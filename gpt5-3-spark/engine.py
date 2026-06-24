@@ -12,6 +12,7 @@ from typing import Iterable
 
 PPQ = 480
 BEATS_PER_BAR = 4
+PITCH_BEND_CENTER = 8192
 ALBUM_TITLE = "The Spark"
 ALBUM_ROOT = Path(__file__).resolve().parent
 MIDI_DIR = ALBUM_ROOT / "midi"
@@ -165,6 +166,16 @@ class MidiTrack:
     def cc(self, channel: int, controller: int, value: int, beat: float) -> None:
         self.add(beat_to_tick(beat), bytes([0xB0 | channel, controller, max(0, min(127, value))]), priority=2)
 
+    def pitch_bend(self, channel: int, value: int, beat: float) -> None:
+        self.add(
+            beat_to_tick(beat),
+            bytes([0xE0 | channel, value & 0x7F, (value >> 7) & 0x7F]),
+            priority=2,
+        )
+
+    def channel_pressure(self, channel: int, value: int, beat: float) -> None:
+        self.add(beat_to_tick(beat), bytes([0xD0 | channel, max(0, min(127, value))]), priority=2)
+
     def note(
         self,
         channel: int,
@@ -203,6 +214,15 @@ class MidiTrack:
         body += vlq(max(0, end_tick - last))
         body += b"\xFF\x2F\x00"
         return b"MTrk" + struct.pack(">I", len(body)) + body
+
+
+def set_pitch_bend_range(track: MidiTrack, channel: int, semitones: int, cents: int = 0, beat: float = 0) -> None:
+    track.cc(channel, 101, 0, beat)
+    track.cc(channel, 100, 0, beat)
+    track.cc(channel, 6, max(0, min(127, semitones)), beat)
+    track.cc(channel, 38, max(0, min(127, cents)), beat)
+    track.cc(channel, 101, 127, beat)
+    track.cc(channel, 100, 127, beat)
 
 
 @dataclass(frozen=True)
@@ -479,7 +499,9 @@ def chord_tones(spec: SongSpec, chord_token: str) -> dict[str, list[int] | int |
     return {"name": chord_token, "bass": bass, "low": low, "pad": pad, "arp": sorted(arp)}
 
 
-def setup_expression(track: MidiTrack, channel: int, spec: SongSpec, volume: int, pan: int) -> None:
+def setup_expression(
+    track: MidiTrack, channel: int, spec: SongSpec, volume: int, pan: int, apply_modulation: bool = True
+) -> None:
     track.cc(channel, 7, volume, 0)
     track.cc(channel, 10, pan, 0)
     track.cc(channel, 91, 58, 0)
@@ -488,14 +510,31 @@ def setup_expression(track: MidiTrack, channel: int, spec: SongSpec, volume: int
         wave = math.sin((bar / 7.5) * math.pi) * 9
         value = int(42 + intensity * 52 + wave)
         track.cc(channel, 11, max(24, min(110, value)), bar_beat(bar))
+        if apply_modulation:
+            modulation = int(24 + intensity * 64 + (math.sin(bar * 0.42) * 10))
+            resonance = int(18 + intensity * 58 + (math.cos(bar * 0.31) * 12))
+            brightness = int(28 + intensity * 56 + (math.sin((bar + 0.9) * 0.37) * 9))
+            track.cc(channel, 1, max(0, min(127, modulation)), bar_beat(bar))
+            track.cc(channel, 71, max(6, min(127, resonance)), bar_beat(bar))
+            track.cc(channel, 74, max(16, min(126, brightness)), bar_beat(bar))
+            if bar % 4 == 0:
+                track.channel_pressure(channel, max(22, min(96, int(34 + intensity * 56))), bar_beat(bar))
         if bar % 2 == 0:
             track.cc(channel, 11, max(24, min(112, value + 8)), bar_beat(bar, 2.0))
 
 
+def apply_subtle_pitch_bend(track: MidiTrack, channel: int, spec: SongSpec, bar: int, phase: float = 0.0, width: int = 176) -> None:
+    intensity = interpolate(spec.intensity, bar)
+    wave = math.sin((bar / 5.5) + phase) * width * (0.25 + 0.75 * intensity)
+    track.pitch_bend(channel, int(PITCH_BEND_CENTER + wave), bar_beat(bar))
+
+
 def add_piano(track: MidiTrack, spec: SongSpec, rng: random.Random, end_tick: int) -> None:
     track.program(0, 0)
+    set_pitch_bend_range(track, 0, 2, 0, 0)
     setup_expression(track, 0, spec, 90, 54)
     for bar in range(spec.bars):
+        apply_subtle_pitch_bend(track, 0, spec, bar, phase=0.12, width=196)
         intensity = interpolate(spec.intensity, bar)
         chord = chord_tones(spec, spec.progression[bar % len(spec.progression)])
         start = bar_beat(bar)
@@ -586,6 +625,11 @@ def add_strings(
     violin.program(3, 40)
     ensemble.program(4, 48)
     basses.program(5, 43)
+    set_pitch_bend_range(cello, 1, 2, 0, 0)
+    set_pitch_bend_range(viola, 2, 2, 0, 0)
+    set_pitch_bend_range(violin, 3, 2, 0, 0)
+    set_pitch_bend_range(ensemble, 4, 2, 0, 0)
+    set_pitch_bend_range(basses, 5, 2, 0, 0)
     setup_expression(cello, 1, spec, 78, 42)
     setup_expression(viola, 2, spec, 70, 62)
     setup_expression(violin, 3, spec, 70, 78)
@@ -593,6 +637,12 @@ def add_strings(
     setup_expression(basses, 5, spec, 72, 36)
 
     for bar in range(4, spec.bars):
+        apply_subtle_pitch_bend(cello, 1, spec, bar, phase=0.2, width=190)
+        apply_subtle_pitch_bend(viola, 2, spec, bar, phase=0.5, width=130)
+        apply_subtle_pitch_bend(violin, 3, spec, bar, phase=0.8, width=160)
+        apply_subtle_pitch_bend(basses, 5, spec, bar, phase=1.4, width=82)
+        if bar % 2 == 0:
+            apply_subtle_pitch_bend(ensemble, 4, spec, bar, phase=1.1, width=98)
         intensity = interpolate(spec.intensity, bar)
         chord = chord_tones(spec, spec.progression[bar % len(spec.progression)])
         if spec.low_pulse and intensity > 0.58:
@@ -634,13 +684,17 @@ def add_strings(
 
 def add_celesta(track: MidiTrack, spec: SongSpec, rng: random.Random, end_tick: int) -> None:
     track.program(6, 8)
+    set_pitch_bend_range(track, 6, 2, 0, 0)
     setup_expression(track, 6, spec, 44, 86)
+    for bar in range(0, spec.bars, 8):
+        apply_subtle_pitch_bend(track, 6, spec, bar, phase=0.03, width=94)
     if not spec.celesta:
         return
     candidate_bars = list(range(max(8, spec.bars // 3), spec.bars - 6, 6))
     if spec.energy < 0.30:
         candidate_bars = list(range(12, spec.bars - 8, 8))
     for phrase_index, bar in enumerate(candidate_bars):
+        apply_subtle_pitch_bend(track, 6, spec, bar, phase=0.15, width=94)
         chord = chord_tones(spec, spec.progression[bar % len(spec.progression)])
         arp = list(chord["arp"])
         intensity = interpolate(spec.intensity, bar)
@@ -654,7 +708,7 @@ def add_celesta(track: MidiTrack, spec: SongSpec, rng: random.Random, end_tick: 
 def add_percussion(track: MidiTrack, spec: SongSpec, rng: random.Random, end_tick: int) -> None:
     if not spec.percussion:
         return
-    setup_expression(track, 9, spec, 64, 54)
+    setup_expression(track, 9, spec, 64, 54, apply_modulation=False)
     for bar in range(8, spec.bars - 4):
         intensity = interpolate(spec.intensity, bar)
         if intensity < 0.46 and bar % 4:
@@ -825,6 +879,7 @@ def parse_midi(path: Path) -> dict[str, object]:
     tempos: list[tuple[int, int]] = []
     names: list[str] = []
     note_on = 0
+    track_metrics: list[dict[str, object]] = []
     max_tick = 0
     for track_index in range(track_count):
         if data[pos : pos + 4] != b"MTrk":
@@ -835,6 +890,10 @@ def parse_midi(path: Path) -> dict[str, object]:
         tick = 0
         running: int | None = None
         name = f"track {track_index + 1}"
+        cc_counts: dict[int, int] = {}
+        pitch_bend_events = 0
+        channel_pressure_events = 0
+        track_note_on = 0
         while pos < end:
             delta, pos = read_vlq(data, pos)
             tick += delta
@@ -867,8 +926,25 @@ def parse_midi(path: Path) -> dict[str, object]:
                 pos += payload_length
                 if kind == 0x90 and len(payload) == 2 and payload[1] > 0:
                     note_on += 1
+                    track_note_on += 1
+                elif kind == 0xB0 and len(payload) == 2:
+                    controller = payload[0]
+                    cc_counts[controller] = cc_counts.get(controller, 0) + 1
+                elif kind == 0xE0:
+                    pitch_bend_events += 1
+                elif kind == 0xD0:
+                    channel_pressure_events += 1
             max_tick = max(max_tick, tick)
         names.append(name)
+        track_metrics.append(
+            {
+                "name": name,
+                "cc_counts": cc_counts,
+                "pitch_bend_events": pitch_bend_events,
+                "channel_pressure_events": channel_pressure_events,
+                "note_on_events": track_note_on,
+            }
+        )
     if pos != len(data):
         raise ValueError(f"{path.name}: trailing bytes after final track")
     if not tempos:
@@ -885,6 +961,7 @@ def parse_midi(path: Path) -> dict[str, object]:
         "names": names,
         "tempo_events": len(tempos),
         "note_on_events": note_on,
+        "tracks": track_metrics,
         "max_tick": max_tick,
         "duration_seconds": seconds,
     }
@@ -921,6 +998,33 @@ def verify_album() -> None:
             errors.append(f"{spec.filename}: too few tracks ({info['track_count']})")
         if int(info["note_on_events"]) < 250:
             errors.append(f"{spec.filename}: too few note-on events ({info['note_on_events']})")
+        tracks = info["tracks"]  # type: ignore[assignment]
+        track_names = {
+            entry["name"]: entry for entry in tracks if isinstance(entry, dict) and "name" in entry
+        }  # type: ignore[var-annotated]
+        required_track_names = (
+            "Piano",
+            "Cello",
+            "Viola",
+            "Violin",
+            "String ensemble",
+            "Low strings",
+            "Celesta echoes",
+        )
+        for track_name in required_track_names:
+            track_info = track_names.get(track_name)
+            if track_info is None:
+                errors.append(f"{spec.filename}: missing track '{track_name}' in MIDI")
+                continue
+            cc_counts = track_info.get("cc_counts", {})  # type: ignore[assignment]
+            if int(cc_counts.get(1, 0)) < 1:
+                errors.append(f"{spec.filename}: '{track_name}' track has no modulation CC1")
+            if int(cc_counts.get(71, 0)) < 1 and int(cc_counts.get(74, 0)) < 1:
+                errors.append(f"{spec.filename}: '{track_name}' track has no timbre control (CC71/CC74)")
+            if int(track_info.get("pitch_bend_events", 0)) < 1:
+                errors.append(f"{spec.filename}: '{track_name}' track has no pitch-bend event")
+            if int(track_info.get("channel_pressure_events", 0)) < 1:
+                errors.append(f"{spec.filename}: '{track_name}' track has no channel-pressure event")
         print(
             f"{spec.number:02d}. {spec.title}: {duration:.3f}s, "
             f"{info['track_count']} tracks, {info['note_on_events']} notes"

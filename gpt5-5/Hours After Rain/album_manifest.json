@@ -1,0 +1,392 @@
+{
+  "album": "Hours After Rain",
+  "track_count": 12,
+  "total_duration_seconds": 3475.994,
+  "total_duration_minutes": 57.933,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "The City Holds Its Breath",
+      "file": "midi/01 - The City Holds Its Breath.mid",
+      "mood": "slow, apprehensive, introspective",
+      "role": "A restrained opening with distant low strings and a hesitant piano pulse.",
+      "key": "D",
+      "mode": "minor",
+      "bars": 72,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 66
+        },
+        {
+          "bar": 16,
+          "bpm": 70
+        },
+        {
+          "bar": 40,
+          "bpm": 74
+        },
+        {
+          "bar": 60,
+          "bpm": 62
+        }
+      ],
+      "duration_seconds": 251.784,
+      "duration_minutes": 4.196,
+      "midi_tracks": 8
+    },
+    {
+      "number": 2,
+      "title": "Glass on Wet Pavement",
+      "file": "midi/02 - Glass on Wet Pavement.mid",
+      "mood": "rapid, nervous, urban",
+      "role": "Sixteenth-note piano motion under thin strings, built for forward pressure.",
+      "key": "A",
+      "mode": "dorian",
+      "bars": 88,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 108
+        },
+        {
+          "bar": 20,
+          "bpm": 118
+        },
+        {
+          "bar": 48,
+          "bpm": 126
+        },
+        {
+          "bar": 72,
+          "bpm": 112
+        }
+      ],
+      "duration_seconds": 181.394,
+      "duration_minutes": 3.023,
+      "midi_tracks": 9
+    },
+    {
+      "number": 3,
+      "title": "Mercy in Three Notes",
+      "file": "midi/03 - Mercy in Three Notes.mid",
+      "mood": "slow, tender, wounded",
+      "role": "A long-breathed lament around a three-note cell.",
+      "key": "F",
+      "mode": "minor",
+      "bars": 96,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 58
+        },
+        {
+          "bar": 20,
+          "bpm": 62
+        },
+        {
+          "bar": 48,
+          "bpm": 66
+        },
+        {
+          "bar": 78,
+          "bpm": 54
+        }
+      ],
+      "duration_seconds": 380.237,
+      "duration_minutes": 6.337,
+      "midi_tracks": 8
+    },
+    {
+      "number": 4,
+      "title": "A Door Left Open",
+      "file": "midi/04 - A Door Left Open.mid",
+      "mood": "energetic, tense, investigative",
+      "role": "Short cells and accented bass notes move like a discovery scene.",
+      "key": "C",
+      "mode": "harmonic_minor",
+      "bars": 104,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 112
+        },
+        {
+          "bar": 24,
+          "bpm": 124
+        },
+        {
+          "bar": 56,
+          "bpm": 132
+        },
+        {
+          "bar": 88,
+          "bpm": 118
+        }
+      ],
+      "duration_seconds": 204.088,
+      "duration_minutes": 3.401,
+      "midi_tracks": 9
+    },
+    {
+      "number": 5,
+      "title": "Rooms That Remember Us",
+      "file": "midi/05 - Rooms That Remember Us.mid",
+      "mood": "introspective, warm, haunted",
+      "role": "A slower interior track with piano harmonics and answering cello phrases.",
+      "key": "G",
+      "mode": "minor",
+      "bars": 88,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 68
+        },
+        {
+          "bar": 24,
+          "bpm": 72
+        },
+        {
+          "bar": 56,
+          "bpm": 76
+        },
+        {
+          "bar": 76,
+          "bpm": 64
+        }
+      ],
+      "duration_seconds": 299.53,
+      "duration_minutes": 4.992,
+      "midi_tracks": 8
+    },
+    {
+      "number": 6,
+      "title": "Red Line Fugue",
+      "file": "midi/06 - Red Line Fugue.mid",
+      "mood": "rapid, energetic, dangerous",
+      "role": "A hard-running ostinato track with staggered string entries.",
+      "key": "E",
+      "mode": "phrygian",
+      "bars": 112,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 122
+        },
+        {
+          "bar": 24,
+          "bpm": 132
+        },
+        {
+          "bar": 64,
+          "bpm": 140
+        },
+        {
+          "bar": 96,
+          "bpm": 126
+        }
+      ],
+      "duration_seconds": 205.274,
+      "duration_minutes": 3.421,
+      "midi_tracks": 9
+    },
+    {
+      "number": 7,
+      "title": "A Quiet Arithmetic of Light",
+      "file": "midi/07 - A Quiet Arithmetic of Light.mid",
+      "mood": "luminous, emotional midpoint",
+      "role": "A five-minute center of gravity for piano, strings, and celesta.",
+      "key": "D",
+      "mode": "minor",
+      "bars": 96,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 72
+        },
+        {
+          "bar": 12,
+          "bpm": 78
+        },
+        {
+          "bar": 32,
+          "bpm": 84
+        },
+        {
+          "bar": 56,
+          "bpm": 82
+        },
+        {
+          "bar": 76,
+          "bpm": 70
+        },
+        {
+          "bar": 92,
+          "bpm": 60
+        }
+      ],
+      "duration_seconds": 299.504,
+      "duration_minutes": 4.992,
+      "midi_tracks": 8
+    },
+    {
+      "number": 8,
+      "title": "Newsprint Ashes",
+      "file": "midi/08 - Newsprint Ashes.mid",
+      "mood": "tragic, low, fatalistic",
+      "role": "A minor-key elegy with heavy basses and bleak high-string suspensions.",
+      "key": "Bb",
+      "mode": "minor",
+      "bars": 100,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 60
+        },
+        {
+          "bar": 24,
+          "bpm": 64
+        },
+        {
+          "bar": 52,
+          "bpm": 68
+        },
+        {
+          "bar": 80,
+          "bpm": 56
+        }
+      ],
+      "duration_seconds": 385.538,
+      "duration_minutes": 6.426,
+      "midi_tracks": 8
+    },
+    {
+      "number": 9,
+      "title": "Borrowed Pulse",
+      "file": "midi/09 - Borrowed Pulse.mid",
+      "mood": "energetic, resilient, searching",
+      "role": "The album reaccelerates with an insistent pulse and more open harmony.",
+      "key": "F",
+      "mode": "dorian",
+      "bars": 108,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 104
+        },
+        {
+          "bar": 28,
+          "bpm": 112
+        },
+        {
+          "bar": 60,
+          "bpm": 120
+        },
+        {
+          "bar": 92,
+          "bpm": 108
+        }
+      ],
+      "duration_seconds": 232.742,
+      "duration_minutes": 3.879,
+      "midi_tracks": 9
+    },
+    {
+      "number": 10,
+      "title": "The Hour Before Dawn",
+      "file": "midi/10 - The Hour Before Dawn.mid",
+      "mood": "slow, suspended, fragile",
+      "role": "Near-still piano figures and long string lines before the final descent.",
+      "key": "E",
+      "mode": "minor",
+      "bars": 96,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 66
+        },
+        {
+          "bar": 24,
+          "bpm": 70
+        },
+        {
+          "bar": 52,
+          "bpm": 74
+        },
+        {
+          "bar": 80,
+          "bpm": 60
+        }
+      ],
+      "duration_seconds": 338.084,
+      "duration_minutes": 5.635,
+      "midi_tracks": 8
+    },
+    {
+      "number": 11,
+      "title": "No Witness Choir",
+      "file": "midi/11 - No Witness Choir.mid",
+      "mood": "tragic, climactic, expansive",
+      "role": "The broad tragic crest: thicker strings, tolling piano, and low percussion.",
+      "key": "C",
+      "mode": "minor",
+      "bars": 112,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 72
+        },
+        {
+          "bar": 24,
+          "bpm": 78
+        },
+        {
+          "bar": 56,
+          "bpm": 86
+        },
+        {
+          "bar": 88,
+          "bpm": 76
+        },
+        {
+          "bar": 104,
+          "bpm": 64
+        }
+      ],
+      "duration_seconds": 348.29,
+      "duration_minutes": 5.805,
+      "midi_tracks": 9
+    },
+    {
+      "number": 12,
+      "title": "Last Train, Empty Platform",
+      "file": "midi/12 - Last Train, Empty Platform.mid",
+      "mood": "quiet, final, unresolved",
+      "role": "A spare closing track that releases the album without fully resolving it.",
+      "key": "D",
+      "mode": "minor",
+      "bars": 88,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 58
+        },
+        {
+          "bar": 20,
+          "bpm": 62
+        },
+        {
+          "bar": 48,
+          "bpm": 66
+        },
+        {
+          "bar": 72,
+          "bpm": 54
+        }
+      ],
+      "duration_seconds": 349.53,
+      "duration_minutes": 5.825,
+      "midi_tracks": 8
+    }
+  ]
+}

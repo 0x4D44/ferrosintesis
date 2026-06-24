@@ -1,0 +1,203 @@
+{
+  "album": "The Long Turning",
+  "track_count": 1,
+  "total_duration_seconds": 3600.0,
+  "total_duration_minutes": 60.0,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "The Long Turning",
+      "file": "midi/01 - The Long Turning.mid",
+      "mood": "single continuous progressive folk-rock/classical collage",
+      "role": "A 60-minute through-composed movement with 20 contrasting three-minute chapters.",
+      "bars": 1800,
+      "bpm": 120,
+      "duration_seconds": 3600.0,
+      "duration_minutes": 60.0,
+      "midi_tracks": 11,
+      "note_on_events": 43714,
+      "sections": [
+        {
+          "number": 1,
+          "start_minute": 0,
+          "name": "Opening Clockwork",
+          "key": "D",
+          "mode": "mixolydian",
+          "texture": "guitar",
+          "lead": "whistle"
+        },
+        {
+          "number": 2,
+          "start_minute": 3,
+          "name": "Hill Dance",
+          "key": "G",
+          "mode": "dorian",
+          "texture": "jig",
+          "lead": "whistle"
+        },
+        {
+          "number": 3,
+          "start_minute": 6,
+          "name": "Glass Engine",
+          "key": "A",
+          "mode": "dorian",
+          "texture": "motor",
+          "lead": "guitar"
+        },
+        {
+          "number": 4,
+          "start_minute": 9,
+          "name": "Pipe Memory",
+          "key": "E",
+          "mode": "aeolian",
+          "texture": "organ",
+          "lead": "organ"
+        },
+        {
+          "number": 5,
+          "start_minute": 12,
+          "name": "Bright Crossing",
+          "key": "F",
+          "mode": "lydian",
+          "texture": "pastoral",
+          "lead": "whistle"
+        },
+        {
+          "number": 6,
+          "start_minute": 15,
+          "name": "Ridge Run",
+          "key": "B",
+          "mode": "phrygian",
+          "texture": "rock",
+          "lead": "electric"
+        },
+        {
+          "number": 7,
+          "start_minute": 18,
+          "name": "Bell Orchard",
+          "key": "C",
+          "mode": "ionian",
+          "texture": "bells",
+          "lead": "bells"
+        },
+        {
+          "number": 8,
+          "start_minute": 21,
+          "name": "Low Tide Machine",
+          "key": "F",
+          "mode": "dorian",
+          "texture": "motor",
+          "lead": "bass"
+        },
+        {
+          "number": 9,
+          "start_minute": 24,
+          "name": "Green Fuse",
+          "key": "D",
+          "mode": "ionian",
+          "texture": "pastoral",
+          "lead": "whistle"
+        },
+        {
+          "number": 10,
+          "start_minute": 27,
+          "name": "Storm Windows",
+          "key": "E",
+          "mode": "phrygian",
+          "texture": "rock",
+          "lead": "electric"
+        },
+        {
+          "number": 11,
+          "start_minute": 30,
+          "name": "The Room Turns",
+          "key": "A",
+          "mode": "aeolian",
+          "texture": "organ",
+          "lead": "organ"
+        },
+        {
+          "number": 12,
+          "start_minute": 33,
+          "name": "Hammered Sun",
+          "key": "G",
+          "mode": "mixolydian",
+          "texture": "jig",
+          "lead": "piano"
+        },
+        {
+          "number": 13,
+          "start_minute": 36,
+          "name": "Far Radio",
+          "key": "C",
+          "mode": "lydian",
+          "texture": "bells",
+          "lead": "bells"
+        },
+        {
+          "number": 14,
+          "start_minute": 39,
+          "name": "Horse Latitudes",
+          "key": "Bb",
+          "mode": "dorian",
+          "texture": "guitar",
+          "lead": "guitar"
+        },
+        {
+          "number": 15,
+          "start_minute": 42,
+          "name": "Broken Relay",
+          "key": "F",
+          "mode": "phrygian",
+          "texture": "motor",
+          "lead": "electric"
+        },
+        {
+          "number": 16,
+          "start_minute": 45,
+          "name": "The Long Green Field",
+          "key": "D",
+          "mode": "mixolydian",
+          "texture": "pastoral",
+          "lead": "whistle"
+        },
+        {
+          "number": 17,
+          "start_minute": 48,
+          "name": "Stone Circle Reel",
+          "key": "A",
+          "mode": "dorian",
+          "texture": "jig",
+          "lead": "whistle"
+        },
+        {
+          "number": 18,
+          "start_minute": 51,
+          "name": "Tremor Choir",
+          "key": "E",
+          "mode": "aeolian",
+          "texture": "organ",
+          "lead": "organ"
+        },
+        {
+          "number": 19,
+          "start_minute": 54,
+          "name": "Return of the Bells",
+          "key": "D",
+          "mode": "mixolydian",
+          "texture": "bells",
+          "lead": "bells"
+        },
+        {
+          "number": 20,
+          "start_minute": 57,
+          "name": "Final Turning",
+          "key": "D",
+          "mode": "ionian",
+          "texture": "guitar",
+          "lead": "whistle"
+        }
+      ]
+    }
+  ]
+}

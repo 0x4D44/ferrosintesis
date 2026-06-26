@@ -1,0 +1,13 @@
+target/
+target_ci/
+bin/
+obj/
+venv/
+.venv/
+env/
+*.tmp
+*.log
+
+# Python
+__pycache__/
+*.pyc

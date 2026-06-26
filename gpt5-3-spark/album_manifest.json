@@ -1,0 +1,392 @@
+{
+  "album": "The Spark",
+  "track_count": 12,
+  "total_duration_seconds": 3448.32,
+  "total_duration_minutes": 57.472,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "The Quiet Before Dawn",
+      "file": "midi/01 - The Quiet Before Dawn.mid",
+      "mood": "quiet, still, expectant",
+      "role": "A room-temperature hush with soft piano harmonics and distant bowed strings.",
+      "key": "E",
+      "mode": "minor",
+      "bars": 72,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 56
+        },
+        {
+          "bar": 16,
+          "bpm": 60
+        },
+        {
+          "bar": 40,
+          "bpm": 58
+        },
+        {
+          "bar": 60,
+          "bpm": 54
+        }
+      ],
+      "duration_seconds": 300.663,
+      "duration_minutes": 5.011,
+      "midi_tracks": 8
+    },
+    {
+      "number": 2,
+      "title": "Windowlit Water",
+      "file": "midi/02 - Windowlit Water.mid",
+      "mood": "quiet, contemplative, slow-building",
+      "role": "Paper reflections over soft piano, then a patient pulse of strings beneath.",
+      "key": "D",
+      "mode": "dorian",
+      "bars": 84,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 66
+        },
+        {
+          "bar": 24,
+          "bpm": 70
+        },
+        {
+          "bar": 52,
+          "bpm": 74
+        },
+        {
+          "bar": 74,
+          "bpm": 66
+        }
+      ],
+      "duration_seconds": 290.988,
+      "duration_minutes": 4.85,
+      "midi_tracks": 8
+    },
+    {
+      "number": 3,
+      "title": "Letters in Winter Ink",
+      "file": "midi/03 - Letters in Winter Ink.mid",
+      "mood": "tender, wounded, and restrained",
+      "role": "A three-note lament repeated through glassy chords and long cello sighs.",
+      "key": "G",
+      "mode": "minor",
+      "bars": 94,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 58
+        },
+        {
+          "bar": 24,
+          "bpm": 62
+        },
+        {
+          "bar": 56,
+          "bpm": 66
+        },
+        {
+          "bar": 80,
+          "bpm": 58
+        }
+      ],
+      "duration_seconds": 368.385,
+      "duration_minutes": 6.14,
+      "midi_tracks": 8
+    },
+    {
+      "number": 4,
+      "title": "First Alarm",
+      "file": "midi/04 - First Alarm.mid",
+      "mood": "urgent, tense, investigative",
+      "role": "A nervous pulse rises under staccato bass and fractured piano runs.",
+      "key": "C",
+      "mode": "harmonic_minor",
+      "bars": 100,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 92
+        },
+        {
+          "bar": 24,
+          "bpm": 104
+        },
+        {
+          "bar": 56,
+          "bpm": 118
+        },
+        {
+          "bar": 84,
+          "bpm": 102
+        }
+      ],
+      "duration_seconds": 231.051,
+      "duration_minutes": 3.851,
+      "midi_tracks": 9
+    },
+    {
+      "number": 5,
+      "title": "A City of Small Fires",
+      "file": "midi/05 - A City of Small Fires.mid",
+      "mood": "restless, urban, intimate",
+      "role": "Piano and strings circle in an anxious dance across muted harmonies.",
+      "key": "F",
+      "mode": "minor",
+      "bars": 88,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 72
+        },
+        {
+          "bar": 24,
+          "bpm": 78
+        },
+        {
+          "bar": 52,
+          "bpm": 86
+        },
+        {
+          "bar": 80,
+          "bpm": 80
+        }
+      ],
+      "duration_seconds": 268.293,
+      "duration_minutes": 4.472,
+      "midi_tracks": 9
+    },
+    {
+      "number": 6,
+      "title": "Mercy of the Rail Line",
+      "file": "midi/06 - Mercy of the Rail Line.mid",
+      "mood": "propulsive, searching, relentless",
+      "role": "Low percussion and repeated harmonic cells carry the album into a kinetic state.",
+      "key": "E",
+      "mode": "phrygian",
+      "bars": 110,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 98
+        },
+        {
+          "bar": 24,
+          "bpm": 108
+        },
+        {
+          "bar": 56,
+          "bpm": 122
+        },
+        {
+          "bar": 92,
+          "bpm": 112
+        }
+      ],
+      "duration_seconds": 239.278,
+      "duration_minutes": 3.988,
+      "midi_tracks": 9
+    },
+    {
+      "number": 7,
+      "title": "Midnight Engine",
+      "file": "midi/07 - Midnight Engine.mid",
+      "mood": "luminous, patient, turning inward",
+      "role": "A bright center where the pulse stays calm and the harmony opens.",
+      "key": "D",
+      "mode": "minor",
+      "bars": 88,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 78
+        },
+        {
+          "bar": 20,
+          "bpm": 84
+        },
+        {
+          "bar": 44,
+          "bpm": 92
+        },
+        {
+          "bar": 64,
+          "bpm": 102
+        },
+        {
+          "bar": 80,
+          "bpm": 96
+        }
+      ],
+      "duration_seconds": 239.931,
+      "duration_minutes": 3.999,
+      "midi_tracks": 9
+    },
+    {
+      "number": 8,
+      "title": "A Door You Didn't Hear Close",
+      "file": "midi/08 - A Door You Didn't Hear Close.mid",
+      "mood": "quiet but dramatic, haunted",
+      "role": "The momentum slips backward, then gathers grief through deep cello echoes.",
+      "key": "A",
+      "mode": "minor",
+      "bars": 102,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 68
+        },
+        {
+          "bar": 28,
+          "bpm": 64
+        },
+        {
+          "bar": 58,
+          "bpm": 60
+        },
+        {
+          "bar": 84,
+          "bpm": 56
+        }
+      ],
+      "duration_seconds": 392.466,
+      "duration_minutes": 6.541,
+      "midi_tracks": 8
+    },
+    {
+      "number": 9,
+      "title": "The Big Arc Begins",
+      "file": "midi/09 - The Big Arc Begins.mid",
+      "mood": "urgent, sweeping, resilient",
+      "role": "The album re-accelerates with a wide pulse and more open harmony.",
+      "key": "F",
+      "mode": "dorian",
+      "bars": 112,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 106
+        },
+        {
+          "bar": 28,
+          "bpm": 118
+        },
+        {
+          "bar": 64,
+          "bpm": 132
+        },
+        {
+          "bar": 96,
+          "bpm": 120
+        }
+      ],
+      "duration_seconds": 226.798,
+      "duration_minutes": 3.78,
+      "midi_tracks": 9
+    },
+    {
+      "number": 10,
+      "title": "Lightning Over Stone",
+      "file": "midi/10 - Lightning Over Stone.mid",
+      "mood": "fast, brilliant, triumphant",
+      "role": "A large emotional crest: percussion, cello, and celesta ignite the mid-album peak.",
+      "key": "E",
+      "mode": "phrygian",
+      "bars": 120,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 110
+        },
+        {
+          "bar": 24,
+          "bpm": 124
+        },
+        {
+          "bar": 56,
+          "bpm": 150
+        },
+        {
+          "bar": 92,
+          "bpm": 138
+        },
+        {
+          "bar": 108,
+          "bpm": 128
+        }
+      ],
+      "duration_seconds": 222.225,
+      "duration_minutes": 3.704,
+      "midi_tracks": 9
+    },
+    {
+      "number": 11,
+      "title": "Chamber of Witness",
+      "file": "midi/11 - Chamber of Witness.mid",
+      "mood": "massive, cathartic, expansive",
+      "role": "A final expansion before quiet; the emotional weight lands with layered strings and tolling piano.",
+      "key": "D",
+      "mode": "minor",
+      "bars": 120,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 84
+        },
+        {
+          "bar": 24,
+          "bpm": 96
+        },
+        {
+          "bar": 56,
+          "bpm": 112
+        },
+        {
+          "bar": 92,
+          "bpm": 104
+        },
+        {
+          "bar": 108,
+          "bpm": 92
+        }
+      ],
+      "duration_seconds": 293.942,
+      "duration_minutes": 4.899,
+      "midi_tracks": 8
+    },
+    {
+      "number": 12,
+      "title": "After the Spark, You Return",
+      "file": "midi/12 - After the Spark, You Return.mid",
+      "mood": "quiet, reflective, unresolved",
+      "role": "A calm close with gentle fragments returning, now carrying the scar of the journey.",
+      "key": "G",
+      "mode": "minor",
+      "bars": 88,
+      "tempo_map": [
+        {
+          "bar": 0,
+          "bpm": 58
+        },
+        {
+          "bar": 24,
+          "bpm": 56
+        },
+        {
+          "bar": 56,
+          "bpm": 60
+        },
+        {
+          "bar": 72,
+          "bpm": 52
+        }
+      ],
+      "duration_seconds": 374.299,
+      "duration_minutes": 6.238,
+      "midi_tracks": 8
+    }
+  ]
+}

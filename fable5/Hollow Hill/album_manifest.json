@@ -1,0 +1,168 @@
+{
+  "album": "Hollow Hill",
+  "artist": "Claude Fable 5",
+  "style": "two-part instrumental epic after Mike Oldfield (Tubular Bells I/II/III, Amarok, The Songs of Distant Earth)",
+  "track_count": 2,
+  "total_duration_seconds": 1589.2,
+  "total_duration_minutes": 26.49,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Hollow Hill, Part One",
+      "file": "midi/01 - Hollow Hill, Part One.mid",
+      "duration_seconds": 835.72,
+      "duration_minutes": 13.93,
+      "sections": [
+        {
+          "time": "0:00",
+          "seconds": 0.0,
+          "name": "I. Dawn"
+        },
+        {
+          "time": "1:24",
+          "seconds": 84.8,
+          "name": "II. First Light"
+        },
+        {
+          "time": "2:32",
+          "seconds": 152.6,
+          "name": "III. The Hill Theme"
+        },
+        {
+          "time": "3:40",
+          "seconds": 220.4,
+          "name": "IV. Interlock"
+        },
+        {
+          "time": "5:31",
+          "seconds": 331.2,
+          "name": "V. Deep Water"
+        },
+        {
+          "time": "8:01",
+          "seconds": 481.2,
+          "name": "VI. Stormrise"
+        },
+        {
+          "time": "9:57",
+          "seconds": 598.0,
+          "name": "VII. The Summoning"
+        },
+        {
+          "time": "9:57",
+          "seconds": 598.0,
+          "name": "the ground"
+        },
+        {
+          "time": "10:17",
+          "seconds": 617.2,
+          "name": "... grand piano"
+        },
+        {
+          "time": "10:36",
+          "seconds": 636.4,
+          "name": "... glockenspiel"
+        },
+        {
+          "time": "10:55",
+          "seconds": 655.6,
+          "name": "... reed and pipe organ"
+        },
+        {
+          "time": "11:14",
+          "seconds": 674.8,
+          "name": "... two acoustic guitars"
+        },
+        {
+          "time": "11:33",
+          "seconds": 694.0,
+          "name": "... mandolin"
+        },
+        {
+          "time": "11:53",
+          "seconds": 713.2,
+          "name": "... Spanish guitar"
+        },
+        {
+          "time": "12:12",
+          "seconds": 732.4,
+          "name": "... overdriven guitar"
+        },
+        {
+          "time": "12:31",
+          "seconds": 751.6,
+          "name": "... strings and choir"
+        },
+        {
+          "time": "12:50",
+          "seconds": 770.8,
+          "name": "... plus: TUBULAR BELLS!"
+        },
+        {
+          "time": "13:29",
+          "seconds": 809.2,
+          "name": "the hilltop (E major)"
+        },
+        {
+          "time": "13:55",
+          "seconds": 835.6,
+          "name": "end of Part One"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Hollow Hill, Part Two",
+      "file": "midi/02 - Hollow Hill, Part Two.mid",
+      "duration_seconds": 753.48,
+      "duration_minutes": 12.56,
+      "sections": [
+        {
+          "time": "0:00",
+          "seconds": 0.0,
+          "name": "I. Green Morning"
+        },
+        {
+          "time": "2:17",
+          "seconds": 137.1,
+          "name": "II. The Dance Under the Hill"
+        },
+        {
+          "time": "4:12",
+          "seconds": 252.9,
+          "name": "III. Stone Voices"
+        },
+        {
+          "time": "5:52",
+          "seconds": 352.9,
+          "name": "IV. The Night Ocean"
+        },
+        {
+          "time": "8:32",
+          "seconds": 512.9,
+          "name": "V. The Return"
+        },
+        {
+          "time": "10:39",
+          "seconds": 639.1,
+          "name": "the summit"
+        },
+        {
+          "time": "10:49",
+          "seconds": 649.4,
+          "name": "(a breath)"
+        },
+        {
+          "time": "10:52",
+          "seconds": 652.6,
+          "name": "VII. The Hollow Hill Reel"
+        },
+        {
+          "time": "12:33",
+          "seconds": 753.5,
+          "name": "end of Part Two"
+        }
+      ]
+    }
+  ]
+}

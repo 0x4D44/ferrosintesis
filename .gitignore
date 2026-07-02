@@ -11,3 +11,7 @@ env/
 # Python
 __pycache__/
 *.pyc
+# Rendered audio (reproducible via fable5/hollowsynth)
+*.wav
+# ...but the synth's attack-transient sample bank is source, not output
+!fable5/hollowsynth/samples/*.wav

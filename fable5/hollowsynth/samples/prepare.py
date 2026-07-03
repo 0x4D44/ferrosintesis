@@ -26,7 +26,24 @@ SOURCES = {
 } | {
     f"flute_{n}.wav": f"{BASE}/Woodwinds/Flute/susvib/LDFlute_susvib_{n}_v1_1.wav"
     for n in ("C4", "A4", "E5", "A5", "C6")
+} | {
+    f"piano_{n}_{d}.wav": f"{BASE}/Keys/Upright%20Nr1/UR1_{n}_{d}_RR1.wav"
+    for n in ("C2", "G2", "C3", "G3", "C4", "G4", "C5", "G5", "C6")
+    for d in ("pp", "mf", "f")
+} | {
+    # second round robin (VSCO has no pp RR2 for C2/G2; reuse RR1 there)
+    f"piano_{n}_{d}_rr2.wav": f"{BASE}/Keys/Upright%20Nr1/UR1_{n}_{d}_RR{{}}.wav".format(
+        1 if (d == "pp" and n in ("C2", "G2")) else 2
+    )
+    for n in ("C2", "G2", "C3", "G3", "C4", "G4", "C5", "G5", "C6")
+    for d in ("pp", "mf", "f")
 }
+
+# f0 search range per family (the default misses the piano's low octaves)
+F0_RANGE = {"piano": (45.0, 2500.0)}
+# the piano has no expressive sustain to preserve: keep much more of the
+# real recording and let the model take only the long tail
+KEEP_FAM = {"piano": (1.8, 0.6)}  # (keep_s, fade_s)
 
 DST = os.path.dirname(os.path.abspath(__file__))
 OUT_SR = 44100
@@ -127,11 +144,12 @@ def main():
         thr = 0.03 * peak
         onset = next(i for i, v in enumerate(x) if abs(v) > thr)
         start = max(0, onset - int(PRE_S * sr))
-        seg = x[start:start + int((PRE_S + KEEP_S) * sr)]
+        keep_s, fade_s = KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S))
+        seg = x[start:start + int((PRE_S + keep_s) * sr)]
         fin = int(0.002 * sr)
         for i in range(min(fin, len(seg))):
             seg[i] *= i / fin
-        fout = int(FADE_S * sr)
+        fout = int(fade_s * sr)
         for i in range(fout):
             j = len(seg) - fout + i
             if 0 <= j < len(seg):
@@ -140,7 +158,8 @@ def main():
         pk = max(abs(v) for v in seg)
         g = 0.9 / pk if pk > 0 else 1.0
         seg = [v * g for v in seg]
-        f0, conf = measure_f0(seg, sr)
+        lo, hi = F0_RANGE.get(fn.split("_")[0], (80.0, 3000.0))
+        f0, conf = measure_f0(seg, sr, lo, hi)
         # nominal pitch from the filename, e.g. violin_G3_f / flute_C4
         note = next(p for p in fn[:-4].split("_") if p[0] in "ABCDEFG" and p[-1].isdigit())
         nominal = NOTE_HZ[note]

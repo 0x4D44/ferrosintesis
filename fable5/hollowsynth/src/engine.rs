@@ -19,6 +19,7 @@ struct Drive {
     tone: Biquad,
     gain: f32,
     post: f32,
+    prev: f32,
 }
 
 impl Drive {
@@ -28,18 +29,25 @@ impl Drive {
         } else {
             (3.5, 0.42)
         };
+        // the nonlinearity runs at 2x rate to halve tanh aliasing
         Drive {
-            pre: Biquad::highpass(90.0, 0.7, sr),
-            tone: Biquad::lowpass(3400.0, 0.8, sr),
+            pre: Biquad::highpass(90.0, 0.7, sr * 2.0),
+            tone: Biquad::lowpass(3400.0, 0.8, sr * 2.0),
             gain,
             post,
+            prev: 0.0,
         }
     }
 
     fn process(&mut self, buf: &mut [f32]) {
         for x in buf.iter_mut() {
-            let y = (self.pre.process(*x) * self.gain).tanh();
-            *x = self.tone.process(y) * self.post;
+            let mid = 0.5 * (self.prev + *x);
+            self.prev = *x;
+            let y0 = self
+                .tone
+                .process((self.pre.process(mid) * self.gain).tanh());
+            let y1 = self.tone.process((self.pre.process(*x) * self.gain).tanh());
+            *x = 0.5 * (y0 + y1) * self.post;
         }
     }
 }
@@ -138,10 +146,108 @@ impl PingPong {
     }
 }
 
+/// Sympathetic resonance: the piano's undamped strings ring along with
+/// whatever it plays. Twelve lightly-damped comb resonators (one per pitch
+/// class, C3..B3) are fed by the piano channels and returned quietly.
+struct Sympathetic {
+    combs: Vec<(DelayLine, f32, OnePole)>,
+    hp: Biquad,
+}
+
+impl Sympathetic {
+    fn new(sr: f32) -> Self {
+        let combs = (0..12)
+            .map(|k| {
+                let f = 130.81 * 2f32.powf(k as f32 / 12.0);
+                let d = sr / f;
+                (
+                    DelayLine::new(d as usize + 4),
+                    d,
+                    OnePole::lowpass(2600.0, sr),
+                )
+            })
+            .collect();
+        Sympathetic {
+            combs,
+            hp: Biquad::highpass(170.0, 0.7, sr),
+        }
+    }
+
+    fn process(&mut self, send: &[f32], l: &mut [f32], r: &mut [f32]) {
+        for i in 0..send.len() {
+            let x = self.hp.process(send[i]) * 0.05;
+            let mut sum = 0.0;
+            for (dl, d, damp) in &mut self.combs {
+                let y = dl.tap(*d);
+                dl.push(x + damp.process(y) * 0.85);
+                sum += y;
+            }
+            let w = sum * 0.55;
+            l[i] += w;
+            r[i] += w;
+        }
+    }
+}
+
+/// Master-bus glue: a slow 2:1 compressor (a dB or two of gentle movement)
+/// and a whisper of saturation, so the mix couples like a record instead of
+/// arithmetic.
+struct BusGlue {
+    env: f32,
+    gain: f32,
+    atk: f32,
+    rel: f32,
+    thr: f32,
+    shelf_l: Biquad,
+    shelf_r: Biquad,
+}
+
+impl BusGlue {
+    fn new(sr: f32) -> Self {
+        BusGlue {
+            env: 0.0,
+            gain: 1.0,
+            atk: 1.0 - (-1.0 / (0.015 * sr)).exp(),
+            rel: 1.0 - (-1.0 / (0.250 * sr)).exp(),
+            thr: 0.32,
+            shelf_l: Biquad::peak(95.0, 0.7, 1.5, sr),
+            shelf_r: Biquad::peak(95.0, 0.7, 1.5, sr),
+        }
+    }
+
+    fn process(&mut self, l: &mut [f32], r: &mut [f32]) {
+        for i in 0..l.len() {
+            let xl = self.shelf_l.process(l[i]);
+            let xr = self.shelf_r.process(r[i]);
+            let level = xl.abs().max(xr.abs());
+            let k = if level > self.env { self.atk } else { self.rel };
+            self.env += k * (level - self.env);
+            let target = if self.env > self.thr {
+                (self.thr / self.env).sqrt() // 2:1 above threshold
+            } else {
+                1.0
+            };
+            let kg = if target < self.gain {
+                self.atk
+            } else {
+                self.rel
+            };
+            self.gain += kg * (target - self.gain);
+            // gentle tape-ish saturation on the glued signal
+            let gl = xl * self.gain;
+            let gr = xr * self.gain;
+            l[i] = gl + 0.12 * ((gl * 1.4).tanh() / 1.4 - gl);
+            r[i] = gr + 0.12 * ((gr * 1.4).tanh() / 1.4 - gr);
+        }
+    }
+}
+
 struct Strip {
     program: u8,
-    volume: f32, // CC7 as amplitude (squared curve)
-    pan: f32,    // 0..1
+    volume: f32,  // CC7 as amplitude (squared curve)
+    pan: f32,     // 0..1
+    bend: f32,    // pitch-bend as a frequency multiplier
+    legato: bool, // CC68: new notes slur into the ringing voice
     expr_target: f32,
     expr: f32,
     reverb_send: f32,
@@ -158,6 +264,8 @@ impl Strip {
             program: 0,
             volume: (100.0f32 / 127.0).powi(2),
             pan: 0.5,
+            bend: 1.0,
+            legato: false,
             expr_target: 1.0,
             expr: 1.0,
             reverb_send: 0.3,
@@ -199,8 +307,11 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
     let mut strips: Vec<Strip> = (0..16).map(|_| Strip::new(sr)).collect();
     let mut active: Vec<Active> = Vec::new();
     let mut reverb = Reverb::new(sr, 0.86, 0.35, opt.wet);
+    let mut rev_hp = Biquad::highpass(150.0, 0.7, sr); // keep the lows dry and tight
     let mut chorus = Chorus::new(sr);
     let mut echo = (opt.delay_s > 0.0).then(|| PingPong::new(sr, opt.delay_s));
+    let mut symp = Sympathetic::new(sr);
+    let mut glue = BusGlue::new(sr);
     let mut stats = Stats {
         voices_spawned: 0,
         peak: 0.0,
@@ -219,6 +330,7 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
     let mut send_rev = [0f32; BLOCK];
     let mut send_cho = [0f32; BLOCK];
     let mut send_del = [0f32; BLOCK];
+    let mut send_sym = [0f32; BLOCK];
     let mut mix_l = [0f32; BLOCK];
     let mut mix_r = [0f32; BLOCK];
     let expr_smooth = 1.0 - (-(BLOCK as f32) / (0.03 * sr)).exp();
@@ -234,6 +346,18 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
             ev_i += 1;
             match kind {
                 EvKind::NoteOn { ch, key, vel } => {
+                    // CC68 legato: slur into the channel's one ringing voice
+                    if ch != 9 && strips[ch as usize].legato {
+                        let mut ringing = active
+                            .iter_mut()
+                            .filter(|a| a.ch == ch && !a.voice.released());
+                        if let (Some(a), None) = (ringing.next(), ringing.next()) {
+                            if a.voice.legato_to(key, vel) {
+                                a.key = key;
+                                continue;
+                            }
+                        }
+                    }
                     let seed = 0x9E37 ^ (stats.voices_spawned as u32).wrapping_mul(2654435761);
                     let voice = if ch == 9 {
                         drums::make(key, vel, sr, seed)
@@ -247,7 +371,11 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                             opt.samples,
                         ))
                     };
-                    if let Some(voice) = voice {
+                    if let Some(mut voice) = voice {
+                        let bend = strips[ch as usize].bend;
+                        if bend != 1.0 {
+                            voice.set_pitch(bend);
+                        }
                         active.push(Active { ch, key, voice });
                         stats.voices_spawned += 1;
                     }
@@ -271,8 +399,18 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                             s.haas_delay = 0.005 * sr * (v - 0.5).abs() * 2.0;
                         }
                         11 => s.expr_target = v * v,
+                        68 => s.legato = val >= 64,
                         91 => s.reverb_send = v,
+                        93 => s.chorus_send = v,
+                        94 => s.delay_send = v,
                         _ => {}
+                    }
+                }
+                EvKind::Bend { ch, semis } => {
+                    let mult = 2f32.powf(semis / 12.0);
+                    strips[ch as usize].bend = mult;
+                    for a in active.iter_mut().filter(|a| a.ch == ch) {
+                        a.voice.set_pitch(mult);
                     }
                 }
                 EvKind::Prog { ch, prog } => {
@@ -317,6 +455,7 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
         send_rev[..n].fill(0.0);
         send_cho[..n].fill(0.0);
         send_del[..n].fill(0.0);
+        send_sym[..n].fill(0.0);
         for (ci, strip) in strips.iter_mut().enumerate() {
             let buf = &mut ch_buf[ci];
             if let Some(drive) = &mut strip.drive {
@@ -330,6 +469,7 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
             let theta = strip.pan * FRAC_PI_2;
             let (gl, gr) = (g * theta.cos(), g * theta.sin());
             let rs = strip.reverb_send * 0.9;
+            let is_piano = ci != 9 && strip.program <= 7;
             let haas = strip.haas_delay;
             for i in 0..n {
                 let x = buf[i];
@@ -349,13 +489,21 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                 send_rev[i] += xs * rs;
                 send_cho[i] += xs * strip.chorus_send;
                 send_del[i] += xs * strip.delay_send;
+                if is_piano {
+                    send_sym[i] += xs;
+                }
             }
         }
+        symp.process(&send_sym[..n], &mut mix_l[..n], &mut mix_r[..n]);
         chorus.process(&send_cho[..n], &mut mix_l[..n], &mut mix_r[..n]);
         if let Some(echo) = &mut echo {
             echo.process(&send_del[..n], &mut mix_l[..n], &mut mix_r[..n]);
         }
+        for x in send_rev[..n].iter_mut() {
+            *x = rev_hp.process(*x);
+        }
         reverb.process(&send_rev[..n], &mut mix_l[..n], &mut mix_r[..n]);
+        glue.process(&mut mix_l[..n], &mut mix_r[..n]);
 
         for i in 0..n {
             out[(block_start + i) * 2] = mix_l[i];
@@ -393,4 +541,38 @@ pub fn normalize_to_i16(samples: &[f32], peak: f32, target: f32) -> Vec<i16> {
                 .clamp(-32768.0, 32767.0) as i16
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The bus glue must tame loud material, pass quiet material nearly
+    /// unchanged, and never blow up.
+    #[test]
+    fn glue_compresses_and_stays_sane() {
+        let sr = 44100.0;
+        let mut glue = BusGlue::new(sr);
+        let mut l: Vec<f32> = (0..44100)
+            .map(|i| (i as f32 * 220.0 / sr * std::f32::consts::TAU).sin() * 0.8)
+            .collect();
+        let mut r = l.clone();
+        glue.process(&mut l, &mut r);
+        let out_peak = l[22050..].iter().fold(0f32, |m, &x| m.max(x.abs()));
+        assert!(out_peak < 0.8, "no gain reduction: {out_peak}");
+        assert!(out_peak > 0.3, "over-compressed: {out_peak}");
+        assert!(l.iter().all(|x| x.is_finite()));
+
+        let mut glue2 = BusGlue::new(sr);
+        let mut ql: Vec<f32> = (0..44100)
+            .map(|i| (i as f32 * 220.0 / sr * std::f32::consts::TAU).sin() * 0.05)
+            .collect();
+        let mut qr = ql.clone();
+        glue2.process(&mut ql, &mut qr);
+        let q_peak = ql[22050..].iter().fold(0f32, |m, &x| m.max(x.abs()));
+        assert!(
+            (q_peak - 0.05).abs() < 0.012,
+            "quiet signal changed: {q_peak}"
+        );
+    }
 }

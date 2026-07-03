@@ -18,7 +18,7 @@
 //! Timing realism: sustained families speak slower at low velocity, the way
 //! a gently-bowed or gently-blown note actually starts.
 
-use crate::dsp::{key_freq, vel_amp, Adsr, Biquad, BlepSaw, Drift, OnePole, Rng, Sine};
+use crate::dsp::{key_freq, vel_amp, Adsr, Biquad, BlepSaw, DelayLine, Drift, OnePole, Rng, Sine};
 use std::f32::consts::TAU;
 
 pub trait Voice {
@@ -26,6 +26,14 @@ pub trait Voice {
     fn render(&mut self, out: &mut [f32]) -> bool;
     fn note_off(&mut self);
     fn released(&self) -> bool;
+    /// Channel pitch bend as a frequency multiplier (1.0 = centre).
+    /// Voices that cannot bend simply ignore it.
+    fn set_pitch(&mut self, _mult: f32) {}
+    /// Take over a new note without re-attacking (slur / hammer-on).
+    /// Return false if this voice cannot, and a fresh voice is needed.
+    fn legato_to(&mut self, _key: u8, _vel: u8) -> bool {
+        false
+    }
 }
 
 fn t60_mul(t60: f32, sr: f32) -> f32 {
@@ -272,6 +280,8 @@ pub struct PluckPreset {
     pub rel_t60: f32,
     pub body: &'static [(f32, f32, f32)], // (freq, q, gain dB) peak EQs
     pub out_lp: f32,                      // 0 = none
+    pub pickup: f32,                      // magnetic pickup position (0 = acoustic)
+    pub sub: f32,                         // envelope-locked fundamental sine (0 = none)
 }
 
 pub const NYLON: PluckPreset = PluckPreset {
@@ -282,8 +292,11 @@ pub const NYLON: PluckPreset = PluckPreset {
     amp: 0.55,
     attack_s: 0.0,
     rel_t60: 0.15,
-    body: &[(210.0, 1.2, 4.0), (750.0, 1.5, 2.5)],
+    // Helmholtz air mode, top-plate mode, upper body colour
+    body: &[(98.0, 1.4, 4.5), (210.0, 1.2, 4.0), (420.0, 1.8, 2.5)],
     out_lp: 0.0,
+    pickup: 0.0,
+    sub: 0.0,
 };
 pub const STEEL: PluckPreset = PluckPreset {
     t60: 3.5,
@@ -293,8 +306,11 @@ pub const STEEL: PluckPreset = PluckPreset {
     amp: 0.50,
     attack_s: 0.0,
     rel_t60: 0.15,
-    body: &[(200.0, 1.2, 3.5), (900.0, 1.5, 2.0)],
+    // Helmholtz, top plate, and a little steel-string presence sparkle
+    body: &[(105.0, 1.4, 4.0), (215.0, 1.2, 3.0), (2800.0, 1.8, 1.5)],
     out_lp: 0.0,
+    pickup: 0.0,
+    sub: 0.0,
 };
 pub const CLEAN: PluckPreset = PluckPreset {
     t60: 3.0,
@@ -306,6 +322,8 @@ pub const CLEAN: PluckPreset = PluckPreset {
     rel_t60: 0.18,
     body: &[],
     out_lp: 5500.0,
+    pickup: 0.12,
+    sub: 0.0,
 };
 pub const DRIVE: PluckPreset = PluckPreset {
     t60: 8.0,
@@ -317,17 +335,34 @@ pub const DRIVE: PluckPreset = PluckPreset {
     rel_t60: 0.20,
     body: &[],
     out_lp: 0.0,
+    pickup: 0.10,
+    sub: 0.0,
+};
+pub const MUTED: PluckPreset = PluckPreset {
+    t60: 0.45, // palm on the bridge: the ring dies fast
+    bright: 1600.0,
+    pick_lp: 2200.0,
+    pos: 0.10,
+    amp: 0.62,
+    attack_s: 0.0,
+    rel_t60: 0.08,
+    body: &[],
+    out_lp: 3200.0,
+    pickup: 0.10,
+    sub: 0.35, // the chug's thud carries the weight
 };
 pub const BASS: PluckPreset = PluckPreset {
-    t60: 3.0,
+    t60: 3.6,
     bright: 1100.0,
     pick_lp: 850.0,
     pos: 0.35,
     amp: 1.05,
     attack_s: 0.0,
     rel_t60: 0.12,
-    body: &[],
+    body: &[(65.0, 0.7, 4.0)], // fundamental weight
     out_lp: 1900.0,
+    pickup: 0.28,
+    sub: 0.18,
 };
 pub const FRETLESS: PluckPreset = PluckPreset {
     t60: 2.6,
@@ -337,8 +372,10 @@ pub const FRETLESS: PluckPreset = PluckPreset {
     amp: 1.05,
     attack_s: 0.012,
     rel_t60: 0.15,
-    body: &[],
+    body: &[(60.0, 0.7, 3.5)],
     out_lp: 1500.0,
+    pickup: 0.33,
+    sub: 0.15,
 };
 pub const HARP: PluckPreset = PluckPreset {
     t60: 4.5,
@@ -350,6 +387,8 @@ pub const HARP: PluckPreset = PluckPreset {
     rel_t60: 0.4,
     body: &[],
     out_lp: 0.0,
+    pickup: 0.0,
+    sub: 0.0,
 };
 pub const BANJO: PluckPreset = PluckPreset {
     t60: 0.9,
@@ -361,18 +400,90 @@ pub const BANJO: PluckPreset = PluckPreset {
     rel_t60: 0.10,
     body: &[(720.0, 2.5, 6.0)],
     out_lp: 0.0,
+    pickup: 0.0,
+    sub: 0.0,
 };
 
-pub struct Pluck {
-    buf: Vec<f32>,
-    idx: usize,
-    ap_c: f32,
-    ap_x1: f32,
-    ap_y1: f32,
+/// One Karplus-Strong delay loop on a fractional-tap delay line, so its
+/// pitch can *move* while ringing (bends, slides, hammer-ons, vibrato).
+/// The in-loop damper's phase delay is compensated in the delay length,
+/// so the string tunes accurately; retuning glides over a few ms.
+struct KsLoop {
+    dl: DelayLine,
+    delay: f32,
+    target: f32,
+    glide_k: f32,
     damp: OnePole,
     loop_gain: f32,
+    bright: f32,
+    t60: f32,
+    sr: f32,
+}
+
+impl KsLoop {
+    /// Loop delay (in samples) for frequency `f`, compensating the damper's
+    /// phase delay and the one-sample write→read latency.
+    fn delay_for(f: f32, bright: f32, sr: f32) -> f32 {
+        let a = 1.0 - (-2.0 * std::f32::consts::PI * (bright / sr).min(0.49)).exp();
+        let b = 1.0 - a;
+        let w = 2.0 * std::f32::consts::PI * f / sr;
+        let d1p = ((b * w.sin()) / (1.0 - b * w.cos())).atan() / w;
+        (sr / f - d1p - 1.0).max(2.0)
+    }
+
+    fn new(f: f32, bright: f32, t60: f32, exc: &[f32], sr: f32) -> Self {
+        let target = Self::delay_for(f, bright, sr);
+        // room to bend or slur a full octave down
+        let mut dl = DelayLine::new((target * 2.2) as usize + 8);
+        let n = target.ceil() as usize + 1;
+        for i in 0..n {
+            dl.push(exc[i % exc.len()]);
+        }
+        KsLoop {
+            dl,
+            delay: target,
+            target,
+            glide_k: 1.0 - (-1.0 / (0.004 * sr)).exp(),
+            damp: OnePole::lowpass(bright, sr),
+            loop_gain: 10f32.powf(-3.0 / (t60 * f)),
+            bright,
+            t60,
+            sr,
+        }
+    }
+
+    /// Retune to a new frequency; the ringing energy stays in the string.
+    fn retune(&mut self, f: f32) {
+        self.target = Self::delay_for(f, self.bright, self.sr);
+        self.loop_gain = 10f32.powf(-3.0 / (self.t60 * f));
+    }
+
+    #[inline]
+    fn tick(&mut self, input: f32) -> f32 {
+        self.delay += self.glide_k * (self.target - self.delay);
+        let s = self.dl.tap(self.delay);
+        self.dl.push(self.damp.process(s) * self.loop_gain + input);
+        s
+    }
+}
+
+pub struct Pluck {
+    // a real string vibrates in two polarizations: one rings on (horizontal),
+    // one decays faster and slightly detuned (vertical) — their sum gives the
+    // characteristic fast-then-slow decay and a gentle beat
+    horiz: KsLoop,
+    vert: KsLoop,
+    base_f: f32,
+    bend: f32,
+    pickup: Option<(DelayLine, f32)>, // magnetic pickup position comb
+    sub: Option<(Sine, f32, f32)>,    // (osc, gain, decay) fundamental weight
+    sub_env: f32,
     body: Vec<Biquad>,
     out_lp: Option<OnePole>,
+    hammer: Vec<f32>, // pending legato excitation, fed into the loops
+    hammer_pos: usize,
+    rng: Rng,
+    pick_lp_hz: f32,
     amp: f32,
     att: f32,
     att_env: f32,
@@ -382,6 +493,7 @@ pub struct Pluck {
     env: f32,
     t: u32,
     min_life: u32,
+    sr: f32,
 }
 
 impl Pluck {
@@ -394,44 +506,35 @@ impl Pluck {
 
         let f = key_freq(key);
         let period = sr / f;
-        // phase delay (in samples) of the in-loop one-pole damper at the
-        // fundamental, so the string tunes accurately
-        let a = 1.0 - (-2.0 * std::f32::consts::PI * (bright / sr).min(0.49)).exp();
-        let b = 1.0 - a;
-        let w = 2.0 * std::f32::consts::PI * f / sr;
-        let d1p = ((b * w.sin()) / (1.0 - b * w.cos())).atan() / w;
-        let target = (period - d1p).max(3.0);
-        let mut len = target.floor() as usize;
-        let mut frac = target - len as f32;
-        if frac < 0.1 && len > 3 {
-            len -= 1;
-            frac += 1.0;
-        }
-        let ap_c = (1.0 - frac) / (1.0 + frac);
         let t60 = (t60_base * (220.0 / f).powf(0.55)).clamp(0.25, 14.0);
-        let loop_gain = 10f32.powf(-3.0 / (t60 * f));
 
         // excitation: filtered noise burst with a pick-position comb
+        let exc_len = (period as usize).max(4);
         let mut lp = OnePole::lowpass(p.pick_lp, sr);
-        let raw: Vec<f32> = (0..len).map(|_| lp.process(rng.white())).collect();
-        let comb = ((len as f32 * pos) as usize).max(1);
-        let mut buf: Vec<f32> = (0..len)
-            .map(|i| raw[i] - 0.9 * raw[(i + comb) % len])
+        let raw: Vec<f32> = (0..exc_len).map(|_| lp.process(rng.white())).collect();
+        let comb = ((exc_len as f32 * pos) as usize).max(1);
+        let mut exc: Vec<f32> = (0..exc_len)
+            .map(|i| raw[i] - 0.9 * raw[(i + comb) % exc_len])
             .collect();
-        let peak = buf.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-6);
+        let peak = exc.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-6);
         let v = vel_amp(vel);
-        for x in &mut buf {
+        for x in &mut exc {
             *x *= v / peak;
         }
 
         Pluck {
-            buf,
-            idx: 0,
-            ap_c,
-            ap_x1: 0.0,
-            ap_y1: 0.0,
-            damp: OnePole::lowpass(bright, sr),
-            loop_gain,
+            horiz: KsLoop::new(f, bright, t60, &exc, sr),
+            vert: KsLoop::new(f * 1.0013, bright * 1.15, t60 * 0.42, &exc, sr),
+            base_f: f,
+            bend: 1.0,
+            pickup: (p.pickup > 0.0).then(|| {
+                // the pickup senses the string a fraction of its length from
+                // the bridge: a feedforward comb with a 2·pos·period delay
+                let d = 2.0 * p.pickup * period;
+                (DelayLine::new(d as usize + 8), d)
+            }),
+            sub: (p.sub > 0.0).then(|| (Sine::new(f, sr, 0.0), p.sub * v, t60_mul(t60 * 0.8, sr))),
+            sub_env: 0.0,
             body: p
                 .body
                 .iter()
@@ -442,6 +545,10 @@ impl Pluck {
             } else {
                 None
             },
+            hammer: Vec::new(),
+            hammer_pos: 0,
+            rng,
+            pick_lp_hz: p.pick_lp,
             amp: p.amp,
             att: if p.attack_s <= 0.0 {
                 1.0
@@ -455,28 +562,49 @@ impl Pluck {
             env: 1.0,
             t: 0,
             min_life: (0.05 * sr) as u32,
+            sr,
+        }
+    }
+
+    fn apply_pitch(&mut self) {
+        let f = self.base_f * self.bend;
+        self.horiz.retune(f);
+        self.vert.retune(f * 1.0013);
+        if let Some((osc, _, _)) = &mut self.sub {
+            osc.set_freq(f, self.sr);
         }
     }
 }
 
 impl Voice for Pluck {
     fn render(&mut self, out: &mut [f32]) -> bool {
-        let len = self.buf.len();
         for o in out.iter_mut() {
-            let read = self.buf[self.idx];
-            // first-order allpass for the fractional part of the delay
-            let s = self.ap_c * (read - self.ap_y1) + self.ap_x1;
-            self.ap_x1 = read;
-            self.ap_y1 = s;
-            self.buf[self.idx] = self.damp.process(s) * self.loop_gain;
-            self.idx = (self.idx + 1) % len;
-
-            let mut y = s;
+            // pending hammer-on energy trickles into both loops
+            let inject = if self.hammer_pos < self.hammer.len() {
+                let h = self.hammer[self.hammer_pos];
+                self.hammer_pos += 1;
+                h
+            } else {
+                0.0
+            };
+            let mut y = 0.74 * self.horiz.tick(inject) + 0.26 * self.vert.tick(inject * 0.7);
+            if let Some((dl, d)) = &mut self.pickup {
+                dl.push(y);
+                y = (y - dl.tap(*d)) * 0.75;
+            }
             for b in &mut self.body {
                 y = b.process(y);
             }
             if let Some(lp) = &mut self.out_lp {
                 y = lp.process(y);
+            }
+            if let Some((osc, gain, decay)) = &mut self.sub {
+                // the fundamental's weight, decaying with the string
+                if self.t < 220 {
+                    self.sub_env = (self.sub_env + 1.0 / 220.0).min(1.0);
+                }
+                y += osc.next() * *gain * self.sub_env;
+                self.sub_env *= *decay;
             }
             if self.att_env < 1.0 {
                 self.att_env = (self.att_env + self.att).min(1.0);
@@ -498,6 +626,27 @@ impl Voice for Pluck {
 
     fn released(&self) -> bool {
         self.released
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+        self.apply_pitch();
+    }
+
+    fn legato_to(&mut self, key: u8, vel: u8) -> bool {
+        // hammer-on / pull-off: retune the ringing string, add a soft tap
+        self.base_f = key_freq(key);
+        self.apply_pitch();
+        let v = vel_amp(vel);
+        let n = ((self.sr / self.base_f) as usize / 2).max(3);
+        let mut lp = OnePole::lowpass((self.pick_lp_hz * 0.5).max(400.0), self.sr);
+        self.hammer = (0..n)
+            .map(|_| lp.process(self.rng.white()) * v * 0.30)
+            .collect();
+        self.hammer_pos = 0;
+        self.sub_env = self.sub_env.max(0.6 * v);
+        self.env = self.env.max(0.3 * v);
+        true
     }
 }
 
@@ -956,6 +1105,7 @@ pub struct Wind {
     a2: f32,
     a3: f32,
     base_f: f32,
+    bend: f32,
     scoop: f32, // pitch multiplier settling toward 1.0
     scoop_k: f32,
     breath_filt: Biquad,
@@ -994,6 +1144,7 @@ impl Wind {
             a2,
             a3,
             base_f: f,
+            bend: 1.0,
             scoop: if whistle { 0.990 } else { 0.984 },
             scoop_k: 0.05,
             breath_filt: Biquad::bandpass((f * 2.0).min(sr * 0.4), 2.0, sr),
@@ -1026,7 +1177,7 @@ impl Voice for Wind {
                 } else {
                     0.0
                 };
-                let f = self.base_f * self.scoop * (1.0 + vib);
+                let f = self.base_f * self.bend * self.scoop * (1.0 + vib);
                 self.fund.set_freq(f, self.sr);
                 self.h2.set_freq(f * 2.0, self.sr);
                 self.h3.set_freq(f * 3.0, self.sr);
@@ -1051,6 +1202,19 @@ impl Voice for Wind {
     fn released(&self) -> bool {
         self.env.released()
     }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+    }
+
+    fn legato_to(&mut self, key: u8, _vel: u8) -> bool {
+        // slur: glide from the old pitch via the scoop, keep the air moving
+        let new_f = key_freq(key);
+        self.scoop = (self.base_f * self.scoop / new_f).clamp(0.85, 1.18);
+        self.base_f = new_f;
+        self.chiff_amp = 0.0;
+        true
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1060,6 +1224,7 @@ impl Voice for Wind {
 pub struct Bowed {
     saw: BlepSaw,
     base_f: f32,
+    bend: f32,
     scoop: f32,
     body: [Biquad; 3],
     lp: OnePole, // bow-pressure brightness: opens with the envelope
@@ -1084,6 +1249,7 @@ impl Bowed {
         Bowed {
             saw: BlepSaw::new(f * 0.975, sr, rng.white() * 0.5 + 0.5),
             base_f: f,
+            bend: 1.0,
             scoop: 0.975 + 0.008 * (vel as f32 / 127.0),
             body: [
                 Biquad::peak(280.0, 1.2, 5.0, sr),
@@ -1120,7 +1286,7 @@ impl Voice for Bowed {
                     0.0
                 };
                 self.saw
-                    .set_freq(self.base_f * self.scoop * (1.0 + vib), self.sr);
+                    .set_freq(self.base_f * self.bend * self.scoop * (1.0 + vib), self.sr);
                 // more bow pressure -> brighter tone
                 self.lp.set_cutoff(900.0 + 5200.0 * self.last_env, self.sr);
             }
@@ -1150,21 +1316,50 @@ impl Voice for Bowed {
     fn released(&self) -> bool {
         self.env.released()
     }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+    }
+
+    fn legato_to(&mut self, key: u8, _vel: u8) -> bool {
+        // one bow, new finger: glide over via the scoop, no fresh bite
+        let new_f = key_freq(key);
+        self.scoop = (self.base_f * self.scoop / new_f).clamp(0.85, 1.18);
+        self.base_f = new_f;
+        true
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
-/// LA layering (sampled attack + modeled sustain) for the solo voices —
-/// level-matched to the models by the `la_level_continuity` test.
+/// LA layering (sampled attack + modeled sustain) — level-matched to the
+/// models by the `la_level_continuity` test.
 const LA_VIOLIN: (f32, (f32, f32)) = (0.30, (0.12, 0.38));
-const LA_FLUTE: (f32, (f32, f32)) = (0.25, (0.06, 0.24));
+const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
+const LA_PIANO: (f32, (f32, f32)) = (0.42, (0.18, 0.85));
 
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
     let noise_off = (0.0, 0.01, 1000.0, 1.0);
     match program {
-        0..=7 => Box::new(piano(key, vel, sr, seed)),
+        0..=7 => {
+            let model = Box::new(piano(key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_PIANO;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::piano_bank(vel, seed & 1 == 0),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         8 => Box::new(bell(
             key,
             vel,
@@ -1213,7 +1408,8 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         16..=23 => Box::new(organ(program, key, vel, sr, seed)),
         24 => Box::new(Pluck::new(&NYLON, key, vel, sr, seed)),
         25 => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
-        26..=28 => Box::new(Pluck::new(&CLEAN, key, vel, sr, seed)),
+        26 | 27 => Box::new(Pluck::new(&CLEAN, key, vel, sr, seed)),
+        28 => Box::new(Pluck::new(&MUTED, key, vel, sr, seed)),
         29..=31 => Box::new(Pluck::new(&DRIVE, key, vel, sr, seed)),
         32..=34 | 36..=39 => Box::new(Pluck::new(&BASS, key, vel, sr, seed)),
         35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
@@ -1274,6 +1470,20 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
 mod tests {
     use super::*;
 
+    /// Lowpass twice, then count rising zero crossings.
+    fn measure_pitch(seg: &[f32], sr: f32) -> f32 {
+        let mut lp1 = OnePole::lowpass(700.0, sr);
+        let mut lp2 = OnePole::lowpass(700.0, sr);
+        let f: Vec<f32> = seg.iter().map(|&x| lp2.process(lp1.process(x))).collect();
+        let mut c = 0;
+        for w in f.windows(2) {
+            if w[0] <= 0.0 && w[1] > 0.0 {
+                c += 1;
+            }
+        }
+        c as f32 / (seg.len() as f32 / sr)
+    }
+
     /// A plucked A4 should oscillate near 440 Hz (count zero crossings).
     #[test]
     fn pluck_pitch_a4() {
@@ -1327,6 +1537,47 @@ mod tests {
             blocks += 1;
         }
         assert!(blocks < 100, "organ never released");
+    }
+
+    /// A bent string must sound at the bent pitch: A4 bent +2 semitones
+    /// should ring near B4 once the glide settles.
+    #[test]
+    fn pluck_bend_two_semitones() {
+        let sr = 44100.0;
+        let mut v = Pluck::new(&STEEL, 69, 100, sr, 9);
+        v.set_pitch(2f32.powf(2.0 / 12.0));
+        let mut buf = vec![0f32; 44100];
+        v.render(&mut buf);
+        let hz = measure_pitch(&buf[8820..30870], sr);
+        assert!((hz - 493.9).abs() < 8.0, "bent pitch {hz} Hz");
+    }
+
+    /// A hammer-on retunes the ringing string without a fresh pluck.
+    #[test]
+    fn pluck_hammer_on_retunes() {
+        let sr = 44100.0;
+        let mut v = Pluck::new(&CLEAN, 69, 100, sr, 12);
+        let mut buf = vec![0f32; 11025];
+        v.render(&mut buf); // let A4 ring for 0.25 s
+        assert!(v.legato_to(74, 90)); // hammer to D5
+        let mut buf2 = vec![0f32; 44100];
+        v.render(&mut buf2);
+        let hz = measure_pitch(&buf2[8820..30870], sr);
+        assert!((hz - 587.3).abs() < 9.0, "hammered pitch {hz} Hz");
+    }
+
+    /// A palm-muted string dies much faster than an open one.
+    #[test]
+    fn muted_dies_fast() {
+        let sr = 44100.0;
+        let mut v = Pluck::new(&MUTED, 52, 100, sr, 5);
+        let mut buf = vec![0f32; 4096];
+        let mut blocks = 0;
+        while v.render(&mut buf) && blocks < 40 {
+            buf.fill(0.0);
+            blocks += 1;
+        }
+        assert!(blocks < 40, "palm mute rang too long ({blocks} blocks)");
     }
 
     /// The fiddle's scoop should settle: pitch after a second must be much

@@ -189,10 +189,14 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
     let one = |amp: f32, t: f32, filt: Biquad| vec![(amp, t, filt)];
     match key {
         35 | 36 => d(
-            &[(165.0, 1.0, 0.30, 28.0)],
-            &one(0.5, 0.006, Biquad::highpass(1200.0, 0.7, sr)),
-            0.6,
-            0.95,
+            // beater knock over a sub drop (86 -> ~45 Hz): the chest thump
+            &[
+                (165.0, 0.8, 0.16, 28.0),
+                (86.0, 1.1 + 0.4 * velnorm, 0.42, 3.0),
+            ],
+            &one(0.5, 0.005, Biquad::highpass(2500.0, 0.7, sr)),
+            0.8,
+            1.0,
         ),
         37 => d(
             // side stick

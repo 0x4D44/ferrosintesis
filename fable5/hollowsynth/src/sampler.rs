@@ -97,6 +97,121 @@ fn flute() -> &'static [Zone] {
     })
 }
 
+fn piano_pp() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "piano_C2_pp.wav" => 65.05,
+            "piano_G2_pp.wav" => 97.77,
+            "piano_C3_pp.wav" => 130.68,
+            "piano_G3_pp.wav" => 195.31,
+            "piano_C4_pp.wav" => 261.04,
+            "piano_G4_pp.wav" => 393.15,
+            "piano_C5_pp.wav" => 523.65,
+            "piano_G5_pp.wav" => 784.41,
+            "piano_C6_pp.wav" => 1051.84,
+        )
+    })
+}
+
+fn piano_mf() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "piano_C2_mf.wav" => 65.17,
+            "piano_G2_mf.wav" => 98.10,
+            "piano_C3_mf.wav" => 130.94,
+            "piano_G3_mf.wav" => 196.23,
+            "piano_C4_mf.wav" => 261.25,
+            "piano_G4_mf.wav" => 393.58,
+            "piano_C5_mf.wav" => 524.52,
+            "piano_G5_mf.wav" => 785.35,
+            "piano_C6_mf.wav" => 1050.22,
+        )
+    })
+}
+
+fn piano_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "piano_C2_f.wav" => 65.52,
+            "piano_G2_f.wav" => 98.33,
+            "piano_C3_f.wav" => 131.19,
+            "piano_G3_f.wav" => 195.73,
+            "piano_C4_f.wav" => 261.74,
+            "piano_G4_f.wav" => 393.96,
+            "piano_C5_f.wav" => 525.21,
+            "piano_G5_f.wav" => 786.26,
+            "piano_C6_f.wav" => 1050.00,
+        )
+    })
+}
+
+fn piano_pp_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "piano_C2_pp_rr2.wav" => 65.05,
+            "piano_G2_pp_rr2.wav" => 97.77,
+            "piano_C3_pp_rr2.wav" => 130.60,
+            "piano_G3_pp_rr2.wav" => 194.91,
+            "piano_C4_pp_rr2.wav" => 261.00,
+            "piano_G4_pp_rr2.wav" => 392.77,
+            "piano_C5_pp_rr2.wav" => 523.95,
+            "piano_G5_pp_rr2.wav" => 784.04,
+            "piano_C6_pp_rr2.wav" => 1049.08,
+        )
+    })
+}
+
+fn piano_mf_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "piano_C2_mf_rr2.wav" => 65.51,
+            "piano_G2_mf_rr2.wav" => 98.28,
+            "piano_C3_mf_rr2.wav" => 131.12,
+            "piano_G3_mf_rr2.wav" => 196.23,
+            "piano_C4_mf_rr2.wav" => 261.29,
+            "piano_G4_mf_rr2.wav" => 393.76,
+            "piano_C5_mf_rr2.wav" => 524.92,
+            "piano_G5_mf_rr2.wav" => 785.18,
+            "piano_C6_mf_rr2.wav" => 1049.43,
+        )
+    })
+}
+
+fn piano_f_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "piano_C2_f_rr2.wav" => 65.58,
+            "piano_G2_f_rr2.wav" => 98.43,
+            "piano_C3_f_rr2.wav" => 131.20,
+            "piano_G3_f_rr2.wav" => 196.39,
+            "piano_C4_f_rr2.wav" => 261.73,
+            "piano_G4_f_rr2.wav" => 393.77,
+            "piano_C5_f_rr2.wav" => 525.19,
+            "piano_G5_f_rr2.wav" => 786.16,
+            "piano_C6_f_rr2.wav" => 1050.12,
+        )
+    })
+}
+
+/// Velocity picks the dynamic layer; alternating round robins keep
+/// repeated notes from being byte-identical (the machine-gun tell).
+pub fn piano_bank(vel: u8, rr2: bool) -> &'static [Zone] {
+    match (vel, rr2) {
+        (0..=51, false) => piano_pp(),
+        (0..=51, true) => piano_pp_rr2(),
+        (52..=95, false) => piano_mf(),
+        (52..=95, true) => piano_mf_rr2(),
+        (_, false) => piano_f(),
+        (_, true) => piano_f_rr2(),
+    }
+}
+
 pub fn violin_bank(vel: u8) -> &'static [Zone] {
     if vel >= 80 {
         violin_f()
@@ -134,6 +249,7 @@ pub struct LaVoice {
     zone: &'static Zone,
     pos: f32,
     step: f32,
+    base_step: f32,
     gain: f32,
     rel_gain: f32,
     rel_mul: f32,
@@ -167,6 +283,7 @@ impl LaVoice {
             zone,
             pos: 0.0,
             step,
+            base_step: step,
             gain: gain * (0.35 + 0.65 * vel_amp(vel)),
             rel_gain: 1.0,
             rel_mul: 1.0,
@@ -215,6 +332,22 @@ impl Voice for LaVoice {
     fn released(&self) -> bool {
         self.sustain.released()
     }
+
+    fn set_pitch(&mut self, mult: f32) {
+        // bend the transient with the note, and the model underneath
+        self.step = self.base_step * mult;
+        self.sustain.set_pitch(mult);
+    }
+
+    fn legato_to(&mut self, key: u8, vel: u8) -> bool {
+        // a slur has no fresh attack: retire the transient, glide the model
+        if self.sustain.legato_to(key, vel) {
+            self.rel_mul = self.rel_t60_mul;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -225,9 +358,19 @@ mod tests {
 
     #[test]
     fn banks_parse() {
-        for z in violin_f().iter().chain(violin_p()).chain(flute()) {
+        for z in violin_f()
+            .iter()
+            .chain(violin_p())
+            .chain(flute())
+            .chain(piano_pp())
+            .chain(piano_mf())
+            .chain(piano_f())
+            .chain(piano_pp_rr2())
+            .chain(piano_mf_rr2())
+            .chain(piano_f_rr2())
+        {
             assert!(z.data.len() > 20_000, "zone too short: {}", z.data.len());
-            assert!((100.0..2500.0).contains(&z.root), "odd root {}", z.root);
+            assert!((40.0..2500.0).contains(&z.root), "odd root {}", z.root);
             let peak = z.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
             assert!(peak > 0.5, "zone not normalised: peak {peak}");
         }
@@ -262,23 +405,25 @@ mod tests {
     #[test]
     fn la_level_continuity() {
         let sr = 44100.0;
-        for (program, name) in [(40u8, "fiddle"), (73u8, "flute")] {
+        for (program, name) in [(40u8, "fiddle"), (73u8, "flute"), (0u8, "piano")] {
             let mut v = voices::make(program, 69, 100, sr, 5, true);
             let mut buf = vec![0f32; 44100]; // 1 s, note held
             v.render(&mut buf);
             let rms = |a: usize, b: usize| {
                 (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
             };
-            // 100 ms windows from 50 ms to 950 ms
+            // 100 ms windows from 50 ms to 950 ms; a natural decay is fine,
+            // but no adjacent pair may jump (a bad handover is a step)
             let w: Vec<f32> = (0..9)
                 .map(|k| rms(2205 + k * 4410, 2205 + (k + 1) * 4410))
                 .collect();
-            let hi = w.iter().cloned().fold(0.0f32, f32::max);
-            let lo = w.iter().cloned().fold(f32::INFINITY, f32::min);
-            assert!(
-                hi / lo < 3.0,
-                "{name}: level jump across the crossfade: {w:?}"
-            );
+            for pair in w.windows(2) {
+                let ratio = (pair[0] / pair[1]).max(pair[1] / pair[0]);
+                assert!(
+                    ratio < 2.4,
+                    "{name}: level jump across the crossfade: {w:?}"
+                );
+            }
         }
     }
 }

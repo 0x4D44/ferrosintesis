@@ -1,6 +1,7 @@
-//! Minimal Standard MIDI File reader: extracts the tempo map, note and
-//! controller events with absolute times in seconds. Supports type 0/1,
-//! running status, and skips anything it does not model (pitch bend, sysex).
+//! Minimal Standard MIDI File reader: extracts the tempo map, note,
+//! controller and pitch-bend events with absolute times in seconds.
+//! Supports type 0/1, running status, and skips anything it does not
+//! model (aftertouch, sysex).
 
 use std::path::Path;
 
@@ -10,6 +11,7 @@ pub enum EvKind {
     NoteOff { ch: u8, key: u8 },
     Cc { ch: u8, num: u8, val: u8 },
     Prog { ch: u8, prog: u8 },
+    Bend { ch: u8, semis: f32 }, // ±2 semitone range
 }
 
 #[derive(Debug, Clone)]
@@ -174,7 +176,14 @@ pub fn parse(data: &[u8]) -> Result<Song, String> {
                         0xD0 => {
                             let _ = c.u8()?;
                         }
-                        0xA0 | 0xE0 => {
+                        0xE0 => {
+                            let lsb = c.u8()? as i32;
+                            let msb = c.u8()? as i32;
+                            let val = (msb << 7) | lsb; // 0..16383, centre 8192
+                            let semis = (val - 8192) as f32 / 8192.0 * 2.0;
+                            raw.push((tick, seq, EvKind::Bend { ch, semis }));
+                        }
+                        0xA0 => {
                             let _ = c.bytes(2)?;
                         }
                         _ => return Err(format!("bad status byte {status:#04x}")),
@@ -277,5 +286,42 @@ mod tests {
             "{}",
             song.events[1].sec
         );
+    }
+
+    /// A pitch-bend message decodes to the right signed semitone value.
+    #[test]
+    fn pitch_bend_decodes() {
+        let mut d: Vec<u8> = Vec::new();
+        d.extend(b"MThd");
+        d.extend(6u32.to_be_bytes());
+        d.extend(1u16.to_be_bytes());
+        d.extend(1u16.to_be_bytes());
+        d.extend(480u16.to_be_bytes());
+        let mut tr: Vec<u8> = Vec::new();
+        tr.extend([0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20]);
+        // max-up bend: 0x3FFF (raw 16383) on channel 0
+        tr.extend([0x00, 0xE0, 0x7F, 0x7F]);
+        // centre (no bend)
+        tr.extend([0x00, 0xE0, 0x00, 0x40]);
+        // max-down bend: raw 0
+        tr.extend([0x00, 0xE0, 0x00, 0x00]);
+        tr.extend([0x00, 0xFF, 0x2F, 0x00]);
+        d.extend(b"MTrk");
+        d.extend((tr.len() as u32).to_be_bytes());
+        d.extend(&tr);
+
+        let song = parse(&d).unwrap();
+        let bends: Vec<f32> = song
+            .events
+            .iter()
+            .filter_map(|e| match e.kind {
+                EvKind::Bend { semis, .. } => Some(semis),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(bends.len(), 3);
+        assert!((bends[0] - 2.0).abs() < 0.01, "{}", bends[0]);
+        assert!(bends[1].abs() < 0.01, "{}", bends[1]);
+        assert!((bends[2] - (-2.0)).abs() < 0.01, "{}", bends[2]);
     }
 }

@@ -304,10 +304,20 @@ def the_return(sc, t):
             sc.note(2, en.pitch(n("E5"), IONIAN, deg), b, 4.0, int(lerp(84, 104, grow)), jt=2)
         if c % 8 == 0 and c >= 8:
             sc.hit(49, b, int(lerp(76, 96, grow)))
-    en.line(sc, 10, t + 12 * m.CYCLE, E4, IONIAN, m.THEME, 88, vel_end=96)
-    en.line(sc, 10, t + 20 * m.CYCLE, E4, IONIAN, m.THEME, 94, vel_end=104, octave=1)
-    en.line(sc, 12, t + 20 * m.CYCLE, E4, IONIAN, m.THEME, 78, vel_end=88)
+    tb1 = t + 12 * m.CYCLE
+    tb2 = t + 20 * m.CYCLE
+    en.line(sc, 10, tb1, E4, IONIAN, m.THEME, 88, vel_end=96)
+    en.line(sc, 10, tb2, E4, IONIAN, m.THEME, 94, vel_end=104, octave=1)
+    en.line(sc, 12, tb2, E4, IONIAN, m.THEME, 78, vel_end=88)
+    en.bend_ramp(sc, 10, tb1 + 28.7, tb1 + 29.3, -1.2, 0.0)
+    en.bend_ramp(sc, 10, tb2 + 28.7, tb2 + 29.3, -1.2, 0.0)
     en.expr_curve(sc, 5, [(t, 70), (t + cycles * m.CYCLE, 100)], step=2)
+
+    # a rapid-fire burst as the ground rises into the summit cadence
+    tc0 = t + cycles * m.CYCLE
+    burst = [1, 3, 5, 8, 5, 3, 1, 3, 5, 8, 10, 8, 5, 8, 10, 12]
+    en.run(sc, 10, tc0 - 4.0, E4, IONIAN, burst, 0.25, 90, 114,
+           octave_double=12)
 
     # the summit cadence, then the great chord
     tc = t + cycles * m.CYCLE
@@ -365,6 +375,8 @@ def reel(sc, t):
     sc.tempo(t + 176, 138)
     for ch in (4, 5, 6):
         sc.cc(ch, 11, 100, t)
+    sc.program(14, 25, t)          # harp channel becomes a tremolo mandolin
+    sc.cc(14, 7, 0, t)
     D2, D3, D4 = n("D2"), n("D3"), n("D4")
     bars = 48
     harm = [0, 0, 3, 4]
@@ -402,6 +414,13 @@ def reel(sc, t):
             for k in range(8):
                 sc.note(15, roll[(0, 2, 1, 3, 0, 3, 1, 2)[k]], b + k * 0.5, 0.45,
                         int(lerp(52, 68, grow)), jt=3)
+        if bar == 32:
+            sc.cc(14, 7, 78, b)
+        if bar >= 32:                  # tremolo mandolin: the classic rapid pick
+            top = en.pitch(D4, IONIAN, 8 + s)
+            for k in range(16):
+                sc.note(14, top, b + k * 0.25, 0.23,
+                        int(lerp(54, 74, grow)) + (6 if k % 2 == 0 else 0), jt=1, jv=3)
     # the tune: fiddle, whistle, thirds, then everyone
     plan = [(0, 12, m.REEL_A, 0, 0), (4, 12, m.REEL_A, 0, 0),
             (8, 11, m.REEL_B, 0, 1), (12, 11, m.REEL_B, 0, 1),
@@ -421,7 +440,12 @@ def reel(sc, t):
             en.line(sc, 1, b, D4, IONIAN,
                     [nt for i, nt in enumerate(strain) if i % 2 == 0],
                     56, octave=1, gate=0.8)
-            en.line(sc, 10, b, D4, IONIAN, strain, vel - 6, gate=0.9)
+            # the lead guitar hammers the run instead of re-picking every
+            # note: overlapping gate + CC68 lets the synth slur note to note
+            sc.cc(10, 68, 127, b - 0.05)
+            en.line(sc, 10, b, D4, IONIAN, strain, vel - 6, vel_end=vel + 4,
+                    gate=1.2)
+            sc.cc(10, 68, 0, b + 4.3)
     # the last bar of tune is replaced by the send-off
     bend = t + bars * 4
     rise = [(1, 0, 0.5), (2, 0.5, 0.5), (3, 1, 0.5), (4, 1.5, 0.5),

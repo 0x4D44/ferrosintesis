@@ -169,6 +169,12 @@ class Score:
     def hit(self, drum: int, beat: float, vel: int, jt: int = 3, jv: int = 5) -> None:
         self.note(9, drum, beat, 0.25, vel, jt=jt, jv=jv)
 
+    def bend(self, ch: int, beat: float, semis: float) -> None:
+        """Pitch bend in semitones (range +/-2, the synth's convention)."""
+        raw = max(0, min(16383, int(round(8192 + semis / 2.0 * 8192))))
+        self.events.setdefault(ch, []).append(
+            (_tick(beat), 2, bytes([0xE0 | ch, raw & 0x7F, raw >> 7])))
+
     # -- conductor ----------------------------------------------------------
     def tempo(self, beat: float, bpm: float) -> None:
         self.tempos.append((beat, bpm))
@@ -302,6 +308,39 @@ def pad_block(sc: Score, ch: int, t0: float, chords: list[list[int] | None],
             vv = vel if vel_end is None else lerp(vel, vel_end, (i * span) / total)
             sc.note(ch, p, b, (j - i + 1) * span + legato, int(vv), jt=4, jv=3)
             i = j + 1
+
+
+def bend_ramp(sc: Score, ch: int, t0: float, t1: float,
+              s0: float, s1: float, steps: int = 12) -> None:
+    """Glide the channel bend from s0 to s1 semitones over [t0, t1]."""
+    for i in range(steps + 1):
+        x = i / steps
+        sc.bend(ch, lerp(t0, t1, x), lerp(s0, s1, x))
+
+
+def run(sc: Score, ch: int, t0: float, base: int, mode: str,
+        degrees: list[int], spacing: float, vel0: int, vel1: int,
+        gate: float = 0.95, jt: int = 1, octave_double: int | None = None,
+        legato: bool = False) -> float:
+    """Rapid-fire line: evenly spaced degrees with a velocity ramp —
+    the classic Oldfield machine-gun figure. Timing jitter is kept tight
+    (the evenness IS the style); the life lives in the crescendo.
+    With legato=True the notes overlap so the synth hammers instead of
+    re-picking (CC68 must be on for the channel). Returns the end beat."""
+    if legato:
+        sc.cc(ch, 68, 127, t0 - 0.05)
+    n = len(degrees)
+    for i, deg in enumerate(degrees):
+        vel = int(round(lerp(vel0, vel1, i / max(1, n - 1))))
+        dur = spacing * (1.25 if legato else gate)
+        p = pitch(base, mode, deg)
+        sc.note(ch, p, t0 + i * spacing, dur, vel, jt=jt, jv=2)
+        if octave_double is not None:
+            sc.note(ch, p + octave_double, t0 + i * spacing, dur,
+                    max(1, vel - 10), jt=jt, jv=2)
+    if legato:
+        sc.cc(ch, 68, 0, t0 + n * spacing + 0.3)
+    return t0 + n * spacing
 
 
 def expr_curve(sc: Score, ch: int, points: list[tuple[float, int]],

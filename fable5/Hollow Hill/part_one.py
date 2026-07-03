@@ -258,7 +258,16 @@ def stormrise(sc, t):
     sc.program(5, 48, t)           # full string ensemble
     sc.program(12, 29, t)          # the fiddle picks up an overdriven voice
     sc.program(3, 33, t)
-    sc.cc(13, 11, 0, t)            # pads out of the way
+    sc.program(13, 28, t)          # the pad channel becomes a palm-muted guitar
+    sc.cc(13, 11, 110, t)
+    sc.cc(13, 10, 28, t)           # hard left -- the classic twin-guitar spread
+    sc.cc(13, 91, 28, t)           # chugs stay dry and tight
+    sc.cc(13, 93, 0, t)
+    sc.cc(13, 94, 0, t)
+    sc.program(11, 29, t)          # the flute channel becomes a second electric
+    sc.cc(11, 10, 100, t)          # hard right, answering the chug guitar
+    sc.cc(11, 91, 40, t)
+    sc.cc(11, 94, 0, t)            # machine-gun runs would smear in the echo
     sc.cc(4, 11, 100, t)
     sc.tempo(t + 96, 120)
     sc.tempo(t + 160, 126)
@@ -295,6 +304,28 @@ def stormrise(sc, t):
             for k in range(8):
                 p = en.pitch(base + 24, AEOLIAN, (1, 3, 5)[k % 3])
                 sc.note(5, p, b + k * 0.5, 0.5, int(lerp(40, 76, grow)), jt=4)
+        # palm-muted chug, 3+3+2 accents — the engine room of the storm
+        if 8 <= bar < bars - 1:
+            root = en.pitch(base + 12, AEOLIAN, 1)
+            for k in range(8):
+                acc = 10 if k in (0, 3, 6) else 0
+                sc.note(13, root, b + k * 0.5, 0.30,
+                        int(lerp(58, 86, grow)) + acc, jt=2, jv=3)
+        # rapid fire: doubled semiquaver cells, then sextuplet rips (bar 54+)
+        if 32 <= bar < bars - 1:
+            cell_a = [1, 2, 3, 5, 3, 2, 1, 2, 3, 5, 6, 5, 3, 2, 1, 2]
+            cell_b = [1, 3, 5, 8, 5, 3, 1, 3, 5, 8, 10, 8, 5, 3, 5, 8]
+            v0 = int(lerp(74, 96, grow))
+            if bar < 54:
+                cell = cell_a if bar % 2 == 0 else cell_b
+                en.run(sc, 11, b, base + 24, AEOLIAN, cell, 0.25,
+                       v0, v0 + 8, octave_double=12)
+            else:
+                # a sextuplet rip: up-down-up within one octave, not a climb
+                # into the stratosphere
+                rip = list(range(1, 9)) + list(range(8, 0, -1)) + list(range(1, 9))
+                en.run(sc, 11, b, base + 12, AEOLIAN, rip,
+                       4.0 / 24.0, 90, 112, octave_double=12)
         # kit
         sc.hit(36, b, 92)
         sc.hit(36, b + 1.5, 78)
@@ -314,7 +345,13 @@ def stormrise(sc, t):
                         0.24, int(lerp(50, 96, k / 15)), jt=2)
     for block in range(1, 4):                         # overdriven wail per block
         base = bases[block * 16 - 8] + 24
-        en.line(sc, 12, t + (block * 16 - 8) * 4, base, AEOLIAN, wail, 84, vel_end=96)
+        tw = t + (block * 16 - 8) * 4
+        en.line(sc, 12, tw, base, AEOLIAN, wail, 84, vel_end=96)
+        # scoop into the opening cry, and bend the last note up a whole tone
+        sc.bend(12, tw - 0.10, -1.5)
+        en.bend_ramp(sc, 12, tw, tw + 0.6, -1.5, 0.0)
+        en.bend_ramp(sc, 12, tw + 14.2, tw + 15.2, 0.0, 2.0)
+        en.bend_ramp(sc, 12, tw + 15.6, tw + 16.0, 2.0, 0.0)
     # final bar: unison rise and a hard cut
     b = t + (bars - 1) * 4
     for k in range(8):
@@ -324,6 +361,7 @@ def stormrise(sc, t):
         sc.hit(38, b + k * 0.5, 70 + 4 * k)
     sc.hit(49, b + 4, 110)
     sc.note(2, n("E5"), b + 4, 4.0, 90, jt=0)
+    sc.cc(13, 11, 0, b + 5)        # the chug guitar bows out with the storm
     return t + bars * 4 + 6        # two beats of held bell, four of silence
 
 
@@ -392,12 +430,11 @@ def summoning(sc, t):
             top = en.pitch(E5, AEOLIAN, r + 7)
             for k in range(16):
                 sc.note(15, top, b + k * 0.25, 0.24, int((52 + (k % 2) * 6) * grow), jt=2)
-        if bar >= 48:      # Spanish guitar runs
+        if bar >= 48:      # Spanish guitar runs — hammered, not re-picked
             up = bar % 2 == 0
-            for k in range(16):
-                deg = r + (k if up else 15 - k)
-                sc.note(8, en.pitch(E3, AEOLIAN, deg), b + k * 0.25, 0.24,
-                        int((54 + (6 if k % 4 == 0 else 0)) * grow), jt=3)
+            degs = [r + (k if up else 15 - k) for k in range(16)]
+            en.run(sc, 8, b, E3, AEOLIAN, degs, 0.25,
+                   int(50 * grow), int(64 * grow), legato=True)
         if bar >= 64:      # strings and choir
             en.pad_block(sc, 5, b, [en.triad(E4, AEOLIAN, r, 4)], 4.0,
                          size=4, lo=57, hi=83, vel=int(64 * grow))
@@ -406,8 +443,11 @@ def summoning(sc, t):
             sc.note(6, root + 19, b, 4.0, int(56 * grow), jt=4)
     # the theme over the ground, twice, from bar 56
     for rep in (56, 64, 72, 80):
-        en.line(sc, 10, t + rep * 4, E4, AEOLIAN, m.THEME, 96, vel_end=104,
+        tb = t + rep * 4
+        en.line(sc, 10, tb, E4, AEOLIAN, m.THEME, 96, vel_end=104,
                 octave=(1 if rep >= 72 else 0))
+        # THEME's last event is (1, 29, 3): a long tonic -- bend up into it
+        en.bend_ramp(sc, 10, tb + 28.7, tb + 29.3, -1.2, 0.0)
     # the bells — stately rather than clangorous: mid register, room to ring
     en.line(sc, 2, t + 72 * 4, E4, AEOLIAN, m.BELL, 88, gate=1.6)
     en.line(sc, 2, t + 76 * 4, E4, AEOLIAN, m.BELL, 92, gate=1.6)

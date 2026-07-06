@@ -19,6 +19,7 @@ const BLOCK: usize = 64;
 // pitch-bend; organs morph their tremulant toward Leslie-fast instead.
 const VIB_RATE_HZ: f32 = 5.3; // vibrato LFO rate
 const VIB_DEPTH_CENTS: f32 = 35.0; // pitch depth at mod = 1
+const LESLIE_SLOW_HZ: f32 = 0.9; // tremulant rate the rotor brakes down to (chorale)
 const LESLIE_FAST_HZ: f32 = 6.8; // tremulant rate the rotor spins up to
 const LESLIE_INERTIA_S: f32 = 1.5; // rotor time constant (spin-up/down)
 const LESLIE_DEPTH_ADD: f32 = 0.10; // extra tremulant depth at mod = 1
@@ -279,7 +280,8 @@ struct Strip {
     expr: f32,
     mod_target: f32, // CC1, smoothed into mod_cur like expression
     mod_cur: f32,
-    mod_engaged: bool, // mod machinery active (stays on through spin-down)
+    mod_engaged: bool,  // mod machinery active (stays on through spin-down)
+    mod_authored: bool, // CC1 has been sent at least once on this channel
     vib_phase: f32,
     leslie_rate: f32, // current tremulant rate/depth, slewed with inertia
     leslie_depth: f32,
@@ -308,6 +310,7 @@ impl Strip {
             mod_target: 0.0,
             mod_cur: 0.0,
             mod_engaged: false,
+            mod_authored: false,
             vib_phase: 0.0,
             leslie_rate: 0.0,
             leslie_depth: 0.0,
@@ -455,7 +458,12 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                     let s = &mut strips[ch as usize];
                     let v = val as f32 / 127.0;
                     match num {
-                        1 => s.mod_target = v,
+                        1 => {
+                            // first CC1 of any value makes the wheel authoritative
+                            // on this channel for the rest of the render
+                            s.mod_target = v;
+                            s.mod_authored = true;
+                        }
                         7 => s.volume = v * v,
                         10 => {
                             s.pan = v;
@@ -518,33 +526,56 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
 
         // CC1 mod wheel: per-block pitch/tremulant updates, before the
         // voices render. Nothing here runs for channels that never move
-        // the wheel, so mod-free renders are bit-identical to v0.5.
+        // the wheel (mod_authored stays false), so mod-free renders are
+        // bit-identical to v0.5.
         for (ci, strip) in strips.iter_mut().enumerate() {
             strip.mod_cur += expr_smooth * (strip.mod_target - strip.mod_cur);
             let on = strip.mod_cur > 1e-3;
-            if ci == 9 || (!on && !strip.mod_engaged) {
+            // an authored organ channel keeps its rotor under CC1 control even
+            // at mod = 0 (that means "brake to slow", not "revert to idle")
+            let authored_organ = strip.mod_authored && matches!(strip.program, 16..=23);
+            if ci == 9 || (!on && !strip.mod_engaged && !authored_organ) {
                 continue;
             }
             let m = if on { strip.mod_cur } else { 0.0 };
             let ch = ci as u8;
             if matches!(strip.program, 16..=23) {
                 // organs: the wheel is a Leslie speed control — the channel's
-                // one rotor slews toward fast with real inertia, and every
-                // organ voice on the channel follows it
+                // one rotor slews with real inertia, and every organ voice on
+                // the channel follows it. Once the wheel has been touched, CC1
+                // is authoritative: it sweeps the rotor across the full Leslie
+                // range (slow chorale .. fast) rather than nudging the program
+                // idle, so CC1 = 0 brakes to LESLIE_SLOW_HZ and CC1 = 127 spins
+                // up to LESLIE_FAST_HZ. Channels that never author CC1 fall back
+                // to the program idle (unreachable here, kept for clarity).
                 let (base_rate, base_depth) = voices::organ_trem_base(strip.program);
                 if !strip.mod_engaged {
-                    strip.leslie_rate = base_rate;
+                    // rotor starts at rest: LESLIE_SLOW for an authored channel,
+                    // else the program idle
+                    strip.leslie_rate = if strip.mod_authored {
+                        LESLIE_SLOW_HZ
+                    } else {
+                        base_rate
+                    };
                     strip.leslie_depth = base_depth;
                 }
-                let target_rate = base_rate + (LESLIE_FAST_HZ - base_rate) * m;
+                let target_rate = if strip.mod_authored {
+                    LESLIE_SLOW_HZ + (LESLIE_FAST_HZ - LESLIE_SLOW_HZ) * m
+                } else {
+                    base_rate
+                };
+                // base depth stays audible even at the slow chorale rate; the
+                // wheel only adds extra swirl on top as it spins up
                 let target_depth = base_depth + LESLIE_DEPTH_ADD * m;
                 strip.leslie_rate += leslie_k * (target_rate - strip.leslie_rate);
                 strip.leslie_depth += leslie_k * (target_depth - strip.leslie_depth);
                 for a in active.iter_mut().filter(|a| a.ch == ch) {
                     a.voice.set_trem(strip.leslie_rate, strip.leslie_depth);
                 }
-                // stay engaged until the rotor has coasted back to base speed
-                strip.mod_engaged = on || (strip.leslie_rate - base_rate).abs() > 0.01;
+                // an authored channel stays engaged for good (its rotor is now
+                // CC1-driven); an unauthored one coasts until it reaches idle
+                strip.mod_engaged =
+                    strip.mod_authored || on || (strip.leslie_rate - base_rate).abs() > 0.01;
             } else if vibrato_family(strip.program) {
                 strip.vib_phase += TAU * VIB_RATE_HZ * n as f32 / sr;
                 if strip.vib_phase > TAU {
@@ -887,15 +918,22 @@ mod tests {
             }
             c as f32 / (t1 - t0)
         };
-        // base 4.2 Hz slewing toward 6.8 Hz with a 1.5 s time constant
+        // CC1 = 127 is authored at t = 0, so the rotor starts at rest
+        // (LESLIE_SLOW_HZ ≈ 0.9 Hz) and slews toward 6.8 Hz with a 1.5 s
+        // time constant — a much wider sweep than the old ~4.2→6.8 nudge.
+        // The windowed AM rate averages ~2 Hz early (rotor still low and
+        // climbing) and ~7 Hz late (settled fast).
         let early = am_rate(0.15, 1.15);
         let late = am_rate(2.9, 3.9);
         assert!(
-            late > early + 0.7,
-            "no spin-up: early {early} Hz, late {late} Hz"
+            late > early + 3.0,
+            "sweep too narrow: early {early} Hz, late {late} Hz"
         );
-        assert!(early < 5.9, "rotor started too fast: {early} Hz");
-        assert!(late > 5.5, "rotor never got fast: {late} Hz");
+        assert!(
+            early < 3.5,
+            "rotor started too fast (should brake to slow): {early} Hz"
+        );
+        assert!(late > 6.0, "rotor never got fast: {late} Hz");
     }
 
     fn render_pluck_with_cc74(cc74: Option<u8>) -> Vec<f32> {

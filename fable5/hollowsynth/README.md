@@ -91,9 +91,16 @@ pull-off. hollowsynth models this at the engine level, not just per-voice:
   channel's pitch bend — so a bent-and-held note can bloom into vibrato,
   the way a guitarist's wail does. Drums, pianos, bells and the palm-mute
   are left alone. On **organs** the wheel is a Leslie speed control
-  instead: the tremulant rate slews from its idle speed toward ~6.8 Hz
-  with a ~1.5 s rotor time constant (real spin-up/spin-down inertia), and
-  the modulation deepens as it spins.
+  instead. The first CC1 event on a channel (any value) makes the wheel
+  *authoritative*: from then on the tremulant rate is CC1 mapped across
+  the full Leslie range — ~0.9 Hz (slow chorale) at CC1 = 0 up to ~6.8 Hz
+  (fast) at CC1 = 127 — so a 0→127 ramp sweeps the rotor over its whole
+  span, and CC1 = 0 *brakes to slow* rather than reverting to the program
+  idle. The rate slews with a ~1.5 s rotor time constant (real
+  spin-up/spin-down inertia), the base tremulant depth stays audible even
+  at the slow rate, and the modulation deepens further as it spins up. A
+  channel whose CC1 is never touched keeps its program's idle tremulant
+  unchanged, so mod-free MIDI renders exactly as before.
 - **CC64 sustain pedal** holds NoteOffs: a note released while the pedal is
   down keeps ringing until the pedal lifts (the piano's pooled washes).
   Pedal-held voices are past their NoteOff, so they are never candidates

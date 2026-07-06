@@ -63,11 +63,17 @@ def _setup(sc) -> None:
         sc.cc(ch, 91, 60, T0)
     sc.cc(CH_RHYTHM, 10, 103, T0)         # L3 repans from M2's antiphonal 30
     sc.cc(CH_CRYSTAL, 94, 35, T0)         # gentle echo bed on the loop
-    for ch, v in ((CH_STEEL, 100), (CH_NYLON, 100), (CH_RHYTHM, 100),
+    for ch, v in ((CH_NYLON, 100), (CH_RHYTHM, 100),
                   (CH_BASS, 110), (CH_BELLS, 96), (CH_WINDS, 88),
                   (CH_ORGAN, 80), (CH_CRYSTAL, 92), (CH_DRUMS, 105),
                   (CH_STRINGS, 50)):
         sc.cc(ch, 11, v, T0)              # sane expression baselines
+    # L1 opens the movement alone after the loud M2: full expression while
+    # exposed (480-520), easing to the 100 baseline as L2 enters (the synth
+    # squares CC11, so 127 -> 100 is ~-4 dB) — lifts the floor of the
+    # near-inaudible opening trough without touching the terraced build.
+    en.cc_curve(sc, CH_STEEL, 11, [(T0, 127), (_cyc(8), 112),
+                                   (_cyc(10), 100)], step=1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +117,8 @@ def _lattice(sc) -> None:
                 base -= 6.0
             elif c - entry == 1:
                 base -= 3.0
+            if which == 0 and c < 8:      # lift the exposed opening line
+                base += 10.0              # (480-520): a near-silent trough
             _lattice_cycle(sc, which, c, base)
 
 
@@ -148,10 +156,14 @@ def _crystal(sc) -> None:
     k = 0
     b = t0
     while b <= t_last + 1e-9:
-        v = lerp(48.0, 56.0, (b - t0) / (t_last - t0))
-        v += (5 if k % 3 == 0 else 0) + (8 if b >= _cyc(TUTTI) else 0)
-        sc.note(CH_CRYSTAL, en.pitch(D5, MODE, degs[k % 3]), b, 0.9,
-                int(round(v)), jt=3, jv=3)
+        # A 15-beat breath: the loop drops out mid-plateau and re-enters,
+        # the re-entry reading as a lift into the 760 tutti.  Phase (k) keeps
+        # advancing so the loop resumes exactly where it would have been.
+        if not 675.0 <= b < 690.0:
+            v = lerp(48.0, 56.0, (b - t0) / (t_last - t0))
+            v += (5 if k % 3 == 0 else 0) + (8 if b >= _cyc(TUTTI) else 0)
+            sc.note(CH_CRYSTAL, en.pitch(D5, MODE, degs[k % 3]), b, 0.9,
+                    int(round(v)), jt=3, jv=3)
         b += 1.0
         k += 1
     sc.cc(CH_CRYSTAL, 10, 76, 799.7)      # hand the pan back centred-ish

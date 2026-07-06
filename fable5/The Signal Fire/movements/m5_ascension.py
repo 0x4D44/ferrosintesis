@@ -68,13 +68,13 @@ def _controllers(sc):
     for ch in MY_CHANNELS:
         sc.cc(ch, 91, 35, T0)                 # closest, driest movement
     sc.cc(cd.CH_DOUBLE, 10, 90, T0)           # ch13 in from hard-right 108
-    for ch, v in ((cd.CH_PIANO, 100), (cd.CH_PAD, 80), (cd.CH_CRYSTAL, 100),
+    # ch0/ch10/ch11 (glitter + figuration) get a breath cycle instead (_breath).
+    for ch, v in ((cd.CH_PAD, 80), (cd.CH_CRYSTAL, 100),
                   (cd.CH_BASS, 115), (cd.CH_ORGAN, 100), (cd.CH_DRUMS, 118),
-                  (cd.CH_RHYTHM, 100), (cd.CH_WAH, 100), (cd.CH_LEAD, 95),
-                  (cd.CH_DOUBLE, 90), (cd.CH_BELLS, 110)):
+                  (cd.CH_LEAD, 95), (cd.CH_DOUBLE, 90), (cd.CH_BELLS, 110)):
         sc.cc(ch, 11, v, T0)
     # the second peal lifts CC11 +5 everywhere it is riding
-    for ch, v in ((cd.CH_ORGAN, 105), (cd.CH_RHYTHM, 105), (cd.CH_WAH, 105),
+    for ch, v in ((cd.CH_ORGAN, 105),
                   (cd.CH_LEAD, 100), (cd.CH_DOUBLE, 95), (cd.CH_BELLS, 115),
                   (cd.CH_CRYSTAL, 105)):
         sc.cc(ch, 11, v, PEAL2)
@@ -95,6 +95,27 @@ def _controllers(sc):
     en.cc_curve(sc, cd.CH_PAD, 11, [(1578.0, 80), (1583.0, 96)], step=0.5)
     sc.cc(cd.CH_PAD, 91, 90, 1583.0)          # throw the ring into the hall
     sc.cc(cd.CH_BELLS, 91, 90, 1583.0)
+
+
+def _breath(sc):
+    """A CC11 breath cycle (~95 -> 75 -> 95 per 8 bars) on the high-note-count
+    glitter/figuration channels, which otherwise sit pinned wide open — so the
+    climax swells and recedes.  Written only across each channel's active
+    spans (the brief internal rests get no CC11)."""
+    spans = {
+        cd.CH_PIANO:  [(T0, 1376.0), (1408.0, CAD)],     # glitter
+        cd.CH_RHYTHM: [(T0, 1376.0), (1392.0, CAD)],     # figuration (on-beat)
+        cd.CH_WAH:    [(T0, 1376.0), (1392.0, CAD)],     # figuration (off-beat)
+    }
+    for ch, chspans in spans.items():
+        for s, e in chspans:
+            pts, b, peak = [], s, True
+            while b < e - 1e-9:
+                pts.append((b, 95 if peak else 75))
+                peak = not peak
+                b += 16.0
+            pts.append((e, 95 if peak else 75))
+            en.expr_curve(sc, ch, pts, step=2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -286,9 +307,13 @@ def _organ(sc):
 def _pad(sc):
     ch = cd.CH_PAD
     pcs_a, pcs_e = [57, 59, 61, 64], [56, 59, 62, 64]    # A add9 / E7
-    chords = [pcs_a if i % 2 == 0 else pcs_e for i in range(31)]
-    chords += [[50, 54, 57, 62], [52, 57, 59, 64]]       # D, Esus4 -> 1576
-    en.pad_block(sc, ch, T0, chords, 8.0, size=4, lo=55, hi=79, vel=58)
+    # Split the bed at the second peal so every voice re-strikes the 1440
+    # arrival — an arrival re-articulation, not one B4 tied for 248 beats.
+    chords1 = [pcs_a if i % 2 == 0 else pcs_e for i in range(16)]   # 1312-1440
+    en.pad_block(sc, ch, T0, chords1, 8.0, size=4, lo=55, hi=79, vel=58)
+    chords2 = [pcs_a if i % 2 == 0 else pcs_e for i in range(15)]   # 1440-1560
+    chords2 += [[50, 54, 57, 62], [52, 57, 59, 64]]      # D, Esus4 -> 1576
+    en.pad_block(sc, ch, PEAL2, chords2, 8.0, size=4, lo=55, hi=79, vel=62)
     for p in (52, 56, 59, 64):                           # E resolution
         sc.note(ch, p, 1576.0, 3.85, 60, jt=4, jv=3)
     for i, p in enumerate((57, 64, 69, 71, 76)):         # A add9, rings to
@@ -319,12 +344,20 @@ def _peal(sc):
 # Strings + choir — THEME_C in octaves (same augmentation as the bells)
 # ---------------------------------------------------------------------------
 def _watch(sc):
-    aug = [(d, s * 2.0, dur * 2.0) for d, s, dur in m.THEME_C]
+    # THEME_C phrase by phrase (each 8-beat chorale phrase, augmented x2 to 16
+    # beats), so each phrase can start -8 and recover across itself: the two
+    # peal statements surge and recede instead of one flat crescendo.
+    phrases = []
+    for p in range(4):
+        ph = [(d, (s - 8 * p) * 2.0, dur * 2.0)
+              for d, s, dur in m.THEME_C if 8 * p <= s < 8 * (p + 1)]
+        phrases.append((16.0 * p, ph))
     for t in (T0, PEAL2):
-        en.line(sc, cd.CH_STRINGS, t, GTR_A, ION, aug, 92, vel_end=97,
-                gate=1.02, jt=4)
-        en.line(sc, cd.CH_CHOIR, t, CHOIR_A, ION, aug, 88, vel_end=93,
-                gate=1.02, jt=4)
+        for off, ph in phrases:
+            en.line(sc, cd.CH_STRINGS, t + off, GTR_A, ION, ph, 89,
+                    vel_end=97, gate=1.02, jt=4)
+            en.line(sc, cd.CH_CHOIR, t + off, CHOIR_A, ION, ph, 85,
+                    vel_end=93, gate=1.02, jt=4)
     rise = [(1, 0, 8), (2, 8, 8), (3, 16, 8), (5, 24, 8)]   # 1408 terrace
     en.line(sc, cd.CH_STRINGS, 1408.0, GTR_A, ION, rise, 84, vel_end=92,
             gate=1.02, jt=4)
@@ -405,6 +438,7 @@ def _lead(sc):
 
 def build(sc):
     _controllers(sc)
+    _breath(sc)
     _drums(sc)
     _bass(sc)
     _figuration(sc)

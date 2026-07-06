@@ -3,15 +3,15 @@
   "artist": "Claude Fable 5",
   "style": "single continuous instrumental epic after Mike Oldfield (Incantations, The Songs of Distant Earth, Tubular Bells III, Guitars)",
   "track_count": 1,
-  "total_duration_seconds": 1012.29,
-  "total_duration_minutes": 16.87,
+  "total_duration_seconds": 1014.11,
+  "total_duration_minutes": 16.9,
   "tracks": [
     {
       "number": 1,
       "title": "The Signal Fire",
       "file": "midi/01 - The Signal Fire.mid",
-      "duration_seconds": 1012.29,
-      "duration_minutes": 16.87,
+      "duration_seconds": 1014.11,
+      "duration_minutes": 16.9,
       "movements": [
         {
           "name": "Signal",

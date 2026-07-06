@@ -65,6 +65,20 @@ FILL_W4 = [(1, 0.0, 0.5), (8, 0.5, 0.5), (7, 1.0, 0.25), (5, 1.25, 0.25),
 # By wave 5 the fills sing THEME_B's opening cell (octave pivot appended).
 FILL_W5 = [(1, 0.0, 0.5), (3, 0.5, 0.5), (5, 1.0, 0.75), (5, 1.75, 0.25),
            (6, 2.0, 0.5), (5, 2.5, 0.5), (3, 3.0, 0.5), (8, 3.5, 0.5)]
+# W5 bar-8 countermelody variants (full bars, one per 8-bar cycle) so the
+# countermelody keeps growing instead of freezing on one shape.  Vocabulary
+# reused from the fills above: octave-drop pivots, a 3-4-5-6 approach run, a
+# 0-1 pivot, and a rising run gesturing into the 1296 ascent.
+FILL_W5_OCT = [(8, 0.0, 0.5), (1, 0.5, 0.5), (8, 1.0, 0.5), (5, 1.5, 0.5),
+               (6, 2.0, 0.5), (5, 2.5, 0.5), (3, 3.0, 0.5), (1, 3.5, 0.5)]
+FILL_W5_APP = [(1, 0.0, 0.5), (1, 0.5, 0.5), (3, 1.0, 0.5), (4, 1.5, 0.5),
+               (5, 2.0, 0.5), (6, 2.5, 0.5), (5, 3.0, 0.5), (3, 3.5, 0.5)]
+FILL_W5_PIV = [(1, 0.0, 0.5), (0, 0.5, 0.5), (1, 1.0, 0.5), (0, 1.5, 0.5),
+               (1, 2.0, 0.5), (5, 2.5, 0.5), (1, 3.0, 0.5), (0, 3.5, 0.5)]
+FILL_W5_RISE = [(1, 0.0, 0.5), (3, 0.5, 0.5), (5, 1.0, 0.5), (6, 1.5, 0.5),
+                (8, 2.0, 0.5), (9, 2.5, 0.5), (10, 3.0, 0.5), (11, 3.5, 0.5)]
+W5_FILLS = [FILL_W5, FILL_W5_OCT, FILL_W5_APP, FILL_W5_PIV,
+            FILL_W4, FILL_W5, FILL_W5_RISE, FILL_W5_RISE]
 
 # W1 paraphrase of THEME_A's opening arch (stays under A4).
 PARA_W1 = [(5, 0, 2), (6, 2, 0.5), (7, 2.5, 0.5), (8, 3, 2.5),
@@ -147,13 +161,24 @@ def _ground(sc):
         en.strum(sc, cd.CH_STEEL, voice[:4], b, 1.9, v, down=True)
         en.strum(sc, cd.CH_STEEL, voice[1:4], b + 2.0, 0.95, v - 5, down=True)
         en.strum(sc, cd.CH_STEEL, voice[3:5], b + 3.0, 0.9, v - 8, down=False)
-        # palm-mute root eighths
+        # palm-mute root: W1 sustained roots (make room for the lead), W2
+        # quarter-note chug (mid density), W3+ the full driving eighths.
         root = 45 if _am(i) else 43
         cv = int(lerp(69, 77, grow))
-        for k in range(8):
-            acc = 5 if k in (0, 4) else (2 if k in (2, 6) else -3)
-            sc.note(cd.CH_RHYTHM, root, b + 0.5 * k, 0.23, cv + acc,
-                    jt=3, jv=3)
+        if b < W2:                          # W1: one sustained root per 2 beats
+            for k in range(2):
+                sc.note(cd.CH_RHYTHM, root, b + 2.0 * k, 1.85, cv + 2,
+                        jt=3, jv=3)
+        elif b < W3:                        # W2: quarter-note chug
+            for k in range(4):
+                acc = 5 if k == 0 else (2 if k == 2 else -2)
+                sc.note(cd.CH_RHYTHM, root, b + 1.0 * k, 0.9, cv + acc,
+                        jt=3, jv=3)
+        else:                               # W3+: full driving eighths
+            for k in range(8):
+                acc = 5 if k in (0, 4) else (2 if k in (2, 6) else -3)
+                sc.note(cd.CH_RHYTHM, root, b + 0.5 * k, 0.23, cv + acc,
+                        jt=3, jv=3)
 
 
 def _bass(sc):
@@ -163,8 +188,23 @@ def _bass(sc):
         wave = min(4, i // 16)
         vel = int(lerp(86, 97, i / (BARS - 1)))
         pos = i % 8
+        if wave == 0:                       # W1: half-time roots for the lead
+            if i % 4 == 3:                  # one dominant pickup per 4 bars
+                en.line(sc, cd.CH_BASS, b, BASS_A, DOR,
+                        [(1, 0.0, 1.85), (1, 2.0, 1.3)], vel, shift=sh,
+                        gate=0.92, jt=4)
+                sc.note(cd.CH_BASS, en.pitch(BASS_A, DOR, 5), b + 3.5, 0.45,
+                        vel, jt=4, jv=4)    # the fifth -> pickup into the A
+            else:
+                en.line(sc, cd.CH_BASS, b, BASS_A, DOR,
+                        [(1, 0.0, 1.85), (1, 2.0, 1.85)], vel, shift=sh,
+                        gate=0.92, jt=4)
+            continue
         if pos == 7 and wave >= 3:
-            fill = FILL_W4 if wave == 3 else FILL_W5
+            if wave == 3:
+                fill = FILL_W4
+            else:                           # W5: vary the bar-8 countermelody
+                fill = W5_FILLS[((i - 71) // 8) % len(W5_FILLS)]
             en.line(sc, cd.CH_BASS, b, BASS_A, DOR, fill, vel + 4,
                     shift=sh, gate=0.9, jt=4)
             continue
@@ -558,7 +598,7 @@ def _w5_block(sc, t, cap, vb, k):
 
 
 def _wave5(sc):
-    caps = (11, 13, 14, 16)                 # F#6 / A6+ / G6 / B6 doubled
+    caps = (11, 13, 14, 16)                 # peaks D5 / F#5 / G6 / B6 (top two octave-doubled)
     for k, t in enumerate((1056.0, 1120.0, 1184.0, 1248.0)):
         _w5_block(sc, t, caps[k], 96 + 3 * k, k)
     # flute doubles the mountain runs an octave up from 1120

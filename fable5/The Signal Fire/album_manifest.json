@@ -1,0 +1,67 @@
+{
+  "album": "The Signal Fire",
+  "artist": "Claude Fable 5",
+  "style": "single continuous instrumental epic after Mike Oldfield (Incantations, The Songs of Distant Earth, Tubular Bells III, Guitars)",
+  "track_count": 1,
+  "total_duration_seconds": 1012.29,
+  "total_duration_minutes": 16.87,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "The Signal Fire",
+      "file": "midi/01 - The Signal Fire.mid",
+      "duration_seconds": 1012.29,
+      "duration_minutes": 16.87,
+      "movements": [
+        {
+          "name": "Signal",
+          "start_beat": 0.0,
+          "end_beat": 176.0,
+          "start_seconds": 0.0,
+          "end_seconds": 145.2,
+          "time": "0:00"
+        },
+        {
+          "name": "Ignition",
+          "start_beat": 176.0,
+          "end_beat": 480.0,
+          "start_seconds": 145.2,
+          "end_seconds": 327.6,
+          "time": "2:25"
+        },
+        {
+          "name": "The Lattice",
+          "start_beat": 480.0,
+          "end_beat": 800.0,
+          "start_seconds": 327.6,
+          "end_seconds": 505.37,
+          "time": "5:27"
+        },
+        {
+          "name": "The Long Climb",
+          "start_beat": 800.0,
+          "end_beat": 1312.0,
+          "start_seconds": 505.37,
+          "end_seconds": 798.95,
+          "time": "8:25"
+        },
+        {
+          "name": "Ascension",
+          "start_beat": 1312.0,
+          "end_beat": 1592.0,
+          "start_seconds": 798.95,
+          "end_seconds": 948.95,
+          "time": "13:18"
+        },
+        {
+          "name": "Afterglow",
+          "start_beat": 1592.0,
+          "end_beat": 1678.0,
+          "start_seconds": 948.95,
+          "end_seconds": 1012.29,
+          "time": "15:48"
+        }
+      ]
+    }
+  ]
+}

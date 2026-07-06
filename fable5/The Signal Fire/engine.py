@@ -209,7 +209,37 @@ class Score:
     def duration_seconds(self) -> float:
         return self.seconds_at(self.last_beat)
 
+    def _resolve_overlaps(self) -> None:
+        """Truncate same-pitch overlapping notes so the file is unambiguous
+        on any GM synth: whenever two notes on one (channel, pitch) overlap,
+        the earlier note's off is clamped to the later note's on.  At an
+        equal tick the note-off sorts before the note-on (priority 4 < 5),
+        so the re-strike is always clean.  Idempotent; called by write()."""
+        for ch, ev in self.events.items():
+            per_pitch_ons: dict[int, list[int]] = {}
+            off_indices: dict[int, list[int]] = {}
+            for i, (tick, prio, data) in enumerate(ev):
+                status = data[0] & 0xF0
+                if status == 0x90 and data[2] > 0:
+                    per_pitch_ons.setdefault(data[1], []).append(tick)
+                elif status == 0x80 or (status == 0x90 and data[2] == 0):
+                    off_indices.setdefault(data[1], []).append(i)
+            for p, ons in per_pitch_ons.items():
+                idxs = off_indices.get(p, [])
+                if len(idxs) != len(ons):
+                    continue                    # unbalanced: leave untouched
+                ons.sort()
+                idxs.sort(key=lambda i: ev[i][0])
+                offs = [ev[i][0] for i in idxs]
+                for k in range(len(ons) - 1):
+                    if offs[k] > ons[k + 1]:
+                        offs[k] = ons[k + 1]    # clamp to the re-strike
+                for i, tick in zip(idxs, offs):
+                    if ev[i][0] != tick:
+                        ev[i] = (tick, ev[i][1], ev[i][2])
+
     def write(self, path: Path, title: str, comment: str = "") -> None:
+        self._resolve_overlaps()
         end = _tick(self.last_beat) + 2 * PPQ
 
         def meta(kind: int, payload: bytes) -> bytes:

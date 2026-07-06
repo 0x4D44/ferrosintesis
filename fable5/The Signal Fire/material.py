@@ -229,6 +229,28 @@ def verify_material() -> list[str]:
                                  f"into downbeat {bt}")
                 prev = iv
 
+    # 3b. The finale realizes the stack in A IONIAN (Ascension pairs
+    # THEME_A on bells with THEME_C on strings/choir, both augmented x2 —
+    # equal augmentation preserves this 1:1 downbeat alignment).  Re-check
+    # that pair's downbeat intervals in ionian so a theme edit can't break
+    # the finale while the dorian check still passes.  (THEME_B is answered
+    # BETWEEN bell phrases in M5, never stacked on downbeats, so only the
+    # A+C pair carries an ionian promise.)
+    prev = None
+    for bt in range(0, int(GROUND_BEATS * 2), 4):
+        da = _sounding_at(THEME_A, float(bt), 32.0)
+        dc = _sounding_at(THEME_C, float(bt), 32.0)
+        if da is None or dc is None:
+            continue
+        iv = abs(en.deg_semis("ionian", da) - en.deg_semis("ionian", dc)) % 12
+        if iv not in _ALLOWED:
+            fails.append(f"THEME_A+THEME_C (ionian finale): interval {iv} "
+                         f"at downbeat {bt}")
+        if iv == 0 and prev == 0:
+            fails.append(f"THEME_A+THEME_C (ionian finale): parallel unison "
+                         f"into downbeat {bt}")
+        prev = iv
+
     # 4. Register promises (so stacked themes never cross).
     if max(d for d, _, _ in THEME_C) > 7:
         fails.append("THEME_C leaves the 1..7 register")

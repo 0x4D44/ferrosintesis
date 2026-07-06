@@ -146,11 +146,20 @@ def _mean_abs(chan: array.array, lo: int, hi: int) -> float:
 
 def _is_attack(chan: array.array, idx: int, rate: int) -> bool:
     """A note-attack transient: the 10 ms after the jump carries clearly
-    more energy than the 10 ms before (a click is isolated instead)."""
+    more energy than the 10 ms before, and the energy PERSISTS (a click is
+    isolated instead — the signal reverts to its prior level).
+
+    Two tiers: the +300 absolute floor protects quiet passages, but must
+    not scale against loud ones — several grid-aligned voices striking a
+    ff downbeat sum to a big delta whose post-energy rise is ~1.6-1.9x,
+    which is an arrival, not a defect.  A genuine click riding a loud bed
+    shows after ~= before (ratio ~1.0) and is still caught."""
     w = max(64, rate // 100)
     before = _mean_abs(chan, idx - w, idx - 8)
     after = _mean_abs(chan, idx + 8, idx + 8 + w)
-    return after > 1.8 * before + 300.0
+    if after > 1.8 * before + 300.0:
+        return True
+    return before > 1500.0 and after > 1.5 * before
 
 
 def click_scan(left: array.array, right: array.array, rate: int,

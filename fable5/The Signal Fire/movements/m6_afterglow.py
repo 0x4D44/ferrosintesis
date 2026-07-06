@@ -13,7 +13,8 @@ they arrived in M1 — one at a time:
               bend_ramp in from -1.5 semis, recentred after every slide
               (and left recentred at the final boundary).
   beat 1596   ch8 nylon — THEME_A complete and intimate: vel ~50-61 arch,
-              gate 0.9, jt=8 rubato; the last note rings 8 beats.
+              gate 0.9, loose micro-timing (jt=8); the true rubato is
+              the conductor tempo map. The last note rings 8 beats.
   beat 1604   ch7 steel — fingerpicked 4-note broken chords beneath, one
               chord per 2 bars (E, D, E, A, D, A — simple I/IV/V), quiet
               (vel ~40-50, under the nylon), thinning to a last low
@@ -98,7 +99,7 @@ def _pad(sc: en.Score) -> None:
 
 
 # ---------------------------------------------------------------------------
-# ch8 — nylon: THEME_A complete, intimate, rubato
+# ch8 — nylon: THEME_A complete, intimate, loose micro-timing
 # ---------------------------------------------------------------------------
 
 def _nylon(sc: en.Score) -> None:

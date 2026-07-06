@@ -67,7 +67,10 @@ def build_album() -> None:
     sc, _spans = build_score()
     path = en.MIDI_DIR / TRACK_FILE
     sc.write(path, TITLE, COMMENT)
-    secs = sc.duration_seconds()
+    # Report the FILE's integrated duration (write() appends a 2-beat
+    # end-of-track pad, ~1.8 s at the closing tempo), not just the last
+    # musical beat — so the manifest matches what a player reports.
+    secs = en.parse_midi(path)["seconds"]
     movement_map = [
         {"name": name,
          "start_beat": t0, "end_beat": t1,

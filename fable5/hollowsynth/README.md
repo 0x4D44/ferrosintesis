@@ -29,10 +29,13 @@ Renders ~14 minutes of stereo 44.1 kHz audio in under 20 seconds.
 | `--delay <MS>` | dotted quaver at the opening tempo | echo-bus time (`0` disables) |
 | `--tail <S>` | 6 | seconds appended for the reverb tail |
 | `--no-samples` | — | disable the LA attack-sample layer (pure modeling) |
+| `--solo <list>` | all | render only the listed 0-based channels (e.g. `11` or `12,13`) — muted channels lose their notes but the tempo map stays, so the output lines up with the full mix; for verification stems |
 | `-q` | — | quiet (no progress) |
 
-MIDI pitch bend (±2 semitones) and CC68 (legato/hammer-on-pull-off),
-CC93 (chorus send) and CC94 (echo send) are all honoured — see below.
+MIDI pitch bend (±2 semitones), CC1 (mod wheel: vibrato, or Leslie speed on
+organs), CC64 (sustain pedal), CC68 (legato/hammer-on-pull-off), CC74
+(brightness/wah), CC93 (chorus send) and CC94 (echo send) are all honoured —
+see below.
 
 Output is peak-normalised to −1 dBFS, 16-bit PCM stereo with TPDF dither.
 
@@ -82,6 +85,25 @@ pull-off. hollowsynth models this at the engine level, not just per-voice:
   bow/tongue attack). CC68 < 64 returns to normal picking.
 - **Program 28** is a dedicated palm-mute preset — heavy damping, a short
   decay, and a dull excitation — rather than just a quieter clean guitar.
+- **CC1 mod wheel** adds expressive vibrato to the sustained melodic
+  families (plucks, bowed strings, winds): an engine-level 5.3 Hz LFO whose
+  depth follows the wheel up to ±35 cents, multiplied on top of the
+  channel's pitch bend — so a bent-and-held note can bloom into vibrato,
+  the way a guitarist's wail does. Drums, pianos, bells and the palm-mute
+  are left alone. On **organs** the wheel is a Leslie speed control
+  instead: the tremulant rate slews from its idle speed toward ~6.8 Hz
+  with a ~1.5 s rotor time constant (real spin-up/spin-down inertia), and
+  the modulation deepens as it spins.
+- **CC64 sustain pedal** holds NoteOffs: a note released while the pedal is
+  down keeps ringing until the pedal lifts (the piano's pooled washes).
+  Pedal-held voices are past their NoteOff, so they are never candidates
+  for CC68 legato retuning.
+- **CC74 brightness** puts a resonant 2-pole lowpass (Q ≈ 1.4) on the
+  channel's dry path, *before* the bus sends tap it — a wah sweep colours
+  the reverb and echo too. 0..127 maps exponentially 300 Hz → 12 kHz, the
+  cutoff is slewed per block so a CC74 LFO riding every 16th doesn't
+  zipper, and 127 (or never sending CC74) is a true bypass — the filter is
+  not in the path at all, and pre-v0.6 renders are bit-identical.
 
 `material.py`'s `bend()`/`bend_ramp()` and `run()` helpers (in the *Hollow
 Hill* composition engine) write these events for rapid-fire runs, wails
@@ -91,10 +113,12 @@ reel for examples.
 ## The mix
 
 - **Channel strips** honour CC7 (volume), CC11 (expression, smoothed — the
-  album's swells depend on it), CC91 (reverb send), CC93 (chorus send),
-  CC94 (echo send) and CC10 pan — realised as equal-power gain **plus a
-  Haas micro-delay** on the far channel, so panned sources localise like
-  sources in a room rather than level tricks.
+  album's swells depend on it; CC1 mod is smoothed the same way), CC64
+  (sustain pedal), CC74 (brightness — the resonant lowpass described
+  above, inserted ahead of the sends), CC91 (reverb send), CC93 (chorus
+  send), CC94 (echo send) and CC10 pan — realised as equal-power gain
+  **plus a Haas micro-delay** on the far channel, so panned sources
+  localise like sources in a room rather than level tricks.
 - **Hall reverb**: Freeverb-style tank behind a 24 ms pre-delay and five early
   reflections — attacks stay clear of the wash, and the room has walls. Its
   send is now **highpassed at 150 Hz** so the low end stays dry and tight
@@ -112,31 +136,26 @@ reel for examples.
   a squash) plus a whisper of tape-style saturation on the stereo mix, so
   the whole record couples together instead of sitting arithmetically flat.
 
-## The mix
-
-- **Channel strips** honour CC7 (volume), CC11 (expression, smoothed — the
-  album's swells depend on it), CC91 (reverb send) and CC10 pan — realised as
-  equal-power gain **plus a Haas micro-delay** on the far channel, so panned
-  sources localise like sources in a room rather than level tricks.
-- **Hall reverb**: Freeverb-style tank behind a 24 ms pre-delay and five early
-  reflections — attacks stay clear of the wash, and the room has walls.
-- **Chorus bus**: one modulated delay, quadrature L/R taps; strings, choir,
-  organs and pads get ensemble width by program profile.
-- **Echo bus**: ping-pong delay timed to a dotted quaver at the song's opening
-  tempo, repeats darkening as they bounce — the classic delayed-lead sound on
-  electric guitars, whistle and crystal.
-
 ## Verification (this machine has no ears)
 
-- `cargo test` (16 tests) — MIDI/tempo-map math including pitch-bend decode,
+- `cargo test` (21 tests) — MIDI/tempo-map math including pitch-bend decode,
   envelopes, a zero-crossing check that a plucked A4 sounds at 440 Hz (the
   KS delay compensates the loop filter's phase delay, so tuning is
   cent-accurate), a bend test (A4 bent +2 semitones settles near B4), a
   hammer-on test (a ringing string retunes without re-picking), a palm-mute
   decay test, a check that the fiddle's onset scoop settles to true pitch,
   three LA-layer checks (bank parses, sampled attack agrees with the model
-  on pitch through the crossfade, no level jump at handover), and a bus-glue
-  test (gain reduction on loud material, near-transparent on quiet material).
+  on pitch through the crossfade, no level jump at handover), a bus-glue
+  test (gain reduction on loud material, near-transparent on quiet
+  material), and five v0.6 checks on real rendered audio: CC1 = 127 makes a
+  bowed note's pitch wander far beyond its natural vibrato (zero-crossing
+  analysis) while CC1 = 0 does not, an organ's tremulant rate measurably
+  climbs over ~2 s after CC1 = 127 (Leslie inertia), CC74 = 20 strips the
+  high-frequency energy from a bright pluck while CC74 = 127 is
+  bit-identical to the unfiltered path, a note whose NoteOff falls under
+  CC64 keeps ringing until pedal-up then dies, and `--solo` of an empty
+  channel renders true silence. A full Part One render was also verified
+  byte-identical between v0.5 and v0.6 binaries.
 - Rendered output is checked numerically: RMS profile follows the score's
   dynamic arc, no DC offset, no unintended silence, and no discontinuities
   beyond genuine musical transients (verified by diffing click locations

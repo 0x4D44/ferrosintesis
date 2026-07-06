@@ -348,6 +348,10 @@ impl Voice for LaVoice {
             false
         }
     }
+
+    fn set_trem(&mut self, rate_hz: f32, depth: f32) {
+        self.sustain.set_trem(rate_hz, depth);
+    }
 }
 
 #[cfg(test)]

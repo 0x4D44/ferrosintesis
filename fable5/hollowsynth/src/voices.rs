@@ -34,6 +34,10 @@ pub trait Voice {
     fn legato_to(&mut self, _key: u8, _vel: u8) -> bool {
         false
     }
+    /// Tremulant control (organs): absolute rate in Hz and depth. The engine
+    /// slews these toward the CC1 mod-wheel target so the Leslie rotor has
+    /// real inertia. Voices without a tremulant ignore it.
+    fn set_trem(&mut self, _rate_hz: f32, _depth: f32) {}
 }
 
 fn t60_mul(t60: f32, sr: f32) -> f32 {
@@ -668,6 +672,7 @@ pub struct Organ {
     rng: Rng,
     drive: f32,
     amp: f32,
+    sr: f32,
 }
 
 impl Organ {
@@ -710,6 +715,7 @@ impl Organ {
             rng,
             drive,
             amp: amp * (0.4 + 0.6 * vel_amp(vel)),
+            sr,
         }
     }
 }
@@ -745,9 +751,29 @@ impl Voice for Organ {
     fn released(&self) -> bool {
         self.env.released()
     }
+
+    fn set_trem(&mut self, rate_hz: f32, depth: f32) {
+        // phase-continuous retune; the engine calls this once per block with
+        // an inertia-slewed rate, so there is no zipper and no click
+        self.trem.set_freq(rate_hz, self.sr);
+        self.trem_depth = depth;
+    }
+}
+
+/// Tremulant (rate Hz, depth) each organ program idles at. The CC1 mod
+/// wheel morphs the rate from here toward the Leslie's fast speed — the
+/// slewing lives in the engine, per channel, so all of a channel's organ
+/// voices share one rotor.
+pub fn organ_trem_base(program: u8) -> (f32, f32) {
+    match program {
+        18 => (6.5, 0.10),
+        16 | 17 => (5.5, 0.06),
+        _ => (4.2, 0.04),
+    }
 }
 
 fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
+    let (trem_hz, trem_depth) = organ_trem_base(program);
     match program {
         18 => Organ::new(
             key,
@@ -763,8 +789,8 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
                 (4.0, 0.15),
             ],
             Adsr::new(0.005, 0.05, 1.0, 0.10, sr),
-            6.5,
-            0.10,
+            trem_hz,
+            trem_depth,
             0.10,
             1.8,
             0.32,
@@ -783,8 +809,8 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
                 (4.0, 0.08),
             ],
             Adsr::new(0.01, 0.05, 1.0, 0.15, sr),
-            5.5,
-            0.06,
+            trem_hz,
+            trem_depth,
             0.08,
             0.0,
             0.32,
@@ -803,8 +829,8 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
                 (8.0, 0.18),
             ],
             Adsr::new(0.06, 0.10, 0.92, 0.25, sr),
-            4.2,
-            0.04,
+            trem_hz,
+            trem_depth,
             0.20,
             0.0,
             0.32,

@@ -2,10 +2,12 @@
 //! (modeled, not sampled) instruments, voiced for the *Hollow Hill* album.
 //!
 //!     hollowsynth input.mid [-o out.wav] [--rate 44100] [--wet 0.32]
-//!                 [--delay MS] [--tail 6] [-q]
+//!                 [--delay MS] [--tail 6] [--solo CH[,CH...]] [-q]
 //!
 //! The echo bus defaults to a dotted quaver at the song's opening tempo;
 //! pass `--delay 0` to disable it, or `--delay <ms>` to set it directly.
+//! `--solo 11` (or `--solo 12,13`) renders only the listed 0-based
+//! channels — verification stems — keeping the tempo map intact.
 
 mod drums;
 mod dsp;
@@ -21,7 +23,7 @@ use std::time::Instant;
 
 fn usage() -> ! {
     eprintln!(
-        "usage: hollowsynth <input.mid> [-o out.wav] [--rate N] [--wet X] [--delay MS] [--tail S] [--no-samples] [-q]"
+        "usage: hollowsynth <input.mid> [-o out.wav] [--rate N] [--wet X] [--delay MS] [--tail S] [--no-samples] [--solo CH[,CH...]] [-q]"
     );
     std::process::exit(2);
 }
@@ -34,6 +36,7 @@ fn main() {
     let mut tail = 6.0f32;
     let mut delay_ms: Option<f32> = None;
     let mut samples = true;
+    let mut solo = 0xFFFFu16; // all channels
     let mut verbose = true;
 
     let mut args = std::env::args().skip(1);
@@ -66,6 +69,20 @@ fn main() {
                     .unwrap_or_else(|| usage())
             }
             "--no-samples" => samples = false,
+            "--solo" => {
+                // render only the listed 0-based channels (e.g. "11" or "12,13")
+                let list = args.next().unwrap_or_else(|| usage());
+                solo = 0;
+                for part in list.split(',') {
+                    let ch: u8 = part
+                        .trim()
+                        .parse()
+                        .ok()
+                        .filter(|&c| c < 16)
+                        .unwrap_or_else(|| usage());
+                    solo |= 1 << ch;
+                }
+            }
             "-q" | "--quiet" => verbose = false,
             "-h" | "--help" => usage(),
             _ if input.is_none() => input = Some(PathBuf::from(a)),
@@ -110,6 +127,7 @@ fn main() {
         tail,
         delay_s,
         samples,
+        solo,
         verbose,
     };
     let (samples, stats) = engine::render(&song, &opt);

@@ -43,6 +43,10 @@ pub trait Voice {
     /// voice's own control-rate formant smoothing removes any residual
     /// zipper. Voices without formants ignore it.
     fn set_vowel(&mut self, _freqs: [f32; 3], _qs: [f32; 3], _gains: [f32; 3]) {}
+    /// Test-only concrete-voice discriminant — the oracle-36 routing seam.
+    /// Plucks report their preset name; other families their family name.
+    #[cfg(test)]
+    fn kind(&self) -> &'static str;
 }
 
 fn t60_mul(t60: f32, sr: f32) -> f32 {
@@ -149,6 +153,11 @@ impl Voice for Modal {
 
     fn released(&self) -> bool {
         self.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "modal"
     }
 }
 
@@ -291,9 +300,13 @@ pub struct PluckPreset {
     pub out_lp: f32,                      // 0 = none
     pub pickup: f32,                      // magnetic pickup position (0 = acoustic)
     pub sub: f32,                         // envelope-locked fundamental sine (0 = none)
+    #[cfg(test)]
+    pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
 
 pub const NYLON: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "NYLON",
     t60: 2.8,
     bright: 3200.0,
     pick_lp: 2500.0,
@@ -308,6 +321,8 @@ pub const NYLON: PluckPreset = PluckPreset {
     sub: 0.0,
 };
 pub const STEEL: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "STEEL",
     t60: 3.5,
     bright: 5200.0,
     pick_lp: 5000.0,
@@ -322,6 +337,8 @@ pub const STEEL: PluckPreset = PluckPreset {
     sub: 0.0,
 };
 pub const CLEAN: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "CLEAN",
     t60: 3.0,
     bright: 4200.0,
     pick_lp: 4500.0,
@@ -335,6 +352,8 @@ pub const CLEAN: PluckPreset = PluckPreset {
     sub: 0.0,
 };
 pub const DRIVE: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "DRIVE",
     t60: 8.0,
     bright: 4800.0,
     pick_lp: 6000.0,
@@ -348,6 +367,8 @@ pub const DRIVE: PluckPreset = PluckPreset {
     sub: 0.0,
 };
 pub const MUTED: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "MUTED",
     t60: 0.45, // palm on the bridge: the ring dies fast
     bright: 1600.0,
     pick_lp: 2200.0,
@@ -361,6 +382,8 @@ pub const MUTED: PluckPreset = PluckPreset {
     sub: 0.35, // the chug's thud carries the weight
 };
 pub const BASS: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "BASS",
     t60: 3.6,
     bright: 1100.0,
     pick_lp: 850.0,
@@ -374,6 +397,8 @@ pub const BASS: PluckPreset = PluckPreset {
     sub: 0.18,
 };
 pub const FRETLESS: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "FRETLESS",
     t60: 2.6,
     bright: 850.0,
     pick_lp: 550.0,
@@ -387,6 +412,8 @@ pub const FRETLESS: PluckPreset = PluckPreset {
     sub: 0.15,
 };
 pub const HARP: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "HARP",
     t60: 4.5,
     bright: 3000.0,
     pick_lp: 1800.0,
@@ -400,6 +427,8 @@ pub const HARP: PluckPreset = PluckPreset {
     sub: 0.0,
 };
 pub const BANJO: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "BANJO",
     t60: 0.9,
     bright: 7500.0,
     pick_lp: 7000.0,
@@ -503,6 +532,8 @@ pub struct Pluck {
     t: u32,
     min_life: u32,
     sr: f32,
+    #[cfg(test)]
+    kind: &'static str,
 }
 
 impl Pluck {
@@ -572,6 +603,8 @@ impl Pluck {
             t: 0,
             min_life: (0.05 * sr) as u32,
             sr,
+            #[cfg(test)]
+            kind: p.name,
         }
     }
 
@@ -656,6 +689,11 @@ impl Voice for Pluck {
         self.sub_env = self.sub_env.max(0.6 * v);
         self.env = self.env.max(0.3 * v);
         true
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        self.kind
     }
 }
 
@@ -762,6 +800,11 @@ impl Voice for Organ {
         // an inertia-slewed rate, so there is no zipper and no click
         self.trem.set_freq(rate_hz, self.sr);
         self.trem_depth = depth;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "organ"
     }
 }
 
@@ -1042,6 +1085,11 @@ impl Voice for SawStack {
             *g = gains;
         }
     }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "sawstack"
+    }
 }
 
 /// Soft notes speak slower: scale an attack time by velocity.
@@ -1268,6 +1316,11 @@ impl Voice for Wind {
         self.chiff_amp = 0.0;
         true
     }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "wind"
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1380,6 +1433,11 @@ impl Voice for Bowed {
         self.scoop = (self.base_f * self.scoop / new_f).clamp(0.85, 1.18);
         self.base_f = new_f;
         true
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "bowed"
     }
 }
 

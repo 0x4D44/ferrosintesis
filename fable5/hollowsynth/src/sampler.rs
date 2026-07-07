@@ -349,6 +349,12 @@ impl Voice for LaVoice {
         }
     }
 
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        // the LA wrapper is transparent for routing: report the model inside
+        self.sustain.kind()
+    }
+
     fn set_trem(&mut self, rate_hz: f32, depth: f32) {
         self.sustain.set_trem(rate_hz, depth);
     }

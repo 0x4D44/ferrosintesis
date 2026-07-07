@@ -18,7 +18,9 @@
 //! Timing realism: sustained families speak slower at low velocity, the way
 //! a gently-bowed or gently-blown note actually starts.
 
-use crate::dsp::{key_freq, vel_amp, Adsr, Biquad, BlepSaw, DelayLine, Drift, OnePole, Rng, Sine};
+use crate::dsp::{
+    key_freq, vel_amp, Adsr, Biquad, BlepSaw, Burst, DelayLine, Drift, OnePole, Rng, Sine,
+};
 use std::f32::consts::TAU;
 
 pub trait Voice {
@@ -301,9 +303,46 @@ pub struct PluckPreset {
     pub pickup: f32,                      // magnetic pickup position (0 = acoustic)
     pub sub: f32,                         // envelope-locked fundamental sine (0 = none)
     pub cab_lp: f32,                      // clean-amp cab rolloff, 0 = none (HLD G2)
+    // --- HLD family B: parallel one-shot transients ---
+    pub click: f32,            // pick/slap onset hardness (0 = none)
+    pub click_hp: f32,         // click filter corner
+    pub click_post: bool,      // false: knocks the body (pre-EQ); true: post-out
+    pub attack_noise: f32,     // finger/fret noise level (0 = none, post-out)
+    pub stop_thump: f32,       // release thud level (0 = none, armed by note_off)
+    pub sub_shape: (f32, f32), // sub waveshaper (2f, 3f) amounts (MUTED grit / B5)
+    pub sub_ramp: u32,         // sub fade-in samples
+    pub grit: bool,            // per-voice soft-clip (MUTED palm chug, G4)
+    pub harmonic: bool,        // prog-31 flageolet: loop retuned to 2f/3f (G7)
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
+
+/// Base values every preset starts from (struct-update in const context).
+const DEFAULTS: PluckPreset = PluckPreset {
+    t60: 3.0,
+    bright: 3000.0,
+    pick_lp: 2500.0,
+    pos: 0.2,
+    amp: 0.5,
+    attack_s: 0.0,
+    rel_t60: 0.15,
+    body: &[],
+    out_lp: 0.0,
+    pickup: 0.0,
+    sub: 0.0,
+    cab_lp: 0.0,
+    click: 0.0,
+    click_hp: 1500.0,
+    click_post: false,
+    attack_noise: 0.0,
+    stop_thump: 0.0,
+    sub_shape: (0.0, 0.0),
+    sub_ramp: 220,
+    grit: false,
+    harmonic: false,
+    #[cfg(test)]
+    name: "DEFAULT",
+};
 
 pub const NYLON: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -313,14 +352,11 @@ pub const NYLON: PluckPreset = PluckPreset {
     pick_lp: 2500.0,
     pos: 0.28,
     amp: 0.55,
-    attack_s: 0.0,
-    rel_t60: 0.15,
     // Helmholtz air mode, top-plate mode, upper body colour
     body: &[(98.0, 1.4, 4.5), (210.0, 1.2, 4.0), (420.0, 1.8, 2.5)],
-    out_lp: 0.0,
-    pickup: 0.0,
-    sub: 0.0,
-    cab_lp: 0.0,
+    click: 0.9, // fingernail on nylon: soft
+    click_hp: 1000.0,
+    ..DEFAULTS
 };
 pub const STEEL: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -330,14 +366,10 @@ pub const STEEL: PluckPreset = PluckPreset {
     pick_lp: 5000.0,
     pos: 0.18,
     amp: 0.50,
-    attack_s: 0.0,
-    rel_t60: 0.15,
     // Helmholtz, top plate, and a little steel-string presence sparkle
     body: &[(105.0, 1.4, 4.0), (215.0, 1.2, 3.0), (2800.0, 1.8, 1.5)],
-    out_lp: 0.0,
-    pickup: 0.0,
-    sub: 0.0,
-    cab_lp: 0.0,
+    click: 2.0, // plectrum on steel (G4)
+    ..DEFAULTS
 };
 pub const CLEAN: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -347,14 +379,14 @@ pub const CLEAN: PluckPreset = PluckPreset {
     pick_lp: 4500.0,
     pos: 0.15,
     amp: 0.50,
-    attack_s: 0.0,
     rel_t60: 0.18,
     // clean-amp body colour (HLD G2): low warmth + presence sparkle
     body: &[(200.0, 1.0, 2.0), (2500.0, 1.0, 3.0)],
     out_lp: 5500.0,
     pickup: 0.12,
-    sub: 0.0,
     cab_lp: 4500.0, // light clean-combo speaker rolloff
+    click: 1.8,
+    ..DEFAULTS
 };
 pub const DRIVE: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -364,13 +396,10 @@ pub const DRIVE: PluckPreset = PluckPreset {
     pick_lp: 6000.0,
     pos: 0.12,
     amp: 0.70,
-    attack_s: 0.0,
     rel_t60: 0.20,
-    body: &[],
-    out_lp: 0.0,
     pickup: 0.10,
-    sub: 0.0,
-    cab_lp: 0.0,
+    click: 2.2, // the pick hits harder through an amp
+    ..DEFAULTS
 };
 pub const MUTED: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -380,13 +409,16 @@ pub const MUTED: PluckPreset = PluckPreset {
     pick_lp: 2200.0,
     pos: 0.10,
     amp: 0.62,
-    attack_s: 0.0,
     rel_t60: 0.08,
-    body: &[],
     out_lp: 3200.0,
     pickup: 0.10,
-    sub: 0.35, // the chug's thud carries the weight
-    cab_lp: 0.0,
+    sub: 0.35,             // the chug's thud carries the weight
+    sub_shape: (0.6, 0.4), // 2f/3f enrichment: a thud, not a sine (G4)
+    sub_ramp: 90,          // the thud speaks fast
+    grit: true,            // palm-mute soft-clip grit
+    click: 1.4,            // palm chuff
+    click_hp: 900.0,
+    ..DEFAULTS
 };
 pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -396,13 +428,14 @@ pub const BASS: PluckPreset = PluckPreset {
     pick_lp: 850.0,
     pos: 0.35,
     amp: 1.05,
-    attack_s: 0.0,
     rel_t60: 0.12,
     body: &[(65.0, 0.7, 4.0)], // fundamental weight
     out_lp: 1900.0,
     pickup: 0.28,
     sub: 0.18,
-    cab_lp: 0.0,
+    attack_noise: 0.5, // fingertip on roundwound (B2/BASS-7)
+    stop_thump: 1.4,   // the damp lands with a thud (B3/BASS-6)
+    ..DEFAULTS
 };
 pub const FRETLESS: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -413,12 +446,88 @@ pub const FRETLESS: PluckPreset = PluckPreset {
     pos: 0.40,
     amp: 1.05,
     attack_s: 0.012,
-    rel_t60: 0.15,
     body: &[(60.0, 0.7, 3.5)],
     out_lp: 1500.0,
     pickup: 0.33,
     sub: 0.15,
-    cab_lp: 0.0,
+    attack_noise: 0.7,
+    stop_thump: 1.4,
+    ..DEFAULTS
+};
+/// Slap bass (B2, GM 36/37): thumb slap + near-bridge pop.
+pub const SLAP: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "SLAP",
+    t60: 2.8,
+    bright: 3500.0,
+    pick_lp: 4500.0,
+    pos: 0.12,
+    amp: 1.0,
+    rel_t60: 0.12,
+    body: &[(65.0, 0.7, 3.0)],
+    out_lp: 4000.0,
+    pickup: 0.28,
+    sub: 0.15,
+    click: 2.4, // the pop — post-out so the out-LP doesn't swallow it
+    click_hp: 1500.0,
+    click_post: true,
+    stop_thump: 0.9,
+    ..DEFAULTS
+};
+/// Picked bass (B2, GM 34): the plectrum click survives the chain.
+pub const PICK: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "PICK",
+    t60: 3.2,
+    bright: 2200.0,
+    pick_lp: 2600.0,
+    pos: 0.15,
+    amp: 1.0,
+    rel_t60: 0.12,
+    body: &[(65.0, 0.7, 3.5)],
+    out_lp: 2400.0,
+    pickup: 0.28,
+    sub: 0.16,
+    click: 1.6,
+    click_hp: 1800.0,
+    click_post: true,
+    stop_thump: 0.8,
+    ..DEFAULTS
+};
+/// Upright/acoustic bass (B2, GM 32): woody, darker, breathier attack.
+pub const UPRIGHT: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "UPRIGHT",
+    t60: 2.4,
+    bright: 900.0,
+    pick_lp: 600.0,
+    pos: 0.38,
+    amp: 1.05,
+    attack_s: 0.008,
+    body: &[(65.0, 0.7, 4.0), (110.0, 1.0, 3.0)],
+    out_lp: 2200.0,
+    sub: 0.15,
+    attack_noise: 0.65, // woody fingertip thud
+    stop_thump: 0.8,
+    ..DEFAULTS
+};
+/// Guitar harmonics (G7, GM 31): the flageolet — the KS loop itself is
+/// retuned to the touched harmonic (2f below E4, 3f above), thin glassy
+/// ring, light grit, no heavy amp.
+pub const HARMONIC: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "HARMONIC",
+    t60: 2.0,
+    bright: 6000.0,
+    pick_lp: 6000.0,
+    pos: 0.08,
+    amp: 0.55,
+    rel_t60: 0.25,
+    pickup: 0.10,
+    click: 0.7,
+    click_hp: 2000.0,
+    harmonic: true,
+    ..DEFAULTS
 };
 pub const HARP: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -428,13 +537,8 @@ pub const HARP: PluckPreset = PluckPreset {
     pick_lp: 1800.0,
     pos: 0.35,
     amp: 0.62,
-    attack_s: 0.0,
     rel_t60: 0.4,
-    body: &[],
-    out_lp: 0.0,
-    pickup: 0.0,
-    sub: 0.0,
-    cab_lp: 0.0,
+    ..DEFAULTS
 };
 pub const BANJO: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -444,13 +548,11 @@ pub const BANJO: PluckPreset = PluckPreset {
     pick_lp: 7000.0,
     pos: 0.12,
     amp: 0.60,
-    attack_s: 0.0,
     rel_t60: 0.10,
     body: &[(720.0, 2.5, 6.0)],
-    out_lp: 0.0,
-    pickup: 0.0,
-    sub: 0.0,
-    cab_lp: 0.0,
+    click: 1.6, // fingerpicks on a drum head
+    click_hp: 2000.0,
+    ..DEFAULTS
 };
 
 /// One Karplus-Strong delay loop on a fractional-tap delay line, so its
@@ -524,9 +626,17 @@ pub struct Pluck {
     vert: KsLoop,
     base_f: f32,
     bend: f32,
+    harm: f32, // G7 flageolet multiple (1.0 = normal), composed into every retune
     pickup: Option<(DelayLine, f32)>, // magnetic pickup position comb
-    sub: Option<(Sine, f32, f32)>,    // (osc, gain, decay) fundamental weight
+    sub: Option<(Sine, f32, f32)>, // (osc, gain, decay) fundamental weight
     sub_env: f32,
+    sub_shape: (f32, f32), // (2f, 3f) waveshaper amounts on the sub
+    sub_ramp: u32,
+    // HLD family B one-shots, all fed by the voice's own rng
+    onset_pre: Option<Burst>,  // pick click / palm chuff — knocks the body
+    onset_post: Option<Burst>, // finger noise / slap pop — after the out-LP
+    stop: Option<Burst>,       // release thump, armed by note_off
+    grit: bool,                // MUTED palm soft-clip
     body: Vec<Biquad>,
     // clean-amp cab (HLD G2): two cascaded biquad lowpasses — one 2nd-order
     // pole pair alone cannot make the −12 dB-vs-one-pole 8 kHz cliff
@@ -573,7 +683,20 @@ impl Pluck {
         // presets and the velocity contrast cannot reach oracle 1's floor
         let out_lp = p.out_lp * (0.60 + 0.60 * vn);
 
-        let f = key_freq(key);
+        // G7 flageolet: the loop itself resonates at the touched harmonic —
+        // 2f below E4, 3f from E4 up (natural-harmonic playability); the
+        // multiple is persistent state composed into every retune (V4/INT-2)
+        let harm = if p.harmonic {
+            if key < 64 {
+                2.0
+            } else {
+                3.0
+            }
+        } else {
+            1.0
+        };
+        let note_f = key_freq(key);
+        let f = note_f * harm; // the frequency the LOOP rings at
         let period = sr / f;
         let t60 = (t60_base * (220.0 / f).powf(0.55)).clamp(0.25, 14.0);
 
@@ -594,8 +717,9 @@ impl Pluck {
         Pluck {
             horiz: KsLoop::new(f, bright, t60, &exc, sr),
             vert: KsLoop::new(f * 1.0013, bright * 1.15, t60 * 0.42, &exc, sr),
-            base_f: f,
+            base_f: note_f,
             bend: 1.0,
+            harm,
             pickup: (p.pickup > 0.0).then(|| {
                 // the pickup senses the string a fraction of its length from
                 // the bridge: a feedforward comb with a 2·pos·period delay
@@ -604,6 +728,44 @@ impl Pluck {
             }),
             sub: (p.sub > 0.0).then(|| (Sine::new(f, sr, 0.0), p.sub * v, t60_mul(t60 * 0.8, sr))),
             sub_env: 0.0,
+            sub_shape: p.sub_shape,
+            sub_ramp: p.sub_ramp,
+            onset_pre: (p.click > 0.0 && !p.click_post).then(|| {
+                let mut b = Burst::new(Biquad::highpass(p.click_hp, 0.7, sr), p.click, 0.003, sr);
+                // super-linear in velocity: a soft fingerpad barely snaps
+                b.trigger(v * vn);
+                b
+            }),
+            onset_post: {
+                // slap/pop (click_post) and finger/fret noise share the
+                // post-out insertion so the out-LP doesn't swallow them
+                if p.click > 0.0 && p.click_post {
+                    let mut b =
+                        Burst::new(Biquad::highpass(p.click_hp, 0.7, sr), p.click, 0.003, sr);
+                    b.trigger(v * vn);
+                    Some(b)
+                } else if p.attack_noise > 0.0 {
+                    let mut b = Burst::new(
+                        Biquad::bandpass(2000.0, 0.8, sr),
+                        (p.attack_noise * (0.45 + 0.55 * v)).min(1.0 * v),
+                        0.004,
+                        sr,
+                    );
+                    b.trigger(1.0);
+                    Some(b)
+                } else {
+                    None
+                }
+            },
+            stop: (p.stop_thump > 0.0).then(|| {
+                Burst::new(
+                    Biquad::lowpass(250.0, 0.7, sr),
+                    p.stop_thump * (0.5 + 0.5 * v),
+                    0.12,
+                    sr,
+                )
+            }),
+            grit: p.grit,
             body: p
                 .body
                 .iter()
@@ -644,7 +806,10 @@ impl Pluck {
     }
 
     fn apply_pitch(&mut self) {
-        let f = self.base_f * self.bend;
+        // the flageolet multiple composes into EVERY retune (V4/INT-2) — a
+        // CC1/RPN/portamento writer must not collapse the loop back to the
+        // fundamental
+        let f = self.base_f * self.harm * self.bend;
         self.horiz.retune(f);
         self.vert.retune(f * 1.0013);
         if let Some((osc, _, _)) = &mut self.sub {
@@ -665,9 +830,17 @@ impl Voice for Pluck {
                 0.0
             };
             let mut y = 0.74 * self.horiz.tick(inject) + 0.26 * self.vert.tick(inject * 0.7);
+            if self.grit {
+                // palm-mute chug: the palm+pick+amp chain compresses (G4)
+                y = (y * 2.0).tanh() * 0.5;
+            }
             if let Some((dl, d)) = &mut self.pickup {
                 dl.push(y);
                 y = (y - dl.tap(*d)) * 0.75;
+            }
+            if let Some(b) = &mut self.onset_pre {
+                // the pick click knocks the body: summed before the body EQ
+                y += b.tick(&mut self.rng);
             }
             for b in &mut self.body {
                 y = b.process(y);
@@ -682,10 +855,15 @@ impl Voice for Pluck {
             }
             if let Some((osc, gain, decay)) = &mut self.sub {
                 // the fundamental's weight, decaying with the string
-                if self.t < 220 {
-                    self.sub_env = (self.sub_env + 1.0 / 220.0).min(1.0);
+                if self.t < self.sub_ramp {
+                    self.sub_env = (self.sub_env + 1.0 / self.sub_ramp as f32).min(1.0);
                 }
-                y += osc.next() * *gain * self.sub_env;
+                let s = osc.next();
+                // DC-free 2f/3f enrichment (G4 thud / B5): s²−½ = −½cos2x,
+                // ¾s−s³ = ¼sin3x — clean even/odd harmonics of a unit sine
+                let (a2, a3) = self.sub_shape;
+                let shaped = s + a2 * (s * s - 0.5) + a3 * (0.75 * s - s * s * s);
+                y += shaped * *gain * self.sub_env;
                 self.sub_env *= *decay;
             }
             if self.att_env < 1.0 {
@@ -694,7 +872,18 @@ impl Voice for Pluck {
             if self.released {
                 self.release_env *= self.rel_mul;
             }
-            let y = y * self.amp * self.att_env * self.release_env;
+            let mut y = y * self.amp * self.att_env * self.release_env;
+            if let Some(b) = &mut self.onset_post {
+                // slap pop / finger noise, after the out-LP AND outside the
+                // attack ramp — the finger contact happens at t=0 even when
+                // the string itself speaks slowly (fretless/upright)
+                y += b.tick(&mut self.rng) * self.amp;
+            }
+            if let Some(b) = &mut self.stop {
+                // release thump (armed by note_off): the palm's thud is NOT
+                // the string ring, so it does not decay with the release env
+                y += b.tick(&mut self.rng) * self.amp;
+            }
             self.env = self.env.max(y.abs()) * 0.9995;
             *o += y;
             self.t += 1;
@@ -703,6 +892,13 @@ impl Voice for Pluck {
     }
 
     fn note_off(&mut self) {
+        if !self.released {
+            if let Some(b) = &mut self.stop {
+                // the stop thump fires on the effective release — under
+                // CC64/CC66 that is the pedal lift, by design (V4/INT-7)
+                b.trigger(1.0);
+            }
+        }
         self.released = true;
     }
 
@@ -717,6 +913,7 @@ impl Voice for Pluck {
 
     fn legato_to(&mut self, key: u8, vel: u8) -> bool {
         // hammer-on / pull-off: retune the ringing string, add a soft tap
+        // (the flageolet multiple, if any, is preserved — V4/INT-2)
         self.base_f = key_freq(key);
         self.apply_pitch();
         let v = vel_amp(vel);
@@ -1561,8 +1758,12 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         25 => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
         26 | 27 => Box::new(Pluck::new(&CLEAN, key, vel, sr, seed)),
         28 => Box::new(Pluck::new(&MUTED, key, vel, sr, seed)),
-        29..=31 => Box::new(Pluck::new(&DRIVE, key, vel, sr, seed)),
-        32..=34 | 36..=39 => Box::new(Pluck::new(&BASS, key, vel, sr, seed)),
+        29 | 30 => Box::new(Pluck::new(&DRIVE, key, vel, sr, seed)),
+        31 => Box::new(Pluck::new(&HARMONIC, key, vel, sr, seed)), // G7 flageolet
+        32 => Box::new(Pluck::new(&UPRIGHT, key, vel, sr, seed)),  // B2
+        33 | 38 | 39 => Box::new(Pluck::new(&BASS, key, vel, sr, seed)), // 38/39 → SynthBass in Phase 5
+        34 => Box::new(Pluck::new(&PICK, key, vel, sr, seed)),           // B2
+        36 | 37 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),      // B2
         35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
         40..=45 => {
             let model = Box::new(Bowed::new(key, vel, sr, seed));
@@ -1711,6 +1912,218 @@ mod tests {
         let d8k = db(&new_ir, 8000.0) - db(&old_ir, 8000.0);
         assert!(d2500 >= 2.0, "presence vs old one-pole: {d2500:.1} dB");
         assert!(d8k <= -12.0, "top-end vs old one-pole: {d8k:.1} dB");
+    }
+
+    fn render_pluck(p: &PluckPreset, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = Pluck::new(p, key, vel, sr, seed);
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    /// Oracle 7 (§5.3 differential): the pick click adds real onset HF —
+    /// same seed, same preset, click on vs off.
+    #[test]
+    fn pick_click_is_audible() {
+        let sr = 44100.0;
+        let no_click = PluckPreset {
+            click: 0.0,
+            ..STEEL
+        };
+        let with = render_pluck(&STEEL, 45, 100, 0.1, 7);
+        let without = render_pluck(&no_click, 45, 100, 0.1, 7);
+        let onset_hf = |s: &[f32]| {
+            crate::testutil::hp_rms(&s[..(0.003 * sr) as usize], sr, 1500.0)
+                / crate::testutil::rms(&s[(0.05 * sr) as usize..(0.08 * sr) as usize]).max(1e-9)
+        };
+        let (w, wo) = (onset_hf(&with), onset_hf(&without));
+        assert!(w > 1.3 * wo, "click on {w} vs off {wo}");
+        // NYLON's fingernail is softer than STEEL's plectrum
+        let nylon = render_pluck(&NYLON, 45, 100, 0.1, 7);
+        let no_nylon = render_pluck(
+            &PluckPreset {
+                click: 0.0,
+                ..NYLON
+            },
+            45,
+            100,
+            0.1,
+            7,
+        );
+        let gain = |a: f32, b: f32| a / b.max(1e-9);
+        assert!(
+            gain(onset_hf(&nylon), onset_hf(&no_nylon)) < gain(w, wo),
+            "NYLON click should be softer than STEEL's"
+        );
+    }
+
+    /// Oracle 8 (§5.1): SLAP's first 3 ms carry ≥3× the >3 kHz energy of
+    /// fingered BASS at the same low key, and the fundamental stays E1.
+    #[test]
+    fn slap_transient_and_pitch() {
+        let sr = 44100.0;
+        let slap = render_pluck(&SLAP, 28, 110, 0.6, 7);
+        let bass = render_pluck(&BASS, 28, 110, 0.6, 7);
+        let onset = |s: &[f32]| crate::testutil::hp_rms(&s[..(0.003 * sr) as usize], sr, 3000.0);
+        assert!(
+            onset(&slap) >= 3.0 * onset(&bass),
+            "slap onset {} vs bass {}",
+            onset(&slap),
+            onset(&bass)
+        );
+        let f = crate::testutil::peak_locate(&slap[(0.1 * sr) as usize..], sr, 35.0, 50.0);
+        assert!((f - 41.2).abs() < 4.0, "slap fundamental {f} Hz");
+    }
+
+    /// Oracle 9 (§5): FRETLESS finger noise — onset >2 kHz energy above the
+    /// no-noise baseline, dying within ~8 ms.
+    #[test]
+    fn finger_noise_speaks_then_dies() {
+        let sr = 44100.0;
+        let with = render_pluck(&FRETLESS, 31, 80, 0.1, 7);
+        let without = render_pluck(
+            &PluckPreset {
+                attack_noise: 0.0,
+                ..FRETLESS
+            },
+            31,
+            80,
+            0.1,
+            7,
+        );
+        let hf = |s: &[f32], a: f32, b: f32| {
+            crate::testutil::hp_rms(&s[(a * sr) as usize..(b * sr) as usize], sr, 2000.0)
+        };
+        assert!(
+            hf(&with, 0.0, 0.008) > 1.5 * hf(&without, 0.0, 0.008),
+            "finger noise: {} vs {}",
+            hf(&with, 0.0, 0.008),
+            hf(&without, 0.0, 0.008)
+        );
+        // the NOISE dies within ~8 ms — measure its energy excess over the
+        // noiseless build per window (the string itself is still ramping up)
+        let excess =
+            |a: f32, b: f32| (hf(&with, a, b).powi(2) - hf(&without, a, b).powi(2)).max(0.0);
+        assert!(
+            excess(0.012, 0.020) < 0.35 * excess(0.0, 0.008),
+            "finger noise rings too long: late {} vs early {}",
+            excess(0.012, 0.020),
+            excess(0.0, 0.008)
+        );
+    }
+
+    /// Oracle 10 (§5): the stop thump fires on note_off (LF bump vs a
+    /// thump-disabled build) and NEVER on a natural end (bit-identical).
+    #[test]
+    fn stop_thump_on_note_off_only() {
+        let sr = 44100.0;
+        let no_thump = PluckPreset {
+            stop_thump: 0.0,
+            ..BASS
+        };
+        let run = |p: &PluckPreset, off: bool| {
+            let mut v = Pluck::new(p, 33, 100, sr, 7);
+            let mut a = vec![0f32; (0.3 * sr) as usize];
+            v.render(&mut a);
+            if off {
+                v.note_off();
+            }
+            let mut b = vec![0f32; (0.12 * sr) as usize];
+            v.render(&mut b);
+            (a, b)
+        };
+        let (_, tail_with) = run(&BASS, true);
+        let (_, tail_without) = run(&no_thump, true);
+        let lf = |s: &[f32]| crate::testutil::band_rms(s, sr, 150.0, 0.7);
+        assert!(
+            lf(&tail_with) > 1.3 * lf(&tail_without),
+            "thump missing: {} vs {}",
+            lf(&tail_with),
+            lf(&tail_without)
+        );
+        // natural end: the armed-but-untriggered burst must change nothing
+        let (a1, b1) = run(&BASS, false);
+        let (a2, b2) = run(&no_thump, false);
+        assert!(
+            a1.iter().zip(&a2).all(|(x, y)| x.to_bits() == y.to_bits())
+                && b1.iter().zip(&b2).all(|(x, y)| x.to_bits() == y.to_bits()),
+            "un-triggered thump altered the render"
+        );
+    }
+
+    /// Oracle 39 (MUTED grit + sub enrichment, §5.1): the palm chug's thud
+    /// carries 2f/3f, and the soft-clip grit changes the string's output.
+    #[test]
+    fn muted_grit_and_rich_thud() {
+        let sr = 44100.0;
+        let plain_sub = PluckPreset {
+            sub_shape: (0.0, 0.0),
+            ..MUTED
+        };
+        let rich = render_pluck(&MUTED, 40, 110, 0.3, 7);
+        let plain = render_pluck(&plain_sub, 40, 110, 0.3, 7);
+        let f = key_freq(40);
+        let h23 = |s: &[f32]| {
+            crate::testutil::mag_at(s, sr, 2.0 * f) + crate::testutil::mag_at(s, sr, 3.0 * f)
+        };
+        assert!(
+            h23(&rich) > 1.2 * h23(&plain),
+            "sub enrichment missing: {} vs {}",
+            h23(&rich),
+            h23(&plain)
+        );
+        let no_grit = PluckPreset {
+            grit: false,
+            ..MUTED
+        };
+        let gritless = render_pluck(&no_grit, 40, 110, 0.3, 7);
+        assert!(
+            rich.iter().zip(&gritless).any(|(x, y)| x != y),
+            "grit clip is not in the path"
+        );
+    }
+
+    /// Oracle 40 (§5.3, three clauses): the prog-31 flageolet suppresses the
+    /// notated fundamental, actually rings at the touched harmonic, and
+    /// holds both under an active pitch modulator (V4/INT-2).
+    #[test]
+    fn harmonic_flageolet_suppresses_fundamental() {
+        let sr = 44100.0;
+        let f = key_freq(52); // E3 ≈ 164.8 Hz, below the E4 split → 2f
+        let buf = render_pluck(&HARMONIC, 52, 100, 0.8, 7);
+        let strongest = crate::testutil::peak_locate(&buf, sr, f * 0.8, f * 3.5);
+        assert!(
+            (strongest / (2.0 * f) - 1.0).abs() < 0.03,
+            "strongest partial at {strongest} Hz, expected ~{}",
+            2.0 * f
+        );
+        let db = |m: f32| 20.0 * m.max(1e-12).log10();
+        let sup = db(crate::testutil::mag_at(&buf, sr, f))
+            - db(crate::testutil::mag_at(&buf, sr, strongest));
+        assert!(sup <= -12.0, "fundamental only {sup:.1} dB down");
+        // clause (c): a +2-semitone bend must move the flageolet, not
+        // collapse it back to the fundamental
+        let mut v = Pluck::new(&HARMONIC, 52, 100, sr, 7);
+        let mut head = vec![0f32; (0.25 * sr) as usize];
+        v.render(&mut head);
+        let bend = 2f32.powf(2.0 / 12.0);
+        v.set_pitch(bend);
+        let mut tail = vec![0f32; (0.6 * sr) as usize];
+        v.render(&mut tail);
+        let late = &tail[(0.2 * sr) as usize..];
+        let target = 2.0 * f * bend;
+        let p = crate::testutil::peak_locate(late, sr, f * 0.8, f * 3.5);
+        assert!(
+            (p / target - 1.0).abs() < 0.04,
+            "bent flageolet at {p} Hz, expected ~{target}"
+        );
+        let sup_bent = db(crate::testutil::mag_at(late, sr, f * bend))
+            - db(crate::testutil::mag_at(late, sr, p));
+        assert!(
+            sup_bent <= -12.0,
+            "bent fundamental only {sup_bent:.1} dB down"
+        );
     }
 
     /// A plucked A4 should oscillate near 440 Hz (count zero crossings).

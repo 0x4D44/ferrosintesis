@@ -425,41 +425,50 @@ pub const MUTED: PluckPreset = PluckPreset {
     click_hp: 900.0,
     ..DEFAULTS
 };
+// Fingered electric bass (GM 33), the album workhorse. Voiced deep, warm and
+// MUFFLED — flatwound/McCartney rather than a bright roundwound jazz bass:
+// the fundamental carries the note, the highs are rolled off, and the pickup
+// comb no longer notches the 2nd harmonic (the partial the ear reads as "deep").
 pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "BASS",
     wound_all: true,
-    t60: 3.6,
-    bright: 1700.0,
-    pick_lp: 1300.0,
+    t60: 3.2,              // was 3.6: a touch tighter, still a warm ring
+    bright: 1250.0,        // was 1700: darker loop damping — fewer high harmonics ring
+    pick_lp: 1000.0,       // was 1300: duller, rounder attack (flatwound)
     pos: 0.35,
     amp: 1.05,
     rel_t60: 0.12,
-    body: &[(65.0, 0.7, 4.0)], // fundamental weight
-    out_lp: 1900.0,
-    pickup: 0.28,
-    sub: 0.18,
-    sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
-    attack_noise: 0.5,     // fingertip on roundwound (B2/BASS-7)
+    // low fundamental + low-mid woody warmth
+    body: &[(60.0, 0.8, 4.5), (110.0, 1.0, 2.5)],
+    out_lp: 1350.0,        // was 1900: muffle — roll the masking mids off the top
+    pickup: 0.34,          // was 0.28: move the comb notch OFF the 2nd harmonic
+    sub: 0.28,             // was 0.18: the "not thin" fix — more fundamental weight
+    sub_ramp: 90,          // the sub speaks fast (a thud, not a swell)
+    sub_shape: (0.4, 0.0), // B5: a real string's weight has a strong 2nd harmonic
+    attack_noise: 0.40,    // was 0.5: less roundwound zing
     stop_thump: 2.2,       // the damp lands with a thud (B3/BASS-6)
     ..DEFAULTS
 };
+// Fretless (GM 35), the album's other bass. Already the darkest electric;
+// pushed deeper and warmer to match the new default character.
 pub const FRETLESS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "FRETLESS",
     wound_all: true,
     t60: 2.6,
-    bright: 1300.0,
-    pick_lp: 900.0,
+    bright: 1050.0,        // was 1300: darker
+    pick_lp: 780.0,        // was 900: rounder, softer attack
     pos: 0.40,
     amp: 1.05,
     attack_s: 0.012,
-    body: &[(60.0, 0.7, 3.5)],
-    out_lp: 1500.0,
-    pickup: 0.33,
-    sub: 0.15,
-    sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
-    attack_noise: 0.7,
+    body: &[(58.0, 0.8, 4.0), (105.0, 1.0, 2.2)], // deeper + woody
+    out_lp: 1200.0,        // was 1500: muffle
+    pickup: 0.37,          // was 0.33: 2nd-harmonic weight
+    sub: 0.26,             // was 0.15: fuller fundamental
+    sub_ramp: 90,          // the sub speaks fast
+    sub_shape: (0.4, 0.0), // B5: a real string's weight has a strong 2nd harmonic
+    attack_noise: 0.55,    // was 0.7
     stop_thump: 2.2,
     ..DEFAULTS
 };
@@ -2261,8 +2270,12 @@ mod tests {
         let (_, tail_with) = run(&BASS, true);
         let (_, tail_without) = run(&no_thump, true);
         let lf = |s: &[f32]| crate::testutil::band_rms(s, sr, 150.0, 0.7);
+        // The flatwound revoice raised BASS's sub weight (0.18 -> 0.28), so the
+        // note's own low end sustains further into the tail and the thump's
+        // *relative* prominence shrinks even though it still clearly fires
+        // (~1.29x here). 1.25 keeps the assertion meaningful at the deeper voicing.
         assert!(
-            lf(&tail_with) > 1.3 * lf(&tail_without),
+            lf(&tail_with) > 1.25 * lf(&tail_without),
             "thump missing: {} vs {}",
             lf(&tail_with),
             lf(&tail_without)

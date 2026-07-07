@@ -1,0 +1,123 @@
+{
+  "album": "Seven Kinds of Sunlight",
+  "artist": "Claude Fable 5",
+  "style": "upbeat odd-meter pop-prog song: 7/8 verses, 6/8 pre-choruses, 5/4 middle-eight, three-voice chorus counterpoint, driving bass, drum fills",
+  "track_count": 1,
+  "total_duration_seconds": 234.81,
+  "total_duration_minutes": 3.91,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Seven Kinds of Sunlight",
+      "file": "midi/01 - Seven Kinds of Sunlight.mid",
+      "duration_seconds": 234.81,
+      "duration_minutes": 3.91,
+      "sections": [
+        {
+          "name": "Intro",
+          "start_beat": 0.0,
+          "end_beat": 32.0,
+          "start_seconds": 0.0,
+          "end_seconds": 13.91,
+          "time": "0:00"
+        },
+        {
+          "name": "Verse 1",
+          "start_beat": 32.0,
+          "end_beat": 88.0,
+          "start_seconds": 13.91,
+          "end_seconds": 38.26,
+          "time": "0:13"
+        },
+        {
+          "name": "Pre-Chorus 1",
+          "start_beat": 88.0,
+          "end_beat": 112.0,
+          "start_seconds": 38.26,
+          "end_seconds": 48.7,
+          "time": "0:38"
+        },
+        {
+          "name": "Chorus 1",
+          "start_beat": 112.0,
+          "end_beat": 176.0,
+          "start_seconds": 48.7,
+          "end_seconds": 76.52,
+          "time": "0:48"
+        },
+        {
+          "name": "Turnaround",
+          "start_beat": 176.0,
+          "end_beat": 184.0,
+          "start_seconds": 76.52,
+          "end_seconds": 80.0,
+          "time": "1:16"
+        },
+        {
+          "name": "Verse 2",
+          "start_beat": 184.0,
+          "end_beat": 240.0,
+          "start_seconds": 80.0,
+          "end_seconds": 104.35,
+          "time": "1:20"
+        },
+        {
+          "name": "Pre-Chorus 2",
+          "start_beat": 240.0,
+          "end_beat": 264.0,
+          "start_seconds": 104.35,
+          "end_seconds": 114.78,
+          "time": "1:44"
+        },
+        {
+          "name": "Chorus 2",
+          "start_beat": 264.0,
+          "end_beat": 328.0,
+          "start_seconds": 114.78,
+          "end_seconds": 142.61,
+          "time": "1:54"
+        },
+        {
+          "name": "Middle Eight",
+          "start_beat": 328.0,
+          "end_beat": 368.0,
+          "start_seconds": 142.61,
+          "end_seconds": 160.0,
+          "time": "2:22"
+        },
+        {
+          "name": "Guitar Solo",
+          "start_beat": 368.0,
+          "end_beat": 424.0,
+          "start_seconds": 160.0,
+          "end_seconds": 184.17,
+          "time": "2:40"
+        },
+        {
+          "name": "Drum Break",
+          "start_beat": 424.0,
+          "end_beat": 446.0,
+          "start_seconds": 184.17,
+          "end_seconds": 193.67,
+          "time": "3:04"
+        },
+        {
+          "name": "Final Chorus",
+          "start_beat": 446.0,
+          "end_beat": 510.0,
+          "start_seconds": 193.67,
+          "end_seconds": 221.1,
+          "time": "3:13"
+        },
+        {
+          "name": "Outro",
+          "start_beat": 510.0,
+          "end_beat": 542.0,
+          "start_seconds": 221.1,
+          "end_seconds": 234.81,
+          "time": "3:41"
+        }
+      ]
+    }
+  ]
+}

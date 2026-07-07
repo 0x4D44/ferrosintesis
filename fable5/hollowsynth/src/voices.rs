@@ -539,10 +539,24 @@ pub struct Pluck {
 impl Pluck {
     pub fn new(p: &PluckPreset, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let mut rng = Rng::new(seed);
+        let vn = vel as f32 / 127.0;
         // round-robin variation: no two picks land identically
         let pos = (p.pos * (1.0 + 0.15 * rng.white())).clamp(0.06, 0.45);
-        let bright = p.bright * (1.0 + 0.08 * rng.white());
+        // velocity→timbre law (HLD family A, G3/B1): a harder pick opens both
+        // the loop damper and the excitation lowpass — velocity changes the
+        // tone, not just the level (the single biggest "sampled at one
+        // dynamic" tell). The soft end is steeper than the HLD's first-guess
+        // constants so bright presets (STEEL, damper ≥ 5 kHz) genuinely
+        // darken at low velocity — tuned to pass oracle 1's 1.4×/1.3×
+        // centroid contrast. Tuning stays exact: KsLoop compensates the
+        // damper's phase delay at whatever cutoff it is given (oracle 2).
+        let bright = (p.bright * (0.35 + 0.85 * vn) * (1.0 + 0.08 * rng.white())).min(sr * 0.45);
         let t60_base = p.t60 * (1.0 + 0.10 * rng.white());
+        let pick_lp = (p.pick_lp * (0.15 + 1.25 * vn)).max(400.0);
+        // the output lowpass (electric/bass presets) opens with velocity too —
+        // without this the fixed out_lp caps the ff brightness of BASS-family
+        // presets and the velocity contrast cannot reach oracle 1's floor
+        let out_lp = p.out_lp * (0.60 + 0.60 * vn);
 
         let f = key_freq(key);
         let period = sr / f;
@@ -550,7 +564,7 @@ impl Pluck {
 
         // excitation: filtered noise burst with a pick-position comb
         let exc_len = (period as usize).max(4);
-        let mut lp = OnePole::lowpass(p.pick_lp, sr);
+        let mut lp = OnePole::lowpass(pick_lp, sr);
         let raw: Vec<f32> = (0..exc_len).map(|_| lp.process(rng.white())).collect();
         let comb = ((exc_len as f32 * pos) as usize).max(1);
         let mut exc: Vec<f32> = (0..exc_len)
@@ -581,14 +595,14 @@ impl Pluck {
                 .map(|&(f, q, g)| Biquad::peak(f, q, g, sr))
                 .collect(),
             out_lp: if p.out_lp > 0.0 {
-                Some(OnePole::lowpass(p.out_lp, sr))
+                Some(OnePole::lowpass(out_lp, sr))
             } else {
                 None
             },
             hammer: Vec::new(),
             hammer_pos: 0,
             rng,
-            pick_lp_hz: p.pick_lp,
+            pick_lp_hz: pick_lp,
             amp: p.amp,
             att: if p.attack_s <= 0.0 {
                 1.0
@@ -1593,6 +1607,42 @@ mod tests {
             }
         }
         c as f32 / (seg.len() as f32 / sr)
+    }
+
+    /// Oracle 1: velocity opens the timbre, not just the level — a hard pick
+    /// reads measurably brighter than a soft one at the same key.
+    #[test]
+    fn velocity_opens_pluck_timbre() {
+        let sr = 44100.0;
+        let cent = |preset: &PluckPreset, key: u8, vel: u8| {
+            let mut v = Pluck::new(preset, key, vel, sr, 7);
+            // pick + early ring: the damper contrast compounds per loop pass
+            let mut buf = vec![0f32; 11025];
+            v.render(&mut buf);
+            crate::testutil::centroid(&buf, sr)
+        };
+        let steel = cent(&STEEL, 52, 120) / cent(&STEEL, 52, 30);
+        let bass = cent(&BASS, 33, 120) / cent(&BASS, 33, 30);
+        assert!(
+            steel > 1.4 && bass > 1.3,
+            "ff/pp centroid ratios: STEEL {steel} (need >1.4), BASS {bass} (need >1.3)"
+        );
+    }
+
+    /// Oracle 2 (guard): the velocity law must not move the tuning — the
+    /// KS loop compensates the damper phase at whatever cutoff it is given.
+    /// Measured with peak_locate (zero-crossing counts overreact to the
+    /// brighter harmonics a hard pick now legitimately carries).
+    #[test]
+    fn velocity_preserves_tuning() {
+        let sr = 44100.0;
+        for vel in [30u8, 120] {
+            let mut v = Pluck::new(&STEEL, 69, vel, sr, 7);
+            let mut buf = vec![0f32; 22050];
+            v.render(&mut buf);
+            let hz = crate::testutil::peak_locate(&buf[4410..], sr, 396.0, 484.0);
+            assert!((hz - 440.0).abs() < 6.0, "vel {vel}: {hz} Hz");
+        }
     }
 
     /// A plucked A4 should oscillate near 440 Hz (count zero crossings).

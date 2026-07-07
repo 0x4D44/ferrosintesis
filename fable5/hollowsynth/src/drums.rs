@@ -146,6 +146,35 @@ impl Voice for Drum {
     }
 }
 
+/// D1 velocity→timbre for membrane voices (HLD family A, §3.3): a harder hit
+/// starts slightly sharper, glides down faster, rings longer, and carries
+/// proportionally more click/noise energy (the 0.5 floor preserves ghost
+/// notes). Applied ONLY to membrane keys — cymbals keep their own `velnorm`
+/// handling (the V4 apply-once rule).
+#[allow(clippy::type_complexity)]
+fn membrane_velocity(
+    tones: &[(f32, f32, f32, f32)],
+    noise: &[(f32, f32, Biquad)],
+    vn: f32,
+) -> (Vec<(f32, f32, f32, f32)>, Vec<(f32, f32, Biquad)>) {
+    let tones = tones
+        .iter()
+        .map(|&(f, a, t, glide)| {
+            (
+                f * (1.0 + 0.03 * vn),
+                a,
+                t * (0.85 + 0.30 * vn),
+                glide * (0.6 + 0.8 * vn),
+            )
+        })
+        .collect();
+    let noise = noise
+        .iter()
+        .map(|&(a, t, filt)| (a * (0.5 + 0.5 * vn * vn), t, filt))
+        .collect();
+    (tones, noise)
+}
+
 /// Inharmonic cymbal partial stack — the classic bell-plate ratios.
 const METAL_RATIOS: [f32; 6] = [1.0, 1.483, 1.932, 2.546, 3.363, 4.365];
 
@@ -191,9 +220,14 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
     let d = |tones: &[(f32, f32, f32, f32)], noise: &[(f32, f32, Biquad)], life: f32, g: f32| {
         Some(Box::new(Drum::new(sr, seed, tones, noise, life, g * v)) as Box<dyn Voice>)
     };
+    // membrane variant: the D1 velocity→timbre transform, then the same build
+    let dm = |tones: &[(f32, f32, f32, f32)], noise: &[(f32, f32, Biquad)], life: f32, g: f32| {
+        let (tones, noise) = membrane_velocity(tones, noise, velnorm);
+        Some(Box::new(Drum::new(sr, seed, &tones, &noise, life, g * v)) as Box<dyn Voice>)
+    };
     let one = |amp: f32, t: f32, filt: Biquad| vec![(amp, t, filt)];
     match key {
-        35 | 36 => d(
+        35 | 36 => dm(
             // beater knock over a sub drop (86 -> ~45 Hz): the chest thump
             &[
                 (165.0, 0.8, 0.16, 28.0),
@@ -210,7 +244,7 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
             0.2,
             0.55,
         ),
-        38 | 40 => d(
+        38 | 40 => dm(
             // snare: shell body + wire rattle, brighter when hit harder
             &[(186.0, 0.8, 0.10, 4.0), (330.0, 0.4, 0.07, 0.0)],
             &[
@@ -235,25 +269,25 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
             )
             .with_bursts(&[(0.010, 0.75), (0.022, 0.6)]),
         ) as Box<dyn Voice>), // hand clap: three quick bursts
-        41 => d(
+        41 => dm(
             &[(100.0, 1.0, 0.32, 10.0)],
             &one(0.25, 0.05, Biquad::bandpass(900.0, 0.8, sr)),
             0.55,
             0.85,
         ),
-        43 => d(
+        43 => dm(
             &[(140.0, 1.0, 0.30, 10.0)],
             &one(0.25, 0.05, Biquad::bandpass(1100.0, 0.8, sr)),
             0.5,
             0.80,
         ),
-        45 => d(
+        45 => dm(
             &[(190.0, 1.0, 0.28, 10.0)],
             &one(0.25, 0.05, Biquad::bandpass(1300.0, 0.8, sr)),
             0.45,
             0.75,
         ),
-        47 | 48 | 50 => d(
+        47 | 48 | 50 => dm(
             &[(240.0, 1.0, 0.24, 10.0)],
             &one(0.2, 0.04, Biquad::bandpass(1500.0, 0.8, sr)),
             0.4,
@@ -340,37 +374,37 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
             0.5,
             0.55,
         ),
-        60 => d(
+        60 => dm(
             &[(400.0, 1.0, 0.11, 3.0)],
             &one(0.35, 0.02, Biquad::bandpass(1400.0, 1.0, sr)),
             0.3,
             0.6,
         ),
-        61 => d(
+        61 => dm(
             &[(300.0, 1.0, 0.13, 3.0)],
             &one(0.35, 0.02, Biquad::bandpass(1100.0, 1.0, sr)),
             0.3,
             0.6,
         ),
-        62 => d(
+        62 => dm(
             &[(230.0, 1.0, 0.05, 0.0)],
             &one(0.3, 0.015, Biquad::bandpass(1200.0, 1.0, sr)),
             0.2,
             0.6,
         ),
-        63 => d(
+        63 => dm(
             &[(190.0, 1.0, 0.24, 3.0)],
             &one(0.3, 0.02, Biquad::bandpass(1000.0, 1.0, sr)),
             0.4,
             0.65,
         ),
-        64 => d(
+        64 => dm(
             &[(145.0, 1.0, 0.28, 3.0)],
             &one(0.3, 0.02, Biquad::bandpass(800.0, 1.0, sr)),
             0.45,
             0.65,
         ),
-        65 | 66 => d(
+        65 | 66 => dm(
             &[(430.0, 0.9, 0.15, 4.0)],
             &one(0.3, 0.02, Biquad::bandpass(1600.0, 1.0, sr)),
             0.3,
@@ -426,5 +460,60 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
             0.15,
             0.4,
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil;
+
+    /// Oracle 30 (structural half, §5.3): the D1 membrane transform moves
+    /// every table quantity in the designed direction — the audio spectral
+    /// form is unwritable under the pitch glide, so the tables are the seam.
+    #[test]
+    fn membrane_velocity_transform_is_directional() {
+        let sr = 44100.0;
+        let tones = [(100.0, 1.0, 0.32, 10.0)];
+        let noise = [(0.25, 0.05, Biquad::bandpass(900.0, 0.8, sr))];
+        let (t_hard, n_hard) = membrane_velocity(&tones, &noise, 1.0);
+        let (t_soft, n_soft) = membrane_velocity(&tones, &noise, 0.0);
+        assert!(t_hard[0].0 > t_soft[0].0, "start pitch");
+        assert!(t_hard[0].2 > t_soft[0].2, "decay t60");
+        assert!(t_hard[0].3 > t_soft[0].3, "glide rate");
+        assert!(n_hard[0].0 > n_soft[0].0, "click/noise energy");
+        // the vn² click curve spans exactly 2x with a 0.5 ghost-note floor
+        assert!((n_hard[0].0 / n_soft[0].0 - 2.0).abs() < 1e-4);
+    }
+
+    fn render_drum(key: u8, vel: u8, secs: f32) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = make(key, vel, sr, 7).unwrap();
+        let mut buf = vec![0f32; (sr * secs) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    /// Oracle 30 (audio half): a hard kick carries proportionally more
+    /// beater click and rings longer than a soft one.
+    #[test]
+    fn drum_velocity_shapes_timbre() {
+        let sr = 44100.0;
+        let hard = render_drum(36, 120, 1.0);
+        let soft = render_drum(36, 30, 1.0);
+        // beater-click energy normalised by the exact velocity gain the
+        // engine applies (gain = g·vel_amp) — on main this ratio is 1.0
+        // because the click amp is velocity-independent relative to gain
+        let click = |s: &[f32], vel: u8| {
+            testutil::hp_rms(&s[..(0.005 * sr) as usize], sr, 2500.0)
+                / crate::dsp::vel_amp(vel).max(1e-9)
+        };
+        let (ch, cs) = (click(&hard, 120), click(&soft, 30));
+        assert!(
+            ch > 1.3 * cs,
+            "click (gain-normalised) hard {ch} vs soft {cs}"
+        );
+        let (th, ts) = (testutil::t60_of(&hard, sr), testutil::t60_of(&soft, sr));
+        assert!(th > ts, "t60 hard {th} vs soft {ts}");
     }
 }

@@ -448,19 +448,25 @@ mod guards {
         // ring (guitars brighter), the K4 wound split darkens low DRIVE keys,
         // and the re-voiced bass presets sit under the wound factor. The
         // canaries (ch 7 piano, ch 8 strings) remain BIT-EXACT vs pre-work.
+        // Re-captured after the flatwound bass revoice (BASS/FRETLESS presets,
+        // GM 33/35): the two bass channels (ch 5, ch 6) now sit deeper and
+        // darker — more sub weight, highs rolled off (centroid 369->295 and
+        // 211->195 Hz). Every other channel, INCLUDING the ch 7 piano and ch 8
+        // strings canaries, is BIT-EXACT vs pre-revoice: the change is
+        // contained to the two bass presets, as intended.
         (0, -41.28, 1020.2),
         (1, -42.07, 2020.8),
         (2, -42.68, 1107.1),
         (3, -40.13, 528.8),
         (4, -36.90, 932.2),
-        (5, -27.01, 369.1),
-        (6, -28.88, 211.0),
+        (5, -24.61, 294.6),
+        (6, -27.14, 194.6),
         (7, -24.35, 567.6),
         (8, -37.21, 2683.1),
         (9, -23.26, 483.9),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 0.99739;
+    const GOLDEN_MASTER_PEAK: f32 = 1.04282;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

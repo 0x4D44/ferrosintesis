@@ -437,20 +437,25 @@ mod guards {
     /// oracle-34 procedure) — it is a drift trip-wire, not a freeze.
     /// Regenerate with: cargo test print_golden_fixture -- --ignored --nocapture
     const GOLDEN: &[(u8, f32, f32)] = &[
-        // captured 2026-07-07 on pre-work v0.7.0 main (commit df07a05 code)
-        (0, -41.99, 933.0),
-        (1, -43.07, 1562.0),
-        (2, -43.54, 1380.9),
-        (3, -38.48, 566.0),
-        (4, -34.76, 976.4),
-        (5, -25.24, 362.9),
-        (6, -28.41, 192.5),
+        // Re-captured after Phase 3 (the Cabinet): CLEAN (ch 2) deliberately
+        // darker above 4.5 kHz, DRIVE (ch 4) re-voiced through the new cab;
+        // the Phase-1 velocity law shifts the guitar/bass channels slightly
+        // at their written velocities. The canaries (ch 7 piano, ch 8
+        // strings) are BIT-EXACT vs the pre-work capture — proof the
+        // untouched families are untouched.
+        (0, -42.35, 889.8),
+        (1, -42.91, 1713.7),
+        (2, -42.92, 1138.8),
+        (3, -38.64, 571.3),
+        (4, -37.15, 1169.7),
+        (5, -25.60, 382.0),
+        (6, -28.90, 203.2),
         (7, -24.35, 567.6),
         (8, -37.21, 2683.1),
-        (9, -24.73, 489.0),
+        (9, -23.26, 470.2),
     ];
-    /// Full-mix pre-normalise master peak on the pre-work build.
-    const GOLDEN_MASTER_PEAK: f32 = 0.86813;
+    /// Full-mix pre-normalise master peak (re-captured with the table above).
+    const GOLDEN_MASTER_PEAK: f32 = 0.90581;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

@@ -45,6 +45,9 @@ pub trait Voice {
     /// voice's own control-rate formant smoothing removes any residual
     /// zipper. Voices without formants ignore it.
     fn set_vowel(&mut self, _freqs: [f32; 3], _qs: [f32; 3], _gains: [f32; 3]) {}
+    /// Hat choke (D6/CYM-4): a closed-hat strike silences the ringing open
+    /// hat within ~10-30 ms. Default no-op; only `Drum` implements it.
+    fn choke(&mut self) {}
     /// Test-only concrete-voice discriminant — the oracle-36 routing seam.
     /// Plucks report their preset name; other families their family name.
     #[cfg(test)]
@@ -433,8 +436,9 @@ pub const BASS: PluckPreset = PluckPreset {
     out_lp: 1900.0,
     pickup: 0.28,
     sub: 0.18,
-    attack_noise: 0.5, // fingertip on roundwound (B2/BASS-7)
-    stop_thump: 1.4,   // the damp lands with a thud (B3/BASS-6)
+    sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
+    attack_noise: 0.5,     // fingertip on roundwound (B2/BASS-7)
+    stop_thump: 1.8,       // the damp lands with a thud (B3/BASS-6)
     ..DEFAULTS
 };
 pub const FRETLESS: PluckPreset = PluckPreset {
@@ -450,8 +454,9 @@ pub const FRETLESS: PluckPreset = PluckPreset {
     out_lp: 1500.0,
     pickup: 0.33,
     sub: 0.15,
+    sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
     attack_noise: 0.7,
-    stop_thump: 1.4,
+    stop_thump: 1.8,
     ..DEFAULTS
 };
 /// Slap bass (B2, GM 36/37): thumb slap + near-bridge pop.
@@ -468,7 +473,8 @@ pub const SLAP: PluckPreset = PluckPreset {
     out_lp: 4000.0,
     pickup: 0.28,
     sub: 0.15,
-    click: 2.4, // the pop — post-out so the out-LP doesn't swallow it
+    sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
+    click: 2.4,            // the pop — post-out so the out-LP doesn't swallow it
     click_hp: 1500.0,
     click_post: true,
     stop_thump: 0.9,
@@ -488,6 +494,7 @@ pub const PICK: PluckPreset = PluckPreset {
     out_lp: 2400.0,
     pickup: 0.28,
     sub: 0.16,
+    sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
     click: 1.6,
     click_hp: 1800.0,
     click_post: true,
@@ -507,7 +514,8 @@ pub const UPRIGHT: PluckPreset = PluckPreset {
     body: &[(65.0, 0.7, 4.0), (110.0, 1.0, 3.0)],
     out_lp: 2200.0,
     sub: 0.15,
-    attack_noise: 0.65, // woody fingertip thud
+    sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
+    attack_noise: 0.65,    // woody fingertip thud
     stop_thump: 0.8,
     ..DEFAULTS
 };
@@ -563,6 +571,7 @@ struct KsLoop {
     dl: DelayLine,
     delay: f32,
     target: f32,
+    max_delay: f32, // V4/INT-4: the line's safe capacity (tap margin held back)
     glide_k: f32,
     damp: OnePole,
     loop_gain: f32,
@@ -594,6 +603,10 @@ impl KsLoop {
             dl,
             delay: target,
             target,
+            // a wider bend (RPN range 24, deep portamento origins) would
+            // silently wrap the ring buffer into garbage — clamp instead:
+            // an out-of-range glide pitch-limits (V4/INT-4, oracle 43)
+            max_delay: target * 2.2 + 4.0,
             glide_k: 1.0 - (-1.0 / (0.004 * sr)).exp(),
             damp: OnePole::lowpass(bright, sr),
             loop_gain: 10f32.powf(-3.0 / (t60 * f)),
@@ -605,7 +618,7 @@ impl KsLoop {
 
     /// Retune to a new frequency; the ringing energy stays in the string.
     fn retune(&mut self, f: f32) {
-        self.target = Self::delay_for(f, self.bright, self.sr);
+        self.target = Self::delay_for(f, self.bright, self.sr).min(self.max_delay);
         self.loop_gain = 10f32.powf(-3.0 / (self.t60 * f));
     }
 
@@ -726,7 +739,15 @@ impl Pluck {
                 let d = 2.0 * p.pickup * period;
                 (DelayLine::new(d as usize + 8), d)
             }),
-            sub: (p.sub > 0.0).then(|| (Sine::new(f, sr, 0.0), p.sub * v, t60_mul(t60 * 0.8, sr))),
+            // B5: random start phase — the sub is part of the string, not a
+            // laboratory cosine locked to the pick
+            sub: (p.sub > 0.0).then(|| {
+                (
+                    Sine::new(f, sr, rng.white() * std::f32::consts::PI),
+                    p.sub * v,
+                    t60_mul(t60 * 0.8, sr),
+                )
+            }),
             sub_env: 0.0,
             sub_shape: p.sub_shape,
             sub_ramp: p.sub_ramp,
@@ -931,6 +952,111 @@ impl Voice for Pluck {
     #[cfg(test)]
     fn kind(&self) -> &'static str {
         self.kind
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SynthBass (HLD family F, B4) — GM 38/39 are synth basses, not plucked
+// strings: saw(s) + sub sine through an envelope-swept resonant lowpass.
+// ---------------------------------------------------------------------------
+
+pub struct SynthBass {
+    saws: Vec<(BlepSaw, f32)>, // (osc, detune ratio)
+    sub: Sine,
+    base_f: f32,
+    bend: f32,
+    amp_env: Adsr,
+    filt_env: Adsr,
+    filt: Biquad,
+    depth: f32, // filter-env sweep depth in Hz
+    q: f32,
+    t: u32,
+    amp: f32,
+    sr: f32,
+}
+
+impl SynthBass {
+    /// program 38 = one saw; 39 = two saws detuned ±8 cents.
+    pub fn new(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+        let f = key_freq(key);
+        let mut rng = Rng::new(seed);
+        let vn = vel as f32 / 127.0;
+        let detunes: &[f32] = if program == 39 {
+            &[0.99538, 1.00463] // ±8 cents
+        } else {
+            &[1.0]
+        };
+        let saws = detunes
+            .iter()
+            .map(|&r| (BlepSaw::new(f * r, sr, rng.white() * 0.5 + 0.5), r))
+            .collect();
+        SynthBass {
+            saws,
+            sub: Sine::new(f, sr, rng.white() * std::f32::consts::PI),
+            base_f: f,
+            bend: 1.0,
+            amp_env: Adsr::new(0.004, 0.18, 0.75, 0.08, sr),
+            filt_env: Adsr::new(0.003, 0.28, 0.25, 0.10, sr),
+            filt: Biquad::lowpass(300.0, 4.0, sr),
+            depth: 900.0 + 2600.0 * vn, // velocity opens the sweep
+            q: 4.0,
+            t: 0,
+            amp: 0.62 * (0.4 + 0.6 * vel_amp(vel)),
+            sr,
+        }
+    }
+}
+
+impl Voice for SynthBass {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            if self.t.is_multiple_of(CTRL) {
+                // envelope-swept resonant filter, state-preserving retune
+                let fenv = self.filt_env.next();
+                let cut = (300.0 + fenv * self.depth).clamp(80.0, self.sr * 0.4);
+                self.filt.retune_lowpass(cut, self.q, self.sr);
+            } else {
+                self.filt_env.next();
+            }
+            let mut s = 0.0;
+            for (osc, _) in &mut self.saws {
+                s += osc.next();
+            }
+            s /= self.saws.len() as f32;
+            s += 0.35 * self.sub.next();
+            let y = self.filt.process(s) * self.amp * self.amp_env.next();
+            *o += y;
+            self.t += 1;
+        }
+        self.amp_env.alive()
+    }
+
+    fn note_off(&mut self) {
+        self.amp_env.release();
+        self.filt_env.release();
+    }
+
+    fn released(&self) -> bool {
+        self.amp_env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        // v0.6/v0.7 bend/vibrato/portamento support (V4/INT-5): the engine
+        // writes per block; BlepSaw/Sine retunes are click-free
+        self.bend = mult;
+        let f = self.base_f * mult;
+        for (osc, r) in &mut self.saws {
+            osc.set_freq(f * *r, self.sr);
+        }
+        self.sub.set_freq(f, self.sr);
+    }
+
+    // legato_to: default false — a synth bass retriggers (stated, not
+    // accidental; V4/B4).
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "synthbass"
     }
 }
 
@@ -1761,9 +1887,10 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         29 | 30 => Box::new(Pluck::new(&DRIVE, key, vel, sr, seed)),
         31 => Box::new(Pluck::new(&HARMONIC, key, vel, sr, seed)), // G7 flageolet
         32 => Box::new(Pluck::new(&UPRIGHT, key, vel, sr, seed)),  // B2
-        33 | 38 | 39 => Box::new(Pluck::new(&BASS, key, vel, sr, seed)), // 38/39 → SynthBass in Phase 5
-        34 => Box::new(Pluck::new(&PICK, key, vel, sr, seed)),           // B2
-        36 | 37 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),      // B2
+        33 => Box::new(Pluck::new(&BASS, key, vel, sr, seed)),
+        38 | 39 => Box::new(SynthBass::new(program, key, vel, sr, seed)), // B4
+        34 => Box::new(Pluck::new(&PICK, key, vel, sr, seed)),            // B2
+        36 | 37 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),       // B2
         35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
         40..=45 => {
             let model = Box::new(Bowed::new(key, vel, sr, seed));
@@ -2124,6 +2251,89 @@ mod tests {
             sup_bent <= -12.0,
             "bent fundamental only {sup_bent:.1} dB down"
         );
+    }
+
+    /// Oracle 43 (V4/INT-4): a range-24 full-down bend pitch-limits at the
+    /// delay line's capacity instead of silently wrapping into garbage.
+    #[test]
+    fn extreme_downbend_stays_finite() {
+        let sr = 44100.0;
+        let mut v = Pluck::new(&BASS, 28, 110, sr, 7);
+        v.set_pitch(2f32.powf(-24.0 / 12.0)); // RPN range 24, wheel floored
+        let mut buf = vec![0f32; sr as usize];
+        v.render(&mut buf);
+        assert!(buf.iter().all(|x| x.is_finite()), "non-finite output");
+        let peak = buf.iter().fold(0f32, |m, &x| m.max(x.abs()));
+        assert!(peak < 2.0, "wrapped ring buffer: peak {peak}");
+    }
+
+    /// Oracle 11 (B5, §5.3): the bass sub carries a real 2nd harmonic
+    /// (differential vs a shaper-disabled build) with no DC, and its start
+    /// phase varies with the seed.
+    #[test]
+    fn bass_sub_shaped_and_phase_random() {
+        let sr = 44100.0;
+        let plain = PluckPreset {
+            sub_shape: (0.0, 0.0),
+            ..BASS
+        };
+        let with = render_pluck(&BASS, 28, 100, 0.4, 7);
+        let without = render_pluck(&plain, 28, 100, 0.4, 7);
+        let f = key_freq(28);
+        let h2 = |s: &[f32]| crate::testutil::mag_at(s, sr, 2.0 * f);
+        assert!(
+            h2(&with) > 1.1 * h2(&without),
+            "sub 2f missing: {} vs {}",
+            h2(&with),
+            h2(&without)
+        );
+        // DC clause, differential: an unwindowed mean of a 41 Hz note reads
+        // fundamental partial-cycle residue (~A/2πn), so compare the SAME
+        // seed with the shaper on vs off — sin²−½ = −½cos2x must add none
+        let mean = |s: &[f32]| s.iter().map(|&x| x as f64).sum::<f64>() / s.len() as f64;
+        let added_dc = (mean(&with) - mean(&without)).abs();
+        assert!(added_dc < 1e-3, "sub shaper leaked DC: {added_dc}");
+        // seed-dependent sub phase: the LF starts differently across seeds
+        let a = render_pluck(&BASS, 28, 100, 0.05, 7);
+        let b = render_pluck(&BASS, 28, 100, 0.05, 8);
+        let lf = |s: &[f32]| {
+            let mut lp = OnePole::lowpass(60.0, sr);
+            s.iter().map(|&x| lp.process(x)).collect::<Vec<f32>>()
+        };
+        assert!(
+            crate::testutil::inter_corr(&lf(&a), &lf(&b)).abs() < 0.98,
+            "sub phase identical across seeds"
+        );
+    }
+
+    /// Oracle 13 (B4 + §5.3 pitch clause): SynthBass holds a steady sustain,
+    /// its filter envelope sweeps the brightness down after the attack, and
+    /// set_pitch actually bends it (V4/INT-5).
+    #[test]
+    fn synthbass_class_and_pitch() {
+        let sr = 44100.0;
+        let mut v = SynthBass::new(38, 40, 100, sr, 7);
+        let mut buf = vec![0f32; (1.0 * sr) as usize];
+        v.render(&mut buf);
+        let rms_a = crate::testutil::rms(&buf[(0.2 * sr) as usize..(0.5 * sr) as usize]);
+        let rms_b = crate::testutil::rms(&buf[(0.5 * sr) as usize..(0.8 * sr) as usize]);
+        let ratio = rms_a.max(rms_b) / rms_a.min(rms_b).max(1e-9);
+        assert!(ratio < 1.3, "sustain not steady: {ratio}");
+        let c_early = crate::testutil::centroid(&buf[..(0.15 * sr) as usize], sr);
+        let c_late = crate::testutil::centroid(&buf[(0.5 * sr) as usize..(0.8 * sr) as usize], sr);
+        assert!(
+            c_early > 1.15 * c_late,
+            "filter env not sweeping: early {c_early} late {c_late}"
+        );
+        // pitch clause: +2 semitones must sound at the bent pitch
+        let mut vb = SynthBass::new(38, 40, 100, sr, 7);
+        vb.set_pitch(2f32.powf(2.0 / 12.0));
+        let mut bent = vec![0f32; (0.6 * sr) as usize];
+        vb.render(&mut bent);
+        let want = key_freq(40) * 2f32.powf(2.0 / 12.0);
+        let p =
+            crate::testutil::peak_locate(&bent[(0.2 * sr) as usize..], sr, want * 0.9, want * 1.1);
+        assert!((p / want - 1.0).abs() < 0.04, "bent pitch {p} vs {want}");
     }
 
     /// A plucked A4 should oscillate near 440 Hz (count zero crossings).

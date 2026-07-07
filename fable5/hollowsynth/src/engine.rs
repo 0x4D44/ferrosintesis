@@ -45,6 +45,10 @@ const RES_MAX_Q: f32 = 8.0;
 const PORTA_MIN_S: f32 = 0.005;
 const PORTA_MAX_S: f32 = 0.6;
 
+// D10: fixed drum-room send level (ch 9 only, un-highpassed so the kick
+// keeps its body; the room is pre-hall).
+const ROOM_SEND: f32 = 0.35;
+
 // Channel aftertouch (0xDn): "crescendo inside a held note" — pressure adds
 // vibrato depth and gain on the sustained melodic families.
 const AT_VIB_RATE_HZ: f32 = 5.0;
@@ -131,6 +135,24 @@ fn vowel_at(pos: f32) -> Vowel {
 /// single source of truth for the Prog handler and oracle 36.
 pub(crate) fn needs_drive(prog: u8) -> bool {
     matches!(prog, 29 | 30)
+}
+
+/// D9: static per-piece kit placement (drummer's perspective) in pan space
+/// [0, 1], 0.5 = centre. Kick/snare stay centred; hats sit left; the toms
+/// sweep across; ride/bell and china/crash-2 sit right, crash-1 left.
+/// Authored CC10 OFFSETS this table (centre leaves it verbatim).
+pub(crate) fn drum_pan(key: u8) -> f32 {
+    match key {
+        42 | 44 | 46 => 0.33,
+        41 => 0.55,
+        43 | 45 => 0.62,
+        47 | 48 => 0.42,
+        50 => 0.32,
+        51 | 53 | 59 => 0.70,
+        49 | 55 => 0.25,
+        52 | 57 => 0.75,
+        _ => 0.5,
+    }
 }
 
 /// The 5-biquad speaker-cabinet model (HLD G1): low-end resonance, a mid
@@ -321,43 +343,82 @@ impl PingPong {
     }
 }
 
-/// Sympathetic resonance: the piano's undamped strings ring along with
-/// whatever it plays. Twelve lightly-damped comb resonators (one per pitch
-/// class, C3..B3) are fed by the piano channels and returned quietly.
+/// Sympathetic resonance: lightly-damped comb resonators fed by a send and
+/// returned quietly. Parameterized (G5/V4): the piano instance rings one
+/// comb per pitch class C3..B3; the guitar instance rings the six open
+/// strings of acoustic guitars (prog 24|25 only).
 struct Sympathetic {
     combs: Vec<(DelayLine, f32, OnePole)>,
     hp: Biquad,
+    feedback: f32,
+    input: f32,
+    ret: f32,
 }
 
 impl Sympathetic {
-    fn new(sr: f32) -> Self {
-        let combs = (0..12)
-            .map(|k| {
-                let f = 130.81 * 2f32.powf(k as f32 / 12.0);
+    fn new(
+        sr: f32,
+        freqs: &[f32],
+        damp_hz: f32,
+        feedback: f32,
+        hp_hz: f32,
+        input: f32,
+        ret: f32,
+    ) -> Self {
+        let combs = freqs
+            .iter()
+            .map(|&f| {
                 let d = sr / f;
                 (
                     DelayLine::new(d as usize + 4),
                     d,
-                    OnePole::lowpass(2600.0, sr),
+                    OnePole::lowpass(damp_hz, sr),
                 )
             })
             .collect();
         Sympathetic {
             combs,
-            hp: Biquad::highpass(170.0, 0.7, sr),
+            hp: Biquad::highpass(hp_hz, 0.7, sr),
+            feedback,
+            input,
+            ret,
         }
+    }
+
+    /// The piano's undamped strings (the original v0.5 instance).
+    fn piano(sr: f32) -> Self {
+        let freqs: Vec<f32> = (0..12)
+            .map(|k| 130.81 * 2f32.powf(k as f32 / 12.0))
+            .collect();
+        Self::new(sr, &freqs, 2600.0, 0.85, 170.0, 0.05, 0.55)
+    }
+
+    /// The acoustic guitar's open strings E2 A2 D3 G3 B3 E4 (GTR-3/KS-6).
+    fn guitar(sr: f32) -> Self {
+        Self::new(
+            sr,
+            &[82.41, 110.0, 146.83, 196.0, 246.94, 329.63],
+            3400.0,
+            0.85,
+            120.0,
+            0.03,
+            0.30,
+        )
     }
 
     fn process(&mut self, send: &[f32], l: &mut [f32], r: &mut [f32]) {
         for i in 0..send.len() {
-            let x = self.hp.process(send[i]) * 0.05;
+            let x = self.hp.process(send[i]) * self.input;
             let mut sum = 0.0;
             for (dl, d, damp) in &mut self.combs {
-                let y = dl.tap(*d);
-                dl.push(x + damp.process(y) * 0.85);
+                let mut y = dl.tap(*d);
+                if y.abs() < 1e-20 {
+                    y = 0.0; // denormal flush
+                }
+                dl.push(x + damp.process(y) * self.feedback);
                 sum += y;
             }
-            let w = sum * 0.55;
+            let w = sum * self.ret;
             l[i] += w;
             r[i] += w;
         }
@@ -461,7 +522,10 @@ struct Strip {
     delay_send: f32,
     drive: Option<Drive>,
     wah: Option<Biquad>, // CC74 brightness filter; None = true bypass
-    cutoff: f32,         // current wah cutoff Hz, slewed toward cutoff_target
+    // second wah instance for channel 9's stereo drum pair (D9 strip
+    // parity: an authored ch-9 CC74/71 keeps filtering the whole kit)
+    wah_r: Option<Biquad>,
+    cutoff: f32, // current wah cutoff Hz, slewed toward cutoff_target
     cutoff_target: f32,
     haas: DelayLine,
     haas_delay: f32, // samples of far-side delay; 0 disables
@@ -512,6 +576,7 @@ impl Strip {
             delay_send: 0.0,
             drive: None,
             wah: None,
+            wah_r: None,
             cutoff: WAH_MAX_HZ,
             cutoff_target: WAH_MAX_HZ,
             haas: DelayLine::new((0.006 * sr) as usize + 4),
@@ -548,6 +613,18 @@ struct Active {
 }
 
 pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
+    render_buses(song, opt, true, true)
+}
+
+/// The real renderer; the bus switches exist so the A/B oracles (19, 32a)
+/// can render the same song with the guitar-sympathetic or drum-room bus
+/// disabled. The public `render` always enables both — no shipped knob.
+pub(crate) fn render_buses(
+    song: &Song,
+    opt: &Options,
+    gtr_symp_on: bool,
+    drum_room_on: bool,
+) -> (Vec<f32>, Stats) {
     let sr = opt.sr;
     let total = ((song.seconds + opt.tail as f64) * sr as f64) as usize;
     let mut out = vec![0f32; total * 2]; // interleaved stereo
@@ -558,7 +635,11 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
     let mut rev_hp = Biquad::highpass(150.0, 0.7, sr); // keep the lows dry and tight
     let mut chorus = Chorus::new(sr);
     let mut echo = (opt.delay_s > 0.0).then(|| PingPong::new(sr, opt.delay_s));
-    let mut symp = Sympathetic::new(sr);
+    let mut symp = Sympathetic::piano(sr);
+    // G5: the acoustic guitars' open strings ring along (prog 24|25 only)
+    let mut gtr_symp = Sympathetic::guitar(sr);
+    // D10: a tight pre-hall drum room — fb 0.42 ≈ 0.29 s t60, ~3 ms predelay
+    let mut drum_room = Reverb::with_predelay(sr, 0.42, 0.55, opt.wet * 0.9, 0.003);
     let mut glue = BusGlue::new(sr);
     let mut stats = Stats {
         voices_spawned: 0,
@@ -579,6 +660,10 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
     let mut send_cho = [0f32; BLOCK];
     let mut send_del = [0f32; BLOCK];
     let mut send_sym = [0f32; BLOCK];
+    let mut send_sym_gtr = [0f32; BLOCK];
+    let mut send_room = [0f32; BLOCK];
+    let mut drum_l = [0f32; BLOCK];
+    let mut drum_r = [0f32; BLOCK];
     let mut mix_l = [0f32; BLOCK];
     let mut mix_r = [0f32; BLOCK];
     let expr_smooth = 1.0 - (-(BLOCK as f32) / (0.03 * sr)).exp();
@@ -627,6 +712,16 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                     } else {
                         vel
                     };
+                    // D6 hat choke: any hat strike silences the hats already
+                    // ringing (the pedal closes / the stick lands)
+                    if ch == 9 && matches!(key, 42 | 44 | 46) {
+                        for a in active
+                            .iter_mut()
+                            .filter(|a| a.ch == 9 && matches!(a.key, 42 | 44 | 46))
+                        {
+                            a.voice.choke();
+                        }
+                    }
                     let seed = 0x9E37 ^ (stats.voices_spawned as u32).wrapping_mul(2654435761);
                     let voice = if ch == 9 {
                         drums::make(key, vel, sr, seed)
@@ -800,6 +895,9 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                                 // resonance needs the filter in the path; it
                                 // enters wide open and slews from there
                                 s.wah = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                                if ch == 9 {
+                                    s.wah_r = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                                }
                             }
                         }
                         74 => {
@@ -808,6 +906,9 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                                 // the filter enters the path transparently:
                                 // wide open, then slews down to the target
                                 s.wah = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                                if ch == 9 {
+                                    s.wah_r = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                                }
                             }
                         }
                         91 => s.reverb_send = v,
@@ -973,12 +1074,17 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
             }
         }
 
-        // voices -> channel buffers
+        // voices -> channel buffers. Channel 9 (drums) is HELD OUT here and
+        // rendered in the dedicated per-piece pass below (D9) — the strip
+        // pass would collapse the kit to a mono point source.
         for buf in ch_buf.iter_mut() {
             buf[..n].fill(0.0);
         }
         stats.max_polyphony = stats.max_polyphony.max(active.len());
         active.retain_mut(|a| {
+            if a.ch == 9 {
+                return true;
+            }
             scratch[..n].fill(0.0);
             let alive = a.voice.render(&mut scratch[..n]);
             let buf = &mut ch_buf[a.ch as usize];
@@ -995,6 +1101,8 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
         send_cho[..n].fill(0.0);
         send_del[..n].fill(0.0);
         send_sym[..n].fill(0.0);
+        send_sym_gtr[..n].fill(0.0);
+        send_room[..n].fill(0.0);
         for (ci, strip) in strips.iter_mut().enumerate() {
             let buf = &mut ch_buf[ci];
             if let Some(drive) = &mut strip.drive {
@@ -1003,12 +1111,16 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
             if let Some(wah) = &mut strip.wah {
                 // CC74 brightness: on the dry path before the sends tap it,
                 // so the wah colours the reverb and echo too; the cutoff and
-                // CC71 resonance slew per block so riding CCs don't zipper
+                // CC71 resonance slew per block so riding CCs don't zipper.
+                // Channel 9's filter STATE is reserved for the drum pair in
+                // the D9 pass — only the slew/retune happens here.
                 strip.cutoff += wah_smooth * (strip.cutoff_target - strip.cutoff);
                 strip.res += wah_smooth * (strip.res_target - strip.res);
                 wah.retune_lowpass(strip.cutoff, strip.res, sr);
-                for x in buf[..n].iter_mut() {
-                    *x = wah.process(*x);
+                if ci != 9 {
+                    for x in buf[..n].iter_mut() {
+                        *x = wah.process(*x);
+                    }
                 }
             }
             strip.expr += expr_smooth * (strip.expr_target - strip.expr);
@@ -1020,6 +1132,7 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
             let (gl, gr) = (g * theta.cos(), g * theta.sin());
             let rs = strip.reverb_send * 0.9;
             let is_piano = ci != 9 && strip.program <= 7;
+            let is_ac_gtr = ci != 9 && matches!(strip.program, 24 | 25);
             let haas = strip.haas_delay;
             for i in 0..n {
                 let x = buf[i];
@@ -1042,12 +1155,72 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                 if is_piano {
                     send_sym[i] += xs;
                 }
+                if is_ac_gtr {
+                    send_sym_gtr[i] += xs;
+                }
             }
         }
+
+        // D9: the dedicated ch-9 pass — every drum voice pans per piece
+        // (LEVEL-ONLY equal power, no Haas: the mono-collapse lesson) into a
+        // stereo pair that then gets full strip parity: CC74/71 wah pair,
+        // CC7/CC11 gain, the CC91 hall send, and the D10 room send.
+        {
+            let s9 = &mut strips[9];
+            drum_l[..n].fill(0.0);
+            drum_r[..n].fill(0.0);
+            let pan_off = s9.pan - 0.5; // authored CC10 offsets the kit table
+            active.retain_mut(|a| {
+                if a.ch != 9 {
+                    return true;
+                }
+                scratch[..n].fill(0.0);
+                let alive = a.voice.render(&mut scratch[..n]);
+                let pan = (drum_pan(a.key) + pan_off).clamp(0.0, 1.0);
+                let theta = pan * FRAC_PI_2;
+                let (ul, ur) = (theta.cos(), theta.sin());
+                for i in 0..n {
+                    drum_l[i] += scratch[i] * ul;
+                    drum_r[i] += scratch[i] * ur;
+                }
+                alive
+            });
+            if let Some(wl) = &mut s9.wah {
+                for x in drum_l[..n].iter_mut() {
+                    *x = wl.process(*x);
+                }
+            }
+            if let Some(wr) = &mut s9.wah_r {
+                wr.retune_lowpass(s9.cutoff, s9.res, sr);
+                for x in drum_r[..n].iter_mut() {
+                    *x = wr.process(*x);
+                }
+            }
+            let g9 = s9.volume * s9.expr * s9.at_gain;
+            if g9 >= 1e-6 {
+                let rs = s9.reverb_send * 0.9;
+                for i in 0..n {
+                    let (xl, xr) = (drum_l[i] * g9, drum_r[i] * g9);
+                    mix_l[i] += xl;
+                    mix_r[i] += xr;
+                    let mono = 0.5 * (xl + xr);
+                    send_rev[i] += mono * rs; // the kit keeps its hall
+                    send_room[i] += mono * ROOM_SEND;
+                }
+            }
+        }
+
         symp.process(&send_sym[..n], &mut mix_l[..n], &mut mix_r[..n]);
+        if gtr_symp_on {
+            gtr_symp.process(&send_sym_gtr[..n], &mut mix_l[..n], &mut mix_r[..n]);
+        }
         chorus.process(&send_cho[..n], &mut mix_l[..n], &mut mix_r[..n]);
         if let Some(echo) = &mut echo {
             echo.process(&send_del[..n], &mut mix_l[..n], &mut mix_r[..n]);
+        }
+        if drum_room_on {
+            // pre-hall: the kit sits in a tight room inside the hall
+            drum_room.process(&send_room[..n], &mut mix_l[..n], &mut mix_r[..n]);
         }
         for x in send_rev[..n].iter_mut() {
             *x = rev_hp.process(*x);
@@ -1131,6 +1304,231 @@ mod tests {
 
     fn rms(seg: &[f32]) -> f32 {
         (seg.iter().map(|&x| (x * x) as f64).sum::<f64>() / seg.len() as f64).sqrt() as f32
+    }
+
+    fn drum_song(hits: &[(f64, u8, u8)], secs: f64, ccs: &[(u8, u8)]) -> Song {
+        let mut ev: Vec<(f64, EvKind)> = ccs
+            .iter()
+            .map(|&(num, val)| (0.0, EvKind::Cc { ch: 9, num, val }))
+            .collect();
+        for &(t, key, vel) in hits {
+            ev.push((t, EvKind::NoteOn { ch: 9, key, vel }));
+        }
+        ev.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        test_song(ev, secs)
+    }
+
+    fn right(stereo: &[f32]) -> Vec<f32> {
+        stereo.iter().skip(1).step_by(2).copied().collect()
+    }
+
+    /// Oracle 32b (D9, §5.3): the kit images across the stereo field —
+    /// decorrelated L/R with real placement — without any Haas trickery
+    /// (mono sum loses < 1 dB), and kick/snare stay centred.
+    #[test]
+    fn kit_images_in_stereo_without_mono_loss() {
+        let sr = 44100.0;
+        let mut hits = Vec::new();
+        for i in 0..8 {
+            hits.push((i as f64 * 0.25, 42u8, 90u8)); // hats left
+        }
+        for i in 0..4 {
+            hits.push((0.125 + i as f64 * 0.5, 51, 95)); // ride right
+        }
+        let song = drum_song(&hits, 2.2, &[]);
+        let out = render(&song, &test_opts(sr)).0;
+        let (l, r) = (left(&out), right(&out));
+        let corr = crate::testutil::inter_corr(&l, &r);
+        assert!(corr < 0.9, "kit still a mono point source: corr {corr}");
+        // placement: hats-only song leans left, and the mono sum holds up
+        let hat_song = drum_song(
+            &(0..8)
+                .map(|i| (i as f64 * 0.25, 42, 90))
+                .collect::<Vec<_>>(),
+            2.2,
+            &[],
+        );
+        let hout = render(&hat_song, &test_opts(sr)).0;
+        let (hl, hr) = (left(&hout), right(&hout));
+        assert!(
+            rms(&hl) > 1.2 * rms(&hr),
+            "hats not left: L {} R {}",
+            rms(&hl),
+            rms(&hr)
+        );
+        let mono: Vec<f32> = hl.iter().zip(&hr).map(|(a, b)| 0.5 * (a + b)).collect();
+        let mid = ((rms(&hl).powi(2) + rms(&hr).powi(2)) / 2.0).sqrt();
+        let loss_db = 20.0 * (rms(&mono) / mid.max(1e-12)).log10();
+        assert!(loss_db > -1.0, "mono collapse: {loss_db:.2} dB");
+        // kick/snare centred
+        let kick_song = drum_song(&[(0.05, 36, 110), (0.55, 38, 105)], 1.2, &[]);
+        let kout = render(&kick_song, &test_opts(sr)).0;
+        let (kl, kr) = (left(&kout), right(&kout));
+        let bal = rms(&kl) / rms(&kr).max(1e-12);
+        assert!((0.95..=1.05).contains(&bal), "kick/snare off centre: {bal}");
+    }
+
+    /// Oracle 42 (D9 strip parity — the review's converged CRITICAL):
+    /// CC7 silences the kit, CC74 darkens it, CC91 still reaches the hall,
+    /// and authored CC10 shifts the whole image.
+    #[test]
+    fn drum_strip_parity_preserved() {
+        let sr = 44100.0;
+        let hits: Vec<(f64, u8, u8)> = (0..6).map(|i| (0.05 + i as f64 * 0.2, 42, 100)).collect();
+        // CC7 = 0 silences
+        let silent = render(&drum_song(&hits, 1.6, &[(7, 0)]), &test_opts(sr)).0;
+        assert!(
+            rms(&silent) < 1e-6,
+            "CC7=0 drums still audible: {}",
+            rms(&silent)
+        );
+        // CC74 = 20 darkens
+        let plain = render(&drum_song(&hits, 1.6, &[]), &test_opts(sr)).0;
+        let dark = render(&drum_song(&hits, 1.6, &[(74, 20)]), &test_opts(sr)).0;
+        let cent = |s: &[f32]| {
+            let m: Vec<f32> = s.chunks_exact(2).map(|p| 0.5 * (p[0] + p[1])).collect();
+            crate::testutil::centroid(&m, sr)
+        };
+        assert!(
+            cent(&dark) < 0.8 * cent(&plain),
+            "ch-9 wah dead: dark {} vs plain {}",
+            cent(&dark),
+            cent(&plain)
+        );
+        // CC91 still reaches the hall: wet render, tail after the last hit
+        let wet_opts = || Options {
+            wet: 0.32,
+            ..test_opts(sr)
+        };
+        let kick = |cc91: u8| {
+            let song = drum_song(&[(0.05, 36, 115)], 2.0, &[(91, cc91)]);
+            render(&song, &wet_opts()).0
+        };
+        let tail =
+            |s: &[f32], t0: f32, t1: f32| rms(&left(s)[(t0 * sr) as usize..(t1 * sr) as usize]);
+        assert!(
+            tail(&kick(127), 1.2, 1.9) > 2.0 * tail(&kick(0), 1.2, 1.9),
+            "drum hall send lost"
+        );
+        // authored CC10 shifts the kit image (hats table-left → pushed right)
+        let panned = render(&drum_song(&hits, 1.6, &[(10, 127)]), &test_opts(sr)).0;
+        let (pl, pr) = (left(&panned), right(&panned));
+        assert!(
+            rms(&pr) > 1.2 * rms(&pl),
+            "CC10 ignored on ch 9: L {} R {}",
+            rms(&pl),
+            rms(&pr)
+        );
+    }
+
+    /// Oracle 32a (D10, §5.2/§5.3 A/B): the drum room adds early energy a
+    /// room-less render lacks, and non-drum channels get no room at all.
+    #[test]
+    fn drum_room_early_reflections() {
+        let sr = 44100.0;
+        let song = drum_song(&[(0.05, 36, 115)], 1.0, &[(91, 0)]);
+        let opts = Options {
+            wet: 0.32,
+            ..test_opts(sr)
+        };
+        let with = render_buses(&song, &opts, true, true).0;
+        let without = render_buses(&song, &opts, true, false).0;
+        // the room's first reflections: ~5-30 ms after the kick onset
+        let win = |s: &[f32]| left(s)[(0.055 * sr) as usize..(0.085 * sr) as usize].to_vec();
+        let diff: Vec<f32> = win(&with)
+            .iter()
+            .zip(win(&without))
+            .map(|(a, b)| a - b)
+            .collect();
+        assert!(rms(&diff) > 1e-4, "no early room energy: {}", rms(&diff));
+        // a piano note gets no room send
+        let piano = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 0 }),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 60,
+                        vel: 100,
+                    },
+                ),
+                (0.8, EvKind::NoteOff { ch: 0, key: 60 }),
+            ],
+            1.2,
+        );
+        let a = render_buses(&piano, &opts, true, true).0;
+        let b = render_buses(&piano, &opts, true, false).0;
+        assert!(
+            a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()),
+            "non-ch9 audio leaked into the drum room"
+        );
+    }
+
+    /// Oracle 19 (G5, §5.3 difference signal): the guitar-sympathetic bus
+    /// rings the open strings under an acoustic guitar, and stays silent
+    /// for the driven electric.
+    #[test]
+    fn guitar_sympathetic_rings_open_strings() {
+        let sr = 44100.0;
+        let strum = |prog: u8| {
+            let mut ev = vec![(0.0, EvKind::Prog { ch: 0, prog })];
+            for (i, &key) in [40u8, 45, 50, 55, 59, 64].iter().enumerate() {
+                let t = i as f64 * 0.012;
+                ev.push((
+                    t,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key,
+                        vel: 105,
+                    },
+                ));
+                ev.push((1.2, EvKind::NoteOff { ch: 0, key }));
+            }
+            test_song(ev, 1.6)
+        };
+        let opts = test_opts(sr);
+        let with = render_buses(&strum(24), &opts, true, true).0;
+        let without = render_buses(&strum(24), &opts, false, true).0;
+        let d: Vec<f32> = left(&with)
+            .iter()
+            .zip(left(&without))
+            .map(|(a, b)| a - b)
+            .collect();
+        let tail = &d[(0.3 * sr) as usize..(0.8 * sr) as usize];
+        let ring: f32 = [82.41f32, 110.0, 146.83]
+            .iter()
+            .map(|&f| crate::testutil::band_rms(tail, sr, f, 8.0))
+            .sum();
+        assert!(ring > 1e-5, "sympathetic strings silent: {ring}");
+        // prog 30 (driven electric) must not feed the bus at all
+        let e_with = render_buses(&strum(30), &opts, true, true).0;
+        let e_without = render_buses(&strum(30), &opts, false, true).0;
+        assert!(
+            e_with
+                .iter()
+                .zip(&e_without)
+                .all(|(x, y)| x.to_bits() == y.to_bits()),
+            "electric guitar leaked into the sympathetic bus"
+        );
+    }
+
+    /// Oracle 26 (D6, engine half): a closed-hat strike chokes the ringing
+    /// open hat in the full render path.
+    #[test]
+    fn closed_hat_chokes_open_in_engine() {
+        let sr = 44100.0;
+        let open_only = drum_song(&[(0.05, 46, 110)], 1.0, &[]);
+        let choked = drum_song(&[(0.05, 46, 110), (0.25, 42, 90)], 1.0, &[]);
+        let a = render(&open_only, &test_opts(sr)).0;
+        let b = render(&choked, &test_opts(sr)).0;
+        let w = |s: &[f32]| rms(&left(s)[(0.32 * sr) as usize..(0.45 * sr) as usize]);
+        assert!(
+            w(&b) < 0.3 * w(&a),
+            "open hat survived the choke: {} vs {}",
+            w(&b),
+            w(&a)
+        );
     }
 
     /// Oracle 3 (§5.1/§5.3): the cabinet's magnitude response, measured on

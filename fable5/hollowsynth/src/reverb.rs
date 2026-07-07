@@ -83,9 +83,16 @@ pub struct Reverb {
 
 impl Reverb {
     pub fn new(sr: f32, room: f32, damp: f32, wet: f32) -> Self {
+        // the hall keeps its 24 ms predelay (oracle 39 pins this)
+        Self::with_predelay(sr, room, damp, wet, PREDELAY_S)
+    }
+
+    /// D10: predelay as a parameter — a tight drum room wants ~2-4 ms
+    /// first reflections, not the hall's 24 ms (V4/CORR-3).
+    pub fn with_predelay(sr: f32, room: f32, damp: f32, wet: f32, predelay_s: f32) -> Self {
         let scale = sr / 44100.0;
         let sz = |n: usize| ((n as f32 * scale) as usize).max(8);
-        let pre_samples = PREDELAY_S * sr;
+        let pre_samples = predelay_s * sr;
         Reverb {
             pre: DelayLine::new((pre_samples + 0.04 * sr) as usize + 8),
             pre_samples,

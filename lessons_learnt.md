@@ -2,6 +2,23 @@
 
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 
+- 2026.07.07 — **Put untouched-family canaries in the golden fixture.** The
+  hollowsynth realism build's per-channel golden table included piano/strings
+  channels no phase touched; they stayed bit-exact for six phases and caught
+  the one real leak (a rebuilt Drive emitting tanh(bias) DC on SILENT
+  channels) that every feature oracle missed. Level guards find drift;
+  canaries find contamination.
+- 2026.07.07 — **Zero-crossing pitch counters lie when a change legitimately
+  brightens a voice.** Three separate "pitch broke" scares in the realism
+  build were the 2nd harmonic leaking through the counter's lowpass
+  (452.5 Hz for a true 440). Measure pitch with a Goertzel peak
+  (`testutil::peak_locate`); keep crossings only for pure-sine calibration.
+- 2026.07.07 — **Noise-fed resonator pairs only beat if they can remember a
+  beat.** CYM-1's 6000/6055 Hz pair at the HLD's Q 120-150 has a ~7 ms ring
+  time against an 18 ms beat period — decorrelated before one cycle, no beat
+  survives. Ring time Q/(πf) must span the beat period (Q ≈ 800 here);
+  Δf > f/Q alone is not sufficient.
+
 - 2026.07.06 — **Write the musical oracle before the music.** The Signal
   Fire's themes were composed to pass a counterpoint oracle (chord tone on
   every ground downbeat, consonant pairwise intervals); the finale's

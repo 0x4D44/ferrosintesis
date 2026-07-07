@@ -14,15 +14,16 @@ conclusive.
   ch8 nylon: theme BARS 7-8 farewell, fingerpicked.
   ch3 fretless (prog 35 @896): slide tones on degrees 1 and 5 (bend_ramp
         scoops, recentred after each; final recentre before 1024).
-  ch6 choir I: THE FINAL HUM — theme BARS 1-4, vowel mm (CC70=0), and
+  ch6 choir I: THE FINAL HUM — theme BARS 1-3, vowel mm (CC70=0), and
         THIS TIME IT ENDS ON DEGREE 1 (the resolution Part One refused);
         aftertouch bloom then decay; lyric metas "Mm... hm... mm...
         (goodnight)".
   ch14 flute (prog 73 @896): distant echo wisps, high, with echo throws.
   ch15 ONE tubular bell (prog 14) on E @~1000 — warm, not crystalline.
 
-Fades to a bare E-B open fifth by ~1015; silence + tail.  CC91 ~75 on all
-of the movement's channels at 896 (far again, the guests receding).
+Settles onto a warm E MAJOR triad (E-G#-B, the tierce de Picardie) that
+rings into the fade by ~1020; silence + tail.  CC91 ~75 on all of the
+movement's channels at 896 (far again, the guests receding).
 """
 
 from __future__ import annotations
@@ -47,9 +48,11 @@ BELL_PITCH = en.n("E4")    # 64 — a warm tubular strike
 MY_CHANNELS = (cd.CH_PIANO, cd.CH_PAD, cd.CH_BASS, cd.CH_CHOIR1,
                cd.CH_NYLON, cd.CH_WINDS, cd.CH_BELLS)
 
-# E(add9): E G# B (E) F#, and the bare fifth it fades to.
+# E(add9): E G# B (E) F#, and the E MAJOR triad it settles onto — the ninth
+# falls away but the G# (the tierce de Picardie, pc8) stays: the parallel-
+# major arc must ARRIVE on a major third, not evaporate to a bare fifth.
 PAD_ADD9 = [en.pitch(PAD_BASE, ION, d) for d in (1, 3, 5, 8, 9)]   # 52 56 59 64 66
-PAD_FIFTH = [en.pitch(PAD_BASE, ION, d) for d in (1, 5)]           # 52 59
+PAD_CLOSE = [en.pitch(PAD_BASE, ION, d) for d in (1, 3, 5)]        # 52 56 59  E G# B
 
 # Theme slices (rebased to start at beat 0).
 THEME_P2 = [(d, s - 16.0, du) for d, s, du in m.THEME[12:]]        # bars 5-8
@@ -93,9 +96,10 @@ def _pad(sc):
     vels_b = (49, 47, 48, 46, 44)
     for p, v in zip(PAD_ADD9, vels_b):
         sc.note(cd.CH_PAD, p, 958.0, 48.0, v, jt=2, jv=2)
-    # The bare E-B open fifth: the colour tones fall away, the fifth rings
-    # on into the fade (last note-off ~1020, then silence + tail).
-    for p, v in zip(PAD_FIFTH, (45, 43)):
+    # The closing E MAJOR triad (E-G#-B): the ninth falls away but the major
+    # third stays and rings on into the fade (last note-off ~1020, then
+    # silence + tail) — the tierce de Picardie the whole arc resolves onto.
+    for p, v in zip(PAD_CLOSE, (45, 41, 43)):
         sc.note(cd.CH_PAD, p, 1000.0, 20.0, v, jt=2, jv=2)
 
 

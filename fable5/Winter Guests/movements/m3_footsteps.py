@@ -51,6 +51,12 @@ E_LEAD = 576.0
 E_STR = 576.0
 E_CHOIR = 704.0                    # the hum made anxious
 
+# The breakdown: for ~32 beats the low-end drive (bass) and the cold arp fall
+# away and the kit thins to a heartbeat, leaving the string tension-pad and
+# the portamento lead exposed — then the full texture (and the choir at 704)
+# SLAMS back in.  Turns the flat 2.5-min crescendo into a terraced build.
+BREAK_LO, BREAK_HI = 672.0, 704.0
+
 # Solo geography (ch12).
 DIVE = 768.0                       # whammy dive -12 over 2 beats
 SCREAM = 800.0                     # dive -12, rip back to 0
@@ -95,6 +101,8 @@ def _controllers(sc):
 # ---------------------------------------------------------------------------
 def _bass(sc):
     for i, b in _bars():
+        if BREAK_LO <= b < BREAK_HI:          # breakdown: the bass drops out
+            continue
         grow = i / (N_BARS - 1)
         vbase = int(lerp(70, 90, grow))
         for idx, (deg, s, dur) in enumerate(m.FOOTSTEPS):
@@ -116,7 +124,7 @@ def _bass(sc):
 def _rhythm(sc):
     starts = (0.0, 1.5, 2.5)                 # the group downbeats
     for i, b in _bars():
-        if b < E_CHUG:
+        if b < E_CHUG or BREAK_LO <= b < BREAK_HI:  # chug drops in the breakdown
             continue
         grow = (i - 2) / (N_BARS - 3)
         vbase = int(lerp(72, 90, grow))
@@ -133,6 +141,9 @@ def _rhythm(sc):
 def _drums(sc):
     for i, b in _bars():
         if b < E_DRUMS:
+            continue
+        if BREAK_LO <= b < BREAK_HI:          # breakdown: a soft heartbeat only
+            sc.hit(36, b + 0.0, 54, jt=2)
             continue
         grow = (i - 1) / (N_BARS - 2)
         kv = int(lerp(84, 102, grow))
@@ -165,7 +176,7 @@ def _drums(sc):
 def _arp(sc):
     arp_bar = 0
     for i, b in _bars():
-        if b < E_ARP:
+        if b < E_ARP or BREAK_LO <= b < BREAK_HI:   # arp drops in the breakdown
             continue
         grow = (b - E_ARP) / (CODA - E_ARP)
         vbase = int(lerp(56, 70, grow))

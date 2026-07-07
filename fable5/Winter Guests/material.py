@@ -30,6 +30,8 @@ Fix the material, never the oracle.
 
 from __future__ import annotations
 
+import math
+
 import engine as en
 
 # ---------------------------------------------------------------------------
@@ -158,28 +160,38 @@ def stack_thirds(theme: list[tuple[int, float, float]]):
 
 def snap_to_chord(voice: list[tuple[int, float, float]], ground: list[int],
                   mode: str, bar_beats: float = 4.0):
-    """Correct strong-beat clashes: any note SOUNDING on a bar-start whose
-    interval vs the ground root is in CLASH is snapped to the nearest
-    chord tone (in semitones; ties resolve upward).  Other notes pass
-    through — passing dissonance off the strong beats is music."""
+    """Correct strong-beat clashes: any note SOUNDING ACROSS a bar downbeat
+    whose interval vs that bar's ground root is in CLASH is snapped to the
+    nearest chord tone (in semitones; ties resolve upward).  A note counts if
+    it starts exactly on a downbeat OR is an anticipation held over the next
+    one — the pop chorus arrives its chord note early and holds the downbeat,
+    so the downbeat a note SOUNDS on is rarely the downbeat it starts on.
+    Notes that touch no downbeat pass through — off-beat dissonance is music."""
+    eps = 1e-9
     out = []
     for deg, start, dur in voice:
+        bar_start = math.floor(start / bar_beats + eps) * bar_beats
+        next_downbeat = math.ceil((start + eps) / bar_beats) * bar_beats
+        if abs(start - bar_start) < eps:
+            downbeat = bar_start                    # starts on its downbeat
+        elif start < next_downbeat < start + dur - eps:
+            downbeat = next_downbeat                # anticipation held across it
+        else:
+            out.append((deg, start, dur))           # touches no downbeat
+            continue
+        root = ground_root_at(ground, downbeat, bar_beats)
+        iv = (en.deg_semis(mode, deg) - en.deg_semis(mode, root)) % 12
         new_deg = deg
-        bar_start = float(int(start // bar_beats)) * bar_beats
-        sounding_downbeat = start <= bar_start < start + dur or start == bar_start
-        if sounding_downbeat:
-            root = ground_root_at(ground, bar_start, bar_beats)
-            iv = (en.deg_semis(mode, deg) - en.deg_semis(mode, root)) % 12
-            if iv in CLASH:
-                semis = en.deg_semis(mode, deg)
-                best = None
-                for k in (0, 2, 4):
-                    for octave in (-7, 0, 7):
-                        cand = root + k + octave
-                        d = abs(en.deg_semis(mode, cand) - semis)
-                        if best is None or d < best[0] or (d == best[0] and cand > best[1]):
-                            best = (d, cand)
-                new_deg = best[1]
+        if iv in CLASH:
+            semis = en.deg_semis(mode, deg)
+            best = None
+            for k in (0, 2, 4):
+                for octave in (-7, 0, 7):
+                    cand = root + k + octave
+                    d = abs(en.deg_semis(mode, cand) - semis)
+                    if best is None or d < best[0] or (d == best[0] and cand > best[1]):
+                        best = (d, cand)
+            new_deg = best[1]
         out.append((new_deg, start, dur))
     return out
 

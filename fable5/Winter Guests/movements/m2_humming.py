@@ -40,6 +40,25 @@ DOR = "dorian"
 T0, T1 = 256.0, 544.0
 CYCLE = 16.0
 
+# A mono-safe stereo image for the intimate hum (fix: the -5.6 dB mono
+# collapse).  The synth localises CC10 pan with a Haas micro-delay
+# (engine.rs ~L682); on SUSTAINED tonal voices that micro-delay combs when
+# the mix folds to mono, and The Humming is sparse+wet enough that the comb
+# dominated the whole mix (measured full-mix corr -0.45).  Fix: keep the
+# sustained beds dead centre (no Haas), take the width from the choir spread
+# plus the transient fingerpicked guitars (bright plucked content does NOT
+# comb at the Haas lag), and leave those guitars at their wide conductor
+# pans.  Measured M2 mono loss drops to ~0.6 dB.  (CC93 chorus is nearly
+# mono-neutral on this synth — the finding's "chorus bus" diagnosis was
+# wrong — but we still trim it a shade per the brief; it barely matters.)
+CHOIR_CHORUS = 30        # a shade under the ~38 (0.30) choir program default
+CHOIR1_PAN = 56          # choir I a little left of centre
+CHOIR2_PAN = 72          # choir II a little right of centre
+BED_PAN = 64             # sustained beds dead centre (mono-safe: no Haas)
+# Conductor pans, restored at the M2->M3 seam so M3 keeps its own image.
+_CONDUCTOR_PANS = {cd.CH_PIANO: 50, cd.CH_ORGAN: 58, cd.CH_STRINGS: 70,
+                   cd.CH_WINDS: 70, cd.CH_CHOIR1: 54, cd.CH_CHOIR2: 74}
+
 # Section boundaries (all land on 16-beat cycle starts).
 V1, ANS, V2A, V2L = 272.0, 304.0, 336.0, 368.0
 BR, V3A, V3B, END = 400.0, 464.0, 496.0, 528.0
@@ -102,11 +121,21 @@ def _bar_chord(b: float) -> tuple[int, str]:
 
 
 # ---------------------------------------------------------------------------
-# Distance arc — CC91 ~70 on every M2 channel at the movement start
+# Distance arc + the mono-safe stereo image (see the pan notes at the top)
 # ---------------------------------------------------------------------------
 def _distance(sc) -> None:
     for ch in MY_CHANNELS:
-        sc.cc(ch, 91, 70, T0)
+        sc.cc(ch, 91, 70, T0)                     # CC91 ~70 distance
+    # Centre the sustained beds (piano pools, harmonium drone, string pads,
+    # flute) so their Haas micro-delay cannot comb in mono; the width comes
+    # from the choir spread (in _choir) and the transient fingerpicked
+    # guitars, which stay at their wide conductor pans.
+    for ch in (cd.CH_PIANO, cd.CH_ORGAN, cd.CH_STRINGS, cd.CH_WINDS):
+        sc.cc(ch, 10, BED_PAN, T0)
+    # Restore every re-panned channel to its conductor pan at the seam so
+    # Footsteps (M3) inherits its own stereo image, not M2's.
+    for ch, pan in _CONDUCTOR_PANS.items():
+        sc.cc(ch, 10, pan, T1 - 0.2)
 
 
 # ---------------------------------------------------------------------------
@@ -148,9 +177,17 @@ def _steel(sc) -> None:
         low = en.pitch(STEEL_BASE, mode, rd) - 12
         tri = en.triad(STEEL_BASE, mode, rd)
         voices = [low, tri[0], tri[1], tri[2]]
+        if sec == "v1":
+            # The FIRST hum is the most intimate moment: leave it bare.  Two
+            # soft sustained half-note chords per bar under the voice — no
+            # busy fingerpicking (that returns in verse 2 at 336).
+            for hb in (0.0, 2.0):
+                en.strum(sc, cd.CH_STEEL, [low, tri[0], tri[1], tri[2]],
+                         b + hb, 1.9, 50, spread=0.05, down=True)
+            continue
         if sec == "v3":                       # fullest: busier pick
             pattern, vel = PICK6, 59
-        elif sec in ("v1", "v2a", "bridge"):
+        elif sec in ("v2a", "bridge"):
             pattern, vel = PICK6, 57
         else:
             pattern, vel = PICK4, 55
@@ -204,6 +241,14 @@ LYR_V1 = [(0.0, "Mm"), (4.0, "mm"), (8.0, "hm"), (12.0, "mm"),
 # Choir I (ch6) + Choir II (ch11): the humming
 # ---------------------------------------------------------------------------
 def _choir(sc) -> None:
+    # The choirs carry the hum's width: spread a little left/right (mono-safe
+    # at this modest offset — the sustained beds are centred so the Haas comb
+    # stays small).  CC93 trimmed a shade under the choir program default.
+    sc.cc(cd.CH_CHOIR1, 93, CHOIR_CHORUS, T0)
+    sc.cc(cd.CH_CHOIR2, 93, CHOIR_CHORUS, T0)
+    sc.cc(cd.CH_CHOIR1, 10, CHOIR1_PAN, T0)    # a little left of centre
+    sc.cc(cd.CH_CHOIR2, 10, CHOIR2_PAN, T0)    # a little right of centre
+
     en.vowel(sc, cd.CH_CHOIR1, 0, T0)          # mm for the whole movement
     en.vowel(sc, cd.CH_CHOIR2, 45, V2A)        # oo when choir II enters
     en.fine_tune(sc, cd.CH_CHOIR2, -6, T0)     # ensemble width (RPN, not bend)

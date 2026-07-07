@@ -56,7 +56,10 @@ STR_E = n("E3")        # 52  string shimmer pads
 PAD_E = n("E3")        # 52  low warm bed
 CHOIR_E = n("E4")      # 64  choir I: chorus stack top + mid ("ah")
 HUM_E = n("E3")        # 52  choir II: the low hum counterline ("mm")
-BELL_E = n("E4")       # 64  tubular-bell peal (theme augmented)
+BELL_E = n("E4")       # 64  the final bell (warm, into Last Light)
+BELL_PEAL_E = n("E5")  # 76  the PEAL an octave up so the bells ring CLEARLY
+#                            above the midrange guitars/choir/organ (register
+#                            separation at the peaks — see _bells).
 LEAD_E = n("E4")       # 64  overdriven lead + its double
 FIDDLE_E = n("E4")     # 64  reel countermelody
 
@@ -318,10 +321,13 @@ def _bells(sc):
         for deg, s, dur in THEME_AUG:
             b = t + s
             v = V_BELL + (6 if deg >= 7 else 0)
-            sc.note(cd.CH_BELLS, en.pitch(BELL_E, ION, deg), b, dur * 0.9,
+            # The peal sits an octave up (BELL_PEAL_E) so it rings clearly
+            # ABOVE the midrange band; the second peal doubles DOWN an octave
+            # (into the old bell register) for body without extra shrillness.
+            sc.note(cd.CH_BELLS, en.pitch(BELL_PEAL_E, ION, deg), b, dur * 0.9,
                     v, jt=3, jv=4)
             if octave_double and deg in (1, 5, 7, 8):
-                sc.note(cd.CH_BELLS, en.pitch(BELL_E, ION, deg) + 12,
+                sc.note(cd.CH_BELLS, en.pitch(BELL_PEAL_E, ION, deg) - 12,
                         b + 0.02, dur * 0.6, v - 16, jt=3, jv=4)
     # The final bell — struck at 880, rings on into Last Light.
     sc.note(cd.CH_BELLS, en.pitch(BELL_E, ION, 1), STOP, 18.0, 100, jt=2)

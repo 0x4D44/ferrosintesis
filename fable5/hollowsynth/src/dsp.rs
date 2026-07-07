@@ -162,6 +162,27 @@ impl DelayLine {
         let b = self.buf[(self.idx + self.buf.len() - i - 1) & self.mask];
         a + (b - a) * frac
     }
+
+    /// K1: 4-point cubic-Lagrange read, used ONLY inside `KsLoop::tick` —
+    /// linear interpolation lowpasses the loop at fractional delays and dulls
+    /// short treble strings. Evaluated strictly in the central interval
+    /// (fractional offset between the two middle stencil points), where
+    /// Lagrange is passive (|H| ≤ 1) — the correct stability basis, not
+    /// "FIR → safe" (V4/DSP-1). Buses keep the linear `tap`.
+    #[inline]
+    pub fn tap_cubic(&self, delay: f32) -> f32 {
+        let d = delay.max(2.0);
+        let i = d.floor() as usize;
+        let fr = d - i as f32;
+        let at = |k: usize| self.buf[(self.idx + self.buf.len() - k) & self.mask];
+        let (p0, p1, p2, p3) = (at(i - 1), at(i), at(i + 1), at(i + 2));
+        // Lagrange weights on nodes {-1, 0, 1, 2} evaluated at fr ∈ [0, 1)
+        let w0 = -fr * (fr - 1.0) * (fr - 2.0) / 6.0;
+        let w1 = (fr + 1.0) * (fr - 1.0) * (fr - 2.0) / 2.0;
+        let w2 = -(fr + 1.0) * fr * (fr - 2.0) / 2.0;
+        let w3 = (fr + 1.0) * fr * (fr - 1.0) / 6.0;
+        w0 * p0 + w1 * p1 + w2 * p2 + w3 * p3
+    }
 }
 
 /// A slow random pitch walk — the drift of a human player. `next()` is meant
@@ -464,5 +485,50 @@ mod tests {
     fn key_freq_a4() {
         assert!((key_freq(69) - 440.0).abs() < 1e-3);
         assert!((key_freq(60) - 261.626).abs() < 0.01);
+    }
+
+    /// Oracle 16 (K1, §5.3 DSP-level): twin hand-built KS loops at a
+    /// worst-case fractional delay — the cubic tap keeps ring energy the
+    /// linear tap's interpolation lowpass eats.
+    #[test]
+    fn cubic_tap_retains_treble_ring() {
+        let sr = 44100.0;
+        let energy = |cubic: bool| {
+            let delay = 12.5f32; // ~3.5 kHz string, frac 0.5 (worst case)
+            let mut dl = DelayLine::new(20);
+            // nearly-open damper: the interpolator's own loss dominates,
+            // which is exactly the defect K1 removes
+            let mut damp = OnePole::lowpass(16000.0, sr);
+            // zero-mean excitation: the loop also resonates at DC, which
+            // decays only via the gain and would swamp both taps equally
+            for i in 0..13 {
+                dl.push(match i {
+                    0 => 1.0,
+                    1 => -1.0,
+                    _ => 0.0,
+                });
+            }
+            let mut acc = 0.0f64;
+            for n in 0..(0.3 * sr) as usize {
+                let s = if cubic {
+                    dl.tap_cubic(delay)
+                } else {
+                    dl.tap(delay)
+                };
+                dl.push(damp.process(s) * 0.997);
+                if n > (0.05 * sr) as usize {
+                    acc += (s as f64) * (s as f64);
+                }
+            }
+            acc.sqrt()
+        };
+        let (c, l) = (energy(true), energy(false));
+        assert!(c > 1.15 * l, "cubic {c} vs linear {l}");
+        // and the cubic tap is exact on the grid (weights sum to 1)
+        let mut dl = DelayLine::new(16);
+        for i in 0..12 {
+            dl.push(i as f32);
+        }
+        assert!((dl.tap_cubic(3.0) - dl.tap(3.0)).abs() < 1e-4);
     }
 }

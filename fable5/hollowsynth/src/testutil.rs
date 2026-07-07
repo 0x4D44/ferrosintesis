@@ -444,19 +444,23 @@ mod guards {
         // at their written velocities. The canaries (ch 7 piano, ch 8
         // strings) are BIT-EXACT vs the pre-work capture — proof the
         // untouched families are untouched.
-        (0, -42.35, 889.8),
-        (1, -42.91, 1713.7),
-        (2, -42.92, 1138.8),
-        (3, -38.64, 571.3),
-        (4, -37.15, 1169.7),
-        (5, -25.60, 382.0),
-        (6, -28.90, 203.2),
+        // Re-captured after Phase 6 (KS core): K1's cubic tap keeps treble
+        // ring (guitars brighter), the K4 wound split darkens low DRIVE keys,
+        // and the re-voiced bass presets sit under the wound factor. The
+        // canaries (ch 7 piano, ch 8 strings) remain BIT-EXACT vs pre-work.
+        (0, -41.28, 1020.2),
+        (1, -42.07, 2020.8),
+        (2, -42.68, 1107.1),
+        (3, -40.13, 528.8),
+        (4, -36.90, 932.2),
+        (5, -27.01, 369.1),
+        (6, -28.88, 211.0),
         (7, -24.35, 567.6),
         (8, -37.21, 2683.1),
-        (9, -23.26, 470.2),
+        (9, -23.26, 483.9),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 0.90581;
+    const GOLDEN_MASTER_PEAK: f32 = 0.99739;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

@@ -138,14 +138,15 @@ pub(crate) fn inter_corr(l: &[f32], r: &[f32]) -> f32 {
     (lr / (ll.sqrt() * rr.sqrt())) as f32
 }
 
-/// AM-rate detector (oracle 24): rectify → 200 Hz envelope lowpass → remove
-/// mean → normalised autocorrelation peak over the lag window. Returns
-/// (peak in 0..1, rate in Hz at the peak lag).
+/// AM-rate detector (oracle 24): rectify → 200 Hz envelope lowpass →
+/// DETREND (subtract a 15 Hz-lowpassed copy, so a decaying tail's trend
+/// doesn't saturate the autocorrelation) → normalised autocorrelation peak
+/// over the lag window. Returns (peak in 0..1, rate in Hz at the peak lag).
 pub(crate) fn env_autocorr_peak(seg: &[f32], sr: f32, lag_lo_s: f32, lag_hi_s: f32) -> (f32, f32) {
     let mut lp = OnePole::lowpass(200.0, sr);
     let env: Vec<f32> = seg.iter().map(|&x| lp.process(x.abs())).collect();
-    let mean = env.iter().sum::<f32>() / env.len().max(1) as f32;
-    let d: Vec<f64> = env.iter().map(|&x| (x - mean) as f64).collect();
+    let mut slow = OnePole::lowpass(15.0, sr);
+    let d: Vec<f64> = env.iter().map(|&x| (x - slow.process(x)) as f64).collect();
     let zero: f64 = d.iter().map(|&x| x * x).sum();
     if zero <= 0.0 {
         return (0.0, 0.0);
@@ -551,13 +552,13 @@ mod guards {
             (28, "MUTED"),
             (29, "DRIVE"),
             (30, "DRIVE"),
-            (31, "DRIVE"), // Phase 4: → HARMONIC
-            (32, "BASS"),  // Phase 5: → UPRIGHT
+            (31, "HARMONIC"), // Phase 4 (G7)
+            (32, "UPRIGHT"),  // Phase 4 (B2)
             (33, "BASS"),
-            (34, "BASS"), // Phase 5: → PICK
+            (34, "PICK"), // Phase 4 (B2)
             (35, "FRETLESS"),
-            (36, "BASS"), // Phase 5: → SLAP
-            (37, "BASS"), // Phase 5: → SLAP
+            (36, "SLAP"), // Phase 4 (B2)
+            (37, "SLAP"), // Phase 4 (B2)
             (38, "BASS"), // Phase 5: → synthbass
             (39, "BASS"), // Phase 5: → synthbass
             (40, "bowed"),

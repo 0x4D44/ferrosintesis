@@ -382,6 +382,44 @@ impl Adsr {
     }
 }
 
+/// A filtered, exponentially-decaying noise one-shot (HLD family B) —
+/// summed in PARALLEL with a voice's output, never into a feedback loop.
+/// One struct, per-use config: the pick click, finger/fret noise, slap pop,
+/// stop thump and palm chuff each pass their own filter, gain and decay.
+pub struct Burst {
+    filt: Biquad,
+    gain: f32,
+    env: f32,   // current amplitude (starts at 0 until triggered)
+    decay: f32, // per-sample multiplier for the configured t60
+}
+
+impl Burst {
+    pub fn new(filt: Biquad, gain: f32, t60: f32, sr: f32) -> Self {
+        Burst {
+            filt,
+            gain,
+            env: 0.0,
+            decay: 10f32.powf(-3.0 / (t60.max(1e-4) * sr)),
+        }
+    }
+
+    /// Arm the one-shot at `level` (relative to the configured gain).
+    pub fn trigger(&mut self, level: f32) {
+        self.env = self.env.max(level);
+    }
+
+    /// Next sample; ~0 cost once the envelope has died.
+    #[inline]
+    pub fn tick(&mut self, rng: &mut Rng) -> f32 {
+        if self.env < 1e-5 {
+            return 0.0;
+        }
+        let y = self.filt.process(rng.white()) * self.gain * self.env;
+        self.env *= self.decay;
+        y
+    }
+}
+
 /// MIDI key -> frequency (A440 equal temperament).
 pub fn key_freq(key: u8) -> f32 {
     440.0 * 2f32.powf((key as f32 - 69.0) / 12.0)

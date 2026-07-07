@@ -21,6 +21,13 @@ struct NoiseBand {
     amp: f32,
     decay: f32,
     filt: Biquad,
+    // D4/D5 extensions: a delayed start (snare wires engage ~1.5 ms after
+    // the stick), and a swell envelope (crash wash blooms over ~50 ms while
+    // the chick is instant). Defaults (onset 0, env 1, floor 1) are inert.
+    onset: u32,
+    env: f32,
+    atk: f32,
+    floor: f32,
 }
 
 pub struct Drum {
@@ -88,6 +95,10 @@ impl Drum {
                 amp: (amp * (1.0 + 0.15 * edge + 0.10 * rng.white())).max(0.0),
                 decay: dmul(t * jd, sr),
                 filt,
+                onset: 0,
+                env: 1.0,
+                atk: 1.0,
+                floor: 1.0,
             })
             .collect();
         Drum {
@@ -107,6 +118,20 @@ impl Drum {
             .iter()
             .map(|&(sec, amp)| ((sec * self.sr) as u32, amp))
             .collect();
+        self
+    }
+
+    /// Upgrade noise band `idx` with a delayed onset and/or a swell
+    /// (`floor` of the gain is present immediately, the rest ramps in over
+    /// `atk_s`). Exact zero before the onset — denormal-safe, click-free.
+    fn with_band_ext(mut self, idx: usize, onset_s: f32, atk_s: f32, floor: f32) -> Self {
+        let b = &mut self.noise[idx];
+        b.onset = (onset_s * self.sr) as u32;
+        b.floor = floor;
+        if atk_s > 0.0 {
+            b.atk = 1.0 / (atk_s * self.sr);
+            b.env = 0.0;
+        }
         self
     }
 }
@@ -138,8 +163,15 @@ impl Voice for Drum {
             }
             let white = self.rng.white();
             for band in &mut self.noise {
-                if band.amp > 1e-5 {
-                    s += band.filt.process(white) * band.amp;
+                if self.t < band.onset {
+                    continue; // exact zero before the wires engage (D5)
+                }
+                if band.env < 1.0 {
+                    band.env = (band.env + band.atk).min(1.0);
+                }
+                let g = band.amp * (band.floor + (1.0 - band.floor) * band.env);
+                if g > 1e-5 {
+                    s += band.filt.process(white) * g;
                     band.amp *= band.decay;
                 }
             }
@@ -216,39 +248,70 @@ const SNARE_TONES: [(f32, f32, f32, f32); 4] = [
 /// Inharmonic cymbal partial stack — the classic bell-plate ratios.
 const METAL_RATIOS: [f32; 6] = [1.0, 1.483, 1.932, 2.546, 3.363, 4.365];
 
-#[allow(clippy::too_many_arguments)]
-fn cymbal(
-    sr: f32,
-    seed: u32,
-    vel: u8,
+/// D7 cymbal build spec — replaces the old ~10-positional-arg `cymbal()`.
+struct CymSpec {
     base: f32,
     tone_amp: f32,
     t60_first: f32,
     t60_last: f32,
-    noise: (f32, f32, f32), // (amp, T60, highpass cutoff)
+    noise: (f32, f32, f32), // (amp, T60, highpass corner)
     life: f32,
     gain: f32,
-) -> Option<Box<dyn Voice>> {
+    /// Stick chick/ping: (absolute amp — velocity-shape it at the call
+    /// site, t60, highpass corner). Never swelled (V4/FIDE-6).
+    click: Option<(f32, f32, f32)>,
+    /// CYM-2 crash bloom: the WASH keeps `floor`≈0.5 of its level at t=0
+    /// and swells to full over ~50 ms; impact partials stay instant.
+    swell: bool,
+    /// CYM-1 coloured wash: closely-spaced high-Q bandpass pairs
+    /// (6000/6055, 8300/8380 Hz, Q ≈ 130 — Δf > f/Q or the beat smears,
+    /// V4/DSP-3) on the shared white source, so overlapping ringdowns
+    /// beat at ~55-80 Hz.
+    pairs: bool,
+}
+
+fn cymbal(spec: &CymSpec, sr: f32, seed: u32, vel: u8) -> Option<Box<dyn Voice>> {
     let v = vel_amp(vel);
     let velnorm = vel as f32 / 127.0;
     let mut tones = Vec::with_capacity(6);
     for (i, &r) in METAL_RATIOS.iter().enumerate() {
         let frac = i as f32 / (METAL_RATIOS.len() - 1) as f32;
-        let amp = tone_amp * (1.0 - 0.6 * frac) * (0.55 + 0.55 * velnorm.powf(frac + 0.5));
-        let t60 = t60_first + (t60_last - t60_first) * frac;
-        tones.push((base * r, amp, t60, 0.0));
+        let amp = spec.tone_amp * (1.0 - 0.6 * frac) * (0.55 + 0.55 * velnorm.powf(frac + 0.5));
+        let t60 = spec.t60_first + (spec.t60_last - spec.t60_first) * frac;
+        tones.push((spec.base * r, amp, t60, 0.0));
     }
     // harder hits open the wash up higher
-    let hp = noise.2 * (0.85 + 0.35 * velnorm);
-    let bands = [(noise.0, noise.1, Biquad::highpass(hp, 0.7, sr))];
-    Some(Box::new(Drum::new(
-        sr,
-        seed,
-        &tones,
-        &bands,
-        life,
-        gain * v,
-    )))
+    let hp = spec.noise.2 * (0.85 + 0.35 * velnorm);
+    let mut bands = vec![(spec.noise.0, spec.noise.1, Biquad::highpass(hp, 0.7, sr))];
+    let mut swelled = vec![0usize];
+    if spec.pairs {
+        for &(fa, fb) in &[(6000.0f32, 6055.0f32), (8300.0, 8380.0)] {
+            for f in [fa, fb] {
+                swelled.push(bands.len());
+                // the pairs ARE the wash coloration (CYM-1), levelled with
+                // the broadband wash. Q must be high enough that each
+                // band's ring time (Q/πf ≈ 26 ms at Q 500) spans a beat
+                // period, or the noise decorrelates before one cycle and
+                // no beat survives — the physical limit the V4 review's
+                // Δf > f/Q rule only half-captured.
+                bands.push((
+                    spec.noise.0 * 6.0,
+                    spec.noise.1,
+                    Biquad::bandpass(f, 800.0, sr),
+                ));
+            }
+        }
+    }
+    if let Some((amp, t60, hp)) = spec.click {
+        bands.push((amp, t60, Biquad::highpass(hp, 0.7, sr)));
+    }
+    let mut drum = Drum::new(sr, seed, &tones, &bands, spec.life, spec.gain * v);
+    if spec.swell {
+        for &idx in &swelled {
+            drum = drum.with_band_ext(idx, 0.0, 0.05, 0.5);
+        }
+    }
+    Some(Box::new(drum))
 }
 
 /// Build a drum voice for a GM key, or None for unmapped keys.
@@ -291,21 +354,28 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
             0.2,
             0.55,
         ),
-        38 | 40 => dm(
-            // snare: four head modes (D2) + shell body and wire rattle,
-            // brighter when hit harder
-            &SNARE_TONES,
-            &[
-                (0.55, 0.09, Biquad::bandpass(1300.0, 0.7, sr)),
-                (
-                    0.75,
-                    0.19,
-                    Biquad::highpass(2800.0 * (0.85 + 0.35 * velnorm), 0.7, sr),
-                ),
-            ],
-            0.5,
-            0.68,
-        ),
+        38 | 40 => {
+            // snare (D2 + D5): four head modes; shell slap lands with the
+            // stick, the wires engage ~1.5 ms later (the snare's "crack"
+            // then "rattle"), with a darker rattle tail
+            let (tones, noise) = membrane_velocity(
+                &SNARE_TONES,
+                &[
+                    (0.55, 0.09, Biquad::bandpass(1300.0, 0.7, sr)),
+                    (
+                        0.75,
+                        0.19,
+                        Biquad::highpass(2800.0 * (0.85 + 0.35 * velnorm), 0.7, sr),
+                    ),
+                    (0.35, 0.35, Biquad::highpass(1800.0, 0.7, sr)),
+                ],
+                velnorm,
+            );
+            let drum = Drum::new(sr, seed, &tones, &noise, 0.6, 0.68 * v)
+                .with_band_ext(1, 0.0015, 0.0005, 0.0)
+                .with_band_ext(2, 0.0015, 0.0005, 0.0);
+            Some(Box::new(drum) as Box<dyn Voice>)
+        }
         39 => Some(Box::new(
             Drum::new(
                 sr,
@@ -342,93 +412,132 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
             0.64,
         ),
         42 | 44 => cymbal(
+            &CymSpec {
+                base: 3300.0,
+                tone_amp: 0.10,
+                t60_first: 0.05,
+                t60_last: 0.03,
+                noise: (0.8, 0.035, 6500.0),
+                life: 0.14,
+                gain: 0.42,
+                // CYM-3: the stick tick a closed/pedal hat leads with
+                click: Some((1.8 * velnorm, 0.005, 9000.0)),
+                swell: false,
+                pairs: false,
+            },
             sr,
             seed,
             vel,
-            3300.0,
-            0.10,
-            0.05,
-            0.03,
-            (0.8, 0.035, 6500.0),
-            0.14,
-            0.42,
         ),
         46 => cymbal(
+            &CymSpec {
+                base: 3300.0,
+                tone_amp: 0.10,
+                t60_first: 0.30,
+                t60_last: 0.18,
+                noise: (0.8, 0.28, 6000.0),
+                life: 0.95,
+                gain: 0.40,
+                click: None,
+                swell: false,
+                pairs: false,
+            },
             sr,
             seed,
             vel,
-            3300.0,
-            0.10,
-            0.30,
-            0.18,
-            (0.8, 0.28, 6000.0),
-            0.95,
-            0.40,
         ),
         49 => cymbal(
-            // crash: rings out the way a real 16" crash does (oracle 29
-            // pins the audible tail > 3 s, china ~1 s, splash < 0.7 s)
+            // crash: instant chick, wash blooms over ~50 ms (CYM-2), the
+            // coloured pairs beat in the shimmer (CYM-1), and it rings
+            // out past 3 s like a real 16" (oracle 29)
+            &CymSpec {
+                base: 950.0,
+                tone_amp: 0.13,
+                t60_first: 2.6,
+                t60_last: 1.0,
+                noise: (1.0, 1.9, 4200.0),
+                life: 4.2,
+                gain: 0.50,
+                click: Some((0.7 * velnorm, 0.004, 8000.0)),
+                swell: true,
+                pairs: true,
+            },
             sr,
             seed,
             vel,
-            950.0,
-            0.13,
-            2.6,
-            1.0,
-            (1.0, 1.9, 4200.0),
-            4.2,
-            0.50,
         ),
         52 => cymbal(
             // china (D7/CYM-7): trashy — compressed decay, aggressive bright
             // wash, short life; until now this key fell to the generic tick
+            &CymSpec {
+                base: 1400.0,
+                tone_amp: 0.09,
+                t60_first: 0.62,
+                t60_last: 0.26,
+                noise: (1.7, 0.45, 7500.0),
+                life: 1.0,
+                gain: 0.50,
+                click: None,
+                swell: false,
+                pairs: false,
+            },
             sr,
             seed,
             vel,
-            1400.0,
-            0.09,
-            0.62,
-            0.26,
-            (1.7, 0.45, 7500.0),
-            1.0,
-            0.50,
         ),
         55 => cymbal(
             // splash (D7/CYM-7): small and quick, split from the crash
+            &CymSpec {
+                base: 1600.0,
+                tone_amp: 0.12,
+                t60_first: 0.4,
+                t60_last: 0.2,
+                noise: (0.9, 0.25, 5000.0),
+                life: 0.6,
+                gain: 0.45,
+                click: None,
+                swell: false,
+                pairs: false,
+            },
             sr,
             seed,
             vel,
-            1600.0,
-            0.12,
-            0.4,
-            0.2,
-            (0.9, 0.25, 5000.0),
-            0.6,
-            0.45,
         ),
         57 => cymbal(
+            &CymSpec {
+                base: 820.0,
+                tone_amp: 0.13,
+                t60_first: 2.4,
+                t60_last: 1.0,
+                noise: (1.0, 1.9, 3800.0),
+                life: 4.6,
+                gain: 0.52,
+                click: Some((0.7 * velnorm, 0.004, 8000.0)),
+                swell: true,
+                pairs: true,
+            },
             sr,
             seed,
             vel,
-            820.0,
-            0.13,
-            2.4,
-            1.0,
-            (1.0, 1.9, 3800.0),
-            4.6,
-            0.52,
         ),
         51 | 59 => cymbal(
+            // ride (CYM-5): a short guarded stick ping over a quiet
+            // sustaining wash, with a widened tone-decay spread
+            &CymSpec {
+                base: 1150.0,
+                tone_amp: 0.16,
+                t60_first: 0.9,
+                t60_last: 0.30,
+                noise: (0.30, 1.3, 6000.0),
+                life: 2.6,
+                gain: 0.42,
+                click: Some((0.55 * (0.4 + 0.6 * velnorm), 0.07, 7500.0)),
+                swell: false,
+                pairs: false,
+            },
             sr,
             seed,
             vel,
-            1150.0,
-            0.16,
-            0.7,
-            0.35,
-            (0.35, 1.0, 6000.0),
-            2.6,
-            0.42,
         ),
         53 => d(
             // ride bell (D7/CYM-6): a dense inharmonic METAL_RATIOS stack on
@@ -724,6 +833,161 @@ mod tests {
         let lo = ratios.iter().fold(f32::MAX, |m, &x| m.min(x));
         assert!(hi / lo > 1.3, "ratio spread {} .. {} too uniform", lo, hi);
         assert!(hi / lo < 6.0, "ratio spread {} .. {} unbounded", lo, hi);
+    }
+
+    /// Oracle 23 (CYM-2): the crash wash BLOOMS — its >6 kHz envelope peaks
+    /// after 20 ms (instant chick, swelling shimmer) while the closed hat
+    /// (no swell) peaks immediately.
+    #[test]
+    fn crash_blooms_hat_does_not() {
+        let sr = 44100.0;
+        let hf_argmax_ms = |s: &[f32]| {
+            let win = (0.005 * sr) as usize;
+            let mut hp = Biquad::highpass(6000.0, 0.7, sr);
+            let f: Vec<f32> = s.iter().map(|&x| hp.process(x)).collect();
+            let (mut bi, mut bv) = (0usize, 0.0f32);
+            for (i, w) in f.chunks(win).take(60).enumerate() {
+                let r = testutil::rms(w);
+                if r > bv {
+                    bi = i;
+                    bv = r;
+                }
+            }
+            bi as f32 * 5.0
+        };
+        let crash = render_drum(49, 110, 0.5);
+        assert!(
+            hf_argmax_ms(&crash) > 20.0,
+            "crash wash peaked at {} ms — no bloom",
+            hf_argmax_ms(&crash)
+        );
+        // the chick still lands at t=0: real HF in the first 3 ms
+        let chick = testutil::hp_rms(&crash[..(0.003 * sr) as usize], sr, 6000.0);
+        assert!(chick > 0.02, "no chick at the front: {chick}");
+        let hat = render_drum(42, 110, 0.2);
+        assert!(
+            hf_argmax_ms(&hat) < 10.0,
+            "hat should not bloom ({} ms)",
+            hf_argmax_ms(&hat)
+        );
+    }
+
+    /// Oracle 24 (CYM-1, §5.3): the coloured wash BEATS — envelope
+    /// autocorrelation in the 10-25 ms lag range, differential against a
+    /// pairs-disabled build of the same spec.
+    #[test]
+    fn crash_wash_beats() {
+        let sr = 44100.0;
+        let spec = |pairs: bool| CymSpec {
+            base: 950.0,
+            tone_amp: 0.13,
+            t60_first: 2.6,
+            t60_last: 1.0,
+            noise: (1.0, 1.9, 4200.0),
+            life: 4.2,
+            gain: 0.50,
+            click: None,
+            swell: true,
+            pairs,
+        };
+        let render = |pairs: bool| {
+            let mut v = cymbal(&spec(pairs), sr, 7, 110).unwrap();
+            let mut buf = vec![0f32; (1.0 * sr) as usize];
+            v.render(&mut buf);
+            // listen where the 6000/6055 pair beats (a broadband read lets
+            // the un-paired wash swamp the AM)
+            let mut bp = Biquad::bandpass(6030.0, 15.0, sr);
+            buf.iter()
+                .skip((0.05 * sr) as usize)
+                .map(|&x| bp.process(x))
+                .collect::<Vec<f32>>()
+        };
+        let (with_peak, rate) =
+            testutil::env_autocorr_peak(&render(true), sr, 1.0 / 100.0, 1.0 / 40.0);
+        let (without_peak, _) =
+            testutil::env_autocorr_peak(&render(false), sr, 1.0 / 100.0, 1.0 / 40.0);
+        assert!(
+            with_peak > without_peak + 0.1,
+            "no added beat: with {with_peak} vs without {without_peak}"
+        );
+        assert!((40.0..=100.0).contains(&rate), "beat rate {rate} Hz");
+    }
+
+    /// Oracle 25 (CYM-3, §5.3 relative form): the closed hat leads with a
+    /// stick tick — early:late >9 kHz ratio far above the tickless build —
+    /// and the tick grows with velocity.
+    #[test]
+    fn closed_hat_tick() {
+        let sr = 44100.0;
+        let ratio = |s: &[f32]| {
+            testutil::hp_rms(&s[..(0.002 * sr) as usize], sr, 9000.0)
+                / testutil::hp_rms(&s[(0.010 * sr) as usize..(0.030 * sr) as usize], sr, 9000.0)
+                    .max(1e-9)
+        };
+        let with = render_drum(42, 110, 0.15);
+        // tickless comparison: same spec, click stripped
+        let spec = CymSpec {
+            base: 3300.0,
+            tone_amp: 0.10,
+            t60_first: 0.05,
+            t60_last: 0.03,
+            noise: (0.8, 0.035, 6500.0),
+            life: 0.14,
+            gain: 0.42,
+            click: None,
+            swell: false,
+            pairs: false,
+        };
+        let mut v = cymbal(&spec, sr, 7, 110).unwrap();
+        let mut without = vec![0f32; (0.15 * sr) as usize];
+        v.render(&mut without);
+        assert!(
+            ratio(&with) > 1.5 * ratio(&without),
+            "tick missing: {} vs {}",
+            ratio(&with),
+            ratio(&without)
+        );
+        // velocity: the tick's absolute energy grows with the hit
+        let soft = render_drum(42, 40, 0.15);
+        let tick = |s: &[f32]| testutil::hp_rms(&s[..(0.002 * sr) as usize], sr, 9000.0);
+        assert!(
+            tick(&with) > tick(&soft),
+            "tick does not scale with velocity"
+        );
+    }
+
+    /// Oracle 27 (CYM-5, §5.3 time-isolated): the ride ping is a short HF
+    /// event over a quieter sustaining wash — early ≫ late, wash alive.
+    #[test]
+    fn ride_ping_over_wash() {
+        let sr = 44100.0;
+        let ride = render_drum(51, 110, 2.0);
+        let early = testutil::hp_rms(&ride[..(0.030 * sr) as usize], sr, 7500.0);
+        let late = testutil::hp_rms(
+            &ride[(0.150 * sr) as usize..(0.300 * sr) as usize],
+            sr,
+            7500.0,
+        );
+        assert!(early > 3.0 * late, "no ping: early {early} vs late {late}");
+        let wash = testutil::rms(&ride[(1.4 * sr) as usize..(1.8 * sr) as usize]);
+        assert!(wash > 5e-6, "the wash died with the ping: {wash}");
+    }
+
+    /// Oracle 33 (D5, §5.3 ratio form): the snare wires engage ~1.5 ms after
+    /// the shell slap — wire-band energy in the first 1 ms is a fraction of
+    /// its 2-6 ms level, while the shell speaks from t=0.
+    #[test]
+    fn snare_wires_engage_late() {
+        let sr = 44100.0;
+        let snare = render_drum(38, 110, 0.3);
+        let wire = |a: f32, b: f32| {
+            testutil::hp_rms(&snare[(a * sr) as usize..(b * sr) as usize], sr, 2800.0)
+        };
+        let pre = wire(0.0, 0.001);
+        let post = wire(0.002, 0.006);
+        assert!(pre < 0.35 * post, "wires too early: {pre} vs {post}");
+        let shell = testutil::band_rms(&snare[..(0.001 * sr) as usize], sr, 1300.0, 0.7);
+        assert!(shell > 1e-3, "shell slap missing at t=0: {shell}");
     }
 
     /// Oracle 30 (audio half): a hard kick carries proportionally more

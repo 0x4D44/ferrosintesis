@@ -300,6 +300,7 @@ pub struct PluckPreset {
     pub out_lp: f32,                      // 0 = none
     pub pickup: f32,                      // magnetic pickup position (0 = acoustic)
     pub sub: f32,                         // envelope-locked fundamental sine (0 = none)
+    pub cab_lp: f32,                      // clean-amp cab rolloff, 0 = none (HLD G2)
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -319,6 +320,7 @@ pub const NYLON: PluckPreset = PluckPreset {
     out_lp: 0.0,
     pickup: 0.0,
     sub: 0.0,
+    cab_lp: 0.0,
 };
 pub const STEEL: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -335,6 +337,7 @@ pub const STEEL: PluckPreset = PluckPreset {
     out_lp: 0.0,
     pickup: 0.0,
     sub: 0.0,
+    cab_lp: 0.0,
 };
 pub const CLEAN: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -346,10 +349,12 @@ pub const CLEAN: PluckPreset = PluckPreset {
     amp: 0.50,
     attack_s: 0.0,
     rel_t60: 0.18,
-    body: &[],
+    // clean-amp body colour (HLD G2): low warmth + presence sparkle
+    body: &[(200.0, 1.0, 2.0), (2500.0, 1.0, 3.0)],
     out_lp: 5500.0,
     pickup: 0.12,
     sub: 0.0,
+    cab_lp: 4500.0, // light clean-combo speaker rolloff
 };
 pub const DRIVE: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -365,6 +370,7 @@ pub const DRIVE: PluckPreset = PluckPreset {
     out_lp: 0.0,
     pickup: 0.10,
     sub: 0.0,
+    cab_lp: 0.0,
 };
 pub const MUTED: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -380,6 +386,7 @@ pub const MUTED: PluckPreset = PluckPreset {
     out_lp: 3200.0,
     pickup: 0.10,
     sub: 0.35, // the chug's thud carries the weight
+    cab_lp: 0.0,
 };
 pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -395,6 +402,7 @@ pub const BASS: PluckPreset = PluckPreset {
     out_lp: 1900.0,
     pickup: 0.28,
     sub: 0.18,
+    cab_lp: 0.0,
 };
 pub const FRETLESS: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -410,6 +418,7 @@ pub const FRETLESS: PluckPreset = PluckPreset {
     out_lp: 1500.0,
     pickup: 0.33,
     sub: 0.15,
+    cab_lp: 0.0,
 };
 pub const HARP: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -425,6 +434,7 @@ pub const HARP: PluckPreset = PluckPreset {
     out_lp: 0.0,
     pickup: 0.0,
     sub: 0.0,
+    cab_lp: 0.0,
 };
 pub const BANJO: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -440,6 +450,7 @@ pub const BANJO: PluckPreset = PluckPreset {
     out_lp: 0.0,
     pickup: 0.0,
     sub: 0.0,
+    cab_lp: 0.0,
 };
 
 /// One Karplus-Strong delay loop on a fractional-tap delay line, so its
@@ -517,6 +528,10 @@ pub struct Pluck {
     sub: Option<(Sine, f32, f32)>,    // (osc, gain, decay) fundamental weight
     sub_env: f32,
     body: Vec<Biquad>,
+    // clean-amp cab (HLD G2): two cascaded biquad lowpasses — one 2nd-order
+    // pole pair alone cannot make the −12 dB-vs-one-pole 8 kHz cliff
+    // oracle 6 demands
+    cab: Option<[Biquad; 2]>,
     out_lp: Option<OnePole>,
     hammer: Vec<f32>, // pending legato excitation, fed into the loops
     hammer_pos: usize,
@@ -594,6 +609,12 @@ impl Pluck {
                 .iter()
                 .map(|&(f, q, g)| Biquad::peak(f, q, g, sr))
                 .collect(),
+            cab: (p.cab_lp > 0.0).then(|| {
+                [
+                    Biquad::lowpass(p.cab_lp, 0.75, sr),
+                    Biquad::lowpass(p.cab_lp, 0.75, sr),
+                ]
+            }),
             out_lp: if p.out_lp > 0.0 {
                 Some(OnePole::lowpass(out_lp, sr))
             } else {
@@ -650,6 +671,11 @@ impl Voice for Pluck {
             }
             for b in &mut self.body {
                 y = b.process(y);
+            }
+            if let Some(cab) = &mut self.cab {
+                for c in cab.iter_mut() {
+                    y = c.process(y);
+                }
             }
             if let Some(lp) = &mut self.out_lp {
                 y = lp.process(y);
@@ -1643,6 +1669,48 @@ mod tests {
             let hz = crate::testutil::peak_locate(&buf[4410..], sr, 396.0, 484.0);
             assert!((hz - 440.0).abs() < 6.0, "vel {vel}: {hz} Hz");
         }
+    }
+
+    /// Oracle 6 (§5.3): the CLEAN chain (shipped body peaks + cascaded cab
+    /// lowpasses, built from the preset's own data) has the presence lift
+    /// and the steep top-end the old bare one-pole lacked.
+    #[test]
+    fn clean_cab_response() {
+        let sr = 44100.0;
+        // new chain from the shipped preset data
+        let mut body: Vec<Biquad> = CLEAN
+            .body
+            .iter()
+            .map(|&(f, q, g)| Biquad::peak(f, q, g, sr))
+            .collect();
+        let mut cab = [
+            Biquad::lowpass(CLEAN.cab_lp, 0.75, sr),
+            Biquad::lowpass(CLEAN.cab_lp, 0.75, sr),
+        ];
+        let mut new_ir = vec![0f32; 8192];
+        new_ir[0] = 1.0;
+        for x in new_ir.iter_mut() {
+            let mut y = *x;
+            for b in body.iter_mut() {
+                y = b.process(y);
+            }
+            for c in cab.iter_mut() {
+                y = c.process(y);
+            }
+            *x = y;
+        }
+        // the old chain: nothing but the shared out_lp one-pole
+        let mut old_lp = OnePole::lowpass(5500.0, sr);
+        let mut old_ir = vec![0f32; 8192];
+        old_ir[0] = 1.0;
+        for x in old_ir.iter_mut() {
+            *x = old_lp.process(*x);
+        }
+        let db = |ir: &[f32], f: f32| 20.0 * crate::testutil::mag_at(ir, sr, f).max(1e-12).log10();
+        let d2500 = db(&new_ir, 2500.0) - db(&old_ir, 2500.0);
+        let d8k = db(&new_ir, 8000.0) - db(&old_ir, 8000.0);
+        assert!(d2500 >= 2.0, "presence vs old one-pole: {d2500:.1} dB");
+        assert!(d8k <= -12.0, "top-end vs old one-pole: {d8k:.1} dB");
     }
 
     /// A plucked A4 should oscillate near 440 Hz (count zero crossings).

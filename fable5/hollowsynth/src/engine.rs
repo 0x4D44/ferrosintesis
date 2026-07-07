@@ -133,42 +133,97 @@ pub(crate) fn needs_drive(prog: u8) -> bool {
     matches!(prog, 29 | 30)
 }
 
-/// Overdrive/distortion channel insert for GM programs 29/30.
+/// The 5-biquad speaker-cabinet model (HLD G1): low-end resonance, a mid
+/// scoop, a presence peak, and a two-pole-pair cliff that both voices the
+/// amp and acts as the decimation filter for the 2× nonlinear path. Built
+/// at the 2× rate; shared with the oracle-3 response test.
+pub(crate) fn cab_biquads(sr2: f32) -> [Biquad; 5] {
+    [
+        Biquad::peak(100.0, 1.2, 4.0, sr2),
+        Biquad::peak(500.0, 1.0, -3.0, sr2),
+        Biquad::peak(2600.0, 1.5, 5.0, sr2),
+        Biquad::lowpass(4000.0, 0.9, sr2),
+        Biquad::lowpass(3800.0, 0.8, sr2),
+    ]
+}
+
+/// Overdrive/distortion channel insert for GM programs 29/30 (HLD G1):
+/// program-keyed pre-voicing → biased (asymmetric) tanh → DC blocker →
+/// speaker cabinet, the whole nonlinear chain at 2× rate. The cab's cliff
+/// replaces the old box-average decimator, so the tanh fizz dies in the
+/// cabinet instead of aliasing down.
 struct Drive {
     pre: Biquad,
-    tone: Biquad,
+    voice: Biquad,
     gain: f32,
+    bias: f32,
     post: f32,
+    dcb: Biquad,
+    cab: [Biquad; 5],
     prev: f32,
 }
 
 impl Drive {
     fn new(program: u8, sr: f32) -> Self {
-        let (gain, post) = if program == 30 {
-            (7.0, 0.30)
+        // 30 = distortion (scooped chug), 29 = overdrive (mid-push lead)
+        let (gain, post, bias) = if program == 30 {
+            (7.0, 0.30, 0.55)
         } else {
-            (3.5, 0.42)
+            (3.5, 0.42, 0.40)
         };
-        // the nonlinearity runs at 2x rate to halve tanh aliasing
+        let voice = if program == 30 {
+            Biquad::peak(650.0, 0.9, -5.0, sr * 2.0)
+        } else {
+            Biquad::peak(800.0, 0.8, 4.0, sr * 2.0)
+        };
         Drive {
             pre: Biquad::highpass(90.0, 0.7, sr * 2.0),
-            tone: Biquad::lowpass(3400.0, 0.8, sr * 2.0),
+            voice,
             gain,
+            bias,
             post,
+            // a real DC blocker after the shaper: the biased tanh produces
+            // large signal-dependent DC that the cab's unity-at-DC biquads
+            // cannot remove (V4/CORR-1)
+            dcb: Biquad::highpass(20.0, 0.7, sr * 2.0),
+            cab: cab_biquads(sr * 2.0),
             prev: 0.0,
         }
     }
 
+    #[inline]
+    fn chain(&mut self, x: f32) -> f32 {
+        // biased tanh referenced to its bias point: the curvature asymmetry
+        // (even harmonics) stays, but silence maps to exactly zero — no
+        // startup thump on channels that merely HAVE a drive. The blocker
+        // then only handles the signal-dependent rectification DC.
+        let shaped = (self.voice.process(self.pre.process(x)) * self.gain + self.bias).tanh()
+            - self.bias.tanh();
+        let mut y = self.dcb.process(shaped);
+        for c in &mut self.cab {
+            y = c.process(y);
+        }
+        y
+    }
+
     fn process(&mut self, buf: &mut [f32]) {
         for x in buf.iter_mut() {
+            // 2x oversampling via midpoint interpolation; the cab's steep
+            // lowpass cliff is the decimation filter, so we keep the
+            // sample-aligned output instead of box-averaging
             let mid = 0.5 * (self.prev + *x);
             self.prev = *x;
-            let y0 = self
-                .tone
-                .process((self.pre.process(mid) * self.gain).tanh());
-            let y1 = self.tone.process((self.pre.process(*x) * self.gain).tanh());
-            *x = 0.5 * (y0 + y1) * self.post;
+            let _ = self.chain(mid);
+            *x = self.chain(*x) * self.post;
         }
+    }
+
+    /// Test-only: neutralise the pre-voicing EQ (oracle 5's gain-matched
+    /// reference — a 0 dB peak is an identity biquad).
+    #[cfg(test)]
+    fn with_flat_voice(mut self) -> Self {
+        self.voice = Biquad::peak(800.0, 0.8, 0.0, 88_200.0);
+        self
     }
 }
 
@@ -1076,6 +1131,94 @@ mod tests {
 
     fn rms(seg: &[f32]) -> f32 {
         (seg.iter().map(|&x| (x * x) as f64).sum::<f64>() / seg.len() as f64).sqrt() as f32
+    }
+
+    /// Oracle 3 (§5.1/§5.3): the cabinet's magnitude response, measured on
+    /// the linear cab chain alone at the 2× rate it runs at — presence peak,
+    /// steep HF cliff, low-end resonance.
+    #[test]
+    fn cabinet_response_shape() {
+        let sr2 = 88_200.0;
+        let mut cab = cab_biquads(sr2);
+        let mut ir = vec![0f32; 16384];
+        ir[0] = 1.0;
+        for x in ir.iter_mut() {
+            let mut y = *x;
+            for c in cab.iter_mut() {
+                y = c.process(y);
+            }
+            *x = y;
+        }
+        let db = |f: f32| 20.0 * crate::testutil::mag_at(&ir, sr2, f).max(1e-12).log10();
+        assert!(
+            db(2600.0) - db(1000.0) >= 3.0,
+            "presence: 2600 {:.1} dB vs 1000 {:.1} dB",
+            db(2600.0),
+            db(1000.0)
+        );
+        assert!(
+            db(6000.0) - db(3000.0) <= -18.0,
+            "cliff: 6000 {:.1} dB vs 3000 {:.1} dB",
+            db(6000.0),
+            db(3000.0)
+        );
+        assert!(
+            db(100.0) - db(300.0) >= 2.0,
+            "low resonance: 100 {:.1} dB vs 300 {:.1} dB",
+            db(100.0),
+            db(300.0)
+        );
+    }
+
+    /// Oracle 4 (§5.3): the biased shaper adds a real 2nd harmonic (a pure
+    /// sine in, so 2f can only come from the new asymmetry) and the DC
+    /// blocker holds the sustained output DC-free.
+    #[test]
+    fn drive_asymmetry_and_dc() {
+        let sr = 44100.0;
+        let mut drive = Drive::new(29, sr);
+        let f0 = 110.0;
+        let mut buf: Vec<f32> = (0..(sr as usize))
+            .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
+            .collect();
+        drive.process(&mut buf);
+        // skip the DC-blocker settling (§5.3: window starts ≥50 ms in)
+        let seg = &buf[(0.05 * sr) as usize..];
+        let dc = seg.iter().map(|&x| x as f64).sum::<f64>() / seg.len() as f64;
+        assert!(dc.abs() < 1e-3, "sustained DC {dc}");
+        let m2 = crate::testutil::mag_at(seg, sr, 2.0 * f0);
+        let m3 = crate::testutil::mag_at(seg, sr, 3.0 * f0);
+        assert!(m2 > 0.1 * m3, "2nd harmonic {m2} vs 3rd {m3}");
+    }
+
+    /// Oracle 5 (§5.1 differential): the program-keyed pre-voicing shifts
+    /// the 600 Hz : 2 kHz balance in the intended direction against a
+    /// voice-bypassed reference — prog 30 scoops the mids, prog 29 pushes.
+    #[test]
+    fn drive_pre_voicing_direction() {
+        let sr = 44100.0;
+        let input: Vec<f32> = {
+            let mut rng = crate::dsp::Rng::new(11);
+            (0..(sr as usize)).map(|_| rng.white() * 0.3).collect()
+        };
+        let ratio = |prog: u8, flat: bool| {
+            let mut d = Drive::new(prog, sr);
+            if flat {
+                d = d.with_flat_voice();
+            }
+            let mut buf = input.clone();
+            d.process(&mut buf);
+            crate::testutil::band_rms(&buf, sr, 600.0, 1.0)
+                / crate::testutil::band_rms(&buf, sr, 2000.0, 1.0).max(1e-9)
+        };
+        assert!(
+            ratio(30, false) < ratio(30, true),
+            "prog 30 should scoop the mids"
+        );
+        assert!(
+            ratio(29, false) > ratio(29, true),
+            "prog 29 should push the mids"
+        );
     }
 
     /// The bus glue must tame loud material, pass quiet material nearly

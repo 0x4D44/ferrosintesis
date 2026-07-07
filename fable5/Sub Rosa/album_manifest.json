@@ -1,0 +1,67 @@
+{
+  "album": "Sub Rosa",
+  "artist": "Claude Fable 5",
+  "style": "Enigma-inspired downtempo-gone-fast instrumental: chant, groove, melodic synth bass, shakuhachi",
+  "track_count": 1,
+  "total_duration_seconds": 454.68,
+  "total_duration_minutes": 7.58,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Sub Rosa",
+      "file": "midi/01 - Sub Rosa.mid",
+      "duration_seconds": 454.68,
+      "duration_minutes": 7.58,
+      "movements": [
+        {
+          "name": "Sigillum",
+          "start_beat": 0.0,
+          "end_beat": 64.0,
+          "start_seconds": 0.0,
+          "end_seconds": 30.97,
+          "time": "0:00"
+        },
+        {
+          "name": "The Chant",
+          "start_beat": 64.0,
+          "end_beat": 256.0,
+          "start_seconds": 30.97,
+          "end_seconds": 123.87,
+          "time": "0:30"
+        },
+        {
+          "name": "The Bamboo Voice",
+          "start_beat": 256.0,
+          "end_beat": 448.0,
+          "start_seconds": 123.87,
+          "end_seconds": 216.77,
+          "time": "2:03"
+        },
+        {
+          "name": "Sub Rosa",
+          "start_beat": 448.0,
+          "end_beat": 576.0,
+          "start_seconds": 216.77,
+          "end_seconds": 278.71,
+          "time": "3:36"
+        },
+        {
+          "name": "Limina",
+          "start_beat": 576.0,
+          "end_beat": 832.0,
+          "start_seconds": 278.71,
+          "end_seconds": 402.58,
+          "time": "4:38"
+        },
+        {
+          "name": "Afterglow",
+          "start_beat": 832.0,
+          "end_beat": 928.0,
+          "start_seconds": 402.58,
+          "end_seconds": 454.68,
+          "time": "6:42"
+        }
+      ]
+    }
+  ]
+}

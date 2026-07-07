@@ -557,10 +557,10 @@ mod guards {
             (33, "BASS"),
             (34, "PICK"), // Phase 4 (B2)
             (35, "FRETLESS"),
-            (36, "SLAP"), // Phase 4 (B2)
-            (37, "SLAP"), // Phase 4 (B2)
-            (38, "BASS"), // Phase 5: → synthbass
-            (39, "BASS"), // Phase 5: → synthbass
+            (36, "SLAP"),      // Phase 4 (B2)
+            (37, "SLAP"),      // Phase 4 (B2)
+            (38, "synthbass"), // Phase 5 (B4)
+            (39, "synthbass"), // Phase 5 (B4)
             (40, "bowed"),
             (46, "HARP"),
             (47, "modal"),

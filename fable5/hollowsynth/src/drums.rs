@@ -187,6 +187,19 @@ impl Voice for Drum {
         true
     }
 
+    /// D6: the pedal grabs the cymbal — every decay collapses to a ~10 ms
+    /// t60 and the voice's life is capped ~30 ms out (never below `t`).
+    fn choke(&mut self) {
+        let fast = dmul(0.010, self.sr);
+        for tone in &mut self.tones {
+            tone.decay = tone.decay.min(fast);
+        }
+        for band in &mut self.noise {
+            band.decay = band.decay.min(fast);
+        }
+        self.life = self.life.min(self.t + (0.030 * self.sr) as u32);
+    }
+
     #[cfg(test)]
     fn kind(&self) -> &'static str {
         "drum"
@@ -988,6 +1001,23 @@ mod tests {
         assert!(pre < 0.35 * post, "wires too early: {pre} vs {post}");
         let shell = testutil::band_rms(&snare[..(0.001 * sr) as usize], sr, 1300.0, 0.7);
         assert!(shell > 1e-3, "shell slap missing at t=0: {shell}");
+    }
+
+    /// Oracle 26 (D6, voice half): choke() collapses a ringing open hat
+    /// within 30 ms and caps its life.
+    #[test]
+    fn choke_kills_open_hat() {
+        let sr = 44100.0;
+        let mut v = make(46, 110, sr, 7).unwrap();
+        let mut head = vec![0f32; (0.05 * sr) as usize];
+        assert!(v.render(&mut head));
+        let before = testutil::rms(&head[(0.03 * sr) as usize..]);
+        v.choke();
+        let mut tail = vec![0f32; (0.1 * sr) as usize];
+        let alive = v.render(&mut tail);
+        assert!(!alive, "choked voice out-lived its 30 ms cap");
+        let after = testutil::rms(&tail[(0.03 * sr) as usize..]);
+        assert!(after < 0.05 * before, "choke too soft: {after} vs {before}");
     }
 
     /// Oracle 30 (audio half): a hard kick carries proportionally more

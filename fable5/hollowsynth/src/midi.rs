@@ -314,6 +314,33 @@ mod tests {
         );
     }
 
+    /// Oracle 36 (midi half): a raw 0xC0 program-change byte reaches
+    /// `EvKind::Prog` with the raw program number — no off-by-one.
+    #[test]
+    fn program_change_decodes_raw() {
+        let mut d: Vec<u8> = Vec::new();
+        d.extend(b"MThd");
+        d.extend(6u32.to_be_bytes());
+        d.extend(1u16.to_be_bytes());
+        d.extend(1u16.to_be_bytes());
+        d.extend(480u16.to_be_bytes());
+        let mut tr: Vec<u8> = Vec::new();
+        tr.extend([0x00, 0xC3, 30]); // program change: ch 3, prog 30 (overdrive)
+        tr.extend([0x00, 0x93, 60, 100]); // note-on so the song has length
+        tr.extend([0x60, 0x83, 60, 0]); // note-off (running-status new status)
+        tr.extend([0x00, 0xFF, 0x2F, 0x00]);
+        d.extend(b"MTrk");
+        d.extend((tr.len() as u32).to_be_bytes());
+        d.extend(&tr);
+
+        let song = parse(&d).unwrap();
+        assert!(
+            matches!(song.events[0].kind, EvKind::Prog { ch: 3, prog: 30 }),
+            "{:?}",
+            song.events[0].kind
+        );
+    }
+
     /// A pitch-bend message decodes to the right signed semitone value.
     #[test]
     fn pitch_bend_decodes() {

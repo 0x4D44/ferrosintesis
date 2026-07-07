@@ -139,6 +139,11 @@ impl Voice for Drum {
     fn released(&self) -> bool {
         true
     }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "drum"
+    }
 }
 
 /// Inharmonic cymbal partial stack — the classic bell-plate ratios.

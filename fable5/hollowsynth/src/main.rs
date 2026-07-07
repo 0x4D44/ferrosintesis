@@ -15,6 +15,8 @@ mod engine;
 mod midi;
 mod reverb;
 mod sampler;
+#[cfg(test)]
+mod testutil;
 mod voices;
 mod wav;
 

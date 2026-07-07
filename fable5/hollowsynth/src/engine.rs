@@ -127,6 +127,12 @@ fn vowel_at(pos: f32) -> Vowel {
     (f, q, g)
 }
 
+/// The GM programs that get the overdrive/cabinet channel insert — the
+/// single source of truth for the Prog handler and oracle 36.
+pub(crate) fn needs_drive(prog: u8) -> bool {
+    matches!(prog, 29 | 30)
+}
+
 /// Overdrive/distortion channel insert for GM programs 29/30.
 struct Drive {
     pre: Biquad,
@@ -783,7 +789,7 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                     };
                     s.chorus_send = cho;
                     s.delay_send = del;
-                    if matches!(prog, 29 | 30) {
+                    if needs_drive(prog) {
                         if s.drive.is_none() {
                             s.drive = Some(Drive::new(prog, sr));
                         }

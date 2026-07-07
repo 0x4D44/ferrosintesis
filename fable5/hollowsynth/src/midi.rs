@@ -1,17 +1,42 @@
 //! Minimal Standard MIDI File reader: extracts the tempo map, note,
-//! controller and pitch-bend events with absolute times in seconds.
-//! Supports type 0/1, running status, and skips anything it does not
-//! model (aftertouch, sysex).
+//! controller, pitch-bend and channel-aftertouch events with absolute
+//! times in seconds. Supports type 0/1, running status, and skips
+//! anything it does not model (polyphonic aftertouch, sysex, and metas
+//! such as lyrics and key signatures).
 
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EvKind {
-    NoteOn { ch: u8, key: u8, vel: u8 },
-    NoteOff { ch: u8, key: u8 },
-    Cc { ch: u8, num: u8, val: u8 },
-    Prog { ch: u8, prog: u8 },
-    Bend { ch: u8, semis: f32 }, // ±2 semitone range
+    NoteOn {
+        ch: u8,
+        key: u8,
+        vel: u8,
+    },
+    NoteOff {
+        ch: u8,
+        key: u8,
+    },
+    Cc {
+        ch: u8,
+        num: u8,
+        val: u8,
+    },
+    Prog {
+        ch: u8,
+        prog: u8,
+    },
+    /// Decoded at the GM default ±2-semitone range; the engine rescales by
+    /// the channel's RPN 0 bend range.
+    Bend {
+        ch: u8,
+        semis: f32,
+    },
+    /// Channel aftertouch (0xDn): one pressure value for the whole channel.
+    Aftertouch {
+        ch: u8,
+        val: u8,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -174,7 +199,8 @@ pub fn parse(data: &[u8]) -> Result<Song, String> {
                             raw.push((tick, seq, EvKind::Prog { ch, prog }));
                         }
                         0xD0 => {
-                            let _ = c.u8()?;
+                            let val = c.u8()?;
+                            raw.push((tick, seq, EvKind::Aftertouch { ch, val }));
                         }
                         0xE0 => {
                             let lsb = c.u8()? as i32;
@@ -323,5 +349,49 @@ mod tests {
         assert!((bends[0] - 2.0).abs() < 0.01, "{}", bends[0]);
         assert!(bends[1].abs() < 0.01, "{}", bends[1]);
         assert!((bends[2] - (-2.0)).abs() < 0.01, "{}", bends[2]);
+    }
+
+    /// Lyric (0x05) and key-signature (0x59) metas are skipped cleanly,
+    /// and channel aftertouch (0xDn) decodes to an event.
+    #[test]
+    fn skips_lyrics_and_keysigs_parses_aftertouch() {
+        let mut d: Vec<u8> = Vec::new();
+        d.extend(b"MThd");
+        d.extend(6u32.to_be_bytes());
+        d.extend(1u16.to_be_bytes());
+        d.extend(1u16.to_be_bytes());
+        d.extend(480u16.to_be_bytes());
+        let mut tr: Vec<u8> = Vec::new();
+        tr.extend([0x00, 0xFF, 0x05, 0x03]); // lyric "hum"
+        tr.extend(b"hum");
+        tr.extend([0x00, 0xFF, 0x59, 0x02, 0x02, 0x00]); // key sig: 2 sharps, major
+        tr.extend([0x00, 0x90, 60, 100]);
+        tr.extend([0x00, 0xD1, 80]); // channel aftertouch, ch 1
+        tr.extend([0x00, 0xFF, 0x05, 0x02]); // mid-note lyric
+        tr.extend(b"ah");
+        tr.extend([0x83, 0x60, 0x80, 60, 0]);
+        tr.extend([0x00, 0xFF, 0x2F, 0x00]);
+        d.extend(b"MTrk");
+        d.extend((tr.len() as u32).to_be_bytes());
+        d.extend(&tr);
+
+        let song = parse(&d).unwrap();
+        assert_eq!(song.events.len(), 3);
+        assert!(matches!(
+            song.events[0].kind,
+            EvKind::NoteOn {
+                ch: 0,
+                key: 60,
+                vel: 100
+            }
+        ));
+        assert!(matches!(
+            song.events[1].kind,
+            EvKind::Aftertouch { ch: 1, val: 80 }
+        ));
+        assert!(matches!(
+            song.events[2].kind,
+            EvKind::NoteOff { ch: 0, key: 60 }
+        ));
     }
 }

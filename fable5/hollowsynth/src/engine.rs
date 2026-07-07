@@ -1,12 +1,16 @@
 //! The render engine: walks the event list in 64-sample blocks, spawns and
 //! mixes voices per channel, applies each channel's strip (program-aware
-//! distortion insert, CC74 brightness filter, CC7 volume, CC11 expression,
-//! CC1 mod-wheel vibrato / Leslie ramp, CC64 sustain pedal, CC10 pan with a
-//! Haas micro-delay for real width, CC91 reverb send) and three global
-//! buses: a hall reverb, a stereo chorus (ensembles breathe), and a
-//! tempo-derived ping-pong echo (the classic delayed-lead sound).
+//! distortion insert, CC74 brightness filter + CC71 resonance, CC7 volume,
+//! CC11 expression, CC1 mod-wheel vibrato / Leslie ramp, CC64 sustain and
+//! CC66 sostenuto pedals, CC67 una corda, CC5/CC65 portamento, CC70 choir
+//! vowel morph, channel aftertouch, RPN 0/1 bend range and fine tune,
+//! CC10 pan with a Haas micro-delay for real width, CC91 reverb send) and
+//! three global buses: a hall reverb, a stereo chorus (ensembles breathe),
+//! and a tempo-derived ping-pong echo (the classic delayed-lead sound).
+//! Every v0.7 controller is opt-in ("authored"): a file that never sends it
+//! renders bit-identically to v0.6.
 
-use crate::dsp::{Biquad, DelayLine, OnePole, Rng};
+use crate::dsp::{key_freq, Biquad, DelayLine, OnePole, Rng};
 use crate::midi::{EvKind, Song};
 use crate::reverb::Reverb;
 use crate::{drums, voices};
@@ -32,12 +36,95 @@ const WAH_MAX_HZ: f32 = 12000.0;
 const WAH_Q: f32 = 1.4;
 const WAH_SLEW_S: f32 = 0.02; // cutoff smoothing so a CC74 LFO doesn't zipper
 
+// CC71 resonance: Q of the CC74 filter, 0..127 exponential. A channel that
+// never authors CC71 stays at WAH_Q exactly.
+const RES_MIN_Q: f32 = 0.7;
+const RES_MAX_Q: f32 = 8.0;
+
+// CC5 portamento time: 0..127 maps exponentially PORTA_MIN_S..PORTA_MAX_S.
+const PORTA_MIN_S: f32 = 0.005;
+const PORTA_MAX_S: f32 = 0.6;
+
+// Channel aftertouch (0xDn): "crescendo inside a held note" — pressure adds
+// vibrato depth and gain on the sustained melodic families.
+const AT_VIB_RATE_HZ: f32 = 5.0;
+const AT_VIB_CENTS: f32 = 25.0; // pitch depth at full pressure
+const AT_GAIN_DB: f32 = 2.5; // gain lift at full pressure
+
 /// Melodic sustained families that take the engine-level CC1 vibrato:
 /// plucks (except palm-mute 28), bowed strings, winds. Drums, organs and
 /// modal instruments (piano, bells) are left alone.
 fn vibrato_family(program: u8) -> bool {
     // guitars (no palm-mute 28), basses, bowed strings, harp, winds, banjo
     matches!(program, 24..=27 | 29..=46 | 72..=79 | 104..=107)
+}
+
+/// Families that answer channel aftertouch: the vibrato families plus
+/// organs, string/choir SawStacks and pads. Drums and the Modal
+/// (piano/bell) family are left alone — pressure cannot swell a struck
+/// string.
+fn aftertouch_family(program: u8) -> bool {
+    vibrato_family(program) || matches!(program, 16..=23 | 48..=54 | 80..=95)
+}
+
+// CC70 vowel morph anchors for the choir programs (52-54). Bass/baritone
+// formant values; "mm" keeps the closed hum the v0.6 onset morph starts from,
+// with the upper bands shaded down the way closed lips actually mute them.
+/// The interpolated vowel a voice's formant bank is retuned to: three band
+/// centre frequencies (Hz), their Qs, and their linear gains.
+type Vowel = ([f32; 3], [f32; 3], [f32; 3]);
+/// One CC70 morph anchor: the CC value it sits at (0..127) paired with the
+/// `Vowel` (band frequencies, Qs, gains) the choir speaks at that value.
+type VowelAnchor = (f32, [f32; 3], [f32; 3], [f32; 3]);
+const VOWEL_ANCHORS: [VowelAnchor; 4] = [
+    (
+        0.0,
+        [500.0, 1400.0, 2400.0],
+        [12.0, 10.0, 9.0],
+        [1.0, 0.30, 0.10],
+    ), // mm
+    (
+        42.0,
+        [350.0, 600.0, 2400.0],
+        [10.0, 12.0, 9.0],
+        [1.0, 0.35, 0.10],
+    ), // oo
+    (
+        84.0,
+        [600.0, 1040.0, 2250.0],
+        [9.0, 10.0, 9.0],
+        [1.0, 0.60, 0.35],
+    ), // ah
+    (
+        127.0,
+        [400.0, 1900.0, 2600.0],
+        [9.0, 10.0, 9.0],
+        [1.0, 0.85, 0.50],
+    ), // eh
+];
+
+/// Interpolate the vowel tables at a (smoothed) CC70 position.
+fn vowel_at(pos: f32) -> Vowel {
+    let p = pos.clamp(0.0, 127.0);
+    let hi = VOWEL_ANCHORS
+        .iter()
+        .position(|a| a.0 >= p)
+        .unwrap_or(VOWEL_ANCHORS.len() - 1);
+    if hi == 0 {
+        let a = &VOWEL_ANCHORS[0];
+        return (a.1, a.2, a.3);
+    }
+    let (a, b) = (&VOWEL_ANCHORS[hi - 1], &VOWEL_ANCHORS[hi]);
+    let t = (p - a.0) / (b.0 - a.0);
+    let mut f = [0f32; 3];
+    let mut q = [0f32; 3];
+    let mut g = [0f32; 3];
+    for i in 0..3 {
+        f[i] = a.1[i] + (b.1[i] - a.1[i]) * t;
+        q[i] = a.2[i] + (b.2[i] - a.2[i]) * t;
+        g[i] = a.3[i] + (b.3[i] - a.3[i]) * t;
+    }
+    (f, q, g)
 }
 
 /// Overdrive/distortion channel insert for GM programs 29/30.
@@ -273,9 +360,32 @@ struct Strip {
     program: u8,
     volume: f32,   // CC7 as amplitude (squared curve)
     pan: f32,      // 0..1
-    bend: f32,     // pitch-bend as a frequency multiplier
+    bend: f32,     // channel pitch multiplier: wheel × range × fine-tune
     legato: bool,  // CC68: new notes slur into the ringing voice
     sustain: bool, // CC64: NoteOffs are held until the pedal lifts
+    // v0.7 authored controllers (all inert until first touched)
+    bend_wheel: f32, // last wheel position in ±2-normalised semitones
+    bend_range: f32, // RPN 0: bend range in semitones (GM default 2)
+    fine: f32,       // RPN 1: fine tune as a frequency multiplier
+    rpn_msb: u8,     // CC101/CC100 select; 127/127 = null
+    rpn_lsb: u8,
+    data_msb: u8, // last CC6, so CC38 can refine it
+    porta_on: bool,
+    porta_time: f32,        // CC5 glide time in seconds
+    last_freq: Option<f32>, // most recent NoteOn pitch (portamento origin)
+    soft: bool,             // CC67 una corda
+    sost_down: bool,        // CC66 sostenuto pedal position
+    vowel_authored: bool,   // CC70 selects a static vowel on choir programs
+    vowel_target: f32,      // CC70 value 0..127
+    vowel_cur: f32,         // slewed per block
+    at_authored: bool,      // channel aftertouch seen on this channel
+    at_target: f32,         // pressure 0..1, smoothed like CC11
+    at_cur: f32,
+    at_phase: f32, // aftertouch vibrato LFO phase
+    at_gain: f32,  // pressure gain lift (1.0 = none)
+    vib_mult: f32, // this block's CC1 vibrato factor, for composition
+    res: f32,      // CC71 resonance: current filter Q, slewed
+    res_target: f32,
     expr_target: f32,
     expr: f32,
     mod_target: f32, // CC1, smoothed into mod_cur like expression
@@ -305,6 +415,28 @@ impl Strip {
             bend: 1.0,
             legato: false,
             sustain: false,
+            bend_wheel: 0.0,
+            bend_range: 2.0,
+            fine: 1.0,
+            rpn_msb: 127,
+            rpn_lsb: 127,
+            data_msb: 0,
+            porta_on: false,
+            porta_time: PORTA_MIN_S,
+            last_freq: None,
+            soft: false,
+            sost_down: false,
+            vowel_authored: false,
+            vowel_target: 0.0,
+            vowel_cur: 0.0,
+            at_authored: false,
+            at_target: 0.0,
+            at_cur: 0.0,
+            at_phase: 0.0,
+            at_gain: 1.0,
+            vib_mult: 1.0,
+            res: WAH_Q,
+            res_target: WAH_Q,
             expr_target: 1.0,
             expr: 1.0,
             mod_target: 0.0,
@@ -346,7 +478,11 @@ pub struct Stats {
 struct Active {
     ch: u8,
     key: u8,
-    held: bool, // NoteOff arrived while the sustain pedal was down
+    held: bool,      // NoteOff arrived while the sustain pedal was down
+    sost: bool,      // CC66: was ringing when the sostenuto pedal went down
+    sost_held: bool, // NoteOff deferred by the sostenuto pedal
+    // CC5/CC65 portamento: (semitone offset from the target, per-block slew)
+    glide: Option<(f32, f32)>,
     voice: Box<dyn voices::Voice>,
 }
 
@@ -402,12 +538,17 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                 EvKind::NoteOn { ch, .. } | EvKind::NoteOff { ch, .. }
                     if opt.solo & (1u16 << ch) == 0 => {}
                 EvKind::NoteOn { ch, key, vel } => {
+                    // portamento origin: the channel's most recent pitch
+                    let porta_from = strips[ch as usize].last_freq;
+                    if ch != 9 {
+                        strips[ch as usize].last_freq = Some(key_freq(key));
+                    }
                     // CC68 legato: slur into the channel's one ringing voice
                     // (pedal-held voices are past their NoteOff — not slurred)
                     if ch != 9 && strips[ch as usize].legato {
-                        let mut ringing = active
-                            .iter_mut()
-                            .filter(|a| a.ch == ch && !a.held && !a.voice.released());
+                        let mut ringing = active.iter_mut().filter(|a| {
+                            a.ch == ch && !a.held && !a.sost_held && !a.voice.released()
+                        });
                         if let (Some(a), None) = (ringing.next(), ringing.next()) {
                             if a.voice.legato_to(key, vel) {
                                 a.key = key;
@@ -415,6 +556,16 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                             }
                         }
                     }
+                    // CC67 una corda: the soft pedal softens the strike —
+                    // the scaled velocity drives the piano's brightness too
+                    let vel = if ch != 9
+                        && strips[ch as usize].soft
+                        && strips[ch as usize].program <= 7
+                    {
+                        ((vel as f32 * 0.75).round() as u8).max(1)
+                    } else {
+                        vel
+                    };
                     let seed = 0x9E37 ^ (stats.voices_spawned as u32).wrapping_mul(2654435761);
                     let voice = if ch == 9 {
                         drums::make(key, vel, sr, seed)
@@ -429,26 +580,50 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                         ))
                     };
                     if let Some(mut voice) = voice {
-                        let bend = strips[ch as usize].bend;
+                        let s = &strips[ch as usize];
+                        let bend = s.bend;
                         if bend != 1.0 {
                             voice.set_pitch(bend);
                         }
+                        if s.vowel_authored && matches!(s.program, 52..=54) {
+                            let (f, q, g) = vowel_at(s.vowel_cur);
+                            voice.set_vowel(f, q, g);
+                        }
+                        // CC65 portamento: the fresh (normally-attacked)
+                        // voice starts at the previous pitch and glides in
+                        let glide = if ch != 9 && s.porta_on {
+                            porta_from.and_then(|from| {
+                                let semis = 12.0 * (from / key_freq(key)).log2();
+                                (semis.abs() > 1e-3).then(|| {
+                                    let k = 1.0
+                                        - (-(BLOCK as f32) / (s.porta_time.max(1e-3) * sr)).exp();
+                                    voice.set_pitch(s.bend * 2f32.powf(semis / 12.0));
+                                    (semis, k)
+                                })
+                            })
+                        } else {
+                            None
+                        };
                         active.push(Active {
                             ch,
                             key,
                             held: false,
+                            sost: false,
+                            sost_held: false,
+                            glide,
                             voice,
                         });
                         stats.voices_spawned += 1;
                     }
                 }
                 EvKind::NoteOff { ch, key } => {
-                    if let Some(a) = active
-                        .iter_mut()
-                        .find(|a| a.ch == ch && a.key == key && !a.held && !a.voice.released())
-                    {
+                    if let Some(a) = active.iter_mut().find(|a| {
+                        a.ch == ch && a.key == key && !a.held && !a.sost_held && !a.voice.released()
+                    }) {
                         if ch != 9 && strips[ch as usize].sustain {
                             a.held = true; // CC64: the pedal keeps it ringing
+                        } else if ch != 9 && a.sost {
+                            a.sost_held = true; // CC66: sostenuto defers it
                         } else {
                             a.voice.note_off();
                         }
@@ -464,6 +639,42 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                             s.mod_target = v;
                             s.mod_authored = true;
                         }
+                        5 => s.porta_time = PORTA_MIN_S * (PORTA_MAX_S / PORTA_MIN_S).powf(v),
+                        6 | 38 => {
+                            // RPN data entry (MSB, optionally refined by LSB)
+                            if num == 6 {
+                                s.data_msb = val;
+                            }
+                            let (msb, lsb) = if num == 6 {
+                                (val, 0)
+                            } else {
+                                (s.data_msb, val)
+                            };
+                            match (s.rpn_msb, s.rpn_lsb) {
+                                (0, 0) => {
+                                    // RPN 0: pitch-bend range, semitones + cents
+                                    s.bend_range = msb.clamp(1, 24) as f32 + lsb as f32 / 100.0;
+                                }
+                                (0, 1) => {
+                                    // RPN 1: fine tune. MSB-only reduces to
+                                    // cents = (v - 64) * 100 / 64.
+                                    let raw = ((msb as i32) << 7 | lsb as i32) - 8192;
+                                    let cents = raw as f32 * (100.0 / 8192.0);
+                                    s.fine = 2f32.powf(cents / 1200.0);
+                                }
+                                _ => {}
+                            }
+                            if matches!((s.rpn_msb, s.rpn_lsb), (0, 0) | (0, 1)) {
+                                // recompose the channel multiplier and push it
+                                // to everything already sounding
+                                s.bend =
+                                    2f32.powf(s.bend_wheel * (s.bend_range * 0.5) / 12.0) * s.fine;
+                                let mult = s.bend;
+                                for a in active.iter_mut().filter(|a| a.ch == ch) {
+                                    a.voice.set_pitch(mult);
+                                }
+                            }
+                        }
                         7 => s.volume = v * v,
                         10 => {
                             s.pan = v;
@@ -475,13 +686,61 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                             s.sustain = val >= 64;
                             if !s.sustain {
                                 // pedal up: everything it was holding lets go
+                                // (unless the sostenuto pedal also has it)
                                 for a in active.iter_mut().filter(|a| a.ch == ch && a.held) {
                                     a.held = false;
-                                    a.voice.note_off();
+                                    if a.sost {
+                                        a.sost_held = true;
+                                    } else {
+                                        a.voice.note_off();
+                                    }
                                 }
                             }
                         }
+                        65 => s.porta_on = val >= 64,
+                        66 => {
+                            let down = val >= 64;
+                            if down && !s.sost_down {
+                                // capture exactly the notes ringing now
+                                for a in active
+                                    .iter_mut()
+                                    .filter(|a| a.ch == ch && !a.voice.released())
+                                {
+                                    a.sost = true;
+                                }
+                            } else if !down && s.sost_down {
+                                for a in active.iter_mut().filter(|a| a.ch == ch && a.sost) {
+                                    a.sost = false;
+                                    if a.sost_held {
+                                        a.sost_held = false;
+                                        if s.sustain {
+                                            a.held = true; // CC64 takes over
+                                        } else {
+                                            a.voice.note_off();
+                                        }
+                                    }
+                                }
+                            }
+                            s.sost_down = down;
+                        }
+                        67 => s.soft = val >= 64,
                         68 => s.legato = val >= 64,
+                        70 => {
+                            // choir vowel select; ringing notes crossfade to it
+                            if !s.vowel_authored {
+                                s.vowel_cur = val as f32;
+                            }
+                            s.vowel_target = val as f32;
+                            s.vowel_authored = true;
+                        }
+                        71 => {
+                            s.res_target = RES_MIN_Q * (RES_MAX_Q / RES_MIN_Q).powf(v);
+                            if s.wah.is_none() {
+                                // resonance needs the filter in the path; it
+                                // enters wide open and slews from there
+                                s.wah = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                            }
+                        }
                         74 => {
                             s.cutoff_target = WAH_MIN_HZ * (WAH_MAX_HZ / WAH_MIN_HZ).powf(v);
                             if val < 127 && s.wah.is_none() {
@@ -493,15 +752,26 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                         91 => s.reverb_send = v,
                         93 => s.chorus_send = v,
                         94 => s.delay_send = v,
+                        100 => s.rpn_lsb = val,
+                        101 => s.rpn_msb = val,
                         _ => {}
                     }
                 }
                 EvKind::Bend { ch, semis } => {
-                    let mult = 2f32.powf(semis / 12.0);
-                    strips[ch as usize].bend = mult;
+                    // `semis` is decoded at the GM ±2 default; rescale by the
+                    // channel's RPN 0 range and compose the RPN 1 fine tune
+                    let s = &mut strips[ch as usize];
+                    s.bend_wheel = semis;
+                    let mult = 2f32.powf(semis * (s.bend_range * 0.5) / 12.0) * s.fine;
+                    s.bend = mult;
                     for a in active.iter_mut().filter(|a| a.ch == ch) {
                         a.voice.set_pitch(mult);
                     }
+                }
+                EvKind::Aftertouch { ch, val } => {
+                    let s = &mut strips[ch as usize];
+                    s.at_target = val as f32 / 127.0;
+                    s.at_authored = true;
                 }
                 EvKind::Prog { ch, prog } => {
                     let s = &mut strips[ch as usize];
@@ -583,14 +853,62 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
                 }
                 // vibrato multiplies on top of the channel's bend multiplier;
                 // the final pass (m = 0) snaps pitch back to the bare bend
-                let mult =
-                    strip.bend * 2f32.powf(m * VIB_DEPTH_CENTS / 1200.0 * strip.vib_phase.sin());
+                let factor = 2f32.powf(m * VIB_DEPTH_CENTS / 1200.0 * strip.vib_phase.sin());
+                strip.vib_mult = factor; // aftertouch/glides compose with it
+                let mult = strip.bend * factor;
                 for a in active.iter_mut().filter(|a| a.ch == ch) {
                     a.voice.set_pitch(mult);
                 }
                 strip.mod_engaged = on;
             } else {
                 strip.mod_engaged = false;
+            }
+        }
+
+        // v0.7 authored controllers: CC70 vowel morph, channel aftertouch,
+        // CC5/65 portamento glides. Every branch is gated on authored state,
+        // so files that never send them render bit-identically to v0.6.
+        for (ci, strip) in strips.iter_mut().enumerate() {
+            if ci == 9 {
+                continue;
+            }
+            let ch = ci as u8;
+            // CC70: slew the vowel position and retarget ringing formants;
+            // the voice's own control-rate smoothing removes any zipper
+            if strip.vowel_authored && matches!(strip.program, 52..=54) {
+                strip.vowel_cur += expr_smooth * (strip.vowel_target - strip.vowel_cur);
+                let (f, q, g) = vowel_at(strip.vowel_cur);
+                for a in active.iter_mut().filter(|a| a.ch == ch) {
+                    a.voice.set_vowel(f, q, g);
+                }
+            }
+            // channel aftertouch: pressure smoothed like CC11, adding
+            // vibrato depth and a gain lift — a crescendo inside the note
+            let mut at_vib = 1.0f32;
+            if strip.at_authored && aftertouch_family(strip.program) {
+                strip.at_cur += expr_smooth * (strip.at_target - strip.at_cur);
+                strip.at_gain = 10f32.powf(strip.at_cur * AT_GAIN_DB / 20.0);
+                strip.at_phase += TAU * AT_VIB_RATE_HZ * n as f32 / sr;
+                if strip.at_phase > TAU {
+                    strip.at_phase -= TAU;
+                }
+                at_vib = 2f32.powf(strip.at_cur * AT_VIB_CENTS / 1200.0 * strip.at_phase.sin());
+                let mult = strip.bend * strip.vib_mult * at_vib;
+                for a in active.iter_mut().filter(|a| a.ch == ch) {
+                    a.voice.set_pitch(mult);
+                }
+            }
+            // portamento: each gliding voice approaches its own pitch
+            for a in active.iter_mut().filter(|a| a.ch == ch) {
+                if let Some((semis, k)) = &mut a.glide {
+                    *semis -= *k * *semis;
+                    let done = semis.abs() < 0.005;
+                    let gm = if done { 1.0 } else { 2f32.powf(*semis / 12.0) };
+                    a.voice.set_pitch(strip.bend * strip.vib_mult * at_vib * gm);
+                    if done {
+                        a.glide = None;
+                    }
+                }
             }
         }
 
@@ -623,16 +941,17 @@ pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
             }
             if let Some(wah) = &mut strip.wah {
                 // CC74 brightness: on the dry path before the sends tap it,
-                // so the wah colours the reverb and echo too; the cutoff
-                // slews per block so a riding CC74 LFO doesn't zipper
+                // so the wah colours the reverb and echo too; the cutoff and
+                // CC71 resonance slew per block so riding CCs don't zipper
                 strip.cutoff += wah_smooth * (strip.cutoff_target - strip.cutoff);
-                wah.retune_lowpass(strip.cutoff, WAH_Q, sr);
+                strip.res += wah_smooth * (strip.res_target - strip.res);
+                wah.retune_lowpass(strip.cutoff, strip.res, sr);
                 for x in buf[..n].iter_mut() {
                     *x = wah.process(*x);
                 }
             }
             strip.expr += expr_smooth * (strip.expr_target - strip.expr);
-            let g = strip.volume * strip.expr;
+            let g = strip.volume * strip.expr * strip.at_gain;
             if g < 1e-6 {
                 continue;
             }
@@ -1104,5 +1423,433 @@ mod tests {
         let (out2, stats2) = render(&song, &opt);
         assert_eq!(stats2.voices_spawned, 1);
         assert!(out2.iter().any(|&x| x != 0.0));
+    }
+
+    // ---- v0.7 authored-controller checks on real rendered audio -----------
+
+    /// Mean fundamental over a segment: lowpass to the fundamental, then
+    /// count rising zero-crossings per second.
+    fn mean_freq(seg: &[f32], sr: f32) -> f32 {
+        let mut lp1 = OnePole::lowpass(700.0, sr);
+        let mut lp2 = OnePole::lowpass(700.0, sr);
+        let f: Vec<f32> = seg.iter().map(|&x| lp2.process(lp1.process(x))).collect();
+        let mut c = 0;
+        for w in f.windows(2) {
+            if w[0] <= 0.0 && w[1] > 0.0 {
+                c += 1;
+            }
+        }
+        c as f32 / (seg.len() as f32 / sr)
+    }
+
+    /// Fraction of a signal's energy above `hz`.
+    fn energy_above(sig: &[f32], hz: f32, sr: f32) -> f64 {
+        let mut hp = Biquad::highpass(hz, 0.7, sr);
+        let (mut hi, mut total) = (0.0f64, 0.0f64);
+        for &x in sig {
+            let y = hp.process(x);
+            hi += (y * y) as f64;
+            total += (x * x) as f64;
+        }
+        hi / total.max(1e-12)
+    }
+
+    /// Fraction of a signal's energy in a band around `center`.
+    fn band_frac(sig: &[f32], center: f32, q: f32, sr: f32) -> f64 {
+        let mut bp = Biquad::bandpass(center, q, sr);
+        let (mut band, mut total) = (0.0f64, 0.0f64);
+        for &x in sig {
+            let y = bp.process(x);
+            band += (y * y) as f64;
+            total += (x * x) as f64;
+        }
+        band / total.max(1e-12)
+    }
+
+    fn render_choir_vowel(cc70: u8) -> Vec<f32> {
+        let song = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 52 }),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 93,
+                        val: 0,
+                    },
+                ), // dry: no chorus bus
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 70,
+                        val: cc70,
+                    },
+                ),
+                (
+                    0.02,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 48,
+                        vel: 90,
+                    },
+                ),
+                (2.4, EvKind::NoteOff { ch: 0, key: 48 }),
+            ],
+            2.5,
+        );
+        left(&render(&song, &test_opts(44100.0)).0)
+    }
+
+    /// CC70 = 84 ("ah") opens the choir's upper formants (gains 0.60/0.35)
+    /// far past CC70 = 0 ("mm", gains 0.30/0.10) — a measurable spectral
+    /// shift on the sustained vowel, not just a level change.
+    #[test]
+    fn cc70_vowel_morph_opens_formants() {
+        let sr = 44100.0;
+        let mm = render_choir_vowel(0);
+        let ah = render_choir_vowel(84);
+        // measure well after the onset morph has settled to the CC70 vowel
+        let (a, b) = ((1.0 * sr) as usize, (2.0 * sr) as usize);
+        let f_mm = energy_above(&mm[a..b], 1500.0, sr);
+        let f_ah = energy_above(&ah[a..b], 1500.0, sr);
+        assert!(
+            f_ah > 1.5 * f_mm,
+            "vowel didn't open: mm {f_mm} vs ah {f_ah}"
+        );
+    }
+
+    /// RPN 0 rescales the pitch-bend range and RPN 1 fine-tune is a constant
+    /// pitch multiplier — both read off a plucked A4's rendered pitch.
+    #[test]
+    fn rpn_bend_range_and_fine_tune() {
+        let sr = 44100.0;
+        let cc = |num, val| EvKind::Cc { ch: 0, num, val };
+        let render_freq = |setup: Vec<(f64, EvKind)>, win: (f32, f32)| -> f32 {
+            let mut ev = vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 25 }),
+                (0.0, cc(93, 0)),
+                (0.0, cc(94, 0)),
+            ];
+            ev.extend(setup);
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 110,
+                },
+            ));
+            ev.push((2.5, EvKind::NoteOff { ch: 0, key: 69 }));
+            let mono = left(&render(&test_song(ev, 2.6), &test_opts(sr)).0);
+            mean_freq(&mono[(win.0 * sr) as usize..(win.1 * sr) as usize], sr)
+        };
+        // same half-deflection wheel; GM default range 2 vs RPN-widened 12
+        let win = (0.25, 0.7);
+        let narrow = render_freq(vec![(0.04, EvKind::Bend { ch: 0, semis: 1.0 })], win);
+        let wide = render_freq(
+            vec![
+                (0.01, cc(101, 0)),
+                (0.01, cc(100, 0)),
+                (0.01, cc(6, 12)),
+                (0.04, EvKind::Bend { ch: 0, semis: 1.0 }),
+            ],
+            win,
+        );
+        // range 2 -> +1 semitone (~466 Hz); range 12 -> +6 semitones (~622 Hz)
+        assert!((narrow - 466.2).abs() < 12.0, "narrow bend: {narrow} Hz");
+        assert!((wide - 622.3).abs() < 20.0, "wide bend: {wide} Hz");
+        // fine tune: RPN 1, +50 cents (MSB 96, LSB 0) with no wheel
+        let plain = render_freq(vec![], win);
+        let fine = render_freq(
+            vec![(0.01, cc(101, 0)), (0.01, cc(100, 1)), (0.01, cc(6, 96))],
+            win,
+        );
+        let ratio = fine / plain;
+        assert!(
+            (ratio - 2f32.powf(50.0 / 1200.0)).abs() < 0.008,
+            "fine-tune ratio {ratio} (plain {plain} -> fine {fine})"
+        );
+    }
+
+    /// CC5/CC65 portamento spawns a fresh, normally-attacked voice that
+    /// starts at the previous note's pitch and glides to its own target —
+    /// distinct from CC68 legato, which retunes the ringing voice in place.
+    #[test]
+    fn portamento_glides_from_previous_pitch() {
+        let sr = 44100.0;
+        let cc = |num, val| EvKind::Cc { ch: 0, num, val };
+        let song = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 25 }),
+                (0.0, cc(93, 0)),
+                (0.0, cc(94, 0)),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 69,
+                        vel: 100,
+                    },
+                ), // A4 origin
+                (0.5, EvKind::NoteOff { ch: 0, key: 69 }),
+                (1.0, cc(65, 127)), // portamento on
+                (1.0, cc(5, 109)),  // glide time ~0.3 s
+                (
+                    2.5,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 57,
+                        vel: 110,
+                    },
+                ), // A3 target
+                (4.2, EvKind::NoteOff { ch: 0, key: 57 }),
+            ],
+            4.5,
+        );
+        let (stereo, stats) = render(&song, &test_opts(sr));
+        // a normal attack, not a legato retune: two distinct voices
+        assert_eq!(stats.voices_spawned, 2);
+        let mono = left(&stereo);
+        let win = |t0: f32, t1: f32| mean_freq(&mono[(t0 * sr) as usize..(t1 * sr) as usize], sr);
+        let early = win(2.55, 2.68); // just after onset: still near 440
+        let late = win(3.8, 4.1); // settled at the A3 target ~220
+        assert!(early > 320.0, "glide didn't start high: {early} Hz");
+        assert!(
+            (late - 220.0).abs() < 12.0,
+            "glide didn't reach target: {late} Hz"
+        );
+    }
+
+    fn render_pluck_resonance(cc71: u8) -> Vec<f32> {
+        let song = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 25 }),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 93,
+                        val: 0,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 94,
+                        val: 0,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 74,
+                        val: 41,
+                    },
+                ), // cutoff ~990 Hz
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 71,
+                        val: cc71,
+                    },
+                ),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 64,
+                        vel: 110,
+                    },
+                ), // E4, 3rd ~990
+                (1.5, EvKind::NoteOff { ch: 0, key: 64 }),
+            ],
+            1.6,
+        );
+        left(&render(&song, &test_opts(44100.0)).0)
+    }
+
+    /// CC71 raises the CC74 filter's Q: with the cutoff parked on the note's
+    /// 3rd harmonic, high resonance builds a peak there that low resonance
+    /// does not.
+    #[test]
+    fn cc71_resonance_builds_a_peak() {
+        let sr = 44100.0;
+        let flat = render_pluck_resonance(0); // Q ~0.7
+        let peaky = render_pluck_resonance(127); // Q ~8.0
+        let (a, b) = ((0.3 * sr) as usize, (1.4 * sr) as usize);
+        let e_flat = band_frac(&flat[a..b], 990.0, 4.0, sr);
+        let e_peaky = band_frac(&peaky[a..b], 990.0, 4.0, sr);
+        assert!(
+            e_peaky > 1.5 * e_flat,
+            "resonance built no peak: flat {e_flat} vs peaky {e_peaky}"
+        );
+    }
+
+    fn render_bowed_aftertouch(at: Option<u8>) -> Vec<f32> {
+        let mut ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 40 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 90,
+                },
+            ),
+        ];
+        if let Some(v) = at {
+            ev.push((0.1, EvKind::Aftertouch { ch: 0, val: v })); // pressure mid-note
+        }
+        ev.push((2.4, EvKind::NoteOff { ch: 0, key: 69 }));
+        left(&render(&test_song(ev, 2.5), &test_opts(44100.0)).0)
+    }
+
+    /// Channel aftertouch swells a held bowed note: a gain bloom (~+2.5 dB)
+    /// and deeper pitch vibrato than the voice's own.
+    #[test]
+    fn aftertouch_swells_gain_and_vibrato() {
+        let sr = 44100.0;
+        let plain = render_bowed_aftertouch(None);
+        let pressed = render_bowed_aftertouch(Some(127));
+        let (a, b) = ((1.5 * sr) as usize, (2.2 * sr) as usize);
+        let ratio = rms(&pressed[a..b]) / rms(&plain[a..b]).max(1e-9);
+        assert!(
+            (1.15..1.6).contains(&ratio),
+            "aftertouch gain bloom off: {ratio}x"
+        );
+        let sp_plain = cycle_freq_spread(&plain[a..b], sr);
+        let sp_press = cycle_freq_spread(&pressed[a..b], sr);
+        assert!(
+            sp_press > sp_plain + 3.0,
+            "no aftertouch vibrato: plain {sp_plain} Hz vs pressed {sp_press} Hz"
+        );
+    }
+
+    /// CC66 sostenuto holds only the notes ringing when the pedal went down:
+    /// a note struck *after* pedal-down is not sustained (unlike CC64), and
+    /// the captured note releases when the pedal lifts.
+    #[test]
+    fn cc66_sostenuto_holds_only_captured_notes() {
+        let sr = 44100.0;
+        let cc = |num, val| EvKind::Cc { ch: 0, num, val };
+        // captured: note rings, THEN the pedal goes down over it
+        let captured = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 60,
+                        vel: 100,
+                    },
+                ),
+                (0.3, cc(66, 127)), // pedal down captures the ringing note
+                (0.5, EvKind::NoteOff { ch: 0, key: 60 }), // deferred by sostenuto
+                (2.0, cc(66, 0)),   // pedal up releases it
+            ],
+            3.5,
+        );
+        // after: the pedal is already down when the note is struck
+        let after = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+                (0.05, cc(66, 127)), // pedal down over nothing
+                (
+                    0.3,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 60,
+                        vel: 100,
+                    },
+                ),
+                (0.5, EvKind::NoteOff { ch: 0, key: 60 }), // not captured: dies now
+                (2.5, cc(66, 0)),
+            ],
+            3.5,
+        );
+        let cap = left(&render(&captured, &test_opts(sr)).0);
+        let aft = left(&render(&after, &test_opts(sr)).0);
+        let w = |sig: &[f32], t0: f32, t1: f32| rms(&sig[(t0 * sr) as usize..(t1 * sr) as usize]);
+        let cap_mid = w(&cap, 1.4, 1.9);
+        let aft_mid = w(&aft, 1.4, 1.9);
+        assert!(
+            cap_mid > 10.0 * aft_mid.max(1e-9),
+            "sostenuto didn't select: captured {cap_mid} vs after {aft_mid}"
+        );
+        // pedal up at 2.5 s: the captured note lets go and decays
+        let cap_after = w(&cap, 3.0, 3.4);
+        assert!(
+            cap_after < 0.05 * cap_mid,
+            "pedal-up didn't release: {cap_after} vs {cap_mid}"
+        );
+    }
+
+    fn render_piano_una_corda(soft: bool) -> Vec<f32> {
+        let mut ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 0 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+        ];
+        if soft {
+            ev.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 67,
+                    val: 127,
+                },
+            )); // una corda on
+        }
+        ev.push((
+            0.05,
+            EvKind::NoteOn {
+                ch: 0,
+                key: 60,
+                vel: 100,
+            },
+        ));
+        ev.push((3.0, EvKind::NoteOff { ch: 0, key: 60 }));
+        left(&render(&test_song(ev, 3.5), &test_opts(44100.0)).0)
+    }
+
+    /// CC67 una corda softens the piano strike: the scaled velocity makes it
+    /// both quieter and duller (velocity drives the model's brightness).
+    #[test]
+    fn cc67_una_corda_softens_piano() {
+        let sr = 44100.0;
+        let normal = render_piano_una_corda(false);
+        let soft = render_piano_una_corda(true);
+        let (a, b) = ((0.06 * sr) as usize, (0.5 * sr) as usize);
+        let r_norm = rms(&normal[a..b]);
+        let r_soft = rms(&soft[a..b]);
+        assert!(
+            r_soft < 0.9 * r_norm,
+            "una corda not quieter: {r_soft} vs {r_norm}"
+        );
+        let hf_norm = energy_above(&normal[a..b], 3000.0, sr);
+        let hf_soft = energy_above(&soft[a..b], 3000.0, sr);
+        assert!(
+            hf_soft < 0.85 * hf_norm,
+            "una corda not duller: soft {hf_soft} vs normal {hf_norm}"
+        );
     }
 }

@@ -38,6 +38,11 @@ pub trait Voice {
     /// slews these toward the CC1 mod-wheel target so the Leslie rotor has
     /// real inertia. Voices without a tremulant ignore it.
     fn set_trem(&mut self, _rate_hz: f32, _depth: f32) {}
+    /// CC70 vowel morph (formant voices): absolute formant frequency, Q and
+    /// gain targets. The engine slews the vowel position per block and the
+    /// voice's own control-rate formant smoothing removes any residual
+    /// zipper. Voices without formants ignore it.
+    fn set_vowel(&mut self, _freqs: [f32; 3], _qs: [f32; 3], _gains: [f32; 3]) {}
 }
 
 fn t60_mul(t60: f32, sr: f32) -> f32 {
@@ -866,6 +871,7 @@ enum StackFilter {
 pub struct SawStack {
     layers: Vec<Layer>,
     base_f: f32,
+    bend: f32, // channel pitch multiplier (bend / fine-tune / aftertouch vibrato)
     filt: StackFilter,
     env: Adsr,
     vib_depth: f32,
@@ -919,6 +925,7 @@ impl SawStack {
         SawStack {
             layers,
             base_f: f,
+            bend: 1.0,
             filt,
             env,
             vib_depth: vib.1,
@@ -948,9 +955,10 @@ impl SawStack {
                 0.0
             };
             let drift = layer.drift.next();
-            layer
-                .osc
-                .set_freq(self.base_f * layer.ratio * (1.0 + vib + drift), sr);
+            layer.osc.set_freq(
+                self.base_f * layer.ratio * self.bend * (1.0 + vib + drift),
+                sr,
+            );
         }
         match &mut self.filt {
             StackFilter::Formant {
@@ -1014,6 +1022,25 @@ impl Voice for SawStack {
 
     fn released(&self) -> bool {
         self.env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        // applied at control rate on top of each layer's detune/vibrato/drift
+        self.bend = mult;
+    }
+
+    fn set_vowel(&mut self, freqs: [f32; 3], qs: [f32; 3], gains: [f32; 3]) {
+        if let StackFilter::Formant {
+            tgt,
+            qs: q,
+            gains: g,
+            ..
+        } = &mut self.filt
+        {
+            *tgt = freqs;
+            *q = qs;
+            *g = gains;
+        }
     }
 }
 

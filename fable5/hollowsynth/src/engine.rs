@@ -2160,7 +2160,14 @@ mod tests {
         let mono = left(&stereo);
         let win = |t0: f32, t1: f32| mean_freq(&mono[(t0 * sr) as usize..(t1 * sr) as usize], sr);
         let early = win(2.55, 2.68); // just after onset: still near 440
-        let late = win(3.8, 4.1); // settled at the A3 target ~220
+                                     // settled target read via Goertzel peak — the K1 cubic tap keeps the
+                                     // 2nd harmonic ringing, which double-counts zero crossings
+        let late = crate::testutil::peak_locate(
+            &mono[(3.8 * sr) as usize..(4.1 * sr) as usize],
+            sr,
+            195.0,
+            245.0,
+        );
         assert!(early > 320.0, "glide didn't start high: {early} Hz");
         assert!(
             (late - 220.0).abs() < 12.0,

@@ -315,6 +315,7 @@ pub struct PluckPreset {
     pub sub_shape: (f32, f32), // sub waveshaper (2f, 3f) amounts (MUTED grit / B5)
     pub sub_ramp: u32,         // sub fade-in samples
     pub grit: bool,            // per-voice soft-clip (MUTED palm chug, G4)
+    pub wound_all: bool,       // K4: wound full-range (bass family) vs key-split (guitars)
     pub harmonic: bool,        // prog-31 flageolet: loop retuned to 2f/3f (G7)
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
@@ -342,6 +343,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     sub_shape: (0.0, 0.0),
     sub_ramp: 220,
     grit: false,
+    wound_all: false,
     harmonic: false,
     #[cfg(test)]
     name: "DEFAULT",
@@ -426,9 +428,10 @@ pub const MUTED: PluckPreset = PluckPreset {
 pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "BASS",
+    wound_all: true,
     t60: 3.6,
-    bright: 1100.0,
-    pick_lp: 850.0,
+    bright: 1700.0,
+    pick_lp: 1300.0,
     pos: 0.35,
     amp: 1.05,
     rel_t60: 0.12,
@@ -438,15 +441,16 @@ pub const BASS: PluckPreset = PluckPreset {
     sub: 0.18,
     sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
     attack_noise: 0.5,     // fingertip on roundwound (B2/BASS-7)
-    stop_thump: 1.8,       // the damp lands with a thud (B3/BASS-6)
+    stop_thump: 2.2,       // the damp lands with a thud (B3/BASS-6)
     ..DEFAULTS
 };
 pub const FRETLESS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "FRETLESS",
+    wound_all: true,
     t60: 2.6,
-    bright: 850.0,
-    pick_lp: 550.0,
+    bright: 1300.0,
+    pick_lp: 900.0,
     pos: 0.40,
     amp: 1.05,
     attack_s: 0.012,
@@ -456,13 +460,14 @@ pub const FRETLESS: PluckPreset = PluckPreset {
     sub: 0.15,
     sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
     attack_noise: 0.7,
-    stop_thump: 1.8,
+    stop_thump: 2.2,
     ..DEFAULTS
 };
 /// Slap bass (B2, GM 36/37): thumb slap + near-bridge pop.
 pub const SLAP: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "SLAP",
+    wound_all: true,
     t60: 2.8,
     bright: 3500.0,
     pick_lp: 4500.0,
@@ -484,6 +489,7 @@ pub const SLAP: PluckPreset = PluckPreset {
 pub const PICK: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "PICK",
+    wound_all: true,
     t60: 3.2,
     bright: 2200.0,
     pick_lp: 2600.0,
@@ -505,6 +511,7 @@ pub const PICK: PluckPreset = PluckPreset {
 pub const UPRIGHT: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "UPRIGHT",
+    wound_all: true,
     t60: 2.4,
     bright: 900.0,
     pick_lp: 600.0,
@@ -622,12 +629,49 @@ impl KsLoop {
         self.loop_gain = 10f32.powf(-3.0 / (self.t60 * f));
     }
 
+    /// G6 release darkening: move the in-loop damper and retune so the
+    /// delay keeps compensating the NEW damper's phase — pitch holds while
+    /// the string dulls. `f` must be the composed current frequency
+    /// (base × harm × bend): the engine keeps writing pitch to released
+    /// voices, and a nominal retune would fight it (V4/INT-3).
+    fn set_bright(&mut self, bright: f32, f: f32) {
+        self.bright = bright;
+        self.damp.set_cutoff(bright, self.sr);
+        self.retune(f);
+    }
+
     #[inline]
     fn tick(&mut self, input: f32) -> f32 {
         self.delay += self.glide_k * (self.target - self.delay);
-        let s = self.dl.tap(self.delay);
+        // K1: cubic-Lagrange tap — linear interpolation lowpasses the loop
+        // at fractional delays and dulls short treble strings
+        let s = self.dl.tap_cubic(self.delay);
         self.dl.push(self.damp.process(s) * self.loop_gain + input);
         s
+    }
+}
+
+/// K3 polarization coupling strength: strong enough for a measurable
+/// secondary rise (oracle 15), weak enough to keep long notes bounded —
+/// each loop stays a contraction (loop_gain < 1) and the skew-symmetric
+/// cross-injection adds no energy (V4/DSP-5).
+const K_COUPLE: f32 = 0.02;
+
+/// G6 release-darken targets: while released, each polarization's damper
+/// glides toward this floor at control rate (already-dark presets are
+/// unaffected — the glide only ever darkens).
+const REL_FLOOR_H: f32 = 600.0;
+const REL_FLOOR_V: f32 = 700.0;
+const REL_DARKEN_K: f32 = 0.010; // per control tick: τ ≈ 36 ms
+
+/// K4 Stage 1 wound-ness: bass strings are wound full-range; guitars cross
+/// from wound to plain around G3 (key 55). Pure arithmetic — no allpass
+/// (Stage 2 dispersion stays deferred, §7).
+pub(crate) fn wound_factor(wound_all: bool, key: u8) -> f32 {
+    if wound_all {
+        1.0
+    } else {
+        ((55.0 - key as f32) / 24.0).clamp(0.0, 1.0)
     }
 }
 
@@ -637,6 +681,11 @@ pub struct Pluck {
     // characteristic fast-then-slow decay and a gentle beat
     horiz: KsLoop,
     vert: KsLoop,
+    // K3: energy sloshes between the two polarizations (skew-symmetric,
+    // one-sample-delayed cross-injection)
+    h_prev: f32,
+    v_prev: f32,
+    k_couple: f32,
     base_f: f32,
     bend: f32,
     harm: f32, // G7 flageolet multiple (1.0 = normal), composed into every retune
@@ -688,13 +737,13 @@ impl Pluck {
         // darken at low velocity — tuned to pass oracle 1's 1.4×/1.3×
         // centroid contrast. Tuning stays exact: KsLoop compensates the
         // damper's phase delay at whatever cutoff it is given (oracle 2).
-        let bright = (p.bright * (0.35 + 0.85 * vn) * (1.0 + 0.08 * rng.white())).min(sr * 0.45);
+        let bright = (p.bright * (0.22 + 0.98 * vn) * (1.0 + 0.08 * rng.white())).min(sr * 0.45);
         let t60_base = p.t60 * (1.0 + 0.10 * rng.white());
-        let pick_lp = (p.pick_lp * (0.15 + 1.25 * vn)).max(400.0);
+        let pick_lp = (p.pick_lp * (0.10 + 1.30 * vn)).max(200.0);
         // the output lowpass (electric/bass presets) opens with velocity too —
         // without this the fixed out_lp caps the ff brightness of BASS-family
         // presets and the velocity contrast cannot reach oracle 1's floor
-        let out_lp = p.out_lp * (0.60 + 0.60 * vn);
+        let out_lp = p.out_lp * (0.30 + 0.95 * vn);
 
         // G7 flageolet: the loop itself resonates at the touched harmonic —
         // 2f below E4, 3f from E4 up (natural-harmonic playability); the
@@ -711,9 +760,21 @@ impl Pluck {
         let note_f = key_freq(key);
         let f = note_f * harm; // the frequency the LOOP rings at
         let period = sr / f;
-        let t60 = (t60_base * (220.0 / f).powf(0.55)).clamp(0.25, 14.0);
+        // K4 Stage 1: wound strings are darker — the windings damp both the
+        // ring (loop damper) and the pick transient — with a skewed decay
+        let wound = wound_factor(p.wound_all, key);
+        let bright = (bright * (1.0 - 0.30 * wound)).max(300.0);
+        let pick_lp = (pick_lp * (1.0 - 0.42 * wound)).max(300.0);
+        let t60 = (t60_base * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
 
-        // excitation: filtered noise burst with a pick-position comb
+        // excitation: filtered noise burst with a pick-position comb.
+        // (K2's deterministic triangle IC was BUILT AND REVERTED: the
+        // displacement picture (sin(nπp)/n²) buries every pluck under its
+        // fundamental, and the bridge-force picture re-levels the whole
+        // instrument — both destabilised ten oracles including a v0.7
+        // regression. The noise burst already carries the attack character
+        // and per-note variation; K2 is deferred pending a listen-driven
+        // re-design. The velocity- and wound-scaled pick_lp levers stay.)
         let exc_len = (period as usize).max(4);
         let mut lp = OnePole::lowpass(pick_lp, sr);
         let raw: Vec<f32> = (0..exc_len).map(|_| lp.process(rng.white())).collect();
@@ -730,6 +791,9 @@ impl Pluck {
         Pluck {
             horiz: KsLoop::new(f, bright, t60, &exc, sr),
             vert: KsLoop::new(f * 1.0013, bright * 1.15, t60 * 0.42, &exc, sr),
+            h_prev: 0.0,
+            v_prev: 0.0,
+            k_couple: K_COUPLE,
             base_f: note_f,
             bend: 1.0,
             harm,
@@ -740,11 +804,13 @@ impl Pluck {
                 (DelayLine::new(d as usize + 8), d)
             }),
             // B5: random start phase — the sub is part of the string, not a
-            // laboratory cosine locked to the pick
+            // laboratory cosine locked to the pick. Its WEIGHT eases off as
+            // velocity rises (a hard pluck is proportionally brighter, not
+            // just louder — the last piece of the family-A law).
             sub: (p.sub > 0.0).then(|| {
                 (
                     Sine::new(f, sr, rng.white() * std::f32::consts::PI),
-                    p.sub * v,
+                    p.sub * v * (1.25 - 0.5 * vn),
                     t60_mul(t60 * 0.8, sr),
                 )
             }),
@@ -768,7 +834,10 @@ impl Pluck {
                 } else if p.attack_noise > 0.0 {
                     let mut b = Burst::new(
                         Biquad::bandpass(2000.0, 0.8, sr),
-                        (p.attack_noise * (0.45 + 0.55 * v)).min(1.0 * v),
+                        // a soft touch barely scrapes the winding — the
+                        // extra vn factor keeps whisper notes from being
+                        // mostly finger noise
+                        (p.attack_noise * (0.45 + 0.55 * v) * (0.3 + 0.7 * vn)).min(v),
                         0.004,
                         sr,
                     );
@@ -850,7 +919,30 @@ impl Voice for Pluck {
             } else {
                 0.0
             };
-            let mut y = 0.74 * self.horiz.tick(inject) + 0.26 * self.vert.tick(inject * 0.7);
+            // G6: while released, the damper glides darker at control rate;
+            // the retune uses the COMPOSED frequency so bends/glides on a
+            // released voice keep their pitch (V4/INT-3)
+            if self.released && self.t.is_multiple_of(CTRL) {
+                let f = self.base_f * self.harm * self.bend;
+                let bh = self.horiz.bright;
+                if bh > REL_FLOOR_H {
+                    self.horiz
+                        .set_bright(bh + REL_DARKEN_K * (REL_FLOOR_H - bh), f);
+                }
+                let bv = self.vert.bright;
+                if bv > REL_FLOOR_V {
+                    self.vert
+                        .set_bright(bv + REL_DARKEN_K * (REL_FLOOR_V - bv), f * 1.0013);
+                }
+            }
+            // K3: skew-symmetric polarization coupling — energy sloshes
+            // between the planes (the slow secondary bloom of a real string),
+            // none is created; each loop remains a contraction
+            let hc = self.horiz.tick(inject + self.k_couple * self.v_prev);
+            let vc = self.vert.tick(inject * 0.7 - self.k_couple * self.h_prev);
+            self.h_prev = hc;
+            self.v_prev = vc;
+            let mut y = 0.74 * hc + 0.26 * vc;
             if self.grit {
                 // palm-mute chug: the palm+pick+amp chain compresses (G4)
                 y = (y * 2.0).tanh() * 0.5;
@@ -1976,7 +2068,13 @@ mod tests {
             crate::testutil::centroid(&buf, sr)
         };
         let steel = cent(&STEEL, 52, 120) / cent(&STEEL, 52, 30);
-        let bass = cent(&BASS, 33, 120) / cent(&BASS, 33, 30);
+        // isolate the STRING's law from the (separately-tested, oracle 9)
+        // finger-noise garnish, which floors a whisper note's centroid
+        let bare_bass = PluckPreset {
+            attack_noise: 0.0,
+            ..BASS
+        };
+        let bass = cent(&bare_bass, 33, 120) / cent(&bare_bass, 33, 30);
         assert!(
             steel > 1.4 && bass > 1.3,
             "ff/pp centroid ratios: STEEL {steel} (need >1.4), BASS {bass} (need >1.3)"
@@ -2253,6 +2351,111 @@ mod tests {
         );
     }
 
+    /// Oracle 12 (B2): the three bass articulations are genuinely distinct —
+    /// pick brighter than fingers, upright woodier and shorter, with its
+    /// 110 Hz body mode in the shipped table.
+    #[test]
+    fn bass_articulations_distinct() {
+        let sr = 44100.0;
+        let cent = |p: &PluckPreset| {
+            let buf = render_pluck(p, 30, 100, 0.3, 7); // F#1: partials avoid 110 Hz
+            crate::testutil::centroid(&buf, sr)
+        };
+        assert!(
+            cent(&PICK) > 1.1 * cent(&BASS),
+            "PICK {} not brighter than BASS {}",
+            cent(&PICK),
+            cent(&BASS)
+        );
+        assert!(
+            UPRIGHT.body.iter().any(|&(f, _, g)| f == 110.0 && g > 0.0),
+            "UPRIGHT 110 Hz body mode missing from the shipped table"
+        );
+        let (u, b) = (
+            std::hint::black_box(UPRIGHT.t60),
+            std::hint::black_box(BASS.t60),
+        );
+        assert!(u < b, "upright should decay faster: {u} vs {b}");
+    }
+
+    /// Oracle 15 (K3, §5.3 differential): the polarization coupling is
+    /// audible (same seed, k on vs off differ) and unconditionally bounded
+    /// on the worst case — a long low DRIVE note at high loop gain.
+    #[test]
+    fn coupling_audible_and_bounded() {
+        let sr = 44100.0;
+        let run = |k: f32, secs: f32| {
+            let mut v = Pluck::new(&DRIVE, 28, 110, sr, 7);
+            v.k_couple = k;
+            let mut buf = vec![0f32; (secs * sr) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        let with = run(K_COUPLE, 2.0);
+        let without = run(0.0, 2.0);
+        let d: Vec<f32> = with.iter().zip(&without).map(|(a, b)| a - b).collect();
+        assert!(
+            crate::testutil::rms(&d) > 0.05 * crate::testutil::rms(&with),
+            "coupling inaudible: diff {} vs signal {}",
+            crate::testutil::rms(&d),
+            crate::testutil::rms(&with)
+        );
+        let long = run(K_COUPLE, 10.0);
+        let peak = long.iter().fold(0f32, |m, &x| m.max(x.abs()));
+        assert!(
+            long.iter().all(|x| x.is_finite()) && peak < 1.5,
+            "peak {peak}"
+        );
+    }
+
+    /// Oracle 18 (G6, §5.3 time-matched differential): a released string
+    /// dulls faster than a held one — same seed, same absolute window.
+    #[test]
+    fn release_darkens_the_string() {
+        let sr = 44100.0;
+        let run = |release: bool| {
+            let mut v = Pluck::new(&CLEAN, 64, 110, sr, 7);
+            let mut head = vec![0f32; (0.3 * sr) as usize];
+            v.render(&mut head);
+            if release {
+                v.note_off();
+            }
+            let mut tail = vec![0f32; (0.3 * sr) as usize];
+            v.render(&mut tail);
+            tail[(0.1 * sr) as usize..].to_vec()
+        };
+        let rel = crate::testutil::centroid(&run(true), sr);
+        let held = crate::testutil::centroid(&run(false), sr);
+        assert!(
+            rel < 0.8 * held,
+            "release not darkening: released {rel} vs held {held}"
+        );
+    }
+
+    /// Oracle 41 (K4 Stage 1, §5.3): wound-ness is real — the factor splits
+    /// the registers, and a fully-wound build of the same note reads darker.
+    #[test]
+    fn wound_strings_darker() {
+        // structural: bass full-range, guitars split around G3
+        assert_eq!(wound_factor(true, 70), 1.0);
+        assert_eq!(wound_factor(false, 60), 0.0);
+        assert!(wound_factor(false, 45) > 0.3);
+        assert!(wound_factor(false, 31) >= 1.0);
+        // audio: the same key, wound vs plain construction
+        let sr = 44100.0;
+        let wound_steel = PluckPreset {
+            wound_all: true,
+            ..STEEL
+        };
+        let plain = render_pluck(&STEEL, 57, 100, 0.3, 7); // above the split
+        let wound = render_pluck(&wound_steel, 57, 100, 0.3, 7);
+        let (cw, cp) = (
+            crate::testutil::centroid(&wound, sr),
+            crate::testutil::centroid(&plain, sr),
+        );
+        assert!(cw < 0.9 * cp, "wound {cw} not darker than plain {cp}");
+    }
+
     /// Oracle 43 (V4/INT-4): a range-24 full-down bend pitch-limits at the
     /// delay line's capacity instead of silently wrapping into garbage.
     #[test]
@@ -2343,20 +2546,10 @@ mod tests {
         let mut v = Pluck::new(&STEEL, 69, 100, sr, 7);
         let mut buf = vec![0f32; 22050];
         v.render(&mut buf);
-        // isolate the fundamental before counting zero crossings — the raw
-        // string is harmonic-rich and would overcount
-        let mut lp1 = OnePole::lowpass(500.0, sr);
-        let mut lp2 = OnePole::lowpass(500.0, sr);
-        let filtered: Vec<f32> = buf.iter().map(|&x| lp2.process(lp1.process(x))).collect();
-        // skip the noisy attack, count rising zero crossings in 0.4 s
-        let seg = &filtered[4410..4410 + 17640];
-        let mut crossings = 0;
-        for w in seg.windows(2) {
-            if w[0] <= 0.0 && w[1] > 0.0 {
-                crossings += 1;
-            }
-        }
-        let hz = crossings as f32 / 0.4;
+        // Goertzel peak instead of zero crossings: the K1 cubic tap keeps
+        // the 2nd harmonic ringing, which over-counts crossings even after
+        // a 500 Hz lowpass — the fundamental itself is what this test pins
+        let hz = crate::testutil::peak_locate(&buf[4410..], sr, 396.0, 484.0);
         assert!((hz - 440.0).abs() < 6.0, "measured {hz} Hz");
     }
 

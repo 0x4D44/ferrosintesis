@@ -1,0 +1,76 @@
+{
+  "album": "Winter Guests",
+  "artist": "Claude Fable 5",
+  "style": "two-part instrumental in the Mike Oldfield idiom with ABBA (The Visitors, Super Trouper) and Crash Test Dummies (Mmm Mmm Mmm Mmm) guest movements",
+  "track_count": 2,
+  "total_duration_seconds": 1107.59,
+  "total_duration_minutes": 18.46,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Winter Guests, Part One",
+      "file": "midi/01 - Winter Guests, Part One.mid",
+      "duration_seconds": 566.61,
+      "duration_minutes": 9.44,
+      "movements": [
+        {
+          "name": "Frost",
+          "start_beat": 0.0,
+          "end_beat": 256.0,
+          "start_seconds": 0.0,
+          "end_seconds": 166.96,
+          "time": "0:00"
+        },
+        {
+          "name": "The Humming",
+          "start_beat": 256.0,
+          "end_beat": 544.0,
+          "start_seconds": 166.96,
+          "end_seconds": 372.67,
+          "time": "2:46"
+        },
+        {
+          "name": "Footsteps in the Hall",
+          "start_beat": 544.0,
+          "end_beat": 864.0,
+          "start_seconds": 372.67,
+          "end_seconds": 569.5,
+          "time": "6:12"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Winter Guests, Part Two",
+      "file": "midi/02 - Winter Guests, Part Two.mid",
+      "duration_seconds": 540.98,
+      "duration_minutes": 9.02,
+      "movements": [
+        {
+          "name": "Searchlight",
+          "start_beat": 0.0,
+          "end_beat": 448.0,
+          "start_seconds": 0.0,
+          "end_seconds": 227.8,
+          "time": "0:00"
+        },
+        {
+          "name": "The Glass Ballroom",
+          "start_beat": 448.0,
+          "end_beat": 896.0,
+          "start_seconds": 227.8,
+          "end_seconds": 455.59,
+          "time": "3:47"
+        },
+        {
+          "name": "Last Light",
+          "start_beat": 896.0,
+          "end_beat": 1024.0,
+          "start_seconds": 455.59,
+          "end_seconds": 541.48,
+          "time": "7:35"
+        }
+      ]
+    }
+  ]
+}

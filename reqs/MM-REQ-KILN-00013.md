@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00013 — Timpani (GM 47) needs strike dynamics and pitch glide
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Should
 - **Area:** hollowsynth / voices (timpani)
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 The timpani (GM 47) must model a real kettle strike: a short post-strike pitch

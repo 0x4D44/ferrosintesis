@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00017 — Bagpipe (109) and shanai (111) as reed voices (blocked on reed engine)
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Could
 - **Area:** hollowsynth / voices (reed)
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 GM 109 (bagpipe) and 111 (shanai) must render as reed instruments — shanai a

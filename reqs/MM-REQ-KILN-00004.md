@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00004 — Marimba (12) and xylophone (13) need wood voices, not the vibes preset
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Should
 - **Area:** hollowsynth / voices
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 GM 12 (Marimba) and 13 (Xylophone) must render with wood-bar character — a fast,

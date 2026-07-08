@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00014 — Reed organ, accordion, harmonica (GM 20-23) need reed character
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Should
 - **Area:** hollowsynth / voices (Organ)
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 GM 20 (reed organ), 21/23 (accordion, tango accordion) and 22 (harmonica) must

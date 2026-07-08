@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00011 — Fretless bass (GM 35) should have a "mwah"
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Should
 - **Area:** hollowsynth / voices (Pluck bass)
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 The fretless bass (GM 35) must have its signature vocal onset — an

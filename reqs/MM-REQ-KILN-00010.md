@@ -8,7 +8,7 @@
 - **Satisfied-by:** `$null | cargo test choir_pad_91_cc70_vowel_morph_opens_formants --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
-- **Claimed-by:** —
+- **Claimed-by:** codex-gpt5@KILN (2026-07-08T21:42:30.7521739+01:00)
 - **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement

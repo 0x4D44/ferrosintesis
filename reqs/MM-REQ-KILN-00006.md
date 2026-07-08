@@ -8,7 +8,7 @@
 - **Satisfied-by:** `$null | cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
-- **Claimed-by:** —
+- **Claimed-by:** codex-gpt5@KILN (2026-07-08T21:05:15.8273838+01:00)
 - **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement

@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `d6c452f2ca873c017232a982560bf8a927cbc65f`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `2f36bf142c64cc76a73a4cfbc08b86bbe11836b0`)
 
 ## Statement
 GM 104 (sitar), 106 (shamisen) and 107 (koto) must render with distinct plucked
@@ -98,3 +98,8 @@ Regression reviewers confirmed tracked MIDI has no 104/106/107 hits and that the
 
 Landing-hygiene reviewer found the expected pre-landing gaps: uncommitted implementation, pending req transition, pending oracle output, pending gates, and generated WAV artifacts. These were addressed before the landing commit except the ignored WAV files, which were removed after evidence capture.
 ```
+
+Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
+realtime API landed. The implementation commit became
+`2f36bf142c64cc76a73a4cfbc08b86bbe11836b0`; the package version was advanced to
+`0.8.4` because trunk already carried `0.8.3`.

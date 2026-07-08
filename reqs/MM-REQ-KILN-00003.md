@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `88ce7367bc61ddb592df336fef0157f06ac08103`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `10cc5b71406f75a5c3de6cdbb67a174e9e29a21a`)
 
 ## Statement
 GM 97 (soundtrack), 99 (atmosphere), 103 (sci-fi) must render as sustaining pad
@@ -83,3 +83,8 @@ Three read-only adversarial reviewers ran concrete refutation checks. The oracle
 and regression reviewers found no defects. The remaining dirty-tree/Accepted
 state finding was the expected pre-landing state and is addressed by this
 commit.
+
+Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
+realtime API landed. The implementation commit became
+`10cc5b71406f75a5c3de6cdbb67a174e9e29a21a`; the package version was advanced to
+`0.8.4` because trunk already carried `0.8.3`.

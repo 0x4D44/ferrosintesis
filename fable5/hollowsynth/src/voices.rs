@@ -1465,7 +1465,7 @@ pub struct SawStack {
     t: u32,
     amp: f32,
     sr: f32,
-    lead_legato: bool, // only leads slur on CC68; others re-attack (byte-identical)
+    legato_enabled: bool, // strings/choir/leads slur on CC68; pads re-attack
 }
 
 impl SawStack {
@@ -1570,7 +1570,7 @@ impl SawStack {
             t: 0,
             amp: amp * (0.4 + 0.6 * vel_amp(vel)),
             sr,
-            lead_legato: false,
+            legato_enabled: false,
         }
     }
 
@@ -1664,11 +1664,9 @@ impl Voice for SawStack {
     }
 
     fn legato_to(&mut self, key: u8, _vel: u8) -> bool {
-        // Only leads slur — strings/choir/pads return false so the engine
-        // re-attacks exactly as before (byte-identical). A slur just retunes
-        // the base frequency; the layers pick it up on the next control tick
-        // and the envelope keeps running (no fresh attack).
-        if !self.lead_legato {
+        // A slur just retunes the base frequency; the layers pick it up on the
+        // next control tick and the envelope keeps running (no fresh attack).
+        if !self.legato_enabled {
             return false;
         }
         self.base_f = key_freq(key);
@@ -1702,7 +1700,7 @@ fn vel_attack(base: f32, vel: u8) -> f32 {
 
 fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     let slow = program == 49;
-    SawStack::new(
+    let mut s = SawStack::new(
         key,
         vel,
         sr,
@@ -1721,7 +1719,9 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         None,
         0.7,
         0.22,
-    )
+    );
+    s.legato_enabled = true;
+    s
 }
 
 fn choir(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
@@ -1732,7 +1732,7 @@ fn choir(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     };
     let qs = [9.0, 10.0, 9.0];
     let start = [500.0, 1400.0, 2400.0]; // closed-mouth schwa
-    SawStack::new(
+    let mut s = SawStack::new(
         key,
         vel,
         sr,
@@ -1757,7 +1757,9 @@ fn choir(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         None,
         0.7,
         1.10,
-    )
+    );
+    s.legato_enabled = true;
+    s
 }
 
 fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
@@ -1888,7 +1890,7 @@ const LEADS: [LeadSpec; 8] = [
 /// GM synth leads (80-87): a `SawStack` voiced for a lead — fast
 /// velocity-tracked attack, short release, a velocity-tracked filter, and a
 /// pulse oscillator for the square-lead class. CC1 vibrato and CC68 legato come
-/// from the engine; `lead_legato` opts this instance into slurs.
+/// from the engine; `legato_enabled` opts this instance into slurs.
 fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     let spec = &LEADS[(program - 80) as usize];
     let cutoff = (spec.cutoff * (0.55 + 0.45 * vel_amp(vel))).min(sr * 0.45);
@@ -1909,7 +1911,7 @@ fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         0.50,
         spec.wave,
     );
-    s.lead_legato = true;
+    s.legato_enabled = true;
     s
 }
 
@@ -3186,17 +3188,19 @@ mod tests {
         assert!(r_sq < 0.35 * r_sw, "square H2/H1 {r_sq} vs saw {r_sw}");
     }
 
-    /// Oracle 6 (gate half): only leads slur; strings/choir/pads re-attack
+    /// Oracle 6 (gate half): strings/choir/leads slur; pads re-attack
     /// (byte-identity does not depend on the CC68 census).
     #[test]
-    fn legato_gated_to_leads() {
+    fn legato_gated_to_strings_choir_and_leads() {
         let sr = 44100.0;
         let mut a = strings(48, 60, 100, sr, 7);
-        let mut b = pad(89, 60, 100, sr, 7);
-        let mut c = lead(81, 60, 100, sr, 7);
-        assert!(!a.legato_to(62, 100), "strings must not slur");
-        assert!(!b.legato_to(62, 100), "pad must not slur");
-        assert!(c.legato_to(62, 100), "lead must slur");
+        let mut b = choir(52, 60, 100, sr, 7);
+        let mut c = pad(89, 60, 100, sr, 7);
+        let mut d = lead(81, 60, 100, sr, 7);
+        assert!(a.legato_to(62, 100), "strings must slur");
+        assert!(b.legato_to(62, 100), "choir must slur");
+        assert!(!c.legato_to(62, 100), "pad must not slur");
+        assert!(d.legato_to(62, 100), "lead must slur");
     }
 
     /// Oracle 8: the lead still answers pitch bend via the shared set_pitch.

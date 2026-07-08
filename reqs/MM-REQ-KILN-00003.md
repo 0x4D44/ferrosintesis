@@ -42,26 +42,33 @@ assertion `left == right` failed: program 97 should route to pad
 Passing oracle for Gate 2:
 
 ```text
-$null | deltic timeout 180 cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml
+$null | cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml
 test voices::tests::synth_fx_97_99_101_103_sustain_as_pads ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.06s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.05s
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
-Additional local gates:
+Additional local gates after rebasing onto `origin/main` at `c0cd5cd`:
 
 ```text
 $null | deltic timeout 180 cargo test gm_routing_pins_voice_kinds --manifest-path fable5/hollowsynth/Cargo.toml
 test testutil::guards::gm_routing_pins_voice_kinds ... ok
 
-deltic timeout 120 cargo fmt --check
+deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
 ok
 
-$null | deltic timeout 600 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-test result: ok. 93 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.61s
+$null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
+test result: ok. 105 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.81s
 
-$null | deltic timeout 600 cargo clippy --all-targets --manifest-path fable5/hollowsynth/Cargo.toml -- -D warnings
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.78s
+$null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.89s
+
+deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
+Finished `release` profile [optimized] target(s) in 3.91s
 ```
 
 MIDI scan:

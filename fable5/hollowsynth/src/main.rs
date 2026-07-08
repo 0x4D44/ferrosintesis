@@ -9,17 +9,7 @@
 //! `--solo 11` (or `--solo 12,13`) renders only the listed 0-based
 //! channels — verification stems — keeping the tempo map intact.
 
-mod drums;
-mod dsp;
-mod engine;
-mod midi;
-mod reverb;
-mod sampler;
-#[cfg(test)]
-mod testutil;
-mod voices;
-mod wav;
-
+use hollowsynth::offline::{self, Options};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -94,7 +84,7 @@ fn main() {
     let input = input.unwrap_or_else(|| usage());
     let output = output.unwrap_or_else(|| input.with_extension("wav"));
 
-    let song = match midi::load(&input) {
+    let song = match offline::load(&input) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("error: {e}");
@@ -104,26 +94,26 @@ fn main() {
     // echo time: a dotted quaver at the opening tempo, unless overridden
     let delay_s = match delay_ms {
         Some(ms) => ms / 1000.0,
-        None => (0.75 * 60.0 / song.initial_bpm as f32).clamp(0.20, 0.62),
+        None => (0.75 * 60.0 / song.initial_bpm() as f32).clamp(0.20, 0.62),
     };
     if verbose {
         eprintln!(
             "{}: {:.2} min, {} events, {} markers, {:.0} bpm at open (echo {:.0} ms)",
-            if song.title.is_empty() {
+            if song.title().is_empty() {
                 input.display().to_string()
             } else {
-                song.title.clone()
+                song.title().to_owned()
             },
-            song.seconds / 60.0,
-            song.events.len(),
-            song.markers.len(),
-            song.initial_bpm,
+            song.seconds() / 60.0,
+            song.events_len(),
+            song.markers_len(),
+            song.initial_bpm(),
             delay_s * 1000.0
         );
     }
 
     let started = Instant::now();
-    let opt = engine::Options {
+    let opt = Options {
         sr: rate as f32,
         wet,
         tail,
@@ -132,9 +122,9 @@ fn main() {
         solo,
         verbose,
     };
-    let (samples, stats) = engine::render(&song, &opt);
-    let pcm = engine::normalize_to_i16(&samples, stats.peak, 0.891); // -1 dBFS
-    if let Err(e) = wav::write_wav(&output, rate, &pcm) {
+    let (samples, stats) = offline::render(&song, &opt);
+    let pcm = offline::normalize_to_i16(&samples, stats.peak, 0.891); // -1 dBFS
+    if let Err(e) = offline::write_wav(&output, rate, &pcm) {
         eprintln!("error writing {}: {e}", output.display());
         std::process::exit(1);
     }

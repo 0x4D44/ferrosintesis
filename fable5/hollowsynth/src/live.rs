@@ -1,0 +1,579 @@
+//! Realtime raw-MIDI byte input and block-render API.
+
+use crate::engine::{CoreOptions, EngineCore};
+use crate::midi::EvKind;
+use crate::sampler;
+
+const LIVE_BLOCK: usize = 64;
+
+#[derive(Debug, Clone, Copy)]
+pub struct RealtimeOptions {
+    pub sample_rate: u32,
+    pub wet: f32,
+    pub delay_s: f32,
+    pub samples: bool,
+    pub master_gain: f32,
+}
+
+impl Default for RealtimeOptions {
+    fn default() -> Self {
+        Self {
+            sample_rate: 44_100,
+            wet: 0.32,
+            delay_s: 0.375,
+            samples: true,
+            master_gain: 0.70,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RealtimeError {
+    OutputTooSmall { needed: usize, got: usize },
+}
+
+pub struct RealtimeSynth {
+    core: EngineCore,
+    parser: MidiByteParser,
+    pending: Vec<LiveCommand>,
+    ring: [f32; LIVE_BLOCK * 2],
+    ring_pos: usize,
+    ring_len: usize,
+    master_gain: f32,
+}
+
+impl RealtimeSynth {
+    pub fn new(options: RealtimeOptions) -> Self {
+        let core = EngineCore::new(CoreOptions {
+            sr: options.sample_rate as f32,
+            wet: options.wet,
+            delay_s: options.delay_s,
+            samples: options.samples,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+        });
+        Self {
+            core,
+            parser: MidiByteParser::new(),
+            pending: Vec::new(),
+            ring: [0.0; LIVE_BLOCK * 2],
+            ring_pos: 0,
+            ring_len: 0,
+            master_gain: options.master_gain,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.core.hard_reset();
+        self.parser.reset();
+        self.pending.clear();
+        self.ring.fill(0.0);
+        self.ring_pos = 0;
+        self.ring_len = 0;
+    }
+
+    pub fn prewarm_samples(&self) {
+        sampler::prewarm();
+    }
+
+    pub fn write_byte(&mut self, byte: u8) {
+        self.parser.push(byte, &mut self.pending);
+    }
+
+    pub fn render_add(&mut self, frames: usize, output: &mut [f32]) -> Result<(), RealtimeError> {
+        let needed = frames.saturating_mul(2);
+        if output.len() < needed {
+            return Err(RealtimeError::OutputTooSmall {
+                needed,
+                got: output.len(),
+            });
+        }
+
+        let mut written = 0usize;
+        while written < frames {
+            if self.ring_len == 0 {
+                self.fill_ring();
+            }
+            let take = (frames - written).min(self.ring_len);
+            let src = self.ring_pos * 2;
+            let dst = written * 2;
+            for i in 0..take * 2 {
+                output[dst + i] += self.ring[src + i];
+            }
+            self.ring_pos += take;
+            self.ring_len -= take;
+            written += take;
+            if self.ring_len == 0 {
+                self.ring_pos = 0;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn active_voice_count(&self) -> usize {
+        self.core.active_voice_count()
+    }
+
+    fn fill_ring(&mut self) {
+        for command in self.pending.drain(..) {
+            match command {
+                LiveCommand::Channel(kind) => self.core.handle_event(kind),
+                LiveCommand::Reset(_) => self.core.hard_reset(),
+            }
+        }
+        self.ring.fill(0.0);
+        self.core.render_block_add(LIVE_BLOCK, &mut self.ring);
+        for x in &mut self.ring {
+            *x = realtime_limit(*x * self.master_gain);
+        }
+        self.ring_pos = 0;
+        self.ring_len = LIVE_BLOCK;
+    }
+}
+
+#[inline]
+fn realtime_limit(x: f32) -> f32 {
+    if x.abs() <= 0.95 {
+        x
+    } else {
+        0.95 * (x / 0.95).tanh()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum LiveCommand {
+    Channel(EvKind),
+    Reset(ResetKind),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResetKind {
+    GmSystemOn,
+    SystemReset,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct MidiByteParser {
+    running: Option<u8>,
+    status: Option<u8>,
+    data: [u8; 2],
+    len: usize,
+    needed: usize,
+    in_sysex: bool,
+    sysex: [u8; 4],
+    sysex_len: usize,
+    sysex_overflow: bool,
+}
+
+impl MidiByteParser {
+    fn new() -> Self {
+        Self {
+            running: None,
+            status: None,
+            data: [0; 2],
+            len: 0,
+            needed: 0,
+            in_sysex: false,
+            sysex: [0; 4],
+            sysex_len: 0,
+            sysex_overflow: false,
+        }
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.running = None;
+        self.status = None;
+        self.len = 0;
+        self.needed = 0;
+        self.in_sysex = false;
+        self.sysex_len = 0;
+        self.sysex_overflow = false;
+    }
+
+    pub(crate) fn push(&mut self, byte: u8, out: &mut Vec<LiveCommand>) {
+        if self.in_sysex {
+            self.push_sysex(byte, out);
+            return;
+        }
+
+        if byte >= 0x80 {
+            self.push_status(byte, out);
+            return;
+        }
+
+        let Some(status) = self.status.or(self.running) else {
+            return;
+        };
+        if self.status.is_none() {
+            self.status = Some(status);
+            self.needed = data_len(status).unwrap_or(0);
+            self.len = 0;
+        }
+        self.push_data(byte, out);
+    }
+
+    fn push_sysex(&mut self, byte: u8, out: &mut Vec<LiveCommand>) {
+        match byte {
+            0xF8..=0xFE => {}
+            0xFF => {
+                out.push(LiveCommand::Reset(ResetKind::SystemReset));
+                self.reset();
+            }
+            0xF7 => {
+                if self.sysex_len == 4
+                    && !self.sysex_overflow
+                    && self.sysex[0] == 0x7E
+                    && self.sysex[2] == 0x09
+                    && self.sysex[3] == 0x01
+                {
+                    out.push(LiveCommand::Reset(ResetKind::GmSystemOn));
+                }
+                self.reset();
+            }
+            0xF0 => {
+                self.in_sysex = true;
+                self.running = None;
+                self.status = None;
+                self.len = 0;
+                self.sysex_len = 0;
+                self.sysex_overflow = false;
+            }
+            b if b < 0x80 => {
+                if self.sysex_len < self.sysex.len() {
+                    self.sysex[self.sysex_len] = b;
+                    self.sysex_len += 1;
+                } else {
+                    self.sysex_overflow = true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn push_status(&mut self, status: u8, out: &mut Vec<LiveCommand>) {
+        match status {
+            0x80..=0xEF => {
+                self.running = Some(status);
+                self.status = Some(status);
+                self.needed = data_len(status).unwrap();
+                self.len = 0;
+            }
+            0xF0 => {
+                self.running = None;
+                self.status = None;
+                self.len = 0;
+                self.needed = 0;
+                self.in_sysex = true;
+                self.sysex_len = 0;
+                self.sysex_overflow = false;
+            }
+            0xF1 | 0xF3 => {
+                self.running = None;
+                self.status = Some(status);
+                self.needed = 1;
+                self.len = 0;
+            }
+            0xF2 => {
+                self.running = None;
+                self.status = Some(status);
+                self.needed = 2;
+                self.len = 0;
+            }
+            0xF4..=0xF7 => {
+                self.running = None;
+                self.status = None;
+                self.len = 0;
+                self.needed = 0;
+            }
+            0xF8..=0xFE => {}
+            0xFF => {
+                out.push(LiveCommand::Reset(ResetKind::SystemReset));
+                self.reset();
+            }
+            _ => {}
+        }
+    }
+
+    fn push_data(&mut self, byte: u8, out: &mut Vec<LiveCommand>) {
+        if self.len < self.data.len() {
+            self.data[self.len] = byte;
+        }
+        self.len += 1;
+        if self.len < self.needed {
+            return;
+        }
+
+        let status = self.status.unwrap();
+        if status < 0xF0 {
+            if let Some(kind) = channel_event(status, &self.data[..self.needed]) {
+                out.push(LiveCommand::Channel(kind));
+            }
+            self.status = None;
+        } else {
+            self.status = None;
+        }
+        self.len = 0;
+        self.needed = 0;
+    }
+}
+
+fn data_len(status: u8) -> Option<usize> {
+    match status & 0xF0 {
+        0x80 | 0x90 | 0xA0 | 0xB0 | 0xE0 => Some(2),
+        0xC0 | 0xD0 => Some(1),
+        _ => None,
+    }
+}
+
+fn channel_event(status: u8, data: &[u8]) -> Option<EvKind> {
+    let ch = status & 0x0F;
+    match status & 0xF0 {
+        0x80 => Some(EvKind::NoteOff { ch, key: data[0] }),
+        0x90 => {
+            let key = data[0];
+            let vel = data[1];
+            Some(if vel == 0 {
+                EvKind::NoteOff { ch, key }
+            } else {
+                EvKind::NoteOn { ch, key, vel }
+            })
+        }
+        0xA0 => None,
+        0xB0 => Some(EvKind::Cc {
+            ch,
+            num: data[0],
+            val: data[1],
+        }),
+        0xC0 => Some(EvKind::Prog { ch, prog: data[0] }),
+        0xD0 => Some(EvKind::Aftertouch { ch, val: data[0] }),
+        0xE0 => {
+            let raw = ((data[1] as i32) << 7) | data[0] as i32;
+            Some(EvKind::Bend {
+                ch,
+                semis: (raw - 8192) as f32 / 8192.0 * 2.0,
+            })
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn opts() -> RealtimeOptions {
+        RealtimeOptions {
+            sample_rate: 44_100,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            master_gain: 1.0,
+        }
+    }
+
+    fn assert_send<T: Send>() {}
+
+    #[test]
+    fn realtime_synth_is_send() {
+        assert_send::<RealtimeSynth>();
+    }
+
+    #[test]
+    fn parser_handles_running_status_and_realtime_interleave() {
+        let mut parser = MidiByteParser::new();
+        let mut out = Vec::new();
+        for b in [0x90, 60, 100, 0xF8, 64, 0, 67, 80] {
+            parser.push(b, &mut out);
+        }
+        assert_eq!(
+            out,
+            vec![
+                LiveCommand::Channel(EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                }),
+                LiveCommand::Channel(EvKind::NoteOff { ch: 0, key: 64 }),
+                LiveCommand::Channel(EvKind::NoteOn {
+                    ch: 0,
+                    key: 67,
+                    vel: 80,
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_consumes_ignored_poly_aftertouch_and_system_common() {
+        let mut parser = MidiByteParser::new();
+        let mut out = Vec::new();
+        for b in [0xA0, 60, 12, 0x90, 60, 100, 0xF2, 1, 2, 64, 100] {
+            parser.push(b, &mut out);
+        }
+        assert_eq!(
+            out,
+            vec![LiveCommand::Channel(EvKind::NoteOn {
+                ch: 0,
+                key: 60,
+                vel: 100,
+            })]
+        );
+    }
+
+    #[test]
+    fn parser_emits_gm_and_system_resets() {
+        let mut parser = MidiByteParser::new();
+        let mut out = Vec::new();
+        for b in [0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7, 0xFF] {
+            parser.push(b, &mut out);
+        }
+        assert_eq!(
+            out,
+            vec![
+                LiveCommand::Reset(ResetKind::GmSystemOn),
+                LiveCommand::Reset(ResetKind::SystemReset),
+            ]
+        );
+    }
+
+    #[test]
+    fn parser_does_not_false_reset_on_extended_sysex_prefix() {
+        let mut parser = MidiByteParser::new();
+        let mut out = Vec::new();
+        for b in [0xF0, 0x7E, 0x7F, 0x09, 0x01, 0x00, 0xF7] {
+            parser.push(b, &mut out);
+        }
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn render_add_rejects_short_output_without_modifying_it() {
+        let mut synth = RealtimeSynth::new(opts());
+        let mut out = [0.25f32; 3];
+        let err = synth.render_add(2, &mut out).unwrap_err();
+        assert_eq!(err, RealtimeError::OutputTooSmall { needed: 4, got: 3 });
+        assert_eq!(out, [0.25; 3]);
+
+        let err = synth.render_add(usize::MAX, &mut []).unwrap_err();
+        assert_eq!(
+            err,
+            RealtimeError::OutputTooSmall {
+                needed: usize::MAX,
+                got: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn render_add_is_additive_and_chunk_stable() {
+        let bytes = [0x90, 60, 100, 0x80, 60, 0];
+
+        let mut one = RealtimeSynth::new(opts());
+        for &b in &bytes[..3] {
+            one.write_byte(b);
+        }
+        let mut whole = vec![0.5f32; 256 * 2];
+        one.render_add(128, &mut whole[..256]).unwrap();
+        for &b in &bytes[3..] {
+            one.write_byte(b);
+        }
+        one.render_add(128, &mut whole[256..]).unwrap();
+
+        let mut split = RealtimeSynth::new(opts());
+        for &b in &bytes[..3] {
+            split.write_byte(b);
+        }
+        let mut chunks = vec![0.5f32; 256 * 2];
+        for i in 0..4 {
+            split
+                .render_add(32, &mut chunks[i * 64..(i + 1) * 64])
+                .unwrap();
+        }
+        for &b in &bytes[3..] {
+            split.write_byte(b);
+        }
+        for i in 4..8 {
+            split
+                .render_add(32, &mut chunks[i * 64..(i + 1) * 64])
+                .unwrap();
+        }
+
+        let signal = whole.iter().any(|&x| (x - 0.5).abs() > 1e-5);
+        assert!(signal, "note stream produced no audible output");
+        for (a, b) in whole.iter().zip(chunks.iter()) {
+            assert!((a - b).abs() < 1e-6, "chunk drift {a} vs {b}");
+        }
+    }
+
+    #[test]
+    fn reset_stops_voice_and_clears_partial_message() {
+        let mut synth = RealtimeSynth::new(opts());
+        for b in [0x90, 60, 100] {
+            synth.write_byte(b);
+        }
+        synth.render_add(64, &mut vec![0.0; 128]).unwrap();
+        assert!(synth.active_voice_count() > 0);
+
+        synth.write_byte(0x90);
+        synth.reset();
+        synth.write_byte(64);
+        synth.write_byte(100);
+        let mut out = vec![0.0f32; 128];
+        synth.render_add(64, &mut out).unwrap();
+        assert_eq!(synth.active_voice_count(), 0);
+        assert!(out.iter().all(|x| x.abs() < 1e-9));
+    }
+
+    #[test]
+    fn gm_reset_and_all_sound_off_clear_active_voice() {
+        let mut gm = RealtimeSynth::new(opts());
+        for b in [0x90, 60, 100] {
+            gm.write_byte(b);
+        }
+        gm.render_add(64, &mut vec![0.0; 128]).unwrap();
+        assert!(gm.active_voice_count() > 0);
+        for b in [0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7] {
+            gm.write_byte(b);
+        }
+        let mut out = vec![0.0f32; 128];
+        gm.render_add(64, &mut out).unwrap();
+        assert_eq!(gm.active_voice_count(), 0);
+        assert!(out.iter().all(|x| x.abs() < 1e-9));
+
+        let mut cc120 = RealtimeSynth::new(opts());
+        for b in [0x90, 60, 100] {
+            cc120.write_byte(b);
+        }
+        cc120.render_add(64, &mut vec![0.0; 128]).unwrap();
+        assert!(cc120.active_voice_count() > 0);
+        for b in [0xB0, 120, 0] {
+            cc120.write_byte(b);
+        }
+        let mut off = vec![0.0f32; 128];
+        cc120.render_add(64, &mut off).unwrap();
+        assert_eq!(cc120.active_voice_count(), 0);
+    }
+
+    #[test]
+    fn all_notes_off_releases_sustained_voice() {
+        let mut synth = RealtimeSynth::new(opts());
+        for b in [0xB0, 64, 127, 0x90, 60, 100, 0x80, 60, 0] {
+            synth.write_byte(b);
+        }
+        synth.render_add(64, &mut vec![0.0; 128]).unwrap();
+        assert!(synth.active_voice_count() > 0);
+
+        for b in [0xB0, 123, 0, 64, 0] {
+            synth.write_byte(b);
+        }
+        let mut out = vec![0.0f32; 44_100 * 2];
+        synth.render_add(22_050, &mut out).unwrap();
+        assert_eq!(synth.active_voice_count(), 0);
+    }
+
+    #[test]
+    fn sample_prewarm_is_available() {
+        RealtimeSynth::new(opts()).prewarm_samples();
+    }
+}

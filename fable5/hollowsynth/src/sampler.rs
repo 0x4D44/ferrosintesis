@@ -224,6 +224,18 @@ pub fn flute_bank() -> &'static [Zone] {
     flute()
 }
 
+pub fn prewarm() {
+    let _ = piano_bank(1, false);
+    let _ = piano_bank(1, true);
+    let _ = piano_bank(80, false);
+    let _ = piano_bank(80, true);
+    let _ = piano_bank(127, false);
+    let _ = piano_bank(127, true);
+    let _ = violin_bank(1);
+    let _ = violin_bank(127);
+    let _ = flute_bank();
+}
+
 fn nearest(zones: &'static [Zone], f: f32) -> &'static Zone {
     zones
         .iter()

@@ -596,10 +596,21 @@ pub struct Options {
     pub verbose: bool,
 }
 
+#[derive(Clone, Copy)]
 pub struct Stats {
     pub voices_spawned: u64,
     pub peak: f32,
     pub max_polyphony: usize,
+}
+
+impl Default for Stats {
+    fn default() -> Self {
+        Self {
+            voices_spawned: 0,
+            peak: 0.0,
+            max_polyphony: 0,
+        }
+    }
 }
 
 struct Active {
@@ -611,6 +622,743 @@ struct Active {
     // CC5/CC65 portamento: (semitone offset from the target, per-block slew)
     glide: Option<(f32, f32)>,
     voice: Box<dyn voices::Voice>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct CoreOptions {
+    pub sr: f32,
+    pub wet: f32,
+    pub delay_s: f32,
+    pub samples: bool,
+    pub solo: u16,
+    pub gtr_symp_on: bool,
+    pub drum_room_on: bool,
+}
+
+impl CoreOptions {
+    fn from_options(opt: &Options, gtr_symp_on: bool, drum_room_on: bool) -> Self {
+        Self {
+            sr: opt.sr,
+            wet: opt.wet,
+            delay_s: opt.delay_s,
+            samples: opt.samples,
+            solo: opt.solo,
+            gtr_symp_on,
+            drum_room_on,
+        }
+    }
+}
+
+pub(crate) struct EngineCore {
+    opt: CoreOptions,
+    strips: Vec<Strip>,
+    active: Vec<Active>,
+    reverb: Reverb,
+    rev_hp: Biquad,
+    chorus: Chorus,
+    echo: Option<PingPong>,
+    symp: Sympathetic,
+    gtr_symp: Sympathetic,
+    drum_room: Reverb,
+    glue: BusGlue,
+    stats: Stats,
+    ch_buf: Vec<[f32; BLOCK]>,
+    scratch: [f32; BLOCK],
+    send_rev: [f32; BLOCK],
+    send_cho: [f32; BLOCK],
+    send_del: [f32; BLOCK],
+    send_sym: [f32; BLOCK],
+    send_sym_gtr: [f32; BLOCK],
+    send_room: [f32; BLOCK],
+    drum_l: [f32; BLOCK],
+    drum_r: [f32; BLOCK],
+    mix_l: [f32; BLOCK],
+    mix_r: [f32; BLOCK],
+    expr_smooth: f32,
+    leslie_k: f32,
+    wah_smooth: f32,
+}
+
+impl EngineCore {
+    pub(crate) fn new(opt: CoreOptions) -> Self {
+        let sr = opt.sr;
+        Self {
+            opt,
+            strips: (0..16).map(|_| Strip::new(sr)).collect(),
+            active: Vec::new(),
+            reverb: Reverb::new(sr, 0.86, 0.35, opt.wet),
+            rev_hp: Biquad::highpass(150.0, 0.7, sr),
+            chorus: Chorus::new(sr),
+            echo: (opt.delay_s > 0.0).then(|| PingPong::new(sr, opt.delay_s)),
+            symp: Sympathetic::piano(sr),
+            gtr_symp: Sympathetic::guitar(sr),
+            drum_room: Reverb::with_predelay(sr, 0.42, 0.55, opt.wet * 0.9, 0.003),
+            glue: BusGlue::new(sr),
+            stats: Stats::default(),
+            ch_buf: vec![[0f32; BLOCK]; 16],
+            scratch: [0f32; BLOCK],
+            send_rev: [0f32; BLOCK],
+            send_cho: [0f32; BLOCK],
+            send_del: [0f32; BLOCK],
+            send_sym: [0f32; BLOCK],
+            send_sym_gtr: [0f32; BLOCK],
+            send_room: [0f32; BLOCK],
+            drum_l: [0f32; BLOCK],
+            drum_r: [0f32; BLOCK],
+            mix_l: [0f32; BLOCK],
+            mix_r: [0f32; BLOCK],
+            expr_smooth: 1.0 - (-(BLOCK as f32) / (0.03 * sr)).exp(),
+            leslie_k: 1.0 - (-(BLOCK as f32) / (LESLIE_INERTIA_S * sr)).exp(),
+            wah_smooth: 1.0 - (-(BLOCK as f32) / (WAH_SLEW_S * sr)).exp(),
+        }
+    }
+
+    pub(crate) fn hard_reset(&mut self) {
+        let opt = self.opt;
+        *self = Self::new(opt);
+    }
+
+    pub(crate) fn active_voice_count(&self) -> usize {
+        self.active.len()
+    }
+
+    pub(crate) fn stats(&self) -> Stats {
+        self.stats
+    }
+
+    pub(crate) fn handle_event(&mut self, kind: EvKind) {
+        match kind {
+            // --solo: muted channels keep their CCs but lose their notes
+            EvKind::NoteOn { ch, .. } | EvKind::NoteOff { ch, .. }
+                if self.opt.solo & (1u16 << ch) == 0 => {}
+            EvKind::NoteOn { ch, key, vel } => self.note_on(ch, key, vel),
+            EvKind::NoteOff { ch, key } => self.note_off(ch, key),
+            EvKind::Cc { ch, num, val } => self.cc(ch, num, val),
+            EvKind::Bend { ch, semis } => self.bend(ch, semis),
+            EvKind::Aftertouch { ch, val } => {
+                let s = &mut self.strips[ch as usize];
+                s.at_target = val as f32 / 127.0;
+                s.at_authored = true;
+            }
+            EvKind::Prog { ch, prog } => self.program_change(ch, prog),
+        }
+    }
+
+    fn note_on(&mut self, ch: u8, key: u8, vel: u8) {
+        let sr = self.opt.sr;
+        let ci = ch as usize;
+        let porta_from = self.strips[ci].last_freq;
+        if ch != 9 {
+            self.strips[ci].last_freq = Some(key_freq(key));
+        }
+        if ch != 9 && self.strips[ci].legato {
+            let mut ringing = self
+                .active
+                .iter_mut()
+                .filter(|a| a.ch == ch && !a.held && !a.sost_held && !a.voice.released());
+            if let (Some(a), None) = (ringing.next(), ringing.next()) {
+                if a.voice.legato_to(key, vel) {
+                    a.key = key;
+                    return;
+                }
+            }
+        }
+
+        let vel = if ch != 9 && self.strips[ci].soft && self.strips[ci].program <= 7 {
+            ((vel as f32 * 0.75).round() as u8).max(1)
+        } else {
+            vel
+        };
+
+        if ch == 9 && matches!(key, 42 | 44 | 46) {
+            for a in self
+                .active
+                .iter_mut()
+                .filter(|a| a.ch == 9 && matches!(a.key, 42 | 44 | 46))
+            {
+                a.voice.choke();
+            }
+        }
+
+        let seed = 0x9E37 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
+        let voice = if ch == 9 {
+            drums::make(key, vel, sr, seed)
+        } else {
+            Some(voices::make(
+                self.strips[ci].program,
+                key,
+                vel,
+                sr,
+                seed,
+                self.opt.samples,
+            ))
+        };
+
+        if let Some(mut voice) = voice {
+            let s = &self.strips[ci];
+            if s.bend != 1.0 {
+                voice.set_pitch(s.bend);
+            }
+            if s.vowel_authored && matches!(s.program, 52..=54) {
+                let (f, q, g) = vowel_at(s.vowel_cur);
+                voice.set_vowel(f, q, g);
+            }
+            let glide = if ch != 9 && s.porta_on {
+                porta_from.and_then(|from| {
+                    let semis = 12.0 * (from / key_freq(key)).log2();
+                    (semis.abs() > 1e-3).then(|| {
+                        let k = 1.0 - (-(BLOCK as f32) / (s.porta_time.max(1e-3) * sr)).exp();
+                        voice.set_pitch(s.bend * 2f32.powf(semis / 12.0));
+                        (semis, k)
+                    })
+                })
+            } else {
+                None
+            };
+            self.active.push(Active {
+                ch,
+                key,
+                held: false,
+                sost: false,
+                sost_held: false,
+                glide,
+                voice,
+            });
+            self.stats.voices_spawned += 1;
+        }
+    }
+
+    fn note_off(&mut self, ch: u8, key: u8) {
+        if let Some(a) = self
+            .active
+            .iter_mut()
+            .find(|a| a.ch == ch && a.key == key && !a.held && !a.sost_held && !a.voice.released())
+        {
+            let s = &self.strips[ch as usize];
+            if ch != 9 && s.sustain {
+                a.held = true;
+            } else if ch != 9 && a.sost {
+                a.sost_held = true;
+            } else {
+                a.voice.note_off();
+            }
+        }
+    }
+
+    fn cc(&mut self, ch: u8, num: u8, val: u8) {
+        let sr = self.opt.sr;
+        let s = &mut self.strips[ch as usize];
+        let v = val as f32 / 127.0;
+        match num {
+            1 => {
+                s.mod_target = v;
+                s.mod_authored = true;
+            }
+            5 => s.porta_time = PORTA_MIN_S * (PORTA_MAX_S / PORTA_MIN_S).powf(v),
+            6 | 38 => {
+                if num == 6 {
+                    s.data_msb = val;
+                }
+                let (msb, lsb) = if num == 6 {
+                    (val, 0)
+                } else {
+                    (s.data_msb, val)
+                };
+                match (s.rpn_msb, s.rpn_lsb) {
+                    (0, 0) => s.bend_range = msb.clamp(1, 24) as f32 + lsb as f32 / 100.0,
+                    (0, 1) => {
+                        let raw = ((msb as i32) << 7 | lsb as i32) - 8192;
+                        let cents = raw as f32 * (100.0 / 8192.0);
+                        s.fine = 2f32.powf(cents / 1200.0);
+                    }
+                    _ => {}
+                }
+                if matches!((s.rpn_msb, s.rpn_lsb), (0, 0) | (0, 1)) {
+                    s.bend = 2f32.powf(s.bend_wheel * (s.bend_range * 0.5) / 12.0) * s.fine;
+                    let mult = s.bend;
+                    for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                        a.voice.set_pitch(mult);
+                    }
+                }
+            }
+            7 => s.volume = v * v,
+            10 => {
+                s.pan = v;
+                s.haas_delay = 0.005 * sr * (v - 0.5).abs() * 2.0;
+            }
+            11 => s.expr_target = v * v,
+            64 => {
+                s.sustain = val >= 64;
+                if !s.sustain {
+                    for a in self.active.iter_mut().filter(|a| a.ch == ch && a.held) {
+                        a.held = false;
+                        if a.sost {
+                            a.sost_held = true;
+                        } else {
+                            a.voice.note_off();
+                        }
+                    }
+                }
+            }
+            65 => s.porta_on = val >= 64,
+            66 => {
+                let down = val >= 64;
+                if down && !s.sost_down {
+                    for a in self
+                        .active
+                        .iter_mut()
+                        .filter(|a| a.ch == ch && !a.voice.released())
+                    {
+                        a.sost = true;
+                    }
+                } else if !down && s.sost_down {
+                    for a in self.active.iter_mut().filter(|a| a.ch == ch && a.sost) {
+                        a.sost = false;
+                        if a.sost_held {
+                            a.sost_held = false;
+                            if s.sustain {
+                                a.held = true;
+                            } else {
+                                a.voice.note_off();
+                            }
+                        }
+                    }
+                }
+                s.sost_down = down;
+            }
+            67 => s.soft = val >= 64,
+            68 => s.legato = val >= 64,
+            70 => {
+                if !s.vowel_authored {
+                    s.vowel_cur = val as f32;
+                }
+                s.vowel_target = val as f32;
+                s.vowel_authored = true;
+            }
+            71 => {
+                s.res_target = RES_MIN_Q * (RES_MAX_Q / RES_MIN_Q).powf(v);
+                if s.wah.is_none() {
+                    s.wah = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                    if ch == 9 {
+                        s.wah_r = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                    }
+                }
+            }
+            74 => {
+                s.cutoff_target = WAH_MIN_HZ * (WAH_MAX_HZ / WAH_MIN_HZ).powf(v);
+                if val < 127 && s.wah.is_none() {
+                    s.wah = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                    if ch == 9 {
+                        s.wah_r = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                    }
+                }
+            }
+            91 => s.reverb_send = v,
+            93 => s.chorus_send = v,
+            94 => s.delay_send = v,
+            100 => s.rpn_lsb = val,
+            101 => s.rpn_msb = val,
+            120 => self.all_sound_off(ch),
+            121 => self.reset_all_controllers(ch),
+            123 => self.all_notes_off(ch),
+            _ => {}
+        }
+    }
+
+    fn bend(&mut self, ch: u8, semis: f32) {
+        let s = &mut self.strips[ch as usize];
+        s.bend_wheel = semis;
+        let mult = 2f32.powf(semis * (s.bend_range * 0.5) / 12.0) * s.fine;
+        s.bend = mult;
+        for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+            a.voice.set_pitch(mult);
+        }
+    }
+
+    fn program_change(&mut self, ch: u8, prog: u8) {
+        let s = &mut self.strips[ch as usize];
+        s.program = prog;
+        let (cho, del) = if ch == 9 {
+            (0.0, 0.0)
+        } else {
+            fx_profile(prog)
+        };
+        s.chorus_send = cho;
+        s.delay_send = del;
+        if needs_drive(prog) {
+            if s.drive.is_none() {
+                s.drive = Some(Drive::new(prog, self.opt.sr));
+            }
+        } else {
+            s.drive = None;
+        }
+    }
+
+    fn rederive_program_defaults(&mut self, ch: u8) {
+        let prog = self.strips[ch as usize].program;
+        let s = &mut self.strips[ch as usize];
+        let (cho, del) = if ch == 9 {
+            (0.0, 0.0)
+        } else {
+            fx_profile(prog)
+        };
+        s.chorus_send = cho;
+        s.delay_send = del;
+        s.drive = needs_drive(prog).then(|| Drive::new(prog, self.opt.sr));
+    }
+
+    fn all_sound_off(&mut self, ch: u8) {
+        self.active.retain_mut(|a| {
+            if a.ch == ch {
+                a.voice.choke();
+                false
+            } else {
+                true
+            }
+        });
+    }
+
+    fn all_notes_off(&mut self, ch: u8) {
+        let sustain = self.strips[ch as usize].sustain;
+        for a in self
+            .active
+            .iter_mut()
+            .filter(|a| a.ch == ch && !a.voice.released())
+        {
+            if ch != 9 && sustain {
+                a.held = true;
+            } else if ch != 9 && a.sost {
+                a.sost_held = true;
+            } else {
+                a.voice.note_off();
+            }
+        }
+    }
+
+    fn reset_all_controllers(&mut self, ch: u8) {
+        let ci = ch as usize;
+        let s = &mut self.strips[ci];
+        s.bend = 1.0;
+        s.bend_wheel = 0.0;
+        s.bend_range = 2.0;
+        s.fine = 1.0;
+        s.rpn_msb = 127;
+        s.rpn_lsb = 127;
+        s.data_msb = 0;
+        s.porta_on = false;
+        s.porta_time = PORTA_MIN_S;
+        s.last_freq = None;
+        s.sustain = false;
+        s.sost_down = false;
+        s.soft = false;
+        s.legato = false;
+        s.vowel_authored = false;
+        s.vowel_target = 0.0;
+        s.vowel_cur = 0.0;
+        s.at_authored = false;
+        s.at_target = 0.0;
+        s.at_cur = 0.0;
+        s.at_gain = 1.0;
+        s.mod_target = 0.0;
+        s.mod_cur = 0.0;
+        s.mod_engaged = false;
+        s.mod_authored = false;
+        s.vib_mult = 1.0;
+        s.res = WAH_Q;
+        s.res_target = WAH_Q;
+        s.expr_target = 1.0;
+        s.expr = 1.0;
+        s.wah = None;
+        s.wah_r = None;
+        s.cutoff = WAH_MAX_HZ;
+        s.cutoff_target = WAH_MAX_HZ;
+        self.rederive_program_defaults(ch);
+
+        let program = self.strips[ci].program;
+        let organ_trem = matches!(program, 16..=23).then(|| voices::organ_trem_base(program));
+        let choir_vowel = matches!(program, 52..=54).then(|| vowel_at(0.0));
+        for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+            if a.held || a.sost_held {
+                a.voice.note_off();
+            }
+            a.held = false;
+            a.sost = false;
+            a.sost_held = false;
+            a.glide = None;
+            a.voice.set_pitch(1.0);
+            if let Some((rate, depth)) = organ_trem {
+                a.voice.set_trem(rate, depth);
+            }
+            if let Some((freqs, qs, gains)) = choir_vowel {
+                a.voice.set_vowel(freqs, qs, gains);
+            }
+        }
+    }
+
+    pub(crate) fn render_block_add(&mut self, n: usize, out: &mut [f32]) {
+        debug_assert!(n <= BLOCK);
+        debug_assert!(out.len() >= n * 2);
+        let sr = self.opt.sr;
+
+        for (ci, strip) in self.strips.iter_mut().enumerate() {
+            strip.mod_cur += self.expr_smooth * (strip.mod_target - strip.mod_cur);
+            let on = strip.mod_cur > 1e-3;
+            let authored_organ = strip.mod_authored && matches!(strip.program, 16..=23);
+            if ci == 9 || (!on && !strip.mod_engaged && !authored_organ) {
+                continue;
+            }
+            let m = if on { strip.mod_cur } else { 0.0 };
+            let ch = ci as u8;
+            if matches!(strip.program, 16..=23) {
+                let (base_rate, base_depth) = voices::organ_trem_base(strip.program);
+                if !strip.mod_engaged {
+                    strip.leslie_rate = if strip.mod_authored {
+                        LESLIE_SLOW_HZ
+                    } else {
+                        base_rate
+                    };
+                    strip.leslie_depth = base_depth;
+                }
+                let target_rate = if strip.mod_authored {
+                    LESLIE_SLOW_HZ + (LESLIE_FAST_HZ - LESLIE_SLOW_HZ) * m
+                } else {
+                    base_rate
+                };
+                let target_depth = base_depth + LESLIE_DEPTH_ADD * m;
+                strip.leslie_rate += self.leslie_k * (target_rate - strip.leslie_rate);
+                strip.leslie_depth += self.leslie_k * (target_depth - strip.leslie_depth);
+                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                    a.voice.set_trem(strip.leslie_rate, strip.leslie_depth);
+                }
+                strip.mod_engaged =
+                    strip.mod_authored || on || (strip.leslie_rate - base_rate).abs() > 0.01;
+            } else if vibrato_family(strip.program) {
+                strip.vib_phase += TAU * VIB_RATE_HZ * n as f32 / sr;
+                if strip.vib_phase > TAU {
+                    strip.vib_phase -= TAU;
+                }
+                let factor = 2f32.powf(m * VIB_DEPTH_CENTS / 1200.0 * strip.vib_phase.sin());
+                strip.vib_mult = factor;
+                let mult = strip.bend * factor;
+                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                    a.voice.set_pitch(mult);
+                }
+                strip.mod_engaged = on;
+            } else {
+                strip.mod_engaged = false;
+            }
+        }
+
+        for (ci, strip) in self.strips.iter_mut().enumerate() {
+            if ci == 9 {
+                continue;
+            }
+            let ch = ci as u8;
+            if strip.vowel_authored && matches!(strip.program, 52..=54) {
+                strip.vowel_cur += self.expr_smooth * (strip.vowel_target - strip.vowel_cur);
+                let (f, q, g) = vowel_at(strip.vowel_cur);
+                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                    a.voice.set_vowel(f, q, g);
+                }
+            }
+            let mut at_vib = 1.0f32;
+            if strip.at_authored && aftertouch_family(strip.program) {
+                strip.at_cur += self.expr_smooth * (strip.at_target - strip.at_cur);
+                strip.at_gain = 10f32.powf(strip.at_cur * AT_GAIN_DB / 20.0);
+                strip.at_phase += TAU * AT_VIB_RATE_HZ * n as f32 / sr;
+                if strip.at_phase > TAU {
+                    strip.at_phase -= TAU;
+                }
+                at_vib = 2f32.powf(strip.at_cur * AT_VIB_CENTS / 1200.0 * strip.at_phase.sin());
+                let mult = strip.bend * strip.vib_mult * at_vib;
+                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                    a.voice.set_pitch(mult);
+                }
+            }
+            for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                if let Some((semis, k)) = &mut a.glide {
+                    *semis -= *k * *semis;
+                    let done = semis.abs() < 0.005;
+                    let gm = if done { 1.0 } else { 2f32.powf(*semis / 12.0) };
+                    a.voice.set_pitch(strip.bend * strip.vib_mult * at_vib * gm);
+                    if done {
+                        a.glide = None;
+                    }
+                }
+            }
+        }
+
+        for buf in self.ch_buf.iter_mut() {
+            buf[..n].fill(0.0);
+        }
+        self.stats.max_polyphony = self.stats.max_polyphony.max(self.active.len());
+        self.active.retain_mut(|a| {
+            if a.ch == 9 {
+                return true;
+            }
+            self.scratch[..n].fill(0.0);
+            let alive = a.voice.render(&mut self.scratch[..n]);
+            let buf = &mut self.ch_buf[a.ch as usize];
+            for (dst, src) in buf[..n].iter_mut().zip(self.scratch[..n].iter()) {
+                *dst += *src;
+            }
+            alive
+        });
+
+        self.mix_l[..n].fill(0.0);
+        self.mix_r[..n].fill(0.0);
+        self.send_rev[..n].fill(0.0);
+        self.send_cho[..n].fill(0.0);
+        self.send_del[..n].fill(0.0);
+        self.send_sym[..n].fill(0.0);
+        self.send_sym_gtr[..n].fill(0.0);
+        self.send_room[..n].fill(0.0);
+        for (ci, strip) in self.strips.iter_mut().enumerate() {
+            let buf = &mut self.ch_buf[ci];
+            if let Some(drive) = &mut strip.drive {
+                drive.process(&mut buf[..n]);
+            }
+            if let Some(wah) = &mut strip.wah {
+                strip.cutoff += self.wah_smooth * (strip.cutoff_target - strip.cutoff);
+                strip.res += self.wah_smooth * (strip.res_target - strip.res);
+                wah.retune_lowpass(strip.cutoff, strip.res, sr);
+                if ci != 9 {
+                    for x in buf[..n].iter_mut() {
+                        *x = wah.process(*x);
+                    }
+                }
+            }
+            strip.expr += self.expr_smooth * (strip.expr_target - strip.expr);
+            let g = strip.volume * strip.expr * strip.at_gain;
+            if g < 1e-6 {
+                continue;
+            }
+            let theta = strip.pan * FRAC_PI_2;
+            let (gl, gr) = (g * theta.cos(), g * theta.sin());
+            let rs = strip.reverb_send * 0.9;
+            let is_piano = ci != 9 && strip.program <= 7;
+            let is_ac_gtr = ci != 9 && matches!(strip.program, 24 | 25);
+            let haas = strip.haas_delay;
+            for (i, &x) in buf[..n].iter().enumerate() {
+                strip.haas.push(x);
+                let (xl, xr) = if haas < 1.0 {
+                    (x, x)
+                } else if strip.pan < 0.5 {
+                    (x, strip.haas.tap(haas))
+                } else {
+                    (strip.haas.tap(haas), x)
+                };
+                self.mix_l[i] += xl * gl;
+                self.mix_r[i] += xr * gr;
+                let xs = x * g;
+                self.send_rev[i] += xs * rs;
+                self.send_cho[i] += xs * strip.chorus_send;
+                self.send_del[i] += xs * strip.delay_send;
+                if is_piano {
+                    self.send_sym[i] += xs;
+                }
+                if is_ac_gtr {
+                    self.send_sym_gtr[i] += xs;
+                }
+            }
+        }
+
+        {
+            let s9 = &mut self.strips[9];
+            self.drum_l[..n].fill(0.0);
+            self.drum_r[..n].fill(0.0);
+            let pan_off = s9.pan - 0.5;
+            self.active.retain_mut(|a| {
+                if a.ch != 9 {
+                    return true;
+                }
+                self.scratch[..n].fill(0.0);
+                let alive = a.voice.render(&mut self.scratch[..n]);
+                let pan = (drum_pan(a.key) + pan_off).clamp(0.0, 1.0);
+                let theta = pan * FRAC_PI_2;
+                let (ul, ur) = (theta.cos(), theta.sin());
+                for i in 0..n {
+                    self.drum_l[i] += self.scratch[i] * ul;
+                    self.drum_r[i] += self.scratch[i] * ur;
+                }
+                alive
+            });
+            if let Some(wl) = &mut s9.wah {
+                for x in self.drum_l[..n].iter_mut() {
+                    *x = wl.process(*x);
+                }
+            }
+            if let Some(wr) = &mut s9.wah_r {
+                wr.retune_lowpass(s9.cutoff, s9.res, sr);
+                for x in self.drum_r[..n].iter_mut() {
+                    *x = wr.process(*x);
+                }
+            }
+            let g9 = s9.volume * s9.expr * s9.at_gain;
+            if g9 >= 1e-6 {
+                let rs = s9.reverb_send * 0.9;
+                for i in 0..n {
+                    let (xl, xr) = (self.drum_l[i] * g9, self.drum_r[i] * g9);
+                    self.mix_l[i] += xl;
+                    self.mix_r[i] += xr;
+                    let mono = 0.5 * (xl + xr);
+                    self.send_rev[i] += mono * rs;
+                    self.send_room[i] += mono * ROOM_SEND;
+                }
+            }
+        }
+
+        self.symp.process(
+            &self.send_sym[..n],
+            &mut self.mix_l[..n],
+            &mut self.mix_r[..n],
+        );
+        if self.opt.gtr_symp_on {
+            self.gtr_symp.process(
+                &self.send_sym_gtr[..n],
+                &mut self.mix_l[..n],
+                &mut self.mix_r[..n],
+            );
+        }
+        self.chorus.process(
+            &self.send_cho[..n],
+            &mut self.mix_l[..n],
+            &mut self.mix_r[..n],
+        );
+        if let Some(echo) = &mut self.echo {
+            echo.process(
+                &self.send_del[..n],
+                &mut self.mix_l[..n],
+                &mut self.mix_r[..n],
+            );
+        }
+        if self.opt.drum_room_on {
+            self.drum_room.process(
+                &self.send_room[..n],
+                &mut self.mix_l[..n],
+                &mut self.mix_r[..n],
+            );
+        }
+        for x in self.send_rev[..n].iter_mut() {
+            *x = self.rev_hp.process(*x);
+        }
+        self.reverb.process(
+            &self.send_rev[..n],
+            &mut self.mix_l[..n],
+            &mut self.mix_r[..n],
+        );
+        self.glue
+            .process(&mut self.mix_l[..n], &mut self.mix_r[..n]);
+
+        for i in 0..n {
+            out[i * 2] += self.mix_l[i];
+            out[i * 2 + 1] += self.mix_r[i];
+            let m = self.mix_l[i].abs().max(self.mix_r[i].abs());
+            if m > self.stats.peak {
+                self.stats.peak = m;
+            }
+        }
+    }
 }
 
 pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
@@ -630,23 +1378,7 @@ pub(crate) fn render_buses(
     let total = ((song.seconds + opt.tail as f64) * sr as f64) as usize;
     let mut out = vec![0f32; total * 2]; // interleaved stereo
 
-    let mut strips: Vec<Strip> = (0..16).map(|_| Strip::new(sr)).collect();
-    let mut active: Vec<Active> = Vec::new();
-    let mut reverb = Reverb::new(sr, 0.86, 0.35, opt.wet);
-    let mut rev_hp = Biquad::highpass(150.0, 0.7, sr); // keep the lows dry and tight
-    let mut chorus = Chorus::new(sr);
-    let mut echo = (opt.delay_s > 0.0).then(|| PingPong::new(sr, opt.delay_s));
-    let mut symp = Sympathetic::piano(sr);
-    // G5: the acoustic guitars' open strings ring along (prog 24|25 only)
-    let mut gtr_symp = Sympathetic::guitar(sr);
-    // D10: a tight pre-hall drum room — fb 0.42 ≈ 0.29 s t60, ~3 ms predelay
-    let mut drum_room = Reverb::with_predelay(sr, 0.42, 0.55, opt.wet * 0.9, 0.003);
-    let mut glue = BusGlue::new(sr);
-    let mut stats = Stats {
-        voices_spawned: 0,
-        peak: 0.0,
-        max_polyphony: 0,
-    };
+    let mut core = EngineCore::new(CoreOptions::from_options(opt, gtr_symp_on, drum_room_on));
 
     let events: Vec<(usize, EvKind)> = song
         .events
@@ -655,21 +1387,6 @@ pub(crate) fn render_buses(
         .collect();
     let mut ev_i = 0;
 
-    let mut ch_buf = vec![[0f32; BLOCK]; 16];
-    let mut scratch = [0f32; BLOCK];
-    let mut send_rev = [0f32; BLOCK];
-    let mut send_cho = [0f32; BLOCK];
-    let mut send_del = [0f32; BLOCK];
-    let mut send_sym = [0f32; BLOCK];
-    let mut send_sym_gtr = [0f32; BLOCK];
-    let mut send_room = [0f32; BLOCK];
-    let mut drum_l = [0f32; BLOCK];
-    let mut drum_r = [0f32; BLOCK];
-    let mut mix_l = [0f32; BLOCK];
-    let mut mix_r = [0f32; BLOCK];
-    let expr_smooth = 1.0 - (-(BLOCK as f32) / (0.03 * sr)).exp();
-    let leslie_k = 1.0 - (-(BLOCK as f32) / (LESLIE_INERTIA_S * sr)).exp();
-    let wah_smooth = 1.0 - (-(BLOCK as f32) / (WAH_SLEW_S * sr)).exp();
     let mut next_report = total / 10;
 
     let mut block_start = 0usize;
@@ -680,563 +1397,10 @@ pub(crate) fn render_buses(
         while ev_i < events.len() && events[ev_i].0 < block_start + n {
             let (_, kind) = events[ev_i];
             ev_i += 1;
-            match kind {
-                // --solo: muted channels keep their CCs but lose their notes
-                EvKind::NoteOn { ch, .. } | EvKind::NoteOff { ch, .. }
-                    if opt.solo & (1u16 << ch) == 0 => {}
-                EvKind::NoteOn { ch, key, vel } => {
-                    // portamento origin: the channel's most recent pitch
-                    let porta_from = strips[ch as usize].last_freq;
-                    if ch != 9 {
-                        strips[ch as usize].last_freq = Some(key_freq(key));
-                    }
-                    // CC68 legato: slur into the channel's one ringing voice
-                    // (pedal-held voices are past their NoteOff — not slurred)
-                    if ch != 9 && strips[ch as usize].legato {
-                        let mut ringing = active.iter_mut().filter(|a| {
-                            a.ch == ch && !a.held && !a.sost_held && !a.voice.released()
-                        });
-                        if let (Some(a), None) = (ringing.next(), ringing.next()) {
-                            if a.voice.legato_to(key, vel) {
-                                a.key = key;
-                                continue;
-                            }
-                        }
-                    }
-                    // CC67 una corda: the soft pedal softens the strike —
-                    // the scaled velocity drives the piano's brightness too
-                    let vel = if ch != 9
-                        && strips[ch as usize].soft
-                        && strips[ch as usize].program <= 7
-                    {
-                        ((vel as f32 * 0.75).round() as u8).max(1)
-                    } else {
-                        vel
-                    };
-                    // D6 hat choke: any hat strike silences the hats already
-                    // ringing (the pedal closes / the stick lands)
-                    if ch == 9 && matches!(key, 42 | 44 | 46) {
-                        for a in active
-                            .iter_mut()
-                            .filter(|a| a.ch == 9 && matches!(a.key, 42 | 44 | 46))
-                        {
-                            a.voice.choke();
-                        }
-                    }
-                    let seed = 0x9E37 ^ (stats.voices_spawned as u32).wrapping_mul(2654435761);
-                    let voice = if ch == 9 {
-                        drums::make(key, vel, sr, seed)
-                    } else {
-                        Some(voices::make(
-                            strips[ch as usize].program,
-                            key,
-                            vel,
-                            sr,
-                            seed,
-                            opt.samples,
-                        ))
-                    };
-                    if let Some(mut voice) = voice {
-                        let s = &strips[ch as usize];
-                        let bend = s.bend;
-                        if bend != 1.0 {
-                            voice.set_pitch(bend);
-                        }
-                        if s.vowel_authored && matches!(s.program, 52..=54) {
-                            let (f, q, g) = vowel_at(s.vowel_cur);
-                            voice.set_vowel(f, q, g);
-                        }
-                        // CC65 portamento: the fresh (normally-attacked)
-                        // voice starts at the previous pitch and glides in
-                        let glide = if ch != 9 && s.porta_on {
-                            porta_from.and_then(|from| {
-                                let semis = 12.0 * (from / key_freq(key)).log2();
-                                (semis.abs() > 1e-3).then(|| {
-                                    let k = 1.0
-                                        - (-(BLOCK as f32) / (s.porta_time.max(1e-3) * sr)).exp();
-                                    voice.set_pitch(s.bend * 2f32.powf(semis / 12.0));
-                                    (semis, k)
-                                })
-                            })
-                        } else {
-                            None
-                        };
-                        active.push(Active {
-                            ch,
-                            key,
-                            held: false,
-                            sost: false,
-                            sost_held: false,
-                            glide,
-                            voice,
-                        });
-                        stats.voices_spawned += 1;
-                    }
-                }
-                EvKind::NoteOff { ch, key } => {
-                    if let Some(a) = active.iter_mut().find(|a| {
-                        a.ch == ch && a.key == key && !a.held && !a.sost_held && !a.voice.released()
-                    }) {
-                        if ch != 9 && strips[ch as usize].sustain {
-                            a.held = true; // CC64: the pedal keeps it ringing
-                        } else if ch != 9 && a.sost {
-                            a.sost_held = true; // CC66: sostenuto defers it
-                        } else {
-                            a.voice.note_off();
-                        }
-                    }
-                }
-                EvKind::Cc { ch, num, val } => {
-                    let s = &mut strips[ch as usize];
-                    let v = val as f32 / 127.0;
-                    match num {
-                        1 => {
-                            // first CC1 of any value makes the wheel authoritative
-                            // on this channel for the rest of the render
-                            s.mod_target = v;
-                            s.mod_authored = true;
-                        }
-                        5 => s.porta_time = PORTA_MIN_S * (PORTA_MAX_S / PORTA_MIN_S).powf(v),
-                        6 | 38 => {
-                            // RPN data entry (MSB, optionally refined by LSB)
-                            if num == 6 {
-                                s.data_msb = val;
-                            }
-                            let (msb, lsb) = if num == 6 {
-                                (val, 0)
-                            } else {
-                                (s.data_msb, val)
-                            };
-                            match (s.rpn_msb, s.rpn_lsb) {
-                                (0, 0) => {
-                                    // RPN 0: pitch-bend range, semitones + cents
-                                    s.bend_range = msb.clamp(1, 24) as f32 + lsb as f32 / 100.0;
-                                }
-                                (0, 1) => {
-                                    // RPN 1: fine tune. MSB-only reduces to
-                                    // cents = (v - 64) * 100 / 64.
-                                    let raw = ((msb as i32) << 7 | lsb as i32) - 8192;
-                                    let cents = raw as f32 * (100.0 / 8192.0);
-                                    s.fine = 2f32.powf(cents / 1200.0);
-                                }
-                                _ => {}
-                            }
-                            if matches!((s.rpn_msb, s.rpn_lsb), (0, 0) | (0, 1)) {
-                                // recompose the channel multiplier and push it
-                                // to everything already sounding
-                                s.bend =
-                                    2f32.powf(s.bend_wheel * (s.bend_range * 0.5) / 12.0) * s.fine;
-                                let mult = s.bend;
-                                for a in active.iter_mut().filter(|a| a.ch == ch) {
-                                    a.voice.set_pitch(mult);
-                                }
-                            }
-                        }
-                        7 => s.volume = v * v,
-                        10 => {
-                            s.pan = v;
-                            // far ear hears a panned source a moment later
-                            s.haas_delay = 0.005 * sr * (v - 0.5).abs() * 2.0;
-                        }
-                        11 => s.expr_target = v * v,
-                        64 => {
-                            s.sustain = val >= 64;
-                            if !s.sustain {
-                                // pedal up: everything it was holding lets go
-                                // (unless the sostenuto pedal also has it)
-                                for a in active.iter_mut().filter(|a| a.ch == ch && a.held) {
-                                    a.held = false;
-                                    if a.sost {
-                                        a.sost_held = true;
-                                    } else {
-                                        a.voice.note_off();
-                                    }
-                                }
-                            }
-                        }
-                        65 => s.porta_on = val >= 64,
-                        66 => {
-                            let down = val >= 64;
-                            if down && !s.sost_down {
-                                // capture exactly the notes ringing now
-                                for a in active
-                                    .iter_mut()
-                                    .filter(|a| a.ch == ch && !a.voice.released())
-                                {
-                                    a.sost = true;
-                                }
-                            } else if !down && s.sost_down {
-                                for a in active.iter_mut().filter(|a| a.ch == ch && a.sost) {
-                                    a.sost = false;
-                                    if a.sost_held {
-                                        a.sost_held = false;
-                                        if s.sustain {
-                                            a.held = true; // CC64 takes over
-                                        } else {
-                                            a.voice.note_off();
-                                        }
-                                    }
-                                }
-                            }
-                            s.sost_down = down;
-                        }
-                        67 => s.soft = val >= 64,
-                        68 => s.legato = val >= 64,
-                        70 => {
-                            // choir vowel select; ringing notes crossfade to it
-                            if !s.vowel_authored {
-                                s.vowel_cur = val as f32;
-                            }
-                            s.vowel_target = val as f32;
-                            s.vowel_authored = true;
-                        }
-                        71 => {
-                            s.res_target = RES_MIN_Q * (RES_MAX_Q / RES_MIN_Q).powf(v);
-                            if s.wah.is_none() {
-                                // resonance needs the filter in the path; it
-                                // enters wide open and slews from there
-                                s.wah = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
-                                if ch == 9 {
-                                    s.wah_r = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
-                                }
-                            }
-                        }
-                        74 => {
-                            s.cutoff_target = WAH_MIN_HZ * (WAH_MAX_HZ / WAH_MIN_HZ).powf(v);
-                            if val < 127 && s.wah.is_none() {
-                                // the filter enters the path transparently:
-                                // wide open, then slews down to the target
-                                s.wah = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
-                                if ch == 9 {
-                                    s.wah_r = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
-                                }
-                            }
-                        }
-                        91 => s.reverb_send = v,
-                        93 => s.chorus_send = v,
-                        94 => s.delay_send = v,
-                        100 => s.rpn_lsb = val,
-                        101 => s.rpn_msb = val,
-                        _ => {}
-                    }
-                }
-                EvKind::Bend { ch, semis } => {
-                    // `semis` is decoded at the GM ±2 default; rescale by the
-                    // channel's RPN 0 range and compose the RPN 1 fine tune
-                    let s = &mut strips[ch as usize];
-                    s.bend_wheel = semis;
-                    let mult = 2f32.powf(semis * (s.bend_range * 0.5) / 12.0) * s.fine;
-                    s.bend = mult;
-                    for a in active.iter_mut().filter(|a| a.ch == ch) {
-                        a.voice.set_pitch(mult);
-                    }
-                }
-                EvKind::Aftertouch { ch, val } => {
-                    let s = &mut strips[ch as usize];
-                    s.at_target = val as f32 / 127.0;
-                    s.at_authored = true;
-                }
-                EvKind::Prog { ch, prog } => {
-                    let s = &mut strips[ch as usize];
-                    s.program = prog;
-                    let (cho, del) = if ch == 9 {
-                        (0.0, 0.0)
-                    } else {
-                        fx_profile(prog)
-                    };
-                    s.chorus_send = cho;
-                    s.delay_send = del;
-                    if needs_drive(prog) {
-                        if s.drive.is_none() {
-                            s.drive = Some(Drive::new(prog, sr));
-                        }
-                    } else {
-                        s.drive = None;
-                    }
-                }
-            }
+            core.handle_event(kind);
         }
 
-        // CC1 mod wheel: per-block pitch/tremulant updates, before the
-        // voices render. Nothing here runs for channels that never move
-        // the wheel (mod_authored stays false), so mod-free renders are
-        // bit-identical to v0.5.
-        for (ci, strip) in strips.iter_mut().enumerate() {
-            strip.mod_cur += expr_smooth * (strip.mod_target - strip.mod_cur);
-            let on = strip.mod_cur > 1e-3;
-            // an authored organ channel keeps its rotor under CC1 control even
-            // at mod = 0 (that means "brake to slow", not "revert to idle")
-            let authored_organ = strip.mod_authored && matches!(strip.program, 16..=23);
-            if ci == 9 || (!on && !strip.mod_engaged && !authored_organ) {
-                continue;
-            }
-            let m = if on { strip.mod_cur } else { 0.0 };
-            let ch = ci as u8;
-            if matches!(strip.program, 16..=23) {
-                // organs: the wheel is a Leslie speed control — the channel's
-                // one rotor slews with real inertia, and every organ voice on
-                // the channel follows it. Once the wheel has been touched, CC1
-                // is authoritative: it sweeps the rotor across the full Leslie
-                // range (slow chorale .. fast) rather than nudging the program
-                // idle, so CC1 = 0 brakes to LESLIE_SLOW_HZ and CC1 = 127 spins
-                // up to LESLIE_FAST_HZ. Channels that never author CC1 fall back
-                // to the program idle (unreachable here, kept for clarity).
-                let (base_rate, base_depth) = voices::organ_trem_base(strip.program);
-                if !strip.mod_engaged {
-                    // rotor starts at rest: LESLIE_SLOW for an authored channel,
-                    // else the program idle
-                    strip.leslie_rate = if strip.mod_authored {
-                        LESLIE_SLOW_HZ
-                    } else {
-                        base_rate
-                    };
-                    strip.leslie_depth = base_depth;
-                }
-                let target_rate = if strip.mod_authored {
-                    LESLIE_SLOW_HZ + (LESLIE_FAST_HZ - LESLIE_SLOW_HZ) * m
-                } else {
-                    base_rate
-                };
-                // base depth stays audible even at the slow chorale rate; the
-                // wheel only adds extra swirl on top as it spins up
-                let target_depth = base_depth + LESLIE_DEPTH_ADD * m;
-                strip.leslie_rate += leslie_k * (target_rate - strip.leslie_rate);
-                strip.leslie_depth += leslie_k * (target_depth - strip.leslie_depth);
-                for a in active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_trem(strip.leslie_rate, strip.leslie_depth);
-                }
-                // an authored channel stays engaged for good (its rotor is now
-                // CC1-driven); an unauthored one coasts until it reaches idle
-                strip.mod_engaged =
-                    strip.mod_authored || on || (strip.leslie_rate - base_rate).abs() > 0.01;
-            } else if vibrato_family(strip.program) {
-                strip.vib_phase += TAU * VIB_RATE_HZ * n as f32 / sr;
-                if strip.vib_phase > TAU {
-                    strip.vib_phase -= TAU;
-                }
-                // vibrato multiplies on top of the channel's bend multiplier;
-                // the final pass (m = 0) snaps pitch back to the bare bend
-                let factor = 2f32.powf(m * VIB_DEPTH_CENTS / 1200.0 * strip.vib_phase.sin());
-                strip.vib_mult = factor; // aftertouch/glides compose with it
-                let mult = strip.bend * factor;
-                for a in active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_pitch(mult);
-                }
-                strip.mod_engaged = on;
-            } else {
-                strip.mod_engaged = false;
-            }
-        }
-
-        // v0.7 authored controllers: CC70 vowel morph, channel aftertouch,
-        // CC5/65 portamento glides. Every branch is gated on authored state,
-        // so files that never send them render bit-identically to v0.6.
-        for (ci, strip) in strips.iter_mut().enumerate() {
-            if ci == 9 {
-                continue;
-            }
-            let ch = ci as u8;
-            // CC70: slew the vowel position and retarget ringing formants;
-            // the voice's own control-rate smoothing removes any zipper
-            if strip.vowel_authored && matches!(strip.program, 52..=54) {
-                strip.vowel_cur += expr_smooth * (strip.vowel_target - strip.vowel_cur);
-                let (f, q, g) = vowel_at(strip.vowel_cur);
-                for a in active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_vowel(f, q, g);
-                }
-            }
-            // channel aftertouch: pressure smoothed like CC11, adding
-            // vibrato depth and a gain lift — a crescendo inside the note
-            let mut at_vib = 1.0f32;
-            if strip.at_authored && aftertouch_family(strip.program) {
-                strip.at_cur += expr_smooth * (strip.at_target - strip.at_cur);
-                strip.at_gain = 10f32.powf(strip.at_cur * AT_GAIN_DB / 20.0);
-                strip.at_phase += TAU * AT_VIB_RATE_HZ * n as f32 / sr;
-                if strip.at_phase > TAU {
-                    strip.at_phase -= TAU;
-                }
-                at_vib = 2f32.powf(strip.at_cur * AT_VIB_CENTS / 1200.0 * strip.at_phase.sin());
-                let mult = strip.bend * strip.vib_mult * at_vib;
-                for a in active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_pitch(mult);
-                }
-            }
-            // portamento: each gliding voice approaches its own pitch
-            for a in active.iter_mut().filter(|a| a.ch == ch) {
-                if let Some((semis, k)) = &mut a.glide {
-                    *semis -= *k * *semis;
-                    let done = semis.abs() < 0.005;
-                    let gm = if done { 1.0 } else { 2f32.powf(*semis / 12.0) };
-                    a.voice.set_pitch(strip.bend * strip.vib_mult * at_vib * gm);
-                    if done {
-                        a.glide = None;
-                    }
-                }
-            }
-        }
-
-        // voices -> channel buffers. Channel 9 (drums) is HELD OUT here and
-        // rendered in the dedicated per-piece pass below (D9) — the strip
-        // pass would collapse the kit to a mono point source.
-        for buf in ch_buf.iter_mut() {
-            buf[..n].fill(0.0);
-        }
-        stats.max_polyphony = stats.max_polyphony.max(active.len());
-        active.retain_mut(|a| {
-            if a.ch == 9 {
-                return true;
-            }
-            scratch[..n].fill(0.0);
-            let alive = a.voice.render(&mut scratch[..n]);
-            let buf = &mut ch_buf[a.ch as usize];
-            for i in 0..n {
-                buf[i] += scratch[i];
-            }
-            alive
-        });
-
-        // channel strips -> stereo mix + bus sends
-        mix_l[..n].fill(0.0);
-        mix_r[..n].fill(0.0);
-        send_rev[..n].fill(0.0);
-        send_cho[..n].fill(0.0);
-        send_del[..n].fill(0.0);
-        send_sym[..n].fill(0.0);
-        send_sym_gtr[..n].fill(0.0);
-        send_room[..n].fill(0.0);
-        for (ci, strip) in strips.iter_mut().enumerate() {
-            let buf = &mut ch_buf[ci];
-            if let Some(drive) = &mut strip.drive {
-                drive.process(&mut buf[..n]);
-            }
-            if let Some(wah) = &mut strip.wah {
-                // CC74 brightness: on the dry path before the sends tap it,
-                // so the wah colours the reverb and echo too; the cutoff and
-                // CC71 resonance slew per block so riding CCs don't zipper.
-                // Channel 9's filter STATE is reserved for the drum pair in
-                // the D9 pass — only the slew/retune happens here.
-                strip.cutoff += wah_smooth * (strip.cutoff_target - strip.cutoff);
-                strip.res += wah_smooth * (strip.res_target - strip.res);
-                wah.retune_lowpass(strip.cutoff, strip.res, sr);
-                if ci != 9 {
-                    for x in buf[..n].iter_mut() {
-                        *x = wah.process(*x);
-                    }
-                }
-            }
-            strip.expr += expr_smooth * (strip.expr_target - strip.expr);
-            let g = strip.volume * strip.expr * strip.at_gain;
-            if g < 1e-6 {
-                continue;
-            }
-            let theta = strip.pan * FRAC_PI_2;
-            let (gl, gr) = (g * theta.cos(), g * theta.sin());
-            let rs = strip.reverb_send * 0.9;
-            let is_piano = ci != 9 && strip.program <= 7;
-            let is_ac_gtr = ci != 9 && matches!(strip.program, 24 | 25);
-            let haas = strip.haas_delay;
-            for i in 0..n {
-                let x = buf[i];
-                strip.haas.push(x);
-                // the far channel is delayed a few milliseconds — Haas
-                // localisation instead of a bare level difference
-                let (xl, xr) = if haas < 1.0 {
-                    (x, x)
-                } else if strip.pan < 0.5 {
-                    (x, strip.haas.tap(haas))
-                } else {
-                    (strip.haas.tap(haas), x)
-                };
-                mix_l[i] += xl * gl;
-                mix_r[i] += xr * gr;
-                let xs = x * g;
-                send_rev[i] += xs * rs;
-                send_cho[i] += xs * strip.chorus_send;
-                send_del[i] += xs * strip.delay_send;
-                if is_piano {
-                    send_sym[i] += xs;
-                }
-                if is_ac_gtr {
-                    send_sym_gtr[i] += xs;
-                }
-            }
-        }
-
-        // D9: the dedicated ch-9 pass — every drum voice pans per piece
-        // (LEVEL-ONLY equal power, no Haas: the mono-collapse lesson) into a
-        // stereo pair that then gets full strip parity: CC74/71 wah pair,
-        // CC7/CC11 gain, the CC91 hall send, and the D10 room send.
-        {
-            let s9 = &mut strips[9];
-            drum_l[..n].fill(0.0);
-            drum_r[..n].fill(0.0);
-            let pan_off = s9.pan - 0.5; // authored CC10 offsets the kit table
-            active.retain_mut(|a| {
-                if a.ch != 9 {
-                    return true;
-                }
-                scratch[..n].fill(0.0);
-                let alive = a.voice.render(&mut scratch[..n]);
-                let pan = (drum_pan(a.key) + pan_off).clamp(0.0, 1.0);
-                let theta = pan * FRAC_PI_2;
-                let (ul, ur) = (theta.cos(), theta.sin());
-                for i in 0..n {
-                    drum_l[i] += scratch[i] * ul;
-                    drum_r[i] += scratch[i] * ur;
-                }
-                alive
-            });
-            if let Some(wl) = &mut s9.wah {
-                for x in drum_l[..n].iter_mut() {
-                    *x = wl.process(*x);
-                }
-            }
-            if let Some(wr) = &mut s9.wah_r {
-                wr.retune_lowpass(s9.cutoff, s9.res, sr);
-                for x in drum_r[..n].iter_mut() {
-                    *x = wr.process(*x);
-                }
-            }
-            let g9 = s9.volume * s9.expr * s9.at_gain;
-            if g9 >= 1e-6 {
-                let rs = s9.reverb_send * 0.9;
-                for i in 0..n {
-                    let (xl, xr) = (drum_l[i] * g9, drum_r[i] * g9);
-                    mix_l[i] += xl;
-                    mix_r[i] += xr;
-                    let mono = 0.5 * (xl + xr);
-                    send_rev[i] += mono * rs; // the kit keeps its hall
-                    send_room[i] += mono * ROOM_SEND;
-                }
-            }
-        }
-
-        symp.process(&send_sym[..n], &mut mix_l[..n], &mut mix_r[..n]);
-        if gtr_symp_on {
-            gtr_symp.process(&send_sym_gtr[..n], &mut mix_l[..n], &mut mix_r[..n]);
-        }
-        chorus.process(&send_cho[..n], &mut mix_l[..n], &mut mix_r[..n]);
-        if let Some(echo) = &mut echo {
-            echo.process(&send_del[..n], &mut mix_l[..n], &mut mix_r[..n]);
-        }
-        if drum_room_on {
-            // pre-hall: the kit sits in a tight room inside the hall
-            drum_room.process(&send_room[..n], &mut mix_l[..n], &mut mix_r[..n]);
-        }
-        for x in send_rev[..n].iter_mut() {
-            *x = rev_hp.process(*x);
-        }
-        reverb.process(&send_rev[..n], &mut mix_l[..n], &mut mix_r[..n]);
-        glue.process(&mut mix_l[..n], &mut mix_r[..n]);
-
-        for i in 0..n {
-            out[(block_start + i) * 2] = mix_l[i];
-            out[(block_start + i) * 2 + 1] = mix_r[i];
-            let m = mix_l[i].abs().max(mix_r[i].abs());
-            if m > stats.peak {
-                stats.peak = m;
-            }
-        }
+        core.render_block_add(n, &mut out[block_start * 2..(block_start + n) * 2]);
 
         block_start += n;
         if opt.verbose && block_start >= next_report {
@@ -1244,12 +1408,12 @@ pub(crate) fn render_buses(
                 "  rendered {:>3.0}%  ({:.1} s, {} live voices)",
                 block_start as f64 / total as f64 * 100.0,
                 block_start as f64 / sr as f64,
-                active.len()
+                core.active_voice_count()
             );
             next_report += total / 10;
         }
     }
-    (out, stats)
+    (out, core.stats())
 }
 
 /// Peak-normalise to `target` and convert to interleaved i16 with TPDF dither.
@@ -1420,6 +1584,67 @@ mod tests {
             rms(&pl),
             rms(&pr)
         );
+    }
+
+    #[test]
+    fn cc121_resets_controllers_but_preserves_mix_state() {
+        let sr = 44100.0;
+        let mut core = EngineCore::new(CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+        });
+        core.handle_event(EvKind::Prog { ch: 0, prog: 30 });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 7,
+            val: 80,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 10,
+            val: 20,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 64,
+            val: 127,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 1,
+            val: 100,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 74,
+            val: 20,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 121,
+            val: 0,
+        });
+
+        let s = &core.strips[0];
+        assert!((s.volume - (80.0f32 / 127.0).powi(2)).abs() < 1e-6);
+        assert!((s.pan - 20.0 / 127.0).abs() < 1e-6);
+        assert!(!s.sustain);
+        assert!(!s.mod_authored);
+        assert_eq!(s.expr, 1.0);
+        assert_eq!(s.expr_target, 1.0);
+        assert!(s.wah.is_none());
+        assert!(
+            s.drive.is_some(),
+            "program-derived drive should be restored"
+        );
+        assert_eq!(s.bend, 1.0);
+        assert_eq!(s.rpn_msb, 127);
+        assert_eq!(s.rpn_lsb, 127);
     }
 
     /// Oracle 32a (D10, §5.2/§5.3 A/B): the drum room adds early energy a

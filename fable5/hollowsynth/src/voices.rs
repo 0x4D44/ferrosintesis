@@ -24,7 +24,7 @@ use crate::dsp::{
 };
 use std::f32::consts::TAU;
 
-pub trait Voice {
+pub trait Voice: Send {
     /// Add one block of samples into `out`; return false when finished.
     fn render(&mut self, out: &mut [f32]) -> bool;
     fn note_off(&mut self);

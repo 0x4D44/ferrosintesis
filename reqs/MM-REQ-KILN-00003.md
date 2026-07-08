@@ -8,7 +8,7 @@
 - **Satisfied-by:** `$null | cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
-- **Claimed-by:** —
+- **Claimed-by:** codex-gpt5@KILN (2026-07-08T20:28:17.3073443+01:00)
 - **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement

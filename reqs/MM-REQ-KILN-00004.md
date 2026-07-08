@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, pending build commit SHA)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `39c0d7bc632eaecb8d7e56a233d53b3bb6040ba0`)
 
 ## Statement
 GM 12 (Marimba) and 13 (Xylophone) must render with wood-bar character — a fast,

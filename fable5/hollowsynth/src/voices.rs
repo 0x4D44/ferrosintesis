@@ -19,7 +19,8 @@
 //! a gently-bowed or gently-blown note actually starts.
 
 use crate::dsp::{
-    key_freq, vel_amp, Adsr, Biquad, BlepSaw, Burst, DelayLine, Drift, OnePole, Rng, Sine,
+    key_freq, vel_amp, Adsr, Biquad, BlepPulse, BlepSaw, Burst, DelayLine, Drift, OnePole, Rng,
+    Sine,
 };
 use std::f32::consts::TAU;
 
@@ -433,9 +434,9 @@ pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "BASS",
     wound_all: true,
-    t60: 3.2,              // was 3.6: a touch tighter, still a warm ring
-    bright: 1250.0,        // was 1700: darker loop damping — fewer high harmonics ring
-    pick_lp: 1000.0,       // was 1300: duller, rounder attack (flatwound)
+    t60: 3.2,        // was 3.6: a touch tighter, still a warm ring
+    bright: 1250.0,  // was 1700: darker loop damping — fewer high harmonics ring
+    pick_lp: 1000.0, // was 1300: duller, rounder attack (flatwound)
     pos: 0.35,
     amp: 1.05,
     rel_t60: 0.12,
@@ -457,16 +458,16 @@ pub const FRETLESS: PluckPreset = PluckPreset {
     name: "FRETLESS",
     wound_all: true,
     t60: 2.6,
-    bright: 1050.0,        // was 1300: darker
-    pick_lp: 780.0,        // was 900: rounder, softer attack
+    bright: 1050.0, // was 1300: darker
+    pick_lp: 780.0, // was 900: rounder, softer attack
     pos: 0.40,
     amp: 1.05,
     attack_s: 0.012,
     body: &[(58.0, 0.8, 4.0), (105.0, 1.0, 2.2)], // deeper + woody
-    out_lp: 1200.0,        // was 1500: muffle
-    pickup: 0.37,          // was 0.33: 2nd-harmonic weight
-    sub: 0.26,             // was 0.15: fuller fundamental
-    sub_ramp: 90,          // the sub speaks fast
+    out_lp: 1200.0,                               // was 1500: muffle
+    pickup: 0.37,                                 // was 0.33: 2nd-harmonic weight
+    sub: 0.26,                                    // was 0.15: fuller fundamental
+    sub_ramp: 90,                                 // the sub speaks fast
     sub_shape: (0.4, 0.0), // B5: a real string's weight has a strong 2nd harmonic
     attack_noise: 0.55,    // was 0.7
     stop_thump: 2.2,
@@ -1354,8 +1355,41 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
 // SawStack (strings / choir / pads)
 // ---------------------------------------------------------------------------
 
+/// Oscillator shape for a `SawStack` layer. Saw for strings/choir/pads and
+/// most leads; Pulse (band-limited square) for the square-lead class.
+#[derive(Clone, Copy)]
+enum Wave {
+    Saw,
+    Pulse(f32), // duty cycle
+}
+
+/// A layer's oscillator — a thin enum so the render loop stays branch-cheap and
+/// the `Saw` arm is numerically identical to a bare `BlepSaw`.
+enum LayerOsc {
+    Saw(BlepSaw),
+    Pulse(BlepPulse),
+}
+
+impl LayerOsc {
+    #[inline]
+    fn next(&mut self) -> f32 {
+        match self {
+            LayerOsc::Saw(o) => o.next(),
+            LayerOsc::Pulse(o) => o.next(),
+        }
+    }
+
+    #[inline]
+    fn set_freq(&mut self, freq: f32, sr: f32) {
+        match self {
+            LayerOsc::Saw(o) => o.set_freq(freq, sr),
+            LayerOsc::Pulse(o) => o.set_freq(freq, sr),
+        }
+    }
+}
+
 struct Layer {
-    osc: BlepSaw,
+    osc: LayerOsc,
     ratio: f32,
     vib_phase: f32,
     vib_rate: f32, // Hz — every player's wobble is their own
@@ -1390,9 +1424,13 @@ pub struct SawStack {
     t: u32,
     amp: f32,
     sr: f32,
+    lead_legato: bool, // only leads slur on CC68; others re-attack (byte-identical)
 }
 
 impl SawStack {
+    /// Saw-oscillator constructor (strings / choir / pads). Delegates to
+    /// `new_wave` with `Wave::Saw`; kept as the stable entry point so those
+    /// callers are byte-identical.
     #[allow(clippy::too_many_arguments)]
     fn new(
         key: u8,
@@ -1410,6 +1448,47 @@ impl SawStack {
         sweep_q: f32,
         amp: f32,
     ) -> Self {
+        Self::new_wave(
+            key,
+            vel,
+            sr,
+            seed,
+            n_osc,
+            detune,
+            drift_depth,
+            filt,
+            env,
+            vib,
+            breath,
+            sweep,
+            sweep_q,
+            amp,
+            Wave::Saw,
+        )
+    }
+
+    /// Full constructor with a selectable oscillator shape. The per-layer RNG
+    /// draw order (osc phase, then `vib_phase`, then `vib_rate`) is identical to
+    /// the historical saw path — load-bearing for byte-identity — so the phase
+    /// is drawn once before the wave match and both arms consume it the same way.
+    #[allow(clippy::too_many_arguments)]
+    fn new_wave(
+        key: u8,
+        vel: u8,
+        sr: f32,
+        seed: u32,
+        n_osc: usize,
+        detune: f32,
+        drift_depth: f32,
+        filt: StackFilter,
+        env: Adsr,
+        vib: (f32, f32, f32), // (hz, depth, delay s)
+        breath: f32,
+        sweep: Option<(f32, f32, f32)>, // (rate, base, octaves)
+        sweep_q: f32,
+        amp: f32,
+        wave: Wave,
+    ) -> Self {
         let f = key_freq(key);
         let mut rng = Rng::new(seed);
         let layers = (0..n_osc)
@@ -1419,8 +1498,14 @@ impl SawStack {
                 } else {
                     0.0
                 };
+                let layer_f = f * (1.0 + detune * spread);
+                let phase = rng.white() * 0.5 + 0.5;
+                let osc = match wave {
+                    Wave::Saw => LayerOsc::Saw(BlepSaw::new(layer_f, sr, phase)),
+                    Wave::Pulse(duty) => LayerOsc::Pulse(BlepPulse::new(layer_f, sr, phase, duty)),
+                };
                 Layer {
-                    osc: BlepSaw::new(f * (1.0 + detune * spread), sr, rng.white() * 0.5 + 0.5),
+                    osc,
                     ratio: 1.0 + detune * spread,
                     vib_phase: rng.white() * std::f32::consts::PI,
                     vib_rate: vib.0 * (1.0 + 0.15 * rng.white()),
@@ -1444,6 +1529,7 @@ impl SawStack {
             t: 0,
             amp: amp * (0.4 + 0.6 * vel_amp(vel)),
             sr,
+            lead_legato: false,
         }
     }
 
@@ -1534,6 +1620,18 @@ impl Voice for SawStack {
     fn set_pitch(&mut self, mult: f32) {
         // applied at control rate on top of each layer's detune/vibrato/drift
         self.bend = mult;
+    }
+
+    fn legato_to(&mut self, key: u8, _vel: u8) -> bool {
+        // Only leads slur — strings/choir/pads return false so the engine
+        // re-attacks exactly as before (byte-identical). A slur just retunes
+        // the base frequency; the layers pick it up on the next control tick
+        // and the envelope keeps running (no fresh attack).
+        if !self.lead_legato {
+            return false;
+        }
+        self.base_f = key_freq(key);
+        true
     }
 
     fn set_vowel(&mut self, freqs: [f32; 3], qs: [f32; 3], gains: [f32; 3]) {
@@ -1657,6 +1755,121 @@ fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
             0.42,
         )
     }
+}
+
+/// Per-program voicing for the GM synth leads (80-87). Kept to the cheap knobs
+/// the SawStack already exposes; bespoke per-program DSP (charang drive, voice
+/// formants, the 86 fifth / 87 sub-octave interval) is deferred to reqs.
+struct LeadSpec {
+    wave: Wave,
+    n_osc: usize,
+    detune: f32,
+    cutoff: f32,
+    q: f32,
+    breath: f32,
+}
+
+const LEADS: [LeadSpec; 8] = [
+    // 80 square lead — hollow, focused pulse
+    LeadSpec {
+        wave: Wave::Pulse(0.5),
+        n_osc: 2,
+        detune: 0.004,
+        cutoff: 3400.0,
+        q: 1.0,
+        breath: 0.0,
+    },
+    // 81 saw lead — the classic (the one used by albums)
+    LeadSpec {
+        wave: Wave::Saw,
+        n_osc: 3,
+        detune: 0.006,
+        cutoff: 3000.0,
+        q: 1.1,
+        breath: 0.0,
+    },
+    // 82 calliope — rounder pulse, breathy, no detune
+    LeadSpec {
+        wave: Wave::Pulse(0.5),
+        n_osc: 1,
+        detune: 0.0,
+        cutoff: 2200.0,
+        q: 0.8,
+        breath: 0.015,
+    },
+    // 83 chiff — airy saw
+    LeadSpec {
+        wave: Wave::Saw,
+        n_osc: 2,
+        detune: 0.005,
+        cutoff: 2800.0,
+        q: 1.0,
+        breath: 0.05,
+    },
+    // 84 charang — brightest, edgiest saw
+    LeadSpec {
+        wave: Wave::Saw,
+        n_osc: 3,
+        detune: 0.012,
+        cutoff: 4200.0,
+        q: 1.4,
+        breath: 0.0,
+    },
+    // 85 voice lead — softer, breathy saw
+    LeadSpec {
+        wave: Wave::Saw,
+        n_osc: 3,
+        detune: 0.008,
+        cutoff: 2500.0,
+        q: 1.2,
+        breath: 0.02,
+    },
+    // 86 fifths* — plain saw this pass (parallel fifth deferred)
+    LeadSpec {
+        wave: Wave::Saw,
+        n_osc: 2,
+        detune: 0.006,
+        cutoff: 3000.0,
+        q: 1.1,
+        breath: 0.0,
+    },
+    // 87 bass+lead* — darker saw this pass (sub octave deferred)
+    LeadSpec {
+        wave: Wave::Saw,
+        n_osc: 2,
+        detune: 0.005,
+        cutoff: 2400.0,
+        q: 1.0,
+        breath: 0.0,
+    },
+];
+
+/// GM synth leads (80-87): a `SawStack` voiced for a lead — fast
+/// velocity-tracked attack, short release, a velocity-tracked filter, and a
+/// pulse oscillator for the square-lead class. CC1 vibrato and CC68 legato come
+/// from the engine; `lead_legato` opts this instance into slurs.
+fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
+    let spec = &LEADS[(program - 80) as usize];
+    let cutoff = (spec.cutoff * (0.55 + 0.45 * vel_amp(vel))).min(sr * 0.45);
+    let mut s = SawStack::new_wave(
+        key,
+        vel,
+        sr,
+        seed,
+        spec.n_osc,
+        spec.detune,
+        0.002, // light per-layer drift — leads sit tighter than pads
+        StackFilter::Lp(Biquad::lowpass(cutoff, spec.q, sr)),
+        Adsr::new(vel_attack(0.010, vel), 0.06, 0.82, 0.10, sr),
+        (0.0, 0.0, 0.0), // no always-on vibrato — CC1 mod wheel provides it
+        spec.breath,
+        None, // no filter sweep (that stays a pad feature)
+        spec.q,
+        0.50,
+        spec.wave,
+    );
+    s.lead_legato = true;
+    s
 }
 
 // ---------------------------------------------------------------------------
@@ -2041,7 +2254,8 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             key, vel, sr, seed, CRYSTAL, noise_off, 0.03, 1.5, 0.60,
         )),
         104..=107 => Box::new(Pluck::new(&BANJO, key, vel, sr, seed)),
-        80..=95 => Box::new(pad(program, key, vel, sr, seed)),
+        80..=87 => Box::new(lead(program, key, vel, sr, seed)),
+        88..=95 => Box::new(pad(program, key, vel, sr, seed)),
         _ => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
     }
 }
@@ -2660,5 +2874,185 @@ mod tests {
         };
         let late = measure(&buf[44100..44100 + 22050]);
         assert!((late - 440.0).abs() < 8.0, "late pitch {late} Hz");
+    }
+
+    // ---- synth-lead voice (GM 80-87) ----
+
+    fn render_saw(v: &mut SawStack, sr: f32, secs: f32) -> Vec<f32> {
+        let mut buf = vec![0f32; (sr * secs) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    /// Non-overlapping windowed-RMS envelope (X5: measure the envelope, not raw
+    /// sample peaks, which oscillator phase moves around).
+    fn rms_env(sig: &[f32], sr: f32, win_ms: f32) -> Vec<f32> {
+        let w = (((win_ms / 1000.0) * sr) as usize).max(1);
+        sig.chunks(w)
+            .map(|c| (c.iter().map(|x| x * x).sum::<f32>() / c.len() as f32).sqrt())
+            .collect()
+    }
+
+    /// Steady-state RMS over [lo, hi] seconds — a beat-robust reference level
+    /// (the detuned stack's beat makes a global-peak reference unreliable).
+    fn steady_rms(sig: &[f32], sr: f32, lo_s: f32, hi_s: f32) -> f32 {
+        let seg = &sig[(lo_s * sr) as usize..(hi_s * sr) as usize];
+        (seg.iter().map(|x| x * x).sum::<f32>() / seg.len() as f32).sqrt()
+    }
+
+    /// Time (s) for the RMS envelope to first reach an absolute level `thr`.
+    fn t_to_level(sig: &[f32], sr: f32, thr: f32, win_ms: f32) -> f32 {
+        let env = rms_env(sig, sr, win_ms);
+        for (i, &e) in env.iter().enumerate() {
+            if e >= thr {
+                return i as f32 * win_ms / 1000.0;
+            }
+        }
+        f32::INFINITY
+    }
+
+    /// Oracle 7a: the `LayerOsc::Saw` arm is bit-for-bit a bare `BlepSaw` — the
+    /// enum wrapper cannot perturb the byte-identical saw path.
+    #[test]
+    fn layerosc_saw_is_bit_identical_to_blepsaw() {
+        let sr = 44100.0;
+        let mut a = LayerOsc::Saw(BlepSaw::new(220.0, sr, 0.3));
+        let mut b = BlepSaw::new(220.0, sr, 0.3);
+        for _ in 0..4000 {
+            assert_eq!(a.next().to_bits(), b.next().to_bits());
+        }
+    }
+
+    /// Oracle 7b: the SawStack families this change refactors — pads, choir,
+    /// strings — render bit-for-bit as the baseline (origin/main) binary.
+    /// Hashes pinned from the baseline; a future SawStack/LayerOsc refactor that
+    /// drifts them trips here.
+    #[test]
+    fn sawstack_families_byte_identical() {
+        let sr = 44100.0;
+        let hash = |mut v: SawStack| {
+            let mut buf = vec![0f32; (sr * 0.5) as usize];
+            v.render(&mut buf);
+            buf.iter().fold(0xcbf29ce484222325u64, |acc, &s| {
+                (acc ^ s.to_bits() as u64).wrapping_mul(0x100000001b3)
+            })
+        };
+        assert_eq!(
+            hash(pad(95, 60, 100, sr, 7)),
+            0xb0bdc70da0091298,
+            "pad(95) drifted"
+        );
+        assert_eq!(
+            hash(choir(52, 60, 100, sr, 7)),
+            0xb6bf7e8fefbc82f1,
+            "choir(52) drifted"
+        );
+        assert_eq!(
+            hash(strings(48, 60, 100, sr, 7)),
+            0x65817f27e894bcac,
+            "strings(48) drifted"
+        );
+    }
+
+    /// Oracle 1: a lead speaks fast; a pad swells slowly. Guard is the ratio —
+    /// absolute pad thresholds near 300 ms are fragile.
+    #[test]
+    fn lead_attack_is_fast_vs_pad() {
+        let sr = 44100.0;
+        let lead_sig = render_saw(&mut lead(81, 69, 100, sr, 7), sr, 1.2);
+        let pad_sig = render_saw(&mut pad(89, 69, 100, sr, 7), sr, 1.2);
+        // reference each against its own steady level (both are settled by 0.8 s)
+        let lt = t_to_level(
+            &lead_sig,
+            sr,
+            0.9 * steady_rms(&lead_sig, sr, 0.8, 1.1),
+            10.0,
+        );
+        let pt = t_to_level(&pad_sig, sr, 0.9 * steady_rms(&pad_sig, sr, 0.8, 1.1), 10.0);
+        assert!(lt < 0.050, "lead attack too slow: {lt}s");
+        assert!(
+            pt > 0.150 && pt > 5.0 * lt,
+            "pad attack {pt}s vs lead {lt}s (ratio guard)"
+        );
+    }
+
+    /// Oracle 2: the lead release is short; the pad rings on.
+    #[test]
+    fn lead_release_is_short_vs_pad() {
+        let sr = 44100.0;
+        let run = |mut v: SawStack| {
+            let mut buf = vec![0f32; (sr * 0.3) as usize];
+            v.render(&mut buf);
+            let seg = &buf[(sr * 0.2) as usize..];
+            let plateau = (seg.iter().map(|x| x * x).sum::<f32>() / seg.len() as f32).sqrt();
+            v.note_off();
+            let mut tail = vec![0f32; (sr * 0.5) as usize];
+            v.render(&mut tail);
+            (plateau, tail)
+        };
+        let (lp, ltail) = run(lead(81, 69, 100, sr, 7));
+        let (pp, ptail) = run(pad(89, 69, 100, sr, 7));
+        let at_300 = |t: &[f32]| rms_env(t, sr, 10.0)[30]; // 300 ms / 10 ms
+        assert!(at_300(&ltail) < 0.10 * lp, "lead release too long");
+        assert!(at_300(&ptail) > 0.10 * pp, "pad released too fast");
+    }
+
+    /// Oracle 3: harder playing opens the lead's tone (velocity -> brightness).
+    #[test]
+    fn lead_velocity_opens_brightness() {
+        let sr = 44100.0;
+        let hard = render_saw(&mut lead(81, 69, 120, sr, 7), sr, 0.4);
+        let soft = render_saw(&mut lead(81, 69, 40, sr, 7), sr, 0.4);
+        let skip = (sr * 0.1) as usize;
+        let c_hard = crate::testutil::centroid(&hard[skip..], sr);
+        let c_soft = crate::testutil::centroid(&soft[skip..], sr);
+        assert!(
+            c_hard > 1.2 * c_soft,
+            "vel brightness: hard {c_hard} soft {c_soft}"
+        );
+    }
+
+    /// Oracle 4b: the square lead (80) routes to the pulse oscillator — its
+    /// even-harmonic content is far weaker than the saw lead (81).
+    #[test]
+    fn square_lead_routes_to_pulse() {
+        let sr = 44100.0;
+        let sq = render_saw(&mut lead(80, 57, 100, sr, 7), sr, 1.2);
+        let sw = render_saw(&mut lead(81, 57, 100, sr, 7), sr, 1.2);
+        let win = |s: &[f32]| s[(sr * 0.15) as usize..(sr * 1.15) as usize].to_vec();
+        let (sqw, sww) = (win(&sq), win(&sw));
+        let mag = crate::testutil::mag_at;
+        let r_sq = mag(&sqw, sr, 440.0) / mag(&sqw, sr, 220.0);
+        let r_sw = mag(&sww, sr, 440.0) / mag(&sww, sr, 220.0);
+        assert!(r_sq < 0.35 * r_sw, "square H2/H1 {r_sq} vs saw {r_sw}");
+    }
+
+    /// Oracle 6 (gate half): only leads slur; strings/choir/pads re-attack
+    /// (byte-identity does not depend on the CC68 census).
+    #[test]
+    fn legato_gated_to_leads() {
+        let sr = 44100.0;
+        let mut a = strings(48, 60, 100, sr, 7);
+        let mut b = pad(89, 60, 100, sr, 7);
+        let mut c = lead(81, 60, 100, sr, 7);
+        assert!(!a.legato_to(62, 100), "strings must not slur");
+        assert!(!b.legato_to(62, 100), "pad must not slur");
+        assert!(c.legato_to(62, 100), "lead must slur");
+    }
+
+    /// Oracle 8: the lead still answers pitch bend via the shared set_pitch.
+    #[test]
+    fn lead_still_bends() {
+        let sr = 44100.0;
+        let mut v = lead(81, 57, 100, sr, 7); // A3 = 220 Hz
+        let up = 2f32.powf(2.0 / 12.0);
+        v.set_pitch(up);
+        let buf = render_saw(&mut v, sr, 0.5);
+        let hz = crate::testutil::peak_locate(&buf[(sr * 0.1) as usize..], sr, 220.0, 300.0);
+        assert!(
+            (hz - 220.0 * up).abs() < 6.0,
+            "bent pitch {hz}, want {}",
+            220.0 * up
+        );
     }
 }

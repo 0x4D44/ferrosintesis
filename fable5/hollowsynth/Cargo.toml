@@ -1,6 +1,6 @@
 [package]
 name = "hollowsynth"
-version = "0.8.8"
+version = "0.8.9"
 edition = "2021"
 description = "A zero-dependency MIDI-to-WAV synthesizer voiced for the Hollow Hill album"
 

@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `PENDING_SHA`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `a93e3bbb83b14e2a51c0532ca65f6462b38f96d3`)
 
 ## Statement
 The CC70 vowel-morph control must be available to the formant-capable SawStack

@@ -4,12 +4,12 @@
 - **Priority:** Could
 - **Area:** hollowsynth / engine
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/engine.rs::vowel_family`, `fable5/hollowsynth/src/engine.rs::render_buses`, `fable5/hollowsynth/src/engine.rs::tests::choir_pad_91_cc70_vowel_morph_opens_formants`, `fable5/hollowsynth/src/voices.rs::SawStack::set_vowel`, `fable5/hollowsynth/src/voices.rs::pad`, `fable5/hollowsynth/README.md`
+- **Implemented-by:** `fable5/hollowsynth/src/engine.rs::vowel_family`, `fable5/hollowsynth/src/engine.rs::EngineCore::note_on`, `fable5/hollowsynth/src/engine.rs::EngineCore::render_block_add`, `fable5/hollowsynth/src/engine.rs::tests::choir_pad_91_cc70_vowel_morph_opens_formants`, `fable5/hollowsynth/src/voices.rs::SawStack::set_vowel`, `fable5/hollowsynth/src/voices.rs::pad`, `fable5/hollowsynth/README.md`
 - **Satisfied-by:** `$null | cargo test choir_pad_91_cc70_vowel_morph_opens_formants --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `a93e3bbb83b14e2a51c0532ca65f6462b38f96d3`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `ad383543a48f216aef7e7ca786b26904980c807b`)
 
 ## Statement
 The CC70 vowel-morph control must be available to the formant-capable SawStack
@@ -32,7 +32,7 @@ Manual reqs-loop build on branch `task/20260708-TSK-HUM-reqs-loop-mm-req-00010`.
 Exact Gate 2 oracle command:
 
 ```powershell
-$null | cargo test choir_pad_91_cc70_vowel_morph_opens_formants --manifest-path fable5/hollowsynth/Cargo.toml
+$null | deltic timeout 180 cargo test choir_pad_91_cc70_vowel_morph_opens_formants --manifest-path fable5/hollowsynth/Cargo.toml
 ```
 
 Passing output recorded on 2026-07-08:
@@ -41,10 +41,16 @@ Passing output recorded on 2026-07-08:
 running 1 test
 test engine::tests::choir_pad_91_cc70_vowel_morph_opens_formants ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.91s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 1.06s
 
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
-     Running unittests src\main.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-b8eab23d08065b45.exe)
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling hollowsynth v0.8.4 (D:\worktrees\midi-music\20260708-TSK-HUM-reqs-loop-mm-req-00010\fable5\hollowsynth)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s
+     Running unittests src\lib.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-ba4185fbc9b0bac1.exe)
+     Running unittests src\main.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-5ef3fec99e2e91ba.exe)
 ```
 
 Oracle red proof on baseline claim commit `2851206`:
@@ -62,18 +68,19 @@ deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.to
 PASS
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: 93 passed; 0 failed; 2 ignored
+PASS: 105 passed; 0 failed; 2 ignored; finished in 7.38s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-PASS
+PASS: Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.89s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-PASS
+PASS: Finished `release` profile [optimized] target(s) in 3.70s
 ```
 
 Existing-MIDI and prior-render safety:
 
 ```text
+No tracked `.mid` files changed between the original scan base `4696cdb` and the rebased trunk base `c0cd5cd`, so the original MIDI scan remains applicable:
 tracked_mid_files_scanned=53
 parse_errors=0
 program91_files=0
@@ -81,10 +88,10 @@ program91_noteons=0
 cc70_files=11
 cc70_on_program91_events=0
 
-Baseline/current render for fable5\Heliopause\midi\01 - Heliopause, Part One.mid:
+Baseline/current render for fable5\Heliopause\midi\01 - Heliopause, Part One.mid, rerun after rebasing onto `c0cd5cd`:
 SHA256 baseline = E6595EEB10020827C7B422463DD0B93F59C6C806B57F1213B1157AC310C69F6D
 SHA256 current  = E6595EEB10020827C7B422463DD0B93F59C6C806B57F1213B1157AC310C69F6D
-cmd /c fc /b req00010-baseline.wav req00010-current.wav
+cmd /c fc /b req00010-baseline-rebased.wav req00010-current-rebased.wav
 FC: no differences encountered
 ```
 
@@ -93,7 +100,9 @@ Adversarial self-review:
 ```text
 Oracle-fit reviewer found a real temporal bug in the first implementation: whole-song lookahead made a program-91 note use the formant path before CC70 arrived. The implementation was changed so program 91 starts as the old lowpass pad and converts inside SawStack::set_vowel only when CC70 is actually authored. The oracle now bit-compares the pre-CC70 window against a no-CC70 render, and the reviewer confirmed the issue fixed.
 
-Compatibility reviewer independently parsed 53 tracked MIDIs and found no raw program-91 events and no CC70 while program 91 is selected. It also reran the vowel tests and found no compatibility issue.
+Compatibility reviewer confirmed the previous 53-MIDI scan still applies because no tracked `.mid` files changed between the scan base and `c0cd5cd`, then reran a baseline/current Heliopause render against `c0cd5cd`; `fc /b` reported no differences.
 
-Landing-hygiene reviewer confirmed the claim commit, pending landing fields, version bump, no staged generated artifacts, and a real future integration conflict with the parallel v0.9 branch. The branch remains unpushed for human sequencing.
+Rebase reviewer checked that no conflict markers remain, `EngineCore::note_on` and `EngineCore::render_block_add` both use `vowel_family(program)`, and the reset-controller path still does not convert program 91 without CC70 authoring.
+
+Landing-hygiene reviewer confirmed the rebased implementation SHA, `0.8.4` version bump, clean gates, no staged generated artifacts, and a real future integration conflict with the parallel v0.9 branch. The branch remains unpushed for human sequencing.
 ```

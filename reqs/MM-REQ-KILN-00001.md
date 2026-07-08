@@ -42,23 +42,30 @@ assertion `left == right` failed: GM 110 must use the bowed/LA fiddle path
 Passing oracle for Gate 2:
 
 ```text
-$null | deltic timeout 180 cargo test gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato --manifest-path fable5/hollowsynth/Cargo.toml
+$null | cargo test gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato --manifest-path fable5/hollowsynth/Cargo.toml
 test engine::tests::gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.40s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.50s
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
-Additional local gates:
+Additional local gates after rebasing onto `origin/main` at `c0cd5cd`:
 
 ```text
-deltic timeout 120 cargo fmt --check
+deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
 ok
 
-$null | deltic timeout 600 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-test result: ok. 93 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.88s
+$null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
+test result: ok. 105 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 7.71s
 
-$null | deltic timeout 600 cargo clippy --all-targets --manifest-path fable5/hollowsynth/Cargo.toml -- -D warnings
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.70s
+$null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.94s
+
+deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
+Finished `release` profile [optimized] target(s) in 4.09s
 ```
 
 Authored-channel compatibility check:

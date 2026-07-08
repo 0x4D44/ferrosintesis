@@ -43,10 +43,11 @@ Passing output recorded on 2026-07-08:
 running 1 test
 test engine::tests::strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 93 filtered out; finished in 7.89s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 105 filtered out; finished in 8.23s
 
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
-     Running unittests src\main.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-b8eab23d08065b45.exe)
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
 Oracle red proof on baseline claim commit `ef0c5f8`:
@@ -66,13 +67,13 @@ deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.to
 PASS
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: 92 passed; 0 failed; 2 ignored
+PASS: 104 passed; 0 failed; 2 ignored
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-PASS
+PASS: Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.00s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-PASS
+PASS: Finished `release` profile [optimized] target(s) in 3.76s
 ```
 
 Existing-MIDI and prior-render safety:

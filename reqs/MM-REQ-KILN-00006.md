@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `43aed520e40d3acf28b2c53a956449f0a7cd22fd`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `f762fa68f022601dafcb164a5de49fc9a57a024c`)
 
 ## Statement
 GM 120–127 (fret noise, breath, seashore, bird, telephone, helicopter, applause,
@@ -84,3 +84,8 @@ changes and found zero 120-127 hits and zero 119-127 off-by-one hits. The
 landing-hygiene reviewer confirmed the version bump, README update, routing
 canary, expected dirty set, gates, and an additional Tuxedo Noir byte-identity
 render (`E48CA61B9B435A2E33F81EA418ACEB1E4154D7C9E111655C24A0D899F49052E7`).
+
+Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
+realtime API landed. The implementation commit became
+`f762fa68f022601dafcb164a5de49fc9a57a024c`; the package version was advanced to
+`0.8.4` because trunk already carried `0.8.3`.

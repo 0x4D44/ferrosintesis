@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `39c0d7bc632eaecb8d7e56a233d53b3bb6040ba0`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `0efd750575902f455c10eb93f7ea2957253c75f6`)
 
 ## Statement
 GM 12 (Marimba) and 13 (Xylophone) must render with wood-bar character — a fast,
@@ -88,3 +88,8 @@ initial oracle gaps around key-scaled decay and click-filter isolation were fixe
 and reverified. The Riverwake byte-identity caveat was corrected with the
 expected-diff render above. The remaining "dirty tree / req still Accepted"
 finding was the expected pre-landing state and is addressed by this commit.
+
+Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
+realtime API landed. The implementation commit became
+`0efd750575902f455c10eb93f7ea2957253c75f6`; the package version was advanced to
+`0.8.4` because trunk already carried `0.8.3`.

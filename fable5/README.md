@@ -34,6 +34,52 @@ note.
 
 This is original material using Gabriel-Knight-vocabulary gestures; it
 quotes no existing piece.
+## Heliopause
+
+A two-part synth instrumental (4:48 + 3:44) in the **Jean-Michel Jarre /
+Oxygène** idiom: sequencer cells with filters in constant motion,
+portamento leads, a theremin drop on RPN bend range 12, 16-against-12
+polymeter, and full-texture drops in both parts. Part Two's lead is Part
+One's theme INVERTED — proven interval-by-interval by the album's oracle,
+which also certifies a triple counterpoint (theme + answer + inversion)
+stacked in the finale.
+
+- Files: `Heliopause/midi/01..02 - Heliopause, Part One/Two.mid`
+- Docs: `Heliopause/README.md` and `ALBUM.md`; verify: `python build.py --verify`
+- Listen: [hollowsynth](hollowsynth/README.md) v0.8 or `Heliopause/audio/*.opus`
+
+This is original material using Jarre-vocabulary gestures; it quotes no
+existing piece.
+
+## The Burning Meridian
+
+Three orchestral film-epic instrumentals (3:14 + 3:19 + 3:03): a 12/8
+war build, a 3/4 elegy with a machine-verified fiddle/flute duet, and a
+5/4 battle whose horn theme (shared with track 1 across two grounds and
+three meters, oracle-proven) stacks with its descant before a turn to
+D major. The "brass" is a built section — rock organ + saw stack with a
+fine-tune spread — since hollowsynth models no brass.
+
+- Files: `The Burning Meridian/midi/01..03 - *.mid`
+- Docs: `The Burning Meridian/README.md` and `ALBUM.md`
+- Listen: `The Burning Meridian/audio/*.opus`
+
+This is original material using broad film-music vocabulary; it is not a
+copy of any existing score.
+
+## Tuxedo Noir
+
+A spy-idiom single (3:05): a machine-certified 2:1 SWUNG walking vamp,
+twang theme vs horn-stab counterline (verified pair), a 12/8 velvet
+middle, a 7/8 chase, an RPN-12 whammy dive, and a minor-major-9 final
+ring.
+
+- File: `Tuxedo Noir/midi/01 - Tuxedo Noir.mid`
+- Docs: `Tuxedo Noir/README.md` and `ALBUM.md`
+- Listen: `Tuxedo Noir/audio/01 - Tuxedo Noir.opus`
+
+This is original material in the spy-score idiom; it quotes no existing
+piece.
 
 ## Seven Kinds of Sunlight
 

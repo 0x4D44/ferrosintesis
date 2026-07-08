@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `7c4ee8582277f850af21b8bf9fe9e0a3307afe2b`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `df700f40ed9f7336550bcbff4ac6018a8e543632`)
 
 ## Statement
 A NoteOn on GM program 55 (Orchestra Hit) must render as a short, layered
@@ -39,10 +39,15 @@ Passing output recorded on 2026-07-08:
 running 1 test
 test voices::tests::orchestra_hit_55_is_short_layered_stab ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.01s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.01s
 
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
-     Running unittests src\main.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-b8eab23d08065b45.exe)
+     Running unittests src\lib.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-ba4185fbc9b0bac1.exe)
+     Running unittests src\main.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-5ef3fec99e2e91ba.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
 Oracle red proof on baseline claim commit `1f40ad1`:
@@ -64,7 +69,7 @@ deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.to
 PASS
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: 93 passed; 0 failed; 2 ignored
+PASS: 105 passed; 0 failed; 2 ignored
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
 PASS
@@ -82,6 +87,7 @@ files_with_program55_changes=0
 files_with_program55_noteons=0
 
 No-program-55 render proof:
+baseline commit: origin/main `c0cd5cd`
 baseline/current render target: fable5/Heliopause/midi/01 - Heliopause, Part One.mid
 baseline/current render stats: 4.79 min, 12643 events, 6 markers, 4859 voices, peak 1.10, max polyphony 95
 baseline SHA256: E6595EEB10020827C7B422463DD0B93F59C6C806B57F1213B1157AC310C69F6D

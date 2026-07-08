@@ -8,7 +8,7 @@
 - **Satisfied-by:** `$null | cargo test sitar_shamisen_koto_have_distinct_pluck_presets --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
-- **Claimed-by:** —
+- **Claimed-by:** codex-gpt5@KILN (2026-07-08T21:22:21.7376460+01:00)
 - **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement

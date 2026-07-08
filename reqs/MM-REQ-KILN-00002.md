@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `282c70045382bd19d5375efed8b7a1eec83feaac`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `8ef34375077a0810add988ef1b6b7cbd7bb3bec7`)
 
 ## Statement
 A NoteOn on GM program 108 (Kalimba) must render as a plucked-tine timbre — a
@@ -75,3 +75,8 @@ program-107 events. The landing-hygiene reviewer confirmed the expected files,
 version bump, README update, routing canary, gates, and req claim; the only
 actionable point was that the implementation was still uncommitted before this
 landing commit.
+
+Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
+realtime API landed. The implementation commit became
+`8ef34375077a0810add988ef1b6b7cbd7bb3bec7`; the package version was advanced to
+`0.8.4` because trunk already carried `0.8.3`.

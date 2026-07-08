@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `pending implementation commit`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `10218747b65f853de04cdc8e226ba720525672be`)
 
 ## Statement
 The string-ensemble (48–51) and choir (52–54) SawStack voices must answer the

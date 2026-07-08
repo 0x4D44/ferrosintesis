@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, pending build commit SHA)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `88ce7367bc61ddb592df336fef0157f06ac08103`)
 
 ## Statement
 GM 97 (soundtrack), 99 (atmosphere), 103 (sci-fi) must render as sustaining pad

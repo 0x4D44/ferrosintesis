@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, pending build commit SHA)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `eeebfdb6875fccf99fe73a329c5a3ed60ef21b62`)
 
 ## Statement
 A NoteOn on GM program 110 (Fiddle) must render through the bowed-string voice

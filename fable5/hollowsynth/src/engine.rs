@@ -76,6 +76,10 @@ fn aftertouch_family(program: u8) -> bool {
     vibrato_family(program) || matches!(program, 16..=23 | 48..=54 | 80..=95)
 }
 
+fn vowel_family(program: u8) -> bool {
+    matches!(program, 52..=54 | 91)
+}
+
 // CC70 vowel morph anchors for the choir programs (52-54). Bass/baritone
 // formant values; "mm" keeps the closed hum the v0.6 onset morph starts from,
 // with the upper bands shaded down the way closed lips actually mute them.
@@ -804,7 +808,7 @@ impl EngineCore {
             if s.bend != 1.0 {
                 voice.set_pitch(s.bend);
             }
-            if s.vowel_authored && matches!(s.program, 52..=54) {
+            if s.vowel_authored && vowel_family(s.program) {
                 let (f, q, g) = vowel_at(s.vowel_cur);
                 voice.set_vowel(f, q, g);
             }
@@ -1159,7 +1163,7 @@ impl EngineCore {
                 continue;
             }
             let ch = ci as u8;
-            if strip.vowel_authored && matches!(strip.program, 52..=54) {
+            if strip.vowel_authored && vowel_family(strip.program) {
                 strip.vowel_cur += self.expr_smooth * (strip.vowel_target - strip.vowel_cur);
                 let (f, q, g) = vowel_at(strip.vowel_cur);
                 for a in self.active.iter_mut().filter(|a| a.ch == ch) {
@@ -1402,6 +1406,7 @@ pub(crate) fn render_buses(
         while ev_i < events.len() && events[ev_i].0 < block_start + n {
             let (_, kind) = events[ev_i];
             ev_i += 1;
+
             core.handle_event(kind);
         }
 
@@ -2480,10 +2485,16 @@ mod tests {
         band / total.max(1e-12)
     }
 
-    fn render_choir_vowel(cc70: u8) -> Vec<f32> {
+    fn render_program_vowel(program: u8, cc70: u8) -> Vec<f32> {
         let song = test_song(
             vec![
-                (0.0, EvKind::Prog { ch: 0, prog: 52 }),
+                (
+                    0.0,
+                    EvKind::Prog {
+                        ch: 0,
+                        prog: program,
+                    },
+                ),
                 (
                     0.0,
                     EvKind::Cc {
@@ -2515,6 +2526,50 @@ mod tests {
         left(&render(&song, &test_opts(44100.0)).0)
     }
 
+    fn render_program_late_vowel(program: u8, cc70: Option<u8>) -> Vec<f32> {
+        let mut events = vec![
+            (
+                0.0,
+                EvKind::Prog {
+                    ch: 0,
+                    prog: program,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.02,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 48,
+                    vel: 90,
+                },
+            ),
+        ];
+        if let Some(val) = cc70 {
+            events.push((
+                0.70,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 70,
+                    val,
+                },
+            ));
+        }
+        events.push((2.4, EvKind::NoteOff { ch: 0, key: 48 }));
+        left(&render(&test_song(events, 2.5), &test_opts(44100.0)).0)
+    }
+
+    fn render_choir_vowel(cc70: u8) -> Vec<f32> {
+        render_program_vowel(52, cc70)
+    }
+
     /// CC70 = 84 ("ah") opens the choir's upper formants (gains 0.60/0.35)
     /// far past CC70 = 0 ("mm", gains 0.30/0.10) — a measurable spectral
     /// shift on the sustained vowel, not just a level change.
@@ -2530,6 +2585,40 @@ mod tests {
         assert!(
             f_ah > 1.5 * f_mm,
             "vowel didn't open: mm {f_mm} vs ah {f_ah}"
+        );
+    }
+
+    /// GM 91 choir-pad is also a formant-capable SawStack once the channel
+    /// authors CC70; it must not stay on the plain lowpass pad path.
+    #[test]
+    fn choir_pad_91_cc70_vowel_morph_opens_formants() {
+        let sr = 44100.0;
+        let mm = render_program_vowel(91, 0);
+        let ah = render_program_vowel(91, 84);
+        let (a, b) = ((1.0 * sr) as usize, (2.0 * sr) as usize);
+        let f_mm = energy_above(&mm[a..b], 1500.0, sr);
+        let f_ah = energy_above(&ah[a..b], 1500.0, sr);
+        assert!(
+            f_ah > 1.5 * f_mm,
+            "choir-pad vowel didn't open: mm {f_mm} vs ah {f_ah}"
+        );
+
+        let plain = render_program_late_vowel(91, None);
+        let late = render_program_late_vowel(91, Some(84));
+        let (pre_a, pre_b) = ((0.2 * sr) as usize, (0.55 * sr) as usize);
+        assert!(
+            plain[pre_a..pre_b]
+                .iter()
+                .zip(&late[pre_a..pre_b])
+                .all(|(a, b)| a.to_bits() == b.to_bits()),
+            "future CC70 changed program 91 before the controller was authored"
+        );
+        let (a, b) = ((1.4 * sr) as usize, (2.2 * sr) as usize);
+        let f_plain = energy_above(&plain[a..b], 1500.0, sr);
+        let f_late = energy_above(&late[a..b], 1500.0, sr);
+        assert!(
+            f_late > 1.5 * f_plain,
+            "late-authored choir-pad vowel didn't open: plain {f_plain} vs ah {f_late}"
         );
     }
 

@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices (Pluck bass)
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** —
+- **Satisfied-by:** `$null | cargo test fretless_bass_35_mwah_blooms --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

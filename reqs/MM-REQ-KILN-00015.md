@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices (piano)
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** —
+- **Satisfied-by:** `$null | cargo test programs_4_7_do_not_use_acoustic_piano_voice --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

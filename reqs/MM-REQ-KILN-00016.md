@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices (Pluck)
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** —
+- **Satisfied-by:** `$null | cargo test harp_46_has_soundboard_and_harp_wound_law --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

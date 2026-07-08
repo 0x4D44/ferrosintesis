@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices (Modal, Organ)
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** —
+- **Satisfied-by:** `$null | cargo test modal_organ_pitch_controls_move_sustained_notes --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

@@ -8,7 +8,7 @@
 - **Satisfied-by:** `$null | cargo test gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
-- **Claimed-by:** —
+- **Claimed-by:** codex-gpt5@KILN (2026-07-08T19:42:36.7641945+01:00)
 - **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement

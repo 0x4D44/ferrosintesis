@@ -4,7 +4,7 @@
 //! Families:
 //!   Modal    — additive/modal synthesis via rotation oscillators
 //!              (piano with two-stage decay, celesta, glockenspiel, music
-//!               box, tubular bells, crystal, timpani)
+//!               box, tubular bells, kalimba, crystal, timpani)
 //!   Pluck    — extended Karplus-Strong strings with per-note round-robin
 //!              variation (guitars, bass, harp, banjo)
 //!   Organ    — harmonic drawbar bank with key click, chiff and tremulant
@@ -307,6 +307,12 @@ fn wood_bar(
         gain,
     )
 }
+const KALIMBA: &[(f32, f32, f32)] = &[
+    (1.00, 1.00, 0.95),
+    (2.80, 0.42, 0.42),
+    (5.40, 0.16, 0.22),
+    (8.15, 0.05, 0.12),
+];
 
 fn timpani(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let f = key_freq(key);
@@ -2319,6 +2325,17 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             key, vel, sr, seed, CRYSTAL, noise_off, 0.03, 1.5, 0.60,
         )),
         104..=107 => Box::new(Pluck::new(&BANJO, key, vel, sr, seed)),
+        108 => Box::new(bell(
+            key,
+            vel,
+            sr,
+            seed,
+            KALIMBA,
+            (0.08, 0.010, 2800.0, 0.9),
+            0.001,
+            0.18,
+            0.56,
+        )),
         80..=87 => Box::new(lead(program, key, vel, sr, seed)),
         88..=95 => Box::new(pad(program, key, vel, sr, seed)),
         _ => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
@@ -2528,6 +2545,49 @@ mod tests {
         assert!(
             quint > 1.8 * vibes_fourth,
             "xylophone 1:3 bar mode not dominant: 3f {quint} vs 4f {vibes_fourth}"
+        );
+    }
+
+    #[test]
+    fn kalimba_108_has_tine_decay_not_pluck() {
+        let sr = 44100.0;
+        let mut voice = make(108, 72, 108, sr, 0x108, false);
+        assert_eq!(
+            voice.kind(),
+            "modal",
+            "program 108 must route to bell/modal"
+        );
+
+        let mut kalimba = vec![0f32; (1.4 * sr) as usize];
+        voice.render(&mut kalimba);
+
+        let f = key_freq(72);
+        let early = &kalimba[(0.015 * sr) as usize..(0.24 * sr) as usize];
+        let fundamental = crate::testutil::band_rms(early, sr, f, 10.0);
+        let second_harmonic = crate::testutil::band_rms(early, sr, f * 2.0, 10.0);
+        let tine_28 = crate::testutil::band_rms(early, sr, f * 2.80, 12.0);
+        let tine_54 = crate::testutil::band_rms(early, sr, f * 5.40, 12.0);
+        assert!(
+            tine_28 > 0.22 * fundamental && tine_28 > 1.25 * second_harmonic,
+            "2.8x tine mode {tine_28} vs f0 {fundamental} and 2x {second_harmonic}"
+        );
+        assert!(
+            tine_54 > 0.055 * fundamental,
+            "5.4x tine mode {tine_54} vs f0 {fundamental}"
+        );
+
+        let contact = crate::testutil::hp_rms(&kalimba[..(0.008 * sr) as usize], sr, 2000.0);
+        let body = crate::testutil::rms(&kalimba[(0.04 * sr) as usize..(0.12 * sr) as usize]);
+        assert!(
+            contact > 0.20 * body && contact < 4.0 * body,
+            "thumb contact {contact} vs early body {body}"
+        );
+
+        let after_contact = (0.020 * sr) as usize;
+        let kalimba_t60 = crate::testutil::t60_of(&kalimba[after_contact..], sr);
+        assert!(
+            kalimba_t60 > 0.25 && kalimba_t60 < 1.4,
+            "kalimba t60 {kalimba_t60}s should be a short tine ring"
         );
     }
 

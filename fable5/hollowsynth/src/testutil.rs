@@ -579,6 +579,7 @@ mod guards {
             (72, "wind"),
             (104, "BANJO"),
             (110, "bowed"),
+            (108, "modal"),
         ];
         for &(prog, want) in cases {
             let v = crate::voices::make(prog, 60, 100, SR, 7, false);

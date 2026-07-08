@@ -40,10 +40,11 @@ Passing output recorded on 2026-07-08:
 running 1 test
 test voices::tests::sitar_shamisen_koto_have_distinct_pluck_presets ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.12s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.13s
 
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
-     Running unittests src\main.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-b8eab23d08065b45.exe)
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
 Oracle red proof on baseline claim commit `e0866db`:
@@ -63,13 +64,13 @@ deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.to
 PASS
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: 93 passed; 0 failed; 2 ignored
+PASS: 105 passed; 0 failed; 2 ignored; finished in 9.98s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-PASS
+PASS: Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.01s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-PASS
+PASS: Finished `release` profile [optimized] target(s) in 4.23s
 ```
 
 Existing-MIDI and prior-render safety:

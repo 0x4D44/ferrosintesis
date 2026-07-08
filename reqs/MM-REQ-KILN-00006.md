@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `PENDING_SHA`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `43aed520e40d3acf28b2c53a956449f0a7cd22fd`)
 
 ## Statement
 GM 120–127 (fret noise, breath, seashore, bird, telephone, helicopter, applause,

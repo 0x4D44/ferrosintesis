@@ -1581,6 +1581,7 @@ pub struct SawStack {
     base_f: f32,
     bend: f32, // channel pitch multiplier (bend / fine-tune / aftertouch vibrato)
     filt: StackFilter,
+    vowel_morph_start: Option<[f32; 3]>,
     env: Adsr,
     vib_depth: f32,
     vib_delay: u32,
@@ -1686,6 +1687,7 @@ impl SawStack {
             base_f: f,
             bend: 1.0,
             filt,
+            vowel_morph_start: None,
             env,
             vib_depth: vib.1,
             vib_delay: (vib.2 * sr) as u32,
@@ -1810,6 +1812,18 @@ impl Voice for SawStack {
             *tgt = freqs;
             *q = qs;
             *g = gains;
+        } else if let Some(start) = self.vowel_morph_start.take() {
+            self.filt = StackFilter::Formant {
+                bands: [
+                    Biquad::bandpass(start[0], qs[0], self.sr),
+                    Biquad::bandpass(start[1], qs[1], self.sr),
+                    Biquad::bandpass(start[2], qs[2], self.sr),
+                ],
+                gains,
+                cur: start,
+                tgt: freqs,
+                qs,
+            };
         }
     }
 
@@ -1907,7 +1921,7 @@ fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
             0.42,
         )
     } else {
-        SawStack::new(
+        let mut stack = SawStack::new(
             key,
             vel,
             sr,
@@ -1922,7 +1936,11 @@ fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
             Some((0.13, 1100.0, 0.5)),
             0.7,
             0.42,
-        )
+        );
+        if program == 91 {
+            stack.vowel_morph_start = Some([500.0, 900.0, 2400.0]);
+        }
+        stack
     }
 }
 

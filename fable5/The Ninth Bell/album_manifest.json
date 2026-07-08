@@ -1,0 +1,83 @@
+{
+  "album": "The Ninth Bell",
+  "artist": "Claude Fable 5",
+  "style": "Gothic orchestral drama in the Gabriel Knight idiom: strings, choir, church organ, tubular bells, timpani",
+  "track_count": 1,
+  "total_duration_seconds": 346.87,
+  "total_duration_minutes": 5.78,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "The Ninth Bell",
+      "file": "midi/01 - The Ninth Bell.mid",
+      "duration_seconds": 346.87,
+      "duration_minutes": 5.78,
+      "movements": [
+        {
+          "name": "I. The Veil",
+          "start_beat": 0.0,
+          "end_beat": 32.0,
+          "start_seconds": 0.0,
+          "end_seconds": 25.95,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Processional",
+          "start_beat": 32.0,
+          "end_beat": 96.0,
+          "start_seconds": 25.95,
+          "end_seconds": 77.84,
+          "time": "0:25"
+        },
+        {
+          "name": "III. First Ascent",
+          "start_beat": 96.0,
+          "end_beat": 128.0,
+          "start_seconds": 77.84,
+          "end_seconds": 103.78,
+          "time": "1:17"
+        },
+        {
+          "name": "IV. The Hit",
+          "start_beat": 128.0,
+          "end_beat": 132.0,
+          "start_seconds": 103.78,
+          "end_seconds": 107.03,
+          "time": "1:43"
+        },
+        {
+          "name": "V. Sotto Voce",
+          "start_beat": 132.0,
+          "end_beat": 196.0,
+          "start_seconds": 107.03,
+          "end_seconds": 167.98,
+          "time": "1:47"
+        },
+        {
+          "name": "VI. Rising Tide",
+          "start_beat": 196.0,
+          "end_beat": 292.0,
+          "start_seconds": 167.98,
+          "end_seconds": 246.19,
+          "time": "2:47"
+        },
+        {
+          "name": "VII. Full Toll",
+          "start_beat": 292.0,
+          "end_beat": 356.0,
+          "start_seconds": 246.19,
+          "end_seconds": 294.19,
+          "time": "4:06"
+        },
+        {
+          "name": "VIII. Embers",
+          "start_beat": 356.0,
+          "end_beat": 404.0,
+          "start_seconds": 294.19,
+          "end_seconds": 343.99,
+          "time": "4:54"
+        }
+      ]
+    }
+  ]
+}

@@ -78,3 +78,18 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   it; prove it by rendering all prior albums byte-identical (build a
   baseline binary in a scratch `git worktree add HEAD` and `cmp`). Keeps
   old albums frozen while the synth grows.
+- 2026.07.08 — **Encode the dramatic shape as an oracle, twice.** The
+  Ninth Bell's "builds and drops" brief became `check_arc` — inequalities
+  on per-bar velocity sums (ascent < ascent, void ≤ 0.25× processional,
+  feint bar < 0.6× its neighbour, climax = global max, coda ≤ 0.2× climax)
+  — plus an `analyze.py` mirror asserting the SAME contour in render RMS
+  dB. Composer agents then compose *to the shape*, and the −60 dB void /
+  −18 dB climax landed first assembly. A prose brief ("goes somewhere
+  dramatic") is unfalsifiable; a contour of numbers is a target and a test.
+- 2026.07.08 — **Reproduce a "verbatim" seed by recomputing it, not
+  copying it.** The Veil had to be the demo's ch0 gesture exactly;
+  `check_intro_fidelity` re-runs `pad_block`/`voice_lead`/`cc_curve` from
+  the engine and pins ch0 note-for-note (sorting by jitter-rounded onset
+  so ±4-tick humanisation can't scramble same-beat chords). Continuing the
+  ground into movement II then needs the intro's FINAL voicing as the
+  voice-lead seed, or bar 9 re-spreads and dents the seam.

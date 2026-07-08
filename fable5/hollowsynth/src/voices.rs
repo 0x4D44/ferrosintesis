@@ -266,6 +266,47 @@ const CRYSTAL: &[(f32, f32, f32)] = &[
     (6.70, 0.10, 1.6),
 ];
 const VIBES: &[(f32, f32, f32)] = &[(1.0, 1.0, 3.0), (4.0, 0.25, 1.2), (9.8, 0.06, 0.5)];
+const MARIMBA: &[(f32, f32, f32)] = &[(1.0, 1.0, 0.95), (3.0, 0.34, 0.42), (5.2, 0.12, 0.22)];
+const MARIMBA_NOISE: (f32, f32, f32, f32) = (0.14, 0.010, 1800.0, 1.0);
+const MARIMBA_ATTACK_S: f32 = 0.001;
+const MARIMBA_RELEASE_T60: f32 = 0.35;
+const MARIMBA_GAIN: f32 = 0.52;
+const XYLOPHONE: &[(f32, f32, f32)] = &[(1.0, 1.0, 0.42), (3.0, 0.58, 0.24), (6.2, 0.14, 0.12)];
+const XYLOPHONE_NOISE: (f32, f32, f32, f32) = (0.18, 0.006, 3200.0, 1.2);
+const XYLOPHONE_ATTACK_S: f32 = 0.0;
+const XYLOPHONE_RELEASE_T60: f32 = 0.25;
+const XYLOPHONE_GAIN: f32 = 0.46;
+
+#[allow(clippy::too_many_arguments)]
+fn wood_bar(
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    table: &[(f32, f32, f32)],
+    noise: (f32, f32, f32, f32),
+    attack_s: f32,
+    release_t60: f32,
+    gain: f32,
+) -> Modal {
+    let f = key_freq(key);
+    let decay_scale = (440.0 / f).powf(0.35).clamp(0.50, 1.80);
+    let scaled: Vec<(f32, f32, f32)> = table
+        .iter()
+        .map(|&(r, a, t)| (r, a, t * decay_scale))
+        .collect();
+    bell(
+        key,
+        vel,
+        sr,
+        seed,
+        &scaled,
+        noise,
+        attack_s,
+        release_t60,
+        gain,
+    )
+}
 
 fn timpani(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let f = key_freq(key);
@@ -2181,7 +2222,29 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             0.5,
             0.52,
         )),
-        11..=13 => Box::new(bell(key, vel, sr, seed, VIBES, noise_off, 0.002, 0.8, 0.45)),
+        11 => Box::new(bell(key, vel, sr, seed, VIBES, noise_off, 0.002, 0.8, 0.45)),
+        12 => Box::new(wood_bar(
+            key,
+            vel,
+            sr,
+            seed,
+            MARIMBA,
+            MARIMBA_NOISE,
+            MARIMBA_ATTACK_S,
+            MARIMBA_RELEASE_T60,
+            MARIMBA_GAIN,
+        )),
+        13 => Box::new(wood_bar(
+            key,
+            vel,
+            sr,
+            seed,
+            XYLOPHONE,
+            XYLOPHONE_NOISE,
+            XYLOPHONE_ATTACK_S,
+            XYLOPHONE_RELEASE_T60,
+            XYLOPHONE_GAIN,
+        )),
         14 | 15 => Box::new(bell(
             key,
             vel,
@@ -2368,6 +2431,102 @@ mod tests {
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    fn render_program(program: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = make(program, key, vel, sr, seed, false);
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    #[test]
+    fn marimba_xylophone_have_wood_bar_envelopes() {
+        let sr = 44100.0;
+        let key = 69;
+        let vibe = render_program(11, key, 105, 2.0, 17);
+        let marimba = render_program(12, key, 105, 2.0, 17);
+        let xylophone = render_program(13, key, 105, 2.0, 17);
+
+        let vibe_t60 = crate::testutil::t60_of(&vibe, sr);
+        let marimba_t60 = crate::testutil::t60_of(&marimba, sr);
+        let xylophone_t60 = crate::testutil::t60_of(&xylophone, sr);
+        assert!(
+            marimba_t60 < 0.55 * vibe_t60,
+            "marimba should decay like wood, not vibes: marimba {marimba_t60:.2}s vs vibes {vibe_t60:.2}s"
+        );
+        assert!(
+            xylophone_t60 < 0.75 * marimba_t60,
+            "xylophone should be shorter than marimba: xylo {xylophone_t60:.2}s vs marimba {marimba_t60:.2}s"
+        );
+
+        let marimba_low = render_program(12, 57, 105, 2.5, 17);
+        let marimba_high = render_program(12, 81, 105, 2.0, 17);
+        let xylo_low = render_program(13, 57, 105, 2.0, 17);
+        let xylo_high = render_program(13, 81, 105, 1.5, 17);
+        let marimba_low_t60 = crate::testutil::t60_of(&marimba_low, sr);
+        let marimba_high_t60 = crate::testutil::t60_of(&marimba_high, sr);
+        let xylo_low_t60 = crate::testutil::t60_of(&xylo_low, sr);
+        let xylo_high_t60 = crate::testutil::t60_of(&xylo_high, sr);
+        assert!(
+            marimba_high_t60 < 0.75 * marimba_low_t60,
+            "marimba decay should shorten up the keyboard: high {marimba_high_t60:.2}s vs low {marimba_low_t60:.2}s"
+        );
+        assert!(
+            xylo_high_t60 < 0.75 * xylo_low_t60,
+            "xylophone decay should shorten up the keyboard: high {xylo_high_t60:.2}s vs low {xylo_low_t60:.2}s"
+        );
+
+        let click_ratio = |sig: &[f32], hz| {
+            let onset = 0..(0.015 * sr) as usize;
+            let body = (0.075 * sr) as usize..(0.140 * sr) as usize;
+            crate::testutil::band_rms(&sig[onset], sr, hz, 1.2)
+                / crate::testutil::band_rms(&sig[body], sr, hz, 1.2).max(1e-9)
+        };
+        let vibe_click = click_ratio(&vibe, 2600.0);
+        let marimba_click = click_ratio(&marimba, 1800.0);
+        let xylo_click = click_ratio(&xylophone, 3200.0);
+        assert!(
+            marimba_click > 1.6 * vibe_click,
+            "marimba wood click missing: marimba {marimba_click} vs vibes {vibe_click}"
+        );
+        assert!(
+            xylo_click > 1.6 * vibe_click,
+            "xylophone wood click missing: xylo {xylo_click} vs vibes {vibe_click}"
+        );
+
+        let click_filter_response = |noise: (f32, f32, f32, f32)| {
+            let mut filt = Biquad::bandpass(noise.2, noise.3, sr);
+            let mut ir = vec![0f32; 8192];
+            ir[0] = 1.0;
+            for x in &mut ir {
+                *x = filt.process(*x);
+            }
+            let center = crate::testutil::mag_at(&ir, sr, noise.2);
+            let low = crate::testutil::mag_at(&ir, sr, noise.2 * 0.33);
+            let high = crate::testutil::mag_at(&ir, sr, noise.2 * 2.0);
+            (center, low, high)
+        };
+        let (marimba_center, marimba_low, marimba_high) = click_filter_response(MARIMBA_NOISE);
+        assert!(
+            marimba_center > 2.0 * marimba_low && marimba_center > 1.6 * marimba_high,
+            "marimba click is not band-passed: center {marimba_center}, low {marimba_low}, high {marimba_high}"
+        );
+        let (xylo_center, xylo_low, xylo_high) = click_filter_response(XYLOPHONE_NOISE);
+        assert!(
+            xylo_center > 2.0 * xylo_low && xylo_center > 1.6 * xylo_high,
+            "xylophone click is not band-passed: center {xylo_center}, low {xylo_low}, high {xylo_high}"
+        );
+
+        let body = &xylophone[(0.04 * sr) as usize..(0.45 * sr) as usize];
+        let f = key_freq(key);
+        let quint = crate::testutil::mag_at(body, sr, 3.0 * f);
+        let vibes_fourth = crate::testutil::mag_at(body, sr, 4.0 * f);
+        assert!(
+            quint > 1.8 * vibes_fourth,
+            "xylophone 1:3 bar mode not dominant: 3f {quint} vs 4f {vibes_fourth}"
+        );
     }
 
     /// Oracle 7 (§5.3 differential): the pick click adds real onset HF —

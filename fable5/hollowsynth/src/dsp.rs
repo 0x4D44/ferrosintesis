@@ -62,6 +62,22 @@ impl Sine {
     }
 }
 
+/// polyBLEP residual for a unit-amplitude step at a phase discontinuity —
+/// corrects the samples just before and after the wrap. Shared by the saw
+/// and pulse oscillators.
+#[inline]
+fn polyblep(t: f32, dt: f32) -> f32 {
+    if t < dt {
+        let x = t / dt;
+        x + x - x * x - 1.0
+    } else if t > 1.0 - dt {
+        let x = (t - 1.0) / dt;
+        x * x + x + x + 1.0
+    } else {
+        0.0
+    }
+}
+
 /// Band-limited sawtooth (polyBLEP).
 pub struct BlepSaw {
     phase: f32,
@@ -81,21 +97,45 @@ impl BlepSaw {
     }
 
     #[inline]
-    fn polyblep(t: f32, dt: f32) -> f32 {
-        if t < dt {
-            let x = t / dt;
-            x + x - x * x - 1.0
-        } else if t > 1.0 - dt {
-            let x = (t - 1.0) / dt;
-            x * x + x + x + 1.0
-        } else {
-            0.0
+    pub fn next(&mut self) -> f32 {
+        let out = 2.0 * self.phase - 1.0 - polyblep(self.phase, self.inc);
+        self.phase += self.inc;
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
         }
+        out
+    }
+}
+
+/// Band-limited pulse / square (polyBLEP at both edges). `duty` in (0, 1);
+/// 0.5 is a square, whose even harmonics cancel. No DC correction for
+/// duty != 0.5 — only 0.5 is used today (duty is clamped to a safe range).
+pub struct BlepPulse {
+    phase: f32,
+    inc: f32,
+    duty: f32,
+}
+
+impl BlepPulse {
+    pub fn new(freq: f32, sr: f32, phase: f32, duty: f32) -> Self {
+        BlepPulse {
+            phase: phase.rem_euclid(1.0),
+            inc: freq / sr,
+            duty: duty.clamp(0.05, 0.95),
+        }
+    }
+
+    pub fn set_freq(&mut self, freq: f32, sr: f32) {
+        self.inc = freq / sr;
     }
 
     #[inline]
     pub fn next(&mut self) -> f32 {
-        let out = 2.0 * self.phase - 1.0 - Self::polyblep(self.phase, self.inc);
+        // +1 for the first `duty` of the cycle, -1 after; polyBLEP added at the
+        // rising edge (phase 0) and subtracted at the falling edge (phase `duty`).
+        let mut out = if self.phase < self.duty { 1.0 } else { -1.0 };
+        out += polyblep(self.phase, self.inc);
+        out -= polyblep((self.phase - self.duty).rem_euclid(1.0), self.inc);
         self.phase += self.inc;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
@@ -530,5 +570,31 @@ mod tests {
             dl.push(i as f32);
         }
         assert!((dl.tap_cubic(3.0) - dl.tap(3.0)).abs() < 1e-4);
+    }
+
+    /// Oracle 4a: a duty-0.5 `BlepPulse` is a band-limited square — its even
+    /// harmonics cancel (H2 << H1) and it carries no DC — unlike a saw, whose
+    /// 2nd harmonic is ~half the fundamental.
+    #[test]
+    fn blep_pulse_square_nulls_even_harmonics() {
+        let sr = 44100.0;
+        let n = sr as usize; // 1 s window
+        let mut p = BlepPulse::new(220.0, sr, 0.0, 0.5);
+        let ps: Vec<f32> = (0..n).map(|_| p.next()).collect();
+        let (p1, p2) = (
+            crate::testutil::mag_at(&ps, sr, 220.0),
+            crate::testutil::mag_at(&ps, sr, 440.0),
+        );
+        let dc = ps.iter().sum::<f32>() / n as f32;
+        assert!(p2 < 0.05 * p1, "square H2 {p2} not << H1 {p1}");
+        assert!(dc.abs() < 0.02, "square DC {dc}");
+
+        let mut s = BlepSaw::new(220.0, sr, 0.0);
+        let ss: Vec<f32> = (0..n).map(|_| s.next()).collect();
+        let (s1, s2) = (
+            crate::testutil::mag_at(&ss, sr, 220.0),
+            crate::testutil::mag_at(&ss, sr, 440.0),
+        );
+        assert!(s2 > 0.3 * s1, "saw H2 {s2} should be strong vs H1 {s1}");
     }
 }

@@ -56,11 +56,11 @@ const AT_VIB_CENTS: f32 = 25.0; // pitch depth at full pressure
 const AT_GAIN_DB: f32 = 2.5; // gain lift at full pressure
 
 /// Melodic sustained families that take the engine-level CC1 vibrato:
-/// plucks (except palm-mute 28), bowed strings, winds. Drums, organs and
-/// modal instruments (piano, bells) are left alone.
+/// plucks (except palm-mute 28), bowed strings, winds, synth leads. Drums,
+/// organs and modal instruments (piano, bells) are left alone.
 fn vibrato_family(program: u8) -> bool {
-    // guitars (no palm-mute 28), basses, bowed strings, harp, winds, banjo
-    matches!(program, 24..=27 | 29..=46 | 72..=79 | 104..=107)
+    // guitars (no palm-mute 28), basses, bowed strings, harp, winds, leads, banjo
+    matches!(program, 24..=27 | 29..=46 | 72..=79 | 80..=87 | 104..=107)
 }
 
 /// Families that answer channel aftertouch: the vibrato families plus
@@ -260,7 +260,8 @@ fn fx_profile(program: u8) -> (f32, f32) {
         48..=51 => (0.35, 0.0),   // string ensembles
         52..=54 => (0.30, 0.0),   // choir
         72..=79 => (0.0, 0.22),   // flute / whistle
-        80..=95 => (0.45, 0.0),   // pads
+        80..=87 => (0.15, 0.25),  // synth leads: focused, with the delayed-lead echo
+        88..=95 => (0.45, 0.0),   // pads
         96..=103 => (0.30, 0.35), // crystal: shimmer and echo
         8..=10 => (0.0, 0.15),    // celesta / glockenspiel / music box
         14 | 15 => (0.0, 0.08),   // tubular bells
@@ -1725,6 +1726,137 @@ mod tests {
             spread_mod > 2.0 * spread_plain,
             "plain {spread_plain} Hz vs mod {spread_mod} Hz"
         );
+    }
+
+    /// Vibrato depth as max-min of a peak-located (Goertzel) pitch track —
+    /// robust on the lead's bright, detuned spectrum where the zero-crossing
+    /// `cycle_freq_spread` lies (repo lesson).
+    fn pitch_spread(sig: &[f32], sr: f32, f_lo: f32, f_hi: f32) -> f32 {
+        let w = (0.08 * sr) as usize;
+        let hop = (0.02 * sr) as usize;
+        let (mut lo, mut hi) = (f32::MAX, f32::MIN);
+        let mut i = 0;
+        while i + w <= sig.len() {
+            let p = crate::testutil::peak_locate(&sig[i..i + w], sr, f_lo, f_hi);
+            lo = lo.min(p);
+            hi = hi.max(p);
+            i += hop;
+        }
+        hi - lo
+    }
+
+    fn render_lead_with_mod(mod_val: u8) -> Vec<f32> {
+        let song = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 81 }),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 93,
+                        val: 0,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 1,
+                        val: mod_val,
+                    },
+                ),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 69,
+                        vel: 100,
+                    },
+                ),
+                (2.4, EvKind::NoteOff { ch: 0, key: 69 }),
+            ],
+            2.5,
+        );
+        left(&render(&song, &test_opts(44100.0)).0)
+    }
+
+    /// Oracle 5: CC1 gives a synth lead mod-wheel vibrato — the pitch wanders
+    /// far more than the (detuned-stack) baseline with the wheel down.
+    #[test]
+    fn cc1_mod_wheel_adds_vibrato_on_lead() {
+        let sr = 44100.0;
+        let plain = render_lead_with_mod(0);
+        let modded = render_lead_with_mod(127);
+        let (a, b) = ((0.6 * sr) as usize, (2.2 * sr) as usize);
+        let spread_plain = pitch_spread(&plain[a..b], sr, 400.0, 480.0);
+        let spread_mod = pitch_spread(&modded[a..b], sr, 400.0, 480.0);
+        assert!(
+            spread_mod > 12.0,
+            "lead mod vibrato too shallow: {spread_mod} Hz"
+        );
+        assert!(
+            spread_mod > 2.0 * spread_plain,
+            "plain {spread_plain} Hz vs mod {spread_mod} Hz"
+        );
+    }
+
+    /// Oracle 6: CC68 slurs a lead into one retuned voice, but strings re-attack
+    /// (the shared SawStack legato is gated to lead instances).
+    #[test]
+    fn cc68_slurs_lead_not_strings() {
+        let sr = 44100.0;
+        let events = |prog: u8| {
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog }),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 68,
+                        val: 127,
+                    },
+                ),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 60,
+                        vel: 100,
+                    },
+                ),
+                (
+                    0.30,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 64,
+                        vel: 100,
+                    },
+                ),
+                (1.0, EvKind::NoteOff { ch: 0, key: 64 }),
+            ]
+        };
+        let (lead_stereo, lead_stats) = render(&test_song(events(81), 1.2), &test_opts(sr));
+        let (_, strings_stats) = render(&test_song(events(48), 1.2), &test_opts(sr));
+        assert_eq!(
+            lead_stats.voices_spawned, 1,
+            "lead should slur into one voice"
+        );
+        assert_eq!(strings_stats.voices_spawned, 2, "strings should re-attack");
+        let mono = left(&lead_stereo);
+        let f_after = crate::testutil::peak_locate(
+            &mono[(0.5 * sr) as usize..(0.9 * sr) as usize],
+            sr,
+            300.0,
+            360.0,
+        );
+        let want = key_freq(64); // E4 ~ 329.6 Hz
+        assert!(
+            (f_after - want).abs() < 6.0,
+            "slurred pitch {f_after}, want {want}"
+        );
+        let win = &mono[(0.30 * sr) as usize..(0.34 * sr) as usize];
+        let rms = (win.iter().map(|x| x * x).sum::<f32>() / win.len() as f32).sqrt();
+        assert!(rms > 1e-3, "slur boundary collapsed to silence: {rms}");
     }
 
     /// CC1 = 127 on an organ spins the tremulant up like a Leslie: the

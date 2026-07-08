@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `PENDING_SHA`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `d6c452f2ca873c017232a982560bf8a927cbc65f`)
 
 ## Statement
 GM 104 (sitar), 106 (shamisen) and 107 (koto) must render with distinct plucked

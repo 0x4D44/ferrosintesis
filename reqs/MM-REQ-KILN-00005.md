@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `pending implementation commit`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `7c4ee8582277f850af21b8bf9fe9e0a3307afe2b`)
 
 ## Statement
 A NoteOn on GM program 55 (Orchestra Hit) must render as a short, layered

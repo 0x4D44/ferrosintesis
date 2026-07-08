@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `eeebfdb6875fccf99fe73a329c5a3ed60ef21b62`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `073ea2c7348a25de62f927a7b4bbf09809196ec1`)
 
 ## Statement
 A NoteOn on GM program 110 (Fiddle) must render through the bowed-string voice
@@ -73,3 +73,8 @@ Three read-only adversarial reviewers ran concrete refutation checks. Two
 confirmed the oracle and regression evidence. The third found the expected
 pre-landing dirty-tree/ledger state; the actionable stale README GM table was
 fixed before landing.
+
+Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
+realtime API landed. The implementation commit became
+`073ea2c7348a25de62f927a7b4bbf09809196ec1`; the package version was advanced to
+`0.8.4` because trunk already carried `0.8.3`.

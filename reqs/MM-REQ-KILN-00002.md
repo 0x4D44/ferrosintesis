@@ -8,7 +8,7 @@
 - **Satisfied-by:** `$null | cargo test kalimba_108_has_tine_decay_not_pluck --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
-- **Claimed-by:** —
+- **Claimed-by:** codex-gpt5@KILN (2026-07-08T20:45:17.6060904+01:00)
 - **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement

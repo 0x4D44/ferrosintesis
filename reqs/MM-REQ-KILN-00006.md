@@ -36,27 +36,31 @@ $null | cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path f
 running 1 test
 test voices::tests::gm_sfx_120_127_are_toneless_noise_fallbacks ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.02s
 
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
-     Running unittests src\main.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-b8eab23d08065b45.exe)
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
-Additional local gates run during landing:
+Additional local gates after rebasing onto `origin/main` at `c0cd5cd`:
 
 ```text
 $null | deltic timeout 120 cargo test gm_routing_pins_voice_kinds --manifest-path fable5/hollowsynth/Cargo.toml
 test testutil::guards::gm_routing_pins_voice_kinds ... ok
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out
 
-deltic timeout 60 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
+deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
 passed
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-test result: ok. 93 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out
+test result: ok. 105 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 7.06s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-Finished `dev` profile [unoptimized + debuginfo] target(s)
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.83s
+
+deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
+Finished `release` profile [optimized] target(s) in 3.64s
 ```
 
 Existing-album invariant: tracked MIDI scan found no SFX programs:

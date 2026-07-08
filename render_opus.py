@@ -41,6 +41,7 @@ ALBUMS: dict[str, tuple[str, str, str]] = {
     "fable5/Seven Kinds of Sunlight":
                                ("Seven Kinds of Sunlight", "Claude Fable 5", "Pop-Prog / Instrumental"),
     "fable5/Sub Rosa":         ("Sub Rosa",         "Claude Fable 5",   "Electronic / Downtempo"),
+    "fable5/The Ninth Bell":   ("The Ninth Bell",   "Claude Fable 5",   "Gothic Orchestral / Instrumental"),
     "fable5/The Signal Fire":  ("The Signal Fire",  "Claude Fable 5",   "Progressive Rock / Instrumental"),
     "fable5/Winter Guests":    ("Winter Guests",    "Claude Fable 5",   "Progressive Rock / Instrumental"),
     "fable5":                  ("The Iron Tide",    "Claude Fable 5",   "Cinematic / Instrumental"),

@@ -56,11 +56,16 @@ const AT_VIB_CENTS: f32 = 25.0; // pitch depth at full pressure
 const AT_GAIN_DB: f32 = 2.5; // gain lift at full pressure
 
 /// Melodic sustained families that take the engine-level CC1 vibrato:
-/// plucks (except palm-mute 28), bowed strings, winds, synth leads. Drums,
-/// organs and modal instruments (piano, bells) are left alone.
+/// plucks (except palm-mute 28), bowed strings, SawStack strings/choir, winds,
+/// synth leads. Drums, organs, pads and modal instruments (piano, bells) are
+/// left alone.
 fn vibrato_family(program: u8) -> bool {
-    // guitars (no palm-mute 28), basses, bowed strings, harp, winds, leads, banjo
-    matches!(program, 24..=27 | 29..=46 | 72..=79 | 80..=87 | 104..=107 | 110)
+    // guitars (no palm-mute 28), basses, bowed strings, harp, SawStack strings/choir,
+    // winds, leads, banjo, fiddle
+    matches!(
+        program,
+        24..=27 | 29..=46 | 48..=54 | 72..=79 | 80..=87 | 104..=107 | 110
+    )
 }
 
 /// Families that answer channel aftertouch: the vibrato families plus
@@ -2011,6 +2016,35 @@ mod tests {
         hi - lo
     }
 
+    fn render_sawstack_with_mod(prog: u8, mod_val: Option<u8>) -> Vec<f32> {
+        let mut events = vec![
+            (0.0, EvKind::Prog { ch: 0, prog }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+        ];
+        if let Some(val) = mod_val {
+            events.push((0.0, EvKind::Cc { ch: 0, num: 1, val }));
+        }
+        events.extend([
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (2.4, EvKind::NoteOff { ch: 0, key: 69 }),
+        ]);
+        left(&render(&test_song(events, 2.5), &test_opts(44100.0)).0)
+    }
+
     fn render_lead_with_mod(mod_val: u8) -> Vec<f32> {
         let song = test_song(
             vec![
@@ -2066,63 +2100,98 @@ mod tests {
         );
     }
 
-    /// Oracle 6: CC68 slurs a lead into one retuned voice, but strings re-attack
-    /// (the shared SawStack legato is gated to lead instances).
+    fn sawstack_legato_render(prog: u8, cc68: Option<u8>) -> (Vec<f32>, Stats) {
+        let mut events = vec![(0.0, EvKind::Prog { ch: 0, prog })];
+        if let Some(val) = cc68 {
+            events.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 68,
+                    val,
+                },
+            ));
+        }
+        events.extend([
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                },
+            ),
+            (
+                0.30,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 64,
+                    vel: 100,
+                },
+            ),
+            (1.0, EvKind::NoteOff { ch: 0, key: 64 }),
+        ]);
+        let (stereo, stats) = render(&test_song(events, 1.2), &test_opts(44100.0));
+        (left(&stereo), stats)
+    }
+
+    /// Req MM-REQ-KILN-00009: strings and choir opt into CC1 vibrato and CC68
+    /// legato; pads stay outside the CC68 slur family.
     #[test]
-    fn cc68_slurs_lead_not_strings() {
+    fn strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in() {
         let sr = 44100.0;
-        let events = |prog: u8| {
-            vec![
-                (0.0, EvKind::Prog { ch: 0, prog }),
-                (
-                    0.0,
-                    EvKind::Cc {
-                        ch: 0,
-                        num: 68,
-                        val: 127,
-                    },
-                ),
-                (
-                    0.05,
-                    EvKind::NoteOn {
-                        ch: 0,
-                        key: 60,
-                        vel: 100,
-                    },
-                ),
-                (
-                    0.30,
-                    EvKind::NoteOn {
-                        ch: 0,
-                        key: 64,
-                        vel: 100,
-                    },
-                ),
-                (1.0, EvKind::NoteOff { ch: 0, key: 64 }),
-            ]
-        };
-        let (lead_stereo, lead_stats) = render(&test_song(events(81), 1.2), &test_opts(sr));
-        let (_, strings_stats) = render(&test_song(events(48), 1.2), &test_opts(sr));
+        for prog in 48..=54 {
+            let untouched = render_sawstack_with_mod(prog, None);
+            let wheel_zero = render_sawstack_with_mod(prog, Some(0));
+            assert!(
+                untouched
+                    .iter()
+                    .zip(&wheel_zero)
+                    .all(|(a, b)| a.to_bits() == b.to_bits()),
+                "program {prog} CC1=0 should not change an otherwise untouched channel"
+            );
+
+            let modded = render_sawstack_with_mod(prog, Some(127));
+            let (a, b) = ((0.8 * sr) as usize, (2.2 * sr) as usize);
+            let spread_plain = pitch_spread(&wheel_zero[a..b], sr, 360.0, 520.0);
+            let spread_mod = pitch_spread(&modded[a..b], sr, 360.0, 520.0);
+            assert!(
+                spread_mod > 9.0,
+                "program {prog} CC1 vibrato too shallow: {spread_mod} Hz"
+            );
+            assert!(
+                spread_mod > 1.5 * spread_plain,
+                "program {prog} plain {spread_plain} Hz vs mod {spread_mod} Hz"
+            );
+
+            assert_eq!(
+                sawstack_legato_render(prog, None).1.voices_spawned,
+                2,
+                "program {prog} without CC68 must still re-attack"
+            );
+            let (slurred, stats) = sawstack_legato_render(prog, Some(127));
+            assert_eq!(
+                stats.voices_spawned, 1,
+                "program {prog} with CC68 should slur into one voice"
+            );
+            let f_after = crate::testutil::peak_locate(
+                &slurred[(0.55 * sr) as usize..(0.9 * sr) as usize],
+                sr,
+                300.0,
+                360.0,
+            );
+            let want = key_freq(64);
+            assert!(
+                (f_after - want).abs() < 6.0,
+                "program {prog} slurred pitch {f_after}, want {want}"
+            );
+        }
+
         assert_eq!(
-            lead_stats.voices_spawned, 1,
-            "lead should slur into one voice"
+            sawstack_legato_render(89, Some(127)).1.voices_spawned,
+            2,
+            "pads must stay outside the CC68 slur family"
         );
-        assert_eq!(strings_stats.voices_spawned, 2, "strings should re-attack");
-        let mono = left(&lead_stereo);
-        let f_after = crate::testutil::peak_locate(
-            &mono[(0.5 * sr) as usize..(0.9 * sr) as usize],
-            sr,
-            300.0,
-            360.0,
-        );
-        let want = key_freq(64); // E4 ~ 329.6 Hz
-        assert!(
-            (f_after - want).abs() < 6.0,
-            "slurred pitch {f_after}, want {want}"
-        );
-        let win = &mono[(0.30 * sr) as usize..(0.34 * sr) as usize];
-        let rms = (win.iter().map(|x| x * x).sum::<f32>() / win.len() as f32).sqrt();
-        assert!(rms > 1e-3, "slur boundary collapsed to silence: {rms}");
     }
 
     /// CC1 = 127 on an organ spins the tremulant up like a Leslie: the

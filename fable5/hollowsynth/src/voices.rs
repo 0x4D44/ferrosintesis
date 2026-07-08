@@ -2321,9 +2321,11 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        96..=103 => Box::new(bell(
+        96 | 98 | 100 | 102 => Box::new(bell(
             key, vel, sr, seed, CRYSTAL, noise_off, 0.03, 1.5, 0.60,
         )),
+        97 | 99 | 103 => Box::new(pad(program, key, vel, sr, seed)),
+        101 => Box::new(pad(95, key, vel, sr, seed)),
         104..=107 => Box::new(Pluck::new(&BANJO, key, vel, sr, seed)),
         108 => Box::new(bell(
             key,
@@ -3105,6 +3107,12 @@ mod tests {
         buf
     }
 
+    fn render_voice(mut v: Box<dyn Voice>, sr: f32, secs: f32) -> Vec<f32> {
+        let mut buf = vec![0f32; (sr * secs) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
     /// Non-overlapping windowed-RMS envelope (X5: measure the envelope, not raw
     /// sample peaks, which oscillator phase moves around).
     fn rms_env(sig: &[f32], sr: f32, win_ms: f32) -> Vec<f32> {
@@ -3172,6 +3180,43 @@ mod tests {
             hash(strings(48, 60, 100, sr, 7)),
             0x65817f27e894bcac,
             "strings(48) drifted"
+        );
+    }
+
+    #[test]
+    fn synth_fx_97_99_101_103_sustain_as_pads() {
+        let sr = 44100.0;
+        let key = 60;
+        let vel = 100;
+        let seed = 7;
+        let crystal = render_voice(make(98, key, vel, sr, seed, false), sr, 4.5);
+        let crystal_tail = steady_rms(&crystal, sr, 3.8, 4.4);
+
+        for prog in [97, 99, 103] {
+            let v = make(prog, key, vel, sr, seed, false);
+            assert_eq!(v.kind(), "sawstack", "program {prog} should route to pad");
+            let sig = render_voice(v, sr, 4.5);
+            let mid = steady_rms(&sig, sr, 2.0, 3.0);
+            let tail = steady_rms(&sig, sr, 3.8, 4.4);
+            assert!(
+                tail > 0.40 * mid,
+                "program {prog} should sustain while held: mid {mid}, tail {tail}"
+            );
+            assert!(
+                tail > 8.0 * crystal_tail.max(1e-9),
+                "program {prog} should not decay like crystal: tail {tail}, crystal {crystal_tail}"
+            );
+        }
+
+        let sweep_fx = render_voice(make(101, key, vel, sr, seed, false), sr, 2.0);
+        let mut sweep_pad = pad(95, key, vel, sr, seed);
+        let sweep_ref = render_saw(&mut sweep_pad, sr, 2.0);
+        assert!(
+            sweep_fx
+                .iter()
+                .zip(&sweep_ref)
+                .all(|(a, b)| a.to_bits() == b.to_bits()),
+            "program 101 should use the sweep-pad path"
         );
     }
 

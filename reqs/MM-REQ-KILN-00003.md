@@ -1,15 +1,15 @@
 # MM-REQ-KILN-00003 — Sustaining synth-FX programs (97/99/101/103) should sustain
 
-- **State:** Accepted
+- **State:** Implemented
 - **Priority:** Could
 - **Area:** hollowsynth / voices dispatch
 - **Raised:** 2026-07-08
-- **Implemented-by:** —
+- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::make`, `fable5/hollowsynth/src/voices.rs::tests::synth_fx_97_99_101_103_sustain_as_pads`, `fable5/hollowsynth/src/testutil.rs::guards::gm_routing_pins_voice_kinds`
 - **Satisfied-by:** `$null | cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
-- **Claimed-by:** codex-gpt5@KILN (2026-07-08T20:28:17.3073443+01:00)
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
+- **Claimed-by:** —
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, pending build commit SHA)
 
 ## Statement
 GM 97 (soundtrack), 99 (atmosphere), 103 (sci-fi) must render as sustaining pad
@@ -22,3 +22,64 @@ These are sustained-texture programs; a struck chime is structurally wrong. The
 SawStack pad voice already provides the right character; this is dispatch-arm
 work. Byte-identical for existing albums (only FX 98/crystal is used, and it
 stays on the bell path). 2026-07-08 GM gap audit (synth FX).
+
+## Notes
+
+Manual reqs-loop implementation branch:
+`task/20260708-TSK-HUM-reqs-loop-mm-req-00003`.
+
+The named oracle was added before implementation and failed red on the old shared
+crystal route:
+
+```text
+$null | deltic timeout 180 cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml
+test voices::tests::synth_fx_97_99_101_103_sustain_as_pads ... FAILED
+assertion `left == right` failed: program 97 should route to pad
+  left: "modal"
+ right: "sawstack"
+```
+
+Passing oracle for Gate 2:
+
+```text
+$null | deltic timeout 180 cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml
+test voices::tests::synth_fx_97_99_101_103_sustain_as_pads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 0.06s
+```
+
+Additional local gates:
+
+```text
+$null | deltic timeout 180 cargo test gm_routing_pins_voice_kinds --manifest-path fable5/hollowsynth/Cargo.toml
+test testutil::guards::gm_routing_pins_voice_kinds ... ok
+
+deltic timeout 120 cargo fmt --check
+ok
+
+$null | deltic timeout 600 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
+test result: ok. 93 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.61s
+
+$null | deltic timeout 600 cargo clippy --all-targets --manifest-path fable5/hollowsynth/Cargo.toml -- -D warnings
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.78s
+```
+
+MIDI scan:
+
+```text
+changed_fx_files=0
+unchanged_crystal_fx_files=6
+```
+
+Unaffected GM-98 material stayed byte-identical:
+
+```text
+baseline_sha256=C297E540885FA9FE5F8A24A452AB3FCA1C48110AB0A3A544A6B775323E3FB847
+current_sha256=C297E540885FA9FE5F8A24A452AB3FCA1C48110AB0A3A544A6B775323E3FB847
+byte_identity=pass
+```
+
+Three read-only adversarial reviewers ran concrete refutation checks. The oracle
+and regression reviewers found no defects. The remaining dirty-tree/Accepted
+state finding was the expected pre-landing state and is addressed by this
+commit.

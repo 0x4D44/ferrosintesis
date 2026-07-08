@@ -1,0 +1,75 @@
+{
+  "album": "Tuxedo Noir",
+  "artist": "Claude Fable 5",
+  "style": "spy-idiom instrumental: swung vamp, twang theme vs horn stabs (verified counterpoint), 12/8 velvet, 7/8 chase, min-maj9 ring",
+  "track_count": 1,
+  "total_duration_seconds": 185.26,
+  "total_duration_minutes": 3.09,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Tuxedo Noir",
+      "file": "midi/01 - Tuxedo Noir.mid",
+      "duration_seconds": 185.26,
+      "duration_minutes": 3.09,
+      "sections": [
+        {
+          "name": "Cold Open",
+          "start_beat": 0.0,
+          "end_beat": 16.0,
+          "start_seconds": 0.0,
+          "end_seconds": 7.5,
+          "time": "0:00"
+        },
+        {
+          "name": "The Vamp",
+          "start_beat": 16.0,
+          "end_beat": 96.0,
+          "start_seconds": 7.5,
+          "end_seconds": 45.0,
+          "time": "0:07"
+        },
+        {
+          "name": "Stabs",
+          "start_beat": 96.0,
+          "end_beat": 144.0,
+          "start_seconds": 45.0,
+          "end_seconds": 67.5,
+          "time": "0:45"
+        },
+        {
+          "name": "Velvet",
+          "start_beat": 144.0,
+          "end_beat": 204.0,
+          "start_seconds": 67.5,
+          "end_seconds": 95.62,
+          "time": "1:07"
+        },
+        {
+          "name": "The Chase",
+          "start_beat": 204.0,
+          "end_beat": 274.0,
+          "start_seconds": 95.62,
+          "end_seconds": 127.44,
+          "time": "1:35"
+        },
+        {
+          "name": "Showdown",
+          "start_beat": 274.0,
+          "end_beat": 354.0,
+          "start_seconds": 127.44,
+          "end_seconds": 164.94,
+          "time": "2:07"
+        },
+        {
+          "name": "Last Cigarette",
+          "start_beat": 354.0,
+          "end_beat": 392.0,
+          "start_seconds": 164.94,
+          "end_seconds": 185.26,
+          "time": "2:44"
+        }
+      ]
+    }
+  ]
+}

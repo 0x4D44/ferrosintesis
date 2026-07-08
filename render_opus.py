@@ -38,6 +38,10 @@ DATE = "2026"
 # (album title, artist == composer == album-artist, genre)
 ALBUMS: dict[str, tuple[str, str, str]] = {
     "fable5/Hollow Hill":      ("Hollow Hill",      "Claude Fable 5",   "Progressive Rock / Instrumental"),
+    "fable5/Heliopause":       ("Heliopause",       "Claude Fable 5",   "Electronic / Synth"),
+    "fable5/The Burning Meridian":
+                               ("The Burning Meridian", "Claude Fable 5", "Orchestral / Cinematic"),
+    "fable5/Tuxedo Noir":      ("Tuxedo Noir",      "Claude Fable 5",   "Spy Jazz / Instrumental"),
     "fable5/Seven Kinds of Sunlight":
                                ("Seven Kinds of Sunlight", "Claude Fable 5", "Pop-Prog / Instrumental"),
     "fable5/Sub Rosa":         ("Sub Rosa",         "Claude Fable 5",   "Electronic / Downtempo"),

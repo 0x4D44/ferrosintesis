@@ -1,0 +1,124 @@
+{
+  "album": "Heliopause",
+  "artist": "Claude Fable 5",
+  "style": "two-part synth instrumental in the Jarre / Oxygene idiom: sequencers, portamento leads, drops, a machine-verified inverted-theme mirror",
+  "track_count": 2,
+  "total_duration_seconds": 513.4,
+  "total_duration_minutes": 8.56,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Heliopause, Part One",
+      "file": "midi/01 - Heliopause, Part One.mid",
+      "duration_seconds": 288.88,
+      "duration_minutes": 4.81,
+      "movements": [
+        {
+          "name": "Solar Wind",
+          "start_beat": 0.0,
+          "end_beat": 48.0,
+          "start_seconds": 0.0,
+          "end_seconds": 24.83,
+          "time": "0:00"
+        },
+        {
+          "name": "The Sequencer",
+          "start_beat": 48.0,
+          "end_beat": 192.0,
+          "start_seconds": 24.83,
+          "end_seconds": 99.31,
+          "time": "0:24"
+        },
+        {
+          "name": "Mirror Waltz",
+          "start_beat": 192.0,
+          "end_beat": 264.0,
+          "start_seconds": 99.31,
+          "end_seconds": 136.55,
+          "time": "1:39"
+        },
+        {
+          "name": "The Drop",
+          "start_beat": 264.0,
+          "end_beat": 344.0,
+          "start_seconds": 136.55,
+          "end_seconds": 177.93,
+          "time": "2:16"
+        },
+        {
+          "name": "Two Suns",
+          "start_beat": 344.0,
+          "end_beat": 488.0,
+          "start_seconds": 177.93,
+          "end_seconds": 252.41,
+          "time": "2:57"
+        },
+        {
+          "name": "Dissolve",
+          "start_beat": 488.0,
+          "end_beat": 552.0,
+          "start_seconds": 252.41,
+          "end_seconds": 287.81,
+          "time": "4:12"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Heliopause, Part Two",
+      "file": "midi/02 - Heliopause, Part Two.mid",
+      "duration_seconds": 224.52,
+      "duration_minutes": 3.74,
+      "movements": [
+        {
+          "name": "Ignition",
+          "start_beat": 0.0,
+          "end_beat": 36.0,
+          "start_seconds": 0.0,
+          "end_seconds": 17.14,
+          "time": "0:00"
+        },
+        {
+          "name": "Slipstream",
+          "start_beat": 36.0,
+          "end_beat": 180.0,
+          "start_seconds": 17.14,
+          "end_seconds": 85.71,
+          "time": "0:17"
+        },
+        {
+          "name": "Crosswind",
+          "start_beat": 180.0,
+          "end_beat": 228.0,
+          "start_seconds": 85.71,
+          "end_seconds": 108.57,
+          "time": "1:25"
+        },
+        {
+          "name": "Eclipse",
+          "start_beat": 228.0,
+          "end_beat": 276.0,
+          "start_seconds": 108.57,
+          "end_seconds": 131.43,
+          "time": "1:48"
+        },
+        {
+          "name": "Perihelion",
+          "start_beat": 276.0,
+          "end_beat": 404.0,
+          "start_seconds": 131.43,
+          "end_seconds": 192.38,
+          "time": "2:11"
+        },
+        {
+          "name": "Afterimage",
+          "start_beat": 404.0,
+          "end_beat": 460.0,
+          "start_seconds": 192.38,
+          "end_seconds": 224.52,
+          "time": "3:12"
+        }
+      ]
+    }
+  ]
+}

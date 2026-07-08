@@ -692,6 +692,60 @@ pub const BANJO: PluckPreset = PluckPreset {
     click_hp: 2000.0,
     ..DEFAULTS
 };
+pub const SITAR: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "SITAR",
+    t60: 2.2,
+    bright: 12_000.0,
+    pick_lp: 10_000.0,
+    pos: 0.045,
+    amp: 0.58,
+    rel_t60: 0.18,
+    body: &[
+        (320.0, 1.3, 2.0),
+        (780.0, 1.6, 2.8),
+        (1040.0, 1.8, 3.2),
+        (1300.0, 1.8, 3.0),
+        (3200.0, 1.5, 4.5),
+    ],
+    out_lp: 11_000.0,
+    pickup: 0.09,
+    click: 1.9,
+    click_hp: 2200.0,
+    attack_noise: 0.20,
+    grit: true,
+    ..DEFAULTS
+};
+pub const SHAMISEN: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "SHAMISEN",
+    t60: 0.55,
+    bright: 6200.0,
+    pick_lp: 5200.0,
+    pos: 0.16,
+    amp: 0.54,
+    rel_t60: 0.09,
+    body: &[(480.0, 2.0, 3.2), (980.0, 1.5, 2.0)],
+    out_lp: 5600.0,
+    click: 1.2,
+    click_hp: 1600.0,
+    ..DEFAULTS
+};
+pub const KOTO: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "KOTO",
+    t60: 7.0,
+    bright: 1900.0,
+    pick_lp: 1500.0,
+    pos: 0.34,
+    amp: 0.62,
+    rel_t60: 0.35,
+    body: &[(140.0, 0.8, 3.0), (280.0, 1.0, 2.4), (560.0, 1.3, 1.6)],
+    out_lp: 2600.0,
+    click: 0.45,
+    click_hp: 900.0,
+    ..DEFAULTS
+};
 
 /// One Karplus-Strong delay loop on a fractional-tap delay line, so its
 /// pitch can *move* while ringing (bends, slides, hammer-ons, vibrato).
@@ -2529,7 +2583,10 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         )),
         97 | 99 | 103 => Box::new(pad(program, key, vel, sr, seed)),
         101 => Box::new(pad(95, key, vel, sr, seed)),
-        104..=107 => Box::new(Pluck::new(&BANJO, key, vel, sr, seed)),
+        104 => Box::new(Pluck::new(&SITAR, key, vel, sr, seed)),
+        105 => Box::new(Pluck::new(&BANJO, key, vel, sr, seed)),
+        106 => Box::new(Pluck::new(&SHAMISEN, key, vel, sr, seed)),
+        107 => Box::new(Pluck::new(&KOTO, key, vel, sr, seed)),
         108 => Box::new(bell(
             key,
             vel,
@@ -2876,6 +2933,81 @@ mod tests {
             assert!(
                 written_pitch < 0.55 * level,
                 "program {program} should not emphasize written pitch: band {written_pitch}, rms {level}"
+            );
+        }
+    }
+
+    #[test]
+    fn sitar_shamisen_koto_have_distinct_pluck_presets() {
+        let sr = 44100.0;
+        for (program, want) in [
+            (104, "SITAR"),
+            (105, "BANJO"),
+            (106, "SHAMISEN"),
+            (107, "KOTO"),
+        ] {
+            assert_eq!(
+                make(program, 60, 100, sr, 7, false).kind(),
+                want,
+                "program {program}"
+            );
+        }
+
+        let render = |program: u8, key: u8, seed: u32| {
+            let mut voice = make(program, key, 104, sr, seed, false);
+            let mut buf = vec![0f32; (1.6 * sr) as usize];
+            voice.render(&mut buf);
+            buf
+        };
+        let body_lo = (0.030 * sr) as usize;
+        let body_hi = (0.420 * sr) as usize;
+        let centroid = |s: &[f32]| crate::testutil::centroid(&s[body_lo..body_hi], sr);
+        let t60 = |s: &[f32]| crate::testutil::t60_of(&s[(0.020 * sr) as usize..], sr);
+        let upper = |s: &[f32], f: f32| {
+            crate::testutil::mag_at(&s[body_lo..body_hi], sr, 3.0 * f)
+                + crate::testutil::mag_at(&s[body_lo..body_hi], sr, 4.0 * f)
+                + crate::testutil::mag_at(&s[body_lo..body_hi], sr, 5.0 * f)
+        };
+        let f = key_freq(60);
+
+        for seed in [0x6510, 0x76A1, 0x1250] {
+            let banjo = render(105, 60, seed);
+            let sitar = render(104, 60, seed);
+            let shamisen = render(106, 60, seed);
+            let koto = render(107, 60, seed);
+
+            assert!(
+                centroid(&sitar) > 1.10 * centroid(&banjo)
+                    && upper(&sitar, f) > 1.25 * upper(&banjo, f),
+                "sitar should have bright jawari-like upper partials at seed {seed}: cent {} vs {}, upper {} vs {}",
+                centroid(&sitar),
+                centroid(&banjo),
+                upper(&sitar, f),
+                upper(&banjo, f)
+            );
+            assert!(
+                t60(&shamisen) < 0.85 * t60(&banjo)
+                    && centroid(&shamisen) < 0.95 * centroid(&banjo),
+                "shamisen should be a lighter, shorter banjo cousin at seed {seed}: t60 {} vs {}, cent {} vs {}",
+                t60(&shamisen),
+                t60(&banjo),
+                centroid(&shamisen),
+                centroid(&banjo)
+            );
+            assert!(
+                t60(&koto) > 2.0 * t60(&banjo) && centroid(&koto) < 0.72 * centroid(&banjo),
+                "koto should ring long and mellow at seed {seed}: t60 {} vs {}, cent {} vs {}",
+                t60(&koto),
+                t60(&banjo),
+                centroid(&koto),
+                centroid(&banjo)
+            );
+            assert!(
+                t60(&sitar) > 1.2 * t60(&shamisen) && t60(&koto) > 1.5 * t60(&sitar),
+                "sitar/shamisen/koto decay ordering collapsed at seed {seed}: sitar {}, shamisen {}, koto {}",
+                t60(&sitar),
+                t60(&shamisen),
+                t60(&koto)
             );
         }
     }

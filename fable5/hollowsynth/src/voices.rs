@@ -11,6 +11,7 @@
 //!   SawStack — detuned polyBLEP saws, each layer with its own vibrato and
 //!              slow pitch drift, through lowpass or vocal formants that
 //!              morph open at the onset (string ensembles, choir, pads)
+//!   OrchHit  — one-shot octave-stacked orchestral stab with a thump
 //!   Wind     — sine + harmonics + breath, with a pitch scoop into the note
 //!   Bowed    — sawtooth through a violin body, with scoop, attack bow
 //!              noise, and bow-pressure brightness
@@ -2177,6 +2178,142 @@ const LA_VIOLIN: (f32, (f32, f32)) = (0.30, (0.12, 0.38));
 const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 const LA_PIANO: (f32, (f32, f32)) = (0.42, (0.18, 0.85));
 
+// ---------------------------------------------------------------------------
+// Orchestra Hit (GM 55)
+// ---------------------------------------------------------------------------
+
+const ORCH_RATIOS: [f32; 5] = [0.5, 0.994, 1.006, 1.988, 2.012];
+const ORCH_ATTACK_S: f32 = 0.004;
+const ORCH_T60_S: f32 = 0.40;
+const ORCH_REL_T60_S: f32 = 0.15;
+const ORCH_LP_BASE_HZ: f32 = 1800.0;
+const ORCH_LP_VEL_HZ: f32 = 3200.0;
+const ORCH_LP_Q: f32 = 0.8;
+const ORCH_AMP: f32 = 0.50;
+const ORCH_THUMP_F_LO: f32 = 50.0;
+const ORCH_THUMP_F_HI: f32 = 110.0;
+const ORCH_THUMP_GAIN: f32 = 0.9;
+
+/// GM 55 Orchestra Hit: a struck tutti stab, built as an octave-stacked
+/// detuned saw ensemble over a short timpani-like thump and noisy attack bite.
+struct OrchHit {
+    saws: Vec<(BlepSaw, f32)>,
+    lp: Biquad,
+    thump: Modal,
+    bite: Burst,
+    base_f: f32,
+    bend: f32,
+    att_env: f32,
+    att_step: f32,
+    dec_env: f32,
+    dec_mul: f32,
+    rel_env: f32,
+    rel_mul: f32,
+    released: bool,
+    rng: Rng,
+    amp: f32,
+    t: u32,
+    sr: f32,
+}
+
+fn orch_hit(key: u8, vel: u8, sr: f32, seed: u32) -> OrchHit {
+    let v = vel_amp(vel);
+    let vn = vel as f32 / 127.0;
+    let f = key_freq(key);
+    let mut rng = Rng::new(seed);
+    let saws = ORCH_RATIOS
+        .iter()
+        .map(|&r| {
+            let ratio = r * (1.0 + 0.0015 * rng.white());
+            let phase = rng.white() * 0.5 + 0.5;
+            (BlepSaw::new((f * ratio).min(sr * 0.45), sr, phase), ratio)
+        })
+        .collect();
+    let cut = (ORCH_LP_BASE_HZ + ORCH_LP_VEL_HZ * vn).min(sr * 0.45);
+    let f_th = (f * 0.5).clamp(ORCH_THUMP_F_LO, ORCH_THUMP_F_HI);
+    let thump = Modal::new(
+        sr,
+        seed ^ 0x5151,
+        &[(f_th, 1.0 * v, 0.30), (f_th * 1.5, 0.5 * v, 0.20)],
+        (0.9 * v, 0.04, Biquad::lowpass(250.0, 0.8, sr)),
+        0.001,
+        ORCH_REL_T60_S,
+        ORCH_THUMP_GAIN,
+    );
+    let mut bite = Burst::new(Biquad::bandpass(2500.0, 1.0, sr), 0.5 * v, 0.035, sr);
+    bite.trigger(vn);
+    OrchHit {
+        saws,
+        lp: Biquad::lowpass(cut, ORCH_LP_Q, sr),
+        thump,
+        bite,
+        base_f: f,
+        bend: 1.0,
+        att_env: 0.0,
+        att_step: 1.0 / (ORCH_ATTACK_S * sr),
+        dec_env: 1.0,
+        dec_mul: t60_mul(ORCH_T60_S, sr),
+        rel_env: 1.0,
+        rel_mul: t60_mul(ORCH_REL_T60_S, sr),
+        released: false,
+        rng,
+        amp: ORCH_AMP * (0.4 + 0.6 * v),
+        t: 0,
+        sr,
+    }
+}
+
+impl Voice for OrchHit {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let thump_alive = self.thump.render(out);
+        let n = self.saws.len() as f32;
+        for o in out.iter_mut() {
+            if self.t.is_multiple_of(CTRL) {
+                let (bend, base, sr) = (self.bend, self.base_f, self.sr);
+                for (osc, ratio) in self.saws.iter_mut() {
+                    osc.set_freq((base * *ratio * bend).min(sr * 0.45), sr);
+                }
+            }
+            let mut s = 0.0;
+            for (osc, _) in self.saws.iter_mut() {
+                s += osc.next();
+            }
+            s = self.lp.process(s / n);
+            if self.att_env < 1.0 {
+                self.att_env = (self.att_env + self.att_step).min(1.0);
+            }
+            *o += s * self.amp * self.att_env * self.dec_env * self.rel_env
+                + self.bite.tick(&mut self.rng);
+            self.dec_env *= self.dec_mul;
+            if self.released {
+                self.rel_env *= self.rel_mul;
+            }
+            self.t += 1;
+        }
+        self.dec_env * self.rel_env * self.amp > 2e-5
+            || thump_alive
+            || self.t < (0.05 * self.sr) as u32
+    }
+
+    fn note_off(&mut self) {
+        self.released = true;
+        self.thump.note_off();
+    }
+
+    fn released(&self) -> bool {
+        self.released
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "orch_hit"
+    }
+}
+
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
     let noise_off = (0.0, 0.01, 1000.0, 1.0);
     match program {
@@ -2298,6 +2435,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         47 => Box::new(timpani(key, vel, sr, seed)),
         48..=51 => Box::new(strings(program, key, vel, sr, seed)),
         52..=54 => Box::new(choir(program, key, vel, sr, seed)),
+        55 => Box::new(orch_hit(key, vel, sr, seed)),
         72..=79 => {
             let model = Box::new(Wind::new(
                 matches!(program, 72 | 78 | 79),
@@ -2457,6 +2595,13 @@ mod tests {
     fn render_program(program: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
         let sr = 44100.0;
         let mut v = make(program, key, vel, sr, seed, false);
+
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    fn render_voice(mut v: Box<dyn Voice>, secs: f32, sr: f32) -> Vec<f32> {
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
@@ -2591,6 +2736,37 @@ mod tests {
             kalimba_t60 > 0.25 && kalimba_t60 < 1.4,
             "kalimba t60 {kalimba_t60}s should be a short tine ring"
         );
+    }
+
+    /// Req MM-REQ-KILN-00005: GM 55 routes to a short layered orchestra hit,
+    /// not the steel-guitar fallback.
+    #[test]
+    fn orchestra_hit_55_is_short_layered_stab() {
+        let sr = 44100.0;
+        let hit = make(55, 69, 100, sr, 7, false);
+        assert_eq!(hit.kind(), "orch_hit", "GM 55 must not route to steel");
+        let buf = render_voice(hit, 2.0, sr);
+        let seg = |a: f32, z: f32| &buf[(a * sr) as usize..(z * sr) as usize];
+        let early = crate::testutil::rms(seg(0.15, 0.45));
+        let late = crate::testutil::rms(seg(1.45, 1.85));
+        let fund = crate::testutil::mag_at(seg(0.05, 0.25), sr, 440.0);
+        let sub = crate::testutil::mag_at(seg(0.05, 0.25), sr, 220.0);
+        let upper = crate::testutil::mag_at(seg(0.05, 0.25), sr, 880.0);
+        let thump = crate::testutil::band_rms(seg(0.0, 0.15), sr, 100.0, 0.7);
+        assert!(
+            late < 0.10 * early,
+            "stab rings too long: late/early {}",
+            late / early
+        );
+        assert!(
+            sub >= 0.25 * fund,
+            "sub-octave layer missing: sub {sub} fund {fund}"
+        );
+        assert!(
+            upper >= 0.12 * fund,
+            "upper-octave layer missing: upper {upper} fund {fund}"
+        );
+        assert!(thump > 1e-3, "low thump missing: {thump}");
     }
 
     /// Oracle 7 (§5.3 differential): the pick click adds real onset HF —

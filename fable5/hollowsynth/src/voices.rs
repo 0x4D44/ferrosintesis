@@ -15,6 +15,7 @@
 //!   Wind     — sine + harmonics + breath, with a pitch scoop into the note
 //!   Bowed    — sawtooth through a violin body, with scoop, attack bow
 //!              noise, and bow-pressure brightness
+//!   SfxNoise — safe toneless noise fallback for GM sound effects
 //!
 //! Timing realism: sustained families speak slower at low velocity, the way
 //! a gently-bowed or gently-blown note actually starts.
@@ -62,6 +63,70 @@ fn t60_mul(t60: f32, sr: f32) -> f32 {
 }
 
 const CTRL: u32 = 16; // control-rate interval in samples
+
+// ---------------------------------------------------------------------------
+// SFX noise fallback
+// ---------------------------------------------------------------------------
+
+struct SfxNoise {
+    rng: Rng,
+    filt: Biquad,
+    amp: f32,
+    decay: f32,
+    rel_mul: f32,
+    released: bool,
+}
+
+impl SfxNoise {
+    fn new(program: u8, vel: u8, sr: f32, seed: u32) -> Self {
+        let (freq, q, t60, gain): (f32, f32, f32, f32) = match program {
+            120 => (3_400.0, 0.55, 0.12, 0.09), // fret squeak
+            121 => (1_900.0, 0.50, 0.35, 0.07), // breath
+            122 => (900.0, 0.45, 0.95, 0.10),   // seashore wash
+            123 => (4_500.0, 0.50, 0.16, 0.07), // bird tweet fallback
+            124 => (1_250.0, 0.50, 0.18, 0.06), // telephone ring fallback
+            125 => (260.0, 0.45, 0.55, 0.09),   // helicopter wash
+            126 => (2_700.0, 0.45, 0.70, 0.12), // applause
+            127 => (1_500.0, 0.42, 0.28, 0.16), // gunshot
+            _ => (1_600.0, 0.45, 0.25, 0.08),
+        };
+        SfxNoise {
+            rng: Rng::new(seed ^ 0x5F58_0000 ^ ((program as u32) << 8)),
+            filt: Biquad::bandpass(freq.min(sr * 0.40), q, sr),
+            amp: vel_amp(vel) * gain,
+            decay: t60_mul(t60, sr),
+            rel_mul: t60_mul(0.06, sr),
+            released: false,
+        }
+    }
+}
+
+impl Voice for SfxNoise {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let s = self.filt.process(self.rng.white()) * self.amp;
+            *o += s;
+            self.amp *= self.decay;
+            if self.released {
+                self.amp *= self.rel_mul;
+            }
+        }
+        self.amp > 1e-5
+    }
+
+    fn note_off(&mut self) {
+        self.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "sfx"
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Modal
@@ -2476,6 +2541,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             0.18,
             0.56,
         )),
+        120..=127 => Box::new(SfxNoise::new(program, vel, sr, seed)),
         80..=87 => Box::new(lead(program, key, vel, sr, seed)),
         88..=95 => Box::new(pad(program, key, vel, sr, seed)),
         _ => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
@@ -2761,6 +2827,57 @@ mod tests {
             "upper-octave layer missing: upper {upper} fund {fund}"
         );
         assert!(thump > 1e-3, "low thump missing: {thump}");
+    }
+
+    #[test]
+    fn gm_sfx_120_127_are_toneless_noise_fallbacks() {
+        let sr = 44100.0;
+        let n = (0.6 * sr) as usize;
+        for program in 120u8..=127 {
+            let seed = 0x5F58_0100 ^ program as u32;
+            let mut low = make(program, 48, 100, sr, seed, false);
+            let mut high = make(program, 72, 100, sr, seed, false);
+            assert_eq!(
+                low.kind(),
+                "sfx",
+                "program {program} must not route to pluck"
+            );
+            assert_eq!(
+                high.kind(),
+                "sfx",
+                "program {program} must not route to pluck"
+            );
+
+            let mut low_buf = vec![0f32; n];
+            let mut high_buf = vec![0f32; n];
+            low.render(&mut low_buf);
+            high.render(&mut high_buf);
+
+            assert!(
+                low_buf
+                    .iter()
+                    .zip(&high_buf)
+                    .all(|(a, b)| a.to_bits() == b.to_bits()),
+                "program {program} SFX fallback must ignore written pitch"
+            );
+
+            let body = &low_buf[(0.015 * sr) as usize..(0.32 * sr) as usize];
+            let level = crate::testutil::rms(body);
+            let flat = crate::testutil::flatness(body, sr, 120.0, 8_000.0);
+            let written_pitch = crate::testutil::band_rms(body, sr, key_freq(60), 12.0);
+            assert!(
+                level > 1e-5 && level < 0.08,
+                "program {program} should be a safe low-level noise fallback, rms {level}"
+            );
+            assert!(
+                flat > 0.18,
+                "program {program} should be toneless/noisy, flatness {flat}"
+            );
+            assert!(
+                written_pitch < 0.55 * level,
+                "program {program} should not emphasize written pitch: band {written_pitch}, rms {level}"
+            );
+        }
     }
 
     /// Oracle 7 (§5.3 differential): the pick click adds real onset HF —

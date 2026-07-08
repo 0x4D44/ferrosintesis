@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices dispatch
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** —
+- **Satisfied-by:** `$null | cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** —
+- **Satisfied-by:** `$null | cargo test marimba_xylophone_have_wood_bar_envelopes --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

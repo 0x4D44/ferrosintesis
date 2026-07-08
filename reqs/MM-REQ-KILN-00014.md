@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices (Organ)
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** —
+- **Satisfied-by:** `$null | cargo test reed_organ_accordion_harmonica_have_free_reed_character --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

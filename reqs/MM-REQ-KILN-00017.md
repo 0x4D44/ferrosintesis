@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices (reed)
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** —
+- **Satisfied-by:** `$null | cargo test bagpipe_shanai_route_to_reed_engine_with_drone_or_double_reed --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

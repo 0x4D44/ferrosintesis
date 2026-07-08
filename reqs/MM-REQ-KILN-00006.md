@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices dispatch
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** —
+- **Satisfied-by:** `$null | cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `PENDING_SHA`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `282c70045382bd19d5375efed8b7a1eec83feaac`)
 
 ## Statement
 A NoteOn on GM program 108 (Kalimba) must render as a plucked-tine timbre — a

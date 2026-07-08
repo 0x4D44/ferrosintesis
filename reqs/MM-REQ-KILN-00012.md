@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00012 — Vibraphone (GM 11) should have its motor tremolo
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Could
 - **Area:** hollowsynth / voices (Modal / bell)
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 The vibraphone (GM 11) must carry the amplitude-modulation tremolo that defines

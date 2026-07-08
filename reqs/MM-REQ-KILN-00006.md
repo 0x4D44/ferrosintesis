@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00006 — SFX programs (GM 120-127) should not emit a pitched guitar note
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Could
 - **Area:** hollowsynth / voices dispatch
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 GM 120–127 (fret noise, breath, seashore, bird, telephone, helicopter, applause,

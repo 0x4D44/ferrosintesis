@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00008 — Modal & Organ voices must respond to pitch bend and portamento
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Should
 - **Area:** hollowsynth / voices (Modal, Organ)
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 The Modal and Organ voice families must honour channel pitch multipliers

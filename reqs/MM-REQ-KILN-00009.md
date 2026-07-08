@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00009 — Strings & choir (SawStack) must answer CC1 vibrato and CC68 legato
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Should
 - **Area:** hollowsynth / engine + voices (SawStack)
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 The string-ensemble (48–51) and choir (52–54) SawStack voices must answer the

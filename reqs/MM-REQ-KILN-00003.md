@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00003 — Sustaining synth-FX programs (97/99/101/103) should sustain
 
-- **State:** Draft
+- **State:** Accepted
 - **Priority:** Could
 - **Area:** hollowsynth / voices dispatch
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement
 GM 97 (soundtrack), 99 (atmosphere), 103 (sci-fi) must render as sustaining pad

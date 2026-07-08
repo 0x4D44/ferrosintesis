@@ -2206,7 +2206,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         34 => Box::new(Pluck::new(&PICK, key, vel, sr, seed)),            // B2
         36 | 37 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),       // B2
         35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
-        40..=45 => {
+        40..=45 | 110 => {
             let model = Box::new(Bowed::new(key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_VIOLIN;

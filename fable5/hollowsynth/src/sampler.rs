@@ -427,7 +427,12 @@ mod tests {
     #[test]
     fn la_level_continuity() {
         let sr = 44100.0;
-        for (program, name) in [(40u8, "fiddle"), (73u8, "flute"), (0u8, "piano")] {
+        for (program, name) in [
+            (40u8, "fiddle"),
+            (110u8, "fiddle-110"),
+            (73u8, "flute"),
+            (0u8, "piano"),
+        ] {
             let mut v = voices::make(program, 69, 100, sr, 5, true);
             let mut buf = vec![0f32; 44100]; // 1 s, note held
             v.render(&mut buf);

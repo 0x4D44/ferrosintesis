@@ -60,7 +60,7 @@ const AT_GAIN_DB: f32 = 2.5; // gain lift at full pressure
 /// organs and modal instruments (piano, bells) are left alone.
 fn vibrato_family(program: u8) -> bool {
     // guitars (no palm-mute 28), basses, bowed strings, harp, winds, leads, banjo
-    matches!(program, 24..=27 | 29..=46 | 72..=79 | 80..=87 | 104..=107)
+    matches!(program, 24..=27 | 29..=46 | 72..=79 | 80..=87 | 104..=107 | 110)
 }
 
 /// Families that answer channel aftertouch: the vibrato families plus
@@ -252,19 +252,19 @@ impl Drive {
 /// Per-program bus sends (chorus, echo). Reverb stays CC91-authored.
 fn fx_profile(program: u8) -> (f32, f32) {
     match program {
-        16..=23 => (0.20, 0.0),   // organs: gentle ensemble
-        24 | 25 => (0.12, 0.08),  // acoustic guitars: a touch of both
-        26..=31 => (0.10, 0.30),  // electric guitars: the delayed-lead sound
-        40..=45 => (0.10, 0.10),  // fiddle
-        46 => (0.15, 0.0),        // harp
-        48..=51 => (0.35, 0.0),   // string ensembles
-        52..=54 => (0.30, 0.0),   // choir
-        72..=79 => (0.0, 0.22),   // flute / whistle
-        80..=87 => (0.15, 0.25),  // synth leads: focused, with the delayed-lead echo
-        88..=95 => (0.45, 0.0),   // pads
-        96..=103 => (0.30, 0.35), // crystal: shimmer and echo
-        8..=10 => (0.0, 0.15),    // celesta / glockenspiel / music box
-        14 | 15 => (0.0, 0.08),   // tubular bells
+        16..=23 => (0.20, 0.0),        // organs: gentle ensemble
+        24 | 25 => (0.12, 0.08),       // acoustic guitars: a touch of both
+        26..=31 => (0.10, 0.30),       // electric guitars: the delayed-lead sound
+        40..=45 | 110 => (0.10, 0.10), // fiddle
+        46 => (0.15, 0.0),             // harp
+        48..=51 => (0.35, 0.0),        // string ensembles
+        52..=54 => (0.30, 0.0),        // choir
+        72..=79 => (0.0, 0.22),        // flute / whistle
+        80..=87 => (0.15, 0.25),       // synth leads: focused, with the delayed-lead echo
+        88..=95 => (0.45, 0.0),        // pads
+        96..=103 => (0.30, 0.35),      // crystal: shimmer and echo
+        8..=10 => (0.0, 0.15),         // celesta / glockenspiel / music box
+        14 | 15 => (0.0, 0.08),        // tubular bells
         _ => (0.0, 0.0),
     }
 }
@@ -1897,10 +1897,16 @@ mod tests {
         hi - lo
     }
 
-    fn render_bowed_with_mod(mod_val: u8) -> Vec<f32> {
+    fn render_bowed_program_with_mod(program: u8, mod_val: u8) -> Vec<f32> {
         let song = test_song(
             vec![
-                (0.0, EvKind::Prog { ch: 0, prog: 40 }),
+                (
+                    0.0,
+                    EvKind::Prog {
+                        ch: 0,
+                        prog: program,
+                    },
+                ),
                 (
                     0.0,
                     EvKind::Cc {
@@ -1932,6 +1938,10 @@ mod tests {
         left(&render(&song, &test_opts(44100.0)).0)
     }
 
+    fn render_bowed_with_mod(mod_val: u8) -> Vec<f32> {
+        render_bowed_program_with_mod(40, mod_val)
+    }
+
     /// CC1 = 127 on a bowed note must produce a periodic pitch deviation
     /// far beyond the voice's own gentle vibrato; CC1 = 0 must not.
     #[test]
@@ -1950,6 +1960,37 @@ mod tests {
         assert!(
             spread_mod > 2.0 * spread_plain,
             "plain {spread_plain} Hz vs mod {spread_mod} Hz"
+        );
+    }
+
+    #[test]
+    fn gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato() {
+        let sr = 44100.0;
+        let routed = crate::voices::make(110, 69, 100, sr, 5, true);
+        assert_eq!(
+            routed.kind(),
+            "bowed",
+            "GM 110 must use the bowed/LA fiddle path"
+        );
+        assert!(vibrato_family(110), "GM 110 must take authored CC1 vibrato");
+        assert_eq!(
+            fx_profile(110),
+            fx_profile(40),
+            "GM 110 should use the fiddle bus profile"
+        );
+
+        let plain = render_bowed_program_with_mod(110, 0);
+        let modded = render_bowed_program_with_mod(110, 127);
+        let (a, b) = ((0.8 * sr) as usize, (2.2 * sr) as usize);
+        let spread_plain = cycle_freq_spread(&plain[a..b], sr);
+        let spread_mod = cycle_freq_spread(&modded[a..b], sr);
+        assert!(
+            spread_mod > 10.0,
+            "GM 110 mod vibrato too shallow: {spread_mod} Hz"
+        );
+        assert!(
+            spread_mod > 2.0 * spread_plain,
+            "GM 110 plain {spread_plain} Hz vs mod {spread_mod} Hz"
         );
     }
 

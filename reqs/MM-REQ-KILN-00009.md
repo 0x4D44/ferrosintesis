@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `10218747b65f853de04cdc8e226ba720525672be`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `96a8c6b62c16a75965138663a191cfce5987282e`)
 
 ## Statement
 The string-ensemble (48–51) and choir (52–54) SawStack voices must answer the
@@ -101,3 +101,8 @@ oracle-fit reviewer confirmed two initial oracle gaps: only GM 48/52 sampled, an
 compatibility reviewer confirmed the existing MIDI exception set is non-empty, verified no inherited-controller leak, and reran the focused oracle green.
 landing-hygiene reviewer confirmed the expected conflict risk with the parallel v0.9 worktree: this patch conflicts there in Cargo.toml, Cargo.lock, README.md, engine.rs, and voices.rs. That is an integration sequencing risk, not a local correctness blocker.
 ```
+
+Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
+realtime API landed. The implementation commit became
+`96a8c6b62c16a75965138663a191cfce5987282e`; the package version was advanced to
+`0.8.4` because trunk already carried `0.8.3`.

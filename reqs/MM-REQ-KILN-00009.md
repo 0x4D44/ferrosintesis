@@ -8,7 +8,7 @@
 - **Satisfied-by:** `$null | cargo test strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
-- **Claimed-by:** —
+- **Claimed-by:** codex-gpt5@KILN (2026-07-08T22:14:45.9983917+01:00)
 - **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
 
 ## Statement

@@ -2,6 +2,22 @@
 
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 
+- 2026.07.08 — **A synth "spread" oracle across instruments must fix pitch, or
+  it measures pitch not timbre.** Four v0.9 verification oracles measured the
+  wrong thing while the voice mechanism was fine: brass `centroid/f0` ordered
+  tuba<trumpet but at E1-vs-C5 the 100 Hz `centroid` floor drops the tuba's
+  fundamental and inverts it; reed anti-alias tested the bari (best case) not
+  the soprano (worst); choir shimmer's ±3–7 Hz FM grid overlapped the static
+  detune cluster; the crash-twin oracle measured a window where the twins were
+  already −70 dB. Render at matched pitch / worst case / the feature's live
+  window, and keep the measurement band clear of confounding static structure.
+- 2026.07.08 — **Shared voice structs are where parallel designs collide.**
+  hollowsynth strings (48–51) and choir (52–54) are both `SawStack`; designed
+  in parallel, one added a stack-level `vib_depth` the other deleted (moving it
+  per-`Layer`). Per-family review passed both; only a cross-section critic
+  caught it. When fanning out voice designs, add an explicit assembly/critic
+  pass over shared structs (`SawStack`, `Layer`, `fx_profile`, the golden
+  fixture) before trusting the union.
 - 2026.07.07 — **Put untouched-family canaries in the golden fixture.** The
   hollowsynth realism build's per-channel golden table included piano/strings
   channels no phase touched; they stayed bit-exact for six phases and caught

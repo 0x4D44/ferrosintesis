@@ -14,13 +14,18 @@ crossfades into the modeled sustain.
 - `violin_*_f.wav` / `violin_*_p.wav` — solo violin arco, forte / piano
   (selected by note velocity), 6 pitch zones each, ~0.63 s
 - `flute_*.wav` — flute sustain onsets, 5 pitch zones, ~0.63 s
+- `drum_sus_cymb1_*`, `drum_crash1_*`, `drum_kick_*`, `drum_snare2_*`
+  — unpitched drum-hit overlays for the default kit: crash/suspended cymbal
+  attacks kept to ~2.2 s, kick/snare attacks kept to ~0.46 s. The modeled drum
+  voice remains the sustain/body layer.
 
 ## Provenance & license
 
 Trimmed from **VSCO 2 Community Edition** (Versilian Studios /
 sgossner, <https://github.com/sgossner/VSCO-2-CE>), released under
-**CC0 1.0 / public domain**. No attribution required; given anyway with
-thanks.
+**CC0 1.0 / public domain**. The generator pins source downloads to VSCO commit
+`440300901dfe9275fd84e0b7763af1f8443ae62e`. No attribution required; given
+anyway with thanks.
 
 ## Regenerating
 
@@ -28,7 +33,9 @@ thanks.
 bank: onset detection, trim, fades, peak normalization, and an
 autocorrelation pitch measurement (octave-safe, parabolic-refined). It
 prints each zone's root frequency — those values are hardcoded in
-`src/sampler.rs` and must be updated if the bank changes.
+`src/sampler.rs` and must be updated if the bank changes. Downloads are cached
+under the system temp directory by VSCO revision and fetched atomically so an
+interrupted run cannot leave a partial final cache file.
 
 ```powershell
 python prepare.py

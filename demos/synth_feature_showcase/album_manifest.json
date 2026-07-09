@@ -85,7 +85,7 @@
           ]
         },
         {
-          "name": "v2 drum kit",
+          "name": "default drum kit",
           "tier": "A",
           "channel": 9,
           "start_beat": 0,

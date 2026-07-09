@@ -115,11 +115,10 @@ def check_features(sc: en.Score) -> list[str]:
                     by_tick[tk] += 1
             if any(count > 1 for count in by_tick.values()):
                 fails.append(f"{f.name}: monophonic feature has chord note-ons")
-        if f.drum_pc:
-            pcs = [prog for b, prog in program_events(sc, 9) if b <= f.start + 1e-6 and prog != 0]
+        if f.drum_kit:
             hits = [n for n in note_spans(sc, 9) if f.start <= n[0] <= f.end]
-            if not pcs or not hits:
-                fails.append(f"{f.name}: missing non-zero drum program change or hits")
+            if not hits:
+                fails.append(f"{f.name}: missing drum hits")
     return fails
 
 
@@ -192,7 +191,6 @@ def check_suite_controllers(scores: list[en.Score]) -> list[str]:
     seen_cc = set()
     bends = 0
     ats = 0
-    drum_pc = False
     for sc in scores:
         for ch in sc.events:
             for cc in REQUIRED_CCS:
@@ -200,8 +198,6 @@ def check_suite_controllers(scores: list[en.Score]) -> list[str]:
                     seen_cc.add(cc)
             bends += len(bend_events(sc, ch))
             ats += len(aftertouch_events(sc, ch))
-            if ch == 9 and any(prog != 0 for _b, prog in program_events(sc, 9)):
-                drum_pc = True
     fails = []
     missing = REQUIRED_CCS - seen_cc
     if missing:
@@ -210,8 +206,6 @@ def check_suite_controllers(scores: list[en.Score]) -> list[str]:
         fails.append(f"only {bends} pitch-bend events")
     if ats < 8:
         fails.append(f"only {ats} aftertouch events")
-    if not drum_pc:
-        fails.append("missing non-zero channel-10 Program Change")
     return fails
 
 

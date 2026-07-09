@@ -485,10 +485,12 @@ mod guards {
         (6, -27.13, 194.4),
         (7, -24.35, 567.6),
         (8, -37.21, 2683.1),
-        (9, -23.26, 483.9),
+        // Re-captured after the default drum kit moved from V1 to V3:
+        // channel 10 is deliberately brighter and slightly louder.
+        (9, -22.51, 726.7),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 1.04280;
+    const GOLDEN_MASTER_PEAK: f32 = 1.16578;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause
@@ -620,7 +622,8 @@ mod guards {
             assert_eq!(v.kind(), want, "program {prog}");
         }
         // drums route through drums::make
-        let d = crate::drums::make(38, 100, SR, 7, crate::drums::Kit::V1).expect("snare voice");
+        let d =
+            crate::drums::make(38, 100, SR, 7, crate::drums::Kit::V1, false).expect("snare voice");
         assert_eq!(d.kind(), "drum");
         // the Drive-insert decision, single source of truth
         for p in 0u8..=127 {

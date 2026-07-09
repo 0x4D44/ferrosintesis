@@ -92,7 +92,7 @@ class Feature:
     bend: tuple[float, float] | None = None
     aftertouch: tuple[int, int] | None = None
     monophonic: bool = False
-    drum_pc: bool = False
+    drum_kit: bool = False
 
 
 @dataclass

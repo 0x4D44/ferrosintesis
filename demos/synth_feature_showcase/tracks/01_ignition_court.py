@@ -13,8 +13,7 @@ def build(sc: en.Score) -> None:
     sc.channel(2, "bass engines", 32, volume=108, pan=64, reverb=12, chorus=0, echo=0)
     sc.channel(3, "synth lead", 80, volume=100, pan=64, reverb=45, chorus=35, echo=28)
     sc.channel(4, "wah answer", 29, volume=88, pan=58, reverb=22, chorus=12, echo=20)
-    sc.channel(9, "v2 kit", None, volume=110, pan=64, reverb=34, chorus=0, echo=0)
-    sc.program(9, 8, 0.0)
+    sc.channel(9, "default kit", None, volume=110, pan=64, reverb=34, chorus=0, echo=0)
 
     for t in range(0, 384, 32):
         en.drum_drive(sc, t, 8, energy=90 + min(28, t // 16))
@@ -71,6 +70,6 @@ def build(sc: en.Score) -> None:
     feature(sc, "all basses", 2, 0, 256, bass_programs, min_notes=160, bend=(0.0, 0.35))
     feature(sc, "all synth leads", 3, 112, 340, lead_programs, min_notes=160, ccs={1: (0, 127), 93: (25, 80), 94: (18, 98), 5: (88, 88), 65: (0, 127)}, bend=(0.0, 0.35))
     feature(sc, "wah resonance drive", 4, 64, 184, {29, 30}, min_notes=180, ccs={71: (0, 127), 74: (24, 120), 10: (42, 86)})
-    feature(sc, "v2 drum kit", 9, 0, 384, set(), min_notes=200, drum_pc=True)
+    feature(sc, "default drum kit", 9, 0, 384, set(), min_notes=200, drum_kit=True)
     sc.audio_check(en.AudioCheck("wah resonance bite", "hf_up", 80, 88, 72, 80, 1.08))
     sc.audio_check(en.AudioCheck("lead bloom", "hf_up", 128, 148, 112, 124, 1.08))

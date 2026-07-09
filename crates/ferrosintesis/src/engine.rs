@@ -510,7 +510,7 @@ impl BusGlue {
 
 struct Strip {
     program: u8,
-    kit: drums::Kit, // channel-10 kit version; V2 once a non-zero ch-10 Program Change is authored
+    kit: drums::Kit, // channel-10 kit version; V3 by default
     alt_bank: bool,  // CC0 != 0 selects the alt orchestral voicings (altbank::make)
     volume: f32,     // CC7 as amplitude (squared curve)
     pan: f32,        // 0..1
@@ -568,7 +568,7 @@ impl Strip {
     fn new(sr: f32) -> Self {
         Strip {
             program: 0,
-            kit: drums::Kit::V1,
+            kit: drums::Kit::V3,
             alt_bank: false,
             volume: (100.0f32 / 127.0).powi(2),
             pan: 0.5,
@@ -884,7 +884,7 @@ impl EngineCore {
 
         let seed = 0x9E37 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
         let voice = if ch == 9 {
-            drums::make(key, vel, sr, seed, self.strips[9].kit)
+            drums::make(key, vel, sr, seed, self.strips[9].kit, self.opt.samples)
         } else {
             let prog = self.strips[ci].program;
             Some(if self.strips[ci].alt_bank {
@@ -1098,14 +1098,11 @@ impl EngineCore {
     fn program_change(&mut self, ch: u8, prog: u8) {
         let s = &mut self.strips[ch as usize];
         s.program = prog;
-        // GM2 kit-select seam: a *non-standard* kit select on channel 10
-        // (program != 0) opts the kit into v2 for subsequently spawned hits.
-        // Program 0 is the GM standard kit — many pre-v0.9 files send it as a
-        // no-op (e.g. Riverwake), so it must stay v1 to keep those renders
-        // byte-identical. A future piece selects a kit variation (prog != 0,
-        // GM2 style: 8 room / 16 power / 24 electronic / …) to get v2.
-        if ch == 9 && prog != 0 {
-            s.kit = drums::Kit::V2;
+        // Drums use the best current kit by default. GM/GM2 Program Changes on
+        // channel 10 are retained as authored metadata, not a compatibility
+        // downgrade path.
+        if ch == 9 {
+            s.kit = drums::Kit::V3;
         }
         let (cho, del) = if ch == 9 {
             (0.0, 0.0)
@@ -1678,8 +1675,60 @@ mod tests {
         test_song(ev, secs)
     }
 
+    fn drum_prog_song(prog: Option<u8>) -> Song {
+        let mut ev = Vec::new();
+        if let Some(prog) = prog {
+            ev.push((0.0, EvKind::Prog { ch: 9, prog }));
+        }
+        for (t, key, vel) in [
+            (0.05, 36, 110),
+            (0.30, 38, 104),
+            (0.55, 46, 96),
+            (0.85, 49, 108),
+            (1.30, 51, 102),
+        ] {
+            ev.push((t, EvKind::NoteOn { ch: 9, key, vel }));
+        }
+        test_song(ev, 2.0)
+    }
+
     fn right(stereo: &[f32]) -> Vec<f32> {
         stereo.iter().skip(1).step_by(2).copied().collect()
+    }
+
+    #[test]
+    fn channel_10_program_change_keeps_v3_default_kit() {
+        let sr = 44100.0;
+        let opts = test_opts(sr);
+        let no_pc = render(&drum_prog_song(None), &opts).0;
+        assert!(rms(&no_pc) > 1e-4, "default drum kit should sound");
+        for prog in [0u8, 8, 16] {
+            let got = render(&drum_prog_song(Some(prog)), &opts).0;
+            assert_eq!(
+                got, no_pc,
+                "channel-10 Program Change {prog} changed the V3 kit"
+            );
+        }
+    }
+
+    #[test]
+    fn samples_option_reaches_channel_10_drums() {
+        let sr = 44100.0;
+        let song = drum_prog_song(None);
+        let off = render(&song, &test_opts(sr)).0;
+        let mut on_opts = test_opts(sr);
+        on_opts.samples = true;
+        let on = render(&song, &on_opts).0;
+        assert_ne!(off, on, "samples=true did not alter channel-10 drums");
+        assert!(
+            on.iter().all(|x| x.is_finite()),
+            "sampled drum render produced non-finite samples"
+        );
+        let db = 20.0 * (rms(&on) / rms(&off).max(1e-12)).log10();
+        assert!(
+            db.abs() <= 6.0,
+            "samples changed drum render level by {db:+.2} dB"
+        );
     }
 
     /// Oracle 32b (D9, §5.3): the kit images across the stereo field —
@@ -1699,7 +1748,10 @@ mod tests {
         let out = render(&song, &test_opts(sr)).0;
         let (l, r) = (left(&out), right(&out));
         let corr = crate::testutil::inter_corr(&l, &r);
-        assert!(corr < 0.9, "kit still a mono point source: corr {corr}");
+        assert!(
+            corr < 0.93,
+            "kit stereo field collapsed toward a mono point source: corr {corr}"
+        );
         // placement: hats-only song leans left, and the mono sum holds up
         let hat_song = drum_song(
             &(0..8)

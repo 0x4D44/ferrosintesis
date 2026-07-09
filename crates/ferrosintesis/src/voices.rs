@@ -320,7 +320,11 @@ impl Voice for Modal {
     }
 }
 
-fn piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+pub(crate) fn is_acoustic_piano(program: u8) -> bool {
+    matches!(program, 0..=3)
+}
+
+fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let f = key_freq(key);
     let v = vel_amp(vel);
     let bright = 0.55 + 0.40 * (vel as f32 / 127.0);
@@ -356,6 +360,90 @@ fn piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         0.0015,
         0.10,
         0.50,
+    )
+}
+
+fn electric_piano_1(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    let f = key_freq(key);
+    let vn = vel as f32 / 127.0;
+    let v = 0.25 + 0.75 * vel_amp(vel);
+    let scale = (440.0 / f).powf(0.25).clamp(0.75, 1.5);
+    let partials = [
+        (1.000, 0.95 * v, 3.6 * scale),
+        (1.003, 0.55 * v, 3.1 * scale),
+        (2.000, 0.32 * v, 2.1 * scale),
+        (2.820, 0.24 * v * (0.7 + 0.5 * vn), 0.85 * scale),
+        (3.000, 0.13 * v, 1.3 * scale),
+        (5.380, 0.08 * v * (0.6 + 0.7 * vn), 0.40 * scale),
+    ];
+    Modal::new(
+        sr,
+        seed,
+        &partials,
+        (
+            0.035 * v,
+            0.010,
+            Biquad::bandpass((f * 7.0).min(5200.0), 0.8, sr),
+        ),
+        0.002,
+        0.22,
+        0.56,
+    )
+}
+
+fn electric_piano_2(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    let f = key_freq(key);
+    let vn = vel as f32 / 127.0;
+    let v = 0.22 + 0.82 * vel_amp(vel);
+    let scale = (440.0 / f).powf(0.18).clamp(0.70, 1.35);
+    let partials = [
+        (1.000, 0.72 * v, 2.4 * scale),
+        (1.997, 0.24 * v, 1.6 * scale),
+        (3.010, 0.42 * v * (0.7 + 0.8 * vn), 1.0 * scale),
+        (4.180, 0.30 * v * (0.6 + 0.9 * vn), 0.72 * scale),
+        (6.820, 0.15 * v * (0.5 + vn), 0.42 * scale),
+        (9.200, 0.06 * v * vn, 0.20 * scale),
+    ];
+    Modal::new(
+        sr,
+        seed,
+        &partials,
+        (
+            0.025 * v,
+            0.006,
+            Biquad::bandpass((f * 10.0).min(7000.0), 0.9, sr),
+        ),
+        0.0008,
+        0.18,
+        0.54,
+    )
+}
+
+fn harpsichord(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    let f = key_freq(key);
+    let v = 0.78 + 0.22 * (vel as f32 / 127.0);
+    let decay_scale = (440.0 / f).powf(0.28).clamp(0.65, 1.5);
+    let mut partials = Vec::new();
+    for k in 1..=12u32 {
+        let kf = k as f32;
+        let fk = f * kf;
+        if fk > sr * 0.42 {
+            break;
+        }
+        partials.push((fk, v / kf.powf(0.72), (1.45 / kf.powf(0.30)) * decay_scale));
+    }
+    Modal::new(
+        sr,
+        seed,
+        &partials,
+        (
+            0.10 * v,
+            0.006,
+            Biquad::highpass((f * 6.0).clamp(1600.0, 6500.0), 0.7, sr),
+        ),
+        0.0,
+        0.08,
+        0.34,
     )
 }
 
@@ -713,6 +801,26 @@ pub const MUTED: PluckPreset = PluckPreset {
     grit: true,            // palm-mute soft-clip grit
     click: 1.4,            // palm chuff
     click_hp: 900.0,
+    ..DEFAULTS
+};
+pub const CLAVINET: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "CLAVINET",
+    t60: 0.78,
+    bright: 5200.0,
+    pick_lp: 5800.0,
+    pos: 0.11,
+    amp: 0.56,
+    rel_t60: 0.06,
+    body: &[(180.0, 1.0, 1.8), (900.0, 1.2, 2.2), (2600.0, 1.0, 2.5)],
+    out_lp: 5200.0,
+    pickup: 0.18,
+    cab_lp: 5200.0,
+    click: 2.0,
+    click_hp: 1600.0,
+    click_post: true,
+    attack_noise: 0.22,
+    stop_thump: 0.5,
     ..DEFAULTS
 };
 // Fingered electric bass (GM 33), the album workhorse. Voiced deep, warm and
@@ -3915,8 +4023,8 @@ fn brass(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Brass {
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
     let noise_off = (0.0, 0.01, 1000.0, 1.0);
     match program {
-        0..=7 => {
-            let model = Box::new(piano(key, vel, sr, seed));
+        0..=3 => {
+            let model = Box::new(acoustic_piano(key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_PIANO;
                 crate::sampler::LaVoice::wrap(
@@ -3932,6 +4040,10 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
+        4 => Box::new(electric_piano_1(key, vel, sr, seed)),
+        5 => Box::new(electric_piano_2(key, vel, sr, seed)),
+        6 => Box::new(harpsichord(key, vel, sr, seed)),
+        7 => Box::new(Pluck::new(&CLAVINET, key, vel, sr, seed)),
         8 => Box::new(bell(
             key,
             vel,
@@ -4209,6 +4321,21 @@ mod tests {
         buf
     }
 
+    fn render_program_sampled(
+        program: u8,
+        key: u8,
+        vel: u8,
+        secs: f32,
+        seed: u32,
+        samples: bool,
+    ) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = make(program, key, vel, sr, seed, samples);
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
     fn segment(s: &[f32], sr: f32, a: f32, b: f32) -> &[f32] {
         &s[(a * sr) as usize..(b * sr) as usize]
     }
@@ -4244,6 +4371,132 @@ mod tests {
         samples.iter().fold(0xcbf2_9ce4_8422_2325, |h, x| {
             (h ^ x.to_bits() as u64).wrapping_mul(0x0000_0100_0000_01b3)
         })
+    }
+
+    #[test]
+    fn keyboard_voices_programs_4_7_do_not_use_acoustic_piano_voice() {
+        let sr = 44100.0;
+        let key = 60;
+        let vel = 96;
+        let seed = 0x4b05_000f;
+        for program in 0u8..=3 {
+            assert!(
+                is_acoustic_piano(program),
+                "GM{program} should stay acoustic"
+            );
+        }
+        for program in 4u8..=7 {
+            assert!(
+                !is_acoustic_piano(program),
+                "GM{program} should not use acoustic-piano engine gates"
+            );
+        }
+        let acoustic_hashes: Vec<(u8, u64)> = (0u8..=3)
+            .map(|program| {
+                (
+                    program,
+                    render_hash(&render_program(program, key, vel, 0.8, seed)),
+                )
+            })
+            .collect();
+        assert_eq!(
+            acoustic_hashes,
+            vec![
+                (0, 14929594896472552629),
+                (1, 14929594896472552629),
+                (2, 14929594896472552629),
+                (3, 14929594896472552629),
+            ],
+            "GM0-3 acoustic piano hashes changed"
+        );
+
+        let acoustic = render_program(0, key, vel, 1.2, seed);
+        let acoustic_hash = render_hash(&acoustic);
+
+        let mut hashes = Vec::new();
+        for program in 4u8..=7 {
+            let s = render_program(program, key, vel, 1.2, seed ^ program as u32);
+            let h = render_hash(&s);
+            assert_ne!(
+                h, acoustic_hash,
+                "GM{program} still renders as the acoustic piano model"
+            );
+            assert!(
+                hashes.iter().all(|&old| old != h),
+                "GM{program} is not distinct from an earlier GM4-7 keyboard voice"
+            );
+            hashes.push(h);
+        }
+
+        let ac_plain = render_program_sampled(0, key, vel, 0.35, seed, false);
+        let ac_sampled = render_program_sampled(0, key, vel, 0.35, seed, true);
+        assert_ne!(
+            render_hash(&ac_plain),
+            render_hash(&ac_sampled),
+            "GM0 sample-layer positive control did not differ"
+        );
+        for program in 4u8..=7 {
+            let plain =
+                render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, false);
+            let sampled =
+                render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, true);
+            assert_eq!(
+                render_hash(&plain),
+                render_hash(&sampled),
+                "GM{program} still uses the acoustic piano LA sample layer"
+            );
+        }
+
+        let band_ratio = |program: u8, key: u8, center: f32| {
+            let f0 = key_freq(key);
+            let s = render_program(program, key, vel, 0.8, seed ^ program as u32 ^ key as u32);
+            let body = segment(&s, sr, 0.05, 0.35);
+            band_rms(body, sr, f0 * center, 12.0) / rms(body).max(1e-9)
+        };
+        for key in [60u8, 76] {
+            let rhodes_bell = band_ratio(4, key, 3.0);
+            let dx_bell = band_ratio(5, key, 3.0);
+            assert!(
+                dx_bell >= rhodes_bell * 1.25,
+                "GM5 should be more bell-forward than GM4 at key {key}: {dx_bell:.4} vs {rhodes_bell:.4}"
+            );
+        }
+
+        let body_rms = |program: u8, vel: u8| {
+            let s = render_program(program, key, vel, 0.8, seed ^ program as u32 ^ vel as u32);
+            rms(segment(&s, sr, 0.05, 0.35))
+        };
+        let harpsi_lo = body_rms(6, 32);
+        let harpsi_hi = body_rms(6, 116);
+        let piano_lo = body_rms(0, 32);
+        let piano_hi = body_rms(0, 116);
+        assert!(
+            harpsi_lo > 1e-4,
+            "GM6 harpsichord too quiet at low velocity"
+        );
+        assert!(
+            harpsi_hi / harpsi_lo <= 1.5,
+            "GM6 harpsichord velocity spread too piano-like: {harpsi_hi:.6} / {harpsi_lo:.6}"
+        );
+        assert!(
+            piano_hi / piano_lo >= 3.0,
+            "GM0 positive control lacks broad piano velocity spread: {piano_hi:.6} / {piano_lo:.6}"
+        );
+
+        let mut clav = make(7, key, vel, sr, seed, false);
+        assert_eq!(
+            clav.kind(),
+            "CLAVINET",
+            "GM7 should route through the clavinet pluck preset"
+        );
+        let mut clav_buf = vec![0f32; (0.8 * sr) as usize];
+        clav.render(&mut clav_buf);
+        let early = rms(segment(&clav_buf, sr, 0.03, 0.18));
+        let late = rms(segment(&clav_buf, sr, 0.42, 0.72));
+        assert!(
+            late < early * 0.45,
+            "GM7 clavinet should decay quickly: late {late:.6}, early {early:.6}"
+        );
     }
 
     #[test]

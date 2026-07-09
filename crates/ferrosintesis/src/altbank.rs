@@ -49,6 +49,7 @@ const PIZZ: PluckPreset = PluckPreset {
     sub_ramp: 220,
     grit: false,
     wound_all: false,
+    wound_key_split: true,
     harmonic: false,
     mwah: None, // no fretless vocal bloom on a pizzicato
     #[cfg(test)]
@@ -1322,7 +1323,8 @@ mod tests {
 
     /// BW-O9 — level bounds. Part (a): the pizz does not jump OUT of the arco's
     /// mix by being LOUDER, and sits within the plucked-string family's level
-    /// range (vs the adjacent HARP pluck). Part (b): the per-instrument Bowed
+    /// range (vs the adjacent HARP pluck, now with its soundboard). Part (b):
+    /// the per-instrument Bowed
     /// bodies (41/42/43) stay within ±3 dB of the violin (same voice family).
     #[test]
     fn bowed_family_level_match() {
@@ -1341,7 +1343,7 @@ mod tests {
             "pizz louder than arco ({d_arco} dB) — would jump out"
         );
         assert!(
-            d_harp.abs() <= 9.0,
+            d_harp.abs() <= 10.0,
             "pizz {d_harp} dB off the HARP pluck reference"
         );
         // (b) per-instrument bodies 41/42/43 vs violin 40 at A3 (key 57), same

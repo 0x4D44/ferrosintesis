@@ -5,7 +5,7 @@
 - **Area:** hollowsynth / voices (timpani)
 - **Raised:** 2026-07-08
 - **Implemented-by:** `fable5/hollowsynth/src/voices.rs::Modal::with_strike_glide`, `fable5/hollowsynth/src/voices.rs::timpani_partials`, `fable5/hollowsynth/src/voices.rs::timpani`, `fable5/hollowsynth/src/voices.rs::tests::timpani_47_glides_brightens_and_rings_after_noteoff`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | deltic timeout 240 cargo test timpani_47_glides_brightens_and_rings_after_noteoff --manifest-path fable5/hollowsynth/Cargo.toml -- --nocapture`; `$null | deltic timeout 600 cargo test --manifest-path fable5/hollowsynth/Cargo.toml`; `python build.py --verify` in `fable5/Hollow Hill`, `fable5/The Burning Meridian`, and `fable5/The Ninth Bell`; baseline render validation recorded in `wrk_docs/2026.07.09 - HLD - MM-REQ-KILN-00013 timpani strike glide.md`
+- **Satisfied-by:** `$null | deltic timeout 240 cargo test timpani_47_glides_brightens_and_rings_after_noteoff --manifest-path fable5/hollowsynth/Cargo.toml -- --nocapture`; post-rebase `$null | deltic timeout 600 cargo test --manifest-path fable5/hollowsynth/Cargo.toml -- --skip altbank::tests::sawstack_v1_canary_frozen` with the skipped canary also failing on clean `origin/main`; `python build.py --verify` in `fable5/Hollow Hill`, `fable5/The Burning Meridian`, and `fable5/The Ninth Bell`; baseline render validation recorded in `wrk_docs/2026.07.09 - HLD - MM-REQ-KILN-00013 timpani strike glide.md`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

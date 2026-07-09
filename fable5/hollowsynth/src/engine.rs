@@ -494,7 +494,7 @@ impl BusGlue {
 
 struct Strip {
     program: u8,
-    kit: drums::Kit, // channel-10 kit version; V2 once a ch-10 Program Change is authored
+    kit: drums::Kit, // channel-10 kit version; V2 once a non-zero ch-10 Program Change is authored
     volume: f32,     // CC7 as amplitude (squared curve)
     pan: f32,        // 0..1
     bend: f32,       // channel pitch multiplier: wheel × range × fine-tune
@@ -999,10 +999,13 @@ impl EngineCore {
     fn program_change(&mut self, ch: u8, prog: u8) {
         let s = &mut self.strips[ch as usize];
         s.program = prog;
-        // GM2 kit-select seam: any Program Change on channel 10 opts the kit
-        // into v2 for subsequently spawned hits. No album authors one, so every
-        // committed drum render stays v1 byte-identical (verified by drift scan).
-        if ch == 9 {
+        // GM2 kit-select seam: a *non-standard* kit select on channel 10
+        // (program != 0) opts the kit into v2 for subsequently spawned hits.
+        // Program 0 is the GM standard kit — many pre-v0.9 files send it as a
+        // no-op (e.g. Riverwake), so it must stay v1 to keep those renders
+        // byte-identical. A future piece selects a kit variation (prog != 0,
+        // GM2 style: 8 room / 16 power / 24 electronic / …) to get v2.
+        if ch == 9 && prog != 0 {
             s.kit = drums::Kit::V2;
         }
         let (cho, del) = if ch == 9 {

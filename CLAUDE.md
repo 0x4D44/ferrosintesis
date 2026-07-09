@@ -88,12 +88,25 @@ orchestra hit 55, strings 48–51 and choir 52–54. A few ranges are still cura
 whitelist and verify nothing strays into an unintended range. Read the family/GM-program
 table in `crates/ferrosintesis/README.md` before assuming a program will sound right.
 
-**The "authored channel" invariant — new synth features must stay opt-in.** Every added
-CC feature (CC1 vibrato/Leslie, CC64/68/74, CC70 vowels, CC0 alt-bank select, RPN,
-aftertouch…) engages only once a channel *authors* it; a channel that never sends it renders
-exactly as before. This keeps already-committed albums frozen while the synth grows. **Prove it**: build a baseline
-binary in a throwaway `git worktree add <path> HEAD`, render a prior album with both
-binaries, and `cmp` for byte-identity. Do this for any voices.rs/engine.rs change.
+**Synth-change policy — controller features are opt-in; timbre improvements are
+default-on with a diff-driven asset refresh.** Two regimes:
+- **Controller/CC features** (CC1 vibrato/Leslie, CC64/68/74, CC70 vowels, CC2 breath,
+  CC0 alt-bank select, RPN, aftertouch…) engage only once a channel *authors* them; a
+  channel that never sends one renders exactly as before. That's correct MIDI
+  semantics, not conservatism — an unauthored controller must be inert.
+- **Instrument/timbre improvements** (better voices, new sample layers, kit upgrades)
+  become the **default sound** — committed albums are not frozen in older, worse
+  renderings. The obligation is to refresh, not to freeze: re-render and re-commit
+  the affected `listening/*.opus` assets in the same task, so the published audio
+  never silently lags the synth.
+
+**Either way, run the render-diff inventory** for any voices.rs/engine.rs/drums.rs/
+sampler.rs change: build a baseline binary in a throwaway `git worktree add <path> HEAD`,
+render every album MIDI in `render_opus.py::ALBUMS` with both binaries, and `cmp`.
+It is a **report, not a pass/fail gate**: expected diffs define exactly which
+listening assets to refresh; *unexpected* diffs (a brass change altering a piano-only
+album, DC on silent channels) are bugs — investigate before committing. For a pure
+controller feature, any diff at all is a bug.
 
 ferrosintesis is versioned (`Cargo.toml`, currently 0.10.2); a shipped-code change needs one
 version bump per integrated task.

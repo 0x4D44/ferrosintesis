@@ -72,12 +72,16 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   layer: centre sustained beds (pan 64) and get width from panning
   transient sources — don't touch the shared chorus bus (it's near
   mono-neutral and shared across all albums).
-- 2026.07.07 — **New synth features must stay opt-in (the "authored
-  channel" pattern).** Every ferrosintesis CC feature (v0.6 CC1, v0.7
-  CC70/71/5/65/66/67/RPN/aftertouch) only engages once a channel authors
-  it; prove it by rendering all prior albums byte-identical (build a
-  baseline binary in a scratch `git worktree add HEAD` and `cmp`). Keeps
-  old albums frozen while the synth grows.
+- 2026.07.07 (rev 2026.07.09) — **Controller features opt-in; timbre
+  improvements default-on; always run the render-diff inventory.** CC
+  features engage only once a channel authors them (correct MIDI
+  semantics — any render diff is a bug). Instrument/timbre improvements
+  become the default sound; the duty is to refresh the affected
+  `listening/*.opus` in the same task, not to freeze old albums. Either
+  way, render all `render_opus.py::ALBUMS` MIDIs against a scratch
+  `git worktree add HEAD` baseline binary and `cmp` — a report defining
+  the refresh set and catching unintended leakage. (Doctrine reworded by
+  Arthur's call; full text in CLAUDE.md.)
 - 2026.07.08 — **Encode the dramatic shape as an oracle, twice.** The
   Ninth Bell's "builds and drops" brief became `check_arc` — inequalities
   on per-bar velocity sums (ascent < ascent, void ≤ 0.25× processional,

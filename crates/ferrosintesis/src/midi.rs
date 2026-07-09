@@ -1,8 +1,8 @@
 //! Minimal Standard MIDI File reader: extracts the tempo map, note,
-//! controller, pitch-bend and channel-aftertouch events with absolute
-//! times in seconds. Supports type 0/1, running status, and skips
-//! anything it does not model (polyphonic aftertouch, sysex, and metas
-//! such as lyrics and key signatures).
+//! controller, pitch-bend and aftertouch (channel and polyphonic) events
+//! with absolute times in seconds. Supports type 0/1, running status, and
+//! skips anything it does not model (sysex and metas such as lyrics and
+//! key signatures).
 
 use std::path::Path;
 
@@ -35,6 +35,12 @@ pub enum EvKind {
     /// Channel aftertouch (0xDn): one pressure value for the whole channel.
     Aftertouch {
         ch: u8,
+        val: u8,
+    },
+    /// Polyphonic (key) aftertouch (0xAn): pressure on one held key.
+    PolyAftertouch {
+        ch: u8,
+        key: u8,
         val: u8,
     },
 }
@@ -210,7 +216,9 @@ pub fn parse(data: &[u8]) -> Result<Song, String> {
                             raw.push((tick, seq, EvKind::Bend { ch, semis }));
                         }
                         0xA0 => {
-                            let _ = c.bytes(2)?;
+                            let key = c.u8()?;
+                            let val = c.u8()?;
+                            raw.push((tick, seq, EvKind::PolyAftertouch { ch, key, val }));
                         }
                         _ => return Err(format!("bad status byte {status:#04x}")),
                     }

@@ -543,6 +543,13 @@ struct Strip {
     res_target: f32,
     expr_target: f32,
     expr: f32,
+    // CC2 breath: a second expression lane (squared, smoothed like CC11)
+    // aimed at sustained-excitation voices. NEUTRAL (1.0) until first
+    // authored — deliberately NOT the GM power-on default of 0, which would
+    // silence every channel that never sends CC2 (authored-channel invariant).
+    breath_authored: bool,
+    breath_target: f32,
+    breath: f32,
     mod_target: f32, // CC1, smoothed into mod_cur like expression
     mod_cur: f32,
     mod_engaged: bool,  // mod machinery active (stays on through spin-down)
@@ -600,6 +607,9 @@ impl Strip {
             res_target: WAH_Q,
             expr_target: 1.0,
             expr: 1.0,
+            breath_authored: false,
+            breath_target: 1.0,
+            breath: 1.0,
             mod_target: 0.0,
             mod_cur: 0.0,
             mod_engaged: false,
@@ -658,6 +668,18 @@ struct Active {
     // CC5/CC65 portamento: (semitone offset from the target, per-block slew)
     glide: Option<(f32, f32)>,
     alt: bool, // spawn-time bank: this voice is an alt-bank voicing (per-voice CC1 routing)
+    // Poly (key) aftertouch (0xAn): a per-note pressure lane mirroring the
+    // channel lane (same smoothing, LFO rate and depths). Channel and key
+    // pressure COMPOSE: the dB gain lifts add and the vibrato factors
+    // multiply — matching how CC7 x CC11 x channel-AT gain already stack in
+    // the strip. All defaults are exact no-ops (multiply by 1.0), so a note
+    // that never receives 0xAn renders bit-identically.
+    poly_authored: bool,
+    poly_target: f32, // pressure 0..1
+    poly_cur: f32,    // smoothed like the channel at_cur
+    poly_phase: f32,  // per-note pressure-vibrato LFO phase
+    poly_mult: f32,   // this block's pitch factor (1.0 = none)
+    poly_gain: f32,   // per-note gain lift (1.0 = none)
     voice: Box<dyn voices::Voice>,
 }
 
@@ -786,6 +808,12 @@ impl EngineCore {
             sost_held: false,
             glide: None,
             alt: false,
+            poly_authored: false,
+            poly_target: 0.0,
+            poly_cur: 0.0,
+            poly_phase: 0.0,
+            poly_mult: 1.0,
+            poly_gain: 1.0,
             voice,
         });
         self.stats.voices_spawned += 1;
@@ -823,6 +851,23 @@ impl EngineCore {
                 let s = &mut self.strips[ch as usize];
                 s.at_target = val as f32 / 127.0;
                 s.at_authored = true;
+            }
+            // Poly (key) aftertouch targets only the ringing voice(s) on that
+            // key. Same family gate as the channel lane (drums stay out) —
+            // gated at event time so unaffected notes never engage the lane.
+            EvKind::PolyAftertouch { ch, key, val } => {
+                if ch != 9 {
+                    let p = val as f32 / 127.0;
+                    for a in self.active.iter_mut().filter(|a| {
+                        a.ch == ch
+                            && a.key == key
+                            && !a.voice.released()
+                            && aftertouch_family(a.program)
+                    }) {
+                        a.poly_target = p;
+                        a.poly_authored = true;
+                    }
+                }
             }
             EvKind::Prog { ch, prog } => self.program_change(ch, prog),
         }
@@ -907,7 +952,7 @@ impl EngineCore {
             // the new voice at the channel's current pressure so a note born
             // mid-swell starts open, not from silence.
             if matches!(s.program, 56..=63) {
-                voice.set_breath(s.expr.sqrt().min(1.3), 0.0);
+                voice.set_breath((s.expr * s.breath).sqrt().min(1.3), 0.0);
             }
             let glide = if ch != 9 && s.porta_on {
                 porta_from.and_then(|from| {
@@ -934,6 +979,12 @@ impl EngineCore {
                 sost_held: false,
                 glide,
                 alt: self.strips[ci].alt_bank,
+                poly_authored: false,
+                poly_target: 0.0,
+                poly_cur: 0.0,
+                poly_phase: 0.0,
+                poly_mult: 1.0,
+                poly_gain: 1.0,
                 voice,
             });
             self.stats.voices_spawned += 1;
@@ -973,6 +1024,11 @@ impl EngineCore {
             1 => {
                 s.mod_target = v;
                 s.mod_authored = true;
+            }
+            2 => {
+                // Breath controller: same squared taper as CC11 expression.
+                s.breath_target = v * v;
+                s.breath_authored = true;
             }
             5 => s.porta_time = PORTA_MIN_S * (PORTA_MAX_S / PORTA_MIN_S).powf(v),
             6 | 38 => {
@@ -1200,6 +1256,9 @@ impl EngineCore {
         s.res_target = WAH_Q;
         s.expr_target = 1.0;
         s.expr = 1.0;
+        s.breath_authored = false;
+        s.breath_target = 1.0;
+        s.breath = 1.0;
         s.wah = None;
         s.wah_r = None;
         s.cutoff = WAH_MAX_HZ;
@@ -1216,6 +1275,14 @@ impl EngineCore {
             a.sost = false;
             a.sost_held = false;
             a.glide = None;
+            // CC121 also drops any per-note key-pressure lane back to its
+            // exact spawn defaults (all no-ops).
+            a.poly_authored = false;
+            a.poly_target = 0.0;
+            a.poly_cur = 0.0;
+            a.poly_phase = 0.0;
+            a.poly_mult = 1.0;
+            a.poly_gain = 1.0;
             a.voice.set_pitch(1.0);
             if organ_leslie_family(a.program) {
                 let (rate, depth) = voices::organ_trem_base(a.program);
@@ -1328,8 +1395,28 @@ impl EngineCore {
                     a.voice.set_vowel(f, q, g);
                 }
             }
+            // Poly (key) aftertouch: advance each authored note's private
+            // pressure lane first, so the channel-AT and glide sites below can
+            // compose its factor in. Unauthored notes keep poly_mult/poly_gain
+            // at exactly 1.0 (a bit-exact no-op).
+            let mut any_poly = false;
+            for a in self
+                .active
+                .iter_mut()
+                .filter(|a| a.ch == ch && a.poly_authored)
+            {
+                a.poly_cur += self.expr_smooth * (a.poly_target - a.poly_cur);
+                a.poly_gain = 10f32.powf(a.poly_cur * AT_GAIN_DB / 20.0);
+                a.poly_phase += TAU * AT_VIB_RATE_HZ * n as f32 / sr;
+                if a.poly_phase > TAU {
+                    a.poly_phase -= TAU;
+                }
+                a.poly_mult = 2f32.powf(a.poly_cur * AT_VIB_CENTS / 1200.0 * a.poly_phase.sin());
+                any_poly = true;
+            }
+            let channel_at = strip.at_authored && aftertouch_family(strip.program);
             let mut at_vib = 1.0f32;
-            if strip.at_authored && aftertouch_family(strip.program) {
+            if channel_at {
                 strip.at_cur += self.expr_smooth * (strip.at_target - strip.at_cur);
                 strip.at_gain = 10f32.powf(strip.at_cur * AT_GAIN_DB / 20.0);
                 strip.at_phase += TAU * AT_VIB_RATE_HZ * n as f32 / sr;
@@ -1347,14 +1434,32 @@ impl EngineCore {
                     } else {
                         strip.vib_mult
                     };
-                    a.voice.set_pitch(strip.bend * vm * at_vib);
+                    a.voice.set_pitch(strip.bend * vm * at_vib * a.poly_mult);
+                }
+            }
+            // Poly-only channels: no channel-AT loop ran, so authored notes
+            // apply their own pitch factor here (glides are handled below).
+            if any_poly && !channel_at {
+                for a in self
+                    .active
+                    .iter_mut()
+                    .filter(|a| a.ch == ch && a.poly_authored && a.glide.is_none())
+                {
+                    let vm = if a.alt && (matches!(a.program, 48..=54) || a.program == 22) {
+                        1.0
+                    } else {
+                        strip.vib_mult
+                    };
+                    a.voice.set_pitch(strip.bend * vm * a.poly_mult);
                 }
             }
             // BR9: brass breath — CC11 expression opens the timbre, channel
             // aftertouch adds flutter growl. A no-op on every 56-63 channel that
             // authors neither (only The Iron Tide uses brass, waived §4.3).
             if matches!(strip.program, 56..=63) {
-                let p = strip.expr.sqrt().min(1.3);
+                // CC2 breath composes into the pressure (1.0 = no-op) so a
+                // breath-authored brass line also opens/closes its timbre.
+                let p = (strip.expr * strip.breath).sqrt().min(1.3);
                 let g = if strip.at_authored { strip.at_cur } else { 0.0 };
                 for a in self.active.iter_mut().filter(|a| a.ch == ch) {
                     a.voice.set_breath(p, g);
@@ -1371,7 +1476,8 @@ impl EngineCore {
                     } else {
                         strip.vib_mult
                     };
-                    a.voice.set_pitch(strip.bend * vm * at_vib * gm);
+                    a.voice
+                        .set_pitch(strip.bend * vm * at_vib * a.poly_mult * gm);
                     if done {
                         a.glide = None;
                     }
@@ -1389,6 +1495,14 @@ impl EngineCore {
             }
             self.scratch[..n].fill(0.0);
             let alive = a.voice.render(&mut self.scratch[..n]);
+            // Per-note poly-AT gain lift; multiplies UNDER the strip's channel
+            // at_gain so channel and key pressure add in dB. Skipped entirely
+            // (1.0) for notes that never authored poly AT.
+            if a.poly_gain != 1.0 {
+                for x in self.scratch[..n].iter_mut() {
+                    *x *= a.poly_gain;
+                }
+            }
             let buf = &mut self.ch_buf[a.ch as usize];
             for (dst, src) in buf[..n].iter_mut().zip(self.scratch[..n].iter()) {
                 *dst += *src;
@@ -1420,7 +1534,10 @@ impl EngineCore {
                 }
             }
             strip.expr += self.expr_smooth * (strip.expr_target - strip.expr);
-            let g = strip.volume * strip.expr * strip.at_gain;
+            if strip.breath_authored {
+                strip.breath += self.expr_smooth * (strip.breath_target - strip.breath);
+            }
+            let g = strip.volume * strip.expr * strip.at_gain * strip.breath;
             if g < 1e-6 {
                 continue;
             }
@@ -1485,7 +1602,7 @@ impl EngineCore {
                     *x = wr.process(*x);
                 }
             }
-            let g9 = s9.volume * s9.expr * s9.at_gain;
+            let g9 = s9.volume * s9.expr * s9.at_gain * s9.breath;
             if g9 >= 1e-6 {
                 let rs = s9.reverb_send * 0.9;
                 for i in 0..n {
@@ -3790,6 +3907,159 @@ mod tests {
         assert!(
             sp_press > sp_plain + 3.0,
             "no aftertouch vibrato: plain {sp_plain} Hz vs pressed {sp_press} Hz"
+        );
+    }
+
+    fn render_poly_at_chord(poly: bool) -> Vec<f32> {
+        let mut ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 40 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 90,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 76,
+                    vel: 90,
+                },
+            ),
+        ];
+        if poly {
+            ev.push((
+                0.1,
+                EvKind::PolyAftertouch {
+                    ch: 0,
+                    key: 69,
+                    val: 127,
+                },
+            ));
+        }
+        ev.push((2.4, EvKind::NoteOff { ch: 0, key: 69 }));
+        ev.push((2.4, EvKind::NoteOff { ch: 0, key: 76 }));
+        left(&render(&test_song(ev, 2.5), &test_opts(44100.0)).0)
+    }
+
+    /// Poly (key) aftertouch is per-note: pressing A4 in an A4+E5 violin
+    /// double stop deepens A4's vibrato while the chord-mate E5 stays steady.
+    #[test]
+    fn poly_aftertouch_targets_only_the_pressed_note() {
+        let sr = 44100.0;
+        let plain = render_poly_at_chord(false);
+        let pressed = render_poly_at_chord(true);
+        let (a, b) = ((1.5 * sr) as usize, (2.2 * sr) as usize);
+        let sp_a_plain = pitch_spread(&plain[a..b], sr, 405.0, 485.0);
+        let sp_a_press = pitch_spread(&pressed[a..b], sr, 405.0, 485.0);
+        assert!(
+            sp_a_press > 5.0 && sp_a_press > 1.5 * sp_a_plain,
+            "poly AT vibrato inert on the pressed note: plain {sp_a_plain} Hz vs pressed {sp_a_press} Hz"
+        );
+        let sp_e_plain = pitch_spread(&plain[a..b], sr, 610.0, 710.0);
+        let sp_e_press = pitch_spread(&pressed[a..b], sr, 610.0, 710.0);
+        assert!(
+            sp_e_press < 5.0f32.max(1.5 * sp_e_plain),
+            "poly AT leaked onto the chord-mate: plain {sp_e_plain} Hz vs pressed {sp_e_press} Hz"
+        );
+    }
+
+    fn render_flute_breath(cc2: Option<u8>) -> Vec<f32> {
+        let mut ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 73 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+        ];
+        if let Some(v) = cc2 {
+            ev.push((
+                0.5,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 2,
+                    val: v,
+                },
+            )); // breath backs off mid-note
+        }
+        ev.push((2.4, EvKind::NoteOff { ch: 0, key: 69 }));
+        left(&render(&test_song(ev, 2.5), &test_opts(44100.0)).0)
+    }
+
+    /// CC2 breath is an expression-like scaler (squared taper): a flute
+    /// note whose breath backs off to 40 mid-note sits far below the
+    /// untouched render once the smoothing settles.
+    #[test]
+    fn cc2_breath_scales_wind_level() {
+        let sr = 44100.0;
+        let plain = render_flute_breath(None);
+        let soft = render_flute_breath(Some(40));
+        let (a, b) = ((1.5 * sr) as usize, (2.2 * sr) as usize);
+        let ratio = rms(&soft[a..b]) / rms(&plain[a..b]).max(1e-9);
+        assert!(
+            (0.01..0.4).contains(&ratio),
+            "CC2 breath backoff inert or overdone: {ratio}x"
+        );
+    }
+
+    /// The authored-channel invariant for the new lanes: full-scale CC2
+    /// (target 1.0, the never-authored default) and a poly aftertouch aimed
+    /// at a key with nothing ringing are both bit-exact no-ops.
+    #[test]
+    fn breath_and_poly_at_neutral_until_authored() {
+        let plain = render_flute_breath(None);
+        let full = render_flute_breath(Some(127));
+        assert_eq!(plain, full, "CC2=127 must be a bit-exact no-op");
+        let base = |extra: Option<EvKind>| {
+            let mut ev = vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 40 }),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 69,
+                        vel: 90,
+                    },
+                ),
+            ];
+            if let Some(e) = extra {
+                ev.push((0.1, e));
+            }
+            ev.push((2.0, EvKind::NoteOff { ch: 0, key: 69 }));
+            left(&render(&test_song(ev, 2.2), &test_opts(44100.0)).0)
+        };
+        let untouched = base(None);
+        let missed = base(Some(EvKind::PolyAftertouch {
+            ch: 0,
+            key: 60, // nothing ringing on this key
+            val: 127,
+        }));
+        assert_eq!(
+            untouched, missed,
+            "poly AT on a silent key must be a bit-exact no-op"
         );
     }
 

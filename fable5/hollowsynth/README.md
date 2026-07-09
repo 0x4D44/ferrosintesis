@@ -35,8 +35,8 @@ Renders ~14 minutes of stereo 44.1 kHz audio in under 20 seconds.
 MIDI pitch bend (±2 semitones by default, RPN-adjustable), RPN fine tune, CC1
 (mod wheel: vibrato, or Leslie speed on organs), channel aftertouch, CC5/CC65
 portamento, CC64 (sustain pedal), CC68 (legato/hammer-on-pull-off), CC74
-(brightness/wah), CC93 (chorus send) and CC94 (echo send) are all honoured —
-see below.
+(brightness/wah), CC93 (chorus send), CC94 (echo send) and CC0 (bank select —
+an alternate orchestral bank, see Performance below) are all honoured — see below.
 
 Output is peak-normalised to −1 dBFS, 16-bit PCM stereo with TPDF dither.
 
@@ -119,6 +119,16 @@ pull-off. hollowsynth models this at the engine level, not just per-voice:
   cutoff is slewed per block so a CC74 LFO riding every 16th doesn't
   zipper, and 127 (or never sending CC74) is a true bypass — the filter is
   not in the path at all, and pre-v0.6 renders are bit-identical.
+- **CC0 bank select — the alternate orchestral bank.** A channel that sends a
+  non-zero **Bank Select MSB (CC0)** before its notes gets hollowsynth's earlier
+  *v0.9* voicings for **strings (48–51)**, **choir (52–54)** and **bowed
+  (40–45)** in place of the current defaults: envelope-tracked string brightness
+  (the tone opens as the note swells), a consonant/breath choir onset with
+  per-section SATB scatter, and per-instrument bowed bodies (distinct
+  viola/cello/contrabass resonances). Everything else on the channel plays its
+  normal voice. `CC0 = 0` — or never sending it, the default — keeps the standard
+  bank, so existing files render byte-for-byte unchanged. Use it to A/B the two
+  orchestral characters, or for tonal variety.
 
 `material.py`'s `bend()`/`bend_ramp()` and `run()` helpers (in the *Hollow
 Hill* composition engine) write these events for rapid-fire runs, wails

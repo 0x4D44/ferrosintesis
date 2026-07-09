@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09, `20b339e`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09, `373e7e1`)
 
 ## Statement
 The Modal and Organ voice families must honour channel pitch multipliers
@@ -27,7 +27,7 @@ but must be proven byte-identical for existing albums. 2026-07-08 GM gap audit
 (cross-cutting engine gap #1).
 
 ## Notes
-Implemented in `20b339e` after Arthur approved the compatibility waiver for
+Implemented in `373e7e1` after Arthur approved the compatibility waiver for
 existing Modal/Organ tracks that already authored pitch controls. The waiver set
 is `fable5/The Burning Meridian/midi/03 - Meridian.mid` plus all 12
 `gpt5-3-spark/midi/*.mid` tracks; every other `render_opus.py::ALBUMS` MIDI
@@ -45,14 +45,14 @@ Passing output:
 running 1 test
 test engine::tests::modal_organ_pitch_controls_move_sustained_notes ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 114 filtered out
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 156 filtered out
 ```
 
 Additional local validation:
 
 ```text
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-test result: ok. 113 passed; 0 failed; 2 ignored
+test result: ok. 153 passed; 0 failed; 4 ignored
 
 $null | deltic timeout 300 cargo clippy --all-targets --manifest-path fable5/hollowsynth/Cargo.toml -- -D warnings
 Finished `dev` profile
@@ -64,8 +64,8 @@ $null | deltic timeout 300 cargo build --release --manifest-path fable5/hollowsy
 Finished `release` profile
 ```
 
-Waiver-aware render comparison, old `origin/main` v0.8.12 release binary vs new
-v0.8.13 release binary:
+Waiver-aware render comparison, current `origin/main` v0.9.0 release binary
+(`41e49d2`) vs rebased v0.9.1 release binary:
 
 ```text
 rendered 53 MIDI files with old and new binaries

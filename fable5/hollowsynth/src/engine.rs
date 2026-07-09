@@ -491,11 +491,11 @@ impl BusGlue {
 struct Strip {
     program: u8,
     kit: drums::Kit, // channel-10 kit version; V2 once a ch-10 Program Change is authored
-    volume: f32,   // CC7 as amplitude (squared curve)
-    pan: f32,      // 0..1
-    bend: f32,     // channel pitch multiplier: wheel × range × fine-tune
-    legato: bool,  // CC68: new notes slur into the ringing voice
-    sustain: bool, // CC64: NoteOffs are held until the pedal lifts
+    volume: f32,     // CC7 as amplitude (squared curve)
+    pan: f32,        // 0..1
+    bend: f32,       // channel pitch multiplier: wheel × range × fine-tune
+    legato: bool,    // CC68: new notes slur into the ringing voice
+    sustain: bool,   // CC64: NoteOffs are held until the pedal lifts
     // v0.7 authored controllers (all inert until first touched)
     bend_wheel: f32, // last wheel position in ±2-normalised semitones
     bend_range: f32, // RPN 0: bend range in semitones (GM default 2)

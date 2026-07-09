@@ -2601,12 +2601,6 @@ mod tests {
         buf
     }
 
-    fn render_voice(mut v: Box<dyn Voice>, secs: f32, sr: f32) -> Vec<f32> {
-        let mut buf = vec![0f32; (secs * sr) as usize];
-        v.render(&mut buf);
-        buf
-    }
-
     #[test]
     fn marimba_xylophone_have_wood_bar_envelopes() {
         let sr = 44100.0;
@@ -2745,7 +2739,7 @@ mod tests {
         let sr = 44100.0;
         let hit = make(55, 69, 100, sr, 7, false);
         assert_eq!(hit.kind(), "orch_hit", "GM 55 must not route to steel");
-        let buf = render_voice(hit, 2.0, sr);
+        let buf = render_voice(hit, sr, 2.0);
         let seg = |a: f32, z: f32| &buf[(a * sr) as usize..(z * sr) as usize];
         let early = crate::testutil::rms(seg(0.15, 0.45));
         let late = crate::testutil::rms(seg(1.45, 1.85));

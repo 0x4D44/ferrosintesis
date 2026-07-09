@@ -5,11 +5,11 @@
 - **Area:** hollowsynth / voices
 - **Raised:** 2026-07-08
 - **Implemented-by:** `fable5/hollowsynth/src/voices.rs::OrchHit`, `fable5/hollowsynth/src/voices.rs::orch_hit`, `fable5/hollowsynth/src/voices.rs::make`, `fable5/hollowsynth/src/voices.rs::tests::orchestra_hit_55_is_short_layered_stab`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | cargo test orchestra_hit_55_is_short_layered_stab --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test orchestra_hit_55_is_short_layered_stab --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `df700f40ed9f7336550bcbff4ac6018a8e543632`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `6cc4a25d357d839ebb1ec83e8ef0c4ddb46aab03`)
 
 ## Statement
 A NoteOn on GM program 55 (Orchestra Hit) must render as a short, layered
@@ -30,7 +30,7 @@ Manual reqs-loop build on branch `task/20260708-TSK-HUM-reqs-loop-mm-req-00005`.
 Exact Gate 2 oracle command:
 
 ```powershell
-$null | cargo test orchestra_hit_55_is_short_layered_stab --manifest-path fable5/hollowsynth/Cargo.toml
+$null | deltic timeout 180 cargo test orchestra_hit_55_is_short_layered_stab --manifest-path fable5/hollowsynth/Cargo.toml
 ```
 
 Passing output recorded on 2026-07-08:
@@ -39,7 +39,7 @@ Passing output recorded on 2026-07-08:
 running 1 test
 test voices::tests::orchestra_hit_55_is_short_layered_stab ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.01s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 110 filtered out; finished in 0.01s
 
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
      Running unittests src\lib.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-ba4185fbc9b0bac1.exe)
@@ -66,16 +66,16 @@ Local validation:
 
 ```text
 deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
-PASS
+passed (no output)
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: 105 passed; 0 failed; 2 ignored
+test result: ok. 109 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 9.05s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-PASS
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.99s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-PASS
+Finished `release` profile [optimized] target(s) in 3.94s
 ```
 
 Existing-MIDI and prior-render safety:
@@ -103,3 +103,10 @@ oracle-fit reviewer found no confirmed issue, reran the named oracle, verified t
 compatibility reviewer found no confirmed issue, scanned 53 tracked MIDI files, confirmed zero program-55 events, and verified the only runtime routing change is voices::make's program-55 arm.
 landing-hygiene reviewer confirmed the expected overlap with the parallel v0.9 worktree, whose branch already contains an orchestra-hit implementation. That is an integration sequencing risk; whichever branch lands second needs deliberate reconciliation.
 ```
+
+Post-integration rebase note: rebased onto `origin/main` at `35f6c40` after
+`MM-REQ-KILN-00003` landed. The implementation commit became
+`6cc4a25d357d839ebb1ec83e8ef0c4ddb46aab03`; the package version was advanced to
+`0.8.9` because trunk already carried `0.8.8`. The rebase kept the existing
+wood-bar, kalimba, sustained-FX, and fiddle dispatch/tests, and reused the
+existing `render_voice` helper to avoid a duplicate test helper.

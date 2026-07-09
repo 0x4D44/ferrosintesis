@@ -490,6 +490,7 @@ impl BusGlue {
 
 struct Strip {
     program: u8,
+    kit: drums::Kit, // channel-10 kit version; V2 once a ch-10 Program Change is authored
     volume: f32,   // CC7 as amplitude (squared curve)
     pan: f32,      // 0..1
     bend: f32,     // channel pitch multiplier: wheel × range × fine-tune
@@ -545,6 +546,7 @@ impl Strip {
     fn new(sr: f32) -> Self {
         Strip {
             program: 0,
+            kit: drums::Kit::V1,
             volume: (100.0f32 / 127.0).powi(2),
             pan: 0.5,
             bend: 1.0,
@@ -791,7 +793,7 @@ impl EngineCore {
 
         let seed = 0x9E37 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
         let voice = if ch == 9 {
-            drums::make(key, vel, sr, seed)
+            drums::make(key, vel, sr, seed, self.strips[9].kit)
         } else {
             Some(voices::make(
                 self.strips[ci].program,
@@ -987,6 +989,12 @@ impl EngineCore {
     fn program_change(&mut self, ch: u8, prog: u8) {
         let s = &mut self.strips[ch as usize];
         s.program = prog;
+        // GM2 kit-select seam: any Program Change on channel 10 opts the kit
+        // into v2 for subsequently spawned hits. No album authors one, so every
+        // committed drum render stays v1 byte-identical (verified by drift scan).
+        if ch == 9 {
+            s.kit = drums::Kit::V2;
+        }
         let (cho, del) = if ch == 9 {
             (0.0, 0.0)
         } else {

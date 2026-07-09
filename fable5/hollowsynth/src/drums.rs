@@ -4,9 +4,19 @@
 //! (e.g. snare shell + snare wires). Hits vary: frequencies and decays are
 //! jittered per strike, and harder hits are brighter.
 
-use crate::dsp::{vel_amp, Biquad, Rng};
+use crate::dsp::{vel_amp, Biquad, OnePole, Rng};
 use crate::voices::Voice;
 use std::f32::consts::TAU;
+
+/// Which channel-10 kit a hit is voiced with. `V1` is the legacy kit
+/// (byte-identical to pre-v0.9). `V2` engages only when a MIDI file authors a
+/// Program Change on channel 10 (GM2 kit-select seam — see the engine's
+/// `EvKind::Prog` handler); a file that never does gets `V1` forever.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Kit {
+    V1,
+    V2,
+}
 
 struct Tone {
     phase: f32,
@@ -30,10 +40,60 @@ struct NoiseBand {
     floor: f32,
 }
 
+/// DR1 noise-coupled shimmer AM: a slow one-pole-lowpassed copy of the shared
+/// per-sample white drives a random-walk amplitude flutter over the whole
+/// voice sum (`norm` puts `depth` in true modulation-index / σ units, so a
+/// crash's 5–15 Hz surface-mode chatter is a wobble, not an LFO). Optional and
+/// `None` on v1 → the multiply is skipped entirely, so v1 stays byte-identical.
+struct Shimmer {
+    lp: OnePole,
+    depth: f32,
+    norm: f32,
+}
+
+impl Shimmer {
+    fn new(rate_hz: f32, depth: f32, sr: f32) -> Self {
+        // `a` cannot be read off `OnePole` (private field), so recompute it
+        // from the same public formula `OnePole::lowpass` uses; `norm` is the
+        // analytic 1/σ of a one-pole-filtered uniform white in [-1,1)
+        // (variance a/(2−a)·1/3).
+        let a = 1.0 - (-2.0 * std::f32::consts::PI * (rate_hz / sr).min(0.49)).exp();
+        let norm = ((2.0 - a) / a * 3.0).sqrt();
+        Shimmer {
+            lp: OnePole::lowpass(rate_hz, sr),
+            depth,
+            norm,
+        }
+    }
+}
+
+/// DR4 kit-v2 snare wires: an enveloped, head-coupled cluster of three
+/// bandpass "wire-mode" resonances that replaces v1's featureless broad-HP
+/// wire band. It runs its own exponential decay AND tracks the 186 Hz head
+/// envelope (`head^head_track`), so the bright rattle sputters out with the
+/// ringing head (~110 ms) instead of on its own 0.19 s clock; a half-wave
+/// 186 Hz "slap" AM makes the early rattle granular. Consumes the shared
+/// per-sample `white` (zero extra RNG draws); `None` on v1 and every non-snare
+/// key → the render hook is skipped, so v1 stays byte-identical.
+struct WireRes {
+    bands: [Biquad; 3], // bandpass wire-mode clusters
+    gains: [f32; 3],    // velocity-shaped per-band gains
+    amp: f32,           // overall level, own exponential decay
+    decay: f32,         // dmul(0.19, sr)
+    onset: u32,         // D5 delayed onset (1.5 ms), exact zero before
+    env: f32,           // onset swell 0..1 (floor 0)
+    atk: f32,           // 1/(0.5 ms) ramp increment
+    head_amp0: f32,     // tones[0].amp at build (the 186 Hz head env reference)
+    head_track: f32,    // WIRE_HEAD_TRACK exponent
+    am_depth: f32,      // granular slap AM depth at full head level
+}
+
 pub struct Drum {
     tones: Vec<Tone>,
     noise: Vec<NoiseBand>,
-    bursts: Vec<(u32, f32)>, // noise re-triggers (offset samples, amp)
+    bursts: Vec<(u32, f32)>,  // noise re-triggers (offset samples, amp)
+    shimmer: Option<Shimmer>, // DR1 noise-coupled AM; None (inert) on v1
+    wire: Option<WireRes>,    // DR4 kit-v2 snare wire resonance; None on v1
     rng: Rng,
     t: u32,
     life: u32,
@@ -105,6 +165,8 @@ impl Drum {
             tones,
             noise,
             bursts: Vec::new(),
+            shimmer: None,
+            wire: None,
             rng,
             t: 0,
             life: (life_s * sr) as u32,
@@ -121,6 +183,20 @@ impl Drum {
         self
     }
 
+    /// DR1: attach a noise-coupled shimmer AM (reusing the shared per-sample
+    /// white draw at render time — zero extra RNG draws).
+    fn with_shimmer(mut self, rate_hz: f32, depth: f32) -> Self {
+        self.shimmer = Some(Shimmer::new(rate_hz, depth, self.sr));
+        self
+    }
+
+    /// DR4: attach the kit-v2 snare wire resonance (reusing the shared
+    /// per-sample white at render time — zero extra RNG draws).
+    fn with_wire(mut self, wire: WireRes) -> Self {
+        self.wire = Some(wire);
+        self
+    }
+
     /// Upgrade noise band `idx` with a delayed onset and/or a swell
     /// (`floor` of the gain is present immediately, the rest ramps in over
     /// `atk_s`). Exact zero before the onset — denormal-safe, click-free.
@@ -131,6 +207,17 @@ impl Drum {
         if atk_s > 0.0 {
             b.atk = 1.0 / (atk_s * self.sr);
             b.env = 0.0;
+        }
+        self
+    }
+
+    /// DR2: rewrite the downward-glide floor to `ratio x` each tone's (already
+    /// jittered) start frequency, so a v2 tom that starts sharp settles exactly
+    /// on the table pitch (`ratio = 1/TOM_OVERSHOOT`) instead of diving to the
+    /// hardwired 0.3x. No RNG draw — pure post-construction rewrite.
+    fn with_glide_floor(mut self, ratio: f32) -> Self {
+        for tone in &mut self.tones {
+            tone.min_freq = tone.freq * ratio;
         }
         self
     }
@@ -175,7 +262,40 @@ impl Voice for Drum {
                     band.amp *= band.decay;
                 }
             }
-            *o += s * self.gain;
+            // DR4 kit-v2 snare wire resonance: reuse the SAME shared white (no
+            // new RNG draw). The 186 Hz head envelope refs are read from the
+            // just-decayed `tones[0]` before the &mut borrow of `wire`;
+            // `.first()` is panic-safe for empty-tone voices (which never carry
+            // a wire). `wire` is None on v1 → the block is skipped entirely, so
+            // v1 stays byte-identical.
+            let head_amp_now = self.tones.first().map_or(0.0, |t| t.amp);
+            let head_phase_sin = self.tones.first().map_or(0.0, |t| t.phase.sin());
+            if let Some(w) = self.wire.as_mut() {
+                if self.t >= w.onset {
+                    // D5 delayed onset: exact zero before, then a short swell.
+                    if w.env < 1.0 {
+                        w.env = (w.env + w.atk).min(1.0);
+                    }
+                    let head = (head_amp_now / w.head_amp0).clamp(0.0, 1.0);
+                    let track = head.powf(w.head_track);
+                    // half-wave 186 Hz granular slap, deepening with head level
+                    let slap = 1.0 + w.am_depth * head * head_phase_sin.max(0.0);
+                    let mut wsum = 0.0;
+                    for (band, &g) in w.bands.iter_mut().zip(w.gains.iter()) {
+                        wsum += band.process(white) * g;
+                    }
+                    s += wsum * w.amp * w.env * track * slap;
+                    w.amp *= w.decay;
+                }
+            }
+            // DR1 shimmer AM: reuse the SAME shared white (no new RNG draw). On
+            // v1 shimmer is None → am == 1.0 → `x * 1.0 == x`, byte-identical.
+            let am = if let Some(sh) = &mut self.shimmer {
+                (1.0 + sh.depth * sh.norm * sh.lp.process(white)).clamp(0.0, 2.0)
+            } else {
+                1.0
+            };
+            *o += s * self.gain * am;
             self.t += 1;
         }
         true
@@ -248,6 +368,13 @@ fn tom_tones(f0: f32, t60: f32, glide: f32) -> [(f32, f32, f32, f32); 3] {
     ]
 }
 
+/// DR2 kit-v2 tom: instead of starting at table pitch and diving ~21 st to the
+/// 0.3x glide floor (the "pew" tell, map_drums §4 T2), a v2 tom starts 2.5 st
+/// sharp and glides DOWN to the table pitch — a real tom's 1-3 st tension
+/// overshoot settling in 30-80 ms.
+const TOM_OVERSHOOT: f32 = 1.155; // 2^(2.5/12)
+const TOM_GLIDE_V2: f32 = 4.0; // oct/s; x(0.6+0.8*vn) => 2.4-5.6 oct/s => 37-87 ms drop
+
 /// D2 snare head modes (DRM-4): four partials with a small shared down-glide
 /// — the 186 Hz fundamental plus the 280/330/430 Hz cluster a real head
 /// carries. Shared with the oracle-21 structural test.
@@ -258,8 +385,38 @@ const SNARE_TONES: [(f32, f32, f32, f32); 4] = [
     (430.0, 0.18, 0.05, 2.0),
 ];
 
+/// DR4 kit-v2 snare wire-mode clusters (key 38): three bandpass centers
+/// approximating the resonant clusters of the ~20 wire partials, replacing
+/// v1's featureless HP-2800 slope. Ring time Q/(πf) ≤ 0.56 ms — coloration,
+/// deliberately no beats (CYM-1 rule: the constraint binds only relied-on
+/// beats). Key 40 (electric snare) scales these ×1.15 for brighter wires.
+const WIRE_CENTERS: [f32; 3] = [3400.0, 5100.0, 7300.0];
+const WIRE_QS: [f32; 3] = [6.0, 7.0, 8.0];
+/// BP-set make-up gain vs the old HP-2800 band's equivalent-noise-bandwidth:
+/// √(≈19250/≈2210) ≈ 2.95; started at 2.9, calibrated by DR-O10 level parity.
+const WIRE_MAKEUP: f32 = 2.9;
+/// Wire re-excitation tracks head^0.4: combined with the wire's own 0.19 s
+/// decay the bright rattle reaches −60 dB by ~110 ms, sputtering out with the
+/// head while the retained dark-tail band carries the residual to ~350 ms.
+const WIRE_HEAD_TRACK: f32 = 0.4;
+
 /// Inharmonic cymbal partial stack — the classic bell-plate ratios.
 const METAL_RATIOS: [f32; 6] = [1.0, 1.483, 1.932, 2.546, 3.363, 4.365];
+
+/// DR1 crash twin-partial detunings (Hz): each `METAL_RATIOS` partial gets a
+/// twin at `base·r + CRASH_TWIN_DF_HZ[i]`, so the 6 pairs beat at 5.6–17.5 Hz
+/// (shimmer range, below the ~20 Hz roughness border).
+const CRASH_TWIN_DF_HZ: [f32; 6] = [5.6, 7.9, 9.3, 11.7, 14.2, 17.5];
+/// Primary renorm so a twin pair matches a v1 single-partial power:
+/// 0.82² + (0.82·0.7)² = 1.002 — level-neutral by construction.
+const CRASH_TONE_NORM: f32 = 0.82;
+/// Wash-amp trim keeping the crash's [0,1 s] energy near-neutral vs v1. The
+/// wash-only compensation √(I(1.9)/I(2.6)) ≈ 0.856 leaves +1.9 dB once the
+/// longer *pair* t60s (2.8 s), the new 1180/1196 low-mid pair, and the shimmer
+/// AM are added (this knob scales every crash noise band). Trimmed to 0.74 so
+/// the measured v2-vs-v1 [0,1 s] RMS lands ≈ +0.7 dB — inside the design's
+/// +0.6..0.8 dB budget with ~1.3 dB margin (DR-O10 calibrated).
+const CRASH_WASH_AMP_V2: f32 = 0.74;
 
 /// D7 cymbal build spec — replaces the old ~10-positional-arg `cymbal()`.
 struct CymSpec {
@@ -281,23 +438,72 @@ struct CymSpec {
     /// V4/DSP-3) on the shared white source, so overlapping ringdowns
     /// beat at ~55-80 Hz.
     pairs: bool,
+    /// DR1 crash kit-v2 upgrade (detuned twin partials, decoupled/longer pair
+    /// t60, a low-mid CYM-1 pair). `None` = legacy v1 build; the v1 tone/band
+    /// vecs and their RNG-draw order are untouched.
+    v2: Option<CrashV2>,
+    /// DR3 kit-v2 open-hat: a second wash band (amp, t60, HP corner) with a
+    /// faster decay than `noise`, so the spectral centroid falls through the
+    /// tail (a real hat loses HF fastest). `None` for every v1 spec.
+    noise2: Option<(f32, f32, f32)>,
+    /// Kit-v2 noise-coupled shimmer AM (rate_hz, depth) applied to the whole
+    /// voice sum. `None` = no shimmer (every v1 spec). Crash uses (9, 0.35);
+    /// open-hat sizzle uses (45, 0.45).
+    shimmer: Option<(f32, f32)>,
+}
+
+/// DR1 kit-v2 crash parameters (see the drums HLD appendix §DR1).
+struct CrashV2 {
+    twin_df: [f32; 6],
+    pairs_t60: f32,
+    low_pair: bool,
 }
 
 fn cymbal(spec: &CymSpec, sr: f32, seed: u32, vel: u8) -> Option<Box<dyn Voice>> {
     let v = vel_amp(vel);
     let velnorm = vel as f32 / 127.0;
-    let mut tones = Vec::with_capacity(6);
+    let mut tones = Vec::with_capacity(12);
     for (i, &r) in METAL_RATIOS.iter().enumerate() {
         let frac = i as f32 / (METAL_RATIOS.len() - 1) as f32;
         let amp = spec.tone_amp * (1.0 - 0.6 * frac) * (0.55 + 0.55 * velnorm.powf(frac + 0.5));
         let t60 = spec.t60_first + (spec.t60_last - spec.t60_first) * frac;
-        tones.push((spec.base * r, amp, t60, 0.0));
+        match &spec.v2 {
+            // DR1(b): interleaved primary + detuned twin — adjacent indices so
+            // each pair lands at a near-identical `modal` (matched edge tilt),
+            // keeping the pair power at the CRASH_TONE_NORM level neutrality.
+            Some(v2) => {
+                tones.push((spec.base * r, amp * CRASH_TONE_NORM, t60, 0.0));
+                tones.push((
+                    spec.base * r + v2.twin_df[i],
+                    amp * CRASH_TONE_NORM * 0.7,
+                    t60,
+                    0.0,
+                ));
+            }
+            None => tones.push((spec.base * r, amp, t60, 0.0)),
+        }
     }
     // harder hits open the wash up higher
     let hp = spec.noise.2 * (0.85 + 0.35 * velnorm);
     let mut bands = vec![(spec.noise.0, spec.noise.1, Biquad::highpass(hp, 0.7, sr))];
     let mut swelled = vec![0usize];
+    // DR3(a): open-hat's faster-decaying sizzle band. Shares the same white
+    // source, differently coloured; correlated like every multi-band hit.
+    if let Some((amp2, t60_2, hp2)) = spec.noise2 {
+        swelled.push(bands.len());
+        bands.push((
+            amp2,
+            t60_2,
+            Biquad::highpass(hp2 * (0.85 + 0.35 * velnorm), 0.7, sr),
+        ));
+    }
     if spec.pairs {
+        // DR1(a): the beat pairs get their own (longer) t60 in v2, decoupled
+        // from the wash; v1 shares the wash t60 exactly as before.
+        let pair_t60 = match &spec.v2 {
+            Some(v2) => v2.pairs_t60,
+            None => spec.noise.1,
+        };
         for &(fa, fb) in &[(6000.0f32, 6055.0f32), (8300.0, 8380.0)] {
             for f in [fa, fb] {
                 swelled.push(bands.len());
@@ -307,11 +513,22 @@ fn cymbal(spec: &CymSpec, sr: f32, seed: u32, vel: u8) -> Option<Box<dyn Voice>>
                 // period, or the noise decorrelates before one cycle and
                 // no beat survives — the physical limit the V4 review's
                 // Δf > f/Q rule only half-captured.
-                bands.push((
-                    spec.noise.0 * 6.0,
-                    spec.noise.1,
-                    Biquad::bandpass(f, 800.0, sr),
-                ));
+                bands.push((spec.noise.0 * 6.0, pair_t60, Biquad::bandpass(f, 800.0, sr)));
+            }
+        }
+        // DR1(c): a low-mid CYM-1 pair (1180/1196 Hz, Δf 16 Hz) puts beating
+        // noise into 700–1500 Hz where the old lone 950 Hz sine used to be
+        // the last survivor.
+        if let Some(v2) = &spec.v2 {
+            if v2.low_pair {
+                for f in [1180.0f32, 1196.0] {
+                    swelled.push(bands.len());
+                    bands.push((
+                        spec.noise.0 * 4.0,
+                        v2.pairs_t60,
+                        Biquad::bandpass(f, 800.0, sr),
+                    ));
+                }
             }
         }
     }
@@ -324,11 +541,70 @@ fn cymbal(spec: &CymSpec, sr: f32, seed: u32, vel: u8) -> Option<Box<dyn Voice>>
             drum = drum.with_band_ext(idx, 0.0, 0.05, 0.5);
         }
     }
+    // DR1(d)/DR3(c): couple the noise shimmer AM onto everything (kit-v2 only).
+    if let Some((rate, depth)) = spec.shimmer {
+        drum = drum.with_shimmer(rate, depth);
+    }
     Some(Box::new(drum))
 }
 
+/// DR1 crash spec for one kit — collapses the near-identical 49/57 v1/v2 pairs.
+/// Pure `CymSpec` data feeding the deterministic `cymbal()`; the v1 branch
+/// reproduces the exact pre-v0.9 fields, so v1 stays byte-identical (pinned by
+/// the crash oracles + `v1_drum_render_is_frozen`). `t60` args are `(first, last)`.
+#[allow(clippy::too_many_arguments)]
+fn crash_spec(
+    kit: Kit,
+    base: f32,
+    hp: f32,
+    life: f32,
+    gain: f32,
+    velnorm: f32,
+    t60_v1: (f32, f32),
+    t60_v2: (f32, f32),
+) -> CymSpec {
+    let v2_kit = kit == Kit::V2;
+    let (t60_first, t60_last) = if v2_kit { t60_v2 } else { t60_v1 };
+    // v2 inverts the decay order (shorter tonal t60 + longer, quieter wash).
+    let (wash_amp, wash_t60) = if v2_kit {
+        (CRASH_WASH_AMP_V2, 2.6)
+    } else {
+        (1.0, 1.9)
+    };
+    let (v2, shimmer) = if v2_kit {
+        (
+            Some(CrashV2 {
+                twin_df: CRASH_TWIN_DF_HZ,
+                pairs_t60: 2.8,
+                low_pair: true,
+            }),
+            Some((9.0, 0.35)),
+        )
+    } else {
+        (None, None)
+    };
+    CymSpec {
+        base,
+        tone_amp: 0.13,
+        t60_first,
+        t60_last,
+        noise: (wash_amp, wash_t60, hp),
+        life,
+        gain,
+        click: Some((0.7 * velnorm, 0.004, 8000.0)),
+        swell: true,
+        pairs: true,
+        v2,
+        noise2: None,
+        shimmer,
+    }
+}
+
 /// Build a drum voice for a GM key, or None for unmapped keys.
-pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Voice>> {
+    // `kit` selects the legacy (V1) or improved (V2) kit. Only the arms a v2
+    // fix touches branch on it (DR1: crash 49|57); every other key ignores it
+    // and stays byte-identical across kits.
     let v = vel_amp(vel);
     let velnorm = vel as f32 / 127.0;
     let d = |tones: &[(f32, f32, f32, f32)], noise: &[(f32, f32, Biquad)], life: f32, g: f32| {
@@ -340,6 +616,21 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
         Some(Box::new(Drum::new(sr, seed, &tones, &noise, life, g * v)) as Box<dyn Voice>)
     };
     let one = |amp: f32, t: f32, filt: Biquad| vec![(amp, t, filt)];
+    // DR2 membrane tom: V1 starts at table pitch and dives to the 0.3x floor;
+    // V2 starts 2.5 st sharp and glides down to the table pitch. V1 arm is
+    // byte-identical to the old `dm(&tom_tones(f0, t60, 10.0), ...)`.
+    let tom = |f0: f32, t60: f32, noise: &[(f32, f32, Biquad)], life: f32, g: f32| {
+        let (start_f, glide, floor) = match kit {
+            Kit::V1 => (f0, 10.0, None),
+            Kit::V2 => (f0 * TOM_OVERSHOOT, TOM_GLIDE_V2, Some(1.0 / TOM_OVERSHOOT)),
+        };
+        let (tones, noise) = membrane_velocity(&tom_tones(start_f, t60, glide), noise, velnorm);
+        let mut drum = Drum::new(sr, seed, &tones, &noise, life, g * v);
+        if let Some(r) = floor {
+            drum = drum.with_glide_floor(r);
+        }
+        Some(Box::new(drum) as Box<dyn Voice>)
+    };
     match key {
         35 | 36 => dm(
             // beater knock over a sub drop (86 -> ~45 Hz): the chest thump,
@@ -367,28 +658,77 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
             0.2,
             0.55,
         ),
-        38 | 40 => {
+        38 | 40 => match kit {
             // snare (D2 + D5): four head modes; shell slap lands with the
             // stick, the wires engage ~1.5 ms later (the snare's "crack"
             // then "rattle"), with a darker rattle tail
-            let (tones, noise) = membrane_velocity(
-                &SNARE_TONES,
-                &[
-                    (0.55, 0.09, Biquad::bandpass(1300.0, 0.7, sr)),
-                    (
-                        0.75,
-                        0.19,
-                        Biquad::highpass(2800.0 * (0.85 + 0.35 * velnorm), 0.7, sr),
-                    ),
-                    (0.35, 0.35, Biquad::highpass(1800.0, 0.7, sr)),
-                ],
-                velnorm,
-            );
-            let drum = Drum::new(sr, seed, &tones, &noise, 0.6, 0.68 * v)
-                .with_band_ext(1, 0.0015, 0.0005, 0.0)
-                .with_band_ext(2, 0.0015, 0.0005, 0.0);
-            Some(Box::new(drum) as Box<dyn Voice>)
-        }
+            Kit::V1 => {
+                let (tones, noise) = membrane_velocity(
+                    &SNARE_TONES,
+                    &[
+                        (0.55, 0.09, Biquad::bandpass(1300.0, 0.7, sr)),
+                        (
+                            0.75,
+                            0.19,
+                            Biquad::highpass(2800.0 * (0.85 + 0.35 * velnorm), 0.7, sr),
+                        ),
+                        (0.35, 0.35, Biquad::highpass(1800.0, 0.7, sr)),
+                    ],
+                    velnorm,
+                );
+                let drum = Drum::new(sr, seed, &tones, &noise, 0.6, 0.68 * v)
+                    .with_band_ext(1, 0.0015, 0.0005, 0.0)
+                    .with_band_ext(2, 0.0015, 0.0005, 0.0);
+                Some(Box::new(drum) as Box<dyn Voice>)
+            }
+            // DR4 kit-v2: drop the broad-HP wire band; the shell (idx0) and a
+            // trimmed dark tail (idx1, 0.35→0.22) go through membrane_velocity
+            // as before, and the wires become a head-coupled `WireRes` cluster.
+            Kit::V2 => {
+                let (tones, noise) = membrane_velocity(
+                    &SNARE_TONES,
+                    &[
+                        (0.55, 0.09, Biquad::bandpass(1300.0, 0.7, sr)),
+                        (0.22, 0.35, Biquad::highpass(1800.0, 0.7, sr)),
+                    ],
+                    velnorm,
+                );
+                // dark tail is now idx1 (shell idx0 keeps no onset delay).
+                let drum = Drum::new(sr, seed, &tones, &noise, 0.6, 0.68 * v)
+                    .with_band_ext(1, 0.0015, 0.0005, 0.0);
+                // key 40 (electric snare): brighter, tighter wires — first
+                // 38/40 differentiation the kit has ever had.
+                let (center_mul, am_depth) = if key == 40 { (1.15, 0.48) } else { (1.0, 0.6) };
+                let bands = [
+                    Biquad::bandpass(WIRE_CENTERS[0] * center_mul, WIRE_QS[0], sr),
+                    Biquad::bandpass(WIRE_CENTERS[1] * center_mul, WIRE_QS[1], sr),
+                    Biquad::bandpass(WIRE_CENTERS[2] * center_mul, WIRE_QS[2], sr),
+                ];
+                // Wire level = the D1 noise-amp scale the old HP band saw
+                // (`0.75·(0.5+0.5·vn²)`) × the BP/HP bandwidth make-up. The
+                // per-sample render multiplies `s` by `self.gain` (= 0.68·v),
+                // so `v` is applied there — carrying it here too would square
+                // the velocity term and diverge from the old band's law, so it
+                // is deliberately omitted (see membrane_velocity's noise map).
+                let d1_noise = 0.5 + 0.5 * velnorm * velnorm;
+                let amp = 0.75 * d1_noise * WIRE_MAKEUP;
+                let wire = WireRes {
+                    bands,
+                    gains: [1.0, 0.55 + 0.45 * velnorm, 0.30 + 0.70 * velnorm],
+                    amp,
+                    decay: dmul(0.19, sr),
+                    onset: (0.0015 * sr) as u32,
+                    env: 0.0,
+                    atk: 1.0 / (0.0005 * sr),
+                    // built tones[0].amp = post-membrane_velocity + jitter head
+                    // level; the render normalises the live head against it.
+                    head_amp0: drum.tones[0].amp,
+                    head_track: WIRE_HEAD_TRACK,
+                    am_depth,
+                };
+                Some(Box::new(drum.with_wire(wire)) as Box<dyn Voice>)
+            }
+        },
         39 => Some(Box::new(
             Drum::new(
                 sr,
@@ -400,26 +740,30 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
             )
             .with_bursts(&[(0.010, 0.75), (0.022, 0.6)]),
         ) as Box<dyn Voice>), // hand clap: three quick bursts
-        41 => dm(
-            &tom_tones(100.0, 0.32, 10.0),
+        41 => tom(
+            100.0,
+            0.32,
             &one(0.25, 0.05, Biquad::bandpass(900.0, 0.8, sr)),
             0.55,
             0.78,
         ),
-        43 => dm(
-            &tom_tones(140.0, 0.30, 10.0),
+        43 => tom(
+            140.0,
+            0.30,
             &one(0.25, 0.05, Biquad::bandpass(1100.0, 0.8, sr)),
             0.5,
             0.74,
         ),
-        45 => dm(
-            &tom_tones(190.0, 0.28, 10.0),
+        45 => tom(
+            190.0,
+            0.28,
             &one(0.25, 0.05, Biquad::bandpass(1300.0, 0.8, sr)),
             0.45,
             0.69,
         ),
-        47 | 48 | 50 => dm(
-            &tom_tones(240.0, 0.24, 10.0),
+        47 | 48 | 50 => tom(
+            240.0,
+            0.24,
             &one(0.2, 0.04, Biquad::bandpass(1500.0, 0.8, sr)),
             0.4,
             0.64,
@@ -437,48 +781,72 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
                 click: Some((1.8 * velnorm, 0.005, 9000.0)),
                 swell: false,
                 pairs: false,
+                v2: None,
+                noise2: None,
+                shimmer: None,
             },
             sr,
             seed,
             vel,
         ),
-        46 => cymbal(
-            &CymSpec {
-                base: 3300.0,
-                tone_amp: 0.10,
-                t60_first: 0.30,
-                t60_last: 0.18,
-                noise: (0.8, 0.28, 6000.0),
-                life: 0.95,
-                gain: 0.40,
-                click: None,
-                swell: false,
-                pairs: false,
-            },
-            sr,
-            seed,
-            vel,
-        ),
-        49 => cymbal(
+        46 => {
+            // DR3 open hat: v2 splits the wash into a slow body + fast sizzle
+            // (the centroid falls through the tail), widens the tonal decay
+            // spread so a faint pitched ring survives under the wash, and adds a
+            // ~45 Hz sizzle wobble. v1 is the old single-wash static hat.
+            let spec = if kit == Kit::V2 {
+                CymSpec {
+                    base: 3300.0,
+                    tone_amp: 0.10,
+                    t60_first: 0.45,
+                    t60_last: 0.10,
+                    noise: (0.55, 0.30, 6000.0),
+                    life: 0.95,
+                    gain: 0.40,
+                    click: None,
+                    swell: false,
+                    pairs: false,
+                    v2: None,
+                    noise2: Some((0.55, 0.16, 10000.0)),
+                    shimmer: Some((45.0, 0.45)),
+                }
+            } else {
+                CymSpec {
+                    base: 3300.0,
+                    tone_amp: 0.10,
+                    t60_first: 0.30,
+                    t60_last: 0.18,
+                    noise: (0.8, 0.28, 6000.0),
+                    life: 0.95,
+                    gain: 0.40,
+                    click: None,
+                    swell: false,
+                    pairs: false,
+                    v2: None,
+                    noise2: None,
+                    shimmer: None,
+                }
+            };
+            cymbal(&spec, sr, seed, vel)
+        }
+        49 => {
             // crash: instant chick, wash blooms over ~50 ms (CYM-2), the
             // coloured pairs beat in the shimmer (CYM-1), and it rings
-            // out past 3 s like a real 16" (oracle 29)
-            &CymSpec {
-                base: 950.0,
-                tone_amp: 0.13,
-                t60_first: 2.6,
-                t60_last: 1.0,
-                noise: (1.0, 1.9, 4200.0),
-                life: 4.2,
-                gain: 0.50,
-                click: Some((0.7 * velnorm, 0.004, 8000.0)),
-                swell: true,
-                pairs: true,
-            },
-            sr,
-            seed,
-            vel,
-        ),
+            // out past 3 s like a real 16" (oracle 29). DR1 (kit v2): decay
+            // order inverted so no tonal partial outlives the wash, detuned
+            // twin partials, a low-mid CYM-1 pair, and the shimmer AM.
+            let spec = crash_spec(
+                kit,
+                950.0,
+                4200.0,
+                4.2,
+                0.50,
+                velnorm,
+                (2.6, 1.0),
+                (1.7, 0.9),
+            );
+            cymbal(&spec, sr, seed, vel)
+        }
         52 => cymbal(
             // china (D7/CYM-7): trashy — compressed decay, aggressive bright
             // wash, short life; until now this key fell to the generic tick
@@ -493,6 +861,9 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
                 click: None,
                 swell: false,
                 pairs: false,
+                v2: None,
+                noise2: None,
+                shimmer: None,
             },
             sr,
             seed,
@@ -511,28 +882,30 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
                 click: None,
                 swell: false,
                 pairs: false,
+                v2: None,
+                noise2: None,
+                shimmer: None,
             },
             sr,
             seed,
             vel,
         ),
-        57 => cymbal(
-            &CymSpec {
-                base: 820.0,
-                tone_amp: 0.13,
-                t60_first: 2.4,
-                t60_last: 1.0,
-                noise: (1.0, 1.9, 3800.0),
-                life: 4.6,
-                gain: 0.52,
-                click: Some((0.7 * velnorm, 0.004, 8000.0)),
-                swell: true,
-                pairs: true,
-            },
-            sr,
-            seed,
-            vel,
-        ),
+        57 => {
+            // second crash: as key 49, DR1 kit-v2 upgrade with a slightly
+            // shorter tonal t60_first (base 820 twins keep the same Δf table —
+            // beat rates are Δf, base-independent).
+            let spec = crash_spec(
+                kit,
+                820.0,
+                3800.0,
+                4.6,
+                0.52,
+                velnorm,
+                (2.4, 1.0),
+                (1.6, 0.9),
+            );
+            cymbal(&spec, sr, seed, vel)
+        }
         51 | 59 => cymbal(
             // ride (CYM-5): a short guarded stick ping over a quiet
             // sustaining wash, with a widened tone-decay spread
@@ -547,6 +920,9 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
                 click: Some((0.55 * (0.4 + 0.6 * velnorm), 0.07, 7500.0)),
                 swell: false,
                 pairs: false,
+                v2: None,
+                noise2: None,
+                shimmer: None,
             },
             sr,
             seed,
@@ -698,11 +1074,226 @@ mod tests {
     }
 
     fn render_drum(key: u8, vel: u8, secs: f32) -> Vec<f32> {
+        render_drum_kit(key, vel, secs, Kit::V1)
+    }
+
+    fn render_drum_kit(key: u8, vel: u8, secs: f32, kit: Kit) -> Vec<f32> {
         let sr = 44100.0;
-        let mut v = make(key, vel, sr, 7).unwrap();
+        let mut v = make(key, vel, sr, 7, kit).unwrap();
         let mut buf = vec![0f32; (sr * secs) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    /// DR0 seam: spot-checks ONE kit-agnostic key (51 ride — never branches on
+    /// `kit`) is byte-identical under V1 and V2, i.e. a ch-10 Program Change
+    /// only ever changes the keys a v2 fix touches. (The V1==v0.8.1 baseline
+    /// invariant is pinned separately by `v1_drum_render_is_frozen`.)
+    #[test]
+    fn kit_v2_seam_wired_and_inert_for_untouched_keys() {
+        let sr = 44100.0;
+        let render = |kit| {
+            let mut v = make(51, 100, sr, 7, kit).unwrap();
+            let mut buf = vec![0f32; (sr * 1.5) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        let v1 = render(Kit::V1);
+        let v2 = render(Kit::V2);
+        assert!(v1.iter().any(|&x| x.abs() > 1e-4), "ride voice makes sound");
+        assert_eq!(v1, v2, "kit-agnostic key 51 identical under V1 and V2");
+    }
+
+    /// FNV-1a over the raw f32 bits of a render buffer — a compact byte-exact
+    /// fingerprint (bit-level, so it catches a sub-dB drift the golden misses).
+    fn render_fingerprint(buf: &[f32]) -> u64 {
+        let mut h = 0xcbf29ce484222325u64;
+        for &x in buf {
+            h ^= x.to_bits() as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+        h
+    }
+
+    /// Byte-exact freeze of the legacy (V1) kit for representative keys, so any
+    /// future edit to a shared render/build path that silently shifts V1 —
+    /// below the golden's ±2.5 dB trip-wire — fails loudly here. V1 IS the
+    /// v0.8.1 baseline (proven at integration by the album byte-compare); this
+    /// pins it forward for every phase still to land. Contamination canary in
+    /// the spirit of lessons_learnt (canaries find contamination, not drift).
+    #[test]
+    fn v1_drum_render_is_frozen() {
+        // (key, fingerprint). Kick, snare, closed hat, crash, tom.
+        let cases: [(u8, u64); 5] = [
+            (36, 0x77e42657e7f8a7a3),
+            (38, 0x9c6b613424fb3d46),
+            (42, 0x76e3c7038c0ff8f5),
+            (49, 0x3d8caf328fcc2db8),
+            (41, 0x82457a61ced252c1),
+        ];
+        for (key, want) in cases {
+            let got = render_fingerprint(&render_drum_kit(key, 100, 1.0, Kit::V1));
+            assert_eq!(got, want, "V1 render of key {key} drifted (fingerprint)");
+        }
+    }
+
+    /// DR-O1 (gate differential): a ch-10 Program Change makes the crash
+    /// (key 49) a materially different render under kit v2 than v1 — the DR1
+    /// fix engages. (The kit-agnostic key 51 stays identical, covered by
+    /// `kit_v2_seam_wired_and_inert_for_untouched_keys`.)
+    #[test]
+    fn dr_o1_crash_v2_diverges_from_v1() {
+        let v1 = render_drum_kit(49, 100, 1.0, Kit::V1);
+        let v2 = render_drum_kit(49, 100, 1.0, Kit::V2);
+        assert!(v1.iter().any(|&x| x.abs() > 1e-4), "v1 crash makes sound");
+        assert!(v2.iter().any(|&x| x.abs() > 1e-4), "v2 crash makes sound");
+        assert_ne!(v1, v2, "crash 49 must differ under kit v2 (DR1 engaged)");
+    }
+
+    /// Detuned-twin beat detector for DR-O4: in the twins' LIVE window
+    /// [0.3, 1.2] s (per the master-HLD §6 DR-O4 correction — the earlier
+    /// [2.0, 3.5] s window measures dead twins), bandpass the lowest primary
+    /// partial + its twin (~950 / 955.6 Hz), take the rectified/smoothed
+    /// envelope, detrend off the slow decay, and return the coefficient of
+    /// variation (std/mean). A single sine (v1) gives a smooth decaying
+    /// envelope → low CV; the 0.7-amp detuned twin (v2) beats at ~5.6 Hz →
+    /// high CV. Seed 7 fixes `jf`, so primary and twin move together and the
+    /// beat rate is `Δf·jf` regardless of the exact strike.
+    fn twin_beat_cv(buf: &[f32]) -> f32 {
+        let sr = 44100.0f32;
+        let a = (0.3 * sr) as usize;
+        let b = (1.2 * sr) as usize;
+        // centre on the lowest primary partial (same jf for both kits).
+        let center = testutil::peak_locate(&buf[a..b], sr, 905.0, 1000.0);
+        let mut bp = Biquad::bandpass(center, 20.0, sr);
+        let mut env_lp = OnePole::lowpass(70.0, sr);
+        let mut slow = OnePole::lowpass(2.0, sr);
+        // process the whole buffer so the filters settle before the window.
+        let mut env = Vec::with_capacity(buf.len());
+        let mut detr = Vec::with_capacity(buf.len());
+        for &x in buf {
+            let e = env_lp.process(bp.process(x).abs());
+            detr.push((e - slow.process(e)) as f64);
+            env.push(e as f64);
+        }
+        let mean = env[a..b].iter().sum::<f64>() / (b - a) as f64;
+        let var = detr[a..b].iter().map(|&d| d * d).sum::<f64>() / (b - a) as f64;
+        (var.sqrt() / mean.max(1e-12)) as f32
+    }
+
+    /// DR-O4 (corrected, master HLD §6): the detuned twin field makes the
+    /// crash tail *shimmer* in the twins' live window — the ~5.6 Hz beat of
+    /// the lowest primary/twin pair lifts the band-envelope CV well above the
+    /// single-sine v1 render. Differential, same seed (fail-first: v1 has no
+    /// twin → smooth decaying line → far less beating).
+    #[test]
+    fn dr_o4_crash_twin_field_beats_in_live_window() {
+        let v1 = render_drum_kit(49, 100, 1.5, Kit::V1);
+        let v2 = render_drum_kit(49, 100, 1.5, Kit::V2);
+        let cv1 = twin_beat_cv(&v1);
+        let cv2 = twin_beat_cv(&v2);
+        println!(
+            "DR-O4 twin-beat CV: v1={cv1:.4} v2={cv2:.4} ratio={:.2}",
+            cv2 / cv1
+        );
+        // calibrated threshold (printed values above): v2 beats far harder.
+        assert!(
+            cv2 > 3.0 * cv1,
+            "twin beat not present: v2 CV {cv2} vs v1 CV {cv1}"
+        );
+    }
+
+    /// DR-O10 (level parity): the kit switch is a realism change, not a mix
+    /// change — v2 crash 49 RMS over [0, 1 s] is within ±2 dB of v1 (the wash
+    /// dominates that energy; `CRASH_WASH_AMP_V2` is its knob). Design budget
+    /// ≈ +0.6..0.8 dB.
+    #[test]
+    fn dr_o10_crash_level_parity() {
+        let sr = 44100.0;
+        let win = (1.0 * sr) as usize;
+        let r1 = testutil::rms(&render_drum_kit(49, 100, 1.0, Kit::V1)[..win]);
+        let r2 = testutil::rms(&render_drum_kit(49, 100, 1.0, Kit::V2)[..win]);
+        let db = 20.0 * (r2 / r1).log10();
+        println!("DR-O10 crash49 [0,1s] RMS: v1={r1:.6} v2={r2:.6} delta={db:.3} dB");
+        assert!(
+            db.abs() <= 2.0,
+            "crash level parity {db} dB exceeds ±2 dB (CRASH_WASH_AMP_V2 = {CRASH_WASH_AMP_V2})"
+        );
+    }
+
+    /// DR-O10 (open hat): the DR3 wash split + sizzle shimmer is a realism
+    /// change, not a mix change — v2 key-46 RMS over its [0, 0.95 s] life stays
+    /// within ±2 dB of v1.
+    #[test]
+    fn dr_o10_open_hat_level_parity() {
+        let r1 = testutil::rms(&render_drum_kit(46, 100, 0.95, Kit::V1));
+        let r2 = testutil::rms(&render_drum_kit(46, 100, 0.95, Kit::V2));
+        let db = 20.0 * (r2 / r1).log10();
+        println!("DR-O10 openhat46 [0,0.95s] RMS: v1={r1:.6} v2={r2:.6} delta={db:.3} dB");
+        assert!(
+            db.abs() <= 2.0,
+            "open-hat level parity {db} dB exceeds ±2 dB"
+        );
+    }
+
+    /// DR2 (tom pitch-drop): a kit-v2 tom (key 41, table 100 Hz) settles ON the
+    /// table pitch, where v1 dives ~21 st to its 0.3x floor (~30 Hz). Measured
+    /// on the settled window [0.15, 0.30] s via a Goertzel peak (never
+    /// zero-crossings — HLD DR-O corrections / lessons_learnt).
+    #[test]
+    fn dr2_tom_v2_settles_at_table_pitch() {
+        let sr = 44100.0;
+        let settled = |kit| {
+            let b = render_drum_kit(41, 100, 0.5, kit);
+            let a = (sr * 0.15) as usize;
+            let z = (sr * 0.30) as usize;
+            testutil::peak_locate(&b[a..z], sr, 20.0, 200.0)
+        };
+        let f_v1 = settled(Kit::V1);
+        let f_v2 = settled(Kit::V2);
+        println!("DR2 tom41 settled pitch: v1={f_v1:.1} Hz  v2={f_v2:.1} Hz");
+        assert!(
+            (f_v2 - 100.0).abs() < 20.0,
+            "v2 tom settles near the 100 Hz table pitch (got {f_v2:.1})"
+        );
+        assert!(
+            f_v1 < 60.0,
+            "v1 tom dived far below the table (got {f_v1:.1})"
+        );
+        assert!(
+            f_v2 > f_v1 * 1.4,
+            "v2 settled pitch sits well above v1's dived pitch (v1={f_v1:.1}, v2={f_v2:.1})"
+        );
+    }
+
+    /// DR3 (open-hat spectral motion): v2 splits the wash into a slow body +
+    /// fast sizzle (and widens the tonal decay spread), so the spectral
+    /// centroid FALLS through the tail — a real hat loses HF fastest. v1's
+    /// single static wash barely moves. Measured as the early/late centroid
+    /// ratio; v2 falls materially more than v1.
+    #[test]
+    fn dr3_open_hat_v2_centroid_falls() {
+        let sr = 44100.0;
+        let ratio = |kit| {
+            let b = render_drum_kit(46, 100, 0.95, kit);
+            let c =
+                |a: f32, z: f32| testutil::centroid(&b[(sr * a) as usize..(sr * z) as usize], sr);
+            let (early, late) = (c(0.02, 0.12), c(0.30, 0.50));
+            (early, late, early / late)
+        };
+        let (e1, l1, r1) = ratio(Kit::V1);
+        let (e2, l2, r2) = ratio(Kit::V2);
+        println!(
+            "DR3 open-hat centroid early/late: v1 {e1:.0}/{l1:.0} r={r1:.2}  v2 {e2:.0}/{l2:.0} r={r2:.2}"
+        );
+        assert!(
+            r2 > r1 * 1.3,
+            "v2 centroid falls materially more than v1 (r1={r1:.2}, r2={r2:.2})"
+        );
+        assert!(
+            r2 > 1.25,
+            "v2 early centroid well above its late (r2={r2:.2})"
+        );
     }
 
     /// Oracle 20 (structural, §5.3): the shipped tom table carries the
@@ -902,6 +1493,9 @@ mod tests {
             click: None,
             swell: true,
             pairs,
+            v2: None,
+            noise2: None,
+            shimmer: None,
         };
         let render = |pairs: bool| {
             let mut v = cymbal(&spec(pairs), sr, 7, 110).unwrap();
@@ -950,6 +1544,9 @@ mod tests {
             click: None,
             swell: false,
             pairs: false,
+            v2: None,
+            noise2: None,
+            shimmer: None,
         };
         let mut v = cymbal(&spec, sr, 7, 110).unwrap();
         let mut without = vec![0f32; (0.15 * sr) as usize];
@@ -1008,7 +1605,7 @@ mod tests {
     #[test]
     fn choke_kills_open_hat() {
         let sr = 44100.0;
-        let mut v = make(46, 110, sr, 7).unwrap();
+        let mut v = make(46, 110, sr, 7, Kit::V1).unwrap();
         let mut head = vec![0f32; (0.05 * sr) as usize];
         assert!(v.render(&mut head));
         let before = testutil::rms(&head[(0.03 * sr) as usize..]);
@@ -1041,5 +1638,84 @@ mod tests {
         );
         let (th, ts) = (testutil::t60_of(&hard, sr), testutil::t60_of(&soft, sr));
         assert!(th > ts, "t60 hard {th} vs soft {ts}");
+    }
+
+    /// DR-O8(a) (differential): the v2 snare wires ring as resonant bandpass
+    /// clusters where v1 is a featureless HP slope. Compare the mean band-RMS
+    /// at the three cluster centres (3400/5100/7300 Hz) against the mean at the
+    /// two between-cluster troughs (4200/6100 Hz), Q 8, over the early window
+    /// [0, 60 ms] where the head-coupled wires are strongest relative to the
+    /// flat dark-tail band. v1's smooth HP slope reads near-flat (~1.06), while
+    /// v2 combs up to ~1.64 — well past the design's 1.35 floor. Same seed
+    /// (fail-first: v1 has no cluster structure). Measured Q 8 matches the wire
+    /// Q so the peaks/troughs resolve; a broader Q smears the contrast.
+    #[test]
+    fn dr4_snare_wire_clusters_are_resonant_v2() {
+        let sr = 44100.0;
+        let v1 = render_drum_kit(38, 110, 0.2, Kit::V1);
+        let v2 = render_drum_kit(38, 110, 0.2, Kit::V2);
+        let (a, b) = (0usize, (0.06 * sr) as usize);
+        let comb = |s: &[f32]| {
+            let seg = &s[a..b];
+            let mean = |fs: &[f32]| {
+                fs.iter()
+                    .map(|&f| testutil::band_rms(seg, sr, f, 8.0))
+                    .sum::<f32>()
+                    / fs.len() as f32
+            };
+            mean(&[3400.0, 5100.0, 7300.0]) / mean(&[4200.0, 6100.0]).max(1e-9)
+        };
+        let (c1, c2) = (comb(&v1), comb(&v2));
+        println!(
+            "DR4 wire comb (mean-centre/mean-trough, [0,60ms] Q8): v1={c1:.3} v2={c2:.3} ratio={:.2}x",
+            c2 / c1
+        );
+        assert!(
+            c2 > 1.35 && c2 > 1.4 * c1,
+            "v2 wire clusters not resonant vs v1 HP slope: v1={c1:.3} v2={c2:.3}"
+        );
+    }
+
+    /// DR-O10 (level parity): the v2 snare's total energy over its [0, 0.6 s]
+    /// life stays within ±2 dB of v1 — `WIRE_MAKEUP` compensates the BP-set
+    /// bandwidth so opting a file into kit v2 is not a snare level jump.
+    #[test]
+    fn dr_o10_snare_v2_level_parity() {
+        let v1 = render_drum_kit(38, 100, 0.6, Kit::V1);
+        let v2 = render_drum_kit(38, 100, 0.6, Kit::V2);
+        let (r1, r2) = (testutil::rms(&v1), testutil::rms(&v2));
+        let db = 20.0 * (r2 / r1.max(1e-12)).log10();
+        println!(
+            "DR-O10 snare [0,0.6s] RMS: v1={r1:.5} v2={r2:.5} delta={db:+.2} dB (WIRE_MAKEUP={WIRE_MAKEUP})"
+        );
+        assert!(
+            db.abs() <= 2.0,
+            "snare v2 level {db:+.2} dB outside ±2 dB of v1 — trim WIRE_MAKEUP"
+        );
+    }
+
+    /// DR4 differentiation: v1 renders keys 38 and 40 byte-identically (the
+    /// arm never branched on the key), while v2 gives the electric snare (40)
+    /// its own brighter wires — the first 38/40 distinction the kit has had.
+    /// Also asserts the v2 snare diverges from v1 (the DR4 fix engaged).
+    #[test]
+    fn dr4_key40_differentiates_only_in_v2() {
+        let s38_v1 = render_drum_kit(38, 100, 0.3, Kit::V1);
+        let s40_v1 = render_drum_kit(40, 100, 0.3, Kit::V1);
+        assert_eq!(s38_v1, s40_v1, "v1 must render keys 38 and 40 identically");
+        let s38_v2 = render_drum_kit(38, 100, 0.3, Kit::V2);
+        let s40_v2 = render_drum_kit(40, 100, 0.3, Kit::V2);
+        assert!(
+            s38_v2.iter().any(|&x| x.abs() > 1e-4),
+            "v2 snare makes sound"
+        );
+        assert_ne!(
+            s38_v2, s40_v2,
+            "v2 must render electric snare (40) differently from 38"
+        );
+        assert_ne!(
+            s38_v2, s38_v1,
+            "v2 snare must diverge from v1 (DR4 engaged)"
+        );
     }
 }

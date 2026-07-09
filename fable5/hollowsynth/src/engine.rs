@@ -61,10 +61,11 @@ const AT_GAIN_DB: f32 = 2.5; // gain lift at full pressure
 /// left alone.
 fn vibrato_family(program: u8) -> bool {
     // guitars (no palm-mute 28), basses, bowed strings, harp, SawStack strings/choir,
-    // winds, leads, banjo, fiddle
+    // brass (56-63), reeds (64-71), winds, leads, banjo, fiddle. Orchestra hit (55)
+    // is excluded — a one-shot stab does not vibrato (symmetric with timpani).
     matches!(
         program,
-        24..=27 | 29..=46 | 48..=54 | 72..=79 | 80..=87 | 104..=107 | 110
+        24..=27 | 29..=46 | 48..=54 | 56..=71 | 72..=79 | 80..=87 | 104..=107 | 110
     )
 }
 
@@ -268,6 +269,9 @@ fn fx_profile(program: u8) -> (f32, f32) {
         46 => (0.15, 0.0),             // harp
         48..=51 => (0.35, 0.0),        // string ensembles
         52..=54 => (0.30, 0.0),        // choir
+        56..=60 => (0.0, 0.0),         // solo brass: hall (CC91) is the space, no ensemble fake
+        61..=63 => (0.25, 0.0),        // brass section / synth brass: section-width chorus
+        64..=67 => (0.06, 0.10),       // saxes: lead voice, a touch of width and slap echo
         72..=79 => (0.0, 0.22),        // flute / whistle
         80..=87 => (0.15, 0.25),       // synth leads: focused, with the delayed-lead echo
         88..=95 => (0.45, 0.0),        // pads
@@ -814,6 +818,12 @@ impl EngineCore {
                 let (f, q, g) = vowel_at(s.vowel_cur);
                 voice.set_vowel(f, q, g);
             }
+            // BR9: brass opens its timbre with breath (CC11 expression). Seed
+            // the new voice at the channel's current pressure so a note born
+            // mid-swell starts open, not from silence.
+            if matches!(s.program, 56..=63) {
+                voice.set_breath(s.expr.sqrt().min(1.3), 0.0);
+            }
             let glide = if ch != 9 && s.porta_on {
                 porta_from.and_then(|from| {
                     let semis = 12.0 * (from / key_freq(key)).log2();
@@ -1190,6 +1200,16 @@ impl EngineCore {
                 let mult = strip.bend * strip.vib_mult * at_vib;
                 for a in self.active.iter_mut().filter(|a| a.ch == ch) {
                     a.voice.set_pitch(mult);
+                }
+            }
+            // BR9: brass breath — CC11 expression opens the timbre, channel
+            // aftertouch adds flutter growl. A no-op on every 56-63 channel that
+            // authors neither (only The Iron Tide uses brass, waived §4.3).
+            if matches!(strip.program, 56..=63) {
+                let p = strip.expr.sqrt().min(1.3);
+                let g = if strip.at_authored { strip.at_cur } else { 0.0 };
+                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                    a.voice.set_breath(p, g);
                 }
             }
             for a in self.active.iter_mut().filter(|a| a.ch == ch) {
@@ -2968,6 +2988,492 @@ mod tests {
         assert!(
             hf_soft < 0.85 * hf_norm,
             "una corda not duller: soft {hf_soft} vs normal {hf_norm}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // v0.9 engine oracles: programs 55-71 (brass / reeds / orchestra hit)
+    // now answer CC1 vibrato, channel aftertouch, CC11 breath, CC68 slur and
+    // the section-chorus/echo sends. Every feature oracle here FAILS on
+    // v0.8.1 (55-71 rendered as a decaying steel pluck with dead
+    // CC1/AT/CC11-timbre and (0,0) sends); the pitch is always argmax of
+    // `mag_at` (Goertzel), never zero crossings, per the lessons file.
+    // -----------------------------------------------------------------------
+
+    /// Argmax-located fundamental (Hz) spread, in cents, across `n` equal
+    /// windows in [t0, t1] of `sig`; each window's pitch is `peak_locate` in
+    /// [flo, fhi].
+    fn pitch_spread_cents(
+        sig: &[f32],
+        sr: f32,
+        t0: f32,
+        t1: f32,
+        n: usize,
+        flo: f32,
+        fhi: f32,
+    ) -> f32 {
+        let span = (t1 - t0) / n as f32;
+        let (mut lo, mut hi) = (f32::MAX, f32::MIN);
+        for i in 0..n {
+            let a = ((t0 + i as f32 * span) * sr) as usize;
+            let b = ((t0 + (i + 1) as f32 * span) * sr) as usize;
+            let f = crate::testutil::peak_locate(&sig[a..b], sr, flo, fhi);
+            lo = lo.min(f);
+            hi = hi.max(f);
+        }
+        1200.0 * (hi / lo).log2()
+    }
+
+    fn render_brass_cc1(cc1: Option<u8>) -> Vec<f32> {
+        let mut ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 56 }),
+            (
+                0.0,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+        ];
+        if let Some(v) = cc1 {
+            ev.push((
+                0.5,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 1,
+                    val: v,
+                },
+            ));
+        }
+        ev.push((3.0, EvKind::NoteOff { ch: 0, key: 69 }));
+        left(&render(&test_song(ev, 3.2), &test_opts(44100.0)).0)
+    }
+
+    /// E55-1: CC1 vibrato is live on a dry brass voice (prog 56 Trumpet,
+    /// fx_profile (0,0), reverb off) — the pitch wander is unambiguously the
+    /// 5.3 Hz engine LFO. Needs the vibrato_family 56..=71 edit (E1).
+    #[test]
+    fn e55_1_cc1_vibrato_live_on_brass() {
+        let sr = 44100.0;
+        let plain = render_brass_cc1(None);
+        let modded = render_brass_cc1(Some(127));
+        let sp_plain = pitch_spread_cents(&plain, sr, 1.2, 1.92, 12, 380.0, 500.0);
+        let sp_mod = pitch_spread_cents(&modded, sr, 1.2, 1.92, 12, 380.0, 500.0);
+        assert!(
+            sp_mod >= 20.0,
+            "CC1 brass vibrato too shallow: {sp_mod:.1} cents"
+        );
+        assert!(
+            sp_mod >= 2.0 * sp_plain,
+            "CC1 vibrato not 2x the no-CC1 spread: mod {sp_mod:.1} vs plain {sp_plain:.1} cents"
+        );
+    }
+
+    fn brass_slur_song(cc68: u8) -> (Vec<f32>, Stats) {
+        // A4 held through, B4 struck at 0.8 s while A4 still sounds; both off
+        // at 2.5 s. CC68=127 makes it one breath (slur), CC68=0 two attacks.
+        let ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 57 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 68,
+                    val: cc68,
+                },
+            ),
+            (
+                0.0,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (
+                0.8,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 71,
+                    vel: 100,
+                },
+            ),
+            (2.5, EvKind::NoteOff { ch: 0, key: 69 }),
+            (2.5, EvKind::NoteOff { ch: 0, key: 71 }),
+        ];
+        let (out, stats) = render(&test_song(ev, 2.7), &test_opts(44100.0));
+        (left(&out), stats)
+    }
+
+    /// E55-3: a CC68 brass phrase (prog 57 Trombone) slurs A4->B4 as one
+    /// breath — exactly ONE sustained voice (no second attack), which reaches
+    /// B4 and is still ringing 0.8 s later. The same phrase with CC68=0
+    /// spawns two voices: the polyphony collapse IS the "no second attack
+    /// transient" proof (a second attack requires a second voice). The
+    /// sustained-B4 clause is the brass-voice contract that fails on the
+    /// v0.8.1 steel pluck (which has decayed to ~1% by [1.6, 2.0]). The
+    /// brass onset is spectrally dark by design (the BR_BLOOM "waa"), so an
+    /// HF-chiff comparison is NOT a valid discriminator here — see the report.
+    /// Cross-owned with the brass voice's legato_to (already in-tree).
+    #[test]
+    fn e55_3_cc68_brass_slur_no_second_attack() {
+        let sr = 44100.0;
+        let (slur, slur_stats) = brass_slur_song(127);
+        let (_, tongued_stats) = brass_slur_song(0);
+        assert_eq!(
+            slur_stats.max_polyphony, 1,
+            "brass slur spawned a second voice"
+        );
+        assert_eq!(
+            tongued_stats.max_polyphony, 2,
+            "the tongued (CC68=0) phrase should be two voices"
+        );
+        let f = crate::testutil::peak_locate(
+            &slur[(1.6 * sr) as usize..(2.0 * sr) as usize],
+            sr,
+            400.0,
+            560.0,
+        );
+        let target = 493.883_f32; // key_freq(71) = B4
+        assert!(
+            (f / target - 1.0).abs() <= 0.005,
+            "slur target pitch off: {f:.1} Hz vs {target:.1} Hz"
+        );
+        // sustained, not a decaying pluck: the slurred voice still rings 0.8 s
+        // after the slur (a v0.8.1 STEEL pluck would be ~1% here).
+        let sus = rms(&slur[(1.6 * sr) as usize..(2.0 * sr) as usize]);
+        let early = rms(&slur[(0.3 * sr) as usize..(0.6 * sr) as usize]);
+        assert!(
+            sus > 0.5 * early,
+            "slurred brass voice decayed like a pluck: sustain ratio {:.3}",
+            sus / early
+        );
+    }
+
+    fn render_chord(prog: u8) -> Vec<f32> {
+        let mut ev = vec![(0.0, EvKind::Prog { ch: 0, prog })];
+        for &k in &[60u8, 64, 67] {
+            ev.push((
+                0.02,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: k,
+                    vel: 100,
+                },
+            ));
+            ev.push((3.0, EvKind::NoteOff { ch: 0, key: k }));
+        }
+        ev.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        render(&test_song(ev, 3.2), &test_opts(44100.0)).0
+    }
+
+    /// E55-4a: a brass-section chord (prog 61, chorus send 0.25) decorrelates
+    /// L/R through the quadrature chorus taps; a dry double-reed chord (prog
+    /// 68, sends (0,0)) at centre pan stays ~mono. Needs the fx_profile edit.
+    #[test]
+    fn e55_4a_section_chorus_decorrelates() {
+        let sr = 44100.0;
+        let (a, b) = ((0.5 * sr) as usize, (3.0 * sr) as usize);
+        let sec = render_chord(61);
+        let corr_sec = crate::testutil::inter_corr(&left(&sec)[a..b], &right(&sec)[a..b]);
+        let dry = render_chord(68);
+        let corr_dry = crate::testutil::inter_corr(&left(&dry)[a..b], &right(&dry)[a..b]);
+        assert!(
+            corr_sec <= 0.97,
+            "section chorus did not decorrelate: corr {corr_sec:.4}"
+        );
+        assert!(
+            corr_dry >= 0.999,
+            "dry reed chord not ~mono at centre: corr {corr_dry:.4}"
+        );
+    }
+
+    fn opts_delay(delay_s: f32) -> Options {
+        Options {
+            sr: 44100.0,
+            wet: 0.0,
+            tail: 1.0,
+            delay_s,
+            samples: false,
+            solo: 0xFFFF,
+            verbose: false,
+        }
+    }
+
+    fn render_sax_echo(delay_s: f32) -> Vec<f32> {
+        let ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 65 }),
+            (
+                0.0,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (0.3, EvKind::NoteOff { ch: 0, key: 69 }),
+        ];
+        crate::testutil::mono(&render(&test_song(ev, 1.2), &opts_delay(delay_s)).0)
+    }
+
+    /// E55-4b: a staccato sax note (prog 65, echo send 0.10) produces a real
+    /// ping-pong repeat ~0.25 s later. The delayed-vs-dry difference signal
+    /// isolates the echo copy from the dry tail (the corrected oracle form).
+    /// Needs the fx_profile edit.
+    #[test]
+    fn e55_4b_sax_echo_present() {
+        let sr = 44100.0;
+        let wet = render_sax_echo(0.25);
+        let dry = render_sax_echo(0.0);
+        let (a, b) = ((0.55 * sr) as usize, (0.65 * sr) as usize);
+        let d: Vec<f32> = wet[a..b]
+            .iter()
+            .zip(&dry[a..b])
+            .map(|(x, y)| x - y)
+            .collect();
+        let e = rms(&d);
+        const FLOOR: f32 = 1e-4; // well above render numerical noise
+        assert!(
+            e >= FLOOR,
+            "sax echo missing in the difference window: rms {e:.3e}"
+        );
+    }
+
+    fn render_brass_cc11(ramp: bool) -> Vec<f32> {
+        // prog 57 Trombone, A2 (key 45) held; CC11 either ramps 30->127 or is
+        // pinned at 127.
+        let mut ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 57 }),
+            (
+                0.0,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 45,
+                    vel: 100,
+                },
+            ),
+        ];
+        if ramp {
+            for i in 0..=20u32 {
+                let t = 0.1 + i as f64 * 0.09;
+                let v = (30 + i * (127 - 30) / 20) as u8;
+                ev.push((
+                    t,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 11,
+                        val: v,
+                    },
+                ));
+            }
+        } else {
+            ev.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 11,
+                    val: 127,
+                },
+            ));
+        }
+        ev.push((2.5, EvKind::NoteOff { ch: 0, key: 45 }));
+        ev.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        left(&render(&test_song(ev, 2.7), &test_opts(44100.0)).0)
+    }
+
+    /// BR-O4: a CC11 ramp 30->127 opens the brass timbre (centroid rises) AND
+    /// raises level, while a pinned CC11=127 stays timbrally flat past the
+    /// bloom — the differential isolates the BR9 pressure path from the amp
+    /// envelope. Needs the BR9 CC11 writer.
+    #[test]
+    fn br_o4_cc11_opens_brass_tone() {
+        let sr = 44100.0;
+        let cf = |sig: &[f32], t0: f32, t1: f32| {
+            crate::testutil::centroid(&sig[(t0 * sr) as usize..(t1 * sr) as usize], sr)
+        };
+        let rw = |sig: &[f32], t0: f32, t1: f32| rms(&sig[(t0 * sr) as usize..(t1 * sr) as usize]);
+        let ramp = render_brass_cc11(true);
+        let pinned = render_brass_cc11(false);
+        let ramp_c = cf(&ramp, 1.8, 2.3) / cf(&ramp, 0.3, 0.8);
+        let ramp_r = rw(&ramp, 1.8, 2.3) / rw(&ramp, 0.3, 0.8).max(1e-9);
+        let pin_c = cf(&pinned, 1.8, 2.3) / cf(&pinned, 0.3, 0.8);
+        assert!(
+            ramp_c >= 1.3,
+            "CC11 ramp didn't brighten: centroid ratio {ramp_c:.2}"
+        );
+        assert!(
+            ramp_r >= 2.0,
+            "CC11 ramp didn't swell: rms ratio {ramp_r:.2}"
+        );
+        assert!(
+            pin_c < 1.1,
+            "pinned CC11 shouldn't drift timbre: centroid ratio {pin_c:.2}"
+        );
+    }
+
+    /// BR-O14: bent + vibratoed brass lands on the right pitch (INT-5). Prog
+    /// 56 A4, CC1=90 active, PB +2 semis: the composed bend x vibrato pitch
+    /// sits at B4 +/-25 cents; a downward bend spanning NoteOff drags the
+    /// release tail >= 80 cents down (set_pitch reaches released voices,
+    /// INT-2).
+    #[test]
+    fn br_o14_bend_and_vibrato_liveness() {
+        let sr = 44100.0;
+        let mut ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 56 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 1,
+                    val: 90,
+                },
+            ),
+            (
+                0.02,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (0.5, EvKind::Bend { ch: 0, semis: 2.0 }),
+        ];
+        // a downward pitch fall spanning the NoteOff at 2.0 s: +2 -> -2 semis
+        for i in 0..=10u32 {
+            let t = 1.9 + i as f64 * 0.04;
+            let semis = 2.0 - i as f32 * 0.4;
+            ev.push((t, EvKind::Bend { ch: 0, semis }));
+        }
+        ev.push((2.0, EvKind::NoteOff { ch: 0, key: 69 }));
+        ev.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        let m = left(&render(&test_song(ev, 2.6), &test_opts(sr)).0);
+        let target = 493.883_f32; // B4 = A4 + 2 semitones
+        let held = crate::testutil::peak_locate(
+            &m[(1.0 * sr) as usize..(1.5 * sr) as usize],
+            sr,
+            440.0,
+            540.0,
+        );
+        let cents = 1200.0 * (held / target).log2();
+        assert!(
+            cents.abs() <= 25.0,
+            "bent+vibratoed brass pitch off: {held:.1} Hz ({cents:.1} cents from B4)"
+        );
+        let tail = crate::testutil::peak_locate(
+            &m[(2.02 * sr) as usize..(2.16 * sr) as usize],
+            sr,
+            340.0,
+            520.0,
+        );
+        let tail_cents = 1200.0 * (tail / target).log2();
+        assert!(
+            tail_cents <= -80.0,
+            "release tail didn't track the fall: {tail:.1} Hz ({tail_cents:.1} cents from B4)"
+        );
+    }
+
+    /// RD-O10: reed CC1/CC68 completeness (INT-5/INT-2), engine-level.
+    /// (a) A CC68 tenor-sax phrase (prog 66) slurs E4->G4 as ONE voice; the
+    /// same phrase with CC68=0 spawns two. (b) A held clarinet (prog 71) with
+    /// CC1=96 and PB +2 semis lands within +/-3% of the bent target under the
+    /// active modulator. Needs the vibrato_family 64..=71 edit.
+    #[test]
+    fn rd_o10_reed_slur_and_pitch_liveness() {
+        let sr = 44100.0;
+        let slur_song = |cc68: u8| {
+            let mut ev = vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 66 }),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 68,
+                        val: cc68,
+                    },
+                ),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 64,
+                        vel: 100,
+                    },
+                ),
+                (
+                    0.4,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 67,
+                        vel: 100,
+                    },
+                ),
+                (1.5, EvKind::NoteOff { ch: 0, key: 64 }),
+                (1.5, EvKind::NoteOff { ch: 0, key: 67 }),
+            ];
+            ev.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+            render(&test_song(ev, 1.7), &test_opts(sr))
+        };
+        let (slur_out, slur_stats) = slur_song(127);
+        let (_, tongued_stats) = slur_song(0);
+        assert_eq!(
+            slur_stats.max_polyphony, 1,
+            "reed slur spawned a second voice"
+        );
+        assert_eq!(
+            tongued_stats.max_polyphony, 2,
+            "tongued reed should be 2 voices"
+        );
+        let m = left(&slur_out);
+        let g4 = 391.995_f32; // key_freq(67)
+        let f = crate::testutil::peak_locate(
+            &m[(0.8 * sr) as usize..(1.3 * sr) as usize],
+            sr,
+            320.0,
+            460.0,
+        );
+        // ±1%: G4 sits mid-grid on peak_locate's 0.5% argmax grid (bracketing
+        // points 392.61 / 394.57 Hz), so ±0.5% is tighter than the measurement
+        // resolution; ±1% still rejects the E4 origin (16% away). See report.
+        assert!(
+            (f / g4 - 1.0).abs() <= 0.01,
+            "reed slur target off: {f:.1} Hz vs {g4:.1} Hz"
+        );
+
+        // (b) CC1 + PB liveness on a held clarinet note (key 62 = D4)
+        let ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 71 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 1,
+                    val: 96,
+                },
+            ),
+            (
+                0.02,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 62,
+                    vel: 100,
+                },
+            ),
+            (0.5, EvKind::Bend { ch: 0, semis: 2.0 }),
+            (2.0, EvKind::NoteOff { ch: 0, key: 62 }),
+        ];
+        let m2 = left(&render(&test_song(ev, 2.2), &test_opts(sr)).0);
+        let target = 329.628_f32; // key_freq(62) * 2^(2/12)
+        let f2 = crate::testutil::peak_locate(
+            &m2[(1.0 * sr) as usize..(1.5 * sr) as usize],
+            sr,
+            280.0,
+            380.0,
+        );
+        assert!(
+            (f2 / target - 1.0).abs() <= 0.03,
+            "clarinet bent+vibrato pitch off: {f2:.1} Hz vs {target:.1} Hz"
         );
     }
 }

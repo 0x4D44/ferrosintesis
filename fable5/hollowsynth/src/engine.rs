@@ -1220,9 +1220,17 @@ impl EngineCore {
                     strip.at_phase -= TAU;
                 }
                 at_vib = 2f32.powf(strip.at_cur * AT_VIB_CENTS / 1200.0 * strip.at_phase.sin());
-                let mult = strip.bend * strip.vib_mult * at_vib;
                 for a in self.active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_pitch(mult);
+                    // Alt strings/choir take CC1 via set_vib, so the coherent
+                    // vib_mult factor must not compose into their aftertouch
+                    // pitch (v0.9 kept 48-54 out of vibrato_family; aftertouch
+                    // still applies). Default voices are byte-for-byte unchanged.
+                    let vm = if a.alt && matches!(strip.program, 48..=54) {
+                        1.0
+                    } else {
+                        strip.vib_mult
+                    };
+                    a.voice.set_pitch(strip.bend * vm * at_vib);
                 }
             }
             // BR9: brass breath — CC11 expression opens the timbre, channel
@@ -1240,7 +1248,13 @@ impl EngineCore {
                     *semis -= *k * *semis;
                     let done = semis.abs() < 0.005;
                     let gm = if done { 1.0 } else { 2f32.powf(*semis / 12.0) };
-                    a.voice.set_pitch(strip.bend * strip.vib_mult * at_vib * gm);
+                    // Same alt-orchestral CC1 exclusion as the aftertouch site.
+                    let vm = if a.alt && matches!(strip.program, 48..=54) {
+                        1.0
+                    } else {
+                        strip.vib_mult
+                    };
+                    a.voice.set_pitch(strip.bend * vm * at_vib * gm);
                     if done {
                         a.glide = None;
                     }

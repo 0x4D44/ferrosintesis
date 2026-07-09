@@ -11,6 +11,11 @@ env/
 # Python
 __pycache__/
 *.pyc
+
+# transcribe.py: outputs, local tool config, and per-tool venvs (external prerequisites)
+transcriptions/
+transcribe.local.json
+tools/
 # Rendered audio (reproducible via ferrosintesis)
 *.wav
 # ...but the synth's attack-transient sample banks are source, not output

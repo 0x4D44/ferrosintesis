@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to transcribe.local.json (gitignored) and edit. Each ML tool lives in its OWN venv (incompatible deps); the orchestrator resolves each executable from here. Omit a tool to fall back to a per-tool venv under tools/<name>/ or to PATH. `path` is the executable; `args` are prepended to every call.",
+  "tools": {
+    "ffmpeg": { "path": "ffmpeg" },
+    "demucs": { "path": "D:/worktrees/midi-music/.../tools/demucs/Scripts/demucs.exe" },
+    "basic-pitch": { "path": "D:/worktrees/midi-music/.../tools/basic-pitch/Scripts/basic-pitch.exe" },
+    "drums": { "path": "D:/worktrees/midi-music/.../tools/drums/Scripts/python.exe", "args": ["-m", "drum_adapter"] }
+  }
+}

@@ -122,8 +122,11 @@ def verify_outputs(track_number: int | None = None) -> None:
         manifest_path = en.ALBUM_ROOT / "album_manifest.json"
         if not manifest_path.exists():
             failures.append(f"{manifest_path} missing; run python build.py first")
-        elif manifest_path.read_bytes() != payloads["album_manifest.json"]:
-            failures.append(f"{manifest_path} is stale; rebuild before verifying")
+        else:
+            actual_manifest = manifest_path.read_text(encoding="utf-8")
+            expected_manifest = payloads["album_manifest.json"].decode("utf-8")
+            if actual_manifest != expected_manifest:
+                failures.append(f"{manifest_path} is stale; rebuild before verifying")
     results = verify.run_all([(b["spec"], b["score"]) for b in built], suite=(track_number is None))
     for name, fails in results:
         status = "PASS" if not fails else f"FAIL ({len(fails)})"

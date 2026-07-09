@@ -70,11 +70,14 @@ fn vibrato_family(program: u8) -> bool {
 }
 
 /// Families that answer channel aftertouch: the vibrato families plus
-/// organs, string/choir SawStacks and pads. Drums and the Modal
-/// (piano/bell) family are left alone — pressure cannot swell a struck
-/// string.
+/// Modal, organ, string/choir SawStack and pad programs. Drums stay out:
+/// pressure is not a pitched-body gesture for percussion.
 fn aftertouch_family(program: u8) -> bool {
-    vibrato_family(program) || matches!(program, 16..=23 | 48..=54 | 80..=95)
+    vibrato_family(program)
+        || matches!(
+            program,
+            0..=23 | 47 | 48..=54 | 80..=95 | 96 | 98 | 100 | 102 | 108
+        )
 }
 
 fn vowel_family(program: u8) -> bool {
@@ -2704,6 +2707,205 @@ mod tests {
             (ratio - 2f32.powf(50.0 / 1200.0)).abs() < 0.008,
             "fine-tune ratio {ratio} (plain {plain} -> fine {fine})"
         );
+    }
+
+    /// Req MM-REQ-KILN-00008: Modal and Organ voices must honour the
+    /// engine's composed pitch multiplier, not swallow it in the trait default.
+    #[test]
+    fn modal_organ_pitch_controls_move_sustained_notes() {
+        let sr = 44100.0;
+        let cc = |num, val| EvKind::Cc { ch: 0, num, val };
+        let cases = [(11u8, "modal vibraphone"), (19u8, "organ")];
+
+        let render_case =
+            |prog: u8, mut ev: Vec<(f64, EvKind)>, seconds: f64| -> (Vec<f32>, Stats) {
+                let mut base = vec![
+                    (0.0, EvKind::Prog { ch: 0, prog }),
+                    (0.0, cc(91, 0)),
+                    (0.0, cc(93, 0)),
+                    (0.0, cc(94, 0)),
+                ];
+                base.append(&mut ev);
+                let (stereo, stats) = render(&test_song(base, seconds), &test_opts(sr));
+                (left(&stereo), stats)
+            };
+        let peak = |sig: &[f32], t0: f32, t1: f32, lo: f32, hi: f32| {
+            crate::testutil::peak_locate(&sig[(t0 * sr) as usize..(t1 * sr) as usize], sr, lo, hi)
+        };
+
+        for (prog, name) in cases {
+            let (bent, _) = render_case(
+                prog,
+                vec![
+                    (
+                        0.05,
+                        EvKind::NoteOn {
+                            ch: 0,
+                            key: 69,
+                            vel: 110,
+                        },
+                    ),
+                    (1.0, EvKind::Bend { ch: 0, semis: 1.0 }),
+                    (2.45, EvKind::NoteOff { ch: 0, key: 69 }),
+                ],
+                2.7,
+            );
+            let pre = peak(&bent, 0.35, 0.80, 420.0, 460.0);
+            let post = peak(&bent, 1.45, 2.10, 445.0, 490.0);
+            assert!((pre - 440.0).abs() < 8.0, "{name}: pre-bend pitch {pre}");
+            assert!(
+                (post - 466.2).abs() < 10.0,
+                "{name}: pitch bend stayed inert, got {post} Hz"
+            );
+
+            let (wide, _) = render_case(
+                prog,
+                vec![
+                    (0.01, cc(101, 0)),
+                    (0.01, cc(100, 0)),
+                    (0.01, cc(6, 12)),
+                    (0.04, EvKind::Bend { ch: 0, semis: 1.0 }),
+                    (
+                        0.05,
+                        EvKind::NoteOn {
+                            ch: 0,
+                            key: 69,
+                            vel: 110,
+                        },
+                    ),
+                    (1.2, EvKind::NoteOff { ch: 0, key: 69 }),
+                ],
+                1.5,
+            );
+            let wide_pitch = peak(&wide, 0.35, 0.90, 585.0, 660.0);
+            assert!(
+                (wide_pitch - 622.3).abs() < 18.0,
+                "{name}: RPN bend range stayed inert, got {wide_pitch} Hz"
+            );
+
+            let (plain, _) = render_case(
+                prog,
+                vec![
+                    (
+                        0.05,
+                        EvKind::NoteOn {
+                            ch: 0,
+                            key: 69,
+                            vel: 110,
+                        },
+                    ),
+                    (1.2, EvKind::NoteOff { ch: 0, key: 69 }),
+                ],
+                1.5,
+            );
+            let (fine, _) = render_case(
+                prog,
+                vec![
+                    (0.01, cc(101, 0)),
+                    (0.01, cc(100, 1)),
+                    (0.01, cc(6, 96)),
+                    (
+                        0.05,
+                        EvKind::NoteOn {
+                            ch: 0,
+                            key: 69,
+                            vel: 110,
+                        },
+                    ),
+                    (1.2, EvKind::NoteOff { ch: 0, key: 69 }),
+                ],
+                1.5,
+            );
+            let plain_pitch = peak(&plain, 0.35, 0.90, 420.0, 460.0);
+            let fine_pitch = peak(&fine, 0.35, 0.90, 440.0, 475.0);
+            let want_ratio = 2f32.powf(50.0 / 1200.0);
+            let ratio = fine_pitch / plain_pitch;
+            assert!(
+                (ratio - want_ratio).abs() < 0.012,
+                "{name}: RPN fine tune stayed inert, ratio {ratio}"
+            );
+
+            let (glide, stats) = render_case(
+                prog,
+                vec![
+                    (
+                        0.05,
+                        EvKind::NoteOn {
+                            ch: 0,
+                            key: 69,
+                            vel: 100,
+                        },
+                    ),
+                    (0.45, EvKind::NoteOff { ch: 0, key: 69 }),
+                    (1.0, cc(65, 127)),
+                    (1.0, cc(5, 109)),
+                    (
+                        2.0,
+                        EvKind::NoteOn {
+                            ch: 0,
+                            key: 81,
+                            vel: 110,
+                        },
+                    ),
+                    (3.7, EvKind::NoteOff { ch: 0, key: 81 }),
+                ],
+                4.0,
+            );
+            assert_eq!(
+                stats.voices_spawned, 2,
+                "{name}: portamento should spawn a new voice"
+            );
+            let early = peak(&glide, 2.06, 2.18, 405.0, 485.0);
+            let late = peak(&glide, 3.25, 3.60, 820.0, 940.0);
+            assert!(
+                early < 500.0,
+                "{name}: glide did not start near old pitch: {early}"
+            );
+            assert!(
+                (late - 880.0).abs() < 35.0,
+                "{name}: glide did not settle to target: {late}"
+            );
+
+            let (pressed, _) = render_case(
+                prog,
+                vec![
+                    (
+                        0.05,
+                        EvKind::NoteOn {
+                            ch: 0,
+                            key: 69,
+                            vel: 100,
+                        },
+                    ),
+                    (0.10, EvKind::Aftertouch { ch: 0, val: 127 }),
+                    (2.5, EvKind::NoteOff { ch: 0, key: 69 }),
+                ],
+                2.7,
+            );
+            let (unpressed, _) = render_case(
+                prog,
+                vec![
+                    (
+                        0.05,
+                        EvKind::NoteOn {
+                            ch: 0,
+                            key: 69,
+                            vel: 100,
+                        },
+                    ),
+                    (2.5, EvKind::NoteOff { ch: 0, key: 69 }),
+                ],
+                2.7,
+            );
+            let a = (1.25 * sr) as usize;
+            let b = (2.30 * sr) as usize;
+            let plain_spread = pitch_spread(&unpressed[a..b], sr, 405.0, 485.0);
+            let pressed_spread = pitch_spread(&pressed[a..b], sr, 405.0, 485.0);
+            assert!(
+                pressed_spread > 5.0 && pressed_spread > 1.5 * plain_spread,
+                "{name}: aftertouch vibrato inert, plain {plain_spread} Hz vs pressed {pressed_spread} Hz"
+            );
+        }
     }
 
     /// CC5/CC65 portamento spawns a fresh, normally-attacked voice that

@@ -1530,6 +1530,12 @@ struct Pipe {
     active: bool,
 }
 
+#[derive(Clone, Copy)]
+struct PitchScoop {
+    ratio: f32,
+    slew: f32,
+}
+
 pub struct Organ {
     harms: Vec<Pipe>,
     env: Adsr,
@@ -1541,6 +1547,9 @@ pub struct Organ {
     click_amp: f32,
     click_decay: f32,
     click_filt: Biquad,
+    reed_noise_amp: f32,
+    reed_noise_filt: Biquad,
+    scoop: Option<PitchScoop>,
     rng: Rng,
     drive: f32,
     amp: f32,
@@ -1561,6 +1570,7 @@ impl Organ {
         trem_hz: f32,
         trem_depth: f32,
         chiff: f32,
+        click: f32,
         drive: f32,
         amp: f32,
     ) -> Self {
@@ -1588,9 +1598,12 @@ impl Organ {
             chiff_amp: chiff * vel_amp(vel),
             chiff_decay: t60_mul(0.03, sr),
             chiff_filt: Biquad::bandpass((f * 2.0).min(sr * 0.4), 2.0, sr),
-            click_amp: 0.09 * vel_amp(vel),
+            click_amp: click * vel_amp(vel),
             click_decay: t60_mul(0.004, sr),
             click_filt: Biquad::highpass(2000.0, 0.7, sr),
+            reed_noise_amp: 0.0,
+            reed_noise_filt: Biquad::bandpass((f * 3.0).clamp(240.0, sr * 0.4), 0.8, sr),
+            scoop: None,
             rng,
             drive,
             amp: amp * (0.4 + 0.6 * vel_amp(vel)),
@@ -1600,25 +1613,61 @@ impl Organ {
         }
     }
 
+    fn with_reed_noise(mut self, amp: f32, center_hz: f32, q: f32) -> Self {
+        self.reed_noise_amp = amp;
+        self.reed_noise_filt = Biquad::bandpass(center_hz.clamp(180.0, self.sr * 0.4), q, self.sr);
+        self
+    }
+
+    fn with_pitch_scoop(mut self, start_ratio: f32, settle_s: f32) -> Self {
+        self.scoop = Some(PitchScoop {
+            ratio: start_ratio,
+            slew: 1.0 - (-1.0 / (settle_s.max(0.01) * self.sr)).exp(),
+        });
+        self.apply_pitch();
+        self
+    }
+
+    fn scoop_ratio(&self) -> f32 {
+        self.scoop.map_or(1.0, |s| s.ratio)
+    }
+
     fn apply_pitch(&mut self) {
+        let pitch = self.bend * self.scoop_ratio();
         for pipe in &mut self.harms {
-            let f = self.base_f * pipe.ratio * self.bend;
+            let f = self.base_f * pipe.ratio * pitch;
             pipe.active = f < self.sr * 0.45;
             if pipe.active {
                 pipe.osc.set_freq(f, self.sr);
             }
         }
     }
+
+    fn advance_scoop(&mut self) {
+        let Some(scoop) = self.scoop.as_mut() else {
+            return;
+        };
+        if (1.0 - scoop.ratio).abs() < 1e-5 {
+            scoop.ratio = 1.0;
+            return;
+        }
+        scoop.ratio += (1.0 - scoop.ratio) * scoop.slew;
+        self.apply_pitch();
+    }
 }
 
 impl Voice for Organ {
     fn render(&mut self, out: &mut [f32]) -> bool {
         for o in out.iter_mut() {
+            self.advance_scoop();
             let mut s = 0.0;
             for pipe in &mut self.harms {
                 if pipe.active {
                     s += pipe.amp * pipe.osc.next();
                 }
+            }
+            if self.reed_noise_amp > 1e-6 {
+                s += self.reed_noise_filt.process(self.rng.white()) * self.reed_noise_amp;
             }
             if self.chiff_amp > 1e-5 {
                 s += self.chiff_filt.process(self.rng.white()) * self.chiff_amp;
@@ -1663,20 +1712,27 @@ impl Voice for Organ {
     }
 }
 
-/// Tremulant (rate Hz, depth) each organ program idles at. The CC1 mod
-/// wheel morphs the rate from here toward the Leslie's fast speed — the
-/// slewing lives in the engine, per channel, so all of a channel's organ
-/// voices share one rotor.
+/// Base tremulant/musette AM (rate Hz, depth) for GM16-23. The engine only
+/// morphs GM16-19 from these values toward Leslie-fast; free reeds keep their
+/// built-in motion or, for GM22, use CC1 as pitch vibrato.
 pub fn organ_trem_base(program: u8) -> (f32, f32) {
     match program {
         18 => (6.5, 0.10),
         16 | 17 => (5.5, 0.06),
+        20 | 22 => (4.2, 0.0),
+        21 => (5.0, 0.015),
+        23 => (5.8, 0.018),
         _ => (4.2, 0.04),
     }
 }
 
+fn cent_ratio(cents: f32) -> f32 {
+    2f32.powf(cents / 1200.0)
+}
+
 fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
     let (trem_hz, trem_depth) = organ_trem_base(program);
+    let f = key_freq(key);
     match program {
         18 => Organ::new(
             key,
@@ -1695,6 +1751,7 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             trem_hz,
             trem_depth,
             0.10,
+            0.09,
             1.8,
             0.32,
         ),
@@ -1715,10 +1772,11 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             trem_hz,
             trem_depth,
             0.08,
+            0.09,
             0.0,
             0.32,
         ),
-        _ => Organ::new(
+        19 => Organ::new(
             key,
             vel,
             sr,
@@ -1735,9 +1793,105 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             trem_hz,
             trem_depth,
             0.20,
+            0.09,
             0.0,
             0.32,
         ),
+        20 => Organ::new(
+            key,
+            vel,
+            sr,
+            seed,
+            &[
+                (1.0, 1.0),
+                (1.5, 0.18),
+                (2.0, 0.34),
+                (2.5, 0.14),
+                (3.0, 0.20),
+                (3.5, 0.12),
+                (4.0, 0.10),
+                (4.5, 0.10),
+                (5.0, 0.06),
+            ],
+            Adsr::new(0.095, 0.08, 0.96, 0.22, sr),
+            trem_hz,
+            trem_depth,
+            0.0,
+            0.0,
+            0.0,
+            0.30,
+        )
+        .with_reed_noise(0.035, (f * 3.6).clamp(700.0, 2400.0), 0.75),
+        21 => Organ::new(
+            key,
+            vel,
+            sr,
+            seed,
+            &[
+                (cent_ratio(-16.0), 0.58),
+                (1.0, 0.92),
+                (cent_ratio(16.0), 0.58),
+                (2.0, 0.24),
+                (3.0, 0.10),
+                (4.0, 0.05),
+            ],
+            Adsr::new(0.040, 0.08, 0.98, 0.18, sr),
+            trem_hz,
+            trem_depth,
+            0.0,
+            0.0,
+            0.0,
+            0.22,
+        )
+        .with_reed_noise(0.018, (f * 3.4).clamp(700.0, 2300.0), 0.8),
+        22 => Organ::new(
+            key,
+            vel,
+            sr,
+            seed,
+            &[
+                (1.0, 1.0),
+                (1.5, 0.30),
+                (2.0, 0.30),
+                (2.5, 0.21),
+                (3.0, 0.16),
+                (3.5, 0.17),
+                (4.0, 0.07),
+                (4.5, 0.14),
+            ],
+            Adsr::new(0.095, 0.04, 0.94, 0.14, sr),
+            trem_hz,
+            trem_depth,
+            0.0,
+            0.0,
+            0.0,
+            0.30,
+        )
+        .with_reed_noise(0.070, (f * 4.0).clamp(900.0, 3200.0), 0.65)
+        .with_pitch_scoop(cent_ratio(-110.0), 0.085),
+        23 => Organ::new(
+            key,
+            vel,
+            sr,
+            seed,
+            &[
+                (cent_ratio(-22.0), 0.54),
+                (1.0, 0.86),
+                (cent_ratio(22.0), 0.54),
+                (2.0, 0.26),
+                (3.0, 0.12),
+                (4.0, 0.06),
+            ],
+            Adsr::new(0.040, 0.07, 0.98, 0.18, sr),
+            trem_hz,
+            trem_depth,
+            0.0,
+            0.0,
+            0.0,
+            0.21,
+        )
+        .with_reed_noise(0.020, (f * 3.5).clamp(750.0, 2600.0), 0.75),
+        _ => unreachable!("organ() only handles GM16-23"),
     }
 }
 
@@ -4061,6 +4215,168 @@ mod tests {
 
     fn max_abs(s: &[f32]) -> f32 {
         s.iter().map(|x| x.abs()).fold(0.0, f32::max)
+    }
+
+    fn off_harmonic_residual(seg: &[f32], sr: f32, f0: f32) -> f32 {
+        let fund = band_rms(seg, sr, f0, 18.0).max(1e-9);
+        let off = [1.5, 2.5, 3.5, 4.5]
+            .iter()
+            .map(|m| band_rms(seg, sr, f0 * *m, 18.0))
+            .sum::<f32>()
+            / 4.0;
+        off / fund
+    }
+
+    fn low_rate_am_depth(seg: &[f32], sr: f32) -> f32 {
+        let mut lp1 = OnePole::lowpass(60.0, sr);
+        let mut lp2 = OnePole::lowpass(60.0, sr);
+        let env: Vec<f32> = seg
+            .iter()
+            .map(|&x| lp2.process(lp1.process(x.abs())))
+            .collect();
+        let mean = env.iter().sum::<f32>() / env.len() as f32;
+        let mut bp = Biquad::bandpass(5.5, 0.9, sr);
+        let am: Vec<f32> = env.iter().map(|&x| bp.process(x - mean)).collect();
+        rms(&am) / mean.max(1e-9)
+    }
+
+    fn render_hash(samples: &[f32]) -> u64 {
+        samples.iter().fold(0xcbf2_9ce4_8422_2325, |h, x| {
+            (h ^ x.to_bits() as u64).wrapping_mul(0x0000_0100_0000_01b3)
+        })
+    }
+
+    #[test]
+    fn reed_organ_accordion_harmonica_have_free_reed_character() {
+        let sr = 44100.0;
+        let key = 69;
+        let vel = 104;
+        let seed = 0x5eed;
+        let f0 = key_freq(key);
+
+        for program in 20..=23 {
+            let mut v = make(program, key, vel, sr, seed, false);
+            assert_eq!(v.kind(), "organ", "GM{program} must route through make()");
+            let mut buf = vec![0f32; (0.25 * sr) as usize];
+            assert!(v.render(&mut buf), "GM{program} should sustain");
+            assert!(
+                rms(&buf) > 1e-4 && buf.iter().all(|x| x.is_finite()),
+                "GM{program} render invalid"
+            );
+        }
+
+        let legacy_hashes: Vec<(u8, u64)> = (16u8..=19)
+            .map(|program| {
+                let routed = render_program(program, key, vel, 0.5, seed);
+                (program, render_hash(&routed))
+            })
+            .collect();
+        assert_eq!(
+            legacy_hashes,
+            vec![
+                (16u8, 7697346571575327780),
+                (17, 7697346571575327780),
+                (18, 2825932507103733612),
+                (19, 11750116236685652893),
+            ],
+            "GM16-19 legacy organ hashes"
+        );
+
+        let click_ratio = |program| {
+            let s = render_program(program, key, vel, 0.7, seed ^ program as u32);
+            let click = hp_rms(segment(&s, sr, 0.0, 0.008), sr, 2500.0);
+            let body = rms(segment(&s, sr, 0.08, 0.22)).max(1e-9);
+            click / body
+        };
+        let gm19_click = click_ratio(19);
+        assert!(gm19_click > 0.030, "GM19 click floor: {gm19_click:.4}");
+        for program in 20..=23 {
+            let r = click_ratio(program);
+            assert!(
+                r <= gm19_click * 0.35,
+                "GM{program} onset too clicky: {r:.4} vs GM19 {gm19_click:.4}"
+            );
+        }
+
+        let gm19 = render_program(19, key, vel, 0.9, seed);
+        let gm20 = render_program(20, key, vel, 0.9, seed);
+        let gm20_body = segment(&gm20, sr, 0.26, 0.60);
+        let gm20_pitch = peak_locate(gm20_body, sr, f0 * 0.97, f0 * 1.03);
+        assert!(
+            (gm20_pitch / f0 - 1.0).abs() <= 0.02,
+            "GM20 late pitch {gm20_pitch:.1} Hz vs {f0:.1}"
+        );
+        let gm20_res = off_harmonic_residual(gm20_body, sr, f0);
+        let gm19_res = off_harmonic_residual(segment(&gm19, sr, 0.26, 0.60), sr, f0);
+        assert!(
+            gm20_res >= 1.5 * gm19_res,
+            "GM20 bellows/free-reed residual {gm20_res:.4} vs GM19 {gm19_res:.4}"
+        );
+
+        let am = |program| {
+            let s = render_program(program, key, vel, 1.0, seed ^ 0x3333);
+            let seg = segment(&s, sr, 0.20, 0.90);
+            let (peak, rate) = env_autocorr_peak(seg, sr, 1.0 / 8.0, 1.0 / 3.0);
+            (
+                low_rate_am_depth(seg, sr),
+                peak,
+                rate,
+                rms(seg),
+                max_abs(seg),
+            )
+        };
+        let (d20, _p20, _r20, rms20, _mx20) = am(20);
+        for program in [21u8, 23] {
+            let (depth, peak, rate, body, peak_abs) = am(program);
+            assert!(
+                (3.0..=8.0).contains(&rate) && peak >= 0.15 && depth >= 2.0 * d20.max(0.002),
+                "GM{program} musette AM depth/peak/rate {depth:.4}/{peak:.3}/{rate:.2} Hz vs GM20 depth {d20:.4}"
+            );
+            assert!(
+                (0.6 * rms20..=1.8 * rms20).contains(&body),
+                "GM{program} body RMS {body:.5} vs GM20 {rms20:.5}"
+            );
+            assert!(
+                peak_abs < 2.5 * rms20,
+                "GM{program} peak {peak_abs:.5} too hot vs GM20 RMS {rms20:.5}"
+            );
+        }
+
+        let gm22 = render_program(22, key, vel, 0.7, seed);
+        let early_pitch = peak_locate(segment(&gm22, sr, 0.015, 0.055), sr, f0 * 0.90, f0 * 1.03);
+        let late_pitch = peak_locate(segment(&gm22, sr, 0.16, 0.36), sr, f0 * 0.97, f0 * 1.03);
+        assert!(
+            early_pitch <= late_pitch * 0.985,
+            "GM22 scoop missing: early {early_pitch:.1} late {late_pitch:.1}"
+        );
+        assert!(
+            (late_pitch / f0 - 1.0).abs() <= 0.02,
+            "GM22 late pitch {late_pitch:.1} Hz vs {f0:.1}"
+        );
+        let gm22_res = off_harmonic_residual(segment(&gm22, sr, 0.26, 0.60), sr, f0);
+        assert!(
+            gm22_res >= 1.3 * gm20_res,
+            "GM22 breath residual {gm22_res:.4} vs GM20 {gm20_res:.4}"
+        );
+
+        let mut harmonica = organ(22, key, vel, sr, seed);
+        let mut warm = vec![0f32; (0.16 * sr) as usize];
+        harmonica.render(&mut warm);
+        let bend = 2f32.powf(2.0 / 12.0);
+        harmonica.set_pitch(bend);
+        harmonica.set_pitch(bend);
+        let mut bent = vec![0f32; (0.24 * sr) as usize];
+        harmonica.render(&mut bent);
+        let bent_pitch = peak_locate(
+            &bent[(0.08 * sr) as usize..],
+            sr,
+            f0 * bend * 0.97,
+            f0 * bend * 1.03,
+        );
+        assert!(
+            (bent_pitch / (f0 * bend) - 1.0).abs() <= 0.02,
+            "GM22 set_pitch reset the scoop or missed bend: {bent_pitch:.1}"
+        );
     }
 
     #[test]

@@ -57,17 +57,25 @@ const AT_VIB_CENTS: f32 = 25.0; // pitch depth at full pressure
 const AT_GAIN_DB: f32 = 2.5; // gain lift at full pressure
 
 /// Melodic sustained families that take the engine-level CC1 vibrato:
-/// plucks (except palm-mute 28), bowed strings, SawStack strings/choir, winds,
-/// synth leads. Drums, organs, pads and modal instruments (piano, bells) are
-/// left alone.
+/// plucks (except palm-mute 28), bowed strings, SawStack strings/choir, harmonica,
+/// winds, synth leads. Drums, Leslie organs, pads and modal instruments (piano,
+/// bells) are left alone.
 fn vibrato_family(program: u8) -> bool {
     // guitars (no palm-mute 28), basses, bowed strings, harp, SawStack strings/choir,
     // brass (56-63), reeds (64-71), winds, leads, banjo, fiddle. Orchestra hit (55)
     // is excluded — a one-shot stab does not vibrato (symmetric with timpani).
     matches!(
         program,
-        24..=27 | 29..=46 | 48..=54 | 56..=71 | 72..=79 | 80..=87 | 104..=107 | 110
+        22 | 24..=27 | 29..=46 | 48..=54 | 56..=71 | 72..=79 | 80..=87 | 104..=107 | 110
     )
+}
+
+fn organ_leslie_family(program: u8) -> bool {
+    matches!(program, 16..=19)
+}
+
+fn cc1_pitch_vibrato_target(program: u8, alt: bool) -> bool {
+    vibrato_family(program) && !(alt && matches!(program, 52..=54 | 22))
 }
 
 /// Families that answer channel aftertouch: the vibrato families plus
@@ -266,7 +274,7 @@ impl Drive {
 /// Per-program bus sends (chorus, echo). Reverb stays CC91-authored.
 fn fx_profile(program: u8) -> (f32, f32) {
     match program {
-        16..=23 => (0.20, 0.0),        // organs: gentle ensemble
+        16..=23 => (0.20, 0.0),        // organs/free reeds: gentle ensemble
         24 | 25 => (0.12, 0.08),       // acoustic guitars: a touch of both
         26..=31 => (0.10, 0.30),       // electric guitars: the delayed-lead sound
         40..=45 | 110 => (0.10, 0.10), // fiddle
@@ -637,6 +645,7 @@ impl Default for Stats {
 struct Active {
     ch: u8,
     key: u8,
+    program: u8,     // spawn-time program: program changes affect future notes
     held: bool,      // NoteOff arrived while the sustain pedal was down
     sost: bool,      // CC66: was ringing when the sostenuto pedal went down
     sost_held: bool, // NoteOff deferred by the sostenuto pedal
@@ -844,6 +853,11 @@ impl EngineCore {
             self.active.push(Active {
                 ch,
                 key,
+                program: if ch == 9 {
+                    128
+                } else {
+                    self.strips[ci].program
+                },
                 held: false,
                 sost: false,
                 sost_held: false,
@@ -1112,7 +1126,6 @@ impl EngineCore {
         self.rederive_program_defaults(ch);
 
         let program = self.strips[ci].program;
-        let organ_trem = matches!(program, 16..=23).then(|| voices::organ_trem_base(program));
         let choir_vowel = matches!(program, 52..=54).then(|| vowel_at(0.0));
         for a in self.active.iter_mut().filter(|a| a.ch == ch) {
             if a.held || a.sost_held {
@@ -1123,7 +1136,8 @@ impl EngineCore {
             a.sost_held = false;
             a.glide = None;
             a.voice.set_pitch(1.0);
-            if let Some((rate, depth)) = organ_trem {
+            if organ_leslie_family(a.program) {
+                let (rate, depth) = voices::organ_trem_base(a.program);
                 a.voice.set_trem(rate, depth);
             }
             if let Some((freqs, qs, gains)) = choir_vowel {
@@ -1140,15 +1154,29 @@ impl EngineCore {
         for (ci, strip) in self.strips.iter_mut().enumerate() {
             strip.mod_cur += self.expr_smooth * (strip.mod_target - strip.mod_cur);
             let on = strip.mod_cur > 1e-3;
-            let authored_organ = strip.mod_authored && matches!(strip.program, 16..=23);
-            if ci == 9 || (!on && !strip.mod_engaged && !authored_organ) {
+            let ch = ci as u8;
+            let leslie_program = self
+                .active
+                .iter()
+                .find(|a| a.ch == ch && organ_leslie_family(a.program))
+                .map(|a| a.program)
+                .or_else(|| {
+                    (strip.mod_authored && organ_leslie_family(strip.program))
+                        .then_some(strip.program)
+                });
+            let active_pitch_vibrato = self
+                .active
+                .iter()
+                .any(|a| a.ch == ch && cc1_pitch_vibrato_target(a.program, a.alt));
+            let pending_pitch_vibrato = vibrato_family(strip.program);
+            if ci == 9 || (!on && !strip.mod_engaged && leslie_program.is_none()) {
                 continue;
             }
             let m = if on { strip.mod_cur } else { 0.0 };
-            let ch = ci as u8;
-            if matches!(strip.program, 16..=23) {
-                let (base_rate, base_depth) = voices::organ_trem_base(strip.program);
-                if !strip.mod_engaged {
+            let mut engaged = false;
+            if let Some(program) = leslie_program {
+                let (base_rate, base_depth) = voices::organ_trem_base(program);
+                if !strip.mod_engaged || strip.leslie_depth <= 0.0 {
                     strip.leslie_rate = if strip.mod_authored {
                         LESLIE_SLOW_HZ
                     } else {
@@ -1164,12 +1192,16 @@ impl EngineCore {
                 let target_depth = base_depth + LESLIE_DEPTH_ADD * m;
                 strip.leslie_rate += self.leslie_k * (target_rate - strip.leslie_rate);
                 strip.leslie_depth += self.leslie_k * (target_depth - strip.leslie_depth);
-                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                for a in self
+                    .active
+                    .iter_mut()
+                    .filter(|a| a.ch == ch && organ_leslie_family(a.program))
+                {
                     a.voice.set_trem(strip.leslie_rate, strip.leslie_depth);
                 }
-                strip.mod_engaged =
-                    strip.mod_authored || on || (strip.leslie_rate - base_rate).abs() > 0.01;
-            } else if vibrato_family(strip.program) {
+                engaged |= strip.mod_authored || on || (strip.leslie_rate - base_rate).abs() > 0.01;
+            }
+            if (on || strip.mod_engaged) && (active_pitch_vibrato || pending_pitch_vibrato) {
                 strip.vib_phase += TAU * VIB_RATE_HZ * n as f32 / sr;
                 if strip.vib_phase > TAU {
                     strip.vib_phase -= TAU;
@@ -1184,19 +1216,23 @@ impl EngineCore {
                     // coherent set_pitch warble); choir gets no CC1. Every default
                     // voice takes the identical set_pitch path, so a channel with
                     // no alt voices is byte-for-byte unchanged.
-                    if a.alt && matches!(strip.program, 48..=51) {
-                        let base = crate::altbank::strings_vib_base(strip.program);
+                    if a.alt && matches!(a.program, 48..=51) {
+                        let base = crate::altbank::strings_vib_base(a.program);
                         a.voice.set_vib(base + (ST_CC1_VIB_DEPTH - base) * m);
-                    } else if a.alt && matches!(strip.program, 52..=54) {
+                    } else if a.alt && matches!(a.program, 52..=54) {
                         // alt-bank choir: no CC1 pitch vibrato (v0.9)
-                    } else {
+                    } else if a.alt && a.program == 22 {
+                        // alt-bank 22 delegates to the default voice, but keeps
+                        // the alt bank's spawn-time CC1 semantics.
+                    } else if vibrato_family(a.program) {
                         a.voice.set_pitch(mult);
                     }
                 }
-                strip.mod_engaged = on;
-            } else {
-                strip.mod_engaged = false;
+                engaged |= on;
+            } else if !active_pitch_vibrato {
+                strip.vib_mult = 1.0;
             }
+            strip.mod_engaged = engaged;
         }
 
         for (ci, strip) in self.strips.iter_mut().enumerate() {
@@ -1225,7 +1261,7 @@ impl EngineCore {
                     // vib_mult factor must not compose into their aftertouch
                     // pitch (v0.9 kept 48-54 out of vibrato_family; aftertouch
                     // still applies). Default voices are byte-for-byte unchanged.
-                    let vm = if a.alt && matches!(strip.program, 48..=54) {
+                    let vm = if a.alt && (matches!(a.program, 48..=54) || a.program == 22) {
                         1.0
                     } else {
                         strip.vib_mult
@@ -1249,7 +1285,7 @@ impl EngineCore {
                     let done = semis.abs() < 0.005;
                     let gm = if done { 1.0 } else { 2f32.powf(*semis / 12.0) };
                     // Same alt-orchestral CC1 exclusion as the aftertouch site.
-                    let vm = if a.alt && matches!(strip.program, 48..=54) {
+                    let vm = if a.alt && (matches!(a.program, 48..=54) || a.program == 22) {
                         1.0
                     } else {
                         strip.vib_mult
@@ -1972,6 +2008,69 @@ mod tests {
         hi - lo
     }
 
+    fn render_cc1_program(program: u8, cc1: Option<u8>, cc1_before_note: bool) -> Vec<f32> {
+        let mut events = vec![
+            (
+                0.0,
+                EvKind::Prog {
+                    ch: 0,
+                    prog: program,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+        ];
+        if cc1_before_note {
+            if let Some(val) = cc1 {
+                events.push((0.0, EvKind::Cc { ch: 0, num: 1, val }));
+            }
+        }
+        events.push((
+            0.05,
+            EvKind::NoteOn {
+                ch: 0,
+                key: 69,
+                vel: 100,
+            },
+        ));
+        if !cc1_before_note {
+            if let Some(val) = cc1 {
+                events.push((0.60, EvKind::Cc { ch: 0, num: 1, val }));
+            }
+        }
+        events.push((3.85, EvKind::NoteOff { ch: 0, key: 69 }));
+        left(&render(&test_song(events, 4.0), &test_opts(44100.0)).0)
+    }
+
+    fn render_cc1_events(events: Vec<(f64, EvKind)>) -> Vec<f32> {
+        left(&render(&test_song(events, 4.0), &test_opts(44100.0)).0)
+    }
+
+    fn am_rate(mono: &[f32], sr: f32, t0: f32, t1: f32) -> f32 {
+        let mut env_lps = [OnePole::lowpass(12.0, sr); 4];
+        let env: Vec<f32> = mono
+            .iter()
+            .map(|&x| {
+                let mut y = x.abs();
+                for lp in env_lps.iter_mut() {
+                    y = lp.process(y);
+                }
+                y
+            })
+            .collect();
+        let mut trend = OnePole::lowpass(1.2, sr);
+        let det: Vec<f32> = env.iter().map(|&x| x - trend.process(x)).collect();
+        let seg = &det[(t0 * sr) as usize..(t1 * sr) as usize];
+        let crossings = seg.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count();
+        crossings as f32 / (t1 - t0)
+    }
+
     fn render_bowed_program_with_mod(program: u8, mod_val: u8) -> Vec<f32> {
         let song = test_song(
             vec![
@@ -2261,6 +2360,313 @@ mod tests {
             sawstack_legato_render(89, Some(127)).1.voices_spawned,
             2,
             "pads must stay outside the CC68 slur family"
+        );
+    }
+
+    #[test]
+    fn gm22_cc1_is_harmonica_vibrato_not_leslie() {
+        let sr = 44100.0;
+
+        let gm19 = render_cc1_program(19, Some(127), true);
+        let gm19_early = am_rate(&gm19, sr, 0.15, 1.15);
+        let gm19_late = am_rate(&gm19, sr, 2.9, 3.9);
+        assert!(
+            gm19_late > gm19_early + 2.5 && gm19_late >= 5.5,
+            "GM19 Leslie ramp regressed: early {gm19_early:.2} Hz late {gm19_late:.2} Hz"
+        );
+
+        let gm22_plain = render_cc1_program(22, None, true);
+        let gm22_mod = render_cc1_program(22, Some(127), true);
+        let (a, b) = ((0.8 * sr) as usize, (2.2 * sr) as usize);
+        let plain_spread = cycle_freq_spread(&gm22_plain[a..b], sr);
+        let mod_spread = cycle_freq_spread(&gm22_mod[a..b], sr);
+        assert!(
+            mod_spread > 8.0 && mod_spread >= 2.0 * plain_spread.max(1.0),
+            "GM22 CC1 should be pitch vibrato, not inert: plain {plain_spread:.2} Hz mod {mod_spread:.2} Hz"
+        );
+        assert!(
+            !organ_leslie_family(22),
+            "GM22 must stay out of the Leslie controller branch"
+        );
+
+        for program in [20u8, 21, 23] {
+            assert!(
+                !organ_leslie_family(program),
+                "GM{program} must stay out of the Leslie controller branch"
+            );
+            let plain = render_cc1_program(program, None, true);
+            let modded = render_cc1_program(program, Some(127), true);
+            assert_eq!(modded, plain, "GM{program} CC1 must be inert");
+        }
+
+        let gm19_then_22 = render_cc1_events(vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 1,
+                    val: 127,
+                },
+            ),
+            (0.02, EvKind::Prog { ch: 0, prog: 22 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (3.85, EvKind::NoteOff { ch: 0, key: 69 }),
+        ]);
+        let changed_spread = cycle_freq_spread(&gm19_then_22[a..b], sr);
+        assert!(
+            changed_spread > 8.0,
+            "program change 19->22 lost GM22 CC1 vibrato: {changed_spread:.2} Hz"
+        );
+
+        let gm22_then_19 = render_cc1_events(vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 22 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 1,
+                    val: 127,
+                },
+            ),
+            (0.02, EvKind::Prog { ch: 0, prog: 19 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (3.85, EvKind::NoteOff { ch: 0, key: 69 }),
+        ]);
+        let back_early = am_rate(&gm22_then_19, sr, 0.15, 1.15);
+        let back_late = am_rate(&gm22_then_19, sr, 2.9, 3.9);
+        assert!(
+            back_late > back_early + 2.5 && back_late >= 5.5,
+            "program change 22->19 lost Leslie ramp: early {back_early:.2} late {back_late:.2}"
+        );
+
+        let held_gm19_after_prog22 = render_cc1_events(vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 1,
+                    val: 127,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (0.60, EvKind::Prog { ch: 0, prog: 22 }),
+            (3.85, EvKind::NoteOff { ch: 0, key: 69 }),
+        ]);
+        let held19_early = am_rate(&held_gm19_after_prog22, sr, 0.15, 1.15);
+        let held19_late = am_rate(&held_gm19_after_prog22, sr, 2.9, 3.9);
+        let held19_pitch_spread = cycle_freq_spread(&held_gm19_after_prog22[a..b], sr);
+        assert!(
+            held19_late > held19_early + 2.5 && held19_late >= 5.5,
+            "held GM19 lost Leslie after program change to GM22: early {held19_early:.2} late {held19_late:.2}"
+        );
+        assert!(
+            held19_pitch_spread < 4.0,
+            "held GM19 picked up GM22 pitch vibrato after program change: {held19_pitch_spread:.2} Hz"
+        );
+
+        let held_gm22_after_prog19 = render_cc1_events(vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 22 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 1,
+                    val: 127,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (0.60, EvKind::Prog { ch: 0, prog: 19 }),
+            (3.85, EvKind::NoteOff { ch: 0, key: 69 }),
+        ]);
+        let held22_pitch_spread = cycle_freq_spread(&held_gm22_after_prog19[a..b], sr);
+        assert!(
+            held22_pitch_spread > 8.0,
+            "held GM22 lost harmonica vibrato after program change to GM19: {held22_pitch_spread:.2} Hz"
+        );
+
+        let held_plain = render_cc1_program(22, None, false);
+        let held_mod = render_cc1_program(22, Some(127), false);
+        let held_plain_spread = cycle_freq_spread(&held_plain[(1.0 * sr) as usize..b], sr);
+        let held_mod_spread = cycle_freq_spread(&held_mod[(1.0 * sr) as usize..b], sr);
+        assert!(
+            held_mod_spread > held_plain_spread + 6.0,
+            "held GM22 note did not pick up CC1 vibrato: plain {held_plain_spread:.2} mod {held_mod_spread:.2}"
+        );
+
+        let reset = render_cc1_events(vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 1,
+                    val: 127,
+                },
+            ),
+            (
+                0.02,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 121,
+                    val: 0,
+                },
+            ),
+            (0.04, EvKind::Prog { ch: 0, prog: 22 }),
+            (
+                0.06,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (3.85, EvKind::NoteOff { ch: 0, key: 69 }),
+        ]);
+        let reset_early = am_rate(&reset, sr, 0.15, 1.15);
+        let reset_late = am_rate(&reset, sr, 2.9, 3.9);
+        let reset_spread = cycle_freq_spread(&reset[a..b], sr);
+        assert!(
+            reset_late <= reset_early + 2.0 && reset_spread < mod_spread * 0.6,
+            "GM reset leaked CC1 into GM22: AM {reset_early:.2}->{reset_late:.2}, spread {reset_spread:.2}"
+        );
+
+        let alt_plain = render_cc1_events(vec![
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
+            (0.0, EvKind::Prog { ch: 0, prog: 22 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (3.85, EvKind::NoteOff { ch: 0, key: 69 }),
+        ]);
+        let alt_mod = render_cc1_events(vec![
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
+            (0.0, EvKind::Prog { ch: 0, prog: 22 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 1,
+                    val: 127,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 69,
+                    vel: 100,
+                },
+            ),
+            (3.85, EvKind::NoteOff { ch: 0, key: 69 }),
+        ]);
+        assert_eq!(
+            alt_mod, alt_plain,
+            "alt-bank GM22 must not take default-bank CC1 vibrato"
         );
     }
 

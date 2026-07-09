@@ -1,14 +1,16 @@
-//! Placeholder crate reserving the `ferrosintesis` package name.
-//!
-//! The real crate will expose the modeled MIDI synthesizer currently developed
-//! in the `midi-music` repository.
+//! Library surface for ferrosintesis.
 
-#![forbid(unsafe_code)]
+pub mod live;
+pub mod offline;
 
-/// The reserved public crate name.
-pub const CRATE_NAME: &str = "ferrosintesis";
-
-/// Returns the reservation status for this placeholder release.
-pub fn status() -> &'static str {
-    "ferrosintesis is reserved for a modeled MIDI synthesizer in Rust"
-}
+pub(crate) mod altbank;
+pub(crate) mod drums;
+pub(crate) mod dsp;
+pub(crate) mod engine;
+pub(crate) mod midi;
+pub(crate) mod reverb;
+pub(crate) mod sampler;
+#[cfg(test)]
+pub(crate) mod testutil;
+pub(crate) mod voices;
+pub(crate) mod wav;

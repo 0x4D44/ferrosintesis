@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Could
-- **Area:** hollowsynth / voices dispatch
+- **Area:** ferrosintesis / voices dispatch
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::make`, `fable5/hollowsynth/src/voices.rs::tests::synth_fx_97_99_101_103_sustain_as_pads`, `fable5/hollowsynth/src/testutil.rs::guards::gm_routing_pins_voice_kinds`
-- **Satisfied-by:** `$null | deltic timeout 180 cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::make`, `crates/ferrosintesis/src/voices.rs::tests::synth_fx_97_99_101_103_sustain_as_pads`, `crates/ferrosintesis/src/testutil.rs::guards::gm_routing_pins_voice_kinds`
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

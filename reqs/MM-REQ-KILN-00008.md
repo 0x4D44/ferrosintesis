@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Should
-- **Area:** hollowsynth / voices (Modal, Organ)
+- **Area:** ferrosintesis / voices (Modal, Organ)
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::Modal::set_pitch`, `fable5/hollowsynth/src/voices.rs::Organ::set_pitch`, `fable5/hollowsynth/src/engine.rs::aftertouch_family`, `fable5/hollowsynth/src/engine.rs::tests::modal_organ_pitch_controls_move_sustained_notes`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | cargo test modal_organ_pitch_controls_move_sustained_notes --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::Modal::set_pitch`, `crates/ferrosintesis/src/voices.rs::Organ::set_pitch`, `crates/ferrosintesis/src/engine.rs::aftertouch_family`, `crates/ferrosintesis/src/engine.rs::tests::modal_organ_pitch_controls_move_sustained_notes`, `crates/ferrosintesis/README.md`
+- **Satisfied-by:** `$null | cargo test modal_organ_pitch_controls_move_sustained_notes --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

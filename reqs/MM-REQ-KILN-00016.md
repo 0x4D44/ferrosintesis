@@ -2,10 +2,10 @@
 
 - **State:** Accepted
 - **Priority:** Could
-- **Area:** hollowsynth / voices (Pluck)
+- **Area:** ferrosintesis / voices (Pluck)
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** `$null | cargo test harp_46_has_soundboard_and_harp_wound_law --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Satisfied-by:** `$null | cargo test harp_46_has_soundboard_and_harp_wound_law --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

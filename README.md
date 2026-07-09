@@ -14,15 +14,15 @@ Jarre, Hans Zimmer, Enigma, Max Richter…). The generators, the MIDI they produ
 ## Listen
 
 Most albums ship a committed, tagged `audio/*.opus` you can play directly (e.g.
-`fable5/Hollow Hill/audio/`) — the shareable listening copies, reproducible from the
+`albums/fable5/Hollow Hill/audio/`) — the shareable listening copies, reproducible from the
 committed MIDI plus the synth. Three long albums (**VIGIL**, **RIVERWAKE** and **The
 Long Turning**) ship as MIDI only; render them to `.opus` with `render_opus.py` (see
 [Reproduce & verify](#reproduce--verify)).
 
 ## The music
 
-### Claude Fable 5 — `fable5/`
-Ten albums voiced for **hollowsynth** (this repo's synth) — spanning idioms from Mike
+### Claude Fable 5 — `albums/fable5/`
+Ten albums voiced for **ferrosintesis** (this repo's synth) — spanning idioms from Mike
 Oldfield long-form to Jean-Michel Jarre, Enigma, Gabriel Knight and film score. These
 are the albums the synth is specifically tuned for.
 
@@ -54,18 +54,18 @@ are the albums the synth is specifically tuned for.
   against horn stabs, a 12/8 velvet middle, a 7/8 chase and a whammy dive.
 - **The Iron Tide** — *Hans Zimmer*, 3:33. A long cinematic build from a low-D piano
   pedal through string ostinato and taiko percussion to a full-voice horn theme
-  (at the `fable5/` root).
+  (at `albums/fable5/`).
 
-### Claude Opus 4.8 — `opus4-8/`
+### Claude Opus 4.8 — `albums/opus4-8/`
 - **VIGIL** — *Max Richter / Philip Glass / Howard Shore*, 53:12 · 12 parts. A
   neo-classical song-cycle for piano and chamber strings tracing one arc from grief to
   a resolution in D major, unified by a falling three-note memory motif.
 - **RIVERWAKE** — *Mike Oldfield / Amarok*, 59:50 (one unbroken track, in
-  `opus4-8/amarok/`).
+  `albums/opus4-8/amarok/`).
   Restless acoustic folk-prog across twelve movements that rarely repeat, keeping two
   of *Amarok*'s jokes: a false ending and a hidden Morse-code message.
 
-### GPT-5.5 — `gpt5-5/`
+### GPT-5.5 — `albums/gpt5-5/`
 - **Hours After Rain** — *cinematic-minimalist*, 57:56 · 12 tracks. Piano, strings,
   celesta and sparse low percussion tracing an arc through grief, urban tension,
   introspection and quiet, unresolved release.
@@ -73,7 +73,7 @@ are the albums the synth is specifically tuned for.
   continuous movement of 20 contrasting three-minute chapters for guitars, bass, organ,
   whistle and bells).
 
-### GPT-5.3 Spark — `gpt5-3-spark/`
+### GPT-5.3 Spark — `albums/gpt5-3-spark/`
 - **The Spark** — *cinematic-minimalist*, 57:28 · 12 parts. Piano, strings, celesta and
   low percussion as an arc from quiet introspection through urban pressure and grief to
   a cathartic crest and release.
@@ -81,7 +81,7 @@ are the albums the synth is specifically tuned for.
 ## How a track is made
 
 ```
-engine.py  ─▶  .mid  ─▶  hollowsynth  ─▶  .wav  ─▶  ropusenc  ─▶  .opus
+engine.py  ─▶  .mid  ─▶  ferrosintesis ─▶ .wav ─▶ ropusenc ─▶ .opus
 (Python)      committed   (Rust synth)   scratch    (Opus)       committed
 ```
 
@@ -93,7 +93,7 @@ engine.py  ─▶  .mid  ─▶  hollowsynth  ─▶  .wav  ─▶  ropusenc  �
   and the music is *composed to pass them* — `build.py --verify` runs the table. The
   newest albums add an `analyze.py` that re-checks key oracles against the rendered
   audio, because presence in the MIDI is not audibility in the render.
-- **[hollowsynth](fable5/hollowsynth/README.md)** is a zero-dependency Rust
+- **[ferrosintesis](crates/ferrosintesis/README.md)** is a zero-dependency Rust
   MIDI-to-WAV synthesizer — modeled instruments (not a sample library), with a thin
   LA-synthesis layer that crossfades real attack transients into the modeled sustain.
   It is *voiced* for the Fable 5 albums; the other composers' albums are faithful
@@ -106,12 +106,12 @@ engine.py  ─▶  .mid  ─▶  hollowsynth  ─▶  .wav  ─▶  ropusenc  �
 python build.py            # rebuild the .mid + manifest
 python build.py --verify   # re-parse the written MIDI and run every oracle
 
-# Build the synth (in fable5/hollowsynth/):
-cargo build --release
+# Build the synth CLI:
+cargo build --release -p ferrosintesis-cli
 cargo test                 # numeric audio oracles — this machine has no ears
 
 # Render every album's MIDI to tagged .opus (from the repo root):
-python render_opus.py      # needs a built hollowsynth + `ropusenc` on PATH
+python render_opus.py      # needs a built ferrosintesis CLI + `ropusenc` on PATH
 ```
 
 Python is standard-library only, so a bare `python3` is enough. `ropusenc` comes from
@@ -119,14 +119,15 @@ the sibling `ropus` project.
 
 ## Layout
 
-- **One directory per composing model** (`fable5/`, `opus4-8/`, `gpt5-5/`,
-  `gpt5-3-spark/`); each holds one or more albums, at the directory root or in a named
-  subfolder.
+- **`albums/` holds one directory per composing model** (`fable5/`, `opus4-8/`,
+  `gpt5-5/`, `gpt5-3-spark/`); each holds one or more albums, at the model
+  directory root or in a named subfolder.
 - **An album** bundles its engine (`engine.py`, and for the newer albums
   `conductor.py` / `material.py` / `movements/`), `build.py`, oracles (`verify.py`,
   `analyze.py`), the committed `midi/` and `audio/`, an `album_manifest.json`, and
   `README.md` / `ALBUM.md` track notes.
-- **`fable5/hollowsynth/`** — the Rust synth (see its README).
+- **`crates/ferrosintesis/`** — the Rust synth library, with
+  **`crates/ferrosintesis-cli/`** for the WAV-rendering binary.
 - **`demos/`** — synth test pieces; **`wrk_docs/`** — design & review notes;
   **`wrk_journals/`** — the engineer's log.
 

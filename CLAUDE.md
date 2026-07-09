@@ -10,35 +10,35 @@ two kinds of code that meet at the MIDI file:
 
 1. **Composition engines** — per-album **Python** (standard-library only) that emit
    `.mid` files. One engine per album; the album *is* the code plus its rendered MIDI.
-2. **hollowsynth** — a **zero-dependency Rust** MIDI-to-WAV synthesizer
-   (`fable5/hollowsynth/`) that renders those MIDIs to audio. It is voiced for the
+2. **ferrosintesis** — a **zero-dependency Rust** MIDI-to-WAV synthesizer
+   (`crates/ferrosintesis/`) that renders those MIDIs to audio. It is voiced for the
    *fable5* (Mike-Oldfield-idiom) albums but plays any GM file as a faithful player.
 
-The pipeline is: `engine.py` → committed `.mid` → **hollowsynth** → `.wav` →
+The pipeline is: `engine.py` → committed `.mid` → **ferrosintesis** → `.wav` →
 `ropusenc` → committed `.opus`. Committed `.mid` (every album) plus committed `.opus`
 (most albums — VIGIL, RIVERWAKE and *The Long Turning* ship MIDI-only) let anyone
 listen without a toolchain; `.wav` is a disposable intermediate.
 
 ## Layout
 
-Top level = **one directory per model** (`fable5/`, `opus4-8/`, `gpt5-5/`,
+`albums/` = **one directory per model** (`fable5/`, `opus4-8/`, `gpt5-5/`,
 `gpt5-3-spark/`), each holding one or more albums. An album lives either at the
-model-dir root or in a named subfolder. `demos/` holds synth test pieces; `wrk_docs/`
-design + review docs; `wrk_journals/` engineer's log; `tmp_v09_hld/` is scratch design
-work for the in-flight hollowsynth v0.9.
+model-dir root or in a named subfolder. `crates/ferrosintesis/` is the synth
+library; `crates/ferrosintesis-cli/` is the offline WAV renderer. `demos/` holds
+synth test pieces; `wrk_docs/` design + review docs; `wrk_journals/` engineer's log.
 
 ## Commands
 
-### hollowsynth (Rust) — from `fable5/hollowsynth/`
+### ferrosintesis (Rust) — from the repo root
 ```
-cargo build --release                 # the render binary (target/release/hollowsynth)
-cargo test                            # 94 tests (numeric audio oracles — this box has no ears)
+cargo build --release -p ferrosintesis-cli  # target/release/ferrosintesis
+cargo test --workspace                     # numeric audio oracles — this box has no ears
 cargo test <name>                     # a single test by name
-cargo clippy --all-targets            # fleet gate is -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt
-./target/release/hollowsynth in.mid -o out.wav          # render
-./target/release/hollowsynth in.mid --solo 11 -o s.wav  # one channel (verification stem)
-./target/release/hollowsynth in.mid --no-samples ...    # disable the LA sample layer
+./target/release/ferrosintesis in.mid -o out.wav          # render
+./target/release/ferrosintesis in.mid --solo 11 -o s.wav  # one channel (verification stem)
+./target/release/ferrosintesis in.mid --no-samples ...    # disable the LA sample layer
 ```
 Run tests with stdin closed (`$null | cargo test …` in PowerShell,
 `cargo test … </dev/null` in bash) — the harness otherwise hangs a stdin-reading test.
@@ -58,10 +58,10 @@ fable5 albums also add `--check` for in-memory-only oracles, safe to run while c
 python render_opus.py                       # render every album's MIDI → tagged .opus (parallel)
 python render_opus.py --album "Winter Guests"
 ```
-Requires a built `hollowsynth` (see above) and `ropusenc` on PATH (from the sibling
+Requires a built `ferrosintesis` CLI (see above) and `ropusenc` on PATH (from the sibling
 `ropus` repo). Album metadata (title/artist/genre) lives in `ALBUMS` in `render_opus.py`.
 
-## hollowsynth architecture
+## ferrosintesis architecture
 
 Zero external dependencies; `[profile.release]` uses LTO. Module map (`src/`):
 
@@ -78,12 +78,12 @@ Zero external dependencies; `[profile.release]` uses LTO. Module map (`src/`):
 - `reverb.rs`, `wav.rs` — Freeverb tank; 16-bit PCM writer with TPDF dither.
 - `testutil.rs` — pitch (Goertzel), RMS, click-detection helpers for the audio oracles.
 
-**hollowsynth does not model every GM program**, but as of v0.9 the orchestral middle is
+**ferrosintesis does not model every GM program**, but as of v0.10 the orchestral middle is
 filled: **brass 56–63** and **reeds 64–71** are now modelled voices (v0.9), joining the
 orchestra hit 55, strings 48–51 and choir 52–54. A few ranges are still curated fallbacks
 (e.g. GM sound-effects 120–127 render as toneless noise). Album engines keep a program
 whitelist and verify nothing strays into an unintended range. Read the family/GM-program
-table in `fable5/hollowsynth/README.md` before assuming a program will sound right.
+table in `crates/ferrosintesis/README.md` before assuming a program will sound right.
 
 **The "authored channel" invariant — new synth features must stay opt-in.** Every added
 CC feature (CC1 vibrato/Leslie, CC64/68/74, CC70 vowels, CC0 alt-bank select, RPN,
@@ -92,7 +92,7 @@ exactly as before. This keeps already-committed albums frozen while the synth gr
 binary in a throwaway `git worktree add <path> HEAD`, render a prior album with both
 binaries, and `cmp` for byte-identity. Do this for any voices.rs/engine.rs change.
 
-hollowsynth is versioned (`Cargo.toml`, currently 0.10.0); a shipped-code change needs one
+ferrosintesis is versioned (`Cargo.toml`, currently 0.10.2); a shipped-code change needs one
 version bump per integrated task.
 
 ## Composition-engine architecture
@@ -117,10 +117,10 @@ audibility in the render. `build.py --verify` prints a pass/fail oracle table an
 nonzero on any failure; treat green oracles as the definition of done for an album.
 
 Two shapes:
-- **Older `tracks/` shape** (`opus4-8/`, `gpt5-5/`, `gpt5-3-spark/`) — `engine.py` +
+- **Older `tracks/` shape** (`albums/opus4-8/`, `albums/gpt5-5/`, `albums/gpt5-3-spark/`) — `engine.py` +
   `build.py` + `tracks/NN_title.py`. Described in
   `wrk_docs/2026.06.26 - HLD - repository layout and album conventions.md`.
-- **Newer `movements/` shape** (all `fable5/` albums) — adds `conductor.py` (global
+- **Newer `movements/` shape** (all `albums/fable5/` albums) — adds `conductor.py` (global
   skeleton: channel map, tempo/meter/marker grid), `material.py` (reusable musical
   gestures), `movements/mN_*.py` (one module per movement, each citing the HLD section it
   implements), and `analyze.py` (audio-side oracles).
@@ -137,7 +137,7 @@ Two shapes:
 | `album_manifest.json` | machine-readable metadata (tracks, durations, movement map) |
 | `ALBUM.md`, `README.md` | human track notes + regenerate/verify instructions |
 
-`.gitignore` drops `.wav` (reproducible) **except** `fable5/hollowsynth/samples/*.wav` —
+`.gitignore` drops `.wav` (reproducible) **except** `crates/ferrosintesis/samples/*.wav` —
 those are the synth's attack-transient sample bank, which is **source, not output**. Never
 treat them as regenerable. Commit an album as one atomic bundle (sources + `.mid` +
 manifest + docs); render/commit `.opus` separately.

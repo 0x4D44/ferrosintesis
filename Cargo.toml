@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "crates/ferrosintesis",
+    "crates/ferrosintesis-cli",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+

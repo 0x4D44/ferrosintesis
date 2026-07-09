@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Should
-- **Area:** hollowsynth / engine + voices (SawStack)
+- **Area:** ferrosintesis / engine + voices (SawStack)
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/engine.rs::vibrato_family`, `fable5/hollowsynth/src/engine.rs::tests::strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in`, `fable5/hollowsynth/src/voices.rs::SawStack::legato_to`, `fable5/hollowsynth/src/voices.rs::strings`, `fable5/hollowsynth/src/voices.rs::choir`, `fable5/hollowsynth/src/voices.rs::tests::legato_gated_to_strings_choir_and_leads`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | cargo test strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/engine.rs::vibrato_family`, `crates/ferrosintesis/src/engine.rs::tests::strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in`, `crates/ferrosintesis/src/voices.rs::SawStack::legato_to`, `crates/ferrosintesis/src/voices.rs::strings`, `crates/ferrosintesis/src/voices.rs::choir`, `crates/ferrosintesis/src/voices.rs::tests::legato_gated_to_strings_choir_and_leads`, `crates/ferrosintesis/README.md`
+- **Satisfied-by:** `$null | cargo test strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

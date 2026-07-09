@@ -2,10 +2,10 @@
 
 - **State:** Accepted
 - **Priority:** Could
-- **Area:** hollowsynth / voices (Modal / bell)
+- **Area:** ferrosintesis / voices (Modal / bell)
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** `$null | cargo test vibraphone_11_motor_tremolo_modulates_amplitude --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Satisfied-by:** `$null | cargo test vibraphone_11_motor_tremolo_modulates_amplitude --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

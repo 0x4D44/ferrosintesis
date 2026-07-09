@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Could
-- **Area:** hollowsynth / voices dispatch
+- **Area:** ferrosintesis / voices dispatch
 - **Raised:** 2026-07-08
-- **Implemented-by:** fable5/hollowsynth/src/voices.rs::SfxNoise, fable5/hollowsynth/src/voices.rs::make, fable5/hollowsynth/src/voices.rs::tests::gm_sfx_120_127_are_toneless_noise_fallbacks, fable5/hollowsynth/src/testutil.rs::guards::gm_routing_pins_voice_kinds, fable5/hollowsynth/README.md
-- **Satisfied-by:** `$null | deltic timeout 180 cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** crates/ferrosintesis/src/voices.rs::SfxNoise, crates/ferrosintesis/src/voices.rs::make, crates/ferrosintesis/src/voices.rs::tests::gm_sfx_120_127_are_toneless_noise_fallbacks, crates/ferrosintesis/src/testutil.rs::guards::gm_routing_pins_voice_kinds, crates/ferrosintesis/README.md
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

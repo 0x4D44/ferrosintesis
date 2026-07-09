@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `0efd750575902f455c10eb93f7ea2957253c75f6`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `b81508e9bfd732eb7e6211a03ce46c7518372a7a`)
 
 ## Statement
 GM 12 (Marimba) and 13 (Xylophone) must render with wood-bar character — a fast,
@@ -41,30 +41,30 @@ marimba should decay like wood, not vibes: marimba 3.00s vs vibes 3.00s
 Passing oracle for Gate 2:
 
 ```text
-$null | cargo test marimba_xylophone_have_wood_bar_envelopes --manifest-path fable5/hollowsynth/Cargo.toml
+$null | deltic timeout 180 cargo test marimba_xylophone_have_wood_bar_envelopes --manifest-path fable5/hollowsynth/Cargo.toml
 test voices::tests::marimba_xylophone_have_wood_bar_envelopes ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 107 filtered out; finished in 0.04s
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
-Additional local gates after rebasing onto `origin/main` at `c0cd5cd`:
+Additional local gates after rebasing onto `origin/main` at `0378038`:
 
 ```text
 deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
 ok
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-test result: ok. 105 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 7.86s
+test result: ok. 106 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 8.17s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.84s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.96s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-Finished `release` profile [optimized] target(s) in 3.54s
+Finished `release` profile [optimized] target(s) in 5.17s
 ```
 
 The original rationale's "12/13 unused" assumption was wrong for the whole repo:
@@ -96,7 +96,7 @@ and reverified. The Riverwake byte-identity caveat was corrected with the
 expected-diff render above. The remaining "dirty tree / req still Accepted"
 finding was the expected pre-landing state and is addressed by this commit.
 
-Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
-realtime API landed. The implementation commit became
-`0efd750575902f455c10eb93f7ea2957253c75f6`; the package version was advanced to
-`0.8.4` because trunk already carried `0.8.3`.
+Post-rebase note: rebased onto `origin/main` at `0378038` after
+`MM-REQ-KILN-00001` landed. The implementation commit became
+`b81508e9bfd732eb7e6211a03ce46c7518372a7a`; the package version was advanced to
+`0.8.5` because trunk already carried `0.8.4`.

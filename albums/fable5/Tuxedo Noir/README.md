@@ -43,4 +43,4 @@ python build.py --verify    # material + 12 structural oracles
 ```
 
 Listen via [ferrosintesis](../../../crates/ferrosintesis/README.md) (v0.8) or the
-committed `audio/01 - Tuxedo Noir.opus`.
+committed `listening/Claude Fable 5/Tuxedo Noir/01 - Tuxedo Noir.opus`.

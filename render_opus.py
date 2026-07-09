@@ -3,7 +3,7 @@
 
 For each MIDI in the repo: render to a temporary WAV with **ferrosintesis**
 (our synth, built at target/release), then encode to
-`<album>/audio/<name>.opus` with **ropusenc**, writing Vorbis-comment tags
+`listening/<artist>/<album>/<name>.opus` with **ropusenc**, writing Vorbis-comment tags
 (TITLE / ARTIST / ALBUM / ALBUMARTIST / COMPOSER / GENRE / DATE /
 TRACKNUMBER / TRACKTOTAL). The committed `.opus` files are the shareable,
 tagged listening copies; they are reproducible from the committed MIDI +
@@ -31,6 +31,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent
 SYNTH = REPO / "target" / "release" / (
     "ferrosintesis.exe" if sys.platform == "win32" else "ferrosintesis")
+LISTENING = REPO / "listening"
 BITRATE = "96000"         # VBR; Opus at 96k ≈ 160-192 kbps MP3, near-transparent
 DATE = "2026"
 
@@ -92,13 +93,18 @@ def all_midis() -> list[Path]:
     return out
 
 
+def opus_path_for(midi: Path) -> Path:
+    key = album_for(midi)
+    album, artist, _genre = ALBUMS[key]
+    return LISTENING / artist / album / (midi.stem + ".opus")
+
+
 def render_one(midi: Path, total_by_album: dict[str, int]) -> tuple[Path, bool, str]:
     key = album_for(midi)
     album, artist, genre = ALBUMS[key]
     title, tracknum = title_and_number(midi)
-    out_dir = REPO / key / "audio"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    opus = out_dir / (midi.stem + ".opus")
+    opus = opus_path_for(midi)
+    opus.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as td:
         wav = Path(td) / (midi.stem + ".wav")
         r = subprocess.run([str(SYNTH), str(midi), "-o", str(wav), "-q"],

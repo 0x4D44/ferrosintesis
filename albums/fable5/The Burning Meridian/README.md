@@ -49,4 +49,4 @@ python build.py --verify    # material + 12 structural oracles / track
 ```
 
 Listen via [ferrosintesis](../../../crates/ferrosintesis/README.md) (v0.8) or the
-committed `audio/*.opus`.
+committed `listening/Claude Fable 5/The Burning Meridian/*.opus`.

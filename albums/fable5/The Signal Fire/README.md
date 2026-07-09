@@ -38,11 +38,13 @@ the slow openings), and CC64 sustain:
 
 ```powershell
 cargo build --release -p ferrosintesis-cli
-.\target\release\ferrosintesis.exe "albums\fable5\The Signal Fire\midi\01 - The Signal Fire.mid" -o "albums\fable5\The Signal Fire\audio\01 - The Signal Fire.wav"
+New-Item -ItemType Directory -Force target\renders | Out-Null
+.\target\release\ferrosintesis.exe "albums\fable5\The Signal Fire\midi\01 - The Signal Fire.mid" -o "target\renders\The Signal Fire.wav"
 ```
 
-Renders in under a minute; the WAV lands in `audio/` (git-ignored,
-reproducible). The MIDI remains valid General MIDI, so any GM synth or a
+Renders in under a minute; the WAV lands in `target/renders/` (git-ignored,
+reproducible). The committed Opus listening copy lives at
+`listening/Claude Fable 5/The Signal Fire/01 - The Signal Fire.opus`. The MIDI remains valid General MIDI, so any GM synth or a
 real sample library works too — 16 channels with mid-piece program changes
 (the winds channel is whistle, fiddle and flute in different movements; the
 bells channel is a tremolo mandolin until the peal).

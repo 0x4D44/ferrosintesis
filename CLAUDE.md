@@ -15,17 +15,20 @@ two kinds of code that meet at the MIDI file:
    *fable5* (Mike-Oldfield-idiom) albums but plays any GM file as a faithful player.
 
 The pipeline is: `engine.py` → committed `.mid` → **ferrosintesis** → `.wav` →
-`ropusenc` → committed `.opus`. Committed `.mid` (every album) plus committed `.opus`
-(most albums — VIGIL, RIVERWAKE and *The Long Turning* ship MIDI-only) let anyone
-listen without a toolchain; `.wav` is a disposable intermediate.
+`ropusenc` → committed `listening/*.opus`. Committed `.mid` (every album) plus
+committed `.opus` (most albums — VIGIL, RIVERWAKE and *The Long Turning* ship
+MIDI-only) let anyone listen without a toolchain; `.wav` is a disposable
+intermediate.
 
 ## Layout
 
 `albums/` = **one directory per model** (`fable5/`, `opus4-8/`, `gpt5-5/`,
 `gpt5-3-spark/`), each holding one or more albums. An album lives either at the
-model-dir root or in a named subfolder. `crates/ferrosintesis/` is the synth
-library; `crates/ferrosintesis-cli/` is the offline WAV renderer. `demos/` holds
-synth test pieces; `wrk_docs/` design + review docs; `wrk_journals/` engineer's log.
+model-dir root or in a named subfolder. `listening/` holds tagged `.opus` listening
+copies grouped by artist and album for drag-and-drop playback.
+`crates/ferrosintesis/` is the synth library; `crates/ferrosintesis-cli/` is the
+offline WAV renderer. `demos/` holds synth test pieces; `wrk_docs/` design + review
+docs; `wrk_journals/` engineer's log.
 
 ## Commands
 
@@ -55,7 +58,7 @@ fable5 albums also add `--check` for in-memory-only oracles, safe to run while c
 
 ### Rendering audio — from the **repo root**
 ```
-python render_opus.py                       # render every album's MIDI → tagged .opus (parallel)
+python render_opus.py                       # render every album's MIDI → listening/*.opus
 python render_opus.py --album "Winter Guests"
 ```
 Requires a built `ferrosintesis` CLI (see above) and `ropusenc` on PATH (from the sibling
@@ -133,14 +136,14 @@ Two shapes:
 | `build.py` | entry point: rebuild / `--verify` / `--check` |
 | `verify.py`, `analyze.py` | structural oracles (MIDI) and audio oracles (render) |
 | `midi/NN - Title.mid` | rendered MIDI, **committed**, reproducible |
-| `audio/NN - Title.opus` | tagged listening copy, **committed for most albums** (via `render_opus.py`; three long albums ship MIDI-only) |
+| `listening/<artist>/<album>/NN - Title.opus` | tagged listening copy, **committed for most albums** (via `render_opus.py`; three long albums ship MIDI-only) |
 | `album_manifest.json` | machine-readable metadata (tracks, durations, movement map) |
 | `ALBUM.md`, `README.md` | human track notes + regenerate/verify instructions |
 
 `.gitignore` drops `.wav` (reproducible) **except** `crates/ferrosintesis/samples/*.wav` —
 those are the synth's attack-transient sample bank, which is **source, not output**. Never
 treat them as regenerable. Commit an album as one atomic bundle (sources + `.mid` +
-manifest + docs); render/commit `.opus` separately.
+manifest + docs); render/commit `listening/*.opus` separately.
 
 ## Before you start
 

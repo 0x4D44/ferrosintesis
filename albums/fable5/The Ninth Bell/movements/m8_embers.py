@@ -112,7 +112,7 @@ def build(sc: en.Score) -> None:
                            (_p(1), 28, 20)):         # A3
         sc.note(CH_STRINGS, pitch_, 380.0, 10.0, v0, jt=4, jv=3)
         sc.note(CH_STRINGS, pitch_, 390.0, 8.0, v1, jt=4, jv=3)   # off 398
-    sc.note(CH_CBASS, _p(1, -2), 380.0, 18.0, 30, jt=4, jv=3)     # A1 -> 398
+    sc.note(CH_CBASS, _p(1, -1), 380.0, 18.0, 30, jt=4, jv=3)     # A2 -> 398
     en.cc_curve(sc, CH_CBASS, 11,
                 [(380.0, 40), (392.0, 24), (400.0, 10)], step=1.0)
 

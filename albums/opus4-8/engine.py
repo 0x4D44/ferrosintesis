@@ -262,9 +262,17 @@ def pad(sc, ch, t0, chords, bar_len, arc, n_voices=4, band=(57, 81),
 
 
 def bass(sc, ch, t0, roots, bar_len, arc, vlo=34, vhi=88,
-         sustain=True, legato=0.3, cc_floor=40, expr=True, gate=0.92):
+         sustain=True, legato=0.3, cc_floor=40, expr=True, gate=0.92,
+         pitch_floor=36):
     """Bass voice from per-bar root pitches (None = silent). Sustained & tied, or
     detached (sustain=False) for a more rhythmic feel."""
+    def floored(p):
+        if p is None:
+            return None
+        while p < pitch_floor:
+            p += 12
+        return p
+    roots = [floored(p) for p in roots]
     if sustain:
         tied_line(sc, ch, t0, roots, bar_len, arc, vlo, vhi, legato)
     else:

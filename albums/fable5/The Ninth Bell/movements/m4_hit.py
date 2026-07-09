@@ -49,7 +49,7 @@ def build(sc: en.Score) -> None:
         sc.note(CH_ORGAN, en.n(p), HIT, D, 118, jt=2, jv=3)
     for p in ("E4", "G#4", "B4", "E5", "G#5"):                # "ah" stab
         sc.note(CH_CHOIR, en.n(p), HIT, D, 117, jt=2, jv=3)
-    for p in ("E1", "E2"):
+    for p in ("E2", "B2"):
         sc.note(CH_CBASS, en.n(p), HIT, D, 116, jt=2, jv=3)
     for p in ("E1", "E2"):                                    # piano octave
         sc.note(CH_PIANO, en.n(p), HIT, D, 120, jt=2, jv=3)

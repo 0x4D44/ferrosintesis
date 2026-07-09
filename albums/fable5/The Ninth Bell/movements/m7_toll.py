@@ -279,7 +279,7 @@ def _fracture(sc: en.Score) -> None:
     sc.note(CH_VIOLIN, _p(4) + 24, t, d, 118, jt=2)
     for p in ("Bb2", "F3"):
         sc.note(CH_CELLO, en.n(p), t, d, 118, jt=2)
-    for p in ("Bb1", "Bb2"):
+    for p in ("Bb2", "F3"):
         sc.note(CH_CBASS, en.n(p), t, d, 118, jt=2)
     for p in ("Bb2", "F3", "Bb3"):
         sc.note(CH_ORGAN, en.n(p), t, d, 117, jt=2)

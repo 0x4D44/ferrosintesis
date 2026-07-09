@@ -34,7 +34,7 @@ HALF = 64.0          # bar 17: violin pass; heartbeat and pedal enter
 T1 = 96.0
 
 _A2 = en.pitch(material.TONIC, material.MODE, 1) - 12    # timpani A
-_A1 = en.pitch(material.TONIC, material.MODE, 1) - 24    # contrabass A
+_A2_CBASS = en.pitch(material.TONIC, material.MODE, 1) - 12
 
 
 def _intro_final_voicing() -> list[int]:
@@ -150,5 +150,5 @@ def build(sc: en.Score) -> None:
         lub = 34 + k // 4                         # grows a hair, late half
         sc.note(CH_TIMPANI, _A2, bar, 0.6, lub, jt=3, jv=2)
         sc.note(CH_TIMPANI, _A2, bar + 2.0, 0.6, lub - 3, jt=3, jv=2)
-        sc.note(CH_CBASS, _A1, bar, 3.9, int(en.lerp(39, 42, k / 7)),
+        sc.note(CH_CBASS, _A2_CBASS, bar, 3.9, int(en.lerp(39, 42, k / 7)),
                 jt=4, jv=2)

@@ -38,12 +38,14 @@ sostenuto / una-corda pedals:
 
 ```powershell
 cargo build --release -p ferrosintesis-cli
-.\target\release\ferrosintesis.exe "albums\fable5\Winter Guests\midi\01 - Winter Guests, Part One.mid" -o "albums\fable5\Winter Guests\audio\01 - Winter Guests, Part One.wav"
-.\target\release\ferrosintesis.exe "albums\fable5\Winter Guests\midi\02 - Winter Guests, Part Two.mid" -o "albums\fable5\Winter Guests\audio\02 - Winter Guests, Part Two.wav"
+New-Item -ItemType Directory -Force target\renders | Out-Null
+.\target\release\ferrosintesis.exe "albums\fable5\Winter Guests\midi\01 - Winter Guests, Part One.mid" -o "target\renders\Winter Guests, Part One.wav"
+.\target\release\ferrosintesis.exe "albums\fable5\Winter Guests\midi\02 - Winter Guests, Part Two.mid" -o "target\renders\Winter Guests, Part Two.wav"
 ```
 
-Each part renders in well under a minute; the WAVs land in `audio/`
-(git-ignored, reproducible). The MIDI is valid General MIDI, so any GM synth
+Each part renders in well under a minute; the WAVs land in `target/renders/`
+(git-ignored, reproducible). The committed Opus listening copies live under
+`listening/Claude Fable 5/Winter Guests/`. The MIDI is valid General MIDI, so any GM synth
 works too — though the vowel morph, portamento and aftertouch are
 ferrosintesis features a stock wavetable will ignore.
 

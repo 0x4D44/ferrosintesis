@@ -60,7 +60,7 @@ python build.py --verify    # 16 oracles: material, structure, CC
 ```
 
 Listen via [ferrosintesis](../../../crates/ferrosintesis/README.md) (v0.7), or play the
-committed `audio/01 - Sub Rosa.opus`.  The audio was verified
+committed `listening/Claude Fable 5/Sub Rosa/01 - Sub Rosa.opus`.  The audio was verified
 numerically: the RMS arc follows the movement plan (Limina loudest at
 −19.2 dB, the breakdown and afterglow receding), no dead air, no
 clicks, and the headline features were measured on rendered stems —

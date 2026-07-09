@@ -82,7 +82,7 @@ python build.py --verify    # 19 oracles, incl. meters, driving bass,
 ```
 
 Listen via [ferrosintesis](../../../crates/ferrosintesis/README.md) (v0.8) or the
-committed `audio/01 - Seven Kinds of Sunlight.opus`.  Audio verified
+committed `listening/Claude Fable 5/Seven Kinds of Sunlight/01 - Seven Kinds of Sunlight.opus`.  Audio verified
 numerically: section RMS follows the form (final chorus loudest at
 −20.2 dB), no dead air, no discontinuities beyond kick onsets; stem
 measurements confirm the dive (−6.9 semis), the gear change (+1.81

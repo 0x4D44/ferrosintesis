@@ -36,12 +36,14 @@ partials, formant-filtered choir, drawbar organs, and a hall reverb.
 
 ```powershell
 cargo build --release -p ferrosintesis-cli
-.\target\release\ferrosintesis.exe "albums\fable5\Hollow Hill\midi\01 - Hollow Hill, Part One.mid" -o "albums\fable5\Hollow Hill\audio\01 - Hollow Hill, Part One.wav"
-.\target\release\ferrosintesis.exe "albums\fable5\Hollow Hill\midi\02 - Hollow Hill, Part Two.mid" -o "albums\fable5\Hollow Hill\audio\02 - Hollow Hill, Part Two.wav"
+New-Item -ItemType Directory -Force target\renders | Out-Null
+.\target\release\ferrosintesis.exe "albums\fable5\Hollow Hill\midi\01 - Hollow Hill, Part One.mid" -o "target\renders\Hollow Hill, Part One.wav"
+.\target\release\ferrosintesis.exe "albums\fable5\Hollow Hill\midi\02 - Hollow Hill, Part Two.mid" -o "target\renders\Hollow Hill, Part Two.wav"
 ```
 
-Each part renders in ~10 seconds. The WAVs land in `audio/` (git-ignored —
-they are reproducible). The MIDI also remains valid General MIDI, so any GM
+Each part renders in ~10 seconds. The WAVs land in `target/renders/`
+(git-ignored — they are reproducible). The committed Opus listening copies
+live under `listening/Claude Fable 5/Hollow Hill/`. The MIDI also remains valid General MIDI, so any GM
 synth or a real orchestral library works too. Sixteen channels are used, with
 a handful of mid-piece program changes (the fretless bass and sweep pad only
 exist in the ocean movements, the mandolin borrows the timpani channel for

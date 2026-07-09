@@ -13,10 +13,11 @@ Jarre, Hans Zimmer, Enigma, Max Richter…). The generators, the MIDI they produ
 
 ## Listen
 
-Most albums ship a committed, tagged `audio/*.opus` you can play directly (e.g.
-`albums/fable5/Hollow Hill/audio/`) — the shareable listening copies, reproducible from the
-committed MIDI plus the synth. Three long albums (**VIGIL**, **RIVERWAKE** and **The
-Long Turning**) ship as MIDI only; render them to `.opus` with `render_opus.py` (see
+Most albums ship committed, tagged `.opus` files under `listening/` (for example
+`listening/Claude Fable 5/Hollow Hill/`). Drag that tree into an audio player for
+the shareable listening copies, reproducible from the committed MIDI plus the synth.
+Three long albums (**VIGIL**, **RIVERWAKE** and **The Long Turning**) ship as MIDI
+only; render them to `.opus` with `render_opus.py` (see
 [Reproduce & verify](#reproduce--verify)).
 
 ## The music
@@ -81,7 +82,7 @@ are the albums the synth is specifically tuned for.
 ## How a track is made
 
 ```
-engine.py  ─▶  .mid  ─▶  ferrosintesis ─▶ .wav ─▶ ropusenc ─▶ .opus
+engine.py  ─▶  .mid  ─▶  ferrosintesis ─▶ .wav ─▶ ropusenc ─▶ listening/*.opus
 (Python)      committed   (Rust synth)   scratch    (Opus)       committed
 ```
 
@@ -124,8 +125,10 @@ the sibling `ropus` project.
   directory root or in a named subfolder.
 - **An album** bundles its engine (`engine.py`, and for the newer albums
   `conductor.py` / `material.py` / `movements/`), `build.py`, oracles (`verify.py`,
-  `analyze.py`), the committed `midi/` and `audio/`, an `album_manifest.json`, and
-  `README.md` / `ALBUM.md` track notes.
+  `analyze.py`), the committed `midi/`, an `album_manifest.json`, and `README.md` /
+  `ALBUM.md` track notes.
+- **`listening/`** — tagged `.opus` listening copies, grouped by artist and album for
+  drag-and-drop playback.
 - **`crates/ferrosintesis/`** — the Rust synth library, with
   **`crates/ferrosintesis-cli/`** for the WAV-rendering binary.
 - **`demos/`** — synth test pieces; **`wrk_docs/`** — design & review notes;

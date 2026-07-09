@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small standard-library MIDI engine for the hollowsynth feature demos."""
+"""Small standard-library MIDI engine for the ferrosintesis feature demos."""
 
 from __future__ import annotations
 

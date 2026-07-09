@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build or verify the hollowsynth feature showcase demos."""
+"""Build or verify the ferrosintesis feature showcase demos."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import verify
 ALBUM = "Synth Feature Showcase"
 ARTIST = "OpenAI Codex"
 COMMENT = (
-    "Original fast instrumental MIDI demos written to exercise hollowsynth "
+    "Original fast instrumental MIDI demos written to exercise ferrosintesis "
     "program families, controllers, stereo staging, and accepted future seams."
 )
 
@@ -86,7 +86,7 @@ def build_outputs(track_number: int | None = None) -> tuple[list[dict], dict, di
     manifest = {
         "album": ALBUM,
         "artist": ARTIST,
-        "style": "Fast dramatic hollowsynth instrument and controller demos",
+        "style": "Fast dramatic ferrosintesis instrument and controller demos",
         "track_count": len(built),
         "total_duration_seconds": round(sum(b["track"]["duration_seconds"] for b in built), 2),
         "total_duration_minutes": round(sum(b["track"]["duration_seconds"] for b in built) / 60.0, 2),

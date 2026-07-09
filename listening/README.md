@@ -4,7 +4,7 @@ This tree holds the committed, tagged Opus listening copies.
 
 Drag `listening/` into an audio player to browse the rendered albums by artist
 and album. The source albums, MIDI files, manifests, and composition engines live
-under `albums/`.
+under `albums/`; synth showcase demos live under `demos/`.
 
 Regenerate these files from the repo root with:
 

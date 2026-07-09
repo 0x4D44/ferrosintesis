@@ -5,7 +5,7 @@
 - **Area:** ferrosintesis / voices (Organ)
 - **Raised:** 2026-07-08
 - **Implemented-by:** task/20260709-TSK-HUM-reqs-heavy-00014-reed-organ-accordion-ha
-- **Satisfied-by:** `$null | cargo test --manifest-path crates/ferrosintesis/Cargo.toml -- --skip altbank::tests::sawstack_v1_canary_frozen`
+- **Satisfied-by:** `$null | cargo test --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
@@ -22,3 +22,9 @@ vibrato rather than the organ Leslie ramp.
 All four render the shared church-pipe-organ registration with zero reed/bellows
 adaptation today (21–23 are borderline absent-in-spirit). GM 20 is used (Winter
 Guests), so re-renders — needs sign-off. 2026-07-08 GM gap audit (organ).
+
+## Notes
+
+- 2026-07-09 implementation gate: `$null | cargo test --manifest-path crates/ferrosintesis/Cargo.toml` passed (`178 passed; 0 failed; 4 ignored`).
+- 2026-07-09 integration gate: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `cargo build --release -p ferrosintesis-cli` passed.
+- 2026-07-09 render containment: Winter Guests Part One GM20 harmonium channel changed while channel 0 stayed byte-identical to latest trunk; RIVERWAKE GM21 accordion channel changed while channel 0 stayed byte-identical to latest trunk.

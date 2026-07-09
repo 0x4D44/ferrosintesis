@@ -5,11 +5,11 @@
 - **Area:** hollowsynth / voices dispatch
 - **Raised:** 2026-07-08
 - **Implemented-by:** `fable5/hollowsynth/src/voices.rs::make`, `fable5/hollowsynth/src/voices.rs::tests::synth_fx_97_99_101_103_sustain_as_pads`, `fable5/hollowsynth/src/testutil.rs::guards::gm_routing_pins_voice_kinds`
-- **Satisfied-by:** `$null | cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `10cc5b71406f75a5c3de6cdbb67a174e9e29a21a`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `a3eecb96c93646fb382867f14d250ac3f9eadb81`)
 
 ## Statement
 GM 97 (soundtrack), 99 (atmosphere), 103 (sci-fi) must render as sustaining pad
@@ -42,33 +42,34 @@ assertion `left == right` failed: program 97 should route to pad
 Passing oracle for Gate 2:
 
 ```text
-$null | cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml
+$null | deltic timeout 180 cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path fable5/hollowsynth/Cargo.toml
 test voices::tests::synth_fx_97_99_101_103_sustain_as_pads ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.05s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 0.05s
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
-Additional local gates after rebasing onto `origin/main` at `c0cd5cd`:
+Additional local gates after rebasing onto `origin/main` at `112d3b9`:
 
 ```text
 $null | deltic timeout 180 cargo test gm_routing_pins_voice_kinds --manifest-path fable5/hollowsynth/Cargo.toml
 test testutil::guards::gm_routing_pins_voice_kinds ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 0.00s
 
 deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
-ok
+passed (no output)
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-test result: ok. 105 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.81s
+test result: ok. 108 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 8.80s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
 Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.89s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-Finished `release` profile [optimized] target(s) in 3.91s
+Finished `release` profile [optimized] target(s) in 3.55s
 ```
 
 MIDI scan:
@@ -91,7 +92,7 @@ and regression reviewers found no defects. The remaining dirty-tree/Accepted
 state finding was the expected pre-landing state and is addressed by this
 commit.
 
-Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
-realtime API landed. The implementation commit became
-`10cc5b71406f75a5c3de6cdbb67a174e9e29a21a`; the package version was advanced to
-`0.8.4` because trunk already carried `0.8.3`.
+Post-integration rebase note: rebased onto `origin/main` at `112d3b9` after
+`MM-REQ-KILN-00002` landed. The implementation commit became
+`a3eecb96c93646fb382867f14d250ac3f9eadb81`; the package version was advanced to
+`0.8.8` because trunk already carried `0.8.7`.

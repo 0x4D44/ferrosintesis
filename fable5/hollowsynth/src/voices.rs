@@ -53,6 +53,10 @@ pub trait Voice: Send {
     /// engine drives it in the authored-controller pass. Voices without a
     /// breath model ignore it.
     fn set_breath(&mut self, _pressure: f32, _growl: f32) {}
+    /// CC1 section-vibrato depth (alt-bank strings): deepen each layer's own
+    /// decorrelated per-layer vibrato. Default no-op; only the alt-bank
+    /// `SawStack` implements it (the default voices are never driven by it).
+    fn set_vib(&mut self, _depth: f32) {}
     /// Hat choke (D6/CYM-4): a closed-hat strike silences the ringing open
     /// hat within ~10-30 ms. Default no-op; only `Drum` implements it.
     fn choke(&mut self) {}

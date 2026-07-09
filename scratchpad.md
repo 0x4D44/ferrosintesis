@@ -1,5 +1,11 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.09 — `origin/main` `8048a64` is red on
+  `altbank::tests::sawstack_v1_canary_frozen`: clean trunk and
+  `MM-REQ-KILN-00013` both report `pad(89) SawStack drifted`, observed hash
+  `7190932198068575567` vs expected `7408265371089978107`
+  (`fable5/hollowsynth/src/altbank.rs:1387`). Out of scope for the GM47 timpani
+  change; likely needs an alt-bank canary recapture or root-cause fix.
 - [ ] 2026.07.08 — drums review: `impl Default for CymSpec` would remove the
   `v2: None, noise2: None, shimmer: None` boilerplate from ~5 simple cymbal call
   sites (`fable5/hollowsynth/src/drums.rs` china 52 / splash 55 / ride 51|59 /

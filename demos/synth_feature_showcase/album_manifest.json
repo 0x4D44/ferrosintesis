@@ -1,0 +1,601 @@
+{
+  "album": "Synth Feature Showcase",
+  "artist": "OpenAI Codex",
+  "style": "Fast dramatic hollowsynth instrument and controller demos",
+  "track_count": 5,
+  "total_duration_seconds": 732.04,
+  "total_duration_minutes": 12.2,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Ignition Court",
+      "file": "midi/01 - Ignition Court.mid",
+      "duration_seconds": 147.69,
+      "duration_minutes": 2.46,
+      "style": "guitar/bass/drum/synth-lead chase",
+      "features": [
+        {
+          "name": "all guitars",
+          "tier": "A",
+          "channel": 0,
+          "start_beat": 0,
+          "end_beat": 192,
+          "start_seconds": 0.0,
+          "end_seconds": 73.85,
+          "programs": [
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ]
+        },
+        {
+          "name": "all basses",
+          "tier": "A",
+          "channel": 2,
+          "start_beat": 0,
+          "end_beat": 256,
+          "start_seconds": 0.0,
+          "end_seconds": 98.46,
+          "programs": [
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39
+          ]
+        },
+        {
+          "name": "all synth leads",
+          "tier": "A",
+          "channel": 3,
+          "start_beat": 112,
+          "end_beat": 340,
+          "start_seconds": 43.08,
+          "end_seconds": 130.77,
+          "programs": [
+            80,
+            81,
+            82,
+            83,
+            84,
+            85,
+            86,
+            87
+          ]
+        },
+        {
+          "name": "wah resonance drive",
+          "tier": "A",
+          "channel": 4,
+          "start_beat": 64,
+          "end_beat": 184,
+          "start_seconds": 24.62,
+          "end_seconds": 70.77,
+          "programs": [
+            29,
+            30
+          ]
+        },
+        {
+          "name": "v2 drum kit",
+          "tier": "A",
+          "channel": 9,
+          "start_beat": 0,
+          "end_beat": 384,
+          "start_seconds": 0.0,
+          "end_seconds": 147.69,
+          "programs": []
+        }
+      ],
+      "audio_checks": [
+        {
+          "name": "wah resonance bite",
+          "kind": "hf_up",
+          "start_seconds": 30.77,
+          "end_seconds": 33.85,
+          "ref_start_seconds": 27.69,
+          "ref_end_seconds": 30.77,
+          "threshold": 1.08
+        },
+        {
+          "name": "lead bloom",
+          "kind": "hf_up",
+          "start_seconds": 49.23,
+          "end_seconds": 56.92,
+          "ref_start_seconds": 43.08,
+          "ref_end_seconds": 47.69,
+          "threshold": 1.08
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Cathedral Mechanica",
+      "file": "midi/02 - Cathedral Mechanica.mid",
+      "duration_seconds": 153.6,
+      "duration_minutes": 2.56,
+      "style": "modal keys, organs, bells, timpani",
+      "features": [
+        {
+          "name": "piano pedals and pitch",
+          "tier": "A",
+          "channel": 0,
+          "start_beat": 0,
+          "end_beat": 126,
+          "start_seconds": 0.0,
+          "end_seconds": 50.4,
+          "programs": [
+            0,
+            4,
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "name": "bells bars vibes",
+          "tier": "A",
+          "channel": 1,
+          "start_beat": 120,
+          "end_beat": 260,
+          "start_seconds": 48.0,
+          "end_seconds": 104.0,
+          "programs": [
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ]
+        },
+        {
+          "name": "organs free reeds",
+          "tier": "A",
+          "channel": 2,
+          "start_beat": 64,
+          "end_beat": 288,
+          "start_seconds": 25.6,
+          "end_seconds": 115.2,
+          "programs": [
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ]
+        },
+        {
+          "name": "timpani refinement bed",
+          "tier": "A",
+          "channel": 3,
+          "start_beat": 160,
+          "end_beat": 376,
+          "start_seconds": 64.0,
+          "end_seconds": 150.4,
+          "programs": [
+            47
+          ]
+        },
+        {
+          "name": "crystal programs",
+          "tier": "A",
+          "channel": 4,
+          "start_beat": 192,
+          "end_beat": 352,
+          "start_seconds": 76.8,
+          "end_seconds": 140.8,
+          "programs": [
+            96,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            103
+          ]
+        }
+      ],
+      "audio_checks": [
+        {
+          "name": "soft pedal opens",
+          "kind": "hf_up",
+          "start_seconds": 14.4,
+          "end_seconds": 20.8,
+          "ref_start_seconds": 1.6,
+          "ref_end_seconds": 8.0,
+          "threshold": 1.05
+        },
+        {
+          "name": "leslie build",
+          "kind": "hf_up",
+          "start_seconds": 54.4,
+          "end_seconds": 62.4,
+          "ref_start_seconds": 28.8,
+          "ref_end_seconds": 36.8,
+          "threshold": 1.08
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Skyline Brass Reactor",
+      "file": "midi/03 - Skyline Brass Reactor.mid",
+      "duration_seconds": 137.14,
+      "duration_minutes": 2.29,
+      "style": "brass, reeds, winds, bowed strings",
+      "features": [
+        {
+          "name": "brass breath and growl",
+          "tier": "A",
+          "channel": 0,
+          "start_beat": 0,
+          "end_beat": 224,
+          "start_seconds": 0.0,
+          "end_seconds": 80.0,
+          "programs": [
+            57,
+            58,
+            60,
+            61
+          ]
+        },
+        {
+          "name": "high brass colors",
+          "tier": "A",
+          "channel": 1,
+          "start_beat": 0,
+          "end_beat": 224,
+          "start_seconds": 0.0,
+          "end_seconds": 80.0,
+          "programs": [
+            56,
+            59,
+            62,
+            63
+          ]
+        },
+        {
+          "name": "reed slurs",
+          "tier": "A",
+          "channel": 2,
+          "start_beat": 112,
+          "end_beat": 288,
+          "start_seconds": 40.0,
+          "end_seconds": 102.86,
+          "programs": [
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71
+          ]
+        },
+        {
+          "name": "wind descants",
+          "tier": "A",
+          "channel": 3,
+          "start_beat": 160,
+          "end_beat": 320,
+          "start_seconds": 57.14,
+          "end_seconds": 114.29,
+          "programs": [
+            72,
+            73,
+            74,
+            75,
+            76,
+            77,
+            78,
+            79
+          ]
+        },
+        {
+          "name": "bowed strings",
+          "tier": "A",
+          "channel": 4,
+          "start_beat": 232,
+          "end_beat": 352,
+          "start_seconds": 82.86,
+          "end_seconds": 125.71,
+          "programs": [
+            40,
+            41,
+            42,
+            43,
+            44,
+            45
+          ]
+        },
+        {
+          "name": "fiddle feature",
+          "tier": "A",
+          "channel": 5,
+          "start_beat": 352,
+          "end_beat": 376,
+          "start_seconds": 125.71,
+          "end_seconds": 134.29,
+          "programs": [
+            110
+          ]
+        }
+      ],
+      "audio_checks": [
+        {
+          "name": "brass breath",
+          "kind": "rms_up",
+          "start_seconds": 2.86,
+          "end_seconds": 7.14,
+          "ref_start_seconds": 0.0,
+          "ref_end_seconds": 2.86,
+          "threshold": 1.05
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Choir of Circuitry",
+      "file": "midi/04 - Choir of Circuitry.mid",
+      "duration_seconds": 144.0,
+      "duration_minutes": 2.4,
+      "style": "strings, choir, pads, synth FX",
+      "features": [
+        {
+          "name": "string vibrato slurs",
+          "tier": "A",
+          "channel": 0,
+          "start_beat": 0,
+          "end_beat": 128,
+          "start_seconds": 0.0,
+          "end_seconds": 48.0,
+          "programs": [
+            48,
+            49,
+            50,
+            51
+          ]
+        },
+        {
+          "name": "choir vowel morph",
+          "tier": "A",
+          "channel": 1,
+          "start_beat": 96,
+          "end_beat": 216,
+          "start_seconds": 36.0,
+          "end_seconds": 81.0,
+          "programs": [
+            52,
+            53,
+            54
+          ]
+        },
+        {
+          "name": "pad filter resonance",
+          "tier": "A",
+          "channel": 2,
+          "start_beat": 192,
+          "end_beat": 320,
+          "start_seconds": 72.0,
+          "end_seconds": 120.0,
+          "programs": [
+            88,
+            89,
+            90,
+            91,
+            92,
+            93,
+            94,
+            95
+          ]
+        },
+        {
+          "name": "orchestra hit",
+          "tier": "A",
+          "channel": 3,
+          "start_beat": 32,
+          "end_beat": 370,
+          "start_seconds": 12.0,
+          "end_seconds": 138.75,
+          "programs": [
+            55
+          ]
+        },
+        {
+          "name": "synth fx sustain",
+          "tier": "A",
+          "channel": 4,
+          "start_beat": 288,
+          "end_beat": 368,
+          "start_seconds": 108.0,
+          "end_seconds": 138.0,
+          "programs": [
+            97,
+            99,
+            101,
+            103
+          ]
+        }
+      ],
+      "audio_checks": [
+        {
+          "name": "vowel shifts",
+          "kind": "hf_down",
+          "start_seconds": 42.0,
+          "end_seconds": 48.0,
+          "ref_start_seconds": 36.0,
+          "ref_end_seconds": 39.0,
+          "threshold": 0.97
+        },
+        {
+          "name": "pad sweep",
+          "kind": "hf_up",
+          "start_seconds": 84.0,
+          "end_seconds": 88.5,
+          "ref_start_seconds": 72.0,
+          "ref_end_seconds": 76.5,
+          "threshold": 1.03
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Atlas of Unbuilt Machines",
+      "file": "midi/05 - Atlas of Unbuilt Machines.mid",
+      "duration_seconds": 149.61,
+      "duration_minutes": 2.49,
+      "style": "future seams, world plucks, SFX",
+      "features": [
+        {
+          "name": "future keys",
+          "tier": "A",
+          "channel": 0,
+          "start_beat": 0,
+          "end_beat": 112,
+          "start_seconds": 0.0,
+          "end_seconds": 43.64,
+          "programs": [
+            4,
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "name": "free reeds",
+          "tier": "A",
+          "channel": 1,
+          "start_beat": 96,
+          "end_beat": 208,
+          "start_seconds": 37.4,
+          "end_seconds": 81.04,
+          "programs": [
+            20,
+            21,
+            22,
+            23
+          ]
+        },
+        {
+          "name": "world plucks",
+          "tier": "A",
+          "channel": 2,
+          "start_beat": 168,
+          "end_beat": 278,
+          "start_seconds": 65.45,
+          "end_seconds": 108.31,
+          "programs": [
+            104,
+            105,
+            106,
+            107,
+            108
+          ]
+        },
+        {
+          "name": "harp refinement",
+          "tier": "A",
+          "channel": 3,
+          "start_beat": 0,
+          "end_beat": 44,
+          "start_seconds": 0.0,
+          "end_seconds": 17.14,
+          "programs": [
+            46
+          ]
+        },
+        {
+          "name": "vibes refinement",
+          "tier": "A",
+          "channel": 3,
+          "start_beat": 48,
+          "end_beat": 92,
+          "start_seconds": 18.7,
+          "end_seconds": 35.84,
+          "programs": [
+            11
+          ]
+        },
+        {
+          "name": "timpani refinement",
+          "tier": "A",
+          "channel": 3,
+          "start_beat": 272,
+          "end_beat": 368,
+          "start_seconds": 105.97,
+          "end_seconds": 143.38,
+          "programs": [
+            47
+          ]
+        },
+        {
+          "name": "sfx fallback",
+          "tier": "A",
+          "channel": 4,
+          "start_beat": 256,
+          "end_beat": 320,
+          "start_seconds": 99.74,
+          "end_seconds": 124.68,
+          "programs": [
+            120,
+            121,
+            122,
+            123,
+            124,
+            125,
+            126,
+            127
+          ]
+        },
+        {
+          "name": "bagpipe shanai placeholders",
+          "tier": "A",
+          "channel": 5,
+          "start_beat": 328,
+          "end_beat": 376,
+          "start_seconds": 127.79,
+          "end_seconds": 146.49,
+          "programs": [
+            109,
+            111
+          ]
+        }
+      ],
+      "audio_checks": [
+        {
+          "name": "noise impact",
+          "kind": "hf_up",
+          "start_seconds": 99.74,
+          "end_seconds": 102.86,
+          "ref_start_seconds": 93.51,
+          "ref_end_seconds": 96.62,
+          "threshold": 1.05
+        },
+        {
+          "name": "shanai pressure",
+          "kind": "rms_up",
+          "start_seconds": 138.7,
+          "end_seconds": 144.94,
+          "ref_start_seconds": 127.79,
+          "ref_end_seconds": 132.47,
+          "threshold": 1.05
+        }
+      ]
+    }
+  ]
+}

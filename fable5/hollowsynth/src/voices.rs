@@ -139,6 +139,8 @@ impl Voice for SfxNoise {
 
 struct Mode {
     osc: Sine,
+    base_freq: f32,
+    active: bool,
     amp: f32,
     decay: f32,
 }
@@ -156,6 +158,8 @@ pub struct Modal {
     released: bool,
     gain: f32,
     level: f32, // rough live-amplitude bookkeeping
+    sr: f32,
+    bend: f32,
 }
 
 impl Modal {
@@ -175,6 +179,8 @@ impl Modal {
             .filter(|&&(f, _, _)| f < sr * 0.45)
             .map(|&(f, a, t)| Mode {
                 osc: Sine::new(f, sr, rng.white() * std::f32::consts::PI),
+                base_freq: f,
+                active: true,
                 amp: a,
                 decay: t60_mul(t, sr),
             })
@@ -196,6 +202,18 @@ impl Modal {
             released: false,
             gain,
             level: 1.0,
+            sr,
+            bend: 1.0,
+        }
+    }
+
+    fn apply_pitch(&mut self) {
+        for mode in &mut self.modes {
+            let f = mode.base_freq * self.bend;
+            mode.active = f < self.sr * 0.45;
+            if mode.active {
+                mode.osc.set_freq(f, self.sr);
+            }
         }
     }
 }
@@ -205,7 +223,9 @@ impl Voice for Modal {
         for o in out.iter_mut() {
             let mut s = 0.0;
             for m in &mut self.modes {
-                s += m.amp * m.osc.next();
+                if m.active {
+                    s += m.amp * m.osc.next();
+                }
                 m.amp *= m.decay;
             }
             if self.noise_amp > 1e-5 {
@@ -230,6 +250,11 @@ impl Voice for Modal {
 
     fn released(&self) -> bool {
         self.released
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+        self.apply_pitch();
     }
 
     #[cfg(test)]
@@ -1338,8 +1363,15 @@ impl Voice for SynthBass {
 // Organ
 // ---------------------------------------------------------------------------
 
+struct Pipe {
+    osc: Sine,
+    ratio: f32,
+    amp: f32,
+    active: bool,
+}
+
 pub struct Organ {
-    harms: Vec<(Sine, f32)>,
+    harms: Vec<Pipe>,
     env: Adsr,
     trem: Sine,
     trem_depth: f32,
@@ -1352,6 +1384,8 @@ pub struct Organ {
     rng: Rng,
     drive: f32,
     amp: f32,
+    base_f: f32,
+    bend: f32,
     sr: f32,
 }
 
@@ -1378,7 +1412,12 @@ impl Organ {
             .map(|&(m, a)| {
                 // every pipe speaks at its own level
                 let a = a * (1.0 + 0.08 * rng.white());
-                (Sine::new(f * m, sr, rng.white() * std::f32::consts::PI), a)
+                Pipe {
+                    osc: Sine::new(f * m, sr, rng.white() * std::f32::consts::PI),
+                    ratio: m,
+                    amp: a,
+                    active: true,
+                }
             })
             .collect();
         Organ {
@@ -1395,7 +1434,19 @@ impl Organ {
             rng,
             drive,
             amp: amp * (0.4 + 0.6 * vel_amp(vel)),
+            base_f: f,
+            bend: 1.0,
             sr,
+        }
+    }
+
+    fn apply_pitch(&mut self) {
+        for pipe in &mut self.harms {
+            let f = self.base_f * pipe.ratio * self.bend;
+            pipe.active = f < self.sr * 0.45;
+            if pipe.active {
+                pipe.osc.set_freq(f, self.sr);
+            }
         }
     }
 }
@@ -1404,8 +1455,10 @@ impl Voice for Organ {
     fn render(&mut self, out: &mut [f32]) -> bool {
         for o in out.iter_mut() {
             let mut s = 0.0;
-            for (osc, a) in &mut self.harms {
-                s += *a * osc.next();
+            for pipe in &mut self.harms {
+                if pipe.active {
+                    s += pipe.amp * pipe.osc.next();
+                }
             }
             if self.chiff_amp > 1e-5 {
                 s += self.chiff_filt.process(self.rng.white()) * self.chiff_amp;
@@ -1430,6 +1483,11 @@ impl Voice for Organ {
 
     fn released(&self) -> bool {
         self.env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+        self.apply_pitch();
     }
 
     fn set_trem(&mut self, rate_hz: f32, depth: f32) {

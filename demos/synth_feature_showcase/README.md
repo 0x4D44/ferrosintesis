@@ -1,6 +1,6 @@
 # Synth Feature Showcase
 
-Five original, fast instrumental MIDI demos for hollowsynth. The suite is
+Five original, fast instrumental MIDI demos for ferrosintesis. The suite is
 designed to exercise current instrument families, expressive MIDI controllers,
 stereo staging, and accepted future synth seams.
 

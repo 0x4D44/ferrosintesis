@@ -1,4 +1,4 @@
-"""Structural MIDI oracles for the hollowsynth feature showcase."""
+"""Structural MIDI oracles for the ferrosintesis feature showcase."""
 
 from __future__ import annotations
 

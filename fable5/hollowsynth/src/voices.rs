@@ -149,6 +149,13 @@ struct Mode {
     decay: f32,
 }
 
+#[derive(Clone, Copy)]
+struct StrikeGlide {
+    ratio: f32,
+    step: f32,
+    floor: f32,
+}
+
 pub struct Modal {
     modes: Vec<Mode>,
     noise_amp: f32,
@@ -164,6 +171,7 @@ pub struct Modal {
     level: f32, // rough live-amplitude bookkeeping
     sr: f32,
     bend: f32,
+    strike_glide: Option<StrikeGlide>,
 }
 
 impl Modal {
@@ -208,16 +216,60 @@ impl Modal {
             level: 1.0,
             sr,
             bend: 1.0,
+            strike_glide: None,
         }
     }
 
+    fn with_strike_glide(
+        mut self,
+        start_ratio: f32,
+        glide_oct_per_s: f32,
+        floor_ratio: f32,
+    ) -> Self {
+        let floor = floor_ratio.max(0.01);
+        let start = start_ratio.max(floor);
+        if start > floor && glide_oct_per_s > 0.0 {
+            self.strike_glide = Some(StrikeGlide {
+                ratio: start,
+                step: 2f32.powf(-glide_oct_per_s / self.sr),
+                floor,
+            });
+            self.apply_pitch();
+        }
+        self
+    }
+
+    fn strike_ratio(&self) -> f32 {
+        self.strike_glide.map_or(1.0, |g| g.ratio)
+    }
+
     fn apply_pitch(&mut self) {
+        let strike = self.strike_ratio();
         for mode in &mut self.modes {
-            let f = mode.base_freq * self.bend;
+            let f = mode.base_freq * self.bend * strike;
             mode.active = f < self.sr * 0.45;
             if mode.active {
                 mode.osc.set_freq(f, self.sr);
             }
+        }
+    }
+
+    fn advance_strike_glide(&mut self) {
+        let mut retune = false;
+        let mut done = false;
+        if let Some(glide) = &mut self.strike_glide {
+            if glide.ratio > glide.floor {
+                let next = (glide.ratio * glide.step).max(glide.floor);
+                retune = next != glide.ratio;
+                glide.ratio = next;
+                done = glide.ratio <= glide.floor;
+            }
+        }
+        if retune {
+            self.apply_pitch();
+        }
+        if done {
+            self.strike_glide = None;
         }
     }
 }
@@ -243,6 +295,7 @@ impl Voice for Modal {
                 self.release_env *= self.rel_mul;
             }
             *o += s * self.gain * self.att_env * self.release_env;
+            self.advance_strike_glide();
         }
         self.level = self.modes.iter().map(|m| m.amp.abs()).sum::<f32>() * self.release_env;
         self.level * self.gain > 2e-5 || self.noise_amp > 1e-4
@@ -413,28 +466,57 @@ const KALIMBA: &[(f32, f32, f32)] = &[
     (5.40, 0.16, 0.22),
     (8.15, 0.05, 0.12),
 ];
+const TIMPANI: &[(f32, f32, f32)] = &[
+    (1.0, 1.0, 1.0),
+    (1.504, 0.70, 0.85),
+    (1.742, 0.45, 0.70),
+    (2.0, 0.30, 0.60),
+    (2.245, 0.20, 0.50),
+];
+const TIMPANI_STRIKE_SEMITONES: f32 = 2.1;
+const TIMPANI_STRIKE_SETTLE_S: f32 = 0.155;
+const TIMPANI_RELEASE_T60: f32 = 6.0;
+const TIMPANI_UPPER_MIN: f32 = 0.62;
+const TIMPANI_UPPER_VELOCITY_SCALE: f32 = 0.58;
+const TIMPANI_UPPER_JITTER: f32 = 0.24;
+const TIMPANI_JITTER_SEED_XOR: u32 = 0x7151_47A5;
 
-fn timpani(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+fn timpani_partials(key: u8, vel: u8, seed: u32) -> Vec<(f32, f32, f32)> {
     let f = key_freq(key);
     let v = vel_amp(vel);
-    let table = [
-        (1.0, 1.0, 1.0),
-        (1.504, 0.70, 0.85),
-        (1.742, 0.45, 0.70),
-        (2.0, 0.30, 0.60),
-        (2.245, 0.20, 0.50),
-    ];
-    let partials: Vec<(f32, f32, f32)> = table.iter().map(|&(r, a, t)| (f * r, a * v, t)).collect();
+    let vn = vel as f32 / 127.0;
+    let upper = TIMPANI_UPPER_MIN + TIMPANI_UPPER_VELOCITY_SCALE * vn;
+    let mut jrng = Rng::new(seed ^ TIMPANI_JITTER_SEED_XOR);
+    TIMPANI
+        .iter()
+        .enumerate()
+        .map(|(i, &(r, a, t))| {
+            let amp = if i == 0 {
+                a * v
+            } else {
+                a * v * upper * (1.0 + TIMPANI_UPPER_JITTER * jrng.white())
+            };
+            (f * r, amp, t)
+        })
+        .collect()
+}
+
+fn timpani(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    let v = vel_amp(vel);
+    let partials = timpani_partials(key, vel, seed);
     let thump = Biquad::lowpass(300.0, 0.8, sr);
+    let start = 2f32.powf(TIMPANI_STRIKE_SEMITONES / 12.0);
+    let glide_oct_per_s = (TIMPANI_STRIKE_SEMITONES / 12.0) / TIMPANI_STRIKE_SETTLE_S;
     Modal::new(
         sr,
         seed,
         &partials,
         (1.1 * v, 0.045, thump),
         0.001,
-        0.25,
+        TIMPANI_RELEASE_T60,
         0.85,
     )
+    .with_strike_glide(start, glide_oct_per_s, 1.0)
 }
 
 // ---------------------------------------------------------------------------
@@ -3971,6 +4053,138 @@ mod tests {
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    fn segment(s: &[f32], sr: f32, a: f32, b: f32) -> &[f32] {
+        &s[(a * sr) as usize..(b * sr) as usize]
+    }
+
+    fn max_abs(s: &[f32]) -> f32 {
+        s.iter().map(|x| x.abs()).fold(0.0, f32::max)
+    }
+
+    #[test]
+    fn timpani_47_glides_brightens_and_rings_after_noteoff() {
+        let sr = 44100.0;
+        let seed = 0x4700_1300;
+        let bend = 2f32.powf(2.0 / 12.0);
+
+        let pitch = |s: &[f32], f0: f32| peak_locate(s, sr, 0.95 * f0, 1.15 * f0);
+        let upper_ratio = |s: &[f32], f0: f32| {
+            let fundamental = mag_at(s, sr, f0).max(1e-9);
+            (mag_at(s, sr, 1.504 * f0) + mag_at(s, sr, 1.742 * f0) + mag_at(s, sr, 2.0 * f0))
+                / fundamental
+        };
+
+        for key in [40u8, 45] {
+            let mut routed = make(47, key, 96, sr, seed, false);
+            assert_eq!(routed.kind(), "modal");
+            let mut routed_buf = vec![0f32; (0.35 * sr) as usize];
+            routed.render(&mut routed_buf);
+
+            let f0 = key_freq(key);
+            let early = pitch(segment(&routed_buf, sr, 0.025, 0.070), f0);
+            let late = pitch(segment(&routed_buf, sr, 0.180, 0.320), f0);
+            assert!(
+                early > 1.05 * late && (late / f0 - 1.0).abs() < 0.03,
+                "key {key}: timpani strike does not settle downward: early {early} late {late} expected {f0}"
+            );
+
+            let soft = render_program(47, key, 40, 0.35, seed);
+            let hard = render_program(47, key, 120, 0.35, seed);
+            let soft_body = segment(&soft, sr, 0.080, 0.260);
+            let hard_body = segment(&hard, sr, 0.080, 0.260);
+            let soft_upper = upper_ratio(soft_body, f0);
+            let hard_upper = upper_ratio(hard_body, f0);
+            assert!(
+                hard_upper > 1.3 * soft_upper,
+                "key {key}: hard timpani strike is not brighter: hard {hard_upper} soft {soft_upper}"
+            );
+            assert!(
+                rms(hard_body) > 4.0 * rms(soft_body)
+                    && max_abs(hard_body) < 8.0 * max_abs(soft_body),
+                "key {key}: velocity loudness/peak law regressed: rms hard {} soft {}, peak hard {} soft {}",
+                rms(hard_body),
+                rms(soft_body),
+                max_abs(hard_body),
+                max_abs(soft_body)
+            );
+
+            let partial_shape = |partial_seed| {
+                let partials = timpani_partials(key, 96, partial_seed);
+                let fundamental = partials[0].1.max(1e-9);
+                [
+                    partials[1].1 / fundamental,
+                    partials[2].1 / fundamental,
+                    partials[3].1 / fundamental,
+                ]
+            };
+            let shape_a = partial_shape(seed);
+            let shape_b = partial_shape(seed ^ 0x5555_AAAA);
+            let variation = shape_a
+                .iter()
+                .zip(shape_b)
+                .map(|(&a, b)| (a - b).abs() / a.max(b).max(1e-9))
+                .fold(0.0, f32::max);
+            let a = render_program(47, key, 96, 0.35, seed);
+            let b = render_program(47, key, 96, 0.35, seed ^ 0x5555_AAAA);
+            let late_a = pitch(segment(&a, sr, 0.180, 0.320), f0);
+            let late_b = pitch(segment(&b, sr, 0.180, 0.320), f0);
+            assert!(
+                variation > 0.08
+                    && (late_a / f0 - 1.0).abs() < 0.03
+                    && (late_b / f0 - 1.0).abs() < 0.03,
+                "key {key}: seed does not change phase-invariant upper balance without moving pitch: variation {variation}, late {late_a}/{late_b}, expected {f0}"
+            );
+
+            let mut held = make(47, key, 96, sr, seed, false);
+            let mut released = make(47, key, 96, sr, seed, false);
+            let mut gate = vec![0f32; (0.120 * sr) as usize];
+            held.render(&mut gate);
+            gate.fill(0.0);
+            released.render(&mut gate);
+            released.note_off();
+            let mut held_tail = vec![0f32; (0.700 * sr) as usize];
+            let mut released_tail = vec![0f32; (0.700 * sr) as usize];
+            held.render(&mut held_tail);
+            released.render(&mut released_tail);
+            let held_tail = segment(&held_tail, sr, 0.300, 0.650);
+            let released_tail = segment(&released_tail, sr, 0.300, 0.650);
+            assert!(
+                rms(released_tail) > 0.65 * rms(held_tail) && rms(released_tail) > 1e-4,
+                "key {key}: timpani note-off chokes the head ring: released {} held {}",
+                rms(released_tail),
+                rms(held_tail)
+            );
+
+            let mut bent = make(47, key, 96, sr, seed, false);
+            let mut bent_buf = vec![0f32; (0.360 * sr) as usize];
+            let chunk = (0.020 * sr) as usize;
+            for (i, part) in bent_buf.chunks_mut(chunk).enumerate() {
+                if i as f32 * 0.020 <= 0.120 {
+                    bent.set_pitch(bend);
+                }
+                bent.render(part);
+            }
+            let want = f0 * bend;
+            let early_bent = pitch(segment(&bent_buf, sr, 0.025, 0.070), want);
+            let late_bent = pitch(segment(&bent_buf, sr, 0.180, 0.320), want);
+            assert!(
+                early_bent > 1.05 * late_bent && (late_bent / want - 1.0).abs() < 0.03,
+                "key {key}: repeated set_pitch reset or double-applied timpani glide: early {early_bent} late {late_bent} expected {want}"
+            );
+        }
+
+        for (program, key) in [(0u8, 60u8), (11, 60), (14, 60), (98, 60), (108, 72)] {
+            let f0 = key_freq(key);
+            let buf = render_program(program, key, 96, 0.35, seed ^ program as u32);
+            let early = pitch(segment(&buf, sr, 0.025, 0.070), f0);
+            let late = pitch(segment(&buf, sr, 0.180, 0.320), f0);
+            assert!(
+                (early / late - 1.0).abs() < 0.03,
+                "program {program}: non-timpani modal voice picked up timpani glide: early {early} late {late}"
+            );
+        }
     }
 
     #[test]

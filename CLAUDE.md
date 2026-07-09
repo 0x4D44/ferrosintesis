@@ -86,13 +86,13 @@ whitelist and verify nothing strays into an unintended range. Read the family/GM
 table in `fable5/hollowsynth/README.md` before assuming a program will sound right.
 
 **The "authored channel" invariant — new synth features must stay opt-in.** Every added
-CC feature (CC1 vibrato/Leslie, CC64/68/74, CC70 vowels, RPN, aftertouch…) engages only
-once a channel *authors* it; a channel that never sends it renders exactly as before. This
-keeps already-committed albums frozen while the synth grows. **Prove it**: build a baseline
+CC feature (CC1 vibrato/Leslie, CC64/68/74, CC70 vowels, CC0 alt-bank select, RPN,
+aftertouch…) engages only once a channel *authors* it; a channel that never sends it renders
+exactly as before. This keeps already-committed albums frozen while the synth grows. **Prove it**: build a baseline
 binary in a throwaway `git worktree add <path> HEAD`, render a prior album with both
 binaries, and `cmp` for byte-identity. Do this for any voices.rs/engine.rs change.
 
-hollowsynth is versioned (`Cargo.toml`, currently 0.8.2); a shipped-code change needs one
+hollowsynth is versioned (`Cargo.toml`, currently 0.10.0); a shipped-code change needs one
 version bump per integrated task.
 
 ## Composition-engine architecture

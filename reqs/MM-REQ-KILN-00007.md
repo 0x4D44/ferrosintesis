@@ -5,11 +5,11 @@
 - **Area:** hollowsynth / voices
 - **Raised:** 2026-07-08
 - **Implemented-by:** `fable5/hollowsynth/src/voices.rs::SITAR`, `fable5/hollowsynth/src/voices.rs::SHAMISEN`, `fable5/hollowsynth/src/voices.rs::KOTO`, `fable5/hollowsynth/src/voices.rs::make`, `fable5/hollowsynth/src/voices.rs::tests::sitar_shamisen_koto_have_distinct_pluck_presets`, `fable5/hollowsynth/src/testutil.rs::guards::gm_routing_pins_voice_kinds`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | cargo test sitar_shamisen_koto_have_distinct_pluck_presets --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test sitar_shamisen_koto_have_distinct_pluck_presets --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `2f36bf142c64cc76a73a4cfbc08b86bbe11836b0`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `8b1c36686b60cc7a8561a3054f32bcc53440a670`)
 
 ## Statement
 GM 104 (sitar), 106 (shamisen) and 107 (koto) must render with distinct plucked
@@ -31,7 +31,7 @@ Manual reqs-loop build on branch `task/20260708-TSK-HUM-reqs-loop-mm-req-00007`.
 Exact Gate 2 oracle command:
 
 ```powershell
-$null | cargo test sitar_shamisen_koto_have_distinct_pluck_presets --manifest-path fable5/hollowsynth/Cargo.toml
+$null | deltic timeout 180 cargo test sitar_shamisen_koto_have_distinct_pluck_presets --manifest-path fable5/hollowsynth/Cargo.toml
 ```
 
 Passing output recorded on 2026-07-08:
@@ -40,7 +40,7 @@ Passing output recorded on 2026-07-08:
 running 1 test
 test voices::tests::sitar_shamisen_koto_have_distinct_pluck_presets ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.13s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 112 filtered out; finished in 0.15s
 
 running 0 tests
 
@@ -61,16 +61,16 @@ Local validation:
 
 ```text
 deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
-PASS
+passed (no output)
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: 105 passed; 0 failed; 2 ignored; finished in 9.98s
+test result: ok. 111 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 8.55s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-PASS: Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.01s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.98s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: Finished `release` profile [optimized] target(s) in 4.23s
+Finished `release` profile [optimized] target(s) in 3.82s
 ```
 
 Existing-MIDI and prior-render safety:
@@ -100,7 +100,8 @@ Regression reviewers confirmed tracked MIDI has no 104/106/107 hits and that the
 Landing-hygiene reviewer found the expected pre-landing gaps: uncommitted implementation, pending req transition, pending oracle output, pending gates, and generated WAV artifacts. These were addressed before the landing commit except the ignored WAV files, which were removed after evidence capture.
 ```
 
-Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
-realtime API landed. The implementation commit became
-`2f36bf142c64cc76a73a4cfbc08b86bbe11836b0`; the package version was advanced to
-`0.8.4` because trunk already carried `0.8.3`.
+Post-integration rebase note: rebased onto `origin/main` at `632693e` after
+`MM-REQ-KILN-00006` landed. The implementation commit became
+`8b1c36686b60cc7a8561a3054f32bcc53440a670`; the package version was advanced to
+`0.8.11` because trunk already carried `0.8.10`. The rebase kept the wood-bar,
+kalimba, sustained-FX, orchestra-hit, SFX-noise, and fiddle dispatch/tests.

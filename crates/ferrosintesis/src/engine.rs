@@ -795,7 +795,10 @@ impl EngineCore {
             }
         }
 
-        let vel = if ch != 9 && self.strips[ci].soft && self.strips[ci].program <= 7 {
+        let vel = if ch != 9
+            && self.strips[ci].soft
+            && voices::is_acoustic_piano(self.strips[ci].program)
+        {
             ((vel as f32 * 0.75).round() as u8).max(1)
         } else {
             vel
@@ -1346,7 +1349,7 @@ impl EngineCore {
             let theta = strip.pan * FRAC_PI_2;
             let (gl, gr) = (g * theta.cos(), g * theta.sin());
             let rs = strip.reverb_send * 0.9;
-            let is_piano = ci != 9 && strip.program <= 7;
+            let is_piano = ci != 9 && voices::is_acoustic_piano(strip.program);
             let is_ac_gtr = ci != 9 && matches!(strip.program, 24 | 25);
             let haas = strip.haas_delay;
             for (i, &x) in buf[..n].iter().enumerate() {
@@ -3611,6 +3614,46 @@ mod tests {
         left(&render(&test_song(ev, 3.5), &test_opts(44100.0)).0)
     }
 
+    fn render_keyboard_una_corda(program: u8, soft: bool) -> Vec<f32> {
+        let mut ev = vec![
+            (
+                0.0,
+                EvKind::Prog {
+                    ch: 0,
+                    prog: program,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+        ];
+        if soft {
+            ev.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 67,
+                    val: 127,
+                },
+            ));
+        }
+        ev.push((
+            0.05,
+            EvKind::NoteOn {
+                ch: 0,
+                key: 60,
+                vel: 100,
+            },
+        ));
+        ev.push((1.0, EvKind::NoteOff { ch: 0, key: 60 }));
+        left(&render(&test_song(ev, 1.4), &test_opts(44100.0)).0)
+    }
+
     /// CC67 una corda softens the piano strike: the scaled velocity makes it
     /// both quieter and duller (velocity drives the model's brightness).
     #[test]
@@ -3631,6 +3674,30 @@ mod tests {
             hf_soft < 0.85 * hf_norm,
             "una corda not duller: soft {hf_soft} vs normal {hf_norm}"
         );
+    }
+
+    #[test]
+    fn keyboard_voices_una_corda_is_acoustic_piano_only() {
+        let sr = 44100.0;
+        let normal = render_keyboard_una_corda(0, false);
+        let soft = render_keyboard_una_corda(0, true);
+        let (a, b) = ((0.06 * sr) as usize, (0.5 * sr) as usize);
+        assert!(
+            rms(&soft[a..b]) < 0.9 * rms(&normal[a..b]),
+            "GM0 una corda positive control did not soften"
+        );
+
+        for program in 4u8..=7 {
+            let plain = render_keyboard_una_corda(program, false);
+            let soft = render_keyboard_una_corda(program, true);
+            assert!(
+                plain
+                    .iter()
+                    .zip(&soft)
+                    .all(|(x, y)| x.to_bits() == y.to_bits()),
+                "GM{program} was still velocity-scaled by acoustic-piano CC67"
+            );
+        }
     }
 
     // -----------------------------------------------------------------------

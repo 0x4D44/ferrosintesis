@@ -1,6 +1,6 @@
 [package]
 name = "ferrosintesis-cli"
-version = "0.10.3"
+version = "0.10.4"
 edition = "2021"
 description = "Command-line WAV renderer for ferrosintesis"
 license = "MIT OR Apache-2.0"

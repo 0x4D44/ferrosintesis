@@ -5,11 +5,11 @@
 - **Area:** hollowsynth / engine
 - **Raised:** 2026-07-08
 - **Implemented-by:** `fable5/hollowsynth/src/engine.rs::vowel_family`, `fable5/hollowsynth/src/engine.rs::EngineCore::note_on`, `fable5/hollowsynth/src/engine.rs::EngineCore::render_block_add`, `fable5/hollowsynth/src/engine.rs::tests::choir_pad_91_cc70_vowel_morph_opens_formants`, `fable5/hollowsynth/src/voices.rs::SawStack::set_vowel`, `fable5/hollowsynth/src/voices.rs::pad`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | cargo test choir_pad_91_cc70_vowel_morph_opens_formants --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test choir_pad_91_cc70_vowel_morph_opens_formants --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `ad383543a48f216aef7e7ca786b26904980c807b`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `df0ae7daa90a8f3b4f9fa13bce4aa13346e8ada3`)
 
 ## Statement
 The CC70 vowel-morph control must be available to the formant-capable SawStack
@@ -41,16 +41,16 @@ Passing output recorded on 2026-07-08:
 running 1 test
 test engine::tests::choir_pad_91_cc70_vowel_morph_opens_formants ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 1.06s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 113 filtered out; finished in 0.98s
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Compiling hollowsynth v0.8.4 (D:\worktrees\midi-music\20260708-TSK-HUM-reqs-loop-mm-req-00010\fable5\hollowsynth)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s
-     Running unittests src\lib.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-ba4185fbc9b0bac1.exe)
-     Running unittests src\main.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-5ef3fec99e2e91ba.exe)
+   Compiling hollowsynth v0.8.12 (D:\worktrees\midi-music\20260708-TSK-HUM-reqs-loop-mm-req-00010\fable5\hollowsynth)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.56s
+     Running unittests src\lib.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-dbc2a0c85c370b4c.exe)
+     Running unittests src\main.rs (fable5\hollowsynth\target\debug\deps\hollowsynth-e095bab3fbaf2821.exe)
 ```
 
 Oracle red proof on baseline claim commit `2851206`:
@@ -65,22 +65,22 @@ Local validation:
 
 ```text
 deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
-PASS
+passed (no output)
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: 105 passed; 0 failed; 2 ignored; finished in 7.38s
+test result: ok. 112 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 8.58s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-PASS: Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.89s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.00s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: Finished `release` profile [optimized] target(s) in 3.70s
+Finished `release` profile [optimized] target(s) in 3.61s
 ```
 
 Existing-MIDI and prior-render safety:
 
 ```text
-No tracked `.mid` files changed between the original scan base `4696cdb` and the rebased trunk base `c0cd5cd`, so the original MIDI scan remains applicable:
+No tracked `.mid` files changed between the original scan base `4696cdb` and the current trunk base `2c60131`, so the original MIDI scan remains applicable:
 tracked_mid_files_scanned=53
 parse_errors=0
 program91_files=0
@@ -100,9 +100,15 @@ Adversarial self-review:
 ```text
 Oracle-fit reviewer found a real temporal bug in the first implementation: whole-song lookahead made a program-91 note use the formant path before CC70 arrived. The implementation was changed so program 91 starts as the old lowpass pad and converts inside SawStack::set_vowel only when CC70 is actually authored. The oracle now bit-compares the pre-CC70 window against a no-CC70 render, and the reviewer confirmed the issue fixed.
 
-Compatibility reviewer confirmed the previous 53-MIDI scan still applies because no tracked `.mid` files changed between the scan base and `c0cd5cd`, then reran a baseline/current Heliopause render against `c0cd5cd`; `fc /b` reported no differences.
+Compatibility reviewer confirmed the previous 53-MIDI scan still applies because no tracked `.mid` files changed between the scan base and `c0cd5cd`, then reran a baseline/current Heliopause render against `c0cd5cd`; `fc /b` reported no differences. Before this integration push, `git diff --name-only 4696cdb origin/main -- "*.mid"` was empty, so the scan still applies to current trunk.
 
 Rebase reviewer checked that no conflict markers remain, `EngineCore::note_on` and `EngineCore::render_block_add` both use `vowel_family(program)`, and the reset-controller path still does not convert program 91 without CC70 authoring.
 
-Landing-hygiene reviewer confirmed the rebased implementation SHA, `0.8.4` version bump, clean gates, no staged generated artifacts, and a real future integration conflict with the parallel v0.9 branch. The branch remains unpushed for human sequencing.
+Landing-hygiene reviewer confirmed the rebased implementation SHA, version bump, clean gates, no staged generated artifacts, and a real future integration conflict with the parallel v0.9 branch.
 ```
+
+Post-integration rebase note: rebased onto `origin/main` at `2c60131` after
+`MM-REQ-KILN-00007` landed. The implementation commit became
+`df0ae7daa90a8f3b4f9fa13bce4aa13346e8ada3`; the package version was advanced to
+`0.8.12` because trunk already carried `0.8.11`. The rebase kept the accumulated
+GM voice/routing additions and merged the README SawStack table row.

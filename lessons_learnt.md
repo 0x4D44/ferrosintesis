@@ -113,3 +113,8 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   `albums/`.** MM-REQ-KILN-00017 left album MIDI byte-identical, but the newly
   committed Synth Feature Showcase listening track used GM109/111 and had to be
   refreshed. Scan every `ALBUMS` entry before declaring a synth change asset-free.
+- 2026.07.09 — **Generated GM43 contrabass lanes need a floor and centered pan.**
+  Spark and Hours After Rain both wrote `chord["bass"] - 12` into program 43,
+  producing MIDI 12-23 sustained notes panned left; ferrosintesis turns that into
+  sub-bass flatulence. Clamp/raise contrabass beds to at least C2 (MIDI 36) and
+  keep sustained low strings centered unless the track has an explicit reason not to.

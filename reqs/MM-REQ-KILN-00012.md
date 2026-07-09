@@ -1,15 +1,15 @@
 # MM-REQ-KILN-00012 — Vibraphone (GM 11) should have its motor tremolo
 
-- **State:** Accepted
+- **State:** Implemented
 - **Priority:** Could
 - **Area:** ferrosintesis / voices (Modal / bell)
 - **Raised:** 2026-07-08
-- **Implemented-by:** —
-- **Satisfied-by:** `$null | cargo test vibraphone_11_motor_tremolo_modulates_amplitude --manifest-path crates/ferrosintesis/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::ModalAmpTrem`, `crates/ferrosintesis/src/voices.rs::VIBRAPHONE_MOTOR_RATE_HZ`, `crates/ferrosintesis/src/voices.rs::tests::vibraphone_11_motor_tremolo_modulates_amplitude`, `crates/ferrosintesis/README.md`
+- **Satisfied-by:** `$null | deltic timeout 120 cargo test vibraphone_11_motor_tremolo_modulates_amplitude --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09)
 
 ## Statement
 The vibraphone (GM 11) must carry the amplitude-modulation tremolo that defines

@@ -98,3 +98,9 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   start working, but 13 committed MIDIs had already authored those controls
   while the synth ignored them. Scan `render_opus.py::ALBUMS` for authored
   controls before promising byte identity; then make the waiver set explicit.
+- 2026.07.09 — **Full-mix audio deltas must follow the rendered signal, not the
+  control's intuition.** The synth feature demos' first `analyze.py` pass failed
+  because wah/Leslie/vowel checks guessed "darkens"/"louder" while the full mix
+  measured HF-up or HF-down after other parts and normalization. For controller
+  audibility, either isolate a solo stem or measure the rendered ratio first and
+  assert that direction.

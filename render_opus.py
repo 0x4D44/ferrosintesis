@@ -55,6 +55,7 @@ ALBUMS: dict[str, tuple[str, str, str]] = {
     "albums/gpt5-5/The Long Turning": ("The Long Turning", "GPT-5.5",          "Instrumental"),
     "albums/opus4-8":                 ("VIGIL",            "Claude Opus 4.8",  "Neo-Classical / Instrumental"),
     "albums/opus4-8/amarok":          ("RIVERWAKE",        "Claude Opus 4.8",  "Progressive Folk / Instrumental"),
+    "demos/synth_feature_showcase":    ("Synth Feature Showcase", "OpenAI Codex", "Synth Demo / Instrumental"),
 }
 
 _NUM = re.compile(r"^\s*(\d+)\s*[-.]\s*(.+)$")

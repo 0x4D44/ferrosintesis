@@ -18,3 +18,10 @@ python analyze.py
 ```
 
 Rendered WAV files are scratch output and are not committed.
+
+Committed listening copies are generated from the repo root:
+
+```powershell
+cargo build --release -p ferrosintesis-cli
+python render_opus.py --album "Synth Feature Showcase"
+```

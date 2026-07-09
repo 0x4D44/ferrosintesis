@@ -143,9 +143,27 @@ pub(crate) fn inter_corr(l: &[f32], r: &[f32]) -> f32 {
 /// doesn't saturate the autocorrelation) → normalised autocorrelation peak
 /// over the lag window. Returns (peak in 0..1, rate in Hz at the peak lag).
 pub(crate) fn env_autocorr_peak(seg: &[f32], sr: f32, lag_lo_s: f32, lag_hi_s: f32) -> (f32, f32) {
+    // Oracle-24 and every 15 Hz caller keep the calibrated corner.
+    env_autocorr_peak_detrend(seg, sr, lag_lo_s, lag_hi_s, 15.0)
+}
+
+/// Minimum tremolo AM autocorrelation peak the alt-bank Bowed(44) must reach.
+pub(crate) const BW_TREM_PEAK_FLOOR: f32 = 0.55;
+
+/// Detrend-corner variant of `env_autocorr_peak`: the highpass `detrend_hz` is a
+/// parameter, not a hard-coded 15 Hz. The alt-bank bow-tremolo (44) sits at
+/// 6-9 Hz — below the 15 Hz corner, which would attenuate its AM fundamental —
+/// so its rate oracle passes `detrend_hz = 4.0`.
+pub(crate) fn env_autocorr_peak_detrend(
+    seg: &[f32],
+    sr: f32,
+    lag_lo_s: f32,
+    lag_hi_s: f32,
+    detrend_hz: f32,
+) -> (f32, f32) {
     let mut lp = OnePole::lowpass(200.0, sr);
     let env: Vec<f32> = seg.iter().map(|&x| lp.process(x.abs())).collect();
-    let mut slow = OnePole::lowpass(15.0, sr);
+    let mut slow = OnePole::lowpass(detrend_hz, sr);
     let d: Vec<f64> = env.iter().map(|&x| (x - slow.process(x)) as f64).collect();
     let zero: f64 = d.iter().map(|&x| x * x).sum();
     if zero <= 0.0 {

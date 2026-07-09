@@ -5,11 +5,11 @@
 - **Area:** hollowsynth / voices dispatch
 - **Raised:** 2026-07-08
 - **Implemented-by:** fable5/hollowsynth/src/voices.rs::SfxNoise, fable5/hollowsynth/src/voices.rs::make, fable5/hollowsynth/src/voices.rs::tests::gm_sfx_120_127_are_toneless_noise_fallbacks, fable5/hollowsynth/src/testutil.rs::guards::gm_routing_pins_voice_kinds, fable5/hollowsynth/README.md
-- **Satisfied-by:** `$null | cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `f762fa68f022601dafcb164a5de49fc9a57a024c`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `d4b87f8bfa15ab22c6327e9af8e991909988ec1a`)
 
 ## Statement
 GM 120–127 (fret noise, breath, seashore, bird, telephone, helicopter, applause,
@@ -32,35 +32,35 @@ Manual reqs-loop implementation landed on branch
 Gate 2 oracle command and passing output:
 
 ```text
-$null | cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path fable5/hollowsynth/Cargo.toml
+$null | deltic timeout 180 cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path fable5/hollowsynth/Cargo.toml
 running 1 test
 test voices::tests::gm_sfx_120_127_are_toneless_noise_fallbacks ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 111 filtered out; finished in 0.02s
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 ```
 
-Additional local gates after rebasing onto `origin/main` at `c0cd5cd`:
+Additional local gates after rebasing onto `origin/main` at `b9cea30`:
 
 ```text
-$null | deltic timeout 120 cargo test gm_routing_pins_voice_kinds --manifest-path fable5/hollowsynth/Cargo.toml
+$null | deltic timeout 180 cargo test gm_routing_pins_voice_kinds --manifest-path fable5/hollowsynth/Cargo.toml
 test testutil::guards::gm_routing_pins_voice_kinds ... ok
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 111 filtered out; finished in 0.00s
 
 deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
-passed
+passed (no output)
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-test result: ok. 105 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 7.06s
+test result: ok. 110 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 19.70s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.83s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.51s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-Finished `release` profile [optimized] target(s) in 3.64s
+Finished `release` profile [optimized] target(s) in 9.58s
 ```
 
 Existing-album invariant: tracked MIDI scan found no SFX programs:
@@ -89,7 +89,8 @@ landing-hygiene reviewer confirmed the version bump, README update, routing
 canary, expected dirty set, gates, and an additional Tuxedo Noir byte-identity
 render (`E48CA61B9B435A2E33F81EA418ACEB1E4154D7C9E111655C24A0D899F49052E7`).
 
-Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
-realtime API landed. The implementation commit became
-`f762fa68f022601dafcb164a5de49fc9a57a024c`; the package version was advanced to
-`0.8.4` because trunk already carried `0.8.3`.
+Post-integration rebase note: rebased onto `origin/main` at `b9cea30` after
+`MM-REQ-KILN-00005` landed. The implementation commit became
+`d4b87f8bfa15ab22c6327e9af8e991909988ec1a`; the package version was advanced to
+`0.8.10` because trunk already carried `0.8.9`. The rebase kept the wood-bar,
+kalimba, sustained-FX, orchestra-hit, and fiddle dispatch/tests.

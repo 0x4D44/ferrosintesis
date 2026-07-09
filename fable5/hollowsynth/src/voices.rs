@@ -437,6 +437,64 @@ fn timpani(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
 // Pluck (extended Karplus-Strong)
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Copy)]
+pub struct MwahSpec {
+    pub start_hz: f32,
+    pub bloom_hz: f32,
+    pub q: f32,
+    pub bloom_s: f32,
+    pub decay_s: f32,
+    pub gain: f32,
+}
+
+struct Mwah {
+    spec: MwahSpec,
+    low: Biquad,
+    high: Biquad,
+    follower: f32,
+    attack_k: f32,
+    release_k: f32,
+}
+
+impl Mwah {
+    const FOLLOWER_SCALE: f32 = 8.0;
+    const HIGH_BLOOM_GAIN: f32 = 2.2;
+
+    fn new(spec: MwahSpec, sr: f32) -> Self {
+        Mwah {
+            spec,
+            low: Biquad::bandpass(spec.start_hz, spec.q, sr),
+            high: Biquad::bandpass(spec.bloom_hz, spec.q, sr),
+            follower: 0.0,
+            attack_k: 1.0 - (-1.0 / (0.006 * sr)).exp(),
+            release_k: 1.0 - (-1.0 / (0.055 * sr)).exp(),
+        }
+    }
+
+    fn tick(&mut self, x: f32, t: u32, sr: f32) -> f32 {
+        let target = x.abs();
+        let k = if target > self.follower {
+            self.attack_k
+        } else {
+            self.release_k
+        };
+        self.follower += k * (target - self.follower);
+
+        let t_s = t as f32 / sr;
+        let u = (t_s / self.spec.bloom_s.max(0.001)).clamp(0.0, 1.0);
+        let smooth = u * u * (3.0 - 2.0 * u);
+        let open = smooth * smooth * smooth * smooth * smooth;
+
+        let age = (t_s - self.spec.bloom_s).max(0.0);
+        let decay = 10f32.powf(-3.0 * age / self.spec.decay_s.max(0.01));
+        let follow = (self.follower * Self::FOLLOWER_SCALE).min(1.0);
+        let low = self.low.process(x);
+        let high = self.high.process(x);
+        let opened = low * (1.0 - open) + high * open * Self::HIGH_BLOOM_GAIN;
+        opened * self.spec.gain * open * decay * follow
+    }
+}
+
 pub struct PluckPreset {
     pub t60: f32,     // decay at 220 Hz
     pub bright: f32,  // loop damping cutoff
@@ -451,16 +509,17 @@ pub struct PluckPreset {
     pub sub: f32,                         // envelope-locked fundamental sine (0 = none)
     pub cab_lp: f32,                      // clean-amp cab rolloff, 0 = none (HLD G2)
     // --- HLD family B: parallel one-shot transients ---
-    pub click: f32,            // pick/slap onset hardness (0 = none)
-    pub click_hp: f32,         // click filter corner
-    pub click_post: bool,      // false: knocks the body (pre-EQ); true: post-out
-    pub attack_noise: f32,     // finger/fret noise level (0 = none, post-out)
-    pub stop_thump: f32,       // release thud level (0 = none, armed by note_off)
-    pub sub_shape: (f32, f32), // sub waveshaper (2f, 3f) amounts (MUTED grit / B5)
-    pub sub_ramp: u32,         // sub fade-in samples
-    pub grit: bool,            // per-voice soft-clip (MUTED palm chug, G4)
-    pub wound_all: bool,       // K4: wound full-range (bass family) vs key-split (guitars)
-    pub harmonic: bool,        // prog-31 flageolet: loop retuned to 2f/3f (G7)
+    pub click: f32,             // pick/slap onset hardness (0 = none)
+    pub click_hp: f32,          // click filter corner
+    pub click_post: bool,       // false: knocks the body (pre-EQ); true: post-out
+    pub attack_noise: f32,      // finger/fret noise level (0 = none, post-out)
+    pub stop_thump: f32,        // release thud level (0 = none, armed by note_off)
+    pub sub_shape: (f32, f32),  // sub waveshaper (2f, 3f) amounts (MUTED grit / B5)
+    pub sub_ramp: u32,          // sub fade-in samples
+    pub grit: bool,             // per-voice soft-clip (MUTED palm chug, G4)
+    pub wound_all: bool,        // K4: wound full-range (bass family) vs key-split (guitars)
+    pub harmonic: bool,         // prog-31 flageolet: loop retuned to 2f/3f (G7)
+    pub mwah: Option<MwahSpec>, // fretless vocal formant bloom (GM 35)
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -489,6 +548,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     grit: false,
     wound_all: false,
     harmonic: false,
+    mwah: None,
     #[cfg(test)]
     name: "DEFAULT",
 };
@@ -614,6 +674,14 @@ pub const FRETLESS: PluckPreset = PluckPreset {
     sub_shape: (0.4, 0.0), // B5: a real string's weight has a strong 2nd harmonic
     attack_noise: 0.55,    // was 0.7
     stop_thump: 2.2,
+    mwah: Some(MwahSpec {
+        start_hz: 380.0,
+        bloom_hz: 720.0,
+        q: 4.0,
+        bloom_s: 0.120,
+        decay_s: 0.450,
+        gain: 0.55,
+    }),
     ..DEFAULTS
 };
 /// Slap bass (B2, GM 36/37): thumb slap + near-bridge pop.
@@ -905,6 +973,7 @@ pub struct Pluck {
     onset_pre: Option<Burst>,  // pick click / palm chuff — knocks the body
     onset_post: Option<Burst>, // finger noise / slap pop — after the out-LP
     stop: Option<Burst>,       // release thump, armed by note_off
+    mwah: Option<Mwah>,        // fretless vocal formant bloom
     grit: bool,                // MUTED palm soft-clip
     body: Vec<Biquad>,
     // clean-amp cab (HLD G2): two cascaded biquad lowpasses — one 2nd-order
@@ -1062,6 +1131,7 @@ impl Pluck {
                     sr,
                 )
             }),
+            mwah: p.mwah.map(|spec| Mwah::new(spec, sr)),
             grit: p.grit,
             body: p
                 .body
@@ -1170,8 +1240,12 @@ impl Voice for Pluck {
                     y = c.process(y);
                 }
             }
+            let mwah_tap = y;
             if let Some(lp) = &mut self.out_lp {
                 y = lp.process(y);
+            }
+            if let Some(mwah) = &mut self.mwah {
+                y += mwah.tick(mwah_tap, self.t, self.sr);
             }
             if let Some((osc, gain, decay)) = &mut self.sub {
                 // the fundamental's weight, decaying with the string
@@ -4272,6 +4346,82 @@ mod tests {
             excess(0.012, 0.020),
             excess(0.0, 0.008)
         );
+    }
+
+    #[test]
+    fn fretless_bass_35_mwah_blooms() {
+        let sr = 44100.0;
+        let vel = 96;
+        let spec = FRETLESS.mwah.expect("FRETLESS must carry the mwah spec");
+        let no_mwah = PluckPreset {
+            mwah: None,
+            ..FRETLESS
+        };
+
+        assert_eq!(make(35, 31, vel, sr, 7, false).kind(), "FRETLESS");
+
+        for key in [31u8, 38] {
+            let seed = 0x35_00u32 + key as u32;
+            let with = render_program(35, key, vel, 0.55, seed);
+            let without = render_pluck(&no_mwah, key, vel, 0.55, seed);
+            let residual: Vec<f32> = with.iter().zip(&without).map(|(a, b)| a - b).collect();
+            let band = |s: &[f32], a: f32, b: f32, hz: f32| {
+                let lo = (a * sr) as usize;
+                let hi = (b * sr) as usize;
+                crate::testutil::band_rms(&s[lo..hi], sr, hz, spec.q)
+            };
+
+            let early_low = band(&residual, 0.035, 0.070, spec.start_hz);
+            let early_high = band(&residual, 0.035, 0.070, spec.bloom_hz);
+            let bloom_low = band(&residual, 0.105, 0.155, spec.start_hz);
+            let bloom_high = band(&residual, 0.105, 0.155, spec.bloom_hz);
+            let late_low = band(&residual, 0.280, 0.420, spec.start_hz);
+            let late_high = band(&residual, 0.280, 0.420, spec.bloom_hz);
+
+            let early_mid = early_low + early_high;
+            let bloom_mid = bloom_low + bloom_high;
+            let late_mid = late_low + late_high;
+            assert!(
+                early_low > 1.35 * early_high.max(1e-9),
+                "key {key}: mwah does not start as a low-mid formant: early low {early_low}, early high {early_high}"
+            );
+            assert!(
+                early_low > 0.02 * bloom_mid,
+                "key {key}: mwah low-mid onset is too small to prove the opening shape: early low {early_low}, bloom mid {bloom_mid}"
+            );
+            assert!(
+                bloom_mid > 2.0 * early_mid.max(1e-8),
+                "key {key}: mwah bloom is not delayed: bloom {bloom_mid} early {early_mid}"
+            );
+            assert!(
+                bloom_mid > 1.6 * late_mid.max(1e-8),
+                "key {key}: mwah bloom does not decay: bloom {bloom_mid} late {late_mid}"
+            );
+
+            let early_ratio = early_high / early_low.max(1e-9);
+            let bloom_ratio = bloom_high / bloom_low.max(1e-9);
+            assert!(
+                bloom_ratio > 1.25 * early_ratio
+                    && bloom_ratio > 0.4
+                    && bloom_high > 6.0 * early_high.max(1e-9),
+                "key {key}: mwah formant does not open upward: early ratio {early_ratio}, bloom ratio {bloom_ratio}, bloom high {bloom_high}, early high {early_high}"
+            );
+
+            let f0 = key_freq(key);
+            let body = &with[(0.080 * sr) as usize..(0.420 * sr) as usize];
+            let peak = crate::testutil::peak_locate(body, sr, f0 * 0.85, f0 * 1.15);
+            assert!(
+                (peak / f0 - 1.0).abs() < 0.05,
+                "key {key}: mwah moved perceived pitch to {peak} Hz, expected {f0}"
+            );
+            let fund = crate::testutil::mag_at(body, sr, f0);
+            let h2 = crate::testutil::mag_at(body, sr, 2.0 * f0);
+            let h3 = crate::testutil::mag_at(body, sr, 3.0 * f0);
+            assert!(
+                fund > 0.55 * h2.max(h3),
+                "key {key}: mwah upper harmonics dominate f0: f0 {fund}, h2 {h2}, h3 {h3}"
+            );
+        }
     }
 
     /// Oracle 10 (§5): the stop thump fires on note_off (LF bump vs a

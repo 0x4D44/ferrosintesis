@@ -1,15 +1,15 @@
 # MM-REQ-KILN-00011 — Fretless bass (GM 35) should have a "mwah"
 
-- **State:** Accepted
+- **State:** Implemented
 - **Priority:** Should
 - **Area:** hollowsynth / voices (Pluck bass)
 - **Raised:** 2026-07-08
-- **Implemented-by:** —
-- **Satisfied-by:** `$null | cargo test fretless_bass_35_mwah_blooms --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::Mwah`, `fable5/hollowsynth/src/voices.rs::FRETLESS`, `fable5/hollowsynth/src/voices.rs::tests::fretless_bass_35_mwah_blooms`, `fable5/hollowsynth/src/testutil.rs::guards::golden_mix_balance_holds`, `fable5/hollowsynth/README.md`
+- **Satisfied-by:** `$null | deltic timeout 240 cargo test fretless_bass_35_mwah_blooms --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09)
 
 ## Statement
 The fretless bass (GM 35) must have its signature vocal onset — an

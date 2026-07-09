@@ -454,19 +454,23 @@ mod guards {
         // 211->195 Hz). Every other channel, INCLUDING the ch 7 piano and ch 8
         // strings canaries, is BIT-EXACT vs pre-revoice: the change is
         // contained to the two bass presets, as intended.
+        // Re-captured after GM 35 fretless mwah: only ch 6's displayed RMS and
+        // centroid change at the displayed precision and the master peak moves
+        // by 0.00002; every other displayed channel, including canaries, is
+        // unchanged.
         (0, -41.28, 1020.2),
         (1, -42.07, 2020.8),
         (2, -42.68, 1107.1),
         (3, -40.13, 528.8),
         (4, -36.90, 932.2),
         (5, -24.61, 294.6),
-        (6, -27.14, 194.6),
+        (6, -27.13, 194.4),
         (7, -24.35, 567.6),
         (8, -37.21, 2683.1),
         (9, -23.26, 483.9),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 1.04282;
+    const GOLDEN_MASTER_PEAK: f32 = 1.04280;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

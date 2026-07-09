@@ -17,6 +17,10 @@ pub struct Zone {
     data: Vec<f32>,
 }
 
+pub struct HitSample {
+    data: Vec<f32>,
+}
+
 /// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).
 fn parse_wav(bytes: &[u8]) -> Vec<f32> {
     assert!(&bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
@@ -50,6 +54,14 @@ macro_rules! bank {
     ($($file:literal => $root:expr),+ $(,)?) => {
         vec![$(Zone {
             root: $root,
+            data: parse_wav(include_bytes!(concat!("../samples/", $file))),
+        }),+]
+    };
+}
+
+macro_rules! hit_bank {
+    ($($file:literal),+ $(,)?) => {
+        vec![$(HitSample {
             data: parse_wav(include_bytes!(concat!("../samples/", $file))),
         }),+]
     };
@@ -199,6 +211,28 @@ fn piano_f_rr2() -> &'static [Zone] {
     })
 }
 
+fn drum_crash() -> &'static [HitSample] {
+    static B: OnceLock<Vec<HitSample>> = OnceLock::new();
+    B.get_or_init(|| {
+        hit_bank!(
+            "drum_sus_cymb1_mp_rr1.wav",
+            "drum_sus_cymb1_mp_rr2.wav",
+            "drum_crash1_ff_rr1.wav",
+            "drum_crash1_ff_rr2.wav",
+        )
+    })
+}
+
+fn drum_kick() -> &'static [HitSample] {
+    static B: OnceLock<Vec<HitSample>> = OnceLock::new();
+    B.get_or_init(|| hit_bank!("drum_kick_v3_rr1.wav", "drum_kick_v3_rr2.wav"))
+}
+
+fn drum_snare() -> &'static [HitSample] {
+    static B: OnceLock<Vec<HitSample>> = OnceLock::new();
+    B.get_or_init(|| hit_bank!("drum_snare2_v5_rr1.wav", "drum_snare2_v5_rr2.wav"))
+}
+
 /// Velocity picks the dynamic layer; alternating round robins keep
 /// repeated notes from being byte-identical (the machine-gun tell).
 pub fn piano_bank(vel: u8, rr2: bool) -> &'static [Zone] {
@@ -224,6 +258,18 @@ pub fn flute_bank() -> &'static [Zone] {
     flute()
 }
 
+pub fn drum_crash_bank() -> &'static [HitSample] {
+    drum_crash()
+}
+
+pub fn drum_kick_bank() -> &'static [HitSample] {
+    drum_kick()
+}
+
+pub fn drum_snare_bank() -> &'static [HitSample] {
+    drum_snare()
+}
+
 pub fn prewarm() {
     let _ = piano_bank(1, false);
     let _ = piano_bank(1, true);
@@ -234,6 +280,9 @@ pub fn prewarm() {
     let _ = violin_bank(1);
     let _ = violin_bank(127);
     let _ = flute_bank();
+    let _ = drum_crash_bank();
+    let _ = drum_kick_bank();
+    let _ = drum_snare_bank();
 }
 
 fn nearest(zones: &'static [Zone], f: f32) -> &'static Zone {
@@ -372,6 +421,117 @@ impl Voice for LaVoice {
     }
 }
 
+/// Unpitched drum sample overlay. The model remains the sustaining voice; the
+/// sample contributes only a short attack/body cue and obeys the same routing
+/// controls as the wrapped model.
+pub struct SampleOverlay {
+    model: Box<dyn Voice>,
+    sample: &'static HitSample,
+    pos: f32,
+    step: f32,
+    gain: f32,
+    rel_gain: f32,
+    rel_mul: f32,
+    rel_t60_mul: f32,
+    buf: Vec<f32>,
+}
+
+impl SampleOverlay {
+    pub fn wrap(
+        model: Box<dyn Voice>,
+        bank: &'static [HitSample],
+        vel: u8,
+        seed: u32,
+        sr: f32,
+        gain: f32,
+    ) -> Box<dyn Voice> {
+        let sample = &bank[(seed as usize) % bank.len()];
+        Box::new(Self {
+            model,
+            sample,
+            pos: 0.0,
+            step: 44100.0 / sr,
+            gain: gain * (0.35 + 0.65 * vel_amp(vel)),
+            rel_gain: 1.0,
+            rel_mul: 1.0,
+            rel_t60_mul: 10f32.powf(-3.0 / (0.018 * sr)),
+            buf: Vec::new(),
+        })
+    }
+}
+
+impl Voice for SampleOverlay {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        self.buf.resize(out.len(), 0.0);
+        self.buf.fill(0.0);
+        let model_alive = self.model.render(&mut self.buf);
+        let mut sample_live = false;
+        let n = self.sample.data.len();
+        for (i, o) in out.iter_mut().enumerate() {
+            let mut s = self.buf[i];
+            let j = self.pos as usize;
+            if j + 1 < n && self.rel_gain > 0.0005 {
+                sample_live = true;
+                let frac = self.pos - j as f32;
+                let v = self.sample.data[j] * (1.0 - frac) + self.sample.data[j + 1] * frac;
+                s += v * self.gain * self.rel_gain;
+                self.rel_gain *= self.rel_mul;
+                self.pos += self.step;
+            }
+            *o += s;
+        }
+        model_alive || sample_live
+    }
+
+    fn note_off(&mut self) {
+        self.model.note_off();
+        self.rel_mul = self.rel_t60_mul;
+    }
+
+    fn released(&self) -> bool {
+        self.model.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.model.set_pitch(mult);
+    }
+
+    fn legato_to(&mut self, key: u8, vel: u8) -> bool {
+        if self.model.legato_to(key, vel) {
+            self.rel_mul = self.rel_t60_mul;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn choke(&mut self) {
+        self.model.choke();
+        self.rel_mul = self.rel_t60_mul;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        self.model.kind()
+    }
+
+    fn set_trem(&mut self, rate_hz: f32, depth: f32) {
+        self.model.set_trem(rate_hz, depth);
+    }
+
+    fn set_vowel(&mut self, freqs: [f32; 3], qs: [f32; 3], gains: [f32; 3]) {
+        self.model.set_vowel(freqs, qs, gains);
+    }
+
+    fn set_breath(&mut self, pressure: f32, growl: f32) {
+        self.model.set_breath(pressure, growl);
+    }
+
+    fn set_vib(&mut self, depth: f32) {
+        self.model.set_vib(depth);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,6 +555,15 @@ mod tests {
             assert!((40.0..2500.0).contains(&z.root), "odd root {}", z.root);
             let peak = z.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
             assert!(peak > 0.5, "zone not normalised: peak {peak}");
+        }
+        for h in drum_crash().iter().chain(drum_kick()).chain(drum_snare()) {
+            assert!(
+                h.data.len() > 8_000,
+                "drum sample too short: {}",
+                h.data.len()
+            );
+            let peak = h.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
+            assert!(peak > 0.5, "drum sample not normalised: peak {peak}");
         }
     }
 
@@ -452,5 +621,20 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn drum_sample_overlay_is_finite_and_forwards_controls() {
+        let sr = 44100.0;
+        let model = voices::make(0, 60, 100, sr, 5, false);
+        let want_kind = model.kind();
+        let mut v = SampleOverlay::wrap(model, drum_kick_bank(), 110, 5, sr, 0.05);
+        v.set_pitch(1.01);
+        assert_eq!(v.kind(), want_kind);
+        v.choke();
+        let mut buf = vec![0f32; (0.1 * sr) as usize];
+        v.render(&mut buf);
+        assert!(buf.iter().all(|x| x.is_finite()));
+        assert!(buf.iter().any(|&x| x.abs() > 1e-5));
     }
 }

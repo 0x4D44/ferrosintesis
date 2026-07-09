@@ -4,18 +4,18 @@
 //! (e.g. snare shell + snare wires). Hits vary: frequencies and decays are
 //! jittered per strike, and harder hits are brighter.
 
-use crate::dsp::{vel_amp, Biquad, OnePole, Rng};
+use crate::dsp::{vel_amp, Biquad, OnePole, Rng, Sine};
+use crate::sampler;
 use crate::voices::Voice;
 use std::f32::consts::TAU;
 
-/// Which channel-10 kit a hit is voiced with. `V1` is the legacy kit
-/// (byte-identical to pre-v0.9). `V2` engages only when a MIDI file authors a
-/// Program Change on channel 10 (GM2 kit-select seam — see the engine's
-/// `EvKind::Prog` handler); a file that never does gets `V1` forever.
+/// Which channel-10 kit a hit is voiced with. `V1` and `V2` are retained for
+/// differential tests. `V3` is the shipped default kit.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kit {
     V1,
     V2,
+    V3,
 }
 
 struct Tone {
@@ -326,6 +326,170 @@ impl Voice for Drum {
     }
 }
 
+struct MetalMode {
+    osc: Sine,
+    amp: f32,
+    decay: f32,
+}
+
+struct MetalPlate {
+    modes: Vec<MetalMode>,
+    bands: Vec<NoiseBand>,
+    rng: Rng,
+    shimmer: Option<Shimmer>,
+    t: u32,
+    life: u32,
+    gain: f32,
+    sr: f32,
+}
+
+struct MetalSpec {
+    lo: f32,
+    hi: f32,
+    modes: usize,
+    tone_amp: f32,
+    t60_low: f32,
+    t60_high: f32,
+    wash_amp: f32,
+    wash_t60: f32,
+    wash_hp: f32,
+    mid_amp: f32,
+    mid_hz: f32,
+    click_amp: f32,
+    click_t60: f32,
+    click_hp: f32,
+    life: f32,
+    gain: f32,
+    swell: bool,
+    shimmer: Option<(f32, f32)>,
+}
+
+impl MetalPlate {
+    fn new(spec: &MetalSpec, sr: f32, seed: u32, vel: u8) -> Self {
+        let mut rng = Rng::new(seed ^ 0xC1A5_5EED);
+        let velnorm = vel as f32 / 127.0;
+        let log_lo = spec.lo.ln();
+        let log_span = (spec.hi / spec.lo).ln();
+        let mut modes = Vec::with_capacity(spec.modes);
+        for i in 0..spec.modes {
+            let frac = (i as f32 + 0.37 + 0.26 * rng.white()).clamp(0.0, spec.modes as f32)
+                / spec.modes as f32;
+            let freq = (log_lo + log_span * frac).exp() * (1.0 + 0.018 * rng.white());
+            let decay_frac = 1.0 - frac;
+            let t60 = spec.t60_high + (spec.t60_low - spec.t60_high) * decay_frac.powf(0.7);
+            let amp = spec.tone_amp
+                * (1.0 - 0.45 * frac)
+                * (0.65 + 0.55 * velnorm)
+                * (0.75 + 0.25 * rng.white().abs());
+            modes.push(MetalMode {
+                osc: Sine::new(freq, sr, rng.white() * TAU),
+                amp,
+                decay: dmul(t60, sr),
+            });
+        }
+        let hp = spec.wash_hp * (0.85 + 0.35 * velnorm);
+        let mut bands = vec![
+            NoiseBand {
+                amp: spec.wash_amp * (0.75 + 0.35 * velnorm),
+                decay: dmul(spec.wash_t60, sr),
+                filt: Biquad::highpass(hp, 0.7, sr),
+                onset: 0,
+                env: if spec.swell { 0.0 } else { 1.0 },
+                atk: if spec.swell { 1.0 / (0.050 * sr) } else { 1.0 },
+                floor: if spec.swell { 0.45 } else { 1.0 },
+            },
+            NoiseBand {
+                amp: spec.mid_amp,
+                decay: dmul(spec.wash_t60 * 0.8, sr),
+                filt: Biquad::bandpass(spec.mid_hz, 0.7, sr),
+                onset: 0,
+                env: if spec.swell { 0.0 } else { 1.0 },
+                atk: if spec.swell { 1.0 / (0.040 * sr) } else { 1.0 },
+                floor: if spec.swell { 0.35 } else { 1.0 },
+            },
+        ];
+        if spec.click_amp > 0.0 {
+            bands.push(NoiseBand {
+                amp: spec.click_amp * velnorm,
+                decay: dmul(spec.click_t60, sr),
+                filt: Biquad::highpass(spec.click_hp, 0.7, sr),
+                onset: 0,
+                env: 1.0,
+                atk: 1.0,
+                floor: 1.0,
+            });
+        }
+        Self {
+            modes,
+            bands,
+            rng,
+            shimmer: spec
+                .shimmer
+                .map(|(rate, depth)| Shimmer::new(rate, depth, sr)),
+            t: 0,
+            life: (spec.life * sr) as u32,
+            gain: spec.gain * vel_amp(vel),
+            sr,
+        }
+    }
+}
+
+impl Voice for MetalPlate {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            if self.t >= self.life {
+                return false;
+            }
+            let mut s = 0.0;
+            for mode in &mut self.modes {
+                s += mode.osc.next() * mode.amp;
+                mode.amp *= mode.decay;
+            }
+            let white = self.rng.white();
+            for band in &mut self.bands {
+                if band.env < 1.0 {
+                    band.env = (band.env + band.atk).min(1.0);
+                }
+                let g = band.amp * (band.floor + (1.0 - band.floor) * band.env);
+                if g > 1e-5 {
+                    s += band.filt.process(white) * g;
+                    band.amp *= band.decay;
+                }
+            }
+            let am = if let Some(sh) = &mut self.shimmer {
+                (1.0 + sh.depth * sh.norm * sh.lp.process(white)).clamp(0.0, 2.0)
+            } else {
+                1.0
+            };
+            *o += s * self.gain * am;
+            self.t += 1;
+        }
+        true
+    }
+
+    fn note_off(&mut self) {}
+
+    fn released(&self) -> bool {
+        true
+    }
+
+    fn choke(&mut self) {
+        let fast = dmul(0.010, self.sr);
+        for mode in &mut self.modes {
+            mode.decay = mode.decay.min(fast);
+        }
+        for band in &mut self.bands {
+            band.decay = band.decay.min(fast);
+        }
+        self.life = self.life.min(self.t + (0.030 * self.sr) as u32);
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "drum"
+    }
+}
+
 /// D1 velocity→timbre for membrane voices (HLD family A, §3.3): a harder hit
 /// starts slightly sharper, glides down faster, rings longer, and carries
 /// proportionally more click/noise energy (the 0.5 floor preserves ghost
@@ -600,11 +764,142 @@ fn crash_spec(
     }
 }
 
+fn metal_spec_for(key: u8) -> MetalSpec {
+    match key {
+        49 => MetalSpec {
+            lo: 650.0,
+            hi: 14_000.0,
+            modes: 44,
+            tone_amp: 0.028,
+            t60_low: 1.35,
+            t60_high: 0.22,
+            wash_amp: 1.25,
+            wash_t60: 3.0,
+            wash_hp: 1900.0,
+            mid_amp: 0.26,
+            mid_hz: 2600.0,
+            click_amp: 0.95,
+            click_t60: 0.004,
+            click_hp: 8500.0,
+            life: 4.2,
+            gain: 0.34,
+            swell: true,
+            shimmer: Some((11.0, 0.28)),
+        },
+        57 => MetalSpec {
+            lo: 560.0,
+            hi: 13_000.0,
+            modes: 44,
+            tone_amp: 0.027,
+            t60_low: 1.25,
+            t60_high: 0.20,
+            wash_amp: 1.22,
+            wash_t60: 3.2,
+            wash_hp: 1800.0,
+            mid_amp: 0.24,
+            mid_hz: 2300.0,
+            click_amp: 0.90,
+            click_t60: 0.004,
+            click_hp: 8200.0,
+            life: 4.6,
+            gain: 0.35,
+            swell: true,
+            shimmer: Some((10.0, 0.28)),
+        },
+        51 | 59 => MetalSpec {
+            lo: 950.0,
+            hi: 12_000.0,
+            modes: 36,
+            tone_amp: 0.036,
+            t60_low: 1.8,
+            t60_high: 0.28,
+            wash_amp: 0.42,
+            wash_t60: 2.2,
+            wash_hp: 5200.0,
+            mid_amp: 0.10,
+            mid_hz: 3400.0,
+            click_amp: 1.05,
+            click_t60: 0.045,
+            click_hp: 7600.0,
+            life: 2.8,
+            gain: 0.39,
+            swell: false,
+            shimmer: Some((18.0, 0.16)),
+        },
+        52 => MetalSpec {
+            lo: 760.0,
+            hi: 14_500.0,
+            modes: 38,
+            tone_amp: 0.024,
+            t60_low: 0.75,
+            t60_high: 0.16,
+            wash_amp: 1.75,
+            wash_t60: 0.62,
+            wash_hp: 5200.0,
+            mid_amp: 0.36,
+            mid_hz: 1850.0,
+            click_amp: 0.45,
+            click_t60: 0.006,
+            click_hp: 9000.0,
+            life: 1.2,
+            gain: 0.44,
+            swell: false,
+            shimmer: Some((24.0, 0.22)),
+        },
+        55 => MetalSpec {
+            lo: 1100.0,
+            hi: 14_000.0,
+            modes: 32,
+            tone_amp: 0.030,
+            t60_low: 0.58,
+            t60_high: 0.14,
+            wash_amp: 1.05,
+            wash_t60: 0.34,
+            wash_hp: 4600.0,
+            mid_amp: 0.16,
+            mid_hz: 3200.0,
+            click_amp: 0.55,
+            click_t60: 0.004,
+            click_hp: 8500.0,
+            life: 0.75,
+            gain: 0.42,
+            swell: false,
+            shimmer: Some((22.0, 0.16)),
+        },
+        _ => unreachable!("no V3 metal profile for key {key}"),
+    }
+}
+
+fn metal_plate(key: u8, sr: f32, seed: u32, vel: u8) -> Box<dyn Voice> {
+    Box::new(MetalPlate::new(&metal_spec_for(key), sr, seed, vel))
+}
+
+fn sample_overlay(key: u8, vel: u8, sr: f32, seed: u32, voice: Box<dyn Voice>) -> Box<dyn Voice> {
+    match key {
+        35 | 36 => {
+            sampler::SampleOverlay::wrap(voice, sampler::drum_kick_bank(), vel, seed, sr, 0.080)
+        }
+        38 | 40 => {
+            sampler::SampleOverlay::wrap(voice, sampler::drum_snare_bank(), vel, seed, sr, 0.075)
+        }
+        49 | 57 => {
+            sampler::SampleOverlay::wrap(voice, sampler::drum_crash_bank(), vel, seed, sr, 0.055)
+        }
+        _ => voice,
+    }
+}
+
 /// Build a drum voice for a GM key, or None for unmapped keys.
-pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Voice>> {
-    // `kit` selects the legacy (V1) or improved (V2) kit. Only the arms a v2
-    // fix touches branch on it (DR1: crash 49|57); every other key ignores it
-    // and stays byte-identical across kits.
+pub fn make(
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    kit: Kit,
+    samples: bool,
+) -> Option<Box<dyn Voice>> {
+    // `kit` selects the legacy test kits or the shipped V3 default. Only V3
+    // gets sample overlays, and only when the caller's sample flag is enabled.
     let v = vel_amp(vel);
     let velnorm = vel as f32 / 127.0;
     let d = |tones: &[(f32, f32, f32, f32)], noise: &[(f32, f32, Biquad)], life: f32, g: f32| {
@@ -622,7 +917,7 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
     let tom = |f0: f32, t60: f32, noise: &[(f32, f32, Biquad)], life: f32, g: f32| {
         let (start_f, glide, floor) = match kit {
             Kit::V1 => (f0, 10.0, None),
-            Kit::V2 => (f0 * TOM_OVERSHOOT, TOM_GLIDE_V2, Some(1.0 / TOM_OVERSHOOT)),
+            Kit::V2 | Kit::V3 => (f0 * TOM_OVERSHOOT, TOM_GLIDE_V2, Some(1.0 / TOM_OVERSHOOT)),
         };
         let (tones, noise) = membrane_velocity(&tom_tones(start_f, t60, glide), noise, velnorm);
         let mut drum = Drum::new(sr, seed, &tones, &noise, life, g * v);
@@ -631,26 +926,37 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
         }
         Some(Box::new(drum) as Box<dyn Voice>)
     };
-    match key {
-        35 | 36 => dm(
+    let voice = match key {
+        35 | 36 => {
             // beater knock over a sub drop (86 -> ~45 Hz): the chest thump,
-            // plus a knuckle-of-the-beater tone (D3)
-            &[
-                (165.0, 0.8, 0.16, 28.0),
-                (86.0, 1.1 + 0.4 * velnorm, 0.42, 3.0),
-                (130.0, 0.4 * velnorm, 0.01, 0.0),
-            ],
-            // D3: the ~3.5 kHz beater "point" is a real bandpass band, not a
-            // second flat highpass correlated with band 1 — with the dm
-            // click curve on top its energy grows super-linearly with
-            // velocity (oracle 22)
-            &[
-                (0.5, 0.005, Biquad::highpass(2500.0, 0.7, sr)),
-                (0.3, 0.005, Biquad::bandpass(3500.0, 0.9, sr)),
-            ],
-            0.8,
-            1.0,
-        ),
+            // plus a knuckle-of-the-beater tone (D3). V3 adds a short low-mid
+            // body band so the click no longer sits on a hollow sub alone.
+            if kit == Kit::V3 {
+                let tones = [
+                    (172.0, 0.76, 0.14, 30.0),
+                    (78.0, 1.25 + 0.35 * velnorm, 0.46, 2.6),
+                    (118.0, 0.38, 0.05, 0.0),
+                    (255.0, 0.22 * velnorm, 0.018, 0.0),
+                ];
+                let noise = [
+                    (0.45, 0.006, Biquad::highpass(2300.0, 0.7, sr)),
+                    (0.42, 0.006, Biquad::bandpass(3600.0, 0.9, sr)),
+                    (0.18, 0.030, Biquad::bandpass(820.0, 0.9, sr)),
+                ];
+                dm(&tones, &noise, 0.8, 1.0)
+            } else {
+                let tones = [
+                    (165.0, 0.8, 0.16, 28.0),
+                    (86.0, 1.1 + 0.4 * velnorm, 0.42, 3.0),
+                    (130.0, 0.4 * velnorm, 0.01, 0.0),
+                ];
+                let noise = [
+                    (0.5, 0.005, Biquad::highpass(2500.0, 0.7, sr)),
+                    (0.3, 0.005, Biquad::bandpass(3500.0, 0.9, sr)),
+                ];
+                dm(&tones, &noise, 0.8, 1.0)
+            }
+        }
         37 => d(
             // side stick
             &[(430.0, 0.5, 0.05, 0.0)],
@@ -684,7 +990,7 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
             // DR4 kit-v2: drop the broad-HP wire band; the shell (idx0) and a
             // trimmed dark tail (idx1, 0.35→0.22) go through membrane_velocity
             // as before, and the wires become a head-coupled `WireRes` cluster.
-            Kit::V2 => {
+            Kit::V2 | Kit::V3 => {
                 let (tones, noise) = membrane_velocity(
                     &SNARE_TONES,
                     &[
@@ -794,7 +1100,7 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
             // (the centroid falls through the tail), widens the tonal decay
             // spread so a faint pitched ring survives under the wash, and adds a
             // ~45 Hz sizzle wobble. v1 is the old single-wash static hat.
-            let spec = if kit == Kit::V2 {
+            let spec = if kit != Kit::V1 {
                 CymSpec {
                     base: 3300.0,
                     tone_amp: 0.10,
@@ -829,6 +1135,7 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
             };
             cymbal(&spec, sr, seed, vel)
         }
+        49 if kit == Kit::V3 => Some(metal_plate(49, sr, seed, vel)),
         49 => {
             // crash: instant chick, wash blooms over ~50 ms (CYM-2), the
             // coloured pairs beat in the shimmer (CYM-1), and it rings
@@ -847,6 +1154,7 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
             );
             cymbal(&spec, sr, seed, vel)
         }
+        52 if kit == Kit::V3 => Some(metal_plate(52, sr, seed, vel)),
         52 => cymbal(
             // china (D7/CYM-7): trashy — compressed decay, aggressive bright
             // wash, short life; until now this key fell to the generic tick
@@ -869,6 +1177,7 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
             seed,
             vel,
         ),
+        55 if kit == Kit::V3 => Some(metal_plate(55, sr, seed, vel)),
         55 => cymbal(
             // splash (D7/CYM-7): small and quick, split from the crash
             &CymSpec {
@@ -890,6 +1199,7 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
             seed,
             vel,
         ),
+        57 if kit == Kit::V3 => Some(metal_plate(57, sr, seed, vel)),
         57 => {
             // second crash: as key 49, DR1 kit-v2 upgrade with a slightly
             // shorter tonal t60_first (base 820 twins keep the same Δf table —
@@ -906,6 +1216,7 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
             );
             cymbal(&spec, sr, seed, vel)
         }
+        51 | 59 if kit == Kit::V3 => Some(metal_plate(key, sr, seed, vel)),
         51 | 59 => cymbal(
             // ride (CYM-5): a short guarded stick ping over a quiet
             // sustaining wash, with a widened tone-decay spread
@@ -1047,7 +1358,14 @@ pub fn make(key: u8, vel: u8, sr: f32, seed: u32, kit: Kit) -> Option<Box<dyn Vo
             0.15,
             0.4,
         ),
-    }
+    };
+    voice.map(|v| {
+        if kit == Kit::V3 && samples {
+            sample_overlay(key, vel, sr, seed, v)
+        } else {
+            v
+        }
+    })
 }
 
 #[cfg(test)]
@@ -1078,11 +1396,19 @@ mod tests {
     }
 
     fn render_drum_kit(key: u8, vel: u8, secs: f32, kit: Kit) -> Vec<f32> {
+        render_drum_kit_samples(key, vel, secs, kit, false)
+    }
+
+    fn render_drum_kit_samples(key: u8, vel: u8, secs: f32, kit: Kit, samples: bool) -> Vec<f32> {
         let sr = 44100.0;
-        let mut v = make(key, vel, sr, 7, kit).unwrap();
+        let mut v = make(key, vel, sr, 7, kit, samples).unwrap();
         let mut buf = vec![0f32; (sr * secs) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    fn sec_window(s: &[f32], sr: f32, a: f32, b: f32) -> &[f32] {
+        &s[(a * sr) as usize..(b * sr) as usize]
     }
 
     /// DR0 seam: spot-checks ONE kit-agnostic key (51 ride — never branches on
@@ -1093,7 +1419,7 @@ mod tests {
     fn kit_v2_seam_wired_and_inert_for_untouched_keys() {
         let sr = 44100.0;
         let render = |kit| {
-            let mut v = make(51, 100, sr, 7, kit).unwrap();
+            let mut v = make(51, 100, sr, 7, kit, false).unwrap();
             let mut buf = vec![0f32; (sr * 1.5) as usize];
             v.render(&mut buf);
             buf
@@ -1234,6 +1560,108 @@ mod tests {
             db.abs() <= 2.0,
             "open-hat level parity {db} dB exceeds ±2 dB"
         );
+    }
+
+    #[test]
+    fn v3_crash_tail_is_broadband_in_samples_off_and_on_modes() {
+        let sr = 44100.0;
+        let v2 = render_drum_kit(49, 100, 4.0, Kit::V2);
+        let v3 = render_drum_kit_samples(49, 100, 4.0, Kit::V3, false);
+        let v3s = render_drum_kit_samples(49, 100, 4.0, Kit::V3, true);
+        for (a, b) in [(0.50, 1.50), (1.50, 3.50)] {
+            let f2 = testutil::flatness(sec_window(&v2, sr, a, b), sr, 700.0, 12_000.0);
+            let f3 = testutil::flatness(sec_window(&v3, sr, a, b), sr, 700.0, 12_000.0);
+            let f3s = testutil::flatness(sec_window(&v3s, sr, a, b), sr, 700.0, 12_000.0);
+            println!("V3 crash flatness [{a:.1},{b:.1}]s: v2={f2:.3} v3={f3:.3} v3s={f3s:.3}");
+            assert!(
+                f3 >= 0.18 && f3 > 1.35 * f2,
+                "modeled V3 crash still too tonal"
+            );
+            assert!(
+                f3s >= 0.18 && f3s >= 0.90 * f3,
+                "sampled V3 crash regressed flatness"
+            );
+        }
+        let r2 = testutil::rms(&v2);
+        for (name, s) in [("v3", &v3), ("v3 samples", &v3s)] {
+            let db = 20.0 * (testutil::rms(s) / r2.max(1e-12)).log10();
+            assert!(
+                db.abs() <= 3.0,
+                "{name} crash level moved {db:+.2} dB vs V2"
+            );
+            assert!(
+                s.iter().all(|x| x.is_finite()),
+                "{name} crash produced non-finite samples"
+            );
+        }
+    }
+
+    #[test]
+    fn v3_sample_overlay_engages_for_crash_kick_and_snare() {
+        for key in [49u8, 36, 38] {
+            let plain = render_drum_kit_samples(key, 110, 0.7, Kit::V3, false);
+            let sampled = render_drum_kit_samples(key, 110, 0.7, Kit::V3, true);
+            assert_ne!(plain, sampled, "sample layer did not engage for key {key}");
+            assert!(
+                sampled.iter().all(|x| x.is_finite()),
+                "sampled key {key} non-finite"
+            );
+            let delta_db =
+                20.0 * (testutil::rms(&sampled) / testutil::rms(&plain).max(1e-12)).log10();
+            assert!(
+                delta_db.abs() <= 6.0,
+                "sample overlay level jump for key {key}: {delta_db:+.2} dB"
+            );
+        }
+    }
+
+    #[test]
+    fn v3_kick_keeps_sub_without_dc() {
+        let sr = 44100.0;
+        let kick = render_drum_kit(36, 115, 0.8, Kit::V3);
+        let sub = testutil::band_rms(
+            &kick[(0.020 * sr) as usize..(0.300 * sr) as usize],
+            sr,
+            60.0,
+            1.0,
+        );
+        let dc = kick.iter().sum::<f32>() / kick.len() as f32;
+        let peak = kick.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-12);
+        assert!(sub > 0.01, "V3 kick lost sub body: {sub}");
+        assert!(dc.abs() < 0.015 * peak, "V3 kick DC offset too high: {dc}");
+    }
+
+    #[test]
+    fn v3_toms_settle_near_table_pitch() {
+        let sr = 44100.0;
+        for (key, table) in [(41u8, 100.0), (43, 140.0), (45, 190.0), (48, 240.0)] {
+            let b = render_drum_kit(key, 100, 0.5, Kit::V3);
+            let f = testutil::peak_locate(
+                &b[(sr * 0.15) as usize..(sr * 0.30) as usize],
+                sr,
+                table * 0.65,
+                table * 1.35,
+            );
+            assert!(
+                (f - table).abs() < table * 0.22,
+                "tom {key} settled at {f:.1} Hz, expected {table}"
+            );
+        }
+    }
+
+    #[test]
+    fn v3_auxiliary_percussion_stays_audible_and_finite() {
+        for key in [
+            37u8, 39, 54, 56, 60, 61, 62, 63, 64, 65, 66, 69, 70, 82, 80, 81,
+        ] {
+            let old = render_drum_kit(key, 100, 0.6, Kit::V2);
+            let new = render_drum_kit(key, 100, 0.6, Kit::V3);
+            assert!(new.iter().all(|x| x.is_finite()), "key {key} non-finite");
+            let nr = testutil::rms(&new);
+            assert!(nr > 1e-5, "key {key} fell silent");
+            let db = 20.0 * (nr / testutil::rms(&old).max(1e-12)).log10();
+            assert!(db.abs() <= 4.0, "key {key} level changed {db:+.2} dB vs V2");
+        }
     }
 
     /// DR2 (tom pitch-drop): a kit-v2 tom (key 41, table 100 Hz) settles ON the
@@ -1605,7 +2033,7 @@ mod tests {
     #[test]
     fn choke_kills_open_hat() {
         let sr = 44100.0;
-        let mut v = make(46, 110, sr, 7, Kit::V1).unwrap();
+        let mut v = make(46, 110, sr, 7, Kit::V1, false).unwrap();
         let mut head = vec![0f32; (0.05 * sr) as usize];
         assert!(v.render(&mut head));
         let before = testutil::rms(&head[(0.03 * sr) as usize..]);

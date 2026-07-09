@@ -113,6 +113,9 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   `albums/`.** MM-REQ-KILN-00017 left album MIDI byte-identical, but the newly
   committed Synth Feature Showcase listening track used GM109/111 and had to be
   refreshed. Scan every `ALBUMS` entry before declaring a synth change asset-free.
+  For long Opus refreshes on Windows, stage temp outputs under `target/` in the
+  worktree; `os.replace` cannot move atomically from `%TEMP%` on `C:` into a `D:`
+  worktree.
 - 2026.07.09 — **Generated GM43 contrabass lanes need a floor and centered pan.**
   Spark and Hours After Rain both wrote `chord["bass"] - 12` into program 43,
   producing MIDI 12-23 sustained notes panned left; ferrosintesis turns that into

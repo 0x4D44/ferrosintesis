@@ -156,6 +156,25 @@ struct StrikeGlide {
     floor: f32,
 }
 
+struct ModalAmpTrem {
+    osc: Sine,
+    depth: f32,
+}
+
+impl ModalAmpTrem {
+    fn new(rate_hz: f32, depth: f32, sr: f32) -> Self {
+        ModalAmpTrem {
+            osc: Sine::new(rate_hz.max(0.1), sr, 0.0),
+            depth: depth.clamp(0.0, 0.95),
+        }
+    }
+
+    #[inline]
+    fn gain(&mut self) -> f32 {
+        1.0 + self.depth * self.osc.next()
+    }
+}
+
 pub struct Modal {
     modes: Vec<Mode>,
     noise_amp: f32,
@@ -172,6 +191,7 @@ pub struct Modal {
     sr: f32,
     bend: f32,
     strike_glide: Option<StrikeGlide>,
+    amp_trem: Option<ModalAmpTrem>,
 }
 
 impl Modal {
@@ -217,7 +237,13 @@ impl Modal {
             sr,
             bend: 1.0,
             strike_glide: None,
+            amp_trem: None,
         }
+    }
+
+    fn with_amp_trem(mut self, rate_hz: f32, depth: f32) -> Self {
+        self.amp_trem = Some(ModalAmpTrem::new(rate_hz, depth, self.sr));
+        self
     }
 
     fn with_strike_glide(
@@ -294,7 +320,8 @@ impl Voice for Modal {
             if self.released {
                 self.release_env *= self.rel_mul;
             }
-            *o += s * self.gain * self.att_env * self.release_env;
+            let amp_trem = self.amp_trem.as_mut().map_or(1.0, ModalAmpTrem::gain);
+            *o += s * self.gain * self.att_env * self.release_env * amp_trem;
             self.advance_strike_glide();
         }
         self.level = self.modes.iter().map(|m| m.amp.abs()).sum::<f32>() * self.release_env;
@@ -507,6 +534,8 @@ const CRYSTAL: &[(f32, f32, f32)] = &[
     (6.70, 0.10, 1.6),
 ];
 const VIBES: &[(f32, f32, f32)] = &[(1.0, 1.0, 3.0), (4.0, 0.25, 1.2), (9.8, 0.06, 0.5)];
+const VIBRAPHONE_MOTOR_RATE_HZ: f32 = 6.0;
+const VIBRAPHONE_MOTOR_DEPTH: f32 = 0.35;
 const MARIMBA: &[(f32, f32, f32)] = &[(1.0, 1.0, 0.95), (3.0, 0.34, 0.42), (5.2, 0.12, 0.22)];
 const MARIMBA_NOISE: (f32, f32, f32, f32) = (0.14, 0.010, 1800.0, 1.0);
 const MARIMBA_ATTACK_S: f32 = 0.001;
@@ -4077,7 +4106,10 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             0.5,
             0.52,
         )),
-        11 => Box::new(bell(key, vel, sr, seed, VIBES, noise_off, 0.002, 0.8, 0.45)),
+        11 => Box::new(
+            bell(key, vel, sr, seed, VIBES, noise_off, 0.002, 0.8, 0.45)
+                .with_amp_trem(VIBRAPHONE_MOTOR_RATE_HZ, VIBRAPHONE_MOTOR_DEPTH),
+        ),
         12 => Box::new(wood_bar(
             key,
             vel,
@@ -4203,7 +4235,8 @@ mod tests {
     use super::*;
     // Audio oracle helpers used by the v0.9 reed/brass oracles (bare names).
     use crate::testutil::{
-        band_rms, centroid, env_autocorr_peak, hp_rms, mag_at, peak_locate, rms,
+        band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend, hp_rms, mag_at,
+        peak_locate, rms,
     };
 
     /// Lowpass twice, then count rising zero crossings.
@@ -4365,6 +4398,49 @@ mod tests {
         let mut bp = Biquad::bandpass(5.5, 0.9, sr);
         let am: Vec<f32> = env.iter().map(|&x| bp.process(x - mean)).collect();
         rms(&am) / mean.max(1e-9)
+    }
+
+    #[test]
+    fn vibraphone_11_motor_tremolo_modulates_amplitude() {
+        let sr = 12000.0;
+        let key = 69;
+        let vel = 104;
+        let seed = 0x11_0012;
+        let render = |program: u8, seed: u32| {
+            let mut voice = make(program, key, vel, sr, seed, false);
+            let mut buf = vec![0f32; (2.8 * sr) as usize];
+            voice.render(&mut buf);
+            buf
+        };
+        let vibraphone = render(11, seed);
+        let vibe_body = segment(&vibraphone, sr, 0.35, 2.35);
+        let (peak, rate) = env_autocorr_peak_detrend(vibe_body, sr, 0.12, 0.22, 4.0);
+        let depth = low_rate_am_depth(vibe_body, sr);
+
+        assert!(
+            peak >= 0.28,
+            "GM11 vibraphone motor AM peak too weak: {peak:.3}"
+        );
+        assert!(
+            (rate - 6.0).abs() <= 0.8,
+            "GM11 vibraphone motor AM rate should be near 6 Hz, got {rate:.2} Hz"
+        );
+        assert!(
+            depth >= 0.08,
+            "GM11 vibraphone motor AM depth too weak: {depth:.4}"
+        );
+
+        for program in [10u8, 12, 13, 14] {
+            let static_voice = render(program, seed ^ program as u32);
+            let static_body = segment(&static_voice, sr, 0.35, 2.35);
+            let (static_peak, static_rate) =
+                env_autocorr_peak_detrend(static_body, sr, 0.12, 0.22, 4.0);
+            let static_depth = low_rate_am_depth(static_body, sr);
+            assert!(
+                !((static_rate - 6.0).abs() <= 0.8 && static_peak >= 0.18),
+                "GM{program} picked up a GM11-like motor signature: peak {static_peak:.3} at {static_rate:.2} Hz, depth {static_depth:.4}"
+            );
+        }
     }
 
     fn render_hash(samples: &[f32]) -> u64 {
@@ -4763,6 +4839,19 @@ mod tests {
         let vibe = render_program(11, key, 105, 2.0, 17);
         let marimba = render_program(12, key, 105, 2.0, 17);
         let xylophone = render_program(13, key, 105, 2.0, 17);
+        let mut static_vibe_voice = bell(
+            key,
+            105,
+            sr,
+            17,
+            VIBES,
+            (0.0, 0.01, 1000.0, 1.0),
+            0.002,
+            0.8,
+            0.45,
+        );
+        let mut static_vibe = vec![0f32; (2.0 * sr) as usize];
+        static_vibe_voice.render(&mut static_vibe);
 
         let vibe_t60 = crate::testutil::t60_of(&vibe, sr);
         let marimba_t60 = crate::testutil::t60_of(&marimba, sr);
@@ -4799,16 +4888,16 @@ mod tests {
             crate::testutil::band_rms(&sig[onset], sr, hz, 1.2)
                 / crate::testutil::band_rms(&sig[body], sr, hz, 1.2).max(1e-9)
         };
-        let vibe_click = click_ratio(&vibe, 2600.0);
+        let vibe_click = click_ratio(&static_vibe, 2600.0);
         let marimba_click = click_ratio(&marimba, 1800.0);
         let xylo_click = click_ratio(&xylophone, 3200.0);
         assert!(
             marimba_click > 1.6 * vibe_click,
-            "marimba wood click missing: marimba {marimba_click} vs vibes {vibe_click}"
+            "marimba wood click missing: marimba {marimba_click} vs static vibes {vibe_click}"
         );
         assert!(
             xylo_click > 1.6 * vibe_click,
-            "xylophone wood click missing: xylo {xylo_click} vs vibes {vibe_click}"
+            "xylophone wood click missing: xylo {xylo_click} vs static vibes {vibe_click}"
         );
 
         let click_filter_response = |noise: (f32, f32, f32, f32)| {

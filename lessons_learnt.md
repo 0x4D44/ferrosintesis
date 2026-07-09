@@ -104,3 +104,8 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   measured HF-up or HF-down after other parts and normalization. For controller
   audibility, either isolate a solo stem or measure the rendered ratio first and
   assert that direction.
+- 2026.07.09 — **Generated text-artifact freshness checks must normalize line
+  endings.** The synth demo verifier compared `album_manifest.json` bytes, so a
+  Windows CRLF checkout failed even though Git saw no diff and the builder emitted
+  the same LF-normalized JSON. Compare text artifacts as text; keep byte-exact
+  checks for binary `.mid` files.

@@ -9,6 +9,8 @@
 //! `--solo 11` (or `--solo 12,13`) renders only the listed 0-based
 //! channels — verification stems — keeping the tempo map intact.
 
+#![forbid(unsafe_code)]
+
 use ferrosintesis::offline::{self, Options};
 use std::path::PathBuf;
 use std::time::Instant;

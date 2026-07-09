@@ -110,7 +110,7 @@ impl Drum {
     fn new(
         sr: f32,
         seed: u32,
-        tones: &[(f32, f32, f32, f32)], // (freq, amp, T60, glide octaves/sec down)
+        tones: &[(f32, f32, f32, f32)], // (freq, amp, T60, glide oct/s down; negative = up)
         noise: &[(f32, f32, Biquad)],   // (amp, T60, filter)
         life_s: f32,
         gain: f32,
@@ -138,7 +138,10 @@ impl Drum {
                 Tone {
                     phase: rng.white() * TAU,
                     freq: f * jf,
-                    glide: if glide_oct_per_s > 0.0 {
+                    // positive rates glide DOWN (mult < 1) toward `min_freq`;
+                    // negative rates glide UP (mult > 1) and `min_freq` acts
+                    // as a ceiling (open cuica, key 79). Zero = no glide.
+                    glide: if glide_oct_per_s != 0.0 {
                         2f32.powf(-glide_oct_per_s / sr)
                     } else {
                         1.0
@@ -211,10 +214,11 @@ impl Drum {
         self
     }
 
-    /// DR2: rewrite the downward-glide floor to `ratio x` each tone's (already
+    /// DR2: rewrite the glide limit to `ratio x` each tone's (already
     /// jittered) start frequency, so a v2 tom that starts sharp settles exactly
     /// on the table pitch (`ratio = 1/TOM_OVERSHOOT`) instead of diving to the
-    /// hardwired 0.3x. No RNG draw — pure post-construction rewrite.
+    /// hardwired 0.3x. With `ratio > 1` it is the CEILING of an upward glide
+    /// (open cuica, key 79). No RNG draw — pure post-construction rewrite.
     fn with_glide_floor(mut self, ratio: f32) -> Self {
         for tone in &mut self.tones {
             tone.min_freq = tone.freq * ratio;
@@ -236,7 +240,9 @@ impl Voice for Drum {
                 if tone.phase > TAU {
                     tone.phase -= TAU;
                 }
-                if tone.glide < 1.0 && tone.freq > tone.min_freq {
+                if (tone.glide < 1.0 && tone.freq > tone.min_freq)
+                    || (tone.glide > 1.0 && tone.freq < tone.min_freq)
+                {
                     tone.freq *= tone.glide;
                 }
                 tone.amp *= tone.decay;
@@ -1272,6 +1278,24 @@ pub fn make(
             0.5,
             0.55,
         ),
+        58 => Some(Box::new(
+            // vibraslap: a cluster of inharmonic tine partials over a mid
+            // noise band, the whole voice amplitude-fluttered by a fast
+            // noise-coupled shimmer AM — the characteristic ~0.7 s rattle
+            Drum::new(
+                sr,
+                seed,
+                &[
+                    (1730.0, 0.45, 0.50, 0.0),
+                    (2470.0, 0.30, 0.42, 0.0),
+                    (3150.0, 0.18, 0.35, 0.0),
+                ],
+                &one(0.45, 0.45, Biquad::bandpass(2100.0, 1.0, sr)),
+                0.85,
+                0.45 * v,
+            )
+            .with_shimmer(28.0, 0.9),
+        ) as Box<dyn Voice>),
         60 => dm(
             &[(400.0, 1.0, 0.11, 3.0)],
             &one(0.35, 0.02, Biquad::bandpass(1400.0, 1.0, sr)),
@@ -1308,6 +1332,29 @@ pub fn make(
             0.3,
             0.6,
         ),
+        // agogo bells (67 hi / 68 lo): the melodic-agogo modal ratios
+        // (1 : 1.70 : 2.85, voices.rs GM113) on drum-kit fundamentals a
+        // minor-third-ish apart, fast metallic decay plus a clank transient
+        67 => d(
+            &[
+                (1650.0, 0.9, 0.20, 0.0),
+                (2805.0, 0.55, 0.16, 0.0),
+                (4700.0, 0.18, 0.10, 0.0),
+            ],
+            &one(0.12, 0.008, Biquad::bandpass(3500.0, 1.0, sr)),
+            0.5,
+            0.50,
+        ),
+        68 => d(
+            &[
+                (1220.0, 0.9, 0.22, 0.0),
+                (2074.0, 0.55, 0.17, 0.0),
+                (3477.0, 0.18, 0.11, 0.0),
+            ],
+            &one(0.12, 0.008, Biquad::bandpass(2900.0, 1.0, sr)),
+            0.5,
+            0.50,
+        ),
         69 | 70 | 82 => d(
             // cabasa / maracas / shaker
             &[],
@@ -1315,6 +1362,52 @@ pub fn make(
             0.18,
             0.40,
         ),
+        // whistles (71 short / 72 long): a pitched ~2.35 kHz tone with a
+        // narrow breath band on the same centre plus a faint HF hiss —
+        // the same voice at two lengths
+        71 | 72 => {
+            let (t60, life) = if key == 71 {
+                (0.10, 0.18)
+            } else {
+                (0.35, 0.50)
+            };
+            d(
+                &[(2350.0, 0.55, t60, 0.0)],
+                &[
+                    (0.30, t60, Biquad::bandpass(2350.0, 6.0, sr)),
+                    (0.10, t60 * 0.8, Biquad::highpass(5000.0, 0.7, sr)),
+                ],
+                life,
+                0.50,
+            )
+        }
+        // guiros (73 short / 74 long): a notched scrape — a fast-decaying
+        // mid noise band re-triggered by a pulse train of bursts (the
+        // stick crossing the notches), short vs long stroke
+        73 | 74 => {
+            let (step, n, center, life) = if key == 73 {
+                (0.011f32, 10usize, 2600.0, 0.16)
+            } else {
+                (0.016, 28, 2200.0, 0.50)
+            };
+            let bursts: Vec<(f32, f32)> = (1..n)
+                .map(|i| {
+                    let frac = i as f32 / n as f32;
+                    (i as f32 * step, 0.9 * (1.0 - 0.5 * frac))
+                })
+                .collect();
+            Some(Box::new(
+                Drum::new(
+                    sr,
+                    seed,
+                    &[],
+                    &one(0.9, 0.012, Biquad::bandpass(center, 1.2, sr)),
+                    life,
+                    0.50 * v,
+                )
+                .with_bursts(&bursts),
+            ) as Box<dyn Voice>)
+        }
         75 => d(
             &[(2500.0, 1.0, 0.09, 0.0)],
             &one(0.1, 0.01, Biquad::bandpass(2500.0, 3.0, sr)),
@@ -1333,6 +1426,32 @@ pub fn make(
             0.3,
             0.60,
         ),
+        // cuicas (78 mute / 79 open): a pitched friction squeak — a strong
+        // fundamental + weak octave sharing a pitch glide, with a light
+        // friction-noise band. Mute: short, gliding DOWN to a 0.55x floor;
+        // open: longer, gliding UP (negative rate) to a 1.85x ceiling.
+        78 => Some(Box::new(
+            Drum::new(
+                sr,
+                seed,
+                &[(640.0, 0.9, 0.12, 7.0), (1280.0, 0.30, 0.10, 7.0)],
+                &one(0.15, 0.03, Biquad::bandpass(1500.0, 1.0, sr)),
+                0.18,
+                0.50 * v,
+            )
+            .with_glide_floor(0.55),
+        ) as Box<dyn Voice>),
+        79 => Some(Box::new(
+            Drum::new(
+                sr,
+                seed,
+                &[(390.0, 0.9, 0.40, -2.5), (780.0, 0.25, 0.30, -2.5)],
+                &one(0.12, 0.10, Biquad::bandpass(1200.0, 1.0, sr)),
+                0.50,
+                0.50 * v,
+            )
+            .with_glide_floor(1.85),
+        ) as Box<dyn Voice>),
         81 => d(
             // open triangle
             &[
@@ -2145,5 +2264,204 @@ mod tests {
             s38_v2, s38_v1,
             "v2 snare must diverge from v1 (DR4 engaged)"
         );
+    }
+
+    // ---- straggler-key oracles (58, 67/68, 71/72, 73/74, 78/79) ----
+
+    /// The nine formerly-fallback keys share one kit-agnostic match arm, so
+    /// every kit renders them identically — and audibly, finitely, and no
+    /// longer as the generic ~1 kHz tick (which capped life at 0.15 s).
+    #[test]
+    fn straggler_keys_modeled_in_all_kits() {
+        for key in [58u8, 67, 68, 71, 72, 73, 74, 78, 79] {
+            let v1 = render_drum_kit(key, 100, 1.0, Kit::V1);
+            let v2 = render_drum_kit(key, 100, 1.0, Kit::V2);
+            let v3 = render_drum_kit(key, 100, 1.0, Kit::V3);
+            assert!(v1.iter().all(|x| x.is_finite()), "key {key} non-finite");
+            assert!(testutil::rms(&v1) > 1e-4, "key {key} inaudible");
+            assert_eq!(v1, v2, "key {key} differs V1 vs V2");
+            assert_eq!(v1, v3, "key {key} differs V1 vs V3");
+        }
+    }
+
+    /// Broadband envelope flutter (coefficient of variation): rectify,
+    /// 200 Hz-smooth, detrend off the slow (4 Hz) decay, and return std/mean
+    /// over `[a, b]` s — high for a rattling voice, low for a smooth decay.
+    fn env_cv(buf: &[f32], a: f32, b: f32) -> f32 {
+        let sr = 44100.0f32;
+        let (ia, ib) = ((a * sr) as usize, (b * sr) as usize);
+        let mut fast = OnePole::lowpass(200.0, sr);
+        let mut slow = OnePole::lowpass(4.0, sr);
+        let mut env = Vec::with_capacity(buf.len());
+        let mut detr = Vec::with_capacity(buf.len());
+        for &x in buf {
+            let e = fast.process(x.abs());
+            detr.push((e - slow.process(e)) as f64);
+            env.push(e as f64);
+        }
+        let mean = env[ia..ib].iter().sum::<f64>() / (ib - ia) as f64;
+        let var = detr[ia..ib].iter().map(|&d| d * d).sum::<f64>() / (ib - ia) as f64;
+        (var.sqrt() / mean.max(1e-12)) as f32
+    }
+
+    /// Key 58 vibraslap: an amplitude-fluttering rattle — envelope CV in the
+    /// LIVE [0.05, 0.40] s window far above a shimmer-stripped build of the
+    /// exact same tine/noise voice (same seed; differential, fail-first) —
+    /// that decays over ~0.7 s.
+    #[test]
+    fn vibraslap_rattles_and_decays() {
+        let sr = 44100.0;
+        let vib = render_drum(58, 100, 1.0);
+        // shimmer-stripped twin of the shipped 58 build (tables mirrored)
+        let mut plain = Drum::new(
+            sr,
+            7,
+            &[
+                (1730.0, 0.45, 0.50, 0.0),
+                (2470.0, 0.30, 0.42, 0.0),
+                (3150.0, 0.18, 0.35, 0.0),
+            ],
+            &[(0.45, 0.45, Biquad::bandpass(2100.0, 1.0, sr))],
+            0.85,
+            0.45 * crate::dsp::vel_amp(100),
+        );
+        let mut smooth = vec![0f32; sr as usize];
+        Voice::render(&mut plain, &mut smooth);
+        let (cv_vib, cv_plain) = (env_cv(&vib, 0.05, 0.40), env_cv(&smooth, 0.05, 0.40));
+        println!("vibraslap env CV={cv_vib:.3} vs shimmerless CV={cv_plain:.3}");
+        assert!(
+            cv_vib > 1.35 * cv_plain,
+            "vibraslap does not rattle: CV {cv_vib} vs shimmerless {cv_plain}"
+        );
+        let life = last_audible(&vib);
+        assert!((0.5..=0.9).contains(&life), "vibraslap life {life}");
+        let early = testutil::rms(&vib[..(0.10 * sr) as usize]);
+        let late = testutil::rms(sec_window(&vib, sr, 0.55, 0.70));
+        assert!(
+            late < 0.3 * early,
+            "vibraslap does not decay: {late} vs {early}"
+        );
+    }
+
+    /// Keys 67/68 agogos: two clear bell fundamentals in their design bands
+    /// (hi ~1650 Hz, lo ~1220 Hz), hi > lo at fixed velocity, both with the
+    /// 1.7x modal partial speaking and a fast metallic decay.
+    #[test]
+    fn agogo_pair_pitched_and_fast() {
+        let sr = 44100.0;
+        let hi = render_drum(67, 100, 0.6);
+        let lo = render_drum(68, 100, 0.6);
+        fn live(b: &[f32]) -> &[f32] {
+            let sr = 44100.0;
+            &b[(0.005 * sr) as usize..(0.15 * sr) as usize]
+        }
+        let f_hi = testutil::peak_locate(live(&hi), sr, 1400.0, 1900.0);
+        let f_lo = testutil::peak_locate(live(&lo), sr, 1000.0, 1450.0);
+        println!("agogo pitches: hi={f_hi:.0} Hz lo={f_lo:.0} Hz");
+        assert!((f_hi - 1650.0).abs() < 150.0, "hi agogo at {f_hi} Hz");
+        assert!((f_lo - 1220.0).abs() < 120.0, "lo agogo at {f_lo} Hz");
+        assert!(
+            f_hi > 1.25 * f_lo,
+            "agogo pitch order/spread: {f_hi} vs {f_lo}"
+        );
+        // the 1.70x mode speaks on both bells
+        for (buf, f0) in [(&hi, 1650.0f32), (&lo, 1220.0)] {
+            let floor = testutil::mag_at(live(buf), sr, f0) * 0.05;
+            let p = testutil::peak_locate(live(buf), sr, f0 * 1.70 * 0.92, f0 * 1.70 * 1.08);
+            assert!(
+                testutil::mag_at(live(buf), sr, p) > floor,
+                "agogo 1.7x mode missing near {} Hz",
+                f0 * 1.70
+            );
+        }
+        // fast metallic decay: late energy a small fraction of the strike
+        let early = testutil::rms(&hi[..(0.05 * sr) as usize]);
+        let late = testutil::rms(sec_window(&hi, sr, 0.35, 0.50));
+        assert!(
+            late < 0.10 * early,
+            "agogo rings too long: {late} vs {early}"
+        );
+    }
+
+    /// Keys 71/72 whistles: both pitched in the ~2.35 kHz design band with
+    /// breath noise around the tone; the short whistle dies < 0.25 s while
+    /// the long one is still audible past 0.3 s.
+    #[test]
+    fn whistles_pitched_short_vs_long() {
+        let sr = 44100.0;
+        let short = render_drum(71, 100, 0.8);
+        let long = render_drum(72, 100, 0.8);
+        for (name, b) in [("short", &short), ("long", &long)] {
+            let f = testutil::peak_locate(&b[..(0.10 * sr) as usize], sr, 1900.0, 2700.0);
+            assert!((f - 2350.0).abs() < 200.0, "{name} whistle pitch {f} Hz");
+        }
+        let (ls, ll) = (last_audible(&short), last_audible(&long));
+        println!("whistle lives: short={ls:.3}s long={ll:.3}s");
+        assert!(ls < 0.25, "short whistle life {ls}");
+        assert!(ll > 0.30, "long whistle life {ll}");
+        // breathiness: real energy above 5 kHz early on (the hiss band)
+        let hiss = testutil::hp_rms(&long[..(0.05 * sr) as usize], sr, 5000.0);
+        assert!(hiss > 1e-3, "whistle breath noise missing: {hiss}");
+    }
+
+    /// Keys 73/74 guiros: the scrape is a periodic pulse train — the envelope
+    /// autocorrelation peaks at the burst rate (short ~91 Hz, long ~63 Hz) —
+    /// and the two strokes have clearly different lengths.
+    #[test]
+    fn guiros_notched_short_vs_long() {
+        let short = render_drum(73, 100, 0.8);
+        let long = render_drum(74, 100, 0.8);
+        let sr = 44100.0;
+        let (ps, rs) = testutil::env_autocorr_peak(
+            &short[..(0.15 * sr) as usize],
+            sr,
+            1.0 / 130.0,
+            1.0 / 60.0,
+        );
+        let (pl, rl) =
+            testutil::env_autocorr_peak(&long[..(0.45 * sr) as usize], sr, 1.0 / 90.0, 1.0 / 40.0);
+        println!(
+            "guiro pulse trains: short peak={ps:.3} @{rs:.0} Hz, long peak={pl:.3} @{rl:.0} Hz"
+        );
+        assert!(ps > 0.2, "short guiro not notched: peak {ps}");
+        assert!(pl > 0.2, "long guiro not notched: peak {pl}");
+        assert!((75.0..=110.0).contains(&rs), "short guiro rate {rs} Hz");
+        assert!((50.0..=75.0).contains(&rl), "long guiro rate {rl} Hz");
+        let (ls, ll) = (last_audible(&short), last_audible(&long));
+        assert!(ls < 0.25, "short guiro life {ls}");
+        assert!(ll > 0.35, "long guiro life {ll}");
+    }
+
+    /// Keys 78/79 cuicas: pitched squeaks that GLIDE — the mute cuica's
+    /// fundamental falls (early > late), the open cuica's rises (late >
+    /// early), both inside the ~350-750 Hz design band, and the open squeak
+    /// out-lives the mute one. Goertzel peak per window, never zero-crossings.
+    #[test]
+    fn cuicas_glide_opposite_ways() {
+        let sr = 44100.0;
+        let mute = render_drum(78, 100, 0.6);
+        let open = render_drum(79, 100, 0.8);
+        let peak = |b: &[f32], a: f32, z: f32, lo: f32, hi: f32| {
+            testutil::peak_locate(&b[(a * sr) as usize..(z * sr) as usize], sr, lo, hi)
+        };
+        let m_early = peak(&mute, 0.0, 0.04, 400.0, 900.0);
+        let m_late = peak(&mute, 0.08, 0.14, 250.0, 500.0);
+        let o_early = peak(&open, 0.0, 0.06, 300.0, 550.0);
+        let o_late = peak(&open, 0.25, 0.40, 550.0, 850.0);
+        println!(
+            "cuica glides: mute {m_early:.0}->{m_late:.0} Hz, open {o_early:.0}->{o_late:.0} Hz"
+        );
+        assert!(
+            m_early > 1.15 * m_late,
+            "mute cuica did not glide down: {m_early} -> {m_late}"
+        );
+        assert!(
+            o_late > 1.15 * o_early,
+            "open cuica did not glide up: {o_early} -> {o_late}"
+        );
+        let (lm, lo_life) = (last_audible(&mute), last_audible(&open));
+        assert!(lm < 0.25, "mute cuica life {lm}");
+        assert!(lo_life > 0.30, "open cuica life {lo_life}");
+        assert!(lo_life > lm, "open cuica must out-live mute");
     }
 }

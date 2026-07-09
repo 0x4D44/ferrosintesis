@@ -93,3 +93,8 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   so ±4-tick humanisation can't scramble same-beat chords). Continuing the
   ground into movement II then needs the intro's FINAL voicing as the
   voice-lead seed, or bar 9 re-spreads and dents the seam.
+- 2026.07.09 — **"Authored-channel" is not the same as old-album
+  byte-identity.** MM-REQ-KILN-00008 made existing Modal/Organ pitch controls
+  start working, but 13 committed MIDIs had already authored those controls
+  while the synth ignored them. Scan `render_opus.py::ALBUMS` for authored
+  controls before promising byte identity; then make the waiver set explicit.

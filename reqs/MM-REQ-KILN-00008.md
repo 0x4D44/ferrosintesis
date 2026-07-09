@@ -1,15 +1,15 @@
 # MM-REQ-KILN-00008 — Modal & Organ voices must respond to pitch bend and portamento
 
-- **State:** Accepted
+- **State:** Implemented
 - **Priority:** Should
 - **Area:** hollowsynth / voices (Modal, Organ)
 - **Raised:** 2026-07-08
-- **Implemented-by:** —
+- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::Modal::set_pitch`, `fable5/hollowsynth/src/voices.rs::Organ::set_pitch`, `fable5/hollowsynth/src/engine.rs::aftertouch_family`, `fable5/hollowsynth/src/engine.rs::tests::modal_organ_pitch_controls_move_sustained_notes`, `fable5/hollowsynth/README.md`
 - **Satisfied-by:** `$null | cargo test modal_organ_pitch_controls_move_sustained_notes --manifest-path fable5/hollowsynth/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09, `20b339e`)
 
 ## Statement
 The Modal and Organ voice families must honour channel pitch multipliers
@@ -25,3 +25,52 @@ Highest-leverage expression gap: one capability unlocks ~40 programs. Needs care
 hence heavy. Opt-in-safe in principle (a channel that never bends is unchanged),
 but must be proven byte-identical for existing albums. 2026-07-08 GM gap audit
 (cross-cutting engine gap #1).
+
+## Notes
+Implemented in `20b339e` after Arthur approved the compatibility waiver for
+existing Modal/Organ tracks that already authored pitch controls. The waiver set
+is `fable5/The Burning Meridian/midi/03 - Meridian.mid` plus all 12
+`gpt5-3-spark/midi/*.mid` tracks; every other `render_opus.py::ALBUMS` MIDI
+must remain byte-identical old-vs-new.
+
+Oracle command:
+
+```powershell
+$null | deltic timeout 180 cargo test modal_organ_pitch_controls_move_sustained_notes --manifest-path fable5/hollowsynth/Cargo.toml
+```
+
+Passing output:
+
+```text
+running 1 test
+test engine::tests::modal_organ_pitch_controls_move_sustained_notes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 114 filtered out
+```
+
+Additional local validation:
+
+```text
+$null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
+test result: ok. 113 passed; 0 failed; 2 ignored
+
+$null | deltic timeout 300 cargo clippy --all-targets --manifest-path fable5/hollowsynth/Cargo.toml -- -D warnings
+Finished `dev` profile
+
+deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.toml
+passed
+
+$null | deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
+Finished `release` profile
+```
+
+Waiver-aware render comparison, old `origin/main` v0.8.12 release binary vs new
+v0.8.13 release binary:
+
+```text
+rendered 53 MIDI files with old and new binaries
+non-waived byte-identical: 40/40
+waived sanity checked: 13/13
+largest waived RMS delta: -2.07 dB (gpt5-3-spark/midi/10 - Lightning Over Stone.mid)
+peaks remained around -1 dBFS with no clipping samples
+```

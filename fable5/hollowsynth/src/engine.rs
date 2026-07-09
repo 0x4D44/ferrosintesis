@@ -23,6 +23,7 @@ const BLOCK: usize = 64;
 // pitch-bend; organs morph their tremulant toward Leslie-fast instead.
 const VIB_RATE_HZ: f32 = 5.3; // vibrato LFO rate
 const VIB_DEPTH_CENTS: f32 = 35.0; // pitch depth at mod = 1
+const ST_CC1_VIB_DEPTH: f32 = 0.012; // alt-bank strings: full-wheel per-layer section vibrato depth
 const LESLIE_SLOW_HZ: f32 = 0.9; // tremulant rate the rotor brakes down to (chorale)
 const LESLIE_FAST_HZ: f32 = 6.8; // tremulant rate the rotor spins up to
 const LESLIE_INERTIA_S: f32 = 1.5; // rotor time constant (spin-up/down)
@@ -498,6 +499,7 @@ impl BusGlue {
 struct Strip {
     program: u8,
     kit: drums::Kit, // channel-10 kit version; V2 once a non-zero ch-10 Program Change is authored
+    alt_bank: bool,  // CC0 != 0 selects the alt orchestral voicings (altbank::make)
     volume: f32,     // CC7 as amplitude (squared curve)
     pan: f32,        // 0..1
     bend: f32,       // channel pitch multiplier: wheel × range × fine-tune
@@ -554,6 +556,7 @@ impl Strip {
         Strip {
             program: 0,
             kit: drums::Kit::V1,
+            alt_bank: false,
             volume: (100.0f32 / 127.0).powi(2),
             pan: 0.5,
             bend: 1.0,
@@ -639,6 +642,7 @@ struct Active {
     sost_held: bool, // NoteOff deferred by the sostenuto pedal
     // CC5/CC65 portamento: (semitone offset from the target, per-block slew)
     glide: Option<(f32, f32)>,
+    alt: bool, // spawn-time bank: this voice is an alt-bank voicing (per-voice CC1 routing)
     voice: Box<dyn voices::Voice>,
 }
 
@@ -802,14 +806,12 @@ impl EngineCore {
         let voice = if ch == 9 {
             drums::make(key, vel, sr, seed, self.strips[9].kit)
         } else {
-            Some(voices::make(
-                self.strips[ci].program,
-                key,
-                vel,
-                sr,
-                seed,
-                self.opt.samples,
-            ))
+            let prog = self.strips[ci].program;
+            Some(if self.strips[ci].alt_bank {
+                crate::altbank::make(prog, key, vel, sr, seed, self.opt.samples)
+            } else {
+                voices::make(prog, key, vel, sr, seed, self.opt.samples)
+            })
         };
 
         if let Some(mut voice) = voice {
@@ -846,6 +848,7 @@ impl EngineCore {
                 sost: false,
                 sost_held: false,
                 glide,
+                alt: self.strips[ci].alt_bank,
                 voice,
             });
             self.stats.voices_spawned += 1;
@@ -874,6 +877,7 @@ impl EngineCore {
         let s = &mut self.strips[ch as usize];
         let v = val as f32 / 127.0;
         match num {
+            0 => s.alt_bank = val != 0, // CC0 bank select: non-zero = alt voicings
             1 => {
                 s.mod_target = v;
                 s.mod_authored = true;
@@ -1174,7 +1178,20 @@ impl EngineCore {
                 strip.vib_mult = factor;
                 let mult = strip.bend * factor;
                 for a in self.active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_pitch(mult);
+                    // Alt-bank strings/choir restore v0.9 CC1 semantics PER HELD
+                    // voice (a.alt is the spawn-time bank): strings deepen their
+                    // own decorrelated per-layer vibrato via set_vib (not the
+                    // coherent set_pitch warble); choir gets no CC1. Every default
+                    // voice takes the identical set_pitch path, so a channel with
+                    // no alt voices is byte-for-byte unchanged.
+                    if a.alt && matches!(strip.program, 48..=51) {
+                        let base = crate::altbank::strings_vib_base(strip.program);
+                        a.voice.set_vib(base + (ST_CC1_VIB_DEPTH - base) * m);
+                    } else if a.alt && matches!(strip.program, 52..=54) {
+                        // alt-bank choir: no CC1 pitch vibrato (v0.9)
+                    } else {
+                        a.voice.set_pitch(mult);
+                    }
                 }
                 strip.mod_engaged = on;
             } else {
@@ -3679,6 +3696,142 @@ mod tests {
         assert!(
             (f2 / target - 1.0).abs() <= 0.03,
             "clarinet bent+vibrato pitch off: {f2:.1} Hz vs {target:.1} Hz"
+        );
+    }
+
+    // --- Alt bank (GM Bank-Select alternate orchestral voicings) ---
+
+    fn bank_song(cc0: Option<u8>, prog: u8) -> Vec<(f64, EvKind)> {
+        let mut ev = Vec::new();
+        if let Some(v) = cc0 {
+            ev.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: v,
+                },
+            ));
+        }
+        ev.push((0.0, EvKind::Prog { ch: 0, prog }));
+        ev.push((
+            0.05,
+            EvKind::NoteOn {
+                ch: 0,
+                key: 60,
+                vel: 100,
+            },
+        ));
+        ev.push((1.5, EvKind::NoteOff { ch: 0, key: 60 }));
+        ev
+    }
+
+    /// AC2 + AC4: `CC0 != 0` routes each in-scope program to the alt voicing,
+    /// which is a genuinely different render from the default (proving the bank
+    /// switch reaches a distinct voice — bowed cello 42, strings 48, choir 52).
+    /// Per-voice character is proven by the `altbank` voice oracles; here we
+    /// assert the routing produces a real, non-trivial difference.
+    #[test]
+    fn alt_bank_selects_distinct_voices() {
+        let sr = 44100.0;
+        for prog in [42u8, 48, 52] {
+            let alt = left(&render(&test_song(bank_song(Some(1), prog), 2.0), &test_opts(sr)).0);
+            let def = left(&render(&test_song(bank_song(None, prog), 2.0), &test_opts(sr)).0);
+            assert_eq!(alt.len(), def.len());
+            // Not byte-identical → the bank routed to a different factory.
+            assert_ne!(
+                alt, def,
+                "prog {prog}: alt bank must produce a distinct render"
+            );
+            // And a non-trivial magnitude (a real voice swap, not a rounding blip).
+            let diff: Vec<f32> = alt.iter().zip(&def).map(|(a, b)| a - b).collect();
+            let ratio = rms(&diff) / rms(&def).max(1e-9);
+            assert!(
+                ratio > 0.01,
+                "prog {prog}: alt render too close to default (diff/base = {ratio:.4})"
+            );
+        }
+    }
+
+    /// AC5: the bank latches (CC121 reset-all-controllers does NOT clear it),
+    /// `CC0 == 0` returns to the default bank byte-identically, and an alt-bank
+    /// channel delegates a non-orchestral program to the default voice.
+    #[test]
+    fn alt_bank_latch_reset_and_delegation() {
+        let sr = 44100.0;
+        let def = left(&render(&test_song(bank_song(None, 48), 2.0), &test_opts(sr)).0);
+        let alt = left(&render(&test_song(bank_song(Some(1), 48), 2.0), &test_opts(sr)).0);
+
+        // CC0=1 then CC121 → still alt (bank is not a performance controller).
+        let rac = vec![
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
+            (0.0, EvKind::Prog { ch: 0, prog: 48 }),
+            (
+                0.02,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 121,
+                    val: 0,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                },
+            ),
+            (1.5, EvKind::NoteOff { ch: 0, key: 60 }),
+        ];
+        let after_rac = left(&render(&test_song(rac, 2.0), &test_opts(sr)).0);
+        assert_eq!(after_rac, alt, "CC121 must not clear the bank");
+
+        // CC0=1 then CC0=0 → back to the default bank.
+        let reset = vec![
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
+            (
+                0.02,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 0,
+                },
+            ),
+            (0.03, EvKind::Prog { ch: 0, prog: 48 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                },
+            ),
+            (1.5, EvKind::NoteOff { ch: 0, key: 60 }),
+        ];
+        let after_reset = left(&render(&test_song(reset, 2.0), &test_opts(sr)).0);
+        assert_eq!(after_reset, def, "CC0=0 must return to the default bank");
+
+        // Alt bank + a non-orchestral program (piano 0) delegates to default.
+        let alt_piano = left(&render(&test_song(bank_song(Some(1), 0), 2.0), &test_opts(sr)).0);
+        let def_piano = left(&render(&test_song(bank_song(None, 0), 2.0), &test_opts(sr)).0);
+        assert_eq!(
+            alt_piano, def_piano,
+            "alt bank must delegate non-orchestral programs to the default voice"
         );
     }
 }

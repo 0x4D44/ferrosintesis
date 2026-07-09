@@ -3,6 +3,7 @@
 pub mod live;
 pub mod offline;
 
+pub(crate) mod altbank;
 pub(crate) mod drums;
 pub(crate) mod dsp;
 pub(crate) mod engine;

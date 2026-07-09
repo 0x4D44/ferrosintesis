@@ -16,6 +16,7 @@
 //!   Wind     — sine + harmonics + breath, with a pitch scoop into the note
 //!   Bowed    — sawtooth through a violin body, with scoop, attack bow
 //!              noise, and bow-pressure brightness
+//!   ReverseCymbal — a pitch-agnostic reverse-cymbal swell for GM 119
 //!   SfxNoise — safe toneless noise fallback for GM sound effects
 //!
 //! Timing realism: sustained families speak slower at low velocity, the way
@@ -635,6 +636,283 @@ fn timpani(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         0.85,
     )
     .with_strike_glide(start, glide_oct_per_s, 1.0)
+}
+
+const TINKLE_BELL: &[(f32, f32, f32)] = &[
+    (1.00, 0.72, 1.7),
+    (2.35, 0.56, 1.35),
+    (3.88, 0.46, 1.05),
+    (5.42, 0.28, 0.72),
+    (7.10, 0.14, 0.45),
+];
+
+const AGOGO: &[(f32, f32, f32)] = &[
+    (1.00, 0.86, 0.42),
+    (1.70, 0.92, 0.36),
+    (2.85, 0.26, 0.24),
+    (4.10, 0.12, 0.16),
+];
+
+const WOODBLOCK: &[(f32, f32, f32)] = &[(1.00, 1.00, 0.16), (2.65, 0.30, 0.07), (4.35, 0.12, 0.04)];
+
+const TAIKO_MODES: &[(f32, f32, f32)] =
+    &[(1.00, 1.00, 0.80), (1.59, 0.44, 0.52), (2.14, 0.24, 0.34)];
+const TOM_MODES: &[(f32, f32, f32)] = &[(1.00, 1.00, 0.40), (1.59, 0.90, 0.30), (2.14, 0.62, 0.22)];
+const SYNTH_DRUM_MODES: &[(f32, f32, f32)] = &[(1.00, 1.00, 0.26), (2.00, 0.03, 0.10)];
+
+fn tinkle_bell(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    bell(
+        key,
+        vel,
+        sr,
+        seed,
+        TINKLE_BELL,
+        (0.07, 0.006, 7_200.0, 1.0),
+        0.0,
+        8.0,
+        0.42,
+    )
+}
+
+fn agogo(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    bell(
+        key,
+        vel,
+        sr,
+        seed,
+        AGOGO,
+        (0.18, 0.008, 3_500.0, 1.1),
+        0.0,
+        4.0,
+        0.50,
+    )
+}
+
+fn steel_drum(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    let f = key_freq(key);
+    let v = vel_amp(vel);
+    let decay_scale = (440.0 / f).powf(0.22).clamp(0.72, 1.45);
+    let mut jrng = Rng::new(seed ^ 0x514E_5748);
+    let partials: Vec<(f32, f32, f32)> = [
+        (1.000, 1.00, 1.00),
+        (1.006, 0.36, 1.10),
+        (2.000, 0.38, 0.82),
+        (2.012, 0.20, 0.75),
+        (3.000, 0.20, 0.60),
+        (4.180, 0.08, 0.42),
+    ]
+    .into_iter()
+    .map(|(r, a, t)| (f * r, a * v * (1.0 + 0.05 * jrng.white()), t * decay_scale))
+    .collect();
+
+    Modal::new(
+        sr,
+        seed,
+        &partials,
+        (
+            0.09 * v,
+            0.020,
+            Biquad::bandpass(2_200.0_f32.min(sr * 0.40), 0.9, sr),
+        ),
+        0.001,
+        6.0,
+        0.55,
+    )
+}
+
+fn woodblock(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    wood_bar(
+        key,
+        vel,
+        sr,
+        seed,
+        WOODBLOCK,
+        (0.28, 0.010, 2_700.0, 0.9),
+        0.0,
+        2.0,
+        0.48,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn membrane_drum(
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    table: &[(f32, f32, f32)],
+    noise: (f32, f32, Biquad),
+    release_t60: f32,
+    gain: f32,
+    strike_semitones: f32,
+    settle_s: f32,
+    jitter: f32,
+) -> Modal {
+    let f = key_freq(key);
+    let v = vel_amp(vel);
+    let decay_scale = (220.0 / f).powf(0.16).clamp(0.76, 1.42);
+    let mut jrng = Rng::new(seed ^ 0x4D45_4D42);
+    let partials: Vec<(f32, f32, f32)> = table
+        .iter()
+        .map(|&(r, a, t)| {
+            (
+                f * r,
+                a * v * (1.0 + jitter * jrng.white()),
+                t * decay_scale,
+            )
+        })
+        .collect();
+    let start = 2f32.powf(strike_semitones / 12.0);
+    let glide_oct_per_s = (strike_semitones / 12.0) / settle_s;
+    Modal::new(
+        sr,
+        seed,
+        &partials,
+        (noise.0 * v, noise.1, noise.2),
+        0.0,
+        release_t60,
+        gain,
+    )
+    .with_strike_glide(start, glide_oct_per_s, 1.0)
+}
+
+fn taiko_drum(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    membrane_drum(
+        key,
+        vel,
+        sr,
+        seed,
+        TAIKO_MODES,
+        (0.95, 0.055, Biquad::lowpass(260.0, 0.8, sr)),
+        6.0,
+        0.72,
+        2.8,
+        0.105,
+        0.10,
+    )
+}
+
+fn melodic_tom(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    membrane_drum(
+        key,
+        vel,
+        sr,
+        seed,
+        TOM_MODES,
+        (
+            0.36,
+            0.030,
+            Biquad::bandpass(2_300.0_f32.min(sr * 0.40), 0.85, sr),
+        ),
+        5.0,
+        0.60,
+        1.7,
+        0.070,
+        0.08,
+    )
+}
+
+fn synth_drum(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    membrane_drum(
+        key,
+        vel,
+        sr,
+        seed,
+        SYNTH_DRUM_MODES,
+        (
+            0.16,
+            0.010,
+            Biquad::bandpass(4_200.0_f32.min(sr * 0.40), 0.75, sr),
+        ),
+        4.0,
+        0.62,
+        7.0,
+        0.090,
+        0.02,
+    )
+}
+
+struct ReversePartial {
+    osc: Sine,
+    amp: f32,
+}
+
+struct ReverseCymbal {
+    rng: Rng,
+    hp: Biquad,
+    partials: Vec<ReversePartial>,
+    sample: usize,
+    peak_samples: usize,
+    sr: f32,
+    gain: f32,
+    released: bool,
+}
+
+impl ReverseCymbal {
+    fn new(vel: u8, sr: f32, seed: u32) -> Self {
+        let mut rng = Rng::new(seed ^ 0xC1A5_0119);
+        let partials = [
+            (1_450.0, 0.18),
+            (2_230.0, 0.13),
+            (3_610.0, 0.10),
+            (5_850.0, 0.06),
+        ]
+        .into_iter()
+        .filter(|(f, _)| *f < sr * 0.45)
+        .map(|(f, amp)| ReversePartial {
+            osc: Sine::new(f, sr, rng.white() * TAU),
+            amp,
+        })
+        .collect();
+
+        ReverseCymbal {
+            rng,
+            hp: Biquad::highpass(2_800.0_f32.min(sr * 0.40), 0.7, sr),
+            partials,
+            sample: 0,
+            peak_samples: (1.02 * sr) as usize,
+            sr,
+            gain: vel_amp(vel) * 0.13,
+            released: false,
+        }
+    }
+
+    fn env_at(&self, sample: usize) -> f32 {
+        if sample <= self.peak_samples {
+            let x = sample as f32 / self.peak_samples.max(1) as f32;
+            x * x * (3.0 - 2.0 * x)
+        } else {
+            let age = (sample - self.peak_samples) as f32 / self.sr;
+            let t60 = if self.released { 0.18 } else { 0.38 };
+            10f32.powf(-3.0 * age / t60)
+        }
+    }
+}
+
+impl Voice for ReverseCymbal {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let env = self.env_at(self.sample);
+            let noise = self.hp.process(self.rng.white()) * 0.95;
+            let metal: f32 = self.partials.iter_mut().map(|p| p.amp * p.osc.next()).sum();
+            *o += (noise + metal) * env * self.gain;
+            self.sample += 1;
+        }
+        self.sample <= self.peak_samples || self.env_at(self.sample) * self.gain > 1e-5
+    }
+
+    fn note_off(&mut self) {
+        self.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "reverse_cym"
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -4332,6 +4610,14 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             0.18,
             0.56,
         )),
+        112 => Box::new(tinkle_bell(key, vel, sr, seed)),
+        113 => Box::new(agogo(key, vel, sr, seed)),
+        114 => Box::new(steel_drum(key, vel, sr, seed)),
+        115 => Box::new(woodblock(key, vel, sr, seed)),
+        116 => Box::new(taiko_drum(key, vel, sr, seed)),
+        117 => Box::new(melodic_tom(key, vel, sr, seed)),
+        118 => Box::new(synth_drum(key, vel, sr, seed)),
+        119 => Box::new(ReverseCymbal::new(vel, sr, seed)),
         120..=127 => Box::new(SfxNoise::new(program, vel, sr, seed)),
         80..=87 => Box::new(lead(program, key, vel, sr, seed)),
         88..=95 => Box::new(pad(program, key, vel, sr, seed)),
@@ -4461,6 +4747,57 @@ mod tests {
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    fn render_program_released(
+        program: u8,
+        key: u8,
+        vel: u8,
+        release_s: f32,
+        secs: f32,
+        seed: u32,
+    ) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = make(program, key, vel, sr, seed, false);
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        let split = ((release_s * sr) as usize).min(buf.len());
+        v.render(&mut buf[..split]);
+        v.note_off();
+        let block = 128;
+        for chunk in buf[split..].chunks_mut(block) {
+            if !v.render(chunk) {
+                break;
+            }
+        }
+        buf
+    }
+
+    fn survives_until(mut v: Box<dyn Voice>, sr: f32, secs: f32) -> bool {
+        let block = 128;
+        let mut left = (secs * sr) as usize;
+        while left > 0 {
+            let n = left.min(block);
+            let mut scratch = vec![0f32; n];
+            if !v.render(&mut scratch) {
+                return false;
+            }
+            left -= n;
+        }
+        true
+    }
+
+    fn dies_within(mut v: Box<dyn Voice>, sr: f32, secs: f32) -> bool {
+        let block = 128;
+        let mut left = (secs * sr) as usize;
+        while left > 0 {
+            let n = left.min(block);
+            let mut scratch = vec![0f32; n];
+            if !v.render(&mut scratch) {
+                return true;
+            }
+            left -= n;
+        }
+        false
     }
 
     fn render_program_sampled(
@@ -5163,6 +5500,259 @@ mod tests {
             assert!(
                 written_pitch < 0.55 * level,
                 "program {program} should not emphasize written pitch: band {written_pitch}, rms {level}"
+            );
+        }
+    }
+
+    #[test]
+    fn gm112_119_melodic_percussion_are_modeled() {
+        let sr = 44100.0;
+        let seed = 0x1121_1900;
+        for program in 112u8..=119 {
+            let sig = render_program(program, 72, 100, 1.6, seed ^ program as u32);
+            let body = segment(&sig, sr, 0.04, 0.32);
+            assert!(
+                sig.iter().all(|s| s.is_finite()),
+                "program {program} produced non-finite audio"
+            );
+            assert!(
+                rms(body) > 1e-5,
+                "program {program} should be audible, body rms {}",
+                rms(body)
+            );
+            assert!(
+                max_abs(&sig) < 0.98,
+                "program {program} should leave headroom, peak {}",
+                max_abs(&sig)
+            );
+        }
+
+        for program in 112u8..=118 {
+            assert_eq!(
+                make(program, 72, 100, sr, seed, false).kind(),
+                "modal",
+                "program {program} must route away from steel fallback"
+            );
+        }
+        assert_eq!(
+            make(119, 72, 100, sr, seed, false).kind(),
+            "reverse_cym",
+            "GM119 needs its reverse-cymbal one-shot, not a pluck"
+        );
+
+        let f = key_freq(84);
+        let tinkle = render_program(112, 84, 100, 1.6, seed ^ 112);
+        let agogo_at_tinkle = render_program(113, 84, 100, 1.6, seed ^ 113);
+        let wood_at_tinkle = render_program(115, 84, 100, 1.6, seed ^ 115);
+        let tinkle_body = segment(&tinkle, sr, 0.06, 0.40);
+        let tinkle_peak = peak_locate(tinkle_body, sr, 0.90 * f, 1.10 * f);
+        assert!(
+            (tinkle_peak / f - 1.0).abs() < 0.05,
+            "GM112 pitch center {tinkle_peak}, expected {f}"
+        );
+        let bright = |s: &[f32]| hp_rms(s, sr, 4_000.0) / rms(s).max(1e-9);
+        assert!(
+            bright(tinkle_body) > 1.15 * bright(segment(&agogo_at_tinkle, sr, 0.06, 0.40))
+                && bright(tinkle_body) > 1.25 * bright(segment(&wood_at_tinkle, sr, 0.06, 0.40)),
+            "GM112 should be the bright small-metal voice"
+        );
+        assert!(
+            rms(segment(&tinkle, sr, 0.80, 1.20)) > 1e-4,
+            "GM112 should keep a quiet bell tail"
+        );
+
+        let f = key_freq(76);
+        let agogo = render_program(113, 76, 100, 1.0, seed ^ 113);
+        let tinkle_at_agogo = render_program(112, 76, 100, 1.0, seed ^ 112);
+        let steel_at_agogo = render_program(114, 76, 100, 1.0, seed ^ 114);
+        let agogo_body = segment(&agogo, sr, 0.04, 0.20);
+        let agogo_peak = peak_locate(agogo_body, sr, 0.85 * f, 1.15 * f);
+        assert!(
+            (agogo_peak / f - 1.0).abs() < 0.08,
+            "GM113 pitch center {agogo_peak}, expected {f}"
+        );
+        let agogo_clank = band_rms(agogo_body, sr, 1.70 * f, 16.0) / rms(agogo_body).max(1e-9);
+        let tinkle_clank = band_rms(
+            segment(&tinkle_at_agogo, sr, 0.04, 0.20),
+            sr,
+            1.70 * f,
+            16.0,
+        ) / rms(segment(&tinkle_at_agogo, sr, 0.04, 0.20)).max(1e-9);
+        let steel_clank = band_rms(segment(&steel_at_agogo, sr, 0.04, 0.20), sr, 1.70 * f, 16.0)
+            / rms(segment(&steel_at_agogo, sr, 0.04, 0.20)).max(1e-9);
+        assert!(
+            agogo_clank > 1.35 * tinkle_clank && agogo_clank > 1.20 * steel_clank,
+            "GM113 should carry the 1.7f agogo clang: agogo {agogo_clank}, tinkle {tinkle_clank}, steel {steel_clank}"
+        );
+        assert!(
+            rms(segment(&agogo, sr, 0.65, 0.95)) < 0.30 * rms(agogo_body),
+            "GM113 should be a short struck bell"
+        );
+
+        let f = key_freq(72);
+        let steel = render_program(114, 72, 100, 1.2, seed ^ 114);
+        let steel_body = segment(&steel, sr, 0.08, 0.35);
+        let steel_peak = peak_locate(steel_body, sr, 0.95 * f, 1.05 * f);
+        assert!(
+            (steel_peak / f - 1.0).abs() < 0.03,
+            "GM114 pitch center {steel_peak}, expected {f}"
+        );
+        let fund = mag_at(steel_body, sr, f).max(1e-9);
+        assert!(
+            mag_at(steel_body, sr, 2.0 * f) > 0.10 * fund
+                && mag_at(steel_body, sr, 3.0 * f) > 0.06 * fund,
+            "GM114 should have steelpan octave/twelfth support"
+        );
+
+        let wood = render_program(115, 72, 100, 0.7, seed ^ 115);
+        let wood_body = segment(&wood, sr, 0.025, 0.140);
+        let wood_peak = peak_locate(wood_body, sr, 0.85 * f, 1.15 * f);
+        assert!(
+            (wood_peak / f - 1.0).abs() < 0.10,
+            "GM115 pitch center {wood_peak}, expected {f}"
+        );
+        assert!(
+            rms(segment(&wood, sr, 0.25, 0.50)) < 0.10 * rms(segment(&wood, sr, 0.00, 0.08)),
+            "GM115 should be the dry short woodblock"
+        );
+
+        let taiko = render_program(116, 48, 100, 1.2, seed ^ 116);
+        let tom_at_taiko = render_program(117, 48, 100, 1.2, seed ^ 117);
+        let f = key_freq(48);
+        let taiko_early = peak_locate(segment(&taiko, sr, 0.035, 0.090), sr, 1.00 * f, 1.30 * f);
+        let taiko_late = peak_locate(segment(&taiko, sr, 0.18, 0.36), sr, 0.95 * f, 1.06 * f);
+        assert!(
+            taiko_early > 1.05 * taiko_late && (taiko_late / f - 1.0).abs() < 0.04,
+            "GM116 should settle downward to pitch: early {taiko_early}, late {taiko_late}, expected {f}"
+        );
+        assert!(
+            band_rms(segment(&taiko, sr, 0.00, 0.20), sr, 150.0, 0.7)
+                > 1.20 * band_rms(segment(&tom_at_taiko, sr, 0.00, 0.20), sr, 150.0, 0.7),
+            "GM116 should have a larger low drum body than melodic tom"
+        );
+
+        let tom = render_program(117, 55, 100, 0.9, seed ^ 117);
+        let taiko_at_tom = render_program(116, 55, 100, 0.9, seed ^ 116);
+        let f = key_freq(55);
+        let tom_early = peak_locate(segment(&tom, sr, 0.025, 0.075), sr, 1.00 * f, 1.20 * f);
+        let tom_late = peak_locate(segment(&tom, sr, 0.12, 0.28), sr, 0.95 * f, 1.06 * f);
+        assert!(
+            tom_early > 1.02 * tom_late && (tom_late / f - 1.0).abs() < 0.04,
+            "GM117 should settle to pitch: early {tom_early}, late {tom_late}, expected {f}"
+        );
+        let attack_bright = hp_rms(segment(&tom, sr, 0.00, 0.08), sr, 1_800.0)
+            / rms(segment(&tom, sr, 0.00, 0.08)).max(1e-9);
+        let taiko_attack_bright = hp_rms(segment(&taiko_at_tom, sr, 0.00, 0.08), sr, 1_800.0)
+            / rms(segment(&taiko_at_tom, sr, 0.00, 0.08)).max(1e-9);
+        assert!(
+            attack_bright > 1.10 * taiko_attack_bright
+                && rms(segment(&tom, sr, 0.45, 0.75)) < rms(segment(&taiko_at_tom, sr, 0.45, 0.75)),
+            "GM117 should be brighter and shorter than taiko"
+        );
+
+        let synth = render_program(118, 60, 100, 0.8, seed ^ 118);
+        let tom_at_synth = render_program(117, 60, 100, 0.8, seed ^ 117);
+        let f = key_freq(60);
+        let synth_early = peak_locate(segment(&synth, sr, 0.015, 0.055), sr, 1.10 * f, 1.70 * f);
+        let synth_late = peak_locate(segment(&synth, sr, 0.14, 0.28), sr, 0.95 * f, 1.06 * f);
+        let tom_at_synth_early = peak_locate(
+            segment(&tom_at_synth, sr, 0.015, 0.055),
+            sr,
+            1.00 * f,
+            1.30 * f,
+        );
+        assert!(
+            synth_early > 1.25 * synth_late
+                && synth_early > 1.12 * tom_at_synth_early
+                && (synth_late / f - 1.0).abs() < 0.04,
+            "GM118 should have the strongest electronic pitch sweep: synth early {synth_early}, late {synth_late}, tom early {tom_at_synth_early}"
+        );
+        let synth_body = segment(&synth, sr, 0.20, 0.34);
+        let tom_body = segment(&tom_at_synth, sr, 0.20, 0.34);
+        let synth_concentration = mag_at(synth_body, sr, f)
+            / (mag_at(synth_body, sr, 1.59 * f) + mag_at(synth_body, sr, 2.14 * f)).max(1e-9);
+        let tom_concentration = mag_at(tom_body, sr, f)
+            / (mag_at(tom_body, sr, 1.59 * f) + mag_at(tom_body, sr, 2.14 * f)).max(1e-9);
+        assert!(
+            synth_concentration > 2.0 * tom_concentration,
+            "GM118 body should avoid acoustic tom upper modes: synth {synth_concentration}, tom {tom_concentration}"
+        );
+
+        for &(program, key, early_a, early_b, late_a, late_b, min_sweep) in &[
+            (116u8, 48u8, 0.035, 0.090, 0.18, 0.36, 1.05),
+            (117, 55, 0.025, 0.075, 0.12, 0.28, 1.02),
+            (118, 60, 0.015, 0.055, 0.14, 0.28, 1.25),
+        ] {
+            let bend = 2f32.powf(2.0 / 12.0);
+            let f0 = key_freq(key) * bend;
+            let mut v = make(program, key, 100, sr, seed ^ program as u32, false);
+            let mut bent = vec![0f32; (0.40 * sr) as usize];
+            let chunk = (0.020 * sr) as usize;
+            for (i, part) in bent.chunks_mut(chunk).enumerate() {
+                if i as f32 * 0.020 <= 0.120 {
+                    v.set_pitch(bend);
+                }
+                v.render(part);
+            }
+            let early = peak_locate(segment(&bent, sr, early_a, early_b), sr, f0, f0 * 1.70);
+            let late = peak_locate(segment(&bent, sr, late_a, late_b), sr, 0.95 * f0, 1.06 * f0);
+            assert!(
+                early > min_sweep * late && (late / f0 - 1.0).abs() < 0.04,
+                "program {program} repeated set_pitch reset or double-applied strike glide: early {early}, late {late}, expected {f0}"
+            );
+        }
+
+        let reverse_low = render_program(119, 48, 100, 1.6, seed ^ 119);
+        let reverse_high = render_program(119, 84, 100, 1.6, seed ^ 119);
+        assert!(
+            reverse_low
+                .iter()
+                .zip(&reverse_high)
+                .all(|(a, b)| a.to_bits() == b.to_bits()),
+            "GM119 reverse cymbal intentionally ignores written pitch"
+        );
+        let early = rms(segment(&reverse_low, sr, 0.10, 0.25));
+        let pre_peak = rms(segment(&reverse_low, sr, 0.75, 0.95));
+        let late = rms(segment(&reverse_low, sr, 1.20, 1.50));
+        assert!(
+            pre_peak > 5.0 * early && late < 0.65 * pre_peak,
+            "GM119 should swell then decay: early {early}, pre_peak {pre_peak}, late {late}"
+        );
+        let short = render_program_released(119, 72, 100, 0.06, 1.6, seed ^ 119);
+        assert!(
+            rms(segment(&short, sr, 0.75, 0.95)) > 0.70 * pre_peak,
+            "GM119 short note-off must not kill the reverse swell"
+        );
+        let mut short_rev = make(119, 72, 100, sr, seed ^ 119, false);
+        let mut gate = vec![0f32; (0.06 * sr) as usize];
+        short_rev.render(&mut gate);
+        short_rev.note_off();
+        assert!(
+            survives_until(short_rev, sr, 0.95),
+            "GM119 must stay alive through the reverse swell after a short note"
+        );
+        assert!(
+            dies_within(make(119, 72, 100, sr, seed ^ 119, false), sr, 2.0),
+            "GM119 should eventually return false after the post-peak decay"
+        );
+
+        for &(program, key, secs, tail_a, tail_b, min_tail_ratio) in &[
+            (112u8, 84u8, 1.3, 0.40, 0.90, 0.55),
+            (113, 76, 0.8, 0.12, 0.32, 0.45),
+            (114, 72, 1.0, 0.24, 0.60, 0.55),
+            (115, 72, 0.5, 0.08, 0.18, 0.25),
+            (116, 48, 1.0, 0.24, 0.60, 0.55),
+            (117, 55, 0.8, 0.16, 0.42, 0.50),
+            (118, 60, 0.7, 0.14, 0.34, 0.45),
+        ] {
+            let held = render_program(program, key, 100, secs, seed ^ program as u32);
+            let short =
+                render_program_released(program, key, 100, 0.06, secs, seed ^ program as u32);
+            let held_tail = rms(segment(&held, sr, tail_a, tail_b)).max(1e-9);
+            let short_tail = rms(segment(&short, sr, tail_a, tail_b));
+            assert!(
+                short_tail > min_tail_ratio * held_tail,
+                "program {program} note-off hard-choked the natural tail: short {short_tail}, held {held_tail}"
             );
         }
     }

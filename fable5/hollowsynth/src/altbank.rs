@@ -50,6 +50,7 @@ const PIZZ: PluckPreset = PluckPreset {
     grit: false,
     wound_all: false,
     harmonic: false,
+    mwah: None, // no fretless vocal bloom on a pizzicato
     #[cfg(test)]
     name: "PIZZ",
 };
@@ -1021,7 +1022,10 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testutil::{band_rms, centroid, flatness, hp_rms, mag_at, peak_locate, rms};
+    use crate::testutil::{
+        band_rms, centroid, env_autocorr_peak_detrend, flatness, hp_rms, mag_at, peak_locate, rms,
+        BW_TREM_PEAK_FLOOR,
+    };
 
     // --- render helpers (ported from the v0.9 test module) -----------------
 
@@ -1195,6 +1199,41 @@ mod tests {
             l42 / l40
         );
         assert!(l42 >= 1.20 * l40, "cello low-band {l42} vs violin {l40}");
+    }
+
+    /// BW-O5 — the bow-tremolo (program 44) amplitude-modulates at ~6-9 Hz and
+    /// harder bowing tremolos faster: the AM autocorrelation peaks in-band, the
+    /// rate tracks `6 + 3·vel`, and vel 127 is at least 1.5 Hz faster than vel 32.
+    #[test]
+    fn tremolo_rate_and_velocity() {
+        let sr = 44100.0;
+        let measure = |vel: u8| {
+            let buf = render_bowed(44, 69, vel, 2.5, 5);
+            let seg = &buf[(0.4 * sr) as usize..(2.4 * sr) as usize];
+            env_autocorr_peak_detrend(seg, sr, 0.08, 0.20, 4.0)
+        };
+        let (peak100, rate100) = measure(100);
+        let (_, rate32) = measure(32);
+        let (_, rate127) = measure(127);
+        assert!(
+            peak100 >= BW_TREM_PEAK_FLOOR,
+            "tremolo peak {peak100} < floor"
+        );
+        let exp100 = 6.0 + 3.0 * (100.0 / 127.0);
+        let exp32 = 6.0 + 3.0 * (32.0 / 127.0);
+        assert!(
+            (rate100 - exp100).abs() / exp100 < 0.15,
+            "vel100 rate {rate100} vs {exp100}"
+        );
+        assert!(
+            (rate32 - exp32).abs() / exp32 < 0.15,
+            "vel32 rate {rate32} vs {exp32}"
+        );
+        assert!(
+            rate127 - rate32 >= 1.5,
+            "velocity rate spread {} Hz",
+            rate127 - rate32
+        );
     }
 
     /// BW-O6 — each tremolo reversal re-bites: broadband bow-noise energy jumps

@@ -1,5 +1,7 @@
 //! Library surface for ferrosintesis.
 
+#![forbid(unsafe_code)]
+
 pub mod live;
 pub mod offline;
 

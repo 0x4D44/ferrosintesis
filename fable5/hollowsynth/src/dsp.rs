@@ -144,6 +144,70 @@ impl BlepPulse {
     }
 }
 
+/// Clamp a pulse duty cycle so the two polyBLEP step corrections (each `2·inc`
+/// wide) cannot overlap — a safety net at extreme `f/sr` only (RD1 §3.2).
+/// Degrades to an exact square when even that is impossible (`inc ≥ 0.25`).
+#[inline]
+fn guard_width(width: f32, inc: f32) -> f32 {
+    let lo = 2.0 * inc;
+    let hi = 1.0 - 2.0 * inc;
+    if lo >= hi {
+        0.5
+    } else {
+        width.clamp(lo, hi)
+    }
+}
+
+/// Band-limited rectangular pulse (polyBLEP), duty cycle `width` ∈ (0, 1). The
+/// reed source. Distinct from `BlepPulse`: this is **zero-DC for ANY width** and
+/// scaled as a difference of two saws, where `BlepPulse` is a ±1 square used
+/// only at duty 0.5. Zero-DC by construction: the signal sits at level `w−1` for
+/// the fraction `w` of the period and at `+w` for the remaining `1−w`, so the
+/// two areas cancel (mean = 0) for any width. Only the harmonic MAGNITUDE
+/// spectrum is load-bearing downstream (tanh is odd; every reed oracle measures
+/// magnitudes), so the sign/phase of the two levels are immaterial. The Fourier
+/// amplitude of harmonic n is `2·|sin(πnw)|/(πn)`: width 0.5 nulls all evens (an
+/// exact square — the clarinet's hollow odd spectrum), narrow widths are
+/// even-rich (a double reed's short pressure pulse).
+pub struct ReedPulse {
+    phase: f32,
+    inc: f32,
+    width: f32,
+}
+
+impl ReedPulse {
+    pub fn new(freq: f32, sr: f32, phase: f32, width: f32) -> Self {
+        let inc = freq / sr;
+        ReedPulse {
+            phase: phase.rem_euclid(1.0),
+            inc,
+            width: guard_width(width, inc),
+        }
+    }
+
+    /// Retune in place (phase-continuous); re-applies the width guard against
+    /// the new `f/sr`. Width itself is fixed per note (chosen at spawn).
+    pub fn set_freq(&mut self, freq: f32, sr: f32) {
+        self.inc = freq / sr;
+        self.width = guard_width(self.width, self.inc);
+    }
+
+    #[inline]
+    pub fn next(&mut self) -> f32 {
+        // difference of two naive saws, the second shifted by (1 − width), each
+        // with its own polyBLEP correction (discontinuities at t=0 and t=width)
+        let p2 = (self.phase + 1.0 - self.width).rem_euclid(1.0);
+        let out = 0.5
+            * ((2.0 * self.phase - 1.0 - polyblep(self.phase, self.inc))
+                - (2.0 * p2 - 1.0 - polyblep(p2, self.inc)));
+        self.phase += self.inc;
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+        }
+        out
+    }
+}
+
 /// One-pole lowpass: z += a * (x - z).
 #[derive(Clone, Copy)]
 pub struct OnePole {
@@ -596,5 +660,55 @@ mod tests {
             crate::testutil::mag_at(&ss, sr, 440.0),
         );
         assert!(s2 > 0.3 * s1, "saw H2 {s2} should be strong vs H1 {s1}");
+    }
+
+    /// RD-O0 (guard): `ReedPulse` calibration — the reed source must match its
+    /// analytic magnitude spectrum, be DC-free, and fold aliasing below −34 dB,
+    /// verified before any reed feature oracle trusts it. The alias floor is
+    /// measured at a LOW fundamental so fold-back is spectrally *separable* from
+    /// the real harmonics (a broadband high-pass would conflate the two — a
+    /// band-limited pulse has genuine harmonics all the way to Nyquist).
+    #[test]
+    fn reed_pulse_calibration() {
+        use crate::testutil::mag_at;
+        use std::f32::consts::PI;
+        let sr = 44100.0;
+        let w = 0.30f32;
+        let norm = 0.5 / (w * (1.0 - w)).sqrt();
+
+        // (i) spectrum: harmonics 1..=5 of a 1 kHz pulse match 2|sin(πnw)|/(πn)·norm
+        let mut p = ReedPulse::new(1000.0, sr, 0.0, w);
+        let sig: Vec<f32> = (0..sr as usize).map(|_| p.next() * norm).collect();
+        for n in 1..=5u32 {
+            let nn = n as f32;
+            let want = 2.0 * (PI * nn * w).sin().abs() / (PI * nn) * norm;
+            let got = mag_at(&sig, sr, 1000.0 * nn);
+            assert!(
+                (got - want).abs() <= 0.10 * want,
+                "harmonic {n}: got {got:.4} want {want:.4}"
+            );
+        }
+        // (ii) zero-DC by construction
+        let mean = sig.iter().sum::<f32>() / sig.len() as f32;
+        assert!(mean.abs() < 1e-3, "DC mean {mean:.6}");
+
+        // (iii) alias floor: at f=200, sr=44100 every above-Nyquist image folds
+        // to an ODD multiple of 100 Hz — bins no real 200-Hz harmonic (an even
+        // multiple of 100) can occupy, and 100 Hz clear of the nearest (a
+        // Goertzel sinc-null over the 1 s window). Their RMS / the fundamental
+        // isolates genuine fold-back; a BLEP-less pulse fails this by several×.
+        let mut p = ReedPulse::new(200.0, sr, 0.0, w);
+        let sig: Vec<f32> = (0..sr as usize).map(|_| p.next() * norm).collect();
+        let fund = mag_at(&sig, sr, 200.0);
+        let (mut acc, mut cnt) = (0.0f64, 0u32);
+        let mut b = 100.0f32;
+        while b <= 21_900.0 {
+            let m = mag_at(&sig, sr, b) as f64;
+            acc += m * m;
+            cnt += 1;
+            b += 200.0; // 100, 300, 500, … (odd multiples of 100)
+        }
+        let alias = (acc / cnt as f64).sqrt() as f32 / fund;
+        assert!(alias < 0.02, "alias floor {alias:.4} (need < 0.02)");
     }
 }

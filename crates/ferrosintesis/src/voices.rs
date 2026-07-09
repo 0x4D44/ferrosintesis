@@ -12,6 +12,7 @@
 //!              slow pitch drift, through lowpass or vocal formants that
 //!              morph open at the onset (string ensembles, choir, pads)
 //!   OrchHit  — one-shot octave-stacked orchestral stab with a thump
+//!   Reed     — band-limited pulse reeds, including bagpipe chanter and shanai
 //!   Wind     — sine + harmonics + breath, with a pitch scoop into the note
 //!   Bowed    — sawtooth through a violin body, with scoop, attack bow
 //!              noise, and bow-pressure brightness
@@ -2988,6 +2989,8 @@ impl Voice for OrchHit {
 const RD_SCOOP_K: f32 = 0.045; // RD6 onset-scoop settle per control tick (τ ≈ 8 ms)
 const RD_CHIFF_T60: f32 = 0.020; // RD5 tongue-chiff decay
 const RD_CHIFF_AMP: f32 = 0.30; // RD5 chiff level (× vn × vel_amp — super-linear)
+pub(crate) const BAGPIPE_DRONE_CONTROL_MAX: u8 = 54;
+const BAGPIPE_DRONE_WIDTH: f32 = 0.22;
 
 /// A GM reed program's fixed voicing (§5 table). All-`pub`, const-constructible.
 pub struct ReedPreset {
@@ -3135,6 +3138,103 @@ pub const CLARINET: ReedPreset = ReedPreset {
     #[cfg(test)]
     name: "clarinet",
 };
+
+pub const BAGPIPE: ReedPreset = ReedPreset {
+    width: 0.18,
+    width_hi: 0.16,
+    formants: [(780.0, 1.8, 7.0), (1550.0, 2.2, 5.5), (3000.0, 2.0, 3.0)],
+    lp: 4700.0,
+    drive_vn: 0.45,
+    breath: 0.018,
+    vib: (4.8, 0.0015, 0.38),
+    attack: 0.028,
+    release: 0.11,
+    scoop: 0.992,
+    range: (60, 84),
+    amp: 0.24,
+    #[cfg(test)]
+    name: "bagpipe",
+};
+
+pub const SHANAI: ReedPreset = ReedPreset {
+    width: 0.12,
+    width_hi: 0.105,
+    formants: [(1200.0, 2.6, 8.0), (2550.0, 2.2, 6.0), (3800.0, 2.0, 3.0)],
+    lp: 5000.0,
+    drive_vn: 0.42,
+    breath: 0.026,
+    vib: (5.8, 0.0045, 0.24),
+    attack: 0.030,
+    release: 0.10,
+    scoop: 0.988,
+    range: (60, 91),
+    amp: 0.40,
+    #[cfg(test)]
+    name: "shanai",
+};
+
+pub(crate) struct BagpipeDrone {
+    root: ReedPulse,
+    fifth: ReedPulse,
+    root_norm: f32,
+    fifth_norm: f32,
+    lp: OnePole,
+    env: Adsr,
+    amp: f32,
+}
+
+impl BagpipeDrone {
+    fn new(key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+        let mut rng = Rng::new(seed ^ 0xBA60_0001);
+        let root_f = if key <= BAGPIPE_DRONE_CONTROL_MAX {
+            key_freq(key)
+        } else {
+            key_freq(key) * 0.5
+        };
+        let fifth_f = root_f * 1.5;
+        let root_width = BAGPIPE_DRONE_WIDTH * (1.0 + 0.015 * rng.white());
+        let fifth_width = (BAGPIPE_DRONE_WIDTH * 0.92) * (1.0 + 0.015 * rng.white());
+        let norm = |width: f32| 0.5 / (width * (1.0 - width)).sqrt();
+        BagpipeDrone {
+            root: ReedPulse::new(root_f, sr, rng.white() * 0.5 + 0.5, root_width),
+            fifth: ReedPulse::new(fifth_f, sr, rng.white() * 0.5 + 0.5, fifth_width),
+            root_norm: norm(root_width),
+            fifth_norm: norm(fifth_width),
+            lp: OnePole::lowpass(2600.0, sr),
+            env: Adsr::new(0.050, 0.08, 0.95, 0.28, sr),
+            amp: 0.055 * (0.45 + 0.55 * vel_amp(vel)),
+        }
+    }
+}
+
+impl Voice for BagpipeDrone {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let e = self.env.next();
+            let s = self.root.next() * self.root_norm * 0.70
+                + self.fifth.next() * self.fifth_norm * 0.42;
+            *o += self.lp.process(s) * self.amp * e;
+        }
+        self.env.alive()
+    }
+
+    fn note_off(&mut self) {
+        self.env.release();
+    }
+
+    fn released(&self) -> bool {
+        self.env.released()
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "reed"
+    }
+}
+
+pub(crate) fn bagpipe_drone(key: u8, vel: u8, sr: f32, seed: u32) -> BagpipeDrone {
+    BagpipeDrone::new(key, vel, sr, seed)
+}
 
 pub struct Reed {
     osc: ReedPulse,
@@ -3342,7 +3442,10 @@ fn reed(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Reed {
         68 => &OBOE,
         69 => &ENGLISH_HORN,
         70 => &BASSOON,
-        _ => &CLARINET, // 71
+        71 => &CLARINET,
+        109 => &BAGPIPE,
+        111 => &SHANAI,
+        _ => &CLARINET,
     };
     Reed::from_preset(preset, key, vel, sr, seed)
 }
@@ -4185,7 +4288,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         52..=54 => Box::new(choir(program, key, vel, sr, seed)),
         55 => Box::new(orch_hit(key, vel, sr, seed)),
         56..=63 => Box::new(brass(program, key, vel, sr, seed)),
-        64..=71 => Box::new(reed(program, key, vel, sr, seed)),
+        64..=71 | 109 | 111 => Box::new(reed(program, key, vel, sr, seed)),
         72..=79 => {
             let model = Box::new(Wind::new(
                 matches!(program, 72 | 78 | 79),
@@ -6608,7 +6711,7 @@ mod tests {
         buf
     }
 
-    const REED_PRESETS: [&ReedPreset; 8] = [
+    const REED_PRESETS: [&ReedPreset; 10] = [
         &SOP_SAX,
         &ALTO_SAX,
         &TENOR_SAX,
@@ -6617,6 +6720,8 @@ mod tests {
         &ENGLISH_HORN,
         &BASSOON,
         &CLARINET,
+        &BAGPIPE,
+        &SHANAI,
     ];
 
     /// RD-O2 (sustains, not plucks): a held reed note holds — late/early RMS
@@ -6882,7 +6987,7 @@ mod tests {
     #[test]
     fn reed_o13_routing_and_lifecycle() {
         let sr = 44100.0;
-        for prog in 64u8..=71 {
+        for prog in (64u8..=71).chain([109, 111]) {
             assert_eq!(
                 make(prog, 60, 100, sr, 7, false).kind(),
                 "reed",
@@ -6920,7 +7025,7 @@ mod tests {
         // formants can't AM the level. This guards two DC sources: the RD4 tanh's
         // asymmetric-pulse bias (the 20 Hz `dcb` catches it) and a marginally-
         // stable inert formant slot (built off DC so it cannot integrate).
-        for prog in 64u8..=71 {
+        for prog in (64u8..=71).chain([109, 111]) {
             let b = render_reed(prog, 60, 100, 1.0, 7);
             assert!(
                 b.iter().all(|x| x.is_finite()),
@@ -6954,7 +7059,7 @@ mod tests {
             );
         }
         // True-DC diagnostic: period-aligned |mean|/rms (vib zeroed) per program
-        for prog in 64u8..=71 {
+        for prog in (64u8..=71).chain([109, 111]) {
             let mut v = reed(prog, 60, 100, sr, 7);
             v.vib_depth = 0.0;
             let mut bd = vec![0f32; (2.0 * sr) as usize];

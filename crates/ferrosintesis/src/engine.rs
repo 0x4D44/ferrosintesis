@@ -55,6 +55,7 @@ const ROOM_SEND: f32 = 0.35;
 const AT_VIB_RATE_HZ: f32 = 5.0;
 const AT_VIB_CENTS: f32 = 25.0; // pitch depth at full pressure
 const AT_GAIN_DB: f32 = 2.5; // gain lift at full pressure
+const BAGPIPE_DRONE_KEY: u8 = u8::MAX;
 
 /// Melodic sustained families that take the engine-level CC1 vibrato:
 /// plucks (except palm-mute 28), bowed strings, SawStack strings/choir, harmonica,
@@ -62,11 +63,12 @@ const AT_GAIN_DB: f32 = 2.5; // gain lift at full pressure
 /// bells) are left alone.
 fn vibrato_family(program: u8) -> bool {
     // guitars (no palm-mute 28), basses, bowed strings, harp, SawStack strings/choir,
-    // brass (56-63), reeds (64-71), winds, leads, banjo, fiddle. Orchestra hit (55)
+    // brass (56-63), reeds (64-71/109/111), winds, leads, banjo, fiddle. Orchestra hit (55)
     // is excluded — a one-shot stab does not vibrato (symmetric with timpani).
     matches!(
         program,
-        22 | 24..=27 | 29..=46 | 48..=54 | 56..=71 | 72..=79 | 80..=87 | 104..=107 | 110
+        22 | 24..=27 | 29..=46 | 48..=54 | 56..=71 | 72..=79 | 80..=87 | 104..=107
+            | 109..=111
     )
 }
 
@@ -284,6 +286,8 @@ fn fx_profile(program: u8) -> (f32, f32) {
         56..=60 => (0.0, 0.0),         // solo brass: hall (CC91) is the space, no ensemble fake
         61..=63 => (0.25, 0.0),        // brass section / synth brass: section-width chorus
         64..=67 => (0.06, 0.10),       // saxes: lead voice, a touch of width and slap echo
+        109 => (0.06, 0.0),            // bagpipe: small width, no slap echo on the drone
+        111 => (0.04, 0.08),           // shanai: dry forward reed with a trace of slap
         72..=79 => (0.0, 0.22),        // flute / whistle
         80..=87 => (0.15, 0.25),       // synth leads: focused, with the delayed-lead echo
         88..=95 => (0.45, 0.0),        // pads
@@ -521,15 +525,16 @@ struct Strip {
     rpn_lsb: u8,
     data_msb: u8, // last CC6, so CC38 can refine it
     porta_on: bool,
-    porta_time: f32,        // CC5 glide time in seconds
-    last_freq: Option<f32>, // most recent NoteOn pitch (portamento origin)
-    soft: bool,             // CC67 una corda
-    sost_down: bool,        // CC66 sostenuto pedal position
-    vowel_authored: bool,   // CC70 selects a static vowel on choir programs
-    vowel_target: f32,      // CC70 value 0..127
-    vowel_cur: f32,         // slewed per block
-    at_authored: bool,      // channel aftertouch seen on this channel
-    at_target: f32,         // pressure 0..1, smoothed like CC11
+    porta_time: f32,         // CC5 glide time in seconds
+    last_freq: Option<f32>,  // most recent NoteOn pitch (portamento origin)
+    bagpipe_drone_holds: u8, // low GM109 notes currently holding the synthetic drone
+    soft: bool,              // CC67 una corda
+    sost_down: bool,         // CC66 sostenuto pedal position
+    vowel_authored: bool,    // CC70 selects a static vowel on choir programs
+    vowel_target: f32,       // CC70 value 0..127
+    vowel_cur: f32,          // slewed per block
+    at_authored: bool,       // channel aftertouch seen on this channel
+    at_target: f32,          // pressure 0..1, smoothed like CC11
     at_cur: f32,
     at_phase: f32, // aftertouch vibrato LFO phase
     at_gain: f32,  // pressure gain lift (1.0 = none)
@@ -579,6 +584,7 @@ impl Strip {
             porta_on: false,
             porta_time: PORTA_MIN_S,
             last_freq: None,
+            bagpipe_drone_holds: 0,
             soft: false,
             sost_down: false,
             vowel_authored: false,
@@ -757,6 +763,53 @@ impl EngineCore {
         self.stats
     }
 
+    fn is_bagpipe_drone(a: &Active, ch: u8) -> bool {
+        a.ch == ch && a.program == 109 && a.key == BAGPIPE_DRONE_KEY
+    }
+
+    fn ensure_bagpipe_drone(&mut self, ch: u8, key: u8, vel: u8) {
+        if self
+            .active
+            .iter()
+            .any(|a| Self::is_bagpipe_drone(a, ch) && !a.voice.released())
+        {
+            return;
+        }
+        let seed = 0xBA60 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
+        let voice = Box::new(voices::bagpipe_drone(key, vel, self.opt.sr, seed));
+        self.active.push(Active {
+            ch,
+            key: BAGPIPE_DRONE_KEY,
+            program: 109,
+            held: false,
+            sost: false,
+            sost_held: false,
+            glide: None,
+            alt: false,
+            voice,
+        });
+        self.stats.voices_spawned += 1;
+    }
+
+    fn release_bagpipe_drone_if_idle(&mut self, ch: u8) {
+        if self.strips[ch as usize].bagpipe_drone_holds > 0 {
+            return;
+        }
+        let has_chant = self.active.iter().any(|a| {
+            a.ch == ch && a.program == 109 && a.key != BAGPIPE_DRONE_KEY && !a.voice.released()
+        });
+        if has_chant {
+            return;
+        }
+        for a in self
+            .active
+            .iter_mut()
+            .filter(|a| Self::is_bagpipe_drone(a, ch) && !a.voice.released())
+        {
+            a.voice.note_off();
+        }
+    }
+
     pub(crate) fn handle_event(&mut self, kind: EvKind) {
         match kind {
             // --solo: muted channels keep their CCs but lose their notes
@@ -779,14 +832,29 @@ impl EngineCore {
         let sr = self.opt.sr;
         let ci = ch as usize;
         let porta_from = self.strips[ci].last_freq;
-        if ch != 9 {
+        let program = self.strips[ci].program;
+        let bagpipe_drone_control =
+            ch != 9 && program == 109 && key <= voices::BAGPIPE_DRONE_CONTROL_MAX;
+        if ch != 9 && !bagpipe_drone_control {
             self.strips[ci].last_freq = Some(key_freq(key));
         }
+        if bagpipe_drone_control {
+            self.strips[ci].bagpipe_drone_holds =
+                self.strips[ci].bagpipe_drone_holds.saturating_add(1);
+            self.ensure_bagpipe_drone(ch, key, vel);
+            return;
+        }
+        if ch != 9 && program == 109 {
+            self.ensure_bagpipe_drone(ch, key, vel);
+        }
         if ch != 9 && self.strips[ci].legato {
-            let mut ringing = self
-                .active
-                .iter_mut()
-                .filter(|a| a.ch == ch && !a.held && !a.sost_held && !a.voice.released());
+            let mut ringing = self.active.iter_mut().filter(|a| {
+                a.ch == ch
+                    && a.key != BAGPIPE_DRONE_KEY
+                    && !a.held
+                    && !a.sost_held
+                    && !a.voice.released()
+            });
             if let (Some(a), None) = (ringing.next(), ringing.next()) {
                 if a.voice.legato_to(key, vel) {
                     a.key = key;
@@ -873,6 +941,10 @@ impl EngineCore {
     }
 
     fn note_off(&mut self, ch: u8, key: u8) {
+        if ch != 9 && key <= voices::BAGPIPE_DRONE_CONTROL_MAX {
+            let holds = &mut self.strips[ch as usize].bagpipe_drone_holds;
+            *holds = holds.saturating_sub(1);
+        }
         if let Some(a) = self
             .active
             .iter_mut()
@@ -886,6 +958,9 @@ impl EngineCore {
             } else {
                 a.voice.note_off();
             }
+        }
+        if ch != 9 {
+            self.release_bagpipe_drone_if_idle(ch);
         }
     }
 
@@ -1062,6 +1137,9 @@ impl EngineCore {
     }
 
     fn all_sound_off(&mut self, ch: u8) {
+        if ch != 9 {
+            self.strips[ch as usize].bagpipe_drone_holds = 0;
+        }
         self.active.retain_mut(|a| {
             if a.ch == ch {
                 a.voice.choke();
@@ -1073,6 +1151,9 @@ impl EngineCore {
     }
 
     fn all_notes_off(&mut self, ch: u8) {
+        if ch != 9 {
+            self.strips[ch as usize].bagpipe_drone_holds = 0;
+        }
         let sustain = self.strips[ch as usize].sustain;
         for a in self
             .active
@@ -2168,6 +2249,146 @@ mod tests {
         assert!(
             spread_mod > 2.0 * spread_plain,
             "GM 110 plain {spread_plain} Hz vs mod {spread_mod} Hz"
+        );
+    }
+
+    #[test]
+    fn bagpipe_shanai_route_to_reed_engine_with_drone_or_double_reed() {
+        let sr = 44100.0;
+        assert_eq!(
+            crate::voices::make(109, 67, 100, sr, 5, false).kind(),
+            "reed",
+            "GM109 bagpipe chanter must use the reed voice"
+        );
+        assert_eq!(
+            crate::voices::make(111, 72, 100, sr, 5, false).kind(),
+            "reed",
+            "GM111 shanai must use the reed voice"
+        );
+        assert!(vibrato_family(109), "bagpipe should take authored reed CC1");
+        assert!(vibrato_family(111), "shanai should take authored reed CC1");
+
+        let bagpipe = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 109 }),
+                (
+                    0.0,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 43,
+                        vel: 70,
+                    },
+                ),
+                (
+                    0.12,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 67,
+                        vel: 104,
+                    },
+                ),
+                (0.42, EvKind::NoteOff { ch: 0, key: 67 }),
+                (
+                    0.50,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 69,
+                        vel: 104,
+                    },
+                ),
+                (0.82, EvKind::NoteOff { ch: 0, key: 69 }),
+                (1.10, EvKind::NoteOff { ch: 0, key: 43 }),
+            ],
+            1.45,
+        );
+        let (bagpipe_out, stats) = render(&bagpipe, &test_opts(sr));
+        assert_eq!(
+            stats.voices_spawned, 3,
+            "one low drone control plus two chanters should spawn one channel drone and two reed chanters"
+        );
+        let bagpipe_l = left(&bagpipe_out);
+        let root = key_freq(43);
+        let fifth = root * 1.5;
+        let drone_only = &bagpipe_l[(0.05 * sr) as usize..(0.11 * sr) as usize];
+        let drone_root = crate::testutil::band_rms(drone_only, sr, root, 8.0);
+        let drone_fifth = crate::testutil::band_rms(drone_only, sr, fifth, 8.0);
+        let drone_level = rms(drone_only);
+        assert!(
+            drone_root > 0.18 * drone_level && drone_fifth > 0.08 * drone_level,
+            "bagpipe drone bands weak: root/drone {:.3}, fifth/drone {:.3}",
+            drone_root / drone_level.max(1e-9),
+            drone_fifth / drone_level.max(1e-9)
+        );
+        let body = &bagpipe_l[(0.20 * sr) as usize..(0.74 * sr) as usize];
+        let body_rms = rms(body);
+        let body_drone = crate::testutil::band_rms(body, sr, root, 8.0);
+        let chanter = crate::testutil::band_rms(body, sr, key_freq(67), 10.0)
+            + crate::testutil::band_rms(body, sr, key_freq(69), 10.0);
+        assert!(
+            body_drone > 0.06 * body_rms && chanter > 0.10 * body_rms,
+            "bagpipe needs drone plus chanter: drone/body {:.3}, chanter/body {:.3}",
+            body_drone / body_rms.max(1e-9),
+            chanter / body_rms.max(1e-9)
+        );
+        assert!(
+            body_rms < 0.12,
+            "bagpipe drone+chanter level too hot before normalisation: {body_rms:.4}"
+        );
+        let release_tail = rms(&bagpipe_l[(1.30 * sr) as usize..(1.42 * sr) as usize]);
+        assert!(
+            release_tail < 0.25 * body_rms,
+            "bagpipe drone did not release with the channel: tail/body {:.3}",
+            release_tail / body_rms.max(1e-9)
+        );
+
+        let render_voice = |program: u8, key: u8, secs: f32| {
+            let mut voice = crate::voices::make(program, key, 110, sr, 9, false);
+            let mut buf = vec![0f32; (secs * sr) as usize];
+            voice.render(&mut buf);
+            buf
+        };
+        let shanai = render_voice(111, 72, 1.4);
+        let clarinet = render_voice(71, 72, 1.4);
+        let seg_start = (0.35 * sr) as usize;
+        let seg_end = (1.20 * sr) as usize;
+        let sh_seg = &shanai[seg_start..seg_end];
+        let cl_seg = &clarinet[seg_start..seg_end];
+        let prom = |s: &[f32], f: f32| crate::testutil::band_rms(s, sr, f, 2.5) / rms(s).max(1e-9);
+        assert!(
+            prom(sh_seg, 1200.0) > 1.25 * prom(cl_seg, 1200.0),
+            "shanai nasal formant too weak vs clarinet: {:.3} vs {:.3}",
+            prom(sh_seg, 1200.0),
+            prom(cl_seg, 1200.0)
+        );
+        let f0 = key_freq(72);
+        let sh_h1 = crate::testutil::band_rms(sh_seg, sr, f0, 12.0);
+        let sh_h2 = crate::testutil::band_rms(sh_seg, sr, f0 * 2.0, 12.0);
+        let cl_h1 = crate::testutil::band_rms(cl_seg, sr, f0, 12.0);
+        let cl_h2 = crate::testutil::band_rms(cl_seg, sr, f0 * 2.0, 12.0);
+        assert!(
+            sh_h2 / sh_h1.max(1e-9) > 2.0 * (cl_h2 / cl_h1.max(1e-9)),
+            "shanai should be even-rich like a double reed: shanai {:.3}, clarinet {:.3}",
+            sh_h2 / sh_h1.max(1e-9),
+            cl_h2 / cl_h1.max(1e-9)
+        );
+
+        let high = render_voice(111, 87, 0.24);
+        let seg = &high[(0.06 * sr) as usize..(0.22 * sr) as usize];
+        let f_alias = sr / 35.5;
+        let fund = crate::testutil::mag_at(seg, sr, f_alias).max(1e-12);
+        let mut acc = 0.0f64;
+        let mut cnt = 0u32;
+        let mut k = 1.5f32;
+        while f_alias * k < 0.4 * sr {
+            let r = crate::testutil::mag_at(seg, sr, f_alias * k) / fund;
+            acc += (r as f64) * (r as f64);
+            cnt += 1;
+            k += 1.0;
+        }
+        let alias = (acc / cnt as f64).sqrt() as f32;
+        assert!(
+            alias < 0.03,
+            "shanai fold-back alias floor too high: {alias:.4}"
         );
     }
 

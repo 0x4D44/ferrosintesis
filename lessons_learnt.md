@@ -109,3 +109,7 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   Windows CRLF checkout failed even though Git saw no diff and the builder emitted
   the same LF-normalized JSON. Compare text artifacts as text; keep byte-exact
   checks for binary `.mid` files.
+- 2026.07.09 — **`render_opus.py::ALBUMS` is the listening blast radius, not just
+  `albums/`.** MM-REQ-KILN-00017 left album MIDI byte-identical, but the newly
+  committed Synth Feature Showcase listening track used GM109/111 and had to be
+  refreshed. Scan every `ALBUMS` entry before declaring a synth change asset-free.

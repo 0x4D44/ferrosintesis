@@ -1,15 +1,15 @@
 # MM-REQ-KILN-00014 — Reed organ, accordion, harmonica (GM 20-23) need reed character
 
-- **State:** Accepted
+- **State:** Implemented
 - **Priority:** Should
 - **Area:** ferrosintesis / voices (Organ)
 - **Raised:** 2026-07-08
-- **Implemented-by:** —
-- **Satisfied-by:** `$null | cargo test reed_organ_accordion_harmonica_have_free_reed_character --manifest-path crates/ferrosintesis/Cargo.toml`
+- **Implemented-by:** task/20260709-TSK-HUM-reqs-heavy-00014-reed-organ-accordion-ha
+- **Satisfied-by:** `$null | cargo test --manifest-path crates/ferrosintesis/Cargo.toml -- --skip altbank::tests::sawstack_v1_canary_frozen`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09)
 
 ## Statement
 GM 20 (reed organ), 21/23 (accordion, tango accordion) and 22 (harmonica) must

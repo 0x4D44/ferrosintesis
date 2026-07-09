@@ -721,6 +721,7 @@ pub struct PluckPreset {
     pub sub_ramp: u32,          // sub fade-in samples
     pub grit: bool,             // per-voice soft-clip (MUTED palm chug, G4)
     pub wound_all: bool,        // K4: wound full-range (bass family) vs key-split (guitars)
+    pub wound_key_split: bool,  // when false, non-bass presets skip the guitar split
     pub harmonic: bool,         // prog-31 flageolet: loop retuned to 2f/3f (G7)
     pub mwah: Option<MwahSpec>, // fretless vocal formant bloom (GM 35)
     #[cfg(test)]
@@ -750,6 +751,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     sub_ramp: 220,
     grit: false,
     wound_all: false,
+    wound_key_split: true,
     harmonic: false,
     mwah: None,
     #[cfg(test)]
@@ -997,6 +999,8 @@ pub const HARP: PluckPreset = PluckPreset {
     pos: 0.35,
     amp: 0.62,
     rel_t60: 0.4,
+    body: &[(90.0, 0.8, 3.5), (180.0, 0.9, 2.8), (400.0, 1.1, 1.8)],
+    wound_key_split: false,
     ..DEFAULTS
 };
 pub const BANJO: PluckPreset = PluckPreset {
@@ -1165,9 +1169,11 @@ const REL_DARKEN_K: f32 = 0.010; // per control tick: τ ≈ 36 ms
 /// K4 Stage 1 wound-ness: bass strings are wound full-range; guitars cross
 /// from wound to plain around G3 (key 55). Pure arithmetic — no allpass
 /// (Stage 2 dispersion stays deferred, §7).
-pub(crate) fn wound_factor(wound_all: bool, key: u8) -> f32 {
+pub(crate) fn wound_factor(wound_all: bool, wound_key_split: bool, key: u8) -> f32 {
     if wound_all {
         1.0
+    } else if !wound_key_split {
+        0.0
     } else {
         ((55.0 - key as f32) / 24.0).clamp(0.0, 1.0)
     }
@@ -1261,7 +1267,7 @@ impl Pluck {
         let period = sr / f;
         // K4 Stage 1: wound strings are darker — the windings damp both the
         // ring (loop damper) and the pick transient — with a skewed decay
-        let wound = wound_factor(p.wound_all, key);
+        let wound = wound_factor(p.wound_all, p.wound_key_split, key);
         let bright = (bright * (1.0 - 0.30 * wound)).max(300.0);
         let pick_lp = (pick_lp * (1.0 - 0.42 * wound)).max(300.0);
         let t60 = (t60_base * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
@@ -5444,6 +5450,73 @@ mod tests {
         assert!(u < b, "upright should decay faster: {u} vs {b}");
     }
 
+    #[test]
+    fn harp_46_has_soundboard_and_harp_wound_law() {
+        assert!(
+            HARP.body.iter().any(|&(f, _, g)| f < 120.0 && g > 0.0),
+            "HARP should have a low soundboard mode"
+        );
+        assert!(
+            HARP.body
+                .iter()
+                .any(|&(f, _, g)| (150.0..=250.0).contains(&f) && g > 0.0),
+            "HARP should have a low-mid soundboard mode"
+        );
+        assert!(
+            HARP.body
+                .iter()
+                .any(|&(f, _, g)| (350.0..=500.0).contains(&f) && g > 0.0),
+            "HARP should have a warm upper soundboard mode"
+        );
+        assert!(
+            !std::hint::black_box(HARP.wound_key_split),
+            "HARP should not inherit the guitar key-split wound law"
+        );
+        assert_eq!(wound_factor(true, true, 70), 1.0);
+        assert_eq!(wound_factor(false, true, 60), 0.0);
+        assert!(wound_factor(false, true, 45) > 0.3);
+        assert_eq!(wound_factor(false, false, 31), 0.0);
+
+        let sr = 44100.0;
+        let bodyless = PluckPreset { body: &[], ..HARP };
+        let old_split = PluckPreset {
+            wound_key_split: true,
+            ..HARP
+        };
+
+        for (key, bands) in [(45u8, [90.0, 180.0, 400.0]), (52u8, [180.0, 400.0, 90.0])] {
+            let full = render_pluck(&HARP, key, 104, 0.7, 0x4600 + key as u32);
+            let dry = render_pluck(&bodyless, key, 104, 0.7, 0x4600 + key as u32);
+            let full_body = segment(&full, sr, 0.04, 0.42);
+            let dry_body = segment(&dry, sr, 0.04, 0.42);
+            for f in bands {
+                let lift =
+                    band_rms(full_body, sr, f, 1.0) / band_rms(dry_body, sr, f, 1.0).max(1e-9);
+                assert!(
+                    lift > 1.08,
+                    "key {key}: HARP body mode {f} Hz did not lift enough versus bodyless clone: {lift:.3}"
+                );
+            }
+        }
+
+        let new_harp = render_pluck(&HARP, 45, 104, 0.7, 0x46_4510);
+        let old_harp = render_pluck(&old_split, 45, 104, 0.7, 0x46_4510);
+        let new_body = segment(&new_harp, sr, 0.04, 0.42);
+        let old_body = segment(&old_harp, sr, 0.04, 0.42);
+        let new_centroid = centroid(new_body, sr);
+        let old_centroid = centroid(old_body, sr);
+        assert!(
+            new_centroid > old_centroid * 1.04,
+            "new harp should be less guitar-wound/dark in bass register: {new_centroid:.1} vs {old_centroid:.1}"
+        );
+        let new_hf = hp_rms(new_body, sr, 1200.0);
+        let old_hf = hp_rms(old_body, sr, 1200.0);
+        assert!(
+            new_hf > old_hf * 1.06,
+            "new harp should retain more high-frequency pluck energy than guitar-split clone: {new_hf:.5} vs {old_hf:.5}"
+        );
+    }
+
     /// Oracle 15 (K3, §5.3 differential): the polarization coupling is
     /// audible (same seed, k on vs off differ) and unconditionally bounded
     /// on the worst case — a long low DRIVE note at high loop gain.
@@ -5503,10 +5576,11 @@ mod tests {
     #[test]
     fn wound_strings_darker() {
         // structural: bass full-range, guitars split around G3
-        assert_eq!(wound_factor(true, 70), 1.0);
-        assert_eq!(wound_factor(false, 60), 0.0);
-        assert!(wound_factor(false, 45) > 0.3);
-        assert!(wound_factor(false, 31) >= 1.0);
+        assert_eq!(wound_factor(true, true, 70), 1.0);
+        assert_eq!(wound_factor(false, true, 60), 0.0);
+        assert!(wound_factor(false, true, 45) > 0.3);
+        assert!(wound_factor(false, true, 31) >= 1.0);
+        assert_eq!(wound_factor(false, false, 31), 0.0);
         // audio: the same key, wound vs plain construction
         let sr = 44100.0;
         let wound_steel = PluckPreset {

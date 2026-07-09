@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Could
-- **Area:** hollowsynth / voices
+- **Area:** ferrosintesis / voices
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::OrchHit`, `fable5/hollowsynth/src/voices.rs::orch_hit`, `fable5/hollowsynth/src/voices.rs::make`, `fable5/hollowsynth/src/voices.rs::tests::orchestra_hit_55_is_short_layered_stab`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | deltic timeout 180 cargo test orchestra_hit_55_is_short_layered_stab --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::OrchHit`, `crates/ferrosintesis/src/voices.rs::orch_hit`, `crates/ferrosintesis/src/voices.rs::make`, `crates/ferrosintesis/src/voices.rs::tests::orchestra_hit_55_is_short_layered_stab`, `crates/ferrosintesis/README.md`
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test orchestra_hit_55_is_short_layered_stab --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

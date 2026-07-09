@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Could
-- **Area:** hollowsynth / voices
+- **Area:** ferrosintesis / voices
 - **Raised:** 2026-07-08
-- **Implemented-by:** fable5/hollowsynth/src/voices.rs::KALIMBA, fable5/hollowsynth/src/voices.rs::make, fable5/hollowsynth/src/voices.rs::tests::kalimba_108_has_tine_decay_not_pluck, fable5/hollowsynth/src/testutil.rs::guards::gm_routing_pins_voice_kinds, fable5/hollowsynth/README.md
-- **Satisfied-by:** `$null | deltic timeout 180 cargo test kalimba_108_has_tine_decay_not_pluck --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** crates/ferrosintesis/src/voices.rs::KALIMBA, crates/ferrosintesis/src/voices.rs::make, crates/ferrosintesis/src/voices.rs::tests::kalimba_108_has_tine_decay_not_pluck, crates/ferrosintesis/src/testutil.rs::guards::gm_routing_pins_voice_kinds, crates/ferrosintesis/README.md
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test kalimba_108_has_tine_decay_not_pluck --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

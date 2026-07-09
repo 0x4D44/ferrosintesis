@@ -2,10 +2,10 @@
 
 - **State:** Accepted
 - **Priority:** Should
-- **Area:** hollowsynth / voices (piano)
+- **Area:** ferrosintesis / voices (piano)
 - **Raised:** 2026-07-08
 - **Implemented-by:** —
-- **Satisfied-by:** `$null | cargo test programs_4_7_do_not_use_acoustic_piano_voice --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Satisfied-by:** `$null | cargo test programs_4_7_do_not_use_acoustic_piano_voice --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

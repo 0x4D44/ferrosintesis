@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Could
-- **Area:** hollowsynth / voices
+- **Area:** ferrosintesis / voices
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::SITAR`, `fable5/hollowsynth/src/voices.rs::SHAMISEN`, `fable5/hollowsynth/src/voices.rs::KOTO`, `fable5/hollowsynth/src/voices.rs::make`, `fable5/hollowsynth/src/voices.rs::tests::sitar_shamisen_koto_have_distinct_pluck_presets`, `fable5/hollowsynth/src/testutil.rs::guards::gm_routing_pins_voice_kinds`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | deltic timeout 180 cargo test sitar_shamisen_koto_have_distinct_pluck_presets --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::SITAR`, `crates/ferrosintesis/src/voices.rs::SHAMISEN`, `crates/ferrosintesis/src/voices.rs::KOTO`, `crates/ferrosintesis/src/voices.rs::make`, `crates/ferrosintesis/src/voices.rs::tests::sitar_shamisen_koto_have_distinct_pluck_presets`, `crates/ferrosintesis/src/testutil.rs::guards::gm_routing_pins_voice_kinds`, `crates/ferrosintesis/README.md`
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test sitar_shamisen_koto_have_distinct_pluck_presets --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

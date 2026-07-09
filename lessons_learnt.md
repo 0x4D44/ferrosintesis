@@ -12,14 +12,14 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   already −70 dB. Render at matched pitch / worst case / the feature's live
   window, and keep the measurement band clear of confounding static structure.
 - 2026.07.08 — **Shared voice structs are where parallel designs collide.**
-  hollowsynth strings (48–51) and choir (52–54) are both `SawStack`; designed
+  ferrosintesis strings (48–51) and choir (52–54) are both `SawStack`; designed
   in parallel, one added a stack-level `vib_depth` the other deleted (moving it
   per-`Layer`). Per-family review passed both; only a cross-section critic
   caught it. When fanning out voice designs, add an explicit assembly/critic
   pass over shared structs (`SawStack`, `Layer`, `fx_profile`, the golden
   fixture) before trusting the union.
 - 2026.07.07 — **Put untouched-family canaries in the golden fixture.** The
-  hollowsynth realism build's per-channel golden table included piano/strings
+  ferrosintesis realism build's per-channel golden table included piano/strings
   channels no phase touched; they stayed bit-exact for six phases and caught
   the one real leak (a rebuilt Drive emitting tanh(bias) DC on SILENT
   channels) that every feature oracle missed. Level guards find drift;
@@ -46,7 +46,7 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   event count — per-movement click scans and velocity means shift on the
   final assembly. Always re-measure the assembled build.
 - 2026.07.06 — **Same-pitch overlapping notes are a silent GM portability
-  bug.** hollowsynth matches note-offs oldest-first so overlaps render
+  bug.** ferrosintesis matches note-offs oldest-first so overlaps render
   fine locally, but kill-newest GM synths chop the re-strike. The Signal
   Fire engine's `Score._resolve_overlaps()` (write-time clamp) is the fix;
   Hollow Hill's engine still has the issue if its files are regenerated.
@@ -57,7 +57,7 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 - 2026.07.06 — **Presence in the MIDI is not audibility in the render.**
   The CC1 Leslie ramp was tick-perfect in the file yet measured flat in
   audio (the organ's idle tremulant was already near LESLIE_FAST). Verify
-  headline effects on rendered stems (hollowsynth `--solo`), not just in
+  headline effects on rendered stems (ferrosintesis `--solo`), not just in
   the event data.
 - 2026.07.07 — **On Opus, heavy compose/surgery subagents must return
   PLAIN TEXT, not a StructuredOutput schema.** Six Winter Guests composers
@@ -65,7 +65,7 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   files were fine. Light verify agents tolerate the schema. Reserve
   workflow `schema:` for short-output lenses; give big generative agents a
   free-text final report.
-- 2026.07.07 — **hollowsynth mono-collapse comes from the pan Haas
+- 2026.07.07 — **ferrosintesis mono-collapse comes from the pan Haas
   micro-delay, not the chorus.** A choir-heavy, sparse, wet movement lost
   5.6 dB summed to mono because every off-centre CC10 pan adds a Haas delay
   that comb-filters sustained tonal voices in mono. Fix at the composition
@@ -73,7 +73,7 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   transient sources — don't touch the shared chorus bus (it's near
   mono-neutral and shared across all albums).
 - 2026.07.07 — **New synth features must stay opt-in (the "authored
-  channel" pattern).** Every hollowsynth CC feature (v0.6 CC1, v0.7
+  channel" pattern).** Every ferrosintesis CC feature (v0.6 CC1, v0.7
   CC70/71/5/65/66/67/RPN/aftertouch) only engages once a channel authors
   it; prove it by rendering all prior albums byte-identical (build a
   baseline binary in a scratch `git worktree add HEAD` and `cmp`). Keeps

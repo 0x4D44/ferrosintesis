@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Should
-- **Area:** hollowsynth / voices dispatch
+- **Area:** ferrosintesis / voices dispatch
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::make`, `fable5/hollowsynth/src/engine.rs::vibrato_family`, `fable5/hollowsynth/src/engine.rs::fx_profile`, `fable5/hollowsynth/src/engine.rs::tests::gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato`
-- **Satisfied-by:** `$null | cargo test gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::make`, `crates/ferrosintesis/src/engine.rs::vibrato_family`, `crates/ferrosintesis/src/engine.rs::fx_profile`, `crates/ferrosintesis/src/engine.rs::tests::gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato`
+- **Satisfied-by:** `$null | cargo test gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Should
-- **Area:** hollowsynth / voices (Pluck bass)
+- **Area:** ferrosintesis / voices (Pluck bass)
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::Mwah`, `fable5/hollowsynth/src/voices.rs::FRETLESS`, `fable5/hollowsynth/src/voices.rs::tests::fretless_bass_35_mwah_blooms`, `fable5/hollowsynth/src/testutil.rs::guards::golden_mix_balance_holds`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | deltic timeout 240 cargo test fretless_bass_35_mwah_blooms --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::Mwah`, `crates/ferrosintesis/src/voices.rs::FRETLESS`, `crates/ferrosintesis/src/voices.rs::tests::fretless_bass_35_mwah_blooms`, `crates/ferrosintesis/src/testutil.rs::guards::golden_mix_balance_holds`, `crates/ferrosintesis/README.md`
+- **Satisfied-by:** `$null | deltic timeout 240 cargo test fretless_bass_35_mwah_blooms --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —

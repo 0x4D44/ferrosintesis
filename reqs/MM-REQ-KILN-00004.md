@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Should
-- **Area:** hollowsynth / voices
+- **Area:** ferrosintesis / voices
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/voices.rs::MARIMBA`, `fable5/hollowsynth/src/voices.rs::XYLOPHONE`, `fable5/hollowsynth/src/voices.rs::wood_bar`, `fable5/hollowsynth/src/voices.rs::make`, `fable5/hollowsynth/src/voices.rs::tests::marimba_xylophone_have_wood_bar_envelopes`
-- **Satisfied-by:** `$null | cargo test marimba_xylophone_have_wood_bar_envelopes --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::MARIMBA`, `crates/ferrosintesis/src/voices.rs::XYLOPHONE`, `crates/ferrosintesis/src/voices.rs::wood_bar`, `crates/ferrosintesis/src/voices.rs::make`, `crates/ferrosintesis/src/voices.rs::tests::marimba_xylophone_have_wood_bar_envelopes`
+- **Satisfied-by:** `$null | cargo test marimba_xylophone_have_wood_bar_envelopes --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

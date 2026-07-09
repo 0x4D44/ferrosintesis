@@ -2,10 +2,10 @@
 
 - **State:** Implemented
 - **Priority:** Could
-- **Area:** hollowsynth / engine
+- **Area:** ferrosintesis / engine
 - **Raised:** 2026-07-08
-- **Implemented-by:** `fable5/hollowsynth/src/engine.rs::vowel_family`, `fable5/hollowsynth/src/engine.rs::EngineCore::note_on`, `fable5/hollowsynth/src/engine.rs::EngineCore::render_block_add`, `fable5/hollowsynth/src/engine.rs::tests::choir_pad_91_cc70_vowel_morph_opens_formants`, `fable5/hollowsynth/src/voices.rs::SawStack::set_vowel`, `fable5/hollowsynth/src/voices.rs::pad`, `fable5/hollowsynth/README.md`
-- **Satisfied-by:** `$null | deltic timeout 180 cargo test choir_pad_91_cc70_vowel_morph_opens_formants --manifest-path fable5/hollowsynth/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/engine.rs::vowel_family`, `crates/ferrosintesis/src/engine.rs::EngineCore::note_on`, `crates/ferrosintesis/src/engine.rs::EngineCore::render_block_add`, `crates/ferrosintesis/src/engine.rs::tests::choir_pad_91_cc70_vowel_morph_opens_formants`, `crates/ferrosintesis/src/voices.rs::SawStack::set_vowel`, `crates/ferrosintesis/src/voices.rs::pad`, `crates/ferrosintesis/README.md`
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test choir_pad_91_cc70_vowel_morph_opens_formants --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —

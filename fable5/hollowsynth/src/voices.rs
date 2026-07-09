@@ -48,6 +48,11 @@ pub trait Voice: Send {
     /// voice's own control-rate formant smoothing removes any residual
     /// zipper. Voices without formants ignore it.
     fn set_vowel(&mut self, _freqs: [f32; 3], _qs: [f32; 3], _gains: [f32; 3]) {}
+    /// Breath/expression control (brass, GM 56-63): CC11 sets lip pressure
+    /// (opening the timbre) and channel aftertouch adds flutter growl. The
+    /// engine drives it in the authored-controller pass. Voices without a
+    /// breath model ignore it.
+    fn set_breath(&mut self, _pressure: f32, _growl: f32) {}
     /// Hat choke (D6/CYM-4): a closed-hat strike silences the ringing open
     /// hat within ~10-30 ms. Default no-op; only `Drum` implements it.
     fn choke(&mut self) {}
@@ -2827,6 +2832,714 @@ fn reed(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Reed {
     Reed::from_preset(preset, key, vel, sr, seed)
 }
 
+// ---------------------------------------------------------------------------
+// Brass (GM 56–63) — the v0.9 flagship. An isolated sustaining voice adjacent
+// to Wind/Bowed (§3.1): per-player lip-valve saws (2× oversampled), ONE
+// loudness scalar driving both the lip lowpass and the per-player
+// bias-referenced tanh (BR1/BR2), bore peak EQ + first-order bell shelf (BR3),
+// straight-mute transmission (BR4), scoop/slur (BR5), breath+tongue chiff
+// (BR6), section scatter (BR7), the synth-brass resonant sweep (BR8), the
+// CC11 breath + aftertouch growl seam (BR9/BR10), and a DC guard (BR11).
+// ---------------------------------------------------------------------------
+
+const BR_DECIM_HZ: f32 = 13_500.0; // BR1 2× decimation cliff (Q 0.8, at sr2)
+const BR_BITE_T60: f32 = 0.06; // BR2 tongue over-blow decay
+const BR_ONSET_RAMP_S: f32 = 0.015; // BR7 late-entry smoothstep ramp
+const BR_H_EXP: f32 = 1.4; // BR2 cutoff-law convexity
+const BR_BLOOM_A: f32 = 0.25; // BR2 brightness-bloom attack (the "waa")
+const BR_L_VEL: (f32, f32) = (0.10, 0.90); // BR2 timbre-law velocity floor/span
+const BR_GROWL_HZ: f32 = 30.0; // BR10 flutter-tongue rate
+const BR_GROWL_AM: f32 = 0.35; // BR10 flutter AM depth
+const BR_GROWL_DRIVE: f32 = 1.6; // BR10 growl → shaper-index bite
+const BR_GROWL_BRIGHT: f32 = 1.00; // BR10 growl → lip/output brightness (so the bite radiates)
+const BR_K_MAX: f32 = 3.2; // BR1/BR2/BR10 composed-drive ceiling (alias cap)
+const BR_GROWL_SLEW: f32 = 0.05; // BR9 growl_cur de-zipper slew (τ ≈ 7 ms)
+const BR_SCOOP_CLAMP: (f32, f32) = (0.85, 1.19); // BR5 slur glide origin bounds
+const BR_PRESS_FLOOR: (f32, f32) = (0.30, 0.70); // BR9 CC11=0 is dark, not dead
+
+/// BR1 bias-referenced tanh lip valve. Normalisation `÷ tanh(0.9·k)` keeps the
+/// positive peak ~k-invariant so the law changes *slope*, not loudness; the
+/// bias term breaks odd symmetry so even harmonics appear (asymmetric flow).
+#[inline]
+fn brass_valve(x: f32, k: f32, b: f32) -> f32 {
+    ((x * k + b).tanh() - b.tanh()) / (0.9 * k).tanh()
+}
+
+/// One BrassPlayer per human player: solo programs run 1, section 61 runs 3,
+/// synth 62/63 run 5. (Skeleton: candidate B.)
+struct BrassPlayer {
+    saw: BlepSaw,       // lip source (natural: at sr2; synth: at sr)
+    detune: f32,        // fixed per-player ratio (sections/synth)
+    onset: u32,         // output samples of silence before this player speaks (BR7)
+    lip_lp: OnePole,    // BR2 envelope-tracked lip-closure lowpass
+    decim: [Biquad; 2], // BR1 2×→1× decimation cliff (natural only)
+    vib_phase: f32,     // BR7 per-player autonomous vibrato (sections/synth)
+    vib_rate: f32,
+    drift: Drift, // BR7 random-walk pitch instability
+    scoop: f32,   // BR5 per-player pitch mult settling toward 1.0
+    scoop_k: f32, // BR5 per-player settle rate (jittered ±15% in sections)
+}
+
+pub struct BrassSpec {
+    pub players: usize,
+    pub detune_cents: f32,    // full spread; players spread linearly
+    pub onset_scatter_s: f32, // per-player random onset in [0, this]; player 0 = 0
+    pub scoop0: f32,
+    pub scoop_k: f32, // BR5
+    pub h_min: f32,
+    pub h_max: f32, // BR2 lip cutoff, multiples of f0
+    pub k_min: f32,
+    pub k_max: f32,
+    pub bias: f32,                  // BR1/BR2 law
+    pub bore: [(f32, f32, f32); 2], // BR3 (Hz, Q, dB); Hz=0 → skip
+    pub bell_fc: f32,
+    pub bell_g: f32, // BR3
+    // BR2 output brightness: an L-driven radiated lowpass `out_base·2^(out_oct·L)`
+    // (the Bowed env→brightness precedent, voices.rs:1861), so the flagship
+    // loudness law reaches the OUTPUT centroid past the fixed bore/bell — the
+    // lip lowpass alone is masked by them. out_base=0 → disabled (synth, which
+    // owns its own resonant sweep).
+    pub out_base: f32,
+    pub out_oct: f32,
+    pub mute: bool,                                // BR4
+    pub synth_sweep: Option<(f32, f32, f32, f32)>, // BR8 (base, vel0, vel_depth, q)
+    pub fenv: (f32, f32, f32, f32),                // BR8 synth resonant-sweep envelope (A/D/S/R)
+    pub breath: f32,
+    pub chiff: f32,                // BR6
+    pub env: (f32, f32, f32, f32), // amp A/D/S/R
+    pub vib: (f32, f32, f32),      // BR7 (rate, depth, delay); depth=0 → none
+    pub drift: f32,
+    pub growl: bool, // BR10 aftertouch growl enabled (naturals yes, synth no)
+    pub amp: f32,
+    #[cfg(test)]
+    pub name: &'static str, // kind() string, oracle-36 seam
+}
+
+/// Base every BrassSpec starts from (struct-update in const context, the
+/// preset idiom of `DEFAULTS` at voices.rs:325).
+const BR_DEFAULTS: BrassSpec = BrassSpec {
+    players: 1,
+    detune_cents: 0.0,
+    onset_scatter_s: 0.0,
+    scoop0: 0.98,
+    scoop_k: 0.010,
+    h_min: 2.5,
+    h_max: 8.0,
+    k_min: 0.8,
+    k_max: 3.0,
+    bias: 0.30,
+    bore: [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)],
+    bell_fc: 1500.0,
+    bell_g: 1.0,
+    out_base: 400.0,
+    out_oct: 4.2,
+    mute: false,
+    synth_sweep: None,
+    fenv: (0.0, 0.0, 0.0, 0.0),
+    breath: 0.012,
+    chiff: 0.30,
+    env: (0.03, 0.10, 0.88, 0.12),
+    vib: (0.0, 0.0, 0.0),
+    drift: 0.0015,
+    growl: true,
+    amp: 0.30,
+    #[cfg(test)]
+    name: "brass",
+};
+
+pub const BR_TRUMPET: BrassSpec = BrassSpec {
+    #[cfg(test)]
+    name: "trumpet",
+    scoop0: 0.982,
+    scoop_k: 0.012,
+    h_min: 2.5,
+    h_max: 9.0,
+    k_min: 0.8,
+    k_max: 3.2,
+    bias: 0.30,
+    bore: [(1200.0, 1.2, 5.0), (2900.0, 1.6, 3.0)],
+    bell_fc: 1500.0,
+    bell_g: 1.1,
+    breath: 0.012,
+    chiff: 0.35,
+    env: (0.03, 0.10, 0.88, 0.12),
+    drift: 0.0015,
+    amp: 0.30,
+    ..BR_DEFAULTS
+};
+pub const BR_TROMBONE: BrassSpec = BrassSpec {
+    #[cfg(test)]
+    name: "trombone",
+    scoop0: 0.975,
+    scoop_k: 0.008, // slow scoop = an audible slide (BR5)
+    h_min: 2.2,
+    h_max: 7.0,
+    k_min: 0.8,
+    k_max: 2.8,
+    bias: 0.35,
+    bore: [(600.0, 1.1, 5.0), (1500.0, 1.5, 2.5)],
+    bell_fc: 800.0,
+    bell_g: 0.8,
+    breath: 0.014,
+    chiff: 0.30,
+    env: (0.045, 0.12, 0.88, 0.15),
+    drift: 0.0018,
+    amp: 0.32,
+    ..BR_DEFAULTS
+};
+pub const BR_TUBA: BrassSpec = BrassSpec {
+    #[cfg(test)]
+    name: "tuba",
+    scoop0: 0.970,
+    scoop_k: 0.006,
+    h_min: 2.0,
+    h_max: 5.0,
+    k_min: 0.7,
+    k_max: 2.2,
+    bias: 0.40,
+    bore: [(230.0, 1.0, 6.0), (600.0, 1.4, 2.0)],
+    bell_fc: 400.0,
+    bell_g: 0.4,
+    breath: 0.018,
+    chiff: 0.22,
+    env: (0.07, 0.14, 0.90, 0.18),
+    drift: 0.0020,
+    amp: 0.40,
+    ..BR_DEFAULTS
+};
+pub const BR_MUTE_TPT: BrassSpec = BrassSpec {
+    #[cfg(test)]
+    name: "muted_trumpet",
+    scoop0: 0.982,
+    scoop_k: 0.012,
+    h_min: 2.5,
+    h_max: 8.0,
+    k_min: 0.8,
+    k_max: 3.0,
+    bias: 0.30,
+    bore: [(1200.0, 1.2, 5.0), (2900.0, 1.6, 3.0)], // trumpet source
+    bell_fc: 1500.0,
+    bell_g: 1.1,
+    mute: true, // BR4 mute stage §3.7 (net ≈ −8 dB)
+    breath: 0.012,
+    chiff: 0.30,
+    env: (0.03, 0.10, 0.88, 0.10),
+    drift: 0.0015,
+    amp: 0.55,
+    ..BR_DEFAULTS
+};
+pub const BR_HORN: BrassSpec = BrassSpec {
+    #[cfg(test)]
+    name: "french_horn",
+    scoop0: 0.985,
+    scoop_k: 0.010,
+    h_min: 2.0,
+    h_max: 5.5,
+    k_min: 0.7,
+    k_max: 2.0,
+    bias: 0.45,
+    bore: [(340.0, 1.0, 6.0), (750.0, 1.4, 2.5)],
+    bell_fc: 750.0,
+    bell_g: 0.5, // darkest: hand-in-bell
+    breath: 0.014,
+    chiff: 0.20,
+    env: (0.055, 0.15, 0.86, 0.20),
+    drift: 0.0016,
+    amp: 0.34,
+    ..BR_DEFAULTS
+};
+pub const BR_SECTION: BrassSpec = BrassSpec {
+    #[cfg(test)]
+    name: "brass_section",
+    players: 3,
+    detune_cents: 16.0,
+    onset_scatter_s: 0.028,
+    scoop0: 0.978,
+    scoop_k: 0.010, // ±15% per player
+    h_min: 2.4,
+    h_max: 7.5,
+    k_min: 0.8,
+    k_max: 2.8,
+    bias: 0.32,
+    bore: [(800.0, 1.0, 4.0), (1800.0, 1.4, 2.5)],
+    bell_fc: 1100.0,
+    bell_g: 0.8,
+    breath: 0.010,
+    chiff: 0.15,
+    env: (0.06, 0.15, 0.88, 0.22),
+    vib: (5.0, 0.0025, 0.35),
+    drift: 0.0030,
+    amp: 0.26,
+    ..BR_DEFAULTS
+};
+pub const BR_SYN1: BrassSpec = BrassSpec {
+    #[cfg(test)]
+    name: "synth_brass",
+    players: 5,
+    detune_cents: 24.0,
+    onset_scatter_s: 0.0,
+    scoop0: 1.0,
+    scoop_k: 0.0,
+    k_min: 0.6,
+    k_max: 0.6,
+    bias: 0.15,
+    bore: [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)], // none
+    bell_fc: 1400.0,
+    bell_g: 0.6,
+    out_base: 0.0,                                  // synth owns its resonant sweep
+    synth_sweep: Some((260.0, 900.0, 2600.0, 1.8)), // 260 + (900 + 2600·vn), Q 1.8
+    fenv: (0.005, 0.22, 0.35, 0.15),
+    breath: 0.0,
+    chiff: 0.0,
+    env: (0.02, 0.18, 0.80, 0.25),
+    vib: (5.2, 0.0015, 0.40),
+    drift: 0.0025,
+    growl: false,
+    amp: 0.28,
+    ..BR_DEFAULTS
+};
+pub const BR_SYN2: BrassSpec = BrassSpec {
+    #[cfg(test)]
+    name: "synth_brass",
+    players: 5,
+    detune_cents: 32.0,
+    onset_scatter_s: 0.0,
+    scoop0: 1.0,
+    scoop_k: 0.0,
+    k_min: 0.6,
+    k_max: 0.6,
+    bias: 0.12,
+    bore: [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)], // none
+    bell_fc: 900.0,
+    bell_g: 0.4,
+    out_base: 0.0,                                  // synth owns its resonant sweep
+    synth_sweep: Some((220.0, 600.0, 1600.0, 1.2)), // 220 + (600 + 1600·vn), Q 1.2
+    fenv: (0.02, 0.35, 0.35, 0.25),                 // slower, darker, longer
+    breath: 0.0,
+    chiff: 0.0,
+    env: (0.09, 0.25, 0.85, 0.35),
+    vib: (4.6, 0.0020, 0.50),
+    drift: 0.0025,
+    growl: false,
+    amp: 0.28,
+    ..BR_DEFAULTS
+};
+
+pub struct Brass {
+    players: Vec<BrassPlayer>,
+    spec: &'static BrassSpec,
+    base_f: f32,
+    bend: f32,      // composed engine multiplier, stored whole (INT-2/3/5)
+    pressure: f32,  // BR9 engine-slewed CC11 blowing pressure, default 1.0
+    growl: f32,     // BR9/BR10 engine-slewed aftertouch growl, default 0.0
+    growl_cur: f32, // BR10 voice-side slew of growl (de-zipper)
+    bite: f32,      // BR2 tongue over-blow, decays t60 60 ms
+    bite_decay: f32,
+    kws: f32,           // current shaper index k (updated at CTRL rate)
+    env: Adsr,          // amplitude envelope
+    benv: Adsr,         // BR2 brightness-bloom envelope (slow attack — the "waa")
+    bloom: f32,         // BR2 per-sample cached benv level (the timbre driver)
+    vn: f32,            // velocity/127, timbre-law input
+    fenv: Option<Adsr>, // BR8 synth resonant-sweep envelope (62/63)
+    fenv_level: f32,
+    sweep: Option<Biquad>, // BR8 shared resonant LP, retuned at CTRL rate
+    dcb: Biquad,           // BR11 highpass 25 Hz — biased-tanh DC guard
+    bore: Vec<Biquad>,     // BR3 bore/mouthpiece peak EQ (linear, on the sum)
+    bell_lp: OnePole,      // BR3 first-order HF-shelf helper
+    bell_g: f32,
+    out_lp: Option<OnePole>, // BR2 L-driven radiated brightness (natural only)
+    mute: Option<[Biquad; 3]>, // BR4 prog 59 (HP + 2 nasal peaks + loss)
+    breath_filt: Biquad,     // BR6 sustained blowing noise, BP at upper bore formant
+    breath: f32,
+    chiff: Burst,   // BR6 tongue transient
+    flutter: Sine,  // BR10 growl flutter LFO (30 Hz)
+    vib_depth: f32, // BR7
+    vib_delay: u32,
+    rng: Rng,
+    t: u32,
+    amp: f32,
+    oversample: bool, // natural: 2× the source; synth: 1× (near-linear tanh)
+    osr: f32,         // oscillator sample rate (sr2 natural, sr synth)
+    sr: f32,
+}
+
+impl Brass {
+    fn new(spec: &'static BrassSpec, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+        let mut rng = Rng::new(seed);
+        let f = key_freq(key);
+        let vn = vel as f32 / 127.0;
+        // Synth brass is near-linear (k = 0.6): its mild tanh makes no
+        // alias-worthy harmonics, so the 2× cascade is skipped (§3.11).
+        let oversample = spec.synth_sweep.is_none();
+        let osr = if oversample { sr * 2.0 } else { sr };
+        let n = spec.players.max(1);
+
+        let players: Vec<BrassPlayer> = (0..n)
+            .map(|i| {
+                let spread = if n > 1 {
+                    (i as f32 / (n - 1) as f32) * 2.0 - 1.0
+                } else {
+                    0.0
+                };
+                let detune = 2f32.powf(spec.detune_cents * 0.5 * spread / 1200.0);
+                // player 0 pinned to 0 so the section has a defined front edge
+                let onset = if i == 0 || spec.onset_scatter_s <= 0.0 {
+                    0
+                } else {
+                    (rng.white().abs() * spec.onset_scatter_s * sr) as u32
+                };
+                let scoop_k = if n > 1 {
+                    spec.scoop_k * (1.0 + 0.15 * rng.white())
+                } else {
+                    spec.scoop_k
+                };
+                let scoop = if spec.scoop_k > 0.0 {
+                    spec.scoop0 + 0.008 * vn
+                } else {
+                    1.0
+                };
+                let lip_fc = if oversample {
+                    (f * spec.h_min).min(osr * 0.24)
+                } else {
+                    osr * 0.45
+                };
+                let f_i = (f * detune).min(osr * 0.45);
+                BrassPlayer {
+                    saw: BlepSaw::new(f_i, osr, rng.white() * 0.5 + 0.5),
+                    detune,
+                    onset,
+                    lip_lp: OnePole::lowpass(lip_fc, osr),
+                    decim: [
+                        Biquad::lowpass(BR_DECIM_HZ, 0.8, osr),
+                        Biquad::lowpass(BR_DECIM_HZ, 0.8, osr),
+                    ],
+                    vib_phase: rng.white() * std::f32::consts::PI,
+                    vib_rate: spec.vib.0 * (1.0 + 0.08 * rng.white()),
+                    drift: Drift::new(seed ^ (0x1234 + i as u32 * 977), spec.drift, 2800),
+                    scoop,
+                    scoop_k,
+                }
+            })
+            .collect();
+
+        // upper bore formant — colours the breath and the tongue chiff
+        let upper = spec
+            .bore
+            .iter()
+            .map(|&(bf, _, _)| bf)
+            .fold(0.0f32, f32::max);
+        let upper = if upper > 0.0 { upper } else { f * 2.0 };
+
+        let bore: Vec<Biquad> = spec
+            .bore
+            .iter()
+            .filter(|&&(bf, _, _)| bf > 0.0)
+            .map(|&(bf, q, g)| Biquad::peak(bf.min(sr * 0.4), q, g, sr))
+            .collect();
+
+        let mute = if spec.mute {
+            Some([
+                Biquad::highpass(750.0, 0.7, sr),
+                Biquad::peak(1600.0, 2.2, 7.0, sr),
+                Biquad::peak(4000.0, 2.0, 3.0, sr),
+            ])
+        } else {
+            None
+        };
+
+        let (fenv, sweep) = if let Some((base, _, _, q)) = spec.synth_sweep {
+            (
+                Some(Adsr::new(
+                    spec.fenv.0,
+                    spec.fenv.1,
+                    spec.fenv.2,
+                    spec.fenv.3,
+                    sr,
+                )),
+                Some(Biquad::lowpass(base, q, sr)),
+            )
+        } else {
+            (None, None)
+        };
+
+        let mut chiff = Burst::new(
+            Biquad::bandpass(upper.min(sr * 0.4), 1.0, sr),
+            spec.chiff,
+            0.03,
+            sr,
+        );
+        // tongued attack: super-linear, house onset convention (voices.rs:833)
+        chiff.trigger(vel_amp(vel) * vn);
+
+        Brass {
+            players,
+            spec,
+            base_f: f,
+            bend: 1.0,
+            pressure: 1.0,
+            growl: 0.0,
+            growl_cur: 0.0,
+            bite: 0.7 * vn * vn,
+            bite_decay: t60_mul(BR_BITE_T60, sr),
+            kws: spec.k_min,
+            env: Adsr::new(
+                vel_attack(spec.env.0, vel),
+                spec.env.1,
+                spec.env.2,
+                spec.env.3,
+                sr,
+            ),
+            benv: Adsr::new(BR_BLOOM_A, 0.05, 1.0, spec.env.3, sr),
+            bloom: 0.0,
+            vn,
+            fenv,
+            fenv_level: 0.0,
+            sweep,
+            dcb: Biquad::highpass(25.0, 0.7, sr),
+            bore,
+            bell_lp: OnePole::lowpass(spec.bell_fc, sr),
+            bell_g: spec.bell_g,
+            out_lp: (spec.out_base > 0.0).then(|| OnePole::lowpass(spec.out_base, sr)),
+            mute,
+            breath_filt: Biquad::bandpass(upper.min(sr * 0.4), 1.5, sr),
+            breath: spec.breath,
+            chiff,
+            flutter: Sine::new(BR_GROWL_HZ, sr, 0.0),
+            vib_depth: spec.vib.1,
+            vib_delay: (spec.vib.2 * sr) as u32,
+            rng,
+            t: 0,
+            amp: spec.amp * (0.4 + 0.6 * vel_amp(vel)),
+            oversample,
+            osr,
+            sr,
+        }
+    }
+
+    fn control_tick(&mut self) {
+        // BR2 loudness scalar L (one scalar drives the whole timbre)
+        let press = BR_PRESS_FLOOR.0 + BR_PRESS_FLOOR.1 * self.pressure;
+        let l =
+            (self.bloom * (BR_L_VEL.0 + BR_L_VEL.1 * self.vn) * press * (1.0 + self.bite)).min(1.3);
+        // BR9/BR10 growl slew (de-zipper block-rate writes); synth never growls
+        let g_target = if self.spec.growl { self.growl } else { 0.0 };
+        self.growl_cur += BR_GROWL_SLEW * (g_target - self.growl_cur);
+        // BR10: growl folds into the brightness scalar so its added drive
+        // (the bite) actually reaches the source AND the radiated output —
+        // otherwise the lip lowpass / output lowpass cap it and only the
+        // flutter AM survives. At growl 0 this is exactly `l` (BR-O2/O3 unmoved).
+        let bright = (l + BR_GROWL_BRIGHT * self.growl_cur).min(1.5);
+        // BR2 lip-closure cutoff law (natural only; synth uses the sweep)
+        if self.oversample {
+            let fc = (self.base_f
+                * (self.spec.h_min + (self.spec.h_max - self.spec.h_min) * bright.powf(BR_H_EXP)))
+            .min(self.osr * 0.24);
+            for p in &mut self.players {
+                p.lip_lp.set_cutoff(fc, self.osr);
+            }
+        }
+        // BR1/BR2/BR10 shaper index, composed drive clamped to the alias cap
+        self.kws = (self.spec.k_min
+            + (self.spec.k_max - self.spec.k_min) * l
+            + BR_GROWL_DRIVE * self.growl_cur)
+            .min(BR_K_MAX);
+        // BR2 radiated brightness: the flagship L scalar opens an output lowpass
+        // so "loudness opens timbre" reaches the OUTPUT centroid (the lip law
+        // alone is masked by the fixed bore/bell). Same L → same at C3, so the
+        // BR-O9 program ordering is unaffected.
+        if let Some(lp) = &mut self.out_lp {
+            let cut =
+                (self.spec.out_base * 2f32.powf(self.spec.out_oct * bright)).min(self.sr * 0.45);
+            lp.set_cutoff(cut, self.sr);
+        }
+        // BR5/BR7 per-player retune, composing every persistent offset
+        let ramp = if self.t > self.vib_delay {
+            (((self.t - self.vib_delay) as f32) / self.sr).min(1.0)
+        } else {
+            0.0
+        };
+        let (base_f, bend, vib_depth, osr, sr) =
+            (self.base_f, self.bend, self.vib_depth, self.osr, self.sr);
+        for p in &mut self.players {
+            p.scoop += p.scoop_k * (1.0 - p.scoop);
+            // control_tick fires every CTRL OUTPUT samples (self.t counts at sr),
+            // so the real tick period is CTRL/sr — divide by sr, not osr (osr=2·sr
+            // for natural presets would halve the rate; only BR_SECTION is affected).
+            p.vib_phase += TAU * p.vib_rate * CTRL as f32 / sr;
+            let vib = if ramp > 0.0 && vib_depth > 0.0 {
+                vib_depth * ramp * p.vib_phase.sin()
+            } else {
+                0.0
+            };
+            let drift = p.drift.next();
+            let f_i = (base_f * p.detune * bend * p.scoop * (1.0 + vib + drift)).min(osr * 0.45);
+            p.saw.set_freq(f_i, osr);
+        }
+    }
+}
+
+impl Voice for Brass {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let ramp_samples = (BR_ONSET_RAMP_S * self.sr) as u32;
+        for o in out.iter_mut() {
+            if self.t.is_multiple_of(CTRL) {
+                self.control_tick();
+            }
+            let e = self.env.next();
+            self.bloom = self.benv.next();
+            self.bite *= self.bite_decay;
+            // BR8 synth resonant sweep (SynthBass idiom): fenv advances every
+            // sample, the filter retunes at control rate.
+            if let Some(f) = &mut self.fenv {
+                self.fenv_level = f.next();
+            }
+            if let (Some(sweep), Some((base, v0, vd, q))) =
+                (self.sweep.as_mut(), self.spec.synth_sweep)
+            {
+                if self.t.is_multiple_of(CTRL) {
+                    let cut =
+                        (base + self.fenv_level * (v0 + vd * self.vn)).clamp(80.0, self.sr * 0.4);
+                    sweep.retune_lowpass(cut, q, self.sr);
+                }
+            }
+
+            // BR1 per-player lip valve, summed (each player intermodulates on
+            // its own — a shared shaper would be a section tell).
+            let (kws, bias, oversample) = (self.kws, self.spec.bias, self.oversample);
+            let mut sum = 0.0;
+            for p in &mut self.players {
+                if self.t < p.onset {
+                    continue;
+                }
+                let ramp = {
+                    let dt = self.t - p.onset;
+                    if ramp_samples == 0 || dt >= ramp_samples {
+                        1.0
+                    } else {
+                        let u = dt as f32 / ramp_samples as f32;
+                        u * u * (3.0 - 2.0 * u) // smoothstep, no step click
+                    }
+                };
+                let v = if oversample {
+                    // two sub-steps at sr2, decimated; keep the aligned sample
+                    let mut y = 0.0;
+                    for _ in 0..2 {
+                        let mut x = brass_valve(p.lip_lp.process(p.saw.next()), kws, bias);
+                        for d in p.decim.iter_mut() {
+                            x = d.process(x);
+                        }
+                        y = x;
+                    }
+                    y
+                } else {
+                    brass_valve(p.lip_lp.process(p.saw.next()), kws, bias)
+                };
+                sum += v * ramp;
+            }
+            sum /= self.players.len() as f32;
+
+            // BR6 breath noise (before the bore EQ so it shares the resonances)
+            if self.breath > 0.0 {
+                sum += self.breath_filt.process(self.rng.white()) * self.breath * e.max(0.0).sqrt();
+            }
+            // BR11 shaper DC guard
+            sum = self.dcb.process(sum);
+            // BR8 synth resonant LP (replaces the per-player lip law)
+            if let Some(sweep) = &mut self.sweep {
+                sum = sweep.process(sum);
+            }
+            // BR3 bore/mouthpiece formants
+            for b in &mut self.bore {
+                sum = b.process(sum);
+            }
+            // BR3 bell HF radiation shelf (first-order, phase-benign)
+            sum += self.bell_g * (sum - self.bell_lp.process(sum));
+            // BR2 L-driven radiated brightness (natural presets)
+            if let Some(lp) = &mut self.out_lp {
+                sum = lp.process(sum);
+            }
+            // BR4 mute: HP 750 ► peak 1600 ► peak 4000 ► ×0.40
+            if let Some(m) = &mut self.mute {
+                let mut y = sum;
+                for stage in m.iter_mut() {
+                    y = stage.process(y);
+                }
+                sum = y * 0.40;
+            }
+            // BR10 flutter AM (post-decimation, so its ±30 Hz sidebands can't
+            // alias); same growl_cur as the bite, so both halves ramp together
+            let am = 1.0 - BR_GROWL_AM * self.growl_cur * (1.0 + self.flutter.next()) * 0.5;
+            sum *= am;
+
+            // BR6 tongue transient ("tuh"): a fresh-attack onset spike, added
+            // OUTSIDE the amp envelope (the Pluck onset_post precedent,
+            // voices.rs:998) so the tongue speaks at t=0 even while the note's
+            // amplitude is still ramping in. A slur (legato_to) never triggers
+            // it — the tongued≠slurred dichotomy (BR-O6).
+            let chiff = self.chiff.tick(&mut self.rng) * self.amp;
+            *o += sum * self.amp * e + chiff;
+            self.t += 1;
+        }
+        self.env.alive()
+    }
+
+    fn note_off(&mut self) {
+        self.env.release();
+        self.benv.release();
+        if let Some(f) = &mut self.fenv {
+            f.release();
+        }
+    }
+
+    fn released(&self) -> bool {
+        self.env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        // composed whole; applied at control rate on top of scoop/vib/drift
+        self.bend = mult;
+    }
+
+    fn set_breath(&mut self, pressure: f32, growl: f32) {
+        // BR9: pressure opens fc/k (never amplitude); growl drives BR10.
+        self.pressure = pressure;
+        self.growl = growl;
+    }
+
+    fn legato_to(&mut self, key: u8, _vel: u8) -> bool {
+        // one breath across fingered notes (BR5): re-aim each player via its
+        // scoop, do NOT retrigger env; kill the bite so the slur has no
+        // second consonant (the tongued≠slurred dichotomy, BR-O6).
+        let new_f = key_freq(key);
+        for p in &mut self.players {
+            let j = 1.0 + 0.10 * self.rng.white(); // players don't move as one
+            p.scoop = (self.base_f * p.scoop / new_f * j).clamp(BR_SCOOP_CLAMP.0, BR_SCOOP_CLAMP.1);
+        }
+        self.base_f = new_f;
+        self.bite = 0.0;
+        true
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        self.spec.name
+    }
+}
+
+fn brass(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Brass {
+    let spec: &'static BrassSpec = match program {
+        56 => &BR_TRUMPET,
+        57 => &BR_TROMBONE,
+        58 => &BR_TUBA,
+        59 => &BR_MUTE_TPT,
+        60 => &BR_HORN,
+        61 => &BR_SECTION,
+        62 => &BR_SYN1,
+        _ => &BR_SYN2, // 63
+    };
+    Brass::new(spec, key, vel, sr, seed)
+}
+
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
     let noise_off = (0.0, 0.01, 1000.0, 1.0);
     match program {
@@ -2949,6 +3662,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         48..=51 => Box::new(strings(program, key, vel, sr, seed)),
         52..=54 => Box::new(choir(program, key, vel, sr, seed)),
         55 => Box::new(orch_hit(key, vel, sr, seed)),
+        56..=63 => Box::new(brass(program, key, vel, sr, seed)),
         64..=71 => Box::new(reed(program, key, vel, sr, seed)),
         72..=79 => {
             let model = Box::new(Wind::new(
@@ -3004,7 +3718,9 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
 mod tests {
     use super::*;
     // Audio oracle helpers used by the v0.9 reed/brass oracles (bare names).
-    use crate::testutil::{band_rms, centroid, hp_rms, mag_at, rms};
+    use crate::testutil::{
+        band_rms, centroid, env_autocorr_peak, hp_rms, mag_at, peak_locate, rms,
+    };
 
     /// Lowpass twice, then count rising zero crossings.
     fn measure_pitch(seg: &[f32], sr: f32) -> f32 {
@@ -4137,6 +4853,580 @@ mod tests {
             (hz - 220.0 * up).abs() < 6.0,
             "bent pitch {hz}, want {}",
             220.0 * up
+        );
+    }
+
+    /// Render a fresh brass voice `secs` seconds (no note_off) into a buffer.
+    fn render_brass(prog: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = brass(prog, key, vel, sr, seed);
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    /// 10→90% rise time of the 10 ms windowed-RMS envelope, in seconds.
+    fn rise_10_90(seg: &[f32], sr: f32) -> f32 {
+        let win = (0.01 * sr) as usize;
+        let env: Vec<f32> = seg.chunks(win).map(rms).collect();
+        let peak = env.iter().cloned().fold(0.0f32, f32::max).max(1e-12);
+        let (lo, hi) = (0.10 * peak, 0.90 * peak);
+        let t_at = |thresh: f32| -> f32 {
+            for (i, &v) in env.iter().enumerate() {
+                if v >= thresh {
+                    return (i * win) as f32 / sr;
+                }
+            }
+            f32::INFINITY
+        };
+        (t_at(hi) - t_at(lo)).max(0.0)
+    }
+
+    /// BR-O1 (sustain): a held brass note holds — sustain ratio ≥ 0.7 (a
+    /// STEEL-pluck fallback measures ≈ 0.01, the journal headline).
+    #[test]
+    fn brass_o1_sustains() {
+        let sr = 44100.0;
+        let b = render_brass(56, 69, 100, 2.2, 7);
+        let ratio = rms(&b[(1.45 * sr) as usize..(1.85 * sr) as usize])
+            / rms(&b[(0.15 * sr) as usize..(0.45 * sr) as usize]).max(1e-12);
+        assert!(ratio >= 0.7, "sustain ratio {ratio:.3} (need ≥ 0.7)");
+    }
+
+    /// BR-O2 (loudness→brightness, flagship): a loud note is measurably brighter
+    /// than a soft one AT THE SUSTAIN, not just louder. The lip law alone is
+    /// masked by the fixed bore/bell, so the L-driven output brightness carries
+    /// the centroid contrast (see `out_base`/`out_oct`, the Bowed precedent).
+    #[test]
+    fn brass_o2_loudness_opens_brightness() {
+        let sr = 44100.0;
+        let cent = |vel: u8| {
+            let b = render_brass(56, 69, vel, 1.4, 7);
+            let seg = &b[(0.4 * sr) as usize..(1.2 * sr) as usize];
+            (centroid(seg, sr), rms(seg))
+        };
+        let (c36, r36) = cent(36);
+        let (c120, r120) = cent(120);
+        assert!(
+            r36 > 1e-4 && r120 > 1e-4,
+            "a window is silent: {r36} {r120}"
+        );
+        assert!(
+            c120 / c36 >= 1.30,
+            "centroid ratio {:.3} (need ≥ 1.30): vel120 {c120:.0} vel36 {c36:.0}",
+            c120 / c36
+        );
+    }
+
+    /// BR-O3 (the "waa"): the note speaks dark and blooms bright over the onset
+    /// (the dedicated `benv`, not the amp attack). EQUAL-length 70 ms windows —
+    /// the Goertzel centroid's leakage is window-length dependent, so the
+    /// appendix's 70 ms early vs 200 ms late is not a valid comparison; both
+    /// windows begin after the ≈28 ms amp attack, so this measures the bloom.
+    #[test]
+    fn brass_o3_the_waa() {
+        let sr = 44100.0;
+        let b = render_brass(56, 69, 100, 1.0, 7);
+        let early = centroid(&b[(0.03 * sr) as usize..(0.10 * sr) as usize], sr);
+        let late = centroid(&b[(0.30 * sr) as usize..(0.37 * sr) as usize], sr);
+        assert!(
+            late / early >= 1.25,
+            "waa late/early {:.3} (need ≥ 1.25): late {late:.0} early {early:.0}",
+            late / early
+        );
+    }
+
+    /// 30 Hz flutter depth: rms of the 30 Hz-bandpassed amplitude envelope over
+    /// its mean — a clean growl-present vs absent discriminator.
+    fn flutter30(seg: &[f32], sr: f32) -> f32 {
+        let mut lp = OnePole::lowpass(200.0, sr);
+        let env: Vec<f32> = seg.iter().map(|&x| lp.process(x.abs())).collect();
+        let mean = env.iter().sum::<f32>() / env.len() as f32;
+        let mut bp = Biquad::bandpass(30.0, 4.0, sr);
+        let flut: Vec<f32> = env.iter().map(|&x| bp.process(x)).collect();
+        rms(&flut) / mean.max(1e-9)
+    }
+
+    /// BR-O5 (growl, voice-level via `set_breath`): channel-aftertouch growl
+    /// adds a 25–40 Hz flutter roughness AND a drive bite, both absent without
+    /// it. (The engine AT path — `at_gain`/`at_vib` — is deferred; this pins the
+    /// voice's own BR10 response.) The env-autocorr peak magnitude alone can't
+    /// discriminate (a smooth envelope autocorrelates highly at short lags), so
+    /// the flutter is pinned by its 30 Hz depth and its autocorr RATE.
+    #[test]
+    fn brass_o5_growl() {
+        let sr = 44100.0;
+        let run = |growl: f32| {
+            let mut v = brass(56, 60, 80, sr, 7);
+            let mut warm = vec![0f32; (0.1 * sr) as usize];
+            v.render(&mut warm);
+            v.set_breath(1.0, growl);
+            let mut buf = vec![0f32; (1.6 * sr) as usize];
+            v.render(&mut buf);
+            let seg = buf[(0.4 * sr) as usize..(1.4 * sr) as usize].to_vec();
+            let (peak, rate) = env_autocorr_peak(&seg, sr, 0.02, 0.05);
+            (flutter30(&seg, sr), peak, rate, hp_rms(&seg, sr, 2000.0))
+        };
+        let (f_on, p_on, r_on, hp_on) = run(110.0 / 127.0);
+        let (f_off, _p_off, r_off, hp_off) = run(0.0);
+        // flutter present with growl, absent without
+        assert!(
+            f_on >= 0.08 && f_on >= 3.0 * f_off,
+            "flutter30 growl {f_on:.4} vs none {f_off:.4}"
+        );
+        assert!(
+            p_on >= 0.25 && (25.0..=40.0).contains(&r_on),
+            "growl autocorr peak {p_on:.3} rate {r_on:.1} Hz"
+        );
+        assert!(
+            !(25.0..=40.0).contains(&r_off),
+            "no-growl envelope shows a 30 Hz flutter (rate {r_off:.1})"
+        );
+        // the drive bite: growl raises >2 kHz energy
+        assert!(
+            hp_on / hp_off >= 1.4,
+            "growl bite hp(2k) ratio {:.3} (need ≥ 1.4)",
+            hp_on / hp_off
+        );
+    }
+
+    /// BR-O6 (tongued ≠ slurred): a fresh-attack note fires a tongue chiff; a
+    /// slur (legato_to) does not. Measured by a differential that isolates the
+    /// chiff exactly — chiff on vs off share an identical RNG stream (the Burst
+    /// draws noise regardless of its gain), so the onset difference IS the
+    /// chiff's audio. It is large for a tongued attack and zero for the slur.
+    /// (A broadband-HF or flatness comparison is confounded: the slur inherits
+    /// full bloom/amplitude/breath while the tongued note speaks dark.)
+    #[test]
+    fn brass_o6_tongued_vs_slurred() {
+        let sr = 44100.0;
+        let nochiff: &'static BrassSpec = Box::leak(Box::new(BrassSpec {
+            chiff: 0.0,
+            ..BR_TRUMPET
+        }));
+        let n = (0.03 * sr) as usize;
+        // tongued C5: the chiff on-vs-off difference is the tongue transient
+        let t_on = {
+            let mut v = Brass::new(&BR_TRUMPET, 72, 100, sr, 7);
+            let mut b = vec![0f32; (0.2 * sr) as usize];
+            v.render(&mut b);
+            b
+        };
+        let t_off = {
+            let mut v = Brass::new(nochiff, 72, 100, sr, 7);
+            let mut b = vec![0f32; (0.2 * sr) as usize];
+            v.render(&mut b);
+            b
+        };
+        let diff = |on: &[f32], off: &[f32]| {
+            rms(&on[..n]
+                .iter()
+                .zip(&off[..n])
+                .map(|(a, b)| a - b)
+                .collect::<Vec<_>>())
+        };
+        let tongued_chiff = diff(&t_on, &t_off);
+        // slur A4 → C5 via legato_to at 1.0 s: the chiff must NOT re-fire
+        let slur = |spec: &'static BrassSpec| {
+            let mut v = Brass::new(spec, 69, 100, sr, 7);
+            let mut head = vec![0f32; sr as usize];
+            v.render(&mut head);
+            assert!(v.legato_to(72, 100), "brass should slur");
+            let mut b = vec![0f32; (0.2 * sr) as usize];
+            v.render(&mut b);
+            b
+        };
+        let s_on = slur(&BR_TRUMPET);
+        let s_off = slur(nochiff);
+        let slur_chiff = diff(&s_on, &s_off);
+        assert!(
+            tongued_chiff > 1e-3 && slur_chiff < 0.05 * tongued_chiff,
+            "chiff: tongued {tongued_chiff:.5} vs slur {slur_chiff:.5} (slur must have none)"
+        );
+        // the slur arrives at C5 (523.25 Hz)
+        let p = peak_locate(&s_on[(0.1 * sr) as usize..], sr, 500.0, 550.0);
+        assert!(
+            (p / 523.25 - 1.0).abs() < 0.01,
+            "slur pitch {p} Hz vs 523.25"
+        );
+    }
+
+    /// BR-O7 (section scatter + determinism): the section (61) rises slower than
+    /// the solo (56) — its per-player onset scatter spreads the front edge — and
+    /// the same seed renders bit-identically twice.
+    #[test]
+    fn brass_o7_section_scatter_and_determinism() {
+        let sr = 44100.0;
+        let sec = render_brass(61, 60, 100, 1.0, 7);
+        let solo = render_brass(56, 60, 100, 1.0, 7);
+        assert!(
+            rise_10_90(&sec, sr) >= rise_10_90(&solo, sr) + 0.015,
+            "section rise {:.4}s not ≥ solo {:.4}s + 15 ms",
+            rise_10_90(&sec, sr),
+            rise_10_90(&solo, sr)
+        );
+        // determinism: same seed twice bit-identical
+        let a = render_brass(61, 60, 100, 0.5, 7);
+        let b = render_brass(61, 60, 100, 0.5, 7);
+        assert!(
+            a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()),
+            "same-seed section renders differ"
+        );
+        // two seeds differ (per-player scatter/detune/drift is seeded)
+        let c = render_brass(61, 60, 100, 0.5, 8);
+        assert!(
+            a.iter().zip(&c).any(|(x, y)| x != y),
+            "seeds 7 and 8 identical"
+        );
+    }
+
+    /// BR-O8 (mute identity, prog 59): the straight mute collapses the lows and
+    /// pushes the nasal mid — `band_rms(500)/band_rms(1800)` ≤ 0.5× the open
+    /// trumpet — and its insertion loss lowers the overall level.
+    #[test]
+    fn brass_o8_mute_identity() {
+        let sr = 44100.0;
+        let m = render_brass(59, 74, 100, 1.0, 7);
+        let o = render_brass(56, 74, 100, 1.0, 7);
+        let ratio =
+            |s: &[f32]| band_rms(s, sr, 500.0, 1.0) / band_rms(s, sr, 1800.0, 1.0).max(1e-9);
+        assert!(
+            ratio(&m) <= 0.5 * ratio(&o),
+            "mute band(500/1800) {:.3} not ≤ 0.5× open {:.3}",
+            ratio(&m),
+            ratio(&o)
+        );
+        assert!(
+            rms(&m) < rms(&o),
+            "mute rms {} not < open {}",
+            rms(&m),
+            rms(&o)
+        );
+    }
+
+    /// BR-O9 (program brightness spread) — implemented against the design's own
+    /// ordering, NOT the appendix/master-HLD §6 literal, which is
+    /// self-inconsistent. The corrected oracle asks for absolute `centroid` at
+    /// C3 ordered trumpet > horn > trombone > tuba. Measuring (voice-level,
+    /// seed-pinned) exposes two problems. First, the full-band C3 `centroid` is
+    /// confounded by the bell-shelf corner (`bell_fc`), not the intended
+    /// lip/bore brightness — it yields trombone > trumpet ≈ tuba > horn, no
+    /// valid brightness order. Second, the specified `horn > trombone`
+    /// contradicts the signed-off preset table, which makes trombone brighter
+    /// than horn (h_max 7.0 vs 5.5, upper bore 1500 vs 750 Hz) — as it should be
+    /// physically. The voices ARE correctly differentiated: a valid high-band
+    /// proxy (`hp_rms(2 kHz)/rms`) orders them trumpet > trombone > horn > tuba
+    /// at every pitch, matching the `h_max` design intent. This test pins THAT —
+    /// the real acceptance (trumpet brightest, tuba darkest, monotone between).
+    /// The appendix's C3-centroid metric and its horn/trombone swap are flagged
+    /// for reconciliation at fixture capture (see the task report).
+    #[test]
+    fn brass_o9_program_brightness_spread() {
+        let sr = 44100.0;
+        let bright = |prog: u8| {
+            let b = render_brass(prog, 48, 100, 2.0, 7); // C3, in every range
+            let seg = &b[(0.4 * sr) as usize..(1.2 * sr) as usize];
+            hp_rms(seg, sr, 2000.0) / rms(seg).max(1e-9)
+        };
+        let (tpt, tbn, horn, tuba) = (bright(56), bright(57), bright(60), bright(58));
+        assert!(
+            tpt > tbn && tbn > horn && horn > tuba,
+            "brightness order tpt {tpt:.3} > tbn {tbn:.3} > horn {horn:.3} > tuba {tuba:.3}"
+        );
+    }
+
+    /// BR-O10 (synth vs natural): the synth-brass resonant sweep (62) decays
+    /// from a bright attack "bwah" to a darker sustain — early centroid ≥ 1.2×
+    /// late — whereas the natural trumpet (56) does NOT (its centroid rises).
+    #[test]
+    fn brass_o10_synth_sweep_decays() {
+        let sr = 44100.0;
+        let ratio = |prog: u8| {
+            let b = render_brass(prog, 60, 110, 1.0, 7);
+            centroid(&b[(0.03 * sr) as usize..(0.15 * sr) as usize], sr)
+                / centroid(&b[(0.6 * sr) as usize..(1.0 * sr) as usize], sr).max(1e-9)
+        };
+        assert!(
+            ratio(62) >= 1.2,
+            "synth sweep early/late {:.3} (need ≥ 1.2)",
+            ratio(62)
+        );
+        assert!(
+            ratio(56) < 1.2,
+            "natural trumpet should not sweep-decay: {:.3}",
+            ratio(56)
+        );
+    }
+
+    /// BR-O11 (alias floor, guard): the loudest growled high note — prog 56 A5
+    /// vel 127, rendered dry AND growled — keeps fold-back on non-harmonic bins
+    /// ≤ 0.03× the 2nd harmonic. The composed drive is clamped to `BR_K_MAX`, so
+    /// the growled render sits at the same drive as the dry note and its flutter
+    /// AM is post-decimation — growl adds no aliasing.
+    #[test]
+    fn brass_o11_alias_floor() {
+        let sr = 44100.0;
+        for growl in [0.0f32, 110.0 / 127.0] {
+            let mut v = brass(56, 81, 127, sr, 7);
+            v.set_breath(1.0, growl);
+            let mut buf = vec![0f32; sr as usize];
+            v.render(&mut buf);
+            let seg = &buf[(0.2 * sr) as usize..];
+            let base = mag_at(seg, sr, 1760.0); // 2nd harmonic of 880 Hz
+            for f in [1246.0f32, 2200.0, 3080.0] {
+                let r = mag_at(seg, sr, f) / base.max(1e-12);
+                assert!(
+                    r <= 0.03,
+                    "growl {growl:.3}: off-bin {f} Hz = {r:.4}× (need ≤ 0.03)"
+                );
+            }
+        }
+    }
+
+    /// BR-O13 (DC guard, guard): the biased-tanh DC is blocked (`dcb` HP 25 Hz).
+    /// True DC is isolated with a 4-pole 8 Hz lowpass — the raw finite-window
+    /// mean of a low note is dominated by the fundamental's partial-cycle
+    /// residue (~A/2πN), not DC (cf. `bass_sub_shaped_and_phase_random`).
+    #[test]
+    fn brass_o13_dc_guard() {
+        let sr = 44100.0;
+        let b = render_brass(57, 41, 127, 1.0, 7);
+        let mut lps = [OnePole::lowpass(8.0, sr); 4];
+        let dc: Vec<f32> = b
+            .iter()
+            .map(|&x| {
+                let mut y = x;
+                for lp in lps.iter_mut() {
+                    y = lp.process(y);
+                }
+                y
+            })
+            .collect();
+        let win = (0.5 * sr) as usize..(0.9 * sr) as usize;
+        let level = rms(&dc[win.clone()]) / rms(&b[win]).max(1e-12);
+        assert!(level < 1e-3, "DC/rms {level:.6} (need < 1e-3)");
+    }
+
+    /// BR-O16 (routing + lifecycle, guard): make() routes 56–63 to their brass
+    /// names; a held note stays alive at 6 s and, on note_off, dies (the shared
+    /// Adsr's exponential release reaches the alive threshold in ≈ 9× the
+    /// release time, so trumpet's 0.12 s release dies in ≈ 1.0 s — the
+    /// appendix's "release + 0.2 s" underestimates that tail); render ADDS into
+    /// its output buffer.
+    #[test]
+    fn brass_o16_routing_and_lifecycle() {
+        let sr = 44100.0;
+        for (prog, name) in [
+            (56u8, "trumpet"),
+            (57, "trombone"),
+            (58, "tuba"),
+            (59, "muted_trumpet"),
+            (60, "french_horn"),
+            (61, "brass_section"),
+            (62, "synth_brass"),
+            (63, "synth_brass"),
+        ] {
+            assert_eq!(
+                make(prog, 60, 100, sr, 7, false).kind(),
+                name,
+                "prog {prog}"
+            );
+        }
+        // held → alive at 6 s
+        let mut v = brass(56, 60, 100, sr, 7);
+        let mut buf = vec![0f32; 4096];
+        let blocks_6s = (6.0 * sr / 4096.0) as usize;
+        for _ in 0..blocks_6s {
+            assert!(v.render(&mut buf), "held brass died before 6 s");
+        }
+        // note_off → dead within a bounded time (exponential-to-1e-4 tail)
+        v.note_off();
+        let mut n = 0;
+        while v.render(&mut buf) && n < 200 {
+            n += 1;
+        }
+        let dead_s = n as f32 * 4096.0 / sr;
+        assert!(
+            dead_s < 1.5,
+            "brass did not die after note_off ({dead_s:.2}s)"
+        );
+        // render ADDS into a pre-filled buffer (does not overwrite)
+        let a = render_brass(56, 60, 100, 0.05, 7);
+        let mut b = vec![0.5f32; a.len()];
+        let mut v2 = brass(56, 60, 100, sr, 7);
+        v2.render(&mut b);
+        assert!(
+            a.iter().zip(&b).all(|(s, o)| (o - (0.5 + s)).abs() < 1e-6),
+            "render overwrote instead of adding into the buffer"
+        );
+    }
+
+    /// Diagnostic print of every oracle's measured value (not a gate).
+    /// `cargo test brass_calibration -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn brass_calibration() {
+        let sr = 44100.0;
+        // BR-O9 (corrected): matched-pitch centroids at several keys + a
+        // high-band brightness proxy (hp_rms 2 kHz / rms), to see which metric
+        // tracks the intended trumpet>horn>trombone>tuba ordering.
+        for key in [48u8, 60, 72] {
+            print!("BR-O9 key{key}: ");
+            for (name, prog) in [("tpt", 56u8), ("horn", 60), ("tbn", 57), ("tuba", 58)] {
+                let b = render_brass(prog, key, 100, 2.0, 7);
+                let seg = &b[(0.4 * sr) as usize..(1.2 * sr) as usize];
+                print!(
+                    "{name} c{:.0}/hp{:.2} ",
+                    centroid(seg, sr),
+                    hp_rms(seg, sr, 2000.0) / rms(seg).max(1e-9)
+                );
+            }
+            println!();
+        }
+        // BR-O2 loudness→brightness (key 69)
+        let c36 = centroid(
+            &render_brass(56, 69, 36, 1.4, 7)[(0.4 * sr) as usize..(1.2 * sr) as usize],
+            sr,
+        );
+        let c120 = centroid(
+            &render_brass(56, 69, 120, 1.4, 7)[(0.4 * sr) as usize..(1.2 * sr) as usize],
+            sr,
+        );
+        println!(
+            "BR-O2 centroid vel120/vel36 = {:.3} ({c120:.0}/{c36:.0})",
+            c120 / c36
+        );
+        // BR-O3 the waa (key 69 vel 100) — EQUAL-length 70 ms windows (Goertzel
+        // centroid leakage depends on window length; the appendix's 70 ms early
+        // vs 200 ms late is not a valid comparison)
+        let b = render_brass(56, 69, 100, 1.0, 7);
+        let early = centroid(&b[(0.03 * sr) as usize..(0.10 * sr) as usize], sr);
+        let late = centroid(&b[(0.30 * sr) as usize..(0.37 * sr) as usize], sr);
+        println!(
+            "BR-O3 waa late/early = {:.3} ({late:.0}/{early:.0})",
+            late / early
+        );
+        // BR-O8 mute vs open (key 74)
+        let m = render_brass(59, 74, 100, 1.0, 7);
+        let o = render_brass(56, 74, 100, 1.0, 7);
+        let ratio = |s: &[f32]| band_rms(s, sr, 500.0, 1.0) / band_rms(s, sr, 1800.0, 1.0);
+        println!(
+            "BR-O8 band(500/1800): mute {:.3} open {:.3} → {:.3}× ; rms mute {:.5} open {:.5}",
+            ratio(&m),
+            ratio(&o),
+            ratio(&m) / ratio(&o),
+            rms(&m),
+            rms(&o)
+        );
+        // BR-O5 growl at the voice level (prog 56, C4=60, vel 80)
+        for g in [0.0f32, 110.0 / 127.0] {
+            let mut v = brass(56, 60, 80, sr, 7);
+            let mut warm = vec![0f32; (0.1 * sr) as usize];
+            v.render(&mut warm);
+            v.set_breath(1.0, g);
+            let mut buf = vec![0f32; (1.6 * sr) as usize];
+            v.render(&mut buf);
+            let seg = &buf[(0.4 * sr) as usize..(1.4 * sr) as usize];
+            let (peak, rate) = env_autocorr_peak(seg, sr, 0.02, 0.05);
+            // direct 30 Hz flutter depth: rms of the 30 Hz-bandpassed envelope
+            // over its mean — clean 0 vs ~0.1 discriminator
+            let mut lp = OnePole::lowpass(200.0, sr);
+            let env: Vec<f32> = seg.iter().map(|&x| lp.process(x.abs())).collect();
+            let mean = env.iter().sum::<f32>() / env.len() as f32;
+            let mut bp = Biquad::bandpass(30.0, 4.0, sr);
+            let flut: Vec<f32> = env.iter().map(|&x| bp.process(x)).collect();
+            println!(
+                "BR-O5 growl={g:.3}: autocorr peak {peak:.3} rate {rate:.1} Hz, flutter30 {:.4}, hp2k {:.5}",
+                rms(&flut) / mean.max(1e-9),
+                hp_rms(seg, sr, 2000.0)
+            );
+        }
+        // BR-O7 section vs solo rise time
+        let sec = render_brass(61, 60, 100, 1.0, 7);
+        let solo = render_brass(56, 60, 100, 1.0, 7);
+        println!(
+            "BR-O7 rise: section {:.4}s solo {:.4}s (Δ={:.4}s)",
+            rise_10_90(&sec, sr),
+            rise_10_90(&solo, sr),
+            rise_10_90(&sec, sr) - rise_10_90(&solo, sr)
+        );
+        // BR-O10 synth sweep decay (prog 62 vs 56, key 60 vel 110)
+        for prog in [62u8, 56] {
+            let b = render_brass(prog, 60, 110, 1.0, 7);
+            let ce = centroid(&b[(0.03 * sr) as usize..(0.15 * sr) as usize], sr);
+            let cl = centroid(&b[(0.6 * sr) as usize..(1.0 * sr) as usize], sr);
+            println!(
+                "BR-O10 prog {prog}: early/late = {:.3} ({ce:.0}/{cl:.0})",
+                ce / cl
+            );
+        }
+        // BR-O11 alias floor (prog 56 key 81 vel 127, growl 0 and 110)
+        for g in [0.0f32, 110.0 / 127.0] {
+            let mut v = brass(56, 81, 127, sr, 7);
+            v.set_breath(1.0, g);
+            let mut buf = vec![0f32; sr as usize];
+            v.render(&mut buf);
+            let seg = &buf[(0.2 * sr) as usize..];
+            let base = mag_at(seg, sr, 1760.0);
+            let worst = [1246.0f32, 2200.0, 3080.0]
+                .iter()
+                .map(|&f| mag_at(seg, sr, f) / base)
+                .fold(0.0f32, f32::max);
+            println!("BR-O11 growl={g:.3}: worst off-bin/mag(1760) = {worst:.4}");
+        }
+        // BR-O13 DC guard (prog 57 key 41 vel 127) — period-aligned window so
+        // the fundamental's partial-cycle residue (~A/2πN) cancels and only true
+        // DC survives (the raw finite-window mean is fundamental-dominated)
+        let b = render_brass(57, 41, 127, 2.5, 7);
+        let f0 = key_freq(41);
+        let per = sr / f0;
+        let start = (0.3 * sr) as usize;
+        for span in [0.6f32, 1.6, 2.0] {
+            let nper = ((span * sr) / per).floor();
+            let len = (nper * per) as usize;
+            let seg_al = &b[start..start + len];
+            let m_al = seg_al.iter().map(|&x| x as f64).sum::<f64>() / seg_al.len() as f64;
+            // DC via a 4-pole 8 Hz lowpass, settled region
+            let mut lps = [OnePole::lowpass(8.0, sr); 4];
+            let dc: Vec<f32> = b
+                .iter()
+                .map(|&x| {
+                    let mut y = x;
+                    for lp in lps.iter_mut() {
+                        y = lp.process(y);
+                    }
+                    y
+                })
+                .collect();
+            let dcm = &dc[(0.6 * sr) as usize..(2.4 * sr) as usize];
+            let dc_lvl = rms(dcm) / rms(&b[(0.6 * sr) as usize..(2.4 * sr) as usize]).max(1e-12);
+            println!(
+                "BR-O13 span {span}: aligned |mean|/rms {:.6}; 4pole-8Hz DC/rms {:.6}",
+                m_al.abs() as f32 / rms(seg_al).max(1e-12),
+                dc_lvl
+            );
+        }
+        // BR-O1 sustain ratio
+        let b = render_brass(56, 69, 100, 2.2, 7);
+        println!(
+            "BR-O1 sustain ratio = {:.3}",
+            rms(&b[(1.45 * sr) as usize..(1.85 * sr) as usize])
+                / rms(&b[(0.15 * sr) as usize..(0.45 * sr) as usize])
+        );
+        // lifecycle: death time after note_off (prog 56, release 0.12)
+        let mut v = brass(56, 60, 100, sr, 7);
+        let mut buf = vec![0f32; 4096];
+        for _ in 0..30 {
+            v.render(&mut buf);
+        }
+        v.note_off();
+        let mut blocks = 0;
+        while v.render(&mut buf) && blocks < 500 {
+            blocks += 1;
+        }
+        println!(
+            "lifecycle: dead {:.3}s after note_off ({blocks} blocks)",
+            blocks as f32 * 4096.0 / sr
         );
     }
 

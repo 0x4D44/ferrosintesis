@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `96a8c6b62c16a75965138663a191cfce5987282e`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `dc2bf8b6187a2434b88b2edd2786edf5955fc168`)
 
 ## Statement
 The string-ensemble (48–51) and choir (52–54) SawStack voices must answer the
@@ -34,7 +34,7 @@ Manual reqs-loop build on branch `task/20260708-TSK-HUM-reqs-loop-mm-req-00009`.
 Exact Gate 2 oracle command:
 
 ```powershell
-$null | cargo test strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in --manifest-path fable5/hollowsynth/Cargo.toml
+$null | deltic timeout 180 cargo test strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in --manifest-path fable5/hollowsynth/Cargo.toml
 ```
 
 Passing output recorded on 2026-07-08:
@@ -43,7 +43,7 @@ Passing output recorded on 2026-07-08:
 running 1 test
 test engine::tests::strings_choir_cc1_vibrato_and_cc68_legato_are_opt_in ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 105 filtered out; finished in 8.23s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 107 filtered out; finished in 11.39s
 
 running 0 tests
 
@@ -67,13 +67,13 @@ deltic timeout 120 cargo fmt --check --manifest-path fable5/hollowsynth/Cargo.to
 PASS
 
 $null | deltic timeout 300 cargo test --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: 104 passed; 0 failed; 2 ignored
+PASS: 106 passed; 0 failed; 2 ignored; finished in 8.74s
 
 $null | deltic timeout 300 cargo clippy --manifest-path fable5/hollowsynth/Cargo.toml --all-targets -- -D warnings
-PASS: Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.00s
+PASS: Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.94s
 
 deltic timeout 300 cargo build --release --manifest-path fable5/hollowsynth/Cargo.toml
-PASS: Finished `release` profile [optimized] target(s) in 3.76s
+PASS: Finished `release` profile [optimized] target(s) in 4.06s
 ```
 
 Existing-MIDI and prior-render safety:
@@ -101,9 +101,10 @@ Adversarial self-review:
 oracle-fit reviewer confirmed two initial oracle gaps: only GM 48/52 sampled, and CC68 proved one spawned voice but not retuned pitch. The oracle was strengthened to cover every GM 48-54 program and verify the slurred pitch retunes to key 64.
 compatibility reviewer confirmed the existing MIDI exception set is non-empty, verified no inherited-controller leak, and reran the focused oracle green.
 landing-hygiene reviewer confirmed the expected conflict risk with the parallel v0.9 worktree: this patch conflicts there in Cargo.toml, Cargo.lock, README.md, engine.rs, and voices.rs. That is an integration sequencing risk, not a local correctness blocker.
+integration reviewer resolved the `engine.rs::vibrato_family` rebase conflict by keeping both trunk's GM110 fiddle CC1 vibrato and this req's GM48-54 SawStack CC1 vibrato; no conflict markers remain.
 ```
 
-Post-rebase note: rebased onto `origin/main` at `c0cd5cd` after the hollowsynth
-realtime API landed. The implementation commit became
-`96a8c6b62c16a75965138663a191cfce5987282e`; the package version was advanced to
-`0.8.4` because trunk already carried `0.8.3`.
+Post-integration rebase note: rebased onto `origin/main` at `29a460d` after
+`MM-REQ-KILN-00001` and `MM-REQ-KILN-00004` landed. The implementation commit
+became `dc2bf8b6187a2434b88b2edd2786edf5955fc168`; the package version was
+advanced to `0.8.6` because trunk already carried `0.8.5`.

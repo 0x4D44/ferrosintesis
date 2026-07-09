@@ -223,6 +223,8 @@ class SongSpec:
     percussion: bool = False
     celesta: bool = True
     low_pulse: bool = False
+    low_string_floor: int = 36
+    low_string_pan: int = 64
 
     @property
     def filename(self) -> str:
@@ -480,6 +482,13 @@ def setup_expression(track: MidiTrack, channel: int, spec: SongSpec, volume: int
             track.cc(channel, 11, max(24, min(112, value + 8)), bar_beat(bar, 2.0))
 
 
+def low_string_pitch(spec: SongSpec, bass: int) -> int:
+    pitch = int(bass) - 12
+    while pitch < spec.low_string_floor:
+        pitch += 12
+    return pitch
+
+
 def add_piano(track: MidiTrack, spec: SongSpec, rng: random.Random, end_tick: int) -> None:
     track.program(0, 0)
     setup_expression(track, 0, spec, 90, 54)
@@ -578,16 +587,17 @@ def add_strings(
     setup_expression(viola, 2, spec, 70, 62)
     setup_expression(violin, 3, spec, 70, 78)
     setup_expression(ensemble, 4, spec, 62, 58)
-    setup_expression(basses, 5, spec, 72, 36)
+    setup_expression(basses, 5, spec, 72, spec.low_string_pan)
 
     for bar in range(4, spec.bars):
         intensity = interpolate(spec.intensity, bar)
         chord = chord_tones(spec, spec.progression[bar % len(spec.progression)])
+        bass_pitch = low_string_pitch(spec, int(chord["bass"]))
         if spec.low_pulse and intensity > 0.58:
             for beat in (0.0, 1.5, 2.0, 3.5):
-                basses.note(5, int(chord["bass"]) - 12, bar_beat(bar, beat), 0.72, int(26 + intensity * 42), end_tick, jitter=5, rng=rng)
+                basses.note(5, bass_pitch, bar_beat(bar, beat), 0.72, int(26 + intensity * 42), end_tick, jitter=5, rng=rng)
         elif bar % 2 == 0:
-            basses.note(5, int(chord["bass"]) - 12, bar_beat(bar), 7.5, int(24 + intensity * 34), end_tick, jitter=7, rng=rng)
+            basses.note(5, bass_pitch, bar_beat(bar), 7.5, int(24 + intensity * 34), end_tick, jitter=7, rng=rng)
 
         if bar % 2 == 0:
             pad = list(chord["pad"])
@@ -617,7 +627,7 @@ def add_strings(
     for index, pitch in enumerate(list(final_chord["pad"])[:4]):
         ensemble.note(4, pitch, bar_beat(final_bar, index * 0.24), 15.3 - index * 0.24, 25 + index * 4, end_tick, jitter=2, rng=rng)
     cello.note(1, int(final_chord["bass"]) + 12, bar_beat(final_bar), 15.2, 34, end_tick, jitter=2, rng=rng)
-    basses.note(5, int(final_chord["bass"]) - 12, bar_beat(final_bar), 15.2, 28, end_tick, jitter=2, rng=rng)
+    basses.note(5, low_string_pitch(spec, int(final_chord["bass"])), bar_beat(final_bar), 15.2, 28, end_tick, jitter=2, rng=rng)
 
 
 def add_celesta(track: MidiTrack, spec: SongSpec, rng: random.Random, end_tick: int) -> None:

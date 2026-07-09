@@ -1,5 +1,11 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.09 — A repo-wide GM43 contrabass scan after the Spark/Hours bass-floor
+  fix still found below-C2 notes outside that task: `albums/fable5/The Ninth Bell/midi/01 - The Ninth Bell.mid`
+  (`contrabass`, ch13, min MIDI 28, centered), plus VIGIL MIDI-only files
+  `albums/opus4-8/midi/02 - First Light.mid`, `04 - Undertow.mid`, and
+  `11 - What Remains.mid` (min MIDI 31-34). Triage by listening before changing;
+  they are not the same left-panned Spark/Hours pattern.
 - [ ] 2026.07.09 — `origin/main` `8048a64` is red on
   `altbank::tests::sawstack_v1_canary_frozen`: clean trunk and
   `MM-REQ-KILN-00013` both report `pad(89) SawStack drifted`, observed hash

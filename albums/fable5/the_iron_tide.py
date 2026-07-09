@@ -225,17 +225,17 @@ def add_ostinato(track: MidiTrack, rng: random.Random) -> None:
 
 def add_low_strings(track: MidiTrack, rng: random.Random) -> None:
     track.program(2, 43)
-    setup_expression(track, 2, 88, 44)
+    setup_expression(track, 2, 88, 64)
     for bar in range(0, 92, 2):
         level = intensity_at(bar)
         root, _ = chord_at(bar)
         # Long pedal tones, breaking into a driving pulse at high intensity.
         if level > 0.7:
             for beat in (0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0):
-                track.note(2, root - 12, bar_beat(bar, beat), 0.85, int(36 + level * 40), jitter=4, rng=rng)
+                track.note(2, root, bar_beat(bar, beat), 0.85, int(36 + level * 40), jitter=4, rng=rng)
         else:
-            track.note(2, root - 12, bar_beat(bar), 7.7, int(30 + level * 36), jitter=5, rng=rng)
-    track.note(2, 26, bar_beat(92), 15.5, 40)  # final low D pedal
+            track.note(2, root, bar_beat(bar), 7.7, int(30 + level * 36), jitter=5, rng=rng)
+    track.note(2, 38, bar_beat(92), 15.5, 40)  # final low D pedal
 
 
 def add_cello(track: MidiTrack, rng: random.Random) -> None:

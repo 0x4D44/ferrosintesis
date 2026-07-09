@@ -78,11 +78,12 @@ Zero external dependencies; `[profile.release]` uses LTO. Module map (`src/`):
 - `reverb.rs`, `wav.rs` — Freeverb tank; 16-bit PCM writer with TPDF dither.
 - `testutil.rs` — pitch (Goertzel), RMS, click-detection helpers for the audio oracles.
 
-**hollowsynth does not model every GM program.** It voices a curated subset; brass and
-reeds (GM ~55–71) are historically **unmodeled** (v0.9 is adding them — see `tmp_v09_hld/`
-and `wrk_docs/…v0.9…`). Album engines keep a program whitelist and verify nothing strays
-into unmodeled ranges. Read the family/GM-program table in `fable5/hollowsynth/README.md`
-before assuming a program will sound right.
+**hollowsynth does not model every GM program**, but as of v0.9 the orchestral middle is
+filled: **brass 56–63** and **reeds 64–71** are now modelled voices (v0.9), joining the
+orchestra hit 55, strings 48–51 and choir 52–54. A few ranges are still curated fallbacks
+(e.g. GM sound-effects 120–127 render as toneless noise). Album engines keep a program
+whitelist and verify nothing strays into an unintended range. Read the family/GM-program
+table in `fable5/hollowsynth/README.md` before assuming a program will sound right.
 
 **The "authored channel" invariant — new synth features must stay opt-in.** Every added
 CC feature (CC1 vibrato/Leslie, CC64/68/74, CC70 vowels, RPN, aftertouch…) engages only

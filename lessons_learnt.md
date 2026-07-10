@@ -72,16 +72,6 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   layer: centre sustained beds (pan 64) and get width from panning
   transient sources — don't touch the shared chorus bus (it's near
   mono-neutral and shared across all albums).
-- 2026.07.07 (rev 2026.07.09) — **Controller features opt-in; timbre
-  improvements default-on; always run the render-diff inventory.** CC
-  features engage only once a channel authors them (correct MIDI
-  semantics — any render diff is a bug). Instrument/timbre improvements
-  become the default sound; the duty is to refresh the affected
-  `listening/*.opus` in the same task, not to freeze old albums. Either
-  way, render all `render_opus.py::ALBUMS` MIDIs against a scratch
-  `git worktree add HEAD` baseline binary and `cmp` — a report defining
-  the refresh set and catching unintended leakage. (Doctrine reworded by
-  Arthur's call; full text in CLAUDE.md.)
 - 2026.07.08 — **Encode the dramatic shape as an oracle, twice.** The
   Ninth Bell's "builds and drops" brief became `check_arc` — inequalities
   on per-bar velocity sums (ascent < ascent, void ≤ 0.25× processional,
@@ -125,3 +115,11 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   producing MIDI 12-23 sustained notes panned left; ferrosintesis turns that into
   sub-bass flatulence. Clamp/raise contrabass beds to at least C2 (MIDI 36) and
   keep sustained low strings centered unless the track has an explicit reason not to.
+- 2026.07.10 — **Build and render only in a task worktree — never the main
+  clone.** `render_opus.py` rewrites committed `listening/*.opus` in place, and
+  `cargo` / `build.py` write `.wav` / `target/` / `.mid` into the tree; run from
+  the main clone `D:\language\midi-music` they dirty the sacred trunk-holder and
+  block its `git pull --ff-only`. The git guards protect the ref, not the working
+  tree, so nothing stops a Python/cargo run from soiling it. A drum-kit-v3 render
+  done in the main clone left 60+ stray files shadowing an already-committed
+  branch; `git status` the main clone if a build/render ever ran there.

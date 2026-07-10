@@ -149,7 +149,8 @@ PART = conductor.Part(
         (CH_HIT, "orchestra hit (the crowd)", 55, 102, 58, 45),
         (CH_VIBE, "vibraphone", 11, 92, 76, 60),
     ],
-    program_changes=[(CH_KIT, 0.0, 1)],      # any non-zero = v2 kit
+    bank_selects=[(6, 1), (8, 1)],           # taiko + riser: percussion set B
+    program_changes=[(CH_KIT, 0.0, 1)],      # non-zero kit program (V3 default)
     extra_markers=[
         (RISER_T0, "the last breath"),
         (460.0, "home water"),
@@ -942,9 +943,15 @@ def build_plunge(sc: en.Score) -> None:
 # ---------------------------------------------------------------------------
 
 def build_splash(sc: en.Score) -> None:
+    # Impact micro-stagger: five sample-aligned attack transients summed in
+    # ONE sample step and tripped the render click scan (23278 > 22000 under
+    # the v0.12 synth). A real splash smears over milliseconds — offsets of
+    # 5-10 ms decorrelate the attacks while every velocity (and so the
+    # splash_energy_max oracle) is unchanged; the tam stays the on-beat
+    # strike inside splash_anatomy's 0.05-beat window.
     sc.note(CH_TAM, 46, SPLASH_T0, 8.0, 122, jt=0, jv=0)
-    sc.note(CH_TAIKO, 38, SPLASH_T0, 0.5, 122, jt=0, jv=2)
-    sc.note(CH_TAIKO, 45, SPLASH_T0, 0.5, 116, jt=0, jv=2)
+    sc.note(CH_TAIKO, 38, SPLASH_T0 + 0.010, 0.5, 122, jt=0, jv=2)
+    sc.note(CH_TAIKO, 45, SPLASH_T0 + 0.020, 0.5, 116, jt=0, jv=2)
     for i in range(1, 16):
         sc.note(CH_TAIKO, 38 if i % 2 else 43, SPLASH_T0 + 0.25 * i, 0.22,
                 round(en.lerp(112, 62, i / 15)), jt=1, jv=3)
@@ -958,8 +965,8 @@ def build_splash(sc: en.Score) -> None:
                             (36, 262.5, 88), (43, 262.0, 86),
                             (41, 263.0, 74)):
         sc.hit(drum, beat, vel, jt=1, jv=3)
-    sc.note(CH_LO, 46, SPLASH_T0, 7.9, 96, jt=0, jv=2)
-    sc.note(CH_LO, 41, SPLASH_T0, 7.9, 88, jt=0, jv=2)
+    sc.note(CH_LO, 46, SPLASH_T0 + 0.015, 7.9, 96, jt=0, jv=2)
+    sc.note(CH_LO, 41, SPLASH_T0 + 0.025, 7.9, 88, jt=0, jv=2)
     en.cc_curve(sc, CH_LO, 11, [(260.0, 118), (267.5, 60)], step=0.5)
     # bar two: the wash — bubbles roaring past, already darkening
     for p in (58, 61, 65):

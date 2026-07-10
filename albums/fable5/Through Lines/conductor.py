@@ -82,7 +82,8 @@ class Part:
                  keysigs: list[tuple[float, int, int]],
                  channels: list[tuple[int, str, int, int, int, int]],
                  program_changes: list[tuple[int, float, int]] = (),
-                 extra_markers: list[tuple[float, str]] = ()) -> None:
+                 extra_markers: list[tuple[float, str]] = (),
+                 bank_selects: list[tuple[int, int]] = ()) -> None:
         self.number = number
         self.title = title
         self.file = file
@@ -93,6 +94,7 @@ class Part:
         self.CHANNELS = channels
         self.PROGRAM_CHANGES = list(program_changes)
         self.EXTRA_MARKERS = list(extra_markers)
+        self.BANK_SELECTS = list(bank_selects)
         self.END_BEAT = movements[-1][2]
 
     def setup(self, sc: en.Score) -> None:
@@ -111,3 +113,7 @@ class Part:
             sc.channel(ch, name, prog, volume=vol, pan=pan, reverb=rev)
         for ch, beat, prog in self.PROGRAM_CHANGES:
             sc.program(ch, prog, beat)
+        # CC0 bank select at beat 0 (ferrosintesis alt-bank: nonzero opts the
+        # channel into the alternate voicings — percussion set B / gong).
+        for ch, val in self.BANK_SELECTS:
+            sc.cc(ch, 0, val, 0.0)

@@ -258,6 +258,7 @@ PART = conductor.Part(
         (DRUMS, "kit", 0, 100, 64, 42),
         (CH_HIT, "orchestra hit", 55, 100, 64, 50),
     ],
+    bank_selects=[(7, 1), (10, 1)],   # taiko + the 119 window: set B (prog 55 passes through the alt bank untouched)
     program_changes=[
         (DRUMS, 0.0, 1),          # kit v2 (sizzle hats, snare rattle)
         (DRUMS, M3, 40),          # brush kit for the Bar Car

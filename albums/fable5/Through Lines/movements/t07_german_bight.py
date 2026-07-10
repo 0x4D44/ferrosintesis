@@ -133,7 +133,8 @@ PART = conductor.Part(
         (CH_CHOIR, "choir", 52, 100, 64, 62),
         (CH_RISER, "riser (reverse cymbal)", 119, 95, 64, 55),
     ],
-    program_changes=[(CH_KIT, 0.0, 1)],       # any non-zero = v2 kit
+    bank_selects=[(5, 1), (8, 1), (12, 1)],   # taiko/signal bell/riser: set B
+    program_changes=[(CH_KIT, 0.0, 1)],       # non-zero kit program (V3 default)
     extra_markers=[
         (MORSE_T0, "the signal: GERMAN BIGHT"),
         (CHORALE_T0, "the chorale, unbroken"),

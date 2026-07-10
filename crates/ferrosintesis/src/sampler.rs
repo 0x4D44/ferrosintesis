@@ -431,6 +431,21 @@ fn clarinet_f() -> &'static [Zone] {
     })
 }
 
+fn nylon() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "nylon_E2.wav" => 82.47,
+            "nylon_B2.wav" => 124.07,
+            "nylon_E3.wav" => 165.21,
+            "nylon_A#3.wav" => 234.63,
+            "nylon_E4.wav" => 326.69,
+            "nylon_A#4.wav" => 466.15,
+            "nylon_E5.wav" => 661.48,
+        )
+    })
+}
+
 fn drum_crash() -> &'static [HitSample] {
     static B: OnceLock<Vec<HitSample>> = OnceLock::new();
     B.get_or_init(|| {
@@ -552,6 +567,13 @@ pub fn reed_bank(program: u8, vel: u8) -> &'static [Zone] {
     }
 }
 
+/// Bank for the layered nylon guitar (GM 24). The FreePats source has one
+/// take per note — no velocity layers, no round robins — so the bank is
+/// flat; `LaVoice`'s `vel_amp` still scales the transient with velocity.
+pub fn guitar_bank() -> &'static [Zone] {
+    nylon()
+}
+
 pub fn drum_crash_bank() -> &'static [HitSample] {
     drum_crash()
 }
@@ -582,6 +604,7 @@ pub fn prewarm() {
         let _ = reed_bank(program, 1);
         let _ = reed_bank(program, 127);
     }
+    let _ = guitar_bank();
     let _ = drum_crash_bank();
     let _ = drum_kick_bank();
     let _ = drum_snare_bank();
@@ -868,6 +891,7 @@ mod tests {
             .chain(bassoon_f())
             .chain(clarinet_p())
             .chain(clarinet_f())
+            .chain(nylon())
         {
             assert!(z.data.len() > 20_000, "zone too short: {}", z.data.len());
             // the tuba bank reaches A#0 (~29 Hz), hence the low floor
@@ -1047,6 +1071,65 @@ mod tests {
         }
     }
 
+    /// The nylon-guitar sample layer must not shift perceived pitch: Goertzel
+    /// peak through the crossfade window, several keys including both repitch
+    /// edges (key 40 sits on the E2 zone; 45/57/68 land between zones; 79 is
+    /// repitched up ~3 st from the top E5 zone).
+    #[test]
+    fn la_guitar_pitch_integrity() {
+        let sr = 44100.0;
+        for key in [40u8, 45, 52, 57, 64, 68, 79] {
+            let f0 = crate::dsp::key_freq(key);
+            let mut v = voices::make(24, key, 100, sr, 5, true);
+            let mut buf = vec![0f32; 44100];
+            v.render(&mut buf);
+            // 0.10–0.40 s spans the fade tail and the handed-over KS string
+            let hz = crate::testutil::peak_locate(&buf[4410..17640], sr, f0 * 0.8, f0 * 1.25);
+            let cents = 1200.0 * (hz / f0).log2();
+            assert!(
+                cents.abs() < 45.0,
+                "nylon key {key}: layered pitch {hz:.2} Hz vs nominal {f0:.2} Hz ({cents:.0} cents)"
+            );
+        }
+    }
+
+    /// The guitar layer must be audible, not just present: samples-on vs
+    /// samples-off must differ materially in the first 50 ms. Measured
+    /// direction (as reeds, not brass): the real pick onset is markedly LESS
+    /// hissy than the model's synthetic attack-noise burst (at the HLD's
+    /// initial 0.45 wrap gain, hf-frac on/off measured 0.07/0.46, 0.04/0.63,
+    /// 0.23/0.47 for keys 45/52/64; direction unchanged at the level-matched
+    /// 0.25) — the realism gain is replacing broadband noise with a woody
+    /// pick transient, so the oracle asserts the layer never makes the
+    /// attack hissier.
+    #[test]
+    fn la_guitar_attack_sharpness() {
+        let sr = 44100.0;
+        for key in [45u8, 52, 64] {
+            let early = |samples: bool| {
+                let mut v = voices::make(24, key, 100, sr, 5, samples);
+                let mut buf = vec![0f32; (0.05 * sr) as usize];
+                v.render(&mut buf);
+                buf
+            };
+            let (on, off) = (early(true), early(false));
+            let diff: Vec<f32> = on.iter().zip(&off).map(|(a, b)| a - b).collect();
+            let (d, o) = (crate::testutil::rms(&diff), crate::testutil::rms(&off));
+            assert!(
+                d > 0.3 * o,
+                "nylon key {key}: onset barely changes with the layer (diff {d:.5} vs off {o:.5})"
+            );
+            let hf_frac = |buf: &[f32]| {
+                crate::testutil::hp_rms(buf, sr, 1500.0) / crate::testutil::rms(buf).max(1e-9)
+            };
+            let (r_on, r_off) = (hf_frac(&on), hf_frac(&off));
+            assert!(
+                r_on < r_off * 1.05,
+                "nylon key {key}: sampled attack hissier than the model: hf-frac on {r_on:.4} vs off {r_off:.4}"
+            );
+        }
+    }
+
     /// The sampled attack must hand over to the model without a level jump.
     #[test]
     fn la_level_continuity() {
@@ -1066,6 +1149,7 @@ mod tests {
             (69u8, 64, "english-horn"),
             (70u8, 48, "bassoon"),
             (71u8, 60, "clarinet"),
+            (24u8, 52, "nylon-guitar"),
         ] {
             let mut v = voices::make(program, key, 100, sr, 5, true);
             let mut buf = vec![0f32; 44100]; // 1 s, note held

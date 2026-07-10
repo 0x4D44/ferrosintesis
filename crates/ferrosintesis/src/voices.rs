@@ -1789,7 +1789,7 @@ impl KsLoop {
 /// secondary rise (oracle 15), weak enough to keep long notes bounded —
 /// each loop stays a contraction (loop_gain < 1) and the skew-symmetric
 /// cross-injection adds no energy (V4/DSP-5).
-const K_COUPLE: f32 = 0.02;
+pub(crate) const K_COUPLE: f32 = 0.02;
 
 /// G6 release-darken targets: while released, each polarization's damper
 /// glides toward this floor at control rate (already-dark presets are
@@ -5897,6 +5897,24 @@ mod tests {
         band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend, hp_rms, mag_at,
         peak_locate, rms, spectral_band_rms, spectral_centroid,
     };
+
+    #[test]
+    fn fold_key_preserves_pitch_class_inside_each_callsite_range() {
+        for (lo, hi) in [(72, 108), (60, 96), (45, 96), (36, 47)] {
+            for key in 0..=127 {
+                let folded = fold_key(key, lo, hi);
+                assert!(
+                    (lo..=hi).contains(&folded),
+                    "key {key} folded to {folded}, outside {lo}..={hi}"
+                );
+                assert_eq!(
+                    folded % 12,
+                    key % 12,
+                    "key {key} changed pitch class in {lo}..={hi}"
+                );
+            }
+        }
+    }
 
     /// Lowpass twice, then count rising zero crossings.
     fn measure_pitch(seg: &[f32], sr: f32) -> f32 {

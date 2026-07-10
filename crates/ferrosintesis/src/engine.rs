@@ -766,6 +766,10 @@ pub(crate) struct EngineCore {
 
 impl EngineCore {
     pub(crate) fn new(opt: CoreOptions) -> Self {
+        let opt = CoreOptions {
+            samples: opt.samples && crate::embedded_samples_available(),
+            ..opt
+        };
         let sr = opt.sr;
         Self {
             opt,
@@ -2000,6 +2004,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "embedded-samples")]
     #[test]
     fn samples_option_reaches_channel_10_drums() {
         let sr = 44100.0;

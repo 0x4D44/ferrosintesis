@@ -102,8 +102,9 @@ engine.py  ─▶  .mid  ─▶  ferrosintesis ─▶ .wav ─▶ ropusenc ─�
   and the music is *composed to pass them* — `build.py --verify` runs the table. The
   newest albums add an `analyze.py` that re-checks key oracles against the rendered
   audio, because presence in the MIDI is not audibility in the render.
-- **[ferrosintesis](crates/ferrosintesis/README.md)** is a zero-dependency Rust
-  MIDI-to-WAV synthesizer — modeled instruments (not a sample library), with a thin
+- **[ferrosintesis](crates/ferrosintesis/README.md)** is a Rust MIDI-to-WAV
+  synthesizer with zero third-party code dependencies — modeled instruments
+  (not a sample library), with a thin
   LA-synthesis layer that crossfades real attack transients into the modeled sustain.
   It is *voiced* for the Fable 5 albums; the other composers' albums are faithful
   General-MIDI renders through the same engine used as a general player.

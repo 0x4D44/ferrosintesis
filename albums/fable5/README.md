@@ -213,7 +213,8 @@ python ".\Hollow Hill\build.py" --verify
 ```
 
 For listening, render the MIDI with [ferrosintesis](../../crates/ferrosintesis/README.md) —
-a zero-dependency Rust MIDI-to-WAV synthesizer voiced for this album
+a Rust MIDI-to-WAV synthesizer with zero third-party code dependencies, voiced
+for this album
 (modeled instruments plus LA-style sampled attacks on the solo voices).
 
 ## The Iron Tide

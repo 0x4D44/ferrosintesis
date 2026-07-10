@@ -10,7 +10,8 @@ two kinds of code that meet at the MIDI file:
 
 1. **Composition engines** — per-album **Python** (standard-library only) that emit
    `.mid` files. One engine per album; the album *is* the code plus its rendered MIDI.
-2. **ferrosintesis** — a **zero-dependency Rust** MIDI-to-WAV synthesizer
+2. **ferrosintesis** — a Rust MIDI-to-WAV synthesizer with **zero third-party
+   code dependencies**
    (`crates/ferrosintesis/`) that renders those MIDIs to audio. It is voiced for the
    *fable5* (Mike-Oldfield-idiom) albums but plays any GM file as a faithful player.
 
@@ -27,8 +28,10 @@ intermediate.
 model-dir root or in a named subfolder. `listening/` holds tagged `.opus` listening
 copies grouped by artist and album for drag-and-drop playback.
 `crates/ferrosintesis/` is the synth library; `crates/ferrosintesis-cli/` is the
-offline WAV renderer. `demos/` holds synth test pieces; `wrk_docs/` design + review
-docs; `wrk_journals/` engineer's log.
+offline WAV renderer. `crates/ferrosintesis-samples-{core,orchestral}/` are the two
+default embedded asset crates; their generator and full provenance live under
+`tools/ferrosintesis-samples/`. `demos/` holds synth test pieces; `wrk_docs/` holds
+design and review docs; `wrk_journals/` is the engineer's log.
 
 ## Commands
 
@@ -76,7 +79,10 @@ Requires a built `ferrosintesis` CLI (see above) and `ropusenc` on PATH (from th
 
 ## ferrosintesis architecture
 
-Zero external dependencies; `[profile.release]` uses LTO. Module map (`src/`):
+Zero third-party code dependencies; `[profile.release]` uses LTO. The default
+`embedded-samples` Cargo feature compiles the two asset crates into the final binary;
+`default-features = false` builds the modeled-only synth without downloading them.
+Module map (`src/`):
 
 - `midi.rs` — GM file parser → tempo map, events, markers.
 - `engine.rs` — the render loop and the **mix**: channel strips (CC7/11/10/64/74/91/93/94),
@@ -87,8 +93,9 @@ Zero external dependencies; `[profile.release]` uses LTO. Module map (`src/`):
   CathedralOrgan, SawStack, Lead, Wind, Bowed). Instrument voicing constants live at the top.
 - `drums.rs` — parametric GM channel-10 percussion.
 - `dsp.rs` — filters, oscillators, shared DSP primitives.
-- `sampler.rs` — the **LA-synthesis** layer: short public-domain PCM attack transients
-  (embedded in the binary) crossfaded into the modeled sustain for piano/fiddle/flute.
+- `sampler.rs` — the **LA-synthesis** layer: 202 public-domain PCM attack transients
+  (16.68 MiB source, supplied by two default embedded asset crates) crossfaded into
+  modeled instrument bodies and sustains.
 - `reverb.rs`, `wav.rs` — Freeverb hall plus the cathedral feedback-delay network;
   16-bit PCM writer with TPDF dither.
 - `testutil.rs` — pitch (Goertzel), RMS, click-detection helpers for the audio oracles.
@@ -120,7 +127,7 @@ listening assets to refresh; *unexpected* diffs (a brass change altering a piano
 album, DC on silent channels) are bugs — investigate before committing. For a pure
 controller feature, any diff at all is a bug.
 
-ferrosintesis is versioned (`Cargo.toml`, currently 0.13.0); a shipped-code change needs one
+ferrosintesis is versioned (`Cargo.toml`, currently 0.13.2); a shipped-code change needs one
 version bump per integrated task.
 
 ## Composition-engine architecture
@@ -165,10 +172,11 @@ Two shapes:
 | `album_manifest.json` | machine-readable metadata (tracks, durations, movement map) |
 | `ALBUM.md`, `README.md` | human track notes + regenerate/verify instructions |
 
-`.gitignore` drops `.wav` (reproducible) **except** `crates/ferrosintesis/samples/*.wav` —
-those are the synth's attack-transient sample bank, which is **source, not output**. Never
-treat them as regenerable. Commit an album as one atomic bundle (sources + `.mid` +
-manifest + docs); render/commit `listening/*.opus` separately.
+`.gitignore` drops `.wav` (reproducible) **except** the files under
+`crates/ferrosintesis-samples-{core,orchestral}/samples/` — those 202 WAVs are the
+synth's 16.68 MiB attack-transient bank, which is **source, not output**. Never treat
+them as regenerable. Commit an album as one atomic bundle (sources + `.mid` + manifest
+and docs); render/commit `listening/*.opus` separately.
 
 ## Before you start
 

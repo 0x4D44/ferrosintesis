@@ -1115,6 +1115,7 @@ pub fn make(
     kit: Kit,
     samples: bool,
 ) -> Option<Box<dyn Voice>> {
+    let samples = samples && crate::embedded_samples_available();
     // `kit` selects the legacy test kits or the shipped V3 default. Only V3
     // gets sample overlays, and only when the caller's sample flag is enabled.
     let v = vel_amp(vel);
@@ -2199,6 +2200,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "embedded-samples")]
     #[test]
     fn v3_sample_overlay_engages_for_crash_kick_and_snare() {
         for key in [49u8, 36, 38] {

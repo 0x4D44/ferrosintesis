@@ -5623,6 +5623,7 @@ fn brass(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Brass {
 }
 
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
+    let samples = samples && crate::embedded_samples_available();
     let noise_off = (0.0, 0.01, 1000.0, 1.0);
     match program {
         0..=3 => {
@@ -6465,13 +6466,16 @@ mod tests {
             hashes.push(h);
         }
 
-        let ac_plain = render_program_sampled(0, key, vel, 0.35, seed, false);
-        let ac_sampled = render_program_sampled(0, key, vel, 0.35, seed, true);
-        assert_ne!(
-            render_hash(&ac_plain),
-            render_hash(&ac_sampled),
-            "GM0 sample-layer positive control did not differ"
-        );
+        #[cfg(feature = "embedded-samples")]
+        {
+            let ac_plain = render_program_sampled(0, key, vel, 0.35, seed, false);
+            let ac_sampled = render_program_sampled(0, key, vel, 0.35, seed, true);
+            assert_ne!(
+                render_hash(&ac_plain),
+                render_hash(&ac_sampled),
+                "GM0 sample-layer positive control did not differ"
+            );
+        }
         for program in 4u8..=7 {
             let plain =
                 render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, false);

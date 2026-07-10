@@ -2,6 +2,8 @@
 members = [
     "crates/ferrosintesis",
     "crates/ferrosintesis-cli",
+    "crates/ferrosintesis-samples-core",
+    "crates/ferrosintesis-samples-orchestral",
 ]
 resolver = "2"
 

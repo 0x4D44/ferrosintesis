@@ -4,8 +4,8 @@
 //! sustain, which keeps all its expressive vibrato, scoop and dynamics.
 //!
 //! The transients are trimmed from VSCO 2 Community Edition (CC0 / public
-//! domain) sustains and embedded in the binary, so the tool remains a
-//! single self-contained executable. Each zone's root frequency was
+//! domain) sustains and embedded from two compile-time asset crates, so the tool
+//! remains a single self-contained executable. Each zone's root frequency was
 //! measured by autocorrelation, so repitching is cent-accurate.
 
 use crate::dsp::{key_freq, vel_amp};
@@ -50,11 +50,23 @@ fn parse_wav(bytes: &[u8]) -> Vec<f32> {
     data
 }
 
+#[cfg(feature = "embedded-samples")]
+fn embedded_wav(name: &str) -> &'static [u8] {
+    ferrosintesis_samples_core::get(name)
+        .or_else(|| ferrosintesis_samples_orchestral::get(name))
+        .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
+}
+
+#[cfg(not(feature = "embedded-samples"))]
+fn embedded_wav(name: &str) -> &'static [u8] {
+    panic!("sample {name} requested from a modeled-only ferrosintesis build")
+}
+
 macro_rules! bank {
     ($($file:literal => $root:expr),+ $(,)?) => {
         vec![$(Zone {
             root: $root,
-            data: parse_wav(include_bytes!(concat!("../samples/", $file))),
+            data: parse_wav(embedded_wav($file)),
         }),+]
     };
 }
@@ -62,12 +74,13 @@ macro_rules! bank {
 macro_rules! hit_bank {
     ($($file:literal),+ $(,)?) => {
         vec![$(HitSample {
-            data: parse_wav(include_bytes!(concat!("../samples/", $file))),
+            data: parse_wav(embedded_wav($file)),
         }),+]
     };
 }
 
-// Roots measured by autocorrelation in the prep script (see samples/README.md).
+// Roots measured by autocorrelation in the prep script
+// (see ../../tools/ferrosintesis-samples/README.md).
 fn violin_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
@@ -643,6 +656,9 @@ pub fn drum_snare_bank() -> &'static [HitSample] {
 }
 
 pub fn prewarm() {
+    if !crate::embedded_samples_available() {
+        return;
+    }
     let _ = piano_bank(1, false);
     let _ = piano_bank(1, true);
     let _ = piano_bank(80, false);
@@ -915,7 +931,7 @@ impl Voice for SampleOverlay {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "embedded-samples"))]
 mod tests {
     use super::*;
     use crate::dsp::OnePole;

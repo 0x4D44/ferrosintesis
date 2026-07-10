@@ -284,9 +284,9 @@ impl Voice for Drum {
             // `.first()` is panic-safe for empty-tone voices (which never carry
             // a wire). `wire` is None on v1 → the block is skipped entirely, so
             // v1 stays byte-identical.
-            let head_amp_now = self.tones.first().map_or(0.0, |t| t.amp);
-            let head_phase_sin = self.tones.first().map_or(0.0, |t| t.phase.sin());
             if let Some(w) = self.wire.as_mut() {
+                let head_amp_now = self.tones.first().map_or(0.0, |t| t.amp);
+                let head_phase_sin = self.tones.first().map_or(0.0, |t| t.phase.sin());
                 if self.t >= w.onset {
                     // D5 delayed onset: exact zero before, then a short swell.
                     if w.env < 1.0 {
@@ -668,9 +668,10 @@ fn cymbal(spec: &CymSpec, sr: f32, seed: u32, vel: u8) -> Option<Box<dyn Voice>>
     let mut bands = vec![(spec.noise.0, spec.noise.1, Biquad::highpass(hp, 0.7, sr))];
     let mut swelled = vec![0usize];
     // DR3(a): open-hat's faster-decaying sizzle band. Shares the same white
-    // source, differently coloured; correlated like every multi-band hit.
+    // source, differently coloured; correlated like every multi-band hit. It
+    // stays instant even if a future cymbal combines `noise2` with a swelling
+    // primary wash.
     if let Some((amp2, t60_2, hp2)) = spec.noise2 {
-        swelled.push(bands.len());
         bands.push((
             amp2,
             t60_2,
@@ -2504,6 +2505,36 @@ mod tests {
             "hat should not bloom ({} ms)",
             hf_argmax_ms(&hat)
         );
+    }
+
+    /// DR3 seam: the secondary sizzle is an instant contact layer, not part of
+    /// a crash-style swelling wash. A noise2-only build is therefore unchanged
+    /// when the primary-wash swell switch is enabled.
+    #[test]
+    fn cymbal_noise2_sizzle_does_not_swell() {
+        let sr = 44100.0;
+        let spec = |swell| CymSpec {
+            base: 3300.0,
+            tone_amp: 0.0,
+            t60_first: 0.10,
+            t60_last: 0.05,
+            noise: (0.0, 0.20, 3000.0),
+            life: 0.20,
+            gain: 1.0,
+            click: None,
+            swell,
+            pairs: false,
+            v2: None,
+            noise2: Some((1.0, 0.10, 6000.0)),
+            shimmer: None,
+        };
+        let render = |swell| {
+            let mut voice = cymbal(&spec(swell), sr, 7, 127).unwrap();
+            let mut buf = vec![0.0; (0.20 * sr) as usize];
+            voice.render(&mut buf);
+            buf
+        };
+        assert_eq!(render(true), render(false));
     }
 
     /// Oracle 24 (CYM-1, §5.3): the coloured wash BEATS — envelope

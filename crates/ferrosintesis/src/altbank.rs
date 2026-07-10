@@ -58,7 +58,7 @@ const PIZZ: PluckPreset = PluckPreset {
     course_t60: 0.42,
     course_bright: 1.15,
     course_mix: (0.74, 0.26),
-    course_couple: 0.02, // == voices::K_COUPLE, the frozen polarization coupling
+    course_couple: crate::voices::K_COUPLE,
     #[cfg(test)]
     name: "PIZZ",
 };

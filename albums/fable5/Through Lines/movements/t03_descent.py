@@ -435,6 +435,7 @@ PART = conductor.Part(
         (CH_HIT, "cataclysm - riser > orchestra hit", 119, 110, 64, 45),
         (CH_TIMP, "timpani", 47, 105, 64, 45),
     ],
+    bank_selects=[(14, 1)],   # riser channel: percussion set B (reverse cymbal)
     program_changes=[
         (CH_HIT, 351.75, 55),                # reverse cymbal -> orch hit
         (3, 386.0, 73),                      # niches for the re-radiation:

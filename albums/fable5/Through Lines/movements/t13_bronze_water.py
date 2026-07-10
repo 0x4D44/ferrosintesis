@@ -191,6 +191,7 @@ PART = conductor.Part(
         (CH_REBAB,   "rebab",           110,  92, 64, 65),
         (CH_STRINGS, "chorale strings",  48, 100, 64, 60),
     ],
+    bank_selects=[(1, 1), (2, 1)],   # kemanak + bronze pots: percussion set B
     extra_markers=[(CHORALE_T1, "Chorale I"), (CHORALE_T2, "Chorale II")],
 )
 

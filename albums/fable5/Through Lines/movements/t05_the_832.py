@@ -264,6 +264,7 @@ PART = conductor.Part(
         (CH_HARP, "harp - dream current", 46, 95, 50, 60),
         (CH_KIT, "kit", 0, 100, 64, 20),
     ],
+    bank_selects=[(3, 1), (5, 1)],   # agogo alarm + riser: percussion set B
     program_changes=[
         (CH_KIT, 176.25, 40),   # brush kit for the footsteps
         (CH_KIT, 191.75, 0),    # classic kit back for the return

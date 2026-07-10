@@ -141,6 +141,7 @@ PART = conductor.Part(
         (CH_BELL, "tinkle bell", 112, 92, 74, 66),
         (CH_HARP, "harp", 46, 96, 64, 55),
     ],
+    bank_selects=[(3, 1)],   # tinkle bell: percussion set B
     extra_markers=[
         (MORSE_T0, "tinkle bell taps GOODNIGHT"),
         (FINAL_T0, "last light: high F - the album's first pitch"),

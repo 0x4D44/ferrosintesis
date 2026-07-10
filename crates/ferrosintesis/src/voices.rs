@@ -3115,6 +3115,12 @@ const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 const LA_PIANO: (f32, (f32, f32)) = (0.42, (0.18, 0.85));
 const LA_BRASS: (f32, (f32, f32)) = (0.35, (0.10, 0.32));
 const LA_REED: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
+/// GM 24 nylon guitar: the sample owns the pick transient (first ~30 ms),
+/// the Karplus-Strong string carries the bendable decay from 200 ms (HLD §4).
+/// Gain level-matched down from the HLD's ~0.45 estimate: the FreePats pluck
+/// body is loud relative to the model and 0.45 stepped the 50–150 ms window
+/// 3.4× above the handover (la_level_continuity cap is 2.4×).
+const LA_GUITAR: (f32, (f32, f32)) = (0.25, (0.05, 0.20));
 /// GM 61 brass section: trumpet bank at reduced gain so the modeled
 /// scattered player onsets stay audible underneath (HLD §4).
 const LA_BRASS_SECTION_GAIN: f32 = 0.6;
@@ -4536,7 +4542,25 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             0.50,
         )),
         16..=23 => Box::new(organ(program, key, vel, sr, seed)),
-        24 => Box::new(Pluck::new(&NYLON, key, vel, sr, seed)),
+        24 => {
+            let model = Box::new(Pluck::new(&NYLON, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_GUITAR;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::guitar_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
+        // 25 steel stays pure model for now: the FreePats steel-string set is
+        // GPL-with-exception, not CC0 — no clean sampled source yet (HLD §2.2)
         25 => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
         26 | 27 => Box::new(Pluck::new(&CLEAN, key, vel, sr, seed)),
         28 => Box::new(Pluck::new(&MUTED, key, vel, sr, seed)),

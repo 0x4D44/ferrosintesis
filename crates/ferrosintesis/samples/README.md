@@ -26,6 +26,13 @@ crossfades into the modeled sustain.
   v1 → p, v3 → f; the bassoon has only v1/v2 at the pinned rev, so
   v2 → f), ~0.63 s. GM 69 (english horn) reuses the oboe bank repitched
   down; the saxes 64–67 stay pure model (no sax in VSCO 2 CE).
+- `nylon_*.wav` — nylon (classical) guitar pluck onsets for GM 24, 7 pitch
+  zones E2–E5 (~6-semitone spacing; B2 stands in for the source's missing
+  A#2), kept 0.9 s so the sample carries the pick transient and early body
+  resonance while the Karplus-Strong string keeps the bendable decay. The
+  source has one take per note — no velocity layers, no round robins. GM 25
+  (steel) stays pure model: no clean CC0 steel-string source yet (the
+  FreePats FSS Steel-String set is GPL-with-exception).
 - `drum_sus_cymb1_*`, `drum_crash1_*`, `drum_kick_*`, `drum_snare2_*`
   — unpitched drum-hit overlays for the default kit: crash/suspended cymbal
   attacks kept to ~2.2 s, kick/snare attacks kept to ~0.46 s. The modeled drum
@@ -38,6 +45,19 @@ sgossner, <https://github.com/sgossner/VSCO-2-CE>), released under
 **CC0 1.0 / public domain**. The generator pins source downloads to VSCO commit
 `440300901dfe9275fd84e0b7763af1f8443ae62e`. No attribution required; given
 anyway with thanks.
+
+The `nylon_*` bank is trimmed from the **FreePats project "Spanish classical
+guitar"** sound bank, version 2019-06-18, by roberto@zenvoid.org
+(<https://freepats.zenvoid.org/Guitar/acoustic-guitar.html>), released under
+the **Creative Commons CC0 1.0 Universal public domain dedication** (stated on
+the set page and in the archive's `readme.txt`; the full legal text ships in
+the archive as `cc0.txt`). The generator pins the exact versioned archive
+`https://freepats.zenvoid.org/Guitar/SpanishClassicalGuitar/SpanishClassicalGuitar-SFZ-20190618.7z`
+by SHA-256
+`ef2fb7de0cc0ab561c4ebc28494f3fc2962596e4f32f16d6c96b8a385c7c098b`
+(verified before extraction). Extraction shells out to 7-Zip
+(`7z x -y -o<dir> <archive>`) — the archive uses an LZMA filter chain that
+bsdtar/GNU tar cannot decode; no Python dependency is added.
 
 ## Regenerating
 

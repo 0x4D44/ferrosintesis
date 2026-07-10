@@ -12,10 +12,13 @@ measurement.
 Pure stdlib; run from this directory: python prepare.py
 """
 
+import hashlib
 import math
 import os
+import shutil
 import socket
 import struct
+import subprocess
 import sys
 import tempfile
 import urllib.request
@@ -101,6 +104,25 @@ SOURCES = {
     for d, v in (("p", "v1"), ("f", "v3"))
 } | DRUM_SOURCES
 
+# FreePats "Spanish classical guitar" (version 2019-06-18), CC0 1.0 public
+# domain dedication (readme.txt + cc0.txt inside the archive). One WAV per
+# note, no velocity layers, no round robins — so the nylon bank is a single
+# dynamic layer / single RR. Pinned by SHA-256 of the versioned archive;
+# extraction needs a 7-Zip binary (`7z x`) — the archive uses an LZMA filter
+# bsdtar cannot decode.
+SCG_ARCHIVE_URL = (
+    "https://freepats.zenvoid.org/Guitar/SpanishClassicalGuitar/"
+    "SpanishClassicalGuitar-SFZ-20190618.7z"
+)
+SCG_ARCHIVE_SHA256 = "ef2fb7de0cc0ab561c4ebc28494f3fc2962596e4f32f16d6c96b8a385c7c098b"
+SCG_MEMBER_DIR = "SpanishClassicalGuitar-SFZ-20190618/samples"
+# nylon zones E2–E5, ~6-semitone spacing (max repitch ±3.5 st); B2 stands in
+# for the set's missing A#2
+GUITAR_SOURCES = {
+    f"nylon_{n}.wav": f"{SCG_MEMBER_DIR}/{n}.wav"
+    for n in ("E2", "B2", "E3", "A#3", "E4", "A#4", "E5")
+}
+
 # f0 search range per family (the default misses the piano's low octaves
 # and the low brass/bassoon fundamentals)
 F0_RANGE = {
@@ -115,10 +137,14 @@ F0_RANGE = {
     "oboe": (200.0, 1000.0),
     "bassoon": (50.0, 800.0),
     "clarinet": (100.0, 1500.0),
+    # guitar E2 (82.4) … E5 (659.3); ceiling 700 keeps autocorr off the
+    # 2nd harmonic of the top zones (the brass/oboe lesson)
+    "nylon": (70.0, 700.0),
 }
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
-KEEP_FAM = {"piano": (1.8, 0.6)}  # (keep_s, fade_s)
+# plucks decay — keep more real body than the 0.62 s default (HLD §3)
+KEEP_FAM = {"piano": (1.8, 0.6), "nylon": (0.9, 0.30)}  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
     "drum_sus_cymb1_mp_rr2.wav": (2.2, 0.35),
@@ -192,6 +218,27 @@ def ensure_source(fn, url, src):
     return path
 
 
+def ensure_guitar_sources(src):
+    """Fetch + verify + extract the pinned FreePats archive into `src`."""
+    missing = [fn for fn in GUITAR_SOURCES if not os.path.exists(os.path.join(src, fn))]
+    if not missing:
+        return
+    arc = os.path.join(src, os.path.basename(SCG_ARCHIVE_URL))
+    if not os.path.exists(arc):
+        print(f"fetching {os.path.basename(arc)} ...", file=sys.stderr)
+        fetch(SCG_ARCHIVE_URL, arc)
+    digest = hashlib.sha256(open(arc, "rb").read()).hexdigest()
+    if digest != SCG_ARCHIVE_SHA256:
+        raise ValueError(f"{arc}: sha256 {digest} != pinned {SCG_ARCHIVE_SHA256}")
+    seven = shutil.which("7z") or r"C:\Program Files\7-Zip\7z.exe"
+    ext = os.path.join(src, "scg_extract")
+    subprocess.run([seven, "x", "-y", f"-o{ext}", arc], check=True,
+                   stdout=subprocess.DEVNULL)
+    for fn, member in GUITAR_SOURCES.items():
+        shutil.copyfile(os.path.join(ext, *member.split("/")),
+                        os.path.join(src, fn))
+
+
 def resample(x, sr_in, sr_out):
     if sr_in == sr_out:
         return x
@@ -247,9 +294,10 @@ def main():
     os.makedirs(src, exist_ok=True)
     for fn, url in SOURCES.items():
         ensure_source(fn, url, src)
+    ensure_guitar_sources(src)
 
     rows = []
-    for fn in sorted(SOURCES):
+    for fn in sorted(SOURCES | GUITAR_SOURCES):
         x, sr = read_wav(os.path.join(src, fn))
         x = resample(x, sr, OUT_SR)
         sr = OUT_SR

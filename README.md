@@ -79,7 +79,7 @@ are the albums the synth is specifically tuned for.
   low percussion as an arc from quiet introspection through urban pressure and grief to
   a cathartic crest and release.
 
-### OpenAI Codex — `albums/codex/`
+### GPT-5.6 — `albums/gpt5-6/`
 - **Atlas of Becoming** — *cinematic / progressive / orchestral collage*, 61:20 ·
   14 tracks. Aquatic spectacle, the contemporary world, biological evolution, linked
   song-form, the GPT lineage, a fast spy-film pursuit, and five freely chosen worlds.
@@ -126,7 +126,7 @@ the sibling `ropus` project.
 ## Layout
 
 - **`albums/` holds one directory per composing model** (`fable5/`, `opus4-8/`,
-  `gpt5-5/`, `gpt5-3-spark/`, `codex/`); each holds one or more albums, at the model
+  `gpt5-5/`, `gpt5-3-spark/`, `gpt5-6/`); each holds one or more albums, at the model
   directory root or in a named subfolder.
 - **An album** bundles its engine (`engine.py`, and for the newer albums
   `conductor.py` / `material.py` / `movements/`), `build.py`, oracles (`verify.py`,

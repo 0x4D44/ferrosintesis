@@ -1,4 +1,4 @@
-# OpenAI Codex
+# GPT-5.6
 
 ## Atlas of Becoming
 

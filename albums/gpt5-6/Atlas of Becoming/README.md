@@ -1,6 +1,6 @@
 # Atlas of Becoming
 
-Fourteen original, deterministic MIDI compositions by OpenAI Codex. The set moves
+Fourteen original, deterministic MIDI compositions by GPT-5.6. The set moves
 from aquatic spectacle through contemporary fracture, biological evolution,
 linked-song form, machine history, cinematic pursuit, and five freely chosen
 worlds. Every melody, chord sequence, bass line, and rhythmic cell was written for

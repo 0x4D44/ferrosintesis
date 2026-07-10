@@ -4,18 +4,28 @@
 //! (e.g. snare shell + snare wires). Hits vary: frequencies and decays are
 //! jittered per strike, and harder hits are brighter.
 
-use crate::dsp::{vel_amp, Biquad, OnePole, Rng, Sine};
+use crate::dsp::{key_freq, vel_amp, Biquad, OnePole, Rng, Sine};
 use crate::sampler;
 use crate::voices::Voice;
 use std::f32::consts::TAU;
 
 /// Which channel-10 kit a hit is voiced with. `V1` and `V2` are retained for
-/// differential tests. `V3` is the shipped default kit.
+/// differential tests. `V3` is the shipped default kit. `Brush` (v0.12)
+/// engages ONLY on a ch-10 Program Change of exactly 40 (the GM2 brush kit):
+/// seven brush voices (tap/slap/swirl/hats/rim/kick), every other key
+/// falling through to the V3 arms.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kit {
+    // V1/V2 are constructed only by the differential tests: the lib-side kit
+    // dispatch is exhaustive matches (a `== Kit::V2`-style comparison would
+    // silently hand a new variant the wrong arm), so outside #[cfg(test)]
+    // nothing constructs them.
+    #[cfg_attr(not(test), allow(dead_code))]
     V1,
+    #[cfg_attr(not(test), allow(dead_code))]
     V2,
     V3,
+    Brush,
 }
 
 struct Tone {
@@ -733,7 +743,13 @@ fn crash_spec(
     t60_v1: (f32, f32),
     t60_v2: (f32, f32),
 ) -> CymSpec {
-    let v2_kit = kit == Kit::V2;
+    // Exhaustive on purpose (the KP-O2 trap): only V1 gets the legacy build.
+    // V3 and Brush crashes route to `metal_plate` in `make` before the crash
+    // arms ever call this; if one ever reached here the v2 build is correct.
+    let v2_kit = match kit {
+        Kit::V1 => false,
+        Kit::V2 | Kit::V3 | Kit::Brush => true,
+    };
     let (t60_first, t60_last) = if v2_kit { t60_v2 } else { t60_v1 };
     // v2 inverts the decay order (shorter tonal t60 + longer, quieter wash).
     let (wash_amp, wash_t60) = if v2_kit {
@@ -895,6 +911,200 @@ fn sample_overlay(key: u8, vel: u8, sr: f32, seed: u32, voice: Box<dyn Voice>) -
     }
 }
 
+// ---------------------------------------------------------------------------
+// v0.12 Brush kit (ch-10 Program 40, GM2 brush kit). Key map:
+//   38 brush tap / 39 brush slap / 40 brush swirl / 42|44 closed hat /
+//   46 open hat / 37 rim knock / 35|36 soft-beater kick.
+// Everything else falls through to the V3 arms in `make`. The swirl lives on
+// key 40 — deliberately OUTSIDE the 42|44→46 choke group, so a shuffle
+// pattern's swirl is never cut by a hat chick.
+// ---------------------------------------------------------------------------
+
+/// BR-O3 structural seam: the brush tap keeps the SNARE_TONES head
+/// frequencies but shortens every T60 — a brush lands soft and the head
+/// barely rings. No WireRes: nylon strands cannot crack the wires.
+const BRUSH_TAP_TONES: [(f32, f32, f32, f32); 4] = [
+    (186.0, 0.8, 0.055, 4.0),
+    (280.0, 0.35, 0.045, 2.0),
+    (330.0, 0.30, 0.040, 2.0),
+    (430.0, 0.18, 0.030, 2.0),
+];
+// Level knobs, calibrated by the brush level oracles.
+const BRUSH_TAP_GAIN: f32 = 1.15;
+const BRUSH_SLAP_GAIN: f32 = 1.26;
+const BRUSH_SWIRL_GAIN: f32 = 0.48;
+const BRUSH_CLOSED_HAT_GAIN: f32 = 0.36;
+const BRUSH_OPEN_HAT_GAIN: f32 = 0.44;
+const BRUSH_RIM_GAIN: f32 = 0.34;
+const BRUSH_KICK_GAIN: f32 = 0.85;
+/// Swirl slow stir AM (a wrist turns ~5 times a second, not a 45 Hz sizzle).
+const BRUSH_SWIRL_AM_RATE_HZ: f32 = 5.0;
+const BRUSH_SWIRL_AM_DEPTH: f32 = 0.65;
+
+/// Brush-tap noise bands: soft shell knock + a gentle mid-high "shhh" —
+/// bandpassed, never the V2/V3 wire clusters (BR-O1).
+fn brush_tap_noise(sr: f32) -> [(f32, f32, Biquad); 2] {
+    [
+        (0.50, 0.055, Biquad::bandpass(1300.0, 0.7, sr)),
+        (0.55, 0.075, Biquad::bandpass(2900.0, 0.8, sr)),
+    ]
+}
+
+/// 1a: brush tap (key 38) — the shortened head under soft brush noise.
+fn brush_tap(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+    let v = vel_amp(vel);
+    let velnorm = vel as f32 / 127.0;
+    let (tones, noise) = membrane_velocity(&BRUSH_TAP_TONES, &brush_tap_noise(sr), velnorm);
+    Some(Box::new(Drum::new(
+        sr,
+        seed,
+        &tones,
+        &noise,
+        0.35,
+        BRUSH_TAP_GAIN * v,
+    )) as Box<dyn Voice>)
+}
+
+/// 1b: brush slap (key 39) — an accented tap whose strands land twice: the
+/// burst re-excites the noise bands ~12 ms after the first contact.
+fn brush_slap(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+    let v = vel_amp(vel);
+    let velnorm = vel as f32 / 127.0;
+    let (tones, noise) = membrane_velocity(&BRUSH_TAP_TONES, &brush_tap_noise(sr), velnorm);
+    let drum = Drum::new(sr, seed, &tones, &noise, 0.40, BRUSH_SLAP_GAIN * v)
+        .with_bursts(&[(0.012, 0.50)]);
+    Some(Box::new(drum) as Box<dyn Voice>)
+}
+
+/// 1c core (shared with the SW-O3 no-shimmer differential clone): the swirl
+/// is toneless — three staggered-swell noise bands sweeping across the head,
+/// the third being the stir's "return".
+fn brush_swirl_drum(vel: u8, sr: f32, seed: u32) -> Drum {
+    let v = vel_amp(vel);
+    let velnorm = vel as f32 / 127.0;
+    let amp = 0.7 + 0.3 * velnorm;
+    Drum::new(
+        sr,
+        seed,
+        &[],
+        &[
+            (amp, 0.32, Biquad::bandpass(2100.0, 0.8, sr)),
+            (0.85 * amp, 0.30, Biquad::bandpass(3100.0, 0.8, sr)),
+            // the RETURN stroke: hot enough to read over bands 1-2's Q-0.8
+            // spread at 4 kHz (SW-O2's return-sweep oracle)
+            (1.45 * amp, 0.32, Biquad::bandpass(4300.0, 0.8, sr)),
+        ],
+        0.85,
+        BRUSH_SWIRL_GAIN * v,
+    )
+    .with_band_ext(0, 0.0, 0.18, 0.0)
+    .with_band_ext(1, 0.22, 0.16, 0.0)
+    .with_band_ext(2, 0.45, 0.14, 0.0)
+}
+
+/// 1c: brush swirl (key 40) — the staggered-swell core under a slow stir AM.
+fn brush_swirl(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+    Some(Box::new(
+        brush_swirl_drum(vel, sr, seed).with_shimmer(BRUSH_SWIRL_AM_RATE_HZ, BRUSH_SWIRL_AM_DEPTH),
+    ) as Box<dyn Voice>)
+}
+
+/// 1d: brush closed/pedal hat (keys 42|44) — the v1 hat darkened (wash corner
+/// 6500→4300) and softened, with a duller stick tick.
+fn brush_closed_hat(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+    let velnorm = vel as f32 / 127.0;
+    cymbal(
+        &CymSpec {
+            base: 3300.0,
+            tone_amp: 0.10,
+            t60_first: 0.05,
+            t60_last: 0.03,
+            noise: (0.8, 0.035, 3600.0),
+            life: 0.14,
+            gain: BRUSH_CLOSED_HAT_GAIN,
+            click: Some((0.7 * velnorm, 0.005, 3800.0)),
+            swell: false,
+            pairs: false,
+            v2: None,
+            // nylon strands land broad and dull: a mid wash under the top —
+            // this band is most of the "darker than sticks" (BH-O1)
+            noise2: Some((0.55, 0.030, 1700.0)),
+            shimmer: None,
+        },
+        sr,
+        seed,
+        vel,
+    )
+}
+
+/// 1e spec (shared with BH-O4's no-shimmer differential clone): the DR3 v2
+/// hat anatomy (body + faster sizzle band + sizzle wobble) darkened and
+/// softened for nylon strands.
+fn brush_open_hat_spec() -> CymSpec {
+    CymSpec {
+        base: 3300.0,
+        tone_amp: 0.10,
+        t60_first: 0.45,
+        t60_last: 0.10,
+        noise: (0.55, 0.30, 3000.0),
+        life: 0.95,
+        gain: BRUSH_OPEN_HAT_GAIN,
+        click: None,
+        swell: false,
+        pairs: false,
+        v2: None,
+        noise2: Some((0.22, 0.16, 6200.0)),
+        shimmer: Some((45.0, 0.45)),
+    }
+}
+
+/// 1e: brush open hat (key 46).
+fn brush_open_hat(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+    cymbal(&brush_open_hat_spec(), sr, seed, vel)
+}
+
+/// 1f: brush rim knock (key 37) — woodier than the stick's side-stick: lower
+/// paired knock modes and a low-mid body band instead of the 2200 Hz ping.
+fn brush_rim(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+    let v = vel_amp(vel);
+    Some(Box::new(Drum::new(
+        sr,
+        seed,
+        &[(330.0, 0.6, 0.06, 0.0), (620.0, 0.35, 0.045, 0.0)],
+        &[(0.55, 0.03, Biquad::bandpass(1250.0, 1.2, sr))],
+        0.2,
+        BRUSH_RIM_GAIN * v,
+    )) as Box<dyn Voice>)
+}
+
+/// 1g: brush-kit kick (keys 35|36) — the v1 kick's tone stack verbatim (the
+/// sub drop is the chest weight, kept intact) under a much softer, darker
+/// beater: a felt beater played light, not a click-point rock kick.
+fn brush_kick(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+    let v = vel_amp(vel);
+    let velnorm = vel as f32 / 127.0;
+    let (tones, noise) = membrane_velocity(
+        &[
+            (165.0, 0.8, 0.16, 28.0),
+            (86.0, 1.1 + 0.4 * velnorm, 0.42, 3.0),
+            (130.0, 0.4 * velnorm, 0.01, 0.0),
+        ],
+        &[
+            (0.05, 0.005, Biquad::highpass(1500.0, 0.7, sr)),
+            (0.03, 0.005, Biquad::bandpass(2200.0, 0.9, sr)),
+        ],
+        velnorm,
+    );
+    Some(Box::new(Drum::new(
+        sr,
+        seed,
+        &tones,
+        &noise,
+        0.8,
+        BRUSH_KICK_GAIN * v,
+    )) as Box<dyn Voice>)
+}
+
 /// Build a drum voice for a GM key, or None for unmapped keys.
 pub fn make(
     key: u8,
@@ -923,7 +1133,9 @@ pub fn make(
     let tom = |f0: f32, t60: f32, noise: &[(f32, f32, Biquad)], life: f32, g: f32| {
         let (start_f, glide, floor) = match kit {
             Kit::V1 => (f0, 10.0, None),
-            Kit::V2 | Kit::V3 => (f0 * TOM_OVERSHOOT, TOM_GLIDE_V2, Some(1.0 / TOM_OVERSHOOT)),
+            Kit::V2 | Kit::V3 | Kit::Brush => {
+                (f0 * TOM_OVERSHOOT, TOM_GLIDE_V2, Some(1.0 / TOM_OVERSHOOT))
+            }
         };
         let (tones, noise) = membrane_velocity(&tom_tones(start_f, t60, glide), noise, velnorm);
         let mut drum = Drum::new(sr, seed, &tones, &noise, life, g * v);
@@ -932,12 +1144,29 @@ pub fn make(
         }
         Some(Box::new(drum) as Box<dyn Voice>)
     };
+    // v0.12 brush kit intercept: the seven brush keys take their own voices
+    // (and skip the V3 sample overlays — a brush has no stick attack); every
+    // other key falls through to the (V3-behaving) arms below.
+    if kit == Kit::Brush {
+        match key {
+            38 => return brush_tap(vel, sr, seed),
+            39 => return brush_slap(vel, sr, seed),
+            40 => return brush_swirl(vel, sr, seed),
+            42 | 44 => return brush_closed_hat(vel, sr, seed),
+            46 => return brush_open_hat(vel, sr, seed),
+            37 => return brush_rim(vel, sr, seed),
+            35 | 36 => return brush_kick(vel, sr, seed),
+            _ => {} // V3 fall-through
+        }
+    }
     let voice = match key {
         35 | 36 => {
             // beater knock over a sub drop (86 -> ~45 Hz): the chest thump,
             // plus a knuckle-of-the-beater tone (D3). V3 adds a short low-mid
             // body band so the click no longer sits on a hollow sub alone.
-            if kit == Kit::V3 {
+            // (Brush is grouped with V3 for fall-through correctness, though
+            // 35|36 never reach here — the brush key map intercepts them.)
+            if matches!(kit, Kit::V3 | Kit::Brush) {
                 let tones = [
                     (172.0, 0.76, 0.14, 30.0),
                     (78.0, 1.25 + 0.35 * velnorm, 0.46, 2.6),
@@ -996,7 +1225,10 @@ pub fn make(
             // DR4 kit-v2: drop the broad-HP wire band; the shell (idx0) and a
             // trimmed dark tail (idx1, 0.35→0.22) go through membrane_velocity
             // as before, and the wires become a head-coupled `WireRes` cluster.
-            Kit::V2 | Kit::V3 => {
+            // (Kit::Brush is unreachable here — brush 38 is intercepted by the
+            // brush key map above and 40 is the swirl; the arm exists only for
+            // match exhaustiveness.)
+            Kit::V2 | Kit::V3 | Kit::Brush => {
                 let (tones, noise) = membrane_velocity(
                     &SNARE_TONES,
                     &[
@@ -1106,7 +1338,9 @@ pub fn make(
             // (the centroid falls through the tail), widens the tonal decay
             // spread so a faint pitched ring survives under the wash, and adds a
             // ~45 Hz sizzle wobble. v1 is the old single-wash static hat.
-            let spec = if kit != Kit::V1 {
+            // (Every non-V1 kit gets the DR3 hat; brush 46 never reaches here —
+            // the brush key map intercepts it.)
+            let spec = if matches!(kit, Kit::V2 | Kit::V3 | Kit::Brush) {
                 CymSpec {
                     base: 3300.0,
                     tone_amp: 0.10,
@@ -1141,7 +1375,7 @@ pub fn make(
             };
             cymbal(&spec, sr, seed, vel)
         }
-        49 if kit == Kit::V3 => Some(metal_plate(49, sr, seed, vel)),
+        49 if matches!(kit, Kit::V3 | Kit::Brush) => Some(metal_plate(49, sr, seed, vel)),
         49 => {
             // crash: instant chick, wash blooms over ~50 ms (CYM-2), the
             // coloured pairs beat in the shimmer (CYM-1), and it rings
@@ -1160,7 +1394,7 @@ pub fn make(
             );
             cymbal(&spec, sr, seed, vel)
         }
-        52 if kit == Kit::V3 => Some(metal_plate(52, sr, seed, vel)),
+        52 if matches!(kit, Kit::V3 | Kit::Brush) => Some(metal_plate(52, sr, seed, vel)),
         52 => cymbal(
             // china (D7/CYM-7): trashy — compressed decay, aggressive bright
             // wash, short life; until now this key fell to the generic tick
@@ -1183,7 +1417,7 @@ pub fn make(
             seed,
             vel,
         ),
-        55 if kit == Kit::V3 => Some(metal_plate(55, sr, seed, vel)),
+        55 if matches!(kit, Kit::V3 | Kit::Brush) => Some(metal_plate(55, sr, seed, vel)),
         55 => cymbal(
             // splash (D7/CYM-7): small and quick, split from the crash
             &CymSpec {
@@ -1205,7 +1439,7 @@ pub fn make(
             seed,
             vel,
         ),
-        57 if kit == Kit::V3 => Some(metal_plate(57, sr, seed, vel)),
+        57 if matches!(kit, Kit::V3 | Kit::Brush) => Some(metal_plate(57, sr, seed, vel)),
         57 => {
             // second crash: as key 49, DR1 kit-v2 upgrade with a slightly
             // shorter tonal t60_first (base 820 twins keep the same Δf table —
@@ -1222,7 +1456,7 @@ pub fn make(
             );
             cymbal(&spec, sr, seed, vel)
         }
-        51 | 59 if kit == Kit::V3 => Some(metal_plate(key, sr, seed, vel)),
+        51 | 59 if matches!(kit, Kit::V3 | Kit::Brush) => Some(metal_plate(key, sr, seed, vel)),
         51 | 59 => cymbal(
             // ride (CYM-5): a short guarded stick ping over a quiet
             // sustaining wash, with a widened tone-decay spread
@@ -1479,11 +1713,260 @@ pub fn make(
         ),
     };
     voice.map(|v| {
-        if kit == Kit::V3 && samples {
+        if matches!(kit, Kit::V3 | Kit::Brush) && samples {
             sample_overlay(key, vel, sr, seed, v)
         } else {
             v
         }
+    })
+}
+
+// ---------------------------------------------------------------------------
+// v0.12 alt-bank percussion set B (GM 116-119). These are MELODIC-channel
+// voices — dispatched from `altbank::make` by PROGRAM (CC0 bank select), not
+// from the channel-10 key map above — so the MIDI key sets each drum's pitch
+// register. Ported from the superseded v0.11 branch (216da4a) and namespaced
+// `_b`; trunk's default-bank 112-119 voices (voices.rs) are untouched.
+// ---------------------------------------------------------------------------
+
+/// Bank-B GM 116 taiko tension overshoot: ~1.5 st sharp at the strike,
+/// settling on the played pitch (slow — a big head takes its time).
+const TAIKO_B_OVERSHOOT: f32 = 1.0905;
+const TAIKO_B_GLIDE_OCT_S: f32 = 1.2;
+const TAIKO_B_GAIN: f32 = 0.71; // level knob: altbank_b116_taiko_level_vs_timpani
+
+/// Bank-B GM 116 taiko: a deep long-ringing membrane — fundamental + three
+/// inharmonic head modes over a LP-140 Hz boom band, with a short bright
+/// bachi slap band that grows super-linearly with velocity (membrane_velocity
+/// noise law).
+pub(crate) fn taiko_b(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
+    let f0 = key_freq(key.clamp(31, 55));
+    let v = vel_amp(vel);
+    let velnorm = vel as f32 / 127.0;
+    let start = f0 * TAIKO_B_OVERSHOOT;
+    let tones = [
+        (start, 1.00, 1.5, TAIKO_B_GLIDE_OCT_S),
+        (start * 1.52, 0.32, 0.8, TAIKO_B_GLIDE_OCT_S),
+        (start * 1.99, 0.18, 0.55, TAIKO_B_GLIDE_OCT_S),
+        (start * 2.44, 0.09, 0.40, TAIKO_B_GLIDE_OCT_S),
+    ];
+    let noise = [
+        (1.1, 0.09, Biquad::lowpass(140.0, 0.8, sr)),
+        (0.45, 0.020, Biquad::bandpass(1600.0, 0.8, sr)),
+    ];
+    let (tones, noise) = membrane_velocity(&tones, &noise, velnorm);
+    Box::new(
+        Drum::new(sr, seed, &tones, &noise, 2.4, TAIKO_B_GAIN * v)
+            .with_glide_floor(1.0 / TAIKO_B_OVERSHOOT),
+    )
+}
+
+const MELODIC_TOM_B_GAIN: f32 = 0.97; // level knob: altbank_b117_melodic_tom_level_vs_marimba
+
+/// Bank-B GM 117 melodic tom: the kit-v2 tom recipe (overshoot + settle on
+/// the played pitch) with a key-tracked decay and a key-tracked stick band,
+/// so a tom line actually plays a melody.
+pub(crate) fn melodic_tom_b(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
+    let f0 = key_freq(key.clamp(36, 72));
+    let v = vel_amp(vel);
+    let velnorm = vel as f32 / 127.0;
+    let t60 = (0.30 * (196.0 / f0).powf(0.25)).clamp(0.18, 0.45);
+    let stick_bp = (f0 * 6.0).clamp(600.0, 1600.0);
+    let noise = [(0.25, 0.05, Biquad::bandpass(stick_bp, 0.8, sr))];
+    let (tones, noise) = membrane_velocity(
+        &tom_tones(f0 * TOM_OVERSHOOT, t60, TOM_GLIDE_V2),
+        &noise,
+        velnorm,
+    );
+    Box::new(
+        Drum::new(sr, seed, &tones, &noise, 0.75, MELODIC_TOM_B_GAIN * v)
+            .with_glide_floor(1.0 / TOM_OVERSHOOT),
+    )
+}
+
+/// Bank-B GM 118 synth-drum "zap": the tone starts 2.83x sharp (a 1.5-octave
+/// dive) and glides fast onto the played pitch, where it rings as a
+/// near-pure sine.
+const SYNTH_DRUM_B_ZAP_RATIO: f32 = 2.83;
+const SYNTH_DRUM_B_GLIDE_OCT_S: f32 = 24.0;
+const SYNTH_DRUM_B_GAIN: f32 = 0.80; // level knob: altbank_b118_synth_drum_level_vs_melodic_tom
+
+/// Bank-B GM 118 synth drum: one zap-glide sine over a tiny >3 kHz tick.
+pub(crate) fn synth_drum_b(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
+    let f0 = key_freq(key.clamp(33, 81));
+    let v = vel_amp(vel);
+    let velnorm = vel as f32 / 127.0;
+    let tones = [(
+        f0 * SYNTH_DRUM_B_ZAP_RATIO,
+        1.0,
+        0.55,
+        SYNTH_DRUM_B_GLIDE_OCT_S,
+    )];
+    let noise = [(0.15, 0.004, Biquad::highpass(3000.0, 0.7, sr))];
+    let (tones, noise) = membrane_velocity(&tones, &noise, velnorm);
+    Box::new(
+        Drum::new(sr, seed, &tones, &noise, 0.9, SYNTH_DRUM_B_GAIN * v)
+            .with_glide_floor(1.0 / SYNTH_DRUM_B_ZAP_RATIO),
+    )
+}
+
+// --- bank-B GM 119 reverse cymbal --------------------------------------------
+
+/// The swell runs at most this long; note_off (or the cap) hard-stops it —
+/// the reverse cymbal's abrupt cut IS the effect.
+const REV_CYM_B_RISE_CAP_S: f32 = 2.5;
+const REV_CYM_B_STOP_T60: f32 = 0.008;
+const REV_CYM_B_LIFE_AFTER_STOP_S: f32 = 0.15;
+pub(crate) const REV_CYM_B_BASE_HZ: f32 = 950.0;
+const REV_CYM_B_TONE_AMP: f32 = 0.13;
+const REV_CYM_B_GAIN: f32 = 0.50; // level knob: altbank_b119_reverse_cymbal_crash_handover_level
+
+struct RevPartial {
+    phase: f32,
+    freq: f32,
+    amp: f32,    // live level, rising
+    target: f32, // the A_i cap (a crash partial's forward level)
+    rise: f32,   // per-sample multiplier > 1 (a reversed T60 decay)
+    onset: u32,  // sample the rise starts: (cap − t60_i), so all land together
+}
+
+struct RevBand {
+    filt: Biquad,
+    amp: f32,
+    target: f32,
+    rise: f32,
+    onset: u32,
+}
+
+/// Bank-B GM 119 reverse cymbal: the crash partial stack played BACKWARDS —
+/// every partial and both wash bands rise from −60 dB on their own
+/// reversed-decay clock so they all peak together at the cap, then a
+/// note_off (or the cap itself) cuts the whole thing dead. Honours note_off,
+/// unlike `Drum`.
+struct RevCymB {
+    partials: Vec<RevPartial>,
+    bands: Vec<RevBand>,
+    rng: Rng,
+    t: u32,
+    cap: u32,  // sample index of the self-stop
+    life: u32, // hard ceiling (stop + 0.15 s)
+    stopped: bool,
+    stop_mul: f32,
+    released: bool,
+    gain: f32,
+    sr: f32,
+}
+
+impl Voice for RevCymB {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            if self.t >= self.life {
+                return false;
+            }
+            if !self.stopped && (self.released || self.t >= self.cap) {
+                self.stopped = true;
+                self.life = self
+                    .life
+                    .min(self.t + (REV_CYM_B_LIFE_AFTER_STOP_S * self.sr) as u32);
+            }
+            let mut s = 0.0;
+            let white = self.rng.white();
+            for p in &mut self.partials {
+                if self.t >= p.onset {
+                    s += p.amp * p.phase.sin();
+                    p.phase += TAU * p.freq / self.sr;
+                    if p.phase > TAU {
+                        p.phase -= TAU;
+                    }
+                    if self.stopped {
+                        p.amp *= self.stop_mul;
+                    } else if p.amp < p.target {
+                        p.amp = (p.amp * p.rise).min(p.target);
+                    }
+                }
+            }
+            for b in &mut self.bands {
+                if self.t >= b.onset && b.amp > 1e-6 {
+                    s += b.filt.process(white) * b.amp;
+                    if self.stopped {
+                        b.amp *= self.stop_mul;
+                    } else if b.amp < b.target {
+                        b.amp = (b.amp * b.rise).min(b.target);
+                    }
+                }
+            }
+            *o += s * self.gain;
+            self.t += 1;
+        }
+        true
+    }
+
+    fn note_off(&mut self) {
+        self.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "revcym_b"
+    }
+}
+
+/// Bank-B GM 119 factory. Key tracking is half a semitone per semitone on the
+/// metal base only (a cymbal's size class, not a chromatic instrument).
+pub(crate) fn reverse_cymbal_b(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
+    let v = vel_amp(vel);
+    let velnorm = vel as f32 / 127.0;
+    let base = REV_CYM_B_BASE_HZ * 2f32.powf((key.clamp(48, 72) as f32 - 60.0) / 24.0);
+    let cap = (REV_CYM_B_RISE_CAP_S * sr) as u32;
+    let rise_for = |t60: f32| 10f32.powf(3.0 / (t60.max(0.005) * sr)); // inverse dmul
+    let mut partials = Vec::with_capacity(METAL_RATIOS.len());
+    for (i, &r) in METAL_RATIOS.iter().enumerate() {
+        let frac = i as f32 / (METAL_RATIOS.len() - 1) as f32;
+        // the crash amp law (forward), reached at the END of the rise
+        let target =
+            REV_CYM_B_TONE_AMP * (1.0 - 0.6 * frac) * (0.55 + 0.55 * velnorm.powf(frac + 0.5));
+        let t60 = 2.2 + (0.8 - 2.2) * frac;
+        partials.push(RevPartial {
+            phase: 0.0,
+            freq: base * r,
+            amp: target * 1e-3,
+            target,
+            rise: rise_for(t60),
+            onset: ((REV_CYM_B_RISE_CAP_S - t60).max(0.0) * sr) as u32,
+        });
+    }
+    let bands = vec![
+        RevBand {
+            filt: Biquad::highpass(3500.0, 0.7, sr),
+            amp: 0.8e-3,
+            target: 0.8,
+            rise: rise_for(REV_CYM_B_RISE_CAP_S),
+            onset: 0,
+        },
+        RevBand {
+            filt: Biquad::highpass(8500.0, 0.7, sr),
+            amp: 0.55e-3,
+            target: 0.55,
+            rise: rise_for(0.9),
+            onset: (1.6 * sr) as u32,
+        },
+    ];
+    Box::new(RevCymB {
+        partials,
+        bands,
+        rng: Rng::new(seed ^ 0x9EC7_3119),
+        t: 0,
+        cap,
+        life: cap + (REV_CYM_B_LIFE_AFTER_STOP_S * sr) as u32,
+        stopped: false,
+        stop_mul: dmul(REV_CYM_B_STOP_T60, sr),
+        released: false,
+        gain: REV_CYM_B_GAIN * v,
+        sr,
     })
 }
 
@@ -2463,5 +2946,359 @@ mod tests {
         assert!(lm < 0.25, "mute cuica life {lm}");
         assert!(lo_life > 0.30, "open cuica life {lo_life}");
         assert!(lo_life > lm, "open cuica must out-live mute");
+    }
+
+    // =======================================================================
+    // v0.12 — the ch-10 brush kit oracles (ported from the superseded v0.11
+    // branch, 216da4a, and re-anchored on trunk's V3 world: unmapped brush
+    // keys fall through to V3, not V2)
+    // =======================================================================
+
+    const SR12: f32 = 44100.0;
+
+    fn seg(buf: &[f32], a: f32, b: f32) -> &[f32] {
+        &buf[(a * SR12) as usize..(b * SR12) as usize]
+    }
+
+    fn db(a: f32, b: f32) -> f32 {
+        20.0 * (a / b.max(1e-12)).log10()
+    }
+
+    /// RMS of `[a, z]` s of the WHOLE-buffer highpass — filter first, then
+    /// window. Highpassing a segment sliced mid-ring reads the slice
+    /// boundary as a step, and that filter transient buries the band being
+    /// measured.
+    fn hp_win(b: &[f32], corner: f32, a: f32, z: f32) -> f32 {
+        let mut hp = Biquad::highpass(corner, 0.7, SR12);
+        let f: Vec<f32> = b.iter().map(|&x| hp.process(x)).collect();
+        testutil::rms(seg(&f, a, z))
+    }
+
+    /// KP-O1: a key no kit remaps (56 cowbell — kit-agnostic in `make`)
+    /// renders byte-identically under all four kits.
+    #[test]
+    fn brush_kit_inert_for_untouched_keys() {
+        let v1 = render_drum_kit(56, 100, 0.6, Kit::V1);
+        let v2 = render_drum_kit(56, 100, 0.6, Kit::V2);
+        let v3 = render_drum_kit(56, 100, 0.6, Kit::V3);
+        let br = render_drum_kit(56, 100, 0.6, Kit::Brush);
+        assert!(v1.iter().any(|&x| x.abs() > 1e-4), "cowbell makes sound");
+        assert_eq!(v1, v2, "cowbell 56 must not branch on kit (V1 vs V2)");
+        assert_eq!(v2, v3, "cowbell 56 must not branch on kit (V2 vs V3)");
+        assert_eq!(v3, br, "cowbell 56 must not branch on kit (V3 vs Brush)");
+    }
+
+    /// KP-O2 (pins the V3 fall-through, the `== Kit::V3` guard trap): unmapped
+    /// brush keys fall through to the V3 voices — the crash (49, a V3 metal
+    /// plate), the ride (51) and a tom (41) render byte-equal to V3 and differ
+    /// from V1.
+    #[test]
+    fn brush_falls_back_to_v3() {
+        for key in [49u8, 51, 41] {
+            let v1 = render_drum_kit(key, 100, 1.0, Kit::V1);
+            let v3 = render_drum_kit(key, 100, 1.0, Kit::V3);
+            let br = render_drum_kit(key, 100, 1.0, Kit::Brush);
+            assert_eq!(br, v3, "brush key {key} must fall back to the V3 voice");
+            assert_ne!(br, v1, "brush key {key} wrongly renders the V1 voice");
+        }
+    }
+
+    /// BR-O1: no wire spike — the brush tap carries far less of the V3
+    /// snare's wire-cluster HF (fraction above 4.5 kHz), because nylon
+    /// strands cannot crack the wires.
+    #[test]
+    fn brush_tap_no_wire_spike() {
+        let hf_frac = |b: &[f32]| {
+            let s = &b[..(0.15 * SR12) as usize];
+            testutil::hp_rms(s, SR12, 4500.0) / testutil::rms(s).max(1e-12)
+        };
+        let brush = hf_frac(&render_drum_kit(38, 100, 0.3, Kit::Brush));
+        let v3 = hf_frac(&render_drum_kit(38, 100, 0.3, Kit::V3));
+        println!("BR-O1 hf fraction: brush {brush:.4} vs v3 {v3:.4}");
+        assert!(
+            brush <= 0.5 * v3,
+            "brush tap still spikes the wires: {brush:.4} vs v3 {v3:.4}"
+        );
+    }
+
+    /// BR-O2 (level knob BRUSH_TAP_GAIN): the tap sits with the V1 snare at
+    /// the same velocity (±2 dB over the hit).
+    #[test]
+    fn brush_tap_level_vs_v1_snare() {
+        let tap = render_drum_kit(38, 100, 0.25, Kit::Brush);
+        let sn = render_drum_kit(38, 100, 0.25, Kit::V1);
+        let d = db(
+            testutil::rms(&tap[..(0.20 * SR12) as usize]),
+            testutil::rms(&sn[..(0.20 * SR12) as usize]),
+        );
+        println!("BR-O2 tap vs v1 snare level: {d:+.2} dB");
+        assert!(
+            d.abs() <= 2.0,
+            "brush tap level {d:+.2} dB off the v1 snare"
+        );
+    }
+
+    /// BR-O3 structural seam: the tap keeps the SNARE_TONES head frequencies
+    /// and amplitudes but shortens every T60 — same head, softer strike.
+    #[test]
+    fn brush_tap_tones_structural_seam() {
+        for (i, (bt, st)) in BRUSH_TAP_TONES.iter().zip(SNARE_TONES.iter()).enumerate() {
+            assert_eq!(bt.0, st.0, "tone {i}: head frequency changed");
+            assert!(
+                bt.2 < st.2,
+                "tone {i}: brush T60 {} not shorter than snare {}",
+                bt.2,
+                st.2
+            );
+        }
+    }
+
+    /// BR-O4,5: the slap is the accented tap (louder at equal velocity), and
+    /// its strands land TWICE — the 12 ms re-excitation burst lifts the
+    /// 10-22 ms window relative to the first contact, where the tap's noise
+    /// only decays.
+    #[test]
+    fn brush_slap_accent_and_double_contact() {
+        let slap = render_drum_kit(39, 100, 0.3, Kit::Brush);
+        let tap = render_drum_kit(38, 100, 0.3, Kit::Brush);
+        let d = db(
+            testutil::rms(&slap[..(0.20 * SR12) as usize]),
+            testutil::rms(&tap[..(0.20 * SR12) as usize]),
+        );
+        println!("BR-O4 slap vs tap level: {d:+.2} dB");
+        assert!(d > 0.4, "slap not an accent: {d:+.2} dB vs tap");
+        let second_contact =
+            |b: &[f32]| hp_win(b, 800.0, 0.013, 0.022) / hp_win(b, 800.0, 0.004, 0.011).max(1e-12);
+        let rs = second_contact(&slap);
+        let rt = second_contact(&tap);
+        println!("BR-O5 second-contact ratio: slap {rs:.3} vs tap {rt:.3}");
+        assert!(
+            rs >= 1.2 * rt,
+            "slap second contact missing: {rs:.3} vs tap {rt:.3}"
+        );
+    }
+
+    /// SW-O1: the swirl SWELLS, it does not hit — the first 30 ms stays well
+    /// under the eventual peak, which lands only after ≥50 ms.
+    #[test]
+    fn brush_swirl_swells_not_hits() {
+        let b = render_drum_kit(40, 100, 1.0, Kit::Brush);
+        let peak = b.iter().fold(0f32, |m, &x| m.max(x.abs()));
+        let early = b[..(0.03 * SR12) as usize]
+            .iter()
+            .fold(0f32, |m, &x| m.max(x.abs()));
+        let peak_t = b.iter().position(|&x| x.abs() >= 0.999 * peak).unwrap_or(0) as f32 / SR12;
+        println!("SW-O1 early peak {early:.4} vs peak {peak:.4} at {peak_t:.3} s");
+        assert!(
+            early <= 0.4 * peak,
+            "swirl hits instead of swelling: {early:.4} vs {peak:.4}"
+        );
+        assert!(peak_t >= 0.05, "swirl peaks too early: {peak_t:.3} s");
+    }
+
+    /// SW-O2: the stir SUSTAINS across its stroke (the mid window holds up
+    /// against the early one), and the third band's 0.45 s onset is the
+    /// return sweep — late HF well above the first stroke's.
+    #[test]
+    fn brush_swirl_sustain_and_return_sweep() {
+        let b = render_drum_kit(40, 100, 1.0, Kit::Brush);
+        let sustain = testutil::rms(seg(&b, 0.45, 0.70)) / testutil::rms(seg(&b, 0.10, 0.35));
+        println!("SW-O2 sustain ratio {sustain:.3}");
+        assert!(sustain >= 0.5, "swirl dies mid-stroke: {sustain:.3}");
+        let ret = hp_win(&b, 3700.0, 0.50, 0.70) / hp_win(&b, 3700.0, 0.10, 0.30).max(1e-12);
+        println!("SW-O2 return-sweep HF ratio {ret:.3}");
+        assert!(ret >= 1.3, "no return sweep: late/early HF {ret:.3}");
+    }
+
+    /// SW-O3 (differential): the 5 Hz stir AM is REAL — the shipping swirl's
+    /// envelope carries far more 5 Hz than the same drum without the shimmer.
+    #[test]
+    fn brush_swirl_slow_am_differential() {
+        let am5 = |mut v: Box<dyn Voice>| {
+            let mut b = vec![0f32; (1.0 * SR12) as usize];
+            v.render(&mut b);
+            let mut lp = OnePole::lowpass(25.0, SR12);
+            let env: Vec<f32> = b.iter().map(|&x| lp.process(x.abs())).collect();
+            let s = &env[(0.1 * SR12) as usize..(0.9 * SR12) as usize];
+            let mean = s.iter().sum::<f32>() / s.len() as f32;
+            let d: Vec<f32> = s.iter().map(|&x| x - mean).collect();
+            testutil::mag_at(&d, SR12, BRUSH_SWIRL_AM_RATE_HZ) / mean.max(1e-12)
+        };
+        let with = am5(brush_swirl(100, SR12, 7).unwrap());
+        let without = am5(Box::new(brush_swirl_drum(100, SR12, 7)));
+        println!("SW-O3 5 Hz AM: with {with:.4} vs without {without:.4}");
+        // the clone's staggered band swells leak a ~0.55 floor into the 5 Hz
+        // bin (three onset lumps across 0.85 s), so the differential is a
+        // ratio over that floor plus an absolute depth check
+        assert!(with >= 0.75, "stir AM too shallow: {with:.4}");
+        assert!(
+            with >= 1.35 * without,
+            "stir AM missing: {with:.4} vs {without:.4}"
+        );
+    }
+
+    /// SW-O4: the swirl seats in the brush's mid-high "shhh" band — spectral
+    /// centroid inside 1.8-4.5 kHz, not a full-band cymbal wash.
+    #[test]
+    fn brush_swirl_spectral_seat() {
+        let b = render_drum_kit(40, 100, 1.0, Kit::Brush);
+        let c = testutil::centroid(seg(&b, 0.05, 0.85), SR12);
+        println!("SW-O4 swirl centroid {c:.0} Hz");
+        assert!(
+            (1800.0..=4500.0).contains(&c),
+            "swirl centroid {c:.0} Hz outside its seat"
+        );
+    }
+
+    /// BH-O1,2 (level knob BRUSH_CLOSED_HAT_GAIN): the brush closed hat is
+    /// DARKER than the V1 hat (centroid ≤0.85x) at matched level (±2 dB).
+    /// (42|44 never branch on kit in `make`, so V1 == V3 here — the stick
+    /// anchor is the shipped hat.)
+    #[test]
+    fn brush_closed_hat_darker_and_level() {
+        let br = render_drum_kit(42, 100, 0.16, Kit::Brush);
+        let v1 = render_drum_kit(42, 100, 0.16, Kit::V1);
+        let cb = testutil::centroid(&br[..(0.14 * SR12) as usize], SR12);
+        let c1 = testutil::centroid(&v1[..(0.14 * SR12) as usize], SR12);
+        println!("BH-O1 closed-hat centroid: brush {cb:.0} vs v1 {c1:.0} Hz");
+        assert!(
+            cb <= 0.85 * c1,
+            "brush closed hat not darker: {cb:.0} vs {c1:.0}"
+        );
+        let d = db(
+            testutil::rms(&br[..(0.14 * SR12) as usize]),
+            testutil::rms(&v1[..(0.14 * SR12) as usize]),
+        );
+        println!("BH-O2 closed-hat level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "brush closed hat level {d:+.2} dB off v1");
+    }
+
+    /// BH-O3,4,5 (level knob BRUSH_OPEN_HAT_GAIN): the brush open hat keeps
+    /// the DR3 anatomy (the 45 Hz sizzle wobble reads on its HF envelope)
+    /// but darker than the V3 open hat (centroid ≤0.85x) at matched level.
+    #[test]
+    fn brush_open_hat_darker_dr3_and_level() {
+        let br = render_drum_kit(46, 100, 0.95, Kit::Brush);
+        let v3 = render_drum_kit(46, 100, 0.95, Kit::V3);
+        let cb = testutil::centroid(seg(&br, 0.0, 0.9), SR12);
+        let c3 = testutil::centroid(seg(&v3, 0.0, 0.9), SR12);
+        println!("BH-O3 open-hat centroid: brush {cb:.0} vs v3 {c3:.0} Hz");
+        assert!(
+            cb <= 0.85 * c3,
+            "brush open hat not darker: {cb:.0} vs {c3:.0}"
+        );
+        // DR3 sizzle wobble: `Shimmer` is lowpassed-NOISE AM (no 45 Hz
+        // Goertzel line exists) — so the oracle is a differential: the
+        // shipping hat's HF-envelope variability well above the identical
+        // spec with the shimmer stripped.
+        // flatten by DIVISION (e / slow(e)) so the tail's decay and shrinking
+        // mean don't dominate — the flattened envelope of an unmodulated wash
+        // is near-constant; the wobble's AM survives the division
+        let hf_env_cv = |mut v: Box<dyn Voice>| {
+            let mut b = vec![0f32; (0.95 * SR12) as usize];
+            v.render(&mut b);
+            let mut hp = Biquad::highpass(3000.0, 0.7, SR12);
+            let mut lp = OnePole::lowpass(90.0, SR12);
+            let mut slow = OnePole::lowpass(3.0, SR12);
+            let flat: Vec<f64> = b
+                .iter()
+                .map(|&x| {
+                    let e = lp.process(hp.process(x).abs());
+                    (e / slow.process(e).max(1e-9)) as f64
+                })
+                .collect();
+            let s = &flat[(0.1 * SR12) as usize..(0.8 * SR12) as usize];
+            let mean = s.iter().sum::<f64>() / s.len() as f64;
+            let var = s.iter().map(|&x| (x - mean) * (x - mean)).sum::<f64>() / s.len() as f64;
+            var.sqrt() / mean.max(1e-12)
+        };
+        let with = hf_env_cv(make(46, 100, SR12, 7, Kit::Brush, false).unwrap());
+        let mut spec = brush_open_hat_spec();
+        spec.shimmer = None;
+        let without = hf_env_cv(cymbal(&spec, SR12, 7, 100).unwrap());
+        println!("BH-O4 sizzle wobble CV: with {with:.4} vs without {without:.4}");
+        assert!(
+            with >= 1.5 * without,
+            "DR3 sizzle wobble missing: {with:.4} vs {without:.4}"
+        );
+        let d = db(
+            testutil::rms(seg(&br, 0.0, 0.9)),
+            testutil::rms(seg(&v3, 0.0, 0.9)),
+        );
+        println!("BH-O5 open-hat level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "brush open hat level {d:+.2} dB off v3");
+    }
+
+    /// BR-O6 (level knob BRUSH_RIM_GAIN): the brush rim knock is WOODIER than
+    /// the stick side-stick (materially lower centroid) at matched level.
+    #[test]
+    fn brush_rim_woodier_and_level() {
+        let br = render_drum_kit(37, 100, 0.12, Kit::Brush);
+        let v1 = render_drum_kit(37, 100, 0.12, Kit::V1);
+        let cb = testutil::centroid(&br[..(0.08 * SR12) as usize], SR12);
+        let c1 = testutil::centroid(&v1[..(0.08 * SR12) as usize], SR12);
+        println!("BR-O6 rim centroid: brush {cb:.0} vs v1 {c1:.0} Hz");
+        assert!(cb <= 0.8 * c1, "brush rim not woodier: {cb:.0} vs {c1:.0}");
+        let d = db(
+            testutil::rms(&br[..(0.10 * SR12) as usize]),
+            testutil::rms(&v1[..(0.10 * SR12) as usize]),
+        );
+        println!("BR-O6 rim level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "brush rim level {d:+.2} dB off v1");
+    }
+
+    /// BK-O1,2,3 (level knob BRUSH_KICK_GAIN): the brush kick keeps the V1
+    /// kick's sub drop intact (86 Hz band within ±2 dB) under a much softer
+    /// beater (HF fraction well below V1's), at matched overall level.
+    #[test]
+    fn brush_kick_soft_beater_sub_intact() {
+        let br = render_drum_kit(36, 100, 0.6, Kit::Brush);
+        let v1 = render_drum_kit(36, 100, 0.6, Kit::V1);
+        let sub = db(
+            testutil::band_rms(seg(&br, 0.0, 0.5), SR12, 86.0, 1.0),
+            testutil::band_rms(seg(&v1, 0.0, 0.5), SR12, 86.0, 1.0),
+        );
+        println!("BK-O1 sub band delta: {sub:+.2} dB");
+        assert!(sub.abs() <= 2.0, "brush kick sub drifted: {sub:+.2} dB");
+        // filter first, window [1, 30] ms — inside the 5 ms-T60 beater
+        // noise's life. The tone stack's t=0 onset step is identical in both
+        // kits and would floor the ratio at ~0.58; the HP-2k transient it
+        // excites is gone within ~0.1 ms, so a 1 ms skip clears it.
+        let hf_frac = |b: &[f32]| {
+            hp_win(b, 2000.0, 0.001, 0.03) / testutil::rms(&b[..(0.03 * SR12) as usize]).max(1e-12)
+        };
+        let hb = hf_frac(&br);
+        let h1 = hf_frac(&v1);
+        println!("BK-O2 beater HF fraction: brush {hb:.4} vs v1 {h1:.4}");
+        assert!(
+            hb <= 0.5 * h1,
+            "brush beater not softer: {hb:.4} vs {h1:.4}"
+        );
+        let d = db(
+            testutil::rms(seg(&br, 0.0, 0.5)),
+            testutil::rms(seg(&v1, 0.0, 0.5)),
+        );
+        println!("BK-O3 kick level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "brush kick level {d:+.2} dB off v1");
+    }
+
+    /// Post-calibration byte-exact freeze of the brush kit (same contract as
+    /// `v1_drum_render_is_frozen`): any shared-path edit that shifts a brush
+    /// voice below the level oracles' ±2 dB trip-wire fails loudly here.
+    #[test]
+    fn brush_render_is_frozen() {
+        // (key, fingerprint). Kick, tap, slap, swirl, closed hat, open hat.
+        let cases: [(u8, u64); 6] = [
+            (36, 0xf4a96bb9e49b508d),
+            (38, 0xf0f2e9c7eafc3efc),
+            (39, 0xcbe847e0064d5592),
+            (40, 0xd7530d0e9024d083),
+            (42, 0xe13957c3b7691ac5),
+            (46, 0x34b8c0ef2dba6183),
+        ];
+        for (key, want) in cases {
+            let got = render_fingerprint(&render_drum_kit(key, 100, 1.0, Kit::Brush));
+            assert_eq!(got, want, "brush render of key {key} drifted: {got:#018x}");
+        }
     }
 }

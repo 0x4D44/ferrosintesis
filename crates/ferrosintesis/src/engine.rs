@@ -293,7 +293,8 @@ fn fx_profile(program: u8) -> (f32, f32) {
         88..=95 => (0.45, 0.0),        // pads
         96..=103 => (0.30, 0.35),      // crystal: shimmer and echo
         8..=10 => (0.0, 0.15),         // celesta / glockenspiel / music box
-        14 | 15 => (0.0, 0.08),        // tubular bells
+        14 => (0.0, 0.08),             // tubular bells
+        15 => (0.10, 0.0),             // hammered dulcimer: sub-beat width, no echo
         _ => (0.0, 0.0),
     }
 }
@@ -1156,9 +1157,15 @@ impl EngineCore {
         s.program = prog;
         // Drums use the best current kit by default. GM/GM2 Program Changes on
         // channel 10 are retained as authored metadata, not a compatibility
-        // downgrade path.
+        // downgrade path — with one GM2 exception (v0.12): program 40 EXACTLY
+        // is the GM2 brush kit; any other program keeps selecting V3 (the
+        // committed showcase demo authors prog 8 and must stay V3).
         if ch == 9 {
-            s.kit = drums::Kit::V3;
+            s.kit = if prog == 40 {
+                drums::Kit::Brush
+            } else {
+                drums::Kit::V3
+            };
         }
         let (cho, del) = if ch == 9 {
             (0.0, 0.0)
@@ -4862,6 +4869,82 @@ mod tests {
         assert_eq!(
             alt_piano, def_piano,
             "alt bank must delegate non-orchestral programs to the default voice"
+        );
+    }
+
+    /// KP-O3 (v0.12 brush kit selection seam, re-anchored on trunk's V3
+    /// default): a ch-10 Program Change of EXACTLY 40 selects the brush kit;
+    /// any other program keeps selecting V3 (the showcase demo's prog 8 must
+    /// not change meaning), and a later non-40 program hands the channel back
+    /// to V3 for subsequently spawned hits.
+    #[test]
+    fn ch10_program_40_selects_brush() {
+        let sr = 44100.0;
+        let song = |progs: &[(f64, u8)]| {
+            let mut ev: Vec<(f64, EvKind)> = progs
+                .iter()
+                .map(|&(t, p)| (t, EvKind::Prog { ch: 9, prog: p }))
+                .collect();
+            ev.push((
+                0.3,
+                EvKind::NoteOn {
+                    ch: 9,
+                    key: 38,
+                    vel: 100,
+                },
+            ));
+            ev.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+            test_song(ev, 1.0)
+        };
+        let r = |progs: &[(f64, u8)]| render(&song(progs), &test_opts(sr)).0;
+        let v3 = r(&[]);
+        let prog8 = r(&[(0.0, 8)]);
+        let brush = r(&[(0.0, 40)]);
+        let back = r(&[(0.0, 40), (0.1, 8)]);
+        assert_eq!(prog8, v3, "non-40 programs must keep the V3 kit");
+        assert_ne!(brush, v3, "prog 40 must select Brush, not V3");
+        assert_eq!(back, v3, "a later non-40 program must hand back to V3");
+    }
+
+    /// G5 (v0.12 tam-tam, authored-only): a GM 14 channel that never authors
+    /// CC0 renders byte-identically with and without an explicit CC0=0
+    /// (tubular bells, the default bank), and only a non-zero CC0 swaps in
+    /// the alt-bank tam-tam — whose ~98 Hz gong fundamental confirms the
+    /// routing.
+    #[test]
+    fn alt_bank_gm14_tamtam_authored_only() {
+        let sr = 44100.0;
+        let base = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 14 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 43,
+                    vel: 100,
+                },
+            ),
+        ];
+        let with_cc0 = |val: u8| {
+            let mut ev = vec![(0.0, EvKind::Cc { ch: 0, num: 0, val })];
+            ev.extend(base.iter().cloned());
+            ev
+        };
+        let no_cc = render(&test_song(base.clone(), 2.0), &test_opts(sr)).0;
+        let cc0_zero = render(&test_song(with_cc0(0), 2.0), &test_opts(sr)).0;
+        let cc0_alt = render(&test_song(with_cc0(8), 2.0), &test_opts(sr)).0;
+        assert_eq!(cc0_zero, no_cc, "CC0=0 must be a no-op (default bank)");
+        assert_ne!(cc0_alt, no_cc, "CC0!=0 on GM 14 must swap in the tam-tam");
+        let l = left(&cc0_alt);
+        let f = crate::testutil::peak_locate(
+            &l[(0.5 * sr) as usize..(1.8 * sr) as usize],
+            sr,
+            55.0,
+            140.0,
+        );
+        assert!(
+            (f - 98.0).abs() <= 3.0,
+            "alt GM 14 fundamental {f:.1} Hz is not the key-43 gong"
         );
     }
 }

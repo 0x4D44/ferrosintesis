@@ -52,6 +52,13 @@ const PIZZ: PluckPreset = PluckPreset {
     wound_key_split: true,
     harmonic: false,
     mwah: None, // no fretless vocal bloom on a pizzicato
+    // v0.12 course fields: the exact literals the Pluck core used to hardcode
+    // (the frozen pre-course polarization voicing).
+    course_detune: 1.0013,
+    course_t60: 0.42,
+    course_bright: 1.15,
+    course_mix: (0.74, 0.26),
+    course_couple: 0.02, // == voices::K_COUPLE, the frozen polarization coupling
     #[cfg(test)]
     name: "PIZZ",
 };
@@ -1018,6 +1025,20 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // Same freeze for alt-bank reeds: the default bank's LA_REED layer
         // (voices.rs, GM 68–71) must not reach alt-bank channels.
         68..=71 => crate::voices::make(program, key, vel, sr, seed, false),
+        // v0.12: the alt bank's GM 14 is a tam-tam / gong ageng (the default
+        // bank keeps tubular bells).
+        14 => Box::new(crate::voices::tam_tam(key, vel, sr, seed)),
+        // v0.12 alt-bank percussion set B: a SECOND voicing of GM 112-119
+        // (ported from the superseded v0.11 branch), coexisting with the
+        // default-bank 112-119 voices, which stay exactly as shipped.
+        112 => Box::new(crate::voices::tinkle_bell_b(key, vel, sr, seed)),
+        113 => Box::new(crate::voices::agogo_b(key, vel, sr, seed)),
+        114 => Box::new(crate::voices::steel_drum_b(key, vel, sr, seed)),
+        115 => Box::new(crate::voices::woodblock_b(key, vel, sr, seed)),
+        116 => crate::drums::taiko_b(key, vel, sr, seed),
+        117 => crate::drums::melodic_tom_b(key, vel, sr, seed),
+        118 => crate::drums::synth_drum_b(key, vel, sr, seed),
+        119 => crate::drums::reverse_cymbal_b(key, vel, sr, seed),
         _ => crate::voices::make(program, key, vel, sr, seed, samples),
     }
 }
@@ -1658,5 +1679,757 @@ mod tests {
         let db = 20.0 * (late / early).log10();
         println!("CH-O6 shimmer early {early:.6} late {late:.6} ({db:.1} dB)");
         assert!(late >= 2.0 * early, "shimmer did not bloom: {db:.1} dB");
+    }
+
+    // =======================================================================
+    // v0.12 — alt-bank percussion set B (GM 112-119) + GM 14 tam-tam oracles.
+    // Ported from the superseded v0.11 branch (216da4a); the voices were
+    // default-bank there, so the oracles now render through the alt factory
+    // `make` and anchor their level knobs to DEFAULT-bank comparators
+    // (glockenspiel 9 / xylophone 13 / marimba 12 / timpani 47), which are
+    // unchanged since the branch forked.
+    // =======================================================================
+
+    const SR12: f32 = 44100.0;
+
+    /// Render an alt-bank voice via the alt factory (the real CC0 seam).
+    fn render_alt(program: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        render_make(program, key, vel, secs, seed, false)
+    }
+
+    /// Render the DEFAULT-bank voice of the same program (comparators, and
+    /// the bank-B distinctness differentials).
+    fn render_def(program: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        let mut v = crate::voices::make(program, key, vel, SR12, seed, false);
+        let mut buf = vec![0f32; (SR12 * secs) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    fn seg12(buf: &[f32], a: f32, b: f32) -> &[f32] {
+        &buf[(a * SR12) as usize..(b * SR12) as usize]
+    }
+
+    fn db_ratio(a: f32, b: f32) -> f32 {
+        20.0 * (a / b.max(1e-12)).log10()
+    }
+
+    /// FNV-1a over the raw f32 bits — byte-exact render fingerprint.
+    fn render_hash(samples: &[f32]) -> u64 {
+        let mut h = 0xcbf29ce484222325u64;
+        for &x in samples {
+            h ^= x.to_bits() as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+        h
+    }
+
+    fn max_abs(s: &[f32]) -> f32 {
+        s.iter().fold(0f32, |m, &x| m.max(x.abs()))
+    }
+
+    /// First time (seconds) the raw |sample| reaches 90% of the render's peak.
+    fn rise_to_090_s(buf: &[f32]) -> f32 {
+        let peak = max_abs(buf);
+        buf.iter()
+            .position(|&x| x.abs() >= 0.9 * peak)
+            .map_or(f32::INFINITY, |i| i as f32 / SR12)
+    }
+
+    /// RMS of `[a, z]` s of the WHOLE-buffer highpass — filter first, then
+    /// window (a mid-ring slice boundary excites the filter as a step).
+    fn hp_win(b: &[f32], corner: f32, a: f32, z: f32) -> f32 {
+        let mut hp = Biquad::highpass(corner, 0.7, SR12);
+        let f: Vec<f32> = b.iter().map(|&x| hp.process(x)).collect();
+        rms(seg12(&f, a, z))
+    }
+
+    /// T1+T2: bank-B GM 112 tinkle bell speaks at the written pitch (folded
+    /// register) and rings out in well under a second (fast-fading small
+    /// bell, not a glock sustain and not a one-sample click).
+    #[test]
+    fn altbank_b112_tinkle_pitch_and_decay() {
+        let b = render_alt(112, 84, 100, 1.2, 0x11_2001);
+        // pitch: Goertzel argmax (never zero-crossings) on the early ring
+        let f = peak_locate(seg12(&b, 0.02, 0.40), SR12, 700.0, 1500.0);
+        assert!(
+            (f / 1046.5 - 1.0).abs() <= 0.015,
+            "B112 key 84 pitch {f:.1} Hz vs 1046.5 Hz"
+        );
+        let late = rms(seg12(&b, 0.80, 1.00));
+        let early = rms(seg12(&b, 0.02, 0.22));
+        let ratio = late / early.max(1e-12);
+        println!("B112 decay ratio late/early = {ratio:.4}");
+        assert!(
+            (0.005..=0.12).contains(&ratio),
+            "B112 decay ratio {ratio:.4} outside [0.005, 0.12]"
+        );
+    }
+
+    /// T3 (level knob TINKLE_B_GAIN): the tinkle bell sits with the
+    /// mallet/bell family — within ±2 dB of the default-bank glockenspiel at
+    /// the SAME key (matched pitch per lessons_learnt).
+    #[test]
+    fn altbank_b112_tinkle_level_vs_glock() {
+        let tink = render_alt(112, 84, 100, 0.4, 0x11_2002);
+        let glock = render_def(9, 84, 100, 0.4, 0x11_2002);
+        let d = db_ratio(
+            rms(seg12(&tink, 0.02, 0.32)),
+            rms(seg12(&glock, 0.02, 0.32)),
+        );
+        println!("B112 vs glock level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "B112 level {d:+.2} dB off glock (>2 dB)");
+    }
+
+    /// T4: the three bank-B Modal percussion voices are genuinely new
+    /// timbres — brighter centroid than the celesta at matched pitch, and
+    /// render-hash distinct from every default-bank keyboard-percussion
+    /// program AND from each other at the same key/vel/seed.
+    #[test]
+    fn altbank_b112_114_timbre_distinct_at_matched_pitch() {
+        let key = 84;
+        let seed = 0x11_2003;
+        let tink = render_alt(112, key, 100, 0.4, seed);
+        let cele = render_def(8, key, 100, 0.4, seed);
+        // Brightness at matched pitch, in the strike's live window (the upper
+        // modes carrying the "tinkle" have sub-second t60s). Measured as the
+        // above-2-kHz energy share — the 20-bin log centroid is a bin-placement
+        // lottery for sparse line spectra and cannot carry this comparison.
+        let bright = |b: &[f32]| {
+            let s = seg12(b, 0.01, 0.11);
+            hp_rms(s, SR12, 2000.0) / rms(s).max(1e-12)
+        };
+        let bt = bright(&tink);
+        let bc = bright(&cele);
+        println!("B112 hp2k share {bt:.3} vs celesta {bc:.3}");
+        assert!(
+            bt >= 1.25 * bc,
+            "B112 brightness {bt:.3} not >=1.25x celesta {bc:.3}"
+        );
+        let mut hashes: Vec<(String, u64)> = [112u8, 113, 114]
+            .iter()
+            .map(|&p| {
+                (
+                    format!("alt{p}"),
+                    render_hash(&render_alt(p, key, 100, 0.8, seed)),
+                )
+            })
+            .collect();
+        for p in [8u8, 9, 10, 12, 14] {
+            hashes.push((
+                format!("def{p}"),
+                render_hash(&render_def(p, key, 100, 0.8, seed)),
+            ));
+        }
+        for i in 0..hashes.len() {
+            for j in (i + 1)..hashes.len() {
+                assert_ne!(
+                    hashes[i].1, hashes[j].1,
+                    "{} and {} render identically at key {key}",
+                    hashes[i].0, hashes[j].0
+                );
+            }
+        }
+    }
+
+    /// A1+A2: bank-B GM 113 agogo speaks at the written pitch and is SHORT —
+    /// a dry clang bell, gone within half a second.
+    #[test]
+    fn altbank_b113_agogo_pitch_short_decay() {
+        let b = render_alt(113, 81, 100, 0.6, 0x11_3001);
+        let f = peak_locate(seg12(&b, 0.01, 0.15), SR12, 600.0, 1200.0);
+        assert!(
+            (f / 880.0 - 1.0).abs() <= 0.015,
+            "B113 key 81 pitch {f:.1} Hz vs 880 Hz"
+        );
+        let ratio = rms(seg12(&b, 0.30, 0.40)) / rms(seg12(&b, 0.01, 0.11)).max(1e-12);
+        println!("B113 decay ratio = {ratio:.4}");
+        assert!(
+            (0.002..=0.06).contains(&ratio),
+            "B113 decay ratio {ratio:.4} outside [0.002, 0.06]"
+        );
+    }
+
+    /// A3: the agogo's identity is the cowbell-family clang partial near
+    /// 1.51x f0 — present and prominent, but below the fundamental.
+    #[test]
+    fn altbank_b113_agogo_clang_mode() {
+        let b = render_alt(113, 81, 100, 0.3, 0x11_3002);
+        let s = seg12(&b, 0.01, 0.15);
+        let clang_f = peak_locate(s, SR12, 1.45 * 880.0, 1.60 * 880.0);
+        let ratio = mag_at(s, SR12, clang_f) / mag_at(s, SR12, 880.0).max(1e-12);
+        println!("B113 clang mode at {clang_f:.0} Hz, clang/fund = {ratio:.3}");
+        assert!(
+            (0.25..=1.2).contains(&ratio),
+            "B113 clang/fundamental ratio {ratio:.3} outside [0.25, 1.2]"
+        );
+    }
+
+    /// A4 (level knob AGOGO_B_GAIN): within ±2 dB of the default-bank
+    /// xylophone at the same key (both short bright percussion in the same
+    /// register).
+    #[test]
+    fn altbank_b113_agogo_level_vs_xylophone() {
+        let ago = render_alt(113, 81, 100, 0.3, 0x11_3003);
+        let xyl = render_def(13, 81, 100, 0.3, 0x11_3003);
+        let d = db_ratio(rms(seg12(&ago, 0.01, 0.21)), rms(seg12(&xyl, 0.01, 0.21)));
+        println!("B113 vs xylophone level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "B113 level {d:+.2} dB off xylophone");
+    }
+
+    /// S1: the steel pan's spectral signature — a strong octave (2.000x) and
+    /// near-twelfth (3.011x) over the fundamental, and an octave FAR more
+    /// prominent than the marimba's (whose modes sit at 3.0/5.2, not 2.0).
+    #[test]
+    fn altbank_b114_steel_octave_twelfth_prominence() {
+        let f0 = 261.63_f32;
+        let pan = render_alt(114, 60, 100, 1.0, 0x11_4001);
+        let s = seg12(&pan, 0.05, 0.60);
+        let fund = mag_at(s, SR12, f0).max(1e-12);
+        let oct = mag_at(s, SR12, 2.0 * f0) / fund;
+        let twelfth = mag_at(s, SR12, 3.011 * f0) / fund;
+        let mar = render_def(12, 60, 100, 1.0, 0x11_4001);
+        let mseg = seg12(&mar, 0.05, 0.60);
+        let moct = mag_at(mseg, SR12, 2.0 * f0) / mag_at(mseg, SR12, f0).max(1e-12);
+        println!("B114 oct {oct:.3} twelfth {twelfth:.3}; marimba oct {moct:.3}");
+        assert!(oct >= 0.40, "B114 octave/fund {oct:.3} < 0.40");
+        assert!(twelfth >= 0.20, "B114 twelfth/fund {twelfth:.3} < 0.20");
+        assert!(
+            oct >= 3.0 * moct,
+            "B114 octave {oct:.3} not >=3x marimba's {moct:.3}"
+        );
+    }
+
+    /// S2: a rubber pan mallet lands SOFT — the render takes materially longer
+    /// to reach 90% of its peak than the hard-struck xylophone.
+    #[test]
+    fn altbank_b114_steel_soft_attack_vs_xylophone() {
+        let pan = render_alt(114, 60, 100, 0.3, 0x11_4002);
+        let xyl = render_def(13, 60, 100, 0.3, 0x11_4002);
+        let t_pan = rise_to_090_s(&pan);
+        let t_xyl = rise_to_090_s(&xyl);
+        println!(
+            "B114 rise {:.1} ms, xylophone {:.1} ms",
+            t_pan * 1e3,
+            t_xyl * 1e3
+        );
+        assert!(t_pan >= 0.006, "B114 attack {:.1} ms < 6 ms", t_pan * 1e3);
+        assert!(
+            t_xyl < 0.004,
+            "xylophone attack {:.1} ms >= 4 ms",
+            t_xyl * 1e3
+        );
+    }
+
+    /// S3: the pan's signature shimmer — the 2.000/2.018 octave twin pair
+    /// beats at 0.018*f0 (~4.7 Hz at C4). Bandpass the octave, flatten the
+    /// decay, then read the AM rate off the envelope autocorrelation.
+    #[test]
+    fn altbank_b114_steel_octave_twin_shimmer() {
+        let f0 = 261.63_f32;
+        let pan = render_alt(114, 60, 100, 1.3, 0x11_4003);
+        // window starts at 0.30 s: the decay-flattening tracker (tau ~0.13 s)
+        // must converge before the beat is read, or its warm-up ramp aliases
+        // into the lag window as a phantom rate
+        let (peak, rate) = twin_beat_autocorr(&pan, 2.0 * f0, 0.30, 1.25, 0.12, 0.35);
+        println!("B114 twin beat: peak {peak:.3} at {rate:.2} Hz");
+        assert!(
+            peak >= 0.20,
+            "B114 twin-beat autocorr peak {peak:.3} < 0.20"
+        );
+        assert!(
+            (rate - 4.7).abs() <= 1.2,
+            "B114 twin-beat rate {rate:.2} Hz not 4.7 +/- 1.2 Hz"
+        );
+    }
+
+    /// Beat detector for decaying twin pairs: bandpass at `bp_f` (Q 8), take
+    /// the rectified envelope, FLATTEN the exponential decay by dividing by a
+    /// lagged one-pole of the same envelope (an exponential decay becomes a
+    /// near-constant under that division; the beat's AM survives), then a
+    /// mean-removed normalised autocorrelation over the lag window. The
+    /// plain env_autocorr on these percussive twins is decay-dominated (the
+    /// t60s here are ~1 s, a 60 dB/s trend that buries a +/-1-2 dB beat), so
+    /// the flattening is load-bearing — see lessons_learnt on measuring a
+    /// feature inside its live window.
+    fn twin_beat_autocorr(
+        buf: &[f32],
+        bp_f: f32,
+        a_s: f32,
+        z_s: f32,
+        lag_lo_s: f32,
+        lag_hi_s: f32,
+    ) -> (f32, f32) {
+        let mut bp = Biquad::bandpass(bp_f, 8.0, SR12);
+        let mut env_lp = OnePole::lowpass(40.0, SR12);
+        let mut slow = OnePole::lowpass(1.2, SR12);
+        let mut flat = Vec::with_capacity(buf.len());
+        for &x in buf {
+            let e = env_lp.process(bp.process(x).abs());
+            let s = slow.process(e);
+            flat.push(e / s.max(1e-9));
+        }
+        let s = &flat[(a_s * SR12) as usize..(z_s * SR12) as usize];
+        let mean = s.iter().sum::<f32>() / s.len() as f32;
+        let d: Vec<f64> = s.iter().map(|&x| (x - mean) as f64).collect();
+        let zero: f64 = d.iter().map(|&x| x * x).sum();
+        if zero <= 0.0 {
+            return (0.0, 0.0);
+        }
+        let lag_lo = ((lag_lo_s * SR12) as usize).max(1);
+        let lag_hi = ((lag_hi_s * SR12) as usize).min(d.len() - 1);
+        let (mut best, mut best_lag) = (f64::MIN, lag_lo);
+        for lag in lag_lo..=lag_hi {
+            let c: f64 = (0..d.len() - lag).map(|i| d[i] * d[i + lag]).sum::<f64>() / zero;
+            if c > best {
+                best = c;
+                best_lag = lag;
+            }
+        }
+        (best as f32, SR12 / best_lag as f32)
+    }
+
+    /// S4 (level knob STEELPAN_B_GAIN): within ±2 dB of the default-bank
+    /// marimba at the same key.
+    #[test]
+    fn altbank_b114_steel_level_vs_marimba() {
+        let pan = render_alt(114, 60, 100, 0.5, 0x11_4004);
+        let mar = render_def(12, 60, 100, 0.5, 0x11_4004);
+        let d = db_ratio(rms(seg12(&pan, 0.02, 0.42)), rms(seg12(&mar, 0.02, 0.42)));
+        println!("B114 vs marimba level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "B114 level {d:+.2} dB off marimba");
+    }
+
+    /// B115-1..3: the woodblock speaks at the written pitch inside its
+    /// register, rings only a few tens of ms, and CLAMPS (not folds) keys
+    /// below its register onto the boundary note.
+    #[test]
+    fn altbank_b115_woodblock_pitch_decay_and_clamp() {
+        let b = render_alt(115, 72, 100, 0.3, 0x11_5001);
+        let f = peak_locate(seg12(&b, 0.002, 0.08), SR12, 350.0, 800.0);
+        assert!(
+            (f / 523.25 - 1.0).abs() <= 0.03,
+            "B115 key 72 pitch {f:.1} Hz vs 523.25 Hz"
+        );
+        let t60 = crate::testutil::t60_of(&b, SR12);
+        println!("B115 t60 = {t60:.3} s");
+        assert!(
+            (0.04..=0.16).contains(&t60),
+            "B115 t60 {t60:.3} s outside [0.04, 0.16]"
+        );
+        // clamp check: key 36 lands on the low boundary (key 60 = 261.63 Hz),
+        // NOT an octave fold of C2
+        let lo = render_alt(115, 36, 100, 0.3, 0x11_5001);
+        let fl = peak_locate(seg12(&lo, 0.002, 0.08), SR12, 180.0, 420.0);
+        assert!(
+            (fl / 261.63 - 1.0).abs() <= 0.03,
+            "B115 key 36 should clamp to 261.63 Hz, got {fl:.1} Hz"
+        );
+    }
+
+    /// B115-4 (level knob WOODBLOCK_B_GAIN): within ±2 dB of the default-bank
+    /// xylophone at the same key over the block's whole life.
+    #[test]
+    fn altbank_b115_woodblock_level_vs_xylophone() {
+        let blk = render_alt(115, 72, 100, 0.10, 0x11_5002);
+        let xyl = render_def(13, 72, 100, 0.10, 0x11_5002);
+        let d = db_ratio(rms(&blk), rms(&xyl));
+        println!("B115 vs xylophone level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "B115 level {d:+.2} dB off xylophone");
+    }
+
+    /// Dispatch guard: every bank-B program 112-119 renders something real,
+    /// DIFFERENT from the default-bank voice of the same program (bank B is
+    /// genuinely a second voicing, not an alias), and the eight are pairwise
+    /// distinct.
+    #[test]
+    fn altbank_b112_119_dispatch_distinct() {
+        let seed = 0x11_5003;
+        let mut hashes = Vec::new();
+        for p in 112u8..=119 {
+            let b = render_alt(p, 60, 100, 0.5, seed);
+            assert!(b.iter().any(|&x| x.abs() > 1e-6), "B{p} renders silence");
+            let h = render_hash(&b);
+            let hd = render_hash(&render_def(p, 60, 100, 0.5, seed));
+            assert_ne!(h, hd, "B{p} renders identically to the default bank");
+            hashes.push((p, h));
+        }
+        for i in 0..hashes.len() {
+            for j in (i + 1)..hashes.len() {
+                assert_ne!(
+                    hashes[i].1, hashes[j].1,
+                    "B{} and B{} render identically",
+                    hashes[i].0, hashes[j].0
+                );
+            }
+        }
+    }
+
+    /// B116-1,2: the taiko settles ON the written pitch (key 43 → ~98 Hz,
+    /// read AFTER the 1.5-st tension overshoot has glided out) and stays a
+    /// deep drum — spectral centroid under 300 Hz.
+    #[test]
+    fn altbank_b116_taiko_settled_pitch_and_darkness() {
+        let b = render_alt(116, 43, 100, 1.2, 7);
+        let f = peak_locate(seg12(&b, 0.20, 1.0), SR12, 60.0, 140.0);
+        println!("B116 settled pitch {f:.1} Hz (want ~98)");
+        assert!(
+            (92.1..=107.8).contains(&f),
+            "B116 settled pitch {f:.1} Hz outside [0.94, 1.10] x 98"
+        );
+        let c = centroid(seg12(&b, 0.02, 1.15), SR12);
+        println!("B116 centroid {c:.0} Hz");
+        assert!(c < 300.0, "B116 centroid {c:.0} Hz not a deep drum");
+    }
+
+    /// B116-3,4: the bachi slap grows super-linearly with velocity (the HF
+    /// fraction at vel 127 well above vel 40's, level-normalised), and the
+    /// boom rings 0.9-2.0 s.
+    #[test]
+    fn altbank_b116_taiko_velocity_slap_and_boom() {
+        // Measure the slap INSIDE its own life ([2, 40] ms — skip the first
+        // 2 ms, where the tones' onset step radiates a velocity-independent
+        // splat) and above 2.5 kHz — the 1.6 kHz Q-0.8 slap band still
+        // passes ~0.8 there while the 98 Hz tones are 55 dB down. Filter
+        // the WHOLE render, then window (see hp_win).
+        let slap_frac = |vel: u8| {
+            let b = render_alt(116, 43, vel, 0.5, 7);
+            hp_win(&b, 2500.0, 0.002, 0.04) / rms(&b).max(1e-12)
+        };
+        let hard = slap_frac(127);
+        let soft = slap_frac(40);
+        println!("B116 slap fraction: vel127 {hard:.4} vs vel40 {soft:.4}");
+        assert!(
+            hard > 1.4 * soft,
+            "B116 slap not velocity-shaped: {hard:.4} vs {soft:.4}"
+        );
+        let b = render_alt(116, 43, 100, 2.6, 7);
+        let t60 = crate::testutil::t60_of(&b, SR12);
+        println!("B116 t60 {t60:.2} s");
+        assert!(
+            (0.9..=2.0).contains(&t60),
+            "B116 t60 {t60:.2} s outside [0.9, 2.0]"
+        );
+    }
+
+    /// B116-5 (level knob TAIKO_B_GAIN): a taiko sits with — to a touch
+    /// above — the default-bank timpani at the same key (0..+3 dB).
+    #[test]
+    fn altbank_b116_taiko_level_vs_timpani() {
+        let tai = render_alt(116, 43, 100, 1.0, 7);
+        let tim = render_def(47, 43, 100, 1.0, 7);
+        let d = db_ratio(rms(seg12(&tai, 0.02, 1.0)), rms(seg12(&tim, 0.02, 1.0)));
+        println!("B116 vs timpani level: {d:+.2} dB");
+        assert!(
+            (0.0..=3.0).contains(&d),
+            "B116 level {d:+.2} dB outside [0, +3] of timpani"
+        );
+    }
+
+    /// B117-1,2,3: the melodic tom settles ON the written pitch, approaches
+    /// it FROM ABOVE (the kit-v2 overshoot), and tracks the keyboard — an
+    /// octave apart stays an octave apart.
+    #[test]
+    fn altbank_b117_melodic_tom_pitch_drop_and_tracking() {
+        let settled = |key: u8, lo: f32, hi: f32| {
+            let b = render_alt(117, key, 100, 0.5, 7);
+            peak_locate(seg12(&b, 0.10, 0.35), SR12, lo, hi)
+        };
+        let f57 = settled(57, 150.0, 300.0);
+        println!("B117 settled pitch {f57:.1} Hz (want ~220)");
+        assert!(
+            (206.8..=242.0).contains(&f57),
+            "B117 settled pitch {f57:.1} Hz outside [0.94, 1.10] x 220"
+        );
+        let b = render_alt(117, 57, 100, 0.5, 7);
+        let early = peak_locate(seg12(&b, 0.002, 0.030), SR12, 150.0, 350.0);
+        println!("B117 early pitch {early:.1} Hz vs settled {f57:.1}");
+        assert!(
+            early >= 1.05 * f57,
+            "B117 does not land from above: early {early:.1} vs settled {f57:.1}"
+        );
+        let f45 = settled(45, 80.0, 160.0);
+        let ratio = f57 / f45;
+        println!("B117 octave tracking 57/45: {ratio:.3}");
+        assert!(
+            (1.88..=2.12).contains(&ratio),
+            "B117 octave tracking {ratio:.3} outside [1.88, 2.12]"
+        );
+    }
+
+    /// B117-4 (level knob MELODIC_TOM_B_GAIN — calibrate BEFORE the synth
+    /// drum's B118-4, which anchors to this voice): within ±2 dB of the
+    /// default-bank marimba at the same key.
+    #[test]
+    fn altbank_b117_melodic_tom_level_vs_marimba() {
+        let tom = render_alt(117, 57, 100, 0.4, 7);
+        let mar = render_def(12, 57, 100, 0.4, 7);
+        let d = db_ratio(rms(seg12(&tom, 0.02, 0.35)), rms(seg12(&mar, 0.02, 0.35)));
+        println!("B117 vs marimba level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "B117 level {d:+.2} dB off marimba");
+    }
+
+    /// B118-1,2,3: the synth drum ZAPS — the tone starts ≥1.8x above where it
+    /// settles (read inside the glide, deliberately: a direction check), the
+    /// settled pitch is the written key, and the settled ring is a near-pure
+    /// sine (negligible HF, most energy in the fundamental's band).
+    #[test]
+    fn altbank_b118_synth_drum_zap_and_purity() {
+        let b = render_alt(118, 45, 100, 0.6, 7);
+        let early = peak_locate(seg12(&b, 0.002, 0.020), SR12, 130.0, 400.0);
+        let settled = peak_locate(seg12(&b, 0.15, 0.45), SR12, 90.0, 135.0);
+        println!("B118 zap: early {early:.1} Hz -> settled {settled:.1} Hz");
+        assert!(
+            early >= 1.8 * settled,
+            "B118 zap ratio {:.2} < 1.8",
+            early / settled
+        );
+        assert!(
+            (103.4..=121.0).contains(&settled),
+            "B118 settled pitch {settled:.1} Hz outside [0.94, 1.10] x 110"
+        );
+        // HP corner at 1 kHz: the 2nd-order highpass leaks a pure 110 Hz
+        // sine at (110/corner)² — 500 Hz would spend 0.048 of the 0.06
+        // budget on the fundamental itself. Filter first, then window.
+        let s = seg12(&b, 0.15, 0.45);
+        let hf = hp_win(&b, 1000.0, 0.15, 0.45) / rms(s).max(1e-12);
+        let band = band_rms(s, SR12, settled, 2.0) / rms(s).max(1e-12);
+        println!("B118 purity: hf frac {hf:.4}, band frac {band:.3}");
+        assert!(hf < 0.06, "B118 settled ring not pure: hf {hf:.4}");
+        assert!(band > 0.7, "B118 fundamental band frac {band:.3} <= 0.7");
+    }
+
+    /// B118-4 (level knob SYNTH_DRUM_B_GAIN, calibrated AFTER B117 per the
+    /// anchor ordering): within ±2 dB of the bank-B melodic tom at the same
+    /// key.
+    #[test]
+    fn altbank_b118_synth_drum_level_vs_melodic_tom() {
+        let syn = render_alt(118, 45, 100, 0.6, 7);
+        let tom = render_alt(117, 45, 100, 0.6, 7);
+        let d = db_ratio(rms(seg12(&syn, 0.02, 0.50)), rms(seg12(&tom, 0.02, 0.50)));
+        println!("B118 vs melodic tom level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "B118 level {d:+.2} dB off melodic tom");
+    }
+
+    /// B119-1,2: the reverse cymbal SWELLS in a staircase (each half-second
+    /// window well above the last, ≥10x across the rise) and then stops
+    /// dead: −34 dB within 50 ms of note_off, and even unreleased it
+    /// self-caps — nothing renders past 3.5 s.
+    #[test]
+    fn altbank_b119_reverse_cymbal_swell_and_stop() {
+        let b = render_alt(119, 60, 100, 3.0, 7);
+        let w = |a, z| rms(seg12(&b, a, z));
+        let (w1, w2, w3, w4) = (w(0.2, 0.7), w(0.7, 1.2), w(1.2, 1.7), w(1.7, 2.2));
+        println!("B119 staircase: {w1:.5} {w2:.5} {w3:.5} {w4:.5}");
+        assert!(w2 >= 1.6 * w1, "B119 swell stalls: w2/w1 {:.2}", w2 / w1);
+        assert!(w3 >= 1.6 * w2, "B119 swell stalls: w3/w2 {:.2}", w3 / w2);
+        assert!(w4 >= 1.6 * w3, "B119 swell stalls: w4/w3 {:.2}", w4 / w3);
+        assert!(w4 >= 10.0 * w1, "B119 total swell {:.1}x < 10x", w4 / w1);
+        // note_off hard stop: render 1.0 s, release, then 0.2 s more
+        let mut v = make(119, 60, 100, SR12, 7, false);
+        let mut pre = vec![0f32; SR12 as usize];
+        v.render(&mut pre);
+        v.note_off();
+        let mut post = vec![0f32; (0.2 * SR12) as usize];
+        v.render(&mut post);
+        let before = rms(&pre[(0.95 * SR12) as usize..]);
+        let after = rms(&post[(0.05 * SR12) as usize..(0.10 * SR12) as usize]);
+        let drop = db_ratio(after, before);
+        println!("B119 stop: {drop:+.1} dB 50-100 ms after note_off");
+        assert!(drop <= -34.0, "B119 stop only {drop:+.1} dB");
+        // self-cap: unreleased, the voice dies on its own before 3.5 s
+        let mut v = make(119, 60, 100, SR12, 7, false);
+        let mut buf = vec![0f32; (4.0 * SR12) as usize];
+        let alive = v.render(&mut buf);
+        assert!(!alive, "B119 still renders after a 4 s unreleased buffer");
+        let late = rms(seg12(&buf, 3.5, 3.95));
+        assert!(late <= 1e-6, "B119 audible past 3.5 s: rms {late}");
+    }
+
+    /// B119-3: the swell BRIGHTENS as it grows — the reversed decays give the
+    /// highest metal partial (4.365x base, t60 0.8 → a 75 dB/s rise from its
+    /// 1.7 s onset) a far steeper climb than the fundamental (27 dB/s from
+    /// 0.3 s), so the partial-stack TILT (top/fundamental Goertzel ratio)
+    /// swings hard toward the top late in the rise. (Noise-band ratios can't
+    /// read this: hp9000/hp3500 of the HP-3500 wash is already ~0.86 with a
+    /// hard ceiling of 1.0 — no headroom for a 1.2x oracle.)
+    #[test]
+    fn altbank_b119_reverse_cymbal_brightens() {
+        let b = render_alt(119, 60, 100, 3.0, 7);
+        let base = crate::drums::REV_CYM_B_BASE_HZ; // key 60 → no size-class transposition
+        let tilt = |a: f32, z: f32| {
+            let s = seg12(&b, a, z);
+            mag_at(s, SR12, base * 4.365) / mag_at(s, SR12, base).max(1e-9)
+        };
+        let early = tilt(1.0, 1.5);
+        let late = tilt(2.2, 2.5);
+        println!("B119 partial tilt: early {early:.4} -> late {late:.4}");
+        // measured 3.15x at the pinned seed; the early read is a noise floor
+        // (the top partial is onset-gated until 1.7 s), so 2.5x keeps margin
+        assert!(
+            late >= 2.5 * early,
+            "B119 does not brighten: tilt {early:.4} -> {late:.4}"
+        );
+    }
+
+    /// B119-4 (level knob REV_CYM_B_GAIN): the swell's last 0.3 s hands over
+    /// at the level a V1 crash opens with (±3 dB) — the classic reverse-into-
+    /// downbeat splice.
+    #[test]
+    fn altbank_b119_reverse_cymbal_crash_handover_level() {
+        let rev = render_alt(119, 60, 100, 2.6, 7);
+        let crash = {
+            let mut v = crate::drums::make(49, 100, SR12, 7, crate::drums::Kit::V1, false).unwrap();
+            let mut buf = vec![0f32; (0.5 * SR12) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        let d = db_ratio(
+            rms(seg12(&rev, 2.2, 2.5)),
+            rms(&crash[..(0.3 * SR12) as usize]),
+        );
+        println!("B119 handover vs V1 crash: {d:+.2} dB");
+        assert!(d.abs() <= 3.0, "B119 handover {d:+.2} dB off the V1 crash");
+    }
+
+    // --- v0.12 CC0-alt GM 14 tam-tam / gong ageng (G1-G4) -------------------
+
+    /// Whole-buffer bandpass at `f` (Q 8), then windowed RMS — filter FIRST
+    /// so a window boundary sliced mid-ring doesn't excite the filter as a
+    /// step and bury the band being measured.
+    fn bp_win(b: &[f32], sr: f32, f: f32, a: f32, z: f32) -> f32 {
+        let mut bp = Biquad::bandpass(f, 8.0, sr);
+        let filt: Vec<f32> = b.iter().map(|&x| bp.process(x)).collect();
+        rms(&filt[(a * sr) as usize..(z * sr) as usize])
+    }
+
+    /// G1: the gong's upper modes BLOOM — the summed energy of the idx>=2
+    /// mode bands (2.09x/2.98x/3.82x/4.76x of the 98 Hz fundamental) peaks
+    /// 0.25-1.0 s after the strike, NOT at it (splash-proof: the bands are
+    /// narrow Q-8 reads far from the 1.1 kHz splash center). Positive
+    /// control: the default-bank tubular bell peaks in its first window.
+    #[test]
+    fn altbank_gm14_tamtam_bloom_onset() {
+        let sr = 44100.0;
+        let argmax_t = |b: &[f32], bands: &[f32]| {
+            let (mut best, mut best_t) = (0.0f32, 0.0f32);
+            let mut t = 0.0f32;
+            while t + 0.1 <= 1.5 {
+                let e = bands
+                    .iter()
+                    .map(|&f| bp_win(b, sr, f, t, t + 0.1).powi(2))
+                    .sum::<f32>()
+                    .sqrt();
+                if e > best {
+                    best = e;
+                    best_t = t;
+                }
+                t += 0.05;
+            }
+            best_t
+        };
+        let gong = render_make(14, 43, 100, 2.0, 7, false);
+        let f0 = 98.0f32;
+        let bloom_bands: Vec<f32> = [2.09f32, 2.98, 3.82, 4.76].iter().map(|r| r * f0).collect();
+        let t_gong = argmax_t(&gong, &bloom_bands);
+        // positive control: the tubular bell strikes at once — its overall
+        // >150 Hz energy peaks in the first window
+        let tube = {
+            let mut v = crate::voices::make(14, 43, 100, sr, 7, false);
+            let mut b = vec![0f32; (2.0 * sr) as usize];
+            v.render(&mut b);
+            b
+        };
+        let t_tube = {
+            let mut hp = Biquad::highpass(150.0, 0.7, sr);
+            let filt: Vec<f32> = tube.iter().map(|&x| hp.process(x)).collect();
+            let (mut best, mut best_t) = (0.0f32, 0.0f32);
+            let mut t = 0.0f32;
+            while t + 0.1 <= 1.5 {
+                let e = rms(&filt[(t * sr) as usize..((t + 0.1) * sr) as usize]);
+                if e > best {
+                    best = e;
+                    best_t = t;
+                }
+                t += 0.05;
+            }
+            best_t
+        };
+        println!("G1 bloom argmax: gong {t_gong:.2} s, tubular control {t_tube:.2} s");
+        assert!(
+            (0.25..=1.0).contains(&t_gong),
+            "gong upper modes peak at {t_gong:.2} s — no bloom"
+        );
+        assert!(t_tube < 0.25, "tubular control peaks late: {t_tube:.2} s");
+    }
+
+    /// G2: the gong speaks in its 65-124 Hz register wherever it is written —
+    /// keys 43 and 67 fold to the same 98 Hz fundamental (pitch class
+    /// preserved), and far-out keys 24/60/90 stay inside the register.
+    #[test]
+    fn altbank_gm14_tamtam_fundamental_folds() {
+        let sr = 44100.0;
+        let fundamental = |key: u8| {
+            let b = render_make(14, key, 100, 2.0, 7, false);
+            peak_locate(
+                &b[(0.3 * sr) as usize..(1.8 * sr) as usize],
+                sr,
+                55.0,
+                140.0,
+            )
+        };
+        for key in [43u8, 67] {
+            let f = fundamental(key);
+            println!("G2 key {key}: fundamental {f:.1} Hz");
+            assert!(
+                (f - 98.0).abs() <= 0.02 * 98.0,
+                "key {key} fundamental {f:.1} Hz not ~98"
+            );
+        }
+        for key in [24u8, 60, 90] {
+            let f = fundamental(key);
+            println!("G2 key {key}: fundamental {f:.1} Hz");
+            assert!(
+                (61.7..=126.0).contains(&f),
+                "key {key} fundamental {f:.1} Hz outside the gong register"
+            );
+        }
+    }
+
+    /// G3: the gong RINGS — the 3 s decay from the [1.0, 1.5] window to the
+    /// [4.0, 4.5] window sits between −30 and −12 dB (T60 6-15 s).
+    #[test]
+    fn altbank_gm14_tamtam_decay_t60() {
+        let sr = 44100.0;
+        let b = render_make(14, 43, 100, 5.0, 7, false);
+        let w = |a: f32, z: f32| rms(&b[(a * sr) as usize..(z * sr) as usize]);
+        let ratio = w(4.0, 4.5) / w(1.0, 1.5).max(1e-12);
+        println!("G3 gong decay ratio over 3 s: {ratio:.4}");
+        assert!(
+            (0.0316..=0.251).contains(&ratio),
+            "gong decay ratio {ratio:.4} outside [-30, -12] dB / 3 s"
+        );
+    }
+
+    /// G4: the strike leads with a short bright SPLASH — high-band energy in
+    /// the first 120 ms well above the same band half a second later. The
+    /// read is a CASCADED (4th-order) highpass at 2.5 kHz: the top bloom
+    /// mode (854 Hz) is −37 dB there, while the broad 1.1 kHz Q-0.6 splash
+    /// still carries real energy — a single 2nd-order HP at 1.5 kHz leaks
+    /// the bloomed modes at −10 dB and drowns the comparison.
+    #[test]
+    fn altbank_gm14_tamtam_splash_transient() {
+        let sr = 44100.0;
+        let b = render_make(14, 43, 100, 1.0, 7, false);
+        let mut hp1 = Biquad::highpass(2500.0, 0.7, sr);
+        let mut hp2 = Biquad::highpass(2500.0, 0.7, sr);
+        let filt: Vec<f32> = b.iter().map(|&x| hp2.process(hp1.process(x))).collect();
+        let early = rms(&filt[..(0.12 * sr) as usize]);
+        let late = rms(&filt[(0.5 * sr) as usize..(0.62 * sr) as usize]);
+        println!("G4 splash hp2500x2: early {early:.5} vs late {late:.5}");
+        assert!(
+            early >= 3.0 * late,
+            "no splash transient: early {early:.5} vs late {late:.5}"
+        );
     }
 }

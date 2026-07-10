@@ -347,6 +347,90 @@ fn horn_f() -> &'static [Zone] {
     })
 }
 
+fn oboe_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "oboe_D3_p.wav" => 293.50,
+            "oboe_F3_p.wav" => 347.64,
+            "oboe_A#3_p.wav" => 464.35,
+            "oboe_D4_p.wav" => 586.46,
+            "oboe_F4_p.wav" => 698.81,
+            "oboe_A#4_p.wav" => 935.72,
+        )
+    })
+}
+
+fn oboe_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "oboe_D3_f.wav" => 294.16,
+            "oboe_F3_f.wav" => 349.95,
+            "oboe_A#3_f.wav" => 466.12,
+            "oboe_D4_f.wav" => 588.05,
+            "oboe_F4_f.wav" => 698.94,
+            "oboe_A#4_f.wav" => 930.35,
+        )
+    })
+}
+
+fn bassoon_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "bassoon_A#0_p.wav" => 58.31,
+            "bassoon_F1_p.wav" => 87.26,
+            "bassoon_C2_p.wav" => 130.70,
+            "bassoon_G2_p.wav" => 195.98,
+            "bassoon_D#3_p.wav" => 312.70,
+            "bassoon_C4_p.wav" => 523.95,
+        )
+    })
+}
+
+fn bassoon_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "bassoon_A#0_f.wav" => 58.25,
+            "bassoon_F1_f.wav" => 87.29,
+            "bassoon_C2_f.wav" => 130.76,
+            "bassoon_G2_f.wav" => 195.94,
+            "bassoon_D#3_f.wav" => 311.06,
+            "bassoon_C4_f.wav" => 523.15,
+        )
+    })
+}
+
+fn clarinet_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "clarinet_A#2_p.wav" => 232.55,
+            "clarinet_D3_p.wav" => 293.36,
+            "clarinet_F3_p.wav" => 349.08,
+            "clarinet_A#3_p.wav" => 466.23,
+            "clarinet_D4_p.wav" => 586.91,
+            "clarinet_F4_p.wav" => 698.75,
+        )
+    })
+}
+
+fn clarinet_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "clarinet_A#2_f.wav" => 233.09,
+            "clarinet_D3_f.wav" => 292.97,
+            "clarinet_F3_f.wav" => 348.60,
+            "clarinet_A#3_f.wav" => 466.38,
+            "clarinet_D4_f.wav" => 587.88,
+            "clarinet_F4_f.wav" => 700.07,
+        )
+    })
+}
+
 fn drum_crash() -> &'static [HitSample] {
     static B: OnceLock<Vec<HitSample>> = OnceLock::new();
     B.get_or_init(|| {
@@ -438,6 +522,36 @@ pub fn brass_bank(program: u8, vel: u8) -> &'static [Zone] {
     }
 }
 
+/// Bank for the layered reed programs (GM 68–71). Velocity picks the
+/// dynamic layer (threshold as `violin_bank`); 69 (english horn) shares
+/// the oboe bank — `LaVoice`'s repitch covers its lower fifth.
+pub fn reed_bank(program: u8, vel: u8) -> &'static [Zone] {
+    let f = vel >= 80;
+    match program {
+        70 => {
+            if f {
+                bassoon_f()
+            } else {
+                bassoon_p()
+            }
+        }
+        71 => {
+            if f {
+                clarinet_f()
+            } else {
+                clarinet_p()
+            }
+        }
+        _ => {
+            if f {
+                oboe_f()
+            } else {
+                oboe_p()
+            }
+        }
+    }
+}
+
 pub fn drum_crash_bank() -> &'static [HitSample] {
     drum_crash()
 }
@@ -463,6 +577,10 @@ pub fn prewarm() {
     for program in 56..=60 {
         let _ = brass_bank(program, 1);
         let _ = brass_bank(program, 127);
+    }
+    for program in [68, 70, 71] {
+        let _ = reed_bank(program, 1);
+        let _ = reed_bank(program, 127);
     }
     let _ = drum_crash_bank();
     let _ = drum_kick_bank();
@@ -744,6 +862,12 @@ mod tests {
             .chain(tuba_f())
             .chain(horn_p())
             .chain(horn_f())
+            .chain(oboe_p())
+            .chain(oboe_f())
+            .chain(bassoon_p())
+            .chain(bassoon_f())
+            .chain(clarinet_p())
+            .chain(clarinet_f())
         {
             assert!(z.data.len() > 20_000, "zone too short: {}", z.data.len());
             // the tuba bank reaches A#0 (~29 Hz), hence the low floor
@@ -856,6 +980,73 @@ mod tests {
         }
     }
 
+    /// The reed sample layer must not shift perceived pitch: Goertzel peak
+    /// through the crossfade window (as `la_brass_pitch_integrity`); 69
+    /// exercises the english horn's repitched oboe bank.
+    #[test]
+    fn la_reed_pitch_integrity() {
+        let sr = 44100.0;
+        for (program, key, name) in [
+            (68u8, 76u8, "oboe"),
+            (69, 64, "english-horn"),
+            (70, 48, "bassoon"),
+            (71, 60, "clarinet"),
+        ] {
+            let f0 = crate::dsp::key_freq(key);
+            let mut v = voices::make(program, key, 100, sr, 5, true);
+            let mut buf = vec![0f32; 44100];
+            v.render(&mut buf);
+            // 0.15–0.55 s spans the fade tail and the handed-over sustain
+            let hz = crate::testutil::peak_locate(&buf[6615..24255], sr, f0 * 0.8, f0 * 1.25);
+            let cents = 1200.0 * (hz / f0).log2();
+            assert!(
+                cents.abs() < 45.0,
+                "{name}: layered pitch {hz:.2} Hz vs nominal {f0:.2} Hz ({cents:.0} cents)"
+            );
+        }
+    }
+
+    /// The reed layer must be audible, not just present: samples-on vs
+    /// samples-off must differ materially in the first 50 ms. Unlike brass
+    /// (real lip bite ADDS high band), every measured reed onset is LESS
+    /// hissy than the model’s synthetic chiff (hf-frac on/off: oboe
+    /// 0.53/0.67, english horn 0.38/0.39, bassoon 0.15/0.20, clarinet
+    /// 0.19/0.28) — the realism gain is removing synthetic noise, so the
+    /// oracle asserts that measured direction: the layer must never make
+    /// the attack hissier than the pure model.
+    #[test]
+    fn la_reed_attack_sharpness() {
+        let sr = 44100.0;
+        for (program, key, name) in [
+            (68u8, 76u8, "oboe"),
+            (69, 64, "english-horn"),
+            (70, 48, "bassoon"),
+            (71, 60, "clarinet"),
+        ] {
+            let early = |samples: bool| {
+                let mut v = voices::make(program, key, 100, sr, 5, samples);
+                let mut buf = vec![0f32; (0.05 * sr) as usize];
+                v.render(&mut buf);
+                buf
+            };
+            let (on, off) = (early(true), early(false));
+            let diff: Vec<f32> = on.iter().zip(&off).map(|(a, b)| a - b).collect();
+            let (d, o) = (crate::testutil::rms(&diff), crate::testutil::rms(&off));
+            assert!(
+                d > 0.3 * o,
+                "{name}: onset barely changes with the layer (diff {d:.5} vs off {o:.5})"
+            );
+            let hf_frac = |buf: &[f32]| {
+                crate::testutil::hp_rms(buf, sr, 1500.0) / crate::testutil::rms(buf).max(1e-9)
+            };
+            let (r_on, r_off) = (hf_frac(&on), hf_frac(&off));
+            assert!(
+                r_on < r_off * 1.05,
+                "{name}: sampled attack hissier than the model: hf-frac on {r_on:.4} vs off {r_off:.4}"
+            );
+        }
+    }
+
     /// The sampled attack must hand over to the model without a level jump.
     #[test]
     fn la_level_continuity() {
@@ -871,6 +1062,10 @@ mod tests {
             (59u8, 69, "muted-trumpet"),
             (60u8, 62, "french-horn"),
             (61u8, 69, "brass-section"),
+            (68u8, 76, "oboe"),
+            (69u8, 64, "english-horn"),
+            (70u8, 48, "bassoon"),
+            (71u8, 60, "clarinet"),
         ] {
             let mut v = voices::make(program, key, 100, sr, 5, true);
             let mut buf = vec![0f32; 44100]; // 1 s, note held

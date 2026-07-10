@@ -1010,6 +1010,9 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // sampled attack layer (voices.rs LA_BRASS) must not reach alt-bank
         // channels, so the fall-through pins samples off for 56–61.
         56..=61 => crate::voices::make(program, key, vel, sr, seed, false),
+        // Same freeze for alt-bank reeds: the default bank's LA_REED layer
+        // (voices.rs, GM 68–71) must not reach alt-bank channels.
+        68..=71 => crate::voices::make(program, key, vel, sr, seed, false),
         _ => crate::voices::make(program, key, vel, sr, seed, samples),
     }
 }

@@ -21,6 +21,11 @@ crossfades into the modeled sustain.
   the horn's top D4 zone exists only as v1 at the pinned rev and is
   reused for both layers), ~0.63 s. GM 61 (section) layers the trumpet
   bank at reduced gain over its scattered modeled players.
+- `oboe_*_{p,f}.wav`, `bassoon_*_{p,f}.wav`, `clarinet_*_{p,f}.wav` — reed
+  sustain onsets for GM 68–71, 6 pitch zones × 2 dynamic layers (VSCO
+  v1 → p, v3 → f; the bassoon has only v1/v2 at the pinned rev, so
+  v2 → f), ~0.63 s. GM 69 (english horn) reuses the oboe bank repitched
+  down; the saxes 64–67 stay pure model (no sax in VSCO 2 CE).
 - `drum_sus_cymb1_*`, `drum_crash1_*`, `drum_kick_*`, `drum_snare2_*`
   — unpitched drum-hit overlays for the default kit: crash/suspended cymbal
   attacks kept to ~2.2 s, kick/snare attacks kept to ~0.46 s. The modeled drum

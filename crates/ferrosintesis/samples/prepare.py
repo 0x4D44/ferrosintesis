@@ -81,10 +81,28 @@ SOURCES = {
         f"{('v1' if n == 'D4' else v)}_1.wav"
     for n in ("A#1", "D2", "F2", "A2", "C3", "D4")
     for d, v in (("p", "v1"), ("f", "v3"))
+} | {
+    # reed sustain onsets — VSCO dynamic layers: v1 -> p, v3 -> f
+    f"oboe_{n}_{d}.wav":
+        f"{BASE}/Woodwinds/Oboe/Sus/Oboe_Sus_{n.replace('#', '%23')}_{v}_Main.wav"
+    for n in ("D3", "F3", "A#3", "D4", "F4", "A#4")
+    for d, v in (("p", "v1"), ("f", "v3"))
+} | {
+    # bassoon has only v1/v2 at the pinned rev: v1 -> p, v2 -> f
+    f"bassoon_{n}_{d}.wav":
+        f"{BASE}/Woodwinds/Bassoon/sus/PSBassoon_{n.replace('#', '%23')}_{v}_1.wav"
+    for n in ("A#0", "F1", "C2", "G2", "D#3", "C4")
+    for d, v in (("p", "v1"), ("f", "v2"))
+} | {
+    f"clarinet_{n}_{d}.wav":
+        f"{BASE}/Woodwinds/Clarinet/susLong/DCClar_susLong_"
+        f"{n.replace('#', '%23')}_{v}_rr1_sum.wav"
+    for n in ("A#2", "D3", "F3", "A#3", "D4", "F4")
+    for d, v in (("p", "v1"), ("f", "v3"))
 } | DRUM_SOURCES
 
 # f0 search range per family (the default misses the piano's low octaves
-# and the low brass fundamentals)
+# and the low brass/bassoon fundamentals)
 F0_RANGE = {
     "piano": (45.0, 2500.0),
     "trumpet": (80.0, 1200.0),
@@ -92,6 +110,11 @@ F0_RANGE = {
     "trombone": (35.0, 600.0),
     "tuba": (40.0, 300.0),
     "horn": (25.0, 600.0),
+    # oboe hi capped at 1000: the F4_f take's 2nd harmonic outcorrelates its
+    # fundamental (~699 Hz) and a 2000 Hz ceiling lets autocorr pick 1398
+    "oboe": (200.0, 1000.0),
+    "bassoon": (50.0, 800.0),
+    "clarinet": (100.0, 1500.0),
 }
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail

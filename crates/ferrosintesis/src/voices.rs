@@ -3470,42 +3470,406 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     s
 }
 
-fn choir(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
-    let (f1, f2, f3) = if program == 52 {
-        (660.0, 1120.0, 2500.0)
+// ---------------------------------------------------------------------------
+// ChoirV2 (GM 52-54) — formant engine v2 (HLD option C, 2026.07.10)
+//
+// A dedicated choir voice, deliberately NOT built on `SawStack`: the stack is
+// shared by strings (48-51), pads and leads, so every choir-v2 behaviour lives
+// in this choir-scoped struct and the shared families render bit-identically.
+//
+// Design (per the signed-off HLD):
+//  - per-singer saw sources in four SATB section pairs, each pair with its own
+//    intonation lean, pitch scatter, drift and decorrelated delayed vibrato;
+//  - an upgraded 5-band tract per section: three CC70-morphable vowel formants
+//    plus a fixed singer's-formant cluster (~2.9/3.25 kHz), with per-section
+//    formant scatter so the four tracts never line up exactly;
+//  - breath noise injected pre-tract (vowel-coloured) — a one-shot onset puff
+//    plus a low sustained air floor;
+//  - a soft consonant onset generalised from the alt-bank `hum_hold` prior
+//    art: the vowel morph holds at a closed schwa, the mouth then opens (level
+//    lift + brightening lowpass);
+//  - CC70 vowel sequences keep working through the existing `set_vowel` path
+//    (the engine's 3-band anchors drive the vowel formants; the singer's
+//    cluster shades with the third band's gain, so "mm" closes it too).
+// ---------------------------------------------------------------------------
+
+/// One SATB section's ensemble character. Cents are relative to written pitch.
+struct Ch2Section {
+    off_cents: f32,        // systematic intonation lean
+    scatter_cents: f32,    // ± uniform per-note draw
+    drift: f32,            // Drift depth
+    vib_rate_mul: f32,     // × 4.6 Hz base
+    vib_depth_mul: f32,    // × 0.006 base
+    vib_delay: (f32, f32), // s, per-singer uniform draw range
+    reg: (u8, u8),         // full-weight key range
+}
+
+/// S, A, T, B. Offsets ≤ 6 cents keep the cluster centre on pitch; scatter
+/// grows toward the low voices; vibrato slows and shallows toward the basses.
+const CH2_SECTIONS: [Ch2Section; 4] = [
+    Ch2Section {
+        off_cents: 3.0,
+        scatter_cents: 4.0,
+        drift: 0.0035,
+        vib_rate_mul: 1.12,
+        vib_depth_mul: 1.00,
+        vib_delay: (0.20, 0.55),
+        reg: (60, 84),
+    },
+    Ch2Section {
+        off_cents: -2.0,
+        scatter_cents: 6.0,
+        drift: 0.0040,
+        vib_rate_mul: 0.97,
+        vib_depth_mul: 0.95,
+        vib_delay: (0.30, 0.60),
+        reg: (53, 74),
+    },
+    Ch2Section {
+        off_cents: 5.0,
+        scatter_cents: 8.0,
+        drift: 0.0045,
+        vib_rate_mul: 1.05,
+        vib_depth_mul: 0.90,
+        vib_delay: (0.28, 0.58),
+        reg: (47, 69),
+    },
+    Ch2Section {
+        off_cents: -6.0,
+        scatter_cents: 10.0,
+        drift: 0.0055,
+        vib_rate_mul: 0.85,
+        vib_depth_mul: 0.70,
+        vib_delay: (0.35, 0.80),
+        reg: (36, 62),
+    },
+];
+
+const CH2_SCHWA: [f32; 3] = [500.0, 1400.0, 2400.0]; // closed-mouth onset vowel
+const CH2_MORPH: f32 = 0.045; // vowel slew per control tick
+/// Singer's-formant cluster: (Hz, Q) — the trained-voice "ring" at 2.8-3.2 kHz.
+const CH2_SF: [(f32, f32); 2] = [(2900.0, 5.0), (3250.0, 6.0)];
+const CH2_FSCAT: f32 = 0.03; // ± per-section formant-frequency scatter
+const CH2_REG_FADE: f32 = 7.0; // semitones of gain fade outside a section reg
+const CH2_REG_FLOOR: f32 = 0.25; // a section never fully mutes
+const CH2_HUM_GAIN: f32 = 0.45; // closed-lips level (−6.9 dB)
+const CH2_MOUTH_RATE: f32 = 0.030; // mouth-open slew per control tick
+const CH2_HUM_LP: (f32, f32) = (900.0, 8000.0); // closed→open lowpass cutoff Hz
+const CH2_BREATH_T60: f32 = 0.09; // onset breath decay, seconds
+const CH2_BREATH_SUS: f32 = 0.008; // sustained air floor (pre-tract)
+/// Output level, calibrated so the sustained RMS sits in the v1 choir's
+/// 0.03-0.07 window across the keyboard (measured before the swap).
+const CH2_AMP: f32 = 1.55;
+
+/// Section register weight: 1.0 inside `reg`, fading linearly to
+/// `CH2_REG_FLOOR` over `CH2_REG_FADE` semitones outside it.
+fn ch2_reg_weight(key: u8, reg: (u8, u8)) -> f32 {
+    let d = if key < reg.0 {
+        (reg.0 - key) as f32
+    } else if key > reg.1 {
+        (key - reg.1) as f32
     } else {
-        (330.0, 870.0, 2300.0)
+        0.0
     };
+    if d <= 0.0 {
+        1.0
+    } else {
+        let t = (d / CH2_REG_FADE).min(1.0);
+        1.0 - (1.0 - CH2_REG_FLOOR) * t
+    }
+}
+
+/// One singer: a detuned/drifting saw with their own delayed vibrato.
+struct Ch2Singer {
+    osc: BlepSaw,
+    ratio: f32,
+    vib_phase: f32,
+    vib_rate: f32,  // Hz
+    vib_depth: f32, // fractional pitch deviation
+    vib_delay: u32, // samples before the wobble starts
+    vib_ramp_s: f32,
+    drift: Drift,
+    gain: f32, // register/section weight (mean-renormalised to 1)
+}
+
+/// One section's vocal tract: 3 vowel formants + the 2-band singer's cluster,
+/// each centre scattered by the section's own `fscat` multipliers.
+struct Ch2Tract {
+    bands: [Biquad; 5],
+    fscat: [f32; 5],
+}
+
+pub struct ChoirV2 {
+    singers: Vec<Ch2Singer>, // 8: [S,S,A,A,T,T,B,B]
+    tracts: [Ch2Tract; 4],   // singer pair i uses tract i/2
+    // shared vowel morph state (per-tract scatter applied at retune)
+    cur: [f32; 3],
+    tgt: [f32; 3],
+    qs: [f32; 3],
+    vgains: [f32; 3],
+    sf_gains: [f32; 2],
+    sf_ref_g3: f32, // program-default third-band gain: the cluster's open point
+    sf_open: f32,   // slewless cluster shade = (vgains[2]/sf_ref_g3).min(1.3)
+    base_f: f32,
+    bend: f32,
+    env: Adsr,
+    breath_env: f32, // one-shot onset puff (decays)
+    breath_mul: f32,
+    hum_hold: u32, // samples: vowel morph frozen, mouth closed
+    mouth: f32,    // 0 closed → 1 open
+    hum_lp: OnePole,
+    rng: Rng,
+    t: u32,
+    amp: f32,
+    sr: f32,
+}
+
+fn choir(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> ChoirV2 {
+    use std::f32::consts::PI;
+    let f = key_freq(key);
+    let vn = vel as f32 / 127.0;
+    let mut rng = Rng::new(seed);
+
+    // Per-program vowel target, onset multipliers and cluster gains. 54
+    // ("synth voice") finally splits from 53 with a brighter "eh" and a
+    // uniform (non-SATB) scatter — a stack of synth voices, not a room.
+    let (tgt, vgains, sf_gains, hold_mul, br_mul): ([f32; 3], [f32; 3], [f32; 2], f32, f32) =
+        match program {
+            52 => (
+                [660.0, 1120.0, 2500.0],
+                [1.0, 0.55, 0.28],
+                [0.30, 0.18],
+                1.0,
+                1.0,
+            ), // aah
+            53 => (
+                [330.0, 870.0, 2300.0],
+                [1.0, 0.45, 0.20],
+                [0.20, 0.12],
+                1.25,
+                0.7,
+            ), // ooh
+            _ => (
+                [400.0, 1900.0, 2600.0],
+                [1.0, 0.70, 0.40],
+                [0.35, 0.22],
+                0.5,
+                1.3,
+            ), // eh
+        };
     let qs = [9.0, 10.0, 9.0];
-    let start = [500.0, 1400.0, 2400.0]; // closed-mouth schwa
-    let mut s = SawStack::new(
-        key,
-        vel,
+    let uniform = program == 54;
+
+    let mut singers: Vec<Ch2Singer> = Vec::with_capacity(8);
+    for i in 0..8u32 {
+        let sec = &CH2_SECTIONS[(i / 2) as usize];
+        let (cents, rate_mul, depth_mul, dlo, dhi, drift, gain) = if uniform {
+            (rng.white() * 12.0, 1.0, 1.0, 0.30, 0.70, 0.0040, 1.0)
+        } else {
+            let (dlo, dhi) = sec.vib_delay;
+            (
+                sec.off_cents + rng.white() * sec.scatter_cents,
+                sec.vib_rate_mul,
+                sec.vib_depth_mul,
+                dlo,
+                dhi,
+                sec.drift,
+                ch2_reg_weight(key, sec.reg),
+            )
+        };
+        let ratio = 2f32.powf(cents / 1200.0);
+        let phase = rng.white() * 0.5 + 0.5;
+        let vib_phase = rng.white() * PI;
+        let vib_rate = 4.6 * rate_mul * (1.0 + 0.15 * rng.white());
+        let vib_delay_s = dlo + (dhi - dlo) * (rng.white() * 0.5 + 0.5);
+        let vib_ramp_s = 0.5 + 0.7 * (rng.white() * 0.5 + 0.5); // 0.5-1.2 s
+        singers.push(Ch2Singer {
+            osc: BlepSaw::new(f * ratio, sr, phase),
+            ratio,
+            vib_phase,
+            vib_rate,
+            vib_depth: 0.006 * depth_mul,
+            vib_delay: (vib_delay_s * sr) as u32,
+            vib_ramp_s,
+            drift: Drift::new(seed ^ (0x2C41 + i * 977), drift, 2800),
+            gain,
+        });
+    }
+    // Renormalise the mean singer gain to 1 so register weighting reshapes the
+    // section balance without moving the overall level across the keyboard.
+    let sum: f32 = singers.iter().map(|s| s.gain).sum();
+    if sum > 0.0 {
+        let k = singers.len() as f32 / sum;
+        for s in &mut singers {
+            s.gain *= k;
+        }
+    }
+
+    // Four tracts, each with its own ±CH2_FSCAT formant scatter. Built at the
+    // closed schwa; the morph retunes the vowel bands toward `tgt`.
+    let tracts = std::array::from_fn(|_| {
+        let mut fscat = [1.0f32; 5];
+        for m in &mut fscat {
+            *m = 1.0 + CH2_FSCAT * rng.white();
+        }
+        let bands = std::array::from_fn(|k| {
+            if k < 3 {
+                Biquad::bandpass(CH2_SCHWA[k] * fscat[k], qs[k], sr)
+            } else {
+                let (sf, sq) = CH2_SF[k - 3];
+                Biquad::bandpass(sf * fscat[k], sq, sr)
+            }
+        });
+        Ch2Tract { bands, fscat }
+    });
+
+    // Soft consonant onset (generalised hum_hold): velocity shortens the hold,
+    // the program scales it; the onset puff is shaped by the tract it feeds.
+    let hum_hold_s = 0.11 * (1.3 - 0.6 * vn) * hold_mul;
+    let breath0 = 0.10 * (0.3 + 0.7 * vn) * br_mul;
+
+    ChoirV2 {
+        singers,
+        tracts,
+        cur: CH2_SCHWA,
+        tgt,
+        qs,
+        vgains,
+        sf_gains,
+        sf_ref_g3: vgains[2],
+        sf_open: 1.0,
+        base_f: f,
+        bend: 1.0,
+        env: Adsr::new(vel_attack(0.28, vel), 0.3, 0.9, 0.4, sr),
+        breath_env: breath0,
+        breath_mul: t60_mul(CH2_BREATH_T60, sr),
+        hum_hold: (hum_hold_s * sr) as u32,
+        mouth: 0.0,
+        hum_lp: OnePole::lowpass(CH2_HUM_LP.0, sr),
+        rng,
+        t: 0,
+        amp: CH2_AMP * (0.4 + 0.6 * vel_amp(vel)),
         sr,
-        seed,
-        4,
-        0.009,
-        0.0045,
-        StackFilter::Formant {
-            bands: [
-                Biquad::bandpass(start[0], qs[0], sr),
-                Biquad::bandpass(start[1], qs[1], sr),
-                Biquad::bandpass(start[2], qs[2], sr),
-            ],
-            gains: [1.0, 0.55, 0.28],
-            cur: start,
-            tgt: [f1, f2, f3],
-            qs,
-        },
-        Adsr::new(vel_attack(0.28, vel), 0.3, 0.9, 0.4, sr),
-        (4.6, 0.004, 0.30),
-        0.02,
-        None,
-        0.7,
-        1.10,
-    );
-    s.legato_enabled = true;
-    s
+    }
+}
+
+impl ChoirV2 {
+    fn control_tick(&mut self) {
+        let sr = self.sr;
+        let t = self.t;
+        // per-singer delayed/ramped vibrato + drift
+        for s in &mut self.singers {
+            s.vib_phase += TAU * s.vib_rate * CTRL as f32 / sr;
+            let ramp = if t > s.vib_delay {
+                (((t - s.vib_delay) as f32) / sr / s.vib_ramp_s).min(1.0)
+            } else {
+                0.0
+            };
+            let vib = if ramp > 0.0 {
+                s.vib_depth * ramp * s.vib_phase.sin()
+            } else {
+                0.0
+            };
+            let drift = s.drift.next();
+            s.osc
+                .set_freq(self.base_f * s.ratio * self.bend * (1.0 + vib + drift), sr);
+        }
+        // vowel morph — frozen at the schwa during the consonant hold
+        if t >= self.hum_hold {
+            for i in 0..3 {
+                if (self.tgt[i] - self.cur[i]).abs() > 1.0 {
+                    self.cur[i] += CH2_MORPH * (self.tgt[i] - self.cur[i]);
+                    for tr in &mut self.tracts {
+                        tr.bands[i].retune_bandpass(self.cur[i] * tr.fscat[i], self.qs[i], sr);
+                    }
+                }
+            }
+            self.mouth += CH2_MOUTH_RATE * (1.0 - self.mouth);
+        }
+        // singer's-formant cluster shade: closed vowels ("mm") mute the ring
+        self.sf_open = (self.vgains[2] / self.sf_ref_g3.max(1e-3)).min(1.3);
+        // closed-lips lowpass opens with the mouth
+        let cut = CH2_HUM_LP.0 + (CH2_HUM_LP.1 - CH2_HUM_LP.0) * self.mouth * self.mouth;
+        self.hum_lp.set_cutoff(cut, sr);
+    }
+}
+
+#[cfg(test)]
+impl ChoirV2 {
+    /// CH2-O5 structural accessors: per-singer vibrato rates (Hz) and onset
+    /// delays (samples) — the decorrelation that makes ensemble shimmer.
+    fn singer_vib_rates(&self) -> Vec<f32> {
+        self.singers.iter().map(|s| s.vib_rate).collect()
+    }
+    fn singer_vib_delays(&self) -> Vec<u32> {
+        self.singers.iter().map(|s| s.vib_delay).collect()
+    }
+}
+
+impl Voice for ChoirV2 {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            if self.t.is_multiple_of(CTRL) {
+                self.control_tick();
+            }
+            let breath_now = CH2_BREATH_SUS + self.breath_env;
+            let mut s = 0.0;
+            for (sec, tr) in self.tracts.iter_mut().enumerate() {
+                // section pair summed pre-tract, breath injected pre-tract so
+                // the air is vowel-coloured, decorrelated across sections
+                let a = &mut self.singers[sec * 2];
+                let mut x = a.osc.next() * a.gain;
+                let b = &mut self.singers[sec * 2 + 1];
+                x += b.osc.next() * b.gain;
+                x += self.rng.white() * breath_now;
+                let mut y = 0.0;
+                for k in 0..3 {
+                    y += tr.bands[k].process(x) * self.vgains[k];
+                }
+                for k in 0..2 {
+                    y += tr.bands[3 + k].process(x) * self.sf_gains[k] * self.sf_open;
+                }
+                s += y;
+            }
+            s /= self.singers.len() as f32;
+            s = self.hum_lp.process(s);
+            s *= CH2_HUM_GAIN + (1.0 - CH2_HUM_GAIN) * self.mouth;
+            self.breath_env *= self.breath_mul;
+            *o += s * self.amp * self.env.next();
+            self.t += 1;
+        }
+        self.env.alive()
+    }
+
+    fn note_off(&mut self) {
+        self.env.release();
+    }
+
+    fn released(&self) -> bool {
+        self.env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+    }
+
+    fn legato_to(&mut self, key: u8, _vel: u8) -> bool {
+        // a melisma: the ringing choir retunes on one vowel — no fresh
+        // consonant, breath puff or attack
+        self.base_f = key_freq(key);
+        true
+    }
+
+    fn set_vowel(&mut self, freqs: [f32; 3], qs: [f32; 3], gains: [f32; 3]) {
+        self.tgt = freqs;
+        self.qs = qs;
+        self.vgains = gains;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "choir2"
+    }
 }
 
 fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
@@ -5746,6 +6110,239 @@ mod tests {
         rms(&am) / mean.max(1e-9)
     }
 
+    // --- ChoirV2 (GM 52-54) formant-engine oracles (HLD option C) ----------
+    // Thresholds are pinned from measured values (2026.07.10, key 57 / vel
+    // 100 / seed 7 unless noted) with generous margins; the sustain window
+    // (2.0-3.8 s) sits past the consonant hold, mouth ramp and vowel morph.
+
+    /// CH2-O1: routing — the default bank builds the dedicated formant engine
+    /// for all three choir programs.
+    #[test]
+    fn choir2_default_bank_routing() {
+        let sr = 44100.0;
+        for prog in 52..=54u8 {
+            assert_eq!(
+                make(prog, 60, 96, sr, 7, false).kind(),
+                "choir2",
+                "GM{prog} must route to ChoirV2"
+            );
+        }
+    }
+
+    /// CH2-O2: vowel formant placement. Per the 2026.07.08 lesson the
+    /// measurement grid is FIXED (three F2 probe frequencies, band q 5) and
+    /// programs are compared against each other at the same probe, so pitch
+    /// and static detune cannot masquerade as timbre. Measured prominences
+    /// P(f) = band_rms(f)/rms at key 57:
+    ///   P870:  53 (own F2) 0.54 vs 54 0.12 | P1120: 52 (own F2) 0.32 vs 54
+    ///   0.13 | P1900: 54 (own F2) 0.28 vs 52 0.11, 53 0.11.
+    /// Plus the F1 ordering as centroid: ooh 939 < aah 1407 / eh 1477.
+    #[test]
+    fn choir2_formant_placement_per_vowel() {
+        let sr = 44100.0;
+        let sus = |prog: u8| {
+            let sig = render_program(prog, 57, 100, 4.0, 7);
+            sig[(2.0 * sr) as usize..(3.8 * sr) as usize].to_vec()
+        };
+        let (aah, ooh, eh) = (sus(52), sus(53), sus(54));
+        let prom = |seg: &[f32], f: f32| band_rms(seg, sr, f, 5.0) / rms(seg).max(1e-9);
+        assert!(
+            prom(&ooh, 870.0) > 1.8 * prom(&eh, 870.0),
+            "ooh F2 870 not prominent: {} vs eh {}",
+            prom(&ooh, 870.0),
+            prom(&eh, 870.0)
+        );
+        assert!(
+            prom(&aah, 1120.0) > 1.6 * prom(&eh, 1120.0),
+            "aah F2 1120 not prominent: {} vs eh {}",
+            prom(&aah, 1120.0),
+            prom(&eh, 1120.0)
+        );
+        assert!(
+            prom(&eh, 1900.0) > 1.6 * prom(&aah, 1900.0).max(prom(&ooh, 1900.0)),
+            "eh F2 1900 not prominent: {} vs aah {} ooh {}",
+            prom(&eh, 1900.0),
+            prom(&aah, 1900.0),
+            prom(&ooh, 1900.0)
+        );
+        let cent = |seg: &[f32]| crate::testutil::centroid(seg, sr);
+        assert!(
+            cent(&ooh) < 0.8 * cent(&aah) && cent(&ooh) < 0.8 * cent(&eh),
+            "ooh must be darkest: ooh {} aah {} eh {}",
+            cent(&ooh),
+            cent(&aah),
+            cent(&eh)
+        );
+    }
+
+    /// CH2-O3: the singer's-formant cluster. (a) All three programs carry a
+    /// 2.8-3.3 kHz ring that stands clear of the spectrum just above it
+    /// (measured cluster/4100 ratios 1.6-1.9×); (b) a closed "mm" vowel via
+    /// the CC70 `set_vowel` path shades the cluster down with the lips
+    /// (measured 0.175 → 0.096 at prog 53).
+    #[test]
+    fn choir2_singers_formant_cluster() {
+        let sr = 44100.0;
+        let prom = |seg: &[f32], f: f32, q: f32| band_rms(seg, sr, f, q) / rms(seg).max(1e-9);
+        for prog in 52..=54u8 {
+            let sig = render_program(prog, 57, 100, 4.0, 7);
+            let sus = segment(&sig, sr, 2.0, 3.8);
+            let cluster = prom(sus, 2950.0, 5.0).max(prom(sus, 3250.0, 5.0));
+            let above = prom(sus, 4100.0, 5.0);
+            assert!(
+                cluster > 1.3 * above,
+                "GM{prog} singer's formant missing: cluster {cluster} vs 4100 band {above}"
+            );
+        }
+        let render_vowel = |vowel: Option<([f32; 3], [f32; 3], [f32; 3])>| {
+            let mut v = choir(53, 57, 100, sr, 7);
+            if let Some((f, q, g)) = vowel {
+                v.set_vowel(f, q, g);
+            }
+            let mut buf = vec![0f32; (4.0 * sr) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        let open = render_vowel(None);
+        let mm = render_vowel(Some((
+            [500.0, 1400.0, 2400.0],
+            [12.0, 10.0, 9.0],
+            [1.0, 0.30, 0.10],
+        )));
+        let sfr = |sig: &[f32]| {
+            let sus = segment(sig, sr, 2.0, 3.8);
+            band_rms(sus, sr, 3050.0, 3.0) / rms(sus).max(1e-9)
+        };
+        assert!(
+            sfr(&mm) < 0.75 * sfr(&open),
+            "mm must close the singer's cluster: mm {} open {}",
+            sfr(&mm),
+            sfr(&open)
+        );
+    }
+
+    /// CH2-O4: the soft consonant onset — the first 60 ms is both quieter
+    /// (closed lips, measured 0.14-0.46× sustain) and darker (closed-lips
+    /// lowpass, measured centroid 397-580 Hz vs 939-1477 sustain), and the
+    /// onset carries breath (spectral flatness ≥ 0.12 measured 0.17-0.27)
+    /// while the sustain stays harmonic (flatness ≤ 0.30 measured
+    /// 0.07-0.19).
+    #[test]
+    fn choir2_consonant_breath_onset() {
+        let sr = 44100.0;
+        for prog in 52..=54u8 {
+            let sig = render_program(prog, 57, 100, 4.0, 7);
+            let onset = segment(&sig, sr, 0.005, 0.065);
+            let sus = segment(&sig, sr, 2.0, 3.8);
+            assert!(
+                rms(onset) < 0.62 * rms(sus),
+                "GM{prog} onset not soft: onset {} sus {}",
+                rms(onset),
+                rms(sus)
+            );
+            let (c_on, c_sus) = (
+                crate::testutil::centroid(onset, sr),
+                crate::testutil::centroid(sus, sr),
+            );
+            assert!(
+                c_on < 0.62 * c_sus,
+                "GM{prog} onset not closed-lips dark: onset {c_on} sus {c_sus}"
+            );
+            let (f_on, f_sus) = (
+                crate::testutil::flatness(onset, sr, 300.0, 6000.0),
+                crate::testutil::flatness(sus, sr, 300.0, 6000.0),
+            );
+            assert!(
+                f_on > 0.12,
+                "GM{prog} onset carries no breath: flatness {f_on}"
+            );
+            assert!(
+                f_sus < 0.30,
+                "GM{prog} sustain not harmonic enough: flatness {f_sus}"
+            );
+        }
+    }
+
+    /// CH2-O5: ensemble shimmer. Structure: eight singers with decorrelated
+    /// vibrato rates (spanning ≥ 0.8 Hz, all in the 3.4-6.2 Hz vocal range)
+    /// and staggered onsets. Audio: envelope AM near the vibrato rates in the
+    /// LIVE window (2.6-3.6 s, all delays ≤ 0.8 s + ramps ≤ 1.2 s are past)
+    /// stays above a floor (measured 0.13-0.22; the grid is an envelope
+    /// bandpass at 5.5 Hz, well away from the ±10-cent static detune lines
+    /// per the 2026.07.08 shimmer-oracle lesson).
+    #[test]
+    fn choir2_ensemble_shimmer() {
+        let sr = 44100.0;
+        for prog in 52..=54u8 {
+            let v = choir(prog, 57, 100, sr, 7);
+            let rates = v.singer_vib_rates();
+            let (lo, hi) = rates
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(l, h), &r| (l.min(r), h.max(r)));
+            assert!(
+                hi - lo > 0.8,
+                "GM{prog} vibrato rates too uniform: {lo}-{hi} Hz"
+            );
+            assert!(
+                lo > 3.4 && hi < 6.2,
+                "GM{prog} vibrato outside vocal range: {lo}-{hi} Hz"
+            );
+            let delays = v.singer_vib_delays();
+            let d_lo = *delays.iter().min().unwrap();
+            let d_hi = *delays.iter().max().unwrap();
+            assert!(
+                d_hi > d_lo + (0.05 * sr) as u32,
+                "GM{prog} vibrato onsets not staggered: {d_lo}-{d_hi}"
+            );
+            let sig = render_program(prog, 57, 100, 4.0, 7);
+            let live = segment(&sig, sr, 2.6, 3.6);
+            let am = low_rate_am_depth(live, sr);
+            assert!(am > 0.08, "GM{prog} live-window shimmer too flat: {am}");
+        }
+    }
+
+    /// CH2-O6: pitch integrity and level continuity. The ensemble's spectral
+    /// peak sits within 45 cents of the written pitch (Goertzel, not zero
+    /// crossings), the bend path works, and the choir's sustained level stays
+    /// within the 2.4× continuity window of the neighbouring string ensemble
+    /// (measured ratios 0.80-2.07 across keys 45/57/69).
+    #[test]
+    fn choir2_pitch_and_level_continuity() {
+        let sr = 44100.0;
+        for prog in 52..=54u8 {
+            for key in [45u8, 57, 69] {
+                let f0 = key_freq(key);
+                let sig = render_program(prog, key, 100, 4.0, 7);
+                let sus = segment(&sig, sr, 2.0, 3.8);
+                let hz = crate::testutil::peak_locate(sus, sr, f0 * 0.9, f0 * 1.1);
+                let cents = 1200.0 * (hz / f0).log2().abs();
+                assert!(
+                    cents < 45.0,
+                    "GM{prog} key {key} pitch off by {cents} cents ({hz} Hz vs {f0})"
+                );
+                let s48 = render_program(48, key, 100, 4.0, 7);
+                let ratio = rms(sus) / rms(segment(&s48, sr, 2.0, 3.8)).max(1e-9);
+                assert!(
+                    (1.0 / 2.4..=2.4).contains(&ratio),
+                    "GM{prog} key {key} level discontinuity vs strings: {ratio}"
+                );
+            }
+        }
+        // bend: a whole tone up lands where it should
+        let mut v = choir(52, 57, 100, sr, 7);
+        let up = 2f32.powf(2.0 / 12.0);
+        v.set_pitch(up);
+        let mut buf = vec![0f32; (2.0 * sr) as usize];
+        v.render(&mut buf);
+        let want = key_freq(57) * up;
+        let hz =
+            crate::testutil::peak_locate(&buf[(1.0 * sr) as usize..], sr, want * 0.9, want * 1.1);
+        assert!(
+            (1200.0 * (hz / want).log2()).abs() < 45.0,
+            "bent choir pitch {hz}, want {want}"
+        );
+    }
+
     #[test]
     fn vibraphone_11_motor_tremolo_modulates_amplitude() {
         let sr = 12000.0;
@@ -7684,10 +8281,13 @@ mod tests {
         }
     }
 
-    /// Oracle 7b: the SawStack families this change refactors — pads, choir,
+    /// Oracle 7b: the SawStack families this change refactors — pads and
     /// strings — render bit-for-bit as the baseline (origin/main) binary.
     /// Hashes pinned from the baseline; a future SawStack/LayerOsc refactor that
-    /// drifts them trips here.
+    /// drifts them trips here. (The choir arm was retired 2026.07.10: GM 52-54
+    /// moved off SawStack onto the dedicated `ChoirV2` formant engine, an
+    /// intentional default-bank voicing change; the surviving pad/strings pins
+    /// prove the shared stack itself did not move.)
     #[test]
     fn sawstack_families_byte_identical() {
         let sr = 44100.0;
@@ -7702,11 +8302,6 @@ mod tests {
             hash(pad(95, 60, 100, sr, 7)),
             0xb0bdc70da0091298,
             "pad(95) drifted"
-        );
-        assert_eq!(
-            hash(choir(52, 60, 100, sr, 7)),
-            0xb6bf7e8fefbc82f1,
-            "choir(52) drifted"
         );
         assert_eq!(
             hash(strings(48, 60, 100, sr, 7)),

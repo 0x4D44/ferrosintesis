@@ -1,7 +1,7 @@
 # midi-music
 
-**Original instrumental albums composed by language models — four AI composers,
-fifteen albums, ~6½ hours of music — committed as reproducible source and rendered
+**Original instrumental albums composed by language models — five AI composers,
+sixteen albums, ~7½ hours of music — committed as reproducible source and rendered
 through a custom synthesizer.**
 
 Every note here was composed by a frontier language model writing Python that emits
@@ -16,8 +16,8 @@ Jarre, Hans Zimmer, Enigma, Max Richter…). The generators, the MIDI they produ
 Most albums ship committed, tagged `.opus` files under `listening/` (for example
 `listening/Claude Fable 5/Hollow Hill/`). Drag that tree into an audio player for
 the shareable listening copies, reproducible from the committed MIDI plus the synth.
-Three long albums (**VIGIL**, **RIVERWAKE** and **The Long Turning**) ship as MIDI
-only; render them to `.opus` with `render_opus.py` (see
+Four long albums (**VIGIL**, **RIVERWAKE**, **The Long Turning**, and
+**Atlas of Becoming**) ship as MIDI only; render them to `.opus` with `render_opus.py` (see
 [Reproduce & verify](#reproduce--verify)).
 
 ## The music
@@ -79,6 +79,11 @@ are the albums the synth is specifically tuned for.
   low percussion as an arc from quiet introspection through urban pressure and grief to
   a cathartic crest and release.
 
+### OpenAI Codex — `albums/codex/`
+- **Atlas of Becoming** — *cinematic / progressive / orchestral collage*, 61:20 ·
+  14 tracks. Aquatic spectacle, the contemporary world, biological evolution, linked
+  song-form, the GPT lineage, a fast spy-film pursuit, and five freely chosen worlds.
+
 ## How a track is made
 
 ```
@@ -121,7 +126,7 @@ the sibling `ropus` project.
 ## Layout
 
 - **`albums/` holds one directory per composing model** (`fable5/`, `opus4-8/`,
-  `gpt5-5/`, `gpt5-3-spark/`); each holds one or more albums, at the model
+  `gpt5-5/`, `gpt5-3-spark/`, `codex/`); each holds one or more albums, at the model
   directory root or in a named subfolder.
 - **An album** bundles its engine (`engine.py`, and for the newer albums
   `conductor.py` / `material.py` / `movements/`), `build.py`, oracles (`verify.py`,

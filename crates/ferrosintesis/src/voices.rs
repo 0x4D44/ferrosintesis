@@ -4196,15 +4196,16 @@ impl Voice for Wind {
 // Bowed solo strings (GM 40-44 / 110)
 // ---------------------------------------------------------------------------
 
-const BODY_VIOLIN: &[(f32, f32, f32)] = &[(280.0, 1.2, 5.0), (610.0, 1.8, 4.0), (1350.0, 1.5, 3.0)];
-const BODY_VIOLA: &[(f32, f32, f32)] = &[(220.0, 1.3, 7.5), (475.0, 1.8, 4.0), (1200.0, 1.6, 3.5)];
-const BODY_CELLO: &[(f32, f32, f32)] = &[(105.0, 1.1, 5.5), (220.0, 1.5, 4.5), (650.0, 1.4, 3.5)];
-const BODY_CONTRABASS: &[(f32, f32, f32)] =
-    &[(62.0, 1.0, 5.5), (115.0, 1.3, 4.5), (380.0, 1.4, 3.0)];
+const BODY_VIOLIN: [(f32, f32, f32); 3] =
+    [(280.0, 1.2, 5.0), (610.0, 1.8, 4.0), (1350.0, 1.5, 3.0)];
+const BODY_VIOLA: [(f32, f32, f32); 3] = [(220.0, 1.3, 7.5), (475.0, 1.8, 4.0), (1200.0, 1.6, 3.5)];
+const BODY_CELLO: [(f32, f32, f32); 3] = [(105.0, 1.1, 5.5), (220.0, 1.5, 4.5), (650.0, 1.4, 3.5)];
+const BODY_CONTRABASS: [(f32, f32, f32); 3] =
+    [(62.0, 1.0, 5.5), (115.0, 1.3, 4.5), (380.0, 1.4, 3.0)];
 
 #[derive(Clone, Copy)]
 struct BowedPreset {
-    body: &'static [(f32, f32, f32)],
+    body: &'static [(f32, f32, f32); 3],
     press_lo: f32,
     press_span: f32,
     vib_rate: f32,
@@ -4216,7 +4217,7 @@ struct BowedPreset {
 }
 
 const BOWED_VIOLIN: BowedPreset = BowedPreset {
-    body: BODY_VIOLIN,
+    body: &BODY_VIOLIN,
     press_lo: 900.0,
     press_span: 5200.0,
     vib_rate: 5.3,
@@ -4230,7 +4231,7 @@ const BOWED_VIOLIN: BowedPreset = BowedPreset {
 fn bowed_preset(program: u8) -> BowedPreset {
     match program {
         41 => BowedPreset {
-            body: BODY_VIOLA,
+            body: &BODY_VIOLA,
             press_lo: 800.0,
             press_span: 4200.0,
             vib_rate: 5.1,
@@ -4240,7 +4241,7 @@ fn bowed_preset(program: u8) -> BowedPreset {
             ..BOWED_VIOLIN
         },
         42 => BowedPreset {
-            body: BODY_CELLO,
+            body: &BODY_CELLO,
             press_lo: 600.0,
             press_span: 2900.0,
             vib_rate: 4.8,
@@ -4249,7 +4250,7 @@ fn bowed_preset(program: u8) -> BowedPreset {
             ..BOWED_VIOLIN
         },
         43 => BowedPreset {
-            body: BODY_CONTRABASS,
+            body: &BODY_CONTRABASS,
             press_lo: 350.0,
             press_span: 1700.0,
             vib_rate: 4.2,
@@ -4291,7 +4292,7 @@ const PIZZ: PluckPreset = PluckPreset {
     pos: 0.30,
     amp: 0.58,
     rel_t60: 0.10,
-    body: BODY_VIOLIN,
+    body: &BODY_VIOLIN,
     click: 0.6,
     click_hp: 900.0,
     attack_noise: 0.25,
@@ -4312,6 +4313,7 @@ pub struct Bowed {
     vib: Sine,
     vib_depth: f32,
     vib_delay: u32,
+    #[cfg(test)]
     vib_val: f32,
     bite: f32,
     trem_rate: f32,
@@ -4365,6 +4367,7 @@ impl Bowed {
             ),
             vib_depth: preset.vib_depth,
             vib_delay: (0.22 * sr) as u32,
+            #[cfg(test)]
             vib_val: 0.0,
             bite: preset.bite,
             trem_rate,
@@ -4390,7 +4393,10 @@ impl Voice for Bowed {
             if self.t.is_multiple_of(CTRL) {
                 self.scoop += 0.03 * (1.0 - self.scoop);
                 let v = self.vib.next();
-                self.vib_val = v;
+                #[cfg(test)]
+                {
+                    self.vib_val = v;
+                }
                 let vib = if self.t > self.vib_delay {
                     let ramp = ((self.t - self.vib_delay) as f32 / (0.2 * self.sr)).min(1.0);
                     self.vib_depth * ramp * v
@@ -8730,6 +8736,57 @@ mod tests {
         assert!(peak >= BW_TREM_PEAK_FLOOR, "tremolo AM peak {peak:.3}");
         assert!((6.0..=9.5).contains(&rate), "tremolo rate {rate:.2} Hz");
 
+        let slow = Bowed::new(44, 69, 32, sr, 5).trem_rate;
+        let fast = Bowed::new(44, 69, 127, sr, 5).trem_rate;
+        assert!(
+            fast - slow >= 1.5,
+            "GM44 velocity did not accelerate tremolo: {slow:.2} -> {fast:.2} Hz"
+        );
+
+        let mut voice = Bowed::new(44, 69, 100, sr, 5);
+        let mut signal = Vec::with_capacity((2.0 * sr) as usize);
+        let mut reversals = Vec::new();
+        let mut block = [0.0; CTRL as usize];
+        while signal.len() < (2.0 * sr) as usize {
+            let reversal = voice.t as usize;
+            let old_until = voice.trem_bite_until;
+            block.fill(0.0);
+            voice.render(&mut block);
+            if voice.trem_bite_until != old_until {
+                reversals.push(reversal);
+            }
+            signal.extend_from_slice(&block);
+        }
+        let period = (sr / key_freq(69)) as usize;
+        let residual: Vec<f32> = signal
+            .iter()
+            .enumerate()
+            .map(|(i, &x)| {
+                if i >= period {
+                    x - signal[i - period]
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let w = (BOW_TREM_BITE_S * sr) as usize;
+        let ratios: Vec<f32> = reversals
+            .iter()
+            .copied()
+            .filter(|&i| i >= w && i + w < residual.len())
+            .map(|i| {
+                hp_rms(&residual[i..i + w], sr, 3000.0)
+                    / hp_rms(&residual[i - w..i], sr, 3000.0).max(1e-9)
+            })
+            .collect();
+        let rebite = ratios.iter().sum::<f32>() / ratios.len().max(1) as f32;
+        assert!(
+            ratios.len() >= 8,
+            "found only {} bow reversals",
+            ratios.len()
+        );
+        assert!(rebite >= 1.3, "GM44 reversal re-bite ratio {rebite:.3}");
+
         let early_late = |program: u8| {
             let s = render_program_sampled(program, 69, 100, 2.0, 7, false);
             rms(segment(&s, sr, 1.55, 1.95)) / rms(segment(&s, sr, 0.10, 0.35)).max(1e-9)
@@ -8738,6 +8795,8 @@ mod tests {
         assert!(early_late(40) > 0.70, "GM40 must sustain like arco");
 
         let bits = |s: Vec<f32>| s.into_iter().map(f32::to_bits).collect::<Vec<_>>();
+        let samples_available = bits(render_program_sampled(0, 69, 100, 0.5, 6, true))
+            != bits(render_program_sampled(0, 69, 100, 0.5, 6, false));
         for program in 41u8..=45 {
             let on = bits(render_program_sampled(program, 69, 100, 0.5, 6, true));
             let off = bits(render_program_sampled(program, 69, 100, 0.5, 6, false));
@@ -8746,7 +8805,14 @@ mod tests {
         for program in [40u8, 110] {
             let on = bits(render_program_sampled(program, 69, 100, 0.5, 6, true));
             let off = bits(render_program_sampled(program, 69, 100, 0.5, 6, false));
-            assert_ne!(on, off, "GM{program} must retain the violin sample");
+            if samples_available {
+                assert_ne!(on, off, "GM{program} must retain the violin sample");
+            } else {
+                assert_eq!(
+                    on, off,
+                    "GM{program} must stay modeled without an embedded bank"
+                );
+            }
         }
     }
 
@@ -8810,6 +8876,17 @@ mod tests {
                 "GM{program} emitted non-finite audio"
             );
             assert!(max_abs(&s) < 1.5, "GM{program} raw peak {}", max_abs(&s));
+            let mut lp1 = OnePole::lowpass(8.0, sr);
+            let mut lp2 = OnePole::lowpass(8.0, sr);
+            let mut lp3 = OnePole::lowpass(8.0, sr);
+            let mut lp4 = OnePole::lowpass(8.0, sr);
+            let dc: Vec<f32> = s
+                .iter()
+                .map(|&x| lp4.process(lp3.process(lp2.process(lp1.process(x)))))
+                .collect();
+            let dc_ratio =
+                rms(segment(&dc, sr, 0.60, 0.95)) / rms(segment(&s, sr, 0.60, 0.95)).max(1e-9);
+            assert!(dc_ratio < 1e-3, "GM{program} true-DC ratio {dc_ratio:.6}");
         }
 
         let pizz = render_program_sampled(45, 69, 100, 0.4, 31, false);

@@ -1,0 +1,17 @@
+Why this piece
+
+The album’s momentum now recedes, as though a loss is understood only after the decisive moment has passed. The unheard door is absence noticed late: the piano keeps moving while every tempo change slows, and deep cello echoes gradually turn uncertainty into grief. The piece is intentionally long and quiet so the emotional reversal has time to register.
+
+Listening guide
+
+0:00 — Acoustic grand piano opens the A-minor lament with patient, repeated figures.
+0:14 — String ensemble and low strings enter as a dark, sustained floor; cello begins its first sighs at 0:28.
+1:39 — The first slowdown makes the pulse feel as if it is slipping backward.
+2:01 — Development: celesta appears at 2:02, then violin takes the lament from 2:09.
+3:31 — A further slowdown deepens the suspended feeling; piano and strings gather weight without percussion.
+4:11 — Turn: viola becomes audible at 4:27, answering cello across the lower, haunted texture.
+5:58 — Coda: the final celesta traces fade into piano, ensemble, cello, and low strings, ending without closure.
+
+MIDI techniques
+
+The tempo deliberately falls 68→64→60→56 BPM at 0:00, 1:39, 3:31, and 5:15. Its dramatic retreat is therefore in the score’s tempo and density, not a tape-slowing audio effect. The piano writes CC64 pedal per bar; every melodic lane follows the grief arc with CC11 expression, CC74 brightness, and CC71 resonance. Bowed/string tracks use CC1 vibrato, persistent channel-pressure targets updated every four bars, and subtle bends within RPN-authored ±2-semitone ranges. Piano and celesta also author CC1, but that lane is inaudible on the modal models in ferrosintesis; their pitch, pressure, filter, and expression controls still sound. There is no percussion track. Static CC7/CC10: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, centered low strings 72/64, celesta 44/86. CC91=58 supplies a shared reverb send. No CC93 chorus or CC94 echo is authored: the replies are separately scored rather than copied by CC94, although program-default string/celesta chorus and echo still colour the render.

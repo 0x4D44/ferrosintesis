@@ -1,0 +1,14 @@
+Why this piece
+Heavy basses and suspended high strings turn public tragedy into an elegy whose details are already becoming ash. The fatalism comes from weight below and unresolved light above, not from a dramatic percussion climax.
+
+Listening guide
+0:00 — Opening: piano establishes B-flat minor at 60 bpm; ensemble and heavy low strings enter at 0:16, cello at 0:32, and viola at 2:03.
+1:36 — The elegy moves to 64 bpm.
+2:09 — Development: celesta enters at 2:10 and violin at 2:21, sharpening the bleak suspension above piano and the string floor.
+3:21 — At 68 bpm the texture reaches its broad tragic weight.
+4:10 — Turn: piano, cello, viola, ensemble, basses, and celesta begin letting the page burn away.
+4:59 — Tempo drops to 56 bpm.
+5:51 — Coda: piano, cello, ensemble, low strings, and sparse celesta leave only the afterimage.
+
+MIDI techniques
+GM piano and string programs are joined by celesta; the contrabass lane is kept centred and in its playable register. Static CC7 volume, CC10 pan, and CC91 reverb establish depth. Per-bar CC11 shapes the elegy's climb and collapse, while piano CC64 sustains the slow harmonic smears. There is deliberately no percussion. No CC1, CC74, chorus/echo automation, pitch bend, aftertouch, portamento, or mid-piece program change is used.

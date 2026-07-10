@@ -1,0 +1,17 @@
+Why this piece
+
+After action comes the need to stand still enough to understand its weight. This chamber is imagined as a large resonant space where layered strings witness what has happened and the piano tolls rather than rushes. Removing both percussion and sounding celesta keeps the catharsis grave: expansion comes from register, density, and harmony, not added sparkle.
+
+Listening guide
+
+0:00 — Acoustic grand piano begins the tolling D-minor pattern.
+0:11 — String ensemble and centered low strings open the chamber around it; cello enters at 0:23.
+1:01 — Viola starts broad answers as the texture gains mass.
+1:49 — Development: violin becomes the upper witness near 1:47, passing the lament above the layered bed.
+2:29 — At 112 BPM the music reaches its largest sustained expansion, driven entirely by piano and strings.
+3:20 — Turn: cello and viola answers accumulate while the piano continues to toll through the harmony.
+4:23 — Tempo begins its final retreat; 4:33 marks the coda and a long full-string release.
+
+MIDI techniques
+
+Tempo expands 84→96→112 BPM at 0:00, 1:09, and 2:29, then contracts to 104 at 3:46 and 92 at 4:23. CC11, CC74 brightness, and CC71 resonance follow the cathartic arc on every melodic lane. CC1 adds vibrato to bowed/string voices; channel pressure updates every four bars and persistently shapes held-note gain and vibrato; narrow bends use explicit RPN ±2-semitone setup. Piano CC64 shapes each tolling bar. Important silent automation: the file contains a named celesta lane with program, mix, reverb, CC1/11/71/74, pressure, and pitch-bend events, but it contains zero note-ons, so none of that lane is audible. Piano CC1 is also inert on its modal model. There is no percussion track. Static sounding CC7/CC10: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, low strings 72/64; the silent celesta is 44/86. CC91=58 supplies reverb; no CC93 chorus or CC94 echo is authored.

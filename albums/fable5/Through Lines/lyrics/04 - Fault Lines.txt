@@ -1,0 +1,19 @@
+Why this piece
+
+This is a portrait of the world in 2026: incompatible systems occupy the same space without a tidy common key. A C-minor block in 4/4 and an F-sharp-minor block felt in 7/8 grind a tritone apart. The bridge chorale repeatedly tries to connect them; the ending offers coexistence rather than pretending conflict has resolved.
+
+Listening guide
+
+0:00 — Hairline: contrabass, strings, timpani and drums expose the first crack; a news ticker soon taps HOLD THE LINE.
+0:30 — Block A: C-minor strings, brass, flute, contrabass and timpani move in 4/4.
+1:30 — The first hymn section opens; choir becomes audible around 1:32, attempts three chords, and is cut off by an orchestra hit.
+1:45 — Block B: palm-muted guitar, synth bass and warm pad regroup in accented 2+2+3 sevens.
+2:45 — The second hymn section opens; choir enters around 2:47, tries five chords, and is cut again.
+3:00 — Collision: both blocks, drums and accelerating doomscroll marimba overlap; the hymn's seven-chord attempt also fails.
+4:55 — A full fault silence follows the double rupture.
+4:58 — Coda: choir, both blocks, strings and flute carry the complete hymn in both keys at once.
+5:35 — A quiet rising minor sixth refuses closure.
+
+MIDI techniques
+
+The file's single time-signature lane stays 4/4; Block B's 7/8 truth is authored in its onset and accent grid. Morse percussion carries HOLD THE LINE. CC11 drives the string/pad pressure and the coda fade; flute uses CC1 modulation plus CC11, choir uses CC70 vowels plus expression, and the collision pad receives pitch-bend fractures that return to centre. Static CC7 spans 92-105 and CC91 22-62. Timpani (pan 54), palm-mute guitar (74) and marimba (46) provide width; all sustained tectonic beds remain at 64. Channel-10 program 16 is metadata-equivalent to the already-default V3 kit, not an audible kit switch. No dynamic lane is written for a wholly silent part.

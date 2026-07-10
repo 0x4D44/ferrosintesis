@@ -1,0 +1,16 @@
+Why this piece
+
+This piece turns the opening hush into reflection and the first hint of forward motion. The image is light moving across water seen through a window: surface details repeat, but never quite in the same emotional place. D Dorian keeps the music contemplative without sealing it inside minor-key grief, while the patient string pulse underneath suggests that the album has begun to move.
+
+Listening guide
+
+0:00 — Acoustic grand piano traces soft, spacious reflections in D Dorian.
+0:15 — String ensemble and low strings form the still water beneath the piano; cello begins speaking at 0:29.
+1:41 — Development and the first celesta glints arrive together. The piano pulse becomes steadier and the harmonic surface opens.
+1:55 — Violin carries the remembering motif above the bed, taking over the foreground through the middle span.
+3:16 — Turn: viola answers from 3:29 as the intensity crests, with cello and ensemble supporting rather than crowding it.
+4:22 — Coda: the pulse recedes; celesta, strings, and piano leave a final reflected chord rather than a firm cadence.
+
+MIDI techniques
+
+The tempo rises 66→70→74 BPM at 0:00, 1:27, and 3:03, then returns to 66 at 4:15. Score density grows with the arc: the piano opens at half-pattern density, sustained strings enter after four bars, and celesta is withheld until the development. Every melodic lane authors CC11 expression plus bar-by-bar CC74 brightness and CC71 resonance. CC1 gives bowed strings evolving vibrato; channel pressure updates every four bars and persistently shapes gain and vibrato. Subtle pitch bends use an explicit RPN ±2-semitone range, and piano CC64 alternates pedal down/up inside each bar. Piano and celesta CC1 are authored but inaudible in the current modal voice model; their other controls remain active. Static CC7/CC10 is piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, centered low strings 72/64, and celesta 44/86. All use CC91=58 reverb; no CC93 chorus or CC94 echo is written.

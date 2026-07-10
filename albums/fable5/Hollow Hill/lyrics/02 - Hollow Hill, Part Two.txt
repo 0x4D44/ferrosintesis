@@ -1,0 +1,14 @@
+Why this piece
+The homeward side answers Part One rather than merely continuing it. The hill theme returns smiling, the folk material becomes a dance, the strange ocean hides a private signal, and the 13/8 ostinato changes from E Dorian to E major. A false ending and fast reel make the ending feel earned rather than ceremonial.
+
+Listening guide
+0:00 — Green Morning: nylon and steel guitars, harp, bass, strings, flute, and fiddle recast the hill theme in pastoral D major.
+2:17 — The Dance Under the Hill: fiddle and tin whistle lead a 6/8 jig over guitars and folk percussion; the last lap lifts from D to E and glock joins.
+4:12 — Stone Voices: low choir, organ, strings, drone bass, piano, timpani, and tolling bell form a Phrygian chant.
+5:52 — The Night Ocean: sweep pad, fretless bass, clean-guitar arpeggios, crystal, and celesta echo the bell motif; around 7:12 a woodblock taps ARTHUR in Morse.
+8:32 — The Return: piano and bass restore the 13/8 engine in E major; guitars, organ, strings, choir, lead, glock, and bells terrace into the summit at 10:39.
+10:49 — A breath: the great cadence leaves three seconds of scored silence.
+10:52 — The Hollow Hill Reel: banjo, fiddle, whistle, guitars, bass, piano, mandolin, and train-beat percussion accelerate to 138 bpm, then stop on three stabs and one bell.
+
+MIDI techniques
+All channels carry an initial GM program plus static CC7 volume, CC10 pan, and CC91 reverb. CC11 expression breathes the ocean pad and grows/fades organ, strings, and choir through the Return. Lead-guitar pitch bends shape the returning theme; CC68 makes late reel runs hammered rather than re-picked. Program changes supply tin whistle, celesta, crystal, fretless bass, sweep pad, overdriven lead, and tremolo mandolin. The harp/mandolin channel is deliberately muted with CC7 at the reel entrance and raised only when its part arrives. Tempo changes create the Return build and reel accelerando. There is no CC1, sustain-pedal, aftertouch, or CC74 automation.

@@ -1,0 +1,15 @@
+Why this piece
+
+This process piece asks what phase music can do when MIDI's floating beat positions replace imperfect tape loops. Two rooms hear the same twelve-note C-lydian figure, but one clock runs exactly one percent slow. The accumulating displacement is the composition: after 101 cycles the slower room has slipped by one complete pattern and both clocks meet again.
+
+Listening guide
+
+0:00 — Same Room: left marimba and right vibraphone begin together. Quieter centred copies sound through two imaginary corridor doors, over an open-fifth string bed.
+1:11 — Drifting Apart: the 0.03-beat-per-cycle offset turns unison into echo and canon.
+2:22 — Opposite Walls: the phase is widest. At 2:25 a centred celesta — the clock — enters only on accents implied by the interference of the two patterns.
+3:34 — Coming Round: the slow clock approaches the next alignment and the resultant accents change again.
+4:37 — One Clock: marimba, vibraphone, corridor copies and celesta re-form a single cycle.
+
+MIDI techniques
+
+Every onset is scheduled as an exact float: room A repeats a 3-beat period, while room B repeats 3.03 beats. There is deliberately no timing or velocity humanisation; the timing difference is the subject. The only dynamic controller is a five-part CC11 arc on the centred strings, rising through the separation and receding during reunion. Static CC7 is 82 on the corridor copies, 100 on the two rooms, 112 on celesta and 116 on strings; CC91 sends span 20-55. The transient room channels are hard-panned CC10 16/112, while the corridor, clock and sustained bed remain at 64 to preserve the mono anchor. No controller automation falls on silence.

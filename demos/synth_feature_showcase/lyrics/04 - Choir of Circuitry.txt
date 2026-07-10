@@ -1,0 +1,14 @@
+Why this piece
+This fast 5/4 electro-choral anthem tests how sustained SawStack families remain distinct under heavy control. Strings supply the engine, choir vowels become the hook, pads supply resonant voltage, and orchestra hits and synth FX turn phrasing into circuitry.
+
+Listening guide
+0:00 — String Engine: GM 48–51 strings drive the ostinato with circuit-kit transients; orchestra-hit punctuation begins at 0:12.
+0:12 — Orchestra hits begin their recurring echoed punctuation.
+0:36 — Vowel Gate: choir programs GM 52–54 enter with changing vowels and vibrato while string slurs and orchestra hits continue.
+1:12 — Pad programs GM 88–95 start their filter/resonance sweep sequence.
+1:30 — Pad Ignition: resonant pads, echoed orchestra hits, and drums replace the opening string/choir emphasis; synth-FX pulses enter at 1:48.
+1:48 — Sustained synth-FX programs GM 97/99/101/103 begin their moving, echoed ribbons.
+2:18 — A final orchestra hit and circuit-kit cadence close the system.
+
+MIDI techniques
+Static CC7/10/91/93/94 values establish the mix, while program changes rotate through the string, choir, pad, and FX families. Strings use CC1 vibrato plus CC68 legato/slur. Choir uses CC70 vowel morph and CC1 vibrato. Pads use CC74 brightness, CC71 resonance, and CC10 autopan. Synth FX use autopan and CC94 echo throws; orchestra hits also throw echo. The width comes from these authored transient and controller moves, not from off-centre sustained beds.

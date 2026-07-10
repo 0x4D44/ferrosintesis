@@ -1,0 +1,18 @@
+Why this piece
+
+This is the kinetic crest promised by the preceding arc. Lightning supplies speed, brilliance, and sudden vertical flashes; stone supplies the low-string and percussion mass that the light strikes against. The piece aims for triumph without smoothness: E Phrygian keeps grit in the harmony while piano, cello, celesta, and drums ignite the album’s most intense motion.
+
+Listening guide
+
+0:00 — Acoustic grand piano fires at half density with eight divisions; the full sixteen-part E-Phrygian grid arrives around 0:17.
+0:09 — Ensemble and pulsed low strings add the stone beneath it.
+0:17 — Cello and low percussion enter; 0:25 adds viola, so the string body forms almost immediately.
+0:52 — The first acceleration reaches 124 BPM; violin begins urgent figures around 0:55.
+1:23 — Development: celesta flashes arrive at 1:24 over increasingly frequent high piano accents.
+1:54 — At 150 BPM the crest ignites. Piano, four-beat bass pulses, full strings, kick, low tom, and sparse crashes combine.
+2:33 — Turn: the peak sustains while gradually yielding from maximum intensity.
+3:27 — Coda: tempo and density fall, landing on a broad final chord rather than an abrupt victory stop.
+
+MIDI techniques
+
+Tempo changes 110→124→150→138→128 BPM at 0:00, 0:52, 1:54, 2:52, and 3:20. The sixteen-step piano pattern is authored note work, not a MIDI arpeggiator; crash accents are GM drum key 49, not an audio sample trigger in the file. Melodic channels automate CC11, CC74 brightness, CC71 resonance, CC1 string vibrato, and persistent channel-pressure targets updated every four bars. Narrow pitch bends sit within explicit RPN ±2-semitone ranges, and the fast piano shortens its CC64 pedal window. Piano/celesta CC1 is authored but does not affect their modal voices; their other lanes remain active. Drums intentionally omit bend, CC1, CC71, CC74, and pressure, retaining CC11 dynamics. Static CC7/CC10: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, low strings 72/64, celesta 44/86, percussion 64/54. All use CC91=58 reverb; no CC93 chorus or CC94 echo is written.

@@ -1,0 +1,17 @@
+Why this piece
+
+The emergency of “First Alarm” spreads into ordinary streets rather than becoming one enormous spectacle. This track imagines many separate points of pressure—windows, traffic, private worries—held inside one restless city. Circling piano and muted string harmony keep the scale intimate, while the low pulse says that every small fire belongs to the same larger motion.
+
+Listening guide
+
+0:00 — Acoustic grand piano begins an angular, circling F-minor dance.
+0:13 — Ensemble and low strings establish the urban undertow; cello adds short foreground phrases from 0:27.
+0:27 — Low percussion joins with restrained kick and low tom, making the pulse physical without turning it into a drum-led piece.
+1:35 — Development: celesta sparks appear at 1:36 and violin enters near 1:45 over the tightening piano grid.
+2:13 — Viola begins answering before the 3:03 turn; the strings now pass the angular motif among different registers.
+3:03 — Turn: the texture reaches its busiest, most anxious span, then gradually backs away.
+4:04 — Coda and tempo easing: percussion falls back while the ensemble and piano close the circle.
+
+MIDI techniques
+
+Tempo rises 72→78→86 BPM at 0:00, 1:20, and 2:46, then eases to 80 at 4:04. The piano’s ten subdivisions per bar create the restless score pattern; low strings switch to short pulses when the intensity crosses its threshold. These are note-design choices, distinct from the controller layer. Melodic tracks also automate CC11 expression, CC74 filter brightness, CC71 resonance, persistent channel-pressure targets updated every four bars, and narrow bends within an explicit RPN ±2-semitone range. CC1 adds vibrato to bowed/string voices; piano and celesta author the same CC1 events, but their modal models do not respond to mod wheel. Piano CC64 controls the changing pedal window. Percussion authors CC11 only as its dynamic lane—no bend, CC1, CC71, CC74, or pressure. Static CC7/CC10: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, low strings 72/64, celesta 44/86, drums 64/54. All send CC91=58; no CC93 chorus or CC94 echo is authored.

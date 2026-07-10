@@ -1,0 +1,13 @@
+Why this piece
+Arthur chose one 17-minute piece crossing four Mike Oldfield corners: the Incantations guitar build, Songs of Distant Earth atmosphere and major lift, Tubular Bells III drive, and Mastermind funk. One bass riff in three guises and three compatible themes keep it coherent. The story is a beacon lit at dusk, blazing, and receiving an answer.
+
+Listening guide
+0:00 — Signal: filter-opening sweep pad, pedalled piano, echoing crystal, sliding fretless bass, and distant whistle; around 1:40 woodblock taps CQ CQ CQ.
+2:25 — Ignition: funk kit and riff bass assemble with palm-muted and wah guitars, Hammond Leslie stabs, nylon comping, and attackless lead wails.
+5:27 — The Lattice: steel, nylon, and clean guitars split one 10/8 riff between them; mandolin accents, fiddle, organ flutes, strings, bass, drums, and an autopanning crystal loop interlock.
+8:25 — The Long Climb: lead guitar rises through five waves over Am–G—theme paraphrase, unison bends, detuned double-track, fast runs, then octave hammer-ons—while flute, organ, strings, choir, mandolin/glock, guitars, bass, and drums terrace in.
+13:18 — Ascension: A major arrives with four-on-floor, half-time riff, Theme A on tubular bells, Theme C in strings/choir, interlocking guitars, and harmonized Theme B wails.
+15:48 — Afterglow: closing sweep pad, nylon/steel guitars, fretless bass, whistle, crystal, and final bell; woodblock answers K, “go ahead.”
+
+MIDI techniques
+Static setup gives every channel a GM program and CC7/10/91 placement, then CC91 dynamically moves the mix from distant/wet to near/dry. CC74 opens/closes the pad and drives the wah LFO; CC1 supplies lead vibrato and Hammond Leslie inertia, while whistle vibrato is written with pitch bend. CC11 creates attackless “violining” and orchestral terraces. Pitch bends cover fretless slides, delayed vibrato, curls, unison bends, a +6-cent double-track offset, and the two lead channels' two-semitone Ascension lift; CC68 makes rapid guitar runs legato. CC64 sustains piano, CC94 throws phrase endings into echo, and CC10 authors antiphonal guitars, lattice spread, hard-split doubles, and crystal autopan. Program changes rotate pad, bass, organ, winds, guitars, glock/crystal, mandolin, and bells.

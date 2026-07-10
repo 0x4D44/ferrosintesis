@@ -1,0 +1,13 @@
+Why this piece
+Part Two mirrors and intensifies Part One. Its lead is the first part's Theme A turned upside down interval by interval; the finale then stacks the original, its answer, and that inversion. The goal is recognisable return without literal repetition, carried by shifting metre and sequencer polymeter.
+
+Listening guide
+0:00 — Ignition: accelerating kick, sweep pad, crystal zaps, and strings launch the second machine.
+0:17 — Slipstream: a 12-slot shuffle in 6/8 rides bass and strings; the glide lead states the inverted theme, with glock and flute sparks.
+1:25 — Crosswind: 4/4 stomp brings both 16- and 12-slot sequencers together over driving bass, organ, and full kit.
+1:48 — Eclipse: the texture drops to blooming choir, pad, heartbeat, and a slowed memory of the original theme.
+2:11 — Perihelion: original theme, answer, and inversion form the verified triple stack over detuned second sequencer, Leslie organ, choir, bass, and full electro floor.
+3:12 — Afterimage: sequencer filter, pad, bass, piano, crystal, and bell close the orbit under a ritardando.
+
+MIDI techniques
+Every channel has static GM program and CC7/10/91 placement. The main sequencer uses dense CC74 filter movement, CC71 resonance, and CC10 autopan; the second sequencer is fine-tuned +6 cents with RPN 1 during Perihelion. Pad and choir author channel aftertouch, while CC70 opens the choir vowel. The lead uses CC5/65 portamento, CC1 vibrato, and CC94 echo throws; bass uses CC68 legato and a closing portamento slide. Organ CC1 drives Leslie spin-up, electric piano uses CC64 sustain, and crystal/flute use CC94 throws. Unlike Part One's theremin drop, this track does not showcase wide RPN-0 pitch bends.

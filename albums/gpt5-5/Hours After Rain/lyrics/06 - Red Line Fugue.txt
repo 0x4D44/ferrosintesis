@@ -1,0 +1,14 @@
+Why this piece
+A Phrygian ostinato imagines danger as a transit line that cannot stop. Staggered string entries turn pursuit into fugue: each new voice inherits the same urgency until the whole system runs at its limit.
+
+Listening guide
+0:00 — Opening: racing piano starts at 122 bpm; ensemble and low strings enter at 0:08, cello and drums at 0:16, viola at 0:34, and violin at 1:04.
+0:47 — The line accelerates to 132 bpm.
+1:10 — Development: celesta echoes enter the full piano/string/percussion engine as staggered voices multiply.
+1:59 — At 140 bpm the fugue reaches maximum density.
+2:17 — Turn: all string lanes, piano, celesta, basses, and percussion keep the line moving while expression starts to recede.
+2:54 — Tempo drops to 126 bpm.
+3:10 — Coda: piano, cello, ensemble, basses, celesta, and percussion peel away from the chase.
+
+MIDI techniques
+GM piano, strings, contrabass, and celesta combine with written channel-10 percussion. Static CC7 volume, CC10 pan, and CC91 reverb place the lanes. Per-bar CC11 automation drives the common intensity arc; piano CC64 uses shorter values under the 16-note pulse. The ostinato and staggered entries are explicit MIDI notes, not an arpeggiator. There is no CC1, CC74, chorus/echo automation, pitch bend, aftertouch, portamento, or program change after the opening setup.

@@ -1,0 +1,15 @@
+Why this piece
+This early Fable 5 work is an original single-movement cinematic build in the Hans Zimmer idiom. Its purpose is direct and architectural: begin with a quiet low-D pedal, add one weight-bearing layer at a time, let a plain horn theme become enormous, then remove the machinery and leave a bare open fifth.
+
+Listening guide
+0:00 — Intro: sparse low piano tolls and centred contrabass establish D minor; the piano gradually fills its upper register.
+0:17 — String ostinato: repeated string figures begin the long acceleration in density.
+0:34 — First build: cello sighs and low-brass braams mark the pillars; taiko-style percussion enters around 0:51.
+1:25 — Theme, distant: French horns state the eight-bar theme above ostinato, low strings, cello, piano, brass pillars, and percussion.
+1:43 — Choir entry: a high choir pad widens the second build.
+2:00 — Surge: the harmony hardens and every repeating layer grows toward the summit.
+2:17 — Climax: horns state the theme twice at full voice, rising an octave on the second pass; cello doubles below while braams, choir, strings, piano, and percussion peak.
+2:51 — Coda: the engine falls away as tempo eases from 112 toward 76; piano, low strings, choir, and fading ostinato resolve to D–A.
+
+MIDI techniques
+Eight active channels use fixed GM programs with static CC7 volume, CC10 pan, and CC91 reverb: piano, string ensemble, contrabass, cello, French horn, brass section, choir, and channel-10 percussion. CC11 expression is the only continuous authored performance effect: the same 96-point bar-by-bar intensity curve, with a gentle sinusoidal swell, is authored across all eight channels to grow the long arc and fade the coda. Portions of those CC11 lanes occur before an instrument's first note or after its last and are therefore inaudible; their value matters only when that channel sounds. Tempo steps shape the coda. There is no authored pitch bend, mod wheel, sustain pedal, aftertouch, portamento, filter/resonance, CC93 chorus, CC94 echo, program change, or dynamic pan; current synth profiles still add default chorus/echo colour to strings, choir, cello, and brass in the rendered audio.

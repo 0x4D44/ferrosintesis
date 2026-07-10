@@ -1,0 +1,15 @@
+Why this piece
+A 6/8 machine-toccata turns the keyboard and modal families into cathedral machinery. Soft piano opens the mechanism; organ rotation supplies the motor; bells, timpani, and crystalline sequencers become the visible gears.
+
+Listening guide
+0:00 — Prepared Keys: piano and cathedral percussion begin; future-key colours enter at 0:10, organs at 0:26, and bells/bars at 0:48.
+0:00–0:50 — The key lane demonstrates acoustic/electric/harpsichord/clavinet colours, pedal states, fine tuning, pressure, wide bend, and portamento.
+0:25 — Organ programs GM 16–19 begin rotating through the central machinery; free reeds GM 20–23 follow from 1:10.
+0:48 — Bells and bars start their GM 8–14 roll-call with moving stereo placement.
+0:51 — Leslie Machinery: organ, bells, and kit interlock; timpani enters at 1:04 and crystal sequencers at 1:17.
+1:04 — The timpani refinement bed enters below the mechanism.
+1:16 — Crystal programs GM 96–103 begin short, panned sequences.
+1:48 — Bell and Kettle Ascent: organs, timpani, crystals, and percussion climb after the piano and bell roll-calls recede.
+
+MIDI techniques
+Static CC7/10/91/93/94 values establish the mix. Piano demonstrates CC67 soft pedal, CC64 sustain, CC66 sostenuto, RPN fine tune and 12-semitone bend range, CC5/65 portamento, channel pressure, and pitch bend. Bell/crystal lanes use CC10 autopan and mid-piece program changes. Organ/free-reed lanes use CC11 expression and portamento while rotating programs; CC1 drives Leslie on GM16–19 and vibrato on GM22 harmonica, but is inert on GM20/21/23. Timpani motion is written pitch/glide behavior in the synth rather than a controller trick.

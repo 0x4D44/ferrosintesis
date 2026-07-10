@@ -1,0 +1,14 @@
+Why this piece
+A deliberately small three-note cell carries a long wounded lament. The point is not melodic abundance but the changing weight of the same appeal as harmony, register, and silence repeatedly reconsider it.
+
+Listening guide
+0:00 — Opening: slow piano frames the cell in F minor at 58 bpm; ensemble and low strings enter at 0:17, cello at 0:33, and celesta at 0:50.
+1:22 — The pulse lifts gently to 62 bpm.
+2:09 — Development: violin enters at 2:25 and viola at 2:45, lengthening the piano/string/celesta lament.
+3:11 — At 66 bpm the wound opens into the track's broadest span.
+4:09 — Turn: piano, upper strings, ensemble, basses, and celesta begin giving the cell back to silence.
+5:00 — Tempo falls to 54 bpm.
+5:44 — Coda: piano, cello, ensemble, and low strings make the final appeal without resolving it.
+
+MIDI techniques
+GM programs are acoustic piano, cello, viola, violin, string ensemble, contrabass, and celesta. Static CC7 volume, CC10 pan, and CC91 reverb provide the chamber space. Per-bar CC11 curves breathe with the track's intensity on every lane; piano CC64 alternates sustained chords with shorter releases. The lament is written phrasing and tempo, not pitch effects. There is no percussion, CC1 vibrato lane, CC74 filter, chorus/echo automation, pitch bend, aftertouch, portamento, or program change after 0:00.

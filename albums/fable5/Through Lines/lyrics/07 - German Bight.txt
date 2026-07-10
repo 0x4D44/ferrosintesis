@@ -1,0 +1,17 @@
+Why this piece
+
+A shipping-forecast sea area becomes a storm told through literal lines: a falling barometer melody, waves grouped in threes and a Morse signal across the eye. The dawn also heals an earlier wound: the chorale repeatedly broken in "Fault Lines" returns complete, not as triumph but as first light over open fifths.
+
+Listening guide
+
+0:00 — Calm Glass: high and low strings, harp and an English-horn barometer float on a still sea.
+1:17 — Freshening: shakuhachi disturbs the surface as the barometer keeps descending; kit and timpani enter around 2:00–2:01, then reverse cymbal around 2:17.
+2:19 — Gale One: brass, taiko, timpani and wave-crash percussion drive 9/8 swells under the strings and wind.
+3:15 — The Eye: the storm collapses to high strings and lone flute; at 3:21 a tinkle bell transmits GERMAN BIGHT in Morse.
+3:59 — Gale Two: the full storm returns larger, now with wordless choir.
+5:09 — Dawn: harp, flute, strings and choir clear the texture; at 5:17 the complete bridge chorale returns.
+6:00 — Open D-A fifths end at sunrise, withholding both grief and triumph.
+
+MIDI techniques
+
+The English-horn barometer falls one semitone per phrase through the first half. CC11 draws the storm arc across strings, brass, wind, choir and dawn; shakuhachi also uses CC1 modulation, and the choir uses CC70 vowel morphs. A real Morse lane drives the signal bell. CC0 bank 1 selects alternate taiko, tinkle-bell and reverse-cymbal voices; channel-10 program 1 is metadata-equivalent to the already-default V3 kit, not an audible switch. Static CC7 spans 92-108 and CC91 42-62. Harp, timpani, taiko and bell supply modest transient pan width; sustained strings, winds, brass and choir stay centred. The beat-zero bank selects precede those instruments' notes but persist until their entries; they are setup, not audible gestures.

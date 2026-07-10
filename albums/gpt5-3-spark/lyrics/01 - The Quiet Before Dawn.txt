@@ -1,0 +1,16 @@
+Why this piece
+
+The album needs stillness before it can earn its later acceleration. This opening imagines the expectant hour before sunrise: a room-temperature piano pattern, distant strings, and small points of celesta that gradually make the silence feel inhabited. Its falling motif and late return to near-stillness establish the fragments that the finale will remember after the journey has changed them.
+
+Listening guide
+
+0:00 — Acoustic grand piano alone: low anchors, a very sparse E-minor arpeggio, and the first falling contour.
+0:17 — String ensemble and centered contrabass enter as long, distant beds.
+0:34 — Cello begins the first foreground phrases; 0:52 brings the first celesta echoes.
+1:41 — Development marker: the already-full piano pattern continues; violin takes the motif from about 1:57 while the ensemble slowly brightens.
+3:18 — Turn: viola becomes the late narrator at 3:34, with cello answers and the broadest dynamic point.
+4:25 — Coda: the arpeggio thins, and piano, cello, ensemble, and low strings settle into a long open ending; the celesta has already fallen silent.
+
+MIDI techniques
+
+Tempo breathes 56→60→58→54 BPM at 0:00, 1:09, 2:45, and 4:07. The piano uses CC64 pedal changes every bar; all melodic lanes shape phrases with CC11 expression, CC74 brightness, and CC71 filter resonance. CC1 adds vibrato to the bowed/string voices, while channel pressure updates every four bars and persistently shapes gain and vibrato until the next target. Narrow pitch bends sit inside an explicitly authored RPN ±2-semitone range. Piano and celesta also carry CC1 data, but ferrosintesis treats both as modal instruments, so that particular mod-wheel lane is inaudible; their pitch bend, pressure, brightness, resonance, and expression still work. Static CC7/CC10 pairs are piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, low strings 72/64, and celesta 44/86; each sends CC91=58 reverb. No CC93 chorus or CC94 echo is authored.

@@ -1,0 +1,15 @@
+Why this piece
+
+This original commuter vignette borrows the dramatic idea of a famous middle section — mundane haste opening into transcendence — without quoting its music. A dry alarm-and-platform world runs out of breath, then the train's departure becomes a whole-tone dream that hangs unresolved in mid-air.
+
+Listening guide
+
+0:00 — The Alarm: bank-B agogo rings in sixteenths as dry piano and kit wake.
+0:07 — Down the Stairs: chugging piano, quarter-note walking bass, tight hats and two-bar flute phrases separated by audible gasps.
+0:57 — Platform Two: the groove strips back; program 40 selects brushes around 1:24 and the authored footsteps then accelerate before the station bell and full kit return.
+1:46 — Doors Closing: piano and bass climb under swelling strings. A full-octave string bend paints the departure whistle at 2:01; bank-B reverse cymbal closes the doors at 2:05.
+2:09 — The Lift: tempo halves. Choir, celesta and harp rise through a whole-tone field and stop unresolved.
+
+MIDI techniques
+
+The commuter flute uses repeated CC11 breath envelopes and small pitch bends. At the departure, RPN 0 sets a 12-semitone bend range and the strings execute one long octave glissando, while CC11 carries their swell. The dream choir uses CC70 vowel morphing toward "ah" and a broad expression arc. Channel 10 briefly selects program 40 for the accelerating brush footsteps, then returns to the classic kit; CC0 bank 1 selects the agogo and reverse-cymbal alternate voices. Static CC7 spans 85-110 and CC91 10-72. Piano, agogo, celesta and harp provide modest pan width; bass, flute, strings, choir and riser remain centred. Beat-zero control setups on the still-silent flute and riser persist until their entries; they do not themselves sound.

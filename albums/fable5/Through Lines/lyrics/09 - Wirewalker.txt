@@ -1,0 +1,16 @@
+Why this piece
+
+The second Fine Line piece makes the "fine line" literal. A solo fiddle crosses a registral void while confined to A3-E4, a perfect fifth as narrow as the wire. Alternating bar lengths continually disturb balance; one stumble breaks the pattern, and only the far platform is allowed to fill the empty middle register.
+
+Listening guide
+
+0:00 — First Steps: contrabass lies below the void and music-box glints hang above it; the fiddle steps onto the wire at 0:05.
+1:06 — Mid-Span: a high-string halo joins. Alternating 5/8 and 6/8 keep the walk rebalancing while small pitch wobbles recover.
+2:07 — The Stumble: at 2:20 one 4/8 bar drops two steps, the bass and glints lurch into dissonance and the deepest bend falls away.
+2:39 — Second Wind: the walker regains the recurring theme over bass, halo and circling glints.
+3:38 — Far Platform: a warm pad and harp finally fill the forbidden register.
+3:48 — An A-major Picardy chord blooms; at 3:58 the fiddle arrives on A4, beyond the wire's earlier fifth.
+
+MIDI techniques
+
+The meter lane alternates 5/8+6/8 with exactly one 4/8 stumble. Hand-drawn pitch bends on the fiddle always return to centre within a beat; CC11 shapes each crossing, and CC1 adds vibrato after arrival. Music-box CC10 moves between 44 and 84 for sparse transient glints. CC11 also controls the high halo and the platform's bass/pad bloom. Static CC7 spans 80-105 and CC91 40-75; all initial channels are centred except the transient platform harp at pan 74, with the glints gaining width only through their dynamic pan lane. No automation is authored on a silent channel.

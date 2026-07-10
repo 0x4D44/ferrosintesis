@@ -1,0 +1,14 @@
+Why this piece
+Near-still piano and long string lines inhabit the fragile hour when darkness has thinned but daylight has not arrived. The piece avoids reassurance: its small acceleration only clarifies how much remains suspended before the final descent.
+
+Listening guide
+0:00 — Opening: piano begins in E minor at 66 bpm; ensemble and low strings enter at 0:15, cello at 0:29, and remote celesta at 0:44.
+1:27 — The suspended pulse rises to 70 bpm.
+1:54 — Development: violin enters at 2:08, joining piano, cello, ensemble, basses, and celesta in longer lines.
+3:03 — At 74 bpm the texture becomes briefly more legible.
+3:42 — Turn: violin hovers above piano, ensemble, basses, and celesta; viola enters at 3:55 as cello recedes.
+4:34 — Tempo falls to 60 bpm.
+5:06 — Coda: piano, cello, ensemble, and low strings enter the final darkness.
+
+MIDI techniques
+GM piano, solo and ensemble strings, contrabass, and celesta are statically placed with CC7 volume, CC10 pan, and CC91 reverb. Per-bar CC11 curves create the almost imperceptible breath of the texture; piano CC64 sustains the near-still figures. Tempo-map events provide the slight awakening and final slowdown. There is no percussion, CC1, CC74, chorus/echo automation, pitch bend, aftertouch, portamento, or program change after 0:00.

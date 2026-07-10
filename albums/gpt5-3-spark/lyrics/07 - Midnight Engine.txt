@@ -1,0 +1,18 @@
+Why this piece
+
+After the rail-line pressure, the album needs a machine that can illuminate rather than threaten. “Midnight Engine” keeps a pulse running but opens the harmony into a patient, bright centre. The idea is motion heard from inside a quiet night: regular enough to feel dependable, spacious enough for thought, and gradually warmer as the listener turns inward.
+
+Listening guide
+
+0:00 — Acoustic grand piano begins at half density with three divisions; the full seven-part D-minor pattern arrives around 0:25.
+0:12 — Ensemble and low strings establish the calm engine; cello enters at 0:25.
+0:25 — Low percussion adds a restrained kick-and-tom pulse rather than a hard drive.
+1:27 — Development: celesta arrives at 1:28 and violin follows at 1:36, letting light gather over the fixed motion.
+2:10 — Tempo reaches 92 BPM; the harmony opens while density remains controlled.
+2:34 — Viola takes the later phrases as the 2:47 turn begins to widen the texture.
+3:02 — The brightest, fastest span reaches 102 BPM without becoming frantic.
+3:40 — Coda: tempo and density ease; the machine winds down into sustained strings and piano.
+
+MIDI techniques
+
+Tempo steps 78→84→92→102→96 BPM at 0:00, 1:02, 2:10, 3:02, and 3:40. The seven-note piano division intentionally avoids a square mechanical grid; low strings pulse only once the score’s intensity threshold is crossed. Melodic lanes shape the slow opening with CC11 expression, CC74 brightness, CC71 resonance, persistent channel-pressure targets updated every four bars, and narrow pitch bends under explicit RPN ±2-semitone setup. CC1 adds vibrato to the bowed/string family. The authored CC1 lane on acoustic piano and celesta is inaudible because their modal models exclude mod-wheel vibrato; pressure, bend, brightness, resonance, expression, and piano CC64 pedal still act. Percussion receives only CC11 dynamics besides its static mix—no melodic modulation or bend. Static CC7/CC10: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, low strings 72/64, celesta 44/86, percussion 64/54. All channels use CC91=58 reverb; no CC93 chorus or CC94 echo is authored.

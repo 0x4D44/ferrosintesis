@@ -1,0 +1,16 @@
+Why this piece
+
+After the epic suite, the album needs a small, direct goodnight. The FABLE cell slows until it resembles a music-box name spoken across a dark room; GOODNIGHT passes as a bell signal, and the last light is the same F that opened track one. The whole double album lands on its first letter.
+
+Listening guide
+
+0:00 — Glide Path: centred strings, low closed-mouth choir and harp descend quietly toward F.
+0:16 — Approach Lights: music box states F-A-B-flat-(silent L)-E in four-fold augmentation over the bed; each absent L becomes a two-beat rest.
+1:28 — Goodnight: the music box pauses while a tinkle bell whispers GOODNIGHT in real Morse rhythm at 1:29.
+1:52 — Flare: music box and harp return as strings and choir make one gentle lift.
+2:20 — Touchdown and Fade: the cell repeats more sparsely while every sustained layer recedes.
+3:09 — Last Light: a single high F6 is the final MIDI note, held through a written ritardando and fade.
+
+MIDI techniques
+
+The music-box cell is recomputed from shared album material at exactly four times its original duration, including the silent letter. A real Morse event lane drives the bank-B tinkle bell. Strings and low choir carry continuous CC11 decrescendos; choir CC70 closes from soft vowels toward "mm", while the music box receives its own final expression fade. Static CC7 spans 86-100 and CC91 55-66. Music box, strings, choir and harp all stay at CC10 64 because ringing and sustained sources comb-filter badly under off-centre Haas delay; only the sparse bell is panned 74. The bell's beat-zero bank select occurs in silence but persists to its 1:29 entry, so it is setup rather than an audible effect.

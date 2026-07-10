@@ -1,0 +1,18 @@
+Why this piece
+
+The album's only straight-ahead swing imagines climbing three flights to a small night-jazz room above a bar. The head's rising motif makes the stairs audible, while the form honours the social logic of a working quartet: introduce the tune, give everyone space, trade compact ideas, shout together, then say the tag three times.
+
+Listening guide
+
+0:00 — Stairwell: genuinely solo piano breathes through a sculpted rubato introduction.
+0:28 — Head In: muted trumpet states the three-flight tune over piano, walking upright bass, jazz guitar and brush kit at 92 bpm.
+1:10 — Piano Solo: the rhythm section maintains a 2:1 swing.
+1:52 — Guitar Solo: jazz guitar takes the next half-chorus.
+2:13 — Trading Fours: piano, guitar and drums alternate strict four-bar turns; markers name every hand-off.
+3:15 — Shout Chorus: the quartet lifts briefly to 95 bpm and plays together.
+3:36 — Head Out: the trumpet head returns transposed with the same melodic design.
+4:16 — Tag x3: three closing tags tighten the cadence; trumpet expression falls after the final accent.
+
+MIDI techniques
+
+Twelve tempo events make the solo-piano opening rubato; after 0:28 the grid locks apart from the shout lift. Piano CC64 sustain pedals its intro phrases. Channel 10 program 40 selects the brush kit, whose ride onsets encode the verified 2:1 ratio. GM59 supplies the muted-trumpet character, reinforced by persistent CC74 44 and light CC1 modulation initialized while the trumpet is silent; those controls become audible when the head enters. The ending adds a CC11 trumpet fade. Static CC7 spans 88-105 and CC91 28-52. Transient piano and guitar sit at pans 52/76; bass, trumpet and kit are centred. There is no unused dynamic automation.

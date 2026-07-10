@@ -1,0 +1,14 @@
+Why this piece
+This fast 7/8-and-4/4 chase is a musical acceptance test for ferrosintesis's guitar, bass, lead, and default-drum families. A palm-muted hook and power-chord answers keep the program roll-call sounding like one ignition sequence rather than a catalogue.
+
+Listening guide
+0:00 — Palm Mute Engine: left/right guitars rotate through GM 24–31 while bass engines cover GM 32–39 above the full default kit.
+0:24 — The wah-answer lane begins its resonant drive against the guitar engine.
+0:43 — Synth leads start their GM 80–87 reactor sequence.
+0:49 — Lead Reactor: guitars and bass continue under portamento lead trade-offs, echo throws, and the moving wah answer.
+1:10 — The dedicated wah feature ends; lead and rhythm engine carry the acceleration.
+1:38 — The bass-family roll-call completes.
+1:50 — Final Ignition: guitars, leads, wah-answer fragments, and drums converge; guitar legato and a short bend figure sharpen the last strike.
+
+MIDI techniques
+Static CC7 volume, CC10 pan, CC91 reverb, CC93 chorus, and CC94 echo place the channels. The feature lanes deliberately showcase mid-piece program changes across every guitar, bass, and synth-lead program. Leads use RPN pitch-bend range, CC1 modulation, CC5/65 portamento, pitch curves, changing chorus, and CC94 echo throws. The answer guitar uses CC74 wah, CC71 resonance, CC10 autopan, and CC11-independent note dynamics. Only the GM35 fretless-bass passage uses bass pitch bend; final guitars use CC68 legato. Channel 10 changes pan for drum staging. These are authored controller demonstrations, not inferred mix effects.

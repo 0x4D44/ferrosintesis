@@ -1,0 +1,19 @@
+Why this piece
+
+This is motion used as both escape and compulsion. The rail image supplies a repeated cell that cannot simply stop: low percussion and bass drive ahead while E Phrygian harmony keeps asking where the journey is going. “Mercy” lies in surrendering to the line for a while; the relentless mechanism carries the listener through the album’s most searching kinetic state.
+
+Listening guide
+
+0:00 — Acoustic grand piano starts the urgent repeating cell in E Phrygian.
+0:10 — Ensemble and centered low strings lock in the track beneath it.
+0:20 — Cello and low percussion enter together; kick and low tom mark the imagined rail joints.
+0:37 — Viola adds an early counter-line as the intensity rises faster than on previous tracks.
+0:59 — The tempo reaches 108 BPM; 1:15 brings violin into the rushing middle register.
+1:25 — Development: celesta flashes at 1:26 above the dense piano, strings, and percussion.
+2:10 — At 122 BPM the line becomes the album’s most relentless passage so far, including sparse crash accents.
+2:43 — Turn: the rail engine stays dense while the long intensity arc starts bending toward release.
+3:42 — Coda: momentum reduces but does not fully come to rest before the final chord.
+
+MIDI techniques
+
+The tempo map is 98→108→122→112 BPM at 0:00, 0:59, 2:10, and 3:21. A 15-step piano pattern and four attacks per bar in the low-string lane produce the mechanical drive; those are authored notes, not an arpeggiator or delay effect. CC11 follows the large intensity curve, while every melodic track adds bar-rate CC74 brightness and CC71 resonance. CC1 drives bowed/string vibrato; channel pressure updates every four bars and persistently shapes gain and vibrato; subtle pitch movement uses explicit RPN ±2-semitone ranges. Piano sustain CC64 is shortened for the dense pattern. Piano and celesta CC1 automation is present but inaudible on their modal voices; their other expression and pitch controls remain active. Drums use CC11 but intentionally no pitch bend, modulation, filter automation, or pressure. Static CC7/CC10: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, low strings 72/64, celesta 44/86, percussion 64/54. CC91=58 supplies reverb; no CC93 chorus or CC94 echo is authored.

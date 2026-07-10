@@ -1,0 +1,17 @@
+Why this piece
+
+This is Claude Fable 5's self-portrait. Five musical characters state the album's F-A-B-flat-(silent L)-E cell in five idioms, then prove that apparently different voices can belong to one model. Their final collapse onto F supplies the pitch that returns at the end of the double album.
+
+Listening guide
+
+0:00 — Baroque: two flutes give the cell as a canon at the fifth; the answer follows three beats later.
+0:45 — Romantic: a single string ensemble breathes through a rubato rise from quiet pads to a 1:22 climax, then sighs away.
+1:48 — Jazz: jazz guitar and walking upright bass ride a 2:1 brush-kit swing.
+2:36 — Electronic: saw lead, octave-pumping synth bass and an enhanced dance kit lock to a hard sixteenth-note grid.
+3:14 — Voice: wordless choir turns the cell into changing vowels.
+3:47 — Five Together: flute, strings, guitar, saw and choir interleave in consonant counterpoint.
+4:38 — The texture narrows; at 4:43 all five strike one F in different octaves and fade.
+
+MIDI techniques
+
+The score contrasts seeded human timing with a genuinely quantized electronic section. Romantic strings use CC11 expression and CC1 modulation; the saw uses broad CC74 brightness sweeps. Choir uses CC70 vowel morphs plus CC11, and every finale voice receives a written expression fade. Channel 10 selects program 40 for brushes, then program 1 at the electronic seam. Static CC7 levels are 90-100 and CC91 reverb sends 25-62; only the transient jazz guitar is off-centre (CC10 54), while sustained parts stay at 64. No authored dynamic lane is stranded on a silent channel.

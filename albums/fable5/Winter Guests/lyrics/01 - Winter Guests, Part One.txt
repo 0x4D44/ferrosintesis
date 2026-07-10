@@ -1,0 +1,10 @@
+Why this piece
+Arthur asked for another Oldfield piece whose “guests” were ABBA and Crash Test Dummies, plus new MIDI expression. The solution avoids pastiche by giving every style one Guest theme. Part One is the cold half: The Visitors-like machinery admits a low wordless hum, then turns that hum anxious and refuses its cadence.
+
+Listening guide
+0:00 — Frost: cold 16th-note ice arp, filter/resonance sweep, aftertouch pad, portamento fretless pedal, music box, piano, electro pulse, and first low “mm” hum at 1:54.
+2:46 — The Humming: the Guest theme is sung low by Choir I over sostenuto harmonium and una-corda piano; Choir II adds an “oo” third, with steel/nylon guitars, flute answers, strings, bass, and sparse percussion. The cadence remains unresolved.
+6:12 — Footsteps in the Hall: 7/8 bass and palm-muted chug drive strings, anxious choir, arp, drums, and organ; a portamento synth lead bends and dives across a 12-semitone range before the cold half stops unsettled.
+
+MIDI techniques
+Initial channels author GM program and CC7/10/91 placement; choir channels also have static CC93 chorus. CC74 cutoff plus CC71 resonance animate the ice arp, whose CC10 autopan provides motion. Pad and both choirs use channel aftertouch; CC70 selects low “mm” and inner “oo.” Fretless bass and the synth lead use CC5/65 portamento. The lead explicitly sets RPN 0 bend range 12 for octave whammy dives and uses CC68 legato. Harmonium CC66 holds pedal points while moving notes continue; piano CC67 una corda softens The Humming. RPN 1 fine-tunes the second choir for width. CC91 automation pulls the cold soundstage closer as the guests enter, and music-box notes use CC94 echo. MIDI lyric events carry the hum syllables. The unused lead-double channel has only static setup, not audible automation.

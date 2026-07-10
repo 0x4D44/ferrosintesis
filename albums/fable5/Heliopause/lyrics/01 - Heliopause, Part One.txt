@@ -1,0 +1,13 @@
+Why this piece
+An original Jean-Michel Jarre/Oxygene-idiom machine piece asks how much drama can come from subtraction and transformation rather than new themes. One melody fits two harmonic grounds, an answer is written to combine with it, and Part Two will invert it. Here the fast sequencer repeatedly gives way to a single exposed voice.
+
+Listening guide
+0:00 — Solar Wind: aftertouch-breathing swirl pad, crystal droplets, flute, heartbeat, bell, and a whoosh establish the weather.
+0:24 — The Sequencer: electric-piano glass joins a filter-opening, auto-panning 16th cell and synth-bass pulse; portamento lead states Theme A with glock halo.
+1:39 — Mirror Waltz: nylon guitar and electric piano move into 3/4 while flute compresses Theme B over strings and glass.
+2:16 — The Drop: the machine cuts out. A wide-bending theremin sighs over pad, sliding bass, opening choir, crystal, and a rebuild riser.
+2:57 — Two Suns: Theme A and Theme B sound together over 16-against-12 sequencers, Leslie organ, legato bass, glock, choir, and full electro drums.
+4:12 — Dissolve: sequencers thin and close their filters; bass, piano, pad, crystal, flute, bell, and a falling lead fragment remain.
+
+MIDI techniques
+Static setup is a GM program with CC7/10/91 volume, pan, and reverb per channel. The main sequencer continuously authors CC74 cutoff, CC71 resonance, and CC10 autopan. Pad and choir use channel aftertouch; choir also morphs vowels with CC70. The lead uses CC5/65 portamento, CC1 vibrato, CC94 echo throws, and pitch bends. The Drop explicitly sets RPN 0 bend range to 12 semitones for the theremin's ±5-semitone curves, then restores it; bass portamento slides underneath. Organ CC1 spins the Leslie, piano uses CC64 sustain, crystal/flute ride CC94, and bass runs use CC68 legato. No channel is note-silent for an entire dynamic automation lane.

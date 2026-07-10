@@ -1,0 +1,14 @@
+Why this piece
+The album opens by making apprehension feel physical: a hesitant piano pulse tests an empty city while distant low strings seem to wait for permission to move. The falling melody and late slowdown turn held breath into a restrained, unresolved exhale.
+
+Listening guide
+0:00 — Opening: sparse piano establishes D minor at 66 bpm; ensemble and low strings enter at 0:15, then cello at 0:29.
+0:58 — The pulse edges up to 70 bpm as the texture begins to gather.
+1:25 — Development: celesta enters at 1:26, violin at 1:39, and viola at 2:11; intensity rises without becoming a full chase.
+2:20 — At 74 bpm the piece reaches its most alert state.
+2:46 — Turn: piano, upper strings, low strings, and celesta hold the city in brighter suspension.
+3:25 — Tempo drops to 62 bpm.
+3:40 — Coda: piano, cello, ensemble, and low strings withdraw to the opening scale.
+
+MIDI techniques
+GM programs are acoustic piano, cello, viola, violin, string ensemble, contrabass, and celesta. Static CC7 volume, CC10 pan, and CC91 reverb place the ensemble. Every active lane receives per-bar CC11 expression shaped by the written intensity curve; piano CC64 sustain is re-authored each bar, longer in the sparse passages. Tempo changes are MIDI tempo-map events. There is no percussion, mod wheel, wah/filter automation, chorus/echo send, pitch bend, aftertouch, portamento, or mid-piece program change.

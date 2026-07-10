@@ -1,0 +1,14 @@
+Why this piece
+A 12/8 cinematic sprint was built to expose the orchestral middle of the GM map: brass weight and bite, reed slurs, wind descants, bowed-string motion, and a final fiddle. Call-and-response makes family differences audible in one continuous reactor.
+
+Listening guide
+0:00 — Low Brass Motor: low brass rotates through GM 57/58/60/61 while high brass answers with GM 56/59/62/63 above the reactor kit; reeds enter at 0:40.
+0:40 — Reed programs GM 64–71 begin their monophonic slur sequence.
+0:45 — Reed Ignition: low/high brass, reeds, and drums overlap; winds enter at 0:57 and bowed strings at 1:23.
+0:57 — Wind descants start rotating through GM 72–79 across the front of the mix.
+1:22 — Bowed programs GM 40–45 begin their engine figures.
+1:31 — Bowed Reactor: reeds, winds, strings, and drums take over as brass withdraws.
+2:05 — GM110 fiddle becomes the final focused reactor voice before shutdown.
+
+MIDI techniques
+Static CC7/10/91/93/94 values establish the stage; program changes perform each family roll-call. Brass uses CC11 expression/timbre opening, channel-pressure growl, CC1 vibrato, and CC68 slur. Reeds use CC1 vibrato and CC68 monophonic slur. Winds use CC10 autopan and CC94 echo throws. Bowed strings and fiddle use CC1 vibrato, CC68 legato, and small pitch-bend scoops. The sprint and call-and-response are written notes and percussion, not an arpeggiator.

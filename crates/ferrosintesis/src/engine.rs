@@ -2559,6 +2559,64 @@ mod tests {
         left(&render(&song, &test_opts(44100.0)).0)
     }
 
+    fn render_bowed_controls(
+        program: u8,
+        key: u8,
+        mod_val: u8,
+        aftertouch: u8,
+        samples: bool,
+    ) -> Vec<f32> {
+        let song = test_song(
+            vec![
+                (
+                    0.0,
+                    EvKind::Prog {
+                        ch: 0,
+                        prog: program,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 93,
+                        val: 0,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 1,
+                        val: mod_val,
+                    },
+                ),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key,
+                        vel: 100,
+                    },
+                ),
+                (
+                    0.10,
+                    EvKind::Aftertouch {
+                        ch: 0,
+                        val: aftertouch,
+                    },
+                ),
+                (2.4, EvKind::NoteOff { ch: 0, key }),
+            ],
+            2.5,
+        );
+        let opt = Options {
+            samples,
+            ..test_opts(44100.0)
+        };
+        left(&render(&song, &opt).0)
+    }
+
     fn render_bowed_with_mod(mod_val: u8) -> Vec<f32> {
         render_bowed_program_with_mod(40, mod_val)
     }
@@ -2613,6 +2671,57 @@ mod tests {
             spread_mod > 2.0 * spread_plain,
             "GM 110 plain {spread_plain} Hz vs mod {spread_mod} Hz"
         );
+    }
+
+    /// Natural vibrato, CC1 and channel aftertouch compose without either
+    /// cancelling into dropouts or exceeding the signed pitch bound.
+    #[test]
+    fn bowed_natural_cc1_aftertouch_composition_is_bounded() {
+        let sr = 44100.0;
+        let range = ((0.8 * sr) as usize, (2.2 * sr) as usize);
+        let cents = |spread_hz: f32, f0: f32| {
+            let half = spread_hz * 0.5;
+            1200.0 * ((f0 + half) / f0).log2()
+        };
+        for (program, key, samples) in [
+            (40u8, 69u8, false),
+            (43, 45, false),
+            (110, 69, false),
+            (40, 69, true),
+            (110, 69, true),
+        ] {
+            let plain = render_bowed_controls(program, key, 0, 0, samples);
+            let modded = render_bowed_controls(program, key, 127, 0, samples);
+            let composed = render_bowed_controls(program, key, 127, 127, samples);
+            let f0 = crate::dsp::key_freq(key);
+            let plain_c = cents(cycle_freq_spread(&plain[range.0..range.1], sr), f0);
+            let mod_c = cents(cycle_freq_spread(&modded[range.0..range.1], sr), f0);
+            let both_c = cents(cycle_freq_spread(&composed[range.0..range.1], sr), f0);
+            assert!(
+                (4.0..=12.0).contains(&plain_c),
+                "GM{program} samples={samples}: autonomous excursion {plain_c:.1} cents"
+            );
+            assert!(
+                mod_c >= 2.0 * plain_c,
+                "GM{program} samples={samples}: CC1 {mod_c:.1} vs natural {plain_c:.1} cents"
+            );
+            assert!(
+                both_c < 75.0,
+                "GM{program} samples={samples}: composed excursion {both_c:.1} cents"
+            );
+
+            let seg = &composed[range.0..range.1];
+            let win = (0.01 * sr) as usize;
+            let levels: Vec<f32> = seg.chunks(win).map(rms).collect();
+            let mut ordered = levels.clone();
+            ordered.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let median = ordered[ordered.len() / 2];
+            let floor = levels.iter().copied().fold(f32::INFINITY, f32::min);
+            assert!(
+                floor >= 0.25 * median,
+                "GM{program} samples={samples}: controller beat dropout {floor:.5} vs median {median:.5}"
+            );
+        }
     }
 
     #[test]

@@ -1,0 +1,10 @@
+Why this piece
+The warm half turns the shared Guest theme into an ABBA-like chorus and an Oldfield guitar line, then sounds all three guises together. Its D-to-E “truck-driver” gear change is also the album's emotional mechanism: the home moves from Part One's E minor into E major, and the last hum finally receives the tonic it was denied.
+
+Listening guide
+0:00 — Searchlight: four-on-floor pop, off-beat piano octaves, bass, steel/rhythm guitars, glock, strings, and stacked “ah” choirs; a breakdown holds “oo” under aftertouch, then the chorus lifts from D to E major at 2:42.
+3:47 — The Glass Ballroom: disco pulse supports all three Guest guises—augmented tubular-bell peal, stacked choir chorus, low hum, and Oldfield guitar line—with hard-split detuned leads, organ Leslie, fiddle, strings, piano, bass, and interlocking guitars. A breathing breakdown separates the two peals.
+7:35 — Last Light: una-corda piano and nylon guitar accompany fretless slides, closing pad, flute echoes, and the final resolved hum; one warm bell and bare E–B fifth fade out without drums.
+
+MIDI techniques
+Channels start with GM program and CC7/10/91 mix, then CC91 draws the room from pop intimacy to dry climax and distant farewell. CC70 selects choir “ah,” “oo,” and “mm”; choir and pad use aftertouch swells. Lead and double are panned apart and RPN 1 fine-tunes the double +8 cents; CC11 violining and extensive pitch vibrato shape the guitar line. Organ CC1 spins Leslie. Piano uses CC64 sustain and CC67 una corda; closing bass uses pitch-bend slides. Pad CC74 closes through Last Light, and flute uses CC94 echo. Program changes turn drawbar into rock organ, glock into tubular bells, warm pad into sweep pad, fingered into fretless bass, and fiddle into flute. The ice-arp channel deliberately has no notes in Part Two: its authored program/static mix setup is inaudible, and there is no fake filter showcase on it.

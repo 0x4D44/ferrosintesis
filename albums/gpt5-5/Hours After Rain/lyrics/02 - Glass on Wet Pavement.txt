@@ -1,0 +1,14 @@
+Why this piece
+Nervous sixteenth-note motion turns reflected city light into forward pressure. Dorian harmony keeps a sliver of openness beneath the speed, so the track feels like running toward something rather than merely fleeing.
+
+Listening guide
+0:00 — Opening: rapid piano begins at 108 bpm; ensemble and low strings enter at 0:09, cello and drums at 0:18, then viola at 0:43.
+0:44 — The street accelerates to 118 bpm.
+1:02 — Development: celesta enters at 1:03 and violin at 1:09, sharpening the existing piano/string/percussion engine.
+1:41 — At 126 bpm the wet-pavement motion reaches maximum pressure.
+2:00 — Turn: piano, cello, viola, ensemble, basses, celesta, and percussion keep the pulse but begin releasing density.
+2:27 — Tempo eases to 112 bpm.
+2:44 — Coda: piano, cello, ensemble, basses, and low percussion simplify the run.
+
+MIDI techniques
+GM programs are piano, solo and ensemble strings, contrabass, and celesta, with written channel-10 kick/tom/crash punctuation. Static CC7 volume, CC10 pan, and CC91 reverb establish the stage. Per-bar CC11 expression follows the rising-and-receding intensity curve on every lane; piano CC64 sustain is shortened for the dense 16-note pulse. The speed is authored notes plus tempo-map changes, not an arpeggiator. There is no CC1, CC74, chorus/echo automation, pitch bend, aftertouch, portamento, or mid-piece program change.

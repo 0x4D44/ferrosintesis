@@ -1,0 +1,18 @@
+Why this piece
+
+The finale returns to the album’s quiet language, but refuses to pretend the intervening journey did not happen. Falling piano fragments, gentle celesta, and long strings recall the opening as memory rather than reprise. The close is calm but unresolved: the listener has returned to stillness carrying the scar of alarm, motion, grief, resilience, and catharsis.
+
+Listening guide
+
+0:00 — Acoustic grand piano returns alone with a sparse G-minor falling figure.
+0:17 — Ensemble and centered low strings enter as a familiar distant bed; cello begins at 0:33.
+0:50 — Celesta recalls the opening album’s small points of light.
+1:39 — The tempo slows before the 2:01 development, making the return feel more reflective than the opening.
+2:14 — Violin takes the remembered falling motif through the central span.
+3:56 — Tempo rises slightly; the 4:04 turn passes the voice to viola at 4:12, with cello answering below.
+5:00 — The final slowing begins.
+5:37 — Coda: piano density falls away, celesta disappears, and the string family sustains an open, unresolved homecoming.
+
+MIDI techniques
+
+Tempo moves 58→56→60→52 BPM at 0:00, 1:39, 3:56, and 5:00. The four-step pulse, falling motif, and late thinning deliberately mirror the opening track at the score level; no authored CC94 copies them, although program-default string/celesta chorus and echo still colour the render. Melodic lanes use CC11 expression, CC74 brightness, and CC71 resonance to shape the subdued arc. CC1 supplies bowed/string vibrato; channel pressure updates every four bars and persistently shapes gain and vibrato; subtle pitch bends stay inside explicitly set RPN ±2-semitone ranges. Piano CC64 controls the long pedal. Piano and celesta author CC1 events that are inaudible on ferrosintesis’s modal voices, while their pressure, bend, filter, and expression data remain effective. There is no percussion. Static CC7/CC10: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, centered low strings 72/64, celesta 44/86. All send CC91=58 reverb. No CC93 chorus or CC94 echo is authored.

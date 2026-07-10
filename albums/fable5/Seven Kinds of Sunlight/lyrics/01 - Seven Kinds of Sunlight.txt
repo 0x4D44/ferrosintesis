@@ -1,0 +1,18 @@
+Why this piece
+The brief was an upbeat, through-written song rather than another suite. Its title nods to the 7/8 verses, but the deeper experiment is pop continuity across 7/8, 6/8, 4/4, and 5/4. A verified three-voice chorus, a verse canon, and a whole-tone gear change let complexity feel like lift rather than homework.
+
+Listening guide
+0:00 — Intro: filter-opening pulse riff and glock corners; piano, picked bass, pad, guitar, and drums drop in.
+0:13 — Verse 1: hummed choir and bright lead sing over a 3+2+2 bass/drum engine and piano chords.
+0:38 — Pre-Chorus 1: rising melody, climbing toms, strings, sequencer riser, and legato bass pull into the chorus.
+0:48 — Chorus 1: choir hook, pulse/glock counter A, string counter B, driving bass, overdriven guitar, piano, pad, and full kit.
+1:20 — Verse 2: piano answers the melody in canon; wah guitar, detuned lead double, ghost snares, vibes, and ooh choir colour the 7/8.
+1:54 — Chorus 2: second choir descant, organ, autopanning pulse, and vibraphone enlarge the stack.
+2:22 — Middle Eight: 5/4 piano pools and ride groove support flute/lead counterpoint with a portamento glide.
+2:40 — Guitar Solo: distorted lead bends and hammers through 7/8, then dives seven semitones.
+3:04 — Drum Break: unison stabs give way to kick, tom cascades, ruffs, and a riser.
+3:13 — Final Chorus: E major stacks every vocal/counter line with flute, Leslie organ, bells, guitars, bass, and ride.
+3:41 — Outro: riff, stop-time punches, bass slide, closing pad, and long E-major ring.
+
+MIDI techniques
+Every channel has static GM program and CC7/10/91 placement. CC70 moves voices from closed hums to “ah”; aftertouch swells pad and choir. RPN 1 detunes the Verse-2 lead −5 cents. The solo sets RPN 0 bend range 12 for unison bends and the −7-semitone dive, with CC1 vibrato, CC68 legato hammer-ons, and CC94 throws. CC74/71 open the pulse and make the guitar wah; CC10 autopans pulse/vibes. CC5/65 glides the middle-eight lead and outro bass; CC64 sustains piano; organ CC1 spins Leslie. MIDI lyric events contain the wordless chorus syllables. No wholly silent channel carries a dynamic automation lane.

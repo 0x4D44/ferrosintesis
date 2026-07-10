@@ -1,0 +1,14 @@
+Why this piece
+An interior remembers its occupants through resonance rather than narrative. Warm piano harmonics and answering cello phrases make absence feel inhabited; the returning minor harmony asks whether memory belongs to people or places.
+
+Listening guide
+0:00 — Opening: piano enters a warm G-minor room at 68 bpm; ensemble and low strings follow at 0:14, then cello at 0:28.
+1:24 — The memory stirs at 72 bpm.
+1:41 — Development: celesta enters at 1:42, violin at 1:51, and viola at 2:49; answering phrases appear in different registers.
+3:11 — Tempo reaches 76 bpm.
+3:17 — Turn: piano, viola, ensemble, basses, and celesta retain the room while cello and violin recede.
+4:14 — Tempo falls to 64 bpm.
+4:29 — Coda: piano, cello, ensemble, and low strings return as the room's oldest memory.
+
+MIDI techniques
+GM programs are piano, solo and ensemble strings, contrabass, and celesta. Static CC7 volume, CC10 pan, and CC91 reverb create the haunted interior. Every lane carries per-bar CC11 expression waves tied to the score's intensity; piano CC64 sustain lets harmonies overlap and release. The answering effect is composed counterpoint, not delay. There is no percussion, mod-wheel automation, wah/filter, chorus/echo send, pitch bend, aftertouch, portamento, or mid-piece program change.

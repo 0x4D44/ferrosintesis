@@ -1,0 +1,11 @@
+Why this piece
+The first panel of an original three-track film-epic cycle turns a single horn theme into a gathering army. Its strong-beat skeleton was designed to survive both this 12/8 ground and Track 3's 5/4 battle. Because the synth used at composition time had no brass model, the “horns” are deliberately constructed from organ and saw voices.
+
+Listening guide
+0:00 — Embers: low tolling piano, warm pad, closed-mouth choir, cello hints, and a timpani crescendo gather over D.
+0:14 — The Ostinato: low strings establish the 12/8 engine; taiko-style drums arrive in stages while cello climbs and organ/saw horn fragments answer.
+1:20 — The Call: the built horn section states the theme three times—first organ plus saw, then full choir, then snapped descant on fiddle, flute, second choir, and glock—over low strings, timpani, kit, pad, and bell.
+2:41 — Over the Hill: harp and solo fiddle dismantle the call over fading strings and pad; a last tutti hit rings out.
+
+MIDI techniques
+Each channel starts with an authored GM program and static CC7 volume, CC10 pan, and CC91 reverb. RPN 1 fine-tunes the saw horn +6 cents against the organ horn; this is synthetic section width, not pitch-bend melody. Choir CC70 moves from closed “mm” to open “ah,” with aftertouch swells. Strings use CC11 expression; pad uses aftertouch and closes on CC74 in the coda. Fiddle writing adds CC1 vibrato, CC68 legato, pitch-bend scoops, and CC94 echo throws; the organ horn also throws phrases into echo. Piano CC64 sustains the opening and final pools. The orchestral build itself is score density and velocity, not a single volume effect.

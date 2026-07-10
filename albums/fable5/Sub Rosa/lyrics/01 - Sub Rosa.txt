@@ -1,0 +1,13 @@
+Why this piece
+“Sub rosa” means under the rose—in secrecy. This original Enigma-idiom piece treats a fast programmed groove as an incense burner beneath plainsong, a melodic bass hook, bamboo-flute breath, glass, and whispered Latin. One unresolved chant survives two grounds and only finds its tonic when the door closes.
+
+Listening guide
+0:00 — Sigillum: drawbar drone, aftertouch-breathing pad, closed hum, bell, crystal glass, heartbeat, and snare crescendo seal the room; music box enters later.
+0:30 — The Chant: four-on-floor groove, melodic synth bass, choir “mm,” sequencer, piano corners, guitar, and first whisper.
+2:03 — The Bamboo Voice: shakuhachi call-and-response, driving bass, wah guitar, kit, strings, and a half-time bent-tone trapdoor.
+3:36 — Sub Rosa: heartbeat breakdown with sliding bass, three-pedal piano, detuned twin choirs, whispers, SUB ROSA in woodblock Morse, and a wide-bending glide lead.
+4:38 — Limina: the chant returns over new harmony at full “ah,” with descant, octave-pop bass, Leslie organ, palm-muted guitar, 16th sequencer, bells, glass, and the densest drums.
+6:42 — Afterglow: drone, bell, heartbeat, piano, pad, flute, and bass remain; the chant finally lands on D and a last “veritas” closes the room.
+
+MIDI techniques
+Static setup is GM program plus CC7/10/91 mix. CC70 morphs choir mm→oo→ah; choir/pad use aftertouch. RPN 1 detunes Choir II −6 cents in the breakdown. The glide lead sets RPN 0 range 12 for 5–7-semitone bends and CC5/65 portamento; bass also slides with portamento and uses CC68 legato. Shakuhachi uses pitch scoops, CC1 breath vibrato, and CC94 throws. Guitar CC74 is a wah LFO; sequencer CC74/71 and CC10 supply filter/resonance/autopan. Piano authors CC64 sustain, CC66 sostenuto, and CC67 una corda together. Organ CC1 spins Leslie; the pad closes with CC74. Original Latin appears as MIDI lyric metas.

@@ -1,0 +1,15 @@
+Why this piece
+Arthur loved the swelling Am–F–C–G string gesture in an orchestral demo and asked where it could go if it built and dropped like the Gabriel Knight title music. The answer keeps that intro verbatim, then compresses one dramatic spring twice: train expectation, betray it, and finally make the betrayal beautiful. Eight framing tolls plus the last resolving A give the piece its name.
+
+Listening guide
+0:00 — The Veil: only the original voice-led strings, swelling from near-silence.
+0:26 — Processional: solo cello states the 13-note lament; violin, contrabass pedal, timpani heartbeat, and two soft bells gather.
+1:17 — First Ascent: organ, closed choir, pulsing strings, rising theme cell, and timpani roll promise A minor.
+1:43 — The Hit: the orchestra lands on fortissimo E major instead, cuts, and leaves a dying cello in scored silence.
+1:47 — Sotto Voce: music box ghosts the theme over dark pad, organ pedal, bell, and a portamento B-flat→A cello sigh.
+2:47 — Rising Tide: strings, stretto theme, harp, tolling piano, Leslie organ, and opening choir rebuild; a feint drop interrupts around 3:32.
+4:06 — Full Toll: theme, bells, full percussion, choir, organ, piano, contrabass, and strings reach the dry climax, then fracture on B-flat at 4:51.
+4:54 — Embers: wrong-footed music box, reversed opening swell, dying fifth, stopped heartbeat, and the ninth bell's lone tonic A.
+
+MIDI techniques
+Channels begin with GM program and CC7/10/91 mix; sustained beds are centred while transient bells, harp, piano, music box, and timpani provide width. CC11 shapes nearly every orchestral swell and cliff. CC91 rides the room from wet pre-hit tails to a dry climax, while CC74 darkens/opens strings and organ. Choir uses CC70 vowels; organ CC1 spins Leslie. Cello CC5/65 portamento and cello/violin pitch bends articulate sighs without wide RPN ranges. Piano/music-box CC64 sustains pools, and the final bell gets CC94 echo. Tempo itself slows in the void, stair-steps through the rebuild, and ritards in Embers. The opening's other channels receive only static setup while silent; no inaudible dynamic effect is claimed there.

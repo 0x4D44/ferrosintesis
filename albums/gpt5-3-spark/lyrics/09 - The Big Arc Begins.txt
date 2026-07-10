@@ -1,0 +1,17 @@
+Why this piece
+
+Grief does not end the journey; it changes the reason for moving. This track restarts the album with resilience rather than panic, broadening the pulse and opening F Dorian harmony so acceleration can feel like recovery. Its job is to begin the final large arc: the same piano-and-string machinery now points outward and upward.
+
+Listening guide
+
+0:00 — Acoustic grand piano starts at half density with seven divisions; the full rising fourteen-part F-Dorian pulse arrives around 0:18.
+0:09 — Ensemble and low strings widen the frame; cello and low percussion join at 0:18.
+0:53 — Viola appears unusually early, adding breadth before the main development.
+1:03 — The tempo lifts to 118 BPM and the bass pulse becomes more insistent.
+1:22 — Development: celesta sparks enter, followed by the violin’s rising motif at 1:28.
+2:17 — At 132 BPM the score reaches its widest kinetic span; the 2:35 turn layers piano, pulsed basses, strings, and crash accents.
+3:31 — Coda: the drive eases, leaving a long ensemble chord rather than erasing the earned momentum.
+
+MIDI techniques
+
+Tempo is 106→118→132→120 BPM at 0:00, 1:03, 2:17, and 3:15. The rising motif and fourteen-note piano grid are score structure, while low strings use four short attacks per bar above the intensity threshold. Controller motion is separate: CC11 shapes the resilient arc, CC74 and CC71 move brightness and resonance every bar, CC1 gives bowed/string vibrato, and channel pressure updates every four bars and persists until its next target. Narrow bends use explicit RPN ±2-semitone ranges; piano uses changing CC64 sustain. Piano and celesta author CC1 that is inert on their modal models, though the remaining controls work. Percussion uses only CC11 dynamics beyond its fixed mix—no bend, mod wheel, filter sweep, or pressure. Static CC7/CC10: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, low strings 72/64, celesta 44/86, percussion 64/54. All send CC91=58 reverb; CC93 chorus and CC94 echo are not authored.

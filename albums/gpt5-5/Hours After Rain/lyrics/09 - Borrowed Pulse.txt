@@ -1,0 +1,14 @@
+Why this piece
+After the fatalism of Newsprint Ashes, the album borrows enough momentum to move again. An insistent pulse and more open Dorian harmony make resilience feel provisional but real: energy returned on loan rather than magically restored.
+
+Listening guide
+0:00 — Opening: piano restarts the album at 104 bpm; ensemble and low strings enter at 0:09, cello and drums at 0:18, then viola at 1:07.
+1:04 — Momentum increases to 112 bpm.
+1:21 — Development: celesta enters at 1:22 and violin at 1:30, joining the piano/string/percussion pulse.
+2:13 — At 120 bpm the borrowed energy reaches its strongest, most open form.
+2:37 — Turn: the full ensemble keeps searching as expression begins to release.
+3:17 — Tempo eases to 108 bpm.
+3:34 — Coda: piano, cello, ensemble, basses, and percussion return the borrowed motion.
+
+MIDI techniques
+GM piano, strings, contrabass, and celesta combine with written channel-10 percussion. Static CC7 volume, CC10 pan, and CC91 reverb place the ensemble. Per-bar CC11 automation follows the resilient intensity arc; piano CC64 sustain is shortened beneath the 12-note rising pulse. The propulsion is composed MIDI notes and tempo changes, not an arpeggiator. There is no CC1, CC74, chorus/echo automation, pitch bend, aftertouch, portamento, or mid-piece program change.

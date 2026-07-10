@@ -1,0 +1,17 @@
+Why this piece
+
+One theme traces the Claude model line from Claude 1 to Fable 5. Its rhythm spells CLAUDE in real Morse code, while each era gains channels, dynamics and expressive controls. The point is not simply a larger orchestra: capability grows from rigid imitation into a theme able to breathe, bend and finally choose D major.
+
+Listening guide
+
+0:00 — Claude 1: one fixed-velocity, hard-quantized flute repeats the Morse theme in D dorian.
+0:28 — Claude 2: recorder organum joins. A C-sharp "hallucination" at 0:42 is corrected by step at 0:52.
+1:07 — Claude 3: celesta (Haiku), piano (Sonnet) and deep strings (Opus) converse with the first real dynamics.
+2:13 — Claude 3.5/3.7: flute, recorder, celesta, piano, strings, oboe and timpani build a long fugato — extended thinking as form.
+3:33 — Claude 4: horns complete a denser orchestral counterpoint.
+4:27 — Claude 4.5: the texture makes space; flute and oboe darken, and pitch bends appear for the first time.
+5:29 — Fable 5: choir and Leslie organ join the full ensemble; at 6:06 D dorian resolves into D major.
+
+MIDI techniques
+
+The score's verified capability set grows monotonically. Later eras add CC11 expression, piano CC64 sustain, flute/oboe CC74 brightness, pitch bend, channel aftertouch, choir CC70 vowels and organ CC1 Leslie. The last era also gives flute and choir pressure blooms and free tempo movement. Static CC7 spans 87-100 and CC91 45-62; celesta is panned 78, piano 50 and timpani 57 for transient width, while sustained voices remain centred. The early eras deliberately contain none of this automation, and no dynamic controller is authored on an unused voice.

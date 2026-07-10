@@ -1,0 +1,15 @@
+Why this piece
+The album's midpoint treats light as something counted by repetition but understood through feeling. Piano figures, strings, and celesta accumulate simple proportions until their brightest sum, then subtract themselves toward quiet.
+
+Listening guide
+0:00 — Opening: piano begins in D minor at 72 bpm; ensemble and low strings enter at 0:13, then cello at 0:27.
+0:40 — The calculation rises to 78 bpm.
+1:41 — Development: celesta enters at 1:42, violin at 1:53, and viola at 1:57 as the chamber texture reaches 84 bpm.
+2:50 — A subtle 82-bpm plateau carries the luminous crest.
+3:13 — Turn: piano, all solo strings, ensemble, basses, and celesta begin reducing the texture.
+3:48 — Tempo falls to 70 bpm.
+4:29 — Coda: piano, cello, ensemble, and basses remain.
+4:43 — The last light slows to 60 bpm.
+
+MIDI techniques
+GM piano, cello, viola, violin, string ensemble, contrabass, and celesta form the palette. Static CC7 volume, CC10 pan, and CC91 reverb define the space. Per-bar CC11 expression is the principal effect, climbing toward the midpoint crest and receding; piano CC64 sustain connects the harmonic arithmetic. The many speed changes are MIDI tempo events. There is no percussion, CC1, CC74, chorus/echo automation, pitch bend, aftertouch, portamento, or mid-piece program change.

@@ -1,0 +1,16 @@
+Why this piece
+
+This gamelan-inspired piece treats tuning, density and time as one body of bronze. A sixteen-beat gong cycle holds nested layers whose activity doubles upward; at the irama change, the tempo halves while the surface doubles. The closing Western chorale does not replace the bronze ensemble — both traditions share the same water.
+
+Listening guide
+
+0:00 — Surface: gong ageng anchors bank-B kemanak and bronze pots, celesta saron and glockenspiel peking in nested densities.
+0:40 — The Rebab Floats: a portamento fiddle line moves freely across the strict colotomic grid.
+1:40 — Bronze Crest: every layer is present and the rebab's vibrato and breath rise above the shimmer.
+2:40 — Irama II: tempo halves to deep water while the upper bronze layers double their note counts, preserving surface speed.
+4:00 — Chorale on Bronze Water: centred Western strings enter; the first chorale statement arrives at 4:20 and the second at 5:00 while colotomy continues.
+5:20 — Gong Ageng: one final low stroke rings alone.
+
+MIDI techniques
+
+RPN 0 sets a two-semitone bend range on the five bronze channels, then constant offsets approximate slendro: gong 0 cents, kemanak +40, pots -20, saron +20 and peking +60. These bends intentionally never recenter. CC0 bank 1 selects the gong-ageng, agogo and tinkle-bell alternate voices. The rebab uses CC5/65 portamento, CC1 vibrato and CC11 expression; the string chorale grows on CC11. Static CC7 spans 78-100 and CC91 50-75. Kemanak, pots, saron and peking spread at pans 78/50/56/72; low gong, rebab and sustained strings remain centred. All setup bends and bank controls occur at beat zero and persist; none is a stray inaudible sweep.

@@ -1,0 +1,20 @@
+Why this piece
+
+This centerpiece honours the dramaturgy of a great side-two medley, not its copyrighted tunes: eight original songs flow from ballad through dream, grotesques, soul, lullaby and anthem into a communal finale. After apparent closure, silence reveals a tiny memory of the opening ledger, cut off as though the record itself has run out.
+
+Listening guide
+
+0:00 — The Ledger: wistful piano, bass, strings, cello and drums; at 1:40 the piano flips to honky-tonk and double time.
+2:05 — Sun on the Estuary: one F chord breathes through Leslie organ, choir, flute birdsong, harp and pad.
+3:30 — Mr. Mudlark: bass and two driven guitars stomp a compact fuzz grotesque.
+4:41 — Polly on the Towpath: slide lead and fiddle race over piano, bass and rock kit.
+6:01 — Out of My Window: electric piano, rhythm guitar, bass, organ, flute, cello and brass make a syncopated soul window.
+7:44 — Slumber Line: choir, strings, flute, cello and harp turn a lullaby into a swell.
+8:41 — Carry the Current: the FABLE cell becomes the anthem's descending ground under full choir, strings, organ, brass and guitars.
+10:41 — The End of the Line: a drum break at 10:45 leads to guitar, organ and fiddle trading twos, then the 11:29 final chorale.
+11:54 — Twenty seconds of scored silence.
+12:14 — The hidden Ledger returns on solo hammered dulcimer and stops mid-phrase.
+
+MIDI techniques
+
+Program changes turn piano into honky-tonk, swap bass/guitar roles and articulate each segue. Piano uses CC64 sustain; organ CC1 Leslie and CC11; choir CC70 vowels plus expression; lead guitar and fiddle use many recentered slide bends. The hidden dulcimer arms very wet CC91 reverb 127, CC93 chorus 96 and CC94 echo 100 during the silent gap, so the controls themselves are inaudible but colour the later notes. Static CC7 spans 78-127 and initial CC91 26-100; bass, organ, choir, strings and cello remain centred, while transient keys, guitars and harp supply width.

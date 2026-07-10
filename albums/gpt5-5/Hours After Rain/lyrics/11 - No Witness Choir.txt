@@ -1,0 +1,14 @@
+Why this piece
+The album's tragic crest asks what grief sounds like with nobody present to hear it. Tolling piano, thick strings, bass weight, and low percussion behave like a wordless choir; the title is metaphorical, not a literal choir patch.
+
+Listening guide
+0:00 — Opening: tolling piano begins in C minor at 72 bpm; ensemble and low strings enter at 0:13, cello and drums at 0:27, then viola at 1:36.
+1:20 — The tragic mass grows at 78 bpm.
+2:00 — Development: celesta enters at 2:00 and violin at 2:09, joining the piano/string/percussion body.
+2:58 — At 86 bpm the unwitnessed choir reaches its maximum breadth.
+3:48 — Turn: every instrumental lane remains while expression begins to fall.
+4:27 — Tempo eases to 76 bpm.
+5:18 — Coda: piano, cello, ensemble, basses, celesta, and percussion slow to 64 bpm and release the crest.
+
+MIDI techniques
+GM piano, strings, contrabass, and celesta create the figurative choir with written kick, tom, and crash punctuation; no GM choir program is present. Static CC7 volume, CC10 pan, and CC91 reverb establish the mass. Per-bar CC11 automation drives the broad climax; piano CC64 sustains the tolling harmony. There is no CC1, CC74, chorus/echo automation, pitch bend, aftertouch, portamento, or mid-piece program change.

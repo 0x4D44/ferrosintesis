@@ -1,0 +1,14 @@
+Why this piece
+The closing track releases the album without pretending to solve it. A sparse falling figure watches the last train depart; the final open fifth leaves the platform empty but not theatrically conclusive.
+
+Listening guide
+0:00 — Opening: piano waits in D minor at 58 bpm; ensemble and low strings enter at 0:17, cello at 0:33, and faint celesta at 0:50.
+1:22 — The pulse lifts to 62 bpm without filling the space.
+1:57 — Development: violin enters at 2:09 around piano, ensemble, basses, and celesta; the cello temporarily disappears.
+3:11 — At 66 bpm the platform reaches its widest resonance.
+3:47 — Turn: viola enters at 3:55 and replaces violin above piano, ensemble, low strings, and celesta.
+4:38 — Tempo falls to 54 bpm.
+5:13 — Coda: piano, cello, ensemble, and basses make the final open-fifth departure.
+
+MIDI techniques
+GM piano, solo and ensemble strings, contrabass, and celesta are placed with static CC7 volume, CC10 pan, and CC91 reverb. Per-bar CC11 expression keeps the quiet arc alive; piano CC64 sustain lengthens the sparse figures and clears between them. The unresolved ending is written harmony, not an effect. There is no percussion, CC1, CC74, chorus/echo automation, pitch bend, aftertouch, portamento, or mid-piece program change.

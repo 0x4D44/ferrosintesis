@@ -58,19 +58,24 @@ class LyricsSidecarTests(unittest.TestCase):
             [f"LYRICS={lyrics}"],
         )
 
-    def test_atlas_has_one_well_shaped_sidecar_per_midi(self) -> None:
-        album = (Path(__file__).resolve().parents[1] / "albums" / "gpt5-6" /
-                 "Atlas of Becoming")
-        midis = sorted((album / "midi").glob("*.mid"))
-        self.assertEqual(len(midis), 14)
+    def test_every_committed_opus_has_one_well_shaped_sidecar(self) -> None:
+        midis = [
+            midi for midi in render_opus.all_midis()
+            if render_opus.opus_path_for(midi).exists()
+        ]
         render_opus.validate_lyrics_sidecars(midis)
-        notes = [render_opus.lyrics_for(midi) for midi in midis]
-        self.assertTrue(all(note is not None for note in notes))
-        for note in notes:
+        missing = [
+            str(midi.relative_to(render_opus.REPO))
+            for midi in midis if render_opus.lyrics_for(midi) is None
+        ]
+        self.assertFalse(missing, f"committed Opus files without lyrics: {missing}")
+        for midi in midis:
+            note = render_opus.lyrics_for(midi)
             assert note is not None
             self.assertTrue(note.startswith("Why this piece\n"))
             self.assertIn("\n\nListening guide\n", note)
             self.assertIn("\n\nMIDI techniques\n", note)
+            self.assertLess(len(note), 8_000, midi.name)
 
 
 if __name__ == "__main__":

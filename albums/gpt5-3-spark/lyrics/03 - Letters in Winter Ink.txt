@@ -1,0 +1,16 @@
+Why this piece
+
+The album’s first sustained grief is deliberately restrained. A short lament is treated like a sentence reread in an old letter: piano repeats it through glassy G-minor harmony while cello stretches the thought into longer sighs. The aim is tenderness without melodrama, allowing the unusual flat-II colour to feel like pain briefly showing through controlled handwriting.
+
+Listening guide
+
+0:00 — Acoustic grand piano states the spare lament over long pedal and cold, open harmony.
+0:17 — String ensemble and low strings arrive almost imperceptibly; cello gives the motif its first long voice at 0:33.
+0:50 — Celesta adds glass-like punctuation, appearing only in widely spaced replies.
+2:06 — Development: violin takes the lament at about 2:10 as tempo and intensity begin to lift.
+3:33 — Viola joins the violin before the crest; violin withdraws near 4:00, just before the 4:05 formal turn.
+5:35 — Coda: piano density falls away and the ensemble holds a wounded, unresolved final span.
+
+MIDI techniques
+
+Tempo is 58 BPM, then 62 at 1:39, 66 at 3:43, and back to 58 at 5:10. The score’s “lament” motif uses long-short falling intervals and occasional flattened final tones; that is composition, not pitch-bend automation. Separately, every melodic lane carries CC11 dynamics, CC74 brightness, and CC71 resonance tied to the slow intensity arc. CC1 animates bowed/string vibrato; channel pressure updates every four bars and persistently shapes gain and vibrato; narrow bends operate inside an RPN-authored ±2-semitone range. Piano CC64 sustains the glassy chords. Piano and celesta contain CC1 events that are inert on ferrosintesis’s modal voices, although their bend, pressure, filter, and expression lanes sound. Static CC7/CC10 pairs: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, low strings 72/64, celesta 44/86. CC91 reverb is 58 throughout; no CC93 chorus or CC94 echo is authored.

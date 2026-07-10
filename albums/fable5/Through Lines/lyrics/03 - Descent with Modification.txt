@@ -1,0 +1,18 @@
+Why this piece
+
+This is evolution made audible, not merely illustrated. A seeded genetic algorithm breeds four-bar motifs with mutation and crossover; the same fitness rule that selects the lineages is rerun by the verifier. Population growth, extinction and renewed diversity are therefore the recorded history of an actual reproducible evolutionary run.
+
+Listening guide
+
+0:00 — Primordial Waters: warm pad drone and one repeated marimba note establish generation zero.
+1:04 — First Replicators: kalimba, vibraphone, celesta, harp, nylon guitar and xylophone arrive as copies accumulate mutation errors.
+2:37 — Cambrian Explosion: eight mallet, pluck and pizzicato lineages flower over percussion.
+3:45 — Selection: weaker lineages starve while the surviving variants continue.
+4:44 — Extinction: bank-B reverse cymbal becomes an orchestra hit, joined by timpani and percussion; the population crashes.
+5:13 — Re-radiation: survivors occupy new niches as vibraphone becomes flute, celesta becomes oboe, harp becomes fiddle and guitar becomes bass.
+6:29 — Emergence: four choir parts harmonize the fittest descendant with flute, fiddle, drone and timpani.
+7:30 — A half cadence leaves the evolutionary story unfinished.
+
+MIDI techniques
+
+Program changes at re-radiation make instrumental adaptation literal. CC11 shapes the persistent drone and the four-part choral emergence; CC70 opens the choir vowels, while CC1 adds vibrato to the evolved flute and fiddle. CC0 bank 1 selects the alternate reverse-cymbal voice before its later orchestra-hit change. Static CC7 spans 90-110 and CC91 30-60. Transient lineages are spread at CC10 40, 76, 88 and 112; drones, evolved winds/strings, choir and low voices remain centred. The beat-zero bank select occurs while its channel is silent, but it is a persistent setup for the later cataclysm, not audible automation.

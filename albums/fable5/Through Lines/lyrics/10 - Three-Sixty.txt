@@ -1,0 +1,18 @@
+Why this piece
+
+The Fine Line trilogy closes by turning the AquaTheater into a 360-degree frame. An orbiting riff circles the listener through two build-and-drop cycles; the final sprint superimposes the high-dive cascade, the wirewalker theme and the orbit itself, proving the three spectacles can share one contrapuntal view.
+
+Listening guide
+
+0:00 — House Lights: bank-B steel-drum sixteenths begin orbiting around warm pad, synth bass and antiphonal brass.
+0:30 — First Climb: the pad brightens as melodic toms, synth drum and reverse-cymbal fills raise the pressure.
+1:15 — Drop One: four-on-floor kit, saw lead, orchestra hits and brass answer the circling riff.
+2:15 — Aerial: tempo halves; harp, suspended high strings and the choir's first entry hang over a sparse kit.
+2:45 — Second Climb: orbit and bass rebuild with brighter pad, choir, toms and risers.
+3:30 — Drop Two: the full company lands, larger than the first drop.
+4:30 — Three-Sixty: harp carries the dive cascade, saw the walker theme and steel drums the orbit riff in verified counterpoint.
+5:15 — Splashdown: pad, bass, harp, choir, kit and orchestra hit release the accumulated energy.
+
+MIDI techniques
+
+The transient steel-drum channel uses a continuous CC10 64->127->0->64 orbit every eight bars; short brass calls sit at static pan 18/110 while every sustained bed stays centred. CC74 and CC11 open the warm pad through each build and close it at the aerial/splashdown; choir CC70 moves from closed vowels toward "ah", with expression on the tail. CC0 bank 1 selects steel drums, melodic toms, synth drum and reverse cymbal; program 1 is metadata-equivalent to the already-default V3 kit, not an audible switch. Static CC7 spans 88-104 and CC91 20-60. Centre-reset CC10 events at 2:15 and 5:15 occur while the orbit channel is silent; those resets are intentionally inaudible, not extra rotations.

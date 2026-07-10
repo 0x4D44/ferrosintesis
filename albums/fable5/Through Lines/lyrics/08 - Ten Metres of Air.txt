@@ -1,0 +1,21 @@
+Why this piece
+
+The first Fine Line piece turns a high dive into one continuous musical trajectory: climb, suspended decision, empty air, impact and altered underwater perception. Each platform rises a minor third, so the diver reaches the starting key ten metres higher before the score removes even the heartbeat for the jump.
+
+Listening guide
+
+0:00 — Poolside: low strings, harp, flute, closed choir and vibraphone glints establish B-flat minor.
+0:12 — First Platform: strings, harp, brass and heartbeat kit begin the four-stage climb.
+0:38 — Second Platform: the same ladder shifts up a minor third.
+1:03 — Third Platform: register and heartbeat rise again; choir joins the upper platforms.
+1:27 — Fourth Platform: the ladder reaches G and the heart quickens.
+1:50 — The Board: lone high flute, harp, choir and heartbeat thin beneath a reverse-cymbal breath.
+2:23 — The Jump: one complete bar contains no MIDI events at all.
+2:27 — The Plunge: four-octave strings and falling harp cascade.
+2:31 — The Splash: alt-bank tam-tam, taiko, low toms, choir and sub swell make the global peak.
+2:35 — Underwater: dark strings, harp, vibraphone and choir drift through bent light.
+3:46 — Surfacing: flute, brass, choir, taiko and orchestra-hit crowd build to home water at 4:49.
+
+MIDI techniques
+
+Tempo changes make the heartbeat accelerate in seconds, not merely beats. The board flute uses CC11 and small bends. Underwater voices close CC74 brightness and high strings carry slow pitch refractions; CC11/CC70 darken the string-and-choir bed before reopening at the surface. CC0 bank 1 selects taiko, gong-ageng and reverse-cymbal alternates; program 1 is metadata-equivalent to the already-default V3 kit, not an audible switch. Static CC7 spans 92-106 and CC91 25-70; sustained voices are centred, with width from harp, taiko, orchestra hit and vibraphone. A short high-string CC74 curve during the 2:31 splash is authored while that channel has no notes, so that specific automation is inaudible.

@@ -1,0 +1,14 @@
+Why this piece
+The finale is a future-facing GM-gap atlas: unusual keyboards, free reeds, world plucks, harp, vibraphone, timpani, sound-effect noise, bagpipe, and shanai are asked to share one through-composed machine. Several once-future seams are now implemented synth features, so the track also records how the instrument grew.
+
+Listening guide
+0:00 — Future Seams: keyboard programs GM 4–7, harp, and atlas percussion establish the ostinato; vibraphone enters at 0:19 and free reeds at 0:37.
+0:18 — Vibraphone refinement follows the opening harp feature.
+0:37 — Free-reed programs GM 20–23 begin their expression/vibrato roll-call.
+0:49 — World Pluck Atlas opens; at 1:05 sitar, banjo, shamisen, koto, and kalimba programs GM 104–108 begin rotating through panned, echoed figures.
+1:39 — Noise Gates: GM 120–127 sound-effect fallbacks puncture the world-pluck/timpani bed with placed noise impacts.
+1:45 — Timpani becomes the low dramatic bed beneath the noise section.
+2:07 — Bagpipe GM109 enters with its managed drone; shanai GM111 takes over at 2:17 as the final reed-family lead.
+
+MIDI techniques
+Static CC7/10/91/93/94 values establish the stage; repeated program changes are the core roll-call. Future keys use CC64 sustain and channel pressure. Free reeds use CC11 expression; only GM22 harmonica authors and audibly uses CC1 vibrato. World plucks use CC10 autopan and CC94 echo throws. Sound-effect fallbacks change pan and echo per impact. Bagpipe/shanai use CC11, CC1, channel pressure, and CC68 slur. GM11 vibraphone's motor tremolo and GM109's persistent drone are synth behaviors triggered by program choice, not extra MIDI controller lanes.

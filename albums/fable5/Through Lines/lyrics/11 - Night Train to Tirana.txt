@@ -1,0 +1,17 @@
+Why this piece
+
+This is the commission's spy-film piece recast as a symphonic sprint. It uses the Bond idiom's tension, brass and twang without quoting a Bond theme, and deliberately avoids the suave lounge language already explored elsewhere: the action sections do not swing, and the ending is a brutal single pitch rather than a glamorous chord.
+
+Listening guide
+
+0:00 — Platform Zero: picked bass gathers momentum under strings, close brass and twang guitar; a bent brass-cluster train whistle sounds at 0:21.
+0:25 — Full Steam: the bass covers nine of every ten eighth-note slots while creeping inner strings, timpani, kit, stabs and orchestra hits drive 12/8.
+1:34 — Bar Car: alto sax takes a brief 2:1 swung theme over a brush kit, bass, guitar and softer strings.
+2:16 — A reverse-cymbal riser puts the company on the roof.
+2:20 — Roof Fight: the meter snaps to 7/8; taiko, timpani, kit, brass and strings fight above the relentless train.
+3:27 — Emergency Brakes: string glissando and cymbal choke strip the motion away.
+3:33 — Terminus: 12/8 returns and the action rebuilds; a second whistle comes at 4:29, the one-octave whammy dive at 4:39, and a single-pitch unison sting at 4:50.
+
+MIDI techniques
+
+RPN 0 gives the twang guitar a 12-semitone bend range for 38 tail fall-offs and one unique full-depth dive. Brass pitch bends create both whistle glissandi. The bar-car sax uses CC1 modulation and CC11 expression; opening strings have a written expression arc. Channel 10 switches enhanced kit -> brushes -> enhanced kit, while the orchestra-hit lane briefly changes to bank-B reverse cymbal for the roof riser. Static CC7 spans 88-105 and CC91 40-58. Guitar, taiko and timpani are modestly offset at pans 54/74/48; bass, brass and sustained strings stay centred. Beat-zero bank and bend-range setup is silent until its assigned instruments enter, but remains active for their later gestures.

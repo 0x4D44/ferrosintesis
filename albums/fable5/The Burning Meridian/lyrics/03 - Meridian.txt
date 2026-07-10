@@ -1,0 +1,12 @@
+Why this piece
+The finale proves that Track 1's call can survive new metre, harmony, and meaning. The same horn theme rides 5/4, remembers the elegy in a half-time break, then turns from D minor to D major. Reuse is the dramatic engine: war material becomes daybreak without changing its identity.
+
+Listening guide
+0:00 — War Footing: low-string 5/4 ostinato grouped 3+2, taiko kit, timpani, pad, choir, and unison organ/saw stabs.
+0:26 — Cavalry: the Track 1 horn theme stretches across the odd metre in three statements while cello runs descend and strings, choir, glock, and percussion gather.
+1:09 — The Break: 4/4 half-time recalls the elegy on fiddle and flute over harp, pad, and portamento cello sighs; piano waits for Daybreak.
+1:26 — Charge: four waves add horn theme, choir, descant, glock, strings, timpani, and bell; a near-silent breath precedes the whole horn section's falling bend.
+2:27 — Daybreak: D major transforms the theme under pealing bells, choir, strings, harp, glock, piano, and a tonic pedal; everyone rings the final chord.
+
+MIDI techniques
+All channels have static GM program plus CC7/10/91 placement. The built horn is rock organ doubled by saw; RPN 1 makes the saw +6 cents sharp, while both horn channels execute the two-semitone pitch-bend fall before the grand pause. Fiddle uses CC1 vibrato and CC68 legato; cello uses CC5/65 portamento in the break and legato elsewhere. Choir CC70 and aftertouch open and swell the voice; pad and choir also use channel aftertouch. Piano CC64 sustains the final ring. The D-minor-to-major change is authored as key signature and rewritten notes, not a pitch-shift effect.

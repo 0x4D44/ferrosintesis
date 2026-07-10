@@ -1,0 +1,14 @@
+Why this piece
+Short angular cells and accented bass imagine the moment an unnoticed opening becomes evidence. Harmonic-minor colour keeps the discovery ambiguous: invitation, trap, and clue all remain possible as the scene accelerates.
+
+Listening guide
+0:00 — Opening: piano investigates at 112 bpm; ensemble and low strings enter at 0:09, cello and drums at 0:17, then viola at 0:46.
+0:51 — The search tightens at 124 bpm.
+1:10 — Development: celesta enters at 1:11 and violin at 1:15, joining the angular piano/string engine and percussion.
+1:53 — At 132 bpm the discovery scene reaches maximum urgency.
+2:17 — Turn: piano, cello, viola, ensemble, basses, celesta, and percussion keep moving while the evidence changes meaning.
+2:51 — Tempo eases to 118 bpm.
+3:07 — Coda: piano, cello, ensemble, basses, and low percussion leave the door unresolved.
+
+MIDI techniques
+GM piano and string programs share the score with celesta and written kick/tom/crash punctuation. Static CC7 volume, CC10 pan, and CC91 reverb place each lane. Per-bar CC11 expression tracks the rising threat; piano CC64 sustain is shortened under the 12-note angular pulse. Repeated bass accents and tempo-map changes create the investigative drive—there is no sequencer effect. No CC1, CC74, chorus/echo automation, pitch bend, aftertouch, portamento, or mid-piece program change is authored.

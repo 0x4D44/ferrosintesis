@@ -1,0 +1,18 @@
+Why this piece
+
+This is the moment observation becomes emergency. After three inward pieces, the album needs an intrusion: a harmonic-minor alarm made from a nervous piano grid, staccato low strings, and low percussion rather than a literal siren. Fractured upward runs and accelerating tempo turn curiosity into urgency while keeping the scene investigative, as if danger has been noticed but not yet understood.
+
+Listening guide
+
+0:00 — Acoustic grand piano launches the angular C harmonic-minor pulse, already more crowded than the earlier tracks.
+0:10 — String ensemble and low strings enter; the bass soon changes from held support into repeated staccato thrusts.
+0:21 — Cello and low percussion arrive together: kick, low tom, and later sparse crash accents.
+1:03 — The first acceleration sharpens the pattern; viola begins at 1:05 as the harmony tightens.
+1:23 — Development: celesta flashes in at 1:24 and violin takes angular fragments from 1:30.
+2:16 — At 118 BPM the alarm reaches its most urgent density, stacking runs, pulsed bass, strings, and percussion.
+2:37 — Turn: the full engine remains active as the intensity begins moving toward its later release.
+3:32 — Coda: energy drops, but the final open chord leaves the alarm unresolved.
+
+MIDI techniques
+
+Tempo changes 92→104→118→102 BPM at 0:00, 1:03, 2:16, and 3:13. Piano note density expands from a half-grid to a 13-step-per-bar pattern, with CC64 pedal shortened for the fast texture. Melodic channels author CC11 expression, CC74 brightness, CC71 resonance, narrow RPN-ranged pitch bends, and persistent channel-pressure targets updated every four bars. CC1 adds vibrato to the bowed/string voices; the same CC1 lane on piano and celesta is authored but inaudible on their modal models. Channel 10 deliberately avoids bend, modulation, resonance, brightness, and pressure: its kick/low-tom/crash score uses only CC11 dynamics plus static mix and reverb. Static CC7/CC10: piano 90/54, cello 78/42, viola 70/62, violin 70/78, ensemble 62/58, low strings 72/64, celesta 44/86, percussion 64/54. Every lane sends CC91=58; no CC93 chorus or CC94 echo is authored.

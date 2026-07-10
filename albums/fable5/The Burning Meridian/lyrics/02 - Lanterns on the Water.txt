@@ -1,0 +1,11 @@
+Why this piece
+The middle panel makes space between the two battles. A fiddle/flute elegy was composed as true counterpoint—consonant at each bar line and midpoint—then passed between the players before the orchestra takes it. The point is grief carried by changing orchestration rather than a new dramatic trick.
+
+Listening guide
+0:00 — Lanterns: harp arpeggios ripple under warm pad and gathering strings; solo fiddle lights the first phrase.
+0:24 — Duet: fiddle and flute sing the elegy twice, swap their roles, and gain a cello line beneath; harp and sustain-pedalled piano form the water.
+1:30 — Swell: strings, choir, organ colour, timpani, bell, and a single cymbal take both voices into the track's peak; the fiddle rises an octave.
+2:27 — Ashfall: harp, fiddle, flute, strings, pad, piano, choir, and bell recede one by one under a ritardando.
+
+MIDI techniques
+Static mix authors a GM program and CC7/10/91 volume, pan, and reverb on each channel. Fiddle CC1 supplies delayed vibrato and CC68 legato joins phrases; flute uses short CC94 echo throws. Piano CC64 makes the harmonic pools ring. Strings grow on CC11; choir uses aftertouch and CC70 opens its vowel for the swell. The pad breathes on channel aftertouch and receives a late CC74 filter close during Ashfall. There is no wide bend-range setup, fine-tune spread, portamento, or dynamic autopan in this track. The lone percussion note at the swell is an orchestration accent, not an automated drum effect.

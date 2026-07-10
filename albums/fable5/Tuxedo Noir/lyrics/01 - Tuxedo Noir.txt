@@ -1,0 +1,14 @@
+Why this piece
+This original spy-score single compresses the idiom into one chase: a provably swung vamp, a new twang theme against a compatible horn-stab line, velvet 12/8, crooked 7/8 pursuit, and the genre's minor-major-9 colour reserved for the last chord. It tips its hat to classic espionage music without quoting its famous theme.
+
+Listening guide
+0:00 — Cold Open: Em9 vibraphone, low piano, rim/ride clicks, celesta drips, pad, and a distant tubular bell set the room.
+0:07 — The Vamp: 2:1 swung walking bass and off-beat comp guitar drive the twang theme; strings gather behind echo throws, vibrato, and fall-off bends.
+0:45 — Stabs: organ plus fine-tuned saw make the horn counterline, answering twang guitar over bass, kit, strings, vibes, and bell.
+1:07 — Velvet: 12/8 bongos support vibes water, flute theme, sliding fiddle, sustained piano, and bass; no brush kit is selected.
+1:35 — The Chase: 7/8 palm-muted chug, bass 3+2+2 cell, unison stabs, overdrive runs, kit, piano, and strings accelerate the pursuit.
+2:07 — Showdown: theme and stabs stack with full-vowel choir; a held breath exposes a wide whammy dive before the final build.
+2:44 — Last Cigarette: vibes and half-speed twang theme fade into the E minor-major-9 ring on piano, vibes, strings, bass, and bell.
+
+MIDI techniques
+Static setup authors GM program and CC7/10/91 mix per channel. Twang guitar uses CC1 vibrato, CC94 echo throws, and pitch-bend falls. The saw stab voice is fine-tuned +5 cents via RPN 1. Fiddle uses CC5/65 portamento plus CC1 vibrato; the solo guitar uses CC68 legato, CC1, and RPN 0 bend range 12 for the showdown dive, then restores the normal range. Piano uses CC64 sustain, pad/choir use aftertouch, strings use CC11 expression, and flute/celesta throw notes into CC94 echo. The chase's 7/8 urgency is composed rhythm rather than an accelerando, though the tempo steps from 128 to 132 bpm.

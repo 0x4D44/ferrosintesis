@@ -1,0 +1,14 @@
+Why this piece
+This is the outward side of an original two-part, side-of-an-LP epic. It draws a common language from Tubular Bells, Amarok, and The Songs of Distant Earth without quoting them: a 13/8 hill ostinato, a folk theme, interlocking guitars, an electronic ocean, a storm, and an instrument roll-call all grow from a deliberately small set of ideas.
+
+Listening guide
+0:00 — Dawn: solo grand piano states the 13-quaver ostinato; glockenspiel, nylon guitar, bass, organ, and strings wake around it.
+1:24 — First Light: walking bass and fingerpicked guitar start the journey; flute calls a theme fragment.
+2:32 — The Hill Theme: guitar, flute, then fiddle and guitar sing the full tune over the odd metre.
+3:40 — Interlock: steel and nylon guitars hocket in 16ths as whistle and hand percussion gather.
+5:31 — Deep Water: warm pad, fretless bass, crystal, clean guitar, music box, and bells suspend the pulse in C Lydian.
+8:01 — Stormrise: distorted and palm-muted guitars, organ, strings, timpani, and full kit climb E–F#–G–A before a hard cut.
+9:57 — The Summoning: the ground accumulates piano (10:17), glock (10:36), organs (10:55), acoustic guitars (11:14), mandolin (11:33), Spanish guitar (11:53), overdrive (12:12), strings/choir (12:31), and tubular bells (12:50), reaching E major at 13:29.
+
+MIDI techniques
+Each channel begins with a GM program and static CC7 volume, CC10 pan, and CC91 reverb. CC11 expression grows the organ and strings, shapes the Deep Water pad, and fades organ/strings/choir after the summit. Stormrise and Summoning use guitar/fiddle pitch-bend scoops, wide bends, CC68 legato hammer-ons, hard L/R guitar repanning, and low-reverb program-swapped chug channels; current guitar profiles still add default chorus and echo. Mid-piece program changes turn glock into music box, bass into fretless, organ into sweep pad, and several channels into electric guitars or mandolin. There is no mod-wheel, sustain-pedal, aftertouch, or CC74 filter automation.

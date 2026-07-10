@@ -64,3 +64,9 @@
   authored in Through Lines T08/T11 rings instead of choking. NOT opt-in-safe to
   change (every existing file sends drum note-offs) — needs a design decision
   (e.g. choke only when note duration < some threshold AND a new opt-in signal).
+- [ ] 2026.07.10 - `altbank::tests::sawstack_v1_canary_frozen` FAILS under
+  `cargo test --release` at trunk 66fa84a (pad(89) fingerprint mismatch,
+  `crates/ferrosintesis/src/altbank.rs:1422`); passes in debug. The exact-hash
+  pin is opt-level-sensitive (float codegen differs in release). Pre-existing,
+  unrelated to the choir-v2 unit; either pin per-profile hashes or run the
+  canary debug-only.

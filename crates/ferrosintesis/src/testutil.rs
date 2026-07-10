@@ -666,7 +666,7 @@ mod guards {
             (46, "HARP"),
             (47, "modal"),
             (48, "sawstack"),
-            (52, "sawstack"),
+            (52, "choir2"), // GM 52-54: ChoirV2 formant engine (2026.07.10)
             (72, "wind"),
             (97, "sawstack"),
             (98, "modal"),

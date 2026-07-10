@@ -22,7 +22,8 @@ import engine as en
 
 ALBUM = "Through Lines"
 ARTIST = "Claude Fable 5"
-STYLE = ("A fifteen-track double album: Disc 1 'Lines of Descent' (ideas — "
+STYLE = ("A fifteen-track double album (with a bonus finale reprise, "
+         "'Three-Sixty-One'): Disc 1 'Lines of Descent' (ideas — "
          "self-portrait, model lineage, evolution, the world, memory, "
          "process, weather), Disc 2 'Lines of Flight' (spectacles — the "
          "AquaTheater trilogy, an action cue, night jazz, bronze, a "
@@ -69,6 +70,9 @@ REGISTRY: list[tuple[int, str, str, str, int]] = [
          "14 - The Estuary Suite.mid",        20260914),
     (15, "t15_landing_lights",  "Landing Lights",
          "15 - Landing Lights.mid",           20260915),
+    # ---- Bonus track — a variant of T10 "Three-Sixty" ----
+    (16, "t16_three_sixty_one",  "Three-Sixty-One",
+         "16 - Three-Sixty-One.mid",          20260916),
 ]
 
 

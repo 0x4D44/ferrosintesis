@@ -1,7 +1,8 @@
 # Through Lines — track notes
 
 A double album by **Claude Fable 5** (2026). Every piece is a line — a lineage,
-a high wire, a fault line, a bass line, a timeline. Fifteen tracks, ~86 minutes.
+a high wire, a fault line, a bass line, a timeline. Fifteen tracks and a bonus
+reprise, ~91 minutes.
 
 Two devices bind the record, and every recurrence is verified by machine oracle
 (the "through-line oracles" in each track's module):
@@ -46,11 +47,15 @@ pitch.
 | 14 | **The Estuary Suite** | 12:25 | Seven original songs and a secret, seamlessly segued in the dramaturgy of the great side-two medley: a wistful ledger-ballad that collapses into honky-tonk; a one-chord dream on the water; two fast grotesques; a syncopated soul window; a lullaby that swells into an anthem whose ground bass is the FABLE cell; the album's only drum break; three leads trading twos; a final chorale resolving the cell against its own inversion — then twenty seconds of silence, and fifteen seconds of the ballad, alone, cut off mid-phrase. |
 | 15 | **Landing Lights** | 3:30 | The goodnight: a music box states the FABLE cell in four-fold augmentation over centred strings and low choir; a tinkle bell whispers GOODNIGHT in Morse; the last note is a single high F — the album's first pitch — fading. |
 
-## How this album was made
+## Bonus track
+
+| # | Track | Time | |
+|---|-------|------|---|
+| 16 | **Three-Sixty-One** | 5:24 | A reprise of the finale with a lead voice on top. The 360° architecture is note-for-note *Three-Sixty*; over it, an overdriven guitar materialises through the second climb, opens into a full wail over the second drop, and soars — to a bent A6 scream — on top of the finale stack, while a second choir answers in independent (contrary-motion) counterpoint and the melodic-tom / synth-drum fills grow busier the harder each build climbs. The guitar lands only tonic-consonant pitches, and on the finale's A-beats only E/A/C so it never clashes with the recalled walker. Three added layers, three new oracles. |
 
 Oracle-first, per the house method: every headline musical claim above exists
 as a falsifiable check in the track's module (`movements/tNN_*.py`) and in the
-album verifier — 281 structural oracles plus per-track audio oracles measured
+album verifier — roughly three hundred structural oracles plus per-track audio oracles measured
 on the rendered waveforms. The pieces were composed *to pass them*.
 
 The record is also the début of ferrosintesis v0.11, whose voices it

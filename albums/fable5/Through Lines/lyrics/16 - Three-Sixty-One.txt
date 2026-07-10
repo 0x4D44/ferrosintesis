@@ -1,0 +1,18 @@
+Why this piece
+
+Three-Sixty-One is the bonus reprise of the Fine Line finale: everything the AquaTheater panorama already does, now with a lead voice riding on top of it. An overdriven guitar materialises during the second climb, wails through the second drop and soars — high, sparse and screaming — over the finale stack, while a second choir answers it in independent counterpoint and the drum fills grow busier the harder each build climbs. The 360-degree architecture is untouched; the three new layers are the whole point.
+
+Listening guide
+
+0:00 — House Lights: bank-B steel-drum sixteenths orbit the listener over warm pad, synth bass and antiphonal brass.
+0:30 — First Climb: melodic toms and synth drum thicken into an almost continuous, escalating fill bed that peaks in a six-beat roll into the drop.
+1:15 — Drop One: four-on-floor kit, saw lead, orchestra hits and brass answer the circling riff.
+2:15 — Aerial: tempo halves; harp, suspended high strings and the choir's first entry hang over a sparse kit.
+2:45 — Second Climb: the orbit rebuilds — and just before 3:00 the distorted guitar creeps in, mid-register fragments answering the climb as the fills escalate again.
+3:30 — Drop Two: the full company lands; the guitar opens into a full wail, and around 4:15 the second choir enters low and rising in contrary motion beneath it.
+4:30 — Three-Sixty: harp carries the dive cascade, saw the walker theme and steel drums the orbit riff in verified counterpoint — and over all of it the guitar soars to a bent A6 scream while the choir weaves its countermelody underneath.
+5:15 — Splashdown: the guitar steps off, the company releases, and the stage clears for the final hit.
+
+MIDI techniques
+
+Two channels are added to the original fifteen-track finale. The distorted lead (ch14, GM30) is summed and driven through the synth's tanh waveshaper + cabinet filter, voiced with CC1 mod-wheel vibrato swells and pitch-bend gestures (each bend released to centre before every section boundary for clean hygiene); it lands only pitch-classes consonant with the tonic pedal, and on the finale's A-beats only E, A or C so it never clashes with the recalled walker's A5. The counterpoint choir (ch15, GM53 Voice Oohs) holds a low "oo" vowel for timbral contrast with the ch8 "ah" bed and moves in predominantly contrary/oblique motion against the guitar. The melodic-tom / synth-drum fills draw on a six-shape library whose per-window note-count rises strictly through each build and thins inside the drops. Both new voices stay centred (CC10 64) for mono safety; the orbit's transient width discipline is unchanged.

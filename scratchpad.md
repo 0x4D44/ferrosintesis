@@ -1,5 +1,12 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.10 — The synth showcase's full audio runner has four pre-existing
+  oracle failures that reproduce byte-for-byte with the 0.11 baseline binary:
+  track 1 `wah resonance bite` HF delta, track 4 `vowel shifts` HF direction,
+  and track 5's flat dynamic arc plus `shanai pressure` RMS delta
+  (`demos/synth_feature_showcase/analyze.py:106-124`). The cathedral-organ
+  track 2 passes. Recalibrate or fix the three untouched tracks in a focused
+  audio-oracle task; do not attribute these failures to the 0.12 organ change.
 - [ ] 2026.07.09 — A repo-wide GM43 contrabass scan after the Spark/Hours bass-floor
   fix still found below-C2 notes outside that task: `albums/fable5/The Ninth Bell/midi/01 - The Ninth Bell.mid`
   (`contrabass`, ch13, min MIDI 28, centered), plus VIGIL MIDI-only files

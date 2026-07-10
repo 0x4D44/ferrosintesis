@@ -1,15 +1,25 @@
 # ferrosintesis
 
-A zero-dependency Rust MIDI-to-WAV synthesizer built around modeled
-instruments rather than a stock wavetable. Every instrument is modeled —
-with one deliberate exception: the piano, solo fiddle and
-flute/whistle use **LA synthesis** (the Roland D-50 trick) — a short
-public-domain PCM attack transient supplies the first ~200 ms of each note,
-then crossfades into the modeled sustain. The ear judges an instrument
-mostly by its onset; the hammer strike, bow bite and breath chiff are the
-things synthesis fakes worst. The 71 transients (~9.1 MiB, trimmed from
-VSCO 2 Community Edition, CC0 — see `samples/README.md`) are embedded in
-the library crate. The workspace CLI builds a single self-contained renderer.
+A Rust MIDI-to-WAV synthesizer with zero third-party code dependencies, built
+around modeled instruments rather than a stock wavetable. Every instrument has
+a modeled body or sustain. The default **LA synthesis** layer (the Roland D-50
+trick) adds short public-domain PCM attacks, then crossfades into those models.
+The ear judges an instrument mostly by its onset; hammer strikes, bow bites,
+breath chiff, brass/reed articulation, plucks, and drum hits are the things
+synthesis fakes worst.
+
+All 202 CC0 transients (16.68 MiB source) come from two default embedded asset
+crates: `ferrosintesis-samples-core` and
+`ferrosintesis-samples-orchestral`. Cargo retrieves and caches each package once;
+the linker embeds the referenced bytes in the final executable. Full provenance
+and regeneration instructions live in
+[`tools/ferrosintesis-samples/README.md`](https://github.com/0x4D44/midi-music/blob/main/tools/ferrosintesis-samples/README.md).
+The workspace CLI remains a single self-contained renderer.
+
+The default `embedded-samples` Cargo feature preserves the full sound. Consumers
+that set `default-features = false` get the modeled-only synth and do not download
+or compile either asset crate. That compile-time choice differs from the runtime
+`--no-samples` option, which disables samples already embedded in the executable.
 
 ```powershell
 cargo build --release -p ferrosintesis-cli

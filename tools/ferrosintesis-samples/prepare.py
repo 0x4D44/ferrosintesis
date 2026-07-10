@@ -6,10 +6,11 @@ trims each to its onset: ~0.62 s kept, fades applied, peak-normalized,
 resampled to 44.1 kHz mono 16-bit. The fundamental is measured by
 autocorrelation — smallest near-maximal lag (octave-safe) with parabolic
 refinement (cent accuracy) — and printed as the zone's root frequency,
-which must match the table in src/sampler.rs. Unpitched drum hits skip root
-measurement.
+which must match the table in crates/ferrosintesis/src/sampler.rs. Unpitched
+drum hits skip root measurement.
 
-Pure stdlib; run from this directory: python prepare.py
+Pure stdlib; run from the repository root:
+python tools/ferrosintesis-samples/prepare.py
 """
 
 import hashlib
@@ -178,7 +179,9 @@ KEEP_FILE = {
     "drum_snare2_v5_rr2.wav": (0.45, 0.08),
 }
 
-DST = os.path.dirname(os.path.abspath(__file__))
+TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(TOOL_DIR, os.pardir, os.pardir))
+CORE_FAMILIES = frozenset(("piano", "violin", "flute"))
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
 PRE_S = 0.008      # pad kept before the onset
@@ -188,6 +191,17 @@ for octave in range(0, 8):
     for i, name in enumerate(["C", "C#", "D", "D#", "E", "F", "F#", "G",
                               "G#", "A", "A#", "B"]):
         NOTE_HZ[f"{name}{octave}"] = 440.0 * 2 ** ((12 * (octave + 1) + i - 69) / 12)
+
+
+def sample_output_path(filename, repo_root=REPO_ROOT):
+    """Return the sample-package destination for a generated WAV."""
+    family = filename.split("_", 1)[0]
+    package = (
+        "ferrosintesis-samples-core"
+        if family in CORE_FAMILIES
+        else "ferrosintesis-samples-orchestral"
+    )
+    return os.path.join(repo_root, "crates", package, "samples", filename)
 
 
 def read_wav(path):
@@ -357,7 +371,9 @@ def main():
             root = f0 if abs(cents) < 60 else cand
         pcm = struct.pack(f"<{len(seg)}h",
                           *[max(-32768, min(32767, int(v * 32767))) for v in seg])
-        with wave.open(os.path.join(DST, fn), "wb") as w:
+        output = sample_output_path(fn)
+        os.makedirs(os.path.dirname(output), exist_ok=True)
+        with wave.open(output, "wb") as w:
             w.setnchannels(1)
             w.setsampwidth(2)
             w.setframerate(sr)

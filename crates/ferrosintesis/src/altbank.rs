@@ -991,6 +991,7 @@ pub(crate) fn choir2_reg_weight(key: u8, section: usize) -> f32 {
 // ---------------------------------------------------------------------------
 
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
+    let samples = samples && crate::embedded_samples_available();
     match program {
         // The best church organ is the default GM19; CC0 selects the exact
         // pre-v0.12 pipe-bank/Leslie voice for scores that intentionally want
@@ -1341,6 +1342,7 @@ mod tests {
 
     /// BW-O7 — tremolo 44 and pizzicato 45 ignore the LA sample layer (no wrap):
     /// samples on/off render byte-identical. Arco 40 still wraps (must differ).
+    #[cfg(feature = "embedded-samples")]
     #[test]
     fn bowed_44_45_skip_sample_layer() {
         let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();

@@ -26,6 +26,35 @@ def write_wav(path, sample_width, channels):
 
 
 class PrepareSampleBankTests(unittest.TestCase):
+    def test_all_samples_route_to_the_expected_package(self):
+        filenames = set(prepare.SOURCES) | set(prepare.GUITAR_SOURCES)
+        core = set()
+        orchestral = set()
+
+        with tempfile.TemporaryDirectory() as repo_root:
+            for filename in filenames:
+                path = prepare.sample_output_path(filename, repo_root)
+                relative = os.path.relpath(path, repo_root).split(os.sep)
+                self.assertEqual(relative[0], "crates")
+                self.assertEqual(relative[-2:], ["samples", filename])
+
+                if relative[1] == "ferrosintesis-samples-core":
+                    core.add(filename)
+                elif relative[1] == "ferrosintesis-samples-orchestral":
+                    orchestral.add(filename)
+                else:
+                    self.fail(f"unexpected sample package for {filename}: {relative[1]}")
+
+        self.assertEqual(len(filenames), 202)
+        self.assertEqual(len(core), 71)
+        self.assertEqual(len(orchestral), 131)
+        self.assertTrue(
+            all(name.startswith(("piano_", "violin_", "flute_")) for name in core)
+        )
+        self.assertFalse(
+            any(name.startswith(("piano_", "violin_", "flute_")) for name in orchestral)
+        )
+
     def test_fetch_is_atomic_on_short_transfer(self):
         with tempfile.TemporaryDirectory() as td:
             final = os.path.join(td, "sample.wav")

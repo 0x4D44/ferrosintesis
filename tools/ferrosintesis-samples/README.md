@@ -1,9 +1,13 @@
-# Attack-transient sample bank
+# Attack-transient sample-bank tooling
 
-Mono 16-bit 44.1 kHz WAVs, embedded into the binary via `include_bytes!`
-and used by `src/sampler.rs` for LA-style synthesis: each supplies the
-onset of a note (the hammer strike, the bow bite, the breath chiff), then
-crossfades into the modeled sustain.
+This directory holds the generator, tests, full inventory, and provenance for
+ferrosintesis's 202 attack transients (16.68 MiB source). The generated mono
+16-bit 44.1 kHz WAVs are split between
+`crates/ferrosintesis-samples-core/samples/` (piano, violin, flute) and
+`crates/ferrosintesis-samples-orchestral/samples/` (all other families). Those
+two default asset crates embed the bytes with `include_bytes!`;
+`crates/ferrosintesis/src/sampler.rs` uses them for LA-style synthesis. Each WAV
+supplies the onset of a note, then crossfades into the modeled body or sustain.
 
 - `piano_*_{pp,mf,f}.wav` and `piano_*_{pp,mf,f}_rr2.wav` — upright piano
   strikes, 9 pitch zones (C2–C6) × 3 dynamic layers × **2 round robins**
@@ -69,14 +73,16 @@ bsdtar/GNU tar cannot decode; no Python dependency is added.
 
 ## Regenerating
 
-`prepare.py` (pure stdlib) downloads the source sustains and rebuilds the
-bank: onset detection, trim, fades, peak normalization, and an
+`prepare.py` (pure stdlib) downloads the source sustains and rebuilds both
+package banks: onset detection, trim, fades, peak normalization, and an
 autocorrelation pitch measurement (octave-safe, parabolic-refined). It
 prints each zone's root frequency — those values are hardcoded in
-`src/sampler.rs` and must be updated if the bank changes. Downloads are cached
-under the system temp directory by VSCO revision and fetched atomically so an
-interrupted run cannot leave a partial final cache file.
+`crates/ferrosintesis/src/sampler.rs` and must be updated if the bank changes.
+Downloads are cached under the system temp directory by VSCO revision and fetched
+atomically so an interrupted run cannot leave a partial final cache file. Piano,
+violin, and flute output routes to the core package; every other family routes to
+the orchestral package.
 
 ```powershell
-python prepare.py
+python tools/ferrosintesis-samples/prepare.py
 ```

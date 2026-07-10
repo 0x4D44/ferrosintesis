@@ -40,3 +40,20 @@
 - [ ] 2026.07.08 — reeds review: `ReedPreset`'s 8 presets each spell out ~13
   fields; a `RD_DEFAULTS` base + struct-update (like `BR_DEFAULTS`) would cut
   ~40 lines (`voices.rs`). Low-value altitude nit; deferred.
+
+- [ ] 2026.07.10 ferrosintesis v0.11 review minors (from 216da4a adversarial pass):
+  (a) crates/ferrosintesis/src/drums.rs:1015 open-hat arm still `== Kit::V2` — use
+  `!= Kit::V1` like crash_spec:570 (latent trap if the Brush intercept narrows);
+  (b) crates/ferrosintesis/src/altbank.rs:61 PIZZ hardcodes course_couple 0.02 dup
+  of private voices::K_COUPLE — make K_COUPLE pub(crate), reference it;
+  (c) voices.rs:4647/:4658/:4669 per-site fold_key bounds never exercised by tests;
+  (d) drums.rs:671 brush-slap re-excitation burst amp is absolute 0.50 — ghost-note
+  slaps (vel~30) render the 12ms second contact louder than the first (touching it
+  breaks brush_render_is_frozen pins — recalibrate deliberately);
+  (e) drums.rs:1442 RevCym honours note_off (8ms stop) — deliberate, but foreign GM
+  files with staccato 119 get near-silence; consider README note only.
+- [ ] 2026.07.10 ferrosintesis percussion ignores note-off (crates/ferrosintesis/src/drums.rs:308;
+  choke() covers only the hat group, engine.rs:884-889) — the "cymbal choke" idiom
+  authored in Through Lines T08/T11 rings instead of choking. NOT opt-in-safe to
+  change (every existing file sends drum note-offs) — needs a design decision
+  (e.g. choke only when note duration < some threshold AND a new opt-in signal).

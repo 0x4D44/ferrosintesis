@@ -825,14 +825,14 @@ def build_dawn(sc: en.Score) -> None:
     for t, p in ((502.0, 64), (508.0, 69), (514.0, 74)):
         sc.note(CH_HARP, p, t, 1.5, 44, jt=3, jv=2)         # bass echoes
     # sunrise (dawn quarter 3): D major light over a bare fifth
-    sc.note(CH_HI, 74, 517.0, 32.0, 40, jt=0, jv=2)
-    sc.note(CH_HI, 81, 519.0, 30.0, 38, jt=0, jv=2)
+    sc.note(CH_HI, 74, 517.0, 32.0, 37, jt=0, jv=2)
+    sc.note(CH_HI, 81, 519.0, 30.0, 35, jt=0, jv=2)
     for p, t, dur, vel in ((74, 517.0, 1.5, 50), (76, 519.0, 1.5, 48),
                            (78, 521.0, 2.0, 48), (81, 523.5, 2.5, 46),
-                           (83, 527.0, 2.0, 44), (86, 529.5, 8.0, 42)):
+                           (83, 527.0, 2.0, 44), (86, 529.5, 6.5, 36)):
         sc.note(CH_FLUTE, p, t, dur, vel, jt=3, jv=2)
-    en.cc_curve(sc, CH_FLUTE, 11, [(517.0, 66), (529.5, 72), (537.5, 30)],
-                step=1.0)
+    en.cc_curve(sc, CH_FLUTE, 11, [(517.0, 66), (529.5, 58), (533.0, 34),
+                                   (536.0, 14)], step=1.0)
     en.arp(sc, CH_HARP, [62, 66, 69, 74, 78], 517.0, 14, 0.5, 42,
            pattern="updown", gate=1.5)
     sc.note(CH_LO, 38, 521.0, 11.9, 42, jt=3, jv=2)
@@ -842,20 +842,24 @@ def build_dawn(sc: en.Score) -> None:
     for t, anchor in ((523.0, BARO_RISE[1]), (527.5, BARO_RISE[2])):
         sc.note(CH_BARO, anchor - 1, t, 0.7, 40, jt=3, jv=2)
         sc.note(CH_BARO, anchor, t + 0.75, 2.2, 44, jt=3, jv=2)
-    # open fifths at sunrise (dawn quarter 4)
-    sc.note(CH_CHOIR, 62, 533.0, 16.0, 44, jt=0, jv=2)
-    sc.note(CH_CHOIR, 69, 533.0, 16.0, 42, jt=0, jv=2)
-    en.vowel_curve(sc, CH_CHOIR, [(533.0, 82), (543.0, 45), (549.0, 15)],
+    # open fifths at sunrise (dawn quarter 4) — the last light dims to
+    # almost nothing: quieter fifths, steeper CC11 tails on every held
+    # voice, so the render fades >= 6 dB below the storm-tail quarter.
+    sc.note(CH_CHOIR, 62, 533.0, 16.0, 33, jt=0, jv=2)
+    sc.note(CH_CHOIR, 69, 533.0, 16.0, 31, jt=0, jv=2)
+    en.vowel_curve(sc, CH_CHOIR, [(533.0, 74), (539.0, 35), (549.0, 8)],
                    step=1.0)
-    en.cc_curve(sc, CH_CHOIR, 11, [(533.0, 80), (548.5, 28)], step=1.0)
-    sc.note(CH_LO, 38, 533.0, 16.0, 44, jt=0, jv=2)
-    sc.note(CH_LO, 45, 533.0, 16.0, 42, jt=0, jv=2)
-    sc.note(CH_BELL, 86, 533.0, 0.6, 42, jt=2, jv=2)        # the lamp relit
+    en.cc_curve(sc, CH_CHOIR, 11, [(533.0, 52), (538.0, 27), (543.0, 14),
+                                   (548.5, 6)], step=1.0)
+    sc.note(CH_LO, 38, 533.0, 16.0, 33, jt=0, jv=2)
+    sc.note(CH_LO, 45, 533.0, 16.0, 31, jt=0, jv=2)
+    sc.note(CH_BELL, 86, 533.0, 0.6, 28, jt=2, jv=2)        # the lamp relit
     for i, p in enumerate((50, 57, 62, 69, 74)):
-        sc.note(CH_HARP, p, 534.0 + 0.75 * i, 2.0, 44 - i, jt=3, jv=2)
-    en.expr_curve(sc, CH_HI, [(517.0, 60), (533.0, 66), (548.5, 26)],
-                  step=1.0)
-    en.cc_curve(sc, CH_LO, 11, [(533.0, 72), (548.5, 30)], step=1.0)
+        sc.note(CH_HARP, p, 534.0 + 0.75 * i, 2.0, 30 - i, jt=3, jv=2)
+    en.expr_curve(sc, CH_HI, [(517.0, 60), (531.0, 50), (537.0, 25),
+                              (543.0, 13), (548.5, 6)], step=1.0)
+    en.cc_curve(sc, CH_LO, 11, [(533.0, 45), (538.0, 25), (543.0, 13),
+                                (548.5, 7)], step=1.0)
 
 
 BUILDERS: list = [build_calm, build_fresh, build_gale1, build_eye,

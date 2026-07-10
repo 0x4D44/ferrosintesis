@@ -51,6 +51,7 @@ ALBUMS: dict[str, tuple[str, str, str]] = {
     "albums/fable5/The Signal Fire":  ("The Signal Fire",  "Claude Fable 5",   "Progressive Rock / Instrumental"),
     "albums/fable5/Winter Guests":    ("Winter Guests",    "Claude Fable 5",   "Progressive Rock / Instrumental"),
     "albums/fable5":                  ("The Iron Tide",    "Claude Fable 5",   "Cinematic / Instrumental"),
+    "albums/fable5/Through Lines":    ("Through Lines",    "Claude Fable 5",   "Progressive Eclectic / Instrumental"),
     "albums/gpt5-3-spark":            ("The Spark",        "GPT-5.3 Spark",    "Instrumental"),
     "albums/gpt5-5/Hours After Rain": ("Hours After Rain", "GPT-5.5",          "Instrumental"),
     "albums/gpt5-5/The Long Turning": ("The Long Turning", "GPT-5.5",          "Instrumental"),

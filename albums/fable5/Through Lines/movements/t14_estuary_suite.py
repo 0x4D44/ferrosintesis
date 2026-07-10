@@ -218,7 +218,7 @@ PART = conductor.Part(
         (CH_EP, "electric piano", 4, 94, 74, 45),
         (CH_BRASS, "brass", 61, 92, 64, 48),
         (CH_HARP, "harp", 46, 90, 46, 58),
-        (CH_DULC, "dulcimer", 15, 100, 64, 50),
+        (CH_DULC, "dulcimer", 15, 127, 64, 100),
         (CH_PAD, "pad", 89, 78, 64, 60),
     ],
     program_changes=[
@@ -1312,13 +1312,37 @@ def _h_endline(sc: en.Score) -> None:
 # ---------------------------------------------------------------------------
 
 def _i_epilogue(sc: en.Score) -> None:
+    """The dulcimer whisper.  A hammered dulcimer has no dampers, so every
+    struck course RINGS until the tape-cut — each note is held to the cut
+    instant rather than choked at its notated length (the synth's release
+    would otherwise silence the ring and the render-side
+    audio_hidden_silence oracle would hear -50s dB: scored, not audible).
+    Velocity alone cannot carry the audibility claim: the suite_dynamic_arc
+    band (min >= 40, mean <= 70) pins the strikes to a whisper, and the
+    synth's vel curve is (v/127)^1.6 — the whole legal velocity range is
+    worth ~1 dB of render level.  So the room does the lifting instead:
+    hall send wide open (CC91 127), the album's ping-pong tape echo
+    (CC94 100) patting each strike into the gaps between plucks, and a
+    breath of chorus shimmer (CC93 96) on the double courses.  The strikes
+    themselves open the band fully — a real first-hammer accent dying
+    linearly to pp (90 -> 44, mean ~67) — which centres the render level
+    between audio_hidden_silence's two bounds (audible >= -50 dB, yet a
+    whisper <= resolve - 6 dB).  The accent and the echo send are capped
+    where they are because of the click-scan oracle: the dulcimer strike
+    is a zero-attack transient erupting from digital silence, and at
+    vel 94 / send 127 its echo replay measured a 22194 sample step
+    (cap 22000)."""
+    sc.cc(CH_DULC, 91, 127, SIL_T0)      # hall wide open for the ghost
+    sc.cc(CH_DULC, 93, 96, SIL_T0)       # course shimmer
+    sc.cc(CH_DULC, 94, 100, SIL_T0)      # the tape echo carries the ring
     quote = material.LEDGER_THEME[:material.LEDGER_EPILOGUE_NOTES]
+    cut = sum(dur for _deg, dur in quote[:-1]) + 0.28   # the cut instant
     t = 0.0
     for i, (deg, dur) in enumerate(quote):
         last = i == len(quote) - 1
-        vel = int(en.lerp(58, 44, i / (len(quote) - 1)))
+        vel = int(en.lerp(90, 44, i / (len(quote) - 1)))
         sc.note(CH_DULC, en.pitch(EPI_BASE, material.LEDGER_MODE, deg),
-                EPI_NOTE_T0 + t, 0.28 if last else dur * 0.95, vel,
+                EPI_NOTE_T0 + t, 0.28 if last else cut - t, vel,
                 jt=2, jv=2)
         t += dur
 

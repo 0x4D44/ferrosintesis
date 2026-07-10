@@ -18,8 +18,22 @@ the clock itself (celesta).  It plays ONLY onsets coinciding (within 30
 ticks) with the accent onsets of A or B: the accents are the figure's
 three octave-doubled notes (indices 0/4/7, a 4+3+5 sixteenth clave),
 sounded one octave up and deduplicated inside the 30-tick window so a
-re-merging accent strikes once.  A quiet centred string bed (C2+G2 open
+re-merging accent strikes once.  A steady centred string bed (C2+G2 open
 fifth, the lydian root the figure deliberately omits) grounds the mode.
+
+The listener stands in the CORRIDOR between the rooms: two centred
+"door" channels (4/5) carry each room's performance verbatim — the
+identical schedule, velocities and durations, only quieter (channel
+volume 82 against the rooms' 100).  This is the piece's mono anchor.
+The rooms themselves are hard-panned, and ferrosintesis widens every
+off-centre channel with a ~4 ms Haas micro-delay; summed to mono that
+delay comb-filters the continuous mallet streams, so a mix whose energy
+lived only at the walls lost > 3 dB in mono (the render-side
+mono-compatibility oracle caps the loss at 2 dB).  Centred channels take
+no audible Haas delay, so the corridor image is phase-coherent between
+L and R and pulls the mono sum back — width from the walls, mono truth
+from the corridor.  The two-rooms stereo image stays (the
+audio_two_rooms_width oracle holds side energy within 14 dB of mid).
 A slow dynamic arc (velocity 58 -> 92 -> 46, peak at beat 168) spans the
 piece; per-16-bar velocity means are oracle-pinned to rise then fall.
 
@@ -87,9 +101,11 @@ DEDUPE_BEATS = EPS_TICKS / en.PPQ
 LYDIAN_PCS = {0, 2, 4, 6, 7, 9, 11}
 
 CH_A, CH_B, CH_CLOCK, CH_BED = 0, 1, 2, 3
+CH_DOOR_A, CH_DOOR_B = 4, 5   # the corridor: both rooms heard centred
 PAN_A, PAN_B = 16, 112     # decisively panned transient rooms
+DOOR_VOLUME = 82           # corridor image level (rooms are volume 100)
 BED_PITCHES = (36, 43)     # C2 + G2, floored at C2, centred
-BED_VEL = 44
+BED_VEL = 96
 
 MOVS: list[tuple[str, float, float]] = [
     ("I. Same Room", 0.0, 75.0),        # drift 0.00 -> 0.75 (unison, echo)
@@ -189,20 +205,24 @@ PART = conductor.Part(
     channels=[
         (CH_A, "room A - marimba", 12, 100, PAN_A, 30),
         (CH_B, "room B - vibraphone", 11, 100, PAN_B, 30),
-        (CH_CLOCK, "the clock - celesta", 8, 82, 64, 45),
-        (CH_BED, "bed - strings", 48, 92, 64, 55),
+        (CH_CLOCK, "the clock - celesta", 8, 112, 64, 45),
+        (CH_BED, "bed - strings", 48, 116, 64, 55),
+        (CH_DOOR_A, "corridor - room A door", 12, DOOR_VOLUME, 64, 20),
+        (CH_DOOR_B, "corridor - room B door", 11, DOOR_VOLUME, 64, 20),
     ],
     extra_markers=[(MID, "the clock enters")],
 )
 
 # -- verification config (consumed by verify.run_track) ---------------------
 PROGRAM_WHITELIST: set[int] = {8, 11, 12, 48}
-CENTERED_CHANNELS: set[int] = {CH_CLOCK, CH_BED}
+CENTERED_CHANNELS: set[int] = {CH_CLOCK, CH_BED, CH_DOOR_A, CH_DOOR_B}
 NOTE_RANGES: dict[int, tuple[int, int]] = {
     CH_A: (47, 69),      # figure 59..69 plus accent lower octaves
     CH_B: (47, 69),
     CH_CLOCK: (71, 81),  # the accent pitches, one octave up
     CH_BED: (36, 43),    # C2..G2, floored at C2
+    CH_DOOR_A: (47, 69),  # the corridor hears the rooms verbatim
+    CH_DOOR_B: (47, 69),
 }
 GAP_WHITELIST: list[tuple[float, float]] = []
 BEND_EXEMPT: set[int] = set()
@@ -237,9 +257,9 @@ def _onset_groups(ons: list[tuple[int, int, int]]
 
 def _expected_notes(ch: int) -> list[tuple[int, int, int]]:
     """The schedule, tick-quantised: what the Score MUST contain."""
-    if ch == CH_A:
+    if ch in (CH_A, CH_DOOR_A):
         evs = [(t, p, v) for t, p, v, _d in room_events("A")]
-    elif ch == CH_B:
+    elif ch in (CH_B, CH_DOOR_B):
         evs = [(t, p, v) for t, p, v, _d in room_events("B")]
     elif ch == CH_CLOCK:
         evs = [(t, p, _clock_vel(t)) for t, p in clock_events()]
@@ -445,7 +465,7 @@ def oracles(sc: en.Score, info, spans) -> list[tuple[str, list[str]]]:
 
     # --- zero_humanisation: EVERY channel realises the schedule exactly ----
     fails = []
-    for ch in (CH_A, CH_B, CH_CLOCK, CH_BED):
+    for ch in (CH_A, CH_B, CH_CLOCK, CH_BED, CH_DOOR_A, CH_DOOR_B):
         got = _note_ons(sc, ch)
         want = _expected_notes(ch)
         if got != want:
@@ -541,7 +561,8 @@ def _movement_builder(t0: float, t1: float, first: bool):
     lo, hi = _tick(t0), _tick(t1)
 
     def build(sc: en.Score) -> None:
-        for ch, room in ((CH_A, "A"), (CH_B, "B")):
+        for ch, room in ((CH_A, "A"), (CH_B, "B"),
+                         (CH_DOOR_A, "A"), (CH_DOOR_B, "B")):
             for t, p, v, d in room_events(room):
                 if lo <= _tick(t) < hi:
                     sc.note(ch, p, t, d, v, jt=0, jv=0)
@@ -555,7 +576,7 @@ def _movement_builder(t0: float, t1: float, first: bool):
         if first:
             # The bed breathes with the arc; CC events are unbounded.
             en.cc_curve(sc, CH_BED, 11,
-                        [(0.0, 48), (PEAK, 84), (END, 40)], step=P)
+                        [(0.0, 84), (PEAK, 116), (END, 66)], step=P)
 
     return build
 

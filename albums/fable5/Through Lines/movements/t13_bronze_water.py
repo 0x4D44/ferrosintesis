@@ -189,7 +189,7 @@ PART = conductor.Part(
         (CH_SARON,   "saron",             8,  96, 56, 50),
         (CH_PEKING,  "peking",            9,  78, 72, 50),
         (CH_REBAB,   "rebab",           110,  92, 64, 65),
-        (CH_STRINGS, "chorale strings",  48,  90, 64, 60),
+        (CH_STRINGS, "chorale strings",  48, 100, 64, 60),
     ],
     extra_markers=[(CHORALE_T1, "Chorale I"), (CHORALE_T2, "Chorale II")],
 )
@@ -363,9 +363,20 @@ def _m5(sc: en.Score) -> None:
     en.expr_curve(sc, CH_STRINGS, [(334.0, 66), (336.0, 74), (344.0, 88),
                                    (351.0, 74), (352.0, 60)], step=0.5)
     material.play_chorale(sc, CH_STRINGS, CHORALE_T1, CHORALE_ROOT, vel=62)
-    en.expr_curve(sc, CH_STRINGS, [(366.0, 72), (368.0, 84), (376.0, 100),
-                                   (383.0, 88)], step=0.5)
-    material.play_chorale(sc, CH_STRINGS, CHORALE_T2, CHORALE_ROOT, vel=70)
+    # Chorale II is the climactic statement, authored a full forte
+    # (vel 88, expression peaking at 127 — the synth maps CC7 and CC11
+    # to amplitude on squared curves, so expression headroom is the
+    # strongest per-point lever).  The GM 48 ensemble sits ~13 dB under
+    # the bronze bed at mezzo levels (measured from a --solo 6 stem
+    # against the full-mix pre-normalization peaks), so a mezzo second
+    # statement reads in the event data but not the RENDER; this forte
+    # lands the strings ~5 dB under the bronze — an audible lift
+    # (analyze.py: audio_chorale_lift >= +0.5 dB, measured ~+1.2 dB,
+    # so the claim holds with margin) that still coexists with, never
+    # replaces, the bronze.
+    en.expr_curve(sc, CH_STRINGS, [(366.0, 92), (368.0, 112), (376.0, 127),
+                                   (383.0, 118)], step=0.5)
+    material.play_chorale(sc, CH_STRINGS, CHORALE_T2, CHORALE_ROOT, vel=88)
 
 
 def _m6(sc: en.Score) -> None:

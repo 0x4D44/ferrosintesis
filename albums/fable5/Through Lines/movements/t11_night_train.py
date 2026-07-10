@@ -59,6 +59,9 @@ Movements (quarter-note beats; a 12/8 bar = 6 beats, a 7/8 bar = 3.5):
 
 from __future__ import annotations
 
+import bisect
+import math
+
 import conductor
 import engine as en
 
@@ -156,7 +159,9 @@ STAB_V = ((60, 62, 63, 67), (60, 62, 63, 67),
 
 def _stab_times() -> tuple[float, ...]:
     out: list[float] = []
-    for b in (3, 7, 11, 15, 19, 23, 27, 31):        # Full Steam double-hits
+    # Full Steam double-hits (no stab in bars 22-25: the brass section
+    # carries the sustained line there instead)
+    for b in (3, 7, 11, 15, 19, 27, 31):
         out += [M2 + 6 * b + 4.5, M2 + 6 * b + 5.0]
     for b in (2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46):   # the fight
         out += [M4 + 3.5 * b, M4 + 3.5 * b + 2.0]
@@ -649,3 +654,475 @@ def _m6_terminus(sc: en.Score) -> None:
 
 BUILDERS: list = [_m1_platform_zero, _m2_full_steam, _m3_bar_car,
                   _m4_roof_fight, _m5_brakes, _m6_terminus]
+
+
+# ---------------------------------------------------------------------------
+# Oracle helpers — score readers (ticks, not beats, for exactness)
+# ---------------------------------------------------------------------------
+
+_PPQ = en.PPQ
+MELODIC_CHANNELS = (CH_BASS, CH_GTR, CH_BRASS, CH_HORN, CH_STR,
+                    CH_CREEP, CH_SAX, CH_TAIKO, CH_TIMP, CH_HIT)
+
+
+def _tk(beat: float) -> int:
+    return int(round(beat * _PPQ))
+
+
+def _note_ons(sc: en.Score, ch: int) -> list[tuple[int, int, int]]:
+    """[(tick, pitch, vel)] for every note-on of the channel."""
+    out = []
+    for tick, _prio, data in sc.events.get(ch, []):
+        if (data[0] & 0xF0) == 0x90 and data[2] > 0:
+            out.append((tick, data[1], data[2]))
+    return sorted(out)
+
+
+def _spans(sc: en.Score, ch: int) -> list[tuple[int, int, int, int]]:
+    """[(on, off, pitch, vel)] with FIFO on/off pairing (verify's rule)."""
+    pending: dict[int, list[tuple[int, int]]] = {}
+    out = []
+    for tick, _prio, data in sorted(sc.events.get(ch, []),
+                                    key=lambda e: (e[0], e[1])):
+        status = data[0] & 0xF0
+        if status == 0x90 and data[2] > 0:
+            pending.setdefault(data[1], []).append((tick, data[2]))
+        elif status == 0x80 or (status == 0x90 and data[2] == 0):
+            queue = pending.get(data[1])
+            if queue:
+                on, vel = queue.pop(0)
+                out.append((on, tick, data[1], vel))
+    return sorted(out)
+
+
+def _bend_lane(sc: en.Score, ch: int) -> list[tuple[int, float]]:
+    """[(tick, frac)]: raw bend as a fraction (-1..+1) of the channel's
+    full bend range (whatever RPN 0 declares that range to be)."""
+    out = []
+    for tick, _prio, data in sc.events.get(ch, []):
+        if (data[0] & 0xF0) == 0xE0:
+            raw = data[1] | (data[2] << 7)
+            out.append((tick, (raw - 8192) / 8192.0))
+    return sorted(out)
+
+
+# ---------------------------------------------------------------------------
+# Oracles — written BEFORE the music; the track is composed to pass them.
+# ---------------------------------------------------------------------------
+
+def oracles(sc: en.Score, info, spans) -> list[tuple[str, list[str]]]:
+    results: list[tuple[str, list[str]]] = []
+
+    # --- meter_map: 12/8 -> 7/8 (the fight, exactly) -> 12/8 --------------
+    fails: list[str] = []
+    want_ts = [(M1, 12, 8), (M4, 7, 8), (M5, 12, 8)]
+    if sorted(sc.timesigs) != want_ts:
+        fails.append(f"time signatures {sorted(sc.timesigs)} != {want_ts}")
+    name, t0, t1 = PART.MOVEMENTS[3]
+    if (t0, t1) != (M4, M5):
+        fails.append(f"'{name}' spans [{t0}, {t1}), want the 7/8 region "
+                     f"[{M4}, {M5})")
+    if abs((M5 - M4) - FIGHT_BARS * 3.5) > 1e-9:
+        fails.append(f"7/8 region is {(M5 - M4) / 3.5:.2f} bars, want "
+                     f"{FIGHT_BARS} whole bars")
+    if abs((M3 - M2) % 6.0) > 1e-9 or abs((END - M6) % 3.0) > 1e-9:
+        fails.append("12/8 sections are not whole numbers of bars")
+    results.append(("meter_map", fails))
+
+    # --- ostinato_relentless: >= 90% of eighth slots in every action span -
+    fails = []
+    bass_ticks = [t for t, _p, _v in _note_ons(sc, CH_BASS)]
+    tol = int(round(0.1 * _PPQ))
+    for a, b in ACTION_SPANS:
+        n_slots = int(round((b - a) / 0.5))
+        covered = 0
+        for k in range(n_slots):
+            slot = _tk(a + 0.5 * k)
+            i = bisect.bisect_left(bass_ticks, slot - tol)
+            if i < len(bass_ticks) and bass_ticks[i] <= slot + tol:
+                covered += 1
+        cov = covered / max(1, n_slots)
+        if cov < 0.90:
+            fails.append(f"span [{a:.0f}, {b:.0f}): bass covers only "
+                         f"{cov:.1%} of the eighth grid (want >= 90%)")
+    results.append(("ostinato_relentless", fails))
+
+    # --- brass_stabs: every documented hit lands >= 3 close short notes;
+    #     every short brass note sits ON a documented hit ------------------
+    fails = []
+    brass = _spans(sc, CH_BRASS)
+    tol = int(round(0.08 * _PPQ))
+    stab_ticks = [_tk(t) for t in STAB_TIMES]
+    for t_beat, st in zip(STAB_TIMES, stab_ticks):
+        grp = [(on, off, p) for on, off, p, _v in brass
+               if abs(on - st) <= tol]
+        if len(grp) < 3:
+            fails.append(f"stab at {t_beat:.1f}: only {len(grp)} notes "
+                         f"(want >= 3)")
+            continue
+        ps = sorted(p for _on, _off, p in grp)
+        if ps[-1] - ps[0] > 12:
+            fails.append(f"stab at {t_beat:.1f}: span {ps[-1] - ps[0]} "
+                         f"> 12 semitones")
+        for on, off, p in grp:
+            if off - on > int(0.5 * _PPQ) + 2:
+                fails.append(f"stab at {t_beat:.1f}: pitch {p} lasts "
+                             f"{(off - on) / _PPQ:.2f} beats (> 0.5)")
+    for on, off, p, _v in brass:
+        if off - on <= int(0.55 * _PPQ):
+            i = bisect.bisect_left(stab_ticks, on - tol)
+            if not (i < len(stab_ticks) and stab_ticks[i] <= on + tol):
+                fails.append(f"stray short brass note (pitch {p}) at beat "
+                             f"{on / _PPQ:.2f} is on no documented hit")
+    results.append(("brass_stabs", fails[:8]))
+
+    # --- whammy_dive: RPN 0 = 12, ONE full-depth monotonic dive, recentred
+    fails = []
+    r101 = r100 = None
+    authored = []                       # (tick, semis) bend-range writes
+    for tick, _prio, data in sorted(sc.events.get(CH_GTR, []),
+                                    key=lambda e: (e[0], e[1])):
+        if (data[0] & 0xF0) != 0xB0:
+            continue
+        num, val = data[1], data[2]
+        if num == 101:
+            r101 = val
+        elif num == 100:
+            r100 = val
+        elif num == 6 and r101 == 0 and r100 == 0:
+            authored.append((tick, val))
+    if [semis for _t, semis in authored] != [12]:
+        fails.append(f"guitar RPN-0 writes {authored}: want exactly one, "
+                     f"= 12 semitones")
+    elif authored[0][0] > _tk(DIVE_T):
+        fails.append("bend range 12 authored after the dive")
+    lane = _bend_lane(sc, CH_GTR)
+    dive_lo, dive_hi = _tk(DIVE_T), _tk(DIVE_T + 3.5)
+    deep = [(t, f) for t, f in lane if f <= -0.9]
+    if not deep:
+        fails.append("no full-depth dive anywhere")
+    else:
+        if min(f for _t, f in deep) > -0.98:
+            fails.append(f"dive bottoms out at {min(f for _t, f in deep):+.2f}"
+                         f" of range (want <= -0.98)")
+        strays = [t for t, _f in deep if not dive_lo <= t <= dive_hi]
+        if strays:
+            fails.append(f"deep bend outside the dive bar at beats "
+                         f"{[round(t / _PPQ, 1) for t in strays[:3]]}")
+    seg = [f for t, f in lane
+           if _tk(DIVE_T + 0.4) <= t <= _tk(DIVE_T + 2.3)]
+    if any(f1 > f0 + 1e-9 for f0, f1 in zip(seg, seg[1:])):
+        fails.append("the dive wobbles on the way down (not monotonic)")
+    rec = [t for t, f in lane
+           if _tk(DIVE_T + 2.3) <= t <= _tk(DIVE_T + 3.5) and abs(f) <= 0.02]
+    if not rec:
+        fails.append("dive not recentred straight after the bottom")
+    results.append(("whammy_dive", fails))
+
+    # --- falloff_bends: 38 documented fall-offs, dip and recentre ----------
+    fails = []
+    if len(FALLOFF_TIMES) != 38:
+        fails.append(f"{len(FALLOFF_TIMES)} documented fall-offs, want 38")
+    for t in FALLOFF_TIMES:
+        win = [f for tk, f in lane if _tk(t - 0.4) <= tk <= _tk(t + 0.2)]
+        if not win or min(win) > -0.12:
+            fails.append(f"fall-off at {t:.2f}: no dip below -0.12 "
+                         f"of range")
+        rec = [tk for tk, f in lane
+               if _tk(t) <= tk <= _tk(t + 0.667) and abs(f) <= 0.02]
+        if not rec:
+            fails.append(f"fall-off at {t:.2f} not recentred within "
+                         f"two-thirds of a beat")
+    results.append(("falloff_bends", fails[:8]))
+
+    # --- swing_confined: 2:1 swing in the Bar Car, and ONLY there ----------
+    fails = []
+    bc0, bc1 = _tk(M3), _tk(M4)
+    sax_in = [(t, p, v) for t, p, v in _note_ons(sc, CH_SAX)
+              if bc0 <= t < bc1]
+    if not sax_in:
+        fails.append("the suave reed never plays in the Bar Car")
+    lobe = 0
+    for t, _p, _v in sax_in:
+        pos = (t % _PPQ) / _PPQ
+        on_beat = pos <= 0.04 or pos >= 0.96
+        on_lobe = abs(pos - 2.0 / 3.0) <= 0.04
+        if not (on_beat or on_lobe):
+            fails.append(f"sax onset at beat {t / _PPQ:.2f} is neither on "
+                         f"the beat nor at beat+2/3 (pos {pos:.3f})")
+        if on_lobe:
+            lobe += 1
+    if lobe < 12:
+        fails.append(f"only {lobe} swing-lobe onsets (want >= 12)")
+    ons = sorted(t for t, _p, _v in sax_in)
+    pair_tol = int(round(0.05 * _PPQ))
+    pairs = sum(1 for a, b, c in zip(ons, ons[1:], ons[2:])
+                if abs((b - a) - 2 * _PPQ // 3) <= pair_tol
+                and abs((c - b) - _PPQ // 3) <= pair_tol)
+    if pairs < 8:
+        fails.append(f"only {pairs} strict 2:1 long-short pairs "
+                     f"(want >= 8)")
+    for ch in MELODIC_CHANNELS:
+        for t, p, _v in _note_ons(sc, ch):
+            if bc0 <= t < bc1:
+                continue
+            pos = (t % _PPQ) / _PPQ
+            if 0.60 <= pos <= 0.73:
+                fails.append(f"ch{ch} onset in the swing lobe at beat "
+                             f"{t / _PPQ:.2f} — swing must stay in the "
+                             f"Bar Car")
+    results.append(("swing_confined", fails[:8]))
+
+    # --- chromatic_creep: the inner line moves by semitone only ------------
+    fails = []
+    creep = _note_ons(sc, CH_CREEP)
+    for name, t0, t1 in PART.MOVEMENTS:
+        seq = [p for t, p, _v in creep
+               if _tk(t0) - 24 <= t < _tk(t1) - 24]
+        for a, b in zip(seq, seq[1:]):
+            if abs(b - a) != 1:
+                fails.append(f"'{name}': creep steps {a} -> {b} "
+                             f"(|{b - a}| != 1 semitone)")
+    if len(creep) < 100:
+        fails.append(f"only {len(creep)} creep notes — the inner line "
+                     f"must run the action")
+    if creep:
+        last_t, last_p, _v = creep[-1]
+        prev_p = creep[-2][1] if len(creep) > 1 else None
+        if last_t != _tk(STING_T) or last_p % 12 != 0:
+            fails.append("the creep's last note is not the sting's C")
+        elif prev_p is not None and last_p - prev_p != 1:
+            fails.append(f"the creep resolves {prev_p} -> {last_p}, "
+                         f"want a +1 semitone resolution onto C")
+    results.append(("chromatic_creep", fails[:8]))
+
+    # --- whistle_gliss: brass cluster + >= half-range gliss, recentred ----
+    fails = []
+    brass_lane = _bend_lane(sc, CH_BRASS)
+    for w, dur in WHISTLE_BLASTS:
+        grp = [(on, off, p) for on, off, p, _v in brass
+               if abs(on - _tk(w)) <= int(0.08 * _PPQ)
+               and off - on > _PPQ]
+        if len(grp) < 3:
+            fails.append(f"whistle at {w:.0f}: only {len(grp)} sustained "
+                         f"cluster notes (want >= 3)")
+            continue
+        ps = sorted(p for _on, _off, p in grp)
+        if any(b - a > 2 for a, b in zip(ps, ps[1:])):
+            fails.append(f"whistle at {w:.0f}: pitches {ps} are not a "
+                         f"cluster (adjacent gaps must be <= 2)")
+        win = [f for t, f in brass_lane
+               if _tk(w) <= t <= _tk(w + dur)]
+        if not win or max(win) < 0.5:
+            fails.append(f"whistle at {w:.0f}: bend gliss peaks at "
+                         f"{max(win) if win else 0:+.2f} (want >= +0.50 "
+                         f"of range)")
+        tail = [f for t, f in brass_lane
+                if _tk(w + dur - 0.3) <= t <= _tk(w + dur + 0.3)]
+        if not tail or abs(tail[-1]) > 0.02:
+            fails.append(f"whistle at {w:.0f}: gliss not recentred by "
+                         f"the end of the blast")
+    results.append(("whistle_gliss", fails))
+
+    # --- brakes_gesture: chromatic string screech + choked crash ----------
+    fails = []
+    run_notes = [(t, p) for t, p, _v in _note_ons(sc, CH_STR)
+                 if _tk(M5) - 24 <= t < _tk(558.0) - 24]
+    run_notes.sort()
+    if len(run_notes) < 13:
+        fails.append(f"brake gliss has {len(run_notes)} notes — cannot "
+                     f"span 12 chromatic semitones")
+    else:
+        for (t0, p0), (_t1, p1) in zip(run_notes, run_notes[1:]):
+            if p1 - p0 != -1:
+                fails.append(f"brake gliss step {p0} -> {p1} at beat "
+                             f"{t0 / _PPQ:.1f} is not a falling semitone")
+        span = run_notes[0][1] - run_notes[-1][1]
+        if span < 12:
+            fails.append(f"brake gliss spans {span} semitones (want >= 12)")
+    chokes = [(on, off) for on, off, p, _v in _spans(sc, DRUMS)
+              if p == 49 and abs(on - _tk(M5)) <= int(0.08 * _PPQ)]
+    if not chokes:
+        fails.append("no crash cymbal on the brake downbeat")
+    elif any(off - on > int(0.5 * _PPQ) for on, off in chokes):
+        fails.append("the brake crash rings — it must be choked "
+                     "(<= 0.5 beat)")
+    results.append(("brakes_gesture", fails[:8]))
+
+    # --- taiko_fight: GM 116 in all 54 fight bars and nowhere else --------
+    fails = []
+    taiko = [t for t, _p, _v in _note_ons(sc, CH_TAIKO)]
+    for k in range(FIGHT_BARS):
+        lo, hi = _tk(M4 + 3.5 * k) - 24, _tk(M4 + 3.5 * (k + 1)) - 24
+        i = bisect.bisect_left(taiko, lo)
+        if not (i < len(taiko) and taiko[i] < hi):
+            fails.append(f"fight bar {k + 1} has no taiko")
+    strays = [t for t in taiko
+              if not _tk(M4) - 24 <= t < _tk(M5) - 24]
+    if strays:
+        fails.append(f"taiko outside the fight at beats "
+                     f"{[round(t / _PPQ, 1) for t in strays[:4]]}")
+    results.append(("taiko_fight", fails[:8]))
+
+    # --- unison_sting: one pitch class C, >= 4 channels, <= 1 beat, ff,
+    #     out of a scored silence, and nothing after ------------------------
+    fails = []
+    sting_tick = _tk(STING_T)
+    sting_chs = set()
+    for ch in sorted(sc.events):
+        for on, off, p, v in _spans(sc, ch):
+            if on > sting_tick + 24:
+                fails.append(f"ch{ch} note at beat {on / _PPQ:.2f} AFTER "
+                             f"the sting — the sting must kill the piece")
+            if abs(on - sting_tick) > 24:
+                continue
+            if ch == DRUMS:
+                continue                    # the kick is punctuation
+            sting_chs.add(ch)
+            if p % 12 != 0:
+                fails.append(f"sting note on ch{ch} is pitch {p} — not C")
+            if off - on > _PPQ + 4:
+                fails.append(f"sting note on ch{ch} lasts "
+                             f"{(off - on) / _PPQ:.2f} beats (> 1)")
+            if v < 100:
+                fails.append(f"sting note on ch{ch} at velocity {v} — "
+                             f"want fortissimo (>= 100)")
+    if len(sting_chs) < 4:
+        fails.append(f"sting spans only {len(sting_chs)} melodic channels "
+                     f"(want >= 4)")
+    held = [(ch, t) for ch in sorted(sc.events)
+            for t, _p, _v in _note_ons(sc, ch)
+            if _tk(773.5) <= t < _tk(774.95)]
+    if held:
+        fails.append(f"notes inside the held breath [773.5, 775): {held[:3]}")
+    results.append(("unison_sting", fails[:8]))
+
+    # --- dramatic_arc: per-beat velocity-sum densities ---------------------
+    fails = []
+    all_ons: list[tuple[int, int]] = []
+    for ch in sc.events:
+        all_ons.extend((t, v) for t, _p, v in _note_ons(sc, ch))
+    all_ons.sort()
+    ticks = [t for t, _v in all_ons]
+
+    def density(a: float, b: float) -> float:
+        i0 = bisect.bisect_left(ticks, _tk(a))
+        i1 = bisect.bisect_left(ticks, _tk(b))
+        return sum(v for _t, v in all_ons[i0:i1]) / max(1e-9, b - a)
+
+    d_intro = density(M1, M2)
+    d_fs = density(M2, M3)
+    d_bc = density(M3, M4)
+    d_rf = density(M4, M5)
+    d_term = density(M6, 771.0)
+    for name, got, op, ratio in (
+            ("intro", d_intro, "<", 0.60), ("Bar Car", d_bc, "<", 0.55),
+            ("Roof Fight", d_rf, ">", 1.15), ("Terminus", d_term, ">", 1.00)):
+        want = ratio * d_fs
+        ok = got < want if op == "<" else got > want
+        if not ok:
+            fails.append(f"{name} density {got:.0f} is not {op} "
+                         f"{ratio:.2f}x Full Steam ({d_fs:.0f}/beat)")
+    results.append(("dramatic_arc", fails))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Audio oracles — run by analyze.py once audio/11 - Night Train to
+# Tirana.wav exists.  Trimmed inner windows keep seams and reverb honest.
+# ---------------------------------------------------------------------------
+
+AUDIO_INTRO = (12.0, 66.0)
+AUDIO_FULL_STEAM = (84.0, 252.0)
+AUDIO_BAR_CAR = (276.0, 348.0)
+AUDIO_FIGHT = (367.0, 542.0)
+AUDIO_TERMINUS = (567.0, 756.0)
+AUDIO_HUSH = (773.9, 774.85)
+AUDIO_STING = (775.0, 775.7)
+
+
+def _goertzel_power(x: list[float], rate: int, freq: float) -> float:
+    """Normalized Goertzel power of `x` at `freq` Hz."""
+    w = 2.0 * math.pi * freq / rate
+    coeff = 2.0 * math.cos(w)
+    s1 = s2 = 0.0
+    for v in x:
+        s0 = v + coeff * s1 - s2
+        s2, s1 = s1, s0
+    return max(0.0, s1 * s1 + s2 * s2 - coeff * s1 * s2) / max(1, len(x)) ** 2
+
+
+def audio_checks(ctx) -> list[tuple[str, list[str]]]:
+    checks: list[tuple[str, list[str]]] = []
+
+    def span_db(a: float, b: float) -> float:
+        i0, i1 = ctx.bar_window(a, b)
+        return ctx.db(ctx.rms(ctx.l, ctx.r, i0, i1))
+
+    # 1. The dramatic arc, in dB on the render.
+    fails: list[str] = []
+    intro = span_db(*AUDIO_INTRO)
+    fs = span_db(*AUDIO_FULL_STEAM)
+    bc = span_db(*AUDIO_BAR_CAR)
+    rf = span_db(*AUDIO_FIGHT)
+    term = span_db(*AUDIO_TERMINUS)
+    if intro > fs - 2.0:
+        fails.append(f"intro {intro:.1f} dB not >= 2 dB under Full Steam "
+                     f"{fs:.1f}")
+    if bc > fs - 3.0:
+        fails.append(f"Bar Car {bc:.1f} dB not >= 3 dB under Full Steam "
+                     f"{fs:.1f}")
+    if rf < fs + 0.3:
+        fails.append(f"Roof Fight {rf:.1f} dB not above Full Steam "
+                     f"{fs:.1f} + 0.3")
+    if term < fs - 0.5:
+        fails.append(f"Terminus {term:.1f} dB sags below Full Steam "
+                     f"{fs:.1f} - 0.5")
+    checks.append(("audio_dynamic_arc", fails))
+
+    # 2. The sting is C — Goertzel energy at C1..C5 vs foreign pitch
+    #    classes (D, Eb, F#, A; G is skipped: it is C's 3rd harmonic).
+    fails = []
+    i0, i1 = ctx.bar_window(*AUDIO_STING)
+    i1 = min(i1, len(ctx.l))
+    mono = [(ctx.l[i] + ctx.r[i]) / 2.0 for i in range(i0, i1)]
+    if len(mono) < 256:
+        fails.append("sting window missing from the render")
+    else:
+        c_e = sum(_goertzel_power(mono, ctx.sample_rate, f)
+                  for f in (65.41, 130.81, 261.63, 523.25))
+        o_e = sum(_goertzel_power(mono, ctx.sample_rate, f)
+                  for f in (293.66, 311.13, 369.99, 440.0))
+        if c_e < 5.0 * o_e:
+            fails.append(f"sting C-energy only {c_e / max(o_e, 1e-12):.1f}x "
+                         f"the foreign-pitch energy (want >= 5x)")
+    checks.append(("audio_sting_unison", fails))
+
+    # 3. The cutoff: silence before, a leap, then a die-away to nothing.
+    fails = []
+    hush = span_db(*AUDIO_HUSH)
+    sting = span_db(*AUDIO_STING)
+    if sting < hush + 8.0:
+        fails.append(f"sting {sting:.1f} dB does not leap >= 8 dB out of "
+                     f"the held breath ({hush:.1f} dB)")
+    on_s = ctx.sc.seconds_at(AUDIO_STING[0])
+
+    def sec_db(a: float, b: float) -> float:
+        i0 = int(a * ctx.sample_rate)
+        i1 = min(int(b * ctx.sample_rate), len(ctx.l))
+        if i1 - i0 < 256:
+            return -120.0
+        return ctx.db(ctx.rms(ctx.l, ctx.r, i0, i1))
+
+    d1 = sec_db(on_s + 1.0, on_s + 1.6)
+    d2 = sec_db(on_s + 2.2, on_s + 3.2)
+    if d1 > sting - 6.0:
+        fails.append(f"1s after the sting still {d1:.1f} dB "
+                     f"(want <= sting - 6)")
+    if d2 > -120.0 and d2 > sting - 15.0:
+        fails.append(f"2.2s after the sting still {d2:.1f} dB "
+                     f"(want <= sting - 15)")
+    checks.append(("audio_sting_cutoff", fails))
+
+    return checks

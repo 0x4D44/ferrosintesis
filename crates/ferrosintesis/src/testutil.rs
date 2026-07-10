@@ -28,6 +28,62 @@ pub(crate) fn band_rms(seg: &[f32], sr: f32, f: f32, q: f32) -> f32 {
     rms(&filtered)
 }
 
+/// Spectral RMS inside an explicit frequency range. Exact DFT bins over a Hann
+/// window make this a real band measurement rather than a narrow-Q proxy.
+pub(crate) fn spectral_band_rms(seg: &[f32], sr: f32, lo: f32, hi: f32) -> f32 {
+    assert!(lo >= 0.0 && hi > lo && hi < sr * 0.5);
+    let n = seg.len();
+    if n < 2 {
+        return 0.0;
+    }
+    let windowed: Vec<f32> = seg
+        .iter()
+        .enumerate()
+        .map(|(i, &x)| {
+            let window = 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (n - 1) as f32).cos();
+            x * window
+        })
+        .collect();
+    let bin_hz = sr / n as f32;
+    let first = (lo / bin_hz).ceil().max(1.0) as usize;
+    let last = (hi / bin_hz).floor() as usize;
+    let energy = (first..=last)
+        .map(|bin| mag_at(&windowed, sr, bin as f32 * bin_hz).powi(2))
+        .sum::<f32>();
+    (0.5 * energy).sqrt()
+}
+
+/// Spectral centroid over exact DFT bins. The bounded 4096-sample window keeps
+/// adjacent-note organ comparisons stable without turning tests into an FFT
+/// implementation or adding a dependency.
+pub(crate) fn spectral_centroid(seg: &[f32], sr: f32, lo: f32, hi: f32) -> f32 {
+    let n = seg.len().min(4096);
+    if n < 2 {
+        return 0.0;
+    }
+    let windowed: Vec<f32> = seg[..n]
+        .iter()
+        .enumerate()
+        .map(|(i, &x)| {
+            let window = 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (n - 1) as f32).cos();
+            x * window
+        })
+        .collect();
+    let bin_hz = sr / n as f32;
+    let first = (lo / bin_hz).ceil().max(1.0) as usize;
+    let last = (hi / bin_hz).floor().min((n / 2) as f32) as usize;
+    let (weighted, total) = (first..=last).fold((0.0f64, 0.0f64), |(weighted, total), bin| {
+        let freq = bin as f32 * bin_hz;
+        let magnitude = mag_at(&windowed, sr, freq) as f64;
+        (weighted + freq as f64 * magnitude, total + magnitude)
+    });
+    if total > 0.0 {
+        (weighted / total) as f32
+    } else {
+        0.0
+    }
+}
+
 /// RMS of the segment above `f` (2nd-order highpass, Q 0.7).
 pub(crate) fn hp_rms(seg: &[f32], sr: f32, f: f32) -> f32 {
     let mut hp = Biquad::highpass(f, 0.7, sr);
@@ -356,6 +412,17 @@ mod calibration {
         assert!(out < 0.4 * inb, "octave-away band rms {out} vs {inb}");
         let hp = hp_rms(&s, sr, 4000.0);
         assert!(hp < 0.1 * inb, "hp leakage {hp}");
+
+        let ranged = spectral_band_rms(&s, sr, 800.0, 1_200.0);
+        let excluded = spectral_band_rms(&s, sr, 2_000.0, 4_000.0);
+        assert!(ranged > 0.4, "range rms {ranged}");
+        assert!(excluded < 0.1 * ranged, "range leakage {excluded}/{ranged}");
+
+        let spectral_center = spectral_centroid(&s, sr, 100.0, 4_000.0);
+        assert!(
+            (spectral_center - 1_000.0).abs() < 20.0,
+            "centroid {spectral_center}"
+        );
     }
 
     #[test]
@@ -578,7 +645,7 @@ mod guards {
             (0, "modal"),
             (8, "modal"),
             (16, "organ"),
-            (19, "organ"),
+            (19, "cathedral-organ"),
             (24, "NYLON"),
             (25, "STEEL"),
             (26, "CLEAN"),

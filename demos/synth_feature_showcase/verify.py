@@ -19,7 +19,7 @@ REQUIRED_PROGRAMS = (
     | set(range(104, 112))
     | set(range(120, 128))
 )
-REQUIRED_CCS = {1, 5, 6, 7, 10, 11, 38, 64, 65, 66, 67, 68, 70, 71, 74, 91, 93, 94, 100, 101}
+REQUIRED_CCS = {0, 1, 5, 6, 7, 10, 11, 38, 64, 65, 66, 67, 68, 70, 71, 74, 91, 93, 94, 100, 101}
 STICKY_RESETS = {64: 0, 65: 0, 66: 0, 67: 0, 68: 0, 71: 0, 74: 127}
 
 
@@ -29,6 +29,7 @@ def run_all(spec_scores: list[tuple[en.TrackSpec, en.Score]], suite: bool = True
         prefix = f"{spec.number:02d} {spec.title}"
         results.append((f"{prefix} structure", check_structure(spec, sc)))
         results.append((f"{prefix} features", check_features(sc)))
+        results.append((f"{prefix} organ banks", check_organ_banks(sc)))
         results.append((f"{prefix} resets", check_resets(spec, sc)))
         results.append((f"{prefix} stereo", check_stereo(sc)))
         results.append((f"{prefix} arc", check_arc(spec, sc)))
@@ -119,6 +120,26 @@ def check_features(sc: en.Score) -> list[str]:
             hits = [n for n in note_spans(sc, 9) if f.start <= n[0] <= f.end]
             if not hits:
                 fails.append(f"{f.name}: missing drum hits")
+    return fails
+
+
+def check_organ_banks(sc: en.Score) -> list[str]:
+    """Track 2 must demonstrate default GM19, legacy GM19, then reset."""
+    bank_events = []
+    for ch, events in sc.events.items():
+        for tk, prio, data in events:
+            if (data[0] & 0xF0) == 0xB0 and data[1] == 0:
+                bank_events.append((tk, prio, ch, data[2]))
+    if not bank_events:
+        return []
+    ordered = sorted(bank_events)
+    vals = [v for _tk, _prio, _ch, v in ordered]
+    fails = []
+    if not any(vals[i:i + 3] == [0, 1, 0] for i in range(len(vals) - 2)):
+        fails.append(f"organ bank sequence {vals}, want default→legacy→default")
+    bad_prio = [(tk, ch, val, prio) for tk, prio, ch, val in ordered if prio != 0]
+    if bad_prio:
+        fails.append(f"CC0 must serialize at priority 0: {bad_prio}")
     return fails
 
 

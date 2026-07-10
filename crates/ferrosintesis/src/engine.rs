@@ -12,7 +12,7 @@
 
 use crate::dsp::{key_freq, Biquad, DelayLine, OnePole, Rng};
 use crate::midi::{EvKind, Song};
-use crate::reverb::Reverb;
+use crate::reverb::{CathedralReverb, Reverb};
 use crate::{drums, voices};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
@@ -72,8 +72,12 @@ fn vibrato_family(program: u8) -> bool {
     )
 }
 
-fn organ_leslie_family(program: u8) -> bool {
-    matches!(program, 16..=19)
+fn organ_leslie_family(program: u8, alt: bool) -> bool {
+    matches!(program, 16..=18) || (program == 19 && alt)
+}
+
+fn cathedral_organ(program: u8, alt: bool) -> bool {
+    program == 19 && !alt
 }
 
 fn cc1_pitch_vibrato_target(program: u8, alt: bool) -> bool {
@@ -274,27 +278,28 @@ impl Drive {
 }
 
 /// Per-program bus sends (chorus, echo). Reverb stays CC91-authored.
-fn fx_profile(program: u8) -> (f32, f32) {
+fn fx_profile(program: u8, alt: bool) -> (f32, f32) {
     match program {
-        16..=23 => (0.20, 0.0),        // organs/free reeds: gentle ensemble
-        24 | 25 => (0.12, 0.08),       // acoustic guitars: a touch of both
-        26..=31 => (0.10, 0.30),       // electric guitars: the delayed-lead sound
+        19 if !alt => (0.0, 0.0), // cathedral organ: the case/room supplies width
+        16..=23 => (0.20, 0.0),   // legacy organs/free reeds: gentle ensemble
+        24 | 25 => (0.12, 0.08),  // acoustic guitars: a touch of both
+        26..=31 => (0.10, 0.30),  // electric guitars: the delayed-lead sound
         40..=45 | 110 => (0.10, 0.10), // fiddle
-        46 => (0.15, 0.0),             // harp
-        48..=51 => (0.35, 0.0),        // string ensembles
-        52..=54 => (0.30, 0.0),        // choir
-        56..=60 => (0.0, 0.0),         // solo brass: hall (CC91) is the space, no ensemble fake
-        61..=63 => (0.25, 0.0),        // brass section / synth brass: section-width chorus
-        64..=67 => (0.06, 0.10),       // saxes: lead voice, a touch of width and slap echo
-        109 => (0.06, 0.0),            // bagpipe: small width, no slap echo on the drone
-        111 => (0.04, 0.08),           // shanai: dry forward reed with a trace of slap
-        72..=79 => (0.0, 0.22),        // flute / whistle
-        80..=87 => (0.15, 0.25),       // synth leads: focused, with the delayed-lead echo
-        88..=95 => (0.45, 0.0),        // pads
-        96..=103 => (0.30, 0.35),      // crystal: shimmer and echo
-        8..=10 => (0.0, 0.15),         // celesta / glockenspiel / music box
-        14 => (0.0, 0.08),             // tubular bells
-        15 => (0.10, 0.0),             // hammered dulcimer: sub-beat width, no echo
+        46 => (0.15, 0.0),        // harp
+        48..=51 => (0.35, 0.0),   // string ensembles
+        52..=54 => (0.30, 0.0),   // choir
+        56..=60 => (0.0, 0.0),    // solo brass: hall (CC91) is the space, no ensemble fake
+        61..=63 => (0.25, 0.0),   // brass section / synth brass: section-width chorus
+        64..=67 => (0.06, 0.10),  // saxes: lead voice, a touch of width and slap echo
+        109 => (0.06, 0.0),       // bagpipe: small width, no slap echo on the drone
+        111 => (0.04, 0.08),      // shanai: dry forward reed with a trace of slap
+        72..=79 => (0.0, 0.22),   // flute / whistle
+        80..=87 => (0.15, 0.25),  // synth leads: focused, with the delayed-lead echo
+        88..=95 => (0.45, 0.0),   // pads
+        96..=103 => (0.30, 0.35), // crystal: shimmer and echo
+        8..=10 => (0.0, 0.15),    // celesta / glockenspiel / music box
+        14 => (0.0, 0.08),        // tubular bells
+        15 => (0.10, 0.0),        // hammered dulcimer: sub-beat width, no echo
         _ => (0.0, 0.0),
     }
 }
@@ -560,9 +565,15 @@ struct Strip {
     leslie_depth: f32,
     reverb_send: f32,
     chorus_send: f32,
+    chorus_authored: bool,
     delay_send: f32,
+    delay_authored: bool,
+    organ_wind: f32,
+    organ_trem_phase: f32,
     drive: Option<Drive>,
     wah: Option<Biquad>, // CC74 brightness filter; None = true bypass
+    wah_legacy: Option<Biquad>,
+    wah_cathedral: Option<Biquad>,
     // second wah instance for channel 9's stereo drum pair (D9 strip
     // parity: an authored ch-9 CC74/71 keeps filtering the whole kit)
     wah_r: Option<Biquad>,
@@ -620,9 +631,15 @@ impl Strip {
             leslie_depth: 0.0,
             reverb_send: 0.3,
             chorus_send: 0.0,
+            chorus_authored: false,
             delay_send: 0.0,
+            delay_authored: false,
+            organ_wind: 0.0,
+            organ_trem_phase: 0.0,
             drive: None,
             wah: None,
+            wah_legacy: None,
+            wah_cathedral: None,
             wah_r: None,
             cutoff: WAH_MAX_HZ,
             cutoff_target: WAH_MAX_HZ,
@@ -647,6 +664,8 @@ pub struct Stats {
     pub voices_spawned: u64,
     pub peak: f32,
     pub max_polyphony: usize,
+    #[cfg(test)]
+    pub(crate) cathedral_return_peak: f32,
 }
 
 impl Default for Stats {
@@ -655,6 +674,8 @@ impl Default for Stats {
             voices_spawned: 0,
             peak: 0.0,
             max_polyphony: 0,
+            #[cfg(test)]
+            cathedral_return_peak: 0.0,
         }
     }
 }
@@ -714,6 +735,7 @@ pub(crate) struct EngineCore {
     strips: Vec<Strip>,
     active: Vec<Active>,
     reverb: Reverb,
+    cathedral: CathedralReverb,
     rev_hp: Biquad,
     chorus: Chorus,
     echo: Option<PingPong>,
@@ -723,8 +745,11 @@ pub(crate) struct EngineCore {
     glue: BusGlue,
     stats: Stats,
     ch_buf: Vec<[f32; BLOCK]>,
+    legacy_buf: Vec<[f32; BLOCK]>,
+    cathedral_buf: Vec<[f32; BLOCK]>,
     scratch: [f32; BLOCK],
     send_rev: [f32; BLOCK],
+    send_cathedral: [f32; BLOCK],
     send_cho: [f32; BLOCK],
     send_del: [f32; BLOCK],
     send_sym: [f32; BLOCK],
@@ -747,6 +772,7 @@ impl EngineCore {
             strips: (0..16).map(|_| Strip::new(sr)).collect(),
             active: Vec::new(),
             reverb: Reverb::new(sr, 0.86, 0.35, opt.wet),
+            cathedral: CathedralReverb::new(sr, opt.wet),
             rev_hp: Biquad::highpass(150.0, 0.7, sr),
             chorus: Chorus::new(sr),
             echo: (opt.delay_s > 0.0).then(|| PingPong::new(sr, opt.delay_s)),
@@ -756,8 +782,11 @@ impl EngineCore {
             glue: BusGlue::new(sr),
             stats: Stats::default(),
             ch_buf: vec![[0f32; BLOCK]; 16],
+            legacy_buf: vec![[0f32; BLOCK]; 16],
+            cathedral_buf: vec![[0f32; BLOCK]; 16],
             scratch: [0f32; BLOCK],
             send_rev: [0f32; BLOCK],
+            send_cathedral: [0f32; BLOCK],
             send_cho: [0f32; BLOCK],
             send_del: [0f32; BLOCK],
             send_sym: [0f32; BLOCK],
@@ -1021,7 +1050,16 @@ impl EngineCore {
         let s = &mut self.strips[ch as usize];
         let v = val as f32 / 127.0;
         match num {
-            0 => s.alt_bank = val != 0, // CC0 bank select: non-zero = alt voicings
+            0 => {
+                s.alt_bank = val != 0; // CC0 bank select: non-zero = alt voicings
+                let (cho, del) = fx_profile(s.program, s.alt_bank);
+                if !s.chorus_authored {
+                    s.chorus_send = cho;
+                }
+                if !s.delay_authored {
+                    s.delay_send = del;
+                }
+            }
             1 => {
                 s.mod_target = v;
                 s.mod_authored = true;
@@ -1116,6 +1154,8 @@ impl EngineCore {
                 s.res_target = RES_MIN_Q * (RES_MAX_Q / RES_MIN_Q).powf(v);
                 if s.wah.is_none() {
                     s.wah = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                    s.wah_legacy = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                    s.wah_cathedral = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
                     if ch == 9 {
                         s.wah_r = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
                     }
@@ -1125,14 +1165,22 @@ impl EngineCore {
                 s.cutoff_target = WAH_MIN_HZ * (WAH_MAX_HZ / WAH_MIN_HZ).powf(v);
                 if val < 127 && s.wah.is_none() {
                     s.wah = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                    s.wah_legacy = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
+                    s.wah_cathedral = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
                     if ch == 9 {
                         s.wah_r = Some(Biquad::lowpass(WAH_MAX_HZ, WAH_Q, sr));
                     }
                 }
             }
             91 => s.reverb_send = v,
-            93 => s.chorus_send = v,
-            94 => s.delay_send = v,
+            93 => {
+                s.chorus_send = v;
+                s.chorus_authored = true;
+            }
+            94 => {
+                s.delay_send = v;
+                s.delay_authored = true;
+            }
             100 => s.rpn_lsb = val,
             101 => s.rpn_msb = val,
             120 => self.all_sound_off(ch),
@@ -1170,10 +1218,12 @@ impl EngineCore {
         let (cho, del) = if ch == 9 {
             (0.0, 0.0)
         } else {
-            fx_profile(prog)
+            fx_profile(prog, s.alt_bank)
         };
         s.chorus_send = cho;
+        s.chorus_authored = false;
         s.delay_send = del;
+        s.delay_authored = false;
         if needs_drive(prog) {
             if s.drive.is_none() {
                 s.drive = Some(Drive::new(prog, self.opt.sr));
@@ -1185,14 +1235,17 @@ impl EngineCore {
 
     fn rederive_program_defaults(&mut self, ch: u8) {
         let prog = self.strips[ch as usize].program;
+        let alt = self.strips[ch as usize].alt_bank;
         let s = &mut self.strips[ch as usize];
         let (cho, del) = if ch == 9 {
             (0.0, 0.0)
         } else {
-            fx_profile(prog)
+            fx_profile(prog, alt)
         };
         s.chorus_send = cho;
+        s.chorus_authored = false;
         s.delay_send = del;
+        s.delay_authored = false;
         s.drive = needs_drive(prog).then(|| Drive::new(prog, self.opt.sr));
     }
 
@@ -1259,6 +1312,7 @@ impl EngineCore {
         s.mod_engaged = false;
         s.mod_authored = false;
         s.vib_mult = 1.0;
+        s.organ_trem_phase = 0.0;
         s.res = WAH_Q;
         s.res_target = WAH_Q;
         s.expr_target = 1.0;
@@ -1267,6 +1321,8 @@ impl EngineCore {
         s.breath_target = 1.0;
         s.breath = 1.0;
         s.wah = None;
+        s.wah_legacy = None;
+        s.wah_cathedral = None;
         s.wah_r = None;
         s.cutoff = WAH_MAX_HZ;
         s.cutoff_target = WAH_MAX_HZ;
@@ -1291,7 +1347,7 @@ impl EngineCore {
             a.poly_mult = 1.0;
             a.poly_gain = 1.0;
             a.voice.set_pitch(1.0);
-            if organ_leslie_family(a.program) {
+            if organ_leslie_family(a.program, a.alt) {
                 let (rate, depth) = voices::organ_trem_base(a.program);
                 a.voice.set_trem(rate, depth);
             }
@@ -1313,10 +1369,10 @@ impl EngineCore {
             let leslie_program = self
                 .active
                 .iter()
-                .find(|a| a.ch == ch && organ_leslie_family(a.program))
+                .find(|a| a.ch == ch && organ_leslie_family(a.program, a.alt))
                 .map(|a| a.program)
                 .or_else(|| {
-                    (strip.mod_authored && organ_leslie_family(strip.program))
+                    (strip.mod_authored && organ_leslie_family(strip.program, strip.alt_bank))
                         .then_some(strip.program)
                 });
             let active_pitch_vibrato = self
@@ -1350,7 +1406,7 @@ impl EngineCore {
                 for a in self
                     .active
                     .iter_mut()
-                    .filter(|a| a.ch == ch && organ_leslie_family(a.program))
+                    .filter(|a| a.ch == ch && organ_leslie_family(a.program, a.alt))
                 {
                     a.voice.set_trem(strip.leslie_rate, strip.leslie_depth);
                 }
@@ -1388,6 +1444,47 @@ impl EngineCore {
                 strip.vib_mult = 1.0;
             }
             strip.mod_engaged = engaged;
+        }
+
+        // The cathedral organ breathes as one wind chest. Pressure and the
+        // signed tremulant sample are channel-global, while each rank applies
+        // its own sensitivity inside the voice. Legacy GM19 remains on the
+        // Leslie path above.
+        for (ci, strip) in self.strips.iter_mut().enumerate() {
+            if ci == 9 {
+                continue;
+            }
+            let ch = ci as u8;
+            let cat_notes = self
+                .active
+                .iter()
+                .filter(|a| a.ch == ch && cathedral_organ(a.program, a.alt))
+                .count();
+            let load = cat_notes.saturating_sub(1).min(9) as f32 / 9.0;
+            let target = load;
+            let tau = if target > strip.organ_wind {
+                0.35
+            } else {
+                1.20
+            };
+            let k = 1.0 - (-(BLOCK as f32) / (tau * sr)).exp();
+            strip.organ_wind += k * (target - strip.organ_wind);
+            let trem = if cat_notes > 0 && strip.mod_cur > 1e-4 {
+                strip.organ_trem_phase += TAU * 5.5 * n as f32 / sr;
+                if strip.organ_trem_phase > TAU {
+                    strip.organ_trem_phase -= TAU;
+                }
+                strip.organ_trem_phase.sin() * strip.mod_cur
+            } else {
+                0.0
+            };
+            for a in self
+                .active
+                .iter_mut()
+                .filter(|a| a.ch == ch && cathedral_organ(a.program, a.alt))
+            {
+                a.voice.set_organ_pressure(strip.organ_wind, trem);
+            }
         }
 
         for (ci, strip) in self.strips.iter_mut().enumerate() {
@@ -1495,6 +1592,12 @@ impl EngineCore {
         for buf in self.ch_buf.iter_mut() {
             buf[..n].fill(0.0);
         }
+        for buf in self.legacy_buf.iter_mut() {
+            buf[..n].fill(0.0);
+        }
+        for buf in self.cathedral_buf.iter_mut() {
+            buf[..n].fill(0.0);
+        }
         self.stats.max_polyphony = self.stats.max_polyphony.max(self.active.len());
         self.active.retain_mut(|a| {
             if a.ch == 9 {
@@ -1510,7 +1613,13 @@ impl EngineCore {
                     *x *= a.poly_gain;
                 }
             }
-            let buf = &mut self.ch_buf[a.ch as usize];
+            let buf = if cathedral_organ(a.program, a.alt) {
+                &mut self.cathedral_buf[a.ch as usize]
+            } else if a.program == 19 && a.alt {
+                &mut self.legacy_buf[a.ch as usize]
+            } else {
+                &mut self.ch_buf[a.ch as usize]
+            };
             for (dst, src) in buf[..n].iter_mut().zip(self.scratch[..n].iter()) {
                 *dst += *src;
             }
@@ -1520,6 +1629,7 @@ impl EngineCore {
         self.mix_l[..n].fill(0.0);
         self.mix_r[..n].fill(0.0);
         self.send_rev[..n].fill(0.0);
+        self.send_cathedral[..n].fill(0.0);
         self.send_cho[..n].fill(0.0);
         self.send_del[..n].fill(0.0);
         self.send_sym[..n].fill(0.0);
@@ -1527,6 +1637,8 @@ impl EngineCore {
         self.send_room[..n].fill(0.0);
         for (ci, strip) in self.strips.iter_mut().enumerate() {
             let buf = &mut self.ch_buf[ci];
+            let legacy = &mut self.legacy_buf[ci];
+            let cathedral = &mut self.cathedral_buf[ci];
             if let Some(drive) = &mut strip.drive {
                 drive.process(&mut buf[..n]);
             }
@@ -1538,6 +1650,18 @@ impl EngineCore {
                     for x in buf[..n].iter_mut() {
                         *x = wah.process(*x);
                     }
+                }
+            }
+            if let Some(wah) = &mut strip.wah_legacy {
+                wah.retune_lowpass(strip.cutoff, strip.res, sr);
+                for x in legacy[..n].iter_mut() {
+                    *x = wah.process(*x);
+                }
+            }
+            if let Some(wah) = &mut strip.wah_cathedral {
+                wah.retune_lowpass(strip.cutoff, strip.res, sr);
+                for x in cathedral[..n].iter_mut() {
+                    *x = wah.process(*x);
                 }
             }
             strip.expr += self.expr_smooth * (strip.expr_target - strip.expr);
@@ -1554,7 +1678,29 @@ impl EngineCore {
             let is_piano = ci != 9 && voices::is_acoustic_piano(strip.program);
             let is_ac_gtr = ci != 9 && matches!(strip.program, 24 | 25);
             let haas = strip.haas_delay;
-            for (i, &x) in buf[..n].iter().enumerate() {
+            let legacy_cho = if strip.chorus_authored {
+                strip.chorus_send
+            } else {
+                0.20
+            };
+            let legacy_del = if strip.delay_authored {
+                strip.delay_send
+            } else {
+                0.0
+            };
+            let cathedral_cho = if strip.chorus_authored {
+                strip.chorus_send
+            } else {
+                0.0
+            };
+            let cathedral_del = if strip.delay_authored {
+                strip.delay_send
+            } else {
+                0.0
+            };
+            for i in 0..n {
+                let (ordinary_x, legacy_x, cathedral_x) = (buf[i], legacy[i], cathedral[i]);
+                let x = ordinary_x + legacy_x + cathedral_x;
                 strip.haas.push(x);
                 let (xl, xr) = if haas < 1.0 {
                     (x, x)
@@ -1565,10 +1711,17 @@ impl EngineCore {
                 };
                 self.mix_l[i] += xl * gl;
                 self.mix_r[i] += xr * gr;
-                let xs = x * g;
-                self.send_rev[i] += xs * rs;
-                self.send_cho[i] += xs * strip.chorus_send;
-                self.send_del[i] += xs * strip.delay_send;
+                let (ordinary_s, legacy_s, cathedral_s) =
+                    (ordinary_x * g, legacy_x * g, cathedral_x * g);
+                let xs = ordinary_s + legacy_s + cathedral_s;
+                self.send_rev[i] += (ordinary_s + legacy_s) * rs;
+                self.send_cathedral[i] += cathedral_s * rs;
+                self.send_cho[i] += ordinary_s * strip.chorus_send
+                    + legacy_s * legacy_cho
+                    + cathedral_s * cathedral_cho;
+                self.send_del[i] += ordinary_s * strip.delay_send
+                    + legacy_s * legacy_del
+                    + cathedral_s * cathedral_del;
                 if is_piano {
                     self.send_sym[i] += xs;
                 }
@@ -1662,6 +1815,18 @@ impl EngineCore {
             &mut self.mix_l[..n],
             &mut self.mix_r[..n],
         );
+        self.cathedral.process(
+            &self.send_cathedral[..n],
+            &mut self.mix_l[..n],
+            &mut self.mix_r[..n],
+        );
+        #[cfg(test)]
+        {
+            self.stats.cathedral_return_peak = self
+                .stats
+                .cathedral_return_peak
+                .max(self.cathedral.debug_return_peak());
+        }
         self.glue
             .process(&mut self.mix_l[..n], &mut self.mix_r[..n]);
 
@@ -2269,7 +2434,18 @@ mod tests {
     }
 
     fn render_cc1_program(program: u8, cc1: Option<u8>, cc1_before_note: bool) -> Vec<f32> {
-        let mut events = vec![
+        let mut events = Vec::new();
+        if program == 19 {
+            events.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ));
+        }
+        events.extend([
             (
                 0.0,
                 EvKind::Prog {
@@ -2285,7 +2461,7 @@ mod tests {
                     val: 0,
                 },
             ),
-        ];
+        ]);
         if cc1_before_note {
             if let Some(val) = cc1 {
                 events.push((0.0, EvKind::Cc { ch: 0, num: 1, val }));
@@ -2408,8 +2584,8 @@ mod tests {
         );
         assert!(vibrato_family(110), "GM 110 must take authored CC1 vibrato");
         assert_eq!(
-            fx_profile(110),
-            fx_profile(40),
+            fx_profile(110, false),
+            fx_profile(40, false),
             "GM 110 should use the fiddle bus profile"
         );
 
@@ -2785,13 +2961,13 @@ mod tests {
             "GM22 CC1 should be pitch vibrato, not inert: plain {plain_spread:.2} Hz mod {mod_spread:.2} Hz"
         );
         assert!(
-            !organ_leslie_family(22),
+            !organ_leslie_family(22, false),
             "GM22 must stay out of the Leslie controller branch"
         );
 
         for program in [20u8, 21, 23] {
             assert!(
-                !organ_leslie_family(program),
+                !organ_leslie_family(program, false),
                 "GM{program} must stay out of the Leslie controller branch"
             );
             let plain = render_cc1_program(program, None, true);
@@ -2800,6 +2976,14 @@ mod tests {
         }
 
         let gm19_then_22 = render_cc1_events(vec![
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
             (0.0, EvKind::Prog { ch: 0, prog: 19 }),
             (
                 0.0,
@@ -2815,6 +2999,14 @@ mod tests {
                     ch: 0,
                     num: 1,
                     val: 127,
+                },
+            ),
+            (
+                0.019,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 0,
                 },
             ),
             (0.02, EvKind::Prog { ch: 0, prog: 22 }),
@@ -2852,6 +3044,14 @@ mod tests {
                     val: 127,
                 },
             ),
+            (
+                0.019,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
             (0.02, EvKind::Prog { ch: 0, prog: 19 }),
             (
                 0.05,
@@ -2871,6 +3071,14 @@ mod tests {
         );
 
         let held_gm19_after_prog22 = render_cc1_events(vec![
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
             (0.0, EvKind::Prog { ch: 0, prog: 19 }),
             (
                 0.0,
@@ -2894,6 +3102,14 @@ mod tests {
                     ch: 0,
                     key: 69,
                     vel: 100,
+                },
+            ),
+            (
+                0.59,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 0,
                 },
             ),
             (0.60, EvKind::Prog { ch: 0, prog: 22 }),
@@ -2937,6 +3153,14 @@ mod tests {
                     vel: 100,
                 },
             ),
+            (
+                0.59,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
             (0.60, EvKind::Prog { ch: 0, prog: 19 }),
             (3.85, EvKind::NoteOff { ch: 0, key: 69 }),
         ]);
@@ -2956,6 +3180,14 @@ mod tests {
         );
 
         let reset = render_cc1_events(vec![
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
             (0.0, EvKind::Prog { ch: 0, prog: 19 }),
             (
                 0.0,
@@ -2978,6 +3210,14 @@ mod tests {
                 EvKind::Cc {
                     ch: 0,
                     num: 121,
+                    val: 0,
+                },
+            ),
+            (
+                0.03,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
                     val: 0,
                 },
             ),
@@ -3070,13 +3310,21 @@ mod tests {
         );
     }
 
-    /// CC1 = 127 on an organ spins the tremulant up like a Leslie: the
+    /// CC1 = 127 on the secondary organ spins the tremulant up like a Leslie: the
     /// amplitude-modulation rate must climb over ~2 s, not jump.
     #[test]
     fn cc1_leslie_spins_up_with_inertia() {
         let sr = 44100.0;
         let song = test_song(
             vec![
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 0,
+                        val: 1,
+                    },
+                ),
                 (0.0, EvKind::Prog { ch: 0, prog: 19 }),
                 (
                     0.0,
@@ -4771,7 +5019,7 @@ mod tests {
     #[test]
     fn alt_bank_selects_distinct_voices() {
         let sr = 44100.0;
-        for prog in [42u8, 48, 52] {
+        for prog in [19u8, 42, 48, 52] {
             let alt = left(&render(&test_song(bank_song(Some(1), prog), 2.0), &test_opts(sr)).0);
             let def = left(&render(&test_song(bank_song(None, prog), 2.0), &test_opts(sr)).0);
             assert_eq!(alt.len(), def.len());
@@ -4945,6 +5193,403 @@ mod tests {
         assert!(
             (f - 98.0).abs() <= 3.0,
             "alt GM 14 fundamental {f:.1} Hz is not the key-43 gong"
+        );
+    }
+
+    /// Cathedral GM19 and the legacy CC0=1 GM19 can overlap on one channel
+    /// without sharing their spawn-time tremulant/Leslie, chorus-default, or
+    /// room routes. The oracle compares that overlap with the same two voices
+    /// on separate, identically controlled channels: global linear buses and
+    /// the final glue must see the same signal either way.
+    #[test]
+    fn gm19_bank_overlap_matches_split_channels() {
+        let sr = 44100.0;
+        let overlap_events = |split: bool, first_alt: bool| {
+            let first_ch = 0;
+            let second_ch = u8::from(split);
+            let mut events = vec![];
+            for (ch, alt) in [(first_ch, first_alt), (second_ch, !first_alt)] {
+                events.push((
+                    0.0,
+                    EvKind::Cc {
+                        ch,
+                        num: 0,
+                        val: u8::from(alt),
+                    },
+                ));
+                events.push((0.0, EvKind::Prog { ch, prog: 19 }));
+                if !split {
+                    break;
+                }
+            }
+            events.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: first_ch,
+                    key: 48,
+                    vel: 100,
+                },
+            ));
+            if !split {
+                events.push((
+                    0.30,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 0,
+                        val: u8::from(!first_alt),
+                    },
+                ));
+            }
+            events.push((
+                0.35,
+                EvKind::NoteOn {
+                    ch: second_ch,
+                    key: 60,
+                    vel: 100,
+                },
+            ));
+            for (time, num, val) in [
+                (0.45, 91, 100),
+                (0.50, 1, 90),
+                (0.65, 93, 64),
+                (0.75, 94, 72),
+            ] {
+                events.push((time, EvKind::Cc { ch: 0, num, val }));
+                if split {
+                    events.push((time, EvKind::Cc { ch: 1, num, val }));
+                }
+            }
+            events.push((
+                1.00,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 121,
+                    val: 0,
+                },
+            ));
+            if split {
+                events.push((
+                    1.00,
+                    EvKind::Cc {
+                        ch: 1,
+                        num: 121,
+                        val: 0,
+                    },
+                ));
+            }
+            events.push((
+                1.50,
+                EvKind::NoteOff {
+                    ch: first_ch,
+                    key: 48,
+                },
+            ));
+            events.push((
+                1.70,
+                EvKind::NoteOff {
+                    ch: second_ch,
+                    key: 60,
+                },
+            ));
+            events
+        };
+
+        let mut opts = test_opts(sr);
+        opts.wet = 0.32;
+        opts.delay_s = 0.12;
+        opts.tail = 1.0;
+        for first_alt in [false, true] {
+            let overlap = render(&test_song(overlap_events(false, first_alt), 2.0), &opts).0;
+            let split = render(&test_song(overlap_events(true, first_alt), 2.0), &opts).0;
+            assert_eq!(overlap.len(), split.len());
+            let diff: Vec<f32> = overlap.iter().zip(&split).map(|(x, y)| x - y).collect();
+            let ratio = rms(&diff) / rms(&split).max(1e-9);
+            assert!(
+                ratio < 2e-4,
+                "held GM19 routes leaked with first_alt={first_alt}: diff/base {ratio:.6}"
+            );
+        }
+    }
+
+    #[test]
+    fn default_gm19_cc1_is_fixed_cathedral_tremulant() {
+        let sr = 44100.0;
+        let mut core = EngineCore::new(CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: false,
+            drum_room_on: false,
+        });
+        core.handle_event(EvKind::Prog { ch: 0, prog: 19 });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 1,
+            val: 127,
+        });
+        core.handle_event(EvKind::NoteOn {
+            ch: 0,
+            key: 57,
+            vel: 100,
+        });
+        let mut block = [0.0f32; BLOCK * 2];
+        for _ in 0..20 {
+            core.render_block_add(BLOCK, &mut block);
+        }
+        let rate_at = |core: &mut EngineCore, block: &mut [f32; BLOCK * 2]| {
+            let before = core.strips[0].organ_trem_phase;
+            block.fill(0.0);
+            core.render_block_add(BLOCK, block);
+            let after = core.strips[0].organ_trem_phase;
+            let delta = (after - before).rem_euclid(TAU);
+            delta * sr / (TAU * BLOCK as f32)
+        };
+        let early = rate_at(&mut core, &mut block);
+        for _ in 0..500 {
+            block.fill(0.0);
+            core.render_block_add(BLOCK, &mut block);
+        }
+        let late = rate_at(&mut core, &mut block);
+        assert!(
+            (5.4..=5.6).contains(&early) && (5.4..=5.6).contains(&late),
+            "cathedral tremulant must stay near 5.5 Hz: early {early:.2}, late {late:.2}"
+        );
+        assert!(
+            (late - early).abs() <= 0.01,
+            "cathedral tremulant must not Leslie-ramp: early {early:.2}, late {late:.2}"
+        );
+        assert!(!organ_leslie_family(19, false));
+        assert!(organ_leslie_family(19, true));
+    }
+
+    #[test]
+    fn cathedral_organ_low_chord_and_pedal_keep_mix_headroom() {
+        let sr = 44_100.0;
+        let chord_events = |keys: &[u8]| {
+            let mut events = vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 7,
+                        val: 127,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 11,
+                        val: 127,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 91,
+                        val: 127,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 93,
+                        val: 0,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 94,
+                        val: 0,
+                    },
+                ),
+            ];
+            for &key in keys {
+                events.push((
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key,
+                        vel: 100,
+                    },
+                ));
+                events.push((2.20, EvKind::NoteOff { ch: 0, key }));
+            }
+            events
+        };
+        let mut opts = test_opts(sr);
+        opts.wet = 0.32;
+        opts.tail = 2.0;
+
+        let low_keys = [24, 28, 31, 36, 40, 43, 48, 52];
+        let (_low_render, low_stats) = render(&test_song(chord_events(&low_keys), 2.4), &opts);
+        assert!(
+            low_stats.cathedral_return_peak < 1.0,
+            "dense low chord cathedral return peaked at {}",
+            low_stats.cathedral_return_peak
+        );
+
+        let plenum = [48, 55, 60, 64, 67, 72, 76];
+        let mut plenum_with_pedal = plenum.to_vec();
+        plenum_with_pedal.push(36);
+        let (without, without_stats) = render(&test_song(chord_events(&plenum), 2.4), &opts);
+        let (with, with_stats) = render(&test_song(chord_events(&plenum_with_pedal), 2.4), &opts);
+        let peak_delta_db = 20.0 * (with_stats.peak / without_stats.peak.max(1e-12)).log10();
+        assert!(
+            peak_delta_db <= 3.0,
+            "adding the 32-foot pedal raised raw peak {peak_delta_db:.2}dB"
+        );
+
+        let normalized_midband = |stereo: &[f32], peak: f32| {
+            let mut hp = Biquad::highpass(250.0, 0.707, sr);
+            let mut lp = Biquad::lowpass(8_000.0, 0.707, sr);
+            let scale = 10f32.powf(-1.0 / 20.0) / peak.max(1e-12);
+            let from = (0.40 * sr) as usize;
+            let to = (1.80 * sr) as usize;
+            let mut energy = 0.0f64;
+            let mut count = 0usize;
+            for (frame, pair) in stereo.chunks_exact(2).enumerate() {
+                let mono = 0.5 * (pair[0] + pair[1]) * scale;
+                let filtered = lp.process(hp.process(mono));
+                if (from..to).contains(&frame) {
+                    energy += (filtered as f64) * (filtered as f64);
+                    count += 1;
+                }
+            }
+            (energy / count.max(1) as f64).sqrt() as f32
+        };
+        let mid_without = normalized_midband(&without, without_stats.peak);
+        let mid_with = normalized_midband(&with, with_stats.peak);
+        let mid_loss_db = 20.0 * (mid_with / mid_without.max(1e-12)).log10();
+        assert!(
+            mid_loss_db >= -1.5,
+            "32-foot pedal cost {mid_loss_db:.2}dB of normalized 250Hz-8kHz level"
+        );
+    }
+
+    #[test]
+    fn cathedral_organ_wind_load_settles_and_recovers() {
+        let sr = 44_100.0;
+        let mut core = EngineCore::new(CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: false,
+            drum_room_on: false,
+        });
+        core.handle_event(EvKind::Prog { ch: 0, prog: 19 });
+        for key in [36, 43, 48, 52, 55, 60, 64, 67, 72, 76] {
+            core.handle_event(EvKind::NoteOn {
+                ch: 0,
+                key,
+                vel: 100,
+            });
+        }
+        let mut block = [0.0f32; BLOCK * 2];
+        for _ in 0..((1.5 * sr) as usize / BLOCK) {
+            block.fill(0.0);
+            core.render_block_add(BLOCK, &mut block);
+        }
+        assert!(
+            (0.95..=1.0).contains(&core.strips[0].organ_wind),
+            "ten-note wind load settled at {}",
+            core.strips[0].organ_wind
+        );
+
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 123,
+            val: 0,
+        });
+        for _ in 0..((2.0 * sr) as usize / BLOCK) {
+            block.fill(0.0);
+            core.render_block_add(BLOCK, &mut block);
+        }
+        assert!(
+            core.strips[0].organ_wind < 0.25,
+            "wind chest had not recovered after two seconds: {}",
+            core.strips[0].organ_wind
+        );
+    }
+
+    /// Manual release-mode gate from signed HLD AC12. Run explicitly with
+    /// `cargo test --release cathedral_organ_render_budget -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn cathedral_organ_render_budget() {
+        use std::time::Instant;
+
+        fn chord(alt: bool) -> Vec<(f64, EvKind)> {
+            let keys = [
+                36u8, 40, 43, 48, 52, 55, 60, 64, 67, 72, 76, 79, 84, 88, 91, 96,
+            ];
+            let mut ev = Vec::new();
+            if alt {
+                ev.push((
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 0,
+                        val: 1,
+                    },
+                ));
+            }
+            ev.push((0.0, EvKind::Prog { ch: 0, prog: 19 }));
+            ev.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 91,
+                    val: 0,
+                },
+            ));
+            ev.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ));
+            for &key in &keys {
+                ev.push((
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key,
+                        vel: 100,
+                    },
+                ));
+                ev.push((4.8, EvKind::NoteOff { ch: 0, key }));
+            }
+            ev
+        }
+
+        let opts = test_opts(44100.0);
+        let legacy = test_song(chord(true), 5.0);
+        let cathedral = test_song(chord(false), 5.0);
+        let _ = render(&legacy, &opts);
+        let _ = render(&cathedral, &opts);
+        let t0 = Instant::now();
+        let _ = render(&legacy, &opts);
+        let old = t0.elapsed();
+        let t1 = Instant::now();
+        let _ = render(&cathedral, &opts);
+        let new = t1.elapsed();
+        let ratio = new.as_secs_f64() / old.as_secs_f64().max(1e-9);
+        println!("16-note 5 s GM19: legacy {old:?}, cathedral {new:?}, ratio {ratio:.2}x");
+        assert!(
+            ratio <= 3.0,
+            "cathedral render budget {ratio:.2}x exceeds 3x"
         );
     }
 }

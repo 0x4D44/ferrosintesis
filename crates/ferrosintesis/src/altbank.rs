@@ -992,6 +992,10 @@ pub(crate) fn choir2_reg_weight(key: u8, section: usize) -> f32 {
 
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
     match program {
+        // The best church organ is the default GM19; CC0 selects the exact
+        // pre-v0.12 pipe-bank/Leslie voice for scores that intentionally want
+        // that secondary colour (notably The Ninth Bell).
+        19 => crate::voices::legacy_church_organ(key, vel, sr, seed),
         40..=43 => {
             let model = Box::new(Bowed::new(program, key, vel, sr, seed));
             if samples {

@@ -163,7 +163,8 @@ class Score:
 
     def cc(self, ch: int, num: int, val: int, beat: float) -> None:
         self.events.setdefault(ch, []).append(
-            (tick(beat), 2, bytes([0xB0 | ch, num & 0x7F, int(clamp(val, 0, 127))]))
+            (tick(beat), 0 if num == 0 else 2,
+             bytes([0xB0 | ch, num & 0x7F, int(clamp(val, 0, 127))]))
         )
 
     def aftertouch(self, ch: int, val: int, beat: float) -> None:

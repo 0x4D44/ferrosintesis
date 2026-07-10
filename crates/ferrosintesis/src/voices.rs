@@ -3113,6 +3113,10 @@ impl Voice for Bowed {
 const LA_VIOLIN: (f32, (f32, f32)) = (0.30, (0.12, 0.38));
 const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 const LA_PIANO: (f32, (f32, f32)) = (0.42, (0.18, 0.85));
+const LA_BRASS: (f32, (f32, f32)) = (0.35, (0.10, 0.32));
+/// GM 61 brass section: trumpet bank at reduced gain so the modeled
+/// scattered player onsets stay audible underneath (HLD §4).
+const LA_BRASS_SECTION_GAIN: f32 = 0.6;
 
 // ---------------------------------------------------------------------------
 // Orchestra Hit (GM 55)
@@ -4565,7 +4569,29 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         48..=51 => Box::new(strings(program, key, vel, sr, seed)),
         52..=54 => Box::new(choir(program, key, vel, sr, seed)),
         55 => Box::new(orch_hit(key, vel, sr, seed)),
-        56..=63 => Box::new(brass(program, key, vel, sr, seed)),
+        56..=61 => {
+            let model = Box::new(brass(program, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_BRASS;
+                let gain = if program == 61 {
+                    gain * LA_BRASS_SECTION_GAIN
+                } else {
+                    gain
+                };
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::brass_bank(program, vel),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
+        62 | 63 => Box::new(brass(program, key, vel, sr, seed)), // synth brass: pure model
         64..=71 | 109 | 111 => Box::new(reed(program, key, vel, sr, seed)),
         72..=79 => {
             let model = Box::new(Wind::new(

@@ -14,6 +14,13 @@ crossfades into the modeled sustain.
 - `violin_*_f.wav` / `violin_*_p.wav` — solo violin arco, forte / piano
   (selected by note velocity), 6 pitch zones each, ~0.63 s
 - `flute_*.wav` — flute sustain onsets, 5 pitch zones, ~0.63 s
+- `trumpet_*_{p,f}.wav`, `mutetpt_*_{p,f}.wav` (straight mute — its own
+  bank, the mute identity is attack-critical), `trombone_*_{p,f}.wav`,
+  `tuba_*_{p,f}.wav`, `horn_*_{p,f}.wav` — brass sustain onsets for
+  GM 56–61, 5–6 pitch zones × 2 dynamic layers (VSCO v1 → p, v3 → f;
+  the horn's top D4 zone exists only as v1 at the pinned rev and is
+  reused for both layers), ~0.63 s. GM 61 (section) layers the trumpet
+  bank at reduced gain over its scattered modeled players.
 - `drum_sus_cymb1_*`, `drum_crash1_*`, `drum_kick_*`, `drum_snare2_*`
   — unpitched drum-hit overlays for the default kit: crash/suspended cymbal
   attacks kept to ~2.2 s, kick/snare attacks kept to ~0.46 s. The modeled drum

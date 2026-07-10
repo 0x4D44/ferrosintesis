@@ -211,6 +211,142 @@ fn piano_f_rr2() -> &'static [Zone] {
     })
 }
 
+fn trumpet_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "trumpet_F2_p.wav" => 174.88,
+            "trumpet_C3_p.wav" => 259.21,
+            "trumpet_G3_p.wav" => 392.78,
+            "trumpet_D4_p.wav" => 586.53,
+            "trumpet_A4_p.wav" => 877.64,
+        )
+    })
+}
+
+fn trumpet_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "trumpet_F2_f.wav" => 172.61,
+            "trumpet_C3_f.wav" => 261.15,
+            "trumpet_G3_f.wav" => 393.83,
+            "trumpet_D4_f.wav" => 588.04,
+            "trumpet_A4_f.wav" => 886.84,
+        )
+    })
+}
+
+fn mutetpt_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "mutetpt_A#2_p.wav" => 232.97,
+            "mutetpt_D3_p.wav" => 293.86,
+            "mutetpt_G3_p.wav" => 392.99,
+            "mutetpt_D4_p.wav" => 586.63,
+            "mutetpt_A4_p.wav" => 880.37,
+        )
+    })
+}
+
+fn mutetpt_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "mutetpt_A#2_f.wav" => 233.07,
+            "mutetpt_D3_f.wav" => 293.30,
+            "mutetpt_G3_f.wav" => 392.47,
+            "mutetpt_D4_f.wav" => 586.39,
+            "mutetpt_A4_f.wav" => 880.34,
+        )
+    })
+}
+
+fn trombone_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "trombone_F1_p.wav" => 87.34,
+            "trombone_A#1_p.wav" => 116.31,
+            "trombone_D2_p.wav" => 146.73,
+            "trombone_F2_p.wav" => 174.45,
+            "trombone_C3_p.wav" => 261.43,
+            "trombone_F3_p.wav" => 349.09,
+        )
+    })
+}
+
+fn trombone_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "trombone_F1_f.wav" => 87.21,
+            "trombone_A#1_f.wav" => 116.56,
+            "trombone_D2_f.wav" => 146.73,
+            "trombone_F2_f.wav" => 174.53,
+            "trombone_C3_f.wav" => 261.56,
+            "trombone_F3_f.wav" => 349.05,
+        )
+    })
+}
+
+fn tuba_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "tuba_A#0_p.wav" => 58.01,
+            "tuba_D#1_p.wav" => 78.25,
+            "tuba_A#1_p.wav" => 116.03,
+            "tuba_D2_p.wav" => 146.34,
+            "tuba_F2_p.wav" => 174.46,
+            "tuba_A#2_p.wav" => 231.99,
+        )
+    })
+}
+
+fn tuba_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "tuba_A#0_f.wav" => 58.35,
+            "tuba_D#1_f.wav" => 77.78,
+            "tuba_A#1_f.wav" => 116.34,
+            "tuba_D2_f.wav" => 145.88,
+            "tuba_F2_f.wav" => 174.42,
+            "tuba_A#2_f.wav" => 233.19,
+        )
+    })
+}
+
+fn horn_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "horn_A#1_p.wav" => 116.90,
+            "horn_D2_p.wav" => 148.36,
+            "horn_F2_p.wav" => 173.95,
+            "horn_A2_p.wav" => 219.46,
+            "horn_C3_p.wav" => 260.59,
+            "horn_D4_p.wav" => 604.11,
+        )
+    })
+}
+
+fn horn_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "horn_A#1_f.wav" => 116.81,
+            "horn_D2_f.wav" => 146.41,
+            "horn_F2_f.wav" => 173.93,
+            "horn_A2_f.wav" => 219.08,
+            "horn_C3_f.wav" => 260.84,
+            "horn_D4_f.wav" => 604.11,
+        )
+    })
+}
+
 fn drum_crash() -> &'static [HitSample] {
     static B: OnceLock<Vec<HitSample>> = OnceLock::new();
     B.get_or_init(|| {
@@ -258,6 +394,50 @@ pub fn flute_bank() -> &'static [Zone] {
     flute()
 }
 
+/// Bank for the layered brass programs (GM 56–61). Velocity picks the
+/// dynamic layer (VSCO v1 → p, v3 → f, threshold as `violin_bank`);
+/// 61 (section) shares the trumpet bank at reduced wrap gain.
+pub fn brass_bank(program: u8, vel: u8) -> &'static [Zone] {
+    let f = vel >= 80;
+    match program {
+        57 => {
+            if f {
+                trombone_f()
+            } else {
+                trombone_p()
+            }
+        }
+        58 => {
+            if f {
+                tuba_f()
+            } else {
+                tuba_p()
+            }
+        }
+        59 => {
+            if f {
+                mutetpt_f()
+            } else {
+                mutetpt_p()
+            }
+        }
+        60 => {
+            if f {
+                horn_f()
+            } else {
+                horn_p()
+            }
+        }
+        _ => {
+            if f {
+                trumpet_f()
+            } else {
+                trumpet_p()
+            }
+        }
+    }
+}
+
 pub fn drum_crash_bank() -> &'static [HitSample] {
     drum_crash()
 }
@@ -280,6 +460,10 @@ pub fn prewarm() {
     let _ = violin_bank(1);
     let _ = violin_bank(127);
     let _ = flute_bank();
+    for program in 56..=60 {
+        let _ = brass_bank(program, 1);
+        let _ = brass_bank(program, 127);
+    }
     let _ = drum_crash_bank();
     let _ = drum_kick_bank();
     let _ = drum_snare_bank();
@@ -550,9 +734,20 @@ mod tests {
             .chain(piano_pp_rr2())
             .chain(piano_mf_rr2())
             .chain(piano_f_rr2())
+            .chain(trumpet_p())
+            .chain(trumpet_f())
+            .chain(mutetpt_p())
+            .chain(mutetpt_f())
+            .chain(trombone_p())
+            .chain(trombone_f())
+            .chain(tuba_p())
+            .chain(tuba_f())
+            .chain(horn_p())
+            .chain(horn_f())
         {
             assert!(z.data.len() > 20_000, "zone too short: {}", z.data.len());
-            assert!((40.0..2500.0).contains(&z.root), "odd root {}", z.root);
+            // the tuba bank reaches A#0 (~29 Hz), hence the low floor
+            assert!((25.0..2500.0).contains(&z.root), "odd root {}", z.root);
             let peak = z.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
             assert!(peak > 0.5, "zone not normalised: peak {peak}");
         }
@@ -592,17 +787,92 @@ mod tests {
         assert!((hz - 440.0).abs() < 12.0, "measured {hz} Hz");
     }
 
+    /// The brass sample layer must not shift perceived pitch: Goertzel peak
+    /// through the crossfade window (zero-crossing counters lie when a layer
+    /// brightens a voice — lessons_learnt 2026.07.07).
+    #[test]
+    fn la_brass_pitch_integrity() {
+        let sr = 44100.0;
+        for (program, key, name) in [
+            (56u8, 69u8, "trumpet"),
+            (57, 55, "trombone"),
+            (58, 40, "tuba"),
+            (59, 69, "muted-trumpet"),
+            (60, 62, "french-horn"),
+            (61, 69, "brass-section"),
+        ] {
+            let f0 = crate::dsp::key_freq(key);
+            let mut v = voices::make(program, key, 100, sr, 5, true);
+            let mut buf = vec![0f32; 44100];
+            v.render(&mut buf);
+            // 0.15–0.55 s spans the fade tail and the handed-over sustain
+            let hz = crate::testutil::peak_locate(&buf[6615..24255], sr, f0 * 0.8, f0 * 1.25);
+            let cents = 1200.0 * (hz / f0).log2();
+            assert!(
+                cents.abs() < 45.0,
+                "{name}: layered pitch {hz:.2} Hz vs nominal {f0:.2} Hz ({cents:.0} cents)"
+            );
+        }
+    }
+
+    /// The layer must be audible, not just present (lessons_learnt
+    /// 2026.07.06): samples-on vs samples-off of the same note must differ
+    /// materially in the first 50 ms, and for the bright programs the real
+    /// attack must raise the high-band fraction (the sampled bite) over the
+    /// model's synthetic chiff. The french horn is exempt from the HF check:
+    /// its hand-in-bell attack is genuinely dark (measured on ≈ off).
+    #[test]
+    fn la_brass_attack_sharpness() {
+        let sr = 44100.0;
+        for (program, key, hf_gain, name) in [
+            (56u8, 69u8, 1.5f32, "trumpet"),
+            (57, 55, 1.3, "trombone"),
+            (58, 40, 2.0, "tuba"),
+            (59, 69, 1.3, "muted-trumpet"),
+            (60, 62, 0.0, "french-horn"),
+            (61, 69, 1.05, "brass-section"),
+        ] {
+            let early = |samples: bool| {
+                let mut v = voices::make(program, key, 100, sr, 5, samples);
+                let mut buf = vec![0f32; (0.05 * sr) as usize];
+                v.render(&mut buf);
+                buf
+            };
+            let (on, off) = (early(true), early(false));
+            let diff: Vec<f32> = on.iter().zip(&off).map(|(a, b)| a - b).collect();
+            let (d, o) = (crate::testutil::rms(&diff), crate::testutil::rms(&off));
+            assert!(
+                d > 0.3 * o,
+                "{name}: onset barely changes with the layer (diff {d:.5} vs off {o:.5})"
+            );
+            let hf_frac = |buf: &[f32]| {
+                crate::testutil::hp_rms(buf, sr, 1500.0) / crate::testutil::rms(buf).max(1e-9)
+            };
+            let (r_on, r_off) = (hf_frac(&on), hf_frac(&off));
+            assert!(
+                r_on > r_off * hf_gain,
+                "{name}: attack not sharper: hf-frac on {r_on:.4} vs off {r_off:.4}"
+            );
+        }
+    }
+
     /// The sampled attack must hand over to the model without a level jump.
     #[test]
     fn la_level_continuity() {
         let sr = 44100.0;
-        for (program, name) in [
-            (40u8, "fiddle"),
-            (110u8, "fiddle-110"),
-            (73u8, "flute"),
-            (0u8, "piano"),
+        for (program, key, name) in [
+            (40u8, 69u8, "fiddle"),
+            (110u8, 69, "fiddle-110"),
+            (73u8, 69, "flute"),
+            (0u8, 69, "piano"),
+            (56u8, 69, "trumpet"),
+            (57u8, 55, "trombone"),
+            (58u8, 40, "tuba"),
+            (59u8, 69, "muted-trumpet"),
+            (60u8, 62, "french-horn"),
+            (61u8, 69, "brass-section"),
         ] {
-            let mut v = voices::make(program, 69, 100, sr, 5, true);
+            let mut v = voices::make(program, key, 100, sr, 5, true);
             let mut buf = vec![0f32; 44100]; // 1 s, note held
             v.render(&mut buf);
             let rms = |a: usize, b: usize| {

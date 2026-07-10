@@ -1006,6 +1006,10 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         45 => Box::new(Pluck::new(&PIZZ, key, vel, sr, seed)),
         48..=51 => Box::new(strings(program, key, vel, sr, seed)),
         52..=54 => Box::new(choir_v2(program, key, vel, sr, seed, 1.0)),
+        // Alt-bank brass stays the frozen v0.9 pure model: the default bank's
+        // sampled attack layer (voices.rs LA_BRASS) must not reach alt-bank
+        // channels, so the fall-through pins samples off for 56–61.
+        56..=61 => crate::voices::make(program, key, vel, sr, seed, false),
         _ => crate::voices::make(program, key, vel, sr, seed, samples),
     }
 }

@@ -32,6 +32,16 @@ docs; `wrk_journals/` engineer's log.
 
 ## Commands
 
+> **Run every build/render below from a task worktree — never the main clone
+> `D:\language\midi-music`.** These commands write into the working tree:
+> `render_opus.py` **rewrites committed `listening/*.opus` in place**, `build.py`
+> rewrites `.mid` / `album_manifest.json`, and `cargo` emits `.wav` / `target/`.
+> Run in the main clone they dirty the sacred trunk-holder (violating
+> worktree-first) and block its `git pull --ff-only`. The git guards protect the
+> *ref*, not the working tree — nothing stops a Python/cargo run from soiling it.
+> "From the repo root" below therefore means **the worktree's root**, not the
+> main clone.
+
 ### ferrosintesis (Rust) — from the repo root
 ```
 cargo build --release -p ferrosintesis-cli  # target/release/ferrosintesis

@@ -51,10 +51,48 @@ SOURCES = {
     )
     for n in ("C2", "G2", "C3", "G3", "C4", "G4", "C5", "G5", "C6")
     for d in ("pp", "mf", "f")
+} | {
+    # brass sustain onsets — VSCO dynamic layers: v1 -> p, v3 -> f
+    f"trumpet_{n}_{d}.wav":
+        f"{BASE}/Brass/Trumpet/sus/Sum_SHTrumpet_sus_{n}_{v}_rr1.wav"
+    for n in ("F2", "C3", "G3", "D4", "A4")
+    for d, v in (("p", "v1"), ("f", "v3"))
+} | {
+    f"mutetpt_{n}_{d}.wav":
+        f"{BASE}/Brass/Trumpet/straightM-sus/Sum_SHTrumpet_straightM-sus_"
+        f"{n.replace('#', '%23')}_{v}_rr1.wav"
+    for n in ("A#2", "D3", "G3", "D4", "A4")
+    for d, v in (("p", "v1"), ("f", "v3"))
+} | {
+    f"trombone_{n}_{d}.wav":
+        f"{BASE}/Brass/Tenor%20Trombone/sus/tenortbn_sus_"
+        f"{n.replace('#', '%23')}_{v}_1.wav"
+    for n in ("F1", "A#1", "D2", "F2", "C3", "F3")
+    for d, v in (("p", "v1"), ("f", "v3"))
+} | {
+    f"tuba_{n}_{d}.wav":
+        f"{BASE}/Brass/Tuba/sus/Tuba3_sus_{n.replace('#', '%23')}_{v}_rr1_Mid.wav"
+    for n in ("A#0", "D#1", "A#1", "D2", "F2", "A#2")
+    for d, v in (("p", "v1"), ("f", "v3"))
+} | {
+    # F Horn: D4 has only v1 at the pinned rev; reuse it for the f layer
+    f"horn_{n}_{d}.wav":
+        f"{BASE}/Brass/F%20Horn/sus/MOHorn_sus_{n.replace('#', '%23')}_"
+        f"{('v1' if n == 'D4' else v)}_1.wav"
+    for n in ("A#1", "D2", "F2", "A2", "C3", "D4")
+    for d, v in (("p", "v1"), ("f", "v3"))
 } | DRUM_SOURCES
 
-# f0 search range per family (the default misses the piano's low octaves)
-F0_RANGE = {"piano": (45.0, 2500.0)}
+# f0 search range per family (the default misses the piano's low octaves
+# and the low brass fundamentals)
+F0_RANGE = {
+    "piano": (45.0, 2500.0),
+    "trumpet": (80.0, 1200.0),
+    "mutetpt": (80.0, 1200.0),
+    "trombone": (35.0, 600.0),
+    "tuba": (40.0, 300.0),
+    "horn": (25.0, 600.0),
+}
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 KEEP_FAM = {"piano": (1.8, 0.6)}  # (keep_s, fade_s)

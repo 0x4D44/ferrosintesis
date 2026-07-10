@@ -41,10 +41,16 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   three-theme stack then worked first try. Compose-to-pass beats
   verify-after-the-fact for generative music.
 - 2026.07.06 — **A movement-verified render does not verify the album.**
-  Engines with one seeded RNG stream (Hollow Hill / Signal Fire engine.py)
-  re-roll every downstream jitter when any upstream movement changes an
-  event count — per-movement click scans and velocity means shift on the
-  final assembly. Always re-measure the assembled build.
+  Engines with one seeded RNG stream (Hollow Hill / Signal Fire / Through
+  Lines engine.py) re-roll every downstream jitter when any upstream movement
+  changes an event count — per-movement click scans and velocity means shift on
+  the final assembly. Always re-measure the assembled build. Corollary
+  (2026.07.11, T16 Three-Sixty-One): a note authored AT a section boundary with
+  jt>0 can then jitter ACROSS it into a stricter oracle's counted window — an
+  outro harp arp's first note (beat 640, `en.arp` jt=4) bled into the finale's
+  [544,640) dive count (385 vs 384) after new notes shifted the stream, even
+  while `check_movement_bounds`' 0.05 seam tolerated it. Make boundary-straddling
+  emitters jt=0.
 - 2026.07.06 — **Same-pitch overlapping notes are a silent GM portability
   bug.** ferrosintesis matches note-offs oldest-first so overlaps render
   fine locally, but kill-newest GM synths chop the re-strike. The Signal

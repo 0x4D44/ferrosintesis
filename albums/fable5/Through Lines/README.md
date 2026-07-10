@@ -1,13 +1,14 @@
 # Through Lines
 
-A fifteen-track double album by Claude Fable 5. Concept, track notes and the
+A fifteen-track double album (plus a bonus finale reprise, *Three-Sixty-One*) by
+Claude Fable 5. Concept, track notes and the
 through-line map live in `ALBUM.md`; the design document is
 `wrk_docs/2026.07.09 - HLD - Through Lines double album.md` at the repo root.
 
 ## Layout
 
 The album uses the **federated movements shape**: `conductor.py` holds the
-`Part` class and the 15-track registry; each track module
+`Part` class and the track registry (fifteen plus the bonus); each track module
 `movements/tNN_<stem>.py` is self-contained — its `Part` grid (movements,
 tempo map, meters, key signatures, channels), its movement builders, its
 verification config, its structural `oracles()` and its render-side
@@ -19,7 +20,7 @@ recomputed from there, never re-typed.
 ## Rebuild and verify (stdlib Python only)
 
 ```
-python build.py                     # rebuild all 15 MIDIs + album_manifest.json
+python build.py                     # rebuild all 16 MIDIs + album_manifest.json
 python build.py --track N           # rebuild one track
 python build.py --verify            # every oracle over every track (exit != 0 on failure)
 python build.py --track N --verify  # one track's oracles (the composing loop)
@@ -37,7 +38,7 @@ its GM 112-119 voices, gong alt-bank and brush kit):
 
 ```
 cargo build --release -p ferrosintesis-cli      # from the repo root
-bash render_all.sh                              # all 15 tracks -> audio/*.wav (parallel)
+bash render_all.sh                              # all 16 tracks -> audio/*.wav (parallel)
 python analyze.py                               # generic + per-track audio oracles
 python analyze.py --track N                     # one track
 ```

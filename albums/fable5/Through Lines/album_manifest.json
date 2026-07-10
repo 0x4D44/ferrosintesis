@@ -1,10 +1,10 @@
 {
   "album": "Through Lines",
   "artist": "Claude Fable 5",
-  "style": "A fifteen-track double album: Disc 1 'Lines of Descent' (ideas \u2014 self-portrait, model lineage, evolution, the world, memory, process, weather), Disc 2 'Lines of Flight' (spectacles \u2014 the AquaTheater trilogy, an action cue, night jazz, bronze, a medley suite, a lullaby). Leitmotifs are machine-verified wherever they recur.",
-  "track_count": 15,
-  "total_duration_seconds": 5152.86,
-  "total_duration_minutes": 85.88,
+  "style": "A fifteen-track double album (with a bonus finale reprise, 'Three-Sixty-One'): Disc 1 'Lines of Descent' (ideas \u2014 self-portrait, model lineage, evolution, the world, memory, process, weather), Disc 2 'Lines of Flight' (spectacles \u2014 the AquaTheater trilogy, an action cue, night jazz, bronze, a medley suite, a lullaby). Leitmotifs are machine-verified wherever they recur.",
+  "track_count": 16,
+  "total_duration_seconds": 5477.12,
+  "total_duration_minutes": 91.29,
   "tracks": [
     {
       "number": 1,
@@ -954,6 +954,79 @@
           "start_seconds": 140.0,
           "end_seconds": 208.32,
           "time": "2:20"
+        }
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Three-Sixty-One",
+      "file": "midi/16 - Three-Sixty-One.mid",
+      "duration_seconds": 324.26,
+      "duration_minutes": 5.4,
+      "movements": [
+        {
+          "name": "I. House Lights",
+          "start_beat": 0.0,
+          "end_beat": 64.0,
+          "start_seconds": 0.0,
+          "end_seconds": 30.0,
+          "time": "0:00"
+        },
+        {
+          "name": "II. First Climb",
+          "start_beat": 64.0,
+          "end_beat": 160.0,
+          "start_seconds": 30.0,
+          "end_seconds": 75.0,
+          "time": "0:30"
+        },
+        {
+          "name": "III. Drop One",
+          "start_beat": 160.0,
+          "end_beat": 288.0,
+          "start_seconds": 75.0,
+          "end_seconds": 135.0,
+          "time": "1:15"
+        },
+        {
+          "name": "IV. Aerial (half time)",
+          "start_beat": 288.0,
+          "end_beat": 320.0,
+          "start_seconds": 135.0,
+          "end_seconds": 165.0,
+          "time": "2:15"
+        },
+        {
+          "name": "V. Second Climb",
+          "start_beat": 320.0,
+          "end_beat": 416.0,
+          "start_seconds": 165.0,
+          "end_seconds": 210.0,
+          "time": "2:45"
+        },
+        {
+          "name": "VI. Drop Two - Full Company",
+          "start_beat": 416.0,
+          "end_beat": 544.0,
+          "start_seconds": 210.0,
+          "end_seconds": 270.0,
+          "time": "3:30"
+        },
+        {
+          "name": "VII. Three-Sixty (the stack)",
+          "start_beat": 544.0,
+          "end_beat": 640.0,
+          "start_seconds": 270.0,
+          "end_seconds": 315.0,
+          "time": "4:30"
+        },
+        {
+          "name": "VIII. Splashdown",
+          "start_beat": 640.0,
+          "end_beat": 660.0,
+          "start_seconds": 315.0,
+          "end_seconds": 324.38,
+          "time": "5:15"
         }
       ]
     }

@@ -83,6 +83,9 @@ are the albums the synth is specifically tuned for.
 - **Atlas of Becoming** — *cinematic / progressive / orchestral collage*, 61:20 ·
   14 tracks. Aquatic spectacle, the contemporary world, biological evolution, linked
   song-form, the GPT lineage, a fast spy-film pursuit, and five freely chosen worlds.
+- **The Architecture of Air** — *cathedral organ / cinematic*, 6:52 · one large-form
+  piece. The default GM19 organ moves from exposed 32-foot pedal through principals,
+  tremulant, wind-chest load, high mixtures, full organ, and a room-only coda.
 
 ## How a track is made
 

@@ -158,6 +158,18 @@ struct StrikeGlide {
     floor: f32,
 }
 
+/// Mode-group bloom (v0.12 alt-bank tam-tam): the modes at index >= `from`
+/// fade in over an attack ramp of their own, so a gong's shimmer partials
+/// swell AFTER the fundamental speaks. `None` on every pre-existing voice —
+/// the render loop branches OUTSIDE the per-sample multiply, so a bloom-less
+/// Modal renders token-identically to before the field existed.
+#[derive(Clone, Copy)]
+struct ModeBloom {
+    from: usize,
+    env: f32,
+    att: f32,
+}
+
 struct ModalAmpTrem {
     osc: Sine,
     depth: f32,
@@ -194,6 +206,7 @@ pub struct Modal {
     bend: f32,
     strike_glide: Option<StrikeGlide>,
     amp_trem: Option<ModalAmpTrem>,
+    bloom: Option<ModeBloom>,
 }
 
 impl Modal {
@@ -240,6 +253,7 @@ impl Modal {
             bend: 1.0,
             strike_glide: None,
             amp_trem: None,
+            bloom: None,
         }
     }
 
@@ -263,6 +277,21 @@ impl Modal {
                 floor,
             });
             self.apply_pitch();
+        }
+        self
+    }
+
+    /// v0.12 tam-tam: the modes at index >= `from` bloom in over `bloom_s`
+    /// seconds instead of speaking at the strike. Only the alt-bank gong
+    /// calls this — every other Modal keeps `bloom: None` and renders
+    /// through the untouched fast path.
+    fn with_mode_bloom(mut self, from: usize, bloom_s: f32) -> Self {
+        if bloom_s > 0.0 && from < self.modes.len() {
+            self.bloom = Some(ModeBloom {
+                from,
+                env: 0.0,
+                att: 1.0 / (bloom_s * self.sr),
+            });
         }
         self
     }
@@ -304,27 +333,60 @@ impl Modal {
 
 impl Voice for Modal {
     fn render(&mut self, out: &mut [f32]) -> bool {
-        for o in out.iter_mut() {
-            let mut s = 0.0;
-            for m in &mut self.modes {
-                if m.active {
-                    s += m.amp * m.osc.next();
+        // The bloom branch lives OUTSIDE the per-sample loop: a voice with
+        // `bloom: None` (every pre-v0.12 Modal) runs the second arm, which is
+        // token-identical to the pre-bloom loop — never a multiply-by-1.0.
+        if let Some(ModeBloom { from, mut env, att }) = self.bloom {
+            for o in out.iter_mut() {
+                let mut s = 0.0;
+                for (i, m) in self.modes.iter_mut().enumerate() {
+                    if m.active {
+                        let g = if i >= from { env } else { 1.0 };
+                        s += m.amp * g * m.osc.next();
+                    }
+                    m.amp *= m.decay;
                 }
-                m.amp *= m.decay;
+                if self.noise_amp > 1e-5 {
+                    s += self.noise_filt.process(self.rng.white()) * self.noise_amp;
+                    self.noise_amp *= self.noise_decay;
+                }
+                if self.att_env < 1.0 {
+                    self.att_env = (self.att_env + self.att).min(1.0);
+                }
+                if self.released {
+                    self.release_env *= self.rel_mul;
+                }
+                let amp_trem = self.amp_trem.as_mut().map_or(1.0, ModalAmpTrem::gain);
+                *o += s * self.gain * self.att_env * self.release_env * amp_trem;
+                self.advance_strike_glide();
+                if env < 1.0 {
+                    env = (env + att).min(1.0);
+                }
             }
-            if self.noise_amp > 1e-5 {
-                s += self.noise_filt.process(self.rng.white()) * self.noise_amp;
-                self.noise_amp *= self.noise_decay;
+            self.bloom = Some(ModeBloom { from, env, att });
+        } else {
+            for o in out.iter_mut() {
+                let mut s = 0.0;
+                for m in &mut self.modes {
+                    if m.active {
+                        s += m.amp * m.osc.next();
+                    }
+                    m.amp *= m.decay;
+                }
+                if self.noise_amp > 1e-5 {
+                    s += self.noise_filt.process(self.rng.white()) * self.noise_amp;
+                    self.noise_amp *= self.noise_decay;
+                }
+                if self.att_env < 1.0 {
+                    self.att_env = (self.att_env + self.att).min(1.0);
+                }
+                if self.released {
+                    self.release_env *= self.rel_mul;
+                }
+                let amp_trem = self.amp_trem.as_mut().map_or(1.0, ModalAmpTrem::gain);
+                *o += s * self.gain * self.att_env * self.release_env * amp_trem;
+                self.advance_strike_glide();
             }
-            if self.att_env < 1.0 {
-                self.att_env = (self.att_env + self.att).min(1.0);
-            }
-            if self.released {
-                self.release_env *= self.rel_mul;
-            }
-            let amp_trem = self.amp_trem.as_mut().map_or(1.0, ModalAmpTrem::gain);
-            *o += s * self.gain * self.att_env * self.release_env * amp_trem;
-            self.advance_strike_glide();
         }
         self.level = self.modes.iter().map(|m| m.amp.abs()).sum::<f32>() * self.release_env;
         self.level * self.gain > 2e-5 || self.noise_amp > 1e-4
@@ -916,6 +978,234 @@ impl Voice for ReverseCymbal {
 }
 
 // ---------------------------------------------------------------------------
+// Alt-bank percussion set B (v0.12): a SECOND voicing of GM 112-115 plus the
+// GM 14 tam-tam, selected only via CC0 bank select (`altbank::make`). The
+// default-bank 112-119 voices above are untouched; everything here is
+// namespaced `_b` so both sets coexist. Ported from the superseded v0.11
+// branch (216da4a) — the numeric oracles live in altbank.rs.
+// ---------------------------------------------------------------------------
+
+/// Register fold: move `key` into [lo, hi] by whole octaves, so the pitch
+/// class is preserved (a melodic register instrument, unlike a plain clamp
+/// which lands everything on the boundary note). Bank-B-internal helper,
+/// shared by the tinkle bell / agogo / steel drums wrappers and the alt-bank
+/// tam-tam.
+pub(crate) fn fold_key(key: u8, lo: u8, hi: u8) -> u8 {
+    let mut k = key as i32;
+    while k < lo as i32 {
+        k += 12;
+    }
+    while k > hi as i32 {
+        k -= 12;
+    }
+    k.clamp(lo as i32, hi as i32) as u8
+}
+
+/// Bank-B GM 112 tinkle bell: a tiny bright hand bell — inharmonic upper
+/// modes on a fast-fading fundamental, with a light >8 kHz strike "ting".
+const TINKLE_B: &[(f32, f32, f32)] = &[
+    (1.00, 1.00, 1.6),
+    (2.32, 0.55, 1.1),
+    (3.85, 0.30, 0.7),
+    (6.24, 0.12, 0.4),
+    (9.51, 0.05, 0.25),
+];
+const TINKLE_B_NOISE: (f32, f32, f32, f32) = (0.10, 0.004, 8000.0, 1.0);
+const TINKLE_B_ATTACK_S: f32 = 0.0;
+const TINKLE_B_RELEASE_T60: f32 = 0.6;
+const TINKLE_B_GAIN: f32 = 0.45; // level knob: altbank_b112_tinkle_level_vs_glock
+
+pub(crate) fn tinkle_bell_b(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    bell(
+        fold_key(key, 72, 108),
+        vel,
+        sr,
+        seed,
+        TINKLE_B,
+        TINKLE_B_NOISE,
+        TINKLE_B_ATTACK_S,
+        TINKLE_B_RELEASE_T60,
+        TINKLE_B_GAIN,
+    )
+}
+
+/// Bank-B GM 113 agogo: a struck metal clang bell — the cowbell-family 1.51x
+/// second mode over a short dry ring.
+const AGOGO_B: &[(f32, f32, f32)] = &[
+    (1.00, 1.00, 0.55),
+    (1.51, 0.65, 0.40),
+    (2.62, 0.35, 0.28),
+    (4.20, 0.18, 0.18),
+    (5.85, 0.08, 0.12),
+];
+const AGOGO_B_NOISE: (f32, f32, f32, f32) = (0.12, 0.005, 3500.0, 1.2);
+const AGOGO_B_ATTACK_S: f32 = 0.0;
+const AGOGO_B_RELEASE_T60: f32 = 0.15;
+const AGOGO_B_GAIN: f32 = 0.31; // level knob: altbank_b113_agogo_level_vs_xylophone
+
+pub(crate) fn agogo_b(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    bell(
+        fold_key(key, 60, 96),
+        vel,
+        sr,
+        seed,
+        AGOGO_B,
+        AGOGO_B_NOISE,
+        AGOGO_B_ATTACK_S,
+        AGOGO_B_RELEASE_T60,
+        AGOGO_B_GAIN,
+    )
+}
+
+/// Bank-B GM 115 woodblock: two or three stiff bar modes, hollow knock noise,
+/// very short ring. Register-clamped (not folded): a woodblock is a
+/// percussion register, and the B115 oracles assume plain clamp behaviour.
+const WOODBLOCK_B: &[(f32, f32, f32)] = &[
+    (1.00, 1.00, 0.085),
+    (2.55, 0.55, 0.045),
+    (4.10, 0.20, 0.028),
+];
+const WOODBLOCK_B_NOISE: (f32, f32, f32, f32) = (0.30, 0.004, 2600.0, 1.0);
+const WOODBLOCK_B_ATTACK_S: f32 = 0.0;
+const WOODBLOCK_B_RELEASE_T60: f32 = 0.06;
+const WOODBLOCK_B_GAIN: f32 = 1.03; // level knob: altbank_b115_woodblock_level_vs_xylophone
+
+pub(crate) fn woodblock_b(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    wood_bar(
+        key.clamp(60, 96),
+        vel,
+        sr,
+        seed,
+        WOODBLOCK_B,
+        WOODBLOCK_B_NOISE,
+        WOODBLOCK_B_ATTACK_S,
+        WOODBLOCK_B_RELEASE_T60,
+        WOODBLOCK_B_GAIN,
+    )
+}
+
+/// Bank-B GM 114 steel drums: a modal pan note following the timpani
+/// pattern — velocity-scaled upper modes with AMP-ONLY jitter. The defining
+/// features: a strong octave (2.000x) with a slightly detuned twin (2.018x)
+/// that beats at 0.018·f0 (≈ 4.7 Hz at C4), a near-twelfth (3.011x), a soft
+/// 10 ms rubber-mallet attack, and a small strike glide (the dent starts
+/// ~0.5 st sharp and settles in ~60 ms).
+const STEELPAN_B: &[(f32, f32, f32)] = &[
+    (1.000, 1.00, 1.4),
+    (1.007, 0.45, 1.1),
+    (2.000, 0.85, 1.0), // octave twin a — the pan's signature shimmer pair;
+    (2.018, 0.30, 1.0), // twin b: NEVER jitter these ratios (beat = Δr·f0).
+    // Twin b rings at twin a's T60: both are modes of the same dent, and a
+    // faster twin-b decay collapses the beat DEPTH mid-ring (measured: the
+    // 4.7 Hz AM line smears into an unreadable 4-6 Hz plateau with 0.8 s).
+    (3.011, 0.55, 0.8),
+    (4.53, 0.18, 0.5),
+    (6.19, 0.08, 0.35),
+];
+const STEELPAN_B_NOISE: (f32, f32, f32, f32) = (0.06, 0.008, 1200.0, 0.8);
+const STEELPAN_B_ATTACK_S: f32 = 0.010;
+const STEELPAN_B_RELEASE_T60: f32 = 0.5;
+const STEELPAN_B_GAIN: f32 = 0.31; // level knob: altbank_b114_steel_level_vs_marimba
+const STEELPAN_B_STRIKE_RATIO: f32 = 1.0293; // 0.5 st sharp at the strike
+const STEELPAN_B_STRIKE_SETTLE_S: f32 = 0.060;
+const STEELPAN_B_UPPER_MIN: f32 = 0.55;
+const STEELPAN_B_UPPER_VELOCITY_SCALE: f32 = 0.75;
+const STEELPAN_B_UPPER_JITTER: f32 = 0.10;
+
+pub(crate) fn steel_drum_b(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    let key = fold_key(key, 45, 96);
+    let f = key_freq(key);
+    let v = vel_amp(vel);
+    let vn = vel as f32 / 127.0;
+    let upper = STEELPAN_B_UPPER_MIN + STEELPAN_B_UPPER_VELOCITY_SCALE * vn;
+    let mut jrng = Rng::new(seed ^ 0x57EE_1DA0);
+    // AMP-ONLY jitter: the 2.000/2.018 twin ratios are load-bearing (their
+    // difference IS the shimmer beat rate) and are never jittered.
+    let partials: Vec<(f32, f32, f32)> = STEELPAN_B
+        .iter()
+        .map(|&(r, a, t)| {
+            let vel_scale = if r >= 2.0 { upper } else { 1.0 };
+            let amp = a * v * vel_scale * (1.0 + STEELPAN_B_UPPER_JITTER * jrng.white());
+            (f * r, amp, t)
+        })
+        .collect();
+    let mallet = Biquad::bandpass(STEELPAN_B_NOISE.2.min(sr * 0.4), STEELPAN_B_NOISE.3, sr);
+    let glide_oct_per_s = (0.5 / 12.0) / STEELPAN_B_STRIKE_SETTLE_S;
+    Modal::new(
+        sr,
+        seed,
+        &partials,
+        (STEELPAN_B_NOISE.0 * v, STEELPAN_B_NOISE.1, mallet),
+        STEELPAN_B_ATTACK_S,
+        STEELPAN_B_RELEASE_T60,
+        STEELPAN_B_GAIN,
+    )
+    .with_strike_glide(STEELPAN_B_STRIKE_RATIO, glide_oct_per_s, 1.0)
+}
+
+/// CC0-alt GM 14 tam-tam / gong ageng: a deep 65–124 Hz strike whose upper
+/// modes BLOOM in over 0.3–0.7 s (slower when struck softly) and ring
+/// 6–15 s, under a short bright splash. Routed ONLY from `altbank::make`
+/// (CC0 != 0 on a GM 14 channel) — the default bank keeps tubular bells.
+const TAMTAM: &[(f32, f32, f32)] = &[
+    (1.000, 1.00, 12.0),
+    (1.483, 0.75, 10.5),
+    (2.090, 0.55, 9.5), // twin a — the bloom group starts here (idx 2)
+    (2.132, 0.45, 9.0), // twin b: 0.042·f0 shimmer beat inside the bloom
+    (2.980, 0.40, 8.0),
+    (3.820, 0.30, 7.5),
+    (4.760, 0.22, 6.5),
+    (5.890, 0.15, 6.0),
+    (7.240, 0.10, 5.0),
+    (8.710, 0.07, 4.5),
+];
+const TAMTAM_BLOOM_FROM: usize = 2;
+const TAMTAM_NOISE_AMP: f32 = 0.55;
+const TAMTAM_NOISE_T60: f32 = 0.12;
+const TAMTAM_NOISE_BP: (f32, f32) = (1100.0, 0.6);
+const TAMTAM_ATTACK_S: f32 = 0.002;
+const TAMTAM_RELEASE_T60: f32 = 3.0;
+const TAMTAM_GAIN: f32 = 0.80; // level knob (alt bank only)
+const TAMTAM_BLOOM_MAX_S: f32 = 0.7;
+const TAMTAM_BLOOM_VEL_S: f32 = 0.4; // bloom_s = 0.7 − 0.4·vn
+const TAMTAM_UPPER_MIN: f32 = 0.5;
+const TAMTAM_UPPER_VELOCITY_SCALE: f32 = 0.9;
+const TAMTAM_UPPER_JITTER: f32 = 0.10;
+
+pub(crate) fn tam_tam(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    let k = fold_key(key, 36, 47);
+    let f = key_freq(k);
+    let v = vel_amp(vel);
+    let vn = vel as f32 / 127.0;
+    let upper = TAMTAM_UPPER_MIN + TAMTAM_UPPER_VELOCITY_SCALE * vn;
+    let mut jrng = Rng::new(seed ^ 0x7A37_A300);
+    let partials: Vec<(f32, f32, f32)> = TAMTAM
+        .iter()
+        .enumerate()
+        .map(|(i, &(r, a, t))| {
+            let amp = if i >= TAMTAM_BLOOM_FROM {
+                a * v * upper * (1.0 + TAMTAM_UPPER_JITTER * jrng.white())
+            } else {
+                a * v
+            };
+            (f * r, amp, t)
+        })
+        .collect();
+    let splash = Biquad::bandpass(TAMTAM_NOISE_BP.0.min(sr * 0.4), TAMTAM_NOISE_BP.1, sr);
+    let bloom_s = TAMTAM_BLOOM_MAX_S - TAMTAM_BLOOM_VEL_S * vn;
+    Modal::new(
+        sr,
+        seed,
+        &partials,
+        (TAMTAM_NOISE_AMP * v, TAMTAM_NOISE_T60, splash),
+        TAMTAM_ATTACK_S,
+        TAMTAM_RELEASE_T60,
+        TAMTAM_GAIN,
+    )
+    .with_mode_bloom(TAMTAM_BLOOM_FROM, bloom_s)
+}
+
+// ---------------------------------------------------------------------------
 // Pluck (extended Karplus-Strong)
 // ---------------------------------------------------------------------------
 
@@ -1003,6 +1293,22 @@ pub struct PluckPreset {
     pub wound_key_split: bool,  // when false, non-bass presets skip the guitar split
     pub harmonic: bool,         // prog-31 flageolet: loop retuned to 2f/3f (G7)
     pub mwah: Option<MwahSpec>, // fretless vocal formant bloom (GM 35)
+    // --- v0.12 second-polarization "course" voicing (GM 15 dulcimer) ---
+    // The vertical KS loop's detune, decay and damping relative to the
+    // horizontal one, and the h/v mix. DEFAULTS carry the exact literals the
+    // code used to hardcode (1.0013 / 0.42 / 1.15 / (0.74, 0.26)), so every
+    // pre-existing preset is bit-identical; the dulcimer re-voices the pair
+    // as a true double course (wider detune, near-equal decay and mix).
+    pub course_detune: f32,
+    pub course_t60: f32,
+    pub course_bright: f32,
+    pub course_mix: (f32, f32),
+    // Cross-injection strength between the two loops. DEFAULTS keep the old
+    // hardcoded K_COUPLE (same-string polarization coupling). A double COURSE
+    // is two separate strings that meet only at the bridge — an order weaker;
+    // full-strength skew coupling splits the pair's normal modes by
+    // ~k·f0/π Hz, which would bury the course's slow tuning beat.
+    pub course_couple: f32,
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -1033,6 +1339,11 @@ const DEFAULTS: PluckPreset = PluckPreset {
     wound_key_split: true,
     harmonic: false,
     mwah: None,
+    course_detune: 1.0013,
+    course_t60: 0.42,
+    course_bright: 1.15,
+    course_mix: (0.74, 0.26),
+    course_couple: K_COUPLE,
     #[cfg(test)]
     name: "DEFAULT",
 };
@@ -1335,6 +1646,44 @@ pub const SHAMISEN: PluckPreset = PluckPreset {
     click_hp: 1600.0,
     ..DEFAULTS
 };
+/// GM 15 hammered dulcimer (v0.12): bright steel double courses struck with
+/// wooden hammers. The course pair IS the character — the vertical loop is a
+/// true second string (wide 1.0042 detune ≈ 7 cents, near-equal decay and
+/// mix, near-zero bridge coupling), so every note carries a slow
+/// unison-shimmer beat (~1-1.8 Hz mid-register) that no single-course preset
+/// has. `bright` sits high: a dulcimer's steel courses ring for seconds —
+/// the ring must span several beat periods or the shimmer never speaks.
+pub const DULCIMER: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "DULCIMER",
+    t60: 5.0,
+    bright: 9000.0,
+    pick_lp: 4200.0,
+    pos: 0.13,
+    amp: 0.87, // level knob: dulcimer_level_vs_harp
+    attack_s: 0.0,
+    rel_t60: 0.35,
+    // soundbox air + top-plate modes, and a hammered-steel presence sparkle
+    body: &[
+        (170.0, 1.0, 3.5),
+        (340.0, 1.2, 2.5),
+        (700.0, 1.5, 1.6),
+        (2800.0, 1.4, 1.8),
+    ],
+    click: 1.7, // wooden hammer knock (pre-EQ: it excites the body)
+    click_hp: 2600.0,
+    wound_key_split: false,
+    course_detune: 1.0042,
+    course_t60: 0.85,
+    course_bright: 1.0,
+    course_mix: (0.56, 0.44),
+    // Two separate strings share only the bridge: an order weaker than the
+    // same-string polarization coupling. Full K_COUPLE would split the pair
+    // ~2-4 Hz apart (measured) and bury the 0.42% tuning beat.
+    course_couple: 0.002,
+    ..DEFAULTS
+};
+
 pub const KOTO: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "KOTO",
@@ -1469,6 +1818,8 @@ pub struct Pluck {
     h_prev: f32,
     v_prev: f32,
     k_couple: f32,
+    course_detune: f32,     // vertical-loop detune ratio (preset course_detune)
+    course_mix: (f32, f32), // (horiz, vert) output mix
     base_f: f32,
     bend: f32,
     harm: f32, // G7 flageolet multiple (1.0 = normal), composed into every retune
@@ -1574,10 +1925,18 @@ impl Pluck {
 
         Pluck {
             horiz: KsLoop::new(f, bright, t60, &exc, sr),
-            vert: KsLoop::new(f * 1.0013, bright * 1.15, t60 * 0.42, &exc, sr),
+            vert: KsLoop::new(
+                f * p.course_detune,
+                bright * p.course_bright,
+                t60 * p.course_t60,
+                &exc,
+                sr,
+            ),
             h_prev: 0.0,
             v_prev: 0.0,
-            k_couple: K_COUPLE,
+            k_couple: p.course_couple,
+            course_detune: p.course_detune,
+            course_mix: p.course_mix,
             base_f: note_f,
             bend: 1.0,
             harm,
@@ -1686,7 +2045,7 @@ impl Pluck {
         // fundamental
         let f = self.base_f * self.harm * self.bend;
         self.horiz.retune(f);
-        self.vert.retune(f * 1.0013);
+        self.vert.retune(f * self.course_detune);
         if let Some((osc, _, _)) = &mut self.sub {
             osc.set_freq(f, self.sr);
         }
@@ -1716,8 +2075,10 @@ impl Voice for Pluck {
                 }
                 let bv = self.vert.bright;
                 if bv > REL_FLOOR_V {
-                    self.vert
-                        .set_bright(bv + REL_DARKEN_K * (REL_FLOOR_V - bv), f * 1.0013);
+                    self.vert.set_bright(
+                        bv + REL_DARKEN_K * (REL_FLOOR_V - bv),
+                        f * self.course_detune,
+                    );
                 }
             }
             // K3: skew-symmetric polarization coupling — energy sloshes
@@ -1727,7 +2088,7 @@ impl Voice for Pluck {
             let vc = self.vert.tick(inject * 0.7 - self.k_couple * self.h_prev);
             self.h_prev = hc;
             self.v_prev = vc;
-            let mut y = 0.74 * hc + 0.26 * vc;
+            let mut y = self.course_mix.0 * hc + self.course_mix.1 * vc;
             if self.grit {
                 // palm-mute chug: the palm+pick+amp chain compresses (G4)
                 y = (y * 2.0).tanh() * 0.5;
@@ -4530,7 +4891,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             XYLOPHONE_RELEASE_T60,
             XYLOPHONE_GAIN,
         )),
-        14 | 15 => Box::new(bell(
+        14 => Box::new(bell(
             key,
             vel,
             sr,
@@ -4541,6 +4902,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             2.5,
             0.50,
         )),
+        15 => Box::new(Pluck::new(&DULCIMER, key, vel, sr, seed)),
         16..=23 => Box::new(organ(program, key, vel, sr, seed)),
         24 => {
             let model = Box::new(Pluck::new(&NYLON, key, vel, sr, seed));
@@ -7892,5 +8254,149 @@ mod tests {
         println!(
             "RD-O12 soprano f0={f0:.1}: half-int fold-back worst {worst:.4}, rms {rms_half:.4}"
         );
+    }
+
+    // =======================================================================
+    // v0.12 — GM 15 hammered dulcimer oracles (ported from the superseded
+    // v0.11 branch, 216da4a)
+    // =======================================================================
+
+    const SR12: f32 = 44100.0;
+
+    fn db_ratio(a: f32, b: f32) -> f32 {
+        20.0 * (a / b.max(1e-12)).log10()
+    }
+
+    /// D1: GM 15 routes to the DULCIMER Pluck preset, holds its written pitch,
+    /// and leads with a wooden hammer knock (early HP-2600 energy well above
+    /// the ringing body's).
+    #[test]
+    fn dulcimer_routing_pitch_and_hammer_click() {
+        assert_eq!(
+            make(15, 69, 100, SR12, 7, false).kind(),
+            "DULCIMER",
+            "GM 15 must route to the DULCIMER preset"
+        );
+        let b = render_program(15, 69, 100, 1.0, 0x11_1501);
+        let f = peak_locate(segment(&b, SR12, 0.10, 0.90), SR12, 396.0, 484.0);
+        assert!((f - 440.0).abs() < 6.0, "GM15 key 69 pitch {f:.1} Hz");
+        let click = hp_rms(segment(&b, SR12, 0.0, 0.02), SR12, 2600.0);
+        let body = hp_rms(segment(&b, SR12, 0.10, 0.12), SR12, 2600.0);
+        println!("GM15 hammer click hp2600: early {click:.5} vs body {body:.5}");
+        assert!(
+            click >= 2.0 * body,
+            "GM15 hammer click not prominent: {click:.5} vs {body:.5}"
+        );
+    }
+
+    /// D2 (2 seeds): the double course — two strings per note detuned by
+    /// 0.42% — beats at 0.0042*f0 (~1.39 Hz at E4, where the course rings
+    /// long enough to span 4+ beat periods). Bandpass the fundamental,
+    /// flatten the decay (divide by a slow envelope tracker), remove the
+    /// residual trend with a zero-phase centered moving average of one beat
+    /// period, then read the AM rate as the Goertzel argmax of the envelope
+    /// spectrum (autocorrelation is edge-biased on a 3-4 period window; the
+    /// Goertzel line is not — see lessons_learnt on Goertzel-peak reads).
+    /// Differential: a unison clone (course_detune 1.0) must show far less.
+    #[test]
+    fn dulcimer_double_course_beat() {
+        let f0 = 329.628_f32; // key 64: beat = 0.0042*f0 = 1.385 Hz
+        for seed in [3u32, 11] {
+            let measure = |preset: &PluckPreset| {
+                let b = render_pluck(preset, 64, 100, 3.5, seed);
+                let (env, srd) = beat_envelope(&b, f0);
+                let seg = &env[(0.4 * srd) as usize..(3.2 * srd) as usize];
+                let (mut bmag, mut brate) = (0.0f32, 0.0f32);
+                for i in 0..35 {
+                    let hz = 0.70 + 0.05 * i as f32;
+                    let m = mag_at(seg, srd, hz);
+                    if m > bmag {
+                        bmag = m;
+                        brate = hz;
+                    }
+                }
+                (bmag, brate)
+            };
+            let (mag_d, rate) = measure(&DULCIMER);
+            let unison = PluckPreset {
+                course_detune: 1.0,
+                ..DULCIMER
+            };
+            let (mag_u, _) = measure(&unison);
+            println!(
+                "GM15 seed {seed}: course beat {mag_d:.3} at {rate:.2} Hz; unison max {mag_u:.3}"
+            );
+            assert!(mag_d >= 0.10, "seed {seed}: course beat {mag_d:.3} < 0.10");
+            assert!(
+                (0.97..=1.80).contains(&rate),
+                "seed {seed}: course beat rate {rate:.2} Hz outside [0.97, 1.80]"
+            );
+            assert!(
+                mag_d >= 2.0 * mag_u,
+                "seed {seed}: beat {mag_d:.3} not >=2x unison clone {mag_u:.3}"
+            );
+        }
+    }
+
+    /// D2's envelope extractor: bandpass f0 (Q8) → rectified 30 Hz-lowpassed
+    /// envelope → flatten the exponential decay (divide by a 0.4 Hz tracker)
+    /// → decimate to ~200 Hz → subtract a centered (zero-phase) moving
+    /// average one beat period wide. Returns (envelope, envelope sample rate).
+    fn beat_envelope(b: &[f32], f0: f32) -> (Vec<f32>, f32) {
+        let mut bp = Biquad::bandpass(f0, 8.0, SR12);
+        let mut elp = OnePole::lowpass(30.0, SR12);
+        let mut slw = OnePole::lowpass(0.4, SR12);
+        let flat: Vec<f32> = b
+            .iter()
+            .map(|&x| {
+                let e = elp.process(bp.process(x).abs());
+                e / slw.process(e).max(1e-9)
+            })
+            .collect();
+        let dec = (SR12 / 200.0) as usize;
+        let srd = SR12 / dec as f32;
+        let sub: Vec<f32> = flat.iter().step_by(dec).copied().collect();
+        let half = ((0.722 * srd) as usize) / 2;
+        let detr: Vec<f32> = (0..sub.len())
+            .map(|i| {
+                let a = i.saturating_sub(half);
+                let z = (i + half).min(sub.len() - 1);
+                let m = sub[a..=z].iter().sum::<f32>() / (z - a + 1) as f32;
+                sub[i] - m
+            })
+            .collect();
+        (detr, srd)
+    }
+
+    /// D3: the decay tracks the register the way a real hammered string does —
+    /// a treble course (its fundamental near the loop damper's corner) dies
+    /// materially faster than a bass course.
+    #[test]
+    fn dulcimer_key_tracked_decay() {
+        let sustain = |key: u8| {
+            let b = render_program(15, key, 100, 2.0, 0x11_1503);
+            rms(segment(&b, SR12, 1.5, 1.9)) / rms(segment(&b, SR12, 0.05, 0.45)).max(1e-12)
+        };
+        let low = sustain(52);
+        let high = sustain(88);
+        println!("GM15 sustain ratio: key52 {low:.4} vs key88 {high:.4}");
+        assert!(
+            low >= 1.4 * high,
+            "GM15 low course {low:.4} should outring the treble {high:.4} by >=1.4x"
+        );
+    }
+
+    /// D4 (level knob DULCIMER.amp): within ±2 dB of the concert harp at the
+    /// same key — the neighbouring plucked-string voice it shares stages with.
+    #[test]
+    fn dulcimer_level_vs_harp() {
+        let dul = render_program(15, 69, 100, 0.5, 0x11_1504);
+        let harp = render_program(46, 69, 100, 0.5, 0x11_1504);
+        let d = db_ratio(
+            rms(segment(&dul, SR12, 0.02, 0.42)),
+            rms(segment(&harp, SR12, 0.02, 0.42)),
+        );
+        println!("GM15 vs harp level: {d:+.2} dB");
+        assert!(d.abs() <= 2.0, "GM15 level {d:+.2} dB off harp");
     }
 }

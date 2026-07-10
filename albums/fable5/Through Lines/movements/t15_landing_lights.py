@@ -13,10 +13,12 @@ BEFORE the music; the track is composed to pass it):
    L becomes a scored 2-beat rest inside every statement
    (`cell_augmentation`: onsets, pitches, durations and the empty L-span
    are all recomputed from material.FABLE_CELL, never re-typed).
- * Centred strings and a LOW choir bed carry the harmony at pan 64 (the
-   mono-collapse rule); stereo width comes only from the transient
-   sources — music box, tinkle bell, harp (generic check_pan +
-   CENTERED_CHANNELS).
+ * The music box, strings, LOW choir bed and harp all sit at pan 64
+   (the mono-collapse rule: ferrosintesis gives any off-centre channel
+   a Haas micro-delay, and these narrowband ringing/sustained sources
+   comb-filter the mono sum — measured -6.8 dB on a pan-56 box stem).
+   Stereo width comes only from the tinkle bell, a sparse transient
+   whisper, and the hall (generic check_pan + CENTERED_CHANNELS).
  * A tinkle bell (GM 112, new in ferrosintesis v0.11) whispers GOODNIGHT
    in Morse, timing taken verbatim from
    material.morse_rhythm(material.MORSE_T15) — `morse_goodnight` decodes
@@ -69,28 +71,33 @@ COMMENT = ("Track 15, the closer: a music box says F-A-Bb-(rest)-E four "
 # Channels and fixed design data
 # ---------------------------------------------------------------------------
 
-CH_BOX = 0        # music box (GM 10) — the FABLE cell at 4x, transient
+CH_BOX = 0        # music box (GM 10) — the FABLE cell at 4x, pan 64
 CH_STR = 1        # strings (GM 48) — sustained bed, pan 64
 CH_CHOIR = 2      # choir (GM 52) — LOW bed (F2/C3), pan 64, CC70 vowels
-CH_BELL = 3       # tinkle bell (GM 112) — the Morse whisper, transient
-CH_HARP = 4       # harp (GM 46) — answers and 1x cell echoes, transient
+CH_BELL = 3       # tinkle bell (GM 112) — the Morse whisper, the one
+                  # off-centre voice (transient, so no mono comb)
+CH_HARP = 4       # harp (GM 46) — answers and 1x cell echoes, pan 64
 
 ROOT_BOX = 77             # F5: the cell root; pitches 77/81/82/88 (F A Bb E)
 FINAL_F = 89              # F6: the album's last (and first) pitch
 FINAL_T0 = 188.0          # the E of statement 6 ends here; F6 resolves it
 FINAL_DUR = 16.0
-FINAL_VEL = 34            # scored near-silence: the lamp going out
+FINAL_VEL = 26            # scored near-silence: the lamp going out
 STRETCH = 4.0             # the T15 augmentation factor (HLD through-line)
 
 # Music-box statement grid: (start_beat, vel, vel_end-or-None).  Four
 # rising statements toward the flare, two falling into the fade.
+# Statement 5 sits at 146 so its long E (156-162) still rings inside
+# the 10-s analysis window before statement 6 — the rendered last
+# minute must fall window over window, with no silent hole for
+# statement 6 to swell out of (audio_final_decrescendo).
 STATEMENTS: tuple[tuple[float, int, int | None], ...] = (
     (16.0, 58, None),
     (40.0, 62, None),
     (64.0, 66, None),
     (112.0, 72, None),          # the peak ("Flare")
-    (140.0, 56, 50),
-    (172.0, 44, 36),            # ...its E resolves to FINAL_F at 188
+    (146.0, 56, 50),
+    (172.0, 36, 30),            # ...its E resolves to FINAL_F at 188
 )
 
 MORSE_T0 = 89.0           # the bell starts one beat into "Goodnight"
@@ -128,11 +135,11 @@ PART = conductor.Part(
     keysigs=[(0.0, -1, 0)],                  # F major (one flat)
     channels=[
         # (ch, name, program, volume, pan, reverb)
-        (CH_BOX, "music box", 10, 100, 56, 62),
+        (CH_BOX, "music box", 10, 100, 64, 62),
         (CH_STR, "strings bed", 48, 90, 64, 58),
         (CH_CHOIR, "low choir", 52, 86, 64, 60),
         (CH_BELL, "tinkle bell", 112, 92, 74, 66),
-        (CH_HARP, "harp", 46, 96, 46, 55),
+        (CH_HARP, "harp", 46, 96, 64, 55),
     ],
     extra_markers=[
         (MORSE_T0, "tinkle bell taps GOODNIGHT"),
@@ -142,7 +149,9 @@ PART = conductor.Part(
 
 # -- verification config (consumed by verify.run_track) ---------------------
 PROGRAM_WHITELIST: set[int] = {10, 46, 48, 52, 112}
-CENTERED_CHANNELS: set[int] = {CH_STR, CH_CHOIR}       # the sustained beds
+# Every ringing/sustained voice is centred (mono-collapse rule); only
+# the transient tinkle bell carries pan width.
+CENTERED_CHANNELS: set[int] = {CH_BOX, CH_STR, CH_CHOIR, CH_HARP}
 NOTE_RANGES: dict[int, tuple[int, int]] = {
     CH_BOX: (72, 91),
     CH_STR: (48, 84),
@@ -257,11 +266,16 @@ def _m5_touchdown(sc: en.Score) -> None:
     cell at its ORIGINAL 1x speed (the same DNA at two time scales); the
     beds thin voice by voice and are gone by 188, where statement 6's E
     resolves up to the piece's final event: one high F, alone, fading.
-    From beat 144 every velocity and CC11 in the track only falls."""
+    From beat 144 every velocity and CC11 in the track only falls, and
+    the box gets its own falling CC11 lane from 164 so the RENDER of
+    statement 6 and the last F sits below the statement-5 window
+    (audio_final_decrescendo: presence is not audibility)."""
+    en.cc_curve(sc, CH_BOX, 11, [(164.0, 124), (172.0, 88), (188.0, 72),
+                                 (203.0, 60)], step=1.0)
     en.cc_curve(sc, CH_STR, 11, [(140.0, 62), (152.0, 54), (164.0, 44),
-                                 (176.0, 30), (187.5, 18)], step=1.0)
+                                 (176.0, 28), (187.5, 16)], step=1.0)
     en.cc_curve(sc, CH_CHOIR, 11, [(140.0, 56), (152.0, 48), (164.0, 38),
-                                   (176.0, 26), (183.5, 16)], step=1.0)
+                                   (176.0, 24), (183.5, 14)], step=1.0)
     en.vowel_curve(sc, CH_CHOIR, [(140.0, 8), (160.0, 4), (180.0, 0)],
                    step=2.0)
     for t, ps, v in ((140.0, (53, 57, 60, 65), 44),
@@ -279,9 +293,9 @@ def _m5_touchdown(sc: en.Score) -> None:
     material.play_cell(sc, CH_BOX, t0, ROOT_BOX, stretch=STRETCH,
                        vel=vel, vel_end=vel_end, jt=0, jv=1)
     material.play_cell(sc, CH_HARP, 154.0, ROOT_BOX - 12, stretch=1.0,
-                       vel=42, vel_end=38, jt=2, jv=1)
-    material.play_cell(sc, CH_HARP, 164.0, ROOT_BOX - 12, stretch=1.0,
-                       vel=36, vel_end=32, jt=2, jv=1)
+                       vel=46, vel_end=42, jt=2, jv=1)
+    material.play_cell(sc, CH_HARP, 162.0, ROOT_BOX - 12, stretch=1.0,
+                       vel=40, vel_end=36, jt=2, jv=1)
     t0, vel, vel_end = STATEMENTS[5]
     material.play_cell(sc, CH_BOX, t0, ROOT_BOX, stretch=STRETCH,
                        vel=vel, vel_end=vel_end, jt=0, jv=1)

@@ -111,25 +111,25 @@ def _cycle_start(k: int) -> float:
 
 def _cycle_vel(k: int) -> float:
     if k <= 10:                       # I  — tentative
-        return en.lerp(52.0, 60.0, k / 10)
+        return en.lerp(48.0, 56.0, k / 10)
     if k <= 22:                       # II — settling in
         return en.lerp(62.0, 68.0, (k - 11) / 11)
     if k <= 28:                       # III — tension (25 handled apart)
         return en.lerp(68.0, 74.0, (k - 23) / 5)
     if k <= 40:                       # IV — second wind (the peak)
-        return en.lerp(73.0, 79.0, (k - 29) / 11)
+        return en.lerp(76.0, 84.0, (k - 29) / 11)
     return 60.0 if k == 41 else 58.0  # V  — the last quiet steps
 
 
 def _breath_bias(k: int) -> int:
     if k <= 10:
-        return 0
+        return -6                     # I breathes shallow: thin first steps
     if k <= 22:
         return 4
     if k <= 28:
         return 8
     if k <= 40:
-        return 10
+        return 16                     # IV breathes deep: the second wind
     return 2
 
 
@@ -688,7 +688,7 @@ def _texture_plan() -> list[tuple[float, int, int, float, float, int, int]]:
     # -- the depth: contrabass, far below the void -------------------------
     for p, at in enumerate(pairs):
         if p <= 11:                            # I — root/fifth rocking
-            v = en.lerp(46.0, 52.0, p / 11)
+            v = en.lerp(40.0, 47.0, p / 11)
             ev.append((at, CH_BASS, 45, 2.4, v, 3, 2))
             ev.append((at + 2.5, CH_BASS, 40, 2.9, v - 2, 3, 2))
         elif p <= 23:                          # II — the lament descent
@@ -712,12 +712,12 @@ def _texture_plan() -> list[tuple[float, int, int, float, float, int, int]]:
             ev.append((at, CH_BASS, 45, 2.4, v, 3, 2))
             ev.append((at + 2.5, CH_BASS, 40, 2.9, v - 2, 3, 2))
         elif p <= 41:                          # IV — walking
-            v = en.lerp(58.0, 66.0, (p - 30) / 11)
+            v = en.lerp(64.0, 74.0, (p - 30) / 11)
             ev.append((at, CH_BASS, 45, 2.4, v, 3, 2))
             ev.append((at + 2.5, CH_BASS, 43, 1.4, v - 2, 3, 2))
             ev.append((at + 4.0, CH_BASS, 40, 1.4, v - 1, 3, 2))
         else:                                  # V — pedal, fading
-            v = en.lerp(44.0, 34.0, (p - 42) / 9)
+            v = en.lerp(40.0, 24.0, (p - 42) / 9)
             ev.append((at, CH_BASS, 45, 5.0 if p == 51 else 5.4, v, 3, 2))
 
     # -- the halo: high strings, far above ---------------------------------
@@ -731,34 +731,34 @@ def _texture_plan() -> list[tuple[float, int, int, float, float, int, int]]:
              (137.5, 89, 5.4, 44.0), (143.0, 89, 9.9, 46.0)]
     for m in range(6):
         b = 164.0 + 11.0 * m
-        v = en.lerp(46.0, 56.0, m / 5)
+        v = en.lerp(52.0, 64.0, m / 5)
         halo += [(b, 81, 10.9, v), (b, 88, 10.9, v - 2)]
     for i, b in enumerate((186.0, 197.0, 208.0, 219.0)):
-        halo.append((b, 84, 10.9, 44.0 + 2.0 * i))
+        halo.append((b, 84, 10.9, 50.0 + 2.5 * i))
     halo += [(230.0, 81, 10.9, 46.0), (230.0, 88, 10.9, 44.0),
-             (241.0, 81, 20.9, 44.0), (241.0, 88, 20.9, 42.0),
-             (241.0, 85, 20.9, 42.0),
-             (262.0, 81, 21.0, 36.0), (262.0, 88, 21.0, 34.0),
-             (262.0, 85, 21.0, 34.0)]
+             (241.0, 81, 20.9, 50.0), (241.0, 88, 20.9, 47.0),
+             (241.0, 85, 20.9, 47.0),
+             (262.0, 81, 21.0, 27.0), (262.0, 88, 21.0, 25.0),
+             (262.0, 85, 21.0, 25.0)]
     ev.extend((b, CH_HALO, pch, d, v, 4, 2) for b, pch, d, v in halo)
 
     # -- the platform pad: the void fills ----------------------------------
     for pch in (57, 64, 69):                   # open fifths first: safe
         ev.append((PLATFORM, CH_PAD, pch, 10.9, 46, 0, 2))
     for pch in (57, 61, 64, 69, 76):           # then the picardy warmth
-        ev.append((BLOOM, CH_PAD, pch, 20.9, 52, 0, 2))
-        ev.append((262.0, CH_PAD, pch, 21.0, 40, 0, 2))
+        ev.append((BLOOM, CH_PAD, pch, 20.9, 58, 0, 2))
+        ev.append((262.0, CH_PAD, pch, 21.0, 30, 0, 2))
 
     # -- the harp: strums and arps across the healed void ------------------
     for i, pch in enumerate((52, 57, 61, 64, 69, 73, 76)):
         ev.append((BLOOM + 0.06 * i, CH_HARP, pch, 4.0 - 0.06 * i,
-                   50 - i, 2, 2))
-    for t, v in ((246.5, 46), (252.0, 43), (257.5, 40), (263.0, 37),
-                 (268.5, 34), (274.0, 31)):
+                   54 - i, 2, 2))
+    for t, v in ((246.5, 50), (252.0, 46), (257.5, 42), (263.0, 30),
+                 (268.5, 26), (274.0, 22)):
         for i, pch in enumerate((57, 61, 64, 69, 73, 76)):
             ev.append((t + 0.25 * i, CH_HARP, pch, 0.6, v - i, 3, 2))
     for i, pch in enumerate((69, 73, 76)):
-        ev.append((279.5 + 0.5 * i, CH_HARP, pch, 1.2, 28 - 2 * i, 3, 2))
+        ev.append((279.5 + 0.5 * i, CH_HARP, pch, 1.2, 18 - 2 * i, 3, 2))
 
     # -- the walker's ascent: off the wire, up the A-major scale -----------
     scale = _ascent_pitches()
@@ -797,9 +797,9 @@ def _spark_plan() -> list[tuple[float, int, float, float, int]]:
     ev += [(230.0, 93, 1.2, 40.0, 44), (235.5, 100, 1.2, 38.0, 84),
            (243.5, 97, 1.0, 44.0, 84),
            (ARRIVAL, 93, 1.5, 56.0, 64),                    # arrival echo
-           (257.5, 100, 1.0, 40.0, 44), (263.0, 97, 1.0, 36.0, 84),
-           (268.5, 93, 1.0, 32.0, 44), (274.0, 97, 1.0, 28.0, 84),
-           (279.5, 93, 1.0, 24.0, 64)]
+           (257.5, 100, 1.0, 40.0, 44), (263.0, 97, 1.0, 28.0, 84),
+           (268.5, 93, 1.0, 24.0, 44), (274.0, 97, 1.0, 19.0, 84),
+           (279.5, 93, 1.0, 15.0, 64)]
     return ev
 
 
@@ -809,15 +809,19 @@ def _cc_plans() -> dict[float, list[tuple[int, int, list, float]]]:
         66.0: [(CH_HALO, 11, [(66.0, 50), (99.0, 62), (131.5, 58)], 1.0)],
         132.0: [(CH_HALO, 11, [(132.0, 64), (145.5, 74), (153.0, 60),
                                (163.5, 58)], 1.0)],
-        164.0: [(CH_HALO, 11, [(164.0, 62), (219.0, 74),
-                               (229.5, 68)], 1.0)],
+        164.0: [(CH_HALO, 11, [(164.0, 68), (219.0, 82),
+                               (229.5, 72)], 1.0)],
         230.0: [
-            (CH_HALO, 11, [(230.0, 64), (241.0, 76), (262.0, 60),
-                           (283.0, 36)], 1.0),
-            (CH_PAD, 11, [(230.0, 60), (241.0, 84), (252.0, 78),
-                          (270.0, 62), (283.0, 40)], 1.0),
+            # the depth recedes: contrabass velocity is nearly level-flat
+            # in the render, so the fade is authored as expression
+            (CH_BASS, 11, [(230.0, 127), (256.0, 116), (263.0, 80),
+                           (270.0, 48), (277.0, 30), (283.0, 18)], 1.0),
+            (CH_HALO, 11, [(230.0, 64), (241.0, 78), (258.0, 62),
+                           (262.0, 48), (283.0, 16)], 1.0),
+            (CH_PAD, 11, [(230.0, 60), (241.0, 90), (252.0, 82),
+                          (262.0, 54), (272.0, 32), (283.0, 14)], 1.0),
             (CH_WALKER, 11, [(241.5, 60), (243.5, 72), (250.5, 96),
-                             (256.0, 92), (263.0, 78), (267.5, 56)], 0.75),
+                             (256.0, 92), (263.0, 70), (267.5, 40)], 0.75),
             # vibrato blooms on the held A4 (CC1: fiddle vibrato depth)
             (CH_WALKER, 1, [(251.0, 0), (254.0, 34), (260.0, 48),
                             (265.5, 26), (267.8, 0)], 0.5),

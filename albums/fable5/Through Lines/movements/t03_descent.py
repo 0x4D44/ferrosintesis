@@ -414,11 +414,16 @@ PART = conductor.Part(
     keysigs=[(0.0, 0, 1)],                   # A minor
     channels=[
         (CH_DRONE, "primordial drone - warm pad", 89, 96, 64, 60),
+        # Pan discipline (the mono-collapse lesson): the Haas micro-delay
+        # comb-filters SUSTAINED tonal voices in mono, so the ringing /
+        # bowed / blown lineages (3 vibraphone>flute, 4 celesta>oboe,
+        # 5 harp>fiddle) sit centred; width stays on the short-decay
+        # struck-and-plucked lineages (1, 2, 7, 8) only.
         (1, "lineage 1 - marimba", 12, 100, 40, 35),
         (2, "lineage 2 - kalimba", 108, 96, 88, 35),
-        (3, "lineage 3 - vibraphone > flute", 11, 96, 24, 40),
-        (4, "lineage 4 - celesta > oboe", 8, 92, 100, 40),
-        (5, "lineage 5 - harp > fiddle", 46, 98, 52, 40),
+        (3, "lineage 3 - vibraphone > flute", 11, 96, 64, 40),
+        (4, "lineage 4 - celesta > oboe", 8, 92, 64, 40),
+        (5, "lineage 5 - harp > fiddle", 46, 98, 64, 40),
         (6, "lineage 6 - nylon guitar > bass", 24, 98, 64, 35),
         (7, "lineage 7 - pizzicato", 45, 96, 76, 35),
         (8, "lineage 8 - xylophone", 13, 90, 112, 35),
@@ -445,8 +450,8 @@ PART = conductor.Part(
 # -- verification config (consumed by verify.run_track) ---------------------
 PROGRAM_WHITELIST: set[int] = {8, 11, 12, 13, 24, 32, 45, 46, 47, 52,
                                55, 68, 73, 89, 108, 110, 119}
-CENTERED_CHANNELS: set[int] = {CH_DRONE, 6, DRUMS, CH_S, CH_A, CH_T, CH_B,
-                               CH_HIT, CH_TIMP}
+CENTERED_CHANNELS: set[int] = {CH_DRONE, 3, 4, 5, 6, DRUMS,
+                               CH_S, CH_A, CH_T, CH_B, CH_HIT, CH_TIMP}
 NOTE_RANGES: dict[int, tuple[int, int]] = {
     CH_DRONE: (40, 52),
     1: (55, 81), 2: (67, 93), 3: (55, 93), 4: (55, 93),

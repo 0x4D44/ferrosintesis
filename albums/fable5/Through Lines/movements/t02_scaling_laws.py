@@ -152,7 +152,12 @@ PART = conductor.Part(
     keysigs=[(0.0, 0, 0), (PIVOT, 2, 0)],        # dorian ink, then D major
     channels=[
         # (ch, name, program, volume, pan, reverb)
-        (CH_FLUTE, "flute - the voice", 73, 100, 64, 55),
+        # Flute volume 87, not 100: era 1 is flute-only and its velocity
+        # is pinned at 80 by era1_rigidity, so the channel fader is the
+        # one honest way to make the first model AUDIBLY small (the
+        # render-side capability staircase).  Later eras win the level
+        # back through their authored CC11 arcs.
+        (CH_FLUTE, "flute - the voice", 73, 87, 64, 55),
         (CH_REC, "recorder - organum", 74, 92, 64, 52),
         (CH_CEL, "celesta - Haiku", 8, 96, 78, 60),
         (CH_PNO, "piano - Sonnet", 0, 100, 50, 45),
@@ -321,8 +326,8 @@ def _e4_extended_thinking(sc: en.Score) -> None:
     en.cc_curve(sc, CH_STR, 11, [(224.0, 52), (256.0, 66), (287.0, 58)],
                 step=2.0)
     # Entry 1: flute, tonic.
-    en.cc_curve(sc, CH_FLUTE, 11, [(224.0, 74), (232.0, 104),
-                                   (238.0, 88)], step=1.0)
+    en.cc_curve(sc, CH_FLUTE, 11, [(224.0, 84), (232.0, 114),
+                                   (238.0, 98)], step=1.0)
     _theme(sc, CH_FLUTE, 224.0, D5, vel=64, vel_end=84, jt=3, jv=4,
            gate=0.95)
     # Entry 2: oboe answers at the fifth (diatonic: shift +4).
@@ -356,8 +361,8 @@ def _e4_extended_thinking(sc: en.Score) -> None:
                  [en.triad(D3, MODE, d) for d in (1, 2, 3, 4, 5, 4, 3, 2)],
                  span=6.0, size=3, lo=50, hi=74, vel=50, vel_end=62,
                  legato=0.2)
-    en.cc_curve(sc, CH_FLUTE, 11, [(288.0, 80), (316.0, 106),
-                                   (334.0, 92)], step=2.0)
+    en.cc_curve(sc, CH_FLUTE, 11, [(288.0, 90), (316.0, 116),
+                                   (334.0, 102)], step=2.0)
     en.cc_curve(sc, CH_OBOE, 11, [(288.0, 78), (320.0, 104),
                                   (334.0, 90)], step=2.0)
     for ch, t0, base, shift, letter, v in (
@@ -404,52 +409,58 @@ def _e4_extended_thinking(sc: en.Score) -> None:
 def _e5_claude_4(sc: en.Score) -> None:
     """[352, 448) Claude 4: the full orchestra, dense counterpoint —
     theme, answer, inversion and countersubjects all at once; the piano
-    gains its sustain pedal (CC64)."""
-    en.cc_curve(sc, CH_STR, 11, [(352.0, 84), (384.0, 100), (416.0, 92),
-                                 (447.5, 106)], step=2.0)
+    gains its sustain pedal (CC64).
+
+    Render-side headline (audio_capability_growth): this era must sit
+    >= 6 dB over the one-flute era 1, so the tutti is scored LOUD —
+    high CC11 arcs, and every velocity a uniform +6 over the first
+    draft (a constant shift keeps the era's velocity stddev identical,
+    preserving monotonic_capability)."""
+    en.cc_curve(sc, CH_STR, 11, [(352.0, 100), (384.0, 116),
+                                 (416.0, 108), (447.5, 120)], step=2.0)
     en.pad_block(sc, CH_STR, 352.0,
                  [en.triad(D3, MODE, d) for d in
                   (1, 4, 1, 5, 3, 4, 5, 1, 7, 4, 5, 1)],
-                 span=8.0, size=4, lo=50, hi=76, vel=62, vel_end=74,
+                 span=8.0, size=4, lo=50, hi=76, vel=68, vel_end=80,
                  legato=0.2)
     # Horns: the theme in canon (tonic, then the fifth, then tonic).
-    _theme(sc, CH_HORN, 352.0, D4, vel=82, vel_end=90, jt=3, jv=4,
+    _theme(sc, CH_HORN, 352.0, D4, vel=88, vel_end=96, jt=3, jv=4,
            gate=0.95)
-    _theme(sc, CH_HORN, 368.0, D3, shift=4, vel=78, vel_end=86,
+    _theme(sc, CH_HORN, 368.0, D3, shift=4, vel=84, vel_end=92,
            jt=3, jv=4, gate=0.95)
-    _theme(sc, CH_HORN, 400.0, D4, vel=86, vel_end=94, jt=3, jv=4,
+    _theme(sc, CH_HORN, 400.0, D4, vel=92, vel_end=100, jt=3, jv=4,
            gate=0.95)
-    sc.note(CH_HORN, 57, 384.0, 14.0, 68, jt=3, jv=3)
-    sc.note(CH_HORN, 62, 416.0, 14.0, 70, jt=3, jv=3)
-    sc.note(CH_HORN, 57, 432.0, 15.0, 74, jt=3, jv=3)
+    sc.note(CH_HORN, 57, 384.0, 14.0, 74, jt=3, jv=3)
+    sc.note(CH_HORN, 62, 416.0, 14.0, 76, jt=3, jv=3)
+    sc.note(CH_HORN, 57, 432.0, 15.0, 80, jt=3, jv=3)
     # Flute: theme high, then its INVERSION — the model argues both ways.
-    en.cc_curve(sc, CH_FLUTE, 11, [(352.0, 88), (368.0, 104),
-                                   (400.0, 96), (440.0, 110)], step=2.0)
-    _theme(sc, CH_FLUTE, 360.0, D5, vel=78, vel_end=90, jt=3, jv=4,
+    en.cc_curve(sc, CH_FLUTE, 11, [(352.0, 104), (368.0, 120),
+                                   (400.0, 112), (440.0, 124)], step=2.0)
+    _theme(sc, CH_FLUTE, 360.0, D5, vel=84, vel_end=96, jt=3, jv=4,
            gate=0.95)
-    _theme(sc, CH_FLUTE, 384.0, D5, vel=80, vel_end=92, jt=3, jv=4,
+    _theme(sc, CH_FLUTE, 384.0, D5, vel=86, vel_end=98, jt=3, jv=4,
            gate=0.95, invert=True)
-    _theme(sc, CH_FLUTE, 408.0, D5, vel=84, vel_end=96, jt=3, jv=4,
+    _theme(sc, CH_FLUTE, 408.0, D5, vel=90, vel_end=102, jt=3, jv=4,
            gate=0.95)
-    _theme(sc, CH_FLUTE, 432.0, D5, shift=1, vel=86, vel_end=96,
+    _theme(sc, CH_FLUTE, 432.0, D5, shift=1, vel=92, vel_end=102,
            jt=3, jv=4, gate=0.95)
     # Oboe: answers at the fifth, plus a free countersubject.
-    en.cc_curve(sc, CH_OBOE, 11, [(352.0, 86), (392.0, 102),
-                                  (447.5, 104)], step=2.0)
-    _theme(sc, CH_OBOE, 368.0, D4, shift=4, vel=74, vel_end=86,
+    en.cc_curve(sc, CH_OBOE, 11, [(352.0, 100), (392.0, 116),
+                                  (447.5, 118)], step=2.0)
+    _theme(sc, CH_OBOE, 368.0, D4, shift=4, vel=80, vel_end=92,
            jt=3, jv=4, gate=0.95)
-    _theme(sc, CH_OBOE, 416.0, D4, shift=4, vel=80, vel_end=92,
+    _theme(sc, CH_OBOE, 416.0, D4, shift=4, vel=86, vel_end=98,
            jt=3, jv=4, gate=0.95)
     en.line(sc, CH_OBOE, 392.0, D4, MODE,
             [(5, 0.0, 3.0), (6, 3.0, 1.0), (7, 4.0, 3.0), (8, 7.0, 1.0),
-             (9, 8.0, 4.0), (8, 12.0, 2.0)], vel=76, jt=3, jv=4)
+             (9, 8.0, 4.0), (8, 12.0, 2.0)], vel=82, jt=3, jv=4)
     # Recorder: inner countersubject in long tones.
-    for t0, deg, du, v in ((352.0, 5, 7.5, 60), (360.0, 4, 7.5, 58),
-                           (368.0, 3, 7.5, 60), (376.0, 5, 7.5, 62),
-                           (384.0, 6, 7.5, 62), (392.0, 5, 7.5, 60),
-                           (400.0, 8, 7.5, 64), (408.0, 7, 7.5, 62),
-                           (416.0, 6, 7.5, 64), (424.0, 5, 7.5, 62),
-                           (432.0, 8, 7.5, 66), (440.0, 8, 7.0, 68)):
+    for t0, deg, du, v in ((352.0, 5, 7.5, 66), (360.0, 4, 7.5, 64),
+                           (368.0, 3, 7.5, 66), (376.0, 5, 7.5, 68),
+                           (384.0, 6, 7.5, 68), (392.0, 5, 7.5, 66),
+                           (400.0, 8, 7.5, 70), (408.0, 7, 7.5, 68),
+                           (416.0, 6, 7.5, 70), (424.0, 5, 7.5, 68),
+                           (432.0, 8, 7.5, 72), (440.0, 8, 7.0, 74)):
         sc.note(CH_REC, en.pitch(D4, MODE, deg), t0, du, v, jt=3, jv=3)
     # Piano: driving eighths under the counterpoint, pedalled per bar.
     for k, d in enumerate((1, 4, 1, 5, 3, 4, 5, 1, 7, 4, 5, 1)):
@@ -457,25 +468,25 @@ def _e5_claude_4(sc: en.Score) -> None:
         pcs = en.triad(D3, MODE, d)
         en.sustain(sc, CH_PNO, t0 + 0.05, t0 + 7.6)
         en.arp(sc, CH_PNO, pcs + [pcs[0] + 12], t0, count=16, step=0.5,
-               vel=64, pattern="updown", gate=1.0, accent_every=4,
+               vel=70, pattern="updown", gate=1.0, accent_every=4,
                accent=8)
     # Celesta: doubling sparkles, then the climb to C7.
     for k in range(6):
-        sc.note(CH_CEL, 86, 352.0 + 16.0 * k, 0.75, 80, jt=2, jv=3)
+        sc.note(CH_CEL, 86, 352.0 + 16.0 * k, 0.75, 86, jt=2, jv=3)
         if k < 5:
-            sc.note(CH_CEL, 93, 360.0 + 16.0 * k, 0.75, 76, jt=2, jv=3)
+            sc.note(CH_CEL, 93, 360.0 + 16.0 * k, 0.75, 82, jt=2, jv=3)
     en.arp(sc, CH_CEL, [74, 77, 81, 84, 86, 89, 93, 96], 436.0,
-           count=16, step=0.25, vel=82, pattern="up", gate=1.1)
-    sc.note(CH_CEL, 96, 444.0, 2.0, 88, jt=1, jv=2)
+           count=16, step=0.25, vel=88, pattern="up", gate=1.1)
+    sc.note(CH_CEL, 96, 444.0, 2.0, 94, jt=1, jv=2)
     # Timpani: the word's first letter as a drum figure, and the roll.
     for k in range(6):
         t0 = 352.0 + 16.0 * k
         for on, du in _MORSE[:4]:
-            sc.note(CH_TIMP, D2, t0 + on, min(du, 0.4), 88 + 2 * k,
+            sc.note(CH_TIMP, D2, t0 + on, min(du, 0.4), 94 + 2 * k,
                     jt=2, jv=3)
-        sc.note(CH_TIMP, 45, t0 + 8.0, 0.4, 80, jt=2, jv=3)
+        sc.note(CH_TIMP, 45, t0 + 8.0, 0.4, 86, jt=2, jv=3)
     for k in range(8):
-        sc.note(CH_TIMP, D2, 444.0 + 0.5 * k, 0.3, 74 + 4 * k,
+        sc.note(CH_TIMP, D2, 444.0 + 0.5 * k, 0.3, 80 + 4 * k,
                 jt=1, jv=2)
 
 
@@ -541,17 +552,20 @@ def _e7_fable_5(sc: en.Score) -> None:
     en.vowel_curve(sc, CH_CHOIR, [(536.0, 0), (556.0, 25), (576.0, 45),
                                   (584.0, 60), (600.0, 88), (614.0, 85),
                                   (626.0, 50), (638.0, 20)], step=1.0)
+    # The choir's expression rises to the climax then falls hard across
+    # the three 8-beat coda windows (audio_final_fade).
     en.cc_curve(sc, CH_CHOIR, 11, [(536.0, 40), (560.0, 62),
                                    (584.0, 84), (612.0, 88),
-                                   (639.0, 30)], step=1.0)
+                                   (616.0, 80), (624.0, 56),
+                                   (632.0, 34), (638.0, 12)], step=1.0)
     for t0, ps, du, v in ((536.0, (62,), 8.0, 46),
                           (544.0, (62, 69), 16.0, 50),
                           (560.0, (62, 67), 12.0, 54),
                           (572.0, (62, 69), 11.8, 58)):
         for p in ps:
             sc.note(CH_CHOIR, p, t0, du, v, jt=0, jv=2)
-    en.cc_curve(sc, CH_FLUTE, 11, [(536.0, 82), (550.0, 104),
-                                   (562.0, 90), (582.0, 106)], step=1.0)
+    en.cc_curve(sc, CH_FLUTE, 11, [(536.0, 92), (550.0, 114),
+                                   (562.0, 100), (582.0, 116)], step=1.0)
     _theme(sc, CH_FLUTE, 536.0, D5, vel=72, vel_end=86, jt=5, jv=5,
            gate=0.92)
     sc.note(CH_FLUTE, D6, 552.0, 6.0, 80, jt=3, jv=3)
@@ -570,7 +584,7 @@ def _e7_fable_5(sc: en.Score) -> None:
     sc.note(CH_STR, 57, 536.0, 24.0, 38, jt=0, jv=2)
     sc.note(CH_STR, D3, 560.0, 23.8, 46, jt=0, jv=2)
     sc.note(CH_STR, 62, 560.0, 23.8, 44, jt=0, jv=2)
-    en.cc_curve(sc, CH_STR, 11, [(536.0, 46), (566.0, 66), (583.0, 84)],
+    en.cc_curve(sc, CH_STR, 11, [(536.0, 46), (566.0, 66), (583.0, 90)],
                 step=2.0)
     # The ascent into the pivot.
     en.line(sc, CH_HORN, 576.0, D3, MODE,
@@ -581,8 +595,11 @@ def _e7_fable_5(sc: en.Score) -> None:
         sc.note(CH_TIMP, D2, 576.0 + 2.0 * k, 0.4, 60 + 8 * k,
                 jt=2, jv=3)
     # -- the resolution [584, 640): D MAJOR ----------------------------
-    en.cc_curve(sc, CH_FLUTE, 11, [(584.0, 108), (600.0, 100),
-                                   (616.0, 92), (636.0, 60)], step=1.0)
+    # Flute expression peaks at the resolution, then decays through the
+    # coda's three windows (the audio_final_fade decrescendo).
+    en.cc_curve(sc, CH_FLUTE, 11, [(584.0, 118), (600.0, 110),
+                                   (616.0, 94), (624.0, 70),
+                                   (632.0, 48), (637.0, 26)], step=1.0)
     _theme(sc, CH_FLUTE, 584.0, D5, mode=MAJ, vel=92, vel_end=102,
            jt=4, jv=4, gate=0.95)
     _theme(sc, CH_OBOE, 584.0, D4, mode=MAJ, vel=86, vel_end=96,
@@ -622,29 +639,43 @@ def _e7_fable_5(sc: en.Score) -> None:
                      (600.0, D2, 98), (608.0, 45, 86)):
         sc.note(CH_TIMP, p, t0, 0.5, v, jt=2, jv=3)
     # -- coda [616, 640): the lamp stays lit, and dims -----------------
+    # audio_final_fade wants each 8-beat window quieter than the last
+    # and >= 4 dB top-to-tail, so the dimming is REAL: every sustained
+    # voice gets a falling CC11 lane, the aftertouch blooms peak early
+    # (a lift late in the coda would raise window 2 above window 1),
+    # and the texture thins — oboe, recorder and pedal release at the
+    # second window's end; only organ/strings/choir/flute reach 638.
     for k in range(10):
         sc.note(CH_TIMP, D2, 616.0 + 0.5 * k, 0.3, 44 - 2 * k,
                 jt=1, jv=2)
     en.leslie(sc, CH_ORG, 616.0, 634.0, 90, 6)
+    en.cc_curve(sc, CH_ORG, 11, [(616.0, 96), (624.0, 68),
+                                 (632.0, 42), (638.0, 18)], step=1.0)
     sc.note(CH_ORG, D2, 616.0, 22.0, 44, jt=0, jv=1)
     for p in (D3, 54, 57):
         sc.note(CH_ORG, p, 616.0, 22.0, 42, jt=0, jv=1)
+    en.cc_curve(sc, CH_STR, 11, [(616.0, 80), (624.0, 56),
+                                 (632.0, 34), (638.0, 14)], step=1.0)
     for p in (D3, 54, 57, 62):
         sc.note(CH_STR, p, 616.0, 22.0, 44, jt=0, jv=1)
     for p in (62, 66, 69):
         sc.note(CH_CHOIR, p, 616.0, 22.0, 46, jt=0, jv=1)
     sc.note(CH_PNO, D2, 616.0, 6.0, 46, jt=1, jv=2)
-    en.sustain(sc, CH_PNO, 616.05, 630.0)
+    en.sustain(sc, CH_PNO, 616.05, 623.5)
     sc.note(CH_FLUTE, 78, 618.0, 20.0, 56, jt=2, jv=2)      # F#5
     en.vibrato(sc, CH_FLUTE, 620.0, 16.0, depth=0.3,
                cycles_per_beat=0.9, delay=2.0)
     sc.bend(CH_FLUTE, 639.0, 0.0)
-    en.at_curve(sc, CH_FLUTE, [(620.0, 0), (630.0, 72), (638.5, 0)],
-                step=0.5)
-    en.at_curve(sc, CH_CHOIR, [(618.0, 0), (628.0, 55), (637.0, 0)],
-                step=0.5)
-    sc.note(CH_OBOE, 66, 617.0, 18.0, 44, jt=2, jv=2)       # F#4
-    sc.note(CH_REC, 74, 618.0, 18.0, 40, jt=2, jv=2)        # D5
+    en.at_curve(sc, CH_FLUTE, [(618.0, 0), (621.0, 58), (630.0, 16),
+                               (637.0, 0)], step=0.5)
+    en.at_curve(sc, CH_CHOIR, [(617.0, 0), (620.0, 45), (628.0, 12),
+                               (636.0, 0)], step=0.5)
+    en.cc_curve(sc, CH_OBOE, 11, [(617.0, 64), (626.0, 38),
+                                  (634.0, 14)], step=1.0)
+    sc.note(CH_OBOE, 66, 617.0, 13.0, 44, jt=2, jv=2)       # F#4
+    en.cc_curve(sc, CH_REC, 11, [(618.0, 58), (626.0, 34),
+                                 (633.0, 12)], step=1.0)
+    sc.note(CH_REC, 74, 618.0, 12.0, 40, jt=2, jv=2)        # D5
     for t0, p, v in ((620.0, 86, 26), (624.0, 93, 24), (628.0, 98, 22)):
         sc.note(CH_CEL, p, t0, 2.5, v, jt=1, jv=1)
 

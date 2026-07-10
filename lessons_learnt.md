@@ -123,3 +123,11 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   tree, so nothing stops a Python/cargo run from soiling it. A drum-kit-v3 render
   done in the main clone left 60+ stray files shadowing an already-committed
   branch; `git status` the main clone if a build/render ever ran there.
+- 2026.07.10 — **`build.py --track N --verify` verifies in memory and does NOT
+  rewrite the MIDI.** Two independent audio-fix agents lost a full iteration to
+  stale renders (the unchanged dB reading was the tell): edit → `--track N`
+  (writes) → `--verify` → render → analyze, in that order. Corollary from the
+  same session: a hard-panned CONTINUOUS stream is pinned near 3 dB mono loss
+  regardless of pan value (the Haas copy stays decorrelated at pan 16 or 22) —
+  moderating the pan doesn't help; centre the sustained stream or make it
+  genuinely transient.

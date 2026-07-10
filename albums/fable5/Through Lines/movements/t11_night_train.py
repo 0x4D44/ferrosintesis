@@ -570,6 +570,10 @@ def _m5_brakes(sc: en.Score) -> None:
     down 17 semitones, a choked crash, the ride ticking as the wheels
     grind to walking pace (the tempo map does the deceleration)."""
     sc.hit(49, M5, 114)                              # the choked crash
+    # Drum NoteOff is deliberately inert because every ordinary hit authors
+    # one. CC120 is the standard, explicit all-sound-off signal: choke this
+    # crash at its notated quarter-beat without changing any other MIDI.
+    sc.cc(DRUMS, 120, 0, M5 + 0.25)
     for j in range(18):
         sc.note(CH_STR, 84 - j, M5 + 0.5 * j, 0.45,
                 round(en.lerp(102, 58, j / 17)), jt=2, jv=2)
@@ -948,6 +952,11 @@ def oracles(sc: en.Score, info, spans) -> list[tuple[str, list[str]]]:
     elif any(off - on > int(0.5 * _PPQ) for on, off in chokes):
         fails.append("the brake crash rings — it must be choked "
                      "(<= 0.5 beat)")
+    all_sound_off = [tick for tick, _prio, data in sc.events.get(DRUMS, [])
+                     if (data[0] & 0xF0) == 0xB0 and data[1] == 120]
+    if _tk(M5 + 0.25) not in all_sound_off:
+        fails.append("the brake crash has no explicit CC120 choke at its "
+                     "notated note-off")
     results.append(("brakes_gesture", fails[:8]))
 
     # --- taiko_fight: GM 116 in all 54 fight bars and nowhere else --------

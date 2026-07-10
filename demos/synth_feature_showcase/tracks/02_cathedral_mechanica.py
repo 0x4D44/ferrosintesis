@@ -6,7 +6,7 @@ from .common import climb_line, feature, octave_riff, pulse_chords, switch
 
 def build(sc: en.Score) -> None:
     sc.marker(0, "Cathedral Mechanica - prepared keys")
-    sc.marker(128, "Leslie machinery")
+    sc.marker(128, "Pipe ranks and Leslie machinery")
     sc.marker(272, "Bell and kettle ascent")
     sc.channel(0, "piano and future keys", 0, volume=98, pan=64, reverb=52, chorus=0, echo=8)
     sc.channel(1, "bells and bars", 8, volume=90, pan=64, reverb=58, chorus=18, echo=16)
@@ -43,6 +43,21 @@ def build(sc: en.Score) -> None:
     for i, prog in enumerate(organ_programs):
         t = 64.0 + i * 28.0
         switch(sc, 2, prog, t)
+        if prog == 19:
+            # Default cathedral organ: exposed 32' pedal, principal body and
+            # mixture glare, followed by a short CC0=1 legacy/Leslie A/B.
+            sc.cc(2, 0, 0, t)
+            en.cc_curve(sc, 2, 1, [(t, 0), (t + 8, 96), (t + 16, 20)], step=0.5)
+            en.cc_curve(sc, 2, 11, [(t, 70), (t + 10, 118), (t + 17, 82)], step=1.0)
+            sc.note(2, 36, t, 16.5, 94, jt=0, jv=0)
+            pulse_chords(sc, 2, organ_chords, t, 4, 92, span=4.0, gate=0.90)
+            for j, pitch in enumerate([72, 76, 79, 84, 88, 91, 96, 100]):
+                sc.note(2, pitch, t + 2.0 + j * 1.6, 1.35, 88 + j * 3, jt=0, jv=0)
+            sc.cc(2, 0, 1, t + 18.0)
+            en.cc_curve(sc, 2, 1, [(t + 18, 0), (t + 23, 127), (t + 27, 40)], step=0.5)
+            pulse_chords(sc, 2, organ_chords, t + 18.0, 2, 88, span=4.0, gate=0.90)
+            sc.cc(2, 0, 0, t + 27.5)
+            continue
         en.cc_curve(sc, 2, 1, [(t, 0), (t + 8, 127), (t + 22, 30)], step=0.5)
         en.cc_curve(sc, 2, 11, [(t, 48), (t + 12, 115), (t + 27, 70)], step=1.0)
         sc.portamento_on(2, t + 2, time_cc=76)
@@ -61,8 +76,8 @@ def build(sc: en.Score) -> None:
 
     feature(sc, "piano pedals and pitch", 0, 0, 126, key_programs, min_notes=130, ccs={64: (0, 127), 66: (0, 127), 67: (0, 127), 5: (92, 92), 65: (0, 127), 6: (12, 70), 100: (0, 127), 101: (0, 127)}, bend=(0.0, 0.25), aftertouch=(0, 100))
     feature(sc, "bells bars vibes", 1, 120, 260, bell_programs, min_notes=120, ccs={10: (48, 80)})
-    feature(sc, "organs free reeds", 2, 64, 288, organ_programs, min_notes=160, ccs={1: (0, 127), 5: (76, 76), 11: (48, 115), 65: (0, 127)})
+    feature(sc, "organs free reeds", 2, 64, 288, organ_programs, min_notes=160, ccs={0: (0, 1), 1: (0, 127), 5: (76, 76), 11: (48, 115), 65: (0, 127)})
     feature(sc, "timpani refinement bed", 3, 160, 376, {47}, min_notes=20)
     feature(sc, "crystal programs", 4, 192, 352, set(range(96, 104)), min_notes=160, ccs={10: (36, 92)})
     sc.audio_check(en.AudioCheck("soft pedal opens", "hf_up", 36, 52, 4, 20, 1.05))
-    sc.audio_check(en.AudioCheck("leslie build", "hf_up", 136, 156, 72, 92, 1.08))
+    sc.audio_check(en.AudioCheck("cathedral mixture", "hf_up", 150, 166, 136, 146, 1.05))

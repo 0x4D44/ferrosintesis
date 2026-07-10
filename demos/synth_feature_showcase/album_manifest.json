@@ -220,13 +220,13 @@
           "threshold": 1.05
         },
         {
-          "name": "leslie build",
+          "name": "cathedral mixture",
           "kind": "hf_up",
-          "start_seconds": 54.4,
-          "end_seconds": 62.4,
-          "ref_start_seconds": 28.8,
-          "ref_end_seconds": 36.8,
-          "threshold": 1.08
+          "start_seconds": 60.0,
+          "end_seconds": 66.4,
+          "ref_start_seconds": 54.4,
+          "ref_end_seconds": 58.4,
+          "threshold": 1.05
         }
       ]
     },

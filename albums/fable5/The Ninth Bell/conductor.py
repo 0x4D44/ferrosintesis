@@ -88,7 +88,7 @@ CHANNELS: list[tuple[int, str, int, int, int, int]] = [
     (CH_STRINGS, "strings",      48,  88, 64, 74),
     (CH_CELLO,   "cello",        42,  96, 64, 70),
     (CH_CHOIR,   "choir",        52,  84, 64, 80),
-    (CH_ORGAN,   "church organ", 19,  78, 64, 60),
+    (CH_ORGAN,   "secondary organ / Leslie", 19,  78, 64, 60),
     (CH_BELLS,   "tubular bells", 14, 92, 48, 90),
     (CH_HARP,    "harp",         46,  80, 80, 70),
     (CH_TIMPANI, "timpani",      47, 100, 56, 55),
@@ -114,4 +114,6 @@ def setup(sc: en.Score) -> None:
     for beat, text in EXTRA_MARKERS:
         sc.marker(beat, text)
     for ch, name, prog, vol, pan, rev in CHANNELS:
+        if ch == CH_ORGAN:
+            sc.cc(ch, 0, 1, 0.0)
         sc.channel(ch, name, prog, volume=vol, pan=pan, reverb=rev)

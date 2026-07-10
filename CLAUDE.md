@@ -80,15 +80,17 @@ Zero external dependencies; `[profile.release]` uses LTO. Module map (`src/`):
 
 - `midi.rs` — GM file parser → tempo map, events, markers.
 - `engine.rs` — the render loop and the **mix**: channel strips (CC7/11/10/64/74/91/93/94),
-  hall reverb, chorus + echo buses, piano sympathetic resonance, bus-glue compression.
+  hall and cathedral reverbs, chorus + echo buses, piano sympathetic resonance,
+  bus-glue compression.
   Bus levels are named constants here.
-- `voices.rs` — the instrument **models** (Pluck/Karplus-Strong, Modal, Organ, SawStack,
-  Lead, Wind, Bowed). Instrument voicing constants live at the top.
+- `voices.rs` — the instrument **models** (Pluck/Karplus-Strong, Modal, drawbar Organ,
+  CathedralOrgan, SawStack, Lead, Wind, Bowed). Instrument voicing constants live at the top.
 - `drums.rs` — parametric GM channel-10 percussion.
 - `dsp.rs` — filters, oscillators, shared DSP primitives.
 - `sampler.rs` — the **LA-synthesis** layer: short public-domain PCM attack transients
   (embedded in the binary) crossfaded into the modeled sustain for piano/fiddle/flute.
-- `reverb.rs`, `wav.rs` — Freeverb tank; 16-bit PCM writer with TPDF dither.
+- `reverb.rs`, `wav.rs` — Freeverb hall plus the cathedral feedback-delay network;
+  16-bit PCM writer with TPDF dither.
 - `testutil.rs` — pitch (Goertzel), RMS, click-detection helpers for the audio oracles.
 
 **ferrosintesis does not model every GM program**, but as of v0.10 the orchestral middle is

@@ -59,6 +59,10 @@ pub trait Voice: Send {
     /// decorrelated per-layer vibrato. Default no-op; only the alt-bank
     /// `SawStack` implements it (the default voices are never driven by it).
     fn set_vib(&mut self, _depth: f32) {}
+    /// Shared cathedral-organ wind state. `pressure` is the smoothed channel
+    /// load in 0..1; `trem` is the signed, channel-global tremulant sample.
+    /// Other voices deliberately ignore both values.
+    fn set_organ_pressure(&mut self, _pressure: f32, _trem: f32) {}
     /// Hat choke (D6/CYM-4): a closed-hat strike silences the ringing open
     /// hat within ~10-30 ms. Default no-op; only `Drum` implements it.
     fn choke(&mut self) {}
@@ -2319,6 +2323,443 @@ struct PitchScoop {
     slew: f32,
 }
 
+// ---------------------------------------------------------------------------
+// GM 19 cathedral organ
+// ---------------------------------------------------------------------------
+
+const ORGAN_TABLE_LEN: usize = 1024;
+const ORGAN_MAX_SOURCE_HARMONICS: usize = 24;
+const ORGAN_MIN_FUNDAMENTAL_HZ: f32 = 12.0;
+const ORGAN_MAX_SR_FRACTION: f32 = 0.45;
+const ORGAN_FIXED_SEED: u32 = 0xC471_EDA1;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RankFamily {
+    OpenWood,
+    Principal,
+    ChorusReed,
+    Mixture,
+}
+
+#[derive(Clone, Copy)]
+struct RankSpec {
+    id: u8,
+    ratio: f32,
+    family: RankFamily,
+    gain: f32,
+    sensitivity: f32,
+}
+
+fn organ_anchor(values: [f32; 3], key: u8) -> f32 {
+    let k = key as f32;
+    if k <= 36.0 {
+        values[0]
+    } else if k < 60.0 {
+        values[0] + (values[1] - values[0]) * ((k - 36.0) / 24.0)
+    } else if k < 84.0 {
+        values[1] + (values[2] - values[1]) * ((k - 60.0) / 24.0)
+    } else {
+        values[2]
+    }
+}
+
+fn organ_speech_ms(family: RankFamily, key: u8) -> f32 {
+    let (c2, c6) = match family {
+        RankFamily::OpenWood => (180.0, 90.0),
+        RankFamily::Principal => (90.0, 35.0),
+        RankFamily::ChorusReed => (130.0, 60.0),
+        RankFamily::Mixture => (55.0, 20.0),
+    };
+    let t = ((key as f32 - 36.0) / 48.0).clamp(0.0, 1.0);
+    c2 + (c6 - c2) * t
+}
+
+fn organ_harmonic_db(family: RankFamily, key: u8, harmonic: usize) -> f32 {
+    if harmonic <= 1 {
+        return 0.0;
+    }
+    let (h2, h3, h6) = match family {
+        RankFamily::OpenWood => (
+            organ_anchor([-28.0, -25.0, -22.0], key),
+            organ_anchor([-9.0, -8.0, -7.0], key),
+            organ_anchor([-40.0, -36.0, -32.0], key),
+        ),
+        RankFamily::Principal => (
+            organ_anchor([-6.0, -5.0, -4.0], key),
+            organ_anchor([-11.0, -9.0, -8.0], key),
+            organ_anchor([-24.0, -18.0, -15.0], key),
+        ),
+        RankFamily::ChorusReed => (
+            organ_anchor([-2.0, -3.0, -4.0], key),
+            organ_anchor([-4.0, -5.0, -6.0], key),
+            organ_anchor([-10.0, -11.0, -12.0], key),
+        ),
+        RankFamily::Mixture => (
+            organ_anchor([-7.0, -6.0, -5.0], key),
+            organ_anchor([-12.0, -10.0, -9.0], key),
+            organ_anchor([-24.0, -20.0, -18.0], key),
+        ),
+    };
+    let h = harmonic as f32;
+    if harmonic == 2 {
+        h2
+    } else if harmonic == 3 {
+        h3
+    } else {
+        // Continue the H3->H6 log-frequency slope above H6. This gives every
+        // generated integer harmonic one deterministic value while retaining
+        // the signed H1/H2/H3/H6 spectral contract.
+        (h3 + (h6 - h3) * (h / 3.0).log2()).max(-72.0)
+    }
+}
+
+fn organ_speech_tilt_db(family: RankFamily, harmonic: usize) -> f32 {
+    match family {
+        RankFamily::OpenWood if harmonic >= 3 => -6.0,
+        RankFamily::Principal if harmonic >= 3 => 3.0,
+        RankFamily::ChorusReed if harmonic >= 2 => 2.0,
+        RankFamily::Mixture if harmonic >= 2 => 2.0,
+        _ => 0.0,
+    }
+}
+
+fn cathedral_mixture_ratios(key: u8) -> [f32; 4] {
+    match key {
+        0..=47 => [6.0, 8.0, 12.0, 16.0],
+        48..=59 => [4.0, 6.0, 8.0, 12.0],
+        60..=71 => [3.0, 4.0, 6.0, 8.0],
+        72..=83 => [2.0, 3.0, 4.0, 6.0],
+        _ => [1.5, 2.0, 3.0, 4.0],
+    }
+}
+
+fn cathedral_registration(key: u8) -> Vec<RankSpec> {
+    let mut ranks = Vec::with_capacity(14);
+    let mut add = |id, ratio, family, gain, sensitivity| {
+        ranks.push(RankSpec {
+            id,
+            ratio,
+            family,
+            gain,
+            sensitivity,
+        });
+    };
+    add(0, 0.5, RankFamily::Principal, 0.28, 1.0);
+    add(1, 1.0, RankFamily::Principal, 0.72, 1.0);
+    add(2, 2.0, RankFamily::Principal, 0.34, 1.0);
+    add(3, 3.0, RankFamily::Principal, 0.18, 1.0);
+    add(4, 4.0, RankFamily::Principal, 0.22, 1.0);
+    let mixture = cathedral_mixture_ratios(key);
+    let previous = matches!(key, 48 | 60 | 72 | 84).then(|| cathedral_mixture_ratios(key - 1));
+    let crossfade_gain = 0.05 * std::f32::consts::FRAC_1_SQRT_2;
+    for (i, ratio) in mixture.into_iter().enumerate() {
+        let gain = if let Some(old) = previous {
+            if old.contains(&ratio) {
+                0.05
+            } else {
+                crossfade_gain
+            }
+        } else {
+            0.05
+        };
+        add(5 + i as u8, ratio, RankFamily::Mixture, gain, 0.35);
+    }
+    if let Some(old) = previous {
+        if let Some(ratio) = old.into_iter().find(|ratio| !mixture.contains(ratio)) {
+            // One old-only rank overlaps the new break for this semitone. ID 14
+            // is reserved for that transition pipe so physical identity remains
+            // unambiguous without lifting the fourteen-pipe runtime ceiling.
+            add(14, ratio, RankFamily::Mixture, crossfade_gain, 0.35);
+        }
+    }
+    add(9, 1.0, RankFamily::ChorusReed, 0.18, 1.2);
+
+    let pedal = ((50.0 - key as f32) / 4.0).clamp(0.0, 1.0);
+    if pedal > 0.0 {
+        add(10, 0.25, RankFamily::OpenWood, 0.32 * pedal, 0.25);
+        add(11, 0.5, RankFamily::Principal, 0.26 * pedal, 0.25);
+        add(12, 1.0, RankFamily::Principal, 0.18 * pedal, 0.25);
+        // At the first mixture overlap only, omit the quietest doubled pedal
+        // colour to leave room for the transition pipe under the 14-rank cap.
+        if key != 48 {
+            add(13, 0.5, RankFamily::ChorusReed, 0.16 * pedal, 0.25);
+        }
+    }
+    ranks
+}
+
+struct RankPipe {
+    #[cfg(test)]
+    id: u8,
+    key: u8,
+    ratio: f32,
+    family: RankFamily,
+    gain: f32,
+    sensitivity: f32,
+    static_tune: f32,
+    #[cfg(test)]
+    identity_bits: (u32, u32),
+    sr: f32,
+    phase: f32,
+    phase_inc: f32,
+    frequency: f32,
+    harmonics: usize,
+    active: bool,
+    speech: Box<[f32; ORGAN_TABLE_LEN]>,
+    steady: Box<[f32; ORGAN_TABLE_LEN]>,
+    age: u64,
+    attack_samples: f32,
+    transition_samples: f32,
+    amp_mod: f32,
+}
+
+impl RankPipe {
+    fn new(spec: RankSpec, key: u8, sr: f32, event_seed: u32) -> Self {
+        let stable_seed = ORGAN_FIXED_SEED
+            ^ (spec.id as u32).wrapping_mul(0x9E37_79B9)
+            ^ (key as u32).wrapping_mul(0x85EB_CA6B);
+        let mut stable = Rng::new(stable_seed);
+        let tune_cents = stable.white() * 1.5;
+        let level = 1.0 + stable.white() * 0.04;
+        let attack_var = 1.0 + stable.white() * 0.08;
+        let mut event = Rng::new(event_seed ^ (spec.id as u32).wrapping_mul(0x27D4_EB2D));
+        let speech_ms = organ_speech_ms(spec.family, key) * attack_var;
+        let mut pipe = Self {
+            #[cfg(test)]
+            id: spec.id,
+            key,
+            ratio: spec.ratio,
+            family: spec.family,
+            gain: spec.gain * level,
+            sensitivity: spec.sensitivity,
+            static_tune: 2f32.powf(tune_cents / 1200.0),
+            #[cfg(test)]
+            identity_bits: (tune_cents.to_bits(), level.to_bits()),
+            sr,
+            phase: event.next_u32() as f32 / u32::MAX as f32 * ORGAN_TABLE_LEN as f32,
+            phase_inc: 0.0,
+            frequency: 0.0,
+            harmonics: 0,
+            active: false,
+            speech: Box::new([0.0; ORGAN_TABLE_LEN]),
+            steady: Box::new([0.0; ORGAN_TABLE_LEN]),
+            age: 0,
+            attack_samples: (speech_ms * 0.12).clamp(4.0, 22.0) * 0.001 * sr,
+            transition_samples: speech_ms * 0.001 * sr,
+            amp_mod: 1.0,
+        };
+        pipe.retune(1.0, 0.0, 0.0);
+        pipe
+    }
+
+    fn regenerate_tables(&mut self, harmonics: usize) {
+        self.speech.fill(0.0);
+        self.steady.fill(0.0);
+        if harmonics == 0 {
+            return;
+        }
+        let mut energy = 0.0;
+        let mut amps = Vec::with_capacity(harmonics);
+        for harmonic in 1..=harmonics {
+            let steady_amp = 10f32.powf(organ_harmonic_db(self.family, self.key, harmonic) / 20.0);
+            let speech_amp =
+                steady_amp * 10f32.powf(organ_speech_tilt_db(self.family, harmonic) / 20.0);
+            energy += steady_amp * steady_amp;
+            amps.push((steady_amp, speech_amp));
+        }
+        let scale = 0.65 / energy.sqrt().max(1e-6);
+        for (index, &(steady_amp, speech_amp)) in amps.iter().enumerate() {
+            let harmonic = index + 1;
+            let mut osc = Sine::new(harmonic as f32, ORGAN_TABLE_LEN as f32, 0.0);
+            for i in 0..ORGAN_TABLE_LEN {
+                let s = osc.next() * scale;
+                self.steady[i] += s * steady_amp;
+                self.speech[i] += s * speech_amp;
+            }
+        }
+    }
+
+    fn retune(&mut self, performance_pitch: f32, pressure: f32, trem: f32) {
+        let wind_cents = -5.0 * pressure.clamp(0.0, 1.0) * self.sensitivity;
+        let trem_cents = 3.0 * trem.clamp(-1.0, 1.0) * self.sensitivity;
+        let frequency = key_freq(self.key)
+            * self.ratio
+            * self.static_tune
+            * performance_pitch.max(0.0001)
+            * 2f32.powf((wind_cents + trem_cents) / 1200.0);
+        let max_hz = self.sr * ORGAN_MAX_SR_FRACTION;
+        let harmonics = if frequency >= ORGAN_MIN_FUNDAMENTAL_HZ && frequency < max_hz {
+            ORGAN_MAX_SOURCE_HARMONICS.min((max_hz / frequency).floor() as usize)
+        } else {
+            0
+        };
+        if harmonics != self.harmonics {
+            self.regenerate_tables(harmonics);
+            self.harmonics = harmonics;
+        }
+        self.frequency = frequency;
+        self.phase_inc = frequency * ORGAN_TABLE_LEN as f32 / self.sr;
+        self.active = harmonics > 0;
+        let amp_db = -1.5 * pressure.clamp(0.0, 1.0) * self.sensitivity
+            + 0.30 * trem.clamp(-1.0, 1.0) * self.sensitivity;
+        self.amp_mod = 10f32.powf(amp_db / 20.0);
+    }
+
+    #[inline]
+    fn next(&mut self) -> f32 {
+        self.age = self.age.saturating_add(1);
+        if !self.active {
+            return 0.0;
+        }
+        let i0 = self.phase as usize & (ORGAN_TABLE_LEN - 1);
+        let i1 = (i0 + 1) & (ORGAN_TABLE_LEN - 1);
+        let frac = self.phase - self.phase.floor();
+        let speech = self.speech[i0] + (self.speech[i1] - self.speech[i0]) * frac;
+        let steady = self.steady[i0] + (self.steady[i1] - self.steady[i0]) * frac;
+        self.phase += self.phase_inc;
+        self.phase = self.phase.rem_euclid(ORGAN_TABLE_LEN as f32);
+        let speech_mix = (self.age as f32 / self.transition_samples.max(1.0)).min(1.0);
+        let attack = (self.age as f32 / self.attack_samples.max(1.0)).min(1.0);
+        let reed_overshoot = if self.family == RankFamily::ChorusReed {
+            1.0 + 0.15 * (1.0 - self.age as f32 / (0.015 * self.sr)).max(0.0)
+        } else {
+            1.0
+        };
+        (speech + (steady - speech) * speech_mix)
+            * attack
+            * reed_overshoot
+            * self.gain
+            * self.amp_mod
+    }
+}
+
+pub struct CathedralOrgan {
+    pipes: Vec<RankPipe>,
+    performance_pitch: f32,
+    pressure: f32,
+    trem: f32,
+    norm: f32,
+    output_hp: Biquad,
+    chiff_filter: Biquad,
+    chiff_rng: Rng,
+    chiff_amp: f32,
+    chiff_decay: f32,
+    released: bool,
+    release_gain: f32,
+    release_step: f32,
+}
+
+impl CathedralOrgan {
+    fn new(key: u8, vel: u8, sr: f32, event_seed: u32) -> Self {
+        let pipes: Vec<_> = cathedral_registration(key)
+            .into_iter()
+            .map(|spec| RankPipe::new(spec, key, sr, event_seed))
+            .collect();
+        debug_assert!(pipes.len() <= 14);
+        let energy = pipes.iter().map(|p| p.gain * p.gain).sum::<f32>().sqrt();
+        // The extra old/new pipe pair at a mixture break is correlated rather
+        // than noise-like, so the generic root-sum-square normaliser trims a
+        // fraction too much. This measured half-percent correction keeps the
+        // audible semitone crossfade inside the 2 dB level contract.
+        let break_compensation = if matches!(key, 48 | 60 | 72 | 84) {
+            1.005
+        } else {
+            1.0
+        };
+        Self {
+            pipes,
+            performance_pitch: 1.0,
+            pressure: 0.0,
+            trem: 0.0,
+            norm: 0.28 / energy.max(0.1) * break_compensation,
+            output_hp: Biquad::highpass(10.0, 0.707, sr),
+            chiff_filter: Biquad::bandpass(2_200.0, 0.8, sr),
+            chiff_rng: Rng::new(event_seed ^ 0xC41F_F123),
+            chiff_amp: 0.012 * (0.35 + 0.65 * vel_amp(vel)),
+            chiff_decay: t60_mul(0.045, sr),
+            released: false,
+            release_gain: 1.0,
+            release_step: 1.0 / (0.10 * sr).max(1.0),
+        }
+    }
+
+    fn retune(&mut self) {
+        for pipe in &mut self.pipes {
+            pipe.retune(self.performance_pitch, self.pressure, self.trem);
+        }
+    }
+
+    #[cfg(test)]
+    fn debug_pipe_identity(&self) -> Vec<(u8, u32, u32)> {
+        self.pipes
+            .iter()
+            .map(|pipe| (pipe.id, pipe.identity_bits.0, pipe.identity_bits.1))
+            .collect()
+    }
+
+    #[cfg(test)]
+    fn debug_composed_frequencies(&self) -> Vec<u32> {
+        self.pipes
+            .iter()
+            .map(|pipe| pipe.frequency.to_bits())
+            .collect()
+    }
+
+    #[cfg(test)]
+    fn debug_all_pipe_bounds_hold(&self) -> bool {
+        self.pipes.len() <= 14
+            && self.pipes.iter().all(|pipe| {
+                !pipe.active
+                    || (pipe.frequency >= ORGAN_MIN_FUNDAMENTAL_HZ
+                        && pipe.frequency * pipe.harmonics as f32
+                            <= pipe.sr * ORGAN_MAX_SR_FRACTION + 0.01)
+            })
+    }
+}
+
+impl Voice for CathedralOrgan {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for sample in out.iter_mut() {
+            let mut organ = self.pipes.iter_mut().map(RankPipe::next).sum::<f32>();
+            if self.chiff_amp > 1e-6 {
+                organ += self.chiff_filter.process(self.chiff_rng.white()) * self.chiff_amp;
+                self.chiff_amp *= self.chiff_decay;
+            }
+            if self.released {
+                self.release_gain = (self.release_gain - self.release_step).max(0.0);
+            }
+            *sample += self
+                .output_hp
+                .process(organ * self.norm * self.release_gain);
+        }
+        self.release_gain > 0.0
+    }
+
+    fn note_off(&mut self) {
+        self.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.released
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.performance_pitch = mult.max(0.0001);
+        self.retune();
+    }
+
+    fn set_organ_pressure(&mut self, pressure: f32, trem: f32) {
+        self.pressure = pressure.clamp(0.0, 1.0);
+        self.trem = trem.clamp(-1.0, 1.0);
+        self.retune();
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "cathedral-organ"
+    }
+}
+
 pub struct Organ {
     harms: Vec<Pipe>,
     env: Adsr,
@@ -2676,6 +3117,11 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
         .with_reed_noise(0.020, (f * 3.5).clamp(750.0, 2600.0), 0.75),
         _ => unreachable!("organ() only handles GM16-23"),
     }
+}
+
+/// Frozen pre-cathedral GM19 voice for the non-zero CC0 compatibility bank.
+pub(crate) fn legacy_church_organ(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
+    Box::new(organ(19, key, vel, sr, seed))
 }
 
 // ---------------------------------------------------------------------------
@@ -4903,7 +5349,8 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             0.50,
         )),
         15 => Box::new(Pluck::new(&DULCIMER, key, vel, sr, seed)),
-        16..=23 => Box::new(organ(program, key, vel, sr, seed)),
+        16..=18 | 20..=23 => Box::new(organ(program, key, vel, sr, seed)),
+        19 => Box::new(CathedralOrgan::new(key, vel, sr, seed)),
         24 => {
             let model = Box::new(Pluck::new(&NYLON, key, vel, sr, seed));
             if samples {
@@ -5062,7 +5509,7 @@ mod tests {
     // Audio oracle helpers used by the v0.9 reed/brass oracles (bare names).
     use crate::testutil::{
         band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend, hp_rms, mag_at,
-        peak_locate, rms,
+        peak_locate, rms, spectral_band_rms, spectral_centroid,
     };
 
     /// Lowpass twice, then count rising zero crossings.
@@ -5453,6 +5900,239 @@ mod tests {
     }
 
     #[test]
+    fn cathedral_organ_legacy_hash_is_preserved() {
+        let sr = 44_100.0;
+        let mut legacy = legacy_church_organ(69, 104, sr, 0x5eed);
+        let mut rendered = vec![0.0; (0.5 * sr) as usize];
+        legacy.render(&mut rendered);
+        assert_eq!(render_hash(&rendered), 11750116236685652893);
+    }
+
+    #[test]
+    fn cathedral_organ_has_pedal_body_and_mixture_sheen() {
+        let sr = 44_100.0;
+        let low = render_program(19, 36, 96, 1.2, 0x1234);
+        let body = segment(&low, sr, 0.35, 1.10);
+        let p32 = mag_at(body, sr, 16.35);
+        let p16 = mag_at(body, sr, 32.70);
+        let p8 = mag_at(body, sr, 65.41);
+        assert!(
+            p32 > 1e-4 && p16 > 1e-4 && p8 > 1e-4,
+            "pedal peaks {p32}/{p16}/{p8}"
+        );
+        assert!(
+            p32 >= p8 * 10f32.powf(-18.0 / 20.0),
+            "32-foot {p32} vs 8-foot {p8}"
+        );
+        let sub = spectral_band_rms(body, sr, 15.0, 40.0);
+        let bass = spectral_band_rms(body, sr, 40.0, 120.0);
+        assert!(
+            sub >= bass * 10f32.powf(-14.0 / 20.0),
+            "sub/bass {sub}/{bass}"
+        );
+
+        let mut legacy = legacy_church_organ(36, 96, sr, 0x1234);
+        let mut legacy_render = vec![0.0; (1.2 * sr) as usize];
+        legacy.render(&mut legacy_render);
+        let legacy_sub = spectral_band_rms(segment(&legacy_render, sr, 0.35, 1.10), sr, 15.0, 40.0);
+        assert!(
+            sub >= legacy_sub * 10f32.powf(6.0 / 20.0),
+            "cathedral/legacy 15-40Hz {sub}/{legacy_sub}"
+        );
+
+        let high = render_program(19, 84, 96, 0.8, 0x1234);
+        let high_body = segment(&high, sr, 0.25, 0.75);
+        assert!(
+            hp_rms(high_body, sr, 4_000.0) >= 0.04 * rms(high_body),
+            "high mixture energy too low"
+        );
+    }
+
+    #[test]
+    fn cathedral_organ_steady_level_is_velocity_independent() {
+        let sr = 44_100.0;
+        let soft = render_program(19, 60, 32, 0.8, 7);
+        let loud = render_program(19, 60, 120, 0.8, 7);
+        let soft_rms = rms(segment(&soft, sr, 0.30, 0.75));
+        let loud_rms = rms(segment(&loud, sr, 0.30, 0.75));
+        let delta_db = 20.0 * (loud_rms / soft_rms.max(1e-12)).log10().abs();
+        assert!(delta_db <= 1.5, "steady velocity delta {delta_db:.2} dB");
+    }
+
+    #[test]
+    fn cathedral_organ_pipe_identity_ignores_event_seed() {
+        let a = CathedralOrgan::new(60, 90, 44_100.0, 1);
+        let b = CathedralOrgan::new(60, 90, 44_100.0, 0xdead_beef);
+        assert_eq!(a.debug_pipe_identity(), b.debug_pipe_identity());
+    }
+
+    #[test]
+    fn cathedral_organ_registration_and_mixture_breaks_are_pinned() {
+        for (key, want) in [
+            (47, vec![6.0, 8.0, 12.0, 16.0]),
+            (48, vec![4.0, 6.0, 8.0, 12.0, 16.0]),
+            (49, vec![4.0, 6.0, 8.0, 12.0]),
+            (60, vec![3.0, 4.0, 6.0, 8.0, 12.0]),
+            (72, vec![2.0, 3.0, 4.0, 6.0, 8.0]),
+            (84, vec![1.5, 2.0, 3.0, 4.0, 6.0]),
+        ] {
+            let ranks = cathedral_registration(key);
+            assert!(ranks.len() <= 14);
+            let mut got: Vec<_> = ranks
+                .iter()
+                .filter(|rank| rank.family == RankFamily::Mixture)
+                .map(|rank| rank.ratio)
+                .collect();
+            got.sort_by(f32::total_cmp);
+            let mut want = want;
+            want.sort_by(f32::total_cmp);
+            assert_eq!(got, want, "mixture break at key {key}");
+        }
+        let full = cathedral_registration(46);
+        assert_eq!(full.len(), 14);
+        assert_eq!(full.iter().find(|rank| rank.id == 10).unwrap().gain, 0.32);
+        let half = cathedral_registration(48);
+        assert_eq!(half.iter().find(|rank| rank.id == 10).unwrap().gain, 0.16);
+        assert_eq!(cathedral_registration(50).len(), 10);
+
+        let high = CathedralOrgan::new(108, 96, 44_100.0, 7);
+        let audible_mixtures = high
+            .pipes
+            .iter()
+            .filter(|pipe| pipe.family == RankFamily::Mixture && pipe.active)
+            .count();
+        assert!(
+            audible_mixtures >= 2,
+            "top-compass mixture ranks {audible_mixtures}"
+        );
+    }
+
+    #[test]
+    fn cathedral_organ_mixture_crossfades_are_smooth() {
+        let sr = 44_100.0;
+        for break_key in [48u8, 60, 72, 84] {
+            let measurements: Vec<_> = [break_key - 1, break_key, break_key + 1]
+                .into_iter()
+                .map(|key| {
+                    let rendered = render_program(19, key, 96, 0.8, 99);
+                    let body = segment(&rendered, sr, 0.30, 0.75);
+                    (rms(body), spectral_centroid(body, sr, 100.0, 12_000.0))
+                })
+                .collect();
+            for (pair_index, pair) in measurements.windows(2).enumerate() {
+                let level_db = 20.0 * (pair[1].0 / pair[0].0.max(1e-12)).log10().abs();
+                let centroid_ratio = pair[1].1 / pair[0].1.max(1e-12);
+                assert!(
+                    level_db <= 2.0,
+                    "break {break_key} pair {pair_index} level jump {level_db:.2}dB ({:.6}/{:.6})",
+                    pair[0].0,
+                    pair[1].0
+                );
+                assert!(
+                    (0.75..=1.25).contains(&centroid_ratio),
+                    "break {break_key} centroid ratio {centroid_ratio:.3}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cathedral_organ_rejects_sub_ten_hz_across_low_midi_keys() {
+        let sr = 44_100.0;
+        for key in 0u8..=35 {
+            let rendered = render_program(19, key, 96, 0.7, 0x7000 + key as u32);
+            let body = segment(&rendered, sr, 0.25, 0.65);
+            let infrasonic = spectral_band_rms(body, sr, 0.1, 9.5);
+            let musical_sub = spectral_band_rms(body, sr, 12.0, 40.0).max(1e-12);
+            let relative_db = 20.0 * (infrasonic / musical_sub).log10();
+            assert!(
+                relative_db <= -24.0,
+                "key {key} sub-10 ratio {relative_db:.1}dB"
+            );
+        }
+    }
+
+    #[test]
+    fn cathedral_organ_composes_pitch_pressure_and_tremulant() {
+        let bend = 2f32.powf(7.0 / 12.0);
+        let mut pitch_first = CathedralOrgan::new(48, 90, 44_100.0, 9);
+        pitch_first.set_pitch(bend);
+        pitch_first.set_organ_pressure(0.8, 0.45);
+        let mut wind_first = CathedralOrgan::new(48, 90, 44_100.0, 9);
+        wind_first.set_organ_pressure(0.8, 0.45);
+        wind_first.set_pitch(bend);
+        assert_eq!(
+            pitch_first.debug_composed_frequencies(),
+            wind_first.debug_composed_frequencies()
+        );
+        assert!(pitch_first.debug_all_pipe_bounds_hold());
+
+        let mut loaded = CathedralOrgan::new(48, 90, 44_100.0, 9);
+        let unloaded: Vec<_> = loaded.pipes.iter().map(|pipe| pipe.frequency).collect();
+        loaded.set_organ_pressure(1.0, 0.0);
+        let cents = |id: u8| {
+            let index = loaded.pipes.iter().position(|pipe| pipe.id == id).unwrap();
+            1200.0 * (loaded.pipes[index].frequency / unloaded[index]).log2()
+        };
+        assert!(
+            (-1.5..=-1.0).contains(&cents(10)),
+            "pedal settling {} cents",
+            cents(10)
+        );
+        assert!(
+            (-5.2..=-4.8).contains(&cents(1)),
+            "principal settling {} cents",
+            cents(1)
+        );
+        assert!(
+            (-6.2..=-5.8).contains(&cents(9)),
+            "reed settling {} cents",
+            cents(9)
+        );
+
+        let mut dry = CathedralOrgan::new(48, 90, 44_100.0, 17);
+        let mut under_load = CathedralOrgan::new(48, 90, 44_100.0, 17);
+        under_load.set_organ_pressure(1.0, 0.0);
+        let mut dry_audio = vec![0.0; 35_280];
+        let mut loaded_audio = vec![0.0; 35_280];
+        dry.render(&mut dry_audio);
+        under_load.render(&mut loaded_audio);
+        let dry_level = rms(&dry_audio[13_230..33_075]);
+        let loaded_level = rms(&loaded_audio[13_230..33_075]);
+        let settling_db = 20.0 * (loaded_level / dry_level.max(1e-12)).log10();
+        assert!(
+            (-1.8..=-0.3).contains(&settling_db),
+            "loaded pipe level settled {settling_db:.2}dB"
+        );
+    }
+
+    #[test]
+    fn cathedral_organ_runtime_bend_stays_bounded_and_release_is_clean() {
+        let sr = 44_100.0;
+        let mut high = CathedralOrgan::new(120, 100, sr, 5);
+        high.set_pitch(4.0);
+        high.set_organ_pressure(1.0, 1.0);
+        assert!(high.debug_all_pipe_bounds_hold());
+        let mut high_buf = vec![0.0; sr as usize / 2];
+        high.render(&mut high_buf);
+        assert!(high_buf.iter().all(|x| x.is_finite()));
+
+        let mut low = CathedralOrgan::new(0, 100, sr, 6);
+        assert!(low.debug_all_pipe_bounds_hold());
+        // Four seconds gives the lowest retained (~16 Hz) rank enough cycles
+        // that the mean measures DC rather than a partial-cycle endpoint.
+        let mut low_buf = vec![0.0; (4.0 * sr) as usize];
+        low.render(&mut low_buf);
+        let mean = low_buf.iter().sum::<f32>() / low_buf.len() as f32;
+        assert!(mean.abs() < 10f32.powf(-70.0 / 20.0), "DC {mean}");
+        low.note_off();
+        assert!(
+            dies_within(Box::new(low), sr, 0.25),
+            "cathedral organ release exceeded 250 ms"
+        );
+    }
+
+    #[test]
     fn reed_organ_accordion_harmonica_have_free_reed_character() {
         let sr = 44100.0;
         let key = 69;
@@ -5471,12 +6151,16 @@ mod tests {
             );
         }
 
-        let legacy_hashes: Vec<(u8, u64)> = (16u8..=19)
+        let mut legacy_hashes: Vec<(u8, u64)> = (16u8..=18)
             .map(|program| {
                 let routed = render_program(program, key, vel, 0.5, seed);
                 (program, render_hash(&routed))
             })
             .collect();
+        let mut legacy = legacy_church_organ(key, vel, sr, seed);
+        let mut legacy_render = vec![0.0; (0.5 * sr) as usize];
+        legacy.render(&mut legacy_render);
+        legacy_hashes.push((19, render_hash(&legacy_render)));
         assert_eq!(
             legacy_hashes,
             vec![
@@ -5488,8 +6172,18 @@ mod tests {
             "GM16-19 legacy organ hashes"
         );
 
+        let render_old_organ = |program| {
+            if program == 19 {
+                let mut v = legacy_church_organ(key, vel, sr, seed ^ program as u32);
+                let mut s = vec![0.0; (0.9 * sr) as usize];
+                v.render(&mut s);
+                s
+            } else {
+                render_program(program, key, vel, 0.9, seed ^ program as u32)
+            }
+        };
         let click_ratio = |program| {
-            let s = render_program(program, key, vel, 0.7, seed ^ program as u32);
+            let s = render_old_organ(program);
             let click = hp_rms(segment(&s, sr, 0.0, 0.008), sr, 2500.0);
             let body = rms(segment(&s, sr, 0.08, 0.22)).max(1e-9);
             click / body
@@ -5504,7 +6198,9 @@ mod tests {
             );
         }
 
-        let gm19 = render_program(19, key, vel, 0.9, seed);
+        let mut gm19_voice = legacy_church_organ(key, vel, sr, seed);
+        let mut gm19 = vec![0.0; (0.9 * sr) as usize];
+        gm19_voice.render(&mut gm19);
         let gm20 = render_program(20, key, vel, 0.9, seed);
         let gm20_body = segment(&gm20, sr, 0.26, 0.60);
         let gm20_pitch = peak_locate(gm20_body, sr, f0 * 0.97, f0 * 1.03);

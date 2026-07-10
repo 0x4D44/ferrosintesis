@@ -172,7 +172,8 @@ class Score:
     # -- events -------------------------------------------------------------
     def cc(self, ch: int, num: int, val: int, beat: float) -> None:
         self.events.setdefault(ch, []).append(
-            (_tick(beat), 2, bytes([0xB0 | ch, num, max(0, min(127, val))])))
+            (_tick(beat), 0 if num == 0 else 2,
+             bytes([0xB0 | ch, num, max(0, min(127, val))])))
 
     def note(self, ch: int, p: int, beat: float, dur: float, vel: int,
              jt: int = 5, jv: int = 4) -> None:
@@ -630,6 +631,7 @@ def parse_midi(path: Path) -> dict:
     lyrics = 0
     keysigs = 0
     aftertouches = 0
+    channel_events: list[tuple[int, int, bytes]] = []
     max_tick = 0
     names: list[str] = []
     for _ in range(ntracks):
@@ -685,6 +687,8 @@ def parse_midi(path: Path) -> dict:
                 pos += length
             else:
                 width = 1 if status & 0xF0 in (0xC0, 0xD0) else 2
+                payload = bytes(data[pos:pos + width])
+                channel_events.append((tick, status, payload))
                 if status & 0xF0 == 0x90 and data[pos + 1] > 0:
                     notes += 1
                 elif status & 0xF0 == 0xD0:
@@ -700,4 +704,5 @@ def parse_midi(path: Path) -> dict:
     return {"format": fmt, "tracks": ntracks, "ppq": division,
             "notes": notes, "seconds": seconds, "names": names,
             "tempo_events": len(tempos), "lyrics": lyrics,
-            "keysigs": keysigs, "aftertouch": aftertouches}
+            "keysigs": keysigs, "aftertouch": aftertouches,
+            "channel_events": channel_events}

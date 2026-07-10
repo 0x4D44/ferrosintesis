@@ -33,7 +33,7 @@ Renders ~14 minutes of stereo 44.1 kHz audio in under 20 seconds.
 | `-q` | — | quiet (no progress) |
 
 MIDI pitch bend (±2 semitones by default, RPN-adjustable), RPN fine tune, CC1
-(mod wheel: vibrato, or Leslie speed on organs), channel aftertouch, CC5/CC65
+(mod wheel: vibrato, cathedral tremulant, or Leslie speed), channel aftertouch, CC5/CC65
 portamento, CC64 (sustain pedal), CC68 (legato/hammer-on-pull-off), CC74
 (brightness/wah), CC93 (chorus send) and CC94 (echo send) are all honoured —
 see below. CC0 bank select is honoured too: a non-zero value selects the
@@ -56,7 +56,7 @@ Output is peak-normalised to −1 dBFS, 16-bit PCM stereo with TPDF dither.
 |--------|-----------|-------------|
 | **Pluck** | extended Karplus-Strong in **two polarizations** — a sustaining loop plus a faster-decaying, slightly detuned one, so notes decay fast-then-slow with a gentle beat, like a real string. The delay line is now **fractional-tap**, so pitch can *move* while a note rings: **MIDI pitch bend** glides it, and **CC68 legato** retunes an already-ringing string instead of re-picking it — hammer-ons and pull-offs, and slides on the fiddle/winds too (see "Performance" below). Tuned-delay allpass, in-loop damping, pick-position comb excitation, per-note round-robin variation. Acoustics get a **body resonator** (Helmholtz air mode + plate modes); electrics and basses get a **pickup-position comb**; basses also get an envelope-locked **sub-oscillator** for fundamental weight. GM 35 fretless adds an envelope-following mid formant that blooms open into the note's onset — the "mwah" rather than a static dark bass preset. GM 46 harp has its own broad soundboard resonances and skips the guitar wound-string key split. A dedicated **palm-mute** preset (heavy damping, short decay) lives at program 28; GM 7 clavinet uses a short bright pickup/comb pluck. GM 15 hammered dulcimer re-voices the polarization pair as a true **double course** — two near-equal strings 0.42 % apart with near-zero bridge coupling, so every note carries the instrument's slow unison-shimmer beat under a wooden hammer knock | guitars 24–31 (28 = muted), basses 32–39, harp 46, clavinet 7, **hammered dulcimer 15**, sitar 104, banjo 105, shamisen 106, koto 107 |
 | **Modal** | banks of decaying rotation-oscillator partials (no `sin()` in the loop) with strike noise; the partial bank retunes phase-continuously for pitch bend, RPN fine tune, portamento and aftertouch vibrato. Acoustic pianos GM 0–3 keep the inharmonic two-stage decay under the LA sampled hammer strike. GM 4 is a Rhodes-style tine EP, GM 5 a brighter FM/DX bell EP, and GM 6 a plucked, narrow-velocity harpsichord with no acoustic hammer sample. GM 11 vibraphone adds the defining motor-fan amplitude tremolo. GM 47 timpani adds a struck-head pitch settle, velocity-bright upper modes, per-strike balance variation, and note-off release that lets short hits ring. GM 112–118 add modeled melodic percussion: bright tinkle bell, clanky agogo, tuned steelpan, dry woodblock, taiko, melodic tom and swept synth drum | acoustic pianos 0–3, electric pianos 4–5, harpsichord 6, celesta 8, glockenspiel 9, music box 10, **vibraphone 11** (metal bars with ~6 Hz motor tremolo), **wood bars 12–13** (marimba/xylophone with short key-scaled decays and band-passed mallet clicks), **tubular bells 14** (hand-tuned chime partials ≈ 2:3:4.2 with hum; strikes jitter so no two ring alike), timpani 47, crystal 96–103, kalimba 108, melodic percussion 112–118 |
-| **Organ / free reed** | GM16–19 use the additive drawbar/pipe bank with key click, attack chiff, tremulant, per-pipe level variation and rock-organ overdrive; CC1 remains Leslie speed there. GM20–23 are free reeds instead: harmonium/reed organ with bellows noise, accordion/tango accordion with musette detuned reeds, and harmonica with breath noise plus a settling scoop. GM22 takes CC1 as pitch vibrato rather than Leslie speed. All retune phase-continuously for pitch bend, RPN fine tune, portamento and aftertouch vibrato | 16–23 |
+| **Organ / free reed** | **GM19 defaults to a cathedral organ**: stable per-rank/per-key pipe identities, generated 1024-sample rank tables, an English full-organ registration, a 32-foot pedal foundation on low keys, wind-load interaction and a fixed-rate tremulant whose depth follows CC1. It feeds its own long cathedral reverb without filtering away the infrasonic weight. CC0 nonzero selects the former additive GM19 drawbar/pipe voice and Leslie path. GM16–18 retain that additive drawbar/Leslie family with key click, chiff, pipe variation and rock-organ overdrive. GM20–23 are free reeds: harmonium, accordions and harmonica. GM22 takes CC1 as pitch vibrato. | 16–23 |
 | **SawStack** | detuned polyBLEP saw ensemble — **each layer with its own vibrato rate/phase and a slow random pitch drift**, so a section sounds like players, not one detuned synth. Strings and choir also answer authored **CC1 vibrato** and **CC68 legato**; pads keep their normal retriggering. The stack feeds a lowpass (strings, pads; the sweep pad's filter is LFO-swept) or a **vocal formant bank** that morphs open at the onset ("mm-ah"). Choir-pad 91 stays on the old pad path unless its channel authors CC70, then it uses the same vowel-morph formant bank. | strings 48–51, choir 52–54, pads 88–95 plus sustained FX 97/99/101/103 |
 | **OrchHit** | one-shot orchestral stab: octave-stacked detuned saw ensemble, low thump, and a short noisy bite with fast decay | orchestra hit 55 |
 | **Brass** | per-player lip-valve saws (2× oversampled) through a fixed bore/bell body, an envelope-tracked **"waa"** brightness that opens with loudness, an onset pitch **scoop** and flutter-tongue **growl**. **CC11 breath** opens the timbre, **channel aftertouch** adds growl; **CC1** vibrato and **CC68** legato as elsewhere. Section/synth-brass get section-width chorus | trumpet 56, trombone 57, tuba 58, muted trumpet 59, french horn 60, brass section 61, synth brass 62–63 |
@@ -109,8 +109,11 @@ pull-off. ferrosintesis models this at the engine level, not just per-voice:
   multiplied on top of the
   channel's pitch bend — so a bent-and-held note can bloom into vibrato,
   the way a guitarist's wail does. Drums, pianos, bells and the palm-mute
-  are left alone. On **organs** the wheel is a Leslie speed control
-  instead. The first CC1 event on a channel (any value) makes the wheel
+  are left alone. On the default **GM19 cathedral organ**, the wheel controls
+  the depth of a channel-wide 5.5 Hz tremulant; its rate and phase stay fixed so
+  an entire division breathes together. On GM16–18 and secondary-bank GM19,
+  the wheel is a Leslie speed control instead. The first CC1 event on one of
+  those Leslie channels (any value) makes the wheel
   *authoritative*: from then on the tremulant rate is CC1 mapped across
   the full Leslie range — ~0.9 Hz (slow chorale) at CC1 = 0 up to ~6.8 Hz
   (fast) at CC1 = 127 — so a 0→127 ramp sweeps the rotor over its whole
@@ -118,8 +121,7 @@ pull-off. ferrosintesis models this at the engine level, not just per-voice:
   idle. The rate slews with a ~1.5 s rotor time constant (real
   spin-up/spin-down inertia), the base tremulant depth stays audible even
   at the slow rate, and the modulation deepens further as it spins up. A
-  channel whose CC1 is never touched keeps its program's idle tremulant
-  unchanged, so mod-free MIDI renders exactly as before.
+  channel whose CC1 is never touched keeps its program's idle Leslie speed.
 - **CC64 sustain pedal** holds NoteOffs: a note released while the pedal is
   down keeps ringing until the pedal lifts (the piano's pooled washes).
   Pedal-held voices are past their NoteOff, so they are never candidates
@@ -149,8 +151,13 @@ reel for examples.
   reflections — attacks stay clear of the wash, and the room has walls. Its
   send is now **highpassed at 150 Hz** so the low end stays dry and tight
   instead of washing out in the tank.
+- **Cathedral reverb**: default GM19 bypasses that low-cut send and feeds a
+  dedicated eight-line feedback-delay network behind a 40 ms pre-delay. Its
+  frequency-dependent decay runs roughly 5–7 seconds, preserves the 32-foot
+  rank's room pressure, and uses a 10 Hz return blocker as a final safety rail.
 - **Chorus bus**: one modulated delay, quadrature L/R taps; strings, choir,
-  organs and pads get ensemble width by program profile.
+  Leslie organs and pads get ensemble width by program profile. The cathedral
+  organ stays out of chorus unless the MIDI explicitly authors CC93.
 - **Echo bus**: ping-pong delay timed to a dotted quaver at the song's opening
   tempo, repeats darkening as they bounce — the classic delayed-lead sound on
   electric guitars, whistle and crystal.

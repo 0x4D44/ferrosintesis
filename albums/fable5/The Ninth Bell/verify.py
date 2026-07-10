@@ -326,6 +326,34 @@ def check_nine_bells(sc):
     return _cap(fails)
 
 
+def check_organ_secondary_bank(sc, info):
+    """The written MIDI's Leslie lane must select legacy GM19 first."""
+    if info is None:
+        evs = [(tk, data[0], data[1:])
+               for tk, _prio, data in
+               sorted(sc.events.get(CH.CH_ORGAN, []), key=lambda e: (e[0], e[1]))]
+    else:
+        evs = [(tk, status, payload)
+               for tk, status, payload in info["channel_events"]
+               if status & 0x0F == CH.CH_ORGAN]
+    bank = [i for i, (_tk, status, payload) in enumerate(evs)
+            if (status & 0xF0) == 0xB0 and payload == bytes([0, 1])]
+    prog = [i for i, (_tk, status, payload) in enumerate(evs)
+            if (status & 0xF0) == 0xC0 and payload == bytes([19])]
+    note = [i for i, (_tk, status, payload) in enumerate(evs)
+            if (status & 0xF0) == 0x90 and payload[1] > 0]
+    fails = []
+    if not bank:
+        fails.append("organ lane has no CC0=1 secondary-bank select")
+    if not prog:
+        fails.append("organ lane has no GM19 program change")
+    if bank and prog and bank[0] > prog[0]:
+        fails.append("organ CC0=1 serializes after GM19 program change")
+    if bank and note and bank[0] > note[0]:
+        fails.append("organ CC0=1 serializes after its first note")
+    return fails
+
+
 def check_silences(sc):
     fails = []
     for (on_w, hold_w, exempt), tag in ((SILENCE_1, "hit"),
@@ -468,6 +496,7 @@ def run_all(sc, info, spans, bounds_whitelist=()):
         ("check_structure", check_structure(sc, info)),
         ("check_intro_fidelity", check_intro_fidelity(sc)),
         ("check_programs", check_programs(sc)),
+        ("check_organ_secondary_bank", check_organ_secondary_bank(sc, info)),
         ("check_pan", check_pan(sc)),
         ("check_nine_bells", check_nine_bells(sc)),
         ("check_silences", check_silences(sc)),

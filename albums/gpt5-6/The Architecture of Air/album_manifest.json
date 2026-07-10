@@ -1,0 +1,170 @@
+{
+  "album": "The Architecture of Air",
+  "version": "1.0.0",
+  "artist": "GPT-5.6",
+  "style": "large-form contemporary cathedral organ with sparse choir, bells, and timpani",
+  "track_count": 1,
+  "total_duration_seconds": 405.9,
+  "total_duration_minutes": 6.76,
+  "originality_note": "All melodic, harmonic, rhythmic, and formal material is original.",
+  "showcase": [
+    "velocity-independent pipe sustain and chiff",
+    "32-foot pedal energy",
+    "principal and high-mixture ranks",
+    "same-channel wind-chest load and recovery",
+    "fixed 5.5 Hz tremulant",
+    "dedicated cathedral room and long decay"
+  ],
+  "tracks": [
+    {
+      "number": 1,
+      "title": "The Architecture of Air",
+      "file": "midi/01 - The Architecture of Air.mid",
+      "duration_seconds": 405.9,
+      "duration_minutes": 6.76,
+      "style": "large-form contemporary cathedral organ with sparse choir, bells, and timpani",
+      "sections": [
+        {
+          "name": "I. Stone Before Breath",
+          "start_beat": 0.0,
+          "start_seconds": 0.0,
+          "time": "0:00",
+          "tempo_bpm": 58.0,
+          "meter": "5/4"
+        },
+        {
+          "name": "II. The Principal Walk",
+          "start_beat": 40.0,
+          "start_seconds": 41.379,
+          "time": "0:41",
+          "tempo_bpm": 72.0,
+          "meter": "4/4"
+        },
+        {
+          "name": "III. The Vault Answers",
+          "start_beat": 104.0,
+          "start_seconds": 94.713,
+          "time": "1:34",
+          "tempo_bpm": 88.0,
+          "meter": "7/8"
+        },
+        {
+          "name": "IV. Tremulant Light",
+          "start_beat": 176.0,
+          "start_seconds": 143.804,
+          "time": "2:23",
+          "tempo_bpm": 66.0,
+          "meter": "3/4"
+        },
+        {
+          "name": "V. Windchest",
+          "start_beat": 240.0,
+          "start_seconds": 201.985,
+          "time": "3:21",
+          "tempo_bpm": 96.0,
+          "meter": "4/4"
+        },
+        {
+          "name": "VI. Mixtures in the Lantern",
+          "start_beat": 336.0,
+          "start_seconds": 261.985,
+          "time": "4:21",
+          "tempo_bpm": 84.0,
+          "meter": "12/8"
+        },
+        {
+          "name": "VII. Full Organ",
+          "start_beat": 416.0,
+          "start_seconds": 319.128,
+          "time": "5:19",
+          "tempo_bpm": 78.0,
+          "meter": "4/4"
+        },
+        {
+          "name": "VIII. The Building Sings",
+          "start_beat": 456.0,
+          "start_seconds": 349.897,
+          "time": "5:49",
+          "tempo_bpm": 60.0,
+          "meter": "4/4"
+        },
+        {
+          "name": "IX. Air After Stone",
+          "start_beat": 480.0,
+          "start_seconds": 373.897,
+          "time": "6:13",
+          "tempo_bpm": 60.0,
+          "meter": "4/4"
+        }
+      ],
+      "audio_windows": {
+        "pedal": {
+          "start_beat": 0.5,
+          "end_beat": 7.5,
+          "start_seconds": 0.517,
+          "end_seconds": 7.759
+        },
+        "principals": {
+          "start_beat": 52.0,
+          "end_beat": 68.0,
+          "start_seconds": 51.379,
+          "end_seconds": 64.713
+        },
+        "tremulant_off": {
+          "start_beat": 182.0,
+          "end_beat": 191.0,
+          "start_seconds": 149.258,
+          "end_seconds": 157.44
+        },
+        "tremulant_on": {
+          "start_beat": 204.0,
+          "end_beat": 215.0,
+          "start_seconds": 169.258,
+          "end_seconds": 179.258
+        },
+        "wind_loaded": {
+          "start_beat": 255.0,
+          "end_beat": 259.5,
+          "start_seconds": 211.36,
+          "end_seconds": 214.173
+        },
+        "wind_recovery": {
+          "start_beat": 261.0,
+          "end_beat": 267.0,
+          "start_seconds": 215.11,
+          "end_seconds": 218.86
+        },
+        "mixtures": {
+          "start_beat": 337.0,
+          "end_beat": 351.0,
+          "start_seconds": 262.7,
+          "end_seconds": 272.7
+        },
+        "climax": {
+          "start_beat": 458.0,
+          "end_beat": 478.0,
+          "start_seconds": 351.897,
+          "end_seconds": 371.897
+        },
+        "tail_early": {
+          "start_beat": 480.2,
+          "end_beat": 484.0,
+          "start_seconds": 374.097,
+          "end_seconds": 377.897
+        },
+        "tail_late": {
+          "start_beat": 486.0,
+          "end_beat": 492.0,
+          "start_seconds": 379.897,
+          "end_seconds": 385.897
+        },
+        "tail_floor": {
+          "start_beat": 500.0,
+          "end_beat": 508.0,
+          "start_seconds": 393.897,
+          "end_seconds": 401.897
+        }
+      }
+    }
+  ]
+}

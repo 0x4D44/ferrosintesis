@@ -1,0 +1,16 @@
+Why this piece
+This is a musical proof of the new default cathedral organ rather than a sequence of test tones. One continuous arc turns the model's 32-foot pressure, pipe speech, shared wind, high mixtures, tremulant, and long room into the subject of the composition.
+
+Listening guide
+0:00 — Stone Before Breath: an exposed C lets the 32-foot foundation turn pitch into pressure.
+0:41 — The Principal Walk: staggered pipes reveal chiff, speech, and the central body of the organ.
+1:35 — The Vault Answers: manual lines cross beneath a distant, wordless choir.
+2:24 — Tremulant Light: one held harmony moves from still air to a fixed, breathing tremulant.
+3:22 — Windchest: ten notes share one chest; one pipe remains to recover in the space.
+4:22 — Mixtures in the Lantern: the highest ranks provide their own brilliance before the tower bells answer.
+5:19 — Full Organ: successive plena gather weight, height, and wind.
+5:50 — The Building Sings: twelve-note full organ stands over the 32-foot C.
+6:14 — Air After Stone: every pipe releases, and the cathedral alone completes the cadence.
+
+MIDI techniques
+The centered GM19 organ channel explicitly writes CC0=0 before Program 19 and never enters the legacy bank. CC91=116 feeds the dedicated cathedral room while CC93 chorus and CC94 echo remain zero. CC1 moves from 0 to 112 on one continuously held chord, exposing the fixed 5.5 Hz tremulant. A ten-note chord on one channel loads the shared wind chest before shedding to one recovering note. CC11 shapes the long swell; velocity mainly varies pipe speech and chiff. The final twelve-note plenum releases at beat 480 into thirty-two note-free beats.

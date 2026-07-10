@@ -1,0 +1,879 @@
+{
+  "album": "Atlas of Becoming",
+  "version": "1.0.0",
+  "artist": "OpenAI Codex",
+  "originality_note": "Original instrumental MIDI compositions. Named references informed only broad form, pacing, ensemble colour, and dramatic movement; all musical material is new.",
+  "track_count": 14,
+  "total_duration_seconds": 3679.72,
+  "total_duration_minutes": 61.33,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Tidal Geometry",
+      "file": "midi/01 - Tidal Geometry.mid",
+      "duration_seconds": 201.96,
+      "duration_minutes": 3.37,
+      "style": "aquatic chamber-orchestra motion in changing metre",
+      "concept": "Water, bodies, and light describe precise arcs before a widening horizon.",
+      "tags": [
+        "fine-line"
+      ],
+      "sections": [
+        {
+          "name": "Glass Surface",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Underwater Wheel",
+          "start_beat": 84,
+          "start_seconds": 46.67,
+          "time": "0:46"
+        },
+        {
+          "name": "Aerial Thread",
+          "start_beat": 168,
+          "start_seconds": 89.38,
+          "time": "1:29"
+        },
+        {
+          "name": "Weightless Drop",
+          "start_beat": 264,
+          "start_seconds": 135.09,
+          "time": "2:15"
+        },
+        {
+          "name": "Final Arc",
+          "start_beat": 304,
+          "start_seconds": 163.0,
+          "time": "2:42"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Wire and Wake",
+      "file": "midi/02 - Wire and Wake.mid",
+      "duration_seconds": 186.45,
+      "duration_minutes": 3.11,
+      "style": "high-wire guitars, hocketing reeds, and athletic percussion",
+      "concept": "Tension travels along a cable, becomes propulsion, then releases into spray.",
+      "tags": [
+        "fine-line"
+      ],
+      "sections": [
+        {
+          "name": "The Cable Takes Weight",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Wake Engine",
+          "start_beat": 100,
+          "start_seconds": 45.45,
+          "time": "0:45"
+        },
+        {
+          "name": "Eleven-Step Crossing",
+          "start_beat": 220,
+          "start_seconds": 95.45,
+          "time": "1:35"
+        },
+        {
+          "name": "Release the Line",
+          "start_beat": 330,
+          "start_seconds": 139.45,
+          "time": "2:19"
+        },
+        {
+          "name": "White Water Coda",
+          "start_beat": 402,
+          "start_seconds": 166.8,
+          "time": "2:46"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Blue Horizon Machine",
+      "file": "midi/03 - Blue Horizon Machine.mid",
+      "duration_seconds": 197.47,
+      "duration_minutes": 3.29,
+      "style": "night-time aquatic pageant for glass, orchestra, and choir",
+      "concept": "A precise spectacle machine discovers breath, weightlessness, and a human horizon.",
+      "tags": [
+        "fine-line"
+      ],
+      "sections": [
+        {
+          "name": "Prism Wake",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "The Water Learns to Dance",
+          "start_beat": 56,
+          "start_seconds": 27.1,
+          "time": "0:27"
+        },
+        {
+          "name": "Procession of Bright Creatures",
+          "start_beat": 120,
+          "start_seconds": 57.1,
+          "time": "0:57"
+        },
+        {
+          "name": "Blue Held Breath",
+          "start_beat": 192,
+          "start_seconds": 89.82,
+          "time": "1:29"
+        },
+        {
+          "name": "Horizon Engine",
+          "start_beat": 232,
+          "start_seconds": 115.36,
+          "time": "1:55"
+        },
+        {
+          "name": "Seven-Fold Spray",
+          "start_beat": 336,
+          "start_seconds": 161.24,
+          "time": "2:41"
+        },
+        {
+          "name": "Sun on Every Wave",
+          "start_beat": 392,
+          "start_seconds": 184.57,
+          "time": "3:04"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Broadcasts from a Fractured Planet",
+      "file": "midi/04 - Broadcasts from a Fractured Planet.mid",
+      "duration_seconds": 252.72,
+      "duration_minutes": 4.21,
+      "style": "polymetric global collage resolving toward a fragile shared pulse",
+      "concept": "Alarm, argument, grief, and solidarity coexist without a false easy resolution.",
+      "tags": [
+        "world"
+      ],
+      "sections": [
+        {
+          "name": "Many Clocks at Dawn",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Crossed Frequencies",
+          "start_beat": 48,
+          "start_seconds": 31.3,
+          "time": "0:31"
+        },
+        {
+          "name": "Seven Unequal Windows",
+          "start_beat": 112,
+          "start_seconds": 68.23,
+          "time": "1:08"
+        },
+        {
+          "name": "Names Without Headlines",
+          "start_beat": 182,
+          "start_seconds": 111.98,
+          "time": "1:51"
+        },
+        {
+          "name": "Hands Find the Same Pulse",
+          "start_beat": 242,
+          "start_seconds": 161.98,
+          "time": "2:41"
+        },
+        {
+          "name": "Common Ground, Moving",
+          "start_beat": 322,
+          "start_seconds": 206.42,
+          "time": "3:26"
+        },
+        {
+          "name": "A Signal Still Fragile",
+          "start_beat": 370,
+          "start_seconds": 231.25,
+          "time": "3:51"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "One Cell, Many Skies",
+      "file": "midi/05 - One Cell, Many Skies.mid",
+      "duration_seconds": 297.29,
+      "duration_minutes": 4.95,
+      "style": "evolutionary variations from monody to orchestral ecology",
+      "concept": "One small organism mutates, specializes, cooperates, and leaves a memory.",
+      "tags": [
+        "evolution"
+      ],
+      "sections": [
+        {
+          "name": "One Breath in the Dark",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Division",
+          "start_beat": 32,
+          "start_seconds": 27.43,
+          "time": "0:27"
+        },
+        {
+          "name": "Mutation Finds a Shore",
+          "start_beat": 80,
+          "start_seconds": 64.35,
+          "time": "1:04"
+        },
+        {
+          "name": "Counterpoint Learns to Swim",
+          "start_beat": 144,
+          "start_seconds": 107.99,
+          "time": "1:47"
+        },
+        {
+          "name": "Rhythmic Life",
+          "start_beat": 200,
+          "start_seconds": 142.27,
+          "time": "2:22"
+        },
+        {
+          "name": "An Ecology of Air",
+          "start_beat": 280,
+          "start_seconds": 186.72,
+          "time": "3:06"
+        },
+        {
+          "name": "Migration Under Six Moons",
+          "start_beat": 360,
+          "start_seconds": 228.1,
+          "time": "3:48"
+        },
+        {
+          "name": "The Cell Remembers",
+          "start_beat": 420,
+          "start_seconds": 267.23,
+          "time": "4:27"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Late for the Ordinary",
+      "file": "midi/06 - Late for the Ordinary.mid",
+      "duration_seconds": 169.13,
+      "duration_minutes": 2.82,
+      "style": "jaunty piano-and-bass morning song with crooked detours",
+      "concept": "Domestic routine becomes a bright, breathless change of scene.",
+      "tags": [
+        "day-in-the-life-middle"
+      ],
+      "sections": [
+        {
+          "name": "Shoelaces and Sunlight",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Three Flights Down",
+          "start_beat": 64,
+          "start_seconds": 29.09,
+          "time": "0:29"
+        },
+        {
+          "name": "The Street Has Seven Corners",
+          "start_beat": 112,
+          "start_seconds": 49.09,
+          "time": "0:49"
+        },
+        {
+          "name": "Everybody Else Is Early",
+          "start_beat": 168,
+          "start_seconds": 75.76,
+          "time": "1:15"
+        },
+        {
+          "name": "Queue in Five",
+          "start_beat": 232,
+          "start_seconds": 101.36,
+          "time": "1:41"
+        },
+        {
+          "name": "Green Light Fugato",
+          "start_beat": 272,
+          "start_seconds": 121.7,
+          "time": "2:01"
+        },
+        {
+          "name": "Tea Before the Clock Notices",
+          "start_beat": 336,
+          "start_seconds": 146.63,
+          "time": "2:26"
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Carry the Lantern",
+      "file": "midi/07 - Carry the Lantern.mid",
+      "duration_seconds": 336.68,
+      "duration_minutes": 5.61,
+      "style": "continuous linked-song medley with callbacks and contrapuntal finale",
+      "concept": "Nine short rooms exchange one lantern motif and arrive together before a humane coda.",
+      "tags": [
+        "abbey-road-medley-flow"
+      ],
+      "sections": [
+        {
+          "name": "I. Accounts in the Rain",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Copper Engine",
+          "start_beat": 80,
+          "start_seconds": 46.15,
+          "time": "0:46"
+        },
+        {
+          "name": "III. Blue Window",
+          "start_beat": 152,
+          "start_seconds": 78.88,
+          "time": "1:18"
+        },
+        {
+          "name": "IV. Small Sun Parade",
+          "start_beat": 216,
+          "start_seconds": 125.71,
+          "time": "2:05"
+        },
+        {
+          "name": "V. The Drums Disagree",
+          "start_beat": 288,
+          "start_seconds": 162.32,
+          "time": "2:42"
+        },
+        {
+          "name": "VI. Three Roads at Once",
+          "start_beat": 352,
+          "start_seconds": 188.27,
+          "time": "3:08"
+        },
+        {
+          "name": "VII. Lanterns Returning",
+          "start_beat": 448,
+          "start_seconds": 225.19,
+          "time": "3:45"
+        },
+        {
+          "name": "VIII. The Common Chord",
+          "start_beat": 544,
+          "start_seconds": 270.9,
+          "time": "4:30"
+        },
+        {
+          "name": "Coda. Leave One Light",
+          "start_beat": 592,
+          "start_seconds": 296.62,
+          "time": "4:56"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Parameters in Bloom",
+      "file": "midi/08 - Parameters in Bloom.mid",
+      "duration_seconds": 467.12,
+      "duration_minutes": 7.79,
+      "style": "symbolic model history growing from seed token to orchestral system",
+      "concept": "The GPT lineage accumulates context, media, reasoning space, tools, and joined voices.",
+      "tags": [
+        "gpt-history"
+      ],
+      "sections": [
+        {
+          "name": "GPT-1: Seed Token",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "GPT-2: Wider Window",
+          "start_beat": 36,
+          "start_seconds": 30.0,
+          "time": "0:30"
+        },
+        {
+          "name": "GPT-3: Few-Shot Constellation",
+          "start_beat": 72,
+          "start_seconds": 58.42,
+          "time": "0:58"
+        },
+        {
+          "name": "InstructGPT: Human Arrow",
+          "start_beat": 108,
+          "start_seconds": 85.42,
+          "time": "1:25"
+        },
+        {
+          "name": "GPT-3.5: Conversation Loop",
+          "start_beat": 144,
+          "start_seconds": 111.14,
+          "time": "1:51"
+        },
+        {
+          "name": "GPT-4: Deep Polyphony",
+          "start_beat": 180,
+          "start_seconds": 135.68,
+          "time": "2:15"
+        },
+        {
+          "name": "GPT-4 Turbo: Compressed Distance",
+          "start_beat": 220,
+          "start_seconds": 164.95,
+          "time": "2:44"
+        },
+        {
+          "name": "GPT-4o: Sight Sound Text",
+          "start_beat": 260,
+          "start_seconds": 189.95,
+          "time": "3:09"
+        },
+        {
+          "name": "o1 reasoning counterline",
+          "start_beat": 300,
+          "start_seconds": 213.95,
+          "time": "3:33"
+        },
+        {
+          "name": "GPT-4.5: Warm Bridge",
+          "start_beat": 340,
+          "start_seconds": 249.24,
+          "time": "4:09"
+        },
+        {
+          "name": "GPT-4.1: Precise Return",
+          "start_beat": 380,
+          "start_seconds": 276.52,
+          "time": "4:36"
+        },
+        {
+          "name": "o3/o4-mini tool-use branch",
+          "start_beat": 420,
+          "start_seconds": 302.05,
+          "time": "5:02"
+        },
+        {
+          "name": "GPT-5: Joined Streams",
+          "start_beat": 460,
+          "start_seconds": 325.58,
+          "time": "5:25"
+        },
+        {
+          "name": "GPT-5.1: Stable Weave",
+          "start_beat": 500,
+          "start_seconds": 350.07,
+          "time": "5:50"
+        },
+        {
+          "name": "GPT-5.2: Longer Horizon",
+          "start_beat": 540,
+          "start_seconds": 373.14,
+          "time": "6:13"
+        },
+        {
+          "name": "GPT-5.3: Quickened Spark",
+          "start_beat": 576,
+          "start_seconds": 393.14,
+          "time": "6:33"
+        },
+        {
+          "name": "GPT-5.4: Architectural Chorus",
+          "start_beat": 612,
+          "start_seconds": 412.43,
+          "time": "6:52"
+        },
+        {
+          "name": "GPT-5.5 Current Chorus",
+          "start_beat": 652,
+          "start_seconds": 433.12,
+          "time": "7:13"
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Black Glass Pursuit",
+      "file": "midi/09 - Black Glass Pursuit.mid",
+      "duration_seconds": 171.55,
+      "duration_minutes": 2.86,
+      "style": "fast chromatic spy-film chase for guitar, vibraphone, brass, and orchestra",
+      "concept": "A reflection becomes a pursuit across trains, roofs, tunnels, and a final glass bridge.",
+      "tags": [
+        "spy-film-score"
+      ],
+      "sections": [
+        {
+          "name": "Cold Open: A Name in the Mirror",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Motorcade Under Black Glass",
+          "start_beat": 72,
+          "start_seconds": 25.71,
+          "time": "0:25"
+        },
+        {
+          "name": "The Lift Stops Between Floors",
+          "start_beat": 144,
+          "start_seconds": 50.26,
+          "time": "0:50"
+        },
+        {
+          "name": "Rooftop Exchange",
+          "start_beat": 216,
+          "start_seconds": 79.06,
+          "time": "1:19"
+        },
+        {
+          "name": "False Passport Fugue",
+          "start_beat": 288,
+          "start_seconds": 102.54,
+          "time": "1:42"
+        },
+        {
+          "name": "Runway Without Lights",
+          "start_beat": 372,
+          "start_seconds": 131.84,
+          "time": "2:11"
+        },
+        {
+          "name": "Afterimage and Detonation",
+          "start_beat": 432,
+          "start_seconds": 150.59,
+          "time": "2:30"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "title": "The Library at the End of Weather",
+      "file": "midi/10 - The Library at the End of Weather.mid",
+      "duration_seconds": 301.93,
+      "duration_minutes": 5.03,
+      "style": "contrapuntal chamber fantasy widening into a storm orchestra",
+      "concept": "Inside an impossible library, pages become birds as weather enters the stacks.",
+      "tags": [
+        "free-choice"
+      ],
+      "sections": [
+        {
+          "name": "The Catalogue Breathes",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Rain Writes on the Windows",
+          "start_beat": 64,
+          "start_seconds": 45.71,
+          "time": "0:45"
+        },
+        {
+          "name": "The Missing Folio",
+          "start_beat": 128,
+          "start_seconds": 85.71,
+          "time": "1:25"
+        },
+        {
+          "name": "Pages Learn the Air",
+          "start_beat": 192,
+          "start_seconds": 139.05,
+          "time": "2:19"
+        },
+        {
+          "name": "Storm in Every Aisle",
+          "start_beat": 256,
+          "start_seconds": 174.6,
+          "time": "2:54"
+        },
+        {
+          "name": "Readers Hold the Roof",
+          "start_beat": 320,
+          "start_seconds": 205.08,
+          "time": "3:25"
+        },
+        {
+          "name": "Birds Carry the Index",
+          "start_beat": 384,
+          "start_seconds": 246.82,
+          "time": "4:06"
+        },
+        {
+          "name": "One Lamp After Weather",
+          "start_beat": 424,
+          "start_seconds": 277.59,
+          "time": "4:37"
+        }
+      ]
+    },
+    {
+      "number": 11,
+      "title": "Clockwork Orchard",
+      "file": "midi/11 - Clockwork Orchard.mid",
+      "duration_seconds": 241.9,
+      "duration_minutes": 4.03,
+      "style": "baroque counterpoint infiltrated by clocks, percussion, and synths",
+      "concept": "Mechanical time colonizes an orchard until living rubato breaks the grid.",
+      "tags": [
+        "free-choice"
+      ],
+      "sections": [
+        {
+          "name": "Seed Under Glass",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Gears Find the Branch",
+          "start_beat": 64,
+          "start_seconds": 34.29,
+          "time": "0:34"
+        },
+        {
+          "name": "Escapement Canopy",
+          "start_beat": 128,
+          "start_seconds": 67.39,
+          "time": "1:07"
+        },
+        {
+          "name": "Iron Pollination",
+          "start_beat": 192,
+          "start_seconds": 99.12,
+          "time": "1:39"
+        },
+        {
+          "name": "Sap Against Steel",
+          "start_beat": 272,
+          "start_seconds": 137.22,
+          "time": "2:17"
+        },
+        {
+          "name": "Branches Bend Time",
+          "start_beat": 336,
+          "start_seconds": 172.78,
+          "time": "2:52"
+        },
+        {
+          "name": "The Living Cadenza",
+          "start_beat": 388,
+          "start_seconds": 204.61,
+          "time": "3:24"
+        }
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Letters to a Future Ocean",
+      "file": "midi/12 - Letters to a Future Ocean.mid",
+      "duration_seconds": 363.72,
+      "duration_minutes": 6.06,
+      "style": "slow luminous epistolary music with one symphonic storm",
+      "concept": "Messages travel through harp, piano, winds, strings, choir, storm, and receding water.",
+      "tags": [
+        "free-choice"
+      ],
+      "sections": [
+        {
+          "name": "Dear Water Not Yet Born",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Postscript in Starlight",
+          "start_beat": 60,
+          "start_seconds": 54.55,
+          "time": "0:54"
+        },
+        {
+          "name": "Archives of Rain",
+          "start_beat": 120,
+          "start_seconds": 112.61,
+          "time": "1:52"
+        },
+        {
+          "name": "The Storm Reads Us",
+          "start_beat": 192,
+          "start_seconds": 176.14,
+          "time": "2:56"
+        },
+        {
+          "name": "Ink Runs Clear",
+          "start_beat": 252,
+          "start_seconds": 222.29,
+          "time": "3:42"
+        },
+        {
+          "name": "Future Shore",
+          "start_beat": 312,
+          "start_seconds": 282.29,
+          "time": "4:42"
+        },
+        {
+          "name": "Last Address",
+          "start_beat": 360,
+          "start_seconds": 333.72,
+          "time": "5:33"
+        }
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Night Market in Thirteen",
+      "file": "midi/13 - Night Market in Thirteen.mid",
+      "duration_seconds": 190.11,
+      "duration_minutes": 3.17,
+      "style": "joyful 13/8 world-jazz and electronic percussion hocket",
+      "concept": "Vendor calls, modal improvisation, and a crooked dance share one crowded street.",
+      "tags": [
+        "free-choice"
+      ],
+      "sections": [
+        {
+          "name": "Lantern Arithmetic",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Vendor Calls Cross",
+          "start_beat": 78,
+          "start_seconds": 33.91,
+          "time": "0:33"
+        },
+        {
+          "name": "Pepper-Smoke Solos",
+          "start_beat": 134,
+          "start_seconds": 57.25,
+          "time": "0:57"
+        },
+        {
+          "name": "Four-to-the-Floor Courtyard",
+          "start_beat": 212,
+          "start_seconds": 88.87,
+          "time": "1:28"
+        },
+        {
+          "name": "Thirteen Returns Laughing",
+          "start_beat": 284,
+          "start_seconds": 121.6,
+          "time": "2:01"
+        },
+        {
+          "name": "Last Tram Hocket",
+          "start_beat": 362,
+          "start_seconds": 153.65,
+          "time": "2:33"
+        },
+        {
+          "name": "Shutters Sing Goodnight",
+          "start_beat": 416,
+          "start_seconds": 176.79,
+          "time": "2:56"
+        }
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Every Door Opens at Once",
+      "file": "midi/14 - Every Door Opens at Once.mid",
+      "duration_seconds": 301.69,
+      "duration_minutes": 5.03,
+      "style": "maximalist album-finale synthesis with a quiet epilogue",
+      "concept": "The album's materials meet, transform one another, and leave one door open.",
+      "tags": [
+        "free-choice"
+      ],
+      "sections": [
+        {
+          "name": "The First Hinge",
+          "start_beat": 0,
+          "start_seconds": 0.0,
+          "time": "0:00"
+        },
+        {
+          "name": "Glass Floods the Stair",
+          "start_beat": 60,
+          "start_seconds": 33.33,
+          "time": "0:33"
+        },
+        {
+          "name": "Small Cells Learn",
+          "start_beat": 116,
+          "start_seconds": 62.3,
+          "time": "1:02"
+        },
+        {
+          "name": "Rooms Remember One Another",
+          "start_beat": 188,
+          "start_seconds": 97.14,
+          "time": "1:37"
+        },
+        {
+          "name": "Recursive Lantern Market",
+          "start_beat": 256,
+          "start_seconds": 133.57,
+          "time": "2:13"
+        },
+        {
+          "name": "Black-Tie Pursuit",
+          "start_beat": 334,
+          "start_seconds": 170.13,
+          "time": "2:50"
+        },
+        {
+          "name": "All Thresholds Answer",
+          "start_beat": 394,
+          "start_seconds": 197.4,
+          "time": "3:17"
+        },
+        {
+          "name": "Doorstorm",
+          "start_beat": 462,
+          "start_seconds": 231.4,
+          "time": "3:51"
+        },
+        {
+          "name": "One Handle Remains",
+          "start_beat": 528,
+          "start_seconds": 262.83,
+          "time": "4:22"
+        },
+        {
+          "name": "The Quiet Hall Beyond",
+          "start_beat": 560,
+          "start_seconds": 285.69,
+          "time": "4:45"
+        }
+      ]
+    }
+  ]
+}

@@ -33,13 +33,13 @@
   (`fable5/hollowsynth/src/drums.rs:271-272`), used only when `wire.is_some()`
   (snare v2). Guard with `if self.wire.is_some()` to skip the per-sample `sin()`
   on non-wire voices. Minor perf; correct as-is.
-  (Done 2026-07-10: `8897b92` moved both head reads inside the wire-only branch.)
+  (Done 2026-07-10: `27dad7a` moved both head reads inside the wire-only branch.)
 - [x] 2026.07.08 — drums review: the DR3 `noise2` band pushes its index into
   `swelled` (`fable5/hollowsynth/src/drums.rs` in `cymbal`), but the only
   `noise2` spec (open-hat 46) has `swell:false`, so it is inert. Latent-wrong if
   a future spec set both `noise2` + `swell` (sizzle should be instant, not
   swelled). Drop the `swelled.push` for noise2 or comment it.
-  (Done 2026-07-10: `8897b92` keeps `noise2` instant and adds an exact differential oracle.)
+  (Done 2026-07-10: `27dad7a` keeps `noise2` instant and adds an exact differential oracle.)
 - [ ] **2026.07.08 — ARTHUR'S CALL: pre-existing vibrato bug in the shipped
   Wind + Bowed voices.** The 55-71 review found the reed vibrato ran 16x too slow
   (fixed); the SAME bug is latent in Wind (`voices.rs` ~1730/1747) and Bowed
@@ -67,13 +67,13 @@
   breaks brush_render_is_frozen pins — recalibrate deliberately);
   (e) drums.rs:1442 RevCym honours note_off (8ms stop) — deliberate, but foreign GM
   files with staccato 119 get near-silence; consider README note only.
-  (Done 2026-07-10: (a) was already exhaustive in v0.12; (b)/(c) landed in `8897b92`; (d) promoted to `MM-BUG-KILN-00001`; (e) is already documented in `crates/ferrosintesis/README.md`.)
+  (Done 2026-07-10: (a) was already exhaustive in v0.12; (b)/(c) landed in `27dad7a`; (d) promoted to `MM-BUG-KILN-00001`; (e) is already documented in `crates/ferrosintesis/README.md`.)
 - [x] 2026.07.10 ferrosintesis percussion ignores note-off (crates/ferrosintesis/src/drums.rs:308;
   choke() covers only the hat group, engine.rs:884-889) — the "cymbal choke" idiom
   authored in Through Lines T08/T11 rings instead of choking. NOT opt-in-safe to
   change (every existing file sends drum note-offs) — needs a design decision
   (e.g. choke only when note duration < some threshold AND a new opt-in signal).
-  (Done 2026-07-10: Through Lines T11 now authors standard CC120 explicitly in `961d95b`; T08's alt-bank reverse cymbal already honours NoteOff. The refreshed T11 stem drops 33.76 dB after the choke.)
+  (Done 2026-07-10: Through Lines T11 now authors standard CC120 explicitly in `0146ba7`; T08's alt-bank reverse cymbal already honours NoteOff. The refreshed T11 stem drops 33.76 dB after the choke.)
 - [ ] 2026.07.10 - `altbank::tests::sawstack_v1_canary_frozen` FAILS under
   `cargo test --release` at trunk 66fa84a (pad(89) fingerprint mismatch,
   `crates/ferrosintesis/src/altbank.rs:1422`); passes in debug. The exact-hash

@@ -4193,8 +4193,111 @@ impl Voice for Wind {
 }
 
 // ---------------------------------------------------------------------------
-// Bowed (fiddle)
+// Bowed solo strings (GM 40-44 / 110)
 // ---------------------------------------------------------------------------
+
+const BODY_VIOLIN: &[(f32, f32, f32)] = &[(280.0, 1.2, 5.0), (610.0, 1.8, 4.0), (1350.0, 1.5, 3.0)];
+const BODY_VIOLA: &[(f32, f32, f32)] = &[(220.0, 1.3, 7.5), (475.0, 1.8, 4.0), (1200.0, 1.6, 3.5)];
+const BODY_CELLO: &[(f32, f32, f32)] = &[(105.0, 1.1, 5.5), (220.0, 1.5, 4.5), (650.0, 1.4, 3.5)];
+const BODY_CONTRABASS: &[(f32, f32, f32)] =
+    &[(62.0, 1.0, 5.5), (115.0, 1.3, 4.5), (380.0, 1.4, 3.0)];
+
+#[derive(Clone, Copy)]
+struct BowedPreset {
+    body: &'static [(f32, f32, f32)],
+    press_lo: f32,
+    press_span: f32,
+    vib_rate: f32,
+    vib_depth: f32,
+    attack_s: f32,
+    bite: f32,
+    amp_trim: f32,
+    tremolo: bool,
+}
+
+const BOWED_VIOLIN: BowedPreset = BowedPreset {
+    body: BODY_VIOLIN,
+    press_lo: 900.0,
+    press_span: 5200.0,
+    vib_rate: 5.3,
+    vib_depth: 0.0045,
+    attack_s: 0.070,
+    bite: 0.100,
+    amp_trim: 1.0,
+    tremolo: false,
+};
+
+fn bowed_preset(program: u8) -> BowedPreset {
+    match program {
+        41 => BowedPreset {
+            body: BODY_VIOLA,
+            press_lo: 800.0,
+            press_span: 4200.0,
+            vib_rate: 5.1,
+            attack_s: 0.090,
+            bite: 0.095,
+            amp_trim: 0.98,
+            ..BOWED_VIOLIN
+        },
+        42 => BowedPreset {
+            body: BODY_CELLO,
+            press_lo: 600.0,
+            press_span: 2900.0,
+            vib_rate: 4.8,
+            attack_s: 0.105,
+            bite: 0.090,
+            ..BOWED_VIOLIN
+        },
+        43 => BowedPreset {
+            body: BODY_CONTRABASS,
+            press_lo: 350.0,
+            press_span: 1700.0,
+            vib_rate: 4.2,
+            vib_depth: 0.0038,
+            attack_s: 0.125,
+            bite: 0.085,
+            ..BOWED_VIOLIN
+        },
+        44 => BowedPreset {
+            tremolo: true,
+            ..BOWED_VIOLIN
+        },
+        110 => BowedPreset {
+            press_lo: 1800.0,
+            press_span: 7000.0,
+            vib_rate: 5.6,
+            attack_s: 0.052,
+            bite: 0.230,
+            ..BOWED_VIOLIN
+        },
+        _ => BOWED_VIOLIN,
+    }
+}
+
+const BOW_TREM_RATE_LO_HZ: f32 = 6.0;
+const BOW_TREM_RATE_VEL_HZ: f32 = 3.0;
+const BOW_TREM_DEPTH_LO: f32 = 0.50;
+const BOW_TREM_DEPTH_VEL: f32 = 0.15;
+const BOW_TREM_BITE_S: f32 = 0.018;
+const BOW_TREM_JITTER: f32 = 0.06;
+const BOW_TREM_AMP_JITTER: f32 = 0.10;
+
+const PIZZ: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "PIZZ",
+    t60: 0.9,
+    bright: 2600.0,
+    pick_lp: 1600.0,
+    pos: 0.30,
+    amp: 0.58,
+    rel_t60: 0.10,
+    body: BODY_VIOLIN,
+    click: 0.6,
+    click_hp: 900.0,
+    attack_noise: 0.25,
+    stop_thump: 0.5,
+    ..DEFAULTS
+};
 
 pub struct Bowed {
     saw: BlepSaw,
@@ -4203,11 +4306,21 @@ pub struct Bowed {
     scoop: f32,
     body: [Biquad; 3],
     lp: OnePole, // bow-pressure brightness: opens with the envelope
+    press_lo: f32,
+    press_span: f32,
     env: Adsr,
     vib: Sine,
     vib_depth: f32,
     vib_delay: u32,
     vib_val: f32,
+    bite: f32,
+    trem_rate: f32,
+    trem_rate_cur: f32,
+    trem_phase: f32,
+    trem_depth: f32,
+    trem_stroke_gain: f32,
+    trem_gain: f32,
+    trem_bite_until: u32,
     rng: Rng,
     t: u32,
     attack_samples: u32,
@@ -4217,31 +4330,55 @@ pub struct Bowed {
 }
 
 impl Bowed {
-    fn new(key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+    fn new(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let f = key_freq(key);
         let mut rng = Rng::new(seed);
-        let attack = vel_attack(0.07, vel);
+        let preset = bowed_preset(program);
+        let vn = vel as f32 / 127.0;
+        let attack = vel_attack(preset.attack_s, vel);
+        let (trem_rate, trem_depth) = if preset.tremolo {
+            (
+                BOW_TREM_RATE_LO_HZ + BOW_TREM_RATE_VEL_HZ * vn,
+                BOW_TREM_DEPTH_LO + BOW_TREM_DEPTH_VEL * vn,
+            )
+        } else {
+            (0.0, 0.0)
+        };
         Bowed {
             saw: BlepSaw::new(f * 0.975, sr, rng.white() * 0.5 + 0.5),
             base_f: f,
             bend: 1.0,
-            scoop: 0.975 + 0.008 * (vel as f32 / 127.0),
+            scoop: 0.975 + 0.008 * vn,
             body: [
-                Biquad::peak(280.0, 1.2, 5.0, sr),
-                Biquad::peak(610.0, 1.8, 4.0, sr),
-                Biquad::peak(1350.0, 1.5, 3.0, sr),
+                Biquad::peak(preset.body[0].0, preset.body[0].1, preset.body[0].2, sr),
+                Biquad::peak(preset.body[1].0, preset.body[1].1, preset.body[1].2, sr),
+                Biquad::peak(preset.body[2].0, preset.body[2].1, preset.body[2].2, sr),
             ],
             lp: OnePole::lowpass(1400.0, sr),
+            press_lo: preset.press_lo,
+            press_span: preset.press_span,
             env: Adsr::new(attack, 0.2, 0.9, 0.18, sr),
-            vib: Sine::new(5.3 * (1.0 + 0.1 * rng.white()), sr, 0.0),
-            vib_depth: 0.0045,
+            vib: Sine::new(
+                preset.vib_rate * (1.0 + 0.1 * rng.white()),
+                sr / CTRL as f32,
+                0.0,
+            ),
+            vib_depth: preset.vib_depth,
             vib_delay: (0.22 * sr) as u32,
             vib_val: 0.0,
+            bite: preset.bite,
+            trem_rate,
+            trem_rate_cur: trem_rate,
+            trem_phase: 0.0,
+            trem_depth,
+            trem_stroke_gain: 1.0,
+            trem_gain: 1.0,
+            trem_bite_until: 0,
             rng,
             t: 0,
             attack_samples: (attack * sr) as u32,
             last_env: 0.0,
-            amp: 0.40 * (0.4 + 0.6 * vel_amp(vel)),
+            amp: 0.40 * (0.4 + 0.6 * vel_amp(vel)) * preset.amp_trim,
             sr,
         }
     }
@@ -4262,23 +4399,37 @@ impl Voice for Bowed {
                 };
                 self.saw
                     .set_freq(self.base_f * self.bend * self.scoop * (1.0 + vib), self.sr);
-                // more bow pressure -> brighter tone
-                self.lp.set_cutoff(900.0 + 5200.0 * self.last_env, self.sr);
+                // More bow pressure opens each instrument's brightness ceiling.
+                self.lp
+                    .set_cutoff(self.press_lo + self.press_span * self.last_env, self.sr);
+                if self.trem_rate > 0.0 {
+                    self.trem_phase += self.trem_rate_cur * CTRL as f32 / self.sr;
+                    if self.trem_phase >= 1.0 {
+                        self.trem_phase -= 1.0;
+                        self.trem_bite_until = self.t + (BOW_TREM_BITE_S * self.sr) as u32;
+                        self.trem_stroke_gain = 1.0 + BOW_TREM_AMP_JITTER * self.rng.white();
+                        self.trem_rate_cur =
+                            self.trem_rate * (1.0 + BOW_TREM_JITTER * self.rng.white());
+                    }
+                    let c = (std::f32::consts::TAU * self.trem_phase).cos();
+                    self.trem_gain = self.trem_stroke_gain
+                        * ((1.0 - self.trem_depth) + self.trem_depth * 0.5 * (1.0 - c));
+                }
             }
             let e = self.env.next();
             self.last_env = e;
             // bow noise: loud while the bow bites, quieter once the string speaks
-            let noise_amp = if self.t < self.attack_samples * 2 {
-                0.10
+            let noise_amp = if self.t < self.attack_samples * 2 || self.t < self.trem_bite_until {
+                self.bite
             } else {
                 0.028
-            } * (1.0 + 0.4 * self.vib_val);
+            };
             let mut s = self.saw.next() + self.rng.white() * noise_amp * e;
             for b in &mut self.body {
                 s = b.process(s);
             }
             s = self.lp.process(s);
-            *o += s * self.amp * e;
+            *o += s * self.amp * e * self.trem_gain;
             self.t += 1;
         }
         self.env.alive()
@@ -4317,6 +4468,7 @@ impl Voice for Bowed {
 /// LA layering (sampled attack + modeled sustain) — level-matched to the
 /// models by the `la_level_continuity` test.
 const LA_VIOLIN: (f32, (f32, f32)) = (0.30, (0.12, 0.38));
+const LA_FIDDLE: (f32, (f32, f32)) = (0.32, (0.08, 0.28));
 const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 const LA_PIANO: (f32, (f32, f32)) = (0.42, (0.18, 0.85));
 const LA_BRASS: (f32, (f32, f32)) = (0.35, (0.10, 0.32));
@@ -5785,10 +5937,10 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         34 => Box::new(Pluck::new(&PICK, key, vel, sr, seed)),            // B2
         36 | 37 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),       // B2
         35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
-        40..=45 | 110 => {
-            let model = Box::new(Bowed::new(key, vel, sr, seed));
+        40 | 110 => {
+            let model = Box::new(Bowed::new(program, key, vel, sr, seed));
             if samples {
-                let (gain, fade) = LA_VIOLIN;
+                let (gain, fade) = if program == 110 { LA_FIDDLE } else { LA_VIOLIN };
                 crate::sampler::LaVoice::wrap(
                     model,
                     crate::sampler::violin_bank(vel),
@@ -5802,6 +5954,8 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
+        41..=44 => Box::new(Bowed::new(program, key, vel, sr, seed)),
+        45 => Box::new(Pluck::new(&PIZZ, key, vel, sr, seed)),
         46 => Box::new(Pluck::new(&HARP, key, vel, sr, seed)),
         47 => Box::new(timpani(key, vel, sr, seed)),
         48..=49 => {
@@ -5931,7 +6085,7 @@ mod tests {
     // Audio oracle helpers used by the v0.9 reed/brass oracles (bare names).
     use crate::testutil::{
         band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend, hp_rms, mag_at,
-        peak_locate, rms, spectral_band_rms, spectral_centroid,
+        peak_locate, rms, spectral_band_rms, spectral_centroid, BW_TREM_PEAK_FLOOR,
     };
 
     #[test]
@@ -8376,7 +8530,7 @@ mod tests {
     #[test]
     fn bowed_scoop_settles() {
         let sr = 44100.0;
-        let mut v = Bowed::new(69, 100, sr, 11);
+        let mut v = Bowed::new(40, 69, 100, sr, 11);
         let mut buf = vec![0f32; 44100 * 2];
         v.render(&mut buf);
         let measure = |seg: &[f32]| {
@@ -8393,6 +8547,278 @@ mod tests {
         };
         let late = measure(&buf[44100..44100 + 22050]);
         assert!((late - 440.0).abs() < 8.0, "late pitch {late} Hz");
+    }
+
+    fn render_default_bowed(program: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = Bowed::new(program, key, vel, sr, seed);
+        let mut buf = vec![0.0; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    fn attack_rise_s(sig: &[f32], sr: f32) -> f32 {
+        let win = (0.005 * sr) as usize;
+        let steady = &sig[(0.25 * sr) as usize..(0.45 * sr) as usize];
+        let mut levels: Vec<f32> = steady.chunks(win).map(rms).collect();
+        levels.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let threshold = 0.8 * levels[levels.len() / 2];
+        sig.chunks(win)
+            .position(|chunk| rms(chunk) >= threshold)
+            .map(|i| i as f32 * win as f32 / sr)
+            .unwrap_or(f32::INFINITY)
+    }
+
+    /// Solo bowed presets must differ in both steady body and bow onset. The
+    /// timbre comparison is level-normalised so attenuation cannot masquerade
+    /// as a darker instrument.
+    #[test]
+    fn default_bowed_bodies_and_onsets_are_distinct() {
+        let sr = 44100.0;
+        let hf = |program: u8| {
+            [50u8, 57, 64]
+                .iter()
+                .map(|&key| {
+                    let s = render_default_bowed(program, key, 100, 0.8, 7);
+                    let body = segment(&s, sr, 0.25, 0.70);
+                    hp_rms(body, sr, 2500.0) / rms(body).max(1e-9)
+                })
+                .sum::<f32>()
+                / 3.0
+        };
+        let body = [hf(40), hf(41), hf(42), hf(43)];
+        for (i, pair) in body.windows(2).enumerate() {
+            let relative = (pair[0] / pair[1]).max(pair[1] / pair[0]);
+            assert!(
+                relative >= 1.05,
+                "adjacent body {} / {} differs only {:.1}%: {body:?}",
+                40 + i,
+                41 + i,
+                (relative - 1.0) * 100.0
+            );
+        }
+
+        let programs = [110u8, 40, 41, 42, 43];
+        let window_s = (0.005 * sr) as usize as f32 / sr;
+        let rises: Vec<f32> = programs
+            .iter()
+            .map(|&program| attack_rise_s(&render_default_bowed(program, 57, 100, 0.5, 11), sr))
+            .collect();
+        for (pair, labels) in rises.windows(2).zip(programs.windows(2)) {
+            assert!(
+                pair[1] - pair[0] + 1e-6 >= window_s,
+                "GM{} / GM{} onset separation too small: {rises:?}",
+                labels[0],
+                labels[1]
+            );
+        }
+    }
+
+    /// Each larger instrument must own an audible body band, while fiddle
+    /// remains a quicker/brighter violin style on both sides of its sample
+    /// handover.
+    #[test]
+    fn default_bowed_body_bands_and_fiddle_identity() {
+        let sr = 44100.0;
+        let prominence = |program: u8, key: u8, center: f32, q: f32| {
+            let s = render_default_bowed(program, key, 100, 0.8, 9);
+            let body = segment(&s, sr, 0.25, 0.70);
+            band_rms(body, sr, center, q) / rms(body).max(1e-9)
+        };
+        for (program, key, center, q) in [
+            (41u8, 57u8, 220.0, 1.3),
+            (42, 43, 105.0, 1.1),
+            (43, 34, 62.0, 1.0),
+        ] {
+            let own = prominence(program, key, center, q);
+            let violin = prominence(40, key, center, q);
+            assert!(
+                own >= 1.10 * violin,
+                "GM{program} body {center} Hz not distinct: {own:.4} vs violin {violin:.4}"
+            );
+        }
+
+        let violin = render_program_sampled(40, 69, 100, 0.8, 11, false);
+        let fiddle = render_program_sampled(110, 69, 100, 0.8, 11, false);
+        let hf = |s: &[f32], a: f32, b: f32| {
+            let w = segment(s, sr, a, b);
+            hp_rms(w, sr, 2500.0) / rms(w).max(1e-9)
+        };
+        let v_early = hf(&violin, 0.0, 0.08);
+        let f_early = hf(&fiddle, 0.0, 0.08);
+        assert!(
+            f_early >= 1.10 * v_early,
+            "fiddle modeled bite is not brighter: {f_early:.4} vs {v_early:.4}"
+        );
+        let v_post = hf(&violin, 0.35, 0.75);
+        let f_post = hf(&fiddle, 0.35, 0.75);
+        assert!(
+            (f_post / v_post).max(v_post / f_post) >= 1.05,
+            "fiddle post-handover body collapsed into violin: {f_post:.4} vs {v_post:.4}"
+        );
+
+        let sampled = render_program_sampled(110, 69, 100, 0.8, 11, true);
+        let windows: Vec<f32> = segment(&sampled, sr, 0.05, 0.35)
+            .chunks((0.05 * sr) as usize)
+            .map(rms)
+            .collect();
+        let worst = windows
+            .windows(2)
+            .map(|w| (w[0] / w[1]).max(w[1] / w[0]))
+            .fold(1.0, f32::max);
+        assert!(
+            worst <= 1.6,
+            "fiddle handover RMS jump {worst:.3}: {windows:?}"
+        );
+    }
+
+    /// The nominal natural-vibrato rates are control-rate values, not full-rate
+    /// oscillators sampled once every CTRL frames.
+    #[test]
+    fn default_bowed_natural_vibrato_runs_at_named_rate() {
+        let sr = 44100.0;
+        for (program, nominal) in [(40u8, 5.3f32), (41, 5.1), (42, 4.8), (43, 4.2), (110, 5.6)] {
+            let mut v = Bowed::new(program, 69, 100, sr, 17);
+            let mut values = Vec::new();
+            let mut block = [0.0; CTRL as usize];
+            let seconds = 3usize;
+            for _ in 0..(seconds * sr as usize / CTRL as usize) {
+                block.fill(0.0);
+                v.render(&mut block);
+                values.push(v.vib_val);
+            }
+            let crossings = values
+                .windows(2)
+                .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
+                .count() as f32
+                / seconds as f32;
+            assert!(
+                (crossings - nominal).abs() / nominal <= 0.15,
+                "GM{program} vibrato {crossings:.2} Hz, expected near {nominal:.2} Hz"
+            );
+        }
+    }
+
+    /// Corrected pitch vibrato must not reappear as periodic bow-hiss AM.
+    #[test]
+    fn default_bowed_arco_am_stays_small() {
+        let sr = 44100.0;
+        for program in [40u8, 110] {
+            let s = render_default_bowed(program, 69, 100, 1.4, 13);
+            let depth = low_rate_am_depth(segment(&s, sr, 0.55, 1.35), sr);
+            assert!(
+                depth < 0.03,
+                "GM{program} arco low-rate AM depth {depth:.4}"
+            );
+        }
+        let trem = render_default_bowed(44, 69, 100, 1.4, 13);
+        let trem_depth = low_rate_am_depth(segment(&trem, sr, 0.55, 1.35), sr);
+        assert!(
+            trem_depth >= 0.08,
+            "GM44 tremolo AM depth only {trem_depth:.4}"
+        );
+    }
+
+    /// Default-bank tremolo and pizzicato are articulation-correct solo
+    /// proxies; neither may inherit the sustained violin sample wrapper.
+    #[test]
+    fn default_bowed_articulations_and_sample_routing() {
+        let sr = 44100.0;
+        let trem = render_program_sampled(44, 69, 100, 2.5, 5, false);
+        let (peak, rate) =
+            env_autocorr_peak_detrend(segment(&trem, sr, 0.4, 2.4), sr, 0.08, 0.20, 4.0);
+        assert!(peak >= BW_TREM_PEAK_FLOOR, "tremolo AM peak {peak:.3}");
+        assert!((6.0..=9.5).contains(&rate), "tremolo rate {rate:.2} Hz");
+
+        let early_late = |program: u8| {
+            let s = render_program_sampled(program, 69, 100, 2.0, 7, false);
+            rms(segment(&s, sr, 1.55, 1.95)) / rms(segment(&s, sr, 0.10, 0.35)).max(1e-9)
+        };
+        assert!(early_late(45) < 0.10, "GM45 must decay like a pluck");
+        assert!(early_late(40) > 0.70, "GM40 must sustain like arco");
+
+        let bits = |s: Vec<f32>| s.into_iter().map(f32::to_bits).collect::<Vec<_>>();
+        for program in 41u8..=45 {
+            let on = bits(render_program_sampled(program, 69, 100, 0.5, 6, true));
+            let off = bits(render_program_sampled(program, 69, 100, 0.5, 6, false));
+            assert_eq!(on, off, "GM{program} must skip the violin sample");
+        }
+        for program in [40u8, 110] {
+            let on = bits(render_program_sampled(program, 69, 100, 0.5, 6, true));
+            let off = bits(render_program_sampled(program, 69, 100, 0.5, 6, false));
+            assert_ne!(on, off, "GM{program} must retain the violin sample");
+        }
+    }
+
+    /// Natural playing ranges stay tuned through bodies and LA handovers; a
+    /// slur retunes the same bow without spawning a fresh attack.
+    #[test]
+    fn default_bowed_pitch_range_and_legato() {
+        let sr = 44100.0;
+        for (program, keys) in [
+            (40u8, &[55u8, 69, 88][..]),
+            (41, &[48, 60, 76]),
+            (42, &[36, 48, 69]),
+            (43, &[34, 45, 64]),
+            (44, &[45, 60, 78]),
+            (45, &[52, 64, 76]),
+            (110, &[55, 69, 88]),
+        ] {
+            for &key in keys {
+                let s = render_program_sampled(program, key, 100, 0.8, 21, true);
+                let window = if program == 45 {
+                    segment(&s, sr, 0.05, 0.45)
+                } else {
+                    segment(&s, sr, 0.20, 0.65)
+                };
+                let f0 = key_freq(key);
+                let found = peak_locate(window, sr, f0 * 0.8, f0 * 1.25);
+                let cents = 1200.0 * (found / f0).log2();
+                assert!(
+                    cents.abs() < 45.0,
+                    "GM{program} key {key} pitch {found:.2} Hz ({cents:.1} cents)"
+                );
+            }
+        }
+
+        let mut v = Bowed::new(42, 57, 100, sr, 23);
+        let mut before = vec![0.0; (0.30 * sr) as usize];
+        v.render(&mut before);
+        assert!(v.legato_to(62, 96));
+        let mut after = vec![0.0; (0.80 * sr) as usize];
+        v.render(&mut after);
+        let f0 = key_freq(62);
+        let found = peak_locate(segment(&after, sr, 0.35, 0.75), sr, f0 * 0.8, f0 * 1.25);
+        assert!(
+            (1200.0 * (found / f0).log2()).abs() < 45.0,
+            "cello legato retune landed at {found:.2} Hz"
+        );
+    }
+
+    #[test]
+    fn default_bowed_family_level_and_numerical_safety() {
+        let sr = 44100.0;
+        let violin = render_default_bowed(40, 57, 100, 1.0, 29);
+        let violin_rms = rms(segment(&violin, sr, 0.20, 0.80));
+        for program in [41u8, 42, 43, 110] {
+            let s = render_default_bowed(program, 57, 100, 1.0, 29);
+            let level = rms(segment(&s, sr, 0.20, 0.80));
+            let db = 20.0 * (level / violin_rms).log10();
+            assert!(db.abs() <= 3.0, "GM{program} level is {db:.2} dB vs violin");
+            assert!(
+                s.iter().all(|x| x.is_finite()),
+                "GM{program} emitted non-finite audio"
+            );
+            assert!(max_abs(&s) < 1.5, "GM{program} raw peak {}", max_abs(&s));
+        }
+
+        let pizz = render_program_sampled(45, 69, 100, 0.4, 31, false);
+        let harp = render_program_sampled(46, 69, 100, 0.4, 31, false);
+        let arco = render_program_sampled(40, 69, 100, 0.4, 31, false);
+        let early = |s: &[f32]| rms(segment(s, sr, 0.05, 0.35));
+        let db = |a: f32, b: f32| 20.0 * (a / b).log10();
+        assert!(db(early(&pizz), early(&arco)) <= 3.0);
+        assert!(db(early(&pizz), early(&harp)).abs() <= 10.0);
     }
 
     // ---- synth-lead voice (GM 80-87) ----

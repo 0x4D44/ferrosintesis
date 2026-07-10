@@ -1,0 +1,12 @@
+Why this piece
+High-wire tension becomes forward propulsion: a taut 5/4 cable pattern accelerates into a guitar-and-percussion wake, fractures into eleven steps, then releases into spray.
+
+Listening guide
+0:00 — The Cable Takes Weight: struck piano and two guitars hocket over running bass and knife strings; reed flare enters at 0:06 and kinetic drums at 0:09.
+0:45 — Wake Engine: faster 4/4 drives piano arpeggio, paired guitars, bass, dense kit, reed flare, and brass rail.
+1:35 — Eleven-Step Crossing: an 11/8 Locrian hocket crosses piano, both guitars, reed, bass, strings, and drums; air synth enters at 1:44.
+2:19 — Release the Line: very fast 4/4 restores piano, guitars, reed, bass, and drums; brass enters at 2:25.
+2:46 — White Water Coda: the rhythm section drops out, leaving knife strings, reed flare, and air-synth arpeggios.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Wake-guitar CC74 wah sweeps audibly from 0:58–1:32. Knife-string CC11 is curved from 2:19–2:46 while that channel is silent; only its final expression value persists into the coda. There is no pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change.

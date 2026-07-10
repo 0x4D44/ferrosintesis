@@ -1,0 +1,16 @@
+Why this piece
+Eight linked rooms and a coda exchange one lantern motif. Abrupt seams become connections: ideas cross-pollinate, pass through drums and three-road guitar counterpoint, return together, then shrink to a humane final light.
+
+Listening guide
+0:00 — I. Accounts in the Rain: close piano and patient bass; flute, strings, and soft drums join.
+0:46 — II. Copper Engine: clipped and answer guitars drive with piano, bass, drums, and answering brass.
+1:18 — III. Blue Window: organ, choir, sparse piano, flute, ride, hi-hat, and bass replace the drive.
+2:05 — IV. Small Sun Parade: piano, two guitars, flute, bass, strings, drums, and brass brighten.
+2:42 — V. The Drums Disagree: kick, snare, hats, and tom runs dominate around piano, guitars, bass, and brass.
+3:08 — VI. Three Roads at Once: three independent guitars cross over strings, bass, drums, and recurring brass calls.
+3:45 — VII. Lanterns Returning: piano, four guitars, strings, bass, drums, flute, and brass combine earlier rooms.
+4:30 — VIII. The Common Chord: choir, piano, bass, drums, and flute share a 3/4 refrain.
+4:56 — Coda. Leave One Light: only piano, choir, and flute remain as the tempo slows.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Piano CC64 sustain stays down from 0:00–0:45. Answer-guitar CC74 wah sweeps from 0:53–1:15. Night-organ CC11 expression swells from 1:18–2:05. A final CC11 arc at 4:56–5:36 is audible on piano, choir, and flute; strings and organ also receive it while silent. There is no pitch bend, aftertouch, portamento, or mid-piece program change.

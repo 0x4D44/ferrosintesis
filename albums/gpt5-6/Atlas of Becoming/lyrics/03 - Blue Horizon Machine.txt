@@ -1,0 +1,14 @@
+Why this piece
+The aquatic sequence closes as a night pageant. Precise spectacle learns breath and weightlessness: glass and water assemble into machinery, fall suddenly quiet, then widen into a human horizon of choir and brass.
+
+Listening guide
+0:00 — Prism Wake: glass celesta, open-water strings, and sparse percussion begin in 7/8; flute enters at 0:01 and bass at 0:13.
+0:27 — The Water Learns to Dance: piano joins marimba, celesta, piccolo, strings, bass, flute, and drums; trumpets and horns enter at 0:42.
+0:57 — Procession of Bright Creatures: choir joins strings in 12/8 while piano, glass, piccolo, flute, bass, drums, and brass broaden the pageant.
+1:29 — Blue Held Breath: the machinery vanishes; choir and strings hold soft chords around celesta droplets and isolated flute.
+1:55 — Horizon Engine: piano, glass hocket, strings, bass, drums, and flute rebuild; choir and brass enter at 2:02.
+2:41 — Seven-Fold Spray: the full ensemble moves in buoyant 7/8.
+3:04 — Sun on Every Wave: strings, choir, bass, celesta, flute, brass, and final percussion settle into major.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Flute CC1 modulation/vibrato traces a whole-track arc, peaking near 3:04. CC11 expression shapes strings, flute, choir, trumpets, and horns from 1:55–3:16. There is no pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change.

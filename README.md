@@ -16,8 +16,8 @@ Jarre, Hans Zimmer, Enigma, Max Richter…). The generators, the MIDI they produ
 Most albums ship committed, tagged `.opus` files under `listening/` (for example
 `listening/Claude Fable 5/Hollow Hill/`). Drag that tree into an audio player for
 the shareable listening copies, reproducible from the committed MIDI plus the synth.
-Four long albums (**VIGIL**, **RIVERWAKE**, **The Long Turning**, and
-**Atlas of Becoming**) ship as MIDI only; render them to `.opus` with `render_opus.py` (see
+Three long albums (**VIGIL**, **RIVERWAKE**, and **The Long Turning**) ship as MIDI
+only; render them to `.opus` with `render_opus.py` (see
 [Reproduce & verify](#reproduce--verify)).
 
 ## The music
@@ -133,7 +133,8 @@ the sibling `ropus` project.
   `analyze.py`), the committed `midi/`, an `album_manifest.json`, and `README.md` /
   `ALBUM.md` track notes.
 - **`listening/`** — tagged `.opus` listening copies, grouped by artist and album for
-  drag-and-drop playback.
+  drag-and-drop playback. An album may supply exact-stem UTF-8 `lyrics/*.txt`
+  sidecars; the renderer embeds them as multiline `LYRICS` listening-guide tags.
 - **`crates/ferrosintesis/`** — the Rust synth library, with
   **`crates/ferrosintesis-cli/`** for the WAV-rendering binary.
 - **`demos/`** — synth test pieces; **`wrk_docs/`** — design & review notes;

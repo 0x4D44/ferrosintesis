@@ -1,0 +1,14 @@
+Why this piece
+A crowded, joyful street turns 13/8 into dance through percussion hockets, a five-note vendor call, and modal improvisation. A square 4/4 courtyard cannot suppress the thirteen-note cell.
+
+Listening guide
+0:00 — Lantern Arithmetic: marimba, xylophone, silk strings, neon droplets, bass, odd-metre percussion, organ, accordion, trumpet, sax, and clarinet crowd the street.
+0:33 — Vendor Calls Cross: pitched hocket, bass, drums, and organ support crossing trumpet, sax, and clarinet calls.
+0:57 — Pepper-Smoke Solos: clarinet, alto sax, then trumpet solo over the market groove.
+1:28 — Four-to-the-Floor Courtyard: honky-tonk piano, pitched hocket, bass, straight drums, and organ turn square while the vendor contour stays crooked.
+2:01 — Thirteen Returns Laughing: the original groove returns under trumpet and clarinet solos.
+2:33 — Last Tram Hocket: marimba, xylophone, strings, neon lead, and accordion hocket under alto sax and a final vendor call.
+2:56 — Shutters Sing Goodnight: trumpet, sax, clarinet, and accordion close one by one over sparse bass and organ.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Trumpet CC1 modulation/vibrato rises to its strongest value at 2:01, then recedes. Neon-lead CC74 brightness opens toward 1:28, then darkens through the tram and shutters. CC11 arcs shape every stall's rise and fade; trumpet expression also changes breath and timbre. The 13/8 hocket is written note/percussion structure, not an arpeggiator. No Leslie sweep, pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change is authored.

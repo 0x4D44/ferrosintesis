@@ -1,0 +1,14 @@
+Why this piece
+An original spy-film chase turns one asymmetric chromatic glass cell into a reflection, motor, fugue subject, runway sprint, and final afterimage without quoting a known theme.
+
+Listening guide
+0:00 — Cold Open: palm-muted guitar states the cell; bass, vibraphone, drums, strings, and brass accumulate.
+0:25 — Motorcade Under Black Glass: muted and distorted guitars, racing strings, bass, fast kit, vibraphone glints, and full brass drive.
+0:50 — The Lift Stops Between Floors: choir pads, bass, irregular percussion, clarinet fragments, vibraphone, and reversed guitar replace the engine.
+1:19 — Rooftop Exchange: guitar and strings return; vibraphone, clarinet, and high guitar hocket above bass, drums, and brass.
+1:42 — False Passport Fugue: viola, guitar, violins, and high guitar enter successively over choir, bass, drums, and late brass.
+2:11 — Runway Without Lights: both guitars, strings, bass, maximum-density drums, brass, orchestra hits, and crashes sprint.
+2:30 — Afterimage and Detonation: choir, half-time guitar, vibraphone, bass, and drums thin before returning brass and the final impact.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Muted-guitar CC74 wah sweeps from 0:31–0:47. Choir CC11 rises through the suspended lift from 0:50–1:18. A final CC11 arc reaches strings, brass, and choir from 2:30 to the end, but only choir and late brass sound there. The chase is written notes and percussion, not an arpeggiator or delay. There is no pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change.

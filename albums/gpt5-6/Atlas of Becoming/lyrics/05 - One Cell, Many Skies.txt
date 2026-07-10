@@ -1,0 +1,15 @@
+Why this piece
+A four-note organism demonstrates evolution through music. It begins alone, divides, mutates, learns counterpoint and rhythm, becomes an orchestral ecology, migrates, and finally remembers its original shape.
+
+Listening guide
+0:00 — One Breath in the Dark: contrabass creates the first habitat; solitary flute states the ancestral cell.
+0:27 — Division: flute divides into clarinet echoes and inversions over branching strings, contrabass, and harp.
+1:04 — Mutation Finds a Shore: harp, strings, and bass support the changing cell across flute, clarinet, oboe, and marimba; drums enter at 1:26.
+1:47 — Counterpoint Learns to Swim: flute, clarinet, and oboe overlap above harp, strings, bass, and tom-led drums.
+2:22 — Rhythmic Life: faster drums support a hocket among clarinet, marimba, oboe, piccolo, flute, and horn.
+3:06 — An Ecology of Air: the widest ecosystem adds deep cello, choir, and horn to harp, woodwinds, strings, bass, and drums.
+3:48 — Migration Under Six Moons: the texture thins to strings, choir, bass, lighter drums, and migrating woodwind calls.
+4:27 — The Cell Remembers: strings, choir, and bass recede under diminishing flute statements.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Flute CC1 modulation/vibrato evolves across the full track, strongest at 3:06 and fading toward 4:57. CC11 expression shapes flute, strings, choir, horn, and cello from 2:22–4:26. There is no pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change.

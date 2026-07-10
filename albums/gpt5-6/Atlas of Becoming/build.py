@@ -12,7 +12,7 @@ import tracks
 import verify
 
 ALBUM = "Atlas of Becoming"
-ARTIST = "OpenAI Codex"
+ARTIST = "GPT-5.6"
 COMMENT = (
     "Original instrumental MIDI compositions. Named references informed only broad "
     "form, pacing, ensemble colour, and dramatic movement; all musical material is new."

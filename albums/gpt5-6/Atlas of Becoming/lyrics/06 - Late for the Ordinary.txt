@@ -1,0 +1,14 @@
+Why this piece
+A bright piano-and-bass change of scene captures the comic velocity of an ordinary morning. Crooked metre turns stairs, street corners, queues, and traffic lights into playful interruptions without losing the tune.
+
+Listening guide
+0:00 — Shoelaces and Sunlight: upright piano and walking bass begin; busy clarinet, flute, strings, drums, and celesta clock ticks join.
+0:29 — Three Flights Down: 3/4 piano and bass climb beneath clarinet, flute, oboe, drums, and corner trumpet.
+0:49 — The Street Has Seven Corners: 7/8 adds a four-way woodwind/celesta hocket, strings, tom-led kit, trumpet, and trombone.
+1:15 — Everybody Else Is Early: brisk 4/4 fills out the ensemble with trumpet, trombone, and shop-door horn.
+1:41 — Queue in Five: quieter 5/4 leaves piano and bass beneath clarinet, oboe, celesta, and strings before drums return.
+2:01 — Green Light Fugato: piano, bass, strings, and drums launch staggered woodwinds and answering brass.
+2:26 — Tea Before the Clock Notices: 3/4 settles piano, bass, strings, woodwinds, celesta, drums, trumpet, and trombone.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Clarinet CC1 modulation/vibrato grows through the seven-corner detour, peaks in the fugato, then relaxes for tea. CC11 expression shapes piano, clarinet, flute, trumpet, and trombone from 1:15–2:48. There is no pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change.

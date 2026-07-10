@@ -1,0 +1,15 @@
+Why this piece
+Chamber counterpoint inside an impossible library gradually admits rain, airborne pages, and a full storm. The opening subject survives and returns after the weather.
+
+Listening guide
+0:00 — The Catalogue Breathes: cello presents the subject; piano, viola/second violin, first violin, bassoon, and sparse cymbal enter.
+0:45 — Rain Writes on the Windows: harp, cello, two violins, centred strings, and pointillist hi-hat/click rain.
+1:25 — The Missing Folio: quiet choir and piano surround cello while bassoon, clarinet, and flute trade fragments.
+2:19 — Pages Learn the Air: flute, clarinet, and harp hocket over cello and strings; drums join around 2:27.
+2:54 — Storm in Every Aisle: driving strings, harp, cello, pads, full drums, horns, flute, and clarinet fill the stacks.
+3:25 — Readers Hold the Roof: cello, strings, choir, drums, winds, and answering horns broaden the subject.
+4:06 — Birds Carry the Index: flute/clarinet calls, harp, cello, quiet strings, and sparse ride cymbal.
+4:37 — One Lamp After Weather: piano, cello, centred strings, viola, violin, and flute fade through incomplete statements.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Harp CC10 autopan moves from 2:19–2:54. Choir CC11 swells during The Missing Folio. Piano, strings, cello, flute, and choir receive a final expression fade from 4:37–5:01. No dynamic filter, echo, mod wheel, pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change is authored; the storm is orchestration and percussion.

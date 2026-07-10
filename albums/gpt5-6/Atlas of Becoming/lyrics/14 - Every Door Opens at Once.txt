@@ -1,0 +1,17 @@
+Why this piece
+The finale transforms the album's recurring materials rather than replaying them. Aquatic glass, evolving cells, linked rooms, odd metre, spy brass, and the six-note hinge converge, then close in reverse order until one quiet door remains.
+
+Listening guide
+0:00 — The First Hinge: flute states the hinge over piano, bass, memory organ, and recursive lead shadows.
+0:33 — Glass Floods the Stair: aquatic glass, wave harp, and evolution pluck hocket above strings, bass, piano, flute, and lead.
+1:02 — Small Cells Learn: pluck, electric latch, glass, harp, lead, piano, choir, bass, and flute accumulate.
+1:37 — Rooms Remember One Another: short rooms foreground piano, electric guitar, glass/harp/sax hocket, then trumpet and horns.
+2:13 — Recursive Lantern Market: glass, guitar, harp, pluck, flute, lead, bass, organ, and 13/8 percussion interlock.
+2:50 — Black-Tie Pursuit: trumpet, horns, and sax hocket over guitar, bass, drums, flute, and lead.
+3:17 — All Thresholds Answer: glass, harp, pluck, lead, guitar, bass, strings, choir, brass, drums, and flute agree.
+3:51 — Doorstorm: every principal process runs together; only the organ sits out.
+4:22 — One Handle Remains: strings and choir hold while the hinge reverses through horns, trumpet, sax, lead, and flute.
+4:45 — The Quiet Hall Beyond: flute and piano share the hinge at breathing speed above one bass and late organ tone.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Flute CC1 modulation/vibrato peaks at the 3:51 doorstorm. Recursive-lead CC74 brightness opens fully there, then darkens. Aquatic-glass CC94 echo peaks in the doorstorm and dries toward the coda. CC11 pushes nearly every part toward the convergence; local expression floors keep the quiet epilogue audible. There is no authored Leslie sweep, pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change.

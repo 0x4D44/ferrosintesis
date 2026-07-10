@@ -1,0 +1,14 @@
+Why this piece
+Alarm, argument, grief, and solidarity coexist. Incompatible clocks and instrumental groups interrupt one another; a shared pulse emerges gradually without pretending the conflict has disappeared.
+
+Listening guide
+0:00 — Many Clocks at Dawn: strings and earth bass underpin offset marimba, clarinet, flute, oboe, side-stick, and hi-hat clocks.
+0:31 — Crossed Frequencies: piano, strings, bass, drums, and dense woodwind hocket compete; warning trumpet enters at 0:33.
+1:08 — Seven Unequal Windows: the groups interrupt more sharply in 7/8; oboe, trumpet, and assembly horn enter in turn.
+1:51 — Names Without Headlines: spacious strings, choir, and bass hold grief beneath oboe, distant flute, kick, and rare crash.
+2:41 — Hands Find the Same Pulse: piano, marimba, woodwinds, strings, bass, drums, choir, trumpet, and horn accumulate.
+3:26 — Common Ground, Moving: the full ensemble shares a faster 6/8.
+3:51 — A Signal Still Fragile: strings, choir, bass, oboe, and quiet side-stick remain.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Witness-oboe CC1 modulation/vibrato follows the drama from 0:00–4:12, retreating for grief and peaking during common ground. CC11 expression shapes strings, oboe, choir, and assembly horn from 2:41–4:11. There is no pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change.

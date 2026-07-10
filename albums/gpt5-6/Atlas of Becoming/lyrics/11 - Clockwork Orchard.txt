@@ -1,0 +1,14 @@
+Why this piece
+Living Baroque counterpoint is gradually colonized by pitched escapements, woodblocks, and machine-grid percussion, then recovers rests, rubato, and breath.
+
+Listening guide
+0:00 — Seed Under Glass: continuo and flute begin; violin, bassoon, and cello enter over soft strings.
+0:34 — Gears Find the Branch: vibraphone escapement, wooden teeth, clicks, and kit percussion start imposing a clock on the counterpoint.
+1:07 — Escapement Canopy: continuo, copper synth, vibraphone, and wooden teeth hocket beneath violin, bassoon, cello, strings, and clock percussion.
+1:39 — Iron Pollination: synth, vibraphone, woodblocks, winds, strings, continuo, cello, and full drums reach maximum grid density.
+2:17 — Sap Against Steel: flute, violin, cello, and continuo resume wider phrasing; the clock drops out around 2:30.
+2:52 — Branches Bend Time: flute and violin slow over continuo and strings with machine voices gone.
+3:24 — The Living Cadenza: breath-led flute, occasional violin, isolated cello, and quiet strings move through written tempo slowdowns.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. CC11 arcs shape the acoustic ensemble across the piece. Separate expression lanes make vibraphone and wooden-teeth clocks grow from near silence, peak around 1:54, and disappear by 3:24. There is no wah, autopan, pitch bend, mod wheel, aftertouch, portamento, sustain automation, or mid-piece program change. The clock illusion is authored short notes and percussion; the ending's rubato is a tempo map.

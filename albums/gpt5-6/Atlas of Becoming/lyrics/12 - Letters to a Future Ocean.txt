@@ -1,0 +1,14 @@
+Why this piece
+A six-note salutation is passed beyond living memory through harp, piano, winds, strings, choir, and water imagery. One violent storm tests the message; the final letter remains unanswered.
+
+Listening guide
+0:00 — Dear Water Not Yet Born: harp, broad strings, deep cello, flute salutation, piano anchors, oboe, and clarinet replies.
+0:54 — Postscript in Starlight: harp, strings, cello, future choir, phosphor bells, and all three winds exchange luminous replies.
+1:52 — Archives of Rain: piano joins the harp, strings, cello, choir, and wind correspondence.
+2:56 — The Storm Reads Us: piano, harp, phosphor bells, fast wind hocket, cello, horns, cinematic drums, and the flute salutation collide.
+3:42 — Ink Runs Clear: quiet harp, strings, cello, choir, piano, and winds reassemble.
+4:42 — Future Shore: harp, strings, cello, held choir, and sparse wind replies recede.
+5:33 — Last Address: almost bare harp and flute receive one low cello/oboe answer and a final phosphor bell.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Phosphor-bell CC74 wah runs from 2:56–3:42. Its CC94 echo send rises from 0:00, peaks around 3:19, drops after the storm, then leaves a moderate tail. Flute CC1 modulation/vibrato peaks around 3:26 and recedes. CC11 shapes the full dynamic arc, with extra string and choir storm swells. There is no pitch bend, aftertouch, portamento, sustain automation, or mid-piece program change.

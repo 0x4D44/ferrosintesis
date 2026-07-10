@@ -5,7 +5,8 @@ For each MIDI in the repo: render to a temporary WAV with **ferrosintesis**
 (our synth, built at target/release), then encode to
 `listening/<artist>/<album>/<name>.opus` with **ropusenc**, writing Vorbis-comment tags
 (TITLE / ARTIST / ALBUM / ALBUMARTIST / COMPOSER / GENRE / DATE /
-TRACKNUMBER / TRACKTOTAL). The committed `.opus` files are the shareable,
+TRACKNUMBER / TRACKTOTAL, plus optional multiline LYRICS listening notes). The
+committed `.opus` files are the shareable,
 tagged listening copies; they are reproducible from the committed MIDI +
 synth by re-running this script.
 
@@ -101,7 +102,61 @@ def opus_path_for(midi: Path) -> Path:
     return LISTENING / artist / album / (midi.stem + ".opus")
 
 
-def render_one(midi: Path, total_by_album: dict[str, int]) -> tuple[Path, bool, str]:
+def lyrics_path_for(midi: Path) -> Path:
+    """The optional UTF-8 listening-note sidecar for a MIDI file."""
+    return midi.parent.parent / "lyrics" / f"{midi.stem}.txt"
+
+
+def lyrics_for(midi: Path) -> str | None:
+    """Read an optional multiline LYRICS value without losing its formatting."""
+    path = lyrics_path_for(midi)
+    if not path.exists():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{path}: lyrics sidecar is not valid UTF-8") from exc
+    text = text.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
+    if not text.strip():
+        raise ValueError(f"{path}: lyrics sidecar is blank")
+    if "\x00" in text:
+        raise ValueError(f"{path}: lyrics sidecar contains a NUL byte")
+    return text
+
+
+def validate_lyrics_sidecars(midis: list[Path]) -> None:
+    """Reject sidecars whose exact MIDI stem is absent from the render set."""
+    stems_by_album: dict[Path, set[str]] = {}
+    for midi in midis:
+        stems_by_album.setdefault(midi.parent.parent, set()).add(midi.stem)
+    for album_dir, midi_stems in stems_by_album.items():
+        lyrics_dir = album_dir / "lyrics"
+        if not lyrics_dir.exists():
+            continue
+        sidecar_stems = {path.stem for path in lyrics_dir.glob("*.txt")}
+        orphans = sorted(sidecar_stems - midi_stems)
+        if orphans:
+            names = ", ".join(f"{stem}.txt" for stem in orphans)
+            raise ValueError(f"{lyrics_dir}: no matching MIDI for {names}")
+
+
+def encoder_comments(artist: str, track_total: int, lyrics: str | None) -> list[str]:
+    comments = [
+        f"ALBUMARTIST={artist}",
+        f"COMPOSER={artist}",
+        f"TRACKTOTAL={track_total}",
+        "ENCODER_SETTINGS=ferrosintesis->ropusenc 96k VBR",
+    ]
+    if lyrics is not None:
+        comments.append(f"LYRICS={lyrics}")
+    return comments
+
+
+def render_one(
+    midi: Path,
+    total_by_album: dict[str, int],
+    lyrics: str | None,
+) -> tuple[Path, bool, str]:
     key = album_for(midi)
     album, artist, genre = ALBUMS[key]
     title, tracknum = title_and_number(midi)
@@ -118,12 +173,10 @@ def render_one(midi: Path, total_by_album: dict[str, int]) -> tuple[Path, bool, 
             "--comp", "10",
             "--title", title, "--artist", artist, "--album", album,
             "--genre", genre, "--date", DATE, "--tracknumber", tracknum,
-            "--comment", f"ALBUMARTIST={artist}",
-            "--comment", f"COMPOSER={artist}",
-            "--comment", f"TRACKTOTAL={total_by_album[key]}",
-            "--comment", "ENCODER_SETTINGS=ferrosintesis->ropusenc 96k VBR",
-            "-o", str(opus), str(wav),
         ]
+        for comment in encoder_comments(artist, total_by_album[key], lyrics):
+            cmd.extend(("--comment", comment))
+        cmd.extend(("-o", str(opus), str(wav)))
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0 or not opus.exists():
             return opus, False, f"ropusenc failed: {r.stderr.strip()[:200]}"
@@ -145,6 +198,11 @@ def main() -> int:
         midis = [m for m in midis if ALBUMS[album_for(m)][0] == args.album]
         if not midis:
             raise SystemExit(f"no album titled {args.album!r}")
+    try:
+        validate_lyrics_sidecars(midis)
+        lyrics_by_midi = {midi: lyrics_for(midi) for midi in midis}
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"invalid lyrics sidecar: {exc}") from exc
     total_by_album = {k: 0 for k in ALBUMS}
     for m in midis:
         total_by_album[album_for(m)] += 1
@@ -153,7 +211,10 @@ def main() -> int:
           f"({args.jobs} workers)")
     ok = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
-        futs = {ex.submit(render_one, m, total_by_album): m for m in midis}
+        futs = {
+            ex.submit(render_one, m, total_by_album, lyrics_by_midi[m]): m
+            for m in midis
+        }
         for fut in concurrent.futures.as_completed(futs):
             opus, good, msg = fut.result()
             size = opus.stat().st_size / 1e6 if good and opus.exists() else 0

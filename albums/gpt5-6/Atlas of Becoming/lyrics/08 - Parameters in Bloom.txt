@@ -1,0 +1,20 @@
+Why this piece
+A symbolic GPT history lets one five-token seed accumulate context, instruction following, multimodality, reasoning gaps, tool calls, and finally joined orchestral voices. The written timeline ends at GPT-5.5; it does not claim GPT-5.6 as a released milestone.
+
+Listening guide
+0:00 — GPT-1: parameter strings and token bass begin; seed lead and sparse training-clock percussion enter.
+0:30 — GPT-2: piano widens the seed, strings, bass, and pulse.
+0:58 — GPT-3: instruction clarinet begins answering the seed as piano context becomes denser.
+1:25 — InstructGPT: seed and clarinet trade more regular responses.
+1:51 — GPT-3.5: anticipatory bass and a quicker pulse create a conversation loop.
+2:15 — GPT-4: fuller string memory and interlocking piano/clarinet lines build deep polyphony.
+2:44 — GPT-4 Turbo: compressed half-beat context figures tighten the ensemble.
+3:09 — GPT-4o: flute, choir, and marimba enter as sight, sound, and text streams.
+3:33 — o1: reasoning cello enters with deliberate internal rests.
+4:09 — GPT-4.5: the multimodal ensemble turns warmer and major.
+4:36 — GPT-4.1: the same ensemble tightens into 7/8.
+5:02 — o3/o4-mini: left-side clean guitar tool calls receive right-side brass responses.
+5:25 — GPT-5 through 7:13 GPT-5.5: all melodic lanes and percussion join, stabilize, broaden, quicken, and swell into the current chorus.
+
+MIDI techniques
+Every channel has authored GM program and CC7/10/91/93/94 mix placement. Reasoning-cello CC11 rises from 3:33 through the joined finale. Eight principal channels share a final CC11 swell from 6:52, peaking near 7:29. Piano CC64 sustain runs from 7:13–7:46. There is no dynamic wah, autopan, pitch bend, mod-wheel lane, aftertouch, portamento, or mid-piece program change; most capabilities are demonstrated through added voices, denser notes, tempo, and metre.

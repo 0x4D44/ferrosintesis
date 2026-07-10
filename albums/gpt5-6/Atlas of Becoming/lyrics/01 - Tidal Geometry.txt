@@ -1,0 +1,12 @@
+Why this piece
+The aquatic triptych opens by turning immersive theatre motion into original music: glass, water, aerial arcs, a suspended drop, and a final high dive. A recurring rising cell and changing metre describe bodies moving through light rather than quoting any source melody.
+
+Listening guide
+0:00 — Glass Surface: blue pad and glass marimba establish 7/8; aerial flute enters at 0:01 and current bass at 0:23.
+0:46 — Underwater Wheel: water piano joins marimba and flute above tidal strings, bass, and water percussion.
+1:29 — Aerial Thread: piano, bass, flute, and drums move into 4/4; horizon horns enter at 1:36.
+2:15 — Weightless Drop: tempo falls to blue pad, isolated flute, and returning glass marimba; the bass and groove disappear.
+2:42 — Final Arc: 7/8 returns with piano, marimba, flute, strings, bass, drums, and horns; the flute climbs from 2:57.
+
+MIDI techniques
+Every channel has an authored GM program plus CC7 volume, CC10 pan, CC91 reverb, CC93 chorus, and CC94 echo placement. Tidal-string CC11 expression rises from 0:46–1:29. Flute CC1 modulation/vibrato grows from 1:29–2:14. Blue-pad expression shapes the drop and finale; strings, flute, pad, and horns share a final CC11 arc from 2:42–3:21. CC10 autopan is authored for glass marimba from 1:29–2:07, but the marimba has no notes there, so it is not an audible showcase. There is no pitch bend, aftertouch, portamento, or mid-piece program change.

@@ -3114,6 +3114,7 @@ const LA_VIOLIN: (f32, (f32, f32)) = (0.30, (0.12, 0.38));
 const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 const LA_PIANO: (f32, (f32, f32)) = (0.42, (0.18, 0.85));
 const LA_BRASS: (f32, (f32, f32)) = (0.35, (0.10, 0.32));
+const LA_REED: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
 /// GM 61 brass section: trumpet bank at reduced gain so the modeled
 /// scattered player onsets stay audible underneath (HLD §4).
 const LA_BRASS_SECTION_GAIN: f32 = 0.6;
@@ -4592,7 +4593,25 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             }
         }
         62 | 63 => Box::new(brass(program, key, vel, sr, seed)), // synth brass: pure model
-        64..=71 | 109 | 111 => Box::new(reed(program, key, vel, sr, seed)),
+        // saxes, bagpipe, shanai: pure model (no clean CC0 source / idiomatic onset)
+        64..=67 | 109 | 111 => Box::new(reed(program, key, vel, sr, seed)),
+        68..=71 => {
+            let model = Box::new(reed(program, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_REED;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::reed_bank(program, vel),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         72..=79 => {
             let model = Box::new(Wind::new(
                 matches!(program, 72 | 78 | 79),

@@ -446,6 +446,50 @@ fn nylon() -> &'static [Zone] {
     })
 }
 
+// String sections for GM 48-49: one bank per dynamic, cello section covering
+// the low split and violin section the high — `nearest` picks the section by
+// root, so a low pad gets celli and a high line gets violins. Roots measured
+// by autocorrelation (both sections sound one octave above their VSCO labels).
+fn strsec_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "celens_C1_p.wav" => 65.48,
+            "celens_G1_p.wav" => 97.46,
+            "celens_D2_p.wav" => 146.97,
+            "celens_A2_p.wav" => 219.85,
+            "celens_E3_p.wav" => 329.02,
+            "celens_B3_p.wav" => 493.92,
+            "vlnens_G2_p.wav" => 196.06,
+            "vlnens_D3_p.wav" => 293.66,
+            "vlnens_A3_p.wav" => 440.80,
+            "vlnens_E4_p.wav" => 660.20,
+            "vlnens_B4_p.wav" => 989.79,
+            "vlnens_D5_p.wav" => 1175.21,
+        )
+    })
+}
+
+fn strsec_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "celens_C1_f.wav" => 65.38,
+            "celens_G1_f.wav" => 97.71,
+            "celens_D2_f.wav" => 146.73,
+            "celens_A2_f.wav" => 219.17,
+            "celens_E3_f.wav" => 328.79,
+            "celens_B3_f.wav" => 493.91,
+            "vlnens_G2_f.wav" => 195.56,
+            "vlnens_D3_f.wav" => 292.71,
+            "vlnens_A3_f.wav" => 441.25,
+            "vlnens_E4_f.wav" => 657.60,
+            "vlnens_B4_f.wav" => 991.44,
+            "vlnens_D5_f.wav" => 1170.87,
+        )
+    })
+}
+
 fn drum_crash() -> &'static [HitSample] {
     static B: OnceLock<Vec<HitSample>> = OnceLock::new();
     B.get_or_init(|| {
@@ -567,6 +611,18 @@ pub fn reed_bank(program: u8, vel: u8) -> &'static [Zone] {
     }
 }
 
+/// Bank for the layered string sections (GM 48-49). Velocity picks the
+/// dynamic layer (violin section v1 → p, v2 → f; cello section v1 → p,
+/// v3 → f; threshold as `violin_bank`). Synth strings 50-51 stay pure
+/// model (they are *synth* strings — HLD option A default).
+pub fn strings_bank(vel: u8) -> &'static [Zone] {
+    if vel >= 80 {
+        strsec_f()
+    } else {
+        strsec_p()
+    }
+}
+
 /// Bank for the layered nylon guitar (GM 24). The FreePats source has one
 /// take per note — no velocity layers, no round robins — so the bank is
 /// flat; `LaVoice`'s `vel_amp` still scales the transient with velocity.
@@ -604,6 +660,8 @@ pub fn prewarm() {
         let _ = reed_bank(program, 1);
         let _ = reed_bank(program, 127);
     }
+    let _ = strings_bank(1);
+    let _ = strings_bank(127);
     let _ = guitar_bank();
     let _ = drum_crash_bank();
     let _ = drum_kick_bank();
@@ -892,6 +950,8 @@ mod tests {
             .chain(clarinet_p())
             .chain(clarinet_f())
             .chain(nylon())
+            .chain(strsec_p())
+            .chain(strsec_f())
         {
             assert!(z.data.len() > 20_000, "zone too short: {}", z.data.len());
             // the tuba bank reaches A#0 (~29 Hz), hence the low floor
@@ -1130,6 +1190,100 @@ mod tests {
         }
     }
 
+    /// The string-section sample layer must not shift perceived pitch:
+    /// Goertzel peak through the crossfade window at idiomatic keys. 48/49
+    /// exercise both the cello-section (low) and violin-section (high) zones;
+    /// 50/51 are pure model by design but are pinned here too so a future
+    /// wrap cannot land without re-passing this oracle.
+    #[test]
+    fn la_strings_pitch_integrity() {
+        let sr = 44100.0;
+        for (program, key, name) in [
+            (48u8, 48u8, "ensemble-low-cello"),
+            (48, 76, "ensemble-high-violin"),
+            (49, 55, "slow-strings-low"),
+            (49, 67, "slow-strings-mid"),
+            (50, 60, "synth-strings-1"),
+            (51, 64, "synth-strings-2"),
+        ] {
+            let f0 = crate::dsp::key_freq(key);
+            let mut v = voices::make(program, key, 100, sr, 5, true);
+            let mut buf = vec![0f32; 44100];
+            v.render(&mut buf);
+            // 0.15-0.55 s spans the fade tail and the handed-over sustain
+            let hz = crate::testutil::peak_locate(&buf[6615..24255], sr, f0 * 0.8, f0 * 1.25);
+            let cents = 1200.0 * (hz / f0).log2();
+            assert!(
+                cents.abs() < 45.0,
+                "{name}: layered pitch {hz:.2} Hz vs nominal {f0:.2} Hz ({cents:.0} cents)"
+            );
+        }
+    }
+
+    /// Synth strings 50-51 stay pure model (HLD option A): samples on/off
+    /// must render byte-identical on the default bank.
+    #[test]
+    fn synth_strings_50_51_skip_sample_layer() {
+        let sr = 44100.0;
+        let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        for prog in [50u8, 51] {
+            let render = |samples: bool| {
+                let mut v = voices::make(prog, 60, 100, sr, 6, samples);
+                let mut buf = vec![0f32; 22050];
+                v.render(&mut buf);
+                buf
+            };
+            assert_eq!(
+                bits(&render(true)),
+                bits(&render(false)),
+                "synth strings {prog} not sample-independent"
+            );
+        }
+    }
+
+    /// The string-section layer must be audible, not just present: samples-on
+    /// vs samples-off must differ materially in the first 50 ms. Measured
+    /// direction is REGISTER-DEPENDENT, unlike brass (up) or reeds/guitar
+    /// (down): the real violin-section bite raises the high-band fraction up
+    /// top (hf on/off 0.58/0.42 at 48@76) while the cello/mid sections are
+    /// LESS hissy than the saw stack's filtered onset (0.22/0.25 at 48@48,
+    /// 0.30/0.37 at 49@67). So the oracle asserts audibility plus a measured
+    /// two-sided band: the layer never makes the attack wildly hissier
+    /// (<1.6x) and never dulls it to mud (>0.5x).
+    #[test]
+    fn la_strings_attack_audibility() {
+        let sr = 44100.0;
+        for (program, key, name) in [
+            (48u8, 48u8, "ensemble-low"),
+            (48, 60, "ensemble-mid"),
+            (48, 76, "ensemble-high"),
+            (49, 55, "slow-low"),
+            (49, 67, "slow-mid"),
+        ] {
+            let early = |samples: bool| {
+                let mut v = voices::make(program, key, 100, sr, 5, samples);
+                let mut buf = vec![0f32; (0.05 * sr) as usize];
+                v.render(&mut buf);
+                buf
+            };
+            let (on, off) = (early(true), early(false));
+            let diff: Vec<f32> = on.iter().zip(&off).map(|(a, b)| a - b).collect();
+            let (d, o) = (crate::testutil::rms(&diff), crate::testutil::rms(&off));
+            assert!(
+                d > 0.3 * o,
+                "{name}: onset barely changes with the layer (diff {d:.5} vs off {o:.5})"
+            );
+            let hf_frac = |buf: &[f32]| {
+                crate::testutil::hp_rms(buf, sr, 1500.0) / crate::testutil::rms(buf).max(1e-9)
+            };
+            let (r_on, r_off) = (hf_frac(&on), hf_frac(&off));
+            assert!(
+                r_on < r_off * 1.6 && r_on > r_off * 0.5,
+                "{name}: attack hf-frac out of the measured band: on {r_on:.4} vs off {r_off:.4}"
+            );
+        }
+    }
+
     /// The sampled attack must hand over to the model without a level jump.
     #[test]
     fn la_level_continuity() {
@@ -1150,6 +1304,9 @@ mod tests {
             (70u8, 48, "bassoon"),
             (71u8, 60, "clarinet"),
             (24u8, 52, "nylon-guitar"),
+            (48u8, 48, "string-ens-low"),
+            (48u8, 76, "string-ens-high"),
+            (49u8, 55, "slow-strings"),
         ] {
             let mut v = voices::make(program, key, 100, sr, 5, true);
             let mut buf = vec![0f32; 44100]; // 1 s, note held

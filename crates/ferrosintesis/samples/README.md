@@ -26,6 +26,14 @@ crossfades into the modeled sustain.
   v1 → p, v3 → f; the bassoon has only v1/v2 at the pinned rev, so
   v2 → f), ~0.63 s. GM 69 (english horn) reuses the oboe bank repitched
   down; the saxes 64–67 stay pure model (no sax in VSCO 2 CE).
+- `vlnens_*_{p,f}.wav`, `celens_*_{p,f}.wav` — string-section sustain
+  onsets for GM 48–49, 6 pitch zones × 2 dynamic layers each (violin
+  section v1 → p, v2 → f; cello section v1 → p, v3 → f; both sections
+  sound one octave above their VSCO filename labels — roots are measured,
+  not assumed), ~0.63 s. One combined bank per dynamic: the cello zones
+  cover the low split and the violin zones the high, so nearest-root
+  selection picks the section by register. Synth strings GM 50–51 stay
+  pure model (they are *synth* strings), as does the alt orchestral bank.
 - `nylon_*.wav` — nylon (classical) guitar pluck onsets for GM 24, 7 pitch
   zones E2–E5 (~6-semitone spacing; B2 stands in for the source's missing
   A#2), kept 0.9 s so the sample carries the pick transient and early body

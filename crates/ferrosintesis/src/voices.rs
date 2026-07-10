@@ -3928,6 +3928,10 @@ const LA_REED: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
 /// body is loud relative to the model and 0.45 stepped the 50–150 ms window
 /// 3.4× above the handover (la_level_continuity cap is 2.4×).
 const LA_GUITAR: (f32, (f32, f32)) = (0.25, (0.05, 0.20));
+/// String sections 48-49: the real section swell reads best with a longer
+/// crossfade than the solo bowed layer (a section "comes into focus", it
+/// does not bite), so the transient hands over across [0.10, 0.40] s.
+const LA_STRINGS: (f32, (f32, f32)) = (0.40, (0.10, 0.40));
 /// GM 61 brass section: trumpet bank at reduced gain so the modeled
 /// scattered player onsets stay audible underneath (HLD §4).
 const LA_BRASS_SECTION_GAIN: f32 = 0.6;
@@ -5400,7 +5404,25 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         }
         46 => Box::new(Pluck::new(&HARP, key, vel, sr, seed)),
         47 => Box::new(timpani(key, vel, sr, seed)),
-        48..=51 => Box::new(strings(program, key, vel, sr, seed)),
+        48..=49 => {
+            let model = Box::new(strings(program, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_STRINGS;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::strings_bank(vel),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
+        // 50-51 are *synth* strings: pure model by design (HLD option A)
+        50 | 51 => Box::new(strings(program, key, vel, sr, seed)),
         52..=54 => Box::new(choir(program, key, vel, sr, seed)),
         55 => Box::new(orch_hit(key, vel, sr, seed)),
         56..=61 => {

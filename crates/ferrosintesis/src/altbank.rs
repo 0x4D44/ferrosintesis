@@ -1015,6 +1015,10 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         }
         44 => Box::new(Bowed::new(44, key, vel, sr, seed)),
         45 => Box::new(Pluck::new(&PIZZ, key, vel, sr, seed)),
+        // Alt-bank strings stay the frozen v0.9 SawStack built HERE (this
+        // module's own `strings`), never `voices::make` — so the default
+        // bank's LA_STRINGS sampled attack layer (voices.rs, GM 48-49)
+        // cannot reach alt-bank channels regardless of the samples flag.
         48..=51 => Box::new(strings(program, key, vel, sr, seed)),
         52..=54 => Box::new(choir_v2(program, key, vel, sr, seed, 1.0)),
         // Alt-bank brass stays the frozen v0.9 pure model: the default bank's
@@ -1356,6 +1360,23 @@ mod tests {
             bits(&off),
             "arco 40 should wrap the sample layer"
         );
+    }
+
+    /// Alt-bank strings 48-51 must ignore the default bank's LA_STRINGS
+    /// sampled attack layer: samples on/off render byte-identical (the
+    /// frozen v0.9 invariant, same guard as brass/reeds/guitar).
+    #[test]
+    fn altbank_strings_skip_sample_layer() {
+        let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        for prog in 48..=51u8 {
+            let on = render_make(prog, 60, 100, 0.5, 6, true);
+            let off = render_make(prog, 60, 100, 0.5, 6, false);
+            assert_eq!(
+                bits(&on),
+                bits(&off),
+                "alt-bank strings {prog} not sample-independent"
+            );
+        }
     }
 
     /// BW-O9 — level bounds. Part (a): the pizz does not jump OUT of the arco's

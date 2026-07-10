@@ -102,6 +102,21 @@ SOURCES = {
         f"{n.replace('#', '%23')}_{v}_rr1_sum.wav"
     for n in ("A#2", "D3", "F3", "A#3", "D4", "F4")
     for d, v in (("p", "v1"), ("f", "v3"))
+} | {
+    # string-section sustain onsets for GM 48-49 — violin section covers the
+    # high split (VSCO dynamic layers: v1 -> p, v2 -> f; no v3 in this set)
+    f"vlnens_{n}_{d}.wav":
+        f"{BASE}/Strings/Violin%20Section/susVib/VlnEns_susVib_"
+        f"{n.replace('#', '%23')}_{v}.wav"
+    for n in ("G2", "D3", "A3", "E4", "B4", "D5")
+    for d, v in (("p", "v1"), ("f", "v2"))
+} | {
+    # cello section covers the low split (v1 -> p, v3 -> f)
+    f"celens_{n}_{d}.wav":
+        f"{BASE}/Strings/Cello%20Section/susvib/susvib_"
+        f"{n.replace('#', '%23')}_{v}_1.wav"
+    for n in ("C1", "G1", "D2", "A2", "E3", "B3")
+    for d, v in (("p", "v1"), ("f", "v3"))
 } | DRUM_SOURCES
 
 # FreePats "Spanish classical guitar" (version 2019-06-18), CC0 1.0 public
@@ -140,6 +155,13 @@ F0_RANGE = {
     # guitar E2 (82.4) … E5 (659.3); ceiling 700 keeps autocorr off the
     # 2nd harmonic of the top zones (the brass/oboe lesson)
     "nylon": (70.0, 700.0),
+    # violin section G2-name spans G3 196 Hz … D5-name D6 1175 Hz (VSCO's
+    # octave labels sit one below sounding pitch here); ceiling 1300 keeps
+    # autocorr off the top zone's 2nd harmonic (the brass/oboe lesson)
+    "vlnens": (150.0, 1300.0),
+    # cello section C1-name sounds C2 65.4 Hz … B3-name B4 493.9 Hz; ceiling
+    # 550 sits just above the top fundamental, below its 2nd harmonic (988)
+    "celens": (50.0, 550.0),
 }
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail

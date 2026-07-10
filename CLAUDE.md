@@ -108,7 +108,7 @@ listening assets to refresh; *unexpected* diffs (a brass change altering a piano
 album, DC on silent channels) are bugs — investigate before committing. For a pure
 controller feature, any diff at all is a bug.
 
-ferrosintesis is versioned (`Cargo.toml`, currently 0.10.2); a shipped-code change needs one
+ferrosintesis is versioned (`Cargo.toml`, currently 0.11.0); a shipped-code change needs one
 version bump per integrated task.
 
 ## Composition-engine architecture

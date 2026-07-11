@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Embedded CC0 piano, violin, and flute samples for ferrosintesis"
 license = "CC0-1.0"
-repository = "https://github.com/0x4D44/midi-music"
+repository = "https://github.com/0x4D44/ferrosintesis"
 readme = "README.md"
 include = ["src/**", "samples/**", "README.md", "LICENSE-CC0"]
 

@@ -598,6 +598,23 @@ const SNARE_TONES: [(f32, f32, f32, f32); 4] = [
     (430.0, 0.18, 0.05, 2.0),
 ];
 
+/// P-S4 kit-v3 snare head: re-seated onto air-loaded circular-membrane (Bessel)
+/// ratios — 1 : 1.593 : 2.135 : 2.30 : 2.653 × the 186 Hz fundamental (the
+/// (0,1)/(1,1)/(2,1)/(0,2)/(3,1) modes) — replacing V2's less physical
+/// 186/280/330/430 cluster and adding the (3,1) mode so the pitched body is
+/// richer and reads less electronic (G5). Same per-mode glide structure as
+/// `SNARE_TONES`. V3/Brush only; V2 keeps `SNARE_TONES` byte-identical.
+/// (Slow head beating is deliberately NOT added here — the head rings only
+/// ~100 ms, too short for a 2-8 Hz beat to complete; beating lives on the
+/// longer-ringing toms, P-T3.)
+const SNARE_TONES_V3: [(f32, f32, f32, f32); 5] = [
+    (186.0, 0.8, 0.10, 4.0),
+    (296.0, 0.42, 0.08, 2.0),
+    (397.0, 0.28, 0.065, 2.0),
+    (428.0, 0.18, 0.055, 2.0),
+    (493.0, 0.11, 0.045, 2.0),
+];
+
 /// DR4 kit-v2 snare wire-mode clusters (key 38): three bandpass centers
 /// approximating the resonant clusters of the ~20 wire partials, replacing
 /// v1's featureless HP-2800 slope. Ring time Q/(πf) ≤ 0.56 ms — coloration,
@@ -1278,8 +1295,15 @@ pub fn make(
             // brush key map above and 40 is the swirl; the arm exists only for
             // match exhaustiveness.)
             Kit::V2 | Kit::V3 | Kit::Brush => {
+                // P-S4: V3/Brush re-seat the head onto Bessel ratios (richer,
+                // physical); V2 keeps SNARE_TONES byte-identical.
+                let head: &[(f32, f32, f32, f32)] = if matches!(kit, Kit::V2) {
+                    &SNARE_TONES
+                } else {
+                    &SNARE_TONES_V3
+                };
                 let (tones, noise) = membrane_velocity(
-                    &SNARE_TONES,
+                    head,
                     &[
                         (0.55, 0.09, Biquad::bandpass(1300.0, 0.7, sr)),
                         (0.22, 0.35, Biquad::highpass(1800.0, 0.7, sr)),
@@ -2802,6 +2826,52 @@ mod tests {
         );
         // (d) no DC blow-up (the snare's inherent offset is ~-5e-4).
         assert!(mean.abs() < 1e-3, "(d) v3 snare DC {mean:.2e}");
+    }
+
+    /// P-S4 (fail-first, differential V3-vs-V2): the V3 snare head is re-seated
+    /// onto air-loaded circular-membrane (Bessel) ratios and gains the (3,1)
+    /// mode — a richer, more physical pitched body than V2's 186/280/330/430.
+    /// The head-band spectral centroid rises (modes at higher ratios + an extra
+    /// upper mode); the fundamental is held and level parity kept. The centroid
+    /// is glide-robust where resolving individual ratios is not (the head's
+    /// per-mode down-glide would smear a peak-ratio read). Fail-first: on the
+    /// unmodified build V3 == V2, so the centroid does not move.
+    #[test]
+    fn snare_head_is_richer_and_physical_v3() {
+        let sr = 44100.0;
+        let v2 = render_drum_kit(38, 100, 0.3, Kit::V2);
+        let v3 = render_drum_kit(38, 100, 0.3, Kit::V3);
+        // early head window (before the glide/decay eat it); the wire buzz is
+        // HP>1800, so 150-600 Hz is the pitched head.
+        let h2 = &v2[..(0.04 * sr) as usize];
+        let h3 = &v3[..(0.04 * sr) as usize];
+        // Centroid of the UPPER head band (above the dominant 186 Hz
+        // fundamental), where the re-seat actually moves the modes
+        // (280/330/430 → 296/397/428/493).
+        let c2 = testutil::spectral_centroid(h2, sr, 240.0, 600.0);
+        let c3 = testutil::spectral_centroid(h3, sr, 240.0, 600.0);
+        let f0 = testutil::spectral_band_rms(h3, sr, 165.0, 205.0);
+        let (r2, r3) = (testutil::rms(&v2), testutil::rms(&v3));
+        let db = 20.0 * (r3 / r2.max(1e-12)).log10();
+        let mean = v3.iter().sum::<f32>() / v3.len() as f32;
+        println!(
+            "P-S4 snare head: centroid v2={c2:.0} v3={c3:.0} Hz; f0band={f0:.4}; \
+             level v3-v2={db:+.2} dB; DC={mean:.2e}"
+        );
+        // (1) re-seated to higher, richer modes: the head centroid rises.
+        assert!(
+            c3 > c2 + 12.0,
+            "(1) v3 head not re-seated higher: v3={c3:.0} v2={c2:.0} Hz"
+        );
+        // (2) the 186 Hz fundamental is held (pitch unchanged).
+        assert!(f0 > 1e-3, "(2) v3 fundamental head missing: {f0:.4}");
+        // (3) level parity with the V2 head.
+        assert!(
+            db.abs() <= 2.0,
+            "(3) v3 snare level {db:+.2} dB outside ±2 dB of v2"
+        );
+        // (4) no DC.
+        assert!(mean.abs() < 1e-3, "(4) v3 snare DC {mean:.2e}");
     }
 
     /// Oracle 26 (D6, voice half): choke() collapses a ringing open hat

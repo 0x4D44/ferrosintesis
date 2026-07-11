@@ -191,6 +191,12 @@ def render_one(
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--album", help="only render this album (by title)")
+    ap.add_argument(
+        "--only-list",
+        help="path to a file of repo-relative MIDI paths (one per line); render "
+        "only those. For surgical asset refreshes that touch just the tracks a "
+        "synth change actually altered (avoids sweeping in unrelated stale opus).",
+    )
     ap.add_argument("--jobs", type=int, default=6)
     args = ap.parse_args()
 
@@ -198,13 +204,30 @@ def main() -> int:
         raise SystemExit(f"synth not built: {SYNTH}\n"
                          f"run: cargo build --release -p ferrosintesis-cli")
 
-    midis = all_midis()
+    all_m = all_midis()
+    midis = all_m
     if args.album:
         midis = [m for m in midis if ALBUMS[album_for(m)][0] == args.album]
         if not midis:
             raise SystemExit(f"no album titled {args.album!r}")
+    if args.only_list:
+        with open(args.only_list, encoding="utf-8") as fh:
+            wanted = {line.strip() for line in fh if line.strip()}
+        midis = [m for m in midis if m.relative_to(REPO).as_posix() in wanted]
+        found = {m.relative_to(REPO).as_posix() for m in midis}
+        missing = wanted - found
+        if missing:
+            raise SystemExit(
+                f"--only-list has {len(missing)} unmatched path(s): "
+                f"{sorted(missing)[:5]}"
+            )
+        if not midis:
+            raise SystemExit("no MIDIs matched --only-list")
     try:
-        validate_lyrics_sidecars(midis)
+        # Sidecar consistency is a repo-wide invariant: validate against the full
+        # MIDI set, not the (possibly track-level) render subset, so a partial
+        # refresh doesn't mistake a not-selected track's sidecar for an orphan.
+        validate_lyrics_sidecars(all_m)
         lyrics_by_midi = {midi: lyrics_for(midi) for midi in midis}
     except (OSError, ValueError) as exc:
         raise SystemExit(f"invalid lyrics sidecar: {exc}") from exc

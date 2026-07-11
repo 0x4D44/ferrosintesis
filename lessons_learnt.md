@@ -174,3 +174,11 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   on `L`/`bright` directly; and the extra harmonics must be shed at high f0 (a
   quartic derate) to hold the 2× alias floor (BR-O11). Top-register ff rasp needs
   4×/ADAA (Fork B) — 2× can't carry a genuine shock tail above ~A4.
+- 2026.07.11 — **A digital-waveguide string detunes progressively FLAT with pitch if
+  `set_freq` under-subtracts the loop latency.** The bowed loop's in-loop reflection
+  filter + read/write add ~3.8 samples, not the hard-coded 1; the residual is a
+  near-constant sample offset, so cents-flat scales with pitch — inaudible in the
+  contrabass's bass but ~50 cents flat by the cello's A4 (it passed the pitch gate only
+  because the contrabass's test keys topped at E4, −36c). Set each waveguide voice's
+  `loop_comp` from a single-note autocorrelation sweep; never assume `sr/f−1`
+  (peak-locate AND autocorrelation agree here — real detune, not a zero-crossing lie).

@@ -27,7 +27,7 @@ Add the full synth, including its embedded CC0 attack samples:
 
 ```toml
 [dependencies]
-ferrosintesis = "0.14.3"
+ferrosintesis = "0.15.0"
 ```
 
 For a smaller modeled-only dependency that never downloads or compiles the sample
@@ -35,7 +35,7 @@ crates:
 
 ```toml
 [dependencies]
-ferrosintesis = { version = "0.14.3", default-features = false }
+ferrosintesis = { version = "0.15.0", default-features = false }
 ```
 
 The sample bytes are resolved by Cargo and embedded at compile time. The library
@@ -111,10 +111,19 @@ legato pass straight through the sample layer to the model underneath —
 the sampled attack only ever plays once per slurred phrase.
 
 Distorted guitar (programs 29/30) is handled the way a real rig would be: the
-sustaining string voices are summed **per channel** and driven through a
-`tanh` waveshaper + cabinet-style tone filter (now run at **2× internal rate**
-to roll off the worst of the aliasing), so power chords get their
-intermodulation grit.
+string voices are summed **per channel** and driven through a two-stage amp —
+program-voiced EQ, a power-supply **sag** compressor (fast-attack/slow-release,
+so pick transients pass and decaying tails are held in saturation), two
+cascaded `tanh` stages with an interstage tilt, and the cabinet filter, all at
+**2× internal rate** — so power chords get their intermodulation grit and held
+notes bloom instead of dying. Electric presets also carry a **pickup coil
+resonance** (the RLC peak that reads "electric": jazzbox 26 warm at 2.4 kHz,
+clean 27 bright at 4.2 kHz), and the driven presets add an **e-bow sustainer**:
+once a held 29/30 note decays to a fraction of its spoken level (0.35 default;
+0.6 on the CC0 alt-bank DRIVE_LEAD), a band-limited saturating driver at the
+string's fundamental holds it there indefinitely — release decays naturally.
+GM 26 (jazz hollowbody, neck pickup) and 27 (bright single-coil platform) are
+distinct presets as of v0.15.
 
 ## Performance: bends, hammer-ons, mutes
 

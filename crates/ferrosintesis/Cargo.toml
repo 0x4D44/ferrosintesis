@@ -1,6 +1,6 @@
 [package]
 name = "ferrosintesis"
-version = "0.14.5"
+version = "0.15.0"
 edition = "2021"
 description = "A modeled MIDI synthesizer in Rust"
 license = "MIT OR Apache-2.0"

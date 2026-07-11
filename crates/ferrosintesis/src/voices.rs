@@ -1318,6 +1318,11 @@ pub struct PluckPreset {
     // full-strength skew coupling splits the pair's normal modes by
     // ~k·f0/π Hz, which would bury the course's slow tuning beat.
     pub course_couple: f32,
+    // --- v0.15 electric-guitar v2 ---
+    // Magnetic-pickup coil resonance (Hz, Q): one resonant lowpass after the
+    // position comb — the RLC peak-then-12 dB/oct that reads "electric"
+    // (Paiva/Pakarinen/Välimäki, JAES 2012). (0, 0) = no pickup circuit.
+    pub pickup_rlc: (f32, f32),
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -1353,6 +1358,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     course_bright: 1.15,
     course_mix: (0.74, 0.26),
     course_couple: K_COUPLE,
+    pickup_rlc: (0.0, 0.0),
     #[cfg(test)]
     name: "DEFAULT",
 };
@@ -1397,7 +1403,8 @@ pub const CLEAN: PluckPreset = PluckPreset {
     body: &[(200.0, 1.0, 2.0), (2500.0, 1.0, 3.0)],
     out_lp: 5500.0,
     pickup: 0.12,
-    cab_lp: 4500.0, // light clean-combo speaker rolloff
+    pickup_rlc: (4200.0, 1.8), // bright single-coil + cable resonance
+    cab_lp: 4500.0,            // light clean-combo speaker rolloff
     click: 1.8,
     ..DEFAULTS
 };
@@ -1411,7 +1418,8 @@ pub const DRIVE: PluckPreset = PluckPreset {
     amp: 0.70,
     rel_t60: 0.20,
     pickup: 0.10,
-    click: 2.2, // the pick hits harder through an amp
+    pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
+    click: 2.2,                // the pick hits harder through an amp
     ..DEFAULTS
 };
 /// Opt-in (CC0 alt-bank) SUSTAINING lead voicing of the driven guitar. A
@@ -1436,7 +1444,8 @@ pub const DRIVE_LEAD: PluckPreset = PluckPreset {
     // fast-decaying HIGH finale notes.
     rel_t60: 0.30, // a slightly longer bloom-off when the note is lifted
     pickup: 0.10,
-    click: 1.3, // softer pick attack: a lead sings, it does not chug
+    pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
+    click: 1.3,                // softer pick attack: a lead sings, it does not chug
     ..DEFAULTS
 };
 pub const MUTED: PluckPreset = PluckPreset {
@@ -1450,11 +1459,12 @@ pub const MUTED: PluckPreset = PluckPreset {
     rel_t60: 0.08,
     out_lp: 3200.0,
     pickup: 0.10,
-    sub: 0.35,             // the chug's thud carries the weight
-    sub_shape: (0.6, 0.4), // 2f/3f enrichment: a thud, not a sine (G4)
-    sub_ramp: 90,          // the thud speaks fast
-    grit: true,            // palm-mute soft-clip grit
-    click: 1.4,            // palm chuff
+    pickup_rlc: (3000.0, 1.2), // darker coil under the palm
+    sub: 0.35,                 // the chug's thud carries the weight
+    sub_shape: (0.6, 0.4),     // 2f/3f enrichment: a thud, not a sine (G4)
+    sub_ramp: 90,              // the thud speaks fast
+    grit: true,                // palm-mute soft-clip grit
+    click: 1.4,                // palm chuff
     click_hp: 900.0,
     ..DEFAULTS
 };
@@ -1609,6 +1619,7 @@ pub const HARMONIC: PluckPreset = PluckPreset {
     amp: 0.55,
     rel_t60: 0.25,
     pickup: 0.10,
+    pickup_rlc: (3800.0, 1.5), // the coil still colors the flageolet
     click: 0.7,
     click_hp: 2000.0,
     harmonic: true,
@@ -1858,6 +1869,7 @@ pub struct Pluck {
     bend: f32,
     harm: f32, // G7 flageolet multiple (1.0 = normal), composed into every retune
     pickup: Option<(DelayLine, f32)>, // magnetic pickup position comb
+    pickup_rlc: Option<Biquad>, // pickup coil RLC resonance (resonant lowpass)
     sub: Option<(Sine, f32, f32)>, // (osc, gain, decay) fundamental weight
     sub_env: f32,
     sub_shape: (f32, f32), // (2f, 3f) waveshaper amounts on the sub
@@ -1980,6 +1992,10 @@ impl Pluck {
                 let d = 2.0 * p.pickup * period;
                 (DelayLine::new(d as usize + 8), d)
             }),
+            // the coil circuit: a resonant lowpass — peak at the resonance,
+            // 12 dB/oct above it (the RLC that makes a pickup sound electric)
+            pickup_rlc: (p.pickup_rlc.0 > 0.0)
+                .then(|| Biquad::lowpass(p.pickup_rlc.0, p.pickup_rlc.1, sr)),
             // B5: random start phase — the sub is part of the string, not a
             // laboratory cosine locked to the pick. Its WEIGHT eases off as
             // velocity rises (a hard pluck is proportionally brighter, not
@@ -2130,6 +2146,11 @@ impl Voice for Pluck {
             if let Some((dl, d)) = &mut self.pickup {
                 dl.push(y);
                 y = (y - dl.tap(*d)) * 0.75;
+            }
+            if let Some(rlc) = &mut self.pickup_rlc {
+                // pickup coil resonance, directly after the position comb
+                // (string → position/aperture → coil circuit)
+                y = rlc.process(y);
             }
             if let Some(b) = &mut self.onset_pre {
                 // the pick click knocks the body: summed before the body EQ
@@ -6779,6 +6800,73 @@ mod tests {
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    /// V2a (guitar v2): the pickup RLC building block is a genuinely RESONANT
+    /// lowpass — a peak above unity at the resonance (a monotone lowpass can
+    /// never gain), then rolloff above. Pinned on the isolated biquad so the
+    /// end-to-end leg (V2b) can attribute its band shift to this element.
+    #[test]
+    fn pickup_rlc_biquad_resonates() {
+        let sr = 44100.0;
+        for &(fc, q) in &[(4200.0f32, 1.8f32), (3300.0, 1.5), (2400.0, 1.1)] {
+            let mut b = Biquad::lowpass(fc, q, sr);
+            let mut ir = vec![0f32; 8192];
+            ir[0] = 1.0;
+            for x in ir.iter_mut() {
+                *x = b.process(*x);
+            }
+            let m = |f: f32| mag_at(&ir, sr, f);
+            // mag_at is normalized for sines, not impulses — assert RATIOS
+            // against the near-DC passband (gain ≈ 1 there), where a monotone
+            // lowpass could never show a peak.
+            let (floor, peak, above) = (m(fc * 0.125), m(fc), m(fc * 2.0));
+            let (pk, ro) = (peak / floor, above / peak);
+            println!("rlc {fc}/{q}: peak/floor {pk:.2} rolloff {ro:.2}");
+            // |H(fc)| = Q for this topology; even the mildest preset (Q 1.1)
+            // must show a genuine peak above the passband floor — the property
+            // no monotone lowpass can fake. (fc/2 comparisons are V2b's job.)
+            assert!(
+                pk > 1.05,
+                "rlc {fc}/{q}: no peak above the passband ({pk:.2})"
+            );
+            assert!(ro < 0.5, "rlc {fc}/{q}: no rolloff above ({ro:.2})");
+        }
+    }
+
+    /// V2b (guitar v2): end-to-end differential — the CLEAN voice with its
+    /// pickup RLC vs the identical preset with the circuit removed. Measured
+    /// at pitches whose harmonic lattices populate BOTH comparison bands
+    /// (A2 = 110 Hz and A3 = 220 Hz put ≥ 3 harmonics in each band), with
+    /// per-band energy floors so a comb null or spectral hole cannot fake
+    /// the ratio (adversarial-review O6/C7).
+    #[test]
+    fn pickup_rlc_shifts_voice_spectrum() {
+        let (fc, _q) = CLEAN.pickup_rlc;
+        let no_rlc = PluckPreset {
+            pickup_rlc: (0.0, 0.0),
+            ..CLEAN
+        };
+        for key in [45u8, 57] {
+            let on = render_pluck(&CLEAN, key, 100, 1.0, 0xA2);
+            let off = render_pluck(&no_rlc, key, 100, 1.0, 0xA2);
+            let sr = 44100.0;
+            let band = |s: &[f32], lo: f32, hi: f32| spectral_band_rms(s, sr, lo, hi);
+            // resonance band vs one octave below it
+            let (r_lo, r_hi) = (fc * 0.8, fc * 1.25);
+            let (n_lo, n_hi) = (fc * 0.4, fc * 0.625);
+            for (nm, s) in [("off", &off), ("on", &on)] {
+                assert!(
+                    band(s, r_lo, r_hi) > 1e-6 && band(s, n_lo, n_hi) > 1e-6,
+                    "key {key} {nm}: a comparison band is empty"
+                );
+            }
+            let ratio_on = band(&on, r_lo, r_hi) / band(&on, n_lo, n_hi);
+            let ratio_off = band(&off, r_lo, r_hi) / band(&off, n_lo, n_hi);
+            let db = 20.0 * (ratio_on / ratio_off).log10();
+            println!("V2b key {key}: resonance-vs-neighbor shift {db:.2} dB");
+            assert!(db >= 2.0, "key {key}: RLC band shift {db:.2} dB < 2.0");
+        }
     }
 
     /// V0 (guitar v2): byte-exact canaries for UNTOUCHED Pluck presets.

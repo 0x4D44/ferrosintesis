@@ -80,6 +80,12 @@
   pin is opt-level-sensitive (float codegen differs in release). Pre-existing,
   unrelated to the choir-v2 unit; either pin per-profile hashes or run the
   canary debug-only.
+- [ ] 2026.07.11 - The GOLDEN fixture's drum row (ch 9: pinned −22.51 dB / 726.7 Hz,
+  currently rendering −22.30 dB / 685.2 Hz) has drifted within tolerance since the
+  V3-kit recapture — later drum commits (e.g. `87b794c` cymbal detuned-pair density)
+  moved it without re-pinning (`crates/ferrosintesis/src/testutil.rs` GOLDEN table).
+  Harmless (guard passes), but the next drum task should re-pin ch 9 so the fixture
+  reflects what it actually renders. Spotted during the guitar v2 unit-A recapture.
 - [ ] 2026.07.11 - Committed `listening/*.opus` look **stale vs the 0.13.4 trunk**
   ("finalize strings on cathedral trunk" `3c8e7ee`). Re-running `python
   render_opus.py` with the current binary regenerates *different* bytes for

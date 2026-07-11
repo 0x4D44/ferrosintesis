@@ -761,11 +761,17 @@ mod guards {
         // centroid change at the displayed precision and the master peak moves
         // by 0.00002; every other displayed channel, including canaries, is
         // unchanged.
+        // Re-captured after guitar v2 unit A (pickup coil RLC on CLEAN /
+        // MUTED / DRIVE): ch 2 brighter (4.2 kHz single-coil peak), ch 3 a
+        // touch darker (3 kHz coil under the palm), ch 4 brighter through the
+        // drive (3.3 kHz humbucker peak). The nylon/steel/bass/piano/strings
+        // rows are BIT-EXACT vs the pre-work capture (see also the
+        // v2_untouched_pluck_canaries FNV pins).
         (0, -41.28, 1020.2),
         (1, -42.07, 2020.8),
-        (2, -42.68, 1107.1),
-        (3, -40.13, 528.8),
-        (4, -36.90, 932.2),
+        (2, -41.93, 1215.9),
+        (3, -39.97, 485.9),
+        (4, -35.28, 1193.7),
         (5, -24.61, 294.6),
         (6, -27.13, 194.4),
         (7, -24.35, 567.6),
@@ -775,7 +781,7 @@ mod guards {
         (9, -22.51, 726.7),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 1.16578;
+    const GOLDEN_MASTER_PEAK: f32 = 1.17168;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

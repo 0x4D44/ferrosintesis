@@ -63,6 +63,11 @@ pub trait Voice: Send {
     /// load in 0..1; `trem` is the signed, channel-global tremulant sample.
     /// Other voices deliberately ignore both values.
     fn set_organ_pressure(&mut self, _pressure: f32, _trem: f32) {}
+    /// CC11-derived swell drive for the cathedral organ's reed rasp (0 = smooth,
+    /// 1 = full snarl). Deliberately separate from `set_organ_pressure` so it
+    /// never triggers table regeneration and leaves that setter's call sites and
+    /// tests untouched. No-op for every other voice (incl. the legacy GM19).
+    fn set_organ_swell(&mut self, _drive: f32) {}
     /// Hat choke (D6/CYM-4): a closed-hat strike silences the ringing open
     /// hat within ~10-30 ms. Default no-op; only `Drum` implements it.
     fn choke(&mut self) {}
@@ -2332,6 +2337,37 @@ const ORGAN_MAX_SOURCE_HARMONICS: usize = 24;
 const ORGAN_MIN_FUNDAMENTAL_HZ: f32 = 12.0;
 const ORGAN_MAX_SR_FRACTION: f32 = 0.45;
 const ORGAN_FIXED_SEED: u32 = 0xC471_EDA1;
+// Reed rasp on the swell (CC11): a chorus reed driven hard *snarls*. When drive
+// (from CC11) rises, the reed pipes crossfade from their `steady` table toward a
+// harder `driven` table (spectral peak off the fundamental, brighter tail,
+// extended to 48 harmonics to fill the 2–8 kHz snarl band that the 24-harmonic
+// cap leaves empty for mid keys) and lift in level. Alias-free by construction —
+// a band-limited table, never a time-domain nonlinearity. See the reed-rasp HLD.
+const ORGAN_MAX_DRIVEN_HARMONICS: usize = 48;
+const REED_LIFT_DB: f32 = 8.0; // reed prominence at full drive (reeds-forward)
+
+/// Driven (hard-blown) chorus-reed spectrum, in dB relative to H1. Same
+/// key-anchored shape as `organ_harmonic_db` but the peak sits on H2–H4 and the
+/// tail falls ~−4 dB/oct (vs −6), which is the perceptual signature of a reed
+/// beating fully against its shallot. Register shaping stays in the key anchors
+/// only (no fixed-Hz formant), so the table remains a pure function of
+/// (family, key, count) and the pitch/pressure path-independence test holds.
+fn organ_driven_harmonic_db(key: u8, harmonic: usize) -> f32 {
+    if harmonic <= 1 {
+        return 0.0;
+    }
+    let h2 = organ_anchor([3.0, 2.0, 1.0], key);
+    let h3 = organ_anchor([2.0, 1.0, 0.0], key);
+    let h6 = organ_anchor([-2.0, -3.0, -4.0], key);
+    let h = harmonic as f32;
+    if harmonic == 2 {
+        h2
+    } else if harmonic == 3 {
+        h3
+    } else {
+        (h3 + (h6 - h3) * (h / 3.0).log2()).max(-72.0)
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RankFamily {
@@ -2522,6 +2558,15 @@ struct RankPipe {
     drift: Drift,
     wander_ratio: f32,
     wander_amp: f32,
+    // Reed rasp (ChorusReed pipes only). `driven` is the hard-blown table
+    // crossfaded in by `blend` (0..1, the CC11-derived drive); `driven_harmonics`
+    // caches its count so it regenerates only when the count changes; `drive_gain`
+    // is the reed lift. `None`/0.0/1.0 for non-reed pipes and at drive 0 — which
+    // is the byte-identical `else` path in `next()`.
+    driven: Option<Box<[f32; ORGAN_TABLE_LEN]>>,
+    driven_harmonics: usize,
+    blend: f32,
+    drive_gain: f32,
 }
 
 impl RankPipe {
@@ -2571,6 +2616,11 @@ impl RankPipe {
             drift: Drift::new(wander_seed, 2.5 * spec.sensitivity, hold_ticks),
             wander_ratio: 1.0,
             wander_amp: 1.0,
+            driven: matches!(spec.family, RankFamily::ChorusReed)
+                .then(|| Box::new([0.0; ORGAN_TABLE_LEN])),
+            driven_harmonics: 0,
+            blend: 0.0,
+            drive_gain: 1.0,
         };
         pipe.retune(1.0, 0.0, 0.0);
         pipe
@@ -2603,6 +2653,34 @@ impl RankPipe {
         }
     }
 
+    /// Build the hard-blown reed table (ChorusReed pipes only), normalized to its
+    /// own energy exactly like `steady`, so crossfading `steady`→`driven` changes
+    /// timbre only — loudness is the separate `drive_gain` lift.
+    fn regenerate_driven(&mut self, harmonics: usize) {
+        let key = self.key;
+        let Some(driven) = self.driven.as_mut() else {
+            return;
+        };
+        driven.fill(0.0);
+        if harmonics == 0 {
+            return;
+        }
+        let mut energy = 0.0;
+        let mut amps = Vec::with_capacity(harmonics);
+        for harmonic in 1..=harmonics {
+            let amp = 10f32.powf(organ_driven_harmonic_db(key, harmonic) / 20.0);
+            energy += amp * amp;
+            amps.push(amp);
+        }
+        let scale = 0.65 / energy.sqrt().max(1e-6);
+        for (index, &amp) in amps.iter().enumerate() {
+            let mut osc = Sine::new((index + 1) as f32, ORGAN_TABLE_LEN as f32, 0.0);
+            for slot in driven.iter_mut() {
+                *slot += osc.next() * scale * amp;
+            }
+        }
+    }
+
     fn retune(&mut self, performance_pitch: f32, pressure: f32, trem: f32) {
         let wind_cents = -5.0 * pressure.clamp(0.0, 1.0) * self.sensitivity;
         let trem_cents = 3.0 * trem.clamp(-1.0, 1.0) * self.sensitivity;
@@ -2620,6 +2698,21 @@ impl RankPipe {
         if harmonics != self.harmonics {
             self.regenerate_tables(harmonics);
             self.harmonics = harmonics;
+        }
+        // Reed pipes also carry a hard-blown `driven` table extended to 48
+        // harmonics (fills the 2–8 kHz snarl band). Same alias law, higher
+        // ceiling; cache its own count so it regenerates only when it changes,
+        // independently of the 24-harmonic steady count.
+        if self.driven.is_some() {
+            let driven_h = if frequency >= ORGAN_MIN_FUNDAMENTAL_HZ && frequency < max_hz {
+                ORGAN_MAX_DRIVEN_HARMONICS.min((max_hz / frequency).floor() as usize)
+            } else {
+                0
+            };
+            if driven_h != self.driven_harmonics {
+                self.regenerate_driven(driven_h);
+                self.driven_harmonics = driven_h;
+            }
         }
         self.frequency = frequency;
         self.phase_inc = frequency * ORGAN_TABLE_LEN as f32 / self.sr;
@@ -2650,6 +2743,22 @@ impl RankPipe {
         let frac = self.phase - self.phase.floor();
         let speech = self.speech[i0] + (self.speech[i1] - self.speech[i0]) * frac;
         let steady = self.steady[i0] + (self.steady[i1] - self.steady[i0]) * frac;
+        // Reed rasp: under swell drive, harden `steady` toward the `driven` table
+        // (same phase accumulator, so the wander detunes both coherently). At
+        // blend 0 — every non-reed pipe, and every reed with the swell shut — this
+        // is bit-for-bit the original `steady`, and the drive_gain multiply below
+        // is skipped: that is the opt-in byte-identity guarantee.
+        let body = if self.blend > 0.0 {
+            match &self.driven {
+                Some(driven) => {
+                    let driven_val = driven[i0] + (driven[i1] - driven[i0]) * frac;
+                    steady + (driven_val - steady) * self.blend
+                }
+                None => steady,
+            }
+        } else {
+            steady
+        };
         self.phase += self.phase_inc * self.wander_ratio;
         self.phase = self.phase.rem_euclid(ORGAN_TABLE_LEN as f32);
         let speech_mix = (self.age as f32 / self.transition_samples.max(1.0)).min(1.0);
@@ -2659,12 +2768,17 @@ impl RankPipe {
         } else {
             1.0
         };
-        (speech + (steady - speech) * speech_mix)
+        let out = (speech + (body - speech) * speech_mix)
             * attack
             * reed_overshoot
             * self.gain
             * self.amp_mod
-            * self.wander_amp
+            * self.wander_amp;
+        if self.blend > 0.0 {
+            out * self.drive_gain
+        } else {
+            out
+        }
     }
 }
 
@@ -2744,10 +2858,13 @@ impl CathedralOrgan {
     fn debug_all_pipe_bounds_hold(&self) -> bool {
         self.pipes.len() <= 14
             && self.pipes.iter().all(|pipe| {
-                !pipe.active
+                (!pipe.active
                     || (pipe.frequency >= ORGAN_MIN_FUNDAMENTAL_HZ
                         && pipe.frequency * pipe.harmonics as f32
-                            <= pipe.sr * ORGAN_MAX_SR_FRACTION + 0.01)
+                            <= pipe.sr * ORGAN_MAX_SR_FRACTION + 0.01))
+                    // The 48-harmonic driven reed table obeys the same Nyquist law.
+                    && pipe.frequency * pipe.driven_harmonics as f32
+                        <= pipe.sr * ORGAN_MAX_SR_FRACTION + 0.01
             })
     }
 }
@@ -2787,6 +2904,19 @@ impl Voice for CathedralOrgan {
         self.pressure = pressure.clamp(0.0, 1.0);
         self.trem = trem.clamp(-1.0, 1.0);
         self.retune();
+    }
+
+    fn set_organ_swell(&mut self, drive: f32) {
+        let d = drive.clamp(0.0, 1.0);
+        // Reed-only: the reeds harden toward `driven` and lift; the flues are left
+        // to the wind-pressure model. Does NOT call `retune()` — no table regen.
+        let gain = 10f32.powf(REED_LIFT_DB * d / 20.0);
+        for pipe in &mut self.pipes {
+            if pipe.family == RankFamily::ChorusReed {
+                pipe.blend = d;
+                pipe.drive_gain = gain;
+            }
+        }
     }
 
     #[cfg(test)]
@@ -7059,6 +7189,7 @@ mod tests {
         let mut high = CathedralOrgan::new(120, 100, sr, 5);
         high.set_pitch(4.0);
         high.set_organ_pressure(1.0, 1.0);
+        high.set_organ_swell(1.0); // exercise the driven reed table at the extreme bend
         assert!(high.debug_all_pipe_bounds_hold());
         let mut high_buf = vec![0.0; sr as usize / 2];
         high.render(&mut high_buf);

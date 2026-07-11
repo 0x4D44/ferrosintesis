@@ -149,3 +149,17 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   re-absorbs it) and broke the buzz guard. Drive a timbre voice with an internal
   per-sample counter, not `retune`: unit renders call `render()` once and never
   retune, so a retune-driven modulation is absent in exactly the oracle renders.
+- 2026.07.11 — **To add drive/"rasp" to an additive voice, redraw the harmonic
+  amplitudes (a band-limited "driven" table crossfaded in), NOT a waveshaper.** For a
+  single periodic pipe a memoryless nonlinearity (tanh) produces only integer
+  harmonics of f0 with modified amplitudes — it IS an amplitude redraw — plus two
+  things you don't want: aliasing (folds the reed's ~19 kHz partials down) and
+  inter-note IMD if it shapes a summed chord. The driven-table crossfade gives the
+  same spectrum alias-free at ~zero cost and shares the pipe's phase accumulator, so
+  the wander rides it. Two oracle corollaries from the reed rasp: (a) a broadband
+  "texture noise" layer contaminates an off-lattice anti-alias oracle — its noise
+  raises off-lattice energy exactly like aliasing — so measure texture separately or
+  drop it (dense driven partials beating in-band already ARE the roughness); (b) an
+  off-lattice anti-alias metric must be ABSOLUTE, not a drive-differential: louder
+  legit high partials leak more into off-lattice Goertzel bins as drive rises, with
+  zero aliasing.

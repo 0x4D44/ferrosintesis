@@ -35,6 +35,15 @@ const LESLIE_DEPTH_ADD: f32 = 0.10; // extra tremulant depth at mod = 1
 // keeps CC91 semantics intact. Bounded above by the low-chord headroom test.
 const CATHEDRAL_WET_SCALE: f32 = 1.30;
 
+// CC11 swell → cathedral-organ reed-rasp drive. Thresholded, not linear: a chorus
+// reed is on/off with registration and the snarl belongs to the top of the
+// dynamic. In (squared) expression terms the knee 0.25 lands at CC11 ≈ 64 (a
+// half-open swell stays smooth), and γ > 1 concentrates the snarl's growth in the
+// last quarter of pedal travel — how a swell crescendo feels. Opt-in: unauthored
+// CC11 ⇒ drive 0 ⇒ byte-identical.
+const ORGAN_SWELL_KNEE: f32 = 0.25;
+const ORGAN_SWELL_GAMMA: f32 = 1.6;
+
 // CC74 brightness: a resonant 2-pole lowpass on the channel's dry path,
 // ahead of the bus sends, so the wah colours the reverb and echo too.
 // 0..127 maps exponentially WAH_MIN_HZ..WAH_MAX_HZ; 127 is a true bypass.
@@ -555,6 +564,10 @@ struct Strip {
     res_target: f32,
     expr_target: f32,
     expr: f32,
+    // CC11 has been authored at least once. Gates the cathedral-organ reed rasp
+    // (swell drive): `expr` defaults to 1.0, so without this a silent organ would
+    // snarl at full drive — the opt-in / authored-channel invariant needs the flag.
+    expr_authored: bool,
     // CC2 breath: a second expression lane (squared, smoothed like CC11)
     // aimed at sustained-excitation voices. NEUTRAL (1.0) until first
     // authored — deliberately NOT the GM power-on default of 0, which would
@@ -625,6 +638,7 @@ impl Strip {
             res_target: WAH_Q,
             expr_target: 1.0,
             expr: 1.0,
+            expr_authored: false,
             breath_authored: false,
             breath_target: 1.0,
             breath: 1.0,
@@ -1111,7 +1125,10 @@ impl EngineCore {
                 s.pan = v;
                 s.haas_delay = 0.005 * sr * (v - 0.5).abs() * 2.0;
             }
-            11 => s.expr_target = v * v,
+            11 => {
+                s.expr_target = v * v;
+                s.expr_authored = true;
+            }
             64 => {
                 s.sustain = val >= 64;
                 if !s.sustain {
@@ -1327,6 +1344,7 @@ impl EngineCore {
         s.res_target = WAH_Q;
         s.expr_target = 1.0;
         s.expr = 1.0;
+        s.expr_authored = false;
         s.breath_authored = false;
         s.breath_target = 1.0;
         s.breath = 1.0;
@@ -1488,12 +1506,21 @@ impl EngineCore {
             } else {
                 0.0
             };
+            // Reed-rasp drive from the swell (CC11). Opt-in: 0 unless CC11 authored.
+            let drive = if strip.expr_authored {
+                ((strip.expr - ORGAN_SWELL_KNEE) / (1.0 - ORGAN_SWELL_KNEE))
+                    .clamp(0.0, 1.0)
+                    .powf(ORGAN_SWELL_GAMMA)
+            } else {
+                0.0
+            };
             for a in self
                 .active
                 .iter_mut()
                 .filter(|a| a.ch == ch && cathedral_organ(a.program, a.alt))
             {
                 a.voice.set_organ_pressure(strip.organ_wind, trem);
+                a.voice.set_organ_swell(drive);
             }
         }
 
@@ -5553,6 +5580,173 @@ mod tests {
         assert!(
             tail_db >= -22.0,
             "cathedral tail only {tail_db:.2} dB below sustain — reverb not wet in the mix"
+        );
+    }
+
+    // Render a single sustained GM19 note at a given authored CC11 swell. `None` =
+    // unauthored = the byte-identity baseline (CC11 is a gain lane, so authored 0
+    // would be silence, never a valid baseline). Dry (wet 0), left channel.
+    #[cfg(test)]
+    fn render_gm19_swell(cc11: Option<u8>) -> Vec<f32> {
+        let sr = 44_100.0;
+        let mut events = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 7,
+                    val: 127,
+                },
+            ),
+        ];
+        if let Some(v) = cc11 {
+            events.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 11,
+                    val: v,
+                },
+            ));
+        }
+        events.push((
+            0.05,
+            EvKind::NoteOn {
+                ch: 0,
+                key: 60,
+                vel: 96,
+            },
+        ));
+        events.push((3.0, EvKind::NoteOff { ch: 0, key: 60 }));
+        let mut opts = test_opts(sr);
+        opts.wet = 0.0;
+        opts.tail = 0.2;
+        left(&render(&test_song(events, 3.0), &opts).0)
+    }
+
+    #[cfg(test)]
+    fn rasp_body_rms(s: &[f32]) -> f32 {
+        (s.iter().map(|x| x * x).sum::<f32>() / s.len().max(1) as f32).sqrt()
+    }
+
+    // Oracle A — the reed rasp grows with the swell (CC11). Level-normalized
+    // metrics (CC11 is a gain lane, so absolute level differs between drive points
+    // and must cancel): `hfr` = high-frequency (>2 kHz) band mass / rms, plus the
+    // spectral centroid. The driven reed table + lift push dense partials into the
+    // 2–8 kHz band as drive rises; the threshold keeps a half-open swell smooth.
+    // Calibration @44.1k (key 60, LIFT_DB=8): hfr 0.277/0.278/0.304/0.378 at
+    // unauth/64/110/127; centroid 1755 → 2843; cc64 stays ≈ unauthored.
+    #[test]
+    fn cathedral_reed_rasp_grows_with_swell() {
+        let sr = 44_100.0;
+        let metrics = |cc: Option<u8>| {
+            let rendered = render_gm19_swell(cc);
+            let body = &rendered[(1.0 * sr) as usize..(2.8 * sr) as usize];
+            let r = rasp_body_rms(body).max(1e-9);
+            (
+                crate::testutil::hp_rms(body, sr, 2_000.0) / r,
+                crate::testutil::spectral_centroid(body, sr, 100.0, 12_000.0),
+            )
+        };
+        let (hfr_u, cen_u) = metrics(None);
+        let (hfr_64, _) = metrics(Some(64));
+        let (hfr_110, _) = metrics(Some(110));
+        let (hfr_127, cen_127) = metrics(Some(127));
+        println!(
+            "rasp hfr u/64/110/127 = {hfr_u:.4}/{hfr_64:.4}/{hfr_110:.4}/{hfr_127:.4}  cen u/127 = {cen_u:.0}/{cen_127:.0}"
+        );
+        assert!(
+            hfr_64 <= 1.10 * hfr_u,
+            "half-open swell (cc64) is not smooth: {hfr_64:.4} vs unauth {hfr_u:.4}"
+        );
+        assert!(
+            hfr_110 > hfr_64 && hfr_127 > hfr_110,
+            "rasp not monotone in the swell: {hfr_64:.4}/{hfr_110:.4}/{hfr_127:.4}"
+        );
+        assert!(
+            hfr_127 >= 1.25 * hfr_u,
+            "full-drive rasp too weak: hfr {hfr_127:.4} vs unauth {hfr_u:.4}"
+        );
+        assert!(
+            cen_127 >= 1.30 * cen_u,
+            "full-drive centroid did not lift: {cen_127:.0} vs unauth {cen_u:.0}"
+        );
+    }
+
+    // Oracle B — the rasp is band-limited spectrum, not aliasing. The mechanism is
+    // a band-limited table crossfade (no time-domain nonlinearity), so energy off
+    // the f0/2 harmonic lattice can only be Goertzel leakage + wander smear — which
+    // stays ~40 dB down. A tanh-without-oversampling reed would fold products into
+    // these off-lattice slots at ~−25 dB. Probes (2k+1)·f0/4 across 6–13 kHz.
+    // Calibration: unauth −46.5 dB, cc127 −41.5 dB relative to rms.
+    #[test]
+    fn cathedral_reed_rasp_is_band_limited_not_aliased() {
+        let sr = 44_100.0;
+        let f0 = 261.63_f32;
+        let offlat = |cc: Option<u8>| {
+            let rendered = render_gm19_swell(cc);
+            let body = &rendered[(1.0 * sr) as usize..(2.8 * sr) as usize];
+            let r = rasp_body_rms(body).max(1e-9);
+            let mut e = 0.0f32;
+            let mut k = 1u32;
+            loop {
+                let f = (2 * k + 1) as f32 * f0 / 4.0;
+                if f > 13_000.0 {
+                    break;
+                }
+                if f >= 6_000.0 {
+                    let m = crate::testutil::mag_at(body, sr, f);
+                    e += m * m;
+                }
+                k += 1;
+            }
+            e.sqrt() / r
+        };
+        let base = offlat(None);
+        let full = offlat(Some(127));
+        println!(
+            "off-lattice u/127 = {base:.6}/{full:.6} ({:.1}/{:.1} dB)",
+            20.0 * base.log10(),
+            20.0 * full.log10()
+        );
+        // Measured full-drive off-lattice is −61.7 dB; 0.005 = −46 dB leaves ~15 dB
+        // margin yet fails a realistic aliasing reed (~−25 dB) by ~20 dB.
+        assert!(
+            full <= 0.005,
+            "full-drive off-lattice {:.1} dB — inharmonic/aliasing content crept in",
+            20.0 * full.log10()
+        );
+        assert!(
+            base <= 0.005,
+            "baseline off-lattice {:.1} dB",
+            20.0 * base.log10()
+        );
+    }
+
+    // Oracle C — an organ that never authors CC11 renders bit-for-bit as the
+    // pre-feature 0.13.3 build (the reed-rasp path is strictly branch-skipped at
+    // drive 0); the CC11=127 canary MUST differ, proving the feature is wired.
+    #[test]
+    fn cathedral_organ_without_cc11_matches_baseline_hash() {
+        let hash = |s: &[f32]| -> u64 {
+            let mut h = 0xcbf2_9ce4_8422_2325u64;
+            for x in s {
+                h ^= x.to_bits() as u64;
+                h = h.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+            h
+        };
+        let no_cc11 = hash(&render_gm19_swell(None));
+        let with_cc11 = hash(&render_gm19_swell(Some(127)));
+        println!("hash no-cc11 = {no_cc11:#018x}, cc127 = {with_cc11:#018x}");
+        assert_eq!(
+            no_cc11, 0x4e65_45f5_a759_2108,
+            "no-CC11 GM19 render changed — opt-in byte-identity broken"
+        );
+        assert_ne!(
+            no_cc11, with_cc11,
+            "CC11 did not change the render — the reed rasp is not wired"
         );
     }
 

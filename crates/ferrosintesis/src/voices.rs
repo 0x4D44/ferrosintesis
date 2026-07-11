@@ -4599,6 +4599,232 @@ impl Voice for Bowed {
 }
 
 // ---------------------------------------------------------------------------
+// BowedString (GM 43 contrabass) — a bowed-string digital waveguide
+// ---------------------------------------------------------------------------
+
+/// A bowed string as a *physical model*: a delay-line waveguide split at the
+/// bow into a bridge-side and a nut-side section, driven every sample by a
+/// nonlinear stick-slip bow-friction interaction (the McIntyre–Woodhouse–
+/// Schumacher / Smith / STK lineage).
+///
+/// Why this and not the shared `Bowed` (saw + static body EQ): a saw through a
+/// fixed EQ is, at 65 Hz, a static harmonic stack — it reads as a buzzy
+/// "transformer hum", and no amount of EQ makes it an instrument, because an
+/// instrument's identity is in the *time domain*. Here every partial comes
+/// from one coupled oscillator locked to the fundamental, so the tone fuses by
+/// construction, and the stick-slip nonlinearity gives it the living,
+/// slightly-irregular motion a static spectrum cannot fake. Contrabass-only
+/// (default GM 43); the Codex per-program `Bowed` set is the CC0 alt bank.
+pub struct BowedString {
+    bridge: DelayLine, // bow -> bridge -> bow section
+    neck: DelayLine,   // bow -> nut -> bow section
+    bridge_delay: f32,
+    neck_delay: f32,
+    beta: f32, // bow position as a fraction of the speaking length
+    base_f: f32,
+    bend: f32,
+    refl: OnePole,     // bridge reflection filter: string losses (darkens)
+    body: [Biquad; 3], // the instrument body's broad low resonances
+    dc_x1: f32,        // DC blocker state (bowed loops accumulate DC)
+    dc_y1: f32,
+    env: Adsr,      // bow pressure/velocity envelope (the onset + release)
+    max_vel: f32,   // bow speed (loudness / brightness)
+    slope: f32,     // bow force: narrows the friction curve (brighter/scratchier)
+    vib: Sine,      // pitch vibrato
+    vib_depth: f32, //
+    vib_delay: u32, // vibrato onset delay
+    grit: Biquad,   // bow-hair / rosin noise band (bandpass)
+    bow_noise: f32, // per-note grit level — no two bows are identical
+    scratch: f32,   // decaying attack "catch" intensity (the bite before the tone)
+    scratch_k: f32, // its per-sample decay
+    drift: Drift,   // slow human pitch wander (intonation is never dead-steady)
+    amp_follow: f32, // output magnitude follower, for the release tail
+    rng: Rng,
+    t: u32,
+    amp: f32,
+    sr: f32,
+}
+
+/// The stick-slip friction characteristic (STK `BowTable`): the fraction of the
+/// bow/string differential velocity that the bow imparts to the string. Near
+/// zero differential the bow *sticks* (coefficient saturates at 1, string moves
+/// with the bow); past a force-dependent threshold it *slips* (coefficient
+/// falls off), and the alternation of the two is what makes a string speak.
+#[inline]
+fn bow_friction(delta_v: f32, slope: f32) -> f32 {
+    let s = (delta_v * slope).abs() + 0.75;
+    let s2 = s * s;
+    (1.0 / (s2 * s2)).min(1.0) // (|Δv·slope| + 0.75)^-4, clamped to the stick region
+}
+
+impl BowedString {
+    fn new(key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+        let f = key_freq(key);
+        let mut rng = Rng::new(seed);
+        let beta = 0.127; // bow ~1/8 from the bridge (arco bass idiom)
+        // Per-note character: the seed varies per voice (the engine's spawn
+        // counter), so drawing the bow's force, grit, scratch and vibrato here
+        // makes every stroke its own — the fix for "each note sounds the same".
+        let u = |r: &mut Rng| r.white() * 0.5 + 0.5;
+        let slope = 2.2 + 0.7 * u(&mut rng); // bow force / pressure this stroke
+        let bow_noise = 0.05 + 0.06 * u(&mut rng); // how gritty this stroke is
+        // the sampled arco bite now owns the onset, so the model's own synth
+        // scratch is dialled right back — just a hint under the sample.
+        let scratch = 0.08 + 0.10 * u(&mut rng);
+        let vib_rate = 4.6 * (1.0 + 0.16 * rng.white());
+        let vib_depth = 0.0016 + 0.0016 * u(&mut rng);
+        let vib_onset = (0.16 + 0.24 * u(&mut rng)) * sr;
+        let grit_hz = 500.0 + 800.0 * u(&mut rng); // bow-hair fluctuation band (low-mid)
+        let mut s = BowedString {
+            bridge: DelayLine::new(320),
+            neck: DelayLine::new(1600),
+            bridge_delay: 1.0,
+            neck_delay: 1.0,
+            beta,
+            base_f: f,
+            bend: 1.0,
+            // string loss: wound bass strings are quite lossy up top -> darker,
+            // and this is what lets the note decay once the bow lifts.
+            refl: OnePole::lowpass(2600.0, sr),
+            body: [
+                Biquad::peak(70.0, 0.7, 3.0, sr),  // the big body/air resonance
+                Biquad::peak(180.0, 0.7, 2.0, sr), // main wood mode
+                Biquad::peak(700.0, 0.5, 1.5, sr), // broad arco "presence"
+            ],
+            dc_x1: 0.0,
+            dc_y1: 0.0,
+            // soft notes speak slower: a longer bow onset at low velocity
+            env: Adsr::new(vel_attack(0.05, vel), 0.1, 0.9, 0.18, sr),
+            // Bow SPEED drives brightness (a harder note is a faster bow, so it
+            // is brighter — real bowing): quiet pedal ~dark, collision ~bright.
+            max_vel: 0.03 + 0.22 * vel_amp(vel),
+            slope,
+            vib: Sine::new(vib_rate, sr, u(&mut rng)), // random start phase too
+            vib_depth,
+            vib_delay: vib_onset as u32,
+            grit: Biquad::bandpass(grit_hz.min(sr * 0.40), 0.8, sr),
+            bow_noise,
+            scratch,
+            // the catch decays over ~45-70 ms into the settled tone
+            scratch_k: (-1.0 / (0.055 * sr)).exp(),
+            drift: Drift::new(seed ^ 0x2BED_51CE, 0.0018, (0.05 * sr / CTRL as f32) as u32),
+            amp_follow: 1.0,
+            rng,
+            t: 0,
+            // Loudness is a velocity-scaled output gain: the self-oscillating
+            // limit-cycle amplitude barely tracks velocity, so the dynamic level
+            // is applied here. Level-matched to the old contrabass so the album
+            // mix balance holds (~0.11 at the quiet pedal, ~0.18 riff/collision).
+            amp: 0.55 + 1.25 * vel_amp(vel),
+            sr,
+        };
+        s.set_freq(f);
+        s
+    }
+
+    fn set_freq(&mut self, f: f32) {
+        // total loop delay = one period, minus the ~1-sample read/write latency;
+        // split at the bow into the two sections.
+        let total = (self.sr / f.max(20.0) - 1.0).max(8.0);
+        self.bridge_delay = (total * self.beta).max(1.0);
+        self.neck_delay = (total * (1.0 - self.beta)).max(1.0);
+    }
+}
+
+impl Voice for BowedString {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            if self.t.is_multiple_of(CTRL) {
+                let vib = if self.t > self.vib_delay {
+                    let ramp = ((self.t - self.vib_delay) as f32 / (0.25 * self.sr)).min(1.0);
+                    self.vib_depth * ramp * self.vib.next()
+                } else {
+                    self.vib.next();
+                    0.0
+                };
+                let drift = self.drift.next();
+                self.set_freq(self.base_f * self.bend * (1.0 + vib) * (1.0 + drift));
+                // the bow lifts on release: the loop loses its energy source and
+                // the string damps faster (darker) as it decays.
+                let refl_hz = if self.env.released() { 900.0 } else { 2600.0 };
+                self.refl.set_cutoff(refl_hz, self.sr);
+            }
+            let e = self.env.next();
+            // the bow "catch": a scratchy bite at the onset that decays into the
+            // settled tone. This transient — not the steady state — is the single
+            // strongest "this is a bow, not an oscillator" cue.
+            self.scratch *= self.scratch_k;
+            // Bow-hair micro-fluctuation. The critical point (the fix for the
+            // "hiss bolted on top"): this perturbs the bow VELOCITY — the INPUT to
+            // the friction nonlinearity — so it jitters the stick-slip timing and
+            // emerges as grain phase-locked to the string, NOT a noise signal added
+            // after the fact. Stronger at the catch, easing into the settled tone.
+            let bow_n = self.grit.process(self.rng.white());
+            let noise_amt = self.bow_noise * (0.6 + 7.0 * self.scratch);
+            // the catch also presses harder — more slip, scratchier — then eases.
+            let slope_eff = self.slope * (1.0 + 1.3 * self.scratch);
+            let bow_vel = self.max_vel * e * (1.0 + noise_amt * bow_n);
+            // loop loss: enough per-period loss that the limit-cycle amplitude
+            // is set by the balance of bow energy in vs loss out — that is what
+            // makes loudness track bow SPEED (dynamics). Heavier once released so
+            // the note actually stops within the tail.
+            let loss = if self.env.released() { 0.70 } else { 0.95 };
+
+            let bridge_out = self.bridge.tap(self.bridge_delay);
+            let neck_out = self.neck.tap(self.neck_delay);
+            // terminations invert; the bridge also filters (string loss) and loses.
+            let bridge_refl = -self.refl.process(bridge_out) * loss;
+            let nut_refl = -neck_out;
+            let string_vel = bridge_refl + nut_refl;
+            let delta_v = bow_vel - string_vel;
+            // the string is driven purely by the friction — the noise is already
+            // inside `bow_vel`, so its grain is shaped by the string, not layered on.
+            let excite = delta_v * bow_friction(delta_v, slope_eff);
+            self.neck.push(bridge_refl + excite);
+            self.bridge.push(nut_refl + excite);
+
+            // pick up the motion at the bridge, colour it with the body, block DC.
+            let mut y = bridge_out;
+            for b in &mut self.body {
+                y = b.process(y);
+            }
+            let hp = y - self.dc_x1 + 0.9985 * self.dc_y1;
+            self.dc_x1 = y;
+            self.dc_y1 = hp;
+            let sample = (hp * self.amp).clamp(-1.5, 1.5);
+            *o += sample;
+            self.amp_follow = self.amp_follow * 0.9997 + sample.abs() * 0.0003;
+            self.t += 1;
+        }
+        // alive while the bow is on, or while the string is still ringing down.
+        self.env.alive() || self.amp_follow > 3.0e-4
+    }
+
+    fn note_off(&mut self) {
+        self.env.release();
+    }
+
+    fn released(&self) -> bool {
+        self.env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+    }
+
+    fn legato_to(&mut self, key: u8, _vel: u8) -> bool {
+        // one bow-stroke, new stopped pitch: retune the string, keep it ringing.
+        self.base_f = key_freq(key);
+        true
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "bowedstring"
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -4606,6 +4832,11 @@ impl Voice for Bowed {
 /// models by the `la_level_continuity` test.
 const LA_VIOLIN: (f32, (f32, f32)) = (0.30, (0.12, 0.38));
 const LA_FIDDLE: (f32, (f32, f32)) = (0.32, (0.08, 0.28));
+/// GM 43 contrabass: a real cello-section arco *bite* over the waveguide
+/// sustain — the bow-catch is what the physical model fakes worst, so the
+/// sample owns the onset. A slightly longer handover than the violin: a bass
+/// bow speaks slower. Gain tuned by ear (Arthur): a restrained bite.
+const LA_CONTRABASS: (f32, (f32, f32)) = (0.29, (0.16, 0.46));
 const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 const LA_PIANO: (f32, (f32, f32)) = (0.42, (0.18, 0.85));
 const LA_BRASS: (f32, (f32, f32)) = (0.35, (0.10, 0.32));
@@ -6091,7 +6322,26 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        41..=44 => Box::new(Bowed::new(program, key, vel, sr, seed)),
+        // GM 43 contrabass: waveguide + cello-arco LA is the DEFAULT bank. The
+        // Codex per-program `Bowed` contrabass is the CC0 alt bank (altbank.rs).
+        43 => {
+            let model = Box::new(BowedString::new(key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_CONTRABASS;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::contrabass_bank(vel),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
+        41 | 42 | 44 => Box::new(Bowed::new(program, key, vel, sr, seed)),
         45 => Box::new(Pluck::new(&PIZZ, key, vel, sr, seed)),
         46 => Box::new(Pluck::new(&HARP, key, vel, sr, seed)),
         47 => Box::new(timpani(key, vel, sr, seed)),

@@ -503,6 +503,43 @@ fn strsec_f() -> &'static [Zone] {
     })
 }
 
+// GM 43 contrabass LA attack: the cello-section arco *bite*, whose low celens
+// zones already sit on the contrabass register (celens_C1 measures 65.4 Hz =
+// C2, celens_G1 = G2). Only the low zones are needed — the part never plays
+// above ~D3 — and `nearest` repitches them by well under a tone. The bite is
+// what synthesis fakes worst; the waveguide keeps the expressive sustain.
+fn contrabass_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "celens_C1_p.wav" => 65.48,
+            "celens_G1_p.wav" => 97.46,
+            "celens_D2_p.wav" => 146.97,
+        )
+    })
+}
+
+fn contrabass_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "celens_C1_f.wav" => 65.38,
+            "celens_G1_f.wav" => 97.71,
+            "celens_D2_f.wav" => 146.73,
+        )
+    })
+}
+
+/// Attack-transient bank for the GM 43 contrabass (cello-section arco, low
+/// zones). Velocity picks the soft / loud layer as elsewhere (VSCO v1/v3).
+pub fn contrabass_bank(vel: u8) -> &'static [Zone] {
+    if vel >= 80 {
+        contrabass_f()
+    } else {
+        contrabass_p()
+    }
+}
+
 fn drum_crash() -> &'static [HitSample] {
     static B: OnceLock<Vec<HitSample>> = OnceLock::new();
     B.get_or_init(|| {

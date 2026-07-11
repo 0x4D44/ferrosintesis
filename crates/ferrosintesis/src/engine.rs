@@ -212,63 +212,154 @@ pub(crate) fn cab_biquads(sr2: f32) -> [Biquad; 5] {
     ]
 }
 
-/// Overdrive/distortion channel insert for GM programs 29/30 (HLD G1):
-/// program-keyed pre-voicing → biased (asymmetric) tanh → DC blocker →
-/// speaker cabinet, the whole nonlinear chain at 2× rate. The cab's cliff
-/// replaces the old box-average decimator, so the tanh fizz dies in the
-/// cabinet instead of aliasing down.
+/// Overdrive/distortion channel insert for GM programs 29/30 (guitar v2,
+/// HLD §3.C): program-keyed pre-voicing → power-supply SAG gain → stage-1
+/// biased (asymmetric) tanh → interstage tilt EQ → stage-2 tanh → DC
+/// blocker → speaker cabinet, the whole nonlinear chain at 2× rate. The
+/// cab's cliff replaces the old box-average decimator, so the shaper fizz
+/// dies in the cabinet instead of aliasing down.
+///
+/// The sag stage is what a real amp's drooping supply does, with the real
+/// temporal polarity: a fast-attack envelope means pick transients pass at
+/// unity gain, then as the note DECAYS the gain recovers (slew-limited, the
+/// supply recharging) and holds the tail in saturation — compression
+/// sustain and bloom, never an onset blast.
 struct Drive {
     pre: Biquad,
     voice: Biquad,
-    gain: f32,
+    g1: f32,
     bias: f32,
+    tilt: Biquad,
+    g2: f32,
     post: f32,
     dcb: Biquad,
     cab: [Biquad; 5],
     prev: f32,
+    // sag state
+    env: f32,
+    g_sag: f32,
+    sag_target: f32, // T: the post-voicing level the sag tries to restore
+    g_max: f32,      // recovery ceiling (test-varied by V5's differential)
+    atk_k: f32,
+    rel_k: f32,
+    slew_up: f32,
+    idle: u32, // consecutive near-silent 2× samples
+    idle_snap: u32,
 }
+
+/// Sag recovery ceiling: +12 dB (HLD §3.C G_MAX ≈ 4).
+const SAG_G_MAX: f32 = 4.0;
 
 impl Drive {
     fn new(program: u8, sr: f32) -> Self {
-        // 30 = distortion (scooped chug), 29 = overdrive (mid-push lead)
-        let (gain, post, bias) = if program == 30 {
-            (7.0, 0.30, 0.55)
+        let sr2 = sr * 2.0;
+        // 30 = distortion (scooped chug), 29 = overdrive (mid-push lead).
+        // Two gentler stages replace v1's single hot tanh; `post` is
+        // level-matched to v1 at the loud operating point (drive_level_probe:
+        // 29 −9.9 dBFS, 30 −11.6 dBFS on a 0.5-amp 220 Hz sine).
+        let (g1, g2, post, bias, sag_target) = if program == 30 {
+            (4.5, 3.0, 0.30, 0.5, 0.33)
         } else {
-            (3.5, 0.42, 0.40)
+            // bias 0.45: the gentler two-stage 29 needs MORE stage-1 asymmetry
+            // than v1's single hot tanh to keep its even-harmonic warmth
+            // (drive_asymmetry_and_dc's 2nd-vs-3rd floor)
+            (2.5, 2.0, 0.42, 0.45, 0.60)
         };
-        let voice = if program == 30 {
-            Biquad::peak(650.0, 0.9, -5.0, sr * 2.0)
+        let (voice, tilt) = if program == 30 {
+            (
+                Biquad::peak(650.0, 0.9, -5.0, sr2),
+                // deepen the scoop between the stages: stage 2 re-saturates
+                // the mids the voicing pulled, so pull again where it counts
+                Biquad::peak(700.0, 0.9, -4.0, sr2),
+            )
         } else {
-            Biquad::peak(800.0, 0.8, 4.0, sr * 2.0)
+            (
+                Biquad::peak(800.0, 0.8, 4.0, sr2),
+                // upper-mid push into stage 2: the singing lead bite
+                Biquad::peak(1200.0, 0.8, 2.0, sr2),
+            )
         };
         Drive {
-            pre: Biquad::highpass(90.0, 0.7, sr * 2.0),
+            pre: Biquad::highpass(90.0, 0.7, sr2),
             voice,
-            gain,
+            g1,
             bias,
+            tilt,
+            g2,
             post,
-            // a real DC blocker after the shaper: the biased tanh produces
+            // a real DC blocker after the shapers: the biased tanh produces
             // large signal-dependent DC that the cab's unity-at-DC biquads
             // cannot remove (V4/CORR-1)
-            dcb: Biquad::highpass(20.0, 0.7, sr * 2.0),
-            cab: cab_biquads(sr * 2.0),
+            dcb: Biquad::highpass(20.0, 0.7, sr2),
+            cab: cab_biquads(sr2),
             prev: 0.0,
+            env: 0.0,
+            g_sag: 1.0,
+            sag_target,
+            g_max: SAG_G_MAX,
+            // attack ≤ 1 ms so the envelope catches the pick before the sag
+            // could boost it; release ≈ 180 ms tracks the note's decay
+            atk_k: 1.0 - (-1.0 / (0.0005 * sr2)).exp(),
+            rel_k: 1.0 - (-1.0 / (0.180 * sr2)).exp(),
+            // recovery slew: +12 dB per ~150 ms — the supply recharging
+            slew_up: 10f32.powf(12.0 / 20.0 / (0.150 * sr2)),
+            idle: 0,
+            idle_snap: (0.4 * sr2) as u32,
         }
     }
 
     #[inline]
     fn chain(&mut self, x: f32) -> f32 {
-        // biased tanh referenced to its bias point: the curvature asymmetry
-        // (even harmonics) stays, but silence maps to exactly zero — no
-        // startup thump on channels that merely HAVE a drive. The blocker
-        // then only handles the signal-dependent rectification DC.
-        let shaped = (self.voice.process(self.pre.process(x)) * self.gain + self.bias).tanh()
-            - self.bias.tanh();
-        let mut y = self.dcb.process(shaped);
+        let v = self.voice.process(self.pre.process(x));
+        // sag follower + gain law: g eases toward T/env (clamped [1, g_max]);
+        // upward motion is slew-limited (recovery), downward inherits the
+        // fast attack of `env` (transients pass at ~unity)
+        // idle bookkeeping FIRST: a long-silent channel pins its sag target
+        // back to unity and snaps its filter state to exact zero (denormal
+        // guard) — without the pin, a silent env would read as "fully
+        // decayed" and slew the gain to g_max, booby-trapping the entrance
+        let a = v.abs();
+        if a < 1e-6 {
+            self.idle += 1;
+            if self.idle == self.idle_snap {
+                self.reset_state();
+            }
+        } else {
+            self.idle = 0;
+        }
+        self.env += if a > self.env { self.atk_k } else { self.rel_k } * (a - self.env);
+        let target = if self.idle >= self.idle_snap {
+            1.0
+        } else {
+            (self.sag_target / self.env.max(self.sag_target / self.g_max)).max(1.0)
+        };
+        self.g_sag = if target < self.g_sag {
+            target
+        } else {
+            (self.g_sag * self.slew_up).min(target)
+        };
+        // stage 1: biased tanh referenced to its bias point — the curvature
+        // asymmetry (even harmonics) stays, but silence maps to exactly zero
+        let s1 = (v * self.g_sag * self.g1 + self.bias).tanh() - self.bias.tanh();
+        // interstage tilt, then the gentler symmetric second stage
+        let s2 = (self.tilt.process(s1) * self.g2).tanh();
+        let mut y = self.dcb.process(s2);
         for c in &mut self.cab {
             y = c.process(y);
         }
         y
+    }
+
+    fn reset_state(&mut self) {
+        self.pre.reset();
+        self.voice.reset();
+        self.tilt.reset();
+        self.dcb.reset();
+        for c in &mut self.cab {
+            c.reset();
+        }
+        self.env = 0.0;
+        self.g_sag = 1.0;
     }
 
     fn process(&mut self, buf: &mut [f32]) {
@@ -288,6 +379,14 @@ impl Drive {
     #[cfg(test)]
     fn with_flat_voice(mut self) -> Self {
         self.voice = Biquad::peak(800.0, 0.8, 0.0, 88_200.0);
+        self
+    }
+
+    /// Test-only: pin the sag recovery ceiling (V5's differential leg
+    /// compares g_max = 1, i.e. sag OFF, against the shipped ceiling).
+    #[cfg(test)]
+    fn with_sag_gmax(mut self, g: f32) -> Self {
+        self.g_max = g;
         self
     }
 }
@@ -2417,6 +2516,147 @@ mod tests {
             ratio(29, false) > ratio(29, true),
             "prog 29 should push the mids"
         );
+    }
+
+    /// V5 (guitar v2): the sag stage — differential AND temporal. The same
+    /// −30 dB-decaying 220 Hz tone runs through g_max = 4 (shipped) vs
+    /// g_max = 1 (sag inert): (a) the first 30 ms match within 1 dB — the
+    /// fast-attack law passes transients at unity, so an inverted or
+    /// permanently-boosted law fails here; (b) the sag render's tail decays
+    /// ≥ 6 dB less — static two-stage compression alone cannot pass a
+    /// differential; (c) after >0.4 s of true silence the insert snaps to
+    /// idle (g_sag = 1, env = 0, filter state zeroed) so a fresh entrance
+    /// never starts boosted; (d) output stays bounded.
+    #[test]
+    fn drive_sag_compression() {
+        let sr = 44100.0;
+        let n = (2.0 * sr) as usize;
+        let decaying: Vec<f32> = (0..n)
+            .map(|i| {
+                let t = i as f32 / sr;
+                0.5 * 10f32.powf(-30.0 * t / 2.0 / 20.0) * (std::f32::consts::TAU * 220.0 * t).sin()
+            })
+            .collect();
+        let render = |gmax: f32| {
+            let mut d = Drive::new(30, sr).with_sag_gmax(gmax);
+            let mut buf = decaying.clone();
+            d.process(&mut buf);
+            buf
+        };
+        let on = render(SAG_G_MAX);
+        let off = render(1.0);
+        let db = |s: &[f32]| 20.0 * crate::testutil::rms(s).max(1e-12).log10();
+        let win = |s: &[f32], a: f32, z: f32| db(&s[(a * sr) as usize..(z * sr) as usize]);
+        // (a) transients pass at unity
+        let (a_on, a_off) = (win(&on, 0.0, 0.03), win(&off, 0.0, 0.03));
+        assert!(
+            (a_on - a_off).abs() <= 1.0,
+            "onset windows differ: sag {a_on:.2} dB vs off {a_off:.2} dB"
+        );
+        // (b) the tail is held up by recovery, not by static compression
+        let decay_on = win(&on, 0.05, 0.10) - win(&on, 1.80, 1.95);
+        let decay_off = win(&off, 0.05, 0.10) - win(&off, 1.80, 1.95);
+        println!("V5 tail decay: sag {decay_on:.1} dB vs off {decay_off:.1} dB");
+        assert!(
+            decay_off - decay_on >= 6.0,
+            "sag differential {:.1} dB < 6",
+            decay_off - decay_on
+        );
+        // (c) idle reset after a burst + true silence
+        let mut d = Drive::new(30, sr);
+        let mut two = vec![0f32; sr as usize];
+        for (i, x) in two.iter_mut().enumerate().take((0.05 * sr) as usize) {
+            *x = 0.5 * (std::f32::consts::TAU * 220.0 * i as f32 / sr).sin();
+        }
+        d.process(&mut two);
+        assert!(
+            d.g_sag == 1.0 && d.env == 0.0,
+            "idle state after 0.95 s silence: g_sag {} env {}",
+            d.g_sag,
+            d.env
+        );
+        // (d) bounded
+        let peak = on.iter().fold(0f32, |m, &x| m.max(x.abs()));
+        assert!(peak <= 1.0, "drive output peak {peak}");
+    }
+
+    /// V9 (guitar v2): aliasing floor — a pure steady sine fed DIRECTLY into
+    /// the Drive (a rendered voice would confound legitimate string
+    /// inharmonicity: detuned polarizations, coupling, noise excitation).
+    /// Every predicted fold-back bin — the 2× nonlinear stage folds at
+    /// 88.2 kHz, the sample-aligned decimation folds again at 44.1 kHz —
+    /// must sit ≤ −40 dB below the fundamental.
+    #[test]
+    fn drive_alias_floor() {
+        let sr = 44100.0;
+        let f0 = 1301.0; // high-lead register, harmonics off any tidy divisor
+        let fold = |f: f32, fs: f32| {
+            let r = f % fs;
+            if r > fs / 2.0 {
+                fs - r
+            } else {
+                r
+            }
+        };
+        for prog in [29u8, 30] {
+            let mut d = Drive::new(prog, sr);
+            let mut buf: Vec<f32> = (0..(sr as usize))
+                .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
+                .collect();
+            d.process(&mut buf);
+            let seg = &buf[(0.2 * sr) as usize..];
+            let m0 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+            let mut worst = -200.0f32;
+            let mut worst_bin = 0.0f32;
+            for n in 2..=80u32 {
+                let fh = n as f32 * f0;
+                if fh <= sr / 2.0 {
+                    continue; // a true harmonic, not an alias
+                }
+                let alias = fold(fold(fh, sr * 2.0), sr);
+                if !(100.0..=20_000.0).contains(&alias) {
+                    continue;
+                }
+                // skip bins that coincide with legitimate harmonics
+                if (alias / f0 - (alias / f0).round()).abs() * f0 < 8.0 {
+                    continue;
+                }
+                let rel = 20.0 * (crate::testutil::mag_at(seg, sr, alias) / m0).log10();
+                if rel > worst {
+                    worst = rel;
+                    worst_bin = alias;
+                }
+            }
+            println!("V9 prog {prog}: worst alias {worst:.1} dB rel f0 at {worst_bin:.0} Hz");
+            assert!(
+                worst <= -40.0,
+                "prog {prog}: alias at {worst_bin:.0} Hz is {worst:.1} dB rel f0"
+            );
+        }
+    }
+
+    /// Level-match probe (diagnostic, `--ignored --nocapture`): post-drive RMS
+    /// of steady 220 Hz sines at a loud and a tail operating point, per
+    /// program — the two-point loudness reference for re-matching `post`
+    /// across Drive revisions (guitar v2 HLD §3.C).
+    #[test]
+    #[ignore]
+    fn drive_level_probe() {
+        let sr = 44100.0;
+        for prog in [29u8, 30] {
+            for amp in [0.5f32, 0.05] {
+                let mut d = Drive::new(prog, sr);
+                let mut buf: Vec<f32> = (0..(sr as usize))
+                    .map(|i| amp * (std::f32::consts::TAU * 220.0 * i as f32 / sr).sin())
+                    .collect();
+                d.process(&mut buf);
+                let r = crate::testutil::rms(&buf[(0.2 * sr) as usize..]);
+                println!(
+                    "drive probe prog {prog} amp {amp}: rms {r:.5} ({:.2} dBFS)",
+                    20.0 * r.max(1e-12).log10()
+                );
+            }
+        }
     }
 
     /// The bus glue must tame loud material, pass quiet material nearly

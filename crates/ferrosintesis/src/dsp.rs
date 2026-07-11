@@ -424,6 +424,17 @@ impl Biquad {
         )
     }
 
+    /// Zero the filter state (coefficients keep their design). Idle/denormal
+    /// guard for long-lived inserts that would otherwise filter silence
+    /// forever (guitar v2 HLD §3.C): snapping decayed state to exact zero
+    /// keeps subnormals off the recursive path.
+    pub(crate) fn reset(&mut self) {
+        self.x1 = 0.0;
+        self.x2 = 0.0;
+        self.y1 = 0.0;
+        self.y2 = 0.0;
+    }
+
     #[inline]
     pub fn process(&mut self, x: f32) -> f32 {
         let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2

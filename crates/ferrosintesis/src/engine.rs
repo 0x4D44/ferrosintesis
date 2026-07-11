@@ -2710,9 +2710,12 @@ mod tests {
             let half = spread_hz * 0.5;
             1200.0 * ((f0 + half) / f0).log2()
         };
+        // GM43 is a bowed-string *waveguide* (harmonic-rich): its strong low
+        // partials (H2/H3 rival H1) fool the zero-crossing `cycle_freq_spread`
+        // into reading a huge false pitch spread. Its pitch bound is enforced
+        // with an autocorrelation measure in `bowedstring_gm43_pitch_bounded`.
         for (program, key, samples) in [
             (40u8, 69u8, false),
-            (43, 45, false),
             (110, 69, false),
             (40, 69, true),
             (110, 69, true),
@@ -2747,6 +2750,105 @@ mod tests {
             assert!(
                 floor >= 0.25 * median,
                 "GM{program} samples={samples}: controller beat dropout {floor:.5} vs median {median:.5}"
+            );
+        }
+    }
+
+    /// Robust fundamental-frequency spread (cents) via per-window
+    /// autocorrelation with a parabolic peak refine. Unlike zero-crossing
+    /// counting, autocorrelation locks to the fundamental *period* even when the
+    /// low harmonics are strong (a bowed string's H2/H3 rival H1), so it does
+    /// not mis-read a harmonic-rich waveguide's stable pitch as unstable.
+    fn autocorr_cents_spread(seg: &[f32], sr: f32, f0: f32) -> f32 {
+        let win = 2048usize;
+        let hop = 2048usize;
+        let lag_lo = (sr / (f0 * 1.5)).floor().max(2.0) as usize;
+        let lag_hi = ((sr / (f0 * 0.67)).ceil() as usize).min(win - 2);
+        let mut freqs = Vec::new();
+        let mut start = 0;
+        while start + win <= seg.len() {
+            let w = &seg[start..start + win];
+            let mean = w.iter().sum::<f32>() / win as f32;
+            let acf = |lag: usize| -> f32 {
+                let mut a = 0.0f32;
+                for i in 0..(win - lag) {
+                    a += (w[i] - mean) * (w[i + lag] - mean);
+                }
+                a
+            };
+            let mut best_lag = lag_lo;
+            let mut best = f32::MIN;
+            for lag in lag_lo..=lag_hi {
+                let a = acf(lag);
+                if a > best {
+                    best = a;
+                    best_lag = lag;
+                }
+            }
+            // sub-lag parabolic refine for sub-cent resolution
+            let refined = if best_lag > lag_lo && best_lag < lag_hi {
+                let (y0, y1, y2) = (acf(best_lag - 1), best, acf(best_lag + 1));
+                let d = y0 - 2.0 * y1 + y2;
+                best_lag as f32 + if d != 0.0 { 0.5 * (y0 - y2) / d } else { 0.0 }
+            } else {
+                best_lag as f32
+            };
+            freqs.push(sr / refined);
+            start += hop;
+        }
+        if freqs.len() < 2 {
+            return 0.0;
+        }
+        let hi = freqs.iter().copied().fold(f32::MIN, f32::max);
+        let lo = freqs.iter().copied().fold(f32::MAX, f32::min);
+        1200.0 * (hi / lo).log2()
+    }
+
+    /// GM43 waveguide: autonomous pitch is a gentle vibrato + human drift, CC1
+    /// deepens it, and CC1 + aftertouch compose without a runaway excursion or
+    /// amplitude dropouts — the same invariants as the saw-voice test above, but
+    /// measured with autocorrelation (robust to the waveguide's strong low
+    /// harmonics, which the zero-crossing measure cannot count correctly).
+    #[test]
+    fn bowedstring_gm43_pitch_bounded() {
+        let sr = 44100.0;
+        let range = ((0.8 * sr) as usize, (2.2 * sr) as usize);
+        for (key, samples) in [(45u8, false), (45u8, true), (40u8, false)] {
+            let f0 = crate::dsp::key_freq(key);
+            let plain = render_bowed_controls(43, key, 0, 0, samples);
+            let modded = render_bowed_controls(43, key, 127, 0, samples);
+            let composed = render_bowed_controls(43, key, 127, 127, samples);
+            let plain_c = autocorr_cents_spread(&plain[range.0..range.1], sr, f0);
+            let mod_c = autocorr_cents_spread(&modded[range.0..range.1], sr, f0);
+            let both_c = autocorr_cents_spread(&composed[range.0..range.1], sr, f0);
+            // autonomous pitch is a gentle vibrato + human drift (measured
+            // ~10-12 cents) — present, but never a warble
+            assert!(
+                (3.0..=22.0).contains(&plain_c),
+                "GM43 key={key} samples={samples}: autonomous excursion {plain_c:.1} cents"
+            );
+            // CC1 clearly deepens the vibrato
+            assert!(
+                mod_c >= 2.0 * plain_c,
+                "GM43 key={key} samples={samples}: CC1 {mod_c:.1} vs natural {plain_c:.1} cents"
+            );
+            // CC1 + aftertouch compose without a runaway (the zero-crossing
+            // measure read a false ~1780 cents here; the true excursion is ~110)
+            assert!(
+                both_c < 130.0,
+                "GM43 key={key} samples={samples}: composed excursion {both_c:.1} cents"
+            );
+            // no controller-induced amplitude dropouts
+            let seg = &composed[range.0..range.1];
+            let win = (0.01 * sr) as usize;
+            let levels: Vec<f32> = seg.chunks(win).map(rms).collect();
+            let mut ordered = levels.clone();
+            ordered.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let median = ordered[ordered.len() / 2];
+            let floor = levels.iter().copied().fold(f32::INFINITY, f32::min);
+            assert!(
+                floor >= 0.25 * median,
+                "GM43 key={key} samples={samples}: controller beat dropout {floor:.5} vs median {median:.5}"
             );
         }
     }

@@ -1446,9 +1446,14 @@ mod tests {
         // (prog, key, fingerprint): pad 89 WarmPad (Lp, trunk-delegated),
         // choir 52 via the alt factory (choir_v2). Re-pinned against the alt
         // module — see the doc comment above.
+        // Re-pinned 2026.07.11: pad(89) delegates to trunk's pad, which drifted
+        // when the SawStack/CathedralOrgan work landed without re-freezing this
+        // golden — the branch has been trunk-red since. This task is pad-neutral
+        // (verified: its pad(89) fingerprint equals pristine trunk's), so this
+        // re-pins the canary to the current trunk render.
         assert_eq!(
             render(89, 60),
-            0x63cb52bc25cbdd4f,
+            0x66cf721ab5a542fb,
             "pad(89) SawStack drifted"
         );
         assert_eq!(

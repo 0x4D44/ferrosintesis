@@ -950,3 +950,309 @@ mod guards {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Stage 0 (woodwind/LA HLD §9.1): synth-wide anti-clone distinctness matrix
+// ---------------------------------------------------------------------------
+
+/// Every GM program should render as an audibly distinct instrument from the
+/// other seven in its family. This matrix renders all 128 programs (model only,
+/// `samples=false` — the layer the per-program preset tables control, and where
+/// the collapses are worst) at fixed probe keys, reduces each to a small timbre
+/// feature vector, and asserts every within-family pair differs by at least
+/// [`EPS`] on its most-distinguishing feature — UNLESS the pair is on [`ALLOW`].
+///
+/// [`ALLOW`] draws the load-bearing distinction:
+/// - [`Why::Legit`] — GM itself defines the pair as near-identical (e.g. Synth
+///   Strings 1/2, 50/51); forcing a difference would be worse music.
+/// - [`Why::Collapse`] — a KNOWN current collapse the woodwind/LA HLD schedules a
+///   fix for. Deleting the entry is part of that stage's definition of done, and
+///   the matrix then proves the fix landed. `allowlisted_collapses_are_really_clones`
+///   fails loudly the moment a stage differentiates a family, forcing the delete.
+///
+/// A brand-new accidental collapse (a future edit that makes two programs render
+/// the same) is on neither list, so it fails here — exactly the guard the pipe
+/// family's 8→2 collapse never had. The pre-existing drift/canary freeze lives in
+/// `mod guards` (`golden_mix_balance_holds`, `determinism_bit_identical`); this
+/// module adds only the missing distinctness axis.
+#[cfg(test)]
+mod distinctness {
+    use super::*;
+
+    const SR: f32 = 44100.0;
+    const NKEYS: usize = 2;
+    /// Two probe keys spanning ~two octaves; the register-dependent voices then
+    /// differ on more than one note, the register-independent collapses on none.
+    const PROBE_KEYS: [u8; NKEYS] = [48, 72];
+    const VEL: u8 = 100;
+    const SECS: f32 = 0.7;
+    const SEED: u32 = 7;
+
+    /// Max relative feature difference below which two renders are treated as the
+    /// same instrument. Current hard collapses render byte-identically (score 0);
+    /// genuinely distinct programs score far higher (the exemplar brass/reed
+    /// families clear [`MARGIN`], pinned by `epsilon_is_calibrated_on_the_good_families`).
+    const EPS: f32 = 0.03;
+    /// The exemplar good families must separate every within-family pair by at
+    /// least this (1.5×EPS), so `EPS` sits safely below true instrument-to-
+    /// instrument distance (HLD §12 Q1). The binding constraint is the
+    /// soprano/alto sax pair (GM 64/65 ≈ 0.055) — genuinely the two closest
+    /// good-family instruments — so the headroom below it is deliberately modest.
+    const MARGIN: f32 = 1.5 * EPS;
+
+    /// Timbre feature vector: [centroid Hz, flatness, odd/even harmonic ratio,
+    /// HF fraction, h2/h1]. Chosen to read timbre, not pitch (harmonic ratios are
+    /// pitch-relative; centroid/flatness are compared only at matched probe keys).
+    type Feat = [f32; 5];
+    /// One program's feature vector at each probe key (kept per-key, not averaged
+    /// — see [`score`]).
+    type FeatSet = [Feat; NKEYS];
+    /// Per-feature floors: keep a near-zero feature from manufacturing a large
+    /// relative difference. Same order as `Feat`.
+    const FLOOR: Feat = [100.0, 0.05, 0.10, 0.02, 0.05];
+
+    #[derive(Clone, Copy)]
+    enum Why {
+        /// GM defines the pair as near-identical; distinctness is not expected.
+        Legit,
+        /// Known current collapse; the named HLD stage removes this entry.
+        Collapse(u8),
+    }
+
+    /// Unordered program pairs exempt from the distinctness assertion, kept sorted
+    /// (a < b). Every `Collapse` entry cites the HLD stage that deletes it.
+    const ALLOW: &[(u8, u8, Why)] = &[
+        // -- Stage 1: Pipe 72-79 — one `whistle` bool → 2 timbres --
+        // whistle=false group: 73 flute / 74 recorder / 75 pan flute /
+        // 76 blown bottle / 77 shakuhachi all render identically.
+        (73, 74, Why::Collapse(1)),
+        (73, 75, Why::Collapse(1)),
+        (73, 76, Why::Collapse(1)),
+        (73, 77, Why::Collapse(1)),
+        (74, 75, Why::Collapse(1)),
+        (74, 76, Why::Collapse(1)),
+        (74, 77, Why::Collapse(1)),
+        (75, 76, Why::Collapse(1)),
+        (75, 77, Why::Collapse(1)),
+        (76, 77, Why::Collapse(1)),
+        // whistle=true group: 72 piccolo / 78 whistle / 79 ocarina.
+        (72, 78, Why::Collapse(1)),
+        (72, 79, Why::Collapse(1)),
+        (78, 79, Why::Collapse(1)),
+        // -- Stage 2: Synth Pad 88-95 — 88,89,90,91,92,93,94 share one base pad.
+        //    91 (halo/"sweep") only differs via a CC-driven vowel morph, inert
+        //    with no controller, so it renders as the base pad here too. 95
+        //    (bowed sweep) is the lone distinct member. --
+        (88, 89, Why::Collapse(2)),
+        (88, 90, Why::Collapse(2)),
+        (88, 91, Why::Collapse(2)),
+        (88, 92, Why::Collapse(2)),
+        (88, 93, Why::Collapse(2)),
+        (88, 94, Why::Collapse(2)),
+        (89, 90, Why::Collapse(2)),
+        (89, 91, Why::Collapse(2)),
+        (89, 92, Why::Collapse(2)),
+        (89, 93, Why::Collapse(2)),
+        (89, 94, Why::Collapse(2)),
+        (90, 91, Why::Collapse(2)),
+        (90, 92, Why::Collapse(2)),
+        (90, 93, Why::Collapse(2)),
+        (90, 94, Why::Collapse(2)),
+        (91, 92, Why::Collapse(2)),
+        (91, 93, Why::Collapse(2)),
+        (91, 94, Why::Collapse(2)),
+        (92, 93, Why::Collapse(2)),
+        (92, 94, Why::Collapse(2)),
+        (93, 94, Why::Collapse(2)),
+        // -- Stage 3: Synth FX 96-103 — crystal bell {96,98,100,102},
+        //    base pad {97,99,103} (101 is pad(95), stands alone) --
+        (96, 98, Why::Collapse(3)),
+        (96, 100, Why::Collapse(3)),
+        (96, 102, Why::Collapse(3)),
+        (98, 100, Why::Collapse(3)),
+        (98, 102, Why::Collapse(3)),
+        (100, 102, Why::Collapse(3)),
+        (97, 99, Why::Collapse(3)),
+        (97, 103, Why::Collapse(3)),
+        (99, 103, Why::Collapse(3)),
+        // -- Stage 4: Ensemble 48-55 — 48/50/51 share one SawStack --
+        (48, 50, Why::Collapse(4)),
+        (48, 51, Why::Collapse(4)),
+        // 50/51 are Synth Strings 1/2: GM defines them near-identical.
+        (50, 51, Why::Legit),
+        // -- Stage 5: minor collapses --
+        (16, 17, Why::Collapse(5)), // organ: two drawbar sets share one config
+        (26, 27, Why::Collapse(5)), // guitar: two "clean electric" share CLEAN
+        (29, 30, Why::Collapse(5)), // guitar: two "overdrive/distortion" share DRIVE
+        (36, 37, Why::Collapse(5)), // bass: two slap share SLAP
+        (0, 1, Why::Collapse(5)),   // piano: acoustic-grand family shares one Modal
+        (0, 2, Why::Collapse(5)),
+        (0, 3, Why::Collapse(5)),
+        (1, 2, Why::Collapse(5)),
+        (1, 3, Why::Collapse(5)),
+        (2, 3, Why::Collapse(5)),
+    ];
+
+    fn allow_reason(a: u8, b: u8) -> Option<Why> {
+        let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
+        ALLOW
+            .iter()
+            .find(|&&(x, y, _)| x == lo && y == hi)
+            .map(|&(_, _, w)| w)
+    }
+
+    fn render(program: u8, key: u8) -> Vec<f32> {
+        let mut v = crate::voices::make(program, key, VEL, SR, SEED, false);
+        let mut buf = vec![0f32; (SECS * SR) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    fn f0_of(key: u8) -> f32 {
+        440.0 * 2f32.powf((key as f32 - 69.0) / 12.0)
+    }
+
+    fn feat_one(seg: &[f32], f0: f32) -> Feat {
+        // Skip the 50 ms onset for a stable steady-state read.
+        let start = ((0.05 * SR) as usize).min(seg.len());
+        let body = &seg[start..];
+        let m = |mult: f32| mag_at(body, SR, f0 * mult);
+        let odd = m(1.0) + m(3.0) + m(5.0);
+        let even = m(2.0) + m(4.0) + m(6.0);
+        [
+            centroid(body, SR),
+            flatness(body, SR, 500.0, 9000.0),
+            odd / (even + 1e-6),
+            hp_rms(body, SR, 3000.0) / rms(body).max(1e-9),
+            m(2.0) / (m(1.0) + 1e-6),
+        ]
+    }
+
+    fn features(program: u8) -> FeatSet {
+        std::array::from_fn(|k| feat_one(&render(program, PROBE_KEYS[k]), f0_of(PROBE_KEYS[k])))
+    }
+
+    /// Relative feature difference at one probe key: the max over features of
+    /// `|a−b| / (|a|+|b|+floor)`. Byte-identical renders → 0; distinct → higher.
+    fn feat_dist(a: &Feat, b: &Feat) -> f32 {
+        (0..5)
+            .map(|i| (a[i] - b[i]).abs() / (a[i].abs() + b[i].abs() + FLOOR[i]))
+            .fold(0.0, f32::max)
+    }
+
+    /// Distance between two programs: the max over probe keys of [`feat_dist`].
+    /// Comparing like-for-like per key (rather than averaging the keys' features
+    /// first) keeps byte-identical collapses at 0 while giving genuinely distinct
+    /// programs full headroom — averaging could cancel a bright-low / dark-high
+    /// difference of opposite sign across the two keys.
+    fn score(a: &FeatSet, b: &FeatSet) -> f32 {
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| feat_dist(x, y))
+            .fold(0.0, f32::max)
+    }
+
+    /// Rendered once (seed fixed → deterministic), shared across the tests below.
+    fn all_feats() -> &'static [FeatSet] {
+        static CELL: std::sync::OnceLock<Vec<FeatSet>> = std::sync::OnceLock::new();
+        CELL.get_or_init(|| (0..128u8).map(features).collect())
+    }
+
+    /// The headline guard: within every GM family, no two programs render as the
+    /// same instrument unless explicitly allowlisted.
+    #[test]
+    fn every_gm_family_is_free_of_unexpected_clones() {
+        let feats = all_feats();
+        let mut failures = Vec::new();
+        for fam in 0..16u8 {
+            let base = fam * 8;
+            for a in base..base + 8 {
+                for b in (a + 1)..base + 8 {
+                    let s = score(&feats[a as usize], &feats[b as usize]);
+                    if s < EPS && allow_reason(a, b).is_none() {
+                        failures.push(format!(
+                            "GM {a} vs {b}: score {s:.4} < EPS {EPS} (unexpected clone)"
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "anti-clone matrix — unexpected clones:\n{}",
+            failures.join("\n")
+        );
+    }
+
+    /// Every `Collapse` entry must still be an actual clone on this build. When a
+    /// stage differentiates the family, this fails — and deleting the now-stale
+    /// entry is part of that stage's definition of done.
+    #[test]
+    fn allowlisted_collapses_are_really_clones() {
+        let feats = all_feats();
+        for &(a, b, why) in ALLOW {
+            if let Why::Collapse(stage) = why {
+                let s = score(&feats[a as usize], &feats[b as usize]);
+                assert!(
+                    s < EPS,
+                    "GM {a} vs {b} is allowlisted as a Stage-{stage} collapse but now \
+                     scores {s:.4} >= EPS {EPS} — already differentiated; delete this ALLOW entry"
+                );
+            }
+        }
+    }
+
+    /// EPS calibration: the exemplar per-program families (brass 56-63, reed
+    /// 64-71) must separate every within-family pair well above EPS, so EPS sits
+    /// safely below genuine instrument-to-instrument distance (HLD §12 Q1).
+    #[test]
+    fn epsilon_is_calibrated_on_the_good_families() {
+        let feats = all_feats();
+        for (base, name) in [(56u8, "brass"), (64u8, "reed")] {
+            let mut min_s = f32::INFINITY;
+            let (mut ma, mut mb) = (0u8, 0u8);
+            for a in base..base + 8 {
+                for b in (a + 1)..base + 8 {
+                    let s = score(&feats[a as usize], &feats[b as usize]);
+                    if s < min_s {
+                        min_s = s;
+                        (ma, mb) = (a, b);
+                    }
+                }
+            }
+            assert!(
+                min_s >= MARGIN,
+                "{name}: tightest pair GM {ma}/{mb} scores {min_s:.4} < MARGIN {MARGIN} — \
+                 EPS {EPS} has too thin a margin below the good families"
+            );
+        }
+    }
+
+    /// Calibration aid (not a gate): print every within-family pair's score, and
+    /// its allowlist tag. Run: `cargo test print_distinctness_matrix -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn print_distinctness_matrix() {
+        let feats = all_feats();
+        for fam in 0..16u8 {
+            let base = fam * 8;
+            println!("--- GM family {}..={} ---", base, base + 7);
+            for a in base..base + 8 {
+                for b in (a + 1)..base + 8 {
+                    let s = score(&feats[a as usize], &feats[b as usize]);
+                    let tag = match allow_reason(a, b) {
+                        Some(Why::Legit) => " [Legit]",
+                        Some(Why::Collapse(_)) => " [Collapse]",
+                        None => "",
+                    };
+                    let flag = if s < EPS && allow_reason(a, b).is_none() {
+                        "  <== UNEXPECTED CLONE"
+                    } else {
+                        ""
+                    };
+                    println!("  GM {a:3} vs {b:3}: {s:.4}{tag}{flag}");
+                }
+            }
+        }
+    }
+}

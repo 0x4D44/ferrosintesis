@@ -1446,14 +1446,15 @@ mod tests {
         // (prog, key, fingerprint): pad 89 WarmPad (Lp, trunk-delegated),
         // choir 52 via the alt factory (choir_v2). Re-pinned against the alt
         // module — see the doc comment above.
-        // Re-pinned 2026.07.11: pad(89) delegates to trunk's pad, which drifted
-        // when the SawStack/CathedralOrgan work landed without re-freezing this
-        // golden — the branch has been trunk-red since. This task is pad-neutral
-        // (verified: its pad(89) fingerprint equals pristine trunk's), so this
-        // re-pins the canary to the current trunk render.
+        // Re-pinned 2026.07.11 (brass-rasp task): pad(89) delegates to trunk's
+        // pad, which drifted AGAIN (0x66cf721ab5a542fb -> 0x63cb52bc25cbdd4f) when
+        // the reed-rasp and GM43-waveguide/bowed work landed without re-freezing
+        // this golden — trunk has been red on this canary since. This task is
+        // pad-neutral (verified: its pad(89) fingerprint equals pristine trunk's),
+        // so it re-pins the canary to the current trunk render.
         assert_eq!(
             render(89, 60),
-            0x66cf721ab5a542fb,
+            0x63cb52bc25cbdd4f,
             "pad(89) SawStack drifted"
         );
         assert_eq!(

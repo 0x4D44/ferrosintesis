@@ -351,7 +351,7 @@ def _lead_hook(sc, t0: float, reps: int, vel: int, *,
         base = t0 + 16.0 * r
         en.line(sc, LEAD, base, E4, _MODE, _HOOK, vel, jt=0, jv=0,
                 gate=0.98)
-        for deg, start, dur in _HOOK:
+        for _deg, start, dur in _HOOK:
             if dur >= 1.5:
                 b = base + start
                 en.cc_curve(sc, LEAD, 1,
@@ -622,7 +622,10 @@ def oracles(sc, info, spans):
     fails_recap: list[str] = []
     intro_roots = _grouped_roots(sc, GTR_R, 0.0, 16.0)
     outro_roots = _grouped_roots(sc, GTR_R, 464.0, 480.0)
-    if intro_roots != outro_roots:
+    if not intro_roots:
+        fails_recap.append("intro riff window [0,16) has no GTR_R "
+                           "chord-hits (recap check would be vacuous)")
+    elif intro_roots != outro_roots:
         fails_recap.append(
             f"outro riff differs from intro riff "
             f"({len(intro_roots)} vs {len(outro_roots)} chord-hits)")
@@ -654,8 +657,8 @@ def oracles(sc, info, spans):
 # (HLD §6.2: re-measured on the assembled-album render, then pinned).
 # ---------------------------------------------------------------------------
 
-_LIFT_DB = 2.0          # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): final chorus over verse 1
-_BRASS_RISE_DB = 0.4    # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): RMS rise across the chorus-2 entry
+_LIFT_DB = 1.3          # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): measured 2.81 dB (verse -23.59, final -20.78); pin = measured - 1.5 slack
+_BRASS_RISE_DB = 0.1    # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): measured 1.64 dB rise (-22.28 -> -20.64); pin = measured - 1.5 slack (the structural late-channel gate carries the entry claim)
 
 
 def audio_checks(ctx):

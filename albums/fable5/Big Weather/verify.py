@@ -54,8 +54,11 @@ DRUM_PAN = {
 
 # The WIDE set (HLD §6.1, Codex-4): keys with |pan - 0.5| >= 0.17.  Mid and
 # floor toms (0.05-0.12 off-centre) count toward pan-group diversity and
-# L/R alternation, never the wide quota.
-WIDE_KEYS = {k for k, p in DRUM_PAN.items() if abs(p - 0.5) >= 0.17}
+# L/R alternation, never the wide quota.  The 1e-9 tolerance keeps the hats
+# at pan 0.33 in the set: |0.33 - 0.5| evaluates to 0.16999999999999998 in
+# binary float, so a bare `>= 0.17` would silently drop keys 42/44/46 that
+# the HLD names explicitly as wide.
+WIDE_KEYS = {k for k, p in DRUM_PAN.items() if abs(p - 0.5) >= 0.17 - 1e-9}
 
 # ---------------------------------------------------------------------------
 # The advanced-MIDI honoring table (HLD §5): feature -> the GM programs on
@@ -143,7 +146,7 @@ def _programs(sc, ch):
             if (data[0] & 0xF0) == 0xC0]
 
 
-def _program_timeline(module, sc, ch):
+def _program_timeline(sc, ch):
     """Deterministic per-channel program timeline: sorted [(beat, prog)].
 
     The channel() setup program plus every scheduled program() change,
@@ -378,6 +381,10 @@ def check_song_energy(module, sc):
         return cache[name]
 
     for lhs, op, rhs, factor in rules:
+        if op not in (">=", "<="):
+            fails.append(f"ENERGY_RULES has unknown op {op!r} "
+                         f"(must be '>=' or '<=')")
+            continue
         el, er = energy(lhs), energy(rhs)
         if el is None or er is None:
             missing = lhs if el is None else rhs
@@ -399,8 +406,12 @@ def check_late_channels(module, sc):
         return []
     fails = []
     for ch, first in sorted(late.items()):
-        early = [on for on, _off, _p, _v in _note_spans(sc, ch)
-                 if on < first - 0.05]
+        notes = _note_spans(sc, ch)
+        if not notes:
+            fails.append(f"ch{ch} is declared late (entry {first}) but "
+                         f"never sounds at all")
+            continue
+        early = [on for on, _off, _p, _v in notes if on < first - 0.05]
         if early:
             fails.append(f"ch{ch} sounds at beat {min(early):.2f}, before "
                          f"its declared entry at {first}")
@@ -457,7 +468,8 @@ def check_bass_melody(module, sc):
             fails.append(f"BASS_SPEC hook names unknown section '{hook}'")
         else:
             t0, t1 = span
-            hp = [p for on, _off, p, _v in notes if t0 - 1e-9 <= on < t1]
+            hp = [p for on, _off, p, _v in notes
+                  if t0 - 1e-9 <= on < t1 - 1e-9]
             if len(set(hp)) < 6 or (hp and max(hp) - min(hp) < 7):
                 fails.append(f"hook '{hook}': bass countermelody too plain "
                              f"({len(set(hp))} pitches, span "
@@ -529,10 +541,10 @@ def check_choir_layers(module, sc):
     return _cap(fails)
 
 
-def _detect_features(module, sc):
+def _detect_features(sc):
     """The set of §5 features authored ON-TARGET (see FEATURE_PROGRAMS)."""
     found: set[str] = set()
-    timelines = {ch: _program_timeline(module, sc, ch)
+    timelines = {ch: _program_timeline(sc, ch)
                  for ch in sc.events if ch != DRUM_CH}
 
     def on_target(feature, ch, beat):
@@ -562,11 +574,14 @@ def _detect_features(module, sc):
         bends = _bend_fracs(sc, ch)
         if len({v for _b, v in bends}) >= 3:
             found.add("pitch_bend")
+        # cc67_soft needs >= 64: CC67 is a pedal, and a lone pedal-UP
+        # (value 0) event must not count as using the feature.  CC70=0
+        # stays countable — 0 is the "mm" vowel, a real setting.
         for feature, num, min_events, min_peak in (
                 ("cc1_vibrato", 1, 1, 20), ("cc1_leslie", 1, 1, 20),
                 ("cc74_wah", 74, 3, 0), ("cc11_expression", 11, 4, 0),
                 ("cc2_breath", 2, 2, 0), ("cc70_vowel", 70, 1, 0),
-                ("cc67_soft", 67, 1, 0)):
+                ("cc67_soft", 67, 1, 64)):
             evs = cc.get(num, [])
             hits = [(b, v) for b, v in evs
                     if v >= min_peak and on_target(feature, ch, b)]
@@ -605,7 +620,7 @@ def check_feature_coverage(module, sc):
     unknown = set(expected) - set(FEATURE_PROGRAMS)
     if unknown:
         fails.append(f"unknown feature names: {sorted(unknown)}")
-    found = _detect_features(module, sc)
+    found = _detect_features(sc)
     missing = set(expected) - unknown - found
     if missing:
         fails.append(f"claimed features not authored on-target: "
@@ -625,6 +640,9 @@ def check_drum_solo(module, sc):
     spec = getattr(module, "DRUM_SOLO_SPEC", None)
     if spec is None:
         return []
+    if not spec["windows"]:
+        return ["DRUM_SOLO_SPEC declares no windows (a drum-feature "
+                "track must name at least one)"]
     fails = []
     allowed = set(spec.get("accompanists", ()))
     for t0, t1 in spec["windows"]:

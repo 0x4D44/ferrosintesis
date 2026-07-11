@@ -272,7 +272,7 @@ def _lead_hook(sc, t0: float, reps: int, vel: int, *,
         base = t0 + 16.0 * r
         en.line(sc, LEAD, base, A4, _MODE, _HOOK, vel, jt=0, jv=0,
                 gate=0.98)
-        for deg, start, dur in _HOOK:
+        for _deg, start, dur in _HOOK:
             if dur >= 1.4:
                 b = base + start
                 en.cc_curve(sc, LEAD, 1,
@@ -1034,7 +1034,7 @@ def oracles(sc, info, spans):
 # on the assembled-album render.  Measured: lift 2.43 dB (pin - 1 dB); drop
 # depth 13.11 dB (pin - 1.6); slam 13.63 dB (pin - 1.6); breakdown
 # side/mid 0.118 (pin - 25%).
-_LIFT_DB = 1.4        # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): final chorus over verse 1
+_LIFT_DB = 0.9        # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): measured 2.43 dB; pin = measured - 1.5 slack (review finding 9: the prior 1.4 pin left only 1.03 dB slack)
 _DROP_DB = 11.5       # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): drop depth below chorus 2
 _SLAM_DB = 12.0       # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): re-entry slam bar over the drop
 _SPREAD_MIN = 0.088   # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): breakdown side/mid |L-R| ratio

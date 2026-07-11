@@ -291,7 +291,7 @@ def _choir_hook(sc, t0: float, reps: int, base: int, mode: str,
     for rep in range(reps):
         b0 = t0 + 16.0 * rep
         en.line(sc, EH, b0, base, mode, _HOOK, vel, jt=0, jv=0, gate=0.96)
-        for deg, start, dur in _HOOK:
+        for _deg, start, dur in _HOOK:
             if dur >= 1.5:
                 b = b0 + start
                 en.cc_curve(sc, EH, 1, [(b + 0.25, 0), (b + dur * 0.6, 52),

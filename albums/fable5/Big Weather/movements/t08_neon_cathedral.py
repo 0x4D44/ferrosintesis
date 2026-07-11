@@ -479,7 +479,7 @@ def chorus2(sc) -> None:
 def bridge(sc) -> None:
     """The relative major: the lead's warm square voice, glides and all."""
     t0 = 256.0
-    G3, G4 = G2 + 12, G2 + 24
+    G4 = G2 + 24
     # Piano: brighter G-major arpeggios.
     for i, deg in enumerate(BRIDGE_PROG):
         b = t0 + 4.0 * i

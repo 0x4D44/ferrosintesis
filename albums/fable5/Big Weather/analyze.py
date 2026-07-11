@@ -94,6 +94,10 @@ def analyze_track(module) -> tuple[int, int]:
         return 1, 0
     sc, _spans = bd.build_score(module)
     rate, left, right = _load(path)
+    if len(left) < 2:
+        print(f"{tag}: FAIL - audio/{path.name} is empty or truncated "
+              f"({len(left)} frames)")
+        return 1, 0
     fails: list[str] = []
 
     # 1. Click scan.

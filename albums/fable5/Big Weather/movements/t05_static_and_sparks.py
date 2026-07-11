@@ -389,7 +389,7 @@ def _lead_hook(sc, t0: float, reps: int, vel: int, *,
         base = t0 + 16.0 * r
         en.line(sc, LEAD, base, FS3, _MODE, _HOOK, vel, jt=0, jv=3,
                 gate=0.97)
-        for deg, start, dur in _HOOK:
+        for _deg, start, dur in _HOOK:
             if dur >= 1.4:
                 en.vibrato(sc, LEAD, base + start, dur * 0.92, depth=0.22,
                            cycles_per_beat=1.4, delay=0.4)

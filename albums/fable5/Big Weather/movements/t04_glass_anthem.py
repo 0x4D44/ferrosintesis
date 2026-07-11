@@ -36,8 +36,6 @@ TITLE = "Glass Anthem"
 FILE = "04 - Glass Anthem.mid"
 SEED = 20260704
 
-BPM = 100.0
-
 # Channels (HLD §3).
 PIANO, GTR_C, GTR_D, BASS = 0, 1, 2, 3
 AAH, OOH, LEAD, KEYS = 4, 5, 6, 7
@@ -478,7 +476,7 @@ def _lead_hook(sc, t0: float, reps: int, vel: int, key: int = 0, *,
         base = t0 + 16.0 * r
         en.line(sc, LEAD, base, C4 + key, _MODE, _HOOK, vel, jt=0, jv=0,
                 gate=0.98)
-        for deg, start, dur in _HOOK:
+        for _deg, start, dur in _HOOK:
             if dur >= 1.5:
                 b = base + start
                 en.cc_curve(sc, LEAD, 1,

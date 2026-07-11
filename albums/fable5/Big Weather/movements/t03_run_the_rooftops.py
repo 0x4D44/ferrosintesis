@@ -301,7 +301,7 @@ def _lead_hook(sc, t0: float, reps: int, vel: int, *,
         base = t0 + 16.0 * r
         en.line(sc, LEAD, base, D4, _MODE, _HOOK, vel, jt=0, jv=0,
                 gate=0.98)
-        for deg, start, dur in _HOOK:
+        for _deg, start, dur in _HOOK:
             if dur >= 1.5:
                 b = base + start
                 en.cc_curve(sc, LEAD, 1,

@@ -6781,6 +6781,95 @@ mod tests {
         buf
     }
 
+    /// V0 (guitar v2): byte-exact canaries for UNTOUCHED Pluck presets.
+    /// The golden mix guard is tolerance-based (±2.5 dB RMS / ±20% centroid)
+    /// and cannot prove exactness; these pins prove the v2 chain additions
+    /// (pickup RLC, sustainer driver) are EXACTLY inert for presets that
+    /// author neither — any bit drift here is contamination, not tuning.
+    #[test]
+    fn v2_untouched_pluck_canaries() {
+        let nylon = render_hash(&render_program(24, 52, 100, 1.0, 0xE1));
+        let bass = render_hash(&render_program(33, 40, 100, 1.0, 0xE2));
+        println!("canaries: NYLON {nylon:#018x}  BASS {bass:#018x}");
+        assert_eq!(nylon, 0x7d2cf13be503bd16, "NYLON canary drifted");
+        assert_eq!(bass, 0x1765c18f27dc72f7, "BASS canary drifted");
+    }
+
+    /// V8b (guitar v2): the coupled two-polarization step matrix
+    /// [[a, k], [-k, a]] has |λ| = sqrt(a² + k²) — discrete skew coupling is
+    /// NOT energy-neutral (it adds |λ|/a − 1 per step). With the sustainer
+    /// driver off, every preset × key must keep (loop_gain·|H_damp(f0)|)² +
+    /// k_couple² < 1 at worst-case velocity/jitter, or a bare held note could
+    /// grow. Mirrors the laws in `Pluck::new` (vel ≤ ×1.2, bright jitter
+    /// ≤ ×1.08, t60 jitter ≤ ×1.1, wound only darkens — ignored, conservative).
+    #[test]
+    fn coupled_loop_margin_holds() {
+        let sr = 44100.0;
+        let presets: &[(&str, &PluckPreset)] = &[
+            ("NYLON", &NYLON),
+            ("STEEL", &STEEL),
+            ("CLEAN", &CLEAN),
+            ("DRIVE", &DRIVE),
+            ("DRIVE_LEAD", &DRIVE_LEAD),
+            ("MUTED", &MUTED),
+            ("CLAVINET", &CLAVINET),
+            ("BASS", &BASS),
+            ("FRETLESS", &FRETLESS),
+            ("SLAP", &SLAP),
+            ("PICK", &PICK),
+            ("UPRIGHT", &UPRIGHT),
+            ("HARMONIC", &HARMONIC),
+            ("HARP", &HARP),
+            ("BANJO", &BANJO),
+            ("SITAR", &SITAR),
+            ("SHAMISEN", &SHAMISEN),
+            ("DULCIMER", &DULCIMER),
+            ("KOTO", &KOTO),
+            ("PIZZ", &PIZZ),
+        ];
+        let hmag = |bright: f32, f: f32| {
+            let a = 1.0 - (-2.0 * std::f32::consts::PI * (bright / sr).min(0.49)).exp();
+            let b = 1.0 - a;
+            let w = 2.0 * std::f32::consts::PI * f / sr;
+            a / (1.0 - 2.0 * b * w.cos() + b * b).sqrt()
+        };
+        let mut worst = 0f32;
+        let mut worst_at = String::new();
+        for (name, p) in presets {
+            for key in 21u8..=108 {
+                let harm = if p.harmonic {
+                    if key < 64 {
+                        2.0
+                    } else {
+                        3.0
+                    }
+                } else {
+                    1.0
+                };
+                // both polarizations, worst-case law multipliers
+                for (f, bright_mul, t60_mul_c) in [
+                    (key_freq(key) * harm, 1.0, 1.0),
+                    (
+                        key_freq(key) * harm * p.course_detune,
+                        p.course_bright,
+                        p.course_t60,
+                    ),
+                ] {
+                    let bright = (p.bright * bright_mul * 1.2 * 1.08).min(sr * 0.45);
+                    let t60 = (p.t60 * 1.1 * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * t60_mul_c;
+                    let lg = 10f32.powf(-3.0 / (t60 * f));
+                    let m = (lg * hmag(bright, f)).powi(2) + p.course_couple * p.course_couple;
+                    if m > worst {
+                        worst = m;
+                        worst_at = format!("{name} key {key} f {f:.0}");
+                    }
+                    assert!(m < 1.0, "{name} key {key}: a² + k² = {m} ≥ 1");
+                }
+            }
+        }
+        println!("V8b worst coupled margin (a²+k²) = {worst:.6} at {worst_at}");
+    }
+
     fn render_program_released(
         program: u8,
         key: u8,

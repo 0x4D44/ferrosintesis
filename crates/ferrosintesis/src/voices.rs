@@ -1910,17 +1910,17 @@ impl KsLoop {
     fn retune(&mut self, f: f32) {
         self.target = Self::delay_for(f, self.bright, self.sr).min(self.max_delay);
         self.loop_gain = 10f32.powf(-3.0 / (self.t60 * f));
-        if self.drv.is_some() {
+        if let Some(prev_f) = self.drv.as_ref().map(|d| d.prev_f) {
             // glide-endpoint minimum (review C3): an upward bend must not
             // borrow the new center's larger headroom while the delay still
             // rings near the old one. Freshly computed for BOTH endpoints —
             // min-ing against the previous clamp would ratchet down forever
             // under vibrato.
-            let h_new = self.sus_headroom(f);
-            let h_prev = self.sus_headroom(self.drv.as_ref().unwrap().prev_f);
-            let d = self.drv.as_mut().unwrap();
-            d.bp.retune_bandpass(f, SUS_BP_Q, self.sr);
-            d.k_max = h_new.min(h_prev);
+            let h = self.sus_headroom(f).min(self.sus_headroom(prev_f));
+            let sr = self.sr;
+            let d = self.drv.as_mut().expect("checked above");
+            d.bp.retune_bandpass(f, SUS_BP_Q, sr);
+            d.k_max = h;
             d.k = d.k.min(d.k_max);
             d.prev_f = f;
         }

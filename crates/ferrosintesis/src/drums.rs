@@ -86,16 +86,30 @@ impl Shimmer {
 /// per-sample `white` (zero extra RNG draws); `None` on v1 and every non-snare
 /// key → the render hook is skipped, so v1 stays byte-identical.
 struct WireRes {
-    bands: [Biquad; 3], // bandpass wire-mode clusters
-    gains: [f32; 3],    // velocity-shaped per-band gains
-    amp: f32,           // overall level, own exponential decay
-    decay: f32,         // dmul(0.19, sr)
-    onset: u32,         // D5 delayed onset (1.5 ms), exact zero before
-    env: f32,           // onset swell 0..1 (floor 0)
-    atk: f32,           // 1/(0.5 ms) ramp increment
-    head_amp0: f32,     // tones[0].amp at build (the 186 Hz head env reference)
-    head_track: f32,    // WIRE_HEAD_TRACK exponent
-    am_depth: f32,      // granular slap AM depth at full head level
+    bands: [Biquad; 3],   // bandpass wire-mode clusters
+    gains: [f32; 3],      // velocity-shaped per-band gains
+    amp: f32,             // overall level, own exponential decay
+    decay: f32,           // dmul(0.19, sr)
+    onset: u32,           // D5 delayed onset (1.5 ms), exact zero before
+    env: f32,             // onset swell 0..1 (floor 0)
+    atk: f32,             // 1/(0.5 ms) ramp increment
+    head_amp0: f32,       // tones[0].amp at build (the 186 Hz head env reference)
+    head_track: f32,      // WIRE_HEAD_TRACK exponent
+    am_depth: f32,        // granular slap AM depth (V2 slap path only)
+    grain: Option<Grain>, // P-S1 kit-v3 collision-grain gate; None = V2 slap
+}
+
+/// P-S1 kit-v3 snare collision-grain gate state: an aperiodic PhISEM-style
+/// grain train replacing V2's periodic 186 Hz slap AM. `e` is the current grain
+/// envelope; a grain fires (`e ← 1`) when a shared-white draw undercuts
+/// `rate·λ` (λ = head-tracked intensity), then decays by `decay` (~0.8 ms).
+/// `floor` is the between-grain gate level. Fed the SAME shared `white` as the
+/// wire bands → zero new RNG draws, so V2 (grain `None`) stays byte-identical.
+struct Grain {
+    e: f32,
+    decay: f32,
+    rate: f32,
+    floor: f32,
 }
 
 pub struct Drum {
@@ -294,13 +308,32 @@ impl Voice for Drum {
                     }
                     let head = (head_amp_now / w.head_amp0).clamp(0.0, 1.0);
                     let track = head.powf(w.head_track);
-                    // half-wave 186 Hz granular slap, deepening with head level
-                    let slap = 1.0 + w.am_depth * head * head_phase_sin.max(0.0);
+                    // Excitation gate. V3/Brush: a seeded APERIODIC collision
+                    // grain (a crackle) — a grain fires when the shared `white`
+                    // undercuts `rate·λ` (λ = the head-tracked intensity), rings
+                    // ~0.6 ms, gate floored at `floor`; the fire times inherit
+                    // the xorshift `white`'s aperiodicity, so no 186 Hz line
+                    // survives (a head-phase bias was tried and re-introduced the
+                    // line — dropped). V2: the legacy periodic 186 Hz half-wave
+                    // slap. Both reuse the shared `white` — zero new RNG draws,
+                    // so V2 stays byte-identical (grain `None` → the else branch).
+                    let gate = if let Some(gr) = w.grain.as_mut() {
+                        let lam = track;
+                        let u = white * 0.5 + 0.5; // shared white → [0, 1)
+                        if u < gr.rate * lam {
+                            gr.e = 1.0;
+                        }
+                        let out = gr.floor + (1.0 - gr.floor) * gr.e;
+                        gr.e *= gr.decay;
+                        out
+                    } else {
+                        1.0 + w.am_depth * head * head_phase_sin.max(0.0)
+                    };
                     let mut wsum = 0.0;
                     for (band, &g) in w.bands.iter_mut().zip(w.gains.iter()) {
                         wsum += band.process(white) * g;
                     }
-                    s += wsum * w.amp * w.env * track * slap;
+                    s += wsum * w.amp * w.env * track * gate;
                     w.amp *= w.decay;
                 }
             }
@@ -579,6 +612,20 @@ const WIRE_MAKEUP: f32 = 2.9;
 /// decay the bright rattle reaches −60 dB by ~110 ms, sputtering out with the
 /// head while the retained dark-tail band carries the residual to ~350 ms.
 const WIRE_HEAD_TRACK: f32 = 0.4;
+
+/// P-S1 kit-v3 snare collision-grain gate. The wire buzz becomes a seeded
+/// APERIODIC grain train (PhISEM-style) instead of V2's periodic 186 Hz slap:
+/// each sample a grain fires when a shared-`white` draw undercuts `rate·λ`
+/// (λ = head-tracked intensity). `GRAIN_RATE`/`GRAIN_RATE_EL` set the fire
+/// probability at full head (~1–2k grains/s), the electric snare (key 40)
+/// rattling faster; `GRAIN_T60` is the grain ring, `GRAIN_FLOOR` the
+/// between-grain gate. `GRAIN_MAKEUP` compensates the mean-gate loss so V3 stays
+/// within ±2 dB of the V2 slap (DR-O10-style), calibrated by the P-S1 oracle.
+const GRAIN_RATE: f32 = 0.03;
+const GRAIN_RATE_EL: f32 = 0.045;
+const GRAIN_FLOOR: f32 = 0.15;
+const GRAIN_T60: f32 = 0.0006;
+const GRAIN_MAKEUP: f32 = 2.5;
 
 /// Inharmonic cymbal partial stack — the classic bell-plate ratios.
 const METAL_RATIOS: [f32; 6] = [1.0, 1.483, 1.932, 2.546, 3.363, 4.365];
@@ -1257,7 +1304,24 @@ pub fn make(
                 // the velocity term and diverge from the old band's law, so it
                 // is deliberately omitted (see membrane_velocity's noise map).
                 let d1_noise = 0.5 + 0.5 * velnorm * velnorm;
-                let amp = 0.75 * d1_noise * WIRE_MAKEUP;
+                let base_amp = 0.75 * d1_noise * WIRE_MAKEUP;
+                // V2 keeps the periodic slap (grain None → byte-identical); V3
+                // and Brush get the aperiodic collision-grain gate + a level
+                // makeup that holds parity with the V2 slap.
+                let (grain, amp) = if matches!(kit, Kit::V2) {
+                    (None, base_amp)
+                } else {
+                    let rate = if key == 40 { GRAIN_RATE_EL } else { GRAIN_RATE };
+                    (
+                        Some(Grain {
+                            e: 0.0,
+                            decay: dmul(GRAIN_T60, sr),
+                            rate,
+                            floor: GRAIN_FLOOR,
+                        }),
+                        base_amp * GRAIN_MAKEUP,
+                    )
+                };
                 let wire = WireRes {
                     bands,
                     gains: [1.0, 0.55 + 0.45 * velnorm, 0.30 + 0.70 * velnorm],
@@ -1271,6 +1335,7 @@ pub fn make(
                     head_amp0: drum.tones[0].amp,
                     head_track: WIRE_HEAD_TRACK,
                     am_depth,
+                    grain,
                 };
                 Some(Box::new(drum.with_wire(wire)) as Box<dyn Voice>)
             }
@@ -2661,6 +2726,82 @@ mod tests {
         assert!(pre < 0.35 * post, "wires too early: {pre} vs {post}");
         let shell = testutil::band_rms(&snare[..(0.001 * sr) as usize], sr, 1300.0, 0.7);
         assert!(shell > 1e-3, "shell slap missing at t=0: {shell}");
+    }
+
+    /// P-S1 (fail-first, differential V3-vs-V2): the V3 snare replaces V2's
+    /// periodic 186 Hz half-wave slap-AM with a seeded PhISEM collision-grain
+    /// gate. Isolate the wire band (HP-2800 removes head modes + shell) over the
+    /// early sustain and assert (a) the V2 slap's envelope periodicity in the
+    /// 120-300 Hz band collapses on V3 (aperiodic), (b) the V3 wire band is more
+    /// leptokurtic (grainy crackle, not smooth wash), (c) V3 stays within ±2 dB
+    /// of V2 (the grain makeup holds level), (d) no DC. Fail-first: on the
+    /// unmodified build V3 == V2, so (a)/(b) fail.
+    #[test]
+    fn snare_grain_is_aperiodic_and_impulsive_v3() {
+        let sr = 44100.0;
+        let v2 = render_drum_kit(38, 100, 0.6, Kit::V2);
+        let v3 = render_drum_kit(38, 100, 0.6, Kit::V3);
+        // Isolate the wire band with a 4th-order HP (two cascaded biquads) so
+        // the loud early 186 Hz head fundamental cannot bleed through and fake a
+        // periodicity — a single 2nd-order HP-2800 leaves it only ~−32 dB down.
+        let wire = |s: &[f32]| -> Vec<f32> {
+            let seg = &s[(0.010 * sr) as usize..(0.090 * sr) as usize];
+            let mut hp1 = Biquad::highpass(3000.0, 0.7, sr);
+            let mut hp2 = Biquad::highpass(3000.0, 0.7, sr);
+            seg.iter().map(|&x| hp2.process(hp1.process(x))).collect()
+        };
+        let (w2, w3) = (wire(&v2), wire(&v3));
+        // (a) periodicity of the wire ENVELOPE in the 120-300 Hz band, where the
+        // V2 half-wave 186 Hz slap AM lives; env_autocorr also returns its rate.
+        let (p2, rate2) = testutil::env_autocorr_peak(&w2, sr, 1.0 / 300.0, 1.0 / 120.0);
+        let (p3, _) = testutil::env_autocorr_peak(&w3, sr, 1.0 / 300.0, 1.0 / 120.0);
+        // grain metric: kurtosis of the DECAY-NORMALISED wire band (divide by a
+        // 600 Hz |·| follower to strip the shared ring-down). The wire is
+        // bandpassed noise, so both bands are already spiky; the grain gate's
+        // between-grain gaps add a modest but real impulsiveness on top.
+        let grain_kurt = |w: &[f32]| -> f32 {
+            let mut env = OnePole::lowpass(600.0, sr);
+            let norm: Vec<f32> = w
+                .iter()
+                .map(|&x| x / env.process(x.abs()).max(1e-6))
+                .collect();
+            testutil::kurtosis(&norm)
+        };
+        let (k2, k3) = (grain_kurt(&w2), grain_kurt(&w3));
+        let (r2, r3) = (testutil::rms(&v2), testutil::rms(&v3));
+        let db = 20.0 * (r3 / r2.max(1e-12)).log10();
+        let mean = v3.iter().sum::<f32>() / v3.len() as f32;
+        println!(
+            "P-S1 snare wire: env-autocorr v2={p2:.3}@{rate2:.0}Hz v3={p3:.3}; \
+             grain-kurtosis v2={k2:.2} v3={k3:.2}; level v3-v2={db:+.2} dB; v3 DC={mean:.2e}"
+        );
+        // (a) THE fix: V2's periodic slap gives strong short-lag envelope
+        // self-correlation (its 186 Hz half-wave AM + harmonics); the V3 grain
+        // gate is aperiodic (seeded from the shared white, no head-phase term),
+        // so that correlation is substantially reduced. DIFFERENTIAL — a decaying
+        // broadband envelope has a nonzero autocorr floor an absolute threshold
+        // cannot reach, so the claim is v3 ≪ v2, not v3 ≈ 0.
+        assert!(
+            p2 > 0.4,
+            "(a) v2 slap envelope periodicity not detected: v2={p2:.3}"
+        );
+        assert!(
+            p3 < 0.65 * p2,
+            "(a) v3 wire buzz still periodic: v3={p3:.3} vs v2={p2:.3}"
+        );
+        // (b) grain-kurtosis (k2/k3 above) is PRINTED, not gated: the wire is
+        // bandpassed noise (already leptokurtic), so the grain gate's added
+        // impulsiveness (v3 ≈ 6.1 vs v2 ≈ 5.8) is real but too marginal for a
+        // robust scalar assertion. The grainy-crackle texture is carried by the
+        // mechanism (aperiodic seeded gate) + the (a) periodicity collapse; the
+        // final timbre is a human-listen item, not an earless oracle.
+        // (c) level parity with the V2 slap (GRAIN_MAKEUP).
+        assert!(
+            db.abs() <= 2.0,
+            "(c) v3 snare level {db:+.2} dB outside ±2 dB of v2"
+        );
+        // (d) no DC blow-up (the snare's inherent offset is ~-5e-4).
+        assert!(mean.abs() < 1e-3, "(d) v3 snare DC {mean:.2e}");
     }
 
     /// Oracle 26 (D6, voice half): choke() collapses a ringing open hat

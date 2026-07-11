@@ -302,6 +302,34 @@ pub(crate) fn env_aperiodicity(seg: &[f32], sr: f32, lag_lo_s: f32, lag_hi_s: f3
     (best.max(0.0) as f32, cov)
 }
 
+/// Kurtosis (4th standardised moment, `E[(x−μ)^4]/σ^4`) — a grain /
+/// impulsiveness detector. A Gaussian process reads ≈ 3.0; smooth
+/// bandpass-filtered noise (the filter's memory sums many inputs → CLT) sits
+/// near 3.0 too; a sparse, spiky, gated grain train reads far higher
+/// (leptokurtic). This is the detector that proves the snare wire buzz becomes
+/// a granular crackle rather than a smooth "shhh" (HLD P-S1): a differential
+/// ratio (grainy render / smooth render) rather than an absolute threshold.
+pub(crate) fn kurtosis(seg: &[f32]) -> f32 {
+    let n = seg.len();
+    if n < 2 {
+        return 0.0;
+    }
+    let mean = seg.iter().map(|&x| x as f64).sum::<f64>() / n as f64;
+    let (mut m2, mut m4) = (0.0f64, 0.0f64);
+    for &x in seg {
+        let d = x as f64 - mean;
+        let d2 = d * d;
+        m2 += d2;
+        m4 += d2 * d2;
+    }
+    m2 /= n as f64;
+    m4 /= n as f64;
+    if m2 <= 0.0 {
+        return 0.0;
+    }
+    (m4 / (m2 * m2)) as f32
+}
+
 // ---------------------------------------------------------------------------
 // The fixed multi-family reference song (oracles 34/35/38)
 // ---------------------------------------------------------------------------
@@ -552,6 +580,43 @@ mod calibration {
         assert!(fn_ > 0.4, "noise flatness {fn_}");
         assert!(ft < 0.2, "tone flatness {ft}");
         assert!(fn_ > 3.0 * ft, "noise {fn_} vs tone {ft}");
+    }
+
+    /// Oracle-0 for `kurtosis`: smooth bandpass-filtered white reads ≈ 3
+    /// (Gaussian-ish via the filter's central-limit averaging), while a sparse
+    /// gated grain train reads far higher — so a grainy/smooth ratio cleanly
+    /// separates the two. Calibrated here before P-S1's snare oracle trusts it.
+    #[test]
+    fn kurtosis_flags_grain_over_smooth_noise() {
+        let sr = 44100.0;
+        // smooth: bandpassed uniform white — the biquad's memory pushes the
+        // output toward Gaussian, so kurtosis lands near 3.0.
+        let raw = noise(11, sr, 0.5);
+        let mut bp = Biquad::bandpass(4000.0, 3.0, sr);
+        let smooth: Vec<f32> = raw.iter().map(|&x| bp.process(x)).collect();
+        let k_smooth = kurtosis(&smooth);
+        // grain: a sparse click train (~2.5% of samples are unit impulses) —
+        // leptokurtic, kurtosis ≈ 1/q ≫ 3.
+        let mut rng = Rng::new(5);
+        let grain: Vec<f32> = (0..(0.5 * sr) as usize)
+            .map(|_| {
+                let u = rng.white();
+                if u.abs() > 0.95 {
+                    u.signum()
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let k_grain = kurtosis(&grain);
+        assert!(
+            (k_smooth - 3.0).abs() < 1.5,
+            "smooth-noise kurtosis {k_smooth} (expect ≈ 3)"
+        );
+        assert!(
+            k_grain > 3.0 * k_smooth,
+            "grain kurtosis {k_grain} not ≫ smooth {k_smooth}"
+        );
     }
 }
 

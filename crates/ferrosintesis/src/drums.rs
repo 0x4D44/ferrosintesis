@@ -1230,15 +1230,21 @@ pub fn make(
                 Drum::new(sr, seed, &tones, &nb, life, g * v).with_glide_floor(1.0 / TOM_OVERSHOOT)
             }
             Kit::V3 | Kit::Brush => {
-                // The richer 6-mode air-loaded ladder (the proven P-T1 win). The
-                // HF attack cloud moves to P-T2 (B2), where early-HF is cleanly
-                // measurable; a shell/cavity body was tried but is swamped by the
-                // loud fundamental's spectral leakage (unmeasurable — see JRN B1),
-                // so it's deferred to Arthur's listen rather than shipped blind.
+                // The richer 6-mode air-loaded ladder (P-T1). P-T2: append an HF
+                // ATTACK CLOUD (the unresolved high modes — a broadband HP wash)
+                // and a sharp STICK CLICK above the mid stick burst, the "snap" a
+                // dull tom lacks. Both HF and short, so they leave the settled
+                // ladder untouched. A shell/cavity body was tried but is swamped
+                // by the loud fundamental's leakage (unmeasurable — see JRN B1),
+                // deferred to Arthur's listen. Bands appended after the stick
+                // band, so V1/V2 stay byte-identical.
                 let start = f0 * TOM_OVERSHOOT;
-                let (tones, nb) =
-                    membrane_velocity(&tom_tones_v3(start, t60, TOM_GLIDE_V2), noise, velnorm);
-                Drum::new(sr, seed, &tones, &nb, life, g * v).with_glide_floor(1.0 / TOM_OVERSHOOT)
+                let mut nb: Vec<(f32, f32, Biquad)> = noise.to_vec();
+                nb.push((0.18, 0.03, Biquad::highpass(1600.0, 0.7, sr)));
+                nb.push((0.4, 0.004, Biquad::highpass(4000.0, 0.7, sr)));
+                let (tones, nbv) =
+                    membrane_velocity(&tom_tones_v3(start, t60, TOM_GLIDE_V2), &nb, velnorm);
+                Drum::new(sr, seed, &tones, &nbv, life, g * v).with_glide_floor(1.0 / TOM_OVERSHOOT)
             }
         };
         Some(Box::new(drum) as Box<dyn Voice>)
@@ -2468,6 +2474,52 @@ mod tests {
             (settled - f0).abs() < 20.0,
             "(2) v3 tom settled pitch {settled:.0} Hz off table {f0}"
         );
+        assert!(db.abs() <= 3.0, "(3) v3 tom level {db:+.2} dB far from v2");
+        assert!(mean.abs() < 1e-3, "(4) v3 tom DC {mean:.2e}");
+    }
+
+    /// P-T2 (fail-first, differential V3-vs-V2): the V3/Brush tom gains an HF
+    /// attack cloud + a sharp stick click above the mid stick burst — the "snap"
+    /// a dull tom lacks. The early >3 kHz snap, normalised by the body, rises vs
+    /// V2 and grows with velocity (the membrane noise law). Key 45. Fail-first:
+    /// V3 == V2 unmodified.
+    #[test]
+    fn tom_attack_snap_v3() {
+        let sr = 44100.0;
+        let ratio = |s: &[f32]| -> f32 {
+            let snap = testutil::hp_rms(&s[..(0.010 * sr) as usize], sr, 3000.0);
+            let body = testutil::rms(&s[(0.050 * sr) as usize..(0.150 * sr) as usize]);
+            snap / body.max(1e-9)
+        };
+        let v2s = render_drum_kit(45, 100, 0.45, Kit::V2);
+        let v3s = render_drum_kit(45, 100, 0.45, Kit::V3);
+        let (v2, v3) = (ratio(&v2s), ratio(&v3s));
+        // velocity character: gain-normalise the snap (like oracle 30) — dividing
+        // by the body would cancel it, because the ladder t60 also grows with
+        // velocity; gain-normalising isolates the noise law's vn² snap growth.
+        let snap_gn = |vel: u8| -> f32 {
+            let s = render_drum_kit(45, vel, 0.45, Kit::V3);
+            testutil::hp_rms(&s[..(0.010 * sr) as usize], sr, 3000.0)
+                / crate::dsp::vel_amp(vel).max(1e-9)
+        };
+        let (c40, c80, c120) = (snap_gn(40), snap_gn(80), snap_gn(120));
+        let db = 20.0 * (testutil::rms(&v3s) / testutil::rms(&v2s).max(1e-12)).log10();
+        let mean = v3s.iter().sum::<f32>() / v3s.len() as f32;
+        println!(
+            "P-T2 tom45 attack: ratio v2={v2:.3} v3={v3:.3}; vel 40/80/120={c40:.3}/{c80:.3}/{c120:.3}; \
+             level v3-v2={db:+.2} dB; DC={mean:.2e}"
+        );
+        // (1) the cloud + click add early HF snap vs V2.
+        assert!(
+            v3 > 1.4 * v2,
+            "(1) v3 tom no snappier than v2: v3={v3:.3} v2={v2:.3}"
+        );
+        // (2) the snap grows with velocity.
+        assert!(
+            c120 > c80 && c80 > c40,
+            "(2) tom snap not velocity-monotone: {c40:.3}/{c80:.3}/{c120:.3}"
+        );
+        // (3) level parity; (4) no DC.
         assert!(db.abs() <= 3.0, "(3) v3 tom level {db:+.2} dB far from v2");
         assert!(mean.abs() < 1e-3, "(4) v3 tom DC {mean:.2e}");
     }

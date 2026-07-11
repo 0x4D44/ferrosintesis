@@ -1,10 +1,10 @@
 [package]
 name = "ferrosintesis-cli"
-version = "0.13.4"
+version = "0.13.5"
 edition = "2021"
 description = "Command-line WAV renderer for ferrosintesis"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/0x4D44/midi-music"
+repository = "https://github.com/0x4D44/ferrosintesis"
 publish = false
 
 [[bin]]
@@ -12,5 +12,5 @@ name = "ferrosintesis"
 path = "src/main.rs"
 
 [dependencies]
-ferrosintesis = { path = "../ferrosintesis", version = "0.13.3" }
+ferrosintesis = { path = "../ferrosintesis", version = "0.13.5" }
 

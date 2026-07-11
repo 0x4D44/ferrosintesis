@@ -30,7 +30,7 @@ dedication. Source downloads are pinned to repository commit
 `440300901dfe9275fd84e0b7763af1f8443ae62e`.
 
 The repository's
-[`tools/ferrosintesis-samples/prepare.py`](https://github.com/0x4D44/midi-music/blob/main/tools/ferrosintesis-samples/prepare.py)
+[`tools/ferrosintesis-samples/prepare.py`](https://github.com/0x4D44/ferrosintesis/blob/main/tools/ferrosintesis-samples/prepare.py)
 performs onset detection, trimming, fades, peak normalization, and conversion
 to mono 16-bit 44.1 kHz WAV. The piano transients retain about 1.8 seconds; the
 violin and flute transients retain about 0.63 seconds.

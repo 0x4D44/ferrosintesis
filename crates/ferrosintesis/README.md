@@ -13,13 +13,33 @@ crates: `ferrosintesis-samples-core` and
 `ferrosintesis-samples-orchestral`. Cargo retrieves and caches each package once;
 the linker embeds the referenced bytes in the final executable. Full provenance
 and regeneration instructions live in
-[`tools/ferrosintesis-samples/README.md`](https://github.com/0x4D44/midi-music/blob/main/tools/ferrosintesis-samples/README.md).
+[`tools/ferrosintesis-samples/README.md`](https://github.com/0x4D44/ferrosintesis/blob/main/tools/ferrosintesis-samples/README.md).
 The workspace CLI remains a single self-contained renderer.
 
 The default `embedded-samples` Cargo feature preserves the full sound. Consumers
 that set `default-features = false` get the modeled-only synth and do not download
 or compile either asset crate. That compile-time choice differs from the runtime
 `--no-samples` option, which disables samples already embedded in the executable.
+
+## Use as a library
+
+Add the full synth, including its embedded CC0 attack samples:
+
+```toml
+[dependencies]
+ferrosintesis = "0.13.5"
+```
+
+For a smaller modeled-only dependency that never downloads or compiles the sample
+crates:
+
+```toml
+[dependencies]
+ferrosintesis = { version = "0.13.5", default-features = false }
+```
+
+The sample bytes are resolved by Cargo and embedded at compile time. The library
+does not download assets at build time or runtime.
 
 ```powershell
 cargo build --release -p ferrosintesis-cli

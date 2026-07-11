@@ -1,8 +1,7 @@
-# midi-music
+# ferrosintesis
 
-**Original instrumental albums composed by language models — five AI composers,
-sixteen albums, ~7½ hours of music — committed as reproducible source and rendered
-through a custom synthesizer.**
+**A dependency-free Rust MIDI synthesizer, developed alongside sixteen original,
+reproducible albums composed by five language models.**
 
 Every note here was composed by a frontier language model writing Python that emits
 MIDI. Nothing is sampled from, or quotes, any existing recording — each album is
@@ -109,6 +108,28 @@ engine.py  ─▶  .mid  ─▶  ferrosintesis ─▶ .wav ─▶ ropusenc ─�
   It is *voiced* for the Fable 5 albums; the other composers' albums are faithful
   General-MIDI renders through the same engine used as a general player.
 
+## Use ferrosintesis as a crate
+
+The default build includes all 202 CC0 attack transients. Cargo retrieves the two
+sample packages once and embeds their bytes in your executable at compile time;
+there is no build-time or runtime asset downloader.
+
+```toml
+[dependencies]
+ferrosintesis = "0.13.5"
+```
+
+Applications that want the modeled synth without downloading or compiling the
+sample packages can disable default features:
+
+```toml
+[dependencies]
+ferrosintesis = { version = "0.13.5", default-features = false }
+```
+
+The repository's `ferrosintesis-cli` renderer uses the default embedded samples but
+is not published as a separate crate.
+
 ## Reproduce & verify
 
 ```bash
@@ -139,8 +160,12 @@ the sibling `ropus` project.
 - **`listening/`** — tagged `.opus` listening copies, grouped by artist and album for
   drag-and-drop playback. An album may supply exact-stem UTF-8 `lyrics/*.txt`
   sidecars; the renderer embeds them as multiline `LYRICS` listening-guide tags.
-- **`crates/ferrosintesis/`** — the Rust synth library, with
-  **`crates/ferrosintesis-cli/`** for the WAV-rendering binary.
+- **`crates/ferrosintesis/`** — the publishable Rust synth library, with
+  **`crates/ferrosintesis-cli/`** for the repository's WAV-rendering binary.
+- **`crates/ferrosintesis-samples-core/`** and
+  **`crates/ferrosintesis-samples-orchestral/`** — the two CC0 asset crates compiled
+  into default builds; **`tools/ferrosintesis-samples/`** holds their preparation and
+  provenance tooling.
 - **`demos/`** — synth test pieces; **`wrk_docs/`** — design & review notes;
   **`wrk_journals/`** — the engineer's log.
 

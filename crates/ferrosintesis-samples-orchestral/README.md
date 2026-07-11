@@ -43,7 +43,7 @@ ef2fb7de0cc0ab561c4ebc28494f3fc2962596e4f32f16d6c96b8a385c7c098b
 ```
 
 The repository's
-[`tools/ferrosintesis-samples/prepare.py`](https://github.com/0x4D44/midi-music/blob/main/tools/ferrosintesis-samples/prepare.py)
+[`tools/ferrosintesis-samples/prepare.py`](https://github.com/0x4D44/ferrosintesis/blob/main/tools/ferrosintesis-samples/prepare.py)
 performs onset detection, trimming, fades, peak normalization, and conversion
 to mono 16-bit 44.1 kHz WAV.
 

@@ -1302,14 +1302,20 @@ pub fn make(
                 } else {
                     &SNARE_TONES_V3
                 };
-                let (tones, noise) = membrane_velocity(
-                    head,
-                    &[
-                        (0.55, 0.09, Biquad::bandpass(1300.0, 0.7, sr)),
-                        (0.22, 0.35, Biquad::highpass(1800.0, 0.7, sr)),
-                    ],
-                    velnorm,
-                );
+                // P-S2: V3/Brush add a short HF CRACK snap at t=0 (idx2, no onset
+                // delay) — the modeled "snap" a bodyless --no-samples snare lacks
+                // (the sample overlay supplies it when samples are on). It rides
+                // the membrane_velocity noise law (0.5+0.5·vn²), so harder hits
+                // crack proportionally more. Appended after the two V2 bands, so
+                // V2's construction RNG draws are untouched (V2 byte-identical).
+                let mut nb = vec![
+                    (0.55f32, 0.09f32, Biquad::bandpass(1300.0, 0.7, sr)),
+                    (0.22, 0.35, Biquad::highpass(1800.0, 0.7, sr)),
+                ];
+                if !matches!(kit, Kit::V2) {
+                    nb.push((0.55, 0.003, Biquad::highpass(5000.0, 0.7, sr)));
+                }
+                let (tones, noise) = membrane_velocity(head, &nb, velnorm);
                 // dark tail is now idx1 (shell idx0 keeps no onset delay).
                 let drum = Drum::new(sr, seed, &tones, &noise, 0.6, 0.68 * v)
                     .with_band_ext(1, 0.0015, 0.0005, 0.0);
@@ -2869,6 +2875,51 @@ mod tests {
         assert!(
             db.abs() <= 2.0,
             "(3) v3 snare level {db:+.2} dB outside ±2 dB of v2"
+        );
+        // (4) no DC.
+        assert!(mean.abs() < 1e-3, "(4) v3 snare DC {mean:.2e}");
+    }
+
+    /// P-S2 (fail-first, differential V3-vs-V2): the V3/Brush snare gains a
+    /// modeled HF crack "snap" at t=0 that V2 lacks — the --no-samples attack
+    /// the sample overlay otherwise supplies. The early >5 kHz snap energy,
+    /// normalised by the body, rises vs V2 and grows with velocity (the
+    /// membrane noise law). Fail-first: V3 == V2 unmodified.
+    #[test]
+    fn snare_crack_snap_v3() {
+        let sr = 44100.0;
+        let ratio = |s: &[f32]| -> f32 {
+            let snap = testutil::hp_rms(&s[..(0.003 * sr) as usize], sr, 5000.0);
+            let body = testutil::rms(&s[(0.010 * sr) as usize..(0.040 * sr) as usize]);
+            snap / body.max(1e-9)
+        };
+        let v2s = render_drum_kit(38, 100, 0.3, Kit::V2);
+        let v3s = render_drum_kit(38, 100, 0.3, Kit::V3);
+        let (v2, v3) = (ratio(&v2s), ratio(&v3s));
+        let c40 = ratio(&render_drum_kit(38, 40, 0.3, Kit::V3));
+        let c80 = ratio(&render_drum_kit(38, 80, 0.3, Kit::V3));
+        let c120 = ratio(&render_drum_kit(38, 120, 0.3, Kit::V3));
+        let db = 20.0 * (testutil::rms(&v3s) / testutil::rms(&v2s).max(1e-12)).log10();
+        let mean = v3s.iter().sum::<f32>() / v3s.len() as f32;
+        println!(
+            "P-S2 snare crack: ratio v2={v2:.3} v3={v3:.3}; vel 40/80/120={c40:.3}/{c80:.3}/{c120:.3}; \
+             level v3-v2={db:+.2} dB; DC={mean:.2e}"
+        );
+        // (1) the crack adds early HF snap vs V2.
+        assert!(
+            v3 > 1.3 * v2,
+            "(1) v3 crack no louder than v2: v3={v3:.3} v2={v2:.3}"
+        );
+        // (2) the snap grows with velocity (harder hits crack more).
+        assert!(
+            c120 > c80 && c80 > c40,
+            "(2) crack not velocity-monotone: {c40:.3}/{c80:.3}/{c120:.3}"
+        );
+        // (3) cumulative V3 snare level stays within a few dB of V2 (golden is
+        // the absolute guard).
+        assert!(
+            db.abs() <= 3.0,
+            "(3) v3 snare level {db:+.2} dB far from v2"
         );
         // (4) no DC.
         assert!(mean.abs() < 1e-3, "(4) v3 snare DC {mean:.2e}");

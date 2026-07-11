@@ -80,3 +80,13 @@
   pin is opt-level-sensitive (float codegen differs in release). Pre-existing,
   unrelated to the choir-v2 unit; either pin per-profile hashes or run the
   canary debug-only.
+- [ ] 2026.07.11 - Committed `listening/*.opus` look **stale vs the 0.13.4 trunk**
+  ("finalize strings on cathedral trunk" `3c8e7ee`). Re-running `python
+  render_opus.py` with the current binary regenerates *different* bytes for
+  non-organ albums the reed-rasp task cannot touch (e.g. Through Lines — no GM19)
+  and even creates fresh MIDI-only opus (VIGIL/RIVERWAKE under
+  `listening/Claude Opus 4.8/`). Spotted while scoping the reed-rasp refresh; the
+  reed-rasp task only refreshed its own 3 GM19+CC11 albums (Architecture of Air,
+  Atlas #14, Hollow Hill). A separate catalog-refresh pass should re-render the
+  strings-affected albums to bring the published audio current — verify against a
+  `render_diff.py` (baseline = 0.13.4 trunk binary) so only genuine deltas land.

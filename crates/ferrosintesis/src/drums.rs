@@ -581,6 +581,23 @@ fn tom_tones(f0: f32, t60: f32, glide: f32) -> [(f32, f32, f32, f32); 3] {
     ]
 }
 
+/// P-T1 kit-v3 tom ladder: a 6-mode air-loaded circular-membrane ladder
+/// (1 : 1.5 : 2.0 : 2.44 : 2.9 : 3.5), amps tapering 1.0→0.08 and per-mode t60
+/// shortening with frequency, all sharing the strike glide (so the inharmonic
+/// ratios hold while the pitch settles). Replaces the sparse 3-mode `tom_tones`
+/// on V3/Brush — the extra resolved modes turn the hollow 3-sine "808 boop"
+/// into a struck head. Still ≤ 8 modes, so `Tone`'s per-sample `sin()` is fine.
+fn tom_tones_v3(f0: f32, t60: f32, glide: f32) -> [(f32, f32, f32, f32); 6] {
+    [
+        (f0, 1.0, t60, glide),
+        (f0 * 1.50, 0.50, t60 * 0.72, glide),
+        (f0 * 2.00, 0.32, t60 * 0.55, glide),
+        (f0 * 2.44, 0.20, t60 * 0.42, glide),
+        (f0 * 2.90, 0.13, t60 * 0.32, glide),
+        (f0 * 3.50, 0.08, t60 * 0.24, glide),
+    ]
+}
+
 /// DR2 kit-v2 tom: instead of starting at table pitch and diving ~21 st to the
 /// 0.3x glide floor (the "pew" tell, map_drums §4 T2), a v2 tom starts 2.5 st
 /// sharp and glides DOWN to the table pitch — a real tom's 1-3 st tension
@@ -1197,17 +1214,33 @@ pub fn make(
     // V2 starts 2.5 st sharp and glides down to the table pitch. V1 arm is
     // byte-identical to the old `dm(&tom_tones(f0, t60, 10.0), ...)`.
     let tom = |f0: f32, t60: f32, noise: &[(f32, f32, Biquad)], life: f32, g: f32| {
-        let (start_f, glide, floor) = match kit {
-            Kit::V1 => (f0, 10.0, None),
-            Kit::V2 | Kit::V3 | Kit::Brush => {
-                (f0 * TOM_OVERSHOOT, TOM_GLIDE_V2, Some(1.0 / TOM_OVERSHOOT))
+        // V1 dives to the 0.3x floor; V2 overshoots +2.5 st and settles on the
+        // table pitch (sparse 3-mode `tom_tones`). V3/Brush use the richer 6-mode
+        // air-loaded ladder PLUS an HF attack cloud and a shell/cavity body band.
+        // V1/V2 draw exactly the old tones/bands, so they stay byte-identical.
+        let drum = match kit {
+            Kit::V1 => {
+                let (tones, nb) = membrane_velocity(&tom_tones(f0, t60, 10.0), noise, velnorm);
+                Drum::new(sr, seed, &tones, &nb, life, g * v)
+            }
+            Kit::V2 => {
+                let start = f0 * TOM_OVERSHOOT;
+                let (tones, nb) =
+                    membrane_velocity(&tom_tones(start, t60, TOM_GLIDE_V2), noise, velnorm);
+                Drum::new(sr, seed, &tones, &nb, life, g * v).with_glide_floor(1.0 / TOM_OVERSHOOT)
+            }
+            Kit::V3 | Kit::Brush => {
+                // The richer 6-mode air-loaded ladder (the proven P-T1 win). The
+                // HF attack cloud moves to P-T2 (B2), where early-HF is cleanly
+                // measurable; a shell/cavity body was tried but is swamped by the
+                // loud fundamental's spectral leakage (unmeasurable — see JRN B1),
+                // so it's deferred to Arthur's listen rather than shipped blind.
+                let start = f0 * TOM_OVERSHOOT;
+                let (tones, nb) =
+                    membrane_velocity(&tom_tones_v3(start, t60, TOM_GLIDE_V2), noise, velnorm);
+                Drum::new(sr, seed, &tones, &nb, life, g * v).with_glide_floor(1.0 / TOM_OVERSHOOT)
             }
         };
-        let (tones, noise) = membrane_velocity(&tom_tones(start_f, t60, glide), noise, velnorm);
-        let mut drum = Drum::new(sr, seed, &tones, &noise, life, g * v);
-        if let Some(r) = floor {
-            drum = drum.with_glide_floor(r);
-        }
         Some(Box::new(drum) as Box<dyn Voice>)
     };
     // v0.12 brush kit intercept: the seven brush keys take their own voices
@@ -2392,6 +2425,51 @@ mod tests {
             f_v2 > f_v1 * 1.4,
             "v2 settled pitch sits well above v1's dived pitch (v1={f_v1:.1}, v2={f_v2:.1})"
         );
+    }
+
+    /// P-T1 (fail-first, differential V3-vs-V2): the V3 tom gains a richer
+    /// 6-mode air-loaded ladder (vs V2's 3 modes) — turning the hollow 3-sine
+    /// "808 boop" into a struck head. (1) upper-mode energy above V2's top mode
+    /// (2.14·f0) appears (the 2.44/2.9/3.5 modes); (2) the settle-to-table-pitch
+    /// (DR-O5) is preserved. Key 45 (rack tom, f0 190). Fail-first: V3 == V2.
+    /// (A shell/cavity body was prototyped but is swamped by the loud
+    /// fundamental's spectral leakage — unmeasurable, deferred: see JRN B1.)
+    #[test]
+    fn tom_ladder_v3() {
+        let sr = 44100.0;
+        let f0 = 190.0;
+        let v2 = render_drum_kit(45, 100, 0.45, Kit::V2);
+        let v3 = render_drum_kit(45, 100, 0.45, Kit::V3);
+        // (1) richer ladder: settled window; V3's upper modes (2.44/2.9/3.5·f0)
+        // sit above V2's top mode (2.14·f0), where V2 has ~nothing.
+        let s2 = &v2[(0.08 * sr) as usize..(0.16 * sr) as usize];
+        let s3 = &v3[(0.08 * sr) as usize..(0.16 * sr) as usize];
+        let up2 = testutil::spectral_band_rms(s2, sr, 2.3 * f0, 3.7 * f0);
+        let up3 = testutil::spectral_band_rms(s3, sr, 2.3 * f0, 3.7 * f0);
+        // (2) settle preserved (the DR2 overshoot-and-settle still lands).
+        let settled = testutil::peak_locate(
+            &v3[(0.15 * sr) as usize..(0.30 * sr) as usize],
+            sr,
+            100.0,
+            300.0,
+        );
+        let db = 20.0 * (testutil::rms(&v3) / testutil::rms(&v2).max(1e-12)).log10();
+        let mean = v3.iter().sum::<f32>() / v3.len() as f32;
+        println!(
+            "P-T1 tom45: upper[437,703] v2={up2:.5} v3={up3:.5} ratio={:.2}; settled={settled:.0} Hz; \
+             level v3-v2={db:+.2} dB; DC={mean:.2e}",
+            up3 / up2.max(1e-9)
+        );
+        assert!(
+            up3 > 1.5 * up2,
+            "(1) v3 lacks the richer upper ladder: v3={up3:.5} v2={up2:.5}"
+        );
+        assert!(
+            (settled - f0).abs() < 20.0,
+            "(2) v3 tom settled pitch {settled:.0} Hz off table {f0}"
+        );
+        assert!(db.abs() <= 3.0, "(3) v3 tom level {db:+.2} dB far from v2");
+        assert!(mean.abs() < 1e-3, "(4) v3 tom DC {mean:.2e}");
     }
 
     /// DR3 (open-hat spectral motion): v2 splits the wash into a slow body +

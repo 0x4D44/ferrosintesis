@@ -604,6 +604,12 @@ fn tom_tones_v3(f0: f32, t60: f32, glide: f32) -> [(f32, f32, f32, f32); 6] {
 /// overshoot settling in 30-80 ms.
 const TOM_OVERSHOOT: f32 = 1.155; // 2^(2.5/12)
 const TOM_GLIDE_V2: f32 = 4.0; // oct/s; x(0.6+0.8*vn) => 2.4-5.6 oct/s => 37-87 ms drop
+/// P-T3 kit-v3 two-head beat detune (Hz): a detuned twin of the low tom modes
+/// this far above them makes the batter+resonant heads "wow" at a few Hz (the
+/// motion a rigid single-mode ladder lacks), and its longer t60 gives a
+/// two-stage decay. Δf·t60 ≳ 1 so a beat completes — toms ring long enough
+/// (unlike the ~100 ms snare head, where beating was dropped).
+const TOM_BEAT_DF: f32 = 6.0;
 
 /// D2 snare head modes (DRM-4): four partials with a small shared down-glide
 /// — the 186 Hz fundamental plus the 280/330/430 Hz cluster a real head
@@ -1239,11 +1245,23 @@ pub fn make(
                 // deferred to Arthur's listen. Bands appended after the stick
                 // band, so V1/V2 stay byte-identical.
                 let start = f0 * TOM_OVERSHOOT;
+                // P-T3 two-head beating: detuned twins of the fundamental and 2nd
+                // mode (Δf a few Hz, ~0.6/0.3× amp, ~1.6× t60) — a slow "wow" plus
+                // a two-stage decay (the longer twin sustains the band). They
+                // share the strike glide/floor.
+                let mut tv: Vec<(f32, f32, f32, f32)> =
+                    tom_tones_v3(start, t60, TOM_GLIDE_V2).to_vec();
+                tv.push((start + TOM_BEAT_DF, 0.6, t60 * 1.6, TOM_GLIDE_V2));
+                tv.push((
+                    start * 1.5 + TOM_BEAT_DF,
+                    0.3,
+                    t60 * 0.72 * 1.6,
+                    TOM_GLIDE_V2,
+                ));
                 let mut nb: Vec<(f32, f32, Biquad)> = noise.to_vec();
                 nb.push((0.18, 0.03, Biquad::highpass(1600.0, 0.7, sr)));
                 nb.push((0.4, 0.004, Biquad::highpass(4000.0, 0.7, sr)));
-                let (tones, nbv) =
-                    membrane_velocity(&tom_tones_v3(start, t60, TOM_GLIDE_V2), &nb, velnorm);
+                let (tones, nbv) = membrane_velocity(&tv, &nb, velnorm);
                 Drum::new(sr, seed, &tones, &nbv, life, g * v).with_glide_floor(1.0 / TOM_OVERSHOOT)
             }
         };
@@ -2522,6 +2540,49 @@ mod tests {
         // (3) level parity; (4) no DC.
         assert!(db.abs() <= 3.0, "(3) v3 tom level {db:+.2} dB far from v2");
         assert!(mean.abs() < 1e-3, "(4) v3 tom DC {mean:.2e}");
+    }
+
+    /// P-T3 (fail-first, differential V3-vs-V2): the V3 tom gains detuned twins
+    /// of the low modes (two coupled heads). The measurable signature is a
+    /// TWO-STAGE decay — the longer-t60 twin sustains the fundamental band ~2.4x
+    /// into a late window where V2's single mode has decayed further. The slow
+    /// beat/wow the two close modes also produce is brief and glide-smeared
+    /// (autocorr and envelope-ripple both fail to isolate it over the decaying
+    /// tom), so it is mechanism-verified + a listen item, not gated here. Key 45.
+    /// Fail-first: V3 == V2 unmodified.
+    #[test]
+    fn tom_two_head_sustain_v3() {
+        let sr = 44100.0;
+        let v2 = render_drum_kit(45, 100, 0.5, Kit::V2);
+        let v3 = render_drum_kit(45, 100, 0.5, Kit::V3);
+        // (1) two-stage decay: the twin sustains the fundamental band late.
+        let late2 = testutil::band_rms(
+            &v2[(0.20 * sr) as usize..(0.40 * sr) as usize],
+            sr,
+            195.0,
+            4.0,
+        );
+        let late3 = testutil::band_rms(
+            &v3[(0.20 * sr) as usize..(0.40 * sr) as usize],
+            sr,
+            195.0,
+            4.0,
+        );
+        let db = 20.0 * (testutil::rms(&v3) / testutil::rms(&v2).max(1e-12)).log10();
+        let mean = v3.iter().sum::<f32>() / v3.len() as f32;
+        println!(
+            "P-T3 tom45: late-sustain v2={late2:.5} v3={late3:.5} ratio={:.2}; \
+             level v3-v2={db:+.2} dB; DC={mean:.2e}",
+            late3 / late2.max(1e-9)
+        );
+        // (1) two-stage sustain: the detuned twin (longer t60) holds the
+        // fundamental band into the late window where V2's single mode has faded.
+        assert!(
+            late3 > 1.4 * late2,
+            "(1) v3 no two-stage sustain: v3={late3:.5} v2={late2:.5}"
+        );
+        assert!(db.abs() <= 3.0, "(2) v3 tom level {db:+.2} dB far from v2");
+        assert!(mean.abs() < 1e-3, "(3) v3 tom DC {mean:.2e}");
     }
 
     /// DR3 (open-hat spectral motion): v2 splits the wash into a slow body +

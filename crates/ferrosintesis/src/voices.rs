@@ -1286,9 +1286,13 @@ pub struct PluckPreset {
     pub rel_t60: f32,
     pub body: &'static [(f32, f32, f32)], // (freq, q, gain dB) peak EQs
     pub out_lp: f32,                      // 0 = none
-    pub pickup: f32,                      // magnetic pickup position (0 = acoustic)
-    pub sub: f32,                         // envelope-locked fundamental sine (0 = none)
-    pub cab_lp: f32,                      // clean-amp cab rolloff, 0 = none (HLD G2)
+    // Magnetic pickup position comb (0 = acoustic). NOTE the ×2 convention:
+    // the comb delay is 2·pickup·period, so the field is HALF the physical
+    // sensing fraction — 0.11 senses at ~0.22 of the string (a neck pickup),
+    // 0.05 near the bridge.
+    pub pickup: f32,
+    pub sub: f32,    // envelope-locked fundamental sine (0 = none)
+    pub cab_lp: f32, // clean-amp cab rolloff, 0 = none (HLD G2)
     // --- HLD family B: parallel one-shot transients ---
     pub click: f32,             // pick/slap onset hardness (0 = none)
     pub click_hp: f32,          // click filter corner
@@ -1406,6 +1410,27 @@ pub const CLEAN: PluckPreset = PluckPreset {
     pickup_rlc: (4200.0, 1.8), // bright single-coil + cable resonance
     cab_lp: 4500.0,            // light clean-combo speaker rolloff
     click: 1.8,
+    ..DEFAULTS
+};
+/// Jazz guitar (GM 26, guitar v2 unit B): a hollowbody at the neck pickup
+/// with the tone rolled off — the warm round comping voice, split from the
+/// bright CLEAN (27) platform it used to share.
+pub const JAZZ: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "JAZZ",
+    t60: 2.4, // flatwounds ring shorter
+    bright: 3600.0,
+    pick_lp: 3500.0,
+    pos: 0.30, // picked over the neck join, not near the bridge
+    amp: 0.50,
+    rel_t60: 0.18,
+    // hollowbody warmth: low bloom + low-mid roundness
+    body: &[(180.0, 1.0, 2.5), (700.0, 1.2, 1.5)],
+    out_lp: 4800.0,
+    pickup: 0.11,              // ×2 convention: senses at ~0.22 — neck position
+    pickup_rlc: (2400.0, 1.1), // neck humbucker, tone rolled
+    cab_lp: 3800.0,            // warm clean-combo rolloff
+    click: 1.2,                // soft pick, no snap
     ..DEFAULTS
 };
 pub const DRIVE: PluckPreset = PluckPreset {
@@ -6489,7 +6514,8 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // 25 steel stays pure model for now: the FreePats steel-string set is
         // GPL-with-exception, not CC0 — no clean sampled source yet (HLD §2.2)
         25 => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
-        26 | 27 => Box::new(Pluck::new(&CLEAN, key, vel, sr, seed)),
+        26 => Box::new(Pluck::new(&JAZZ, key, vel, sr, seed)),
+        27 => Box::new(Pluck::new(&CLEAN, key, vel, sr, seed)),
         28 => Box::new(Pluck::new(&MUTED, key, vel, sr, seed)),
         29 | 30 => Box::new(Pluck::new(&DRIVE, key, vel, sr, seed)),
         31 => Box::new(Pluck::new(&HARMONIC, key, vel, sr, seed)), // G7 flageolet
@@ -6869,6 +6895,30 @@ mod tests {
         }
     }
 
+    /// V3 (guitar v2 unit B): the 26/27 split is audible — the same note at
+    /// the same velocity reads distinctly darker on the jazz box (neck
+    /// pickup, rolled tone, hollowbody warmth) than on the bright CLEAN
+    /// platform, and both stay solidly audible.
+    #[test]
+    fn jazz_clean_split_is_audible() {
+        let sr = 44100.0;
+        for key in [50u8, 62] {
+            let j = render_program(26, key, 100, 1.0, 0xB3);
+            let c = render_program(27, key, 100, 1.0, 0xB3);
+            let (cj, cc) = (centroid(&j, sr), centroid(&c, sr));
+            let (rj, rc) = (rms(&j), rms(&c));
+            println!("V3 key {key}: JAZZ centroid {cj:.0} Hz, CLEAN {cc:.0} Hz");
+            assert!(
+                cc >= 1.25 * cj,
+                "key {key}: CLEAN {cc:.0} Hz not ≥1.25× JAZZ {cj:.0} Hz"
+            );
+            assert!(
+                rj > 0.01 && rc > 0.01,
+                "key {key}: a split voice fell silent (jazz {rj:.4}, clean {rc:.4})"
+            );
+        }
+    }
+
     /// V0 (guitar v2): byte-exact canaries for UNTOUCHED Pluck presets.
     /// The golden mix guard is tolerance-based (±2.5 dB RMS / ±20% centroid)
     /// and cannot prove exactness; these pins prove the v2 chain additions
@@ -6897,6 +6947,7 @@ mod tests {
             ("NYLON", &NYLON),
             ("STEEL", &STEEL),
             ("CLEAN", &CLEAN),
+            ("JAZZ", &JAZZ),
             ("DRIVE", &DRIVE),
             ("DRIVE_LEAD", &DRIVE_LEAD),
             ("MUTED", &MUTED),

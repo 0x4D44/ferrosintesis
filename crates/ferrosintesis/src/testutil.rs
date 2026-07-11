@@ -775,9 +775,12 @@ mod guards {
         // (drive_level_probe); the tail lift is the feature, knob = sag_target.
         // Every other row, including ch 2/ch 3, is BIT-EXACT vs the unit-A
         // capture — the drive insert touches programs 29/30 only.
+        // Re-captured after guitar v2 unit B (the 26/27 split): ch 2 is now
+        // the JAZZ hollowbody — warmer and rounder (centroid 1216 -> 855 Hz)
+        // by design; every other row is BIT-EXACT vs the unit-C capture.
         (0, -41.28, 1020.2),
         (1, -42.07, 2020.8),
-        (2, -41.93, 1215.9),
+        (2, -41.49, 855.0),
         (3, -39.97, 485.9),
         (4, -28.28, 726.6),
         (5, -24.61, 294.6),
@@ -789,7 +792,7 @@ mod guards {
         (9, -22.51, 726.7),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 1.25983;
+    const GOLDEN_MASTER_PEAK: f32 = 1.25090;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause
@@ -880,7 +883,7 @@ mod guards {
             (19, "cathedral-organ"),
             (24, "NYLON"),
             (25, "STEEL"),
-            (26, "CLEAN"),
+            (26, "JAZZ"), // guitar v2 unit B: the 26/27 split
             (27, "CLEAN"),
             (28, "MUTED"),
             (29, "DRIVE"),

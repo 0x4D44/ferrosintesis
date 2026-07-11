@@ -540,6 +540,46 @@ pub fn contrabass_bank(vel: u8) -> &'static [Zone] {
     }
 }
 
+// GM 42 cello LA attack: the cello-section arco bite across the cello's full
+// register — the celens zones ARE cellos (celens_C1 measures 65 Hz = C2 up to
+// celens_B3 ≈ B4), so `nearest` picks the right zone per note.
+fn cello_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "celens_C1_p.wav" => 65.48,
+            "celens_G1_p.wav" => 97.46,
+            "celens_D2_p.wav" => 146.97,
+            "celens_A2_p.wav" => 219.85,
+            "celens_E3_p.wav" => 329.02,
+            "celens_B3_p.wav" => 493.92,
+        )
+    })
+}
+
+fn cello_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "celens_C1_f.wav" => 65.38,
+            "celens_G1_f.wav" => 97.71,
+            "celens_D2_f.wav" => 146.73,
+            "celens_A2_f.wav" => 219.17,
+            "celens_E3_f.wav" => 328.79,
+            "celens_B3_f.wav" => 493.91,
+        )
+    })
+}
+
+/// Attack-transient bank for the GM 42 cello (cello-section arco, full range).
+pub fn cello_bank(vel: u8) -> &'static [Zone] {
+    if vel >= 80 {
+        cello_f()
+    } else {
+        cello_p()
+    }
+}
+
 fn drum_crash() -> &'static [HitSample] {
     static B: OnceLock<Vec<HitSample>> = OnceLock::new();
     B.get_or_init(|| {

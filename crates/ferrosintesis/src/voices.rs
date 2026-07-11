@@ -4652,18 +4652,20 @@ pub struct BowedString {
     body: [Biquad; 3], // the instrument body's broad low resonances
     dc_x1: f32,        // DC blocker state (bowed loops accumulate DC)
     dc_y1: f32,
-    env: Adsr,       // bow pressure/velocity envelope (the onset + release)
-    max_vel: f32,    // bow speed (loudness / brightness)
-    slope: f32,      // bow force: narrows the friction curve (brighter/scratchier)
-    vib: Sine,       // pitch vibrato
-    vib_depth: f32,  //
-    vib_delay: u32,  // vibrato onset delay
-    grit: Biquad,    // bow-hair / rosin noise band (bandpass)
-    bow_noise: f32,  // per-note grit level — no two bows are identical
-    scratch: f32,    // decaying attack "catch" intensity (the bite before the tone)
-    scratch_k: f32,  // its per-sample decay
-    drift: Drift,    // slow human pitch wander (intonation is never dead-steady)
-    amp_follow: f32, // output magnitude follower, for the release tail
+    env: Adsr,               // bow pressure/velocity envelope (the onset + release)
+    max_vel: f32,            // bow speed (loudness / brightness)
+    slope: f32,              // bow force: narrows the friction curve (brighter/scratchier)
+    vib: Sine,               // pitch vibrato
+    vib_depth: f32,          //
+    vib_delay: u32,          // vibrato onset delay
+    grit: Biquad,            // bow-hair / rosin noise band (bandpass)
+    bow_noise: f32,          // per-note grit level — no two bows are identical
+    scratch: f32,            // decaying attack "catch" intensity (the bite before the tone)
+    scratch_k: f32,          // its per-sample decay
+    drift: Drift,            // slow human pitch wander (intonation is never dead-steady)
+    amp_follow: f32,         // output magnitude follower, for the release tail
+    refl_sustain: f32,       // bridge-filter cutoff while bowed (register brightness)
+    out_lp: Option<OnePole>, // post-output darkening (cello de-buzz); None = flat
     rng: Rng,
     t: u32,
     amp: f32,
@@ -4683,13 +4685,30 @@ fn bow_friction(delta_v: f32, slope: f32) -> f32 {
 }
 
 impl BowedString {
-    fn new(key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+    fn new(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let f = key_freq(key);
         let mut rng = Rng::new(seed);
         let beta = 0.127; // bow ~1/8 from the bridge (arco bass idiom)
-                          // Per-note character: the seed varies per voice (the engine's spawn
-                          // counter), so drawing the bow's force, grit, scratch and vibrato here
-                          // makes every stroke its own — the fix for "each note sounds the same".
+                          // Register-dependent voicing: the cello (42) sits ~an octave above the
+                          // contrabass (43), so its body resonances and string brightness are
+                          // higher and its output a touch lighter. Same waveguide, retuned.
+                          // (body freqs, in-loop bridge damping, amp base/span, OUTPUT lowpass Hz).
+                          // The output lowpass (0 = none) darkens the cello cleanly without touching
+                          // the loop's nonlinear dynamics; it is None for the contrabass, so GM43
+                          // stays byte-identical to the integrated Stage 1.
+        let (body_f, refl_sustain, amp_base, amp_span, out_lp_hz) = match program {
+            42 => (
+                [110.0f32, 230.0, 500.0],
+                2600.0f32,
+                0.36f32,
+                0.82f32,
+                2100.0f32,
+            ),
+            _ => ([70.0, 180.0, 700.0], 2600.0, 0.55, 1.25, 0.0),
+        };
+        // Per-note character: the seed varies per voice (the engine's spawn
+        // counter), so drawing the bow's force, grit, scratch and vibrato here
+        // makes every stroke its own — the fix for "each note sounds the same".
         let u = |r: &mut Rng| r.white() * 0.5 + 0.5;
         let slope = 2.2 + 0.7 * u(&mut rng); // bow force / pressure this stroke
         let bow_noise = 0.05 + 0.06 * u(&mut rng); // how gritty this stroke is
@@ -4710,11 +4729,11 @@ impl BowedString {
             bend: 1.0,
             // string loss: wound bass strings are quite lossy up top -> darker,
             // and this is what lets the note decay once the bow lifts.
-            refl: OnePole::lowpass(2600.0, sr),
+            refl: OnePole::lowpass(refl_sustain, sr),
             body: [
-                Biquad::peak(70.0, 0.7, 3.0, sr),  // the big body/air resonance
-                Biquad::peak(180.0, 0.7, 2.0, sr), // main wood mode
-                Biquad::peak(700.0, 0.5, 1.5, sr), // broad arco "presence"
+                Biquad::peak(body_f[0], 0.7, 3.0, sr), // the big body/air resonance
+                Biquad::peak(body_f[1], 0.7, 2.0, sr), // main wood mode
+                Biquad::peak(body_f[2], 0.5, 1.5, sr), // broad arco "presence"
             ],
             dc_x1: 0.0,
             dc_y1: 0.0,
@@ -4740,7 +4759,13 @@ impl BowedString {
             // limit-cycle amplitude barely tracks velocity, so the dynamic level
             // is applied here. Level-matched to the old contrabass so the album
             // mix balance holds (~0.11 at the quiet pedal, ~0.18 riff/collision).
-            amp: 0.55 + 1.25 * vel_amp(vel),
+            amp: amp_base + amp_span * vel_amp(vel),
+            refl_sustain,
+            out_lp: if out_lp_hz > 0.0 {
+                Some(OnePole::lowpass(out_lp_hz, sr))
+            } else {
+                None
+            },
             sr,
         };
         s.set_freq(f);
@@ -4771,7 +4796,11 @@ impl Voice for BowedString {
                 self.set_freq(self.base_f * self.bend * (1.0 + vib) * (1.0 + drift));
                 // the bow lifts on release: the loop loses its energy source and
                 // the string damps faster (darker) as it decays.
-                let refl_hz = if self.env.released() { 900.0 } else { 2600.0 };
+                let refl_hz = if self.env.released() {
+                    900.0
+                } else {
+                    self.refl_sustain
+                };
                 self.refl.set_cutoff(refl_hz, self.sr);
             }
             let e = self.env.next();
@@ -4812,6 +4841,9 @@ impl Voice for BowedString {
             let mut y = bridge_out;
             for b in &mut self.body {
                 y = b.process(y);
+            }
+            if let Some(lp) = &mut self.out_lp {
+                y = lp.process(y); // cello de-buzz; None for the bass (byte-identical)
             }
             let hp = y - self.dc_x1 + 0.9985 * self.dc_y1;
             self.dc_x1 = y;
@@ -4862,6 +4894,9 @@ const LA_FIDDLE: (f32, (f32, f32)) = (0.32, (0.08, 0.28));
 /// sample owns the onset. A slightly longer handover than the violin: a bass
 /// bow speaks slower. Gain tuned by ear (Arthur): a restrained bite.
 const LA_CONTRABASS: (f32, (f32, f32)) = (0.29, (0.16, 0.46));
+/// GM 42 cello: the cello-section arco bite over the waveguide sustain. A
+/// slightly faster handover than the bass (a cello bow speaks quicker).
+const LA_CELLO: (f32, (f32, f32)) = (0.30, (0.13, 0.40));
 const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 const LA_PIANO: (f32, (f32, f32)) = (0.42, (0.18, 0.85));
 const LA_BRASS: (f32, (f32, f32)) = (0.35, (0.10, 0.32));
@@ -6447,26 +6482,26 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        // GM 43 contrabass: waveguide + cello-arco LA is the DEFAULT bank. The
-        // Codex per-program `Bowed` contrabass is the CC0 alt bank (altbank.rs).
-        43 => {
-            let model = Box::new(BowedString::new(key, vel, sr, seed));
+        // GM 42 cello / 43 contrabass: waveguide + arco LA is the DEFAULT bank.
+        // The Codex per-program `Bowed` set is the CC0 alt bank (altbank.rs).
+        42 | 43 => {
+            let model = Box::new(BowedString::new(program, key, vel, sr, seed));
             if samples {
-                let (gain, fade) = LA_CONTRABASS;
-                crate::sampler::LaVoice::wrap(
-                    model,
-                    crate::sampler::contrabass_bank(vel),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                )
+                let (gain, fade, bank) = if program == 42 {
+                    (LA_CELLO.0, LA_CELLO.1, crate::sampler::cello_bank(vel))
+                } else {
+                    (
+                        LA_CONTRABASS.0,
+                        LA_CONTRABASS.1,
+                        crate::sampler::contrabass_bank(vel),
+                    )
+                };
+                crate::sampler::LaVoice::wrap(model, bank, key, vel, sr, gain, fade)
             } else {
                 model
             }
         }
-        41 | 42 | 44 => Box::new(Bowed::new(program, key, vel, sr, seed)),
+        41 | 44 => Box::new(Bowed::new(program, key, vel, sr, seed)),
         45 => Box::new(Pluck::new(&PIZZ, key, vel, sr, seed)),
         46 => Box::new(Pluck::new(&HARP, key, vel, sr, seed)),
         47 => Box::new(timpani(key, vel, sr, seed)),

@@ -56,10 +56,6 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   fine locally, but kill-newest GM synths chop the re-strike. The Signal
   Fire engine's `Score._resolve_overlaps()` (write-time clamp) is the fix;
   Hollow Hill's engine still has the issue if its files are regenerated.
-- 2026.07.06 — **Interrupted composer agents leave salvageable drafts.**
-  On session-limit deaths mid-fan-out, relaunch with an explicit
-  "verify-and-complete the draft, don't rewrite" note — three of six
-  Signal Fire drafts were kept nearly verbatim, saving a full re-run.
 - 2026.07.06 — **Presence in the MIDI is not audibility in the render.**
   The CC1 Leslie ramp was tick-perfect in the file yet measured flat in
   audio (the organ's idle tremulant was already near LESLIE_FAST). Verify
@@ -163,3 +159,14 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   off-lattice anti-alias metric must be ABSOLUTE, not a drive-differential: louder
   legit high partials leak more into off-lattice Goertzel bins as drive rises, with
   zero aliasing.
+- 2026.07.11 — **For brass "rasp"/cuivré, SPLIT the shaper drive across two
+  knees — don't stack a 2nd stage on an already-hard one.** At forte the brass
+  lip-tanh already sits near its alias cap (`kws ≈ 3.1` vs `BR_K_MAX 3.2`), so a
+  second waveshaper on top barely hardens it (measured on/off 1.04). Splitting the
+  drive (stage 1 softens as the cascade opens, a 2nd knee re-hardens) gives a
+  genuinely slower, shock-like rolloff (on/off up to ~1.4 in the top band). Two
+  corollaries verified in `control_tick`: the loudness scalar `L ≤ 1.0` in sustain
+  (`0.10 + 0.90·vn`), so any gate on "L>1" / "(bright−1)" is near-dead — gate rasp
+  on `L`/`bright` directly; and the extra harmonics must be shed at high f0 (a
+  quartic derate) to hold the 2× alias floor (BR-O11). Top-register ff rasp needs
+  4×/ADAA (Fork B) — 2× can't carry a genuine shock tail above ~A4.

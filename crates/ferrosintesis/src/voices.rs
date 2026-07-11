@@ -4201,7 +4201,7 @@ const BODY_VIOLIN: [(f32, f32, f32); 3] =
 const BODY_VIOLA: [(f32, f32, f32); 3] = [(220.0, 1.3, 7.5), (475.0, 1.8, 4.0), (1200.0, 1.6, 3.5)];
 const BODY_CELLO: [(f32, f32, f32); 3] = [(105.0, 1.1, 5.5), (220.0, 1.5, 4.5), (650.0, 1.4, 3.5)];
 const BODY_CONTRABASS: [(f32, f32, f32); 3] =
-    [(62.0, 1.0, 5.5), (115.0, 1.3, 4.5), (380.0, 1.4, 3.0)];
+    [(62.0, 1.0, 2.5), (115.0, 1.3, 7.5), (380.0, 1.4, 3.0)];
 
 #[derive(Clone, Copy)]
 struct BowedPreset {
@@ -4257,6 +4257,7 @@ fn bowed_preset(program: u8) -> BowedPreset {
             vib_depth: 0.0038,
             attack_s: 0.125,
             bite: 0.085,
+            amp_trim: 0.85,
             ..BOWED_VIOLIN
         },
         44 => BowedPreset {

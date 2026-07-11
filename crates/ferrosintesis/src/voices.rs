@@ -4627,17 +4627,17 @@ pub struct BowedString {
     body: [Biquad; 3], // the instrument body's broad low resonances
     dc_x1: f32,        // DC blocker state (bowed loops accumulate DC)
     dc_y1: f32,
-    env: Adsr,      // bow pressure/velocity envelope (the onset + release)
-    max_vel: f32,   // bow speed (loudness / brightness)
-    slope: f32,     // bow force: narrows the friction curve (brighter/scratchier)
-    vib: Sine,      // pitch vibrato
-    vib_depth: f32, //
-    vib_delay: u32, // vibrato onset delay
-    grit: Biquad,   // bow-hair / rosin noise band (bandpass)
-    bow_noise: f32, // per-note grit level — no two bows are identical
-    scratch: f32,   // decaying attack "catch" intensity (the bite before the tone)
-    scratch_k: f32, // its per-sample decay
-    drift: Drift,   // slow human pitch wander (intonation is never dead-steady)
+    env: Adsr,       // bow pressure/velocity envelope (the onset + release)
+    max_vel: f32,    // bow speed (loudness / brightness)
+    slope: f32,      // bow force: narrows the friction curve (brighter/scratchier)
+    vib: Sine,       // pitch vibrato
+    vib_depth: f32,  //
+    vib_delay: u32,  // vibrato onset delay
+    grit: Biquad,    // bow-hair / rosin noise band (bandpass)
+    bow_noise: f32,  // per-note grit level — no two bows are identical
+    scratch: f32,    // decaying attack "catch" intensity (the bite before the tone)
+    scratch_k: f32,  // its per-sample decay
+    drift: Drift,    // slow human pitch wander (intonation is never dead-steady)
     amp_follow: f32, // output magnitude follower, for the release tail
     rng: Rng,
     t: u32,
@@ -4662,14 +4662,14 @@ impl BowedString {
         let f = key_freq(key);
         let mut rng = Rng::new(seed);
         let beta = 0.127; // bow ~1/8 from the bridge (arco bass idiom)
-        // Per-note character: the seed varies per voice (the engine's spawn
-        // counter), so drawing the bow's force, grit, scratch and vibrato here
-        // makes every stroke its own — the fix for "each note sounds the same".
+                          // Per-note character: the seed varies per voice (the engine's spawn
+                          // counter), so drawing the bow's force, grit, scratch and vibrato here
+                          // makes every stroke its own — the fix for "each note sounds the same".
         let u = |r: &mut Rng| r.white() * 0.5 + 0.5;
         let slope = 2.2 + 0.7 * u(&mut rng); // bow force / pressure this stroke
         let bow_noise = 0.05 + 0.06 * u(&mut rng); // how gritty this stroke is
-        // the sampled arco bite now owns the onset, so the model's own synth
-        // scratch is dialled right back — just a hint under the sample.
+                                                   // the sampled arco bite now owns the onset, so the model's own synth
+                                                   // scratch is dialled right back — just a hint under the sample.
         let scratch = 0.08 + 0.10 * u(&mut rng);
         let vib_rate = 4.6 * (1.0 + 0.16 * rng.white());
         let vib_depth = 0.0016 + 0.0016 * u(&mut rng);

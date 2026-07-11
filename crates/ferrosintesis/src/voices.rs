@@ -5494,12 +5494,66 @@ const BR_GROWL_SLEW: f32 = 0.05; // BR9 growl_cur de-zipper slew (τ ≈ 7 ms)
 const BR_SCOOP_CLAMP: (f32, f32) = (0.85, 1.19); // BR5 slur glide origin bounds
 const BR_PRESS_FLOOR: (f32, f32) = (0.30, 0.70); // BR9 CC11=0 is dark, not dead
 
+// BR12 — progressive-steepening cascade (the "rasp"/cuivré). A real brass note
+// "brasses up" when pushed: the pressure wave steepens toward a shock as it
+// travels the bore, cascading energy into a slow-rolloff high-harmonic tail whose
+// centroid climbs super-linearly with loudness. The single BR1 lip valve, driven
+// linearly by L and capped at BR_K_MAX for aliasing, has a rolloff too fast for
+// that tearing edge. BR12 adds a SECOND mild bias-tanh stage — a discrete analog
+// of cumulative bore steepening — blended in by an amount that (a) blooms with
+// loudness above a threshold (gated on `bright`, which spans ~0.3..1.0 in sustain
+// and >1 only under authored growl — so mp stays clean and forte/ff/growl rip),
+// (b) scales per-program by a brassiness constant B (trombone/trumpet rip, horn/
+// tuba barely), and (c) derates at high f0 so the alias floor (BR-O11) holds at
+// 2×. Naturals 56–61 only; the synth path (62/63, near-linear, no oversampling)
+// never reads it. This is the FORK-A change: it reshapes the harmonic rolloff
+// within the existing 2× envelope, it does NOT raise the drive past BR_K_MAX.
+const BR_CASCADE_MAX: f32 = 1.0; // max morph toward the two-stage cascade (full rip)
+const BR_CASCADE_SPLIT: f32 = 0.6; // stage-1 drive reduction at full cascade (the split)
+const BR_CASCADE_K2: f32 = 2.6; // stage-2 shaper index (the second knee)
+const BR_CASCADE_BIAS2: f32 = 0.55; // stage-2 bias fraction (less even, more buzz)
+const BR_CASCADE_RADIATE: f32 = 1.2; // BR12 out_lp cutoff opening at full cascade (lets rasp radiate)
+const BR_CASCADE_LO: f32 = 0.62; // bright below which no rasp (mp stays clean)
+const BR_CASCADE_HI: f32 = 1.02; // bright at which the rasp is fully open (ff/growl)
+const BR_CASCADE_F0: f32 = 440.0; // f0 (Hz) above which the rasp derates (alias guard)
+const BR_CASCADE_F0_FLOOR: f32 = 0.06; // min high-f0 derate (top-register rasp is Fork-B territory)
+
+/// Smoothstep 0→1 over [e0, e1]; flat outside. Used to gate the BR12 rasp on
+/// loudness so it blooms in over forte rather than switching on.
+#[inline]
+fn smoothstep(e0: f32, e1: f32, x: f32) -> f32 {
+    let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// BR1 bias-referenced tanh lip valve. Normalisation `÷ tanh(0.9·k)` keeps the
 /// positive peak ~k-invariant so the law changes *slope*, not loudness; the
 /// bias term breaks odd symmetry so even harmonics appear (asymmetric flow).
 #[inline]
 fn brass_valve(x: f32, k: f32, b: f32) -> f32 {
     ((x * k + b).tanh() - b.tanh()) / (0.9 * k).tanh()
+}
+
+/// BR12 lip valve + progressive-steepening cascade. `cascade_amt = 0` returns the
+/// bare BR1 valve exactly (the pre-BR12 sound). Otherwise it morphs toward a
+/// TWO-STAGE cascade that SPLITS the drive across two gentler knees rather than
+/// stacking a stage on an already-hard one — the naive stack barely hardens a
+/// forte note (stage 1 is already near hard-clip at k≈3), whereas splitting the
+/// drive gives the composite a genuinely slower, more shock-like harmonic rolloff:
+/// stage 1 softens as the cascade opens (`k·(1 − SPLIT·amt)`), then a second knee
+/// (`BR_CASCADE_K2`) re-hardens it. Both stages are k-normalised, so peak/loudness
+/// is preserved (BR-O2's "both windows audible" holds). Runs INSIDE the 2×
+/// oversampled sub-step, before decimation, so its extra harmonics meet the same
+/// 13.5 kHz anti-alias cliff as BR1 (bounded by BR-O11).
+#[inline]
+fn brass_rasp(x: f32, k: f32, b: f32, cascade_amt: f32) -> f32 {
+    let single = brass_valve(x, k, b);
+    if cascade_amt <= 0.0 {
+        return single;
+    }
+    let k1 = k * (1.0 - BR_CASCADE_SPLIT * cascade_amt);
+    let cascade = brass_valve(brass_valve(x, k1, b), BR_CASCADE_K2, b * BR_CASCADE_BIAS2);
+    single + cascade_amt * (cascade - single)
 }
 
 /// One BrassPlayer per human player: solo programs run 1, section 61 runs 3,
@@ -5528,6 +5582,7 @@ pub struct BrassSpec {
     pub k_min: f32,
     pub k_max: f32,
     pub bias: f32,                  // BR1/BR2 law
+    pub brassiness: f32,            // BR12 rasp/cuivré readiness (0 = no cascade; ~1 = rips easily)
     pub bore: [(f32, f32, f32); 2], // BR3 (Hz, Q, dB); Hz=0 → skip
     pub bell_fc: f32,
     pub bell_g: f32, // BR3
@@ -5565,6 +5620,7 @@ const BR_DEFAULTS: BrassSpec = BrassSpec {
     k_min: 0.8,
     k_max: 3.0,
     bias: 0.30,
+    brassiness: 0.0, // BR12 off by default; naturals opt in below, synth stays 0
     bore: [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)],
     bell_fc: 1500.0,
     bell_g: 1.0,
@@ -5594,6 +5650,7 @@ pub const BR_TRUMPET: BrassSpec = BrassSpec {
     k_min: 0.8,
     k_max: 3.2,
     bias: 0.30,
+    brassiness: 1.0, // BR12 the brightest, most readily "brassing up" voice
     bore: [(1200.0, 1.2, 5.0), (2900.0, 1.6, 3.0)],
     bell_fc: 1500.0,
     bell_g: 1.1,
@@ -5614,6 +5671,7 @@ pub const BR_TROMBONE: BrassSpec = BrassSpec {
     k_min: 0.8,
     k_max: 2.8,
     bias: 0.35,
+    brassiness: 1.0, // BR12 cylindrical bore + flare: rips as readily as the trumpet
     bore: [(600.0, 1.1, 5.0), (1500.0, 1.5, 2.5)],
     bell_fc: 800.0,
     bell_g: 0.8,
@@ -5634,6 +5692,7 @@ pub const BR_TUBA: BrassSpec = BrassSpec {
     k_min: 0.7,
     k_max: 2.2,
     bias: 0.40,
+    brassiness: 0.35, // BR12 wide conical bore barely brasses — a gentle edge only
     bore: [(230.0, 1.0, 6.0), (600.0, 1.4, 2.0)],
     bell_fc: 400.0,
     bell_g: 0.4,
@@ -5654,6 +5713,7 @@ pub const BR_MUTE_TPT: BrassSpec = BrassSpec {
     k_min: 0.8,
     k_max: 3.0,
     bias: 0.30,
+    brassiness: 0.9, // BR12 trumpet source rasps; the mute stage tames it downstream
     bore: [(1200.0, 1.2, 5.0), (2900.0, 1.6, 3.0)], // trumpet source
     bell_fc: 1500.0,
     bell_g: 1.1,
@@ -5675,6 +5735,7 @@ pub const BR_HORN: BrassSpec = BrassSpec {
     k_min: 0.7,
     k_max: 2.0,
     bias: 0.45,
+    brassiness: 0.5, // BR12 mellow until pushed hard — the cuivré only at fortissimo
     bore: [(340.0, 1.0, 6.0), (750.0, 1.4, 2.5)],
     bell_fc: 750.0,
     bell_g: 0.5, // darkest: hand-in-bell
@@ -5698,6 +5759,7 @@ pub const BR_SECTION: BrassSpec = BrassSpec {
     k_min: 0.8,
     k_max: 2.8,
     bias: 0.32,
+    brassiness: 0.7, // BR12 the ensemble edge, a touch held back vs a solo lead
     bore: [(800.0, 1.0, 4.0), (1800.0, 1.4, 2.5)],
     bell_fc: 1100.0,
     bell_g: 0.8,
@@ -5773,6 +5835,7 @@ pub struct Brass {
     bite: f32,      // BR2 tongue over-blow, decays t60 60 ms
     bite_decay: f32,
     kws: f32,           // current shaper index k (updated at CTRL rate)
+    cascade_amt: f32,   // BR12 rasp cascade wet-blend (updated at CTRL rate; 0 = off)
     env: Adsr,          // amplitude envelope
     benv: Adsr,         // BR2 brightness-bloom envelope (slow attack — the "waa")
     bloom: f32,         // BR2 per-sample cached benv level (the timbre driver)
@@ -5919,6 +5982,7 @@ impl Brass {
             bite: 0.7 * vn * vn,
             bite_decay: t60_mul(BR_BITE_T60, sr),
             kws: spec.k_min,
+            cascade_amt: 0.0,
             env: Adsr::new(
                 vel_attack(spec.env.0, vel),
                 spec.env.1,
@@ -5980,13 +6044,42 @@ impl Brass {
             + (self.spec.k_max - self.spec.k_min) * l
             + BR_GROWL_DRIVE * self.growl_cur)
             .min(BR_K_MAX);
+        // BR12 rasp cascade amount (natural only). Blooms with `bright` over
+        // [LO,HI] so mp stays clean and forte/ff/growl rip; scaled per-program by
+        // brassiness B; derated above BR_CASCADE_F0 so a high note's dense upper
+        // harmonics can't push fold-back past the 2× alias floor (BR-O11). Because
+        // `bright` carries the authored growl term, an aftertouch note rasps
+        // harder — the opt-in cuivré rides the existing growl seam for free.
+        self.cascade_amt = if self.oversample && self.spec.brassiness > 0.0 {
+            // quartic roll-off: full rasp through the common range (≤ ~A4 440 Hz),
+            // shedding fast above so a high note's dense upper harmonics stay under
+            // the 2× alias floor (BR-O11). The very top register is Fork-B territory.
+            let r2 = {
+                let r = BR_CASCADE_F0 / self.base_f.max(BR_CASCADE_F0);
+                r * r
+            };
+            let hf_derate = (r2 * r2).clamp(BR_CASCADE_F0_FLOOR, 1.0);
+            (self.spec.brassiness
+                * BR_CASCADE_MAX
+                * smoothstep(BR_CASCADE_LO, BR_CASCADE_HI, bright)
+                * hf_derate)
+                .clamp(0.0, BR_CASCADE_MAX)
+        } else {
+            0.0
+        };
         // BR2 radiated brightness: the flagship L scalar opens an output lowpass
         // so "loudness opens timbre" reaches the OUTPUT centroid (the lip law
         // alone is masked by the fixed bore/bell). Same L → same at C3, so the
         // BR-O9 program ordering is unaffected.
         if let Some(lp) = &mut self.out_lp {
-            let cut =
-                (self.spec.out_base * 2f32.powf(self.spec.out_oct * bright)).min(self.sr * 0.45);
+            // BR12: the cascade also OPENS the radiated output so its extra rasp
+            // harmonics actually leave the bell (the fixed out_lp corner would
+            // otherwise roll them off). Gated by cascade_amt (⇒ by loudness &
+            // program brassiness), so mp is unmoved and the pre-BR12 / flat-twin
+            // render is bit-identical (cascade_amt ≡ 0).
+            let open = 1.0 + BR_CASCADE_RADIATE * self.cascade_amt;
+            let cut = (self.spec.out_base * open * 2f32.powf(self.spec.out_oct * bright))
+                .min(self.sr * 0.45);
             lp.set_cutoff(cut, self.sr);
         }
         // BR5/BR7 per-player retune, composing every persistent offset
@@ -6041,8 +6134,11 @@ impl Voice for Brass {
             }
 
             // BR1 per-player lip valve, summed (each player intermodulates on
-            // its own — a shared shaper would be a section tell).
-            let (kws, bias, oversample) = (self.kws, self.spec.bias, self.oversample);
+            // its own — a shared shaper would be a section tell). BR12 folds the
+            // rasp cascade in per player too — the steepening is a per-lip effect,
+            // not a section-bus one.
+            let (kws, bias, oversample, cascade_amt) =
+                (self.kws, self.spec.bias, self.oversample, self.cascade_amt);
             let mut sum = 0.0;
             for p in &mut self.players {
                 if self.t < p.onset {
@@ -6058,10 +6154,13 @@ impl Voice for Brass {
                     }
                 };
                 let v = if oversample {
-                    // two sub-steps at sr2, decimated; keep the aligned sample
+                    // two sub-steps at sr2, decimated; keep the aligned sample.
+                    // BR12 rasp cascade runs HERE, before decimation, so its extra
+                    // harmonics see the same 13.5 kHz anti-alias cliff as BR1.
                     let mut y = 0.0;
                     for _ in 0..2 {
-                        let mut x = brass_valve(p.lip_lp.process(p.saw.next()), kws, bias);
+                        let mut x =
+                            brass_rasp(p.lip_lp.process(p.saw.next()), kws, bias, cascade_amt);
                         for d in p.decim.iter_mut() {
                             x = d.process(x);
                         }
@@ -6069,6 +6168,7 @@ impl Voice for Brass {
                     }
                     y
                 } else {
+                    // synth path: near-linear (k≈0.6), no cascade (cascade_amt≡0)
                     brass_valve(p.lip_lp.process(p.saw.next()), kws, bias)
                 };
                 sum += v * ramp;
@@ -9828,6 +9928,47 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// BR-O12 (the rasp blooms — BR12 acceptance): the progressive-steepening
+    /// cascade adds real high-harmonic energy at forte, stays clean at mp, and the
+    /// gap BLOOMS super-linearly with loudness (the cuivré "brasses up"). Measured
+    /// as a differential — trumpet vs a cascade-disabled twin (`brassiness = 0`,
+    /// i.e. the pre-BR12 sound), same seed — so the ratio isolates the cascade from
+    /// everything else (the BR-O6 idiom). Fixed pitch C4 (261.6 Hz, below the
+    /// high-f0 derate knee so the full cascade is live); high band ≥ 3.5 kHz sits
+    /// above the trumpet's top bore formant (2.9 kHz), clear of the static
+    /// structure the 2026.07.08 lesson warns about.
+    #[test]
+    fn brass_o12_rasp_blooms() {
+        let sr = 44100.0;
+        // cascade-disabled twin: brassiness 0 ⇒ brass_rasp returns the bare BR1
+        // valve ⇒ byte-identical to the pre-BR12 render for this spec.
+        let flat: &'static BrassSpec = Box::leak(Box::new(BrassSpec {
+            brassiness: 0.0,
+            ..BR_TRUMPET
+        }));
+        let hi = |spec: &'static BrassSpec, vel: u8| {
+            let mut v = Brass::new(spec, 60, vel, sr, 7); // C4, full-cascade register
+            let mut buf = vec![0f32; (1.4 * sr) as usize];
+            v.render(&mut buf);
+            let seg = &buf[(0.4 * sr) as usize..(1.2 * sr) as usize];
+            hp_rms(seg, sr, 5000.0) / rms(seg).max(1e-9)
+        };
+        let ratio_f = hi(&BR_TRUMPET, 120) / hi(flat, 120).max(1e-9); // forte: rips
+        let ratio_p = hi(&BR_TRUMPET, 80) / hi(flat, 80).max(1e-9); // mp: clean
+        assert!(
+            ratio_f >= 1.18,
+            "forte rasp adds high-harmonic energy: on/off {ratio_f:.3} (need ≥ 1.18)"
+        );
+        assert!(
+            ratio_p <= 1.06,
+            "mp must stay clean (rasp gated off): on/off {ratio_p:.3} (need ≤ 1.06)"
+        );
+        assert!(
+            ratio_f >= ratio_p + 0.12,
+            "the rasp must BLOOM with loudness: forte {ratio_f:.3} vs mp {ratio_p:.3}"
+        );
     }
 
     /// BR-O13 (DC guard, guard): the biased-tanh DC is blocked (`dcb` HP 25 Hz).

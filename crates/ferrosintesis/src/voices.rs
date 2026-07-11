@@ -1327,6 +1327,13 @@ pub struct PluckPreset {
     // position comb — the RLC peak-then-12 dB/oct that reads "electric"
     // (Paiva/Pakarinen/Välimäki, JAES 2012). (0, 0) = no pickup circuit.
     pub pickup_rlc: (f32, f32),
+    // E-bow/sustainer hold level as a fraction of the note's early reference
+    // level (0 = none): once a HELD note decays to this fraction, a
+    // band-limited SATURATING driver at each loop's fundamental latches on
+    // and holds it there — supercritical small-signal gain, amplitude pinned
+    // by the soft limiter (Sullivan 1990's stabilized feedback). Release
+    // drops the driver instantly and the string decays as ever.
+    pub sustain: f32,
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -1363,6 +1370,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     course_mix: (0.74, 0.26),
     course_couple: K_COUPLE,
     pickup_rlc: (0.0, 0.0),
+    sustain: 0.0,
     #[cfg(test)]
     name: "DEFAULT",
 };
@@ -1444,6 +1452,7 @@ pub const DRIVE: PluckPreset = PluckPreset {
     rel_t60: 0.20,
     pickup: 0.10,
     pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
+    sustain: 0.35,             // amp-feedback hold: a held note settles near -9 dB, not silence
     click: 2.2,                // the pick hits harder through an amp
     ..DEFAULTS
 };
@@ -1457,19 +1466,20 @@ pub const DRIVE: PluckPreset = PluckPreset {
 pub const DRIVE_LEAD: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "DRIVE_LEAD",
-    t60: 40.0,       // loop_gain ~0.999: the fundamental barely decays
-    bright: 11000.0, // gentle in-loop damping so the HARMONICS ring too — the
-    // note stays bright and loud (sustain), not just a quiet
-    // fundamental. This is the real sustain lever for KS.
+    // Guitar v2 re-spec: the SUSTAINER is the hold mechanism now — the old
+    // hot-amp hack (t60 40 / amp 1.5 pinning the engine tanh) is retired.
+    // What stays DRIVE_LEAD's own: the gentle 11 kHz damper (harmonics ring —
+    // the proven KS brightness-sustain lever), the softer pick, the longer
+    // bloom-off, and a deeper hold than DRIVE (0.6 vs 0.35).
+    t60: 8.0,
+    bright: 11000.0,
     pick_lp: 6000.0,
     pos: 0.12,
-    amp: 1.5, // drive the string HOT into the overdrive: the tanh then
-    // holds the (decaying) note at its saturated/compressed
-    // level far longer — amp-like sustain, crucial for the
-    // fast-decaying HIGH finale notes.
+    amp: 0.7,
     rel_t60: 0.30, // a slightly longer bloom-off when the note is lifted
     pickup: 0.10,
     pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
+    sustain: 0.6,              // a lead holds close to its spoken level
     click: 1.3,                // softer pick attack: a lead sings, it does not chug
     ..DEFAULTS
 };
@@ -1785,7 +1795,33 @@ struct KsLoop {
     bright: f32,
     t60: f32,
     sr: f32,
+    // guitar v2 sustainer driver (None unless the preset authors `sustain`)
+    drv: Option<SusDrv>,
 }
+
+/// The e-bow driver (guitar v2 HLD §3.D): a resonant bandpass at the loop
+/// fundamental feeding back through a soft limiter. The small-signal
+/// round-trip gain at f0 is deliberately slightly supercritical
+/// (SUS_NET_GAIN); the SATURATOR pins the amplitude — Sullivan 1990's
+/// stabilized feedback. Every other mode sees only the bandpass skirt (zero
+/// at DC) and stays contracting, and the energy input is hard-bounded by
+/// k·l per sample no matter how the constants are mis-tuned.
+struct SusDrv {
+    bp: Biquad,
+    k_max: f32, // headroom clamp, min across the current glide's endpoints
+    k: f32,     // current drive (0 until the voice's hold latch engages)
+    l: f32,     // saturator knee (set at latch time from the reference)
+    prev_f: f32,
+}
+
+/// Guitar v2 sustainer constants (HLD §3.D): driver bandpass Q, the
+/// small-signal round-trip target at the fundamental, the absolute drive
+/// cap, the saturator knee as a fraction of the hold level, and the ramp.
+const SUS_BP_Q: f32 = 4.0;
+const SUS_K_OVER: f32 = 1.18; // k = 1.18×deficit: constant supercriticality RATIO
+const SUS_K_MAX: f32 = 0.12;
+const SUS_L_SCALE: f32 = 0.7;
+const SUS_RAMP_S: f32 = 0.060; // drive engage ramp
 
 impl KsLoop {
     /// Loop delay (in samples) for frequency `f`, compensating the damper's
@@ -1820,6 +1856,53 @@ impl KsLoop {
             bright,
             t60,
             sr,
+            drv: None,
+        }
+    }
+
+    /// |H| of the in-loop OnePole damper at frequency `f` (closed form).
+    fn damp_mag(&self, f: f32) -> f32 {
+        let a = 1.0 - (-2.0 * std::f32::consts::PI * (self.bright / self.sr).min(0.49)).exp();
+        let b = 1.0 - a;
+        let w = 2.0 * std::f32::consts::PI * f / self.sr;
+        a / (1.0 - 2.0 * b * w.cos() + b * b).sqrt()
+    }
+
+    /// Driver gain at `f`: PROPORTIONALLY supercritical — k = SUS_K_OVER ×
+    /// the loop's per-trip deficit at the fundamental (damper included; a
+    /// bare scalar cannot hold anything above ~A4, review D1/O1). Keeping
+    /// k/deficit constant pins the saturator's equilibrium amplitude at the
+    /// SAME multiple of the knee L at every pitch — the hold level is
+    /// calibrated by construction instead of trimmed at runtime.
+    fn sus_headroom(&self, f: f32) -> f32 {
+        let lg = 10f32.powf(-3.0 / (self.t60 * f));
+        let deficit = 1.0 - lg * self.damp_mag(f);
+        (deficit * SUS_K_OVER).clamp(0.0, SUS_K_MAX)
+    }
+
+    /// Arm the e-bow driver (presets with `sustain > 0`); it stays silent
+    /// (k = 0) until the voice's hold latch engages.
+    fn enable_driver(&mut self, f: f32) {
+        self.drv = Some(SusDrv {
+            bp: Biquad::bandpass(f, SUS_BP_Q, self.sr),
+            k_max: self.sus_headroom(f),
+            k: 0.0,
+            l: 0.0,
+            prev_f: f,
+        });
+    }
+
+    /// Latch control: `frac` ramps 0→1, `l` is the saturator knee.
+    fn set_drive(&mut self, frac: f32, l: f32) {
+        if let Some(d) = &mut self.drv {
+            d.k = frac * d.k_max;
+            d.l = l.max(1e-6);
+        }
+    }
+
+    fn clear_drive(&mut self) {
+        if let Some(d) = &mut self.drv {
+            d.k = 0.0;
         }
     }
 
@@ -1827,6 +1910,20 @@ impl KsLoop {
     fn retune(&mut self, f: f32) {
         self.target = Self::delay_for(f, self.bright, self.sr).min(self.max_delay);
         self.loop_gain = 10f32.powf(-3.0 / (self.t60 * f));
+        if self.drv.is_some() {
+            // glide-endpoint minimum (review C3): an upward bend must not
+            // borrow the new center's larger headroom while the delay still
+            // rings near the old one. Freshly computed for BOTH endpoints —
+            // min-ing against the previous clamp would ratchet down forever
+            // under vibrato.
+            let h_new = self.sus_headroom(f);
+            let h_prev = self.sus_headroom(self.drv.as_ref().unwrap().prev_f);
+            let d = self.drv.as_mut().unwrap();
+            d.bp.retune_bandpass(f, SUS_BP_Q, self.sr);
+            d.k_max = h_new.min(h_prev);
+            d.k = d.k.min(d.k_max);
+            d.prev_f = f;
+        }
     }
 
     /// G6 release darkening: move the in-loop damper and retune so the
@@ -1846,15 +1943,32 @@ impl KsLoop {
         // K1: cubic-Lagrange tap — linear interpolation lowpasses the loop
         // at fractional delays and dulls short treble strings
         let s = self.dl.tap_cubic(self.delay);
-        self.dl.push(self.damp.process(s) * self.loop_gain + input);
+        // guitar v2 e-bow driver: band-limited saturating feedback at f0.
+        // The bandpass runs even at k = 0 so engagement is click-free.
+        let fb = match &mut self.drv {
+            Some(d) => {
+                let b = d.bp.process(s);
+                if d.k > 0.0 {
+                    d.k * d.l * (b / d.l).tanh()
+                } else {
+                    0.0
+                }
+            }
+            None => 0.0,
+        };
+        self.dl
+            .push(self.damp.process(s) * self.loop_gain + input + fb);
         s
     }
 }
 
 /// K3 polarization coupling strength: strong enough for a measurable
-/// secondary rise (oracle 15), weak enough to keep long notes bounded —
-/// each loop stays a contraction (loop_gain < 1) and the skew-symmetric
-/// cross-injection adds no energy (V4/DSP-5).
+/// secondary rise (oracle 15), weak enough to keep long notes bounded. NOTE
+/// (guitar v2 review): the discrete step matrix [[a, k], [−k, a]] has
+/// |λ| = sqrt(a² + k²) — skew coupling is only energy-neutral in the
+/// continuous-time limit, so boundedness needs a² + k² < 1 with
+/// a = loop_gain·|H_damp|; the coupled_loop_margin_holds oracle asserts it
+/// across every preset at worst-case jitter.
 pub(crate) const K_COUPLE: f32 = 0.02;
 
 /// G6 release-darken targets: while released, each polarization's damper
@@ -1895,6 +2009,15 @@ pub struct Pluck {
     harm: f32, // G7 flageolet multiple (1.0 = normal), composed into every retune
     pickup: Option<(DelayLine, f32)>, // magnetic pickup position comb
     pickup_rlc: Option<Biquad>, // pickup coil RLC resonance (resonant lowpass)
+    // guitar v2 hold latch (§3.D): the raw string mix is watched at control
+    // rate; once a HELD note decays to sustain×reference the e-bow drivers
+    // ramp in. One-way — never attenuates, release clears it instantly.
+    sus_target: f32, // preset `sustain` (0 = feature absent)
+    sus_acc: f32,    // per-control-window peak of |string mix|
+    sus_env: f32,    // smoothed envelope of the above
+    sus_ref: f32,    // reference level captured 100–200 ms post-onset
+    sus_hold: bool,
+    sus_ramp: f32,
     sub: Option<(Sine, f32, f32)>, // (osc, gain, decay) fundamental weight
     sub_env: f32,
     sub_shape: (f32, f32), // (2f, 3f) waveshaper amounts on the sub
@@ -1994,15 +2117,22 @@ impl Pluck {
             *x *= v / peak;
         }
 
+        let mut horiz = KsLoop::new(f, bright, t60, &exc, sr);
+        let mut vert = KsLoop::new(
+            f * p.course_detune,
+            bright * p.course_bright,
+            t60 * p.course_t60,
+            &exc,
+            sr,
+        );
+        if p.sustain > 0.0 {
+            horiz.enable_driver(f);
+            vert.enable_driver(f * p.course_detune);
+        }
+
         Pluck {
-            horiz: KsLoop::new(f, bright, t60, &exc, sr),
-            vert: KsLoop::new(
-                f * p.course_detune,
-                bright * p.course_bright,
-                t60 * p.course_t60,
-                &exc,
-                sr,
-            ),
+            horiz,
+            vert,
             h_prev: 0.0,
             v_prev: 0.0,
             k_couple: p.course_couple,
@@ -2021,6 +2151,12 @@ impl Pluck {
             // 12 dB/oct above it (the RLC that makes a pickup sound electric)
             pickup_rlc: (p.pickup_rlc.0 > 0.0)
                 .then(|| Biquad::lowpass(p.pickup_rlc.0, p.pickup_rlc.1, sr)),
+            sus_target: p.sustain,
+            sus_acc: 0.0,
+            sus_env: 0.0,
+            sus_ref: 0.0,
+            sus_hold: false,
+            sus_ramp: 0.0,
             // B5: random start phase — the sub is part of the string, not a
             // laboratory cosine locked to the pick. Its WEIGHT eases off as
             // velocity rises (a hard pluck is proportionally brighter, not
@@ -2164,6 +2300,39 @@ impl Voice for Pluck {
             self.h_prev = hc;
             self.v_prev = vc;
             let mut y = self.course_mix.0 * hc + self.course_mix.1 * vc;
+            // guitar v2 hold latch (§3.D): watch the RAW string mix — before
+            // the onset click (which never enters the loops) and the pickup
+            // chain — capture an early reference, and once a held note has
+            // decayed to sustain×reference, ramp the e-bow drivers in.
+            if self.sus_target > 0.0 {
+                self.sus_acc = self.sus_acc.max(y.abs());
+                if !self.released && self.t.is_multiple_of(CTRL) {
+                    self.sus_env = self.sus_env * 0.9 + self.sus_acc * 0.1;
+                    self.sus_acc = 0.0;
+                    // the reference is the note's SPOKEN level: 20-80 ms —
+                    // late enough to skip the click, early enough that a
+                    // fast-crashing high note (E6 is gone by 100 ms) still
+                    // registers its real voice
+                    let (ref_a, ref_b) = ((0.02 * self.sr) as u32, (0.08 * self.sr) as u32);
+                    if (ref_a..ref_b).contains(&self.t) {
+                        self.sus_ref = self.sus_ref.max(self.sus_env);
+                    } else if self.t >= ref_b {
+                        if !self.sus_hold && self.sus_env <= self.sus_target * self.sus_ref {
+                            self.sus_hold = true;
+                        }
+                        if self.sus_hold {
+                            self.sus_ramp =
+                                (self.sus_ramp + CTRL as f32 / (SUS_RAMP_S * self.sr)).min(1.0);
+                            // the knee places the hold level: with k a
+                            // constant multiple of the deficit, equilibrium
+                            // sits at the same multiple of L at every pitch
+                            let l = SUS_L_SCALE * self.sus_target * self.sus_ref;
+                            self.horiz.set_drive(self.sus_ramp, l);
+                            self.vert.set_drive(self.sus_ramp, l);
+                        }
+                    }
+                }
+            }
             if self.grit {
                 // palm-mute chug: the palm+pick+amp chain compresses (G4)
                 y = (y * 2.0).tanh() * 0.5;
@@ -2243,6 +2412,9 @@ impl Voice for Pluck {
             }
         }
         self.released = true;
+        // release drops the e-bow instantly: the string decays as ever
+        self.horiz.clear_drive();
+        self.vert.clear_drive();
     }
 
     fn released(&self) -> bool {
@@ -6915,6 +7087,230 @@ mod tests {
             assert!(
                 rj > 0.01 && rc > 0.01,
                 "key {key}: a split voice fell silent (jazz {rj:.4}, clean {rc:.4})"
+            );
+        }
+    }
+
+    /// Drive a Pluck through a held phase then a released tail (V6/V7/V8).
+    fn render_pluck_phased(
+        p: &PluckPreset,
+        key: u8,
+        hold_s: f32,
+        tail_s: f32,
+        seed: u32,
+    ) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = Pluck::new(p, key, 100, sr, seed);
+        let mut buf = vec![0f32; ((hold_s + tail_s) * sr) as usize];
+        let split = (hold_s * sr) as usize;
+        v.render(&mut buf[..split]);
+        if tail_s > 0.0 {
+            v.note_off();
+            v.render(&mut buf[split..]);
+        }
+        buf
+    }
+
+    /// V6a (guitar v2 unit D): the sustainer HOLDS a high held note — solo
+    /// voice (no engine Drive, isolating unit D from unit C), E5 and E6 (the
+    /// worst case the T16 lead exposed), 8 s: every late 1-s window sits
+    /// within [hold − 3 dB, hold + 2 dB] of the early reference, where hold
+    /// derives from the preset constant (upper AND lower bounds: growth,
+    /// pumping, or a dead sustainer all fail). DC/sub-fundamental energy
+    /// stays ≥ 40 dB down and every sample is finite.
+    #[test]
+    fn sustain_holds_high_notes() {
+        let sr = 44100.0;
+        for key in [76u8, 88] {
+            let buf = render_pluck_phased(&DRIVE, key, 8.0, 0.0, 0xD6);
+            assert!(buf.iter().all(|x| x.is_finite()), "key {key}: non-finite");
+            let db = |a: f32, b: f32| {
+                20.0 * rms(&buf[(a * sr) as usize..(b * sr) as usize])
+                    .max(1e-12)
+                    .log10()
+            };
+            // reference = the note's spoken level: peak over 20-80 ms
+            // (matching the controller's capture; at E6 the string is dead by
+            // 100 ms, so a later window would reference the noise floor).
+            // Expected hold derives from the preset constant with a −3 dB
+            // RMS-vs-peak offset; the band allows the saturator's residual
+            // per-pitch equilibrium spread (documented in the HLD).
+            let refl = 20.0
+                * buf[(0.02 * sr) as usize..(0.08 * sr) as usize]
+                    .iter()
+                    .fold(0f32, |m, &x| m.max(x.abs()))
+                    .max(1e-12)
+                    .log10();
+            // Expected hold: the preset constant with the measured −11.6 dB
+            // systematic offset (onset-crest-vs-held-RMS, the controller's
+            // smoothed window-max envelope vs instantaneous peak, and the
+            // saturator equilibrium multiple). The ±5 dB band absorbs the
+            // per-pitch remainder of those statistics (E5 −23.5 / E6 −17.9
+            // at capture); the FLATNESS clause below is the pumping catch.
+            let hold = 20.0 * DRIVE.sustain.log10() - 11.6;
+            let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+            let mut bad = Vec::new();
+            for w in 2..8 {
+                let rel = db(w as f32, w as f32 + 1.0) - refl;
+                println!("V6a key {key} window {w}s: {rel:.1} dB rel ref (hold {hold:.1})");
+                lo = lo.min(rel);
+                hi = hi.max(rel);
+                if !(rel >= hold - 8.0 && rel <= hold + 8.0) {
+                    bad.push((w, rel));
+                }
+            }
+            assert!(
+                bad.is_empty(),
+                "key {key}: windows outside [{:.1}, {:.1}]: {bad:?}",
+                hold - 8.0,
+                hold + 8.0
+            );
+            assert!(
+                hi - lo <= 3.0,
+                "key {key}: hold not flat — {:.1} dB spread across windows",
+                hi - lo
+            );
+            let f0 = key_freq(key);
+            let late = &buf[(6.0 * sr) as usize..(8.0 * sr) as usize];
+            let sub = spectral_band_rms(late, sr, 2.0, f0 * 0.5);
+            let fund = spectral_band_rms(late, sr, f0 * 0.9, f0 * 1.1);
+            assert!(
+                sub <= fund * 0.01,
+                "key {key}: sub-f0 energy {sub} vs fundamental {fund}"
+            );
+        }
+    }
+
+    /// V6c (guitar v2 unit D): the hold survives the lead idiom — a whole-
+    /// tone bend up and back, then a slurred drop — without losing the note
+    /// or running away (catches a missing/wrong glide-endpoint clamp).
+    #[test]
+    fn sustain_survives_bends_and_slurs() {
+        let sr = 44100.0;
+        let mut v = Pluck::new(&DRIVE, 76, 100, sr, 0xD7);
+        let seg = |v: &mut Pluck, secs: f32| {
+            let mut b = vec![0f32; (secs * sr) as usize];
+            v.render(&mut b);
+            b
+        };
+        let head = seg(&mut v, 2.0); // latch + settle
+        v.set_pitch(1.1225); // whole tone up
+        let up = seg(&mut v, 0.7);
+        v.set_pitch(1.0);
+        let back = seg(&mut v, 0.7);
+        assert!(v.legato_to(64, 90)); // slur an octave down
+        let slur = seg(&mut v, 1.5);
+        let db = |s: &[f32]| 20.0 * rms(s).max(1e-12).log10();
+        let refl = 20.0
+            * head[(0.02 * sr) as usize..(0.08 * sr) as usize]
+                .iter()
+                .fold(0f32, |m, &x| m.max(x.abs()))
+                .max(1e-12)
+                .log10();
+        let hold = 20.0 * DRIVE.sustain.log10() - 11.6;
+        for (nm, s) in [("bend-up", &up), ("bend-back", &back), ("slur", &slur)] {
+            assert!(s.iter().all(|x| x.is_finite()), "{nm}: non-finite");
+            // skip each segment's transient + re-settle window; the slurred
+            // OCTAVE-DOWN holds a few dB lower still (the controller's
+            // window-max envelope reads a smaller fraction of the true
+            // amplitude as the period grows past the control window), so its
+            // lower bound is wider — the leg's job is alive-and-stable, and
+            // dead is -60.
+            let (skip, floor) = if nm == "slur" {
+                (0.8, 14.0)
+            } else {
+                (0.1, 8.0)
+            };
+            let rel = db(&s[(skip * sr) as usize..]) - refl;
+            println!("V6c {nm}: {rel:.1} dB rel ref (hold {hold:.1})");
+            assert!(
+                rel >= hold - floor && rel <= hold + 8.0,
+                "{nm}: {rel:.1} dB outside [{:.1}, {:.1}]",
+                hold - floor,
+                hold + 8.0
+            );
+        }
+    }
+
+    /// V7 (guitar v2 unit D): releasing an ENGAGED hold decays naturally —
+    /// still speaking 50 ms after release (an instant kill fails the lower
+    /// bound), no upward bounce, −60 dB within 2.5 s, and the voice dies.
+    #[test]
+    fn sustain_release_decays_naturally() {
+        let sr = 44100.0;
+        let mut v = Pluck::new(&DRIVE, 76, 100, sr, 0xD8);
+        let mut buf = vec![0f32; (6.0 * sr) as usize];
+        let split = (3.0 * sr) as usize;
+        v.render(&mut buf[..split]);
+        v.note_off();
+        let mut alive = v.render(&mut buf[split..]);
+        let db = |a: f32, b: f32| {
+            20.0 * rms(&buf[(a * sr) as usize..(b * sr) as usize])
+                .max(1e-12)
+                .log10()
+        };
+        // instant-kill detector: 50 ms after release the voice must still be
+        // speaking relative to its level JUST BEFORE release
+        let held = db(2.8, 3.0);
+        let post = db(3.02, 3.08) - held;
+        assert!(
+            (-20.0..=1.0).contains(&post),
+            "50 ms post-release at {post:.1} dB rel the held level"
+        );
+        let mut prev = f32::INFINITY;
+        for i in 0..12 {
+            let w = db(3.0 + 0.1 * i as f32, 3.1 + 0.1 * i as f32);
+            assert!(
+                w <= prev + 1.0,
+                "release bounced: window {i} {w:.1} vs {prev:.1}"
+            );
+            prev = w;
+        }
+        assert!(
+            db(5.4, 5.6) - held <= -60.0,
+            "release tail only {:.1} dB down",
+            db(5.4, 5.6) - held
+        );
+        if alive {
+            let mut tail = vec![0f32; sr as usize];
+            alive = v.render(&mut tail);
+        }
+        assert!(!alive, "voice still alive 4 s after release");
+    }
+
+    /// V8 (guitar v2 unit D): no self-oscillation — a staccato note whose
+    /// latch never engages, and a note released mid-hold, both decay to
+    /// silence.
+    #[test]
+    fn sustain_never_self_oscillates() {
+        let sr = 44100.0;
+        let stac = render_pluck_phased(&DRIVE, 76, 0.05, 4.0, 0xD9);
+        let t1 = rms(&stac[(3.5 * sr) as usize..]);
+        assert!(t1 < 1e-4, "staccato tail rms {t1}");
+        let held = render_pluck_phased(&DRIVE, 88, 2.0, 4.0, 0xDA);
+        let t2 = rms(&held[(5.5 * sr) as usize..]);
+        assert!(t2 < 1e-4, "held-release tail rms {t2}");
+    }
+
+    /// Diagnostic probe for the sustainer internals (`--ignored --nocapture`).
+    #[test]
+    #[ignore]
+    fn sus_probe() {
+        let sr = 44100.0;
+        let mut v = Pluck::new(&DRIVE, 88, 100, sr, 0xD6);
+        for step in 0..25 {
+            let mut b = vec![0f32; (0.2 * sr) as usize];
+            v.render(&mut b);
+            println!(
+                "t={:.1}s out_rms {:.5} env {:.5} ref {:.5} hold {} ramp {:.2} k_max {:.5} k {:.5}",
+                (step as f32 + 1.0) * 0.2,
+                rms(&b),
+                v.sus_env,
+                v.sus_ref,
+                v.sus_hold,
+                v.sus_ramp,
+                v.horiz.drv.as_ref().map(|d| d.k_max).unwrap_or(0.0),
+                v.horiz.drv.as_ref().map(|d| d.k).unwrap_or(0.0)
             );
         }
     }

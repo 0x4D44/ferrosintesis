@@ -2518,6 +2518,47 @@ mod tests {
         );
     }
 
+    /// V6b (guitar v2): the held-lead steady state stays HARMONIC through the
+    /// engine — the sustainer converges toward the fundamental (by design;
+    /// the damper's tilted loss stands), and the Drive's tanh re-harmonizes
+    /// it. A naked-sine pass (the T16 "wooden glockenspiel" failure mode)
+    /// fails the 2f0 pin.
+    #[test]
+    fn sustained_lead_stays_harmonic_through_drive() {
+        let sr = 44100.0;
+        let events = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 29 }),
+            // silence the default echo send so the pin reads the dry voice
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 94,
+                    val: 0,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 76,
+                    vel: 100,
+                },
+            ),
+        ];
+        let out = left(&render(&test_song(events, 3.2), &test_opts(sr)).0);
+        let seg = &out[(2.5 * sr) as usize..(3.0 * sr) as usize];
+        let f0 = 659.26;
+        let m1 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+        let m2 = crate::testutil::mag_at(seg, sr, 2.0 * f0);
+        let rel = 20.0 * (m2 / m1).log10();
+        println!("V6b: 2f0 at {rel:.1} dB rel f0 in the 2.5–3.0 s window");
+        assert!(
+            rel >= -20.0,
+            "held lead lost its harmonics: 2f0 {rel:.1} dB rel f0"
+        );
+    }
+
     /// V5 (guitar v2): the sag stage — differential AND temporal. The same
     /// −30 dB-decaying 220 Hz tone runs through g_max = 4 (shipped) vs
     /// g_max = 1 (sag inert): (a) the first 30 ms match within 1 dB — the

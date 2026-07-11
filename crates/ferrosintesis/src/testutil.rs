@@ -778,11 +778,17 @@ mod guards {
         // Re-captured after guitar v2 unit B (the 26/27 split): ch 2 is now
         // the JAZZ hollowbody — warmer and rounder (centroid 1216 -> 855 Hz)
         // by design; every other row is BIT-EXACT vs the unit-C capture.
+        // Re-captured after guitar v2 unit D (the string sustainer): ch 4's
+        // held notes now hold their fundamental instead of dying (centroid
+        // 727 -> 468 Hz, RMS ~unchanged) — the V6b oracle pins the post-Drive
+        // 2f0 content so the held tone stays harmonic, and DRIVE_LEAD's
+        // 11 kHz damper is the brighter opt-in lead. All other rows
+        // BIT-EXACT vs the unit-B capture.
         (0, -41.28, 1020.2),
         (1, -42.07, 2020.8),
         (2, -41.49, 855.0),
         (3, -39.97, 485.9),
-        (4, -28.28, 726.6),
+        (4, -27.95, 468.1),
         (5, -24.61, 294.6),
         (6, -27.13, 194.4),
         (7, -24.35, 567.6),
@@ -792,7 +798,7 @@ mod guards {
         (9, -22.51, 726.7),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 1.25090;
+    const GOLDEN_MASTER_PEAK: f32 = 1.25446;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

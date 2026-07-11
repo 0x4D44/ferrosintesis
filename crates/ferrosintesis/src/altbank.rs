@@ -59,9 +59,10 @@ const PIZZ: PluckPreset = PluckPreset {
     course_bright: 1.15,
     course_mix: (0.74, 0.26),
     course_couple: crate::voices::K_COUPLE,
-    // v0.15 electric-guitar v2 field: explicitly inert (no pickup circuit) —
-    // a pizzicato is acoustic and frozen.
+    // v0.15 electric-guitar v2 fields: explicitly inert (no pickup circuit,
+    // no sustainer) — a pizzicato is acoustic and frozen.
     pickup_rlc: (0.0, 0.0),
+    sustain: 0.0,
     #[cfg(test)]
     name: "PIZZ",
 };

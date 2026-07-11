@@ -58,6 +58,7 @@ ALBUMS: dict[str, tuple[str, str, str]] = {
     "albums/gpt5-6/Atlas of Becoming": ("Atlas of Becoming", "GPT-5.6",      "Cinematic / Progressive / Instrumental"),
     "albums/gpt5-6/The Architecture of Air":
                                ("The Architecture of Air", "GPT-5.6", "Cathedral Organ / Cinematic / Instrumental"),
+    "albums/gpt5-6/Bright Matter":    ("Bright Matter",    "GPT-5.6",          "Progressive Electronic / Instrumental"),
     "albums/opus4-8":                 ("VIGIL",            "Claude Opus 4.8",  "Neo-Classical / Instrumental"),
     "albums/opus4-8/amarok":          ("RIVERWAKE",        "Claude Opus 4.8",  "Progressive Folk / Instrumental"),
     "demos/synth_feature_showcase":    ("Synth Feature Showcase", "OpenAI Codex", "Synth Demo / Instrumental"),

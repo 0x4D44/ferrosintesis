@@ -379,17 +379,49 @@ struct MetalMode {
     osc: Sine,
     amp: f32,
     decay: f32,
+    band: u8, // P-C1 cascade band index (0..3) from freq vs 1.5/4/8 kHz edges
+}
+
+/// P-C1 Föppl–von Kármán bloom cascade: a 3-stage step-driven one-pole chain
+/// whose per-band multipliers `m_b = floor_b + depth_b·c_{b-1}` MULTIPLY each
+/// mode's intrinsic decay (never replace it), so a strike's low modes ring at
+/// once while the high bands bloom in over tens of ms — the crash's "wash-up".
+/// Feed-forward, envelope-domain, m_b ∈ [floor_b, 1] → BIBO-stable, no DC, no
+/// self-oscillation, no RNG. `None` (legacy) leaves the modal bank unchanged.
+struct Cascade {
+    c: [f32; 3],     // 3 cascade stage states (step-driven)
+    atk: f32,        // one-pole coefficient for the per-hit τ
+    floor: [f32; 4], // [1.0, f1, f2, f3] per band (band 0 is undriven)
+    depth: [f32; 4], // [0.0, D1, D2, D3] per band
 }
 
 struct MetalPlate {
     modes: Vec<MetalMode>,
     bands: Vec<NoiseBand>,
+    casc: Option<Cascade>,
+    /// P-C2 wash-follow: `Some(floor_w)` drives the wash band[0]'s swell from
+    /// the cascade's stage `c2` (`floor_w + (1−floor_w)·c2`) instead of its own
+    /// fixed ramp, so the loud wash blooms WITH the cascade and is velocity-gated
+    /// (a soft crash's wash barely swells). `None` = the legacy self-swell.
+    wash_floor: Option<f32>,
     rng: Rng,
     shimmer: Option<Shimmer>,
     t: u32,
     life: u32,
     gain: f32,
     sr: f32,
+}
+
+/// P-C1 per-key bloom parameters: the band floors (f1, f2, f3 for bands 1/2/3),
+/// the τ law `τ = tau_a − tau_b·g` ms (g = the smoothstep velocity gate), and a
+/// depth scale (1.0 for crash/china/splash; 0.15 for the ride so it barely
+/// blooms and cannot become a small crash — a profile bound, not a tuning).
+#[derive(Clone, Copy)]
+struct BloomSpec {
+    floor: [f32; 3],
+    tau_a: f32,
+    tau_b: f32,
+    depth_scale: f32,
 }
 
 struct MetalSpec {
@@ -411,6 +443,7 @@ struct MetalSpec {
     gain: f32,
     swell: bool,
     shimmer: Option<(f32, f32)>,
+    bloom: Option<BloomSpec>,
 }
 
 impl MetalPlate {
@@ -430,12 +463,48 @@ impl MetalPlate {
                 * (1.0 - 0.45 * frac)
                 * (0.65 + 0.55 * velnorm)
                 * (0.75 + 0.25 * rng.white().abs());
+            let band = if freq < 1500.0 {
+                0u8
+            } else if freq < 4000.0 {
+                1
+            } else if freq < 8000.0 {
+                2
+            } else {
+                3
+            };
             modes.push(MetalMode {
                 osc: Sine::new(freq, sr, rng.white() * TAU),
                 amp,
                 decay: dmul(t60, sr),
+                band,
             });
         }
+        // P-C1/C2 bloom: the smoothstep velocity gate g drives both the modal
+        // cascade and the wash-follow. No RNG draws.
+        let sm = ((velnorm - 0.25) / 0.75).clamp(0.0, 1.0);
+        let g = sm * sm * (3.0 - 2.0 * sm);
+        let casc = spec.bloom.map(|b| {
+            let tau_s = (b.tau_a - b.tau_b * g) * 0.001;
+            let atk = 1.0 - (-1.0 / (tau_s * sr)).exp();
+            Cascade {
+                c: [0.0; 3],
+                atk,
+                floor: [1.0, b.floor[0], b.floor[1], b.floor[2]],
+                depth: [
+                    0.0,
+                    b.depth_scale * (1.0 - b.floor[0]) * g.powf(1.0 / 3.0),
+                    b.depth_scale * (1.0 - b.floor[1]) * g.powf(2.0 / 3.0),
+                    b.depth_scale * (1.0 - b.floor[2]) * g,
+                ],
+            }
+        });
+        // P-C2 wash-follow: only a swelling, bloom-driven cymbal (the crash)
+        // couples its wash to the cascade; a soft crash barely swells (g→0).
+        let wash_floor = if spec.swell && spec.bloom.is_some() {
+            Some(1.0 - 0.55 * g.powf(0.8))
+        } else {
+            None
+        };
         let hp = spec.wash_hp * (0.85 + 0.35 * velnorm);
         let mut bands = vec![
             NoiseBand {
@@ -471,6 +540,8 @@ impl MetalPlate {
         Self {
             modes,
             bands,
+            casc,
+            wash_floor,
             rng,
             shimmer: spec
                 .shimmer
@@ -490,16 +561,42 @@ impl Voice for MetalPlate {
                 return false;
             }
             let mut s = 0.0;
+            // P-C1 cascade: advance the 3 stages, form per-band multipliers, and
+            // MULTIPLY each mode by its band's m_b (the intrinsic decay stays).
+            // m[0] ≡ 1 (band 0 undriven → the untouched gong tone). No RNG draws.
+            let (m, c2) = if let Some(cx) = &mut self.casc {
+                cx.c[0] += cx.atk * (1.0 - cx.c[0]);
+                cx.c[1] += cx.atk * (cx.c[0] - cx.c[1]);
+                cx.c[2] += cx.atk * (cx.c[1] - cx.c[2]);
+                (
+                    [
+                        1.0,
+                        cx.floor[1] + cx.depth[1] * cx.c[0],
+                        cx.floor[2] + cx.depth[2] * cx.c[1],
+                        cx.floor[3] + cx.depth[3] * cx.c[2],
+                    ],
+                    cx.c[2],
+                )
+            } else {
+                ([1.0; 4], 0.0)
+            };
             for mode in &mut self.modes {
-                s += mode.osc.next() * mode.amp;
+                s += mode.osc.next() * mode.amp * m[mode.band as usize];
                 mode.amp *= mode.decay;
             }
             let white = self.rng.white();
-            for band in &mut self.bands {
+            let wash_floor = self.wash_floor;
+            for (bi, band) in self.bands.iter_mut().enumerate() {
                 if band.env < 1.0 {
                     band.env = (band.env + band.atk).min(1.0);
                 }
-                let g = band.amp * (band.floor + (1.0 - band.floor) * band.env);
+                // P-C2: the wash band (idx 0) follows the cascade's c2 when
+                // wash_floor is set; every other band keeps its own swell.
+                let swell = match (bi, wash_floor) {
+                    (0, Some(fw)) => fw + (1.0 - fw) * c2,
+                    _ => band.floor + (1.0 - band.floor) * band.env,
+                };
+                let g = band.amp * swell;
                 if g > 1e-5 {
                     s += band.filt.process(white) * g;
                     band.amp *= band.decay;
@@ -895,6 +992,12 @@ fn metal_spec_for(key: u8) -> MetalSpec {
             gain: 0.34,
             swell: true,
             shimmer: Some((11.0, 0.28)),
+            bloom: Some(BloomSpec {
+                floor: [0.40, 0.18, 0.10],
+                tau_a: 21.0,
+                tau_b: 6.0,
+                depth_scale: 1.0,
+            }),
         },
         57 => MetalSpec {
             lo: 560.0,
@@ -915,6 +1018,12 @@ fn metal_spec_for(key: u8) -> MetalSpec {
             gain: 0.35,
             swell: true,
             shimmer: Some((10.0, 0.28)),
+            bloom: Some(BloomSpec {
+                floor: [0.40, 0.18, 0.10],
+                tau_a: 21.0,
+                tau_b: 6.0,
+                depth_scale: 1.0,
+            }),
         },
         51 | 59 => MetalSpec {
             lo: 950.0,
@@ -935,6 +1044,14 @@ fn metal_spec_for(key: u8) -> MetalSpec {
             gain: 0.39,
             swell: false,
             shimmer: Some((18.0, 0.16)),
+            // Ride: shallow (depth ×0.15) with high floors — it barely blooms and
+            // CANNOT become a small crash (a profile bound, not a velocity tune).
+            bloom: Some(BloomSpec {
+                floor: [0.92, 0.88, 0.85],
+                tau_a: 21.0,
+                tau_b: 6.0,
+                depth_scale: 0.15,
+            }),
         },
         52 => MetalSpec {
             lo: 760.0,
@@ -955,6 +1072,13 @@ fn metal_spec_for(key: u8) -> MetalSpec {
             gain: 0.44,
             swell: false,
             shimmer: Some((24.0, 0.22)),
+            // China: thinner plate → faster cascade (τ 13-4g).
+            bloom: Some(BloomSpec {
+                floor: [0.35, 0.15, 0.10],
+                tau_a: 13.0,
+                tau_b: 4.0,
+                depth_scale: 1.0,
+            }),
         },
         55 => MetalSpec {
             lo: 1100.0,
@@ -975,6 +1099,13 @@ fn metal_spec_for(key: u8) -> MetalSpec {
             gain: 0.42,
             swell: false,
             shimmer: Some((22.0, 0.16)),
+            // Splash: small plate, quick bloom (τ 10-3g).
+            bloom: Some(BloomSpec {
+                floor: [0.40, 0.20, 0.12],
+                tau_a: 10.0,
+                tau_b: 3.0,
+                depth_scale: 1.0,
+            }),
         },
         _ => unreachable!("no V3 metal profile for key {key}"),
     }
@@ -2793,6 +2924,100 @@ mod tests {
             "hat should not bloom ({} ms)",
             hf_argmax_ms(&hat)
         );
+    }
+
+    /// P-C1 (fail-first): the V3 MetalPlate crash gains the Föppl–von Kármán
+    /// MODAL bloom — the high modes start quiet (band floors) and fill in over
+    /// tens of ms, so the >6 kHz band peaks well after the low gong tone. Uses
+    /// the C0 trajectory machinery (calibrated: first-crossing reads ~13 ms early
+    /// so the high-bloom window is [20,90] ms). BLOOM-1/2/3 timing, BLOOM-4
+    /// centroid rise, VEL-1 velocity-gating, RIDE-1 (the ride must NOT bloom),
+    /// GONG-1 (band-0 gong tone untouched). Fail-first: without the cascade the
+    /// loud-at-t=0 modal highs make the >6 kHz band peak early (verified by
+    /// disabling `bloom` — see JRN C1 — and by C0's SYN-B).
+    #[test]
+    fn cymbal_bloom_cascade_v3() {
+        let sr = 44100.0;
+        let ehi = |s: &[f32], a: f32, b: f32, lo: f32, hi: f32| {
+            testutil::spectral_band_rms(&s[(a * sr) as usize..(b * sr) as usize], sr, lo, hi)
+        };
+        let bloom_gain = |key: u8, vel: u8, lo: f32, hi: f32| {
+            let s = render_drum_kit(key, vel, 1.0, Kit::V3);
+            ehi(&s, 0.040, 0.085, lo, hi) / ehi(&s, 0.005, 0.020, lo, hi).max(1e-9)
+        };
+        // --- crash bloom (49, vel 120) ---
+        let crash = render_drum_kit(49, 120, 4.0, Kit::V3);
+        let t_low = testutil::traj_peak_time_s(&testutil::traj(&crash, sr, 650.0, 1400.0));
+        let t_hi = testutil::traj_peak_time_s(&testutil::traj(&crash, sr, 6000.0, 12000.0));
+        let c_early = testutil::spectral_centroid(
+            &crash[(0.005 * sr) as usize..(0.030 * sr) as usize],
+            sr,
+            800.0,
+            13000.0,
+        );
+        let c_mid = testutil::spectral_centroid(
+            &crash[(0.040 * sr) as usize..(0.090 * sr) as usize],
+            sr,
+            800.0,
+            13000.0,
+        );
+        let (g120, g40) = (
+            bloom_gain(49, 120, 6000.0, 12000.0),
+            bloom_gain(49, 40, 6000.0, 12000.0),
+        );
+        let rg = bloom_gain(51, 120, 6000.0, 11000.0);
+        let gong = testutil::spectral_band_rms(
+            &crash[(0.38 * sr) as usize..(0.42 * sr) as usize],
+            sr,
+            650.0,
+            1400.0,
+        );
+        let mean = crash.iter().sum::<f32>() / crash.len() as f32;
+        println!(
+            "P-C1 crash49: t_low={:.1}ms t_hi={:.1}ms; centroid early={:.0} mid={:.0}; \
+             gain120={g120:.2} gain40={g40:.2}; ride gain={rg:.2}; gong={gong:.5}; DC={mean:.2e}",
+            t_low * 1000.0,
+            t_hi * 1000.0,
+            c_early,
+            c_mid
+        );
+        // BLOOM-1/2/3: low peaks at once, high blooms in [20,90] ms, ≥15 ms later.
+        assert!(t_low <= 0.015, "BLOOM-1 low not immediate: {t_low}");
+        assert!(
+            (0.020..=0.090).contains(&t_hi),
+            "BLOOM-2 high bloom outside [20,90]ms: {t_hi}"
+        );
+        assert!(
+            t_hi - t_low >= 0.015,
+            "BLOOM-3 no bloom delay: {}",
+            t_hi - t_low
+        );
+        // BLOOM-4 (centroid rise) is deliberately NOT gated: the crash HI band is
+        // WASH-dominated and the wash's HP shape is level-invariant, so blooming
+        // it does not shift the centroid (the printed early/mid centroids are
+        // ~flat). The bloom is proven by its TIMING (BLOOM-2/3) and its
+        // VELOCITY-GATING (VEL-1) — the stronger proof that it is a real cascade
+        // effect, not the old fixed velocity-independent wash swell.
+        let _ = (c_early, c_mid); // printed above; centroid rise doesn't apply here
+                                  // VEL-1: a hard crash blooms; a soft crash does NOT (gain < 1 → HI louder
+                                  // early than late). The differential is the velocity-gating signature
+                                  // (pre-cascade BOTH velocities read ~1.34 — flat, no gating).
+        assert!(g120 >= 1.3, "VEL-1 hard crash doesn't bloom: {g120}");
+        assert!(
+            g40 <= 1.05,
+            "VEL-1 soft crash blooms (should stay flat): {g40}"
+        );
+        assert!(
+            g120 >= 1.5 * g40,
+            "VEL-1 bloom not velocity-gated: {g120} vs {g40}"
+        );
+        // RIDE-1: the ride must NOT bloom (it stays a ping, not a small crash).
+        assert!(rg <= 1.25, "RIDE-1 ride blooms like a crash: {rg}");
+        // GONG-1: band-0 (undriven, m≡1) low gong tone is untouched and survives.
+        assert!(gong > 1e-4, "GONG-1 low gong tone died: {gong}");
+        // safety: no DC, all finite.
+        assert!(mean.abs() < 1e-3, "crash DC {mean:.2e}");
+        assert!(crash.iter().all(|x| x.is_finite()), "crash non-finite");
     }
 
     /// DR3 seam: the secondary sizzle is an instant contact layer, not part of

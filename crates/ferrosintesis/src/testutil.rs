@@ -330,6 +330,50 @@ pub(crate) fn kurtosis(seg: &[f32]) -> f32 {
     (m4 / (m2 * m2)) as f32
 }
 
+/// Band-limited RMS envelope E(t; lo, hi) over 25 ms windows, 5 ms hop, 3-tap
+/// smoothed — the cymbal-bloom trajectory (HLD cascade oracle). Times *when* a
+/// band's energy peaks: a real crash's high band blooms tens of ms after the
+/// strike, its low band peaks at t=0. Pair with `traj_peak_time_s`.
+pub(crate) fn traj(seg: &[f32], sr: f32, lo: f32, hi: f32) -> Vec<f32> {
+    let win = (0.025 * sr) as usize;
+    let hop = (0.005 * sr) as usize;
+    if win == 0 || hop == 0 || seg.len() < win {
+        return Vec::new();
+    }
+    let mut e = Vec::new();
+    let mut i = 0;
+    while i + win <= seg.len() {
+        e.push(spectral_band_rms(&seg[i..i + win], sr, lo, hi));
+        i += hop;
+    }
+    // 3-tap moving average (endpoints clamp).
+    (0..e.len())
+        .map(|k| {
+            let a = e[k.saturating_sub(1)];
+            let c = e[(k + 1).min(e.len() - 1)];
+            (a + e[k] + c) / 3.0
+        })
+        .collect()
+}
+
+/// First-crossing peak time (seconds) of a `traj`: the CENTER time of the first
+/// window reaching ≥ 0.90·max. First-crossing (not argmax) is robust where a
+/// noisy wash plateau would let argmax wander tens of ms. Assumes `traj`'s
+/// 25 ms window / 5 ms hop convention (so the first window's center is 12.5 ms).
+pub(crate) fn traj_peak_time_s(tr: &[f32]) -> f32 {
+    if tr.is_empty() {
+        return 0.0;
+    }
+    let max = tr.iter().cloned().fold(0.0f32, f32::max);
+    let thr = 0.90 * max;
+    for (k, &v) in tr.iter().enumerate() {
+        if v >= thr {
+            return k as f32 * 0.005 + 0.0125;
+        }
+    }
+    0.0
+}
+
 // ---------------------------------------------------------------------------
 // The fixed multi-family reference song (oracles 34/35/38)
 // ---------------------------------------------------------------------------
@@ -617,6 +661,65 @@ mod calibration {
             k_grain > 3.0 * k_smooth,
             "grain kurtosis {k_grain} not ≫ smooth {k_smooth}"
         );
+    }
+
+    /// Oracle-0 for the cymbal-bloom trajectory (`traj` + `traj_peak_time_s`):
+    /// calibrated on SYN-A (a known low→high migrating spectrum whose high band
+    /// blooms at 51 ms) and SYN-B (pure decays from t=0, no bloom) before C1's
+    /// crash oracle trusts it. SYN-A's high band must peak ~51 ms after t=0 while
+    /// its low band peaks immediately; SYN-B's high band must NOT bloom.
+    #[test]
+    fn bloom_trajectory_machinery_calibrates() {
+        let sr = 44100.0;
+        let syn = |bloom: bool| -> Vec<f32> {
+            let mut rng = Rng::new(11);
+            (0..(0.3 * sr) as usize)
+                .map(|i| {
+                    let t = i as f32 / sr;
+                    let low = (-t / 0.20).exp() * (std::f32::consts::TAU * 900.0 * t).sin();
+                    let high_env = if bloom {
+                        // alpha function peaking at 51 ms, value 1 at the peak
+                        let x = t / 0.051;
+                        x * x * (2.0 * (1.0 - x)).exp()
+                    } else {
+                        (-t / 0.06).exp() // legacy: pure decay from t=0
+                    };
+                    let high = high_env
+                        * 0.5
+                        * ((std::f32::consts::TAU * 7000.0 * t).sin()
+                            + (std::f32::consts::TAU * 9100.0 * t).sin());
+                    low + high + 0.01 * rng.white()
+                })
+                .collect()
+        };
+        let a = syn(true);
+        let b = syn(false);
+        let low_a = traj_peak_time_s(&traj(&a, sr, 700.0, 1200.0));
+        let high_a = traj_peak_time_s(&traj(&a, sr, 6000.0, 11000.0));
+        let high_b = traj_peak_time_s(&traj(&b, sr, 6000.0, 11000.0));
+        println!(
+            "BLOOM machinery: SYN-A low={:.1}ms high={:.1}ms; SYN-B high={:.1}ms",
+            low_a * 1000.0,
+            high_a * 1000.0,
+            high_b * 1000.0
+        );
+        // SYN-A: low peaks immediately, high blooms clearly later.
+        assert!(low_a <= 0.020, "SYN-A low peak too late: {low_a}");
+        // The first-crossing estimator reads ~37 ms for this true-51 ms bloom: it
+        // fires when the WINDOWED envelope first reaches 0.9·max, ~13 ms ahead of
+        // the true peak. This ~13 ms early bias is exactly why C1's high-band
+        // bloom window is [20, 90] ms, not [40, 80] — SYN-A pins the bias here.
+        assert!(
+            (0.028..=0.048).contains(&high_a),
+            "SYN-A high bloom time {high_a} (expect ~37 ms measured for a true 51 ms bloom)"
+        );
+        assert!(
+            high_a - low_a >= 0.015,
+            "SYN-A no bloom delay: {}",
+            high_a - low_a
+        );
+        // SYN-B: high also peaks at t=0 → the detector must NOT report a bloom.
+        assert!(high_b <= 0.020, "SYN-B false bloom: high={high_b}");
     }
 }
 

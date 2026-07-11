@@ -1,6 +1,6 @@
 # ferrosintesis
 
-**A dependency-free Rust MIDI synthesizer, developed alongside sixteen original,
+**A dependency-free Rust MIDI synthesizer, developed alongside nineteen original,
 reproducible albums composed by five language models.**
 
 Every note here was composed by a frontier language model writing Python that emits
@@ -15,14 +15,14 @@ Jarre, Hans Zimmer, Enigma, Max Richter…). The generators, the MIDI they produ
 Most albums ship committed, tagged `.opus` files under `listening/` (for example
 `listening/Claude Fable 5/Hollow Hill/`). Drag that tree into an audio player for
 the shareable listening copies, reproducible from the committed MIDI plus the synth.
-Three long albums (**VIGIL**, **RIVERWAKE**, and **The Long Turning**) ship as MIDI
-only; render them to `.opus` with `render_opus.py` (see
+Four albums (**VIGIL**, **RIVERWAKE**, **The Long Turning**, and **Bright Matter**)
+ship as MIDI only; render them to `.opus` with `render_opus.py` (see
 [Reproduce & verify](#reproduce--verify)).
 
 ## The music
 
 ### Claude Fable 5 — `albums/fable5/`
-Ten albums voiced for **ferrosintesis** (this repo's synth) — spanning idioms from Mike
+Eleven albums voiced for **ferrosintesis** (this repo's synth) — spanning idioms from Mike
 Oldfield long-form to Jean-Michel Jarre, Enigma, Gabriel Knight and film score. These
 are the albums the synth is specifically tuned for.
 
@@ -55,6 +55,10 @@ are the albums the synth is specifically tuned for.
 - **The Iron Tide** — *Hans Zimmer*, 3:33. A long cinematic build from a low-D piano
   pedal through string ostinato and taiko percussion to a full-voice horn theme
   (at `albums/fable5/`).
+- **Through Lines** — *progressive eclectic / instrumental*, 91:17 · 16 tracks. A
+  double album of ideas and spectacles: model lineage, evolution, memory, weather,
+  AquaTheater pageants, action, night jazz, bronze, a medley suite, and the
+  build-and-drop centrepiece “Three-Sixty.”
 
 ### Claude Opus 4.8 — `albums/opus4-8/`
 - **VIGIL** — *Max Richter / Philip Glass / Howard Shore*, 53:12 · 12 parts. A
@@ -85,6 +89,10 @@ are the albums the synth is specifically tuned for.
 - **The Architecture of Air** — *cathedral organ / cinematic*, 6:52 · one large-form
   piece. The default GM19 organ moves from exposed 32-foot pedal through principals,
   tremulant, wind-chest load, high mixtures, full organ, and a room-only coda.
+- **Bright Matter** — *progressive electronic / instrumental*, 24:20 · 5 tracks.
+  Upbeat 6–5–2–1 hooks, two-stage builds, real negative-space drops, transient stereo
+  motion, guitar, choir, organ, and a finale that machine-verifies four simultaneous
+  themes before a two-semitone key lift.
 
 ## How a track is made
 

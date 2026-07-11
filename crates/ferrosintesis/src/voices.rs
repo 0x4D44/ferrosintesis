@@ -2511,6 +2511,17 @@ struct RankPipe {
     attack_samples: f32,
     transition_samples: f32,
     amp_mod: f32,
+    // Per-pipe wind-wander: an independent slow random walk (local wind-pressure
+    // deviation) that drifts pitch and amplitude together, so this pipe beats
+    // against its neighbours on a continuously moving rate rather than the fixed
+    // `static_tune` offset. This — not a coherent tremulant — is what makes the
+    // additive stack breathe like many real pipes instead of one frozen,
+    // "harpsichord-like" oscillator. Ticks at control rate off `age`; never
+    // touches `frequency`/`harmonics`, so no table regen and the pinned
+    // frequency/bounds tests are unaffected.
+    drift: Drift,
+    wander_ratio: f32,
+    wander_amp: f32,
 }
 
 impl RankPipe {
@@ -2522,6 +2533,16 @@ impl RankPipe {
         let tune_cents = stable.white() * 1.5;
         let level = 1.0 + stable.white() * 0.04;
         let attack_var = 1.0 + stable.white() * 0.08;
+        // Wander seed + hold jitter are drawn from `stable` AFTER the identity
+        // draws above, so (a) they are stable per (rank id, key) and independent
+        // of `event_seed` — `pipe_identity_ignores_event_seed` and byte-identical
+        // rebuilds both hold — and (b) `tune_cents`/`level`/`attack_var` are
+        // untouched. Base hold ~0.45 s at the 64-sample control rate (≈310
+        // ticks), jittered ±25% per pipe so the 14 pipes never retarget in
+        // lock-step. Depth scales with `sensitivity` (pedals stay stately).
+        let wander_seed = stable.next_u32();
+        let hold_jitter = stable.white();
+        let hold_ticks = (310.0 * (1.0 + 0.25 * hold_jitter)).round().max(1.0) as u32;
         let mut event = Rng::new(event_seed ^ (spec.id as u32).wrapping_mul(0x27D4_EB2D));
         let speech_ms = organ_speech_ms(spec.family, key) * attack_var;
         let mut pipe = Self {
@@ -2547,6 +2568,9 @@ impl RankPipe {
             attack_samples: (speech_ms * 0.12).clamp(4.0, 22.0) * 0.001 * sr,
             transition_samples: speech_ms * 0.001 * sr,
             amp_mod: 1.0,
+            drift: Drift::new(wander_seed, 2.5 * spec.sensitivity, hold_ticks),
+            wander_ratio: 1.0,
+            wander_amp: 1.0,
         };
         pipe.retune(1.0, 0.0, 0.0);
         pipe
@@ -2611,12 +2635,22 @@ impl RankPipe {
         if !self.active {
             return 0.0;
         }
+        // Advance the wind-wander at a 64-sample control rate (~689 Hz). The walk
+        // value is in cents; convert to a pitch ratio and a co-signed amplitude
+        // trim (+0.4 dB per +2.5 cents). Keyed off `age`, this is independent of
+        // the caller's block size, so voice unit renders (which call render()
+        // once on the whole buffer, never retune) see the wander too.
+        if self.age % 64 == 1 {
+            let w = self.drift.next().clamp(-60.0, 60.0);
+            self.wander_ratio = 2f32.powf(w / 1200.0);
+            self.wander_amp = 10f32.powf(0.16 * w / 20.0);
+        }
         let i0 = self.phase as usize & (ORGAN_TABLE_LEN - 1);
         let i1 = (i0 + 1) & (ORGAN_TABLE_LEN - 1);
         let frac = self.phase - self.phase.floor();
         let speech = self.speech[i0] + (self.speech[i1] - self.speech[i0]) * frac;
         let steady = self.steady[i0] + (self.steady[i1] - self.steady[i0]) * frac;
-        self.phase += self.phase_inc;
+        self.phase += self.phase_inc * self.wander_ratio;
         self.phase = self.phase.rem_euclid(ORGAN_TABLE_LEN as f32);
         let speech_mix = (self.age as f32 / self.transition_samples.max(1.0)).min(1.0);
         let attack = (self.age as f32 / self.attack_samples.max(1.0)).min(1.0);
@@ -2630,6 +2664,7 @@ impl RankPipe {
             * reed_overshoot
             * self.gain
             * self.amp_mod
+            * self.wander_amp
     }
 }
 
@@ -6600,6 +6635,110 @@ mod tests {
         assert!(delta_db <= 1.5, "steady velocity delta {delta_db:.2} dB");
     }
 
+    // Oracle A — the steady state is alive and aperiodic (not a static,
+    // phase-locked additive tone = "harpsichord"). Key 76 (E5) sits in the
+    // complained-about register, has no pedal ranks, and carries both a
+    // unison pair (Principal id1 vs Reed id9) and mixture-vs-principal
+    // coincident ratios. A2 (max normalised envelope autocorrelation over
+    // 1.5–4.5 s lags) is the discriminator: a static organ's constant-rate
+    // beats make the envelope quasi-periodic (re-peaks high); independent
+    // per-pipe wind-walks decorrelate it (low). Calibration (measured @44.1k,
+    // stable across event seeds to ±0.01):
+    //   pre-wander static organ  autocorr ≈ 0.44,  cov ≈ 0.153
+    //   post-wander              autocorr ≈ 0.25,  cov ≈ 0.131
+    // 0.35 sits cleanly between (≈0.10 margin each side). The static organ is a
+    // touch less self-similar than a pure model predicts, so the separation is
+    // ~1.8× rather than a larger factor — but the two clusters do not overlap
+    // and are seed-stable, so the threshold holds for this signal.
+    #[test]
+    fn cathedral_organ_steady_state_is_alive_and_aperiodic() {
+        let sr = 44_100.0;
+        let render = render_program(19, 76, 96, 11.0, 0xA11CE);
+        let steady = segment(&render, sr, 1.0, 10.5);
+        let (autocorr, cov) = crate::testutil::env_aperiodicity(steady, sr, 1.5, 4.5);
+        println!("cathedral A  seedA: autocorr={autocorr:.4} cov={cov:.4}");
+
+        // A3 — the wander rides the STABLE (rank,key) seed, not the event seed:
+        // a different event seed must give the same envelope statistics.
+        let render2 = render_program(19, 76, 96, 11.0, 0x5EED9);
+        let steady2 = segment(&render2, sr, 1.0, 10.5);
+        let (autocorr2, cov2) = crate::testutil::env_aperiodicity(steady2, sr, 1.5, 4.5);
+        println!("cathedral A  seedB: autocorr={autocorr2:.4} cov={cov2:.4}");
+
+        assert!(cov >= 0.02, "steady envelope is frozen: cov {cov:.4}");
+        assert!(
+            autocorr <= 0.35,
+            "steady envelope is quasi-periodic (harpsichord-like): autocorr {autocorr:.4}"
+        );
+        assert!(
+            (cov - cov2).abs() <= 0.20 * cov.max(cov2) + 1e-6
+                && (autocorr - autocorr2).abs() <= 0.15,
+            "wander looks event-seeded: ({cov:.4},{autocorr:.4}) vs ({cov2:.4},{autocorr2:.4})"
+        );
+    }
+
+    // Oracle B — regression guard that sustained high notes are NOT
+    // harpsichord-like in the two ways that percept is often assumed to arise:
+    // integer-buzz and a plucked onset. Measurement (@44.1k) showed this voice
+    // already sits well inside "organ" territory on both — key84 buzz ≈ −27 dB,
+    // key96 ≈ −16 dB, key88 onset rise ≈ 143 ms — so the actual "harpsichordy"
+    // driver is static-ness (Oracle A / the wind-wander), not these. B1 measures
+    // integer-buzz at k∈{5,7,11,13}·f0 — the slots reachable ONLY by the
+    // unison/reed ranks' own upper harmonics (mixtures live at 1.5/2/3/4× and
+    // their multiples), so it excludes the intended mixture sheen and sees only
+    // the "dense integer series" that reads as a plucked string. Thresholds carry
+    // margin over the measured values: this test guards against a future change
+    // (or the reverb refresh) regressing the treble, it is not driving a fix.
+    #[test]
+    fn cathedral_organ_high_notes_are_not_harpsichord_bright() {
+        let sr = 44_100.0;
+        for key in [84u8, 96] {
+            let f0 = key_freq(key);
+            let render = render_program(19, key, 96, 4.0, 0xB0B);
+            let body = segment(&render, sr, 0.8, 3.5);
+            let mut buzz2 = 0.0f32;
+            for k in [5.0f32, 7.0, 11.0, 13.0] {
+                let f = k * f0;
+                if f < 0.45 * sr {
+                    let m = crate::testutil::mag_at(body, sr, f);
+                    buzz2 += m * m;
+                }
+            }
+            let body_mag = crate::testutil::mag_at(body, sr, f0).max(1e-9);
+            let buzz_db = 20.0 * (buzz2.sqrt() / body_mag).log10();
+            println!("cathedral B  key{key}: integer-buzz {buzz_db:.2} dB");
+            assert!(
+                buzz_db <= -14.0,
+                "key {key} integer-buzz {buzz_db:.2} dB reads harpsichord-like"
+            );
+            // B3 anti-dulling: keep real >4 kHz mixture sheen (mirrors the pinned
+            // pedal-body test's high clause, so purifying flues cannot go too far).
+            let sheen = hp_rms(body, sr, 4_000.0);
+            assert!(
+                sheen >= 0.04 * rms(body),
+                "key {key} mixture sheen collapsed"
+            );
+        }
+
+        // B2 — the onset is no longer a pluck: envelope reaches 90% of steady
+        // within no LESS than 8 ms (a real treble principal speaks in 10–30 ms;
+        // a sub-5 ms rise + noise chiff is a hammer/pluck cue).
+        let render = render_program(19, 88, 96, 1.0, 0xB0B);
+        let mut lp = OnePole::lowpass(200.0, sr);
+        let env: Vec<f32> = render.iter().map(|&x| lp.process(x.abs())).collect();
+        let steady = rms(segment(&render, sr, 0.30, 0.60));
+        let rise_idx = env
+            .iter()
+            .position(|&e| e >= 0.9 * steady)
+            .unwrap_or(env.len());
+        let rise_ms = rise_idx as f32 / sr * 1000.0;
+        println!("cathedral B  key88 rise {rise_ms:.2} ms");
+        assert!(
+            rise_ms >= 8.0,
+            "key 88 onset rises in {rise_ms:.2} ms (pluck-like)"
+        );
+    }
+
     #[test]
     fn cathedral_organ_pipe_identity_ignores_event_seed() {
         let a = CathedralOrgan::new(60, 90, 44_100.0, 1);
@@ -6655,8 +6794,14 @@ mod tests {
             let measurements: Vec<_> = [break_key - 1, break_key, break_key + 1]
                 .into_iter()
                 .map(|key| {
-                    let rendered = render_program(19, key, 96, 0.8, 99);
-                    let body = segment(&rendered, sr, 0.30, 0.75);
+                    // Measure the registration level over a long window: per-pipe
+                    // wind-wander is a zero-mean micro-dynamic, so a short window
+                    // catches different keys at different walk phases and would
+                    // read that as a registration jump. A ~2.5 s window averages
+                    // the wander out and tests the static registration-continuity
+                    // contract the 2.0 dB bound is really about.
+                    let rendered = render_program(19, key, 96, 3.0, 99);
+                    let body = segment(&rendered, sr, 0.5, 3.0);
                     (rms(body), spectral_centroid(body, sr, 100.0, 12_000.0))
                 })
                 .collect();

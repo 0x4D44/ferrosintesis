@@ -154,14 +154,19 @@ impl Reverb {
     }
 }
 
-const CATHEDRAL_PREDELAY_S: f32 = 0.040;
-const CATHEDRAL_LINES_44K: [usize; 8] = [2087, 2609, 3169, 3691, 4241, 4751, 5261, 5813];
+// Cathedral room size. Longer pre-delay (direct-to-reverb gap), longer and more
+// numerous mean-free-path delays, and quieter/later early reflections all read as
+// a larger stone volume — and the diffuse tail wraps the organ's exposed treble,
+// which is most of "presence" for a bright plenum. Line lengths are all prime
+// (hence pairwise co-prime — verified), ~1.30× the previous set, 61–172 ms.
+const CATHEDRAL_PREDELAY_S: f32 = 0.055;
+const CATHEDRAL_LINES_44K: [usize; 8] = [2711, 3389, 4127, 4801, 5519, 6203, 6829, 7561];
 const CATHEDRAL_EARLY: [(f32, f32); 5] = [
-    (0.048, 0.40),
-    (0.057, 0.31),
-    (0.071, 0.25),
-    (0.091, 0.18),
-    (0.117, 0.13),
+    (0.060, 0.340),
+    (0.071, 0.264),
+    (0.089, 0.213),
+    (0.114, 0.153),
+    (0.146, 0.111),
 ];
 const CATHEDRAL_INPUT: [f32; 8] = [1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0];
 const CATHEDRAL_LEFT: [f32; 8] = [1.0, -1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0];
@@ -188,9 +193,13 @@ impl CathedralLine {
             idx: 0,
             low_state: 0.0,
             high_state: 0.0,
-            low_gain: gain(6.2),
-            mid_gain: gain(6.25),
-            high_gain: gain(3.5),
+            // Large stone cathedral: LF reflects almost totally (naves measure
+            // RT rising below 250 Hz), the mid-band sits mid-5–9 s, and air
+            // absorption keeps the top shorter so the tail warms rather than
+            // rings harsh.
+            low_gain: gain(8.2),
+            mid_gain: gain(7.0),
+            high_gain: gain(4.2),
         }
     }
 
@@ -279,7 +288,9 @@ impl CathedralReverb {
             }),
             lines: std::array::from_fn(|index| CathedralLine::new(line_lengths[index], sr)),
             low_k: one_pole(180.0),
-            high_k: one_pole(3_500.0),
+            // Air absorption bites from ~2 kHz in a large volume; pulling the
+            // treble-decay corner down warms the longer tail.
+            high_k: one_pole(2_800.0),
             return_hp_l: Biquad::highpass(10.0, std::f32::consts::FRAC_1_SQRT_2, sr),
             return_hp_r: Biquad::highpass(10.0, std::f32::consts::FRAC_1_SQRT_2, sr),
             wet,
@@ -487,10 +498,10 @@ mod tests {
             .position(|(l, r)| l.abs().max(r.abs()) > 1e-7)
             .expect("cathedral impulse response should become audible");
         let first_s = first as f32 / SR;
-        assert!(first_s >= 0.035, "wet output began at {first_s:.6}s");
+        assert!(first_s >= 0.050, "wet output began at {first_s:.6}s");
         assert!(
-            (0.047..=0.049).contains(&first_s),
-            "first early reflection was at {first_s:.6}s, expected about 48ms"
+            (0.059..=0.061).contains(&first_s),
+            "first early reflection was at {first_s:.6}s, expected about 60ms"
         );
     }
 
@@ -544,13 +555,16 @@ mod tests {
         let rt500 = estimated_octave_rt60(500.0);
         let rt2k = estimated_octave_rt60(2_000.0);
         let rt8k = estimated_octave_rt60(8_000.0);
-        assert!((5.0..=6.5).contains(&rt31), "31.5Hz RT60 {rt31:.2}s");
-        assert!((5.5..=7.0).contains(&rt63), "63Hz RT60 {rt63:.2}s");
-        assert!((5.5..=7.2).contains(&rt125), "125Hz RT60 {rt125:.2}s");
-        assert!((5.5..=7.2).contains(&rt500), "500Hz RT60 {rt500:.2}s");
-        assert!((4.5..=6.5).contains(&rt2k), "2kHz RT60 {rt2k:.2}s");
-        assert!((2.5..=4.5).contains(&rt8k), "8kHz RT60 {rt8k:.2}s");
-        assert!(rt500 > rt8k + 1.0, "500Hz {rt500:.2}s, 8kHz {rt8k:.2}s");
+        // Ranges set from the deterministic measured values (±~0.9 s), which read
+        // a touch off the design RT (8.2/7.0/4.2 s) through the crossover blend.
+        // A large stone cathedral: the LF rings ~8.6 s, treble clears first.
+        assert!((7.7..=9.5).contains(&rt31), "31.5Hz RT60 {rt31:.2}s");
+        assert!((6.7..=8.5).contains(&rt63), "63Hz RT60 {rt63:.2}s");
+        assert!((7.0..=8.8).contains(&rt125), "125Hz RT60 {rt125:.2}s");
+        assert!((6.0..=7.7).contains(&rt500), "500Hz RT60 {rt500:.2}s");
+        assert!((5.2..=6.9).contains(&rt2k), "2kHz RT60 {rt2k:.2}s");
+        assert!((4.0..=5.6).contains(&rt8k), "8kHz RT60 {rt8k:.2}s");
+        assert!(rt500 > rt8k + 1.5, "500Hz {rt500:.2}s, 8kHz {rt8k:.2}s");
     }
 
     #[test]

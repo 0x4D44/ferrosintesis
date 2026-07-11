@@ -2,6 +2,13 @@
 
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 
+- 2026.07.11 — **`deltic timeout <cmd> bash script.sh` hands the script to a
+  bash whose exported-function children can't exec `D:/...` paths** — every
+  `render_all.sh` child failed "No such file or directory" on an exe that
+  existed, and the failure was first misattributed to a concurrent cargo
+  relink. Run repo shell scripts via the harness Git Bash directly (its own
+  timeout applies); keep `deltic timeout` for non-script commands (cargo,
+  python) where it works fine.
 - 2026.07.08 — **A synth "spread" oracle across instruments must fix pitch, or
   it measures pitch not timbre.** Four v0.9 verification oracles measured the
   wrong thing while the voice mechanism was fine: brass `centroid/f0` ordered
@@ -29,6 +36,10 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   build were the 2nd harmonic leaking through the counter's lowpass
   (452.5 Hz for a true 440). Measure pitch with a Goertzel peak
   (`testutil::peak_locate`); keep crossings only for pure-sine calibration.
+  Corollary (2026.07.11, Big Weather): for controller-audibility probes on
+  vibrato'd/moving notes, a fixed-frequency Goertzel bin (~1.5 Hz) misses
+  harmonics wandering ±60 Hz — use band-integrated FFT fractions (t05's
+  wah/Leslie probes) instead.
 - 2026.07.07 — **Noise-fed resonator pairs only beat if they can remember a
   beat.** CYM-1's 6000/6055 Hz pair at the HLD's Q 120-150 has a ~7 ms ring
   time against an 18 ms beat period — decorrelated before one cycle, no beat
@@ -106,11 +117,6 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   damper `bright` kills the harmonics that carry the RMS — raise `bright` (NOT `t60`,
   which clamps at pitch and only governs the fundamental); the tanh `amp` adds
   compression sustain for the fastest-decaying high notes.
-- 2026.07.09 — **Generated text-artifact freshness checks must normalize line
-  endings.** The synth demo verifier compared `album_manifest.json` bytes, so a
-  Windows CRLF checkout failed even though Git saw no diff and the builder emitted
-  the same LF-normalized JSON. Compare text artifacts as text; keep byte-exact
-  checks for binary `.mid` files.
 - 2026.07.09 — **`render_opus.py::ALBUMS` is the listening blast radius, not just
   `albums/`.** MM-REQ-KILN-00017 left album MIDI byte-identical, but the newly
   committed Synth Feature Showcase listening track used GM109/111 and had to be
@@ -123,14 +129,6 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   producing MIDI 12-23 sustained notes panned left; ferrosintesis turns that into
   sub-bass flatulence. Clamp/raise contrabass beds to at least C2 (MIDI 36) and
   keep sustained low strings centered unless the track has an explicit reason not to.
-- 2026.07.10 — **Build and render only in a task worktree — never the main
-  clone.** `render_opus.py` rewrites committed `listening/*.opus` in place, and
-  `cargo` / `build.py` write `.wav` / `target/` / `.mid` into the tree; run from
-  the main clone `D:\language\midi-music` they dirty the sacred trunk-holder and
-  block its `git pull --ff-only`. The git guards protect the ref, not the working
-  tree, so nothing stops a Python/cargo run from soiling it. A drum-kit-v3 render
-  done in the main clone left 60+ stray files shadowing an already-committed
-  branch; `git status` the main clone if a build/render ever ran there.
 - 2026.07.10 — **`build.py --track N --verify` verifies in memory and does NOT
   rewrite the MIDI.** Two independent audio-fix agents lost a full iteration to
   stale renders (the unchanged dB reading was the tell): edit → `--track N`

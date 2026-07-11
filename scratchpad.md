@@ -100,3 +100,13 @@
   use GM 29/30 (Hollow Hill, Seven Kinds, Signal Fire, Estuary, Three-Sixty-One) — treat
   as a timbre improvement with a render-diff refresh. See
   `wrk_docs/2026.07.11 - HLD - Three-Sixty-One soaring lead.md`.
+- [ ] 2026.07.11 — Big Weather review latents (report-only, benign today):
+  (a) `albums/fable5/Big Weather/conductor.py:101-104` — Part.setup writes
+  BANK_SELECTS CC0 (priority 2) after channel()'s program change (priority 1)
+  at tick 0, wrong order per GM semantics; harmless for ferrosintesis (CC0 is
+  per-strip state read at voice spawn) and no Big Weather module uses
+  BANK_SELECTS — same pattern exists in the Through Lines conductor it was
+  copied from. (b) `albums/fable5/Big Weather/verify.py` section_energy /
+  check_drum_solo compute bars from the meter at section START; a mid-section
+  meter change would skew per-bar math — all ten tracks are uniform 4/4, so
+  latent.

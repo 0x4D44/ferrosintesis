@@ -235,84 +235,124 @@ HARP_CM9 = (48, 55, 60, 64, 67, 71, 76, 79)
 # finale's A-beats, only {E,A,C}); the fills escalate strictly per window.
 # ---------------------------------------------------------------------------
 
-# (A) The distorted-guitar solo (ch14, GM30).  (onset, MIDI pitch, dur, vel).
-# jt=0 so onsets stay tick-exact for the downbeat-consonance oracle; the life
-# is in the CC1 vibrato swells and the marked bends, not timing smear.
-
-GUITAR_B2: list[tuple[float, int, float, int]] = [
-    # Second climb: three fragments, strictly escalating (4 / 10 / 13 notes).
-    (346.0, 71, 0.5, 66), (346.5, 74, 0.5, 68), (347.0, 76, 1.0, 70),
-    (348.0, 69, 2.0, 72),
-    (356.0, 76, 1.0, 74), (357.0, 74, 0.5, 72), (357.5, 71, 0.5, 70),
-    (358.0, 67, 1.0, 72), (359.0, 69, 0.5, 74), (360.0, 69, 2.0, 76),
-    (372.0, 71, 0.75, 76), (373.0, 74, 0.75, 78), (374.0, 76, 0.5, 78),
-    (374.5, 79, 1.5, 80),
-    (388.0, 76, 0.5, 80), (388.5, 79, 0.5, 82), (389.0, 81, 0.5, 82),
-    (389.5, 83, 1.5, 84),
-    (396.0, 79, 1.0, 82), (397.0, 76, 0.5, 82), (397.5, 74, 0.5, 80),
-    (398.0, 76, 1.5, 84),
-    (404.0, 74, 0.5, 86), (404.5, 76, 0.5, 86), (405.0, 79, 0.5, 88),
-    (405.5, 81, 0.45, 88), (406.0, 81, 2.75, 90),   # bend to B5 over the 408 D-beat
-]
-
-GUITAR_D2: list[tuple[float, int, float, int]] = [
-    # Drop two: four hook rotations, register rising 83 -> 91.
-    (420.0, 83, 2.0, 96), (422.0, 81, 0.5, 92), (422.5, 79, 0.5, 90),
-    (423.0, 76, 1.0, 90), (425.5, 79, 0.5, 92), (426.0, 81, 0.5, 92),
-    (426.5, 79, 0.5, 90), (427.0, 81, 0.9, 94), (428.0, 76, 2.0, 96),
-    (432.0, 86, 1.75, 98), (434.0, 83, 0.5, 94), (434.5, 81, 0.5, 92),
-    (435.0, 79, 0.5, 92), (435.5, 81, 0.5, 92), (436.0, 83, 1.5, 96),
-    (438.5, 81, 0.5, 92), (439.0, 78, 0.5, 92), (439.5, 81, 0.45, 94),
-    (440.0, 78, 1.0, 96), (441.0, 81, 3.0, 98),
-    (448.0, 88, 2.0, 100), (450.0, 86, 0.5, 96), (450.5, 83, 0.5, 96),
-    (451.0, 86, 0.5, 98), (451.5, 88, 0.5, 98), (452.0, 91, 2.0, 102),
-    (455.0, 88, 0.5, 98), (455.5, 86, 0.5, 96), (456.0, 88, 2.5, 100),
-    (462.0, 84, 0.5, 96), (462.5, 86, 0.5, 98), (463.0, 88, 0.5, 98),
-    (463.5, 86, 0.5, 96), (464.5, 81, 3.5, 102),   # THE SCREAM: bend to B5
-    (468.5, 83, 0.5, 98), (469.0, 86, 0.5, 98), (469.5, 83, 0.5, 96),
-    (470.0, 79, 1.5, 96), (473.0, 81, 0.5, 96), (473.5, 83, 0.5, 98),
-    (474.0, 86, 0.5, 98), (474.5, 90, 1.5, 100),
-    (480.0, 83, 4.5, 100), (485.0, 79, 0.5, 98), (485.5, 81, 0.5, 98),
-    (486.0, 83, 0.5, 100), (486.5, 86, 0.5, 100), (487.0, 88, 3.0, 102),
-    (492.0, 91, 3.0, 104),                         # "sob": dip to -1 between beats
-    (496.0, 86, 1.0, 100), (497.0, 83, 0.5, 98), (497.5, 86, 0.5, 100),
-    (498.0, 88, 1.5, 100), (500.0, 83, 3.5, 102), (505.0, 81, 0.5, 98),
-    (505.5, 83, 0.5, 98), (506.0, 81, 0.5, 96), (506.5, 79, 0.5, 96),
-    (507.0, 81, 1.0, 98), (508.0, 78, 2.0, 96),
-    (512.0, 88, 2.0, 100), (514.0, 86, 0.5, 98), (514.5, 83, 0.5, 96),
-    (515.0, 79, 1.0, 96), (517.0, 81, 0.5, 94), (517.5, 79, 0.5, 94),
-    (518.0, 76, 1.5, 96), (521.0, 79, 0.5, 94), (521.5, 81, 0.5, 94),
-    (522.0, 79, 0.5, 92), (522.5, 76, 1.5, 94), (526.0, 76, 0.5, 94),
-    (526.5, 79, 0.5, 94), (527.0, 81, 0.5, 96), (527.5, 83, 0.5, 96),
-    (528.0, 86, 2.0, 98), (532.0, 83, 2.0, 96), (536.0, 81, 2.0, 94),
-    (538.0, 78, 1.5, 90), (540.0, 81, 1.5, 92),
-]
-
-GUITAR_FIN: list[tuple[float, int, float, int]] = [
-    # The soar: everything >= 83 (B5), sparse-but-high, peak A6 (93).
-    (552.0, 83, 4.0, 104), (556.0, 88, 4.0, 106), (560.0, 91, 3.0, 106),
-    (564.0, 88, 2.0, 104), (566.0, 86, 1.0, 102), (567.0, 83, 1.0, 102),
+# (A) The soaring lead (ch14, GM29 -> DRIVE_LEAD via CC0).  (onset, pitch, dur,
+# vel), jt=0.  HELD tones ring on the sustaining voice; runs slur via CC68
+# legato; GUITAR_BENDS wail; CC1 blooms.  Designed by Fable 5 (consult) to the
+# harmonic spine in wrk_docs/2026.07.11 - HLD - Three-Sixty-One soaring lead.md:
+# every held tone is consonant on EVERY downbeat it spans, and on the finale's
+# A-beats (548+8k, the walker's A5) lands only pitch-class E, A or C.
+GUITAR_LEAD: list[tuple[float, int, float, int]] = [
+    # BUILD2 [320,416): the lead materialises, three windows, then the wail.
+    (345.0, 76, 0.5, 66), (345.5, 78, 0.5, 68), (346.0, 79, 4.0, 72),
+    (356.0, 76, 0.5, 70), (356.5, 78, 0.5, 72), (357.0, 79, 0.5, 74),
+    (357.5, 81, 4.5, 78), (364.0, 79, 4.0, 76), (368.5, 78, 0.5, 74),
+    (369.0, 76, 2.0, 76),
+    (388.0, 79, 0.5, 80), (388.5, 81, 0.5, 82), (389.0, 83, 3.0, 84),
+    (392.0, 81, 2.0, 84), (394.0, 79, 2.0, 82),
+    (402.0, 76, 0.5, 84), (402.5, 79, 0.5, 86), (403.0, 81, 0.5, 86),
+    (403.5, 83, 0.5, 88),
+    (404.0, 83, 10.5, 92),   # PRE-DROP WAIL: B5 rings over G+D into the drop
+    # DROP2 [416,544): the full wail, register climbing, two 9-beat soars.
+    (416.0, 83, 6.5, 96),
+    (422.75, 81, 0.25, 90), (423.0, 83, 0.25, 92), (423.25, 84, 0.5, 94),
+    (424.0, 84, 6.0, 98),
+    (430.0, 86, 0.25, 94), (430.25, 88, 0.25, 96), (430.5, 86, 0.25, 96),
+    (430.75, 84, 0.25, 96), (431.0, 83, 0.5, 96),
+    (432.0, 86, 9.5, 100),   # D6 soar across the G->D change (D bridge)
+    (441.5, 88, 0.25, 96), (441.75, 90, 0.25, 98), (442.0, 91, 0.5, 100),
+    (442.5, 90, 0.5, 100), (443.0, 88, 0.5, 100),
+    (444.0, 90, 2.5, 100),
+    (448.0, 88, 6.5, 100),
+    (454.5, 86, 0.25, 96), (454.75, 88, 0.25, 98), (455.0, 90, 0.5, 100),
+    (456.0, 88, 6.0, 102),   # THE SCREAM
+    (462.0, 86, 0.25, 98), (462.25, 88, 0.25, 100), (462.5, 90, 0.25, 100),
+    (462.75, 91, 0.25, 102), (463.0, 90, 0.5, 102),
+    (464.0, 91, 9.0, 104),   # G6 soar across the G->D change (G bridge)
+    (473.0, 88, 0.5, 100), (473.5, 86, 0.5, 100),
+    # breath 474-480
+    (480.0, 88, 6.5, 102),
+    (486.5, 86, 0.25, 98), (486.75, 84, 0.25, 98), (487.0, 83, 0.5, 98),
+    (488.0, 84, 4.5, 102),   # the sob
+    (492.5, 86, 0.25, 100), (492.75, 88, 0.5, 100),
+    (496.0, 91, 3.0, 104), (499.0, 90, 0.5, 100), (500.0, 88, 3.0, 102),
+    (504.0, 90, 3.0, 100),
+    # rest 507-512
+    (512.0, 88, 4.0, 98),
+    (516.5, 86, 0.25, 96), (516.75, 84, 0.25, 96), (517.0, 83, 1.0, 96),
+    (520.0, 84, 3.5, 96), (524.0, 84, 3.0, 94), (528.0, 83, 3.0, 92),
+    (532.0, 79, 2.0, 90),
+    (536.0, 78, 1.5, 88), (538.0, 79, 1.5, 86), (540.0, 81, 2.0, 88),
+    # rest 542-544
+    # FINALE [544,640): THE SOAR, E-pedal, all >= 84, peak A6.
+    (544.0, 88, 7.0, 104),
+    (551.0, 86, 0.25, 100), (551.25, 84, 0.5, 102),
+    (552.0, 84, 3.5, 104), (555.5, 86, 0.5, 102),
+    (556.0, 88, 4.0, 106),
+    (560.5, 86, 0.25, 102), (560.75, 88, 0.25, 104), (561.0, 91, 0.5, 104),
+    (562.0, 91, 2.0, 106), (564.0, 88, 4.0, 106), (568.0, 88, 3.0, 106),
+    (571.0, 91, 0.5, 104), (571.5, 93, 0.5, 106),
+    (572.0, 93, 3.0, 108),
+    # rest 575-576
     (576.0, 88, 6.0, 106),
-    (584.0, 83, 1.0, 106), (585.0, 86, 1.0, 106), (586.0, 88, 2.0, 107),
-    (588.0, 93, 2.0, 108), (590.0, 91, 1.0, 106), (591.0, 88, 1.0, 106),
-    (592.0, 88, 4.0, 108),
-    (600.0, 91, 2.0, 108), (602.0, 93, 6.0, 110),   # THE PEAK: scream-flick bends
-    (612.0, 88, 3.0, 106), (615.0, 86, 1.0, 104), (616.0, 83, 3.5, 104),
-    (624.0, 88, 8.0, 104),                          # the farewell tone; exits at 632
+    (582.0, 86, 0.25, 104), (582.25, 88, 0.25, 106), (582.5, 91, 0.5, 106),
+    (584.0, 91, 3.0, 106), (587.0, 88, 0.5, 104), (587.5, 91, 0.5, 106),
+    (588.0, 93, 4.0, 108), (592.0, 88, 3.5, 108),
+    # breath 595.5-600
+    (600.0, 91, 2.0, 108),
+    (602.0, 93, 6.0, 110),   # THE PEAK A6 (scream-flicks between the downbeats)
+    (608.0, 93, 2.0, 108), (610.0, 91, 0.5, 106), (610.5, 88, 0.5, 106),
+    (612.0, 88, 3.0, 106), (615.0, 86, 0.5, 104), (615.5, 84, 0.5, 104),
+    (616.0, 84, 4.0, 104), (620.0, 88, 3.0, 104),
+    (623.0, 86, 0.5, 102), (623.5, 88, 0.5, 104),
+    (624.0, 88, 8.0, 104),   # the farewell tone; exits 632
 ]
 
-GUITAR_SOLO = GUITAR_B2 + GUITAR_D2 + GUITAR_FIN
+# (A2) The plucky under-layer (same ch14, polyphonic).  Short (<=0.35 beat) low
+# (<=74) stabs that ring briefly then release -> a plucked chug under the lead;
+# an octave+ below it so they only drive the distortion, never smear the lead.
+# None straddles a 4-beat downbeat; both breath windows stay empty.
+GUITAR_BED: list[tuple[float, int, float, int]] = [
+    (401.5, 67, 0.3, 74), (409.5, 66, 0.3, 74), (413.5, 69, 0.3, 76),
+    (417.5, 71, 0.3, 80), (419.0, 67, 0.3, 78),
+    (426.5, 69, 0.3, 80), (429.0, 72, 0.3, 78),
+    (434.5, 74, 0.3, 82), (437.0, 71, 0.3, 80),
+    (445.5, 69, 0.3, 80), (450.5, 71, 0.3, 82), (458.5, 69, 0.3, 82),
+    (466.5, 74, 0.3, 84), (469.0, 71, 0.3, 82),
+    (482.5, 71, 0.3, 84), (485.0, 67, 0.3, 82), (490.5, 69, 0.3, 82),
+    (498.5, 74, 0.3, 84), (506.5, 69, 0.3, 82), (514.5, 71, 0.3, 82),
+    (522.5, 72, 0.3, 80), (530.5, 74, 0.3, 80), (538.5, 66, 0.3, 78),
+    (546.5, 71, 0.3, 84), (554.5, 69, 0.3, 84), (566.5, 67, 0.3, 82),
+    (578.5, 71, 0.3, 84), (614.5, 69, 0.3, 82), (622.5, 67, 0.3, 82),
+]
 
-# ch14 pitch-bend gestures, as linear ramp segments (t0, t1, semis0, semis1);
-# each gesture ends at 0 well before its section boundary (416/544/640) so the
-# generic check_bend_hygiene stays green.  CC1 vibrato rides on top separately.
+GUITAR_SOLO = GUITAR_LEAD   # the melodic lead (bed is separate; oracles split at 75)
+
+# (B) Pitch-bend gestures (t0, t1, semis0, semis1); integer plateaus; each ends
+# at 0 before its section boundary (416/544/640) so check_bend_hygiene passes,
+# and every flick lives strictly between 4-beat downbeats so the WRITTEN pitch
+# governs consonance at each downbeat (no correctness rides on a bend).
 GUITAR_BENDS: list[tuple[float, float, float, float]] = [
-    (406.25, 406.75, 0.0, 2.0), (408.25, 408.75, 2.0, 0.0),   # B5 over the D-beat
-    (432.5, 433.0, 0.0, 2.0), (433.25, 433.6, 2.0, 0.0),      # E6 flick
-    (465.0, 465.75, 0.0, 2.0), (467.5, 467.9, 2.0, 0.0),      # the scream to B5
-    (493.0, 493.5, 0.0, -1.0), (493.5, 494.0, -1.0, 0.0),     # the sob
-    (602.5, 603.25, 0.0, 2.0), (603.25, 603.9, 2.0, 0.0),     # peak flick 1 -> B6
-    (606.0, 606.5, 0.0, 2.0), (606.5, 607.0, 2.0, 0.0),       # peak flick 2
+    (405.0, 405.6, 0.0, 2.0), (405.6, 406.2, 2.0, 0.0),      # BUILD2 wail scoop
+    (450.0, 450.6, 0.0, 2.0), (450.6, 451.2, 2.0, 0.0),      # wail on the 448 E6
+    (458.0, 458.6, 0.0, 2.0), (458.6, 459.2, 2.0, 0.0),      # THE SCREAM (456 E6)
+    (463.2, 463.6, 0.0, 2.0), (463.6, 464.0, 2.0, 0.0),      # scoop into 464 G6
+    (490.0, 490.5, 0.0, -1.0), (490.5, 491.0, -1.0, 0.0),    # the sob (488 C6)
+    (544.2, 544.6, -2.0, 0.0),                               # scoop UP into entry
+    (571.2, 571.6, 0.0, 2.0), (571.6, 572.0, 2.0, 0.0),      # into 572 A6 touch
+    (587.2, 587.6, 0.0, 2.0), (587.6, 588.0, 2.0, 0.0),      # into 588 A6
+    (602.5, 603.0, 0.0, 2.0), (603.0, 603.5, 2.0, 0.0),      # PEAK scream-flick 1
+    (605.5, 606.0, 0.0, 2.0), (606.0, 606.5, 2.0, 0.0),      # PEAK scream-flick 2
+]
+
+# (C) Legato: CC68 on/off beat pairs bracketing each hammer-on / pull-off run,
+# so the run slurs into the soaring held tone (a retune, not a fresh pick) —
+# the specific cure for the "marimba" attack stream.
+GUITAR_LEGATO: list[tuple[float, float]] = [
+    (344.9, 346.1), (355.9, 357.6), (368.4, 369.1), (401.9, 404.1),
+    (422.6, 424.1), (429.9, 432.1), (454.4, 456.1), (461.9, 464.1),
+    (486.4, 488.1), (516.4, 517.1),
+    (550.9, 552.1), (560.4, 562.1), (570.9, 572.1), (581.9, 584.1),
+    (586.9, 588.1), (614.9, 616.1), (622.9, 624.1),
 ]
 
 # (B) The choir counterpoint (ch15, GM53 Voice Oohs).  (onset, pitch, dur, vel).
@@ -416,15 +456,16 @@ PART = conductor.Part(
         (CH_SYNDRUM, "synth drum", 118, 98, 64, 30),
         (CH_HIT, "orchestra hit", 55, 100, 64, 40),
         (CH_RISER, "riser - reverse cymbal", 119, 88, 64, 55),
-        (CH_GUITAR, "solo - distortion guitar", 30, 104, 64, 26),
+        (CH_GUITAR, "solo - overdrive lead", 29, 118, 64, 20),
         (CH_CHOIR2, "choir - counterpoint", 53, 90, 64, 52),
     ],
-    bank_selects=[(0, 1), (10, 1), (11, 1), (13, 1)],   # steel/toms/synth-drum/riser: set B
+    bank_selects=[(0, 1), (10, 1), (11, 1), (13, 1),    # steel/toms/synth-drum/riser: set B
+                  (14, 1)],   # -One: opt the lead guitar into the sustaining DRIVE_LEAD voice
     program_changes=[(CH_KIT, 0.0, 1)],     # non-zero kit program (V3 default)
 )
 
 # -- verification config (consumed by verify.run_track) ---------------------
-PROGRAM_WHITELIST: set[int] = {30, 39, 46, 49, 52, 53, 55, 61, 81, 89,
+PROGRAM_WHITELIST: set[int] = {29, 39, 46, 49, 52, 53, 55, 61, 81, 89,
                                114, 117, 118, 119}
 CENTERED_CHANNELS: set[int] = {CH_PAD, CH_BASS, CH_LEAD, CH_HARP,
                                CH_AERIAL, CH_CHOIR, CH_TOMS, CH_SYNDRUM,
@@ -902,44 +943,51 @@ def oracles(sc: en.Score, info, spans) -> list[tuple[str, list[str]]]:
         for t, p, _v in _note_ons(sc, ch):
             stack.setdefault(t, []).append(p)
 
+    # The melodic LEAD is ch14 pitch >= 76 (E5); the plucky bed is <= 74 (D5);
+    # nothing lands on 75.  Every arc/soar check keys off the lead.
+    g_lead = [(t, p, v) for t, p, v in g_ons if p >= 76]
+    g_bed = [(t, p, v) for t, p, v in g_ons if p <= 74]
+
     # --- guitar_solo_arc: silent-then-rising, soaring, breathing, consonant -
     fails = []
     if any(t < _tick(BUILD2[0]) for t, _p, _v in g_ons):
         fails.append("guitar sounds before the second climb (beat 320)")
 
-    def _gwin(lo: float, hi: float) -> int:
-        return sum(1 for t, _p, _v in g_ons if _tick(lo) <= t < _tick(hi))
+    def _lwin(lo: float, hi: float) -> int:
+        return sum(1 for t, _p, _v in g_lead if _tick(lo) <= t < _tick(hi))
 
-    w = [_gwin(320, 352), _gwin(352, 384), _gwin(384, 416)]
+    w = [_lwin(320, 352), _lwin(352, 384), _lwin(384, 416)]
     if w[0] < 3 or not (w[0] < w[1] < w[2]):
-        fails.append(f"build-two guitar windows not rising: {w}")
+        fails.append(f"build-two lead windows not rising: {w}")
 
-    def _gmean(lo: float, hi: float, idx: int) -> float:
-        xs = [e[idx] for e in g_ons if _tick(lo) <= e[0] < _tick(hi)]
+    def _lmean(lo: float, hi: float, idx: int) -> float:
+        xs = [e[idx] for e in g_lead if _tick(lo) <= e[0] < _tick(hi)]
         return sum(xs) / len(xs) if xs else 0.0
 
-    mb, md, mf = _gmean(320, 416, 1), _gmean(416, 544, 1), _gmean(544, 640, 1)
+    mb, md, mf = _lmean(320, 416, 1), _lmean(416, 544, 1), _lmean(544, 640, 1)
     if not (mb < md < mf):
-        fails.append(f"guitar register not rising: {mb:.0f}/{md:.0f}/{mf:.0f}")
-    if _gwin(320, 416) / 96.0 >= _gwin(416, 544) / 128.0:
-        fails.append("guitar density not rising into drop two")
-    if _gmean(544, 640, 2) <= _gmean(416, 544, 2):
-        fails.append("finale guitar not louder than drop two")
-    fin_p = [p for t, p, _v in g_ons if _tick(544) <= t < _tick(640)]
-    if fin_p and min(fin_p) < 83:
-        fails.append(f"guitar dips to {min(fin_p)} in the finale (must soar >= 83)")
+        fails.append(f"lead register not rising: {mb:.0f}/{md:.0f}/{mf:.0f}")
+    if _lwin(320, 416) / 96.0 >= _lwin(416, 544) / 128.0:
+        fails.append("lead density not rising into drop two")
+    if _lmean(544, 640, 2) <= _lmean(416, 544, 2):
+        fails.append("finale lead not louder than drop two")
+    fin_lead = [p for t, p, _v in g_lead if _tick(544) <= t < _tick(640)]
+    if fin_lead and min(fin_lead) < 83:
+        fails.append(f"lead dips to {min(fin_lead)} in the finale (must soar >= 83)")
     for lo, hi in ((416, 544), (544, 640)):
-        seg = [e for e in g_ons if _tick(lo) <= e[0] < _tick(hi)]
+        seg = [e for e in g_lead if _tick(lo) <= e[0] < _tick(hi)]
         if len(_phrases(seg, gap_ticks=2 * _PPQ)) < 5:
-            fails.append(f"guitar has < 5 phrases in [{lo},{hi})")
-        secspans = sorted((on, off) for on, off, _p in _note_spans(sc, CH_GUITAR)
+            fails.append(f"lead has < 5 phrases in [{lo},{hi})")
+        leadspans = [(on, off) for on, off, p in _note_spans(sc, CH_GUITAR)
+                     if p >= 76 and _tick(lo) <= on < _tick(hi)]
+        sounding = sum(off - on for on, off in leadspans) / _PPQ
+        if sounding > 0.88 * (hi - lo):   # sustained lead rings a lot, by design
+            fails.append(f"lead over-plays [{lo},{hi}) (duty "
+                         f"{sounding / (hi - lo):.2f} > 0.88)")
+        allspans = sorted((on, off) for on, off, _p in _note_spans(sc, CH_GUITAR)
                           if _tick(lo) <= on < _tick(hi))
-        sounding = sum(off - on for on, off in secspans) / _PPQ
-        if sounding > 0.75 * (hi - lo):
-            fails.append(f"guitar over-plays [{lo},{hi}) (duty "
-                         f"{sounding / (hi - lo):.2f} > 0.75)")
         horizon, max_gap = _tick(lo), 0
-        for on, off in secspans:
+        for on, off in allspans:
             max_gap = max(max_gap, on - horizon)
             horizon = max(horizon, off)
         if max_gap < 4 * _PPQ:
@@ -967,6 +1015,45 @@ def oracles(sc: en.Score, info, spans) -> list[tuple[str, list[str]]]:
         beat += 4.0
     results.append(("guitar_solo_arc", fails[:8]))
 
+    # --- guitar_lead_detail: register split, sustain, bends, legato, bed ------
+    fails = []
+    if any(74 < p < 76 for _t, p, _v in g_ons):
+        fails.append("a ch14 note sits in the lead/bed seam (74<p<76)")
+    for lo, hi in ((416, 544), (544, 640)):
+        lp = [p for t, p, _v in g_lead if _tick(lo) <= t < _tick(hi)]
+        bp = [p for t, p, _v in g_bed if _tick(lo) <= t < _tick(hi)]
+        if lp and bp and max(bp) >= min(lp):
+            fails.append(f"bed not strictly under the lead in [{lo},{hi})")
+    holds = [(on, off) for on, off, p in _note_spans(sc, CH_GUITAR)
+             if p >= 76 and off - on >= 2 * _PPQ and _tick(416) <= on < _tick(640)]
+    if len(holds) < 12:
+        fails.append(f"only {len(holds)} held (>=2-beat) lead tones (want >= 12)")
+    if sum(off - on for on, off in holds) / _PPQ < 55:
+        fails.append("< 55 beats of ringing held lead")
+    if not holds or max(off - on for on, off in holds) < 6 * _PPQ:
+        fails.append("no >= 6-beat soaring tone")
+    if sum(1 for _t, f in gbends if abs(f) >= 0.9) < 6:
+        fails.append("< 6 full (>=+-2) bend excursions")
+    c68 = _cc_lane(sc, CH_GUITAR, 68)
+    pairs, on68 = 0, False
+    for _t, v in c68:
+        if v >= 64 and not on68:
+            on68 = True
+        elif v < 64 and on68:
+            on68, pairs = False, pairs + 1
+    if pairs < 8:
+        fails.append(f"only {pairs} CC68 legato pairs (want >= 8)")
+    nbd_d2 = sum(1 for t, _p, _v in g_bed if _tick(416) <= t < _tick(544))
+    nbd_fin = sum(1 for t, _p, _v in g_bed if _tick(544) <= t < _tick(640))
+    if nbd_d2 < 12:
+        fails.append(f"only {nbd_d2} bed stabs in drop two (want >= 12)")
+    if nbd_fin < 3:
+        fails.append(f"only {nbd_fin} bed stabs in the finale (want >= 3)")
+    bedspans = [(on, off) for on, off, p in _note_spans(sc, CH_GUITAR) if p <= 74]
+    if sum(off - on for on, off in bedspans) / _PPQ > 0.15 * (640 - 416):
+        fails.append("bed not sparse (rings too much)")
+    results.append(("guitar_lead_detail", fails[:8]))
+
     # --- choir_counterpoint: late, under the solo, independent, consonant ---
     fails = []
     c_ons = _note_ons(sc, CH_CHOIR2)
@@ -982,9 +1069,9 @@ def oracles(sc: en.Score, info, spans) -> list[tuple[str, list[str]]]:
         fails.append("counterpoint bleeds into the outro")
     c_fin = sorted((t, p) for t, p, _v in c_ons
                    if _tick(544) <= t < _tick(640))
-    if c_fin and fin_p and max(p for _t, p in c_fin) >= min(fin_p):
+    if c_fin and fin_lead and max(p for _t, p in c_fin) >= min(fin_lead):
         fails.append(f"counterpoint {max(p for _t, p in c_fin)} not under the "
-                     f"solo floor {min(fin_p)}")
+                     f"lead floor {min(fin_lead)}")
     cf = 0
     beat = 512.0
     while beat < FINALE[1] - 1e-9 and cf <= 6:
@@ -1005,12 +1092,17 @@ def oracles(sc: en.Score, info, spans) -> list[tuple[str, list[str]]]:
                                      f"beat {beat:.0f}")
                         cf += 1
         beat += 4.0
-    g_on_ticks = [t for t, _p, _v in g_ons]
+    # Independence is measured against the guitar's MELODIC onsets (the note
+    # plan), not the sustain re-picks the emitter adds in drop two / the finale
+    # — re-picking is timbre (a tremolo-held note), not a new melodic event.
+    g_mel = sorted((_tick(o), gp) for o, gp, _d, _v in GUITAR_SOLO
+                   if FINALE[0] <= o < FINALE[1])
+    g_on_ticks = [t for t, _p in g_mel]
     indep = sum(1 for t, _p in c_fin
                 if all(abs(t - gt) > 60 for gt in g_on_ticks))
     if indep < 12:
         fails.append(f"only {indep} independent counterpoint onsets (>= 12)")
-    g_sorted = sorted((t, p) for t, p, _v in g_ons)
+    g_sorted = g_mel
     contrary = classified = obl_con = 0
     prev = None
     for t, p in c_fin:
@@ -1347,11 +1439,20 @@ def _crashes(sc: en.Score, t0: float, t1: float, vel: int) -> None:
 # -One emitters — the distorted guitar, the choir counterpoint, the fills.
 # ---------------------------------------------------------------------------
 
+GUITAR_VEL_BOOST = 12       # lift the whole solo so the lead sits on the stack
+
+
 def _guitar_solo(sc: en.Score, t0: float, t1: float) -> None:
-    """Emit distorted-lead notes with onset in [t0, t1).  jt=0: tick-exact."""
+    """Emit the soaring lead with onset in [t0, t1).  The notes are HELD — the
+    sustaining DRIVE_LEAD voice (opted in via the ch14 CC0 bank-select) rings a
+    long tone at near-constant level so it soars and blooms with vibrato instead
+    of dying a beat after the pick.  GUITAR_BENDS wail; CC68 legato slurs the
+    fast runs into hammer-ons / pull-offs.  jt=0 keeps the onsets tick-exact for
+    the downbeat-consonance oracle."""
     for onset, p, dur, vel in GUITAR_SOLO:
         if t0 <= onset < t1:
-            sc.note(CH_GUITAR, p, onset, dur, vel, jt=0, jv=2)
+            sc.note(CH_GUITAR, p, onset, dur, min(127, vel + GUITAR_VEL_BOOST),
+                    jt=0, jv=2)
 
 
 def _guitar_bends(sc: en.Score, t0: float, t1: float) -> None:
@@ -1375,6 +1476,24 @@ def _guitar_cc1(sc: en.Score, t0: float, t1: float) -> None:
         en.cc_curve(sc, CH_GUITAR, 1,
                     [(onset, 0), (onset + 0.35 * dur, peak),
                      (onset + dur - 0.1, 0)], step=0.25)
+
+
+def _guitar_bed(sc: en.Score, t0: float, t1: float) -> None:
+    """The plucky under-layer: short low stabs with onset in [t0, t1).  Same
+    ch14 as the lead (polyphonic); short + low so they read as plucked chug
+    under the sustaining lead and drive the distortion harder."""
+    for onset, p, dur, vel in GUITAR_BED:
+        if t0 <= onset < t1:
+            sc.note(CH_GUITAR, p, onset, dur, vel, jt=0, jv=2)
+
+
+def _guitar_legato(sc: en.Score, t0: float, t1: float) -> None:
+    """CC68 legato ON (90) then OFF (0) bracketing each run whose ON-beat is in
+    [t0, t1): the run slurs (hammer-on/pull-off) into its soaring held tone."""
+    for on, off in GUITAR_LEGATO:
+        if t0 <= on < t1:
+            sc.cc(CH_GUITAR, 68, 90, on)
+            sc.cc(CH_GUITAR, 68, 0, off)
 
 
 def _choir2(sc: en.Score, t0: float, t1: float) -> None:
@@ -1513,9 +1632,11 @@ def _b_build2(sc: en.Score) -> None:
     _snare_roll(sc, 408.0, 416.0, 50, 96)
     _fills_in(sc, *BUILD2)
     _build_fills(sc, *BUILD2)          # -One: denser fills on the second climb
-    _guitar_solo(sc, *BUILD2)          # -One: the solo materializes, teasing
+    _guitar_solo(sc, *BUILD2)          # -One: the soaring lead materialises
+    _guitar_bed(sc, *BUILD2)           # -One: plucky under-layer stabs
     _guitar_bends(sc, *BUILD2)
     _guitar_cc1(sc, *BUILD2)
+    _guitar_legato(sc, *BUILD2)        # -One: hammer-on/pull-off runs
     _risers_in(sc, *BUILD2)
 
 
@@ -1526,11 +1647,11 @@ def _b_drop2(sc: en.Score) -> None:
     _bass_8ths(sc, *DROP2, 90, 94, pops=True)
     _four_floor(sc, *DROP2, kick=116, clap=108, hat=74, open_hat=82,
                 hat16=58, tamb=54)
-    _crashes(sc, *DROP2, vel=116)
+    _crashes(sc, *DROP2, vel=98)     # -One: duck for the lead's pocket
     for r in range(4):
         en.line(sc, CH_LEAD, DROP2[0] + 32.0 * r, LEAD_ROOT, MODE, HOOK,
                 vel=100, gate=0.96, jt=2, jv=4)
-    _hits(sc, *DROP2, step=4.0, vel=106)
+    _hits(sc, *DROP2, step=4.0, vel=92)     # -One: duck for the lead's pocket
     _brass_pairs(sc, *BRASS_PAIRS["drop2"])
     for c in range(16):
         t = DROP2[0] + 8.0 * c
@@ -1538,8 +1659,10 @@ def _b_drop2(sc: en.Score) -> None:
             sc.note(CH_CHOIR, p, t, 7.8, 76, jt=3, jv=2)
     en.vowel_curve(sc, CH_CHOIR, [(416.0, 88), (540.0, 95)], step=4.0)
     _guitar_solo(sc, *DROP2)           # -One: the full wail over drop two
+    _guitar_bed(sc, *DROP2)
     _guitar_bends(sc, *DROP2)
     _guitar_cc1(sc, *DROP2)
+    _guitar_legato(sc, *DROP2)
     _choir2(sc, *DROP2)                # -One: counterpoint enters, rising
     _choir2_controllers(sc)            # authors the whole ch15 CC span once
     _fills_in(sc, *DROP2)
@@ -1565,8 +1688,8 @@ def _b_finale(sc: en.Score) -> None:
     _bass_8ths(sc, *FINALE, 92, 92, pops=True)
     _four_floor(sc, *FINALE, kick=112, clap=106, hat=72, open_hat=80,
                 hat16=56)
-    _crashes(sc, *FINALE, vel=118)
-    _hits(sc, *FINALE, step=4.0, vel=108)
+    _crashes(sc, *FINALE, vel=98)     # -One: duck for the soaring lead
+    _hits(sc, *FINALE, step=4.0, vel=92)     # -One: duck for the soaring lead
     for k in range(6):
         for p in (52, 64):
             sc.note(CH_CHOIR, p, FINALE[0] + 16.0 * k, 15.7, 74,
@@ -1577,8 +1700,10 @@ def _b_finale(sc: en.Score) -> None:
             sc.note(CH_AERIAL, p, FINALE[0] + 32.0 * k, 31.5, 56,
                     jt=3, jv=2)
     _guitar_solo(sc, *FINALE)          # -One: the soaring solo on top
+    _guitar_bed(sc, *FINALE)
     _guitar_bends(sc, *FINALE)
     _guitar_cc1(sc, *FINALE)
+    _guitar_legato(sc, *FINALE)
     _choir2(sc, *FINALE)               # -One: the finale counterpoint
     _fills_in(sc, *FINALE)
 

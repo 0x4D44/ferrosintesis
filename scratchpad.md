@@ -90,3 +90,13 @@
   Atlas #14, Hollow Hill). A separate catalog-refresh pass should re-render the
   strings-affected albums to bring the published audio current — verify against a
   `render_diff.py` (baseline = 0.13.4 trunk binary) so only genuine deltas land.
+- [ ] 2026.07.11 - **Review the distorted-guitar synthesis quality** (Arthur, separate
+  pass). The T16 soaring lead is "sort-of OK" but the guitar timbre isn't convincing.
+  The voice is Karplus-Strong pluck + tanh/cabinet Drive (`voices.rs` DRIVE/DRIVE_LEAD
+  presets, `engine.rs` Drive insert). High notes decay fast even with DRIVE_LEAD (the KS
+  loop; a plucked string has no feedback sustain). Options to evaluate: a feedback/e-bow
+  loop_gain>1 for true infinite sustain; a compressor/sustainer stage in the Drive; a
+  richer cabinet/tone stack; or a hybrid oscillator+pluck lead. Affects the 5 albums that
+  use GM 29/30 (Hollow Hill, Seven Kinds, Signal Fire, Estuary, Three-Sixty-One) — treat
+  as a timbre improvement with a render-diff refresh. See
+  `wrk_docs/2026.07.11 - HLD - Three-Sixty-One soaring lead.md`.

@@ -1031,6 +1031,12 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // 25 has no layer yet (no clean CC0 steel source) but is pinned too so
         // it stays frozen if one lands.
         24..=25 => crate::voices::make(program, key, vel, sr, seed, false),
+        // Opt-in SUSTAINING lead voicing of the driven guitar (GM 29/30): a
+        // held note rings for its whole duration (amp sustain) for a soaring
+        // lead with bends and legato. The default-bank 29/30 voice (the
+        // decaying DRIVE preset) is untouched; the channel-wide overdrive/
+        // cabinet Drive insert still applies (it is program-keyed in engine.rs).
+        29 | 30 => Box::new(Pluck::new(&crate::voices::DRIVE_LEAD, key, vel, sr, seed)),
         // Same freeze for alt-bank reeds: the default bank's LA_REED layer
         // (voices.rs, GM 68–71) must not reach alt-bank channels.
         68..=71 => crate::voices::make(program, key, vel, sr, seed, false),

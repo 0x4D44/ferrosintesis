@@ -1414,6 +1414,31 @@ pub const DRIVE: PluckPreset = PluckPreset {
     click: 2.2, // the pick hits harder through an amp
     ..DEFAULTS
 };
+/// Opt-in (CC0 alt-bank) SUSTAINING lead voicing of the driven guitar. A
+/// near-infinite string decay so a held note rings at ~constant level for its
+/// whole written duration (real amp sustain), held in the distortion — a
+/// soaring lead that bends and slurs, instead of a decaying pluck that reads
+/// as a struck mallet. Softer pick so it sings, not chugs. The default-bank
+/// 29/30 voice (DRIVE, above) is untouched; only a channel that opts in via
+/// CC0 bank-select gets this.
+pub const DRIVE_LEAD: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "DRIVE_LEAD",
+    t60: 40.0,       // loop_gain ~0.999: the fundamental barely decays
+    bright: 11000.0, // gentle in-loop damping so the HARMONICS ring too — the
+    // note stays bright and loud (sustain), not just a quiet
+    // fundamental. This is the real sustain lever for KS.
+    pick_lp: 6000.0,
+    pos: 0.12,
+    amp: 1.5, // drive the string HOT into the overdrive: the tanh then
+    // holds the (decaying) note at its saturated/compressed
+    // level far longer — amp-like sustain, crucial for the
+    // fast-decaying HIGH finale notes.
+    rel_t60: 0.30, // a slightly longer bloom-off when the note is lifted
+    pickup: 0.10,
+    click: 1.3, // softer pick attack: a lead sings, it does not chug
+    ..DEFAULTS
+};
 pub const MUTED: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "MUTED",

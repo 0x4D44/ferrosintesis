@@ -95,11 +95,17 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   while the synth ignored them. Scan `render_opus.py::ALBUMS` for authored
   controls before promising byte identity; then make the waiver set explicit.
 - 2026.07.09 — **Full-mix audio deltas must follow the rendered signal, not the
-  control's intuition.** The synth feature demos' first `analyze.py` pass failed
-  because wah/Leslie/vowel checks guessed "darkens"/"louder" while the full mix
-  measured HF-up or HF-down after other parts and normalization. For controller
-  audibility, either isolate a solo stem or measure the rendered ratio first and
-  assert that direction.
+  control's intuition** (extended 2026.07.11). The synth demos' first `analyze.py`
+  pass failed because wah/Leslie/vowel checks guessed "darkens"/"louder" while the
+  full mix measured the opposite after other parts and normalization. Corollaries
+  from the T16 guitar work: `--solo` stems are INDEPENDENTLY peak-normalized, so a
+  solo-stem RMS measures crest/decay, NOT the channel's level in the mix —
+  un-normalize via the CLI's reported `peak`, and judge lead audibility band-limited
+  (700–2500 Hz), not broadband (a single lead sits ~18–24 dB under a full mix by
+  nature). And KS sustain: a held distorted-guitar note dies because the in-loop
+  damper `bright` kills the harmonics that carry the RMS — raise `bright` (NOT `t60`,
+  which clamps at pitch and only governs the fundamental); the tanh `amp` adds
+  compression sustain for the fastest-decaying high notes.
 - 2026.07.09 — **Generated text-artifact freshness checks must normalize line
   endings.** The synth demo verifier compared `album_manifest.json` bytes, so a
   Windows CRLF checkout failed even though Git saw no diff and the builder emitted

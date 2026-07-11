@@ -1,0 +1,29 @@
+Why this piece
+
+Drum feature number one: a D-mixolydian rooftop chase at 132 BPM where the
+kit is the protagonist. Two composed solos use the drum kit's real stereo
+stage - hats left, crash-1 and splash far left, high tom a third left,
+ride right, china and crash-2 far right - so the phrases genuinely move
+across the room. Brass stabs and a wah rhythm guitar keep the chase alive
+between them. The hums say "run the rooftops / wire to wire".
+
+Listening guide
+
+0:00 - The chase riff: overdriven bVII stomp, brass answering.
+0:43 - Chorus: the lead hook over D-D-G-G, riff underneath.
+1:12 - SOLO I (16 bars): hat-call/ride-answer, then china-and-crash
+       antiphony over tom circuits, two 32nd-note burst bars, and a
+       crash-trading summit - a sparse bass pedal is the only companion.
+2:40 - Breakdown: the band thins to a heartbeat.
+2:54 - SOLO II (8 bars, drums alone): the antiphony figure returns twice,
+       a two-bar 32nd shimmer, and a rising floor-to-high "rooftop rush".
+3:09 - Double final chorus; 4:07 the riff jumps one last parapet.
+
+MIDI techniques
+
+The solos are oracle-checked for width and density: 18-22 hits per bar,
+nine distinct pan groups, mandatory 32nd-burst bars, and left/right
+alternations - and the render must prove the spread (side/mid energy in
+the solo windows). Velocity opens the kit's timbre (harder = brighter);
+fills track the toms' overshoot-and-settle pitch glide. CC74+CC71 drive
+the wah guitar; brass growls are aftertouch; the bass glides with CC5/65.

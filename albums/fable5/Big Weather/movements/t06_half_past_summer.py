@@ -699,13 +699,14 @@ def oracles(sc, info, spans):
 
 
 # ---------------------------------------------------------------------------
-# Audio oracles — thresholds provisional until the phase-D freeze
+# Audio oracles — thresholds FROZEN at the phase-D album freeze (2026.07.11)
 # (HLD §6.2: re-measured on the assembled-album render, then pinned).
 # ---------------------------------------------------------------------------
 
-# PROVISIONAL pins (2026.07.11, per-track render, ferrosintesis v0.13.x;
-# re-pinned at the phase-D assembled-album freeze).  Measured: lift
-# 4.45 dB, dip 9.07 dB, re-entry 11.47 dB — pinned at measured - slack.
+# FROZEN pins at the phase-D album freeze (2026.07.11, per-track render,
+# ferrosintesis v0.13.x; re-pinned at the phase-D assembled-album freeze).
+# Measured: lift 4.45 dB, dip 9.07 dB, re-entry 11.47 dB — pinned at
+# measured - slack.
 _LIFT_DB = 3.0          # final chorus over verse 1 (measured 4.45)
 _DIP_DB = 7.0           # cadenza below chorus 2 (measured 9.07)
 _REENTRY_DB = 9.0       # final-chorus slam over the cadenza (meas. 11.47)

@@ -1,0 +1,27 @@
+Why this piece
+
+The album's lightest weather: A-major jangle-pop built on wall-to-wall
+picked add9 eighth notes, with a glide lead that slides between hook notes
+like a kite on a string. The signature move is the pre-chorus: the choir
+swells from a closed "oo" to an open "ah" as the pad rises - the sound of
+wind picking up. The hums say "paper kites / catch the wind / over
+rooftops / fly on".
+
+Listening guide
+
+0:00 - Intro: the jangle engine starts alone, then piano joins.
+0:16 - Verse: melodic bass walking under the eighth-note shimmer.
+0:48 - Pre-chorus: the choir swell, oo to ah, snare sixteenths launching.
+1:05 - Chorus: the glide lead sings the hook, portamento engaged.
+2:26 - Middle-8: strings gate in for the first time, everything softens.
+2:42 - Final chorus: a drive guitar lifts the jangle, the choir opens wide.
+3:23 - Outro: the kites let go - the engine winds down to a last chime.
+
+MIDI techniques
+
+CC5/CC65 portamento gives the lead its glide; CC68 slurs tie its phrases.
+CC70 vowel curves drive the oo-to-ah morphs (proved audible in the render,
+not just present in the file). CC64 pedals the piano, CC11 shapes the
+string swells, CC94 throws echo accents. The second guitar chimes on GM25
+and lifts to GM29 only for the last chorus. All sustained beds centred;
+the render loses only 0.08 dB summed to mono.

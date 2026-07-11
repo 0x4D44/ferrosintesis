@@ -841,19 +841,19 @@ def oracles(sc, info, spans):
 
 
 # ---------------------------------------------------------------------------
-# Audio oracles — measure-then-assert (HLD §6.2); thresholds PROVISIONAL
-# until the phase-D assembled-album freeze.  Measured 2026.07.11 on this
-# worktree's ferrosintesis 0.13.x per-track render:
+# Audio oracles — measure-then-assert (HLD §6.2); thresholds FROZEN
+# at the phase-D assembled-album freeze (2026.07.11).  Measured 2026.07.11 on
+# this worktree's ferrosintesis 0.13.x per-track render:
 #   chorus lift +2.96 dB, drop depth +19.58 dB, re-entry slam +20.49 dB,
 #   Leslie AM-flux fast/slow 1.58, wah band-fraction bright/dark 5.85
 #   (weakest single bar 3.45).  Pins sit >= 1.5 dB / >= 25% under those.
 # ---------------------------------------------------------------------------
 
-_LIFT_DB = 1.4      # PROVISIONAL: final chorus RMS over verse-1 RMS
-_DROP_DB = 14.0     # PROVISIONAL: whisper core >= this far below chorus 2
-_SLAM_DB = 14.0     # PROVISIONAL: first final-chorus bar over the drop
-_LESLIE_FLUX = 1.2  # PROVISIONAL: fast-rotor AM flux / slow-rotor flux
-_WAH_RATIO = 2.0    # PROVISIONAL: bright-half band fraction / dark-half
+_LIFT_DB = 1.4      # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): final chorus RMS over verse-1 RMS
+_DROP_DB = 14.0     # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): whisper core >= this far below chorus 2
+_SLAM_DB = 14.0     # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): first final-chorus bar over the drop
+_LESLIE_FLUX = 1.2  # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): fast-rotor AM flux / slow-rotor flux
+_WAH_RATIO = 2.0    # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): bright-half band fraction / dark-half
 
 
 def _mono(ctx, i0: int, i1: int) -> list[float]:

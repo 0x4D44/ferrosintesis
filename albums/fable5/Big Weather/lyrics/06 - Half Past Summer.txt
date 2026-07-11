@@ -1,0 +1,29 @@
+Why this piece
+
+The bass guitar's album. G major at 112 BPM, Rhodes and acoustic guitar
+holding the light, brushes and rim clicks keeping time - and the bass
+singing the most melodic line on the record: a phrase-shaped verse
+countermelody (nearly three-quarters stepwise), a chorus octave-pop
+figure, and a middle-8 cadenza where a fretless takes over and simply
+sings. The hums say "half past summer / gold to the rim".
+
+Listening guide
+
+0:00 - Intro: the Rhodes glows; the bass previews its countermelody.
+0:12 - Verse: the countermelody proper, stated four times, the tune's
+       real lead voice.
+0:55 - Chorus: tambourine backbeat, octave-pop bass, acoustic strums.
+2:12 - Middle-8, the CADENZA: the bass becomes a fretless (program 35),
+       the tempo eases to 104, drums thin to a heartbeat - slides in,
+       fall-offs, portamento glides, hand vibrato - then hands back.
+2:40 - Final chorus: the two bass ideas meet - the countermelody sung
+       over the chorus changes. 3:14 - outro; the bass says goodnight.
+
+MIDI techniques
+
+A scheduled program change 33-35-33 makes the cadenza literal; CC5/CC65
+portamento and two dozen pitch-bend gestures live only inside its window
+(oracle-pinned). CC68 hammers the cadenza run; CC64 pedals the Rhodes;
+CC74 brightens the steel guitar into choruses; CC94 answers the Rhodes
+fills with echo. The cadenza's dip and the final chorus's 11 dB re-entry
+are both measured in the render and frozen as regression thresholds.

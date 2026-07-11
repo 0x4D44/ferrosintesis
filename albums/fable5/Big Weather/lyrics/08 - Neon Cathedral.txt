@@ -1,0 +1,33 @@
+Why this piece
+
+The album's breather, and its most architectural track: E minor at 96 BPM,
+opening inside a real cathedral - the synth's pipe-organ voice with its
+long decorrelated stone reverb - whose theme the band then carries out
+into the neon. Echo-guitar phrases are answered by their own delays; the
+long swell in the back half is the track's single dynamic peak. The hums
+say "neon cathedral / every window burning / hold up the sky".
+
+Listening guide
+
+0:00 - PRELUDE: the cathedral organ alone; the THEME, stated plainly.
+0:30 - The band enters quietly: brushes, una corda piano, echo guitar,
+       bass; the organ becomes a drawbar instrument and stays.
+1:10 - Chorus: the hook arches on the echo guitar.
+2:10 - Chorus 2: a dark choir bed arrives.
+2:40 - Bridge in G major: a portamento square lead, the first real light.
+3:05 - The SWELL: strings gate in, sticks replace brushes, everything
+       rises for twenty bars...
+3:25 - ...to the peak: the hook returns on a driven guitar, aftertouch
+       leaning into the organ and strings.
+3:55 - Reprise: the prelude theme again - now on the band, quietly,
+       the cathedral remembered rather than revisited.
+
+MIDI techniques
+
+The cathedral program (GM19) is confined to the prelude by oracle - after
+the first verse the organ channel is re-programmed and never returns to
+it, keeping the mono-hostile stone tail contained (measured: 0.09 dB mono
+loss). The echo probe is a true A/B: the same staccato tag played dry
+(CC94 authored to zero) and thrown (CC94 spike), 3.9 dB apart in the
+render. Aftertouch swells organ and strings; CC5/65 glides the bridge
+lead; theme and hook recalls are recomputed from the score, never copied.

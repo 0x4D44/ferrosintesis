@@ -1,0 +1,30 @@
+Why this piece
+
+The record's riff engine: F#-minor rock at 128 BPM built from a distortion
+riff with a chromatic "spark" turn, a strictly gapped palm-mute chug, and
+a rock organ whose Leslie audibly spins up and down. Before the last
+chorus the song drops to a whisper - never to silence - and then slams
+back nearly twenty decibels. The hums say "static and sparks / wire in
+the dark".
+
+Listening guide
+
+0:00 - The riff: i-bIII-IV power chords, G-natural spark in the turn.
+0:15 - Verse: the chug engine - eighth-note palm mutes with real rests.
+0:45 - Pre-chorus; 1:00 chorus 1: the hook on an overdriven lead with
+       hand-bent vibrato (CC1 does nothing on a guitar - the wobble is
+       drawn in pitch bend).
+1:52 - Chorus 2: the bass answers the hook with its own countermelody.
+2:15 - Middle-8: the wah lead speaks - a filter opening 5.8x brighter
+       on the bright half of each phrase.
+2:37 - The WHISPER: everything at velocity 48 or less, palm-mute ticks,
+       low organ pad, heartbeat kick; the Leslie winds up in its last bar.
+2:52 - The slam: full band, 20 dB in one beat. 3:30 - outro, riff out.
+
+MIDI techniques
+
+The whisper's discipline is an oracle: every note-on in the window at or
+under velocity 48, coverage continuous so the gap check never trips. The
+Leslie is proved in the render by amplitude-modulation flux on an exposed
+organ chord (fast rotor vs slow); the wah by a band-energy ratio, not
+spectral tilt. Chug duty-cycle is capped by oracle for mono safety.

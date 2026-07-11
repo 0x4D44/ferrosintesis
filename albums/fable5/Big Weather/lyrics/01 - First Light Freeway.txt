@@ -1,0 +1,33 @@
+Why this piece
+
+The album opener and its mission statement: an E-major driving pop-rock
+song whose riff has a mixolydian bite (G and D naturals against the sunny
+key), whose chorus is meant to be whistled, and whose bass finally gets to
+sing the hook itself. The choir hums "first light / freeway / hold the
+lane / till morning".
+
+Listening guide
+
+0:00 - The RIFF: overdriven power chords with a borrowed bIII, four times.
+0:15 - Verse: off-beat piano, picked clean guitar, the bass already walking.
+0:45 - Pre-chorus: palm-tight chug and a wah pedal opening the clean guitar.
+1:00 - Chorus 1: the hook on the lead synth, lyric hums in the file.
+2:01 - Chorus 2: brass stabs and the layered choir arrive; the organ takes
+       over from the Rhodes and its Leslie spins up into 2:32.
+2:32 - Middle-8: una corda piano arpeggios, choir oo, strings enter pp.
+2:47 - Lead break: a hammered run to a held peak, then the DIVE - a full
+       octave down on a 12-semitone bend range - into
+3:02 - the final chorus: timpani rolls, strings, and the bass doubling the
+       hook note-for-note an octave below the lead.
+3:40 - Outro: the riff returns, the front rolls out on one held E5.
+
+MIDI techniques
+
+RPN0 widens the lead's bend range to 12 semitones for the dive and returns
+it to 2 afterwards. CC1 vibrato blooms on held hook notes; CC68 legato
+hammers the break's run; CC74+wah shapes the pre-chorus; CC64/CC67 pedal
+the piano; CC2-adjacent brass growls are channel aftertouch; CC94 throws
+the lead into the echo bus. Scheduled program changes: Rhodes to rock
+organ at chorus 2, overdrive to distortion for the final chorus. Sustained
+beds (bass, choir, strings, organ, timpani) stay centred; width comes from
+the guitar pair at 48/80 and the kit's own stereo placement.

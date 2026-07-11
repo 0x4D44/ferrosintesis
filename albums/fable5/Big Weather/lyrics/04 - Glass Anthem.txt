@@ -1,0 +1,31 @@
+Why this piece
+
+The album's power ballad and its clearest demonstration of "the orchestra
+arrives as the song builds": from a rubato solo piano to a thirteen-channel
+tutti in one unbroken staircase, every entry gated and machine-checked.
+The final chorus lifts the whole song from C major to D. The choir hums
+"glass anthem / hold the light / through the storm / we shine on".
+
+Listening guide
+
+0:00 - Rubato piano alone: the tempo genuinely breathes (86-94 BPM)
+       before locking to 100 at the first verse.
+0:26 - Verse 1: una corda piano and a single choir wisp.
+1:05 - Pre-chorus: the drums' first heartbeat; 1:14 chorus 1, bass and
+       clean guitar now in.
+2:12 - Chorus 2: drive guitar and second choir layer.
+2:41 - Middle-8: the pullback - strings enter under the hush, CC11 swells.
+2:58 - A timpani roll on the dominant opens the door...
+3:01 - ...and the final chorus lands in D major: brass, third choir layer,
+       organ, the album's largest single lift (16 dB over verse 1).
+3:59 - Outro: the intro motif returns, lifted with the new key, and the
+       tempo eases away.
+
+MIDI techniques
+
+Ten real tempo events (rubato intro, middle-8 pullback, outro easing).
+CC67 una corda in the verses, CC64 pedalling throughout, CC11 string
+swells, CC70 choir morphs, channel-aftertouch brass growls, Leslie ramps
+after the EP-to-organ program change, drive lift 29 to 30 at the key
+change. The layer staircase is pinned by an oracle counting active
+channels per section: 1, 2, 4, 6, 7, 7, 9, 13.

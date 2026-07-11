@@ -1,0 +1,33 @@
+Why this piece
+
+The choir feature - the album's "layered, complex choral vocals" made
+literal. Three choir channels sing true SATB-style parts: the bright "eh"
+sopranos carry a descant (the whistleable hook), the "aahs" the body, the
+"oohs" a low counter - independent voice-led lines, never parallel pads,
+with the registral order enforced by an oracle. B minor rises to its
+relative D major for the lift. The words the choir almost says: "get
+away, get away".
+
+Listening guide
+
+0:00 - Intro: solo piano states the hook; the choir breathes in.
+0:15 - Verse: piano and bass under a hummed aah bed.
+0:46 - Chorus: the descant sings the hook over claps and tambourine.
+2:19 - The VAMP: call-and-response - piano phrases call, the choir
+       answers on the back half of every cell, twelve cells long, a
+       constant G-to-A preparation aching for the lift.
+3:05 - The KEY LIFT: the same music re-rooted in D major, doo-wop
+       changes, everything open.
+3:44 - The TAG: choir nearly alone with claps and tambourine - and the
+       vowels themselves bloom, mm to open ah, threefold brighter.
+4:00 - Outro: the getaway car pulls away quietly.
+
+MIDI techniques
+
+CC70 vowel curves are the featured controller: the tag's morph is proved
+in the render by a formant-band ratio (1.9 kHz vs 450 Hz energy, 3.07x
+across the midpoint). CC1 blooms the descant's held notes; CC68 slurs a
+soprano melisma; aftertouch swells the aahs; CC64/CC67 pedal the piano;
+CC94 throws its calls into the echo. Antiphony and tag purity are both
+oracles: answers must land within half a beat of their cue, and nothing
+but choir and hand percussion may sound in the tag.

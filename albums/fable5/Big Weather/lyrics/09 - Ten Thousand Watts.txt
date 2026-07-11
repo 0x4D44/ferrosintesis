@@ -1,0 +1,34 @@
+Why this piece
+
+The fastest, hardest song on the record, and drum feature number two -
+built to contrast the first: where "Run the Rooftops" soloed in long
+phrases over a pedal, this one trades strict fours with the band, then
+takes eight bars completely alone. A-minor power chords, orchestra hits,
+late-gated timpani - and a produced drop (drone and cymbal swell, never
+silence) before the re-entry slam. The hums say "ten thousand watts /
+every light on".
+
+Listening guide
+
+0:00 - The stomp riff: bVII/bVI power chords at 138.
+0:55 - Chorus: the hook surges an octave in its third bar.
+2:19 - TRADING FOURS: three rounds - four bars of band, four of drums
+       alone; the drum fours escalate from kick-snare engine to cymbal
+       chokes to a preview of the cyclone.
+3:00 - BREAKDOWN SOLO, unaccompanied: the 32nd-note around-the-kit
+       CYCLONE, chokes, the engine at maximum - phrase-built, not noise.
+3:14 - The DROP: a fretless-smooth bass drone slides A3 to A2 under a
+       cymbal swell, the room holds its breath (13 dB down)...
+3:21 - ...SLAM: the final chorus lands 13.6 dB up in a single beat,
+       timpani now underneath everything.
+3:56 - Outro: the riff, the watts cut one by one.
+
+MIDI techniques
+
+The trading fours are an oracle (band bars and drum bars strictly
+alternate; drum fours band-silent); the solo passes the album's full
+drum-solo gauntlet (density, burst bars, six-plus keys over five-plus pan
+groups, wide-voice quota, left/right alternations) and its stereo spread
+is re-proved in the render. The drop's drone uses CC5/65 portamento and
+CC11 ducking so the gap oracle never trips. Orchestra hits are stabs
+only; timpani enters at the slam (late-gated).

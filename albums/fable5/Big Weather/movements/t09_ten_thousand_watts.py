@@ -1025,19 +1025,19 @@ def oracles(sc, info, spans):
 
 
 # ---------------------------------------------------------------------------
-# Audio oracles — thresholds provisional until the phase-D freeze
+# Audio oracles — thresholds FROZEN at the phase-D album freeze (2026.07.11)
 # (HLD §6.2: re-measured on the assembled-album render, then pinned).
 # ---------------------------------------------------------------------------
 
-# PROVISIONAL thresholds — measured 2026.07.11 on this worktree's
-# per-track render (ferrosintesis 0.13.x); re-pinned at phase D on the
-# assembled-album render.  Measured: lift 2.43 dB (pin - 1 dB); drop
+# FROZEN thresholds (phase-D album freeze, 2026.07.11) — measured 2026.07.11 on
+# this worktree's per-track render (ferrosintesis 0.13.x); re-pinned at phase D
+# on the assembled-album render.  Measured: lift 2.43 dB (pin - 1 dB); drop
 # depth 13.11 dB (pin - 1.6); slam 13.63 dB (pin - 1.6); breakdown
 # side/mid 0.118 (pin - 25%).
-_LIFT_DB = 1.4        # PROVISIONAL: final chorus over verse 1
-_DROP_DB = 11.5       # PROVISIONAL: drop depth below chorus 2
-_SLAM_DB = 12.0       # PROVISIONAL: re-entry slam bar over the drop
-_SPREAD_MIN = 0.088   # PROVISIONAL: breakdown side/mid |L-R| ratio
+_LIFT_DB = 1.4        # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): final chorus over verse 1
+_DROP_DB = 11.5       # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): drop depth below chorus 2
+_SLAM_DB = 12.0       # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): re-entry slam bar over the drop
+_SPREAD_MIN = 0.088   # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): breakdown side/mid |L-R| ratio
 
 
 def audio_checks(ctx):

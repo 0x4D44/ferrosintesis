@@ -765,20 +765,20 @@ def oracles(sc, info, spans):
 
 
 # ---------------------------------------------------------------------------
-# Audio oracles — thresholds provisional until the phase-D freeze
+# Audio oracles — thresholds FROZEN at the phase-D album freeze (2026.07.11)
 # (HLD 6.2: re-measured on the assembled-album render, then pinned).
 # ---------------------------------------------------------------------------
 
-# PROVISIONAL: measured 4.13 dB (2026.07.11, ferrosintesis 0.13.x
-# per-track render); pinned with 2.1 dB slack, re-pinned at phase D.
+# FROZEN 2026.07.11 (phase-D album render): measured 4.13 dB (ferrosintesis
+# 0.13.x per-track render); pinned with 2.1 dB slack, re-pinned at phase D.
 _LIFT_DB = 2.0        # lift chorus over verse 1
-# PROVISIONAL: measured 3.07x (band ratio 0.0563 -> 0.1729, 2026.07.11,
-# per-track render); pinned 41% below the measurement, re-pinned at
-# phase D.  The oo -> eh morph retunes the choir's F2 600 -> 1900 Hz and
+# FROZEN 2026.07.11 (phase-D album render): measured 3.07x (band ratio
+# 0.0563 -> 0.1729, per-track render); pinned 41% below the measurement,
+# re-pinned at phase D.  The oo -> eh morph retunes the choir's F2 600 -> 1900 Hz and
 # lifts the band-2/3 gains 0.35/0.10 -> 0.85/0.50 (engine.rs
 # VOWEL_ANCHORS), so the 1.9 kHz / 450 Hz energy ratio must jump.
 _VOWEL_RATIO = 1.8    # tag formant-band ratio, eh half over oo half
-# PROVISIONAL: measured 2.13 dB (2026.07.11); pinned with 1.1 dB slack.
+# FROZEN 2026.07.11 (phase-D album render): measured 2.13 dB; pinned with 1.1 dB slack.
 _VOWEL_RMS_DB = 1.0   # the opening mouth also leans in
 
 

@@ -777,15 +777,15 @@ def oracles(sc, info, spans):
 
 
 # ---------------------------------------------------------------------------
-# Audio oracles — thresholds provisional until the phase-D freeze
+# Audio oracles — thresholds FROZEN at the phase-D album freeze (2026.07.11)
 # (HLD 6.2: re-measured on the assembled-album render, then pinned).
 # ---------------------------------------------------------------------------
 
-# PROVISIONAL: measured 3.80 dB (2026.07.11, ferrosintesis 0.13.1
-# per-track render); pinned with 1.8 dB slack, re-pinned at phase D.
+# FROZEN 2026.07.11 (phase-D album render): measured 3.80 dB (ferrosintesis
+# 0.13.1 per-track render); pinned with 1.8 dB slack, re-pinned at phase D.
 _LIFT_DB = 2.0    # final chorus over verse 1
-# PROVISIONAL: measured 2.66 dB (2026.07.11, ferrosintesis 0.13.1
-# per-track render); pinned with 1.16 dB slack, re-pinned at phase D.
+# FROZEN 2026.07.11 (phase-D album render): measured 2.66 dB (ferrosintesis
+# 0.13.1 per-track render); pinned with 1.16 dB slack, re-pinned at phase D.
 _SWELL_DB = 1.5   # pre-chorus-2 second half over first half
 
 

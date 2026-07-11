@@ -650,12 +650,12 @@ def oracles(sc, info, spans):
 
 
 # ---------------------------------------------------------------------------
-# Audio oracles — thresholds provisional until the phase-D freeze
+# Audio oracles — thresholds FROZEN at the phase-D album freeze (2026.07.11)
 # (HLD §6.2: re-measured on the assembled-album render, then pinned).
 # ---------------------------------------------------------------------------
 
-_LIFT_DB = 2.0          # PROVISIONAL: final chorus over verse 1
-_BRASS_RISE_DB = 0.4    # PROVISIONAL: RMS rise across the chorus-2 entry
+_LIFT_DB = 2.0          # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): final chorus over verse 1
+_BRASS_RISE_DB = 0.4    # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): RMS rise across the chorus-2 entry
 
 
 def audio_checks(ctx):

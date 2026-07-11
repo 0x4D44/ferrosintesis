@@ -1,0 +1,34 @@
+Why this piece
+
+The title track and closer: D major at 120, the album's fullest sound and
+its quietest ending. The piano states the title hook alone; twelve gated
+entries later the entire thirteen-channel band and orchestra are singing
+it together; and then the storm rolls out - a real ritardando, from 120
+down to 84 - until only the piano is left, playing exactly the phrase it
+began with. The choir hums "big weather / coming in / hold together /
+here it comes".
+
+Listening guide
+
+0:00 - Solo piano: the title hook, twice (una corda the first time).
+0:16 - Verse 1: bass, clean guitar and drums arrive.
+1:04 - Chorus 1: the lead sings the piano's hook, note-for-note.
+2:16 - Chorus 2: choir and brass gate in.
+2:40 - Middle-8: the eye of the storm - strings enter, four bars of
+       dominant build.
+3:04 - THE DOUBLE FINAL CHORUS: thirty-two bars of full tutti - three
+       choir layers, brass, strings, timpani on every downbeat, organ,
+       both guitars driven - the album's total sound.
+4:08 - Outro: the tutti decays; at the hush a woodblock taps "BW" in
+       Morse; the tempo lets go (120 to 84); the solo piano closes the
+       circle at 4:24.
+
+MIDI techniques
+
+The bookend is an oracle: the outro piano statement must equal the intro
+statement, recomputed by the same code. The tutti is counted, not
+claimed: every final-chorus bar carries at least eleven channels, most
+all thirteen. Six tempo events shape the ritardando. CC70 morphs the
+choirs, CC2 and aftertouch push the brass, CC11 swells the strings, the
+Leslie spins on the organ, and the Morse garnish is en.morse(), velocity
+38, dead centre.

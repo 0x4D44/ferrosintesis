@@ -918,15 +918,15 @@ def oracles(sc, info, spans):
 
 
 # ---------------------------------------------------------------------------
-# Audio oracles — thresholds provisional until the phase-D freeze
+# Audio oracles — thresholds FROZEN at the phase-D album freeze (2026.07.11)
 # (HLD §6.2: re-measured on the assembled-album render, then pinned).
 # ---------------------------------------------------------------------------
 
-# PROVISIONAL (re-pinned at the phase-D album freeze): measured on the
+# FROZEN at the phase-D album freeze (2026.07.11): measured on the
 # 2026.07.11 per-track render, ferrosintesis 0.13.x —
 # lift 4.8 dB, entry rise 3.7 dB; pinned measured - >=1.2 dB slack.
-_LIFT_DB = 3.5     # PROVISIONAL: final chorus over verse 1
-_RISE_DB = 2.5     # PROVISIONAL: RMS rise across the beat-368 tutti entry
+_LIFT_DB = 3.5     # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): final chorus over verse 1
+_RISE_DB = 2.5     # FROZEN 2026.07.11 (phase-D album render, ferrosintesis 0.13.x): RMS rise across the beat-368 tutti entry
 
 
 def audio_checks(ctx):

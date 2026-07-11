@@ -4665,6 +4665,7 @@ pub struct BowedString {
     drift: Drift,            // slow human pitch wander (intonation is never dead-steady)
     amp_follow: f32,         // output magnitude follower, for the release tail
     refl_sustain: f32,       // bridge-filter cutoff while bowed (register brightness)
+    loop_comp: f32,          // loop-latency tuning compensation, in samples
     out_lp: Option<OnePole>, // post-output darkening (cello de-buzz); None = flat
     rng: Rng,
     t: u32,
@@ -4692,19 +4693,28 @@ impl BowedString {
                           // Register-dependent voicing: the cello (42) sits ~an octave above the
                           // contrabass (43), so its body resonances and string brightness are
                           // higher and its output a touch lighter. Same waveguide, retuned.
-                          // (body freqs, in-loop bridge damping, amp base/span, OUTPUT lowpass Hz).
+                          // (body freqs, in-loop bridge damping, amp base/span, OUTPUT lowpass Hz,
+                          // loop-latency tuning compensation in samples).
                           // The output lowpass (0 = none) darkens the cello cleanly without touching
                           // the loop's nonlinear dynamics; it is None for the contrabass, so GM43
                           // stays byte-identical to the integrated Stage 1.
-        let (body_f, refl_sustain, amp_base, amp_span, out_lp_hz) = match program {
+                          // loop_comp: the in-loop reflection filter + structural latency add ~3.8
+                          // samples the bare `sr/f - 1` never subtracted, so the string renders
+                          // progressively flat with pitch (fine in the bass, but ~50 cents flat at
+                          // the cello's A4). The cello subtracts the measured ~3.85; the contrabass
+                          // keeps 1.0 to stay byte-identical to Stage 1 (its residual flatness is
+                          // small and characterful in the bass; a global re-tune is a separate,
+                          // ear-gated change).
+        let (body_f, refl_sustain, amp_base, amp_span, out_lp_hz, loop_comp) = match program {
             42 => (
                 [110.0f32, 230.0, 500.0],
                 2600.0f32,
                 0.36f32,
                 0.82f32,
                 2100.0f32,
+                3.85f32,
             ),
-            _ => ([70.0, 180.0, 700.0], 2600.0, 0.55, 1.25, 0.0),
+            _ => ([70.0, 180.0, 700.0], 2600.0, 0.55, 1.25, 0.0, 1.0),
         };
         // Per-note character: the seed varies per voice (the engine's spawn
         // counter), so drawing the bow's force, grit, scratch and vibrato here
@@ -4761,6 +4771,7 @@ impl BowedString {
             // mix balance holds (~0.11 at the quiet pedal, ~0.18 riff/collision).
             amp: amp_base + amp_span * vel_amp(vel),
             refl_sustain,
+            loop_comp,
             out_lp: if out_lp_hz > 0.0 {
                 Some(OnePole::lowpass(out_lp_hz, sr))
             } else {
@@ -4773,9 +4784,11 @@ impl BowedString {
     }
 
     fn set_freq(&mut self, f: f32) {
-        // total loop delay = one period, minus the ~1-sample read/write latency;
-        // split at the bow into the two sections.
-        let total = (self.sr / f.max(20.0) - 1.0).max(8.0);
+        // total loop delay = one period, minus the loop latency (structural
+        // read/write plus the in-loop reflection filter's phase delay, ~1 sample
+        // for the bass, ~3.85 for the cello); split at the bow into the two
+        // sections. Compensating this is what keeps the higher register in tune.
+        let total = (self.sr / f.max(20.0) - self.loop_comp).max(8.0);
         self.bridge_delay = (total * self.beta).max(1.0);
         self.neck_delay = (total * (1.0 - self.beta)).max(1.0);
     }
@@ -9339,16 +9352,23 @@ mod tests {
         let bits = |s: Vec<f32>| s.into_iter().map(f32::to_bits).collect::<Vec<_>>();
         let samples_available = bits(render_program_sampled(0, 69, 100, 0.5, 6, true))
             != bits(render_program_sampled(0, 69, 100, 0.5, 6, false));
-        for program in 41u8..=45 {
+        // Modeled-only bowed voices carry no sample layer: viola (41), tremolo
+        // (44) and pizzicato (45).
+        for program in [41u8, 44, 45] {
             let on = bits(render_program_sampled(program, 69, 100, 0.5, 6, true));
             let off = bits(render_program_sampled(program, 69, 100, 0.5, 6, false));
-            assert_eq!(on, off, "GM{program} must skip the violin sample");
+            assert_eq!(on, off, "GM{program} must skip the sample layer");
         }
-        for program in [40u8, 110] {
-            let on = bits(render_program_sampled(program, 69, 100, 0.5, 6, true));
-            let off = bits(render_program_sampled(program, 69, 100, 0.5, 6, false));
+        // Sampled voices carry their LA attack when the key is in the bank's
+        // range: violin (40) and fiddle (110) and the cello (42) at A4; the
+        // contrabass (43) at a low E2 — A4 is above its zones, so there it
+        // correctly falls back to the bare waveguide (tested in the skip spirit
+        // by the range guard, not here).
+        for (program, key) in [(40u8, 69u8), (110, 69), (42, 69), (43, 40)] {
+            let on = bits(render_program_sampled(program, key, 100, 0.5, 6, true));
+            let off = bits(render_program_sampled(program, key, 100, 0.5, 6, false));
             if samples_available {
-                assert_ne!(on, off, "GM{program} must retain the violin sample");
+                assert_ne!(on, off, "GM{program} must carry its LA sample at key {key}");
             } else {
                 assert_eq!(
                     on, off,

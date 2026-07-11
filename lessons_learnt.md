@@ -137,3 +137,15 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   regardless of pan value (the Haas copy stays decorrelated at pan 16 or 22) —
   moderating the pan doesn't help; centre the sustained stream or make it
   genuinely transient.
+- 2026.07.11 — **Calibrate a timbre oracle against the OLD code first; a plausible
+  "fix" premise can be measurably false.** The "harpsichordy" cathedral organ was
+  assumed to be integer-buzzy + fast-attack, but measurement showed buzz already
+  −27 dB (key 84) and onset already 143 ms — neither harpsichord-like. The real
+  driver was static-ness: each additive pipe is a phase-locked wavetable, and a
+  per-pipe wind-wander (`Drift` off `age`, ±2.5 cents, seeded from the STABLE
+  rank/key seed so `--verify` stays byte-identical) dropped the steady envelope's
+  4.5 s-lag autocorrelation 0.44→0.25. The specced high-key voicing surgery was
+  DROPPED after a foundation boost moved upper/fund <1 dB (the RSS normaliser
+  re-absorbs it) and broke the buzz guard. Drive a timbre voice with an internal
+  per-sample counter, not `retune`: unit renders call `render()` once and never
+  retune, so a retune-driven modulation is absent in exactly the oracle renders.

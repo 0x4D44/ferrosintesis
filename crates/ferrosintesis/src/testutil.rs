@@ -252,6 +252,56 @@ pub(crate) fn flatness(seg: &[f32], sr: f32, lo: f32, hi: f32) -> f32 {
     ((logs / n as f64).exp() / (sum / n as f64)) as f32
 }
 
+/// Aperiodicity of a sustained tone's amplitude envelope. Rectify → 10 Hz
+/// envelope lowpass → decimate by 64 → mean-subtract → peak *normalised*
+/// autocorrelation over `[lag_lo_s, lag_hi_s]`, plus the coefficient of
+/// variation `std/mean` of the decimated envelope.
+///
+/// A static, phase-locked additive tone beats at constant rates, so its
+/// envelope is quasi-periodic and its autocorrelation re-peaks at multi-second
+/// lags (returns high). Independent slow random walks give an envelope whose
+/// autocorrelation has decayed away by such lags (returns low). The CoV is a
+/// "shimmer present at all" floor. Deterministic; no wall clock. The existing
+/// `env_autocorr_peak*` runs at full rate and 15 Hz-detrends — far too slow at
+/// multi-second lags and it would erase the 0.15–2.5 Hz wander band, so this is
+/// a purpose-built decimated, mean-subtracted variant.
+pub(crate) fn env_aperiodicity(seg: &[f32], sr: f32, lag_lo_s: f32, lag_hi_s: f32) -> (f32, f32) {
+    const DECIM: usize = 64;
+    let mut lp = OnePole::lowpass(10.0, sr);
+    let mut env: Vec<f32> = Vec::with_capacity(seg.len() / DECIM + 1);
+    for (i, &x) in seg.iter().enumerate() {
+        let e = lp.process(x.abs());
+        if i % DECIM == 0 {
+            env.push(e);
+        }
+    }
+    if env.len() < 4 {
+        return (0.0, 0.0);
+    }
+    let mean = env.iter().sum::<f32>() / env.len() as f32;
+    if mean <= 1e-12 {
+        return (0.0, 0.0);
+    }
+    let var = env.iter().map(|&e| (e - mean) * (e - mean)).sum::<f32>() / env.len() as f32;
+    let cov = var.sqrt() / mean;
+    let d: Vec<f64> = env.iter().map(|&e| (e - mean) as f64).collect();
+    let zero: f64 = d.iter().map(|&x| x * x).sum();
+    if zero <= 0.0 {
+        return (0.0, cov);
+    }
+    let env_sr = sr / DECIM as f32;
+    let lag_lo = ((lag_lo_s * env_sr) as usize).max(1);
+    let lag_hi = ((lag_hi_s * env_sr) as usize).min(d.len().saturating_sub(1));
+    let mut best = f64::MIN;
+    for lag in lag_lo..=lag_hi {
+        let c: f64 = (0..d.len() - lag).map(|i| d[i] * d[i + lag]).sum::<f64>() / zero;
+        if c > best {
+            best = c;
+        }
+    }
+    (best.max(0.0) as f32, cov)
+}
+
 // ---------------------------------------------------------------------------
 // The fixed multi-family reference song (oracles 34/35/38)
 // ---------------------------------------------------------------------------

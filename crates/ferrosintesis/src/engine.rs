@@ -29,6 +29,12 @@ const LESLIE_FAST_HZ: f32 = 6.8; // tremulant rate the rotor spins up to
 const LESLIE_INERTIA_S: f32 = 1.5; // rotor time constant (spin-up/down)
 const LESLIE_DEPTH_ADD: f32 = 0.10; // extra tremulant depth at mod = 1
 
+// The cathedral room runs hotter than the shared hall: the biggest single
+// "presence" lever for the organ is the wet return, and scaling it here (rather
+// than the global `--wet`) leaves every other instrument's hall untouched and
+// keeps CC91 semantics intact. Bounded above by the low-chord headroom test.
+const CATHEDRAL_WET_SCALE: f32 = 1.30;
+
 // CC74 brightness: a resonant 2-pole lowpass on the channel's dry path,
 // ahead of the bus sends, so the wah colours the reverb and echo too.
 // 0..127 maps exponentially WAH_MIN_HZ..WAH_MAX_HZ; 127 is a true bypass.
@@ -776,7 +782,7 @@ impl EngineCore {
             strips: (0..16).map(|_| Strip::new(sr)).collect(),
             active: Vec::new(),
             reverb: Reverb::new(sr, 0.86, 0.35, opt.wet),
-            cathedral: CathedralReverb::new(sr, opt.wet),
+            cathedral: CathedralReverb::new(sr, opt.wet * CATHEDRAL_WET_SCALE),
             rev_hp: Biquad::highpass(150.0, 0.7, sr),
             chorus: Chorus::new(sr),
             echo: (opt.delay_s > 0.0).then(|| PingPong::new(sr, opt.delay_s)),
@@ -5367,6 +5373,78 @@ mod tests {
         );
         assert!(!organ_leslie_family(19, false));
         assert!(organ_leslie_family(19, true));
+    }
+
+    // Oracle C3 — the cathedral reverb is genuinely wet in the FULL MIX (proves
+    // the `opt.wet * CATHEDRAL_WET_SCALE` routing, not just the FDN in isolation).
+    // A GM19 chord is held, released, and left to ring; the tail a full 1–2 s
+    // after note-off must still sit within ~22 dB of the sustain — a long, present
+    // stone room, not a dab of ambience. Guards against the send being unrouted or
+    // the wet scale reverting. Calibration (@wet 0.32, 1–2 s after release):
+    //   CATHEDRAL_WET_SCALE 1.30 (shipping)  tail ≈ −20.8 dB
+    //   CATHEDRAL_WET_SCALE 1.00 (a revert)  tail ≈ −23.1 dB  → fails
+    // −22.0 is the midpoint; the 2.2 dB gap is exactly the 1.30× wet return.
+    #[test]
+    fn cathedral_organ_tail_is_wet_in_the_full_mix() {
+        let sr = 44_100.0;
+        let mut events = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 7,
+                    val: 127,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 11,
+                    val: 127,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 91,
+                    val: 127,
+                },
+            ),
+        ];
+        for key in [60u8, 64, 67] {
+            events.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key,
+                    vel: 96,
+                },
+            ));
+            events.push((2.0, EvKind::NoteOff { ch: 0, key }));
+        }
+        let mut opts = test_opts(sr);
+        opts.wet = 0.32;
+        opts.tail = 4.0;
+        let (stereo, _stats) = render(&test_song(events, 2.2), &opts);
+        let l = left(&stereo);
+        let r = right(&stereo);
+        let win = |a: f32, b: f32| -> f32 {
+            let (i, j) = ((a * sr) as usize, ((b * sr) as usize).min(l.len()));
+            let n = (j - i).max(1) as f32;
+            let e: f32 = (i..j).map(|k| l[k] * l[k] + r[k] * r[k]).sum::<f32>() / (2.0 * n);
+            e.sqrt()
+        };
+        let sustain = win(1.0, 1.9);
+        let tail = win(3.0, 4.0); // 1–2 s after the 2.0 s note-off
+        let tail_db = 20.0 * (tail / sustain.max(1e-12)).log10();
+        println!("cathedral C3  tail {tail_db:.2} dB below sustain (sustain={sustain:.4} tail={tail:.4})");
+        assert!(
+            tail_db >= -22.0,
+            "cathedral tail only {tail_db:.2} dB below sustain — reverb not wet in the mix"
+        );
     }
 
     #[test]

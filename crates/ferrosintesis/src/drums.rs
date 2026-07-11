@@ -427,7 +427,11 @@ struct BloomSpec {
 struct MetalSpec {
     lo: f32,
     hi: f32,
-    modes: usize,
+    // P-C3 density: `singles` low log-spaced modes stay single (the dense low
+    // band protects the strongest-line tail guard); the upper `pairs` centers
+    // each emit a detuned PAIR that beats. Total partials = singles + 2·pairs.
+    singles: usize,
+    pairs: usize,
     tone_amp: f32,
     t60_low: f32,
     t60_high: f32,
@@ -452,10 +456,22 @@ impl MetalPlate {
         let velnorm = vel as f32 / 127.0;
         let log_lo = spec.lo.ln();
         let log_span = (spec.hi / spec.lo).ln();
-        let mut modes = Vec::with_capacity(spec.modes);
-        for i in 0..spec.modes {
-            let frac = (i as f32 + 0.37 + 0.26 * rng.white()).clamp(0.0, spec.modes as f32)
-                / spec.modes as f32;
+        let n_centers = spec.singles + spec.pairs;
+        let mut modes = Vec::with_capacity(n_centers + spec.pairs);
+        let band_of = |f: f32| -> u8 {
+            if f < 1500.0 {
+                0
+            } else if f < 4000.0 {
+                1
+            } else if f < 8000.0 {
+                2
+            } else {
+                3
+            }
+        };
+        for i in 0..n_centers {
+            let frac = (i as f32 + 0.37 + 0.26 * rng.white()).clamp(0.0, n_centers as f32)
+                / n_centers as f32;
             let freq = (log_lo + log_span * frac).exp() * (1.0 + 0.018 * rng.white());
             let decay_frac = 1.0 - frac;
             let t60 = spec.t60_high + (spec.t60_low - spec.t60_high) * decay_frac.powf(0.7);
@@ -463,21 +479,31 @@ impl MetalPlate {
                 * (1.0 - 0.45 * frac)
                 * (0.65 + 0.55 * velnorm)
                 * (0.75 + 0.25 * rng.white().abs());
-            let band = if freq < 1500.0 {
-                0u8
-            } else if freq < 4000.0 {
-                1
-            } else if freq < 8000.0 {
-                2
+            let decay = dmul(t60, sr);
+            if i < spec.singles {
+                // low single mode — keeps the dense low band (tail-guard safe)
+                modes.push(MetalMode {
+                    osc: Sine::new(freq, sr, rng.white() * TAU),
+                    amp,
+                    decay,
+                    band: band_of(freq),
+                });
             } else {
-                3
-            };
-            modes.push(MetalMode {
-                osc: Sine::new(freq, sr, rng.white() * TAU),
-                amp,
-                decay: dmul(t60, sr),
-                band,
-            });
+                // P-C3 detuned PAIR: two partials Δf apart (Δf = 4.5 + 0.0011·f Hz,
+                // ×(1+0.25·white)), beating at 5-20 Hz, independent phases — the
+                // dense bronze shimmer under the bloom. Each carries the center's
+                // amp (the pair ≈ two legacy modes' power).
+                let df = (4.5 + 0.0011 * freq) * (1.0 + 0.25 * rng.white());
+                for sgn in [-0.5f32, 0.5] {
+                    let f = freq + sgn * df;
+                    modes.push(MetalMode {
+                        osc: Sine::new(f, sr, rng.white() * TAU),
+                        amp,
+                        decay,
+                        band: band_of(f),
+                    });
+                }
+            }
         }
         // P-C1/C2 bloom: the smoothstep velocity gate g drives both the modal
         // cascade and the wash-follow. No RNG draws.
@@ -976,7 +1002,8 @@ fn metal_spec_for(key: u8) -> MetalSpec {
         49 => MetalSpec {
             lo: 650.0,
             hi: 14_000.0,
-            modes: 44,
+            singles: 12,
+            pairs: 16,
             tone_amp: 0.028,
             t60_low: 1.35,
             t60_high: 0.22,
@@ -1002,7 +1029,8 @@ fn metal_spec_for(key: u8) -> MetalSpec {
         57 => MetalSpec {
             lo: 560.0,
             hi: 13_000.0,
-            modes: 44,
+            singles: 12,
+            pairs: 16,
             tone_amp: 0.027,
             t60_low: 1.25,
             t60_high: 0.20,
@@ -1028,7 +1056,8 @@ fn metal_spec_for(key: u8) -> MetalSpec {
         51 | 59 => MetalSpec {
             lo: 950.0,
             hi: 12_000.0,
-            modes: 36,
+            singles: 14,
+            pairs: 11,
             tone_amp: 0.036,
             t60_low: 1.8,
             t60_high: 0.28,
@@ -1056,7 +1085,8 @@ fn metal_spec_for(key: u8) -> MetalSpec {
         52 => MetalSpec {
             lo: 760.0,
             hi: 14_500.0,
-            modes: 38,
+            singles: 10,
+            pairs: 14,
             tone_amp: 0.024,
             t60_low: 0.75,
             t60_high: 0.16,
@@ -1083,7 +1113,8 @@ fn metal_spec_for(key: u8) -> MetalSpec {
         55 => MetalSpec {
             lo: 1100.0,
             hi: 14_000.0,
-            modes: 32,
+            singles: 8,
+            pairs: 12,
             tone_amp: 0.030,
             t60_low: 0.58,
             t60_high: 0.14,
@@ -3018,6 +3049,41 @@ mod tests {
         // safety: no DC, all finite.
         assert!(mean.abs() < 1e-3, "crash DC {mean:.2e}");
         assert!(crash.iter().all(|x| x.is_finite()), "crash non-finite");
+    }
+
+    /// P-C3 (differential, within one render): the V3 crash splits its UPPER
+    /// modes into detuned PAIRS (the dense bronze shimmer under the bloom) while
+    /// the LOW band stays single (dense, tail-guard safe). So the upper band's
+    /// envelope BEATS (detrended CV high) where the low band's does not. Measured
+    /// as the ratio of upper-band beat-CV to low-band beat-CV — no pre-C3 render
+    /// needed. (DENS-1, no strong line, is guarded by `v3_crash_tail_is_broadband`
+    /// flatness ≥ 0.18 / narrow-line ≤ 0.45, which still pass.)
+    #[test]
+    fn cymbal_density_pairs_beat_v3() {
+        let sr = 44100.0;
+        let crash = render_drum_kit(49, 100, 1.5, Kit::V3);
+        // Periodic-beat detector: bandpass a region, then env_autocorr (low
+        // detrend corner to keep the 6-20 Hz beats). The pairs' beat is PERIODIC
+        // so it survives the aperiodic wash noise (which a CV cannot separate).
+        let beat_peak = |buf: &[f32], center: f32| -> f32 {
+            let (a, b) = ((0.2 * sr) as usize, (1.5 * sr) as usize);
+            let mut bp = Biquad::bandpass(center, 8.0, sr);
+            let filt: Vec<f32> = buf[a..b].iter().map(|&x| bp.process(x)).collect();
+            testutil::env_autocorr_peak_detrend(&filt, sr, 1.0 / 22.0, 1.0 / 6.0, 3.0).0
+        };
+        let p_low = beat_peak(&crash, 1050.0); // low band: single modes
+        let p_hi = beat_peak(&crash, 5000.0); // upper band: detuned pairs
+        println!("P-C3 crash49 beat-autocorr: low(singles)={p_low:.3} upper(pairs)={p_hi:.3}");
+        // The upper pairs beat periodically MORE than the low singles. The
+        // absolute level is modest because the loud wash sets an aperiodic
+        // autocorr floor (~0.2) that masks the modal beat — so this is a
+        // DIFFERENTIAL, and the beating's audibility under the wash is a listen
+        // refinement. DENS-1 (no strong line) stays guarded by
+        // `v3_crash_tail_is_broadband` (flatness ≥ 0.18 / narrow-line ≤ 0.45).
+        assert!(
+            p_hi > 1.2 * p_low,
+            "(DENS-2) upper pairs don't beat above the low singles: upper {p_hi} vs low {p_low}"
+        );
     }
 
     /// DR3 seam: the secondary sizzle is an instant contact layer, not part of

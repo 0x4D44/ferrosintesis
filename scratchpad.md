@@ -75,7 +75,7 @@
   releasing the oldest when the ninth spawns; newest-wins would break power chords.)
   (Done 2026-07-12: the engine releases the oldest unreleased GM 29/30 voice
   before spawning a ninth on the same channel, overriding sustain and sostenuto.)
-- [ ] 2026.07.12 - Trunk's cello-v2 task (GM 42/43 waveguide+LA, `sampler.rs`
+- [x] 2026.07.12 - Trunk's cello-v2 task (GM 42/43 waveguide+LA, `sampler.rs`
   cello/contrabass banks) left several **cello-only** committed `listening/*.opus`
   lagging its own synth — surfaced during guitar-v2 integration by re-rendering
   with the merged binary: `listening/GPT-5.6/Atlas of Becoming/{05 - One Cell Many
@@ -91,6 +91,18 @@
   `task/20260711-TSK-claude-cello-waveguide` already contains 36 refreshed GM42
   assets in seven commits; it is ahead 7 / behind 14. Rebase and integrate that
   existing branch instead of duplicating the render.)
+  (Done 2026-07-13: rebased the seven commits from 43-behind onto v0.15.3,
+  rescanned the expanded 104-MIDI catalog, and rerendered all 36 committed-Opus
+  GM42 tracks. Nine were already current through later trunk refreshes; the final
+  recovered delta contains the remaining 27 listening assets.)
+- [ ] 2026.07.13 - `render_opus.py --jobs 4` can emit a different Opus container
+  from a subsequent `--jobs 1` render of the same MIDI and synth, while decoded
+  float PCM is SHA-256 identical. Seen on Atlas of Becoming 05 during cello-v2
+  recovery: the first parallel encode changed container hash on a single-worker
+  repeat; two subsequent single-worker encodes were byte-identical. Do not use raw
+  Opus equality as the audio oracle. Investigate whether `ropusenc` stream serial
+  assignment depends on parallel launch timing, then make it deterministic or
+  compare decoded PCM in render-refresh tooling.
 - [x] 2026.07.11 - The GOLDEN fixture's drum row (ch 9: pinned −22.51 dB / 726.7 Hz,
   currently rendering −22.30 dB / 685.2 Hz) has drifted within tolerance since the
   V3-kit recapture — later drum commits (e.g. `87b794c` cymbal detuned-pair density)

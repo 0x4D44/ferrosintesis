@@ -34,7 +34,7 @@
   must be re-verified byte-identical after the extraction (the RNG-draw order must be
   preserved exactly). Small, safe, but cross-cutting — do it as its own task.
 
-- [ ] **2026.07.08 — ARTHUR'S CALL: pre-existing vibrato bug in the shipped
+- [x] **2026.07.08 — ARTHUR'S CALL: pre-existing vibrato bug in the shipped
   Wind + Bowed voices.** The 55-71 review found the reed vibrato ran 16x too slow
   (fixed); the SAME bug is latent in Wind (`voices.rs` ~1730/1747) and Bowed
   (~1841/1860) — an LFO `Sine` built at full `sr` but ticked once per `CTRL`
@@ -45,6 +45,9 @@
   Left OUT of v0.9 (scope = brass/reeds/orchestral) and flagged for Arthur: fix
   in a follow-up (its own listen), or fold into v0.9 under the relaxed policy.
   (Verified 2026-07-10 at `voices.rs:3726` and `voices.rs:3837`; decision still needed.)
+  (Already fixed 2026-07-12: Bowed was already corrected; Stage 1 commit
+  `48a7e71` fixed Wind and `ede3347` refreshed all 32 affected listening assets.
+  `MM-BUG-KILN-00003` remains the independent two-eyes closure record.)
 - [ ] 2026.07.10 - `altbank::tests::sawstack_v1_canary_frozen` FAILS under
   `cargo test --release` at trunk 66fa84a (pad(89) fingerprint mismatch,
   `crates/ferrosintesis/src/altbank.rs:1422`); passes in debug. The exact-hash

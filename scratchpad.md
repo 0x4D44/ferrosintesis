@@ -1,6 +1,6 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
-- [ ] 2026.07.12 — **ferrosintesis renders are NOT bit-reproducible across the
+- [x] 2026.07.12 — **ferrosintesis renders are NOT bit-reproducible across the
   fleet's machines** — surfaced completing the guitar-v2 opus refresh. This box
   renders SawStack pad(89) to hash `7190932198068575567`, while the frozen canary
   `altbank::tests::sawstack_v1_canary_frozen` is pinned to `7408265371089978107`
@@ -17,6 +17,9 @@
   catalog-wide refresh from a single machine. Promote to lessons_learnt at the
   next prune. (Guitar-v2 opus itself is complete: all 20 tracks at the right synth
   version on origin/main; this is a separate fleet-repro issue.)
+  (Done 2026-07-12: replaced all nine stored full-buffer fingerprints with
+  tolerance-based RMS, spectral-centroid, and late/early-envelope signatures.
+  Exact comparisons remain only for buffers rendered within the same test run.)
 - [ ] 2026.07.12 — **Push-loop process bug**: a per-file `git push origin
   <sha>:main` loop that rebases on race used `git rebase … | tail`; the pipe's
   exit code (from `tail`, always 0) MASKED a rebase conflict, so the loop kept
@@ -24,7 +27,7 @@
   rebase rc directly (`git rebase …; rc=$?`) and STOP on conflict — never gate
   control flow on a piped git command's exit status (same class as the Git-Bash
   python-shim exit-swallow already in this repo's lessons).
-- [ ] 2026.07.12 — **Extract a `control_lfo(rate, rng, sr) -> Sine` helper.** The
+- [x] 2026.07.12 — **Extract a `control_lfo(rate, rng, sr) -> Sine` helper.** The
   control-rate LFO line `Sine::new(rate*(1.0+0.08*rng.white()), sr/CTRL as f32, 0.0)`
   is now duplicated verbatim in three voices — `Wind` (`crates/ferrosintesis/src/voices.rs:4548`),
   `Reed` (`:5673`), `Bowed` (`~:4810`) — and it is the *exact* line whose `sr` vs
@@ -33,6 +36,8 @@
   (pipes) deliberately: it touches Reed/Bowed, which are out of scope and whose renders
   must be re-verified byte-identical after the extraction (the RNG-draw order must be
   preserved exactly). Small, safe, but cross-cutting — do it as its own task.
+  (Done 2026-07-12: Wind, Reed, and Bowed now share `control_lfo`; focused
+  frequency tests pass and the catalog render inventory verifies output identity.)
 
 - [x] **2026.07.08 — ARTHUR'S CALL: pre-existing vibrato bug in the shipped
   Wind + Bowed voices.** The 55-71 review found the reed vibrato ran 16x too slow
@@ -57,7 +62,7 @@
   (Done 2026-07-12: accepted the two exact fingerprints observed across fleet
   machines/profiles while continuing to reject every other render. Portable
   metric-based canaries remain in the cross-machine-repro item above.)
-- [ ] 2026.07.12 - Guitar v2 sustainer: latched 29/30 voices never decay while
+- [x] 2026.07.12 - Guitar v2 sustainer: latched 29/30 voices never decay while
   held, so CC64 (deferred note_off, `engine.rs` pedal path) or heavily stacked
   long notes accumulate permanently-held voices (polyphony/CPU wall + an organ-
   like bed). Out of catalog today (no album authors CC64 on driven guitars -
@@ -68,6 +73,8 @@
   and `Pluck::render` holds driven notes indefinitely. Decision still needed.
   Recommend an eight-voice per-channel cap for unreleased GM 29/30 voices,
   releasing the oldest when the ninth spawns; newest-wins would break power chords.)
+  (Done 2026-07-12: the engine releases the oldest unreleased GM 29/30 voice
+  before spawning a ninth on the same channel, overriding sustain and sostenuto.)
 - [ ] 2026.07.12 - Trunk's cello-v2 task (GM 42/43 waveguide+LA, `sampler.rs`
   cello/contrabass banks) left several **cello-only** committed `listening/*.opus`
   lagging its own synth — surfaced during guitar-v2 integration by re-rendering
@@ -118,7 +125,7 @@
   (Already fixed 2026-07-12: integrated guitar v2 added pickup RLC, two-stage
   drive with sag, richer cabinet voicing, and the proposed e-bow sustainer;
   commits `fcd0653`, `1423b2e`, and `09293e5`, with review fixes in `463b438`.)
-- [ ] 2026.07.11 — Big Weather review latents (report-only, benign today):
+- [x] 2026.07.11 — Big Weather review latents (report-only, benign today):
   (a) `albums/fable5/Big Weather/conductor.py:101-104` — Part.setup writes
   BANK_SELECTS CC0 (priority 2) after channel()'s program change (priority 1)
   at tick 0, wrong order per GM semantics; harmless for ferrosintesis (CC0 is
@@ -132,3 +139,6 @@
   a priority-0 bank-select event before program changes in the shared/copied
   engine path; defer meter-span integration until variable meter is introduced,
   but make the current verifier fail clearly if a checked span crosses a meter change.)
+  (Done 2026-07-12: both copied engines now order CC0 before program changes;
+  both verifiers enforce the ordering; Big Weather's energy and drum-solo checks
+  now reject checked spans containing an interior meter change with a clear error.)

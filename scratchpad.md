@@ -84,7 +84,7 @@
   reflects what it actually renders. Spotted during the guitar v2 unit-A recapture.
   (Done 2026-07-12: re-ran `print_golden_fixture` and re-pinned ch 9 to
   −22.30 dB / 685.2 Hz; `golden_mix_balance_holds` passes.)
-- [ ] 2026.07.11 - Committed `listening/*.opus` look **stale vs the 0.13.4 trunk**
+- [x] 2026.07.11 - Committed `listening/*.opus` look **stale vs the 0.13.4 trunk**
   ("finalize strings on cathedral trunk" `3c8e7ee`). Re-running `python
   render_opus.py` with the current binary regenerates *different* bytes for
   non-organ albums the reed-rasp task cannot touch (e.g. Through Lines — no GM19)
@@ -94,6 +94,9 @@
   Atlas #14, Hollow Hill). A separate catalog-refresh pass should re-render the
   strings-affected albums to bring the published audio current — verify against a
   `render_diff.py` (baseline = 0.13.4 trunk binary) so only genuine deltas land.
+  (Promoted 2026-07-12: `MM-REQ-KILN-00018`; the old render-all branch is now
+  20 commits behind and differs from current trunk in 52 listening files, so it
+  must be re-scoped against current trunk rather than integrated as-is.)
 - [x] 2026.07.11 - **Review the distorted-guitar synthesis quality** (Arthur, separate
   pass). The T16 soaring lead is "sort-of OK" but the guitar timbre isn't convincing.
   The voice is Karplus-Strong pluck + tanh/cabinet Drive (`voices.rs` DRIVE/DRIVE_LEAD

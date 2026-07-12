@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO / "fable5" / "The Signal Fire"))
+sys.path.insert(0, str(REPO / "albums" / "fable5" / "The Signal Fire"))
 from engine import Score, bend_ramp, vibrato  # noqa: E402
 
 BPM = 92

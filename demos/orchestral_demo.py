@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""orchestral_demo.py — a short orchestral demo for hollowsynth.
+"""orchestral_demo.py — a short orchestral demo for ferrosintesis.
 
 Exercises the ORCHESTRAL voice families and lots of MIDI performance effects:
   ch0  String ensemble (GM 48)   — SawStack, the sustained bed (CC11 swells)
@@ -7,11 +7,12 @@ Exercises the ORCHESTRAL voice families and lots of MIDI performance effects:
                                     pitch-bend scoops, CC68 legato slur run
   ch2  Solo cello     (GM 42)    — Bowed model; hand-drawn pitch-bend vibrato
   ch3  Choir aahs     (GM 52)    — SawStack + formant vowel morph
-  ch4  Brass section  (GM 61)    — *** UNMODELED: falls back to a steel pluck ***
-  ch5  Oboe           (GM 68)    — *** UNMODELED: falls back to a steel pluck ***
+  ch4  Brass section  (GM 61)    — Brass model; CC11 breath opens the timbre
+  ch5  Oboe           (GM 68)    — Reed model; double-reed formant bank
 
-The brass + oboe passages are deliberate: they reveal that GM 55-71
-(brass + reeds) have no model and render as a plucked steel-string guitar.
+One program per channel with no drums, so `ferrosintesis --solo <ch>` yields a
+clean single-program stem.  (Brass 56-63 and reeds 64-71 were unmodeled steel-pluck
+fallbacks when this demo was written; both have been modeled families since v0.9.)
 
 Run:  python demos/orchestral_demo.py   ->  demos/orchestral_demo.mid
 """
@@ -20,7 +21,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO / "fable5" / "The Signal Fire"))
+sys.path.insert(0, str(REPO / "albums" / "fable5" / "The Signal Fire"))
 import engine as E  # noqa: E402
 from engine import Score, triad, pitch, n, line, pad_block, run, bend_ramp, vibrato, cc_curve  # noqa: E402
 

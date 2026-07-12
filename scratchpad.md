@@ -48,12 +48,15 @@
   (Already fixed 2026-07-12: Bowed was already corrected; Stage 1 commit
   `48a7e71` fixed Wind and `ede3347` refreshed all 32 affected listening assets.
   `MM-BUG-KILN-00003` remains the independent two-eyes closure record.)
-- [ ] 2026.07.10 - `altbank::tests::sawstack_v1_canary_frozen` FAILS under
+- [x] 2026.07.10 - `altbank::tests::sawstack_v1_canary_frozen` FAILS under
   `cargo test --release` at trunk 66fa84a (pad(89) fingerprint mismatch,
   `crates/ferrosintesis/src/altbank.rs:1422`); passes in debug. The exact-hash
   pin is opt-level-sensitive (float codegen differs in release). Pre-existing,
   unrelated to the choir-v2 unit; either pin per-profile hashes or run the
   canary debug-only.
+  (Done 2026-07-12: accepted the two exact fingerprints observed across fleet
+  machines/profiles while continuing to reject every other render. Portable
+  metric-based canaries remain in the cross-machine-repro item above.)
 - [ ] 2026.07.12 - Guitar v2 sustainer: latched 29/30 voices never decay while
   held, so CC64 (deferred note_off, `engine.rs` pedal path) or heavily stacked
   long notes accumulate permanently-held voices (polyphony/CPU wall + an organ-

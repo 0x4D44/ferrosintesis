@@ -64,6 +64,10 @@
   2026.07.11 usage survey) and documented in the README, but a follow-up design
   should give the engine a per-channel cap or newest-wins policy for LATCHED
   voices (needs a small Voice-trait surface, e.g. `is_holding()`), review C1.
+  (Verified 2026-07-12: still real; `EngineCore::note_on` pushes without a cap
+  and `Pluck::render` holds driven notes indefinitely. Decision still needed.
+  Recommend an eight-voice per-channel cap for unreleased GM 29/30 voices,
+  releasing the oldest when the ninth spawns; newest-wins would break power chords.)
 - [ ] 2026.07.12 - Trunk's cello-v2 task (GM 42/43 waveguide+LA, `sampler.rs`
   cello/contrabass banks) left several **cello-only** committed `listening/*.opus`
   lagging its own synth — surfaced during guitar-v2 integration by re-rendering
@@ -76,6 +80,10 @@
   sweep should re-render every GM 42/43 album against the current trunk binary (the
   full list is likely broader than these 5 — only guitar-cello overlaps were
   rendered here). Verify against a render-diff (baseline = current origin/main).
+  (Verified 2026-07-12: still stale on `origin/main`, but
+  `task/20260711-TSK-claude-cello-waveguide` already contains 36 refreshed GM42
+  assets in seven commits; it is ahead 7 / behind 14. Rebase and integrate that
+  existing branch instead of duplicating the render.)
 - [x] 2026.07.11 - The GOLDEN fixture's drum row (ch 9: pinned −22.51 dB / 726.7 Hz,
   currently rendering −22.30 dB / 685.2 Hz) has drifted within tolerance since the
   V3-kit recapture — later drum commits (e.g. `87b794c` cymbal detuned-pair density)
@@ -120,3 +128,7 @@
   check_drum_solo compute bars from the meter at section START; a mid-section
   meter change would skew per-bar math — all ten tracks are uniform 4/4, so
   latent.
+  (Verified 2026-07-12: both assumptions remain. Decision still needed. Recommend
+  a priority-0 bank-select event before program changes in the shared/copied
+  engine path; defer meter-span integration until variable meter is introduced,
+  but make the current verifier fail clearly if a checked span crosses a meter change.)

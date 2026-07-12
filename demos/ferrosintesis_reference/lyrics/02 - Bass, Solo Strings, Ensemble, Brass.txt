@@ -1,0 +1,48 @@
+ferrosintesis Reference Audition - Bass, Solo Strings, Ensemble, Brass
+
+0:00  GM 032 Acoustic Bass
+0:04  GM 033 Electric Bass (finger)
+0:09  GM 034 Electric Bass (pick)
+0:14  GM 035 Fretless Bass
+0:19  GM 036 Slap Bass 1
+0:24  GM 038 Synth Bass 1
+0:28  GM 039 Synth Bass 2
+0:33  GM 040 Violin
+0:38  GM 040 Violin [alt]
+0:43  GM 041 Viola
+0:48  GM 041 Viola [alt]
+0:52  GM 042 Cello
+0:57  GM 042 Cello [alt]
+1:02  GM 043 Contrabass
+1:07  GM 043 Contrabass [alt]
+1:12  GM 044 Tremolo Strings
+1:16  GM 044 Tremolo Strings [alt]
+1:21  GM 045 Pizzicato Strings
+1:26  GM 045 Pizzicato Strings [alt]
+1:31  GM 046 Orchestral Harp
+1:36  GM 047 Timpani
+1:40  GM 048 String Ensemble 1
+1:45  GM 048 String Ensemble 1 [alt]
+1:50  GM 049 String Ensemble 2
+1:55  GM 049 String Ensemble 2 [alt]
+2:00  GM 050 Synth Strings 1
+2:04  GM 050 Synth Strings 1 [alt]
+2:09  GM 052 Choir Aahs
+2:14  GM 052 Choir Aahs [alt]
+2:19  GM 053 Voice Oohs
+2:24  GM 053 Voice Oohs [alt]
+2:28  GM 054 Synth Voice
+2:33  GM 054 Synth Voice [alt]
+2:38  GM 055 Orchestra Hit
+2:43  GM 056 Trumpet
+2:48  GM 057 Trombone
+2:52  GM 058 Tuba
+2:57  GM 059 Muted Trumpet
+3:02  GM 060 French Horn
+3:07  GM 061 Brass Section
+3:12  GM 062 Synth Brass 1
+3:16  GM 063 Synth Brass 2
+
+Aliases (render identically once dry; auditioned as their canonical voice):
+  GM 037 Slap Bass 2 = GM 036 Slap Bass 1
+  GM 051 Synth Strings 2 = GM 050 Synth Strings 1

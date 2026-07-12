@@ -63,6 +63,7 @@ ALBUMS: dict[str, tuple[str, str, str]] = {
     "albums/opus4-8":                 ("VIGIL",            "Claude Opus 4.8",  "Neo-Classical / Instrumental"),
     "albums/opus4-8/amarok":          ("RIVERWAKE",        "Claude Opus 4.8",  "Progressive Folk / Instrumental"),
     "demos/synth_feature_showcase":    ("Synth Feature Showcase", "OpenAI Codex", "Synth Demo / Instrumental"),
+    "demos/ferrosintesis_reference":   ("ferrosintesis Reference Audition", "ferrosintesis", "Reference / Instrument Audition"),
 }
 
 _NUM = re.compile(r"^\s*(\d+)\s*[-.]\s*(.+)$")

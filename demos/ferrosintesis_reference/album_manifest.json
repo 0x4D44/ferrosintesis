@@ -1,0 +1,58 @@
+{
+  "album": "ferrosintesis Reference Audition",
+  "artist": "ferrosintesis",
+  "style": "Dry one-at-a-time audition of every ferrosintesis voice and effect",
+  "track_count": 6,
+  "total_duration_seconds": 818.53,
+  "total_duration_minutes": 13.64,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Keys, Chromatic, Organ, Guitar",
+      "file": "midi/01 - Keys, Chromatic, Organ, Guitar.mid",
+      "duration_seconds": 154.8,
+      "duration_minutes": 2.58,
+      "style": "instrument audition"
+    },
+    {
+      "number": 2,
+      "title": "Bass, Solo Strings, Ensemble, Brass",
+      "file": "midi/02 - Bass, Solo Strings, Ensemble, Brass.mid",
+      "duration_seconds": 202.8,
+      "duration_minutes": 3.38,
+      "style": "instrument audition"
+    },
+    {
+      "number": 3,
+      "title": "Reed, Pipe, Lead, Pad",
+      "file": "midi/03 - Reed, Pipe, Lead, Pad.mid",
+      "duration_seconds": 126.0,
+      "duration_minutes": 2.1,
+      "style": "instrument audition"
+    },
+    {
+      "number": 4,
+      "title": "FX, World, Percussive, Noise",
+      "file": "midi/04 - FX, World, Percussive, Noise.mid",
+      "duration_seconds": 159.6,
+      "duration_minutes": 2.66,
+      "style": "instrument audition"
+    },
+    {
+      "number": 5,
+      "title": "Kit Roll-Call",
+      "file": "midi/05 - Kit Roll-Call.mid",
+      "duration_seconds": 66.0,
+      "duration_minutes": 1.1,
+      "style": "every drum voice + brush kit"
+    },
+    {
+      "number": 6,
+      "title": "Controllers and Effects",
+      "file": "midi/06 - Controllers and Effects.mid",
+      "duration_seconds": 109.33,
+      "duration_minutes": 1.82,
+      "style": "audible controllers + effects"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+ferrosintesis Reference Audition - Kit Roll-Call
+
+0:00  KEY 035 Acoustic Bass Drum
+0:01  KEY 036 Bass Drum 1
+0:02  KEY 037 Side Stick
+0:03  KEY 038 Acoustic Snare
+0:04  KEY 039 Hand Clap
+0:05  KEY 040 Electric Snare
+0:06  KEY 041 Low Floor Tom
+0:07  KEY 042 Closed Hi-Hat
+0:08  KEY 043 High Floor Tom
+0:09  KEY 044 Pedal Hi-Hat
+0:10  KEY 045 Low Tom
+0:11  KEY 046 Open Hi-Hat
+0:12  KEY 047 Low-Mid Tom
+0:13  KEY 048 Hi-Mid Tom
+0:14  KEY 049 Crash Cymbal 1
+0:15  KEY 050 High Tom
+0:16  KEY 051 Ride Cymbal 1
+0:17  KEY 052 Chinese Cymbal
+0:18  KEY 053 Ride Bell
+0:19  KEY 054 Tambourine
+0:20  KEY 055 Splash Cymbal
+0:21  KEY 056 Cowbell
+0:22  KEY 057 Crash Cymbal 2
+0:23  KEY 058 Vibraslap
+0:24  KEY 059 Ride Cymbal 2
+0:25  KEY 060 Hi Bongo
+0:26  KEY 061 Low Bongo
+0:27  KEY 062 Mute Hi Conga
+0:28  KEY 063 Open Hi Conga
+0:29  KEY 064 Low Conga
+0:30  KEY 065 High Timbale
+0:31  KEY 066 Low Timbale
+0:32  KEY 067 High Agogo
+0:33  KEY 068 Low Agogo
+0:34  KEY 069 Cabasa
+0:35  KEY 070 Maracas
+0:36  KEY 071 Short Whistle
+0:37  KEY 072 Long Whistle
+0:38  KEY 073 Short Guiro
+0:39  KEY 074 Long Guiro
+0:40  KEY 075 Claves
+0:41  KEY 076 Hi Wood Block
+0:42  KEY 077 Low Wood Block
+0:43  KEY 078 Mute Cuica
+0:44  KEY 079 Open Cuica
+0:45  KEY 080 Mute Triangle
+0:46  KEY 081 Open Triangle
+0:47  KEY 082 Shaker
+0:48  BRUSH 035 Acoustic Bass Drum
+0:49  BRUSH 036 Bass Drum 1
+0:50  BRUSH 037 Side Stick
+0:51  BRUSH 038 Acoustic Snare
+0:52  BRUSH 039 Hand Clap
+0:53  BRUSH 040 Electric Snare
+0:54  BRUSH 042 Closed Hi-Hat
+0:55  BRUSH 044 Pedal Hi-Hat
+0:56  BRUSH 046 Open Hi-Hat
+0:57  HI-HAT CHOKE 46->42
+1:01  TOM VELOCITY SWEEP (key 045)

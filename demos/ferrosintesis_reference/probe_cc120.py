@@ -25,9 +25,9 @@ import sys
 import wave
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ALBUM = HERE.parent
+ALBUM = Path(__file__).resolve().parent
 REPO = ALBUM.parent.parent
+HERE = ALBUM / "build"
 sys.path.insert(0, str(REPO / "demos" / "synth_feature_showcase"))
 import engine as en  # noqa: E402
 

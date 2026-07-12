@@ -1,0 +1,44 @@
+ferrosintesis Reference Audition - FX, World, Percussive, Noise
+
+0:00  GM 096 FX 1 (rain)
+0:04  GM 104 Sitar
+0:09  GM 105 Banjo
+0:14  GM 106 Shamisen
+0:19  GM 107 Koto
+0:24  GM 108 Kalimba
+0:28  GM 109 Bagpipe
+0:33  GM 110 Fiddle
+0:38  GM 111 Shanai
+0:43  GM 112 Tinkle Bell
+0:48  GM 112 Tinkle Bell [alt]
+0:52  GM 113 Agogo
+0:57  GM 113 Agogo [alt]
+1:02  GM 114 Steel Drums
+1:07  GM 114 Steel Drums [alt]
+1:12  GM 115 Woodblock
+1:16  GM 115 Woodblock [alt]
+1:21  GM 116 Taiko Drum
+1:26  GM 116 Taiko Drum [alt]
+1:31  GM 117 Melodic Tom
+1:36  GM 117 Melodic Tom [alt]
+1:40  GM 118 Synth Drum
+1:45  GM 118 Synth Drum [alt]
+1:50  GM 119 Reverse Cymbal
+1:55  GM 119 Reverse Cymbal [alt]
+2:00  GM 120 Guitar Fret Noise
+2:04  GM 121 Breath Noise
+2:09  GM 122 Seashore
+2:14  GM 123 Bird Tweet
+2:19  GM 124 Telephone Ring
+2:24  GM 125 Helicopter
+2:28  GM 126 Applause
+2:33  GM 127 Gunshot
+
+Aliases (render identically once dry; auditioned as their canonical voice):
+  GM 097 FX 2 (soundtrack) = GM 088 Pad 1 (new age)
+  GM 098 FX 3 (crystal) = GM 096 FX 1 (rain)
+  GM 099 FX 4 (atmosphere) = GM 088 Pad 1 (new age)
+  GM 100 FX 5 (brightness) = GM 096 FX 1 (rain)
+  GM 101 FX 6 (goblins) = GM 095 Pad 8 (sweep)
+  GM 102 FX 7 (echoes) = GM 096 FX 1 (rain)
+  GM 103 FX 8 (sci-fi) = GM 088 Pad 1 (new age)

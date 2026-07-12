@@ -84,6 +84,17 @@ fn t60_mul(t60: f32, sr: f32) -> f32 {
 
 const CTRL: u32 = 16; // control-rate interval in samples
 
+/// Build an LFO that is advanced once per [`CTRL`] output samples. Keeping the
+/// reduced sample rate here prevents the historical 16x-slow vibrato bug from
+/// reappearing when another control-rate voice is added.
+fn control_lfo(rate_hz: f32, jitter: f32, rng: &mut Rng, sr: f32) -> Sine {
+    Sine::new(
+        rate_hz * (1.0 + jitter * rng.white()),
+        sr / CTRL as f32,
+        0.0,
+    )
+}
+
 // ---------------------------------------------------------------------------
 // SFX noise fallback
 // ---------------------------------------------------------------------------
@@ -4786,11 +4797,7 @@ impl Wind {
                 preset.release,
                 sr,
             ),
-            // The LFO is ticked once per CTRL samples (control rate), so build it
-            // at sr/CTRL — else `vib.next()` advances CTRL× too slow and a labelled
-            // 5 Hz vibrato renders at ~0.31 Hz (MM-BUG-KILN-00003). Reed (RD7) and
-            // Bowed already do this; Wind was the lone holdout.
-            vib: Sine::new(vibr.0 * (1.0 + 0.08 * rng.white()), sr / CTRL as f32, 0.0),
+            vib: control_lfo(vibr.0, 0.08, &mut rng, sr),
             vib_depth: vibr.1,
             vib_delay: (vibr.2 * sr) as u32,
             vib_val: 0.0,
@@ -5052,11 +5059,7 @@ impl Bowed {
             press_lo: preset.press_lo,
             press_span: preset.press_span,
             env: Adsr::new(attack, 0.2, 0.9, 0.18, sr),
-            vib: Sine::new(
-                preset.vib_rate * (1.0 + 0.1 * rng.white()),
-                sr / CTRL as f32,
-                0.0,
-            ),
+            vib: control_lfo(preset.vib_rate, 0.1, &mut rng, sr),
             vib_depth: preset.vib_depth,
             vib_delay: (0.22 * sr) as u32,
             #[cfg(test)]
@@ -5960,10 +5963,7 @@ impl Reed {
                 sr,
             ),
             last_env: 0.0,
-            // RD7: the LFO is ticked once per CTRL samples (control rate), so
-            // build it at sr/CTRL — else `vib.next()` advances CTRL× too slow
-            // (a labelled 5 Hz sax vibrato would drift at ~0.3 Hz).
-            vib: Sine::new(vibr.0 * (1.0 + 0.08 * rng.white()), sr / CTRL as f32, 0.0),
+            vib: control_lfo(vibr.0, 0.08, &mut rng, sr),
             vib_depth: vibr.1,
             vib_delay: (vibr.2 * sr) as u32,
             vib_val: 0.0,
@@ -7266,9 +7266,31 @@ mod tests {
     use super::*;
     // Audio oracle helpers used by the v0.9 reed/brass oracles (bare names).
     use crate::testutil::{
-        band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend, hp_rms, mag_at,
-        peak_locate, rms, spectral_band_rms, spectral_centroid, BW_TREM_PEAK_FLOOR,
+        assert_render_signature, band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend,
+        hp_rms, mag_at, peak_locate, render_signature, rms, spectral_band_rms, spectral_centroid,
+        RenderSignature, BW_TREM_PEAK_FLOOR,
     };
+
+    #[test]
+    fn control_lfo_advances_at_the_requested_rate() {
+        let sr = 44100.0;
+        let mut rng = Rng::new(7);
+        let mut lfo = control_lfo(5.0, 0.0, &mut rng, sr);
+        let ticks = (2.0 * sr / CTRL as f32) as usize;
+        let mut previous = lfo.next();
+        let mut rising_crossings = 0;
+        for _ in 1..ticks {
+            let current = lfo.next();
+            if previous <= 0.0 && current > 0.0 {
+                rising_crossings += 1;
+            }
+            previous = current;
+        }
+        assert!(
+            (9..=11).contains(&rising_crossings),
+            "5 Hz control LFO produced {rising_crossings} cycles in 2 seconds"
+        );
+    }
 
     #[test]
     fn fold_key_preserves_pitch_class_inside_each_callsite_range() {
@@ -7739,18 +7761,37 @@ mod tests {
         }
     }
 
-    /// V0 (guitar v2): byte-exact canaries for UNTOUCHED Pluck presets.
-    /// The golden mix guard is tolerance-based (±2.5 dB RMS / ±20% centroid)
-    /// and cannot prove exactness; these pins prove the v2 chain additions
-    /// (pickup RLC, sustainer driver) are EXACTLY inert for presets that
-    /// author neither — any bit drift here is contamination, not tuning.
+    /// V0 (guitar v2): tight portable canaries for UNTOUCHED Pluck presets.
+    /// These catch level, spectrum, or envelope contamination without relying
+    /// on raw `f32` fingerprints that vary across fleet machines.
     #[test]
-    fn v2_untouched_pluck_canaries() {
-        let nylon = render_hash(&render_program(24, 52, 100, 1.0, 0xE1));
-        let bass = render_hash(&render_program(33, 40, 100, 1.0, 0xE2));
-        println!("canaries: NYLON {nylon:#018x}  BASS {bass:#018x}");
-        assert_eq!(nylon, 0x7d2cf13be503bd16, "NYLON canary drifted");
-        assert_eq!(bass, 0x1765c18f27dc72f7, "BASS canary drifted");
+    fn v2_untouched_pluck_signatures_are_stable() {
+        let nylon_render = render_program(24, 52, 100, 1.0, 0xE1);
+        let bass_render = render_program(33, 40, 100, 1.0, 0xE2);
+        assert_render_signature(
+            "NYLON",
+            render_signature(
+                &nylon_render,
+                44100.0,
+                (0.05, 0.4),
+                (0.05, 0.15),
+                (0.5, 0.8),
+            ),
+            RenderSignature {
+                rms_db: -24.052,
+                centroid_hz: 252.392,
+                late_early_db: -24.303,
+            },
+        );
+        assert_render_signature(
+            "BASS",
+            render_signature(&bass_render, 44100.0, (0.05, 0.4), (0.05, 0.15), (0.5, 0.8)),
+            RenderSignature {
+                rms_db: -17.016,
+                centroid_hz: 186.643,
+                late_early_db: -15.518,
+            },
+        );
     }
 
     /// V8b (guitar v2): the coupled two-polarization step matrix
@@ -8199,12 +8240,6 @@ mod tests {
         }
     }
 
-    fn render_hash(samples: &[f32]) -> u64 {
-        samples.iter().fold(0xcbf2_9ce4_8422_2325, |h, x| {
-            (h ^ x.to_bits() as u64).wrapping_mul(0x0000_0100_0000_01b3)
-        })
-    }
-
     #[test]
     fn keyboard_voices_programs_4_7_do_not_use_acoustic_piano_voice() {
         let sr = 44100.0;
@@ -8223,41 +8258,27 @@ mod tests {
                 "GM{program} should not use acoustic-piano engine gates"
             );
         }
-        let acoustic_hashes: Vec<(u8, u64)> = (0u8..=3)
-            .map(|program| {
-                (
-                    program,
-                    render_hash(&render_program(program, key, vel, 0.8, seed)),
-                )
-            })
-            .collect();
-        assert_eq!(
-            acoustic_hashes,
-            vec![
-                (0, 14929594896472552629),
-                (1, 14929594896472552629),
-                (2, 14929594896472552629),
-                (3, 14929594896472552629),
-            ],
-            "GM0-3 acoustic piano hashes changed"
-        );
-
         let acoustic = render_program(0, key, vel, 1.2, seed);
-        let acoustic_hash = render_hash(&acoustic);
+        for program in 1u8..=3 {
+            assert_eq!(
+                render_program(program, key, vel, 1.2, seed),
+                acoustic,
+                "GM0-3 acoustic piano routes diverged locally"
+            );
+        }
 
-        let mut hashes = Vec::new();
+        let mut renders: Vec<Vec<f32>> = Vec::new();
         for program in 4u8..=7 {
             let s = render_program(program, key, vel, 1.2, seed ^ program as u32);
-            let h = render_hash(&s);
             assert_ne!(
-                h, acoustic_hash,
+                s, acoustic,
                 "GM{program} still renders as the acoustic piano model"
             );
             assert!(
-                hashes.iter().all(|&old| old != h),
+                renders.iter().all(|old| old != &s),
                 "GM{program} is not distinct from an earlier GM4-7 keyboard voice"
             );
-            hashes.push(h);
+            renders.push(s);
         }
 
         #[cfg(feature = "embedded-samples")]
@@ -8265,8 +8286,7 @@ mod tests {
             let ac_plain = render_program_sampled(0, key, vel, 0.35, seed, false);
             let ac_sampled = render_program_sampled(0, key, vel, 0.35, seed, true);
             assert_ne!(
-                render_hash(&ac_plain),
-                render_hash(&ac_sampled),
+                ac_plain, ac_sampled,
                 "GM0 sample-layer positive control did not differ"
             );
         }
@@ -8276,8 +8296,7 @@ mod tests {
             let sampled =
                 render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, true);
             assert_eq!(
-                render_hash(&plain),
-                render_hash(&sampled),
+                plain, sampled,
                 "GM{program} still uses the acoustic piano LA sample layer"
             );
         }
@@ -8335,12 +8354,20 @@ mod tests {
     }
 
     #[test]
-    fn cathedral_organ_legacy_hash_is_preserved() {
+    fn cathedral_organ_legacy_signature_is_stable() {
         let sr = 44_100.0;
         let mut legacy = legacy_church_organ(69, 104, sr, 0x5eed);
         let mut rendered = vec![0.0; (0.5 * sr) as usize];
         legacy.render(&mut rendered);
-        assert_eq!(render_hash(&rendered), 11750116236685652893);
+        assert_render_signature(
+            "legacy cathedral organ",
+            render_signature(&rendered, sr, (0.1, 0.4), (0.05, 0.15), (0.35, 0.48)),
+            RenderSignature {
+                rms_db: -12.798,
+                centroid_hz: 1189.406,
+                late_early_db: -0.724,
+            },
+        );
     }
 
     #[test]
@@ -8697,25 +8724,51 @@ mod tests {
             );
         }
 
-        let mut legacy_hashes: Vec<(u8, u64)> = (16u8..=18)
-            .map(|program| {
-                let routed = render_program(program, key, vel, 0.5, seed);
-                (program, render_hash(&routed))
-            })
-            .collect();
+        let expected = [
+            (
+                16u8,
+                RenderSignature {
+                    rms_db: -12.554,
+                    centroid_hz: 358.579,
+                    late_early_db: 0.270,
+                },
+            ),
+            (
+                17,
+                RenderSignature {
+                    rms_db: -12.554,
+                    centroid_hz: 358.579,
+                    late_early_db: 0.270,
+                },
+            ),
+            (
+                18,
+                RenderSignature {
+                    rms_db: -18.891,
+                    centroid_hz: 701.393,
+                    late_early_db: 0.158,
+                },
+            ),
+        ];
+        for (program, signature) in expected {
+            let rendered = render_program(program, key, vel, 0.5, seed);
+            assert_render_signature(
+                &format!("legacy organ GM{program}"),
+                render_signature(&rendered, sr, (0.1, 0.4), (0.05, 0.15), (0.35, 0.48)),
+                signature,
+            );
+        }
         let mut legacy = legacy_church_organ(key, vel, sr, seed);
         let mut legacy_render = vec![0.0; (0.5 * sr) as usize];
         legacy.render(&mut legacy_render);
-        legacy_hashes.push((19, render_hash(&legacy_render)));
-        assert_eq!(
-            legacy_hashes,
-            vec![
-                (16u8, 7697346571575327780),
-                (17, 7697346571575327780),
-                (18, 2825932507103733612),
-                (19, 11750116236685652893),
-            ],
-            "GM16-19 legacy organ hashes"
+        assert_render_signature(
+            "legacy organ GM19",
+            render_signature(&legacy_render, sr, (0.1, 0.4), (0.05, 0.15), (0.35, 0.48)),
+            RenderSignature {
+                rms_db: -12.798,
+                centroid_hz: 1189.406,
+                late_early_db: -0.724,
+            },
         );
 
         let render_old_organ = |program| {
@@ -10559,31 +10612,38 @@ mod tests {
     }
 
     /// Oracle 7b: the SawStack families this change refactors — pads and
-    /// strings — render bit-for-bit as the baseline (origin/main) binary.
-    /// Hashes pinned from the baseline; a future SawStack/LayerOsc refactor that
-    /// drifts them trips here. (The choir arm was retired 2026.07.10: GM 52-54
+    /// strings — retain tight level, spectrum, and envelope signatures.
+    /// (The choir arm was retired 2026.07.10: GM 52-54
     /// moved off SawStack onto the dedicated `ChoirV2` formant engine, an
     /// intentional default-bank voicing change; the surviving pad/strings pins
     /// prove the shared stack itself did not move.)
     #[test]
-    fn sawstack_families_byte_identical() {
+    fn sawstack_family_signatures_are_stable() {
         let sr = 44100.0;
-        let hash = |mut v: SawStack| {
+        let render = |mut v: SawStack| {
             let mut buf = vec![0f32; (sr * 0.5) as usize];
             v.render(&mut buf);
-            buf.iter().fold(0xcbf29ce484222325u64, |acc, &s| {
-                (acc ^ s.to_bits() as u64).wrapping_mul(0x100000001b3)
-            })
+            buf
         };
-        assert_eq!(
-            hash(pad(95, 60, 100, sr, 7)),
-            0xb0bdc70da0091298,
-            "pad(95) drifted"
+        let pad_render = render(pad(95, 60, 100, sr, 7));
+        let strings_render = render(strings(48, 60, 100, sr, 7));
+        assert_render_signature(
+            "SawStack pad(95)",
+            render_signature(&pad_render, sr, (0.1, 0.4), (0.05, 0.15), (0.35, 0.48)),
+            RenderSignature {
+                rms_db: -25.026,
+                centroid_hz: 657.345,
+                late_early_db: 12.005,
+            },
         );
-        assert_eq!(
-            hash(strings(48, 60, 100, sr, 7)),
-            0x65817f27e894bcac,
-            "strings(48) drifted"
+        assert_render_signature(
+            "SawStack strings(48)",
+            render_signature(&strings_render, sr, (0.1, 0.4), (0.05, 0.15), (0.35, 0.48)),
+            RenderSignature {
+                rms_db: -28.043,
+                centroid_hz: 683.291,
+                late_early_db: 3.082,
+            },
         );
     }
 

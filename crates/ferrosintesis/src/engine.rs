@@ -180,6 +180,11 @@ pub(crate) fn needs_drive(prog: u8) -> bool {
     matches!(prog, 29 | 30)
 }
 
+/// Driven guitar strings can sustain indefinitely while physically/pedal held.
+/// Eight voices preserve two power chords plus lead/doubling while bounding the
+/// per-channel CPU and level wall from pathological stacked MIDI.
+const DRIVEN_GUITAR_VOICE_LIMIT: usize = 8;
+
 /// D9: static per-piece kit placement (drummer's perspective) in pan space
 /// [0, 1], 0.5 = centre. Kick/snare stay centred; hats sit left; the toms
 /// sweep across; ride/bell and china/crash-2 sit right, crash-1 left.
@@ -996,6 +1001,28 @@ impl EngineCore {
         }
     }
 
+    fn make_room_for_driven_guitar(&mut self, ch: u8) {
+        let active = self
+            .active
+            .iter()
+            .filter(|a| a.ch == ch && needs_drive(a.program) && !a.voice.released())
+            .count();
+        let release_count = active.saturating_sub(DRIVEN_GUITAR_VOICE_LIMIT - 1);
+        for a in self
+            .active
+            .iter_mut()
+            .filter(|a| a.ch == ch && needs_drive(a.program) && !a.voice.released())
+            .take(release_count)
+        {
+            // Voice stealing is a hard safety boundary: it overrides both pedal
+            // deferrals and drops Pluck's e-bow driver through note_off().
+            a.held = false;
+            a.sost = false;
+            a.sost_held = false;
+            a.voice.note_off();
+        }
+    }
+
     pub(crate) fn handle_event(&mut self, kind: EvKind) {
         match kind {
             // --solo: muted channels keep their CCs but lose their notes
@@ -1083,6 +1110,10 @@ impl EngineCore {
             {
                 a.voice.choke();
             }
+        }
+
+        if ch != 9 && needs_drive(program) {
+            self.make_room_for_driven_guitar(ch);
         }
 
         let seed = 0x9E37 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
@@ -4916,6 +4947,162 @@ mod tests {
         );
     }
 
+    fn dry_core() -> EngineCore {
+        EngineCore::new(CoreOptions::from_options(&test_opts(44100.0), false, false))
+    }
+
+    fn unreleased_driven(core: &EngineCore, ch: u8) -> usize {
+        core.active
+            .iter()
+            .filter(|a| a.ch == ch && needs_drive(a.program) && !a.voice.released())
+            .count()
+    }
+
+    #[test]
+    fn driven_guitar_voice_limit_releases_oldest_across_programs_per_channel() {
+        let mut core = dry_core();
+        core.handle_event(EvKind::Prog { ch: 0, prog: 29 });
+        for key in 40..44 {
+            core.handle_event(EvKind::NoteOn {
+                ch: 0,
+                key,
+                vel: 100,
+            });
+        }
+        core.handle_event(EvKind::Prog { ch: 0, prog: 30 });
+        for key in 44..48 {
+            core.handle_event(EvKind::NoteOn {
+                ch: 0,
+                key,
+                vel: 100,
+            });
+        }
+        core.handle_event(EvKind::Prog { ch: 1, prog: 29 });
+        core.handle_event(EvKind::NoteOn {
+            ch: 1,
+            key: 52,
+            vel: 100,
+        });
+        assert_eq!(unreleased_driven(&core, 0), DRIVEN_GUITAR_VOICE_LIMIT);
+
+        core.handle_event(EvKind::NoteOn {
+            ch: 0,
+            key: 60,
+            vel: 100,
+        });
+        assert_eq!(unreleased_driven(&core, 0), DRIVEN_GUITAR_VOICE_LIMIT);
+        assert_eq!(unreleased_driven(&core, 1), 1, "other channel was stolen");
+        let oldest = core
+            .active
+            .iter()
+            .find(|a| a.ch == 0 && a.key == 40)
+            .unwrap();
+        assert!(
+            oldest.voice.released(),
+            "oldest driven voice was not stolen"
+        );
+        let newest = core
+            .active
+            .iter()
+            .find(|a| a.ch == 0 && a.key == 60)
+            .unwrap();
+        assert!(!newest.voice.released(), "newest driven voice was stolen");
+    }
+
+    #[test]
+    fn driven_guitar_voice_limit_overrides_sustain_pedal() {
+        let mut core = dry_core();
+        core.handle_event(EvKind::Prog { ch: 0, prog: 29 });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 64,
+            val: 127,
+        });
+        for key in 40..48 {
+            core.handle_event(EvKind::NoteOn {
+                ch: 0,
+                key,
+                vel: 100,
+            });
+            core.handle_event(EvKind::NoteOff { ch: 0, key });
+        }
+        assert!(core.active.iter().filter(|a| a.ch == 0).all(|a| a.held));
+
+        core.handle_event(EvKind::NoteOn {
+            ch: 0,
+            key: 60,
+            vel: 100,
+        });
+        let oldest = core
+            .active
+            .iter()
+            .find(|a| a.ch == 0 && a.key == 40)
+            .unwrap();
+        assert!(oldest.voice.released() && !oldest.held);
+
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 64,
+            val: 0,
+        });
+        assert_eq!(unreleased_driven(&core, 0), 1);
+        assert!(core
+            .active
+            .iter()
+            .find(|a| a.ch == 0 && a.key == 60)
+            .is_some_and(|a| !a.voice.released()));
+    }
+
+    #[test]
+    fn driven_guitar_voice_limit_overrides_sostenuto_capture() {
+        let mut core = dry_core();
+        core.handle_event(EvKind::Prog { ch: 0, prog: 30 });
+        for key in 40..48 {
+            core.handle_event(EvKind::NoteOn {
+                ch: 0,
+                key,
+                vel: 100,
+            });
+        }
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 66,
+            val: 127,
+        });
+        for key in 40..48 {
+            core.handle_event(EvKind::NoteOff { ch: 0, key });
+        }
+        assert!(core
+            .active
+            .iter()
+            .filter(|a| a.ch == 0)
+            .all(|a| a.sost && a.sost_held));
+
+        core.handle_event(EvKind::NoteOn {
+            ch: 0,
+            key: 60,
+            vel: 100,
+        });
+        let oldest = core
+            .active
+            .iter()
+            .find(|a| a.ch == 0 && a.key == 40)
+            .unwrap();
+        assert!(oldest.voice.released() && !oldest.sost && !oldest.sost_held);
+
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 66,
+            val: 0,
+        });
+        assert_eq!(unreleased_driven(&core, 0), 1);
+        assert!(core
+            .active
+            .iter()
+            .find(|a| a.ch == 0 && a.key == 60)
+            .is_some_and(|a| !a.voice.released()));
+    }
+
     fn render_piano_una_corda(soft: bool) -> Vec<f32> {
         let mut ev = vec![
             (0.0, EvKind::Prog { ch: 0, prog: 0 }),
@@ -6115,28 +6302,29 @@ mod tests {
         );
     }
 
-    // Oracle C — an organ that never authors CC11 renders bit-for-bit as the
-    // pre-feature 0.13.3 build (the reed-rasp path is strictly branch-skipped at
-    // drive 0); the CC11=127 canary MUST differ, proving the feature is wired.
+    // Oracle C — an organ that never authors CC11 retains its pre-feature level,
+    // spectrum, and envelope; CC11=127 MUST differ, proving the feature is wired.
     #[test]
-    fn cathedral_organ_without_cc11_matches_baseline_hash() {
-        let hash = |s: &[f32]| -> u64 {
-            let mut h = 0xcbf2_9ce4_8422_2325u64;
-            for x in s {
-                h ^= x.to_bits() as u64;
-                h = h.wrapping_mul(0x0000_0100_0000_01b3);
-            }
-            h
-        };
-        let no_cc11 = hash(&render_gm19_swell(None));
-        let with_cc11 = hash(&render_gm19_swell(Some(127)));
-        println!("hash no-cc11 = {no_cc11:#018x}, cc127 = {with_cc11:#018x}");
-        assert_eq!(
-            no_cc11, 0x4e65_45f5_a759_2108,
-            "no-CC11 GM19 render changed — opt-in byte-identity broken"
+    fn cathedral_organ_without_cc11_matches_baseline_signature() {
+        let no_cc11_render = render_gm19_swell(None);
+        crate::testutil::assert_render_signature(
+            "unauthored GM19",
+            crate::testutil::render_signature(
+                &no_cc11_render,
+                44100.0,
+                (0.5, 2.5),
+                (0.2, 0.7),
+                (2.0, 2.7),
+            ),
+            crate::testutil::RenderSignature {
+                rms_db: -20.478,
+                centroid_hz: 1107.038,
+                late_early_db: 0.051,
+            },
         );
+        let with_cc11 = render_gm19_swell(Some(127));
         assert_ne!(
-            no_cc11, with_cc11,
+            no_cc11_render, with_cc11,
             "CC11 did not change the render — the reed rasp is not wired"
         );
     }

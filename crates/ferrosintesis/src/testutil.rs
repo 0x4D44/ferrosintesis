@@ -124,6 +124,69 @@ pub(crate) fn centroid(seg: &[f32], sr: f32) -> f32 {
     }
 }
 
+/// Cross-machine-stable render tripwire. Raw `f32` fingerprints vary with
+/// optimizer/CPU codegen even when the audible signal is unchanged; these three
+/// measurements retain a tight level, spectrum, and envelope guard without
+/// depending on last-bit identity.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RenderSignature {
+    pub(crate) rms_db: f32,
+    pub(crate) centroid_hz: f32,
+    pub(crate) late_early_db: f32,
+}
+
+pub(crate) const SIGNATURE_RMS_TOL_DB: f32 = 0.15;
+pub(crate) const SIGNATURE_CENTROID_TOL: f32 = 0.02;
+pub(crate) const SIGNATURE_ENVELOPE_TOL_DB: f32 = 0.30;
+
+fn signature_window(samples: &[f32], sr: f32, window: (f32, f32)) -> &[f32] {
+    let start = (window.0 * sr) as usize;
+    let end = (window.1 * sr) as usize;
+    assert!(
+        window.0 >= 0.0 && window.1 > window.0 && end <= samples.len(),
+        "signature window {:?} outside {:.3}s render",
+        window,
+        samples.len() as f32 / sr
+    );
+    &samples[start..end]
+}
+
+pub(crate) fn render_signature(
+    samples: &[f32],
+    sr: f32,
+    body: (f32, f32),
+    early: (f32, f32),
+    late: (f32, f32),
+) -> RenderSignature {
+    let body = signature_window(samples, sr, body);
+    let early_rms = rms(signature_window(samples, sr, early)).max(1e-12);
+    let late_rms = rms(signature_window(samples, sr, late)).max(1e-12);
+    RenderSignature {
+        rms_db: 20.0 * rms(body).max(1e-12).log10(),
+        centroid_hz: centroid(body, sr),
+        late_early_db: 20.0 * (late_rms / early_rms).log10(),
+    }
+}
+
+pub(crate) fn signature_matches(got: RenderSignature, expected: RenderSignature) -> bool {
+    (got.rms_db - expected.rms_db).abs() <= SIGNATURE_RMS_TOL_DB
+        && (got.centroid_hz / expected.centroid_hz.max(1e-12) - 1.0).abs() <= SIGNATURE_CENTROID_TOL
+        && (got.late_early_db - expected.late_early_db).abs() <= SIGNATURE_ENVELOPE_TOL_DB
+}
+
+pub(crate) fn assert_render_signature(
+    label: &str,
+    got: RenderSignature,
+    expected: RenderSignature,
+) {
+    assert!(
+        signature_matches(got, expected),
+        "{label} render signature drifted: got {got:?}, expected {expected:?} \
+         (tolerances: rms ±{SIGNATURE_RMS_TOL_DB:.2} dB, centroid ±{:.1}%, envelope ±{SIGNATURE_ENVELOPE_TOL_DB:.2} dB)",
+        SIGNATURE_CENTROID_TOL * 100.0
+    );
+}
+
 /// Argmax of `mag_at` over a fine log grid (0.5% steps) in [f_lo, f_hi].
 pub(crate) fn peak_locate(seg: &[f32], sr: f32, f_lo: f32, f_hi: f32) -> f32 {
     let mut f = f_lo;
@@ -569,6 +632,43 @@ mod calibration {
     }
 
     #[test]
+    fn portable_render_signature_detects_level_spectrum_and_envelope_drift() {
+        let sr = 44100.0;
+        let mut base: Vec<f32> = (0..sr as usize)
+            .map(|i| {
+                let t = i as f32 / sr;
+                let env = if t < 0.5 { 1.0 } else { 0.55 };
+                env * (0.7 * (std::f32::consts::TAU * 440.0 * t).sin()
+                    + 0.3 * (std::f32::consts::TAU * 3520.0 * t).sin())
+            })
+            .collect();
+        let windows = ((0.05, 0.95), (0.10, 0.35), (0.65, 0.90));
+        let expected = render_signature(&base, sr, windows.0, windows.1, windows.2);
+
+        let gain = 10f32.powf(0.25 / 20.0);
+        let louder: Vec<f32> = base.iter().map(|&x| x * gain).collect();
+        assert!(!signature_matches(
+            render_signature(&louder, sr, windows.0, windows.1, windows.2),
+            expected
+        ));
+
+        let mut lp = OnePole::lowpass(1200.0, sr);
+        let darker: Vec<f32> = base.iter().map(|&x| lp.process(x)).collect();
+        assert!(!signature_matches(
+            render_signature(&darker, sr, windows.0, windows.1, windows.2),
+            expected
+        ));
+
+        for x in &mut base[(0.5 * sr) as usize..] {
+            *x *= 0.95;
+        }
+        assert!(!signature_matches(
+            render_signature(&base, sr, windows.0, windows.1, windows.2),
+            expected
+        ));
+    }
+
+    #[test]
     fn t60_of_recovers_a_known_decay() {
         let sr = 44100.0;
         let t60 = 0.5f32;
@@ -766,7 +866,7 @@ mod guards {
         // touch darker (3 kHz coil under the palm), ch 4 brighter through the
         // drive (3.3 kHz humbucker peak). The nylon/steel/bass/piano/strings
         // rows are BIT-EXACT vs the pre-work capture (see also the
-        // v2_untouched_pluck_canaries FNV pins).
+        // v2_untouched_pluck_signatures_are_stable portable signature guard).
         // Re-captured after guitar v2 unit C (Drive v2: two stages + sag):
         // ch 4 sits 7.0 dB higher and darker — the sag compressor holds
         // decayed note tails up, and a decayed KS tail is fundamental-heavy

@@ -123,10 +123,10 @@ once a held 29/30 note decays to a fraction of its spoken level (0.35 default;
 0.6 on the CC0 alt-bank DRIVE_LEAD), a band-limited saturating driver at the
 string's fundamental holds it there indefinitely — release decays naturally.
 GM 26 (jazz hollowbody, neck pickup) and 27 (bright single-coil platform) are
-distinct presets as of v0.15. Known limit: every held driven note sustains, so
-a 29/30 channel that stacks many long overlapping notes (or defers releases
-under CC64) accumulates held voices — idiomatic writing holds one lead line or
-a power chord, which is what the mechanism is voiced for.
+distinct presets as of v0.15. Each channel keeps at most eight unreleased GM
+29/30 voices across both programs. A ninth note releases the oldest voice,
+including one deferred by sustain or sostenuto, so malformed or heavily layered
+MIDI cannot grow the sustainer without bound while ordinary chords remain intact.
 
 ## Performance: bends, hammer-ons, mutes
 

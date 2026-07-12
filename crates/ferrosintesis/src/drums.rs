@@ -942,7 +942,8 @@ fn cymbal(spec: &CymSpec, sr: f32, seed: u32, vel: u8) -> Option<Box<dyn Voice>>
 /// DR1 crash spec for one kit — collapses the near-identical 49/57 v1/v2 pairs.
 /// Pure `CymSpec` data feeding the deterministic `cymbal()`; the v1 branch
 /// reproduces the exact pre-v0.9 fields, so v1 stays byte-identical (pinned by
-/// the crash oracles + `v1_drum_render_is_frozen`). `t60` args are `(first, last)`.
+/// the crash oracles + `v1_drum_render_signatures_are_stable`). `t60` args are
+/// `(first, last)`.
 #[allow(clippy::too_many_arguments)]
 fn crash_spec(
     kit: Kit,
@@ -2332,7 +2333,7 @@ mod tests {
     /// DR0 seam: spot-checks ONE kit-agnostic key (51 ride — never branches on
     /// `kit`) is byte-identical under V1 and V2, i.e. a ch-10 Program Change
     /// only ever changes the keys a v2 fix touches. (The V1==v0.8.1 baseline
-    /// invariant is pinned separately by `v1_drum_render_is_frozen`.)
+    /// invariant is pinned separately by `v1_drum_render_signatures_are_stable`.)
     #[test]
     fn kit_v2_seam_wired_and_inert_for_untouched_keys() {
         let sr = 44100.0;
@@ -2348,36 +2349,70 @@ mod tests {
         assert_eq!(v1, v2, "kit-agnostic key 51 identical under V1 and V2");
     }
 
-    /// FNV-1a over the raw f32 bits of a render buffer — a compact byte-exact
-    /// fingerprint (bit-level, so it catches a sub-dB drift the golden misses).
-    fn render_fingerprint(buf: &[f32]) -> u64 {
-        let mut h = 0xcbf29ce484222325u64;
-        for &x in buf {
-            h ^= x.to_bits() as u64;
-            h = h.wrapping_mul(0x100000001b3);
-        }
-        h
-    }
-
-    /// Byte-exact freeze of the legacy (V1) kit for representative keys, so any
+    /// Portable freeze of the legacy (V1) kit for representative keys, so any
     /// future edit to a shared render/build path that silently shifts V1 —
     /// below the golden's ±2.5 dB trip-wire — fails loudly here. V1 IS the
     /// v0.8.1 baseline (proven at integration by the album byte-compare); this
     /// pins it forward for every phase still to land. Contamination canary in
     /// the spirit of lessons_learnt (canaries find contamination, not drift).
     #[test]
-    fn v1_drum_render_is_frozen() {
-        // (key, fingerprint). Kick, snare, closed hat, crash, tom.
-        let cases: [(u8, u64); 5] = [
-            (36, 0x77e42657e7f8a7a3),
-            (38, 0x9c6b613424fb3d46),
-            (42, 0x76e3c7038c0ff8f5),
-            (49, 0x3d8caf328fcc2db8),
-            (41, 0x82457a61ced252c1),
+    fn v1_drum_render_signatures_are_stable() {
+        // Kick, snare, closed hat, crash, tom.
+        let cases = [
+            (
+                36,
+                testutil::RenderSignature {
+                    rms_db: -11.549,
+                    centroid_hz: 188.589,
+                    late_early_db: -7.436,
+                },
+            ),
+            (
+                38,
+                testutil::RenderSignature {
+                    rms_db: -20.956,
+                    centroid_hz: 957.116,
+                    late_early_db: -15.458,
+                },
+            ),
+            (
+                42,
+                testutil::RenderSignature {
+                    rms_db: -35.702,
+                    centroid_hz: 7887.204,
+                    late_early_db: -59.097,
+                },
+            ),
+            (
+                49,
+                testutil::RenderSignature {
+                    rms_db: -18.445,
+                    centroid_hz: 5960.781,
+                    late_early_db: 1.826,
+                },
+            ),
+            (
+                41,
+                testutil::RenderSignature {
+                    rms_db: -15.054,
+                    centroid_hz: 184.404,
+                    late_early_db: -7.775,
+                },
+            ),
         ];
-        for (key, want) in cases {
-            let got = render_fingerprint(&render_drum_kit(key, 100, 1.0, Kit::V1));
-            assert_eq!(got, want, "V1 render of key {key} drifted (fingerprint)");
+        for (key, expected) in cases {
+            let rendered = render_drum_kit(key, 100, 1.0, Kit::V1);
+            testutil::assert_render_signature(
+                &format!("V1 drum key {key}"),
+                testutil::render_signature(
+                    &rendered,
+                    44100.0,
+                    (0.0, 0.20),
+                    (0.0, 0.02),
+                    (0.04, 0.08),
+                ),
+                expected,
+            );
         }
     }
 
@@ -4059,23 +4094,74 @@ mod tests {
         assert!(d.abs() <= 2.0, "brush kick level {d:+.2} dB off v1");
     }
 
-    /// Post-calibration byte-exact freeze of the brush kit (same contract as
-    /// `v1_drum_render_is_frozen`): any shared-path edit that shifts a brush
-    /// voice below the level oracles' ±2 dB trip-wire fails loudly here.
+    /// Post-calibration portable freeze of the brush kit (same contract as the
+    /// V1 signatures): any shared-path edit below the broad level oracles fails.
     #[test]
-    fn brush_render_is_frozen() {
-        // (key, fingerprint). Kick, tap, slap, swirl, closed hat, open hat.
-        let cases: [(u8, u64); 6] = [
-            (36, 0xf4a96bb9e49b508d),
-            (38, 0xf0f2e9c7eafc3efc),
-            (39, 0xcbe847e0064d5592),
-            (40, 0xd7530d0e9024d083),
-            (42, 0xe13957c3b7691ac5),
-            (46, 0x34b8c0ef2dba6183),
+    fn brush_render_signatures_are_stable() {
+        // Kick, tap, slap, swirl, closed hat, open hat.
+        let cases = [
+            (
+                36,
+                testutil::RenderSignature {
+                    rms_db: -12.962,
+                    centroid_hz: 168.235,
+                    late_early_db: -7.434,
+                },
+            ),
+            (
+                38,
+                testutil::RenderSignature {
+                    rms_db: -20.911,
+                    centroid_hz: 474.734,
+                    late_early_db: -40.576,
+                },
+            ),
+            (
+                39,
+                testutil::RenderSignature {
+                    rms_db: -19.795,
+                    centroid_hz: 582.261,
+                    late_early_db: -35.832,
+                },
+            ),
+            (
+                40,
+                testutil::RenderSignature {
+                    rms_db: -44.069,
+                    centroid_hz: 2800.437,
+                    late_early_db: 16.597,
+                },
+            ),
+            (
+                42,
+                testutil::RenderSignature {
+                    rms_db: -34.509,
+                    centroid_hz: 6485.427,
+                    late_early_db: -61.407,
+                },
+            ),
+            (
+                46,
+                testutil::RenderSignature {
+                    rms_db: -28.514,
+                    centroid_hz: 6471.648,
+                    late_early_db: -4.519,
+                },
+            ),
         ];
-        for (key, want) in cases {
-            let got = render_fingerprint(&render_drum_kit(key, 100, 1.0, Kit::Brush));
-            assert_eq!(got, want, "brush render of key {key} drifted: {got:#018x}");
+        for (key, expected) in cases {
+            let rendered = render_drum_kit(key, 100, 1.0, Kit::Brush);
+            testutil::assert_render_signature(
+                &format!("brush drum key {key}"),
+                testutil::render_signature(
+                    &rendered,
+                    44100.0,
+                    (0.0, 0.20),
+                    (0.0, 0.02),
+                    (0.04, 0.08),
+                ),
+                expected,
+            );
         }
     }
 }

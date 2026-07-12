@@ -1076,8 +1076,8 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
 mod tests {
     use super::*;
     use crate::testutil::{
-        band_rms, centroid, env_autocorr_peak_detrend, flatness, hp_rms, mag_at, peak_locate, rms,
-        BW_TREM_PEAK_FLOOR,
+        assert_render_signature, band_rms, centroid, env_autocorr_peak_detrend, flatness, hp_rms,
+        mag_at, peak_locate, render_signature, rms, RenderSignature, BW_TREM_PEAK_FLOOR,
     };
 
     // --- render helpers (ported from the v0.9 test module) -----------------
@@ -1429,42 +1429,41 @@ mod tests {
 
     // --- SawStack / strings (ST1/2/3) --------------------------------------
 
-    /// SawStack contamination canary — RE-PINNED against the alt module. The
+    /// Portable SawStack contamination canary against the alt module. The
     /// v0.9 form pinned `make(89)` (pad, Lp) and `make(52)` (then a v1 choir).
     /// In the alt factory `make(52)` routes to `choir_v2` and `make(89)`
-    /// delegates to trunk's pad, so both fingerprints are re-pinned to what the
-    /// alt module actually renders. The pad accepts the two exact fingerprints
-    /// observed across the fleet's machines/profiles; choir remains a single
-    /// exact fingerprint. Any other drift is still caught.
+    /// delegates to trunk's pad, so both signatures are calibrated to what the
+    /// alt module actually renders. Tight level, spectrum, and envelope
+    /// signatures catch contamination without depending on non-portable raw
+    /// floating-point fingerprints.
     #[test]
-    fn sawstack_v1_canary_frozen() {
-        fn fp(buf: &[f32]) -> u64 {
-            let mut h = 0xcbf29ce484222325u64;
-            for &x in buf {
-                h ^= x.to_bits() as u64;
-                h = h.wrapping_mul(0x100000001b3);
-            }
-            h
-        }
+    fn sawstack_v1_signatures_are_stable() {
         let sr = 44100.0;
         let render = |prog: u8, key: u8| {
             let mut v = make(prog, key, 100, sr, 7, false);
             let mut b = vec![0f32; (sr * 1.5) as usize];
             v.render(&mut b);
-            fp(&b)
+            b
         };
-        // pad 89 WarmPad delegates to trunk. Identical source has produced both
-        // values below across the fleet's machines/build profiles; accept only
-        // that known set until the wider portable-canary work replaces raw hashes.
-        let pad_fp = render(89, 60);
-        assert!(
-            matches!(pad_fp, 0x63cb52bc25cbdd4f | 0x66cf721ab5a542fb),
-            "pad(89) SawStack drifted: {pad_fp:#018x}"
+        let pad = render(89, 60);
+        let choir = render(52, 60);
+        assert_render_signature(
+            "alt pad(89)",
+            render_signature(&pad, sr, (0.2, 0.8), (0.1, 0.3), (0.9, 1.3)),
+            RenderSignature {
+                rms_db: -21.567,
+                centroid_hz: 611.243,
+                late_early_db: 1.923,
+            },
         );
-        assert_eq!(
-            render(52, 60),
-            0x8d6848dd707d9834,
-            "choir(52) alt render drifted"
+        assert_render_signature(
+            "alt choir(52)",
+            render_signature(&choir, sr, (0.2, 0.8), (0.1, 0.3), (0.9, 1.3)),
+            RenderSignature {
+                rms_db: -29.502,
+                centroid_hz: 1308.458,
+                late_early_db: 2.215,
+            },
         );
     }
 
@@ -1751,16 +1750,6 @@ mod tests {
         20.0 * (a / b.max(1e-12)).log10()
     }
 
-    /// FNV-1a over the raw f32 bits — byte-exact render fingerprint.
-    fn render_hash(samples: &[f32]) -> u64 {
-        let mut h = 0xcbf29ce484222325u64;
-        for &x in samples {
-            h ^= x.to_bits() as u64;
-            h = h.wrapping_mul(0x100000001b3);
-        }
-        h
-    }
-
     fn max_abs(s: &[f32]) -> f32 {
         s.iter().fold(0f32, |m, &x| m.max(x.abs()))
     }
@@ -1843,27 +1832,19 @@ mod tests {
             bt >= 1.25 * bc,
             "B112 brightness {bt:.3} not >=1.25x celesta {bc:.3}"
         );
-        let mut hashes: Vec<(String, u64)> = [112u8, 113, 114]
+        let mut renders: Vec<(String, Vec<f32>)> = [112u8, 113, 114]
             .iter()
-            .map(|&p| {
-                (
-                    format!("alt{p}"),
-                    render_hash(&render_alt(p, key, 100, 0.8, seed)),
-                )
-            })
+            .map(|&p| (format!("alt{p}"), render_alt(p, key, 100, 0.8, seed)))
             .collect();
         for p in [8u8, 9, 10, 12, 14] {
-            hashes.push((
-                format!("def{p}"),
-                render_hash(&render_def(p, key, 100, 0.8, seed)),
-            ));
+            renders.push((format!("def{p}"), render_def(p, key, 100, 0.8, seed)));
         }
-        for i in 0..hashes.len() {
-            for j in (i + 1)..hashes.len() {
+        for i in 0..renders.len() {
+            for j in (i + 1)..renders.len() {
                 assert_ne!(
-                    hashes[i].1, hashes[j].1,
+                    renders[i].1, renders[j].1,
                     "{} and {} render identically at key {key}",
-                    hashes[i].0, hashes[j].0
+                    renders[i].0, renders[j].0
                 );
             }
         }
@@ -2082,21 +2063,20 @@ mod tests {
     #[test]
     fn altbank_b112_119_dispatch_distinct() {
         let seed = 0x11_5003;
-        let mut hashes = Vec::new();
+        let mut renders = Vec::new();
         for p in 112u8..=119 {
             let b = render_alt(p, 60, 100, 0.5, seed);
             assert!(b.iter().any(|&x| x.abs() > 1e-6), "B{p} renders silence");
-            let h = render_hash(&b);
-            let hd = render_hash(&render_def(p, 60, 100, 0.5, seed));
-            assert_ne!(h, hd, "B{p} renders identically to the default bank");
-            hashes.push((p, h));
+            let default = render_def(p, 60, 100, 0.5, seed);
+            assert_ne!(b, default, "B{p} renders identically to the default bank");
+            renders.push((p, b));
         }
-        for i in 0..hashes.len() {
-            for j in (i + 1)..hashes.len() {
+        for i in 0..renders.len() {
+            for j in (i + 1)..renders.len() {
                 assert_ne!(
-                    hashes[i].1, hashes[j].1,
+                    renders[i].1, renders[j].1,
                     "B{} and B{} render identically",
-                    hashes[i].0, hashes[j].0
+                    renders[i].0, renders[j].0
                 );
             }
         }

@@ -1105,7 +1105,9 @@ mod distinctness {
         (50, 51, Why::Legit),
         // -- Stage 5: minor collapses --
         (16, 17, Why::Collapse(5)), // organ: two drawbar sets share one config
-        (26, 27, Why::Collapse(5)), // guitar: two "clean electric" share CLEAN
+        // (26, 27) was a Collapse: both shared CLEAN. Guitar v2 split them into
+        // JAZZ (neck hollowbody) and CLEAN (bright single-coil) — differentiated,
+        // so the stale collapse entry is deleted (this oracle's own contract).
         (29, 30, Why::Collapse(5)), // guitar: two "overdrive/distortion" share DRIVE
         (36, 37, Why::Collapse(5)), // bass: two slap share SLAP
         (0, 1, Why::Collapse(5)),   // piano: acoustic-grand family shares one Modal

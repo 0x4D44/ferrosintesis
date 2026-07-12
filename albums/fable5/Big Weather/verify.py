@@ -229,6 +229,26 @@ def check_programs(module, sc):
     return _cap(fails)
 
 
+def check_bank_select_order(_module, sc):
+    """CC0 at a tick must precede Program Change at that same tick."""
+    fails = []
+    for ch, events in sorted(sc.events.items()):
+        by_tick: dict[int, dict[str, list[int]]] = {}
+        for tick, priority, data in events:
+            status = data[0] & 0xF0
+            kind = ("bank" if status == 0xB0 and data[1] == 0 else
+                    "program" if status == 0xC0 else None)
+            if kind is not None:
+                by_tick.setdefault(tick, {"bank": [], "program": []})[kind].append(priority)
+        for tick, priorities in by_tick.items():
+            if (priorities["bank"] and priorities["program"] and
+                    max(priorities["bank"]) >= min(priorities["program"])):
+                fails.append(f"ch{ch} tick {tick}: CC0 priority "
+                             f"{priorities['bank']} must precede Program Change "
+                             f"priority {priorities['program']}")
+    return _cap(fails)
+
+
 def check_pan(module, sc):
     fails = []
     for ch in sorted(module.CENTERED_CHANNELS):
@@ -347,6 +367,19 @@ def _beats_per_bar(part, beat):
     return num * 4.0 / den
 
 
+def _meter_changes_in_span(part, t0, t1):
+    """Time-signature changes strictly inside [t0,t1); boundaries are valid."""
+    changes = []
+    previous = None
+    for beat, numerator, denominator in sorted(part.TIME_SIGNATURES):
+        meter = (numerator, denominator)
+        if (previous is not None and meter != previous and
+                t0 + 1e-9 < beat < t1 - 1e-9):
+            changes.append(beat)
+        previous = meter
+    return changes
+
+
 def section_energy(module, sc, name):
     """Duration-weighted energy per bar of the named section (HLD D10).
 
@@ -374,6 +407,19 @@ def check_song_energy(module, sc):
         return []
     fails = []
     cache: dict[str, float | None] = {}
+    invalid_meter_sections = set()
+
+    names = {name for lhs, _op, rhs, _factor in rules for name in (lhs, rhs)}
+    for name in sorted(names):
+        span = _section(module.PART, name)
+        if span is None:
+            continue
+        changes = _meter_changes_in_span(module.PART, *span)
+        if changes:
+            invalid_meter_sections.add(name)
+            fails.append(f"ENERGY_RULES section '{name}' [{span[0]:g},{span[1]:g}) "
+                         f"crosses time-signature change(s) at {changes}; "
+                         "variable-meter energy math is unsupported")
 
     def energy(name):
         if name not in cache:
@@ -381,6 +427,8 @@ def check_song_energy(module, sc):
         return cache[name]
 
     for lhs, op, rhs, factor in rules:
+        if lhs in invalid_meter_sections or rhs in invalid_meter_sections:
+            continue
         if op not in (">=", "<="):
             fails.append(f"ENERGY_RULES has unknown op {op!r} "
                          f"(must be '>=' or '<=')")
@@ -647,6 +695,11 @@ def check_drum_solo(module, sc):
     allowed = set(spec.get("accompanists", ()))
     for t0, t1 in spec["windows"]:
         tag = f"solo [{t0:.0f},{t1:.0f})"
+        changes = _meter_changes_in_span(module.PART, t0, t1)
+        if changes:
+            fails.append(f"{tag}: crosses time-signature change(s) at {changes}; "
+                         "variable-meter drum-solo math is unsupported")
+            continue
         for ch in sorted(sc.events):
             if ch == DRUM_CH or ch in allowed:
                 continue
@@ -698,6 +751,7 @@ def run_track(module, sc, info, spans) -> list[tuple[str, list[str]]]:
     results = [
         ("check_structure", check_structure(module, sc, info)),
         ("check_programs", check_programs(module, sc)),
+        ("check_bank_select_order", check_bank_select_order(module, sc)),
         ("check_pan", check_pan(module, sc)),
         ("check_ranges", check_ranges(module, sc)),
         ("check_gaps", check_gaps(module, sc)),

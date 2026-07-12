@@ -161,6 +161,26 @@ def check_programs(module, sc):
     return _cap(fails)
 
 
+def check_bank_select_order(_module, sc):
+    """CC0 at a tick must precede Program Change at that same tick."""
+    fails = []
+    for ch, events in sorted(sc.events.items()):
+        by_tick: dict[int, dict[str, list[int]]] = {}
+        for tick, priority, data in events:
+            status = data[0] & 0xF0
+            kind = ("bank" if status == 0xB0 and data[1] == 0 else
+                    "program" if status == 0xC0 else None)
+            if kind is not None:
+                by_tick.setdefault(tick, {"bank": [], "program": []})[kind].append(priority)
+        for tick, priorities in by_tick.items():
+            if (priorities["bank"] and priorities["program"] and
+                    max(priorities["bank"]) >= min(priorities["program"])):
+                fails.append(f"ch{ch} tick {tick}: CC0 priority "
+                             f"{priorities['bank']} must precede Program Change "
+                             f"priority {priorities['program']}")
+    return _cap(fails)
+
+
 def check_pan(module, sc):
     fails = []
     for ch in sorted(module.CENTERED_CHANNELS):
@@ -277,6 +297,7 @@ def run_track(module, sc, info, spans) -> list[tuple[str, list[str]]]:
     results = [
         ("check_structure", check_structure(module, sc, info)),
         ("check_programs", check_programs(module, sc)),
+        ("check_bank_select_order", check_bank_select_order(module, sc)),
         ("check_pan", check_pan(module, sc)),
         ("check_ranges", check_ranges(module, sc)),
         ("check_gaps", check_gaps(module, sc)),

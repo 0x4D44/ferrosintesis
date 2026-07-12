@@ -172,7 +172,8 @@ class Score:
     # -- events -------------------------------------------------------------
     def cc(self, ch: int, num: int, val: int, beat: float) -> None:
         self.events.setdefault(ch, []).append(
-            (_tick(beat), 2, bytes([0xB0 | ch, num, max(0, min(127, val))])))
+            (_tick(beat), 0 if num == 0 else 2,
+             bytes([0xB0 | ch, num, max(0, min(127, val))])))
 
     def note(self, ch: int, p: int, beat: float, dur: float, vel: int,
              jt: int = 5, jv: int = 4) -> None:

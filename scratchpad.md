@@ -1,5 +1,29 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.12 — **ferrosintesis renders are NOT bit-reproducible across the
+  fleet's machines** — surfaced completing the guitar-v2 opus refresh. This box
+  renders SawStack pad(89) to hash `7190932198068575567`, while the frozen canary
+  `altbank::tests::sawstack_v1_canary_frozen` is pinned to `7408265371089978107`
+  (another machine's render) — the exact pair logged 2026.07.09. The brass-ADAA
+  re-pin `0a7bbc3` re-froze it to the pin-machine, so it is RED on THIS box at
+  v0.15.1 (green on whatever box gates it — not a trunk regression). Same
+  nondeterminism in opus: rendering Through Lines 07 German Bight at identical
+  v0.15.1 code+MIDI on this box gives different bytes than the brass agent's
+  committed copy. Consequences: (1) exact-hash render canaries are non-portable —
+  make `sawstack_v1_canary_frozen` (+ peers) tolerance-based or scope them to one
+  gating machine; (2) the "deterministic render ⇒ git sees only changed tracks"
+  listening model holds within ONE box only — decide opus staleness by synth
+  VERSION / render-history, not by byte-diffing another box's render, and run any
+  catalog-wide refresh from a single machine. Promote to lessons_learnt at the
+  next prune. (Guitar-v2 opus itself is complete: all 20 tracks at the right synth
+  version on origin/main; this is a separate fleet-repro issue.)
+- [ ] 2026.07.12 — **Push-loop process bug**: a per-file `git push origin
+  <sha>:main` loop that rebases on race used `git rebase … | tail`; the pipe's
+  exit code (from `tail`, always 0) MASKED a rebase conflict, so the loop kept
+  pushing the partially-applied stack and falsely reported success. Capture the
+  rebase rc directly (`git rebase …; rc=$?`) and STOP on conflict — never gate
+  control flow on a piped git command's exit status (same class as the Git-Bash
+  python-shim exit-swallow already in this repo's lessons).
 - [x] 2026.07.10 — The synth showcase's full audio runner has four pre-existing
   oracle failures that reproduce byte-for-byte with the 0.11 baseline binary:
   track 1 `wah resonance bite` HF delta, track 4 `vowel shifts` HF direction,
@@ -22,6 +46,9 @@
   (`fable5/hollowsynth/src/altbank.rs:1387`). Out of scope for the GM47 timpani
   change; likely needs an alt-bank canary recapture or root-cause fix.
   (Already fixed: the repinned current-path canary passes on v0.13.1.)
+  (RE-OPENED 2026.07.12: recurred at v0.15.1 on this box, identical hashes — the
+  re-pin only re-freezes to the pin-machine; the exact-hash canary is not
+  machine-portable. See the top 2026.07.12 cross-machine-repro entry.)
 - [x] 2026.07.08 — drums review: `impl Default for CymSpec` would remove the
   `v2: None, noise2: None, shimmer: None` boilerplate from ~5 simple cymbal call
   sites (`fable5/hollowsynth/src/drums.rs` china 52 / splash 55 / ride 51|59 /

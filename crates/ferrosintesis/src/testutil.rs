@@ -794,8 +794,10 @@ mod guards {
         (7, -24.35, 567.6),
         (8, -37.21, 2683.1),
         // Re-captured after the default drum kit moved from V1 to V3:
-        // channel 10 is deliberately brighter and slightly louder.
-        (9, -22.51, 726.7),
+        // channel 10 is deliberately brighter and slightly louder. Re-pinned
+        // after the later V3 cymbal-density work moved the fixture within its
+        // guard tolerance.
+        (9, -22.30, 685.2),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
     const GOLDEN_MASTER_PEAK: f32 = 1.25446;

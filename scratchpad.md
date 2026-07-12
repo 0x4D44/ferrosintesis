@@ -76,12 +76,14 @@
   sweep should re-render every GM 42/43 album against the current trunk binary (the
   full list is likely broader than these 5 — only guitar-cello overlaps were
   rendered here). Verify against a render-diff (baseline = current origin/main).
-- [ ] 2026.07.11 - The GOLDEN fixture's drum row (ch 9: pinned −22.51 dB / 726.7 Hz,
+- [x] 2026.07.11 - The GOLDEN fixture's drum row (ch 9: pinned −22.51 dB / 726.7 Hz,
   currently rendering −22.30 dB / 685.2 Hz) has drifted within tolerance since the
   V3-kit recapture — later drum commits (e.g. `87b794c` cymbal detuned-pair density)
   moved it without re-pinning (`crates/ferrosintesis/src/testutil.rs` GOLDEN table).
   Harmless (guard passes), but the next drum task should re-pin ch 9 so the fixture
   reflects what it actually renders. Spotted during the guitar v2 unit-A recapture.
+  (Done 2026-07-12: re-ran `print_golden_fixture` and re-pinned ch 9 to
+  −22.30 dB / 685.2 Hz; `golden_mix_balance_holds` passes.)
 - [ ] 2026.07.11 - Committed `listening/*.opus` look **stale vs the 0.13.4 trunk**
   ("finalize strings on cathedral trunk" `3c8e7ee`). Re-running `python
   render_opus.py` with the current binary regenerates *different* bytes for

@@ -173,7 +173,19 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   (`0.10 + 0.90·vn`), so any gate on "L>1" / "(bright−1)" is near-dead — gate rasp
   on `L`/`bright` directly; and the extra harmonics must be shed at high f0 (a
   quartic derate) to hold the 2× alias floor (BR-O11). Top-register ff rasp needs
-  4×/ADAA (Fork B) — 2× can't carry a genuine shock tail above ~A4.
+  anti-aliasing above ~A4 — and first-order ADAA (F = ln cosh, applied STAGE-WISE
+  to the cascade) at the existing 2× delivered it (v0.15.1); a full 4×/Fork-B was
+  not needed. Three ADAA gotchas from that work: (a) a FLAT rasp floor over-drives
+  the mildly-derated upper-mid (A5–B5 get clamped UP and alias under growl) — make
+  the floor frequency-gated so it lifts ONLY the top octave (C6+, `smoothstep(900,
+  1100,f0)`), leaving A5 at its natural quartic value; (b) the binding BR-O11 alias
+  guard is A5, not the highest note F#6, partly because A5's 2200 Hz guard bin sits
+  in the BR6 breath band — the guard half-measures breath noise, so isolate breath=0
+  when tuning; (c) a pure sine barely aliases through a tanh (its harmonics decay
+  before Nyquist), so a spectral unit oracle on the ISOLATED shaper reads the noise
+  floor and can't reproduce the voice's aliasing — pin ADAA with a boxcar-mean MATH
+  oracle (divided-difference == the shaper's mean over the step) and lean on the
+  voice-level guard (BR-O11/O11b) for real-world efficacy.
 - 2026.07.11 — **A digital-waveguide string detunes progressively FLAT with pitch if
   `set_freq` under-subtracts the loop latency.** The bowed loop's in-loop reflection
   filter + read/write add ~3.8 samples, not the hard-coded 1; the residual is a

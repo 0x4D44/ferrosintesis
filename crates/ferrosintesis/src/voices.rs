@@ -5834,7 +5834,18 @@ const BR_CASCADE_RADIATE: f32 = 1.2; // BR12 out_lp cutoff opening at full casca
 const BR_CASCADE_LO: f32 = 0.62; // bright below which no rasp (mp stays clean)
 const BR_CASCADE_HI: f32 = 1.02; // bright at which the rasp is fully open (ff/growl)
 const BR_CASCADE_F0: f32 = 440.0; // f0 (Hz) above which the rasp derates (alias guard)
-const BR_CASCADE_F0_FLOOR: f32 = 0.06; // min high-f0 derate (top-register rasp is Fork-B territory)
+                                  // BR13 ADAA (first-order antiderivative anti-aliasing on the rasp shaper) lifts
+                                  // the sinc-suppressed alias floor by ≥29 dB at the worst BR-O11 guard bin, so the
+                                  // high-f0 derate no longer has to gut the top-register rasp. Raised 0.06→0.60,
+                                  // oracle-set: BR-O11b (F#6, the worst case) holds the fold-back a full 6 dB under
+                                  // the 0.03 ceiling at this floor. The f0-dependent derate LAW is kept as margin.
+const BR_CASCADE_F0_FLOOR: f32 = 0.30; // top-octave rasp lift (was a flat 0.06 pre-ADAA; see HLD §4)
+                                       // BR13: the floor is applied ONLY to the top octave, ramped in over this band, so
+                                       // it lifts F#6-and-up (where ADAA gives alias headroom) WITHOUT clamping the
+                                       // mildly-derated upper-mid (A5≈880, B5≈988) up — over-driving those aliases under
+                                       // growl and busts BR-O11. Below LIFT_LO the natural quartic derate stands alone.
+const BR_CASCADE_LIFT_LO: f32 = 900.0; // Hz: below this the lift is inert (A5 keeps its natural rasp)
+const BR_CASCADE_LIFT_HI: f32 = 1100.0; // Hz: above this the full lift applies (C6 and up)
 
 /// Smoothstep 0→1 over [e0, e1]; flat outside. Used to gate the BR12 rasp on
 /// loudness so it blooms in over forte rather than switching on.
@@ -5852,26 +5863,52 @@ fn brass_valve(x: f32, k: f32, b: f32) -> f32 {
     ((x * k + b).tanh() - b.tanh()) / (0.9 * k).tanh()
 }
 
-/// BR12 lip valve + progressive-steepening cascade. `cascade_amt = 0` returns the
-/// bare BR1 valve exactly (the pre-BR12 sound). Otherwise it morphs toward a
-/// TWO-STAGE cascade that SPLITS the drive across two gentler knees rather than
-/// stacking a stage on an already-hard one — the naive stack barely hardens a
-/// forte note (stage 1 is already near hard-clip at k≈3), whereas splitting the
-/// drive gives the composite a genuinely slower, more shock-like harmonic rolloff:
-/// stage 1 softens as the cascade opens (`k·(1 − SPLIT·amt)`), then a second knee
-/// (`BR_CASCADE_K2`) re-hardens it. Both stages are k-normalised, so peak/loudness
-/// is preserved (BR-O2's "both windows audible" holds). Runs INSIDE the 2×
-/// oversampled sub-step, before decimation, so its extra harmonics meet the same
-/// 13.5 kHz anti-alias cliff as BR1 (bounded by BR-O11).
+// --- BR13: first-order antiderivative anti-aliasing (ADAA) for the rasp ------
+// See `wrk_docs/2026.07.11 - HLD - brass ADAA antialiasing`. First-order ADAA
+// replaces the memoryless shaper f(x[n]) with the boxcar-filtered continuous
+// model (F(x1)-F(x0))/(x1-x0), F=∫f — a sinc(f/sr2) prefilter with zeros at every
+// multiple of sr2, i.e. exactly where the audible aliases are born. Applied
+// STAGE-WISE (each bias-tanh separately, then the morph is a linear mix, which
+// commutes with ADAA), so no composite antiderivative is needed. All math in f64
+// (the divided difference is ill-conditioned near x1≈x0); audio stays f32.
+const BR_ADAA_H: f64 = 1.0e-4; // |Δx| below which the DD cancels → midpoint fallback
+
+/// Numerically stable ln cosh: |u| − ln2 + ln1p(e^(−2|u|)). Exact for all |u|
+/// (the naive `cosh(u).ln()` overflows for |u| ≳ 20 even in f64).
 #[inline]
-fn brass_rasp(x: f32, k: f32, b: f32, cascade_amt: f32) -> f32 {
-    let single = brass_valve(x, k, b);
-    if cascade_amt <= 0.0 {
-        return single;
+fn lncosh(u: f64) -> f64 {
+    let a = u.abs();
+    a - std::f64::consts::LN_2 + (-2.0 * a).exp().ln_1p()
+}
+
+/// One bias-referenced tanh valve in f64 (mirrors `brass_valve`, the shaper the
+/// antiderivative below integrates).
+#[inline]
+fn brass_valve_f64(x: f64, k: f64, b: f64) -> f64 {
+    ((x * k + b).tanh() - b.tanh()) / (0.9 * k).tanh()
+}
+
+/// Antiderivative F of `brass_valve_f64`: ∫tanh(kx+b)dx = (1/k)lncosh(kx+b),
+/// ∫tanh(b)dx = x·tanh(b), both ÷ the same tanh(0.9k) normaliser.
+#[inline]
+fn brass_valve_antideriv(x: f64, k: f64, b: f64) -> f64 {
+    (lncosh(k * x + b) / k - x * b.tanh()) / (0.9 * k).tanh()
+}
+
+/// First-order ADAA of one bias valve over the step x0→x1. Divided difference of
+/// the antiderivative, with a midpoint fallback when |Δx| < BR_ADAA_H to dodge the
+/// catastrophic cancellation of `(F(x1)-F(x0))/(x1-x0)`. At the seam the two
+/// branches agree to ~3e-9 (f64), far below f32 output quantisation, so the
+/// switch is spectrally inert. F is recomputed each call with the CURRENT (k,b) —
+/// never cached — because a cached F(x0) from ramped parameters is meaningless.
+#[inline]
+fn brass_valve_adaa(x1: f64, x0: f64, k: f64, b: f64) -> f64 {
+    let dx = x1 - x0;
+    if dx.abs() < BR_ADAA_H {
+        brass_valve_f64(0.5 * (x0 + x1), k, b)
+    } else {
+        (brass_valve_antideriv(x1, k, b) - brass_valve_antideriv(x0, k, b)) / dx
     }
-    let k1 = k * (1.0 - BR_CASCADE_SPLIT * cascade_amt);
-    let cascade = brass_valve(brass_valve(x, k1, b), BR_CASCADE_K2, b * BR_CASCADE_BIAS2);
-    single + cascade_amt * (cascade - single)
 }
 
 /// One BrassPlayer per human player: solo programs run 1, section 61 runs 3,
@@ -5887,6 +5924,47 @@ struct BrassPlayer {
     drift: Drift, // BR7 random-walk pitch instability
     scoop: f32,   // BR5 per-player pitch mult settling toward 1.0
     scoop_k: f32, // BR5 per-player settle rate (jittered ±15% in sections)
+    // BR13 ADAA state (natural path): previous sr2 sample fed to the shaper, and
+    // the previous ADAA outputs of the single valve and the cascade's stage 1.
+    // All zero at note-on — every valve maps 0→0, so x_prev=0 seeds exactly.
+    x_prev: f64,
+    s_prev: f64,
+    u_prev: f64,
+}
+
+impl BrassPlayer {
+    /// BR13: anti-aliased rasp for one sr2 sub-step. `x` is the lip_lp output
+    /// (the shaper input). Mirrors `brass_rasp` but every bias-tanh is run through
+    /// first-order ADAA, and the `single` branch carries a matching half-sample
+    /// alignment average so the linear single↔cascade morph never combs (both
+    /// paths land at 1.0-sample group delay). See the HLD §2/§4.
+    #[inline]
+    fn rasp_adaa(&mut self, x: f32, k: f32, b: f32, cascade_amt: f32) -> f32 {
+        let (k, b, x) = (k as f64, b as f64, x as f64);
+        let s = brass_valve_adaa(x, self.x_prev, k, b);
+        let s_align = 0.5 * (s + self.s_prev); // +0.5-sample delay to match the cascade
+        let y = if cascade_amt > 0.0 {
+            let a = cascade_amt as f64;
+            let k1 = k * (1.0 - BR_CASCADE_SPLIT as f64 * a);
+            let u = brass_valve_adaa(x, self.x_prev, k1, b);
+            let c = brass_valve_adaa(
+                u,
+                self.u_prev,
+                BR_CASCADE_K2 as f64,
+                b * BR_CASCADE_BIAS2 as f64,
+            );
+            self.u_prev = u;
+            s_align + a * (c - s_align)
+        } else {
+            // Cascade dormant: keep u_prev tracking stage 1's static output so the
+            // first sample after cascade_amt lifts off 0 has no seeding transient.
+            self.u_prev = brass_valve_f64(x, k, b);
+            s_align
+        };
+        self.x_prev = x;
+        self.s_prev = s;
+        y as f32
+    }
 }
 
 pub struct BrassSpec {
@@ -6236,6 +6314,9 @@ impl Brass {
                     drift: Drift::new(seed ^ (0x1234 + i as u32 * 977), spec.drift, 2800),
                     scoop,
                     scoop_k,
+                    x_prev: 0.0,
+                    s_prev: 0.0,
+                    u_prev: 0.0,
                 }
             })
             .collect();
@@ -6369,14 +6450,18 @@ impl Brass {
         // `bright` carries the authored growl term, an aftertouch note rasps
         // harder — the opt-in cuivré rides the existing growl seam for free.
         self.cascade_amt = if self.oversample && self.spec.brassiness > 0.0 {
-            // quartic roll-off: full rasp through the common range (≤ ~A4 440 Hz),
-            // shedding fast above so a high note's dense upper harmonics stay under
-            // the 2× alias floor (BR-O11). The very top register is Fork-B territory.
+            // Quartic roll-off: full rasp through the common range (≤ ~A4 440 Hz),
+            // shedding above it. BR13 ADAA then LIFTS the top octave back up via a
+            // frequency-gated floor (ramped over [LIFT_LO, LIFT_HI]) — the top
+            // register is no longer Fork-B territory. The lift deliberately spares
+            // the upper-mid (A5/B5) so BR-O11 (breath-contaminated A5 guard) holds.
             let r2 = {
                 let r = BR_CASCADE_F0 / self.base_f.max(BR_CASCADE_F0);
                 r * r
             };
-            let hf_derate = (r2 * r2).clamp(BR_CASCADE_F0_FLOOR, 1.0);
+            let lift = BR_CASCADE_F0_FLOOR
+                * smoothstep(BR_CASCADE_LIFT_LO, BR_CASCADE_LIFT_HI, self.base_f);
+            let hf_derate = (r2 * r2).max(lift).min(1.0);
             (self.spec.brassiness
                 * BR_CASCADE_MAX
                 * smoothstep(BR_CASCADE_LO, BR_CASCADE_HI, bright)
@@ -6477,8 +6562,8 @@ impl Voice for Brass {
                     // harmonics see the same 13.5 kHz anti-alias cliff as BR1.
                     let mut y = 0.0;
                     for _ in 0..2 {
-                        let mut x =
-                            brass_rasp(p.lip_lp.process(p.saw.next()), kws, bias, cascade_amt);
+                        let lip = p.lip_lp.process(p.saw.next());
+                        let mut x = p.rasp_adaa(lip, kws, bias, cascade_amt);
                         for d in p.decim.iter_mut() {
                             x = d.process(x);
                         }
@@ -10677,6 +10762,158 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// BR-O11b (alias floor, worst case — the BR13 ADAA acceptance guard): the
+    /// TOP-register loud note where the raised `BR_CASCADE_F0_FLOOR` runs the rasp
+    /// hardest and folding harmonics have the lowest (strongest) index. Prog 56,
+    /// key 90 (F#6 ≈ 1480 Hz), vel 127, dry AND growled. Non-harmonic guard bins
+    /// {3840, 2360, 880} Hz (fold sources p≈57–59 about sr2; none a multiple of
+    /// 1480). Fold-back must stay ≤ 0.03× the 2nd harmonic (2960 Hz) AND ≤ 0.015×
+    /// — the 6 dB margin that licenses the committed floor value (HLD §4/O-A).
+    #[test]
+    fn brass_o11b_alias_floor_top() {
+        let sr = 44100.0;
+        for growl in [0.0f32, 110.0 / 127.0] {
+            let mut v = brass(56, 90, 127, sr, 7);
+            v.set_breath(1.0, growl);
+            let mut buf = vec![0f32; sr as usize];
+            v.render(&mut buf);
+            let seg = &buf[(0.2 * sr) as usize..];
+            let base = mag_at(seg, sr, 2960.0); // 2nd harmonic of 1480 Hz
+            for f in [3840.0f32, 2360.0, 880.0] {
+                let r = mag_at(seg, sr, f) / base.max(1e-12);
+                assert!(
+                    r <= 0.015,
+                    "F#6 growl {growl:.3}: off-bin {f} Hz = {r:.4}× (need ≤ 0.015, 6 dB margin)"
+                );
+            }
+        }
+    }
+
+    /// Non-asserting diagnostic: prints the worst off-bin/2nd-harmonic ratio at
+    /// A5 and F#6 for the CURRENT `BR_CASCADE_F0_FLOOR`, so the floor can be
+    /// oracle-set. Run with `--nocapture`. Not a gate.
+    #[test]
+    fn brass_adaa_floor_diag() {
+        let sr = 44100.0;
+        for &(key, f2, bins) in &[
+            (81u8, 1760.0f32, [1246.0f32, 2200.0, 3080.0]),
+            (90u8, 2960.0f32, [3840.0f32, 2360.0, 880.0]),
+        ] {
+            for breath in [1.0f32, 0.0] {
+                for growl in [0.0f32, 110.0 / 127.0] {
+                    let mut v = brass(56, key, 127, sr, 7);
+                    v.set_breath(breath, growl);
+                    let mut buf = vec![0f32; sr as usize];
+                    v.render(&mut buf);
+                    let seg = &buf[(0.2 * sr) as usize..];
+                    let base = mag_at(seg, sr, f2).max(1e-12);
+                    let worst = bins
+                        .iter()
+                        .map(|&f| mag_at(seg, sr, f) / base)
+                        .fold(0.0f32, f32::max);
+                    eprintln!(
+                        "DIAG floor={BR_CASCADE_F0_FLOOR} key={key} breath={breath:.0} growl={growl:.2} worst_ratio={worst:.4}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// BR-O (ADAA math correctness, pins HLD §1/§2): first-order ADAA replaces the
+    /// memoryless shaper by its boxcar-filtered continuous model, whose value over
+    /// a linear step x0→x1 is exactly the MEAN of the shaper over [x0, x1]:
+    ///   (F(x1) − F(x0)) / (x1 − x0) = (1/(x1−x0)) ∫ f dx  =  mean f over [x0,x1].
+    /// So the divided difference must equal a fine numerical mean of `brass_valve`.
+    /// This is the robust unit oracle (a spectral test of the isolated shaper is not
+    /// — a single tone barely aliases, so it cannot exercise the suppression the way
+    /// the full voice does; the voice-level guard is BR-O11/BR-O11b). It catches a
+    /// wrong antiderivative directly, AND — via the near-equal-Δx cases — proves the
+    /// midpoint fallback equals the true mean at the seam (HLD §3).
+    #[test]
+    fn brass_o_adaa_matches_boxcar_mean() {
+        // trapezoidal mean of brass_valve over [x0, x1] at high resolution
+        let mean = |x0: f64, x1: f64, k: f64, b: f64| -> f64 {
+            let m = 8192usize;
+            let h = (x1 - x0) / m as f64;
+            let mut acc = 0.5 * (brass_valve_f64(x0, k, b) + brass_valve_f64(x1, k, b));
+            for j in 1..m {
+                acc += brass_valve_f64(x0 + h * j as f64, k, b);
+            }
+            acc * h / (x1 - x0)
+        };
+        let params = [
+            (0.8f64, 0.15f64),
+            (3.2, 0.30),
+            (BR_CASCADE_K2 as f64, 0.30 * BR_CASCADE_BIAS2 as f64),
+        ];
+        // wide steps (DD branch) and near-equal steps (midpoint fallback branch)
+        let steps = [
+            (-1.3f64, 0.9f64),
+            (-0.2, 1.4),
+            (0.05, 0.9),
+            (0.4, 0.4 + 5e-5),   // |Δx| < BR_ADAA_H ⇒ fallback
+            (-0.7, -0.7 - 3e-5), // fallback, descending
+        ];
+        let mut worst = 0.0f64;
+        for &(k, b) in &params {
+            for &(x0, x1) in &steps {
+                let got = brass_valve_adaa(x1, x0, k, b);
+                let want = mean(x0, x1, k, b);
+                worst = worst.max((got - want).abs());
+            }
+        }
+        assert!(
+            worst <= 1e-5,
+            "ADAA divided-difference must equal the shaper's boxcar mean: worst |Δ| {worst:.2e} (need ≤ 1e-5)"
+        );
+    }
+
+    /// BR-O (fallback seam, pins HLD §3): the near-equal-samples midpoint fallback
+    /// must join the divided-difference branch seamlessly. Sweeps x0 across the
+    /// operating range at every stage's (k,b) extreme and compares the two branches
+    /// evaluated either side of the h threshold about the SAME midpoint — the exact
+    /// switch a spectral oracle never exercises. (Part 2 of O-C, the forced-branch
+    /// render + hit-counter canary, is covered structurally: the sweep drives both
+    /// branches deterministically here.)
+    #[test]
+    fn brass_o_adaa_fallback_seam() {
+        let params = [
+            (0.8f64, 0.15f64),
+            (0.8, 0.30),
+            (3.2, 0.15),
+            (3.2, 0.30),
+            (BR_CASCADE_K2 as f64, 0.30 * BR_CASCADE_BIAS2 as f64),
+        ];
+        let eps = BR_ADAA_H * (1.0 / 1024.0);
+        let mut worst = 0.0f64;
+        for &(k, b) in &params {
+            let mut x0 = -1.6f64;
+            while x0 <= 1.6 {
+                let m = x0; // midpoint
+                            // DD branch: Δx just above threshold, symmetric about m
+                let hi = brass_valve_adaa(
+                    m + 0.5 * (BR_ADAA_H + eps),
+                    m - 0.5 * (BR_ADAA_H + eps),
+                    k,
+                    b,
+                );
+                // fallback branch: Δx just below threshold, same midpoint
+                let lo = brass_valve_adaa(
+                    m + 0.5 * (BR_ADAA_H - eps),
+                    m - 0.5 * (BR_ADAA_H - eps),
+                    k,
+                    b,
+                );
+                worst = worst.max((hi - lo).abs());
+                x0 += 8e-4;
+            }
+        }
+        assert!(
+            worst <= 1e-6,
+            "ADAA fallback seam discontinuity {worst:.2e} (need ≤ 1e-6)"
+        );
     }
 
     /// BR-O12 (the rasp blooms — BR12 acceptance): the progressive-steepening

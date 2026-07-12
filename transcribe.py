@@ -536,9 +536,92 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _ferro(synth: Path, midi: Path, out_wav: Path, solo: int | None = None) -> None:
+    argv = [str(synth), str(midi), "-o", str(out_wav), "-q"]
+    if solo is not None:
+        argv += ["--solo", str(solo)]
+    r = subprocess.run(argv, capture_output=True, text=True)
+    if r.returncode != 0 or not out_wav.exists():
+        raise SystemExit(f"ferrosintesis failed: {r.stderr.strip()[:200]}")
+
+
+def _recall(expected: list, got: list, onset_tol: float = 0.15) -> float:
+    """Fraction of expected notes matched (exact pitch, onset within tol) by a distinct got note."""
+    if not expected:
+        return 1.0
+    used = [False] * len(got)
+    hit = 0
+    for (o, _d, p, _v) in sorted(expected):
+        for i, (go, _gd, gp, _gv) in enumerate(got):
+            if not used[i] and gp == p and abs(go - o) <= onset_tol:
+                used[i] = True
+                hit += 1
+                break
+    return hit / len(expected)
+
+
 def diagnose(repo: Path) -> int:
-    print("diagnose: ML round-trip + smoke is implemented once the tools are installed.")
-    return 0
+    """ML diagnostics (NOT a build gate): clean-stem round-trip + full-mix smoke.
+
+    Renders a fixture MIDI with ferrosintesis, transcribes it back, and reports note
+    recovery. Recovery reflects the external models + ferrosintesis's (modelled, ML-alien)
+    timbre — it is diagnostic, not a correctness measure. Tripwire: mono recovery < 50%
+    means the setup/oracle is broken, not a low bar to accept.
+    """
+    synth = repo / "target" / "release" / (
+        "ferrosintesis.exe" if sys.platform == "win32" else "ferrosintesis")
+    if not synth.exists():
+        raise SystemExit(f"ferrosintesis not built: {synth}\n"
+                         f"run: cargo build --release -p ferrosintesis-cli")
+    cfg = load_config(repo)
+
+    fixture = {
+        "vocals": [(0.0, 0.5, 72, 100), (0.5, 0.5, 74, 100),
+                   (1.0, 0.5, 76, 100), (1.5, 0.5, 79, 100)],
+        "bass":   [(0.0, 1.0, 36, 110), (1.0, 1.0, 43, 110)],
+        "other":  [(0.0, 2.0, 60, 80), (0.0, 2.0, 64, 80), (0.0, 2.0, 67, 80)],
+        "drums":  [(0.0, 0.1, 36, 110), (0.5, 0.1, 38, 100),
+                   (1.0, 0.1, 36, 110), (1.5, 0.1, 38, 100)],
+    }
+    mono_scores = []
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        fx = tmp / "fixture.mid"
+        write_midi(fx, fixture)
+
+        print("clean-stem round-trip (diagnostic):")
+        for role, notes in fixture.items():
+            ch = ROLE_TABLE[role][0]
+            wav = tmp / f"{role}.wav"
+            try:
+                _ferro(synth, fx, wav, solo=ch)
+                if role == "drums":
+                    got = ingest_drum_midi(transcribe_drums(repo, cfg, wav, tmp))
+                else:
+                    got = ingest_basic_pitch_csv(transcribe_pitched(repo, cfg, wav, tmp))
+            except SystemExit as e:
+                print(f"  [{role}] skipped ({e})")
+                continue
+            score = _recall(notes, got)
+            print(f"  [{role}] recall {score:.0%} ({len(got)} notes transcribed)")
+            if role in ("vocals", "bass"):
+                mono_scores.append(score)
+
+        if mono_scores and max(mono_scores) < 0.5:
+            print("  TRIPWIRE: monophonic recall < 50% — the setup/oracle looks broken, "
+                  "not a low bar to accept.")
+
+        print("full-mix smoke (diagnostic):")
+        mix = tmp / "mix.wav"
+        _ferro(synth, fx, mix)
+        try:
+            run_pipeline(repo, cfg, mix, tmp / "out")
+            ok = (tmp / "out" / "combined.mid").exists()
+            print(f"  pipeline completed; combined.mid present: {ok}")
+            return 0 if ok else 1
+        except SystemExit as e:
+            print(f"  smoke skipped/failed: {e}")
+            return 0
 
 
 if __name__ == "__main__":

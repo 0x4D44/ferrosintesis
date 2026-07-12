@@ -4465,21 +4465,255 @@ fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
 }
 
 // ---------------------------------------------------------------------------
-// Wind (flute / whistle)
+// Wind — the GM pipe / flue family (72-79)
+// ---------------------------------------------------------------------------
+// Air-jet (edge-tone) instruments. ONE voice + a per-program preset table — the
+// shape the Reed family (64-71) proved. The key move: **bore class lives in the
+// DATA, not in code.** A stopped pipe (pan flute) is a preset whose EVEN
+// harmonic slots are 0.0; a Helmholtz vessel (bottle / ocarina / whistle) is a
+// preset whose ladder is one weak entry. One mechanism (an amplitude table),
+// eight identities — so `render` carries no per-instrument branch.
+//
+// Design + oracle spec: see the WD-O suite in `mod tests` and
+// `wrk_docs/2026.07.11 - HLD - woodwind and synthwide LA synthesis ...` §7.1.
+// This voice needs nothing from the engine beyond set_pitch / legato_to.
 // ---------------------------------------------------------------------------
 
+const WD_SCOOP_K: f32 = 0.05; // onset-scoop settle per control tick
+/// Velocity normal at which the preset table reads DIRECTLY off the render
+/// (`bright` == 1.0 at vel 100, mid-register) — so the table is the spectrum.
+const WD_VN0: f32 = 100.0 / 127.0;
+/// Partials above this fraction of `sr` are gated off rather than folded.
+const WD_ALIAS_LIM: f32 = 0.44;
+
+/// A GM pipe program's fixed voicing. All-`pub`, const-constructible.
+pub struct WindPreset {
+    /// h2..h7 amplitudes relative to h1 = 1.0, at `bright` = 1. The bore class:
+    /// stopped pipe zeroes the evens; a vessel keeps one weak entry.
+    pub harm: [f32; 6],
+    pub vel_bright: f32, // velocity → spectral tilt slope (recorder ≈ 0: it can't be blown open)
+    pub reg_dark: f32,   // register → spectral tilt slope (top of range purifies)
+    pub breath: f32,     // sustain breath-bed level (through the tracked bandpass)
+    pub breath_f: f32,   // bed centre as a MULTIPLE of f0 (vessels sit on f0; pipes above it)
+    pub breath_q: f32,   // bed Q (pan-flute halo 0.8 … whistle 4.0 focused)
+    pub breath_hi: f32,  // >8 kHz noise shelf (shakuhachi muraiki); 0.0 = filter not built
+    pub chiff: f32,      // onset chiff level (× vn × vel_amp — super-linear, Reed convention)
+    pub chiff_t60: f32,  // chiff decay
+    pub vib: (f32, f32, f32), // (rate Hz, depth, delay s)
+    pub attack: f32,     // Adsr attack base (vel_attack-scaled)
+    pub release: f32,
+    pub scoop: f32,      // onset pitch multiplier start
+    pub range: (u8, u8), // MIDI keys for register normalisation
+    pub amp: f32,
+    #[cfg(test)]
+    pub name: &'static str, // diagnostic label (kind() is always "wind")
+}
+
+/// 72 — open cylinder, half a flute. A thinner flute ladder; its register does
+/// the "piercing" work. Focused air (its high register masks noise anyway).
+pub const PICCOLO: WindPreset = WindPreset {
+    harm: [0.22, 0.06, 0.015, 0.0, 0.0, 0.0],
+    vel_bright: 0.7,
+    reg_dark: 0.45,
+    breath: 0.055,
+    breath_f: 2.0,
+    breath_q: 2.5,
+    breath_hi: 0.0,
+    chiff: 0.12,
+    chiff_t60: 0.020,
+    vib: (5.5, 0.0035, 0.20),
+    attack: 0.025,
+    release: 0.09,
+    scoop: 0.988,
+    range: (74, 108),
+    amp: 0.50,
+    #[cfg(test)]
+    name: "piccolo",
+};
+/// 73 — the flagship (used by ~all 12 committed albums, so R1: move it as little
+/// as possible). h2/h3, breath level+placement+Q, attack, release, scoop and amp
+/// are TODAY'S ACCEPTED VALUES verbatim; h4..h6 merely extend the existing
+/// ~−8.5 dB/harmonic rolloff into a skirt, replacing the old absolute cliff.
+pub const FLUTE: WindPreset = WindPreset {
+    harm: [0.32, 0.12, 0.045, 0.018, 0.008, 0.0],
+    vel_bright: 0.9,
+    reg_dark: 0.55,
+    breath: 0.09,
+    breath_f: 2.0,
+    breath_q: 2.0,
+    breath_hi: 0.0,
+    chiff: 0.10,
+    chiff_t60: 0.025,
+    // depth trimmed 0.004 → 0.0035: the CTRL-rate fix makes this vibrato NEWLY
+    // AUDIBLE (it ran at ~0.31 Hz before), so keep it subtle. ±6 cents.
+    vib: (5.0, 0.0035, 0.25),
+    attack: 0.050,
+    release: 0.10,
+    scoop: 0.984,
+    range: (60, 96),
+    amp: 0.50,
+    #[cfg(test)]
+    name: "flute",
+};
+/// 74 — open duct + fipple. The PUREST pipe: fundamental-dominant, a whisper of
+/// ladder, near-zero breath, speaks instantly at pitch. Its defining trait is
+/// that velocity does NOT open the timbre (blow harder and it just goes sharp),
+/// hence vel_bright 0.15.
+pub const RECORDER: WindPreset = WindPreset {
+    harm: [0.09, 0.05, 0.012, 0.0, 0.0, 0.0],
+    vel_bright: 0.15,
+    reg_dark: 0.35,
+    breath: 0.03,
+    breath_f: 2.0,
+    breath_q: 2.0,
+    breath_hi: 0.0,
+    chiff: 0.06,
+    chiff_t60: 0.018,
+    vib: (5.0, 0.0018, 0.35),
+    attack: 0.018,
+    release: 0.08,
+    scoop: 0.996,
+    range: (60, 96),
+    amp: 0.50,
+    #[cfg(test)]
+    name: "recorder",
+};
+/// 75 — STOPPED cylinder: the evens are structurally dead (bore class as data).
+/// Strong h3 (the hollow 12th it overblows to) + decaying odds. Loud BROAD breath
+/// halo at 2.5·f0 — deliberately BETWEEN h2 and h3 so the noise cannot fake an
+/// even partial and pollute the odd/even oracle. Iconic chiff: loudest + longest.
+pub const PAN_FLUTE: WindPreset = WindPreset {
+    harm: [0.0, 0.38, 0.0, 0.14, 0.0, 0.05],
+    vel_bright: 0.6,
+    reg_dark: 0.5,
+    breath: 0.24,
+    breath_f: 2.5,
+    breath_q: 0.8,
+    breath_hi: 0.0,
+    chiff: 0.30,
+    chiff_t60: 0.045,
+    vib: (4.8, 0.005, 0.22),
+    attack: 0.035,
+    release: 0.10,
+    scoop: 0.978,
+    range: (55, 91),
+    amp: 0.46,
+    #[cfg(test)]
+    name: "pan_flute",
+};
+/// 76 — HELMHOLTZ vessel: one resonance, so a near-bare sine. The jet noise is
+/// filtered by that same resonance, so the bed sits ON f0 and is the loudest
+/// fraction in the family — the tone is bare, so the AIR is the timbre.
+pub const BLOWN_BOTTLE: WindPreset = WindPreset {
+    harm: [0.08, 0.02, 0.0, 0.0, 0.0, 0.0],
+    vel_bright: 0.3,
+    reg_dark: 0.0, // no ladder to darken
+    breath: 0.80,
+    breath_f: 1.0,
+    breath_q: 1.5,
+    breath_hi: 0.0,
+    chiff: 0.18,
+    chiff_t60: 0.035,
+    vib: (4.6, 0.004, 0.30),
+    attack: 0.065,
+    release: 0.12,
+    scoop: 0.975,
+    range: (48, 84),
+    amp: 0.54,
+    #[cfg(test)]
+    name: "blown_bottle",
+};
+/// 77 — open end-blown bamboo. The richest ladder, weighted h2 ≈ h3 (the dark
+/// wood + edge complexity that separates it from the flute's h2-dominant
+/// balance), tail to h7. Rich breath PLUS the muraiki >8 kHz shelf — the one
+/// instrument that needs `breath_hi`. Deep meri onset scoop, slowest bloom.
+pub const SHAKUHACHI: WindPreset = WindPreset {
+    harm: [0.26, 0.26, 0.10, 0.05, 0.025, 0.012],
+    vel_bright: 0.8,
+    reg_dark: 0.5,
+    breath: 0.30,
+    breath_f: 2.5,
+    breath_q: 1.0,
+    breath_hi: 0.05,
+    chiff: 0.20,
+    chiff_t60: 0.040,
+    vib: (4.5, 0.006, 0.35),
+    attack: 0.070,
+    release: 0.12,
+    scoop: 0.955,
+    range: (57, 86),
+    amp: 0.46,
+    #[cfg(test)]
+    name: "shakuhachi",
+};
+/// 78 — the human whistle: the mouth cavity is itself a Helmholtz resonator, so
+/// a near-pure sine with a NARROW focused air band AT the whistle pitch.
+pub const WHISTLE: WindPreset = WindPreset {
+    harm: [0.04, 0.008, 0.0, 0.0, 0.0, 0.0],
+    vel_bright: 0.2,
+    reg_dark: 0.2,
+    breath: 0.16,
+    breath_f: 1.0,
+    breath_q: 4.0,
+    breath_hi: 0.0,
+    chiff: 0.05,
+    chiff_t60: 0.015,
+    vib: (5.5, 0.006, 0.18),
+    attack: 0.015,
+    release: 0.08,
+    scoop: 0.990,
+    range: (72, 100),
+    amp: 0.52,
+    #[cfg(test)]
+    name: "whistle",
+};
+/// 79 — vessel flute: one dominant partial plus a single warm h2, and
+/// deliberately NO h3 (a vessel's overtones are weak and inharmonic — omitting
+/// is more honest than faking one).
+pub const OCARINA: WindPreset = WindPreset {
+    harm: [0.16, 0.0, 0.0, 0.0, 0.0, 0.0],
+    vel_bright: 0.25,
+    reg_dark: 0.0,
+    breath: 0.17,
+    breath_f: 1.2,
+    breath_q: 2.0,
+    breath_hi: 0.0,
+    chiff: 0.08,
+    chiff_t60: 0.022,
+    vib: (5.2, 0.004, 0.25),
+    attack: 0.030,
+    release: 0.11,
+    scoop: 0.985,
+    range: (60, 88),
+    amp: 0.52,
+    #[cfg(test)]
+    name: "ocarina",
+};
+
+/// GM pipe program → its voicing. Anything outside 72..=79 falls back to the flute.
+pub fn wind(program: u8) -> &'static WindPreset {
+    match program {
+        72 => &PICCOLO,
+        74 => &RECORDER,
+        75 => &PAN_FLUTE,
+        76 => &BLOWN_BOTTLE,
+        77 => &SHAKUHACHI,
+        78 => &WHISTLE,
+        79 => &OCARINA,
+        _ => &FLUTE,
+    }
+}
+
 pub struct Wind {
-    fund: Sine,
-    h2: Sine,
-    h3: Sine,
-    a2: f32,
-    a3: f32,
+    osc: [Sine; 7], // h1..h7 (index i renders harmonic i+1)
+    amps: [f32; 7], // amps[0] = 1.0 (fundamental); zero slots are never ticked
     base_f: f32,
     bend: f32,
     scoop: f32, // pitch multiplier settling toward 1.0
-    scoop_k: f32,
     breath_filt: Biquad,
-    breath: f32,
+    breath_amp: f32,
+    hi_filt: Option<Biquad>, // >8 kHz muraiki shelf (shakuhachi only)
+    hi_amp: f32,
     chiff_amp: f32,
     chiff_decay: f32,
     env: Adsr,
@@ -4494,41 +4728,75 @@ pub struct Wind {
 }
 
 impl Wind {
-    fn new(whistle: bool, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+    fn from_preset(preset: &WindPreset, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let f = key_freq(key);
+        let vn = vel as f32 / 127.0;
         let mut rng = Rng::new(seed);
-        let (a2, a3, breath, vibr) = if whistle {
-            (0.12, 0.03, 0.05, (5.5, 0.006, 0.18))
-        } else {
-            (0.32, 0.12, 0.09, (5.0, 0.004, 0.25))
-        };
-        let attack = if whistle {
-            vel_attack(0.02, vel)
-        } else {
-            vel_attack(0.05, vel)
-        };
+        // Register position: 0 at range bottom, 1 at top (out-of-range clamps).
+        let (lo, hi) = preset.range;
+        let reg = ((key as f32 - lo as f32) / (hi as f32 - lo as f32).max(1.0)).clamp(0.0, 1.0);
+        // The spectral-tilt scalar. Normalised so bright == 1.0 at vel 100,
+        // mid-register — i.e. the preset table IS the spectrum at the oracle probe.
+        // Harder blowing opens the timbre; the top of the range purifies it.
+        let bright = (1.0 + preset.vel_bright * (vn - WD_VN0) - preset.reg_dark * (reg - 0.5))
+            .clamp(0.55, 1.20);
+
+        // Partial amplitudes: upper partials scale super-linearly with `bright`.
+        let mut amps = [0.0f32; 7];
+        amps[0] = 1.0;
+        for (i, a) in amps.iter_mut().enumerate().skip(1) {
+            *a = preset.harm[i - 1] * bright.powi(i as i32);
+        }
+        // Alias gate: a partial above 0.44·sr is silenced, never folded. (0.44
+        // leaves headroom for a ±2-semitone bend: 0.44 × 1.122 = 0.494 < Nyquist.)
+        let lim = WD_ALIAS_LIM * sr;
+        for (i, a) in amps.iter_mut().enumerate() {
+            if (i + 1) as f32 * f > lim {
+                *a = 0.0;
+            }
+        }
+        // One phase draw per SLOT (even silent ones) so the RNG stream stays
+        // aligned across presets with different partial counts — the WD-O5
+        // breath-differential seam depends on that.
+        let osc = std::array::from_fn(|i| {
+            Sine::new(f * (i + 1) as f32, sr, rng.white() * std::f32::consts::PI)
+        });
+
+        // Breath bed: a bandpass tracking f0, placed and shaped per bore.
+        // Amplitude-quadratic in velocity — turbulent noise grows super-linearly
+        // with jet speed, so hard blowing is airier and soft playing purer.
+        let vel_air = 0.35 + 1.05 * vn * vn;
+        let vibr = preset.vib;
         Wind {
-            fund: Sine::new(f, sr, rng.white() * std::f32::consts::PI),
-            h2: Sine::new(f * 2.0, sr, rng.white() * std::f32::consts::PI),
-            h3: Sine::new(f * 3.0, sr, rng.white() * std::f32::consts::PI),
-            a2,
-            a3,
+            osc,
+            amps,
             base_f: f,
             bend: 1.0,
-            scoop: if whistle { 0.990 } else { 0.984 },
-            scoop_k: 0.05,
-            breath_filt: Biquad::bandpass((f * 2.0).min(sr * 0.4), 2.0, sr),
-            breath,
-            chiff_amp: 0.22 * vel_amp(vel),
-            chiff_decay: t60_mul(0.025, sr),
-            env: Adsr::new(attack, 0.05, 0.92, 0.10, sr),
-            vib: Sine::new(vibr.0, sr, 0.0),
+            scoop: preset.scoop,
+            breath_filt: Biquad::bandpass((preset.breath_f * f).min(sr * 0.4), preset.breath_q, sr),
+            breath_amp: preset.breath * vel_air,
+            hi_filt: (preset.breath_hi > 0.0).then(|| Biquad::highpass(8000.0, 0.7, sr)),
+            hi_amp: preset.breath_hi * vel_air,
+            chiff_amp: preset.chiff * vn * vel_amp(vel),
+            chiff_decay: t60_mul(preset.chiff_t60, sr),
+            env: Adsr::new(
+                vel_attack(preset.attack, vel),
+                0.05,
+                0.92,
+                preset.release,
+                sr,
+            ),
+            // The LFO is ticked once per CTRL samples (control rate), so build it
+            // at sr/CTRL — else `vib.next()` advances CTRL× too slow and a labelled
+            // 5 Hz vibrato renders at ~0.31 Hz (MM-BUG-KILN-00003). Reed (RD7) and
+            // Bowed already do this; Wind was the lone holdout.
+            vib: Sine::new(vibr.0 * (1.0 + 0.08 * rng.white()), sr / CTRL as f32, 0.0),
             vib_depth: vibr.1,
             vib_delay: (vibr.2 * sr) as u32,
             vib_val: 0.0,
             rng,
             t: 0,
-            amp: 0.5 * (0.4 + 0.6 * vel_amp(vel)),
+            amp: preset.amp * (0.4 + 0.6 * vel_amp(vel)),
             sr,
         }
     }
@@ -4538,7 +4806,7 @@ impl Voice for Wind {
     fn render(&mut self, out: &mut [f32]) -> bool {
         for o in out.iter_mut() {
             if self.t.is_multiple_of(CTRL) {
-                self.scoop += self.scoop_k * (1.0 - self.scoop);
+                self.scoop += WD_SCOOP_K * (1.0 - self.scoop);
                 let v = self.vib.next();
                 self.vib_val = v;
                 let vib = if self.t > self.vib_delay {
@@ -4548,18 +4816,34 @@ impl Voice for Wind {
                     0.0
                 };
                 let f = self.base_f * self.bend * self.scoop * (1.0 + vib);
-                self.fund.set_freq(f, self.sr);
-                self.h2.set_freq(f * 2.0, self.sr);
-                self.h3.set_freq(f * 3.0, self.sr);
+                for (i, osc) in self.osc.iter_mut().enumerate() {
+                    if self.amps[i] > 0.0 {
+                        osc.set_freq(f * (i + 1) as f32, self.sr);
+                    }
+                }
             }
-            let mut s = self.fund.next() + self.a2 * self.h2.next() + self.a3 * self.h3.next();
+            let mut s = 0.0;
+            for (i, osc) in self.osc.iter_mut().enumerate() {
+                if self.amps[i] > 0.0 {
+                    s += self.amps[i] * osc.next();
+                }
+            }
             let e = self.env.next();
             // the breath rides the vibrato — air moves with the pitch wobble
             let breath_mod = 1.0 + 0.5 * self.vib_val;
-            s += self.breath_filt.process(self.rng.white())
-                * (self.breath * e * breath_mod + self.chiff_amp);
+            let noise = self.breath_filt.process(self.rng.white());
+            s += noise * self.breath_amp * e * breath_mod;
+            // The second RNG draw is gated on the FILTER, not on hi_amp, so a test
+            // that zeroes hi_amp keeps this stream aligned with its twin.
+            if let Some(hf) = self.hi_filt.as_mut() {
+                s += hf.process(self.rng.white()) * self.hi_amp * e * breath_mod;
+            }
+            // The chiff sits OUTSIDE the envelope (the Reed/Brass onset convention):
+            // a fresh attack spits at t=0 while the envelope is still ramping. Inside
+            // it, the old flute's chiff was largely swallowed by its own 50 ms attack.
+            let chiff = noise * self.chiff_amp * self.amp;
             self.chiff_amp *= self.chiff_decay;
-            *o += s * self.amp * e;
+            *o += s * self.amp * e + chiff;
             self.t += 1;
         }
         self.env.alive()
@@ -4583,6 +4867,13 @@ impl Voice for Wind {
         self.scoop = (self.base_f * self.scoop / new_f).clamp(0.85, 1.18);
         self.base_f = new_f;
         self.chiff_amp = 0.0;
+        // An upward slur sheds partials that would now alias (never un-zeroed).
+        let lim = WD_ALIAS_LIM * self.sr;
+        for (i, a) in self.amps.iter_mut().enumerate() {
+            if (i + 1) as f32 * new_f > lim {
+                *a = 0.0;
+            }
+        }
         true
     }
 
@@ -6913,14 +7204,14 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             }
         }
         72..=79 => {
-            let model = Box::new(Wind::new(
-                matches!(program, 72 | 78 | 79),
-                key,
-                vel,
-                sr,
-                seed,
-            ));
-            if samples {
+            let model = Box::new(Wind::from_preset(wind(program), key, vel, sr, seed));
+            // Sample policy: ONLY the concert flute (73) and the piccolo (72 — a
+            // flute attack repitched up is still a credible small-flute onset) get
+            // the flute LA bank. Smearing a transverse-flute attack across a stopped
+            // pipe, a vessel, end-blown bamboo or a human whistle destroyed identity
+            // exactly in the window where the ear decides what the instrument IS.
+            // 74..=79 are model-only, each with its own bespoke chiff.
+            if samples && matches!(program, 72 | 73) {
                 let (gain, fade) = LA_FLUTE;
                 crate::sampler::LaVoice::wrap(
                     model,
@@ -11890,5 +12181,549 @@ mod tests {
         );
         println!("GM15 vs harp level: {d:+.2} dB");
         assert!(d.abs() <= 2.0, "GM15 level {d:+.2} dB off harp");
+    }
+
+    // -----------------------------------------------------------------------
+    // WD-O — the pipe/flue family oracle suite (GM 72-79)
+    // -----------------------------------------------------------------------
+    // WD-O1 (8-way distinctness) is NOT re-implemented here: it IS the synth-wide
+    // anti-clone matrix in `testutil::distinctness`, whose 13 pipe `Collapse(1)`
+    // exemptions this stage DELETED. That deletion is the proof, and duplicating
+    // it here would be dead weight. (Measured after the rework: every one of the
+    // 28 pipe pairs clears EPS 0.03 — the tightest is 74/79 at 0.188.)
+    //
+    // House rules honoured throughout: matched pitch inside any cross-instrument
+    // comparison; `mag_at`/`peak_locate`, never a zero-crossing counter (it lies
+    // when a voice legitimately brightens); and windows chosen either PRE-VIBRATO
+    // ([0.10, 0.28] s — after attack+scoop settle, before any vib_delay ≥ 0.18 s
+    // bites) or LATE-SUSTAIN ([0.5, 1.5] s) where the measure is wobble-immune.
+
+    const WD_SR: f32 = 44100.0;
+
+    /// STRICTLY PRE-VIBRATO window for every harmonic-ratio read.
+    ///
+    /// This is load-bearing, not a detail. Read a harmonic ratio inside the
+    /// vibrato'd region and it UNDER-READS the upper partials: harmonic n carries
+    /// n× the frequency deviation, hence n× the modulation index β, so its energy
+    /// spreads into FM sidebands that a fixed-bin Goertzel simply misses. (Pan
+    /// flute, β₃ = 1.73 → J₀ = 0.36: a true h3 of 0.38 reads as 0.14.) Every
+    /// preset's `vib_delay` is ≥ 0.18 s and the onset scoop (τ ≈ 7 ms) is long
+    /// settled by 0.10 s, so this window sees the steady table and nothing else.
+    /// RMS/fraction measures (WD-O4/O5/O11) are wobble-immune and use late sustain.
+    const WD_PREVIB: (f32, f32) = (0.10, 0.17);
+
+    /// The key at which a preset's register position is exactly 0.5, i.e. where
+    /// `bright` == 1.0 at vel 100 and the preset table reads DIRECTLY off the render.
+    fn wd_mid_key(p: &WindPreset) -> u8 {
+        ((p.range.0 as u16 + p.range.1 as u16) / 2) as u8
+    }
+
+    fn wd_render(p: &WindPreset, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        let mut v = Wind::from_preset(p, key, vel, WD_SR, seed);
+        let mut buf = vec![0f32; (secs * WD_SR) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    /// Breathless seam: the same voice with the noise bed silenced at construction,
+    /// so a harmonic read is not biased by the air. (Struct-update from a const;
+    /// every WindPreset field is Copy.)
+    fn wd_render_dry(p: &WindPreset, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        let dry = WindPreset {
+            breath: 0.0,
+            breath_hi: 0.0,
+            ..*p
+        };
+        wd_render(&dry, key, vel, secs, seed)
+    }
+
+    /// Harmonic magnitude ratio m(n)/m(1) of a segment whose fundamental is `f0`.
+    fn wd_hr(seg: &[f32], f0: f32, n: u32) -> f32 {
+        mag_at(seg, WD_SR, f0 * n as f32) / mag_at(seg, WD_SR, f0).max(1e-9)
+    }
+
+    /// WD-O2 — BORE CLASS. A stopped pipe (pan flute) has structurally dead EVEN
+    /// harmonics and a strong odd ladder; an open pipe (flute) is even-rich.
+    /// Fail-first: today 75 renders the flute table, so m2/m1 ≈ 0.32, not < 0.02.
+    #[test]
+    fn wd_o2_stopped_pipe_is_odd_only() {
+        let pan_key = wd_mid_key(&PAN_FLUTE);
+        let pan = wd_render_dry(&PAN_FLUTE, pan_key, 100, 0.5, 7);
+        let pan_body = segment(&pan, WD_SR, WD_PREVIB.0, WD_PREVIB.1);
+        let f0 = key_freq(pan_key);
+        let (m2, m3, m4, m5) = (
+            wd_hr(pan_body, f0, 2),
+            wd_hr(pan_body, f0, 3),
+            wd_hr(pan_body, f0, 4),
+            wd_hr(pan_body, f0, 5),
+        );
+        println!("WD-O2 pan flute: h2 {m2:.4} h3 {m3:.4} h4 {m4:.4} h5 {m5:.4}");
+        assert!(
+            m2 < 0.02 && m4 < 0.02,
+            "pan-flute evens alive: h2 {m2} h4 {m4}"
+        );
+        assert!(
+            (0.28..=0.48).contains(&m3),
+            "pan-flute h3 {m3} outside [0.28, 0.48]"
+        );
+        assert!(
+            (0.08..=0.20).contains(&m5),
+            "pan-flute h5 {m5} outside [0.08, 0.20]"
+        );
+        assert!(
+            (m3 + m5) / (m2 + m4 + 1e-6) > 10.0,
+            "odd/even ratio collapsed: {}",
+            (m3 + m5) / (m2 + m4 + 1e-6)
+        );
+        // open-pipe contrast at ITS mid key (an absolute per-instrument claim)
+        let fl_key = wd_mid_key(&FLUTE);
+        let fl = wd_render_dry(&FLUTE, fl_key, 100, 0.5, 7);
+        let fl_h2 = wd_hr(
+            segment(&fl, WD_SR, WD_PREVIB.0, WD_PREVIB.1),
+            key_freq(fl_key),
+            2,
+        );
+        println!("WD-O2 flute h2 {fl_h2:.4}");
+        assert!(
+            (0.25..=0.40).contains(&fl_h2),
+            "flute h2 {fl_h2} outside [0.25, 0.40] — the open pipe lost its evens"
+        );
+    }
+
+    /// WD-O3 — HELMHOLTZ vessels (76 bottle, 78 whistle, 79 ocarina) are ONE
+    /// dominant partial, not a ladder. This is what stops them sounding like a
+    /// dull flute. Fail-first: today 76 ≡ flute (R ≈ 0.36 ≫ 0.11) and 79's old
+    /// whistle table carried an h3 it should not have.
+    #[test]
+    fn wd_o3_helmholtz_single_partial_dominance() {
+        // upper-partial energy relative to the fundamental
+        let upper_ratio = |p: &WindPreset| -> f32 {
+            let key = wd_mid_key(p);
+            let s = wd_render_dry(p, key, 100, 0.5, 7);
+            let body = segment(&s, WD_SR, WD_PREVIB.0, WD_PREVIB.1);
+            let f0 = key_freq(key);
+            let up: f32 = (2..=6)
+                .map(|n| wd_hr(body, f0, n).powi(2))
+                .sum::<f32>()
+                .sqrt();
+            up
+        };
+        let (bottle, whistle, flute) = (
+            upper_ratio(&BLOWN_BOTTLE),
+            upper_ratio(&WHISTLE),
+            upper_ratio(&FLUTE),
+        );
+        println!("WD-O3 upper/fund — bottle {bottle:.4} whistle {whistle:.4} flute {flute:.4}");
+        assert!(bottle < 0.11, "blown bottle is not a bare vessel: {bottle}");
+        assert!(whistle < 0.06, "whistle is not near-sine: {whistle}");
+        assert!(
+            flute > 0.30,
+            "flute lost its ladder (contrast broken): {flute}"
+        );
+
+        // the ocarina: exactly one warm h2, and deliberately NO h3
+        let oc_key = wd_mid_key(&OCARINA);
+        let oc = wd_render_dry(&OCARINA, oc_key, 100, 0.5, 7);
+        let body = segment(&oc, WD_SR, WD_PREVIB.0, WD_PREVIB.1);
+        let f0 = key_freq(oc_key);
+        let (h2, h3) = (wd_hr(body, f0, 2), wd_hr(body, f0, 3));
+        println!("WD-O3 ocarina: h2 {h2:.4} h3 {h3:.4}");
+        assert!(
+            (0.12..=0.20).contains(&h2),
+            "ocarina h2 {h2} outside [0.12, 0.20]"
+        );
+        assert!(h3 < 0.012, "ocarina grew an h3 it should not have: {h3}");
+    }
+
+    /// WD-O4 — the shakuhachi's muraiki breath tone: a genuine sustained noise
+    /// shelf above 8 kHz that no other pipe has. Fail-first: today 77 ≡ 73
+    /// byte-identically, so the ratio is exactly 1.0.
+    #[test]
+    fn wd_o4_shakuhachi_muraiki_shelf() {
+        let key = wd_mid_key(&SHAKUHACHI); // 71
+                                           // Measured with an EXACT DFT band, not `hp_rms`: a Q-0.7 highpass at 8 kHz
+                                           // leaks a flute's own h4 (2.1 kHz) / h5 / h6 straight through its skirt and
+                                           // reports ~0.8% "above 8 kHz" for a voice whose top partial is 3.1 kHz —
+                                           // which would silently compress the very contrast this oracle exists to prove.
+        let shelf = |p: &WindPreset| {
+            let s = wd_render(p, key, 100, 1.6, 7); // breath ON — the shelf IS breath
+            let body = segment(&s, WD_SR, 0.5, 1.5);
+            spectral_band_rms(body, WD_SR, 8000.0, 16000.0) / rms(body).max(1e-9)
+        };
+        let (shak, flute) = (shelf(&SHAKUHACHI), shelf(&FLUTE));
+        println!(
+            "WD-O4 8-16kHz fraction — shakuhachi {shak:.5} flute {flute:.5} (ratio {:.0}x)",
+            shak / flute.max(1e-9)
+        );
+        assert!(shak >= 0.010, "no muraiki shelf: {shak}");
+        assert!(
+            shak >= 10.0 * flute,
+            "shakuhachi shelf {shak} not clear of the flute's {flute}"
+        );
+    }
+
+    /// WD-O5 — BREATH FRACTION per instrument, via a same-seed differential seam:
+    /// zeroing `breath_amp`/`hi_amp` POST-construction keeps both RNG streams
+    /// aligned, so (full − nobed) isolates the bed exactly. Fail-first: today all
+    /// five non-whistle programs share one bed and all three whistle programs
+    /// share another, so the ordering clause (recorder < flute < pan < bottle)
+    /// cannot hold — recorder == flute exactly.
+    #[test]
+    fn wd_o5_breath_fraction_bands_and_ordering() {
+        let bf = |p: &WindPreset| -> f32 {
+            let key = wd_mid_key(p);
+            let n = (1.6 * WD_SR) as usize;
+            let mut full = Wind::from_preset(p, key, 100, WD_SR, 7);
+            let mut nobed = Wind::from_preset(p, key, 100, WD_SR, 7);
+            nobed.breath_amp = 0.0;
+            nobed.hi_amp = 0.0;
+            let (mut a, mut b) = (vec![0f32; n], vec![0f32; n]);
+            full.render(&mut a);
+            nobed.render(&mut b);
+            let diff: Vec<f32> = a.iter().zip(&b).map(|(x, y)| x - y).collect();
+            rms(segment(&diff, WD_SR, 0.5, 1.5)) / rms(segment(&a, WD_SR, 0.5, 1.5)).max(1e-9)
+        };
+        let (rec, picc, fl, wh, oc, shak, pan, bot) = (
+            bf(&RECORDER),
+            bf(&PICCOLO),
+            bf(&FLUTE),
+            bf(&WHISTLE),
+            bf(&OCARINA),
+            bf(&SHAKUHACHI),
+            bf(&PAN_FLUTE),
+            bf(&BLOWN_BOTTLE),
+        );
+        println!(
+            "WD-O5 breath fraction — rec {rec:.4} picc {picc:.4} flute {fl:.4} whistle {wh:.4} \
+             oca {oc:.4} shak {shak:.4} pan {pan:.4} bottle {bot:.4}"
+        );
+        // Bands calibrated against the render. NOTE the factor that sets them:
+        // `Rng::white()` is UNIFORM in [-1, 1), so its RMS is 1/sqrt(3) = 0.577, NOT 1.
+        // The closed-form bed level is therefore
+        //     bed_rms ~= breath * (1/sqrt(3)) * sqrt(pi*fc / (Q*sr)) * e^2   (e = sustain)
+        // and breath_mod (1 + 0.5*vib) adds a further ~x1.06 in RMS. Predicting these
+        // fractions from a UNIT-RMS white assumption overstates every one of them by
+        // ~1/0.61. The coefficients are anchored on the flute's accepted `breath: 0.09`
+        // (R1), so these fractions are a CONSEQUENCE of that anchor, not a free choice.
+        for (name, v, lo, hi) in [
+            ("recorder", rec, 0.003, 0.009),
+            ("piccolo", picc, 0.007, 0.018),
+            ("flute", fl, 0.010, 0.021), // tight: this IS today's accepted flute bed (R1)
+            ("whistle", wh, 0.012, 0.028),
+            ("ocarina", oc, 0.014, 0.031),
+            ("shakuhachi", shak, 0.048, 0.105),
+            ("pan_flute", pan, 0.038, 0.085),
+            ("blown_bottle", bot, 0.055, 0.122),
+        ] {
+            assert!(
+                (lo..=hi).contains(&v),
+                "{name} breath fraction {v:.4} outside [{lo}, {hi}]"
+            );
+        }
+        // the robust ordering clause — the part that cannot hold on today's code
+        assert!(
+            rec < fl && fl < pan && pan < bot,
+            "breath ordering collapsed: rec {rec} < flute {fl} < pan {pan} < bottle {bot}"
+        );
+        assert!(
+            shak > 3.0 * fl,
+            "shakuhachi {shak} is not markedly airier than the flute {fl}"
+        );
+    }
+
+    /// WD-O6 — the spectrum opens with VELOCITY and closes with REGISTER, and the
+    /// recorder is the instrument that (physically) does NOT open: you cannot blow
+    /// a fipple harder without going sharp. Fail-first: today the spectrum is
+    /// invariant in both, so all three ratios are exactly 1.00.
+    #[test]
+    fn wd_o6_register_and_velocity_brightness_coupling() {
+        // upper-partial energy relative to the fundamental, breathless
+        let tilt = |p: &WindPreset, key: u8, vel: u8| -> f32 {
+            let s = wd_render_dry(p, key, vel, 0.5, 7);
+            let body = segment(&s, WD_SR, WD_PREVIB.0, WD_PREVIB.1);
+            let f0 = key_freq(key);
+            (2..=4).map(|n| wd_hr(body, f0, n)).sum::<f32>()
+        };
+        // A: velocity opens the flute's timbre, not merely its level
+        let fl_key = 65;
+        let (soft, hard) = (tilt(&FLUTE, fl_key, 30), tilt(&FLUTE, fl_key, 115));
+        let flute_ratio = hard / soft.max(1e-9);
+        let (r_soft, r_hard) = rms_pair(&FLUTE, fl_key);
+        println!("WD-O6a flute tilt ff/pp {flute_ratio:.3} (rms {r_soft:.4} -> {r_hard:.4})");
+        assert!(
+            flute_ratio >= 1.4,
+            "velocity does not open the flute: {flute_ratio}"
+        );
+        assert!(r_hard > r_soft, "velocity did not raise level");
+
+        // B: the recorder does NOT open — and the law is per-instrument
+        let rec_ratio = tilt(&RECORDER, fl_key, 115) / tilt(&RECORDER, fl_key, 30).max(1e-9);
+        println!("WD-O6b recorder tilt ff/pp {rec_ratio:.3}");
+        assert!(
+            rec_ratio <= 1.25,
+            "the recorder should barely open with velocity: {rec_ratio}"
+        );
+        assert!(
+            flute_ratio >= 1.5 * rec_ratio,
+            "flute {flute_ratio} vs recorder {rec_ratio}: the coupling is not per-instrument"
+        );
+
+        // C: the top of the range purifies (harmonic-relative — pitch-safe)
+        let low = wd_hr(
+            segment(
+                &wd_render_dry(&FLUTE, 62, 100, 0.5, 7),
+                WD_SR,
+                WD_PREVIB.0,
+                WD_PREVIB.1,
+            ),
+            key_freq(62),
+            2,
+        );
+        let high = wd_hr(
+            segment(
+                &wd_render_dry(&FLUTE, 91, 100, 0.5, 7),
+                WD_SR,
+                WD_PREVIB.0,
+                WD_PREVIB.1,
+            ),
+            key_freq(91),
+            2,
+        );
+        println!("WD-O6c flute h2/h1 — key62 {low:.4} key91 {high:.4}");
+        assert!(
+            low >= 1.25 * high,
+            "register does not purify: h2 {low} @62 vs {high} @91"
+        );
+    }
+
+    fn rms_pair(p: &WindPreset, key: u8) -> (f32, f32) {
+        let s = |vel| {
+            rms(segment(
+                &wd_render(p, key, vel, 0.5, 7),
+                WD_SR,
+                WD_PREVIB.0,
+                WD_PREVIB.1,
+            ))
+        };
+        (s(30), s(115))
+    }
+
+    /// WD-O7 — VIBRATO RATE. The regression test for MM-BUG-KILN-00003: the LFO is
+    /// ticked at control rate, so it must be BUILT at sr/CTRL. Measured by an FM
+    /// sideband scan (no zero-crossing counter, wobble-proof).
+    /// Fail-first: the old LFO ran at rate/16 ≈ 0.31 Hz, so there is no sideband
+    /// pair anywhere in 3-8 Hz and S/carrier sits at leakage level (≲ 0.03).
+    #[test]
+    fn wd_o7_builtin_vibrato_rate_is_about_5hz() {
+        let probe = |p: &WindPreset, key: u8, lo: f32, hi: f32| -> (f32, f32) {
+            // breathless: the vibrato is pitch-FM on the TONE
+            let s = wd_render_dry(p, key, 100, 3.0, 7);
+            let body = segment(&s, WD_SR, 1.0, 3.0); // fully ramped; scoop settled, no bend
+                                                     // The carrier of an FM tone sits EXACTLY at the centre pitch, which here is
+                                                     // key_freq(key) (scoop settled to 1.0, no bend). Do NOT peak-locate it: under
+                                                     // a deep vibrato (the shakuhachi's beta ~ 0.69) the first sideband rivals the
+                                                     // carrier, and a peak search then locks onto the SIDEBAND and inverts the
+                                                     // ratio. The known centre frequency is both simpler and correct.
+            let f0 = key_freq(key);
+            let carrier = mag_at(body, WD_SR, f0).max(1e-9);
+            let mut best = (0.0f32, 0.0f32); // (rate, sideband-sum / carrier)
+            let mut r = lo;
+            while r <= hi {
+                let sb = (mag_at(body, WD_SR, f0 - r) + mag_at(body, WD_SR, f0 + r)) / carrier;
+                if sb > best.1 {
+                    best = (r, sb);
+                }
+                r += 0.05;
+            }
+            best
+        };
+        let (rate, depth) = probe(&FLUTE, 72, 3.0, 8.0);
+        println!("WD-O7 flute vibrato: {rate:.2} Hz, sidebands {depth:.3} of carrier");
+        assert!(
+            (4.3..=5.7).contains(&rate),
+            "flute vibrato at {rate:.2} Hz, not ~5 Hz (0.31 Hz => the CTRL-rate bug is back)"
+        );
+        assert!(
+            depth >= 0.25,
+            "flute vibrato is inert: sidebands {depth:.3}"
+        );
+
+        let (s_rate, s_depth) = probe(&SHAKUHACHI, wd_mid_key(&SHAKUHACHI), 3.0, 8.0);
+        println!("WD-O7 shakuhachi vibrato: {s_rate:.2} Hz, sidebands {s_depth:.3}");
+        assert!(
+            (3.8..=5.2).contains(&s_rate),
+            "shakuhachi vibrato at {s_rate:.2} Hz, not ~4.5 Hz"
+        );
+        assert!(s_depth >= 0.25, "shakuhachi vibrato inert: {s_depth:.3}");
+    }
+
+    /// WD-O8 — the CHIFF: a fresh attack spits, super-linearly in velocity, and the
+    /// pan flute's iconic chiff dwarfs the recorder's discreet one.
+    /// Fail-first: today 75 and 74 are byte-identical, so pan/rec is exactly 1.0.
+    #[test]
+    fn wd_o8_chiff_onset_and_per_instrument_prominence() {
+        // same-seed differential isolates the chiff exactly
+        let chiff_energy = |p: &WindPreset, key: u8, vel: u8, a: f32, b: f32| -> f32 {
+            let n = (0.3 * WD_SR) as usize;
+            let mut on = Wind::from_preset(p, key, vel, WD_SR, 7);
+            let mut off = Wind::from_preset(p, key, vel, WD_SR, 7);
+            off.chiff_amp = 0.0;
+            let (mut x, mut y) = (vec![0f32; n], vec![0f32; n]);
+            on.render(&mut x);
+            off.render(&mut y);
+            let d: Vec<f32> = x.iter().zip(&y).map(|(u, v)| u - v).collect();
+            rms(segment(&d, WD_SR, a, b))
+        };
+        let (early, late) = (
+            chiff_energy(&PAN_FLUTE, 72, 100, 0.0, 0.02),
+            chiff_energy(&PAN_FLUTE, 72, 100, 0.20, 0.22),
+        );
+        println!("WD-O8 pan chiff: early {early:.5} late {late:.5}");
+        assert!(early > 1e-3, "no chiff at the onset: {early}");
+        assert!(
+            early >= 2.0 * late,
+            "chiff does not decay: {early} vs {late}"
+        );
+
+        // super-linear in velocity (the Reed convention: × vn × vel_amp)
+        let ff = chiff_energy(&PAN_FLUTE, 72, 120, 0.0, 0.02);
+        let pp = chiff_energy(&PAN_FLUTE, 72, 30, 0.0, 0.02);
+        println!("WD-O8 pan chiff ff/pp {:.1}x", ff / pp.max(1e-9));
+        assert!(ff >= 8.0 * pp, "chiff is not super-linear: {ff} vs {pp}");
+
+        // the load-bearing clause: per-instrument prominence, at MATCHED pitch
+        let rec = chiff_energy(&RECORDER, 72, 100, 0.0, 0.02);
+        println!("WD-O8 pan/recorder chiff {:.1}x", early / rec.max(1e-9));
+        assert!(
+            early >= 3.0 * rec,
+            "the pan flute's iconic chiff does not stand out from the recorder's: \
+             {early} vs {rec}"
+        );
+    }
+
+    /// WD-O9 — the FLUTE CONTINUITY CANARY (R1). GM 73 is used by ~all 12 committed
+    /// albums, so it must move as little as the design promised. This is deliberately
+    /// NOT fail-first: it should pass BEFORE and AFTER. A failure means the flagship
+    /// drifted — STOP; never widen these bands to make it green.
+    #[test]
+    fn wd_o9_flute_continuity_canary() {
+        let s = wd_render_dry(&FLUTE, 72, 100, 1.6, 7);
+        let body = segment(&s, WD_SR, WD_PREVIB.0, WD_PREVIB.1);
+        let f0 = key_freq(72);
+        let (h2, h3) = (wd_hr(body, f0, 2), wd_hr(body, f0, 3));
+        // today 0.32 / 0.12; after the register tilt at key 72, ≈ 0.35 / 0.143
+        println!("WD-O9 flute h2 {h2:.4} h3 {h3:.4}");
+        assert!(
+            (0.27..=0.40).contains(&h2),
+            "flute h2 {h2} left [0.27, 0.40] — the flagship moved"
+        );
+        assert!(
+            (0.09..=0.18).contains(&h3),
+            "flute h3 {h3} left [0.09, 0.18] — the flagship moved"
+        );
+        // The new h4-h6 must stay a SKIRT, not a sheen. Measured DIRECTLY as
+        // harmonic energy relative to the fundamental: a `hp_rms(3000)` proxy is
+        // useless here because a Q-0.7 highpass leaks the flute's own h4 (2.1 kHz)
+        // and h5 (2.6 kHz) straight through its skirt, reading them as "sheen".
+        let skirt = (4..=6)
+            .map(|n| wd_hr(body, f0, n).powi(2))
+            .sum::<f32>()
+            .sqrt();
+        println!("WD-O9 flute h4..h6 skirt {skirt:.4}");
+        assert!(
+            skirt < 0.10,
+            "the flute grew a sheen where it should have a skirt: {skirt}"
+        );
+    }
+
+    /// WD-O10 — routing, SAMPLE POLICY, and lifecycle.
+    /// The sample-policy clause is a DIFFERENTIAL, not a `kind()` check: `LaVoice`
+    /// is transparent for routing (it reports the inner model's kind), so kind()
+    /// cannot distinguish wrapped from bare. Instead: a program with no LA layer
+    /// renders BIT-IDENTICALLY with samples on and off.
+    /// Fail-first: today all eight are wrapped, so 74..=79 differ.
+    #[test]
+    fn wd_o10_routing_sample_policy_and_lifecycle() {
+        for p in 72..=79u8 {
+            assert_eq!(
+                make(p, 60, 100, WD_SR, 7, false).kind(),
+                "wind",
+                "program {p} left the Wind family"
+            );
+        }
+        // key 72 sits inside the flute bank's zone map (it has no zone below C4)
+        for p in 72..=79u8 {
+            let with = render_program_sampled(p, 72, 100, 0.5, 7, true);
+            let without = render_program_sampled(p, 72, 100, 0.5, 7, false);
+            let identical = with
+                .iter()
+                .zip(&without)
+                .all(|(a, b)| a.to_bits() == b.to_bits());
+            match p {
+                72 | 73 => assert!(
+                    !identical,
+                    "GM {p} should carry the flute LA attack, but samples=true changed nothing"
+                ),
+                _ => assert!(
+                    identical,
+                    "GM {p} still borrows the transverse-flute attack — the wrong onset is \
+                     exactly what made it read as 'flute'"
+                ),
+            }
+        }
+        // lifecycle + hygiene (mirrors reed_o13)
+        assert!(survives_until(
+            Box::new(Wind::from_preset(&FLUTE, 72, 100, WD_SR, 7)),
+            WD_SR,
+            6.0
+        ));
+        let mut v = Wind::from_preset(&FLUTE, 72, 100, WD_SR, 7);
+        let mut warm = vec![0f32; 4410];
+        v.render(&mut warm);
+        v.note_off();
+        // Adsr release is exponential (tau = `release`) and dies below 1e-4, so from
+        // sustain 0.92 with tau = 0.10 s that is 0.92*exp(-t/0.1) < 1e-4 => t ~ 0.91 s.
+        assert!(dies_within(Box::new(v), WD_SR, 2.0), "flute never released");
+        let s = wd_render(&SHAKUHACHI, 71, 100, 1.0, 7);
+        assert!(s.iter().all(|x| x.is_finite()), "non-finite sample");
+        let dc = s.iter().sum::<f32>() / s.len() as f32;
+        assert!(dc.abs() < 1e-3, "DC offset {dc}");
+        // the alias gate: a hot top-register piccolo must not fold junk back down
+        let hot = wd_render(&PICCOLO, 106, 127, 0.5, 7);
+        let hb = segment(&hot, WD_SR, 0.10, 0.40);
+        let junk = hp_rms(hb, WD_SR, 20500.0) / rms(hb).max(1e-9);
+        println!("WD-O10 piccolo near-Nyquist junk {junk:.5}");
+        assert!(
+            junk < 0.01,
+            "partials above 0.44·sr are folding, not gated: {junk}"
+        );
+    }
+
+    /// WD-O11 — family loudness containment: no preset is a mix bomb. A guard
+    /// (passes trivially today, when all eight are clones) that binds future edits.
+    #[test]
+    fn wd_o11_family_loudness_containment() {
+        let level = |p: &WindPreset| {
+            let s = wd_render(p, wd_mid_key(p), 100, 1.6, 7);
+            rms(segment(&s, WD_SR, 0.5, 1.5))
+        };
+        let flute = level(&FLUTE);
+        for p in [
+            &PICCOLO,
+            &RECORDER,
+            &PAN_FLUTE,
+            &BLOWN_BOTTLE,
+            &SHAKUHACHI,
+            &WHISTLE,
+            &OCARINA,
+        ] {
+            let d = db_ratio(level(p), flute);
+            println!("WD-O11 {} vs flute: {d:+.2} dB", p.name);
+            assert!(
+                d.abs() <= 4.0,
+                "{} sits {d:+.2} dB off the flute — a mix bomb",
+                p.name
+            );
+        }
     }
 }

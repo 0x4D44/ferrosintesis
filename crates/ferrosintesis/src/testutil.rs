@@ -1045,23 +1045,11 @@ mod distinctness {
     /// Unordered program pairs exempt from the distinctness assertion, kept sorted
     /// (a < b). Every `Collapse` entry cites the HLD stage that deletes it.
     const ALLOW: &[(u8, u8, Why)] = &[
-        // -- Stage 1: Pipe 72-79 — one `whistle` bool → 2 timbres --
-        // whistle=false group: 73 flute / 74 recorder / 75 pan flute /
-        // 76 blown bottle / 77 shakuhachi all render identically.
-        (73, 74, Why::Collapse(1)),
-        (73, 75, Why::Collapse(1)),
-        (73, 76, Why::Collapse(1)),
-        (73, 77, Why::Collapse(1)),
-        (74, 75, Why::Collapse(1)),
-        (74, 76, Why::Collapse(1)),
-        (74, 77, Why::Collapse(1)),
-        (75, 76, Why::Collapse(1)),
-        (75, 77, Why::Collapse(1)),
-        (76, 77, Why::Collapse(1)),
-        // whistle=true group: 72 piccolo / 78 whistle / 79 ocarina.
-        (72, 78, Why::Collapse(1)),
-        (72, 79, Why::Collapse(1)),
-        (78, 79, Why::Collapse(1)),
+        // -- Stage 1: Pipe 72-79 — DONE. The `whistle` bool became an 8-entry
+        //    WindPreset table, so all 28 pipe pairs are now genuinely distinct
+        //    instruments and carry no exemption. (This is the pattern: a stage's
+        //    definition of done includes deleting its entries, after which the
+        //    matrix itself proves the fix.)
         // -- Stage 2: Synth Pad 88-95 — 88,89,90,91,92,93,94 share one base pad.
         //    91 (halo/"sweep") only differs via a CC-driven vowel morph, inert
         //    with no controller, so it renders as the base pad here too. 95

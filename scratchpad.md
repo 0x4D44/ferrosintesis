@@ -24,6 +24,16 @@
   rebase rc directly (`git rebase …; rc=$?`) and STOP on conflict — never gate
   control flow on a piped git command's exit status (same class as the Git-Bash
   python-shim exit-swallow already in this repo's lessons).
+- [ ] 2026.07.12 — **Extract a `control_lfo(rate, rng, sr) -> Sine` helper.** The
+  control-rate LFO line `Sine::new(rate*(1.0+0.08*rng.white()), sr/CTRL as f32, 0.0)`
+  is now duplicated verbatim in three voices — `Wind` (`crates/ferrosintesis/src/voices.rs:4548`),
+  `Reed` (`:5673`), `Bowed` (`~:4810`) — and it is the *exact* line whose `sr` vs
+  `sr/CTRL` form caused MM-BUG-KILN-00003. A one-line helper would put the invariant
+  in one place so a future 4th voice can't reintroduce the bug. Deferred from Stage 1
+  (pipes) deliberately: it touches Reed/Bowed, which are out of scope and whose renders
+  must be re-verified byte-identical after the extraction (the RNG-draw order must be
+  preserved exactly). Small, safe, but cross-cutting — do it as its own task.
+
 - [x] 2026.07.10 — The synth showcase's full audio runner has four pre-existing
   oracle failures that reproduce byte-for-byte with the 0.11 baseline binary:
   track 1 `wah resonance bite` HF delta, track 4 `vowel shifts` HF direction,

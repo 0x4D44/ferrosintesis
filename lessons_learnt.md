@@ -1,7 +1,19 @@
 # Lessons learnt
 
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
+(Currently over cap — due a prune pass.)
 
+- 2026.07.12 — **`Rng::white()` is UNIFORM in [-1,1), so its RMS is 1/√3 ≈ 0.577,
+  not 1.0.** Any audio oracle that predicts an *absolute* noise level from a
+  closed form must carry this factor. The Wind/pipe breath-fraction oracles
+  (WD-O5) were all designed against a unit-RMS-white assumption and every band
+  came out ≈ 1/0.61× too high until re-pinned; the model was correct throughout.
+  Corollary: `Biquad::bandpass(fc,Q)` on white outputs RMS ≈ √(π·fc/(Q·sr)) — a
+  narrow, cheap way to size a tracked breath bed. And reading a harmonic ratio
+  inside a vibrato'd window under-reads upper partials (harmonic n carries n× the
+  FM modulation index, so its energy leaks into sidebands a fixed Goertzel bin
+  misses) — read harmonics in a strictly PRE-vibrato window; and never `peak_locate`
+  an FM carrier when β≳0.5 (the first sideband can outrank it) — use the known pitch.
 - 2026.07.11 — **`deltic timeout <cmd> bash script.sh` hands the script to a
   bash whose exported-function children can't exec `D:/...` paths** — every
   `render_all.sh` child failed "No such file or directory" on an exe that

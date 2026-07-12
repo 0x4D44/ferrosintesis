@@ -216,6 +216,17 @@ pub struct OnePole {
 }
 
 impl OnePole {
+    /// |H(f)| of a one-pole lowpass designed by `OnePole::lowpass(cutoff, sr)`.
+    ///
+    /// Closed form, shared by the KS sustainer's headroom math and the
+    /// coupled-loop margin oracle so test and shipped code cannot drift apart.
+    pub(crate) fn lowpass_mag(cutoff: f32, f: f32, sr: f32) -> f32 {
+        let a = 1.0 - (-2.0 * core::f32::consts::PI * (cutoff / sr).min(0.49)).exp();
+        let b = 1.0 - a;
+        let w = 2.0 * core::f32::consts::PI * f / sr;
+        a / (1.0 - 2.0 * b * w.cos() + b * b).sqrt()
+    }
+
     pub fn lowpass(cutoff: f32, sr: f32) -> Self {
         let a = 1.0 - (-2.0 * PI * (cutoff / sr).min(0.49)).exp();
         OnePole { a, z: 0.0 }

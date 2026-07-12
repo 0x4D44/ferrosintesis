@@ -1802,16 +1802,17 @@ struct KsLoop {
 /// The e-bow driver (guitar v2 HLD §3.D): a resonant bandpass at the loop
 /// fundamental feeding back through a soft limiter. The small-signal
 /// round-trip gain at f0 is deliberately slightly supercritical
-/// (SUS_NET_GAIN); the SATURATOR pins the amplitude — Sullivan 1990's
+/// (SUS_K_OVER x the loop's per-trip deficit); the SATURATOR pins the
+/// amplitude — Sullivan 1990's
 /// stabilized feedback. Every other mode sees only the bandpass skirt (zero
 /// at DC) and stays contracting, and the energy input is hard-bounded by
 /// k·l per sample no matter how the constants are mis-tuned.
 struct SusDrv {
     bp: Biquad,
-    k_max: f32, // headroom clamp, min across the current glide's endpoints
-    k: f32,     // current drive (0 until the voice's hold latch engages)
-    l: f32,     // saturator knee (set at latch time from the reference)
-    prev_f: f32,
+    k_max: f32,  // headroom clamp, min across the current glide's endpoints
+    k: f32,      // current drive (0 until the voice's hold latch engages)
+    l: f32,      // saturator knee (set at latch time from the reference)
+    h_last: f32, // headroom at the previous retune's center (glide endpoint)
 }
 
 /// Guitar v2 sustainer constants (HLD §3.D): driver bandpass Q, the
@@ -1862,10 +1863,7 @@ impl KsLoop {
 
     /// |H| of the in-loop OnePole damper at frequency `f` (closed form).
     fn damp_mag(&self, f: f32) -> f32 {
-        let a = 1.0 - (-2.0 * std::f32::consts::PI * (self.bright / self.sr).min(0.49)).exp();
-        let b = 1.0 - a;
-        let w = 2.0 * std::f32::consts::PI * f / self.sr;
-        a / (1.0 - 2.0 * b * w.cos() + b * b).sqrt()
+        OnePole::lowpass_mag(self.bright, f, self.sr)
     }
 
     /// Driver gain at `f`: PROPORTIONALLY supercritical — k = SUS_K_OVER ×
@@ -1883,12 +1881,13 @@ impl KsLoop {
     /// Arm the e-bow driver (presets with `sustain > 0`); it stays silent
     /// (k = 0) until the voice's hold latch engages.
     fn enable_driver(&mut self, f: f32) {
+        let h = self.sus_headroom(f);
         self.drv = Some(SusDrv {
             bp: Biquad::bandpass(f, SUS_BP_Q, self.sr),
-            k_max: self.sus_headroom(f),
+            k_max: h,
             k: 0.0,
             l: 0.0,
-            prev_f: f,
+            h_last: h,
         });
     }
 
@@ -1910,19 +1909,21 @@ impl KsLoop {
     fn retune(&mut self, f: f32) {
         self.target = Self::delay_for(f, self.bright, self.sr).min(self.max_delay);
         self.loop_gain = 10f32.powf(-3.0 / (self.t60 * f));
-        if let Some(prev_f) = self.drv.as_ref().map(|d| d.prev_f) {
+        if self.drv.is_some() {
             // glide-endpoint minimum (review C3): an upward bend must not
             // borrow the new center's larger headroom while the delay still
-            // rings near the old one. Freshly computed for BOTH endpoints —
-            // min-ing against the previous clamp would ratchet down forever
-            // under vibrato.
-            let h = self.sus_headroom(f).min(self.sus_headroom(prev_f));
+            // rings near the old one. h_last is the FRESH endpoint value from
+            // the previous retune (not the clamped min - min-ing against the
+            // previous clamp would ratchet down forever under vibrato), so
+            // one transcendental evaluation per retune suffices.
+            let h = self.sus_headroom(f);
             let sr = self.sr;
-            let d = self.drv.as_mut().expect("checked above");
-            d.bp.retune_bandpass(f, SUS_BP_Q, sr);
-            d.k_max = h;
-            d.k = d.k.min(d.k_max);
-            d.prev_f = f;
+            if let Some(d) = &mut self.drv {
+                d.bp.retune_bandpass(f, SUS_BP_Q, sr);
+                d.k_max = h.min(d.h_last);
+                d.k = d.k.min(d.k_max);
+                d.h_last = h;
+            }
         }
     }
 
@@ -2018,6 +2019,8 @@ pub struct Pluck {
     sus_ref: f32,    // reference level captured 100–200 ms post-onset
     sus_hold: bool,
     sus_ramp: f32,
+    sus_l: f32,                    // saturator knee, frozen at latch engage
+    sus_ref_until: u32,            // reference-capture deadline (re-armed by a slur)
     sub: Option<(Sine, f32, f32)>, // (osc, gain, decay) fundamental weight
     sub_env: f32,
     sub_shape: (f32, f32), // (2f, 3f) waveshaper amounts on the sub
@@ -2157,6 +2160,8 @@ impl Pluck {
             sus_ref: 0.0,
             sus_hold: false,
             sus_ramp: 0.0,
+            sus_l: 0.0,
+            sus_ref_until: (0.08 * sr) as u32,
             // B5: random start phase — the sub is part of the string, not a
             // laboratory cosine locked to the pick. Its WEIGHT eases off as
             // velocity rises (a hard pluck is proportionally brighter, not
@@ -2313,22 +2318,33 @@ impl Voice for Pluck {
                     // late enough to skip the click, early enough that a
                     // fast-crashing high note (E6 is gone by 100 ms) still
                     // registers its real voice
-                    let (ref_a, ref_b) = ((0.02 * self.sr) as u32, (0.08 * self.sr) as u32);
-                    if (ref_a..ref_b).contains(&self.t) {
-                        self.sus_ref = self.sus_ref.max(self.sus_env);
-                    } else if self.t >= ref_b {
-                        if !self.sus_hold && self.sus_env <= self.sus_target * self.sus_ref {
+                    // the reference window is the 60 ms ending at
+                    // sus_ref_until; a slur RE-ARMS it (review C4), so a soft
+                    // slurred note references ITS own spoken level instead of
+                    // holding at a previous loud note's
+                    let win = (0.06 * self.sr) as u32;
+                    if self.t < self.sus_ref_until {
+                        if self.t + win >= self.sus_ref_until {
+                            self.sus_ref = self.sus_ref.max(self.sus_env);
+                        }
+                    } else {
+                        let target = self.sus_target * self.sus_ref;
+                        if !self.sus_hold && self.sus_env <= target {
                             self.sus_hold = true;
+                            // the knee places the hold level; frozen at
+                            // engage (the beat makes the instantaneous
+                            // envelope an unreliable snapshot — target is
+                            // the calibrated quantity)
+                            self.sus_l = SUS_L_SCALE * target.max(1e-9);
                         }
                         if self.sus_hold {
                             self.sus_ramp =
                                 (self.sus_ramp + CTRL as f32 / (SUS_RAMP_S * self.sr)).min(1.0);
-                            // the knee places the hold level: with k a
-                            // constant multiple of the deficit, equilibrium
-                            // sits at the same multiple of L at every pitch
-                            let l = SUS_L_SCALE * self.sus_target * self.sus_ref;
-                            self.horiz.set_drive(self.sus_ramp, l);
-                            self.vert.set_drive(self.sus_ramp, l);
+                            // with k a constant multiple of the deficit, the
+                            // equilibrium sits at the same multiple of the
+                            // knee at every pitch
+                            self.horiz.set_drive(self.sus_ramp, self.sus_l);
+                            self.vert.set_drive(self.sus_ramp, self.sus_l);
                         }
                     }
                 }
@@ -2440,6 +2456,17 @@ impl Voice for Pluck {
         self.hammer_pos = 0;
         self.sub_env = self.sub_env.max(0.6 * v);
         self.env = self.env.max(0.3 * v);
+        // guitar v2 (review C4): the slurred note is a NEW note to the
+        // sustainer — drop the drive, re-arm the reference window, and let
+        // the latch re-engage against the slur's own spoken level
+        if self.sus_target > 0.0 {
+            self.horiz.clear_drive();
+            self.vert.clear_drive();
+            self.sus_hold = false;
+            self.sus_ramp = 0.0;
+            self.sus_ref = 0.0;
+            self.sus_ref_until = self.t + (0.06 * self.sr) as u32;
+        }
         true
     }
 
@@ -7091,6 +7118,12 @@ mod tests {
         }
     }
 
+    /// Measured systematic offset between the spoken-level peak reference and
+    /// the held RMS: crest-vs-RMS, the smoothed window-max envelope statistic,
+    /// and the saturator equilibrium multiple. Shared by V6a and V6c so the
+    /// sustainer's level calibration lives in exactly one place.
+    const SUS_HOLD_REF_OFFSET_DB: f32 = -11.6;
+
     /// Drive a Pluck through a held phase then a released tail (V6/V7/V8).
     fn render_pluck_phased(
         p: &PluckPreset,
@@ -7114,10 +7147,10 @@ mod tests {
     /// V6a (guitar v2 unit D): the sustainer HOLDS a high held note — solo
     /// voice (no engine Drive, isolating unit D from unit C), E5 and E6 (the
     /// worst case the T16 lead exposed), 8 s: every late 1-s window sits
-    /// within [hold − 3 dB, hold + 2 dB] of the early reference, where hold
-    /// derives from the preset constant (upper AND lower bounds: growth,
-    /// pumping, or a dead sustainer all fail). DC/sub-fundamental energy
-    /// stays ≥ 40 dB down and every sample is finite.
+    /// within ±5 dB of the constant-derived hold level (upper AND lower
+    /// bounds: growth or a dead sustainer fails), the windows stay FLAT
+    /// within 3 dB (the pumping catch), DC/sub-fundamental energy stays
+    /// ≥ 40 dB down, and every sample is finite.
     #[test]
     fn sustain_holds_high_notes() {
         let sr = 44100.0;
@@ -7147,7 +7180,7 @@ mod tests {
             // saturator equilibrium multiple). The ±5 dB band absorbs the
             // per-pitch remainder of those statistics (E5 −23.5 / E6 −17.9
             // at capture); the FLATNESS clause below is the pumping catch.
-            let hold = 20.0 * DRIVE.sustain.log10() - 11.6;
+            let hold = 20.0 * DRIVE.sustain.log10() + SUS_HOLD_REF_OFFSET_DB;
             let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
             let mut bad = Vec::new();
             for w in 2..8 {
@@ -7155,15 +7188,15 @@ mod tests {
                 println!("V6a key {key} window {w}s: {rel:.1} dB rel ref (hold {hold:.1})");
                 lo = lo.min(rel);
                 hi = hi.max(rel);
-                if !(rel >= hold - 8.0 && rel <= hold + 8.0) {
+                if !(rel >= hold - 5.0 && rel <= hold + 5.0) {
                     bad.push((w, rel));
                 }
             }
             assert!(
                 bad.is_empty(),
                 "key {key}: windows outside [{:.1}, {:.1}]: {bad:?}",
-                hold - 8.0,
-                hold + 8.0
+                hold - 5.0,
+                hold + 5.0
             );
             assert!(
                 hi - lo <= 3.0,
@@ -7207,7 +7240,7 @@ mod tests {
                 .fold(0f32, |m, &x| m.max(x.abs()))
                 .max(1e-12)
                 .log10();
-        let hold = 20.0 * DRIVE.sustain.log10() - 11.6;
+        let hold = 20.0 * DRIVE.sustain.log10() + SUS_HOLD_REF_OFFSET_DB;
         for (nm, s) in [("bend-up", &up), ("bend-back", &back), ("slur", &slur)] {
             assert!(s.iter().all(|x| x.is_finite()), "{nm}: non-finite");
             // skip each segment's transient + re-settle window; the slurred
@@ -7216,18 +7249,33 @@ mod tests {
             // amplitude as the period grows past the control window), so its
             // lower bound is wider — the leg's job is alive-and-stable, and
             // dead is -60.
-            let (skip, floor) = if nm == "slur" {
-                (0.8, 14.0)
-            } else {
-                (0.1, 8.0)
-            };
+            if nm == "slur" {
+                // the slur RE-REFERENCES its own spoken level (review C4) —
+                // a soft hammer tap holds quietly by design, so the absolute
+                // level tracks the tap, not the original note. The
+                // diagnostics are aliveness (a dead sustainer decays through
+                // this window) and FLATNESS (the hold's signature).
+                let h1 = db(&s[(0.8 * sr) as usize..(1.15 * sr) as usize]) - refl;
+                let h2 = db(&s[(1.15 * sr) as usize..(1.5 * sr) as usize]) - refl;
+                println!("V6c slur: {h1:.1} / {h2:.1} dB rel ref (hold {hold:.1})");
+                assert!(h1 > -45.0 && h2 > -45.0, "slur died: {h1:.1}/{h2:.1} dB");
+                assert!(
+                    (h1 - h2).abs() <= 3.0,
+                    "slur not held flat: {h1:.1} vs {h2:.1} dB"
+                );
+                continue;
+            }
+            // steady holds pin +/-5 dB (V6a); bend legs allow a wider LOWER
+            // bound — the endpoint-minimum clamp and the higher pitch's
+            // envelope statistics legitimately hold a bend a few dB softer.
+            let skip = 0.1;
             let rel = db(&s[(skip * sr) as usize..]) - refl;
             println!("V6c {nm}: {rel:.1} dB rel ref (hold {hold:.1})");
             assert!(
-                rel >= hold - floor && rel <= hold + 8.0,
+                rel >= hold - 8.0 && rel <= hold + 5.0,
                 "{nm}: {rel:.1} dB outside [{:.1}, {:.1}]",
-                hold - floor,
-                hold + 8.0
+                hold - 8.0,
+                hold + 5.0
             );
         }
     }
@@ -7362,12 +7410,9 @@ mod tests {
             ("KOTO", &KOTO),
             ("PIZZ", &PIZZ),
         ];
-        let hmag = |bright: f32, f: f32| {
-            let a = 1.0 - (-2.0 * std::f32::consts::PI * (bright / sr).min(0.49)).exp();
-            let b = 1.0 - a;
-            let w = 2.0 * std::f32::consts::PI * f / sr;
-            a / (1.0 - 2.0 * b * w.cos() + b * b).sqrt()
-        };
+        // the SAME closed form the shipped code uses - the oracle must not
+        // hold a private copy that keeps passing against stale math
+        let hmag = |bright: f32, f: f32| OnePole::lowpass_mag(bright, f, sr);
         let mut worst = 0f32;
         let mut worst_at = String::new();
         for (name, p) in presets {

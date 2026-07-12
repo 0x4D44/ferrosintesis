@@ -225,6 +225,7 @@ pub(crate) fn cab_biquads(sr2: f32) -> [Biquad; 5] {
 /// supply recharging) and holds the tail in saturation — compression
 /// sustain and bloom, never an onset blast.
 struct Drive {
+    program: u8,
     pre: Biquad,
     voice: Biquad,
     g1: f32,
@@ -280,6 +281,7 @@ impl Drive {
             )
         };
         Drive {
+            program,
             pre: Biquad::highpass(90.0, 0.7, sr2),
             voice,
             g1,
@@ -303,7 +305,10 @@ impl Drive {
             rel_k: 1.0 - (-1.0 / (0.180 * sr2)).exp(),
             // recovery slew: +12 dB per ~150 ms — the supply recharging
             slew_up: 10f32.powf(12.0 / 20.0 / (0.150 * sr2)),
-            idle: 0,
+            // born idle: without this, a first note 0.2-0.4 s into the render
+            // meets a gain pre-charged toward g_max by the silent gap
+            // (review C2 follow-up)
+            idle: (0.4 * sr2) as u32,
             idle_snap: (0.4 * sr2) as u32,
         }
     }
@@ -320,7 +325,7 @@ impl Drive {
         // decayed" and slew the gain to g_max, booby-trapping the entrance
         let a = v.abs();
         if a < 1e-6 {
-            self.idle += 1;
+            self.idle = self.idle.saturating_add(1);
             if self.idle == self.idle_snap {
                 self.reset_state();
             }
@@ -1351,7 +1356,10 @@ impl EngineCore {
         s.delay_send = del;
         s.delay_authored = false;
         if needs_drive(prog) {
-            if s.drive.is_none() {
+            // rebuild on a program CHANGE too: 29<->30 mid-song choreography
+            // is an authored idiom, and the two programs differ in voicing,
+            // stage gains and sag target (review C3)
+            if s.drive.as_ref().map(|d| d.program) != Some(prog) {
                 s.drive = Some(Drive::new(prog, self.opt.sr));
             }
         } else {

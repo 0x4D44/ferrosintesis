@@ -80,6 +80,13 @@
   pin is opt-level-sensitive (float codegen differs in release). Pre-existing,
   unrelated to the choir-v2 unit; either pin per-profile hashes or run the
   canary debug-only.
+- [ ] 2026.07.12 - Guitar v2 sustainer: latched 29/30 voices never decay while
+  held, so CC64 (deferred note_off, `engine.rs` pedal path) or heavily stacked
+  long notes accumulate permanently-held voices (polyphony/CPU wall + an organ-
+  like bed). Out of catalog today (no album authors CC64 on driven guitars -
+  2026.07.11 usage survey) and documented in the README, but a follow-up design
+  should give the engine a per-channel cap or newest-wins policy for LATCHED
+  voices (needs a small Voice-trait surface, e.g. `is_holding()`), review C1.
 - [ ] 2026.07.11 - The GOLDEN fixture's drum row (ch 9: pinned −22.51 dB / 726.7 Hz,
   currently rendering −22.30 dB / 685.2 Hz) has drifted within tolerance since the
   V3-kit recapture — later drum commits (e.g. `87b794c` cymbal detuned-pair density)

@@ -1,5 +1,34 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.12 — **`crates/ferrosintesis/README.md`'s GM table contradicts the source in 8
+  places** — surfaced while auditing instrument coverage for the reference-audition demo
+  (`wrk_docs/2026.07.12 - HLD - ferrosintesis reference audition.md`). Source wins in each:
+  (1) **README:88 lists "crystal 96–103" as Modal, but README:90 lists "97/99/101/103" as
+  SawStack — the two rows contradict each other.** Only 96/98/100/102 are Modal
+  (`voices.rs:7229`); 97/99/103 are pads (`:7232`) and 101 is the sweep pad (`:7233`). The
+  SawStack row is the correct one.
+  (2) **GM 31's sounding pitch is NOT the written key** — the KS loop rings at 2f below key 64
+  and 3f at/above (`voices.rs:2083-2091`), non-monotonic across the boundary. Documented
+  nowhere outside a terse `// G7 flageolet` marker. This is the most surprising undocumented
+  behaviour in the melodic set and deserves an explicit README line.
+  (3) README:69-71's CC0 alt-bank list is **incomplete** — it omits 19 (legacy organ), 29/30
+  (DRIVE_LEAD), and that the bank *pins samples off* for 24/25, 56–61, 68–71
+  (`altbank.rs:1003, :1032, :1037, :1043, :1046`).
+  (4) README:97 says ReverseCymbal ignores the written key — true for the default bank, but
+  the **alt-bank 119 DOES read the key** (`drums.rs:2239`, clamped 48–72). Not stated.
+  (5) `drums.rs:1358`'s doc comment says `make` returns "`None` for unmapped keys" — **false**;
+  every arm returns `Some`, unmapped keys get a generic tick (`drums.rs:2023`). No ch10 key is
+  silent.
+  (6) README:94 implies GM 86 "fifths lead" and GM 87 "bass+lead" render an interval — the
+  **parallel fifth and the sub-octave are both unimplemented/deferred** (`voices.rs:4419`,
+  `:4428`). The names promise something that does not render.
+  (7) README:87 says GM 46 harp skips the wound-string key split — true, but **GM 15 dulcimer
+  also does** (`voices.rs:1755`) and the README omits it.
+  (8) **Seven shipped CC/engine features are entirely undocumented**: CC2 breath, CC66
+  sostenuto, CC67 una corda (acoustic piano 0–3 only), CC71 resonance, polyphonic key
+  aftertouch, the guitar sympathetic resonator (GM 24/25 only), and the channel-10 drum-room
+  reverb (which **ignores CC91** — `ROOM_SEND` is a const at `engine.rs:1918`, so a dry-drums
+  bar is impossible from MIDI). The engine reads **25** CCs; the README documents 8.
 - [x] 2026.07.12 — **ferrosintesis renders are NOT bit-reproducible across the
   fleet's machines** — surfaced completing the guitar-v2 opus refresh. This box
   renders SawStack pad(89) to hash `7190932198068575567`, while the frozen canary

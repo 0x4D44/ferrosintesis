@@ -94,7 +94,7 @@
   Atlas #14, Hollow Hill). A separate catalog-refresh pass should re-render the
   strings-affected albums to bring the published audio current — verify against a
   `render_diff.py` (baseline = 0.13.4 trunk binary) so only genuine deltas land.
-- [ ] 2026.07.11 - **Review the distorted-guitar synthesis quality** (Arthur, separate
+- [x] 2026.07.11 - **Review the distorted-guitar synthesis quality** (Arthur, separate
   pass). The T16 soaring lead is "sort-of OK" but the guitar timbre isn't convincing.
   The voice is Karplus-Strong pluck + tanh/cabinet Drive (`voices.rs` DRIVE/DRIVE_LEAD
   presets, `engine.rs` Drive insert). High notes decay fast even with DRIVE_LEAD (the KS
@@ -104,6 +104,9 @@
   use GM 29/30 (Hollow Hill, Seven Kinds, Signal Fire, Estuary, Three-Sixty-One) — treat
   as a timbre improvement with a render-diff refresh. See
   `wrk_docs/2026.07.11 - HLD - Three-Sixty-One soaring lead.md`.
+  (Already fixed 2026-07-12: integrated guitar v2 added pickup RLC, two-stage
+  drive with sag, richer cabinet voicing, and the proposed e-bow sustainer;
+  commits `fcd0653`, `1423b2e`, and `09293e5`, with review fixes in `463b438`.)
 - [ ] 2026.07.11 — Big Weather review latents (report-only, benign today):
   (a) `albums/fable5/Big Weather/conductor.py:101-104` — Part.setup writes
   BANK_SELECTS CC0 (priority 2) after channel()'s program change (priority 1)

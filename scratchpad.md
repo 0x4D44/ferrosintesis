@@ -87,6 +87,18 @@
   2026.07.11 usage survey) and documented in the README, but a follow-up design
   should give the engine a per-channel cap or newest-wins policy for LATCHED
   voices (needs a small Voice-trait surface, e.g. `is_holding()`), review C1.
+- [ ] 2026.07.12 - Trunk's cello-v2 task (GM 42/43 waveguide+LA, `sampler.rs`
+  cello/contrabass banks) left several **cello-only** committed `listening/*.opus`
+  lagging its own synth — surfaced during guitar-v2 integration by re-rendering
+  with the merged binary: `listening/GPT-5.6/Atlas of Becoming/{05 - One Cell Many
+  Skies, 10 - The Library at the End of Weather, 11 - Clockwork Orchard, 12 -
+  Letters to a Future Ocean}.opus` and `listening/OpenAI Codex/Synth Feature
+  Showcase/03 - Skyline Brass Reactor.opus` all render different bytes than
+  committed. These have NO guitar 26-31 content, so guitar-v2 does not touch them —
+  left at trunk's committed bytes (out of guitar-v2 scope). A cello/catalog-refresh
+  sweep should re-render every GM 42/43 album against the current trunk binary (the
+  full list is likely broader than these 5 — only guitar-cello overlaps were
+  rendered here). Verify against a render-diff (baseline = current origin/main).
 - [ ] 2026.07.11 - The GOLDEN fixture's drum row (ch 9: pinned −22.51 dB / 726.7 Hz,
   currently rendering −22.30 dB / 685.2 Hz) has drifted within tolerance since the
   V3-kit recapture — later drum commits (e.g. `87b794c` cymbal detuned-pair density)

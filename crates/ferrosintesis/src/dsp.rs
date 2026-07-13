@@ -567,6 +567,44 @@ impl Burst {
     }
 }
 
+/// A sparse aperiodic grain train (PhISEM-style) — the rain/droplet gate. Each
+/// sample a grain fires (`e ← 1`) when a fresh uniform draw undercuts the
+/// per-sample probability `p`, then rings down by `decay` (a T60). Between grains
+/// the gate sits at ~0 — that silence is what makes rain *rain*, where a
+/// continuous bandpassed-noise bed only hisses. Used as `noise_bp.process(rng.white()) * gate`.
+///
+/// Rate is grains-per-SECOND, converted to `p = hz/sr` at construction. That is
+/// the one deliberate improvement over the private `Grain` in `drums.rs`, whose
+/// raw per-sample probability is silently sample-rate dependent; the dozen lines
+/// are duplicated on purpose rather than shared — unifying them would perturb the
+/// drums' RNG draw order and byte-change every drum-bearing album for no gain.
+pub struct GrainGate {
+    e: f32,
+    decay: f32,
+    p: f32, // per-sample fire probability = hz / sr
+}
+
+impl GrainGate {
+    pub fn new(hz: f32, t60: f32, sr: f32) -> Self {
+        GrainGate {
+            e: 0.0,
+            decay: 10f32.powf(-3.0 / (t60.max(1e-4) * sr)),
+            p: (hz / sr).clamp(0.0, 1.0),
+        }
+    }
+
+    /// Next gate value in [0, 1]; draws exactly one uniform sample from `rng`.
+    #[inline]
+    pub fn next(&mut self, rng: &mut Rng) -> f32 {
+        if rng.white() * 0.5 + 0.5 < self.p {
+            self.e = 1.0;
+        }
+        let out = self.e;
+        self.e *= self.decay;
+        out
+    }
+}
+
 /// MIDI key -> frequency (A440 equal temperament).
 pub fn key_freq(key: u8) -> f32 {
     440.0 * 2f32.powf((key as f32 - 69.0) / 12.0)
@@ -732,5 +770,43 @@ mod tests {
         }
         let alias = (acc / cnt as f64).sqrt() as f32 / fund;
         assert!(alias < 0.02, "alias floor {alias:.4} (need < 0.02)");
+    }
+
+    /// `GrainGate` fires at ~`hz` grains/SECOND (not a raw per-sample probability)
+    /// and is sparse between grains. A grain onset is a fresh 0→1 jump of `e`; the
+    /// count of onsets over one second must track `hz` across sample rates, which
+    /// is exactly the sample-rate independence the drums `Grain` lacks.
+    #[test]
+    fn grain_gate_rate_is_grains_per_second() {
+        for sr in [22050.0f32, 44100.0, 48000.0] {
+            let mut g = GrainGate::new(40.0, 0.02, sr);
+            let mut rng = Rng::new(9);
+            let mut onsets = 0u32;
+            let mut prev = 0.0f32;
+            let mut nonzero = 0u32;
+            let n = sr as usize;
+            for _ in 0..n {
+                let v = g.next(&mut rng);
+                // a fresh grain fires when the envelope jumps back up to 1.0
+                if v > prev + 0.5 {
+                    onsets += 1;
+                }
+                if v > 0.02 {
+                    nonzero += 1;
+                }
+                prev = v;
+            }
+            assert!(
+                (30..=52).contains(&onsets),
+                "sr {sr}: {onsets} grain onsets/s (want ~40)"
+            );
+            // sparse: with a 20 ms ring at 40/s the gate is open well under half
+            // the time — the silence between grains is the point.
+            assert!(
+                (nonzero as f32) < 0.55 * n as f32,
+                "sr {sr}: gate open {}% — not sparse",
+                100 * nonzero / n as u32
+            );
+        }
     }
 }

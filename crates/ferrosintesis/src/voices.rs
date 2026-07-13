@@ -23,8 +23,8 @@
 //! a gently-bowed or gently-blown note actually starts.
 
 use crate::dsp::{
-    key_freq, vel_amp, Adsr, Biquad, BlepPulse, BlepSaw, Burst, DelayLine, Drift, OnePole,
-    ReedPulse, Rng, Sine,
+    key_freq, vel_amp, Adsr, Biquad, BlepPulse, BlepSaw, Burst, DelayLine, Drift, GrainGate,
+    OnePole, ReedPulse, Rng, Sine,
 };
 use std::f32::consts::TAU;
 
@@ -7297,6 +7297,613 @@ fn brass(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Brass {
     Brass::new(spec, key, vel, sr, seed)
 }
 
+// ---------------------------------------------------------------------------
+// Fx (GM 96-103) — the synth-FX family. Three real cores wearing eight hats:
+// a crystal Modal bell {96,98,100,102}, a detuned SawStack {97,99,101,103}. The
+// family's identity is carried by TIME and RANDOMNESS — a sparse droplet train,
+// a filter that opens / closes / blooms, an internal echo, a lurching random-walk
+// pitch, a falling scoop — NOT by eight sets of steady filter knobs (that is the
+// hole the pre-Stage-3 code fell into: the anti-clone matrix reads only
+// steady-state spectrum, so each temporal identity also gets its own FX-O* oracle).
+//
+// One `Fx` wrapper owns all the motion around an existing core:
+//   core -> + onset Burst -> + noise·GrainGate -> LP (one-shot sweep) -> echo -> out
+// A preset with NO onset/noise/echo/wobble/scoop/filter is `inert`: the wrapper is
+// a pure pass-through taken OUTSIDE the sample loop. GM 98 (crystal, 7 albums) is
+// exactly that preset, so it renders bit-identically to today's
+// `bell(... CRYSTAL ...)` call (FX-O5) — the "freeze the anchor" rule, structural.
+//
+// Every numeric field below is engineering GUT-FEEL, tuned by the FX-O* oracles
+// and the distinctness matrix; ONLY the crystal bell core constants are
+// load-bearing (the 98 freeze).
+// ---------------------------------------------------------------------------
+
+/// Frozen crystal bell core parameters: EXACTLY today's
+/// `bell(key, vel, sr, seed, CRYSTAL, noise_off, 0.03, 1.5, 0.60)`, so the inert
+/// wrapper for GM 98 renders bit-for-bit. Do not touch (guarded by FX-O5).
+const FX_BELL_NOISE: (f32, f32, f32, f32) = (0.0, 0.01, 1000.0, 1.0);
+const FX_BELL_ATTACK: f32 = 0.03;
+const FX_BELL_RELEASE: f32 = 1.5;
+const FX_BELL_GAIN: f32 = 0.60;
+/// Saw FX cores are pitch-stable except goblins (101): no per-layer vibrato or
+/// drift, so the ONLY pitch motion in the family is 101's `Drift` wobble and
+/// 103's scoop — which keeps FX-O4 (goblins unstable vs a stable pad) honest.
+const FX_SAW_DRIFT: f32 = 0.0;
+const FX_SAW_VIB: (f32, f32, f32) = (0.0, 0.0, 0.0);
+const FX_RNG_XOR: u32 = 0x0FC5_0FC5;
+const FX_WOBBLE_XOR: u32 = 0x6B0B_6B0B;
+/// Placeholder saw ADSR for the bell presets (unused — bells build the frozen
+/// crystal `Modal`, whose envelope is baked into the core, not this field).
+const FX_ENV_UNUSED: (f32, f32, f32, f32) = (0.0, 0.0, 0.0, 0.0);
+
+/// Which core an FX preset wraps. `Bell` carries its inharmonic partial table
+/// (the crystal bank); `Saws` carries oscillator count + detune.
+#[derive(Clone, Copy)]
+enum FxCore {
+    Bell(&'static [(f32, f32, f32)]),
+    Saws { n: usize, detune: f32 },
+}
+
+/// One FX preset. Flat and const-constructible (the `BrassSpec` / `WindPreset`
+/// house style). A field left at its "off" value (0, or `scoop0 == 1.0`) disables
+/// that stage; a preset with every stage off is `inert` (GM 98).
+struct FxSpec {
+    #[cfg(test)]
+    name: &'static str,
+    core: FxCore,
+    saw_env: (f32, f32, f32, f32), // saw-core amp ADSR (a,d,s,r); bells ignore it
+    saw_amp: f32,
+    onset_gain: f32, // onset Burst level (0 = none)
+    onset_t60: f32,
+    onset_fc: f32,
+    noise_amp: f32, // added noise layer level (0 = none)
+    noise_fc: f32,
+    noise_q: f32,
+    grain_hz: f32, // GrainGate rate, grains/s (0 = a continuous bed instead of a gate)
+    grain_t60: f32,
+    lp_fc0: f32, // one-shot LP: cutoff glides fc0 -> fc1 over lp_glide_t60 (fc0 == 0 => no filter)
+    lp_fc1: f32,
+    lp_glide_t60: f32,
+    lp_q: f32,
+    echo_s: f32, // internal echo delay, seconds (0 = none) — lives in the VOICE, not the bus
+    echo_fb: f32,
+    echo_fc: f32, // echo feedback lowpass cutoff
+    scoop0: f32,  // pitch scoop: starts scoop0·f, relaxes to f over scoop_t60 (1.0 = none)
+    scoop_t60: f32,
+    wob_depth: f32, // random-walk pitch wobble depth, fractional ± (0 = none)
+    wob_hold_s: f32,
+}
+
+// -- The eight presets. Each identity is separated on a DIFFERENT axis (§4.2):
+//    96 aperiodic / 97 opens / 98 static / 99 closes / 100 blooms / 101 never
+//    settles / 102 periodic / 103 falls. --
+
+/// 96 rain — a pitched glass bell with SPARSE APERIODIC droplets (GrainGate)
+/// falling around it. STOCHASTIC. Droplets are bandpassed white, gated sparse.
+const FX_RAIN: FxSpec = FxSpec {
+    #[cfg(test)]
+    name: "fx",
+    core: FxCore::Bell(CRYSTAL),
+    saw_env: FX_ENV_UNUSED,
+    saw_amp: 0.0,
+    onset_gain: 0.0,
+    onset_t60: 0.05,
+    onset_fc: 4000.0,
+    noise_amp: 0.55,  // gut-feel: audible droplets over the bell without swamping it
+    noise_fc: 5200.0, // gut-feel: bright glassy plink band
+    noise_q: 1.6,
+    grain_hz: 15.0,   // gut-feel: ~15 droplets/s reads as rain, not a hiss
+    grain_t60: 0.045, // gut-feel: short plink ring
+    lp_fc0: 0.0,
+    lp_fc1: 0.0,
+    lp_glide_t60: 0.0,
+    lp_q: 0.7,
+    echo_s: 0.0,
+    echo_fb: 0.0,
+    echo_fc: 3000.0,
+    scoop0: 1.0,
+    scoop_t60: 0.0,
+    wob_depth: 0.0,
+    wob_hold_s: 0.0,
+};
+
+/// 97 soundtrack — a slow cinematic SWELL: dark at the strike, filter opening
+/// over seconds. TEMPORAL (filter opens).
+const FX_SOUNDTRACK: FxSpec = FxSpec {
+    #[cfg(test)]
+    name: "fx",
+    core: FxCore::Saws {
+        n: 7,
+        detune: 0.012,
+    },
+    saw_env: (2.2, 0.6, 1.0, 1.8), // gut-feel: slow swell in, long hold
+    saw_amp: 0.40,
+    onset_gain: 0.0,
+    onset_t60: 0.02,
+    onset_fc: 2000.0,
+    noise_amp: 0.0,
+    noise_fc: 2000.0,
+    noise_q: 1.0,
+    grain_hz: 0.0,
+    grain_t60: 0.0,
+    lp_fc0: 420.0,     // gut-feel: dark at the strike
+    lp_fc1: 4600.0,    // gut-feel: opens bright
+    lp_glide_t60: 2.6, // gut-feel: over ~2.6 s (cinematic)
+    lp_q: 0.9,
+    echo_s: 0.0,
+    echo_fb: 0.0,
+    echo_fc: 3000.0,
+    scoop0: 1.0,
+    scoop_t60: 0.0,
+    wob_depth: 0.0,
+    wob_hold_s: 0.0,
+};
+
+/// 98 crystal — FROZEN. A bright inharmonic glass bell (the CRYSTAL Modal). No
+/// motion of any kind => `inert` => bit-identical to the pre-Stage-3 render.
+const FX_CRYSTAL: FxSpec = FxSpec {
+    #[cfg(test)]
+    name: "fx",
+    core: FxCore::Bell(CRYSTAL),
+    saw_env: FX_ENV_UNUSED,
+    saw_amp: 0.0,
+    onset_gain: 0.0,
+    onset_t60: 0.0,
+    onset_fc: 0.0,
+    noise_amp: 0.0,
+    noise_fc: 0.0,
+    noise_q: 1.0,
+    grain_hz: 0.0,
+    grain_t60: 0.0,
+    lp_fc0: 0.0,
+    lp_fc1: 0.0,
+    lp_glide_t60: 0.0,
+    lp_q: 1.0,
+    echo_s: 0.0,
+    echo_fb: 0.0,
+    echo_fc: 0.0,
+    scoop0: 1.0,
+    scoop_t60: 0.0,
+    wob_depth: 0.0,
+    wob_hold_s: 0.0,
+};
+
+/// 99 atmosphere — a percussive pluck DECAYING into a soft dark wash; the filter
+/// CLOSES. TEMPORAL. Opposite direction to 97's opening swell.
+const FX_ATMOSPHERE: FxSpec = FxSpec {
+    #[cfg(test)]
+    name: "fx",
+    core: FxCore::Saws {
+        n: 5,
+        detune: 0.010,
+    },
+    saw_env: (0.02, 0.7, 0.30, 1.4), // gut-feel: fast pluck, decay into a low wash
+    saw_amp: 0.40,
+    onset_gain: 0.28, // gut-feel: a soft pluck click over the saw
+    onset_t60: 0.05,
+    onset_fc: 2600.0,
+    noise_amp: 0.0,
+    noise_fc: 2000.0,
+    noise_q: 1.0,
+    grain_hz: 0.0,
+    grain_t60: 0.0,
+    lp_fc0: 3600.0,    // gut-feel: bright pluck
+    lp_fc1: 520.0,     // closes to a dark wash
+    lp_glide_t60: 0.9, // gut-feel: over ~0.9 s
+    lp_q: 1.2,
+    echo_s: 0.0,
+    echo_fb: 0.0,
+    echo_fc: 3000.0,
+    scoop0: 1.0,
+    scoop_t60: 0.0,
+    wob_depth: 0.0,
+    wob_hold_s: 0.0,
+};
+
+/// 100 brightness — the high end arrives LATE: a one-shot MONOTONE filter rise so
+/// the air blooms on top over ~2 s. TEMPORAL-spectral. (SawStack's random-phase
+/// sweep LFO cannot do a deterministic monotone rise; the glide lives here.)
+const FX_BRIGHTNESS: FxSpec = FxSpec {
+    #[cfg(test)]
+    name: "fx",
+    core: FxCore::Bell(CRYSTAL),
+    saw_env: FX_ENV_UNUSED,
+    saw_amp: 0.0,
+    onset_gain: 0.0,
+    onset_t60: 0.0,
+    onset_fc: 0.0,
+    // A faint SUSTAINED air bed: the bell's own HF partials decay too fast to
+    // "bloom", but a constant broadband bed under the opening LP is the air that
+    // arrives late (its HF only passes once the linear cutoff climbs the band).
+    noise_amp: 0.07,  // gut-feel: an airy shimmer, well under the bell
+    noise_fc: 7000.0, // gut-feel: air centred high, ABOVE every crystal partial
+    noise_q: 0.5,     // gut-feel: wide, not a whistle
+    grain_hz: 0.0,    // continuous bed (no gate) — the LP does the timing, not a gate
+    grain_t60: 0.0,
+    lp_fc0: 700.0,     // gut-feel: fundamental passes fast, air stays capped
+    lp_fc1: 9500.0,    // gut-feel: air blooms in on top
+    lp_glide_t60: 3.0, // gut-feel: a slow LINEAR climb so the HF band opens LATE
+    lp_q: 0.7,
+    echo_s: 0.0,
+    echo_fb: 0.0,
+    echo_fc: 3000.0,
+    scoop0: 1.0,
+    scoop_t60: 0.0,
+    wob_depth: 0.0,
+    wob_hold_s: 0.0,
+};
+
+/// 101 goblins — UNSTABLE: a lurching random-walk pitch (±~35 cents) via `Drift`,
+/// re-thrown ~every 0.4 s; never settles. STOCHASTIC. A resonant static filter
+/// gives it a fixed formant the wobbling fundamental slides under.
+const FX_GOBLINS: FxSpec = FxSpec {
+    #[cfg(test)]
+    name: "fx",
+    core: FxCore::Saws {
+        n: 5,
+        detune: 0.016,
+    },
+    saw_env: (0.15, 0.4, 0.9, 1.2), // gut-feel: sustains while it lurches
+    saw_amp: 0.40,
+    onset_gain: 0.0,
+    onset_t60: 0.02,
+    onset_fc: 2000.0,
+    noise_amp: 0.0,
+    noise_fc: 2000.0,
+    noise_q: 1.0,
+    grain_hz: 0.0,
+    grain_t60: 0.0,
+    lp_fc0: 1500.0, // static resonant formant (fc0 == fc1)
+    lp_fc1: 1500.0,
+    lp_glide_t60: 0.0,
+    lp_q: 3.5, // gut-feel: resonant enough to read as a fixed vowel
+    echo_s: 0.0,
+    echo_fb: 0.0,
+    echo_fc: 3000.0,
+    scoop0: 1.0,
+    scoop_t60: 0.0,
+    wob_depth: 0.026, // gut-feel: ±~45 cents peak, so the windowed std clears 15 cents
+    wob_hold_s: 0.4,  // re-thrown ~every 0.4 s
+};
+
+/// 102 echoes — a droplet then a decaying periodic REPEAT train at a fixed ~0.22 s.
+/// TEMPORAL. The repeats live INSIDE the voice (the engine echo bus is absent when
+/// `opt.delay_s == 0`, so a bus-dependent identity would evaporate — §4.3).
+const FX_ECHOES: FxSpec = FxSpec {
+    #[cfg(test)]
+    name: "fx",
+    core: FxCore::Bell(CRYSTAL),
+    saw_env: FX_ENV_UNUSED,
+    saw_amp: 0.0,
+    onset_gain: 0.55, // gut-feel: a crisp droplet the echo repeats as sharp impulses (FX-O1)
+    onset_t60: 0.025,
+    onset_fc: 3200.0,
+    noise_amp: 0.0,
+    noise_fc: 0.0,
+    noise_q: 1.0,
+    grain_hz: 0.0,
+    grain_t60: 0.0,
+    lp_fc0: 2600.0, // gentle static LP so the echo-sustained body is darker than a lone 98 strike
+    lp_fc1: 2600.0,
+    lp_glide_t60: 0.0,
+    lp_q: 0.7,
+    echo_s: 0.22,  // the identity: ~4.5 Hz repeat train (FX-O1)
+    echo_fb: 0.72, // gut-feel: many audible repeats -> a strong periodic AM, yet a
+    // tail that still terminates in a few seconds (FX-O6, and the voice budget)
+    echo_fc: 2800.0, // each repeat a touch darker
+    scoop0: 1.0,
+    scoop_t60: 0.0,
+    wob_depth: 0.0,
+    wob_hold_s: 0.0,
+};
+
+/// 103 sci-fi — a falling resonant ZAP: pitch scoops DOWN and the filter sweeps
+/// DOWN together. TEMPORAL. A high-Q closing filter reads as the classic laser.
+const FX_SCIFI: FxSpec = FxSpec {
+    #[cfg(test)]
+    name: "fx",
+    core: FxCore::Saws {
+        n: 4,
+        detune: 0.008,
+    },
+    saw_env: (0.004, 0.45, 0.0, 0.6), // gut-feel: instant zap, decays to silence while held
+    saw_amp: 0.42,
+    onset_gain: 0.20, // gut-feel: a sharp zap transient
+    onset_t60: 0.03,
+    onset_fc: 4000.0,
+    noise_amp: 0.0,
+    noise_fc: 2000.0,
+    noise_q: 1.0,
+    grain_hz: 0.0,
+    grain_t60: 0.0,
+    lp_fc0: 6000.0,     // bright at the start
+    lp_fc1: 380.0,      // sweeps down to a dark resonance
+    lp_glide_t60: 0.55, // over ~0.55 s
+    lp_q: 5.0,          // gut-feel: resonant "pew" as the cutoff falls
+    echo_s: 0.0,
+    echo_fb: 0.0,
+    echo_fc: 3000.0,
+    scoop0: 2.0,     // starts an octave up
+    scoop_t60: 0.28, // falls to written pitch over ~0.28 s
+    wob_depth: 0.0,
+    wob_hold_s: 0.0,
+};
+
+/// GM program (96-103) -> its FX preset.
+fn fx(program: u8) -> &'static FxSpec {
+    match program {
+        96 => &FX_RAIN,
+        97 => &FX_SOUNDTRACK,
+        98 => &FX_CRYSTAL,
+        99 => &FX_ATMOSPHERE,
+        100 => &FX_BRIGHTNESS,
+        101 => &FX_GOBLINS,
+        102 => &FX_ECHOES,
+        _ => &FX_SCIFI, // 103
+    }
+}
+
+/// Internal per-voice echo (NOT the engine's global, tempo-derived, delay-gated
+/// bus). A feedback delay line with a darkening lowpass in the loop.
+struct FxEcho {
+    line: DelayLine,
+    delay: f32, // samples
+    lp: OnePole,
+    fb: f32,
+}
+
+/// The synth-FX voice (GM 96-103): an existing core plus the family's motion.
+pub struct Fx {
+    core: Box<dyn Voice>,
+    inert: bool, // GM 98: the wrapper adds nothing, so render is a pure pass-through
+    bend: f32,
+    last_pitch: f32,
+    // onset transient (added OUTSIDE the core envelope, decays fast)
+    onset: Burst,
+    // added noise layer (rain droplets); `grain` gates it sparse/aperiodic
+    noise_amp: f32,
+    noise_bp: Biquad,
+    grain: Option<GrainGate>,
+    // one-shot lowpass sweep (open / close / bloom); retuned at control rate
+    lp: Option<Biquad>,
+    lp_fc0: f32,
+    lp_fc1: f32,
+    lp_q: f32,
+    lp_relax: f32, // LINEAR 1 -> 0 over the glide (cutoff fc0 -> fc1)
+    lp_step: f32,  // per-control-tick linear decrement of lp_relax
+    // internal echo + its liveness tail (so a repeat never truncates with a click)
+    echo: Option<FxEcho>,
+    echo_tail: u32,
+    echo_tail_hold: u32,
+    // pitch scoop (one-shot glide to written pitch)
+    scoop: f32,
+    scoop_k: f32,
+    // random-walk pitch wobble (goblins)
+    wobble: Option<Drift>,
+    wob: f32,
+    rng: Rng,
+    sr: f32,
+    #[cfg(test)]
+    name: &'static str,
+}
+
+impl Fx {
+    fn from_spec(spec: &FxSpec, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+        let core: Box<dyn Voice> = match spec.core {
+            FxCore::Bell(table) => Box::new(bell(
+                key,
+                vel,
+                sr,
+                seed,
+                table,
+                FX_BELL_NOISE,
+                FX_BELL_ATTACK,
+                FX_BELL_RELEASE,
+                FX_BELL_GAIN,
+            )),
+            FxCore::Saws { n, detune } => Box::new(SawStack::new(
+                key,
+                vel,
+                sr,
+                seed,
+                n,
+                detune,
+                FX_SAW_DRIFT,
+                // Wide-open core LP: the WRAPPER filter (below) is the tone control,
+                // so the core is a near-raw oscillator source the wrapper shapes.
+                StackFilter::Lp(Biquad::lowpass(sr * 0.45, 0.7, sr)),
+                Adsr::new(
+                    spec.saw_env.0,
+                    spec.saw_env.1,
+                    spec.saw_env.2,
+                    spec.saw_env.3,
+                    sr,
+                ),
+                FX_SAW_VIB,
+                0.0,
+                None,
+                0.7,
+                spec.saw_amp,
+            )),
+        };
+
+        let inert = spec.onset_gain == 0.0
+            && spec.noise_amp == 0.0
+            && spec.lp_fc0 == 0.0
+            && spec.echo_s == 0.0
+            && spec.scoop0 == 1.0
+            && spec.wob_depth == 0.0;
+
+        let rng = Rng::new(seed ^ FX_RNG_XOR);
+
+        let mut onset = Burst::new(
+            Biquad::bandpass(spec.onset_fc.max(1.0).min(sr * 0.4), 1.2, sr),
+            spec.onset_gain,
+            spec.onset_t60.max(1e-4),
+            sr,
+        );
+        if spec.onset_gain > 0.0 {
+            onset.trigger(vel_amp(vel));
+        }
+
+        let grain =
+            (spec.grain_hz > 0.0).then(|| GrainGate::new(spec.grain_hz, spec.grain_t60, sr));
+
+        let lp =
+            (spec.lp_fc0 > 0.0).then(|| Biquad::lowpass(spec.lp_fc0.min(sr * 0.45), spec.lp_q, sr));
+        // LINEAR cutoff ramp (not exponential): an exponential relax front-loads
+        // the opening — the cutoff crosses the HF band in the first ~0.1 s — so
+        // "the air blooms in over 2 s" (100) never reads as a LATE HF peak. A
+        // linear ramp crosses the band on a predictable, late schedule (FX-O3).
+        let lp_step = if spec.lp_glide_t60 > 0.0 {
+            CTRL as f32 / (spec.lp_glide_t60 * sr)
+        } else {
+            1.0 // static filter (fc0 == fc1) or an instant jump to fc1
+        };
+
+        let echo = (spec.echo_s > 0.0).then(|| FxEcho {
+            line: DelayLine::new((spec.echo_s * sr) as usize + 4),
+            delay: spec.echo_s * sr,
+            lp: OnePole::lowpass(spec.echo_fc.min(sr * 0.45), sr),
+            fb: spec.echo_fb,
+        });
+        // Grace window (~3 echo periods) so the liveness tail outlasts the last
+        // audible repeat and 102 never truncates mid-ring (FX-O6).
+        let echo_tail_hold = ((spec.echo_s * 3.0) * sr) as u32;
+
+        let scoop_k = if spec.scoop_t60 > 0.0 && spec.scoop0 != 1.0 {
+            t60_mul(spec.scoop_t60, sr / CTRL as f32)
+        } else {
+            0.0
+        };
+
+        let wobble = (spec.wob_depth > 0.0).then(|| {
+            let hold_ticks = ((spec.wob_hold_s * sr / CTRL as f32) as u32).max(1);
+            Drift::new(seed ^ FX_WOBBLE_XOR, spec.wob_depth, hold_ticks)
+        });
+
+        Fx {
+            core,
+            inert,
+            bend: 1.0,
+            last_pitch: 1.0,
+            onset,
+            noise_amp: spec.noise_amp,
+            noise_bp: Biquad::bandpass(spec.noise_fc.max(1.0).min(sr * 0.4), spec.noise_q, sr),
+            grain,
+            lp,
+            lp_fc0: spec.lp_fc0,
+            lp_fc1: spec.lp_fc1,
+            lp_q: spec.lp_q,
+            lp_relax: 1.0,
+            lp_step,
+            echo,
+            echo_tail: 0,
+            echo_tail_hold,
+            scoop: spec.scoop0,
+            scoop_k,
+            wobble,
+            wob: 0.0,
+            rng,
+            sr,
+            #[cfg(test)]
+            name: spec.name,
+        }
+    }
+}
+
+impl Voice for Fx {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        // GM 98 (and any other motionless preset): the wrapper adds nothing, so
+        // return the core's render UNCHANGED. This fast path lives OUTSIDE the
+        // per-sample loop and is what makes the crystal freeze bit-exact (FX-O5).
+        if self.inert {
+            return self.core.render(out);
+        }
+        let mut core_alive = false;
+        let mut base = 0;
+        while base < out.len() {
+            let n = (out.len() - base).min(CTRL as usize);
+
+            // -- control rate: recompose the core pitch (bend · scoop · wobble) --
+            if self.scoop_k > 0.0 {
+                self.scoop = 1.0 + (self.scoop - 1.0) * self.scoop_k;
+            }
+            if let Some(d) = &mut self.wobble {
+                self.wob = d.next();
+            }
+            let pitch = self.bend * self.scoop * (1.0 + self.wob);
+            if (pitch - self.last_pitch).abs() > 1e-9 {
+                self.core.set_pitch(pitch);
+                self.last_pitch = pitch;
+            }
+            // -- control rate: glide the one-shot LP cutoff (fc0 -> fc1, linear) --
+            if let Some(lp) = &mut self.lp {
+                self.lp_relax = (self.lp_relax - self.lp_step).max(0.0);
+                let cut = (self.lp_fc1 + (self.lp_fc0 - self.lp_fc1) * self.lp_relax)
+                    .clamp(40.0, self.sr * 0.45);
+                lp.retune_lowpass(cut, self.lp_q, self.sr);
+            }
+
+            // -- render the core into a scratch chunk (it accumulates, so zeroed) --
+            let mut scratch = [0.0f32; CTRL as usize];
+            core_alive |= self.core.render(&mut scratch[..n]);
+
+            // -- per-sample post chain --
+            for (k, &dry) in scratch[..n].iter().enumerate() {
+                let mut s = dry;
+                s += self.onset.tick(&mut self.rng);
+                if self.noise_amp > 0.0 {
+                    let gate = match &mut self.grain {
+                        Some(g) => g.next(&mut self.rng),
+                        None => 1.0,
+                    };
+                    s += self.noise_bp.process(self.rng.white()) * self.noise_amp * gate;
+                }
+                if let Some(lp) = &mut self.lp {
+                    s = lp.process(s);
+                }
+                if let Some(echo) = &mut self.echo {
+                    let d = echo.line.tap(echo.delay);
+                    echo.line.push(s + echo.lp.process(d) * echo.fb);
+                    s += d;
+                    if d.abs() > 1e-4 {
+                        self.echo_tail = self.echo_tail_hold;
+                    } else if self.echo_tail > 0 {
+                        self.echo_tail -= 1;
+                    }
+                }
+                out[base + k] += s;
+            }
+            base += n;
+        }
+        // FX-O6: stay alive while the echo tail still rings.
+        core_alive || self.echo_tail > 0
+    }
+
+    fn note_off(&mut self) {
+        self.core.note_off();
+    }
+
+    fn released(&self) -> bool {
+        self.core.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+        // Forward immediately so the inert fast path (GM 98) honours pitch bend
+        // exactly as the bare bell did; the chunk loop re-composes bend with
+        // scoop / wobble for the moving presets.
+        self.core.set_pitch(mult);
+        self.last_pitch = mult;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        self.name
+    }
+}
+
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
     let samples = samples && crate::embedded_samples_available();
     let noise_off = (0.0, 0.01, 1000.0, 1.0);
@@ -7554,11 +8161,12 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        96 | 98 | 100 | 102 => Box::new(bell(
-            key, vel, sr, seed, CRYSTAL, noise_off, 0.03, 1.5, 0.60,
-        )),
-        97 | 99 | 103 => Box::new(pad(program, key, vel, sr, seed)),
-        101 => Box::new(pad(95, key, vel, sr, seed)),
+        // Synth FX (Stage 3): three cores wearing eight hats — a crystal Modal
+        // bell {96,98,100,102} and a detuned SawStack {97,99,101,103}, wrapped in
+        // the `Fx` voice that owns each preset's motion. GM 98 (crystal, 7 albums)
+        // is the inert preset → bit-identical to the old `bell(... CRYSTAL ...)`.
+        // Tier D: no sample layer.
+        96..=103 => Box::new(Fx::from_spec(fx(program), key, vel, sr, seed)),
         104 => Box::new(Pluck::new(&SITAR, key, vel, sr, seed)),
         105 => Box::new(Pluck::new(&BANJO, key, vel, sr, seed)),
         106 => Box::new(Pluck::new(&SHAMISEN, key, vel, sr, seed)),
@@ -7595,8 +8203,8 @@ mod tests {
     // Audio oracle helpers used by the v0.9 reed/brass oracles (bare names).
     use crate::testutil::{
         assert_render_signature, band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend,
-        hp_rms, mag_at, peak_locate, render_signature, rms, spectral_band_rms, spectral_centroid,
-        RenderSignature, BW_TREM_PEAK_FLOOR,
+        hp_rms, kurtosis, mag_at, peak_locate, render_signature, rms, spectral_band_rms,
+        spectral_centroid, traj, traj_peak_time_s, RenderSignature, BW_TREM_PEAK_FLOOR,
     };
 
     #[test]
@@ -11202,40 +11810,248 @@ mod tests {
         );
     }
 
+    /// Stage 3: every synth-FX program (96-103) now routes to the `Fx` wrapper
+    /// voice. (Was `synth_fx_97_99_101_103_sustain_as_pads`, which pinned the old
+    /// pad/crystal fall-through; the eight presets are no longer pads — their
+    /// per-identity behaviour is guarded by the FX-O* oracles below.)
     #[test]
-    fn synth_fx_97_99_101_103_sustain_as_pads() {
+    fn synth_fx_96_103_route_to_fx_voice() {
         let sr = 44100.0;
-        let key = 60;
-        let vel = 100;
-        let seed = 7;
-        let crystal = render_voice(make(98, key, vel, sr, seed, false), sr, 4.5);
-        let crystal_tail = steady_rms(&crystal, sr, 3.8, 4.4);
-
-        for prog in [97, 99, 103] {
-            let v = make(prog, key, vel, sr, seed, false);
-            assert_eq!(v.kind(), "sawstack", "program {prog} should route to pad");
-            let sig = render_voice(v, sr, 4.5);
-            let mid = steady_rms(&sig, sr, 2.0, 3.0);
-            let tail = steady_rms(&sig, sr, 3.8, 4.4);
-            assert!(
-                tail > 0.40 * mid,
-                "program {prog} should sustain while held: mid {mid}, tail {tail}"
-            );
-            assert!(
-                tail > 8.0 * crystal_tail.max(1e-9),
-                "program {prog} should not decay like crystal: tail {tail}, crystal {crystal_tail}"
+        for prog in 96u8..=103 {
+            let v = make(prog, 60, 100, sr, 7, false);
+            assert_eq!(
+                v.kind(),
+                "fx",
+                "program {prog} should route to the Fx voice"
             );
         }
+    }
 
-        let sweep_fx = render_voice(make(101, key, vel, sr, seed, false), sr, 2.0);
-        let mut sweep_pad = pad(95, key, vel, sr, seed);
-        let sweep_ref = render_saw(&mut sweep_pad, sr, 2.0);
-        assert!(
-            sweep_fx
+    /// FX-O5 (THE FREEZE GUARD): GM 98 (crystal, 7 albums) renders BIT-IDENTICAL
+    /// to the pre-Stage-3 `bell(... CRYSTAL ...)` call — the `Fx` wrapper for 98 is
+    /// inert, so its render is a pure pass-through of the same `Modal`. The
+    /// strongest guard in the stage: `to_bits()` equality over the whole buffer.
+    #[test]
+    fn fx_o5_crystal_98_is_frozen_bit_for_bit() {
+        let sr = 44100.0;
+        for &(key, vel, seed) in &[(60u8, 100u8, 7u32), (48, 64, 3), (79, 120, 11)] {
+            let fx98 = render_voice(make(98, key, vel, sr, seed, false), sr, 3.0);
+            // The exact pre-Stage-3 crystal call (voices.rs dispatch, unchanged):
+            let noise_off = (0.0, 0.01, 1000.0, 1.0);
+            let bell98: Box<dyn Voice> = Box::new(bell(
+                key, vel, sr, seed, CRYSTAL, noise_off, 0.03, 1.5, 0.60,
+            ));
+            let reference = render_voice(bell98, sr, 3.0);
+            assert_eq!(fx98.len(), reference.len());
+            let diffs = fx98
                 .iter()
-                .zip(&sweep_ref)
-                .all(|(a, b)| a.to_bits() == b.to_bits()),
-            "program 101 should use the sweep-pad path"
+                .zip(&reference)
+                .filter(|(a, b)| a.to_bits() != b.to_bits())
+                .count();
+            assert_eq!(
+                diffs, 0,
+                "GM 98 (key {key}, vel {vel}, seed {seed}) is NOT bit-identical to the \
+                 frozen crystal bell: {diffs} samples differ — the freeze is broken"
+            );
+        }
+    }
+
+    /// FX-O1: 102 (echoes) is literally repetition — a decaying periodic train at
+    /// the fixed ~0.22 s delay (≈4.55 Hz). 98 (crystal) is a static decay and must
+    /// read flat. CRITICAL: the detrend corner is 1.0 Hz, NOT the 15 Hz default — a
+    /// 4.55 Hz AM sits BELOW a 15 Hz highpass and would be erased (the exact trap in
+    /// lessons_learnt.md for the bow tremolo).
+    #[test]
+    fn fx_o1_echoes_102_repeat_at_the_delay() {
+        let sr = 44100.0;
+        let echo = render_voice(make(102, 60, 100, sr, 7, false), sr, 2.5);
+        let bell = render_voice(make(98, 60, 100, sr, 7, false), sr, 2.5);
+        // bracket the 0.22 s delay period; detrend at 1.0 Hz so the slow bell-decay
+        // trend is removed but the 4.55 Hz repeat AM survives.
+        let (e_peak, e_rate) = env_autocorr_peak_detrend(&echo, sr, 0.16, 0.30, 1.0);
+        let (b_peak, _) = env_autocorr_peak_detrend(&bell, sr, 0.16, 0.30, 1.0);
+        println!("FX-O1 echoes: 102 peak={e_peak:.3} rate={e_rate:.2}Hz; 98 peak={b_peak:.3}");
+        // 102 measures ~0.38; 98 ~0.12. 0.30 sits with real margin between them.
+        assert!(
+            e_peak >= 0.30,
+            "102 echo AM autocorr peak {e_peak:.3} < 0.30 — the repeat train is too weak"
+        );
+        assert!(
+            (e_rate - 4.55).abs() <= 0.9,
+            "102 repeat rate {e_rate:.2} Hz not ~4.55 Hz (1/0.22 s)"
+        );
+        assert!(
+            b_peak <= 0.20,
+            "98 crystal is a static decay but reads a periodic AM peak {b_peak:.3}"
+        );
+        assert!(
+            e_peak >= 2.0 * b_peak,
+            "102 repeat AM {e_peak:.3} is not clearly periodic vs the flat crystal {b_peak:.3}"
+        );
+    }
+
+    /// FX-O2: 96 (rain) is granular AND aperiodic. Its HF droplet band is far more
+    /// impulsive (leptokurtic) than a CONTINUOUS bandpassed-noise bed — the sparse
+    /// GrainGate gaps are the grain. Plus an anti-cheat: the droplet-band envelope
+    /// autocorrelation is LOW, forbidding rain implemented as a *periodic* gate.
+    #[test]
+    fn fx_o2_rain_96_is_granular_and_aperiodic() {
+        let sr = 44100.0;
+        let rain = render_voice(make(96, 60, 100, sr, 7, false), sr, 2.0);
+        // isolate the droplet band (well above the crystal partials at this key).
+        let hf_band = |sig: &[f32]| -> Vec<f32> {
+            let mut bp = Biquad::bandpass(5200.0, 1.6, sr);
+            sig.iter().map(|&x| bp.process(x)).collect()
+        };
+        // continuous bed: bandpassed white through the SAME filter — the smooth
+        // baseline (bandpassed noise is already leptokurtic, so this is a ratio).
+        let mut rng = Rng::new(31);
+        let bed: Vec<f32> = (0..rain.len()).map(|_| rng.white()).collect();
+        let rain_k = kurtosis(&hf_band(&rain));
+        let bed_k = kurtosis(&hf_band(&bed));
+        let (rain_ac, _) = env_autocorr_peak(&hf_band(&rain), sr, 1.0 / 40.0, 1.0 / 3.0);
+        println!(
+            "FX-O2 rain: 96 HF kurtosis {rain_k:.2} vs continuous bed {bed_k:.2} \
+             (ratio {:.2}); droplet-env autocorr {rain_ac:.3}",
+            rain_k / bed_k.max(1e-9)
+        );
+        assert!(
+            rain_k >= 1.5 * bed_k,
+            "96 rain HF kurtosis {rain_k:.2} not >= 1.5x the continuous bed {bed_k:.2} — \
+             the droplets are not granular"
+        );
+        assert!(
+            rain_ac <= 0.30,
+            "96 rain droplet envelope autocorr {rain_ac:.3} too high — rain must be \
+             stochastic, not a periodic gate"
+        );
+    }
+
+    /// FX-O3: 100 (brightness) blooms LATE — the HF band peaks well after the LF
+    /// band as the one-shot filter opens over ~2 s. A plain bell (98) has no such
+    /// delay: its HF is brightest at the strike.
+    #[test]
+    fn fx_o3_brightness_100_blooms_late() {
+        let sr = 44100.0;
+        let key = 72; // f0 ~523 Hz: the 4.5x/6.7x crystal partials land in the HF band
+        let bloom = render_voice(make(100, key, 100, sr, 7, false), sr, 3.5);
+        let bell = render_voice(make(98, key, 100, sr, 7, false), sr, 3.5);
+        // HF band sits ABOVE every crystal partial (top partial 6.7·523 ≈ 3.5 kHz),
+        // so it is pure "air" — the bell's own HF cannot manufacture an early peak
+        // there; only the opening filter reveals the sustained air bed late.
+        let lag = |sig: &[f32]| -> f32 {
+            let lf = traj_peak_time_s(&traj(sig, sr, 400.0, 750.0));
+            let hf = traj_peak_time_s(&traj(sig, sr, 3800.0, 6000.0));
+            hf - lf
+        };
+        let bloom_lag = lag(&bloom);
+        let bell_lag = lag(&bell);
+        println!("FX-O3 brightness: 100 HF-LF lag {bloom_lag:.3}s; 98 lag {bell_lag:.3}s");
+        assert!(
+            bloom_lag >= 0.8,
+            "100 brightness HF-LF bloom lag {bloom_lag:.3}s < 0.8 s — it does not bloom late"
+        );
+        assert!(
+            bell_lag <= 0.2,
+            "98 crystal should not bloom (HF-LF lag {bell_lag:.3}s > 0.2 s)"
+        );
+    }
+
+    /// FX-O4: 101 (goblins) never settles — a lurching random-walk pitch whose
+    /// window-to-window fundamental scatters by >= 15 cents, where a stable pad
+    /// holds within 5 cents.
+    #[test]
+    fn fx_o4_goblins_101_pitch_is_unstable() {
+        let sr = 44100.0;
+        // Per-window fundamental scatter, in cents about the mean. `pitch_hz`
+        // (zero-crossing) reads the true fundamental period, so it is robust to a
+        // detuned stack's amplitude beating — where `peak_locate` picks whichever
+        // detune sideband is loudest and reports beating as spurious jitter.
+        let cents_std = |sig: &[f32], f_lo: f32, f_hi: f32| -> f32 {
+            let win = (0.12 * sr) as usize;
+            let mut hz: Vec<f32> = Vec::new();
+            let mut i = 0;
+            while i + win <= sig.len() {
+                hz.push(peak_locate(&sig[i..i + win], sr, f_lo, f_hi));
+                i += win;
+            }
+            let mean = hz.iter().sum::<f32>() / hz.len() as f32;
+            let var = hz
+                .iter()
+                .map(|&f| {
+                    let c = 1200.0 * (f / mean).log2();
+                    c * c
+                })
+                .sum::<f32>()
+                / hz.len() as f32;
+            var.sqrt()
+        };
+        // key 60, f0 ~262 Hz; ±45 cents keeps the peak inside [235, 292]. The
+        // stable reference is the crystal bell (98): a single clean fundamental,
+        // so `peak_locate` reads a rock-steady pitch — a detuned pad would beat and
+        // fool the argmax into spurious jitter (that is the wobble we must isolate).
+        let goblins = render_voice(make(101, 60, 100, sr, 7, false), sr, 2.0);
+        let stable = render_voice(make(98, 60, 100, sr, 7, false), sr, 2.0); // crystal bell
+        let g_std = cents_std(&goblins, 235.0, 292.0);
+        let s_std = cents_std(&stable, 235.0, 292.0);
+        println!("FX-O4 goblins: 101 pitch std {g_std:.1} cents; stable bell 98 {s_std:.1} cents");
+        assert!(
+            g_std >= 15.0,
+            "101 goblins pitch std {g_std:.1} cents < 15 — not unstable enough"
+        );
+        // `peak_locate`'s 0.5%-step grid is ~8.6 cents, so a truly static tone
+        // reads a residual ~5 cents (one-step jitter in low-SNR late windows). The
+        // real discriminator is the 5x gap to goblins, checked below.
+        assert!(
+            s_std <= 8.0,
+            "stable bell 98 pitch std {s_std:.1} cents > 8 — the reference is not stable"
+        );
+        assert!(
+            g_std >= 3.0 * s_std,
+            "goblins pitch scatter {g_std:.1} not clearly above the stable floor {s_std:.1} cents"
+        );
+    }
+
+    /// FX-O6: 102's echo tail may finish on its own — `render()` must stay alive
+    /// while the internal repeat train still rings, then die QUIET (never truncate
+    /// a live repeat with a click). The tail must also outlast the bare core.
+    #[test]
+    fn fx_o6_echoes_102_tail_finishes_cleanly() {
+        let sr = 44100.0;
+        let block = 64usize;
+        let mut v = make(102, 60, 100, sr, 7, false);
+        v.note_off(); // release the strike immediately; the echo train carries on
+        let mut buf = vec![0f32; block];
+        let mut alive_secs = 0.0f32;
+        let mut blocks = 0u32;
+        let max_blocks = (10.0 * sr / block as f32) as u32;
+        let final_rms = loop {
+            buf.fill(0.0);
+            let alive = v.render(&mut buf);
+            let r = rms(&buf);
+            blocks += 1;
+            if !alive {
+                break r;
+            }
+            alive_secs = blocks as f32 * block as f32 / sr;
+            assert!(
+                blocks < max_blocks,
+                "102 echo never reported done in 10 s — the tail does not terminate"
+            );
+        };
+        let last_rms = final_rms;
+        println!("FX-O6 echoes: 102 stayed alive {alive_secs:.2}s, final block rms {last_rms:.2e}");
+        // outlasts the bare crystal core (which alone falls silent well under 2 s
+        // here) — proof the echo tail extends liveness ...
+        assert!(
+            alive_secs >= 2.0,
+            "102 echo tail only {alive_secs:.2}s — the internal repeats are not holding the voice alive"
+        );
+        // ... and when it finally reports done, the signal has already faded, so no
+        // audible repeat is truncated with a click.
+        assert!(
+            last_rms < 1e-3,
+            "102 echo cut off while still ringing (final rms {last_rms:.2e}) — a truncation click"
         );
     }
 

@@ -420,10 +420,21 @@ fn fx_profile(program: u8, alt: bool) -> (f32, f32) {
         72..=79 => (0.0, 0.22),   // flute / whistle
         80..=87 => (0.15, 0.25),  // synth leads: focused, with the delayed-lead echo
         88..=95 => (0.45, 0.0),   // pads
-        96..=103 => (0.30, 0.35), // crystal: shimmer and echo
-        8..=10 => (0.0, 0.15),    // celesta / glockenspiel / music box
-        14 => (0.0, 0.08),        // tubular bells
-        15 => (0.10, 0.0),        // hammered dulcimer: sub-beat width, no echo
+        // Synth FX (Stage 3): split per preset. 98 (crystal) keeps its pre-split
+        // values — part of the 7-album freeze. 102 (echoes) gets a LOW bus-echo
+        // send: its repeats are INTERNAL to the voice, so a bus echo would double
+        // them. The rest are gut-feel (chorus shimmer + a little bus echo).
+        96 => (0.30, 0.20),    // rain: droplets are internal; light shimmer
+        97 => (0.35, 0.25),    // soundtrack: wide swell
+        98 => (0.30, 0.35),    // crystal: FROZEN — unchanged from the pre-split arm
+        99 => (0.30, 0.25),    // atmosphere: wash
+        100 => (0.30, 0.30),   // brightness: shimmer as it blooms
+        101 => (0.25, 0.30),   // goblins: a touch less width, more echo scatter
+        102 => (0.30, 0.05),   // echoes: internal repeats — starve the bus echo
+        103 => (0.20, 0.30),   // sci-fi: focused zap, echoed
+        8..=10 => (0.0, 0.15), // celesta / glockenspiel / music box
+        14 => (0.0, 0.08),     // tubular bells
+        15 => (0.10, 0.0),     // hammered dulcimer: sub-beat width, no echo
         _ => (0.0, 0.0),
     }
 }

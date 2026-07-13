@@ -1011,11 +1011,16 @@ mod guards {
             (48, "sawstack"),
             (52, "choir2"), // GM 52-54: ChoirV2 formant engine (2026.07.10)
             (72, "wind"),
-            (97, "sawstack"),
-            (98, "modal"),
-            (99, "sawstack"),
-            (101, "sawstack"),
-            (103, "sawstack"),
+            // Synth FX 96-103 (Stage 3): all route to the `Fx` wrapper voice.
+            // 98 (crystal) is the inert preset — same "fx" kind, frozen audio.
+            (96, "fx"),
+            (97, "fx"),
+            (98, "fx"),
+            (99, "fx"),
+            (100, "fx"),
+            (101, "fx"),
+            (102, "fx"),
+            (103, "fx"),
             (104, "SITAR"),
             (105, "BANJO"),
             (106, "SHAMISEN"),
@@ -1156,17 +1161,12 @@ mod distinctness {
         //    94 halo-noise) over the shared SawStack, chiefly via the one-shot
         //    filter envelope. 89 (warm) and 95 (sweep) are frozen bit-for-bit. All
         //    21 former collapses are deleted and the matrix proves the split. --
-        // -- Stage 3: Synth FX 96-103 — crystal bell {96,98,100,102},
-        //    base pad {97,99,103} (101 is pad(95), stands alone) --
-        (96, 98, Why::Collapse(3)),
-        (96, 100, Why::Collapse(3)),
-        (96, 102, Why::Collapse(3)),
-        (98, 100, Why::Collapse(3)),
-        (98, 102, Why::Collapse(3)),
-        (100, 102, Why::Collapse(3)),
-        (97, 99, Why::Collapse(3)),
-        (97, 103, Why::Collapse(3)),
-        (99, 103, Why::Collapse(3)),
+        // -- Stage 3: Synth FX 96-103 — DONE. The crystal bell {96,98,100,102} and
+        //    base pad {97,99,101,103} became eight distinct `Fx` presets separated
+        //    by TIME and RANDOMNESS (96 aperiodic droplets / 97 opens / 99 closes /
+        //    100 blooms late / 101 lurches / 102 repeats / 103 falls), over the same
+        //    two cores. 98 (crystal) is frozen bit-for-bit (inert wrapper). All nine
+        //    former collapses are deleted and the matrix now proves the split. --
         // -- Stage 4: Ensemble 48-55 — DONE. 50/51 (Synth Strings 1/2) became a
         //    divide-down string machine (`synth_strings`, shared BBD chorus),
         //    distinct from the acoustic section 48/49 and from each other, so

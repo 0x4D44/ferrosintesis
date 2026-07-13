@@ -1,0 +1,71 @@
+//! raw_dump — DEV-ONLY measurement tool (not shipped in the product binary).
+//!
+//! Renders a MIDI exactly as `render_opus.py` does (all CLI defaults) but writes
+//! the RAW, UN-normalized float buffer straight from `offline::render` to a
+//! 32-bit IEEE-float WAV — bypassing `normalize_to_i16` (the per-track peak
+//! normalizer). ffmpeg's ebur128 meter then reads that WAV to report the synth's
+//! NATIVE integrated loudness and true peak, before any gain staging.
+//!
+//!     cargo run --release -p ferrosintesis-cli --example raw_dump -- in.mid out.f32.wav
+//!
+//! Prints one CSV line to stdout: raw_sample_peak,voices,max_polyphony
+//! so a driver script can capture the exact peak at full precision.
+
+use ferrosintesis::offline::{self, Options};
+use std::io::Write;
+
+fn write_f32_wav(path: &str, sr: u32, interleaved_stereo: &[f32]) -> std::io::Result<()> {
+    // Minimal WAVE_FORMAT_IEEE_FLOAT (format tag 3), 2ch, 32-bit.
+    let ch: u16 = 2;
+    let bits: u16 = 32;
+    let byte_rate = sr * ch as u32 * (bits / 8) as u32;
+    let block_align: u16 = ch * (bits / 8);
+    let data_bytes = (interleaved_stereo.len() * 4) as u32;
+    let mut f = std::io::BufWriter::new(std::fs::File::create(path)?);
+    f.write_all(b"RIFF")?;
+    f.write_all(&(36 + data_bytes).to_le_bytes())?;
+    f.write_all(b"WAVE")?;
+    f.write_all(b"fmt ")?;
+    f.write_all(&16u32.to_le_bytes())?; // fmt chunk size
+    f.write_all(&3u16.to_le_bytes())?; // audio format 3 = IEEE float
+    f.write_all(&ch.to_le_bytes())?;
+    f.write_all(&sr.to_le_bytes())?;
+    f.write_all(&byte_rate.to_le_bytes())?;
+    f.write_all(&block_align.to_le_bytes())?;
+    f.write_all(&bits.to_le_bytes())?;
+    f.write_all(b"data")?;
+    f.write_all(&data_bytes.to_le_bytes())?;
+    for &s in interleaved_stereo {
+        f.write_all(&s.to_le_bytes())?;
+    }
+    f.flush()
+}
+
+fn main() {
+    let mut args = std::env::args().skip(1);
+    let input = args.next().expect("usage: raw_dump <in.mid> <out.wav>");
+    let output = args.next().expect("usage: raw_dump <in.mid> <out.wav>");
+
+    let song = offline::load(std::path::Path::new(&input)).expect("load MIDI");
+    // Identical echo-time policy to the CLI (main.rs): dotted quaver at opening
+    // tempo, clamped [0.20, 0.62] s.
+    let delay_s = (0.75 * 60.0 / song.initial_bpm() as f32).clamp(0.20, 0.62);
+    // Identical defaults to render_opus.py's invocation (it passes only -o/-q):
+    // rate 44100, wet 0.32, tail 6.0, samples on, all channels.
+    let opt = Options {
+        sr: 44100.0,
+        wet: 0.32,
+        tail: 6.0,
+        delay_s,
+        samples: true,
+        solo: 0xFFFF,
+        verbose: false,
+    };
+    let (samples, stats) = offline::render(&song, &opt);
+    write_f32_wav(&output, 44100, &samples).expect("write float WAV");
+    // Full-precision raw sample peak (the CLI only prints 2 decimals).
+    println!(
+        "{:.6},{},{}",
+        stats.peak, stats.voices_spawned, stats.max_polyphony
+    );
+}

@@ -171,15 +171,99 @@ pub fn integrated_lufs(interleaved_stereo: &[f32], fs: f32) -> f32 {
     (offset + 10.0 * mean_rel.log10()) as f32
 }
 
+// ---------------------------------------------------------------------------
+// True-peak metering (ITU-R BS.1770-4 Annex 2): 4× oversample, then max |x|.
+// ---------------------------------------------------------------------------
+
+const TP_OVERSAMPLE: usize = 4;
+const TP_TAPS_PER_PHASE: usize = 12;
+
+/// A 4-phase polyphase interpolation FIR (windowed sinc), each phase normalized
+/// to unit DC gain so interpolated samples match amplitude. Built once per call.
+fn tp_polyphase() -> [[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE] {
+    let n = TP_OVERSAMPLE * TP_TAPS_PER_PHASE; // prototype length
+    let center = (n as f64 - 1.0) / 2.0;
+    let mut proto = [0.0f64; TP_OVERSAMPLE * TP_TAPS_PER_PHASE];
+    for (i, p) in proto.iter_mut().enumerate() {
+        let x = i as f64 - center;
+        // Normalized sinc at cutoff = original Nyquist (fc = 1/OVERSAMPLE).
+        let s = if x.abs() < 1e-9 {
+            1.0
+        } else {
+            let a = std::f64::consts::PI * x / TP_OVERSAMPLE as f64;
+            a.sin() / a
+        };
+        // Blackman window.
+        let w = 0.42 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / (n as f64 - 1.0)).cos()
+            + 0.08 * (4.0 * std::f64::consts::PI * i as f64 / (n as f64 - 1.0)).cos();
+        *p = s * w;
+    }
+    // Split into phases and normalize each to unit sum.
+    let mut phases = [[0.0f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE];
+    for (ph, phase) in phases.iter_mut().enumerate() {
+        let mut sum = 0.0f64;
+        for k in 0..TP_TAPS_PER_PHASE {
+            sum += proto[ph + TP_OVERSAMPLE * k];
+        }
+        let g = if sum.abs() > 1e-12 { 1.0 / sum } else { 1.0 };
+        for k in 0..TP_TAPS_PER_PHASE {
+            phase[k] = (proto[ph + TP_OVERSAMPLE * k] * g) as f32;
+        }
+    }
+    phases
+}
+
+/// Max 4×-oversampled true peak (linear) of one channel.
+fn channel_true_peak(c: &[f32], phases: &[[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE]) -> f32 {
+    let mut peak = 0.0f32;
+    for i in 0..c.len() {
+        for phase in phases.iter() {
+            let mut acc = 0.0f32;
+            for (k, &coef) in phase.iter().enumerate() {
+                if i >= k {
+                    acc += c[i - k] * coef;
+                }
+            }
+            peak = peak.max(acc.abs());
+        }
+        // Guard: also consider the raw sample itself.
+        peak = peak.max(c[i].abs());
+    }
+    peak
+}
+
+/// True peak of an interleaved-stereo buffer in dBTP (dB relative to full scale,
+/// inter-sample). Returns `f32::NEG_INFINITY` for pure silence.
+pub fn true_peak_dbtp(interleaved_stereo: &[f32], _fs: f32) -> f32 {
+    let phases = tp_polyphase();
+    let n_frames = interleaved_stereo.len() / 2;
+    let mut left = Vec::with_capacity(n_frames);
+    let mut right = Vec::with_capacity(n_frames);
+    for f in 0..n_frames {
+        left.push(interleaved_stereo[2 * f]);
+        right.push(interleaved_stereo[2 * f + 1]);
+    }
+    let peak = channel_true_peak(&left, &phases).max(channel_true_peak(&right, &phases));
+    if peak <= 0.0 {
+        f32::NEG_INFINITY
+    } else {
+        20.0 * peak.log10()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn stereo_sine(freq: f32, peak: f32, secs: f32, fs: f32) -> Vec<f32> {
+        stereo_sine_phase(freq, peak, secs, fs, 0.0)
+    }
+
+    fn stereo_sine_phase(freq: f32, peak: f32, secs: f32, fs: f32, phase: f32) -> Vec<f32> {
         let n = (secs * fs) as usize;
         let mut v = Vec::with_capacity(n * 2);
         for i in 0..n {
-            let s = peak * (2.0 * std::f32::consts::PI * freq * i as f32 / fs).sin();
+            let s = peak * (2.0 * std::f32::consts::PI * freq * i as f32 / fs + phase).sin();
             v.push(s);
             v.push(s);
         }
@@ -249,5 +333,46 @@ mod tests {
     fn silence_is_neg_inf() {
         let sig = vec![0.0f32; 44100 * 2];
         assert_eq!(integrated_lufs(&sig, 44100.0), f32::NEG_INFINITY);
+    }
+
+    fn sample_peak_dbfs(interleaved: &[f32]) -> f32 {
+        let p = interleaved.iter().fold(0.0f32, |m, &x| m.max(x.abs()));
+        20.0 * p.log10()
+    }
+
+    /// A full-scale fs/4 tone at 45° phase samples at ±0.707 (−3 dBFS) while its
+    /// true crest is 0 dBFS: the 4× oversampler must recover most of that 3 dB gap.
+    #[test]
+    fn true_peak_recovers_intersample() {
+        let fs = 44100.0;
+        let sig = stereo_sine_phase(fs / 4.0, 1.0, 1.0, fs, std::f32::consts::FRAC_PI_4);
+        let tp = true_peak_dbtp(&sig, fs);
+        let sp = sample_peak_dbfs(&sig); // ≈ −3.01 dBFS
+        assert!(
+            tp > sp + 2.0,
+            "oversampler should recover most of the inter-sample crest (tp {tp} vs sp {sp})"
+        );
+        assert!(
+            (tp - 0.0).abs() < 0.6,
+            "true peak of a full-scale sine should be ~0 dBTP, got {tp}"
+        );
+    }
+
+    /// A low tone's crest lands essentially on the samples: true peak ≈ sample peak.
+    #[test]
+    fn true_peak_low_tone_matches_sample() {
+        let fs = 44100.0;
+        let sig = stereo_sine(100.0, 0.5, 1.0, fs);
+        let tp = true_peak_dbtp(&sig, fs);
+        assert!(
+            (tp - (-6.0206)).abs() < 0.2,
+            "0.5-amp low tone should read ~-6.02 dBTP, got {tp}"
+        );
+    }
+
+    #[test]
+    fn true_peak_silence_neg_inf() {
+        let sig = vec![0.0f32; 4410 * 2];
+        assert_eq!(true_peak_dbtp(&sig, 44100.0), f32::NEG_INFINITY);
     }
 }

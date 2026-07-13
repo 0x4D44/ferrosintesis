@@ -63,11 +63,12 @@ fn main() {
     };
     let (samples, stats) = offline::render(&song, &opt);
     let lufs = offline::integrated_lufs(&samples, 44100.0);
+    let tp = offline::true_peak_dbtp(&samples, 44100.0);
     write_f32_wav(&output, 44100, &samples).expect("write float WAV");
-    // raw_sample_peak, voices, max_polyphony, our_integrated_LUFS (for the
-    // differential check vs ffmpeg ebur128 on the same WAV).
+    // raw_sample_peak, voices, max_polyphony, our_integrated_LUFS, our_true_peak_dBTP
+    // (for the differential check vs ffmpeg ebur128 on the same WAV).
     println!(
-        "{:.6},{},{},{:.2}",
-        stats.peak, stats.voices_spawned, stats.max_polyphony, lufs
+        "{:.6},{},{},{:.2},{:.2}",
+        stats.peak, stats.voices_spawned, stats.max_polyphony, lufs, tp
     );
 }

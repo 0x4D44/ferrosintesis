@@ -253,15 +253,13 @@ fn default_delay_s(bpm: f64) -> f32 {
 /// The single source of truth for the synth parameters. Production and the
 /// parameter-parity test both read *this*, so the test observes what actually runs.
 fn synth_options(song: &Song) -> Options {
-    Options {
-        sr: SR as f32,
-        wet: WET,
-        tail: TAIL,
-        delay_s: default_delay_s(song.initial_bpm()),
-        samples: true,
-        solo: 0xFFFF, // all 16 channels
-        verbose: false,
-    }
+    Options::default()
+        .with_sample_rate(SR as f32)
+        .with_reverb(WET)
+        .with_tail(TAIL)
+        .with_echo(default_delay_s(song.initial_bpm()))
+        .with_samples(true)
+        .with_solo(0xFFFF) // all 16 channels
 }
 
 /// Repo-relative path with forward slashes — Python's `PurePath.as_posix()`.
@@ -601,7 +599,7 @@ impl Drop for TempWav {
 /// Render one MIDI to a loudness-normalized WAV, in-process. These are exactly the
 /// calls ferrosintesis-cli makes under render_opus.py's flags.
 fn render_wav(midi: &Path, wav: &Path) -> Result<(), String> {
-    let song = offline::load(midi)?;
+    let song = offline::load(midi).map_err(|e| e.to_string())?;
     let (samples, _stats) = offline::render(&song, &synth_options(&song));
     let pcm = offline::normalize_loudness(&samples, SR as f32, TARGET_LUFS, TP_CEILING);
     offline::write_wav(wav, SR, &pcm).map_err(|e| format!("writing {}: {e}", wav.display()))
@@ -912,7 +910,6 @@ mod tests {
         assert_eq!(opt.tail, 6.0);
         assert!(opt.samples);
         assert_eq!(opt.solo, 0xFFFF);
-        assert!(!opt.verbose);
         assert_eq!(opt.delay_s, default_delay_s(song.initial_bpm()));
     }
 

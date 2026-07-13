@@ -800,20 +800,104 @@ impl Strip {
     }
 }
 
+/// How to render a [`Song`](crate::offline::Song).
+///
+/// This struct is `#[non_exhaustive]`: start from [`Options::default`] and use the
+/// `with_*` builder methods, so that a new render knob in a future minor release
+/// does not break your code.
+///
+/// ```
+/// use ferrosintesis::offline::Options;
+///
+/// let opt = Options::default()
+///     .with_sample_rate(48_000.0)
+///     .with_echo(0.0); // no echo bus
+///
+/// assert_eq!(opt.sr, 48_000.0);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Options {
+    /// Output sample rate in Hz. Default 44100.
     pub sr: f32,
+    /// Reverb send, 0.0 (dry) to 1.0. Default 0.32.
     pub wet: f32,
+    /// Seconds of reverb tail rendered past the last note-off. Default 6.0.
     pub tail: f32,
-    pub delay_s: f32,  // echo time; 0 disables the echo bus
-    pub samples: bool, // LA attack-sample layer on the solo voices
-    pub solo: u16,     // channel bitmask; note events elsewhere are dropped
-    pub verbose: bool,
+    /// Echo time in seconds; 0.0 disables the echo bus entirely. Default 0.375.
+    pub delay_s: f32,
+    /// Enable the embedded PCM attack-sample layer. Ignored when the crate is built
+    /// without the `embedded-samples` feature. Default true.
+    pub samples: bool,
+    /// Channel bitmask: bit *n* enables MIDI channel *n*. Note events on masked-out
+    /// channels are dropped, which is how you render a single-instrument stem.
+    /// Default `0xFFFF` (all 16 channels).
+    pub solo: u16,
 }
 
-#[derive(Clone, Copy)]
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            sr: 44_100.0,
+            wet: 0.32,
+            tail: 6.0,
+            delay_s: 0.375,
+            samples: true,
+            solo: 0xFFFF,
+        }
+    }
+}
+
+impl Options {
+    /// Set the output sample rate in Hz.
+    pub fn with_sample_rate(mut self, sr: f32) -> Self {
+        self.sr = sr;
+        self
+    }
+
+    /// Set the reverb send, 0.0 (dry) to 1.0.
+    pub fn with_reverb(mut self, wet: f32) -> Self {
+        self.wet = wet;
+        self
+    }
+
+    /// Set how many seconds of reverb tail are rendered past the last note-off.
+    pub fn with_tail(mut self, tail: f32) -> Self {
+        self.tail = tail;
+        self
+    }
+
+    /// Set the echo time in seconds. Pass 0.0 to disable the echo bus.
+    pub fn with_echo(mut self, delay_s: f32) -> Self {
+        self.delay_s = delay_s;
+        self
+    }
+
+    /// Enable or disable the embedded PCM attack-sample layer.
+    pub fn with_samples(mut self, samples: bool) -> Self {
+        self.samples = samples;
+        self
+    }
+
+    /// Set the channel bitmask: bit *n* enables MIDI channel *n*. Notes on masked-out
+    /// channels are dropped, which is how you render a single-instrument stem.
+    pub fn with_solo(mut self, solo: u16) -> Self {
+        self.solo = solo;
+        self
+    }
+}
+
+/// What a render cost, returned alongside the audio.
+///
+/// `#[non_exhaustive]`: new counters may be added in a minor release.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct Stats {
+    /// Total voices allocated over the whole render.
     pub voices_spawned: u64,
+    /// Largest absolute sample value in the returned buffer, before any normalization.
     pub peak: f32,
+    /// The most voices alive at once.
     pub max_polyphony: usize,
     #[cfg(test)]
     pub(crate) cathedral_return_peak: f32,
@@ -828,6 +912,31 @@ impl Default for Stats {
             #[cfg(test)]
             cathedral_return_peak: 0.0,
         }
+    }
+}
+
+/// A progress report, passed to the callback given to
+/// [`render_with_progress`](crate::offline::render_with_progress).
+///
+/// `#[non_exhaustive]`: new fields may be added in a minor release.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct Progress {
+    /// Seconds of audio rendered so far.
+    pub rendered_seconds: f64,
+    /// Total seconds this render will produce, including the reverb tail.
+    pub total_seconds: f64,
+    /// Voices alive at this instant.
+    pub active_voices: usize,
+}
+
+impl Progress {
+    /// Fraction of the render completed, in `0.0..=1.0`.
+    pub fn fraction(&self) -> f64 {
+        if self.total_seconds <= 0.0 {
+            return 1.0;
+        }
+        (self.rendered_seconds / self.total_seconds).clamp(0.0, 1.0)
     }
 }
 
@@ -2201,19 +2310,46 @@ impl EngineCore {
 }
 
 pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
-    render_buses(song, opt, true, true, true)
+    render_buses_with_progress(song, opt, true, true, true, &mut |_| {})
 }
 
-/// The real renderer; the bus switches exist so the A/B oracles (19, 32a,
-/// and the tarab oracle) can render the same song with the
+pub fn render_with_progress(
+    song: &Song,
+    opt: &Options,
+    on_progress: &mut dyn FnMut(Progress),
+) -> (Vec<f32>, Stats) {
+    render_buses_with_progress(song, opt, true, true, true, on_progress)
+}
+
+/// The A/B oracle entry point (19, 32a): render the same song with the
 /// guitar-sympathetic, drum-room, or sitar-tarab bus disabled. The public
-/// `render` always enables all three — no shipped knob.
+/// `render` always enables all three — no shipped knob — so this is
+/// test-only.
+#[cfg(test)]
 pub(crate) fn render_buses(
     song: &Song,
     opt: &Options,
     gtr_symp_on: bool,
     drum_room_on: bool,
     sitar_symp_on: bool,
+) -> (Vec<f32>, Stats) {
+    render_buses_with_progress(
+        song,
+        opt,
+        gtr_symp_on,
+        drum_room_on,
+        sitar_symp_on,
+        &mut |_| {},
+    )
+}
+
+pub(crate) fn render_buses_with_progress(
+    song: &Song,
+    opt: &Options,
+    gtr_symp_on: bool,
+    drum_room_on: bool,
+    sitar_symp_on: bool,
+    on_progress: &mut dyn FnMut(Progress),
 ) -> (Vec<f32>, Stats) {
     let sr = opt.sr;
     let total = ((song.seconds + opt.tail as f64) * sr as f64) as usize;
@@ -2250,13 +2386,12 @@ pub(crate) fn render_buses(
         core.render_block_add(n, &mut out[block_start * 2..(block_start + n) * 2]);
 
         block_start += n;
-        if opt.verbose && block_start >= next_report {
-            eprintln!(
-                "  rendered {:>3.0}%  ({:.1} s, {} live voices)",
-                block_start as f64 / total as f64 * 100.0,
-                block_start as f64 / sr as f64,
-                core.active_voice_count()
-            );
+        if block_start >= next_report {
+            on_progress(Progress {
+                rendered_seconds: block_start as f64 / sr as f64,
+                total_seconds: total as f64 / sr as f64,
+                active_voices: core.active_voice_count(),
+            });
             next_report += total / 10;
         }
     }
@@ -2452,7 +2587,6 @@ mod tests {
             delay_s: 0.0,
             samples: false,
             solo: 0xFFFF,
-            verbose: false,
         }
     }
 
@@ -6636,7 +6770,6 @@ mod tests {
             delay_s,
             samples: false,
             solo: 0xFFFF,
-            verbose: false,
         }
     }
 

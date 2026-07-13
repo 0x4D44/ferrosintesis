@@ -1,84 +1,93 @@
 # ferrosintesis
 
-A Rust MIDI-to-WAV synthesizer with zero third-party code dependencies, built
-around modeled instruments rather than a stock wavetable. Every instrument has
-a modeled body or sustain. The default **LA synthesis** layer (the Roland D-50
-trick) adds short public-domain PCM attacks, then crossfades into those models.
-The ear judges an instrument mostly by its onset; hammer strikes, bow bites,
-breath chiff, brass/reed articulation, plucks, and drum hits are the things
-synthesis fakes worst.
+A General MIDI synthesizer in pure Rust with zero third-party dependencies.
+Give it a `.mid` file, get stereo audio — no SoundFont required: the
+instruments are physical and spectral models (Karplus-Strong strings, modal
+partial banks, lip-valve brass, a cathedral pipe organ), and their attacks are
+reinforced by an embedded bank of public-domain recorded transients.
+`cargo add ferrosintesis` is the entire setup.
 
-All 202 CC0 transients (16.68 MiB source) come from two default embedded asset
-crates: `ferrosintesis-samples-core` and
-`ferrosintesis-samples-orchestral`. Cargo retrieves and caches each package once;
-the linker embeds the referenced bytes in the final executable. Full provenance
-and regeneration instructions live in
-[`tools/ferrosintesis-samples/README.md`](https://github.com/0x4D44/ferrosintesis/blob/main/tools/ferrosintesis-samples/README.md).
-The workspace CLI remains a single self-contained renderer.
+Most GM synthesis crates are SoundFont players: excellent if you have a good
+`.sf2`, but you must bring one. ferrosintesis is for the other case — a MIDI
+file in hand and nothing else on disk. It was built to render a catalog of
+generative albums and voiced with corresponding care; it plays any GM file
+faithfully.
 
-The default `embedded-samples` Cargo feature preserves the full sound. Consumers
-that set `default-features = false` get the modeled-only synth and do not download
-or compile either asset crate. That compile-time choice differs from the runtime
-`--no-samples` option, which disables samples already embedded in the executable.
+## Quick start
 
-## Use as a library
-
-Add the full synth, including its embedded CC0 attack samples:
-
-```toml
-[dependencies]
-ferrosintesis = "0.15.0"
+```
+cargo add ferrosintesis
 ```
 
-For a smaller modeled-only dependency that never downloads or compiles the sample
-crates:
+```rust
+use ferrosintesis::offline::{self, Options};
+use std::path::Path;
 
-```toml
-[dependencies]
-ferrosintesis = { version = "0.15.0", default-features = false }
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let song = offline::load(Path::new("input.mid"))?;
+    println!("{}: {:.1} s, {} events", song.title(), song.seconds(), song.events_len());
+
+    // `Options` is #[non_exhaustive]; construct it from Default and refine
+    // with the with_* builders.
+    let opt = Options::default().with_reverb(0.25);
+
+    // Interleaved stereo f32 at `opt.sr`, un-normalized.
+    let (samples, stats) = offline::render(&song, &opt);
+    eprintln!("{} voices, peak {:.3}", stats.voices_spawned, stats.peak);
+
+    // Integrated loudness to -18 LUFS (BS.1770-4) under a -1 dBTP true-peak
+    // ceiling, TPDF-dithered to 16-bit.
+    let pcm = offline::normalize_loudness(&samples, opt.sr, -18.0, -1.0);
+    offline::write_wav(Path::new("output.wav"), opt.sr as u32, &pcm)?;
+    Ok(())
+}
 ```
 
-The sample bytes are resolved by Cargo and embedded at compile time. The library
-does not download assets at build time or runtime.
+`offline::parse(&bytes)` is `load` for in-memory data. For long renders,
+`offline::render_with_progress` takes a `FnMut(Progress)` callback — rendered
+seconds, total seconds, active voices, and a `fraction()` helper. `Song`
+exposes `title()`, `seconds()`, `initial_bpm()`, `events_len()` and
+`markers_len()`. Errors are `MidiError`, a plain enum implementing
+`std::error::Error`.
 
-```powershell
-cargo build --release -p ferrosintesis-cli
-.\target\release\ferrosintesis.exe "albums\fable5\Hollow Hill\midi\01 - Hollow Hill, Part One.mid" `
-    -o "target\demo\01 - Hollow Hill, Part One.wav"
-```
+## The audio contract
 
-Renders ~14 minutes of stereo 44.1 kHz audio in under 20 seconds.
+`offline::render` returns `(Vec<f32>, Stats)`: **interleaved stereo** — left,
+right, left, right — at `opt.sr`, un-normalized. `Stats` reports the absolute
+peak, voices spawned, and maximum polyphony. Renders are deterministic: the
+same MIDI, the same options and the same build produce byte-identical output.
+
+Getting from that buffer to a file is two calls.
+`normalize_loudness(&samples, sr, target_lufs, ceiling_dbtp)` measures
+integrated loudness per BS.1770-4, gains to the target, true-peak-limits to
+the ceiling (iterating, because limiting itself costs loudness), and
+TPDF-dithers to `Vec<i16>`; `normalize_to_i16` is the plain peak-scaling
+alternative. `write_wav` writes 16-bit PCM stereo. The measurement primitives
+— `integrated_lufs`, `true_peak_dbtp`, `limit_true_peak` — are public if you
+want your own gain staging.
 
 ## Options
 
-| flag | default | meaning |
-|------|---------|---------|
-| `-o <file>` | input with `.wav` | output path |
-| `--rate <N>` | 44100 | sample rate |
-| `--wet <X>` | 0.32 | reverb return level |
-| `--delay <MS>` | dotted quaver at the opening tempo | echo-bus time (`0` disables) |
-| `--tail <S>` | 6 | seconds appended for the reverb tail |
-| `--no-samples` | — | disable the LA attack-sample layer (pure modeling) |
-| `--solo <list>` | all | render only the listed 0-based channels (e.g. `11` or `12,13`) — muted channels lose their notes but the tempo map stays, so the output lines up with the full mix; for verification stems |
-| `-q` | — | quiet (no progress) |
+| builder | field | default | meaning |
+|---------|-------|---------|---------|
+| `with_sample_rate` | `sr` | `44100.0` | output sample rate (Hz) |
+| `with_reverb` | `wet` | `0.32` | reverb return level |
+| `with_tail` | `tail` | `6.0` | seconds of reverb tail rendered past the last note |
+| `with_echo` | `delay_s` | `0.375` | echo-bus delay in seconds; `0.0` disables the bus |
+| `with_samples` | `samples` | `true` | the embedded attack-sample layer |
+| `with_solo` | `solo` | `0xFFFF` | channel bitmask; notes on cleared channels are dropped, but the tempo map stays, so a solo stem lines up with the full mix |
 
-MIDI pitch bend (±2 semitones by default, RPN-adjustable), RPN fine tune, CC1
-(mod wheel: vibrato, cathedral tremulant, or Leslie speed), channel aftertouch, CC5/CC65
-portamento, CC64 (sustain pedal), CC68 (legato/hammer-on-pull-off), CC74
-(brightness/wah), CC93 (chorus send) and CC94 (echo send) are all honoured —
-see below. CC0 bank select is honoured too: a non-zero value selects the
-alt-bank voicings (the frozen v0.9 strings 48–51, choir 52–54 and bowed
-40–45). On GM 14 the alt bank is a **tam-tam / gong ageng** — a deep
-65–124 Hz strike whose shimmer partials bloom in over 0.3–0.7 s and ring
-6–15 s under a short bright splash — while the default bank keeps tubular
-bells. GM 112–119 get a second **percussion set B** voicing on the alt bank:
-a fast-fading tinkle bell, dry clang agogo, octave-twin steel pan (a
-~4.7 Hz shimmer beat at C4), short woodblock, overshoot-settle taiko,
-key-tracked melodic tom, zap-glide synth drum and a reversed-decay reverse
-cymbal that swells to a hard note-off stop — the default-bank 112–119
-voices are untouched.
+The struct is `#[non_exhaustive]`, so a struct literal will not compile; the
+fields stay `pub` for reading.
 
-Output is peak-normalised to −1 dBFS, 16-bit PCM stereo with TPDF dither.
+## Feature flags
+
+`embedded-samples` (default) compiles two first-party asset crates into the
+binary: 202 recorded attack transients, 16.68 MiB of PCM. The synth uses them
+the way the Roland D-50 did — LA synthesis: play a real onset, crossfade into
+the modeled body — because the ear judges an instrument mostly by its first
+hundred milliseconds, and onsets (hammer strikes, bow bites, breath chiff,
+brass articulation) are what synthesis fakes worst.
 
 ## The instrument models
 
@@ -98,157 +107,56 @@ Output is peak-normalised to −1 dBFS, 16-bit PCM stereo with TPDF dither.
 | **SFX** | dedicated GM sound-effect voices. Sustained textures follow the key: **breath 121** (formant-shaped hiss, soft onset), **seashore 122** (surf wash + spray riding a ~0.09 Hz swell), **helicopter 125** (rotor noise chopped at ~11 Hz), **applause 126** (dense clap-grain cloud, ~360 claps/s) — all hold while the key is down and release on note-off. One-shots: **bird tweet 123** (four fast upward FM chirps), **telephone 124** (440+480 Hz ring, 0.9 s on / 0.45 s off cadence repeating while held), **gunshot 127** (broadband crack peaking above the piano, with a low boom). **Fret noise 120** keeps the original short toneless squeak transient. All ignore the written pitch | sound effects 120–127 |
 | **Drums** | default V3 kit: parametric membranes with pitch glide, kick sub/body/click separation, toms that settle near table pitch, resonant snare wires, and dense **MetalPlate** cymbals with broadband wash instead of exposed sine tails. With samples on (the default), the whole acoustic kit — kick 35/36, side stick 37, snare 38/40, the six GM toms 41–50 (two sampled drums repitched along the modeled ladder), hi-hats 42/44/46, and all the cymbals — plays a CC0 **sampled drum kit** (Virtuosity Drums `mid` mic set + a Big Rusty 18" china): velocity layers and round robins from the source SFZ mappings, a per-hit ±40-cent rate + gain micro-variation against machine-gunning, and the engine's hi-hat choke group (closed/pedal chokes the open hat) intact; `--no-samples` keeps a fully modeled fallback. Channel-10 Program Changes are accepted as MIDI metadata, but no longer unlock a better kit because the best kit is already the default — with one exception: **Program 40 exactly selects the GM2 brush kit** (v0.12): brush tap 38 / slap 39 (strands land twice) / stir-swirl 40 (staggered noise swells with a slow 5 Hz wrist AM, outside the hat choke group) / darkened closed 42\|44 and open 46 hats / woody rim 37 / soft-beater kick 35\|36 with the sub drop intact. Every key the brush kit does not remap falls through to the V3 voices, and any other Program Change keeps the default V3 kit. | GM channel 10 |
 
-Timing realism: sustained families speak slower at low velocity, the way a
-gently-bowed or gently-blown note actually starts.
+## Controllers
 
-The LA layer (`src/sampler.rs`) picks the nearest pitch zone, repitches it
-to the exact target (each zone's root was measured by autocorrelation to
-cent accuracy), and crossfades: the transient fades out over the same
-window the model fades in, so the model's weaker synthetic onset is masked
-by the real one. Targets too far outside the sampled range fall back to
-the bare model. `--no-samples` turns the whole layer off. Pitch bend and
-legato pass straight through the sample layer to the model underneath —
-the sampled attack only ever plays once per slurred phrase.
+| control | effect |
+|---------|--------|
+| pitch bend | channel-wide, applied to already-sounding notes, so a bend sweeps the chord; ±2 semitones by default, rescaled by RPN 0; RPN fine tune honoured |
+| CC1 mod wheel | vibrato on the sustained melodic families; tremulant depth on the cathedral organ; Leslie speed on the drawbar organs |
+| CC64, CC68 | sustain pedal; legato — a NoteOn while one note rings retunes the ringing voice (a hammer-on on guitars, a slur on bows and winds) instead of restarting it |
+| CC74 | resonant lowpass on the channel's dry path, ahead of the sends; 127 — or never sending it — is a true bypass |
+| CC7, CC11, CC10 | volume, smoothed expression, equal-power pan with a Haas micro-delay |
+| CC91, CC93, CC94 | reverb, chorus and echo sends |
+| CC5/CC65, aftertouch | portamento; channel and polyphonic pressure (vibrato, brass growl) |
+| CC0 bank select | alternate voicings: a tam-tam at 14, a second percussion set at 112–119, the legacy drawbar GM 19, alternate strings and choir |
 
-Distorted guitar (programs 29/30) is handled the way a real rig would be: the
-string voices are summed **per channel** and driven through a two-stage amp —
-program-voiced EQ, a power-supply **sag** compressor (fast-attack/slow-release,
-so pick transients pass and decaying tails are held in saturation), two
-cascaded `tanh` stages with an interstage tilt, and the cabinet filter, all at
-**2× internal rate** — so power chords get their intermodulation grit and held
-notes bloom instead of dying. Electric presets also carry a **pickup coil
-resonance** (the RLC peak that reads "electric": jazzbox 26 warm at 2.4 kHz,
-clean 27 bright at 4.2 kHz), and the driven presets add an **e-bow sustainer**:
-once a held 29/30 note decays to a fraction of its spoken level (0.35 default;
-0.6 on the CC0 alt-bank DRIVE_LEAD), a band-limited saturating driver at the
-string's fundamental holds it there indefinitely — release decays naturally.
-GM 26 (jazz hollowbody, neck pickup) and 27 (bright single-coil platform) are
-distinct presets as of v0.15. Each channel keeps at most eight unreleased GM
-29/30 voices across both programs. A ninth note releases the oldest voice,
-including one deferred by sustain or sostenuto, so malformed or heavily layered
-MIDI cannot grow the sustainer without bound while ordinary chords remain intact.
+The rule throughout: an unauthored controller is inert. A channel that never
+sends one renders exactly as if the feature did not exist.
 
-## Performance: bends, hammer-ons, mutes
+## Realtime
 
-Real guitarists barely re-pick every note — they bend, slide, hammer-on and
-pull-off. ferrosintesis models this at the engine level, not just per-voice:
+`ferrosintesis::live` wraps the same engine for realtime use:
+`RealtimeSynth::new(RealtimeOptions::default())`, feed raw MIDI bytes with
+`write_byte`, and sum stereo blocks into your output buffer with
+`render_add(frames, &mut out)`. It is the secondary surface — the crate is
+offline-first — but it is the same voices and the same mix.
 
-- **Pitch bend** (`0xEn`) sets a channel-wide frequency multiplier that's
-  applied both to new notes and to everything already sounding on that
-  channel, so a bend sweeps the whole chord.
-- **CC68 ≥ 64** puts a channel into legato mode: a `NoteOn` that arrives
-  while exactly one note is still ringing on that channel *retunes the
-  ringing voice* instead of spawning a new one — a hammer-on/pull-off on
-  guitars and bass (with a soft excitation tap, not a fresh pluck), a slur
-  on the fiddle, winds, strings and choir (the scoop or ensemble stack
-  glides to the new pitch, no fresh bow/tongue/section attack). CC68 < 64
-  returns to normal picking.
-- **Program 28** is a dedicated palm-mute preset — heavy damping, a short
-  decay, and a dull excitation — rather than just a quieter clean guitar.
-- **CC1 mod wheel** adds expressive vibrato to the sustained melodic
-  families (plucks, bowed strings, SawStack strings/choir, winds): an
-  engine-level 5.3 Hz LFO whose depth follows the wheel up to ±35 cents,
-  multiplied on top of the
-  channel's pitch bend — so a bent-and-held note can bloom into vibrato,
-  the way a guitarist's wail does. Drums, pianos, bells and the palm-mute
-  are left alone. On the default **GM19 cathedral organ**, the wheel controls
-  the depth of a channel-wide 5.5 Hz tremulant; its rate and phase stay fixed so
-  an entire division breathes together. On GM16–18 and secondary-bank GM19,
-  the wheel is a Leslie speed control instead. The first CC1 event on one of
-  those Leslie channels (any value) makes the wheel
-  *authoritative*: from then on the tremulant rate is CC1 mapped across
-  the full Leslie range — ~0.9 Hz (slow chorale) at CC1 = 0 up to ~6.8 Hz
-  (fast) at CC1 = 127 — so a 0→127 ramp sweeps the rotor over its whole
-  span, and CC1 = 0 *brakes to slow* rather than reverting to the program
-  idle. The rate slews with a ~1.5 s rotor time constant (real
-  spin-up/spin-down inertia), the base tremulant depth stays audible even
-  at the slow rate, and the modulation deepens further as it spins up. A
-  channel whose CC1 is never touched keeps its program's idle Leslie speed.
-- **CC64 sustain pedal** holds NoteOffs: a note released while the pedal is
-  down keeps ringing until the pedal lifts (the piano's pooled washes).
-  Pedal-held voices are past their NoteOff, so they are never candidates
-  for CC68 legato retuning.
-- **CC74 brightness** puts a resonant 2-pole lowpass (Q ≈ 1.4) on the
-  channel's dry path, *before* the bus sends tap it — a wah sweep colours
-  the reverb and echo too. 0..127 maps exponentially 300 Hz → 12 kHz, the
-  cutoff is slewed per block so a CC74 LFO riding every 16th doesn't
-  zipper, and 127 (or never sending CC74) is a true bypass — the filter is
-  not in the path at all, and pre-v0.6 renders are bit-identical.
+## Performance
 
-`material.py`'s `bend()`/`bend_ramp()` and `run()` helpers (in the *Hollow
-Hill* composition engine) write these events for rapid-fire runs, wails
-and hammered passages; see `part_one.py`'s Stormrise and `part_two.py`'s
-reel for examples.
+Render in release. A release build (LTO) renders a dense, fully-orchestrated
+track at roughly 5x realtime on a current desktop — a four-minute piece in
+about fifty seconds — and sparser material considerably faster. Debug builds
+are dramatically slower and are not worth timing.
 
-## The mix
+## Sample provenance and licensing
 
-- **Channel strips** honour CC7 (volume), CC11 (expression, smoothed — the
-  album's swells depend on it; CC1 mod is smoothed the same way), CC64
-  (sustain pedal), CC74 (brightness — the resonant lowpass described
-  above, inserted ahead of the sends), CC91 (reverb send), CC93 (chorus
-  send), CC94 (echo send) and CC10 pan — realised as equal-power gain
-  **plus a Haas micro-delay** on the far channel, so panned sources
-  localise like sources in a room rather than level tricks.
-- **Hall reverb**: Freeverb-style tank behind a 24 ms pre-delay and five early
-  reflections — attacks stay clear of the wash, and the room has walls. Its
-  send is now **highpassed at 150 Hz** so the low end stays dry and tight
-  instead of washing out in the tank.
-- **Cathedral reverb**: default GM19 bypasses that low-cut send and feeds a
-  dedicated eight-line feedback-delay network behind a 40 ms pre-delay. Its
-  frequency-dependent decay runs roughly 5–7 seconds, preserves the 32-foot
-  rank's room pressure, and uses a 10 Hz return blocker as a final safety rail.
-- **Chorus bus**: one modulated delay, quadrature L/R taps; strings, choir,
-  Leslie organs and pads get ensemble width by program profile. The cathedral
-  organ stays out of chorus unless the MIDI explicitly authors CC93.
-- **Echo bus**: ping-pong delay timed to a dotted quaver at the song's opening
-  tempo, repeats darkening as they bounce — the classic delayed-lead sound on
-  electric guitars, whistle and crystal.
-- **Sympathetic resonance**: the piano channels feed twelve lightly-damped
-  comb resonators (one per pitch class), returned quietly — the other
-  strings ringing along, the thing that makes a real piano sound big rather
-  than like notes in isolation.
-- **Bus glue**: a slow, gentle 2:1 compressor (a dB or two of movement, not
-  a squash) plus a whisper of tape-style saturation on the stereo mix, so
-  the whole record couples together instead of sitting arithmetically flat.
+The 202 embedded transients are trimmed from the VSCO 2 Community Edition
+orchestral library and the FreePats Spanish classical guitar bank, both
+CC0 1.0. The generator pins its sources — VSCO to an exact upstream commit,
+FreePats to a SHA-256-verified archive — and the full inventory, provenance
+and regeneration tooling live in the repository under
+[`tools/ferrosintesis-samples/`](https://github.com/0x4D44/ferrosintesis/tree/main/tools/ferrosintesis-samples).
+The two asset crates contain nothing but that PCM and `include_bytes!`. The
+code is licensed MIT OR Apache-2.0; the samples are CC0-1.0.
 
-## Verification (this machine has no ears)
+## MSRV and dependencies
 
-- `cargo test` (21 tests) — MIDI/tempo-map math including pitch-bend decode,
-  envelopes, a zero-crossing check that a plucked A4 sounds at 440 Hz (the
-  KS delay compensates the loop filter's phase delay, so tuning is
-  cent-accurate), a bend test (A4 bent +2 semitones settles near B4), a
-  hammer-on test (a ringing string retunes without re-picking), a palm-mute
-  decay test, a check that the fiddle's onset scoop settles to true pitch,
-  three LA-layer checks (bank parses, sampled attack agrees with the model
-  on pitch through the crossfade, no level jump at handover), a bus-glue
-  test (gain reduction on loud material, near-transparent on quiet
-  material), and five v0.6 checks on real rendered audio: CC1 = 127 makes a
-  bowed note's pitch wander far beyond its natural vibrato (zero-crossing
-  analysis) while CC1 = 0 does not, an organ's tremulant rate measurably
-  climbs over ~2 s after CC1 = 127 (Leslie inertia), CC74 = 20 strips the
-  high-frequency energy from a bright pluck while CC74 = 127 is
-  bit-identical to the unfiltered path, a note whose NoteOff falls under
-  CC64 keeps ringing until pedal-up then dies, and `--solo` of an empty
-  channel renders true silence. A full Part One render was also verified
-  byte-identical between v0.5 and v0.6 binaries.
-- Rendered output is checked numerically: RMS profile follows the score's
-  dynamic arc, no DC offset, no unintended silence, and no discontinuities
-  beyond genuine musical transients (verified by diffing click locations
-  against a `--no-samples` render and inspecting raw sample values at
-  flagged points).
-- **Stereo width, honestly**: the quieter, sparser movements (Dawn, First
-  Light) measure close to the pre-v0.5 baseline (correlation near 0). The
-  louder, denser sections — Stormrise's chugging guitars and sub-reinforced
-  kick, the piano's longer sampled attack — measure more centred than
-  before (roughly +0.5 to +0.6 broadband in Part One, down from an initial
-  +0.73 after two rounds of fixes: the bass sub-oscillator and piano
-  crossfade were both dialed back, and the storm's two rhythm-guitar
-  channels are now hard-panned). Some of this is a *correct* side effect of
-  requested changes — real mixes keep sub-bass and kick mono/centred on
-  purpose — but it's a genuine, not fully eliminated, tradeoff of the fuller
-  sound, worth a human listen if the storm and summoning sections feel
-  narrower than the rest.
+Rust 1.87. The dependency closure is this crate plus its two first-party
+sample-asset crates — no third-party code, no build scripts, and
+`#![forbid(unsafe_code)]` throughout.
 
-What it has **not** had is a human listen — balance was set by construction
-and measurement. All the knobs are named constants: instrument voicing at the
-top of `src/voices.rs`, bus levels in `src/engine.rs`.
+## Design
+
+The long version — how each instrument model works, what the LA-synthesis
+layer is and why onsets matter most, the mix architecture bus by bus — is
+[DESIGN.md](https://github.com/0x4D44/ferrosintesis/blob/main/crates/ferrosintesis/DESIGN.md).

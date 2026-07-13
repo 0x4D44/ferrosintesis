@@ -6,12 +6,21 @@ use crate::sampler;
 
 const LIVE_BLOCK: usize = 64;
 
-#[derive(Debug, Clone, Copy)]
+/// How to configure a [`RealtimeSynth`].
+///
+/// `#[non_exhaustive]`: construct with [`RealtimeOptions::default`] and assign fields.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct RealtimeOptions {
+    /// Output sample rate in Hz. Default 44100.
     pub sample_rate: u32,
+    /// Reverb send, 0.0 to 1.0. Default 0.32.
     pub wet: f32,
+    /// Echo time in seconds; 0.0 disables the echo bus. Default 0.375.
     pub delay_s: f32,
+    /// Enable the embedded PCM attack-sample layer. Default true.
     pub samples: bool,
+    /// Master output gain applied to the mix. Default 0.70.
     pub master_gain: f32,
 }
 
@@ -27,10 +36,34 @@ impl Default for RealtimeOptions {
     }
 }
 
+/// Why a realtime block render failed.
+///
+/// `#[non_exhaustive]`: match with a `_` arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RealtimeError {
-    OutputTooSmall { needed: usize, got: usize },
+    /// The output slice passed to [`RealtimeSynth::render_add`] is too short for the
+    /// requested frame count. It needs `frames * 2` samples (interleaved stereo).
+    OutputTooSmall {
+        /// Samples required: `frames * 2`.
+        needed: usize,
+        /// Samples actually supplied.
+        got: usize,
+    },
 }
+
+impl std::fmt::Display for RealtimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RealtimeError::OutputTooSmall { needed, got } => write!(
+                f,
+                "output buffer too small: need {needed} samples (interleaved stereo), got {got}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RealtimeError {}
 
 pub struct RealtimeSynth {
     core: EngineCore,

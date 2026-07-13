@@ -4,6 +4,7 @@
 //! skips anything it does not model (sysex and metas such as lyrics and
 //! key signatures).
 
+use crate::error::MidiError;
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -65,36 +66,36 @@ struct Cursor<'a> {
 }
 
 impl<'a> Cursor<'a> {
-    fn u8(&mut self) -> Result<u8, String> {
-        let b = *self.data.get(self.pos).ok_or("unexpected end of file")?;
+    fn u8(&mut self) -> Result<u8, MidiError> {
+        let b = *self.data.get(self.pos).ok_or(MidiError::UnexpectedEof)?;
         self.pos += 1;
         Ok(b)
     }
 
-    fn peek(&self) -> Result<u8, String> {
-        Ok(*self.data.get(self.pos).ok_or("unexpected end of file")?)
+    fn peek(&self) -> Result<u8, MidiError> {
+        Ok(*self.data.get(self.pos).ok_or(MidiError::UnexpectedEof)?)
     }
 
-    fn bytes(&mut self, n: usize) -> Result<&'a [u8], String> {
+    fn bytes(&mut self, n: usize) -> Result<&'a [u8], MidiError> {
         let s = self
             .data
             .get(self.pos..self.pos + n)
-            .ok_or("unexpected end of file")?;
+            .ok_or(MidiError::UnexpectedEof)?;
         self.pos += n;
         Ok(s)
     }
 
-    fn u16(&mut self) -> Result<u16, String> {
+    fn u16(&mut self) -> Result<u16, MidiError> {
         let b = self.bytes(2)?;
         Ok(u16::from_be_bytes([b[0], b[1]]))
     }
 
-    fn u32(&mut self) -> Result<u32, String> {
+    fn u32(&mut self) -> Result<u32, MidiError> {
         let b = self.bytes(4)?;
         Ok(u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
     }
 
-    fn vlq(&mut self) -> Result<u32, String> {
+    fn vlq(&mut self) -> Result<u32, MidiError> {
         let mut v: u32 = 0;
         loop {
             let b = self.u8()?;
@@ -106,25 +107,28 @@ impl<'a> Cursor<'a> {
     }
 }
 
-pub fn load(path: &Path) -> Result<Song, String> {
-    let data = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+pub fn load(path: &Path) -> Result<Song, MidiError> {
+    let data = std::fs::read(path).map_err(|source| MidiError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
     parse(&data)
 }
 
-pub fn parse(data: &[u8]) -> Result<Song, String> {
+pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
     let mut c = Cursor { data, pos: 0 };
     if c.bytes(4)? != b"MThd" {
-        return Err("not a MIDI file (no MThd)".into());
+        return Err(MidiError::NotMidi);
     }
     let hlen = c.u32()? as usize;
     let fmt = c.u16()?;
     let ntracks = c.u16()?;
     let division = c.u16()?;
     if division & 0x8000 != 0 {
-        return Err("SMPTE time division is not supported".into());
+        return Err(MidiError::UnsupportedTimeDivision);
     }
     if fmt > 1 {
-        return Err(format!("unsupported SMF format {fmt}"));
+        return Err(MidiError::UnsupportedFormat(fmt));
     }
     c.pos = 8 + hlen;
 
@@ -137,7 +141,7 @@ pub fn parse(data: &[u8]) -> Result<Song, String> {
 
     for track_index in 0..ntracks {
         if c.bytes(4)? != b"MTrk" {
-            return Err(format!("track {track_index}: missing MTrk"));
+            return Err(MidiError::MissingTrack { index: track_index });
         }
         let len = c.u32()? as usize;
         let end = c.pos + len;
@@ -220,7 +224,7 @@ pub fn parse(data: &[u8]) -> Result<Song, String> {
                             let val = c.u8()?;
                             raw.push((tick, seq, EvKind::PolyAftertouch { ch, key, val }));
                         }
-                        _ => return Err(format!("bad status byte {status:#04x}")),
+                        _ => return Err(MidiError::BadStatusByte(status)),
                     }
                     seq += 1;
                 }

@@ -131,16 +131,26 @@ fn main() {
     }
 
     let started = Instant::now();
-    let opt = Options {
-        sr: rate as f32,
-        wet,
-        tail,
-        delay_s,
-        samples,
-        solo,
-        verbose,
+    let opt = Options::default()
+        .with_sample_rate(rate as f32)
+        .with_reverb(wet)
+        .with_tail(tail)
+        .with_echo(delay_s)
+        .with_samples(samples)
+        .with_solo(solo);
+    // The library never writes to stderr; progress reporting is the caller's job.
+    let (samples, stats) = if verbose {
+        offline::render_with_progress(&song, &opt, &mut |p| {
+            eprintln!(
+                "  rendered {:>3.0}%  ({:.1} s, {} live voices)",
+                p.fraction() * 100.0,
+                p.rendered_seconds,
+                p.active_voices
+            );
+        })
+    } else {
+        offline::render(&song, &opt)
     };
-    let (samples, stats) = offline::render(&song, &opt);
     let pcm = if peak_normalize {
         offline::normalize_to_i16(&samples, stats.peak, 0.891) // legacy: peak to -1 dBFS
     } else {

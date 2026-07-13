@@ -52,15 +52,13 @@ fn main() {
     let delay_s = (0.75 * 60.0 / song.initial_bpm() as f32).clamp(0.20, 0.62);
     // Identical defaults to render_opus.py's invocation (it passes only -o/-q):
     // rate 44100, wet 0.32, tail 6.0, samples on, all channels.
-    let opt = Options {
-        sr: 44100.0,
-        wet: 0.32,
-        tail: 6.0,
-        delay_s,
-        samples: true,
-        solo: 0xFFFF,
-        verbose: false,
-    };
+    let opt = Options::default()
+        .with_sample_rate(44100.0)
+        .with_reverb(0.32)
+        .with_tail(6.0)
+        .with_echo(delay_s)
+        .with_samples(true)
+        .with_solo(0xFFFF);
     let (samples, stats) = offline::render(&song, &opt);
     let lufs = offline::integrated_lufs(&samples, 44100.0);
     let tp = offline::true_peak_dbtp(&samples, 44100.0);

@@ -115,6 +115,27 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   pattern) — same family as the zero-crossing-pitch lesson: check the estimator can see
   the effect before pinning thresholds on it.
 
+- 2026.07.13 — **An MSRV is only real once a toolchain at that version has compiled it —
+  and `rust-version` is what turns the checking lint ON.** Grepping for the newest std API
+  gives a LOWER bound, not the answer: an audit concluded "≥1.70" from `OnceLock`/
+  `is_some_and` and missed `is_multiple_of` (stable **1.87**) and `is_none_or` (1.82) buried
+  in `altbank.rs`/`voices.rs`. Clippy's `incompatible_msrv` lint finds these instantly but
+  only fires once `rust-version` is *set* — so declare a floor first, let clippy correct it,
+  then prove it with a real `cargo +<msrv> check --workspace`. That last step is not
+  ceremony: it caught that `crates/ferrosintesis/Cargo.toml` declared a dependency as a
+  **multi-line inline table**, which is invalid TOML 1.0 — cargo ≥1.9x parses it happily,
+  cargo 1.87 refuses the manifest outright. We would have published a crate nobody on our
+  own declared MSRV could build. Keep every dependency on ONE line.
+- 2026.07.13 — **Settle the API before commissioning the prose about it, and never quote a
+  performance number you have not just measured.** Two costs from one pre-publish pass.
+  (1) `#[non_exhaustive]` on a public options struct forbids *functional update*
+  (`..Default::default()`) from foreign crates as well as struct literals, and the fallback
+  (`let mut o = Options::default(); o.f = x;`) trips clippy's `field_reassign_with_default`
+  under `-D warnings` — so a `with_*` builder is the ONLY clean construction path, not sugar.
+  Discovering that mid-consult meant re-briefing the agent already writing the README.
+  (2) The README had claimed ~40x realtime for years; the actual measurement is **5.25x**
+  (245.8 s of audio in 46.8 s) — the old figure predates the orchestral voices and the sample
+  layer. It was about to go onto crates.io. Run the render; don't trust the sentence.
 - 2026.07.13 — **A byte-exact test fixture MUST be marked `-text` in `.gitattributes`,
   and the render pipeline IS byte-reproducible across binaries.** Two findings from the
   Rust `render-catalog` port. (1) This repo has `core.autocrlf=true`, so git rewrites LF

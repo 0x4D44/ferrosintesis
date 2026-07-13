@@ -616,7 +616,6 @@ pub(crate) fn reference_opts(sr: f32, solo: u16) -> Options {
         delay_s: 0.25,
         samples: false,
         solo,
-        verbose: false,
     }
 }
 

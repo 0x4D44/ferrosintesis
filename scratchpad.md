@@ -286,3 +286,28 @@
   DrumGlue bus-compressor idea before reaping dry-drum-bus branch.md`. Would slot into
   `crates/ferrosintesis/src/engine.rs` next to `BusGlue`. Worth a look if "kit still
   not prominent enough" comes back up after the shipped `kit_balance()` fix.
+- [ ] 2026-07-13 — **No root LICENSE** (`d:\language\midi-music\`). Only the four crate dirs
+  carry licence text, so everything outside them — `tools/ferrosintesis-samples/prepare.py`
+  (the very file the published crate READMEs cite as CC0 provenance evidence), `albums/`,
+  `build.py`, `render_opus.py`, `demos/` — is all-rights-reserved by default, and GitHub
+  shows no licence badge. Not a crates.io blocker (the `license` field is what the registry
+  requires, and all three publishable crates have it). **Needs Arthur:** a blanket root
+  MIT/Apache would also sweep in nineteen albums of creative work, which may not be wanted —
+  a carve-out (code MIT/Apache, `albums/` separate) is probably the right shape.
+- [ ] 2026-07-13 — **MSRV could be lowered from 1.87 to ~1.70** by replacing `is_multiple_of`
+  (`altbank.rs:215,527`, `voices.rs:2311,2340`) with `% CTRL == 0` and `is_none_or`
+  (`altbank.rs:471`) with `map_or(true, ..)`. Both are provably equivalent on unsigned ints,
+  but they sit in DSP hot loops, so the synth-change policy applies: needs the render-diff
+  inventory to confirm bit-identical output. Low value, non-zero cost — only worth it if a
+  low MSRV is a goal for the published crate.
+- [ ] 2026-07-13 — **Ship a `PROVENANCE.md` inside each samples `.crate`.** The per-file
+  source map (202 outputs → upstream URLs) lives only in `tools/ferrosintesis-samples/prepare.py`,
+  which is outside both packages' `include` lists — so a crates.io consumer gets the prose
+  summary and the CC0 text, but must follow a GitHub link for the evidence. CC0 requires no
+  attribution so this is not a legal gap, but crates.io tarballs are immutable forever while
+  repos are not. `prepare.py` already holds every field needed to emit it.
+- [ ] 2026-07-13 — **`ferrosintesis-cli` is `publish = false`**, so `cargo install ferrosintesis`
+  will not work — the library publishes, the renderer binary does not. Deliberate per the
+  2026.07.09 HLD, but it is a product decision worth restating (and worth revisiting at 1.0):
+  if the CLI should ship, it needs `README.md`, `LICENSE-*`, an `include` list, and to be
+  published last.

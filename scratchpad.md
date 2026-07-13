@@ -1,5 +1,16 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.13 — **No reusable render-diff harness exists, though CLAUDE.md mandates the
+  render-diff inventory** for any voices.rs/engine.rs/drums.rs/sampler.rs change. Every task
+  hand-rolls it (build a baseline binary in a throwaway worktree, render `render_opus.py::ALBUMS`
+  with both binaries, `cmp`). A worktree-hygiene pass found one agent's ad-hoc scripts
+  (`renderdiff.ps1`/`refresh_affected.py`/`spotcheck.py`) but they were hardcoded to specific
+  worktree paths and not reusable, so they were retired with the `salvage-orphan-scraps` archive.
+  Worth writing a small parameterized `tools/render-diff` (baseline-ref + head-ref → per-album
+  WAV-hash DIFF/same/FAIL table) so the mandated inventory isn't re-invented each task. Note the
+  workflow shifted: `.opus` is now git-ignored build output rendered via `build.py`, so a fresh
+  harness should diff `.wav` renders, not committed assets.
+
 - [ ] 2026.07.13 — **`CLAUDE.md` version string is stale: says ferrosintesis is "currently
   0.14.3", crate builds as 0.15.3** (`CLAUDE.md` ferrosintesis-architecture "is versioned …
   currently 0.14.3" line vs `crates/ferrosintesis/Cargo.toml`). Root `README.md`'s crate

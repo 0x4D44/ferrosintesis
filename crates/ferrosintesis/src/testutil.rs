@@ -1087,13 +1087,13 @@ mod guards {
 /// feature vector, and asserts every within-family pair differs by at least
 /// [`EPS`] on its most-distinguishing feature — UNLESS the pair is on [`ALLOW`].
 ///
-/// [`ALLOW`] draws the load-bearing distinction:
-/// - [`Why::Legit`] — GM itself defines the pair as near-identical (e.g. Synth
-///   Strings 1/2, 50/51); forcing a difference would be worse music.
-/// - [`Why::Collapse`] — a KNOWN current collapse the woodwind/LA HLD schedules a
-///   fix for. Deleting the entry is part of that stage's definition of done, and
-///   the matrix then proves the fix landed. `allowlisted_collapses_are_really_clones`
-///   fails loudly the moment a stage differentiates a family, forcing the delete.
+/// Every entry is a [`Why::Collapse`] — a KNOWN current collapse the woodwind/LA
+/// HLD schedules a fix for. Deleting the entry is part of that stage's definition
+/// of done, and the matrix then proves the fix landed.
+/// `allowlisted_collapses_are_really_clones` fails loudly the moment a stage
+/// differentiates a family, forcing the delete. (There is no longer any
+/// "legitimately near-identical" exemption: Stage 4 split the last such pair,
+/// Synth Strings 50/51, into genuinely distinct instruments.)
 ///
 /// A brand-new accidental collapse (a future edit that makes two programs render
 /// the same) is on neither list, so it fails here — exactly the guard the pipe
@@ -1138,8 +1138,6 @@ mod distinctness {
 
     #[derive(Clone, Copy)]
     enum Why {
-        /// GM defines the pair as near-identical; distinctness is not expected.
-        Legit,
         /// Known current collapse; the named HLD stage removes this entry.
         Collapse(u8),
     }
@@ -1188,11 +1186,11 @@ mod distinctness {
         (97, 99, Why::Collapse(3)),
         (97, 103, Why::Collapse(3)),
         (99, 103, Why::Collapse(3)),
-        // -- Stage 4: Ensemble 48-55 — 48/50/51 share one SawStack --
-        (48, 50, Why::Collapse(4)),
-        (48, 51, Why::Collapse(4)),
-        // 50/51 are Synth Strings 1/2: GM defines them near-identical.
-        (50, 51, Why::Legit),
+        // -- Stage 4: Ensemble 48-55 — DONE. 50/51 (Synth Strings 1/2) became a
+        //    divide-down string machine (`synth_strings`, shared BBD chorus),
+        //    distinct from the acoustic section 48/49 and from each other, so
+        //    all three former collapses (48/50, 48/51, 50/51) are deleted and the
+        //    matrix now proves the split. --
         // -- Stage 5: minor collapses --
         (16, 17, Why::Collapse(5)), // organ: two drawbar sets share one config
         // (26, 27) was a Collapse: both shared CLEAN. Guitar v2 split them into
@@ -1306,14 +1304,13 @@ mod distinctness {
     fn allowlisted_collapses_are_really_clones() {
         let feats = all_feats();
         for &(a, b, why) in ALLOW {
-            if let Why::Collapse(stage) = why {
-                let s = score(&feats[a as usize], &feats[b as usize]);
-                assert!(
-                    s < EPS,
-                    "GM {a} vs {b} is allowlisted as a Stage-{stage} collapse but now \
-                     scores {s:.4} >= EPS {EPS} — already differentiated; delete this ALLOW entry"
-                );
-            }
+            let Why::Collapse(stage) = why;
+            let s = score(&feats[a as usize], &feats[b as usize]);
+            assert!(
+                s < EPS,
+                "GM {a} vs {b} is allowlisted as a Stage-{stage} collapse but now \
+                 scores {s:.4} >= EPS {EPS} — already differentiated; delete this ALLOW entry"
+            );
         }
     }
 
@@ -1356,7 +1353,6 @@ mod distinctness {
                 for b in (a + 1)..base + 8 {
                     let s = score(&feats[a as usize], &feats[b as usize]);
                     let tag = match allow_reason(a, b) {
-                        Some(Why::Legit) => " [Legit]",
                         Some(Why::Collapse(_)) => " [Collapse]",
                         None => "",
                     };

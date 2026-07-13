@@ -35,6 +35,15 @@
   aftertouch, the guitar sympathetic resonator (GM 24/25 only), and the channel-10 drum-room
   reverb (which **ignores CC91** — `ROOM_SEND` is a const at `engine.rs:1918`, so a dry-drums
   bar is impossible from MIDI). The engine reads **25** CCs; the README documents 8.
+
+- [ ] 2026.07.13 — `distinctness::Why` (`crates/ferrosintesis/src/testutil.rs:1139`)
+  is now a **single-variant enum** (`Collapse(u8)`) after Stage 4 deleted the last
+  `Legit` pair (synth strings 50/51). Not wrong, but a mild smell: it forced a
+  plain destructuring `let Why::Collapse(stage) = why;` at the once-`if let` site.
+  If it stays single-variant through Stages 5/7a/7b (none of which add `Legit`),
+  collapse it to a bare stage id: `ALLOW: &[(u8, u8, u8)]` and `allow_reason ->
+  Option<u8>`. Deferred to avoid widening Stage 4 into a shared-infra refactor.
+
 - [x] 2026.07.12 — **ferrosintesis renders are NOT bit-reproducible across the
   fleet's machines** — surfaced completing the guitar-v2 opus refresh. This box
   renders SawStack pad(89) to hash `7190932198068575567`, while the frozen canary

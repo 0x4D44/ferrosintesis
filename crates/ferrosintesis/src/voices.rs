@@ -3641,6 +3641,12 @@ pub struct SawStack {
     rng: Rng,
     sweep: Option<(f32, f32, f32, f32)>, // (lfo phase, rate Hz, base cutoff, octaves)
     sweep_q: f32,
+    // Divide-down string machine (synth strings 50/51): one shared BBD chorus
+    // LFO — (phase, rate Hz, ± pitch depth) — read by every layer at its own
+    // fixed phase offset, so the ensemble motion is *correlated*, unlike each
+    // player's independent `drift`. `None` for every other caller; its per-layer
+    // contribution is then exactly `+ 0.0`, so those renders are bit-identical.
+    chorus: Option<(f32, f32, f32)>,
     t: u32,
     amp: f32,
     sr: f32,
@@ -3747,11 +3753,21 @@ impl SawStack {
             rng,
             sweep: sweep.map(|(rate, base, oct)| (sweep_phase, rate, base, oct)),
             sweep_q,
+            chorus: None,
             t: 0,
             amp: amp * (0.4 + 0.6 * vel_amp(vel)),
             sr,
             legato_enabled: false,
         }
+    }
+
+    /// Turn this stack into a divide-down string machine: replace the layers'
+    /// independent detune drift with one shared BBD chorus LFO. Fixed start
+    /// phase (0.0) keeps the render deterministic; the per-layer phase offsets
+    /// applied in `control_tick` supply the ensemble width.
+    fn with_chorus(mut self, rate_hz: f32, depth: f32) -> Self {
+        self.chorus = Some((0.0, rate_hz, depth));
+        self
     }
 
     fn control_tick(&mut self) {
@@ -3761,7 +3777,18 @@ impl SawStack {
             0.0
         };
         let sr = self.sr;
-        for layer in &mut self.layers {
+        // Advance the shared BBD chorus LFO once per control tick (string
+        // machines only). Every layer then reads it at a fixed phase offset for
+        // a *correlated* ensemble motion. `None` → `cmod == 0.0` below, so every
+        // other caller's frequency is unchanged to the bit.
+        let chorus = if let Some((phase, rate, depth)) = &mut self.chorus {
+            *phase += TAU * *rate * CTRL as f32 / sr;
+            Some((*phase, *depth))
+        } else {
+            None
+        };
+        let n = self.layers.len() as f32;
+        for (i, layer) in self.layers.iter_mut().enumerate() {
             layer.vib_phase += TAU * layer.vib_rate * CTRL as f32 / sr;
             let vib = if ramp > 0.0 && self.vib_depth > 0.0 {
                 self.vib_depth * ramp * layer.vib_phase.sin()
@@ -3769,8 +3796,12 @@ impl SawStack {
                 0.0
             };
             let drift = layer.drift.next();
+            let cmod = match chorus {
+                Some((phase, depth)) => depth * (phase + i as f32 * TAU / n).sin(),
+                None => 0.0,
+            };
             layer.osc.set_freq(
-                self.base_f * layer.ratio * self.bend * (1.0 + vib + drift),
+                self.base_f * layer.ratio * self.bend * (1.0 + vib + drift + cmod),
                 sr,
             );
         }
@@ -3912,6 +3943,47 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         0.7,
         0.22,
     );
+    s.legato_enabled = true;
+    s
+}
+
+/// Synth Strings 1/2 (GM 50/51) — a *divide-down string machine* (Solina idiom),
+/// deliberately NOT the acoustic section `strings()` renders for 48/49. A string
+/// machine has no players: its ensemble comes from one shared BBD chorus (via
+/// [`SawStack::with_chorus`]), so per-player `drift` and vibrato are OFF and the
+/// width is entirely correlated. 51 is the lush/slow variant — wider, more
+/// layers, slower & deeper chorus, darker and slower to swell. Tier D: no sample
+/// layer (the `make` dispatch routes 50/51 straight here, model-only).
+fn synth_strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
+    let lush = program == 51;
+    let (n_osc, detune, cutoff, q) = if lush {
+        (6, 0.014, 2400.0, 0.8)
+    } else {
+        (5, 0.010, 3000.0, 0.9)
+    };
+    let (attack, decay, sustain, release) = if lush {
+        (0.25, 0.5, 0.92, 0.9)
+    } else {
+        (0.10, 0.4, 0.90, 0.5)
+    };
+    let (chorus_hz, chorus_depth) = if lush { (0.45, 0.0026) } else { (0.75, 0.0015) };
+    let mut s = SawStack::new(
+        key,
+        vel,
+        sr,
+        seed,
+        n_osc,
+        detune,
+        0.0, // no independent per-player drift — the machine's motion is the chorus
+        StackFilter::Lp(Biquad::lowpass(cutoff, q, sr)),
+        Adsr::new(vel_attack(attack, vel), decay, sustain, release, sr),
+        (0.0, 0.0, 0.0), // no per-player vibrato
+        0.0,             // no breath bed
+        None,            // no filter sweep
+        q,
+        0.24,
+    )
+    .with_chorus(chorus_hz, chorus_depth);
     s.legato_enabled = true;
     s
 }
@@ -7157,8 +7229,9 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        // 50-51 are *synth* strings: pure model by design (HLD option A)
-        50 | 51 => Box::new(strings(program, key, vel, sr, seed)),
+        // 50-51 are *synth* strings — a divide-down string machine, distinct from
+        // the acoustic section 48/49 render. Pure model (tier D), no sample layer.
+        50 | 51 => Box::new(synth_strings(program, key, vel, sr, seed)),
         52..=54 => Box::new(choir(program, key, vel, sr, seed)),
         55 => Box::new(orch_hit(key, vel, sr, seed)),
         56..=61 => {
@@ -10570,6 +10643,76 @@ mod tests {
         let mut buf = vec![0f32; (sr * secs) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    // -- Stage 4 (ensemble 48-51): the Synth Strings 50/51 string-machine split --
+
+    /// EN-O1: Synth Strings 1/2 (50/51) are tier D — a *model-only* divide-down
+    /// machine. The `make` dispatch must never wrap them in a sample layer, so
+    /// samples on/off render bit-identically. Guards a future dispatch edit from
+    /// silently turning the synth strings into sampled acoustic strings.
+    #[test]
+    fn synth_strings_50_51_are_model_only() {
+        let sr = 44100.0;
+        for program in [50u8, 51] {
+            let render = |samples: bool| {
+                let mut v = make(program, 60, 100, sr, 7, samples);
+                let mut buf = vec![0f32; (sr * 0.5) as usize];
+                v.render(&mut buf);
+                buf
+            };
+            assert_eq!(
+                render(true),
+                render(false),
+                "program {program} must be model-only — the sample layer must be inert"
+            );
+        }
+    }
+
+    /// EN-O2: within the machine, 51 is the lush/dark variant of 50 (lowpass 2400
+    /// vs 3000 Hz). Both are chorus-only (no vibrato or drift), so a high-band
+    /// energy fraction compares them cleanly — where a magnitude centroid would be
+    /// confounded by the *acoustic* section's vibrato smearing its own partials.
+    /// The raw distinctness of all three is proven independently by the matrix.
+    #[test]
+    fn synth_strings_2_is_the_darker_variant() {
+        let sr = 44100.0;
+        let render = |mut v: SawStack| {
+            let mut buf = vec![0f32; (sr * 0.7) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        let hf_frac = |s: &[f32]| hp_rms(s, sr, 2800.0) / rms(s).max(1e-9);
+        let h50 = hf_frac(&render(synth_strings(50, 60, 100, sr, 7)));
+        let h51 = hf_frac(&render(synth_strings(51, 60, 100, sr, 7)));
+        assert!(
+            h51 < h50 * 0.85,
+            "synth strings 2 (51) should pass less high-frequency energy than 1 (50): \
+             HF fraction {h51:.4} vs {h50:.4}"
+        );
+    }
+
+    /// EN-O3: the string machine's ensemble motion is CORRELATED — one shared BBD
+    /// chorus (period ~1.33 s at 0.75 Hz) beats the layers together periodically,
+    /// where the acoustic section's independent per-player drift + vibrato wander
+    /// aperiodically. The envelope autocorrelation in the chorus band is the
+    /// differential; the machine must show a stronger period than the section.
+    #[test]
+    fn synth_strings_ensemble_motion_is_correlated() {
+        let sr = 44100.0;
+        let render = |mut v: SawStack| {
+            let mut buf = vec![0f32; (sr * 4.0) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        // 0.9-2.2 s lag brackets the 0.75 Hz chorus period (1.33 s).
+        let (machine, _) =
+            env_autocorr_peak(&render(synth_strings(50, 60, 100, sr, 7)), sr, 0.9, 2.2);
+        let (section, _) = env_autocorr_peak(&render(strings(48, 60, 100, sr, 7)), sr, 0.9, 2.2);
+        assert!(
+            machine > section * 1.3,
+            "the string machine (50) should beat more periodically than the acoustic section (48): {machine:.3} vs {section:.3}"
+        );
     }
 
     /// Non-overlapping windowed-RMS envelope (X5: measure the envelope, not raw

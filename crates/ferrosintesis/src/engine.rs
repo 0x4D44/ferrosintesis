@@ -802,9 +802,9 @@ impl Strip {
 
 /// How to render a [`Song`](crate::offline::Song).
 ///
-/// This struct is `#[non_exhaustive]`: start from [`Options::default`] and use the
-/// `with_*` builder methods, so that a new render knob in a future minor release
-/// does not break your code.
+/// Start from [`Options::default`] and refine with the `with_*` builders. The fields
+/// are private on purpose: that is what lets a future minor release add a render knob,
+/// or rename one, without breaking your code. Read them back with the accessors.
 ///
 /// ```
 /// use ferrosintesis::offline::Options;
@@ -813,26 +813,18 @@ impl Strip {
 ///     .with_sample_rate(48_000.0)
 ///     .with_echo(0.0); // no echo bus
 ///
-/// assert_eq!(opt.sr, 48_000.0);
+/// assert_eq!(opt.sample_rate(), 48_000.0);
+/// assert_eq!(opt.echo(), 0.0);
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct Options {
-    /// Output sample rate in Hz. Default 44100.
-    pub sr: f32,
-    /// Reverb send, 0.0 (dry) to 1.0. Default 0.32.
-    pub wet: f32,
-    /// Seconds of reverb tail rendered past the last note-off. Default 6.0.
-    pub tail: f32,
-    /// Echo time in seconds; 0.0 disables the echo bus entirely. Default 0.375.
-    pub delay_s: f32,
-    /// Enable the embedded PCM attack-sample layer. Ignored when the crate is built
-    /// without the `embedded-samples` feature. Default true.
-    pub samples: bool,
-    /// Channel bitmask: bit *n* enables MIDI channel *n*. Note events on masked-out
-    /// channels are dropped, which is how you render a single-instrument stem.
-    /// Default `0xFFFF` (all 16 channels).
-    pub solo: u16,
+    pub(crate) sr: f32,
+    pub(crate) wet: f32,
+    pub(crate) tail: f32,
+    pub(crate) delay_s: f32,
+    pub(crate) samples: bool,
+    pub(crate) solo: u16,
 }
 
 impl Default for Options {
@@ -849,41 +841,75 @@ impl Default for Options {
 }
 
 impl Options {
-    /// Set the output sample rate in Hz.
+    /// Set the output sample rate in Hz. Default 44100.
     pub fn with_sample_rate(mut self, sr: f32) -> Self {
         self.sr = sr;
         self
     }
 
-    /// Set the reverb send, 0.0 (dry) to 1.0.
+    /// Set the reverb send, 0.0 (dry) to 1.0. Default 0.32.
     pub fn with_reverb(mut self, wet: f32) -> Self {
         self.wet = wet;
         self
     }
 
     /// Set how many seconds of reverb tail are rendered past the last note-off.
+    /// Default 6.0.
     pub fn with_tail(mut self, tail: f32) -> Self {
         self.tail = tail;
         self
     }
 
-    /// Set the echo time in seconds. Pass 0.0 to disable the echo bus.
-    pub fn with_echo(mut self, delay_s: f32) -> Self {
-        self.delay_s = delay_s;
-        self
-    }
-
-    /// Enable or disable the embedded PCM attack-sample layer.
+    /// Enable or disable the embedded PCM attack-sample layer. Default true. Has no
+    /// effect when the crate is built without the `embedded-samples` feature.
     pub fn with_samples(mut self, samples: bool) -> Self {
         self.samples = samples;
         self
     }
 
+    /// Set the echo time in seconds. Pass 0.0 to disable the echo bus. Default 0.375.
+    pub fn with_echo(mut self, delay_s: f32) -> Self {
+        self.delay_s = delay_s;
+        self
+    }
+
     /// Set the channel bitmask: bit *n* enables MIDI channel *n*. Notes on masked-out
-    /// channels are dropped, which is how you render a single-instrument stem.
+    /// channels are dropped, which is how you render a single-instrument stem. The
+    /// tempo map is unaffected, so a stem lines up with the full mix. Default `0xFFFF`.
     pub fn with_solo(mut self, solo: u16) -> Self {
         self.solo = solo;
         self
+    }
+
+    /// The output sample rate in Hz.
+    pub fn sample_rate(&self) -> f32 {
+        self.sr
+    }
+
+    /// The reverb send, 0.0 (dry) to 1.0.
+    pub fn reverb(&self) -> f32 {
+        self.wet
+    }
+
+    /// Seconds of reverb tail rendered past the last note-off.
+    pub fn tail(&self) -> f32 {
+        self.tail
+    }
+
+    /// The echo time in seconds; 0.0 means the echo bus is disabled.
+    pub fn echo(&self) -> f32 {
+        self.delay_s
+    }
+
+    /// Whether the embedded PCM attack-sample layer is enabled. Always renders as
+    /// disabled when the crate is built without the `embedded-samples` feature.
+    pub fn samples(&self) -> bool {
+        self.samples
+    }
+
+    /// The channel bitmask: bit *n* enables MIDI channel *n*.
+    pub fn solo(&self) -> u16 {
+        self.solo
     }
 }
 
@@ -2464,6 +2490,90 @@ pub fn normalize_loudness(
 mod tests {
     use super::*;
     use crate::midi::Ev;
+
+    /// `render_with_progress` must be a pure observer: attaching a progress callback
+    /// cannot move a single sample.
+    ///
+    /// This pins the property the v0.17 API pass claimed and would otherwise only have
+    /// asserted. It matters because the callback path is now the ONLY path — `render`
+    /// delegates to it with a no-op closure — so a future change that let the callback
+    /// (or the counter that fires it) touch engine state would silently re-voice every
+    /// album in this repo. A bit-exact compare inside one build is a valid oracle here:
+    /// both renders run in the same binary, so there is no cross-profile float-reorder
+    /// trap (see lessons_learnt.md).
+    #[test]
+    fn render_with_progress_is_bit_identical_to_render() {
+        // Something with a bit of everything: pitched voices, a program change, a
+        // controller, and a drum hit on channel 10.
+        let mut events = Vec::new();
+        for (sec, kind) in [
+            (0.0, EvKind::Prog { ch: 0, prog: 46 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 91,
+                    val: 80,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 9,
+                    key: 38,
+                    vel: 110,
+                },
+            ),
+            (
+                0.40,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 67,
+                    vel: 90,
+                },
+            ),
+            (0.90, EvKind::NoteOff { ch: 0, key: 60 }),
+            (1.20, EvKind::NoteOff { ch: 0, key: 67 }),
+        ] {
+            events.push(Ev { sec, kind });
+        }
+        let song = Song {
+            events,
+            seconds: 1.5,
+            markers: Vec::new(),
+            title: String::new(),
+            initial_bpm: 120.0,
+        };
+        let opt = Options::default().with_tail(0.5);
+
+        let (plain, plain_stats) = render(&song, &opt);
+
+        let mut seen = Vec::new();
+        let (observed, observed_stats) = render_with_progress(&song, &opt, &mut |p| seen.push(p));
+
+        assert_eq!(
+            plain, observed,
+            "attaching a progress callback changed the rendered audio"
+        );
+        assert_eq!(plain_stats.peak, observed_stats.peak);
+        assert_eq!(plain_stats.voices_spawned, observed_stats.voices_spawned);
+
+        // And the callback must actually have fired, or the test proves nothing.
+        assert!(!seen.is_empty(), "progress callback never fired");
+        assert!(seen.iter().all(|p| (0.0..=1.0).contains(&p.fraction())));
+        // Monotonic, and it reaches the end.
+        assert!(seen
+            .windows(2)
+            .all(|w| w[1].rendered_seconds >= w[0].rendered_seconds));
+    }
 
     /// U4 full-chain oracle: loudness-normalising an arbitrary-level stereo tone
     /// must land the decoded i16 at the target LUFS and under the true-peak ceiling.

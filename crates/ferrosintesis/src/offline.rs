@@ -4,14 +4,14 @@
 //! samples, then convert those samples to 16-bit PCM with [`normalize_loudness`] and
 //! write them with [`write_wav`].
 //!
-//! [`render`] returns **interleaved stereo `f32`** at [`Options::sr`] Hz. The sample
-//! rate is not carried in the returned buffer, so pass the same `opt.sr` to every
-//! downstream call.
+//! [`render`] returns **interleaved stereo `f32`** at [`Options::sample_rate`] Hz. The
+//! rate is not carried in the returned buffer, so pass the same `opt.sample_rate()` to
+//! every downstream call.
 
 use std::path::Path;
 
 pub use crate::engine::{normalize_loudness, normalize_to_i16, Options, Progress, Stats};
-pub use crate::error::MidiError;
+pub use crate::error::{MidiError, MAX_SONG_SECONDS};
 pub use crate::loudness::{integrated_lufs, limit_true_peak, true_peak_dbtp};
 pub use crate::wav::write_wav;
 
@@ -74,12 +74,20 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
 
 /// Render a song to audio.
 ///
-/// Returns **interleaved stereo `f32`** at `opt.sr` Hz — `samples.len() / 2` frames,
-/// covering the song plus [`Options::tail`] seconds of reverb decay — together with
-/// the [`Stats`] for the render.
+/// Returns **interleaved stereo `f32`** at `opt.sample_rate()` Hz — `samples.len() / 2`
+/// frames, covering the song plus [`Options::tail`] seconds of reverb decay — together
+/// with the [`Stats`] for the render.
 ///
 /// The samples are **not** normalized and `stats.peak` may exceed 1.0. Pass the buffer
 /// through [`normalize_loudness`] before writing it.
+///
+/// # Allocation
+///
+/// This allocates `(song.seconds() + opt.tail()) * opt.sample_rate() * 8` bytes up front.
+/// [`parse`] already refuses a tempo map implying a song longer than 24 hours
+/// ([`MidiError::TooLong`]), so untrusted input cannot turn this into an unbounded
+/// allocation — but a legitimately long song is still a large buffer, and
+/// [`Song::seconds`] lets you check before committing to it.
 pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
     crate::engine::render(&song.0, opt)
 }

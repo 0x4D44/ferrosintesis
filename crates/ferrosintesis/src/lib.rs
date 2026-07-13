@@ -61,6 +61,9 @@
 //! table; DESIGN.md in the repository carries the full design essay.
 
 #![forbid(unsafe_code)]
+// The public surface ships to docs.rs. An undocumented public item is a bug, and the
+// gate (`clippy -D warnings`) makes this one fail the build rather than rot quietly.
+#![warn(missing_docs)]
 
 pub mod live;
 pub mod offline;

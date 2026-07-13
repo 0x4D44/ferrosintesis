@@ -4,7 +4,7 @@
 //! skips anything it does not model (sysex and metas such as lyrics and
 //! key signatures).
 
-use crate::error::MidiError;
+use crate::error::{MidiError, MAX_SONG_SECONDS};
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -128,7 +128,7 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
         return Err(MidiError::UnsupportedTimeDivision);
     }
     if fmt > 1 {
-        return Err(MidiError::UnsupportedFormat(fmt));
+        return Err(MidiError::UnsupportedFormat { format: fmt });
     }
     c.pos = 8 + hlen;
 
@@ -224,7 +224,7 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                             let val = c.u8()?;
                             raw.push((tick, seq, EvKind::PolyAftertouch { ch, key, val }));
                         }
-                        _ => return Err(MidiError::BadStatusByte(status)),
+                        _ => return Err(MidiError::BadStatusByte { status }),
                     }
                     seq += 1;
                 }
@@ -269,6 +269,12 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
         })
         .collect();
     let seconds = events.last().map(|e| e.sec).unwrap_or(0.0);
+    // The tempo map is entirely attacker-controlled, and `render` allocates in
+    // proportion to `seconds`. Refuse an absurd length here rather than let the
+    // allocator abort the process on a few dozen bytes of hostile input.
+    if !(seconds.is_finite() && seconds <= MAX_SONG_SECONDS) {
+        return Err(MidiError::TooLong { seconds });
+    }
     let markers = raw_markers
         .into_iter()
         .map(|(tick, text)| (to_sec(tick), text))

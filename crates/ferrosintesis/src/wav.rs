@@ -3,6 +3,15 @@
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
+/// Write interleaved stereo 16-bit PCM to a WAV file.
+///
+/// `interleaved` is left/right/left/right, so its length must be even; `sr` is the
+/// sample rate in Hz. This is the last step of the offline pipeline — pass it the
+/// `Vec<i16>` from [`normalize_loudness`](crate::offline::normalize_loudness).
+///
+/// # Errors
+///
+/// Any [`std::io::Error`] from creating or writing the file.
 pub fn write_wav(path: &Path, sr: u32, interleaved: &[i16]) -> std::io::Result<()> {
     let mut w = BufWriter::new(std::fs::File::create(path)?);
     let data_len = (interleaved.len() * 2) as u32;

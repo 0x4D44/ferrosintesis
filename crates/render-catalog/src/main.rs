@@ -905,12 +905,12 @@ mod tests {
             repo().join("demos/ferrosintesis_reference/midi/06 - Controllers and Effects.mid");
         let song = offline::load(&midi).expect("load fixture midi");
         let opt = synth_options(&song);
-        assert_eq!(opt.sr, 44100.0);
-        assert_eq!(opt.wet, 0.32);
-        assert_eq!(opt.tail, 6.0);
-        assert!(opt.samples);
-        assert_eq!(opt.solo, 0xFFFF);
-        assert_eq!(opt.delay_s, default_delay_s(song.initial_bpm()));
+        assert_eq!(opt.sample_rate(), 44100.0);
+        assert_eq!(opt.reverb(), 0.32);
+        assert_eq!(opt.tail(), 6.0);
+        assert!(opt.samples());
+        assert_eq!(opt.solo(), 0xFFFF);
+        assert_eq!(opt.echo(), default_delay_s(song.initial_bpm()));
     }
 
     // --- ropusenc argv, pinned to a golden captured from the real Python ----

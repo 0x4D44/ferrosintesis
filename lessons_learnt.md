@@ -126,16 +126,30 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   **multi-line inline table**, which is invalid TOML 1.0 — cargo ≥1.9x parses it happily,
   cargo 1.87 refuses the manifest outright. We would have published a crate nobody on our
   own declared MSRV could build. Keep every dependency on ONE line.
-- 2026.07.13 — **Settle the API before commissioning the prose about it, and never quote a
-  performance number you have not just measured.** Two costs from one pre-publish pass.
-  (1) `#[non_exhaustive]` on a public options struct forbids *functional update*
-  (`..Default::default()`) from foreign crates as well as struct literals, and the fallback
+- 2026.07.13 — **`#[non_exhaustive]` seals LESS than you think, and `pub` fields quietly
+  cancel it.** Three traps, all hit in one pre-publish API pass. (1) On an *enum* it only
+  reserves the right to add **variants** — the **fields inside** a variant stay exhaustively
+  matchable, so `Io { path, source }` still freezes its field list. Every data-carrying
+  variant needs its OWN `#[non_exhaustive]`, and tuple variants should become struct variants
+  first. (2) On a *struct* it blocks **construction**, not **field assignment** — so
+  `#[non_exhaustive]` + `pub` fields is the worst of both worlds: the builder becomes optional
+  sugar while every field NAME and TYPE is still frozen. Seal INPUT structs (private fields +
+  `with_*` builders + accessors) and leave OUTPUT structs (`Stats`, `Progress`) `pub` — they
+  can't be constructed downstream anyway, so adding a field is already safe. (3) The fallback
   (`let mut o = Options::default(); o.f = x;`) trips clippy's `field_reassign_with_default`
-  under `-D warnings` — so a `with_*` builder is the ONLY clean construction path, not sugar.
-  Discovering that mid-consult meant re-briefing the agent already writing the README.
-  (2) The README had claimed ~40x realtime for years; the actual measurement is **5.25x**
-  (245.8 s of audio in 46.8 s) — the old figure predates the orchestral voices and the sample
-  layer. It was about to go onto crates.io. Run the render; don't trust the sentence.
+  under `-D warnings`, and `..Default::default()` is illegal on a foreign non_exhaustive
+  struct — so a builder is the ONLY clean construction path, not a nicety. Also: settle the
+  API *before* commissioning the prose about it, or you re-brief the agent writing your README.
+- 2026.07.13 — **Never quote a performance number you have not just measured, and re-check a
+  doc table against the code before it becomes permanent.** The README claimed ~40x realtime
+  for years; the measurement is **5.25x** (245.8 s of audio in 46.8 s) — the old figure
+  predates the orchestral voices and the sample layer. An adversarial review of the same
+  README also found four *wrong rows* in a GM table headed "GM coverage, honestly" (GM 38/39
+  are SynthBass not Karplus-Strong; 42/43 are a stick-slip waveguide with their own sample
+  banks, not polyBLEP bows; only 72–73 of the 72–79 winds get the flute sample bank; GM 108
+  was missing entirely) plus a DESIGN.md that still described the output as peak-normalised
+  three versions after it became loudness-normalised. Docs rot silently and a doc claim on
+  crates.io is permanent. Run the render; grep the routing; then write the sentence.
 - 2026.07.13 — **A byte-exact test fixture MUST be marked `-text` in `.gitattributes`,
   and the render pipeline IS byte-reproducible across binaries.** Two findings from the
   Rust `render-catalog` port. (1) This repo has `core.autocrlf=true`, so git rewrites LF

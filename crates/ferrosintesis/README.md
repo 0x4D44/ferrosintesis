@@ -27,18 +27,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let song = offline::load(Path::new("input.mid"))?;
     println!("{}: {:.1} s, {} events", song.title(), song.seconds(), song.events_len());
 
-    // `Options` is #[non_exhaustive]; construct it from Default and refine
-    // with the with_* builders.
+    // `Options` has private fields: build it from Default with the with_* builders.
     let opt = Options::default().with_reverb(0.25);
 
-    // Interleaved stereo f32 at `opt.sr`, un-normalized.
+    // Interleaved stereo f32 at `opt.sample_rate()`, un-normalized.
     let (samples, stats) = offline::render(&song, &opt);
     eprintln!("{} voices, peak {:.3}", stats.voices_spawned, stats.peak);
 
     // Integrated loudness to -18 LUFS (BS.1770-4) under a -1 dBTP true-peak
     // ceiling, TPDF-dithered to 16-bit.
-    let pcm = offline::normalize_loudness(&samples, opt.sr, -18.0, -1.0);
-    offline::write_wav(Path::new("output.wav"), opt.sr as u32, &pcm)?;
+    let pcm = offline::normalize_loudness(&samples, opt.sample_rate(), -18.0, -1.0);
+    offline::write_wav(Path::new("output.wav"), opt.sample_rate() as u32, &pcm)?;
     Ok(())
 }
 ```
@@ -53,7 +52,7 @@ exposes `title()`, `seconds()`, `initial_bpm()`, `events_len()` and
 ## The audio contract
 
 `offline::render` returns `(Vec<f32>, Stats)`: **interleaved stereo** — left,
-right, left, right — at `opt.sr`, un-normalized. `Stats` reports the absolute
+right, left, right — at `opt.sample_rate()`, un-normalized. `Stats` reports the absolute
 peak, voices spawned, and maximum polyphony. Renders are deterministic: the
 same MIDI, the same options and the same build produce byte-identical output.
 
@@ -68,17 +67,18 @@ want your own gain staging.
 
 ## Options
 
-| builder | field | default | meaning |
-|---------|-------|---------|---------|
-| `with_sample_rate` | `sr` | `44100.0` | output sample rate (Hz) |
-| `with_reverb` | `wet` | `0.32` | reverb return level |
-| `with_tail` | `tail` | `6.0` | seconds of reverb tail rendered past the last note |
-| `with_echo` | `delay_s` | `0.375` | echo-bus delay in seconds; `0.0` disables the bus |
-| `with_samples` | `samples` | `true` | the embedded attack-sample layer |
-| `with_solo` | `solo` | `0xFFFF` | channel bitmask; notes on cleared channels are dropped, but the tempo map stays, so a solo stem lines up with the full mix |
+| builder | accessor | default | meaning |
+|---------|----------|---------|---------|
+| `with_sample_rate` | `sample_rate()` | `44100.0` | output sample rate (Hz) |
+| `with_reverb` | `reverb()` | `0.32` | reverb return level |
+| `with_tail` | `tail()` | `6.0` | seconds of reverb tail rendered past the last note |
+| `with_echo` | `echo()` | `0.375` | echo-bus delay in seconds; `0.0` disables the bus |
+| `with_samples` | `samples()` | `true` | the embedded attack-sample layer |
+| `with_solo` | `solo()` | `0xFFFF` | channel bitmask; notes on cleared channels are dropped, but the tempo map stays, so a solo stem lines up with the full mix |
 
-The struct is `#[non_exhaustive]`, so a struct literal will not compile; the
-fields stay `pub` for reading.
+The fields are private: build with `Options::default()` plus the `with_*` methods, and
+read them back with the matching accessors (`opt.sample_rate()`, `opt.echo()`, …). That
+is what lets a later release add or rename a knob without breaking you.
 
 ## Feature flags
 
@@ -101,11 +101,14 @@ brass articulation) are what synthesis fakes worst.
 | **Brass** | per-player lip-valve saws (2× oversampled) through a fixed bore/bell body, an envelope-tracked **"waa"** brightness that opens with loudness, an onset pitch **scoop** and flutter-tongue **growl**. Pushed loud, the naturals **"brass up"**: a progressive-steepening **rasp cascade** (a second lip-valve stage that *splits* the drive across two knees for a slower, shock-like harmonic rolloff — the cuivré edge) blooms in over forte and opens the radiated output so the edge escapes the bell. It is scaled per program by a **brassiness** constant (trumpet/trombone rip; horn stays mellow until fortissimo; tuba barely brasses) and derated in the top register so it stays under the 2× alias floor; the synth-brass pair is untouched. **CC11 breath** opens the timbre, **channel aftertouch** adds growl (and rasps harder); **CC1** vibrato and **CC68** legato as elsewhere. Section/synth-brass get section-width chorus | trumpet 56, trombone 57, tuba 58, muted trumpet 59, french horn 60, brass section 61, synth brass 62–63 |
 | **Reed** | a band-limited **variable-duty pulse** source (a square for the clarinet's hollow odd spectrum, a narrow pulse for the double reeds' buzz) shaped by a tanh over-blow, a per-program **formant bank**, tongue **chiff** and breath onset, and control-rate vibrato. Bagpipe adds one persistent channel drone under the chanter; shanai uses a bright double-reed preset. GM 22 harmonica is a free-reed preset — wide-duty odd-harmonic pulse, prominent breath, and a slow draw-bend scoop into the note. Velocity opens the timbre; saxes get a touch of slap echo. CC1/CC68 as elsewhere | harmonica 22, soprano/alto/tenor/bari sax 64–67, oboe 68, english horn 69, bassoon 70, clarinet 71, bagpipe 109, shanai 111 |
 | **Lead** | the SawStack voiced for a synth lead — **fast velocity-tracked attack, short release, a velocity-tracked filter** (harder = brighter), and a band-limited **square/pulse** oscillator for the square-lead class. No always-on vibrato: the **CC1 mod wheel** adds it, and **CC68 legato** slurs one note into the next. Per-program voicing (square, saw, calliope, chiff, charang, voice, fifths, bass+lead) via oscillator shape, count, detune and cutoff | synth leads 80–87 |
-| **Wind** | sine + weak harmonics + band-filtered breath that rides the vibrato, chiff, and a pitch **scoop** into each note — under an **LA sampled attack** (real flute onset, 5 pitch zones); bends and CC68 legato slur the scoop instead of re-tonguing | flutes/whistles 72–79 |
-| **Bowed solo strings** | program-specific polyBLEP bowed voices: violin, viola, cello and contrabass own register-correct body resonances, bow-pressure ceilings, onset speeds and natural-vibrato rates; fiddle uses a quicker, brighter, noisier violin-style bow. Violin/fiddle retain the **LA sampled attack** (6 pitch zones × forte/piano), while viola/cello/bass stay modeled rather than receiving a repitched violin transient. GM44 is a velocity-sensitive 6–9 Hz bow-tremolo proxy with reversal re-bites; GM45 is a decaying, bendable violin-body pizzicato pluck. Bends and CC68 legato keep one bow stroke across several fingered notes | violin/viola/cello/contrabass 40–43, tremolo/pizzicato 44–45, fiddle 110 |
+| **Wind** | sine + weak harmonics + band-filtered breath that rides the vibrato, chiff, and a pitch **scoop** into each note — under an **LA sampled attack** (real flute onset, 5 pitch zones); bends and CC68 legato slur the scoop instead of re-tonguing. Only 72–73 play under the sampled flute attack; 74–79 (recorder, pan flute, bottle, shakuhachi, whistle, ocarina) are model-only with a bespoke chiff each — a repitched transverse-flute transient destroyed their identity | flutes/whistles 72–79 |
+| **Bowed strings (polyBLEP)** | program-specific polyBLEP bowed voices: violin and viola own register-correct body resonances, bow-pressure ceilings, onset speeds and natural-vibrato rates; fiddle uses a quicker, brighter, noisier violin-style bow. Violin/fiddle retain the **LA sampled attack** (6 pitch zones × forte/piano); viola stays modeled with no sampled attack. GM44 is a velocity-sensitive 6–9 Hz bow-tremolo proxy with reversal re-bites; GM45 is a decaying, bendable violin-body **pizzicato pluck** — a pluck, not a bow. Bends and CC68 legato keep one bow stroke across several fingered notes | violin/viola 40–41, tremolo/pizzicato 44–45, fiddle 110 |
+| **Cello / contrabass (waveguide)** | the crate's most elaborate string model: a stick-slip digital **waveguide** with an STK-style friction table — not polyBLEP, not model-only — plus dedicated **arco sample banks** (`cello_bank`/`contrabass_bank`, their own recordings, not a repitched violin transient) crossfaded into the waveguide sustain | cello 42, contrabass 43 |
 | **ReverseCymbal** | fixed-length high-passed noise and inharmonic metal swell for the GM reverse-cymbal program. Written key is intentionally ignored; short melodic note-offs do not kill the pre-peak swell | reverse cymbal 119 |
 | **SFX** | dedicated GM sound-effect voices. Sustained textures follow the key: **breath 121** (formant-shaped hiss, soft onset), **seashore 122** (surf wash + spray riding a ~0.09 Hz swell), **helicopter 125** (rotor noise chopped at ~11 Hz), **applause 126** (dense clap-grain cloud, ~360 claps/s) — all hold while the key is down and release on note-off. One-shots: **bird tweet 123** (four fast upward FM chirps), **telephone 124** (440+480 Hz ring, 0.9 s on / 0.45 s off cadence repeating while held), **gunshot 127** (broadband crack peaking above the piano, with a low boom). **Fret noise 120** keeps the original short toneless squeak transient. All ignore the written pitch | sound effects 120–127 |
 | **Drums** | default V3 kit: parametric membranes with pitch glide, kick sub/body/click separation, toms that settle near table pitch, resonant snare wires, and dense **MetalPlate** cymbals with broadband wash instead of exposed sine tails. With samples on (the default), the whole acoustic kit — kick 35/36, side stick 37, snare 38/40, the six GM toms 41–50 (two sampled drums repitched along the modeled ladder), hi-hats 42/44/46, and all the cymbals — plays a CC0 **sampled drum kit** (Virtuosity Drums `mid` mic set + a Big Rusty 18" china): velocity layers and round robins from the source SFZ mappings, a per-hit ±40-cent rate + gain micro-variation against machine-gunning, and the engine's hi-hat choke group (closed/pedal chokes the open hat) intact; `--no-samples` keeps a fully modeled fallback. Channel-10 Program Changes are accepted as MIDI metadata, but no longer unlock a better kit because the best kit is already the default — with one exception: **Program 40 exactly selects the GM2 brush kit** (v0.12): brush tap 38 / slap 39 (strands land twice) / stir-swirl 40 (staggered noise swells with a slow 5 Hz wrist AM, outside the hat choke group) / darkened closed 42\|44 and open 46 hats / woody rim 37 / soft-beater kick 35\|36 with the sub drop intact. Every key the brush kit does not remap falls through to the V3 voices, and any other Program Change keeps the default V3 kit. | GM channel 10 |
+
+The kalimba's lamella bank lives under GM 108, grouped with the Modal chromatic-percussion row above (not a gap in the table: 108 was previously missing from an earlier draft of this doc, now covered). If your material leans on GM 120–127 sound effects, note that only fret noise 120 is a toneless placeholder — 121–127 are dedicated modeled voices per the SFX row above.
 
 ## Controllers
 

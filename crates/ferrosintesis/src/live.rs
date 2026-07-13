@@ -8,20 +8,27 @@ const LIVE_BLOCK: usize = 64;
 
 /// How to configure a [`RealtimeSynth`].
 ///
-/// `#[non_exhaustive]`: construct with [`RealtimeOptions::default`] and assign fields.
+/// Start from [`RealtimeOptions::default`] and refine with the `with_*` builders. As
+/// with [`Options`](crate::offline::Options), the fields are private so that a future
+/// minor release can add or rename a knob without breaking you.
+///
+/// ```
+/// use ferrosintesis::live::RealtimeOptions;
+///
+/// let opt = RealtimeOptions::default()
+///     .with_sample_rate(48_000)
+///     .with_master_gain(0.5);
+///
+/// assert_eq!(opt.sample_rate(), 48_000);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub struct RealtimeOptions {
-    /// Output sample rate in Hz. Default 44100.
-    pub sample_rate: u32,
-    /// Reverb send, 0.0 to 1.0. Default 0.32.
-    pub wet: f32,
-    /// Echo time in seconds; 0.0 disables the echo bus. Default 0.375.
-    pub delay_s: f32,
-    /// Enable the embedded PCM attack-sample layer. Default true.
-    pub samples: bool,
-    /// Master output gain applied to the mix. Default 0.70.
-    pub master_gain: f32,
+    pub(crate) sample_rate: u32,
+    pub(crate) wet: f32,
+    pub(crate) delay_s: f32,
+    pub(crate) samples: bool,
+    pub(crate) master_gain: f32,
 }
 
 impl Default for RealtimeOptions {
@@ -36,28 +43,95 @@ impl Default for RealtimeOptions {
     }
 }
 
+impl RealtimeOptions {
+    /// Set the output sample rate in Hz. Default 44100.
+    pub fn with_sample_rate(mut self, sample_rate: u32) -> Self {
+        self.sample_rate = sample_rate;
+        self
+    }
+
+    /// Set the reverb send, 0.0 (dry) to 1.0. Default 0.32.
+    pub fn with_reverb(mut self, wet: f32) -> Self {
+        self.wet = wet;
+        self
+    }
+
+    /// Set the echo time in seconds. Pass 0.0 to disable the echo bus. Default 0.375.
+    pub fn with_echo(mut self, delay_s: f32) -> Self {
+        self.delay_s = delay_s;
+        self
+    }
+
+    /// Enable or disable the embedded PCM attack-sample layer. Default true.
+    pub fn with_samples(mut self, samples: bool) -> Self {
+        self.samples = samples;
+        self
+    }
+
+    /// Set the master output gain applied to the mix. Default 0.70.
+    pub fn with_master_gain(mut self, master_gain: f32) -> Self {
+        self.master_gain = master_gain;
+        self
+    }
+
+    /// The output sample rate in Hz.
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    /// The reverb send, 0.0 (dry) to 1.0.
+    pub fn reverb(&self) -> f32 {
+        self.wet
+    }
+
+    /// The echo time in seconds; 0.0 means the echo bus is disabled.
+    pub fn echo(&self) -> f32 {
+        self.delay_s
+    }
+
+    /// Whether the embedded PCM attack-sample layer is enabled.
+    pub fn samples(&self) -> bool {
+        self.samples
+    }
+
+    /// The master output gain applied to the mix.
+    pub fn master_gain(&self) -> f32 {
+        self.master_gain
+    }
+}
+
 /// Why a realtime block render failed.
 ///
-/// `#[non_exhaustive]`: match with a `_` arm.
+/// Both the enum and its data-carrying variants are `#[non_exhaustive]`: match with a
+/// `_` arm, and match variants with `..`. New variants — and new fields on existing
+/// ones — may be added in a minor release.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RealtimeError {
     /// The output slice passed to [`RealtimeSynth::render_add`] is too short for the
     /// requested frame count. It needs `frames * 2` samples (interleaved stereo).
+    #[non_exhaustive]
     OutputTooSmall {
-        /// Samples required: `frames * 2`.
+        /// Samples required: `frames * 2` (saturating).
         needed: usize,
         /// Samples actually supplied.
         got: usize,
+        /// Frames requested, as passed to [`RealtimeSynth::render_add`].
+        frames: usize,
     },
 }
 
 impl std::fmt::Display for RealtimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RealtimeError::OutputTooSmall { needed, got } => write!(
+            RealtimeError::OutputTooSmall {
+                needed,
+                got,
+                frames,
+            } => write!(
                 f,
-                "output buffer too small: need {needed} samples (interleaved stereo), got {got}"
+                "output buffer too small: {frames} frames need {needed} samples \
+                 (interleaved stereo), got {got}"
             ),
         }
     }
@@ -65,6 +139,14 @@ impl std::fmt::Display for RealtimeError {
 
 impl std::error::Error for RealtimeError {}
 
+/// A realtime General MIDI synthesizer: raw MIDI bytes in, stereo audio blocks out.
+///
+/// Feed it the bytes of a live MIDI stream with [`write_byte`](Self::write_byte) — it
+/// parses running status and interleaved realtime bytes itself — then pull audio with
+/// [`render_add`](Self::render_add) from your audio callback.
+///
+/// This is the same engine and the same voices as [`offline`](crate::offline); the crate
+/// is offline-first, and this is the secondary surface.
 pub struct RealtimeSynth {
     core: EngineCore,
     parser: MidiByteParser,
@@ -76,6 +158,8 @@ pub struct RealtimeSynth {
 }
 
 impl RealtimeSynth {
+    /// Create a synth. Voices, buses and reverb are sized for `options.sample_rate`,
+    /// so the rate cannot change afterwards — build a new synth instead.
     pub fn new(options: RealtimeOptions) -> Self {
         let core = EngineCore::new(CoreOptions {
             sr: options.sample_rate as f32,
@@ -98,6 +182,8 @@ impl RealtimeSynth {
         }
     }
 
+    /// Silence every voice, clear the effect tanks, and reset the MIDI parser to a
+    /// clean running-status state. Equivalent to a panic / all-notes-off button.
     pub fn reset(&mut self) {
         self.core.hard_reset();
         self.parser.reset();
@@ -107,20 +193,42 @@ impl RealtimeSynth {
         self.ring_len = 0;
     }
 
+    /// Decode the embedded attack-sample banks now, on this thread.
+    ///
+    /// The banks decode lazily on first use, which would otherwise happen inside your
+    /// audio callback and blow the deadline. Call this once during setup, off the
+    /// realtime thread. A no-op without the `embedded-samples` feature.
     pub fn prewarm_samples(&self) {
         sampler::prewarm();
     }
 
+    /// Feed one byte of a live MIDI stream.
+    ///
+    /// The parser tracks running status and tolerates realtime bytes (clock, active
+    /// sensing) interleaved mid-message, so you can hand it a raw port's bytes verbatim.
+    /// Bytes are buffered and take effect at the start of the next
+    /// [`render_add`](Self::render_add) block.
     pub fn write_byte(&mut self, byte: u8) {
         self.parser.push(byte, &mut self.pending);
     }
 
+    /// Render `frames` frames and **add** them into `output`.
+    ///
+    /// `output` is interleaved stereo, so it must hold at least `frames * 2` samples.
+    /// This call is **additive**: it sums into whatever is already there rather than
+    /// overwriting, so zero the buffer first if you want the synth alone.
+    ///
+    /// # Errors
+    ///
+    /// [`RealtimeError::OutputTooSmall`] if `output.len() < frames * 2`. Nothing is
+    /// written and no MIDI state is consumed, so the call is safe to retry.
     pub fn render_add(&mut self, frames: usize, output: &mut [f32]) -> Result<(), RealtimeError> {
         let needed = frames.saturating_mul(2);
         if output.len() < needed {
             return Err(RealtimeError::OutputTooSmall {
                 needed,
                 got: output.len(),
+                frames,
             });
         }
 
@@ -145,6 +253,7 @@ impl RealtimeSynth {
         Ok(())
     }
 
+    /// How many voices are sounding right now. Useful as a load meter.
     pub fn active_voice_count(&self) -> usize {
         self.core.active_voice_count()
     }
@@ -486,7 +595,14 @@ mod tests {
         let mut synth = RealtimeSynth::new(opts());
         let mut out = [0.25f32; 3];
         let err = synth.render_add(2, &mut out).unwrap_err();
-        assert_eq!(err, RealtimeError::OutputTooSmall { needed: 4, got: 3 });
+        assert_eq!(
+            err,
+            RealtimeError::OutputTooSmall {
+                needed: 4,
+                got: 3,
+                frames: 2,
+            }
+        );
         assert_eq!(out, [0.25; 3]);
 
         let err = synth.render_add(usize::MAX, &mut []).unwrap_err();
@@ -495,6 +611,7 @@ mod tests {
             RealtimeError::OutputTooSmall {
                 needed: usize::MAX,
                 got: 0,
+                frames: usize::MAX,
             }
         );
     }

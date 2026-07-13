@@ -3713,6 +3713,17 @@ pub struct SawStack {
     // player's independent `drift`. `None` for every other caller; its per-layer
     // contribution is then exactly `+ 0.0`, so those renders are bit-identical.
     chorus: Option<(f32, f32, f32)>,
+    // One-shot filter envelope (synth pads 88/90/92/93): a note-synchronous
+    // MONOTONE cutoff trajectory the free-running `sweep` LFO cannot make — a
+    // bright onset decaying into a warm bed (`fenv` starts >1) or a slow swell
+    // opening into the sound (`fenv` starts <1). `fenv` is the live cutoff
+    // multiplier, relaxing toward 1.0 by `fenv_k` per control tick; `base_cut`
+    // is the design cutoff used when there is no `sweep`. Inert (`fenv_k == 0.0`,
+    // `fenv == 1.0`) for every other caller, whose cutoff is then `× 1.0` — bit-
+    // identical. `fenv_k` is built at `sr / CTRL` (control rate), NOT `sr`.
+    fenv: f32,
+    fenv_k: f32,
+    base_cut: f32,
     t: u32,
     amp: f32,
     sr: f32,
@@ -3820,6 +3831,9 @@ impl SawStack {
             sweep: sweep.map(|(rate, base, oct)| (sweep_phase, rate, base, oct)),
             sweep_q,
             chorus: None,
+            fenv: 1.0,
+            fenv_k: 0.0,
+            base_cut: 0.0,
             t: 0,
             amp: amp * (0.4 + 0.6 * vel_amp(vel)),
             sr,
@@ -3833,6 +3847,22 @@ impl SawStack {
     /// applied in `control_tick` supply the ensemble width.
     fn with_chorus(mut self, rate_hz: f32, depth: f32) -> Self {
         self.chorus = Some((0.0, rate_hz, depth));
+        self
+    }
+
+    /// Arm the one-shot filter envelope (synth pads). The cutoff starts at
+    /// `start_mult × base` and relaxes toward `base` with time constant `t60`.
+    /// `base_cut` is the design cutoff, used when the stack has no `sweep` (with
+    /// a sweep, the LFO already supplies the moving base and `base_cut` is
+    /// ignored). The relax coefficient is built at the CONTROL rate `sr / CTRL`,
+    /// because `control_tick` runs once per `CTRL` samples — the exact trap that
+    /// was MM-BUG-KILN-00003 for the flute vibrato.
+    fn with_fenv(mut self, start_mult: f32, t60: f32, base_cut: f32) -> Self {
+        if t60 > 0.0 {
+            self.fenv = start_mult;
+            self.fenv_k = t60_mul(t60, self.sr / CTRL as f32);
+            self.base_cut = base_cut;
+        }
         self
     }
 
@@ -3887,10 +3917,23 @@ impl SawStack {
                 }
             }
             StackFilter::Lp(b) => {
-                if let Some((phase, rate, base, oct)) = &mut self.sweep {
-                    *phase += TAU * *rate * CTRL as f32 / sr;
-                    let cut = *base * 2f32.powf(*oct * 0.5 * (phase.sin() + 1.0));
-                    b.retune_lowpass(cut.min(sr * 0.4), self.sweep_q, sr);
+                // Relax the one-shot filter envelope toward 1.0 (inert unless a
+                // pad armed it; `fenv_k == 0.0` leaves `fenv` at exactly 1.0).
+                if self.fenv_k > 0.0 {
+                    self.fenv = 1.0 + (self.fenv - 1.0) * self.fenv_k;
+                }
+                // Retune only when there is motion to apply: a sweep, or a live
+                // filter envelope. A caller with neither (strings/leads/other
+                // pads) skips this exactly as before — bit-identical. A swept
+                // caller with `fenv` inert computes today's cutoff, then `× 1.0`.
+                if self.sweep.is_some() || self.fenv_k > 0.0 {
+                    let cut = if let Some((phase, rate, base, oct)) = &mut self.sweep {
+                        *phase += TAU * *rate * CTRL as f32 / sr;
+                        *base * 2f32.powf(*oct * 0.5 * (phase.sin() + 1.0))
+                    } else {
+                        self.base_cut
+                    };
+                    b.retune_lowpass((cut * self.fenv).min(sr * 0.4), self.sweep_q, sr);
                 }
             }
         }
@@ -4456,9 +4499,18 @@ impl Voice for ChoirV2 {
     }
 }
 
+/// GM synth pads (88-95). Each of the eight is a distinct identity over the
+/// shared `SawStack` (Stage 2 of the stages-2-5 HLD). Two are FROZEN bit-for-bit
+/// because they carry almost all committed pad usage — 89 warm (19 albums) and 95
+/// sweep (8) — and the moving six each get an identity axis the base pad lacked,
+/// chiefly the one-shot filter envelope (`with_fenv`). The FX-family aliases
+/// 97/99/103 (base pad) and 101 (dispatched as `pad(95)`) fall through to the
+/// frozen arms until Stage 3 gives the FX family its own voice.
 fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
-    if program == 95 {
-        SawStack::new(
+    match program {
+        // 95 sweep — FROZEN. The sweep IS the instrument (1.8 octaves of slow
+        // resonant travel). Verbatim from the pre-Stage-2 voice.
+        95 => SawStack::new(
             key,
             vel,
             sr,
@@ -4473,9 +4525,149 @@ fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
             Some((0.07, 350.0, 1.8)),
             1.1,
             0.42,
+        ),
+        // 88 new age — a STRUCK pad: a bright resonant onset decaying into a soft
+        // dark bed (fenv 5.0 -> 1.0 over a 900 Hz base). The only pad with an
+        // onset *event*; unreachable without the filter envelope.
+        88 => SawStack::new(
+            key,
+            vel,
+            sr,
+            seed,
+            5,
+            0.008,
+            0.0030,
+            StackFilter::Lp(Biquad::lowpass(900.0, 1.4, sr)),
+            Adsr::new(0.25, 0.5, 1.0, 1.5, sr),
+            (0.0, 0.0, 0.0),
+            0.0,
+            None,
+            1.4,
+            0.42,
         )
-    } else {
-        let mut stack = SawStack::new(
+        .with_fenv(5.0, 0.45, 900.0),
+        // 90 polysynth — the pad that PLAYS: an order-of-magnitude faster attack
+        // than 89, wide audible detune, short release (chords must clear). A
+        // light bright-onset fenv — the classic "pluck into pad".
+        90 => SawStack::new(
+            key,
+            vel,
+            sr,
+            seed,
+            7,
+            0.020,
+            0.0025,
+            StackFilter::Lp(Biquad::lowpass(3200.0, 1.0, sr)),
+            Adsr::new(0.08, 0.35, 0.85, 0.5, sr),
+            (0.0, 0.0, 0.0),
+            0.0,
+            None,
+            1.0,
+            0.36,
+        )
+        .with_fenv(2.2, 0.30, 3200.0),
+        // 91 choir — FORMANTS by default (a sung "aah", not a filtered saw): the
+        // family's one purely-spectral identity. Static vowel (cur == tgt, so
+        // control_tick does not morph); CC70 still retargets via set_vowel. A
+        // slow delayed per-layer vibrato is the singers' wobble.
+        91 => {
+            let freqs = [660.0, 1120.0, 2600.0];
+            let qs = [9.0, 10.0, 9.0];
+            let gains = [1.0, 0.55, 0.28];
+            SawStack::new(
+                key,
+                vel,
+                sr,
+                seed,
+                5,
+                0.008,
+                0.0040,
+                StackFilter::Formant {
+                    bands: [
+                        Biquad::bandpass(freqs[0], qs[0], sr),
+                        Biquad::bandpass(freqs[1], qs[1], sr),
+                        Biquad::bandpass(freqs[2], qs[2], sr),
+                    ],
+                    gains,
+                    cur: freqs,
+                    tgt: freqs,
+                    qs,
+                },
+                Adsr::new(0.7, 0.5, 1.0, 1.6, sr),
+                (4.6, 0.004, 0.35),
+                0.0,
+                None,
+                0.7,
+                1.5,
+            )
+        }
+        // 92 bowed — NO onset: the filter opens *with* the amplitude over ~1.5 s,
+        // like a bow taking the string. The inverse fenv (starts at 0.30× the
+        // cutoff and rises). No sweep — a wobble would fight the swell.
+        92 => SawStack::new(
+            key,
+            vel,
+            sr,
+            seed,
+            5,
+            0.006,
+            0.0035,
+            StackFilter::Lp(Biquad::lowpass(2000.0, 2.2, sr)),
+            Adsr::new(1.6, 0.8, 1.0, 2.2, sr),
+            (3.6, 0.0025, 0.9),
+            0.0,
+            None,
+            2.2,
+            0.44,
+        )
+        .with_fenv(0.30, 1.4, 2000.0),
+        // 93 metallic — a resonant CLANG: a narrow pulse (even-rich, buzzy) under
+        // a self-resonant lowpass (Q 6.5) that clangs on the fenv onset and
+        // shimmers via a fast shallow sweep. HONEST LIMIT: this is a clang, not a
+        // bell — every SawStack partial is harmonic, so a true *inharmonic*
+        // metallic needs a Modal voice (a separate req, not this preset).
+        93 => SawStack::new_wave(
+            key,
+            vel,
+            sr,
+            seed,
+            4,
+            0.014,
+            0.0030,
+            StackFilter::Lp(Biquad::lowpass(1600.0, 6.5, sr)),
+            Adsr::new(0.15, 0.6, 0.8, 1.0, sr),
+            (0.0, 0.0, 0.0),
+            0.0,
+            Some((0.9, 1600.0, 0.35)),
+            6.5,
+            0.26,
+            Wave::Pulse(0.22),
+        )
+        .with_fenv(4.0, 0.18, 1600.0),
+        // 94 halo — AIR: a soft tonal core almost buried in a *swept band of
+        // noise*. The only pad where noise is first-class; injected pre-filter,
+        // so the sweep shapes the noise band as much as the tone (free shimmer).
+        94 => SawStack::new(
+            key,
+            vel,
+            sr,
+            seed,
+            5,
+            0.012,
+            0.0045,
+            StackFilter::Lp(Biquad::lowpass(700.0, 2.4, sr)),
+            Adsr::new(0.9, 0.6, 1.0, 2.0, sr),
+            (0.0, 0.0, 0.0),
+            0.40,
+            Some((0.19, 700.0, 1.6)),
+            2.4,
+            0.34,
+        ),
+        // 89 warm — FROZEN (19 albums): the reference pad, its identity is
+        // negative space. Also the fall-through for the FX-family base-pad
+        // aliases 97/99/103. Verbatim from the pre-Stage-2 else branch (which set
+        // no vowel for these — 91 is now its own formant arm above).
+        _ => SawStack::new(
             key,
             vel,
             sr,
@@ -4490,11 +4682,7 @@ fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
             Some((0.13, 1100.0, 0.5)),
             0.7,
             0.42,
-        );
-        if program == 91 {
-            stack.vowel_morph_start = Some([500.0, 900.0, 2400.0]);
-        }
-        stack
+        ),
     }
 }
 
@@ -10834,6 +11022,109 @@ mod tests {
             "GM17 should have a percussive onset the steady GM16 lacks: \
              onset/sustain band-punch 17={p17:.2} 16={p16:.2} (3rd-ratio 17={d17:.2} 16={d16:.2})"
         );
+    }
+
+    // -- Stage 2 (synth pads 88-95) --
+
+    fn pad_seg(program: u8, key: u8, vel: u8, secs: f32, lo: f32, hi: f32) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = pad(program, key, vel, sr, 7);
+        let mut buf = vec![0f32; (sr * secs) as usize];
+        v.render(&mut buf);
+        buf[(lo * sr) as usize..(hi * sr) as usize].to_vec()
+    }
+
+    /// PD-O3: the one-shot filter envelope moves the SPECTRUM, not the level —
+    /// the property a preset-only design cannot reach, and the proof the new
+    /// `fenv` DSP works. 88 (falling fenv) opens bright and darkens into a bed
+    /// while staying roughly as loud; 92 (rising fenv) opens over its long swell;
+    /// the frozen 89 shows no such gesture.
+    #[test]
+    fn pad_filter_envelope_moves_spectrum_not_level() {
+        let sr = 44100.0;
+        // 88 new age: bright resonant onset -> dark bed (fenv 5.0 -> 1.0). The
+        // 0.25 s attack partly masks the fast-decaying bright front, so the
+        // gesture is clear but modest.
+        let on = pad_seg(88, 60, 100, 3.0, 0.0, 0.12);
+        let bed = pad_seg(88, 60, 100, 3.0, 1.5, 2.5);
+        let (c_on, c_bed) = (centroid(&on, sr), centroid(&bed, sr));
+        let (r_on, r_bed) = (rms(&on), rms(&bed));
+        assert!(
+            c_on > 1.3 * c_bed,
+            "88 onset must be brighter than its bed (fenv moves the spectrum): centroid {c_on:.0} vs {c_bed:.0}"
+        );
+        assert!(
+            r_on < 1.5 * r_bed,
+            "88's darkening must be SPECTRAL, not the note merely getting quieter: rms {r_on:.4} vs {r_bed:.4}"
+        );
+        // 92 bowed: the filter opens WITH the amplitude (rising fenv 0.30 -> 1.0).
+        let early = pad_seg(92, 60, 100, 3.0, 0.15, 0.45);
+        let open = pad_seg(92, 60, 100, 3.0, 1.8, 2.6);
+        assert!(
+            centroid(&open, sr) > 1.3 * centroid(&early, sr),
+            "92 should open over its swell (rising fenv)"
+        );
+        // 89 frozen: no fenv gesture (onset ~ sustain brightness).
+        let on89 = pad_seg(89, 60, 100, 3.0, 0.10, 0.25);
+        let sus89 = pad_seg(89, 60, 100, 3.0, 1.5, 2.5);
+        let ratio = centroid(&on89, sr) / centroid(&sus89, sr).max(1.0);
+        assert!(
+            (0.7..1.5).contains(&ratio),
+            "89 (frozen, no fenv) must show no onset->sustain brightness gesture: {ratio:.2}"
+        );
+    }
+
+    /// PD-O5: the choir pad (91) has vowel FORMANTS no other pad has — its one
+    /// purely-spectral identity. The cleanest tell is the F3 formant at ~2600 Hz:
+    /// 91 boosts a band the plain-lowpass 89 (cutoff 1400 Hz) has rolled steeply
+    /// off, so 91 carries far more energy there. (Measuring at a formant *centre*
+    /// frequency reads between harmonics; a band read integrates across them.)
+    #[test]
+    fn choir_pad_91_has_a_formant_peak() {
+        let sr = 44100.0;
+        let f3_fraction = |program: u8| {
+            let seg = pad_seg(program, 60, 100, 1.0, 0.1, 0.95);
+            spectral_band_rms(&seg, sr, 2400.0, 2800.0) / rms(&seg).max(1e-9)
+        };
+        let p91 = f3_fraction(91);
+        let p89 = f3_fraction(89);
+        assert!(
+            p91 > 2.5 * p89,
+            "91's F3 formant (~2600 Hz) should carry far more energy than the lowpass 89 there: 91={p91:.4} 89={p89:.4}"
+        );
+    }
+
+    /// PD-O6: the calibration gate. The resonant pads (93's self-resonant Q 6.5,
+    /// 91's formant boost) must not clip at max velocity across the register, and
+    /// every pad shares a loudness window with the reference 89 — converting the
+    /// two amp values the design flagged as gut-feel into a measured guard.
+    #[test]
+    fn pads_are_level_safe_and_do_not_clip() {
+        let sr = 44100.0;
+        let peak_of = |program: u8, key: u8| {
+            let mut v = pad(program, key, 127, sr, 7);
+            let mut buf = vec![0f32; (sr * 1.5) as usize];
+            v.render(&mut buf);
+            buf.iter().fold(0.0f32, |m, &x| m.max(x.abs()))
+        };
+        for program in 88u8..=95 {
+            for key in [36u8, 48, 60, 72, 84] {
+                let peak = peak_of(program, key);
+                assert!(
+                    peak < 0.98,
+                    "pad {program} key {key} clips at vel 127: peak {peak:.3}"
+                );
+            }
+        }
+        // Loudness parity vs the reference warm pad (89), sustained.
+        let rms89 = rms(&pad_seg(89, 60, 100, 3.0, 1.5, 2.5));
+        for program in 88u8..=95 {
+            let r = rms(&pad_seg(program, 60, 100, 3.0, 1.5, 2.5));
+            assert!(
+                r > 0.4 * rms89 && r < 2.5 * rms89,
+                "pad {program} is outside the family loudness window (89 rms {rms89:.4}): {r:.4}"
+            );
+        }
     }
 
     /// Non-overlapping windowed-RMS envelope (X5: measure the envelope, not raw

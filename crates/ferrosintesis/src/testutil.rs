@@ -1150,31 +1150,12 @@ mod distinctness {
         //    instruments and carry no exemption. (This is the pattern: a stage's
         //    definition of done includes deleting its entries, after which the
         //    matrix itself proves the fix.)
-        // -- Stage 2: Synth Pad 88-95 — 88,89,90,91,92,93,94 share one base pad.
-        //    91 (halo/"sweep") only differs via a CC-driven vowel morph, inert
-        //    with no controller, so it renders as the base pad here too. 95
-        //    (bowed sweep) is the lone distinct member. --
-        (88, 89, Why::Collapse(2)),
-        (88, 90, Why::Collapse(2)),
-        (88, 91, Why::Collapse(2)),
-        (88, 92, Why::Collapse(2)),
-        (88, 93, Why::Collapse(2)),
-        (88, 94, Why::Collapse(2)),
-        (89, 90, Why::Collapse(2)),
-        (89, 91, Why::Collapse(2)),
-        (89, 92, Why::Collapse(2)),
-        (89, 93, Why::Collapse(2)),
-        (89, 94, Why::Collapse(2)),
-        (90, 91, Why::Collapse(2)),
-        (90, 92, Why::Collapse(2)),
-        (90, 93, Why::Collapse(2)),
-        (90, 94, Why::Collapse(2)),
-        (91, 92, Why::Collapse(2)),
-        (91, 93, Why::Collapse(2)),
-        (91, 94, Why::Collapse(2)),
-        (92, 93, Why::Collapse(2)),
-        (92, 94, Why::Collapse(2)),
-        (93, 94, Why::Collapse(2)),
+        // -- Stage 2: Synth Pad 88-95 — DONE. 88,89,90,91,92,93,94 shared one base
+        //    pad; each moving member now has its own identity (88 struck / 90
+        //    polysynth / 91 choir-formant / 92 bowed-swell / 93 metallic-clang /
+        //    94 halo-noise) over the shared SawStack, chiefly via the one-shot
+        //    filter envelope. 89 (warm) and 95 (sweep) are frozen bit-for-bit. All
+        //    21 former collapses are deleted and the matrix proves the split. --
         // -- Stage 3: Synth FX 96-103 — crystal bell {96,98,100,102},
         //    base pad {97,99,103} (101 is pad(95), stands alone) --
         (96, 98, Why::Collapse(3)),

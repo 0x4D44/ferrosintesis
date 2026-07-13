@@ -4291,8 +4291,13 @@ mod tests {
             "choir-pad vowel didn't open: mm {f_mm} vs ah {f_ah}"
         );
 
+        // 91 is now a choir FORMANT by default (an open "aah"), so a late CC70
+        // RETARGETS the vowel rather than opening one from a plain lowpass. A
+        // contrasting closed "mm" (0) must audibly darken the default open vowel,
+        // proving retargeting still works — while staying bit-inert until the
+        // controller is actually authored.
         let plain = render_program_late_vowel(91, None);
-        let late = render_program_late_vowel(91, Some(84));
+        let late = render_program_late_vowel(91, Some(0));
         let (pre_a, pre_b) = ((0.2 * sr) as usize, (0.55 * sr) as usize);
         assert!(
             plain[pre_a..pre_b]
@@ -4305,8 +4310,8 @@ mod tests {
         let f_plain = energy_above(&plain[a..b], 1500.0, sr);
         let f_late = energy_above(&late[a..b], 1500.0, sr);
         assert!(
-            f_late > 1.5 * f_plain,
-            "late-authored choir-pad vowel didn't open: plain {f_plain} vs ah {f_late}"
+            f_late < 0.8 * f_plain,
+            "late-authored closed vowel didn't retarget the default open choir formant: plain {f_plain} vs mm {f_late}"
         );
     }
 

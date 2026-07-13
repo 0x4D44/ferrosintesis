@@ -8,7 +8,7 @@ MIDI. Nothing is sampled from, or quotes, any existing recording — each album 
 *original* material written in the vocabulary of an idiom (Mike Oldfield, Jean-Michel
 Jarre, Hans Zimmer, Enigma, Max Richter…). The generators and the MIDI they produce are
 committed as reproducible source; the rendered audio is build output you regenerate from
-that source with one command (`python build.py`).
+that source with one command (`cargo run --release -p render-catalog`).
 
 ## Listen
 
@@ -16,7 +16,7 @@ The audio is not committed — you build it. From the repo root, one command ren
 every album to tagged `.opus` under `listening/<artist>/<album>/`:
 
 ```bash
-python build.py     # builds the synth + CLI, then renders every album into listening/
+cargo run --release -p render-catalog     # builds the synth, then renders every album
 ```
 
 Then drag `listening/` into an audio player. Rendering needs a Rust toolchain and
@@ -148,10 +148,10 @@ is not published as a separate crate.
 ## Reproduce & verify
 
 ```bash
-# Build the synth + CLI and render every album to listening/*.opus (from the repo root):
-python build.py                      # = cargo build --release -p ferrosintesis-cli, then render_opus.py
-python build.py --album "Sub Rosa"   # build, then render just one album
-python render_opus.py                # render only, if the CLI is already built
+# Build the synth and render every album to listening/*.opus (from the repo root):
+cargo run --release -p render-catalog                        # everything
+cargo run --release -p render-catalog -- --album "Sub Rosa"  # just one album
+cargo run --release -p render-catalog -- --jobs 4            # limit parallelism
 
 # Regenerate/verify one album's MIDI (run inside that album's own directory):
 python build.py                      # rebuild the .mid + manifest
@@ -162,11 +162,12 @@ cargo build --release -p ferrosintesis-cli
 cargo test                           # numeric audio oracles — this machine has no ears
 ```
 
-(The repo-root `build.py` builds + renders; an album directory's own `build.py` rebuilds
-that album's MIDI — same name, distinguished by which directory you run it in.) Python is
-standard-library only, so a bare `python3` is enough. Rendering additionally needs
-`ropusenc` from the sibling `ropus` project on PATH. The `.opus` / `.wav` files are
-git-ignored build output; only the sources and `.mid` are committed.
+Rendering the catalog is pure Rust (`crates/render-catalog`) — no Python involved; it
+needs a Rust toolchain plus `ropusenc` from the sibling `ropus` project on PATH. Python
+is still what *composes* the music: each album directory has its own `build.py` that
+rebuilds that album's MIDI, standard-library only, so a bare `python3` is enough. The
+`.opus` / `.wav` files are git-ignored build output; only the sources and `.mid` are
+committed.
 
 ## Layout
 
@@ -178,11 +179,13 @@ git-ignored build output; only the sources and `.mid` are committed.
   `analyze.py`), the committed `midi/`, an `album_manifest.json`, and `README.md` /
   `ALBUM.md` track notes.
 - **`listening/`** — tagged `.opus` listening copies, grouped by artist and album for
-  drag-and-drop playback. **Git-ignored build output** (produced by `python build.py`),
-  not committed. An album may supply exact-stem UTF-8 `lyrics/*.txt` sidecars; the
-  renderer embeds them as multiline `LYRICS` listening-guide tags.
+  drag-and-drop playback. **Git-ignored build output** (produced by
+  `cargo run --release -p render-catalog`), not committed. An album may supply
+  exact-stem UTF-8 `lyrics/*.txt` sidecars; the renderer embeds them as multiline
+  `LYRICS` listening-guide tags.
 - **`crates/ferrosintesis/`** — the publishable Rust synth library, with
-  **`crates/ferrosintesis-cli/`** for the repository's WAV-rendering binary.
+  **`crates/ferrosintesis-cli/`** for the repository's WAV-rendering binary and
+  **`crates/render-catalog/`** for the catalog renderer (MIDI → tagged `.opus`).
 - **`crates/ferrosintesis-samples-core/`** and
   **`crates/ferrosintesis-samples-orchestral/`** — the two CC0 asset crates compiled
   into default builds; **`tools/ferrosintesis-samples/`** holds their preparation and

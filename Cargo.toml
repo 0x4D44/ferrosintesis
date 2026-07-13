@@ -4,10 +4,15 @@ members = [
     "crates/ferrosintesis-cli",
     "crates/ferrosintesis-samples-core",
     "crates/ferrosintesis-samples-orchestral",
+    "crates/render-catalog",
 ]
 resolver = "2"
 
 [profile.release]
 opt-level = 3
 lto = true
+# render-catalog isolates a per-track synth panic with `catch_unwind`, which is a
+# no-op under `panic = "abort"`. Unwind is already the default; pinning it here
+# documents the dependency so a future size/speed tweak can't silently remove it.
+panic = "unwind"
 

@@ -7,7 +7,8 @@ Build them from the repo root with one command, then drag `listening/` into an
 audio player to browse the rendered albums by artist and album:
 
 ```powershell
-python build.py     # builds the synth + CLI, then renders every album into this tree
+cargo run --release -p render-catalog                        # every album
+cargo run --release -p render-catalog -- --album "Sub Rosa"  # just one album
 ```
 
 The source albums, MIDI files, manifests, and composition engines live under

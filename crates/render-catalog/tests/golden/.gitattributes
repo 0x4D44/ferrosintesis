@@ -1,0 +1,5 @@
+# The .argv goldens are length-prefixed captures of the exact argv the retired
+# render_opus.py passed to ropusenc. They are byte-exact fixtures: a CRLF
+# translation would desynchronise every length prefix from its payload, so keep
+# git's eol conversion (core.autocrlf=true on Windows) off them.
+*.argv -text

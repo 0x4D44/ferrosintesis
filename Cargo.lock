@@ -24,3 +24,10 @@ version = "0.1.0"
 [[package]]
 name = "ferrosintesis-samples-orchestral"
 version = "0.1.0"
+
+[[package]]
+name = "render-catalog"
+version = "0.1.0"
+dependencies = [
+ "ferrosintesis",
+]

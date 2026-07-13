@@ -3,6 +3,23 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.13 — **A byte-exact test fixture MUST be marked `-text` in `.gitattributes`,
+  and the render pipeline IS byte-reproducible across binaries.** Two findings from the
+  Rust `render-catalog` port. (1) This repo has `core.autocrlf=true`, so git rewrites LF
+  to CRLF on checkout for anything it thinks is text — which silently desyncs every
+  length prefix in a length-prefixed golden. `crates/render-catalog/tests/golden/
+  .gitattributes` (`*.argv -text`) pins it; verify with `git cat-file -p :<file> | cmp -
+  <file>`. (2) The feared cross-binary LTO float divergence did **not** happen: the
+  in-process render inside `render-catalog` produced `.opus` **byte-identical** to the
+  `ferrosintesis` CLI binary's, all 6 demo tracks, before and after a refactor. So the
+  earlier "LTO reorders float ops" lesson applies to *debug-vs-release*, not to two
+  release binaries linking the same rlib — a cross-binary byte-compare IS a usable
+  parity oracle here (`ropusenc`'s Ogg serial is the fixed constant `0xC0DEC0DE`, so it
+  is deterministic too). Corollary: when porting, capture the golden from the OLD
+  implementation *before* deleting it — it caught that `render_opus.py` tagged
+  `TRACKTOTAL` with the count of *selected* tracks (1 under `--only-list`), not the
+  album's true size.
+
 - 2026.07.13 — **A true-peak ceiling on the WAV does NOT survive lossy Opus
   encoding.** ropusenc's 96k VBR + 44.1→48 kHz resample adds content-dependent
   inter-sample true peak — ~1.6 dB typically, but up to ~2.9 dB on the

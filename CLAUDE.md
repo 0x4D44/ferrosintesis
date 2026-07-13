@@ -19,10 +19,12 @@ The pipeline is: `engine.py` → committed `.mid` → **ferrosintesis** → `.wa
 `ropusenc` → `listening/*.opus`. The committed `.mid` (every album) is the
 listenable source of truth; the `.opus` and `.wav` renders are reproducible
 **build output** (git-ignored, not committed), regenerated on demand with
-`python build.py` (builds the synth + CLI, then renders every album). There is no
-committed audio to play directly — you build the repo to hear it. (History note:
-the `.opus` files were committed until they had bloated `.git` past 5.9 GB with
-re-rendered copies; they were purged and are now render-on-demand.)
+`python build.py` (builds the synth + CLI, then renders every album). Every render
+is loudness-normalized to −18 LUFS (BS.1770-4) with a −1 dBTP true-peak limit and
+R128 replay-gain tags. There is no committed audio to play directly — you build the
+repo to hear it. (History note: the `.opus` files were committed until they had
+bloated `.git` past 5.9 GB with re-rendered copies; they were purged and are now
+render-on-demand.)
 
 ## Layout
 
@@ -134,7 +136,7 @@ exactly the albums it should; *unexpected* diffs (a brass change altering a pian
 album, DC on silent channels) are bugs — investigate before committing. For a pure
 controller feature, any diff at all is a bug.
 
-ferrosintesis is versioned (`Cargo.toml`, currently 0.14.3); a shipped-code change needs one
+ferrosintesis is versioned (`Cargo.toml`, currently 0.16.0); a shipped-code change needs one
 version bump per integrated task.
 
 ## Composition-engine architecture
@@ -175,7 +177,7 @@ Two shapes:
 | `build.py` | entry point: rebuild / `--verify` / `--check` |
 | `verify.py`, `analyze.py` | structural oracles (MIDI) and audio oracles (render) |
 | `midi/NN - Title.mid` | rendered MIDI, **committed**, reproducible |
-| `listening/<artist>/<album>/NN - Title.opus` | tagged listening copy — **git-ignored build output**, produced by `python build.py` (not committed) |
+| `listening/<artist>/<album>/NN - Title.opus` | tagged listening copy — **git-ignored build output**, produced by `python build.py` (-18 LUFS, -1 dBTP, R128 tags) |
 | `album_manifest.json` | machine-readable metadata (tracks, durations, movement map) |
 | `ALBUM.md`, `README.md` | human track notes + regenerate/verify instructions |
 

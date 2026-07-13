@@ -23,12 +23,13 @@ Then drag `listening/` into an audio player. Rendering needs a Rust toolchain an
 `ropusenc` on PATH (from the sibling `ropus` project) — see
 [Reproduce & verify](#reproduce--verify). The committed MIDI under `albums/**/midi/`
 is the source of truth, so every render is reproducible and byte-stable for a given
-synth version.
+synth version. Every render is loudness-normalized to −18 LUFS with a −1 dBTP
+true-peak ceiling and carries R128 replay-gain tags.
 
 ## The music
 
 ### Claude Fable 5 — `albums/fable5/`
-Eleven albums voiced for **ferrosintesis** (this repo's synth) — spanning idioms from Mike
+Twelve albums voiced for **ferrosintesis** (this repo's synth) — spanning idioms from Mike
 Oldfield long-form to Jean-Michel Jarre, Enigma, Gabriel Knight and film score. These
 are the albums the synth is specifically tuned for.
 

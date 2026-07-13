@@ -77,13 +77,17 @@ def analyze_track(path: Path, track: dict[str, object]) -> list[str]:
     if rate < 32000:
         failures.append(f"sample rate {rate} is unexpectedly low")
     peak = max(abs(value) for value in samples) / 32768.0
-    if peak < 0.42:
-        failures.append(f"peak {db(peak):.1f} dBFS is too quiet")
     if peak >= 0.99997:
         failures.append("render reaches digital full scale")
 
     stereo, mono = stereo_and_mono_rms(samples)
     mono_loss = db(stereo) - db(mono)
+    # ferrosintesis (>= 0.16) loudness-normalizes every render to a fixed integrated
+    # loudness, so a peak-based "too quiet" test is obsolete (a high-crest track can
+    # sit well below full scale by design). Guard on RMS instead — a genuinely broken
+    # or near-silent render still trips this (threshold matches Atlas of Becoming).
+    if db(stereo) < -36.0:
+        failures.append(f"overall level {db(stereo):.1f} dBFS is too quiet")
     if mono_loss > 3.0:
         failures.append(f"mono sum loses {mono_loss:.2f} dB")
 

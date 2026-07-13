@@ -39,6 +39,16 @@ DATE = "2026"
 # loudness (BS.1770-4) with a -1 dBTP true-peak limit. Keep in lockstep with the
 # CLI default (crates/ferrosintesis-cli/src/main.rs).
 TARGET_LUFS = -18.0
+# WAV true-peak ceiling we ask the synth to limit to before encoding. It is more
+# conservative than the -1 dBTP delivery target because ropusenc's lossy 96k encode
+# + 44.1->48 kHz resample adds inter-sample true peak. The overshoot is content-
+# dependent and worst on bright/dense material: up to ~2.9 dB on Bright Matter
+# "Six-Five-Two-One" (measured WAV -3.6 -> opus -0.7). At -4.5 dBTP that same track
+# encodes to about -2.7 dBTP, and every other track was already compliant at -3.5,
+# so -4.5 keeps the whole catalog safely under -1 dBTP. Loudness is unaffected
+# (peaks only) and -18 LUFS content at ~-4 dBTP is a normal ~14 dB PLR, so the
+# headroom is free.
+OPUS_TP_CEILING = -4.5
 # R128 replay-gain tags (RFC 7845 §5.2): Q7.8 fixed-point dB to reach the -23 LUFS
 # reference. The audio is baked to TARGET_LUFS and the album arc is flattened, so
 # the track and album gains are equal — track- and album-mode players then produce
@@ -181,7 +191,8 @@ def render_one(
     opus.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as td:
         wav = Path(td) / (midi.stem + ".wav")
-        r = subprocess.run([str(SYNTH), str(midi), "-o", str(wav), "-q"],
+        r = subprocess.run([str(SYNTH), str(midi), "-o", str(wav), "-q",
+                            "--tp-ceiling", str(OPUS_TP_CEILING)],
                            capture_output=True, text=True)
         if r.returncode != 0 or not wav.exists():
             return opus, False, f"ferrosintesis failed: {r.stderr.strip()[:200]}"

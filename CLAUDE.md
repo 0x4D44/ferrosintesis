@@ -147,8 +147,14 @@ exactly the albums it should; *unexpected* diffs (a brass change altering a pian
 album, DC on silent channels) are bugs — investigate before committing. For a pure
 controller feature, any diff at all is a bug.
 
-ferrosintesis is versioned (`Cargo.toml`, currently 0.16.0); a shipped-code change needs one
-version bump per integrated task.
+ferrosintesis is versioned (`Cargo.toml`, currently 0.17.0); a shipped-code change needs one
+version bump per integrated task. The crate is **published to crates.io**, so its public API
+carries a semver promise: `Options`/`RealtimeOptions` are sealed (private fields — construct
+with `Options::default()` + the `with_*` builders, read with the accessors), and the error
+enums plus every data-carrying variant are `#[non_exhaustive]`. Adding a render knob or an
+error variant is therefore a minor bump, not a major one — keep it that way. Publish order is
+forced by the `=0.1.0` pins: `ferrosintesis-samples-core` → `-orchestral` → `ferrosintesis`.
+`ferrosintesis-cli` and `render-catalog` are `publish = false`.
 
 ## Composition-engine architecture
 

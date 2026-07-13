@@ -6,18 +6,24 @@ reproducible albums composed by five language models.**
 Every note here was composed by a frontier language model writing Python that emits
 MIDI. Nothing is sampled from, or quotes, any existing recording — each album is
 *original* material written in the vocabulary of an idiom (Mike Oldfield, Jean-Michel
-Jarre, Hans Zimmer, Enigma, Max Richter…). The generators, the MIDI they produce, and
-(for most albums) the rendered audio are committed, so you can listen with no toolchain
-— or regenerate everything from source.
+Jarre, Hans Zimmer, Enigma, Max Richter…). The generators and the MIDI they produce are
+committed as reproducible source; the rendered audio is build output you regenerate from
+that source with one command (`python build.py`).
 
 ## Listen
 
-Most albums ship committed, tagged `.opus` files under `listening/` (for example
-`listening/Claude Fable 5/Hollow Hill/`). Drag that tree into an audio player for
-the shareable listening copies, reproducible from the committed MIDI plus the synth.
-Four albums (**VIGIL**, **RIVERWAKE**, **The Long Turning**, and **Bright Matter**)
-ship as MIDI only; render them to `.opus` with `render_opus.py` (see
-[Reproduce & verify](#reproduce--verify)).
+The audio is not committed — you build it. From the repo root, one command renders
+every album to tagged `.opus` under `listening/<artist>/<album>/`:
+
+```bash
+python build.py     # builds the synth + CLI, then renders every album into listening/
+```
+
+Then drag `listening/` into an audio player. Rendering needs a Rust toolchain and
+`ropusenc` on PATH (from the sibling `ropus` project) — see
+[Reproduce & verify](#reproduce--verify). The committed MIDI under `albums/**/midi/`
+is the source of truth, so every render is reproducible and byte-stable for a given
+synth version.
 
 ## The music
 
@@ -98,7 +104,7 @@ are the albums the synth is specifically tuned for.
 
 ```
 engine.py  ─▶  .mid  ─▶  ferrosintesis ─▶ .wav ─▶ ropusenc ─▶ listening/*.opus
-(Python)      committed   (Rust synth)   scratch    (Opus)       committed
+(Python)      committed   (Rust synth)   scratch    (Opus)     build output
 ```
 
 - **Composition engines** are per-album Python using only the standard library — no
@@ -141,20 +147,25 @@ is not published as a separate crate.
 ## Reproduce & verify
 
 ```bash
-# Regenerate/verify one album (run inside its directory):
-python build.py            # rebuild the .mid + manifest
-python build.py --verify   # re-parse the written MIDI and run every oracle
+# Build the synth + CLI and render every album to listening/*.opus (from the repo root):
+python build.py                      # = cargo build --release -p ferrosintesis-cli, then render_opus.py
+python build.py --album "Sub Rosa"   # build, then render just one album
+python render_opus.py                # render only, if the CLI is already built
 
-# Build the synth CLI:
+# Regenerate/verify one album's MIDI (run inside that album's own directory):
+python build.py                      # rebuild the .mid + manifest
+python build.py --verify             # re-parse the written MIDI and run every oracle
+
+# Build and test the synth on its own:
 cargo build --release -p ferrosintesis-cli
-cargo test                 # numeric audio oracles — this machine has no ears
-
-# Render every album's MIDI to tagged .opus (from the repo root):
-python render_opus.py      # needs a built ferrosintesis CLI + `ropusenc` on PATH
+cargo test                           # numeric audio oracles — this machine has no ears
 ```
 
-Python is standard-library only, so a bare `python3` is enough. `ropusenc` comes from
-the sibling `ropus` project.
+(The repo-root `build.py` builds + renders; an album directory's own `build.py` rebuilds
+that album's MIDI — same name, distinguished by which directory you run it in.) Python is
+standard-library only, so a bare `python3` is enough. Rendering additionally needs
+`ropusenc` from the sibling `ropus` project on PATH. The `.opus` / `.wav` files are
+git-ignored build output; only the sources and `.mid` are committed.
 
 ## Layout
 
@@ -166,8 +177,9 @@ the sibling `ropus` project.
   `analyze.py`), the committed `midi/`, an `album_manifest.json`, and `README.md` /
   `ALBUM.md` track notes.
 - **`listening/`** — tagged `.opus` listening copies, grouped by artist and album for
-  drag-and-drop playback. An album may supply exact-stem UTF-8 `lyrics/*.txt`
-  sidecars; the renderer embeds them as multiline `LYRICS` listening-guide tags.
+  drag-and-drop playback. **Git-ignored build output** (produced by `python build.py`),
+  not committed. An album may supply exact-stem UTF-8 `lyrics/*.txt` sidecars; the
+  renderer embeds them as multiline `LYRICS` listening-guide tags.
 - **`crates/ferrosintesis/`** — the publishable Rust synth library, with
   **`crates/ferrosintesis-cli/`** for the repository's WAV-rendering binary.
 - **`crates/ferrosintesis-samples-core/`** and

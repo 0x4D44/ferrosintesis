@@ -29,8 +29,10 @@ note.
   (thirteen oracles, written before the music — including the intro
   fidelity check against the demo gesture and the build/drop dynamic-arc
   contour)
-- Listen via [ferrosintesis](../../crates/ferrosintesis/README.md) **v0.8** or the
-  committed `listening/Claude Fable 5/The Ninth Bell/01 - The Ninth Bell.opus`
+- Listen by rendering with `python build.py` (or
+  [ferrosintesis](../../crates/ferrosintesis/README.md) directly); the tagged
+  `.opus` — git-ignored build output — lands under
+  `listening/Claude Fable 5/The Ninth Bell/`
 
 This is original material using Gabriel-Knight-vocabulary gestures; it
 quotes no existing piece.
@@ -46,8 +48,9 @@ stacked in the finale.
 
 - Files: `Heliopause/midi/01..02 - Heliopause, Part One/Two.mid`
 - Docs: `Heliopause/README.md` and `ALBUM.md`; verify: `python build.py --verify`
-- Listen: [ferrosintesis](../../crates/ferrosintesis/README.md) v0.8 or
-  `listening/Claude Fable 5/Heliopause/*.opus`
+- Listen: render with `python build.py` (or
+  [ferrosintesis](../../crates/ferrosintesis/README.md) directly); the tagged
+  `.opus` (git-ignored build output) lands under `listening/Claude Fable 5/Heliopause/`
 
 This is original material using Jarre-vocabulary gestures; it quotes no
 existing piece.
@@ -64,7 +67,8 @@ yet model brass.
 
 - Files: `The Burning Meridian/midi/01..03 - *.mid`
 - Docs: `The Burning Meridian/README.md` and `ALBUM.md`
-- Listen: `listening/Claude Fable 5/The Burning Meridian/*.opus`
+- Listen: render with `python build.py`; the tagged `.opus` (git-ignored build
+  output) lands under `listening/Claude Fable 5/The Burning Meridian/`
 
 This is original material using broad film-music vocabulary; it is not a
 copy of any existing score.
@@ -78,7 +82,8 @@ ring.
 
 - File: `Tuxedo Noir/midi/01 - Tuxedo Noir.mid`
 - Docs: `Tuxedo Noir/README.md` and `ALBUM.md`
-- Listen: `listening/Claude Fable 5/Tuxedo Noir/01 - Tuxedo Noir.opus`
+- Listen: render with `python build.py`; the tagged `.opus` (git-ignored build
+  output) lands under `listening/Claude Fable 5/Tuxedo Noir/`
 
 This is original material in the spy-score idiom; it quotes no existing
 piece.
@@ -101,9 +106,10 @@ bend range 12 ending in a −7 semitone whammy dive.
   `Seven Kinds of Sunlight/album_manifest.json`
 - Docs: `Seven Kinds of Sunlight/README.md` and `ALBUM.md`
 - Regenerate/verify: `python build.py` / `python build.py --verify`
-- Listen via [ferrosintesis](../../crates/ferrosintesis/README.md) **v0.8** or the
-  committed `listening/Claude Fable 5/Seven Kinds of Sunlight/01 - Seven Kinds of
-  Sunlight.opus`
+- Listen by rendering with `python build.py` (or
+  [ferrosintesis](../../crates/ferrosintesis/README.md) directly); the tagged
+  `.opus` — git-ignored build output — lands under
+  `listening/Claude Fable 5/Seven Kinds of Sunlight/`
 
 This is an original composition; it quotes no existing piece.
 
@@ -126,8 +132,9 @@ woodblock tapping SUB ROSA in Morse.
   `Sub Rosa/album_manifest.json`
 - Docs: `Sub Rosa/README.md` and `Sub Rosa/ALBUM.md`
 - Regenerate/verify: `python build.py` / `python build.py --verify`
-- Listen via [ferrosintesis](../../crates/ferrosintesis/README.md) **v0.7** or the
-  committed `listening/Claude Fable 5/Sub Rosa/01 - Sub Rosa.opus`
+- Listen by rendering with `python build.py` (or
+  [ferrosintesis](../../crates/ferrosintesis/README.md) directly); the tagged
+  `.opus` — git-ignored build output — lands under `listening/Claude Fable 5/Sub Rosa/`
 
 This is original material using Enigma-vocabulary gestures; it quotes no
 existing piece.

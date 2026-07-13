@@ -59,8 +59,9 @@ python build.py --verify    # 16 oracles: material, structure, CC
                             # RPN/bend hygiene, Morse, dynamics, bounds
 ```
 
-Listen via [ferrosintesis](../../../crates/ferrosintesis/README.md) (v0.7), or play the
-committed `listening/Claude Fable 5/Sub Rosa/01 - Sub Rosa.opus`.  The audio was verified
+Listen by rendering with `python build.py` from the repo root (or
+[ferrosintesis](../../../crates/ferrosintesis/README.md) directly); the tagged
+`listening/Claude Fable 5/Sub Rosa/01 - Sub Rosa.opus` is git-ignored build output.  The audio was verified
 numerically: the RMS arc follows the movement plan (Limina loudest at
 −19.2 dB, the breakdown and afterglow receding), no dead air, no
 clicks, and the headline features were measured on rendered stems —

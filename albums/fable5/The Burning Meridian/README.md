@@ -48,5 +48,6 @@ python build.py             # rebuild all three + manifest
 python build.py --verify    # material + 12 structural oracles / track
 ```
 
-Listen via [ferrosintesis](../../../crates/ferrosintesis/README.md) (v0.8) or the
-committed `listening/Claude Fable 5/The Burning Meridian/*.opus`.
+Listen by rendering with `python build.py` (or
+[ferrosintesis](../../../crates/ferrosintesis/README.md) directly); the tagged
+`.opus` lands, git-ignored, under `listening/Claude Fable 5/The Burning Meridian/`.

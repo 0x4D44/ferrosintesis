@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""render_opus.py — render every committed album to tagged Ogg Opus.
+"""render_opus.py — render every album's MIDI to tagged Ogg Opus.
 
 For each MIDI in the repo: render to a temporary WAV with **ferrosintesis**
 (our synth, built at target/release), then encode to
 `listening/<artist>/<album>/<name>.opus` with **ropusenc**, writing Vorbis-comment tags
 (TITLE / ARTIST / ALBUM / ALBUMARTIST / COMPOSER / GENRE / DATE /
 TRACKNUMBER / TRACKTOTAL, plus optional multiline LYRICS listening notes). The
-committed `.opus` files are the shareable,
-tagged listening copies; they are reproducible from the committed MIDI +
-synth by re-running this script.
+`.opus` files are reproducible **build output** (git-ignored), not source: they
+are regenerated from the committed MIDI + synth by re-running this script (or,
+more simply, `python build.py`, which builds the CLI first).
 
     python render_opus.py            # render everything (parallel)
     python render_opus.py --album "Winter Guests"   # one album, by name

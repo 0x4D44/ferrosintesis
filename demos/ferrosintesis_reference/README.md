@@ -24,8 +24,10 @@ index (embedded as the opus `LYRICS` tag) gives a timestamped table of contents.
 
 ## How to use it
 
-- **Listen** to `listening/ferrosintesis/ferrosintesis Reference Audition/*.opus`,
-  scrubbing by the timestamped index in each track's tags.
+- **Listen** by rendering with `python build.py` from the repo root (the `.opus` is
+  git-ignored build output); the tagged files land under
+  `listening/ferrosintesis/ferrosintesis Reference Audition/`, scrubbable by the
+  timestamped index in each track's tags.
 - **Hear one voice** by finding it in the index (e.g. "1:30 GM 057 Trombone").
 - **A/B a voice against its alt-bank twin** — each alt voicing is inlined immediately
   after its default (e.g. GM 019 Church Organ, then GM 019 [alt] = the legacy Leslie

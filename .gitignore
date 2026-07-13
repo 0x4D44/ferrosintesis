@@ -16,8 +16,10 @@ __pycache__/
 transcriptions/
 transcribe.local.json
 tools/
-# Rendered audio (reproducible via ferrosintesis)
+# Rendered audio — reproducible build output, not source.
+# Regenerate with `python build.py` (synth + CLI + render) or `render_opus.py`.
 *.wav
+*.opus
 # ...but the synth's attack-transient sample banks are source, not output
 !crates/ferrosintesis-samples-core/samples/*.wav
 !crates/ferrosintesis-samples-orchestral/samples/*.wav

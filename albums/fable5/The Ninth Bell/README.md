@@ -12,8 +12,9 @@ void, and a larger rebuild into the true climax and its second betrayal.
 - Key: A aeolian, 4/4, 101 bars. Eight movements with MIDI markers; timed
   map in `album_manifest.json`; per-movement notes in `ALBUM.md`.
 - Design: `wrk_docs/2026.07.07 - HLD - The Ninth Bell.md`
-- Listen via [ferrosintesis](../../../crates/ferrosintesis/README.md) **v0.8** or the
-  committed `listening/Claude Fable 5/The Ninth Bell/01 - The Ninth Bell.opus`.
+- Listen by rendering with `python build.py` (or
+  [ferrosintesis](../../../crates/ferrosintesis/README.md) directly); the tagged
+  `.opus` lands (git-ignored) under `listening/Claude Fable 5/The Ninth Bell/`.
 
 ## The shape (what Arthur asked for)
 

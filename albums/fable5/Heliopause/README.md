@@ -42,7 +42,8 @@ python build.py             # rebuild both parts + manifest
 python build.py --verify    # material + 12 structural oracles / part
 ```
 
-Listen via [ferrosintesis](../../../crates/ferrosintesis/README.md) (v0.8) or the
-committed `listening/Claude Fable 5/Heliopause/*.opus`.  Renders measured clean: no dead air, no
+Listen by rendering with `python build.py` (or
+[ferrosintesis](../../../crates/ferrosintesis/README.md) directly); the tagged
+`.opus` lands, git-ignored, under `listening/Claude Fable 5/Heliopause/`.  Renders measured clean: no dead air, no
 discontinuities beyond drum onsets, both parts peaking in their
 verified climax movements.

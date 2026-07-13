@@ -20,8 +20,9 @@ melodies, signature riffs, lyrics, or arrangements.
 - `analyze.py` — optional render-side WAV checks.
 - `album_manifest.json` — durations, concepts, tags, and timed section maps.
 - `ALBUM.md` — listening notes and the design response to the brief.
-- `lyrics/` — exact-track UTF-8 listening guides embedded in the committed Opus
-  files as multiline `LYRICS` tags.
+- `lyrics/` — exact-track UTF-8 listening guides embedded as multiline `LYRICS`
+  tags in the `.opus` files produced by `python build.py` (git-ignored build
+  output).
 
 ## Rebuild and verify
 

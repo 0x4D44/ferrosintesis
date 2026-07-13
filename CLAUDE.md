@@ -16,17 +16,21 @@ two kinds of code that meet at the MIDI file:
    *fable5* (Mike-Oldfield-idiom) albums but plays any GM file as a faithful player.
 
 The pipeline is: `engine.py` → committed `.mid` → **ferrosintesis** → `.wav` →
-`ropusenc` → committed `listening/*.opus`. Committed `.mid` (every album) plus
-committed `.opus` (most albums — VIGIL, RIVERWAKE and *The Long Turning* ship
-MIDI-only) let anyone listen without a toolchain; `.wav` is a disposable
-intermediate.
+`ropusenc` → `listening/*.opus`. The committed `.mid` (every album) is the
+listenable source of truth; the `.opus` and `.wav` renders are reproducible
+**build output** (git-ignored, not committed), regenerated on demand with
+`python build.py` (builds the synth + CLI, then renders every album). There is no
+committed audio to play directly — you build the repo to hear it. (History note:
+the `.opus` files were committed until they had bloated `.git` past 5.9 GB with
+re-rendered copies; they were purged and are now render-on-demand.)
 
 ## Layout
 
 `albums/` = **one directory per model** (`fable5/`, `opus4-8/`, `gpt5-5/`,
 `gpt5-3-spark/`), each holding one or more albums. An album lives either at the
 model-dir root or in a named subfolder. `listening/` holds tagged `.opus` listening
-copies grouped by artist and album for drag-and-drop playback.
+copies grouped by artist and album for drag-and-drop playback — **git-ignored build
+output**, produced by `python build.py` (not committed).
 `crates/ferrosintesis/` is the synth library; `crates/ferrosintesis-cli/` is the
 offline WAV renderer. `crates/ferrosintesis-samples-{core,orchestral}/` are the two
 default embedded asset crates; their generator and full provenance live under
@@ -36,14 +40,14 @@ design and review docs; `wrk_journals/` is the engineer's log.
 ## Commands
 
 > **Run every build/render below from a task worktree — never the main clone
-> `D:\language\midi-music`.** These commands write into the working tree:
-> `render_opus.py` **rewrites committed `listening/*.opus` in place**, `build.py`
-> rewrites `.mid` / `album_manifest.json`, and `cargo` emits `.wav` / `target/`.
-> Run in the main clone they dirty the sacred trunk-holder (violating
-> worktree-first) and block its `git pull --ff-only`. The git guards protect the
-> *ref*, not the working tree — nothing stops a Python/cargo run from soiling it.
-> "From the repo root" below therefore means **the worktree's root**, not the
-> main clone.
+> `D:\language\midi-music`.** An album's own `python build.py` (run from an album
+> directory) rewrites the **tracked** `.mid` / `album_manifest.json`; run in the main
+> clone it dirties the sacred trunk-holder (violating worktree-first) and blocks its
+> `git pull --ff-only`. Rendering (the **root** `build.py`, `render_opus.py`, `cargo`)
+> now writes only git-ignored `.opus` / `.wav` / `target/`, so it no longer dirties
+> *tracked* state — but it still churns the tree with hundreds of MiB, so keep it in a
+> worktree too. The git guards protect the *ref*, not the working tree. "From the repo
+> root" below therefore means **the worktree's root**, not the main clone.
 
 ### ferrosintesis (Rust) — from the repo root
 ```
@@ -70,12 +74,15 @@ byte-identical and `--verify` reasons about the same Score that produced the fil
 fable5 albums also add `--check` for in-memory-only oracles, safe to run while composing.)
 
 ### Rendering audio — from the **repo root**
+The `.opus` listening copies are git-ignored build output, regenerated on demand:
 ```
-python render_opus.py                       # render every album's MIDI → listening/*.opus
-python render_opus.py --album "Winter Guests"
+python build.py                             # build synth + CLI, then render every album
+python build.py --album "Winter Guests"     # build, then render one album
+python render_opus.py                       # render only (assumes the CLI is already built)
 ```
-Requires a built `ferrosintesis` CLI (see above) and `ropusenc` on PATH (from the sibling
-`ropus` repo). Album metadata (title/artist/genre) lives in `ALBUMS` in `render_opus.py`.
+`build.py` runs `cargo build --release -p ferrosintesis-cli` then `render_opus.py`, and
+requires a Rust toolchain plus `ropusenc` on PATH (from the sibling `ropus` repo). Album
+metadata (title/artist/genre) lives in `ALBUMS` in `render_opus.py`.
 
 ## ferrosintesis architecture
 
@@ -114,16 +121,16 @@ default-on with a diff-driven asset refresh.** Two regimes:
   channel that never sends one renders exactly as before. That's correct MIDI
   semantics, not conservatism — an unauthored controller must be inert.
 - **Instrument/timbre improvements** (better voices, new sample layers, kit upgrades)
-  become the **default sound** — committed albums are not frozen in older, worse
-  renderings. The obligation is to refresh, not to freeze: re-render and re-commit
-  the affected `listening/*.opus` assets in the same task, so the published audio
-  never silently lags the synth.
+  become the **default sound**. Because the `.opus` renders are git-ignored build
+  output (produced by `python build.py`), there is no committed audio to refresh —
+  anyone who renders after your change simply hears the improved synth, and the
+  committed album source (the `.mid`) is unaffected.
 
 **Either way, run the render-diff inventory** for any voices.rs/engine.rs/drums.rs/
 sampler.rs change: build a baseline binary in a throwaway `git worktree add <path> HEAD`,
 render every album MIDI in `render_opus.py::ALBUMS` with both binaries, and `cmp`.
-It is a **report, not a pass/fail gate**: expected diffs define exactly which
-listening assets to refresh; *unexpected* diffs (a brass change altering a piano-only
+It is a **report, not a pass/fail gate**: expected diffs confirm the change reached
+exactly the albums it should; *unexpected* diffs (a brass change altering a piano-only
 album, DC on silent channels) are bugs — investigate before committing. For a pure
 controller feature, any diff at all is a bug.
 
@@ -168,15 +175,16 @@ Two shapes:
 | `build.py` | entry point: rebuild / `--verify` / `--check` |
 | `verify.py`, `analyze.py` | structural oracles (MIDI) and audio oracles (render) |
 | `midi/NN - Title.mid` | rendered MIDI, **committed**, reproducible |
-| `listening/<artist>/<album>/NN - Title.opus` | tagged listening copy, **committed for most albums** (via `render_opus.py`; three long albums ship MIDI-only) |
+| `listening/<artist>/<album>/NN - Title.opus` | tagged listening copy — **git-ignored build output**, produced by `python build.py` (not committed) |
 | `album_manifest.json` | machine-readable metadata (tracks, durations, movement map) |
 | `ALBUM.md`, `README.md` | human track notes + regenerate/verify instructions |
 
-`.gitignore` drops `.wav` (reproducible) **except** the files under
-`crates/ferrosintesis-samples-{core,orchestral}/samples/` — those 202 WAVs are the
-synth's 16.68 MiB attack-transient bank, which is **source, not output**. Never treat
-them as regenerable. Commit an album as one atomic bundle (sources + `.mid` + manifest
-and docs); render/commit `listening/*.opus` separately.
+`.gitignore` drops `.wav` and `.opus` (both reproducible build output) **except** the
+WAVs under `crates/ferrosintesis-samples-{core,orchestral}/samples/` — those 202 files
+are the synth's 16.68 MiB attack-transient bank, which is **source, not output**. Never
+treat them as regenerable. Commit an album as one atomic bundle (sources + `.mid` +
+manifest and docs); the `.opus` renders are **not** committed — regenerate them with
+`python build.py`.
 
 ## Before you start
 

@@ -43,7 +43,8 @@ New-Item -ItemType Directory -Force target\renders | Out-Null
 ```
 
 Renders in under a minute; the WAV lands in `target/renders/` (git-ignored,
-reproducible). The committed Opus listening copy lives at
+reproducible). The tagged Opus listening copy is git-ignored build output —
+run `python build.py` from the repo root to render it to
 `listening/Claude Fable 5/The Signal Fire/01 - The Signal Fire.opus`. The MIDI remains valid General MIDI, so any GM synth or a
 real sample library works too — 16 channels with mid-piece program changes
 (the winds channel is whistle, fiddle and flute in different movements; the

@@ -42,5 +42,6 @@ python build.py             # rebuild + manifest
 python build.py --verify    # material + 12 structural oracles
 ```
 
-Listen via [ferrosintesis](../../../crates/ferrosintesis/README.md) (v0.8) or the
-committed `listening/Claude Fable 5/Tuxedo Noir/01 - Tuxedo Noir.opus`.
+Listen by rendering with `python build.py` (or [ferrosintesis](../../../crates/ferrosintesis/README.md)
+directly); the tagged, git-ignored `.opus` lands at
+`listening/Claude Fable 5/Tuxedo Noir/01 - Tuxedo Noir.opus`.

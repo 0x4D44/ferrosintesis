@@ -42,8 +42,9 @@ New-Item -ItemType Directory -Force target\renders | Out-Null
 ```
 
 Each part renders in ~10 seconds. The WAVs land in `target/renders/`
-(git-ignored — they are reproducible). The committed Opus listening copies
-live under `listening/Claude Fable 5/Hollow Hill/`. The MIDI also remains valid General MIDI, so any GM
+(git-ignored — they are reproducible). The Opus listening copies are
+git-ignored build output too: run `python build.py` from the repo root to
+render them under `listening/Claude Fable 5/Hollow Hill/`. The MIDI also remains valid General MIDI, so any GM
 synth or a real orchestral library works too. Sixteen channels are used, with
 a handful of mid-piece program changes (the fretless bass and sweep pad only
 exist in the ocean movements, the mandolin borrows the timpani channel for

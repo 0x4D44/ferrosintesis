@@ -44,7 +44,8 @@ New-Item -ItemType Directory -Force target\renders | Out-Null
 ```
 
 Each part renders in well under a minute; the WAVs land in `target/renders/`
-(git-ignored, reproducible). The committed Opus listening copies live under
+(git-ignored, reproducible). The tagged Opus listening copies are git-ignored
+build output produced by `python build.py` (run from the repo root); they land under
 `listening/Claude Fable 5/Winter Guests/`. The MIDI is valid General MIDI, so any GM synth
 works too — though the vowel morph, portamento and aftertouch are
 ferrosintesis features a stock wavetable will ignore.

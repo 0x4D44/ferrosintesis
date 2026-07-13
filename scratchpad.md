@@ -1,5 +1,11 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.13 — **`CLAUDE.md` version string is stale: says ferrosintesis is "currently
+  0.14.3", crate builds as 0.15.3** (`CLAUDE.md` ferrosintesis-architecture "is versioned …
+  currently 0.14.3" line vs `crates/ferrosintesis/Cargo.toml`). Root `README.md`'s crate
+  examples also pin `0.13.5`. Spotted while decommitting rendered opus; refresh all three
+  version strings in one pass.
+
 - [ ] 2026.07.12 — **`crates/ferrosintesis/README.md`'s GM table contradicts the source in 8
   places** — surfaced while auditing instrument coverage for the reference-audition demo
   (`wrk_docs/2026.07.12 - HLD - ferrosintesis reference audition.md`). Source wins in each:

@@ -35,6 +35,15 @@ SYNTH = REPO / "target" / "release" / (
 LISTENING = REPO / "listening"
 BITRATE = "96000"         # VBR; Opus at 96k ≈ 160-192 kbps MP3, near-transparent
 DATE = "2026"
+# ferrosintesis (>= 0.16) loudness-normalizes every render to this integrated
+# loudness (BS.1770-4) with a -1 dBTP true-peak limit. Keep in lockstep with the
+# CLI default (crates/ferrosintesis-cli/src/main.rs).
+TARGET_LUFS = -18.0
+# R128 replay-gain tags (RFC 7845 §5.2): Q7.8 fixed-point dB to reach the -23 LUFS
+# reference. The audio is baked to TARGET_LUFS and the album arc is flattened, so
+# the track and album gains are equal — track- and album-mode players then produce
+# the identical, arc-preserving result.
+R128_GAIN_Q78 = round(256 * (-23.0 - TARGET_LUFS))
 
 # Album metadata by the directory that holds the `midi/` folder.
 # (album title, artist == composer == album-artist, genre)
@@ -151,7 +160,9 @@ def encoder_comments(artist: str, track_total: int, lyrics: str | None) -> list[
         f"ALBUMARTIST={artist}",
         f"COMPOSER={artist}",
         f"TRACKTOTAL={track_total}",
-        "ENCODER_SETTINGS=ferrosintesis->ropusenc 96k VBR",
+        "ENCODER_SETTINGS=ferrosintesis(-18 LUFS)->ropusenc 96k VBR",
+        f"R128_TRACK_GAIN={R128_GAIN_Q78}",
+        f"R128_ALBUM_GAIN={R128_GAIN_Q78}",
     ]
     if lyrics is not None:
         comments.append(f"LYRICS={lyrics}")

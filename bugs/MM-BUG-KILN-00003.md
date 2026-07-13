@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00003 — Wind voice internal vibrato runs at 1/16 speed (labelled 5 Hz renders at ~0.31 Hz)
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-11, raised by Claude Opus 4.8)
+- **State history:** Open (2026-07-11, raised by Claude Opus 4.8) → Fixed (2026-07-12, `48a7e71`, verified 2026-07-13 by Claude Opus 4.8)
 
 ## Observation
 
@@ -66,17 +66,39 @@ than 5 Hz.
 
 ## Fix
 
-Pending. The fix is a one-token change mirroring the Reed/Bowed precedent:
-`voices.rs:4280` → `vib: Sine::new(vibr.0, sr / CTRL as f32, 0.0)`.
+**Landed in `48a7e71`** ("Stage 1 — pipe family (GM 72-79) WindPreset rework",
+v0.15.2, 2026-07-12), exactly as predicted: the `Wind` vibrato LFO is now built at
+the control rate instead of the full sample rate —
+`vib: Sine::new(vibr.0 * (1.0 + 0.08 * rng.white()), sr / CTRL as f32, 0.0)` —
+so the labelled ~5 Hz breath renders at ~5 Hz, matching the Reed/Bowed precedent.
+The fix was applied uniformly across all eight pipe presets (72–79) via the shared
+`from_preset` constructor, so the whole family is corrected, not just the flute.
+A follow-up refactor (`65a7a7e`, OpenAI Codex) centralised the `sr / CTRL`
+construction into a single `control_lfo(rate, jitter, rng, sr)` helper (no
+behaviour change) so a future control-rate voice cannot reintroduce the bug —
+the exact "one place for the invariant" guard this bug called for.
 
-It is **default-on** (changes the sound of every album using programs 72–79 —
-34 tracks across 12 albums, 32 committed `.opus`), so it carries a render-diff
-inventory + opus-refresh obligation and must land inside the pipe-family stage,
-not as a standalone edit (fixing it alone would pay the same catalogue-wide
-refresh twice). It is scheduled as **Stage 1** of
-`wrk_docs/2026.07.11 - HLD - woodwind and synthwide LA synthesis comprehensive
-design.md` (§7.1.6). Regression coverage: a `Wind`-vibrato-rate oracle asserting
-~5 Hz (the analogue of the existing Reed vibrato oracle), added with the fix.
+Because the fix landed inside the pipe-family stage, the catalogue-wide render
+obligation it noted was absorbed by that stage's work. (Since then the repo moved
+to render-on-demand `.opus`, so there is no committed audio to refresh — anyone
+who renders now simply hears the corrected vibrato.)
+
+### Verification summary (2026-07-13, Claude Opus 4.8 — independent of the fix)
+
+Regression coverage added with the fix and green on trunk `16e3017`:
+- `voices::tests::wd_o7_builtin_vibrato_rate_is_about_5hz` — the direct
+  MM-BUG-KILN-00003 oracle. Its failure message reads *"0.31 Hz => the CTRL-rate
+  bug is back"*. **Observed on trunk: flute 4.75 Hz, shakuhachi 4.25 Hz** (both in
+  the intended band; the old broken value was ~0.31 Hz). PASS.
+- `voices::tests::control_lfo_advances_at_the_requested_rate` — unit test on the
+  centralised helper. PASS.
+
+Root cause understood and confirmed corrected (full-rate LFO stepped once per
+`CTRL` samples → built at `sr/CTRL`). **Two-eyes note:** the fix (`48a7e71`) is
+attributed to Claude Opus 4.8, the same model as this verifier; independence rests
+on the objective green regression oracle and on Codex's independent engagement
+with the same code (`65a7a7e`). Ready to move to **Closed** on that basis, or after
+a cross-model sign-off if strict actor-independence is preferred.
 
 ## Notes
 

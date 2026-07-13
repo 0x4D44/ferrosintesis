@@ -3,6 +3,18 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.13 — **A true-peak ceiling on the WAV does NOT survive lossy Opus
+  encoding.** ropusenc's 96k VBR + 44.1→48 kHz resample adds content-dependent
+  inter-sample true peak — ~1.6 dB typically, but up to ~2.9 dB on the
+  brightest/densest material (Bright Matter "Six-Five-Two-One": WAV −3.6 → opus
+  −0.7). So `render_opus.py` limits the WAV to −4.5 dBTP (`OPUS_TP_CEILING`) to land
+  the encoded `.opus` safely under −1. Probe the BRIGHTEST/DENSEST track (not one
+  sample) before picking the ceiling — a milder track under-predicts the overshoot
+  and costs whole-catalog re-render cycles. Corollary: loudness normalization under
+  a peak ceiling leaves high-crest tracks below target because limiting removes
+  loudness; `normalize_loudness` iterates (re-measure → re-makeup → re-limit) to
+  recover it, converging from below so it never overshoots the ceiling.
+
 - 2026.07.13 — **To audition ferrosintesis voices one-at-a-time, four facts are
   load-bearing.** (1) **CC120 (All Sound Off) is the ONLY MIDI lever that stops a
   ringing voice** — CC121 only note-offs *held* notes (`engine.rs:1468`), CC123 is a

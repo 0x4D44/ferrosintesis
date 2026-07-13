@@ -20,13 +20,21 @@
   (Done 2026-07-12: replaced all nine stored full-buffer fingerprints with
   tolerance-based RMS, spectral-centroid, and late/early-envelope signatures.
   Exact comparisons remain only for buffers rendered within the same test run.)
-- [ ] 2026.07.12 — **Push-loop process bug**: a per-file `git push origin
+- [x] 2026.07.12 — **Push-loop process bug**: a per-file `git push origin
   <sha>:main` loop that rebases on race used `git rebase … | tail`; the pipe's
   exit code (from `tail`, always 0) MASKED a rebase conflict, so the loop kept
   pushing the partially-applied stack and falsely reported success. Capture the
   rebase rc directly (`git rebase …; rc=$?`) and STOP on conflict — never gate
   control flow on a piped git command's exit status (same class as the Git-Bash
   python-shim exit-swallow already in this repo's lessons).
+  (Done 2026-07-13: Deltic 3.36.561 adds `deltic integrate --push
+  --incremental`, restricted to per-commit-preflighted `listening/**/*.opus` plus
+  docs. It uses direct Git statuses, fetch/rebase/re-gate between commits, a
+  bounded retry budget, remote reconciliation for uncertain pushes, explicit
+  partial-progress errors, and worktree retention on conflict. Local-Git
+  regressions cover the original mid-stack conflict, hidden source changes,
+  already-landed reruns, and uncertain/rebased push retries; integrated to Deltic
+  `origin/main` at `5bc98d39`.)
 - [x] 2026.07.12 — **Extract a `control_lfo(rate, rng, sr) -> Sine` helper.** The
   control-rate LFO line `Sine::new(rate*(1.0+0.08*rng.white()), sr/CTRL as f32, 0.0)`
   is now duplicated verbatim in three voices — `Wind` (`crates/ferrosintesis/src/voices.rs:4548`),

@@ -2104,27 +2104,44 @@ pub fn normalize_to_i16(samples: &[f32], peak: f32, target: f32) -> Vec<i16> {
     dither_quantize(samples, scale)
 }
 
+/// Max loudness-recovery iterations and the LUFS tolerance for "on target".
+const LOUDNESS_MAX_ITERS: usize = 6;
+const LOUDNESS_TOL_DB: f32 = 0.3;
+
 /// Loudness-normalise: bring integrated loudness (BS.1770-4) to `target_lufs`,
-/// then true-peak-limit to `ceiling_dbtp`, then TPDF-dither to interleaved i16.
+/// true-peak-limit to `ceiling_dbtp`, then TPDF-dither to interleaved i16.
 ///
-/// The loudness gain is a single scalar, so every composed within-track dynamic
-/// (and every `analyze.py` ratio oracle) is preserved exactly; only over-ceiling
-/// transients are touched, by the limiter. Silence (no gated blocks) passes
-/// through ungained.
+/// The gain is a single scalar, so every composed within-track dynamic (and every
+/// `analyze.py` ratio oracle) is preserved exactly; only over-ceiling transients
+/// are touched, by the limiter. On a high-crest track a low ceiling removes enough
+/// peak energy to drop the loudness below target, so we iterate: re-measure and
+/// re-apply the residual makeup, re-limit, until on target. Because limiting only
+/// ever removes energy, loudness approaches the target from below and never
+/// overshoots — so this converges (or, for a track that genuinely cannot reach the
+/// target without over-limiting, lands as close as the ceiling allows). Silence
+/// (no gated blocks) passes through ungained.
 pub fn normalize_loudness(
     samples: &[f32],
     sr: f32,
     target_lufs: f32,
     ceiling_dbtp: f32,
 ) -> Vec<i16> {
-    let measured = crate::loudness::integrated_lufs(samples, sr);
-    let gain = if measured.is_finite() {
-        10f32.powf((target_lufs - measured) / 20.0)
-    } else {
-        1.0
-    };
-    let mut buf: Vec<f32> = samples.iter().map(|&x| x * gain).collect();
-    crate::loudness::limit_true_peak(&mut buf, sr, ceiling_dbtp);
+    let mut buf: Vec<f32> = samples.to_vec();
+    for _ in 0..LOUDNESS_MAX_ITERS {
+        let measured = crate::loudness::integrated_lufs(&buf, sr);
+        if !measured.is_finite() {
+            break; // silence — leave ungained
+        }
+        let delta = target_lufs - measured;
+        if delta.abs() < LOUDNESS_TOL_DB {
+            break; // on target
+        }
+        let g = 10f32.powf(delta / 20.0);
+        for x in buf.iter_mut() {
+            *x *= g;
+        }
+        crate::loudness::limit_true_peak(&mut buf, sr, ceiling_dbtp);
+    }
     dither_quantize(&buf, 1.0)
 }
 
@@ -2184,6 +2201,52 @@ mod tests {
             .max()
             .unwrap();
         assert!(max_lsb <= 1, "pure-scalar path drifted by {max_lsb} LSB");
+    }
+
+    /// High-crest recovery: a quiet body with sparse loud transients, normalised
+    /// under an aggressive ceiling. Single-pass gain+limit lands well below target
+    /// (the limiter eats the transient energy); the recovery loop must lift it back
+    /// to the target by raising the body, while the true peak stays at the ceiling.
+    #[test]
+    fn normalize_loudness_recovers_on_high_crest() {
+        let fs = 44100.0;
+        let n = (fs * 6.0) as usize;
+        let burst_period = fs as usize / 3; // a burst ~every 0.33 s
+        let burst_len = fs as usize / 200; // ~5 ms bursts
+        let mut sig = Vec::with_capacity(n * 2);
+        for i in 0..n {
+            let t = i as f32 / fs;
+            let mut s = 0.05 * (2.0 * std::f32::consts::PI * 180.0 * t).sin(); // quiet body
+            if i % burst_period < burst_len {
+                s += 0.55 * (2.0 * std::f32::consts::PI * 1200.0 * t).sin(); // loud transient
+            }
+            sig.push(s);
+            sig.push(s);
+        }
+        // Single-pass reference (what the old code did): gain to target, limit once.
+        let raw = crate::loudness::integrated_lufs(&sig, fs);
+        let g = 10f32.powf((-18.0 - raw) / 20.0);
+        let mut once: Vec<f32> = sig.iter().map(|&x| x * g).collect();
+        crate::loudness::limit_true_peak(&mut once, fs, -6.0);
+        let single = crate::loudness::integrated_lufs(&once, fs);
+        assert!(
+            single < -18.0 - 0.5,
+            "test signal must under-shoot single-pass (got {single}) or it proves nothing"
+        );
+
+        // Full path with the recovery loop.
+        let pcm = normalize_loudness(&sig, fs, -18.0, -6.0);
+        let dec: Vec<f32> = pcm.iter().map(|&s| s as f32 / 32768.0).collect();
+        let lufs = crate::loudness::integrated_lufs(&dec, fs);
+        let tp = crate::loudness::true_peak_dbtp(&dec, fs);
+        assert!(
+            (lufs - (-18.0)).abs() < 0.4,
+            "recovery loop should reach ~-18 LUFS, got {lufs} (single-pass was {single})"
+        );
+        assert!(
+            tp <= -5.8,
+            "true peak must respect the -6 dBTP ceiling, got {tp}"
+        );
     }
 
     fn test_song(events: Vec<(f64, EvKind)>, seconds: f64) -> Song {

@@ -16,7 +16,7 @@ import engine as en
 import programs as pr
 from tracks import MELODIC
 from tracks.audition import CH as MELODIC_CH, VELS
-from tracks.effects import REQUIRED as FX_REQUIRED
+from tracks.effects import CH as EFFECTS_CH, REQUIRED as FX_REQUIRED
 from tracks.kit import DRUM_KEYS
 
 
@@ -74,10 +74,7 @@ def check_structure(spec: en.TrackSpec, sc: en.Score) -> list[str]:
     secs = sc.duration_seconds()
     if not spec.duration_window[0] <= secs <= spec.duration_window[1]:
         fails.append(f"duration {secs:.1f}s outside {spec.duration_window}")
-    note_count = len(note_ons(sc, MELODIC_CH)) + len(note_ons(sc, 9)) + sum(
-        len(note_ons(sc, ch)) for ch in sc.events if ch not in (MELODIC_CH, 9)
-    )
-    if note_count < 1:
+    if sum(len(note_ons(sc, ch)) for ch in sc.events) < 1:
         fails.append("track has no notes")
     data = sc.to_bytes(spec.title)
     en.BUILD_DIR.mkdir(parents=True, exist_ok=True)
@@ -248,18 +245,14 @@ def check_coverage_effects(by_num) -> list[str]:
     if 6 not in by_num:
         return []
     sc = by_num[6][1]
-    seen = {cc for cc in FX_REQUIRED if cc_events(sc, effects_ch(sc), cc)}
+    seen = {cc for cc in FX_REQUIRED if cc_events(sc, EFFECTS_CH, cc)}
     missing = FX_REQUIRED - seen
     if missing:
         fails.append(f"missing effect CCs {sorted(missing)}")
-    bends = sum(1 for _tk, _p, d in sc.events.get(0, []) if (d[0] & 0xF0) == 0xE0)
-    ats = sum(1 for _tk, _p, d in sc.events.get(0, []) if (d[0] & 0xF0) == 0xD0 and d[1] > 0)
+    bends = sum(1 for _tk, _p, d in sc.events.get(EFFECTS_CH, []) if (d[0] & 0xF0) == 0xE0)
+    ats = sum(1 for _tk, _p, d in sc.events.get(EFFECTS_CH, []) if (d[0] & 0xF0) == 0xD0 and d[1] > 0)
     if bends < 1:
         fails.append("no pitch-bend demonstrated")
     if ats < 1:
         fails.append("no aftertouch demonstrated")
     return fails
-
-
-def effects_ch(sc: en.Score) -> int:
-    return 0

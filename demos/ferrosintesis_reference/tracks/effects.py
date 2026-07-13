@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import engine as en
 
-from .audition import slot_reset
+from .audition import dry_sends
 
 CH = 0
 # CCs this track must exercise (check_coverage(d) mirrors this).
@@ -23,8 +23,12 @@ def _chord(sc, ch, root, beat, dur, vel=100):
 
 
 def _section(sc, t, label):
+    # CC121 (reset all controllers) between demos - unlike the melodic slot_reset it
+    # DESTROYS the wah filter (engine.rs:1458), so the CC71/CC74 resonance section does
+    # not colour every section after it. The following program change + dry CCs then
+    # re-establish a clean channel.
     sc.marker(t, label)
-    slot_reset(sc, CH, t + 0.05)
+    sc.cc(CH, 121, 0, t + 0.05)
 
 
 def build(sc: en.Score) -> None:
@@ -34,7 +38,7 @@ def build(sc: en.Score) -> None:
     # CC91 hall reverb A/B - strings 48.
     _section(sc, t, "CC91 hall reverb: dry")
     sc.program(CH, 48, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     _chord(sc, CH, 60, t + 1.0, 3.0)
     sc.cc(CH, 120, 0, t + 5.0)
     sc.marker(t + 6.0, "CC91 hall reverb: wet")
@@ -46,7 +50,7 @@ def build(sc: en.Score) -> None:
     # CC93 chorus A/B - pad 88.
     _section(sc, t, "CC93 chorus: dry")
     sc.program(CH, 88, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     _chord(sc, CH, 55, t + 1.0, 3.0)
     sc.cc(CH, 120, 0, t + 5.0)
     sc.marker(t + 6.0, "CC93 chorus: on")
@@ -58,7 +62,7 @@ def build(sc: en.Score) -> None:
     # CC94 echo A/B - electric guitar 30 (staccato so the repeats are exposed).
     _section(sc, t, "CC94 echo: dry")
     sc.program(CH, 30, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     for i in range(3):
         sc.note(CH, 52, t + 1.0 + i * 1.0, 0.2, 104, jt=0, jv=0)
     sc.cc(CH, 120, 0, t + 5.0)
@@ -72,7 +76,7 @@ def build(sc: en.Score) -> None:
     # CC1 vibrato - violin 40, held note, mod wheel rises.
     _section(sc, t, "CC1 vibrato (violin)")
     sc.program(CH, 40, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     sc.note(CH, 67, t + 1.0, 6.0, 100, jt=0, jv=0)
     en.cc_curve(sc, CH, 1, [(t + 1.5, 0), (t + 6.0, 110)], step=0.25)
     sc.cc(CH, 120, 0, t + 7.5)
@@ -81,7 +85,7 @@ def build(sc: en.Score) -> None:
     # CC1 Leslie - percussive organ 17; hold each end >= 3s for the rotor inertia.
     _section(sc, t, "CC1 Leslie ramp (organ)")
     sc.program(CH, 17, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     _chord(sc, CH, 55, t + 1.0, 11.0, vel=96)
     en.cc_curve(sc, CH, 1, [(t + 1.5, 0), (t + 5.5, 0), (t + 6.0, 127), (t + 11.0, 127)], step=0.5)
     sc.cc(CH, 120, 0, t + 12.5)
@@ -90,7 +94,7 @@ def build(sc: en.Score) -> None:
     # CC74 filter sweep - saw lead 81; sweep 126 -> 20, NEVER park on 127 (127 = bypass).
     _section(sc, t, "CC74 filter sweep (lead)")
     sc.program(CH, 81, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     sc.note(CH, 64, t + 1.0, 6.0, 104, jt=0, jv=0)
     en.cc_curve(sc, CH, 74, [(t + 1.2, 126), (t + 6.5, 20)], step=0.25)
     sc.cc(CH, 120, 0, t + 7.5)
@@ -99,7 +103,7 @@ def build(sc: en.Score) -> None:
     # CC71 resonance - steel guitar 25, with CC74 parked in band first (else it parks at 12kHz).
     _section(sc, t, "CC71 resonance (guitar, CC74 in band)")
     sc.program(CH, 25, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     sc.cc(CH, 74, 45, t + 0.6)
     sc.note(CH, 55, t + 1.0, 6.0, 104, jt=0, jv=0)
     en.cc_curve(sc, CH, 71, [(t + 1.5, 0), (t + 6.0, 127)], step=0.25)
@@ -109,7 +113,7 @@ def build(sc: en.Score) -> None:
     # CC64 sustain - piano 0, staccato notes held by the pedal across their offs.
     _section(sc, t, "CC64 sustain pedal (piano)")
     sc.program(CH, 0, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     sc.sustain(CH, t + 0.9, t + 5.0)
     for i, p in enumerate((48, 52, 55, 60, 64)):
         sc.note(CH, p, t + 1.0 + i * 0.6, 0.2, 100, jt=0, jv=0)
@@ -119,7 +123,7 @@ def build(sc: en.Score) -> None:
     # CC70 vowel morph - choir 52; sweep the four anchors mm/oo/ah/eh.
     _section(sc, t, "CC70 vowel morph (choir)")
     sc.program(CH, 52, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     _chord(sc, CH, 55, t + 1.0, 6.0, vel=96)
     en.cc_curve(sc, CH, 70, [(t + 1.2, 0), (t + 6.5, 127)], step=0.25)
     sc.cc(CH, 120, 0, t + 7.5)
@@ -128,7 +132,7 @@ def build(sc: en.Score) -> None:
     # CC2 breath - flute 73; cut-only (127 is neutral), so ramp DOWN.
     _section(sc, t, "CC2 breath cut (flute)")
     sc.program(CH, 73, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     sc.note(CH, 74, t + 1.0, 5.0, 100, jt=0, jv=0)
     en.cc_curve(sc, CH, 2, [(t + 1.2, 127), (t + 5.5, 45)], step=0.25)
     sc.cc(CH, 120, 0, t + 6.5)
@@ -137,7 +141,7 @@ def build(sc: en.Score) -> None:
     # Pitch bend - violin 40.
     _section(sc, t, "Pitch bend (violin)")
     sc.program(CH, 40, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     sc.note(CH, 67, t + 1.0, 4.0, 100, jt=0, jv=0)
     en.bend_curve(sc, CH, [(t + 1.5, 0.0), (t + 2.5, 2.0), (t + 3.5, -2.0), (t + 4.5, 0.0)], step=0.125)
     sc.cc(CH, 120, 0, t + 5.5)
@@ -146,7 +150,7 @@ def build(sc: en.Score) -> None:
     # Channel aftertouch - brass section 61.
     _section(sc, t, "Channel aftertouch (brass)")
     sc.program(CH, 61, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     sc.note(CH, 55, t + 1.0, 5.0, 100, jt=0, jv=0)
     en.at_curve(sc, CH, [(t + 1.5, 0), (t + 5.0, 127)], step=0.25)
     sc.cc(CH, 120, 0, t + 6.5)
@@ -155,7 +159,7 @@ def build(sc: en.Score) -> None:
     # Portamento - saw lead 81; CC5 time + CC65 on, a leap glides.
     _section(sc, t, "Portamento (lead)")
     sc.program(CH, 81, t + 0.3)
-    sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+    dry_sends(sc, CH, t + 0.4)
     sc.portamento_on(CH, t + 0.6, time_cc=100)
     sc.note(CH, 52, t + 1.0, 1.5, 104, jt=0, jv=0)
     sc.note(CH, 64, t + 2.5, 2.5, 104, jt=0, jv=0)
@@ -172,7 +176,7 @@ def build(sc: en.Score) -> None:
         for prog in (a, b):
             _section(sc, t, f"{label} [{prog:03d}]")
             sc.program(CH, prog, t + 0.3)
-            sc.cc(CH, 91, 0, t + 0.4); sc.cc(CH, 93, 0, t + 0.4); sc.cc(CH, 94, 0, t + 0.4)
+            dry_sends(sc, CH, t + 0.4)
             if gesture == "power":
                 sc.note(CH, root, t + 1.0, 3.0, 110, jt=0, jv=0)
                 sc.note(CH, root + 7, t + 1.0, 3.0, 110, jt=0, jv=0)

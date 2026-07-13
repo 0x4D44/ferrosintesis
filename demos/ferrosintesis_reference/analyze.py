@@ -21,7 +21,7 @@ import engine as en
 
 import tracks
 from tracks import MELODIC, BPM_MELODIC
-from tracks.audition import SLOT_BEATS, onset_beat, _CHOKE_AT, _ONSET
+from tracks.audition import SLOT_BEATS, onset_beat, _CHOKE_AT
 import programs as pr
 
 # Calibrated against a real render: the quietest legitimate voice is GM 125 Helicopter

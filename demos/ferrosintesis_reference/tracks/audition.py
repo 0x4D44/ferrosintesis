@@ -36,6 +36,13 @@ _FIGURE = (0, 4, 7)
 _CHORD = (0, 4, 7)
 
 
+def dry_sends(sc: en.Score, ch: int, beat: float) -> None:
+    """Force reverb/chorus/echo off. Must be authored AFTER a program change, which
+    re-derives NON-ZERO chorus/echo defaults from fx_profile (engine.rs:1349)."""
+    for num in (91, 93, 94):
+        sc.cc(ch, num, 0, beat)
+
+
 def _root(register: tuple[int, int]) -> int:
     lo, hi = register
     return max(lo, min(hi - 7, lo + (hi - lo - 7) // 2))
@@ -59,8 +66,7 @@ def emit_slot(sc: en.Score, slot: pr.Slot, t0: float) -> None:
     sc.program(ch, slot.program, t0 + _PROGRAM_AT)
     if slot.alt:
         sc.cc(ch, 0, 1, t0 + _PROGRAM_AT + 0.02)   # select alt bank after the PC
-    for num in (91, 93, 94):                        # dry: reverb, chorus, echo - AFTER the PC
-        sc.cc(ch, num, 0, t0 + _SENDS_AT)
+    dry_sends(sc, ch, t0 + _SENDS_AT)
     vel = VEL[slot.gesture]
     root = _root(slot.register)
     if slot.gesture == pr.ONESHOT:

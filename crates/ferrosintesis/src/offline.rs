@@ -3,6 +3,7 @@
 use std::path::Path;
 
 pub use crate::engine::{normalize_to_i16, Options, Stats};
+pub use crate::loudness::integrated_lufs;
 pub use crate::wav::write_wav;
 
 pub struct Song(crate::midi::Song);

@@ -17,6 +17,7 @@ pub(crate) mod altbank;
 pub(crate) mod drums;
 pub(crate) mod dsp;
 pub(crate) mod engine;
+pub(crate) mod loudness;
 pub(crate) mod midi;
 pub(crate) mod reverb;
 pub(crate) mod sampler;

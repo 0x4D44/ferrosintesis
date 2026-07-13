@@ -62,10 +62,12 @@ fn main() {
         verbose: false,
     };
     let (samples, stats) = offline::render(&song, &opt);
+    let lufs = offline::integrated_lufs(&samples, 44100.0);
     write_f32_wav(&output, 44100, &samples).expect("write float WAV");
-    // Full-precision raw sample peak (the CLI only prints 2 decimals).
+    // raw_sample_peak, voices, max_polyphony, our_integrated_LUFS (for the
+    // differential check vs ffmpeg ebur128 on the same WAV).
     println!(
-        "{:.6},{},{}",
-        stats.peak, stats.voices_spawned, stats.max_polyphony
+        "{:.6},{},{},{:.2}",
+        stats.peak, stats.voices_spawned, stats.max_polyphony, lufs
     );
 }

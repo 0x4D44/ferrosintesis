@@ -1,3 +1,7 @@
+Why this piece
+The central joke is structural: the apparent drop arrives with nearly every expected layer except the kick. Holding that one element back turns its entrance sixteen beats later into the track's real release, before a moonlit hush clears space for the larger second drop.
+
+Listening guide
 BRIGHT MATTER — INSTRUMENTAL LISTENING GUIDE
 
 0:00  I. CITY BLINK
@@ -23,3 +27,6 @@ The second drop adds sixteenth hats, tambourine, full choir, guitar, one-bar bra
 
 4:25  VIII. LAST WINDOW
 The rhythm leaves first. Vibraphone, strings, the hook, and three receding echoes remain in the final lit room.
+
+MIDI techniques
+The score deliberately writes zero kick notes in the false-drop window and exactly four in the arrival bar. Mallet notes alternate across fixed pan positions, CC94 echo throws peak on selected phrases, tempo falls to 59 bpm for the moonlit bridge, and the later drum, choir, guitar, brass, and controller layers make the second drop measurably larger.

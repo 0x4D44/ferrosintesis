@@ -42,7 +42,18 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   channels no phase touched; they stayed bit-exact for six phases and caught
   the one real leak (a rebuilt Drive emitting tanh(bias) DC on SILENT
   channels) that every feature oracle missed. Level guards find drift;
-  canaries find contamination.
+  canaries find contamination. **Corollary (2026.07.12): a bit-exact hash of an
+  f32 render is NOT a valid *frozen* golden across build profiles.** Release
+  (opt-level 3 + LTO) reorders the SawStack's summed-oscillator float ops, so
+  `sawstack_v1_canary_frozen` flipped debug↔release (`0x63cb52bc25cbdd4f` vs
+  `0x66cf721ab5a542fb` — the same pad, two profiles) and was "re-pinned" for
+  months, each pin just reddening the other profile. Freeze *aggregate* features
+  (rms / centroid / band energy) with a relative tolerance: they average out
+  per-sample reorder noise (~1e-7 across profiles) yet still catch contamination
+  (voices differ 30–130%). In-build *relative* bit-compares (two renders in ONE
+  build — determinism / two-path equivalence) stay valid; only cross-commit
+  frozen hashes are the trap. `drums.rs`'s frozen-hash goldens are the same class
+  (green today, latent).
 - 2026.07.07 — **Zero-crossing pitch counters lie when a change legitimately
   brightens a voice.** Three separate "pitch broke" scares in the realism
   build were the 2nd harmonic leaking through the counter's lowpass
@@ -133,6 +144,8 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   `albums/`.** MM-REQ-KILN-00017 left album MIDI byte-identical, but the newly
   committed Synth Feature Showcase listening track used GM109/111 and had to be
   refreshed. Scan every `ALBUMS` entry before declaring a synth change asset-free.
+  Every newly committed Opus also needs a three-section listening-guide sidecar:
+  the renderer permits an absent optional sidecar, but the repository test does not.
   For long Opus refreshes on Windows, stage temp outputs under `target/` in the
   worktree; `os.replace` cannot move atomically from `%TEMP%` on `C:` into a `D:`
   worktree.

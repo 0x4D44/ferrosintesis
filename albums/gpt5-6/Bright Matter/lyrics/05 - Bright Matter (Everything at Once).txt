@@ -1,3 +1,7 @@
+Why this piece
+The finale treats the first four tracks as reusable musical material, not just references in the notes. Their orbit, runway, gravity, and delayed-light hooks accumulate until all four sound together, then the complete stack rises from E to F-sharp major for the album's summit.
+
+Listening guide
 BRIGHT MATTER — INSTRUMENTAL LISTENING GUIDE
 
 0:00  I. PARTICLES
@@ -26,3 +30,6 @@ Everything lifts from E to F-sharp major. Organ expression reaches full, guitar 
 
 5:29  IX. AFTERGLOW
 Only strings, harp, a stretched number hook, organ pedal, and one final orchestral point remain.
+
+MIDI techniques
+Four identified hook cells return on separate channels—saw lead, distorted guitar, choir, and harp—and the score oracle checks their pitch identity in every finale window. CC10 traces repeated full pan rotations, guitar pitch bends reset cleanly, choir formants and organ expression evolve by controller, and tempo, key, drum-density, and velocity events shape the vacuum-to-summit arc.

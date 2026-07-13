@@ -1,0 +1,17 @@
+Why this piece
+
+Placed between two large, troubled structures, Snow is the cycle's quiet eye. Almost everything is entrusted to one piano, so the E-D-C memory motif can be heard without orchestral rhetoric. A barely audible string presence at the end changes solitude into suspension rather than closure.
+
+Listening guide
+
+0:00 — Soft pedalled piano opens an eight-bar A-minor progression, one chord per bar.
+0:08 — The bare E-D-C motif appears high above the broken harmony.
+0:40 — Its second entrance returns after a long stretch of space.
+1:12 — A third statement marks the modest centre of the piece; the dynamic arc never rises beyond a murmur.
+1:44 — The final piano version extends E-D-C through B to A.
+1:52 — Two high string voices enter for the first time beneath the last bars.
+2:08 — Open A and E settle in the piano while a high B remains suspended as the unresolved ninth.
+
+MIDI techniques
+
+This type-1 MIDI file uses only acoustic grand piano and String Ensemble 2 at a constant 60 BPM and 480 ticks per beat. The piano accompaniment is built from voice-led three-note chords plus bass notes, with CC64 pedal reset and held for each bar. Four separately placed melodic statements share the piano channel. The string channel begins only at bar 28, holds two high voices, and fades through CC11. Low velocities and seeded timing offsets create the fragile surface. No pan, effects sends, pitch bend, aftertouch, percussion, or tempo automation is authored.

@@ -1,0 +1,18 @@
+Why this piece
+
+Undertow gives grief a direction: down. Its C-minor bass falls C-B-flat-A-flat-G, every layer occupies a deliberately low register, and the memory figure becomes a heavy G-F-E-flat cello line. Even the sole reach toward brightness is dragged back into the same unresolved depth.
+
+Listening guide
+
+0:00 — Contrabass and two dark string beds establish the four-bar descending ground.
+0:34 — Cello enters low with G-F-E-flat, the album's memory motif pulled into C minor.
+1:09 — Low broken piano and viola thicken the centre without lifting the register.
+1:43 — The long swell begins to strain upward while the ground continues underneath.
+2:18 — Violin appears for its only gesture: G5 sighs through F5 to E-flat5 above the full low ensemble.
+2:51 — The violin vanishes and the texture is pulled downward again.
+3:26 — The coda strips away piano and inner voices, sinking toward bass and dark strings.
+4:00 — A hollow C-minor tail leaves D, the added ninth, unresolved in the low register.
+
+MIDI techniques
+
+The file is type-1 MIDI at 480 ticks per beat with a fixed 56 BPM tempo. Seven GM programs form the same chamber palette as the opener, but pitch bands keep the pads, piano, viola, cello, and bass unusually low. Tied notes preserve common tones across the repeating ground, and CC11 shapes one slow swell on sustained channels. Piano CC64 is re-authored through its broken-chord passages. The violin contains only three note attacks, making its climax an orchestration event rather than a controller effect. No authored pan, effects sends, bends, aftertouch, drums, or program changes occur after the opening.

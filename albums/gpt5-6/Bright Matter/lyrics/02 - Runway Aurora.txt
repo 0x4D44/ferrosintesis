@@ -1,3 +1,7 @@
+Why this piece
+Runway Aurora recasts the shared progression as forward motion: paired mallet lamps mark the runway while muted guitar supplies the engine. The first launch dissolves into a half-time cloud deck, then returns faster and brighter for the aurora drop.
+
+Listening guide
 BRIGHT MATTER — INSTRUMENTAL LISTENING GUIDE
 
 0:00  I. COLD LAMPS
@@ -23,3 +27,6 @@ Tempo jumps to 138 bpm. The second launch is brighter, denser, and wider in tran
 
 4:17  VIII. WHEELS DOWN
 The engine releases into strings, celesta, one slow guitar statement, and a final orchestral landing light.
+
+MIDI techniques
+Marimba and celesta notes alternate between fixed left and right pans to form a strict transient hocket. The distorted lead uses a dense authored pitch-bend lane with explicit centre resets at section boundaries; tempo and meter events create the 6/8 cloud deck and the final acceleration to 138 bpm, while centred sustained parts preserve mono compatibility.

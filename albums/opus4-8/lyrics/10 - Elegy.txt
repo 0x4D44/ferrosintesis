@@ -1,0 +1,19 @@
+Why this piece
+
+Elegy is the cycle's nadir and its clearest act of remembrance. The opener's A-G-F motif returns slower, lower, and heavier over the full descending D-minor ground. One C-sharp turns the approach to the climax into A major: a single chromatic wound whose resolution makes the return to D minor feel inevitable rather than comforting.
+
+Listening guide
+
+0:00 — Contrabass and thick sustained strings begin the D-C-B-flat-A-G-F-E-D lament descent.
+0:37 — Cello states A-G-F low and slowly; viola adds a close inner line.
+1:14 — Sparse pedalled piano tolls bare roots and fifths while a lower string bed enters.
+1:51 — Violin answers the cello an octave higher, widening the grief without speeding it up.
+2:28 — The immense central swell begins; cello and high violin develop the motif over full strings.
+2:55 — A single A-major bar exposes C-sharp at the summit.
+3:05 — Its resolution to D minor starts the long descent.
+3:42 — Violin leaves and the piano tolls into a hollowed texture.
+4:55 — The final D-minor tail repeats A-G-F once more in the cello, each note softer than the last.
+
+MIDI techniques
+
+The type-1 file uses 480 ticks per beat and the album's slowest fixed tempo, 52 BPM. Seven GM channels provide piano, four solo strings/bass roles, and two string ensembles. Long tied notes, gentle legato overlaps, and dense CC11 curves make the string body continuous. Piano attacks occur only twice per eight-bar cycle and use CC64 to ring like distant bells. The lone C-sharp is a written chord tone in one A-major bar; there is no bend or modulation controller. Apart from CC11 and piano sustain, the file authors no pan, effects sends, aftertouch, drums, or program changes.

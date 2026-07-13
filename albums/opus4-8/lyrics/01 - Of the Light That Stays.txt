@@ -1,0 +1,17 @@
+Why this piece
+
+VIGIL begins with the musical memory that will hold the cycle together. A descending D-minor ground keeps returning beneath strings that seem to breathe, while the falling 5-4-3 figure turns each new layer into another recollection. The piece does not resolve its grief; its final added ninth leaves a little light suspended inside it.
+
+Listening guide
+
+0:00 — Contrabass and four-part strings begin the eight-bar lament ground, descending from D through C, B-flat and A toward a lower D.
+0:32 — Cello gives the first low statement of the memory theme.
+1:04 — Broken piano chords join, adding movement without disturbing the slow pulse.
+1:36 — Viola, a second string bed, and violin widen the sound; the theme now answers itself across registers.
+2:40 — The long climax begins. Piano becomes more continuous and the violin carries the theme high above the full chamber texture.
+3:44 — The accumulated weight starts to recede, returning attention to the ground and cello.
+4:48 — A dissolving D-minor tail leaves a high E, the unresolved ninth, glimmering over the final fade.
+
+MIDI techniques
+
+The file is type-1 MIDI at 480 ticks per beat, fixed at 60 BPM. Seven GM channels use acoustic grand piano, cello, violin, viola, contrabass, and String Ensembles 1 and 2. Common tones in the pads are written as tied notes rather than re-attacked chords; the bass supplies a literal descending passacaglia. CC11 traces the single long dynamic arc on the sustained parts, while piano CC64 pedals the broken-chord passages. Seeded timing and duration offsets keep attacks slightly apart. No pan, volume, reverb, chorus, echo, pitch bend, aftertouch, or mid-piece program changes are authored.

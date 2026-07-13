@@ -1,0 +1,18 @@
+Why this piece
+
+After the nadir, healing arrives as a change in harmonic behaviour rather than a denial of the past. The familiar 5-4-3 descent becomes C-B-flat-A in F major and now resolves into consonance. Plagal warmth, a singing cello, and a restrained violin glow let the same musical memory console instead of grieve.
+
+Listening guide
+
+0:00 — Piano, soft contrabass, and warm strings establish the F-major cycle and its gently descending bass.
+0:30 — Cello begins the main melody, repeatedly turning suspensions downward into rest.
+1:00 — Viola joins and the piano broadens into eighth-note motion.
+1:30 — A sparse high violin line enters for the hopeful swell.
+2:00 — The violin glow remains while the dynamic begins to ease rather than climb further.
+2:30 — Violin withdraws; cello returns to the foreground over gentler piano chords.
+3:00 — Viola leaves and the texture thins toward its opening colours.
+4:00 — The tail settles on F add9: cello and bass hold home while a soft high G supplies the last light.
+
+MIDI techniques
+
+This type-1 MIDI file is fixed at 64 BPM with 480 ticks per beat. Six GM channels use piano, cello, violin, viola, contrabass, and String Ensemble 1. The eight-bar harmony is voiced to retain common tones, with tied pad and viola notes avoiding needless re-attacks. CC11 provides the sustained dynamic breath; per-bar piano CC64 connects broken chords. The violin is deliberately sparse—only nine attacks in the committed MIDI—so orchestration marks the swell. The descending bass and plagal IV-over-I close are written directly. There are no authored pans, effects sends, bends, aftertouch, percussion, tempo changes, or later program changes.

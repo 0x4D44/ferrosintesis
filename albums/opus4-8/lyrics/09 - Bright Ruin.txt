@@ -1,0 +1,20 @@
+Why this piece
+
+Bright Ruin lets the cycle move forward without pretending that grief has vanished. D mixolydian supplies major-key momentum, but C natural removes the leading-tone certainty and the bass still carries a lament-shaped descent. The result is sunlight with an ache inside it: the memory motif can run now, though it cannot quite close.
+
+Listening guide
+
+0:00 — Piano alone sets the moving eight-bar progression in D mixolydian.
+0:18 — Contrabass, viola, and a sustained string bed add the descending D-C-B-A bass shape.
+0:37 — Cello begins a lower countermelody.
+0:55 — Violin takes the lyrical A-G-F-sharp theme as a second, lower string bed arrives.
+1:14 — High broken-chord sparkle appears above the continuing piano pattern.
+1:32 — Piano shifts into faster eighth-note motion for the lift.
+1:51 — Full-hearted peak: violin rises an octave while every chamber layer is active.
+2:28 — Violin drops out and cello carries the easing momentum.
+3:05 — The arrangement thins toward piano, bass, and the main pad.
+3:42 — A pedalled D-add9 roll fades with E still shining above the chord.
+
+MIDI techniques
+
+This is type-1 MIDI at 480 ticks per beat and a constant 104 BPM. Seven fixed GM programs supply the album's full chamber palette. Piano chords, high eighth-note arpeggios, sustained tied strings, and a stepwise bass are separately sequenced, allowing texture and register to drive the arc. The Asus4-to-A-minor motion writes the downward suspension directly into the notes. CC11 shapes bowed channels; CC64 pedals the piano. The peak is an octave transposition, not pitch bend. No pan, effects sends, aftertouch, drums, tempo map, or mid-piece program change is authored.

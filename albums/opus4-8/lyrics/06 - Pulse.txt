@@ -1,0 +1,19 @@
+Why this piece
+
+Pulse replaces VIGIL's singing lament with anxiety that cannot finish a sentence. E is hammered as a pedal while F, the phrygian flat second, repeatedly scrapes against it. New rhythmic layers ratchet the pressure upward; when the album's motif finally appears, it is clipped into a warning rather than allowed to sing.
+
+Listening guide
+
+0:00 — Contrabass quarters and isolated low-piano E attacks establish the heartbeat.
+0:27 — Piano accelerates to sixteenths and cello locks in with E-F eighth-note grinds.
+0:53 — Viola begins short upper-triad stabs on beats one and three.
+1:20 — Violin adds repeated rising E-F-G-B figures as the harmony turns darker.
+1:47 — A thin sustained string layer arrives under the tightening attacks.
+2:13 — Peak: every layer hammers together; high violin alternates its rising figure with the clipped B-A-G memory motif.
+2:40 — The ensemble cuts out abruptly, leaving only the low E pulse.
+2:53 — The remaining heartbeat thins and gutters.
+3:33 — Bass and piano sound one final low E and fade.
+
+MIDI techniques
+
+The type-1 file is fixed at 144 BPM and 480 ticks per beat. Its six GM channels are piano, contrabass, cello, viola, violin, and String Ensemble 1. Rhythm is fully note-authored: piano sixteenths, bass and cello subdivisions, clipped 0.45-beat viola chords, and short violin cells. Velocity accents mark downbeats, while small seeded tick offsets prevent machine-perfect unisons. CC11 is the only continuous controller and spans each instrumental lane; there is deliberately no sustain pedal during the motor. No pitch bends, aftertouch, pan, effects sends, drums, tempo changes, or later program changes are present.

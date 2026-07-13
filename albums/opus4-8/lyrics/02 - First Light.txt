@@ -1,0 +1,18 @@
+Why this piece
+
+After the opener's held grief, this is the first cautious answer. F major, a rocking piano figure, and a melody that rises before giving the album's 5-4-3 sigh make hope audible without turning it into triumph. Its modest scale matters: the cycle needs dawn, not daylight, this early.
+
+Listening guide
+
+0:00 — Piano alone rocks through F, D minor, B-flat major seventh, and C in soft broken eighth notes.
+0:27 — Cello and a quiet contrabass enter; the melody rises, then folds into the C-B-flat-A memory figure.
+0:53 — Viola and a two-voice high string shimmer warm the middle of the texture.
+1:20 — Violin doubles the melody an octave higher for the restrained central swell.
+1:47 — The hopeful colour is held rather than pushed into a grand climax.
+2:13 — Violin withdraws; cello and piano carry the music gently down.
+3:07 — The texture thins toward piano alone.
+3:33 — A final F-major sonority adds both sixth and ninth, fading as a soft, open glow.
+
+MIDI techniques
+
+The type-1 file uses 480 ticks per beat and one 72 BPM tempo. Six GM channels carry piano, cello, violin, viola, contrabass, and high strings. The piano's repeated CC64 pedal changes blur each bar of the rocking pattern. Sustained strings and bass use tied voice-leading plus CC11 expression; the violin melody is note-shaped without a controller lane. The arrangement is additive by eight-bar sections, so its arc comes from orchestration as well as velocity. Only program changes, CC11, and CC64 are authored; there is no pan, reverb send, pitch bend, aftertouch, or percussion.

@@ -1,3 +1,7 @@
+Why this piece
+The album opens by turning its 6–5–2–1 harmonic premise into an ecstatic build-and-drop track. A circling steel-pan hook and steadily growing ensemble make the abstract number pattern feel physical before the finale lifts it from C to D major.
+
+Listening guide
 BRIGHT MATTER — INSTRUMENTAL LISTENING GUIDE
 
 0:00  I. COUNT THE SPARKS
@@ -26,3 +30,6 @@ The whole arrangement lifts from C to D major without losing the 6–5–2–1 g
 
 4:28  IX. AFTERIMAGE
 The arena disappears, leaving high strings, harp, one slowed hook, and a final point of light.
+
+MIDI techniques
+CC10 automation carries the steel-pan figure around the full stereo circle while sustained beds remain centred for mono safety. Authored expression curves create sidechain-like pumps; progressively denser melodic-tom fills, exact 6–5–2–1 bass roots, a drumless half-tempo bridge, and the two-semitone finale lift are all encoded as score events and checked by track oracles.

@@ -1,0 +1,25 @@
+Why this piece
+Riverwake is an original, nearly hour-long acoustic folk/progressive journey in the spirit of Mike Oldfield's Amarok. One continuous piece keeps changing key, mode, tempo, density, and lead voice while three recurring ideas—the arching main tune, a bell figure, and a sprung dance motif—make the restless form feel like one river. The homage is structural rather than a quotation: it includes a theatrical false ending and a woodblock message in Morse code, but all musical material is original.
+
+Listening guide
+0:00 — I · Awakening: a D-minor/Dorian dawn grows from choir, strings, organ, and glockenspiel droplets into interlocking nylon and steel guitars; whistle introduces the main tune and bells answer.
+8:19 — II · First Dance: reels and a compound-feel jig put fiddle, banjo, accordion, bass, and hand percussion in front while the harmony climbs through D, G, and A.
+13:48 — III · Procession: the main theme crosses into bright D major, first with choir and organ behind it, then in a broad bell-and-march anthem.
+18:39 — IV · The Glade: the current pools into dark ambient pads and a sparse pan-flute hush before two deliberately lopsided waltz sections wake it again.
+24:19 — V · Drums of the River: marimba and glockenspiel interlock with congas, bongos, toms, cowbell, claves, and other hand percussion; a choir-and-organ chant divides the jams.
+29:57 — VI · The Chase: fast nylon-guitar and banjo hockets, walking bass, reel drums, and pan flute give way to rock-prog drive with clean electric guitar and church organ.
+33:49 — VII · Chant & Bells: choir calls in three-part chords, low organ answers, and bodhrán/shaker patterns hold the pulse; tubular bells then open onto a quiet F-major plateau.
+38:03 — VIII · Pastoral Reprise: the opening guitar texture and main tune return in F, now led by fiddle, before a B-flat jig pushes onward.
+42:44 — IX · Storm: the fastest stretch drives from 144 to 156 BPM through D, G, and A, then gathers into a D-major anthem.
+47:28 — False ending: a full choir, strings, organ, guitars, bass, bells, crash, and kick land on one grand cadence. After the authored 3.2-second gap, a brisk reel breaks the spell at 47:34.
+48:12 — Hidden message: a high woodblock taps “AMAROK” in Morse over a quiet D drone held by strings, organ, and bass.
+48:19 — X · Hymn: the main theme reaches its full-hearted summit with flute, fiddle, choir, strings, organ, marching percussion, guitars, and bells.
+54:09 — XI · Homeward: G-Mixolydian pastoral music narrows into a B-minor hush, then a slow D-major ambient fade.
+59:40 — Final chord: strings, choir, organ, bass, tubular bell, and a high glockenspiel D bloom together; CC11 expression drains away through the end.
+
+MIDI techniques
+The type-1 file uses one conductor track plus sixteen fixed instrument tracks in 4/4. Each channel receives exactly one GM program: nylon and steel guitars, banjo, acoustic bass, glockenspiel, tubular bells, flute, fiddle, accordion, drums, choir, strings, church organ, clean guitar, pan flute, and marimba. The 44-entry tempo map ranges from 60 to 156 BPM; modal and key changes are composed directly into the notes while the file-level key signature remains D minor.
+
+Rhythmic character comes from note placement rather than meter changes: jig patterns divide a four-beat bar into twelve slots, the waltz groups beats as bass–chord–chord–lift, and the fastest interlocks place sixteen attacks per instrument per bar, with the partner guitar or banjo offset by half a subdivision. A fixed random seed humanises note starts, lengths, and velocities by a few ticks while keeping regeneration deterministic. Voice-leading keeps sustained choir, string, organ, and accordion chords in practical ranges; repeated pad tones are tied instead of re-attacked.
+
+CC11 expression is the only authored continuous controller. It gives choir, strings, organ, and the final bass chord bar-scale breathing and the closing fade. There is no authored pitch bend, sustain pedal, mod wheel, pan, reverb, chorus, echo, aftertouch, or mid-piece program change. The false ending is an actual note-free gap in the MIDI, and the Morse passage uses timed high-woodblock notes rather than text metadata.

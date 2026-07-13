@@ -1,0 +1,19 @@
+Why this piece
+
+This is VIGIL's romantic centre: grief made direct rather than implied. The falling D-C-B-flat memory figure is coloured by G harmonic minor, where F-sharp pulls painfully toward G. Each return adds weight until cello and high violin speak the same unsent thought at the largest point, then the music can only fall away.
+
+Listening guide
+
+0:00 — Contrabass and strings begin the eight-bar lament, including the exposed D/F-sharp dominant pull.
+0:29 — Cello states the low D-C-B-flat theme.
+0:58 — Piano, viola, and a lower second string bed join the next pass.
+1:27 — Violin answers above the cello as the harmony grows warmer and more urgent.
+1:56 — Broken piano motion increases and the full ensemble gathers.
+2:25 — The extended climax begins: high violin and cello share the theme over the densest string writing.
+3:24 — Violin withdraws; two long ground cycles carry the broken descent.
+4:22 — The coda returns to quieter pad, bass, and cello.
+4:51 — G minor dissolves beneath a high A, an unresolved ninth standing for the unanswered letter.
+
+MIDI techniques
+
+This type-1 MIDI file runs at a constant 66 BPM with 480 ticks per beat. Seven GM channels use piano and the six bowed/string colours of the album palette. The harmonic-minor F-sharp is written directly into the D-major dominant chord and bass line; it is not a pitch-bend effect. Voice-led tied pads, sustained bass, and CC11 build the long arc, while the piano moves from sparse pedalled chords to eighth-note patterns near the summit. Seeded humanisation separates attacks across the ensemble. Aside from program changes, CC11, and piano CC64, no controllers, send effects, percussion, or tempo changes are authored.

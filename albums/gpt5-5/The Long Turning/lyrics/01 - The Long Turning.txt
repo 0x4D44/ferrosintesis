@@ -1,0 +1,31 @@
+Why this piece
+One uninterrupted hour treats recurrence as a journey: the same guitar cells, modal harmony, whistle calls, organ beds, and bells keep returning in altered light. Twenty exactly three-minute chapters move between progressive folk-rock drive and contemporary-classical space, while the final D-major turn makes the opening clockwork feel remembered rather than repeated.
+
+Listening guide
+0:00 — Opening Clockwork: D-mixolydian guitar figures begin the mechanism; a whistle line rises above light percussion and strings.
+3:00 — Hill Dance: the centre shifts to G dorian, the guitar falls into a twelve-step jig pattern, and whistle leads a stronger dance pulse.
+6:00 — Glass Engine: A-dorian motor rhythm tightens into sixteen guitar attacks per bar, with guitar lead, hammered-key accents, and driving drums.
+9:00 — Pipe Memory: E-aeolian organ chords lengthen the scale of the room; organ melody and distant choir replace the mechanical foreground.
+12:00 — Bright Crossing: F lydian opens a pastoral clearing of whistle, bells, sustained strings, and organ, marked only by an occasional cymbal.
+15:00 — Ridge Run: B-phrygian rock brings the first electric-guitar lead and one of the hour's hardest drum patterns.
+18:00 — Bell Orchard: C major turns the tuned percussion into both texture and melody over gentler rhythm.
+21:00 — Low Tide Machine: an F-dorian motor chapter gives the fretless bass the lead while guitar, piano, and drums keep the machinery moving.
+24:00 — Green Fuse: D major brightens the pastoral material, but a dance beat keeps the whistle-led field in motion.
+27:00 — Storm Windows: E-phrygian electric lead meets the score's highest-energy rock chapter and repeated tom fills.
+30:00 — The Room Turns: A-aeolian organ and choir restore breadth after the storm; the organ itself carries the recurring lead motif.
+33:00 — Hammered Sun: G-mixolydian jig rhythm returns with piano in the lead and bells flashing through the upper register.
+36:00 — Far Radio: C lydian removes the regular drum pattern, leaving bell melody, long strings, and organ to hover at a distance.
+39:00 — Horse Latitudes: B-flat dorian returns to guitar texture and guitar lead, supported by a restrained rock pulse.
+42:00 — Broken Relay: F-phrygian motor rhythm reconnects the electric lead, dense guitar subdivision, and driving percussion.
+45:00 — The Long Green Field: D-mixolydian whistle, bells, strings, and organ form the quietest late pastoral span.
+48:00 — Stone Circle Reel: A-dorian whistle rides the jig at renewed intensity, with the dance percussion now close to the hour's peak.
+51:00 — Tremor Choir: E-aeolian organ, distant choir, and driving drums combine the spacious and mechanical worlds.
+54:00 — Return of the Bells: D-mixolydian bells restate the bright material over lighter percussion and an open final chord cycle.
+57:00 — Final Turning: D major brings back guitar and whistle, lets the percussion fall away, and closes the hour in the opening instruments' transformed light.
+
+MIDI techniques
+The file is format-1 MIDI at 480 PPQ: one conductor track and ten performance tracks, with 43,714 note-on events. A single 120 bpm tempo and 4/4 meter make every 90-bar chapter exactly three minutes; conductor markers name all twenty boundaries. Raw MIDI programs are fixed at the start for steel guitar (25), overdriven guitar (29), acoustic piano (0), fretless bass (35), church organ (19), strings (48), recorder/whistle (74), tubular bells (14), choir aahs (52), plus channel-10 percussion.
+
+All performance channels author static CC7 volume, CC10 pan, and CC91 reverb. Guitar and bass receive bar-by-bar CC11 expression; strings, organ, and active drum patterns receive it at their own phrase rates. Section energy shapes both expression and note velocity: each chapter swells toward its midpoint and recedes, while a slower arch adds lift through the middle of the hour. Texture changes are written as note-pattern changes—eight-step guitar flow, twelve-step jig, sixteen-step motor/rock figures; distinct light, dance, and drive drum grids; sustained organ/choir entries; and texture-specific piano or bell attacks—not as program swaps.
+
+The score uses a fixed seed for reproducibility and applies two-to-seven ticks of timing and release jitter to avoid a rigid grid. It authors no sustain pedal, pitch bend, mod wheel, aftertouch, filter automation, chorus/echo send, or mid-piece program change. Every event is clipped to the exact 60:00 endpoint.

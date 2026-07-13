@@ -1,0 +1,19 @@
+Why this piece
+
+The cycle's first fast piece turns ordinary morning pressure into perpetual motion. A-dorian harmony lets the raised sixth, F-sharp, flash through an otherwise minor loop, while the album's falling motif stretches into long violin notes above a piano that barely stops. The final hush makes the preceding crowding feel physical.
+
+Listening guide
+
+0:00 — Solo piano starts the pendulum: sixteenth-note figures cycle through A minor, C, G, and D.
+0:22 — Pulsed contrabass and two sustained string lines enter beneath the mechanism.
+0:51 — Cello adds a slow inner contour, moving against the rapid surface.
+1:20 — Violin begins long E-D-C sighs over the churn.
+1:49 — The piano register lifts as the whole texture presses upward.
+2:18 — Peak section: piano and violin move an octave higher and the D-major chord exposes the bright dorian F-sharp.
+2:55 — The register drops, but the motor keeps running while voices begin to peel away.
+3:31 — Cello leaves and the crowded texture thins to piano, violin, and strings.
+4:06 — The sixteenths stop on one held A-minor chord; pedal and strings let the sudden space bloom.
+
+MIDI techniques
+
+This is type-1 MIDI at 480 ticks per beat and a constant 132 BPM. The piano pendulum is explicitly sequenced at sixteen notes per bar with short, slightly overlapping gates and four-note accents. Contrabass roots are detached pulses; the two pad channels hold separate registers so sustained voices do not collide. CC11 provides continuous breathing on bass and bowed parts. The piano uses CC64 only for the terminal hush. Register shifts are written as octave transpositions, not program changes or pitch bends. Six fixed GM programs are used, with no drums, pan, send effects, aftertouch, or tempo automation.

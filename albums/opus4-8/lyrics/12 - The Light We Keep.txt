@@ -1,0 +1,21 @@
+Why this piece
+
+The finale earns its light by carrying the album's grief intact. It begins with the opener's D-minor ground and 5-4-3 theme, gathers memories of the darker tracks, then changes the same material into D major. F-sharp and C-sharp do not erase the lament bass; they reveal that it can support radiance as well as sorrow.
+
+Listening guide
+
+0:00 — Contrabass and strings recall the opener's descending D-minor ground.
+0:32 — Cello returns with the original memory theme.
+1:04 — Piano and viola join the gathering ensemble.
+1:36 — Violin and the second string layer complete the minor-mode texture.
+2:08 — Faster piano motion drives the darker remembrance toward its turn.
+2:40 — D major breaks through; high string arpeggios replace some of the earlier weight.
+3:12 — Violin returns with the theme recoloured by F-sharp.
+3:44 — Radiant climax: the full ensemble and octave-high violin state the major version.
+4:16 — The light is held, then allowed to recede without returning to minor.
+5:20 — One last quiet pass leaves cello, bass, and the principal strings at home.
+5:52 — A long D-add9 coda slows from 60 to 52 and 44 BPM; high E settles to F-sharp as the chord fades.
+
+MIDI techniques
+
+The type-1 file uses 480 ticks per beat, eleven eight-bar cycles, and seven GM chamber channels. Separate minor and major grounds share the same descending bass; the mode change is fully note-authored through F-sharp, C-sharp, and a major-coloured version of the theme. Tied string voice-leading and CC11 sustain one large arc. Piano CC64 joins its broken chords, while String Ensemble 2 carries explicit eighth-note arpeggios during the major turn. The only tempo automation on VIGIL appears in the coda: 60 BPM, then 52, then 44. No pan, send effects, pitch bend, aftertouch, percussion, or mid-piece program change is authored.

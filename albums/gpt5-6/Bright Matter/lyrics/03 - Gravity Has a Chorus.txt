@@ -1,3 +1,7 @@
+Why this piece
+This track makes changing metre sound like changing gravity. A 7/8 launch falls into square 4/4 drops, floats through a 5/4 zero-gravity bridge, and gains its full mass only when choir, brass, rhythm section, and cathedral organ converge.
+
+Listening guide
 BRIGHT MATTER — INSTRUMENTAL LISTENING GUIDE
 
 0:00  I. WEIGHTLESS COUNT
@@ -23,3 +27,6 @@ The cathedral organ finally enters. Its expression and tremulant rise continuous
 
 4:18  VIII. QUIET FIELD
 Organ pedal, strings, and closing choir remain after the rhythmic mass has gone.
+
+MIDI techniques
+Conductor events establish the verified 7/8→4/4→5/4 metric world. Two choir channels use CC70 vowel automation to open from “oo” toward “ah”, while the late cathedral-organ entrance carries rising CC11 expression and CC1 tremulant; the zero-gravity section removes the drum channel before the larger return.

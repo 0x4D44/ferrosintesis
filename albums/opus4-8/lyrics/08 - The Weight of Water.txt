@@ -1,0 +1,20 @@
+Why this piece
+
+This track asks how much weight repetition can acquire. The same four-bar B-flat-minor ground returns twenty times, but additive orchestration keeps changing its mass until the loop becomes the album's loudest wave. The sudden subtraction after the crest is the real catharsis: not release upward, but exhaustion beneath the surface.
+
+Listening guide
+
+0:00 — Cello and descending contrabass expose the F-E-flat-D-flat theme and B-flat-A-flat-G-flat-F lament line.
+0:33 — Piano and the first string bed join the repeating four-bar ground.
+1:06 — Viola and a lower second string layer deepen the accumulation.
+1:39 — Violin enters above the cello; no earlier layer has been removed.
+2:12 — Piano figuration becomes more continuous, turning repetition into forward pressure.
+2:46 — Cello and violin begin octave-lifted statements as the wave grows taller.
+3:59 — The fifteenth pass reaches the full-ensemble peak.
+4:16 — Sudden break: violin and octave doublings disappear and the dynamic falls sharply.
+4:32 — A long recession removes parts pass by pass.
+5:31 — A hollow B-flat-minor tail leaves the minor third fading above root and fifth.
+
+MIDI techniques
+
+The file is type-1 MIDI at 480 ticks per beat and one 58 BPM tempo. Seven GM channels hold piano, cello, violin, viola, contrabass, and two string ensembles. Its form is encoded as twenty four-bar cycles with an explicit layer roster: entrances, register lifts, and denser piano eighths provide the additive process. Tied voice-leading prevents sustained pads from re-attacking common tones; CC11 supplies the near-linear climb and exhausted fade. Piano CC64 pedals its broken chords. The violin has no controller lane, so its growth comes from note register and velocity. No authored pan, send effects, bends, aftertouch, drums, or program changes occur.

@@ -213,10 +213,15 @@ fn tp_polyphase() -> [[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE] {
     phases
 }
 
-/// Max 4×-oversampled true peak (linear) of one channel.
-fn channel_true_peak(c: &[f32], phases: &[[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE]) -> f32 {
-    let mut peak = 0.0f32;
-    for i in 0..c.len() {
+/// Per-frame 4×-oversampled true-peak envelope (linear) of one channel: entry `i`
+/// is the max |interpolated sub-sample| anchored at frame `i` (and the raw sample).
+fn channel_true_peak_env(
+    c: &[f32],
+    phases: &[[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE],
+) -> Vec<f32> {
+    let mut env = vec![0.0f32; c.len()];
+    for (i, e) in env.iter_mut().enumerate() {
+        let mut peak = c[i].abs();
         for phase in phases.iter() {
             let mut acc = 0.0f32;
             for (k, &coef) in phase.iter().enumerate() {
@@ -226,10 +231,16 @@ fn channel_true_peak(c: &[f32], phases: &[[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPL
             }
             peak = peak.max(acc.abs());
         }
-        // Guard: also consider the raw sample itself.
-        peak = peak.max(c[i].abs());
+        *e = peak;
     }
-    peak
+    env
+}
+
+/// Max 4×-oversampled true peak (linear) of one channel.
+fn channel_true_peak(c: &[f32], phases: &[[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE]) -> f32 {
+    channel_true_peak_env(c, phases)
+        .into_iter()
+        .fold(0.0f32, f32::max)
 }
 
 /// True peak of an interleaved-stereo buffer in dBTP (dB relative to full scale,
@@ -248,6 +259,73 @@ pub fn true_peak_dbtp(interleaved_stereo: &[f32], _fs: f32) -> f32 {
         f32::NEG_INFINITY
     } else {
         20.0 * peak.log10()
+    }
+}
+
+/// Attack/release ramp times for the true-peak limiter.
+const TP_ATTACK_MS: f32 = 1.5;
+const TP_RELEASE_MS: f32 = 100.0;
+/// A hair of extra headroom: applying a time-varying gain slightly reshapes the
+/// waveform, so target just under the stated ceiling to guarantee it in the output.
+const TP_SAFETY_DB: f32 = 0.3;
+
+/// In-place true-peak lookahead limiter on an interleaved-stereo buffer: pulls
+/// every 4×-oversampled true peak to `ceiling_dbtp`, with a click-free anticipatory
+/// attack (bounded-slope backward pass, so the gain is already down when the peak
+/// arrives → the ceiling is met) and a gentle release (bounded-slope forward pass,
+/// so gain recovers without pumping). One shared gain per frame preserves the
+/// stereo image. Content already under the ceiling passes through unchanged.
+pub fn limit_true_peak(interleaved_stereo: &mut [f32], fs: f32, ceiling_dbtp: f32) {
+    let n_frames = interleaved_stereo.len() / 2;
+    if n_frames == 0 {
+        return;
+    }
+    let ceil_lin = 10f32.powf((ceiling_dbtp - TP_SAFETY_DB) / 20.0);
+    let phases = tp_polyphase();
+
+    // De-interleave, build the shared true-peak envelope.
+    let mut left = Vec::with_capacity(n_frames);
+    let mut right = Vec::with_capacity(n_frames);
+    for f in 0..n_frames {
+        left.push(interleaved_stereo[2 * f]);
+        right.push(interleaved_stereo[2 * f + 1]);
+    }
+    let env_l = channel_true_peak_env(&left, &phases);
+    let env_r = channel_true_peak_env(&right, &phases);
+
+    // Target gain per frame: pull anything over the ceiling down to it.
+    let mut g: Vec<f32> = (0..n_frames)
+        .map(|i| {
+            let env = env_l[i].max(env_r[i]);
+            if env > ceil_lin {
+                ceil_lin / env
+            } else {
+                1.0
+            }
+        })
+        .collect();
+
+    // Backward pass = anticipatory attack: gain may fall (forward in time) no
+    // faster than the attack slope, so it reaches the reduction BEFORE the peak.
+    let atk_step = 10f32.powf((20.0 / (TP_ATTACK_MS / 1000.0 * fs)) / 20.0);
+    for i in (0..n_frames - 1).rev() {
+        let ramp = g[i + 1] * atk_step;
+        if ramp < g[i] {
+            g[i] = ramp;
+        }
+    }
+    // Forward pass = release: gain may rise no faster than the release slope.
+    let rel_step = 10f32.powf((20.0 / (TP_RELEASE_MS / 1000.0 * fs)) / 20.0);
+    for i in 1..n_frames {
+        let ramp = g[i - 1] * rel_step;
+        if ramp < g[i] {
+            g[i] = ramp;
+        }
+    }
+
+    for f in 0..n_frames {
+        interleaved_stereo[2 * f] *= g[f];
+        interleaved_stereo[2 * f + 1] *= g[f];
     }
 }
 
@@ -374,5 +452,58 @@ mod tests {
     fn true_peak_silence_neg_inf() {
         let sig = vec![0.0f32; 4410 * 2];
         assert_eq!(true_peak_dbtp(&sig, 44100.0), f32::NEG_INFINITY);
+    }
+
+    /// The limiter must bring an over-ceiling signal's true peak to the ceiling.
+    #[test]
+    fn limiter_meets_ceiling() {
+        let fs = 44100.0;
+        let mut sig = stereo_sine(1000.0, 2.0, 1.0, fs); // true peak ≈ +6 dBTP
+        assert!(true_peak_dbtp(&sig, fs) > 5.0);
+        limit_true_peak(&mut sig, fs, -1.0);
+        let tp = true_peak_dbtp(&sig, fs);
+        assert!(
+            tp <= -0.9,
+            "limited true peak must sit at/under the -1 dBTP ceiling, got {tp}"
+        );
+    }
+
+    /// Content already under the ceiling passes through untouched (no gain, no pumping).
+    #[test]
+    fn limiter_unity_under_ceiling() {
+        let fs = 44100.0;
+        let orig = stereo_sine(440.0, 0.3, 1.0, fs); // ~-10.5 dBTP, well under -1
+        let mut sig = orig.clone();
+        limit_true_peak(&mut sig, fs, -1.0);
+        let max_diff = orig
+            .iter()
+            .zip(&sig)
+            .fold(0.0f32, |m, (a, b)| m.max((a - b).abs()));
+        assert!(
+            max_diff < 1e-6,
+            "under-ceiling content must be unchanged, max sample diff {max_diff}"
+        );
+    }
+
+    /// After a loud transient, the gain must release back to unity so the quiet
+    /// tail that follows is left untouched (proves release, not permanent ducking).
+    #[test]
+    fn limiter_releases_to_unity() {
+        let fs = 44100.0;
+        let mut burst = stereo_sine(1000.0, 2.5, 0.05, fs); // loud transient
+        let tail = stereo_sine(300.0, 0.2, 0.6, fs); // quiet tail, under ceiling
+        burst.extend_from_slice(&tail);
+        let orig = burst.clone();
+        limit_true_peak(&mut burst, fs, -1.0);
+        // Compare only the LAST 0.2 s (well past the 100 ms release): must be unchanged.
+        let start = orig.len() - (0.2 * fs) as usize * 2;
+        let max_diff = orig[start..]
+            .iter()
+            .zip(&burst[start..])
+            .fold(0.0f32, |m, (a, b)| m.max((a - b).abs()));
+        assert!(
+            max_diff < 1e-5,
+            "gain must release to unity for the quiet tail, max diff {max_diff}"
+        );
     }
 }

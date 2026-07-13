@@ -2083,9 +2083,9 @@ pub(crate) fn render_buses(
     (out, core.stats())
 }
 
-/// Peak-normalise to `target` and convert to interleaved i16 with TPDF dither.
-pub fn normalize_to_i16(samples: &[f32], peak: f32, target: f32) -> Vec<i16> {
-    let scale = if peak > 1e-9 { target / peak } else { 1.0 };
+/// Scale by `scale`, TPDF-dither, and quantise to interleaved i16. Shared by the
+/// peak- and loudness-normalisation paths so both dither identically.
+fn dither_quantize(samples: &[f32], scale: f32) -> Vec<i16> {
     let mut rng = Rng::new(0xD17E);
     samples
         .iter()
@@ -2098,10 +2098,93 @@ pub fn normalize_to_i16(samples: &[f32], peak: f32, target: f32) -> Vec<i16> {
         .collect()
 }
 
+/// Peak-normalise to `target` and convert to interleaved i16 with TPDF dither.
+pub fn normalize_to_i16(samples: &[f32], peak: f32, target: f32) -> Vec<i16> {
+    let scale = if peak > 1e-9 { target / peak } else { 1.0 };
+    dither_quantize(samples, scale)
+}
+
+/// Loudness-normalise: bring integrated loudness (BS.1770-4) to `target_lufs`,
+/// then true-peak-limit to `ceiling_dbtp`, then TPDF-dither to interleaved i16.
+///
+/// The loudness gain is a single scalar, so every composed within-track dynamic
+/// (and every `analyze.py` ratio oracle) is preserved exactly; only over-ceiling
+/// transients are touched, by the limiter. Silence (no gated blocks) passes
+/// through ungained.
+pub fn normalize_loudness(
+    samples: &[f32],
+    sr: f32,
+    target_lufs: f32,
+    ceiling_dbtp: f32,
+) -> Vec<i16> {
+    let measured = crate::loudness::integrated_lufs(samples, sr);
+    let gain = if measured.is_finite() {
+        10f32.powf((target_lufs - measured) / 20.0)
+    } else {
+        1.0
+    };
+    let mut buf: Vec<f32> = samples.iter().map(|&x| x * gain).collect();
+    crate::loudness::limit_true_peak(&mut buf, sr, ceiling_dbtp);
+    dither_quantize(&buf, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::midi::Ev;
+
+    /// U4 full-chain oracle: loudness-normalising an arbitrary-level stereo tone
+    /// must land the decoded i16 at the target LUFS and under the true-peak ceiling.
+    #[test]
+    fn normalize_loudness_hits_target_and_ceiling() {
+        let fs = 44100.0;
+        // A −30 dBFS-ish 1 kHz stereo sine (needs boosting toward −18).
+        let n = (fs * 5.0) as usize;
+        let mut sig = Vec::with_capacity(n * 2);
+        for i in 0..n {
+            let s = 0.03 * (2.0 * std::f32::consts::PI * 1000.0 * i as f32 / fs).sin();
+            sig.push(s);
+            sig.push(s);
+        }
+        let pcm = normalize_loudness(&sig, fs, -18.0, -1.0);
+        let dec: Vec<f32> = pcm.iter().map(|&s| s as f32 / 32768.0).collect();
+        let lufs = crate::loudness::integrated_lufs(&dec, fs);
+        let tp = crate::loudness::true_peak_dbtp(&dec, fs);
+        assert!(
+            (lufs - (-18.0)).abs() < 0.5,
+            "decoded loudness should be ~-18 LUFS, got {lufs}"
+        );
+        assert!(
+            tp <= -0.8,
+            "decoded true peak should be <= ceiling, got {tp}"
+        );
+    }
+
+    /// When the loudness gain leaves the signal under the ceiling, the path is a
+    /// pure scalar: output must equal input×gain to within the dither (±1 LSB).
+    #[test]
+    fn normalize_loudness_is_pure_scalar_under_ceiling() {
+        let fs = 44100.0;
+        let n = (fs * 5.0) as usize;
+        let mut sig = Vec::with_capacity(n * 2);
+        for i in 0..n {
+            let s = 0.05 * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / fs).sin();
+            sig.push(s);
+            sig.push(s);
+        }
+        // Target the signal's own loudness → gain ≈ 1, no limiting.
+        let measured = crate::loudness::integrated_lufs(&sig, fs);
+        let pcm = normalize_loudness(&sig, fs, measured, 0.0);
+        // Reference: same dither/quantise with unity scale, no gain, no limiter.
+        let reference = normalize_to_i16(&sig, 1.0, 1.0);
+        let max_lsb = pcm
+            .iter()
+            .zip(&reference)
+            .map(|(a, b)| (a - b).unsigned_abs())
+            .max()
+            .unwrap();
+        assert!(max_lsb <= 1, "pure-scalar path drifted by {max_lsb} LSB");
+    }
 
     fn test_song(events: Vec<(f64, EvKind)>, seconds: f64) -> Song {
         Song {

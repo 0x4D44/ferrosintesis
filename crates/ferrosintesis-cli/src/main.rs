@@ -17,7 +17,7 @@ use std::time::Instant;
 
 fn usage() -> ! {
     eprintln!(
-        "usage: ferrosintesis <input.mid> [-o out.wav] [--rate N] [--wet X] [--delay MS] [--tail S] [--no-samples] [--solo CH[,CH...]] [-q]"
+        "usage: ferrosintesis <input.mid> [-o out.wav] [--rate N] [--wet X] [--delay MS] [--tail S] [--no-samples] [--solo CH[,CH...]] [--lufs LUFS] [--tp-ceiling dBTP] [--peak-normalize] [-q]\n  default: loudness-normalize to -18 LUFS with a -1 dBTP true-peak limit;\n  --peak-normalize uses the legacy per-track peak normalization (-1 dBFS)."
     );
     std::process::exit(2);
 }
@@ -32,6 +32,9 @@ fn main() {
     let mut samples = true;
     let mut solo = 0xFFFFu16; // all channels
     let mut verbose = true;
+    let mut peak_normalize = false; // legacy per-track peak normalization
+    let mut target_lufs = -18.0f32; // BS.1770 integrated-loudness target
+    let mut tp_ceiling = -1.0f32; // true-peak ceiling (dBTP)
 
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -63,6 +66,19 @@ fn main() {
                     .unwrap_or_else(|| usage())
             }
             "--no-samples" => samples = false,
+            "--peak-normalize" => peak_normalize = true,
+            "--lufs" => {
+                target_lufs = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_else(|| usage())
+            }
+            "--tp-ceiling" => {
+                tp_ceiling = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_else(|| usage())
+            }
             "--solo" => {
                 // render only the listed 0-based channels (e.g. "11" or "12,13")
                 let list = args.next().unwrap_or_else(|| usage());
@@ -125,7 +141,13 @@ fn main() {
         verbose,
     };
     let (samples, stats) = offline::render(&song, &opt);
-    let pcm = offline::normalize_to_i16(&samples, stats.peak, 0.891); // -1 dBFS
+    let pcm = if peak_normalize {
+        offline::normalize_to_i16(&samples, stats.peak, 0.891) // legacy: peak to -1 dBFS
+    } else {
+        // Default: per-track loudness normalization to `target_lufs` with a
+        // `tp_ceiling` true-peak limit (see the loudness overhaul PLN/CR docs).
+        offline::normalize_loudness(&samples, rate as f32, target_lufs, tp_ceiling)
+    };
     if let Err(e) = offline::write_wav(&output, rate, &pcm) {
         eprintln!("error writing {}: {e}", output.display());
         std::process::exit(1);

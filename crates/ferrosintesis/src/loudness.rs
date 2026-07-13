@@ -6,9 +6,9 @@
 //!
 //! Implements ITU-R BS.1770-4 / EBU R128 integrated loudness:
 //!   1. K-weighting pre-filter (stage-1 high shelf + stage-2 RLB high-pass),
-//!      coefficients re-derived for the actual sample rate via the RBJ cookbook
-//!      bilinear transform (the tabulated constants in the standard are 48 kHz
-//!      only — our render rate is 44.1 kHz).
+//!      coefficients re-derived for the actual sample rate via the Zölzer
+//!      shelving formulation libebur128 uses (the tabulated constants in the
+//!      standard are 48 kHz only — our render rate is 44.1 kHz).
 //!   2. 400 ms blocks, 100 ms hop (75 % overlap), channel-weighted mean square.
 //!   3. Two-stage gating: absolute −70 LUFS, then relative −10 LU.
 //!
@@ -262,39 +262,38 @@ pub fn true_peak_dbtp(interleaved_stereo: &[f32], _fs: f32) -> f32 {
     }
 }
 
-/// Attack/release ramp times for the true-peak limiter.
-const TP_ATTACK_MS: f32 = 1.5;
+/// Attack/release ramp times for the true-peak limiter. The attack is kept a few
+/// ms rather than sub-ms so the gain is near-flat across the 12-tap interpolation
+/// window: a steep ramp there re-inflates the interpolated peak above g·env and
+/// stalls convergence. 5 ms of anticipatory pre-duck is inaudible for transients.
+const TP_ATTACK_MS: f32 = 5.0;
 const TP_RELEASE_MS: f32 = 100.0;
-/// A hair of extra headroom: applying a time-varying gain slightly reshapes the
-/// waveform, so target just under the stated ceiling to guarantee it in the output.
-const TP_SAFETY_DB: f32 = 0.3;
+/// Headroom below the stated ceiling. Covers (a) waveform reshaping by the
+/// time-varying gain and (b) the ~0.5 dB our 4× true-peak meter reads under
+/// ffmpeg/libebur128 on transient-rich material. This is FREE: loudness is
+/// measured before limiting, so a lower true-peak does not change the LUFS.
+const TP_SAFETY_DB: f32 = 1.0;
+/// Max limiter passes. A fast attack ramp straddling the FIR window slightly
+/// inflates the interpolated peak above g·env, so one pass can under-correct;
+/// re-measuring the limited buffer and re-limiting converges in a few passes.
+const TP_MAX_PASSES: usize = 12;
 
-/// In-place true-peak lookahead limiter on an interleaved-stereo buffer: pulls
-/// every 4×-oversampled true peak to `ceiling_dbtp`, with a click-free anticipatory
-/// attack (bounded-slope backward pass, so the gain is already down when the peak
-/// arrives → the ceiling is met) and a gentle release (bounded-slope forward pass,
-/// so gain recovers without pumping). One shared gain per frame preserves the
-/// stereo image. Content already under the ceiling passes through unchanged.
-pub fn limit_true_peak(interleaved_stereo: &mut [f32], fs: f32, ceiling_dbtp: f32) {
-    let n_frames = interleaved_stereo.len() / 2;
-    if n_frames == 0 {
-        return;
+/// One bounded-slope limiter pass over de-interleaved channels: returns true if
+/// any gain reduction was applied (i.e. the buffer was over the ceiling).
+fn limit_pass(
+    left: &mut [f32],
+    right: &mut [f32],
+    fs: f32,
+    ceil_lin: f32,
+    phases: &[[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE],
+) -> bool {
+    let n = left.len();
+    if n == 0 {
+        return false;
     }
-    let ceil_lin = 10f32.powf((ceiling_dbtp - TP_SAFETY_DB) / 20.0);
-    let phases = tp_polyphase();
-
-    // De-interleave, build the shared true-peak envelope.
-    let mut left = Vec::with_capacity(n_frames);
-    let mut right = Vec::with_capacity(n_frames);
-    for f in 0..n_frames {
-        left.push(interleaved_stereo[2 * f]);
-        right.push(interleaved_stereo[2 * f + 1]);
-    }
-    let env_l = channel_true_peak_env(&left, &phases);
-    let env_r = channel_true_peak_env(&right, &phases);
-
-    // Target gain per frame: pull anything over the ceiling down to it.
-    let mut g: Vec<f32> = (0..n_frames)
+    let env_l = channel_true_peak_env(left, phases);
+    let env_r = channel_true_peak_env(right, phases);
+    let mut g: Vec<f32> = (0..n)
         .map(|i| {
             let env = env_l[i].max(env_r[i]);
             if env > ceil_lin {
@@ -304,28 +303,58 @@ pub fn limit_true_peak(interleaved_stereo: &mut [f32], fs: f32, ceiling_dbtp: f3
             }
         })
         .collect();
-
-    // Backward pass = anticipatory attack: gain may fall (forward in time) no
-    // faster than the attack slope, so it reaches the reduction BEFORE the peak.
+    if g.iter().all(|&x| x >= 1.0) {
+        return false; // already under the ceiling
+    }
+    // Backward pass = anticipatory attack (gain reaches the reduction BEFORE the
+    // peak); forward pass = gentle release (no pumping). Both bounded-slope → no clicks.
     let atk_step = 10f32.powf((20.0 / (TP_ATTACK_MS / 1000.0 * fs)) / 20.0);
-    for i in (0..n_frames - 1).rev() {
+    for i in (0..n - 1).rev() {
         let ramp = g[i + 1] * atk_step;
         if ramp < g[i] {
             g[i] = ramp;
         }
     }
-    // Forward pass = release: gain may rise no faster than the release slope.
     let rel_step = 10f32.powf((20.0 / (TP_RELEASE_MS / 1000.0 * fs)) / 20.0);
-    for i in 1..n_frames {
+    for i in 1..n {
         let ramp = g[i - 1] * rel_step;
         if ramp < g[i] {
             g[i] = ramp;
         }
     }
+    for i in 0..n {
+        left[i] *= g[i];
+        right[i] *= g[i];
+    }
+    true
+}
 
+/// In-place true-peak limiter on an interleaved-stereo buffer: pulls every
+/// 4×-oversampled true peak to `ceiling_dbtp` (less a safety margin), with a
+/// click-free anticipatory attack and a gentle release. One shared gain per frame
+/// preserves the stereo image. Content already under the ceiling is unchanged.
+/// Iterated to convergence so a fast attack ramp can't leave residual overshoot.
+pub fn limit_true_peak(interleaved_stereo: &mut [f32], fs: f32, ceiling_dbtp: f32) {
+    let n_frames = interleaved_stereo.len() / 2;
+    if n_frames == 0 {
+        return;
+    }
+    let ceil_lin = 10f32.powf((ceiling_dbtp - TP_SAFETY_DB) / 20.0);
+    let phases = tp_polyphase();
+
+    let mut left: Vec<f32> = (0..n_frames).map(|f| interleaved_stereo[2 * f]).collect();
+    let mut right: Vec<f32> = (0..n_frames)
+        .map(|f| interleaved_stereo[2 * f + 1])
+        .collect();
+
+    for _ in 0..TP_MAX_PASSES {
+        if !limit_pass(&mut left, &mut right, fs, ceil_lin, &phases) {
+            break;
+        }
+    }
     for f in 0..n_frames {
-        interleaved_stereo[2 * f] *= g[f];
-        interleaved_stereo[2 * f + 1] *= g[f];
+        interleaved_stereo[2 * f] = left[f];
+        interleaved_stereo[2 * f + 1] = right[f];
     }
 }
 

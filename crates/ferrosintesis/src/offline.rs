@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-pub use crate::engine::{normalize_to_i16, Options, Stats};
+pub use crate::engine::{normalize_loudness, normalize_to_i16, Options, Stats};
 pub use crate::loudness::{integrated_lufs, limit_true_peak, true_peak_dbtp};
 pub use crate::wav::write_wav;
 

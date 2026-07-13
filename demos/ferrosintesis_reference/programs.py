@@ -94,12 +94,22 @@ OVERRIDE: dict[int, dict] = {
     # Bass - synth basses reach lower
     38: {"register": (28, 55)},
     39: {"register": (28, 55)},
-    # Strings / orchestral
+    # Strings / orchestral.
+    # 40/42/43/44 carry an ALT bank that is the SAME INSTRUMENT (the frozen v0.9 twin),
+    # so both banks MUST be auditioned in the same register or the A/B compares notes
+    # rather than voices. Before this, the family row (48, 79) auditioned the CONTRABASS
+    # an octave-and-a-fourth above a double bass's compass -- and its (since-fixed) pitch
+    # bug was worst exactly there. See check_dual_bank_registers().
+    40: {"register": (55, 84)},                       # Violin: G3-C6
+    42: {"register": (40, 72)},                       # Cello: E2-C5
+    43: {"register": (28, 60)},                       # Contrabass: E1-C4 (sounding)
+    44: {"register": (55, 84)},                       # Tremolo strings: as the violin
     45: {"register": (55, 84)},                       # Pizzicato: violin body pluck
     46: {"register": (36, 84), "note": "full-compass harp, no wound split, voices.rs:1673"},
     47: {"register": (36, 53), "gesture": STRUCK,
          "note": "thump LP fixed 300Hz - not a timpani above ~key62, voices.rs:697"},
-    # Ensemble
+    # Ensemble. 52/53/54 have a same-instrument ALT bank -- match its register.
+    52: {"register": (48, 72)}, 53: {"register": (48, 72)}, 54: {"register": (48, 72)},
     55: {"register": (44, 57), "gesture": ONESHOT,
          "note": "one-shot; thump tracks key only over 44-57, voices.rs:5523"},
     # Brass - tuba/trombone sit low
@@ -122,10 +132,12 @@ OVERRIDE: dict[int, dict] = {
           "note": "keys<=54 sound NO chanter; chanter notes ALSO spawn a drone (always polyphonic), engine.rs:1039"},
     110: {"register": (55, 84), "gesture": SUSTAIN},   # Fiddle
     111: {"register": (60, 84), "gesture": SUSTAIN},   # Shanai
-    # Percussive - modelled melodic percussion registers
-    112: {"register": (72, 88)},                       # Tinkle bell: strike bp 7200Hz, voices.rs:741
+    # Percussive - modelled melodic percussion registers. 112/113/116 have a
+    # same-instrument set-B ALT bank -- match its register (see check_dual_bank_registers).
+    112: {"register": (72, 96)},                       # Tinkle bell: strike bp 7200Hz, voices.rs:741
+    113: {"register": (60, 84)},                       # Agogo
     114: {"register": (48, 79)},                       # Steel drum
-    116: {"register": (33, 55), "gesture": STRUCK},    # Taiko: boom LP 260Hz, voices.rs:857
+    116: {"register": (36, 55), "gesture": STRUCK},    # Taiko: boom LP 260Hz, voices.rs:857
     117: {"register": (36, 67), "gesture": STRUCK},    # Melodic tom
     118: {"register": (36, 72), "gesture": STRUCK},    # Synth drum
     119: {"register": (60, 60), "gesture": ONESHOT,
@@ -226,3 +238,42 @@ def melodic_slots(lo: int, hi: int) -> list[Slot]:
 def alias_index() -> list[tuple[int, int]]:
     """(program, canonical) pairs, ascending - for the marker/lyrics cross-reference."""
     return sorted(ALIAS.items())
+
+
+# Dual-bank programs whose ALT is a genuinely DIFFERENT instrument, so a shared register
+# would be wrong. Every other dual-bank program must audition both banks in the SAME
+# register - see check_dual_bank_registers().
+REGISTER_MAY_DIVERGE = {
+    14: "alt is a tam-tam/gong, not tubular bells; it folds to one octave (voices.rs:1184)",
+    119: "main ignores the key entirely (fixed 1.02s swell); the alt IS key-tracked",
+}
+
+
+def check_dual_bank_registers() -> list[str]:
+    """An A/B must vary ONE thing: the bank. Not the notes.
+
+    Every dual-bank program whose alt is the same instrument must audition both banks in
+    the same register, or the listener is comparing pitches rather than voices. This is
+    not hypothetical: the contrabass (GM 43) used to inherit the strings family row
+    (48, 79) for its main and (28, 60) for its alt -- so the main was auditioned an
+    octave-and-a-fourth ABOVE a double bass's compass, exactly where its loop-latency
+    pitch bug was worst (-45 cents), while the alt was played in compass. The A/B was
+    rigged against the main, and the resulting "the alt sounds better" was half real
+    defect and half harness artefact. Twelve of the twenty-four dual-bank rows were
+    mismatched like this.
+
+    Returns a list of human-readable failures (empty == good).
+    """
+    problems: list[str] = []
+    for program, (alt_register, _gesture, label) in sorted(ALT_BANK.items()):
+        if program in REGISTER_MAY_DIVERGE:
+            continue
+        main_register = _resolve(program).register
+        if main_register != alt_register:
+            problems.append(
+                f"GM {program:03d} ({GM_NAMES[program]}): the A/B compares DIFFERENT "
+                f"REGISTERS - main {main_register} vs alt {alt_register} ({label}). "
+                f"Add an OVERRIDE so both banks audition the same notes, or document the "
+                f"divergence in REGISTER_MAY_DIVERGE."
+            )
+    return problems

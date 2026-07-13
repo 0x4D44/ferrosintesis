@@ -15,7 +15,13 @@ __pycache__/
 # transcribe.py: outputs, local tool config, and per-tool venvs (external prerequisites)
 transcriptions/
 transcribe.local.json
-tools/
+# Ignore tools/ CONTENTS (not the dir itself — a `tools/` rule excludes the directory
+# outright and git then cannot re-include anything inside it). This catches the transcribe
+# venvs while letting committed dev tools below be re-included.
+tools/*
+# ...committed dev tools under tools/ ARE source (sample generator, render-diff harness).
+!tools/ferrosintesis-samples/
+!tools/render-diff/
 # Rendered audio — reproducible build output, not source.
 # Regenerate with `cargo run --release -p render-catalog`.
 *.wav

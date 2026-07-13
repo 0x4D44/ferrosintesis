@@ -1,15 +1,13 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
-- [ ] 2026.07.13 — **No reusable render-diff harness exists, though CLAUDE.md mandates the
-  render-diff inventory** for any voices.rs/engine.rs/drums.rs/sampler.rs change. Every task
-  hand-rolls it (build a baseline binary in a throwaway worktree, render `render_opus.py::ALBUMS`
-  with both binaries, `cmp`). A worktree-hygiene pass found one agent's ad-hoc scripts
-  (`renderdiff.ps1`/`refresh_affected.py`/`spotcheck.py`) but they were hardcoded to specific
-  worktree paths and not reusable, so they were retired with the `salvage-orphan-scraps` archive.
-  Worth writing a small parameterized `tools/render-diff` (baseline-ref + head-ref → per-album
-  WAV-hash DIFF/same/FAIL table) so the mandated inventory isn't re-invented each task. Note the
-  workflow shifted: `.opus` is now git-ignored build output rendered via `build.py`, so a fresh
-  harness should diff `.wav` renders, not committed assets.
+- [x] 2026.07.13 — **DONE (2026.07.13, weak-voices task): reusable render-diff harness at
+  `tools/render-diff/render_diff.py`.** Parameterized `--baseline`/`--new` binaries +
+  `--program`/`--key` "touched voice" declarations → per-album WAV-hash table classifying
+  every track EXPECTED-changed / EXPECTED-same / CONTAMINATION / NOT-REACHED, exit nonzero on
+  contamination. Diffs `.wav` renders (not committed assets), as the note asked. It scans each
+  MIDI for the programs/keys it actually SOUNDS (program changes with no notes don't count).
+  Validated on the weak-voices change across 99 album MIDIs: 76 changed, 23 same, 0
+  contamination. NOTE the `tools/` gitignore trap it exposed (see lessons_learnt).
 
 - [ ] 2026.07.13 — **`CLAUDE.md` version string is stale: says ferrosintesis is "currently
   0.14.3", crate builds as 0.15.3** (`CLAUDE.md` ferrosintesis-architecture "is versioned …

@@ -240,6 +240,18 @@ impl Modal {
         release_t60: f32,
         gain: f32,
     ) -> Self {
+        // INVARIANT: the attack ramp must not outlast the strike transient it exists to
+        // let through. `att_env` multiplies the WHOLE voice, noise burst included, so an
+        // attack_s longer than the noise t60 gates the mallet transient with its own
+        // envelope — GM 114's alt bank shipped with attack_s 10 ms against a noise t60 of
+        // 8 ms, which attenuated its strike to ~12% of peak and made a steel pan sound
+        // like a muted thud. Cheap to state, and it catches the whole bug class for free.
+        debug_assert!(
+            noise.0 <= 0.0 || attack_s < noise.1,
+            "Modal: attack_s ({attack_s} s) >= strike-noise t60 ({} s) — the attack ramp \
+             will gate the strike transient it is supposed to pass",
+            noise.1,
+        );
         let mut rng = Rng::new(seed);
         let modes = partials
             .iter()
@@ -770,6 +782,19 @@ fn agogo(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     )
 }
 
+/// GM 114 steel drums (tenor pan).
+///
+/// A pan note is a hammered convex dome, deliberately tuned so its first modes are
+/// NEAR-HARMONIC (fundamental : octave : twelfth = 1 : 2 : 3) — that harmonic tuning
+/// is what makes a pan a *pitched* instrument rather than a gong. Its identity on top
+/// of that is (a) a BRIGHT metallic strike, and (b) a shimmer: each mode has a slightly
+/// detuned twin (the dome is not perfectly symmetric), and the pair beats at Δr·f0.
+///
+/// This table used to stop at the 4.18 partial — at C4 that is 1.1 kHz, i.e. the pan
+/// had NO energy at all above ~2 kHz (measured: band energy 2-5 kHz and 5-12 kHz both
+/// rounded to 0.0000). A steel pan with no top end is a dull, muted bell, which is
+/// exactly how it sounded. The fix is upward extension of the mode ladder plus a strike
+/// burst bright enough to read as mallet-on-steel. Pinned by `steel_pan_is_bright_metal`.
 fn steel_drum(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let f = key_freq(key);
     let v = vel_amp(vel);
@@ -777,13 +802,18 @@ fn steel_drum(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let mut jrng = Rng::new(seed ^ 0x514E_5748);
     let partials: Vec<(f32, f32, f32)> = [
         (1.000, 1.00, 1.00),
-        (1.006, 0.36, 1.10),
-        (2.000, 0.38, 0.82),
-        (2.012, 0.20, 0.75),
-        (3.000, 0.20, 0.60),
-        (4.180, 0.08, 0.42),
+        (1.006, 0.40, 1.05), // twin: the slow shimmer on the fundamental
+        (2.000, 0.70, 0.85), // the octave is nearly as strong as the fundamental
+        (2.015, 0.32, 0.85), // twin b — NEVER jitter these ratios (beat = Δr·f0)
+        (3.010, 0.50, 0.70), // the twelfth: the third leg of the pan's tuned triad
+        (4.180, 0.24, 0.52),
+        (5.430, 0.15, 0.40), // the inharmonic upper modes: the metallic "ting" that
+        (6.900, 0.09, 0.30), // makes it steel and not a marimba. These are the ones
+        (8.600, 0.05, 0.22), // that were missing entirely.
     ]
     .into_iter()
+    // Amp-only jitter: the 2.000/2.015 twin ratios are load-bearing (they set the
+    // beat rate), so jittering the RATIO would smear the shimmer.
     .map(|(r, a, t)| (f * r, a * v * (1.0 + 0.05 * jrng.white()), t * decay_scale))
     .collect();
 
@@ -791,10 +821,12 @@ fn steel_drum(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         sr,
         seed,
         &partials,
+        // The mallet-on-steel strike: brighter (3.4 kHz vs 2.2) and longer (35 ms vs
+        // 20) than the old muted thud, so the attack carries real metal.
         (
-            0.09 * v,
-            0.020,
-            Biquad::bandpass(2_200.0_f32.min(sr * 0.40), 0.9, sr),
+            0.22 * v,
+            0.035,
+            Biquad::bandpass(3_400.0_f32.min(sr * 0.40), 0.9, sr),
         ),
         0.001,
         6.0,
@@ -1123,7 +1155,11 @@ const STEELPAN_B: &[(f32, f32, f32)] = &[
     (6.19, 0.08, 0.35),
 ];
 const STEELPAN_B_NOISE: (f32, f32, f32, f32) = (0.06, 0.008, 1200.0, 0.8);
-const STEELPAN_B_ATTACK_S: f32 = 0.010;
+// The strike burst decays with t60 = 8 ms, but `attack_s` ramps the WHOLE voice in
+// over 10 ms — so the mallet transient was being gated by its own attack envelope and
+// reached only ~12% of its peak. An attack ramp must never outlast the transient it is
+// supposed to let through: keep attack_s well under the noise t60 (8 ms).
+const STEELPAN_B_ATTACK_S: f32 = 0.003;
 const STEELPAN_B_RELEASE_T60: f32 = 0.5;
 const STEELPAN_B_GAIN: f32 = 0.31; // level knob: altbank_b114_steel_level_vs_marimba
 const STEELPAN_B_STRIKE_RATIO: f32 = 1.0293; // 0.5 st sharp at the strike
@@ -5563,13 +5599,25 @@ impl BowedString {
                           // The output lowpass (0 = none) darkens the cello cleanly without touching
                           // the loop's nonlinear dynamics; it is None for the contrabass, so GM43
                           // stays byte-identical to the integrated Stage 1.
-                          // loop_comp: the in-loop reflection filter + structural latency add ~3.8
-                          // samples the bare `sr/f - 1` never subtracted, so the string renders
-                          // progressively flat with pitch (fine in the bass, but ~50 cents flat at
-                          // the cello's A4). The cello subtracts the measured ~3.85; the contrabass
-                          // keeps 1.0 to stay byte-identical to Stage 1 (its residual flatness is
-                          // small and characterful in the bass; a global re-tune is a separate,
-                          // ear-gated change).
+                          // loop_comp: the in-loop reflection filter + structural latency add ~3.85
+                          // samples that the bare `sr/f` never subtracted. That is a FIXED SAMPLE
+                          // latency, so as a pitch error it GROWS with pitch (the same samples are a
+                          // bigger fraction of a shorter period). Both programs run the identical
+                          // OnePole (refl_sustain = 2600.0), so both carry the identical latency and
+                          // both need the same 3.85.
+                          //
+                          // The contrabass used to keep 1.0 "to stay byte-identical to Stage 1", on
+                          // the theory that its residual flatness was small and characterful in the
+                          // bass. Measured, that is false and the premise has expired:
+                          //   GM43 @ 1.0  : -6.1 c (key 28) -> -45.6 c (key 67), SPREAD 39.5 c
+                          //   GM43 alt    : +2.9 .. +5.6 c,                      spread  2.7 c
+                          //   GM42 @ 3.85 : -2.5 .. -0.7 c,                      spread  1.8 c  <- control
+                          // A CONSTANT offset is inaudible; a pitch-DEPENDENT one corrupts INTERVALS
+                          // (a fifth renders ~14 c narrow, so a sustained triad beats against itself)
+                          // — on the bass, the harmonic foundation, where it hurts most. And the
+                          // byte-identity premise died with the .opus/.wav renders becoming
+                          // git-ignored build output (CLAUDE.md): there is no committed audio to
+                          // stay identical to. Pinned by `bowed_string_tuning_is_pitch_independent`.
         let (body_f, refl_sustain, amp_base, amp_span, out_lp_hz, loop_comp) = match program {
             42 => (
                 [110.0f32, 230.0, 500.0],
@@ -5579,7 +5627,7 @@ impl BowedString {
                 2100.0f32,
                 3.85f32,
             ),
-            _ => ([70.0, 180.0, 700.0], 2600.0, 0.55, 1.25, 0.0, 1.0),
+            _ => ([70.0, 180.0, 700.0], 2600.0, 0.55, 1.25, 0.0, 3.85),
         };
         // Per-note character: the seed varies per voice (the engine's spawn
         // counter), so drawing the bow's force, grit, scratch and vibrato here
@@ -11508,6 +11556,141 @@ mod tests {
         let mut buf = vec![0f32; (sr * secs) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    /// SP-O1 (regression, GM 114 steel drums): a steel pan is BRIGHT METAL.
+    ///
+    /// The bug this pins: the mode ladder stopped at the 4.18 partial — at C4 that is
+    /// 1.1 kHz — so the voice had essentially no energy above 2 kHz and read as a dull,
+    /// muted bell rather than struck steel. Measured before the fix, band energy at
+    /// 2-5 kHz and 5-12 kHz both rounded to 0.0000 against a 250-700 Hz body of 0.0035.
+    ///
+    /// The oracle is a RATIO of bands within one render (immune to the renderer's
+    /// peak-normalise) and is calibrated against the crate's OWN mallet instruments
+    /// rather than a number I invented. Measured on the strike (0-50 ms), the
+    /// upper-band/body ratio separates bar material cleanly and by a factor of ~400:
+    ///
+    ///   METAL bars:  vibraphone 0.047   tubular bells 0.047
+    ///   WOOD  bars:  marimba    0.0001  xylophone     0.0001
+    ///
+    /// A hammered steel dome belongs in the METAL cluster. The threshold sits in the
+    /// two-decade gap between the clusters, so it is not sensitive to tuning.
+    #[test]
+    fn steel_pan_is_bright_metal() {
+        let sr = 44100.0;
+        let key = 60; // C4: f0 261.6 Hz
+        let render = |program: u8| render_voice(make(program, key, 100, sr, 7, false), sr, 1.5);
+
+        // metal-ness = upper-band / body energy, on the strike, where bar material
+        // announces itself.
+        let metalness = |b: &[f32]| {
+            let seg = &b[..(0.05 * sr) as usize];
+            let body = spectral_band_rms(seg, sr, 200.0, 800.0);
+            let metal = spectral_band_rms(seg, sr, 1800.0, 6000.0);
+            metal / body.max(1e-9)
+        };
+        let pan = metalness(&render(114));
+        let vibes = metalness(&render(11)); // metal bars: the in-crate METAL reference
+        let marimba = metalness(&render(12)); // wooden bars: the in-crate WOOD reference
+        println!("SP-O1 metalness (1.8-6k/0.2-0.8k on strike): pan={pan:.4} vibes={vibes:.4} marimba={marimba:.4}");
+
+        // (a) the pan is in the METAL cluster, not the wood one. The threshold lives in
+        // the empty two-decade gap between them.
+        assert!(
+            pan > 0.01,
+            "(a) GM114 steel pan metalness {pan:.4} is down in the WOODEN-BAR cluster \
+             (marimba {marimba:.4}) — it has no metallic top at all"
+        );
+        // (b) and it is comparable to a struck metal bar. A hammered steel dome cannot be
+        // meaningfully darker than a vibraphone.
+        assert!(
+            pan > 0.5 * vibes,
+            "(b) GM114 steel pan ({pan:.4}) is far darker than a VIBRAPHONE ({vibes:.4})"
+        );
+    }
+
+    // -- BowedString (GM 42/43): loop-latency tuning --------------------------
+
+    /// Locate f0 to sub-cent accuracy: a fine Goertzel sweep +/-90 cents around
+    /// the expected pitch. `testutil::peak_locate` steps by 0.5% (= 8.6 cents),
+    /// which is far too coarse to gate a 5-cent oracle, and its unguarded argmax
+    /// over a wide span can latch onto a partial. Anchoring the search on the
+    /// KNOWN target pitch and stepping finely avoids both traps.
+    fn f0_cents_error(seg: &[f32], sr: f32, target_hz: f32) -> f32 {
+        let (lo, hi) = (target_hz * 2f32.powf(-0.075), target_hz * 2f32.powf(0.075));
+        let n = 300;
+        let (mut best_f, mut best_m) = (target_hz, 0.0f32);
+        for i in 0..n {
+            let f = lo + (hi - lo) * (i as f32) / ((n - 1) as f32);
+            let m = mag_at(seg, sr, f);
+            if m > best_m {
+                best_m = m;
+                best_f = f;
+            }
+        }
+        1200.0 * (best_f / target_hz).log2()
+    }
+
+    fn key_hz(key: u8) -> f32 {
+        440.0 * 2f32.powf((key as f32 - 69.0) / 12.0)
+    }
+
+    /// BS-O1 (regression, GM 43 contrabass): the waveguide's loop latency must be
+    /// compensated, so tuning error is INDEPENDENT OF PITCH.
+    ///
+    /// The bug this pins: `loop_comp` was 1.0 for program 43 while the true in-loop
+    /// latency (structural + the 2600 Hz reflection OnePole's phase delay) is ~3.85
+    /// samples. An under-compensated FIXED SAMPLE latency is a pitch error that GROWS
+    /// with pitch, because the missing samples are a larger fraction of a shorter
+    /// period. Measured before the fix: -6.1 c at key 28 rising to -45.6 c at key 67.
+    ///
+    /// The load-bearing clause is (b), the SPREAD -- interval integrity. A constant
+    /// offset just means "the band tuned to A=442" and is inaudible; a pitch-dependent
+    /// one makes a fifth ~14 c narrow, so a sustained triad beats against itself. On
+    /// the bass -- the harmonic foundation -- that is the worst place for it.
+    ///
+    /// GM 42 (cello) is the in-code CONTROL: same waveguide, same refl_sustain, hence
+    /// the same latency, and it already carried the correct 3.85.
+    #[test]
+    fn bowed_string_tuning_is_pitch_independent() {
+        let sr = 44100.0;
+        // Ratios, not absolute levels: cents error is inherently level-invariant, and
+        // the sample layer is off so we measure the waveguide itself.
+        // Each instrument is measured over ITS OWN compass. Rendering a cello at E1
+        // (a fourth below its bottom string) would measure the model outside the range
+        // it is voiced for -- the same mistake the reference audition was making with
+        // the contrabass, which is what disguised this bug as a taste question.
+        //   GM 42 cello:      C2-E5  (36-76)
+        //   GM 43 contrabass: E1-G3  (28-55, sounding)
+        for (program, keys) in [
+            (42u8, &[36u8, 43, 48, 55, 62, 69, 76][..]),
+            (43u8, &[28u8, 33, 38, 43, 47, 51, 55][..]),
+        ] {
+            let mut cents = Vec::new();
+            for &key in keys {
+                let buf = render_voice(make(program, key, 96, sr, 7, false), sr, 3.0);
+                // the SETTLED sustain: past the bow-catch transient and the vibrato
+                // onset, before the note is released.
+                let seg = &buf[(0.8 * sr) as usize..(2.6 * sr) as usize];
+                cents.push(f0_cents_error(seg, sr, key_hz(key)));
+            }
+            let max = cents.iter().cloned().fold(f32::MIN, f32::max);
+            let min = cents.iter().cloned().fold(f32::MAX, f32::min);
+            let spread = max - min;
+
+            // (a) absolute tuning: within 8 cents of equal temperament.
+            assert!(
+                max.abs() <= 8.0 && min.abs() <= 8.0,
+                "GM{program}: tuning error outside +/-8 c: {cents:?}"
+            );
+            // (b) INTERVAL INTEGRITY: the error must not depend on pitch.
+            // Before the fix GM43 spread 39.5 c here -- an 8x failure.
+            assert!(
+                spread <= 5.0,
+                "GM{program}: tuning error is PITCH-DEPENDENT (spread {spread:.1} c > 5 c) \
+                 -- intervals are corrupted, not merely detuned. cents = {cents:?}"
+            );
+        }
     }
 
     // -- Stage 4 (ensemble 48-51): the Synth Strings 50/51 string-machine split --

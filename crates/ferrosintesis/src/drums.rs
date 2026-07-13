@@ -1622,12 +1622,34 @@ pub fn make(
             0.45,
             0.69,
         ),
-        47 | 48 | 50 => tom(
+        // GM gives SIX toms (41 low floor -> 50 high). 47/48/50 used to share ONE
+        // arm at 240 Hz, so the top three toms were literally the same drum: a
+        // descending tom fill rendered as the same pitch struck three times, and
+        // key 47's and key 50's buffers were bit-identical. Extending the ladder's
+        // own geometry (100 -> 140 -> 190 -> 240, ratios ~1.4/1.36/1.26) gives
+        // ~293 and ~352, with t60/life/gain continuing their downward taper and the
+        // stick band rising with the drum (smaller shell -> shorter, brighter, quieter).
+        // Pinned by `tom_ladder_is_six_distinct_drums`.
+        47 => tom(
             240.0,
             0.24,
             &one(0.2, 0.04, Biquad::bandpass(1500.0, 0.8, sr)),
             0.4,
             0.64,
+        ),
+        48 => tom(
+            293.0,
+            0.22,
+            &one(0.2, 0.04, Biquad::bandpass(1700.0, 0.8, sr)),
+            0.36,
+            0.61,
+        ),
+        50 => tom(
+            352.0,
+            0.20,
+            &one(0.2, 0.04, Biquad::bandpass(1900.0, 0.8, sr)),
+            0.33,
+            0.58,
         ),
         42 | 44 => cymbal(
             &CymSpec {
@@ -2585,10 +2607,23 @@ mod tests {
         assert!(dc.abs() < 0.015 * peak, "V3 kick DC offset too high: {dc}");
     }
 
+    /// Each tom settles on ITS OWN table pitch. The 48 -> 240 Hz row used to encode the
+    /// collapsed `47 | 48 | 50 => tom(240.0, ...)` arm, i.e. this golden was pinning the
+    /// bug: it asserted the hi-mid tom sounds at the low-mid tom's pitch. The tolerance
+    /// is unchanged (+/-22%); only the expected values are corrected to the real ladder,
+    /// and all six GM toms are now covered instead of four. See
+    /// `tom_ladder_is_six_distinct_drums` for the shape assertion.
     #[test]
     fn v3_toms_settle_near_table_pitch() {
         let sr = 44100.0;
-        for (key, table) in [(41u8, 100.0), (43, 140.0), (45, 190.0), (48, 240.0)] {
+        for (key, table) in [
+            (41u8, 100.0),
+            (43, 140.0),
+            (45, 190.0),
+            (47, 240.0),
+            (48, 293.0),
+            (50, 352.0),
+        ] {
             let b = render_drum_kit(key, 100, 0.5, Kit::V3);
             let f = testutil::peak_locate(
                 &b[(sr * 0.15) as usize..(sr * 0.30) as usize],
@@ -2691,6 +2726,68 @@ mod tests {
         );
         assert!(db.abs() <= 3.0, "(3) v3 tom level {db:+.2} dB far from v2");
         assert!(mean.abs() < 1e-3, "(4) v3 tom DC {mean:.2e}");
+    }
+
+    /// P-T5 (regression): GM gives SIX toms (41 low floor, 43 high floor, 45 low,
+    /// 47 low-mid, 48 hi-mid, 50 high) and they must be SIX DISTINCT DRUMS.
+    ///
+    /// The bug this pins: keys 47/48/50 shared one `tom(240.0, ...)` match arm, so
+    /// the top three toms were bit-identical -- a descending tom fill rendered as the
+    /// same pitch struck three times, differing only in pan. No existing oracle caught
+    /// it: `tom_ladder_v3` only ever renders key 45, so the ladder's *shape* was never
+    /// asserted, only one rung of it.
+    ///
+    /// Two clauses. (a) the settled pitch rises STRICTLY and by an audible step at
+    /// every rung -- a ratio test, so it is immune to the renderer's peak-normalise.
+    /// (b) the belt-and-braces one: the raw buffers must not be bit-identical. Clause
+    /// (b) is what actually failed before the fix (47 vs 50 were the same bytes), and
+    /// it cannot be fooled by a pitch estimator latching onto the wrong partial.
+    ///
+    /// NOTE: uses `render_drum_kit(..., Kit::V3)`, not the `render_drum` helper --
+    /// that helper hardcodes `Kit::V1`, the legacy voice the engine never selects.
+    #[test]
+    fn tom_ladder_is_six_distinct_drums() {
+        let sr = 44100.0;
+        let keys = [41u8, 43, 45, 47, 48, 50];
+        let mut f0s = Vec::new();
+        let mut bufs = Vec::new();
+        for &k in &keys {
+            let buf = render_drum_kit(k, 100, 0.45, Kit::V3);
+            // settled window: past the strike glide, on the ringing membrane.
+            let settled = testutil::peak_locate(
+                &buf[(0.15 * sr) as usize..(0.30 * sr) as usize],
+                sr,
+                80.0,
+                520.0,
+            );
+            f0s.push(settled);
+            bufs.push(buf);
+        }
+        println!("P-T5 tom ladder f0 (keys {keys:?}): {f0s:?}");
+
+        // (a) strictly ascending, each rung an audible step (>= 1.10x ~ 165 cents).
+        for i in 1..keys.len() {
+            assert!(
+                f0s[i] > f0s[i - 1] * 1.10,
+                "(a) tom ladder is not ascending at key {} -> {}: {:.0} Hz -> {:.0} Hz \
+                 (need >= 1.10x). The six GM toms must be six distinct drums.",
+                keys[i - 1],
+                keys[i],
+                f0s[i - 1],
+                f0s[i],
+            );
+        }
+        // (b) no two toms are the SAME DRUM. 47/48/50 were bit-identical before the fix.
+        for i in 0..keys.len() {
+            for j in (i + 1)..keys.len() {
+                assert!(
+                    bufs[i] != bufs[j],
+                    "(b) keys {} and {} render BIT-IDENTICALLY -- they are the same drum",
+                    keys[i],
+                    keys[j],
+                );
+            }
+        }
     }
 
     /// P-T2 (fail-first, differential V3-vs-V2): the V3/Brush tom gains an HF

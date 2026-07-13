@@ -3,6 +3,35 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.13 — **To detect a bad cymbal/plate on a box with no ears, measure decay RATES
+  and STRUCTURE, never spectral SNAPSHOTS.** Every cheap scalar (flatness, centroid,
+  kurtosis, peak prominence, band ratios) is a time-marginal of the spectrum, and a
+  noise-wash's filter corner is free to sit anywhere — so it DOMINATES every snapshot and
+  the feature is blind to the actual defect. Proven: 11 of 16 proposed cymbal-oracle clauses
+  were measured worthless (already green on the broken voice, or unsatisfiable, or rejecting
+  the real recording as a reference). The two real crash round-robins we own agree to the
+  decimal on decay features (spectral-tilt −11.0 dB/s both) while disagreeing ~30% on
+  snapshots — because decay rates are a property of the PLATE, snapshots of the STRIKE. Use
+  a DIFFERENTIAL oracle against the recording, but only in the decay domain (t60(f) shape is
+  material physics, so it transfers across cymbals; mode frequencies don't). Also: today's
+  `MetalPlate` is a time-invariant highpassed noise wash decayed by ONE scalar with the
+  44-mode plate 17 dB under it — t60 flat ~3.0 s from 200 Hz–14 kHz where a real cymbal
+  darkens (1.0 s at 10–14 kHz). Full design + oracle in `wrk_docs/2026.07.13 - HLD - cymbal
+  plate synthesis and its oracle.md`.
+
+- 2026.07.13 — **Two silent traps that let bad drum voices pass a green suite.** (1) The test
+  helper `render_drum` (drums.rs:2313) hardcodes `Kit::V1`, but the engine ships **V3**
+  (engine.rs forces it) — so every "V3 cymbal" oracle (`china_splash_crash_are_distinct`,
+  `crash_blooms_hat_does_not`, …) is measuring the DEAD legacy voice the engine never
+  selects. Any new drum oracle in the house idiom inherits the trap: render via
+  `render_drum_kit(…, Kit::V3)`. (2) A golden can PIN a bug: `v3_toms_settle_near_table_pitch`
+  asserted key 48 → 240 Hz, which encoded the collapsed `47 | 48 | 50 => tom(240.0)` arm
+  (the top three GM toms were bit-identical but for pan). Fix a golden's EXPECTED value, never
+  its tolerance. Corollary invariant now enforced in `Modal::new`: `attack_s < strike-noise
+  t60`, else the attack ramp gates the very transient it exists to pass (GM 114's alt steel
+  pan shipped 10 ms attack vs 8 ms mallet burst → strike at 12% of peak → a steel pan that
+  measured as a wooden bar, metalness 0.0002 vs marimba 0.0001).
+
 - 2026.07.13 — **A byte-exact test fixture MUST be marked `-text` in `.gitattributes`,
   and the render pipeline IS byte-reproducible across binaries.** Two findings from the
   Rust `render-catalog` port. (1) This repo has `core.autocrlf=true`, so git rewrites LF
@@ -258,8 +287,16 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 - 2026.07.11 — **A digital-waveguide string detunes progressively FLAT with pitch if
   `set_freq` under-subtracts the loop latency.** The bowed loop's in-loop reflection
   filter + read/write add ~3.8 samples, not the hard-coded 1; the residual is a
-  near-constant sample offset, so cents-flat scales with pitch — inaudible in the
-  contrabass's bass but ~50 cents flat by the cello's A4 (it passed the pitch gate only
-  because the contrabass's test keys topped at E4, −36c). Set each waveguide voice's
-  `loop_comp` from a single-note autocorrelation sweep; never assume `sr/f−1`
-  (peak-locate AND autocorrelation agree here — real detune, not a zero-crossing lie).
+  near-constant sample offset, so cents-flat scales with pitch — ~50 cents flat by the
+  cello's A4 (it passed the pitch gate only because the contrabass's test keys topped at
+  E4, −36c). Set each waveguide voice's `loop_comp` from a single-note autocorrelation
+  sweep; never assume `sr/f−1` (peak-locate AND autocorrelation agree here — real detune,
+  not a zero-crossing lie). **UPDATE 2026.07.13: the "inaudible in the contrabass's bass"
+  dismissal was WRONG and cost months.** The contrabass shipped at `loop_comp=1.0` on that
+  rationale; measured over its OWN compass (E1–G3) it spreads −6c→−46c = 39.5c, and a
+  pitch-DEPENDENT error corrupts INTERVALS (a fifth ~14c narrow → a sustained triad beats
+  against itself) — worst on the bass, the harmonic foundation. Arthur heard it as "the alt
+  bank sounds better" (the alt's offset is constant, hence inaudible). Fixed to 3.85 (the
+  cello's value — same `refl_sustain`, same latency). Oracle asserts cents-SPREAD ≤ 5 over
+  each instrument's own compass, not a per-note floor. Lesson: never call a pitch error
+  "inaudible" from a snapshot — measure the spread over the real compass.

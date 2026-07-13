@@ -36,6 +36,10 @@ def run_all(spec_scores, suite: bool = True):
         results.append(("coverage: alt bank", check_coverage_alt(by_num)))
         results.append(("coverage: drum keys", check_coverage_drums(by_num)))
         results.append(("coverage: effects CCs", check_coverage_effects(by_num)))
+        # An A/B must vary ONE thing: the bank. If the two banks are auditioned in
+        # different registers the listener compares notes, not voices -- and any
+        # verdict drawn from it is unsound. This caught 12 of 24 dual-bank rows.
+        results.append(("A/B validity: dual-bank registers", pr.check_dual_bank_registers()))
     return results
 
 

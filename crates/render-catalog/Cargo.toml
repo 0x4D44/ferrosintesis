@@ -11,4 +11,4 @@ name = "render-catalog"
 path = "src/main.rs"
 
 [dependencies]
-ferrosintesis = { path = "../ferrosintesis", version = "0.16.0" }
+ferrosintesis = { path = "../ferrosintesis", version = "0.17.0" }

@@ -3,6 +3,21 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.13 — **To audition ferrosintesis voices one-at-a-time, four facts are
+  load-bearing.** (1) **CC120 (All Sound Off) is the ONLY MIDI lever that stops a
+  ringing voice** — CC121 only note-offs *held* notes (`engine.rs:1468`), CC123 is a
+  release; plucks decay up to 14 s, so without CC120 the tail bleeds into the next
+  slot. (2) CC120 does NOT flush the reverb/chorus/echo tanks — the gap is silent only
+  because the sends are zeroed; and **CC91=0 alone is not dry**: a program change
+  re-derives a NON-ZERO CC93/CC94 from `fx_profile` for ~76/128 programs, so author
+  CC91/93/94=0 *after* every PC. (3) **Audio oracles must be RATIOS**, never absolute
+  floors — the CLI peak-normalises the whole render (`normalize_to_i16`,
+  `scale=target/peak`), so one louder voice rescales every other slot. (4) A "raw
+  voice" reset must OMIT CC71/CC74 (they instantiate the wah filter, `engine.rs:1286`);
+  an effects track that DOES use the filter must reset with CC121 between demos to
+  destroy it, or the resonance section colours everything after it. Measured, not
+  assumed: CC120 + zeroed sends hits the −96 dB dither floor within 50 ms
+  (sympathetic comb and 7 s koto included). See `demos/ferrosintesis_reference/`.
 - 2026.07.12 — **`Rng::white()` is UNIFORM in [-1,1), so its RMS is 1/√3 ≈ 0.577,
   not 1.0.** Any audio oracle that predicts an *absolute* noise level from a
   closed form must carry this factor. The Wind/pipe breath-fraction oracles

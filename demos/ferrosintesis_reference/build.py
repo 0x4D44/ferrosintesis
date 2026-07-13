@@ -123,9 +123,13 @@ def verify_outputs(track_number: int | None = None) -> None:
             failures.append(f"{path} is stale; rebuild before verifying")
         stem = Path(spec.filename).stem
         lyric_path = en.ALBUM_ROOT / "lyrics" / f"{stem}.txt"
+        expected_lyric = payloads[f"lyrics/{stem}.txt"].decode("utf-8")
         if not lyric_path.exists():
             failures.append(f"{lyric_path} missing; run python build.py first")
-        elif lyric_path.read_bytes() != payloads[f"lyrics/{stem}.txt"]:
+        # read_text (not read_bytes) so a CRLF checkout under core.autocrlf=true still
+        # matches the LF the generator writes - a text sidecar's line endings are not
+        # a meaningful staleness signal, and the manifest check below is normalised too.
+        elif lyric_path.read_text(encoding="utf-8") != expected_lyric:
             failures.append(f"{lyric_path} is stale; rebuild before verifying")
     if track_number is None:
         manifest_path = en.ALBUM_ROOT / "album_manifest.json"

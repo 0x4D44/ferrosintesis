@@ -1001,8 +1001,8 @@ mod guards {
             (33, "BASS"),
             (34, "PICK"), // Phase 4 (B2)
             (35, "FRETLESS"),
-            (36, "SLAP"),      // Phase 4 (B2)
-            (37, "SLAP"),      // Phase 4 (B2)
+            (36, "SLAP"),      // Phase 4 (B2): thumb slap
+            (37, "SLAP_POP"),  // Stage 5a (B2): bridge pop
             (38, "synthbass"), // Phase 5 (B4)
             (39, "synthbass"), // Phase 5 (B4)
             (40, "bowed"),
@@ -1192,13 +1192,14 @@ mod distinctness {
         //    all three former collapses (48/50, 48/51, 50/51) are deleted and the
         //    matrix now proves the split. --
         // -- Stage 5: minor collapses --
-        (16, 17, Why::Collapse(5)), // organ: two drawbar sets share one config
+        // Stage 5a — DONE: organ 16/17 (17 got the Percussion tab + thinned
+        // drawbars) and bass 36/37 (37 became the bridge-pop SLAP_POP) are split,
+        // so (16,17) and (36,37) are deleted and the matrix proves each fix.
         // (26, 27) was a Collapse: both shared CLEAN. Guitar v2 split them into
         // JAZZ (neck hollowbody) and CLEAN (bright single-coil) — differentiated,
         // so the stale collapse entry is deleted (this oracle's own contract).
-        (29, 30, Why::Collapse(5)), // guitar: two "overdrive/distortion" share DRIVE
-        (36, 37, Why::Collapse(5)), // bass: two slap share SLAP
-        (0, 1, Why::Collapse(5)),   // piano: acoustic-grand family shares one Modal
+        (29, 30, Why::Collapse(5)), // guitar: two "overdrive/distortion" share DRIVE — Stage 7b
+        (0, 1, Why::Collapse(5)),   // piano: acoustic-grand family shares one Modal — Stage 7a
         (0, 2, Why::Collapse(5)),
         (0, 3, Why::Collapse(5)),
         (1, 2, Why::Collapse(5)),

@@ -1611,6 +1611,21 @@ pub const SLAP: PluckPreset = PluckPreset {
     stop_thump: 0.9,
     ..DEFAULTS
 };
+/// Slap Bass 2 (GM 37): the *pop* — the finger pulls the string off the board near
+/// the bridge. Brighter and thinner than the thumb-slap SLAP (GM 36): a bridge-ward
+/// pluck position, far more HF snap, less fundamental weight, and a short ring.
+pub const SLAP_POP: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "SLAP_POP",
+    pos: 0.06,        // near the bridge — thin, bright
+    bright: 5200.0,   // was 3500: the pop's HF snap
+    pick_lp: 6500.0,  // was 4500: let the snap through
+    t60: 1.8,         // was 2.8: dies faster than the thumb
+    sub: 0.08,        // was 0.15: thinner, less weight
+    click: 3.2,       // was 2.4: a sharper pull-off transient
+    click_hp: 2600.0, // was 1500: the snap sits higher
+    ..SLAP
+};
 /// Picked bass (B2, GM 34): the plectrum click survives the chain.
 pub const PICK: PluckPreset = PluckPreset {
     #[cfg(test)]
@@ -3217,6 +3232,13 @@ pub struct Organ {
     click_amp: f32,
     click_decay: f32,
     click_filt: Biquad,
+    // Percussion tab (GM 17 only): a pitched harmonic tap struck at key-on that
+    // decays away over the sustained drawbar — the Hammond "Percussion" voice.
+    // Inert (`perc_amp == 0.0`) for every other organ program, whose render is
+    // then bit-identical (the block is skipped and `perc_osc` never ticks).
+    perc_osc: Sine,
+    perc_amp: f32,
+    perc_decay: f32,
     reed_noise_amp: f32,
     reed_noise_filt: Biquad,
     scoop: Option<PitchScoop>,
@@ -3271,6 +3293,9 @@ impl Organ {
             click_amp: click * vel_amp(vel),
             click_decay: t60_mul(0.004, sr),
             click_filt: Biquad::highpass(2000.0, 0.7, sr),
+            perc_osc: Sine::new(f, sr, 0.0),
+            perc_amp: 0.0,
+            perc_decay: 0.0,
             reed_noise_amp: 0.0,
             reed_noise_filt: Biquad::bandpass((f * 3.0).clamp(240.0, sr * 0.4), 0.8, sr),
             scoop: None,
@@ -3286,6 +3311,19 @@ impl Organ {
     fn with_reed_noise(mut self, amp: f32, center_hz: f32, q: f32) -> Self {
         self.reed_noise_amp = amp;
         self.reed_noise_filt = Biquad::bandpass(center_hz.clamp(180.0, self.sr * 0.4), q, self.sr);
+        self
+    }
+
+    /// The Hammond Percussion tab (GM 17): a pitched harmonic tap at `ratio`×f0,
+    /// level `amp` relative to the drawbar fundamental, decaying over `t60`. It
+    /// rides the master amp/env like the drawbars, so it is velocity-scaled and
+    /// released with the note, but its own exponential decay makes it a one-shot
+    /// tap over the held sustain — the "ping" that separates 17 from 16.
+    fn with_percussion(mut self, ratio: f32, amp: f32, t60: f32) -> Self {
+        let f = (self.base_f * ratio).min(self.sr * 0.45);
+        self.perc_osc = Sine::new(f, self.sr, 0.0);
+        self.perc_amp = amp;
+        self.perc_decay = t60_mul(t60, self.sr);
         self
     }
 
@@ -3346,6 +3384,10 @@ impl Voice for Organ {
             if self.click_amp > 1e-5 {
                 s += self.click_filt.process(self.rng.white()) * self.click_amp;
                 self.click_amp *= self.click_decay;
+            }
+            if self.perc_amp > 1e-5 {
+                s += self.perc_amp * self.perc_osc.next();
+                self.perc_amp *= self.perc_decay;
             }
             if self.drive > 0.0 {
                 s = (s * self.drive).tanh() / self.drive;
@@ -3425,7 +3467,7 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             1.8,
             0.32,
         ),
-        16 | 17 => Organ::new(
+        16 => Organ::new(
             key,
             vel,
             sr,
@@ -3446,6 +3488,30 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             0.0,
             0.32,
         ),
+        // 17 percussive organ: the Percussion tab drops the 4' drawbar and thins
+        // the upper drawbars, and a 3rd-harmonic tap pings at key-on and decays
+        // over the sustained tone — the identity 16 lacks. Louder key click too.
+        17 => Organ::new(
+            key,
+            vel,
+            sr,
+            seed,
+            &[
+                (0.5, 0.55),
+                (1.0, 1.0),
+                (1.5, 0.25),
+                (2.0, 0.30),
+                (3.0, 0.06),
+            ],
+            Adsr::new(0.01, 0.05, 1.0, 0.15, sr),
+            trem_hz,
+            trem_depth,
+            0.08,
+            0.14,
+            0.0,
+            0.32,
+        )
+        .with_percussion(3.0, 0.55, 0.22),
         19 => Organ::new(
             key,
             vel,
@@ -7170,7 +7236,8 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         33 => Box::new(Pluck::new(&BASS, key, vel, sr, seed)),
         38 | 39 => Box::new(SynthBass::new(program, key, vel, sr, seed)), // B4
         34 => Box::new(Pluck::new(&PICK, key, vel, sr, seed)),            // B2
-        36 | 37 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),       // B2
+        36 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),            // B2: thumb slap
+        37 => Box::new(Pluck::new(&SLAP_POP, key, vel, sr, seed)),        // B2: bridge pop
         35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
         40 | 110 => {
             let model = Box::new(Bowed::new(program, key, vel, sr, seed));
@@ -8807,11 +8874,13 @@ mod tests {
                 },
             ),
             (
+                // GM17 percussive organ (Stage 5a): darker than 16 (dropped 4'
+                // drawbar, thinned 3rd) with a decaying 3rd-harmonic tap.
                 17,
                 RenderSignature {
-                    rms_db: -12.554,
-                    centroid_hz: 358.579,
-                    late_early_db: 0.270,
+                    rms_db: -12.710,
+                    centroid_hz: 330.765,
+                    late_early_db: 0.257,
                 },
             ),
             (
@@ -10712,6 +10781,58 @@ mod tests {
         assert!(
             machine > section * 1.3,
             "the string machine (50) should beat more periodically than the acoustic section (48): {machine:.3} vs {section:.3}"
+        );
+    }
+
+    /// OS-1 (Stage 5a): GM 17 percussive organ strikes a 3rd-harmonic tap at
+    /// key-on that DECAYS over the held drawbar, where GM 16's 3rd harmonic is a
+    /// steady drawbar. Normalising the 3rd by the fundamental in an early vs late
+    /// window isolates the tap from any global envelope; the differential vs 16 is
+    /// the guard. The anti-clone matrix proves the raw split, but its steady-state
+    /// read cannot see the *percussive* (temporal) identity — this can.
+    #[test]
+    fn percussive_organ_17_has_a_decaying_tap() {
+        let sr = 44100.0;
+        let f0 = key_freq(60);
+        // Early/late ratio of (3rd harmonic / fundamental): >1 means the 3rd is
+        // proportionally stronger at onset — i.e. a decaying tap sits on it.
+        let tap_ratio = |program: u8| {
+            let mut v = make(program, 60, 100, sr, 7, false);
+            let mut buf = vec![0f32; (sr * 0.8) as usize];
+            v.render(&mut buf);
+            let third_over_first = |lo: f32, hi: f32| {
+                let seg = &buf[(lo * sr) as usize..(hi * sr) as usize];
+                mag_at(seg, sr, f0 * 3.0) / mag_at(seg, sr, f0).max(1e-9)
+            };
+            // 0.02-0.10 s: past the click transient, tap still strong.
+            third_over_first(0.02, 0.10) / third_over_first(0.45, 0.75)
+        };
+        let d17 = tap_ratio(17);
+        let d16 = tap_ratio(16);
+        // Onset punch: the tap + louder key click make 17's onset energy larger
+        // relative to its sustain than 16's steady drawbars — a band-energy read
+        // (700-900 Hz around the 3rd harmonic) integrates the decaying tap where a
+        // narrowband Goertzel smears it.
+        let punch = |program: u8| {
+            let mut v = make(program, 60, 100, sr, 7, false);
+            let mut buf = vec![0f32; (sr * 0.8) as usize];
+            v.render(&mut buf);
+            let band = |lo: f32, hi: f32| {
+                spectral_band_rms(
+                    &buf[(lo * sr) as usize..(hi * sr) as usize],
+                    sr,
+                    650.0,
+                    950.0,
+                )
+            };
+            band(0.005, 0.055) / band(0.45, 0.75).max(1e-9)
+        };
+        let p17 = punch(17);
+        let p16 = punch(16);
+        assert!(
+            p17 > 1.6 * p16,
+            "GM17 should have a percussive onset the steady GM16 lacks: \
+             onset/sustain band-punch 17={p17:.2} 16={p16:.2} (3rd-ratio 17={d17:.2} 16={d16:.2})"
         );
     }
 

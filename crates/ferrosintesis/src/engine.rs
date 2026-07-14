@@ -65,6 +65,14 @@ const PORTA_MAX_S: f32 = 0.6;
 // keeps its body; the room is pre-hall).
 const ROOM_SEND: f32 = 0.35;
 
+// D10e: overall drum-bus forward level — the whole kit sits this much louder
+// against the band. The master normalizes to a fixed -18 LUFS, so a modest lift
+// shifts the internal drums-vs-band balance forward (the value is calibrated to
+// what actually reaches the master after normalization + the -1 dBTP limiter,
+// not the nominal number). 1.0 = the pre-change level; 2.0 (+6 dB nominal) is what
+// lands as an audible ~+3 dB of drum prominence once the limiter takes its share.
+const DRUM_FORWARD: f32 = 2.0;
+
 // Channel aftertouch (0xDn): "crescendo inside a held note" — pressure adds
 // vibrato depth and gain on the sustained melodic families.
 const AT_VIB_RATE_HZ: f32 = 5.0;
@@ -205,6 +213,29 @@ pub(crate) fn drum_pan(key: u8) -> f32 {
         49 | 55 => 0.25,
         52 | 57 => 0.75,
         _ => 0.5,
+    }
+}
+
+/// D10d: per-key kit-balance trim. The kit voicing — the sampled `DRUM_LEVEL`
+/// table and the modeled kit it is level-matched to — inherited a balance where,
+/// measured on the Hey Jude reference, the hi-hats sit ~19 dB under the kick/snare
+/// while the crash/ride sit only ~2 dB under them. That reads as "the hats vanish
+/// and the cymbals are too loud." This trim corrects it for BOTH kits at once
+/// (applied in the drum mix, so it scales the sampled and modeled voices equally
+/// and preserves their level parity): the hi-hats come up ~+11 dB, the loud accent
+/// cymbals come down, and the backbone (kick/snare/toms/stick/aux) stays put.
+fn kit_balance(key: u8) -> f32 {
+    match key {
+        42 | 44 | 46 => 4.5,                // hi-hats: ~19 dB too quiet -> up ~+13 dB
+        38 | 40 => 1.8, // snare: well forward (it sat behind the toms; +2.6 -> ~+5 dB)
+        41 | 43 | 45 | 47 | 48 | 50 => 1.6, // toms: forward ~+4 dB
+        49 => 0.5,      // crash 1 (hard-left, used rhythmically): pulled down further
+        57 => 0.68,     // crash 2 (right): stays an accent
+        51 | 59 => 0.55, // ride: too loud and too sustained
+        53 => 0.72,     // ride bell
+        52 => 0.68,     // china
+        55 => 0.68,     // splash
+        _ => 1.0,       // kick/side-stick/tamb/cowbell: unchanged
     }
 }
 
@@ -2032,7 +2063,8 @@ impl EngineCore {
                 let alive = a.voice.render(&mut self.scratch[..n]);
                 let pan = (drum_pan(a.key) + pan_off).clamp(0.0, 1.0);
                 let theta = pan * FRAC_PI_2;
-                let (ul, ur) = (theta.cos(), theta.sin());
+                let bal = kit_balance(a.key);
+                let (ul, ur) = (theta.cos() * bal, theta.sin() * bal);
                 for i in 0..n {
                     self.drum_l[i] += self.scratch[i] * ul;
                     self.drum_r[i] += self.scratch[i] * ur;
@@ -2050,7 +2082,7 @@ impl EngineCore {
                     *x = wr.process(*x);
                 }
             }
-            let g9 = s9.volume * s9.expr * s9.at_gain * s9.breath;
+            let g9 = s9.volume * s9.expr * s9.at_gain * s9.breath * DRUM_FORWARD;
             if g9 >= 1e-6 {
                 let rs = s9.reverb_send * 0.9;
                 for i in 0..n {
@@ -2450,6 +2482,58 @@ mod tests {
         }
     }
 
+    /// Oracle (D10d, kit internal balance): the kit voicing was cymbal-heavy and
+    /// hat-light — measured on the Hey Jude reference the hi-hats sat ~19 dB under
+    /// the kick and the crash only ~2 dB under, so a standard beat lost its hats
+    /// and the cymbals dominated. The `kit_balance` trim corrects it. This locks in
+    /// the corrected balance on the DEFAULT (sampled) kit: the hi-hats must be
+    /// audible against the kick (not buried), the crash must sit below the kick (an
+    /// accent, not the loudest voice), and the snare/toms must be forward (near the
+    /// kick). Isolated equal-velocity hits, dry (wet=0), so it measures the
+    /// voices + trim, not the room; each level is taken relative to the kick, so
+    /// the shape survives the renderer's normalization.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn kit_internal_balance_hats_audible_crash_an_accent() {
+        let sr = 44100.0;
+        let mut opt = test_opts(sr);
+        opt.samples = true;
+        // one hit each, 1 s apart: kick, snare, closed hat, crash, tom.
+        let hits = [
+            (0.0, 36, 100),
+            (1.0, 38, 100),
+            (2.0, 42, 100),
+            (3.0, 49, 100),
+            (4.0, 45, 100),
+        ];
+        let out = render(&drum_song(&hits, 5.0, &[]), &opt).0;
+        let mono = left(&out);
+        let db = |t: f64| {
+            let a = (t * sr as f64) as usize;
+            let b = ((t + 0.4) * sr as f64) as usize;
+            20.0 * rms(&mono[a..b.min(mono.len())]).max(1e-9).log10()
+        };
+        let (kick, snare, hat, crash, tom) = (db(0.0), db(1.0), db(2.0), db(3.0), db(4.0));
+        // Measured margins at the shipped trim: hat-kick ~-11.7, crash-kick ~-11.9,
+        // snare-kick ~-6.2, tom-kick ~-4.4 dB. Reverting the hat trim drops hat-kick
+        // to ~-24.8 and trips the first assert (fail-first verified).
+        // hi-hats must be audible against the kick (they were ~19-26 dB under before)
+        assert!(
+            hat - kick > -16.0,
+            "hi-hats buried vs kick: {:.1} dB",
+            hat - kick
+        );
+        // crash sits below the kick — an accent, not the loudest voice
+        assert!(crash < kick, "crash not below kick: {:.1} dB", crash - kick);
+        // snare and toms are forward (within ~9 dB of the kick)
+        assert!(
+            snare - kick > -9.0,
+            "snare too far back: {:.1} dB",
+            snare - kick
+        );
+        assert!(tom - kick > -9.0, "toms too far back: {:.1} dB", tom - kick);
+    }
+
     #[cfg(feature = "embedded-samples")]
     #[test]
     fn samples_option_reaches_channel_10_drums() {
@@ -2481,8 +2565,14 @@ mod tests {
         for i in 0..8 {
             hits.push((i as f64 * 0.25, 42u8, 90u8)); // hats left
         }
-        for i in 0..4 {
-            hits.push((0.125 + i as f64 * 0.5, 51, 95)); // ride right
+        // ride right — matched in density and level to the (now hat-forward) kit so
+        // the pattern actually exercises the L/R spread. Since the D10d rebalance
+        // trims the ride and lifts the hats, a sparse quiet ride would let the
+        // dominant left-panned hats correlate the field; a present ride keeps both
+        // sides live (the point of the oracle), while a real mono collapse would
+        // still peg corr near 1.0.
+        for i in 0..8 {
+            hits.push((0.125 + i as f64 * 0.25, 51, 120)); // ride right
         }
         let song = drum_song(&hits, 2.2, &[]);
         let out = render(&song, &test_opts(sr)).0;

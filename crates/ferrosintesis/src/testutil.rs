@@ -1094,10 +1094,16 @@ mod guards {
         // channel 10 is deliberately brighter and slightly louder. Re-pinned
         // after the later V3 cymbal-density work moved the fixture within its
         // guard tolerance.
-        (9, -22.30, 685.2),
+        // Re-captured after the D10d kit-balance rebalance (hi-hats up, ride/crash
+        // down, snare/toms forward) + the D10e +6 dB drum-bus forward level: ch 10
+        // is 5.1 dB louder and brighter (centroid 685 -> 737 Hz, hats up), and the
+        // master peak nearly doubles. Every melodic channel (0-8), including the
+        // ch 7 piano and ch 8 strings canaries, is BIT-EXACT vs the prior capture —
+        // proof the change is contained to the drum bus.
+        (9, -17.16, 737.4),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 1.17665;
+    const GOLDEN_MASTER_PEAK: f32 = 2.20355;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

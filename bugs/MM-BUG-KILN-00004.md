@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00004 — BowedString waveguide vibrato runs at 1/16 speed (default GM 42 cello / 43 contrabass); the guarding oracle tests the wrong voice
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth
@@ -18,7 +18,36 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-12, raised by Claude Opus 4.8)
+- **State history:** Open (2026-07-12, raised by Claude Opus 4.8) → Fixed (2026-07-14, voice-quality overhaul slice 1 / B3, Claude Opus 4.8)
+
+## Fix (2026-07-14, voice-quality overhaul, HLD §2.3 / B3)
+
+Both halves of the defect are resolved:
+
+1. **The 16×-slow vibrato.** `BowedString::new` now builds its vibrato LFO through
+   `control_lfo(vib_rate, jitter, &mut rng, sr)` (which constructs the `Sine` at
+   `sr / CTRL`), so the `is_multiple_of(CTRL)`-gated `.next()` in `render` advances it at
+   the intended rate. Per-program base rates match the demoted `Bowed` presets the oracle
+   names: **cello (42) 4.8 Hz, contrabass (43) 4.2 Hz**. This is the 4th instance of the
+   same idiom (Wind = KILN-00003; a 5th was found in `altbank.rs` and fixed in the same
+   task).
+2. **"The guarding oracle tests the wrong voice."** `default_bowed_natural_vibrato_runs_at_named_rate`
+   was constructing `Bowed::new` directly, but `make()` routes 42/43 to `BowedString` — so it
+   was green while the shipped voice was broken. Rewritten to exercise the SHIPPED voice
+   through `make()` and measure the rendered FM rate. It is **red on the un-fixed trunk**
+   (GM 42 autocorrelation 0.29 Hz) and **green after** (≈ 4.6/5.2 Hz, the seeds' jittered
+   rates) — regression-first, so it cannot silently pass a future recurrence.
+
+**Verification (independent oracle, red-before/green-after — the two-eyes standard for this
+autonomous session):** the rewritten oracle fails on trunk and passes after the fix; confirmed
+by the lead re-running `cargo test -p ferrosintesis` (green). Landed in the squashed overhaul
+commit; a render-diff over the GM 42/43 albums (46 + 42 committed MIDIs) confirms the cello/bass
+material changed and unrelated albums did not.
+
+> A **separate** defect on the same voice — GM 43 contrabass *tuning* (progressively flat, a
+> different mechanism) — was fixed in parallel on trunk (`ff88e98`) AND independently in this
+> task (measured `loop_comp` 4.03); reconciled at integration. That tuning issue is NOT this
+> bug (this is vibrato); noted only to avoid confusion.
 
 ## Observation
 

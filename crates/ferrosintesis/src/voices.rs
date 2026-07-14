@@ -17,7 +17,10 @@
 //!   Bowed    — sawtooth through a violin body, with scoop, attack bow
 //!              noise, and bow-pressure brightness
 //!   ReverseCymbal — a pitch-agnostic reverse-cymbal swell for GM 119
-//!   SfxNoise — safe toneless noise fallback for GM sound effects
+//!   SfxNoise — toneless noise squeak transient for GM 120 (fret noise)
+//!   Sfx*     — dedicated GM sound-effect voices 121-127: sustained
+//!              breath/seashore/helicopter/applause textures that follow the
+//!              key hold, plus bird-chirp, telephone-ring and gunshot shots
 //!
 //! Timing realism: sustained families speak slower at low velocity, the way
 //! a gently-bowed or gently-blown note actually starts.
@@ -110,15 +113,10 @@ struct SfxNoise {
 
 impl SfxNoise {
     fn new(program: u8, vel: u8, sr: f32, seed: u32) -> Self {
+        // Since 2026.07.14 only GM 120 (fret squeak) routes here — 121-127
+        // have dedicated voices. The 120 constants are bit-frozen.
         let (freq, q, t60, gain): (f32, f32, f32, f32) = match program {
             120 => (3_400.0, 0.55, 0.12, 0.09), // fret squeak
-            121 => (1_900.0, 0.50, 0.35, 0.07), // breath
-            122 => (900.0, 0.45, 0.95, 0.10),   // seashore wash
-            123 => (4_500.0, 0.50, 0.16, 0.07), // bird tweet fallback
-            124 => (1_250.0, 0.50, 0.18, 0.06), // telephone ring fallback
-            125 => (260.0, 0.45, 0.55, 0.09),   // helicopter wash
-            126 => (2_700.0, 0.45, 0.70, 0.12), // applause
-            127 => (1_500.0, 0.42, 0.28, 0.16), // gunshot
             _ => (1_600.0, 0.45, 0.25, 0.08),
         };
         SfxNoise {
@@ -143,6 +141,528 @@ impl Voice for SfxNoise {
             }
         }
         self.amp > 1e-5
+    }
+
+    fn note_off(&mut self) {
+        self.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "sfx"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GM Sound Effects 121-127 (2026.07.14): dedicated per-program voices.
+//
+// The old SfxNoise burst served all of 120-127: one band-passed white-noise
+// decay, 24-39 dB under a piano at equal velocity, dead within ~1 s no matter
+// how long the key was held. GM 120 (fret noise) keeps that voice — a fret
+// squeak IS a short quiet noise transient — and the other seven get models:
+//
+//   sustained while the key is down (release on note-off):
+//     121 breath      — formant-shaped turbulent hiss, soft onset
+//     122 seashore    — low surf wash + spray hiss swelling at ~0.09 Hz
+//     125 helicopter  — broadband rotor bed chopped at ~11 Hz blade rate
+//     126 applause    — two interleaved clap-grain trains (~360 claps/s)
+//   one-shots (shaped and levelled):
+//     123 bird tweet  — four upward FM chirps on a fixed 0.16 s grid
+//     124 telephone   — 440+480 Hz ring, 0.9 s on / 0.45 s off cadence
+//                       (repeats while held, damps fast on note-off)
+//     127 gunshot     — broadband crack above the piano's peak + boom tail
+//
+// All seven ignore the written key (GM SFX are pitch-less) and draw all
+// randomness from the seeded Rng, so equal-seed renders are bit-identical.
+// Levels are calibrated against the crate's own piano (program 0, vel 100:
+// peak 0.8185, rms(0-0.5 s) 0.2991) — the per-program oracles pin the ratios.
+// ---------------------------------------------------------------------------
+
+/// Attack-hold-release envelope shared by the sustained SFX voices: one-pole
+/// rise toward 1.0 while the key is down, exponential t60 release after
+/// note-off.
+struct SfxEnv {
+    level: f32,
+    att: f32,
+    rel_mul: f32,
+    released: bool,
+}
+
+impl SfxEnv {
+    fn new(attack_s: f32, release_t60: f32, sr: f32) -> Self {
+        SfxEnv {
+            level: 0.0,
+            att: 1.0 - (-1.0 / (attack_s.max(1e-3) * sr)).exp(),
+            rel_mul: t60_mul(release_t60, sr),
+            released: false,
+        }
+    }
+
+    #[inline]
+    fn next(&mut self) -> f32 {
+        if self.released {
+            self.level *= self.rel_mul;
+        } else {
+            self.level += self.att * (1.0 - self.level);
+        }
+        self.level
+    }
+
+    fn dead(&self) -> bool {
+        self.released && self.level < 1e-5
+    }
+}
+
+/// GM 121 breath noise: turbulent exhale — white noise through two vocal-ish
+/// formant bandpasses plus a broadband hiss, swelling in over ~0.12 s and
+/// holding while the key is down.
+struct SfxBreath {
+    rng: Rng,
+    f1: Biquad,
+    f2: Biquad,
+    hiss: Biquad,
+    env: SfxEnv,
+    amp: f32,
+}
+
+impl SfxBreath {
+    fn new(vel: u8, sr: f32, seed: u32) -> Self {
+        SfxBreath {
+            rng: Rng::new(seed ^ 0x5F58_0079),
+            f1: Biquad::bandpass(500.0, 2.0, sr),
+            f2: Biquad::bandpass(1_400.0, 2.2, sr),
+            hiss: Biquad::bandpass(4_200.0f32.min(sr * 0.40), 0.8, sr),
+            env: SfxEnv::new(0.12, 0.30, sr),
+            amp: vel_amp(vel) * 1.30,
+        }
+    }
+}
+
+impl Voice for SfxBreath {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let n = self.rng.white();
+            let s =
+                self.f1.process(n) * 0.5 + self.f2.process(n) * 0.5 + self.hiss.process(n) * 0.2;
+            *o += s * self.amp * self.env.next();
+        }
+        !self.env.dead()
+    }
+
+    fn note_off(&mut self) {
+        self.env.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.env.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "sfx"
+    }
+}
+
+/// GM 122 seashore: a low surf wash and a spray hiss, both riding a ~0.09 Hz
+/// swell (the hiss follows the swell squared — spray breaks at the crest),
+/// sustained while the key is down.
+struct SfxSeashore {
+    rng: Rng,
+    wash: Biquad,
+    wash_lp: Biquad,
+    spray: Biquad,
+    swell: Sine,
+    env: SfxEnv,
+    amp: f32,
+}
+
+impl SfxSeashore {
+    fn new(vel: u8, sr: f32, seed: u32) -> Self {
+        SfxSeashore {
+            rng: Rng::new(seed ^ 0x5F58_007A),
+            wash: Biquad::bandpass(600.0, 0.45, sr),
+            // A single Q 0.45 bandpass has 6 dB/oct skirts — enough hiss
+            // leaks past 2.5 kHz to rival the spray. The lowpass steepens
+            // the wash's top so the surf rumble genuinely dominates.
+            wash_lp: Biquad::lowpass(1_000.0, 0.7, sr),
+            spray: Biquad::bandpass(3_800.0f32.min(sr * 0.40), 0.6, sr),
+            swell: Sine::new(0.09, sr, 0.0),
+            env: SfxEnv::new(0.40, 1.20, sr),
+            amp: vel_amp(vel),
+        }
+    }
+}
+
+impl Voice for SfxSeashore {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let sw = 0.55 + 0.45 * self.swell.next();
+            let n = self.rng.white();
+            let s = self.wash_lp.process(self.wash.process(n)) * 1.7 * sw
+                + self.spray.process(n) * 0.22 * sw * sw;
+            *o += s * self.amp * self.env.next();
+        }
+        !self.env.dead()
+    }
+
+    fn note_off(&mut self) {
+        self.env.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.env.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "sfx"
+    }
+}
+
+/// GM 123 bird tweet: four fast upward FM chirps on a fixed 0.16 s grid, each
+/// a 60 ms exponential sweep (~2.5 -> 4.4 kHz) with a 38 Hz trill, then done.
+/// A one-shot; an early note-off damps the call quickly.
+struct SfxBird {
+    phase: f32,
+    trill: Sine,
+    t: u32,
+    chirp_len: u32,
+    att_len: u32,
+    rel_len: u32,
+    grid_len: u32,
+    chirp: u8,
+    f_start: f32,
+    sweep_mul: f32,
+    jitter: [f32; 4],
+    sr: f32,
+    amp: f32,
+    rel: f32,
+    rel_mul: f32,
+    released: bool,
+}
+
+impl SfxBird {
+    const CHIRPS: u8 = 4;
+
+    fn new(vel: u8, sr: f32, seed: u32) -> Self {
+        let mut rng = Rng::new(seed ^ 0x5F58_007B);
+        // Seeded per-chirp start-frequency jitter (+-6%); the grid is fixed so
+        // the call's rhythm is deterministic and oracle-addressable.
+        let jitter = [
+            1.0 + 0.06 * rng.white(),
+            1.0 + 0.06 * rng.white(),
+            1.0 + 0.06 * rng.white(),
+            1.0 + 0.06 * rng.white(),
+        ];
+        let chirp_len = (0.060 * sr) as u32;
+        SfxBird {
+            phase: 0.0,
+            trill: Sine::new(38.0, sr, 0.0),
+            t: 0,
+            chirp_len,
+            att_len: (0.008 * sr) as u32,
+            rel_len: (0.012 * sr) as u32,
+            grid_len: (0.16 * sr) as u32,
+            chirp: 0,
+            f_start: 2_500.0,
+            // f multiplies by 1.85 across one chirp: per-sample growth factor.
+            sweep_mul: 1.85f32.powf(1.0 / chirp_len as f32),
+            jitter,
+            sr,
+            amp: vel_amp(vel) * 0.26,
+            rel: 1.0,
+            rel_mul: t60_mul(0.05, sr),
+            released: false,
+        }
+    }
+}
+
+impl Voice for SfxBird {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let mut alive = self.chirp < Self::CHIRPS;
+        for o in out.iter_mut() {
+            if self.released {
+                self.rel *= self.rel_mul;
+            }
+            if !alive || self.rel < 1e-5 {
+                alive = false;
+                break;
+            }
+            let tr = self.trill.next();
+            if self.t < self.chirp_len {
+                let f = self.f_start
+                    * self.jitter[self.chirp as usize]
+                    * self.sweep_mul.powi(self.t as i32)
+                    * (1.0 + 0.05 * tr);
+                self.phase += TAU * f / self.sr;
+                if self.phase > TAU {
+                    self.phase -= TAU;
+                }
+                // Trapezoid envelope: quick edges, flat body — a whistled
+                // chirp holds its level while the pitch sweeps.
+                let w = if self.t < self.att_len {
+                    self.t as f32 / self.att_len as f32
+                } else if self.t + self.rel_len > self.chirp_len {
+                    (self.chirp_len - self.t) as f32 / self.rel_len as f32
+                } else {
+                    1.0
+                };
+                *o += self.phase.sin() * w * self.amp * self.rel;
+            }
+            self.t += 1;
+            if self.t >= self.grid_len {
+                self.t = 0;
+                self.chirp += 1;
+                if self.chirp >= Self::CHIRPS {
+                    alive = false;
+                }
+            }
+        }
+        alive && self.rel >= 1e-5
+    }
+
+    fn note_off(&mut self) {
+        self.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "sfx"
+    }
+}
+
+/// GM 124 telephone: the two classic ring tones (440 + 480 Hz) under a 20 Hz
+/// striker warble, gated by the ring cadence — 0.9 s on, 0.45 s off —
+/// repeating while the key is held; note-off damps the bell fast.
+struct SfxTelephone {
+    tone1: Sine,
+    tone2: Sine,
+    warble: Sine,
+    t: u32,
+    cycle_len: u32,
+    on_len: u32,
+    gate: f32,
+    gate_coef: f32,
+    amp: f32,
+    rel: f32,
+    rel_mul: f32,
+    released: bool,
+}
+
+impl SfxTelephone {
+    fn new(vel: u8, sr: f32, _seed: u32) -> Self {
+        SfxTelephone {
+            tone1: Sine::new(440.0, sr, 0.0),
+            tone2: Sine::new(480.0, sr, 0.0),
+            warble: Sine::new(20.0, sr, 0.0),
+            t: 0,
+            cycle_len: (1.35 * sr) as u32,
+            on_len: (0.90 * sr) as u32,
+            gate: 0.0,
+            gate_coef: 1.0 - (-1.0 / (0.004 * sr)).exp(),
+            amp: vel_amp(vel) * 0.21,
+            rel: 1.0,
+            rel_mul: t60_mul(0.15, sr),
+            released: false,
+        }
+    }
+}
+
+impl Voice for SfxTelephone {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            if self.released {
+                self.rel *= self.rel_mul;
+            }
+            let target = if self.t < self.on_len { 1.0 } else { 0.0 };
+            self.gate += self.gate_coef * (target - self.gate);
+            let w = 1.0 + 0.35 * self.warble.next();
+            let s = (self.tone1.next() + self.tone2.next()) * w;
+            *o += s * self.gate * self.amp * self.rel;
+            self.t += 1;
+            if self.t >= self.cycle_len {
+                self.t = 0;
+            }
+        }
+        !(self.released && self.rel < 1e-5)
+    }
+
+    fn note_off(&mut self) {
+        self.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "sfx"
+    }
+}
+
+/// GM 125 helicopter: a rotor bed (low broadband noise + blade thump) chopped
+/// by a squared ~11 Hz raised-sine gate, over a faint unmodulated turbine
+/// hiss, sustained while the key is down.
+struct SfxHelicopter {
+    rng: Rng,
+    rotor: Biquad,
+    thump: Biquad,
+    turbine: Biquad,
+    chop: Sine,
+    env: SfxEnv,
+    amp: f32,
+}
+
+impl SfxHelicopter {
+    fn new(vel: u8, sr: f32, seed: u32) -> Self {
+        SfxHelicopter {
+            rng: Rng::new(seed ^ 0x5F58_007D),
+            rotor: Biquad::bandpass(330.0, 0.5, sr),
+            thump: Biquad::lowpass(140.0, 0.8, sr),
+            turbine: Biquad::bandpass(2_500.0f32.min(sr * 0.40), 0.5, sr),
+            chop: Sine::new(11.0, sr, 0.0),
+            env: SfxEnv::new(0.25, 0.40, sr),
+            amp: vel_amp(vel),
+        }
+    }
+}
+
+impl Voice for SfxHelicopter {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let g = 0.5 + 0.5 * self.chop.next();
+            let g = g * g;
+            let n = self.rng.white();
+            let s = (self.rotor.process(n) * 2.4 + self.thump.process(n) * 1.2) * g
+                + self.turbine.process(n) * 0.15;
+            *o += s * self.amp * self.env.next();
+        }
+        !self.env.dead()
+    }
+
+    fn note_off(&mut self) {
+        self.env.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.env.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "sfx"
+    }
+}
+
+/// GM 126 applause: two interleaved PhISEM clap-grain trains (150 + 210
+/// claps/s through distinct clap-band filters), swelling in and sustaining
+/// while the key is held — a crowd, not a hiss.
+struct SfxApplause {
+    rng: Rng,
+    gate1: GrainGate,
+    gate2: GrainGate,
+    clap1: Biquad,
+    clap2: Biquad,
+    env: SfxEnv,
+    amp: f32,
+}
+
+impl SfxApplause {
+    fn new(vel: u8, sr: f32, seed: u32) -> Self {
+        SfxApplause {
+            rng: Rng::new(seed ^ 0x5F58_007E),
+            gate1: GrainGate::new(150.0, 0.010, sr),
+            gate2: GrainGate::new(210.0, 0.008, sr),
+            clap1: Biquad::bandpass(2_400.0f32.min(sr * 0.40), 0.8, sr),
+            clap2: Biquad::bandpass(3_100.0f32.min(sr * 0.40), 0.9, sr),
+            env: SfxEnv::new(0.25, 0.60, sr),
+            amp: vel_amp(vel) * 1.30,
+        }
+    }
+}
+
+impl Voice for SfxApplause {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let g1 = self.gate1.next(&mut self.rng);
+            let n1 = self.rng.white();
+            let g2 = self.gate2.next(&mut self.rng);
+            let n2 = self.rng.white();
+            let s = self.clap1.process(n1) * g1 + self.clap2.process(n2) * g2;
+            *o += s * self.amp * self.env.next();
+        }
+        !self.env.dead()
+    }
+
+    fn note_off(&mut self) {
+        self.env.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.env.released
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "sfx"
+    }
+}
+
+/// GM 127 gunshot: a broadband muzzle crack whose peak stands well above the
+/// piano's (the loudest thing this synth makes, as it should be), decaying
+/// into a low boom. A one-shot regardless of key hold.
+struct SfxGunshot {
+    rng: Rng,
+    boom: Biquad,
+    crack_env: f32,
+    crack_mul: f32,
+    boom_env: f32,
+    boom_mul: f32,
+    amp: f32,
+    rel: f32,
+    rel_mul: f32,
+    released: bool,
+}
+
+impl SfxGunshot {
+    fn new(vel: u8, sr: f32, seed: u32) -> Self {
+        SfxGunshot {
+            rng: Rng::new(seed ^ 0x5F58_007F),
+            boom: Biquad::lowpass(400.0, 0.7, sr),
+            crack_env: 1.0,
+            crack_mul: t60_mul(0.015, sr),
+            boom_env: 1.0,
+            boom_mul: t60_mul(0.30, sr),
+            amp: vel_amp(vel),
+            rel: 1.0,
+            rel_mul: t60_mul(0.06, sr),
+            released: false,
+        }
+    }
+}
+
+impl Voice for SfxGunshot {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            if self.released {
+                self.rel *= self.rel_mul;
+            }
+            let n = self.rng.white();
+            let s = n * self.crack_env * 4.1 + self.boom.process(n) * self.boom_env * 1.6;
+            *o += s * self.amp * self.rel;
+            self.crack_env *= self.crack_mul;
+            self.boom_env *= self.boom_mul;
+        }
+        self.boom_env * self.rel > 1e-5
     }
 
     fn note_off(&mut self) {
@@ -8238,7 +8758,16 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         117 => Box::new(melodic_tom(key, vel, sr, seed)),
         118 => Box::new(synth_drum(key, vel, sr, seed)),
         119 => Box::new(ReverseCymbal::new(vel, sr, seed)),
-        120..=127 => Box::new(SfxNoise::new(program, vel, sr, seed)),
+        // GM sound effects: 120 keeps the toneless squeak transient; the other
+        // seven are dedicated voices (see the SFX block above SfxEnv).
+        120 => Box::new(SfxNoise::new(program, vel, sr, seed)),
+        121 => Box::new(SfxBreath::new(vel, sr, seed)),
+        122 => Box::new(SfxSeashore::new(vel, sr, seed)),
+        123 => Box::new(SfxBird::new(vel, sr, seed)),
+        124 => Box::new(SfxTelephone::new(vel, sr, seed)),
+        125 => Box::new(SfxHelicopter::new(vel, sr, seed)),
+        126 => Box::new(SfxApplause::new(vel, sr, seed)),
+        127 => Box::new(SfxGunshot::new(vel, sr, seed)),
         80..=87 => Box::new(lead(program, key, vel, sr, seed)),
         88..=95 => Box::new(pad(program, key, vel, sr, seed)),
         _ => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
@@ -10165,55 +10694,417 @@ mod tests {
         assert!(thump > 1e-3, "low thump missing: {thump}");
     }
 
+    /// Calibration aid (not a gate): baseline levels for the GM 120-127 rework.
+    /// Run: `cargo test -p ferrosintesis --release print_sfx_baseline -- --ignored --nocapture`
     #[test]
-    fn gm_sfx_120_127_are_toneless_noise_fallbacks() {
+    #[ignore]
+    fn print_sfx_baseline() {
+        let sr = 44100.0;
+        let piano = render_voice(make(0, 60, 100, sr, 7, false), sr, 2.0);
+        let p_peak = piano.iter().fold(0f32, |m, &x| m.max(x.abs()));
+        let p_rms = crate::testutil::rms(&piano[..(0.5 * sr) as usize]);
+        println!("piano(0) key60 vel100: peak {p_peak:.4} rms(0-0.5s) {p_rms:.5}");
+        for program in 120u8..=127 {
+            let seed = 0x5F58_0100 ^ program as u32;
+            let buf = render_sfx_hold(program, 100, sr, seed, 2.0, 3.0);
+            let peak = buf.iter().fold(0f32, |m, &x| m.max(x.abs()));
+            let early = crate::testutil::rms(&buf[..(0.5 * sr) as usize]);
+            let late = crate::testutil::rms(&buf[(1.5 * sr) as usize..(2.0 * sr) as usize]);
+            let body = &buf[(0.015 * sr) as usize..(0.32 * sr) as usize];
+            let flat = crate::testutil::flatness(body, sr, 120.0, 8_000.0);
+            let kurt = crate::testutil::kurtosis(body);
+            println!(
+                "sfx {program}: peak {peak:.4} rms(0-0.5) {early:.5} rms(1.5-2.0,held) {late:.5} \
+                 flat {flat:.3} kurt {kurt:.2} peak/piano {:.3} rms/piano {:.3}",
+                peak / p_peak,
+                early / p_rms
+            );
+        }
+    }
+
+    /// Render an SFX program with the key held for `hold_s` then released,
+    /// out to `total_s`. Key 60; the SFX voices ignore written pitch.
+    fn render_sfx_hold(
+        program: u8,
+        vel: u8,
+        sr: f32,
+        seed: u32,
+        hold_s: f32,
+        total_s: f32,
+    ) -> Vec<f32> {
+        let mut v = make(program, 60, vel, sr, seed, false);
+        let mut buf = vec![0f32; (total_s * sr) as usize];
+        let hold = ((hold_s * sr) as usize).min(buf.len());
+        let (a, b) = buf.split_at_mut(hold);
+        if v.render(a) {
+            v.note_off();
+            v.render(b);
+        }
+        buf
+    }
+
+    // -----------------------------------------------------------------
+    // GM Sound Effects 120-127 — per-program oracles.
+    //
+    // Re-cut from the retired `gm_sfx_120_127_are_toneless_noise_fallbacks`,
+    // which pinned all eight programs to ONE decaying noise burst (rms < 0.08,
+    // no sustain, key-invariant, toneless). The clauses that still apply are
+    // kept per program below; the "safe low-level" absolute rms clause is
+    // replaced by RATIO oracles against the crate's own piano (program 0),
+    // because the renderer peak-normalises and absolute levels mean nothing.
+    //
+    // Reference (measured, this box, vel 100, key 60, seed 7):
+    //   piano peak 0.8185, rms(0-0.5 s) 0.2991.
+    // -----------------------------------------------------------------
+
+    /// Piano reference for the SFX level ratios: (peak, rms over 0-0.5 s).
+    fn piano_ref(sr: f32) -> (f32, f32) {
+        let piano = render_voice(make(0, 60, 100, sr, 7, false), sr, 1.0);
+        let peak = piano.iter().fold(0f32, |m, &x| m.max(x.abs()));
+        let rms = crate::testutil::rms(&piano[..(0.5 * sr) as usize]);
+        (peak, rms)
+    }
+
+    /// The clause the old global test carried that still applies to ALL eight:
+    /// an SFX program ignores the written pitch entirely (same seed, two keys,
+    /// bit-identical), and routes to an "sfx" voice, never a pluck fallback.
+    #[test]
+    fn gm_sfx_120_127_ignore_written_pitch() {
         let sr = 44100.0;
         let n = (0.6 * sr) as usize;
         for program in 120u8..=127 {
             let seed = 0x5F58_0100 ^ program as u32;
             let mut low = make(program, 48, 100, sr, seed, false);
             let mut high = make(program, 72, 100, sr, seed, false);
-            assert_eq!(
-                low.kind(),
-                "sfx",
-                "program {program} must not route to pluck"
-            );
-            assert_eq!(
-                high.kind(),
-                "sfx",
-                "program {program} must not route to pluck"
-            );
-
+            assert_eq!(low.kind(), "sfx", "program {program} must route to sfx");
+            assert_eq!(high.kind(), "sfx", "program {program} must route to sfx");
             let mut low_buf = vec![0f32; n];
             let mut high_buf = vec![0f32; n];
             low.render(&mut low_buf);
             high.render(&mut high_buf);
-
             assert!(
                 low_buf
                     .iter()
                     .zip(&high_buf)
                     .all(|(a, b)| a.to_bits() == b.to_bits()),
-                "program {program} SFX fallback must ignore written pitch"
-            );
-
-            let body = &low_buf[(0.015 * sr) as usize..(0.32 * sr) as usize];
-            let level = crate::testutil::rms(body);
-            let flat = crate::testutil::flatness(body, sr, 120.0, 8_000.0);
-            let written_pitch = crate::testutil::band_rms(body, sr, key_freq(60), 12.0);
-            assert!(
-                level > 1e-5 && level < 0.08,
-                "program {program} should be a safe low-level noise fallback, rms {level}"
-            );
-            assert!(
-                flat > 0.18,
-                "program {program} should be toneless/noisy, flatness {flat}"
-            );
-            assert!(
-                written_pitch < 0.55 * level,
-                "program {program} should not emphasize written pitch: band {written_pitch}, rms {level}"
+                "program {program} SFX must ignore written pitch"
             );
         }
+    }
+
+    /// GM 120 fret noise: deliberately unchanged — a short, quiet, toneless
+    /// squeak transient. Keeps every clause of the retired global test.
+    #[test]
+    fn gm120_fret_squeak_is_a_quiet_toneless_one_shot() {
+        let sr = 44100.0;
+        let buf = render_sfx_hold(120, 100, sr, 0x5F58_0100 ^ 120, 2.5, 3.0);
+        let body = &buf[(0.015 * sr) as usize..(0.32 * sr) as usize];
+        let level = crate::testutil::rms(body);
+        let flat = crate::testutil::flatness(body, sr, 120.0, 8_000.0);
+        let written_pitch = crate::testutil::band_rms(body, sr, key_freq(60), 12.0);
+        assert!(
+            level > 1e-5 && level < 0.08,
+            "fret squeak should stay a low-level transient, rms {level}"
+        );
+        assert!(
+            flat > 0.18,
+            "fret squeak should be toneless, flatness {flat}"
+        );
+        assert!(
+            written_pitch < 0.55 * level,
+            "fret squeak must not emphasize written pitch: band {written_pitch}, rms {level}"
+        );
+        let late = crate::testutil::rms(&buf[(1.0 * sr) as usize..(1.5 * sr) as usize]);
+        assert!(
+            late < 0.02 * level,
+            "fret squeak is a one-shot even while held: late {late} vs body {level}"
+        );
+    }
+
+    /// GM 121 breath noise: a broadband hiss that HOLDS while the key is down,
+    /// speaks softly (no percussive onset), and sits at a usable level next to
+    /// the piano. Old voice: 0.45 s one-shot 33 dB under the piano.
+    #[test]
+    fn gm121_breath_sustains_as_soft_formant_hiss() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 121;
+        let (_, p_rms) = piano_ref(sr);
+        let held = render_sfx_hold(121, 100, sr, seed, 2.5, 3.0);
+        let released = render_sfx_hold(121, 100, sr, seed, 0.2, 3.0);
+        let win = |b: &[f32], a: f32, z: f32| {
+            crate::testutil::rms(&b[(a * sr) as usize..(z * sr) as usize])
+        };
+        let r_hold = win(&held, 1.5, 2.0);
+        let r_rel = win(&released, 1.5, 2.0);
+        assert!(
+            r_hold > 20.0 * r_rel.max(1e-7),
+            "breath must sustain while held: held {r_hold} vs released {r_rel}"
+        );
+        let ratio = r_hold / p_rms;
+        assert!(
+            (0.12..=0.9).contains(&ratio),
+            "breath level vs piano out of band: {ratio:.4} (held rms {r_hold})"
+        );
+        let onset = win(&held, 0.0, 0.03);
+        let body = win(&held, 0.3, 0.5);
+        assert!(
+            onset < 0.5 * body,
+            "breath must speak softly, not percussively: onset {onset} vs body {body}"
+        );
+        let hold_seg = &held[(0.5 * sr) as usize..(2.0 * sr) as usize];
+        let flat = crate::testutil::flatness(hold_seg, sr, 120.0, 8_000.0);
+        assert!(flat > 0.18, "breath should stay toneless, flatness {flat}");
+    }
+
+    /// GM 122 seashore: a sustained low noise wash with a surf hiss on top,
+    /// breathing at the slow swell rate while the key is held.
+    #[test]
+    fn gm122_seashore_sustains_and_swells() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 122;
+        let (_, p_rms) = piano_ref(sr);
+        let held = render_sfx_hold(122, 100, sr, seed, 4.0, 4.5);
+        let released = render_sfx_hold(122, 100, sr, seed, 0.2, 4.5);
+        let win = |b: &[f32], a: f32, z: f32| {
+            crate::testutil::rms(&b[(a * sr) as usize..(z * sr) as usize])
+        };
+        let r_hold = win(&held, 1.5, 2.0);
+        let r_rel = win(&released, 1.5, 2.0);
+        assert!(
+            r_hold > 20.0 * r_rel.max(1e-7),
+            "seashore must sustain while held: held {r_hold} vs released {r_rel}"
+        );
+        let ratio = r_hold / p_rms;
+        assert!(
+            (0.15..=1.2).contains(&ratio),
+            "seashore level vs piano out of band: {ratio:.4} (held rms {r_hold})"
+        );
+        // The ~0.09 Hz swell: the second window rides the swell crest, the
+        // first sits on its rise — a self-relative shape, not an absolute.
+        let early = win(&held, 0.5, 1.5);
+        let crest = win(&held, 2.5, 3.5);
+        assert!(
+            crest > 1.15 * early,
+            "seashore should swell while held: {early} -> {crest}"
+        );
+        // Low wash dominates, but real surf hiss is present up top.
+        let hold_seg = &held[(1.0 * sr) as usize..(3.0 * sr) as usize];
+        let low = crate::testutil::spectral_band_rms(hold_seg, sr, 150.0, 1_200.0);
+        let hiss = crate::testutil::spectral_band_rms(hold_seg, sr, 2_500.0, 8_000.0);
+        assert!(
+            low > 1.2 * hiss && hiss > 0.05 * low,
+            "seashore balance off: wash {low} vs hiss {hiss}"
+        );
+        let flat = crate::testutil::flatness(hold_seg, sr, 120.0, 8_000.0);
+        assert!(
+            flat > 0.18,
+            "seashore should stay toneless, flatness {flat}"
+        );
+    }
+
+    /// GM 123 bird tweet: fast upward FM chirps that repeat — not a noise puff.
+    /// Chirp grid is deterministic (chirp k starts at k*0.16 s, 60 ms long).
+    #[test]
+    fn gm123_bird_tweet_chirps_upward_and_repeats() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 123;
+        let (_, p_rms) = piano_ref(sr);
+        let buf = render_sfx_hold(123, 100, sr, seed, 2.0, 2.5);
+        let win = |a: f32, z: f32| &buf[(a * sr) as usize..(z * sr) as usize];
+        // (a) the chirp sweeps UP within one chirp.
+        let head = crate::testutil::centroid(win(0.005, 0.025), sr);
+        let tail = crate::testutil::centroid(win(0.038, 0.058), sr);
+        assert!(
+            tail > 1.2 * head,
+            "bird chirp must sweep upward: centroid {head:.0} -> {tail:.0} Hz"
+        );
+        // (b) the call REPEATS: chirp 2 is as loud as chirp 1, not a decay tail.
+        let c1 = crate::testutil::rms(win(0.0, 0.06));
+        let c2 = crate::testutil::rms(win(0.16, 0.22));
+        assert!(
+            c2 > 0.5 * c1,
+            "bird call must repeat, not decay away: chirp1 {c1} chirp2 {c2}"
+        );
+        // (c) between chirps it is quiet (chirps, not a wash).
+        let gap = crate::testutil::rms(win(0.09, 0.15));
+        assert!(
+            gap < 0.25 * c1,
+            "bird gaps must be quiet: gap {gap} vs chirp {c1}"
+        );
+        // (d) tonal whistle, not noise: chirp-band energy dwarfs what lies
+        // outside it (the old bp(4500, Q 0.5) noise puff spilled far above).
+        let call = win(0.0, 0.06);
+        let in_band = crate::testutil::spectral_band_rms(call, sr, 1_800.0, 5_500.0);
+        let out_low = crate::testutil::spectral_band_rms(call, sr, 100.0, 1_500.0);
+        let out_high = crate::testutil::spectral_band_rms(call, sr, 6_500.0, 12_000.0);
+        assert!(
+            in_band > 4.0 * (out_low + out_high),
+            "bird tweet must be a tonal chirp: in-band {in_band} vs outside {out_low}+{out_high}"
+        );
+        // (e) audible next to a piano.
+        let ratio = c1 / p_rms;
+        assert!(
+            (0.12..=0.9).contains(&ratio),
+            "bird level vs piano out of band: {ratio:.4}"
+        );
+    }
+
+    /// GM 124 telephone: TWO ring tones (440 + 480 Hz) with a ring/pause
+    /// cadence — ring 0.9 s, pause 0.45 s, ring again — at a usable level.
+    /// Old voice: one toneless 0.18 s noise puff 39 dB under the piano.
+    #[test]
+    fn gm124_telephone_rings_two_tones_with_cadence() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 124;
+        let (_, p_rms) = piano_ref(sr);
+        let buf = render_sfx_hold(124, 100, sr, seed, 3.0, 3.5);
+        let win = |a: f32, z: f32| &buf[(a * sr) as usize..(z * sr) as usize];
+        let on = win(0.25, 0.85);
+        // (a) the two bell tones stand proud of neighbouring frequencies.
+        let t440 = crate::testutil::mag_at(on, sr, 440.0);
+        let t480 = crate::testutil::mag_at(on, sr, 480.0);
+        let off1 = crate::testutil::mag_at(on, sr, 700.0);
+        let off2 = crate::testutil::mag_at(on, sr, 300.0);
+        assert!(
+            t440 > 4.0 * off1 && t440 > 4.0 * off2 && t480 > 4.0 * off1 && t480 > 4.0 * off2,
+            "telephone must ring two tones: 440 {t440} 480 {t480} vs 700 {off1} / 300 {off2}"
+        );
+        let flat = crate::testutil::flatness(on, sr, 120.0, 8_000.0);
+        assert!(flat < 0.10, "telephone ring must be tonal, flatness {flat}");
+        // (b) the cadence gates: pause between rings, then it rings AGAIN.
+        let r_on = crate::testutil::rms(on);
+        let r_off = crate::testutil::rms(win(1.0, 1.3));
+        let r_ring2 = crate::testutil::rms(win(1.5, 2.1));
+        assert!(
+            r_off < 0.2 * r_on,
+            "cadence pause missing: pause {r_off} vs ring {r_on}"
+        );
+        assert!(
+            r_ring2 > 0.4 * r_on,
+            "second ring missing: {r_ring2} vs first {r_on}"
+        );
+        // (c) audible next to a piano.
+        let ratio = r_on / p_rms;
+        assert!(
+            (0.2..=1.3).contains(&ratio),
+            "telephone level vs piano out of band: {ratio:.4}"
+        );
+    }
+
+    /// GM 125 helicopter: broadband rotor noise CHOPPED at a blade rate in
+    /// 8-14 Hz, holding while the key is down. Old voice: 0.55 s one-shot
+    /// wash 36 dB under the piano, no chop.
+    #[test]
+    fn gm125_helicopter_chops_at_rotor_rate_while_held() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 125;
+        let (_, p_rms) = piano_ref(sr);
+        let held = render_sfx_hold(125, 100, sr, seed, 2.5, 3.0);
+        let released = render_sfx_hold(125, 100, sr, seed, 0.2, 3.0);
+        let win = |b: &[f32], a: f32, z: f32| {
+            crate::testutil::rms(&b[(a * sr) as usize..(z * sr) as usize])
+        };
+        let r_hold = win(&held, 1.5, 2.0);
+        let r_rel = win(&released, 1.5, 2.0);
+        assert!(
+            r_hold > 20.0 * r_rel.max(1e-7),
+            "helicopter must sustain while held: held {r_hold} vs released {r_rel}"
+        );
+        let ratio = r_hold / p_rms;
+        assert!(
+            (0.2..=1.4).contains(&ratio),
+            "helicopter level vs piano out of band: {ratio:.4} (held rms {r_hold})"
+        );
+        // Blade-chop AM: envelope autocorrelation peaks at a lag in 8-14 Hz.
+        // detrend_hz=4.0 — the 15 Hz default corner would eat the chop itself.
+        let seg = &held[(0.5 * sr) as usize..(2.5 * sr) as usize];
+        let (peak, rate) =
+            crate::testutil::env_autocorr_peak_detrend(seg, sr, 1.0 / 14.0, 1.0 / 8.0, 4.0);
+        assert!(
+            peak > 0.25 && (8.0..=14.0).contains(&rate),
+            "helicopter chop missing: autocorr peak {peak:.3} at {rate:.1} Hz"
+        );
+        let flat = crate::testutil::flatness(seg, sr, 120.0, 8_000.0);
+        assert!(
+            flat > 0.18,
+            "helicopter should stay toneless, flatness {flat}"
+        );
+    }
+
+    /// GM 126 applause: a dense grain cloud (individual claps, not a smooth
+    /// hiss) that holds while the key is down. Kurtosis is the grain detector:
+    /// smooth filtered noise reads ~3 (Gaussian), a clap train far higher —
+    /// asserted both absolutely and DIFFERENTIALLY against breath (121), the
+    /// crate's own smooth sustained hiss.
+    #[test]
+    fn gm126_applause_is_a_dense_sustained_grain_cloud() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 126;
+        let (_, p_rms) = piano_ref(sr);
+        let held = render_sfx_hold(126, 100, sr, seed, 2.5, 3.0);
+        let released = render_sfx_hold(126, 100, sr, seed, 0.2, 3.0);
+        let win = |b: &[f32], a: f32, z: f32| {
+            crate::testutil::rms(&b[(a * sr) as usize..(z * sr) as usize])
+        };
+        let r_hold = win(&held, 1.5, 2.0);
+        let r_rel = win(&released, 1.5, 2.0);
+        assert!(
+            r_hold > 20.0 * r_rel.max(1e-7),
+            "applause must sustain while held: held {r_hold} vs released {r_rel}"
+        );
+        let ratio = r_hold / p_rms;
+        assert!(
+            (0.15..=1.1).contains(&ratio),
+            "applause level vs piano out of band: {ratio:.4} (held rms {r_hold})"
+        );
+        let seg = &held[(0.8 * sr) as usize..(2.0 * sr) as usize];
+        let kurt = crate::testutil::kurtosis(seg);
+        let breath = render_sfx_hold(121, 100, sr, 0x5F58_0100 ^ 121, 2.5, 3.0);
+        let smooth = crate::testutil::kurtosis(&breath[(0.8 * sr) as usize..(2.0 * sr) as usize]);
+        assert!(
+            kurt > 4.0 && kurt > 1.5 * smooth,
+            "applause must be granular: kurtosis {kurt:.2} vs smooth breath {smooth:.2}"
+        );
+        let flat = crate::testutil::flatness(seg, sr, 120.0, 8_000.0);
+        assert!(
+            flat > 0.18,
+            "applause should stay toneless, flatness {flat}"
+        );
+    }
+
+    /// GM 127 gunshot: an IMPULSIVE crack — its peak must stand ABOVE the
+    /// piano's peak at equal velocity (real gunshots dwarf any instrument),
+    /// then die fast as a one-shot. Old voice peaked 21 dB UNDER the piano
+    /// (peak ratio 0.087) — the retired global test asserted it stay quiet.
+    #[test]
+    fn gm127_gunshot_cracks_above_the_piano_peak() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 127;
+        let (p_peak, _) = piano_ref(sr);
+        let buf = render_sfx_hold(127, 100, sr, seed, 2.0, 2.5);
+        let peak = buf.iter().fold(0f32, |m, &x| m.max(x.abs()));
+        let ratio = peak / p_peak;
+        assert!(
+            (2.0..=8.0).contains(&ratio),
+            "gunshot peak must dwarf the piano's: ratio {ratio:.3} (peak {peak:.3})"
+        );
+        // Impulsive crest: the crack towers over its own boom tail.
+        let tail = crate::testutil::rms(&buf[(0.1 * sr) as usize..(0.4 * sr) as usize]);
+        assert!(
+            peak > 12.0 * tail.max(1e-7),
+            "gunshot must be impulsive: peak {peak} vs 0.1-0.4 s tail {tail}"
+        );
+        // One-shot even while held.
+        let early = crate::testutil::rms(&buf[..(0.1 * sr) as usize]);
+        let late = crate::testutil::rms(&buf[(0.8 * sr) as usize..(1.1 * sr) as usize]);
+        assert!(
+            late < 0.05 * early,
+            "gunshot must die as a one-shot: late {late} vs early {early}"
+        );
+        // Toneless: a crack has no pitch.
+        let body = &buf[(0.003 * sr) as usize..(0.10 * sr) as usize];
+        let flat = crate::testutil::flatness(body, sr, 300.0, 8_000.0);
+        assert!(flat > 0.15, "gunshot should be toneless, flatness {flat}");
     }
 
     #[test]

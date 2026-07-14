@@ -119,8 +119,10 @@ Module map (`src/`):
 
 **ferrosintesis does not model every GM program**, but as of v0.10 the orchestral middle is
 filled: **brass 56–63** and **reeds 64–71** are now modelled voices (v0.9), joining the
-orchestra hit 55, strings 48–51 and choir 52–54. A few ranges are still curated fallbacks
-(e.g. GM sound-effects 120–127 render as toneless noise). Album engines keep a program
+orchestra hit 55, strings 48–51 and choir 52–54. GM sound effects 121–127 are dedicated
+voices since 2026.07.14 (sustained seashore/helicopter/applause/breath textures that follow
+key hold; telephone/bird/gunshot one-shots); only fret noise 120 remains a toneless
+squeak transient. Album engines keep a program
 whitelist and verify nothing strays into an unintended range. Read the family/GM-program
 table in `crates/ferrosintesis/README.md` before assuming a program will sound right.
 

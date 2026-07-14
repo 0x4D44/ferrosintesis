@@ -87,6 +87,12 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   FM modulation index, so its energy leaks into sidebands a fixed Goertzel bin
   misses) — read harmonics in a strictly PRE-vibrato window; and never `peak_locate`
   an FM carrier when β≳0.5 (the first sideband can outrank it) — use the known pitch.
+  Two more unit traps (2026.07.14, SFX oracles): `spectral_band_rms` is Hann-
+  windowed, so ratioing it against raw `rms()` bakes in the window's power factor
+  and deflates any "band fraction" — compare spectral-vs-spectral only; and
+  `testutil::centroid` is magnitude-weighted, so an amplitude taper inside the
+  measurement window drags the centroid toward the loud end (a sin-windowed chirp
+  read ×1.17 where the sweep was ×1.4 — flatten the envelope or move the window).
 - 2026.07.11 — **`deltic timeout <cmd> bash script.sh` hands the script to a
   bash whose exported-function children can't exec `D:/...` paths** — every
   `render_all.sh` child failed "No such file or directory" on an exe that

@@ -4,8 +4,8 @@
 - **Priority:** Could
 - **Area:** ferrosintesis / voices dispatch
 - **Raised:** 2026-07-08
-- **Implemented-by:** crates/ferrosintesis/src/voices.rs::SfxNoise, crates/ferrosintesis/src/voices.rs::make, crates/ferrosintesis/src/voices.rs::tests::gm_sfx_120_127_are_toneless_noise_fallbacks, crates/ferrosintesis/src/testutil.rs::guards::gm_routing_pins_voice_kinds, crates/ferrosintesis/README.md
-- **Satisfied-by:** `$null | deltic timeout 180 cargo test gm_sfx_120_127_are_toneless_noise_fallbacks --manifest-path crates/ferrosintesis/Cargo.toml`
+- **Implemented-by:** crates/ferrosintesis/src/voices.rs::SfxNoise, crates/ferrosintesis/src/voices.rs::make, crates/ferrosintesis/src/voices.rs::tests::gm_sfx_120_127_ignore_written_pitch, crates/ferrosintesis/src/testutil.rs::guards::gm_routing_pins_voice_kinds, crates/ferrosintesis/README.md
+- **Satisfied-by:** `$null | deltic timeout 180 cargo test gm_sfx_120_127_ignore_written_pitch --manifest-path crates/ferrosintesis/Cargo.toml`
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
@@ -25,6 +25,14 @@ burst (or near silence) is a safer default. Byte-identical for existing albums
 2026-07-08 GM gap audit (percussive/SFX).
 
 ## Notes
+
+2026-07-14: the 120-127 family was reworked into dedicated per-program voices
+(sustained breath/seashore/helicopter/applause, bird/telephone/gunshot shots;
+fret noise 120 unchanged). This req's guarantee — no pitched guitar note, the
+written pitch ignored — still holds and is now pinned by
+`gm_sfx_120_127_ignore_written_pitch` plus per-program oracles (`gm120…` …
+`gm127…`); the original `gm_sfx_120_127_are_toneless_noise_fallbacks` test was
+re-cut into those. Implemented-by/Satisfied-by updated to the successor test.
 
 Manual reqs-loop implementation landed on branch
 `task/20260708-TSK-HUM-reqs-loop-mm-req-00006`.

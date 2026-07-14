@@ -22,6 +22,10 @@ name = "ferrosintesis-samples-core"
 version = "0.1.0"
 
 [[package]]
+name = "ferrosintesis-samples-drumkit"
+version = "0.1.0"
+
+[[package]]
 name = "ferrosintesis-samples-orchestral"
 version = "0.1.0"
 

@@ -1,0 +1,12 @@
+[package]
+name = "ferrosintesis-samples-drumkit"
+version = "0.1.0"
+edition = "2021"
+description = "Embedded CC0 sampled-cymbal drum-kit bank for ferrosintesis"
+license = "CC0-1.0"
+repository = "https://github.com/0x4D44/ferrosintesis"
+readme = "README.md"
+include = ["src/**", "samples/**", "README.md", "PROVENANCE.md", "LICENSE-CC0"]
+
+[lib]
+path = "src/lib.rs"

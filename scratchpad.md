@@ -1,6 +1,6 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
-- [ ] 2026.07.14 — **`tests/test_render_opus.py` is orphaned dead code.** It does
+- [x] 2026.07.14 — **`tests/test_render_opus.py` is orphaned dead code.** It does
   `import render_opus` (`tests/test_render_opus.py:7`), but `render_opus.py` was retired
   when the Rust `render-catalog` replaced it (`crates/render-catalog/src/main.rs:3`
   states it "Replaces the retired `render_opus.py`"). No `render_opus.py` exists anywhere
@@ -10,8 +10,10 @@
   lives in Rust (`crates/render-catalog/tests/`). Spotted during the root
   analysis-script triage (the five loudness-measurement leftovers were removed in the same
   task; this Python test is the same post-Rust-port leftover class but was parked for a
-  separate dead-test-cleanup decision). Action: delete `tests/test_render_opus.py`, then
-  check whether `tests/__init__.py` still has any purpose.
+  separate dead-test-cleanup decision).
+  (Done 2026-07-14: deleted `tests/test_render_opus.py` and the now-purposeless
+  `tests/__init__.py` — its only reason to exist was to package that one test — so the
+  empty root `tests/` scaffold is gone entirely. No pytest/unittest config referenced it.)
 
 - [x] 2026.07.13 — **DONE (2026.07.13, weak-voices task): reusable render-diff harness at
   `tools/render-diff/render_diff.py`.** Parameterized `--baseline`/`--new` binaries +

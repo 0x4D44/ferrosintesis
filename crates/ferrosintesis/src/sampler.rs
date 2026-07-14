@@ -1313,7 +1313,10 @@ mod tests {
         };
         let with = mag50(&render(true));
         let without = mag50(&render(false));
-        eprintln!("kick 50 Hz: with-sub={with:.6} without={without:.6} ratio={:.2}", with / without.max(1e-9));
+        eprintln!(
+            "kick 50 Hz: with-sub={with:.6} without={without:.6} ratio={:.2}",
+            with / without.max(1e-9)
+        );
         assert!(
             with > 1.8 * without.max(1e-9),
             "kick sub-layer adds no deep 50 Hz content: with={with:.5} without={without:.5}"

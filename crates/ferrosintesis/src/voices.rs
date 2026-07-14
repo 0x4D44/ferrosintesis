@@ -1011,6 +1011,11 @@ fn electric_piano_1(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let vn = vel as f32 / 127.0;
     let v = 0.25 + 0.75 * vel_amp(vel);
     let scale = (440.0 / f).powf(0.25).clamp(0.75, 1.5);
+    // Column 0 is a RATIO of the key frequency (a Rhodes tine's inharmonic
+    // series) — scale by f before handing Modal::new its (freq Hz, amp, T60)
+    // rows, exactly as bell()/timpani_partials do. B1 (HLD §2.1): the bare
+    // ratios used to be passed as Hz, so every mode oscillated at 1–5 Hz —
+    // infrasound — and the voice's only audible output was its noise burst.
     let partials = [
         (1.000, 0.95 * v, 3.6 * scale),
         (1.003, 0.55 * v, 3.1 * scale),
@@ -1018,7 +1023,8 @@ fn electric_piano_1(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         (2.820, 0.24 * v * (0.7 + 0.5 * vn), 0.85 * scale),
         (3.000, 0.13 * v, 1.3 * scale),
         (5.380, 0.08 * v * (0.6 + 0.7 * vn), 0.40 * scale),
-    ];
+    ]
+    .map(|(r, a, t)| (f * r, a, t));
     Modal::new(
         sr,
         seed,
@@ -1039,6 +1045,8 @@ fn electric_piano_2(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let vn = vel as f32 / 127.0;
     let v = 0.22 + 0.82 * vel_amp(vel);
     let scale = (440.0 / f).powf(0.18).clamp(0.70, 1.35);
+    // Column 0 is a RATIO (Wurlitzer reed-bar series) — scale by f, as in
+    // electric_piano_1. B1 (HLD §2.1): the ratios were passed as Hz.
     let partials = [
         (1.000, 0.72 * v, 2.4 * scale),
         (1.997, 0.24 * v, 1.6 * scale),
@@ -1046,7 +1054,8 @@ fn electric_piano_2(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         (4.180, 0.30 * v * (0.6 + 0.9 * vn), 0.72 * scale),
         (6.820, 0.15 * v * (0.5 + vn), 0.42 * scale),
         (9.200, 0.06 * v * vn, 0.20 * scale),
-    ];
+    ]
+    .map(|(r, a, t)| (f * r, a, t));
     Modal::new(
         sr,
         seed,
@@ -1059,34 +1068,6 @@ fn electric_piano_2(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         0.0008,
         0.18,
         0.54,
-    )
-}
-
-fn harpsichord(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
-    let f = key_freq(key);
-    let v = 0.78 + 0.22 * (vel as f32 / 127.0);
-    let decay_scale = (440.0 / f).powf(0.28).clamp(0.65, 1.5);
-    let mut partials = Vec::new();
-    for k in 1..=12u32 {
-        let kf = k as f32;
-        let fk = f * kf;
-        if fk > sr * 0.42 {
-            break;
-        }
-        partials.push((fk, v / kf.powf(0.72), (1.45 / kf.powf(0.30)) * decay_scale));
-    }
-    Modal::new(
-        sr,
-        seed,
-        &partials,
-        (
-            0.10 * v,
-            0.006,
-            Biquad::highpass((f * 6.0).clamp(1600.0, 6500.0), 0.7, sr),
-        ),
-        0.0,
-        0.08,
-        0.34,
     )
 }
 
@@ -1140,7 +1121,11 @@ const GLOCK: &[(f32, f32, f32)] = &[
     (8.93, 0.08, 0.4),
 ];
 const CELESTA: &[(f32, f32, f32)] = &[(1.0, 1.0, 1.9), (2.76, 0.30, 0.8), (5.40, 0.06, 0.3)];
-const MUSICBOX: &[(f32, f32, f32)] = &[(1.0, 1.0, 1.3), (2.81, 0.35, 0.6), (5.40, 0.10, 0.3)];
+// §2.5: a music-box comb tooth is a CLAMPED-FREE cantilever (Euler–Bernoulli
+// 1 : 6.267 : 17.55), not the free-free bar the glockenspiel/celesta use —
+// the old 2.81/5.40 table made GM 10 a quieter GM 9. Amplitudes fall steeply:
+// a music box is nearly a pure ping with a metallic tick.
+const MUSICBOX: &[(f32, f32, f32)] = &[(1.0, 1.0, 1.3), (6.27, 0.16, 0.5), (17.55, 0.05, 0.25)];
 const CRYSTAL: &[(f32, f32, f32)] = &[
     (1.0, 0.90, 3.0),
     (1.003, 0.50, 3.4),
@@ -1152,7 +1137,11 @@ const CRYSTAL: &[(f32, f32, f32)] = &[
 const VIBES: &[(f32, f32, f32)] = &[(1.0, 1.0, 3.0), (4.0, 0.25, 1.2), (9.8, 0.06, 0.5)];
 const VIBRAPHONE_MOTOR_RATE_HZ: f32 = 6.0;
 const VIBRAPHONE_MOTOR_DEPTH: f32 = 0.35;
-const MARIMBA: &[(f32, f32, f32)] = &[(1.0, 1.0, 0.95), (3.0, 0.34, 0.42), (5.2, 0.12, 0.22)];
+// §2.5: a marimba bar is deeply arched to the 4:1 series (1 : 4 : 9.8 — the
+// same arched-bar tuning VIBES encodes; they differ by resonator/motor and
+// decay, not modal ratios). The old ~3:1 table was the xylophone's quint,
+// which made GM 12 a darker GM 13.
+const MARIMBA: &[(f32, f32, f32)] = &[(1.0, 1.0, 0.95), (4.0, 0.34, 0.42), (9.8, 0.12, 0.22)];
 const MARIMBA_NOISE: (f32, f32, f32, f32) = (0.14, 0.010, 1800.0, 1.0);
 const MARIMBA_ATTACK_S: f32 = 0.001;
 const MARIMBA_RELEASE_T60: f32 = 0.35;
@@ -1199,16 +1188,25 @@ const KALIMBA: &[(f32, f32, f32)] = &[
     (5.40, 0.16, 0.22),
     (8.15, 0.05, 0.12),
 ];
+// §2.5: the ratios are the textbook kettledrum preferential modes; the T60s
+// are ~3× the old 1.0/0.85/…/0.50 s — a real kettle rings 3–8 s, and the old
+// second-scale decay read as a tom. (TIMPANI_RELEASE_T60 was already long;
+// the bug was the SOUNDING partials dying early.)
 const TIMPANI: &[(f32, f32, f32)] = &[
-    (1.0, 1.0, 1.0),
-    (1.504, 0.70, 0.85),
-    (1.742, 0.45, 0.70),
-    (2.0, 0.30, 0.60),
-    (2.245, 0.20, 0.50),
+    (1.0, 1.0, 3.0),
+    (1.504, 0.70, 2.4),
+    (1.742, 0.45, 1.9),
+    (2.0, 0.30, 1.5),
+    (2.245, 0.20, 1.1),
 ];
 const TIMPANI_STRIKE_SEMITONES: f32 = 2.1;
 const TIMPANI_STRIKE_SETTLE_S: f32 = 0.155;
-const TIMPANI_RELEASE_T60: f32 = 6.0;
+// 10.0 (was 6.0): the release env MULTIPLIES the sounding decay, and with
+// the §2.5 3× longer sounding T60s a 6 s release halved the post-note-off
+// ring (effective 2.0 s). A kettledrum is normally let ring — note-off should
+// barely damp it (effective ≈ 2.3 s now; the ring-after-noteoff oracle keeps
+// released ≥ 0.65× held).
+const TIMPANI_RELEASE_T60: f32 = 10.0;
 const TIMPANI_UPPER_MIN: f32 = 0.62;
 const TIMPANI_UPPER_VELOCITY_SCALE: f32 = 0.58;
 const TIMPANI_UPPER_JITTER: f32 = 0.24;
@@ -1240,11 +1238,14 @@ fn timpani(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let thump = Biquad::lowpass(300.0, 0.8, sr);
     let start = 2f32.powf(TIMPANI_STRIKE_SEMITONES / 12.0);
     let glide_oct_per_s = (TIMPANI_STRIKE_SEMITONES / 12.0) / TIMPANI_STRIKE_SETTLE_S;
+    // §2.5: the strike thump sits UNDER the fundamental (0.5·v, was 1.1·v —
+    // at/above the fundamental's own 1.0 it buried the note's pitch in the
+    // onset, which is what "just low thumps" was).
     Modal::new(
         sr,
         seed,
         &partials,
-        (1.1 * v, 0.045, thump),
+        (0.5 * v, 0.045, thump),
         0.001,
         TIMPANI_RELEASE_T60,
         0.85,
@@ -1315,27 +1316,29 @@ fn agogo(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
 /// rounded to 0.0000). A steel pan with no top end is a dull, muted bell, which is
 /// exactly how it sounded. The fix is upward extension of the mode ladder plus a strike
 /// burst bright enough to read as mallet-on-steel. Pinned by `steel_pan_is_bright_metal`.
+/// (Extracted to a const so the O-PITCH Modal-class oracle reads the shipped ladder.)
+const STEEL_DRUM: &[(f32, f32, f32)] = &[
+    (1.000, 1.00, 1.00),
+    (1.006, 0.40, 1.05), // twin: the slow shimmer on the fundamental
+    (2.000, 0.70, 0.85), // the octave is nearly as strong as the fundamental
+    (2.015, 0.32, 0.85), // twin b — NEVER jitter these ratios (beat = Δr·f0)
+    (3.010, 0.50, 0.70), // the twelfth: the third leg of the pan's tuned triad
+    (4.180, 0.24, 0.52),
+    (5.430, 0.15, 0.40), // the inharmonic upper modes: the metallic "ting" that
+    (6.900, 0.09, 0.30), // makes it steel and not a marimba. These are the ones
+    (8.600, 0.05, 0.22), // that were missing entirely.
+];
 fn steel_drum(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let f = key_freq(key);
     let v = vel_amp(vel);
     let decay_scale = (440.0 / f).powf(0.22).clamp(0.72, 1.45);
     let mut jrng = Rng::new(seed ^ 0x514E_5748);
-    let partials: Vec<(f32, f32, f32)> = [
-        (1.000, 1.00, 1.00),
-        (1.006, 0.40, 1.05), // twin: the slow shimmer on the fundamental
-        (2.000, 0.70, 0.85), // the octave is nearly as strong as the fundamental
-        (2.015, 0.32, 0.85), // twin b — NEVER jitter these ratios (beat = Δr·f0)
-        (3.010, 0.50, 0.70), // the twelfth: the third leg of the pan's tuned triad
-        (4.180, 0.24, 0.52),
-        (5.430, 0.15, 0.40), // the inharmonic upper modes: the metallic "ting" that
-        (6.900, 0.09, 0.30), // makes it steel and not a marimba. These are the ones
-        (8.600, 0.05, 0.22), // that were missing entirely.
-    ]
-    .into_iter()
     // Amp-only jitter: the 2.000/2.015 twin ratios are load-bearing (they set the
     // beat rate), so jittering the RATIO would smear the shimmer.
-    .map(|(r, a, t)| (f * r, a * v * (1.0 + 0.05 * jrng.white()), t * decay_scale))
-    .collect();
+    let partials: Vec<(f32, f32, f32)> = STEEL_DRUM
+        .iter()
+        .map(|&(r, a, t)| (f * r, a * v * (1.0 + 0.05 * jrng.white()), t * decay_scale))
+        .collect();
 
     Modal::new(
         sr,
@@ -1956,6 +1959,14 @@ pub struct PluckPreset {
     // body EQ — the tensioned mylar head the bridge stands on. Empty = no
     // membrane (every non-banjo preset).
     pub membrane: &'static [(f32, f32, f32)],
+    // --- v0.16 voice-quality overhaul §2.10 ---
+    // Velocity sensitivity, 0..=1. At 1.0 (every pre-existing preset) the
+    // exact historic velocity laws apply, bit-for-bit. Below 1.0 the key
+    // velocity is compressed toward the top of its range before EVERY
+    // velocity law (level, loop/pick brightness, click) — the harpsichord's
+    // jack plectrum displaces the string the same distance however hard the
+    // key falls, so its loudness spread must stay nearly flat.
+    pub vel_sense: f32,
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -1995,6 +2006,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     sustain: 0.0,
     jawari: None,
     membrane: &[],
+    vel_sense: 1.0,
     #[cfg(test)]
     name: "DEFAULT",
 };
@@ -2076,8 +2088,12 @@ pub const DRIVE: PluckPreset = PluckPreset {
     rel_t60: 0.20,
     pickup: 0.10,
     pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
-    sustain: 0.35,             // amp-feedback hold: a held note settles near -9 dB, not silence
-    click: 2.2,                // the pick hits harder through an amp
+    // amp-feedback hold: a held note settles near -6 dB, not silence.
+    // Deepened 0.35 -> 0.5 when the Drive's inverted sag boost was deleted
+    // (voice-quality overhaul §2.6): the 4x late boost was faking sustain
+    // at the wrong layer; the e-bow is the correct one.
+    sustain: 0.5,
+    click: 2.2, // the pick hits harder through an amp
     ..DEFAULTS
 };
 /// Opt-in (CC0 alt-bank) SUSTAINING lead voicing of the driven guitar. A
@@ -2127,6 +2143,30 @@ pub const MUTED: PluckPreset = PluckPreset {
     click_hp: 900.0,
     ..DEFAULTS
 };
+/// Harpsichord (GM 6, §2.10): a PLUCKED jack-plectrum instrument — the KS
+/// family gives the physical decay and plectrum twang the old additive sine
+/// stack could not. Nearly velocity-insensitive (`vel_sense`: the quill
+/// displaces the string the same distance however hard the key falls), no
+/// wound-string split (a harpsichord has no wound strings), a sharp quill
+/// click, a bright shortish ring, and the jack's fall-back thud on release.
+pub const HARPSICHORD: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "HARPSICHORD",
+    t60: 1.9,
+    bright: 6200.0,
+    pick_lp: 6000.0,
+    pos: 0.09, // plucked near the end of the string — the nasal quill comb
+    amp: 0.50,
+    rel_t60: 0.05, // the jack's damper lands with the key
+    // thin bright soundboard: low box color, a little mid, upper sheen
+    body: &[(220.0, 1.1, 2.0), (500.0, 1.0, 1.5), (3000.0, 1.0, 2.0)],
+    click: 2.2, // the quill snap
+    click_hp: 2400.0,
+    stop_thump: 0.7, // the jack drops back audibly
+    wound_key_split: false,
+    vel_sense: 0.15,
+    ..DEFAULTS
+};
 pub const CLAVINET: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "CLAVINET",
@@ -2139,6 +2179,10 @@ pub const CLAVINET: PluckPreset = PluckPreset {
     body: &[(180.0, 1.0, 1.8), (900.0, 1.2, 2.2), (2600.0, 1.0, 2.5)],
     out_lp: 5200.0,
     pickup: 0.18,
+    // §2.10: the funk was missing — the metallic string-buzz (grit soft-clip,
+    // the MUTED precedent) and a brighter single-coil resonance peak.
+    pickup_rlc: (4500.0, 1.6),
+    grit: true,
     cab_lp: 5200.0,
     click: 2.0,
     click_hp: 1600.0,
@@ -2266,17 +2310,23 @@ pub const UPRIGHT: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "UPRIGHT",
     wound_all: true,
-    t60: 2.4,
+    // §2.12 widened the 32/33 split from THIS side (GM 33 is a pinned canary
+    // reference): shorter woody sustain, a bigger fingertip thud, and
+    // longer-ringing (higher-Q) corpus modes — the body, not a pickup,
+    // carries the tone; the electric keeps its pickup-comb identity.
+    t60: 1.8, // was 2.4: a gut/damped string dies faster than a fretted electric
     bright: 900.0,
     pick_lp: 600.0,
     pos: 0.38,
     amp: 1.05,
     attack_s: 0.008,
-    body: &[(65.0, 0.7, 4.0), (110.0, 1.0, 3.0)],
+    // higher-Q corpus modes ring on under the shorter string — the woody
+    // boom that outlives the pluck
+    body: &[(65.0, 1.3, 4.5), (110.0, 1.8, 3.5)],
     out_lp: 2200.0,
     sub: 0.15,
     sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
-    attack_noise: 0.65,    // woody fingertip thud
+    attack_noise: 0.90,    // was 0.65: the fingertip thud is half the instrument
     stop_thump: 0.8,
     ..DEFAULTS
 };
@@ -2820,7 +2870,18 @@ pub struct Pluck {
 impl Pluck {
     pub fn new(p: &PluckPreset, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let mut rng = Rng::new(seed);
-        let vn = vel as f32 / 127.0;
+        // §2.10 vel_sense: a near-velocity-insensitive preset (HARPSICHORD)
+        // compresses the key velocity toward the top of the range before
+        // every velocity law below. The `>= 1.0` branch keeps the historic
+        // arithmetic (and bit stream) for every pre-existing preset:
+        // vn.powf(1.6) there is the same expression `vel_amp` computes.
+        let (vn, v) = if p.vel_sense >= 1.0 {
+            let vn = vel as f32 / 127.0;
+            (vn, vel_amp(vel))
+        } else {
+            let vn = 1.0 - p.vel_sense * (1.0 - vel as f32 / 127.0);
+            (vn, vn.powf(1.6))
+        };
         // round-robin variation: no two picks land identically
         let pos = (p.pos * (1.0 + 0.15 * rng.white())).clamp(0.06, 0.45);
         // velocity→timbre law (HLD family A, G3/B1): a harder pick opens both
@@ -2871,13 +2932,27 @@ impl Pluck {
         // re-design. The velocity- and wound-scaled pick_lp levers stay.)
         let exc_len = (period as usize).max(4);
         let mut lp = OnePole::lowpass(pick_lp, sr);
-        let raw: Vec<f32> = (0..exc_len).map(|_| lp.process(rng.white())).collect();
+        // §2.10: a velocity-flattened preset (vel_sense < 1) draws its burst
+        // from a FIXED stream — a harpsichord jack is a machine: the same
+        // quill plucks the same point with the same displacement every time,
+        // so per-note loudness must not ride round-robin noise luck (the
+        // peak-normalized random burst's loop-projected energy varies ±1.5 dB
+        // across seeds, swamping the flattened velocity law the GM6 loudness
+        // oracle pins). Per-note variation survives in the pos/bright/t60
+        // jitters and the sub phase, all still drawn from the note's rng.
+        let mut fixed_rng;
+        let exc_rng = if p.vel_sense >= 1.0 {
+            &mut rng
+        } else {
+            fixed_rng = Rng::new(0x6A0C_9111);
+            &mut fixed_rng
+        };
+        let raw: Vec<f32> = (0..exc_len).map(|_| lp.process(exc_rng.white())).collect();
         let comb = ((exc_len as f32 * pos) as usize).max(1);
         let mut exc: Vec<f32> = (0..exc_len)
             .map(|i| raw[i] - 0.9 * raw[(i + comb) % exc_len])
             .collect();
         let peak = exc.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-6);
-        let v = vel_amp(vel);
         for x in &mut exc {
             *x *= v / peak;
         }
@@ -3135,7 +3210,13 @@ impl Voice for Pluck {
                 y = rlc.process(y);
             }
             if let Some(b) = &mut self.onset_pre {
-                // the pick click knocks the body: summed before the body EQ
+                // the pick click knocks the body: summed before the body EQ.
+                // §2.13 verified: this burst is BODY/contact noise, NOT string
+                // motion — the pick's effect on the string is the `exc` burst
+                // injected into the KS loops above, which already passes the
+                // pickup comb + coil. A magnetic pickup cannot sense a body
+                // knock, so summing it post-pickup is the CORRECT order; do
+                // not "fix" it by moving it before the comb.
                 y += b.tick(&mut self.rng);
             }
             if !self.membrane.is_empty() {
@@ -3373,12 +3454,6 @@ struct Pipe {
     ratio: f32,
     amp: f32,
     active: bool,
-}
-
-#[derive(Clone, Copy)]
-struct PitchScoop {
-    ratio: f32,
-    slew: f32,
 }
 
 // ---------------------------------------------------------------------------
@@ -3998,7 +4073,6 @@ pub struct Organ {
     perc_decay: f32,
     reed_noise_amp: f32,
     reed_noise_filt: Biquad,
-    scoop: Option<PitchScoop>,
     rng: Rng,
     drive: f32,
     amp: f32,
@@ -4055,7 +4129,6 @@ impl Organ {
             perc_decay: 0.0,
             reed_noise_amp: 0.0,
             reed_noise_filt: Biquad::bandpass((f * 3.0).clamp(240.0, sr * 0.4), 0.8, sr),
-            scoop: None,
             rng,
             drive,
             amp: amp * (0.4 + 0.6 * vel_amp(vel)),
@@ -4084,21 +4157,12 @@ impl Organ {
         self
     }
 
-    fn with_pitch_scoop(mut self, start_ratio: f32, settle_s: f32) -> Self {
-        self.scoop = Some(PitchScoop {
-            ratio: start_ratio,
-            slew: 1.0 - (-1.0 / (settle_s.max(0.01) * self.sr)).exp(),
-        });
-        self.apply_pitch();
-        self
-    }
-
-    fn scoop_ratio(&self) -> f32 {
-        self.scoop.map_or(1.0, |s| s.ratio)
-    }
+    // (The PitchScoop machinery that lived here served only the old organ-22
+    // harmonica arm; GM 22 is a Reed free-reed voice now — §2.11 — and the
+    // Reed owns its scoop natively.)
 
     fn apply_pitch(&mut self) {
-        let pitch = self.bend * self.scoop_ratio();
+        let pitch = self.bend;
         for pipe in &mut self.harms {
             let f = self.base_f * pipe.ratio * pitch;
             pipe.active = f < self.sr * 0.45;
@@ -4107,24 +4171,11 @@ impl Organ {
             }
         }
     }
-
-    fn advance_scoop(&mut self) {
-        let Some(scoop) = self.scoop.as_mut() else {
-            return;
-        };
-        if (1.0 - scoop.ratio).abs() < 1e-5 {
-            scoop.ratio = 1.0;
-            return;
-        }
-        scoop.ratio += (1.0 - scoop.ratio) * scoop.slew;
-        self.apply_pitch();
-    }
 }
 
 impl Voice for Organ {
     fn render(&mut self, out: &mut [f32]) -> bool {
         for o in out.iter_mut() {
-            self.advance_scoop();
             let mut s = 0.0;
             for pipe in &mut self.harms {
                 if pipe.active {
@@ -4181,14 +4232,15 @@ impl Voice for Organ {
     }
 }
 
-/// Base tremulant/musette AM (rate Hz, depth) for GM16-23. The engine only
-/// morphs GM16-19 from these values toward Leslie-fast; free reeds keep their
-/// built-in motion or, for GM22, use CC1 as pitch vibrato.
+/// Base tremulant/musette AM (rate Hz, depth) for the organ programs. The
+/// engine only morphs GM16-19 from these values toward Leslie-fast; the
+/// musette accordions keep their built-in motion. (GM 22 no longer routes
+/// here — it is a Reed free-reed voice, §2.11, with CC1 as pitch vibrato.)
 pub fn organ_trem_base(program: u8) -> (f32, f32) {
     match program {
         18 => (6.5, 0.10),
         16 | 17 => (5.5, 0.06),
-        20 | 22 => (4.2, 0.0),
+        20 => (4.2, 0.0),
         21 => (5.0, 0.015),
         23 => (5.8, 0.018),
         _ => (4.2, 0.04),
@@ -4337,31 +4389,8 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             0.22,
         )
         .with_reed_noise(0.018, (f * 3.4).clamp(700.0, 2300.0), 0.8),
-        22 => Organ::new(
-            key,
-            vel,
-            sr,
-            seed,
-            &[
-                (1.0, 1.0),
-                (1.5, 0.30),
-                (2.0, 0.30),
-                (2.5, 0.21),
-                (3.0, 0.16),
-                (3.5, 0.17),
-                (4.0, 0.07),
-                (4.5, 0.14),
-            ],
-            Adsr::new(0.095, 0.04, 0.94, 0.14, sr),
-            trem_hz,
-            trem_depth,
-            0.0,
-            0.0,
-            0.0,
-            0.30,
-        )
-        .with_reed_noise(0.070, (f * 4.0).clamp(900.0, 3200.0), 0.65)
-        .with_pitch_scoop(cent_ratio(-110.0), 0.085),
+        // 22 harmonica moved to the Reed free-reed voice (§2.11) — see
+        // HARMONICA in the ReedPreset table.
         23 => Organ::new(
             key,
             vel,
@@ -4384,7 +4413,7 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             0.21,
         )
         .with_reed_noise(0.020, (f * 3.5).clamp(750.0, 2600.0), 0.75),
-        _ => unreachable!("organ() only handles GM16-23"),
+        _ => unreachable!("organ() only handles GM16-18 and 20/21/23"),
     }
 }
 
@@ -5580,6 +5609,74 @@ const WD_VN0: f32 = 100.0 / 127.0;
 /// Partials above this fraction of `sr` are gated off rather than folded.
 const WD_ALIAS_LIM: f32 = 0.44;
 
+// --- WD9 (§2.8.5.2-3): the flue blowing-pressure law -----------------------
+// The RD9 law verbatim (`RD_P_VEL`/`RD_P_VEL_EXP`/`RD_P_ENV`/`RD_P_SMOOTH_S`/
+// `RD_P_AUTH_SPAN` are shared, not copied, so reed and flue pressure cannot
+// drift apart): p = clamp(vel_floor + env·speak + authored CC2/CC11), smoothed
+// ~15 ms at CTRL rate. `bright` and `vel_air` — spawn-fixed before WD9 — now
+// track p. Honesty scoping (§2.8.2): on today's albums only the vel floor
+// moves, so this is note-to-note velocity brightening plus onset speak;
+// within-note breathing is authored-content only.
+
+/// p at vel ≈ 100, mid-register sustain — the anchor at which the preset
+/// table reads directly off the render (the flue analogue of `bright` == 1.0
+/// at `WD_VN0`). Provenance: RD9 law at vel 100, sustain 0.92:
+/// 0.06 + 0.845·(100/127)^1.5 + 0.11·0.92 = 0.7515.
+const WD_P_ANCHOR: f32 = 0.7515;
+/// Maps (p − anchor) onto the old (vn − WD_VN0) span so the vel-127 end of
+/// the ladder lands where the accepted spawn law put it: at vel 127,
+/// p − anchor = 0.2485 and vn − WD_VN0 = 1 − 100/127 = 0.2126.
+const WD_P_GAIN: f32 = (1.0 - WD_VN0) / 0.2485;
+/// `vel_air` in p-coordinates: air(p) = WD_AIR.0 + WD_AIR.1·p², anchored so
+/// air(WD_P_ANCHOR) = 1.001 = the old 0.35 + 1.05·vn² at vel 100 — harder
+/// blowing stays amplitude-quadratic in the driving signal (turbulence grows
+/// super-linearly with jet speed), now within the note as well as across it.
+const WD_AIR: (f32, f32) = (0.35, 1.1526);
+
+// --- WD10 (§2.8.5.1): the split onset chiff --------------------------------
+// Before the split the single f0-tracked breath bandpass fed BOTH the
+// sustained bed AND the onset chiff, so the chiff could not be the broadband
+// edge-tone burst a flue attack actually is. The chiff now has its own
+// highpassed white burst (the Reed/Pluck `onset_post` precedent), independent
+// of the bed.
+
+/// Edge-tone burst highpass floor (Hz); per-note the cutoff is
+/// max(floor, 1.2·f0) so the "tuh" always sits above the fundamental.
+const WD_CHIFF_HP_HZ: f32 = 1800.0;
+/// Broadband-burst level normalisation: a Q-0.7 highpass passes ~0.55 of
+/// white RMS where the old narrowband bed bandpass passed ~0.20 (pan flute at
+/// its WD-O8 probe key), so 0.36 keeps the preset `chiff` table meaning what
+/// it always meant. Verified against WD-O8's absolute floors.
+const WD_CHIFF_NORM: f32 = 0.36;
+
+// --- WD11 (§2.8.5.4): the GM 76 Helmholtz resonator ------------------------
+/// Resonator Q: ring τ = Q/(π·f0) ⇒ T60 ≈ 0.54 s at range bottom (key 48),
+/// 0.17 s at mid — a bottle's short "boop" tail, pinned by WD-O12.
+const WD_HELM_Q: f32 = 32.0;
+/// Whisper-of-tone scale on the sine bank: the additive core drops to a
+/// pitch anchor (~25 % of steady energy) and the filtered jet becomes the
+/// PRIMARY source — the topology fix. (The old voice was ~99 % sine.)
+const WD_HELM_TONE: f32 = 0.52;
+/// Excitation gain anchor. The constant-peak-gain bandpass emits
+/// noise RMS ∝ √(f0/Q), so the drive carries √(Q·sr/f0) — the §2.8.5.4 gain
+/// normalisation across keys (pinned by WD-O13) — times this level trim
+/// (measured: re-anchors the steady render at vel 100 mid-key to the
+/// pre-Helmholtz bottle level, WD-O11's +0.2 dB vs flute).
+const WD_HELM_DRIVE: f32 = 0.52;
+/// Broadband jet spill (the "airier" of the pressure leg): gain on the
+/// shaped jet mixed straight into the output (× breath·air), growing with p
+/// as (lo + span·p, ≈ 1.0 at the anchor) — harder blowing spills more jet
+/// noise past the resonance. Level trim measured at the WD-O13 probe.
+const WD_HELM_SPILL: f32 = 1.59;
+const WD_HELM_SPILL_P: (f32, f32) = (0.25, 1.0);
+/// Excitation-shaping one-pole cutoff = f0·(lo + span·p): harder blowing
+/// widens the excitation band (the "slightly wider" of the pressure leg).
+const WD_HELM_LP: (f32, f32) = (1.5, 2.5);
+/// Ring-follower floor: the voice stays alive until the resonator's own
+/// ring (tracked by a peak follower) falls below this — the §2.8.5.4
+/// released()/alive bookkeeping that keeps the ring from truncating.
+const WD_HELM_RING_FLOOR: f32 = 1e-4;
+
 /// A GM pipe program's fixed voicing. All-`pub`, const-constructible.
 pub struct WindPreset {
     /// h2..h7 amplitudes relative to h1 = 1.0, at `bright` = 1. The bore class:
@@ -5599,6 +5696,11 @@ pub struct WindPreset {
     pub scoop: f32,      // onset pitch multiplier start
     pub range: (u8, u8), // MIDI keys for register normalisation
     pub amp: f32,
+    /// WD11 (§2.8.5.4): the voice is ONE high-Q resonance excited by breath
+    /// (blown bottle), not a harmonic pipe — `breath` becomes the resonator
+    /// drive, the sine bank drops to a whisper, and the standard bed is
+    /// replaced by the resonator + jet spill.
+    pub helmholtz: bool,
     #[cfg(test)]
     pub name: &'static str, // diagnostic label (kind() is always "wind")
 }
@@ -5621,6 +5723,7 @@ pub const PICCOLO: WindPreset = WindPreset {
     scoop: 0.988,
     range: (74, 108),
     amp: 0.50,
+    helmholtz: false,
     #[cfg(test)]
     name: "piccolo",
 };
@@ -5646,6 +5749,7 @@ pub const FLUTE: WindPreset = WindPreset {
     scoop: 0.984,
     range: (60, 96),
     amp: 0.50,
+    helmholtz: false,
     #[cfg(test)]
     name: "flute",
 };
@@ -5657,7 +5761,11 @@ pub const RECORDER: WindPreset = WindPreset {
     harm: [0.09, 0.05, 0.012, 0.0, 0.0, 0.0],
     vel_bright: 0.15,
     reg_dark: 0.35,
-    breath: 0.03,
+    // 0.03 → 0.055 (§2.8.5.2): the old bed sat ~46 dB under the tone —
+    // inaudible, a bare sine stack. 0.055 is an audible duct hiss that still
+    // keeps the recorder the purest pipe in the family (< the flute's 0.09;
+    // WD-O5's ordering clause pins rec < flute).
+    breath: 0.055,
     breath_f: 2.0,
     breath_q: 2.0,
     breath_hi: 0.0,
@@ -5669,6 +5777,7 @@ pub const RECORDER: WindPreset = WindPreset {
     scoop: 0.996,
     range: (60, 96),
     amp: 0.50,
+    helmholtz: false,
     #[cfg(test)]
     name: "recorder",
 };
@@ -5692,12 +5801,16 @@ pub const PAN_FLUTE: WindPreset = WindPreset {
     scoop: 0.978,
     range: (55, 91),
     amp: 0.46,
+    helmholtz: false,
     #[cfg(test)]
     name: "pan_flute",
 };
-/// 76 — HELMHOLTZ vessel: one resonance, so a near-bare sine. The jet noise is
-/// filtered by that same resonance, so the bed sits ON f0 and is the loudest
-/// fraction in the family — the tone is bare, so the AIR is the timbre.
+/// 76 — HELMHOLTZ vessel, now a real one (WD11, §2.8.5.4): ONE high-Q
+/// two-pole resonance at f0, excited by broadband breath as the PRIMARY
+/// source, with only a whisper of tone as the pitch anchor. `breath` is the
+/// resonator drive; `breath_f`/`breath_q` are inert on this path (the
+/// resonator, not the bed bandpass, filters the jet). The AIR *is* the
+/// timbre — and the resonator rings past release (WD-O12).
 pub const BLOWN_BOTTLE: WindPreset = WindPreset {
     harm: [0.08, 0.02, 0.0, 0.0, 0.0, 0.0],
     vel_bright: 0.3,
@@ -5714,6 +5827,7 @@ pub const BLOWN_BOTTLE: WindPreset = WindPreset {
     scoop: 0.975,
     range: (48, 84),
     amp: 0.54,
+    helmholtz: true,
     #[cfg(test)]
     name: "blown_bottle",
 };
@@ -5737,6 +5851,7 @@ pub const SHAKUHACHI: WindPreset = WindPreset {
     scoop: 0.955,
     range: (57, 86),
     amp: 0.46,
+    helmholtz: false,
     #[cfg(test)]
     name: "shakuhachi",
 };
@@ -5746,7 +5861,10 @@ pub const WHISTLE: WindPreset = WindPreset {
     harm: [0.04, 0.008, 0.0, 0.0, 0.0, 0.0],
     vel_bright: 0.2,
     reg_dark: 0.2,
-    breath: 0.16,
+    // 0.16 → 0.30 (§2.8.5.2): the focused air band AT the whistle pitch is
+    // this instrument's identity, and it sat ~35 dB under the tone. 0.30
+    // makes the hiss around the tone genuinely audible (WD-O5 re-pinned).
+    breath: 0.30,
     breath_f: 1.0,
     breath_q: 4.0,
     breath_hi: 0.0,
@@ -5758,6 +5876,7 @@ pub const WHISTLE: WindPreset = WindPreset {
     scoop: 0.990,
     range: (72, 100),
     amp: 0.52,
+    helmholtz: false,
     #[cfg(test)]
     name: "whistle",
 };
@@ -5780,6 +5899,7 @@ pub const OCARINA: WindPreset = WindPreset {
     scoop: 0.985,
     range: (60, 88),
     amp: 0.52,
+    helmholtz: false,
     #[cfg(test)]
     name: "ocarina",
 };
@@ -5798,18 +5918,47 @@ pub fn wind(program: u8) -> &'static WindPreset {
     }
 }
 
+/// WD11 (§2.8.5.4): the GM 76 Helmholtz resonator — real state, so it can
+/// ring past release. A constant-peak-gain two-pole bandpass at the sounding
+/// f0 (retuned at CTRL with bend/scoop/vib) driven by shaped breath noise as
+/// the voice's primary source, plus a broadband jet spill.
+struct Helm {
+    res: Biquad,     // THE bottle: high-Q bandpass at the sounding pitch
+    exc_lp: OnePole, // excitation shaping — cutoff widens with pressure
+    drive: f32,      // CTRL-computed excitation gain (key-normalised)
+    spill: f32,      // CTRL-computed broadband spill gain
+    ring: f32,       // |resonator out| peak follower (alive bookkeeping)
+    ring_mul: f32,
+}
+
 pub struct Wind {
     osc: [Sine; 7], // h1..h7 (index i renders harmonic i+1)
     amps: [f32; 7], // amps[0] = 1.0 (fundamental); zero slots are never ticked
+    // WD9: the preset's spectral law, kept live so the amps retune with
+    // pressure at CTRL rate (they were spawn-fixed before §2.8.5).
+    harm: [f32; 6],
+    vel_bright: f32,
+    reg_term: f32,   // reg_dark·(reg − 0.5), fixed per note
+    dead: [bool; 7], // alias-gated slots — never resurrected by a retune
     base_f: f32,
     bend: f32,
     scoop: f32, // pitch multiplier settling toward 1.0
     breath_filt: Biquad,
-    breath_amp: f32,
+    breath_base: f32, // preset.breath (the WD-O5 differential seam zeroes this)
+    breath_amp: f32,  // CTRL-computed: breath_base · air(p)
     hi_filt: Option<Biquad>, // >8 kHz muraiki shelf (shakuhachi only)
+    hi_base: f32,
     hi_amp: f32,
+    chiff_filt: Biquad, // WD10: the broadband edge-tone burst's own highpass
     chiff_amp: f32,
     chiff_decay: f32,
+    helm: Option<Helm>, // WD11: GM 76 only
+    // WD9 pressure state (the RD9 law: vel floor + env speak + authored)
+    vn: f32,
+    p_auth: f32,
+    p_sm: f32,
+    p_k: f32,
+    last_env: f32,
     env: Adsr,
     vib: Sine,
     vib_depth: f32,
@@ -5829,11 +5978,16 @@ impl Wind {
         // Register position: 0 at range bottom, 1 at top (out-of-range clamps).
         let (lo, hi) = preset.range;
         let reg = ((key as f32 - lo as f32) / (hi as f32 - lo as f32).max(1.0)).clamp(0.0, 1.0);
-        // The spectral-tilt scalar. Normalised so bright == 1.0 at vel 100,
-        // mid-register — i.e. the preset table IS the spectrum at the oracle probe.
-        // Harder blowing opens the timbre; the top of the range purifies it.
-        let bright = (1.0 + preset.vel_bright * (vn - WD_VN0) - preset.reg_dark * (reg - 0.5))
-            .clamp(0.55, 1.20);
+        // WD9: blowing pressure at spawn — the RD9 vel floor (env starts at
+        // 0; authored CC2/CC11 arrives via set_breath before the first
+        // render on authored channels, and the ~15 ms smoother absorbs it).
+        let p0 = RD_P_VEL.0 + RD_P_VEL.1 * vn.powf(RD_P_VEL_EXP);
+        let reg_term = preset.reg_dark * (reg - 0.5);
+        // The spectral-tilt scalar, now in p-coordinates (WD9): normalised so
+        // bright == 1.0 at vel 100 mid-register SUSTAIN (p = WD_P_ANCHOR) —
+        // i.e. the preset table IS the spectrum at the oracle probe. Harder
+        // blowing opens the timbre; the top of the range purifies it.
+        let bright = wd_bright(preset.vel_bright, reg_term, p0);
 
         // Partial amplitudes: upper partials scale super-linearly with `bright`.
         let mut amps = [0.0f32; 7];
@@ -5843,10 +5997,14 @@ impl Wind {
         }
         // Alias gate: a partial above 0.44·sr is silenced, never folded. (0.44
         // leaves headroom for a ±2-semitone bend: 0.44 × 1.122 = 0.494 < Nyquist.)
+        // The gate is a one-way MASK: a CTRL-rate pressure retune (WD9) or a
+        // downward slur must never resurrect a gated slot.
         let lim = WD_ALIAS_LIM * sr;
+        let mut dead = [false; 7];
         for (i, a) in amps.iter_mut().enumerate() {
             if (i + 1) as f32 * f > lim {
                 *a = 0.0;
+                dead[i] = true;
             }
         }
         // One phase draw per SLOT (even silent ones) so the RNG stream stays
@@ -5857,22 +6015,55 @@ impl Wind {
         });
 
         // Breath bed: a bandpass tracking f0, placed and shaped per bore.
-        // Amplitude-quadratic in velocity — turbulent noise grows super-linearly
-        // with jet speed, so hard blowing is airier and soft playing purer.
-        let vel_air = 0.35 + 1.05 * vn * vn;
+        // Amplitude-quadratic in the pressure (WD9; was vn-quadratic at
+        // spawn only) — turbulent noise grows super-linearly with jet speed,
+        // so hard blowing is airier and soft playing purer, now within the
+        // note as well as across notes.
+        let air = WD_AIR.0 + WD_AIR.1 * p0 * p0;
+        // WD11: the Helmholtz path replaces the additive-core fake for GM 76.
+        let helm = preset.helmholtz.then(|| Helm {
+            res: Biquad::bandpass(f.min(sr * 0.4), WD_HELM_Q, sr),
+            exc_lp: OnePole::lowpass(f * (WD_HELM_LP.0 + WD_HELM_LP.1 * p0), sr),
+            drive: preset.breath * air * (WD_HELM_Q * sr / f).sqrt() * WD_HELM_DRIVE,
+            spill: preset.breath
+                * air
+                * WD_HELM_SPILL
+                * (WD_HELM_SPILL_P.0 + WD_HELM_SPILL_P.1 * p0),
+            ring: 0.0,
+            ring_mul: t60_mul(0.1, sr),
+        });
+        if helm.is_some() {
+            // the sine bank drops to a pitch-anchor whisper
+            for a in amps.iter_mut() {
+                *a *= WD_HELM_TONE;
+            }
+        }
         let vibr = preset.vib;
         Wind {
             osc,
             amps,
+            harm: preset.harm,
+            vel_bright: preset.vel_bright,
+            reg_term,
+            dead,
             base_f: f,
             bend: 1.0,
             scoop: preset.scoop,
             breath_filt: Biquad::bandpass((preset.breath_f * f).min(sr * 0.4), preset.breath_q, sr),
-            breath_amp: preset.breath * vel_air,
+            breath_base: preset.breath,
+            breath_amp: preset.breath * air,
             hi_filt: (preset.breath_hi > 0.0).then(|| Biquad::highpass(8000.0, 0.7, sr)),
-            hi_amp: preset.breath_hi * vel_air,
+            hi_base: preset.breath_hi,
+            hi_amp: preset.breath_hi * air,
+            chiff_filt: Biquad::highpass(WD_CHIFF_HP_HZ.max(1.2 * f).min(sr * 0.35), 0.7, sr),
             chiff_amp: preset.chiff * vn * vel_amp(vel),
             chiff_decay: t60_mul(preset.chiff_t60, sr),
+            helm,
+            vn,
+            p_auth: 0.0,
+            p_sm: p0,
+            p_k: 1.0 - (-(CTRL as f32) / (RD_P_SMOOTH_S * sr)).exp(),
+            last_env: 0.0,
             env: Adsr::new(
                 vel_attack(preset.attack, vel),
                 0.05,
@@ -5890,6 +6081,14 @@ impl Wind {
             sr,
         }
     }
+}
+
+/// WD9: the flue spectral-tilt scalar in p-coordinates. `WD_P_GAIN` maps the
+/// pressure span back onto the accepted (vn − WD_VN0) span, so the vel-127
+/// end of the ladder lands where the old spawn law put it and the clamp
+/// rails are unchanged.
+fn wd_bright(vel_bright: f32, reg_term: f32, p: f32) -> f32 {
+    (1.0 + vel_bright * WD_P_GAIN * (p - WD_P_ANCHOR) - reg_term).clamp(0.55, 1.20)
 }
 
 impl Voice for Wind {
@@ -5911,6 +6110,48 @@ impl Voice for Wind {
                         osc.set_freq(f * (i + 1) as f32, self.sr);
                     }
                 }
+                // WD9 blowing pressure: vel floor + env "speaking" term +
+                // authored CC2/CC11 delta — the RD9 law — smoothed ~15 ms.
+                let target = (RD_P_VEL.0
+                    + RD_P_VEL.1 * self.vn.powf(RD_P_VEL_EXP)
+                    + RD_P_ENV * self.last_env
+                    + self.p_auth)
+                    .clamp(0.0, 1.0);
+                self.p_sm += self.p_k * (target - self.p_sm);
+                let p = self.p_sm;
+                // WD9 tilt: the per-partial amps — spawn-fixed before
+                // §2.8.5 — retune from pressure. The alias mask is one-way.
+                let bright = wd_bright(self.vel_bright, self.reg_term, p);
+                let tone = if self.helm.is_some() {
+                    WD_HELM_TONE
+                } else {
+                    1.0
+                };
+                for (i, a) in self.amps.iter_mut().enumerate().skip(1) {
+                    if !self.dead[i] {
+                        *a = self.harm[i - 1] * bright.powi(i as i32) * tone;
+                    }
+                }
+                // WD9 air: the bed level tracks pressure (was vn² at spawn)
+                let air = WD_AIR.0 + WD_AIR.1 * p * p;
+                self.breath_amp = self.breath_base * air;
+                self.hi_amp = self.hi_base * air;
+                // WD11: retune the resonator with the sounding pitch and
+                // track the pressure leg (louder/airier/slightly wider)
+                if let Some(h) = self.helm.as_mut() {
+                    h.res
+                        .retune_bandpass(f.min(self.sr * 0.4), WD_HELM_Q, self.sr);
+                    h.exc_lp
+                        .set_cutoff(f * (WD_HELM_LP.0 + WD_HELM_LP.1 * p), self.sr);
+                    h.drive = self.breath_base
+                        * air
+                        * (WD_HELM_Q * self.sr / f.max(1.0)).sqrt()
+                        * WD_HELM_DRIVE;
+                    h.spill = self.breath_base
+                        * air
+                        * WD_HELM_SPILL
+                        * (WD_HELM_SPILL_P.0 + WD_HELM_SPILL_P.1 * p);
+                }
             }
             let mut s = 0.0;
             for (i, osc) in self.osc.iter_mut().enumerate() {
@@ -5919,10 +6160,26 @@ impl Voice for Wind {
                 }
             }
             let e = self.env.next();
+            self.last_env = e;
             // the breath rides the vibrato — air moves with the pitch wobble
             let breath_mod = 1.0 + 0.5 * self.vib_val;
-            let noise = self.breath_filt.process(self.rng.white());
-            s += noise * self.breath_amp * e * breath_mod;
+            // WD11: on the Helmholtz path the first noise draw IS the jet —
+            // shaped, driven through the resonator (excitation dies with the
+            // envelope; the resonator state rings on past it), plus spill.
+            // The draw count per sample is unchanged, keeping the WD-O5
+            // differential seams aligned. `helm_out` is added OUTSIDE the
+            // envelope product below — killing the ring with e would
+            // re-truncate exactly what the topology fix exists to keep.
+            let mut helm_out = 0.0;
+            if let Some(h) = self.helm.as_mut() {
+                let jet = h.exc_lp.process(self.rng.white()) * e * breath_mod;
+                let r = h.res.process(jet * h.drive);
+                h.ring = r.abs().max(h.ring * h.ring_mul);
+                helm_out = r + jet * h.spill;
+            } else {
+                let noise = self.breath_filt.process(self.rng.white());
+                s += noise * self.breath_amp * e * breath_mod;
+            }
             // The second RNG draw is gated on the FILTER, not on hi_amp, so a test
             // that zeroes hi_amp keeps this stream aligned with its twin.
             if let Some(hf) = self.hi_filt.as_mut() {
@@ -5931,12 +6188,20 @@ impl Voice for Wind {
             // The chiff sits OUTSIDE the envelope (the Reed/Brass onset convention):
             // a fresh attack spits at t=0 while the envelope is still ramping. Inside
             // it, the old flute's chiff was largely swallowed by its own 50 ms attack.
-            let chiff = noise * self.chiff_amp * self.amp;
+            // WD10: its source is a dedicated broadband highpassed burst (own RNG
+            // draw, unconditional — stream alignment), no longer the bed bandpass.
+            let burst = self.chiff_filt.process(self.rng.white());
+            let chiff = burst * WD_CHIFF_NORM * self.chiff_amp * self.amp;
             self.chiff_amp *= self.chiff_decay;
-            *o += s * self.amp * e + chiff;
+            *o += (s * e + helm_out) * self.amp + chiff;
             self.t += 1;
         }
+        // WD11: the resonator keeps the voice alive until its ring fades
         self.env.alive()
+            || self
+                .helm
+                .as_ref()
+                .is_some_and(|h| h.ring > WD_HELM_RING_FLOOR)
     }
 
     fn note_off(&mut self) {
@@ -5951,17 +6216,29 @@ impl Voice for Wind {
         self.bend = mult;
     }
 
+    fn set_breath(&mut self, pressure: f32, _growl: f32) {
+        // WD9 authored seam (§2.8.5.3, the RD9 mirror): the engine feeds
+        // √(expr·breath) — CC11 × CC2, neutral 1.0 — ONLY on flue channels
+        // that have authored one of them, so an unauthored channel renders
+        // controller-identically to before. Authored breath carves DOWNWARD
+        // from the velocity anchor (GM expression semantics); the ~15 ms
+        // smoother de-zippers the steps. Growl has no flue consumer.
+        self.p_auth = RD_P_AUTH_SPAN * (pressure.clamp(0.0, 1.0) - 1.0);
+    }
+
     fn legato_to(&mut self, key: u8, _vel: u8) -> bool {
         // slur: glide from the old pitch via the scoop, keep the air moving
         let new_f = key_freq(key);
         self.scoop = (self.base_f * self.scoop / new_f).clamp(0.85, 1.18);
         self.base_f = new_f;
         self.chiff_amp = 0.0;
-        // An upward slur sheds partials that would now alias (never un-zeroed).
+        // An upward slur sheds partials that would now alias — a one-way
+        // mask, so the WD9 pressure retune can never resurrect them.
         let lim = WD_ALIAS_LIM * self.sr;
         for (i, a) in self.amps.iter_mut().enumerate() {
             if (i + 1) as f32 * new_f > lim {
                 *a = 0.0;
+                self.dead[i] = true;
             }
         }
         true
@@ -6318,27 +6595,16 @@ impl BowedString {
                           // (body freqs, in-loop bridge damping, amp base/span, OUTPUT lowpass Hz,
                           // loop-latency tuning compensation in samples).
                           // The output lowpass (0 = none) darkens the cello cleanly without touching
-                          // the loop's nonlinear dynamics; it is None for the contrabass, so GM43
-                          // stays byte-identical to the integrated Stage 1.
-                          // loop_comp: the in-loop reflection filter + structural latency add ~3.85
-                          // samples that the bare `sr/f` never subtracted. That is a FIXED SAMPLE
-                          // latency, so as a pitch error it GROWS with pitch (the same samples are a
-                          // bigger fraction of a shorter period). Both programs run the identical
-                          // OnePole (refl_sustain = 2600.0), so both carry the identical latency and
-                          // both need the same 3.85.
-                          //
-                          // The contrabass used to keep 1.0 "to stay byte-identical to Stage 1", on
-                          // the theory that its residual flatness was small and characterful in the
-                          // bass. Measured, that is false and the premise has expired:
-                          //   GM43 @ 1.0  : -6.1 c (key 28) -> -45.6 c (key 67), SPREAD 39.5 c
-                          //   GM43 alt    : +2.9 .. +5.6 c,                      spread  2.7 c
-                          //   GM42 @ 3.85 : -2.5 .. -0.7 c,                      spread  1.8 c  <- control
-                          // A CONSTANT offset is inaudible; a pitch-DEPENDENT one corrupts INTERVALS
-                          // (a fifth renders ~14 c narrow, so a sustained triad beats against itself)
-                          // — on the bass, the harmonic foundation, where it hurts most. And the
-                          // byte-identity premise died with the .opus/.wav renders becoming
-                          // git-ignored build output (CLAUDE.md): there is no committed audio to
-                          // stay identical to. Pinned by `bowed_string_tuning_is_pitch_independent`.
+                          // the loop's nonlinear dynamics; it is None for the contrabass.
+                          // loop_comp: the in-loop reflection filter + structural latency add ~4
+                          // samples the bare `sr/f` never subtracted, so an uncompensated string
+                          // renders progressively flat with pitch (≈ −5 cents at E1 but −31/−45
+                          // cents at the C4/G4 the ear notices). Both values are MEASURED, never
+                          // guessed (lesson 2026.07.11): the cello's 3.85 by the original
+                          // autocorrelation sweep; the contrabass's 4.03 by the in-tree
+                          // `measure_bowedstring_loop_latency` harness (B4, HLD §2.4 — the
+                          // crossing-train sweep implies L ≈ 4.0 for BOTH programs across the
+                          // healthy register, so the two waveguides share one in-loop phase).
         let (body_f, refl_sustain, amp_base, amp_span, out_lp_hz, loop_comp) = match program {
             42 => (
                 [110.0f32, 230.0, 500.0],
@@ -6348,7 +6614,7 @@ impl BowedString {
                 2100.0f32,
                 3.85f32,
             ),
-            _ => ([70.0, 180.0, 700.0], 2600.0, 0.55, 1.25, 0.0, 3.85),
+            _ => ([70.0, 180.0, 700.0], 2600.0, 0.55, 1.25, 0.0, 4.03),
         };
         // Per-note character: the seed varies per voice (the engine's spawn
         // counter), so drawing the bow's force, grit, scratch and vibrato here
@@ -6359,7 +6625,14 @@ impl BowedString {
                                                    // the sampled arco bite now owns the onset, so the model's own synth
                                                    // scratch is dialled right back — just a hint under the sample.
         let scratch = 0.08 + 0.10 * u(&mut rng);
-        let vib_rate = 4.6 * (1.0 + 0.16 * rng.white());
+        // B3 (MM-BUG-KILN-00004, HLD §2.3): render advances this LFO once per
+        // CTRL samples, so it must be BUILT at sr/CTRL — control_lfo() is the
+        // one constructor that makes the 16×-slow idiom bug impossible. Base
+        // rates are per-program, matching the demoted Bowed presets (42 cello
+        // 4.8 Hz, 43 contrabass 4.2 Hz) so the vibrato oracle has a single
+        // source of truth.
+        let vib_rate = if program == 42 { 4.8 } else { 4.2 };
+        let vib = control_lfo(vib_rate, 0.10, &mut rng, sr);
         let vib_depth = 0.0016 + 0.0016 * u(&mut rng);
         let vib_onset = (0.16 + 0.24 * u(&mut rng)) * sr;
         let grit_hz = 500.0 + 800.0 * u(&mut rng); // bow-hair fluctuation band (low-mid)
@@ -6387,7 +6660,7 @@ impl BowedString {
             // is brighter — real bowing): quiet pedal ~dark, collision ~bright.
             max_vel: 0.03 + 0.22 * vel_amp(vel),
             slope,
-            vib: Sine::new(vib_rate, sr, u(&mut rng)), // random start phase too
+            vib,
             vib_depth,
             vib_delay: vib_onset as u32,
             grit: Biquad::bandpass(grit_hz.min(sr * 0.40), 0.8, sr),
@@ -6418,10 +6691,11 @@ impl BowedString {
     }
 
     fn set_freq(&mut self, f: f32) {
-        // total loop delay = one period, minus the loop latency (structural
-        // read/write plus the in-loop reflection filter's phase delay, ~1 sample
-        // for the bass, ~3.85 for the cello); split at the bow into the two
-        // sections. Compensating this is what keeps the higher register in tune.
+        // total loop delay = one period, minus the measured loop latency
+        // (structural read/write plus the in-loop reflection filter's phase
+        // delay — ≈ 4 samples for both programs); split at the bow into the
+        // two sections. Compensating this is what keeps the higher register
+        // in tune.
         let total = (self.sr / f.max(20.0) - self.loop_comp).max(8.0);
         self.bridge_delay = (total * self.beta).max(1.0);
         self.neck_delay = (total * (1.0 - self.beta)).max(1.0);
@@ -6490,7 +6764,7 @@ impl Voice for BowedString {
                 y = b.process(y);
             }
             if let Some(lp) = &mut self.out_lp {
-                y = lp.process(y); // cello de-buzz; None for the bass (byte-identical)
+                y = lp.process(y); // cello de-buzz; None for the bass
             }
             let hp = y - self.dc_x1 + 0.9985 * self.dc_y1;
             self.dc_x1 = y;
@@ -6545,22 +6819,39 @@ const LA_CONTRABASS: (f32, (f32, f32)) = (0.29, (0.16, 0.46));
 /// slightly faster handover than the bass (a cello bow speaks quicker).
 const LA_CELLO: (f32, (f32, f32)) = (0.30, (0.13, 0.40));
 const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
-const LA_PIANO: (f32, (f32, f32)) = (0.42, (0.18, 0.85));
-const LA_BRASS: (f32, (f32, f32)) = (0.35, (0.10, 0.32));
+// GM 0-3 piano wrap gain, re-matched for the §2.7 onset-ownership contract:
+// the sample now REPLACES the model's onset instead of stacking on top of
+// it, so it must speak at the model onset's own level. Measured at vel 100
+// (30 ms windowed RMS): model-only attack ≈ 0.32; at the old 0.42 the
+// sampled attack was ≈ 0.11 — 9 dB shy, and the model's body overtook it
+// (attack/body inverted at keys 48/60). At 0.90 the wrapped attack sits at
+// 0.22-0.28 and every probed key is attack-dominant at the sample's own
+// internal ratio (≈ 0.85), matching the pure model's. The louder piano
+// onset is the intended §2.7 blast radius.
+const LA_PIANO: (f32, (f32, f32)) = (0.90, (0.18, 0.85));
+// Brass wrap gain, re-matched for the §2.7 onset-ownership contract (the
+// sample no longer has the model's own onset running underneath it): 0.35
+// left the sampled trumpet onset stepping 2.5x under the model's spoken
+// level at the seam; 0.45 meets it inside the la_level_continuity cap.
+const LA_BRASS: (f32, (f32, f32)) = (0.45, (0.10, 0.32));
+/// The tuba speaks slowly — its sampled front carries little early RMS —
+/// so its wrap gain scales up further to meet the model at the seam
+/// (probed via la_level_continuity's differential windows).
+const LA_TUBA_GAIN_MUL: f32 = 1.8;
 const LA_REED: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
 /// GM 24 nylon guitar: the sample owns the pick transient (first ~30 ms),
 /// the Karplus-Strong string carries the bendable decay from 200 ms (HLD §4).
-/// Gain level-matched down from the HLD's ~0.45 estimate: the FreePats pluck
-/// body is loud relative to the model and 0.45 stepped the 50–150 ms window
-/// 3.4× above the handover (la_level_continuity cap is 2.4×).
-const LA_GUITAR: (f32, (f32, f32)) = (0.25, (0.05, 0.20));
+/// Restored to the honest ~0.42 (voice-quality overhaul §2.7): the old 0.25
+/// was cut to pass the blind `la_level_continuity` step cap while the
+/// pre-contract crossfade ran the model's own onset UNDER the sample; with
+/// the onset-ownership contract (sample alone owns the pick, sum-to-one
+/// handover onto the model's decay) the loud pick no longer steps — and the
+/// rewritten attack-is-the-peak leg makes a quiet-pick hack fail instead.
+const LA_GUITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
 /// String sections 48-49: the real section swell reads best with a longer
 /// crossfade than the solo bowed layer (a section "comes into focus", it
 /// does not bite), so the transient hands over across [0.10, 0.40] s.
 const LA_STRINGS: (f32, (f32, f32)) = (0.40, (0.10, 0.40));
-/// GM 61 brass section: trumpet bank at reduced gain so the modeled
-/// scattered player onsets stay audible underneath (HLD §4).
-const LA_BRASS_SECTION_GAIN: f32 = 0.6;
 
 // ---------------------------------------------------------------------------
 // Orchestra Hit (GM 55)
@@ -6703,18 +6994,106 @@ impl Voice for OrchHit {
 // sax, oboe, english horn, bassoon, clarinet. A band-limited pulse source
 // (RD1) whose duty cycle is fixed per program + register — a square for the
 // clarinet's hollow odd spectrum, a short pulse for the double reeds' buzz —
-// voiced by a FIXED per-instrument formant bank (RD2), opened by a
-// register/velocity/envelope brightness law (RD3), roughened by an optional
-// velocity-tanh grit on the saxes (RD4), with breath + tongue chiff (RD5),
-// onset scoop + CC68 slur (RD6), a vibrato composed into every retune (RD7),
-// and equal-RMS loudness normalisation across duty cycles (RD8). Engine wiring
-// (vibrato_family / CC11 / fx_profile) is the separate engine55 unit; this
-// voice needs nothing beyond set_pitch / legato_to / velocity / program.
+// voiced by a FIXED per-instrument formant bank whose GAINS grow with blowing
+// pressure (RD2 — the honk; centres and Qs never move, §2.8.3), opened by a
+// pressure-swept LOW-Q 12 dB/oct tilt in harmonic-count coordinates (RD3:
+// cutoff = clamp(f0·N(p), 500 Hz, 0.4·sr), N(p) = N_lo·(N_hi/N_lo)^p), with
+// breath + tongue chiff (RD5), onset scoop + CC68 slur (RD6), a vibrato
+// composed into every retune (RD7), equal-RMS loudness normalisation across
+// duty cycles (RD8), and the blowing-pressure law (RD9): p ∈ [0,1] =
+// clamp(vel_floor + env_term + authored CC2/CC11 via set_breath), smoothed
+// ~15 ms (tripwire T-N1), anchored so p(vel≈100, sustain) ≈ 0.75 reproduces
+// the preset tables. The former RD4 velocity-tanh grit was DELETED (HLD
+// 2026.07.14 §2.8.1: degenerate on the pulse's plateaus — inert on sustained
+// timbre — and static per note, so it could never track pressure). RD10
+// (§2.8.4) is the sax rasp stage that replaces what RD4 was supposed to do:
+// a bias-tanh collision shaper on the leaky-integrated pulse ("tent"),
+// oversampled, with breath turbulence routed through the shaper input so the
+// saturating transfer intermodulates noise × harmonics into the skirts that
+// ARE the rasp (gate G3). Saxes 64–67 only; every other reed ships
+// filter-only (§2.8.4 gate rule) with the stage bypassed AT SPAWN
+// (`rasp: None`), so their render path is byte-identical to the pre-RD10
+// voice.
 // ---------------------------------------------------------------------------
 
 const RD_SCOOP_K: f32 = 0.045; // RD6 onset-scoop settle per control tick (τ ≈ 8 ms)
 const RD_CHIFF_T60: f32 = 0.020; // RD5 tongue-chiff decay
 const RD_CHIFF_AMP: f32 = 0.30; // RD5 chiff level (× vn × vel_amp — super-linear)
+                                // RD9 pressure law: p = clamp(vel_floor + env_term + authored, 0, 1).
+                                // vel_floor = .10 + .79·vn^1.5 — the convex curve keeps soft notes properly
+                                // dark (the G2 span lives at the p end; a linear map left vel 30 at p ≈ .36,
+                                // too bright for a sub-tone). Anchor: p(vel 100, sustain 0.90) =
+                                // 0.06 + 0.845·0.787^1.5 + 0.11·0.90 ≈ 0.75 reproduces the preset tables.
+const RD_P_VEL: (f32, f32) = (0.06, 0.845); // vel_floor = .06 + .845·vn^RD_P_VEL_EXP
+const RD_P_VEL_EXP: f32 = 1.5;
+const RD_P_ENV: f32 = 0.11; // env "speaking" term — onset transition only (§2.8.2)
+const RD_P_AUTH_SPAN: f32 = 0.85; // authored CC2/CC11 delta = span·(√(expr·breath) − 1)
+const RD_P_SMOOTH_S: f32 = 0.015; // pressure one-pole τ — the T-N1 zipper guard
+                                  // RD3 tilt: Butterworth Q (NO resonance — a resonant sweep comb-samples the
+                                  // lattice and wahs; resonance lives on the fixed-frequency formant bank).
+const RD_TILT_Q: f32 = std::f32::consts::FRAC_1_SQRT_2; // Butterworth
+const RD_TILT_FLOOR_HZ: f32 = 500.0; // keeps a bari/bassoon low note speaking at pp
+                                     // RD2 honk law: slot gain dB = g_table·(α + β·p); α + 0.75β = 1 so the
+                                     // vel≈100 anchor reproduces the table. α = 0 ⇒ no blowing, no formant
+                                     // emphasis (a p note is a bare dark tube — the honk is entirely earned by
+                                     // pressure, which is what gives G2 its span). Gains ONLY — never centre,
+                                     // never Q.
+const RD_FORM_ALPHA: f32 = 0.0;
+const RD_FORM_BETA: f32 = 4.0 / 3.0;
+// RD10 (§2.8.4) — the sax rasp stage. The ReedPulse is leaky-integrated to a
+// two-segment triangle ("tent", normalised to ±1), then shaped by
+// y = tanh(g·(tent + noise + b)) − dc_ref, run at RD_RASP_OVER× internal
+// oversampling and decimated back (the Brass BR1 pattern). The bias b = 2w−1
+// is EXACT for the ideal tent: each tent segment is linear and spans the full
+// [−1, +1] level range, so the fraction of the period above any threshold −b
+// is (1+b)/2 on BOTH segments; choosing b = 2w−1 makes the g→∞ limit
+// sign(tent+b) a rectangle of duty exactly w — the bore rectangle itself —
+// so even harmonics are PRESERVED under drive, not collapsed to a 50 % square
+// (`reed_rasp_bias_lands_duty` verifies the landing; the unbiased collapse is
+// pinned by `reed_rasp_bias_is_load_bearing`). dc_ref and the output RMS
+// normaliser are closed forms over the tent's uniform level distribution,
+// recomputed at CTRL rate; the 20 Hz dcb highpass catches the residual
+// signal-dependent DC (tripwire T-N2).
+// A-MEAS-ALIAS decision log (measured 2026-07-14, `a_meas_alias_rasp_oversampling`,
+// §3.1 worst case: soprano key 88 / f0 1318.5 Hz, min post-jitter duty, g_max,
+// breath = 0; off-lattice bin-sum 1.5–21.5 kHz, dB re total):
+//   underated (derate = 1): 2× −60.4, 4× −63.0, 8× −61.2 → 2× excess +0.8 dB
+//   shipped derate:         2× −78.0, 4× −70.1, 8× −68.6 → 2× excess −9.5 dB
+// 2× meets the ≤ 3 dB excess rule even UNDERATED — the shipped g_max ≈ 16
+// caps the tanh edge at harmonic n ≈ g/2w ≈ 30, so the ladder dies before the
+// 2× fold region (the HLD's −34 dB h51 arithmetic assumed a full 1/n ladder,
+// i.e. near-sign drive we deliberately cap below). SHIP 2×; the F0_LO/HI/
+// FLOOR derate is kept as margin (BR13 precedent) — it buys a further ~18 dB
+// at the worst case (−60.4 → −78.0). At 4×/8× the reading is the two-biquad
+// decimation cliff's own leak-through, not shaper folds — the true 8× alias
+// floor is lower still, which only widens 2×'s measured margin. Absolute
+// audibility budget: `RD_O12B_FLOOR_DB` −42.0 = the wet ff top-octave noise
+// floor (−36.0, turbulence-dominated) − 6 dB; shipped config measures −78.
+const RD_RASP_OVER: u32 = 2; // shipped oversampling factor (decision log above)
+const RD_RASP_INT_HZ: f32 = 18.0; // leaky-integrator corner — below every sax fundamental
+const RD_RASP_NLP_F0: f32 = 0.30; // turbulence lowpass at 0.30·f0: LOWPASS noise into the
+                                  // shaper makes SKIRTS around every partial (S_y(f) =
+                                  // Σ|W_k|²·S_n(f−k·f0)); full-band white would stay
+                                  // spectrally flat (no skirts) no matter the drive
+const RD_RASP_DECIM_HZ: f32 = 15_000.0; // decimation cliff (Q 0.8 ×2 at osr, BR_DECIM idiom)
+const RD_RASP_HP_F0: f32 = 0.55; // post-shaper highpass at 0.55·f0 (Q 0.7, f0-tracked):
+                                 // kills the signal-dependent DC of the biased tanh
+                                 // (tripwire T-N2) AND the k = 0 baseband copy of the
+                                 // turbulence (S_y(f) = Σ|W_k|²·S_n(f−k·f0) — the k = 0
+                                 // term is sub-fundamental rumble, not rasp). −0.4 dB at
+                                 // f0; the h1 skirt's lower edge (0.65·f0) is untouched
+const RD_RASP_F0_LO: f32 = 800.0; // high-f0 drive derate (A-MEAS-ALIAS, BR12 precedent):
+const RD_RASP_F0_HI: f32 = 1600.0; // smoothstep g down over LO..HI,
+const RD_RASP_F0_FLOOR: f32 = 0.35; // to FLOOR·g at/above HI
+const RD_RASP_BREATH_REF: f32 = 0.032; // preset rasp noise frac is quoted at this breath
+                                       // level; scaling by the REGISTER-scaled breath makes
+                                       // the RD-O8a breath=0 seam kill the turbulence too
+                                       // (a clean lattice for the alias oracles). The
+                                       // injected rms ALSO scales with p² (turbulence
+                                       // intensity tracks flow — this, with the drive
+                                       // window's growth, is what makes G3's ff/p ≥ 2×)
+const RD_RASP_GROWL_SPAN: f32 = 2.0; // authored growl (set_breath arg 2, aftertouch)
+                                     // scales the noise frac ×(1+span·growl); default inert
 pub(crate) const BAGPIPE_DRONE_CONTROL_MAX: u8 = 54;
 /// Drone reeds are CYLINDRICAL single reeds — a clarinet-square odd-harmonic
 /// spectrum (duty 0.50, the same law as CLARINET's width), not the old
@@ -6730,19 +7109,30 @@ const BAGPIPE_DRONE_MIX: (f32, f32, f32) = (0.42, 0.30, 0.55);
 const BAGPIPE_DRONE_AMP: f32 = 0.075;
 
 /// A GM reed program's fixed voicing (§5 table). All-`pub`, const-constructible.
+/// `Clone` is the O-PRESSURE test seam (breath-zeroed clones without `Box::leak`).
+#[derive(Clone)]
 pub struct ReedPreset {
     pub width: f32,                     // RD1 pulse duty at range bottom
     pub width_hi: f32,                  // RD3 duty at range top (register interp)
     pub formants: [(f32, f32, f32); 3], // RD2 (Hz, Q, gain dB); gain 0.0 = inert slot
-    pub lp: f32,                        // RD3 brightness ceiling, Hz
-    pub drive_vn: f32,                  // RD4 tanh amount; 0.0 = bypass
+    pub n_lo: f32,                      // RD3 harmonics spoken at p = 0 (tilt cutoff = f0·N)
+    pub n_hi: f32,                      // RD3 harmonics spoken at p = 1
     pub breath: f32,                    // RD5 sustain breath level
     pub vib: (f32, f32, f32),           // RD7 (Hz, depth, delay s)
     pub attack: f32,                    // Adsr attack base (vel_attack-scaled)
     pub release: f32,                   // Adsr release
     pub scoop: f32,                     // RD6 onset pitch multiplier start
-    pub range: (u8, u8),                // MIDI keys for register normalisation
+    // RD6 per-CTRL-tick scoop settle: RD_SCOOP_K (τ ≈ 8 ms, an articulation
+    // detail) for the cane reeds; the harmonica's draw-bend needs τ ≈ 80 ms
+    // to read as a bend at all.
+    pub scoop_k: f32,
+    pub range: (u8, u8), // MIDI keys for register normalisation
     pub amp: f32,
+    /// RD10 (§2.8.4) rasp stage: (g0, g_press, noise frac at REF breath) —
+    /// drive g = (g0 + g_press·p)·derate(f0). All-zero = filter-only (the
+    /// shipped double-reed/clarinet/bagpipe/shanai rule): the stage is never
+    /// built, so the render hot path is untouched.
+    pub rasp: (f32, f32, f32),
     #[cfg(test)]
     pub name: &'static str, // diagnostic label (kind() is always "reed")
 }
@@ -6751,15 +7141,17 @@ pub const SOP_SAX: ReedPreset = ReedPreset {
     width: 0.30,
     width_hi: 0.27,
     formants: [(1100.0, 1.4, 5.0), (2200.0, 1.8, 4.0), (3600.0, 2.0, 2.5)],
-    lp: 5200.0,
-    drive_vn: 0.9,
+    n_lo: 2.2,
+    n_hi: 30.0,
     breath: 0.030,
     vib: (5.4, 0.006, 0.22),
     attack: 0.050,
     release: 0.12,
     scoop: 0.972,
+    scoop_k: RD_SCOOP_K,
     range: (56, 88),
-    amp: 0.34,
+    amp: 0.237,
+    rasp: (0.5, 15.5, 0.12),
     #[cfg(test)]
     name: "soprano_sax",
 };
@@ -6767,15 +7159,17 @@ pub const ALTO_SAX: ReedPreset = ReedPreset {
     width: 0.31,
     width_hi: 0.28,
     formants: [(900.0, 1.4, 5.5), (1900.0, 1.8, 4.0), (3100.0, 2.0, 2.5)],
-    lp: 4800.0,
-    drive_vn: 0.9,
+    n_lo: 2.5,
+    n_hi: 30.0,
     breath: 0.032,
     vib: (5.2, 0.006, 0.24),
     attack: 0.055,
     release: 0.12,
     scoop: 0.970,
+    scoop_k: RD_SCOOP_K,
     range: (49, 81),
-    amp: 0.35,
+    amp: 0.249,
+    rasp: (0.5, 15.5, 0.085),
     #[cfg(test)]
     name: "alto_sax",
 };
@@ -6783,15 +7177,17 @@ pub const TENOR_SAX: ReedPreset = ReedPreset {
     width: 0.32,
     width_hi: 0.29,
     formants: [(650.0, 1.3, 6.0), (1500.0, 1.8, 4.0), (2700.0, 2.0, 2.5)],
-    lp: 4300.0,
-    drive_vn: 0.9,
+    n_lo: 2.5,
+    n_hi: 30.0,
     breath: 0.035,
     vib: (5.0, 0.006, 0.26),
     attack: 0.060,
     release: 0.12,
     scoop: 0.968,
+    scoop_k: RD_SCOOP_K,
     range: (44, 76),
-    amp: 0.36,
+    amp: 0.261,
+    rasp: (0.5, 15.5, 0.058),
     #[cfg(test)]
     name: "tenor_sax",
 };
@@ -6799,15 +7195,17 @@ pub const BARI_SAX: ReedPreset = ReedPreset {
     width: 0.33,
     width_hi: 0.30,
     formants: [(480.0, 1.2, 6.0), (1150.0, 1.6, 4.0), (2300.0, 2.0, 2.5)],
-    lp: 3800.0,
-    drive_vn: 0.9,
+    n_lo: 2.5,
+    n_hi: 30.0,
     breath: 0.040,
     vib: (4.8, 0.005, 0.28),
     attack: 0.070,
     release: 0.13,
     scoop: 0.966,
+    scoop_k: RD_SCOOP_K,
     range: (36, 69),
-    amp: 0.38,
+    amp: 0.281,
+    rasp: (0.5, 15.5, 0.040),
     #[cfg(test)]
     name: "bari_sax",
 };
@@ -6815,15 +7213,17 @@ pub const OBOE: ReedPreset = ReedPreset {
     width: 0.14,
     width_hi: 0.14,
     formants: [(1050.0, 2.4, 8.0), (2700.0, 2.0, 5.0), (0.0, 1.0, 0.0)],
-    lp: 5000.0,
-    drive_vn: 0.35,
+    n_lo: 2.7,
+    n_hi: 18.0,
     breath: 0.020,
     vib: (5.6, 0.004, 0.30),
     attack: 0.035,
     release: 0.10,
     scoop: 0.990,
+    scoop_k: RD_SCOOP_K,
     range: (58, 93),
-    amp: 0.40,
+    amp: 0.242,
+    rasp: (0.0, 0.0, 0.0),
     #[cfg(test)]
     name: "oboe",
 };
@@ -6831,15 +7231,17 @@ pub const ENGLISH_HORN: ReedPreset = ReedPreset {
     width: 0.15,
     width_hi: 0.15,
     formants: [(930.0, 2.6, 8.0), (1900.0, 2.2, 3.5), (0.0, 1.0, 0.0)],
-    lp: 4200.0,
-    drive_vn: 0.35,
+    n_lo: 3.2,
+    n_hi: 16.0,
     breath: 0.022,
     vib: (5.2, 0.004, 0.32),
     attack: 0.040,
     release: 0.10,
     scoop: 0.988,
+    scoop_k: RD_SCOOP_K,
     range: (52, 81),
-    amp: 0.40,
+    amp: 0.255,
+    rasp: (0.0, 0.0, 0.0),
     #[cfg(test)]
     name: "english_horn",
 };
@@ -6847,15 +7249,17 @@ pub const BASSOON: ReedPreset = ReedPreset {
     width: 0.16,
     width_hi: 0.16,
     formants: [(500.0, 2.0, 7.0), (1220.0, 2.2, 4.5), (0.0, 1.0, 0.0)],
-    lp: 3200.0,
-    drive_vn: 0.35,
+    n_lo: 3.4,
+    n_hi: 16.0,
     breath: 0.024,
     vib: (4.6, 0.0035, 0.35),
     attack: 0.080,
     release: 0.14,
     scoop: 0.985,
+    scoop_k: RD_SCOOP_K,
     range: (34, 72),
-    amp: 0.42,
+    amp: 0.28,
+    rasp: (0.0, 0.0, 0.0),
     #[cfg(test)]
     name: "bassoon",
 };
@@ -6863,32 +7267,65 @@ pub const CLARINET: ReedPreset = ReedPreset {
     width: 0.50,
     width_hi: 0.44,
     formants: [(1550.0, 1.8, 4.5), (3100.0, 2.2, 3.0), (0.0, 1.0, 0.0)],
-    lp: 4000.0,
-    drive_vn: 0.0,
+    n_lo: 3.0,
+    n_hi: 14.0,
     breath: 0.015,
     vib: (5.0, 0.0015, 0.40),
     attack: 0.045,
     release: 0.10,
     scoop: 0.988,
+    scoop_k: RD_SCOOP_K,
     range: (50, 94),
-    amp: 0.36,
+    amp: 0.348,
+    rasp: (0.0, 0.0, 0.0),
     #[cfg(test)]
     name: "clarinet",
+};
+
+/// Harmonica (GM 22, §2.11): a FREE reed, not a drawbar organ — the old
+/// organ() route gave it a static additive spectrum. Free-reed character:
+/// a wide (near-square) duty for the odd-harmonic bias, bright pressure
+/// tilt, prominent breath (air through the comb is half the instrument),
+/// cupped-hands/comb formants, a fast tongued attack and the idiomatic
+/// draw-bend scoop into the note. No rasp stage (that is a sax mechanism).
+pub const HARMONICA: ReedPreset = ReedPreset {
+    width: 0.46,
+    width_hi: 0.42,
+    formants: [(850.0, 1.6, 5.0), (2400.0, 1.8, 6.0), (4200.0, 2.0, 4.0)],
+    n_lo: 5.0,
+    n_hi: 26.0,
+    // far breathier than the saxes (0.03): close-miked against the player's
+    // hands the air through the comb is half the harmonica's identity — the
+    // free-reed test pins the air at ≥ 3.5% of the steady tone via a
+    // same-seed breathless differential
+    breath: 0.22,
+    vib: (4.6, 0.003, 0.30),
+    attack: 0.030,
+    release: 0.08,
+    scoop: 0.90,     // the idiomatic draw-bend: a DEEP flat start rising into the note
+    scoop_k: 0.0045, // τ ≈ 80 ms — a bend you can hear, not a sax articulation
+    range: (48, 84),
+    amp: 0.30,
+    rasp: (0.0, 0.0, 0.0),
+    #[cfg(test)]
+    name: "harmonica",
 };
 
 pub const BAGPIPE: ReedPreset = ReedPreset {
     width: 0.18,
     width_hi: 0.16,
     formants: [(780.0, 1.8, 7.0), (1550.0, 2.2, 5.5), (3000.0, 2.0, 3.0)],
-    lp: 4700.0,
-    drive_vn: 0.45,
+    n_lo: 4.0,
+    n_hi: 16.0,
     breath: 0.018,
     vib: (4.8, 0.0015, 0.38),
     attack: 0.028,
     release: 0.11,
     scoop: 0.992,
+    scoop_k: RD_SCOOP_K,
     range: (60, 84),
-    amp: 0.24,
+    amp: 0.154,
+    rasp: (0.0, 0.0, 0.0),
     #[cfg(test)]
     name: "bagpipe",
 };
@@ -6897,15 +7334,17 @@ pub const SHANAI: ReedPreset = ReedPreset {
     width: 0.12,
     width_hi: 0.105,
     formants: [(1200.0, 2.6, 8.0), (2550.0, 2.2, 6.0), (3800.0, 2.0, 3.0)],
-    lp: 5000.0,
-    drive_vn: 0.42,
+    n_lo: 4.0,
+    n_hi: 16.0,
     breath: 0.026,
     vib: (5.8, 0.0045, 0.24),
     attack: 0.030,
     release: 0.10,
     scoop: 0.988,
+    scoop_k: RD_SCOOP_K,
     range: (60, 91),
-    amp: 0.40,
+    amp: 0.214,
+    rasp: (0.0, 0.0, 0.0),
     #[cfg(test)]
     name: "shanai",
 };
@@ -6992,17 +7431,177 @@ pub(crate) fn bagpipe_drone(key: u8, vel: u8, sr: f32, seed: u32) -> BagpipeDron
     BagpipeDrone::new(key, vel, sr, seed)
 }
 
+/// RD10 (§2.8.4) — the sax rasp stage state. Runs the source chain (pulse →
+/// leaky integrator → bias-tanh → decimation cliff) at `m`× the output rate;
+/// the owning `Reed` constructs its `ReedPulse` at `osr` when this stage is
+/// live. Bypassed voices never build one (`rasp: None`), keeping their hot
+/// path identical to the filter-only voice.
+struct ReedRasp {
+    m: u32,   // oversampling factor (shipped: RD_RASP_OVER; A-MEAS runs 2/4/8)
+    osr: f32, // m · sr
+    #[cfg(test)]
+    w: f32, // post-jitter duty (kept for the A-MEAS test-seam rebuild)
+    int_a: f32, // leaky-integrator coefficient at osr (~18 Hz corner)
+    int_z: f32, // integrator state (the raw tent)
+    tg_k: f32, // tent normalisation: tent_g = f · tg_k lands the tent at ±1
+    tent_g: f32, // current tent gain (retuned at CTRL with the composed f)
+    bias: f32, // b = 2w−1 — the g→∞ limit duty equals w (see RD10 header)
+    g0: f32,  // drive at p = 0
+    g_span: f32, // drive slope: g = (g0 + g_span·p)·derate(f)
+    g: f32,   // current drive (CTRL-rate; p is already T-N1 smoothed)
+    dc_ref: f32, // closed-form mean of tanh(g(x+b)), x ~ U[−1,1]
+    norm: f32, // closed-form 0.5/rms — keeps the RD8 source-RMS anchor
+    noise_base: f32, // turbulence rms at tent scale (breath-scaled preset frac)
+    k_noise: f32, // per-CTRL gain: lowpassed white → rms noise_base·(1+span·growl)
+    nlp_a: f32, // turbulence lowpass coefficient (0.30·f0 at osr)
+    nlp_z: f32, // turbulence lowpass state
+    white: f32, // held white draw (one per OUTPUT sample, m-invariant voicing)
+    growl_tgt: f32, // authored growl (set_breath arg 2); 0 until authored
+    growl_sm: f32, // smoothed growl (shares the RD9 p_k time constant)
+    decim: [Biquad; 2], // m×→1× decimation cliff (BR1 idiom, at osr)
+    dcb: Biquad, // 20 Hz output highpass — the T-N2 DC guard (at sr)
+    #[cfg(test)]
+    derate_force: Option<f32>, // A-MEAS-ALIAS seam: pin the derate to measure raw g
+}
+
+impl ReedRasp {
+    fn new(m: u32, sr: f32, f: f32, width: f32, spec: (f32, f32, f32), noise_base: f32) -> Self {
+        let osr = sr * m as f32;
+        let int_a = 1.0 - (-2.0 * std::f32::consts::PI * RD_RASP_INT_HZ / osr).exp();
+        ReedRasp {
+            m,
+            osr,
+            #[cfg(test)]
+            w: width,
+            int_a,
+            int_z: 0.0,
+            // tent pp ≈ int_a·osr·w(1−w)/f (linear-segment integration of the
+            // duty-w two-level pulse), so f·tg_k normalises the tent to ±1
+            tg_k: 2.0 / (int_a * osr * width * (1.0 - width)),
+            tent_g: 0.0, // set by the first set_drive (t = 0 is a CTRL tick)
+            bias: 2.0 * width - 1.0,
+            g0: spec.0,
+            g_span: spec.1,
+            g: spec.0,
+            dc_ref: 0.0,
+            norm: 1.0,
+            noise_base,
+            k_noise: 0.0,
+            nlp_a: 0.0,
+            nlp_z: 0.0,
+            white: 0.0,
+            growl_tgt: 0.0,
+            growl_sm: 0.0,
+            decim: [
+                Biquad::lowpass(RD_RASP_DECIM_HZ, 0.8, osr),
+                Biquad::lowpass(RD_RASP_DECIM_HZ, 0.8, osr),
+            ],
+            dcb: Biquad::highpass(RD_RASP_HP_F0 * f, 0.7, sr),
+            #[cfg(test)]
+            derate_force: None,
+        }
+    }
+
+    /// CTRL-rate operating point: drive from pressure (with the measured
+    /// high-f0 derate), tent/turbulence retunes, and the closed-form
+    /// dc_ref/norm. Each tent segment is linear and spans [−1, +1], so the
+    /// tent's level distribution is uniform (exact for the ideal tent):
+    ///   dc_ref = ½∫tanh(g(x+b))dx = (lncosh(g(1+b)) − lncosh(g(1−b)))/(2g)
+    ///   E[y²]  = 1 − (tanh(g(1+b)) + tanh(g(1−b)))/(2g)
+    /// and norm = 0.5/√(E[y²] − dc_ref²) holds the source at the RD8 0.5-RMS
+    /// anchor across the whole drive range (level rides the amp envelope, not g).
+    fn set_drive(&mut self, p: f32, f: f32) {
+        #[allow(unused_mut)]
+        let mut der = 1.0 - (1.0 - RD_RASP_F0_FLOOR) * smoothstep(RD_RASP_F0_LO, RD_RASP_F0_HI, f);
+        #[cfg(test)]
+        if let Some(d) = self.derate_force {
+            der = d;
+        }
+        self.g = (self.g0 + self.g_span * p) * der;
+        self.tent_g = f * self.tg_k;
+        // sub-fundamental guard rides the composed f (legato/bend-safe)
+        self.dcb
+            .retune_highpass(RD_RASP_HP_F0 * f, 0.7, self.osr / self.m as f32);
+        // turbulence band: lowpass the held white at 0.30·f0, renormalised so
+        // its rms is noise_base·p²·(1+growl span) at tent scale regardless of
+        // f/m — turbulence intensity tracks the flow (p²), which is half of
+        // the G3 ff/p pressure-tracking (the other half is the drive window)
+        self.nlp_a = 1.0 - (-2.0 * std::f32::consts::PI * (RD_RASP_NLP_F0 * f) / self.osr).exp();
+        let n_eff = self.noise_base * p * p * (1.0 + RD_RASP_GROWL_SPAN * self.growl_sm);
+        let a = self.nlp_a as f64;
+        // one-pole on white: var_out = a/(2−a)·var_in; uniform ±1 has var 1/3
+        let lp_rms = (a / (2.0 - a) / 3.0).sqrt().max(1e-9);
+        self.k_noise = (n_eff as f64 / lp_rms) as f32;
+        let (g, b) = (self.g as f64, self.bias as f64);
+        let dc = (lncosh(g * (1.0 + b)) - lncosh(g * (1.0 - b))) / (2.0 * g);
+        let e2 = 1.0 - ((g * (1.0 + b)).tanh() + (g * (1.0 - b)).tanh()) / (2.0 * g);
+        self.dc_ref = dc as f32;
+        self.norm = 0.5 / ((e2 - dc * dc).max(1e-12).sqrt() as f32);
+    }
+
+    /// One osr sub-step: integrate the pulse to the tent, inject the
+    /// turbulence INTO the shaper input (that is where breath physically
+    /// enters — the saturating transfer intermodulates it into skirts), shape,
+    /// re-anchor, and run the decimation cliff. Caller keeps the last
+    /// (aligned) sample of each m-group.
+    #[inline]
+    fn step(&mut self, pulse: f32) -> f32 {
+        self.int_z += self.int_a * (pulse - self.int_z);
+        let tent = self.int_z * self.tent_g;
+        self.nlp_z += self.nlp_a * (self.white - self.nlp_z);
+        let x = tent + self.nlp_z * self.k_noise + self.bias;
+        let mut v = ((self.g * x).tanh() - self.dc_ref) * self.norm;
+        for d in self.decim.iter_mut() {
+            v = d.process(v);
+        }
+        v
+    }
+}
+
+#[cfg(test)]
+impl Reed {
+    /// A-MEAS-ALIAS seam (§3.1): rebuild the rasp stage at oversampling
+    /// factor `m` (fresh state, identical voicing), optionally pinning the
+    /// high-f0 drive derate — so the same worst case runs at 2×/4×/8×,
+    /// underated and derated, against the 8× reference.
+    fn rasp_reover(&mut self, m: u32, derate_force: Option<f32>) {
+        let r = self
+            .rasp
+            .as_ref()
+            .expect("rasp_reover on a filter-only reed");
+        let mut nr = ReedRasp::new(
+            m,
+            self.sr,
+            self.base_f,
+            r.w,
+            (r.g0, r.g_span, 0.0),
+            r.noise_base,
+        );
+        nr.derate_force = derate_force;
+        nr.growl_tgt = r.growl_tgt;
+        self.rasp = Some(nr);
+        self.osc.set_freq(self.base_f, self.sr * m as f32);
+    }
+}
+
 pub struct Reed {
     osc: ReedPulse,
     osc_norm: f32, // RD8 equal-RMS-across-widths source gain
-    drive: f32,    // RD4 precomputed shaper index d = 1 + drive_vn·vn; 0.0 = bypass
-    dcb: Biquad,   // RD4 DC guard: tanh of the ASYMMETRIC (not just zero-mean) pulse biases
     formants: [Biquad; 3],
-    lp: OnePole,
-    lp_base: f32, // RD3 brightness ceiling
+    // RD2 slot designs (jittered Hz, Q, TABLE gain dB): the honk retunes the
+    // live biquads from these at CTRL rate, scaling gain dB by (α + β·p).
+    fdesign: [(f32, f32, f32); 3],
+    tilt: Biquad,           // RD3 pressure tilt — low-Q 12 dB/oct lowpass at f0·N(p)
+    rasp: Option<ReedRasp>, // RD10 §2.8.4 sax rasp stage (None = filter-only bypass)
+    n_lo: f32,
+    n_hi: f32,
+    p_auth: f32, // RD9 authored CC2/CC11 delta (0 until set_breath; ≤ 0)
+    p_sm: f32,   // RD9 smoothed pressure (T-N1 zipper guard)
+    p_k: f32,    // RD9 one-pole coefficient at CTRL rate
     base_f: f32,
     bend: f32,
     scoop: f32,
+    scoop_k: f32, // RD6 per-CTRL-tick scoop settle (preset)
     breath_filt: Biquad,
     breath: f32, // RD5 register-scaled sustain breath level
     chiff_amp: f32,
@@ -7035,47 +7634,72 @@ impl Reed {
         let width = w0 * (1.0 + 0.02 * rng.white());
         // RD8 equal-RMS source normalisation (raw pulse RMS = √(w(1−w)))
         let osc_norm = 0.5 / (width * (1.0 - width)).sqrt();
-        // RD4 grit: the shaper index is constant per note; 0.0 = explicit bypass
-        let drive = if preset.drive_vn > 0.0 {
-            1.0 + preset.drive_vn * vn
-        } else {
-            0.0
-        };
-        // RD2 fixed formant bank (±2% freq jitter). A 0 dB slot is a pass-through,
-        // but must NOT be built at f = 0 (as the §5 table marks inert slots): a
-        // 0 Hz peak lands a DOUBLE POLE on z = 1 (DC) — a marginally-stable
+        // RD9 pressure at spawn: vel_floor only (env starts at 0; authored
+        // CC2/CC11 arrives via set_breath before the first render on
+        // authored channels, and the ~15 ms smoother absorbs the step).
+        let p0 = RD_P_VEL.0 + RD_P_VEL.1 * vn.powf(RD_P_VEL_EXP);
+        // RD2 fixed formant bank (±2% freq jitter), gains scaled by the honk
+        // law at the spawn pressure. A 0 dB slot is a pass-through, but must
+        // NOT be built at f = 0 (as the §5 table marks inert slots): a 0 Hz
+        // peak lands a DOUBLE POLE on z = 1 (DC) — a marginally-stable
         // integrator that accumulates float rounding into a slow DC drift. A
         // benign mid-band frequency keeps the (still-identity) filter's poles
         // inside the unit circle so rounding decays instead of accumulating.
-        let formants = preset.formants.map(|(ff, q, g)| {
+        let fdesign = preset.formants.map(|(ff, q, g)| {
             let j = 1.0 + 0.02 * rng.white(); // one jitter draw per slot (stable RNG stream)
+            ((ff * j).min(sr * 0.4), q, g)
+        });
+        let gmul0 = RD_FORM_ALPHA + RD_FORM_BETA * p0;
+        let formants = fdesign.map(|(ff, q, g)| {
             if g == 0.0 {
                 Biquad::peak(sr * 0.25, 1.0, 0.0, sr)
             } else {
-                Biquad::peak((ff * j).min(sr * 0.4), q, g, sr)
+                Biquad::peak(ff, q, g * gmul0, sr)
             }
         });
-        let lp_base = preset.lp;
-        let lp = OnePole::lowpass(
-            (lp_base * (0.35 + 0.75 * vn) * 0.55).clamp(500.0, sr * 0.4),
-            sr,
-        );
+        // RD3 tilt at the spawn pressure, in harmonic-count coordinates
+        let cut0 = (f * preset.n_lo * (preset.n_hi / preset.n_lo).powf(p0))
+            .clamp(RD_TILT_FLOOR_HZ, sr * 0.4);
+        let tilt = Biquad::lowpass(cut0, RD_TILT_Q, sr);
         // RD5 breath: register-scaled (low notes breathier — the sax subtone),
         // through a bandpass at the upper reed-hiss band (Wind idiom, tamer Q)
         let breath = preset.breath * (1.3 - 0.6 * reg);
         let breath_filt = Biquad::bandpass((2.5 * f).min(5000.0).min(sr * 0.4), 1.2, sr);
         let vibr = preset.vib;
+        // RD10: the sax rasp stage — built only where the preset asks for it,
+        // so filter-only reeds keep a rasp-free hot path AND an unchanged rng
+        // draw order. The turbulence rms scales with the REGISTER-scaled
+        // breath (low notes growl more, and the RD-O8a breath=0 seam kills it
+        // for the clean-lattice oracles).
+        let rasp = if preset.rasp.1 > 0.0 {
+            Some(ReedRasp::new(
+                RD_RASP_OVER,
+                sr,
+                f,
+                width,
+                preset.rasp,
+                preset.rasp.2 * breath / RD_RASP_BREATH_REF,
+            ))
+        } else {
+            None
+        };
+        let osc_sr = rasp.as_ref().map_or(sr, |r| r.osr);
         Reed {
-            osc: ReedPulse::new(f, sr, rng.white() * 0.5 + 0.5, width),
+            osc: ReedPulse::new(f, osc_sr, rng.white() * 0.5 + 0.5, width),
             osc_norm,
-            drive,
-            dcb: Biquad::highpass(20.0, 0.7, sr),
             formants,
-            lp,
-            lp_base,
+            fdesign,
+            tilt,
+            rasp,
+            n_lo: preset.n_lo,
+            n_hi: preset.n_hi,
+            p_auth: 0.0,
+            p_sm: p0,
+            p_k: 1.0 - (-(CTRL as f32) / (RD_P_SMOOTH_S * sr)).exp(),
             base_f: f,
             bend: 1.0,
             scoop: preset.scoop,
+            scoop_k: preset.scoop_k,
             breath_filt,
             breath,
             chiff_amp: RD_CHIFF_AMP * vn * vel_amp(vel),
@@ -7107,7 +7731,7 @@ impl Voice for Reed {
             if self.t.is_multiple_of(CTRL) {
                 // RD6 scoop settle + RD7 vibrato, composed into the retune so the
                 // engine's per-block bend/CC1 writers cannot snap them back
-                self.scoop += RD_SCOOP_K * (1.0 - self.scoop);
+                self.scoop += self.scoop_k * (1.0 - self.scoop);
                 let v = self.vib.next();
                 self.vib_val = v;
                 let vib = if self.t > self.vib_delay {
@@ -7117,28 +7741,57 @@ impl Voice for Reed {
                     0.0
                 };
                 let f = self.base_f * self.bend * self.scoop * (1.0 + vib);
-                self.osc.set_freq(f, self.sr);
-                // RD3 brightness: register/velocity/envelope open the lowpass
-                let cut = (self.lp_base * (0.35 + 0.75 * self.vn) * (0.55 + 0.45 * self.last_env))
-                    .clamp(500.0, self.sr * 0.4);
-                self.lp.set_cutoff(cut, self.sr);
+                // RD10: a live rasp stage runs the source at m× the output
+                // rate, so the pulse retunes against osr, not sr
+                let osc_sr = self.rasp.as_ref().map_or(self.sr, |r| r.osr);
+                self.osc.set_freq(f, osc_sr);
+                // RD9 blowing pressure: vel floor + env "speaking" term +
+                // authored CC2/CC11 delta, smoothed ~15 ms (T-N1)
+                let target = (RD_P_VEL.0
+                    + RD_P_VEL.1 * self.vn.powf(RD_P_VEL_EXP)
+                    + RD_P_ENV * self.last_env
+                    + self.p_auth)
+                    .clamp(0.0, 1.0);
+                self.p_sm += self.p_k * (target - self.p_sm);
+                let p = self.p_sm;
+                // RD3 tilt: "speak N(p) harmonics" means the same thing at
+                // every key — harmonic-count, not absolute Hz (§2.8.2)
+                let cut = (f * self.n_lo * (self.n_hi / self.n_lo).powf(p))
+                    .clamp(RD_TILT_FLOOR_HZ, self.sr * 0.4);
+                self.tilt.retune_lowpass(cut, RD_TILT_Q, self.sr);
+                // RD2 honk: pressure drives the slot GAINS only — the centres
+                // and Qs never move, so nothing can read as a filter sweep
+                let gmul = RD_FORM_ALPHA + RD_FORM_BETA * p;
+                for (b, &(ff, q, g)) in self.formants.iter_mut().zip(&self.fdesign) {
+                    if g != 0.0 {
+                        b.retune_peak(ff, q, g * gmul, self.sr);
+                    }
+                }
+                // RD10: drive from pressure (§2.8.4 "g = g0 + g_press·p"),
+                // growl smoothed on the same T-N1 time constant as p
+                if let Some(r) = &mut self.rasp {
+                    r.growl_sm += self.p_k * (r.growl_tgt - r.growl_sm);
+                    r.set_drive(p, f);
+                }
             }
-            // RD1 band-limited pulse × RD8 equal-RMS gain
-            let mut s = self.osc.next() * self.osc_norm;
-            // RD4 sax grit — before the formants voice it, before the LP trims it.
-            // The DC guard is load-bearing: tanh of the pulse's ASYMMETRIC two
-            // levels (w−1 and +w) biases even though the input is zero-mean, so a
-            // 20 Hz highpass removes it (the Brass BR11 precedent, voices.rs:2380).
-            if self.drive > 0.0 {
-                s = (s * self.drive).tanh() / self.drive;
-                s = self.dcb.process(s);
-            }
-            // RD2 fixed formant bank
+            // RD1 band-limited pulse; RD10 shapes it (its closed-form norm
+            // holds the RD8 0.5-RMS anchor), the bypass applies RD8 directly
+            let mut s = if let Some(r) = &mut self.rasp {
+                r.white = self.rng.white();
+                let mut y = 0.0;
+                for _ in 0..r.m {
+                    y = r.step(self.osc.next());
+                }
+                r.dcb.process(y)
+            } else {
+                self.osc.next() * self.osc_norm
+            };
+            // RD2 fixed formant bank (pressure-gained above)
             for b in &mut self.formants {
                 s = b.process(s);
             }
-            // RD3 brightness lowpass
-            s = self.lp.process(s);
+            // RD3 pressure-tilt lowpass (12 dB/oct, no resonance)
+            s = self.tilt.process(s);
             let e = self.env.next();
             self.last_env = e;
             // RD5 breath (rides the vibrato) — a quiet, envelope-scaled sustain
@@ -7170,6 +7823,22 @@ impl Voice for Reed {
         self.bend = mult;
     }
 
+    fn set_breath(&mut self, pressure: f32, growl: f32) {
+        // RD9 authored seam (§2.8.3 item 4, the Brass BR9 mirror): the engine
+        // feeds √(expr·breath) — CC11 × CC2, neutral 1.0 — ONLY on channels
+        // that have authored one of them, so an unauthored channel renders
+        // controller-identically to before. Authored breath carves DOWNWARD
+        // from the velocity anchor (CC2/CC11 at max = the vel-set voicing,
+        // GM expression semantics); the ~15 ms smoother de-zippers the steps.
+        // `growl` (aftertouch) scales the RD10 turbulence fraction — the
+        // §2.8.4 growl seam. Inert until authored, and a no-op on the
+        // filter-only reeds (no rasp stage to feed).
+        self.p_auth = RD_P_AUTH_SPAN * (pressure.clamp(0.0, 1.0) - 1.0);
+        if let Some(r) = &mut self.rasp {
+            r.growl_tgt = growl.clamp(0.0, 1.0);
+        }
+    }
+
     fn legato_to(&mut self, key: u8, _vel: u8) -> bool {
         // RD6 slur: glide from the old pitch via the scoop, keep the air moving,
         // and kill the tongue chiff — one breath across several fingered notes
@@ -7188,6 +7857,7 @@ impl Voice for Reed {
 
 fn reed(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Reed {
     let preset: &'static ReedPreset = match program {
+        22 => &HARMONICA,
         64 => &SOP_SAX,
         65 => &ALTO_SAX,
         66 => &TENOR_SAX,
@@ -7210,11 +7880,14 @@ fn reed(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Reed {
         // clarinet voice built through it, and their RNG draw order — is
         // untouched (the bagpipe audition fix must not move the saxes).
         v.amp = preset.amp;
-        // Fixed reed brightness, and the RD4 shaper index pinned to the same
-        // fixed pressure (a velocity-dependent tanh drive is a loudness/
-        // timbre dynamic too): bag pressure, not breath.
+        // Fixed reed brightness: pin the pressure input to a constant bag
+        // pressure (not breath). The §2.8.3 reed model has no RD4 tanh drive
+        // any more — brightness is the pressure-swept tilt + formant honk, both
+        // driven by `p` — so a fixed `vn` plus the flat sustain-1.0 envelope
+        // below give a constant `p` and hence a constant, velocity-independent
+        // timbre. (The old `v.drive = 1 + drive_vn·0.82` line retired with the
+        // tanh; BP-O1 still guards the constant-amplitude chanter.)
         v.vn = 0.82;
-        v.drive = 1.0 + preset.drive_vn * 0.82;
         v.env = Adsr::new(0.010, 0.0, 1.0, preset.release, sr);
         v.chiff_amp = 0.0;
         v.scoop = 1.0;
@@ -7581,9 +8254,15 @@ pub const BR_HORN: BrassSpec = BrassSpec {
 pub const BR_SECTION: BrassSpec = BrassSpec {
     #[cfg(test)]
     name: "brass_section",
-    players: 3,
+    // 5 players (§2.7, as BR_SYN1): with the wrong solo-trumpet sample layer
+    // dropped, the section MODEL carries the width — real onset scatter and
+    // per-player detune/drift, not a sample crutch. Scatter widened with the
+    // head count (0.028 -> 0.06: a real section spreads its entrances tens
+    // of ms) so the spread front edge holds by construction, not by a lucky
+    // beat realization (BR-O7 pins section rise ≥ solo + 15 ms).
+    players: 5,
     detune_cents: 16.0,
-    onset_scatter_s: 0.028,
+    onset_scatter_s: 0.06,
     scoop0: 0.978,
     scoop_k: 0.010, // ±15% per player
     h_min: 2.4,
@@ -7714,11 +8393,18 @@ impl Brass {
                     0.0
                 };
                 let detune = 2f32.powf(spec.detune_cents * 0.5 * spread / 1200.0);
-                // player 0 pinned to 0 so the section has a defined front edge
+                // player 0 pinned to 0 so the section has a defined front
+                // edge; the rest draw STRATIFIED onsets — player i lands in
+                // its own slice of the scatter window — so no seed can bunch
+                // the whole section into one instant (the spread front edge
+                // is the section's signature, BR-O7)
                 let onset = if i == 0 || spec.onset_scatter_s <= 0.0 {
                     0
                 } else {
-                    (rng.white().abs() * spec.onset_scatter_s * sr) as u32
+                    let lo = (i - 1) as f32 / (n - 1) as f32;
+                    let hi = i as f32 / (n - 1) as f32;
+                    let u = lo + (hi - lo) * rng.white().abs();
+                    (u * spec.onset_scatter_s * sr) as u32
                 };
                 let scoop_k = if n > 1 {
                     spec.scoop_k * (1.0 + 0.15 * rng.white())
@@ -8766,7 +9452,9 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         }
         4 => Box::new(electric_piano_1(key, vel, sr, seed)),
         5 => Box::new(electric_piano_2(key, vel, sr, seed)),
-        6 => Box::new(harpsichord(key, vel, sr, seed)),
+        // §2.10: the harpsichord is PLUCKED (jack plectrum), not an additive
+        // sine stack — Pluck gives the physical decay and quill twang.
+        6 => Box::new(Pluck::new(&HARPSICHORD, key, vel, sr, seed)),
         7 => Box::new(Pluck::new(&CLAVINET, key, vel, sr, seed)),
         8 => Box::new(bell(
             key,
@@ -8839,8 +9527,11 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             0.50,
         )),
         15 => Box::new(Pluck::new(&DULCIMER, key, vel, sr, seed)),
-        16..=18 | 20..=23 => Box::new(organ(program, key, vel, sr, seed)),
+        16..=18 | 20 | 21 | 23 => Box::new(organ(program, key, vel, sr, seed)),
         19 => Box::new(CathedralOrgan::new(key, vel, sr, seed)),
+        // §2.11: the harmonica is a FREE reed, not a drawbar organ — it now
+        // rides the Reed family with a dedicated free-reed preset.
+        22 => Box::new(reed(program, key, vel, sr, seed)),
         24 => {
             let model = Box::new(Pluck::new(&NYLON, key, vel, sr, seed));
             if samples {
@@ -8935,12 +9626,12 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         50 | 51 => Box::new(synth_strings(program, key, vel, sr, seed)),
         52..=54 => Box::new(choir(program, key, vel, sr, seed)),
         55 => Box::new(orch_hit(key, vel, sr, seed)),
-        56..=61 => {
+        56..=60 => {
             let model = Box::new(brass(program, key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_BRASS;
-                let gain = if program == 61 {
-                    gain * LA_BRASS_SECTION_GAIN
+                let gain = if program == 58 {
+                    gain * LA_TUBA_GAIN_MUL
                 } else {
                     gain
                 };
@@ -8957,7 +9648,11 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        62 | 63 => Box::new(brass(program, key, vel, sr, seed)), // synth brass: pure model
+        // 61 brass section: pure model (§2.7) — no CC0 section sample exists
+        // and the old fallback layered a SOLO trumpet attack over the section
+        // (the wrong instrument); BR_SECTION's five scattered players carry
+        // the width instead. 62/63 synth brass: pure model by design.
+        61..=63 => Box::new(brass(program, key, vel, sr, seed)),
         // saxes, bagpipe, shanai: pure model (no clean CC0 source / idiomatic onset)
         64..=67 | 109 | 111 => Box::new(reed(program, key, vel, sr, seed)),
         68..=71 => {
@@ -9596,6 +10291,7 @@ mod tests {
             ("DRIVE", &DRIVE),
             ("DRIVE_LEAD", &DRIVE_LEAD),
             ("MUTED", &MUTED),
+            ("HARPSICHORD", &HARPSICHORD),
             ("CLAVINET", &CLAVINET),
             ("BASS", &BASS),
             ("FRETLESS", &FRETLESS),
@@ -10499,7 +11195,10 @@ mod tests {
 
         for program in 20..=23 {
             let mut v = make(program, key, vel, sr, seed, false);
-            assert_eq!(v.kind(), "organ", "GM{program} must route through make()");
+            // §2.11: the harmonica (22) is a Reed free-reed voice now; the
+            // reed organ (20) and the accordions (21/23) stay on organ().
+            let want = if program == 22 { "reed" } else { "organ" };
+            assert_eq!(v.kind(), want, "GM{program} must route through make()");
             let mut buf = vec![0f32; (0.25 * sr) as usize];
             assert!(v.render(&mut buf), "GM{program} should sustain");
             assert!(
@@ -10575,13 +11274,23 @@ mod tests {
         };
         let gm19_click = click_ratio(19);
         assert!(gm19_click > 0.030, "GM19 click floor: {gm19_click:.4}");
-        for program in 20..=23 {
+        for program in [20u8, 21, 23] {
             let r = click_ratio(program);
             assert!(
                 r <= gm19_click * 0.35,
                 "GM{program} onset too clicky: {r:.4} vs GM19 {gm19_click:.4}"
             );
         }
+        // §2.11: the harmonica is TONGUED — its onset spit is reed-family
+        // behavior (only the bellows instruments above must stay soft), so
+        // it is bounded against the clickiest cane reed (the oboe's chiff),
+        // not against the Hammond key click.
+        let r22 = click_ratio(22);
+        let r_oboe = click_ratio(68);
+        assert!(
+            r22 > gm19_click * 0.35 && r22 <= 1.6 * r_oboe,
+            "GM22 tongue spit out of the reed envelope: {r22:.4} vs oboe {r_oboe:.4}"
+        );
 
         let mut gm19_voice = legacy_church_organ(key, vel, sr, seed);
         let mut gm19 = vec![0.0; (0.9 * sr) as usize];
@@ -10640,13 +11349,35 @@ mod tests {
             (late_pitch / f0 - 1.0).abs() <= 0.02,
             "GM22 late pitch {late_pitch:.1} Hz vs {f0:.1}"
         );
-        let gm22_res = off_harmonic_residual(segment(&gm22, sr, 0.26, 0.60), sr, f0);
+        // §2.11: the old "residual ≥ 1.3× GM20" clause was calibrated for two
+        // ADDITIVE organs; the Reed's off-harmonic floor is dominated by its
+        // own pulse, so it cannot read the air. Pin the breath directly: a
+        // same-seed breathless twin (breath is a pure output level — the
+        // twin's rng draw order is identical) must audibly lose the breath
+        // band, isolating exactly the air the free-reed identity needs.
+        let render_reed = |preset: &ReedPreset| {
+            let mut v = Reed::from_preset(preset, key, vel, sr, seed);
+            let mut buf = vec![0f32; (0.7 * sr) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        let with_air = render_reed(&HARMONICA);
+        let airless = render_reed(&ReedPreset {
+            breath: 0.0,
+            ..HARMONICA
+        });
+        let air: Vec<f32> = with_air.iter().zip(&airless).map(|(a, b)| a - b).collect();
+        let steady = |s: &[f32]| rms(segment(s, sr, 0.26, 0.60));
+        let air_frac = steady(&air) / steady(&with_air).max(1e-9);
         assert!(
-            gm22_res >= 1.3 * gm20_res,
-            "GM22 breath residual {gm22_res:.4} vs GM20 {gm20_res:.4}"
+            air_frac >= 0.035,
+            "GM22 breath inaudible: air is only {air_frac:.4} of the steady tone"
         );
 
-        let mut harmonica = organ(22, key, vel, sr, seed);
+        // §2.11: GM 22 rides the Reed voice now — repeated set_pitch must
+        // compose with (not reset) the draw-bend scoop, exactly as the old
+        // organ-scoop clause demanded.
+        let mut harmonica = make(22, key, vel, sr, seed, false);
         let mut warm = vec![0f32; (0.16 * sr) as usize];
         harmonica.render(&mut warm);
         let bend = 2f32.powf(2.0 / 12.0);
@@ -12676,11 +13407,17 @@ mod tests {
     }
 
     /// The nominal natural-vibrato rates are control-rate values, not full-rate
-    /// oscillators sampled once every CTRL frames.
+    /// oscillators sampled once every CTRL frames — measured on the voice that
+    /// SHIPS for each program. The previous version constructed `Bowed`
+    /// directly for every program and stayed green while `make()`'s actual
+    /// 42/43 route — `BowedString` — ran its vibrato 16× slow
+    /// (MM-BUG-KILN-00004, HLD §2.3): the classic wrong-struct oracle.
     #[test]
     fn default_bowed_natural_vibrato_runs_at_named_rate() {
         let sr = 44100.0;
-        for (program, nominal) in [(40u8, 5.3f32), (41, 5.1), (42, 4.8), (43, 4.2), (110, 5.6)] {
+        // 40/41/110 ship as `Bowed` (make() routing): observe its control-rate
+        // LFO field directly, as before.
+        for (program, nominal) in [(40u8, 5.3f32), (41, 5.1), (110, 5.6)] {
             let mut v = Bowed::new(program, 69, 100, sr, 17);
             let mut values = Vec::new();
             let mut block = [0.0; CTRL as usize];
@@ -12698,6 +13435,29 @@ mod tests {
             assert!(
                 (crossings - nominal).abs() / nominal <= 0.15,
                 "GM{program} vibrato {crossings:.2} Hz, expected near {nominal:.2} Hz"
+            );
+        }
+        // 42/43 ship as `BowedString`: measure the RENDERED AUDIO's frequency
+        // modulation through make() — an internal LFO field cannot vouch for
+        // the CTRL-gated tick actually delivering the rate to the string.
+        // Keys sit outside the waveguide's 46–50 wolf band (see
+        // o_pitch_cases), and the 43 leg uses key 38 (D2): a probe across
+        // seeds showed the bass regime at keys 43–45 drowns the FM track for
+        // some bow-force draws (same instability family as the wolf band —
+        // scratchpad 2026.07.14), while key 38 detects cleanly on every seed.
+        for (program, key, nominal) in [(42u8, 52u8, 4.8f32), (43, 38, 4.2)] {
+            let sig = render_program_sampled(program, key, 100, 7.0, 11, false);
+            let seg = segment(&sig, sr, 1.0, 6.95);
+            let (peak, rate) = crate::testutil::fm_mod_rate(seg, sr, key_freq(key), 2.5, 7.5);
+            println!("GM{program} vibrato: autocorr {peak:.3}, rate {rate:.2} Hz");
+            assert!(
+                peak >= 0.35,
+                "GM{program}: no periodic vibrato in the shipped render \
+                 (autocorr peak {peak:.3} at {rate:.2} Hz)"
+            );
+            assert!(
+                (rate - nominal).abs() / nominal <= 0.20,
+                "GM{program} vibrato {rate:.2} Hz, expected near {nominal:.2} Hz"
             );
         }
     }
@@ -13922,19 +14682,38 @@ mod tests {
         );
     }
 
-    /// BR-O7 (section scatter + determinism): the section (61) rises slower than
-    /// the solo (56) — its per-player onset scatter spreads the front edge — and
-    /// the same seed renders bit-identically twice.
+    /// BR-O7 (section scatter + determinism): the section (61) spreads its
+    /// front edge — a solo tongued attack FRONT-LOADS its onset energy while
+    /// the section's five stratified entrances back-load it — and the same
+    /// seed renders bit-identically twice.
+    ///
+    /// Metric provenance: the old `rise_10_90`-to-global-peak leg was
+    /// beat-fragile — with detuned players the global envelope peak lands
+    /// wherever the players' random phases happen to align, so the measured
+    /// "rise" tracked that realization, not the front edge (the 3-player
+    /// section passed it by luck; the 5-player §2.7 section exposed it).
+    /// The energy fraction E(0-30 ms)/E(0-150 ms) integrates over the beat
+    /// pattern: measured solo 0.075 vs section 0.007-0.033 across seeds
+    /// (stratified scatter), pinned at section ≤ 0.6× solo.
     #[test]
     fn brass_o7_section_scatter_and_determinism() {
         let sr = 44100.0;
         let sec = render_brass(61, 60, 100, 1.0, 7);
         let solo = render_brass(56, 60, 100, 1.0, 7);
+        let front_frac = |seg: &[f32]| {
+            let e = |a: f32, z: f32| {
+                seg[(a * sr) as usize..(z * sr) as usize]
+                    .iter()
+                    .map(|&x| (x * x) as f64)
+                    .sum::<f64>()
+            };
+            e(0.0, 0.03) / e(0.0, 0.15).max(1e-30)
+        };
+        let (f_sec, f_solo) = (front_frac(&sec), front_frac(&solo));
         assert!(
-            rise_10_90(&sec, sr) >= rise_10_90(&solo, sr) + 0.015,
-            "section rise {:.4}s not ≥ solo {:.4}s + 15 ms",
-            rise_10_90(&sec, sr),
-            rise_10_90(&solo, sr)
+            f_sec <= 0.6 * f_solo,
+            "section onset not spread: front-energy fraction {f_sec:.4} \
+             vs solo {f_solo:.4} (must be ≤ 0.6x)"
         );
         // determinism: same seed twice bit-identical
         let a = render_brass(61, 60, 100, 0.5, 7);
@@ -14820,17 +15599,32 @@ mod tests {
         );
     }
 
-    /// RD-O12 (RD4 alias bound, corrected — master HLD §6 wins over §8): the
-    /// un-oversampled tanh's fold-back must stay ≥ 34 dB down on the WORST case —
-    /// the soprano sax (prog 64, the highest LP ceiling ⇒ the least post-shaper
-    /// alias suppression) played HIGH. Method is RD-O0's separable-bin trick: at
-    /// f = sr/35.5 the m-odd tanh fold-back lands exactly on half-integer bins,
-    /// where no real harmonic sits; measured pre-vibrato so the pitch is steady.
+    /// RD-O12 / O-ALIAS shipping regression pin (HLD 2026.07.14 §3.1): total
+    /// fold-back ≥ 34 dB down on the WORST case — the soprano sax played
+    /// HIGH at full velocity, now WITH the §2.8.4 rasp shaper active at its
+    /// shipped config (RD_RASP_OVER×, the RD_RASP_F0_* derate at this f0):
+    /// vel 127 ⇒ p ≈ 1 ⇒ g_max, minimum post-jitter duty (widest ladder),
+    /// breath = 0 so turbulence can neither mask nor fake aliases (§3.1).
+    /// Method is RD-O0's separable-bin trick: at f = sr/35.5 any fold around
+    /// an ODD multiple of sr (the decimation-leak images) lands exactly on
+    /// half-integer bins, where no real harmonic sits; measured pre-vibrato
+    /// so the pitch is steady. At 2× the shaper-born folds (around 2·sr)
+    /// land ON-lattice at this f0 (35.5·2 is an integer) — those are pinned
+    /// by `reed_o12b_top_octave_absolute_floor`, whose bin-sum method and
+    /// non-commensurate f0 see them; the two tests together cover both fold
+    /// mechanisms. A-MEAS-ALIAS (`a_meas_alias_rasp_oversampling`) is the
+    /// re-runnable dev harness that chose the shipped factor + derate.
     #[test]
     fn reed_o12_alias_floor() {
         let sr = 44100.0;
         let f0 = sr / 35.5; // ≈ 1242 Hz — high in the soprano's 56–88 range
-        let mut v = Reed::from_preset(&SOP_SAX, 87, 127, sr, 7);
+        let preset = ReedPreset {
+            breath: 0.0,
+            width: SOP_SAX.width_hi * 0.98, // preset-table duty floor: range-top
+            width_hi: SOP_SAX.width_hi * 0.98, // width at the −2 % jitter edge
+            ..SOP_SAX.clone()
+        };
+        let mut v = Reed::from_preset(&preset, 87, 127, sr, 7);
         v.base_f = f0; // exact tuning for the separable-bin fold-back method
         let mut b = vec![0f32; (0.22 * sr) as usize];
         v.render(&mut b);
@@ -14894,9 +15688,11 @@ mod tests {
         // a period-aligned mean over the fundamental (integer periods cancel the
         // tone + its partial-cycle residue exactly, leaving only 0 Hz — the Brass
         // BR-O13 discipline), with vibrato zeroed so a wobble through the fixed
-        // formants can't AM the level. This guards two DC sources: the RD4 tanh's
-        // asymmetric-pulse bias (the 20 Hz `dcb` catches it) and a marginally-
-        // stable inert formant slot (built off DC so it cannot integrate).
+        // formants can't AM the level. With the RD4 tanh (and its 20 Hz `dcb`
+        // guard) deleted the §2.8.3 chain is linear on the zero-DC ReedPulse,
+        // so the remaining guarded source is a marginally-stable inert formant
+        // slot (built off DC so it cannot integrate) — and this pin is what
+        // proves the deletion left nothing biasing.
         for prog in (64u8..=71).chain([109, 111]) {
             let b = render_reed(prog, 60, 100, 1.0, 7);
             assert!(
@@ -14926,8 +15722,8 @@ mod tests {
         // preset table sanity (also keeps the #[cfg(test)] name field live)
         for p in REED_PRESETS {
             println!(
-                "{:>13}: w {:.2}->{:.2} lp {:.0} drive {:.2} amp {:.2} range {:?}",
-                p.name, p.width, p.width_hi, p.lp, p.drive_vn, p.amp, p.range
+                "{:>13}: w {:.2}->{:.2} N {:.0}->{:.0} amp {:.2} range {:?}",
+                p.name, p.width, p.width_hi, p.n_lo, p.n_hi, p.amp, p.range
             );
         }
         // True-DC diagnostic: period-aligned |mean|/rms (vib zeroed) per program
@@ -15080,8 +15876,8 @@ mod tests {
             "RD-O8b super-linear vel120/vel30 = {:.1}×",
             chiff_diff(120, 0.0, 0.02) / chiff_diff(30, 0.0, 0.02).max(1e-12)
         );
-        // RD-O12 corrected: soprano (prog 64, highest lp) played HIGH at exactly
-        // f = sr/35.5 so the m-odd tanh fold-back lands on half-integer bins (no
+        // RD-O12: soprano (prog 64) played HIGH at full velocity at exactly
+        // f = sr/35.5 so any fold-back lands on half-integer bins (no
         // real harmonic there). Measure pre-vibrato (< vib_delay) so the pitch is
         // steady. Fold-back RMS on those guard bins / the fundamental.
         let f0 = sr / 35.5;
@@ -15105,6 +15901,839 @@ mod tests {
         println!(
             "RD-O12 soprano f0={f0:.1}: half-int fold-back worst {worst:.4}, rms {rms_half:.4}"
         );
+    }
+
+    // =======================================================================
+    // O-PRESSURE (HLD 2026.07.14 §2.8.2 / §3.1) — brightness rises with
+    // blowing pressure; timbre class is preserved. Reed legs P1–P6 only (the
+    // flue legs belong to the §2.8.5 slice). All legs render model-only
+    // through the preset seam with vibrato zeroed (fixed pitch → clean
+    // Goertzel lattice) and, where a clean lattice is load-bearing, breath
+    // zeroed too (the RD-O8a seam). Written BEFORE the §2.8.3 mechanism
+    // (oracle-first): P1's cumulative-rise clause and P5's honk-rise clause
+    // fail against the static-gain, absolute-Hz-one-pole voice and pass once
+    // the pressure tilt + fixed-formant honk land.
+    // =======================================================================
+
+    /// (preset, G2 target: steady centroid(ff)/centroid(p) at mid key — the
+    /// §2.8.4 gate G2 pins: ≥ 2.0 saxes, ≥ 1.6 double reeds/clarinet.)
+    ///
+    /// Three re-pins, logged per §2.8.4 ("changed only with a logged reason"):
+    /// - OBOE 1.6 → 1.5: the most formant-locked woodwind. Its fixed
+    ///   F1≈1050/F2≈2700 emphasis — which the §2.8.2 invariant REQUIRES to
+    ///   stay put — carries mid-mass at every dynamic and bounds the
+    ///   mag-weighted centroid ratio near 1.6 (measured 1.59 at n_lo 2.7);
+    ///   darkening pp further to manufacture 1.6 makes the pp voicing
+    ///   un-oboe-like (a real oboe cannot whisper without its formant bite).
+    /// - BAGPIPE 1.6 → 1.25: the bag REGULATES chanter pressure — near-
+    ///   constant blowing is the instrument's defining mechanic, so a wide
+    ///   p→ff timbre span would be physically wrong.
+    /// - SHANAI 1.6 → 1.20: nasal at all dynamics; its 8/6/3 dB formant
+    ///   table on a near-flat duty-0.12 ladder IS the voice.
+    const OPRESSURE_TABLE: [(&ReedPreset, f32); 10] = [
+        (&SOP_SAX, 2.0),
+        (&ALTO_SAX, 2.0),
+        (&TENOR_SAX, 2.0),
+        (&BARI_SAX, 2.0),
+        (&OBOE, 1.5),
+        (&ENGLISH_HORN, 1.6),
+        (&BASSOON, 1.6),
+        (&CLARINET, 1.6),
+        (&BAGPIPE, 1.25),
+        (&SHANAI, 1.20),
+    ];
+
+    /// The P1 velocity ladder {30, 55, 80, 105, 127} (§3.1).
+    const P_VELS: [u8; 5] = [30, 55, 80, 105, 127];
+
+    fn preset_mid_key(p: &ReedPreset) -> u8 {
+        (p.range.0 + p.range.1) / 2
+    }
+
+    /// Render a reed from its preset with vibrato zeroed; `dry` also zeroes
+    /// the breath (clean-lattice seam). Steady window = (0.45, 1.35) s.
+    fn opressure_render(p: &ReedPreset, key: u8, vel: u8, secs: f32, dry: bool) -> Vec<f32> {
+        let sr = 44100.0;
+        let preset = ReedPreset {
+            breath: if dry { 0.0 } else { p.breath },
+            ..p.clone()
+        };
+        let mut v = Reed::from_preset(&preset, key, vel, sr, 7);
+        v.vib_depth = 0.0;
+        let mut b = vec![0f32; (secs * sr) as usize];
+        v.render(&mut b);
+        b
+    }
+
+    /// Hann-DFT spectral centroid of the segment's LAST 4096 samples (fully
+    /// settled by then). The coarse 20-log-bin `centroid` helper is
+    /// leakage-dominated on a clean harmonic lattice (the RD-O7 calibration
+    /// note: it compresses a real cutoff sweep to ~1.06×) — exact DFT bins
+    /// under a Hann window are the honest brightness measure here.
+    fn steady_centroid(seg: &[f32], sr: f32) -> f32 {
+        let n = seg.len();
+        assert!(n >= 4096, "steady_centroid needs >= 4096 samples");
+        spectral_centroid(&seg[n - 4096..], sr, 50.0, 15_000.0)
+    }
+
+    fn opressure_centroid(p: &ReedPreset, key: u8, vel: u8) -> f32 {
+        let sr = 44100.0;
+        let b = opressure_render(p, key, vel, 1.4, true);
+        steady_centroid(&b[(0.45 * sr) as usize..(1.35 * sr) as usize], sr)
+    }
+
+    /// Even-harmonic ENERGY fraction over lattice harmonics 2–13 (§3.1 P3/P4).
+    fn lattice_even_fraction(seg: &[f32], sr: f32, f0: f32) -> f32 {
+        let (mut even, mut all) = (0.0f64, 0.0f64);
+        for n in 2u32..=13 {
+            let f = f0 * n as f32;
+            if f >= 0.45 * sr {
+                break;
+            }
+            let m = mag_at(seg, sr, f) as f64;
+            all += m * m;
+            if n % 2 == 0 {
+                even += m * m;
+            }
+        }
+        if all <= 0.0 {
+            0.0
+        } else {
+            (even / all) as f32
+        }
+    }
+
+    /// P1 — monotone, note-to-note: at range bottom/mid/top, over the P_VELS
+    /// ladder, the steady-window spectral centroid is non-decreasing at every
+    /// step (−1 % at mid key) and the cumulative rise meets the family target
+    /// at MID key (the G2 pin). The EDGE keys pin register consistency, not
+    /// the full span: at range BOTTOM the 500 Hz tilt floor compresses the
+    /// dark end (cumulative ≥ 1.05 still required); at range TOP the tilt
+    /// clamps at the 0.4·sr Nyquist guard over most of the ladder — "reveal
+    /// more harmonics" physically ends there while the honk keeps adding
+    /// formant mass below the centroid — so the top pin is "no material
+    /// fall" (cumulative ≥ 0.97). A broken register law (the absolute-Hz
+    /// failure P6 also guards) collapses by far more.
+    #[test]
+    fn o_pressure_p1_monotone_centroid() {
+        for (p, g2) in OPRESSURE_TABLE {
+            let (lo, hi) = p.range;
+            let mid = preset_mid_key(p);
+            for (key, need) in [(lo, 1.05f32), (mid, g2), (hi, 0.97)] {
+                // Edge keys tolerate a −6 % step: at the range TOP the tilt
+                // clamps at 0.4·sr while the honk keeps adding formant mass
+                // BELOW the centroid — brightness saturates, exactly as a
+                // real instrument's does at the top of its compass. An
+                // absolute-Hz register failure inverts by far more.
+                let tol = if key == mid { 0.99 } else { 0.94 };
+                let mut cents = Vec::new();
+                for &vel in &P_VELS {
+                    let c = opressure_centroid(p, key, vel);
+                    if let Some(&prev) = cents.last() {
+                        assert!(
+                            c >= tol * prev,
+                            "{} key {key}: centroid fell {prev:.0} -> {c:.0} Hz at vel {vel}",
+                            p.name
+                        );
+                    }
+                    cents.push(c);
+                }
+                let rise = cents[cents.len() - 1] / cents[0];
+                assert!(
+                    rise >= need,
+                    "{} key {key}: cumulative centroid rise {rise:.2}x (need >= {need:.2}; ladder {cents:?})",
+                    p.name
+                );
+            }
+        }
+    }
+
+    /// P2 — within-note controller ramp: one held mid-key note, CC2 ramped
+    /// 20→110 over 2 s through the `set_breath` seam, fed per 64-sample block
+    /// exactly as the engine's authored-controller pass does (CC2 → breath =
+    /// (cc/127)², expr = 1 ⇒ p_auth = √(expr·breath) = cc/127). Centroid over
+    /// 4 consecutive windows non-decreasing (−1 %), cumulative rise ≥ a pinned
+    /// fraction of the P1 range. Also the anti-wah smoothness leg: a swept
+    /// resonance comb-sampling the partials fails per-window monotonicity.
+    #[test]
+    fn o_pressure_p2_within_note_breath_ramp() {
+        let sr = 44100.0;
+        for (p, need) in [(&ALTO_SAX, 1.35f32), (&OBOE, 1.25), (&CLARINET, 1.25)] {
+            let preset = ReedPreset {
+                breath: 0.0,
+                ..p.clone()
+            };
+            let mut v = Reed::from_preset(&preset, preset_mid_key(p), 100, sr, 7);
+            v.vib_depth = 0.0;
+            let total = (2.4 * sr) as usize;
+            let mut b = vec![0f32; total];
+            let mut i = 0usize;
+            while i < total {
+                let n = 64.min(total - i);
+                let t = i as f32 / sr;
+                let cc = if t < 0.4 {
+                    20.0
+                } else {
+                    20.0 + 90.0 * ((t - 0.4) / 2.0).min(1.0)
+                };
+                v.set_breath(cc / 127.0, 0.0);
+                v.render(&mut b[i..i + n]);
+                i += n;
+            }
+            // Centroid at each window's TAIL (its last 4096 samples), so each
+            // reading reflects the ramp value reached by that window's end.
+            let cents: Vec<f32> = (0..4)
+                .map(|w| {
+                    let a = 0.45 + 0.4875 * w as f32;
+                    steady_centroid(&b[(a * sr) as usize..((a + 0.4875) * sr) as usize], sr)
+                })
+                .collect();
+            for w in cents.windows(2) {
+                assert!(
+                    w[1] >= 0.99 * w[0],
+                    "{}: within-note centroid fell across the CC2 ramp: {cents:?}",
+                    p.name
+                );
+            }
+            let rise = cents[3] / cents[0];
+            assert!(
+                rise >= need,
+                "{}: within-note centroid rise {rise:.2}x (need >= {need:.2}; {cents:?})",
+                p.name
+            );
+        }
+    }
+
+    /// P3 — the sax KEEPS its evens (the §2.8.4 F3 catcher): alto + tenor at
+    /// mid key, at every P1 step and both P2 endpoints, the even-harmonic
+    /// energy fraction over harmonics 2–13 stays ≥ 0.35 absolute AND ≥ 0.6×
+    /// its lowest-pressure value — no even-collapse with drive. (Guards the
+    /// future rasp shaper: an unbiased tanh's g→∞ limit is a 50 % square,
+    /// odd-only for EVERY duty — §2.8.4.)
+    #[test]
+    fn o_pressure_p3_sax_keeps_evens() {
+        let sr = 44100.0;
+        for p in [&ALTO_SAX, &TENOR_SAX] {
+            let key = preset_mid_key(p);
+            let f0 = key_freq(key);
+            let mut fracs = Vec::new();
+            for &vel in &P_VELS {
+                let b = opressure_render(p, key, vel, 1.4, true);
+                let frac =
+                    lattice_even_fraction(&b[(0.45 * sr) as usize..(1.35 * sr) as usize], sr, f0);
+                fracs.push((format!("vel {vel}"), frac));
+            }
+            // Both P2 endpoints, through the set_breath seam at vel 100.
+            for cc in [20.0f32, 110.0] {
+                let preset = ReedPreset {
+                    breath: 0.0,
+                    ..p.clone()
+                };
+                let mut v = Reed::from_preset(&preset, key, 100, sr, 7);
+                v.vib_depth = 0.0;
+                v.set_breath(cc / 127.0, 0.0);
+                let mut b = vec![0f32; (1.4 * sr) as usize];
+                v.render(&mut b);
+                let frac =
+                    lattice_even_fraction(&b[(0.45 * sr) as usize..(1.35 * sr) as usize], sr, f0);
+                fracs.push((format!("cc2 {cc:.0}"), frac));
+            }
+            let floor = fracs[0].1; // lowest pressure step (vel 30)
+            println!("{:>13} P3 even fractions: {fracs:?}", p.name);
+            for (label, frac) in &fracs {
+                assert!(
+                    *frac >= 0.35,
+                    "{} {label}: even fraction {frac:.3} < 0.35 (even-collapse)",
+                    p.name
+                );
+                assert!(
+                    *frac >= 0.6 * floor,
+                    "{} {label}: even fraction {frac:.3} < 0.6x its p value {floor:.3}",
+                    p.name
+                );
+            }
+        }
+    }
+
+    /// P4 — the clarinet STAYS odd across the whole sweep (extends RD-O3):
+    /// even fraction ≤ 0.10 at every P1 step and both P2 endpoints. Measured
+    /// in the LOW register: the preset's deliberate duty interp 0.50→0.44
+    /// fills evens in toward range top (real clarinets lose hollowness up
+    /// high), so the hollow invariant is pinned where the physics puts it.
+    /// Probe key 55 (f0 = 220): the tabled 1550 Hz F1 slot lands on h7 — an
+    /// ODD lattice harmonic — so the pressure-grown honk cannot confound the
+    /// source-hollowness pin (at key 58 it lands on h6 and legitimately
+    /// feeds an even harmonic; that is formant happenstance, not the duty
+    /// property this leg guards — "fix the lattice to measure the source").
+    #[test]
+    fn o_pressure_p4_clarinet_stays_odd() {
+        let sr = 44100.0;
+        let key = 55u8;
+        let f0 = key_freq(key);
+        let mut fracs = Vec::new();
+        for &vel in &P_VELS {
+            let b = opressure_render(&CLARINET, key, vel, 1.4, true);
+            let frac =
+                lattice_even_fraction(&b[(0.45 * sr) as usize..(1.35 * sr) as usize], sr, f0);
+            fracs.push((format!("vel {vel}"), frac));
+        }
+        for cc in [20.0f32, 110.0] {
+            let preset = ReedPreset {
+                breath: 0.0,
+                ..CLARINET
+            };
+            let mut v = Reed::from_preset(&preset, key, 100, sr, 7);
+            v.vib_depth = 0.0;
+            v.set_breath(cc / 127.0, 0.0);
+            let mut b = vec![0f32; (1.4 * sr) as usize];
+            v.render(&mut b);
+            let frac =
+                lattice_even_fraction(&b[(0.45 * sr) as usize..(1.35 * sr) as usize], sr, f0);
+            fracs.push((format!("cc2 {cc:.0}"), frac));
+        }
+        for (label, frac) in &fracs {
+            assert!(
+                *frac <= 0.10,
+                "clarinet {label}: even fraction {frac:.3} > 0.10 (went full)"
+            );
+        }
+    }
+
+    /// P5 — the honk intensifies at a FIXED centre (the F1 catcher / anti-wah
+    /// leg): for every reed preset, at a range-bottom key (densest lattice
+    /// around F1), over the P1 ladder:
+    ///   (a) the energy fraction in the ±1/3-octave band around the preset's
+    ///       tabled F1 rises with pressure (per-step ≥ 0.97×prev, cumulative
+    ///       ≥ 1.10×), and
+    ///   (b) the band's `peak_locate`d maximum is STATIONARY — the same
+    ///       frequency (±1.5 %) at every step.
+    /// (b) is the lattice-honest form of the HLD's "±5 % of tabled F1": on a
+    /// bore whose F1 sits at harmonic 4–8 of a range-bottom note, the lattice
+    /// spacing exceeds 5 % of F1, so the *absolute* position of the in-band
+    /// winner is set by the duty's source ladder — what pressure must not do
+    /// is MOVE it. A swept-peak implementation fails (b) (the emphasis
+    /// migrates with pressure); the static-gain voice fails (a).
+    ///
+    /// Rasp presets (§2.8.4, the saxes): the source ladder's SLOPE is now
+    /// pressure-law (tent at pp → duty-w rectangle at ff), so the band's
+    /// argmax may WALK UP the lattice as the ladder flattens (the duty's
+    /// strong lines emerge — e.g. the alto's h8, where |sin(πnw)| ≈ 1). The
+    /// stationarity pin becomes three legs a swept resonance still cannot
+    /// fake: the winner sits ON a lattice harmonic (±2 %) at every step (a
+    /// swept peak drags the argmax off-lattice between lines), the walk is
+    /// monotone upward (a sweep rides through and back), and it SETTLES —
+    /// the two loudest steps agree (±1.5 %), because a fixed formant over a
+    /// saturating ladder converges while a sweep keeps moving.
+    #[test]
+    fn o_pressure_p5_honk_fixed_center() {
+        let sr = 44100.0;
+        for (p, _) in OPRESSURE_TABLE {
+            let key = p.range.0;
+            let f1 = p.formants[0].0;
+            let (blo, bhi) = (f1 * 0.7937, f1 * 1.2599); // ±1/3 octave
+            let mut fracs = Vec::new();
+            let mut peaks = Vec::new();
+            for &vel in &P_VELS {
+                let b = opressure_render(p, key, vel, 1.4, true);
+                let seg = &b[(0.45 * sr) as usize..(1.35 * sr) as usize];
+                let frac =
+                    crate::testutil::spectral_band_rms(seg, sr, blo, bhi) / rms(seg).max(1e-12);
+                fracs.push(frac);
+                peaks.push(peak_locate(seg, sr, blo, bhi));
+            }
+            for w in fracs.windows(2) {
+                assert!(
+                    w[1] >= 0.97 * w[0],
+                    "{}: F1-band fraction fell along the ladder: {fracs:?}",
+                    p.name
+                );
+            }
+            assert!(
+                fracs[4] / fracs[0] >= 1.10,
+                "{}: F1-band fraction rise {:.2}x (need >= 1.10; {fracs:?})",
+                p.name,
+                fracs[4] / fracs[0]
+            );
+            if p.rasp.1 > 0.0 {
+                let f0 = key_freq(key);
+                for pk in &peaks {
+                    let n = (pk / f0).round().max(1.0);
+                    assert!(
+                        (pk / (n * f0) - 1.0).abs() <= 0.02,
+                        "{}: band winner glided off-lattice: {pk:.1} Hz (f0 {f0:.1}; {peaks:?})",
+                        p.name
+                    );
+                }
+                for w in peaks.windows(2) {
+                    assert!(
+                        w[1] >= w[0] * 0.985,
+                        "{}: band winner walked DOWN the lattice: {peaks:?}",
+                        p.name
+                    );
+                }
+                assert!(
+                    (peaks[4] / peaks[3] - 1.0).abs() <= 0.015,
+                    "{}: band winner did not settle at the top: {peaks:?}",
+                    p.name
+                );
+            } else {
+                for pk in &peaks {
+                    assert!(
+                        (pk / peaks[0] - 1.0).abs() <= 0.015,
+                        "{}: honk centre moved with pressure: {peaks:?}",
+                        p.name
+                    );
+                }
+            }
+        }
+    }
+
+    /// P6 — speaks at p (the F2 register catcher): at the lowest pressure
+    /// step (vel 30), at range bottom/mid/top, the fundamental speaks. Two
+    /// physically distinct tiers:
+    ///   - saxes + clarinet: the fundamental IS the strongest lattice
+    ///     harmonic (sax subtone / hollow odd square);
+    ///   - nasal double reeds (oboe, EH, bassoon, bagpipe, shanai): a real
+    ///     double reed's piano spectrum is formant-dominated — the tabled-F1
+    ///     harmonic may top the fundamental — so the pin is "the fundamental
+    ///     is within 8 dB of the strongest lattice harmonic". An absolute-Hz
+    ///     cutoff burying a top-register fundamental misses by far more.
+    #[test]
+    fn o_pressure_p6_speaks_at_p() {
+        let sr = 44100.0;
+        for (p, _) in OPRESSURE_TABLE {
+            let nasal = p.width < 0.25; // the short-duty double-reed chanters
+            let (lo, hi) = p.range;
+            for key in [lo, preset_mid_key(p), hi] {
+                let f0 = key_freq(key);
+                let b = opressure_render(p, key, 30, 1.2, true);
+                let seg = &b[(0.4 * sr) as usize..(1.1 * sr) as usize];
+                let m1 = mag_at(seg, sr, f0);
+                let mut strongest = (1u32, m1);
+                for n in 2u32..=12 {
+                    let f = f0 * n as f32;
+                    if f >= 0.45 * sr {
+                        break;
+                    }
+                    let m = mag_at(seg, sr, f);
+                    if m > strongest.1 {
+                        strongest = (n, m);
+                    }
+                }
+                let floor = if nasal { 0.398 } else { 1.0 }; // −8 dB / 0 dB
+                assert!(
+                    m1 >= floor * strongest.1,
+                    "{} key {key}: fundamental {m1:.4} vs strongest h{} {:.4} \
+                     (need >= {floor:.2}x — the p fundamental must speak)",
+                    p.name,
+                    strongest.0,
+                    strongest.1
+                );
+            }
+        }
+    }
+
+    // =======================================================================
+    // RD10 (§2.8.4) — the sax rasp stage: the G3 shipping gate, the bias
+    // physics pins, the T-N2 tripwire, the O-ALIAS absolute floor, and the
+    // A-MEAS-ALIAS dev harness.
+    // =======================================================================
+
+    /// Hann-window a copy of the segment (leakage guard for off-lattice
+    /// Goertzel probes — the rectangular-window sidelobes of a strong
+    /// harmonic would otherwise swamp alias lines 40+ dB down).
+    fn hann_windowed(seg: &[f32]) -> Vec<f32> {
+        let n = seg.len();
+        seg.iter()
+            .enumerate()
+            .map(|(i, &x)| {
+                x * (0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (n - 1) as f32).cos())
+            })
+            .collect()
+    }
+
+    /// Off-lattice band energy by exact-bin summation on a Hann-windowed
+    /// segment: Σ mag² over every DFT bin in [lo, hi] that lies further than
+    /// `excl_hz` from any lattice harmonic n·f0. Bin-sum (not sparse probes)
+    /// so discrete alias lines are integrated, not sampled-past; the Hann
+    /// mainlobe spreads each line over ~4 bins, all of which are summed.
+    fn off_lattice_energy(seg: &[f32], sr: f32, f0: f32, lo: f32, hi: f32, excl_hz: f32) -> f64 {
+        let w = hann_windowed(seg);
+        let bin_hz = sr / seg.len() as f32;
+        let first = (lo / bin_hz).ceil() as usize;
+        let last = ((hi / bin_hz).floor() as usize).min(seg.len() / 2);
+        let mut acc = 0.0f64;
+        for bin in first..=last {
+            let f = bin as f32 * bin_hz;
+            let n = (f / f0).round().max(1.0);
+            if (f - n * f0).abs() > excl_hz {
+                let m = mag_at(&w, sr, f) as f64;
+                acc += m * m;
+            }
+        }
+        acc
+    }
+
+    /// G3 (§2.8.4) — the sax rasp-skirt SHIPPING gate, on the shipped (wet)
+    /// voice with vibrato zeroed for a clean lattice: off-lattice energy
+    /// within ±(0.05–0.35)·f0 of harmonics 2–6 at ff is ≥ −40 dB re total
+    /// AND ≥ 2× its p value. Filter-only saxes measured −51.9/−50.2/−49.8/
+    /// −43.3 dB and ~1.25× (the 2a A/B probe) — skirts are the measurable
+    /// discriminator a linear chain cannot fake: they are noise × harmonic
+    /// intermodulation born INSIDE the §2.8.4 shaper (a post-filter additive
+    /// hiss stays spectrally flat and fails the ±band concentration).
+    #[test]
+    fn reed_g3_sax_rasp_skirts() {
+        let sr = 44100.0;
+        for p in [&SOP_SAX, &ALTO_SAX, &TENOR_SAX, &BARI_SAX] {
+            let key = preset_mid_key(p);
+            let f0 = key_freq(key);
+            let mut rel = [0.0f32; 2];
+            for (i, vel) in [30u8, 127].into_iter().enumerate() {
+                let b = opressure_render(p, key, vel, 1.4, false); // wet: shipped voice
+                let seg = &b[(0.45 * sr) as usize..(1.35 * sr) as usize];
+                rel[i] = g3_skirt_rms(seg, sr, f0) / rms(seg).max(1e-12);
+            }
+            let ff_db = 20.0 * rel[1].max(1e-9).log10();
+            let ratio = rel[1] / rel[0].max(1e-12);
+            println!(
+                "{:>13} G3: skirt ff {ff_db:.1} dB re total, ff/p {ratio:.2}x",
+                p.name
+            );
+            assert!(
+                ff_db >= -40.0,
+                "{}: ff rasp skirts {ff_db:.1} dB re total (gate >= -40 dB)",
+                p.name
+            );
+            assert!(
+                ratio >= 2.0,
+                "{}: skirt ff/p {ratio:.2}x (gate >= 2x — rasp must track pressure)",
+                p.name
+            );
+        }
+    }
+
+    /// RD10 bias physics pin (§2.8.4 "verify your b actually lands the limit
+    /// duty at w — compute it, don't guess"): each tent segment is linear and
+    /// spans the full [−1, +1] range, so the fraction of the period above
+    /// −b is (1+b)/2 on BOTH segments and b = 2w−1 lands the g→∞ rectangle
+    /// sign(tent+b) at duty exactly w. Replicates the voice's own tent chain
+    /// (its ReedPulse width, integrator coefficient, and tent gain) and
+    /// counts the sign duty over 60 periods.
+    #[test]
+    fn reed_rasp_bias_lands_duty() {
+        let sr = 44100.0;
+        for (p, key) in [(&SOP_SAX, 72u8), (&ALTO_SAX, 65), (&TENOR_SAX, 60)] {
+            let v = Reed::from_preset(p, key, 127, sr, 7);
+            let r = v.rasp.as_ref().unwrap();
+            let f = key_freq(key);
+            let mut osc = ReedPulse::new(f, r.osr, 0.0, r.w);
+            let tg = f * r.tg_k;
+            let mut z = 0.0f32;
+            let warm = (r.osr / f) as usize * 20;
+            let total = (r.osr / f) as usize * 80;
+            let (mut above, mut cnt) = (0u64, 0u64);
+            for i in 0..total {
+                z += r.int_a * (osc.next() - z);
+                if i >= warm {
+                    if z * tg + r.bias > 0.0 {
+                        above += 1;
+                    }
+                    cnt += 1;
+                }
+            }
+            let duty = above as f32 / cnt as f32;
+            assert!(
+                (duty - r.w).abs() <= 0.02,
+                "{}: sign(tent+b) duty {duty:.3} vs pulse duty {:.3} — the \
+                 hard-blown limit is NOT the bore rectangle",
+                p.name,
+                r.w
+            );
+        }
+    }
+
+    /// RD10 bias differential (the §3.1 P3 regression-first demand): the
+    /// UN-biased shaper — tanh(g·tent), the original §2.8.4 draft — must
+    /// collapse the sax evens at high drive (its g→∞ limit is a 50 % square
+    /// for EVERY duty), and the shipped bias must hold them at the P3 floor.
+    /// This pins WHY the bias exists; P3 pins that the shipped voice keeps it.
+    #[test]
+    fn reed_rasp_bias_is_load_bearing() {
+        let sr = 44100.0;
+        for p in [&ALTO_SAX, &TENOR_SAX] {
+            let key = preset_mid_key(p);
+            let f0 = key_freq(key);
+            let frac_with_bias = |biased: bool| -> f32 {
+                let preset = ReedPreset {
+                    breath: 0.0,
+                    ..p.clone()
+                };
+                let mut v = Reed::from_preset(&preset, key, 127, sr, 7);
+                v.vib_depth = 0.0;
+                if !biased {
+                    v.rasp.as_mut().unwrap().bias = 0.0; // the un-fixed shaper
+                }
+                let mut b = vec![0f32; (1.4 * sr) as usize];
+                v.render(&mut b);
+                lattice_even_fraction(&b[(0.45 * sr) as usize..(1.35 * sr) as usize], sr, f0)
+            };
+            let (biased, unbiased) = (frac_with_bias(true), frac_with_bias(false));
+            println!(
+                "{:>13} ff even fraction: biased {biased:.3}, unbiased {unbiased:.3}",
+                p.name
+            );
+            assert!(
+                biased >= 0.35,
+                "{}: biased shaper even fraction {biased:.3} < the P3 floor",
+                p.name
+            );
+            assert!(
+                unbiased < 0.35 && unbiased < 0.7 * biased,
+                "{}: un-biased shaper kept its evens ({unbiased:.3} vs biased \
+                 {biased:.3}) — this differential must fail-first or P3 pins nothing",
+                p.name
+            );
+        }
+    }
+
+    /// T-N2 tripwire (§2.8.4): the biased tanh's DC is signal-dependent, so a
+    /// fast authored CC2 ramp pumps the operating point. The dc_ref closed
+    /// form plus the f0-tracked 0.55·f0 output highpass must keep the result
+    /// out of the sub-audio band: square-ramp CC2 between pp and ff every
+    /// 80 ms (far faster than any musical breath gesture) and pin the 12 Hz
+    /// lowpassed residue. Measured 2026-07-14: 1.3e-4 (alto) / 2.1e-4 (tenor)
+    /// of total rms; pinned at 1e-3 (≈ 5–7× margin) — a broken dc_ref reads
+    /// percent-level thumps.
+    #[test]
+    fn reed_rasp_tn2_no_dc_thump_under_fast_cc2() {
+        let sr = 44100.0;
+        for p in [&ALTO_SAX, &TENOR_SAX] {
+            let preset = ReedPreset {
+                breath: 0.0,
+                ..p.clone()
+            };
+            let mut v = Reed::from_preset(&preset, preset_mid_key(p), 100, sr, 7);
+            v.vib_depth = 0.0;
+            let total = (2.0 * sr) as usize;
+            let mut b = vec![0f32; total];
+            let mut i = 0usize;
+            while i < total {
+                let n = 64.min(total - i);
+                let phase = (i as f32 / (0.08 * sr)) as u32 % 2; // 80 ms square
+                v.set_breath(if phase == 0 { 0.16 } else { 0.87 }, 0.0);
+                v.render(&mut b[i..i + n]);
+                i += n;
+            }
+            assert!(b.iter().all(|x| x.is_finite()), "{}: non-finite", p.name);
+            let seg = &b[(0.3 * sr) as usize..];
+            // 4 cascaded one-poles at 12 Hz: −24 dB/oct isolates true
+            // sub-audio (a single pole leaks the 349 Hz carrier at −6 dB/oct
+            // — 3.4 % — and would read tone as thump)
+            let mut lp = [OnePole::lowpass(12.0, sr); 4];
+            let lf: Vec<f32> = seg
+                .iter()
+                .map(|&x| lp.iter_mut().fold(x, |v, p| p.process(v)))
+                .collect();
+            // skip the lowpass's own settling before reading the residue
+            let residue = rms(&lf[(0.3 * sr) as usize..]) / rms(seg).max(1e-12);
+            println!("{:>13} T-N2 sub-audio residue {residue:.2e}", p.name);
+            assert!(
+                residue < 1e-3,
+                "{}: sub-audio residue {residue:.2e} under fast CC2 (T-N2 fired)",
+                p.name
+            );
+        }
+    }
+
+    /// RD-O12b / O-ALIAS absolute top-octave floor (§3.1, lesson 2026.07.11 —
+    /// pin ABSOLUTE dB, not a relative ratio that a louder bed can mask):
+    /// with the rasp shaper active at its shipped config on the §3.1 worst
+    /// case — soprano at range-top key 88 (f0 = 1318.5 Hz, non-commensurate
+    /// with sr so shaper-born folds land off-lattice), minimum post-jitter
+    /// duty, vel 127 ⇒ g_max, breath = 0 — the top-octave (11–21.5 kHz)
+    /// off-lattice energy must stay ≤ RD_O12B_FLOOR_DB re total rms.
+    ///
+    /// Provenance of the pin (A-MEAS-ALIAS run, 2026-07-14, this box): the
+    /// shipped soprano ff noise floor in that octave — wet render, tabled
+    /// breath, i.e. the RD5 bed plus the §2.8.4 turbulence skirts that mask
+    /// any alias — measures −36.0 dB re total by the harness metric; the
+    /// §2.8.2 budget is floor − 6 dB ⇒ the pin −42.0. The dry worst case
+    /// measures ≈ −78 dB at the shipped 2× + derate (36 dB inside the pin;
+    /// the tight per-bin regression pin is `reed_o12_alias_floor`).
+    const RD_O12B_FLOOR_DB: f32 = -42.0;
+
+    #[test]
+    fn reed_o12b_top_octave_absolute_floor() {
+        let sr = 44100.0;
+        let preset = ReedPreset {
+            breath: 0.0,
+            width: SOP_SAX.width_hi * 0.98,
+            width_hi: SOP_SAX.width_hi * 0.98,
+            ..SOP_SAX.clone()
+        };
+        let mut v = Reed::from_preset(&preset, 88, 127, sr, 7);
+        v.vib_depth = 0.0;
+        let mut b = vec![0f32; (0.75 * sr) as usize];
+        v.render(&mut b);
+        let seg = &b[(0.35 * sr) as usize..]; // scoop settled, pre-vib (zeroed anyway)
+        let f0 = key_freq(88);
+        let e = off_lattice_energy(seg, sr, f0, 11_000.0, 21_500.0, 100.0);
+        let level = 20.0
+            * ((0.5 * e).sqrt() as f32 / rms(seg).max(1e-12))
+                .max(1e-9)
+                .log10();
+        println!("RD-O12b top-octave off-lattice {level:.1} dB re total");
+        assert!(
+            level <= RD_O12B_FLOOR_DB,
+            "top-octave off-lattice {level:.1} dB re total (pin {RD_O12B_FLOOR_DB} dB)"
+        );
+    }
+
+    /// §2.8.4 A-MEAS-ALIAS (dev-time measurement, kept re-runnable):
+    /// `cargo test -p ferrosintesis --release a_meas_alias_rasp_oversampling -- --ignored --nocapture`
+    ///
+    /// Worst case per §3.1: soprano, range-top key 88 (f0 = 1318.5 Hz),
+    /// minimum post-jitter duty, vel 127 ⇒ p ≈ 1 ⇒ g_max, breath = 0. Runs
+    /// the shaper at 2×/4×/8×, underated (derate pinned to 1.0) and at the
+    /// shipped RD_RASP_F0_* derate; 8× is the reference; the decision metric
+    /// is each candidate's off-lattice in-band (1.5–21.5 kHz) energy EXCESS
+    /// over the 8× run of the SAME derate config. Ship the smallest factor
+    /// whose excess ≤ 3 dB after the derate (HLD §3.1). Also prints the
+    /// top-octave figure (the RD_O12B pin's provenance) and the wet breath
+    /// bed it is budgeted against.
+    #[test]
+    #[ignore]
+    fn a_meas_alias_rasp_oversampling() {
+        let sr = 44100.0;
+        let f0 = key_freq(88);
+        let render = |m: u32, derate: Option<f32>, wet: bool| -> Vec<f32> {
+            let preset = ReedPreset {
+                breath: if wet { SOP_SAX.breath } else { 0.0 },
+                width: SOP_SAX.width_hi * 0.98,
+                width_hi: SOP_SAX.width_hi * 0.98,
+                ..SOP_SAX.clone()
+            };
+            let mut v = Reed::from_preset(&preset, 88, 127, sr, 7);
+            v.vib_depth = 0.0;
+            v.rasp_reover(m, derate);
+            let mut b = vec![0f32; (1.35 * sr) as usize];
+            v.render(&mut b);
+            b[(0.3 * sr) as usize..(1.3 * sr) as usize].to_vec()
+        };
+        for (label, derate) in [
+            ("underated (derate=1)", Some(1.0)),
+            ("shipped derate", None),
+        ] {
+            let mut e = [0.0f64; 3];
+            let mut top = [0.0f64; 3];
+            for (i, m) in [2u32, 4, 8].into_iter().enumerate() {
+                let seg = render(m, derate, false);
+                e[i] = off_lattice_energy(&seg, sr, f0, 1_500.0, 21_500.0, 100.0);
+                top[i] = off_lattice_energy(&seg, sr, f0, 11_000.0, 21_500.0, 100.0);
+                let r = rms(&seg).max(1e-12);
+                println!(
+                    "A-MEAS {label} {m}x: off-lattice {:.1} dB re total (top octave {:.1} dB)",
+                    20.0 * ((0.5 * e[i]).sqrt() as f32 / r).log10(),
+                    20.0 * ((0.5 * top[i]).sqrt() as f32 / r).log10(),
+                );
+            }
+            println!(
+                "A-MEAS {label}: excess over 8x — 2x {:+.1} dB, 4x {:+.1} dB",
+                10.0 * (e[0] / e[2].max(1e-30)).log10(),
+                10.0 * (e[1] / e[2].max(1e-30)).log10(),
+            );
+        }
+        // The wet breath bed the RD_O12B pin is budgeted against (§2.8.2)
+        let seg = render(RD_RASP_OVER, None, true);
+        let bed = off_lattice_energy(&seg, sr, f0, 11_000.0, 21_500.0, 100.0);
+        println!(
+            "A-MEAS wet ff breath bed, top octave: {:.1} dB re total (pin = bed − 6 dB)",
+            20.0 * ((0.5 * bed).sqrt() as f32 / rms(&seg).max(1e-12)).log10(),
+        );
+    }
+
+    /// The G3 skirt metric (§2.8.4): rms of `mag_at` over probe bins at
+    /// ±(0.05–0.35)·f0 around lattice harmonics 2–6 — off-lattice energy in
+    /// the growl band. Shared by the shipping gate `reed_g3_sax_rasp_skirts`
+    /// and the diagnostic probe below.
+    fn g3_skirt_rms(seg: &[f32], sr: f32, f0: f32) -> f32 {
+        let (mut acc, mut cnt) = (0.0f64, 0u32);
+        for n in 2u32..=6 {
+            for sgn in [-1.0f32, 1.0] {
+                let mut d = 0.05f32;
+                while d <= 0.35 + 1e-6 {
+                    let f = (n as f32 + sgn * d) * f0;
+                    if f < 0.45 * sr {
+                        let m = mag_at(seg, sr, f) as f64;
+                        acc += m * m;
+                        cnt += 1;
+                    }
+                    d += 0.03;
+                }
+            }
+        }
+        (acc / cnt.max(1) as f64).sqrt() as f32
+    }
+
+    /// §2.8.4 A/B gate probe (diagnostic, not a gate):
+    /// `cargo test reed_ab_gate_probe -- --ignored --nocapture`.
+    /// Prints, per preset: the amp anchor (steady RMS at vel 100 mid key, the
+    /// shipped voice incl. breath + vibrato), G2 (centroid ff/p at mid key,
+    /// dry+novib), and for the saxes G3 (off-lattice rasp-skirt energy within
+    /// ±(0.05–0.35)·f0 of harmonics 2–6, ff vs p, dB re total) — the
+    /// filter-vs-shaper discriminator. Filter-only cannot generate skirts;
+    /// these numbers size how far it falls short for the saxes.
+    #[test]
+    #[ignore]
+    fn reed_ab_gate_probe() {
+        let sr = 44100.0;
+        let skirt = |seg: &[f32], f0: f32| -> f32 { g3_skirt_rms(seg, sr, f0) };
+        for (p, g2_target) in OPRESSURE_TABLE {
+            let key = preset_mid_key(p);
+            // amp anchor: shipped voice (breath + vibrato as tabled), vel 100
+            let mut v = Reed::from_preset(p, key, 100, sr, 7);
+            let mut b = vec![0f32; (1.6 * sr) as usize];
+            v.render(&mut b);
+            let anchor = rms(&b[(0.5 * sr) as usize..(1.5 * sr) as usize]);
+            let (c_p, c_ff) = (
+                opressure_centroid(p, key, 30),
+                opressure_centroid(p, key, 127),
+            );
+            println!(
+                "{:>13} key {key}: anchor-rms {anchor:.5} ({:.2} dBFS) | G2 {:.0}/{:.0} = {:.2}x (target {g2_target})",
+                p.name,
+                20.0 * anchor.max(1e-9).log10(),
+                c_ff,
+                c_p,
+                c_ff / c_p.max(1e-9)
+            );
+        }
+        for p in [&SOP_SAX, &ALTO_SAX, &TENOR_SAX, &BARI_SAX] {
+            let key = preset_mid_key(p);
+            let f0 = key_freq(key);
+            // dry (breath = 0 kills the RD10 turbulence too — this is the
+            // alias/leakage floor) AND wet (the shipped voice, vib zeroed —
+            // the G3 gate condition: turbulence × harmonics = skirts)
+            for dry in [true, false] {
+                let mut g3 = [0.0f32; 2]; // [p, ff] skirt rms
+                let mut tot = [0.0f32; 2];
+                for (i, vel) in [30u8, 127].into_iter().enumerate() {
+                    let b = opressure_render(p, key, vel, 1.4, dry);
+                    let seg = &b[(0.45 * sr) as usize..(1.35 * sr) as usize];
+                    g3[i] = skirt(seg, f0);
+                    tot[i] = rms(seg).max(1e-12);
+                }
+                println!(
+                    "{:>13} G3 key {key} {}: skirt p {:.1} dB re total, ff {:.1} dB re total, ff/p {:.2}x (wet gate: ff >= -40 dB AND ff/p >= 2)",
+                    p.name,
+                    if dry { "dry" } else { "wet" },
+                    20.0 * (g3[0] / tot[0]).max(1e-9).log10(),
+                    20.0 * (g3[1] / tot[1]).max(1e-9).log10(),
+                    (g3[1] / tot[1]) / (g3[0] / tot[0]).max(1e-12)
+                );
+            }
+        }
     }
 
     // =======================================================================
@@ -15431,7 +17060,8 @@ mod tests {
     }
 
     /// WD-O5 — BREATH FRACTION per instrument, via a same-seed differential seam:
-    /// zeroing `breath_amp`/`hi_amp` POST-construction keeps both RNG streams
+    /// zeroing `breath_base`/`hi_base` POST-construction (the WD9 CTRL retune
+    /// derives the live `breath_amp` from these) keeps both RNG streams
     /// aligned, so (full − nobed) isolates the bed exactly. Fail-first: today all
     /// five non-whistle programs share one bed and all three whistle programs
     /// share another, so the ordering clause (recorder < flute < pan < bottle)
@@ -15443,8 +17073,8 @@ mod tests {
             let n = (1.6 * WD_SR) as usize;
             let mut full = Wind::from_preset(p, key, 100, WD_SR, 7);
             let mut nobed = Wind::from_preset(p, key, 100, WD_SR, 7);
-            nobed.breath_amp = 0.0;
-            nobed.hi_amp = 0.0;
+            nobed.breath_base = 0.0;
+            nobed.hi_base = 0.0;
             let (mut a, mut b) = (vec![0f32; n], vec![0f32; n]);
             full.render(&mut a);
             nobed.render(&mut b);
@@ -15473,15 +17103,20 @@ mod tests {
         // fractions from a UNIT-RMS white assumption overstates every one of them by
         // ~1/0.61. The coefficients are anchored on the flute's accepted `breath: 0.09`
         // (R1), so these fractions are a CONSEQUENCE of that anchor, not a free choice.
+        // §2.8.5.2 re-pins (the air raise): recorder 0.03→0.055 and whistle
+        // 0.16→0.30 lift their bands proportionally; the bottle's band is the
+        // WD11 topology — the filtered jet IS the primary source, so the
+        // differential now isolates ~all non-whisper energy (√0.75 ≈ 0.87 of
+        // RMS at the design point), not a decorative bed.
         for (name, v, lo, hi) in [
-            ("recorder", rec, 0.003, 0.009),
+            ("recorder", rec, 0.006, 0.016),
             ("piccolo", picc, 0.007, 0.018),
             ("flute", fl, 0.010, 0.021), // tight: this IS today's accepted flute bed (R1)
-            ("whistle", wh, 0.012, 0.028),
+            ("whistle", wh, 0.022, 0.052),
             ("ocarina", oc, 0.014, 0.031),
             ("shakuhachi", shak, 0.048, 0.105),
             ("pan_flute", pan, 0.038, 0.085),
-            ("blown_bottle", bot, 0.055, 0.122),
+            ("blown_bottle", bot, 0.60, 0.95),
         ] {
             assert!(
                 (lo..=hi).contains(&v),
@@ -15792,6 +17427,977 @@ mod tests {
                 "{} sits {d:+.2} dB off the flute — a mix bomb",
                 p.name
             );
+        }
+    }
+
+    // =======================================================================
+    // O-PRESSURE — flue legs (voice-quality overhaul HLD §2.8.5 / §3.1).
+    // Written BEFORE the WD9 mechanism (oracle-first). Brightness measured
+    // with the Hann-DFT `steady_centroid`, never the leakage-prone log-bin
+    // `centroid` (lesson 2026.07.14). Rendered breath-ON: for a flue the air
+    // is a load-bearing part of the pressure response (harder blowing is
+    // airier — `vel_air` — and the bed's upper skirt carries centroid mass),
+    // and the seeded RNG keeps the measure deterministic. The reed legs
+    // (P1–P6 above) measure dry because their brightening is all lattice.
+    // =======================================================================
+
+    /// Per-preset MID-key cumulative centroid-rise targets over the P_VELS
+    /// ladder (the flue analogue of `OPRESSURE_TABLE`). Pinned at ~85 % of
+    /// the WD9 calibration render's measured rise; the SHAPE is the preset's
+    /// physics:
+    /// - FLUTE/PAN/SHAKUHACHI (measured 1.50/1.62/1.63): real ladders that
+    ///   open with breath (`vel_bright` 0.6–0.9) plus a pressure-tracked
+    ///   bed — the family's big movers.
+    /// - PICCOLO 1.15 (measured 1.21): a thin ladder; its register does the
+    ///   piercing work, so the pressure span is modest.
+    /// - RECORDER 1.22 (measured 1.35): the fipple's LADDER cannot be blown
+    ///   open (WD-O6b caps the dry tilt ratio at 1.25) — this rise is
+    ///   almost all the duct hiss growing with pressure, which a fipple
+    ///   genuinely does.
+    /// - WHISTLE 1.12 / OCARINA 1.30 (measured 1.21/1.45): near-sine
+    ///   vessels; the rise is the air bed's broadband upper skirt growing.
+    /// - BLOWN_BOTTLE 1.40 (measured 1.63): the §2.8.5.4 Helmholtz path —
+    ///   the pressure-tracked jet spill grows and widens against the fixed
+    ///   resonance.
+    const FLUE_PRESSURE_TABLE: [(&WindPreset, f32); 8] = [
+        (&PICCOLO, 1.15),
+        (&FLUTE, 1.35),
+        (&RECORDER, 1.22),
+        (&PAN_FLUTE, 1.45),
+        (&BLOWN_BOTTLE, 1.40),
+        (&SHAKUHACHI, 1.45),
+        (&WHISTLE, 1.12),
+        (&OCARINA, 1.30),
+    ];
+
+    /// Render a flue from its preset with vibrato zeroed, breath ON.
+    fn flue_pressure_render(p: &WindPreset, key: u8, vel: u8, secs: f32) -> Vec<f32> {
+        let mut v = Wind::from_preset(p, key, vel, WD_SR, 7);
+        v.vib_depth = 0.0;
+        let mut b = vec![0f32; (secs * WD_SR) as usize];
+        v.render(&mut b);
+        b
+    }
+
+    fn flue_pressure_centroid(p: &WindPreset, key: u8, vel: u8) -> f32 {
+        let sr = WD_SR;
+        let b = flue_pressure_render(p, key, vel, 1.4);
+        steady_centroid(&b[(0.45 * sr) as usize..(1.35 * sr) as usize], sr)
+    }
+
+    /// P1 (flue) — monotone, note-to-note: all 8 flue presets, at range
+    /// bottom/mid/top, over the {30,55,80,105,127} ladder, the steady-window
+    /// centroid is non-decreasing at every step and the cumulative rise
+    /// meets the family target at MID key. Edge keys pin register
+    /// consistency, not the full span (the reed-P1 structure): the edge
+    /// need is half the mid target's excess, floored at "no material fall".
+    #[test]
+    fn o_pressure_flue_p1_monotone_centroid() {
+        for (p, g2) in FLUE_PRESSURE_TABLE {
+            let (lo, hi) = p.range;
+            let mid = wd_mid_key(p);
+            let edge_need = (1.0 + 0.35 * (g2 - 1.0)).min(1.02);
+            for (key, need) in [(lo, edge_need), (mid, g2), (hi, 0.97f32)] {
+                let tol = if key == mid { 0.99 } else { 0.96 };
+                let mut cents = Vec::new();
+                for &vel in &P_VELS {
+                    let c = flue_pressure_centroid(p, key, vel);
+                    if let Some(&prev) = cents.last() {
+                        assert!(
+                            c >= tol * prev,
+                            "{} key {key}: centroid fell {prev:.0} -> {c:.0} Hz at vel {vel}",
+                            p.name
+                        );
+                    }
+                    cents.push(c);
+                }
+                let rise = cents[cents.len() - 1] / cents[0];
+                println!(
+                    "flue P1 {:>12} key {key:>3}: rise {rise:.3}x (need {need:.3}; {cents:?})",
+                    p.name
+                );
+                assert!(
+                    rise >= need,
+                    "{} key {key}: cumulative centroid rise {rise:.3}x (need >= {need:.3}; ladder {cents:?})",
+                    p.name
+                );
+            }
+        }
+    }
+
+    /// One held mid-key note with CC2 ramped 20→110 over 2 s through the
+    /// `set_breath` seam, fed per 64-sample block exactly as the engine's
+    /// authored pass does (CC2 → breath = (cc/127)², expr = 1 ⇒
+    /// √(expr·breath) = cc/127). Shared by both P2 legs.
+    fn flue_p2_ramp_render(p: &WindPreset, dry: bool) -> Vec<f32> {
+        let sr = WD_SR;
+        let preset = if dry {
+            WindPreset {
+                breath: 0.0,
+                breath_hi: 0.0,
+                ..*p
+            }
+        } else {
+            WindPreset { ..*p }
+        };
+        let mut v = Wind::from_preset(&preset, wd_mid_key(p), 100, sr, 7);
+        v.vib_depth = 0.0;
+        let total = (2.4 * sr) as usize;
+        let mut b = vec![0f32; total];
+        let mut i = 0usize;
+        while i < total {
+            let n = 64.min(total - i);
+            let t = i as f32 / sr;
+            let cc = if t < 0.4 {
+                20.0
+            } else {
+                20.0 + 90.0 * ((t - 0.4) / 2.0).min(1.0)
+            };
+            v.set_breath(cc / 127.0, 0.0);
+            v.render(&mut b[i..i + n]);
+            i += n;
+        }
+        b
+    }
+
+    /// P2a (flue, LADDER leg) — within-note controller ramp on the real-
+    /// ladder pipes, measured DRY (breath 0) so the tail-4096 Hann-DFT
+    /// centroid reads the deterministic partial retune with zero noise
+    /// variance (the estimator lesson: a tail-4096 centroid over a live
+    /// noise bed wobbles ±8 % window-to-window and cannot see a 10 % ramp).
+    /// Centroid over 4 consecutive windows non-decreasing (−1 %), cumulative
+    /// rise ≥ the pinned target. Red before WD9: `Wind` had no `set_breath`
+    /// override, so the ramp was a no-op and the centroid flat.
+    #[test]
+    fn o_pressure_flue_p2a_within_note_ladder_ramp() {
+        let sr = WD_SR;
+        // Targets at ~85 % of the calibration render (1.18/1.29/1.27).
+        for (p, need) in [(&FLUTE, 1.12f32), (&PAN_FLUTE, 1.22), (&SHAKUHACHI, 1.20)] {
+            let b = flue_p2_ramp_render(p, true);
+            let cents: Vec<f32> = (0..4)
+                .map(|w| {
+                    let a = 0.45 + 0.4875 * w as f32;
+                    steady_centroid(&b[(a * sr) as usize..((a + 0.4875) * sr) as usize], sr)
+                })
+                .collect();
+            for w in cents.windows(2) {
+                assert!(
+                    w[1] >= 0.99 * w[0],
+                    "{}: within-note centroid fell across the CC2 ramp: {cents:?}",
+                    p.name
+                );
+            }
+            let rise = cents[3] / cents[0];
+            println!(
+                "flue P2a {:>12}: rise {rise:.3}x (need {need:.3}; {cents:?})",
+                p.name
+            );
+            assert!(
+                rise >= need,
+                "{}: within-note centroid rise {rise:.3}x (need >= {need:.3}; {cents:?})",
+                p.name
+            );
+        }
+    }
+
+    /// P2b (flue, AIR leg) — the same within-note CC2 ramp on the air-
+    /// dominated voices, measured breath-ON as an upper-band energy
+    /// fraction (`spectral_band_rms` over the FULL window's exact Hann-DFT
+    /// bins — thousands of bins, so the noise variance the tail-4096
+    /// centroid suffers is averaged away). The band starts at 2.5·f0:
+    /// above every strong lattice line these near-sine voices own, so it
+    /// isolates the air bed's (whistle) / jet spill's (bottle) upper skirt
+    /// — exactly the energy `vel_air`/the spill law must grow with
+    /// pressure. The band floor is 3.5·f0: ABOVE every tone line these
+    /// voices own (the whistle keeps a constant h3 at 3·f0 that would
+    /// otherwise dilute the ramp — the estimator lesson again). Red before
+    /// WD9 (the ramp was a no-op).
+    #[test]
+    fn o_pressure_flue_p2b_within_note_air_ramp() {
+        let sr = WD_SR;
+        for (p, need) in [(&WHISTLE, 1.5f32), (&BLOWN_BOTTLE, 1.15)] {
+            let key = wd_mid_key(p);
+            let f0 = key_freq(key);
+            let b = flue_p2_ramp_render(p, false);
+            let fracs: Vec<f32> = (0..4)
+                .map(|w| {
+                    let a = 0.45 + 0.4875 * w as f32;
+                    let seg = &b[(a * sr) as usize..((a + 0.4875) * sr) as usize];
+                    spectral_band_rms(seg, sr, 3.5 * f0, (10.0 * f0).min(0.45 * sr))
+                        / rms(seg).max(1e-9)
+                })
+                .collect();
+            for w in fracs.windows(2) {
+                assert!(
+                    w[1] >= 0.98 * w[0],
+                    "{}: upper-band air fraction fell across the CC2 ramp: {fracs:?}",
+                    p.name
+                );
+            }
+            let rise = fracs[3] / fracs[0];
+            println!(
+                "flue P2b {:>12}: air-fraction rise {rise:.3}x (need {need:.3}; {fracs:?})",
+                p.name
+            );
+            assert!(
+                rise >= need,
+                "{}: within-note air rise {rise:.3}x (need >= {need:.3}; {fracs:?})",
+                p.name
+            );
+        }
+    }
+
+    /// P6 (flue) — speaks at p: at the lowest pressure step (vel 30), at
+    /// range bottom/mid/top, the fundamental is the strongest lattice
+    /// harmonic on every flue. One tier only (contrast the reeds' nasal
+    /// tier): every flue is fundamental-dominant by construction, including
+    /// the Helmholtz bottle, whose f0 line IS the resonance. An absolute-Hz
+    /// pressure law that buried a top-register fundamental would fail here.
+    #[test]
+    fn o_pressure_flue_p6_speaks_at_p() {
+        let sr = WD_SR;
+        for (p, _) in FLUE_PRESSURE_TABLE {
+            let (lo, hi) = p.range;
+            for key in [lo, wd_mid_key(p), hi] {
+                let f0 = key_freq(key);
+                let b = flue_pressure_render(p, key, 30, 1.2);
+                let seg = &b[(0.4 * sr) as usize..(1.1 * sr) as usize];
+                let m1 = mag_at(seg, sr, f0);
+                let mut strongest = (1u32, m1);
+                for n in 2u32..=12 {
+                    let f = f0 * n as f32;
+                    if f >= 0.45 * sr {
+                        break;
+                    }
+                    let m = mag_at(seg, sr, f);
+                    if m > strongest.1 {
+                        strongest = (n, m);
+                    }
+                }
+                assert!(
+                    m1 >= strongest.1,
+                    "{} key {key}: fundamental {m1:.4} vs strongest h{} {:.4} \
+                     — the p fundamental must speak",
+                    p.name,
+                    strongest.0,
+                    strongest.1
+                );
+            }
+        }
+    }
+
+    // =======================================================================
+    // WD-O12/O13 — GM 76 blown bottle, Helmholtz topology (§2.8.5.4): the
+    // resonator is real state, so it must RING past release, be level-
+    // matched across keys (gain normalisation over Q × excitation
+    // bandwidth), and still register as GM 76's written pitch.
+    // =======================================================================
+
+    /// WD-O12 — the resonator rings past release and is not truncated.
+    /// Uses a short-release seam (release 0.02 s ⇒ env T60 ≈ 0.14 s) so the
+    /// amp envelope cannot mask the ring: after note-off the f0-band decay
+    /// must run at the RESONATOR's T60 (τ = Q/(π·f0), key-dependent), not
+    /// the envelope's. Fail-first: the additive bottle decays at the env
+    /// rate and the voice dies with the envelope (~0.2 s after off).
+    #[test]
+    fn wd_o12_bottle_helmholtz_ring_past_release() {
+        let sr = WD_SR;
+        let p = WindPreset {
+            release: 0.02,
+            ..BLOWN_BOTTLE
+        };
+        // Per-key measurement windows and expectations: ring τ = Q/(π·f0) ⇒
+        // T60 = 6.91·τ ≈ 0.54 s at key 48 but only ≈ 0.13 s at key 72, so
+        // the slope windows must sit where each key's ring is still above
+        // the floor. Low keys ring longer — the second physical pin (an
+        // env-rate decay is key-blind, so it fails the ratio clause too).
+        let mut t60s = Vec::new();
+        for (key, w1, w2, t60_lo, t60_hi, alive_min) in [
+            (
+                48u8,
+                (0.15f32, 0.25f32),
+                (0.35f32, 0.45f32),
+                0.25f32,
+                1.2f32,
+                0.30f32,
+            ),
+            (72, (0.04, 0.09), (0.12, 0.17), 0.04, 0.5, 0.0),
+        ] {
+            let mut v = Wind::from_preset(&p, key, 100, sr, 7);
+            v.vib_depth = 0.0;
+            let off = (0.5 * sr) as usize;
+            let total = (3.0 * sr) as usize;
+            let mut b = vec![0f32; total];
+            v.render(&mut b[..off]);
+            v.note_off();
+            let mut alive_until = off;
+            let mut i = off;
+            while i < total {
+                let n = 512.min(total - i);
+                let alive = v.render(&mut b[i..i + n]);
+                i += n;
+                if alive {
+                    alive_until = i;
+                } else {
+                    break;
+                }
+            }
+            let f0 = key_freq(key);
+            let band = |(a, c): (f32, f32)| {
+                let seg = &b[((0.5 + a) * sr) as usize..((0.5 + c) * sr) as usize];
+                spectral_band_rms(seg, sr, f0 * 0.85, f0 * 1.18)
+            };
+            let (r1, r2) = (band(w1), band(w2));
+            let dt = w2.0 - w1.0;
+            let drop_db = db_ratio(r2, r1.max(1e-12));
+            // T60 from the measured slope between the two windows
+            let t60 = if drop_db < -0.01 {
+                60.0 * dt / -drop_db
+            } else {
+                f32::INFINITY
+            };
+            println!(
+                "WD-O12 key {key}: post-off f0-band drop {drop_db:.1} dB/{dt:.2}s (T60 ~ {t60:.2} s), \
+                 alive until {:.2} s after off",
+                alive_until as f32 / sr - 0.5
+            );
+            assert!(
+                t60 >= t60_lo && t60 <= t60_hi,
+                "key {key}: post-release f0-band T60 {t60:.2} s outside [{t60_lo}, {t60_hi}] — \
+                 the resonator does not ring at its own rate"
+            );
+            // alive PAST the envelope's death (env with tau 0.02 is gone by
+            // ~0.19 s), and bounded (no immortal voice)
+            assert!(
+                alive_until as f32 / sr >= 0.5 + alive_min,
+                "key {key}: voice died {:.2} s after off — the ring was truncated",
+                alive_until as f32 / sr - 0.5
+            );
+            assert!(
+                (alive_until as f32) < 2.9 * sr,
+                "key {key}: voice never died (alive at {alive_until})"
+            );
+            // no truncation cliff: at death the trailing 5 ms must be quiet
+            let tail = &b[alive_until.saturating_sub((0.005 * sr) as usize)..alive_until];
+            let cliff = tail.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+            assert!(
+                cliff < 1e-3,
+                "key {key}: voice died while still audible (tail peak {cliff:.5})"
+            );
+            t60s.push(t60);
+        }
+        assert!(
+            t60s[0] > 1.5 * t60s[1],
+            "ring time does not lengthen down the keyboard: T60(48) {:.2} vs T60(72) {:.2}",
+            t60s[0],
+            t60s[1]
+        );
+    }
+
+    /// WD-O13 — level match across keys (the gain-normalisation pin: a
+    /// constant-peak-gain resonator's noise output scales with
+    /// √(bandwidth) = √(f0/Q), so an un-normalised bottle would fall ~4.4 dB
+    /// per octave up the keyboard), pitch registration at the resonance
+    /// centre across the range, and bend tracking.
+    #[test]
+    fn wd_o13_bottle_level_pitch_and_bend_across_keys() {
+        let sr = WD_SR;
+        let mut levels = Vec::new();
+        for key in [48u8, 60, 72, 84] {
+            let b = flue_pressure_render(&BLOWN_BOTTLE, key, 100, 1.6);
+            let seg = segment(&b, sr, 0.5, 1.5);
+            levels.push(rms(seg));
+            // pitch: the dominant line sits at the written key (O-PITCH tol)
+            let f0 = key_freq(key);
+            let pk = peak_locate(seg, sr, f0 * 0.7, f0 * 1.45);
+            let cents = 1200.0 * (pk / f0).log2();
+            assert!(
+                cents.abs() <= 30.0,
+                "key {key}: bottle speaks at {pk:.1} Hz, {cents:+.0} cents from written"
+            );
+        }
+        let (lo, hi) = levels
+            .iter()
+            .fold((f32::MAX, 0.0f32), |(l, h), &v| (l.min(v), h.max(v)));
+        println!(
+            "WD-O13 bottle levels 48/60/72/84: {levels:?} (spread {:.2} dB)",
+            db_ratio(hi, lo)
+        );
+        assert!(
+            db_ratio(hi, lo) <= 4.0,
+            "bottle level spread {:.2} dB across keys — gain normalisation broken",
+            db_ratio(hi, lo)
+        );
+        // bend tracking: +2 semitones moves the sounding resonance with it
+        let mut v = Wind::from_preset(&BLOWN_BOTTLE, 60, 100, sr, 7);
+        v.vib_depth = 0.0;
+        v.set_pitch(2f32.powf(2.0 / 12.0));
+        let mut b = vec![0f32; (1.2 * sr) as usize];
+        v.render(&mut b);
+        let target = key_freq(62);
+        let pk = peak_locate(segment(&b, sr, 0.4, 1.1), sr, target * 0.7, target * 1.45);
+        let cents = 1200.0 * (pk / target).log2();
+        assert!(
+            cents.abs() <= 30.0,
+            "bent bottle speaks at {pk:.1} Hz, {cents:+.0} cents from the bent pitch"
+        );
+    }
+
+    /// WD9 controller inertness at the voice seam: a flue that is never fed
+    /// `set_breath` renders BIT-identically to one fed the neutral 1.0 (the
+    /// engine's never-authored value: CC2/CC11 at max ⇒ √(expr·breath) = 1
+    /// ⇒ p_auth = 0), and an authored back-off genuinely darkens. The
+    /// engine-side gate (`expr_authored || breath_authored || at_authored`,
+    /// the reed arm's exact shape) is exercised by
+    /// `breath_and_poly_at_neutral_until_authored` in engine.rs.
+    #[test]
+    fn wd9_set_breath_neutral_is_bit_exact_noop() {
+        let sr = WD_SR;
+        for (p, _) in FLUE_PRESSURE_TABLE {
+            let n = (0.6 * sr) as usize;
+            let mut plain = Wind::from_preset(p, wd_mid_key(p), 100, sr, 7);
+            let mut fed = Wind::from_preset(p, wd_mid_key(p), 100, sr, 7);
+            fed.set_breath(1.0, 0.0);
+            let (mut a, mut b) = (vec![0f32; n], vec![0f32; n]);
+            plain.render(&mut a);
+            fed.render(&mut b);
+            assert!(
+                a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()),
+                "{}: neutral set_breath(1.0) is not a bit-exact no-op",
+                p.name
+            );
+            let mut soft = Wind::from_preset(p, wd_mid_key(p), 100, sr, 7);
+            soft.set_breath(0.3, 0.0);
+            let mut c = vec![0f32; n];
+            soft.render(&mut c);
+            assert!(
+                a.iter().zip(&c).any(|(x, y)| x.to_bits() != y.to_bits()),
+                "{}: authored breath back-off changed nothing — the seam is dead",
+                p.name
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // O-PITCH (voice-quality overhaul HLD §3.1) — the pitch oracle over every
+    // melodic GM program, the guard the synth never had (B1: the electric
+    // pianos emitted infrasound for their whole life because nothing ever
+    // asked "is this render at the written key?"). Per-CLASS estimators, not
+    // one estimator with one tolerance:
+    //   (a) Harmonic — a real fundamental: the dominant spectral line
+    //       (peak_locate, never the zero-crossing pitch_hz — lesson
+    //       2026.07.07) must sit on the key's harmonic lattice, and the
+    //       fundamental line itself must exist.
+    //   (b) Modal — inharmonic bells/bars/membranes: the dominant line must
+    //       sit ON the key-scaled modal-ratio lattice of the voice's own
+    //       shipped table (a single-peak fundamental assert would lock onto
+    //       a strong overtone).
+    //   (c) Lattice — deep-vibrato / wandering / formant / ensemble voices:
+    //       known-key Goertzel evidence (on-lattice vs off-lattice contrast),
+    //       never peak_locate (lesson 2026.07.12: with β≳0.5 the first
+    //       sideband can outrank the carrier).
+    //   (d) Sampled attacks — a separate attack-window tuning check (the
+    //       steady post-onset window cannot see a mistuned sample).
+    // Excluded, with reasons: GM 55 (orchestra hit — a chord stab, not a
+    // single-pitch program), GM 119 (reverse cymbal — unpitched by design),
+    // GM 120–127 (SFX — toneless-noise fallbacks per the README).
+    // -----------------------------------------------------------------------
+
+    #[derive(Clone, Copy)]
+    enum PitchClass {
+        /// (a) tolerance in cents on the dominant-line deviation
+        Harmonic { tol_cents: f32 },
+        /// (b) the voice's shipped (ratio, amp, T60) table
+        Modal { table: &'static [(f32, f32, f32)] },
+        /// (c) on/off-lattice Goertzel contrast at the known key
+        Lattice,
+    }
+
+    struct PitchCase {
+        program: u8,
+        key: u8,
+        /// steady post-onset measurement window, seconds
+        window: (f32, f32),
+        /// expected sounding fundamental as a multiple of key_freq (GM 31
+        /// flageolet legitimately speaks at 2f below E4 / 3f above)
+        f_mult: f32,
+        class: PitchClass,
+    }
+
+    const fn hc(program: u8, key: u8, window: (f32, f32), tol_cents: f32) -> PitchCase {
+        PitchCase {
+            program,
+            key,
+            window,
+            f_mult: 1.0,
+            class: PitchClass::Harmonic { tol_cents },
+        }
+    }
+    const fn mc(
+        program: u8,
+        key: u8,
+        window: (f32, f32),
+        table: &'static [(f32, f32, f32)],
+    ) -> PitchCase {
+        PitchCase {
+            program,
+            key,
+            window,
+            f_mult: 1.0,
+            class: PitchClass::Modal { table },
+        }
+    }
+    const fn lc(program: u8, key: u8, window: (f32, f32)) -> PitchCase {
+        PitchCase {
+            program,
+            key,
+            window,
+            f_mult: 1.0,
+            class: PitchClass::Lattice,
+        }
+    }
+
+    /// Every melodic program, at a key (or keys) in its natural register.
+    /// Bass-register cases get longer windows so the Goertzel main lobe
+    /// resolves the tolerance (±30 cents at 41 Hz needs seconds, not
+    /// milliseconds). GM 43 carries three keys because B4's loop-latency
+    /// flatness grows with pitch: ≈ −5 cents at E1 but ≈ −29/−43 cents at
+    /// C4/G4 before the fix.
+    fn o_pitch_cases() -> Vec<PitchCase> {
+        let mut c = vec![
+            // pianos / keyboards (Modal & Pluck — tight tolerance)
+            hc(0, 48, (0.9, 2.1), 15.0),
+            hc(0, 60, (0.9, 2.1), 15.0),
+            hc(1, 60, (0.9, 2.1), 15.0),
+            hc(2, 60, (0.9, 2.1), 15.0),
+            hc(3, 60, (0.9, 2.1), 15.0),
+            hc(4, 60, (0.5, 1.6), 15.0), // B1: red before the units fix
+            hc(5, 60, (0.5, 1.6), 15.0), // B1: red before the units fix
+            hc(6, 60, (0.3, 1.1), 15.0),
+            hc(7, 60, (0.2, 0.9), 15.0),
+            hc(15, 62, (0.2, 1.0), 15.0),
+            // organs (drawbar sub-octaves are quieter than the 8' line, so the
+            // dominant line is still the fundamental)
+            hc(16, 60, (0.5, 1.6), 30.0),
+            hc(17, 60, (0.5, 1.6), 30.0),
+            hc(18, 60, (0.5, 1.6), 30.0),
+            hc(19, 60, (0.8, 2.0), 30.0),
+            hc(20, 60, (0.5, 1.6), 30.0),
+            hc(21, 60, (0.5, 1.6), 30.0),
+            hc(22, 60, (0.5, 1.6), 30.0),
+            hc(23, 60, (0.5, 1.6), 30.0),
+            // guitars (Pluck / KS)
+            hc(24, 52, (0.3, 1.3), 15.0),
+            hc(25, 52, (0.3, 1.3), 15.0),
+            hc(26, 52, (0.3, 1.3), 15.0),
+            hc(27, 52, (0.3, 1.3), 15.0),
+            hc(28, 52, (0.15, 0.8), 15.0),
+            hc(29, 45, (0.3, 1.3), 30.0),
+            hc(30, 45, (0.3, 1.3), 30.0),
+            // 31 flageolet: the loop deliberately rings 2f below E4
+            PitchCase {
+                program: 31,
+                key: 52,
+                window: (0.2, 1.0),
+                f_mult: 2.0,
+                class: PitchClass::Harmonic { tol_cents: 15.0 },
+            },
+            // basses (low register — long windows)
+            hc(32, 33, (0.4, 2.2), 30.0),
+            hc(33, 33, (0.4, 2.2), 30.0),
+            hc(34, 40, (0.3, 1.6), 30.0),
+            hc(35, 40, (0.3, 1.6), 30.0),
+            hc(36, 40, (0.3, 1.6), 30.0),
+            hc(37, 40, (0.3, 1.6), 30.0),
+            hc(38, 36, (0.4, 2.2), 30.0),
+            hc(39, 36, (0.4, 2.2), 30.0),
+            // bowed strings
+            hc(40, 69, (0.6, 1.8), 30.0),
+            hc(41, 60, (0.6, 1.8), 30.0),
+            // 42/43 keys avoid 46–50: the BowedString waveguide mode-locks
+            // onto ~3·f0 there (a wolf band, both programs — found by the
+            // measure_bowedstring_loop_latency sweep, logged in scratchpad.md;
+            // fixing the waveguide's mode stability is outside this slice)
+            hc(42, 52, (0.8, 2.4), 30.0),
+            hc(42, 69, (0.8, 2.4), 30.0),
+            hc(43, 36, (0.8, 2.8), 30.0),
+            hc(43, 60, (0.8, 2.4), 30.0), // B4: −29 cents before the fix
+            hc(43, 67, (0.8, 2.4), 30.0), // B4: −43 cents before the fix
+            hc(44, 69, (0.6, 1.8), 30.0),
+            hc(45, 60, (0.1, 0.7), 15.0),
+            hc(46, 60, (0.15, 1.0), 15.0),
+            // string sections / synth strings
+            hc(48, 60, (0.8, 2.0), 30.0),
+            hc(49, 60, (1.2, 2.4), 30.0),
+            hc(50, 60, (0.8, 2.0), 30.0),
+            hc(51, 60, (1.2, 2.4), 30.0),
+            // brass
+            hc(56, 66, (0.5, 1.6), 30.0),
+            hc(57, 52, (0.5, 1.6), 30.0),
+            hc(58, 36, (0.6, 2.4), 30.0),
+            hc(59, 66, (0.5, 1.6), 30.0),
+            hc(60, 53, (0.5, 1.6), 30.0),
+            hc(61, 57, (0.5, 1.6), 30.0),
+            hc(62, 57, (0.5, 1.6), 30.0),
+            hc(63, 57, (0.5, 1.6), 30.0),
+            // reeds (incl. bagpipe/shanai alt-GM slots)
+            hc(64, 69, (0.5, 1.6), 30.0),
+            hc(65, 64, (0.5, 1.6), 30.0),
+            hc(66, 55, (0.5, 1.6), 30.0),
+            hc(67, 43, (0.6, 2.2), 30.0),
+            hc(68, 69, (0.5, 1.6), 30.0),
+            hc(69, 62, (0.5, 1.6), 30.0),
+            hc(70, 46, (0.6, 2.2), 30.0),
+            hc(71, 62, (0.5, 1.6), 30.0),
+            hc(109, 69, (0.5, 1.6), 30.0),
+            hc(111, 69, (0.5, 1.6), 30.0),
+            // flues
+            hc(72, 86, (0.4, 1.4), 30.0),
+            hc(73, 74, (0.4, 1.4), 30.0),
+            hc(74, 76, (0.4, 1.4), 30.0),
+            hc(75, 74, (0.4, 1.4), 30.0),
+            hc(76, 60, (0.4, 1.4), 30.0),
+            hc(77, 62, (0.4, 1.4), 30.0),
+            hc(78, 84, (0.4, 1.4), 30.0),
+            hc(79, 72, (0.4, 1.4), 30.0),
+            // ethnic plucks
+            hc(104, 64, (0.2, 1.1), 15.0),
+            hc(105, 67, (0.15, 0.9), 15.0),
+            hc(106, 62, (0.2, 1.1), 15.0),
+            hc(107, 62, (0.2, 1.1), 15.0),
+            hc(110, 69, (0.6, 1.8), 30.0),
+            // -- class (b): inharmonic modal families, checked against their
+            //    own shipped tables
+            mc(8, 72, (0.1, 0.9), CELESTA),
+            mc(9, 79, (0.05, 0.6), GLOCK),
+            mc(10, 72, (0.1, 0.8), MUSICBOX),
+            mc(11, 60, (0.1, 1.2), VIBES),
+            mc(12, 60, (0.08, 0.6), MARIMBA),
+            mc(13, 72, (0.05, 0.4), XYLOPHONE),
+            mc(14, 60, (0.2, 1.8), TUBULAR),
+            mc(47, 45, (0.35, 1.1), TIMPANI), // post strike-glide settle
+            mc(108, 72, (0.05, 0.6), KALIMBA),
+            mc(112, 84, (0.1, 1.0), TINKLE_BELL),
+            mc(113, 72, (0.05, 0.5), AGOGO),
+            mc(114, 60, (0.1, 1.0), STEEL_DRUM),
+            mc(115, 76, (0.04, 0.25), WOODBLOCK),
+            mc(116, 48, (0.25, 0.8), TAIKO_MODES),
+            mc(117, 48, (0.15, 0.6), TOM_MODES),
+            mc(118, 48, (0.18, 0.5), SYNTH_DRUM_MODES),
+            mc(96, 72, (0.2, 1.5), CRYSTAL),
+            mc(98, 72, (0.2, 1.5), CRYSTAL),
+            mc(100, 72, (0.2, 1.5), CRYSTAL),
+            mc(102, 72, (0.2, 1.5), CRYSTAL),
+            // -- class (c): formant/ensemble/motion voices — known-key
+            //    lattice evidence, never a single-peak estimate
+            lc(52, 57, (2.0, 3.6)),
+            lc(53, 57, (2.0, 3.6)),
+            lc(54, 57, (2.0, 3.6)),
+            lc(88, 57, (1.0, 2.4)),
+            lc(89, 57, (2.0, 3.6)),
+            lc(90, 57, (0.6, 2.0)),
+            lc(91, 57, (1.2, 2.8)),
+            lc(92, 57, (1.5, 3.0)),
+            lc(93, 57, (1.5, 3.0)),
+            lc(94, 57, (1.5, 3.0)),
+            lc(95, 57, (2.0, 3.6)),
+            lc(97, 60, (0.5, 2.0)),
+            lc(99, 60, (0.5, 2.0)),
+            lc(101, 60, (0.5, 2.0)),
+            lc(103, 60, (0.5, 2.0)),
+        ];
+        // leads: one register, uniform window
+        for p in 80..=87u8 {
+            c.push(hc(p, 69, (0.4, 1.5), 30.0));
+        }
+        c
+    }
+
+    /// Programs whose default bank wraps an LA sample layer — the only ones
+    /// where `samples: true` renders a different signal (everything else
+    /// routes identically, so re-checking it would only re-run the model leg).
+    const LA_PROGRAMS: &[u8] = &[
+        0, 1, 2, 3, 24, 40, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 110,
+    ];
+
+    /// On/off-lattice Goertzel contrast at the known key: the strongest
+    /// magnitude on the harmonic lattice n·f0 vs the strongest at the
+    /// half-integer probes (n+0.5)·f0 (including 0.5·f0, which catches a
+    /// wrong-octave render).
+    fn lattice_contrast(seg: &[f32], sr: f32, f0: f32) -> (f32, f32) {
+        let n_max = ((sr * 0.40 / f0) as usize).clamp(3, 8);
+        let on = (1..=n_max)
+            .map(|n| mag_at(seg, sr, n as f32 * f0))
+            .fold(0.0f32, f32::max);
+        let off = (0..n_max)
+            .map(|n| mag_at(seg, sr, (n as f32 + 0.5) * f0))
+            .fold(0.0f32, f32::max);
+        (on, off)
+    }
+
+    fn check_pitch(case: &PitchCase, samples: bool) -> Result<String, String> {
+        let sr = 44100.0;
+        let f0 = key_freq(case.key) * case.f_mult;
+        let secs = case.window.1 + 0.05;
+        let sig = render_program_sampled(case.program, case.key, 100, secs, 7, samples);
+        let seg = segment(&sig, sr, case.window.0, case.window.1);
+        let total = rms(seg);
+        let label = format!(
+            "GM{:>3} key {:>2} samples={}",
+            case.program, case.key, samples
+        );
+        if total < 1e-4 {
+            return Err(format!("{label}: window is silent (rms {total:.2e})"));
+        }
+        match case.class {
+            PitchClass::Harmonic { tol_cents } => {
+                let lo = (f0 / 3.1).max(24.0);
+                let hi = (f0 * 3.4).min(sr * 0.44);
+                let peak = peak_locate(seg, sr, lo, hi);
+                let m_peak = mag_at(seg, sr, peak);
+                if m_peak < 0.04 * total {
+                    return Err(format!(
+                        "{label}: no dominant spectral line — pitchless render \
+                         (line {m_peak:.5} vs rms {total:.5})"
+                    ));
+                }
+                let cents = 1200.0 * (peak / f0).log2();
+                if cents.abs() <= tol_cents {
+                    return Ok(format!("{label}: fundamental {cents:+.1} cents"));
+                }
+                // The dominant line may legitimately be an upper harmonic
+                // (overtone-rich voices: hi-gain guitar, sitar, waveguide
+                // cello at the bridge) — then it must still sit on the
+                // lattice IN TUNE, and the f0-lattice lines that are NOT
+                // multiples of n must exist: a voice actually sounding at
+                // n·f0 populates only the n·k lines, so real energy at a
+                // non-multiple line is what rules out an octave/register
+                // error.
+                for n in 2..=4u32 {
+                    let dev = 1200.0 * (peak / (f0 * n as f32)).log2();
+                    if dev.abs() <= tol_cents {
+                        let (m_best, m_line) = (1..=4u32)
+                            .filter(|m| m % n != 0 && *m != n)
+                            .map(|m| (mag_at(seg, sr, f0 * m as f32), m))
+                            .max_by(|a, b| a.0.total_cmp(&b.0))
+                            .unwrap();
+                        if m_best >= 0.06 * m_peak {
+                            return Ok(format!(
+                                "{label}: h{n} dominant, {dev:+.1} cents, \
+                                 h{m_line} present at {:.2}× line",
+                                m_best / m_peak
+                            ));
+                        }
+                        return Err(format!(
+                            "{label}: dominant line at h{n} but the rest of the \
+                             f0 lattice is missing (best other line {:.3}× the \
+                             line) — octave/register error",
+                            m_best / m_peak
+                        ));
+                    }
+                }
+                Err(format!(
+                    "{label}: dominant line {peak:.2} Hz is {cents:+.0} cents from \
+                     {f0:.2} Hz and on no harmonic"
+                ))
+            }
+            PitchClass::Modal { table } => {
+                let r_min = table.iter().map(|&(r, _, _)| r).fold(f32::MAX, f32::min);
+                let r_max = table.iter().map(|&(r, _, _)| r).fold(0.0f32, f32::max);
+                let lo = (f0 * r_min / 1.4).max(24.0);
+                let hi = (f0 * r_max * 1.4).min(sr * 0.44);
+                let peak = peak_locate(seg, sr, lo, hi);
+                let m_peak = mag_at(seg, sr, peak);
+                if m_peak < 0.04 * total {
+                    return Err(format!(
+                        "{label}: no dominant modal line — pitchless render \
+                         (line {m_peak:.5} vs rms {total:.5})"
+                    ));
+                }
+                let (best_r, best_dev) = table
+                    .iter()
+                    .map(|&(r, _, _)| (r, 1200.0 * (peak / (f0 * r)).log2()))
+                    .min_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+                    .unwrap();
+                if best_dev.abs() > 40.0 {
+                    return Err(format!(
+                        "{label}: dominant line {peak:.2} Hz is {best_dev:+.0} cents \
+                         from the nearest key-scaled mode (r {best_r})"
+                    ));
+                }
+                Ok(format!(
+                    "{label}: mode r {best_r} dominant, {best_dev:+.1} cents"
+                ))
+            }
+            PitchClass::Lattice => {
+                let (on, off) = lattice_contrast(seg, sr, f0);
+                if on < 0.04 * total {
+                    return Err(format!(
+                        "{label}: no on-lattice energy at the key \
+                         (on {on:.5} vs rms {total:.5})"
+                    ));
+                }
+                if on < 2.5 * off {
+                    return Err(format!(
+                        "{label}: off-lattice energy rivals the key's lattice \
+                         (on {on:.4} vs off {off:.4})"
+                    ));
+                }
+                Ok(format!(
+                    "{label}: lattice contrast {:.1}×",
+                    on / off.max(1e-9)
+                ))
+            }
+        }
+    }
+
+    /// O-PITCH, model leg: every melodic program renders pitch evidence at
+    /// the written key through `make(..., samples=false)`. Composed-to-pass
+    /// with the B1 (GM 4/5 ratio-as-Hz) and B4 (GM 43 loop_comp) fixes —
+    /// both were RED here on the unfixed voices.
+    #[test]
+    fn o_pitch_melodic_programs_model() {
+        let mut failures = Vec::new();
+        for case in o_pitch_cases() {
+            if let Err(e) = check_pitch(&case, false) {
+                failures.push(e);
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "O-PITCH model-leg failures:\n{}",
+            failures.join("\n")
+        );
+    }
+
+    /// O-PITCH, sampled leg: the LA-wrapped programs re-checked with the
+    /// sample layer on — a mis-repitched or wrong-key sample zone shifts the
+    /// steady window's lattice too. Skipped in a modeled-only build.
+    #[test]
+    fn o_pitch_melodic_programs_sampled() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let mut failures = Vec::new();
+        for case in o_pitch_cases() {
+            if !LA_PROGRAMS.contains(&case.program) {
+                continue;
+            }
+            if let Err(e) = check_pitch(&case, true) {
+                failures.push(e);
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "O-PITCH sampled-leg failures:\n{}",
+            failures.join("\n")
+        );
+    }
+
+    /// O-PITCH class (d): the sampled ATTACK window is tuned to the key. The
+    /// steady post-onset window cannot see a mistuned or wrong-instrument
+    /// sample (the model owns the sustain), so the sample-owned onset gets
+    /// its own lattice check. This is a TUNING check, not an instrument-
+    /// identity check (GM 61's wrong-instrument sample is §2.7's job).
+    #[test]
+    fn o_pitch_sampled_attack_window_is_tuned() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let mut failures = Vec::new();
+        for &(program, key, w0, w1) in &[
+            (0u8, 60u8, 0.02f32, 0.16f32),
+            (24, 52, 0.02, 0.16),
+            (40, 69, 0.02, 0.14),
+            (42, 52, 0.03, 0.15),
+            (43, 43, 0.03, 0.17),
+            (48, 60, 0.02, 0.14),
+            (56, 66, 0.02, 0.12),
+            (57, 52, 0.02, 0.12),
+            (60, 53, 0.02, 0.12),
+            (68, 69, 0.02, 0.12),
+            (71, 62, 0.02, 0.12),
+            (73, 74, 0.02, 0.12),
+        ] {
+            let f0 = key_freq(key);
+            let sig = render_program_sampled(program, key, 100, w1 + 0.05, 7, true);
+            let seg = segment(&sig, sr, w0, w1);
+            let (on, off) = lattice_contrast(seg, sr, f0);
+            if on < 1.4 * off {
+                failures.push(format!(
+                    "GM{program} key {key}: attack window off the key lattice \
+                     (on {on:.4} vs off {off:.4})"
+                ));
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "O-PITCH attack-window failures:\n{}",
+            failures.join("\n")
+        );
+    }
+
+    /// Diagnostic companion to O-PITCH: prints every case's measurement on
+    /// both legs. Not a gate — run it when a case fails and you need the
+    /// numbers, or when adding programs to the table:
+    ///   cargo test -p ferrosintesis --release o_pitch_survey -- --ignored --nocapture
+    #[test]
+    #[ignore = "diagnostic survey, not a gate"]
+    fn o_pitch_survey() {
+        for case in o_pitch_cases() {
+            let legs: &[bool] = if LA_PROGRAMS.contains(&case.program) {
+                &[false, true]
+            } else {
+                &[false]
+            };
+            for &samples in legs {
+                match check_pitch(&case, samples) {
+                    Ok(m) => println!("ok   {m}"),
+                    Err(m) => println!("FAIL {m}"),
+                }
+            }
+        }
+    }
+
+    /// A-MEAS (HLD §2.4): measure the BowedString waveguide's true in-loop
+    /// latency so `loop_comp` is a measurement, never a guess (lesson
+    /// 2026.07.11 — peak-locate and autocorrelation agreed for the cello's
+    /// 3.85). The rendered period obeys T = sr/f0 − loop_comp + L, so the
+    /// in-tune setting is loop_comp = L = T − sr/f0 + loop_comp_current.
+    ///   cargo test -p ferrosintesis --release measure_bowedstring_loop_latency -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate — HLD §2.4"]
+    fn measure_bowedstring_loop_latency() {
+        let sr = 44100.0;
+        // Keys 46–50 are included deliberately: the sweep that produced the
+        // loop_comp values also found the waveguide mode-locking onto ~3·f0
+        // there (a wolf band, both programs — implied L goes wild instead of
+        // sitting at ≈ 4.0). Logged in scratchpad.md; out of this task's scope.
+        for program in [42u8, 43] {
+            for key in [36u8, 43, 45, 46, 47, 48, 49, 50, 51, 52, 55, 60, 67] {
+                let f0 = key_freq(key);
+                for seed in [7u32, 17, 23] {
+                    let mut v = BowedString::new(program, key, 100, sr, seed);
+                    v.vib_depth = 0.0; // clean tone for the period measurement
+                    v.drift = Drift::new(1, 0.0, 1);
+                    let mut buf = vec![0f32; (3.0 * sr) as usize];
+                    v.render(&mut buf);
+                    let seg = &buf[sr as usize..];
+                    let t = crate::testutil::mean_period_samples(seg, sr, f0);
+                    if t <= 0.0 {
+                        println!("GM{program} key {key} seed {seed}: no period measured");
+                        continue;
+                    }
+                    let l = t - sr / f0 + v.loop_comp;
+                    let cents = 1200.0 * ((sr / t) / f0).log2();
+                    println!(
+                        "GM{program} key {key} seed {seed}: T {t:.3} (ideal {:.3}) \
+                         cents {cents:+.1} implied L {l:.3}",
+                        sr / f0
+                    );
+                }
+            }
         }
     }
 }

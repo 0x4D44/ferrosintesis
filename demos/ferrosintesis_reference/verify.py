@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+import re
 import tempfile
 
 import engine as en
@@ -31,15 +32,13 @@ def run_all(spec_scores, suite: bool = True):
             results.append((f"{prefix} dry", check_dry(sc)))
             results.append((f"{prefix} gap", check_gap(sc)))
             results.append((f"{prefix} registers", check_registers(spec.number, sc)))
+            results.append((f"{prefix} A/B parity", check_ab_parity(spec.number, sc)))
     if suite:
         results.append(("coverage: melodic voices", check_coverage_melodic(by_num)))
         results.append(("coverage: alt bank", check_coverage_alt(by_num)))
         results.append(("coverage: drum keys", check_coverage_drums(by_num)))
         results.append(("coverage: effects CCs", check_coverage_effects(by_num)))
-        # An A/B must vary ONE thing: the bank. If the two banks are auditioned in
-        # different registers the listener compares notes, not voices -- and any
-        # verdict drawn from it is unsound. This caught 12 of 24 dual-bank rows.
-        results.append(("A/B validity: dual-bank registers", pr.check_dual_bank_registers()))
+        results.append(("alias vs make() dispatch", check_alias_dispatch()))
     return results
 
 
@@ -178,6 +177,137 @@ def check_registers(num: int, sc: en.Score) -> list[str]:
                 if len(fails) >= 8:
                     return fails
                 break
+    return fails
+
+
+def check_ab_parity(num: int, sc: en.Score) -> list[str]:
+    """Every default/alt program pair is auditioned at the same root key, velocity
+    and gesture (HLD 2.14 item 1). Checked on the EMITTED notes, not just the
+    tables: the alt slot's note-ons must equal the default twin's, shifted by
+    exactly one slot - so a hand-tuned alt register (the 20-semitone GM 43 rigged
+    A/B) can never silently return."""
+    fails = []
+    slots = _slots_for(num)
+    ons = note_ons(sc, MELODIC_CH)
+
+    def emitted(idx: int):
+        t0 = idx * 8.0
+        return [(round(b - t0, 4), k, v) for b, k, v in ons if t0 - 1e-6 <= b < t0 + 8.0 - 1e-6]
+
+    for i, slot in enumerate(slots):
+        if not slot.alt:
+            continue
+        if i == 0 or slots[i - 1].program != slot.program or slots[i - 1].alt:
+            fails.append(f"{slot.label}: not preceded by its default twin")
+            continue
+        default = slots[i - 1]
+        if (default.register, default.gesture) != (slot.register, slot.gesture):
+            fails.append(
+                f"{slot.label}: register/gesture {slot.register}/{slot.gesture} != "
+                f"default's {default.register}/{default.gesture}"
+            )
+        if emitted(i - 1) != emitted(i):
+            fails.append(f"{slot.label}: emitted notes differ from default twin (unfair A/B)")
+        if len(fails) >= 6:
+            break
+    return fails
+
+
+# --- ALIAS vs the Rust dispatch ----------------------------------------------------
+#
+# ALIAS claims "renders byte-identically to the canonical voice once dry". The ground
+# truth is the `match program` in voices.rs `make()`: a true alias must share one
+# match arm whose body never reads `program` (the byte is discarded). That is
+# NECESSARY, not sufficient - the engine can still split a shared arm with a
+# per-program insert (needs_drive, engine.rs:262, gives 29/30 different Drive
+# profiles despite one `Pluck::new(&DRIVE, ..)` arm) - so ALIAS stays curated, but a
+# STALE entry (dispatch split under it, like the 2026-07 pad/FX/organ/slap splits)
+# now fails mechanically instead of rotting in a hand table.
+
+_VOICES_RS = Path(__file__).resolve().parents[2] / "crates" / "ferrosintesis" / "src" / "voices.rs"
+
+
+def _make_arms(src: str) -> list[tuple[str, str]]:
+    """(pattern, body) for each arm of `make()`'s `match program`, in order."""
+    start = src.index("pub fn make(")
+    start = src.index("match program {", start)
+    text = re.sub(r"//[^\n]*", "", src[src.index("{", start) + 1:])  # comments lie about depth
+    arms: list[tuple[str, str]] = []
+    pat: list[str] = []
+    body: list[str] = []
+    in_body = False
+    depth = 0
+    j = 0
+    while j < len(text):
+        if not in_body and depth == 0 and text.startswith("=>", j):
+            in_body = True
+            j += 2
+            continue
+        c = text[j]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            if depth == 0:  # the match's own closing brace - flush the last arm
+                if in_body:
+                    arms.append(("".join(pat), "".join(body)))
+                return arms
+            depth -= 1
+            if in_body:
+                body.append(c)
+                if depth == 0 and "".join(body).lstrip().startswith("{"):
+                    arms.append(("".join(pat), "".join(body)))  # block arm: no comma needed
+                    pat, body, in_body = [], [], False
+                j += 1
+                continue
+        if in_body and depth == 0 and c == ",":
+            arms.append(("".join(pat), "".join(body)))
+            pat, body, in_body = [], [], False
+            j += 1
+            continue
+        (body if in_body else pat).append(c)
+        j += 1
+    return arms
+
+
+def _arm_programs(pattern: str) -> list[int] | None:
+    """Programs a match pattern covers; None for `_` or anything unparsable."""
+    out: list[int] = []
+    for tok in pattern.strip().lstrip(",").split("|"):
+        tok = tok.strip()
+        m = re.fullmatch(r"(\d+)\s*\.\.=\s*(\d+)", tok)
+        if m:
+            out.extend(range(int(m.group(1)), int(m.group(2)) + 1))
+        elif tok.isdigit():
+            out.append(int(tok))
+        else:
+            return None
+    return out
+
+
+def check_alias_dispatch() -> list[str]:
+    """Every ALIAS pair shares one `make()` arm and that arm discards `program`."""
+    if not _VOICES_RS.exists():
+        return [f"{_VOICES_RS} not found - cannot verify ALIAS against the dispatch"]
+    try:
+        arms = _make_arms(_VOICES_RS.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        return [f"could not parse make() dispatch in {_VOICES_RS}: {exc}"]
+    prog_arm: dict[int, tuple[int, str]] = {}
+    for idx, (pattern, body) in enumerate(arms):
+        progs = _arm_programs(pattern)
+        if progs is None:
+            continue  # `_` fallback; no alias may rely on it
+        for p in progs:
+            prog_arm.setdefault(p, (idx, body))  # first matching arm wins, like rustc
+    fails = []
+    for p, canon in sorted(pr.ALIAS.items()):
+        got_p, got_c = prog_arm.get(p), prog_arm.get(canon)
+        if got_p is None or got_c is None:
+            fails.append(f"GM {p}->{canon}: not matched by an explicit make() arm")
+        elif got_p[0] != got_c[0]:
+            fails.append(f"GM {p} and canonical GM {canon} sit in different make() arms - stale alias")
+        elif re.search(r"\bprogram\b", got_p[1]):
+            fails.append(f"GM {p}->{canon}: shared make() arm reads `program` - not byte-identical")
     return fails
 
 

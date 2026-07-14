@@ -44,6 +44,24 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   pan shipped 10 ms attack vs 8 ms mallet burst → strike at 12% of peak → a steel pan that
   measured as a wooden bar, metalness 0.0002 vs marimba 0.0001).
 
+- 2026.07.14 — **White noise through a memoryless nonlinearity stays spectrally
+  FLAT — it cannot make skirts.** S_y(f) = Σ|W_k|²·S_n(f−k·f0): shifting and summing
+  a flat PSD is still flat, whatever the drive. To get growl skirts around partials
+  (the sax G3 gate), the injected turbulence must be band-limited well below f0
+  *before* the shaper (RD10 lowpasses it at 0.30·f0); full-band injection just adds
+  hiss and the skirt bands never concentrate. Corollary for oracles: a single
+  one-pole "sub-audio" probe leaks a 349 Hz carrier at −6 dB/oct (~3 %) — cascade
+  poles before calling a residue DC.
+
+- 2026.07.14 — **The 20-log-bin `testutil::centroid` is leakage-dominated on a clean
+  harmonic lattice — a real 3× filter-cutoff sweep reads as ~1.1×.** Its fixed Goertzel
+  bins almost never land on a harmonic, so every bin reads sinc-leakage skirts and the
+  "centroid" mostly tracks the strongest harmonic's nearest bins (RD-O7's old note
+  measured the same compression). For brightness oracles use the Hann-windowed exact-DFT
+  `testutil::spectral_centroid` on a settled window (O-PRESSURE's `steady_centroid`
+  pattern) — same family as the zero-crossing-pitch lesson: check the estimator can see
+  the effect before pinning thresholds on it.
+
 - 2026.07.13 — **A byte-exact test fixture MUST be marked `-text` in `.gitattributes`,
   and the render pipeline IS byte-reproducible across binaries.** Two findings from the
   Rust `render-catalog` port. (1) This repo has `core.autocrlf=true`, so git rewrites LF

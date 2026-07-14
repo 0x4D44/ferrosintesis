@@ -402,6 +402,18 @@ impl Biquad {
         )
     }
 
+    /// Retune as a highpass in place, preserving filter state (no clicks).
+    /// The reed rasp stage (RD10) tracks its sub-fundamental guard at 0.55·f0
+    /// from this at CTRL rate.
+    pub fn retune_highpass(&mut self, freq: f32, q: f32, sr: f32) {
+        let fresh = Self::highpass(freq, q, sr);
+        self.b0 = fresh.b0;
+        self.b1 = fresh.b1;
+        self.b2 = fresh.b2;
+        self.a1 = fresh.a1;
+        self.a2 = fresh.a2;
+    }
+
     /// Constant-peak-gain bandpass.
     pub fn bandpass(freq: f32, q: f32, sr: f32) -> Self {
         let w = 2.0 * PI * (freq / sr).min(0.49);
@@ -413,6 +425,18 @@ impl Biquad {
     /// Retune as a bandpass in place, preserving filter state (no clicks).
     pub fn retune_bandpass(&mut self, freq: f32, q: f32, sr: f32) {
         let fresh = Self::bandpass(freq, q, sr);
+        self.b0 = fresh.b0;
+        self.b1 = fresh.b1;
+        self.b2 = fresh.b2;
+        self.a1 = fresh.a1;
+        self.a2 = fresh.a2;
+    }
+
+    /// Retune as a peak EQ in place, preserving filter state (no clicks).
+    /// The reed honk (RD2) redesigns its formant slots from this at CTRL
+    /// rate — gain moves with blowing pressure, centre and Q never do.
+    pub fn retune_peak(&mut self, freq: f32, q: f32, gain_db: f32, sr: f32) {
+        let fresh = Self::peak(freq, q, gain_db, sr);
         self.b0 = fresh.b0;
         self.b1 = fresh.b1;
         self.b2 = fresh.b2;
@@ -433,17 +457,6 @@ impl Biquad {
             -2.0 * cw,
             1.0 - alpha / a,
         )
-    }
-
-    /// Zero the filter state (coefficients keep their design). Idle/denormal
-    /// guard for long-lived inserts that would otherwise filter silence
-    /// forever (guitar v2 HLD §3.C): snapping decayed state to exact zero
-    /// keeps subnormals off the recursive path.
-    pub(crate) fn reset(&mut self) {
-        self.x1 = 0.0;
-        self.x2 = 0.0;
-        self.y1 = 0.0;
-        self.y2 = 0.0;
     }
 
     #[inline]

@@ -223,17 +223,18 @@ pub(crate) fn cab_biquads(sr2: f32) -> [Biquad; 5] {
 }
 
 /// Overdrive/distortion channel insert for GM programs 29/30 (guitar v2,
-/// HLD §3.C): program-keyed pre-voicing → power-supply SAG gain → stage-1
-/// biased (asymmetric) tanh → interstage tilt EQ → stage-2 tanh → DC
-/// blocker → speaker cabinet, the whole nonlinear chain at 2× rate. The
-/// cab's cliff replaces the old box-average decimator, so the shaper fizz
-/// dies in the cabinet instead of aliasing down.
+/// HLD §3.C): program-keyed pre-voicing → stage-1 biased (asymmetric) tanh
+/// → interstage tilt EQ → stage-2 tanh → DC blocker → speaker cabinet, the
+/// whole nonlinear chain at 2× rate. The cab's cliff replaces the old
+/// box-average decimator, so the shaper fizz dies in the cabinet instead
+/// of aliasing down.
 ///
-/// The sag stage is what a real amp's drooping supply does, with the real
-/// temporal polarity: a fast-attack envelope means pick transients pass at
-/// unity gain, then as the note DECAYS the gain recovers (slew-limited, the
-/// supply recharging) and holds the tail in saturation — compression
-/// sustain and bloom, never an onset blast.
+/// The chain is STATIC: the loudest instant (the pick) drives the tanh
+/// stages hardest, which is exactly how a real amp clips. The old
+/// "power-supply sag" gain (`sag_target / env`, slewing UP to 4× as the
+/// note decayed) had the temporal polarity backwards — it faked sustain by
+/// blooming the tail — and was deleted (voice-quality overhaul §2.6);
+/// held-note sustain is the string's e-bow sustainer (`DRIVE.sustain`).
 struct Drive {
     program: u8,
     pre: Biquad,
@@ -246,20 +247,7 @@ struct Drive {
     dcb: Biquad,
     cab: [Biquad; 5],
     prev: f32,
-    // sag state
-    env: f32,
-    g_sag: f32,
-    sag_target: f32, // T: the post-voicing level the sag tries to restore
-    g_max: f32,      // recovery ceiling (test-varied by V5's differential)
-    atk_k: f32,
-    rel_k: f32,
-    slew_up: f32,
-    idle: u32, // consecutive near-silent 2× samples
-    idle_snap: u32,
 }
-
-/// Sag recovery ceiling: +12 dB (HLD §3.C G_MAX ≈ 4).
-const SAG_G_MAX: f32 = 4.0;
 
 impl Drive {
     fn new(program: u8, sr: f32) -> Self {
@@ -268,13 +256,13 @@ impl Drive {
         // Two gentler stages replace v1's single hot tanh; `post` is
         // level-matched to v1 at the loud operating point (drive_level_probe:
         // 29 −9.9 dBFS, 30 −11.6 dBFS on a 0.5-amp 220 Hz sine).
-        let (g1, g2, post, bias, sag_target) = if program == 30 {
-            (4.5, 3.0, 0.30, 0.5, 0.33)
+        let (g1, g2, post, bias) = if program == 30 {
+            (4.5, 3.0, 0.30, 0.5)
         } else {
             // bias 0.45: the gentler two-stage 29 needs MORE stage-1 asymmetry
             // than v1's single hot tanh to keep its even-harmonic warmth
             // (drive_asymmetry_and_dc's 2nd-vs-3rd floor)
-            (2.5, 2.0, 0.42, 0.45, 0.60)
+            (2.5, 2.0, 0.42, 0.45)
         };
         let (voice, tilt) = if program == 30 {
             (
@@ -305,57 +293,15 @@ impl Drive {
             dcb: Biquad::highpass(20.0, 0.7, sr2),
             cab: cab_biquads(sr2),
             prev: 0.0,
-            env: 0.0,
-            g_sag: 1.0,
-            sag_target,
-            g_max: SAG_G_MAX,
-            // attack ≤ 1 ms so the envelope catches the pick before the sag
-            // could boost it; release ≈ 180 ms tracks the note's decay
-            atk_k: 1.0 - (-1.0 / (0.0005 * sr2)).exp(),
-            rel_k: 1.0 - (-1.0 / (0.180 * sr2)).exp(),
-            // recovery slew: +12 dB per ~150 ms — the supply recharging
-            slew_up: 10f32.powf(12.0 / 20.0 / (0.150 * sr2)),
-            // born idle: without this, a first note 0.2-0.4 s into the render
-            // meets a gain pre-charged toward g_max by the silent gap
-            // (review C2 follow-up)
-            idle: (0.4 * sr2) as u32,
-            idle_snap: (0.4 * sr2) as u32,
         }
     }
 
     #[inline]
     fn chain(&mut self, x: f32) -> f32 {
         let v = self.voice.process(self.pre.process(x));
-        // sag follower + gain law: g eases toward T/env (clamped [1, g_max]);
-        // upward motion is slew-limited (recovery), downward inherits the
-        // fast attack of `env` (transients pass at ~unity)
-        // idle bookkeeping FIRST: a long-silent channel pins its sag target
-        // back to unity and snaps its filter state to exact zero (denormal
-        // guard) — without the pin, a silent env would read as "fully
-        // decayed" and slew the gain to g_max, booby-trapping the entrance
-        let a = v.abs();
-        if a < 1e-6 {
-            self.idle = self.idle.saturating_add(1);
-            if self.idle == self.idle_snap {
-                self.reset_state();
-            }
-        } else {
-            self.idle = 0;
-        }
-        self.env += if a > self.env { self.atk_k } else { self.rel_k } * (a - self.env);
-        let target = if self.idle >= self.idle_snap {
-            1.0
-        } else {
-            (self.sag_target / self.env.max(self.sag_target / self.g_max)).max(1.0)
-        };
-        self.g_sag = if target < self.g_sag {
-            target
-        } else {
-            (self.g_sag * self.slew_up).min(target)
-        };
         // stage 1: biased tanh referenced to its bias point — the curvature
         // asymmetry (even harmonics) stays, but silence maps to exactly zero
-        let s1 = (v * self.g_sag * self.g1 + self.bias).tanh() - self.bias.tanh();
+        let s1 = (v * self.g1 + self.bias).tanh() - self.bias.tanh();
         // interstage tilt, then the gentler symmetric second stage
         let s2 = (self.tilt.process(s1) * self.g2).tanh();
         let mut y = self.dcb.process(s2);
@@ -363,18 +309,6 @@ impl Drive {
             y = c.process(y);
         }
         y
-    }
-
-    fn reset_state(&mut self) {
-        self.pre.reset();
-        self.voice.reset();
-        self.tilt.reset();
-        self.dcb.reset();
-        for c in &mut self.cab {
-            c.reset();
-        }
-        self.env = 0.0;
-        self.g_sag = 1.0;
     }
 
     fn process(&mut self, buf: &mut [f32]) {
@@ -394,14 +328,6 @@ impl Drive {
     #[cfg(test)]
     fn with_flat_voice(mut self) -> Self {
         self.voice = Biquad::peak(800.0, 0.8, 0.0, 88_200.0);
-        self
-    }
-
-    /// Test-only: pin the sag recovery ceiling (V5's differential leg
-    /// compares g_max = 1, i.e. sag OFF, against the shipped ceiling).
-    #[cfg(test)]
-    fn with_sag_gmax(mut self, g: f32) -> Self {
-        self.g_max = g;
         self
     }
 }
@@ -1269,6 +1195,22 @@ impl EngineCore {
             if matches!(s.program, 56..=63) {
                 voice.set_breath((s.expr * s.breath).sqrt().min(1.3), 0.0);
             }
+            // RD9 (§2.8.3): reeds open their timbre from the same CC2/CC11
+            // lanes — but only once AUTHORED, so a channel that never sends
+            // them renders controller-identically to before (§2.8.2; brass
+            // predates that invariant and keeps its unconditional seed).
+            if matches!(s.program, 64..=71 | 109 | 111)
+                && (s.expr_authored || s.breath_authored || s.at_authored)
+            {
+                voice.set_breath((s.expr * s.breath).sqrt().min(1.0), 0.0);
+            }
+            // WD9 (§2.8.5.3): the flue arm of the same authored-only seam —
+            // a note born mid-swell starts at the channel's pressure.
+            if matches!(s.program, 72..=79)
+                && (s.expr_authored || s.breath_authored || s.at_authored)
+            {
+                voice.set_breath((s.expr * s.breath).sqrt().min(1.0), 0.0);
+            }
             let glide = if ch != 9 && s.porta_on {
                 porta_from.and_then(|from| {
                     let semis = 12.0 * (from / key_freq(key)).log2();
@@ -1880,6 +1822,31 @@ impl EngineCore {
                 let g = if strip.at_authored { strip.at_cur } else { 0.0 };
                 for a in self.active.iter_mut().filter(|a| a.ch == ch) {
                     a.voice.set_breath(p, g);
+                }
+            }
+            // RD9 (§2.8.3): the reed breath seam, AUTHORED-only (§2.8.2 — an
+            // unauthored reed channel must render exactly as before; contrast
+            // the unconditional brass site above). Aftertouch rides along as
+            // the growl arg, reserved for the §2.8.4 rasp stage.
+            if matches!(strip.program, 64..=71 | 109 | 111)
+                && (strip.expr_authored || strip.breath_authored || strip.at_authored)
+            {
+                let p = (strip.expr * strip.breath).sqrt().min(1.0);
+                let g = if strip.at_authored { strip.at_cur } else { 0.0 };
+                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                    a.voice.set_breath(p, g);
+                }
+            }
+            // WD9 (§2.8.5.3): the flue breath seam — same authored-only gate,
+            // same lanes. `Wind` has no growl consumer, so nothing rides the
+            // second arg. An unauthored flue channel never reaches here and
+            // renders controller-identically to before.
+            if matches!(strip.program, 72..=79)
+                && (strip.expr_authored || strip.breath_authored || strip.at_authored)
+            {
+                let p = (strip.expr * strip.breath).sqrt().min(1.0);
+                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                    a.voice.set_breath(p, 0.0);
                 }
             }
             for a in self.active.iter_mut().filter(|a| a.ch == ch) {
@@ -3073,8 +3040,14 @@ mod tests {
     /// V6b (guitar v2): the held-lead steady state stays HARMONIC through the
     /// engine — the sustainer converges toward the fundamental (by design;
     /// the damper's tilted loss stands), and the Drive's tanh re-harmonizes
-    /// it. A naked-sine pass (the T16 "wooden glockenspiel" failure mode)
-    /// fails the 2f0 pin.
+    /// it. A naked-sine pass (the T16 "wooden glockenspiel" failure mode,
+    /// which measures ≤ −50 dB here) fails the 2f0 pin.
+    ///
+    /// Floor provenance: −20 dB was calibrated when the sag boost ran the
+    /// held tail ×4 hotter into the shapers; with the inverted sag deleted
+    /// (§2.6) the level-matched static drive at the e-bow's hold level
+    /// (DRIVE.sustain = 0.5) measures −24.9 dB, so the anti-naked-sine floor
+    /// is re-pinned at −30 dB (5 dB margin, matching the old pin's margin).
     #[test]
     fn sustained_lead_stays_harmonic_through_drive() {
         let sr = 44100.0;
@@ -3106,71 +3079,9 @@ mod tests {
         let rel = 20.0 * (m2 / m1).log10();
         println!("V6b: 2f0 at {rel:.1} dB rel f0 in the 2.5–3.0 s window");
         assert!(
-            rel >= -20.0,
+            rel >= -30.0,
             "held lead lost its harmonics: 2f0 {rel:.1} dB rel f0"
         );
-    }
-
-    /// V5 (guitar v2): the sag stage — differential AND temporal. The same
-    /// −30 dB-decaying 220 Hz tone runs through g_max = 4 (shipped) vs
-    /// g_max = 1 (sag inert): (a) the first 30 ms match within 1 dB — the
-    /// fast-attack law passes transients at unity, so an inverted or
-    /// permanently-boosted law fails here; (b) the sag render's tail decays
-    /// ≥ 6 dB less — static two-stage compression alone cannot pass a
-    /// differential; (c) after >0.4 s of true silence the insert snaps to
-    /// idle (g_sag = 1, env = 0, filter state zeroed) so a fresh entrance
-    /// never starts boosted; (d) output stays bounded.
-    #[test]
-    fn drive_sag_compression() {
-        let sr = 44100.0;
-        let n = (2.0 * sr) as usize;
-        let decaying: Vec<f32> = (0..n)
-            .map(|i| {
-                let t = i as f32 / sr;
-                0.5 * 10f32.powf(-30.0 * t / 2.0 / 20.0) * (std::f32::consts::TAU * 220.0 * t).sin()
-            })
-            .collect();
-        let render = |gmax: f32| {
-            let mut d = Drive::new(30, sr).with_sag_gmax(gmax);
-            let mut buf = decaying.clone();
-            d.process(&mut buf);
-            buf
-        };
-        let on = render(SAG_G_MAX);
-        let off = render(1.0);
-        let db = |s: &[f32]| 20.0 * crate::testutil::rms(s).max(1e-12).log10();
-        let win = |s: &[f32], a: f32, z: f32| db(&s[(a * sr) as usize..(z * sr) as usize]);
-        // (a) transients pass at unity
-        let (a_on, a_off) = (win(&on, 0.0, 0.03), win(&off, 0.0, 0.03));
-        assert!(
-            (a_on - a_off).abs() <= 1.0,
-            "onset windows differ: sag {a_on:.2} dB vs off {a_off:.2} dB"
-        );
-        // (b) the tail is held up by recovery, not by static compression
-        let decay_on = win(&on, 0.05, 0.10) - win(&on, 1.80, 1.95);
-        let decay_off = win(&off, 0.05, 0.10) - win(&off, 1.80, 1.95);
-        println!("V5 tail decay: sag {decay_on:.1} dB vs off {decay_off:.1} dB");
-        assert!(
-            decay_off - decay_on >= 6.0,
-            "sag differential {:.1} dB < 6",
-            decay_off - decay_on
-        );
-        // (c) idle reset after a burst + true silence
-        let mut d = Drive::new(30, sr);
-        let mut two = vec![0f32; sr as usize];
-        for (i, x) in two.iter_mut().enumerate().take((0.05 * sr) as usize) {
-            *x = 0.5 * (std::f32::consts::TAU * 220.0 * i as f32 / sr).sin();
-        }
-        d.process(&mut two);
-        assert!(
-            d.g_sag == 1.0 && d.env == 0.0,
-            "idle state after 0.95 s silence: g_sag {} env {}",
-            d.g_sag,
-            d.env
-        );
-        // (d) bounded
-        let peak = on.iter().fold(0f32, |m, &x| m.max(x.abs()));
-        assert!(peak <= 1.0, "drive output peak {peak}");
     }
 
     /// V9 (guitar v2): aliasing floor — a pure steady sine fed DIRECTLY into
@@ -3249,6 +3160,220 @@ mod tests {
                     20.0 * r.max(1e-12).log10()
                 );
             }
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // O-ATTACK (§3.1): "a struck/plucked voice's attack is its loudest
+    // instant", measured on a windowed-RMS envelope through the FULL
+    // engine — never a single global sample peak (noise/beating/body
+    // resonance can nudge a raw peak; a 30 ms RMS window cannot).
+    // -----------------------------------------------------------------
+
+    /// Windowed-RMS envelope: 30 ms windows on a 10 ms hop, as
+    /// (window-start seconds, rms) pairs.
+    fn rms_env(sig: &[f32], sr: f32) -> Vec<(f32, f32)> {
+        let win = (0.030 * sr) as usize;
+        let hop = (0.010 * sr) as usize;
+        let mut v = Vec::new();
+        let mut a = 0usize;
+        while a + win <= sig.len() {
+            v.push((a as f32 / sr, rms(&sig[a..a + win])));
+            a += hop;
+        }
+        v
+    }
+
+    /// One note through the engine, dry: reverb wet 0, echo bus disabled
+    /// (`delay_s: 0`), chorus/echo/reverb sends zeroed so a bus tail cannot
+    /// masquerade as a late bloom of the voice itself.
+    fn o_attack_render(
+        program: u8,
+        key: u8,
+        vel: u8,
+        secs: f64,
+        samples: bool,
+        sr: f32,
+    ) -> Vec<f32> {
+        let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
+        let events = vec![
+            (
+                0.0,
+                EvKind::Prog {
+                    ch: 0,
+                    prog: program,
+                },
+            ),
+            (0.0, cc(91, 0)),
+            (0.0, cc(93, 0)),
+            (0.0, cc(94, 0)),
+            (0.05, EvKind::NoteOn { ch: 0, key, vel }),
+        ];
+        let mut opt = test_opts(sr);
+        opt.samples = samples;
+        left(&render(&test_song(events, secs), &opt).0)
+    }
+
+    /// The property: no post-attack window's RMS may exceed the attack
+    /// window's loudest RMS. The attack window is per-class (`attack_s`),
+    /// not a hard 80 ms constant — bar percussion speaks fast, timpani and
+    /// tubular bells slower.
+    fn assert_attack_dominates(sig: &[f32], sr: f32, note_s: f32, attack_s: f32, name: &str) {
+        let env = rms_env(sig, sr);
+        let attack = env
+            .iter()
+            .filter(|(t, _)| *t >= note_s - 0.005 && *t < note_s + attack_s)
+            .map(|&(_, r)| r)
+            .fold(0f32, f32::max);
+        assert!(attack > 1e-5, "{name}: silent attack window");
+        let (mut worst, mut worst_t) = (0f32, 0f32);
+        for &(t, r) in env.iter().filter(|(t, _)| *t >= note_s + attack_s) {
+            if r > worst {
+                (worst, worst_t) = (r, t);
+            }
+        }
+        assert!(
+            worst <= attack,
+            "{name}: late bloom — window at {worst_t:.2} s has rms {worst:.5} \
+             above the attack's {attack:.5}"
+        );
+    }
+
+    /// O-ATTACK, struck/plucked leg: Modal (piano/bells/mallets/timpani)
+    /// and non-sustaining Pluck presets, model-only through the engine.
+    #[test]
+    fn o_attack_struck_attack_dominates() {
+        let sr = 44100.0;
+        for (program, key, attack_s, name) in [
+            (0u8, 60u8, 0.15f32, "acoustic piano"),
+            (6, 60, 0.12, "harpsichord"), // §2.10: guards the new Pluck route
+            (9, 84, 0.12, "glockenspiel"),
+            (12, 72, 0.10, "marimba"),
+            (14, 65, 0.20, "tubular bells"),
+            (47, 50, 0.20, "timpani"),
+            (24, 52, 0.12, "nylon guitar"),
+            (25, 52, 0.12, "steel guitar"),
+            (45, 60, 0.10, "pizzicato"),
+            (46, 60, 0.12, "harp"),
+        ] {
+            let sig = o_attack_render(program, key, 100, 3.0, false, sr);
+            assert_attack_dominates(&sig, sr, 0.05, attack_s, name);
+        }
+    }
+
+    /// O-ATTACK, sampled leg: the LA-wrapped struck voices with the sample
+    /// layer on, through the engine (a pick quieter than the model's 200 ms
+    /// sustain is upside-down for a plucked string). Under the pre-§2.7
+    /// crossfade the model's own onset ran UNDER the sample (a doubled
+    /// attack) and masked the GM-24 gain cut even here; once the contract
+    /// gives the sample sole onset ownership, the 0.25 hack fails
+    /// `la_level_continuity`'s attack-is-the-peak leg (measured: nylon key
+    /// 45 inverts at 0.25), and this engine-level leg pins the fixed gain.
+    #[test]
+    fn o_attack_sampled_struck_attack_dominates() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        for (program, key, attack_s, name) in [
+            (0u8, 60u8, 0.20f32, "acoustic piano (LA)"),
+            (24, 52, 0.12, "nylon guitar (LA)"),
+            (24, 57, 0.12, "nylon guitar (LA), mid"),
+            (24, 64, 0.12, "nylon guitar (LA), high"),
+        ] {
+            let sig = o_attack_render(program, key, 100, 3.0, true, sr);
+            assert_attack_dominates(&sig, sr, 0.05, attack_s, name);
+        }
+    }
+
+    /// O-ATTACK, sustaining-pluck leg (`sustain > 0`: the DRIVE e-bow):
+    /// a held distorted note may HOLD, but no late window may exceed the
+    /// pick — the §2.6 sag-inversion catcher. The deleted sag law's restore
+    /// target was an ABSOLUTE level, so a quiet pick (vel 20-30) was boosted
+    /// past its own attack ~0.2 s in, and at ff the sag's slow limit cycle
+    /// grew past the pick by ~7 s (measured 1.00-1.04x pre-fix on every row
+    /// here; the static two-stage cascade keeps all four well below 1).
+    #[test]
+    fn o_attack_sustained_plucks_no_late_bloom() {
+        let sr = 44100.0;
+        for (program, vel, secs, name) in [
+            (29u8, 20u8, 4.0, "overdrive pp"),
+            (29, 100, 4.0, "overdrive ff"),
+            (30, 30, 4.0, "distortion p"),
+            (30, 100, 8.0, "distortion ff, long hold"),
+        ] {
+            let sig = o_attack_render(program, 45, vel, secs, false, sr);
+            assert_attack_dominates(&sig, sr, 0.05, 0.15, name);
+        }
+    }
+
+    /// O-ATTACK, unit leg: the Drive insert itself on a known decaying
+    /// input (−15 dB/s, 220 Hz), pinning recovery at the unit rather than
+    /// only end-to-end. Two clauses: (a) windowed output RMS never RISES
+    /// (0.5 dB tolerance) — a recovery gain law that outruns the decay
+    /// fails; (b) the tail genuinely DECAYS — ≥ 12 dB from the 0.05-0.10 s
+    /// window to the 1.80-1.95 s window. The deleted sag law held that
+    /// decay to 5.6 dB (measured, prog 30) by slewing gain up to 4x as the
+    /// envelope fell; the static two-stage cascade measures 16.6 dB.
+    #[test]
+    fn o_attack_drive_never_blooms_on_decay() {
+        let sr = 44100.0;
+        let n = (2.0 * sr) as usize;
+        for prog in [29u8, 30] {
+            let mut d = Drive::new(prog, sr);
+            let mut buf: Vec<f32> = (0..n)
+                .map(|i| {
+                    let t = i as f32 / sr;
+                    0.5 * 10f32.powf(-15.0 * t / 20.0) * (std::f32::consts::TAU * 220.0 * t).sin()
+                })
+                .collect();
+            d.process(&mut buf);
+            let win = (0.05 * sr) as usize;
+            let env: Vec<f32> = buf.chunks_exact(win).map(rms).collect();
+            // (a) skip the first pair: filter/DC-blocker settling
+            for (k, pair) in env.windows(2).enumerate().skip(1) {
+                assert!(
+                    pair[1] <= pair[0] * 1.06,
+                    "prog {prog}: output rose on a decaying input at window {k}: \
+                     {:.5} -> {:.5}",
+                    pair[0],
+                    pair[1]
+                );
+            }
+            // (b) the decay must pass through, not be recovered away
+            let db = |a: f32, z: f32| {
+                20.0 * rms(&buf[(a * sr) as usize..(z * sr) as usize])
+                    .max(1e-12)
+                    .log10()
+            };
+            let decay = db(0.05, 0.10) - db(1.80, 1.95);
+            assert!(
+                decay >= 12.0,
+                "prog {prog}: tail held up — decay {decay:.1} dB < 12 \
+                 (a sag-like envelope-inverse recovery gain)"
+            );
+        }
+    }
+
+    /// Diagnostic (`--ignored --nocapture`): held-note level through the
+    /// engine for the driven guitars — the §2.6 loudness-risk probe. Prints
+    /// the windowed RMS of a 3.5 s held note at 0.2–0.5 s vs 2.5–3.0 s so a
+    /// sustain collapse after a Drive change is measured, not guessed.
+    #[test]
+    #[ignore = "diagnostic probe, not a gate"]
+    fn o_attack_held_note_probe() {
+        let sr = 44100.0;
+        for prog in [29u8, 30] {
+            let sig = o_attack_render(prog, 45, 100, 3.5, false, sr);
+            let w = |a: f32, z: f32| rms(&sig[(a * sr) as usize..(z * sr) as usize]);
+            let (early, late) = (w(0.2, 0.5), w(2.5, 3.0));
+            println!(
+                "prog {prog}: early {early:.5} ({:.1} dB), late {late:.5} ({:.1} dB), \
+                 drop {:.1} dB",
+                20.0 * early.max(1e-9).log10(),
+                20.0 * late.max(1e-9).log10(),
+                20.0 * (early.max(1e-9) / late.max(1e-9)).log10()
+            );
         }
     }
 

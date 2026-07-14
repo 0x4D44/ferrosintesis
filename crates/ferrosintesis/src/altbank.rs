@@ -67,6 +67,9 @@ const PIZZ: PluckPreset = PluckPreset {
     // drum-head membrane) — the frozen v0.9 pizzicato has neither.
     jawari: None,
     membrane: &[],
+    // v0.16 §2.10 field at its inert default: 1.0 keeps the exact historic
+    // velocity arithmetic (bit stream included).
+    vel_sense: 1.0,
     #[cfg(test)]
     name: "PIZZ",
 };
@@ -192,7 +195,11 @@ impl Bowed {
             press_lo,
             press_span,
             env: Adsr::new(attack, 0.2, 0.9, 0.18, sr),
-            vib: Sine::new(vib_rate * (1.0 + 0.1 * rng.white()), sr, 0.0),
+            // The LFO is ticked once per CTRL samples in render(), so it must
+            // be built at the CONTROL rate — built at full `sr` it ran 16×
+            // slow (the 4th instance of MM-BUG-KILN-00004's idiom bug; the
+            // voices.rs Wind/Reed/Bowed/BowedString instances are all fixed).
+            vib: Sine::new(vib_rate * (1.0 + 0.1 * rng.white()), sr / CTRL as f32, 0.0),
             vib_depth: 0.0045,
             vib_delay: (0.22 * sr) as u32,
             vib_val: 0.0,
@@ -1148,6 +1155,36 @@ mod tests {
         };
         let late = measure(&buf[44100..44100 + 22050]);
         assert!((late - 440.0).abs() < 8.0, "late pitch {late} Hz");
+    }
+
+    /// The Bowed vibrato LFO is ticked once per CTRL samples in render(), so
+    /// it must be BUILT at the control rate. The 4th instance of
+    /// MM-BUG-KILN-00004's idiom bug built it at full `sr`, running the
+    /// labelled ~4-5 Hz vibrato at ~0.3 Hz. Counts the LFO's own rising
+    /// zero-crossings across two seconds of control ticks (the same pin
+    /// voices.rs keeps on `control_lfo`).
+    #[test]
+    fn bowed_vibrato_lfo_runs_at_control_rate() {
+        let sr = 44100.0;
+        for (program, rate) in [(40u8, 5.3f32), (41, 5.1), (42, 4.8), (43, 4.2)] {
+            let mut v = Bowed::new(program, 60, 100, sr, 11);
+            let ticks = (2.0 * sr / CTRL as f32) as usize;
+            let mut prev = v.vib.next();
+            let mut crossings = 0u32;
+            for _ in 1..ticks {
+                let cur = v.vib.next();
+                if prev <= 0.0 && cur > 0.0 {
+                    crossings += 1;
+                }
+                prev = cur;
+            }
+            let hz = crossings as f32 / 2.0;
+            // the build jitters the rate ±10%; the crossing count adds ±0.5
+            assert!(
+                (hz - rate).abs() <= 0.10 * rate + 0.5,
+                "GM{program} alt-bank vibrato runs at {hz:.2} Hz, labelled {rate} Hz"
+            );
+        }
     }
 
     /// BW-O1 — pizzicato 45 decays like a pluck; arco 40 sustains.
@@ -2133,8 +2170,12 @@ mod tests {
         );
     }
 
-    /// B116-5 (level knob TAIKO_B_GAIN): a taiko sits with — to a touch
-    /// above — the default-bank timpani at the same key (0..+3 dB).
+    /// B116-5 (level knob TAIKO_B_GAIN): the taiko's level is pinned against
+    /// the default-bank timpani at the same key. Originally 0..+3 dB; the
+    /// voice-quality §2.5 timpani retune (thump 1.1→0.5·v, sounding T60s ×3)
+    /// deliberately made the timpani ring ~4 dB hotter over this window, and
+    /// the alt bank is FROZEN (TAIKO_B_GAIN must not chase a reference), so
+    /// the pin moves with the reference: measured −4.21 dB, guarded ±1.5.
     #[test]
     fn altbank_b116_taiko_level_vs_timpani() {
         let tai = render_alt(116, 43, 100, 1.0, 7);
@@ -2142,8 +2183,8 @@ mod tests {
         let d = db_ratio(rms(seg12(&tai, 0.02, 1.0)), rms(seg12(&tim, 0.02, 1.0)));
         println!("B116 vs timpani level: {d:+.2} dB");
         assert!(
-            (0.0..=3.0).contains(&d),
-            "B116 level {d:+.2} dB outside [0, +3] of timpani"
+            (-5.7..=-2.7).contains(&d),
+            "B116 level {d:+.2} dB outside [-5.7, -2.7] of the retuned timpani"
         );
     }
 

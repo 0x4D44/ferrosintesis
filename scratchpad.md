@@ -24,6 +24,41 @@
   Validated on the weak-voices change across 99 album MIDIs: 76 changed, 23 same, 0
   contamination. NOTE the `tools/` gitignore trap it exposed (see lessons_learnt).
 
+- [ ] 2026.07.14 — **BowedString (GM 42/43) has a wolf band at keys 46–50 (B♭2–D3): the
+  waveguide abandons its fundamental and mode-locks onto ~3·f0** (both programs, all seeds
+  tried). Found by the `measure_bowedstring_loop_latency` sweep during the B4 tuning work
+  (`crates/ferrosintesis/src/voices.rs`, `BowedString::new` / the `#[ignore]`d harness at the
+  end of its test module): healthy keys imply a consistent loop latency L ≈ 4.0, but at keys
+  46–50 the crossing-train period collapses to ~130–155 samples vs the ~300–380 ideal, and
+  O-PITCH's spectrum check confirms the render's ONLY lattice is 3·f0 (f0/2f0/4f0 all
+  ≤ 2.4 % of the 3·f0 line). A seed-dependent fringe extends to keys 43–45: pitch still
+  lands on f0 there, but for some bow-force draws the regime turns noisy enough to bury
+  the vibrato FM entirely (probed across seeds 7/11/13/17/23; keys 38 and 55 are clean on
+  every seed). Likely the bow-friction operating point vs the delay-split (beta 0.127) in
+  that register. Real audible defect in the cello/bass range of committed albums; O-PITCH
+  and the vibrato oracle route around it (comments at `o_pitch_cases` and the vibrato
+  test) — needs its own slice to fix the waveguide's mode stability, then move the oracle
+  keys back in.
+
+- [ ] 2026.07.14 — **altbank.rs Bowed vibrato is the same 16×-slow idiom bug as
+  MM-BUG-KILN-00004**: `altbank.rs:191` builds `vib: Sine::new(vib_rate·…, sr, 0.0)` at the
+  FULL sample rate but `render` advances it only under `is_multiple_of(CTRL)`
+  (`altbank.rs:215-217`), so the CC0 alt-bank bowed voices' vibrato runs at rate/16 — the
+  systemic audit in the voice-quality HLD §2.3 predicted exactly this fourth instance.
+  Fix is one line (route through `voices.rs::control_lfo` or build at `sr/CTRL`); left
+  untouched here because the B3 slice's mandate was BowedString-only.
+
+- [ ] 2026.07.13 — **No reusable render-diff harness exists, though CLAUDE.md mandates the
+  render-diff inventory** for any voices.rs/engine.rs/drums.rs/sampler.rs change. Every task
+  hand-rolls it (build a baseline binary in a throwaway worktree, render `render_opus.py::ALBUMS`
+  with both binaries, `cmp`). A worktree-hygiene pass found one agent's ad-hoc scripts
+  (`renderdiff.ps1`/`refresh_affected.py`/`spotcheck.py`) but they were hardcoded to specific
+  worktree paths and not reusable, so they were retired with the `salvage-orphan-scraps` archive.
+  Worth writing a small parameterized `tools/render-diff` (baseline-ref + head-ref → per-album
+  WAV-hash DIFF/same/FAIL table) so the mandated inventory isn't re-invented each task. Note the
+  workflow shifted: `.opus` is now git-ignored build output rendered via `build.py`, so a fresh
+  harness should diff `.wav` renders, not committed assets.
+
 - [ ] 2026.07.13 — **`CLAUDE.md` version string is stale: says ferrosintesis is "currently
   0.14.3", crate builds as 0.15.3** (`CLAUDE.md` ferrosintesis-architecture "is versioned …
   currently 0.14.3" line vs `crates/ferrosintesis/Cargo.toml`). Root `README.md`'s crate

@@ -6,7 +6,7 @@ be heard and identified. Where `demos/synth_feature_showcase/` is a musical show
 that layers instruments, this isolates them — so you can answer "what does GM 57 sound
 like?" and A/B two voices as a comparison of *timbre*, not of *writing*.
 
-Six tracks, ~13 min:
+Six tracks, ~15 min:
 
 | # | Track | Content |
 |---|-------|---------|
@@ -18,9 +18,12 @@ Six tracks, ~13 min:
 | 6 | Controllers and Effects | reverb, chorus, echo, vibrato, Leslie, filter/resonance, sustain, vowel morph, breath, bend, aftertouch, portamento, and the no-CC A/Bs |
 
 Each melodic slot: reset the channel, switch program (and bank), force the sends dry,
-play a fixed rising figure and a held note or chord, let it ring, then choke it with
-**CC120** so the gap is clean. The MIDI markers name every slot, and the `lyrics/*.txt`
-index (embedded as the opus `LYRICS` tag) gives a timestamped table of contents.
+play a fixed rising figure and a landing — a held triad for chordal families (organs,
+ensembles, pads, brass sections; struck instruments already chord), a single held
+note for solo/bass voices and the timpani — let it ring, choke it with **CC120**,
+then tag one soft (vel 48) note so the *p* dynamic layer of every sampled bank is
+heard too. The MIDI markers name every slot, and the `lyrics/*.txt` index (embedded
+as the opus `LYRICS` tag) gives a timestamped table of contents.
 
 ## How to use it
 
@@ -31,7 +34,8 @@ index (embedded as the opus `LYRICS` tag) gives a timestamped table of contents.
 - **Hear one voice** by finding it in the index (e.g. "1:30 GM 057 Trombone").
 - **A/B a voice against its alt-bank twin** — each alt voicing is inlined immediately
   after its default (e.g. GM 019 Church Organ, then GM 019 [alt] = the legacy Leslie
-  organ).
+  organ), and plays **the identical phrase**: same root key, velocity and gesture,
+  so the comparison is timbre, never register (`check_ab_parity` pins this).
 
 ## Rebuild / verify
 
@@ -44,9 +48,12 @@ python analyze.py          # audio oracles: every slot audible, no voice masks t
 
 `verify.py` proves coverage (every distinct voice, alt voicing, drum key and effect
 CC), flat authoring (no humanisation, so the A/B is honest), dry authoring (CC91/93/94
-zeroed after each program change) and the CC120 gaps. `analyze.py` proves, on the real
-render, that **every voice makes a sound** and that **no voice's tail masks the next**
-— both as ratios, because the CLI peak-normalises the whole render.
+zeroed after each program change), the CC120 gaps, default/alt A/B parity (identical
+emitted phrases), and that every `ALIAS` entry still shares a program-discarding arm
+of the `make()` dispatch in `crates/ferrosintesis/src/voices.rs` (a stale alias fails
+the gate instead of silently never rendering a voice). `analyze.py` proves, on the
+real render, that **every voice makes a sound** and that **no voice's tail masks the
+next** — both as ratios, because the CLI peak-normalises the whole render.
 
 ## Known limits (stated, not hidden)
 

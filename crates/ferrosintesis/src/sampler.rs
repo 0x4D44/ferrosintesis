@@ -627,9 +627,10 @@ pub fn flute_bank() -> &'static [Zone] {
     flute()
 }
 
-/// Bank for the layered brass programs (GM 56–61). Velocity picks the
-/// dynamic layer (VSCO v1 → p, v3 → f, threshold as `violin_bank`);
-/// 61 (section) shares the trumpet bank at reduced wrap gain.
+/// Bank for the layered brass programs (GM 56–60). Velocity picks the
+/// dynamic layer (VSCO v1 → p, v3 → f, threshold as `violin_bank`).
+/// 61 (section) is pure model (§2.7): no CC0 section sample exists, and
+/// the old trumpet fall-through layered the WRONG instrument's attack.
 pub fn brass_bank(program: u8, vel: u8) -> &'static [Zone] {
     let f = vel >= 80;
     match program {
@@ -784,9 +785,18 @@ fn smooth(x: f32) -> f32 {
     x * x * (3.0 - 2.0 * x)
 }
 
-/// Sampled attack + modeled sustain. The sustain fades in over
-/// `[0, fade_end]` while the transient fades out over `[fade_start,
-/// fade_end]`, so the model's own (weaker) onset is masked by the real one.
+/// Sampled attack + modeled sustain, under the §2.7 onset-ownership
+/// contract — one owner per instant:
+///
+/// - `[0, fade_start)`: the SAMPLE owns the onset. The wrapped model runs
+///   from note-start (envelopes, filters, KS loop age naturally) but its
+///   output is DISCARDED — no doubled attack, no hand-authored start state.
+/// - `[fade_start, fade_end)`: one sum-to-one crossfade sample→model. A
+///   sample and a model at the same pitch are CORRELATED, so an equal-power
+///   law can boost or cancel at the midpoint; complementary weights keep
+///   the sum level-true through the seam (verified by `la_level_continuity`
+///   across every wrapped program).
+/// - `[fade_end, ∞)`: the MODEL owns the sustain.
 pub struct LaVoice {
     sustain: Box<dyn Voice>,
     zone: &'static Zone,
@@ -849,14 +859,17 @@ impl Voice for LaVoice {
         let mut sample_live = false;
         for (i, o) in out.iter_mut().enumerate() {
             let t = self.t + i;
-            let mut s = self.buf[i] * smooth(t as f32 / self.fade_end as f32);
+            // §2.7: one sum-to-one crossfade weight — the model is silent
+            // (discarded, but running) before fade_start, sole owner after
+            // fade_end; the smoothstep keeps the seam edges C1-continuous.
+            let u = smooth((t as f32 - self.fade_start as f32) / fade_len);
+            let mut s = self.buf[i] * u;
             let j = self.pos as usize;
-            if j + 1 < n && self.rel_gain > 0.0005 {
+            if t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
                 sample_live = true;
                 let frac = self.pos - j as f32;
                 let v = self.zone.data[j] * (1.0 - frac) + self.zone.data[j + 1] * frac;
-                let ag = 1.0 - smooth((t as f32 - self.fade_start as f32) / fade_len);
-                s += v * ag * self.gain * self.rel_gain;
+                s += v * (1.0 - u) * self.gain * self.rel_gain;
                 self.rel_gain *= self.rel_mul;
                 self.pos += self.step;
             }
@@ -900,6 +913,15 @@ impl Voice for LaVoice {
 
     fn set_trem(&mut self, rate_hz: f32, depth: f32) {
         self.sustain.set_trem(rate_hz, depth);
+    }
+
+    fn set_breath(&mut self, pressure: f32, growl: f32) {
+        // Authored CC2/CC11 timbre-tracking must reach the model inside the
+        // wrap (it used to no-op here, so the samples-on render ignored the
+        // controller). The engine only drives this on authored channels
+        // (plus brass's neutral pressure-1.0 note-on seed, a no-op), so an
+        // unauthored channel renders bit-exactly as before.
+        self.sustain.set_breath(pressure, growl);
     }
 }
 
@@ -1403,7 +1425,6 @@ mod tests {
             (58, 40, "tuba"),
             (59, 69, "muted-trumpet"),
             (60, 62, "french-horn"),
-            (61, 69, "brass-section"),
         ] {
             let f0 = crate::dsp::key_freq(key);
             let mut v = voices::make(program, key, 100, sr, 5, true);
@@ -1434,7 +1455,6 @@ mod tests {
             (58, 40, 2.0, "tuba"),
             (59, 69, 1.3, "muted-trumpet"),
             (60, 62, 0.0, "french-horn"),
-            (61, 69, 1.05, "brass-section"),
         ] {
             let early = |samples: bool| {
                 let mut v = voices::make(program, key, 100, sr, 5, samples);
@@ -1637,6 +1657,64 @@ mod tests {
         }
     }
 
+    /// GM 61 brass section stays pure model (§2.7): no CC0 section sample
+    /// exists and the old trumpet fall-through layered the WRONG
+    /// instrument's attack — samples on/off must render byte-identical so a
+    /// future wrap cannot land without re-deciding that.
+    #[test]
+    fn brass_section_61_skips_sample_layer() {
+        let sr = 44100.0;
+        let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        let render = |samples: bool| {
+            let mut v = voices::make(61, 69, 100, sr, 6, samples);
+            let mut buf = vec![0f32; 22050];
+            v.render(&mut buf);
+            buf
+        };
+        assert_eq!(
+            bits(&render(true)),
+            bits(&render(false)),
+            "brass section 61 not sample-independent"
+        );
+    }
+
+    /// The LA wrapper forwards `set_breath` to the wrapped model (routed
+    /// from the reed/flue work: authored CC2/CC11 timbre-tracking used to
+    /// no-op on the samples path). Two legs: the engine's neutral brass
+    /// note-on seed (pressure 1.0) is a bit-exact no-op — an unauthored
+    /// channel renders exactly as before — and an authored (non-neutral)
+    /// pressure genuinely reaches the model through the wrap.
+    #[test]
+    fn la_wrap_forwards_breath() {
+        let sr = 44100.0;
+        let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        let render = |prog: u8, breath: Option<(f32, f32)>| {
+            let mut v = voices::make(prog, 69, 100, sr, 5, true);
+            if let Some((p, g)) = breath {
+                v.set_breath(p, g);
+            }
+            let mut buf = vec![0f32; 44100];
+            v.render(&mut buf);
+            buf
+        };
+        // neutral seed == no call, bit-exact (brass defaults pressure 1.0)
+        assert_eq!(
+            bits(&render(56, Some((1.0, 0.0)))),
+            bits(&render(56, None)),
+            "neutral set_breath(1.0, 0) must be a bit-exact no-op"
+        );
+        // authored pressure must change the render for every LA-wrapped
+        // wind family the forward serves (brass 56, reed 68, flute 73)
+        for prog in [56u8, 68, 73] {
+            let (plain, blown) = (render(prog, None), render(prog, Some((0.4, 0.0))));
+            assert_ne!(
+                bits(&plain),
+                bits(&blown),
+                "prog {prog}: authored breath does not reach the wrapped model"
+            );
+        }
+    }
+
     /// The string-section layer must be audible, not just present: samples-on
     /// vs samples-off must differ materially in the first 50 ms. Measured
     /// direction is REGISTER-DEPENDENT, unlike brass (up) or reeds/guitar
@@ -1680,46 +1758,81 @@ mod tests {
         }
     }
 
-    /// The sampled attack must hand over to the model without a level jump.
+    /// The sampled attack must hand over to the model without a level jump —
+    /// and (§3.2, two-sided rewrite) for STRUCK/PLUCKED wrapped voices the
+    /// attack must be the render's loudest instant. The second leg is what
+    /// makes the seam cap ungameable: the old one-sided reading was
+    /// satisfied by cutting the GM 24 wrap gain until the pick sat QUIETER
+    /// than the model's sustain (upside-down for a plucked string).
+    ///
+    /// The no-step leg is DIFFERENTIAL (the §2.7 "measured, per-key seam
+    /// limit"): each adjacent-window ratio of the wrapped render is compared
+    /// with the model-only render's ratio for the same windows, and the
+    /// wrap may not introduce more than a 2.4x step in either direction.
+    /// An absolute cap cannot serve both families: a high plucked string
+    /// legitimately decays > 2.4x per 100 ms once the pick is honest, while
+    /// a sustained voice's own crescendo (the slow-speaking tuba) legitimately
+    /// rises — only the step the WRAP adds on top of the voice's own
+    /// envelope shape is a seam defect.
     #[test]
     fn la_level_continuity() {
         let sr = 44100.0;
-        for (program, key, name) in [
-            (40u8, 69u8, "fiddle"),
-            (110u8, 69, "fiddle-110"),
-            (73u8, 69, "flute"),
-            (0u8, 69, "piano"),
-            (56u8, 69, "trumpet"),
-            (57u8, 55, "trombone"),
-            (58u8, 40, "tuba"),
-            (59u8, 69, "muted-trumpet"),
-            (60u8, 62, "french-horn"),
-            (61u8, 69, "brass-section"),
-            (68u8, 76, "oboe"),
-            (69u8, 64, "english-horn"),
-            (70u8, 48, "bassoon"),
-            (71u8, 60, "clarinet"),
-            (24u8, 52, "nylon-guitar"),
-            (48u8, 48, "string-ens-low"),
-            (48u8, 76, "string-ens-high"),
-            (49u8, 55, "slow-strings"),
+        for (program, key, name, struck) in [
+            (40u8, 69u8, "fiddle", false),
+            (110u8, 69, "fiddle-110", false),
+            (73u8, 69, "flute", false),
+            (0u8, 69, "piano", true),
+            (0u8, 48, "piano-low", true),
+            (56u8, 69, "trumpet", false),
+            (57u8, 55, "trombone", false),
+            (58u8, 40, "tuba", false),
+            (59u8, 69, "muted-trumpet", false),
+            (60u8, 62, "french-horn", false),
+            (68u8, 76, "oboe", false),
+            (69u8, 64, "english-horn", false),
+            (70u8, 48, "bassoon", false),
+            (71u8, 60, "clarinet", false),
+            (24u8, 45, "nylon-guitar-low", true),
+            (24u8, 52, "nylon-guitar", true),
+            (24u8, 64, "nylon-guitar-high", true),
+            (48u8, 48, "string-ens-low", false),
+            (48u8, 76, "string-ens-high", false),
+            (49u8, 55, "slow-strings", false),
         ] {
-            let mut v = voices::make(program, key, 100, sr, 5, true);
-            let mut buf = vec![0f32; 44100]; // 1 s, note held
-            v.render(&mut buf);
-            let rms = |a: usize, b: usize| {
-                (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+            // 100 ms windows from 50 ms to 950 ms, wrapped and model-only
+            let win = |samples: bool| {
+                let mut v = voices::make(program, key, 100, sr, 5, samples);
+                let mut buf = vec![0f32; 44100]; // 1 s, note held
+                v.render(&mut buf);
+                let rms = |a: usize, b: usize| {
+                    (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                };
+                let coarse: Vec<f32> = (0..9)
+                    .map(|k| rms(2205 + k * 4410, 2205 + (k + 1) * 4410))
+                    .collect();
+                let fine: Vec<f32> = (0..19).map(|k| rms(k * 2205, (k + 1) * 2205)).collect();
+                (coarse, fine)
             };
-            // 100 ms windows from 50 ms to 950 ms; a natural decay is fine,
-            // but no adjacent pair may jump (a bad handover is a step)
-            let w: Vec<f32> = (0..9)
-                .map(|k| rms(2205 + k * 4410, 2205 + (k + 1) * 4410))
-                .collect();
-            for pair in w.windows(2) {
-                let ratio = (pair[0] / pair[1]).max(pair[1] / pair[0]);
+            let ((w, fine), (m, _)) = (win(true), win(false));
+            for (pw, pm) in w.windows(2).zip(m.windows(2)) {
+                let (rw, rm) = (pw[0] / pw[1], pm[0] / pm[1]);
+                let excess = (rw / rm).max(rm / rw);
                 assert!(
-                    ratio < 2.4,
-                    "{name}: level jump across the crossfade: {w:?}"
+                    excess < 2.4,
+                    "{name}: wrap-introduced level step across the crossfade \
+                     ({excess:.2}x beyond the model's own shape): wrapped {w:?} \
+                     vs model {m:?}"
+                );
+            }
+            // struck/plucked: the attack is the global peak — 50 ms windows
+            // from t=0, the loudest must start inside the first 150 ms
+            if struck {
+                let attack = fine[..3].iter().fold(0f32, |mx, &x| mx.max(x));
+                let late = fine[3..].iter().fold(0f32, |mx, &x| mx.max(x));
+                assert!(
+                    late <= attack,
+                    "{name}: attack is not the peak — late window {late:.5} \
+                     above attack {attack:.5} ({fine:?})"
                 );
             }
         }

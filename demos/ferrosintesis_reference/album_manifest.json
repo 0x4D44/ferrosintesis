@@ -3,39 +3,39 @@
   "artist": "ferrosintesis",
   "style": "Dry one-at-a-time audition of every ferrosintesis voice and effect",
   "track_count": 6,
-  "total_duration_seconds": 818.53,
-  "total_duration_minutes": 13.64,
+  "total_duration_seconds": 895.33,
+  "total_duration_minutes": 14.92,
   "tracks": [
     {
       "number": 1,
       "title": "Keys, Chromatic, Organ, Guitar",
       "file": "midi/01 - Keys, Chromatic, Organ, Guitar.mid",
-      "duration_seconds": 154.8,
-      "duration_minutes": 2.58,
+      "duration_seconds": 159.6,
+      "duration_minutes": 2.66,
       "style": "instrument audition"
     },
     {
       "number": 2,
       "title": "Bass, Solo Strings, Ensemble, Brass",
       "file": "midi/02 - Bass, Solo Strings, Ensemble, Brass.mid",
-      "duration_seconds": 202.8,
-      "duration_minutes": 3.38,
+      "duration_seconds": 212.4,
+      "duration_minutes": 3.54,
       "style": "instrument audition"
     },
     {
       "number": 3,
       "title": "Reed, Pipe, Lead, Pad",
       "file": "midi/03 - Reed, Pipe, Lead, Pad.mid",
-      "duration_seconds": 126.0,
-      "duration_minutes": 2.1,
+      "duration_seconds": 154.8,
+      "duration_minutes": 2.58,
       "style": "instrument audition"
     },
     {
       "number": 4,
       "title": "FX, World, Percussive, Noise",
       "file": "midi/04 - FX, World, Percussive, Noise.mid",
-      "duration_seconds": 159.6,
-      "duration_minutes": 2.66,
+      "duration_seconds": 193.2,
+      "duration_minutes": 3.22,
       "style": "instrument audition"
     },
     {

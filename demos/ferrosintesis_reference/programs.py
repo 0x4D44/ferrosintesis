@@ -7,11 +7,15 @@ music is a loop over data, not four hand-written tracks. Three ideas only:
   * REGISTER - a (lo, hi) MIDI-key range, one per GM family (16 rows) plus a handful
     of documented overrides. Keeps each voice in its natural range (a tuba at C5
     tells you nothing) and keeps the LA sample layer engaged.
-  * GESTURE  - SUSTAIN (held note), STRUCK (chord left to ring) or ONESHOT (single
-    hit whose length is the voice's own envelope). Picks the phrase shape.
+  * GESTURE  - SUSTAIN (figure + held single note), CHORD (figure + held triad, for
+    chordal families - organs, ensembles, pads, brass sections), STRUCK (figure +
+    triad left to ring) or ONESHOT (single hit whose length is the voice's own
+    envelope). Picks the phrase shape.
   * ALIAS    - programs that share one voice factory AND, once dry, one effect
     profile render identically. We audition the canonical one and cross-reference
     the rest in the marker/lyrics index, rather than commit duplicate audio.
+    verify.py's check_alias_dispatch re-derives this claim from the `make()` match
+    in crates/ferrosintesis/src/voices.rs, so a stale alias fails the gate.
 
 Traps that would otherwise render silence or a wrong pitch are OVERRIDE rows with a
 `note`, mirrored from crates/ferrosintesis/src/ (cited inline). See the HLD
@@ -24,6 +28,7 @@ from dataclasses import dataclass, field
 SUSTAIN = "sustain"
 STRUCK = "struck"
 ONESHOT = "oneshot"
+CHORD = "chord"
 
 GM_NAMES = [
     "Acoustic Grand Piano", "Bright Acoustic Piano", "Electric Grand Piano", "Honky-tonk Piano",
@@ -64,16 +69,16 @@ GM_NAMES = [
 FAMILY: dict[int, tuple[int, int, str]] = {
     0:   (48, 84, STRUCK),    # Piano
     8:   (60, 88, STRUCK),    # Chromatic percussion
-    16:  (48, 84, SUSTAIN),   # Organ
+    16:  (48, 84, CHORD),     # Organ - chordal: land a held triad (HLD 2.14 item 3)
     24:  (45, 76, STRUCK),    # Guitar
-    32:  (28, 52, STRUCK),    # Bass
+    32:  (28, 52, SUSTAIN),   # Bass - single landing; a low triad is mud, not audition
     40:  (48, 79, SUSTAIN),   # Strings / orchestral
-    48:  (48, 76, SUSTAIN),   # Ensemble
-    56:  (48, 72, SUSTAIN),   # Brass
+    48:  (48, 76, CHORD),     # Ensemble - chordal: land a held triad (HLD 2.14 item 3)
+    56:  (48, 72, SUSTAIN),   # Brass (solo; sections 61-63 override to CHORD)
     64:  (52, 79, SUSTAIN),   # Reed
     72:  (67, 91, SUSTAIN),   # Pipe
     80:  (48, 79, SUSTAIN),   # Synth lead
-    88:  (48, 76, SUSTAIN),   # Synth pad
+    88:  (48, 76, CHORD),     # Synth pad - chordal: land a held triad (HLD 2.14 item 3)
     96:  (60, 88, STRUCK),    # Synth FX
     104: (48, 79, STRUCK),    # Ethnic
     112: (60, 88, STRUCK),    # Percussive
@@ -94,28 +99,29 @@ OVERRIDE: dict[int, dict] = {
     # Bass - synth basses reach lower
     38: {"register": (28, 55)},
     39: {"register": (28, 55)},
-    # Strings / orchestral.
-    # 40/42/43/44 carry an ALT bank that is the SAME INSTRUMENT (the frozen v0.9 twin),
-    # so both banks MUST be auditioned in the same register or the A/B compares notes
-    # rather than voices. Before this, the family row (48, 79) auditioned the CONTRABASS
-    # an octave-and-a-fourth above a double bass's compass -- and its (since-fixed) pitch
-    # bug was worst exactly there. See check_dual_bank_registers().
-    40: {"register": (55, 84)},                       # Violin: G3-C6
-    42: {"register": (40, 72)},                       # Cello: E2-C5
-    43: {"register": (28, 60)},                       # Contrabass: E1-C4 (sounding)
-    44: {"register": (55, 84)},                       # Tremolo strings: as the violin
+    # Strings / orchestral
+    # 42/43: the family row (48,79) put a cello at E3+ and a CONTRABASS at C4 - the
+    # alt A/B was then 8/20 semitones apart (HLD 2.14 item 1). Pin both defaults to
+    # the instrument's idiomatic range (which the alt slot now inherits): roots land
+    # at E3 (cello) / E2 (contrabass), inside the LA zone spans (sampler.rs
+    # celens_C1..B3 / celens_C1..D2).
+    42: {"register": (40, 72)},                       # Cello: idiomatic range
+    43: {"register": (28, 60)},                       # Contrabass: idiomatic range
     45: {"register": (55, 84)},                       # Pizzicato: violin body pluck
     46: {"register": (36, 84), "note": "full-compass harp, no wound split, voices.rs:1673"},
-    47: {"register": (36, 53), "gesture": STRUCK,
-         "note": "thump LP fixed 300Hz - not a timpani above ~key62, voices.rs:697"},
-    # Ensemble. 52/53/54 have a same-instrument ALT bank -- match its register.
-    52: {"register": (48, 72)}, 53: {"register": (48, 72)}, 54: {"register": (48, 72)},
+    47: {"register": (36, 53), "gesture": SUSTAIN,
+         "note": "single-note landing - a timpani is not chordal (HLD 2.5); "
+                 "thump LP fixed 300Hz - not a timpani above ~key62, voices.rs:697"},
+    # Ensemble
     55: {"register": (44, 57), "gesture": ONESHOT,
          "note": "one-shot; thump tracks key only over 44-57, voices.rs:5523"},
-    # Brass - tuba/trombone sit low
+    # Brass - tuba/trombone sit low; the sections 61-63 are chordal
     57: {"register": (40, 72)},                       # Trombone
     58: {"register": (28, 58)},                       # Tuba: bore 230Hz, voices.rs:6383
     60: {"register": (41, 77)},                       # French Horn
+    61: {"gesture": CHORD},                           # Brass Section: land a held triad
+    62: {"gesture": CHORD},                           # Synth Brass 1
+    63: {"gesture": CHORD},                           # Synth Brass 2
     # Reed - the voice declares a hard `range:` (voices.rs:5652..5798); use it.
     64: {"register": (56, 88)}, 65: {"register": (49, 81)}, 66: {"register": (44, 76)},
     67: {"register": (36, 69)}, 68: {"register": (58, 88)}, 69: {"register": (52, 81)},
@@ -126,7 +132,6 @@ OVERRIDE: dict[int, dict] = {
     78: {"register": (72, 96)}, 79: {"register": (60, 84)},
     # Bass+lead reaches low
     87: {"register": (36, 72)},
-    # Synth FX pads (97/99/103) alias to the generic pad; 96/98/100/102 are bells.
     # Ethnic overrides
     109: {"register": (60, 84), "gesture": SUSTAIN,
           "note": "keys<=54 sound NO chanter; chanter notes ALSO spawn a drone (always polyphonic), engine.rs:1039"},
@@ -145,17 +150,22 @@ OVERRIDE: dict[int, dict] = {
 }
 
 # program -> canonical program it renders identically to (once dry). Audition the
-# canonical, index the rest. Verified against voices.rs `make` dispatch + fx_profile.
+# canonical, index the rest. Ground truth is the `make()` match in
+# crates/ferrosintesis/src/voices.rs: a true alias shares one match arm whose body
+# never reads `program` (byte discarded), AND no engine-level per-program insert
+# splits the pair (e.g. 29/30 share `Pluck::new(&DRIVE, ..)` but engine.rs:262
+# gives them different Drive profiles - NOT aliases). check_alias_dispatch
+# (verify.py) re-derives the arm claim mechanically on every --verify.
+#
+# Regenerated 2026-07-14 (HLD 2.14 item 2). Un-aliased, with the dispatch fact:
+#   17->16   percussive organ grew its own drawbars + percussion tap (voices.rs:3494)
+#   37->36   split into SLAP (thumb) vs SLAP_POP (bridge pop) presets (voices.rs:8034)
+#   51->50   synth_strings() now keys a lush 6-osc variant off program 51 (voices.rs:4067)
+#   89-94->88  pad() is per-program since the Stage 2 distinctness work (voices.rs:4509)
+#   97/99/103->88, 98/100/102->96, 101->95  the FX family 96-103 is eight distinct
+#     Fx::from_spec presets (voices.rs:7633,8169), no longer pads/bells
 ALIAS: dict[int, int] = {
-    1: 0, 2: 0, 3: 0,          # all -> acoustic_piano(), program byte discarded, voices.rs:6978
-    17: 16,                    # same Organ arm + trem, voices.rs:3417
-    37: 36,                    # same SLAP preset, voices.rs:7101
-    51: 50,                    # synth strings, identical model-only branch, voices.rs:7161
-    # Dry pads: generic pad() (88-94) and FX pads (97/99/103) collapse to one voice
-    # once CC93/CC94 are zeroed (they differ only in default sends).
-    89: 88, 90: 88, 91: 88, 92: 88, 93: 88, 94: 88, 97: 88, 99: 88, 103: 88,
-    98: 96, 100: 96, 102: 96,  # bell(CRYSTAL) shared arm, voices.rs:7229
-    101: 95,                   # pad(95) sweep, voices.rs:7233
+    1: 0, 2: 0, 3: 0,  # 0..=3 one arm, one acoustic_piano() + one piano_bank(), voices.rs:7911
 }
 
 # Note on the LA sample layer: programs 0, 24, 40, 42, 43, 48, 49, 56-61, 68-73 and 110
@@ -165,32 +175,40 @@ ALIAS: dict[int, int] = {
 # check_registers (notes stay inside the register) already keeps the layer engaged.
 
 # Alt-bank (CC0=1) programs that are a genuinely DIFFERENT voice (not just samples
-# pinned off). program -> (register, gesture, label). Mirrored from altbank.rs:997.
-ALT_BANK: dict[int, tuple[tuple[int, int], str, str]] = {
-    14:  ((36, 47), STRUCK, "tam-tam (folds to one octave, voices.rs:1184)"),
-    19:  ((48, 84), SUSTAIN, "legacy Leslie church organ"),
-    29:  ((45, 76), SUSTAIN, "DRIVE_LEAD - sustaining, e-bow hold"),
-    30:  ((45, 76), SUSTAIN, "DRIVE_LEAD - sustaining, e-bow hold"),
-    40:  ((55, 84), SUSTAIN, "frozen v0.9 bowed violin"),
-    41:  ((48, 79), SUSTAIN, "frozen v0.9 bowed viola"),
-    42:  ((40, 72), SUSTAIN, "frozen v0.9 bowed cello"),
-    43:  ((28, 60), SUSTAIN, "frozen v0.9 bowed contrabass"),
-    44:  ((55, 84), SUSTAIN, "frozen v0.9 tremolo"),
-    45:  ((55, 84), STRUCK, "frozen v0.9 pizzicato"),
-    48:  ((48, 76), SUSTAIN, "frozen v0.9 string ensemble"),
-    49:  ((48, 76), SUSTAIN, "frozen v0.9 slow strings"),
-    50:  ((48, 76), SUSTAIN, "frozen v0.9 synth strings"),
-    52:  ((48, 72), SUSTAIN, "frozen v0.9 choir aahs"),
-    53:  ((48, 72), SUSTAIN, "frozen v0.9 voice oohs"),
-    54:  ((48, 72), SUSTAIN, "frozen v0.9 synth voice"),
-    112: ((72, 96), STRUCK, "percussion set B tinkle bell"),
-    113: ((60, 84), STRUCK, "set B agogo (dry, t60 0.15s)"),
-    114: ((48, 79), STRUCK, "set B steel pan"),
-    115: ((60, 88), STRUCK, "set B woodblock (clamp 60-96, voices.rs:1084)"),
-    116: ((36, 55), STRUCK, "set B taiko (clamp 31-55)"),
-    117: ((36, 67), STRUCK, "set B melodic tom (clamp 36-72)"),
-    118: ((36, 72), STRUCK, "set B synth drum (clamp 33-81)"),
-    119: ((48, 72), STRUCK, "set B reverse cymbal - IS key-tracked (clamp 48-72, drums.rs:2239)"),
+# pinned off). program -> label. Mirrored from altbank.rs:997.
+#
+# The alt slot inherits its default twin's register AND gesture (melodic_slots), so
+# every A/B is pitch-, velocity- and gesture-matched - a hand-tuned alt register let
+# e.g. GM 43 audition C4 vs E2, a 20-semitone rigged A/B (HLD 2.14 item 1).
+# check_ab_parity (verify.py) pins this. Voices with their own internal key clamp or
+# fold (tam-tam, set B percussion) still get identical WRITTEN keys; the clamp is the
+# voice's own character and is noted in the label.
+ALT_BANK: dict[int, str] = {
+    14:  "tam-tam (folds written keys to its octave, voices.rs:1184)",
+    19:  "legacy Leslie church organ",
+    29:  "DRIVE_LEAD - sustaining, e-bow hold",
+    30:  "DRIVE_LEAD - sustaining, e-bow hold",
+    40:  "frozen v0.9 bowed violin",
+    41:  "frozen v0.9 bowed viola",
+    42:  "frozen v0.9 bowed cello",
+    43:  "frozen v0.9 bowed contrabass",
+    44:  "frozen v0.9 tremolo",
+    45:  "frozen v0.9 pizzicato",
+    48:  "frozen v0.9 string ensemble",
+    49:  "frozen v0.9 slow strings",
+    50:  "frozen v0.9 synth strings",
+    52:  "frozen v0.9 choir aahs",
+    53:  "frozen v0.9 voice oohs",
+    54:  "frozen v0.9 synth voice",
+    112: "percussion set B tinkle bell",
+    113: "set B agogo (dry, t60 0.15s)",
+    114: "set B steel pan",
+    115: "set B woodblock (clamp 60-96, voices.rs:1084)",
+    116: "set B taiko (clamp 31-55)",
+    117: "set B melodic tom (clamp 36-72)",
+    118: "set B synth drum (clamp 33-81)",
+    119: "set B reverse cymbal - IS key-tracked (clamp 48-72, drums.rs:2239); "
+         "auditioned at the default's fixed one-shot key",
 }
 
 
@@ -223,15 +241,17 @@ def _resolve(program: int) -> Slot:
 
 def melodic_slots(lo: int, hi: int) -> list[Slot]:
     """Ordered audition slots for programs [lo, hi]: each rendered voice, with its
-    alt-bank twin inlined immediately after, skipping aliases (indexed elsewhere)."""
+    alt-bank twin inlined immediately after, skipping aliases (indexed elsewhere).
+    The alt twin inherits the default's register and gesture so the A/B compares
+    timbre at matched pitch, velocity and phrase (check_ab_parity)."""
     out: list[Slot] = []
     for p in range(lo, hi + 1):
         if p in ALIAS:
             continue
-        out.append(_resolve(p))
+        default = _resolve(p)
+        out.append(default)
         if p in ALT_BANK:
-            reg, gesture, label = ALT_BANK[p]
-            out.append(Slot(p, reg, gesture, alt=True, note=label))
+            out.append(Slot(p, default.register, default.gesture, alt=True, note=ALT_BANK[p]))
     return out
 
 

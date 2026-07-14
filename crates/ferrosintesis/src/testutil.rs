@@ -437,6 +437,136 @@ pub(crate) fn traj_peak_time_s(tr: &[f32]) -> f32 {
     0.0
 }
 
+/// High-precision mean fundamental period, in SAMPLES, of a sustained tone.
+/// Isolates the fundamental with two cascaded bandpasses at `f_expect`, finds
+/// every rising zero crossing with linear interpolation, and averages the
+/// period over the whole crossing train (first-to-last / count), so the
+/// per-crossing interpolation error divides by the number of cycles. This is
+/// the tuning-measurement primitive for the waveguide `loop_comp` sweeps
+/// (lesson 2026.07.11: measure, never assume `sr/f − 1`).
+pub(crate) fn mean_period_samples(seg: &[f32], sr: f32, f_expect: f32) -> f32 {
+    let mut b1 = Biquad::bandpass(f_expect, 4.0, sr);
+    let mut b2 = Biquad::bandpass(f_expect, 4.0, sr);
+    let f: Vec<f32> = seg.iter().map(|&x| b2.process(b1.process(x))).collect();
+    // skip the filter settle before trusting crossings
+    let skip = ((0.1 * sr) as usize).min(f.len() / 4);
+    let mut first = None;
+    let mut last = None;
+    let mut count = 0u32;
+    for i in skip..f.len().saturating_sub(1) {
+        if f[i] <= 0.0 && f[i + 1] > 0.0 {
+            let t = i as f64 + (f[i] / (f[i] - f[i + 1])) as f64;
+            if first.is_none() {
+                first = Some(t);
+            }
+            last = Some(t);
+            count += 1;
+        }
+    }
+    match (first, last) {
+        (Some(a), Some(b)) if count >= 2 => ((b - a) / (count - 1) as f64) as f32,
+        _ => 0.0,
+    }
+}
+
+/// FM vibrato detector: (normalised autocorrelation peak 0..1, modulation rate
+/// in Hz) of the fundamental's instantaneous-frequency track, searched over
+/// `[rate_lo, rate_hi]`. Two cascaded bandpasses isolate the fundamental,
+/// interpolated rising zero crossings give a per-cycle frequency series
+/// (sample rate ≈ f0 — ample for single-digit-Hz vibrato), a moving-average
+/// detrend removes drift/wander, and the autocorrelation peak names the rate.
+/// This measures the SHIPPED render — no internal LFO fields — so a
+/// control-rate LFO built at the wrong sample rate (the 16×-slow idiom bug,
+/// MM-BUG-KILN-00003/00004) cannot hide from it.
+pub(crate) fn fm_mod_rate(seg: &[f32], sr: f32, f0: f32, rate_lo: f32, rate_hi: f32) -> (f32, f32) {
+    let mut b1 = Biquad::bandpass(f0, 6.0, sr);
+    let mut b2 = Biquad::bandpass(f0, 6.0, sr);
+    let f: Vec<f32> = seg.iter().map(|&x| b2.process(b1.process(x))).collect();
+    let skip = ((0.15 * sr) as usize).min(f.len() / 4);
+    let mut times: Vec<f64> = Vec::new();
+    for i in skip..f.len().saturating_sub(1) {
+        if f[i] <= 0.0 && f[i + 1] > 0.0 {
+            times.push(i as f64 + (f[i] / (f[i] - f[i + 1])) as f64);
+        }
+    }
+    if times.len() < 32 {
+        return (0.0, 0.0);
+    }
+    let raw: Vec<f64> = times
+        .windows(2)
+        .map(|w| sr as f64 / (w[1] - w[0]))
+        .collect();
+    // cycle-series sample rate ≈ the mean fundamental frequency
+    let cyc_sr = (raw.len() as f64 * sr as f64 / (times[times.len() - 1] - times[0])) as f32;
+    // Pre-smooth the cycle series with a short centred boxcar: bow-grit phase
+    // noise is broadband up to the cycle Nyquist, while the vibrato lives at
+    // or below rate_hi — a window ≈ a third of the fastest searched period
+    // kills most per-cycle jitter without touching the searched band.
+    let sm = ((cyc_sr / (3.0 * rate_hi)) as usize).max(1);
+    let freqs: Vec<f64> = (0..raw.len())
+        .map(|i| {
+            let a = i.saturating_sub(sm);
+            let b = (i + sm + 1).min(raw.len());
+            raw[a..b].iter().sum::<f64>() / (b - a) as f64
+        })
+        .collect();
+    // detrend: subtract a centred moving average (~0.4 s) so slow drift and
+    // the note's scoop cannot masquerade as (or mask) periodic vibrato
+    let half = ((0.2 * cyc_sr) as usize).max(1);
+    let d: Vec<f64> = (0..freqs.len())
+        .map(|i| {
+            let a = i.saturating_sub(half);
+            let b = (i + half + 1).min(freqs.len());
+            let mean = freqs[a..b].iter().sum::<f64>() / (b - a) as f64;
+            freqs[i] - mean
+        })
+        .collect();
+    let zero: f64 = d.iter().map(|&x| x * x).sum();
+    if zero <= 0.0 {
+        return (0.0, 0.0);
+    }
+    let lag_lo = ((cyc_sr / rate_hi) as usize).max(1);
+    let lag_hi = ((cyc_sr / rate_lo) as usize).min(d.len().saturating_sub(1));
+    if lag_hi <= lag_lo {
+        return (0.0, 0.0);
+    }
+    let mut corr = Vec::with_capacity(lag_hi - lag_lo + 1);
+    let mut best = f64::MIN;
+    let mut best_i = 0usize;
+    for lag in lag_lo..=lag_hi {
+        let c: f64 = (0..d.len() - lag).map(|i| d[i] * d[i + lag]).sum::<f64>() / zero;
+        corr.push(c);
+        if c > best {
+            best = c;
+            best_i = lag - lag_lo;
+        }
+    }
+    // A periodic modulation correlates almost equally at 2×/3× its period, so
+    // the GLOBAL argmax can read an octave low. Take the smallest-lag LOCAL
+    // MAXIMUM within 85 % of the peak — the modulation's true period — and
+    // refine the lag with a parabolic fit through its neighbours.
+    let mut i = best_i;
+    for j in 1..corr.len().saturating_sub(1) {
+        if corr[j] >= corr[j - 1] && corr[j] >= corr[j + 1] && corr[j] >= 0.85 * best {
+            i = j;
+            break;
+        }
+    }
+    let lag_f = if i >= 1 && i + 1 < corr.len() {
+        let (a, b, c) = (corr[i - 1], corr[i], corr[i + 1]);
+        let denom = a - 2.0 * b + c;
+        let delta = if denom.abs() > 1e-12 {
+            (0.5 * (a - c) / denom).clamp(-1.0, 1.0)
+        } else {
+            0.0
+        };
+        (lag_lo + i) as f64 + delta
+    } else {
+        (lag_lo + i) as f64
+    };
+    (best.max(0.0) as f32, (cyc_sr as f64 / lag_f) as f32)
+}
+
 // ---------------------------------------------------------------------------
 // The fixed multi-family reference song (oracles 34/35/38)
 // ---------------------------------------------------------------------------
@@ -716,6 +846,65 @@ mod calibration {
         assert!((rate - 60.0).abs() < 8.0, "AM rate {rate}");
     }
 
+    /// Oracle-0 for `mean_period_samples`: a pure tone's period is recovered
+    /// far below the tenth-of-a-sample precision the waveguide `loop_comp`
+    /// measurement needs, and a small noise floor does not disturb it.
+    #[test]
+    fn mean_period_recovers_a_known_tone() {
+        let sr = 44100.0;
+        let f = 130.8127; // C3
+        let want = sr / f;
+        let clean = sine(f, 0.5, sr, 2.0);
+        let p = mean_period_samples(&clean, sr, f);
+        assert!(
+            (p - want).abs() < 0.02,
+            "clean period {p:.4} vs {want:.4} samples"
+        );
+        let mut rng = Rng::new(3);
+        let noisy: Vec<f32> = clean.iter().map(|&x| x + 0.02 * rng.white()).collect();
+        let p = mean_period_samples(&noisy, sr, f);
+        assert!(
+            (p - want).abs() < 0.05,
+            "noisy period {p:.4} vs {want:.4} samples"
+        );
+    }
+
+    /// Oracle-0 for `fm_mod_rate`: a ±0.2 % FM at 4.8 Hz on a C3 carrier — the
+    /// BowedString vibrato's exact shape — is detected confidently at the right
+    /// rate, while the same depth at the 16×-slow bug rate (0.29 Hz) yields no
+    /// confident in-band detection. Calibrated before the bowed-vibrato oracle
+    /// trusts it.
+    #[test]
+    fn fm_mod_rate_recovers_synthetic_vibrato() {
+        let sr = 44100.0;
+        let f0 = 130.8127f32;
+        let fm = |mod_hz: f32| -> Vec<f32> {
+            let mut rng = Rng::new(9);
+            let mut phase = 0.0f64;
+            (0..(4.0 * sr) as usize)
+                .map(|i| {
+                    let t = i as f32 / sr;
+                    let inst = f0 as f64
+                        * (1.0 + 0.002 * (std::f64::consts::TAU * mod_hz as f64 * t as f64).sin());
+                    phase += std::f64::consts::TAU * inst / sr as f64;
+                    (phase.sin() * 0.5) as f32 + 0.01 * rng.white()
+                })
+                .collect()
+        };
+        let (peak, rate) = fm_mod_rate(&fm(4.8), sr, f0, 2.0, 10.0);
+        assert!(peak > 0.6, "true vibrato autocorr peak {peak:.3}");
+        assert!(
+            (rate - 4.8).abs() / 4.8 < 0.06,
+            "true vibrato rate {rate:.2} Hz"
+        );
+        let (slow_peak, slow_rate) = fm_mod_rate(&fm(0.29), sr, f0, 2.0, 10.0);
+        assert!(
+            slow_peak < 0.5 || (slow_rate - 4.8).abs() / 4.8 > 0.25,
+            "16x-slow vibrato must not read as a named-rate detection: \
+             peak {slow_peak:.3} rate {slow_rate:.2} Hz"
+        );
+    }
+
     #[test]
     fn flatness_separates_noise_from_tone() {
         let sr = 44100.0;
@@ -884,11 +1073,19 @@ mod guards {
         // 2f0 content so the held tone stays harmonic, and DRIVE_LEAD's
         // 11 kHz damper is the brighter opt-in lead. All other rows
         // BIT-EXACT vs the unit-B capture.
+        // Re-captured after the voice-quality overhaul §2.6 deleted the
+        // Drive's inverted sag gain (it slewed UP to 4x as the note decayed
+        // — a real amp clips hardest at the pick): ch 4 is 4.4 dB quieter
+        // and brighter (centroid 468 -> 814 Hz) with the tail no longer
+        // artificially held up and fundamental-heavy; held-note sustain now
+        // lives at the string layer (DRIVE.sustain 0.35 -> 0.5) and O-ATTACK
+        // pins the no-late-bloom shape. All other rows BIT-EXACT vs the
+        // unit-D capture — the drive insert touches programs 29/30 only.
         (0, -41.28, 1020.2),
         (1, -42.07, 2020.8),
         (2, -41.49, 855.0),
         (3, -39.97, 485.9),
-        (4, -27.95, 468.1),
+        (4, -32.31, 814.3),
         (5, -24.61, 294.6),
         (6, -27.13, 194.4),
         (7, -24.35, 567.6),
@@ -900,7 +1097,7 @@ mod guards {
         (9, -22.30, 685.2),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 1.25446;
+    const GOLDEN_MASTER_PEAK: f32 = 1.17665;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause
@@ -986,9 +1183,12 @@ mod guards {
     fn gm_routing_pins_voice_kinds() {
         let cases: &[(u8, &str)] = &[
             (0, "modal"),
+            (6, "HARPSICHORD"), // voice-quality §2.10: plucked, not additive
+            (7, "CLAVINET"),
             (8, "modal"),
             (16, "organ"),
             (19, "cathedral-organ"),
+            (22, "reed"), // voice-quality §2.11: free reed, not drawbar organ
             (24, "NYLON"),
             (25, "STEEL"),
             (26, "JAZZ"), // guitar v2 unit B: the 26/27 split

@@ -1,6 +1,6 @@
 [package]
 name = "ferrosintesis"
-version = "0.18.0"
+version = "0.18.1"
 edition = "2021"
 description = "A modeled MIDI synthesizer in Rust"
 license = "MIT OR Apache-2.0"
@@ -14,11 +14,17 @@ categories = ["multimedia::audio"]
 default = ["embedded-samples"]
 embedded-samples = [
     "dep:ferrosintesis-samples-core",
+    "dep:ferrosintesis-samples-drumkit",
     "dep:ferrosintesis-samples-orchestral",
 ]
 
 [dependencies]
 ferrosintesis-samples-core = { path = "../ferrosintesis-samples-core", version = "=0.1.0", optional = true }
+ferrosintesis-samples-drumkit = {
+    path = "../ferrosintesis-samples-drumkit",
+    version = "=0.1.0",
+    optional = true,
+}
 ferrosintesis-samples-orchestral = {
     path = "../ferrosintesis-samples-orchestral",
     version = "=0.1.0",

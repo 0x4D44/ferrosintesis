@@ -12,5 +12,5 @@ name = "ferrosintesis"
 path = "src/main.rs"
 
 [dependencies]
-ferrosintesis = { path = "../ferrosintesis", version = "0.18.0" }
+ferrosintesis = { path = "../ferrosintesis", version = "0.18.1" }
 

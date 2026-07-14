@@ -1155,9 +1155,9 @@ fn sample_overlay(key: u8, vel: u8, sr: f32, seed: u32, voice: Box<dyn Voice>) -
         38 | 40 => {
             sampler::SampleOverlay::wrap(voice, sampler::drum_snare_bank(), vel, seed, sr, 0.075)
         }
-        49 | 57 => {
-            sampler::SampleOverlay::wrap(voice, sampler::drum_crash_bank(), vel, seed, sr, 0.055)
-        }
+        // 49|57 used to take a crash-attack overlay here; the sampled-cymbal
+        // intercept in `make` now returns before this wrap whenever samples
+        // are on, so a crash arm would be unreachable.
         _ => voice,
     }
 }
@@ -1357,6 +1357,11 @@ fn brush_kick(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
 }
 
 /// Build a drum voice for a GM key, or None for unmapped keys.
+///
+/// `rr` is the engine's per-key hit counter (how many times this key has
+/// already fired this render) — the sampled cymbals cycle their round-robin
+/// takes from it so consecutive hits of one key never repeat a take, no
+/// matter what other drums play in between. Model voices ignore it.
 pub fn make(
     key: u8,
     vel: u8,
@@ -1364,6 +1369,7 @@ pub fn make(
     seed: u32,
     kit: Kit,
     samples: bool,
+    rr: u8,
 ) -> Option<Box<dyn Voice>> {
     let samples = samples && crate::embedded_samples_available();
     // `kit` selects the legacy test kits or the shipped V3 default. Only V3
@@ -1443,6 +1449,17 @@ pub fn make(
             37 => return brush_rim(vel, sr, seed),
             35 | 36 => return brush_kick(vel, sr, seed),
             _ => {} // V3 fall-through
+        }
+    }
+    // Sampled cymbals (drum-kit bank): with samples on, the V3/Brush cymbal
+    // keys (49/57 crash, 51/59 ride, 53 bell, 52 china, 55 splash) become
+    // pure sample playback — the recorded hit IS the voice, no MetalPlate
+    // underneath, and no 49/57 `sample_overlay` (that would double the
+    // sample). `--no-samples` (and V1/V2) keeps today's modeled path
+    // bit-identical; hi-hats 42/44/46 stay modeled on every path.
+    if samples && matches!(kit, Kit::V3 | Kit::Brush) {
+        if let Some(v) = sampler::sampled_cymbal(key, vel, seed, rr, sr) {
+            return Some(v);
         }
     }
     let voice = match key {
@@ -2342,7 +2359,7 @@ mod tests {
 
     fn render_drum_kit_samples(key: u8, vel: u8, secs: f32, kit: Kit, samples: bool) -> Vec<f32> {
         let sr = 44100.0;
-        let mut v = make(key, vel, sr, 7, kit, samples).unwrap();
+        let mut v = make(key, vel, sr, 7, kit, samples, 0).unwrap();
         let mut buf = vec![0f32; (sr * secs) as usize];
         v.render(&mut buf);
         buf
@@ -2360,7 +2377,7 @@ mod tests {
     fn kit_v2_seam_wired_and_inert_for_untouched_keys() {
         let sr = 44100.0;
         let render = |kit| {
-            let mut v = make(51, 100, sr, 7, kit, false).unwrap();
+            let mut v = make(51, 100, sr, 7, kit, false, 0).unwrap();
             let mut buf = vec![0f32; (sr * 1.5) as usize];
             v.render(&mut buf);
             buf
@@ -2552,10 +2569,15 @@ mod tests {
                 f3 >= 0.18 && f3 > 1.35 * f2,
                 "modeled V3 crash still too tonal"
             );
-            assert!(
-                f3s >= 0.18 && f3s >= 0.90 * f3,
-                "sampled V3 crash regressed flatness"
-            );
+            // The samples-on path is now a REAL recorded crash (Stage B/C
+            // sampled cymbals), not the model plus a thin overlay: a real
+            // plate has more spectral structure than the MetalPlate's
+            // filtered-noise wash and its tail legitimately darkens, so its
+            // flatness sits naturally below f3 (measured 0.605/0.464 vs
+            // 0.742/0.820). Hold it to the absolute broadband floor — the
+            // "cymbal, not a tonal bell" guard — not to the synthetic wash
+            // it replaced.
+            assert!(f3s >= 0.18, "sampled V3 crash tail not broadband: {f3s:.3}");
         }
         let r2 = testutil::rms(&v2);
         for (name, s) in [("v3", &v3), ("v3 samples", &v3s)] {
@@ -2589,6 +2611,58 @@ mod tests {
                 "sample overlay level jump for key {key}: {delta_db:+.2} dB"
             );
         }
+    }
+
+    /// Stage C sampled-cymbal routing seam: samples+V3/Brush swaps the seven
+    /// GM cymbal keys onto the sampled bank; `--no-samples` and the legacy
+    /// kits keep the modeled path (the `--no-samples` canary's structural
+    /// half — the bit-identity half is the render-diff against the trunk
+    /// binary). Hi-hats stay modeled on every path.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_cymbals_route_only_on_v3_brush_with_samples() {
+        let sr = 44100.0;
+        for key in [49u8, 51, 52, 53, 55, 57, 59] {
+            for (kit, name) in [(Kit::V3, "V3"), (Kit::Brush, "Brush")] {
+                let v = make(key, 100, sr, 7, kit, true, 0).unwrap();
+                assert_eq!(v.kind(), "sampledcymbal", "key {key} kit {name}");
+                let m = make(key, 100, sr, 7, kit, false, 0).unwrap();
+                assert_eq!(m.kind(), "drum", "--no-samples key {key} kit {name}");
+            }
+            for (kit, name) in [(Kit::V1, "V1"), (Kit::V2, "V2")] {
+                let m = make(key, 100, sr, 7, kit, true, 0).unwrap();
+                assert_eq!(m.kind(), "drum", "legacy kit {name} key {key}");
+            }
+        }
+        for key in [42u8, 44, 46] {
+            let v = make(key, 100, sr, 7, Kit::V3, true, 0).unwrap();
+            assert_ne!(v.kind(), "sampledcymbal", "hat {key} must stay modeled");
+        }
+    }
+
+    /// Stage C level calibration oracle: each sampled cymbal sits within
+    /// ±3 dB of the model it replaces (vel 100, RMS over a fixed 3 s window),
+    /// so swapping the voice never jumps the kit mix.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_cymbal_level_parity() {
+        let mut worst: (u8, f32) = (0, 0.0);
+        for key in [49u8, 51, 52, 53, 55, 57, 59] {
+            let model = render_drum_kit_samples(key, 100, 3.0, Kit::V3, false);
+            let sampled = render_drum_kit_samples(key, 100, 3.0, Kit::V3, true);
+            let (rm, rs) = (testutil::rms(&model), testutil::rms(&sampled));
+            let db = 20.0 * (rs / rm.max(1e-12)).log10();
+            println!("key {key}: model rms {rm:.5} sampled rms {rs:.5} delta {db:+.2} dB");
+            if db.abs() > worst.1.abs() {
+                worst = (key, db);
+            }
+        }
+        assert!(
+            worst.1.abs() <= 3.0,
+            "sampled cymbal {} level {:+.2} dB vs model",
+            worst.0,
+            worst.1
+        );
     }
 
     #[test]
@@ -3544,7 +3618,7 @@ mod tests {
     #[test]
     fn choke_kills_open_hat() {
         let sr = 44100.0;
-        let mut v = make(46, 110, sr, 7, Kit::V1, false).unwrap();
+        let mut v = make(46, 110, sr, 7, Kit::V1, false, 0).unwrap();
         let mut head = vec![0f32; (0.05 * sr) as usize];
         assert!(v.render(&mut head));
         let before = testutil::rms(&head[(0.03 * sr) as usize..]);
@@ -4121,7 +4195,7 @@ mod tests {
             let var = s.iter().map(|&x| (x - mean) * (x - mean)).sum::<f64>() / s.len() as f64;
             var.sqrt() / mean.max(1e-12)
         };
-        let with = hf_env_cv(make(46, 100, SR12, 7, Kit::Brush, false).unwrap());
+        let with = hf_env_cv(make(46, 100, SR12, 7, Kit::Brush, false, 0).unwrap());
         let mut spec = brush_open_hat_spec();
         spec.shimmer = None;
         let without = hf_env_cv(cymbal(&spec, SR12, 7, 100).unwrap());

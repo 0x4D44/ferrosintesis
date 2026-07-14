@@ -2300,7 +2300,8 @@ mod tests {
     fn altbank_b119_reverse_cymbal_crash_handover_level() {
         let rev = render_alt(119, 60, 100, 2.6, 7);
         let crash = {
-            let mut v = crate::drums::make(49, 100, SR12, 7, crate::drums::Kit::V1, false).unwrap();
+            let mut v =
+                crate::drums::make(49, 100, SR12, 7, crate::drums::Kit::V1, false, 0).unwrap();
             let mut buf = vec![0f32; (0.5 * SR12) as usize];
             v.render(&mut buf);
             buf

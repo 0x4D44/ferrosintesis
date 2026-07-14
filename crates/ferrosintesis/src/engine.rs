@@ -950,6 +950,12 @@ pub(crate) struct EngineCore {
     expr_smooth: f32,
     leslie_k: f32,
     wah_smooth: f32,
+    // Per-key channel-10 hit counter (wraps): the sampled cymbals cycle their
+    // round-robin takes from it, so consecutive hits of the SAME key step
+    // 0→1→2→3→0… deterministically no matter what other drums interleave.
+    // (A seed-modulo pick would immediate-repeat ~1/rr of the time — the
+    // machine-gun artifact.)
+    drum_rr: [u8; 128],
 }
 
 impl EngineCore {
@@ -994,6 +1000,7 @@ impl EngineCore {
             expr_smooth: 1.0 - (-(BLOCK as f32) / (0.03 * sr)).exp(),
             leslie_k: 1.0 - (-(BLOCK as f32) / (LESLIE_INERTIA_S * sr)).exp(),
             wah_smooth: 1.0 - (-(BLOCK as f32) / (WAH_SLEW_S * sr)).exp(),
+            drum_rr: [0; 128],
         }
     }
 
@@ -1235,7 +1242,9 @@ impl EngineCore {
 
         let seed = 0x9E37 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
         let voice = if ch == 9 {
-            drums::make(key, vel, sr, seed, self.strips[9].kit, self.opt.samples)
+            let rr = self.drum_rr[key as usize];
+            self.drum_rr[key as usize] = rr.wrapping_add(1);
+            drums::make(key, vel, sr, seed, self.strips[9].kit, self.opt.samples, rr)
         } else {
             let prog = self.strips[ci].program;
             Some(if self.strips[ci].alt_bank {
@@ -2829,6 +2838,147 @@ mod tests {
             "open hat survived the choke: {} vs {}",
             w(&b),
             w(&a)
+        );
+    }
+
+    /// Normalized cross-correlation of two equal windows, max |r| over
+    /// ±`max_lag` samples — the anti-machine-gun similarity measure.
+    fn ncc_max(a: &[f32], b: &[f32], max_lag: usize) -> f32 {
+        fn ncc_at(a: &[f32], b: &[f32]) -> f32 {
+            let (mut sab, mut saa, mut sbb) = (0f64, 0f64, 0f64);
+            for (&x, &y) in a.iter().zip(b) {
+                sab += (x * y) as f64;
+                saa += (x * x) as f64;
+                sbb += (y * y) as f64;
+            }
+            (sab / (saa.sqrt() * sbb.sqrt()).max(1e-30)) as f32
+        }
+        let n = a.len().min(b.len()) - max_lag;
+        let mut best = 0f32;
+        for lag in 0..=max_lag {
+            best = best.max(ncc_at(&a[..n], &b[lag..lag + n]).abs());
+            best = best.max(ncc_at(&a[lag..lag + n], &b[..n]).abs());
+        }
+        best
+    }
+
+    /// First sample above 5% of the window's peak — a hit's true onset,
+    /// undoing the engine's block-quantized voice spawn.
+    fn hit_onset(w: &[f32]) -> usize {
+        let peak = w.iter().fold(0f32, |m, &x| m.max(x.abs()));
+        w.iter().position(|&x| x.abs() > 0.05 * peak).unwrap_or(0)
+    }
+
+    /// Rate-warp-searching NCC: max correlation over playback-rate ratios
+    /// ±5.5% (the jitter spread of two hits), warping `b` from its detected
+    /// onset and comparing a 40 ms window that starts 30 ms in — past the
+    /// stick transient every take of one cymbal shares, into the
+    /// take-specific wash. A rate-jittered copy of the SAME take re-aligns
+    /// near its true ratio and reads high; a different take stays low at
+    /// every warp. Plain NCC cannot make this distinction — ±2.5% rate
+    /// jitter alone already decorrelates the window (measured ~0.07-0.19 for
+    /// the same take), which would let a seed-modulo repeat sail through.
+    fn warp_ncc(a: &[f32], b: &[f32]) -> f32 {
+        let (a, b) = (&a[hit_onset(a)..], &b[hit_onset(b)..]);
+        let w0 = 1323usize; // window start: 30 ms
+        let n = 1764usize; // window length: 40 ms
+        let lag = 48usize; // residual onset-estimate error
+        let steps = 220;
+        // correlate FIRST DIFFERENCES: differencing tilts the measure toward
+        // the high-frequency sizzle that is take-specific, away from the low
+        // plate modes every take of one cymbal shares
+        let da: Vec<f32> = a[w0..w0 + n + lag + 1]
+            .windows(2)
+            .map(|p| p[1] - p[0])
+            .collect();
+        let mut warped = vec![0f32; w0 + n + lag + 1];
+        let mut best = 0f32;
+        for s in 0..=steps {
+            let r = 0.945 + 0.11 * s as f32 / steps as f32;
+            for (i, w) in warped.iter_mut().enumerate() {
+                let x = i as f32 * r;
+                let j = x as usize;
+                let frac = x - j as f32;
+                *w = b[j] * (1.0 - frac) + b[j + 1] * frac;
+            }
+            let dw: Vec<f32> = warped[w0..].windows(2).map(|p| p[1] - p[0]).collect();
+            best = best.max(ncc_max(&da, &dw, lag));
+        }
+        best
+    }
+
+    /// THE anti-machine-gun oracle (Stage C headline). Eight ride hits of the
+    /// SAME key through the full engine path, so the per-key round-robin
+    /// counter drives the take and the note seed drives the micro-variation:
+    ///
+    ///  * consecutive hits must be genuinely different TAKES: their
+    ///    warp-searched NCC stays low. Seed-modulo rr picking repeats a take
+    ///    back-to-back, the warp search re-aligns it through the rate jitter,
+    ///    and this clause goes red (fail-first proven);
+    ///  * NO pair of the eight may correlate like a clone (plain NCC ~1.0)
+    ///    and no two hits may be bit-identical: dropping the rate/gain
+    ///    micro-variation makes hits 0&4/1&5/… (same take after the 4-take
+    ///    wrap) exact clones and this clause goes red (fail-first proven).
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_ride_hits_are_decorrelated() {
+        let sr = 44100.0;
+        let n_hits = 8usize;
+        let spacing = 1.3f64; // ride takes are ~1.2 s: windows never overlap
+        let hits: Vec<(f64, u8, u8)> = (0..n_hits)
+            .map(|i| (0.05 + spacing * i as f64, 51u8, 100u8))
+            .collect();
+        // dry drum bus: zero the sends so hit windows hold only the voice
+        let song = drum_song(
+            &hits,
+            0.05 + spacing * n_hits as f64,
+            &[(91, 0), (93, 0), (94, 0)],
+        );
+        let opt = Options {
+            samples: true,
+            ..test_opts(sr)
+        };
+        let s = render(&song, &opt).0;
+        let mono: Vec<f32> = s.chunks_exact(2).map(|p| p[0] + p[1]).collect();
+        let win = |i: usize| {
+            let at = ((0.05 + spacing * i as f64) * sr as f64) as usize;
+            &mono[at..at + (0.20 * sr) as usize]
+        };
+        let mut worst_any = 0f32;
+        for i in 0..n_hits {
+            for j in (i + 1)..n_hits {
+                assert_ne!(win(i), win(j), "hits {i} and {j} are bit-identical");
+                let r = ncc_max(win(i), win(j), 128);
+                if j == i + 1 || j == i + 4 {
+                    println!("ride hits {i}-{j}: plain ncc {r:.3}");
+                }
+                worst_any = worst_any.max(r);
+            }
+        }
+        // calibration visibility: same-take pairs (i, i+4) must read HIGH
+        // under the warp search — that head-room is what lets the consecutive
+        // clause catch a seed-modulo repeat
+        for i in 0..n_hits - 4 {
+            let r = warp_ncc(win(i), win(i + 4));
+            println!("ride hits {i}-{} (same take): warp ncc {r:.3}", i + 4);
+        }
+        let mut worst_consecutive = 0f32;
+        for i in 0..n_hits - 1 {
+            let r = warp_ncc(win(i), win(i + 1));
+            println!("ride hits {i}-{}: warp ncc {r:.3}", i + 1);
+            worst_consecutive = worst_consecutive.max(r);
+        }
+        // Calibration (measured on this bank): distinct takes warp-NCC
+        // 0.12-0.48; the same take under micro-variation re-aligns to
+        // 0.70-0.86; a clone is 1.0. The 0.60 threshold sits ≥0.10 clear of
+        // both populations.
+        assert!(
+            worst_consecutive < 0.60,
+            "consecutive ride hits warp-correlate {worst_consecutive:.3} — round-robin repeat"
+        );
+        assert!(
+            worst_any < 0.98,
+            "some ride hit pair is a clone: ncc {worst_any:.3}"
         );
     }
 
@@ -5259,6 +5409,78 @@ mod tests {
         ev.push((2.4, EvKind::NoteOff { ch: 0, key: 69 }));
         ev.push((2.4, EvKind::NoteOff { ch: 0, key: 76 }));
         left(&render(&test_song(ev, 2.5), &test_opts(44100.0)).0)
+    }
+
+    /// Anti-machine-gun, END TO END through the engine (not the voice in isolation):
+    /// a fast repeated ride must NOT sound like one sample retriggered. The engine's
+    /// per-key round-robin counter cycles the 4 takes, and the note seed drives a per-hit
+    /// micro-variation, so even the two hits that land on the SAME round-robin take (hit 0
+    /// and hit 4 of a 4-take bank) are meaningfully different.
+    ///
+    /// The guard: the same-take pair (0, 4) must differ SUBSTANTIALLY. A machine-gun
+    /// (fixed take, no micro-variation) renders them bit-identical, so their difference
+    /// energy is exactly zero; with the micro-variation's ±40-cent playback-rate spread the
+    /// two same-take hits phase-decorrelate, so the normalized difference energy is large.
+    /// This is the oracle that fails if the round-robin is seed-modulo (can repeat a take
+    /// back-to-back) or if the micro-variation is dropped.
+    #[test]
+    fn sampled_ride_does_not_machine_gun() {
+        let sr = 44100.0;
+        let opts = Options {
+            samples: true,
+            ..test_opts(sr)
+        };
+        if !crate::embedded_samples_available() {
+            return; // the modeled-only build has no sampled cymbals to guard
+        }
+        // 5 ISOLATED ride hits on ch10, 1.6 s apart — WIDER than the ride's ~1.2 s ring, so
+        // no prior hit's tail bleeds into the next attack window. That isolation is
+        // load-bearing: at close spacing hit 4's window would contain hits 0-3's overlapping
+        // tails and differ from hit 0 for that reason alone, passing the test without ever
+        // exercising the micro-variation. With the RIDE bank's 4 round-robins the counter
+        // cycles 0,1,2,3,0, so hit 0 and hit 4 both land on take rr0 — a CLEAN same-take pair.
+        let gap = 1.6f64;
+        let mut ev = Vec::new();
+        for i in 0..5u32 {
+            let t = 0.05 + gap * i as f64;
+            ev.push((
+                t,
+                EvKind::NoteOn {
+                    ch: 9,
+                    key: 51,
+                    vel: 100,
+                },
+            ));
+            ev.push((t + gap - 0.1, EvKind::NoteOff { ch: 9, key: 51 }));
+        }
+        let mono = left(&render(&test_song(ev, 0.05 + gap * 5.0), &opts).0);
+
+        let hit = |i: usize| -> &[f32] {
+            let a = ((0.05 + gap as f32 * i as f32) * sr) as usize;
+            &mono[a..a + (0.06 * sr) as usize]
+        };
+        let rms = |x: &[f32]| (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt();
+
+        for i in 0..5 {
+            assert!(
+                rms(hit(i)) > 1e-3,
+                "ride hit {i} is silent — sampled cymbal not routed?"
+            );
+        }
+        // The load-bearing check: hits 0 and 4 are the SAME round-robin take, both isolated,
+        // yet must differ SUBSTANTIALLY. A machine-gun (fixed take, no micro-variation)
+        // renders them bit-identical -> diff/rms == 0; the ±40-cent playback-rate spread
+        // phase-decorrelates them -> diff/rms is large. Verified fail-first: with the rate
+        // jitter neutralized this drops to ~0.06 (gain jitter only) and the assert fails.
+        let h0 = hit(0);
+        let h4 = hit(4);
+        let diff: Vec<f32> = h0.iter().zip(h4).map(|(a, b)| a - b).collect();
+        let ratio = rms(&diff) / rms(h0).max(1e-9);
+        assert!(
+            ratio > 0.5,
+            "same-round-robin ride hits are nearly identical (diff/rms = {ratio:.3}) — \
+             MACHINE-GUN: the micro-variation is not decorrelating repeats"
+        );
     }
 
     /// Poly (key) aftertouch is per-note: pressing A4 in an A4+E5 violin

@@ -3,6 +3,18 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.14 — **Plain NCC cannot detect a repeated sample take once per-hit rate
+  jitter exists** — ±2.5% playback-rate jitter alone decorrelates a 30 ms cymbal
+  window to NCC 0.07–0.19 *for the same take*, so an anti-machine-gun oracle built
+  on plain correlation waves a round-robin repeat through. Use a rate-WARP-searching
+  NCC: warp one hit over ratio candidates (±ratio spread of two jitter draws),
+  anchor at the detected onset, and correlate FIRST DIFFERENCES (tilts toward the
+  take-specific HF sizzle, away from the low plate modes every take of one cymbal
+  shares) over a window starting past the shared stick transient (30–70 ms).
+  Measured on the drumkit ride: distinct takes 0.12–0.48, same take 0.70–0.86,
+  clone 1.0 — a usable threshold at 0.60. Raw-waveform/onset-window variants had
+  no margin (adjacent takes correlate 0.71). See `sampled_ride_hits_are_decorrelated`.
+
 - 2026.07.13 — **To detect a bad cymbal/plate on a box with no ears, measure decay RATES
   and STRUCTURE, never spectral SNAPSHOTS.** Every cheap scalar (flatness, centroid,
   kurtosis, peak prominence, band ratios) is a time-marginal of the spectrum, and a
@@ -148,11 +160,6 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   survives. Ring time Q/(πf) must span the beat period (Q ≈ 800 here);
   Δf > f/Q alone is not sufficient.
 
-- 2026.07.06 — **Write the musical oracle before the music.** The Signal
-  Fire's themes were composed to pass a counterpoint oracle (chord tone on
-  every ground downbeat, consonant pairwise intervals); the finale's
-  three-theme stack then worked first try. Compose-to-pass beats
-  verify-after-the-fact for generative music.
 - 2026.07.06 — **A movement-verified render does not verify the album.**
   Engines with one seeded RNG stream (Hollow Hill / Signal Fire / Through
   Lines engine.py) re-roll every downstream jitter when any upstream movement

@@ -1045,8 +1045,8 @@ mod guards {
             assert_eq!(v.kind(), want, "program {prog}");
         }
         // drums route through drums::make
-        let d =
-            crate::drums::make(38, 100, SR, 7, crate::drums::Kit::V1, false).expect("snare voice");
+        let d = crate::drums::make(38, 100, SR, 7, crate::drums::Kit::V1, false, 0)
+            .expect("snare voice");
         assert_eq!(d.kind(), "drum");
         // the Drive-insert decision, single source of truth
         for p in 0u8..=127 {

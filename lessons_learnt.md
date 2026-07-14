@@ -3,6 +3,13 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.14 — **Virtuosity's 18" jazz kick has NO 30-70 Hz sub in ANY mic set
+  (fundamental ~80 Hz; the overhead's "sub" reading is room rumble).** Re-micing
+  cannot create low end the instrument never produced — a deep-kick ask needs a
+  modeled-sub layer or a ~100 Hz-hinged shelf on the fundamental. Related: white
+  rate jitter alone can never bound worst-pair correlation on fast repeated
+  hits — some same-take pair always draws near-equal rates; stratify the rate
+  offsets by hit index, coprime with the round-robin count (hats: 5 vs 4).
 - 2026.07.14 — **Deep-velocity-layered sample libraries with no round robins
   (Virtuosity snare 36 vl, toms 16 vl) still yield working round robins: fill
   each target layer's RR slots with ADJACENT source velocity layers.** They are

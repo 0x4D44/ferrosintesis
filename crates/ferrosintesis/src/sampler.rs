@@ -991,6 +991,19 @@ pub struct SampledDrum {
     choke_mul: f32,
     /// Samples of silence to emit before playback starts (onset jitter).
     delay: u32,
+    /// Modeled sub-sine layered under the sampled attack (kick only; `sub_amp`
+    /// is 0 for every other drum, so its render branch is skipped and those
+    /// voices stay bit-identical). Virtuosity's 18" jazz kick has its
+    /// fundamental at ~80 Hz and no 30-70 Hz content; this synth sub supplies
+    /// the deep weight the recording can't — the same sample-attack-plus-model
+    /// hybrid the LA layer uses elsewhere. Pitch drops start->end over ~20 ms
+    /// (a real kick's beater-then-body swoop), amplitude decays on its own t60.
+    sub_phase: f32,
+    sub_incr: f32,
+    sub_incr_end: f32,
+    sub_pitch_mul: f32,
+    sub_amp: f32,
+    sub_decay: f32,
     #[cfg(test)]
     layer: usize,
     #[cfg(test)]
@@ -1042,13 +1055,49 @@ impl SampledDrum {
             // hat-grab/CC120 choke: -60 dB in ~15 ms
             choke_mul: 10f32.powf(-3.0 / (0.015 * sr)),
             delay,
+            // inert by default; `with_kick_sub` turns it on for the kick only
+            sub_phase: 0.0,
+            sub_incr: 0.0,
+            sub_incr_end: 0.0,
+            sub_pitch_mul: 0.0,
+            sub_amp: 0.0,
+            sub_decay: 0.0,
             #[cfg(test)]
             layer,
             #[cfg(test)]
             rr,
         }
     }
+
+    /// Engage the modeled sub-sine for a kick strike. `level` scales with the
+    /// hit; the sub is a fixed proportion of the kick's own sample gain so it
+    /// tracks velocity without a second velocity curve.
+    fn with_kick_sub(mut self, vel: u8, sr: f32) -> Self {
+        let tau = std::f32::consts::TAU;
+        self.sub_incr = tau * KICK_SUB_START_HZ / sr;
+        self.sub_incr_end = tau * KICK_SUB_END_HZ / sr;
+        // (incr - incr_end) decays to ~e^-1 of its span every KICK_SUB_PITCH_S
+        self.sub_pitch_mul = (-1.0 / (KICK_SUB_PITCH_S * sr)).exp();
+        self.sub_amp = KICK_SUB_LEVEL * vel_amp(vel);
+        // amplitude t60
+        self.sub_decay = 10f32.powf(-3.0 / (KICK_SUB_T60_S * sr));
+        self
+    }
 }
+
+/// Kick sub-layer voicing. Tuned so the rendered kick's sub(30-70)/mid(140-400)
+/// energy ratio lands in the "deep" band without booming; see
+/// `sampled_kick_has_deep_sub`.
+#[cfg(feature = "embedded-samples")]
+const KICK_SUB_START_HZ: f32 = 90.0;
+#[cfg(feature = "embedded-samples")]
+const KICK_SUB_END_HZ: f32 = 48.0;
+#[cfg(feature = "embedded-samples")]
+const KICK_SUB_PITCH_S: f32 = 0.020;
+#[cfg(feature = "embedded-samples")]
+const KICK_SUB_T60_S: f32 = 0.16;
+#[cfg(feature = "embedded-samples")]
+const KICK_SUB_LEVEL: f32 = 0.55;
 
 /// Sampled-drum voice for a GM channel-10 key (35/36 kick, 37 side stick,
 /// 38/40 snare, 41-50 toms, 42/44/46 hi-hats, 49/57 crash, 51/59 ride,
@@ -1090,9 +1139,14 @@ pub fn sampled_drum(key: u8, vel: u8, seed: u32, hit_index: u8, sr: f32) -> Opti
         seed,
         hit_index,
     };
-    Some(Box::new(SampledDrum::new(
-        bank, level, hit, sr, repitch, jit,
-    )))
+    let voice = SampledDrum::new(bank, level, hit, sr, repitch, jit);
+    // the kick gets a modeled sub-sine under the sampled attack for deep weight
+    let voice = if matches!(key, 35 | 36) {
+        voice.with_kick_sub(vel, sr)
+    } else {
+        voice
+    };
+    Some(Box::new(voice))
 }
 
 /// Modeled-only builds have no drum-kit bank; the caller falls back to the
@@ -1126,6 +1180,14 @@ impl Voice for SampledDrum {
             let a = self.data[j] as f32;
             let b = self.data[j + 1] as f32;
             *o += (a + (b - a) * frac) * (1.0 / 32768.0) * self.gain * self.env;
+            // modeled kick sub (inert for every other drum: sub_amp == 0)
+            if self.sub_amp > 1e-6 {
+                *o += self.sub_amp * self.env * self.sub_phase.sin();
+                self.sub_phase += self.sub_incr;
+                self.sub_incr =
+                    self.sub_incr_end + (self.sub_incr - self.sub_incr_end) * self.sub_pitch_mul;
+                self.sub_amp *= self.sub_decay;
+            }
             self.env *= self.fade_mul;
             self.pos += self.step;
         }
@@ -1214,6 +1276,48 @@ mod tests {
         for w in rrs.windows(2) {
             assert_ne!(w[0], w[1], "immediate round-robin repeat");
         }
+    }
+
+    /// The kick's modeled sub-layer supplies deep low content the sampled jazz
+    /// kick (fundamental ~80 Hz, nothing below) does not have. Measured as the
+    /// energy of a ~50 Hz Goertzel bin: present with the sub, ~absent without.
+    /// Fail-first: drop `with_kick_sub` and the ratio collapses to ~1.
+    #[test]
+    fn sampled_kick_has_deep_sub() {
+        let sr = 44100.0;
+        let hit = DrumHit {
+            vel: 110,
+            seed: 7,
+            hit_index: 0,
+        };
+        let render = |sub: bool| -> Vec<f32> {
+            let mut v = SampledDrum::new(&kitbank::KICK, 1.0, hit, sr, 1.0, &DRUM_JITTER);
+            if sub {
+                v = v.with_kick_sub(hit.vel, sr);
+            }
+            let mut buf = vec![0f32; (0.3 * sr) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        // Goertzel magnitude at ~50 Hz (the sub's settled pitch).
+        let mag50 = |x: &[f32]| -> f32 {
+            let w = std::f32::consts::TAU * 50.0 / sr;
+            let coeff = 2.0 * w.cos();
+            let (mut s1, mut s2) = (0.0f32, 0.0f32);
+            for &v in x {
+                let s0 = v + coeff * s1 - s2;
+                s2 = s1;
+                s1 = s0;
+            }
+            ((s1 * s1 + s2 * s2 - coeff * s1 * s2).max(0.0)).sqrt() / x.len() as f32
+        };
+        let with = mag50(&render(true));
+        let without = mag50(&render(false));
+        eprintln!("kick 50 Hz: with-sub={with:.6} without={without:.6} ratio={:.2}", with / without.max(1e-9));
+        assert!(
+            with > 1.8 * without.max(1e-9),
+            "kick sub-layer adds no deep 50 Hz content: with={with:.5} without={without:.5}"
+        );
     }
 
     /// Velocity picks the bank's dynamic layer at the SFZ boundaries, and

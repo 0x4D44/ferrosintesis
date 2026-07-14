@@ -922,22 +922,64 @@ const TOM_LO_ROOT_HZ: f32 = 113.5;
 #[cfg(feature = "embedded-samples")]
 const TOM_HI_ROOT_HZ: f32 = 181.0;
 
-/// Anti-machine-gun micro-variation (mechanism b): every hit gets a playback
-/// rate of 1 + U(-0.025, +0.025) — ±~43 cents, inaudible as pitch on an
-/// unpitched drum but enough to decorrelate the waveform and the decay
-/// length — and a gain of ×(1 + U(-0.06, +0.06)). Both are deterministic from
-/// the note seed. Mechanism (a), the clean per-key round-robin cycling, lives
-/// in the engine's `drum_rr` counter and arrives here as `hit_index`.
+/// Anti-machine-gun micro-variation (mechanism b), per bank profile: every
+/// hit gets a playback rate of 1 + stratum + U(-rate, +rate), a gain of
+/// ×(1 + U(-gain, +gain)), and an onset delay of U(0, onset_s) of silence.
+/// All deterministic from the note seed (plus `hit_index` for the stratum).
+/// Mechanism (a), the clean per-key round-robin cycling, lives in the
+/// engine's `drum_rr` counter and arrives here as `hit_index`.
 #[cfg(feature = "embedded-samples")]
-const DRUM_RATE_JITTER: f32 = 0.025;
+struct DrumJitter {
+    /// Half-width of the white playback-rate jitter.
+    rate: f32,
+    /// Deterministic per-hit rate offsets, cycled by `hit_index % len`
+    /// (empty: none). See `HAT_JITTER` for why white jitter alone is not
+    /// enough on fast repeated hits.
+    strata: &'static [f32],
+    /// Half-width of the white gain jitter.
+    gain: f32,
+    /// Maximum onset delay in seconds; each hit draws U(0, this) of silence
+    /// before the sample starts, shifting the transient off the grid.
+    onset_s: f32,
+}
+
+/// The pitched/tonal drums (kick, snare, toms, cymbals): gentle ±2.5% rate
+/// (±~43 cents — inaudible as pitch wobble on a snare or tom, enough to
+/// decorrelate the decay), ±6% gain, no onset jitter — exactly the pre-hat-
+/// profile behaviour, so these banks render bit-identically to before.
 #[cfg(feature = "embedded-samples")]
-const DRUM_GAIN_JITTER: f32 = 0.06;
+const DRUM_JITTER: DrumJitter = DrumJitter {
+    rate: 0.025,
+    strata: &[],
+    gain: 0.06,
+    onset_s: 0.0,
+};
+
+/// The hi-hats (42/44/46) are UNPITCHED and transient-dominated, and fast
+/// 16th closed-hat lines are where Arthur heard machine-gunning (worst
+/// hit-pair NCC 0.494 under the pitched profile). White jitter alone cannot
+/// fix that: over 16 hits some pair sharing a round-robin take always draws
+/// nearly equal rates and re-correlates. So the hats add STRATIFIED rate
+/// offsets — 5 slots across ±8%, cycled by hit index; 5 is coprime with the
+/// 4-take round robin, so no two hits closer than 20 apart share both take
+/// and stratum, and adjacent strata (4%) minus the ±0.8% white spread still
+/// guarantee ≥2.4% rate separation for every same-take pair — plus a 0-1 ms
+/// onset jitter and wider ±10% gain jitter. ±8% is ±~133 cents: on a hat
+/// that reads as strike-position variation, not detune.
+#[cfg(feature = "embedded-samples")]
+const HAT_JITTER: DrumJitter = DrumJitter {
+    rate: 0.008,
+    strata: &[-0.08, -0.04, 0.0, 0.04, 0.08],
+    gain: 0.10,
+    onset_s: 0.001,
+};
 
 /// A full sampled drum hit: velocity picks the bank's dynamic layer, the
 /// engine's per-key hit counter picks the round-robin take, and the note seed
-/// adds per-hit rate/gain micro-variation so even a repeated take never
-/// renders twice the same. `repitch` scales the playback rate on top of the
-/// jitter (1.0 for everything except the toms).
+/// adds per-hit rate/gain/onset micro-variation (per the bank's `DrumJitter`
+/// profile) so even a repeated take never renders twice the same. `repitch`
+/// scales the playback rate on top of the jitter (1.0 for everything except
+/// the toms).
 #[cfg(feature = "embedded-samples")]
 pub struct SampledDrum {
     data: &'static [i16],
@@ -947,10 +989,23 @@ pub struct SampledDrum {
     env: f32,
     fade_mul: f32,
     choke_mul: f32,
+    /// Samples of silence to emit before playback starts (onset jitter).
+    delay: u32,
     #[cfg(test)]
     layer: usize,
     #[cfg(test)]
     rr: usize,
+}
+
+/// One strike of a sampled drum: the note velocity, the note seed (drives
+/// the micro-variation), and the engine's per-key hit counter (drives the
+/// round-robin take and the jitter stratum).
+#[cfg(feature = "embedded-samples")]
+#[derive(Clone, Copy)]
+struct DrumHit {
+    vel: u8,
+    seed: u32,
+    hit_index: u8,
 }
 
 #[cfg(feature = "embedded-samples")]
@@ -958,26 +1013,35 @@ impl SampledDrum {
     fn new(
         bank: &'static ferrosintesis_samples_drumkit::Bank,
         level: f32,
-        vel: u8,
-        seed: u32,
-        hit_index: u8,
+        hit: DrumHit,
         sr: f32,
         repitch: f32,
+        jit: &DrumJitter,
     ) -> Self {
-        let layer = bank.layer_for_velocity(vel);
-        let rr = hit_index as usize % bank.round_robins;
-        let mut rng = Rng::new(seed ^ 0x00C1_4BA1);
-        let rate = 1.0 + DRUM_RATE_JITTER * rng.white();
-        let gjit = 1.0 + DRUM_GAIN_JITTER * rng.white();
+        let layer = bank.layer_for_velocity(hit.vel);
+        let rr = hit.hit_index as usize % bank.round_robins;
+        let mut rng = Rng::new(hit.seed ^ 0x00C1_4BA1);
+        let stratum = if jit.strata.is_empty() {
+            0.0
+        } else {
+            jit.strata[hit.hit_index as usize % jit.strata.len()]
+        };
+        // draw order matters: rate then gain (as before the profiles), then
+        // onset — a zero-onset profile thus renders bit-identically to the
+        // pre-profile voice
+        let rate = 1.0 + stratum + jit.rate * rng.white();
+        let gjit = 1.0 + jit.gain * rng.white();
+        let delay = (jit.onset_s * sr * (0.5 + 0.5 * rng.white())) as u32;
         SampledDrum {
             data: bank.pcm(layer, rr),
             pos: 0.0,
             step: 44_100.0 / sr * rate * repitch,
-            gain: level * vel_amp(vel) * gjit,
+            gain: level * vel_amp(hit.vel) * gjit,
             env: 1.0,
             fade_mul: 1.0,
             // hat-grab/CC120 choke: -60 dB in ~15 ms
             choke_mul: 10f32.powf(-3.0 / (0.015 * sr)),
+            delay,
             #[cfg(test)]
             layer,
             #[cfg(test)]
@@ -1014,9 +1078,20 @@ pub fn sampled_drum(key: u8, vel: u8, seed: u32, hit_index: u8, sr: f32) -> Opti
         55 => (&kit::SPLASH, 1.0),
         _ => return None,
     };
+    // the unpitched hats take the hard-decorrelation profile; everything
+    // else keeps the gentle pitched-drum jitter (see the profile docs)
+    let jit = match key {
+        42 | 44 | 46 => &HAT_JITTER,
+        _ => &DRUM_JITTER,
+    };
     let level = DRUM_LEVEL.iter().find(|(k, _)| *k == key).unwrap().1;
+    let hit = DrumHit {
+        vel,
+        seed,
+        hit_index,
+    };
     Some(Box::new(SampledDrum::new(
-        bank, level, vel, seed, hit_index, sr, repitch,
+        bank, level, hit, sr, repitch, jit,
     )))
 }
 
@@ -1038,6 +1113,11 @@ impl Voice for SampledDrum {
     fn render(&mut self, out: &mut [f32]) -> bool {
         let n = self.data.len();
         for o in out.iter_mut() {
+            // onset jitter: emit silence until the delay is spent
+            if self.delay > 0 {
+                self.delay -= 1;
+                continue;
+            }
             let j = self.pos as usize;
             if j + 1 >= n || self.env < 1e-4 {
                 return false;
@@ -1110,7 +1190,18 @@ mod tests {
             .map(|i| {
                 // a fresh pseudo-random seed per hit, exactly like the engine
                 let seed = 0x9E37 ^ (i as u32).wrapping_mul(2654435761);
-                let v = SampledDrum::new(bank, 0.4, 100, seed, i, sr, 1.0);
+                let v = SampledDrum::new(
+                    bank,
+                    0.4,
+                    DrumHit {
+                        vel: 100,
+                        seed,
+                        hit_index: i,
+                    },
+                    sr,
+                    1.0,
+                    &DRUM_JITTER,
+                );
                 (v.layer, v.rr)
             })
             .collect();
@@ -1131,15 +1222,51 @@ mod tests {
     fn sampled_drum_velocity_selects_layer() {
         let sr = 44100.0;
         let bank = &kitbank::RIDE; // vel_hi [42, 85, 127]
-        let layer = |vel: u8| SampledDrum::new(bank, 0.4, vel, 7, 0, sr, 1.0).layer;
+        let layer = |vel: u8| {
+            SampledDrum::new(
+                bank,
+                0.4,
+                DrumHit {
+                    vel,
+                    seed: 7,
+                    hit_index: 0,
+                },
+                sr,
+                1.0,
+                &DRUM_JITTER,
+            )
+            .layer
+        };
         assert_eq!(layer(30), 0);
         assert_eq!(layer(42), 0);
         assert_eq!(layer(43), 1);
         assert_eq!(layer(85), 1);
         assert_eq!(layer(86), 2);
         assert_eq!(layer(120), 2);
-        let soft = SampledDrum::new(bank, 0.4, 30, 7, 0, sr, 1.0);
-        let hard = SampledDrum::new(bank, 0.4, 120, 7, 0, sr, 1.0);
+        let soft = SampledDrum::new(
+            bank,
+            0.4,
+            DrumHit {
+                vel: 30,
+                seed: 7,
+                hit_index: 0,
+            },
+            sr,
+            1.0,
+            &DRUM_JITTER,
+        );
+        let hard = SampledDrum::new(
+            bank,
+            0.4,
+            DrumHit {
+                vel: 120,
+                seed: 7,
+                hit_index: 0,
+            },
+            sr,
+            1.0,
+            &DRUM_JITTER,
+        );
         assert!(
             !std::ptr::eq(soft.data, hard.data),
             "soft and hard hits must play different takes"
@@ -1152,7 +1279,18 @@ mod tests {
     #[test]
     fn sampled_drum_choke_reaches_silence_within_20_ms() {
         let sr = 44100.0;
-        let mut v = SampledDrum::new(&kitbank::CRASH, 0.4, 110, 7, 0, sr, 1.0);
+        let mut v = SampledDrum::new(
+            &kitbank::CRASH,
+            0.4,
+            DrumHit {
+                vel: 110,
+                seed: 7,
+                hit_index: 0,
+            },
+            sr,
+            1.0,
+            &DRUM_JITTER,
+        );
         let mut head = vec![0f32; (0.30 * sr) as usize];
         assert!(v.render(&mut head));
         let pre = head[head.len() - 441..]
@@ -1200,7 +1338,18 @@ mod tests {
                 }
             }
             // and through the voice: near-zero entry, near-zero exit
-            let mut v = SampledDrum::new(bank, 0.4, 110, 7, 0, sr, 1.0);
+            let mut v = SampledDrum::new(
+                bank,
+                0.4,
+                DrumHit {
+                    vel: 110,
+                    seed: 7,
+                    hit_index: 0,
+                },
+                sr,
+                1.0,
+                &DRUM_JITTER,
+            );
             let mut buf = vec![0f32; (3.0 * sr) as usize];
             let alive = v.render(&mut buf);
             assert!(!alive, "3 s must outlast every bank take");

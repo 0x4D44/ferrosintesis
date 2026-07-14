@@ -2998,7 +2998,17 @@ mod tests {
     /// drives the per-hit rate/gain micro-variation:
     ///
     ///  * every hit window must be audible and NO pair bit-identical;
-    ///  * no pair may correlate like a clone (plain NCC ~1.0);
+    ///  * NO pair — same-take or cross-take — may correlate above 0.35
+    ///    (listener-verified: the pre-hat-profile kit read worst-pair 0.494
+    ///    and Arthur heard it as machine-gunny). Uniform ±2.5% rate jitter
+    ///    cannot reach this: over 16 hits some same-take pair always lands
+    ///    within a fraction of a percent in rate, re-correlating the
+    ///    transient (fail-first: threshold tightened before the hat jitter
+    ///    profile landed — the old engine read 0.494 against this 0.35).
+    ///    The hat profile answers with STRATIFIED rate offsets
+    ///    (hit_index % 5 over ±7%, coprime with the 4-take round-robin, so
+    ///    no two hits closer than 20 apart share take AND rate stratum)
+    ///    plus onset jitter (U(0, 1 ms)) and wider gain jitter;
     ///  * the same-take pairs (i, i+4 after the 4-take wrap) must differ
     ///    SUBSTANTIALLY (normalized difference energy — the ride oracle's
     ///    diff/rms measure).
@@ -3069,8 +3079,9 @@ mod tests {
              min same-take diff/rms {worst_diff:.3}"
         );
         assert!(
-            worst_any < 0.97,
-            "some hat pair correlates like a clone: ncc {worst_any:.3} — MACHINE-GUN"
+            worst_any < 0.35,
+            "some hat pair correlates {worst_any:.3} (limit 0.35) — MACHINE-GUN: \
+             the hat jitter profile is not decorrelating repeats"
         );
         assert!(
             worst_diff > 0.4,

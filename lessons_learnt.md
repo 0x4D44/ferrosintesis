@@ -37,6 +37,29 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   stereo-imaging oracle (a hat-forward kit correlates more; give its test pattern a
   present ride so it still exercises the L/R spread).
 
+- 2026.07.14 — **A one-pole KS damper's MAGNITUDE at f0 (not `loop_gain`/`t60`) rules
+  treble decay** — STEEL B5: damp_mag(f0) ≈ 0.955/round-trip ≈ −390 dB/s, so the
+  fundamental is dead in ~130 ms whatever the nominal t60. Naive `1/|H(f0)|` loop-gain
+  compensation is DC-UNSTABLE (round-trip gain > 1 below f0, since |H(DC)|=1); hold a
+  treble carrier with the band-limited saturating `SusDrv` sustainer instead. This is why
+  a fast plucked tremolo machine-guns: not (only) the fresh-spawn re-attack, but the
+  inter-stroke release chop + the dead treble carrier. Fix = re-PICK the ringing string
+  (voice reuse + stretched release + carrier hold + pick-catch + h1-floor); see the tremolo
+  HLD. Oracle: f0-carrier p10/p90 (tone persists between strokes) — broadband/HFfrac metrics
+  are FOOLED (the onset train dominates all bands, so total-energy ratios are invariant; and
+  overlapping released twins fill gaps with hash that gross-envelope metrics credit as
+  continuity). Corollary: one comb-noise period's h1 is Rayleigh-random (20 dB stroke
+  roulette) and additive re-injection phase-cancels — a re-pick must catch (scale) the line
+  and floor its own h1.
+- 2026.07.14 — **A "bug" can be test-pinned as a feature — check before removing it.** The
+  GM20 reed-organ half-integer partials (1.5/2.5/3.5/4.5f) read as a parallel-fifth "organum
+  ghost" AND are pinned by `reed_organ_..._free_reed_character` as intentional off-harmonic
+  character (off_harmonic_residual ≥ 1.5× church organ). Removing them killed the fifth but
+  broke the test. When a scoped-oracle change passes but the FULL suite fails, the failing
+  test is telling you the "bug" was a design choice — don't override it on an unverifiable ear
+  judgment; escalate to the human, or fix at the right layer (character via reed-noise, not
+  clean pitched quints).
+
 - 2026.07.14 — **Virtuosity's 18" jazz kick has NO 30-70 Hz sub in ANY mic set
   (fundamental ~80 Hz; the overhead's "sub" reading is room rumble).** Re-micing
   cannot create low end the instrument never produced — a deep-kick ask needs a

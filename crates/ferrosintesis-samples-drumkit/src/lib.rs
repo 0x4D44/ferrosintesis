@@ -1,22 +1,23 @@
-//! Embedded CC0 sampled-cymbal drum-kit bank for ferrosintesis.
+//! Embedded CC0 sampled drum-kit bank for ferrosintesis.
 //!
 //! Mono 16-bit 44.1 kHz WAVs trimmed from two CC0 1.0 sources by
 //! `tools/ferrosintesis-samples/prepare_drumkit.py`: Virtuosity Drums
-//! (`mid` mic set -- ride bow/bell, crash, sizzle crash, hi-hat
-//! closed/open/pedal/splash) and Karoryfer Big Rusty Drums (18" china).
-//! See `PROVENANCE.md` for the pinned revisions, license text, and the
-//! full articulation inventory.
+//! (`mid` mic set -- kick, snare center/snares-off/cross-stick, hi/low
+//! toms, ride bow/bell, crash, sizzle crash, hi-hat closed/open/pedal/
+//! splash) and Karoryfer Big Rusty Drums (18" china). See `PROVENANCE.md`
+//! for the pinned revisions, license text, and the full articulation
+//! inventory -- including which banks' "round robins" are adjacent source
+//! velocity layers (the deep-layered articulations have no true round
+//! robins at the source).
 //!
-//! Stage A ships the assets and accessors only; the synth wires them up
-//! in a later stage. Consumers normally access this crate through
-//! `ferrosintesis`.
+//! Consumers normally access this crate through `ferrosintesis`.
 
 #![forbid(unsafe_code)]
 
 use std::sync::OnceLock;
 
 /// Number of WAV files embedded in this package.
-pub const FILE_COUNT: usize = 109;
+pub const FILE_COUNT: usize = 188;
 
 /// Sample rate of every embedded WAV, in hertz.
 pub const SAMPLE_RATE_HZ: u32 = 44_100;
@@ -311,6 +312,70 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/hhp_vl3_rr4.wav"),
     ),
     (
+        "kick_vl1_rr1.wav",
+        include_bytes!("../samples/kick_vl1_rr1.wav"),
+    ),
+    (
+        "kick_vl1_rr2.wav",
+        include_bytes!("../samples/kick_vl1_rr2.wav"),
+    ),
+    (
+        "kick_vl1_rr3.wav",
+        include_bytes!("../samples/kick_vl1_rr3.wav"),
+    ),
+    (
+        "kick_vl1_rr4.wav",
+        include_bytes!("../samples/kick_vl1_rr4.wav"),
+    ),
+    (
+        "kick_vl2_rr1.wav",
+        include_bytes!("../samples/kick_vl2_rr1.wav"),
+    ),
+    (
+        "kick_vl2_rr2.wav",
+        include_bytes!("../samples/kick_vl2_rr2.wav"),
+    ),
+    (
+        "kick_vl2_rr3.wav",
+        include_bytes!("../samples/kick_vl2_rr3.wav"),
+    ),
+    (
+        "kick_vl2_rr4.wav",
+        include_bytes!("../samples/kick_vl2_rr4.wav"),
+    ),
+    (
+        "kick_vl3_rr1.wav",
+        include_bytes!("../samples/kick_vl3_rr1.wav"),
+    ),
+    (
+        "kick_vl3_rr2.wav",
+        include_bytes!("../samples/kick_vl3_rr2.wav"),
+    ),
+    (
+        "kick_vl3_rr3.wav",
+        include_bytes!("../samples/kick_vl3_rr3.wav"),
+    ),
+    (
+        "kick_vl3_rr4.wav",
+        include_bytes!("../samples/kick_vl3_rr4.wav"),
+    ),
+    (
+        "kick_vl4_rr1.wav",
+        include_bytes!("../samples/kick_vl4_rr1.wav"),
+    ),
+    (
+        "kick_vl4_rr2.wav",
+        include_bytes!("../samples/kick_vl4_rr2.wav"),
+    ),
+    (
+        "kick_vl4_rr3.wav",
+        include_bytes!("../samples/kick_vl4_rr3.wav"),
+    ),
+    (
+        "kick_vl4_rr4.wav",
+        include_bytes!("../samples/kick_vl4_rr4.wav"),
+    ),
+    (
         "ride_vl1_rr1.wav",
         include_bytes!("../samples/ride_vl1_rr1.wav"),
     ),
@@ -395,6 +460,42 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/ridebell_vl3_rr3.wav"),
     ),
     (
+        "sidestick_vl1_rr1.wav",
+        include_bytes!("../samples/sidestick_vl1_rr1.wav"),
+    ),
+    (
+        "sidestick_vl1_rr2.wav",
+        include_bytes!("../samples/sidestick_vl1_rr2.wav"),
+    ),
+    (
+        "sidestick_vl1_rr3.wav",
+        include_bytes!("../samples/sidestick_vl1_rr3.wav"),
+    ),
+    (
+        "sidestick_vl2_rr1.wav",
+        include_bytes!("../samples/sidestick_vl2_rr1.wav"),
+    ),
+    (
+        "sidestick_vl2_rr2.wav",
+        include_bytes!("../samples/sidestick_vl2_rr2.wav"),
+    ),
+    (
+        "sidestick_vl2_rr3.wav",
+        include_bytes!("../samples/sidestick_vl2_rr3.wav"),
+    ),
+    (
+        "sidestick_vl3_rr1.wav",
+        include_bytes!("../samples/sidestick_vl3_rr1.wav"),
+    ),
+    (
+        "sidestick_vl3_rr2.wav",
+        include_bytes!("../samples/sidestick_vl3_rr2.wav"),
+    ),
+    (
+        "sidestick_vl3_rr3.wav",
+        include_bytes!("../samples/sidestick_vl3_rr3.wav"),
+    ),
+    (
         "sizzle_vl1_rr1.wav",
         include_bytes!("../samples/sizzle_vl1_rr1.wav"),
     ),
@@ -443,6 +544,126 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/sizzle_vl3_rr4.wav"),
     ),
     (
+        "snare_vl1_rr1.wav",
+        include_bytes!("../samples/snare_vl1_rr1.wav"),
+    ),
+    (
+        "snare_vl1_rr2.wav",
+        include_bytes!("../samples/snare_vl1_rr2.wav"),
+    ),
+    (
+        "snare_vl1_rr3.wav",
+        include_bytes!("../samples/snare_vl1_rr3.wav"),
+    ),
+    (
+        "snare_vl2_rr1.wav",
+        include_bytes!("../samples/snare_vl2_rr1.wav"),
+    ),
+    (
+        "snare_vl2_rr2.wav",
+        include_bytes!("../samples/snare_vl2_rr2.wav"),
+    ),
+    (
+        "snare_vl2_rr3.wav",
+        include_bytes!("../samples/snare_vl2_rr3.wav"),
+    ),
+    (
+        "snare_vl3_rr1.wav",
+        include_bytes!("../samples/snare_vl3_rr1.wav"),
+    ),
+    (
+        "snare_vl3_rr2.wav",
+        include_bytes!("../samples/snare_vl3_rr2.wav"),
+    ),
+    (
+        "snare_vl3_rr3.wav",
+        include_bytes!("../samples/snare_vl3_rr3.wav"),
+    ),
+    (
+        "snare_vl4_rr1.wav",
+        include_bytes!("../samples/snare_vl4_rr1.wav"),
+    ),
+    (
+        "snare_vl4_rr2.wav",
+        include_bytes!("../samples/snare_vl4_rr2.wav"),
+    ),
+    (
+        "snare_vl4_rr3.wav",
+        include_bytes!("../samples/snare_vl4_rr3.wav"),
+    ),
+    (
+        "snare_vl5_rr1.wav",
+        include_bytes!("../samples/snare_vl5_rr1.wav"),
+    ),
+    (
+        "snare_vl5_rr2.wav",
+        include_bytes!("../samples/snare_vl5_rr2.wav"),
+    ),
+    (
+        "snare_vl5_rr3.wav",
+        include_bytes!("../samples/snare_vl5_rr3.wav"),
+    ),
+    (
+        "snare_vl6_rr1.wav",
+        include_bytes!("../samples/snare_vl6_rr1.wav"),
+    ),
+    (
+        "snare_vl6_rr2.wav",
+        include_bytes!("../samples/snare_vl6_rr2.wav"),
+    ),
+    (
+        "snare_vl6_rr3.wav",
+        include_bytes!("../samples/snare_vl6_rr3.wav"),
+    ),
+    (
+        "snareoff_vl1_rr1.wav",
+        include_bytes!("../samples/snareoff_vl1_rr1.wav"),
+    ),
+    (
+        "snareoff_vl1_rr2.wav",
+        include_bytes!("../samples/snareoff_vl1_rr2.wav"),
+    ),
+    (
+        "snareoff_vl1_rr3.wav",
+        include_bytes!("../samples/snareoff_vl1_rr3.wav"),
+    ),
+    (
+        "snareoff_vl2_rr1.wav",
+        include_bytes!("../samples/snareoff_vl2_rr1.wav"),
+    ),
+    (
+        "snareoff_vl2_rr2.wav",
+        include_bytes!("../samples/snareoff_vl2_rr2.wav"),
+    ),
+    (
+        "snareoff_vl2_rr3.wav",
+        include_bytes!("../samples/snareoff_vl2_rr3.wav"),
+    ),
+    (
+        "snareoff_vl3_rr1.wav",
+        include_bytes!("../samples/snareoff_vl3_rr1.wav"),
+    ),
+    (
+        "snareoff_vl3_rr2.wav",
+        include_bytes!("../samples/snareoff_vl3_rr2.wav"),
+    ),
+    (
+        "snareoff_vl3_rr3.wav",
+        include_bytes!("../samples/snareoff_vl3_rr3.wav"),
+    ),
+    (
+        "snareoff_vl4_rr1.wav",
+        include_bytes!("../samples/snareoff_vl4_rr1.wav"),
+    ),
+    (
+        "snareoff_vl4_rr2.wav",
+        include_bytes!("../samples/snareoff_vl4_rr2.wav"),
+    ),
+    (
+        "snareoff_vl4_rr3.wav",
+        include_bytes!("../samples/snareoff_vl4_rr3.wav"),
+    ),
+    (
         "splash_vl1_rr1.wav",
         include_bytes!("../samples/splash_vl1_rr1.wav"),
     ),
@@ -457,6 +678,102 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
         "splash_vl1_rr4.wav",
         include_bytes!("../samples/splash_vl1_rr4.wav"),
+    ),
+    (
+        "tomhi_vl1_rr1.wav",
+        include_bytes!("../samples/tomhi_vl1_rr1.wav"),
+    ),
+    (
+        "tomhi_vl1_rr2.wav",
+        include_bytes!("../samples/tomhi_vl1_rr2.wav"),
+    ),
+    (
+        "tomhi_vl1_rr3.wav",
+        include_bytes!("../samples/tomhi_vl1_rr3.wav"),
+    ),
+    (
+        "tomhi_vl2_rr1.wav",
+        include_bytes!("../samples/tomhi_vl2_rr1.wav"),
+    ),
+    (
+        "tomhi_vl2_rr2.wav",
+        include_bytes!("../samples/tomhi_vl2_rr2.wav"),
+    ),
+    (
+        "tomhi_vl2_rr3.wav",
+        include_bytes!("../samples/tomhi_vl2_rr3.wav"),
+    ),
+    (
+        "tomhi_vl3_rr1.wav",
+        include_bytes!("../samples/tomhi_vl3_rr1.wav"),
+    ),
+    (
+        "tomhi_vl3_rr2.wav",
+        include_bytes!("../samples/tomhi_vl3_rr2.wav"),
+    ),
+    (
+        "tomhi_vl3_rr3.wav",
+        include_bytes!("../samples/tomhi_vl3_rr3.wav"),
+    ),
+    (
+        "tomhi_vl4_rr1.wav",
+        include_bytes!("../samples/tomhi_vl4_rr1.wav"),
+    ),
+    (
+        "tomhi_vl4_rr2.wav",
+        include_bytes!("../samples/tomhi_vl4_rr2.wav"),
+    ),
+    (
+        "tomhi_vl4_rr3.wav",
+        include_bytes!("../samples/tomhi_vl4_rr3.wav"),
+    ),
+    (
+        "tomlo_vl1_rr1.wav",
+        include_bytes!("../samples/tomlo_vl1_rr1.wav"),
+    ),
+    (
+        "tomlo_vl1_rr2.wav",
+        include_bytes!("../samples/tomlo_vl1_rr2.wav"),
+    ),
+    (
+        "tomlo_vl1_rr3.wav",
+        include_bytes!("../samples/tomlo_vl1_rr3.wav"),
+    ),
+    (
+        "tomlo_vl2_rr1.wav",
+        include_bytes!("../samples/tomlo_vl2_rr1.wav"),
+    ),
+    (
+        "tomlo_vl2_rr2.wav",
+        include_bytes!("../samples/tomlo_vl2_rr2.wav"),
+    ),
+    (
+        "tomlo_vl2_rr3.wav",
+        include_bytes!("../samples/tomlo_vl2_rr3.wav"),
+    ),
+    (
+        "tomlo_vl3_rr1.wav",
+        include_bytes!("../samples/tomlo_vl3_rr1.wav"),
+    ),
+    (
+        "tomlo_vl3_rr2.wav",
+        include_bytes!("../samples/tomlo_vl3_rr2.wav"),
+    ),
+    (
+        "tomlo_vl3_rr3.wav",
+        include_bytes!("../samples/tomlo_vl3_rr3.wav"),
+    ),
+    (
+        "tomlo_vl4_rr1.wav",
+        include_bytes!("../samples/tomlo_vl4_rr1.wav"),
+    ),
+    (
+        "tomlo_vl4_rr2.wav",
+        include_bytes!("../samples/tomlo_vl4_rr2.wav"),
+    ),
+    (
+        "tomlo_vl4_rr3.wav",
+        include_bytes!("../samples/tomlo_vl4_rr3.wav"),
     ),
 ];
 
@@ -528,9 +845,53 @@ pub static CHINA: Bank = Bank {
     vel_hi: &[25, 51, 76, 101, 127],
     round_robins: 4,
 };
+/// Kick drum, snares on (`mid_kick_snon`) -- the source's full 4x4 grid of
+/// velocity layers x TRUE round robins.
+pub static KICK: Bank = Bank {
+    name: "kick",
+    vel_hi: &[31, 63, 95, 127],
+    round_robins: 4,
+};
+/// Snare, center hit (`mid_snare_center`). The source has 36 single-take
+/// velocity layers and no round robins; each of this bank's 6 layers fills
+/// its 3 round-robin slots with adjacent source layers -- distinct takes at
+/// near-identical dynamics (see PROVENANCE.md).
+pub static SNARE: Bank = Bank {
+    name: "snare",
+    vel_hi: &[21, 41, 63, 84, 105, 127],
+    round_robins: 3,
+};
+/// Snare with the wires thrown off (`mid_snareoff_center`); adjacent-layer
+/// round robins as `SNARE`.
+pub static SNARE_OFF: Bank = Bank {
+    name: "snareoff",
+    vel_hi: &[32, 63, 95, 127],
+    round_robins: 3,
+};
+/// Snare cross-stick (`mid_snare_crossstick`) -- the GM 37 side stick;
+/// adjacent-layer round robins.
+pub static SIDESTICK: Bank = Bank {
+    name: "sidestick",
+    vel_hi: &[47, 87, 127],
+    round_robins: 3,
+};
+/// High (rack) tom, center hit (`mid_htom_center`), root ~181 Hz;
+/// adjacent-layer round robins.
+pub static TOM_HI: Bank = Bank {
+    name: "tomhi",
+    vel_hi: &[31, 63, 95, 127],
+    round_robins: 3,
+};
+/// Low (floor) tom, center hit (`mid_ltom_center`), root ~113.5 Hz;
+/// adjacent-layer round robins.
+pub static TOM_LO: Bank = Bank {
+    name: "tomlo",
+    vel_hi: &[31, 63, 95, 127],
+    round_robins: 3,
+};
 
 /// Every articulation in the kit.
-pub static BANKS: [&Bank; 9] = [
+pub static BANKS: [&Bank; 15] = [
     &RIDE,
     &RIDE_BELL,
     &CRASH,
@@ -540,6 +901,12 @@ pub static BANKS: [&Bank; 9] = [
     &HH_OPEN,
     &HH_PEDAL,
     &CHINA,
+    &KICK,
+    &SNARE,
+    &SNARE_OFF,
+    &SIDESTICK,
+    &TOM_HI,
+    &TOM_LO,
 ];
 
 impl Bank {
@@ -706,6 +1073,15 @@ mod tests {
         assert_eq!(CHINA.layer_for_velocity(25), 0);
         assert_eq!(CHINA.layer_for_velocity(102), 4);
         assert_eq!(SPLASH.layer_for_velocity(64), 0);
+        assert_eq!(KICK.layer_for_velocity(31), 0);
+        assert_eq!(KICK.layer_for_velocity(32), 1);
+        assert_eq!(KICK.layer_for_velocity(127), 3);
+        assert_eq!(SNARE.layer_for_velocity(21), 0);
+        assert_eq!(SNARE.layer_for_velocity(22), 1);
+        assert_eq!(SNARE.layer_for_velocity(85), 4);
+        assert_eq!(SNARE.layer_for_velocity(106), 5);
+        assert_eq!(TOM_LO.layer_for_velocity(64), 2);
+        assert_eq!(SIDESTICK.layer_for_velocity(90), 2);
     }
 
     #[test]
@@ -723,7 +1099,7 @@ mod tests {
         assert_eq!(get("missing.wav"), None);
     }
 
-    const EXPECTED_BYTES: usize = 16392538;
+    const EXPECTED_BYTES: usize = 20896910;
 
     #[test]
     fn decoded_banks_are_valid_audio() {
@@ -733,6 +1109,12 @@ mod tests {
             (&CRASH, 2.0, 2.85),
             (&HH_CLOSED, 0.2, 1.25),
             (&CHINA, 1.5, 2.25),
+            (&KICK, 0.3, 0.65),
+            (&SNARE, 0.3, 0.65),
+            (&SNARE_OFF, 0.3, 0.65),
+            (&SIDESTICK, 0.2, 0.45),
+            (&TOM_HI, 0.5, 0.85),
+            (&TOM_LO, 0.5, 0.85),
         ] {
             for layer in 0..bank.layers() {
                 for rr in 0..bank.round_robins {

@@ -1,9 +1,10 @@
-"""Rebuild the sampled-cymbal drum-kit bank (crates/ferrosintesis-samples-drumkit).
+"""Rebuild the sampled drum-kit bank (crates/ferrosintesis-samples-drumkit).
 
 Sources (both CC0 1.0 Universal, verified from each repo's LICENSE file):
 - github.com/sfzinstruments/virtuosity_drums @ VIRTUOSITY_REV — a stick-played
   contemporary jazz kit; this bank takes the `mid` mic set (the balanced mono-
-  friendly mid position): ride bow + bell, crash, sizzle crash, hi-hat
+  friendly mid position): the full kit — kick, snare (center, snares-off,
+  cross-stick), hi/low toms, ride bow + bell, crash, sizzle crash, hi-hat
   closed/open/pedal, and the hi-hat splash.
 - github.com/sfzinstruments/karoryfer.big-rusty-drums @ BIG_RUSTY_REV — the
   18" china (stick articulation, `oh` overhead mic; Virtuosity has no china).
@@ -11,6 +12,16 @@ Sources (both CC0 1.0 Universal, verified from each repo's LICENSE file):
 Velocity-layer splits and round-robin counts below were parsed from the source
 repos' SFZ mappings (Programs/mappings/mid/*.sfz and
 Programs/mappings/china_18/cn_oh.sfz), not guessed.
+
+Two source shapes exist. The cymbals and the kick have TRUE round robins
+(`..._vl{L}_rr{R}.flac`, `BANKS` below). The snare/toms/sidestick instead have
+DEEP velocity layering with no round robins (36/16/16 single-take layers);
+embedding all of them would bloat the crate, so `PSEUDO_RR_BANKS` picks a
+subset of target layers and maps ADJACENT source velocity layers onto the
+round-robin slots — distinct recorded takes within ~10 velocity points of
+each other, timbrally near-identical once the pipeline peak-normalizes every
+file (the synth applies velocity gain itself), so they cycle exactly like
+true round robins.
 
 The sources are FLAC; decoding shells out to ffmpeg (pcm_s24le, no resample —
 FLAC decode is bit-exact, so the ffmpeg version does not affect output). All
@@ -79,6 +90,41 @@ BANKS = [
      f"{V_BASE}/Samples/{MICSET}/hh/{MICSET}_hh_pedal_vl{{vl}}_rr{{rr}}.flac"),
     ("china", 5, 4, 2.2, 0.35, (25, 51, 76, 101, 127),
      f"{B_BASE}/Samples/china_18/cn/{CHINA_MIC}/cn_vl{{vl}}_rr{{rr}}.flac"),
+    # kick, snares on (mid_kick_snon): the source's full 4x4 grid
+    ("kick", 4, 4, 0.6, 0.15, (31, 63, 95, 127),
+     f"{V_BASE}/Samples/{MICSET}/kick/{MICSET}_kick_snon_vl{{vl}}_rr{{rr}}.flac"),
+]
+
+# stem, keep_s, fade_s, hivel per target layer, vl_map, source URL pattern
+# ({vl} is the SOURCE velocity layer, 1-based). vl_map[i][j] is the source
+# velocity layer behind output take `<stem>_vl{i+1}_rr{j+1}.wav`: each target
+# layer's round-robin slots are filled by adjacent source layers (see module
+# docstring). Source layer counts/hivels parsed from the SFZ mappings:
+#   snare_center      36 layers (hivel 3,7,10,...,127 — every ~3.5)
+#   snareoff_center   12 layers (hivel 10,21,...,127 — every ~10.6)
+#   snare_crossstick  16 layers (hivel 7,15,...,127 — every 8)
+#   htom/ltom_center  16 layers (hivel 7,15,...,127 — every 8)
+PSEUDO_RR_BANKS = [
+    # 6 target layers x 3 takes from the 36: the top three source layers of
+    # each 6-layer block (the block's loudest, most consistent takes)
+    ("snare", 0.6, 0.20, (21, 41, 63, 84, 105, 127),
+     ((4, 5, 6), (10, 11, 12), (16, 17, 18),
+      (22, 23, 24), (28, 29, 30), (34, 35, 36)),
+     f"{V_BASE}/Samples/{MICSET}/snare/{MICSET}_snare_center_vl{{vl}}.flac"),
+    # snares-off snare: all 12 source layers, 4 targets x 3 takes
+    ("snareoff", 0.6, 0.20, (32, 63, 95, 127),
+     ((1, 2, 3), (4, 5, 6), (7, 8, 9), (10, 11, 12)),
+     f"{V_BASE}/Samples/{MICSET}/snareoff/{MICSET}_snareoff_center_vl{{vl}}.flac"),
+    # cross-stick (GM 37 side stick): quiet, timbrally stable — 3 targets
+    ("sidestick", 0.4, 0.10, (47, 87, 127),
+     ((4, 5, 6), (9, 10, 11), (14, 15, 16)),
+     f"{V_BASE}/Samples/{MICSET}/snare/{MICSET}_snare_crossstick_vl{{vl}}.flac"),
+    ("tomhi", 0.8, 0.25, (31, 63, 95, 127),
+     ((2, 3, 4), (6, 7, 8), (10, 11, 12), (14, 15, 16)),
+     f"{V_BASE}/Samples/{MICSET}/htom/{MICSET}_htom_center_vl{{vl}}.flac"),
+    ("tomlo", 0.8, 0.25, (31, 63, 95, 127),
+     ((2, 3, 4), (6, 7, 8), (10, 11, 12), (14, 15, 16)),
+     f"{V_BASE}/Samples/{MICSET}/ltom/{MICSET}_ltom_center_vl{{vl}}.flac"),
 ]
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -110,6 +156,51 @@ def decode_flac(ffmpeg, flac_path, wav_path):
     os.replace(part, wav_path)
 
 
+def prepare_take(ffmpeg, cache, url, cache_stem, out_name, keep_s, fade_s):
+    """Fetch, decode, trim, normalize and write one take; bytes written."""
+    flac = os.path.join(cache, f"{cache_stem}.flac")
+    if not os.path.exists(flac):
+        print(f"fetching {cache_stem}.flac ...", file=sys.stderr)
+        fetch(url, flac)
+    dec = flac[:-5] + "_dec.wav"
+    decode_flac(ffmpeg, flac, dec)
+    ch, src_sr = wav_info(dec)
+    x, sr = read_wav(dec)   # downmixes stereo to mono
+    x = resample(x, sr, OUT_SR)
+    sr = OUT_SR
+
+    peak = max(abs(v) for v in x)
+    thr = 0.03 * peak
+    onset = next(i for i, v in enumerate(x) if abs(v) > thr)
+    start = max(0, onset - int(PRE_S * sr))
+    seg = x[start:start + int((PRE_S + keep_s) * sr)]
+    fin = int(FADE_IN_S * sr)
+    for i in range(min(fin, len(seg))):
+        seg[i] *= i / fin
+    fout = int(fade_s * sr)
+    for i in range(fout):
+        j = len(seg) - fout + i
+        if 0 <= j < len(seg):
+            t = 1.0 - i / fout
+            seg[j] *= t * t
+    pk = max(abs(v) for v in seg)
+    g = PEAK / pk if pk > 0 else 1.0
+    seg = [v * g for v in seg]
+    rms = math.sqrt(sum(v * v for v in seg) / len(seg))
+
+    pcm = struct.pack(
+        f"<{len(seg)}h",
+        *[max(-32768, min(32767, int(v * 32767))) for v in seg])
+    with wave.open(os.path.join(OUT_DIR, out_name), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(pcm)
+    print(f"{out_name:22} {src_sr:>6} {ch:>2} "
+          f"{len(seg) / sr:6.3f} {PEAK:5.2f} {rms:6.3f}")
+    return 44 + len(pcm)
+
+
 def main():
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
@@ -129,50 +220,23 @@ def main():
         assert len(vel_hi) == layers and vel_hi[-1] == 127
         for vl in range(1, layers + 1):
             for rr in range(1, rrs + 1):
-                url = url_fmt.format(vl=vl, rr=rr)
-                out_name = f"{stem}_vl{vl}_rr{rr}.wav"
-                flac = os.path.join(cache, f"{stem}_vl{vl}_rr{rr}.flac")
-                if not os.path.exists(flac):
-                    print(f"fetching {out_name[:-4]}.flac ...", file=sys.stderr)
-                    fetch(url, flac)
-                dec = flac[:-5] + "_dec.wav"
-                decode_flac(ffmpeg, flac, dec)
-                ch, src_sr = wav_info(dec)
-                x, sr = read_wav(dec)   # downmixes stereo to mono
-                x = resample(x, sr, OUT_SR)
-                sr = OUT_SR
-
-                peak = max(abs(v) for v in x)
-                thr = 0.03 * peak
-                onset = next(i for i, v in enumerate(x) if abs(v) > thr)
-                start = max(0, onset - int(PRE_S * sr))
-                seg = x[start:start + int((PRE_S + keep_s) * sr)]
-                fin = int(FADE_IN_S * sr)
-                for i in range(min(fin, len(seg))):
-                    seg[i] *= i / fin
-                fout = int(fade_s * sr)
-                for i in range(fout):
-                    j = len(seg) - fout + i
-                    if 0 <= j < len(seg):
-                        t = 1.0 - i / fout
-                        seg[j] *= t * t
-                pk = max(abs(v) for v in seg)
-                g = PEAK / pk if pk > 0 else 1.0
-                seg = [v * g for v in seg]
-                rms = math.sqrt(sum(v * v for v in seg) / len(seg))
-
-                pcm = struct.pack(
-                    f"<{len(seg)}h",
-                    *[max(-32768, min(32767, int(v * 32767))) for v in seg])
-                with wave.open(os.path.join(OUT_DIR, out_name), "wb") as w:
-                    w.setnchannels(1)
-                    w.setsampwidth(2)
-                    w.setframerate(sr)
-                    w.writeframes(pcm)
-                total_bytes += 44 + len(pcm)
-                print(f"{out_name:22} {src_sr:>6} {ch:>2} "
-                      f"{len(seg) / sr:6.3f} {PEAK:5.2f} {rms:6.3f}")
+                total_bytes += prepare_take(
+                    ffmpeg, cache, url_fmt.format(vl=vl, rr=rr),
+                    f"{stem}_vl{vl}_rr{rr}", f"{stem}_vl{vl}_rr{rr}.wav",
+                    keep_s, fade_s)
+    for stem, keep_s, fade_s, vel_hi, vl_map, url_fmt in PSEUDO_RR_BANKS:
+        assert len(vel_hi) == len(vl_map) and vel_hi[-1] == 127
+        rrs = len(vl_map[0])
+        assert all(len(row) == rrs for row in vl_map)
+        for li, row in enumerate(vl_map, start=1):
+            for ri, src_vl in enumerate(row, start=1):
+                total_bytes += prepare_take(
+                    ffmpeg, cache, url_fmt.format(vl=src_vl),
+                    f"{stem}_srcvl{src_vl}", f"{stem}_vl{li}_rr{ri}.wav",
+                    keep_s, fade_s)
     n = sum(layers * rrs for _, layers, rrs, *_ in BANKS)
+    n += sum(len(vl_map) * len(vl_map[0])
+             for _, _, _, _, vl_map, _ in PSEUDO_RR_BANKS)
     print(f"\n{n} files, {total_bytes / (1024 * 1024):.2f} MiB written to {OUT_DIR}")
     return 0
 

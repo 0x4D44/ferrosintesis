@@ -17,10 +17,6 @@ pub struct Zone {
     data: Vec<f32>,
 }
 
-pub struct HitSample {
-    data: Vec<f32>,
-}
-
 /// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).
 fn parse_wav(bytes: &[u8]) -> Vec<f32> {
     assert!(&bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
@@ -66,14 +62,6 @@ macro_rules! bank {
     ($($file:literal => $root:expr),+ $(,)?) => {
         vec![$(Zone {
             root: $root,
-            data: parse_wav(embedded_wav($file)),
-        }),+]
-    };
-}
-
-macro_rules! hit_bank {
-    ($($file:literal),+ $(,)?) => {
-        vec![$(HitSample {
             data: parse_wav(embedded_wav($file)),
         }),+]
     };
@@ -580,28 +568,6 @@ pub fn cello_bank(vel: u8) -> &'static [Zone] {
     }
 }
 
-fn drum_crash() -> &'static [HitSample] {
-    static B: OnceLock<Vec<HitSample>> = OnceLock::new();
-    B.get_or_init(|| {
-        hit_bank!(
-            "drum_sus_cymb1_mp_rr1.wav",
-            "drum_sus_cymb1_mp_rr2.wav",
-            "drum_crash1_ff_rr1.wav",
-            "drum_crash1_ff_rr2.wav",
-        )
-    })
-}
-
-fn drum_kick() -> &'static [HitSample] {
-    static B: OnceLock<Vec<HitSample>> = OnceLock::new();
-    B.get_or_init(|| hit_bank!("drum_kick_v3_rr1.wav", "drum_kick_v3_rr2.wav"))
-}
-
-fn drum_snare() -> &'static [HitSample] {
-    static B: OnceLock<Vec<HitSample>> = OnceLock::new();
-    B.get_or_init(|| hit_bank!("drum_snare2_v5_rr1.wav", "drum_snare2_v5_rr2.wav"))
-}
-
 /// Velocity picks the dynamic layer; alternating round robins keep
 /// repeated notes from being byte-identical (the machine-gun tell).
 pub fn piano_bank(vel: u8, rr2: bool) -> &'static [Zone] {
@@ -721,18 +687,6 @@ pub fn guitar_bank() -> &'static [Zone] {
     nylon()
 }
 
-pub fn drum_crash_bank() -> &'static [HitSample] {
-    drum_crash()
-}
-
-pub fn drum_kick_bank() -> &'static [HitSample] {
-    drum_kick()
-}
-
-pub fn drum_snare_bank() -> &'static [HitSample] {
-    drum_snare()
-}
-
 pub fn prewarm() {
     if !crate::embedded_samples_available() {
         return;
@@ -763,9 +717,6 @@ pub fn prewarm() {
     let _ = strings_bank(1);
     let _ = strings_bank(127);
     let _ = guitar_bank();
-    let _ = drum_crash_bank();
-    let _ = drum_kick_bank();
-    let _ = drum_snare_bank();
 }
 
 fn nearest(zones: &'static [Zone], f: f32) -> &'static Zone {
@@ -925,154 +876,70 @@ impl Voice for LaVoice {
     }
 }
 
-/// Unpitched drum sample overlay. The model remains the sustaining voice; the
-/// sample contributes only a short attack/body cue and obeys the same routing
-/// controls as the wrapped model.
-pub struct SampleOverlay {
-    model: Box<dyn Voice>,
-    sample: &'static HitSample,
-    pos: f32,
-    step: f32,
-    gain: f32,
-    rel_gain: f32,
-    rel_mul: f32,
-    rel_t60_mul: f32,
-    buf: Vec<f32>,
-}
-
-impl SampleOverlay {
-    pub fn wrap(
-        model: Box<dyn Voice>,
-        bank: &'static [HitSample],
-        vel: u8,
-        seed: u32,
-        sr: f32,
-        gain: f32,
-    ) -> Box<dyn Voice> {
-        let sample = &bank[(seed as usize) % bank.len()];
-        Box::new(Self {
-            model,
-            sample,
-            pos: 0.0,
-            step: 44100.0 / sr,
-            gain: gain * (0.35 + 0.65 * vel_amp(vel)),
-            rel_gain: 1.0,
-            rel_mul: 1.0,
-            rel_t60_mul: 10f32.powf(-3.0 / (0.018 * sr)),
-            buf: Vec::new(),
-        })
-    }
-}
-
-impl Voice for SampleOverlay {
-    fn render(&mut self, out: &mut [f32]) -> bool {
-        self.buf.resize(out.len(), 0.0);
-        self.buf.fill(0.0);
-        let model_alive = self.model.render(&mut self.buf);
-        let mut sample_live = false;
-        let n = self.sample.data.len();
-        for (i, o) in out.iter_mut().enumerate() {
-            let mut s = self.buf[i];
-            let j = self.pos as usize;
-            if j + 1 < n && self.rel_gain > 0.0005 {
-                sample_live = true;
-                let frac = self.pos - j as f32;
-                let v = self.sample.data[j] * (1.0 - frac) + self.sample.data[j + 1] * frac;
-                s += v * self.gain * self.rel_gain;
-                self.rel_gain *= self.rel_mul;
-                self.pos += self.step;
-            }
-            *o += s;
-        }
-        model_alive || sample_live
-    }
-
-    fn note_off(&mut self) {
-        self.model.note_off();
-        self.rel_mul = self.rel_t60_mul;
-    }
-
-    fn released(&self) -> bool {
-        self.model.released()
-    }
-
-    fn set_pitch(&mut self, mult: f32) {
-        self.model.set_pitch(mult);
-    }
-
-    fn legato_to(&mut self, key: u8, vel: u8) -> bool {
-        if self.model.legato_to(key, vel) {
-            self.rel_mul = self.rel_t60_mul;
-            true
-        } else {
-            false
-        }
-    }
-
-    fn choke(&mut self) {
-        self.model.choke();
-        self.rel_mul = self.rel_t60_mul;
-    }
-
-    #[cfg(test)]
-    fn kind(&self) -> &'static str {
-        self.model.kind()
-    }
-
-    fn set_trem(&mut self, rate_hz: f32, depth: f32) {
-        self.model.set_trem(rate_hz, depth);
-    }
-
-    fn set_vowel(&mut self, freqs: [f32; 3], qs: [f32; 3], gains: [f32; 3]) {
-        self.model.set_vowel(freqs, qs, gains);
-    }
-
-    fn set_breath(&mut self, pressure: f32, growl: f32) {
-        self.model.set_breath(pressure, growl);
-    }
-
-    fn set_vib(&mut self, depth: f32) {
-        self.model.set_vib(depth);
-    }
-}
-
 // ---------------------------------------------------------------------------
-// Sampled cymbals (drum-kit bank, Stage B): unlike `SampleOverlay` there is no
-// model underneath — the recorded hit IS the whole voice. Unpitched: the GM
-// key selects a bank, never a playback pitch.
+// Sampled drum kit (drum-kit bank, Stages B/E): unlike the old kick/snare
+// attack overlay there is no model underneath — the recorded hit IS the whole
+// voice. Unpitched except the toms, whose two sampled drums are repitched by
+// playback rate across the six GM tom keys.
 // ---------------------------------------------------------------------------
 
-/// Per-bank output levels, calibrated so each sampled cymbal lands within a
-/// couple of dB of the `MetalPlate` model it replaces at vel 100 (RMS over the
-/// sample's own life) — see `sampled_cymbal_level_parity`.
+/// Per-key output levels, calibrated so each sampled drum lands within a
+/// couple of dB of the model it replaces at vel 100 (RMS over a fixed
+/// window) — see `sampled_drum_level_parity`.
 #[cfg(feature = "embedded-samples")]
-const CYMBAL_LEVEL: [(u8, f32); 7] = [
+const DRUM_LEVEL: [(u8, f32); 21] = [
+    (35, 1.54), // kick (soft-beater alias)
+    (36, 1.54), // kick
+    (37, 0.28), // side stick (cross-stick)
+    (38, 0.98), // snare
+    (40, 0.98), // electric snare (same bank)
+    (41, 0.95), // low floor tom
+    (42, 0.14), // closed hi-hat
+    (43, 1.04), // high floor tom
+    (44, 0.13), // pedal hi-hat
+    (45, 1.22), // low tom
+    (46, 0.17), // open hi-hat
+    (47, 1.19), // low-mid tom
+    (48, 1.21), // hi-mid tom
     (49, 0.65), // crash 1
-    (57, 0.68), // crash 2
+    (50, 1.22), // high tom
     (51, 0.45), // ride 1
-    (59, 0.45), // ride 2
-    (53, 0.45), // ride bell
     (52, 0.68), // china
+    (53, 0.45), // ride bell
     (55, 0.34), // splash
+    (57, 0.68), // crash 2
+    (59, 0.45), // ride 2
 ];
+
+/// The modeled tom ladder's settle pitches (drums.rs `tom(...)` arms) and the
+/// measured roots of the two sampled toms. The sampled toms are repitched by
+/// playback rate (`target / root`) so the six GM keys keep the same ladder as
+/// the model: 41/43 pull from the ~113.5 Hz floor tom, 45/47/48/50 from the
+/// ~181 Hz rack tom (the assignment that minimizes stretch — key 45's 190 Hz
+/// target sits almost exactly on the rack tom's root).
+#[cfg(feature = "embedded-samples")]
+const TOM_LO_ROOT_HZ: f32 = 113.5;
+#[cfg(feature = "embedded-samples")]
+const TOM_HI_ROOT_HZ: f32 = 181.0;
 
 /// Anti-machine-gun micro-variation (mechanism b): every hit gets a playback
 /// rate of 1 + U(-0.025, +0.025) — ±~43 cents, inaudible as pitch on an
-/// unpitched cymbal but enough to decorrelate the waveform and the decay
+/// unpitched drum but enough to decorrelate the waveform and the decay
 /// length — and a gain of ×(1 + U(-0.06, +0.06)). Both are deterministic from
 /// the note seed. Mechanism (a), the clean per-key round-robin cycling, lives
 /// in the engine's `drum_rr` counter and arrives here as `hit_index`.
 #[cfg(feature = "embedded-samples")]
-const CYMBAL_RATE_JITTER: f32 = 0.025;
+const DRUM_RATE_JITTER: f32 = 0.025;
 #[cfg(feature = "embedded-samples")]
-const CYMBAL_GAIN_JITTER: f32 = 0.06;
+const DRUM_GAIN_JITTER: f32 = 0.06;
 
-/// A full sampled cymbal hit: velocity picks the bank's dynamic layer, the
+/// A full sampled drum hit: velocity picks the bank's dynamic layer, the
 /// engine's per-key hit counter picks the round-robin take, and the note seed
 /// adds per-hit rate/gain micro-variation so even a repeated take never
-/// renders twice the same.
+/// renders twice the same. `repitch` scales the playback rate on top of the
+/// jitter (1.0 for everything except the toms).
 #[cfg(feature = "embedded-samples")]
-pub struct SampledCymbal {
+pub struct SampledDrum {
     data: &'static [i16],
     pos: f32,
     step: f32,
@@ -1087,7 +954,7 @@ pub struct SampledCymbal {
 }
 
 #[cfg(feature = "embedded-samples")]
-impl SampledCymbal {
+impl SampledDrum {
     fn new(
         bank: &'static ferrosintesis_samples_drumkit::Bank,
         level: f32,
@@ -1095,16 +962,17 @@ impl SampledCymbal {
         seed: u32,
         hit_index: u8,
         sr: f32,
+        repitch: f32,
     ) -> Self {
         let layer = bank.layer_for_velocity(vel);
         let rr = hit_index as usize % bank.round_robins;
         let mut rng = Rng::new(seed ^ 0x00C1_4BA1);
-        let rate = 1.0 + CYMBAL_RATE_JITTER * rng.white();
-        let gjit = 1.0 + CYMBAL_GAIN_JITTER * rng.white();
-        SampledCymbal {
+        let rate = 1.0 + DRUM_RATE_JITTER * rng.white();
+        let gjit = 1.0 + DRUM_GAIN_JITTER * rng.white();
+        SampledDrum {
             data: bank.pcm(layer, rr),
             pos: 0.0,
-            step: 44_100.0 / sr * rate,
+            step: 44_100.0 / sr * rate * repitch,
             gain: level * vel_amp(vel) * gjit,
             env: 1.0,
             fade_mul: 1.0,
@@ -1118,37 +986,44 @@ impl SampledCymbal {
     }
 }
 
-/// Sampled-cymbal voice for a GM channel-10 key (49/57 crash, 51/59 ride,
-/// 53 ride bell, 52 china, 55 splash), or `None` for any other key. Hi-hats
-/// 42/44/46 deliberately stay modeled (they keep the engine's choke group and
-/// the modeled pedal articulation).
+/// Sampled-drum voice for a GM channel-10 key (35/36 kick, 37 side stick,
+/// 38/40 snare, 41-50 toms, 42/44/46 hi-hats, 49/57 crash, 51/59 ride,
+/// 53 ride bell, 52 china, 55 splash), or `None` for any other key. The
+/// engine's hi-hat choke group keeps working: a closed/pedal hit chokes a
+/// ringing open hat through `Voice::choke`, same as the modeled hats.
 #[cfg(feature = "embedded-samples")]
-pub fn sampled_cymbal(
-    key: u8,
-    vel: u8,
-    seed: u32,
-    hit_index: u8,
-    sr: f32,
-) -> Option<Box<dyn Voice>> {
+pub fn sampled_drum(key: u8, vel: u8, seed: u32, hit_index: u8, sr: f32) -> Option<Box<dyn Voice>> {
     use ferrosintesis_samples_drumkit as kit;
-    let bank: &'static kit::Bank = match key {
-        49 | 57 => &kit::CRASH,
-        51 | 59 => &kit::RIDE,
-        53 => &kit::RIDE_BELL,
-        52 => &kit::CHINA,
-        55 => &kit::SPLASH,
+    let (bank, repitch): (&'static kit::Bank, f32) = match key {
+        35 | 36 => (&kit::KICK, 1.0),
+        37 => (&kit::SIDESTICK, 1.0),
+        38 | 40 => (&kit::SNARE, 1.0),
+        41 => (&kit::TOM_LO, 100.0 / TOM_LO_ROOT_HZ),
+        43 => (&kit::TOM_LO, 140.0 / TOM_LO_ROOT_HZ),
+        45 => (&kit::TOM_HI, 190.0 / TOM_HI_ROOT_HZ),
+        47 => (&kit::TOM_HI, 240.0 / TOM_HI_ROOT_HZ),
+        48 => (&kit::TOM_HI, 293.0 / TOM_HI_ROOT_HZ),
+        50 => (&kit::TOM_HI, 352.0 / TOM_HI_ROOT_HZ),
+        42 => (&kit::HH_CLOSED, 1.0),
+        44 => (&kit::HH_PEDAL, 1.0),
+        46 => (&kit::HH_OPEN, 1.0),
+        49 | 57 => (&kit::CRASH, 1.0),
+        51 | 59 => (&kit::RIDE, 1.0),
+        53 => (&kit::RIDE_BELL, 1.0),
+        52 => (&kit::CHINA, 1.0),
+        55 => (&kit::SPLASH, 1.0),
         _ => return None,
     };
-    let level = CYMBAL_LEVEL.iter().find(|(k, _)| *k == key).unwrap().1;
-    Some(Box::new(SampledCymbal::new(
-        bank, level, vel, seed, hit_index, sr,
+    let level = DRUM_LEVEL.iter().find(|(k, _)| *k == key).unwrap().1;
+    Some(Box::new(SampledDrum::new(
+        bank, level, vel, seed, hit_index, sr, repitch,
     )))
 }
 
-/// Modeled-only builds have no cymbal bank; the caller falls back to the
-/// `MetalPlate` model (`drums::make` also forces `samples = false` there).
+/// Modeled-only builds have no drum-kit bank; the caller falls back to the
+/// models (`drums::make` also forces `samples = false` there).
 #[cfg(not(feature = "embedded-samples"))]
-pub fn sampled_cymbal(
+pub fn sampled_drum(
     _key: u8,
     _vel: u8,
     _seed: u32,
@@ -1159,7 +1034,7 @@ pub fn sampled_cymbal(
 }
 
 #[cfg(feature = "embedded-samples")]
-impl Voice for SampledCymbal {
+impl Voice for SampledDrum {
     fn render(&mut self, out: &mut [f32]) -> bool {
         let n = self.data.len();
         for o in out.iter_mut() {
@@ -1177,7 +1052,7 @@ impl Voice for SampledCymbal {
         true
     }
 
-    // A struck cymbal rings out; percussion ignores note-off (house rule,
+    // A struck drum rings out; percussion ignores note-off (house rule,
     // same as `Drum`/`MetalPlate`).
     fn note_off(&mut self) {}
 
@@ -1191,7 +1066,7 @@ impl Voice for SampledCymbal {
 
     #[cfg(test)]
     fn kind(&self) -> &'static str {
-        "sampledcymbal"
+        "sampleddrum"
     }
 }
 
@@ -1202,14 +1077,24 @@ mod tests {
     use crate::voices;
     use ferrosintesis_samples_drumkit as kitbank;
 
-    /// The five GM-routed cymbal banks (49/57, 51/59, 53, 52, 55).
-    fn routed_banks() -> [&'static kitbank::Bank; 5] {
+    /// The thirteen GM-routed drum banks (35/36, 37, 38/40, 41/43, 42, 44,
+    /// 45/47/48/50, 46, 49/57, 51/59, 53, 52, 55). `CRASH_SIZZLE` and
+    /// `SNARE_OFF` ship in the bank but have no GM key yet.
+    fn routed_banks() -> [&'static kitbank::Bank; 13] {
         [
             &kitbank::CRASH,
             &kitbank::RIDE,
             &kitbank::RIDE_BELL,
             &kitbank::CHINA,
             &kitbank::SPLASH,
+            &kitbank::KICK,
+            &kitbank::SNARE,
+            &kitbank::SIDESTICK,
+            &kitbank::TOM_HI,
+            &kitbank::TOM_LO,
+            &kitbank::HH_CLOSED,
+            &kitbank::HH_OPEN,
+            &kitbank::HH_PEDAL,
         ]
     }
 
@@ -1218,14 +1103,14 @@ mod tests {
     /// one key use four DISTINCT takes and no pair of consecutive hits ever
     /// repeats one. (A seed-modulo pick would repeat ~25% of the time.)
     #[test]
-    fn sampled_cymbal_round_robin_cycles() {
+    fn sampled_drum_round_robin_cycles() {
         let sr = 44100.0;
         let bank = &kitbank::RIDE;
         let takes: Vec<(usize, usize)> = (0..5u8)
             .map(|i| {
                 // a fresh pseudo-random seed per hit, exactly like the engine
                 let seed = 0x9E37 ^ (i as u32).wrapping_mul(2654435761);
-                let v = SampledCymbal::new(bank, 0.4, 100, seed, i, sr);
+                let v = SampledDrum::new(bank, 0.4, 100, seed, i, sr, 1.0);
                 (v.layer, v.rr)
             })
             .collect();
@@ -1243,18 +1128,18 @@ mod tests {
     /// Velocity picks the bank's dynamic layer at the SFZ boundaries, and
     /// still scales gain continuously inside a layer.
     #[test]
-    fn sampled_cymbal_velocity_selects_layer() {
+    fn sampled_drum_velocity_selects_layer() {
         let sr = 44100.0;
         let bank = &kitbank::RIDE; // vel_hi [42, 85, 127]
-        let layer = |vel: u8| SampledCymbal::new(bank, 0.4, vel, 7, 0, sr).layer;
+        let layer = |vel: u8| SampledDrum::new(bank, 0.4, vel, 7, 0, sr, 1.0).layer;
         assert_eq!(layer(30), 0);
         assert_eq!(layer(42), 0);
         assert_eq!(layer(43), 1);
         assert_eq!(layer(85), 1);
         assert_eq!(layer(86), 2);
         assert_eq!(layer(120), 2);
-        let soft = SampledCymbal::new(bank, 0.4, 30, 7, 0, sr);
-        let hard = SampledCymbal::new(bank, 0.4, 120, 7, 0, sr);
+        let soft = SampledDrum::new(bank, 0.4, 30, 7, 0, sr, 1.0);
+        let hard = SampledDrum::new(bank, 0.4, 120, 7, 0, sr, 1.0);
         assert!(
             !std::ptr::eq(soft.data, hard.data),
             "soft and hard hits must play different takes"
@@ -1265,9 +1150,9 @@ mod tests {
     /// A choked cymbal (hat grab / CC120) reaches silence within ~20 ms and
     /// the voice then terminates.
     #[test]
-    fn sampled_cymbal_choke_reaches_silence_within_20_ms() {
+    fn sampled_drum_choke_reaches_silence_within_20_ms() {
         let sr = 44100.0;
-        let mut v = SampledCymbal::new(&kitbank::CRASH, 0.4, 110, 7, 0, sr);
+        let mut v = SampledDrum::new(&kitbank::CRASH, 0.4, 110, 7, 0, sr, 1.0);
         let mut head = vec![0f32; (0.30 * sr) as usize];
         assert!(v.render(&mut head));
         let pre = head[head.len() - 441..]
@@ -1293,7 +1178,7 @@ mod tests {
     /// rendered stream begins near zero and dies out near zero rather than
     /// stepping. Guards a future re-prepared bank as much as the voice.
     #[test]
-    fn sampled_cymbal_has_no_boundary_click() {
+    fn sampled_drum_has_no_boundary_click() {
         let sr = 44100.0;
         for bank in routed_banks() {
             for layer in 0..bank.layers() {
@@ -1315,7 +1200,7 @@ mod tests {
                 }
             }
             // and through the voice: near-zero entry, near-zero exit
-            let mut v = SampledCymbal::new(bank, 0.4, 110, 7, 0, sr);
+            let mut v = SampledDrum::new(bank, 0.4, 110, 7, 0, sr, 1.0);
             let mut buf = vec![0f32; (3.0 * sr) as usize];
             let alive = v.render(&mut buf);
             assert!(!alive, "3 s must outlast every bank take");
@@ -1377,15 +1262,7 @@ mod tests {
             let peak = z.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
             assert!(peak > 0.5, "zone not normalised: peak {peak}");
         }
-        for h in drum_crash().iter().chain(drum_kick()).chain(drum_snare()) {
-            assert!(
-                h.data.len() > 8_000,
-                "drum sample too short: {}",
-                h.data.len()
-            );
-            let peak = h.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
-            assert!(peak > 0.5, "drum sample not normalised: peak {peak}");
-        }
+        // (the drum-kit bank's own asset crate tests guard the sampled kit)
     }
 
     fn pitch_of(seg: &[f32], sr: f32) -> f32 {
@@ -1836,20 +1713,5 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn drum_sample_overlay_is_finite_and_forwards_controls() {
-        let sr = 44100.0;
-        let model = voices::make(0, 60, 100, sr, 5, false);
-        let want_kind = model.kind();
-        let mut v = SampleOverlay::wrap(model, drum_kick_bank(), 110, 5, sr, 0.05);
-        v.set_pitch(1.01);
-        assert_eq!(v.kind(), want_kind);
-        v.choke();
-        let mut buf = vec![0f32; (0.1 * sr) as usize];
-        v.render(&mut buf);
-        assert!(buf.iter().all(|x| x.is_finite()));
-        assert!(buf.iter().any(|&x| x.abs() > 1e-5));
     }
 }

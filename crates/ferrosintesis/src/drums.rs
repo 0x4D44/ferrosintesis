@@ -1147,21 +1147,6 @@ fn metal_plate(key: u8, sr: f32, seed: u32, vel: u8) -> Box<dyn Voice> {
     Box::new(MetalPlate::new(&metal_spec_for(key), sr, seed, vel))
 }
 
-fn sample_overlay(key: u8, vel: u8, sr: f32, seed: u32, voice: Box<dyn Voice>) -> Box<dyn Voice> {
-    match key {
-        35 | 36 => {
-            sampler::SampleOverlay::wrap(voice, sampler::drum_kick_bank(), vel, seed, sr, 0.080)
-        }
-        38 | 40 => {
-            sampler::SampleOverlay::wrap(voice, sampler::drum_snare_bank(), vel, seed, sr, 0.075)
-        }
-        // 49|57 used to take a crash-attack overlay here; the sampled-cymbal
-        // intercept in `make` now returns before this wrap whenever samples
-        // are on, so a crash arm would be unreachable.
-        _ => voice,
-    }
-}
-
 // ---------------------------------------------------------------------------
 // v0.12 Brush kit (ch-10 Program 40, GM2 brush kit). Key map:
 //   38 brush tap / 39 brush slap / 40 brush swirl / 42|44 closed hat /
@@ -1372,8 +1357,9 @@ pub fn make(
     rr: u8,
 ) -> Option<Box<dyn Voice>> {
     let samples = samples && crate::embedded_samples_available();
-    // `kit` selects the legacy test kits or the shipped V3 default. Only V3
-    // gets sample overlays, and only when the caller's sample flag is enabled.
+    // `kit` selects the legacy test kits or the shipped V3 default. Only
+    // V3/Brush get the sampled drum kit, and only when the caller's sample
+    // flag is enabled.
     let v = vel_amp(vel);
     let velnorm = vel as f32 / 127.0;
     let d = |tones: &[(f32, f32, f32, f32)], noise: &[(f32, f32, Biquad)], life: f32, g: f32| {
@@ -1451,18 +1437,22 @@ pub fn make(
             _ => {} // V3 fall-through
         }
     }
-    // Sampled cymbals (drum-kit bank): with samples on, the V3/Brush cymbal
-    // keys (49/57 crash, 51/59 ride, 53 bell, 52 china, 55 splash) become
-    // pure sample playback — the recorded hit IS the voice, no MetalPlate
-    // underneath, and no 49/57 `sample_overlay` (that would double the
-    // sample). `--no-samples` (and V1/V2) keeps today's modeled path
-    // bit-identical; hi-hats 42/44/46 stay modeled on every path.
+    // Sampled drum kit (drum-kit bank): with samples on, the V3/Brush GM kit
+    // keys (35/36 kick, 37 side stick, 38/40 snare, 41-50 toms, 42/44/46
+    // hi-hats, 49/57 crash, 51/59 ride, 53 bell, 52 china, 55 splash) become
+    // pure sample playback — the recorded hit IS the voice, no model
+    // underneath and no attack overlay (that would double the sample).
+    // `--no-samples` (and V1/V2) keeps today's modeled path bit-identical.
+    // On Brush the brush key map above already intercepted 35-46, so only
+    // the toms and cymbals reach this seam there — a brush kit keeps its
+    // brush voices. The engine's hi-hat choke group works unchanged: a
+    // closed/pedal hit chokes a ringing open hat via `Voice::choke`.
     if samples && matches!(kit, Kit::V3 | Kit::Brush) {
-        if let Some(v) = sampler::sampled_cymbal(key, vel, seed, rr, sr) {
+        if let Some(v) = sampler::sampled_drum(key, vel, seed, rr, sr) {
             return Some(v);
         }
     }
-    let voice = match key {
+    match key {
         35 | 36 => {
             // beater knock over a sub drop (86 -> ~45 Hz): the chest thump,
             // plus a knuckle-of-the-beater tone (D3). V3 adds a short low-mid
@@ -2067,14 +2057,7 @@ pub fn make(
             0.15,
             0.4,
         ),
-    };
-    voice.map(|v| {
-        if matches!(kit, Kit::V3 | Kit::Brush) && samples {
-            sample_overlay(key, vel, sr, seed, v)
-        } else {
-            v
-        }
-    })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2595,11 +2578,11 @@ mod tests {
 
     #[cfg(feature = "embedded-samples")]
     #[test]
-    fn v3_sample_overlay_engages_for_crash_kick_and_snare() {
+    fn v3_sampled_kit_engages_for_crash_kick_and_snare() {
         for key in [49u8, 36, 38] {
             let plain = render_drum_kit_samples(key, 110, 0.7, Kit::V3, false);
             let sampled = render_drum_kit_samples(key, 110, 0.7, Kit::V3, true);
-            assert_ne!(plain, sampled, "sample layer did not engage for key {key}");
+            assert_ne!(plain, sampled, "sampled kit did not engage for key {key}");
             assert!(
                 sampled.iter().all(|x| x.is_finite()),
                 "sampled key {key} non-finite"
@@ -2608,46 +2591,94 @@ mod tests {
                 20.0 * (testutil::rms(&sampled) / testutil::rms(&plain).max(1e-12)).log10();
             assert!(
                 delta_db.abs() <= 6.0,
-                "sample overlay level jump for key {key}: {delta_db:+.2} dB"
+                "sampled kit level jump for key {key}: {delta_db:+.2} dB"
             );
         }
     }
 
-    /// Stage C sampled-cymbal routing seam: samples+V3/Brush swaps the seven
-    /// GM cymbal keys onto the sampled bank; `--no-samples` and the legacy
-    /// kits keep the modeled path (the `--no-samples` canary's structural
-    /// half — the bit-identity half is the render-diff against the trunk
-    /// binary). Hi-hats stay modeled on every path.
+    /// Stage E sampled-kit routing seam: samples+V3 swaps the GM kit keys —
+    /// kick 35/36, side stick 37, snare 38/40, toms 41-50, hi-hats 42/44/46,
+    /// cymbals 49/51/52/53/55/57/59 — onto the sampled bank; `--no-samples`
+    /// and the legacy kits keep the modeled path (the `--no-samples` canary's
+    /// structural half — the bit-identity half is the render-diff against
+    /// the trunk binary). On Brush the brush key map wins for its own keys;
+    /// toms and cymbals fall through to the sampled kit, exactly as they
+    /// fell through to the V3 models before.
     #[cfg(feature = "embedded-samples")]
     #[test]
-    fn sampled_cymbals_route_only_on_v3_brush_with_samples() {
+    fn sampled_kit_routes_only_on_v3_brush_with_samples() {
         let sr = 44100.0;
-        for key in [49u8, 51, 52, 53, 55, 57, 59] {
-            for (kit, name) in [(Kit::V3, "V3"), (Kit::Brush, "Brush")] {
-                let v = make(key, 100, sr, 7, kit, true, 0).unwrap();
-                assert_eq!(v.kind(), "sampledcymbal", "key {key} kit {name}");
-                let m = make(key, 100, sr, 7, kit, false, 0).unwrap();
-                assert_eq!(m.kind(), "drum", "--no-samples key {key} kit {name}");
-            }
+        let kit_keys = [
+            35u8, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 55, 57, 59,
+        ];
+        for key in kit_keys {
+            let v = make(key, 100, sr, 7, Kit::V3, true, 0).unwrap();
+            assert_eq!(v.kind(), "sampleddrum", "key {key} V3+samples");
+            let m = make(key, 100, sr, 7, Kit::V3, false, 0).unwrap();
+            assert_ne!(m.kind(), "sampleddrum", "--no-samples key {key}");
             for (kit, name) in [(Kit::V1, "V1"), (Kit::V2, "V2")] {
                 let m = make(key, 100, sr, 7, kit, true, 0).unwrap();
-                assert_eq!(m.kind(), "drum", "legacy kit {name} key {key}");
+                assert_ne!(m.kind(), "sampleddrum", "legacy kit {name} key {key}");
             }
         }
-        for key in [42u8, 44, 46] {
-            let v = make(key, 100, sr, 7, Kit::V3, true, 0).unwrap();
-            assert_ne!(v.kind(), "sampledcymbal", "hat {key} must stay modeled");
+        // Brush: the brush key map intercepts its seven brush keys before the
+        // sampled seam (a brush kit has no stick sounds)…
+        for key in [35u8, 36, 37, 38, 39, 40, 42, 44, 46] {
+            let v = make(key, 100, sr, 7, Kit::Brush, true, 0).unwrap();
+            assert_ne!(v.kind(), "sampleddrum", "brush key {key} must stay brush");
+        }
+        // …while toms and cymbals fall through to the sampled kit.
+        for key in [41u8, 43, 45, 47, 48, 50, 49, 51, 52, 53, 55, 57, 59] {
+            let v = make(key, 100, sr, 7, Kit::Brush, true, 0).unwrap();
+            assert_eq!(v.kind(), "sampleddrum", "brush fall-through key {key}");
         }
     }
 
-    /// Stage C level calibration oracle: each sampled cymbal sits within
+    /// Stage E velocity-layer seam: harder hits pull a different (louder)
+    /// take, and gain still scales continuously inside a layer — checked
+    /// through `make` for one representative of each new piece.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_kit_velocity_selects_layers_through_make() {
+        for (key, soft, hard) in [
+            (36u8, 20, 120), // kick: vl1 vs vl4
+            (38, 15, 120),   // snare: vl1 vs vl6
+            (42, 20, 120),   // closed hat: vl1 vs vl4
+            (45, 20, 120),   // tom: vl1 vs vl4
+        ] {
+            let a = render_drum_kit_samples(key, soft, 0.5, Kit::V3, true);
+            let b = render_drum_kit_samples(key, hard, 0.5, Kit::V3, true);
+            let (ra, rb) = (testutil::rms(&a), testutil::rms(&b));
+            assert!(
+                rb > 2.0 * ra,
+                "key {key}: hard hit not louder ({rb:.5} vs {ra:.5})"
+            );
+            // different layer => different take => not a scaled copy: the
+            // peak-normalized samples differ in waveform, not just gain
+            let g = rb / ra.max(1e-12);
+            let scaled_diff: f32 = a
+                .iter()
+                .zip(&b)
+                .map(|(x, y)| (x * g - y).abs())
+                .fold(0f32, f32::max);
+            let peak_b = b.iter().fold(0f32, |m, &x| m.max(x.abs()));
+            assert!(
+                scaled_diff > 0.2 * peak_b,
+                "key {key}: hard hit looks like a scaled soft hit (layer not switching)"
+            );
+        }
+    }
+
+    /// Stage C/E level calibration oracle: each sampled drum sits within
     /// ±3 dB of the model it replaces (vel 100, RMS over a fixed 3 s window),
     /// so swapping the voice never jumps the kit mix.
     #[cfg(feature = "embedded-samples")]
     #[test]
-    fn sampled_cymbal_level_parity() {
+    fn sampled_drum_level_parity() {
         let mut worst: (u8, f32) = (0, 0.0);
-        for key in [49u8, 51, 52, 53, 55, 57, 59] {
+        for key in [
+            35u8, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 55, 57, 59,
+        ] {
             let model = render_drum_kit_samples(key, 100, 3.0, Kit::V3, false);
             let sampled = render_drum_kit_samples(key, 100, 3.0, Kit::V3, true);
             let (rm, rs) = (testutil::rms(&model), testutil::rms(&sampled));
@@ -2659,10 +2690,45 @@ mod tests {
         }
         assert!(
             worst.1.abs() <= 3.0,
-            "sampled cymbal {} level {:+.2} dB vs model",
+            "sampled drum {} level {:+.2} dB vs model",
             worst.0,
             worst.1
         );
+    }
+
+    /// Stage E tom repitch oracle: the six GM tom keys must render as six
+    /// DISTINCT, ASCENDING pitches that land on the modeled ladder's table
+    /// values (100/140/190/240/293/352 Hz) — the two sampled drums (floor tom
+    /// root ~113.5 Hz for 41/43, rack tom root ~181 Hz for 45/47/48/50) are
+    /// repitched by playback rate. Tolerance covers the deterministic ±2.5%
+    /// per-hit rate jitter plus root-measurement error.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_toms_repitch_preserves_the_ladder() {
+        let sr = 44100.0;
+        let mut prev = 0.0f32;
+        for (key, table) in [
+            (41u8, 100.0f32),
+            (43, 140.0),
+            (45, 190.0),
+            (47, 240.0),
+            (48, 293.0),
+            (50, 352.0),
+        ] {
+            let b = render_drum_kit_samples(key, 100, 0.6, Kit::V3, true);
+            let f =
+                testutil::peak_locate(&b[..(0.35 * sr) as usize], sr, table * 0.70, table * 1.35);
+            println!("sampled tom {key}: {f:.1} Hz (table {table})");
+            assert!(
+                (f - table).abs() < table * 0.12,
+                "sampled tom {key} at {f:.1} Hz, expected ~{table}"
+            );
+            assert!(
+                f > prev * 1.08,
+                "tom ladder not ascending at key {key}: {f:.1} Hz vs prev {prev:.1}"
+            );
+            prev = f;
+        }
     }
 
     #[test]

@@ -2949,6 +2949,136 @@ mod tests {
         );
     }
 
+    /// Stage E (engine half): the hi-hat choke group survives the sampled
+    /// kit — a closed (42) or pedal (44) strike chokes the ringing SAMPLED
+    /// open hat (46) within ~30 ms, exactly as the modeled hats behave
+    /// (`closed_hat_chokes_open_in_engine`).
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_closed_or_pedal_hat_chokes_open_in_engine() {
+        let sr = 44100.0;
+        let opt = Options {
+            samples: true,
+            ..test_opts(sr)
+        };
+        let open_only = drum_song(&[(0.05, 46, 110)], 1.0, &[]);
+        let a = render(&open_only, &opt).0;
+        // 30 ms after the choking hit the open ring must be gone (the voice
+        // fade is -60 dB in ~15 ms). The window also contains the choker's
+        // OWN body (the pedal chick rings well past 200 ms), so the oracle
+        // measures the RESIDUAL: choked-render energy minus the energy of
+        // the choker played alone. An unchoked open hat leaves its full ring
+        // in the residual; a choked one leaves almost nothing.
+        let w = |s: &[f32]| rms(&left(s)[(0.28 * sr) as usize..(0.45 * sr) as usize]);
+        for choker in [42u8, 44] {
+            let choked = drum_song(&[(0.05, 46, 110), (0.25, choker, 90)], 1.0, &[]);
+            let b = render(&choked, &opt).0;
+            let solo = drum_song(&[(0.25, choker, 90)], 1.0, &[]);
+            let c = render(&solo, &opt).0;
+            let residual = (w(&b).powi(2) - w(&c).powi(2)).max(0.0).sqrt();
+            println!(
+                "choker {choker}: open-only {:.5}, choked {:.5}, choker-solo {:.5}, residual {:.5}",
+                w(&a),
+                w(&b),
+                w(&c),
+                residual
+            );
+            assert!(
+                residual < 0.35 * w(&a),
+                "sampled open hat survived the key-{choker} choke: residual {residual} vs open ring {}",
+                w(&a)
+            );
+        }
+    }
+
+    /// THE Stage E anti-machine-gun oracle for the highest-stakes piece:
+    /// hats play continuous 16ths. Sixteen closed-hat (42) hits at 16th-note
+    /// spacing (120 bpm, 0.125 s) through the full engine path, so the
+    /// per-key round-robin counter cycles the 4 takes and the note seed
+    /// drives the per-hit rate/gain micro-variation:
+    ///
+    ///  * every hit window must be audible and NO pair bit-identical;
+    ///  * no pair may correlate like a clone (plain NCC ~1.0);
+    ///  * the same-take pairs (i, i+4 after the 4-take wrap) must differ
+    ///    SUBSTANTIALLY (normalized difference energy — the ride oracle's
+    ///    diff/rms measure).
+    ///
+    /// The clone detector is calibrated FAIL-FIRST inside the test: two
+    /// voices built with the same seed and same hit index (what a
+    /// machine-gun engine would produce) render bit-identically and read
+    /// NCC 1.0 — the reading the engine path must never approach.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_fast_closed_hats_do_not_machine_gun() {
+        let sr = 44100.0;
+        // fail-first calibration: same seed + same take == a true machine gun
+        let clone_hat = || {
+            let mut w = vec![0f32; (0.10 * sr) as usize];
+            let mut v = drums::make(42, 100, sr, 0xBEEF, drums::Kit::V3, true, 3).unwrap();
+            v.render(&mut w);
+            w
+        };
+        let (c1, c2) = (clone_hat(), clone_hat());
+        assert_eq!(c1, c2, "identical seed+take must render bit-identically");
+        let clone_ncc = ncc_max(&c1, &c2, 128);
+        assert!(
+            clone_ncc > 0.999,
+            "clone detector miscalibrated: {clone_ncc:.4}"
+        );
+
+        let n = 16usize;
+        let dt = 0.125f64; // 16th notes at 120 bpm
+        let hits: Vec<(f64, u8, u8)> = (0..n).map(|i| (0.05 + dt * i as f64, 42, 100)).collect();
+        // dry drum bus: zero the sends so hit windows hold only the voice
+        let song = drum_song(
+            &hits,
+            0.05 + dt * n as f64 + 0.3,
+            &[(91, 0), (93, 0), (94, 0)],
+        );
+        let opt = Options {
+            samples: true,
+            ..test_opts(sr)
+        };
+        let s = render(&song, &opt).0;
+        let mono: Vec<f32> = s.chunks_exact(2).map(|p| p[0] + p[1]).collect();
+        let win = |i: usize| -> &[f32] {
+            let at = ((0.05 + dt * i as f64) * sr as f64) as usize;
+            &mono[at..at + (0.10 * sr) as usize]
+        };
+        for i in 0..n {
+            assert!(
+                rms(win(i)) > 1e-4,
+                "hat hit {i} is silent — sampled hat not routed?"
+            );
+        }
+        let mut worst_any = 0f32;
+        for i in 0..n {
+            for j in (i + 1)..n {
+                assert_ne!(win(i), win(j), "hat hits {i} and {j} are bit-identical");
+                worst_any = worst_any.max(ncc_max(win(i), win(j), 128));
+            }
+        }
+        let mut worst_diff = f32::INFINITY;
+        for i in 0..n - 4 {
+            let (a, b) = (win(i), win(i + 4));
+            let diff: Vec<f32> = a.iter().zip(b).map(|(x, y)| x - y).collect();
+            worst_diff = worst_diff.min(rms(&diff) / rms(a).max(1e-9));
+        }
+        println!(
+            "fast hats: max pairwise ncc {worst_any:.3} (clone reads {clone_ncc:.3}), \
+             min same-take diff/rms {worst_diff:.3}"
+        );
+        assert!(
+            worst_any < 0.97,
+            "some hat pair correlates like a clone: ncc {worst_any:.3} — MACHINE-GUN"
+        );
+        assert!(
+            worst_diff > 0.4,
+            "same-take hats nearly identical (diff/rms {worst_diff:.3}) — \
+             MACHINE-GUN: the micro-variation is not decorrelating repeats"
+        );
+    }
+
     /// Oracle 3 (§5.1/§5.3): the cabinet's magnitude response, measured on
     /// the linear cab chain alone at the 2× rate it runs at — presence peak,
     /// steep HF cliff, low-end resonance.

@@ -6716,7 +6716,18 @@ const RD_SCOOP_K: f32 = 0.045; // RD6 onset-scoop settle per control tick (τ �
 const RD_CHIFF_T60: f32 = 0.020; // RD5 tongue-chiff decay
 const RD_CHIFF_AMP: f32 = 0.30; // RD5 chiff level (× vn × vel_amp — super-linear)
 pub(crate) const BAGPIPE_DRONE_CONTROL_MAX: u8 = 54;
-const BAGPIPE_DRONE_WIDTH: f32 = 0.22;
+/// Drone reeds are CYLINDRICAL single reeds — a clarinet-square odd-harmonic
+/// spectrum (duty 0.50, the same law as CLARINET's width), not the old
+/// all-harmonic 0.22 buzz.
+const BAGPIPE_DRONE_WIDTH: f32 = 0.50;
+/// The tenor pair is never perfectly locked: ±0.2% detune → a slow amplitude
+/// beat at 2·detune·f (≈0.9 Hz on an A drone) — the sound of real drones.
+const BAGPIPE_TENOR_DETUNE: f32 = 0.002;
+/// Tenor pair + bass octave mix. UNEQUAL tenors so the beat never nulls.
+const BAGPIPE_DRONE_MIX: (f32, f32, f32) = (0.42, 0.30, 0.55);
+/// Constant drone level — bag pressure is constant, so velocity is ignored
+/// (≈2× the old under-powered drone).
+const BAGPIPE_DRONE_AMP: f32 = 0.075;
 
 /// A GM reed program's fixed voicing (§5 table). All-`pub`, const-constructible.
 pub struct ReedPreset {
@@ -6900,35 +6911,53 @@ pub const SHANAI: ReedPreset = ReedPreset {
 };
 
 pub(crate) struct BagpipeDrone {
-    root: ReedPulse,
-    fifth: ReedPulse,
-    root_norm: f32,
-    fifth_norm: f32,
+    tenor1: ReedPulse,
+    tenor2: ReedPulse,
+    bass: ReedPulse,
+    norm: (f32, f32, f32),
     lp: OnePole,
     env: Adsr,
     amp: f32,
 }
 
 impl BagpipeDrone {
-    fn new(key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+    /// The Highland drone stack: two tenors at the drone pitch (detuned
+    /// against each other → the slow beat) plus one bass an octave below.
+    /// Spawned by a low drone-control note it sounds AT that pitch; spawned
+    /// by a chanter note the tenors sit an octave below it. Velocity is
+    /// ignored: bag pressure is constant.
+    fn new(key: u8, _vel: u8, sr: f32, seed: u32) -> Self {
         let mut rng = Rng::new(seed ^ 0xBA60_0001);
-        let root_f = if key <= BAGPIPE_DRONE_CONTROL_MAX {
+        let tenor_f = if key <= BAGPIPE_DRONE_CONTROL_MAX {
             key_freq(key)
         } else {
             key_freq(key) * 0.5
         };
-        let fifth_f = root_f * 1.5;
-        let root_width = BAGPIPE_DRONE_WIDTH * (1.0 + 0.015 * rng.white());
-        let fifth_width = (BAGPIPE_DRONE_WIDTH * 0.92) * (1.0 + 0.015 * rng.white());
+        let bass_f = tenor_f * 0.5;
         let norm = |width: f32| 0.5 / (width * (1.0 - width)).sqrt();
+        let w1 = BAGPIPE_DRONE_WIDTH * (1.0 + 0.015 * rng.white());
+        let w2 = BAGPIPE_DRONE_WIDTH * (1.0 + 0.015 * rng.white());
+        let w3 = BAGPIPE_DRONE_WIDTH * (1.0 + 0.015 * rng.white());
         BagpipeDrone {
-            root: ReedPulse::new(root_f, sr, rng.white() * 0.5 + 0.5, root_width),
-            fifth: ReedPulse::new(fifth_f, sr, rng.white() * 0.5 + 0.5, fifth_width),
-            root_norm: norm(root_width),
-            fifth_norm: norm(fifth_width),
+            tenor1: ReedPulse::new(
+                tenor_f * (1.0 + BAGPIPE_TENOR_DETUNE),
+                sr,
+                rng.white() * 0.5 + 0.5,
+                w1,
+            ),
+            tenor2: ReedPulse::new(
+                tenor_f * (1.0 - BAGPIPE_TENOR_DETUNE),
+                sr,
+                rng.white() * 0.5 + 0.5,
+                w2,
+            ),
+            bass: ReedPulse::new(bass_f, sr, rng.white() * 0.5 + 0.5, w3),
+            norm: (norm(w1), norm(w2), norm(w3)),
             lp: OnePole::lowpass(2600.0, sr),
-            env: Adsr::new(0.050, 0.08, 0.95, 0.28, sr),
-            amp: 0.055 * (0.45 + 0.55 * vel_amp(vel)),
+            // Constant-pressure sustain (1.0, no decay dip); the release is
+            // the bag emptying at the authored stop / engine hang release.
+            env: Adsr::new(0.050, 0.0, 1.0, 0.22, sr),
+            amp: BAGPIPE_DRONE_AMP,
         }
     }
 }
@@ -6937,8 +6966,9 @@ impl Voice for BagpipeDrone {
     fn render(&mut self, out: &mut [f32]) -> bool {
         for o in out.iter_mut() {
             let e = self.env.next();
-            let s = self.root.next() * self.root_norm * 0.70
-                + self.fifth.next() * self.fifth_norm * 0.42;
+            let s = self.tenor1.next() * self.norm.0 * BAGPIPE_DRONE_MIX.0
+                + self.tenor2.next() * self.norm.1 * BAGPIPE_DRONE_MIX.1
+                + self.bass.next() * self.norm.2 * BAGPIPE_DRONE_MIX.2;
             *o += self.lp.process(s) * self.amp * e;
         }
         self.env.alive()
@@ -7170,7 +7200,27 @@ fn reed(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Reed {
         111 => &SHANAI,
         _ => &CLARINET,
     };
-    Reed::from_preset(preset, key, vel, sr, seed)
+    let mut v = Reed::from_preset(preset, key, vel, sr, seed);
+    if program == 109 {
+        // A Highland chanter is a constant-pressure double reed fed by the
+        // bag: NO dynamics (velocity is ignored — amplitude, brightness and
+        // envelope are fixed), NO tongue chiff (articulation is grace-note
+        // pitch flicks, not tonguing), no onset scoop, no vibrato mechanism.
+        // Post-construct overrides so `from_preset` — and every sax / oboe /
+        // clarinet voice built through it, and their RNG draw order — is
+        // untouched (the bagpipe audition fix must not move the saxes).
+        v.amp = preset.amp;
+        // Fixed reed brightness, and the RD4 shaper index pinned to the same
+        // fixed pressure (a velocity-dependent tanh drive is a loudness/
+        // timbre dynamic too): bag pressure, not breath.
+        v.vn = 0.82;
+        v.drive = 1.0 + preset.drive_vn * 0.82;
+        v.env = Adsr::new(0.010, 0.0, 1.0, preset.release, sr);
+        v.chiff_amp = 0.0;
+        v.scoop = 1.0;
+        v.vib_depth = 0.0;
+    }
+    v
 }
 
 // ---------------------------------------------------------------------------
@@ -8120,6 +8170,10 @@ struct FxSpec {
     #[cfg(test)]
     name: &'static str,
     core: FxCore,
+    // Core level into the wrapper chain. 1.0 for every preset except rain,
+    // which trims its crystal bell to a faint sparkle hint under the wash.
+    // (x * 1.0 is exact in IEEE 754, so a 1.0 preset is bit-identical.)
+    core_gain: f32,
     saw_env: (f32, f32, f32, f32), // saw-core amp ADSR (a,d,s,r); bells ignore it
     saw_amp: f32,
     onset_gain: f32, // onset Burst level (0 = none)
@@ -8147,22 +8201,27 @@ struct FxSpec {
 //    96 aperiodic / 97 opens / 98 static / 99 closes / 100 blooms / 101 never
 //    settles / 102 periodic / 103 falls. --
 
-/// 96 rain — a pitched glass bell with SPARSE APERIODIC droplets (GrainGate)
-/// falling around it. STOCHASTIC. Droplets are bandpassed white, gated sparse.
+/// 96 rain — a DENSE stochastic droplet wash (GrainGate far past the
+/// ~20-30 events/s auditory fusion edge) with the crystal bell trimmed to a
+/// faint pitched sparkle inside it. STOCHASTIC. The old ~15 grains/s train
+/// read as countable falling STONES (each droplet an individually resolvable
+/// pitched object) and the full-level bell as the object being struck; real
+/// rain is hundreds of events/s that fuse into a continuous wash.
 const FX_RAIN: FxSpec = FxSpec {
     #[cfg(test)]
     name: "fx",
     core: FxCore::Bell(CRYSTAL),
+    core_gain: 0.35, // the pitched bell is a hint under the wash, not the lead
     saw_env: FX_ENV_UNUSED,
     saw_amp: 0.0,
     onset_gain: 0.0,
     onset_t60: 0.05,
     onset_fc: 4000.0,
-    noise_amp: 0.55,  // gut-feel: audible droplets over the bell without swamping it
-    noise_fc: 5200.0, // gut-feel: bright glassy plink band
-    noise_q: 1.6,
-    grain_hz: 15.0,   // gut-feel: ~15 droplets/s reads as rain, not a hiss
-    grain_t60: 0.045, // gut-feel: short plink ring
+    noise_amp: 0.20, // rebalanced: the dense gate has ~4x the RMS of the sparse train
+    noise_fc: 4800.0, // rain-hiss band, a touch lower than the old glass plink
+    noise_q: 0.9,    // wide: a broadband wash, not a tuned plink
+    grain_hz: 380.0, // hundreds of drops/s — the fusion regime (rain, not stones)
+    grain_t60: 0.035, // short overlapping grains -> a shimmering wash with flutter
     lp_fc0: 0.0,
     lp_fc1: 0.0,
     lp_glide_t60: 0.0,
@@ -8185,6 +8244,7 @@ const FX_SOUNDTRACK: FxSpec = FxSpec {
         n: 7,
         detune: 0.012,
     },
+    core_gain: 1.0,
     saw_env: (2.2, 0.6, 1.0, 1.8), // gut-feel: slow swell in, long hold
     saw_amp: 0.40,
     onset_gain: 0.0,
@@ -8214,6 +8274,7 @@ const FX_CRYSTAL: FxSpec = FxSpec {
     #[cfg(test)]
     name: "fx",
     core: FxCore::Bell(CRYSTAL),
+    core_gain: 1.0,
     saw_env: FX_ENV_UNUSED,
     saw_amp: 0.0,
     onset_gain: 0.0,
@@ -8246,6 +8307,7 @@ const FX_ATMOSPHERE: FxSpec = FxSpec {
         n: 5,
         detune: 0.010,
     },
+    core_gain: 1.0,
     saw_env: (0.02, 0.7, 0.30, 1.4), // gut-feel: fast pluck, decay into a low wash
     saw_amp: 0.40,
     onset_gain: 0.28, // gut-feel: a soft pluck click over the saw
@@ -8276,6 +8338,7 @@ const FX_BRIGHTNESS: FxSpec = FxSpec {
     #[cfg(test)]
     name: "fx",
     core: FxCore::Bell(CRYSTAL),
+    core_gain: 1.0,
     saw_env: FX_ENV_UNUSED,
     saw_amp: 0.0,
     onset_gain: 0.0,
@@ -8312,6 +8375,7 @@ const FX_GOBLINS: FxSpec = FxSpec {
         n: 5,
         detune: 0.016,
     },
+    core_gain: 1.0,
     saw_env: (0.15, 0.4, 0.9, 1.2), // gut-feel: sustains while it lurches
     saw_amp: 0.40,
     onset_gain: 0.0,
@@ -8342,6 +8406,7 @@ const FX_ECHOES: FxSpec = FxSpec {
     #[cfg(test)]
     name: "fx",
     core: FxCore::Bell(CRYSTAL),
+    core_gain: 1.0,
     saw_env: FX_ENV_UNUSED,
     saw_amp: 0.0,
     onset_gain: 0.55, // gut-feel: a crisp droplet the echo repeats as sharp impulses (FX-O1)
@@ -8375,6 +8440,7 @@ const FX_SCIFI: FxSpec = FxSpec {
         n: 4,
         detune: 0.008,
     },
+    core_gain: 1.0,
     saw_env: (0.004, 0.45, 0.0, 0.6), // gut-feel: instant zap, decays to silence while held
     saw_amp: 0.42,
     onset_gain: 0.20, // gut-feel: a sharp zap transient
@@ -8424,7 +8490,8 @@ struct FxEcho {
 /// The synth-FX voice (GM 96-103): an existing core plus the family's motion.
 pub struct Fx {
     core: Box<dyn Voice>,
-    inert: bool, // GM 98: the wrapper adds nothing, so render is a pure pass-through
+    inert: bool,    // GM 98: the wrapper adds nothing, so render is a pure pass-through
+    core_gain: f32, // rain trims its bell to a sparkle; 1.0 (exact) elsewhere
     bend: f32,
     last_pitch: f32,
     // onset transient (added OUTSIDE the core envelope, decays fast)
@@ -8554,6 +8621,7 @@ impl Fx {
         Fx {
             core,
             inert,
+            core_gain: spec.core_gain,
             bend: 1.0,
             last_pitch: 1.0,
             onset,
@@ -8620,7 +8688,9 @@ impl Voice for Fx {
 
             // -- per-sample post chain --
             for (k, &dry) in scratch[..n].iter().enumerate() {
-                let mut s = dry;
+                // core_gain is 1.0 (an exact IEEE multiply) for every preset
+                // except rain, whose bell is trimmed to a sparkle hint.
+                let mut s = dry * self.core_gain;
                 s += self.onset.tick(&mut self.rng);
                 if self.noise_amp > 0.0 {
                     let gate = match &mut self.grain {
@@ -8981,8 +9051,8 @@ mod tests {
     // Audio oracle helpers used by the v0.9 reed/brass oracles (bare names).
     use crate::testutil::{
         assert_render_signature, band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend,
-        hp_rms, kurtosis, mag_at, peak_locate, render_signature, rms, spectral_band_rms,
-        spectral_centroid, traj, traj_peak_time_s, RenderSignature, BW_TREM_PEAK_FLOOR,
+        hp_rms, mag_at, peak_locate, render_signature, rms, spectral_band_rms, spectral_centroid,
+        traj, traj_peak_time_s, RenderSignature, BW_TREM_PEAK_FLOOR,
     };
 
     #[test]
@@ -13361,40 +13431,67 @@ mod tests {
         );
     }
 
-    /// FX-O2: 96 (rain) is granular AND aperiodic. Its HF droplet band is far more
-    /// impulsive (leptokurtic) than a CONTINUOUS bandpassed-noise bed — the sparse
-    /// GrainGate gaps are the grain. Plus an anti-cheat: the droplet-band envelope
-    /// autocorrelation is LOW, forbidding rain implemented as a *periodic* gate.
+    /// FX-O2 (rain v2): 96 (rain) is a FUSED, APERIODIC stochastic wash. Real
+    /// rain is hundreds of drop events per second — far past the ~20-30
+    /// events/s auditory fusion edge — so no single droplet is resolvable as
+    /// an object; the old ~15 grains/s train read as countable falling STONES
+    /// and the full-level crystal bell as the object being hit. Self-relative
+    /// shape checks only (the renderer peak-normalises):
+    ///   (a) FUSED — the droplet-band envelope has no deep inter-grain gaps
+    ///       and a low crest: the grains overlap into a continuous wash;
+    ///   (b) APERIODIC (anti-cheat kept from v1) — no periodic AM peak, so
+    ///       rain cannot be implemented as a periodic gate;
+    ///   (c) WASH-DOMINANT with a PITCHED HINT — the wash carries the voice,
+    ///       while the bell survives as a faint sparkle, not the lead.
     #[test]
-    fn fx_o2_rain_96_is_granular_and_aperiodic() {
+    fn fx_o2_rain_96_is_a_fused_aperiodic_wash() {
         let sr = 44100.0;
         let rain = render_voice(make(96, 60, 100, sr, 7, false), sr, 2.0);
-        // isolate the droplet band (well above the crystal partials at this key).
-        let hf_band = |sig: &[f32]| -> Vec<f32> {
-            let mut bp = Biquad::bandpass(5200.0, 1.6, sr);
-            sig.iter().map(|&x| bp.process(x)).collect()
-        };
-        // continuous bed: bandpassed white through the SAME filter — the smooth
-        // baseline (bandpassed noise is already leptokurtic, so this is a ratio).
-        let mut rng = Rng::new(31);
-        let bed: Vec<f32> = (0..rain.len()).map(|_| rng.white()).collect();
-        let rain_k = kurtosis(&hf_band(&rain));
-        let bed_k = kurtosis(&hf_band(&bed));
-        let (rain_ac, _) = env_autocorr_peak(&hf_band(&rain), sr, 1.0 / 40.0, 1.0 / 3.0);
+        // isolate the droplet band (well above the crystal partials at this key)
+        let mut bp = Biquad::bandpass(4800.0, 0.9, sr);
+        let hf: Vec<f32> = rain.iter().map(|&x| bp.process(x)).collect();
+        // 10 ms RMS envelope over the steady wash (skip the bell strike)
+        let start = (0.30 * sr) as usize;
+        let win = (0.010 * sr) as usize;
+        let env: Vec<f32> = hf[start..].chunks_exact(win).map(rms).collect();
+        let mean = env.iter().sum::<f32>() / env.len() as f32;
+        let gaps = env.iter().filter(|&&e| e < 0.30 * mean).count() as f32 / env.len() as f32;
+        let mut sorted = env.clone();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let p95 = sorted[(sorted.len() as f32 * 0.95) as usize];
+        let crest = p95 / mean.max(1e-9);
+        let (ac, _) = env_autocorr_peak(&hf, sr, 1.0 / 40.0, 1.0 / 3.0);
+        let body = &rain[start..];
+        let wash_frac = rms(&hf[start..]) / rms(body).max(1e-9);
+        let bell_hint = band_rms(body, sr, key_freq(60), 8.0) / rms(body).max(1e-9);
         println!(
-            "FX-O2 rain: 96 HF kurtosis {rain_k:.2} vs continuous bed {bed_k:.2} \
-             (ratio {:.2}); droplet-env autocorr {rain_ac:.3}",
-            rain_k / bed_k.max(1e-9)
+            "FX-O2 rain: gaps {gaps:.3}, crest {crest:.2}, env AC {ac:.3}, \
+             wash/total {wash_frac:.2}, bell/total {bell_hint:.3}"
         );
         assert!(
-            rain_k >= 1.5 * bed_k,
-            "96 rain HF kurtosis {rain_k:.2} not >= 1.5x the continuous bed {bed_k:.2} — \
-             the droplets are not granular"
+            gaps <= 0.02,
+            "96 rain droplet band has deep inter-grain gaps ({gaps:.3} of windows \
+             < 0.3x mean) — a countable drip train (stones), not a fused wash"
         );
         assert!(
-            rain_ac <= 0.30,
-            "96 rain droplet envelope autocorr {rain_ac:.3} too high — rain must be \
+            crest <= 1.8,
+            "96 rain droplet-band envelope crest {crest:.2} — individually \
+             resolvable droplet spikes (stones), not a fused wash"
+        );
+        assert!(
+            ac <= 0.30,
+            "96 rain droplet envelope autocorr {ac:.3} too high — rain must be \
              stochastic, not a periodic gate"
+        );
+        assert!(
+            wash_frac >= 0.45,
+            "96 rain wash/total {wash_frac:.2} — the noise wash does not carry \
+             the voice; the pitched bell still dominates"
+        );
+        assert!(
+            (0.015..=0.40).contains(&bell_hint),
+            "96 rain bell/total {bell_hint:.3} — want a FAINT pitched sparkle \
+             under the wash (present, but never the lead)"
         );
     }
 
@@ -14651,6 +14748,75 @@ mod tests {
             early / soft.max(1e-12) > 10.0,
             "chiff not super-linear: ff/pp {:.1}",
             early / soft.max(1e-12)
+        );
+    }
+
+    /// BP-O1: the GM 109 chanter is CONSTANT-AMPLITUDE. A Highland chanter is
+    /// a constant-pressure double reed fed by the bag: no velocity dynamics,
+    /// no tongue chiff (articulation is grace-note pitch flicks), no decay
+    /// dip. The tenor sax is the in-tree canary that the override stays
+    /// scoped to 109 and the shared `reed()` family keeps its dynamics.
+    #[test]
+    fn bp_o1_bagpipe_chanter_is_constant_amplitude_saxes_keep_dynamics() {
+        let sr = 44100.0;
+        let sus = |prog: u8, vel: u8| {
+            let b = render_voice(make(prog, 72, vel, sr, 9, false), sr, 1.0);
+            rms(&b[(0.35 * sr) as usize..(0.95 * sr) as usize])
+        };
+        let pipe_ratio = sus(109, 40) / sus(109, 120).max(1e-9);
+        let sax_ratio = sus(66, 40) / sus(66, 120).max(1e-9);
+        let pipe = render_voice(make(109, 72, 100, sr, 9, false), sr, 1.0);
+        let early = rms(&pipe[(0.05 * sr) as usize..(0.20 * sr) as usize]);
+        let late = rms(&pipe[(0.70 * sr) as usize..(0.95 * sr) as usize]);
+        let onset_ratio = early / late.max(1e-9);
+        println!(
+            "BP-O1: chanter vel40/vel120 {pipe_ratio:.3}; sax vel40/vel120 \
+             {sax_ratio:.3}; chanter onset/sustain {onset_ratio:.3}"
+        );
+        assert!(
+            (0.90..=1.11).contains(&pipe_ratio),
+            "chanter has velocity dynamics (vel40/vel120 RMS {pipe_ratio:.3}) — \
+             a bagpipe has one loudness: constant bag pressure"
+        );
+        assert!(
+            sax_ratio <= 0.70,
+            "tenor sax lost its velocity dynamics (vel40/vel120 {sax_ratio:.3}) — \
+             the bagpipe constant-amplitude override leaked into shared reed()"
+        );
+        assert!(
+            (0.85..=1.18).contains(&onset_ratio),
+            "chanter early/late RMS {onset_ratio:.3} — the level must be flat \
+             from onset to sustain (no swell, no chiff spit, no decay dip)"
+        );
+    }
+
+    /// BP-O2: the drone's tenor pair BEATS at its detune. Real Highland
+    /// drones are two tenors an octave below the chanter (plus a bass an
+    /// octave below them), never perfectly locked — the pair produces a slow
+    /// AM beat at 2·detune·f (~0.9 Hz on an A drone). The old drone was one
+    /// root plus a FIFTH: no beat partner at all (and no Highland pipe
+    /// carries a fifth drone).
+    #[test]
+    fn bp_o2_bagpipe_drone_tenor_pair_beats_at_the_detune() {
+        let sr = 44100.0;
+        // chanter key 69 (A4, 440 Hz) -> tenor drones at 220 Hz
+        let mut v = bagpipe_drone(69, 90, sr, 11);
+        let mut buf = vec![0f32; (5.0 * sr) as usize];
+        v.render(&mut buf);
+        let mut bp = Biquad::bandpass(220.0, 5.0, sr);
+        let tenor: Vec<f32> = buf.iter().map(|&x| bp.process(x)).collect();
+        // beat = 2·0.002·220 ≈ 0.88 Hz -> period ≈ 1.14 s; detrend below it
+        let (peak, rate) =
+            env_autocorr_peak_detrend(&tenor[(0.5 * sr) as usize..], sr, 0.85, 1.45, 0.4);
+        println!("BP-O2: drone tenor-band AM autocorr {peak:.3} at {rate:.2} Hz");
+        assert!(
+            peak >= 0.35,
+            "no tenor-pair beat: AM autocorr {peak:.3} < 0.35 — the drone has \
+             no detuned partner at its own pitch"
+        );
+        assert!(
+            (0.75..=1.05).contains(&rate),
+            "tenor beat {rate:.2} Hz not at the ±0.2% pair detune (~0.88 Hz)"
         );
     }
 

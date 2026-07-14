@@ -71,6 +71,11 @@ const AT_VIB_RATE_HZ: f32 = 5.0;
 const AT_VIB_CENTS: f32 = 25.0; // pitch depth at full pressure
 const AT_GAIN_DB: f32 = 2.5; // gain lift at full pressure
 const BAGPIPE_DRONE_KEY: u8 = u8::MAX;
+/// Chanter silence (with no drone-control hold) after which the latched
+/// bagpipe drone is released — the bag emptying at the end of the tune. Long
+/// enough to bridge musical rests and articulation gaps, short enough that
+/// the drone dies inside a normal render tail.
+const BAGPIPE_DRONE_HANG_S: f32 = 1.0;
 
 /// Melodic sustained families that take the engine-level CC1 vibrato:
 /// plucks (except palm-mute 28), bowed strings, SawStack strings/choir, harmonica,
@@ -693,16 +698,18 @@ struct Strip {
     rpn_lsb: u8,
     data_msb: u8, // last CC6, so CC38 can refine it
     porta_on: bool,
-    porta_time: f32,         // CC5 glide time in seconds
-    last_freq: Option<f32>,  // most recent NoteOn pitch (portamento origin)
-    bagpipe_drone_holds: u8, // low GM109 notes currently holding the synthetic drone
-    soft: bool,              // CC67 una corda
-    sost_down: bool,         // CC66 sostenuto pedal position
-    vowel_authored: bool,    // CC70 selects a static vowel on choir programs
-    vowel_target: f32,       // CC70 value 0..127
-    vowel_cur: f32,          // slewed per block
-    at_authored: bool,       // channel aftertouch seen on this channel
-    at_target: f32,          // pressure 0..1, smoothed like CC11
+    porta_time: f32,          // CC5 glide time in seconds
+    last_freq: Option<f32>,   // most recent NoteOn pitch (portamento origin)
+    bagpipe_drone_holds: u8,  // low GM109 notes currently holding the synthetic drone
+    bagpipe_drone_live: bool, // a channel drone is sounding — gates the latch tick
+    bagpipe_drone_hang: u32,  // blocks of chanter silence so far (drone release countdown)
+    soft: bool,               // CC67 una corda
+    sost_down: bool,          // CC66 sostenuto pedal position
+    vowel_authored: bool,     // CC70 selects a static vowel on choir programs
+    vowel_target: f32,        // CC70 value 0..127
+    vowel_cur: f32,           // slewed per block
+    at_authored: bool,        // channel aftertouch seen on this channel
+    at_target: f32,           // pressure 0..1, smoothed like CC11
     at_cur: f32,
     at_phase: f32, // aftertouch vibrato LFO phase
     at_gain: f32,  // pressure gain lift (1.0 = none)
@@ -770,6 +777,8 @@ impl Strip {
             porta_time: PORTA_MIN_S,
             last_freq: None,
             bagpipe_drone_holds: 0,
+            bagpipe_drone_live: false,
+            bagpipe_drone_hang: 0,
             soft: false,
             sost_down: false,
             vowel_authored: false,
@@ -1033,6 +1042,8 @@ impl EngineCore {
             voice,
         });
         self.stats.voices_spawned += 1;
+        self.strips[ch as usize].bagpipe_drone_live = true;
+        self.strips[ch as usize].bagpipe_drone_hang = 0;
     }
 
     fn release_bagpipe_drone_if_idle(&mut self, ch: u8) {
@@ -1051,6 +1062,59 @@ impl EngineCore {
             .filter(|a| Self::is_bagpipe_drone(a, ch) && !a.voice.released())
         {
             a.voice.note_off();
+        }
+        self.strips[ch as usize].bagpipe_drone_live = false;
+        self.strips[ch as usize].bagpipe_drone_hang = 0;
+    }
+
+    /// Bagpipe drone latch (block rate). One CONTINUOUS drone per channel: a
+    /// chanter gap must not release it — a real set of pipes never stops its
+    /// drones between melody notes. The drone releases only after
+    /// [`BAGPIPE_DRONE_HANG_S`] of chanter silence with no drone-control
+    /// hold: the bag emptying at the end of the tune. Gated on
+    /// `bagpipe_drone_live`, so every channel that never spawned a drone
+    /// (every non-GM109 channel, hence every existing album) does no work —
+    /// and sees no behaviour change — here.
+    fn tick_bagpipe_drone_latch(&mut self) {
+        let hang_blocks = (BAGPIPE_DRONE_HANG_S * self.opt.sr / BLOCK as f32) as u32;
+        for ci in 0..self.strips.len() {
+            if !self.strips[ci].bagpipe_drone_live {
+                continue;
+            }
+            let ch = ci as u8;
+            let has_drone = self
+                .active
+                .iter()
+                .any(|a| Self::is_bagpipe_drone(a, ch) && !a.voice.released());
+            if !has_drone {
+                // released/choked elsewhere (CC120/123, authored stop)
+                self.strips[ci].bagpipe_drone_live = false;
+                self.strips[ci].bagpipe_drone_hang = 0;
+                continue;
+            }
+            let holding = self.strips[ci].bagpipe_drone_holds > 0
+                || self.active.iter().any(|a| {
+                    a.ch == ch
+                        && a.program == 109
+                        && a.key != BAGPIPE_DRONE_KEY
+                        && !a.voice.released()
+                });
+            if holding {
+                self.strips[ci].bagpipe_drone_hang = 0;
+            } else {
+                self.strips[ci].bagpipe_drone_hang += 1;
+                if self.strips[ci].bagpipe_drone_hang >= hang_blocks {
+                    for a in self
+                        .active
+                        .iter_mut()
+                        .filter(|a| Self::is_bagpipe_drone(a, ch) && !a.voice.released())
+                    {
+                        a.voice.note_off();
+                    }
+                    self.strips[ci].bagpipe_drone_live = false;
+                    self.strips[ci].bagpipe_drone_hang = 0;
+                }
+            }
         }
     }
 
@@ -1234,8 +1298,10 @@ impl EngineCore {
     }
 
     fn note_off(&mut self, ch: u8, key: u8) {
+        let mut drone_stop = false;
         if ch != 9 && key <= voices::BAGPIPE_DRONE_CONTROL_MAX {
             let holds = &mut self.strips[ch as usize].bagpipe_drone_holds;
+            drone_stop = *holds == 1; // this NoteOff ends the last authored hold
             *holds = holds.saturating_sub(1);
         }
         if let Some(a) = self
@@ -1252,7 +1318,13 @@ impl EngineCore {
                 a.voice.note_off();
             }
         }
-        if ch != 9 {
+        // Chanter NoteOffs no longer release the channel drone — the old
+        // per-note release/re-spawn made the "continuous" drone pump at every
+        // note boundary (and re-strike at the NEW note's pitch). The drone
+        // latches; only an AUTHORED stop (the last low drone-control note
+        // ending) releases it here, and otherwise the block-rate hang timer
+        // in `tick_bagpipe_drone_latch` releases it after sustained silence.
+        if drone_stop {
             self.release_bagpipe_drone_if_idle(ch);
         }
     }
@@ -1470,6 +1542,8 @@ impl EngineCore {
     fn all_sound_off(&mut self, ch: u8) {
         if ch != 9 {
             self.strips[ch as usize].bagpipe_drone_holds = 0;
+            self.strips[ch as usize].bagpipe_drone_live = false;
+            self.strips[ch as usize].bagpipe_drone_hang = 0;
         }
         self.active.retain_mut(|a| {
             if a.ch == ch {
@@ -1580,6 +1654,8 @@ impl EngineCore {
         debug_assert!(n <= BLOCK);
         debug_assert!(out.len() >= n * 2);
         let sr = self.opt.sr;
+
+        self.tick_bagpipe_drone_latch();
 
         for (ci, strip) in self.strips.iter_mut().enumerate() {
             strip.mod_cur += self.expr_smooth * (strip.mod_target - strip.mod_cur);
@@ -3522,14 +3598,25 @@ mod tests {
         let drone_fifth = crate::testutil::band_rms(drone_only, sr, fifth, 8.0);
         let drone_level = rms(drone_only);
         assert!(
-            drone_root > 0.18 * drone_level && drone_fifth > 0.08 * drone_level,
-            "bagpipe drone bands weak: root/drone {:.3}, fifth/drone {:.3}",
-            drone_root / drone_level.max(1e-9),
-            drone_fifth / drone_level.max(1e-9)
+            drone_root > 0.18 * drone_level,
+            "bagpipe drone root band weak: root/drone {:.3}",
+            drone_root / drone_level.max(1e-9)
+        );
+        // Highland drones are OCTAVES (tenor pair + bass), never a dedicated
+        // fifth oscillator. The bound allows the bass drone's own 3rd
+        // harmonic (an odd-harmonic square at root/2 puts its 3rd exactly on
+        // the twelfth, ≈0.41 of root here — physically real on any pipe) but
+        // rejects the old fifth oscillator (measured 0.73 of root).
+        assert!(
+            drone_fifth < 0.55 * drone_root,
+            "bagpipe drone carries a FIFTH ({:.3} of root) — Highland drones \
+             are a tenor pair plus a bass octave",
+            drone_fifth / drone_root.max(1e-9)
         );
         let body = &bagpipe_l[(0.20 * sr) as usize..(0.74 * sr) as usize];
         let body_rms = rms(body);
         let body_drone = crate::testutil::band_rms(body, sr, root, 8.0);
+        let body_bass = crate::testutil::band_rms(body, sr, root * 0.5, 6.0);
         let chanter = crate::testutil::band_rms(body, sr, key_freq(67), 10.0)
             + crate::testutil::band_rms(body, sr, key_freq(69), 10.0);
         assert!(
@@ -3537,6 +3624,11 @@ mod tests {
             "bagpipe needs drone plus chanter: drone/body {:.3}, chanter/body {:.3}",
             body_drone / body_rms.max(1e-9),
             chanter / body_rms.max(1e-9)
+        );
+        assert!(
+            body_bass > 0.04 * body_rms,
+            "bagpipe drone has no bass octave: bass/body {:.3}",
+            body_bass / body_rms.max(1e-9)
         );
         assert!(
             body_rms < 0.12,
@@ -3597,6 +3689,106 @@ mod tests {
         assert!(
             alias < 0.03,
             "shanai fold-back alias floor too high: {alias:.4}"
+        );
+    }
+
+    /// BP-O3: the channel drone is CONTINUOUS across chanter note boundaries.
+    /// A real set of pipes never stops its drones between melody notes; the
+    /// old engine released the drone at every chanter NoteOff (when no other
+    /// chanter rang) and spawned a FRESH one — at the NEW note's pitch — on
+    /// the next NoteOn: an amplitude notch plus a pitch lurch at every note
+    /// boundary. One latched drone per channel, released only by an authored
+    /// drone-control stop or the block-rate hang timer (the bag emptying).
+    #[test]
+    fn bagpipe_drone_is_continuous_across_chanter_note_boundaries() {
+        let sr = 44100.0;
+        // A plain chanter melody — NO low drone-control note (the shape of a
+        // real-world GM 109 file): two notes with a 20 ms articulation gap.
+        let song = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 109 }),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 67,
+                        vel: 96,
+                    },
+                ),
+                (0.60, EvKind::NoteOff { ch: 0, key: 67 }),
+                (
+                    0.62,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 69,
+                        vel: 96,
+                    },
+                ),
+                (1.20, EvKind::NoteOff { ch: 0, key: 69 }),
+            ],
+            1.30,
+        );
+        let (out, stats) = render(&song, &test_opts(sr));
+        let l = left(&out);
+        let win = |a: f32, b: f32| &l[(a * sr) as usize..(b * sr) as usize];
+        // Tenor drones sit an octave below the FIRST chanter note (196 Hz)
+        // and must still be there, at the SAME pitch, during the second note.
+        let tenor_w1 = crate::testutil::band_rms(win(0.25, 0.55), sr, 196.0, 8.0);
+        let tenor_w2 = crate::testutil::band_rms(win(0.70, 1.15), sr, 196.0, 8.0);
+        let tenor_hold = tenor_w2 / tenor_w1.max(1e-9);
+        // The bass drone (98 Hz — steady, no beat partner) must not notch at
+        // the 0.60/0.62 boundary: 100 ms windows, 50 ms hop, min vs median.
+        let mut env98: Vec<(f32, f32)> = Vec::new();
+        let mut t = 0.20f32;
+        while t + 0.10 <= 1.151 {
+            env98.push((
+                t,
+                crate::testutil::band_rms(win(t, t + 0.10), sr, 98.0, 8.0),
+            ));
+            t += 0.05;
+        }
+        let mut all: Vec<f32> = env98.iter().map(|&(_, e)| e).collect();
+        all.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let med = all[all.len() / 2];
+        let dip = env98
+            .iter()
+            .filter(|&&(t0, _)| (0.40..=0.90).contains(&t0))
+            .map(|&(_, e)| e)
+            .fold(f32::INFINITY, f32::min)
+            / med.max(1e-9);
+        let body = rms(win(0.25, 1.15));
+        println!(
+            "BP-O3: voices {}, tenor hold {tenor_hold:.3}, bass med/body {:.3}, \
+             bass dip {dip:.3}",
+            stats.voices_spawned,
+            med / body.max(1e-9)
+        );
+        // ONE drone for the whole channel: 2 chanters + 1 drone. The per-note
+        // release/re-spawn bug spawned a second drone (4 voices).
+        assert_eq!(
+            stats.voices_spawned, 3,
+            "two chanter notes must share ONE latched channel drone \
+             (2 chanters + 1 drone); more means a re-spawn per note"
+        );
+        // The sharp presence discriminator: pre-fix the 98 Hz band was pure
+        // leakage floor (0.023 of body); the real bass drone reads ~0.13.
+        assert!(
+            med > 0.06 * body,
+            "the drone has no steady bass octave at 98 Hz (med/body {:.4})",
+            med / body.max(1e-9)
+        );
+        // The tenor PAIR beats (~0.78 Hz), so this band's level swings with
+        // beat phase across the two windows (deterministically 0.41 here);
+        // the floor only requires the tenors to still be audibly present.
+        assert!(
+            tenor_hold >= 0.25,
+            "tenor drone collapsed across the note boundary (note2/note1 \
+             196 Hz band {tenor_hold:.3}) — released and re-spawned at the \
+             new note's pitch"
+        );
+        assert!(
+            dip >= 0.5,
+            "bass drone notches at the chanter note boundary: min/median {dip:.3}"
         );
     }
 

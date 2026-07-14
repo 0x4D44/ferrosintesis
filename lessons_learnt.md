@@ -3,6 +3,18 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.14 — **Deep-velocity-layered sample libraries with no round robins
+  (Virtuosity snare 36 vl, toms 16 vl) still yield working round robins: fill
+  each target layer's RR slots with ADJACENT source velocity layers.** They are
+  distinct recorded takes within ~10 velocity points, timbrally near-identical
+  once the prep pipeline peak-normalizes (the synth applies velocity gain
+  itself) — so they cycle exactly like true RRs (fast-hat NCC ≤0.49 vs 1.0
+  clone). Corollary for choke oracles: "choked window quieter than the open
+  ring" FAILS when the choking articulation's own body outlasts the window (the
+  pedal chick rings past 200 ms) — measure the RESIDUAL instead: choked-render
+  energy minus choker-played-alone energy (`sampled_closed_or_pedal_hat_
+  chokes_open_in_engine`).
+
 - 2026.07.14 — **Plain NCC cannot detect a repeated sample take once per-hit rate
   jitter exists** — ±2.5% playback-rate jitter alone decorrelates a 30 ms cymbal
   window to NCC 0.07–0.19 *for the same take*, so an anti-machine-gun oracle built

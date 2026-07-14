@@ -3,6 +3,24 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.14 — **"Drums too far back / not prominent" is usually INTERNAL KIT
+  BALANCE (hi-hats too quiet, ride/crash too loud vs kick/snare), not a bus level
+  or reverb problem — and a flat drum-bus gain cannot fix it.** The master
+  normalizes to a fixed −18 LUFS and true-peak-limits to −1 dBTP, so a flat drum
+  lift is absorbed: a +6.8 dB probe moved the delivered master ~0.4 dB (the drums
+  become the peak-driving element and the limiter clamps exactly the kick/snare
+  transients you hear). Diagnose per-FAMILY balance in a REAL track before reaching
+  for bus tools: an env-gated per-key mute (keep only 42/44/46, or only 35/36/38/40)
+  + integrated-LUFS on the ch10 solo stem shows which family dominates. On a standard
+  backbeat the hats measured 26 dB under the kick/snare (gone); on Hey Jude the crash
+  sat 2 dB under (too loud). Root: the sampled `DRUM_LEVEL` table is calibrated to
+  MATCH the modeled kit, so it faithfully inherited the model's hat-light/cymbal-heavy
+  voicing. Fix the balance as a per-key trim in the drum MIX (engine `kit_balance`),
+  not in `DRUM_LEVEL` — it then scales both the sampled and modeled kits equally and
+  keeps their parity. Beware the golden mix-balance fixture (re-pin ch10 only) and the
+  stereo-imaging oracle (a hat-forward kit correlates more; give its test pattern a
+  present ride so it still exercises the L/R spread).
+
 - 2026.07.14 — **Virtuosity's 18" jazz kick has NO 30-70 Hz sub in ANY mic set
   (fundamental ~80 Hz; the overhead's "sub" reading is room rumble).** Re-micing
   cannot create low end the instrument never produced — a deep-kick ask needs a

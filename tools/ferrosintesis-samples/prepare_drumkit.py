@@ -3,9 +3,13 @@
 Sources (both CC0 1.0 Universal, verified from each repo's LICENSE file):
 - github.com/sfzinstruments/virtuosity_drums @ VIRTUOSITY_REV — a stick-played
   contemporary jazz kit; this bank takes the `mid` mic set (the balanced mono-
-  friendly mid position): the full kit — kick, snare (center, snares-off,
+  friendly mid position) for most of the kit — snare (center, snares-off,
   cross-stick), hi/low toms, ride bow + bell, crash, sizzle crash, hi-hat
-  closed/open/pedal, and the hi-hat splash.
+  closed/open/pedal, and the hi-hat splash. The KICK alone comes from the
+  `kickmic` close-mic set (same 4x4 snares-on grid, same velocity splits):
+  the overhead `mid` position barely captures the kick's sub — its
+  sub(30-70 Hz)/mid(140-400 Hz) spectral-density ratio reads ~0.04-1.0
+  across the layers, i.e. boxy — while the close mic carries the low end.
 - github.com/sfzinstruments/karoryfer.big-rusty-drums @ BIG_RUSTY_REV — the
   18" china (stick articulation, `oh` overhead mic; Virtuosity has no china).
 
@@ -58,7 +62,7 @@ B_BASE = (
     "https://raw.githubusercontent.com/sfzinstruments/karoryfer.big-rusty-drums/"
     f"{BIG_RUSTY_REV}"
 )
-MICSET = "mid"      # Virtuosity mic position for the whole kit bank
+MICSET = "mid"      # Virtuosity mic position for the kit bank (kick: kickmic)
 CHINA_MIC = "oh"    # Big Rusty overhead mic — closest match to Virtuosity's mid
 
 OUT_SR = 44100
@@ -90,9 +94,11 @@ BANKS = [
      f"{V_BASE}/Samples/{MICSET}/hh/{MICSET}_hh_pedal_vl{{vl}}_rr{{rr}}.flac"),
     ("china", 5, 4, 2.2, 0.35, (25, 51, 76, 101, 127),
      f"{B_BASE}/Samples/china_18/cn/{CHINA_MIC}/cn_vl{{vl}}_rr{{rr}}.flac"),
-    # kick, snares on (mid_kick_snon): the source's full 4x4 grid
+    # kick, snares on, CLOSE MIC (kickmic_kick_snon): the source's full 4x4
+    # grid, same velocity splits as the mid set — the close mic is the only
+    # position that captures the kick's sub (see module docstring)
     ("kick", 4, 4, 0.6, 0.15, (31, 63, 95, 127),
-     f"{V_BASE}/Samples/{MICSET}/kick/{MICSET}_kick_snon_vl{{vl}}_rr{{rr}}.flac"),
+     f"{V_BASE}/Samples/kickmic/kick/kickmic_kick_snon_vl{{vl}}_rr{{rr}}.flac"),
 ]
 
 # stem, keep_s, fade_s, hivel per target layer, vl_map, source URL pattern
@@ -156,8 +162,15 @@ def decode_flac(ffmpeg, flac_path, wav_path):
     os.replace(part, wav_path)
 
 
-def prepare_take(ffmpeg, cache, url, cache_stem, out_name, keep_s, fade_s):
-    """Fetch, decode, trim, normalize and write one take; bytes written."""
+def prepare_take(ffmpeg, cache, url, out_name, keep_s, fade_s):
+    """Fetch, decode, trim, normalize and write one take; bytes written.
+
+    The download cache is keyed by the source URL's basename (which encodes
+    the mic set and articulation), never the output name — re-pointing a bank
+    at a different mic set must re-fetch, not silently reuse the old mic's
+    audio from the cache.
+    """
+    cache_stem = os.path.splitext(os.path.basename(url))[0]
     flac = os.path.join(cache, f"{cache_stem}.flac")
     if not os.path.exists(flac):
         print(f"fetching {cache_stem}.flac ...", file=sys.stderr)
@@ -222,8 +235,7 @@ def main():
             for rr in range(1, rrs + 1):
                 total_bytes += prepare_take(
                     ffmpeg, cache, url_fmt.format(vl=vl, rr=rr),
-                    f"{stem}_vl{vl}_rr{rr}", f"{stem}_vl{vl}_rr{rr}.wav",
-                    keep_s, fade_s)
+                    f"{stem}_vl{vl}_rr{rr}.wav", keep_s, fade_s)
     for stem, keep_s, fade_s, vel_hi, vl_map, url_fmt in PSEUDO_RR_BANKS:
         assert len(vel_hi) == len(vl_map) and vel_hi[-1] == 127
         rrs = len(vl_map[0])
@@ -232,8 +244,7 @@ def main():
             for ri, src_vl in enumerate(row, start=1):
                 total_bytes += prepare_take(
                     ffmpeg, cache, url_fmt.format(vl=src_vl),
-                    f"{stem}_srcvl{src_vl}", f"{stem}_vl{li}_rr{ri}.wav",
-                    keep_s, fade_s)
+                    f"{stem}_vl{li}_rr{ri}.wav", keep_s, fade_s)
     n = sum(layers * rrs for _, layers, rrs, *_ in BANKS)
     n += sum(len(vl_map) * len(vl_map[0])
              for _, _, _, _, vl_map, _ in PSEUDO_RR_BANKS)

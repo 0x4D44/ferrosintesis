@@ -1843,6 +1843,52 @@ impl Mwah {
     }
 }
 
+/// Sitar jawari bridge (GM 104): an envelope-tracking one-sided contact
+/// nonlinearity INSIDE the KS feedback loop. The wide curved bridge grazes
+/// the string once per period, flattening the spectral envelope and pumping
+/// energy from the fundamental into high partials on EVERY round trip — so
+/// the buzz decays with the note instead of as its square (the refuted
+/// memoryless-waveshaper behaviour: relative 3rd-harmonic ∝ A², −2 dB of
+/// buzz per −1 dB of decay). The contact height is a RATIO of the tracked
+/// signal envelope, which makes the map homogeneous of degree 1: the buzz
+/// character is level-invariant all the way down the decay.
+///
+/// Boundedness: the contact map is pointwise nonexpansive, |J(s)| ≤ |s| for
+/// every input and every internal state (a reflected sample never lands
+/// further from zero than it came in — proof at `Jawari::process`). The
+/// jawari therefore only
+/// REMOVES energy from the loop; the linear contraction analysis
+/// (`coupled_loop_margin_holds`: (loop_gain·|H_damp|)² + k² < 1) remains a
+/// valid upper bound and the string still decays to silence — no runaway,
+/// no limit cycle. The spectral flattening is redistribution within a
+/// shrinking energy budget, not gain.
+#[derive(Clone, Copy)]
+pub struct JawariSpec {
+    /// Contact height at note start, as a fraction of the tracked envelope
+    /// (lower = deeper contact = more buzz).
+    pub ratio_start: f32,
+    /// Contact height after the slow sweep settles — the sitar's spectral
+    /// evolution over the decay (the contact point migrating on the curve).
+    pub ratio_end: f32,
+    /// Time constant (s) of the ratio glide from start to end.
+    pub sweep_s: f32,
+    /// Coefficient of restitution 0..1: the fraction of the beyond-bridge
+    /// excursion REFLECTED back off the bridge (0 = the string sticks,
+    /// 1 = a lossless bounce).
+    pub restitution: f32,
+    /// One-sided delay modulation: while the string is in contact it wraps
+    /// onto the curved bridge and SHORTENS by up to this fraction of the
+    /// loop delay. This leg is what actually sustains the HIGH partials —
+    /// a delay shift is a phase shift proportional to frequency, so the
+    /// n-th partial sees n× the modulation index and the spectral envelope
+    /// flattens. (Measured: amplitude-domain contact alone — clip OR fold —
+    /// moves energy into h1–h4 and leaves everything above h6 decaying
+    /// exactly like plain KS.)
+    pub wrap: f32,
+    /// Envelope-follower release time constant (s); attack is instant.
+    pub follow_s: f32,
+}
+
 pub struct PluckPreset {
     pub t60: f32,     // decay at 220 Hz
     pub bright: f32,  // loop damping cutoff
@@ -1901,6 +1947,15 @@ pub struct PluckPreset {
     // by the soft limiter (Sullivan 1990's stabilized feedback). Release
     // drops the driver instantly and the string decays as ever.
     pub sustain: f32,
+    // --- v0.16 sitar/banjo (GM 104/105) ---
+    // Sitar bridge contact inside the KS loop (None = plain string); see
+    // `JawariSpec` for the model and its boundedness argument.
+    pub jawari: Option<JawariSpec>,
+    // Banjo drum-head modes: (freq Hz, Q, linear gain) parallel bandpass
+    // resonators driven by the string+pick signal and summed before the
+    // body EQ — the tensioned mylar head the bridge stands on. Empty = no
+    // membrane (every non-banjo preset).
+    pub membrane: &'static [(f32, f32, f32)],
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -1938,6 +1993,8 @@ const DEFAULTS: PluckPreset = PluckPreset {
     course_couple: K_COUPLE,
     pickup_rlc: (0.0, 0.0),
     sustain: 0.0,
+    jawari: None,
+    membrane: &[],
     #[cfg(test)]
     name: "DEFAULT",
 };
@@ -2255,29 +2312,49 @@ pub const HARP: PluckPreset = PluckPreset {
     wound_key_split: false,
     ..DEFAULTS
 };
+/// GM 105 banjo (v0.16): a steel string over a tensioned mylar DRUM HEAD.
+/// The body is a membrane, not a wooden box — the `membrane` modes are the
+/// head's (0,1)/(1,1)/(2,1) family at the classic inharmonic 1.00/1.59/2.14
+/// ratios (same ratios drums.rs uses), rung by the pick transient (the
+/// "thunk") and continuously driven by the string through the bridge (the
+/// mid-forward honk). Fast decay, bright, percussive.
 pub const BANJO: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "BANJO",
-    t60: 0.9,
+    t60: 0.75, // head damping eats the ring: faster than the wooden boxes
     bright: 7500.0,
     pick_lp: 7000.0,
     pos: 0.12,
     amp: 0.60,
-    rel_t60: 0.10,
-    body: &[(720.0, 2.5, 6.0)],
-    click: 1.6, // fingerpicks on a drum head
+    rel_t60: 0.08,
+    // resonator-back honk formant (the head modes carry the low-mid punch)
+    body: &[(650.0, 1.8, 4.0)],
+    membrane: &[
+        (345.0, 18.0, 1.5), // (0,1) head fundamental — the thunk
+        (549.0, 14.0, 1.0), // (1,1) ≈ 1.59×
+        (738.0, 12.0, 0.8), // (2,1) ≈ 2.14×
+    ],
+    click: 2.2, // fingerpicks snap hard on a drum head
     click_hp: 2000.0,
     ..DEFAULTS
 };
+/// GM 104 sitar (v0.16): the identity is the JAWARI — see `JawariSpec`. The
+/// old preset faked it with `grit` (a memoryless waveshaper whose relative
+/// buzz dies at twice the note's decay rate — refuted) plus a 12 kHz "bright"
+/// (−3.2 dB at Nyquist — refuted); both are replaced by the in-loop contact.
+/// `bright` drops to a physical string damping: the jawari re-pumps the highs
+/// every period, so they no longer need an unnaturally lossless loop to ring.
+/// The engine adds the tarab (sympathetic-string) halo on program 104.
 pub const SITAR: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "SITAR",
-    t60: 2.2,
-    bright: 12_000.0,
-    pick_lp: 10_000.0,
-    pos: 0.045,
+    t60: 2.1, // the sitar ring (the jawari's graze drains a little of it)
+    bright: 8500.0,
+    pick_lp: 7000.0,
+    pos: 0.045, // mizrab strikes close to the bridge
     amp: 0.58,
     rel_t60: 0.18,
+    // gourd + tabli formants and the 3 kHz presence the jawari feeds
     body: &[
         (320.0, 1.3, 2.0),
         (780.0, 1.6, 2.8),
@@ -2286,11 +2363,24 @@ pub const SITAR: PluckPreset = PluckPreset {
         (3200.0, 1.5, 4.5),
     ],
     out_lp: 11_000.0,
+    // acoustic colour comb; doubles as the DC block for the (asymmetric)
+    // one-sided contact waveform
     pickup: 0.09,
-    click: 1.9,
+    click: 1.4, // the jawari supplies the edge; the mizrab click can relax
     click_hp: 2200.0,
     attack_noise: 0.20,
-    grit: true,
+    jawari: Some(JawariSpec {
+        // GRAZING is the geometry that buzzes: the parameter sweep put the
+        // shallow-contact plateau (tip-of-the-peak grazes, ratio ≥ 0.45) at
+        // 7–11× the plain-KS late high-band share, while deep contact
+        // (ratio ≤ 0.28) rectifies into h1–h4 and loses the buzz entirely.
+        ratio_start: 0.80, // shallow graze at the pluck…
+        ratio_end: 0.45,   // …deepening slightly as the note ages
+        sweep_s: 1.1,      // the slow spectral evolution of the decay
+        restitution: 0.6,  // a lively bounce off the polished bridge
+        wrap: 0.04,        // contact shortens the string ≤4% — the buzz engine
+        follow_s: 0.014,   // tracks the period-scale envelope, not the cycle
+    }),
     ..DEFAULTS
 };
 pub const SHAMISEN: PluckPreset = PluckPreset {
@@ -2379,6 +2469,78 @@ struct KsLoop {
     sr: f32,
     // guitar v2 sustainer driver (None unless the preset authors `sustain`)
     drv: Option<SusDrv>,
+    // sitar jawari bridge contact (None unless the preset authors `jawari`)
+    jaw: Option<Jawari>,
+}
+
+/// The jawari runtime (see `JawariSpec` for the model). All state is driven
+/// by the loop signal itself: the follower decays with the string, so the
+/// contact height h = ratio·follower shrinks with the note and the map stays
+/// scale-invariant down to silence. No random draws, no external energy.
+struct Jawari {
+    fol: f32,   // envelope follower (instant attack, one-pole release)
+    fol_k: f32, // follower release coefficient
+    ratio: f32, // current contact ratio, glides ratio → ratio_end
+    ratio_end: f32,
+    ratio_k: f32, // per-sample glide coefficient
+    rest: f32,    // coefficient of restitution, clamped to [0, 1]
+    wrap: f32,    // delay-shortening fraction while in contact, in [0, 0.05]
+    depth: f32,   // last sample's normalized contact depth, 0..1
+}
+
+impl Jawari {
+    fn new(spec: &JawariSpec, sr: f32) -> Self {
+        Jawari {
+            fol: 0.0,
+            fol_k: 1.0 - (-1.0 / (spec.follow_s.max(1e-4) * sr)).exp(),
+            ratio: spec.ratio_start,
+            ratio_end: spec.ratio_end,
+            ratio_k: 1.0 - (-1.0 / (spec.sweep_s.max(1e-3) * sr)).exp(),
+            // the clamps make passivity/boundedness unconditional by
+            // construction, whatever a future preset writes
+            rest: spec.restitution.clamp(0.0, 1.0),
+            wrap: spec.wrap.clamp(0.0, 0.05),
+            depth: 0.0,
+        }
+    }
+
+    /// One-sided reflecting bridge contact. For s ≥ −h the sample passes
+    /// untouched; a sample beyond the bridge (s < −h ≤ 0, excursion
+    /// e = −(s+h) > 0) bounces back with restitution r:
+    ///     J(s) = −h + r·e.
+    ///
+    /// Passivity (|J(s)| ≤ |s| for EVERY input and EVERY state):
+    /// |s| = h + e. If J(s) ≤ 0 then |J(s)| = h − r·e ≤ h ≤ |s|; if
+    /// J(s) > 0 then |J(s)| = r·e − h ≤ e ≤ |s| (r ≤ 1). The map never
+    /// moves a sample further from zero than it came in, so it can only
+    /// remove energy from the feedback loop — the buzz is redistribution
+    /// of a shrinking budget, never gain.
+    #[inline]
+    fn process(&mut self, s: f32) -> f32 {
+        let a = s.abs();
+        if a > self.fol {
+            self.fol = a; // instant attack
+        } else {
+            self.fol += self.fol_k * (a - self.fol);
+            if self.fol < 1e-24 {
+                self.fol = 0.0; // denormal flush
+            }
+        }
+        self.ratio += self.ratio_k * (self.ratio_end - self.ratio);
+        let h = self.ratio * self.fol;
+        if s < -h {
+            let e = -(s + h);
+            // normalized contact depth drives next sample's bridge wrap;
+            // kept PROPORTIONAL (rarely saturating): a smooth per-period
+            // delay-mod pulse spreads energy up the harmonic comb, where a
+            // saturated square gate was measured to dump it into h1–h4
+            self.depth = (e / (0.5 * self.fol + 1e-20)).min(1.0);
+            e * self.rest - h
+        } else {
+            self.depth = 0.0;
+            s
+        }
+    }
 }
 
 /// The e-bow driver (guitar v2 HLD §3.D): a resonant bandpass at the loop
@@ -2440,6 +2602,7 @@ impl KsLoop {
             t60,
             sr,
             drv: None,
+            jaw: None,
         }
     }
 
@@ -2524,8 +2687,22 @@ impl KsLoop {
     fn tick(&mut self, input: f32) -> f32 {
         self.delay += self.glide_k * (self.target - self.delay);
         // K1: cubic-Lagrange tap — linear interpolation lowpasses the loop
-        // at fractional delays and dulls short treble strings
-        let s = self.dl.tap_cubic(self.delay);
+        // at fractional delays and dulls short treble strings.
+        // Jawari wrap leg: while in contact the string wraps onto the curved
+        // bridge and shortens — a one-sided, contact-gated tap shift (same
+        // interpolated-tap machinery every bend/glide already uses, clamped
+        // to the line's safe range).
+        let tap = match &self.jaw {
+            Some(j) if j.depth > 0.0 => (self.delay - j.depth * j.wrap * self.delay).max(2.0),
+            _ => self.delay,
+        };
+        let s = self.dl.tap_cubic(tap);
+        // sitar jawari: the bridge grazes the string INSIDE the loop, every
+        // round trip (None compiles to the identical plain-KS path)
+        let s = match &mut self.jaw {
+            Some(j) => j.process(s),
+            None => s,
+        };
         // guitar v2 e-bow driver: band-limited saturating feedback at f0.
         // The bandpass runs even at k = 0 so engagement is click-free.
         let fb = match &mut self.drv {
@@ -2613,6 +2790,9 @@ pub struct Pluck {
     stop: Option<Burst>,       // release thump, armed by note_off
     mwah: Option<Mwah>,        // fretless vocal formant bloom
     grit: bool,                // MUTED palm soft-clip
+    // banjo drum head: parallel (mode filter, gain) resonators (empty for
+    // every preset that authors no `membrane`)
+    membrane: Vec<(Biquad, f32)>,
     body: Vec<Biquad>,
     // clean-amp cab (HLD G2): two cascaded biquad lowpasses — one 2nd-order
     // pole pair alone cannot make the −12 dB-vs-one-pole 8 kHz cliff
@@ -2714,6 +2894,11 @@ impl Pluck {
             horiz.enable_driver(f);
             vert.enable_driver(f * p.course_detune);
         }
+        if let Some(spec) = &p.jawari {
+            // both polarizations graze the same bridge
+            horiz.jaw = Some(Jawari::new(spec, sr));
+            vert.jaw = Some(Jawari::new(spec, sr));
+        }
 
         Pluck {
             horiz,
@@ -2798,6 +2983,11 @@ impl Pluck {
             }),
             mwah: p.mwah.map(|spec| Mwah::new(spec, sr)),
             grit: p.grit,
+            membrane: p
+                .membrane
+                .iter()
+                .map(|&(f, q, g)| (Biquad::bandpass(f, q, sr), g))
+                .collect(),
             body: p
                 .body
                 .iter()
@@ -2947,6 +3137,17 @@ impl Voice for Pluck {
             if let Some(b) = &mut self.onset_pre {
                 // the pick click knocks the body: summed before the body EQ
                 y += b.tick(&mut self.rng);
+            }
+            if !self.membrane.is_empty() {
+                // banjo head: the bridge drives the membrane modes — the
+                // pick's broadband knock rings them (the thunk) and the
+                // string keeps feeding them (the honk). Parallel feedforward
+                // resonators: BIBO-stable, decays with its drive.
+                let mut m = 0.0;
+                for (mode, g) in &mut self.membrane {
+                    m += mode.process(y) * *g;
+                }
+                y += m;
             }
             for b in &mut self.body {
                 y = b.process(y);
@@ -11356,6 +11557,202 @@ mod tests {
             assert!(
                 short_tail > min_tail_ratio * held_tail,
                 "program {program} note-off hard-choked the natural tail: short {short_tail}, held {held_tail}"
+            );
+        }
+    }
+
+    /// GM 104 sitar (v0.16, jawari oracle 1): the buzz SURVIVES the decay.
+    /// At the note's own −30 dB point the 2–6 kHz share of a jawari'd render
+    /// sits far above the plain-KS control (identical preset with
+    /// `jawari: None`, identical seeds). Everything is a ratio or a
+    /// self-relative share — no absolute levels — and band energies are
+    /// aggregated across seeds before any ratio so no single noise draw
+    /// decides. The refuted memoryless-grit design loses 2 dB of relative
+    /// buzz per 1 dB of decay and cannot pass this.
+    #[test]
+    fn sitar_jawari_buzz_survives_decay() {
+        let sr = 44100.0;
+        let plain = PluckPreset {
+            jawari: None,
+            ..SITAR
+        };
+        let win = (0.05 * sr) as usize;
+        let span = (0.35 * sr) as usize;
+        for key in [55u8, 62, 69] {
+            // per-key accumulators: (band², total²) for early and late
+            let (mut we_b, mut we_t, mut wl_b, mut wl_t) = (0f64, 0f64, 0f64, 0f64);
+            let (mut ce_b, mut ce_t, mut cl_b, mut cl_t) = (0f64, 0f64, 0f64, 0f64);
+            for seed in [3u32, 11, 40, 57, 92] {
+                let with = render_pluck(&SITAR, key, 100, 3.2, seed);
+                let ctrl = render_pluck(&plain, key, 100, 3.2, seed);
+                // the with-render's own −30 dB point; the SAME window is
+                // then used for the control (same seed, same excitation)
+                let env: Vec<f32> = with.chunks(win).map(rms).collect();
+                let peak = env.iter().cloned().fold(0.0f32, f32::max);
+                let t30 = env
+                    .iter()
+                    .position(|&v| v > 0.0 && v <= peak * 10f32.powf(-1.5))
+                    .unwrap_or(env.len() / 2)
+                    * win
+                    + (0.20 * sr) as usize; // a beat past −30 dB: the control's HF keeps dying, the jawari's does not
+                let l0 = t30.min(with.len() - span - 1);
+                let l1 = l0 + span;
+                let (e0, e1) = ((0.04 * sr) as usize, (0.25 * sr) as usize);
+                let sq = |x: f32| (x as f64) * (x as f64);
+                we_b += sq(spectral_band_rms(&with[e0..e1], sr, 2000.0, 6000.0));
+                we_t += sq(rms(&with[e0..e1]));
+                wl_b += sq(spectral_band_rms(&with[l0..l1], sr, 2000.0, 6000.0));
+                wl_t += sq(rms(&with[l0..l1]));
+                ce_b += sq(spectral_band_rms(&ctrl[e0..e1], sr, 2000.0, 6000.0));
+                ce_t += sq(rms(&ctrl[e0..e1]));
+                cl_b += sq(spectral_band_rms(&ctrl[l0..l1], sr, 2000.0, 6000.0));
+                cl_t += sq(rms(&ctrl[l0..l1]));
+            }
+            let share = |b: f64, t: f64| (b / t.max(1e-24)).sqrt();
+            let (we, wl) = (share(we_b, we_t), share(wl_b, wl_t));
+            let (ce, cl) = (share(ce_b, ce_t), share(cl_b, cl_t));
+            // (a) level: deep in the decay the jawari render keeps far more
+            // of its energy in the buzz band than plain KS does
+            assert!(
+                wl > 2.5 * cl,
+                "key {key}: late 2-6 kHz share with {wl:.5} vs plain-KS {cl:.5}"
+            );
+            // (b) shape: the buzz's SURVIVAL (late share over early share)
+            // beats the control's — high partials decay with the note, not
+            // twice as fast
+            assert!(
+                wl / we.max(1e-12) > 2.0 * (cl / ce.max(1e-12)),
+                "key {key}: buzz survival with {:.4} vs plain-KS {:.4}",
+                wl / we.max(1e-12),
+                cl / ce.max(1e-12)
+            );
+        }
+    }
+
+    /// GM 104 sitar (v0.16, jawari oracle 2 — STABILITY): a state-dependent
+    /// nonlinearity inside a feedback delay loop is where synths blow up or
+    /// lock into a non-decaying limit cycle, so the contact map's paper
+    /// passivity proof (`Jawari::process`) gets an empirical twin: for keys
+    /// across the register × both velocity extremes, a HELD note's coarse
+    /// energy envelope peaks in the attack, decays strictly at 1 s stride,
+    /// reaches terminal silence, and the voice reports itself dead within a
+    /// bounded time. The engagement clause (same-seed difference vs the
+    /// jawari-less control) keeps this oracle from passing vacuously with
+    /// the jawari disconnected.
+    #[test]
+    fn sitar_jawari_is_stable_across_register() {
+        let sr = 44100.0;
+        let plain = PluckPreset {
+            jawari: None,
+            ..SITAR
+        };
+        for key in [48u8, 55, 62, 69, 76, 83] {
+            for vel in [30u8, 120] {
+                let seed = 9 + key as u32 * 7 + vel as u32;
+                let s = render_pluck(&SITAR, key, vel, 8.0, seed);
+                // engagement: the jawari audibly reshapes this note
+                let c = render_pluck(&plain, key, vel, 8.0, seed);
+                let (g0, g1) = ((0.10 * sr) as usize, (1.0 * sr) as usize);
+                let d: Vec<f32> = s[g0..g1]
+                    .iter()
+                    .zip(&c[g0..g1])
+                    .map(|(a, b)| a - b)
+                    .collect();
+                assert!(
+                    rms(&d) > 0.05 * rms(&c[g0..g1]).max(1e-12),
+                    "key {key} vel {vel}: jawari not engaged (diff {} vs {})",
+                    rms(&d),
+                    rms(&c[g0..g1])
+                );
+                let win = (0.25 * sr) as usize;
+                let env: Vec<f32> = s.chunks(win).map(rms).collect();
+                let peak = env.iter().cloned().fold(0.0f32, f32::max);
+                let argmax = env
+                    .iter()
+                    .position(|&v| v == peak)
+                    .expect("nonempty envelope");
+                // (a) no post-attack growth: the loudest coarse window is
+                // inside the first second
+                assert!(
+                    argmax * win < (1.0 * sr) as usize,
+                    "key {key} vel {vel}: envelope peaks at {:.2} s — energy grew after the attack",
+                    (argmax * win) as f32 / sr
+                );
+                // (b) strict decay at 1 s stride until terminal silence —
+                // a limit cycle would plateau and fail this
+                for k in 4..env.len() {
+                    if env[k - 4] > peak * 1e-4 {
+                        assert!(
+                            env[k] < 0.92 * env[k - 4],
+                            "key {key} vel {vel}: envelope not decaying at t={:.2}s ({} vs {})",
+                            (k * win) as f32 / sr,
+                            env[k],
+                            env[k - 4]
+                        );
+                    }
+                }
+                // (c) terminal silence within the render
+                let tail = env[env.len() - 2].max(env[env.len() - 1]);
+                assert!(
+                    tail < 1e-3 * peak,
+                    "key {key} vel {vel}: tail {tail} vs peak {peak}"
+                );
+                // (d) bounded life: the voice itself reports dead
+                assert!(
+                    dies_within(Box::new(Pluck::new(&SITAR, key, vel, sr, seed)), sr, 12.0),
+                    "key {key} vel {vel}: held sitar still alive at 12 s"
+                );
+            }
+        }
+    }
+
+    /// GM 105 banjo (v0.16): the body is a DRUM — a tensioned head with
+    /// inharmonic membrane modes (1.00/1.59/2.14 of the head fundamental),
+    /// rung by the pick (the thunk) and driven by the string, on top of a
+    /// fast, bright, percussive decay whose brightness collapses as the
+    /// head damping eats the ring. All differential (same seed, membrane
+    /// stripped) or self-relative.
+    #[test]
+    fn banjo_membrane_thunk_and_fast_bright_decay() {
+        let sr = 44100.0;
+        let bare = PluckPreset {
+            membrane: &[],
+            ..BANJO
+        };
+        let head = 345.0f32;
+        for seed in [5u32, 21] {
+            let with = render_pluck(&BANJO, 60, 105, 1.6, seed);
+            let ctrl = render_pluck(&bare, 60, 105, 1.6, seed);
+            let onset = (0.09 * sr) as usize;
+            // (1) the inharmonic head modes speak at the onset
+            for (f, floor) in [(head, 1.8f32), (head * 1.593, 1.35), (head * 2.135, 1.3)] {
+                let w = mag_at(&with[..onset], sr, f);
+                let c = mag_at(&ctrl[..onset], sr, f);
+                assert!(
+                    w > floor * c,
+                    "seed {seed}: membrane mode {f:.0} Hz missing ({w} vs {c})"
+                );
+            }
+            // (2) the head-fundamental thunk band carries real onset energy
+            let thunk_w = band_rms(&with[..onset], sr, head, 4.0);
+            let thunk_c = band_rms(&ctrl[..onset], sr, head, 4.0);
+            assert!(
+                thunk_w > 1.2 * thunk_c,
+                "seed {seed}: no membrane thunk ({thunk_w} vs {thunk_c})"
+            );
+            // (3) fast decay, and the membrane must not lengthen the ring
+            let t_w = crate::testutil::t60_of(&with[(0.01 * sr) as usize..], sr);
+            let t_c = crate::testutil::t60_of(&ctrl[(0.01 * sr) as usize..], sr);
+            assert!(
+                t_w < 1.0 && t_w < 1.2 * t_c,
+                "seed {seed}: banjo ring too long (t60 {t_w} vs bare {t_c})"
+            );
+            // (4) bright percussive onset whose brightness collapses
+            let c_on = centroid(&with[..(0.10 * sr) as usize], sr);
+            let c_late = centroid(&with[(0.30 * sr) as usize..(0.50 * sr) as usize], sr);
+            assert!(
+                c_on > 1800.0 && c_on > 2.0 * c_late,
+                "seed {seed}: banjo brightness shape wrong (onset {c_on}, late {c_late})"
             );
         }
     }

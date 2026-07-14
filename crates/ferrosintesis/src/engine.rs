@@ -577,6 +577,33 @@ impl Sympathetic {
         )
     }
 
+    /// The sitar's tarab strings (GM 104, v0.16): thirteen sympathetic
+    /// strings under the frets. Tuned chromatically C4..C5 — the same
+    /// raga-agnostic trick as the piano instance — with a brighter damper
+    /// and a higher feedback than the guitar bus, so the halo shimmers and
+    /// briefly outlasts the plucked string (per-trip 0.955 keeps every comb
+    /// a strict contraction).
+    fn sitar(sr: f32) -> Self {
+        let freqs: Vec<f32> = (0..13)
+            .map(|k| 261.63 * 2f32.powf(k as f32 / 12.0))
+            .collect();
+        let damp_hz = 5200.0;
+        let mut s = Self::new(sr, &freqs, damp_hz, 0.955, 200.0, 0.035, 0.35);
+        // At feedback 0.955 each comb's resonance is only a few Hz wide, so
+        // the in-loop damper's phase delay (plus the write→read sample)
+        // detunes the peak right off the played pitch — compensate the
+        // delay exactly as KsLoop::delay_for does. The wider piano/guitar
+        // instances (fb 0.85) stay untouched and bit-identical.
+        let a = 1.0 - (-2.0 * std::f32::consts::PI * (damp_hz / sr).min(0.49)).exp();
+        let b = 1.0 - a;
+        for ((_, d, _), &f) in s.combs.iter_mut().zip(freqs.iter()) {
+            let w = 2.0 * std::f32::consts::PI * f / sr;
+            let d1p = ((b * w.sin()) / (1.0 - b * w.cos())).atan() / w;
+            *d = (sr / f - d1p - 1.0).max(2.0);
+        }
+        s
+    }
+
     fn process(&mut self, send: &[f32], l: &mut [f32], r: &mut [f32]) {
         for i in 0..send.len() {
             let x = self.hp.process(send[i]) * self.input;
@@ -854,10 +881,16 @@ pub(crate) struct CoreOptions {
     pub solo: u16,
     pub gtr_symp_on: bool,
     pub drum_room_on: bool,
+    pub sitar_symp_on: bool,
 }
 
 impl CoreOptions {
-    fn from_options(opt: &Options, gtr_symp_on: bool, drum_room_on: bool) -> Self {
+    fn from_options(
+        opt: &Options,
+        gtr_symp_on: bool,
+        drum_room_on: bool,
+        sitar_symp_on: bool,
+    ) -> Self {
         Self {
             sr: opt.sr,
             wet: opt.wet,
@@ -866,6 +899,7 @@ impl CoreOptions {
             solo: opt.solo,
             gtr_symp_on,
             drum_room_on,
+            sitar_symp_on,
         }
     }
 }
@@ -881,6 +915,10 @@ pub(crate) struct EngineCore {
     echo: Option<PingPong>,
     symp: Sympathetic,
     gtr_symp: Sympathetic,
+    sitar_symp: Sympathetic,
+    // set the first time a strip sounds program 104; until then the tarab
+    // bus is never processed, so sitar-less renders stay bit-identical
+    sitar_seen: bool,
     drum_room: Reverb,
     glue: BusGlue,
     stats: Stats,
@@ -894,6 +932,7 @@ pub(crate) struct EngineCore {
     send_del: [f32; BLOCK],
     send_sym: [f32; BLOCK],
     send_sym_gtr: [f32; BLOCK],
+    send_sym_sitar: [f32; BLOCK],
     send_room: [f32; BLOCK],
     drum_l: [f32; BLOCK],
     drum_r: [f32; BLOCK],
@@ -922,6 +961,8 @@ impl EngineCore {
             echo: (opt.delay_s > 0.0).then(|| PingPong::new(sr, opt.delay_s)),
             symp: Sympathetic::piano(sr),
             gtr_symp: Sympathetic::guitar(sr),
+            sitar_symp: Sympathetic::sitar(sr),
+            sitar_seen: false,
             drum_room: Reverb::with_predelay(sr, 0.42, 0.55, opt.wet * 0.9, 0.003),
             glue: BusGlue::new(sr),
             stats: Stats::default(),
@@ -935,6 +976,7 @@ impl EngineCore {
             send_del: [0f32; BLOCK],
             send_sym: [0f32; BLOCK],
             send_sym_gtr: [0f32; BLOCK],
+            send_sym_sitar: [0f32; BLOCK],
             send_room: [0f32; BLOCK],
             drum_l: [0f32; BLOCK],
             drum_r: [0f32; BLOCK],
@@ -1820,6 +1862,7 @@ impl EngineCore {
         self.send_del[..n].fill(0.0);
         self.send_sym[..n].fill(0.0);
         self.send_sym_gtr[..n].fill(0.0);
+        self.send_sym_sitar[..n].fill(0.0);
         self.send_room[..n].fill(0.0);
         for (ci, strip) in self.strips.iter_mut().enumerate() {
             let buf = &mut self.ch_buf[ci];
@@ -1863,6 +1906,10 @@ impl EngineCore {
             let rs = strip.reverb_send * 0.9;
             let is_piano = ci != 9 && voices::is_acoustic_piano(strip.program);
             let is_ac_gtr = ci != 9 && matches!(strip.program, 24 | 25);
+            let is_sitar = ci != 9 && strip.program == 104;
+            if is_sitar {
+                self.sitar_seen = true;
+            }
             let haas = strip.haas_delay;
             let legacy_cho = if strip.chorus_authored {
                 strip.chorus_send
@@ -1913,6 +1960,9 @@ impl EngineCore {
                 }
                 if is_ac_gtr {
                     self.send_sym_gtr[i] += xs;
+                }
+                if is_sitar {
+                    self.send_sym_sitar[i] += xs;
                 }
             }
         }
@@ -1974,6 +2024,15 @@ impl EngineCore {
                 &mut self.mix_r[..n],
             );
         }
+        // tarab bus: gated on `sitar_seen` (not just the option) so a render
+        // with no program 104 anywhere never even touches the combs
+        if self.opt.sitar_symp_on && self.sitar_seen {
+            self.sitar_symp.process(
+                &self.send_sym_sitar[..n],
+                &mut self.mix_l[..n],
+                &mut self.mix_r[..n],
+            );
+        }
         self.chorus.process(
             &self.send_cho[..n],
             &mut self.mix_l[..n],
@@ -2028,23 +2087,30 @@ impl EngineCore {
 }
 
 pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
-    render_buses(song, opt, true, true)
+    render_buses(song, opt, true, true, true)
 }
 
-/// The real renderer; the bus switches exist so the A/B oracles (19, 32a)
-/// can render the same song with the guitar-sympathetic or drum-room bus
-/// disabled. The public `render` always enables both — no shipped knob.
+/// The real renderer; the bus switches exist so the A/B oracles (19, 32a,
+/// and the tarab oracle) can render the same song with the
+/// guitar-sympathetic, drum-room, or sitar-tarab bus disabled. The public
+/// `render` always enables all three — no shipped knob.
 pub(crate) fn render_buses(
     song: &Song,
     opt: &Options,
     gtr_symp_on: bool,
     drum_room_on: bool,
+    sitar_symp_on: bool,
 ) -> (Vec<f32>, Stats) {
     let sr = opt.sr;
     let total = ((song.seconds + opt.tail as f64) * sr as f64) as usize;
     let mut out = vec![0f32; total * 2]; // interleaved stereo
 
-    let mut core = EngineCore::new(CoreOptions::from_options(opt, gtr_symp_on, drum_room_on));
+    let mut core = EngineCore::new(CoreOptions::from_options(
+        opt,
+        gtr_symp_on,
+        drum_room_on,
+        sitar_symp_on,
+    ));
 
     let events: Vec<(usize, EvKind)> = song
         .events
@@ -2466,6 +2532,7 @@ mod tests {
             solo: 0xFFFF,
             gtr_symp_on: true,
             drum_room_on: true,
+            sitar_symp_on: true,
         });
         core.handle_event(EvKind::Prog { ch: 0, prog: 30 });
         core.handle_event(EvKind::Cc {
@@ -2526,8 +2593,8 @@ mod tests {
             wet: 0.32,
             ..test_opts(sr)
         };
-        let with = render_buses(&song, &opts, true, true).0;
-        let without = render_buses(&song, &opts, true, false).0;
+        let with = render_buses(&song, &opts, true, true, true).0;
+        let without = render_buses(&song, &opts, true, false, true).0;
         // the room's first reflections: ~5-30 ms after the kick onset
         let win = |s: &[f32]| left(s)[(0.055 * sr) as usize..(0.085 * sr) as usize].to_vec();
         let diff: Vec<f32> = win(&with)
@@ -2552,8 +2619,8 @@ mod tests {
             ],
             1.2,
         );
-        let a = render_buses(&piano, &opts, true, true).0;
-        let b = render_buses(&piano, &opts, true, false).0;
+        let a = render_buses(&piano, &opts, true, true, true).0;
+        let b = render_buses(&piano, &opts, true, false, true).0;
         assert!(
             a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()),
             "non-ch9 audio leaked into the drum room"
@@ -2583,8 +2650,8 @@ mod tests {
             test_song(ev, 1.6)
         };
         let opts = test_opts(sr);
-        let with = render_buses(&strum(24), &opts, true, true).0;
-        let without = render_buses(&strum(24), &opts, false, true).0;
+        let with = render_buses(&strum(24), &opts, true, true, true).0;
+        let without = render_buses(&strum(24), &opts, false, true, true).0;
         let d: Vec<f32> = left(&with)
             .iter()
             .zip(left(&without))
@@ -2597,14 +2664,77 @@ mod tests {
             .sum();
         assert!(ring > 1e-5, "sympathetic strings silent: {ring}");
         // prog 30 (driven electric) must not feed the bus at all
-        let e_with = render_buses(&strum(30), &opts, true, true).0;
-        let e_without = render_buses(&strum(30), &opts, false, true).0;
+        let e_with = render_buses(&strum(30), &opts, true, true, true).0;
+        let e_without = render_buses(&strum(30), &opts, false, true, true).0;
         assert!(
             e_with
                 .iter()
                 .zip(&e_without)
                 .all(|(x, y)| x.to_bits() == y.to_bits()),
             "electric guitar leaked into the sympathetic bus"
+        );
+    }
+
+    /// Tarab oracle (GM 104, v0.16, §5.3 difference signal): the sitar's
+    /// thirteen sympathetic strings ring under a sitar note — the bus-on
+    /// minus bus-off difference is exactly the tarab return, comb-shaped
+    /// around the resonating strings — and a banjo (or anything else)
+    /// leaves the bus bit-identically silent.
+    #[test]
+    fn sitar_tarab_strings_ring_sympathetically() {
+        let sr = 44100.0;
+        let song = |prog: u8| {
+            test_song(
+                vec![
+                    (0.0, EvKind::Prog { ch: 0, prog }),
+                    (
+                        0.02,
+                        EvKind::NoteOn {
+                            ch: 0,
+                            key: 62,
+                            vel: 105,
+                        },
+                    ),
+                    (1.0, EvKind::NoteOff { ch: 0, key: 62 }),
+                ],
+                1.8,
+            )
+        };
+        let opts = test_opts(sr);
+        let with = render_buses(&song(104), &opts, true, true, true).0;
+        let without = render_buses(&song(104), &opts, true, true, false).0;
+        let d: Vec<f32> = left(&with)
+            .iter()
+            .zip(left(&without))
+            .map(|(a, b)| a - b)
+            .collect();
+        let (w0, w1) = ((0.20 * sr) as usize, (1.20 * sr) as usize);
+        let ring = rms(&d[w0..w1]);
+        let dry = rms(&left(&without)[w0..w1]);
+        // the return is a real halo relative to the dry sitar, not dust
+        assert!(
+            ring > 1e-3 * dry,
+            "tarab strings silent: return {ring} vs dry {dry}"
+        );
+        // …and it is comb-shaped: the D4 tarab string (the played pitch)
+        // rings far above a probe BELOW the whole bank (261.63 Hz bottom
+        // string; probes between combs are useless — thirteen strings'
+        // overtone series blanket everything above)
+        let played = crate::testutil::band_rms(&d[w0..w1], sr, 293.66, 8.0);
+        let probe = crate::testutil::band_rms(&d[w0..w1], sr, 225.0, 8.0);
+        assert!(
+            played > 2.0 * probe,
+            "tarab return not comb-shaped: D4 {played} vs 225 Hz {probe}"
+        );
+        // a banjo playing the same note must not feed the bus at all
+        let b_with = render_buses(&song(105), &opts, true, true, true).0;
+        let b_without = render_buses(&song(105), &opts, true, true, false).0;
+        assert!(
+            b_with
+                .iter()
+                .zip(&b_without)
+                .all(|(x, y)| x.to_bits() == y.to_bits()),
+            "banjo leaked into the tarab bus"
         );
     }
 
@@ -5110,7 +5240,12 @@ mod tests {
     }
 
     fn dry_core() -> EngineCore {
-        EngineCore::new(CoreOptions::from_options(&test_opts(44100.0), false, false))
+        EngineCore::new(CoreOptions::from_options(
+            &test_opts(44100.0),
+            false,
+            false,
+            false,
+        ))
     }
 
     fn unreleased_driven(core: &EngineCore, ch: u8) -> usize {
@@ -6209,6 +6344,7 @@ mod tests {
             solo: 0xFFFF,
             gtr_symp_on: false,
             drum_room_on: false,
+            sitar_symp_on: false,
         });
         core.handle_event(EvKind::Prog { ch: 0, prog: 19 });
         core.handle_event(EvKind::Cc {
@@ -6612,6 +6748,7 @@ mod tests {
             solo: 0xFFFF,
             gtr_symp_on: false,
             drum_room_on: false,
+            sitar_symp_on: false,
         });
         core.handle_event(EvKind::Prog { ch: 0, prog: 19 });
         for key in [36, 43, 48, 52, 55, 60, 64, 67, 72, 76] {

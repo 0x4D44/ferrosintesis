@@ -63,6 +63,10 @@ const PIZZ: PluckPreset = PluckPreset {
     // no sustainer) — a pizzicato is acoustic and frozen.
     pickup_rlc: (0.0, 0.0),
     sustain: 0.0,
+    // v0.16 sitar/banjo fields: explicitly inert (no jawari bridge buzz, no
+    // drum-head membrane) — the frozen v0.9 pizzicato has neither.
+    jawari: None,
+    membrane: &[],
     #[cfg(test)]
     name: "PIZZ",
 };

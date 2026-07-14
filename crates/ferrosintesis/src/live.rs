@@ -52,6 +52,7 @@ impl RealtimeSynth {
             solo: 0xFFFF,
             gtr_symp_on: true,
             drum_room_on: true,
+            sitar_symp_on: true,
         });
         Self {
             core,

@@ -44,6 +44,16 @@ pub trait Voice: Send {
     fn legato_to(&mut self, _key: u8, _vel: u8) -> bool {
         false
     }
+    /// Tremolo restrike: a fast same-key repetition re-PICKS this still-
+    /// ringing voice (full stroke: fresh excitation + contact click) instead
+    /// of spawning a new voice from silence. Unlike `legato_to` (a slur — no
+    /// attack), a restrike IS an attack; what it must not be is a restart:
+    /// the string state carries over, so the tone stays continuous under the
+    /// stroke train. Return false (default) if this voice cannot — the
+    /// engine then spawns a fresh voice exactly as before.
+    fn retrigger(&mut self, _key: u8, _vel: u8) -> bool {
+        false
+    }
     /// Tremulant control (organs): absolute rate in Hz and depth. The engine
     /// slews these toward the CC1 mod-wheel target so the Leslie rotor has
     /// real inertia. Voices without a tremulant ignore it.
@@ -2188,6 +2198,13 @@ pub struct PluckPreset {
     // jack plectrum displaces the string the same distance however hard the
     // key falls, so its loudness spread must stay nearly flat.
     pub vel_sense: f32,
+    // TREM: whether a fast same-key restrike may re-pick this string as a
+    // tremolo stroke (engine gate TREM1). True for hand-picked strings
+    // (guitars, basses, dulcimer, sitar, banjo — tremolo/roll/jhala are the
+    // idiom); FALSE for the mechanically-damped keyboard machines
+    // (harpsichord jack, clavinet yarn strip), whose fast repeats must keep
+    // articulating.
+    pub trem: bool,
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -2228,6 +2245,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     jawari: None,
     membrane: &[],
     vel_sense: 1.0,
+    trem: true,
     #[cfg(test)]
     name: "DEFAULT",
 };
@@ -2417,6 +2435,7 @@ pub const HARPSICHORD: PluckPreset = PluckPreset {
     stop_thump: 0.7, // the jack drops back audibly
     wound_key_split: false,
     vel_sense: 0.15,
+    trem: false, // the jack damper lands with the key: repeats articulate
     ..DEFAULTS
 };
 pub const CLAVINET: PluckPreset = PluckPreset {
@@ -2441,6 +2460,7 @@ pub const CLAVINET: PluckPreset = PluckPreset {
     click_post: true,
     attack_noise: 0.22,
     stop_thump: 0.5,
+    trem: false, // the yarn damper strip stops the string: repeats articulate
     ..DEFAULTS
 };
 // Fingered electric bass (GM 33), the album workhorse. Voiced deep, warm and
@@ -2959,6 +2979,15 @@ impl KsLoop {
         }
     }
 
+    /// TREM pick catch: the plectrum grabs the ringing string at a restrike
+    /// — scale the standing wave down so the new stroke's displacement
+    /// DOMINATES the phase (vector-adding a fresh burst to a comparable
+    /// circulating carrier randomly cancels; a real pick re-imposes the
+    /// displacement, it does not add to it). g ≤ 1: pure energy removal.
+    fn catch_damp(&mut self, g: f32) {
+        self.dl.scale(g);
+    }
+
     /// Retune to a new frequency; the ringing energy stays in the string.
     fn retune(&mut self, f: f32) {
         self.target = Self::delay_for(f, self.bright, self.sr).min(self.max_delay);
@@ -3045,6 +3074,57 @@ pub(crate) const K_COUPLE: f32 = 0.02;
 /// unaffected — the glide only ever darkens).
 const REL_FLOOR_H: f32 = 600.0;
 const REL_FLOOR_V: f32 = 700.0;
+
+/// TREM (tremolo restrike): the restruck pick burst's peak relative to a
+/// fresh pluck's (tremolo strokes are lighter grazing strokes, and the burst
+/// ADDS to a loop that is already ringing rather than initialising a silent
+/// one — at 1.0 a low-string tremolo accumulates several dB above a single
+/// pluck's attack).
+const TREM_RESTRIKE_LEVEL: f32 = 0.7;
+/// After a restrike un-releases the voice, the release attenuation rides
+/// back up at this T60-style rate (60 dB per this many seconds). The gap
+/// between tremolo strokes costs ~12 dB (rel_t60 0.15, ~30 ms gap), so
+/// recovery completes in ~8 ms — inside the stroke's own attack, which
+/// masks it; instant recovery would be an audible level step.
+const TREM_REL_RECOVER_S: f32 = 0.040;
+/// Once a voice has taken a tremolo restrike, its note_offs use the
+/// preset's release T60 STRETCHED by this factor: mid-run gate-offs are a
+/// notation artifact (the pick hand never damps between strokes), and the
+/// stock guitar release (0.15 s = 400 dB/s) was measured to carve 12–15 dB
+/// troughs into every 30 ms gap — the dominant term of the click-train
+/// artifact, bigger than the fresh-spawn restart it accompanied. 8× turns
+/// that into ~1.5 dB per gap, while the RUN-END tail still dies in ~1.2 s
+/// (a musical ring-off, not an undamped drone).
+const TREM_RELEASE_STRETCH: f32 = 8.0;
+/// Tremolo carrier hold. At treble keys the one-pole loop damper's
+/// MAGNITUDE at f0 dominates the decay (measured: STEEL key 83, vel 55 —
+/// damp_mag(f0) = 0.955/trip × ~976 trips/s ≈ −390 dB/s; the fundamental is
+/// −45 dB inside 100 ms), so between 75 ms strokes there is nothing left
+/// ringing whatever the engine does about voice identity. Compensating
+/// loop_gain by 1/|H(f0)| is DC-UNSTABLE (round-trip gain > 1 below f0), so
+/// a tremolo-run voice instead engages the existing band-limited SATURATING
+/// sustainer (SusDrv — bounded injection, bandpass zero at DC) as the
+/// stroke-averaged energy the player's hand keeps feeding the string. The
+/// fraction is the hold knee relative to the stroke's spoken level (the
+/// same law as the DRIVE preset's e-bow, a touch lower).
+const TREM_SUS_FRACTION: f32 = 0.35;
+/// The tremolo hold drops this long after the last restrike (an ongoing
+/// run restrikes every ≤ ~100 ms and keeps refreshing it): the run has
+/// ended, the driver disengages, and the string decays at the stretched
+/// release like any ring-off.
+const TREM_SUS_DROP_S: f32 = 0.16;
+/// The pick-catch at a restrike: the standing wave is scaled by this before
+/// the new stroke's burst is injected. The grab makes the NEW displacement
+/// own the carrier phase (no stroke-roulette cancellation against the old
+/// one) and bounds cross-stroke energy accumulation.
+const TREM_CATCH: f32 = 0.35;
+/// Minimum fundamental deposit of a restrike burst, as a fraction of the
+/// burst's peak. One period of comb-filtered noise has a Rayleigh-random h1
+/// coefficient — measured spanning 20 dB stroke-to-stroke, which reads as a
+/// stuttering tremolo. A real pick displacement always carries strong h1
+/// (the triangle IC's sin(πp) term), so top the burst's h1 up — in phase
+/// with its own — to this floor.
+const TREM_H1_FLOOR: f32 = 0.5;
 const REL_DARKEN_K: f32 = 0.010; // per control tick: τ ≈ 36 ms
 
 /// K4 Stage 1 wound-ness: bass strings are wound full-range; guitars cross
@@ -3112,6 +3192,24 @@ pub struct Pluck {
     hammer_pos: usize,
     rng: Rng,
     pick_lp_hz: f32,
+    // TREM restrike state: the spawn stroke's pick position and velocity-law
+    // damper cutoffs (h/v), restored — with fresh per-stroke jitter — when a
+    // tremolo restrike re-picks a release-darkened string; and the per-sample
+    // release_env recovery multiplier for the un-release ramp.
+    pos: f32,
+    spawn_bright_h: f32,
+    spawn_bright_v: f32,
+    rel_rec: f32,
+    // set by the first restrike: this voice is a tremolo run — its gate-offs
+    // take the STRETCHED release (rel_mul_trem), skip the stop thump and the
+    // G6 release darkening, and keep the tremolo sustainer driving through
+    // the inter-stroke gaps
+    trem_hold: bool,
+    rel_mul_trem: f32,
+    trem_ok: bool,         // preset capability (PluckPreset::trem)
+    trem_sus: bool,        // the sustainer was trem-installed (sus_target was 0)
+    trem_last_strike: u32, // voice time of the most recent restrike
+    trem_drop: u32,        // TREM_SUS_DROP_S in samples
     amp: f32,
     att: f32,
     att_env: f32,
@@ -3342,6 +3440,16 @@ impl Pluck {
             hammer_pos: 0,
             rng,
             pick_lp_hz: pick_lp,
+            pos,
+            spawn_bright_h: bright,
+            spawn_bright_v: bright * p.course_bright,
+            rel_rec: 10f32.powf(3.0 / (TREM_REL_RECOVER_S * sr)),
+            trem_hold: false,
+            rel_mul_trem: t60_mul(p.rel_t60 * TREM_RELEASE_STRETCH, sr),
+            trem_ok: p.trem,
+            trem_sus: false,
+            trem_last_strike: 0,
+            trem_drop: (TREM_SUS_DROP_S * sr) as u32,
             amp: p.amp,
             att: if p.attack_s <= 0.0 {
                 1.0
@@ -3385,10 +3493,30 @@ impl Voice for Pluck {
             } else {
                 0.0
             };
+            // TREM run-end watchdog: an ongoing tremolo restrikes every
+            // ≤ ~100 ms; once none has arrived for TREM_SUS_DROP_S the run
+            // is over — drop the trem-installed hold and let the string
+            // decay (a preset e-bow keeps its own latch semantics).
+            if self.trem_sus
+                && self.t.is_multiple_of(CTRL)
+                && self.t.wrapping_sub(self.trem_last_strike) > self.trem_drop
+            {
+                self.horiz.clear_drive();
+                self.vert.clear_drive();
+                self.sus_hold = false;
+                self.sus_ramp = 0.0;
+                self.sus_target = 0.0;
+                self.trem_sus = false;
+            }
             // G6: while released, the damper glides darker at control rate;
             // the retune uses the COMPOSED frequency so bends/glides on a
-            // released voice keep their pitch (V4/INT-3)
-            if self.released && self.t.is_multiple_of(CTRL) {
+            // released voice keep their pitch (V4/INT-3). A tremolo-run
+            // voice (trem_hold) skips the glide: at treble keys the loop
+            // period is ~1 ms, so the per-round-trip damper compounds
+            // ~1000×/s and the glide kills even the FUNDAMENTAL inside a
+            // 30 ms inter-stroke gap — measured as the dominant term of the
+            // click-train artifact, above the release envelope itself.
+            if self.released && !self.trem_hold && self.t.is_multiple_of(CTRL) {
                 let f = self.base_f * self.harm * self.bend;
                 let bh = self.horiz.bright;
                 if bh > REL_FLOOR_H {
@@ -3522,6 +3650,13 @@ impl Voice for Pluck {
             }
             if self.released {
                 self.release_env *= self.rel_mul;
+            } else if self.release_env < 1.0 {
+                // TREM: a restrike un-released this voice mid-release-decay;
+                // ride the attenuation back up smoothly under the stroke's
+                // own attack (this branch is unreachable unless retrigger()
+                // ran — released is never cleared anywhere else, so every
+                // pre-existing render is bit-identical).
+                self.release_env = (self.release_env * self.rel_rec).min(1.0);
             }
             let mut y = y * self.amp * self.att_env * self.release_env;
             if let Some(b) = &mut self.onset_post {
@@ -3543,12 +3678,22 @@ impl Voice for Pluck {
     }
 
     fn note_off(&mut self) {
-        if !self.released {
+        if !self.released && !self.trem_hold {
             if let Some(b) = &mut self.stop {
                 // the stop thump fires on the effective release — under
                 // CC64/CC66 that is the pedal lift, by design (V4/INT-7)
                 b.trigger(1.0);
             }
+        }
+        if self.trem_hold {
+            // TREM: mid-run gate-offs are notation, not damping — the pick
+            // hand never stops the string between tremolo strokes. Take the
+            // stretched release (and no stop thump 13×/s), and KEEP the
+            // tremolo hold driving through the gap; the run-end watchdog in
+            // render() drops it TREM_SUS_DROP_S after the last restrike.
+            self.rel_mul = self.rel_mul_trem;
+            self.released = true;
+            return;
         }
         self.released = true;
         // release drops the e-bow instantly: the string decays as ever
@@ -3590,6 +3735,100 @@ impl Voice for Pluck {
             self.sus_ref = 0.0;
             self.sus_ref_until = self.t + (0.06 * self.sr) as u32;
         }
+        true
+    }
+
+    fn retrigger(&mut self, key: u8, vel: u8) -> bool {
+        // TREM: a tremolo stroke re-PICKS the still-ringing string. Same
+        // pick law as a fresh pluck (pick_lp burst + position comb + contact
+        // click) — the ONE difference from a fresh spawn is that the string
+        // state carries over: no restart from silence, no second voice
+        // decaying underneath, no phase discontinuity. That continuity is
+        // what turns 13 strokes/s from a click train into a shimmer.
+        if !self.trem_ok {
+            return false; // mechanically damped presets: repeats articulate
+        }
+        self.base_f = key_freq(key);
+        self.apply_pitch();
+        let v = vel_amp(vel);
+        let vn = vel as f32 / 127.0;
+        let f = self.base_f * self.harm * self.bend;
+        // the release G6 glide darkened the dampers between strokes —
+        // restore the spawn stroke's velocity-law cutoffs (fresh per-stroke
+        // jitter: no two strokes land identically)
+        let bh = (self.spawn_bright_h * (1.0 + 0.08 * self.rng.white())).min(self.sr * 0.45);
+        let bv = (self.spawn_bright_v * (1.0 + 0.08 * self.rng.white())).min(self.sr * 0.45);
+        self.horiz.set_bright(bh, f);
+        self.vert.set_bright(bv, f * self.course_detune);
+        // a fresh pick burst, trickled INTO the ringing loops (hammer path)
+        let n = ((self.sr / f) as usize).max(4);
+        let mut lp = OnePole::lowpass(self.pick_lp_hz, self.sr);
+        let raw: Vec<f32> = (0..n).map(|_| lp.process(self.rng.white())).collect();
+        let comb = ((n as f32 * self.pos) as usize).max(1);
+        let mut exc: Vec<f32> = (0..n).map(|i| raw[i] - 0.9 * raw[(i + comb) % n]).collect();
+        let peak = exc.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-6);
+        let g = v * TREM_RESTRIKE_LEVEL / peak;
+        for x in &mut exc {
+            *x *= g;
+        }
+        // guarantee the stroke deposits FUNDAMENTAL (see TREM_H1_FLOOR):
+        // top the burst's h1 up, in phase with its own h1, to the floor
+        let (mut xr, mut xi) = (0f32, 0f32);
+        for (i, &x) in exc.iter().enumerate() {
+            let ph = 2.0 * std::f32::consts::PI * i as f32 / n as f32;
+            xr += x * ph.cos();
+            xi -= x * ph.sin();
+        }
+        let h1_amp = 2.0 * (xr * xr + xi * xi).sqrt() / n as f32;
+        let h1_target = TREM_H1_FLOOR * v * TREM_RESTRIKE_LEVEL;
+        if h1_amp < h1_target {
+            let phi = xi.atan2(xr);
+            let add = h1_target - h1_amp;
+            for (i, x) in exc.iter_mut().enumerate() {
+                let ph = 2.0 * std::f32::consts::PI * i as f32 / n as f32 + phi;
+                *x += add * ph.cos();
+            }
+        }
+        // the pick-catch: grab the standing wave so this stroke's
+        // displacement owns the string (and the carrier phase)
+        self.horiz.catch_damp(TREM_CATCH);
+        self.vert.catch_damp(TREM_CATCH);
+        self.hammer = exc;
+        self.hammer_pos = 0;
+        // the plectrum clicks on every stroke (same law as the spawn pick)
+        if let Some(b) = &mut self.onset_pre {
+            b.trigger(v * vn);
+        }
+        self.sub_env = self.sub_env.max(0.6 * v);
+        self.env = self.env.max(0.3 * v);
+        if !self.trem_hold {
+            // FIRST restrike: this voice becomes a tremolo run. Install the
+            // carrier hold (see TREM_SUS_FRACTION) if the preset has no
+            // sustainer of its own, and arm the reference window so the
+            // hold level is THIS run's spoken level. Later restrikes must
+            // NOT reset any of this — the hold persists across the run.
+            if self.sus_target <= 0.0 {
+                self.sus_target = TREM_SUS_FRACTION;
+                self.trem_sus = true;
+                self.horiz.enable_driver(f);
+                self.vert.enable_driver(f * self.course_detune);
+            } else {
+                // a preset e-bow (DRIVE): the restrike is a NEW note to it,
+                // exactly as a slur is
+                self.horiz.clear_drive();
+                self.vert.clear_drive();
+            }
+            self.sus_hold = false;
+            self.sus_ramp = 0.0;
+            self.sus_ref = 0.0;
+            self.sus_ref_until = self.t + (0.06 * self.sr) as u32;
+        }
+        self.trem_last_strike = self.t;
+        // un-release: the stroke owns the string again; render() ramps the
+        // release attenuation back up under the stroke's attack. From here
+        // on this voice is a tremolo run: gate-offs damp softly.
+        self.released = false;
+        self.trem_hold = true;
         true
     }
 

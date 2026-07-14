@@ -856,6 +856,21 @@ impl Voice for LaVoice {
         }
     }
 
+    fn retrigger(&mut self, key: u8, vel: u8) -> bool {
+        // TREM: a tremolo restrike re-picks the MODEL string; the sampled
+        // attack transient is NOT replayed (the identical PCM 13×/s is the
+        // machine-gun artifact the drum round-robins exist to avoid) — it
+        // is retired quickly, exactly like a slur. The model's own restrike
+        // burst articulates every stroke, decorrelated per stroke by
+        // construction.
+        if self.sustain.retrigger(key, vel) {
+            self.rel_mul = self.rel_t60_mul;
+            true
+        } else {
+            false
+        }
+    }
+
     #[cfg(test)]
     fn kind(&self) -> &'static str {
         // the LA wrapper is transparent for routing: report the model inside

@@ -70,6 +70,9 @@ const PIZZ: PluckPreset = PluckPreset {
     // v0.16 §2.10 field at its inert default: 1.0 keeps the exact historic
     // velocity arithmetic (bit stream included).
     vel_sense: 1.0,
+    // TREM: no tremolo restrike — plucked-tremolo is not the pizzicato
+    // idiom (a fast string tremolo is bowed), and the alt bank stays frozen.
+    trem: false,
     #[cfg(test)]
     name: "PIZZ",
 };

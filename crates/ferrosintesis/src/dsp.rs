@@ -267,6 +267,14 @@ impl DelayLine {
         self.buf[self.idx] = x;
     }
 
+    /// Scale the whole line (the tremolo pick-catch): g ≤ 1 only removes
+    /// energy, so loop passivity is trivially preserved.
+    pub fn scale(&mut self, g: f32) {
+        for x in &mut self.buf {
+            *x *= g;
+        }
+    }
+
     /// Read `delay` samples back (linear interpolation), before the next push.
     #[inline]
     pub fn tap(&self, delay: f32) -> f32 {

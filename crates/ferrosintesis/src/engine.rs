@@ -1067,7 +1067,23 @@ pub(crate) struct EngineCore {
     // (A seed-modulo pick would immediate-repeat ~1/rr of the time — the
     // machine-gun artifact.)
     drum_rr: [u8; 128],
+    // TREM1 (tremolo restrike): the running sample clock (advanced per
+    // rendered block; events are block-quantised, so this is exactly their
+    // resolution) and the per-(channel, key) time of the previous NoteOn —
+    // together they give the same-key inter-onset interval that gates the
+    // tremolo-restrike path in note_on.
+    now: u64,
+    key_on_at: Vec<[u64; 128]>,
 }
+
+/// TREM1: a same-key NoteOn this close (in seconds) to the previous one on
+/// the same channel is a tremolo stroke — re-excite the still-ringing
+/// plucked voice instead of spawning a fresh one from silence. 100 ms
+/// (10 strokes/s) separates genuine tremolo (mandolin/guitar tremolo is
+/// 10–16 strokes/s, IOI ≤ 100 ms) from intentional same-note picking
+/// (5–7 notes/s, IOI ≥ 143 ms, 43% above the gate), which must keep its
+/// full per-note articulation.
+const TREM_IOI_MAX_S: f32 = 0.10;
 
 impl EngineCore {
     pub(crate) fn new(opt: CoreOptions) -> Self {
@@ -1112,6 +1128,8 @@ impl EngineCore {
             leslie_k: 1.0 - (-(BLOCK as f32) / (LESLIE_INERTIA_S * sr)).exp(),
             wah_smooth: 1.0 - (-(BLOCK as f32) / (WAH_SLEW_S * sr)).exp(),
             drum_rr: [0; 128],
+            now: 0,
+            key_on_at: vec![[u64::MAX; 128]; 16],
         }
     }
 
@@ -1301,6 +1319,18 @@ impl EngineCore {
         let program = self.strips[ci].program;
         let bagpipe_drone_control =
             ch != 9 && program == 109 && key <= voices::BAGPIPE_DRONE_CONTROL_MAX;
+        // TREM1: same-key inter-onset interval (in samples) against the
+        // previous NoteOn of this (channel, key); the clock updates on EVERY
+        // melodic NoteOn so a slow passage keeps re-arming a long IOI.
+        let trem_prev = if ch != 9 {
+            let prev = self.key_on_at[ci][key as usize];
+            self.key_on_at[ci][key as usize] = self.now;
+            prev
+        } else {
+            u64::MAX
+        };
+        let trem_restrike =
+            trem_prev != u64::MAX && (self.now - trem_prev) as f32 <= TREM_IOI_MAX_S * sr;
         if ch != 9 && !bagpipe_drone_control {
             self.strips[ci].last_freq = Some(key_freq(key));
         }
@@ -1324,6 +1354,38 @@ impl EngineCore {
             if let (Some(a), None) = (ringing.next(), ringing.next()) {
                 if a.voice.legato_to(key, vel) {
                     a.key = key;
+                    return;
+                }
+            }
+        }
+        // TREM1: a fast same-key restrike (IOI ≤ 100 ms — a tremolo stroke)
+        // re-picks the still-ringing plucked voice instead of spawning a new
+        // one from silence: a fresh spawn is a broadband restart transient,
+        // and 10–16 of those per second read as a click train, not a
+        // tremolo. Scoped by CAPABILITY: only Pluck implements retrigger()
+        // (a plucked string physically IS re-struck while ringing); winds /
+        // bowed / reeds / brass return the default false and keep full
+        // per-note re-articulation — their legato_to (a slur) must never be
+        // conscripted for this. The explicit CC68 legato path above still
+        // wins where authored.
+        if ch != 9 && trem_restrike {
+            let prog = self.strips[ci].program;
+            let alt = self.strips[ci].alt_bank;
+            if let Some(a) = self
+                .active
+                .iter_mut()
+                .rev()
+                .find(|a| a.ch == ch && a.key == key && a.program == prog && a.alt == alt)
+            {
+                if a.voice.retrigger(key, vel) {
+                    // the stroke re-opens the voice's gate: its NoteOff (and
+                    // the pedal state at that time) now governs it afresh
+                    a.held = false;
+                    a.sost_held = false;
+                    // consume this stroke's seed slot so every LATER spawn
+                    // draws exactly the seed it would have pre-change — the
+                    // render diff stays confined to the tremolo itself
+                    self.stats.voices_spawned += 1;
                     return;
                 }
             }
@@ -1800,6 +1862,9 @@ impl EngineCore {
     pub(crate) fn render_block_add(&mut self, n: usize, out: &mut [f32]) {
         debug_assert!(n <= BLOCK);
         debug_assert!(out.len() >= n * 2);
+        // TREM1 sample clock: events for this block were already applied at
+        // now == block start; advance for the next block's events.
+        self.now += n as u64;
         let sr = self.opt.sr;
 
         self.tick_bagpipe_drone_latch();
@@ -2706,6 +2771,108 @@ mod tests {
 
     fn rms(seg: &[f32]) -> f32 {
         (seg.iter().map(|&x| (x * x) as f64).sum::<f64>() / seg.len() as f64).sqrt() as f32
+    }
+
+    /// A same-key repeated-note figure on one channel: `n` NoteOn/NoteOff
+    /// pairs, `ioi` seconds apart, each gated `gate` seconds — the tremolo
+    /// (and, at slow ioi, picked-repeat) test figure.
+    fn repeat_song(prog: u8, key: u8, n: usize, ioi: f64, gate: f64, secs: f64) -> Song {
+        let mut ev = vec![(0.0, EvKind::Prog { ch: 0, prog })];
+        for i in 0..n {
+            let t = 0.1 + i as f64 * ioi;
+            ev.push((
+                t,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key,
+                    vel: 55,
+                },
+            ));
+            ev.push((t + gate, EvKind::NoteOff { ch: 0, key }));
+        }
+        test_song(ev, secs)
+    }
+
+    /// p10/p90 ratio of the f0-carrier magnitude track (Goertzel per 10 ms
+    /// frame) over [t0, t1] — the "does the TONE persist between strokes"
+    /// scalar. A ratio, so the −18 LUFS single-scalar loudness normalisation
+    /// (and any other pure gain) cannot move it.
+    fn carrier_p10_over_p90(out: &[f32], sr: f32, f0: f32, t0: f64, t1: f64) -> f32 {
+        let hop = (0.010 * sr) as usize;
+        let (a, b) = (
+            (t0 * sr as f64) as usize / hop,
+            (t1 * sr as f64) as usize / hop,
+        );
+        let mut mags: Vec<f32> = (a..b)
+            .map(|k| crate::testutil::mag_at(&out[k * hop..(k + 1) * hop], sr, f0))
+            .collect();
+        mags.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        mags[mags.len() / 10] / mags[mags.len() * 9 / 10].max(1e-12)
+    }
+
+    /// TREM1 oracle: a fast same-key repeated figure on the steel guitar
+    /// (GM 25) — 40 strokes at 75 ms IOI, 45 ms gate, the measured shape of
+    /// the reported defect — must render as a TREMOLO (one string whose
+    /// fundamental persists between strokes, re-picked per stroke), not as
+    /// 13 fresh-voice restarts per second (a click train).
+    ///
+    /// Clause (a) is the perceptual defect itself: the f0 CARRIER's
+    /// trough/peak ratio across the steady run. Fresh spawns + the hard
+    /// 0.15 s release + G6 release-darkening leave nothing ringing between
+    /// strokes (measured 0.03), and — the HFfrac lesson — gross-band
+    /// metrics can't see that (overlapping released twins fill the gaps
+    /// with broadband hash; broadband p10/p90 moved the WRONG way on an
+    /// intermediate fix). The carrier ratio tracks exactly the thing the
+    /// ear streams into "one continuous note": tonal energy at f0 in the
+    /// gaps. With the restrike path it measures 0.22.
+    ///
+    /// Clause (b) rejects the opposite degeneracy: the strokes must still
+    /// ARTICULATE (broadband 20 ms-frame ripple ≥ 4 dB) — a fix that slurs
+    /// the run into one flat held note fails here.
+    ///
+    /// Clause (c) pins the IOI gate: the same figure at 200 ms IOI is
+    /// intentional picking and must keep dying between notes (carrier ratio
+    /// stays at the articulated floor, measured 0.006). If the gate ever
+    /// widens into picking territory, this clause reds.
+    #[test]
+    fn fast_same_key_restrikes_shimmer_not_click_train() {
+        let sr = 44100.0;
+        let key = 83u8; // B5 — treble worst case: fundamental t60 ~130 ms
+        let f0 = crate::dsp::key_freq(key);
+
+        // (a) + (b): the defect figure — 40 strokes, 13.3/s
+        let song = repeat_song(25, key, 40, 0.075, 0.045, 3.6);
+        let out = left(&render(&song, &test_opts(sr)).0);
+        let carrier = carrier_p10_over_p90(&out, sr, f0, 0.6, 2.9);
+        assert!(
+            carrier > 0.10,
+            "tremolo carrier collapses between strokes: f0 p10/p90 = {carrier:.3} \
+             (fresh-spawn click train ≈ 0.03, restrike shimmer ≈ 0.22)"
+        );
+        let frame = (0.020 * sr) as usize;
+        let a = (0.6 * sr) as usize / frame;
+        let b = (2.9 * sr) as usize / frame;
+        let mut frames: Vec<f32> = (a..b)
+            .map(|k| rms(&out[k * frame..(k + 1) * frame]))
+            .collect();
+        frames.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        let ripple = frames[frames.len() / 10] / frames[frames.len() * 9 / 10].max(1e-12);
+        assert!(
+            ripple < 0.63,
+            "strokes no longer articulate (broadband ripple {ripple:.3} ≥ 0.63 \
+             ≈ under 4 dB): the tremolo degenerated into a slur"
+        );
+
+        // (c): 200 ms IOI is PICKING — each note must still die away
+        let slow = repeat_song(25, key, 12, 0.200, 0.045, 3.6);
+        let out = left(&render(&slow, &test_opts(sr)).0);
+        let slow_carrier = carrier_p10_over_p90(&out, sr, f0, 0.6, 2.4);
+        assert!(
+            slow_carrier < 0.05,
+            "slow same-note picking lost its articulation: f0 p10/p90 = \
+             {slow_carrier:.3} (articulated ≈ 0.006) — the tremolo IOI gate \
+             has widened into picking territory"
+        );
     }
 
     fn drum_song(hits: &[(f64, u8, u8)], secs: f64, ccs: &[(u8, u8)]) -> Song {

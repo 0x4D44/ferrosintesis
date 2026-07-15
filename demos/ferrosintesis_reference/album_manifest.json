@@ -3,23 +3,23 @@
   "artist": "ferrosintesis",
   "style": "Dry one-at-a-time audition of every ferrosintesis voice and effect",
   "track_count": 6,
-  "total_duration_seconds": 895.33,
-  "total_duration_minutes": 14.92,
+  "total_duration_seconds": 904.93,
+  "total_duration_minutes": 15.08,
   "tracks": [
     {
       "number": 1,
       "title": "Keys, Chromatic, Organ, Guitar",
       "file": "midi/01 - Keys, Chromatic, Organ, Guitar.mid",
-      "duration_seconds": 159.6,
-      "duration_minutes": 2.66,
+      "duration_seconds": 174.0,
+      "duration_minutes": 2.9,
       "style": "instrument audition"
     },
     {
       "number": 2,
       "title": "Bass, Solo Strings, Ensemble, Brass",
       "file": "midi/02 - Bass, Solo Strings, Ensemble, Brass.mid",
-      "duration_seconds": 212.4,
-      "duration_minutes": 3.54,
+      "duration_seconds": 207.6,
+      "duration_minutes": 3.46,
       "style": "instrument audition"
     },
     {

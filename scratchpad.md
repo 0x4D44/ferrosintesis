@@ -1,5 +1,15 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.14 — **`check_dual_bank_registers` is dead code with a latent unpack bug.**
+  `demos/ferrosintesis_reference/programs.py` (`check_dual_bank_registers`) is never
+  called from verify.py or anywhere else, and its loop unpacks `ALT_BANK.items()` values
+  as 3-tuples (`for program, (alt_register, _gesture, label) in ...`) while ALT_BANK
+  values are strings — it would ValueError on first call. Its premise is obsolete: alt
+  slots now INHERIT the default's register in `melodic_slots` (and STANDALONE_ALT
+  entries carry their own), so registers can no longer silently diverge. Delete the
+  function and the comment references to it, or rewrite it against REGISTER_MAY_DIVERGE
+  if any check is still wanted. (Spotted during the round-2 tam-tam audition work.)
+
 - [x] 2026.07.14 — **`tests/test_render_opus.py` is orphaned dead code.** It does
   `import render_opus` (`tests/test_render_opus.py:7`), but `render_opus.py` was retired
   when the Rust `render-catalog` replaced it (`crates/render-catalog/src/main.rs:3`

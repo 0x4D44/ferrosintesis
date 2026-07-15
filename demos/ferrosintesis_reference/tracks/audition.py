@@ -69,11 +69,17 @@ def slot_reset(sc: en.Score, ch: int, beat: float) -> None:
 
 def emit_slot(sc: en.Score, slot: pr.Slot, t0: float) -> None:
     ch = CH
-    sc.marker(t0, slot.label)
+    # Anchor the marker (and the lyrics timestamp derived from it) to the first
+    # AUDIBLE note, not the slot's silent administrative start. The slot opens with a
+    # reset + program change (silent); the sound begins at _ONSET. With the marker at
+    # t0 the lyrics index (floored to whole seconds) could land on the PREVIOUS slot's
+    # soft-tag note (which plays at t0-1.8 beats), so scrubbing to a label played the
+    # wrong instrument. At the onset every label lands on its own voice.
+    sc.marker(t0 + _ONSET, slot.label)
     slot_reset(sc, ch, t0 + _RESET_AT)
     sc.program(ch, slot.program, t0 + _PROGRAM_AT)
     if slot.alt:
-        sc.cc(ch, 0, 1, t0 + _PROGRAM_AT + 0.02)   # select alt bank after the PC
+        sc.cc(ch, 0, slot.alt_bank_value, t0 + _PROGRAM_AT + 0.02)  # select alt bank after the PC
     dry_sends(sc, ch, t0 + _SENDS_AT)
     vel = VEL[slot.gesture]
     root = _root(slot.register)

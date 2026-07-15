@@ -165,7 +165,9 @@ OVERRIDE: dict[int, dict] = {
 #   97/99/103->88, 98/100/102->96, 101->95  the FX family 96-103 is eight distinct
 #     Fx::from_spec presets (voices.rs:7633,8169), no longer pads/bells
 ALIAS: dict[int, int] = {
-    1: 0, 2: 0, 3: 0,  # 0..=3 one arm, one acoustic_piano() + one piano_bank(), voices.rs:7911
+    # (empty) 1/2/3 -> 0 removed in round 2: make() now has distinct arms
+    # (bright acoustic / CP electric grand / honky-tonk) - they audition as
+    # their own slots and the distinctness matrix (testutil.rs) pins the split.
 }
 
 # Note on the LA sample layer: programs 0, 24, 40, 42, 43, 48, 49, 56-61, 68-73 and 110
@@ -185,14 +187,17 @@ ALIAS: dict[int, int] = {
 # voice's own character and is noted in the label.
 ALT_BANK: dict[int, str] = {
     14:  "tam-tam (folds written keys to its octave, voices.rs:1184)",
-    19:  "legacy Leslie church organ",
+    19:  "CathedralOrgan pipe model (CC0=2 alt: its own wind-chest breathing, "
+         "CC11 reed swell and stone-room reverb; default + CC0=1 stay the Leslie)",
     29:  "DRIVE_LEAD - sustaining, e-bow hold",
     30:  "DRIVE_LEAD - sustaining, e-bow hold",
     40:  "frozen v0.9 bowed violin",
     41:  "frozen v0.9 bowed viola",
     42:  "frozen v0.9 bowed cello",
     43:  "frozen v0.9 bowed contrabass",
-    44:  "frozen v0.9 tremolo",
+    # 44 dropped: both banks dispatch the same violin-bodied Bowed(44) tremolo
+    # (voices.rs make() and altbank.rs agree), so the A/B compared a voice to
+    # itself. Round-2 CR "GM044 tremolo strings - redundant alt".
     45:  "frozen v0.9 pizzicato",
     48:  "frozen v0.9 string ensemble",
     49:  "frozen v0.9 slow strings",
@@ -212,6 +217,25 @@ ALT_BANK: dict[int, str] = {
 }
 
 
+# CC0 value each alt slot selects. Default 1 (the single "legacy alt" bank). GM19's
+# alt is the CathedralOrgan on bank 2; bank 1 stays the legacy Leslie (kept
+# byte-identical for The Ninth Bell). altbank::make dispatches GM19 by this value.
+ALT_BANK_VALUE: dict[int, int] = {19: 2}
+
+
+# Alt-bank voices auditioned STANDALONE - their own slot appended after the range
+# walk - instead of inlined as an A/B right after their default. For these the alt
+# is a different INSTRUMENT, so an adjacent A/B at the default's register is a
+# rigged comparison (the tam-tam gong heard as "weird tubular bells", round-2 CR).
+# program -> (register, gesture, display name). check_ab_parity skips these;
+# check_registers still pins the standalone register. The display name replaces
+# the GM name in the slot label (the GM name describes the DEFAULT bank; a
+# standalone alt is a different instrument and the lyrics should say so).
+STANDALONE_ALT: dict[int, tuple[tuple[int, int], str, str]] = {
+    14: ((36, 47), ONESHOT, "Tam-Tam"),  # one crash in its folded gong octave
+}
+
+
 @dataclass(frozen=True)
 class Slot:
     """One audition: a program (optionally on the alt bank) with its phrase shape."""
@@ -220,11 +244,13 @@ class Slot:
     register: tuple[int, int]
     gesture: str
     alt: bool = False
+    alt_bank_value: int = 1  # CC0 value the alt slot selects (GM19 cathedral = 2)
     note: str | None = None
+    nick: str | None = None  # display name override (STANDALONE_ALT voices)
 
     @property
     def name(self) -> str:
-        return GM_NAMES[self.program]
+        return self.nick or GM_NAMES[self.program]
 
     @property
     def label(self) -> str:
@@ -243,16 +269,34 @@ def melodic_slots(lo: int, hi: int) -> list[Slot]:
     """Ordered audition slots for programs [lo, hi]: each rendered voice, with its
     alt-bank twin inlined immediately after, skipping aliases (indexed elsewhere).
     The alt twin inherits the default's register and gesture so the A/B compares
-    timbre at matched pitch, velocity and phrase (check_ab_parity)."""
+    timbre at matched pitch, velocity and phrase (check_ab_parity). STANDALONE_ALT
+    programs are appended at the end of the walk instead - the alt is a different
+    instrument, so it gets its own slot, register and gesture."""
     out: list[Slot] = []
+    tail: list[Slot] = []
     for p in range(lo, hi + 1):
         if p in ALIAS:
             continue
         default = _resolve(p)
         out.append(default)
         if p in ALT_BANK:
-            out.append(Slot(p, default.register, default.gesture, alt=True, note=ALT_BANK[p]))
-    return out
+            if p in STANDALONE_ALT:
+                register, gesture, nick = STANDALONE_ALT[p]
+                tail.append(
+                    Slot(p, register, gesture, alt=True, note=ALT_BANK[p], nick=nick)
+                )
+            else:
+                out.append(
+                    Slot(
+                        p,
+                        default.register,
+                        default.gesture,
+                        alt=True,
+                        alt_bank_value=ALT_BANK_VALUE.get(p, 1),
+                        note=ALT_BANK[p],
+                    )
+                )
+    return out + tail
 
 
 def alias_index() -> list[tuple[int, int]]:

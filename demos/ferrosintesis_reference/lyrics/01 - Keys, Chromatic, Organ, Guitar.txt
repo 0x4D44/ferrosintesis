@@ -1,40 +1,38 @@
 ferrosintesis Reference Audition - Keys, Chromatic, Organ, Guitar
 
 0:00  GM 000 Acoustic Grand Piano
-0:04  GM 004 Electric Piano 1
-0:09  GM 005 Electric Piano 2
-0:14  GM 006 Harpsichord
-0:19  GM 007 Clavinet
-0:24  GM 008 Celesta
-0:28  GM 009 Glockenspiel
-0:33  GM 010 Music Box
-0:38  GM 011 Vibraphone
-0:43  GM 012 Marimba
-0:48  GM 013 Xylophone
-0:52  GM 014 Tubular Bells
-0:57  GM 014 Tubular Bells [alt]
-1:02  GM 015 Dulcimer
-1:07  GM 016 Drawbar Organ
-1:12  GM 017 Percussive Organ
-1:16  GM 018 Rock Organ
-1:21  GM 019 Church Organ
-1:26  GM 019 Church Organ [alt]
-1:31  GM 020 Reed Organ
-1:36  GM 021 Accordion
-1:40  GM 022 Harmonica
-1:45  GM 023 Tango Accordion
-1:50  GM 024 Acoustic Guitar (nylon)
-1:55  GM 025 Acoustic Guitar (steel)
-2:00  GM 026 Electric Guitar (jazz)
-2:04  GM 027 Electric Guitar (clean)
-2:09  GM 028 Electric Guitar (muted)
-2:14  GM 029 Overdriven Guitar
-2:19  GM 029 Overdriven Guitar [alt]
-2:24  GM 030 Distortion Guitar
-2:28  GM 030 Distortion Guitar [alt]
-2:33  GM 031 Guitar Harmonics
-
-Aliases (render identically once dry; auditioned as their canonical voice):
-  GM 001 Bright Acoustic Piano = GM 000 Acoustic Grand Piano
-  GM 002 Electric Grand Piano = GM 000 Acoustic Grand Piano
-  GM 003 Honky-tonk Piano = GM 000 Acoustic Grand Piano
+0:05  GM 001 Bright Acoustic Piano
+0:10  GM 002 Electric Grand Piano
+0:15  GM 003 Honky-tonk Piano
+0:19  GM 004 Electric Piano 1
+0:24  GM 005 Electric Piano 2
+0:29  GM 006 Harpsichord
+0:34  GM 007 Clavinet
+0:39  GM 008 Celesta
+0:43  GM 009 Glockenspiel
+0:48  GM 010 Music Box
+0:53  GM 011 Vibraphone
+0:58  GM 012 Marimba
+1:03  GM 013 Xylophone
+1:07  GM 014 Tubular Bells
+1:12  GM 015 Dulcimer
+1:17  GM 016 Drawbar Organ
+1:22  GM 017 Percussive Organ
+1:27  GM 018 Rock Organ
+1:31  GM 019 Church Organ
+1:36  GM 019 Church Organ [alt]
+1:41  GM 020 Reed Organ
+1:46  GM 021 Accordion
+1:51  GM 022 Harmonica
+1:55  GM 023 Tango Accordion
+2:00  GM 024 Acoustic Guitar (nylon)
+2:05  GM 025 Acoustic Guitar (steel)
+2:10  GM 026 Electric Guitar (jazz)
+2:15  GM 027 Electric Guitar (clean)
+2:19  GM 028 Electric Guitar (muted)
+2:24  GM 029 Overdriven Guitar
+2:29  GM 029 Overdriven Guitar [alt]
+2:34  GM 030 Distortion Guitar
+2:39  GM 030 Distortion Guitar [alt]
+2:43  GM 031 Guitar Harmonics
+2:48  GM 014 Tam-Tam [alt]

@@ -1005,13 +1005,26 @@ pub(crate) fn choir2_reg_weight(key: u8, section: usize) -> f32 {
 // instruments normally.
 // ---------------------------------------------------------------------------
 
-pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
+pub fn make(
+    program: u8,
+    bank: u8,
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    samples: bool,
+) -> Box<dyn Voice> {
     let samples = samples && crate::embedded_samples_available();
     match program {
-        // The best church organ is the default GM19; CC0 selects the exact
-        // pre-v0.12 pipe-bank/Leslie voice for scores that intentionally want
-        // that secondary colour (notably The Ninth Bell).
-        19 => crate::voices::legacy_church_organ(key, vel, sr, seed),
+        // The default GM19 is the Leslie drawbar. CC0=1 selects the same legacy
+        // Leslie voice for scores that intentionally want that secondary colour
+        // (notably The Ninth Bell — byte-identical). CC0=2 selects the restored
+        // CathedralOrgan pipe model (its own wind-chest breathing + CC11 reed
+        // swell + dedicated stone-room reverb).
+        19 => match bank {
+            2 => crate::voices::cathedral_organ(key, vel, sr, seed),
+            _ => crate::voices::legacy_church_organ(key, vel, sr, seed),
+        },
         40..=43 => {
             let model = Box::new(Bowed::new(program, key, vel, sr, seed));
             if samples {
@@ -1107,7 +1120,7 @@ mod tests {
     /// so 40–45 route to the resurrected Bowed/PIZZ voicings.)
     fn render_make(program: u8, key: u8, vel: u8, secs: f32, seed: u32, samples: bool) -> Vec<f32> {
         let sr = 44100.0;
-        let mut v = make(program, key, vel, sr, seed, samples);
+        let mut v = make(program, 1, key, vel, sr, seed, samples);
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
@@ -1116,7 +1129,7 @@ mod tests {
     /// Render an alt-factory strings voice (`make` → `strings` for 48–51).
     fn render_str(prog: u8, key: u8, secs: f32) -> Vec<f32> {
         let sr = 44100.0;
-        let mut v = make(prog, key, 100, sr, 7, false);
+        let mut v = make(prog, 1, key, 100, sr, 7, false);
         let mut b = vec![0f32; (sr * secs) as usize];
         v.render(&mut b);
         b
@@ -1217,7 +1230,7 @@ mod tests {
         );
         assert!((f0 - 440.0).abs() / 440.0 < 0.005, "pizz pitch {f0} Hz");
         // a whole tone up via set_pitch (composed into the ringing string)
-        let mut v = make(45, 69, 100, sr, 3, false);
+        let mut v = make(45, 1, 69, 100, sr, 3, false);
         v.set_pitch(2f32.powf(2.0 / 12.0));
         let mut buf = vec![0f32; (0.7 * sr) as usize];
         v.render(&mut buf);
@@ -1481,7 +1494,7 @@ mod tests {
     fn sawstack_v1_signatures_are_stable() {
         let sr = 44100.0;
         let render = |prog: u8, key: u8| {
-            let mut v = make(prog, key, 100, sr, 7, false);
+            let mut v = make(prog, 1, key, 100, sr, 7, false);
             let mut b = vec![0f32; (sr * 1.5) as usize];
             v.render(&mut b);
             b
@@ -1565,7 +1578,7 @@ mod tests {
     fn st2_section_vibrato_spreads_carrier() {
         let sr = 44100.0;
         let carrier = |depth: f32| {
-            let mut v = make(48, 81, 100, sr, 7, false); // A5
+            let mut v = make(48, 1, 81, 100, sr, 7, false); // A5
             v.set_vib(depth);
             let mut b = vec![0f32; (sr * 2.0) as usize];
             v.render(&mut b);
@@ -1590,7 +1603,7 @@ mod tests {
     fn ch_o1_choir_v2_kind() {
         let sr = 44100.0;
         for prog in 52..=54u8 {
-            assert_eq!(make(prog, 60, 96, sr, 7, false).kind(), "choir2");
+            assert_eq!(make(prog, 1, 60, 96, sr, 7, false).kind(), "choir2");
             assert_eq!(choir_v2(prog, 60, 96, sr, 7, 0.75).kind(), "choir2");
         }
     }
@@ -2288,7 +2301,7 @@ mod tests {
         assert!(w4 >= 1.6 * w3, "B119 swell stalls: w4/w3 {:.2}", w4 / w3);
         assert!(w4 >= 10.0 * w1, "B119 total swell {:.1}x < 10x", w4 / w1);
         // note_off hard stop: render 1.0 s, release, then 0.2 s more
-        let mut v = make(119, 60, 100, SR12, 7, false);
+        let mut v = make(119, 1, 60, 100, SR12, 7, false);
         let mut pre = vec![0f32; SR12 as usize];
         v.render(&mut pre);
         v.note_off();
@@ -2300,7 +2313,7 @@ mod tests {
         println!("B119 stop: {drop:+.1} dB 50-100 ms after note_off");
         assert!(drop <= -34.0, "B119 stop only {drop:+.1} dB");
         // self-cap: unreleased, the voice dies on its own before 3.5 s
-        let mut v = make(119, 60, 100, SR12, 7, false);
+        let mut v = make(119, 1, 60, 100, SR12, 7, false);
         let mut buf = vec![0f32; (4.0 * SR12) as usize];
         let alive = v.render(&mut buf);
         assert!(!alive, "B119 still renders after a 4 s unreleased buffer");

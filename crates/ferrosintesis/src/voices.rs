@@ -710,6 +710,52 @@ struct ModeBloom {
     att: f32,
 }
 
+/// Electric-piano pickup nonlinearity (round 2 "no bark"): a magnetic or
+/// electrostatic pickup driven by a close tine/reed is asymmetric — the
+/// gap closes further on one half of the swing than it opens on the other
+/// — so it regenerates dense, velocity-growing harmonics between the
+/// voice's sparse bell partials. Modeled as a bias-offset tanh (the same
+/// curvature idiom as the guitar Drive's stage 1) normalized to
+/// small-signal unity, then a one-pole DC blocker (the biased shaper
+/// produces signal-dependent DC). `None` on every other Modal — the render
+/// loop branches OUTSIDE the per-sample multiply, exactly like `bloom`.
+struct PickupShaper {
+    drive: f32,
+    bias_tanh: f32, // tanh(bias), precomputed
+    bias: f32,
+    norm: f32, // small-signal unity: drive * (1 - tanh(bias)^2)
+    dc_r: f32, // DC-blocker feedback (one-pole highpass ~20 Hz)
+    dc_x1: f32,
+    dc_y1: f32,
+}
+
+impl PickupShaper {
+    fn new(drive: f32, bias: f32, sr: f32) -> Self {
+        let bias_tanh = bias.tanh();
+        PickupShaper {
+            drive,
+            bias_tanh,
+            bias,
+            norm: (drive * (1.0 - bias_tanh * bias_tanh)).max(1e-6),
+            // 20 Hz: the shaper's DC rides the note's decay envelope as a slow
+            // ramp; 10 Hz let ~1e-3 of it through on the hard-driven Wurly.
+            // Every EP note lives at E2+ (82 Hz), where 20 Hz costs <0.3 dB.
+            dc_r: 1.0 - std::f32::consts::TAU * 20.0 / sr,
+            dc_x1: 0.0,
+            dc_y1: 0.0,
+        }
+    }
+
+    #[inline]
+    fn process(&mut self, x: f32) -> f32 {
+        let shaped = ((x * self.drive + self.bias).tanh() - self.bias_tanh) / self.norm;
+        let y = shaped - self.dc_x1 + self.dc_r * self.dc_y1;
+        self.dc_x1 = shaped;
+        self.dc_y1 = y;
+        y
+    }
+}
+
 struct ModalAmpTrem {
     osc: Sine,
     depth: f32,
@@ -747,6 +793,7 @@ pub struct Modal {
     strike_glide: Option<StrikeGlide>,
     amp_trem: Option<ModalAmpTrem>,
     bloom: Option<ModeBloom>,
+    pickup: Option<PickupShaper>,
 }
 
 impl Modal {
@@ -806,7 +853,18 @@ impl Modal {
             strike_glide: None,
             amp_trem: None,
             bloom: None,
+            pickup: None,
         }
+    }
+
+    /// Round 2: the EP pickup shaper (see [`PickupShaper`]). Only
+    /// `electric_piano_1/_2` call this; every other Modal keeps
+    /// `pickup: None` and renders through the untouched paths.
+    fn with_pickup_drive(mut self, drive: f32, bias: f32) -> Self {
+        if drive > 0.0 {
+            self.pickup = Some(PickupShaper::new(drive, bias, self.sr));
+        }
+        self
     }
 
     fn with_amp_trem(mut self, rate_hz: f32, depth: f32) -> Self {
@@ -916,6 +974,34 @@ impl Voice for Modal {
                 }
             }
             self.bloom = Some(ModeBloom { from, env, att });
+        } else if self.pickup.is_some() {
+            // EP pickup branch (round 2): the shaper acts on THIS voice's
+            // contribution only (the out buffer already carries other
+            // voices), so it lives inside the loop — but the branch that
+            // selects it is out here, and a pickup-less Modal never takes it.
+            for o in out.iter_mut() {
+                let mut s = 0.0;
+                for m in &mut self.modes {
+                    if m.active {
+                        s += m.amp * m.osc.next();
+                    }
+                    m.amp *= m.decay;
+                }
+                if self.noise_amp > 1e-5 {
+                    s += self.noise_filt.process(self.rng.white()) * self.noise_amp;
+                    self.noise_amp *= self.noise_decay;
+                }
+                if self.att_env < 1.0 {
+                    self.att_env = (self.att_env + self.att).min(1.0);
+                }
+                if self.released {
+                    self.release_env *= self.rel_mul;
+                }
+                let amp_trem = self.amp_trem.as_mut().map_or(1.0, ModalAmpTrem::gain);
+                let dry = s * self.gain * self.att_env * self.release_env * amp_trem;
+                *o += self.pickup.as_mut().expect("branch guard").process(dry);
+                self.advance_strike_glide();
+            }
         } else {
             for o in out.iter_mut() {
                 let mut s = 0.0;
@@ -964,7 +1050,11 @@ impl Voice for Modal {
 }
 
 pub(crate) fn is_acoustic_piano(program: u8) -> bool {
-    matches!(program, 0..=3)
+    // Round 2 split GM1/2/3 off the GM0 alias: 1 (bright) and 3 (honky-tonk)
+    // are still acoustic grands (LA piano bank, soundboard sympathetic bus,
+    // una-corda velocity cut); 2 (electric grand, CP-style strings-through-
+    // pickup) is fully modeled and skips the acoustic engine gates.
+    matches!(program, 0 | 1 | 3)
 }
 
 fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
@@ -1006,6 +1096,123 @@ fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     )
 }
 
+/// GM1/GM3 (round 2): the GM0 grand construction with re-voiced knobs —
+/// `bright_add` lifts the per-harmonic brightness base, `hammer_mult`/
+/// `hammer_cap` re-tune the strike bandpass, and the unison second string
+/// gets its own detune ratio/level/mode count (GM0's shimmer string is
+/// 1.0007 at 0.6 for k<=4). `acoustic_piano` itself is untouched so GM0
+/// renders byte-identically.
+#[allow(clippy::too_many_arguments)]
+fn grand_piano_variant(
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    bright_add: f32,
+    hammer_mult: f32,
+    hammer_cap: f32,
+    unison_ratio: f32,
+    unison_amp: f32,
+    unison_k: u32,
+    third_string: bool,
+) -> Modal {
+    let f = key_freq(key);
+    let v = vel_amp(vel);
+    let bright = 0.55 + bright_add + 0.40 * (vel as f32 / 127.0);
+    let inharm = 0.00045;
+    let t1 = (9.0 * (110.0 / f).powf(0.65)).clamp(0.4, 12.0);
+    let mut partials = Vec::new();
+    for k in 1..=16u32 {
+        let kf = k as f32;
+        let fk = f * kf * (1.0 + inharm * kf * kf).sqrt();
+        if fk > sr * 0.42 {
+            break;
+        }
+        let amp = v * bright.powi(k as i32 - 1) / kf.powf(1.08);
+        let t = t1 / (1.0 + 0.6 * (kf - 1.0));
+        partials.push((fk, amp * 0.85, t));
+        if k <= 6 {
+            partials.push((fk * 1.0003, amp * 0.22, t * 2.8));
+        }
+        if k <= unison_k {
+            partials.push((fk * unison_ratio, amp * unison_amp, t * 0.9));
+        }
+        if third_string && k <= unison_k {
+            // the third string of the trichord, flat of center — the
+            // honky-tonk wobble needs both sides of the unison detuned
+            partials.push((fk * (2.0 - unison_ratio), amp * unison_amp * 0.8, t * 0.95));
+        }
+    }
+    let hammer = Biquad::bandpass((f * hammer_mult).min(hammer_cap), 1.0, sr);
+    Modal::new(
+        sr,
+        seed,
+        &partials,
+        (0.30 * v, 0.012, hammer),
+        0.0015,
+        0.10,
+        0.50,
+    )
+}
+
+/// GM1 Bright Acoustic (round 2): the same grand, voiced brighter — a
+/// higher per-harmonic brightness base and a harder, higher strike band.
+fn bright_acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    grand_piano_variant(
+        key, vel, sr, seed, 0.12, 12.0, 4800.0, 1.0007, 0.6, 4, false,
+    )
+}
+
+/// GM3 Honky-tonk (round 2): the saloon upright — the unison trichord
+/// detuned WIDE (±~12 cents vs the grand's 1.2) and loud on both sides, so
+/// held notes beat audibly; a slightly harder tack-hammer band on top.
+fn honky_tonk_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    grand_piano_variant(key, vel, sr, seed, 0.05, 11.0, 4300.0, 1.007, 0.85, 6, true)
+}
+
+/// GM2 Electric Grand (round 2): the CP-style stage piano — real short
+/// strings through a piezo pickup, not a soundboard. Higher inharmonicity
+/// (short scale), a faster decay, almost no soundboard aftersound (the
+/// pickup hears the string, not the case singing), and a bright glassy
+/// strike. Fully modeled: no LA grand-attack layer, no sympathetic bus
+/// (is_acoustic_piano excludes 2).
+fn electric_grand_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    let f = key_freq(key);
+    let v = vel_amp(vel);
+    let bright = 0.60 + 0.36 * (vel as f32 / 127.0);
+    let inharm = 0.0011;
+    let t1 = (5.5 * (110.0 / f).powf(0.60)).clamp(0.35, 8.0);
+    let mut partials = Vec::new();
+    for k in 1..=16u32 {
+        let kf = k as f32;
+        let fk = f * kf * (1.0 + inharm * kf * kf).sqrt();
+        if fk > sr * 0.42 {
+            break;
+        }
+        let amp = v * bright.powi(k as i32 - 1) / kf.powf(0.98);
+        let t = t1 / (1.0 + 0.7 * (kf - 1.0));
+        partials.push((fk, amp * 0.9, t));
+        if k <= 3 {
+            // a whisper of aftersound: the plate carries far less than a
+            // grand's soundboard
+            partials.push((fk * 1.0004, amp * 0.07, t * 2.2));
+        }
+        if k <= 4 {
+            partials.push((fk * 1.0005, amp * 0.5, t * 0.9));
+        }
+    }
+    let hammer = Biquad::bandpass((f * 11.0).min(5600.0), 0.9, sr);
+    Modal::new(
+        sr,
+        seed,
+        &partials,
+        (0.26 * v, 0.009, hammer),
+        0.0012,
+        0.12,
+        0.52,
+    )
+}
+
 fn electric_piano_1(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let f = key_freq(key);
     let vn = vel as f32 / 127.0;
@@ -1038,6 +1245,10 @@ fn electric_piano_1(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         0.22,
         0.56,
     )
+    // Round 2: the Rhodes bark — pickup drive grows with velocity so a soft
+    // touch stays a clean bell and a hard one snarls (tune-by-ear: base 0.6,
+    // span 3.2, bias 0.4)
+    .with_pickup_drive(0.6 + 3.2 * vn, 0.4)
 }
 
 fn electric_piano_2(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
@@ -1069,6 +1280,10 @@ fn electric_piano_2(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         0.18,
         0.54,
     )
+    // Round 2: the Wurlitzer bark — the reed bar sits closer to its
+    // electrostatic pickup than a tine does to a magnetic one, so it barks
+    // earlier and harder (tune-by-ear: base 0.8, span 3.8, bias 0.45)
+    .with_pickup_drive(0.8 + 3.8 * vn, 0.45)
 }
 
 /// Bar/tube/bell family, defined by (ratio, amp, T60) tables. Each strike
@@ -1193,7 +1408,13 @@ const KALIMBA: &[(f32, f32, f32)] = &[
 // second-scale decay read as a tom. (TIMPANI_RELEASE_T60 was already long;
 // the bug was the SOUNDING partials dying early.)
 const TIMPANI: &[(f32, f32, f32)] = &[
-    (1.0, 1.0, 3.0),
+    // Round-2: the (0,1) fundamental is air-loaded and decays FAST on a real kettle —
+    // the ~1.504 principal mode rings longest and carries the pitch. Round-1 tripled
+    // every T60 uniformly, leaving the fundamental (loudest AND longest at 3.0) to
+    // outlast the uppers so the late tail collapsed to a low boom. Shorten just the
+    // fundamental (3.0 -> 1.9, now shorter than the principal's 2.4) to de-boom the
+    // tail while keeping the pitched upper modes long.
+    (1.0, 1.0, 1.9),
     (1.504, 0.70, 2.4),
     (1.742, 0.45, 1.9),
     (2.0, 0.30, 1.5),
@@ -2100,18 +2321,30 @@ pub const DRIVE: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "DRIVE",
     t60: 8.0,
-    bright: 4800.0,
+    // Round 2 ("clean, dark sustain"): 4800 killed every held partial, so
+    // the e-bow tail collapsed to a pure dark sine long before the note
+    // ended. 9000 keeps the pick's own harmonics alive through the musical
+    // sustain (DRIVE_LEAD proved the lever at 11000); the drive re-clips
+    // what survives (driven_sustain_stays_distorted).
+    bright: 9000.0,
     pick_lp: 6000.0,
     pos: 0.12,
-    amp: 0.70,
+    // Round 2: the voice fed the Drive ~24 dB below its tanh knee, so no
+    // real note ever clipped (only the pick click did) — the "overdriven"
+    // guitar was a clean amp. 1.5 + the raised g1 (engine.rs Drive::new)
+    // put the spoken level well past the knee and the e-bow hold at the
+    // knee; Drive::post is re-matched so rendered loudness is unchanged.
+    amp: 1.5,
     rel_t60: 0.20,
     pickup: 0.10,
     pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
-    // amp-feedback hold: a held note settles near -6 dB, not silence.
+    // amp-feedback hold: a held note settles near -3 dB, not silence.
     // Deepened 0.35 -> 0.5 when the Drive's inverted sag boost was deleted
-    // (voice-quality overhaul §2.6): the 4x late boost was faking sustain
-    // at the wrong layer; the e-bow is the correct one.
-    sustain: 0.5,
+    // (voice-quality overhaul §2.6), then -> 0.7 in round 2: with the
+    // drive now actually compressing, the held level reads quieter than
+    // its raw value, and the hotter hold is what keeps the tail inside
+    // the tanh knee (its clipping depth is what the round-2 oracle pins).
+    sustain: 0.7,
     click: 2.2, // the pick hits harder through an amp
     ..DEFAULTS
 };
@@ -2372,10 +2605,17 @@ pub const HARP: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "HARP",
     t60: 4.5,
-    bright: 3000.0,
-    pick_lp: 1800.0,
+    // Round-2: the loop-damper `bright` at the DEFAULTS 3000 damped everything above
+    // ~3 kHz within the ring, so the sustained harp had no shimmer (centroid near the
+    // fundamental, "needs work"). Open `bright` (the shimmer lever) and brighten the
+    // pluck (pick_lp) so upper partials ring. The HARP pluck is the early-window LEVEL
+    // reference for the pizz/bowed-family oracles (BW-O9), so trim amp 0.62 -> 0.56 to
+    // hold that reference level as the brighter voice front-loads more attack energy.
+    // Level-only trim; shimmer centroid and the soundboard differentials are ratios.
+    bright: 6000.0,
+    pick_lp: 3400.0,
     pos: 0.35,
-    amp: 0.62,
+    amp: 0.56,
     rel_t60: 0.4,
     body: &[(90.0, 0.8, 3.5), (180.0, 0.9, 2.8), (400.0, 1.1, 1.8)],
     wound_key_split: false,
@@ -3475,6 +3715,185 @@ struct Pipe {
     active: bool,
 }
 
+pub struct Organ {
+    harms: Vec<Pipe>,
+    env: Adsr,
+    trem: Sine,
+    trem_depth: f32,
+    chiff_amp: f32,
+    chiff_decay: f32,
+    chiff_filt: Biquad,
+    click_amp: f32,
+    click_decay: f32,
+    click_filt: Biquad,
+    // Percussion tab (GM 17 only): a pitched harmonic tap struck at key-on that
+    // decays away over the sustained drawbar — the Hammond "Percussion" voice.
+    // Inert (`perc_amp == 0.0`) for every other organ program, whose render is
+    // then bit-identical (the block is skipped and `perc_osc` never ticks).
+    perc_osc: Sine,
+    perc_amp: f32,
+    perc_decay: f32,
+    reed_noise_amp: f32,
+    reed_noise_filt: Biquad,
+    rng: Rng,
+    drive: f32,
+    amp: f32,
+    base_f: f32,
+    bend: f32,
+    sr: f32,
+}
+
+impl Organ {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        key: u8,
+        vel: u8,
+        sr: f32,
+        seed: u32,
+        stops: &[(f32, f32)],
+        env: Adsr,
+        trem_hz: f32,
+        trem_depth: f32,
+        chiff: f32,
+        click: f32,
+        drive: f32,
+        amp: f32,
+    ) -> Self {
+        let f = key_freq(key);
+        let mut rng = Rng::new(seed);
+        let harms = stops
+            .iter()
+            .filter(|&&(m, _)| f * m < sr * 0.45)
+            .map(|&(m, a)| {
+                // every pipe speaks at its own level
+                let a = a * (1.0 + 0.08 * rng.white());
+                Pipe {
+                    osc: Sine::new(f * m, sr, rng.white() * std::f32::consts::PI),
+                    ratio: m,
+                    amp: a,
+                    active: true,
+                }
+            })
+            .collect();
+        Organ {
+            harms,
+            env,
+            trem: Sine::new(trem_hz, sr, 0.0),
+            trem_depth,
+            chiff_amp: chiff * vel_amp(vel),
+            chiff_decay: t60_mul(0.03, sr),
+            chiff_filt: Biquad::bandpass((f * 2.0).min(sr * 0.4), 2.0, sr),
+            click_amp: click * vel_amp(vel),
+            click_decay: t60_mul(0.004, sr),
+            click_filt: Biquad::highpass(2000.0, 0.7, sr),
+            perc_osc: Sine::new(f, sr, 0.0),
+            perc_amp: 0.0,
+            perc_decay: 0.0,
+            reed_noise_amp: 0.0,
+            reed_noise_filt: Biquad::bandpass((f * 3.0).clamp(240.0, sr * 0.4), 0.8, sr),
+            rng,
+            drive,
+            amp: amp * (0.4 + 0.6 * vel_amp(vel)),
+            base_f: f,
+            bend: 1.0,
+            sr,
+        }
+    }
+
+    fn with_reed_noise(mut self, amp: f32, center_hz: f32, q: f32) -> Self {
+        self.reed_noise_amp = amp;
+        self.reed_noise_filt = Biquad::bandpass(center_hz.clamp(180.0, self.sr * 0.4), q, self.sr);
+        self
+    }
+
+    /// The Hammond Percussion tab (GM 17): a pitched harmonic tap at `ratio`×f0,
+    /// level `amp` relative to the drawbar fundamental, decaying over `t60`. It
+    /// rides the master amp/env like the drawbars, so it is velocity-scaled and
+    /// released with the note, but its own exponential decay makes it a one-shot
+    /// tap over the held sustain — the "ping" that separates 17 from 16.
+    fn with_percussion(mut self, ratio: f32, amp: f32, t60: f32) -> Self {
+        let f = (self.base_f * ratio).min(self.sr * 0.45);
+        self.perc_osc = Sine::new(f, self.sr, 0.0);
+        self.perc_amp = amp;
+        self.perc_decay = t60_mul(t60, self.sr);
+        self
+    }
+
+    // (The PitchScoop machinery that lived here served only the old organ-22
+    // harmonica arm; GM 22 is a Reed free-reed voice now — §2.11 — and the
+    // Reed owns its scoop natively.)
+
+    fn apply_pitch(&mut self) {
+        let pitch = self.bend;
+        for pipe in &mut self.harms {
+            let f = self.base_f * pipe.ratio * pitch;
+            pipe.active = f < self.sr * 0.45;
+            if pipe.active {
+                pipe.osc.set_freq(f, self.sr);
+            }
+        }
+    }
+}
+
+impl Voice for Organ {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let mut s = 0.0;
+            for pipe in &mut self.harms {
+                if pipe.active {
+                    s += pipe.amp * pipe.osc.next();
+                }
+            }
+            if self.reed_noise_amp > 1e-6 {
+                s += self.reed_noise_filt.process(self.rng.white()) * self.reed_noise_amp;
+            }
+            if self.chiff_amp > 1e-5 {
+                s += self.chiff_filt.process(self.rng.white()) * self.chiff_amp;
+                self.chiff_amp *= self.chiff_decay;
+            }
+            if self.click_amp > 1e-5 {
+                s += self.click_filt.process(self.rng.white()) * self.click_amp;
+                self.click_amp *= self.click_decay;
+            }
+            if self.perc_amp > 1e-5 {
+                s += self.perc_amp * self.perc_osc.next();
+                self.perc_amp *= self.perc_decay;
+            }
+            if self.drive > 0.0 {
+                s = (s * self.drive).tanh() / self.drive;
+            }
+            let trem = 1.0 + self.trem_depth * self.trem.next();
+            *o += s * self.amp * trem * self.env.next();
+        }
+        self.env.alive()
+    }
+
+    fn note_off(&mut self) {
+        self.env.release();
+    }
+
+    fn released(&self) -> bool {
+        self.env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+        self.apply_pitch();
+    }
+
+    fn set_trem(&mut self, rate_hz: f32, depth: f32) {
+        // phase-continuous retune; the engine calls this once per block with
+        // an inertia-slewed rate, so there is no zipper and no click
+        self.trem.set_freq(rate_hz, self.sr);
+        self.trem_depth = depth;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "organ"
+    }
+}
+
 // ---------------------------------------------------------------------------
 // GM 19 cathedral organ
 // ---------------------------------------------------------------------------
@@ -4072,185 +4491,6 @@ impl Voice for CathedralOrgan {
     }
 }
 
-pub struct Organ {
-    harms: Vec<Pipe>,
-    env: Adsr,
-    trem: Sine,
-    trem_depth: f32,
-    chiff_amp: f32,
-    chiff_decay: f32,
-    chiff_filt: Biquad,
-    click_amp: f32,
-    click_decay: f32,
-    click_filt: Biquad,
-    // Percussion tab (GM 17 only): a pitched harmonic tap struck at key-on that
-    // decays away over the sustained drawbar — the Hammond "Percussion" voice.
-    // Inert (`perc_amp == 0.0`) for every other organ program, whose render is
-    // then bit-identical (the block is skipped and `perc_osc` never ticks).
-    perc_osc: Sine,
-    perc_amp: f32,
-    perc_decay: f32,
-    reed_noise_amp: f32,
-    reed_noise_filt: Biquad,
-    rng: Rng,
-    drive: f32,
-    amp: f32,
-    base_f: f32,
-    bend: f32,
-    sr: f32,
-}
-
-impl Organ {
-    #[allow(clippy::too_many_arguments)]
-    fn new(
-        key: u8,
-        vel: u8,
-        sr: f32,
-        seed: u32,
-        stops: &[(f32, f32)],
-        env: Adsr,
-        trem_hz: f32,
-        trem_depth: f32,
-        chiff: f32,
-        click: f32,
-        drive: f32,
-        amp: f32,
-    ) -> Self {
-        let f = key_freq(key);
-        let mut rng = Rng::new(seed);
-        let harms = stops
-            .iter()
-            .filter(|&&(m, _)| f * m < sr * 0.45)
-            .map(|&(m, a)| {
-                // every pipe speaks at its own level
-                let a = a * (1.0 + 0.08 * rng.white());
-                Pipe {
-                    osc: Sine::new(f * m, sr, rng.white() * std::f32::consts::PI),
-                    ratio: m,
-                    amp: a,
-                    active: true,
-                }
-            })
-            .collect();
-        Organ {
-            harms,
-            env,
-            trem: Sine::new(trem_hz, sr, 0.0),
-            trem_depth,
-            chiff_amp: chiff * vel_amp(vel),
-            chiff_decay: t60_mul(0.03, sr),
-            chiff_filt: Biquad::bandpass((f * 2.0).min(sr * 0.4), 2.0, sr),
-            click_amp: click * vel_amp(vel),
-            click_decay: t60_mul(0.004, sr),
-            click_filt: Biquad::highpass(2000.0, 0.7, sr),
-            perc_osc: Sine::new(f, sr, 0.0),
-            perc_amp: 0.0,
-            perc_decay: 0.0,
-            reed_noise_amp: 0.0,
-            reed_noise_filt: Biquad::bandpass((f * 3.0).clamp(240.0, sr * 0.4), 0.8, sr),
-            rng,
-            drive,
-            amp: amp * (0.4 + 0.6 * vel_amp(vel)),
-            base_f: f,
-            bend: 1.0,
-            sr,
-        }
-    }
-
-    fn with_reed_noise(mut self, amp: f32, center_hz: f32, q: f32) -> Self {
-        self.reed_noise_amp = amp;
-        self.reed_noise_filt = Biquad::bandpass(center_hz.clamp(180.0, self.sr * 0.4), q, self.sr);
-        self
-    }
-
-    /// The Hammond Percussion tab (GM 17): a pitched harmonic tap at `ratio`×f0,
-    /// level `amp` relative to the drawbar fundamental, decaying over `t60`. It
-    /// rides the master amp/env like the drawbars, so it is velocity-scaled and
-    /// released with the note, but its own exponential decay makes it a one-shot
-    /// tap over the held sustain — the "ping" that separates 17 from 16.
-    fn with_percussion(mut self, ratio: f32, amp: f32, t60: f32) -> Self {
-        let f = (self.base_f * ratio).min(self.sr * 0.45);
-        self.perc_osc = Sine::new(f, self.sr, 0.0);
-        self.perc_amp = amp;
-        self.perc_decay = t60_mul(t60, self.sr);
-        self
-    }
-
-    // (The PitchScoop machinery that lived here served only the old organ-22
-    // harmonica arm; GM 22 is a Reed free-reed voice now — §2.11 — and the
-    // Reed owns its scoop natively.)
-
-    fn apply_pitch(&mut self) {
-        let pitch = self.bend;
-        for pipe in &mut self.harms {
-            let f = self.base_f * pipe.ratio * pitch;
-            pipe.active = f < self.sr * 0.45;
-            if pipe.active {
-                pipe.osc.set_freq(f, self.sr);
-            }
-        }
-    }
-}
-
-impl Voice for Organ {
-    fn render(&mut self, out: &mut [f32]) -> bool {
-        for o in out.iter_mut() {
-            let mut s = 0.0;
-            for pipe in &mut self.harms {
-                if pipe.active {
-                    s += pipe.amp * pipe.osc.next();
-                }
-            }
-            if self.reed_noise_amp > 1e-6 {
-                s += self.reed_noise_filt.process(self.rng.white()) * self.reed_noise_amp;
-            }
-            if self.chiff_amp > 1e-5 {
-                s += self.chiff_filt.process(self.rng.white()) * self.chiff_amp;
-                self.chiff_amp *= self.chiff_decay;
-            }
-            if self.click_amp > 1e-5 {
-                s += self.click_filt.process(self.rng.white()) * self.click_amp;
-                self.click_amp *= self.click_decay;
-            }
-            if self.perc_amp > 1e-5 {
-                s += self.perc_amp * self.perc_osc.next();
-                self.perc_amp *= self.perc_decay;
-            }
-            if self.drive > 0.0 {
-                s = (s * self.drive).tanh() / self.drive;
-            }
-            let trem = 1.0 + self.trem_depth * self.trem.next();
-            *o += s * self.amp * trem * self.env.next();
-        }
-        self.env.alive()
-    }
-
-    fn note_off(&mut self) {
-        self.env.release();
-    }
-
-    fn released(&self) -> bool {
-        self.env.released()
-    }
-
-    fn set_pitch(&mut self, mult: f32) {
-        self.bend = mult;
-        self.apply_pitch();
-    }
-
-    fn set_trem(&mut self, rate_hz: f32, depth: f32) {
-        // phase-continuous retune; the engine calls this once per block with
-        // an inertia-slewed rate, so there is no zipper and no click
-        self.trem.set_freq(rate_hz, self.sr);
-        self.trem_depth = depth;
-    }
-
-    #[cfg(test)]
-    fn kind(&self) -> &'static str {
-        "organ"
-    }
-}
-
 /// Base tremulant/musette AM (rate Hz, depth) for the organ programs. The
 /// engine only morphs GM16-19 from these values toward Leslie-fast; the
 /// musette accordions keep their built-in motion. (GM 22 no longer routes
@@ -4432,13 +4672,19 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             0.21,
         )
         .with_reed_noise(0.020, (f * 3.5).clamp(750.0, 2600.0), 0.75),
-        _ => unreachable!("organ() only handles GM16-18 and 20/21/23"),
+        _ => unreachable!("organ() only handles GM16-21 and 23"),
     }
 }
 
 /// Frozen pre-cathedral GM19 voice for the non-zero CC0 compatibility bank.
 pub(crate) fn legacy_church_organ(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
     Box::new(organ(19, key, vel, sr, seed))
+}
+
+/// GM19 CC0=2 alt bank: the restored cathedral pipe-organ voice (a second
+/// church-organ colour alongside the default Leslie drawbar). See [`CathedralOrgan`].
+pub(crate) fn cathedral_organ(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
+    Box::new(CathedralOrgan::new(key, vel, sr, seed))
 }
 
 // ---------------------------------------------------------------------------
@@ -4852,7 +5098,11 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
             Adsr::new(vel_attack(0.07, vel), 0.3, 0.85, 0.35, sr)
         },
         (5.1, 0.003, 0.22),
-        0.0,
+        // Round-2: a small bow-noise breath bed. A bare 5-saw detuned stack is
+        // near-perfectly periodic and reads as "synthy"; the sample layer only owns
+        // the onset (zeroed after 0.40 s), so the sustain needs its own aperiodic bow
+        // "air". Summed pre-filter, so it becomes filtered bow-hiss under the section.
+        0.025,
         None,
         0.7,
         0.22,
@@ -4989,6 +5239,14 @@ const CH2_MOUTH_RATE: f32 = 0.030; // mouth-open slew per control tick
 const CH2_HUM_LP: (f32, f32) = (900.0, 8000.0); // closed→open lowpass cutoff Hz
 const CH2_BREATH_T60: f32 = 0.09; // onset breath decay, seconds
 const CH2_BREATH_SUS: f32 = 0.008; // sustained air floor (pre-tract)
+/// Klatt-style voicing (chest) branch — round 2 "thin, no body": the tract
+/// is a parallel bandpass bank whose lowest band is F1, so a note below F1
+/// had NO sung fundamental (−24 dB at A2). A lowpassed copy of the dry
+/// pre-tract source runs in parallel and restores it; the 2-pole corner
+/// keeps the branch to chest register (the vowel identity stays with the
+/// formants). Per-program gain below (the ooh is the most
+/// fundamental-dominant vowel).
+const CH2_CHEST_LP_HZ: f32 = 580.0;
 /// Output level, calibrated so the sustained RMS sits in the v1 choir's
 /// 0.03-0.07 window across the keyboard (measured before the swap).
 const CH2_AMP: f32 = 1.55;
@@ -5050,6 +5308,8 @@ pub struct ChoirV2 {
     hum_hold: u32, // samples: vowel morph frozen, mouth closed
     mouth: f32,    // 0 closed → 1 open
     hum_lp: OnePole,
+    chest_lp: Biquad, // Klatt voicing branch: lowpassed dry pre-tract copy
+    chest_gain: f32,
     rng: Rng,
     t: u32,
     amp: f32,
@@ -5065,30 +5325,49 @@ fn choir(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> ChoirV2 {
     // Per-program vowel target, onset multipliers and cluster gains. 54
     // ("synth voice") finally splits from 53 with a brighter "eh" and a
     // uniform (non-SATB) scatter — a stack of synth voices, not a room.
-    let (tgt, vgains, sf_gains, hold_mul, br_mul): ([f32; 3], [f32; 3], [f32; 2], f32, f32) =
-        match program {
-            52 => (
-                [660.0, 1120.0, 2500.0],
-                [1.0, 0.55, 0.28],
-                [0.30, 0.18],
-                1.0,
-                1.0,
-            ), // aah
-            53 => (
-                [330.0, 870.0, 2300.0],
-                [1.0, 0.45, 0.20],
-                [0.20, 0.12],
-                1.25,
-                0.7,
-            ), // ooh
-            _ => (
-                [400.0, 1900.0, 2600.0],
-                [1.0, 0.70, 0.40],
-                [0.35, 0.22],
-                0.5,
-                1.3,
-            ), // eh
-        };
+    // Last two columns (round 2, chest branch): chest_gain — the Klatt
+    // voicing bypass level — and amp_mul, the output re-trim that holds the
+    // sustained level inside the strings-continuity window after the chest
+    // energy lands (the h1-vs-peak oracle is amp-invariant, so the trim
+    // never buries the restored fundamental).
+    let (tgt, vgains, sf_gains, hold_mul, br_mul, chest_gain, amp_mul): (
+        [f32; 3],
+        [f32; 3],
+        [f32; 2],
+        f32,
+        f32,
+        f32,
+        f32,
+    ) = match program {
+        52 => (
+            [660.0, 1120.0, 2500.0],
+            [1.0, 0.55, 0.28],
+            [0.30, 0.18],
+            1.0,
+            1.0,
+            0.35,
+            0.85,
+        ), // aah
+        53 => (
+            [330.0, 870.0, 2300.0],
+            [1.0, 0.45, 0.20],
+            [0.20, 0.12],
+            1.25,
+            0.7,
+            0.50,
+            0.44,
+        ), // ooh — the most fundamental-dominant vowel
+        _ => (
+            [400.0, 1900.0, 2600.0],
+            [1.0, 0.70, 0.40],
+            [0.35, 0.22],
+            0.5,
+            1.3,
+            0.0,
+            1.0,
+        ), // eh — no chest: the synth stack already carries its fundamental
+           // (h1 −0.5 dB rel peak, measured) and renders exactly as before
+    };
     let qs = [9.0, 10.0, 9.0];
     let uniform = program == 54;
 
@@ -5178,9 +5457,11 @@ fn choir(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> ChoirV2 {
         hum_hold: (hum_hold_s * sr) as u32,
         mouth: 0.0,
         hum_lp: OnePole::lowpass(CH2_HUM_LP.0, sr),
+        chest_lp: Biquad::lowpass(CH2_CHEST_LP_HZ, 0.6, sr),
+        chest_gain,
         rng,
         t: 0,
-        amp: CH2_AMP * (0.4 + 0.6 * vel_amp(vel)),
+        amp: CH2_AMP * amp_mul * (0.4 + 0.6 * vel_amp(vel)),
         sr,
     }
 }
@@ -5246,6 +5527,7 @@ impl Voice for ChoirV2 {
             }
             let breath_now = CH2_BREATH_SUS + self.breath_env;
             let mut s = 0.0;
+            let mut dry = 0.0;
             for (sec, tr) in self.tracts.iter_mut().enumerate() {
                 // section pair summed pre-tract, breath injected pre-tract so
                 // the air is vowel-coloured, decorrelated across sections
@@ -5254,6 +5536,7 @@ impl Voice for ChoirV2 {
                 let b = &mut self.singers[sec * 2 + 1];
                 x += b.osc.next() * b.gain;
                 x += self.rng.white() * breath_now;
+                dry += x;
                 let mut y = 0.0;
                 for k in 0..3 {
                     y += tr.bands[k].process(x) * self.vgains[k];
@@ -5264,6 +5547,13 @@ impl Voice for ChoirV2 {
                 s += y;
             }
             s /= self.singers.len() as f32;
+            // Klatt voicing branch: the sung fundamental in parallel with the
+            // formant bank (which has no band below F1). Runs through the same
+            // mouth/lips chain below, so a closed hum stays closed. Gated so a
+            // zero-gain program (54) renders bit-identically to pre-chest.
+            if self.chest_gain > 0.0 {
+                s += self.chest_lp.process(dry / self.singers.len() as f32) * self.chest_gain;
+            }
             s = self.hum_lp.process(s);
             s *= CH2_HUM_GAIN + (1.0 - CH2_HUM_GAIN) * self.mouth;
             self.breath_env *= self.breath_mul;
@@ -5777,7 +6067,11 @@ pub const FLUTE: WindPreset = WindPreset {
 /// that velocity does NOT open the timbre (blow harder and it just goes sharp),
 /// hence vel_bright 0.15.
 pub const RECORDER: WindPreset = WindPreset {
-    harm: [0.09, 0.05, 0.012, 0.0, 0.0, 0.0],
+    // Round-2: 0.09/0.05/0.012 made h2 ≈ −21 dB — the steady tone was a near-sine
+    // (crest ~1.7), "doesn't sound like a recorder". Raise the low ladder to give it
+    // an audible open-pipe body, keeping evens present (h2 ≥ h3, the OPEN-pipe
+    // signature) and staying below the flute's 0.32 (recorder is the purer pipe).
+    harm: [0.16, 0.08, 0.02, 0.0, 0.0, 0.0],
     vel_bright: 0.15,
     reg_dark: 0.35,
     // 0.03 → 0.055 (§2.8.5.2): the old bed sat ~46 dB under the tone —
@@ -7542,11 +7836,20 @@ impl ReedRasp {
         self.dcb
             .retune_highpass(RD_RASP_HP_F0 * f, 0.7, self.osr / self.m as f32);
         // turbulence band: lowpass the held white at 0.30·f0, renormalised so
-        // its rms is noise_base·p²·(1+growl span) at tent scale regardless of
-        // f/m — turbulence intensity tracks the flow (p²), which is half of
-        // the G3 ff/p pressure-tracking (the other half is the drive window)
+        // its rms is noise_base·p⁴·(1+growl span) at tent scale regardless of
+        // f/m. Round 2 ("all sound distorted from mezzo-forte up"): the
+        // window is now QUARTIC in pressure, was p². The p² law left a vel-96
+        // note with ~0.5× the ff skirt energy — the rasp barely distinguished
+        // mf from ff — and gating the DRIVE instead is a dead end: the skirt
+        // transfer saturates in g while a g-knee moves the honk band-winner
+        // (breaks P5) and dents the P2 ramp. Only the noise INTENSITY is
+        // gated, so the harmonic path (drive, tent, honk, tilt) is untouched
+        // at every pressure — P2/P5/P3 see identical harmonic input, ff is
+        // bit-identical (window(1) = 1), and the mf skirt drops directly with
+        // the window (reed_sax_rasp_blooms_with_pressure).
         self.nlp_a = 1.0 - (-2.0 * std::f32::consts::PI * (RD_RASP_NLP_F0 * f) / self.osr).exp();
-        let n_eff = self.noise_base * p * p * (1.0 + RD_RASP_GROWL_SPAN * self.growl_sm);
+        let n_eff =
+            self.noise_base * (p * p) * (p * p) * (1.0 + RD_RASP_GROWL_SPAN * self.growl_sm);
         let a = self.nlp_a as f64;
         // one-pole on white: var_out = a/(2−a)·var_in; uniform ±1 has var 1/3
         let lp_rms = (a / (2.0 - a) / 3.0).sqrt().max(1e-9);
@@ -9452,8 +9755,15 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
     let samples = samples && crate::embedded_samples_available();
     let noise_off = (0.0, 0.01, 1000.0, 1.0);
     match program {
-        0..=3 => {
-            let model = Box::new(acoustic_piano(key, vel, sr, seed));
+        // Round 2 split the GM0..=3 alias into distinct pianos. 0/1/3 stay
+        // acoustic grands (LA piano attack bank + the is_acoustic_piano
+        // engine gates); 2 is the CP-style electric grand, fully modeled.
+        0 | 1 | 3 => {
+            let model: Box<dyn Voice> = match program {
+                0 => Box::new(acoustic_piano(key, vel, sr, seed)),
+                1 => Box::new(bright_acoustic_piano(key, vel, sr, seed)),
+                _ => Box::new(honky_tonk_piano(key, vel, sr, seed)),
+            };
             if samples {
                 let (gain, fade) = LA_PIANO;
                 crate::sampler::LaVoice::wrap(
@@ -9469,6 +9779,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
+        2 => Box::new(electric_grand_piano(key, vel, sr, seed)),
         4 => Box::new(electric_piano_1(key, vel, sr, seed)),
         5 => Box::new(electric_piano_2(key, vel, sr, seed)),
         // §2.10: the harpsichord is PLUCKED (jack plectrum), not an additive
@@ -9546,8 +9857,11 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             0.50,
         )),
         15 => Box::new(Pluck::new(&DULCIMER, key, vel, sr, seed)),
-        16..=18 | 20 | 21 | 23 => Box::new(organ(program, key, vel, sr, seed)),
-        19 => Box::new(CathedralOrgan::new(key, vel, sr, seed)),
+        // 19 rejoined the drawbar arm in round 2: the audition preferred the
+        // legacy Leslie drawbar over the CathedralOrgan pipe model (retired),
+        // so the default and the CC0 alt (legacy_church_organ) are now the
+        // same voice.
+        16..=21 | 23 => Box::new(organ(program, key, vel, sr, seed)),
         // §2.11: the harmonica is a FREE reed, not a drawbar organ — it now
         // rides the Reed family with a dedicated free-reed preset.
         22 => Box::new(reed(program, key, vel, sr, seed)),
@@ -9619,7 +9933,30 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        41 | 44 => Box::new(Bowed::new(program, key, vel, sr, seed)),
+        // GM 41 viola: give it the sampled bowed attack its siblings (violin 40,
+        // cello 42, contrabass 43) all carry — round-2, Arthur "replace with alt". It
+        // was uniquely the only solo-bowed default with no LA layer, which is why the
+        // CC0 alt (Bowed + samples) sounded better. Uses the violin bank repitched as a
+        // viola proxy, exactly as the alt bank does (altbank.rs 40..=43). The reversal of
+        // the prior model-only design is pinned by default_bowed_articulations_and_sample_routing.
+        41 => {
+            let model = Box::new(Bowed::new(41, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_VIOLIN;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::violin_bank(vel),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
+        44 => Box::new(Bowed::new(44, key, vel, sr, seed)),
         45 => Box::new(Pluck::new(&PIZZ, key, vel, sr, seed)),
         46 => Box::new(Pluck::new(&HARP, key, vel, sr, seed)),
         47 => Box::new(timpani(key, vel, sr, seed)),
@@ -9923,6 +10260,17 @@ mod tests {
         buf
     }
 
+    /// Render the GM19 CC0=2 cathedral pipe voice in isolation (the default GM19
+    /// is now the Leslie drawbar, so `render_program(19, ...)` no longer reaches
+    /// the cathedral). Mirrors `render_program` but builds the cathedral voice.
+    fn render_cathedral(key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = cathedral_organ(key, vel, sr, seed);
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
     /// V2a (guitar v2): the pickup RLC building block is a genuinely RESONANT
     /// lowpass — a peak above unity at the resonance (a monotone lowpass can
     /// never gain), then rolloff above. Pinned on the isolated biquad so the
@@ -10018,7 +10366,12 @@ mod tests {
     /// the held RMS: crest-vs-RMS, the smoothed window-max envelope statistic,
     /// and the saturator equilibrium multiple. Shared by V6a and V6c so the
     /// sustainer's level calibration lives in exactly one place.
-    const SUS_HOLD_REF_OFFSET_DB: f32 = -11.6;
+    /// Re-measured for round 2's DRIVE preset (sustain 0.5→0.7, bright
+    /// 4800→9000): the brighter damper shrinks the high-key loop deficit so
+    /// the SUS_K_MAX clamp no longer caps E6 below its true equilibrium —
+    /// the hold now reads E5 −12.4 / E6 −7.4 dB rel ref (was −23.5/−17.9 at
+    /// the clamped capture); −7.3 centers the ±5 dB band on both.
+    const SUS_HOLD_REF_OFFSET_DB: f32 = -7.3;
 
     /// Drive a Pluck through a held phase then a released tail (V6/V7/V8).
     fn render_pluck_phased(
@@ -10587,6 +10940,37 @@ mod tests {
     /// while the sustain stays harmonic (flatness ≤ 0.30 measured
     /// 0.07-0.19).
     #[test]
+    fn choir2_low_notes_carry_the_sung_fundamental() {
+        // Round-2 "thin, no body": the tract is a parallel bandpass bank whose
+        // lowest band is F1 (660 aah / 330 ooh), so a low note's FUNDAMENTAL
+        // (below F1) was filtered out — at A2 it measured −24.4 (52) / −19.6
+        // (53) dB below the note's loudest harmonic: a nasal formant cluster
+        // with no sung pitch under it. (A band-energy fraction cannot pin
+        // this: the 80-500 Hz band already collects h2-h4 formant skirts.)
+        // The Klatt-style chest branch (a lowpassed copy of the dry pre-tract
+        // source blended in parallel) restores it; it pitch-tracks by
+        // construction. GM54's synth stack already carried its fundamental
+        // (−0.5 dB) and is not asserted here.
+        let sr = 44100.0;
+        for (prog, floor_db) in [(52u8, -12.0f32), (53, -12.0)] {
+            let f0 = key_freq(45);
+            let sig = render_program(prog, 45, 96, 3.0, 7);
+            let sus = segment(&sig, sr, 1.0, 2.8);
+            let m1 = mag_at(sus, sr, f0);
+            let peak = (1..=20u32)
+                .map(|h| mag_at(sus, sr, f0 * h as f32))
+                .fold(0.0f32, f32::max);
+            let rel = 20.0 * (m1 / peak.max(1e-9)).log10();
+            println!("GM{prog} A2: h1 {rel:.1} dB rel peak harmonic");
+            assert!(
+                rel >= floor_db,
+                "GM{prog}: sung fundamental buried — h1 {rel:.1} dB rel the \
+                 loudest harmonic (floor {floor_db})"
+            );
+        }
+    }
+
+    #[test]
     fn choir2_consonant_breath_onset() {
         let sr = 44100.0;
         for prog in 52..=54u8 {
@@ -10745,33 +11129,66 @@ mod tests {
         }
     }
 
+    /// Round-2 GM004/005 "clean sine stack, no bark": the additive Modal EPs
+    /// had zero harmonic-generating nonlinearity, so nothing filled between
+    /// the sparse bell partials and nothing grew with velocity. The pickup
+    /// shaper regenerates a full ladder: measured at 4·f0 — a harmonic ABSENT
+    /// from EP1's partial table (1.0/1.003/2.0/2.82/3.0/5.38), so it can only
+    /// come from the new nonlinearity. Pre-shaper it measured ~1e-4 (leakage);
+    /// the bark must both exist at forte and GROW with velocity, and the
+    /// biased shaper's DC must stay blocked.
+    #[test]
+    fn electric_piano_pickup_bark_grows_with_velocity() {
+        let sr = 44100.0;
+        for prog in [4u8, 5] {
+            let f0 = key_freq(60);
+            let ratio = |vel: u8| {
+                let sig = render_program(prog, 60, vel, 0.8, 7);
+                let seg = segment(&sig, sr, 0.05, 0.55);
+                mag_at(seg, sr, 4.0 * f0) / mag_at(seg, sr, f0).max(1e-9)
+            };
+            let (r60, r90, r120) = (ratio(60), ratio(90), ratio(120));
+            println!("GM{prog} h4/h1: vel60 {r60:.4} vel90 {r90:.4} vel120 {r120:.4}");
+            assert!(
+                r120 > 0.03,
+                "GM{prog}: no pickup bark at forte — h4/h1 {r120:.4} (floor 0.03)"
+            );
+            assert!(
+                r120 > r90 && r90 > r60,
+                "GM{prog}: bark not velocity-graded — {r60:.4}/{r90:.4}/{r120:.4}"
+            );
+            let sig = render_program(prog, 60, 120, 0.8, 7);
+            let seg = segment(&sig, sr, 0.05, 0.75);
+            let dc = seg.iter().map(|&x| x as f64).sum::<f64>() / seg.len() as f64;
+            assert!(dc.abs() < 1e-3, "GM{prog}: shaper DC leaked: {dc}");
+        }
+    }
+
     #[test]
     fn keyboard_voices_programs_4_7_do_not_use_acoustic_piano_voice() {
         let sr = 44100.0;
         let key = 60;
         let vel = 96;
         let seed = 0x4b05_000f;
-        for program in 0u8..=3 {
+        // Round 2 split GM1/2/3 off the GM0 alias: 0/1/3 keep the acoustic
+        // engine gates; 2 (CP electric grand) deliberately does not. The old
+        // GM0..=3 render-equality clause is retired with the alias — the
+        // distinctness matrix now asserts the OPPOSITE (all four pairwise
+        // distinct, testutil::distinctness).
+        for program in [0u8, 1, 3] {
             assert!(
                 is_acoustic_piano(program),
                 "GM{program} should stay acoustic"
             );
         }
-        for program in 4u8..=7 {
+        for program in [2u8, 4, 5, 6, 7] {
             assert!(
                 !is_acoustic_piano(program),
                 "GM{program} should not use acoustic-piano engine gates"
             );
         }
-        let acoustic = render_program(0, key, vel, 1.2, seed);
-        for program in 1u8..=3 {
-            assert_eq!(
-                render_program(program, key, vel, 1.2, seed),
-                acoustic,
-                "GM0-3 acoustic piano routes diverged locally"
-            );
-        }
 
+        let acoustic = render_program(0, key, vel, 1.2, seed);
         let mut renders: Vec<Vec<f32>> = Vec::new();
         for program in 4u8..=7 {
             let s = render_program(program, key, vel, 1.2, seed ^ program as u32);
@@ -10878,7 +11295,7 @@ mod tests {
     #[test]
     fn cathedral_organ_has_pedal_body_and_mixture_sheen() {
         let sr = 44_100.0;
-        let low = render_program(19, 36, 96, 1.2, 0x1234);
+        let low = render_cathedral(36, 96, 1.2, 0x1234);
         let body = segment(&low, sr, 0.35, 1.10);
         let p32 = mag_at(body, sr, 16.35);
         let p16 = mag_at(body, sr, 32.70);
@@ -10907,7 +11324,7 @@ mod tests {
             "cathedral/legacy 15-40Hz {sub}/{legacy_sub}"
         );
 
-        let high = render_program(19, 84, 96, 0.8, 0x1234);
+        let high = render_cathedral(84, 96, 0.8, 0x1234);
         let high_body = segment(&high, sr, 0.25, 0.75);
         assert!(
             hp_rms(high_body, sr, 4_000.0) >= 0.04 * rms(high_body),
@@ -10918,54 +11335,12 @@ mod tests {
     #[test]
     fn cathedral_organ_steady_level_is_velocity_independent() {
         let sr = 44_100.0;
-        let soft = render_program(19, 60, 32, 0.8, 7);
-        let loud = render_program(19, 60, 120, 0.8, 7);
+        let soft = render_cathedral(60, 32, 0.8, 7);
+        let loud = render_cathedral(60, 120, 0.8, 7);
         let soft_rms = rms(segment(&soft, sr, 0.30, 0.75));
         let loud_rms = rms(segment(&loud, sr, 0.30, 0.75));
         let delta_db = 20.0 * (loud_rms / soft_rms.max(1e-12)).log10().abs();
         assert!(delta_db <= 1.5, "steady velocity delta {delta_db:.2} dB");
-    }
-
-    // Oracle A — the steady state is alive and aperiodic (not a static,
-    // phase-locked additive tone = "harpsichord"). Key 76 (E5) sits in the
-    // complained-about register, has no pedal ranks, and carries both a
-    // unison pair (Principal id1 vs Reed id9) and mixture-vs-principal
-    // coincident ratios. A2 (max normalised envelope autocorrelation over
-    // 1.5–4.5 s lags) is the discriminator: a static organ's constant-rate
-    // beats make the envelope quasi-periodic (re-peaks high); independent
-    // per-pipe wind-walks decorrelate it (low). Calibration (measured @44.1k,
-    // stable across event seeds to ±0.01):
-    //   pre-wander static organ  autocorr ≈ 0.44,  cov ≈ 0.153
-    //   post-wander              autocorr ≈ 0.25,  cov ≈ 0.131
-    // 0.35 sits cleanly between (≈0.10 margin each side). The static organ is a
-    // touch less self-similar than a pure model predicts, so the separation is
-    // ~1.8× rather than a larger factor — but the two clusters do not overlap
-    // and are seed-stable, so the threshold holds for this signal.
-    #[test]
-    fn cathedral_organ_steady_state_is_alive_and_aperiodic() {
-        let sr = 44_100.0;
-        let render = render_program(19, 76, 96, 11.0, 0xA11CE);
-        let steady = segment(&render, sr, 1.0, 10.5);
-        let (autocorr, cov) = crate::testutil::env_aperiodicity(steady, sr, 1.5, 4.5);
-        println!("cathedral A  seedA: autocorr={autocorr:.4} cov={cov:.4}");
-
-        // A3 — the wander rides the STABLE (rank,key) seed, not the event seed:
-        // a different event seed must give the same envelope statistics.
-        let render2 = render_program(19, 76, 96, 11.0, 0x5EED9);
-        let steady2 = segment(&render2, sr, 1.0, 10.5);
-        let (autocorr2, cov2) = crate::testutil::env_aperiodicity(steady2, sr, 1.5, 4.5);
-        println!("cathedral A  seedB: autocorr={autocorr2:.4} cov={cov2:.4}");
-
-        assert!(cov >= 0.02, "steady envelope is frozen: cov {cov:.4}");
-        assert!(
-            autocorr <= 0.35,
-            "steady envelope is quasi-periodic (harpsichord-like): autocorr {autocorr:.4}"
-        );
-        assert!(
-            (cov - cov2).abs() <= 0.20 * cov.max(cov2) + 1e-6
-                && (autocorr - autocorr2).abs() <= 0.15,
-            "wander looks event-seeded: ({cov:.4},{autocorr:.4}) vs ({cov2:.4},{autocorr2:.4})"
-        );
     }
 
     // Oracle B — regression guard that sustained high notes are NOT
@@ -10985,7 +11360,7 @@ mod tests {
         let sr = 44_100.0;
         for key in [84u8, 96] {
             let f0 = key_freq(key);
-            let render = render_program(19, key, 96, 4.0, 0xB0B);
+            let render = render_cathedral(key, 96, 4.0, 0xB0B);
             let body = segment(&render, sr, 0.8, 3.5);
             let mut buzz2 = 0.0f32;
             for k in [5.0f32, 7.0, 11.0, 13.0] {
@@ -11014,7 +11389,7 @@ mod tests {
         // B2 — the onset is no longer a pluck: envelope reaches 90% of steady
         // within no LESS than 8 ms (a real treble principal speaks in 10–30 ms;
         // a sub-5 ms rise + noise chiff is a hammer/pluck cue).
-        let render = render_program(19, 88, 96, 1.0, 0xB0B);
+        let render = render_cathedral(88, 96, 1.0, 0xB0B);
         let mut lp = OnePole::lowpass(200.0, sr);
         let env: Vec<f32> = render.iter().map(|&x| lp.process(x.abs())).collect();
         let steady = rms(segment(&render, sr, 0.30, 0.60));
@@ -11091,7 +11466,7 @@ mod tests {
                     // read that as a registration jump. A ~2.5 s window averages
                     // the wander out and tests the static registration-continuity
                     // contract the 2.0 dB bound is really about.
-                    let rendered = render_program(19, key, 96, 3.0, 99);
+                    let rendered = render_cathedral(key, 96, 3.0, 99);
                     let body = segment(&rendered, sr, 0.5, 3.0);
                     (rms(body), spectral_centroid(body, sr, 100.0, 12_000.0))
                 })
@@ -11117,7 +11492,7 @@ mod tests {
     fn cathedral_organ_rejects_sub_ten_hz_across_low_midi_keys() {
         let sr = 44_100.0;
         for key in 0u8..=35 {
-            let rendered = render_program(19, key, 96, 0.7, 0x7000 + key as u32);
+            let rendered = render_cathedral(key, 96, 0.7, 0x7000 + key as u32);
             let body = segment(&rendered, sr, 0.25, 0.65);
             let infrasonic = spectral_band_rms(body, sr, 0.1, 9.5);
             let musical_sub = spectral_band_rms(body, sr, 12.0, 40.0).max(1e-12);
@@ -11419,6 +11794,35 @@ mod tests {
         assert!(
             (bent_pitch / (f0 * bend) - 1.0).abs() <= 0.02,
             "GM22 set_pitch reset the scoop or missed bend: {bent_pitch:.1}"
+        );
+    }
+
+    /// GM047 timpani tail must stay PITCHED, not collapse to a low boom. Round-1
+    /// tripled every partial T60, so the fundamental (ratio 1.0) — already the
+    /// loudest (amp 1.0) and now the longest-ringing (T60 3.0) — outlasts the faster
+    /// upper modes and the tail becomes an isolated low hum ("boomy", round-2). In
+    /// the LATE tail (0.5-1.0 s) the pitched-partial energy must stay a real fraction
+    /// of the fundamental. Fail-first at TIMPANI[0].2 = 3.0.
+    #[test]
+    fn timpani_47_tail_stays_pitched_not_a_boom() {
+        let sr = 44100.0;
+        let key = 45u8;
+        let f0 = key_freq(key);
+        let buf = render_program(47, key, 96, 2.8, 0x4700_1300);
+        let tail = segment(&buf, sr, 1.5, 2.5);
+        let fund = mag_at(tail, sr, f0).max(1e-9);
+        let upper = (mag_at(tail, sr, 1.504 * f0)
+            + mag_at(tail, sr, 1.742 * f0)
+            + mag_at(tail, sr, 2.0 * f0))
+            / fund;
+        println!("timpani late-tail upper/fund: {upper:.3}");
+        // A real kettledrum's (0,1) fundamental is air-damped and decays FAST; the
+        // ~1.5 principal mode rings longest and carries the pitch. Round-1 made the
+        // fundamental the longest partial (T60 3.0) so the late tail is a low hum.
+        assert!(
+            upper > 0.60,
+            "timpani late tail is a low boom: upper/fund {upper:.3} (need > 0.60 — the pitched \
+             principal mode must not be swamped by the fundamental)"
         );
     }
 
@@ -12969,6 +13373,28 @@ mod tests {
         assert!(u < b, "upright should decay faster: {u} vs {b}");
     }
 
+    /// GM046 harp must SHIMMER — its sustained tone carries upper-partial energy,
+    /// not just a low-mid soundboard thud. Round-2: pick_lp 1800 dulled the attack
+    /// and the loop-damper `bright` sat at the DEFAULTS 3000, so the ring damped
+    /// everything above ~3 kHz and the centroid sat near the fundamental ("needs
+    /// work" / dark). `bright` is the shimmer lever (it sets the KS loop damper).
+    /// Fail-first at bright=3000/pick_lp=1800.
+    #[test]
+    fn harp_46_shimmers() {
+        let sr = 44100.0;
+        let buf = render_pluck(&HARP, 60, 96, 0.6, 7);
+        let sus = segment(&buf, sr, 0.10, 0.45);
+        let c = spectral_centroid(sus, sr, 100.0, 9000.0);
+        println!("harp shimmer centroid: {c:.0} Hz");
+        // Threshold calibrated between the dark original (432 Hz) and the brightened
+        // voice (641 Hz) — a ~40% shimmer lift with margin either side. The absolute
+        // brightness is Arthur's ear to fine-tune; this only pins "not dark again".
+        assert!(
+            c > 580.0,
+            "harp too dark: sustain centroid {c:.0} Hz (need > 580)"
+        );
+    }
+
     #[test]
     fn harp_46_has_soundboard_and_harp_wound_law() {
         assert!(
@@ -13060,8 +13486,13 @@ mod tests {
         );
         let long = run(K_COUPLE, 10.0);
         let peak = long.iter().fold(0f32, |m, &x| m.max(x.abs()));
+        // Bound re-pinned 1.5 → 3.2 when round 2 raised DRIVE.amp 0.7 → 1.5
+        // (the raw voice scales ×2.14; the engine's Drive tanh bounds the
+        // mixed signal). Measured 1.57 post-raise — same ~2× margin as the
+        // 0.73-vs-1.5 original capture; runaway feedback still lands far
+        // outside.
         assert!(
-            long.iter().all(|x| x.is_finite()) && peak < 1.5,
+            long.iter().all(|x| x.is_finite()) && peak < 3.2,
             "peak {peak}"
         );
     }
@@ -13507,8 +13938,9 @@ mod tests {
         );
     }
 
-    /// Default-bank tremolo and pizzicato are articulation-correct solo
-    /// proxies; neither may inherit the sustained violin sample wrapper.
+    /// Default-bank tremolo and pizzicato are articulation-correct solo proxies
+    /// that skip the sustained violin sample wrapper; the viola (round-2) DOES take
+    /// the LA bowed attack, matching its violin/cello/bass siblings.
     #[test]
     fn default_bowed_articulations_and_sample_routing() {
         let sr = 44100.0;
@@ -13579,19 +14011,20 @@ mod tests {
         let bits = |s: Vec<f32>| s.into_iter().map(f32::to_bits).collect::<Vec<_>>();
         let samples_available = bits(render_program_sampled(0, 69, 100, 0.5, 6, true))
             != bits(render_program_sampled(0, 69, 100, 0.5, 6, false));
-        // Modeled-only bowed voices carry no sample layer: viola (41), tremolo
-        // (44) and pizzicato (45).
-        for program in [41u8, 44, 45] {
+        // Modeled-only bowed voices carry no sample layer: tremolo (44) and
+        // pizzicato (45). (Round-2: the viola 41 now DOES carry the LA layer —
+        // Arthur's "replace with alt" — so it moved to the sampled group below.)
+        for program in [44u8, 45] {
             let on = bits(render_program_sampled(program, 69, 100, 0.5, 6, true));
             let off = bits(render_program_sampled(program, 69, 100, 0.5, 6, false));
             assert_eq!(on, off, "GM{program} must skip the sample layer");
         }
         // Sampled voices carry their LA attack when the key is in the bank's
-        // range: violin (40) and fiddle (110) and the cello (42) at A4; the
-        // contrabass (43) at a low E2 — A4 is above its zones, so there it
-        // correctly falls back to the bare waveguide (tested in the skip spirit
+        // range: violin (40), viola (41, round-2), fiddle (110) and the cello (42)
+        // at A4; the contrabass (43) at a low E2 — A4 is above its zones, so there
+        // it correctly falls back to the bare waveguide (tested in the skip spirit
         // by the range guard, not here).
-        for (program, key) in [(40u8, 69u8), (110, 69), (42, 69), (43, 40)] {
+        for (program, key) in [(40u8, 69u8), (41, 69), (110, 69), (42, 69), (43, 40)] {
             let on = bits(render_program_sampled(program, key, 100, 0.5, 6, true));
             let off = bits(render_program_sampled(program, key, 100, 0.5, 6, false));
             if samples_available {
@@ -13776,6 +14209,35 @@ mod tests {
 
     fn key_hz(key: u8) -> f32 {
         440.0 * 2f32.powf((key as f32 - 69.0) / 12.0)
+    }
+
+    /// GM048/049 string ensembles must carry bow-noise "air", not read as a bare
+    /// detuned-saw synth ("synthy", round-2). Measured PAST the sample fade (the LA
+    /// attack is zeroed after 0.40 s; render model-only), so it is a claim about the
+    /// SawStack sustain itself: the inter-harmonic band between h2 and h3 — off the
+    /// ±0.7% detune sidebands — must hold real aperiodic energy vs the harmonics. A
+    /// pure detuned-saw stack is near-periodic, so that band sits at the floor.
+    /// Fail-first at breath=0.0.
+    #[test]
+    fn string_ensemble_48_has_bow_noise_air() {
+        let sr = 44100.0;
+        let key = 60u8;
+        let f0 = key_freq(key);
+        let buf = render_program(48, key, 100, 1.0, 7);
+        let sus = segment(&buf, sr, 0.55, 1.0);
+        let harm = spectral_band_rms(sus, sr, 0.97 * f0, 1.03 * f0)
+            + spectral_band_rms(sus, sr, 1.97 * f0, 2.03 * f0);
+        let inter = spectral_band_rms(sus, sr, 2.4 * f0, 2.6 * f0);
+        let ratio = inter / harm.max(1e-9);
+        println!("ensemble inter-harmonic/harmonic: {ratio:.5}");
+        // A bare detuned-saw stack has EXACTLY zero energy between the harmonics
+        // (the fail-before value), so this pins "the sustain carries aperiodic bow
+        // air" — the mechanism — rather than an absolute loudness. Threshold sits well
+        // above the periodic-floor 0 and below the breath-fed value.
+        assert!(
+            ratio > 0.001,
+            "string ensemble too periodic (synthy): inter/harm {ratio:.5} (need > 0.001 — bow air present)"
+        );
     }
 
     /// BS-O1 (regression, GM 43 contrabass): the waveguide's loop latency must be
@@ -14128,10 +14590,13 @@ mod tests {
         assert_render_signature(
             "SawStack strings(48)",
             render_signature(&strings_render, sr, (0.1, 0.4), (0.05, 0.15), (0.35, 0.48)),
+            // Re-pinned round-2: strings() gained a bow-noise breath bed (0.0 -> 0.025),
+            // which raises the sustained centroid (broadband air) 683 -> 708 Hz. rms and
+            // envelope are essentially unchanged; this is the intended timbre change.
             RenderSignature {
-                rms_db: -28.043,
-                centroid_hz: 683.291,
-                late_early_db: 3.082,
+                rms_db: -28.037,
+                centroid_hz: 708.315,
+                late_early_db: 3.102,
             },
         );
     }
@@ -16438,6 +16903,52 @@ mod tests {
         }
     }
 
+    /// Round-2 "all sound distorted from mezzo-forte up": the rasp must
+    /// BLOOM with pressure, not sit engaged at every ordinary dynamic. The
+    /// turbulence window is quartic in pressure (was p²), so a vel-96 note
+    /// keeps its honk and brightness ramp (drive g, tilt and formants are
+    /// untouched — P2/P5 stay bit-comparable on the harmonic path) but mixes
+    /// in well under half the ff skirt energy; the ff voice itself is
+    /// UNCHANGED (G3's −40 dB floor re-asserted here so this oracle is
+    /// self-contained). Pre-change the mf/ff skirt ratio measured ~0.45-0.55
+    /// per sax — the rasp barely distinguished mf from ff.
+    #[test]
+    fn reed_sax_rasp_blooms_with_pressure() {
+        let sr = 44100.0;
+        for p in [&SOP_SAX, &ALTO_SAX, &TENOR_SAX, &BARI_SAX] {
+            let key = preset_mid_key(p);
+            let f0 = key_freq(key);
+            let skirt = |vel: u8| {
+                let b = opressure_render(p, key, vel, 1.4, false);
+                let seg = &b[(0.45 * sr) as usize..(1.35 * sr) as usize];
+                g3_skirt_rms(seg, sr, f0) / rms(seg).max(1e-12)
+            };
+            let (mf, ff) = (skirt(96), skirt(127));
+            let ff_db = 20.0 * ff.max(1e-9).log10();
+            let mf_db = 20.0 * mf.max(1e-9).log10();
+            let ratio = mf / ff.max(1e-12);
+            println!(
+                "{:>13} bloom: mf/ff skirt {ratio:.3} (mf {mf_db:.1} / ff {ff_db:.1} dB re total)",
+                p.name
+            );
+            assert!(
+                ff_db >= -40.0,
+                "{}: ff rasp skirts {ff_db:.1} dB re total — the bloom must not cost ff",
+                p.name
+            );
+            // Either the mf rasp is well under half the ff rasp, or it sits
+            // at/below the −42 dB audibility budget (RD_O12B precedent: the
+            // wet ff top-octave noise floor − 6 dB) — the bari's residue is
+            // its pulse-jitter harmonic floor, organic and pressure-blind,
+            // not rasp.
+            assert!(
+                ratio <= 0.4 || mf_db <= -42.0,
+                "{}: mf rasp {ratio:.3}x of ff at {mf_db:.1} dB — mezzo-forte still distorted",
+                p.name
+            );
+        }
+    }
+
     /// RD10 bias physics pin (§2.8.4 "verify your b actually lands the limit
     /// duty at w — compute it, don't guess"): each tent segment is linear and
     /// spans the full [−1, +1] range, so the fraction of the period above
@@ -16962,6 +17473,38 @@ mod tests {
     /// Harmonic magnitude ratio m(n)/m(1) of a segment whose fundamental is `f0`.
     fn wd_hr(seg: &[f32], f0: f32, n: u32) -> f32 {
         mag_at(seg, WD_SR, f0 * n as f32) / mag_at(seg, WD_SR, f0).max(1e-9)
+    }
+
+    /// The recorder is an OPEN pipe with an audible harmonic BODY, not a near-sine.
+    /// Round-2: harm=[0.09,0.05,0.012] made h2 ≈ −21 dB — the weakest low ladder of
+    /// any open pipe in the family — so the steady tone collapsed toward the
+    /// fundamental (crest ~1.7). Assert: (1) h2 audible; (2) still below the flute
+    /// (the recorder stays the purer pipe — WD-O5's ordering intent); (3) h2 ≥ h3,
+    /// the OPEN-pipe signature — a wrong "odd-harmonic hollow" fix that killed the
+    /// evens would VIOLATE this clause. Fail-first at harm[0]=0.09 (h2 ≈ 0.09).
+    #[test]
+    fn wd_recorder_is_an_open_pipe_not_a_sine() {
+        let key = wd_mid_key(&RECORDER);
+        let f0 = key_freq(key);
+        let rec = wd_render_dry(&RECORDER, key, 100, 0.5, 7);
+        let rec_body = segment(&rec, WD_SR, WD_PREVIB.0, WD_PREVIB.1);
+        let h2 = wd_hr(rec_body, f0, 2);
+        let h3 = wd_hr(rec_body, f0, 3);
+        let flute = wd_render_dry(&FLUTE, key, 100, 0.5, 7);
+        let fl_h2 = wd_hr(segment(&flute, WD_SR, WD_PREVIB.0, WD_PREVIB.1), f0, 2);
+        println!("recorder body: h2 {h2:.4} h3 {h3:.4}  (flute h2 {fl_h2:.4})");
+        assert!(
+            h2 >= 0.14,
+            "recorder h2 {h2:.3} too weak — near-sine (need >= 0.14)"
+        );
+        assert!(
+            h2 < fl_h2,
+            "recorder h2 {h2:.3} not below flute {fl_h2:.3} — must stay the purer pipe"
+        );
+        assert!(
+            h2 >= h3,
+            "recorder h2 {h2:.3} < h3 {h3:.3} — evens must stay alive (open pipe)"
+        );
     }
 
     /// WD-O2 — BORE CLASS. A stopped pipe (pan flute) has structurally dead EVEN

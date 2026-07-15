@@ -100,12 +100,18 @@ fn vibrato_family(program: u8) -> bool {
     )
 }
 
-fn organ_leslie_family(program: u8, alt: bool) -> bool {
-    matches!(program, 16..=18) || (program == 19 && alt)
+fn organ_leslie_family(program: u8, bank: u8) -> bool {
+    // 16..=18 always. GM19 is the Leslie drawbar on the default bank and the
+    // CC0=1 legacy bank; the CC0=2 bank is the restored CathedralOrgan pipe
+    // model, which has its own wind-chest motion and takes no Leslie ramp.
+    matches!(program, 16..=18) || (program == 19 && bank != 2)
 }
 
-fn cathedral_organ(program: u8, alt: bool) -> bool {
-    program == 19 && !alt
+fn cathedral_organ(program: u8, bank: u8) -> bool {
+    // GM19 on the CC0=2 alt bank: the restored cathedral pipe organ (wind-chest
+    // breathing + CC11 reed-rasp swell + its own dedicated stone-room reverb).
+    // Default-bank and CC0=1 GM19 are the Leslie drawbar and are NOT cathedral.
+    program == 19 && bank == 2
 }
 
 fn cc1_pitch_vibrato_target(program: u8, alt: bool) -> bool {
@@ -284,16 +290,27 @@ impl Drive {
     fn new(program: u8, sr: f32) -> Self {
         let sr2 = sr * 2.0;
         // 30 = distortion (scooped chug), 29 = overdrive (mid-push lead).
-        // Two gentler stages replace v1's single hot tanh; `post` is
-        // level-matched to v1 at the loud operating point (drive_level_probe:
-        // 29 −9.9 dBFS, 30 −11.6 dBFS on a 0.5-amp 220 Hz sine).
+        // Two gentler stages replace v1's single hot tanh.
+        //
+        // Round 2 ("clean, dark sustain"): g1 raised 2.5→9.0 / 4.5→8.0 and
+        // the DRIVE preset now feeds the insert ~7 dB hotter (voices.rs
+        // DRIVE: amp 0.7→1.5, sustain 0.5→0.7, bright 4800→9000), so the
+        // e-bow-held tail keeps audible harmonic edge
+        // (driven_sustain_stays_distorted). Measured ceiling: the hold's
+        // clipping depth is structurally capped by the §2.6 sag-catcher
+        // (o_attack_sustained_plucks_no_late_bloom) — a deeply squared hold
+        // out-RMSes the broadband attack window (crest-factor inversion,
+        // measured at DRIVE.amp ≥ 2.0), so the hold sits at the tanh knee,
+        // not in hard clip. `post` re-matched end-to-end (o_attack_held_note
+        // _probe early window, key 45 vel 100: 29 0.0368, 30 0.0423 — the
+        // pre-round-2 levels).
         let (g1, g2, post, bias) = if program == 30 {
-            (4.5, 3.0, 0.30, 0.5)
+            (8.0, 3.0, 0.145, 0.9)
         } else {
-            // bias 0.45: the gentler two-stage 29 needs MORE stage-1 asymmetry
-            // than v1's single hot tanh to keep its even-harmonic warmth
-            // (drive_asymmetry_and_dc's 2nd-vs-3rd floor)
-            (2.5, 2.0, 0.42, 0.45)
+            // bias raised with g1 (0.45→0.9): at the hotter swing the old
+            // bias point washed out of the curvature and the even-harmonic
+            // warmth vanished (drive_asymmetry_and_dc's 2nd-vs-3rd floor)
+            (9.0, 2.0, 0.12, 0.9)
         };
         let (voice, tilt) = if program == 30 {
             (
@@ -364,24 +381,24 @@ impl Drive {
 }
 
 /// Per-program bus sends (chorus, echo). Reverb stays CC91-authored.
-fn fx_profile(program: u8, alt: bool) -> (f32, f32) {
+fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
     match program {
-        19 if !alt => (0.0, 0.0), // cathedral organ: the case/room supplies width
-        16..=23 => (0.20, 0.0),   // legacy organs/free reeds: gentle ensemble
-        24 | 25 => (0.12, 0.08),  // acoustic guitars: a touch of both
-        26..=31 => (0.10, 0.30),  // electric guitars: the delayed-lead sound
+        19 if bank == 2 => (0.0, 0.0), // cathedral organ (CC0=2): the case/room supplies width
+        16..=23 => (0.20, 0.0),        // legacy organs/free reeds: gentle ensemble
+        24 | 25 => (0.12, 0.08),       // acoustic guitars: a touch of both
+        26..=31 => (0.10, 0.30),       // electric guitars: the delayed-lead sound
         40..=45 | 110 => (0.10, 0.10), // fiddle
-        46 => (0.15, 0.0),        // harp
-        48..=51 => (0.35, 0.0),   // string ensembles
-        52..=54 => (0.30, 0.0),   // choir
-        56..=60 => (0.0, 0.0),    // solo brass: hall (CC91) is the space, no ensemble fake
-        61..=63 => (0.25, 0.0),   // brass section / synth brass: section-width chorus
-        64..=67 => (0.06, 0.10),  // saxes: lead voice, a touch of width and slap echo
-        109 => (0.06, 0.0),       // bagpipe: small width, no slap echo on the drone
-        111 => (0.04, 0.08),      // shanai: dry forward reed with a trace of slap
-        72..=79 => (0.0, 0.22),   // flute / whistle
-        80..=87 => (0.15, 0.25),  // synth leads: focused, with the delayed-lead echo
-        88..=95 => (0.45, 0.0),   // pads
+        46 => (0.15, 0.0),             // harp
+        48..=51 => (0.35, 0.0),        // string ensembles
+        52..=54 => (0.30, 0.0),        // choir
+        56..=60 => (0.0, 0.0),         // solo brass: hall (CC91) is the space, no ensemble fake
+        61..=63 => (0.25, 0.0),        // brass section / synth brass: section-width chorus
+        64..=67 => (0.06, 0.10),       // saxes: lead voice, a touch of width and slap echo
+        109 => (0.06, 0.0),            // bagpipe: small width, no slap echo on the drone
+        111 => (0.04, 0.08),           // shanai: dry forward reed with a trace of slap
+        72..=79 => (0.0, 0.22),        // flute / whistle
+        80..=87 => (0.15, 0.25),       // synth leads: focused, with the delayed-lead echo
+        88..=95 => (0.45, 0.0),        // pads
         // Synth FX (Stage 3): split per preset. 98 (crystal) keeps its pre-split
         // values — part of the 7-album freeze. 102 (echoes) gets a LOW bus-echo
         // send: its repeats are INTERNAL to the voice, so a bus echo would double
@@ -640,13 +657,14 @@ impl BusGlue {
 
 struct Strip {
     program: u8,
-    kit: drums::Kit, // channel-10 kit version; V3 by default
-    alt_bank: bool,  // CC0 != 0 selects the alt orchestral voicings (altbank::make)
-    volume: f32,     // CC7 as amplitude (squared curve)
-    pan: f32,        // 0..1
-    bend: f32,       // channel pitch multiplier: wheel × range × fine-tune
-    legato: bool,    // CC68: new notes slur into the ringing voice
-    sustain: bool,   // CC64: NoteOffs are held until the pedal lifts
+    kit: drums::Kit,    // channel-10 kit version; V3 by default
+    alt_bank: bool,     // CC0 != 0 selects the alt orchestral voicings (altbank::make)
+    alt_bank_value: u8, // raw CC0 value: 0 default, 1 legacy alt, 2 GM19 cathedral organ
+    volume: f32,        // CC7 as amplitude (squared curve)
+    pan: f32,           // 0..1
+    bend: f32,          // channel pitch multiplier: wheel × range × fine-tune
+    legato: bool,       // CC68: new notes slur into the ringing voice
+    sustain: bool,      // CC64: NoteOffs are held until the pedal lifts
     // v0.7 authored controllers (all inert until first touched)
     bend_wheel: f32, // last wheel position in ±2-normalised semitones
     bend_range: f32, // RPN 0: bend range in semitones (GM default 2)
@@ -675,9 +693,8 @@ struct Strip {
     res_target: f32,
     expr_target: f32,
     expr: f32,
-    // CC11 has been authored at least once. Gates the cathedral-organ reed rasp
-    // (swell drive): `expr` defaults to 1.0, so without this a silent organ would
-    // snarl at full drive — the opt-in / authored-channel invariant needs the flag.
+    // CC11 has been authored at least once (opt-in / authored-channel
+    // invariant: `expr` defaults to 1.0).
     expr_authored: bool,
     // CC2 breath: a second expression lane (squared, smoothed like CC11)
     // aimed at sustained-excitation voices. NEUTRAL (1.0) until first
@@ -719,6 +736,7 @@ impl Strip {
             program: 0,
             kit: drums::Kit::V3,
             alt_bank: false,
+            alt_bank_value: 0,
             volume: (100.0f32 / 127.0).powi(2),
             pan: 0.5,
             bend: 1.0,
@@ -823,6 +841,7 @@ struct Active {
     // CC5/CC65 portamento: (semitone offset from the target, per-block slew)
     glide: Option<(f32, f32)>,
     alt: bool, // spawn-time bank: this voice is an alt-bank voicing (per-voice CC1 routing)
+    alt_bank_value: u8, // spawn-time raw CC0 value (2 = GM19 cathedral organ routing)
     // Poly (key) aftertouch (0xAn): a per-note pressure lane mirroring the
     // channel lane (same smoothing, LFO rate and depths). Channel and key
     // pressure COMPOSE: the dB gain lifts add and the vibrato factors
@@ -997,6 +1016,7 @@ impl EngineCore {
             sost_held: false,
             glide: None,
             alt: false,
+            alt_bank_value: 0,
             poly_authored: false,
             poly_target: 0.0,
             poly_cur: 0.0,
@@ -1205,7 +1225,15 @@ impl EngineCore {
         } else {
             let prog = self.strips[ci].program;
             Some(if self.strips[ci].alt_bank {
-                crate::altbank::make(prog, key, vel, sr, seed, self.opt.samples)
+                crate::altbank::make(
+                    prog,
+                    self.strips[ci].alt_bank_value,
+                    key,
+                    vel,
+                    sr,
+                    seed,
+                    self.opt.samples,
+                )
             } else {
                 voices::make(prog, key, vel, sr, seed, self.opt.samples)
             })
@@ -1267,6 +1295,7 @@ impl EngineCore {
                 sost_held: false,
                 glide,
                 alt: self.strips[ci].alt_bank,
+                alt_bank_value: self.strips[ci].alt_bank_value,
                 poly_authored: false,
                 poly_target: 0.0,
                 poly_cur: 0.0,
@@ -1318,7 +1347,8 @@ impl EngineCore {
         match num {
             0 => {
                 s.alt_bank = val != 0; // CC0 bank select: non-zero = alt voicings
-                let (cho, del) = fx_profile(s.program, s.alt_bank);
+                s.alt_bank_value = val; // raw value: 1 = legacy alt, 2 = GM19 cathedral organ
+                let (cho, del) = fx_profile(s.program, s.alt_bank_value);
                 if !s.chorus_authored {
                     s.chorus_send = cho;
                 }
@@ -1487,7 +1517,7 @@ impl EngineCore {
         let (cho, del) = if ch == 9 {
             (0.0, 0.0)
         } else {
-            fx_profile(prog, s.alt_bank)
+            fx_profile(prog, s.alt_bank_value)
         };
         s.chorus_send = cho;
         s.chorus_authored = false;
@@ -1507,12 +1537,12 @@ impl EngineCore {
 
     fn rederive_program_defaults(&mut self, ch: u8) {
         let prog = self.strips[ch as usize].program;
-        let alt = self.strips[ch as usize].alt_bank;
+        let bank = self.strips[ch as usize].alt_bank_value;
         let s = &mut self.strips[ch as usize];
         let (cho, del) = if ch == 9 {
             (0.0, 0.0)
         } else {
-            fx_profile(prog, alt)
+            fx_profile(prog, bank)
         };
         s.chorus_send = cho;
         s.chorus_authored = false;
@@ -1622,7 +1652,7 @@ impl EngineCore {
             a.poly_mult = 1.0;
             a.poly_gain = 1.0;
             a.voice.set_pitch(1.0);
-            if organ_leslie_family(a.program, a.alt) {
+            if organ_leslie_family(a.program, a.alt_bank_value) {
                 let (rate, depth) = voices::organ_trem_base(a.program);
                 a.voice.set_trem(rate, depth);
             }
@@ -1646,10 +1676,10 @@ impl EngineCore {
             let leslie_program = self
                 .active
                 .iter()
-                .find(|a| a.ch == ch && organ_leslie_family(a.program, a.alt))
+                .find(|a| a.ch == ch && organ_leslie_family(a.program, a.alt_bank_value))
                 .map(|a| a.program)
                 .or_else(|| {
-                    (strip.mod_authored && organ_leslie_family(strip.program, strip.alt_bank))
+                    (strip.mod_authored && organ_leslie_family(strip.program, strip.alt_bank_value))
                         .then_some(strip.program)
                 });
             let active_pitch_vibrato = self
@@ -1683,7 +1713,7 @@ impl EngineCore {
                 for a in self
                     .active
                     .iter_mut()
-                    .filter(|a| a.ch == ch && organ_leslie_family(a.program, a.alt))
+                    .filter(|a| a.ch == ch && organ_leslie_family(a.program, a.alt_bank_value))
                 {
                     a.voice.set_trem(strip.leslie_rate, strip.leslie_depth);
                 }
@@ -1735,7 +1765,7 @@ impl EngineCore {
             let cat_notes = self
                 .active
                 .iter()
-                .filter(|a| a.ch == ch && cathedral_organ(a.program, a.alt))
+                .filter(|a| a.ch == ch && cathedral_organ(a.program, a.alt_bank_value))
                 .count();
             let load = cat_notes.saturating_sub(1).min(9) as f32 / 9.0;
             let target = load;
@@ -1766,7 +1796,7 @@ impl EngineCore {
             for a in self
                 .active
                 .iter_mut()
-                .filter(|a| a.ch == ch && cathedral_organ(a.program, a.alt))
+                .filter(|a| a.ch == ch && cathedral_organ(a.program, a.alt_bank_value))
             {
                 a.voice.set_organ_pressure(strip.organ_wind, trem);
                 a.voice.set_organ_swell(drive);
@@ -1924,7 +1954,7 @@ impl EngineCore {
                     *x *= a.poly_gain;
                 }
             }
-            let buf = if cathedral_organ(a.program, a.alt) {
+            let buf = if cathedral_organ(a.program, a.alt_bank_value) {
                 &mut self.cathedral_buf[a.ch as usize]
             } else if a.program == 19 && a.alt {
                 &mut self.legacy_buf[a.ch as usize]
@@ -3315,6 +3345,61 @@ mod tests {
         );
     }
 
+    /// Round-2 GM029/030 ("clean, dark sustain"): the e-bow-held tail must
+    /// keep an audible harmonic edge, not decay to a warm near-sine. The
+    /// sustainer holds the string near a pure fundamental, so only the
+    /// Drive's regeneration puts harmonics in the deep hold — THD of
+    /// harmonics 2..=16 vs f0, through the full engine (dry: chorus/echo
+    /// silenced), in the 5.5–6.0 s window of a held note (past the ~6 s
+    /// e-bow climb, the pick's own partials long dead). Pre-round-2 the
+    /// four rows measured −32.8/−35.8/−35.5/−35.4 dB (inaudible); the
+    /// floors sit ~3 dB above those and ~3 dB below the shipped values.
+    /// The depth is capped structurally: a harder-clipped hold turns
+    /// square and its windowed RMS overtakes the broadband attack,
+    /// tripping the §2.6 sag-catcher (o_attack_sustained_plucks_no_late_
+    /// bloom) — so the hold rides the tanh knee, not the rail.
+    #[test]
+    fn driven_sustain_stays_distorted() {
+        let sr = 44100.0;
+        for (prog, key, floor) in [
+            (29u8, 40u8, -29.0f32), // E2: low chug register
+            (29, 45, -28.0),        // A2: open-string lead register
+            (30, 40, -33.0),
+            (30, 45, -29.0),
+        ] {
+            let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
+            let events = vec![
+                (0.0, EvKind::Prog { ch: 0, prog }),
+                (0.0, cc(93, 0)),
+                (0.0, cc(94, 0)),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key,
+                        vel: 100,
+                    },
+                ),
+            ];
+            let out = left(&render(&test_song(events, 6.2), &test_opts(sr)).0);
+            let f0 = 440.0 * 2f32.powf((key as f32 - 69.0) / 12.0);
+            let seg = &out[(5.5 * sr) as usize..(6.0 * sr) as usize];
+            let m1 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+            let mut pow = 0.0f32;
+            for n in 2..=16u32 {
+                let m = crate::testutil::mag_at(seg, sr, n as f32 * f0);
+                pow += m * m;
+            }
+            let thd = 20.0 * (pow.sqrt() / m1).log10();
+            println!("driven sustain prog {prog} key {key}: THD(2..16) {thd:.1} dB rel f0");
+            assert!(
+                thd >= floor,
+                "prog {prog} key {key}: held sustain went clean — THD {thd:.1} dB \
+                 rel f0 (floor {floor})"
+            );
+        }
+    }
+
     /// V9 (guitar v2): aliasing floor — a pure steady sine fed DIRECTLY into
     /// the Drive (a rendered voice would confound legitimate string
     /// inharmonicity: detuned polarizations, coupling, noise excitation).
@@ -3869,8 +3954,8 @@ mod tests {
         );
         assert!(vibrato_family(110), "GM 110 must take authored CC1 vibrato");
         assert_eq!(
-            fx_profile(110, false),
-            fx_profile(40, false),
+            fx_profile(110, 0),
+            fx_profile(40, 0),
             "GM 110 should use the fiddle bus profile"
         );
 
@@ -4493,6 +4578,37 @@ mod tests {
         );
     }
 
+    /// Round-2 GM019: the DEFAULT bank is the drawbar church organ with the
+    /// CC1 Leslie (the voice the audition preferred); the CathedralOrgan
+    /// pipe model is retired. A default-bank GM19 with CC1 pinned high must
+    /// show the Leslie spin-up — the AM rate climbs from the chorale brake
+    /// toward Leslie-fast — not the cathedral's fixed 5.5 Hz tremulant
+    /// (whose rate never moved, only its depth).
+    #[test]
+    fn default_gm19_cc1_ramps_the_leslie() {
+        let sr = 44100.0;
+        let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
+        let out = render_cc1_events(vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+            (0.0, cc(93, 0)),
+            (0.0, cc(1, 127)),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                },
+            ),
+        ]);
+        let early = am_rate(&out, sr, 0.15, 1.15);
+        let late = am_rate(&out, sr, 2.9, 3.9);
+        assert!(
+            late > early + 2.5 && late >= 5.5,
+            "default GM19 CC1 must Leslie-ramp: early {early:.2} Hz late {late:.2} Hz"
+        );
+    }
+
     #[test]
     fn gm22_cc1_is_harmonica_vibrato_not_leslie() {
         let sr = 44100.0;
@@ -4515,13 +4631,13 @@ mod tests {
             "GM22 CC1 should be pitch vibrato, not inert: plain {plain_spread:.2} Hz mod {mod_spread:.2} Hz"
         );
         assert!(
-            !organ_leslie_family(22, false),
+            !organ_leslie_family(22, 0),
             "GM22 must stay out of the Leslie controller branch"
         );
 
         for program in [20u8, 21, 23] {
             assert!(
-                !organ_leslie_family(program, false),
+                !organ_leslie_family(program, 0),
                 "GM{program} must stay out of the Leslie controller branch"
             );
             let plain = render_cc1_program(program, None, true);
@@ -6831,11 +6947,13 @@ mod tests {
     /// which is a genuinely different render from the default (proving the bank
     /// switch reaches a distinct voice — bowed cello 42, strings 48, choir 52).
     /// Per-voice character is proven by the `altbank` voice oracles; here we
-    /// assert the routing produces a real, non-trivial difference.
+    /// assert the routing produces a real, non-trivial difference. (GM19 left
+    /// this list in round 2: both banks are the same drawbar voice now, pinned
+    /// bit-identical by default_gm19_is_the_legacy_drawbar_voice.)
     #[test]
     fn alt_bank_selects_distinct_voices() {
         let sr = 44100.0;
-        for prog in [19u8, 42, 48, 52] {
+        for prog in [42u8, 48, 52] {
             let alt = left(&render(&test_song(bank_song(Some(1), prog), 2.0), &test_opts(sr)).0);
             let def = left(&render(&test_song(bank_song(None, prog), 2.0), &test_opts(sr)).0);
             assert_eq!(alt.len(), def.len());
@@ -7127,469 +7245,14 @@ mod tests {
         }
     }
 
+    /// Round-2 GM019 differential pin: with the CathedralOrgan retired, the
+    /// default bank IS the legacy drawbar voice — a default-bank GM19 render
+    /// must be bit-identical to the CC0=1 render under identical controls
+    /// (this is what let the audition drop its GM19 A/B slot). Any drift
+    /// here means the banks' routing or spawn paths diverged again.
     #[test]
-    fn default_gm19_cc1_is_fixed_cathedral_tremulant() {
-        let sr = 44100.0;
-        let mut core = EngineCore::new(CoreOptions {
-            sr,
-            wet: 0.0,
-            delay_s: 0.0,
-            samples: false,
-            solo: 0xFFFF,
-            gtr_symp_on: false,
-            drum_room_on: false,
-            sitar_symp_on: false,
-        });
-        core.handle_event(EvKind::Prog { ch: 0, prog: 19 });
-        core.handle_event(EvKind::Cc {
-            ch: 0,
-            num: 1,
-            val: 127,
-        });
-        core.handle_event(EvKind::NoteOn {
-            ch: 0,
-            key: 57,
-            vel: 100,
-        });
-        let mut block = [0.0f32; BLOCK * 2];
-        for _ in 0..20 {
-            core.render_block_add(BLOCK, &mut block);
-        }
-        let rate_at = |core: &mut EngineCore, block: &mut [f32; BLOCK * 2]| {
-            let before = core.strips[0].organ_trem_phase;
-            block.fill(0.0);
-            core.render_block_add(BLOCK, block);
-            let after = core.strips[0].organ_trem_phase;
-            let delta = (after - before).rem_euclid(TAU);
-            delta * sr / (TAU * BLOCK as f32)
-        };
-        let early = rate_at(&mut core, &mut block);
-        for _ in 0..500 {
-            block.fill(0.0);
-            core.render_block_add(BLOCK, &mut block);
-        }
-        let late = rate_at(&mut core, &mut block);
-        assert!(
-            (5.4..=5.6).contains(&early) && (5.4..=5.6).contains(&late),
-            "cathedral tremulant must stay near 5.5 Hz: early {early:.2}, late {late:.2}"
-        );
-        assert!(
-            (late - early).abs() <= 0.01,
-            "cathedral tremulant must not Leslie-ramp: early {early:.2}, late {late:.2}"
-        );
-        assert!(!organ_leslie_family(19, false));
-        assert!(organ_leslie_family(19, true));
-    }
-
-    // Oracle C3 — the cathedral reverb is genuinely wet in the FULL MIX (proves
-    // the `opt.wet * CATHEDRAL_WET_SCALE` routing, not just the FDN in isolation).
-    // A GM19 chord is held, released, and left to ring; the tail a full 1–2 s
-    // after note-off must still sit within ~22 dB of the sustain — a long, present
-    // stone room, not a dab of ambience. Guards against the send being unrouted or
-    // the wet scale reverting. Calibration (@wet 0.32, 1–2 s after release):
-    //   CATHEDRAL_WET_SCALE 1.30 (shipping)  tail ≈ −20.8 dB
-    //   CATHEDRAL_WET_SCALE 1.00 (a revert)  tail ≈ −23.1 dB  → fails
-    // −22.0 is the midpoint; the 2.2 dB gap is exactly the 1.30× wet return.
-    #[test]
-    fn cathedral_organ_tail_is_wet_in_the_full_mix() {
-        let sr = 44_100.0;
-        let mut events = vec![
-            (0.0, EvKind::Prog { ch: 0, prog: 19 }),
-            (
-                0.0,
-                EvKind::Cc {
-                    ch: 0,
-                    num: 7,
-                    val: 127,
-                },
-            ),
-            (
-                0.0,
-                EvKind::Cc {
-                    ch: 0,
-                    num: 11,
-                    val: 127,
-                },
-            ),
-            (
-                0.0,
-                EvKind::Cc {
-                    ch: 0,
-                    num: 91,
-                    val: 127,
-                },
-            ),
-        ];
-        for key in [60u8, 64, 67] {
-            events.push((
-                0.05,
-                EvKind::NoteOn {
-                    ch: 0,
-                    key,
-                    vel: 96,
-                },
-            ));
-            events.push((2.0, EvKind::NoteOff { ch: 0, key }));
-        }
-        let mut opts = test_opts(sr);
-        opts.wet = 0.32;
-        opts.tail = 4.0;
-        let (stereo, _stats) = render(&test_song(events, 2.2), &opts);
-        let l = left(&stereo);
-        let r = right(&stereo);
-        let win = |a: f32, b: f32| -> f32 {
-            let (i, j) = ((a * sr) as usize, ((b * sr) as usize).min(l.len()));
-            let n = (j - i).max(1) as f32;
-            let e: f32 = (i..j).map(|k| l[k] * l[k] + r[k] * r[k]).sum::<f32>() / (2.0 * n);
-            e.sqrt()
-        };
-        let sustain = win(1.0, 1.9);
-        let tail = win(3.0, 4.0); // 1–2 s after the 2.0 s note-off
-        let tail_db = 20.0 * (tail / sustain.max(1e-12)).log10();
-        println!("cathedral C3  tail {tail_db:.2} dB below sustain (sustain={sustain:.4} tail={tail:.4})");
-        assert!(
-            tail_db >= -22.0,
-            "cathedral tail only {tail_db:.2} dB below sustain — reverb not wet in the mix"
-        );
-    }
-
-    // Render a single sustained GM19 note at a given authored CC11 swell. `None` =
-    // unauthored = the byte-identity baseline (CC11 is a gain lane, so authored 0
-    // would be silence, never a valid baseline). Dry (wet 0), left channel.
-    #[cfg(test)]
-    fn render_gm19_swell(cc11: Option<u8>) -> Vec<f32> {
-        let sr = 44_100.0;
-        let mut events = vec![
-            (0.0, EvKind::Prog { ch: 0, prog: 19 }),
-            (
-                0.0,
-                EvKind::Cc {
-                    ch: 0,
-                    num: 7,
-                    val: 127,
-                },
-            ),
-        ];
-        if let Some(v) = cc11 {
-            events.push((
-                0.0,
-                EvKind::Cc {
-                    ch: 0,
-                    num: 11,
-                    val: v,
-                },
-            ));
-        }
-        events.push((
-            0.05,
-            EvKind::NoteOn {
-                ch: 0,
-                key: 60,
-                vel: 96,
-            },
-        ));
-        events.push((3.0, EvKind::NoteOff { ch: 0, key: 60 }));
-        let mut opts = test_opts(sr);
-        opts.wet = 0.0;
-        opts.tail = 0.2;
-        left(&render(&test_song(events, 3.0), &opts).0)
-    }
-
-    #[cfg(test)]
-    fn rasp_body_rms(s: &[f32]) -> f32 {
-        (s.iter().map(|x| x * x).sum::<f32>() / s.len().max(1) as f32).sqrt()
-    }
-
-    // Oracle A — the reed rasp grows with the swell (CC11). Level-normalized
-    // metrics (CC11 is a gain lane, so absolute level differs between drive points
-    // and must cancel): `hfr` = high-frequency (>2 kHz) band mass / rms, plus the
-    // spectral centroid. The driven reed table + lift push dense partials into the
-    // 2–8 kHz band as drive rises; the threshold keeps a half-open swell smooth.
-    // Calibration @44.1k (key 60, LIFT_DB=8): hfr 0.277/0.278/0.304/0.378 at
-    // unauth/64/110/127; centroid 1755 → 2843; cc64 stays ≈ unauthored.
-    #[test]
-    fn cathedral_reed_rasp_grows_with_swell() {
-        let sr = 44_100.0;
-        let metrics = |cc: Option<u8>| {
-            let rendered = render_gm19_swell(cc);
-            let body = &rendered[(1.0 * sr) as usize..(2.8 * sr) as usize];
-            let r = rasp_body_rms(body).max(1e-9);
-            (
-                crate::testutil::hp_rms(body, sr, 2_000.0) / r,
-                crate::testutil::spectral_centroid(body, sr, 100.0, 12_000.0),
-            )
-        };
-        let (hfr_u, cen_u) = metrics(None);
-        let (hfr_64, _) = metrics(Some(64));
-        let (hfr_110, _) = metrics(Some(110));
-        let (hfr_127, cen_127) = metrics(Some(127));
-        println!(
-            "rasp hfr u/64/110/127 = {hfr_u:.4}/{hfr_64:.4}/{hfr_110:.4}/{hfr_127:.4}  cen u/127 = {cen_u:.0}/{cen_127:.0}"
-        );
-        assert!(
-            hfr_64 <= 1.10 * hfr_u,
-            "half-open swell (cc64) is not smooth: {hfr_64:.4} vs unauth {hfr_u:.4}"
-        );
-        assert!(
-            hfr_110 > hfr_64 && hfr_127 > hfr_110,
-            "rasp not monotone in the swell: {hfr_64:.4}/{hfr_110:.4}/{hfr_127:.4}"
-        );
-        assert!(
-            hfr_127 >= 1.25 * hfr_u,
-            "full-drive rasp too weak: hfr {hfr_127:.4} vs unauth {hfr_u:.4}"
-        );
-        assert!(
-            cen_127 >= 1.30 * cen_u,
-            "full-drive centroid did not lift: {cen_127:.0} vs unauth {cen_u:.0}"
-        );
-    }
-
-    // Oracle B — the rasp is band-limited spectrum, not aliasing. The mechanism is
-    // a band-limited table crossfade (no time-domain nonlinearity), so energy off
-    // the f0/2 harmonic lattice can only be Goertzel leakage + wander smear — which
-    // stays ~40 dB down. A tanh-without-oversampling reed would fold products into
-    // these off-lattice slots at ~−25 dB. Probes (2k+1)·f0/4 across 6–13 kHz.
-    // Calibration: unauth −46.5 dB, cc127 −41.5 dB relative to rms.
-    #[test]
-    fn cathedral_reed_rasp_is_band_limited_not_aliased() {
-        let sr = 44_100.0;
-        let f0 = 261.63_f32;
-        let offlat = |cc: Option<u8>| {
-            let rendered = render_gm19_swell(cc);
-            let body = &rendered[(1.0 * sr) as usize..(2.8 * sr) as usize];
-            let r = rasp_body_rms(body).max(1e-9);
-            let mut e = 0.0f32;
-            let mut k = 1u32;
-            loop {
-                let f = (2 * k + 1) as f32 * f0 / 4.0;
-                if f > 13_000.0 {
-                    break;
-                }
-                if f >= 6_000.0 {
-                    let m = crate::testutil::mag_at(body, sr, f);
-                    e += m * m;
-                }
-                k += 1;
-            }
-            e.sqrt() / r
-        };
-        let base = offlat(None);
-        let full = offlat(Some(127));
-        println!(
-            "off-lattice u/127 = {base:.6}/{full:.6} ({:.1}/{:.1} dB)",
-            20.0 * base.log10(),
-            20.0 * full.log10()
-        );
-        // Measured full-drive off-lattice is −61.7 dB; 0.005 = −46 dB leaves ~15 dB
-        // margin yet fails a realistic aliasing reed (~−25 dB) by ~20 dB.
-        assert!(
-            full <= 0.005,
-            "full-drive off-lattice {:.1} dB — inharmonic/aliasing content crept in",
-            20.0 * full.log10()
-        );
-        assert!(
-            base <= 0.005,
-            "baseline off-lattice {:.1} dB",
-            20.0 * base.log10()
-        );
-    }
-
-    // Oracle C — an organ that never authors CC11 retains its pre-feature level,
-    // spectrum, and envelope; CC11=127 MUST differ, proving the feature is wired.
-    #[test]
-    fn cathedral_organ_without_cc11_matches_baseline_signature() {
-        let no_cc11_render = render_gm19_swell(None);
-        crate::testutil::assert_render_signature(
-            "unauthored GM19",
-            crate::testutil::render_signature(
-                &no_cc11_render,
-                44100.0,
-                (0.5, 2.5),
-                (0.2, 0.7),
-                (2.0, 2.7),
-            ),
-            crate::testutil::RenderSignature {
-                rms_db: -20.478,
-                centroid_hz: 1107.038,
-                late_early_db: 0.051,
-            },
-        );
-        let with_cc11 = render_gm19_swell(Some(127));
-        assert_ne!(
-            no_cc11_render, with_cc11,
-            "CC11 did not change the render — the reed rasp is not wired"
-        );
-    }
-
-    #[test]
-    fn cathedral_organ_low_chord_and_pedal_keep_mix_headroom() {
-        let sr = 44_100.0;
-        let chord_events = |keys: &[u8]| {
-            let mut events = vec![
-                (0.0, EvKind::Prog { ch: 0, prog: 19 }),
-                (
-                    0.0,
-                    EvKind::Cc {
-                        ch: 0,
-                        num: 7,
-                        val: 127,
-                    },
-                ),
-                (
-                    0.0,
-                    EvKind::Cc {
-                        ch: 0,
-                        num: 11,
-                        val: 127,
-                    },
-                ),
-                (
-                    0.0,
-                    EvKind::Cc {
-                        ch: 0,
-                        num: 91,
-                        val: 127,
-                    },
-                ),
-                (
-                    0.0,
-                    EvKind::Cc {
-                        ch: 0,
-                        num: 93,
-                        val: 0,
-                    },
-                ),
-                (
-                    0.0,
-                    EvKind::Cc {
-                        ch: 0,
-                        num: 94,
-                        val: 0,
-                    },
-                ),
-            ];
-            for &key in keys {
-                events.push((
-                    0.05,
-                    EvKind::NoteOn {
-                        ch: 0,
-                        key,
-                        vel: 100,
-                    },
-                ));
-                events.push((2.20, EvKind::NoteOff { ch: 0, key }));
-            }
-            events
-        };
-        let mut opts = test_opts(sr);
-        opts.wet = 0.32;
-        opts.tail = 2.0;
-
-        let low_keys = [24, 28, 31, 36, 40, 43, 48, 52];
-        let (_low_render, low_stats) = render(&test_song(chord_events(&low_keys), 2.4), &opts);
-        assert!(
-            low_stats.cathedral_return_peak < 1.0,
-            "dense low chord cathedral return peaked at {}",
-            low_stats.cathedral_return_peak
-        );
-
-        let plenum = [48, 55, 60, 64, 67, 72, 76];
-        let mut plenum_with_pedal = plenum.to_vec();
-        plenum_with_pedal.push(36);
-        let (without, without_stats) = render(&test_song(chord_events(&plenum), 2.4), &opts);
-        let (with, with_stats) = render(&test_song(chord_events(&plenum_with_pedal), 2.4), &opts);
-        let peak_delta_db = 20.0 * (with_stats.peak / without_stats.peak.max(1e-12)).log10();
-        assert!(
-            peak_delta_db <= 3.0,
-            "adding the 32-foot pedal raised raw peak {peak_delta_db:.2}dB"
-        );
-
-        let normalized_midband = |stereo: &[f32], peak: f32| {
-            let mut hp = Biquad::highpass(250.0, 0.707, sr);
-            let mut lp = Biquad::lowpass(8_000.0, 0.707, sr);
-            let scale = 10f32.powf(-1.0 / 20.0) / peak.max(1e-12);
-            let from = (0.40 * sr) as usize;
-            let to = (1.80 * sr) as usize;
-            let mut energy = 0.0f64;
-            let mut count = 0usize;
-            for (frame, pair) in stereo.chunks_exact(2).enumerate() {
-                let mono = 0.5 * (pair[0] + pair[1]) * scale;
-                let filtered = lp.process(hp.process(mono));
-                if (from..to).contains(&frame) {
-                    energy += (filtered as f64) * (filtered as f64);
-                    count += 1;
-                }
-            }
-            (energy / count.max(1) as f64).sqrt() as f32
-        };
-        let mid_without = normalized_midband(&without, without_stats.peak);
-        let mid_with = normalized_midband(&with, with_stats.peak);
-        let mid_loss_db = 20.0 * (mid_with / mid_without.max(1e-12)).log10();
-        assert!(
-            mid_loss_db >= -1.5,
-            "32-foot pedal cost {mid_loss_db:.2}dB of normalized 250Hz-8kHz level"
-        );
-    }
-
-    #[test]
-    fn cathedral_organ_wind_load_settles_and_recovers() {
-        let sr = 44_100.0;
-        let mut core = EngineCore::new(CoreOptions {
-            sr,
-            wet: 0.0,
-            delay_s: 0.0,
-            samples: false,
-            solo: 0xFFFF,
-            gtr_symp_on: false,
-            drum_room_on: false,
-            sitar_symp_on: false,
-        });
-        core.handle_event(EvKind::Prog { ch: 0, prog: 19 });
-        for key in [36, 43, 48, 52, 55, 60, 64, 67, 72, 76] {
-            core.handle_event(EvKind::NoteOn {
-                ch: 0,
-                key,
-                vel: 100,
-            });
-        }
-        let mut block = [0.0f32; BLOCK * 2];
-        for _ in 0..((1.5 * sr) as usize / BLOCK) {
-            block.fill(0.0);
-            core.render_block_add(BLOCK, &mut block);
-        }
-        assert!(
-            (0.95..=1.0).contains(&core.strips[0].organ_wind),
-            "ten-note wind load settled at {}",
-            core.strips[0].organ_wind
-        );
-
-        core.handle_event(EvKind::Cc {
-            ch: 0,
-            num: 123,
-            val: 0,
-        });
-        for _ in 0..((2.0 * sr) as usize / BLOCK) {
-            block.fill(0.0);
-            core.render_block_add(BLOCK, &mut block);
-        }
-        assert!(
-            core.strips[0].organ_wind < 0.25,
-            "wind chest had not recovered after two seconds: {}",
-            core.strips[0].organ_wind
-        );
-    }
-
-    /// Manual release-mode gate from signed HLD AC12. Run explicitly with
-    /// `cargo test --release cathedral_organ_render_budget -- --ignored --nocapture`.
-    #[test]
-    #[ignore]
-    fn cathedral_organ_render_budget() {
-        use std::time::Instant;
-
-        fn chord(alt: bool) -> Vec<(f64, EvKind)> {
-            let keys = [
-                36u8, 40, 43, 48, 52, 55, 60, 64, 67, 72, 76, 79, 84, 88, 91, 96,
-            ];
+    fn default_gm19_is_the_legacy_drawbar_voice() {
+        let events = |alt: bool| {
             let mut ev = Vec::new();
             if alt {
                 ev.push((
@@ -7603,51 +7266,105 @@ mod tests {
             }
             ev.push((0.0, EvKind::Prog { ch: 0, prog: 19 }));
             ev.push((
-                0.0,
+                0.2,
                 EvKind::Cc {
                     ch: 0,
-                    num: 91,
-                    val: 0,
+                    num: 1,
+                    val: 96,
                 },
             ));
             ev.push((
-                0.0,
-                EvKind::Cc {
+                0.05,
+                EvKind::NoteOn {
                     ch: 0,
-                    num: 93,
-                    val: 0,
+                    key: 60,
+                    vel: 100,
                 },
             ));
-            for &key in &keys {
+            ev.push((1.6, EvKind::NoteOff { ch: 0, key: 60 }));
+            ev
+        };
+        let mut opts = test_opts(44100.0);
+        opts.wet = 0.32;
+        opts.delay_s = 0.12;
+        opts.tail = 0.5;
+        let default_bank = render(&test_song(events(false), 2.0), &opts).0;
+        let legacy = render(&test_song(events(true), 2.0), &opts).0;
+        assert!(
+            default_bank
+                .iter()
+                .zip(&legacy)
+                .all(|(a, b)| a.to_bits() == b.to_bits()),
+            "default GM19 and CC0 legacy GM19 renders diverged"
+        );
+    }
+
+    /// GM19 CC0=2 selects the restored CathedralOrgan pipe model — a distinct
+    /// church-organ colour from the default/CC0=1 Leslie drawbar, carrying its
+    /// own long stone-room FDN reverb tail. Default and CC0=1 stay the Leslie
+    /// (bit-identical). Regression-first: before the restore CC0=2 fell through
+    /// to legacy_church_organ, so all three banks rendered identically and both
+    /// asserts below (distinct + wet tail) would fail.
+    #[test]
+    fn gm19_cc0_2_is_the_cathedral_organ() {
+        let events = |bank: u8| {
+            let mut ev = Vec::new();
+            if bank > 0 {
                 ev.push((
-                    0.05,
-                    EvKind::NoteOn {
+                    0.0,
+                    EvKind::Cc {
                         ch: 0,
-                        key,
-                        vel: 100,
+                        num: 0,
+                        val: bank,
                     },
                 ));
-                ev.push((4.8, EvKind::NoteOff { ch: 0, key }));
             }
+            ev.push((0.0, EvKind::Prog { ch: 0, prog: 19 }));
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 48,
+                    vel: 100,
+                },
+            ));
+            ev.push((1.2, EvKind::NoteOff { ch: 0, key: 48 }));
             ev
-        }
-
-        let opts = test_opts(44100.0);
-        let legacy = test_song(chord(true), 5.0);
-        let cathedral = test_song(chord(false), 5.0);
-        let _ = render(&legacy, &opts);
-        let _ = render(&cathedral, &opts);
-        let t0 = Instant::now();
-        let _ = render(&legacy, &opts);
-        let old = t0.elapsed();
-        let t1 = Instant::now();
-        let _ = render(&cathedral, &opts);
-        let new = t1.elapsed();
-        let ratio = new.as_secs_f64() / old.as_secs_f64().max(1e-9);
-        println!("16-note 5 s GM19: legacy {old:?}, cathedral {new:?}, ratio {ratio:.2}x");
+        };
+        let mut opts = test_opts(44100.0);
+        opts.wet = 0.32;
+        opts.tail = 1.0;
+        let default_bank = render(&test_song(events(0), 2.5), &opts).0;
+        let legacy = render(&test_song(events(1), 2.5), &opts).0;
+        let cathedral = render(&test_song(events(2), 2.5), &opts).0;
+        // Default and CC0=1 are the identical Leslie drawbar (Ninth Bell safety).
         assert!(
-            ratio <= 3.0,
-            "cathedral render budget {ratio:.2}x exceeds 3x"
+            default_bank
+                .iter()
+                .zip(&legacy)
+                .all(|(a, b)| a.to_bits() == b.to_bits()),
+            "default and CC0=1 GM19 must stay the identical Leslie drawbar"
+        );
+        // CC0=2 is a genuinely different render: the cathedral pipe voice.
+        assert!(
+            cathedral
+                .iter()
+                .zip(&legacy)
+                .any(|(a, b)| a.to_bits() != b.to_bits()),
+            "CC0=2 GM19 did not differ from the Leslie — cathedral voice not routed"
+        );
+        // The cathedral rings on its dedicated stone-room FDN well past the
+        // note-off; measure RMS in the final 0.3 s vs the Leslie's shared-hall
+        // decay.
+        let sr = 44100usize;
+        let tail = |v: &[f32]| {
+            let seg = &v[v.len().saturating_sub((0.3 * sr as f32) as usize)..];
+            (seg.iter().map(|x| x * x).sum::<f32>() / seg.len().max(1) as f32).sqrt()
+        };
+        let (cat_tail, leg_tail) = (tail(&cathedral), tail(&legacy));
+        assert!(
+            cat_tail > leg_tail * 2.0 && cat_tail > 1e-4,
+            "cathedral reverb tail ({cat_tail:.2e}) should ring well past the Leslie's ({leg_tail:.2e})"
         );
     }
 }

@@ -1906,9 +1906,20 @@ pub fn make(
             0.45,
             0.65,
         ),
-        65 | 66 => dm(
+        // Timbales come as a tuned PAIR: 65 High (macho) sits ~a fourth above 66
+        // Low (hembra). They used to share one 430 Hz arm -> bit-identical (round-2
+        // audition feedback). Split: high keeps 430 Hz; low drops to 320 Hz (430/1.34)
+        // with its noise-band centre tracked down proportionally (1600->1200, as the
+        // bongos track 1400->1100) and a hair more ring for the larger shell.
+        65 => dm(
             &[(430.0, 0.9, 0.15, 4.0)],
             &one(0.3, 0.02, Biquad::bandpass(1600.0, 1.0, sr)),
+            0.3,
+            0.6,
+        ),
+        66 => dm(
+            &[(320.0, 0.9, 0.16, 4.0)],
+            &one(0.3, 0.02, Biquad::bandpass(1200.0, 1.0, sr)),
             0.3,
             0.6,
         ),
@@ -2928,6 +2939,31 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Timbales: GM 65 (High/macho) must ring audibly above GM 66 (Low/hembra).
+    /// Before the round-2 split they shared one `65 | 66 => dm(430 Hz)` arm, so at
+    /// equal vel+seed they rendered bit-identical (pitch ratio 1.000). Same bug
+    /// class as `tom_ladder_is_six_distinct_drums`. Fail-first on the shared arm.
+    #[test]
+    fn timbales_hi_vs_lo_distinct_pitch() {
+        let sr = 44100.0;
+        let hi = render_drum_kit(65, 100, 0.4, Kit::V3);
+        let lo = render_drum_kit(66, 100, 0.4, Kit::V3);
+        // (b) the un-foolable clause: equal vel+seed must not render bit-identical.
+        assert!(
+            hi != lo,
+            "timbale 65 and 66 render bit-identically -- they are the same drum (shared match arm)"
+        );
+        // (a) high timbale audibly above low (>= 1.12x ~ a minor third floor).
+        let (a, b) = ((0.02 * sr) as usize, (0.14 * sr) as usize);
+        let f_hi = testutil::peak_locate(&hi[a..b], sr, 150.0, 600.0);
+        let f_lo = testutil::peak_locate(&lo[a..b], sr, 150.0, 600.0);
+        println!("timbale pitches: hi={f_hi:.0} lo={f_lo:.0}");
+        assert!(
+            f_hi > f_lo * 1.12,
+            "timbales not pitch-distinct: hi={f_hi:.0} Hz lo={f_lo:.0} Hz (need hi >= 1.12x lo)"
+        );
     }
 
     /// P-T2 (fail-first, differential V3-vs-V2): the V3/Brush tom gains an HF

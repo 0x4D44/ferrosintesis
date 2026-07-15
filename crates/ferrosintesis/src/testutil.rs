@@ -315,56 +315,6 @@ pub(crate) fn flatness(seg: &[f32], sr: f32, lo: f32, hi: f32) -> f32 {
     ((logs / n as f64).exp() / (sum / n as f64)) as f32
 }
 
-/// Aperiodicity of a sustained tone's amplitude envelope. Rectify → 10 Hz
-/// envelope lowpass → decimate by 64 → mean-subtract → peak *normalised*
-/// autocorrelation over `[lag_lo_s, lag_hi_s]`, plus the coefficient of
-/// variation `std/mean` of the decimated envelope.
-///
-/// A static, phase-locked additive tone beats at constant rates, so its
-/// envelope is quasi-periodic and its autocorrelation re-peaks at multi-second
-/// lags (returns high). Independent slow random walks give an envelope whose
-/// autocorrelation has decayed away by such lags (returns low). The CoV is a
-/// "shimmer present at all" floor. Deterministic; no wall clock. The existing
-/// `env_autocorr_peak*` runs at full rate and 15 Hz-detrends — far too slow at
-/// multi-second lags and it would erase the 0.15–2.5 Hz wander band, so this is
-/// a purpose-built decimated, mean-subtracted variant.
-pub(crate) fn env_aperiodicity(seg: &[f32], sr: f32, lag_lo_s: f32, lag_hi_s: f32) -> (f32, f32) {
-    const DECIM: usize = 64;
-    let mut lp = OnePole::lowpass(10.0, sr);
-    let mut env: Vec<f32> = Vec::with_capacity(seg.len() / DECIM + 1);
-    for (i, &x) in seg.iter().enumerate() {
-        let e = lp.process(x.abs());
-        if i % DECIM == 0 {
-            env.push(e);
-        }
-    }
-    if env.len() < 4 {
-        return (0.0, 0.0);
-    }
-    let mean = env.iter().sum::<f32>() / env.len() as f32;
-    if mean <= 1e-12 {
-        return (0.0, 0.0);
-    }
-    let var = env.iter().map(|&e| (e - mean) * (e - mean)).sum::<f32>() / env.len() as f32;
-    let cov = var.sqrt() / mean;
-    let d: Vec<f64> = env.iter().map(|&e| (e - mean) as f64).collect();
-    let zero: f64 = d.iter().map(|&x| x * x).sum();
-    if zero <= 0.0 {
-        return (0.0, cov);
-    }
-    let env_sr = sr / DECIM as f32;
-    let lag_lo = ((lag_lo_s * env_sr) as usize).max(1);
-    let lag_hi = ((lag_hi_s * env_sr) as usize).min(d.len().saturating_sub(1));
-    let mut best = f64::MIN;
-    for lag in lag_lo..=lag_hi {
-        let c: f64 = (0..d.len() - lag).map(|i| d[i] * d[i + lag]).sum::<f64>() / zero;
-        if c > best {
-            best = c;
-        }
-    }
-    (best.max(0.0) as f32, cov)
-}
-
 /// Kurtosis (4th standardised moment, `E[(x−μ)^4]/σ^4`) — a grain /
 /// impulsiveness detector. A Gaussian process reads ≈ 3.0; smooth
 /// bandpass-filtered noise (the filter's memory sums many inputs → CLT) sits
@@ -1085,7 +1035,17 @@ mod guards {
         (1, -42.07, 2020.8),
         (2, -41.49, 855.0),
         (3, -39.97, 485.9),
-        (4, -32.31, 814.3),
+        // Re-captured (ch 4 only) after round 2's driven-guitar rework
+        // ("clean, dark sustain"): hotter drive staging (DRIVE amp/sustain/
+        // bright + Drive g1/bias, post level-re-matched end-to-end) leaves
+        // ch 4 −0.6 dB and darker (centroid 814 → 545 Hz — held notes now
+        // keep a compressed, clipped fundamental instead of a decayed
+        // whisper; driven_sustain_stays_distorted pins the tail THD).
+        // Ch 8 (strings) drifted in-band (2683 → 2382 Hz) earlier from the
+        // GM048/049 bow-noise breath (sawstack signature re-pinned there);
+        // master peak now measures 1.19061 — both inside this guard's
+        // tolerance, left at their captures.
+        (4, -32.87, 544.9),
         (5, -24.61, 294.6),
         (6, -27.13, 194.4),
         (7, -24.35, 567.6),
@@ -1193,7 +1153,9 @@ mod guards {
             (7, "CLAVINET"),
             (8, "modal"),
             (16, "organ"),
-            (19, "cathedral-organ"),
+            // 19 rejoined the drawbar arm in round 2 (CathedralOrgan retired);
+            // both banks are the same organ() voice now
+            (19, "organ"),
             (22, "reed"), // voice-quality §2.11: free reed, not drawbar organ
             (24, "NYLON"),
             (25, "STEEL"),
@@ -1385,13 +1347,12 @@ mod distinctness {
         // (26, 27) was a Collapse: both shared CLEAN. Guitar v2 split them into
         // JAZZ (neck hollowbody) and CLEAN (bright single-coil) — differentiated,
         // so the stale collapse entry is deleted (this oracle's own contract).
+        // -- Stage 7a: piano 0-3 — DONE (round 2). The GM0..=3 alias split into
+        //    the grand (0), a brighter-voiced grand (1), a CP-style electric
+        //    grand (2, higher inharmonicity / fast decay / no soundboard
+        //    aftersound) and the wide-trichord honky-tonk (3); all six former
+        //    collapse entries are deleted and the matrix proves the split. --
         (29, 30, Why::Collapse(5)), // guitar: two "overdrive/distortion" share DRIVE — Stage 7b
-        (0, 1, Why::Collapse(5)),   // piano: acoustic-grand family shares one Modal — Stage 7a
-        (0, 2, Why::Collapse(5)),
-        (0, 3, Why::Collapse(5)),
-        (1, 2, Why::Collapse(5)),
-        (1, 3, Why::Collapse(5)),
-        (2, 3, Why::Collapse(5)),
     ];
 
     fn allow_reason(a: u8, b: u8) -> Option<Why> {

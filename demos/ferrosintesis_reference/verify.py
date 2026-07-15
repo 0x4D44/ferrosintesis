@@ -197,6 +197,10 @@ def check_ab_parity(num: int, sc: en.Score) -> list[str]:
     for i, slot in enumerate(slots):
         if not slot.alt:
             continue
+        if slot.program in pr.STANDALONE_ALT:
+            # a standalone alt is deliberately NOT an A/B (different instrument,
+            # own register/gesture) - check_registers still pins its notes
+            continue
         if i == 0 or slots[i - 1].program != slot.program or slots[i - 1].alt:
             fails.append(f"{slot.label}: not preceded by its default twin")
             continue
@@ -349,13 +353,20 @@ def check_coverage_alt(by_num) -> list[str]:
         if num not in by_num:
             return []
         sc = by_num[num][1]
-        # an alt slot authors CC0=1; the program active at that point is the alt program
+        # an alt slot authors a non-zero CC0 (1 = the single legacy alt; 2 = the
+        # GM19 CathedralOrgan bank); the program active at that point is the alt
+        # program - the LATEST program change before the CC0 (a max over program
+        # NUMBERS only held for the ascending inline walk, and a STANDALONE_ALT
+        # tail slot re-authors a lower number after higher ones)
         progs = program_events(sc, MELODIC_CH)
         for beat, val in cc_events(sc, MELODIC_CH, 0):
-            if val == 1:
-                active = max((p for b, p in progs if b <= beat + 1e-6), default=None)
-                if active is not None:
-                    seen.add(active)
+            if val != 0:
+                latest = max(
+                    ((b, p) for b, p in progs if b <= beat + 1e-6),
+                    default=None,
+                )
+                if latest is not None:
+                    seen.add(latest[1])
     missing = set(pr.ALT_BANK) - seen
     if missing:
         fails.append(f"missing alt-bank voicings {sorted(missing)}")

@@ -3,6 +3,22 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.16 — **ferrosintesis LA sampling is ONSET-ONLY — a missing sample cannot fix a
+  SUSTAIN or noise complaint; route every voice fix by cue.** Proven: brass HOLDS render
+  bit-identical with `--no-samples` (the LA layer has crossfaded out by ~0.3 s). So an
+  IDENTITY/attack complaint (40==41 viola sameness, recorder identity, timpani strike) wants
+  a new CC0 onset bank; a SUSTAIN/noise complaint (brass "holds synthetic", sax "fuzz", flue
+  "sshsshssh", choir) wants MODEL work, NOT a sample — and is usually a handful of constants.
+  Do not confuse the two (round-3 feedback: most complaints were the model side, i.e. cheap).
+  Method that nailed all 15 root causes: A/B every voice against a REAL GM module —
+  `mdmidiemu --synth sc55|mu80` (ROMs at `D:/language/mdsc55/roms`) renders the actual Roland
+  SC-55mkII / Yamaha MU-80; SC-55 is the reliable spectral reference (~40 ms onset, no swell),
+  MU-80 is often reverb/swell-dominated (use for character only). Watch for oracles that ENCODE
+  the defect — three found blocking the correct fix (`harp_46_shimmers` rewards the octave-hollow
+  balance; choir `CH2-O2` pins GM54 bright; recorder `WD-O1` asserts `h2≥h3` backwards) —
+  recalibrate them against hardware IN the fix commit. Full analysis:
+  `wrk_docs/2026.07.16 - PLN - voice-quality round 3 (15 voices) roadmap.md`.
+
 - 2026.07.15 — **A plucked-voice "no sustain" complaint is usually the note-off
   RELEASE (`rel_t60`), not the natural KS decay.** Album guitar parts are written
   as SHORT notes (~0.2–0.55 beat, gate < 1), so MIDI note-off lands in ~0.2 s and

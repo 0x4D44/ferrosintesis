@@ -2463,29 +2463,35 @@ pub const CLAVINET: PluckPreset = PluckPreset {
     trem: false, // the yarn damper strip stops the string: repeats articulate
     ..DEFAULTS
 };
-// Fingered electric bass (GM 33), the album workhorse. Voiced deep, warm and
-// MUFFLED — flatwound/McCartney rather than a bright roundwound jazz bass:
-// the fundamental carries the note, the highs are rolled off, and the pickup
-// comb no longer notches the 2nd harmonic (the partial the ear reads as "deep").
+// Fingered electric bass (GM 33), the album workhorse. DRIVING roundwound
+// voicing (Arthur's Yamaha-XG brief, 2026.07): a punchy, mid-forward bass that
+// pushes a groove — the low end still anchors, but the note now SPEAKS. The
+// muffle is lifted (out_lp/bright/pick_lp opened), a low-mid GROWL and an
+// attack-presence bump are added to the body, the finger attack has more
+// roundwound zing, and an electric pickup-coil resonance adds the XG bite.
+// Deliberately kept a touch darker than the picked PICK bass (bass_articulations
+// keeps that ordering). Supersedes the old dark flatwound/McCartney voicing.
 pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "BASS",
     wound_all: true,
-    t60: 3.2,        // was 3.6: a touch tighter, still a warm ring
-    bright: 1250.0,  // was 1700: darker loop damping — fewer high harmonics ring
-    pick_lp: 1000.0, // was 1300: duller, rounder attack (flatwound)
-    pos: 0.35,
+    t60: 3.2,
+    bright: 1900.0,  // was 1250: open the loop — harmonics ring, the note drives
+    pick_lp: 1800.0, // was 1000: a brighter roundwound finger attack
+    pos: 0.30,       // was 0.35: a touch more bridge-ward — defined, aggressive
     amp: 1.05,
     rel_t60: 0.12,
-    // low fundamental + low-mid woody warmth
-    body: &[(60.0, 0.8, 4.5), (110.0, 1.0, 2.5)],
-    out_lp: 1350.0,        // was 1900: muffle — roll the masking mids off the top
-    pickup: 0.34,          // was 0.28: move the comb notch OFF the 2nd harmonic
-    sub: 0.28,             // was 0.18: the "not thin" fix — more fundamental weight
-    sub_ramp: 90,          // the sub speaks fast (a thud, not a swell)
-    sub_shape: (0.4, 0.0), // B5: a real string's weight has a strong 2nd harmonic
-    attack_noise: 0.40,    // was 0.5: less roundwound zing
-    stop_thump: 2.2,       // the damp lands with a thud (B3/BASS-6)
+    // low anchor + a DRIVING low-mid growl (320 Hz) and an attack-presence
+    // bump (760 Hz) — the mids that make a bass push a groove
+    body: &[(55.0, 0.8, 4.0), (110.0, 1.0, 2.5), (320.0, 0.9, 3.0), (760.0, 1.1, 2.4)],
+    out_lp: 2100.0,           // was 1350: un-muffle (still under PICK's 2400)
+    pickup: 0.34,             // comb notch off the 2nd harmonic
+    pickup_rlc: (1500.0, 1.1), // electric pickup-coil resonance — the XG bite
+    sub: 0.24,                // was 0.28: solid low end, but mid-forward not boomy
+    sub_ramp: 90,             // the sub speaks fast (a thud, not a swell)
+    sub_shape: (0.4, 0.0),    // a real string's weight has a strong 2nd harmonic
+    attack_noise: 0.62,       // was 0.40: the roundwound finger zing/attack
+    stop_thump: 2.2,          // the damp lands with a thud
     ..DEFAULTS
 };
 // Fretless (GM 35), the album's other bass. Already the darkest electric;
@@ -10888,13 +10894,18 @@ mod tests {
                 late_early_db: -20.742,
             },
         );
+        // BASS re-voiced to the driving XG roundwound (2026.07, Arthur's brief):
+        // brighter/more mid-forward than the old muffled flatwound, so the
+        // signature is regenerated — higher centroid (186 -> 207 Hz), hotter
+        // (out_lp opened). Its driving character is separately pinned by
+        // `bass_drives_not_muffled`.
         assert_render_signature(
             "BASS",
             render_signature(&bass_render, 44100.0, (0.05, 0.4), (0.05, 0.15), (0.5, 0.8)),
             RenderSignature {
-                rms_db: -17.016,
-                centroid_hz: 186.643,
-                late_early_db: -15.518,
+                rms_db: -16.061,
+                centroid_hz: 207.454,
+                late_early_db: -15.123,
             },
         );
     }
@@ -12112,6 +12123,32 @@ mod tests {
         assert!(
             quint_db < -30.0,
             "GM20 reed organ half-integer/integer energy {quint_db:.1} dB (want < -30)"
+        );
+    }
+
+    /// GM33 fingered bass is voiced as a DRIVING roundwound (Arthur's Yamaha-XG
+    /// brief): it must have low-mid GROWL and upper-mid PRESENCE, not the old
+    /// muffled flatwound where everything above the fundamental was rolled off.
+    /// Pins the driving character against a re-muffling regression. (Old muffled
+    /// voicing measured growl ≈ -28 dB, presence ≈ -86 dB; the driving voicing
+    /// ≈ -20 dB / -64 dB, both relative to the 40-200 Hz low band.)
+    #[test]
+    fn bass_drives_not_muffled() {
+        let sr = 44100.0;
+        let seg = render_program(33, 40, 100, 1.0, 0xE2); // E2, hard — where it drives
+        let body = segment(&seg, sr, 0.15, 0.85);
+        let low = spectral_band_rms(body, sr, 40.0, 200.0).max(1e-9);
+        let growl = spectral_band_rms(body, sr, 200.0, 800.0);
+        let presence = spectral_band_rms(body, sr, 800.0, 2500.0);
+        let growl_db = 20.0 * (growl / low).log10();
+        let presence_db = 20.0 * (presence / low).log10();
+        assert!(
+            growl_db > -25.0,
+            "GM33 bass lost its low-mid growl: {growl_db:.1} dB rel. low (want > -25)"
+        );
+        assert!(
+            presence_db > -75.0,
+            "GM33 bass is muffled — no upper-mid presence: {presence_db:.1} dB rel. low (want > -75)"
         );
     }
 

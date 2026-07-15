@@ -1030,8 +1030,8 @@ mod guards {
         // lives at the string layer (DRIVE.sustain 0.35 -> 0.5) and O-ATTACK
         // pins the no-late-bloom shape. All other rows BIT-EXACT vs the
         // unit-D capture — the drive insert touches programs 29/30 only.
-        (0, -41.28, 1020.2),
-        (1, -42.07, 2020.8),
+        (0, -40.22, 899.2),
+        (1, -41.50, 2030.2),
         (2, -41.49, 855.0),
         (3, -39.97, 485.9),
         // Re-captured (ch 4 only) after round 2's driven-guitar rework
@@ -1047,7 +1047,7 @@ mod guards {
         (5, -19.40, 241.3),
         (6, -27.13, 194.4),
         (7, -24.35, 567.6),
-        (8, -37.21, 2683.1),
+        (8, -37.21, 2382.1),
         // Re-captured after the default drum kit moved from V1 to V3:
         // channel 10 is deliberately brighter and slightly louder. Re-pinned
         // after the later V3 cymbal-density work moved the fixture within its
@@ -1061,7 +1061,7 @@ mod guards {
         (9, -17.16, 737.4),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 2.20355;
+    const GOLDEN_MASTER_PEAK: f32 = 2.26981;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

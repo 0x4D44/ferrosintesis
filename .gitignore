@@ -30,3 +30,9 @@ tools/*
 !crates/ferrosintesis-samples-core/samples/*.wav
 !crates/ferrosintesis-samples-drumkit/samples/*.wav
 !crates/ferrosintesis-samples-orchestral/samples/*.wav
+
+# Third-party reference MIDI test corpus (fan transcriptions of copyrighted works,
+# used only to stress-test ferrosintesis against real-world MIDI content). Never
+# commit or push these — this repo's remote is public. Local-only.
+test-corpus/*
+!test-corpus/README.md

@@ -2014,8 +2014,20 @@ const DEFAULTS: PluckPreset = PluckPreset {
 pub const NYLON: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "NYLON",
-    t60: 2.8,
-    bright: 3200.0,
+    // A freely-vibrating (un-muted) nylon string rings for seconds; the old
+    // t60 2.8 / bright 3200 died in ~1.2 s (RMS) at E3 and collapsed by ~1 s at
+    // E4, so held/long notes had little sustain. Longer t60 extends the
+    // fundamental; a slightly higher damper keeps the harmonics that carry the
+    // perceived ring (lessons_learnt: bright, not t60, is the RMS lever).
+    t60: 3.8,
+    bright: 3800.0,
+    // Let-ring release: a plucked open string is NOT damped at MIDI note-off —
+    // it keeps ringing until re-struck or muted. Album guitar parts are written
+    // as short notes (~0.2 s), so the old 0.15 s chop killed the ring the moment
+    // the note ended. A ~1.1 s release lets short notes sing and overlap like a
+    // real fingerpicked/strummed guitar, while still bounding the tail so voices
+    // reap. (MUTED keeps its fast chop — that is the palm-muted articulation.)
+    rel_t60: 1.1,
     pick_lp: 2500.0,
     pos: 0.28,
     amp: 0.55,
@@ -2028,8 +2040,15 @@ pub const NYLON: PluckPreset = PluckPreset {
 pub const STEEL: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "STEEL",
-    t60: 3.5,
-    bright: 5200.0,
+    // Steel strings ring longer and brighter than nylon: raise t60 for the
+    // aftersound and nudge the damper so the high harmonics sustain (the steel
+    // "sparkle" that dies first under a low damper corner).
+    t60: 4.5,
+    bright: 5600.0,
+    // Let-ring release (see NYLON): an un-muted steel string sustains past a
+    // short MIDI note-off. Skank/staccato chops stay tight because they are so
+    // short they are already low before the fade (measured -46 dB by +0.3 s).
+    rel_t60: 1.1,
     pick_lp: 5000.0,
     pos: 0.18,
     amp: 0.50,
@@ -10240,9 +10259,15 @@ mod tests {
         }
     }
 
-    /// V0 (guitar v2): tight portable canaries for UNTOUCHED Pluck presets.
-    /// These catch level, spectrum, or envelope contamination without relying
-    /// on raw `f32` fingerprints that vary across fleet machines.
+    /// V0 (guitar v2): tight portable canaries for the Pluck presets. These
+    /// catch level, spectrum, or envelope contamination without relying on raw
+    /// `f32` fingerprints that vary across fleet machines.
+    ///
+    /// NYLON's signature was deliberately re-pinned by the acoustic-guitar
+    /// sustain task (t60 2.8→3.8, bright 3200→3800): a louder RMS and a
+    /// higher `late_early_db` (−24.3→−20.7 dB) ARE the improvement — the note
+    /// now rings further into the late window instead of dying. BASS is the
+    /// untouched control and must not move.
     #[test]
     fn v2_untouched_pluck_signatures_are_stable() {
         let nylon_render = render_program(24, 52, 100, 1.0, 0xE1);
@@ -10257,9 +10282,9 @@ mod tests {
                 (0.5, 0.8),
             ),
             RenderSignature {
-                rms_db: -24.052,
-                centroid_hz: 252.392,
-                late_early_db: -24.303,
+                rms_db: -22.585,
+                centroid_hz: 254.285,
+                late_early_db: -20.742,
             },
         );
         assert_render_signature(

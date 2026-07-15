@@ -3,6 +3,22 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.15 — **A plucked-voice "no sustain" complaint is usually the note-off
+  RELEASE (`rel_t60`), not the natural KS decay.** Album guitar parts are written
+  as SHORT notes (~0.2–0.55 beat, gate < 1), so MIDI note-off lands in ~0.2 s and
+  the amp release governs the sound. The acoustics inherited `DEFAULTS.rel_t60 =
+  0.15 s` — a fast chop that kills the ring 0.3 s after note-off. An un-muted string
+  is not damped at note-off; give the non-muted guitars a "let-ring" `rel_t60` (~1.1
+  s) and keep MUTED's fast chop. Bounded pile-up: no polyphony cap for acoustics, a
+  voice reaps only when it decays < 2e-5, so a long release ≈ note-rate × ring
+  voices (fine offline). Isolated `render_pluck_phased` shows the full chop (−213 dB
+  tail); the real engine masks most of it via the guitar echo send (0.08) + CC91
+  reverb, so the in-mix win is a modest +4–9 dB — measure in the ENGINE, not just the
+  voice. Corollary: the `mean_freq` zero-crossing pitch estimator is timbre-brittle
+  (any `bright` bump tips it — it mis-counts on the 2nd harmonic leaking past its
+  700 Hz lowpass); for precise pitch use the Goertzel `peak_locate` + parabolic
+  refinement, never zero-crossings (`rpn_bend_range_and_fine_tune`).
+
 - 2026.07.14 — **"Drums too far back / not prominent" is usually INTERNAL KIT
   BALANCE (hi-hats too quiet, ride/crash too loud vs kick/snare), not a bus level
   or reverb problem — and a flat drum-bus gain cannot fix it.** The master

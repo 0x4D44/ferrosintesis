@@ -5306,7 +5306,13 @@ mod tests {
     fn rpn_bend_range_and_fine_tune() {
         let sr = 44100.0;
         let cc = |num, val| EvKind::Cc { ch: 0, num, val };
-        let render_freq = |setup: Vec<(f64, EvKind)>, win: (f32, f32)| -> f32 {
+        // Read the rendered pitch with a Goertzel peak refined by a parabolic
+        // interpolation in log-frequency (the engine already routes precise
+        // pitch through peak_locate). mean_freq's zero-crossing count quantizes
+        // to ~0.5% over this window AND mis-counts when a bright pluck's 2nd
+        // harmonic leaks past its 700 Hz lowpass — too coarse for the fine-tune
+        // ratio, and timbre-sensitive (it tips when the steel voice brightens).
+        let render_freq = |setup: Vec<(f64, EvKind)>, win: (f32, f32), band: (f32, f32)| -> f32 {
             let mut ev = vec![
                 (0.0, EvKind::Prog { ch: 0, prog: 25 }),
                 (0.0, cc(93, 0)),
@@ -5323,11 +5329,27 @@ mod tests {
             ));
             ev.push((2.5, EvKind::NoteOff { ch: 0, key: 69 }));
             let mono = left(&render(&test_song(ev, 2.6), &test_opts(sr)).0);
-            mean_freq(&mono[(win.0 * sr) as usize..(win.1 * sr) as usize], sr)
+            let seg = &mono[(win.0 * sr) as usize..(win.1 * sr) as usize];
+            let c = crate::testutil::peak_locate(seg, sr, band.0, band.1);
+            // parabolic vertex over the geometric (×1.005) neighbours of the peak
+            let lm = crate::testutil::mag_at(seg, sr, c / 1.005);
+            let cm = crate::testutil::mag_at(seg, sr, c);
+            let hm = crate::testutil::mag_at(seg, sr, c * 1.005);
+            let denom = lm - 2.0 * cm + hm;
+            let delta = if denom.abs() > 1e-9 {
+                (0.5 * (lm - hm) / denom).clamp(-1.0, 1.0)
+            } else {
+                0.0
+            };
+            c * 1.005f32.powf(delta)
         };
         // same half-deflection wheel; GM default range 2 vs RPN-widened 12
         let win = (0.25, 0.7);
-        let narrow = render_freq(vec![(0.04, EvKind::Bend { ch: 0, semis: 1.0 })], win);
+        let narrow = render_freq(
+            vec![(0.04, EvKind::Bend { ch: 0, semis: 1.0 })],
+            win,
+            (430.0, 510.0),
+        );
         let wide = render_freq(
             vec![
                 (0.01, cc(101, 0)),
@@ -5336,15 +5358,17 @@ mod tests {
                 (0.04, EvKind::Bend { ch: 0, semis: 1.0 }),
             ],
             win,
+            (560.0, 690.0),
         );
         // range 2 -> +1 semitone (~466 Hz); range 12 -> +6 semitones (~622 Hz)
         assert!((narrow - 466.2).abs() < 12.0, "narrow bend: {narrow} Hz");
         assert!((wide - 622.3).abs() < 20.0, "wide bend: {wide} Hz");
         // fine tune: RPN 1, +50 cents (MSB 96, LSB 0) with no wheel
-        let plain = render_freq(vec![], win);
+        let plain = render_freq(vec![], win, (410.0, 475.0));
         let fine = render_freq(
             vec![(0.01, cc(101, 0)), (0.01, cc(100, 1)), (0.01, cc(6, 96))],
             win,
+            (410.0, 475.0),
         );
         let ratio = fine / plain;
         assert!(

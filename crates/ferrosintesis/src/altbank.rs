@@ -39,6 +39,7 @@ const PIZZ: PluckPreset = PluckPreset {
     out_lp: 0.0,
     pickup: 0.0,
     sub: 0.0,
+    kick: 0.0,
     cab_lp: 0.0,
     click: 0.6,
     click_hp: 900.0,

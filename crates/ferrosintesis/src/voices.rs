@@ -2138,7 +2138,15 @@ pub struct PluckPreset {
     // sensing fraction — 0.11 senses at ~0.22 of the string (a neck pickup),
     // 0.05 near the bridge.
     pub pickup: f32,
-    pub sub: f32,    // envelope-locked fundamental sine (0 = none)
+    pub sub: f32, // envelope-locked fundamental sine (0 = none)
+    // The bass "kick": gain of a deep lowpassed-noise thump fired at note-on
+    // (KICK_LP_HZ / KICK_T60_S), summed in parallel like the stop thump. Models
+    // the broadband LOW attack thud of a real finger bass through an amp —
+    // measured on the MU-80 (XG) as strong 20-80 Hz onset energy (centroid
+    // ~100 Hz) that our modelled voice lacked. Lowpassed deep so it adds low
+    // punch but never a click. 0 = none; only the electric basses author it, so
+    // every other preset is bit-identical.
+    pub kick: f32,
     pub cab_lp: f32, // clean-amp cab rolloff, 0 = none (HLD G2)
     // --- HLD family B: parallel one-shot transients ---
     pub click: f32,             // pick/slap onset hardness (0 = none)
@@ -2222,6 +2230,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     out_lp: 0.0,
     pickup: 0.0,
     sub: 0.0,
+    kick: 0.0,
     cab_lp: 0.0,
     click: 0.0,
     click_hp: 1500.0,
@@ -2463,35 +2472,41 @@ pub const CLAVINET: PluckPreset = PluckPreset {
     trem: false, // the yarn damper strip stops the string: repeats articulate
     ..DEFAULTS
 };
-// Fingered electric bass (GM 33), the album workhorse. DRIVING roundwound
-// voicing (Arthur's Yamaha-XG brief, 2026.07): a punchy, mid-forward bass that
-// pushes a groove — the low end still anchors, but the note now SPEAKS. The
-// muffle is lifted (out_lp/bright/pick_lp opened), a low-mid GROWL and an
-// attack-presence bump are added to the body, the finger attack has more
-// roundwound zing, and an electric pickup-coil resonance adds the XG bite.
-// Deliberately kept a touch darker than the picked PICK bass (bass_articulations
-// keeps that ordering). Supersedes the old dark flatwound/McCartney voicing.
+// Fingered electric bass (GM 33), the album workhorse. MUFFLED FLATWOUND
+// voicing (Arthur's brief, 2026.07: "McCartney with old flat strings" — warm,
+// round, thumpy, NOT twangy). Keeps the v5 low-end WEIGHT and onset kick, but
+// rolls the top hard off and strips the roundwound/electric zing: the highs are
+// muffled (low out_lp/bright/pick_lp), the pick sits neck-ward, the finger
+// attack barely scrapes, and the electric pickup-coil "bite" is removed. The
+// low anchor (50/100 Hz body + sub + kick) is untouched — dark on top, big
+// underneath. Still under the picked PICK bass in brightness (bass_articulations).
 pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "BASS",
     wound_all: true,
     t60: 3.2,
-    bright: 1900.0,  // was 1250: open the loop — harmonics ring, the note drives
-    pick_lp: 1800.0, // was 1000: a brighter roundwound finger attack
-    pos: 0.30,       // was 0.35: a touch more bridge-ward — defined, aggressive
+    // Muffled/flatwound top end: the loop and pluck are DARK (damped harmonics,
+    // a dull round finger attack), the pick sits neck-ward for McCartney warmth,
+    // and out_lp rolls the highs off hard. The whole point is to kill the twang
+    // while leaving the low end (below) leading.
+    bright: 1100.0, // was 1550: dark, damped harmonics — flatwound, not roundwound
+    pick_lp: 850.0, // was 1250: a dull, round finger pluck (no zing)
+    pos: 0.37,      // was 0.30: neck-ward — McCartney warmth, not bridge twang
     amp: 1.05,
     rel_t60: 0.12,
-    // low anchor + a DRIVING low-mid growl (320 Hz) and an attack-presence
-    // bump (760 Hz) — the mids that make a bass push a groove
-    body: &[(55.0, 0.8, 4.0), (110.0, 1.0, 2.5), (320.0, 0.9, 3.0), (760.0, 1.1, 2.4)],
-    out_lp: 2100.0,           // was 1350: un-muffle (still under PICK's 2400)
-    pickup: 0.34,             // comb notch off the 2nd harmonic
-    pickup_rlc: (1500.0, 1.1), // electric pickup-coil resonance — the XG bite
-    sub: 0.24,                // was 0.28: solid low end, but mid-forward not boomy
-    sub_ramp: 90,             // the sub speaks fast (a thud, not a swell)
-    sub_shape: (0.4, 0.0),    // a real string's weight has a strong 2nd harmonic
-    attack_noise: 0.62,       // was 0.40: the roundwound finger zing/attack
-    stop_thump: 2.2,          // the damp lands with a thud
+    // low anchor UNCHANGED from v5 (50/100 Hz, +9/+6.2 — the weight Arthur
+    // approved); the 320 low-mid is eased and the 760 attack-presence bump
+    // (a source of twang) is DROPPED — flatwounds are low-thump, not mid-forward
+    body: &[(50.0, 0.8, 9.0), (100.0, 1.0, 6.2), (320.0, 0.9, 1.2)],
+    out_lp: 1150.0,         // was 2100: the MUFFLE — roll the highs off hard
+    pickup: 0.34,           // comb notch off the 2nd harmonic
+    pickup_rlc: (0.0, 0.0), // was (1500,1.1): the electric "bite" REMOVED — flatwounds are passive-dark
+    sub: 0.72,              // strong steady fundamental — the low-end weight (kept from v5)
+    kick: 3.9,              // deep onset THUMP — the low-end kick (see KICK_LP_HZ)
+    sub_ramp: 90,           // the sub speaks fast (a thud, not a swell)
+    sub_shape: (0.4, 0.0),  // a real string's weight has a strong 2nd harmonic
+    attack_noise: 0.12,     // was 0.30: flatwounds barely scrape — kill the roundwound twang
+    stop_thump: 2.2,        // the damp lands with a thud
     ..DEFAULTS
 };
 // Fretless (GM 35), the album's other bass. Already the darkest electric;
@@ -3075,6 +3090,16 @@ impl KsLoop {
 /// across every preset at worst-case jitter.
 pub(crate) const K_COUPLE: f32 = 0.02;
 
+/// Bass "kick" decay: the onset noise thump (preset `kick`) rings down with
+/// this t60 — a fast punch that lands with the pluck and is gone before the
+/// note settles. Short enough to read as a transient PUNCH, not a boomy tail.
+const KICK_T60_S: f32 = 0.075;
+/// Bass "kick" lowpass corner: the thump is a deep, DARK thud (the MU-80/XG
+/// finger-bass onset measures strongest at 20-80 Hz, centroid ~100 Hz). Cutting
+/// this low guarantees the thump carries no mid/treble energy — it can add low
+/// weight but can never read as the pick "click" Arthur was bothered by.
+const KICK_LP_HZ: f32 = 55.0;
+
 /// G6 release-darken targets: while released, each polarization's damper
 /// glides toward this floor at control rate (already-dark presets are
 /// unaffected — the glide only ever darkens).
@@ -3177,6 +3202,12 @@ pub struct Pluck {
     sus_ref_until: u32,            // reference-capture deadline (re-armed by a slur)
     sub: Option<(Sine, f32, f32)>, // (osc, gain, decay) fundamental weight
     sub_env: f32,
+    // The bass "kick": a deep lowpassed-noise thump fired at note-on, summed in
+    // parallel (like the stop thump). A real module's bass punch is a broadband
+    // LOW attack thud — the pluck displacing the heavy string through the amp —
+    // measured on the MU-80 (XG) as strong 20-80 Hz energy at onset, centroid
+    // ~100 Hz. Lowpassed deep (KICK_LP_HZ) so it can never read as a click.
+    kick_thump: Option<Burst>,
     sub_shape: (f32, f32), // (2f, 3f) waveshaper amounts on the sub
     sub_ramp: u32,
     // HLD family B one-shots, all fed by the voice's own rng
@@ -3379,6 +3410,16 @@ impl Pluck {
                 )
             }),
             sub_env: 0.0,
+            // The bass "kick": a deep noise thump fired NOW (at note-on),
+            // velocity-scaled so a hard pluck kicks harder, ringing down over
+            // ~KICK_T60_S. Inert (None) for every kick-less preset, so those
+            // renders stay bit-identical.
+            kick_thump: (p.kick > 0.0).then(|| {
+                let mut b =
+                    Burst::new(Biquad::lowpass(KICK_LP_HZ, 0.9, sr), p.kick, KICK_T60_S, sr);
+                b.trigger(0.4 + 0.6 * v);
+                b
+            }),
             sub_shape: p.sub_shape,
             sub_ramp: p.sub_ramp,
             onset_pre: (p.click > 0.0 && !p.click_post).then(|| {
@@ -3674,6 +3715,11 @@ impl Voice for Pluck {
             if let Some(b) = &mut self.stop {
                 // release thump (armed by note_off): the palm's thud is NOT
                 // the string ring, so it does not decay with the release env
+                y += b.tick(&mut self.rng) * self.amp;
+            }
+            if let Some(b) = &mut self.kick_thump {
+                // onset "kick": the deep attack thud, in parallel like the stop
+                // thump (not string ring, so no release/attack env on it)
                 y += b.tick(&mut self.rng) * self.amp;
             }
             self.env = self.env.max(y.abs()) * 0.9995;
@@ -10433,9 +10479,14 @@ mod tests {
             ..BASS
         };
         let bass = cent(&bare_bass, 33, 120) / cent(&bare_bass, 33, 30);
+        // BASS is now the muffled FLATWOUND (dark loop + pluck, out_lp 1150): a
+        // hard pluck still opens the timbre, but a flatwound has far less treble
+        // headroom to open INTO than a roundwound, so the ratio is gentler
+        // (~1.19 vs STEEL's ~1.76). >1.12 keeps the velocity LAW pinned without
+        // demanding a brightness the flatwound voicing deliberately lacks.
         assert!(
-            steel > 1.4 && bass > 1.3,
-            "ff/pp centroid ratios: STEEL {steel} (need >1.4), BASS {bass} (need >1.3)"
+            steel > 1.4 && bass > 1.12,
+            "ff/pp centroid ratios: STEEL {steel} (need >1.4), BASS {bass} (need >1.12)"
         );
     }
 
@@ -10894,18 +10945,21 @@ mod tests {
                 late_early_db: -20.742,
             },
         );
-        // BASS re-voiced to the driving XG roundwound (2026.07, Arthur's brief):
-        // brighter/more mid-forward than the old muffled flatwound, so the
-        // signature is regenerated — higher centroid (186 -> 207 Hz), hotter
-        // (out_lp opened). Its driving character is separately pinned by
-        // `bass_drives_not_muffled`.
+        // BASS re-voiced to the MUFFLED FLATWOUND (2026.07, Arthur's brief:
+        // "McCartney with old flat strings"): the low-end weight is pushed hard
+        // (big sub + onset kick) and the top is rolled off (out_lp/bright/pick_lp
+        // down, electric bite removed), so the signature is regenerated — hotter
+        // (rms -16.06 -> -14.10, the added low weight) and darker (centroid
+        // 207 -> 178 Hz, the muffle), with a slower relative decay (late/early
+        // -15.1 -> -11.2, the big sustaining sub). Its muffled character is
+        // separately pinned by `bass_is_muffled_flatwound`.
         assert_render_signature(
             "BASS",
             render_signature(&bass_render, 44100.0, (0.05, 0.4), (0.05, 0.15), (0.5, 0.8)),
             RenderSignature {
-                rms_db: -16.061,
-                centroid_hz: 207.454,
-                late_early_db: -15.123,
+                rms_db: -14.104,
+                centroid_hz: 178.100,
+                late_early_db: -11.198,
             },
         );
     }
@@ -12126,16 +12180,20 @@ mod tests {
         );
     }
 
-    /// GM33 fingered bass is voiced as a DRIVING roundwound (Arthur's Yamaha-XG
-    /// brief): it must have low-mid GROWL and upper-mid PRESENCE, not the old
-    /// muffled flatwound where everything above the fundamental was rolled off.
-    /// Pins the driving character against a re-muffling regression. (Old muffled
-    /// voicing measured growl ≈ -28 dB, presence ≈ -86 dB; the driving voicing
-    /// ≈ -20 dB / -64 dB, both relative to the 40-200 Hz low band.)
+    /// GM33 fingered bass is the MUFFLED FLATWOUND (Arthur's brief: "McCartney
+    /// with old flat strings" — warm, round, thumpy, NOT twangy). Its low band
+    /// must DOMINATE and everything above must roll off HARD: the low-mid
+    /// (200-800 Hz) sits well under the 40-200 Hz low band, and the upper-mid
+    /// presence (800-2500 Hz) is heavily attenuated. Pins the flatwound tone
+    /// against a re-BRIGHTENING regression (e.g. a return to the driving
+    /// roundwound, which measured growl ≈ -20 dB / presence ≈ -64 dB; the muffled
+    /// voicing measures ≈ -34 dB / -59 dB, both relative to the low band). The
+    /// low-end WEIGHT itself (sub + kick + body) is guarded by the golden mix
+    /// balance and the v2 signature; this oracle guards the DARKNESS.
     #[test]
-    fn bass_drives_not_muffled() {
+    fn bass_is_muffled_flatwound() {
         let sr = 44100.0;
-        let seg = render_program(33, 40, 100, 1.0, 0xE2); // E2, hard — where it drives
+        let seg = render_program(33, 40, 100, 1.0, 0xE2); // E2, hard
         let body = segment(&seg, sr, 0.15, 0.85);
         let low = spectral_band_rms(body, sr, 40.0, 200.0).max(1e-9);
         let growl = spectral_band_rms(body, sr, 200.0, 800.0);
@@ -12143,12 +12201,14 @@ mod tests {
         let growl_db = 20.0 * (growl / low).log10();
         let presence_db = 20.0 * (presence / low).log10();
         assert!(
-            growl_db > -25.0,
-            "GM33 bass lost its low-mid growl: {growl_db:.1} dB rel. low (want > -25)"
+            growl_db < -20.0,
+            "GM33 bass is not low-dominated (too much low-mid — re-brightened?): \
+             {growl_db:.1} dB rel. low (want < -20, muffled)"
         );
         assert!(
-            presence_db > -75.0,
-            "GM33 bass is muffled — no upper-mid presence: {presence_db:.1} dB rel. low (want > -75)"
+            presence_db < -40.0,
+            "GM33 bass has upper-mid presence back (twang returned): \
+             {presence_db:.1} dB rel. low (want < -40, muffled)"
         );
     }
 
@@ -13560,9 +13620,20 @@ mod tests {
     #[test]
     fn stop_thump_on_note_off_only() {
         let sr = 44100.0;
+        // Isolate the thump MECHANISM from BASS's (now very large) sub + kick,
+        // which live in the same sub-250 Hz band as the 250 Hz-lowpassed thump
+        // and mask it completely in the full voice (measurably ~0 contribution
+        // at the muffled-flatwound sub weight of 0.72). We still test BASS's own
+        // stop_thump VALUE (2.2), just with the masking layers switched off so
+        // the burst is observable — the mechanism is what this oracle guards.
+        let base = PluckPreset {
+            sub: 0.0,
+            kick: 0.0,
+            ..BASS
+        };
         let no_thump = PluckPreset {
             stop_thump: 0.0,
-            ..BASS
+            ..base
         };
         let run = |p: &PluckPreset, off: bool| {
             let mut v = Pluck::new(p, 33, 100, sr, 7);
@@ -13575,21 +13646,21 @@ mod tests {
             v.render(&mut b);
             (a, b)
         };
-        let (_, tail_with) = run(&BASS, true);
+        let (_, tail_with) = run(&base, true);
         let (_, tail_without) = run(&no_thump, true);
         let lf = |s: &[f32]| crate::testutil::band_rms(s, sr, 150.0, 0.7);
-        // The flatwound revoice raised BASS's sub weight (0.18 -> 0.28), so the
-        // note's own low end sustains further into the tail and the thump's
-        // *relative* prominence shrinks even though it still clearly fires
-        // (~1.29x here). 1.25 keeps the assertion meaningful at the deeper voicing.
+        // The thump adds ~19% LF here (1.19x); the note's own harmonics (55 Hz
+        // key with body-EQ'd low) share the band, so the burst can't swamp it.
+        // >1.10 pins that the note_off thud fires while leaving deterministic
+        // margin (fixed seed 7).
         assert!(
-            lf(&tail_with) > 1.25 * lf(&tail_without),
+            lf(&tail_with) > 1.10 * lf(&tail_without),
             "thump missing: {} vs {}",
             lf(&tail_with),
             lf(&tail_without)
         );
         // natural end: the armed-but-untriggered burst must change nothing
-        let (a1, b1) = run(&BASS, false);
+        let (a1, b1) = run(&base, false);
         let (a2, b2) = run(&no_thump, false);
         assert!(
             a1.iter().zip(&a2).all(|(x, y)| x.to_bits() == y.to_bits())

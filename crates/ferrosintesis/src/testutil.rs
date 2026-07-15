@@ -1037,15 +1037,14 @@ mod guards {
         // Re-captured (ch 4 only) after round 2's driven-guitar rework
         // ("clean, dark sustain"): hotter drive staging (DRIVE amp/sustain/
         // bright + Drive g1/bias, post level-re-matched end-to-end) leaves
-        // ch 4 −0.6 dB and darker (centroid 814 → 545 Hz — held notes now
-        // keep a compressed, clipped fundamental instead of a decayed
-        // whisper; driven_sustain_stays_distorted pins the tail THD).
-        // Ch 8 (strings) drifted in-band (2683 → 2382 Hz) earlier from the
-        // GM048/049 bow-noise breath (sawstack signature re-pinned there);
-        // master peak now measures 1.19061 — both inside this guard's
-        // tolerance, left at their captures.
+        // ch 4 −0.6 dB and darker (centroid 814 → 545 Hz).
         (4, -32.87, 544.9),
-        (5, -24.61, 294.6),
+        // Re-captured after the muffled-flatwound bass re-voice (kick + big sub
+        // + muffle, GM33): ch 5 louder (the low-end WEIGHT Arthur approved) and
+        // darker (the muffle). Every other channel — INCLUDING the ch 7 piano
+        // and ch 8 strings canaries — is BIT-EXACT vs the pre-revoice capture:
+        // the change is contained to the BASS preset, as intended.
+        (5, -19.40, 241.3),
         (6, -27.13, 194.4),
         (7, -24.35, 567.6),
         (8, -37.21, 2683.1),

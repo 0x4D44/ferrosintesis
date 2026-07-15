@@ -37,6 +37,23 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   stereo-imaging oracle (a hat-forward kit correlates more; give its test pattern a
   present ride so it still exercises the L/R spread).
 
+- 2026.07.15 — **The KS Pluck BASS already emits a strong pitch-tracking f0/2 SUBHARMONIC —
+  so "add a sub-octave" is a solved problem, and a second oscillator is redundant + octave-
+  flip-risky.** Measured dry/isolated/sustained: A2 f0/2 sits **+5.7 dB OVER** the fundamental,
+  E2 +0.3, F#3 +11.7, and the peak TRACKS f0/2 (E2→42 Hz, A2→54 Hz), not the fixed ~50 Hz
+  body peak. It's a LONE f0/2 line (no 1.5·f0), so it reads as sub-reinforcement / "bigness"
+  (why a low-voiced bass already sounds big), NOT a wrong-octave pitch. Before building a
+  low-end feature, MEASURE what the voice already emits at f0/2 — a Fable-designed sub-octave
+  oscillator was fully built then shelved once this showed its premise ("~nothing at f0/2")
+  was false. Two corollaries: (1) **Ground bass timbre in a REAL module** — `mdsc55` emulates
+  the real Yamaha MU-80 (XG) / SC-55 with ROMs on disk; render the actual passage through
+  `mdmidiemu --synth mu80` and measure the onset spectrum (the XG finger bass is LOW-dominated,
+  centroid ~100-135 Hz; a mid-forward model reads "twangy"). Its per-key f0/2 level jumps
+  non-monotonically = multisample-zone artifact, NOT a design law to copy. (2) When a voice's
+  masking layer grows (BASS sub 0.28→0.72), a differential oracle for a small parallel feature
+  (the stop thump) drops BELOW the rng-realization noise floor and reads with<without — test
+  the MECHANISM on a sub/kick-free clone, don't weaken the assertion.
+
 - 2026.07.14 — **A one-pole KS damper's MAGNITUDE at f0 (not `loop_gain`/`t60`) rules
   treble decay** — STEEL B5: damp_mag(f0) ≈ 0.955/round-trip ≈ −390 dB/s, so the
   fundamental is dead in ~130 ms whatever the nominal t60. Naive `1/|H(f0)|` loop-gain

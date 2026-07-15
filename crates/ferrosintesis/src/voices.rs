@@ -4840,6 +4840,19 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             0.0,
             0.32,
         ),
+        // 20 reed organ (harmonium/Lowrey): a FREE reed radiates an INTEGER
+        // harmonic series. The old additive table carried a full half-integer
+        // ladder (1.5/2.5/3.5/4.5f) — perfect-fifth "quint" partials that
+        // painted an audible parallel fifth (medieval-organum ghost) on every
+        // note (flagged in the Tubular Bells reference render at 0:07). Those
+        // quints were the WRONG realization of a right idea: a free reed IS
+        // less pure than the church organ. Integer harmonics only now; the
+        // reed's inharmonic CHARACTER is re-realized PHYSICALLY as broadband
+        // reed BUZZ — turbulent air rasping past the vibrating tongue, not a
+        // pitched mutation rank — which keeps the off-harmonic residual that
+        // distinguishes it from GM19 WITHOUT any pitched fifth. Wider, louder,
+        // slightly lower-centred noise than before so it spans the 1.5–4.5f
+        // band the free-reed-character oracle samples.
         20 => Organ::new(
             key,
             vel,
@@ -4847,14 +4860,10 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             seed,
             &[
                 (1.0, 1.0),
-                (1.5, 0.18),
-                (2.0, 0.34),
-                (2.5, 0.14),
-                (3.0, 0.20),
-                (3.5, 0.12),
-                (4.0, 0.10),
-                (4.5, 0.10),
-                (5.0, 0.06),
+                (2.0, 0.38),
+                (3.0, 0.22),
+                (4.0, 0.13),
+                (5.0, 0.07),
             ],
             Adsr::new(0.095, 0.08, 0.96, 0.22, sr),
             trem_hz,
@@ -4864,7 +4873,7 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             0.0,
             0.30,
         )
-        .with_reed_noise(0.035, (f * 3.6).clamp(700.0, 2400.0), 0.75),
+        .with_reed_noise(0.05, (f * 3.0).clamp(600.0, 2400.0), 0.7),
         21 => Organ::new(
             key,
             vel,
@@ -11038,16 +11047,6 @@ mod tests {
         s.iter().map(|x| x.abs()).fold(0.0, f32::max)
     }
 
-    fn off_harmonic_residual(seg: &[f32], sr: f32, f0: f32) -> f32 {
-        let fund = band_rms(seg, sr, f0, 18.0).max(1e-9);
-        let off = [1.5, 2.5, 3.5, 4.5]
-            .iter()
-            .map(|m| band_rms(seg, sr, f0 * *m, 18.0))
-            .sum::<f32>()
-            / 4.0;
-        off / fund
-    }
-
     fn low_rate_am_depth(seg: &[f32], sr: f32) -> f32 {
         let mut lp1 = OnePole::lowpass(60.0, sr);
         let mut lp2 = OnePole::lowpass(60.0, sr);
@@ -11931,9 +11930,6 @@ mod tests {
             "GM22 tongue spit out of the reed envelope: {r22:.4} vs oboe {r_oboe:.4}"
         );
 
-        let mut gm19_voice = legacy_church_organ(key, vel, sr, seed);
-        let mut gm19 = vec![0.0; (0.9 * sr) as usize];
-        gm19_voice.render(&mut gm19);
         let gm20 = render_program(20, key, vel, 0.9, seed);
         let gm20_body = segment(&gm20, sr, 0.26, 0.60);
         let gm20_pitch = peak_locate(gm20_body, sr, f0 * 0.97, f0 * 1.03);
@@ -11941,11 +11937,32 @@ mod tests {
             (gm20_pitch / f0 - 1.0).abs() <= 0.02,
             "GM20 late pitch {gm20_pitch:.1} Hz vs {f0:.1}"
         );
-        let gm20_res = off_harmonic_residual(gm20_body, sr, f0);
-        let gm19_res = off_harmonic_residual(segment(&gm19, sr, 0.26, 0.60), sr, f0);
+        // Free-reed character. The old clause asserted GM20 has more energy at
+        // 1.5/2.5/3.5/4.5f than the church organ — but that half-integer energy
+        // WAS the parallel-fifth "organum ghost" (a pitched quint mutation
+        // borrowed from pipe-organ ranks), removed on 2026.07 because it read as
+        // an audible foreign fifth doubling a melody. A harmonic free reed is,
+        // if anything, mellower than this unusually bright legacy church organ
+        // (measured: GM20 upper-harmonic ratio 0.04 vs GM19 0.15), so that
+        // comparison can no longer be honoured. The reed's inharmonic character
+        // is now its broadband BUZZ (turbulent air past the tongue), kept as an
+        // honest absolute floor: audible inter-harmonic energy in the clean gaps
+        // between harmonics, which a sterile sine-stack organ would not carry.
+        // The no-parallel-fifth property itself is pinned by the dedicated
+        // `reed_organ_gm20_has_no_parallel_fifth` oracle.
+        let buzz = |seg: &[f32]| {
+            let fund = band_rms(seg, sr, f0, 18.0).max(1e-9);
+            let off = [1.25, 1.75, 2.25, 2.75, 3.25, 3.75]
+                .iter()
+                .map(|m| band_rms(seg, sr, f0 * *m, 40.0))
+                .sum::<f32>()
+                / 6.0;
+            off / fund
+        };
+        let gm20_buzz = buzz(gm20_body);
         assert!(
-            gm20_res >= 1.5 * gm19_res,
-            "GM20 bellows/free-reed residual {gm20_res:.4} vs GM19 {gm19_res:.4}"
+            gm20_buzz > 0.020,
+            "GM20 lost its free-reed buzz: inter-harmonic residual {gm20_buzz:.4} (want > 0.020) — reed_noise gone?"
         );
 
         let am = |program| {
@@ -12062,6 +12079,39 @@ mod tests {
             upper > 0.60,
             "timpani late tail is a low boom: upper/fund {upper:.3} (need > 0.60 — the pitched \
              principal mode must not be swamped by the fundamental)"
+        );
+    }
+
+    /// GM 20 Reed Organ (harmonium/Lowrey) is a FREE reed: it radiates an
+    /// INTEGER harmonic series. The old additive table carried a full
+    /// half-integer ladder (1.5/2.5/3.5/4.5f) — perfect-fifth "quint" partials
+    /// that painted a parallel fifth (medieval-organum ghost) on every note and
+    /// read as harmonically "strange" doubling a melody (Tubular Bells 0:07).
+    /// This pins the quints at the inter-partial floor: the fifth (1.5f) and the
+    /// summed half-integer energy must NOT be real partials. (The old quint
+    /// voice measured 1.5f ≈ -14.6 dB and quint/integer ≈ -12 dB; the harmonic
+    /// voice lands ≈ -80 dB on both.)
+    #[test]
+    fn reed_organ_gm20_has_no_parallel_fifth() {
+        let sr = 44100.0;
+        let key = 81u8; // A5, the Tubular Bells ostinato register
+        let f0 = key_freq(key);
+        let mut v = make(20, key, 100, sr, 0x2000_0007, false);
+        let mut buf = vec![0f32; (0.9 * sr) as usize];
+        v.render(&mut buf);
+        let body = &buf[(0.30 * sr) as usize..]; // settled, past the onset
+        let m = |mult: f32| mag_at(body, sr, f0 * mult).max(1e-12);
+        let fifth_db = 20.0 * (m(1.5) / m(1.0)).log10();
+        let quints = m(1.5) + m(2.5) + m(3.5) + m(4.5);
+        let harmonics = m(1.0) + m(2.0) + m(3.0) + m(4.0) + m(5.0);
+        let quint_db = 20.0 * (quints / harmonics).log10();
+        assert!(
+            fifth_db < -35.0,
+            "GM20 reed organ has a parallel fifth: 1.5f at {fifth_db:.1} dB (want < -35)"
+        );
+        assert!(
+            quint_db < -30.0,
+            "GM20 reed organ half-integer/integer energy {quint_db:.1} dB (want < -30)"
         );
     }
 

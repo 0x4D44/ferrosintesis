@@ -275,3 +275,14 @@
   (Done 2026-07-12: both copied engines now order CC0 before program changes;
   both verifiers enforce the ordering; Big Weather's energy and drum-solo checks
   now reject checked spans containing an interior meter change with a clear error.)
+
+- [ ] 2026.07.15 — **Drum-bus glue compressor (ch9) — unshipped idea recovered from the
+  superseded `dry-drum-bus-for-forward-kit` branch before reaping it.** A feed-forward
+  3:1 peak compressor + makeup gain on the channel-10 bus (sibling of the existing
+  `BusGlue`), so kit prominence rides through the −18 LUFS / −1 dBTP master as RMS body
+  instead of getting shaved off as peaks. Compiled clean; never gated, never A/B'd by
+  ear, never committed. Full rationale, constants (`DRUM_COMP_THR`/`_MAKEUP`/`_ATK_S`/
+  `_REL_S`) and code sketch are preserved in `wrk_journals/2026.07.15 - JRN - recover
+  DrumGlue bus-compressor idea before reaping dry-drum-bus branch.md`. Would slot into
+  `crates/ferrosintesis/src/engine.rs` next to `BusGlue`. Worth a look if "kit still
+  not prominent enough" comes back up after the shipped `kit_balance()` fix.

@@ -49,6 +49,7 @@ const PIZZ: PluckPreset = PluckPreset {
     sub_shape: (0.0, 0.0),
     sub_ramp: 220,
     grit: false,
+    buzz: 0.0,
     wound_all: false,
     wound_key_split: true,
     harmonic: false,

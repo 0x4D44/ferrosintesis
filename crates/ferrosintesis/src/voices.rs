@@ -2157,6 +2157,7 @@ pub struct PluckPreset {
     pub sub_shape: (f32, f32),  // sub waveshaper (2f, 3f) amounts (MUTED grit / B5)
     pub sub_ramp: u32,          // sub fade-in samples
     pub grit: bool,             // per-voice soft-clip (MUTED palm chug, G4)
+    pub buzz: f32,              // envelope-normalized yarn/fret contact buzz (round-3 U1)
     pub wound_all: bool,        // K4: wound full-range (bass family) vs key-split (guitars)
     pub wound_key_split: bool,  // when false, non-bass presets skip the guitar split
     pub harmonic: bool,         // prog-31 flageolet: loop retuned to 2f/3f (G7)
@@ -2240,6 +2241,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     sub_shape: (0.0, 0.0),
     sub_ramp: 220,
     grit: false,
+    buzz: 0.0,
     wound_all: false,
     wound_key_split: true,
     harmonic: false,
@@ -2463,11 +2465,22 @@ pub const CLAVINET: PluckPreset = PluckPreset {
     // the MUTED precedent) and a brighter single-coil resonance peak.
     pickup_rlc: (4500.0, 1.6),
     grit: true,
+    // Round-3 U1 bug B: the memoryless grit's RELATIVE buzz dies ~2× faster
+    // than the note (near-linear at sustain amplitude). The yarn/fret contact
+    // buzz is proportional to string motion, so it rides an envelope-
+    // normalized cubic instead — constant buzz-to-signal ratio through the
+    // decay. Amount is a defensible default → round-3 EAR-A/B list.
+    buzz: 0.22,
     cab_lp: 5200.0,
     click: 2.0,
     click_hp: 1600.0,
     click_post: true,
-    attack_noise: 0.22,
+    // 0.22 dated from when this param was DEAD (shadowed by click_post —
+    // round-3 U1 bug A), so it never had an audible calibration; at 0.22 the
+    // resurrected scrape sits ~20 dB under the click in its own band. 0.55
+    // makes the tangent contact register next to the click (exact amount →
+    // round-3 EAR-A/B list).
+    attack_noise: 0.55,
     stop_thump: 0.5,
     trem: false, // the yarn damper strip stops the string: repeats articulate
     ..DEFAULTS
@@ -3213,9 +3226,14 @@ pub struct Pluck {
     // HLD family B one-shots, all fed by the voice's own rng
     onset_pre: Option<Burst>,  // pick click / palm chuff — knocks the body
     onset_post: Option<Burst>, // finger noise / slap pop — after the out-LP
+    scrape: Option<Burst>,     // tangent scrape when click_post coexists (round-3 U1)
     stop: Option<Burst>,       // release thump, armed by note_off
     mwah: Option<Mwah>,        // fretless vocal formant bloom
     grit: bool,                // MUTED palm soft-clip
+    buzz: f32,                 // envelope-normalized contact-snap buzz (round-3 U1)
+    buzz_env: f32,             // fast rectifier average the buzz normalizes against
+    buzz_k: f32,               // buzz_env one-pole coefficient (~8 ms)
+    buzz_hp: Biquad,           // keeps only the bright part of the gated contact
     // banjo drum head: parallel (mode filter, gain) resonators (empty for
     // every preset that authors no `membrane`)
     membrane: Vec<(Biquad, f32)>,
@@ -3452,6 +3470,21 @@ impl Pluck {
                     None
                 }
             },
+            // Round-3 U1 bug A: when click_post AND attack_noise are both set
+            // (only CLAVINET), the branch above shadowed the scrape — the
+            // tangent contact noise was dead code. It gets its own slot so
+            // both one-shots fire; every preset without the combination
+            // builds None and renders bit-identically.
+            scrape: (p.click > 0.0 && p.click_post && p.attack_noise > 0.0).then(|| {
+                let mut b = Burst::new(
+                    Biquad::bandpass(2000.0, 0.8, sr),
+                    (p.attack_noise * (0.45 + 0.55 * v) * (0.3 + 0.7 * vn)).min(v),
+                    0.004,
+                    sr,
+                );
+                b.trigger(1.0);
+                b
+            }),
             stop: (p.stop_thump > 0.0).then(|| {
                 Burst::new(
                     Biquad::lowpass(250.0, 0.7, sr),
@@ -3462,6 +3495,14 @@ impl Pluck {
             }),
             mwah: p.mwah.map(|spec| Mwah::new(spec, sr)),
             grit: p.grit,
+            buzz: p.buzz,
+            buzz_env: 0.0,
+            // ~40 ms: slow enough not to track the waveform WITHIN a low-key
+            // period (key 48's period is 7.6 ms — an 8 ms follower rode each
+            // cycle and kept n under the contact threshold), fast enough to
+            // follow the 0.78 s t60 decay with ~3 dB lag.
+            buzz_k: 1.0 - (-1.0 / (0.040 * sr)).exp(),
+            buzz_hp: Biquad::highpass(3000.0, 0.7, sr),
             membrane: p
                 .membrane
                 .iter()
@@ -3634,6 +3675,37 @@ impl Voice for Pluck {
                 // palm-mute chug: the palm+pick+amp chain compresses (G4)
                 y = (y * 2.0).tanh() * 0.5;
             }
+            if self.buzz > 0.0 {
+                // Yarn/fret contact buzz (round-3 U1 bug B): while the string
+                // swings past the contact threshold — the top of every cycle —
+                // the fret/yarn contact brightens the string itself. Gating
+                // the signal by that condition and keeping only the highpassed
+                // part injects a pitch-locked splatter whose hard gate edges
+                // re-pump the highs every period (the sitar-jawari physics).
+                // The threshold reads the signal NORMALIZED against a
+                // fast-tracked (~8 ms) envelope, so the RELATIVE buzz level
+                // survives the whole decay instead of dying at twice the
+                // note's rate — the refuted memoryless-grit property (a smooth
+                // waveshaper on a dark sustain cannot make real HF: measured,
+                // cubic moved the sustain HF fraction only 0.063→0.076, and a
+                // 1-sample snap train was energy-starved at −38 dB).
+                // Deterministic (no rng draw — every other preset's stream is
+                // untouched) and feedforward → BIBO-stable. Pre-pickup: fret
+                // contact IS string motion, so it passes the position comb,
+                // the coil resonance and the body like the rest of the string.
+                self.buzz_env += (y.abs() - self.buzz_env) * self.buzz_k;
+                let n = y / (self.buzz_env * 1.6).max(1e-6);
+                // 0.45: a near-sine sustain peaks at n ≈ 0.98 minus the
+                // follower's decay lag (~30 % on this t60) — 0.45 keeps the
+                // contact engaged for the top third of every swing all the
+                // way down the decay, which is the whole point of the fix.
+                let gated = if n > 0.45 { y } else { 0.0 };
+                // ×8 make-up drive: the >3 kHz content of the gate edges is
+                // intrinsically ~−32 dB re the string (measured), so the
+                // stage brings preset buzz ≈ 0.2 to an audible ~−14 dB
+                // relative buzz. One knob (the preset's `buzz`) → EAR list.
+                y += self.buzz * 8.0 * self.buzz_hp.process(gated);
+            }
             if let Some((dl, d)) = &mut self.pickup {
                 dl.push(y);
                 y = (y - dl.tap(*d)) * 0.75;
@@ -3710,6 +3782,13 @@ impl Voice for Pluck {
                 // slap pop / finger noise, after the out-LP AND outside the
                 // attack ramp — the finger contact happens at t=0 even when
                 // the string itself speaks slowly (fretless/upright)
+                y += b.tick(&mut self.rng) * self.amp;
+            }
+            if let Some(b) = &mut self.scrape {
+                // the tangent scrape coexists with the slap-pop click
+                // (round-3 U1 bug A) — same post-out insertion, and it only
+                // exists (and draws rng) on presets setting both, so every
+                // other preset's stream is untouched
                 y += b.tick(&mut self.rng) * self.amp;
             }
             if let Some(b) = &mut self.stop {
@@ -13775,6 +13854,103 @@ mod tests {
         assert!(
             rich.iter().zip(&gritless).any(|(x, y)| x != y),
             "grit clip is not in the path"
+        );
+    }
+
+    /// Round-3 U1 bug A (plan §3.3, hand-verified): CLAVINET sets `click_post`
+    /// AND `attack_noise`, but the `onset_post` if/else-if lets the slap-pop
+    /// branch shadow the tangent scrape — `attack_noise: 0.22` was dead code
+    /// (renders were byte-identical with it zeroed, the RED observation).
+    /// Two clauses: (a) the shipped preset carries the scrape in its path;
+    /// (b) at its shipped level the scrape is audible on its own — asserted
+    /// on a click-free lesion, because next to the gain-2.0 slap click a
+    /// with/without band-energy read drowns in the click's rng realization
+    /// (the two bursts interleave draws from the shared voice rng).
+    #[test]
+    fn clavinet_tangent_scrape_speaks() {
+        let sr = 44100.0;
+        let no_scrape = PluckPreset {
+            attack_noise: 0.0,
+            ..CLAVINET
+        };
+        let with = render_pluck(&CLAVINET, 60, 110, 0.25, 7);
+        let without = render_pluck(&no_scrape, 60, 110, 0.25, 7);
+        assert!(
+            with.iter().zip(&without).any(|(x, y)| x != y),
+            "attack_noise is dead code on CLAVINET (click_post shadows it)"
+        );
+        let solo = PluckPreset {
+            click: 0.0,
+            ..CLAVINET
+        };
+        let solo_off = PluckPreset {
+            click: 0.0,
+            attack_noise: 0.0,
+            ..CLAVINET
+        };
+        let s_on = render_pluck(&solo, 60, 110, 0.25, 7);
+        let s_off = render_pluck(&solo_off, 60, 110, 0.25, 7);
+        // With the click gone, NOTHING else draws the voice rng while the
+        // scrape burst lives, so the waveform difference IS the scrape.
+        // Assert it speaks at its designed level: ≥ −24 dB under the onset
+        // over the burst's own 10 ms life (the shared burst formula caps its
+        // gain at min(v), so a band-energy contest against the string is
+        // unwinnable by construction — presence at level is the honest
+        // clause; the exact amount is a round-3 EAR-A/B item).
+        let n10 = (0.010 * sr) as usize;
+        let diff: Vec<f32> = s_on[..n10]
+            .iter()
+            .zip(&s_off[..n10])
+            .map(|(&x, &y)| x - y)
+            .collect();
+        let ratio = crate::testutil::rms(&diff) / crate::testutil::rms(&s_on[..n10]).max(1e-9);
+        assert!(
+            ratio >= 0.06,
+            "tangent scrape below its designed level: diff/onset {ratio:.4} < 0.06"
+        );
+    }
+
+    /// Round-3 U1 bug B (plan §3.3): the memoryless grit tanh is near-linear
+    /// at sustain amplitude, so the clavinet's metallic buzz died with the
+    /// onset — the same refuted property whose sitar instance was replaced by
+    /// the in-loop jawari. Measured HF fractions (>2.8 kHz share, key 48
+    /// vel 110) BEFORE the contact-gated buzz landed:
+    ///   [.05-.15] 0.374  [.15-.30] 0.134  [.30-.50] 0.063  [.45-.60] 0.050
+    /// — a 7.5× collapse down the ring. AFTER:
+    ///   [.05-.15] 0.461  [.15-.30] 0.276  [.30-.50] 0.171  [.45-.60] 0.160
+    /// Three clauses: the sustain buzz is audible (≥0.12 ≈ −18 dB HF share,
+    /// RED at 0.063), it PERSISTS through the ring (late ≥ half of mid, RED
+    /// at 0.37×), and it is the buzz stage doing it (differential). All
+    /// windows start past the attack — the strike transient's brightness is
+    /// the click/scrape's axis, not this oracle's.
+    #[test]
+    fn clavinet_buzz_survives_into_the_sustain() {
+        let sr = 44100.0;
+        let buf = render_pluck(&CLAVINET, 48, 110, 0.7, 7);
+        let hf_frac = |b: &[f32], lo: f32, hi: f32| {
+            let seg = segment(b, sr, lo, hi);
+            crate::testutil::hp_rms(seg, sr, 2800.0) / crate::testutil::rms(seg).max(1e-9)
+        };
+        let sustain = hf_frac(&buf, 0.30, 0.50);
+        assert!(
+            sustain >= 0.12,
+            "clavinet sustain buzz inaudible: HF fraction {sustain:.4} < 0.12"
+        );
+        let (mid, late) = (hf_frac(&buf, 0.15, 0.30), hf_frac(&buf, 0.45, 0.60));
+        assert!(
+            late >= 0.5 * mid,
+            "clavinet buzz still dies down the ring: late {late:.4} < half of mid {mid:.4}"
+        );
+        let no_buzz = PluckPreset {
+            buzz: 0.0,
+            ..CLAVINET
+        };
+        let plain = render_pluck(&no_buzz, 48, 110, 0.7, 7);
+        assert!(
+            hf_frac(&buf, 0.30, 0.50) > 1.5 * hf_frac(&plain, 0.30, 0.50),
+            "the buzz stage is not what carries the sustain HF: {} vs {}",
+            hf_frac(&buf, 0.30, 0.50),
+            hf_frac(&plain, 0.30, 0.50)
         );
     }
 

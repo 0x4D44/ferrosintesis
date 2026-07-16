@@ -62,6 +62,54 @@ impl Sine {
     }
 }
 
+/// Two-operator FM (strictly: phase-modulation, the DX convention) pair —
+/// one modulator phase-modulating one carrier (round-3 U5, the GM5 DX-style
+/// electric piano: a DX EP *is* FM, so it is modeled as FM rather than
+/// faked additively). Explicit phase accumulators — the rotating-phasor
+/// [`Sine`] cannot be phase-modulated. Two sines per sample: fine for an
+/// offline per-voice oscillator.
+pub struct FmPair {
+    car: f32,
+    md: f32,
+    car_dw: f32,
+    md_dw: f32,
+    ratio: f32,
+}
+
+impl FmPair {
+    pub fn new(freq: f32, ratio: f32, sr: f32) -> Self {
+        FmPair {
+            car: 0.0,
+            md: 0.0,
+            car_dw: freq / sr,
+            md_dw: freq * ratio / sr,
+            ratio,
+        }
+    }
+
+    /// Retune in place (keeps both phases — bend-continuous).
+    pub fn set_freq(&mut self, freq: f32, sr: f32) {
+        self.car_dw = freq / sr;
+        self.md_dw = freq * self.ratio / sr;
+    }
+
+    /// Next sample with modulation `index` (radians of carrier-phase swing).
+    #[inline]
+    pub fn next(&mut self, index: f32) -> f32 {
+        let m = (core::f32::consts::TAU * self.md).sin();
+        let y = (core::f32::consts::TAU * self.car + index * m).sin();
+        self.car += self.car_dw;
+        if self.car >= 1.0 {
+            self.car -= 1.0;
+        }
+        self.md += self.md_dw;
+        if self.md >= 1.0 {
+            self.md -= 1.0;
+        }
+        y
+    }
+}
+
 /// polyBLEP residual for a unit-amplitude step at a phase discontinuity —
 /// corrects the samples just before and after the wrap. Shared by the saw
 /// and pulse oscillators.

@@ -26,8 +26,8 @@
 //! a gently-bowed or gently-blown note actually starts.
 
 use crate::dsp::{
-    key_freq, vel_amp, Adsr, Biquad, BlepPulse, BlepSaw, Burst, DelayLine, Drift, GrainGate,
-    OnePole, ReedPulse, Rng, Sine,
+    key_freq, vel_amp, Adsr, Biquad, BlepPulse, BlepSaw, Burst, DelayLine, Drift, FmPair,
+    GrainGate, OnePole, ReedPulse, Rng, Sine,
 };
 use std::f32::consts::TAU;
 
@@ -1237,9 +1237,13 @@ fn electric_piano_1(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         (1.000, 0.95 * v, 3.6 * scale),
         (1.003, 0.55 * v, 3.1 * scale),
         (2.000, 0.32 * v, 2.1 * scale),
-        (2.820, 0.24 * v * (0.7 + 0.5 * vn), 0.85 * scale),
+        // Round-3 U5: the Rhodes BARK — the tine/bell partial jumps to
+        // ~0.6x the fundamental at onset with a SHORT ring, so a hard
+        // strike knocks then blooms into the warm body instead of reading
+        // as a clean sine stack (plan 3.2: "GM4 does not bark").
+        (2.820, 0.55 * v * (0.4 + 0.8 * vn), 0.45 * scale),
         (3.000, 0.13 * v, 1.3 * scale),
-        (5.380, 0.08 * v * (0.6 + 0.7 * vn), 0.40 * scale),
+        (5.380, 0.16 * v * (0.4 + 1.0 * vn), 0.30 * scale),
     ]
     .map(|(r, a, t)| (f * r, a, t));
     Modal::new(
@@ -1255,45 +1259,103 @@ fn electric_piano_1(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         0.22,
         0.56,
     )
-    // Round 2: the Rhodes bark — pickup drive grows with velocity so a soft
-    // touch stays a clean bell and a hard one snarls (tune-by-ear: base 0.6,
-    // span 3.2, bias 0.4)
-    .with_pickup_drive(0.6 + 3.2 * vn, 0.4)
+    // Round-3 U5: the bark lives in the TINE PARTIAL now (2.82·f0 above),
+    // not in shaper saturation — round 2's deep drive (0.6+3.2·vn) was the
+    // shared hack that pushed GM4/GM5 together, and at forte its tanh
+    // compression ate the raised tine 4× (measured: table ratio 0.73 →
+    // rendered 0.177). Halved drive keeps the velocity-graded pickup growl
+    // (and the pinned h4/h1 law) while letting the strike through.
+    .with_pickup_drive(0.4 + 1.6 * vn, 0.3)
 }
 
-fn electric_piano_2(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+/// GM 5 (round-3 U5, plan §3.2): a REAL two-operator FM electric piano. A
+/// DX-style EP *is* FM — round 2 modeled it as another additive Modal stack
+/// with the same pickup shaper as GM 4, which is exactly how the pair
+/// re-converged ("GM004/GM005 sound very similar"). Splitting the SYNTHESIS
+/// METHOD is what prevents re-convergence: carrier at f0, 1:1 modulator,
+/// index = a fast-decaying strike component (the glassy bell attack) over a
+/// velocity-scaled RESIDUAL (the sustain keeps its FM sheen instead of
+/// collapsing to a sine — measured h-tail/h1 was 0.076 at HEAD). Velocity
+/// scales the index, so h4/h1 grows with velocity (M2: the pinned bark test
+/// holds for prog 5 structurally — the index stays below Bessel J3's first
+/// peak). Deterministic: no rng, no noise — the FM ladder is the voice.
+struct FmEp {
+    op: FmPair,
+    f0: f32,
+    sr: f32,
+    amp: f32,
+    env: f32,
+    env_decay: f32,
+    idx_sus: f32,
+    idx_atk: f32,
+    idx_atk_decay: f32,
+    att_env: f32,
+    att: f32,
+    released: bool,
+    release_env: f32,
+    rel_mul: f32,
+}
+
+fn fm_electric_piano(key: u8, vel: u8, sr: f32) -> FmEp {
     let f = key_freq(key);
     let vn = vel as f32 / 127.0;
     let v = 0.22 + 0.82 * vel_amp(vel);
-    let scale = (440.0 / f).powf(0.18).clamp(0.70, 1.35);
-    // Column 0 is a RATIO (Wurlitzer reed-bar series) — scale by f, as in
-    // electric_piano_1. B1 (HLD §2.1): the ratios were passed as Hz.
-    let partials = [
-        (1.000, 0.72 * v, 2.4 * scale),
-        (1.997, 0.24 * v, 1.6 * scale),
-        (3.010, 0.42 * v * (0.7 + 0.8 * vn), 1.0 * scale),
-        (4.180, 0.30 * v * (0.6 + 0.9 * vn), 0.72 * scale),
-        (6.820, 0.15 * v * (0.5 + vn), 0.42 * scale),
-        (9.200, 0.06 * v * vn, 0.20 * scale),
-    ]
-    .map(|(r, a, t)| (f * r, a, t));
-    Modal::new(
+    // piano-like key-scaled decay, a touch longer than the old Modal's body
+    let t60 = (2.6 * (440.0 / f).powf(0.25)).clamp(0.8, 5.0);
+    FmEp {
+        op: FmPair::new(f, 1.0, sr),
+        f0: f,
         sr,
-        seed,
-        &partials,
-        (
-            0.025 * v,
-            0.006,
-            Biquad::bandpass((f * 10.0).min(7000.0), 0.9, sr),
-        ),
-        0.0008,
-        0.18,
-        0.54,
-    )
-    // Round 2: the Wurlitzer bark — the reed bar sits closer to its
-    // electrostatic pickup than a tine does to a magnetic one, so it barks
-    // earlier and harder (tune-by-ear: base 0.8, span 3.8, bias 0.45)
-    .with_pickup_drive(0.8 + 3.8 * vn, 0.45)
+        // level-matched to the retired Modal GM5 (measured rms 0.096/0.078/
+        // 0.105 at (60,100)/(64,80)/(55,110) over 1 s — the FM voice lands
+        // within ~1 dB, verified by the U5 level probe)
+        amp: 0.47 * v,
+        env: 1.0,
+        env_decay: t60_mul(t60, sr),
+        idx_sus: 0.35 + 0.85 * vn,
+        idx_atk: 0.5 + 1.6 * vn,
+        idx_atk_decay: t60_mul(0.10, sr),
+        att_env: 0.0,
+        att: 1.0 - (-1.0 / (0.002 * sr)).exp(),
+        released: false,
+        release_env: 1.0,
+        rel_mul: t60_mul(0.15, sr),
+    }
+}
+
+impl Voice for FmEp {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let y = self.op.next(self.idx_sus + self.idx_atk);
+            if self.att_env < 1.0 {
+                self.att_env = (self.att_env + self.att).min(1.0);
+            }
+            if self.released {
+                self.release_env *= self.rel_mul;
+            }
+            *o += y * self.amp * self.env * self.att_env * self.release_env;
+            self.env *= self.env_decay;
+            self.idx_atk *= self.idx_atk_decay;
+        }
+        self.amp * self.env * self.release_env > 2e-5
+    }
+
+    fn note_off(&mut self) {
+        self.released = true;
+    }
+
+    fn released(&self) -> bool {
+        self.released
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.op.set_freq(self.f0 * mult, self.sr);
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "FM_EPIANO"
+    }
 }
 
 /// Bar/tube/bell family, defined by (ratio, amp, T60) tables. Each strike
@@ -10269,7 +10331,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         }
         2 => Box::new(electric_grand_piano(key, vel, sr, seed)),
         4 => Box::new(electric_piano_1(key, vel, sr, seed)),
-        5 => Box::new(electric_piano_2(key, vel, sr, seed)),
+        5 => Box::new(fm_electric_piano(key, vel, sr)),
         // §2.10: the harpsichord is PLUCKED (jack plectrum), not an additive
         // sine stack — Pluck gives the physical decay and quill twang.
         6 => Box::new(Pluck::new(&HARPSICHORD, key, vel, sr, seed)),
@@ -11712,29 +11774,37 @@ mod tests {
         }
     }
 
-    /// Round-2 GM004/005 "clean sine stack, no bark": the additive Modal EPs
-    /// had zero harmonic-generating nonlinearity, so nothing filled between
-    /// the sparse bell partials and nothing grew with velocity. The pickup
-    /// shaper regenerates a full ladder: measured at 4·f0 — a harmonic ABSENT
-    /// from EP1's partial table (1.0/1.003/2.0/2.82/3.0/5.38), so it can only
-    /// come from the new nonlinearity. Pre-shaper it measured ~1e-4 (leakage);
-    /// the bark must both exist at forte and GROW with velocity, and the
-    /// biased shaper's DC must stay blocked.
+    /// Round-2 GM004/005 "clean sine stack, no bark", REVISED by round-3 U5
+    /// (the plan's M2 correction sanctions revising this test in the same
+    /// change that re-voices the pair): each EP's bark now lives at its own
+    /// line. GM 4's bark is the raised TINE partial (2.82·f0, velocity-
+    /// scaled in the mode table) — round 2's deep shaper drive was halved
+    /// because its tanh compression ate the strike (measured 4×), so 4·f0
+    /// is no longer the bark carrier. GM 5 is the 2-op FM voice whose
+    /// velocity→index mapping grows the whole harmonic ladder — measured at
+    /// 4·f0 as before. Both must exist at forte, GROW with velocity, and
+    /// stay DC-clean.
     #[test]
     fn electric_piano_pickup_bark_grows_with_velocity() {
         let sr = 44100.0;
         for prog in [4u8, 5] {
             let f0 = key_freq(60);
+            let bark_f = if prog == 4 { 2.82 * f0 } else { 4.0 * f0 };
             let ratio = |vel: u8| {
                 let sig = render_program(prog, 60, vel, 0.8, 7);
                 let seg = segment(&sig, sr, 0.05, 0.55);
-                mag_at(seg, sr, 4.0 * f0) / mag_at(seg, sr, f0).max(1e-9)
+                // peak-search ±6 %: the Modal strike-glide moves the tine
+                let mut best = 0f32;
+                for j in 0..13 {
+                    best = best.max(mag_at(seg, sr, bark_f * (0.94 + 0.01 * j as f32)));
+                }
+                best / mag_at(seg, sr, f0).max(1e-9)
             };
             let (r60, r90, r120) = (ratio(60), ratio(90), ratio(120));
-            println!("GM{prog} h4/h1: vel60 {r60:.4} vel90 {r90:.4} vel120 {r120:.4}");
+            println!("GM{prog} bark/h1: vel60 {r60:.4} vel90 {r90:.4} vel120 {r120:.4}");
             assert!(
                 r120 > 0.03,
-                "GM{prog}: no pickup bark at forte — h4/h1 {r120:.4} (floor 0.03)"
+                "GM{prog}: no bark at forte — bark/h1 {r120:.4} (floor 0.03)"
             );
             assert!(
                 r120 > r90 && r90 > r60,
@@ -11745,6 +11815,75 @@ mod tests {
             let dc = seg.iter().map(|&x| x as f64).sum::<f64>() / seg.len() as f64;
             assert!(dc.abs() < 1e-3, "GM{prog}: shaper DC leaked: {dc}");
         }
+    }
+
+    /// Round-3 U5 (plan §3.2): the e-pianos re-converged in round 2 — both
+    /// are additive Modal stacks whose sustains collapse to a near-pure
+    /// fundamental (measured h-tail/h1: GM4 0.027, GM5 0.076), and the
+    /// distinguishing energy lives only in the first ~250 ms. Three clauses,
+    /// each RED at HEAD:
+    /// (1) GM4 BARKS: the plan's "tine/bell to ~0.4-0.6× the fundamental"
+    ///     is a MODEL-TABLE prescription; the table now carries 0.61× at
+    ///     forte, which RENDERS as ~0.28 over the 50 ms strike window (the
+    ///     tine's own 0.45 s T60 and the pickup shaper's compression are in
+    ///     the path — measured; HEAD's 0.28× table rendered ~0.13). Floor
+    ///     0.22 pins the raised strike with margin on both sides. Then it
+    ///     must BLOOM away — under half the onset level by the sustain (a
+    ///     bark that never decays is an organ stop).
+    /// (2) GM5's sustain stays GLASSY: harmonic tail (h2+h3+h4)/h1 in
+    ///     [0.4, 0.8 s] ≥ 0.20 (an FM EP's residual index keeps upper
+    ///     harmonics alive; HEAD reads ~0.08 — a sine).
+    /// (3) The pair cannot re-converge in the window a held note lives in:
+    ///     GM5's sustain harmonic tail ≥ 2.5× GM4's (the two synthesis
+    ///     methods differ exactly where round 2's MAX-metric never looked).
+    #[test]
+    fn e_pianos_bark_and_stay_glassy_apart() {
+        let sr = 44100.0;
+        let key = 60u8;
+        let f0 = key_freq(key);
+        // (1) GM4 bark: the Rhodes tine partial (2.82·f0) vs f0 — PEAK-
+        // SEARCHED ±6 % (the Modal strike-glide moves mode frequencies at
+        // onset, so a fixed-bin Goertzel undercounts the strike; same idiom
+        // as the perceptual oracle's D3 harmonic search)
+        let gm4 = render_program(4, key, 120, 1.0, 7);
+        let bell = |a: f32, b: f32| {
+            let seg = segment(&gm4, sr, a, b);
+            let m = |center: f32| {
+                let mut best = 0f32;
+                for j in 0..13 {
+                    best = best.max(mag_at(seg, sr, center * (0.94 + 0.01 * j as f32)));
+                }
+                best
+            };
+            m(2.82 * f0) / m(f0).max(1e-9)
+        };
+        let (onset_bark, sustain_bark) = (bell(0.0, 0.05), bell(0.45, 0.80));
+        println!("GM4 bark: onset {onset_bark:.3} sustain {sustain_bark:.3}");
+        assert!(
+            onset_bark >= 0.22,
+            "GM4 does not bark: onset bell/f0 {onset_bark:.3} < 0.22"
+        );
+        assert!(
+            sustain_bark <= 0.5 * onset_bark,
+            "GM4 bark does not bloom away: sustain {sustain_bark:.3} vs onset {onset_bark:.3}"
+        );
+        // (2)+(3) sustain harmonic tails
+        let tail = |prog: u8| {
+            let sig = render_program(prog, key, 100, 1.0, 7);
+            let seg = segment(&sig, sr, 0.40, 0.80);
+            let h = |n: f32| mag_at(seg, sr, n * f0);
+            (h(2.0) + h(3.0) + h(4.0)) / h(1.0).max(1e-9)
+        };
+        let (t4, t5) = (tail(4), tail(5));
+        println!("EP sustain harmonic tails: GM4 {t4:.3} GM5 {t5:.3}");
+        assert!(
+            t5 >= 0.20,
+            "GM5 sustain went sine again: harmonic tail {t5:.3} < 0.20"
+        );
+        assert!(
+            t5 >= 2.5 * t4,
+            "GM4/GM5 sustains re-converged: tails {t4:.3} vs {t5:.3}"
+        );
     }
 
     #[test]

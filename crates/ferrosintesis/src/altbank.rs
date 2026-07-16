@@ -32,6 +32,7 @@ const PIZZ: PluckPreset = PluckPreset {
     bright: 2600.0,
     pick_lp: 1600.0,
     pos: 0.30,
+    h1_floor: 0.0,
     amp: 0.58,
     attack_s: 0.0,
     rel_t60: 0.10,

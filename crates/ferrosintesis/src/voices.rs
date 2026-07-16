@@ -2235,6 +2235,13 @@ pub struct PluckPreset {
     pub bright: f32,  // loop damping cutoff
     pub pick_lp: f32, // excitation lowpass
     pub pos: f32,     // pick position (0..0.5)
+    /// Minimum fundamental deposit of the INITIAL pluck burst, as a fraction of the
+    /// burst peak `v` (0 = off = every preset unchanged). One period of comb-filtered
+    /// noise has a Rayleigh-random h1 (~18 dB spread per note/seed); a weak-h1 draw lets
+    /// the undamped low-mid octave dominate by up to +20 dB — an intermittent "an-octave-
+    /// up" tell. Tops the burst's h1 up in phase to this floor (the `TREM_H1_FLOOR`
+    /// restrike fix, now on the initial pluck too). Set on the harp; others opt in.
+    pub h1_floor: f32,
     pub amp: f32,
     pub attack_s: f32,
     pub rel_t60: f32,
@@ -2331,6 +2338,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     bright: 3000.0,
     pick_lp: 2500.0,
     pos: 0.2,
+    h1_floor: 0.0, // off by default — every non-harp pluck is byte-identical
     amp: 0.5,
     attack_s: 0.0,
     rel_t60: 0.15,
@@ -2828,6 +2836,12 @@ pub const HARP: PluckPreset = PluckPreset {
     bright: 6000.0,
     pick_lp: 3400.0,
     pos: 0.35,
+    // Round-3: fix the intermittent "an-octave-up" harp notes. The initial burst's h1 is
+    // a Rayleigh-random draw; a weak-h1 note lets the undamped low-mid octave dominate by
+    // up to +20 dB (measured max +23 at G3-C4 vs SC-55's clean −6..−10). Floor the h1 like
+    // the restrike does. Calibrated 0.15·v: pulls the G3-C4 octave-excess outliers into the
+    // SC-55 band, holds the median at −6..−8 dB, leaves f0-dominant notes + C5 untouched.
+    h1_floor: 0.15,
     amp: 0.56,
     rel_t60: 0.4,
     body: &[(90.0, 0.8, 3.5), (180.0, 0.9, 2.8), (400.0, 1.1, 1.8)],
@@ -3328,7 +3342,40 @@ const TREM_CATCH: f32 = 0.35;
 /// (the triangle IC's sin(πp) term), so top the burst's h1 up — in phase
 /// with its own — to this floor.
 const TREM_H1_FLOOR: f32 = 0.5;
+// h1-floor register fade (initial pluck): the octave rings undamped only in the low-mid,
+// so the floor is needed at G3-C4 and fades out toward C5 (where the loop damps the octave
+// and the note is already f0-dominant). Confines the fix to the susceptible register so
+// high notes are untouched. (Harp-tuned; only HARP currently sets h1_floor > 0.)
+const HARP_FLOOR_LO: f32 = 262.0; // C4 — full floor at/below
+const HARP_FLOOR_HI: f32 = 523.0; // C5 — no floor at/above
 const REL_DARKEN_K: f32 = 0.010; // per control tick: τ ≈ 36 ms
+
+/// Top a pluck burst's FUNDAMENTAL up to `h1_target` (in phase with its own h1) by adding
+/// a cosine at the fundamental period. One period of comb-filtered noise has a Rayleigh-
+/// random h1; a weak draw lets the undamped octave dominate. Shared by the tremolo restrike
+/// (`TREM_H1_FLOOR`) and the initial pluck (`PluckPreset.h1_floor`). No-op if target ≤ 0 or
+/// the burst already clears the floor, so a preset with `h1_floor = 0` is byte-identical.
+fn top_up_h1(exc: &mut [f32], h1_target: f32) {
+    let n = exc.len();
+    if n == 0 || h1_target <= 0.0 {
+        return;
+    }
+    let (mut xr, mut xi) = (0f32, 0f32);
+    for (i, &x) in exc.iter().enumerate() {
+        let ph = 2.0 * std::f32::consts::PI * i as f32 / n as f32;
+        xr += x * ph.cos();
+        xi -= x * ph.sin();
+    }
+    let h1_amp = 2.0 * (xr * xr + xi * xi).sqrt() / n as f32;
+    if h1_amp < h1_target {
+        let phi = xi.atan2(xr);
+        let add = h1_target - h1_amp;
+        for (i, x) in exc.iter_mut().enumerate() {
+            let ph = 2.0 * std::f32::consts::PI * i as f32 / n as f32 + phi;
+            *x += add * ph.cos();
+        }
+    }
+}
 
 /// K4 Stage 1 wound-ness: bass strings are wound full-range; guitars cross
 /// from wound to plain around G3 (key 55). Pure arithmetic — no allpass
@@ -3527,6 +3574,12 @@ impl Pluck {
         for x in &mut exc {
             *x *= v / peak;
         }
+        // Floor the initial burst's fundamental (harp fix; inert at h1_floor = 0). Guards
+        // against a weak-h1 Rayleigh draw letting the octave dominate — see `top_up_h1`.
+        // Faded out above C4 (the octave-hollow is a low-mid phenomenon), so high notes —
+        // already f0-dominant with a damped octave — are untouched.
+        let floor_reg = 1.0 - smoothstep(HARP_FLOOR_LO, HARP_FLOOR_HI, f);
+        top_up_h1(&mut exc, p.h1_floor * v * floor_reg);
         let mut horiz = KsLoop::new(f, bright, t60, &exc, sr);
         let mut vert = KsLoop::new(
             f * p.course_detune,
@@ -4060,24 +4113,8 @@ impl Voice for Pluck {
         for x in &mut exc {
             *x *= g;
         }
-        // guarantee the stroke deposits FUNDAMENTAL (see TREM_H1_FLOOR):
-        // top the burst's h1 up, in phase with its own h1, to the floor
-        let (mut xr, mut xi) = (0f32, 0f32);
-        for (i, &x) in exc.iter().enumerate() {
-            let ph = 2.0 * std::f32::consts::PI * i as f32 / n as f32;
-            xr += x * ph.cos();
-            xi -= x * ph.sin();
-        }
-        let h1_amp = 2.0 * (xr * xr + xi * xi).sqrt() / n as f32;
-        let h1_target = TREM_H1_FLOOR * v * TREM_RESTRIKE_LEVEL;
-        if h1_amp < h1_target {
-            let phi = xi.atan2(xr);
-            let add = h1_target - h1_amp;
-            for (i, x) in exc.iter_mut().enumerate() {
-                let ph = 2.0 * std::f32::consts::PI * i as f32 / n as f32 + phi;
-                *x += add * ph.cos();
-            }
-        }
+        // guarantee the stroke deposits FUNDAMENTAL (see TREM_H1_FLOOR / top_up_h1)
+        top_up_h1(&mut exc, TREM_H1_FLOOR * v * TREM_RESTRIKE_LEVEL);
         // the pick-catch: grab the standing wave so this stroke's
         // displacement owns the string (and the carrier phase)
         self.horiz.catch_damp(TREM_CATCH);
@@ -14835,6 +14872,56 @@ mod tests {
             c > 580.0,
             "harp too dark: sustain centroid {c:.0} Hz (need > 580)"
         );
+    }
+
+    /// Round-3 harp octave-outlier guard (graduates the deep-dive diagnosis into a
+    /// permanent oracle). The initial pluck burst has a Rayleigh-random h1; pre-fix, a
+    /// weak-h1 draw let the undamped low-mid octave dominate by up to +23 dB at G3-C4 —
+    /// the intermittent "an-octave-up" harp notes. `HARP.h1_floor` tops the fundamental up.
+    /// Across many seeds, NO note in the susceptible register may show a hot octave; SC-55
+    /// is a clean −6..−10 dB re f0 everywhere. Band-integrated (the two KS loops smear h2).
+    #[test]
+    fn harp_octave_outliers_are_floored() {
+        let sr = 44100.0;
+        let band = |buf: &[f32], f: f32| -> f32 {
+            // sustain window ≥ the 1.47 s two-loop beat period, band-integrated (both
+            // detuned partials) — the perceptual "an-octave-up" lives in the ring, not
+            // the transient attack.
+            let seg = &buf[(0.3 * sr) as usize..(2.0 * sr) as usize];
+            [0.985f32, 1.0, 1.015]
+                .iter()
+                .map(|m| mag_at(seg, sr, f * m).powi(2))
+                .sum::<f32>()
+        };
+        for key in [55u8, 57, 59, 60] {
+            // G3, A3, B3, C4 — the octave-susceptible band
+            let f0 = key_freq(key);
+            let mut worst = f32::NEG_INFINITY;
+            for seed in 0..24u32 {
+                let buf = render_pluck(&HARP, key, 96, 2.2, seed);
+                let db = 10.0 * (band(&buf, 2.0 * f0) / band(&buf, f0).max(1e-12)).log10();
+                worst = worst.max(db);
+            }
+            eprintln!("harp octave key {key}: worst h2/h1 over 24 seeds = {worst:.1} dB");
+            // Pre-fix this reached +23 dB (grossly octave-up); the h1 floor caps the worst
+            // seed at ~4 dB (median is a healthy −5..−8, mid-SC-55). ≤5 guards the regression
+            // with margin; the exact residual + floor depth are Arthur's ear-in-the-loop call.
+            assert!(
+                worst <= 6.0,
+                "harp key {key}: worst h2/h1 over 24 seeds = {worst:.1} dB — octave outlier (need ≤ 6)"
+            );
+        }
+    }
+
+    /// The initial-pluck h1 floor is OFF by default (every non-harp pluck byte-identical)
+    /// and ON for the harp. Byte-identity of the others is proven by the render-diff.
+    #[test]
+    fn h1_floor_is_off_by_default() {
+        assert_eq!(DEFAULTS.h1_floor, 0.0);
+        assert_ne!(HARP.h1_floor, 0.0, "harp must set h1_floor");
+        for p in [&STEEL, &NYLON, &JAZZ, &HARPSICHORD] {
+            assert_eq!(p.h1_floor, 0.0, "{} must inherit h1_floor = 0", p.name);
+        }
     }
 
     #[test]

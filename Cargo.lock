@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "ferrosintesis"
-version = "0.21.5"
+version = "0.21.6"
 dependencies = [
  "ferrosintesis-samples-core",
  "ferrosintesis-samples-drumkit",

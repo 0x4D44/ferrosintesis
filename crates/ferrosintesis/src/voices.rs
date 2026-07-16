@@ -2444,19 +2444,43 @@ pub const HARPSICHORD: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "HARPSICHORD",
     t60: 1.9,
-    bright: 6200.0,
+    // Round-3 U4: 11000 (was 6200) — the quill excitation alone cannot make
+    // the ring bright: the in-loop damper's magnitude at HF rules treble
+    // decay (2026.07.14 lesson), and at 6200 the highs are ground down by
+    // 0.2 s whatever the excitation. A harpsichord's short light strings
+    // barely damp HF — the persistent "jangle" IS slow treble decay
+    // (DRIVE_LEAD proved the lever at 11000).
+    bright: 11000.0,
     pick_lp: 6000.0,
     pos: 0.09, // plucked near the end of the string — the nasal quill comb
     amp: 0.50,
     rel_t60: 0.05, // the jack's damper lands with the key
-    // thin bright soundboard: low box color, a little mid, upper sheen
-    body: &[(220.0, 1.1, 2.0), (500.0, 1.0, 1.5), (3000.0, 1.0, 2.0)],
+    // Thin bright soundboard: low box color, a little mid, and a REAL upper
+    // sheen (round-3 U4: 3 kHz +2→+3.5 dB plus a 4.5 kHz sizzle peak — the
+    // third harpsichord signature next to the quill and the slow-damped
+    // jangle; a piano's massive board absorbs what a harpsichord's thin
+    // spruce radiates).
+    body: &[
+        (220.0, 1.1, 2.0),
+        (500.0, 1.0, 1.5),
+        (3000.0, 1.0, 3.5),
+        (4500.0, 1.0, 2.5),
+    ],
     click: 2.2, // the quill snap
     click_hp: 2400.0,
     stop_thump: 0.7, // the jack drops back audibly
     wound_key_split: false,
     vel_sense: 0.15,
     trem: false, // the jack damper lands with the key: repeats articulate
+    // Round-3 U4: the 4′ octave rank — the plan's "optional second KS loop"
+    // is FREE here: the existing vertical polarization loop (the dulcimer
+    // course machinery) retuned an octave up IS the 4′ choir. 8′ dominant,
+    // 4′ clearly present; the shorter 4′ strings decay a little faster.
+    // 2×f0 sits on the harmonic lattice, so every pitch oracle stays honest.
+    course_detune: 2.0,
+    course_t60: 0.7,
+    course_bright: 1.0,
+    course_mix: (0.62, 0.38),
     ..DEFAULTS
 };
 pub const CLAVINET: PluckPreset = PluckPreset {
@@ -3378,7 +3402,6 @@ impl Pluck {
         for x in &mut exc {
             *x *= v / peak;
         }
-
         let mut horiz = KsLoop::new(f, bright, t60, &exc, sr);
         let mut vert = KsLoop::new(
             f * p.course_detune,
@@ -14139,6 +14162,52 @@ mod tests {
                 r3 >= 2.0 * r0,
                 "key {key}: honky-tonk f0 line does not split: GM3 side-line \
                  ratio {r3:.3} vs GM0 control {r0:.3}"
+            );
+        }
+    }
+
+    /// Round-3 U4 (plan §3.3): the harpsichord must JANGLE — persistent
+    /// post-onset brightness — and carry its 4′ octave rank. Clause (a):
+    /// sustain-window centroid ≥ 1.75× the GM0 piano control (HEAD measured
+    /// 1.64×/1.37× at keys 55/67 — RED). Clause (b): 4′ choir energy,
+    /// 2f0/f0 ≥ 2× the control's (HEAD ~0.2 vs ~0.2 — RED; the plan's
+    /// original §3.3 choir clause, live because the rank is now built).
+    ///
+    /// What delivers it (each measured): the in-loop damper opened
+    /// 6200→11000 (the 07.14 lesson — the damper's HF magnitude rules
+    /// treble decay, and no excitation survives it), the thin-soundboard
+    /// body sheen, and the 4′ rank on the existing course loop. The plan's
+    /// proposed QUILL-PULSE excitation was built and REFUTED by
+    /// measurement, then removed: with `vel_sense: 0.15` flattening the
+    /// velocity laws, the noise burst's pick_lp is already open at every
+    /// velocity, so the "spectrally flat" pulse changed neither the attack
+    /// share (0.293 vs 0.355 — it read DARKER) nor the sustain share
+    /// (0.0341 vs 0.0334) — the same premise-false pattern as the shelved
+    /// bass sub-octave (lessons 2026.07.15).
+    #[test]
+    fn harpsichord_jangles_with_a_four_foot_choir() {
+        let sr = 44100.0;
+        for key in [55u8, 67] {
+            let f0 = key_freq(key);
+            let stats = |prog: u8| {
+                let mut v = make(prog, key, 100, sr, 7, true);
+                let mut buf = vec![0f32; (0.5 * sr) as usize];
+                v.render(&mut buf);
+                let seg = &buf[(0.20 * sr) as usize..(0.45 * sr) as usize];
+                let choir = crate::testutil::mag_at(seg, sr, 2.0 * f0)
+                    / crate::testutil::mag_at(seg, sr, f0).max(1e-9);
+                (crate::testutil::centroid(seg, sr), choir)
+            };
+            let ((c6, ch6), (c0, ch0)) = (stats(6), stats(0));
+            println!("harpsi key {key}: cent {c6:.0} vs GM0 {c0:.0}; 2f0/f0 {ch6:.2} vs {ch0:.2}");
+            assert!(
+                c6 >= 1.75 * c0,
+                "key {key}: harpsichord sustain does not jangle: centroid {c6:.0} Hz \
+                 vs GM0 control {c0:.0} Hz"
+            );
+            assert!(
+                ch6 >= 2.0 * ch0,
+                "key {key}: no 4′ choir over the control: 2f0/f0 {ch6:.2} vs GM0 {ch0:.2}"
             );
         }
     }

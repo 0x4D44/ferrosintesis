@@ -6218,6 +6218,24 @@ const WD_VN0: f32 = 100.0 / 127.0;
 /// Partials above this fraction of `sr` are gated off rather than folded.
 const WD_ALIAS_LIM: f32 = 0.44;
 
+// --- Stage 1 (round-3 feedback): the breath flutter ------------------------
+// The sustain breath rode a ±50% AM LOCKED to the pitch vibrato (4.5-5.5 Hz).
+// That sits on the ~4 Hz fluctuation-strength peak (Fastl/Zwicker) and, on the
+// loud-breath pipes (pan flute / bottle / shakuhachi), reads as the "shaking
+// sshsshssh" of round-3 feedback. Replace it with a shallow, slow, DECORRELATED
+// flutter — a control-rate LFO off the pitch vibrato and off the 4 Hz peak, so
+// the breath drifts naturally instead of pulsing. WD_FLUTTER_HZ = 2.0 sits well
+// clear of the 4.5-5.5 Hz pitch-vib rate (and, being a near-pure sine, carries
+// negligible energy at its 4.0 Hz 2nd harmonic), so the breath-AM oracle cleanly
+// separates the two. Built from a SEPARATE rng (seed ^ SALT) so
+// `self.rng` — the render-loop noise stream — keeps its exact draw sequence:
+// the WD-O5 differential seam and every wind's underlying noise are untouched;
+// only the AM envelope moves. Zero-mean, so the MEAN breath level is unchanged.
+const WD_FLUTTER_HZ: f32 = 2.0;
+const WD_FLUTTER_DEPTH: f32 = 0.12; // was 0.5 on the pitch-vib LFO
+const WD_FLUTTER_JIT: f32 = 0.08; // per-note rate jitter (matches the vib LFO)
+const WD_FLUTTER_SALT: u32 = 0xF107_7E45; // decorrelate the flutter rng from self.rng
+
 // --- WD9 (§2.8.5.2-3): the flue blowing-pressure law -----------------------
 // The RD9 law verbatim (`RD_P_VEL`/`RD_P_VEL_EXP`/`RD_P_ENV`/`RD_P_SMOOTH_S`/
 // `RD_P_AUTH_SPAN` are shared, not copied, so reed and flue pressure cannot
@@ -6402,7 +6420,10 @@ pub const PAN_FLUTE: WindPreset = WindPreset {
     harm: [0.0, 0.38, 0.0, 0.14, 0.0, 0.05],
     vel_bright: 0.6,
     reg_dark: 0.5,
-    breath: 0.24,
+    // Round-3: 0.24 → 0.12. The loud broad halo, deeply AM'd by the old breath
+    // tremolo, was the "sshsshssh"; the flutter fix tames the pulsing and this
+    // brings the steady level toward the SC-55 pan-flute breath fraction.
+    breath: 0.12,
     breath_f: 2.5,
     breath_q: 0.8,
     breath_hi: 0.0,
@@ -6452,7 +6473,10 @@ pub const SHAKUHACHI: WindPreset = WindPreset {
     harm: [0.26, 0.26, 0.10, 0.05, 0.025, 0.012],
     vel_bright: 0.8,
     reg_dark: 0.5,
-    breath: 0.30,
+    // Round-3: 0.30 → 0.20 (kept above the pan flute — shakuhachi is airier, and
+    // the WD-O5 `shak > 3·flute` clause needs the margin). The muraiki >8 kHz shelf
+    // (breath_hi) stays; the flutter fix removes the pulsing that read as shaking.
+    breath: 0.20,
     breath_f: 2.5,
     breath_q: 1.0,
     breath_hi: 0.05,
@@ -6577,6 +6601,8 @@ pub struct Wind {
     vib_depth: f32,
     vib_delay: u32,
     vib_val: f32,
+    flutter: Sine,    // slow breath-flutter LFO, decorrelated from the pitch vib
+    flutter_val: f32, // control-rate flutter value in ~[-1, 1]
     rng: Rng,
     t: u32,
     amp: f32,
@@ -6688,6 +6714,16 @@ impl Wind {
             vib_depth: vibr.1,
             vib_delay: (vibr.2 * sr) as u32,
             vib_val: 0.0,
+            // A SEPARATE throwaway rng so the flutter draws nothing from `self.rng`
+            // (the render-loop noise stream stays byte-for-byte aligned — see the
+            // WD_FLUTTER_* header and the WD-O5 differential seam).
+            flutter: control_lfo(
+                WD_FLUTTER_HZ,
+                WD_FLUTTER_JIT,
+                &mut Rng::new(seed ^ WD_FLUTTER_SALT),
+                sr,
+            ),
+            flutter_val: 0.0,
             rng,
             t: 0,
             amp: preset.amp * (0.4 + 0.6 * vel_amp(vel)),
@@ -6711,6 +6747,7 @@ impl Voice for Wind {
                 self.scoop += WD_SCOOP_K * (1.0 - self.scoop);
                 let v = self.vib.next();
                 self.vib_val = v;
+                self.flutter_val = self.flutter.next();
                 let vib = if self.t > self.vib_delay {
                     let ramp = ((self.t - self.vib_delay) as f32 / (0.2 * self.sr)).min(1.0);
                     self.vib_depth * ramp * v
@@ -6774,8 +6811,10 @@ impl Voice for Wind {
             }
             let e = self.env.next();
             self.last_env = e;
-            // the breath rides the vibrato — air moves with the pitch wobble
-            let breath_mod = 1.0 + 0.5 * self.vib_val;
+            // The breath rides a shallow, slow flutter DECORRELATED from the pitch
+            // vibrato — natural air drift, not the deep vib-locked pulse that read as
+            // "shaking sshsshssh" on the loud-breath pipes. See the WD_FLUTTER_* header.
+            let breath_mod = 1.0 + WD_FLUTTER_DEPTH * self.flutter_val;
             // WD11: on the Helmholtz path the first noise draw IS the jet —
             // shaped, driven through the resonator (excitation dies with the
             // envelope; the resonator state rings on past it), plus spill.
@@ -7764,7 +7803,11 @@ pub const SOP_SAX: ReedPreset = ReedPreset {
     scoop_k: RD_SCOOP_K,
     range: (56, 88),
     amp: 0.237,
-    rasp: (0.5, 15.5, 0.12),
+    // Round-3: noise_base 0.12 → 0.044. The rasp TURBULENCE (broadband noise) read
+    // as "fuzz on top"; the small saxes were driven hardest and worst. Cut toward
+    // the (already-clean) bari floor — target inter-harmonic fraction ~0.003, into
+    // the SC-55 range. The tanh harmonic drive (0.5, 15.5) — the reedy edge — stays.
+    rasp: (0.5, 15.5, 0.044),
     #[cfg(test)]
     name: "soprano_sax",
 };
@@ -7782,7 +7825,7 @@ pub const ALTO_SAX: ReedPreset = ReedPreset {
     scoop_k: RD_SCOOP_K,
     range: (49, 81),
     amp: 0.249,
-    rasp: (0.5, 15.5, 0.085),
+    rasp: (0.5, 15.5, 0.042), // round-3: 0.085 → 0.042, de-fuzz (see SOP_SAX)
     #[cfg(test)]
     name: "alto_sax",
 };
@@ -7800,7 +7843,7 @@ pub const TENOR_SAX: ReedPreset = ReedPreset {
     scoop_k: RD_SCOOP_K,
     range: (44, 76),
     amp: 0.261,
-    rasp: (0.5, 15.5, 0.058),
+    rasp: (0.5, 15.5, 0.044), // round-3: 0.058 → 0.044, de-fuzz (see SOP_SAX)
     #[cfg(test)]
     name: "tenor_sax",
 };
@@ -7818,6 +7861,9 @@ pub const BARI_SAX: ReedPreset = ReedPreset {
     scoop_k: RD_SCOOP_K,
     range: (36, 69),
     amp: 0.281,
+    // Round-3: unchanged — the bari already measures clean (inharm ~0.0022, below
+    // the SC-55 bari); the small saxes were the fuzzy ones. Its "low-fi" is the
+    // duty-null h3, a Stage-2 concern, not the turbulence.
     rasp: (0.5, 15.5, 0.040),
     #[cfg(test)]
     name: "bari_sax",
@@ -8417,7 +8463,10 @@ impl Voice for Reed {
             let e = self.env.next();
             self.last_env = e;
             // RD5 breath (rides the vibrato) — a quiet, envelope-scaled sustain
-            // hiss, post-LP; and a one-shot tongue chiff sharing the same filter
+            // hiss, post-LP; and a one-shot tongue chiff sharing the same filter.
+            // NB: the Wind voice decoupled this from the vibrato (round-3 flutter,
+            // see WD_FLUTTER_*); the reed keeps the coupling — no sax "shaking"
+            // complaint, and the reed breath (0.4×) is quieter — a conscious deferral.
             let breath_mod = 1.0 + 0.4 * self.vib_val;
             let noise = self.breath_filt.process(self.rng.white());
             s += noise * self.breath * e * breath_mod;
@@ -17275,22 +17324,40 @@ mod tests {
         for p in [&SOP_SAX, &ALTO_SAX, &TENOR_SAX, &BARI_SAX] {
             let key = preset_mid_key(p);
             let f0 = key_freq(key);
-            let mut rel = [0.0f32; 2];
-            for (i, vel) in [30u8, 127].into_iter().enumerate() {
-                let b = opressure_render(p, key, vel, 1.4, false); // wet: shipped voice
+            let rel = |pr: &ReedPreset, vel: u8| -> f32 {
+                let b = opressure_render(pr, key, vel, 1.4, false); // wet: shipped voice
                 let seg = &b[(0.45 * sr) as usize..(1.35 * sr) as usize];
-                rel[i] = g3_skirt_rms(seg, sr, f0) / rms(seg).max(1e-12);
-            }
-            let ff_db = 20.0 * rel[1].max(1e-9).log10();
-            let ratio = rel[1] / rel[0].max(1e-12);
+                g3_skirt_rms(seg, sr, f0) / rms(seg).max(1e-12)
+            };
+            let ff = rel(p, 127);
+            let ff_db = 20.0 * ff.max(1e-9).log10();
+            let ratio = ff / rel(p, 30).max(1e-12);
+            // Round-3: the sax rasp turbulence was deliberately cut to clear the
+            // "fuzz on top" — so an absolute ff floor read off our OWN output would
+            // be circular (Codex). Anchor to the mechanism instead: the rasp-ON ff
+            // skirt must exceed the rasp-OFF null (the g→∞ filter-only voice, same
+            // key/vel) by a fixed margin — proof the (smaller) rasp still adds
+            // audible off-lattice turbulence, not that it hit some absolute level.
+            let off_db = 20.0
+                * rel(
+                    &ReedPreset {
+                        rasp: (0.0, 0.0, 0.0),
+                        ..*p
+                    },
+                    127,
+                )
+                .max(1e-9)
+                .log10();
             println!(
-                "{:>13} G3: skirt ff {ff_db:.1} dB re total, ff/p {ratio:.2}x",
-                p.name
+                "{:>13} G3: skirt ff {ff_db:.1} dB (rasp-off null {off_db:.1}, +{:.1} dB), ff/p {ratio:.2}x",
+                p.name,
+                ff_db - off_db
             );
             assert!(
-                ff_db >= -40.0,
-                "{}: ff rasp skirts {ff_db:.1} dB re total (gate >= -40 dB)",
-                p.name
+                ff_db - off_db >= 4.0,
+                "{}: ff rasp only +{:.1} dB over the rasp-off null ({off_db:.1} dB) — rasp inaudible",
+                p.name,
+                ff_db - off_db
             );
             assert!(
                 ratio >= 2.0,
@@ -17305,10 +17372,12 @@ mod tests {
     /// turbulence window is quartic in pressure (was p²), so a vel-96 note
     /// keeps its honk and brightness ramp (drive g, tilt and formants are
     /// untouched — P2/P5 stay bit-comparable on the harmonic path) but mixes
-    /// in well under half the ff skirt energy; the ff voice itself is
-    /// UNCHANGED (G3's −40 dB floor re-asserted here so this oracle is
-    /// self-contained). Pre-change the mf/ff skirt ratio measured ~0.45-0.55
-    /// per sax — the rasp barely distinguished mf from ff.
+    /// in well under half the ff skirt energy. Pre-change the mf/ff skirt ratio
+    /// measured ~0.45-0.55 per sax — the rasp barely distinguished mf from ff.
+    /// (Round-3 removed the absolute ff-skirt floor from this oracle — the
+    /// de-fuzz cut lowered it — so rasp PRESENCE at ff is now guarded by
+    /// `reed_g3_sax_rasp_skirts`'s rasp-on-vs-off differential; this oracle keeps
+    /// only its unique job, the bloom ratio.)
     #[test]
     fn reed_sax_rasp_blooms_with_pressure() {
         let sr = 44100.0;
@@ -17328,11 +17397,9 @@ mod tests {
                 "{:>13} bloom: mf/ff skirt {ratio:.3} (mf {mf_db:.1} / ff {ff_db:.1} dB re total)",
                 p.name
             );
-            assert!(
-                ff_db >= -40.0,
-                "{}: ff rasp skirts {ff_db:.1} dB re total — the bloom must not cost ff",
-                p.name
-            );
+            // Round-3: rasp presence at ff is now guarded by reed_g3's rasp-on-vs-off
+            // differential (the absolute −40 dB floor here would be circular after the
+            // deliberate de-fuzz cut). This oracle keeps its unique job — the BLOOM:
             // Either the mf rasp is well under half the ff rasp, or it sits
             // at/below the −42 dB audibility budget (RD_O12B precedent: the
             // wet ff top-octave noise floor − 6 dB) — the bari's residue is
@@ -18079,8 +18146,8 @@ mod tests {
             ("flute", fl, 0.010, 0.021), // tight: this IS today's accepted flute bed (R1)
             ("whistle", wh, 0.022, 0.052),
             ("ocarina", oc, 0.014, 0.031),
-            ("shakuhachi", shak, 0.048, 0.105),
-            ("pan_flute", pan, 0.038, 0.085),
+            ("shakuhachi", shak, 0.040, 0.062), // round-3: breath 0.30→0.20 (de-shake)
+            ("pan_flute", pan, 0.021, 0.037),   // round-3: breath 0.24→0.12 (de-shake)
             ("blown_bottle", bot, 0.60, 0.95),
         ] {
             assert!(
@@ -18097,6 +18164,82 @@ mod tests {
             shak > 3.0 * fl,
             "shakuhachi {shak} is not markedly airier than the flute {fl}"
         );
+    }
+
+    /// Round-3 (Stage 1): the sustain breath must FLUTTER at `WD_FLUTTER_HZ`,
+    /// decorrelated from the pitch vibrato — not pulse at the pitch-vib rate. That
+    /// deep vib-locked pulse sat on the ~4 Hz fluctuation-strength peak and read as
+    /// the "shaking sshsshssh" on the loud-breath pipes. Isolate the PURE breath via
+    /// the WD-O5 differential (full − nobed, same seed) so every harmonic and its
+    /// vibrato FM cancels, then compare the breath envelope's AM energy at the
+    /// flutter rate vs the pitch-vib rate. Guards the fix: it is RED on the
+    /// pre-round-3 `breath_mod = 1 + 0.5·vib_val` (all AM at the vib rate, none at
+    /// 2 Hz) and GREEN after. `FLUTE` is an uncomplained control (its AM also moves
+    /// off the vib rate). The blown bottle (GM 76) is deliberately EXCLUDED: its
+    /// Helmholtz resonator narrows the jet into a narrowband signal whose envelope
+    /// fluctuates randomly across all low frequencies, swamping any coherent-AM read
+    /// (verified — the ratio stays ~0.8 even with the vibrato killed, so it is the
+    /// resonator, not the pitch tracking). The flutter still rides the SAME
+    /// `breath_mod` on its jet, so the pipes here guard the shared mechanism; the
+    /// bottle's larger over-noisiness is a separate Stage-2 concern.
+    #[test]
+    fn wd_breath_am_flutters_off_the_pitch_vibrato() {
+        // Max Goertzel magnitude over a small band — robust to the flutter's ±8 %
+        // rate jitter and to leakage (Codex: bands, not single bins).
+        let band_max = |env: &[f32], f0: f32, w: f32| -> f32 {
+            (0..=8)
+                .map(|i| mag_at(env, WD_SR, f0 - w + 2.0 * w * (i as f32 / 8.0)))
+                .fold(0.0f32, f32::max)
+        };
+        // Isolate the PURE breath via the WD-O5 differential (full − nobed, same
+        // seed → harmonics and their vibrato FM cancel), take its envelope (mean
+        // removed so the DC of |breath| does not leak into the low AM bins), and
+        // return its coherent AM energy at (flutter rate, pitch-vib rate).
+        let am = |p: &WindPreset| -> (f32, f32) {
+            let key = wd_mid_key(p);
+            let n = (4.0 * WD_SR) as usize;
+            let mut full = Wind::from_preset(p, key, 100, WD_SR, 7);
+            let mut nobed = Wind::from_preset(p, key, 100, WD_SR, 7);
+            nobed.breath_base = 0.0;
+            nobed.hi_base = 0.0;
+            let (mut a, mut b) = (vec![0f32; n], vec![0f32; n]);
+            full.render(&mut a);
+            nobed.render(&mut b);
+            let breath: Vec<f32> = a.iter().zip(&b).map(|(x, y)| x - y).collect();
+            let seg = segment(&breath, WD_SR, 1.0, 4.0);
+            let mut env: Vec<f32> = seg.iter().map(|x| x.abs()).collect();
+            let mean = env.iter().sum::<f32>() / env.len() as f32;
+            for e in &mut env {
+                *e -= mean;
+            }
+            (
+                band_max(&env, WD_FLUTTER_HZ, 0.4),
+                band_max(&env, p.vib.0, 0.6),
+            )
+        };
+        // The complained pan/shakuhachi + the FLUTE control: the flutter must
+        // DOMINATE the pitch-vib rate — proof the breath AM is decoupled from the
+        // vibrato. (GM 76 blown bottle is NOT testable this way: its Helmholtz
+        // resonator narrows the jet into a narrowband signal whose envelope
+        // fluctuates randomly across all low frequencies, swamping any coherent
+        // AM measurement — verified, both with and without vibrato. Its flutter
+        // rides the SAME `breath_mod` on the jet, so this shared-mechanism guard
+        // covers it; its own over-noisiness is a separate Stage-2 concern.)
+        for p in [&PAN_FLUTE, &SHAKUHACHI, &FLUTE] {
+            let (e_flut, e_vib) = am(p);
+            println!(
+                "{}: breath AM flutter@{:.1}Hz {e_flut:.5} vs vib@{:.1}Hz {e_vib:.5} (ratio {:.2})",
+                p.name,
+                WD_FLUTTER_HZ,
+                p.vib.0,
+                e_flut / e_vib.max(1e-9)
+            );
+            assert!(
+                e_flut > 2.0 * e_vib,
+                "{}: breath AM still tracks the pitch vibrato — flutter {e_flut:.5} not > 2x vib {e_vib:.5}",
+                p.name
+            );
+        }
     }
 
     /// WD-O6 — the spectrum opens with VELOCITY and closes with REGISTER, and the

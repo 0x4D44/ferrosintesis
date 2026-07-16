@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 
 /// Number of WAV files embedded in this package.
-pub const FILE_COUNT: usize = 131;
+pub const FILE_COUNT: usize = 139;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
@@ -273,6 +273,14 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ("oboe_F3_p.wav", include_bytes!("../samples/oboe_F3_p.wav")),
     ("oboe_F4_f.wav", include_bytes!("../samples/oboe_F4_f.wav")),
     ("oboe_F4_p.wav", include_bytes!("../samples/oboe_F4_p.wav")),
+    ("steel_A#2.wav", include_bytes!("../samples/steel_A#2.wav")),
+    ("steel_A#3.wav", include_bytes!("../samples/steel_A#3.wav")),
+    ("steel_B4.wav", include_bytes!("../samples/steel_B4.wav")),
+    ("steel_B5.wav", include_bytes!("../samples/steel_B5.wav")),
+    ("steel_E2.wav", include_bytes!("../samples/steel_E2.wav")),
+    ("steel_E3.wav", include_bytes!("../samples/steel_E3.wav")),
+    ("steel_E4.wav", include_bytes!("../samples/steel_E4.wav")),
+    ("steel_F5.wav", include_bytes!("../samples/steel_F5.wav")),
     (
         "trombone_A#1_f.wav",
         include_bytes!("../samples/trombone_A#1_f.wav"),

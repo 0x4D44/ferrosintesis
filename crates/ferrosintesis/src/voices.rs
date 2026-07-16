@@ -10638,9 +10638,29 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        // 25 steel stays pure model for now: the FreePats steel-string set is
-        // GPL-with-exception, not CC0 — no clean sampled source yet (HLD §2.2)
-        25 => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
+        // 25 steel: LA layer added 2026.07.16, closing HLD §2.2's open question.
+        // The FreePats steel set stays rejected (GPL-with-exception — its
+        // composition-scoped carve-out does not reach redistributing the sample
+        // DATA via include_bytes!). The bank is instead a 2017 Martin HD28,
+        // CC0-dedicated by Jeff Learman in the Discord SFZ GM Bank — see
+        // tools/ferrosintesis-samples/prepare.py STEEL_REV for the pinned SHA.
+        25 => {
+            let model = Box::new(Pluck::new(&STEEL, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_GUITAR;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::steel_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         26 => Box::new(Pluck::new(&JAZZ, key, vel, sr, seed)),
         27 => Box::new(Pluck::new(&CLEAN, key, vel, sr, seed)),
         28 => Box::new(Pluck::new(&MUTED, key, vel, sr, seed)),

@@ -143,11 +143,12 @@ are dramatically slower and are not worth timing.
 
 ## Sample provenance and licensing
 
-The 202 embedded transients are trimmed from the VSCO 2 Community Edition
-orchestral library and the FreePats Spanish classical guitar bank, both
-CC0 1.0. The generator pins its sources — VSCO to an exact upstream commit,
-FreePats to a SHA-256-verified archive — and the full inventory, provenance
-and regeneration tooling live in the repository under
+The 210 embedded transients are trimmed from the VSCO 2 Community Edition
+orchestral library, the FreePats Spanish classical guitar bank, and the Discord
+SFZ GM Bank's Martin HD28 steel-string acoustic — all CC0 1.0. The generator
+pins every source — VSCO to an exact upstream commit, FreePats to a
+SHA-256-verified archive, the Martin to an exact upstream commit — and the full
+inventory, provenance and regeneration tooling live in the repository under
 [`tools/ferrosintesis-samples/`](https://github.com/0x4D44/ferrosintesis/tree/main/tools/ferrosintesis-samples).
 The two asset crates contain nothing but that PCM and `include_bytes!`. The
 code is licensed MIT OR Apache-2.0; the samples are CC0-1.0.

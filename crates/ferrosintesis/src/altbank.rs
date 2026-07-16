@@ -1059,10 +1059,13 @@ pub fn make(
         // sampled attack layer (voices.rs LA_BRASS) must not reach alt-bank
         // channels, so the fall-through pins samples off for 56–61.
         56..=61 => crate::voices::make(program, key, vel, sr, seed, false),
-        // Same freeze for the alt-bank nylon guitar: the default bank's
-        // LA_GUITAR layer (voices.rs, GM 24) must not reach alt-bank channels.
-        // 25 has no layer yet (no clean CC0 steel source) but is pinned too so
-        // it stays frozen if one lands.
+        // Same freeze for the alt-bank guitars: the default bank's LA_GUITAR
+        // layer (voices.rs, GM 24 nylon and — since 2026.07.16 — GM 25 steel)
+        // must not reach alt-bank channels. This pin was placed for 24 while 25
+        // still had no layer, explicitly so 25 "stays frozen if one lands"; the
+        // Martin HD28 bank landed, so it is now load-bearing for both, and CC0!=0
+        // is how a score keeps the pure-model steel. Pinned by
+        // altbank_guitars_skip_sample_layer.
         24..=25 => crate::voices::make(program, key, vel, sr, seed, false),
         // Opt-in SUSTAINING lead voicing of the driven guitar (GM 29/30): a
         // held note rings for its whole duration (amp sustain) for a soaring
@@ -1448,6 +1451,61 @@ mod tests {
                 "alt-bank strings {prog} not sample-independent"
             );
         }
+    }
+
+    /// Alt-bank guitars 24-25 must ignore the default bank's LA_GUITAR sampled
+    /// attack layer: samples on/off render byte-identical (the same guard as
+    /// brass/reeds/strings).
+    ///
+    /// This became load-bearing for 25 on 2026.07.16, when the Martin HD28 CC0
+    /// bank gave the default steel an LA layer for the first time. Before that
+    /// the assertion was vacuous — 25 had no layer to skip — so the `24..=25`
+    /// pin in `make` was untested and a future edit could have silently let the
+    /// sampled attack through to alt-bank channels. CC0!=0 is how a score asks
+    /// for the pure-model steel, so this test is what keeps that promise.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn altbank_guitars_skip_sample_layer() {
+        let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        for prog in 24..=25u8 {
+            let on = render_make(prog, 52, 100, 0.5, 6, true);
+            let off = render_make(prog, 52, 100, 0.5, 6, false);
+            assert_eq!(
+                bits(&on),
+                bits(&off),
+                "alt-bank guitar {prog} not sample-independent"
+            );
+        }
+    }
+
+    /// The alt-bank steel must be a real alternative to the default, not a
+    /// copy of it: with samples available, default-bank GM 25 (LA-layered) and
+    /// alt-bank GM 25 (pure model) must diverge in the attack window. Guards
+    /// the other direction from `altbank_guitars_skip_sample_layer` — together
+    /// they pin that CC0!=0 selects a genuinely different, un-layered voice.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn altbank_steel_differs_from_the_layered_default() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let alt = render_make(25, 52, 100, 0.5, 6, true);
+        let mut d = crate::voices::make(25, 52, 100, sr, 6, true);
+        let mut def = vec![0f32; (0.5 * sr) as usize];
+        d.render(&mut def);
+        let win = (0.05 * sr) as usize;
+        let diff: Vec<f32> = alt[..win]
+            .iter()
+            .zip(&def[..win])
+            .map(|(a, b)| a - b)
+            .collect();
+        let (dr, ar) = (rms(&diff), rms(&alt[..win]));
+        assert!(
+            dr > 0.3 * ar,
+            "alt-bank steel 25 barely differs from the layered default \
+             (diff {dr:.5} vs alt {ar:.5}) — is the LA layer leaking through?"
+        );
     }
 
     /// BW-O9 — level bounds. Part (a): the pizz does not jump OUT of the arco's

@@ -1,3 +1,4 @@
+import math
 import os
 import struct
 import tempfile
@@ -6,6 +7,33 @@ import urllib.error
 import wave
 
 import prepare
+
+
+def old_trim(x, sr, keep_s, fade_s):
+    """The pre-2026.07.16 trim, kept as a reference implementation.
+
+    Its fade-in is a fixed 2 ms regardless of how much lead-in the source
+    actually has — the defect the `lead` cap fixes. Retained here so both the
+    inertness oracle and the bites-on-tight-trims oracle can compare against
+    the real thing rather than an approximation of it.
+    """
+    peak = max(abs(v) for v in x)
+    thr = 0.03 * peak
+    onset = next(i for i, v in enumerate(x) if abs(v) > thr)
+    start = max(0, onset - int(prepare.PRE_S * sr))
+    seg = x[start:start + int((prepare.PRE_S + keep_s) * sr)]
+    fin = int(0.002 * sr)
+    for i in range(min(fin, len(seg))):
+        seg[i] *= i / fin
+    fout = int(fade_s * sr)
+    for i in range(fout):
+        j = len(seg) - fout + i
+        if 0 <= j < len(seg):
+            t = 1.0 - i / fout
+            seg[j] *= t * t
+    pk = max(abs(v) for v in seg)
+    g = 0.9 / pk if pk > 0 else 1.0
+    return [v * g for v in seg]
 
 
 def write_wav(path, sample_width, channels):
@@ -27,7 +55,11 @@ def write_wav(path, sample_width, channels):
 
 class PrepareSampleBankTests(unittest.TestCase):
     def test_all_samples_route_to_the_expected_package(self):
-        filenames = set(prepare.SOURCES) | set(prepare.GUITAR_SOURCES)
+        filenames = (
+            set(prepare.SOURCES)
+            | set(prepare.GUITAR_SOURCES)
+            | set(prepare.STEEL_URLS)
+        )
         core = set()
         orchestral = set()
 
@@ -45,14 +77,93 @@ class PrepareSampleBankTests(unittest.TestCase):
                 else:
                     self.fail(f"unexpected sample package for {filename}: {relative[1]}")
 
-        self.assertEqual(len(filenames), 202)
+        self.assertEqual(len(filenames), 210)
         self.assertEqual(len(core), 71)
-        self.assertEqual(len(orchestral), 131)
+        self.assertEqual(len(orchestral), 139)
         self.assertTrue(
             all(name.startswith(("piano_", "violin_", "flute_")) for name in core)
         )
         self.assertFalse(
             any(name.startswith(("piano_", "violin_", "flute_")) for name in orchestral)
+        )
+
+    def test_fade_in_is_inert_when_lead_in_exceeds_the_window(self):
+        """A source with >= 2 ms of lead-in must be cut exactly as before.
+
+        Differential oracle against the pre-fix algorithm. This is the claim the
+        already-committed WAVs rest on, and it is deliberately narrow: the fade
+        cap only bites when the onset sits INSIDE the 2 ms window, so the 136
+        sources with more lead-in than that must come out bit-identical.
+
+        Note the sizing. An earlier attempt at this fix padded up to PRE_S
+        (8 ms) and asserted inertness with test inputs that had 8-300 ms of
+        lead-in — which passed, and was wrong: the real bank is trimmed far
+        tighter than that (median onset 120 samples on piano, 8 on steel), so
+        the pad silently re-cut 131 committed files. The lesson is in the
+        parameters below: they are the MEASURED population, not a convenient
+        assumption.
+        """
+
+        sr = prepare.OUT_SR
+        fin = int(0.002 * sr)  # 88 samples — the de-click window
+        # lead-ins at and above the window, including the exact boundary, and
+        # the 31 ms real-world case (vlnens, the most generously padded family)
+        for lead in (fin, fin + 1, 127, 352, 1374):
+            with self.subTest(lead_samples=lead):
+                body = [math.sin(2 * math.pi * 440.0 * i / sr) for i in range(sr)]
+                x = [0.0] * lead + body
+                new = prepare.trim_to_onset(list(x), sr, keep_s=0.62, fade_s=0.20)
+                ref = old_trim(list(x), sr, keep_s=0.62, fade_s=0.20)
+                self.assertEqual(len(new), len(ref))
+                self.assertEqual(new, ref)
+
+    def test_fade_in_never_exceeds_available_lead_in(self):
+        """A tightly-trimmed source must keep its attack.
+
+        Uses the MEASURED steel geometry: onset within a handful of samples,
+        first sample at near-silence (so there is no step to de-click). The old
+        fixed 2 ms fade attenuated the whole pick transient; the cap must leave
+        it essentially untouched.
+        """
+        sr = prepare.OUT_SR
+        for onset in (0, 1, 8, 41):  # measured steel onsets across the bank
+            with self.subTest(onset=onset):
+                body = [math.sin(2 * math.pi * 220.0 * i / sr) for i in range(sr)]
+                x = [0.0] * onset + body
+
+                seg = prepare.trim_to_onset(list(x), sr, keep_s=0.9, fade_s=0.30)
+
+                # The transient must survive: peak within the first 2 ms should
+                # reach essentially the normalized ceiling, not a fraction of it.
+                early_peak = max(abs(v) for v in seg[: int(0.002 * sr)])
+                self.assertGreater(
+                    early_peak,
+                    0.85,
+                    f"onset={onset}: de-click fade crushed the attack "
+                    f"(early peak {early_peak:.3f})",
+                )
+
+    def test_fade_in_cap_actually_bites_on_the_measured_steel_geometry(self):
+        """Guard against the cap silently regressing to a no-op.
+
+        True differential against `old_trim`: at the median measured steel
+        onset the new cut must deliver a materially stronger attack than the
+        old fixed-fade cut. Measured ratio is ~1.35x; asserted at 1.2x so
+        harmless numerical drift does not flake it.
+        """
+        sr = prepare.OUT_SR
+        body = [math.sin(2 * math.pi * 220.0 * i / sr) for i in range(sr)]
+        x = [0.0] * 8 + body  # median measured steel onset
+
+        fin = int(0.002 * sr)
+        new_peak = max(abs(v) for v in prepare.trim_to_onset(
+            list(x), sr, keep_s=0.9, fade_s=0.30)[:fin])
+        old_peak = max(abs(v) for v in old_trim(
+            list(x), sr, keep_s=0.9, fade_s=0.30)[:fin])
+        self.assertGreater(
+            new_peak,
+            old_peak * 1.2,
+            f"fade cap is not biting: new {new_peak:.4f} vs old {old_peak:.4f}",
         )
 
     def test_fetch_is_atomic_on_short_transfer(self):

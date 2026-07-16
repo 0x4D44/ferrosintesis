@@ -432,6 +432,26 @@ fn clarinet_f() -> &'static [Zone] {
     })
 }
 
+/// GM 25 steel-string acoustic — a 2017 Martin HD28 Vintage Series, CC0.
+/// Roots are the MEASURED fundamentals, not the nominal note names: the
+/// instrument was tuned ~3-16 cents flat and the sampler repitches from the
+/// real f0, so the flatness never reaches the render.
+fn steel() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "steel_E2.wav" => 81.98,
+            "steel_A#2.wav" => 116.33,
+            "steel_E3.wav" => 164.56,
+            "steel_A#3.wav" => 231.86,
+            "steel_E4.wav" => 327.92,
+            "steel_B4.wav" => 490.67,
+            "steel_F5.wav" => 693.98,
+            "steel_B5.wav" => 978.93,
+        )
+    })
+}
+
 fn nylon() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
@@ -687,6 +707,13 @@ pub fn guitar_bank() -> &'static [Zone] {
     nylon()
 }
 
+/// GM 25 steel-string acoustic. One take per note upstream — no velocity
+/// layers, no round robins — so this is a single flat layer exactly like
+/// nylon, and `LaVoice`'s `vel_amp` does the dynamic scaling.
+pub fn steel_bank() -> &'static [Zone] {
+    steel()
+}
+
 pub fn prewarm() {
     if !crate::embedded_samples_available() {
         return;
@@ -717,6 +744,7 @@ pub fn prewarm() {
     let _ = strings_bank(1);
     let _ = strings_bank(127);
     let _ = guitar_bank();
+    let _ = steel_bank();
 }
 
 fn nearest(zones: &'static [Zone], f: f32) -> &'static Zone {

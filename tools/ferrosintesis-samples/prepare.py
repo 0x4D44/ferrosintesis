@@ -22,6 +22,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import urllib.request
 import wave
 
@@ -139,6 +140,39 @@ GUITAR_SOURCES = {
     for n in ("E2", "B2", "E3", "A#3", "E4", "A#4", "E5")
 }
 
+# Steel-string acoustic (GM 25) — a 2017 Martin HD28 Vintage Series recorded and
+# CC0-dedicated by Jeff Learman, distributed in the Discord SFZ GM Bank. The
+# dedication is a header comment in the instrument's own .sfz ("// License:
+# Creative Commons CC0"), which that repo's README designates as the
+# authoritative per-instrument licence location. The repo is a MIXED CC0/CC-BY
+# aggregation with no repo-level LICENSE, so CC0 cannot be inferred repo-wide
+# and THE SHA PIN IS LOAD-BEARING: fetch from STEEL_REV only, never master.
+# One take per note — no velocity layers, no round robins — so, exactly like
+# nylon, the steel bank is a single flat layer and LaVoice's vel_amp does the
+# dynamic scaling.
+STEEL_REV = "05d5ed8befa042fd9d99a6d159dfc3673d3f8edc"
+STEEL_DIR = "Discord GM/Melodic/026-Acoustic Guitar (steel)"
+# zones E2–B5, ~6-semitone spacing (max repitch ±3.5 st), mirroring nylon. The
+# source labels accidentals as FLATS; our note parser (and NOTE_HZ) speak
+# sharps, so the destination names are respelled: Bb2 -> A#2, Bb3 -> A#3.
+STEEL_SOURCES = {
+    "steel_E2.wav": "MartinGM2_040__E2_1.wav",
+    "steel_A#2.wav": "MartinGM2_046_Bb2_1.wav",
+    "steel_E3.wav": "MartinGM2_052__E3_1.wav",
+    "steel_A#3.wav": "MartinGM2_058_Bb3_1.wav",
+    "steel_E4.wav": "MartinGM2_064__E4_1.wav",
+    "steel_B4.wav": "MartinGM2_071__B4_1.wav",
+    "steel_F5.wav": "MartinGM2_077__F5_1.wav",
+    "steel_B5.wav": "MartinGM2_083__B5_1.wav",
+}
+STEEL_URLS = {
+    dest: (
+        f"https://raw.githubusercontent.com/sfzinstruments/Discord-SFZ-GM-Bank/"
+        f"{STEEL_REV}/{urllib.parse.quote(STEEL_DIR)}/{urllib.parse.quote(member)}"
+    )
+    for dest, member in STEEL_SOURCES.items()
+}
+
 # f0 search range per family (the default misses the piano's low octaves
 # and the low brass/bassoon fundamentals)
 F0_RANGE = {
@@ -156,6 +190,11 @@ F0_RANGE = {
     # guitar E2 (82.4) … E5 (659.3); ceiling 700 keeps autocorr off the
     # 2nd harmonic of the top zones (the brass/oboe lesson)
     "nylon": (70.0, 700.0),
+    # steel E2 (82.4) … B5 (987.8); ceiling 1050 clears the top zone's
+    # fundamental but stays under its 2nd harmonic (1976) — the brass/oboe
+    # lesson. The Martin is tuned ~12 cents flat throughout; harmless, because
+    # the MEASURED root is what lands in the zone table.
+    "steel": (70.0, 1050.0),
     # violin section G2-name spans G3 196 Hz … D5-name D6 1175 Hz (VSCO's
     # octave labels sit one below sounding pitch here); ceiling 1300 keeps
     # autocorr off the top zone's 2nd harmonic (the brass/oboe lesson)
@@ -167,7 +206,11 @@ F0_RANGE = {
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
-KEEP_FAM = {"piano": (1.8, 0.6), "nylon": (0.9, 0.30)}  # (keep_s, fade_s)
+KEEP_FAM = {
+    "piano": (1.8, 0.6),
+    "nylon": (0.9, 0.30),
+    "steel": (0.9, 0.30),
+}  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
     "drum_sus_cymb1_mp_rr2.wav": (2.2, 0.35),
@@ -324,38 +367,64 @@ def measure_f0(x, sr, lo=80.0, hi=3000.0):
     return sr / lag, corr[best_lag]
 
 
+def trim_to_onset(x, sr, keep_s, fade_s):
+    """Cut `x` to its onset, de-click both ends, and peak-normalize.
+
+    Returns the finished segment: PRE_S of lead-in, then `keep_s` of audio,
+    with a 2 ms fade-in and a `fade_s` squared fade-out, normalized to 0.9.
+    """
+    peak = max(abs(v) for v in x)
+    # onset: first sample above 3% of peak
+    thr = 0.03 * peak
+    onset = next(i for i, v in enumerate(x) if abs(v) > thr)
+    start = max(0, onset - int(PRE_S * sr))
+    seg = x[start:start + int((PRE_S + keep_s) * sr)]
+    # De-click fade-in, sized to the lead-in that ACTUALLY EXISTS.
+    #
+    # `start` clamps at 0, so a source trimmed tight to its onset yields less
+    # than PRE_S of lead-in — and a fixed 2 ms fade then runs straight over the
+    # attack, attenuating precisely the transient the LA layer exists to
+    # capture. That is not hypothetical: 74 of the 210 sources have their onset
+    # inside 2 ms (measured), worst among them the Martin steel takes (median
+    # onset 8 samples, 0.18 ms) which would lose their entire pick attack.
+    # Every source begins at near-silence (max |x[0]| over the bank is 0.015),
+    # so there is no step to de-click in the first place and shortening the
+    # fade cannot introduce one. Capping the fade at `lead` therefore fixes the
+    # tight-trim case and is exactly inert for the 136 sources with >= 2 ms of
+    # lead-in. Pinned by test_fade_in_never_exceeds_available_lead_in and
+    # test_fade_in_is_inert_when_lead_in_exceeds_the_window.
+    lead = onset - start
+    fin = min(int(0.002 * sr), lead)
+    for i in range(min(fin, len(seg))):
+        seg[i] *= i / fin
+    fout = int(fade_s * sr)
+    for i in range(fout):
+        j = len(seg) - fout + i
+        if 0 <= j < len(seg):
+            t = 1.0 - i / fout
+            seg[j] *= t * t
+    pk = max(abs(v) for v in seg)
+    g = 0.9 / pk if pk > 0 else 1.0
+    return [v * g for v in seg]
+
+
 def main():
     socket.setdefaulttimeout(60)
     src = os.path.join(tempfile.gettempdir(), "vsco2ce_src", VSCO_REV)
     os.makedirs(src, exist_ok=True)
     for fn, url in SOURCES.items():
         ensure_source(fn, url, src)
+    for fn, url in STEEL_URLS.items():
+        ensure_source(fn, url, src)
     ensure_guitar_sources(src)
 
     rows = []
-    for fn in sorted(SOURCES | GUITAR_SOURCES):
+    for fn in sorted(SOURCES | GUITAR_SOURCES | STEEL_URLS):
         x, sr = read_wav(os.path.join(src, fn))
         x = resample(x, sr, OUT_SR)
         sr = OUT_SR
-        peak = max(abs(v) for v in x)
-        # onset: first sample above 3% of peak
-        thr = 0.03 * peak
-        onset = next(i for i, v in enumerate(x) if abs(v) > thr)
-        start = max(0, onset - int(PRE_S * sr))
         keep_s, fade_s = KEEP_FILE.get(fn, KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S)))
-        seg = x[start:start + int((PRE_S + keep_s) * sr)]
-        fin = int(0.002 * sr)
-        for i in range(min(fin, len(seg))):
-            seg[i] *= i / fin
-        fout = int(fade_s * sr)
-        for i in range(fout):
-            j = len(seg) - fout + i
-            if 0 <= j < len(seg):
-                t = 1.0 - i / fout
-                seg[j] *= t * t
-        pk = max(abs(v) for v in seg)
-        g = 0.9 / pk if pk > 0 else 1.0
-        seg = [v * g for v in seg]
+        seg = trim_to_onset(x, sr, keep_s, fade_s)
         if fn in DRUM_SOURCES:
             root = f0 = cand = cents = conf = None
         else:

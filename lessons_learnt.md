@@ -3,6 +3,21 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.16 — **A differential oracle is only as good as its INPUT POPULATION — take the
+  parameters from measurement, never from the assumption you are trying to verify.** Fixing
+  `prepare.py`'s de-click fade, I "proved inertness" with a test fed 8-300 ms of lead-in and
+  shipped green — but the real bank is trimmed FAR tighter (median onset: piano 120 samples,
+  violin 3, steel 8), so the change silently re-cut 131 committed WAVs and would have delayed
+  every layered attack by up to 7 ms. `git status` caught it; the passing test did not. The
+  sample bank IS the oracle here: regenerating and diffing the committed WAVs is a real-world
+  check no unit test replaces — run it before believing any prepare.py change is inert.
+  Corollary that fell out: `prepare.py`'s fixed 2 ms fade-in has been wrong since the LA layer
+  was born (`ce99cda`, 2026-07-02, `git log -L` shows ONE commit ever) — it was sized for
+  day-one violin and every family added since inherited it, so 74 of 210 sources had their
+  onset INSIDE the fade window and their attack crushed. A constant does not have to drift to
+  become wrong; the material underneath it can move instead. When adding a family to a shared
+  generator, re-measure the constants against the NEW material.
+
 - 2026.07.16 — **A per-voice modulator is phase-COHERENT across a multi-player voice —
   it pumps the whole "section," unlike the decorrelated per-player detune/vibrato/scatter.**
   Brass `l` (the loudness/timbre scalar, `voices.rs` `control_tick`) is per-VOICE, shared by

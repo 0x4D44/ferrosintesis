@@ -736,6 +736,26 @@ fn smooth(x: f32) -> f32 {
     x * x * (3.0 - 2.0 * x)
 }
 
+/// Per-program DSP of a SHARED sample inside the sample-owned window
+/// (round-3 U3, plan §3.1). GM 0/1/3 wrap one piano bank at one gain, so
+/// every model-layer differentiator was discarded exactly where the ear
+/// decides "piano identity" — the fix processes the existing sample
+/// per-program instead (zero new assets). Default-inert: `LaFx::default()`
+/// takes none of the branches below, so every other wrapped program
+/// renders byte-identically (the render-diff inventory is the guard).
+#[derive(Clone, Copy, Default)]
+pub struct LaFx {
+    /// One-pole high-shelf on the sample readout: (gain_db, corner_hz).
+    /// GM 1 Bright's hammer-band brightness, moved INTO the sampled onset.
+    pub shelf: Option<(f32, f32)>,
+    /// Two extra detuned reads of the same sample: (ratio_a, ratio_b, mix).
+    /// GM 3 Honky's trichord beat, starting AT the onset. The side reads
+    /// begin 5/9 ms into the zone so the hammer transient stays singular
+    /// (per-read phase decorrelation — the §3.1 comb/flange watch) while
+    /// their continuously-diverging phase makes true f0-band beating.
+    pub detune: Option<(f32, f32, f32)>,
+}
+
 /// Sampled attack + modeled sustain, under the §2.7 onset-ownership
 /// contract — one owner per instant:
 ///
@@ -762,6 +782,14 @@ pub struct LaVoice {
     fade_start: usize,
     fade_end: usize,
     buf: Vec<f32>,
+    fx: LaFx,
+    /// Detuned side-read positions (source-rate samples).
+    pos2: f32,
+    pos3: f32,
+    /// High-shelf state/coefficients (one-pole: v + g·(v − lp(v))).
+    shelf_lp: f32,
+    shelf_a: f32,
+    shelf_g: f32,
 }
 
 impl LaVoice {
@@ -776,12 +804,35 @@ impl LaVoice {
         gain: f32,
         fade: (f32, f32),
     ) -> Box<dyn Voice> {
+        Self::wrap_fx(sustain, zones, key, vel, sr, gain, fade, LaFx::default())
+    }
+
+    /// [`Self::wrap`] with per-program sample DSP (round-3 U3). Only the
+    /// GM 0-3 piano arm passes a non-default `fx`.
+    #[allow(clippy::too_many_arguments)] // mirrors wrap()'s established shape + one fx
+    pub fn wrap_fx(
+        sustain: Box<dyn Voice>,
+        zones: &'static [Zone],
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+        fx: LaFx,
+    ) -> Box<dyn Voice> {
         let f = key_freq(key);
         let zone = nearest(zones, f);
         let step = f / zone.root * 44100.0 / sr;
         if !(0.5..=2.05).contains(&step) {
             return sustain;
         }
+        let (shelf_g, shelf_a) = match fx.shelf {
+            Some((db, hz)) => (
+                10f32.powf(db / 20.0) - 1.0,
+                1.0 - (-std::f32::consts::TAU * hz / sr).exp(),
+            ),
+            None => (0.0, 0.0),
+        };
         Box::new(LaVoice {
             sustain,
             zone,
@@ -796,6 +847,13 @@ impl LaVoice {
             fade_start: (fade.0 * sr) as usize,
             fade_end: (fade.1 * sr) as usize,
             buf: Vec::new(),
+            fx,
+            // 5 / 9 ms into the source (44.1 kHz zone data)
+            pos2: 220.0,
+            pos3: 397.0,
+            shelf_lp: 0.0,
+            shelf_a,
+            shelf_g,
         })
     }
 }
@@ -819,7 +877,34 @@ impl Voice for LaVoice {
             if t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
                 sample_live = true;
                 let frac = self.pos - j as f32;
-                let v = self.zone.data[j] * (1.0 - frac) + self.zone.data[j + 1] * frac;
+                let mut v = self.zone.data[j] * (1.0 - frac) + self.zone.data[j + 1] * frac;
+                if let Some((ra, rb, mix)) = self.fx.detune {
+                    // round-3 U3: two detuned reads of the SAME data — the
+                    // continuously-diverging phase beats at f0·(1−ra) etc.,
+                    // real periodic AM, from the first hammer instant
+                    let d = &self.zone.data;
+                    let mut side = 0.0;
+                    let k = self.pos2 as usize;
+                    if k + 1 < n {
+                        let fr = self.pos2 - k as f32;
+                        side += d[k] * (1.0 - fr) + d[k + 1] * fr;
+                    }
+                    self.pos2 += self.step * ra;
+                    let k = self.pos3 as usize;
+                    if k + 1 < n {
+                        let fr = self.pos3 - k as f32;
+                        side += d[k] * (1.0 - fr) + d[k + 1] * fr;
+                    }
+                    self.pos3 += self.step * rb;
+                    v += mix * side;
+                }
+                if self.fx.shelf.is_some() {
+                    // round-3 U3: one-pole high-shelf — unity at DC, +g above
+                    // the corner; the readout stays phase-coherent with the
+                    // crossfade partner underneath
+                    self.shelf_lp += (v - self.shelf_lp) * self.shelf_a;
+                    v += self.shelf_g * (v - self.shelf_lp);
+                }
                 s += v * (1.0 - u) * self.gain * self.rel_gain;
                 self.rel_gain *= self.rel_mul;
                 self.pos += self.step;

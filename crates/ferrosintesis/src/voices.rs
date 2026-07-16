@@ -7570,6 +7570,18 @@ const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 // internal ratio (≈ 0.85), matching the pure model's. The louder piano
 // onset is the intended §2.7 blast radius.
 const LA_PIANO: (f32, (f32, f32)) = (0.90, (0.18, 0.85));
+/// Round-3 U3 (plan §3.1): GM 1's brightness moved INTO the shared piano
+/// sample's own window — a high-shelf above 1.8 kHz on the sample readout.
+/// 5 dB measured to land the plan's own acceptance target (GM1/GM0 early
+/// HF ratio ≥ 1.25, the SC-55 bright-vs-grand delta; +4 dB read 1.22 at
+/// key 60). Amount → round-3 EAR-A/B list. GM 0 passes `LaFx::default()`
+/// → byte-identical.
+const LA_BRIGHT_SHELF: (f32, f32) = (5.0, 1800.0);
+/// Round-3 U3: GM 3's trichord beat from the first hammer instant — two
+/// extra reads of the same sample at ±7 cents, mixed at 0.4 (amount →
+/// EAR-A/B list). The perceptual matrix's T4 guard demands this read as
+/// true f0-band beating (D5 > 0 at key 72), never a static comb.
+const LA_HONKY_DETUNE: (f32, f32, f32) = (1.007, 0.993, 0.4);
 // Brass wrap gain, re-matched for the §2.7 onset-ownership contract (the
 // sample no longer has the model's own onset running underneath it): 0.35
 // left the sampled trumpet onset stepping 2.5x under the model's spoken
@@ -10204,7 +10216,21 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             };
             if samples {
                 let (gain, fade) = LA_PIANO;
-                crate::sampler::LaVoice::wrap(
+                // Round-3 U3: per-program DSP of the SHARED sample — the
+                // identity cue lives in the sample-owned window the model
+                // differentiators never reached (plan §3.1).
+                let fx = match program {
+                    1 => crate::sampler::LaFx {
+                        shelf: Some(LA_BRIGHT_SHELF),
+                        detune: None,
+                    },
+                    3 => crate::sampler::LaFx {
+                        shelf: None,
+                        detune: Some(LA_HONKY_DETUNE),
+                    },
+                    _ => crate::sampler::LaFx::default(),
+                };
+                crate::sampler::LaVoice::wrap_fx(
                     model,
                     crate::sampler::piano_bank(vel, seed & 1 == 0),
                     key,
@@ -10212,6 +10238,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                     sr,
                     gain,
                     fade,
+                    fx,
                 )
             } else {
                 model
@@ -14026,6 +14053,94 @@ mod tests {
             hf_frac(&buf, 0.30, 0.50),
             hf_frac(&plain, 0.30, 0.50)
         );
+    }
+
+    /// Round-3 U3 (plan §3.1): GM 0/1/3 share the piano bank at one gain, so
+    /// GM 1's round-2 brightness differentiator (a 4800 Hz hammer band spent
+    /// inside [0, 0.18 s]) was multiplied by ZERO exactly where the ear
+    /// decides "piano identity". The fix puts the brightness INTO the
+    /// sample-owned window (a high-shelf on GM 1's sample readout). The
+    /// oracle is the plan's own: differential, SAMPLES ON, early-window —
+    /// GM 1's HF fraction over [0, 0.4 s] must exceed GM 0's by ≥ 1.25×
+    /// (RED at HEAD: the W1 renders were byte-identical).
+    #[test]
+    fn bright_piano_tilts_the_shared_sample_onset() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        for key in [48u8, 60] {
+            let hf_frac = |prog: u8| {
+                let mut v = make(prog, key, 100, sr, 7, true);
+                let mut buf = vec![0f32; (0.45 * sr) as usize];
+                v.render(&mut buf);
+                let span = &buf[..(0.40 * sr) as usize];
+                crate::testutil::hp_rms(span, sr, 2500.0) / rms(span).max(1e-9)
+            };
+            let (r0, r1) = (hf_frac(0), hf_frac(1));
+            assert!(
+                r1 >= 1.25 * r0,
+                "key {key}: bright grand not brighter in the sampled onset: \
+                 GM1 {r1:.4} vs GM0 {r0:.4}"
+            );
+        }
+    }
+
+    /// Round-3 U3 (plan §3.1): GM 3's honky-tonk beat must begin AT THE
+    /// ONSET — round 2 put the wide trichord detune in the model, which the
+    /// shared-sample crossfade discards until 0.85 s, so the first (and for
+    /// short notes, only) 0.8 s of a honky note was a plain grand. Metric:
+    /// detrended envelope ripple of the f0-band signal over [0.05, 0.9] —
+    /// the beat is periodic f0-band AM (the same anti-flange axis as the
+    /// perceptual oracle's D5; key 72 is T4's load-bearing beat probe, where
+    /// ±0.7 % reads sit ~3.7/7.3 Hz apart). RED at HEAD.
+    #[test]
+    fn honky_tonk_beats_from_the_onset() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        // The honky signature, asserted DIRECTLY in the spectrum: the f0
+        // line SPLITS into side lines at f0·(1±0.007) — at key 72 they sit
+        // ±3.7 Hz off center, resolvable in a 0.85 s Hann-windowed Goertzel
+        // (Hann keeps the center line's leakage ~−31 dB at that offset).
+        // Three envelope-domain estimator drafts were measured and REJECTED:
+        // a moving-average detrend ate the 3.7 Hz beat line itself (4× low);
+        // a linear detrend of the raw envelope left decay curvature in the
+        // sub-2 Hz bins (GM0 control read 0.197 at key 60); and total
+        // f0-band ripple is a soup of sample-vs-model crossfade interference
+        // that the side reads actually SMOOTH (GM0 3.8 dB, GM3 3.2). The
+        // line-split ratio is monotone in the mix and is the physics. Keys
+        // 72/79 per T4 (a key-48-class probe splits by ~0.9 Hz —
+        // unresolvable in this window); GM0 — same estimator, no trichord —
+        // is the running control for the recorded upright's own unisons.
+        let side_ratio = |prog: u8, key: u8| {
+            let mut v = make(prog, key, 100, sr, 7, true);
+            let mut buf = vec![0f32; (0.95 * sr) as usize];
+            v.render(&mut buf);
+            let f0 = key_freq(key);
+            let seg = &buf[(0.05 * sr) as usize..(0.90 * sr) as usize];
+            let n = seg.len();
+            let w: Vec<f32> = seg
+                .iter()
+                .enumerate()
+                .map(|(i, &x)| {
+                    let h = 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (n - 1) as f32).cos();
+                    x * h
+                })
+                .collect();
+            let m = |f: f32| crate::testutil::mag_at(&w, sr, f);
+            (m(f0 * 1.007) + m(f0 * 0.993)) / m(f0).max(1e-9)
+        };
+        for key in [72u8, 79] {
+            let (r0, r3) = (side_ratio(0, key), side_ratio(3, key));
+            println!("honky split key {key}: GM3 {r3:.3} vs GM0 {r0:.3}");
+            assert!(
+                r3 >= 2.0 * r0,
+                "key {key}: honky-tonk f0 line does not split: GM3 side-line \
+                 ratio {r3:.3} vs GM0 control {r0:.3}"
+            );
+        }
     }
 
     /// Oracle 40 (§5.3, three clauses): the prog-31 flageolet suppresses the

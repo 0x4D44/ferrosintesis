@@ -1724,13 +1724,11 @@ mod perceptual_distinctness {
     /// round-3 perceived clones — plus the two shared-bank adjudication
     /// candidates below; the full tier flagged nothing at the frozen bar.
     const ALLOW: &[(u8, u8, Why)] = &[
-        // Round-3 complaint #1/#2: GM 0/1/3 share the piano bank at one gain;
-        // the model differentiators are discarded inside the sample-owned
-        // window. U3 (LaVoice per-program sample DSP) un-shares the onsets,
-        // which reclassifies these pairs to the full tier and deletes them.
-        (0, 1, Why::Collapse("U3 piano sample-DSP")),
-        (0, 3, Why::Collapse("U3 piano sample-DSP")),
-        (1, 3, Why::Collapse("U3 piano sample-DSP")),
+        // Round-3 complaint #1/#2 (GM 0/1/3 piano sameness): FIXED by U3 —
+        // the per-program sample DSP (GM1 shelf, GM3 detuned reads)
+        // un-shared the onsets, the pairs reclassified to the full tier and
+        // cleared BAR_FULL, and their three Collapse entries were deleted
+        // (this oracle's own contract).
         // Round-3 complaint #10/#11: both share the literal Pluck DRIVE arm.
         // Plan review M3: the round-3 complaint is MAIN-vs-ALT, which U2
         // fixed at the preset layer (DRIVE decays, DRIVE_LEAD holds) WITHOUT
@@ -2495,14 +2493,15 @@ mod perceptual_distinctness {
     /// bare-model fallback — investigate the routing, don't reclassify.
     #[test]
     fn onset_tier_classification_is_stable() {
-        /// Pinned on the module's landing HEAD (2026-07-16 calibration run).
-        /// 0/1/3 share the piano bank, 40/41 the violin bank, 48/49 the
-        /// strings bank, 29/30 a literal code arm. 72/73 share the flute
-        /// bank but classify INDEPENDENT — the 0.06 s fade start lets the
-        /// piccolo/flute models diverge inside W1 (investigated, not a
-        /// fallback); their onset difference is real, so full-tier is honest.
-        const SHARED_ONSET_PAIRS: &[(u8, u8)] =
-            &[(0, 1), (0, 3), (1, 3), (29, 30), (40, 41), (48, 49)];
+        /// Pinned on the module's landing HEAD (2026-07-16 calibration run);
+        /// re-pinned after U3's piano sample-DSP un-shared the GM 0/1/3
+        /// onsets (the deliberate GREEN transition — the pairs now differ
+        /// inside W1 and score on the full metric). 40/41 share the violin
+        /// bank, 48/49 the strings bank, 29/30 a literal code arm. 72/73
+        /// share the flute bank but classify INDEPENDENT — the 0.06 s fade
+        /// start lets the piccolo/flute models diverge inside W1
+        /// (investigated, not a fallback), so full-tier is honest.
+        const SHARED_ONSET_PAIRS: &[(u8, u8)] = &[(29, 30), (40, 41), (48, 49)];
         let ps = passports();
         let mut got = Vec::new();
         for fam in 0..16u8 {

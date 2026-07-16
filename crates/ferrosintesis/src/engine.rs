@@ -4171,6 +4171,29 @@ mod tests {
         hi - lo
     }
 
+    /// Like [`cycle_freq_spread`], but ZERO-PHASE band-limits around `f0` first
+    /// so a sub-octave partial cannot leak into the fundamental's zero-crossing
+    /// count and inflate the reading. GM19's 16' foundation adds a partial at
+    /// `f0/2`; that sub-octave sits inside `cycle_freq_spread`'s 700 Hz passband
+    /// and wanders its per-cycle frequency estimate. A single causal high/band-
+    /// pass would RING and bias the spread further UP, so we apply a `Biquad`
+    /// bandpass forward, reverse the buffer, filter again, and reverse back
+    /// (filtfilt): the two passes cancel phase and ringing, leaving a real pitch
+    /// vibrato (whose fundamental stays inside the [0.75·f0, 1.5·f0] band)
+    /// untouched while rejecting the f0/2 sub-octave and 2·f0 harmonic.
+    fn cycle_freq_spread_f0(seg: &[f32], sr: f32, f0: f32) -> f32 {
+        // Q ≈ 1.3 puts the single-pass −3 dB skirts near [0.75·f0, 1.5·f0]; the
+        // second (reverse) pass squares the magnitude, deepening sub-octave and
+        // harmonic rejection without adding phase distortion.
+        let q = 1.3;
+        let mut fwd = Biquad::bandpass(f0, q, sr);
+        let forward: Vec<f32> = seg.iter().map(|&x| fwd.process(x)).collect();
+        let mut rev = Biquad::bandpass(f0, q, sr);
+        let mut back: Vec<f32> = forward.iter().rev().map(|&x| rev.process(x)).collect();
+        back.reverse();
+        cycle_freq_spread(&back, sr)
+    }
+
     fn render_cc1_program(program: u8, cc1: Option<u8>, cc1_before_note: bool) -> Vec<f32> {
         let mut events = Vec::new();
         if program == 19 {
@@ -5213,7 +5236,16 @@ mod tests {
         ]);
         let held19_early = am_rate(&held_gm19_after_prog22, sr, 0.15, 1.15);
         let held19_late = am_rate(&held_gm19_after_prog22, sr, 2.9, 3.9);
-        let held19_pitch_spread = cycle_freq_spread(&held_gm19_after_prog22[a..b], sr);
+        // GM19's held note is key 69; its 16' foundation adds a partial at
+        // key_freq(69)/2 that would leak into a plain zero-crossing spread. The
+        // zero-phase f0-band-limited spread rejects that sub-octave (see
+        // `cycle_freq_spread_f0`) so this measures the fundamental's pitch
+        // wander only — GM19's Leslie is amplitude modulation, not vibrato.
+        let held19_pitch_spread =
+            cycle_freq_spread_f0(&held_gm19_after_prog22[a..b], sr, key_freq(69));
+        println!(
+            "gm22_cc1: held19_pitch_spread {held19_pitch_spread:.2} Hz (f0-filtered), GM22 mod_spread {mod_spread:.2} Hz plain_spread {plain_spread:.2} Hz"
+        );
         assert!(
             held19_late > held19_early + 2.5 && held19_late >= 5.5,
             "held GM19 lost Leslie after program change to GM22: early {held19_early:.2} late {held19_late:.2}"
@@ -5451,33 +5483,25 @@ mod tests {
             4.0,
         );
         let mono = left(&render(&song, &test_opts(sr)).0);
-        // envelope-follow the whole take, detrend, then count tremulant
-        // cycles (rising crossings) per window — the AM rate
-        let mut lp1 = OnePole::lowpass(15.0, sr);
-        let mut lp2 = OnePole::lowpass(15.0, sr);
-        let env: Vec<f32> = mono
-            .iter()
-            .map(|&x| lp2.process(lp1.process(x.abs())))
-            .collect();
-        let mut trend = OnePole::lowpass(1.5, sr);
-        let det: Vec<f32> = env.iter().map(|&x| x - trend.process(x)).collect();
-        let am_rate = |t0: f32, t1: f32| {
-            let seg = &det[(t0 * sr) as usize..(t1 * sr) as usize];
-            let mut c = 0;
-            for w in seg.windows(2) {
-                if w[0] <= 0.0 && w[1] > 0.0 {
-                    c += 1;
-                }
-            }
-            c as f32 / (t1 - t0)
-        };
+        // Count tremulant cycles (rising envelope crossings) per window with the
+        // shared module `am_rate` follower (4× OnePole @12 Hz, detrended @1.2 Hz).
+        // The old local follower here (2× @15 Hz, detrend @1.5 Hz) was under-
+        // damped: it let the GM19 16' foundation's sub-octave partial leak into
+        // the amplitude envelope and mis-counted the AM rate. The steeper module
+        // follower is immune to that sub-octave — the real Leslie tremolo is pure
+        // amplitude modulation and is unchanged.
         // CC1 = 127 is authored at t = 0, so the rotor starts at rest
-        // (LESLIE_SLOW_HZ ≈ 0.9 Hz) and slews toward 6.8 Hz with a 1.5 s
-        // time constant — a much wider sweep than the old ~4.2→6.8 nudge.
-        // The windowed AM rate averages ~2 Hz early (rotor still low and
-        // climbing) and ~7 Hz late (settled fast).
-        let early = am_rate(0.15, 1.15);
-        let late = am_rate(2.9, 3.9);
+        // (LESLIE_SLOW_HZ ≈ 0.9 Hz) and slews toward 6.8 Hz with a 1.5 s time
+        // constant. The windowed AM rate averages ~2 Hz early (rotor still low
+        // and climbing) and ~6 Hz late (settled fast). The `late >= 5.5` floor
+        // matches every sibling Leslie-ramp assertion under the module `am_rate`
+        // follower (`default_gm19_cc1_ramps_the_leslie`, the GM19 clauses of
+        // `gm22_cc1_is_harmonica_vibrato_not_leslie`): the steeper 4× follower
+        // resolves the settled fast rate as 6 detrended crossings/s, a touch
+        // below the old under-damped follower's ~7.
+        let early = am_rate(&mono, sr, 0.15, 1.15);
+        let late = am_rate(&mono, sr, 2.9, 3.9);
+        println!("cc1_leslie_spins_up_with_inertia: early {early:.2} Hz late {late:.2} Hz");
         assert!(
             late > early + 3.0,
             "sweep too narrow: early {early} Hz, late {late} Hz"
@@ -5486,7 +5510,63 @@ mod tests {
             early < 3.5,
             "rotor started too fast (should brake to slow): {early} Hz"
         );
-        assert!(late > 6.0, "rotor never got fast: {late} Hz");
+        assert!(late >= 5.5, "rotor never got fast: {late} Hz");
+    }
+
+    /// Anti-masking guard for the U7b Leslie/vibrato measurement redesign: the
+    /// fixed measurements must still DISCRIMINATE a real defect, not trivially
+    /// pass. (a) A STALLED Leslie (GM19, no CC1 authored — the rotor never
+    /// ramps) reads a flat, low `am_rate` that must FAIL cc1_leslie's own
+    /// discrimination (`late > early + 3.0` ramp AND `late >= 5.5` speed):
+    /// measured stalled ≈ early 2 / late 5, active ≈ early 2 / late 6, so the
+    /// pair separate. (b) The f0-band-limited cycle spread must still read LARGE
+    /// (~20 Hz) for GM22's real pitch vibrato — the band-limit rejects GM19's
+    /// 16' sub-octave without nulling a genuine vibrato.
+    #[test]
+    fn leslie_and_vibrato_measures_still_catch_defects() {
+        let sr = 44100.0;
+        let stalled = render_cc1_events(vec![
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
+            (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.02,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 57,
+                    vel: 100,
+                },
+            ),
+            (3.95, EvKind::NoteOff { ch: 0, key: 57 }),
+        ]);
+        let early = am_rate(&stalled, sr, 0.15, 1.15);
+        let late = am_rate(&stalled, sr, 2.9, 3.9);
+        assert!(
+            !(late > early + 3.0 && late >= 5.5),
+            "stalled Leslie would falsely pass cc1_leslie — the measurement masks a stuck rotor: early {early:.2} late {late:.2}"
+        );
+
+        let (a, b) = ((0.8 * sr) as usize, (2.2 * sr) as usize);
+        let gm22_mod = render_cc1_program(22, Some(127), true);
+        let gm22_f0 = cycle_freq_spread_f0(&gm22_mod[a..b], sr, key_freq(69));
+        assert!(
+            gm22_f0 > 8.0,
+            "f0-band-limit nulled GM22's real pitch vibrato: {gm22_f0:.2} Hz"
+        );
     }
 
     fn render_pluck_with_cc74(cc74: Option<u8>) -> Vec<f32> {

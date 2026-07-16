@@ -5120,6 +5120,7 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             sr,
             seed,
             &[
+                (0.5, 0.5),
                 (1.0, 1.0),
                 (2.0, 0.62),
                 (3.0, 0.28),
@@ -12244,10 +12245,13 @@ mod tests {
         assert_render_signature(
             "legacy cathedral organ",
             render_signature(&rendered, sr, (0.1, 0.4), (0.05, 0.15), (0.35, 0.48)),
+            // Re-captured after the GM19 16' foundation drawbar landed: the added
+            // (0.5, 0.5) sub-octave lowers the spectral centroid ~1189 -> ~799 Hz
+            // (and lifts the RMS ~0.72 dB). Envelope shape is essentially unchanged.
             RenderSignature {
-                rms_db: -12.798,
-                centroid_hz: 1189.406,
-                late_early_db: -0.724,
+                rms_db: -12.081,
+                centroid_hz: 798.787,
+                late_early_db: -0.729,
             },
         );
     }
@@ -12278,10 +12282,21 @@ mod tests {
         let mut legacy = legacy_church_organ(36, 96, sr, 0x1234);
         let mut legacy_render = vec![0.0; (1.2 * sr) as usize];
         legacy.render(&mut legacy_render);
-        let legacy_sub = spectral_band_rms(segment(&legacy_render, sr, 0.35, 1.10), sr, 15.0, 40.0);
+        // Round-3 U7b: GM19's drawbar organ now carries a 16' foundation, whose
+        // sub-octave at key 36 sits at ~33 Hz — inside the old 15-40 Hz band, so
+        // the drawbar legitimately shares that band with the cathedral. The
+        // cathedral's GENUINE depth advantage is its 32' pedal an octave lower
+        // (~16 Hz); the drawbar has no partial below ~33 Hz. Compare the deep
+        // [15,25] Hz band, where only the cathedral's 32' speaks — this still
+        // proves the cathedral goes deeper without penalising the drawbar's
+        // legitimate 16'. (The cathedral's own pedal/sub identity is pinned by
+        // the p32 / sub-bass / mixture clauses above, which are unchanged.)
+        let cathedral_deep = spectral_band_rms(body, sr, 15.0, 25.0);
+        let legacy_deep =
+            spectral_band_rms(segment(&legacy_render, sr, 0.35, 1.10), sr, 15.0, 25.0);
         assert!(
-            sub >= legacy_sub * 10f32.powf(6.0 / 20.0),
-            "cathedral/legacy 15-40Hz {sub}/{legacy_sub}"
+            cathedral_deep >= legacy_deep * 10f32.powf(6.0 / 20.0),
+            "cathedral 32' pedal not deeper than legacy drawbar in [15,25]Hz: {cathedral_deep}/{legacy_deep}"
         );
 
         let high = render_cathedral(84, 96, 0.8, 0x1234);
@@ -12545,6 +12560,30 @@ mod tests {
         );
     }
 
+    /// GM19 (church organ) carries a 16-foot foundation drawbar — the `(0.5,
+    /// 0.5)` stop at the head of its partial table — which radiates a sub-octave
+    /// partial one octave below the fundamental. That sub-octave is what gives a
+    /// pedal-less church organ its gravitas. Measured as the ratio of sub-octave
+    /// band energy (f0/2) to fundamental band energy; with the 16' present the
+    /// ratio sits near 0.43, and it collapses toward 0 if the stop is removed.
+    #[test]
+    fn church_organ_has_16ft_foundation() {
+        let sr = 44100.0;
+        let ratio = |key: u8| {
+            let s = render_program(19, key, 100, 1.0, 7);
+            let w = segment(&s, sr, 0.15, 0.9);
+            let f0 = key_freq(key);
+            band_rms(w, sr, f0 * 0.5, 8.0) / band_rms(w, sr, f0, 8.0)
+        };
+        let keys = [50u8, 55, 60];
+        let mean = keys.iter().map(|&k| ratio(k)).sum::<f32>() / keys.len() as f32;
+        println!("church_organ_has_16ft_foundation: sub/fund ratio {mean:.4}");
+        assert!(
+            mean >= 0.15,
+            "GM19 16' foundation missing or too weak: sub/fund {mean:.4} (want >= 0.15)"
+        );
+    }
+
     #[test]
     fn reed_organ_accordion_harmonica_have_free_reed_character() {
         let sr = 44100.0;
@@ -12609,10 +12648,14 @@ mod tests {
         assert_render_signature(
             "legacy organ GM19",
             render_signature(&legacy_render, sr, (0.1, 0.4), (0.05, 0.15), (0.35, 0.48)),
+            // Re-captured after the GM19 16' foundation drawbar landed (same
+            // legacy_church_organ(69,104,0x5eed) render as
+            // `cathedral_organ_legacy_signature_is_stable`): the (0.5, 0.5)
+            // sub-octave lowers the centroid ~1189 -> ~799 Hz, lifts RMS ~0.72 dB.
             RenderSignature {
-                rms_db: -12.798,
-                centroid_hz: 1189.406,
-                late_early_db: -0.724,
+                rms_db: -12.081,
+                centroid_hz: 798.787,
+                late_early_db: -0.729,
             },
         );
 
@@ -12634,10 +12677,16 @@ mod tests {
         };
         let gm19_click = click_ratio(19);
         assert!(gm19_click > 0.030, "GM19 click floor: {gm19_click:.4}");
+        // Round-3 U7b: GM19's new 16' foundation raises its sustained body RMS,
+        // so its click/body ratio (the reference) legitimately DROPS — the
+        // Hammond is now less onset-dominant, more sustained. The bellows voices'
+        // absolute onsets are unchanged (soft); the softness bound relative to
+        // this now-lower reference loosens from 0.35 to 0.45. They still sit well
+        // under half the Hammond's click ratio, so "much softer onset" holds.
         for program in [20u8, 21, 23] {
             let r = click_ratio(program);
             assert!(
-                r <= gm19_click * 0.35,
+                r <= gm19_click * 0.45,
                 "GM{program} onset too clicky: {r:.4} vs GM19 {gm19_click:.4}"
             );
         }

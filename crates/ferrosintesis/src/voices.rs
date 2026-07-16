@@ -108,6 +108,51 @@ fn control_lfo(rate_hz: f32, jitter: f32, rng: &mut Rng, sr: f32) -> Sine {
     )
 }
 
+/// Smooth value-noise generator — the "living-breath" micro-modulator. Smoothstep-
+/// interpolates between random targets in [-1, 1] drawn every `hold_s` seconds, giving
+/// a slow, bounded, ZERO-MEAN, APERIODIC control signal. Aperiodic by construction, so
+/// — unlike a fixed LFO — it never reads as a tremolo or a slow swell (the failure mode
+/// that periodic breath modulators risk). It owns its own `Rng`, so advancing it never
+/// perturbs a voice's main rng stream: folding it into a render at depth 0 is a
+/// bit-exact no-op, keeping the living/frozen differential clean.
+struct BreathNoise {
+    rng: Rng,
+    prev: f32,
+    target: f32,
+    phase: f32, // 0..1 within the current segment
+    inc: f32,   // phase increment per `next()` = 1 / segment-length-in-ticks
+}
+
+impl BreathNoise {
+    /// `hold_s` is the mean segment length; `ctrl_hz` is the rate the `next()` cadence
+    /// runs at (a voice calls `next()` once per control tick, i.e. `sr / CTRL`).
+    fn new(seed: u32, hold_s: f32, ctrl_hz: f32) -> Self {
+        let mut rng = Rng::new(seed);
+        let prev = rng.white();
+        let target = rng.white();
+        BreathNoise {
+            rng,
+            prev,
+            target,
+            phase: 0.0,
+            inc: 1.0 / (hold_s * ctrl_hz).max(1.0),
+        }
+    }
+
+    /// Next control-rate sample, in [-1, 1].
+    fn next(&mut self) -> f32 {
+        self.phase += self.inc;
+        if self.phase >= 1.0 {
+            self.phase -= 1.0;
+            self.prev = self.target;
+            self.target = self.rng.white();
+        }
+        // smoothstep ease → C1-continuous at each target change (no velocity kink)
+        let s = smoothstep(0.0, 1.0, self.phase);
+        self.prev + (self.target - self.prev) * s
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SFX noise fallback
 // ---------------------------------------------------------------------------
@@ -8821,6 +8866,15 @@ const BR_GROWL_SLEW: f32 = 0.05; // BR9 growl_cur de-zipper slew (τ ≈ 7 ms)
 const BR_SCOOP_CLAMP: (f32, f32) = (0.85, 1.19); // BR5 slur glide origin bounds
 const BR_PRESS_FLOOR: (f32, f32) = (0.30, 0.70); // BR9 CC11=0 is dark, not dead
 
+// BR-LB living-breath (Stage 2, solo naturals 56-60): a shallow, zero-mean, APERIODIC
+// value-noise wander of the `l` timbre scalar so the sustain breathes instead of freezing.
+// Because fc/kws/cascade/out_lp all ride `l`, one fold-in moves the whole timbre coherently.
+// Depth is the one ear-tunable knob (out_oct=4.2 makes out_lp very sensitive → keep it small).
+const BR_BREATH_DEPTH: f32 = 0.025; // fractional L modulation depth (first-cut; A/B-tunable)
+const BR_BREATH_HOLD_S: f32 = 0.22; // value-noise mean segment (dominant ~2.3 Hz, sub-4 Hz peak)
+const BR_BREATH_RAMP: (f32, f32) = (0.15, 0.40); // fade-in window (s): the onset stays bit-exact
+const BR_BREATH_SALT: u32 = 0x8BEA_7401; // throwaway-rng seed offset (never draws from self.rng)
+
 // BR12 — progressive-steepening cascade (the "rasp"/cuivré). A real brass note
 // "brasses up" when pushed: the pressure wave steepens toward a shock as it
 // travels the bore, cascading energy into a slow-rolloff high-harmonic tail whose
@@ -9266,6 +9320,8 @@ pub struct Brass {
     flutter: Sine,  // BR10 growl flutter LFO (30 Hz)
     vib_depth: f32, // BR7
     vib_delay: u32,
+    breath_gen: BreathNoise, // BR-LB living-breath value-noise (solo naturals only)
+    breath_depth: f32,       // BR-LB fold depth: BR_BREATH_DEPTH for solo naturals, else 0
     rng: Rng,
     t: u32,
     amp: f32,
@@ -9429,6 +9485,14 @@ impl Brass {
             flutter: Sine::new(BR_GROWL_HZ, sr, 0.0),
             vib_depth: spec.vib.1,
             vib_delay: (spec.vib.2 * sr) as u32,
+            breath_gen: BreathNoise::new(seed ^ BR_BREATH_SALT, BR_BREATH_HOLD_S, sr / CTRL as f32),
+            // BR-LB: solo naturals (single-player, oversampled) breathe. Section 61 (5 players
+            // share one `l` → coherent pump) and synth 62/63 (not oversampled) do not.
+            breath_depth: if oversample && spec.players == 1 {
+                BR_BREATH_DEPTH
+            } else {
+                0.0
+            },
             rng,
             t: 0,
             amp: spec.amp * (0.4 + 0.6 * vel_amp(vel)),
@@ -9441,8 +9505,16 @@ impl Brass {
     fn control_tick(&mut self) {
         // BR2 loudness scalar L (one scalar drives the whole timbre)
         let press = BR_PRESS_FLOOR.0 + BR_PRESS_FLOOR.1 * self.pressure;
-        let l =
-            (self.bloom * (BR_L_VEL.0 + BR_L_VEL.1 * self.vn) * press * (1.0 + self.bite)).min(1.3);
+        let base_l = self.bloom * (BR_L_VEL.0 + BR_L_VEL.1 * self.vn) * press * (1.0 + self.bite);
+        // BR-LB living-breath: fold a shallow zero-mean value-noise wander into L so the
+        // sustain breathes (fc/kws/cascade/out_lp all ride L → one fold moves the whole
+        // timbre coherently). Ramped in AFTER the onset so the praised attack is bit-exact
+        // (ramp=0 ⇒ ×1.0 exactly). Advanced every tick regardless of depth, so a depth-0
+        // render differs by ONLY the multiply. Headroom: sustain base_l ≤ ~1.0 vs the 1.3
+        // clamp ≫ the ≤0.025 breath, so the multiply never clips asymmetrically.
+        let ramp = smoothstep(BR_BREATH_RAMP.0, BR_BREATH_RAMP.1, self.t as f32 / self.sr);
+        let breathe = 1.0 + self.breath_depth * ramp * self.breath_gen.next();
+        let l = (base_l * breathe).min(1.3);
         // BR9/BR10 growl slew (de-zipper block-rate writes); synth never growls
         let g_target = if self.spec.growl { self.growl } else { 0.0 };
         self.growl_cur += BR_GROWL_SLEW * (g_target - self.growl_cur);
@@ -16189,12 +16261,175 @@ mod tests {
     }
 
     /// Render a fresh brass voice `secs` seconds (no note_off) into a buffer.
+    /// Renders FROZEN (BR-LB living-breath off) so the static-timbre oracles isolate
+    /// their invariant property from the Stage-2 breath axis, which has its own oracle
+    /// (`brass_sustain_breathes_off_the_frozen_hold`). Production breath is validated by
+    /// the render-diff inventory + that oracle + Arthur's ear.
     fn render_brass(prog: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = brass(prog, key, vel, sr, seed);
+        v.breath_depth = 0.0;
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    /// Render a fresh brass voice with the production living-breath ON (solo naturals
+    /// get `BR_BREATH_DEPTH`). Same construction/seed as `render_brass`, so a paired
+    /// pair differs by ONLY the deterministic breath multiply.
+    fn render_brass_breathing(prog: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
         let sr = 44100.0;
         let mut v = brass(prog, key, vel, sr, seed);
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    /// Nearest-rank percentile of an ALREADY-SORTED slice (q in [0,1]).
+    fn percentile(sorted: &[f32], q: f32) -> f32 {
+        sorted[((sorted.len() - 1) as f32 * q) as usize]
+    }
+
+    /// p5–p95 spread (Hz) of a sliding spectral-centroid time-series over the sustain —
+    /// the "does the timbre wander?" measurement. Frozen holds are near-flat; a breathing
+    /// hold wanders. (Window 2048 / hop 1024 over [0.5, 1.9] s.)
+    fn centroid_wander_hz(buf: &[f32], sr: f32) -> f32 {
+        let (w, hop) = (2048usize, 1024usize);
+        let (start, end) = ((0.5 * sr) as usize, ((1.9 * sr) as usize).min(buf.len()));
+        let mut cents: Vec<f32> = (start..end.saturating_sub(w))
+            .step_by(hop)
+            .map(|i| spectral_centroid(&buf[i..i + w], sr, 100.0, 12_000.0))
+            .collect();
+        cents.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        percentile(&cents, 0.95) - percentile(&cents, 0.05)
+    }
+
+    /// BR-LB O-LIVE (the money oracle): the solo-natural sustain BREATHES — its spectral
+    /// centroid wanders (the actual "holds synthetic" complaint), where the frozen hold
+    /// does not. Differential (breath ON vs frozen, same seed → isolates the deterministic
+    /// fold), so it certifies TIMBRE motion, not the incidental level ripple a tremolo
+    /// would also show. Bounds it too: in-band (not a wobble), not a level tremolo, finite.
+    #[test]
+    fn brass_sustain_breathes_off_the_frozen_hold() {
+        let sr = 44100.0;
+        let live = render_brass_breathing(56, 60, 90, 2.0, 7); // trumpet C4 mf, 2 s hold
+        let froz = render_brass(56, 60, 90, 2.0, 7);
+        let live_w = centroid_wander_hz(&live, sr);
+        let froz_w = centroid_wander_hz(&froz, sr);
+        // attack preserved: the breath ramps in after the onset, so the first 150 ms is
+        // bit-identical to the frozen render (ramp=0 ⇒ ×1.0 exactly).
+        let onset = (0.15 * sr) as usize;
+        assert_eq!(
+            live[..onset],
+            froz[..onset],
+            "living-breath perturbed the (praised) attack"
+        );
+        let peak = live.iter().cloned().fold(0.0f32, |m, x| m.max(x.abs()));
+        assert!(
+            live.iter().all(|x| x.is_finite()) && peak < 1.5,
+            "breathing render not finite/bounded (peak {peak:.3})"
+        );
+        eprintln!("BR-LB O-LIVE: live wander {live_w:.1} Hz, frozen {froz_w:.1} Hz");
+        assert!(
+            froz_w < 25.0,
+            "frozen baseline is not frozen: centroid p5-p95 {froz_w:.1} Hz"
+        );
+        assert!(
+            live_w >= 4.0 * froz_w && live_w >= 40.0,
+            "sustain not breathing: live {live_w:.1} Hz vs frozen {froz_w:.1} Hz (SC-55 ~88-191)"
+        );
+        assert!(
+            live_w <= 300.0,
+            "breath overshoots into a wobble: live {live_w:.1} Hz (SC-55 top ~191)"
+        );
+        // tremolo ceiling: the breath must move TIMBRE, not become a level tremolo.
+        let ripple_db = {
+            let seg = &live[(0.5 * sr) as usize..(1.9 * sr) as usize];
+            let win = (0.03 * sr) as usize;
+            let mut env: Vec<f32> = seg.chunks(win).map(rms).collect();
+            env.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            20.0 * (percentile(&env, 0.95) / percentile(&env, 0.05).max(1e-9)).log10()
+        };
+        eprintln!("BR-LB O-LIVE: sustain RMS ripple {ripple_db:.2} dB");
+        assert!(
+            ripple_db < 4.0,
+            "breath became a level tremolo: RMS p5-p95 {ripple_db:.2} dB (SC-55 ≤ ~4)"
+        );
+    }
+
+    /// BR-LB O-SCOPE: the living-breath reaches EXACTLY the solo naturals (56-60); section
+    /// 61 and synth 62/63 are excluded, and synth is structurally inert to `l` even if the
+    /// depth field is forced on (guards the render-diff contract as a unit test).
+    #[test]
+    fn brass_living_breath_scope_and_inertness() {
+        let sr = 44100.0;
+        for prog in 56..=60 {
+            assert!(
+                brass(prog, 60, 90, sr, 7).breath_depth > 0.0,
+                "solo natural {prog} should breathe"
+            );
+        }
+        assert_eq!(
+            brass(61, 60, 90, sr, 7).breath_depth,
+            0.0,
+            "section 61 must not breathe"
+        );
+        assert_eq!(
+            brass(62, 60, 90, sr, 7).breath_depth,
+            0.0,
+            "synth 62 must not breathe"
+        );
+        assert_eq!(
+            brass(63, 60, 90, sr, 7).breath_depth,
+            0.0,
+            "synth 63 must not breathe"
+        );
+        for prog in [62u8, 63] {
+            let render = |depth: f32| {
+                let mut v = brass(prog, 60, 90, sr, 7);
+                v.breath_depth = depth;
+                let mut buf = vec![0f32; sr as usize];
+                v.render(&mut buf);
+                buf
+            };
+            assert_eq!(
+                render(BR_BREATH_DEPTH),
+                render(0.0),
+                "synth {prog} not inert to a forced breath (l leaked into the synth path)"
+            );
+        }
+    }
+
+    /// BR-LB O-BREATHNOISE: the value-noise modulator is bounded [-1,1], ~zero-mean, and
+    /// APERIODIC — it decorrelates across segments (an LFO would autocorrelate ≈ 1 at its
+    /// period), which is what buys "living, not a wobble."
+    #[test]
+    fn breath_noise_is_bounded_zero_mean_aperiodic() {
+        let ctrl_hz = 44100.0 / CTRL as f32;
+        let mut b = BreathNoise::new(12345, BR_BREATH_HOLD_S, ctrl_hz);
+        let n = (ctrl_hz * 60.0) as usize; // 60 s of control-rate samples
+        let mut v = Vec::with_capacity(n);
+        for _ in 0..n {
+            let x = b.next();
+            assert!((-1.0..=1.0).contains(&x), "breath value out of range: {x}");
+            v.push(x);
+        }
+        let mean = v.iter().sum::<f32>() / n as f32;
+        assert!(
+            mean.abs() < 0.1,
+            "breath not ~zero-mean over 60 s: {mean:.4}"
+        );
+        let sos = v.iter().map(|&x| (x * x) as f64).sum::<f64>().max(1e-12);
+        let autocorr = |lag: usize| -> f32 {
+            let num: f64 = (0..n - lag).map(|i| (v[i] * v[i + lag]) as f64).sum();
+            (num / sos) as f32
+        };
+        let seg = (BR_BREATH_HOLD_S * ctrl_hz) as usize;
+        assert!(
+            autocorr(4 * seg) < 0.5,
+            "breath looks periodic (autocorr {:.2} at 4 segments)",
+            autocorr(4 * seg)
+        );
     }
 
     /// 10→90% rise time of the 10 ms windowed-RMS envelope, in seconds.

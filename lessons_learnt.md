@@ -3,6 +3,20 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.16 — **A per-voice modulator is phase-COHERENT across a multi-player voice —
+  it pumps the whole "section," unlike the decorrelated per-player detune/vibrato/scatter.**
+  Brass `l` (the loudness/timbre scalar, `voices.rs` `control_tick`) is per-VOICE, shared by
+  all players; folding a living-breath into it would tremolo the 5-player section 61 as one
+  coherent unit (the "wobbly synthetic" tell). Gate liveness modulators to SOLO voices
+  (`oversample && spec.players == 1` → naturals 56-60); leave sections alone (already alive
+  from per-player detune+vibrato+onset-scatter). Two more reusable moves from this fix:
+  (1) model breath as APERIODIC value-noise (smoothstep between random targets), not a sine —
+  a periodic LFO reads as a tremolo/slow-swell; (2) isolate a new DEFAULT-ON modulation axis
+  from the ~16 existing static-timbre oracles by rendering them FROZEN (force the depth field
+  to 0 in the shared `render_brass` test helper) — the new axis gets its own DIFFERENTIAL
+  oracle (`brass_sustain_breathes_off_the_frozen_hold`, a sliding-centroid p5–p95 wander:
+  measure the actual complaint = TIMBRE motion, not the incidental level AM a tremolo also shows).
+
 - 2026.07.16 — **ferrosintesis LA sampling is ONSET-ONLY — a missing sample cannot fix a
   SUSTAIN or noise complaint; route every voice fix by cue.** Proven: brass HOLDS render
   bit-identical with `--no-samples` (the LA layer has crossfaded out by ~0.3 s). So an

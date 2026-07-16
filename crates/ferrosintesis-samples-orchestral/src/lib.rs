@@ -472,7 +472,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    const EXPECTED_BYTES: usize = 7931912;
+    const EXPECTED_BYTES: usize = 8555154;
 
     #[test]
     fn inventory_matches_packaged_wavs() {

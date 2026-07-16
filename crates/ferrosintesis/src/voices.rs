@@ -2367,13 +2367,15 @@ pub const DRIVE: PluckPreset = PluckPreset {
     rel_t60: 0.20,
     pickup: 0.10,
     pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
-    // amp-feedback hold: a held note settles near -3 dB, not silence.
-    // Deepened 0.35 -> 0.5 when the Drive's inverted sag boost was deleted
-    // (voice-quality overhaul §2.6), then -> 0.7 in round 2: with the
-    // drive now actually compressing, the held level reads quieter than
-    // its raw value, and the hotter hold is what keeps the tail inside
-    // the tanh knee (its clipping depth is what the round-2 oracle pins).
-    sustain: 0.7,
+    // Round-3 U2 (plan §3.6): NO e-bow hold — the default bank is a DECAYING
+    // overdriven pluck again (hard pick, richly-clipped attack, natural t60
+    // ring), restoring the main-vs-alt contrast that round 2 erased when it
+    // armed this hold at 0.7 (deeper than the lead's 0.6 — the two banks'
+    // held notes collapsed to the same warm near-sine). The sustaining voice
+    // is the CC0 alt bank's DRIVE_LEAD; the amp-feedback machinery and its
+    // oracles live there now (driven_main_and_alt_banks_diverge pins the
+    // contrast; the engine THD floor pins the lead's held edge).
+    sustain: 0.0,
     click: 2.2, // the pick hits harder through an amp
     ..DEFAULTS
 };
@@ -2402,6 +2404,14 @@ pub const DRIVE_LEAD: PluckPreset = PluckPreset {
     pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
     sustain: 0.6,              // a lead holds close to its spoken level
     click: 1.3,                // softer pick attack: a lead sings, it does not chug
+    // Round-3 U2: a soft SWELLING onset — the second dimension (with the
+    // decay contrast) the ear reads through the shared Drive insert. A real
+    // e-bow/feedback lead blooms into the note instead of snapping. τ = 30 ms
+    // (~70 ms to 90 %) — deliberately SIZED to sit inside the sustainer's
+    // 80 ms spoken-level capture window (sus_ref_until) so the hold latches
+    // to a near-full reference; a longer swell deflates the captured
+    // reference and shifts the whole V6a hold-calibration chain.
+    attack_s: 0.03,
     ..DEFAULTS
 };
 pub const MUTED: PluckPreset = PluckPreset {
@@ -10832,7 +10842,15 @@ mod tests {
     /// the SUS_K_MAX clamp no longer caps E6 below its true equilibrium —
     /// the hold now reads E5 −12.4 / E6 −7.4 dB rel ref (was −23.5/−17.9 at
     /// the clamped capture); −7.3 centers the ±5 dB band on both.
-    const SUS_HOLD_REF_OFFSET_DB: f32 = -7.3;
+    /// Measured crest-vs-held-RMS systematic offset for the sustainer's
+    /// hold expectation (V6a/V6c): `hold ≈ 20·log10(preset.sustain) + THIS`.
+    /// Re-captured for DRIVE_LEAD when round-3 U2 migrated the sustainer
+    /// oracles off DRIVE (softer click and a 30 ms swell change the
+    /// crest-vs-smoothed statistics): E5 −12.0 / E6 −4.6 rel-ref → center
+    /// −8.3 → offset −8.3 − 20·log10(0.6) = −3.9. (The pre-U2 DRIVE capture
+    /// was −7.3.) Re-capture this the same way if the lead's click,
+    /// attack_s, or sustain change.
+    const SUS_HOLD_REF_OFFSET_DB: f32 = -3.9;
 
     /// Drive a Pluck through a held phase then a released tail (V6/V7/V8).
     fn render_pluck_phased(
@@ -10854,7 +10872,9 @@ mod tests {
         buf
     }
 
-    /// V6a (guitar v2 unit D): the sustainer HOLDS a high held note — solo
+    /// V6a (guitar v2 unit D; round-3 U2 migrated the sustainer oracles from
+    /// DRIVE to DRIVE_LEAD — the alt-bank lead is where the hold lives now,
+    /// the default bank decays): the sustainer HOLDS a high held note — solo
     /// voice (no engine Drive, isolating unit D from unit C), E5 and E6 (the
     /// worst case the T16 lead exposed), 8 s: every late 1-s window sits
     /// within ±5 dB of the constant-derived hold level (upper AND lower
@@ -10865,7 +10885,7 @@ mod tests {
     fn sustain_holds_high_notes() {
         let sr = 44100.0;
         for key in [76u8, 88] {
-            let buf = render_pluck_phased(&DRIVE, key, 8.0, 0.0, 0xD6);
+            let buf = render_pluck_phased(&DRIVE_LEAD, key, 8.0, 0.0, 0xD6);
             assert!(buf.iter().all(|x| x.is_finite()), "key {key}: non-finite");
             let db = |a: f32, b: f32| {
                 20.0 * rms(&buf[(a * sr) as usize..(b * sr) as usize])
@@ -10873,13 +10893,16 @@ mod tests {
                     .log10()
             };
             // reference = the note's spoken level: peak over 20-80 ms
-            // (matching the controller's capture; at E6 the string is dead by
-            // 100 ms, so a later window would reference the noise floor).
-            // Expected hold derives from the preset constant with a −3 dB
-            // RMS-vs-peak offset; the band allows the saturator's residual
-            // per-pitch equilibrium spread (documented in the HLD).
+            // Reference = the note's spoken CREST. The lead's 30 ms swell
+            // (round-3 U2) moves the crest per pitch — E5 peaks post-swell
+            // ~90 ms, E6's whole string life sits inside the swell and
+            // crests ~40 ms — so the window spans [0.02, 0.20] and the max
+            // finds the crest wherever the swell puts it (a fixed 20-80 ms
+            // read deflates one key or the other and shifts everything
+            // measured "rel ref"). Ends at 200 ms: past that the sustainer
+            // hold — not the spoken crest — would own the max.
             let refl = 20.0
-                * buf[(0.02 * sr) as usize..(0.08 * sr) as usize]
+                * buf[(0.02 * sr) as usize..(0.20 * sr) as usize]
                     .iter()
                     .fold(0f32, |m, &x| m.max(x.abs()))
                     .max(1e-12)
@@ -10890,7 +10913,7 @@ mod tests {
             // saturator equilibrium multiple). The ±5 dB band absorbs the
             // per-pitch remainder of those statistics (E5 −23.5 / E6 −17.9
             // at capture); the FLATNESS clause below is the pumping catch.
-            let hold = 20.0 * DRIVE.sustain.log10() + SUS_HOLD_REF_OFFSET_DB;
+            let hold = 20.0 * DRIVE_LEAD.sustain.log10() + SUS_HOLD_REF_OFFSET_DB;
             let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
             let mut bad = Vec::new();
             for w in 2..8 {
@@ -10924,13 +10947,64 @@ mod tests {
         }
     }
 
+    /// Round-3 U2 (plan §3.6): GM 29/30's main and alt banks must be
+    /// DIFFERENT instruments — a decaying overdriven pluck (DRIVE, the
+    /// default bank) vs a soaring amp-sustain lead (DRIVE_LEAD, the CC0 alt).
+    /// Round 2 erased the contrast by arming DRIVE's amp-feedback hold
+    /// (sustain 0.7 — deeper than the lead's 0.6): both banks' held notes
+    /// collapsed to the same warm near-sine, and the old engine THD oracle
+    /// demanded a distorted 6 s tail on the DEFAULT bank — it enforced the
+    /// defect (that floor now lives on the alt bank where the hold lives).
+    /// This is the MAIN ≠ ALT invariant round 2 lacked; both clauses were
+    /// observed RED at HEAD.
+    #[test]
+    fn driven_main_and_alt_banks_diverge() {
+        let sr = 44100.0;
+        let main = render_pluck_phased(&DRIVE, 45, 3.0, 0.5, 0xE1);
+        let lead = render_pluck_phased(&DRIVE_LEAD, 45, 3.0, 0.5, 0xE1);
+        // (1) sustain-index gap: late held level relative to the spoken
+        // level — the lead must sit ≥ 6 dB above the main (HEAD: the MAIN
+        // held 0.7 vs the lead's 0.6, gap −1 dB → RED).
+        let sus_index = |b: &[f32]| {
+            20.0 * (rms(&b[(2.5 * sr) as usize..(3.0 * sr) as usize]).max(1e-9)
+                / rms(&b[(0.05 * sr) as usize..(0.30 * sr) as usize]).max(1e-9))
+            .log10()
+        };
+        let gap = sus_index(&lead) - sus_index(&main);
+        assert!(
+            gap >= 6.0,
+            "main/alt driven banks hold alike: sustain-index gap {gap:.1} dB < 6 \
+             (main {:.1}, lead {:.1})",
+            sus_index(&main),
+            sus_index(&lead)
+        );
+        // (2) onset-shape gap: the lead SWELLS while the main is a hard
+        // pick — time to 90 % of the envelope peak differs by ≥ 25 ms
+        // (HEAD: both attack instantly → RED).
+        let attack = |b: &[f32]| {
+            let span = &b[..(0.4 * sr) as usize];
+            let mut lp = crate::dsp::OnePole::lowpass(200.0, sr);
+            let env: Vec<f32> = span.iter().map(|&x| lp.process(x.abs())).collect();
+            let peak = env.iter().fold(0.0f32, |m, &x| m.max(x));
+            env.iter()
+                .position(|&e| e >= 0.9 * peak)
+                .map(|i| i as f32 / sr)
+                .unwrap_or(0.4)
+        };
+        let (a_main, a_lead) = (attack(&main), attack(&lead));
+        assert!(
+            a_lead >= a_main + 0.025,
+            "the alt lead does not swell: attack main {a_main:.3} s vs lead {a_lead:.3} s"
+        );
+    }
+
     /// V6c (guitar v2 unit D): the hold survives the lead idiom — a whole-
     /// tone bend up and back, then a slurred drop — without losing the note
     /// or running away (catches a missing/wrong glide-endpoint clamp).
     #[test]
     fn sustain_survives_bends_and_slurs() {
         let sr = 44100.0;
-        let mut v = Pluck::new(&DRIVE, 76, 100, sr, 0xD7);
+        let mut v = Pluck::new(&DRIVE_LEAD, 76, 100, sr, 0xD7);
         let seg = |v: &mut Pluck, secs: f32| {
             let mut b = vec![0f32; (secs * sr) as usize];
             v.render(&mut b);
@@ -10950,7 +11024,7 @@ mod tests {
                 .fold(0f32, |m, &x| m.max(x.abs()))
                 .max(1e-12)
                 .log10();
-        let hold = 20.0 * DRIVE.sustain.log10() + SUS_HOLD_REF_OFFSET_DB;
+        let hold = 20.0 * DRIVE_LEAD.sustain.log10() + SUS_HOLD_REF_OFFSET_DB;
         for (nm, s) in [("bend-up", &up), ("bend-back", &back), ("slur", &slur)] {
             assert!(s.iter().all(|x| x.is_finite()), "{nm}: non-finite");
             // skip each segment's transient + re-settle window; the slurred
@@ -10996,7 +11070,7 @@ mod tests {
     #[test]
     fn sustain_release_decays_naturally() {
         let sr = 44100.0;
-        let mut v = Pluck::new(&DRIVE, 76, 100, sr, 0xD8);
+        let mut v = Pluck::new(&DRIVE_LEAD, 76, 100, sr, 0xD8);
         let mut buf = vec![0f32; (6.0 * sr) as usize];
         let split = (3.0 * sr) as usize;
         v.render(&mut buf[..split]);
@@ -11042,10 +11116,10 @@ mod tests {
     #[test]
     fn sustain_never_self_oscillates() {
         let sr = 44100.0;
-        let stac = render_pluck_phased(&DRIVE, 76, 0.05, 4.0, 0xD9);
+        let stac = render_pluck_phased(&DRIVE_LEAD, 76, 0.05, 4.0, 0xD9);
         let t1 = rms(&stac[(3.5 * sr) as usize..]);
         assert!(t1 < 1e-4, "staccato tail rms {t1}");
-        let held = render_pluck_phased(&DRIVE, 88, 2.0, 4.0, 0xDA);
+        let held = render_pluck_phased(&DRIVE_LEAD, 88, 2.0, 4.0, 0xDA);
         let t2 = rms(&held[(5.5 * sr) as usize..]);
         assert!(t2 < 1e-4, "held-release tail rms {t2}");
     }
@@ -11055,7 +11129,7 @@ mod tests {
     #[ignore]
     fn sus_probe() {
         let sr = 44100.0;
-        let mut v = Pluck::new(&DRIVE, 88, 100, sr, 0xD6);
+        let mut v = Pluck::new(&DRIVE_LEAD, 88, 100, sr, 0xD6);
         for step in 0..25 {
             let mut b = vec![0f32; (0.2 * sr) as usize];
             v.render(&mut b);

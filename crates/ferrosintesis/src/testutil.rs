@@ -1038,7 +1038,14 @@ mod guards {
         // ("clean, dark sustain"): hotter drive staging (DRIVE amp/sustain/
         // bright + Drive g1/bias, post level-re-matched end-to-end) leaves
         // ch 4 −0.6 dB and darker (centroid 814 → 545 Hz).
-        (4, -32.87, 544.9),
+        // Re-captured (ch 4 only) after round-3 U2 restored the main/alt
+        // contrast: the default DRIVE bank lost its e-bow hold (sustain
+        // 0.7 → 0.0), so held tails decay instead of settling into the
+        // fundamental-heavy hold — near-identical RMS (−0.1 dB) but brighter
+        // on average (centroid 545 → 808 Hz). Every other row, including the
+        // ch 7 piano and ch 8 strings canaries, is BIT-EXACT vs the prior
+        // capture: the change is contained to the default drive preset.
+        (4, -32.96, 808.2),
         // Re-captured after the muffled-flatwound bass re-voice (kick + big sub
         // + muffle, GM33): ch 5 louder (the low-end WEIGHT Arthur approved) and
         // darker (the muffle). Every other channel — INCLUDING the ch 7 piano
@@ -1061,7 +1068,7 @@ mod guards {
         (9, -17.16, 737.4),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 2.26981;
+    const GOLDEN_MASTER_PEAK: f32 = 2.27034;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause
@@ -1725,9 +1732,13 @@ mod perceptual_distinctness {
         (0, 3, Why::Collapse("U3 piano sample-DSP")),
         (1, 3, Why::Collapse("U3 piano sample-DSP")),
         // Round-3 complaint #10/#11: both share the literal Pluck DRIVE arm.
-        // U2 (drive main≠alt split) deletes this (and byte_identical_arms_
-        // score_zero flips to a distinctness assertion in the same change).
-        (29, 30, Why::Collapse("U2 drive main≠alt split")),
+        // Plan review M3: the round-3 complaint is MAIN-vs-ALT, which U2
+        // fixed at the preset layer (DRIVE decays, DRIVE_LEAD holds) WITHOUT
+        // splitting 29 from 30 — the two programs deliberately still share
+        // the arm, byte_identical_arms_score_zero still pins it, and this
+        // entry stays until a future 29≠30 split (overdriven vs distortion
+        // voicing) deletes both together.
+        (29, 30, Why::Collapse("a future GM29≠30 voicing split")),
         // §7 contingent controls — shared violin/strings banks; the model
         // tails measure 0.13/0.06, far under BAR_TAIL. Probable true
         // positives the old matrix missed (40/41 = the repitched-violin

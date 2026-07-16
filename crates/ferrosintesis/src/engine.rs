@@ -3723,7 +3723,18 @@ mod tests {
     #[test]
     fn sustained_lead_stays_harmonic_through_drive() {
         let sr = 44100.0;
+        // Round-3 U2: the held-lead idiom lives on the CC0 alt bank now —
+        // the default DRIVE bank decays again (plan §3.6), so this pin
+        // follows the sustainer to DRIVE_LEAD via bank-select 1.
         let events = vec![
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: 1,
+                },
+            ),
             (0.0, EvKind::Prog { ch: 0, prog: 29 }),
             // silence the default echo send so the pin reads the dry voice
             (
@@ -3780,6 +3791,10 @@ mod tests {
         ] {
             let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
             let events = vec![
+                // Round-3 U2: the e-bow hold lives on the CC0 alt bank
+                // (DRIVE_LEAD); the default bank decays, so a 5.5 s window
+                // on it would read string remnants, not a held tail.
+                (0.0, cc(0, 1)),
                 (0.0, EvKind::Prog { ch: 0, prog }),
                 (0.0, cc(93, 0)),
                 (0.0, cc(94, 0)),

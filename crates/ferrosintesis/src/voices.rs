@@ -8060,11 +8060,18 @@ pub struct ReedPreset {
     /// shipped double-reed/clarinet/bagpipe/shanai rule): the stage is never
     /// built, so the render hot path is untouched.
     pub rasp: (f32, f32, f32),
+    /// RD11 (Stage-2 cone-fill) upper-harmonic residual depth. 0 = off (every
+    /// non-sax reed): the residual is never built, hot path untouched, render
+    /// byte-identical. >0 (the 4 conical-bore saxes) fills the duty-null h3 and
+    /// the thin upper-mid with a parallel h3..h8 sine bank (no h1/h2 → the hot
+    /// h2 and fundamental are untouched). See `ConeResidual`.
+    pub cone: f32,
     #[cfg(test)]
     pub name: &'static str, // diagnostic label (kind() is always "reed")
 }
 
 pub const SOP_SAX: ReedPreset = ReedPreset {
+    cone: 0.24, // RD11 cone-fill (calibrated: h3 ≈ −6 dB, into the SC-55 band)
     width: 0.30,
     width_hi: 0.27,
     formants: [(1100.0, 1.4, 5.0), (2200.0, 1.8, 4.0), (3600.0, 2.0, 2.5)],
@@ -8087,6 +8094,7 @@ pub const SOP_SAX: ReedPreset = ReedPreset {
     name: "soprano_sax",
 };
 pub const ALTO_SAX: ReedPreset = ReedPreset {
+    cone: 0.24, // RD11 cone-fill (calibrated: h3 ≈ −6 dB, into the SC-55 band)
     width: 0.31,
     width_hi: 0.28,
     formants: [(900.0, 1.4, 5.5), (1900.0, 1.8, 4.0), (3100.0, 2.0, 2.5)],
@@ -8105,6 +8113,7 @@ pub const ALTO_SAX: ReedPreset = ReedPreset {
     name: "alto_sax",
 };
 pub const TENOR_SAX: ReedPreset = ReedPreset {
+    cone: 0.24, // RD11 cone-fill (calibrated: h3 ≈ −6 dB, into the SC-55 band)
     width: 0.32,
     width_hi: 0.29,
     formants: [(650.0, 1.3, 6.0), (1500.0, 1.8, 4.0), (2700.0, 2.0, 2.5)],
@@ -8123,6 +8132,7 @@ pub const TENOR_SAX: ReedPreset = ReedPreset {
     name: "tenor_sax",
 };
 pub const BARI_SAX: ReedPreset = ReedPreset {
+    cone: 0.24, // RD11 cone-fill (calibrated: h3 ≈ −6 dB, into the SC-55 band)
     width: 0.33,
     width_hi: 0.30,
     formants: [(480.0, 1.2, 6.0), (1150.0, 1.6, 4.0), (2300.0, 2.0, 2.5)],
@@ -8144,6 +8154,7 @@ pub const BARI_SAX: ReedPreset = ReedPreset {
     name: "bari_sax",
 };
 pub const OBOE: ReedPreset = ReedPreset {
+    cone: 0.0, // RD11: non-sax reed — cone-fill off (byte-identical)
     width: 0.14,
     width_hi: 0.14,
     formants: [(1050.0, 2.4, 8.0), (2700.0, 2.0, 5.0), (0.0, 1.0, 0.0)],
@@ -8162,6 +8173,7 @@ pub const OBOE: ReedPreset = ReedPreset {
     name: "oboe",
 };
 pub const ENGLISH_HORN: ReedPreset = ReedPreset {
+    cone: 0.0, // RD11: non-sax reed — cone-fill off (byte-identical)
     width: 0.15,
     width_hi: 0.15,
     formants: [(930.0, 2.6, 8.0), (1900.0, 2.2, 3.5), (0.0, 1.0, 0.0)],
@@ -8180,6 +8192,7 @@ pub const ENGLISH_HORN: ReedPreset = ReedPreset {
     name: "english_horn",
 };
 pub const BASSOON: ReedPreset = ReedPreset {
+    cone: 0.0, // RD11: non-sax reed — cone-fill off (byte-identical)
     width: 0.16,
     width_hi: 0.16,
     formants: [(500.0, 2.0, 7.0), (1220.0, 2.2, 4.5), (0.0, 1.0, 0.0)],
@@ -8198,6 +8211,7 @@ pub const BASSOON: ReedPreset = ReedPreset {
     name: "bassoon",
 };
 pub const CLARINET: ReedPreset = ReedPreset {
+    cone: 0.0, // RD11: cylindrical bore — cone-fill off, MUST stay odd (byte-identical)
     width: 0.50,
     width_hi: 0.44,
     formants: [(1550.0, 1.8, 4.5), (3100.0, 2.2, 3.0), (0.0, 1.0, 0.0)],
@@ -8223,6 +8237,7 @@ pub const CLARINET: ReedPreset = ReedPreset {
 /// cupped-hands/comb formants, a fast tongued attack and the idiomatic
 /// draw-bend scoop into the note. No rasp stage (that is a sax mechanism).
 pub const HARMONICA: ReedPreset = ReedPreset {
+    cone: 0.0, // RD11: free reed — cone-fill off (byte-identical)
     width: 0.46,
     width_hi: 0.42,
     formants: [(850.0, 1.6, 5.0), (2400.0, 1.8, 6.0), (4200.0, 2.0, 4.0)],
@@ -8246,6 +8261,7 @@ pub const HARMONICA: ReedPreset = ReedPreset {
 };
 
 pub const BAGPIPE: ReedPreset = ReedPreset {
+    cone: 0.0, // RD11: non-sax reed — cone-fill off (byte-identical)
     width: 0.18,
     width_hi: 0.16,
     formants: [(780.0, 1.8, 7.0), (1550.0, 2.2, 5.5), (3000.0, 2.0, 3.0)],
@@ -8265,6 +8281,7 @@ pub const BAGPIPE: ReedPreset = ReedPreset {
 };
 
 pub const SHANAI: ReedPreset = ReedPreset {
+    cone: 0.0, // RD11: non-sax reed — cone-fill off (byte-identical)
     width: 0.12,
     width_hi: 0.105,
     formants: [(1200.0, 2.6, 8.0), (2550.0, 2.2, 6.0), (3800.0, 2.0, 3.0)],
@@ -8527,6 +8544,62 @@ impl Reed {
     }
 }
 
+// RD11 cone-fill: the four saxes are CONICAL bores (a complete harmonic series),
+// but the model is a symmetric duty-`w` rectangle whose sinc null guts h3 and whose
+// upper-mid is thin. This is a parallel additive bank of upper partials only
+// (n = 3..8, NO h1/h2 — ferro's fundamental and h2 are already at/above SC-55, so
+// adding a full saw would inflate them and DRAG the centroid down). Pure sines below
+// Nyquist ⇒ alias-free and DC-free by construction; downstream of and parallel to the
+// rasp ⇒ the `bias = 2w−1` identity is untouched. Depths are per-preset (`cone`); the
+// weights taper gently so h3 fills strongly while the highs keep the centroid up.
+const CONE_N0: u32 = 3; // first partial (h3 — the duty null)
+const CONE_WEIGHTS: [f32; 6] = [1.0, 0.9, 0.7, 0.55, 0.45, 0.4]; // n = 3,4,5,6,7,8
+
+struct ConeResidual {
+    partials: [Sine; 6],
+    gain: [f32; 6], // CONE_WEIGHTS in-band, 0 above Nyquist (set at retune); amp applied in next()
+    amp: f32,       // per-preset `cone` scale
+}
+
+impl ConeResidual {
+    fn new(f: f32, sr: f32, cone: f32) -> Self {
+        let partials = std::array::from_fn(|i| Sine::new(f * (CONE_N0 + i as u32) as f32, sr, 0.0));
+        let mut cr = ConeResidual {
+            partials,
+            gain: [0.0; 6],
+            amp: cone,
+        };
+        cr.set_freq(f, sr);
+        cr
+    }
+
+    /// Retune every partial to n·f (following bend/scoop/vibrato); mute (gain 0) any
+    /// that would exceed Nyquist so the bank never aliases.
+    fn set_freq(&mut self, f: f32, sr: f32) {
+        for (i, s) in self.partials.iter_mut().enumerate() {
+            let fp = f * (CONE_N0 + i as u32) as f32;
+            self.gain[i] = if fp < sr * 0.45 {
+                s.set_freq(fp, sr);
+                CONE_WEIGHTS[i]
+            } else {
+                0.0
+            };
+        }
+    }
+
+    /// Σ gain·sin(2π·n·φ), scaled by the preset depth. Advances every partial (phase
+    /// continuity) regardless of its gate; `amp = 0` makes the whole bank a bit-exact
+    /// no-op (the cone-on/off differential seam).
+    #[inline]
+    fn next(&mut self) -> f32 {
+        let mut y = 0.0;
+        for (i, s) in self.partials.iter_mut().enumerate() {
+            y += self.gain[i] * s.next();
+        }
+        y * self.amp
+    }
+}
+
 pub struct Reed {
     osc: ReedPulse,
     osc_norm: f32, // RD8 equal-RMS-across-widths source gain
@@ -8536,6 +8609,7 @@ pub struct Reed {
     fdesign: [(f32, f32, f32); 3],
     tilt: Biquad,           // RD3 pressure tilt — low-Q 12 dB/oct lowpass at f0·N(p)
     rasp: Option<ReedRasp>, // RD10 §2.8.4 sax rasp stage (None = filter-only bypass)
+    cone_res: Option<ConeResidual>, // RD11 Stage-2 cone-fill (saxes only; None = untouched)
     n_lo: f32,
     n_hi: f32,
     p_auth: f32, // RD9 authored CC2/CC11 delta (0 until set_breath; ≤ 0)
@@ -8634,6 +8708,10 @@ impl Reed {
             fdesign,
             tilt,
             rasp,
+            // RD11 cone-fill: built only for the conical saxes (cone > 0). No self.rng
+            // draw (partial phases are deterministic 0), so the reed's rng stream — and
+            // every non-sax reed's render — is byte-identical.
+            cone_res: (preset.cone > 0.0).then(|| ConeResidual::new(f, sr, preset.cone)),
             n_lo: preset.n_lo,
             n_hi: preset.n_hi,
             p_auth: 0.0,
@@ -8688,6 +8766,11 @@ impl Voice for Reed {
                 // rate, so the pulse retunes against osr, not sr
                 let osc_sr = self.rasp.as_ref().map_or(self.sr, |r| r.osr);
                 self.osc.set_freq(f, osc_sr);
+                // RD11 cone-fill: the residual is parallel to the rasp OUTPUT, so it
+                // retunes against sr (not osr), following the same composed pitch.
+                if let Some(cr) = &mut self.cone_res {
+                    cr.set_freq(f, self.sr);
+                }
                 // RD9 blowing pressure: vel floor + env "speaking" term +
                 // authored CC2/CC11 delta, smoothed ~15 ms (T-N1)
                 let target = (RD_P_VEL.0
@@ -8729,6 +8812,13 @@ impl Voice for Reed {
             } else {
                 self.osc.next() * self.osc_norm
             };
+            // RD11 cone-fill: sum the parallel upper-harmonic residual (saxes only) so
+            // the formant bank + tilt then shape it with the pulse. Downstream of the
+            // rasp/bias-tanh chain ⇒ `bias = 2w−1` untouched; h1/h2 absent ⇒ the hot
+            // fundamental/h2 untouched and the centroid not dragged.
+            if let Some(cr) = &mut self.cone_res {
+                s += cr.next();
+            }
             // RD2 fixed formant bank (pressure-gained above)
             for b in &mut self.formants {
                 s = b.process(s);
@@ -17273,6 +17363,13 @@ mod tests {
     fn render_reed(prog: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
         let sr = 44100.0;
         let mut v = reed(prog, key, vel, sr, seed);
+        // Isolate the ~existing reed oracles from the Stage-2 cone-fill axis (they test the
+        // rasp / double-reed / clarinet / alias / sustain — all orthogonal to the cone). The
+        // cone's own effects are covered by `reed_sax_fills_h3_without_dulling` + the full
+        // render-diff. Non-saxes have no residual → this is a no-op for them.
+        if let Some(cr) = v.cone_res.as_mut() {
+            cr.amp = 0.0;
+        }
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
@@ -17290,6 +17387,111 @@ mod tests {
         &BAGPIPE,
         &SHANAI,
     ];
+
+    /// RD11 O-H3 (the money oracle): the cone-fill lifts the sax h3 out of the duty-null
+    /// AND does not dull or hollow the voice. Differential (cone ON vs the residual muted,
+    /// same seed → isolates the fill). Vib forced off + a settled window so the Goertzel is
+    /// clean. Guards (per the DSP + Codex reviews) that filling h3 does NOT: add/collapse h2,
+    /// suppress the fundamental, or drag the centroid down (the raw-saw failure mode).
+    #[test]
+    fn reed_sax_fills_h3_without_dulling() {
+        let sr = 44100.0;
+        for &(prog, key, label) in &[(65u8, 60u8, "alto"), (66u8, 55u8, "tenor")] {
+            let f0 = key_freq(key);
+            for &vel in &[70u8, 110u8] {
+                let measure = |mute: bool| -> (f32, f32, f32, f32) {
+                    let mut v = reed(prog, key, vel, sr, 7);
+                    v.vib_depth = 0.0; // steady spectrum
+                    if mute {
+                        v.cone_res.as_mut().unwrap().amp = 0.0; // saxes always build the residual
+                    }
+                    let mut buf = vec![0f32; (1.6 * sr) as usize];
+                    v.render(&mut buf);
+                    let seg = &buf[(0.5 * sr) as usize..(1.5 * sr) as usize];
+                    (
+                        mag_at(seg, sr, f0),
+                        mag_at(seg, sr, 2.0 * f0),
+                        mag_at(seg, sr, 3.0 * f0),
+                        spectral_centroid(seg, sr, 100.0, 12_000.0),
+                    )
+                };
+                let (h1_on, h2_on, h3_on, cen_on) = measure(false);
+                let (h1_off, h2_off, h3_off, cen_off) = measure(true);
+                let db = |a: f32, b: f32| 20.0 * (a / b.max(1e-9)).log10();
+                let (h3on_db, h3off_db) = (db(h3_on, h1_on), db(h3_off, h1_off));
+                let (dh2, dh1) = (db(h2_on, h2_off), db(h1_on, h1_off));
+                eprintln!(
+                    "RD11 O-H3 {label} v{vel}: h3 {h3off_db:.1}→{h3on_db:.1} dB | h2Δ {dh2:.1} | f0Δ {dh1:.1} | cen {cen_off:.0}→{cen_on:.0}"
+                );
+                assert!(
+                    h3on_db >= h3off_db + 6.0,
+                    "{label} v{vel}: h3 not filled ({h3off_db:.1}→{h3on_db:.1} dB)"
+                );
+                assert!(
+                    (-14.0..=-2.0).contains(&h3on_db),
+                    "{label} v{vel}: filled h3 out of the SC-55 band ({h3on_db:.1} dB)"
+                );
+                assert!(
+                    dh2.abs() <= 3.0,
+                    "{label} v{vel}: h2 moved {dh2:.1} dB (residual must carry no h2)"
+                );
+                assert!(
+                    dh1.abs() <= 1.5,
+                    "{label} v{vel}: fundamental moved {dh1:.1} dB (no coherent f0 suppression)"
+                );
+                // anti-drag: the residual must not pull the centroid DOWN the way a full
+                // saw would (~60+ Hz, widening the SC-55 gap). A tiny dip at ff — where the
+                // note is already bright and the fill sits below the existing centroid — is
+                // fine; the lift shows at the soft/mid dynamics where the hollowness bites.
+                assert!(
+                    cen_on >= cen_off - 65.0,
+                    "{label} v{vel}: centroid dragged down {cen_off:.0}→{cen_on:.0} Hz (saw-like)"
+                );
+            }
+        }
+    }
+
+    /// RD11 O-SCOPE: cone-fill reaches EXACTLY the four conical saxes. Every other reed —
+    /// including HARMONICA, which the `REED_PRESETS` array omits — has `cone == 0` and builds
+    /// no residual, so its render is byte-identical (proven by the full render-diff).
+    #[test]
+    fn reed_cone_is_sax_only() {
+        let sr = 44100.0;
+        let cases: [(u8, bool); 11] = [
+            (64, true),
+            (65, true),
+            (66, true),
+            (67, true), // sop/alto/tenor/bari
+            (22, false),
+            (68, false),
+            (69, false),
+            (70, false), // harmonica/oboe/EH/bassoon
+            (71, false),
+            (109, false),
+            (111, false), // clarinet/bagpipe/shanai
+        ];
+        for (prog, is_sax) in cases {
+            assert_eq!(
+                reed(prog, 60, 90, sr, 7).cone_res.is_some(),
+                is_sax,
+                "prog {prog} cone gate wrong"
+            );
+        }
+        for p in [&SOP_SAX, &ALTO_SAX, &TENOR_SAX, &BARI_SAX] {
+            assert!(p.cone > 0.0, "sax {} should cone-fill", p.name);
+        }
+        for p in [
+            &OBOE,
+            &ENGLISH_HORN,
+            &BASSOON,
+            &CLARINET,
+            &HARMONICA,
+            &BAGPIPE,
+            &SHANAI,
+        ] {
+            assert_eq!(p.cone, 0.0, "non-sax {} must not cone-fill", p.name);
+        }
+    }
 
     /// RD-O2 (sustains, not plucks): a held reed note holds — late/early RMS
     /// ratio ≥ 0.6 (the STEEL-pluck fallback measures ≈ 0.01, the journal
@@ -17661,8 +17863,10 @@ mod tests {
             n as f32 * 4096.0 / sr < 1.5,
             "reed did not die after note_off"
         );
-        // render ADDS into a pre-filled buffer
-        let a = render_reed(66, 60, 100, 0.05, 7);
+        // render ADDS into a pre-filled buffer (both direct `reed()` so the cone-fill
+        // state matches — `render_reed` now isolates saxes cone-off, which would differ)
+        let mut a = vec![0f32; (0.05 * sr) as usize];
+        reed(66, 60, 100, sr, 7).render(&mut a);
         let mut bb = vec![0.5f32; a.len()];
         reed(66, 60, 100, sr, 7).render(&mut bb);
         assert!(
@@ -17941,6 +18145,7 @@ mod tests {
         let sr = 44100.0;
         let preset = ReedPreset {
             breath: if dry { 0.0 } else { p.breath },
+            cone: 0.0, // isolate the rasp/pressure oracles from the Stage-2 cone-fill axis
             ..p.clone()
         };
         let mut v = Reed::from_preset(&preset, key, vel, sr, 7);

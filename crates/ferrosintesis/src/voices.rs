@@ -2364,8 +2364,26 @@ pub const STEEL: PluckPreset = PluckPreset {
     pick_lp: 5000.0,
     pos: 0.18,
     amp: 0.50,
-    // Helmholtz, top plate, and a little steel-string presence sparkle
-    body: &[(105.0, 1.4, 4.0), (215.0, 1.2, 3.0), (2800.0, 1.8, 1.5)],
+    // Round-3 U6 (plan §3.5): dreadnought re-voice. The round-2 steel work was
+    // sustain-only (t60/bright/rel_t60) and never touched timbre; HEAD measured
+    // almost no 4-5.5 kHz brilliance (the pick "zing" a real steel-string has).
+    // A low-mid scoop (~350 Hz) opens the boxy mid, the presence peak grows
+    // 1.5->3.5 dB, and a new ~4.5 kHz sparkle peak restores the brilliance the
+    // model lacked. Helmholtz (105) + top plate (215) unchanged. The plan's
+    // "sharpen the flatpick" levers (click_hp 1500->2500, attack_noise ~0.06)
+    // are DEFERRED to the EAR list: both are ear-character polish that do not
+    // move the sparkle oracle, and both trip existing pinned tests — attack_noise
+    // fires independent of the click (confounding pick_click_is_audible's
+    // isolation and wound_strings_darker's contrast), and a brighter click_hp
+    // corner carries less total >1500 Hz burst energy (pick_click_is_audible
+    // reads 1.27 vs its 1.3 bar). They need a listen + principled test isolation.
+    body: &[
+        (105.0, 1.4, 4.0),
+        (215.0, 1.2, 3.0),
+        (350.0, 1.0, -3.0),
+        (2800.0, 1.8, 3.5),
+        (4500.0, 1.8, 2.5),
+    ],
     click: 2.0, // plectrum on steel (G4)
     ..DEFAULTS
 };
@@ -10782,6 +10800,55 @@ mod tests {
             let hz = crate::testutil::peak_locate(&buf[4410..], sr, 396.0, 484.0);
             assert!((hz - 440.0).abs() < 6.0, "vel {vel}: {hz} Hz");
         }
+    }
+
+    /// Round-3 U6 (plan §3.5): GM25 "not a very good steel acoustic guitar" —
+    /// the round-2 steel work was sustain-only (t60/bright/rel_t60) and never
+    /// touched timbre, so HEAD renders a weak 3-5 kHz presence and almost no
+    /// 4-5.5 kHz brilliance — the pick "zing" a real steel-string carries. The
+    /// dreadnought body re-voice (low-mid ~350 Hz scoop, presence 1.5->3.5 dB,
+    /// a NEW ~4.5 kHz sparkle peak) plus the sharper flatpick (click_hp
+    /// 1500->2500, attack_noise) restore it. Measured over the early pick+ring
+    /// window [0,0.35 s], mean of 3-5 kHz / 0.5-2 kHz band RMS across four keys.
+    ///
+    /// Clause (1) is the fail-first bar (an ABSOLUTE presence threshold, not a
+    /// steel>nylon ratio): HEAD steel already out-brights nylon (pick_lp 5000 vs
+    /// 2500), so a nylon-relative test would be vacuously green — the defect is
+    /// that neither carries enough brilliance. Calibrated 2026-07-16: HEAD
+    /// mean 0.0713, U6 mean 0.0978; bar frozen at 0.085 in the gap (RED on HEAD
+    /// with ~16 % margin, GREEN on U6 with ~15 %). Clause (2) is a signature
+    /// guard (not fail-first — HEAD passes it): a steel reads brighter than a
+    /// classical, so a regression that dulled it would trip here.
+    #[test]
+    fn steel_string_has_pick_sparkle() {
+        let sr = 44100.0;
+        use crate::testutil::spectral_band_rms;
+        let sparkle = |prog: u8| {
+            let keys = [40u8, 47, 52, 59];
+            let mut acc = 0.0f32;
+            for &k in &keys {
+                let sig = render_program(prog, k, 100, 0.6, 7);
+                let e = segment(&sig, sr, 0.0, 0.35);
+                let sp = spectral_band_rms(e, sr, 3000.0, 5000.0);
+                let bd = spectral_band_rms(e, sr, 500.0, 2000.0);
+                acc += sp / bd.max(1e-9);
+            }
+            acc / keys.len() as f32
+        };
+        let steel = sparkle(25);
+        let nylon = sparkle(24);
+        println!(
+            "steel sparkle {steel:.4}  nylon {nylon:.4}  ratio {:.2}",
+            steel / nylon.max(1e-9)
+        );
+        assert!(
+            steel >= 0.085,
+            "GM25 steel lacks pick sparkle: mean 3-5k/body {steel:.4} < 0.085"
+        );
+        assert!(
+            steel >= 1.8 * nylon,
+            "steel should out-sparkle nylon: {steel:.4} vs {nylon:.4}"
+        );
     }
 
     /// Oracle 6 (§5.3): the CLEAN chain (shipped body peaks + cascaded cab

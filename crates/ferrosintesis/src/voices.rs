@@ -4983,8 +4983,14 @@ pub fn organ_trem_base(program: u8) -> (f32, f32) {
         18 => (6.5, 0.10),
         16 | 17 => (5.5, 0.06),
         20 => (4.2, 0.0),
-        21 => (5.0, 0.015),
-        23 => (5.8, 0.018),
+        // Round-3 U7 (plan §3.4): the accordions' COHERENT global tremolo is
+        // removed (depth 0) — it was the "musette" oracle cheat (a single AM on
+        // every harmonic in lock-step). Real musette shimmer is per-harmonic
+        // reed BEATING (detuned reed pairs on each harmonic, so the beat rate
+        // scales with h), now carried by the stops table itself. The rate is
+        // kept for the engine's Leslie-morph plumbing but the depth is inert.
+        21 => (5.0, 0.0),
+        23 => (5.8, 0.0),
         _ => (4.2, 0.04),
     }
 }
@@ -5118,18 +5124,30 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             0.30,
         )
         .with_reed_noise(0.05, (f * 3.0).clamp(600.0, 2400.0), 0.7),
+        // Round-3 U7 (plan §3.4): a French MUSETTE — three reeds detuned ±16
+        // cents, each radiating its FULL harmonic series, so every harmonic h
+        // beats at ~h× the fundamental's beat rate (the shimmer the coherent
+        // tremolo faked). HEAD carried the detuned triple only on H1; H2/H3/H4
+        // were single static sines. Side reeds sit at ~0.63× the centre reed
+        // (matching H1's existing 0.58/0.92 ratio).
         21 => Organ::new(
             key,
             vel,
             sr,
             seed,
             &[
-                (cent_ratio(-16.0), 0.58),
                 (1.0, 0.92),
+                (cent_ratio(-16.0), 0.58),
                 (cent_ratio(16.0), 0.58),
                 (2.0, 0.24),
+                (2.0 * cent_ratio(-16.0), 0.15),
+                (2.0 * cent_ratio(16.0), 0.15),
                 (3.0, 0.10),
+                (3.0 * cent_ratio(-16.0), 0.06),
+                (3.0 * cent_ratio(16.0), 0.06),
                 (4.0, 0.05),
+                (4.0 * cent_ratio(-16.0), 0.03),
+                (4.0 * cent_ratio(16.0), 0.03),
             ],
             Adsr::new(0.040, 0.08, 0.98, 0.18, sr),
             trem_hz,
@@ -5142,16 +5160,23 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
         .with_reed_noise(0.018, (f * 3.4).clamp(700.0, 2300.0), 0.8),
         // 22 harmonica moved to the Reed free-reed voice (§2.11) — see
         // HARMONICA in the ReedPreset table.
+        // Round-3 U7 (plan §3.4): a DRIER, sharper bandoneon/tango box. HEAD
+        // had it BACKWARDS — a WIDER musette (±22 c) than the GM21 accordion
+        // (±16 c). A bandoneon is a drier double-reed: NARROWER detune (±9 c),
+        // QUIETER side reeds (~0.46× the centre vs GM21's 0.63×), and the
+        // musette confined to H1/H2 — H3/H4 stay single sines (drier top).
         23 => Organ::new(
             key,
             vel,
             sr,
             seed,
             &[
-                (cent_ratio(-22.0), 0.54),
-                (1.0, 0.86),
-                (cent_ratio(22.0), 0.54),
+                (1.0, 0.90),
+                (cent_ratio(-9.0), 0.41),
+                (cent_ratio(9.0), 0.41),
                 (2.0, 0.26),
+                (2.0 * cent_ratio(-9.0), 0.11),
+                (2.0 * cent_ratio(9.0), 0.11),
                 (3.0, 0.12),
                 (4.0, 0.06),
             ],
@@ -10851,6 +10876,80 @@ mod tests {
         );
     }
 
+    /// Per-harmonic musette AM DEPTH: bandpass harmonic `h` of GM `prog` at
+    /// `key`, take the envelope (lowpassed |band|), return its coefficient of
+    /// variation (std/mean) over the ~1.15 s sustain window, averaged over
+    /// three keys. A detuned reed PAIR beats deeply (CV ~0.5); a single static
+    /// sine is flat (CV ~0.08, the noise+leakage floor). This is the robust,
+    /// non-flaky replacement for the beat-RATE estimator the H4 review flagged
+    /// as circular — depth is stable to ±0.01 across keys where the autocorr
+    /// rate hits boundary artifacts.
+    fn musette_cv(prog: u8, h: u32) -> f32 {
+        let sr = 44100.0;
+        let mut acc = 0.0f32;
+        let keys = [50u8, 55, 60];
+        for &key in &keys {
+            let f0 = key_freq(key);
+            let sig = render_program(prog, key, 100, 1.4, 7);
+            let w = segment(&sig, sr, 0.20, 1.35);
+            let mut bp = Biquad::bandpass(h as f32 * f0, 18.0, sr);
+            let band: Vec<f32> = w.iter().map(|&x| bp.process(x)).collect();
+            let mut lp = OnePole::lowpass(40.0, sr);
+            let env: Vec<f64> = band.iter().map(|&x| lp.process(x.abs()) as f64).collect();
+            let n = env.len() as f64;
+            let mean = env.iter().sum::<f64>() / n;
+            let var = env.iter().map(|&e| (e - mean).powi(2)).sum::<f64>() / n;
+            acc += if mean > 1e-9 {
+                (var.sqrt() / mean) as f32
+            } else {
+                0.0
+            };
+        }
+        acc / keys.len() as f32
+    }
+
+    /// Round-3 U7 (plan §3.4, replaces the global-AM musette check the coherent
+    /// tremolo cheated): a French musette is per-harmonic reed BEATING — three
+    /// reeds detuned ±16 c, each radiating its full series, so every harmonic
+    /// beats. HEAD carried the detuned triple only on H1 (H2/H3/H4 single
+    /// sines) plus a coherent global tremolo. This oracle measures the AM depth
+    /// (CV) at H2 and H3: a coherent tremolo cannot lift the UPPER harmonics'
+    /// depth without a gross whole-spectrum wobble, and the tremolo is removed
+    /// anyway — so depth here can only come from the detuned reed pairs.
+    /// Calibrated 2026-07-16: HEAD H2 0.08 / H3 0.075 (RED); U7 H2 0.60 /
+    /// H3 0.29 (GREEN). Bars frozen at 0.30 / 0.18 in the gaps.
+    #[test]
+    fn accordion_musette_beats_across_harmonics() {
+        let (h1, h2, h3) = (musette_cv(21, 1), musette_cv(21, 2), musette_cv(21, 3));
+        println!("GM21 musette CV: h1 {h1:.3} h2 {h2:.3} h3 {h3:.3}");
+        assert!(h1 >= 0.30, "GM21 H1 musette lost: CV {h1:.3} < 0.30");
+        assert!(h2 >= 0.30, "GM21 H2 has no reed beating: CV {h2:.3} < 0.30");
+        assert!(h3 >= 0.18, "GM21 H3 has no reed beating: CV {h3:.3} < 0.18");
+    }
+
+    /// Round-3 U7 (plan §3.4): GM23 is a DRIER bandoneon than the GM21 musette
+    /// accordion — HEAD had it backwards (wider ±22 c detune vs GM21's ±16 c).
+    /// The fix confines GM23's musette to H1/H2 (quieter side reeds, ±9 c);
+    /// H3/H4 stay single sines, so its top is dry. Oracle: GM23's H3 beating
+    /// depth is well under GM21's. HEAD GM23 H3 0.079 vs GM21 H3 0.073 (NOT
+    /// drier → RED); U7 GM23 H3 0.09 vs GM21 H3 0.29 (drier → GREEN). GM23 must
+    /// still read as a reed box (H1 beats).
+    #[test]
+    fn bandoneon_is_drier_than_accordion() {
+        let g23_h3 = musette_cv(23, 3);
+        let g21_h3 = musette_cv(21, 3);
+        let g23_h1 = musette_cv(23, 1);
+        println!("GM23 dry: h3 {g23_h3:.3} vs GM21 h3 {g21_h3:.3}; GM23 h1 {g23_h1:.3}");
+        assert!(
+            g23_h3 < 0.5 * g21_h3,
+            "GM23 top not drier than GM21: H3 CV {g23_h3:.3} vs {g21_h3:.3}"
+        );
+        assert!(
+            g23_h1 >= 0.30,
+            "GM23 stopped beating entirely: H1 CV {g23_h1:.3}"
+        );
+    }
+
     /// Oracle 6 (§5.3): the CLEAN chain (shipped body peaks + cascaded cab
     /// lowpasses, built from the preset's own data) has the presence lift
     /// and the steep top-end the old bare one-pole lacked.
@@ -12516,25 +12615,23 @@ mod tests {
             "GM20 lost its free-reed buzz: inter-harmonic residual {gm20_buzz:.4} (want > 0.020) — reed_noise gone?"
         );
 
-        let am = |program| {
+        // Round-3 U7 (plan §3.4): the musette shimmer of GM21/23 is now verified
+        // by the dedicated per-harmonic beating oracles
+        // (`accordion_musette_beats_across_harmonics`,
+        // `bandoneon_is_drier_than_accordion`). The round-2 clause here checked a
+        // single GLOBAL low-rate AM depth ≥ 2× GM20 — exactly the coherent
+        // tremolo cheat §3.4 removed (a lock-step AM on every harmonic passed it
+        // without any real per-reed beating). With the coherent tremolo gone and
+        // the beating carried by detuned reed pairs, this block keeps only the
+        // level-sanity clauses; the musette itself is the other oracles' job.
+        let level = |program| {
             let s = render_program(program, key, vel, 1.0, seed ^ 0x3333);
             let seg = segment(&s, sr, 0.20, 0.90);
-            let (peak, rate) = env_autocorr_peak(seg, sr, 1.0 / 8.0, 1.0 / 3.0);
-            (
-                low_rate_am_depth(seg, sr),
-                peak,
-                rate,
-                rms(seg),
-                max_abs(seg),
-            )
+            (rms(seg), max_abs(seg))
         };
-        let (d20, _p20, _r20, rms20, _mx20) = am(20);
+        let (rms20, _) = level(20);
         for program in [21u8, 23] {
-            let (depth, peak, rate, body, peak_abs) = am(program);
-            assert!(
-                (3.0..=8.0).contains(&rate) && peak >= 0.15 && depth >= 2.0 * d20.max(0.002),
-                "GM{program} musette AM depth/peak/rate {depth:.4}/{peak:.3}/{rate:.2} Hz vs GM20 depth {d20:.4}"
-            );
+            let (body, peak_abs) = level(program);
             assert!(
                 (0.6 * rms20..=1.8 * rms20).contains(&body),
                 "GM{program} body RMS {body:.5} vs GM20 {rms20:.5}"

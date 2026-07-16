@@ -1078,8 +1078,13 @@ pub fn make(
         // (voices.rs, GM 68–71) must not reach alt-bank channels.
         68..=71 => crate::voices::make(program, key, vel, sr, seed, false),
         // v0.12: the alt bank's GM 14 is a tam-tam / gong ageng (the default
-        // bank keeps tubular bells).
-        14 => Box::new(crate::voices::tam_tam(key, vel, sr, seed)),
+        // bank keeps tubular bells). CC0=2 with the sample layer available
+        // swaps in the RECORDED gong ageng (a full-ring one-shot); CC0=1, any
+        // other alt bank, and --no-samples all keep the modeled tam-tam.
+        14 => match (bank, samples) {
+            (2, true) => crate::sampler::gong_one_shot(key, vel, sr, seed),
+            _ => Box::new(crate::voices::tam_tam(key, vel, sr, seed)),
+        },
         // v0.12 alt-bank percussion set B: a SECOND voicing of GM 112-119
         // (ported from the superseded v0.11 branch), coexisting with the
         // default-bank 112-119 voices, which stay exactly as shipped.
@@ -1130,6 +1135,25 @@ mod tests {
     fn render_make(program: u8, key: u8, vel: u8, secs: f32, seed: u32, samples: bool) -> Vec<f32> {
         let sr = 44100.0;
         let mut v = make(program, 1, key, vel, sr, seed, samples);
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    /// Render an alt-factory `make` voice on a chosen CC0 alt bank (the gong
+    /// oracles need bank=2; `render_make` hardcodes bank=1).
+    #[cfg(feature = "embedded-samples")]
+    fn render_make_bank(
+        program: u8,
+        bank: u8,
+        key: u8,
+        vel: u8,
+        secs: f32,
+        seed: u32,
+        samples: bool,
+    ) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = make(program, bank, key, vel, sr, seed, samples);
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
@@ -2571,5 +2595,123 @@ mod tests {
             early >= 3.0 * late,
             "no splash transient: early {early:.5} vs late {late:.5}"
         );
+    }
+
+    // --- v0.12 CC0=2 GM 14 SAMPLED gong (bank=2) discriminator + guards -----
+
+    /// THE DISCRIMINATOR: CC0=2 GM 14 renders a RECORDED gong, not the modeled
+    /// tam-tam. Same key/vel/seed, both banks, ONE test: the sample's spectrum
+    /// over the ring window [0.5, 2.5] s is a dense inharmonic cloud (high
+    /// spectral flatness) while the model is a handful of discrete decaying
+    /// sinusoids (low flatness). Assert the sample clears the threshold AND the
+    /// model control stays below it — so the test is RED on the model and GREEN
+    /// on the sample by construction.
+    ///
+    /// NOTE — this is a REDESIGNED discriminator. The originally-specified
+    /// probe-ratio metric (gap-band RMS ÷ fundamental) is mathematically
+    /// confounded for this signal pair: the model concentrates its energy in
+    /// the fundamental while the recorded gong spreads energy across many
+    /// partials, so the gap÷f0 ratio is ~0.005 for BOTH once the gong is
+    /// correctly tuned. Spectral flatness separates them cleanly instead
+    /// (model 0.34 vs sample 0.76 over [300,1500] Hz). The separation is ~2.3×,
+    /// not the ~100× the probe metric appeared to give — that apparent gap was
+    /// an artifact of the mis-specified 80 Hz root (see `GONG_ROOT_HZ`).
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn altbank_gm14_gong_is_sample_derived() {
+        let sr = 44100.0;
+        let ring = |b: &[f32]| {
+            flatness(
+                &b[(0.5 * sr) as usize..(2.5 * sr) as usize],
+                sr,
+                300.0,
+                1500.0,
+            )
+        };
+        // key 43 folds to the 98 Hz register (fold_key(43,36,47) == 43).
+        let sample = ring(&render_make_bank(14, 2, 43, 100, 4.0, 7, true));
+        let model = ring(&render_make_bank(14, 2, 43, 100, 4.0, 7, false));
+        println!("GM14 gong flatness [300,1500] Hz: sample {sample:.4}, model control {model:.4}");
+        // Empirically calibrated: recorded gong 0.760, modeled tam-tam 0.336.
+        // 0.50 is the log-midpoint (√(0.336·0.760) ≈ 0.505) of that gap —
+        // sample ~0.26 above, model ~0.16 below, both robust (deterministic).
+        const THRESHOLD: f32 = 0.50;
+        assert!(
+            sample >= THRESHOLD,
+            "sample flatness {sample:.4} < {THRESHOLD}: not a dense recorded gong"
+        );
+        assert!(
+            model < THRESHOLD,
+            "model control flatness {model:.4} >= {THRESHOLD}: discriminator not separating"
+        );
+    }
+
+    /// The sampled gong folds into the tam-tam register wherever it is written:
+    /// keys 43 and 67 both repitch the sample's dominant low partial to ~98 Hz
+    /// (pitch class preserved — the album-use guarantee), and far-out keys
+    /// 24/60/90 stay inside the 61.7-126 Hz register. Proves the repitch/fold
+    /// uses the same window as the modeled tam-tam. (Regression guard — GREEN,
+    /// not expected RED.)
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn altbank_gm14_gong_folds_to_register() {
+        let sr = 44100.0;
+        let low_partial = |key: u8| {
+            let b = render_make_bank(14, 2, key, 100, 2.0, 7, true);
+            peak_locate(
+                &b[(0.3 * sr) as usize..(1.8 * sr) as usize],
+                sr,
+                55.0,
+                140.0,
+            )
+        };
+        for key in [43u8, 67] {
+            let f = low_partial(key);
+            println!("gong fold key {key}: dominant low partial {f:.1} Hz");
+            assert!(
+                (f - 98.0).abs() <= 0.03 * 98.0,
+                "key {key} low partial {f:.1} Hz not ~98 (±3%)"
+            );
+        }
+        for key in [24u8, 60, 90] {
+            let f = low_partial(key);
+            println!("gong fold key {key}: dominant low partial {f:.1} Hz");
+            assert!(
+                (61.7..=126.0).contains(&f),
+                "key {key} low partial {f:.1} Hz outside the gong register"
+            );
+        }
+    }
+
+    /// The sampled gong RINGS and then REAPS (HLD risk #4 — the bounded tail):
+    /// substantial energy still present at [3.0, 3.5] s (rings ≥ 3 s), and
+    /// `render()` returns false (frees the slot) well before 30 s.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn altbank_gm14_gong_rings_and_reaps() {
+        let sr = 44100.0;
+        let mut v = crate::sampler::gong_one_shot(43, 100, sr, 7);
+        let block = (0.5 * sr) as usize;
+        let mut ring_rms = 0.0f32;
+        let mut reaped_by = None;
+        for i in 0..60 {
+            let mut buf = vec![0f32; block];
+            let alive = v.render(&mut buf);
+            if i == 6 {
+                // block i covers [i*0.5, (i+1)*0.5] s → [3.0, 3.5] s
+                ring_rms = rms(&buf);
+            }
+            if !alive {
+                reaped_by = Some((i + 1) as f32 * 0.5);
+                break;
+            }
+        }
+        println!("gong ring RMS at [3.0,3.5]s: {ring_rms:.5}, reaped by {reaped_by:?} s");
+        assert!(
+            ring_rms >= 0.01,
+            "gong not still ringing at 3 s (RMS {ring_rms:.5})"
+        );
+        let reaped = reaped_by.expect("gong never reaped within 30 s — unbounded voice");
+        assert!(reaped <= 30.0, "gong reaped too late: {reaped} s");
     }
 }

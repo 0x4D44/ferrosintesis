@@ -50,6 +50,7 @@ fn parse_wav(bytes: &[u8]) -> Vec<f32> {
 fn embedded_wav(name: &str) -> &'static [u8] {
     ferrosintesis_samples_core::get(name)
         .or_else(|| ferrosintesis_samples_orchestral::get(name))
+        .or_else(|| ferrosintesis_samples_gong::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 
@@ -1337,6 +1338,116 @@ impl Voice for SampledDrum {
     #[cfg(test)]
     fn kind(&self) -> &'static str {
         "sampleddrum"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GongOneShot — CC0=2 GM 14 pitched gong (a full-ring sampled one-shot).
+// ---------------------------------------------------------------------------
+
+/// The gong's measured dominant low partial — the repitch root. Both takes'
+/// strongest 40-200 Hz partial sits at 99.3-99.5 Hz (≈ G2), by Goertzel scan
+/// over the [0.3,2.5] s ring; the 80 Hz partial the sourcing note guessed at is
+/// real but 5× weaker. Rooting here makes key 43 (G2, 98 Hz) speak at pitch.
+#[cfg(feature = "embedded-samples")]
+const GONG_ROOT_HZ: f32 = 99.4;
+/// Gong output level. An EAR-tunable knob, defaulted to the modeled tam-tam's
+/// gain (`voices::TAMTAM_GAIN`, 0.80) so the two voicings sit at the same level.
+#[cfg(feature = "embedded-samples")]
+const GONG_LEVEL: f32 = 0.80;
+/// Velocity at/above which the loud take is chosen instead of the soft take.
+/// A hard switch — the two takes are different recordings, so summing them
+/// would comb-filter.
+#[cfg(feature = "embedded-samples")]
+const GONG_LOUD_VEL: u8 = 84;
+
+/// Both dynamic layers, decoded once (soft, loud). The voice borrows a
+/// `&'static [f32]` into the chosen take, so no per-note allocation.
+#[cfg(feature = "embedded-samples")]
+static GONG_LAYERS: OnceLock<(Vec<f32>, Vec<f32>)> = OnceLock::new();
+
+#[cfg(feature = "embedded-samples")]
+fn gong_layers() -> &'static (Vec<f32>, Vec<f32>) {
+    GONG_LAYERS.get_or_init(|| {
+        (
+            parse_wav(embedded_wav("gong_ageng_soft.wav")),
+            parse_wav(embedded_wav("gong_ageng_loud.wav")),
+        )
+    })
+}
+
+/// A full-ring sampled gong one-shot that OWNS the whole voice (like
+/// `SampledDrum`, not the LA attack-plus-model `LaVoice`). Velocity selects the
+/// dynamic layer; the note key repitches the entire ring so the gong speaks in
+/// the tam-tam register wherever it is written. The prepared sample already
+/// ends on a 0.3 s fade to silence, so the voice needs no release envelope — it
+/// plays to the end of the ring, then reaps its slot.
+#[cfg(feature = "embedded-samples")]
+pub struct GongOneShot {
+    data: &'static [f32],
+    pos: f32,
+    step: f32,
+    gain: f32,
+}
+
+/// One CC0=2 GM 14 gong strike. `seed` is unused (the take is picked by
+/// velocity, not round-robin), kept for a uniform voice-factory signature.
+#[cfg(feature = "embedded-samples")]
+pub fn gong_one_shot(key: u8, vel: u8, sr: f32, _seed: u32) -> Box<dyn Voice> {
+    let (soft, loud) = gong_layers();
+    let data: &'static [f32] = if vel >= GONG_LOUD_VEL {
+        loud.as_slice()
+    } else {
+        soft.as_slice()
+    };
+    // fold with the SAME window as the modeled tam-tam so external MIDIs fold
+    // identically, then repitch the sample's ~99 Hz (G2) dominant to the target.
+    let repitch = key_freq(crate::voices::fold_key(key, 36, 47)) / GONG_ROOT_HZ;
+    Box::new(GongOneShot {
+        data,
+        pos: 0.0,
+        step: 44_100.0 / sr * repitch,
+        gain: GONG_LEVEL * vel_amp(vel),
+    })
+}
+
+/// Modeled-only builds have no gong bank; the caller never reaches here
+/// (`altbank::make` only routes to the gong when `samples` is true, which
+/// implies the feature), so this stub only satisfies the type-checker.
+#[cfg(not(feature = "embedded-samples"))]
+pub fn gong_one_shot(_key: u8, _vel: u8, _sr: f32, _seed: u32) -> Box<dyn Voice> {
+    panic!("gong one-shot requested from a modeled-only ferrosintesis build")
+}
+
+#[cfg(feature = "embedded-samples")]
+impl Voice for GongOneShot {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let n = self.data.len();
+        for o in out.iter_mut() {
+            let j = self.pos as usize;
+            // reap at the bounded tail: the prepared sample ends at zero.
+            if j + 1 >= n {
+                return false;
+            }
+            let frac = self.pos - j as f32;
+            let a = self.data[j];
+            let b = self.data[j + 1];
+            *o += (a + (b - a) * frac) * self.gain;
+            self.pos += self.step;
+        }
+        true
+    }
+
+    // A struck gong rings out; percussion ignores note-off (house rule).
+    fn note_off(&mut self) {}
+
+    fn released(&self) -> bool {
+        true
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "gongoneshot"
     }
 }
 

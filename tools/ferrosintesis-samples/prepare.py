@@ -224,6 +224,25 @@ KEEP_FILE = {
 
 TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(TOOL_DIR, os.pardir, os.pardir))
+
+# Local-file intake — CC BY 3.0 gong pair pre-placed under gong-src/ (there is NO
+# auto-fetch: Freesound requires a login to download the originals, so they are
+# committed as source and read directly from disk). They run through the SAME
+# downmix/resample/normalize chain as the fetched sources, but the FULL RING is
+# kept — a gong's multi-second bloom IS the instrument — so only leading silence is
+# trimmed and a short squared end fade removes the truncation click (no attack
+# trim). Treated as one-shots like DRUM_SOURCES: measure_f0 is skipped, and the
+# destination crate is routed explicitly here (NOT via sample_output_path, whose
+# family-prefix routing is left untouched for core/orchestral).
+GONG_SRC = os.path.join(TOOL_DIR, "gong-src")
+# out_name -> (source filename under gong-src/, destination sample crate, end fade s)
+LOCAL_SOURCES = {
+    "gong_ageng_soft.wav": (
+        "gong_ageng_soft_261890.wav", "ferrosintesis-samples-gong", 0.30),
+    "gong_ageng_loud.wav": (
+        "gong_ageng_loud_261893.wav", "ferrosintesis-samples-gong", 0.30),
+}
+
 CORE_FAMILIES = frozenset(("piano", "violin", "flute"))
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -408,46 +427,98 @@ def trim_to_onset(x, sr, keep_s, fade_s):
     return [v * g for v in seg]
 
 
+def trim_lead_and_ring(x, sr, pre_s, end_fade_s):
+    """Trim leading pre-onset silence, KEEP the full ring, de-click both ends,
+    peak-normalize to 0.9.
+
+    Unlike `trim_to_onset` (which caps the kept audio to a short attack window),
+    this keeps everything from just before the onset to the end of the recording —
+    a gong's multi-second bloom is the whole instrument, so nothing after the
+    attack may be discarded. Only leading silence is dropped (with a `pre_s`
+    lead-in pad); a `pre_s`-bounded 2 ms fade-in de-clicks the start and an
+    `end_fade_s` squared fade-out removes the end-truncation click.
+    """
+    peak = max(abs(v) for v in x)
+    thr = 0.03 * peak
+    onset = next(i for i, v in enumerate(x) if abs(v) > thr)
+    start = max(0, onset - int(pre_s * sr))
+    seg = x[start:]
+    # de-click fade-in, sized to the lead-in that ACTUALLY exists (as trim_to_onset)
+    lead = onset - start
+    fin = min(int(0.002 * sr), lead)
+    for i in range(min(fin, len(seg))):
+        seg[i] *= i / fin
+    fout = int(end_fade_s * sr)
+    for i in range(fout):
+        j = len(seg) - fout + i
+        if 0 <= j < len(seg):
+            t = 1.0 - i / fout
+            seg[j] *= t * t
+    pk = max(abs(v) for v in seg)
+    g = 0.9 / pk if pk > 0 else 1.0
+    return [v * g for v in seg]
+
+
+def write_wav_mono(path, seg, sr):
+    """Quantize a float mono signal to 16-bit PCM and write it as a WAV."""
+    pcm = struct.pack(f"<{len(seg)}h",
+                      *[max(-32768, min(32767, int(v * 32767))) for v in seg])
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(pcm)
+
+
 def main():
     socket.setdefaulttimeout(60)
-    src = os.path.join(tempfile.gettempdir(), "vsco2ce_src", VSCO_REV)
-    os.makedirs(src, exist_ok=True)
-    for fn, url in SOURCES.items():
-        ensure_source(fn, url, src)
-    for fn, url in STEEL_URLS.items():
-        ensure_source(fn, url, src)
-    ensure_guitar_sources(src)
+    # `--local-only` skips the fetched full bank (network + rewriting the tracked
+    # core/orchestral WAVs) and regenerates ONLY the local gong intake below.
+    local_only = "--local-only" in sys.argv[1:]
 
     rows = []
-    for fn in sorted(SOURCES | GUITAR_SOURCES | STEEL_URLS):
-        x, sr = read_wav(os.path.join(src, fn))
+    if not local_only:
+        src = os.path.join(tempfile.gettempdir(), "vsco2ce_src", VSCO_REV)
+        os.makedirs(src, exist_ok=True)
+        for fn, url in SOURCES.items():
+            ensure_source(fn, url, src)
+        for fn, url in STEEL_URLS.items():
+            ensure_source(fn, url, src)
+        ensure_guitar_sources(src)
+
+        for fn in sorted(SOURCES | GUITAR_SOURCES | STEEL_URLS):
+            x, sr = read_wav(os.path.join(src, fn))
+            x = resample(x, sr, OUT_SR)
+            sr = OUT_SR
+            keep_s, fade_s = KEEP_FILE.get(fn, KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S)))
+            seg = trim_to_onset(x, sr, keep_s, fade_s)
+            if fn in DRUM_SOURCES:
+                root = f0 = cand = cents = conf = None
+            else:
+                lo, hi = F0_RANGE.get(fn.split("_")[0], (80.0, 3000.0))
+                f0, conf = measure_f0(seg, sr, lo, hi)
+                # nominal pitch from the filename, e.g. violin_G3_f / flute_C4
+                note = next(p for p in fn[:-4].split("_") if p[0] in "ABCDEFG" and p[-1].isdigit())
+                nominal = NOTE_HZ[note]
+                # snap measured f0 to the nearest octave of the nominal note
+                cand = min((nominal * 2 ** k for k in range(-2, 3)),
+                           key=lambda c: abs(math.log(f0 / c)))
+                cents = 1200 * math.log2(f0 / cand)
+                root = f0 if abs(cents) < 60 else cand
+            write_wav_mono(sample_output_path(fn), seg, sr)
+            rows.append((fn, root, f0, cand, cents, conf, len(seg) / sr))
+
+    # Local-file intake (gong): full ring kept, one-shot (no f0), explicit routing.
+    for out_name, (src_fn, package, end_fade_s) in sorted(LOCAL_SOURCES.items()):
+        x, sr = read_wav(os.path.join(GONG_SRC, src_fn))
         x = resample(x, sr, OUT_SR)
         sr = OUT_SR
-        keep_s, fade_s = KEEP_FILE.get(fn, KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S)))
-        seg = trim_to_onset(x, sr, keep_s, fade_s)
-        if fn in DRUM_SOURCES:
-            root = f0 = cand = cents = conf = None
-        else:
-            lo, hi = F0_RANGE.get(fn.split("_")[0], (80.0, 3000.0))
-            f0, conf = measure_f0(seg, sr, lo, hi)
-            # nominal pitch from the filename, e.g. violin_G3_f / flute_C4
-            note = next(p for p in fn[:-4].split("_") if p[0] in "ABCDEFG" and p[-1].isdigit())
-            nominal = NOTE_HZ[note]
-            # snap measured f0 to the nearest octave of the nominal note
-            cand = min((nominal * 2 ** k for k in range(-2, 3)),
-                       key=lambda c: abs(math.log(f0 / c)))
-            cents = 1200 * math.log2(f0 / cand)
-            root = f0 if abs(cents) < 60 else cand
-        pcm = struct.pack(f"<{len(seg)}h",
-                          *[max(-32768, min(32767, int(v * 32767))) for v in seg])
-        output = sample_output_path(fn)
-        os.makedirs(os.path.dirname(output), exist_ok=True)
-        with wave.open(output, "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(sr)
-            w.writeframes(pcm)
-        rows.append((fn, root, f0, cand, cents, conf, len(seg) / sr))
+        seg = trim_lead_and_ring(x, sr, PRE_S, end_fade_s)
+        output = os.path.join(REPO_ROOT, "crates", package, "samples", out_name)
+        write_wav_mono(output, seg, sr)
+        rows.append((out_name, None, None, None, None, None, len(seg) / sr))
+
     print(f"{'file':26} {'root_hz':>9} {'measured':>9} {'nominal':>9} {'cents':>7} {'conf':>5} {'len_s':>6}")
     for r in rows:
         if r[1] is None:

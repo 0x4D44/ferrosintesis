@@ -16,6 +16,7 @@ default = ["embedded-samples"]
 embedded-samples = [
     "dep:ferrosintesis-samples-core",
     "dep:ferrosintesis-samples-drumkit",
+    "dep:ferrosintesis-samples-gong",
     "dep:ferrosintesis-samples-orchestral",
 ]
 
@@ -30,6 +31,7 @@ ferrosintesis-samples-drumkit = {
     version = "=0.1.0",
     optional = true,
 }
+ferrosintesis-samples-gong = { path = "../ferrosintesis-samples-gong", version = "=0.1.0", optional = true }
 ferrosintesis-samples-orchestral = {
     path = "../ferrosintesis-samples-orchestral",
     version = "=0.1.0",

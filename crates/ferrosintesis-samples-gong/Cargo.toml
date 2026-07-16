@@ -1,0 +1,13 @@
+[package]
+name = "ferrosintesis-samples-gong"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+description = "Embedded CC BY 3.0 gong-ageng samples for ferrosintesis (GM14 CC0=2 pitched gong)"
+license = "CC-BY-3.0"
+repository = "https://github.com/0x4D44/ferrosintesis"
+readme = "README.md"
+include = ["src/**", "samples/**", "README.md", "NOTICE", "PROVENANCE.md"]
+
+[lib]
+path = "src/lib.rs"

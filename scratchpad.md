@@ -1,5 +1,12 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.16 — **`LA_PROGRAMS` in voices.rs tests (~:19255) is stale vs the make()
+  wiring.** It lists GM 2 (fully modeled electric grand — the samples flag changes
+  nothing) and omits GM 41 (which DOES wrap the violin bank since round 2). Consequence
+  today: the pitch-case harness skips 41's sampled leg and runs a no-op sampled leg on 2.
+  The perceptual oracle's `sample_layer_engaged_at_probe_keys` (testutil.rs) carries the
+  code-true list — sync `LA_PROGRAMS` to it, or derive both from one shared const.
+
 - [ ] 2026.07.14 — **`check_dual_bank_registers` is dead code with a latent unpack bug.**
   `demos/ferrosintesis_reference/programs.py` (`check_dual_bank_registers`) is never
   called from verify.py or anywhere else, and its loop unpacks `ALT_BANK.items()` values

@@ -1271,6 +1271,17 @@ mod guards {
 /// family's 8→2 collapse never had. The pre-existing drift/canary freeze lives in
 /// `mod guards` (`golden_mix_balance_holds`, `determinism_bit_identical`); this
 /// module adds only the missing distinctness axis.
+///
+/// **Blind spot (round-3 plan §2.2, kept deliberately):** this matrix renders
+/// `samples: false` and its 5-feature vector carries zero temporal information,
+/// so it certifies MODEL-arm divergence only — it cannot see a clone whose
+/// audible sameness lives in a shared LA sample layer, a shared onset, or a
+/// shared envelope (GM 0/1, 0/3 and 4/5 all scored "distinct" here while the
+/// ear called them clones — measured 2026-07-16: 0.179/0.225/0.363, above the
+/// accepted-distinct sax pair 64/65 at 0.170). It stays as the
+/// model-preset-layer tripwire (byte-level arm collapse regardless of sample
+/// masking); the ear-facing anti-clone gate is `perceptual_distinctness` below
+/// (samples ON, two-tier, temporal features).
 #[cfg(test)]
 mod distinctness {
     use super::*;
@@ -1512,5 +1523,1083 @@ mod distinctness {
                 }
             }
         }
+    }
+}
+
+/// Round-3 Wave-0 perceptual anti-clone oracle — implements
+/// `wrk_docs/2026.07.16 - HLD - perceptual distinctness oracle.md` (ACCEPTED,
+/// including the §7 two-tier addendum).
+///
+/// Where `mod distinctness` above measures the MODEL arms (samples off, no
+/// temporal features), this module measures what the EAR gets: `samples: true`,
+/// one 3 s no-note-off render per (program, probe key {48, 72}), five time
+/// windows, and a 7-dimension timbre "passport" — D1 envelope, D2 tilt,
+/// D3 tilt-removed harmonic shape, D4 noise/tonality, D5 modulation, D6 onset,
+/// D7 energy-weighted band-spectrogram — aggregated with a saturating
+/// bounded-influence sum (§2.3): `S = Σ Wᵢ·min(dᵢ, 2)`, blended
+/// `0.4·SHORT + 0.6·LONG` per key, mean over keys (never max).
+///
+/// Two-tier (§7): a pair whose W1 onsets render (near-)identically —
+/// [`is_shared_onset`] — shares an LA bank or a code arm, so it is scored on
+/// the model-owned tail only (D1/D3/D4 over W3–W5, vs [`BAR_TAIL`]): *given
+/// identical onsets, does the model inject a real instrument difference in the
+/// sustain?* Independent-onset pairs get the full metric vs [`BAR_FULL`].
+/// Dropping D5 modulation from tail credit is the key lever: a shared-onset
+/// pair cannot earn distinctness through detune-beat or tremolo alone (T4).
+///
+/// Every `CAL`-marked constant was frozen by the §2.4 calibration run on the
+/// HEAD this module landed on (see `perceptual_bar_is_calibrated`). Do NOT
+/// iterate weights/JNDs to green — that is how green-but-wrong oracles are
+/// born. The sanctioned maximum is ONE documented revision with a physical
+/// diagnosis (§2.4, T2), then the pair is ear-adjudicated (§6).
+#[cfg(all(test, feature = "embedded-samples"))]
+mod perceptual_distinctness {
+    use super::*;
+
+    const SR: f32 = 44100.0;
+    const SECS: f32 = 3.0;
+    const VEL: u8 = 100;
+    const SEED: u32 = 7;
+    const NKEYS: usize = 2;
+    const PROBE_KEYS: [u8; NKEYS] = [48, 72];
+    /// D7 band count: 16 log-spaced bands, 100 Hz → 10 kHz (§2.2 D7).
+    const NB: usize = 16;
+    /// D3 harmonic passport depth (k = 1..=10).
+    const NH: usize = 10;
+
+    /// §2.2 windows. W3 starts past every LA fade seam's midpoint and every LA
+    /// fade ends by 0.85 s (`la_fade_ends_before_model_owned_window` in
+    /// voices.rs pins < 0.90 — tripwire T7), so W4/W5 are model-owned for
+    /// every wrapped program and W1 is sample-owned.
+    const WINDOWS: [(f32, f32); 5] = [
+        (0.02, 0.12),
+        (0.12, 0.45),
+        (0.45, 0.90),
+        (0.90, 1.70),
+        (1.70, 2.80),
+    ];
+    /// SHORT view = {W1, W2}; LONG view = {W1..W5} (§2.2). The SHORT view is
+    /// what keeps shared-onset verdicts honest: a pair must differ where the
+    /// music lives, not only in second three of a held note.
+    const SHORT_NW: usize = 2;
+    const V_SHORT: usize = 0;
+    const V_LONG: usize = 1;
+    /// Post-onset spectral-analysis span per view (D2/D3/D4). The onset's own
+    /// spectral content is D6's axis (§2.2 anti-correlation: one physical knob
+    /// earns credit on one axis), so these spans start after W1. The LONG span
+    /// (W3–W5) is model-owned for every wrapped program and doubles as the
+    /// Tier-2 tail span (§7).
+    const SPAN_SHORT: (f32, f32) = (0.12, 0.45);
+    const SPAN_TAIL: (f32, f32) = (0.45, 2.80);
+    /// D5 modulation span (LONG-only; SHORT has too few cycles, §2.2 D5).
+    const SPAN_MOD: (f32, f32) = (0.12, 2.80);
+
+    // ---- §2.3 aggregation ----
+    const W_DIM: [f32; 7] = [0.15, 0.05, 0.12, 0.09, 0.12, 0.12, 0.35];
+    const DIM_CAP: f32 = 2.0;
+    /// Tier-2 renormaliser: the kept dims' raw weights (D1 .15 + D3 .12 +
+    /// D4 .09) sum to 0.36; dividing keeps the tail score on the same
+    /// 0..2 scale as the full score so the two BARs are comparable.
+    const W_TAIL_SUM: f32 = 0.36;
+
+    // ---- CAL JNDs (§2.2). Absolute-scale members (dB, log2, log-rate):
+    // δ = |a−b| / JND. Ratio members: δ = (|a−b| / (|a|+|b|+floor)) / JND. ----
+    /// D1: attack time to 90 % peak, compared in log10 seconds (~30 % JND).
+    const JND_ATTACK_LOG10: f32 = 0.12;
+    /// D1 SHORT decay slope (dB/s) — early decays are steep, so a wider JND.
+    const JND_SLOPE_SHORT: f32 = 4.0;
+    /// D1 LONG / tail decay slopes (dB/s).
+    const JND_SLOPE: f32 = 3.0;
+    /// D1 sustain level (dB).
+    const JND_SUSTAIN_DB: f32 = 3.0;
+    /// D1 envelope roughness (std/mean of the 10 ms env; ratio member).
+    const FLOOR_ROUGH: f32 = 0.05;
+    const JND_ROUGH: f32 = 0.25;
+    /// D2 centroid (log2 octaves) — deliberately coarse; brightness is EQ,
+    /// not identity, and D2 carries the lowest weight.
+    const JND_CENT_LOG2: f32 = 0.20;
+    /// D2/D6 HF fraction (> 3 kHz energy share; ratio member).
+    const FLOOR_HF: f32 = 0.02;
+    const JND_HF: f32 = 0.30;
+    /// D3 tilt-removed harmonic-shape residual distance (dB RMS).
+    const JND_D3_DB: f32 = 2.5;
+    /// D3 rel-dB floor: harmonics more than 35 dB under the loudest are noise.
+    const H_FLOOR_DB: f32 = -35.0;
+    /// D4 spectral flatness (ratio member).
+    const FLOOR_FLAT: f32 = 0.05;
+    const JND_FLAT: f32 = 0.30;
+    /// D4 harmonic fraction (ratio member).
+    const FLOOR_HARM_FRAC: f32 = 0.05;
+    const JND_HARM_FRAC: f32 = 0.25;
+    /// D4 log-kurtosis (ln units; grain/impulsiveness).
+    const JND_LOG_KURT: f32 = 0.35;
+    /// D5 AM/FM depth (normalised autocorrelation peak, 0..1).
+    const JND_MOD_DEPTH: f32 = 0.25;
+    /// D5 AM rate (log2 octaves), credited only when BOTH depths exceed the
+    /// gate (§2.2 D5).
+    const JND_AM_RATE_LOG2: f32 = 0.5;
+    const AM_RATE_GATE: f32 = 0.25;
+    /// D6 onset centroid (log2 octaves) — finer than D2: the attack is where
+    /// the ear decides what an instrument IS.
+    const JND_ONSET_CENT_LOG2: f32 = 0.25;
+    /// D6 onset-energy share (ratio member).
+    const FLOOR_ONSET_SHARE: f32 = 0.02;
+    const JND_ONSET_SHARE: f32 = 0.30;
+    /// D7 energy-weighted cell distance (dB). T2's one sanctioned lever if
+    /// GM4/5 lands above BAR_FULL: power→power^1.5 weighting or JND 2.5→3.
+    const JND_D7_DB: f32 = 2.5;
+    /// D7 drop threshold: cells where BOTH members sit under −40 dB rel the
+    /// loudest cell are inaudible — excluded (§2.2 D7).
+    const D7_DROP_DB: f32 = -40.0;
+
+    /// §7 tier classifier threshold: rms(W1_a − W1_b) / max(rms) < 2 % at
+    /// BOTH probe keys ⇒ the onsets are the same audible object.
+    const SHARED_ONSET_REL: f32 = 0.02;
+
+    // ---- Thresholds (§2.4 + §7) — FROZEN by the 2026-07-16 calibration run
+    // on HEAD 33579ac (data: `print_perceptual_matrix`, recorded in the
+    // round-3 build journal). Key outcomes:
+    //   NEG_tail  (0,1)=0.0905  (0,3)=0.6043  (1,3)=0.5505  (29,30)=0.0000
+    //   POS_full  (83,87)=0.1071 (64,65)=0.1404 (11,12)=0.8039
+    //             (16,23)=0.8719 (17,21)=1.1442; brass min (57,60)=0.5535,
+    //             reed tier-1 min (64,65)=0.1404
+    //   (4,5) UNDER-REDS: full score 1.0236 ≫ min(POS) — the §2.4 gap is
+    //   empty and inverted 15×, beyond any sanctioned JND revision. Verdict
+    //   per §2.4/§7's own fallback: (4,5) is EAR-ADJUDICATED (round-3 EAR
+    //   list) — at matched pitch our GM4/5 renders genuinely differ in
+    //   envelope (D1) and band energy (D7); the ear's "very similar" verdict
+    //   is about instrument-class identity, the §6.1 honest limit. The U5
+    //   e-piano split carries its own fail-first oracles instead; its
+    //   before/after jump in THIS matrix (baseline 1.0236) is reported, not
+    //   gated.
+    //   (72,73) classified INDEPENDENT-onset: the flute fade starts at
+    //   0.06 s, so the piccolo-vs-flute models already diverge inside W1
+    //   (T8 investigated: early crossfade, NOT a bare-model fallback).
+    // ----
+    /// FROZEN: no NEG_full anchor survives calibration ((29,30) is tail-tier
+    /// byte-identical, (4,5) ear-adjudicated above), so the bar sits under
+    /// min(POS_full)/MARGIN_MUL = 0.0824 with ~10 % drift headroom — while
+    /// still far above the ~0 a byte-identical or near-clone regression
+    /// scores. Every observed full-tier pair clears 0.1071.
+    const BAR_FULL: f32 = 0.075;
+    /// FROZEN per §2.4's NEG-side rule applied to the tail tier:
+    /// 1.25 · max(NEG_tail) = 1.25 · 0.6043 = 0.755 → 0.76. Deliberately
+    /// strict — (0,3)'s 0.60 is detune line-splitting reading as harmonic
+    /// shape, and the ear still called it a clone — so a shared-onset pair
+    /// below this bar is "not proven distinct" and goes through one ear
+    /// adjudication (§6/§7), never a threshold nudge. POS_tail is anchored
+    /// on nothing by design.
+    const BAR_TAIL: f32 = 0.76;
+    /// POS pairs must clear MARGIN_MUL·BAR (the no-false-alarm side).
+    const MARGIN_MUL: f32 = 1.3;
+
+    /// Ear-accepted distinct pairs asserted ≥ `MARGIN_MUL · BAR_FULL` (§7
+    /// POS_full; all classify independent-onset). 48/49, 72/73 and 40/44 are
+    /// deliberately absent: reported by `print_perceptual_matrix`, adjudicated
+    /// by ear once (§6/§7), never silently anchored.
+    const POS_FULL: &[(u8, u8)] = &[(64, 65), (16, 23), (17, 21), (83, 87), (11, 12)];
+
+    #[derive(Clone, Copy)]
+    enum Why {
+        /// Known perceived clone; the cited round-3 unit deletes this entry —
+        /// `allowlisted_perceived_clones_are_still_clones` forces the delete
+        /// the moment the voice fix lands (the mechanical GREEN transition).
+        Collapse(&'static str),
+        /// Shared-onset pair awaiting its one batched human ear A/B (round-3
+        /// build journal, EAR-A/B list). Not asserted in either direction
+        /// (§6/§7: numeric features cannot decide this class).
+        EarPending(&'static str),
+    }
+
+    /// Unordered program pairs exempt from the tier-bar assertion, kept
+    /// sorted (a < b). The RED-on-HEAD observation (2026-07-16, empty ALLOW):
+    /// the tail tier flagged exactly (0,1), (0,3), (1,3), (29,30) — the
+    /// round-3 perceived clones — plus the two shared-bank adjudication
+    /// candidates below; the full tier flagged nothing at the frozen bar.
+    const ALLOW: &[(u8, u8, Why)] = &[
+        // Round-3 complaint #1/#2: GM 0/1/3 share the piano bank at one gain;
+        // the model differentiators are discarded inside the sample-owned
+        // window. U3 (LaVoice per-program sample DSP) un-shares the onsets,
+        // which reclassifies these pairs to the full tier and deletes them.
+        (0, 1, Why::Collapse("U3 piano sample-DSP")),
+        (0, 3, Why::Collapse("U3 piano sample-DSP")),
+        (1, 3, Why::Collapse("U3 piano sample-DSP")),
+        // Round-3 complaint #10/#11: both share the literal Pluck DRIVE arm.
+        // U2 (drive main≠alt split) deletes this (and byte_identical_arms_
+        // score_zero flips to a distinctness assertion in the same change).
+        (29, 30, Why::Collapse("U2 drive main≠alt split")),
+        // §7 contingent controls — shared violin/strings banks; the model
+        // tails measure 0.13/0.06, far under BAR_TAIL. Probable true
+        // positives the old matrix missed (40/41 = the repitched-violin
+        // viola proxy). One batched human listen each decides: EarAccepted
+        // or a voice-fix requirement (viola bank = roadmap Stage 3).
+        (
+            40,
+            41,
+            Why::EarPending("viola is a repitched-violin proxy — same or different?"),
+        ),
+        (
+            48,
+            49,
+            Why::EarPending("string ensembles 1/2 — real swell-time difference?"),
+        ),
+    ];
+
+    fn allow_reason(a: u8, b: u8) -> Option<Why> {
+        let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
+        ALLOW
+            .iter()
+            .find(|&&(x, y, _)| x == lo && y == hi)
+            .map(|&(_, _, w)| w)
+    }
+
+    // ------------------------------------------------------------------
+    // Rendering + passport extraction
+    // ------------------------------------------------------------------
+
+    fn f0_of(key: u8) -> f32 {
+        440.0 * 2f32.powf((key as f32 - 69.0) / 12.0)
+    }
+
+    fn render3s(program: u8, key: u8, samples: bool) -> Vec<f32> {
+        // §2.1: a silent samples-off run would measure a different instrument
+        // and invalidate every threshold in this module.
+        assert!(crate::embedded_samples_available());
+        let mut v = crate::voices::make(program, key, VEL, SR, SEED, samples);
+        let mut buf = vec![0f32; (SECS * SR) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    fn seg(buf: &[f32], w: (f32, f32)) -> &[f32] {
+        &buf[(w.0 * SR) as usize..(w.1 * SR) as usize]
+    }
+
+    fn db(x: f32) -> f32 {
+        20.0 * x.max(1e-7).log10()
+    }
+
+    /// Window-RMS decay slope in dB/s between two windows' midpoints, clamped
+    /// so silence-vs-silence reads 0 and silence transitions stay bounded.
+    fn slope_db_per_s(buf: &[f32], early: (f32, f32), late: (f32, f32)) -> f32 {
+        let dt = 0.5 * (late.0 + late.1) - 0.5 * (early.0 + early.1);
+        ((db(rms(seg(buf, late))) - db(rms(seg(buf, early)))) / dt).clamp(-150.0, 150.0)
+    }
+
+    /// D3/D4 harmonic scan: peak-searched ±4 % around k·f0 (9-point 1 % grid,
+    /// §2.2 D3 — catches the off-grid EP partials), rel-dB against the loudest
+    /// harmonic floored at −35 dB, plus the harmonic energy fraction.
+    fn harmonics(s: &[f32], f0: f32) -> ([f32; NH], f32) {
+        let mut mag = [0f32; NH];
+        for (k, m) in mag.iter_mut().enumerate() {
+            let fk = (k + 1) as f32 * f0;
+            if fk > 0.45 * SR {
+                break;
+            }
+            let mut best = 0f32;
+            for j in 0..9 {
+                best = best.max(mag_at(s, SR, fk * (0.96 + 0.01 * j as f32)));
+            }
+            *m = best;
+        }
+        let total = rms(s).max(1e-9);
+        let harm_frac = (mag.iter().map(|&m| 0.5 * m * m).sum::<f32>() / (total * total)).min(1.5);
+        let loudest = mag.iter().fold(1e-9f32, |a, &b| a.max(b));
+        let rel: [f32; NH] =
+            std::array::from_fn(|k| (20.0 * (mag[k].max(1e-9) / loudest).log10()).max(H_FLOOR_DB));
+        (rel, harm_frac)
+    }
+
+    /// Least-squares line in (log2 k, dB) subtracted: what is left is the
+    /// spectral SHAPE that survives an EQ change (§2.2 D3).
+    fn tilt_residuals(rel: &[f32; NH]) -> [f32; NH] {
+        let xs: [f32; NH] = std::array::from_fn(|k| ((k + 1) as f32).log2());
+        let n = NH as f32;
+        let sx: f32 = xs.iter().sum();
+        let sy: f32 = rel.iter().sum();
+        let sxx: f32 = xs.iter().map(|x| x * x).sum();
+        let sxy: f32 = xs.iter().zip(rel.iter()).map(|(x, y)| x * y).sum();
+        let denom = n * sxx - sx * sx;
+        let beta = if denom.abs() > 1e-9 {
+            (n * sxy - sx * sy) / denom
+        } else {
+            0.0
+        };
+        let alpha = (sy - beta * sx) / n;
+        std::array::from_fn(|k| rel[k] - (alpha + beta * xs[k]))
+    }
+
+    /// D5 AM detector on the f0-band (§2.2 D5): bandpass Q≈8 at f0 (the
+    /// anti-flange defence — true detuned-unison beating makes periodic
+    /// f0-band AM; a static comb makes tilt but no AM), rectified envelope
+    /// decimated to ~200 Hz (the decimation is what keeps a 0.08–1.2 s lag
+    /// autocorrelation affordable across 256 passports), slow-moving-average
+    /// detrend, normalised autocorrelation peak → (depth, rate Hz). A
+    /// modulation index gate keeps a flat envelope's noise floor from
+    /// reading as periodic AM.
+    fn am_depth_rate(s: &[f32], f0: f32) -> (f32, f32) {
+        let mut bp = Biquad::bandpass(f0, 8.0, SR);
+        let mut lp = OnePole::lowpass(30.0, SR);
+        let dec = (SR / 200.0) as usize;
+        let mut env: Vec<f64> = Vec::with_capacity(s.len() / dec + 1);
+        for (i, &x) in s.iter().enumerate() {
+            let e = lp.process(bp.process(x).abs());
+            if i % dec == dec - 1 {
+                env.push(e as f64);
+            }
+        }
+        let esr = SR / dec as f32;
+        let n = env.len();
+        if n < 8 {
+            return (0.0, 0.0);
+        }
+        let mean_env = env.iter().sum::<f64>() / n as f64;
+        if mean_env <= 1e-7 {
+            return (0.0, 0.0);
+        }
+        let half = (0.6 * esr) as usize;
+        let d: Vec<f64> = (0..n)
+            .map(|i| {
+                let a = i.saturating_sub(half);
+                let b = (i + half + 1).min(n);
+                env[i] - env[a..b].iter().sum::<f64>() / (b - a) as f64
+            })
+            .collect();
+        let zero: f64 = d.iter().map(|&x| x * x).sum();
+        // modulation index: rms of the periodic residue vs the mean level
+        if zero <= 0.0 || (zero / n as f64).sqrt() / mean_env < 0.02 {
+            return (0.0, 0.0);
+        }
+        let lag_lo = ((0.08 * esr) as usize).max(1);
+        let lag_hi = ((1.2 * esr) as usize).min(n - 2);
+        if lag_hi <= lag_lo {
+            return (0.0, 0.0);
+        }
+        let (mut best, mut best_lag) = (f64::MIN, lag_lo);
+        for lag in lag_lo..=lag_hi {
+            let c: f64 = (0..n - lag).map(|i| d[i] * d[i + lag]).sum::<f64>() / zero;
+            if c > best {
+                best = c;
+                best_lag = lag;
+            }
+        }
+        (best.max(0.0) as f32, esr / best_lag as f32)
+    }
+
+    /// The 7-dimension timbre passport of one (program, probe-key) render
+    /// (§2.2). Index convention for the per-view arrays: [V_SHORT, V_LONG].
+    struct Passport {
+        /// Raw W1 segment — the §7 tier classifier and test 6 read it.
+        w1: Vec<f32>,
+        w1_rms: f32,
+        // D1 envelope
+        attack_log10: f32,
+        slope_short: f32,
+        slope_long: f32,
+        slope_w34: f32,
+        slope_w45: f32,
+        sustain_db: f32,
+        roughness: f32,
+        // D2 tilt (per view)
+        cent_log2: [f32; 2],
+        hf_frac: [f32; 2],
+        // D3 harmonic shape (per view): tilt-removed residuals + rel-linear
+        // amplitudes (the per-k significance weights)
+        h_resid: [[f32; NH]; 2],
+        h_lin: [[f32; NH]; 2],
+        // D4 noise/tonality (per view)
+        flat: [f32; 2],
+        harm_frac: [f32; 2],
+        log_kurt: [f32; 2],
+        // D5 modulation (LONG only)
+        am_depth: f32,
+        am_rate_log2: f32,
+        fm_depth: f32,
+        // D6 onset
+        onset_cent_log2: f32,
+        onset_hf: f32,
+        onset_flat: f32,
+        onset_share: f32,
+        // D7 band-spectrogram: absolute cell dB, per window × band
+        cell_db: [[f32; NB]; 5],
+    }
+
+    fn band_f(i: usize) -> f32 {
+        100.0 * 100f32.powf(i as f32 / (NB - 1) as f32)
+    }
+
+    impl Passport {
+        fn new(program: u8, key: u8) -> Passport {
+            let buf = render3s(program, key, true);
+            let f0 = f0_of(key);
+
+            // D1 — attack over [0, 0.45]
+            let att_span = &buf[..(0.45 * SR) as usize];
+            let mut lp = OnePole::lowpass(200.0, SR);
+            let env: Vec<f32> = att_span.iter().map(|&x| lp.process(x.abs())).collect();
+            let peak = env.iter().fold(0.0f32, |a, &b| a.max(b));
+            let attack_s = if peak <= 1e-7 {
+                0.45
+            } else {
+                env.iter()
+                    .position(|&e| e >= 0.9 * peak)
+                    .map(|i| i as f32 / SR)
+                    .unwrap_or(0.45)
+            };
+            let rough = {
+                let s = seg(&buf, (0.90, 2.80));
+                let win = (0.010 * SR) as usize;
+                let e: Vec<f32> = s.chunks(win).map(rms).collect();
+                let mean = e.iter().sum::<f32>() / e.len() as f32;
+                if mean < 1e-6 {
+                    0.0
+                } else {
+                    (e.iter().map(|&v| (v - mean) * (v - mean)).sum::<f32>() / e.len() as f32)
+                        .sqrt()
+                        / mean
+                }
+            };
+
+            // D2/D3/D4 per view
+            let spans = [SPAN_SHORT, SPAN_TAIL];
+            let mut cent_log2 = [0f32; 2];
+            let mut hf_frac = [0f32; 2];
+            let mut h_resid = [[0f32; NH]; 2];
+            let mut h_lin = [[0f32; NH]; 2];
+            let mut flat = [0f32; 2];
+            let mut harm_frac = [0f32; 2];
+            let mut log_kurt = [0f32; 2];
+            for (v, &span) in spans.iter().enumerate() {
+                let s = seg(&buf, span);
+                cent_log2[v] = centroid(s, SR).max(50.0).log2();
+                hf_frac[v] = hp_rms(s, SR, 3000.0) / rms(s).max(1e-9);
+                let (rel, hfr) = harmonics(s, f0);
+                h_resid[v] = tilt_residuals(&rel);
+                h_lin[v] = std::array::from_fn(|k| 10f32.powf(rel[k] / 20.0));
+                flat[v] = flatness(s, SR, 500.0, 9000.0);
+                harm_frac[v] = hfr;
+                log_kurt[v] = kurtosis(s).max(1.5).ln();
+            }
+
+            // D5 (LONG only)
+            let mod_span = seg(&buf, SPAN_MOD);
+            let (am_depth, am_rate) = am_depth_rate(mod_span, f0);
+            let fm_depth = fm_mod_rate(mod_span, SR, f0, 3.0, 9.0).0;
+
+            // D6 — [0, 0.12] incl. t=0 (the attack transient itself)
+            let onset = &buf[..(0.12 * SR) as usize];
+            let onset_share = rms(onset) / rms(&buf[..(2.80 * SR) as usize]).max(1e-9);
+
+            // D7 cells
+            let mut cell_db = [[0f32; NB]; 5];
+            for (w, &win) in WINDOWS.iter().enumerate() {
+                let s = seg(&buf, win);
+                for (b, cell) in cell_db[w].iter_mut().enumerate() {
+                    *cell = db(band_rms(s, SR, band_f(b), 3.5));
+                }
+            }
+
+            let w1: Vec<f32> = seg(&buf, WINDOWS[0]).to_vec();
+            let w1_rms = rms(&w1);
+            Passport {
+                w1,
+                w1_rms,
+                attack_log10: attack_s.max(0.005).log10(),
+                slope_short: slope_db_per_s(&buf, (0.12, 0.25), (0.32, 0.45)),
+                slope_long: slope_db_per_s(&buf, WINDOWS[1], WINDOWS[4]),
+                slope_w34: slope_db_per_s(&buf, WINDOWS[2], WINDOWS[3]),
+                slope_w45: slope_db_per_s(&buf, WINDOWS[3], WINDOWS[4]),
+                sustain_db: (db(rms(seg(&buf, WINDOWS[4]))) - db(rms(seg(&buf, (0.05, 0.30)))))
+                    .clamp(-120.0, 20.0),
+                roughness: rough,
+                cent_log2,
+                hf_frac,
+                h_resid,
+                h_lin,
+                flat,
+                harm_frac,
+                log_kurt,
+                am_depth,
+                am_rate_log2: am_rate.max(0.5).log2(),
+                fm_depth,
+                onset_cent_log2: centroid(onset, SR).max(50.0).log2(),
+                onset_hf: hp_rms(onset, SR, 3000.0) / rms(onset).max(1e-9),
+                onset_flat: flatness(onset, SR, 500.0, 9000.0),
+                onset_share,
+                cell_db,
+            }
+        }
+
+        fn assert_finite(&self, label: &str) {
+            let mut all: Vec<f32> = vec![
+                self.w1_rms,
+                self.attack_log10,
+                self.slope_short,
+                self.slope_long,
+                self.slope_w34,
+                self.slope_w45,
+                self.sustain_db,
+                self.roughness,
+                self.am_depth,
+                self.am_rate_log2,
+                self.fm_depth,
+                self.onset_cent_log2,
+                self.onset_hf,
+                self.onset_flat,
+                self.onset_share,
+            ];
+            all.extend_from_slice(&self.cent_log2);
+            all.extend_from_slice(&self.hf_frac);
+            all.extend_from_slice(&self.flat);
+            all.extend_from_slice(&self.harm_frac);
+            all.extend_from_slice(&self.log_kurt);
+            for v in 0..2 {
+                all.extend_from_slice(&self.h_resid[v]);
+                all.extend_from_slice(&self.h_lin[v]);
+            }
+            for row in &self.cell_db {
+                all.extend_from_slice(row);
+            }
+            assert!(
+                all.iter().all(|x| x.is_finite()),
+                "{label}: non-finite passport feature"
+            );
+        }
+    }
+
+    /// One render per (program, probe key), shared by every test below.
+    fn passports() -> &'static [[Passport; NKEYS]] {
+        static CELL: std::sync::OnceLock<Vec<[Passport; NKEYS]>> = std::sync::OnceLock::new();
+        CELL.get_or_init(|| {
+            (0..128u8)
+                .map(|p| std::array::from_fn(|k| Passport::new(p, PROBE_KEYS[k])))
+                .collect()
+        })
+    }
+
+    // ------------------------------------------------------------------
+    // Pair distances (§2.2–§2.3, §7)
+    // ------------------------------------------------------------------
+
+    fn d_abs(a: f32, b: f32, jnd: f32) -> f32 {
+        (a - b).abs() / jnd
+    }
+
+    fn d_rel(a: f32, b: f32, floor: f32, jnd: f32) -> f32 {
+        ((a - b).abs() / (a.abs() + b.abs() + floor)) / jnd
+    }
+
+    /// D3: per-k significance-weighted RMS of the tilt-removed residual
+    /// difference, in dB (§2.2 D3). Significance = pair-max linear power of
+    /// the harmonic, so inaudible harmonics cannot carry the verdict.
+    fn d3_dist(a: &Passport, b: &Passport, v: usize) -> f32 {
+        let (mut num, mut wsum) = (0f32, 0f32);
+        for k in 0..NH {
+            let w = (a.h_lin[v][k] * a.h_lin[v][k]).max(b.h_lin[v][k] * b.h_lin[v][k]);
+            let dr = a.h_resid[v][k] - b.h_resid[v][k];
+            num += w * dr * dr;
+            wsum += w;
+        }
+        if wsum <= 0.0 {
+            0.0
+        } else {
+            (num / wsum).sqrt() / JND_D3_DB
+        }
+    }
+
+    /// D7: energy-weighted mean |ΔdB| over the view's audible cells (§2.2 D7).
+    /// Each member's cells are normalised to its own loudest cell (level-free:
+    /// this reads WHERE the energy is and how it moves, not how loud the
+    /// program is); weighting by pair-max linear power is the audibility
+    /// weighting the old matrix lacked.
+    fn d7_dist(a: &Passport, b: &Passport, v: usize) -> f32 {
+        let nw = if v == V_SHORT {
+            SHORT_NW
+        } else {
+            WINDOWS.len()
+        };
+        let max_of = |p: &Passport| {
+            p.cell_db[..nw]
+                .iter()
+                .flatten()
+                .fold(f32::MIN, |m, &x| m.max(x))
+        };
+        let (ma, mb) = (max_of(a), max_of(b));
+        let (mut num, mut wsum) = (0f32, 0f32);
+        for w in 0..nw {
+            for k in 0..NB {
+                let ra = a.cell_db[w][k] - ma;
+                let rb = b.cell_db[w][k] - mb;
+                if ra < D7_DROP_DB && rb < D7_DROP_DB {
+                    continue;
+                }
+                let wgt = 10f32.powf(ra / 10.0).max(10f32.powf(rb / 10.0));
+                num += wgt * (ra - rb).abs();
+                wsum += wgt;
+            }
+        }
+        if wsum <= 0.0 {
+            0.0
+        } else {
+            (num / wsum) / JND_D7_DB
+        }
+    }
+
+    /// Full-metric per-view dimension distances [d1..d7] (§2.2).
+    fn dims_view(a: &Passport, b: &Passport, v: usize) -> [f32; 7] {
+        let d1 = if v == V_SHORT {
+            (d_abs(a.attack_log10, b.attack_log10, JND_ATTACK_LOG10)
+                + d_abs(a.slope_short, b.slope_short, JND_SLOPE_SHORT))
+                / 2.0
+        } else {
+            (d_abs(a.attack_log10, b.attack_log10, JND_ATTACK_LOG10)
+                + d_abs(a.slope_long, b.slope_long, JND_SLOPE)
+                + d_abs(a.sustain_db, b.sustain_db, JND_SUSTAIN_DB)
+                + d_rel(a.roughness, b.roughness, FLOOR_ROUGH, JND_ROUGH))
+                / 4.0
+        };
+        let d2 = (d_abs(a.cent_log2[v], b.cent_log2[v], JND_CENT_LOG2)
+            + d_rel(a.hf_frac[v], b.hf_frac[v], FLOOR_HF, JND_HF))
+            / 2.0;
+        let d3 = d3_dist(a, b, v);
+        let d4 = (d_rel(a.flat[v], b.flat[v], FLOOR_FLAT, JND_FLAT)
+            + d_rel(
+                a.harm_frac[v],
+                b.harm_frac[v],
+                FLOOR_HARM_FRAC,
+                JND_HARM_FRAC,
+            )
+            + d_abs(a.log_kurt[v], b.log_kurt[v], JND_LOG_KURT))
+            / 3.0;
+        let d5 = if v == V_SHORT {
+            0.0
+        } else {
+            let mut sum = d_abs(a.am_depth, b.am_depth, JND_MOD_DEPTH)
+                + d_abs(a.fm_depth, b.fm_depth, JND_MOD_DEPTH);
+            let mut n = 2.0;
+            if a.am_depth > AM_RATE_GATE && b.am_depth > AM_RATE_GATE {
+                sum += d_abs(a.am_rate_log2, b.am_rate_log2, JND_AM_RATE_LOG2);
+                n += 1.0;
+            }
+            sum / n
+        };
+        let d6 = (d_abs(a.onset_cent_log2, b.onset_cent_log2, JND_ONSET_CENT_LOG2)
+            + d_rel(a.onset_hf, b.onset_hf, FLOOR_HF, JND_HF)
+            + d_rel(a.onset_flat, b.onset_flat, FLOOR_FLAT, JND_FLAT)
+            + d_rel(
+                a.onset_share,
+                b.onset_share,
+                FLOOR_ONSET_SHARE,
+                JND_ONSET_SHARE,
+            ))
+            / 4.0;
+        let d7 = d7_dist(a, b, v);
+        [d1, d2, d3, d4, d5, d6, d7]
+    }
+
+    fn s_of(dims: &[f32; 7]) -> f32 {
+        dims.iter()
+            .zip(W_DIM.iter())
+            .map(|(&d, &w)| w * d.min(DIM_CAP))
+            .sum()
+    }
+
+    /// Tier-1 score: 0.4·SHORT + 0.6·LONG per key, mean over keys (§2.3).
+    fn score_full(a: &[Passport; NKEYS], b: &[Passport; NKEYS]) -> f32 {
+        (0..NKEYS)
+            .map(|k| {
+                0.4 * s_of(&dims_view(&a[k], &b[k], V_SHORT))
+                    + 0.6 * s_of(&dims_view(&a[k], &b[k], V_LONG))
+            })
+            .sum::<f32>()
+            / NKEYS as f32
+    }
+
+    /// Tier-2 tail dimension distances [d1_tail, d3, d4]: envelope SHAPE in
+    /// the model-owned tail (W3→W4, W4→W5 slopes + roughness), harmonic shape
+    /// and noise character over W3–W5. D6/D2/D5 carry no credit (§7).
+    fn dims_tail(a: &Passport, b: &Passport) -> [f32; 3] {
+        let d1 = (d_abs(a.slope_w34, b.slope_w34, JND_SLOPE)
+            + d_abs(a.slope_w45, b.slope_w45, JND_SLOPE)
+            + d_rel(a.roughness, b.roughness, FLOOR_ROUGH, JND_ROUGH))
+            / 3.0;
+        [d1, d3_dist(a, b, V_LONG), {
+            (d_rel(a.flat[V_LONG], b.flat[V_LONG], FLOOR_FLAT, JND_FLAT)
+                + d_rel(
+                    a.harm_frac[V_LONG],
+                    b.harm_frac[V_LONG],
+                    FLOOR_HARM_FRAC,
+                    JND_HARM_FRAC,
+                )
+                + d_abs(a.log_kurt[V_LONG], b.log_kurt[V_LONG], JND_LOG_KURT))
+                / 3.0
+        }]
+    }
+
+    /// Tier-2 score: renormalised D1/D3/D4 bounded sum over the tail, mean
+    /// over keys (§7).
+    fn score_tail(a: &[Passport; NKEYS], b: &[Passport; NKEYS]) -> f32 {
+        (0..NKEYS)
+            .map(|k| {
+                let d = dims_tail(&a[k], &b[k]);
+                (W_DIM[0] * d[0].min(DIM_CAP)
+                    + W_DIM[2] * d[1].min(DIM_CAP)
+                    + W_DIM[3] * d[2].min(DIM_CAP))
+                    / W_TAIL_SUM
+            })
+            .sum::<f32>()
+            / NKEYS as f32
+    }
+
+    /// §7 tier classifier: byte-identical sampled onsets drive the W1
+    /// difference to ~0; near-silent W1s (slow swells) are also "shared" —
+    /// their identity legitimately lives in the tail. Auto-reclassifies when
+    /// a voice later gets its own bank (no hardcoded pair labels).
+    fn is_shared_onset(a: &[Passport; NKEYS], b: &[Passport; NKEYS]) -> bool {
+        (0..NKEYS).all(|k| {
+            let denom = a[k].w1_rms.max(b[k].w1_rms);
+            if denom < 1e-5 {
+                return true;
+            }
+            let diff: f32 = rms(&a[k]
+                .w1
+                .iter()
+                .zip(b[k].w1.iter())
+                .map(|(&x, &y)| x - y)
+                .collect::<Vec<f32>>());
+            diff / denom < SHARED_ONSET_REL
+        })
+    }
+
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    enum Tier {
+        Full,
+        Tail,
+    }
+
+    fn score_pair(a: &[Passport; NKEYS], b: &[Passport; NKEYS]) -> (Tier, f32, f32) {
+        if is_shared_onset(a, b) {
+            (Tier::Tail, score_tail(a, b), BAR_TAIL)
+        } else {
+            (Tier::Full, score_full(a, b), BAR_FULL)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // The six oracle tests (§3) + the §7 tier freeze
+    // ------------------------------------------------------------------
+
+    /// §3 test 1 — the headline guard: within every GM family, no two
+    /// programs SOUND like the same instrument (samples on, tier-appropriate
+    /// bar) unless explicitly allowlisted.
+    #[test]
+    fn every_gm_family_sounds_free_of_unexpected_clones() {
+        let ps = passports();
+        let mut failures = Vec::new();
+        for fam in 0..16u8 {
+            let base = fam * 8;
+            for a in base..base + 8 {
+                for b in (a + 1)..base + 8 {
+                    let (tier, s, bar) = score_pair(&ps[a as usize], &ps[b as usize]);
+                    if s < bar && allow_reason(a, b).is_none() {
+                        failures.push(format!(
+                            "GM {a} vs {b}: {tier:?} score {s:.4} < bar {bar} (perceived clone)"
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "perceptual anti-clone matrix — unexpected clones:\n{}",
+            failures.join("\n")
+        );
+    }
+
+    /// §3 test 2 — every `Collapse` entry is still a perceived clone on this
+    /// build. The moment a round-3 voice fix lands, this fails and forces the
+    /// entry's deletion: the mechanical GREEN transition.
+    #[test]
+    fn allowlisted_perceived_clones_are_still_clones() {
+        let ps = passports();
+        for &(a, b, why) in ALLOW {
+            if let Why::Collapse(unit) = why {
+                let (tier, s, bar) = score_pair(&ps[a as usize], &ps[b as usize]);
+                assert!(
+                    s < bar,
+                    "GM {a} vs {b} is allowlisted as a {unit} collapse but now scores \
+                     {s:.4} >= {tier:?} bar {bar} — already differentiated; delete this \
+                     ALLOW entry (and its {unit} journal line)"
+                );
+            }
+        }
+    }
+
+    /// §3 test 3 — the no-false-alarm side + drift alarm: every POS control
+    /// pair (ear-accepted distinct) clears the margin above BAR_FULL, and the
+    /// brass/reed exemplar families keep every independent-onset pair above
+    /// it too. A trip here on an untouched pair means the metric drifted —
+    /// investigate before committing, recalibrate only deliberately (T5).
+    #[test]
+    fn perceptual_bar_is_calibrated() {
+        let ps = passports();
+        let margin = MARGIN_MUL * BAR_FULL;
+        for &(a, b) in POS_FULL {
+            let (tier, s, _) = score_pair(&ps[a as usize], &ps[b as usize]);
+            assert!(
+                tier == Tier::Full,
+                "POS pair GM {a}/{b} classified {tier:?} — a POS_FULL control must be \
+                 independent-onset; if a bank change made these share an onset, T8 says \
+                 investigate the routing, never reclassify silently"
+            );
+            assert!(
+                s >= margin,
+                "POS pair GM {a}/{b} scores {s:.4} < MARGIN_P {margin:.4} — the \
+                 calibration gap collapsed (T5)"
+            );
+        }
+        for (base, name) in [(56u8, "brass"), (64u8, "reed")] {
+            let mut min_s = f32::INFINITY;
+            let (mut ma, mut mb) = (0u8, 0u8);
+            for a in base..base + 8 {
+                for b in (a + 1)..base + 8 {
+                    let (tier, s, _) = score_pair(&ps[a as usize], &ps[b as usize]);
+                    if tier == Tier::Full && s < min_s {
+                        min_s = s;
+                        (ma, mb) = (a, b);
+                    }
+                }
+            }
+            assert!(
+                min_s >= margin,
+                "{name}: tightest independent-onset pair GM {ma}/{mb} scores {min_s:.4} \
+                 < MARGIN_P {margin:.4} — BAR_FULL has too thin a margin below the good \
+                 families"
+            );
+        }
+    }
+
+    /// §3 test 4 — while GM 29/30 share the literal `Pluck::new(&DRIVE)` arm
+    /// they must score EXACTLY zero at every stage of the metric (byte-identical
+    /// ⇒ 0, §2.3). The drive main≠alt unit replaces this with a distinctness
+    /// assertion when it splits the arm.
+    #[test]
+    fn byte_identical_arms_score_zero() {
+        let ps = passports();
+        let a = &ps[29];
+        let b = &ps[30];
+        for k in 0..NKEYS {
+            let diff: f32 = a[k]
+                .w1
+                .iter()
+                .zip(b[k].w1.iter())
+                .map(|(&x, &y)| (x - y).abs())
+                .fold(0.0, f32::max);
+            assert!(
+                diff == 0.0,
+                "GM 29/30 W1 renders differ at key {} — the shared DRIVE arm split \
+                 without updating this oracle",
+                PROBE_KEYS[k]
+            );
+        }
+        assert!(score_full(a, b) < 1e-6, "GM 29/30 full score not ~0");
+        assert!(score_tail(a, b) < 1e-6, "GM 29/30 tail score not ~0");
+    }
+
+    /// §3 test 5 — premetric sanity: score(a,a) = 0 exactly, symmetry, and
+    /// every feature of every passport finite (catches NaN / denormal /
+    /// asymmetric-formula bugs).
+    #[test]
+    fn metric_is_a_premetric() {
+        let ps = passports();
+        for (i, p) in ps.iter().enumerate() {
+            for (k, pk) in p.iter().enumerate() {
+                pk.assert_finite(&format!("GM {i} key {}", PROBE_KEYS[k]));
+            }
+        }
+        for &p in &[0usize, 4, 19, 25, 29, 40, 52, 56, 64, 72, 88, 104] {
+            assert!(
+                score_full(&ps[p], &ps[p]) == 0.0 && score_tail(&ps[p], &ps[p]) == 0.0,
+                "GM {p}: self-distance is not exactly zero"
+            );
+        }
+        for &(a, b) in &[(0u8, 1u8), (4, 5), (24, 25), (56, 60), (64, 71), (88, 92)] {
+            let (pa, pb) = (&ps[a as usize], &ps[b as usize]);
+            assert!(
+                (score_full(pa, pb) - score_full(pb, pa)).abs() < 1e-9
+                    && (score_tail(pa, pb) - score_tail(pb, pa)).abs() < 1e-9
+                    && is_shared_onset(pa, pb) == is_shared_onset(pb, pa),
+                "GM {a}/{b}: metric is not symmetric"
+            );
+        }
+    }
+
+    /// §3 test 6 — the wrong-path tripwire (T1): every LA-wrapped program's
+    /// sample layer actually engages at the probe keys, guarding
+    /// `LaVoice::wrap`'s silent bare-model fallback when a repitch leaves the
+    /// 0.5–2.05 zone window. The program list mirrors the `make()` wiring
+    /// (every `LaVoice::wrap` arm).
+    ///
+    /// Measured deviation from the HLD's ">0.5 dB W1 RMS" criterion: the
+    /// repo's own `la_level_continuity` contract level-matches the sampled
+    /// onset to the model's (GM 68 oboe measured −0.24 dB at key 72 while
+    /// fully engaged), so an RMS delta is blind to a CORRECT engagement. The
+    /// waveform difference reads the same intent robustly: exactly 0 on the
+    /// bare-model fallback, O(1) when a different (sampled) onset plays.
+    #[test]
+    fn sample_layer_engaged_at_probe_keys() {
+        const LA_WRAPPED: &[u8] = &[
+            0, 1, 3, 24, 40, 41, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 110,
+        ];
+        let ps = passports();
+        let mut failures = Vec::new();
+        for &prog in LA_WRAPPED {
+            let mut rel_diffs = Vec::new();
+            for k in 0..NKEYS {
+                let on = &ps[prog as usize][k].w1;
+                let off = {
+                    let mut v = crate::voices::make(prog, PROBE_KEYS[k], VEL, SR, SEED, false);
+                    let mut buf = vec![0f32; (0.13 * SR) as usize];
+                    v.render(&mut buf);
+                    seg(&buf, WINDOWS[0]).to_vec()
+                };
+                let diff: Vec<f32> = on.iter().zip(off.iter()).map(|(&x, &y)| x - y).collect();
+                let denom = ps[prog as usize][k].w1_rms.max(rms(&off)).max(1e-9);
+                rel_diffs.push((PROBE_KEYS[k], rms(&diff) / denom));
+            }
+            if !rel_diffs.iter().any(|&(_, d)| d > 0.05) {
+                failures.push(format!(
+                    "GM {prog}: W1 on/off waveform rel-diffs {rel_diffs:.3?} — LA layer \
+                     not engaged at either probe key (silent bare-model fallback?)"
+                ));
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    /// §7 — freeze which within-family pairs are shared-onset, so a future
+    /// bank change cannot silently move a pair between tiers (each tier has
+    /// its own bar, so a silent move changes the effective gate). T8: a
+    /// nominally shared-bank pair MISSING from this list means a silent
+    /// bare-model fallback — investigate the routing, don't reclassify.
+    #[test]
+    fn onset_tier_classification_is_stable() {
+        /// Pinned on the module's landing HEAD (2026-07-16 calibration run).
+        /// 0/1/3 share the piano bank, 40/41 the violin bank, 48/49 the
+        /// strings bank, 29/30 a literal code arm. 72/73 share the flute
+        /// bank but classify INDEPENDENT — the 0.06 s fade start lets the
+        /// piccolo/flute models diverge inside W1 (investigated, not a
+        /// fallback); their onset difference is real, so full-tier is honest.
+        const SHARED_ONSET_PAIRS: &[(u8, u8)] =
+            &[(0, 1), (0, 3), (1, 3), (29, 30), (40, 41), (48, 49)];
+        let ps = passports();
+        let mut got = Vec::new();
+        for fam in 0..16u8 {
+            let base = fam * 8;
+            for a in base..base + 8 {
+                for b in (a + 1)..base + 8 {
+                    if is_shared_onset(&ps[a as usize], &ps[b as usize]) {
+                        got.push((a, b));
+                    }
+                }
+            }
+        }
+        assert!(
+            got == SHARED_ONSET_PAIRS,
+            "shared-onset tier membership changed.\n  pinned: {SHARED_ONSET_PAIRS:?}\n  \
+             got:    {got:?}\nA pair moving tiers changes its effective bar — re-pin \
+             deliberately (and re-adjudicate the pair) or fix the routing (T8)."
+        );
+    }
+
+    /// Calibration aid (not a gate): the §2.4/§7 control tables plus every
+    /// within-family pair's tier, score and per-dimension distances.
+    /// Run: `cargo test print_perceptual_matrix -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn print_perceptual_matrix() {
+        let ps = passports();
+        for fam in 0..16u8 {
+            let base = fam * 8;
+            println!("--- GM family {}..={} ---", base, base + 7);
+            for a in base..base + 8 {
+                for b in (a + 1)..base + 8 {
+                    let (pa, pb) = (&ps[a as usize], &ps[b as usize]);
+                    let (tier, s, bar) = score_pair(pa, pb);
+                    let tag = match allow_reason(a, b) {
+                        Some(Why::Collapse(u)) => format!(" [Collapse → {u}]"),
+                        Some(Why::EarPending(q)) => format!(" [EarPending: {q}]"),
+                        None => String::new(),
+                    };
+                    let flag = if s < bar && allow_reason(a, b).is_none() {
+                        "  <== PERCEIVED CLONE"
+                    } else {
+                        ""
+                    };
+                    match tier {
+                        Tier::Full => {
+                            let d0 = dims_view(&pa[0], &pb[0], V_LONG);
+                            let d1 = dims_view(&pa[1], &pb[1], V_LONG);
+                            println!(
+                                "  GM {a:3} vs {b:3}: FULL {s:.4}{tag}{flag}  longdims \
+                                 k48 {d0:.2?} k72 {d1:.2?}"
+                            );
+                        }
+                        Tier::Tail => {
+                            let d0 = dims_tail(&pa[0], &pb[0]);
+                            let d1 = dims_tail(&pa[1], &pb[1]);
+                            println!(
+                                "  GM {a:3} vs {b:3}: TAIL {s:.4}{tag}{flag}  taildims \
+                                 k48 {d0:.2?} k72 {d1:.2?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        println!("\n=== §2.4 / §7 calibration controls ===");
+        let mut neg_full: f32 = 0.0;
+        let mut neg_tail: f32 = 0.0;
+        for &(a, b) in &[(0u8, 1u8), (0, 3), (4, 5), (29, 30)] {
+            let (tier, s, _) = score_pair(&ps[a as usize], &ps[b as usize]);
+            println!("NEG GM {a}/{b}: {tier:?} {s:.4}");
+            match tier {
+                Tier::Full => neg_full = neg_full.max(s),
+                Tier::Tail => neg_tail = neg_tail.max(s),
+            }
+        }
+        let mut pos_min = f32::INFINITY;
+        for &(a, b) in POS_FULL {
+            let (tier, s, _) = score_pair(&ps[a as usize], &ps[b as usize]);
+            println!("POS GM {a}/{b}: {tier:?} {s:.4}");
+            pos_min = pos_min.min(s);
+        }
+        for (base, name) in [(56u8, "brass"), (64u8, "reed")] {
+            let mut fam_min = f32::INFINITY;
+            for a in base..base + 8 {
+                for b in (a + 1)..base + 8 {
+                    let (tier, s, _) = score_pair(&ps[a as usize], &ps[b as usize]);
+                    if tier == Tier::Full {
+                        fam_min = fam_min.min(s);
+                    }
+                }
+            }
+            println!("{name} family tier-1 minimum: {fam_min:.4}");
+            pos_min = pos_min.min(fam_min);
+        }
+        for &(a, b) in &[(40u8, 41u8), (48, 49), (72, 73), (40, 44)] {
+            let (tier, s, _) = score_pair(&ps[a as usize], &ps[b as usize]);
+            println!("ADJUDICATE GM {a}/{b}: {tier:?} {s:.4} (ear once, §6/§7)");
+        }
+        println!(
+            "BAR_FULL gap: [{:.4}, {:.4}] (geomean {:.4}); current {BAR_FULL}",
+            1.25 * neg_full,
+            pos_min / MARGIN_MUL,
+            (1.25 * neg_full * pos_min / MARGIN_MUL).sqrt().max(0.0)
+        );
+        println!(
+            "BAR_TAIL lower anchor: {:.4} (POS_tail anchored on nothing, §7); current {BAR_TAIL}",
+            1.25 * neg_tail
+        );
     }
 }

@@ -10455,6 +10455,34 @@ mod tests {
         traj, traj_peak_time_s, RenderSignature, BW_TREM_PEAK_FLOOR,
     };
 
+    /// Tripwire T7 of the perceptual-distinctness oracle (round-3 Wave 0):
+    /// its windows W4/W5 (0.90 s+) are "model-owned for every LA-wrapped
+    /// program" ONLY while every LA crossfade ends before 0.90 s. A future
+    /// fade retune past that silently re-owns W4 and invalidates the
+    /// two-tier calibration — re-derive the oracle windows before moving one.
+    #[test]
+    fn la_fade_ends_before_model_owned_window() {
+        for (name, (_, fade)) in [
+            ("LA_VIOLIN", LA_VIOLIN),
+            ("LA_FIDDLE", LA_FIDDLE),
+            ("LA_CONTRABASS", LA_CONTRABASS),
+            ("LA_CELLO", LA_CELLO),
+            ("LA_FLUTE", LA_FLUTE),
+            ("LA_PIANO", LA_PIANO),
+            ("LA_BRASS", LA_BRASS),
+            ("LA_REED", LA_REED),
+            ("LA_GUITAR", LA_GUITAR),
+            ("LA_STRINGS", LA_STRINGS),
+        ] {
+            assert!(
+                fade.1 < 0.90,
+                "{name} fade ends at {} s >= 0.90 — W4/W5 of the perceptual \
+                 distinctness oracle would no longer be model-owned (T7)",
+                fade.1
+            );
+        }
+    }
+
     #[test]
     fn control_lfo_advances_at_the_requested_rate() {
         let sr = 44100.0;

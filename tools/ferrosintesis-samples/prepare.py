@@ -174,6 +174,40 @@ STEEL_URLS = {
     for dest, member in STEEL_SOURCES.items()
 }
 
+# Harpsichord (GM 6) — VCSL "Harpsichord, Unk" (Harpsi4), a 5-octave FF–f''' plucked
+# keyboard, CC0 1.0 (github.com/sgossner/VCSL; the root LICENSE is the full CC0 1.0
+# Universal text, added in commit c1ea7bcc). Single register (Main), single round
+# robin (rr1) — one flat layer exactly like nylon/steel, so LaVoice's vel_amp does
+# the dynamic scaling. THE PIN IS LOAD-BEARING: fetch from VCSL_REV only. Note that
+# VCSL's octave labels sit ONE OCTAVE BELOW sounding pitch (measured 2026.07.17 —
+# label C3 sounds 262 Hz = C4), the same offset the VSCO string sections carry. So
+# the destination names use the SOUNDING pitch and map to the octave-down source
+# label; the MEASURED root (not the label) is what lands in sampler.rs.
+VCSL_REV = "c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e"
+_VCSL_HARPSI_DIR = "Chordophones/Zithers/Harpsichord, Unk/Sustains"
+# dest (SOUNDING pitch) -> source label (one octave down); ~6-semitone C/F grid
+# spanning sounding C2..F6 (max repitch ±3 st, mirroring nylon).
+_HARPSI_ZONES = [
+    ("harpsi_C2.wav", "C1"),
+    ("harpsi_F2.wav", "F1"),
+    ("harpsi_C3.wav", "C2"),
+    ("harpsi_F3.wav", "F2"),
+    ("harpsi_C4.wav", "C3"),
+    ("harpsi_F4.wav", "F3"),
+    ("harpsi_C5.wav", "C4"),
+    ("harpsi_F5.wav", "F4"),
+    ("harpsi_C6.wav", "C5"),
+    ("harpsi_F6.wav", "F5"),
+]
+HARPSICHORD_URLS = {
+    dest: (
+        f"https://raw.githubusercontent.com/sgossner/VCSL/{VCSL_REV}/"
+        f"{urllib.parse.quote(_VCSL_HARPSI_DIR)}/"
+        f"Harpsi4_Sus_Main_{urllib.parse.quote(label)}_rr1.wav"
+    )
+    for dest, label in _HARPSI_ZONES
+}
+
 # GM 109 bagpipe (HLD 2026.07.17). A CC0 FreePats G-pipe: two separately-recorded
 # drones (bass G2, tenor G3) an octave apart, plus a chanter. These are LOOPED
 # sustains, not attack transients — `extract_loop` (not `trim_to_onset`) emits a
@@ -227,6 +261,11 @@ F0_RANGE = {
     # lesson. The Martin is tuned ~12 cents flat throughout; harmless, because
     # the MEASURED root is what lands in the zone table.
     "steel": (70.0, 1050.0),
+    # harpsichord sounds C2 65 Hz … F6 1396 Hz; ceiling 1500 clears the top
+    # zone's fundamental but stays under its 2nd harmonic (2792) — the
+    # brass/oboe autocorr lesson. Bright and plucked, but the fundamental
+    # dominates: the probe measured every zone correctly even at a 2200 ceiling.
+    "harpsi": (55.0, 1500.0),
     # violin section G2-name spans G3 196 Hz … D5-name D6 1175 Hz (VSCO's
     # octave labels sit one below sounding pitch here); ceiling 1300 keeps
     # autocorr off the top zone's 2nd harmonic (the brass/oboe lesson)
@@ -242,6 +281,7 @@ KEEP_FAM = {
     "piano": (1.8, 0.6),
     "nylon": (0.9, 0.30),
     "steel": (0.9, 0.30),
+    "harpsi": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -658,12 +698,14 @@ def main():
             ensure_source(fn, url, src)
         for fn, url in STEEL_URLS.items():
             ensure_source(fn, url, src)
+        for fn, url in HARPSICHORD_URLS.items():
+            ensure_source(fn, url, src)
         ensure_guitar_sources(src)
         ensure_bagpipe_sources(src)
 
         # Looped bagpipe sustains (own transform: extract_loop, not trim_to_onset)
         rows += _bake_bagpipe(src)
-        for fn in sorted(SOURCES | GUITAR_SOURCES | STEEL_URLS):
+        for fn in sorted(SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS):
             x, sr = read_wav(os.path.join(src, fn))
             x = resample(x, sr, OUT_SR)
             sr = OUT_SR

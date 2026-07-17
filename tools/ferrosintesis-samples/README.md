@@ -52,6 +52,13 @@ supplies the onset of a note, then crossfades into the modeled body or sustain.
   source has one take per note — no velocity layers, no round robins. GM 25
   (steel) stays pure model: no clean CC0 steel-string source yet (the
   FreePats FSS Steel-String set is GPL-with-exception).
+- `harpsi_*.wav` — harpsichord (GM 6) quill-pluck onsets, 10 pitch zones
+  sounding C2–F6 (~6-semitone C/F grid, one take per note: single register
+  `Main`, single round robin), kept 0.9 s like the guitars so the sample carries
+  the quill transient and early jangle while the Karplus-Strong string keeps the
+  slow-damped decay. VCSL's file labels sit ONE OCTAVE BELOW sounding pitch, so
+  the bake renames each zone to its sounding pitch and the measured root (not the
+  label) lands in the zone table.
 - `drum_sus_cymb1_*`, `drum_crash1_*`, `drum_kick_*`, `drum_snare2_*`
   — unpitched drum-hit overlays for the default kit: crash/suspended cymbal
   attacks kept to ~2.2 s, kick/snare attacks kept to ~0.46 s. The modeled drum
@@ -77,6 +84,16 @@ by SHA-256
 (verified before extraction). Extraction shells out to 7-Zip
 (`7z x -y -o<dir> <archive>`) — the archive uses an LZMA filter chain that
 bsdtar/GNU tar cannot decode; no Python dependency is added.
+
+The `harpsi_*` bank is trimmed from the **Versilian Community Sample Library
+(VCSL)** "Harpsichord, Unk" (Harpsi4) set, a 5-octave FF–f''' harpsichord
+(<https://github.com/sgossner/VCSL>), released under the **Creative Commons CC0
+1.0 Universal public domain dedication** — the repo's root `LICENSE` is the full
+CC0 1.0 legal text (added in commit `c1ea7bcc`), and the README restates it. The
+generator pins the source to commit
+`c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e` and fetches the ten `Sustains` WAVs
+directly (24-bit stereo; `read_wav` downmixes to mono). No attribution required;
+given anyway with thanks.
 
 ## Regenerating
 

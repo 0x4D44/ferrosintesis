@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 
 /// Number of WAV files embedded in this package.
-pub const FILE_COUNT: usize = 147;
+pub const FILE_COUNT: usize = 157;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
@@ -210,6 +210,16 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         "drum_sus_cymb1_mp_rr2.wav",
         include_bytes!("../samples/drum_sus_cymb1_mp_rr2.wav"),
     ),
+    ("harpsi_C2.wav", include_bytes!("../samples/harpsi_C2.wav")),
+    ("harpsi_C3.wav", include_bytes!("../samples/harpsi_C3.wav")),
+    ("harpsi_C4.wav", include_bytes!("../samples/harpsi_C4.wav")),
+    ("harpsi_C5.wav", include_bytes!("../samples/harpsi_C5.wav")),
+    ("harpsi_C6.wav", include_bytes!("../samples/harpsi_C6.wav")),
+    ("harpsi_F2.wav", include_bytes!("../samples/harpsi_F2.wav")),
+    ("harpsi_F3.wav", include_bytes!("../samples/harpsi_F3.wav")),
+    ("harpsi_F4.wav", include_bytes!("../samples/harpsi_F4.wav")),
+    ("harpsi_F5.wav", include_bytes!("../samples/harpsi_F5.wav")),
+    ("harpsi_F6.wav", include_bytes!("../samples/harpsi_F6.wav")),
     (
         "horn_A#1_f.wav",
         include_bytes!("../samples/horn_A#1_f.wav"),
@@ -498,7 +508,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    const EXPECTED_BYTES: usize = 9032142;
+    const EXPECTED_BYTES: usize = 9833422;
 
     #[test]
     fn inventory_matches_packaged_wavs() {

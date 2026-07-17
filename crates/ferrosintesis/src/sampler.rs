@@ -715,6 +715,37 @@ pub fn steel_bank() -> &'static [Zone] {
     steel()
 }
 
+/// GM 6 harpsichord — VCSL "Harpsichord, Unk" (Harpsi4), a 5-octave FF–f'''
+/// plucked keyboard (CC0). One take per note upstream (single register `Main`,
+/// single round robin), so the bank is flat exactly like nylon/steel and
+/// `LaVoice`'s `vel_amp` scales the transient with velocity. The sample owns the
+/// quill pluck; the Karplus-Strong string (`HARPSICHORD` preset) carries the
+/// slow-damped jangle. Roots are the MEASURED sounding fundamentals — VCSL's file
+/// labels sit an octave below sounding pitch, so the bake renames each zone to
+/// its sounding pitch and measures the real f0 (roots printed by prepare.py).
+fn harpsichord() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "harpsi_C2.wav" => 65.64,
+            "harpsi_F2.wav" => 87.44,
+            "harpsi_C3.wav" => 131.38,
+            "harpsi_F3.wav" => 175.14,
+            "harpsi_C4.wav" => 262.36,
+            "harpsi_F4.wav" => 349.68,
+            "harpsi_C5.wav" => 524.79,
+            "harpsi_F5.wav" => 699.37,
+            "harpsi_C6.wav" => 1045.81,
+            "harpsi_F6.wav" => 1394.14,
+        )
+    })
+}
+
+/// GM 6 harpsichord attack bank (see [`harpsichord`]).
+pub fn harpsichord_bank() -> &'static [Zone] {
+    harpsichord()
+}
+
 // --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
 //
 // These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
@@ -2348,6 +2379,9 @@ mod tests {
             (24u8, 45, "nylon-guitar-low", true),
             (24u8, 52, "nylon-guitar", true),
             (24u8, 64, "nylon-guitar-high", true),
+            (6u8, 48, "harpsichord-low", true),
+            (6u8, 60, "harpsichord", true),
+            (6u8, 72, "harpsichord-high", true),
             (48u8, 48, "string-ens-low", false),
             (48u8, 76, "string-ens-high", false),
             (49u8, 55, "slow-strings", false),

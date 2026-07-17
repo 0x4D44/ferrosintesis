@@ -3,6 +3,15 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.17 — **A fast-decaying plucked-KEYBOARD LA layer needs a LOWER wrap gain than the guitars
+  (harpsichord `LA_HARPSICHORD`=0.28 vs `LA_GUITAR`=0.42): a real harpsichord's high strings damp fast
+  in the MODEL but the recording's body still rings, so at 0.42 the sampled 50–150 ms window sits 2.9×
+  above the model's own decay shape and trips `la_level_continuity` at C5 (key 72).** The quill spike
+  (0–50 ms) is before that seam window, so lowering gain keeps the attack character. Also: VCSL keyboard
+  file labels sit ONE OCTAVE BELOW sounding pitch (label C3 → 262 Hz = C4), same as the VSCO string
+  sections — the bake renames each zone to its sounding pitch and the MEASURED root lands in `sampler.rs`
+  (`voices.rs` `LA_HARPSICHORD`, `prepare.py` `HARPSICHORD_URLS`, probe `tools/…` measured 0.91–1.00 conf).
+
 - 2026.07.17 — **Inspect a candidate sample's ACTUAL AUDIO (spectral flatness + dominant-partial
   concentration) before trusting its name/licence for a timbre role.** A licence-only search called
   VCSL "Gong 1" a near-pitchless tam-tam; it is a PITCHED gong (sharp 143 Hz/D3, 95%-concentrated) —

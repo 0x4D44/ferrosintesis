@@ -2458,7 +2458,7 @@ mod perceptual_distinctness {
     #[test]
     fn sample_layer_engaged_at_probe_keys() {
         const LA_WRAPPED: &[u8] = &[
-            0, 1, 3, 24, 40, 41, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 110,
+            0, 1, 3, 6, 24, 40, 41, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 110,
         ];
         let ps = passports();
         let mut failures = Vec::new();

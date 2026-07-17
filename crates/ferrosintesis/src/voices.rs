@@ -7821,6 +7821,15 @@ const LA_REED: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
 /// handover onto the model's decay) the loud pick no longer steps — and the
 /// rewritten attack-is-the-peak leg makes a quiet-pick hack fail instead.
 const LA_GUITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
+/// GM 6 harpsichord: the sample owns the quill pluck (first ~30 ms), the
+/// Karplus-Strong string carries the slow-damped jangle from ~200 ms — the same
+/// onset-ownership split as the plucked guitars. Gain is BELOW the guitar's 0.42:
+/// a harpsichord's high strings are short and damp fast, so the model's own decay
+/// is very quiet by 50-150 ms while the real recording's body still rings — at
+/// 0.42 that stepped the seam 2.9x beyond the model's shape at C5. 0.28 meets the
+/// `la_level_continuity` cap with margin while keeping the sample dominant at the
+/// onset (the quill spike lives in the first 50 ms, before the seam window).
+const LA_HARPSICHORD: (f32, (f32, f32)) = (0.28, (0.05, 0.20));
 /// String sections 48-49: the real section swell reads best with a longer
 /// crossfade than the solo bowed layer (a section "comes into focus", it
 /// does not bite), so the transient hands over across [0.10, 0.40] s.
@@ -10656,8 +10665,26 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         4 => Box::new(electric_piano_1(key, vel, sr, seed)),
         5 => Box::new(fm_electric_piano(key, vel, sr)),
         // §2.10: the harpsichord is PLUCKED (jack plectrum), not an additive
-        // sine stack — Pluck gives the physical decay and quill twang.
-        6 => Box::new(Pluck::new(&HARPSICHORD, key, vel, sr, seed)),
+        // sine stack — Pluck gives the physical decay and quill twang. The LA
+        // layer (2026.07.17) crossfades the real VCSL quill onset over that model,
+        // exactly as the nylon/steel guitars wrap their Pluck.
+        6 => {
+            let model = Box::new(Pluck::new(&HARPSICHORD, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_HARPSICHORD;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::harpsichord_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         7 => Box::new(Pluck::new(&CLAVINET, key, vel, sr, seed)),
         8 => Box::new(bell(
             key,
@@ -12465,10 +12492,23 @@ mod tests {
                 render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, false);
             let sampled =
                 render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, true);
-            assert_eq!(
-                plain, sampled,
-                "GM{program} still uses the acoustic piano LA sample layer"
-            );
+            if program == 6 {
+                // GM6 harpsichord gained its OWN VCSL quill LA onset (2026.07.17):
+                // its sample layer must ENGAGE (plain != sampled). It is the
+                // harpsichord bank, not the piano's — the distinct-from-GM0 and
+                // is_acoustic_piano checks above already prove GM6 is not the
+                // acoustic-piano voice, so this is a positive engagement control.
+                assert_ne!(
+                    plain, sampled,
+                    "GM6 harpsichord LA sample layer did not engage"
+                );
+            } else {
+                // GM4/5/7 stay pure model — no LA layer, so sampled == plain.
+                assert_eq!(
+                    plain, sampled,
+                    "GM{program} unexpectedly uses an LA sample layer"
+                );
+            }
         }
 
         let band_ratio = |program: u8, key: u8, center: f32| {
@@ -20767,7 +20807,7 @@ mod tests {
     /// where `samples: true` renders a different signal (everything else
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
-        0, 1, 2, 3, 24, 40, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 109, 110,
+        0, 1, 2, 3, 6, 24, 40, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

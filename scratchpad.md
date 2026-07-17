@@ -1,5 +1,13 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.17 — **`tools/ferrosintesis-samples/README.md` inventory is stale on GM25
+  steel.** The `nylon_*` bullet still says "GM 25 (steel) stays pure model: no clean CC0
+  steel-string source yet" — but steel got a CC0 Martin HD28 LA bank on 2026.07.16
+  (`prepare.py` `STEEL_SOURCES`, `sampler.rs` `steel_bank`, `make()` program 25). The
+  README never got a `steel_*` inventory bullet or provenance paragraph. Add them (mirror
+  the new `harpsi_*` entry) when next curating that doc. (Spotted adding the harpsichord
+  bank; left steel alone to avoid touching another task's scope.)
+
 - [ ] 2026.07.16 — **`LA_PROGRAMS` in voices.rs tests (~:19255) is stale vs the make()
   wiring.** It lists GM 2 (fully modeled electric grand — the samples flag changes
   nothing) and omits GM 41 (which DOES wrap the violin bank since round 2). Consequence

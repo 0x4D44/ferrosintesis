@@ -6685,11 +6685,14 @@ pub const FLUTE: WindPreset = WindPreset {
 /// that velocity does NOT open the timbre (blow harder and it just goes sharp),
 /// hence vel_bright 0.15.
 pub const RECORDER: WindPreset = WindPreset {
-    // Round-2: 0.09/0.05/0.012 made h2 ≈ −21 dB — the steady tone was a near-sine
-    // (crest ~1.7), "doesn't sound like a recorder". Raise the low ladder to give it
-    // an audible open-pipe body, keeping evens present (h2 ≥ h3, the OPEN-pipe
-    // signature) and staying below the flute's 0.32 (recorder is the purer pipe).
-    harm: [0.16, 0.08, 0.02, 0.0, 0.0, 0.0],
+    // Round-3: the even-rich round-2 tone was INVERTED vs SC-55, which is ODD-tilted —
+    // h3 the dominant overtone, evens suppressed (present, not dead), an audible odd
+    // ladder (h5). A recorder is an OPEN pipe (all harmonics allowed), but the SC-55
+    // patch's fipple/jet voicing tilts it odd — this matches the reference, NOT a stopped-
+    // pipe law. Per-harmonic SC-55 dB (probe key 78: h2≈−41 h3≈−29 h4≈−47 h5≈−46 h6≈−59
+    // h7≈−52), kept below the flute (purer pipe) and within the WD-O6b vel-tilt (≤1.25) /
+    // flue-pressure (≥1.22) gates. Calibrated at keys 78 + 65 — degree is Arthur's ear.
+    harm: [0.010, 0.036, 0.005, 0.006, 0.001, 0.0025], // h2..h7
     vel_bright: 0.15,
     reg_dark: 0.35,
     // 0.03 → 0.055 (§2.8.5.2): the old bed sat ~46 dB under the tone —
@@ -19300,35 +19303,76 @@ mod tests {
         mag_at(seg, WD_SR, f0 * n as f32) / mag_at(seg, WD_SR, f0).max(1e-9)
     }
 
-    /// The recorder is an OPEN pipe with an audible harmonic BODY, not a near-sine.
-    /// Round-2: harm=[0.09,0.05,0.012] made h2 ≈ −21 dB — the weakest low ladder of
-    /// any open pipe in the family — so the steady tone collapsed toward the
-    /// fundamental (crest ~1.7). Assert: (1) h2 audible; (2) still below the flute
-    /// (the recorder stays the purer pipe — WD-O5's ordering intent); (3) h2 ≥ h3,
-    /// the OPEN-pipe signature — a wrong "odd-harmonic hollow" fix that killed the
-    /// evens would VIOLATE this clause. Fail-first at harm[0]=0.09 (h2 ≈ 0.09).
+    /// HANN-windowed harmonic magnitude at n·f0 — leakage-robust (lesson 2026.07.14: the
+    /// rectangular `mag_at`/`wd_hr` leaks h1 into the weak upper harmonics, ~−44 dB into
+    /// h2, so SC-55-faithful −46 dB partials read as noise). Used by the recorder odd-tilt
+    /// oracle, which must resolve h5/h7 far below h1.
+    fn wd_mag_hann(seg: &[f32], f0: f32, n: u32) -> f32 {
+        let len = seg.len();
+        let win: Vec<f32> = seg
+            .iter()
+            .enumerate()
+            .map(|(i, &x)| {
+                x * (0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (len - 1) as f32).cos())
+            })
+            .collect();
+        mag_at(&win, WD_SR, f0 * n as f32)
+    }
+
+    /// WD recorder ODD-TILT (was `wd_recorder_is_an_open_pipe_not_a_sine`, which asserted
+    /// the inverted `h2 >= h3`). The recorder matches SC-55's odd-tilted spectrum: h3 the
+    /// dominant overtone, an audible odd ladder (h5 alive past h4), evens SUPPRESSED but
+    /// present (not a clarinet, not a sine). A recorder is an OPEN pipe; the odd-tilt is the
+    /// SC-55 patch's fipple/jet voicing, not a stopped-pipe law. HANN-windowed (leakage-
+    /// robust — the rectangular `wd_hr` leaks h1 into the weak upper odds; lesson 2026.07.14).
+    /// Two-sided + "h3 loudest overtone" so no degenerate single-partial spectrum passes; each
+    /// clause FAILS on the current even-dominant spectrum.
     #[test]
-    fn wd_recorder_is_an_open_pipe_not_a_sine() {
+    fn wd_recorder_matches_sc55_odd_tilt() {
         let key = wd_mid_key(&RECORDER);
         let f0 = key_freq(key);
         let rec = wd_render_dry(&RECORDER, key, 100, 0.5, 7);
-        let rec_body = segment(&rec, WD_SR, WD_PREVIB.0, WD_PREVIB.1);
-        let h2 = wd_hr(rec_body, f0, 2);
-        let h3 = wd_hr(rec_body, f0, 3);
+        let body = segment(&rec, WD_SR, WD_PREVIB.0, WD_PREVIB.1);
+        let m1 = wd_mag_hann(body, f0, 1).max(1e-12);
+        let m = |n: u32| wd_mag_hann(body, f0, n);
+        let (h2, h3, h4, h5, h6, h7) = (m(2), m(3), m(4), m(5), m(6), m(7));
         let flute = wd_render_dry(&FLUTE, key, 100, 0.5, 7);
-        let fl_h2 = wd_hr(segment(&flute, WD_SR, WD_PREVIB.0, WD_PREVIB.1), f0, 2);
-        println!("recorder body: h2 {h2:.4} h3 {h3:.4}  (flute h2 {fl_h2:.4})");
-        assert!(
-            h2 >= 0.14,
-            "recorder h2 {h2:.3} too weak — near-sine (need >= 0.14)"
+        let fl_body = segment(&flute, WD_SR, WD_PREVIB.0, WD_PREVIB.1);
+        let fl_h2r = wd_mag_hann(fl_body, f0, 2) / wd_mag_hann(fl_body, f0, 1).max(1e-12);
+        let odd_even = (h3 + h5 + h7) / (h2 + h4 + h6).max(1e-12);
+        eprintln!(
+            "recorder odd-tilt (re h1): h2 {:.3} h3 {:.3} h4 {:.3} h5 {:.3} h6 {:.3} h7 {:.3} | odd/even {odd_even:.2} | fl h2 {fl_h2r:.3}",
+            h2 / m1, h3 / m1, h4 / m1, h5 / m1, h6 / m1, h7 / m1
         );
+        // (1) h3 is the single loudest overtone (kills the even-dominant defect; leakage-robust)
         assert!(
-            h2 < fl_h2,
-            "recorder h2 {h2:.3} not below flute {fl_h2:.3} — must stay the purer pipe"
+            h3 >= h2 && h3 >= h4 && h3 >= h5 && h3 >= h6 && h3 >= h7,
+            "recorder h3 not the loudest overtone (h2 {:.4} h3 {:.4} h5 {:.4})",
+            h2 / m1,
+            h3 / m1,
+            h5 / m1
         );
+        // (2) aggregate odd dominance (SC-55 ≈ 2.9; current even-dominant ≈ 0.33 fails)
         assert!(
-            h2 >= h3,
-            "recorder h2 {h2:.3} < h3 {h3:.3} — evens must stay alive (open pipe)"
+            odd_even >= 2.5,
+            "recorder overtone odd/even {odd_even:.2} < 2.5 (not odd-tilted)"
+        );
+        // (3) the odd ladder is audibly ALIVE past h4 (kills the degenerate single-h3 pass).
+        // SC-55's h5/h3 ≈ 0.14; floor at 0.1·h3 — a dead h5 (leakage ≈ 0) fails, SC-55 passes.
+        assert!(
+            h5 >= 0.1 * h3,
+            "recorder h5 {:.4} < 0.1·h3 {:.4} — odd ladder dies at h3",
+            h5 / m1,
+            h3 / m1
+        );
+        // (4) evens PRESENT (a dead-even all-odd tone is a clarinet, not a recorder), below the
+        // flute (purer pipe), and not dominant. SC-55 h2/h3 ≈ 0.25; floor 0.15·h3 fails a
+        // clarinet-y regression while passing SC-55.
+        assert!(
+            h2 >= 0.15 * h3 && (h2 / m1) < fl_h2r && h2 <= h3,
+            "recorder even balance off: h2 {:.4} (flute {fl_h2r:.4}), h3 {:.4}",
+            h2 / m1,
+            h3 / m1
         );
     }
 

@@ -332,7 +332,7 @@ def _m1(sc: en.Score) -> None:
     for ch, cents in TUNING_CENTS:
         en.bend_range(sc, ch, 2, 0.0)          # RPN 0 = 2 semitones
         sc.bend(ch, 0.0, cents / 100.0)        # the static slendro offset
-    sc.cc(CH_GONG, 0, 1, 0.0)                  # CC0 nonzero: gong ageng bank
+    sc.cc(CH_GONG, 0, 2, 0.0)                  # CC0=2: the pitched gong-ageng bank (was CC0=1)
     _bronze_cycles(sc, 0, 4)
 
 

@@ -790,7 +790,7 @@ def _heart_slice(sc: en.Score, t0: float, t1: float) -> None:
 # ---------------------------------------------------------------------------
 
 def build_poolside(sc: en.Score) -> None:
-    sc.cc(CH_TAM, 0, 1, 0.0)           # latch the gong-ageng alt bank now
+    sc.cc(CH_TAM, 0, 2, 0.0)           # CC0=2: the pitched gong-ageng bank (was CC0=1)
     sc.cc(CH_HI, 74, 84, 0.0)          # the climb is BRIGHT (audio contrast)
     for chn, v in ((CH_HI, 80), (CH_LO, 78), (CH_CHOIR, 70),
                    (CH_FLUTE, 76), (CH_BRASS, 78), (CH_HARP, 96)):

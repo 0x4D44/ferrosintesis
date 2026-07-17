@@ -6,6 +6,7 @@ version = 4
 name = "ferrosintesis"
 version = "0.21.16"
 dependencies = [
+ "ferrosintesis-samples-clavinet",
  "ferrosintesis-samples-core",
  "ferrosintesis-samples-drumkit",
  "ferrosintesis-samples-gong",
@@ -19,6 +20,10 @@ version = "0.14.2"
 dependencies = [
  "ferrosintesis",
 ]
+
+[[package]]
+name = "ferrosintesis-samples-clavinet"
+version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-core"

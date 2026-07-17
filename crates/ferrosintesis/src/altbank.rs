@@ -1096,6 +1096,12 @@ pub fn make(
         117 => crate::drums::melodic_tom_b(key, vel, sr, seed),
         118 => crate::drums::synth_drum_b(key, vel, sr, seed),
         119 => crate::drums::reverse_cymbal_b(key, vel, sr, seed),
+        // GM 7 clavinet: the CC0 alt bank keeps the fully-modeled Pluck (2026.07.17),
+        // the same freeze idiom as 109 below. MANDATORY, not optional: without it the
+        // fall-through forwards `samples: true` into voices::make's new sampled 7 arm,
+        // leaking the default sampled clavinet onto alt-bank channels and hiding the
+        // model — the exact inverse of "move the existing clavinet to the alt bank".
+        7 => crate::voices::make(program, key, vel, sr, seed, false),
         // GM 109 bagpipe: the CC0 alt bank keeps the fully-modeled bagpipe (HLD
         // 2026.07.17). MANDATORY, not optional: without it the fall-through
         // below forwards `samples: true` into voices::make's new 109 arm, so the

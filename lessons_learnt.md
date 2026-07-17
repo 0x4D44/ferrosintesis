@@ -13,6 +13,17 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   MIDI period = tick math not intended seconds (960+240 tick = 1.25 s, NOT 1.5). Reproducer + SC-55 compare:
   `target/level_audit/` (mdmidiemu ROMs at `D:/language/mdsc55/roms/sc55`). See `wrk_docs/2026.07.17 - CR - instrument level audit + SC-55 trim.md`.
 
+- 2026.07.17 — **Extracting a LOOPED sample from an SF3 soundfont: ffmpeg's Ogg-Vorbis decode drops
+  ~80–100 trailing frames (Vorbis priming/padding), so the soundfont's `endloop` lands PAST the decoded
+  end — clamping it to the decoded length shortens short low-note loops below one period and DETUNES the
+  note (clavinet G1 read +200 cents).** Don't trust the soundfont loop points: loop PITCH-SYNCHRONOUSLY
+  — carve an exact integer number of periods (`T = sr/originalPitch`; `originalPitch` is accurate to a
+  few cents) from the steady body, length-preserving crossfade at the wrap (`prepare.py`
+  `_bake_clavinet_note`). Also: SF3 `shdr` start/end are BYTE offsets into `smpl` (each a self-contained
+  Ogg), NOT PCM frames as in SF2; and the sample NAME octave is +1 vs `originalPitch` (name "C4" = MIDI 48
+  = C3). Two RIFF-walker gotchas: a chunk header's size field is a SIZE not an end offset (`end=off+size`);
+  a `LIST` body starts after its 4-byte type (`data=off+12, size-4`).
+
 - 2026.07.17 — **A fast-decaying plucked-KEYBOARD LA layer needs a LOWER wrap gain than the guitars
   (harpsichord `LA_HARPSICHORD`=0.28 vs `LA_GUITAR`=0.42): a real harpsichord's high strings damp fast
   in the MODEL but the recording's body still rings, so at 0.42 the sampled 50–150 ms window sits 2.9×

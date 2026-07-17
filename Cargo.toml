@@ -2,6 +2,7 @@
 members = [
     "crates/ferrosintesis",
     "crates/ferrosintesis-cli",
+    "crates/ferrosintesis-samples-clavinet",
     "crates/ferrosintesis-samples-core",
     "crates/ferrosintesis-samples-drumkit",
     "crates/ferrosintesis-samples-gong",

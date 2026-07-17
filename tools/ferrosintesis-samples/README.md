@@ -59,6 +59,16 @@ supplies the onset of a note, then crossfades into the modeled body or sustain.
   slow-damped decay. VCSL's file labels sit ONE OCTAVE BELOW sounding pitch, so
   the bake renames each zone to its sounding pitch and the measured root (not the
   label) lands in the zone table.
+- `clavinet_*.wav` — GM 7 clavinet, the DEFAULT sampled voice (11 pitch zones
+  sounding G1–G6), extracted from the MuseScore "MS Basic" **SF3** soundfont. Unlike
+  the onset-only banks these are FULL decaying notes: each zone's ~0.2 s Ogg body is
+  looped **pitch-synchronously** (an exact integer number of `originalPitch` periods,
+  because the Ogg decode drops ~80–100 trailing frames and corrupts the soundfont's
+  short low-note loops) under a register-scaled exponential decay, then faded — a
+  self-contained ~1.6 s clavinet note the `ClavinetSampled` voice repitches per key
+  with a fast note-off damp. Output routes to the separate MIT `-clavinet` crate; the
+  modeled Pluck stays the `--no-samples` / CC0-alt voice. `t60`/level are ear-tunable.
+  **Unlike every other bank here, this one is MIT, not CC0.**
 - `drum_sus_cymb1_*`, `drum_crash1_*`, `drum_kick_*`, `drum_snare2_*`
   — unpitched drum-hit overlays for the default kit: crash/suspended cymbal
   attacks kept to ~2.2 s, kick/snare attacks kept to ~0.46 s. The modeled drum
@@ -94,6 +104,18 @@ generator pins the source to commit
 `c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e` and fetches the ten `Sustains` WAVs
 directly (24-bit stereo; `read_wav` downmixes to mono). No attribution required;
 given anyway with thanks.
+
+The `clavinet_*` bank is extracted from the **MuseScore "MS Basic"** soundfont
+(`musescore/MuseScore`, `share/sound/MS Basic.sf3`), released under the **MIT
+License** — the ONLY non-CC0 bank here. MIT (and MuseScore's terms) require the
+copyright notices to travel with the samples, so they ship in their own
+`ferrosintesis-samples-clavinet` crate with a `NOTICE`; the clavinet traces to the
+FluidR3Mono lineage (Frank Wen / Michael Cowgill / S. Christian Collins). The
+generator pins commit `d307a2bd899f15bf650efc3c2891211af5cb78b5` and verifies the
+SF3's SHA-256 (`5ea2375e…3c2d99c`) before use. SF3 stores each sample as a
+self-contained Ogg-Vorbis stream in the `smpl` chunk, so extraction slices the
+GM 7 preset's zones out by their byte offsets and decodes them with **ffmpeg** (the
+same shell-out precedent as `prepare_drumkit.py`'s FLAC decode).
 
 ## Regenerating
 

@@ -83,7 +83,8 @@ is what lets a later release add or rename a knob without breaking you.
 ## Feature flags
 
 `embedded-samples` (default) compiles two first-party asset crates into the
-binary: 212 recorded attack transients, 17.44 MiB of PCM. The synth uses them
+binary: 212 recorded attack transients plus an 11-zone sampled clavinet, 18.9 MiB
+of PCM. The synth uses them
 the way the Roland D-50 did — LA synthesis: play a real onset, crossfade into
 the modeled body — because the ear judges an instrument mostly by its first
 hundred milliseconds, and onsets (hammer strikes, bow bites, breath chiff,
@@ -93,7 +94,7 @@ brass articulation) are what synthesis fakes worst.
 
 | family | technique | GM programs |
 |--------|-----------|-------------|
-| **Pluck** | extended Karplus-Strong in **two polarizations** — a sustaining loop plus a faster-decaying, slightly detuned one, so notes decay fast-then-slow with a gentle beat, like a real string. The delay line is now **fractional-tap**, so pitch can *move* while a note rings: **MIDI pitch bend** glides it, and **CC68 legato** retunes an already-ringing string instead of re-picking it — hammer-ons and pull-offs, and slides on the fiddle/winds too (see "Performance" below). Tuned-delay allpass, in-loop damping, pick-position comb excitation, per-note round-robin variation. Acoustics get a **body resonator** (Helmholtz air mode + plate modes); electrics and basses get a **pickup-position comb**; basses also get an envelope-locked **sub-oscillator** for fundamental weight. GM 35 fretless adds an envelope-following mid formant that blooms open into the note's onset — the "mwah" rather than a static dark bass preset. GM 46 harp has its own broad soundboard resonances and skips the guitar wound-string key split. A dedicated **palm-mute** preset (heavy damping, short decay) lives at program 28; GM 7 clavinet uses a short bright pickup/comb pluck with a soft-clip string buzz. GM 6 harpsichord is a nearly velocity-insensitive quill pluck — fixed-energy excitation, no wound-string split, a jack thud on release — and since 2026.07 plays under an **LA sampled attack** (a CC0 VCSL harpsichord, 10 pitch zones sounding C2–F6) that carries the real quill onset while the model keeps the slow-damped jangle. GM 15 hammered dulcimer re-voices the polarization pair as a true **double course** — two near-equal strings 0.42 % apart with near-zero bridge coupling, so every note carries the instrument's slow unison-shimmer beat under a wooden hammer knock | guitars 24–31 (28 = muted), basses 32–39, harp 46, harpsichord 6, clavinet 7, **hammered dulcimer 15**, sitar 104, banjo 105, shamisen 106, koto 107 |
+| **Pluck** | extended Karplus-Strong in **two polarizations** — a sustaining loop plus a faster-decaying, slightly detuned one, so notes decay fast-then-slow with a gentle beat, like a real string. The delay line is now **fractional-tap**, so pitch can *move* while a note rings: **MIDI pitch bend** glides it, and **CC68 legato** retunes an already-ringing string instead of re-picking it — hammer-ons and pull-offs, and slides on the fiddle/winds too (see "Performance" below). Tuned-delay allpass, in-loop damping, pick-position comb excitation, per-note round-robin variation. Acoustics get a **body resonator** (Helmholtz air mode + plate modes); electrics and basses get a **pickup-position comb**; basses also get an envelope-locked **sub-oscillator** for fundamental weight. GM 35 fretless adds an envelope-following mid formant that blooms open into the note's onset — the "mwah" rather than a static dark bass preset. GM 46 harp has its own broad soundboard resonances and skips the guitar wound-string key split. A dedicated **palm-mute** preset (heavy damping, short decay) lives at program 28; GM 7 clavinet is **sampled by default** since 2026.07 (a real clavinet from the MuseScore MS Basic soundfont, MIT) — the modeled short bright pickup/comb pluck with a soft-clip string buzz is now the `--no-samples` and CC0-nonzero alt-bank voice. GM 6 harpsichord is a nearly velocity-insensitive quill pluck — fixed-energy excitation, no wound-string split, a jack thud on release — and since 2026.07 plays under an **LA sampled attack** (a CC0 VCSL harpsichord, 10 pitch zones sounding C2–F6) that carries the real quill onset while the model keeps the slow-damped jangle. GM 15 hammered dulcimer re-voices the polarization pair as a true **double course** — two near-equal strings 0.42 % apart with near-zero bridge coupling, so every note carries the instrument's slow unison-shimmer beat under a wooden hammer knock | guitars 24–31 (28 = muted), basses 32–39, harp 46, harpsichord 6, clavinet 7, **hammered dulcimer 15**, sitar 104, banjo 105, shamisen 106, koto 107 |
 | **Modal** | banks of decaying rotation-oscillator partials (no `sin()` in the loop) with strike noise; the partial bank retunes phase-continuously for pitch bend, RPN fine tune, portamento and aftertouch vibrato. Acoustic pianos GM 0–3 keep the inharmonic two-stage decay under the LA sampled hammer strike. GM 4 is a Rhodes-style tine EP, GM 5 a brighter FM/DX bell EP. GM 11 vibraphone adds the defining motor-fan amplitude tremolo. GM 47 timpani adds a struck-head pitch settle, velocity-bright upper modes, per-strike balance variation, and note-off release that lets short hits ring. GM 112–118 add modeled melodic percussion: bright tinkle bell, clanky agogo, tuned steelpan, dry woodblock, taiko, melodic tom and swept synth drum | acoustic pianos 0–3, electric pianos 4–5, celesta 8, glockenspiel 9, music box 10, **vibraphone 11** (metal bars with ~6 Hz motor tremolo), **wood bars 12–13** (marimba/xylophone with short key-scaled decays and band-passed mallet clicks), **tubular bells 14** (hand-tuned chime partials ≈ 2:3:4.2 with hum; strikes jitter so no two ring alike), timpani 47, crystal 96–103, kalimba 108, melodic percussion 112–118 |
 | **Organ / free reed** | **GM19 defaults to a cathedral organ**: stable per-rank/per-key pipe identities, generated 1024-sample rank tables, an English full-organ registration, a 32-foot pedal foundation on low keys, wind-load interaction and a fixed-rate tremulant whose depth follows CC1. It feeds its own long cathedral reverb without filtering away the infrasonic weight. CC0 nonzero selects the former additive GM19 drawbar/pipe voice and Leslie path. GM16–18 retain that additive drawbar/Leslie family with key click, chiff, pipe variation and rock-organ overdrive. GM20/21/23 are bellows free reeds: harmonium and accordions. GM22 harmonica now lives in the **Reed** family (below) and takes CC1 as pitch vibrato. | 16–21, 23 |
 | **SawStack** | detuned polyBLEP saw ensemble — **each layer with its own vibrato rate/phase and a slow random pitch drift**, so a section sounds like players, not one detuned synth. Strings and choir also answer authored **CC1 vibrato** and **CC68 legato**; pads keep their normal retriggering. The stack feeds a lowpass (strings, pads; the sweep pad's filter is LFO-swept) or a **vocal formant bank** that morphs open at the onset ("mm-ah"). Choir-pad 91 stays on the old pad path unless its channel authors CC70, then it uses the same vowel-morph formant bank. | strings 48–51, choir 52–54, pads 88–95 plus sustained FX 97/99/101/103 |
@@ -143,17 +144,21 @@ are dramatically slower and are not worth timing.
 
 ## Sample provenance and licensing
 
-The 228 embedded recordings (attack transients plus GM 109's looped bagpipe) are trimmed from the VSCO 2 Community Edition
+The 239 embedded recordings (attack transients, GM 109's looped bagpipe, and the
+GM 7 sampled clavinet) are trimmed from the VSCO 2 Community Edition
 orchestral library, the FreePats Spanish classical guitar bank, the Discord
 SFZ GM Bank's Martin HD28 steel-string acoustic, and the Versilian Community
-Sample Library's harpsichord — all CC0 1.0. The generator
+Sample Library's harpsichord — all CC0 1.0 — plus the GM 7 clavinet from the
+MuseScore "MS Basic" soundfont, which is **MIT** (not CC0). The generator
 pins every source — VSCO to an exact upstream commit, FreePats to a
-SHA-256-verified archive, the Martin and the VCSL harpsichord each to an exact
-upstream commit — and the full
+SHA-256-verified archive, and the Martin, the VCSL harpsichord and the MuseScore
+soundfont each to an exact commit and/or SHA-256 — and the full
 inventory, provenance and regeneration tooling live in the repository under
 [`tools/ferrosintesis-samples/`](https://github.com/0x4D44/ferrosintesis/tree/main/tools/ferrosintesis-samples).
-The two asset crates contain nothing but that PCM and `include_bytes!`. The
-code is licensed MIT OR Apache-2.0; the samples are CC0-1.0.
+The asset crates contain nothing but that PCM and `include_bytes!`. The
+code is licensed MIT OR Apache-2.0; the samples are CC0-1.0, **except the GM 7
+clavinet, which is MIT** — its own `ferrosintesis-samples-clavinet` crate carries
+the required attribution in `NOTICE`.
 
 ## MSRV and dependencies
 

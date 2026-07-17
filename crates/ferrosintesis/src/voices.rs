@@ -10685,7 +10685,17 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        7 => Box::new(Pluck::new(&CLAVINET, key, vel, sr, seed)),
+        // GM 7 clavinet: SAMPLED by default (MuseScore MS Basic, MIT — 2026.07.17).
+        // The modeled Pluck moves to the --no-samples fallback AND the CC0-nonzero
+        // alt bank (`altbank::make`'s 7 => arm forces samples=false), mirroring the
+        // GM 109 bagpipe's sampled-default / modeled-alt split.
+        7 => {
+            if samples {
+                crate::sampler::clavinet_sampled(key, vel, sr, seed)
+            } else {
+                Box::new(Pluck::new(&CLAVINET, key, vel, sr, seed))
+            }
+        }
         8 => Box::new(bell(
             key,
             vel,
@@ -12492,21 +12502,22 @@ mod tests {
                 render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, false);
             let sampled =
                 render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, true);
-            if program == 6 {
-                // GM6 harpsichord gained its OWN VCSL quill LA onset (2026.07.17):
-                // its sample layer must ENGAGE (plain != sampled). It is the
-                // harpsichord bank, not the piano's — the distinct-from-GM0 and
-                // is_acoustic_piano checks above already prove GM6 is not the
-                // acoustic-piano voice, so this is a positive engagement control.
+            if program == 6 || program == 7 {
+                // GM6 harpsichord gained its own VCSL quill LA onset (2026.07.17) and
+                // GM7 clavinet became a sampled voice by default (MuseScore, 2026.07.17):
+                // both must ENGAGE their sample bank (plain != sampled). Neither is the
+                // piano's bank — the distinct-from-GM0 and is_acoustic_piano checks above
+                // already prove they are not the acoustic-piano voice, so this is a
+                // positive engagement control.
                 assert_ne!(
                     plain, sampled,
-                    "GM6 harpsichord LA sample layer did not engage"
+                    "GM{program} sample voice did not engage (plain == sampled)"
                 );
             } else {
-                // GM4/5/7 stay pure model — no LA layer, so sampled == plain.
+                // GM4/5 stay pure model — no sample layer, so sampled == plain.
                 assert_eq!(
                     plain, sampled,
-                    "GM{program} unexpectedly uses an LA sample layer"
+                    "GM{program} unexpectedly uses a sample layer"
                 );
             }
         }
@@ -20858,7 +20869,8 @@ mod tests {
     /// where `samples: true` renders a different signal (everything else
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
-        0, 1, 2, 3, 6, 24, 40, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 109, 110,
+        0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 109,
+        110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

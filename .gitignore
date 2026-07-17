@@ -27,6 +27,7 @@ tools/*
 *.wav
 *.opus
 # ...but the synth's attack-transient sample banks are source, not output
+!crates/ferrosintesis-samples-clavinet/samples/*.wav
 !crates/ferrosintesis-samples-core/samples/*.wav
 !crates/ferrosintesis-samples-drumkit/samples/*.wav
 !crates/ferrosintesis-samples-orchestral/samples/*.wav

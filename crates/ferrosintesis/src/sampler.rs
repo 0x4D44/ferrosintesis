@@ -52,6 +52,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_orchestral::get(name))
         .or_else(|| ferrosintesis_samples_gong::get(name))
         .or_else(|| ferrosintesis_samples_grand::get(name))
+        .or_else(|| ferrosintesis_samples_clavinet::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 
@@ -1753,6 +1754,133 @@ impl Voice for GongOneShot {
     }
 }
 
+// --- GM 7 clavinet: the DEFAULT sampled voice (MuseScore MS Basic, MIT) ----------
+//
+// Eleven baked decaying notes (sounding G1-G6, pitch-synchronous loops) picked by
+// `nearest` and repitched per key. Unlike the ring-out gong, a clavinet string is
+// DAMPED on key release, so note-off starts a fast release fade. `--no-samples` and
+// the CC0-nonzero alt bank use the modeled `Pluck(&CLAVINET)` instead (routed in
+// `voices::make` / `altbank::make`).
+
+/// Clavinet output level — an EAR-tunable knob (this box has no ears), roughly
+/// level-matched to the modeled clavinet it replaces as the default voice.
+const CLAVINET_LEVEL: f32 = 0.80;
+/// Note-off damp time (t60): a clavinet string is stopped by the key, so it mutes
+/// fast — the release, not the baked body decay, governs a short note.
+const CLAVINET_RELEASE_T60: f32 = 0.06;
+
+/// GM 7 clavinet sampled bank: 11 baked decaying notes, sounding G1-G6. Roots are the
+/// exact nominal fundamentals — the bake loops pitch-synchronously to `originalPitch`,
+/// so the sustained pitch is dead-on and `nearest` repitches minimally per key.
+fn clavinet() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "clavinet_G1.wav" => 49.00,
+            "clavinet_C2.wav" => 65.41,
+            "clavinet_G2.wav" => 98.00,
+            "clavinet_C3.wav" => 130.81,
+            "clavinet_G3.wav" => 196.00,
+            "clavinet_C4.wav" => 261.63,
+            "clavinet_G4.wav" => 392.00,
+            "clavinet_C5.wav" => 523.25,
+            "clavinet_G5.wav" => 783.99,
+            "clavinet_C6.wav" => 1046.50,
+            "clavinet_G6.wav" => 1567.98,
+        )
+    })
+}
+
+/// GM 7 clavinet sampled bank (see [`clavinet`]).
+pub fn clavinet_bank() -> &'static [Zone] {
+    clavinet()
+}
+
+/// GM 7 clavinet: the DEFAULT sampled voice. Plays the nearest baked zone repitched
+/// to the key (like [`GongOneShot`]), but a clavinet is DAMPED on key release, so
+/// note-off starts a fast release fade instead of ringing out.
+#[cfg(feature = "embedded-samples")]
+pub struct ClavinetSampled {
+    data: &'static [f32],
+    pos: f32,
+    base_step: f32,
+    bend: f32,
+    gain: f32,
+    rel_mul: f32,
+    env: f32,
+    releasing: bool,
+}
+
+/// One clavinet note: nearest baked zone, repitched to the key. `seed` is unused
+/// (no round robins), kept for a uniform voice-factory signature.
+#[cfg(feature = "embedded-samples")]
+pub fn clavinet_sampled(key: u8, vel: u8, sr: f32, _seed: u32) -> Box<dyn Voice> {
+    let f = key_freq(key);
+    let zone = nearest(clavinet_bank(), f);
+    Box::new(ClavinetSampled {
+        data: zone.data.as_slice(),
+        pos: 0.0,
+        base_step: 44_100.0 / sr * (f / zone.root),
+        bend: 1.0,
+        gain: CLAVINET_LEVEL * vel_amp(vel),
+        rel_mul: 10f32.powf(-3.0 / (CLAVINET_RELEASE_T60 * sr)),
+        env: 1.0,
+        releasing: false,
+    })
+}
+
+/// Modeled-only builds have no clavinet bank; the caller never reaches here
+/// (`voices::make` routes to this only when `samples` is true, which implies the
+/// feature), so this stub only satisfies the type-checker.
+#[cfg(not(feature = "embedded-samples"))]
+pub fn clavinet_sampled(_key: u8, _vel: u8, _sr: f32, _seed: u32) -> Box<dyn Voice> {
+    panic!("clavinet sample requested from a modeled-only ferrosintesis build")
+}
+
+#[cfg(feature = "embedded-samples")]
+impl Voice for ClavinetSampled {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let n = self.data.len();
+        let step = self.base_step * self.bend;
+        for o in out.iter_mut() {
+            let j = self.pos as usize;
+            // reap at the bounded tail: the baked note ends on a fade to zero.
+            if j + 1 >= n {
+                return false;
+            }
+            let frac = self.pos - j as f32;
+            let a = self.data[j];
+            let b = self.data[j + 1];
+            *o += (a + (b - a) * frac) * self.gain * self.env;
+            self.pos += step;
+            if self.releasing {
+                self.env *= self.rel_mul;
+                if self.env < 1e-4 {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    fn note_off(&mut self) {
+        self.releasing = true;
+    }
+
+    fn released(&self) -> bool {
+        self.releasing
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "clavinetsampled"
+    }
+}
+
 #[cfg(all(test, feature = "embedded-samples"))]
 mod tests {
     use super::*;
@@ -2550,5 +2678,41 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// GM 7 clavinet routing (2026.07.17): the DEFAULT bank is the sampled voice,
+    /// while BOTH `--no-samples` and the CC0-nonzero ALT bank fall back to the modeled
+    /// Pluck — the "move the existing clavinet to the alt bank" contract. A render
+    /// check confirms the sampled default is a genuinely different signal from the alt.
+    #[test]
+    fn clavinet_default_is_sampled_alt_is_modeled() {
+        let sr = 44100.0;
+        assert_eq!(
+            voices::make(7, 60, 100, sr, 5, true).kind(),
+            "clavinetsampled",
+            "GM7 default (samples on) must be the sampled clavinet"
+        );
+        assert_eq!(
+            voices::make(7, 60, 100, sr, 5, false).kind(),
+            "CLAVINET",
+            "GM7 --no-samples must be the modeled Pluck"
+        );
+        assert_eq!(
+            crate::altbank::make(7, 1, 60, 100, sr, 5, true).kind(),
+            "CLAVINET",
+            "GM7 CC0-nonzero alt bank must be the modeled Pluck"
+        );
+        // the sampled default renders a different signal from the modeled alt
+        let (mut def, mut alt) = (
+            voices::make(7, 60, 100, sr, 5, true),
+            crate::altbank::make(7, 1, 60, 100, sr, 5, true),
+        );
+        let (mut db, mut ab) = (vec![0f32; 22050], vec![0f32; 22050]);
+        def.render(&mut db);
+        alt.render(&mut ab);
+        assert_ne!(
+            db, ab,
+            "sampled default must differ from the modeled alt bank"
+        );
     }
 }

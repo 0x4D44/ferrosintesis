@@ -273,6 +273,37 @@ GRAND_SOURCES = {
     for rr, v in (("", v_rr1), ("_rr2", v_rr2))
 }
 
+# Clavinet (GM 7) — the MuseScore "MS Basic" soundfont's clavinet (MIT, NOT CC0), the
+# default sampled voice; the modeled Pluck moves to the CC0-nonzero alt bank + the
+# --no-samples fallback. MS Basic is an SF3 soundfont: SF2 structure but each sample is
+# a self-contained Ogg-Vorbis stream in the `smpl` chunk, so the SF3 shdr start/end are
+# BYTE offsets (not sample frames) delimiting the Ogg — sliced out and decoded with
+# ffmpeg (same shell-out precedent as the drumkit's FLAC). THE PIN IS LOAD-BEARING and
+# the sha256 is verified before use. Output routes to the separate MIT-licensed
+# `ferrosintesis-samples-clavinet` crate so the CC0 banks stay pure CC0.
+MUSESCORE_REV = "d307a2bd899f15bf650efc3c2891211af5cb78b5"
+MUSESCORE_SF3_URL = (
+    f"https://raw.githubusercontent.com/musescore/MuseScore/{MUSESCORE_REV}/"
+    "share/sound/MS%20Basic.sf3"
+)
+MUSESCORE_SF3_SHA256 = (
+    "5ea2375e8bd7d8e71def1036978c1621e85b66934169b6a2744b27b9b3c2d99c"
+)
+# Each clavinet zone is baked into a self-contained decaying note: the ~0.2 s decoded
+# Ogg body's sustain loop is made seamless (a short crossfade) and repeated under an
+# exponential decay, so a held note rings and decays like a real clavinet string.
+# CLAVINET_T60 is register-scaled and EAR-TUNABLE (this box has no ears): low notes ring
+# longer. root MIDI 31 -> 2.4 s down to root 91 -> 0.9 s (linear in MIDI).
+CLAVINET_KEEP_S = 1.6
+CLAVINET_FADE_S = 0.05
+CLAVINET_SEAM_XF = 160  # loop-seam crossfade length (samples)
+
+
+def clavinet_t60(root_midi):
+    """Register-scaled clavinet decay t60 (EAR-tunable): 2.4 s low -> 0.9 s high."""
+    frac = (root_midi - 31) / 60.0
+    return round(2.4 - max(0.0, min(1.0, frac)) * 1.5, 3)
+
 # f0 search range per family (the default misses the piano's low octaves
 # and the low brass/bassoon fundamentals)
 F0_RANGE = {
@@ -763,6 +794,198 @@ def _bake_bagpipe(src):
     return rows
 
 
+_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def _midi_name(m):
+    return f"{_NOTE_NAMES[m % 12]}{m // 12 - 1}"
+
+
+def _midi_hz(m):
+    return 440.0 * 2 ** ((m - 69) / 12)
+
+
+def ensure_musescore_sf3(src):
+    """Fetch + sha256-verify the pinned MuseScore MS Basic soundfont."""
+    path = os.path.join(src, "MS_Basic.sf3")
+    if not os.path.exists(path):
+        print("fetching MS Basic.sf3 (~51 MB) ...", file=sys.stderr)
+        fetch(MUSESCORE_SF3_URL, path)
+    digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    if digest != MUSESCORE_SF3_SHA256:
+        raise ValueError(f"{path}: sha256 {digest} != pinned {MUSESCORE_SF3_SHA256}")
+    return path
+
+
+def _clavinet_zones(sf3):
+    """Parse an SF2/SF3 soundfont and return the GM7 clavinet's sample zones.
+
+    Returns (smpl_data_offset, [(root_midi, sample_start, sample_end, startloop,
+    endloop, samplerate), ...]) — SF3 start/end are BYTE offsets into `smpl`
+    (each slice is one self-contained Ogg-Vorbis stream); startloop/endloop are
+    decoded-frame offsets from the sample start.
+    """
+    assert sf3[0:4] == b"RIFF" and sf3[8:12] == b"sfbk", "not an SF2/SF3 file"
+
+    def u16(b, o):
+        return struct.unpack("<H", b[o:o + 2])[0]
+
+    # top-level walk: locate LIST sdta (holds `smpl`) and LIST pdta
+    lists = {}
+    pos = 12
+    while pos + 12 <= len(sf3):
+        cid = sf3[pos:pos + 4]
+        sz = struct.unpack("<I", sf3[pos + 4:pos + 8])[0]
+        if cid == b"LIST":
+            lists[sf3[pos + 8:pos + 12]] = (pos + 12, sz - 4)
+        pos += 8 + sz + (sz & 1)
+
+    def walk(off, size):
+        end = off + size
+        subs = {}
+        p = off
+        while p + 8 <= end:
+            cid = sf3[p:p + 4]
+            sz = struct.unpack("<I", sf3[p + 4:p + 8])[0]
+            subs[cid] = (p + 8, sz)
+            p += 8 + sz + (sz & 1)
+        return subs
+
+    sdta = walk(*lists[b"sdta"])
+    pdta = walk(*lists[b"pdta"])
+    smpl_off = sdta[b"smpl"][0]
+
+    def recs(name, width):
+        o, s = pdta[name]
+        return [sf3[o + i * width:o + (i + 1) * width] for i in range(s // width)]
+
+    phdr, pbag, pgen = recs(b"phdr", 38), recs(b"pbag", 4), recs(b"pgen", 4)
+    inst, ibag, igen = recs(b"inst", 22), recs(b"ibag", 4), recs(b"igen", 4)
+    shdr = recs(b"shdr", 46)
+
+    # preset bank==0 (phdr[22]) preset==7 (phdr[20]); presetBagNdx at [24]
+    pi = next(i for i, r in enumerate(phdr) if u16(r, 22) == 0 and u16(r, 20) == 7)
+    instr = None
+    for b in range(u16(phdr[pi], 24), u16(phdr[pi + 1], 24)):
+        for g in range(u16(pbag[b], 0), u16(pbag[b + 1], 0)):
+            if u16(pgen[g], 0) == 41:  # gen 41 = instrument index
+                instr = u16(pgen[g], 2)
+    if instr is None:
+        raise ValueError("clavinet preset has no instrument generator")
+
+    zones = []
+    for b in range(u16(inst[instr], 20), u16(inst[instr + 1], 20)):
+        sid = None
+        for g in range(u16(ibag[b], 0), u16(ibag[b + 1], 0)):
+            if u16(igen[g], 0) == 53:  # gen 53 = sampleID
+                sid = u16(igen[g], 2)
+        if sid is None:
+            continue  # global zone
+        h = shdr[sid]
+        start, end, sl, el, sr = struct.unpack("<IIIII", h[20:40])
+        root = h[40]  # originalPitch (MIDI) — trustworthy; sample NAME octave is +1
+        zones.append((root, start, end, sl, el, sr))
+    return smpl_off, zones
+
+
+def _seamless_loop(x, sl, el, xf):
+    """Return a length-(el-sl) loop whose wrap el->sl is click-free — PITCH-PRESERVING.
+
+    A soundfont loop `x[sl:el]` is an integer number of fundamental periods, so its
+    length MUST be preserved or the repeat re-pitches the note (shortening it broke the
+    low zones, whose loop is only 1-2 periods). Instead of trimming, crossfade the
+    loop's tail toward the `xf` samples that PRECEDE `sl`: the tail then trends into
+    `x[sl-1]`, so wrapping to `x[sl]` is continuous while the loop length is unchanged.
+    """
+    L = el - sl
+    xf = min(xf, L // 2, sl)  # bounded by the loop and the available pre-roll
+    loop = list(x[sl:el])
+    if xf >= 2:
+        for k in range(xf):
+            w = k / xf
+            loop[L - xf + k] = loop[L - xf + k] * (1 - w) + x[sl - xf + k] * w
+    return loop
+
+
+def _bake_clavinet_note(x, root_hz, sr, t60, keep_s=None, fade_s=None):
+    """Bake one decoded clavinet zone into a self-contained decaying note.
+
+    The decoded Ogg body (~0.2 s, real attack) is extended by looping a PITCH-
+    SYNCHRONOUS window under an exponential decay, then faded and peak-normalized.
+    We do NOT trust the soundfont's own loop points: the Ogg decode drops ~80-100
+    trailing frames (Vorbis padding), which shortens the short low-note loops below
+    an integer period and re-pitches the note. Because `originalPitch` is accurate,
+    we instead carve exactly `k` periods (`T = sr/root_hz`) out of the steady body,
+    ending a hair before the decoded end, so the loop length is an exact multiple of
+    the fundamental and the sustained pitch is dead-on.
+    """
+    keep_s = CLAVINET_KEEP_S if keep_s is None else keep_s
+    fade_s = CLAVINET_FADE_S if fade_s is None else fade_s
+    period = sr / root_hz
+    guard = 8
+    loop_end = min(len(x) - guard, len(x))
+    attack = int(0.004 * sr)  # keep a few ms of the real onset before the loop
+    max_k = max(1, int((loop_end - attack) / period))
+    k = min(max_k, 16)  # a handful of periods: stable, still a tiny embedded window
+    loop_len = int(round(k * period))
+    loop_start = max(0, loop_end - loop_len)
+    loop = _seamless_loop(x, loop_start, loop_end, CLAVINET_SEAM_XF)
+    out = list(x[:loop_start])
+    n = int(keep_s * sr)
+    i = 0
+    while len(out) < n:
+        out.append(loop[i % len(loop)])
+        i += 1
+    out = out[:n]
+    dec = 10 ** (-3.0 / (t60 * sr))
+    g = 1.0
+    for j in range(loop_start, len(out)):
+        g *= dec
+        out[j] *= g
+    f = int(fade_s * sr)
+    for c in range(f):
+        j = len(out) - f + c
+        if 0 <= j < len(out):
+            out[j] *= 1.0 - c / f
+    pk = max(abs(v) for v in out) or 1.0
+    return [v * 0.9 / pk for v in out]
+
+
+def _bake_clavinet(src):
+    """Extract + decode + bake the 11 GM7 clavinet zones from MS Basic.sf3.
+
+    Writes `clavinet_<sounding-pitch>.wav` into the MIT-licensed
+    `ferrosintesis-samples-clavinet` crate; returns print-table rows. Ogg decode
+    shells out to ffmpeg (mono 16-bit 44.1 kHz PCM), matching the drumkit's FLAC path.
+    """
+    sf3 = open(ensure_musescore_sf3(src), "rb").read()
+    smpl_off, zones = _clavinet_zones(sf3)
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-clavinet", "samples")
+    rows = []
+    for root, start, end, _sl, _el, _sr in sorted(zones):
+        ogg = os.path.join(src, f"clavinet_{root}.ogg")
+        wav = os.path.join(src, f"clavinet_{root}.wav")
+        with open(ogg, "wb") as f:
+            f.write(sf3[smpl_off + start:smpl_off + end])
+        subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", ogg, "-acodec", "pcm_s16le", wav], check=True)
+        x, wsr = read_wav(wav)
+        if wsr != OUT_SR:
+            x = resample(x, wsr, OUT_SR)
+            wsr = OUT_SR
+        seg = _bake_clavinet_note(x, _midi_hz(root), wsr, clavinet_t60(root))
+        # measure the baked note's root over its steady body (the zone table uses the
+        # MEASURED fundamental, as every other bank does)
+        nominal = _midi_hz(root)
+        f0, conf = measure_f0(seg, wsr, nominal * 0.85, nominal * 1.2)
+        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+        out_name = f"clavinet_{_midi_name(root)}.wav"
+        write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
+        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    return rows
+
+
 def main():
     socket.setdefaulttimeout(60)
     # `--local-only` skips the fetched full bank (network + rewriting the tracked
@@ -785,6 +1008,12 @@ def main():
 
         # Looped bagpipe sustains (own transform: extract_loop, not trim_to_onset)
         rows += _bake_bagpipe(src)
+
+        # GM7 clavinet: own transform (SF3 Ogg extract + ffmpeg decode + decay bake),
+        # cached by MuseScore rev, output to the separate MIT `-clavinet` crate.
+        clav_src = os.path.join(tempfile.gettempdir(), "musescore_sf3", MUSESCORE_REV)
+        os.makedirs(clav_src, exist_ok=True)
+        rows += _bake_clavinet(clav_src)
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | GRAND_SOURCES
         ):

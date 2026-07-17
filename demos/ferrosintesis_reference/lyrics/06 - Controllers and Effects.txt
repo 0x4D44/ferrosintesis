@@ -2,24 +2,24 @@ ferrosintesis Reference Audition - Controllers and Effects
 
 0:00  CC91 hall reverb: dry
 0:04  CC91 hall reverb: wet
-0:08  CC93 chorus: dry
-0:12  CC93 chorus: on
-0:17  CC94 echo: dry
-0:21  CC94 echo: on
-0:26  CC1 vibrato (violin)
-0:32  CC1 Leslie ramp (organ)
-0:42  CC74 filter sweep (lead)
-0:48  CC71 resonance (guitar, CC74 in band)
-0:54  CC64 sustain pedal (piano)
-0:59  CC70 vowel morph (choir)
-1:05  CC2 breath cut (flute)
-1:10  Pitch bend (violin)
-1:15  Channel aftertouch (brass)
-1:20  Portamento (lead)
-1:25  A/B piano sympathetic: GM000 vs GM004 [000]
-1:29  A/B piano sympathetic: GM000 vs GM004 [004]
-1:33  A/B guitar sympathetic: GM024 vs GM026 [024]
-1:37  A/B guitar sympathetic: GM024 vs GM026 [026]
-1:41  A/B overdrive insert: GM027 vs GM030 [027]
-1:45  A/B overdrive insert: GM027 vs GM030 [030]
-1:49  end
+0:10  CC93 chorus: dry
+0:14  CC93 chorus: on
+0:20  CC94 echo: dry
+0:24  CC94 echo: on
+0:30  CC1 vibrato (violin)
+0:36  CC1 Leslie ramp (organ)
+0:46  CC74 filter sweep (lead)
+0:52  CC71 resonance (guitar, CC74 in band)
+0:58  CC64 sustain pedal (piano)
+1:04  CC70 vowel morph (choir)
+1:10  CC2 breath cut (flute)
+1:16  Pitch bend (violin)
+1:22  Channel aftertouch (brass)
+1:28  Portamento (lead)
+1:34  A/B piano sympathetic: GM000 vs GM004 [000]
+1:38  A/B piano sympathetic: GM000 vs GM004 [004]
+1:42  A/B guitar sympathetic: GM024 vs GM026 [024]
+1:46  A/B guitar sympathetic: GM024 vs GM026 [026]
+1:50  A/B overdrive insert: GM027 vs GM030 [027]
+1:54  A/B overdrive insert: GM027 vs GM030 [030]
+1:58  end

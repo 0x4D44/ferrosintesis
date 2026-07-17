@@ -4,31 +4,31 @@ ferrosintesis Reference Audition - Reed, Pipe, Lead, Pad
 0:05  GM 065 Alto Sax
 0:10  GM 066 Tenor Sax
 0:15  GM 067 Baritone Sax
-0:19  GM 068 Oboe
-0:24  GM 069 English Horn
-0:29  GM 070 Bassoon
-0:34  GM 071 Clarinet
-0:39  GM 072 Piccolo
-0:43  GM 073 Flute
-0:48  GM 074 Recorder
-0:53  GM 075 Pan Flute
-0:58  GM 076 Blown Bottle
-1:03  GM 077 Shakuhachi
-1:07  GM 078 Whistle
-1:12  GM 079 Ocarina
-1:17  GM 080 Lead 1 (square)
-1:22  GM 081 Lead 2 (sawtooth)
-1:27  GM 082 Lead 3 (calliope)
-1:31  GM 083 Lead 4 (chiff)
-1:36  GM 084 Lead 5 (charang)
-1:41  GM 085 Lead 6 (voice)
-1:46  GM 086 Lead 7 (fifths)
-1:51  GM 087 Lead 8 (bass+lead)
-1:55  GM 088 Pad 1 (new age)
-2:00  GM 089 Pad 2 (warm)
-2:05  GM 090 Pad 3 (polysynth)
-2:10  GM 091 Pad 4 (choir)
-2:15  GM 092 Pad 5 (bowed)
-2:19  GM 093 Pad 6 (metallic)
-2:24  GM 094 Pad 7 (halo)
-2:29  GM 095 Pad 8 (sweep)
+0:20  GM 068 Oboe
+0:25  GM 069 English Horn
+0:30  GM 070 Bassoon
+0:35  GM 071 Clarinet
+0:40  GM 072 Piccolo
+0:45  GM 073 Flute
+0:50  GM 074 Recorder
+0:55  GM 075 Pan Flute
+1:00  GM 076 Blown Bottle
+1:05  GM 077 Shakuhachi
+1:10  GM 078 Whistle
+1:15  GM 079 Ocarina
+1:20  GM 080 Lead 1 (square)
+1:25  GM 081 Lead 2 (sawtooth)
+1:30  GM 082 Lead 3 (calliope)
+1:35  GM 083 Lead 4 (chiff)
+1:40  GM 084 Lead 5 (charang)
+1:45  GM 085 Lead 6 (voice)
+1:50  GM 086 Lead 7 (fifths)
+1:55  GM 087 Lead 8 (bass+lead)
+2:00  GM 088 Pad 1 (new age)
+2:05  GM 089 Pad 2 (warm)
+2:10  GM 090 Pad 3 (polysynth)
+2:15  GM 091 Pad 4 (choir)
+2:20  GM 092 Pad 5 (bowed)
+2:25  GM 093 Pad 6 (metallic)
+2:30  GM 094 Pad 7 (halo)
+2:35  GM 095 Pad 8 (sweep)

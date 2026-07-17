@@ -4,35 +4,35 @@ ferrosintesis Reference Audition - Keys, Chromatic, Organ, Guitar
 0:05  GM 001 Bright Acoustic Piano
 0:10  GM 002 Electric Grand Piano
 0:15  GM 003 Honky-tonk Piano
-0:19  GM 004 Electric Piano 1
-0:24  GM 005 Electric Piano 2
-0:29  GM 006 Harpsichord
-0:34  GM 007 Clavinet
-0:39  GM 008 Celesta
-0:43  GM 009 Glockenspiel
-0:48  GM 010 Music Box
-0:53  GM 011 Vibraphone
-0:58  GM 012 Marimba
-1:03  GM 013 Xylophone
-1:07  GM 014 Tubular Bells
-1:12  GM 015 Dulcimer
-1:17  GM 016 Drawbar Organ
-1:22  GM 017 Percussive Organ
-1:27  GM 018 Rock Organ
-1:31  GM 019 Church Organ
-1:36  GM 019 Church Organ [alt]
-1:41  GM 020 Reed Organ
-1:46  GM 021 Accordion
-1:51  GM 022 Harmonica
-1:55  GM 023 Tango Accordion
-2:00  GM 024 Acoustic Guitar (nylon)
-2:05  GM 025 Acoustic Guitar (steel)
-2:10  GM 026 Electric Guitar (jazz)
-2:15  GM 027 Electric Guitar (clean)
-2:19  GM 028 Electric Guitar (muted)
-2:24  GM 029 Overdriven Guitar
-2:29  GM 029 Overdriven Guitar [alt]
-2:34  GM 030 Distortion Guitar
-2:39  GM 030 Distortion Guitar [alt]
-2:43  GM 031 Guitar Harmonics
-2:48  GM 014 Tam-Tam [alt]
+0:20  GM 004 Electric Piano 1
+0:25  GM 005 Electric Piano 2
+0:30  GM 006 Harpsichord
+0:35  GM 007 Clavinet
+0:40  GM 008 Celesta
+0:45  GM 009 Glockenspiel
+0:50  GM 010 Music Box
+0:55  GM 011 Vibraphone
+1:00  GM 012 Marimba
+1:05  GM 013 Xylophone
+1:10  GM 014 Tubular Bells
+1:15  GM 015 Dulcimer
+1:20  GM 016 Drawbar Organ
+1:25  GM 017 Percussive Organ
+1:30  GM 018 Rock Organ
+1:35  GM 019 Church Organ
+1:40  GM 019 Church Organ [alt]
+1:45  GM 020 Reed Organ
+1:50  GM 021 Accordion
+1:55  GM 022 Harmonica
+2:00  GM 023 Tango Accordion
+2:05  GM 024 Acoustic Guitar (nylon)
+2:10  GM 025 Acoustic Guitar (steel)
+2:15  GM 026 Electric Guitar (jazz)
+2:20  GM 027 Electric Guitar (clean)
+2:25  GM 028 Electric Guitar (muted)
+2:30  GM 029 Overdriven Guitar
+2:35  GM 029 Overdriven Guitar [alt]
+2:40  GM 030 Distortion Guitar
+2:45  GM 030 Distortion Guitar [alt]
+2:50  GM 031 Guitar Harmonics
+2:55  GM 014 Tam-Tam [alt]

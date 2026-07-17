@@ -10,7 +10,10 @@ from . import audition, effects, kit
 # Melodic tracks: number -> (program lo, hi). analyze.py reads this to recompute the
 # slot grid rather than bloat the manifest with an AudioCheck per slot.
 MELODIC = {1: (0, 31), 2: (32, 63), 3: (64, 95), 4: (96, 127)}
-BPM_MELODIC = 100.0
+# 96 BPM makes SLOT_BEATS (8) land on exactly 5.0 s, so every instrument slot
+# starts on a :x0/:x5 clock boundary. At 100 BPM a slot was 4.8 s and the roll
+# drifted off the 5-second grid (…0:15, 0:19, 0:24… instead of …0:15, 0:20…).
+BPM_MELODIC = 96.0
 
 _TITLES = {
     1: "Keys, Chromatic, Organ, Guitar",

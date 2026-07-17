@@ -4,39 +4,39 @@ ferrosintesis Reference Audition - FX, World, Percussive, Noise
 0:05  GM 097 FX 2 (soundtrack)
 0:10  GM 098 FX 3 (crystal)
 0:15  GM 099 FX 4 (atmosphere)
-0:19  GM 100 FX 5 (brightness)
-0:24  GM 101 FX 6 (goblins)
-0:29  GM 102 FX 7 (echoes)
-0:34  GM 103 FX 8 (sci-fi)
-0:39  GM 104 Sitar
-0:43  GM 105 Banjo
-0:48  GM 106 Shamisen
-0:53  GM 107 Koto
-0:58  GM 108 Kalimba
-1:03  GM 109 Bagpipe
-1:07  GM 110 Fiddle
-1:12  GM 111 Shanai
-1:17  GM 112 Tinkle Bell
-1:22  GM 112 Tinkle Bell [alt]
-1:27  GM 113 Agogo
-1:31  GM 113 Agogo [alt]
-1:36  GM 114 Steel Drums
-1:41  GM 114 Steel Drums [alt]
-1:46  GM 115 Woodblock
-1:51  GM 115 Woodblock [alt]
-1:55  GM 116 Taiko Drum
-2:00  GM 116 Taiko Drum [alt]
-2:05  GM 117 Melodic Tom
-2:10  GM 117 Melodic Tom [alt]
-2:15  GM 118 Synth Drum
-2:19  GM 118 Synth Drum [alt]
-2:24  GM 119 Reverse Cymbal
-2:29  GM 119 Reverse Cymbal [alt]
-2:34  GM 120 Guitar Fret Noise
-2:39  GM 121 Breath Noise
-2:43  GM 122 Seashore
-2:48  GM 123 Bird Tweet
-2:53  GM 124 Telephone Ring
-2:58  GM 125 Helicopter
-3:03  GM 126 Applause
-3:07  GM 127 Gunshot
+0:20  GM 100 FX 5 (brightness)
+0:25  GM 101 FX 6 (goblins)
+0:30  GM 102 FX 7 (echoes)
+0:35  GM 103 FX 8 (sci-fi)
+0:40  GM 104 Sitar
+0:45  GM 105 Banjo
+0:50  GM 106 Shamisen
+0:55  GM 107 Koto
+1:00  GM 108 Kalimba
+1:05  GM 109 Bagpipe
+1:10  GM 110 Fiddle
+1:15  GM 111 Shanai
+1:20  GM 112 Tinkle Bell
+1:25  GM 112 Tinkle Bell [alt]
+1:30  GM 113 Agogo
+1:35  GM 113 Agogo [alt]
+1:40  GM 114 Steel Drums
+1:45  GM 114 Steel Drums [alt]
+1:50  GM 115 Woodblock
+1:55  GM 115 Woodblock [alt]
+2:00  GM 116 Taiko Drum
+2:05  GM 116 Taiko Drum [alt]
+2:10  GM 117 Melodic Tom
+2:15  GM 117 Melodic Tom [alt]
+2:20  GM 118 Synth Drum
+2:25  GM 118 Synth Drum [alt]
+2:30  GM 119 Reverse Cymbal
+2:35  GM 119 Reverse Cymbal [alt]
+2:40  GM 120 Guitar Fret Noise
+2:45  GM 121 Breath Noise
+2:50  GM 122 Seashore
+2:55  GM 123 Bird Tweet
+3:00  GM 124 Telephone Ring
+3:05  GM 125 Helicopter
+3:10  GM 126 Applause
+3:15  GM 127 Gunshot

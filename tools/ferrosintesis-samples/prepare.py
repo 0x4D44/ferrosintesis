@@ -16,6 +16,7 @@ python tools/ferrosintesis-samples/prepare.py
 import hashlib
 import math
 import os
+import re
 import shutil
 import socket
 import struct
@@ -173,6 +174,37 @@ STEEL_URLS = {
     for dest, member in STEEL_SOURCES.items()
 }
 
+# GM 109 bagpipe (HLD 2026.07.17). A CC0 FreePats G-pipe: two separately-recorded
+# drones (bass G2, tenor G3) an octave apart, plus a chanter. These are LOOPED
+# sustains, not attack transients — `extract_loop` (not `trim_to_onset`) emits a
+# seamless loop region, and the whole emitted WAV loops at render time via a plain
+# modulo wrap. Take the WAV archive (not the FLAC one — stdlib `wave` reads it).
+BAGPIPE_ARCHIVE_URL = (
+    "https://freepats.zenvoid.org/Ethnic/Bagpipe/Bagpipe-SFZ-20221204.7z"
+)
+BAGPIPE_ARCHIVE_SHA256 = (
+    "6f25f232065ebc51ab9d3b54aaedc8a29e59e454ec31d3f1b4a03b3d04256066"
+)
+_BP_MEMBERS = "Bagpipe-SFZ-20221204"
+# dest -> member path in the archive. Two drones + six chanter zones (RR1, `_31`),
+# ~2.5-semitone spacing F4–G5. The `.sfz` is copied too, for its loop points.
+BAGPIPE_SOURCES = {
+    "drone_G2.wav": f"{_BP_MEMBERS}/samples/drone_G2_1.wav",
+    "drone_G3.wav": f"{_BP_MEMBERS}/samples/drone_G3_3.wav",
+    "chanter_F4.wav": f"{_BP_MEMBERS}/samples/F4_31.wav",
+    "chanter_G4.wav": f"{_BP_MEMBERS}/samples/G4_31.wav",
+    "chanter_A4.wav": f"{_BP_MEMBERS}/samples/A4_31.wav",
+    "chanter_C5.wav": f"{_BP_MEMBERS}/samples/C5_31.wav",
+    "chanter_D5.wav": f"{_BP_MEMBERS}/samples/D5_31.wav",
+    "chanter_G5.wav": f"{_BP_MEMBERS}/samples/G5_31.wav",
+}
+BAGPIPE_SFZ_MEMBER = f"{_BP_MEMBERS}/Bagpipe-20221204.sfz"
+# Target loop lengths: drones long (slow, low), chanter short (masked by the drone).
+BAGPIPE_LOOP_S = {"drone": 1.5, "chanter": 0.4}
+# Every bagpipe sample is normalized to this RMS at bake; the drone/chanter MIX is
+# then set by the per-voice gains in Rust (mirroring the modeled 0.154 : 0.075).
+BAGPIPE_TARGET_RMS = 0.18
+
 # f0 search range per family (the default misses the piano's low octaves
 # and the low brass/bassoon fundamentals)
 F0_RANGE = {
@@ -316,25 +348,126 @@ def ensure_source(fn, url, src):
     return path
 
 
-def ensure_guitar_sources(src):
-    """Fetch + verify + extract the pinned FreePats archive into `src`."""
-    missing = [fn for fn in GUITAR_SOURCES if not os.path.exists(os.path.join(src, fn))]
-    if not missing:
+def ensure_archive_sources(src, url, sha256, member_map, extract_subdir):
+    """Fetch + sha256-verify + 7z-extract an archive, copying members into `src`.
+
+    Generalizes the FreePats fetch: two callers (Spanish guitar, bagpipe) are
+    structurally identical — a `.7z` pinned by SHA-256, extracted with 7z (the
+    archives use an LZMA filter bsdtar cannot decode), members copied out by a
+    dest -> member-path map. Kept to exactly these four params; if a third caller
+    ever needs a post-process hook, copy-paste rather than grow this.
+    """
+    if all(os.path.exists(os.path.join(src, fn)) for fn in member_map):
         return
-    arc = os.path.join(src, os.path.basename(SCG_ARCHIVE_URL))
+    arc = os.path.join(src, os.path.basename(url))
     if not os.path.exists(arc):
         print(f"fetching {os.path.basename(arc)} ...", file=sys.stderr)
-        fetch(SCG_ARCHIVE_URL, arc)
+        fetch(url, arc)
     digest = hashlib.sha256(open(arc, "rb").read()).hexdigest()
-    if digest != SCG_ARCHIVE_SHA256:
-        raise ValueError(f"{arc}: sha256 {digest} != pinned {SCG_ARCHIVE_SHA256}")
+    if digest != sha256:
+        raise ValueError(f"{arc}: sha256 {digest} != pinned {sha256}")
     seven = shutil.which("7z") or r"C:\Program Files\7-Zip\7z.exe"
-    ext = os.path.join(src, "scg_extract")
+    ext = os.path.join(src, extract_subdir)
     subprocess.run([seven, "x", "-y", f"-o{ext}", arc], check=True,
                    stdout=subprocess.DEVNULL)
-    for fn, member in GUITAR_SOURCES.items():
+    for fn, member in member_map.items():
         shutil.copyfile(os.path.join(ext, *member.split("/")),
                         os.path.join(src, fn))
+
+
+def ensure_guitar_sources(src):
+    """Fetch + verify + extract the pinned FreePats Spanish-guitar archive."""
+    ensure_archive_sources(src, SCG_ARCHIVE_URL, SCG_ARCHIVE_SHA256,
+                           GUITAR_SOURCES, "scg_extract")
+
+
+def ensure_bagpipe_sources(src):
+    """Fetch + verify + extract the pinned FreePats bagpipe archive (+ its SFZ)."""
+    members = dict(BAGPIPE_SOURCES)
+    members["bagpipe.sfz"] = BAGPIPE_SFZ_MEMBER
+    ensure_archive_sources(src, BAGPIPE_ARCHIVE_URL, BAGPIPE_ARCHIVE_SHA256,
+                           members, "bagpipe_extract")
+
+
+def parse_sfz_loops(sfz_text):
+    """Map each region's source basename -> (loop_start, loop_end) from an SFZ.
+
+    Minimal: splits on `<region>`, reads the last `sample=` and any
+    `loop_start=`/`loop_end=` in each. Enough for the FreePats bagpipe, whose
+    loop points are expertly correlation-placed (rho 0.98-1.00) — far better than
+    a self-search on a variable reed, so we seed `extract_loop` from these.
+    """
+    loops = {}
+    for region in re.split(r"<region>", sfz_text)[1:]:
+        # sample value runs to the next opcode on the line or the end of line —
+        # handles both "own line" (FreePats) and inline `sample=x opcode=y` SFZ
+        m_s = re.search(r"sample=(.+?)(?=\s+\w+=|[\r\n]|$)", region)
+        m_ls = re.search(r"loop_start=(\d+)", region)
+        m_le = re.search(r"loop_end=(\d+)", region)
+        if m_s and m_ls and m_le:
+            base = os.path.basename(m_s.group(1).strip().replace("\\", "/"))
+            loops[base] = (int(m_ls.group(1)), int(m_le.group(1)))
+    return loops
+
+
+def _seam_click(seg):
+    """Wrap-seam click for a buffer looped by plain modulo.
+
+    Returns |seg[0] - seg[-1]| (the discontinuity a modulo wrap actually
+    produces) as a MULTIPLE of the 95th-percentile of the body's sample-to-
+    sample steps. A seamless loop wraps with a step no worse than the signal's
+    own normal steps, so this is ~1; a click is an outlier, >> 1.
+
+    This replaces a Pearson-correlation seam metric: Pearson is offset/scale-
+    insensitive (Codex review) AND phase-sensitive across a fixed window, so it
+    both admits anomalous boundary steps and rejects perfectly-seamless loops.
+    The first-difference outlier ratio is what a click physically is.
+    """
+    n = len(seg)
+    diffs = sorted(abs(seg[i + 1] - seg[i]) for i in range(n - 1))
+    p95 = diffs[min(len(diffs) - 1, int(0.95 * len(diffs)))] if diffs else 0.0
+    wrap = abs(seg[0] - seg[-1])
+    return wrap / p95 if p95 > 0 else 0.0
+
+
+def extract_loop(x, sr, loop_start, f0, target_s, target_rms=None):
+    """Emit a SHORT seamless loop region from a sustained sample.
+
+    Unlike `trim_to_onset` (an attack extractor that seeks the onset, fades the
+    tail to zero, and peak-normalizes) this keeps the STEADY interior and the
+    whole returned buffer loops via a plain modulo wrap.
+
+    `loop_start` is the SFZ's expertly-placed loop entry (a trusted steady-state
+    point). The SFZ loop_end, though, spans nearly the whole file (chanter loops
+    run 4-6 s), which is far too large to ship — so we cut our OWN endpoint at
+    ~`target_s`, searching +/-1 period for the length whose modulo wrap has the
+    smallest seam step. Then DC-remove (the drones carry -35/-41 dB DC) and
+    normalize to a COMMON RMS (not per-file peak) so a `nearest()` zone switch on
+    a sustained voice doesn't jump in level.
+    """
+    period = sr / f0
+    base = int(round(target_s * sr))
+    span = int(2 * period)
+    if loop_start + base + span >= len(x):
+        raise ValueError(f"source too short for a {target_s}s loop at {loop_start}")
+    # search the endpoint over +/-2 periods for the length whose wrap best
+    # matches in BOTH value and slope (a small step and a continuing trend) —
+    # value-only can pick a point where level matches but the waveform is
+    # heading the wrong way, which still clicks.
+    def seam_cost(length):
+        i, j = loop_start, loop_start + length
+        val = abs(x[i] - x[j])
+        slope = abs((x[i + 1] - x[i]) - (x[j] - x[j - 1]))
+        return val + slope
+    length = min(range(base - span, base + span + 1),
+                 key=lambda L: seam_cost(L) if L >= 4 else 9e9)
+    seg = x[loop_start:loop_start + length]
+    mean = sum(seg) / len(seg)
+    seg = [v - mean for v in seg]
+    rms = math.sqrt(sum(v * v for v in seg) / len(seg))
+    tgt = BAGPIPE_TARGET_RMS if target_rms is None else target_rms
+    g = tgt / rms if rms > 0 else 1.0
+    return [v * g for v in seg]
 
 
 def resample(x, sr_in, sr_out):
@@ -471,6 +604,46 @@ def write_wav_mono(path, seg, sr):
         w.writeframes(pcm)
 
 
+def _bake_bagpipe(src):
+    """Bake the looped bagpipe drones + chanter; return print-table rows.
+
+    Separate from the onset loop in `main`: these are looped sustains, so they
+    use `extract_loop` (SFZ loop points + common-RMS) not `trim_to_onset`, and a
+    tight per-file f0 window — a single chanter range can't work, since the 2nd
+    harmonic of the lowest zone (F4, ~684 Hz) sits below the highest fundamental
+    (G5, ~774 Hz), so one ceiling cannot be both above 774 and below 684.
+    """
+    with open(os.path.join(src, "bagpipe.sfz"), encoding="utf-8",
+              errors="replace") as f:
+        loops = parse_sfz_loops(f.read())
+    rows = []
+    for fn, member in sorted(BAGPIPE_SOURCES.items()):
+        x, sr = read_wav(os.path.join(src, fn))
+        ls, _le = loops[os.path.basename(member)]
+        if sr != OUT_SR:
+            ls = int(ls * OUT_SR / sr)
+            x = resample(x, sr, OUT_SR)
+            sr = OUT_SR
+        note = next(p for p in fn[:-4].split("_")
+                    if p[0] in "ABCDEFG" and p[-1].isdigit())
+        nominal = NOTE_HZ[note]
+        # measure f0 from the steady loop region with a tight +/-2 semitone
+        # window (source is 30-50 cents flat) — never wide enough to lock onto a
+        # harmonic (a single chanter range can't: F4's 2nd harmonic < G5's f0)
+        f0, conf = measure_f0(x[ls:], sr, nominal * 2 ** (-2 / 12),
+                              nominal * 2 ** (2 / 12))
+        target_s = BAGPIPE_LOOP_S[fn.split("_")[0]]
+        seg = extract_loop(x, sr, ls, f0, target_s)
+        click = _seam_click(seg)
+        if click > 3.0:
+            raise ValueError(f"{fn}: loop seam click x{click:.2f} of p95 step "
+                             f"— reed too variable here, widen search")
+        write_wav_mono(sample_output_path(fn), seg, sr)
+        rows.append((fn, f0, f0, nominal, 1200 * math.log2(f0 / nominal),
+                     click, len(seg) / sr))
+    return rows
+
+
 def main():
     socket.setdefaulttimeout(60)
     # `--local-only` skips the fetched full bank (network + rewriting the tracked
@@ -486,7 +659,10 @@ def main():
         for fn, url in STEEL_URLS.items():
             ensure_source(fn, url, src)
         ensure_guitar_sources(src)
+        ensure_bagpipe_sources(src)
 
+        # Looped bagpipe sustains (own transform: extract_loop, not trim_to_onset)
+        rows += _bake_bagpipe(src)
         for fn in sorted(SOURCES | GUITAR_SOURCES | STEEL_URLS):
             x, sr = read_wav(os.path.join(src, fn))
             x = resample(x, sr, OUT_SR)

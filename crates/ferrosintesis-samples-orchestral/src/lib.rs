@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 
 /// Number of WAV files embedded in this package.
-pub const FILE_COUNT: usize = 139;
+pub const FILE_COUNT: usize = 147;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
@@ -105,6 +105,30 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/celens_G1_p.wav"),
     ),
     (
+        "chanter_A4.wav",
+        include_bytes!("../samples/chanter_A4.wav"),
+    ),
+    (
+        "chanter_C5.wav",
+        include_bytes!("../samples/chanter_C5.wav"),
+    ),
+    (
+        "chanter_D5.wav",
+        include_bytes!("../samples/chanter_D5.wav"),
+    ),
+    (
+        "chanter_F4.wav",
+        include_bytes!("../samples/chanter_F4.wav"),
+    ),
+    (
+        "chanter_G4.wav",
+        include_bytes!("../samples/chanter_G4.wav"),
+    ),
+    (
+        "chanter_G5.wav",
+        include_bytes!("../samples/chanter_G5.wav"),
+    ),
+    (
         "clarinet_A#2_f.wav",
         include_bytes!("../samples/clarinet_A#2_f.wav"),
     ),
@@ -151,6 +175,14 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
         "clarinet_F4_p.wav",
         include_bytes!("../samples/clarinet_F4_p.wav"),
+    ),
+    (
+        "drone_G2.wav",
+        include_bytes!("../samples/drone_G2.wav"),
+    ),
+    (
+        "drone_G3.wav",
+        include_bytes!("../samples/drone_G3.wav"),
     ),
     (
         "drum_crash1_ff_rr1.wav",
@@ -472,7 +504,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    const EXPECTED_BYTES: usize = 8555154;
+    const EXPECTED_BYTES: usize = 9032142;
 
     #[test]
     fn inventory_matches_packaged_wavs() {

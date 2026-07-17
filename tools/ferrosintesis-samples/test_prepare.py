@@ -226,5 +226,63 @@ class PrepareSampleBankTests(unittest.TestCase):
                             prepare.read_wav(path)
 
 
+class BagpipeLoopTests(unittest.TestCase):
+    """The looped-sustain path (HLD 2026.07.17) — extract_loop and the SFZ parse.
+
+    These test the pure transforms without any network or the real WAVs, so the
+    prepare.py bagpipe capability is committable green before the samples exist.
+    """
+
+    def test_parse_sfz_loops_reads_points_per_region(self):
+        sfz = (
+            "// header\n"
+            "<region> sample=samples/drone_G2_1.wav lokey=36 hikey=47 "
+            "loop_start=1858 loop_end=106496\n"
+            "<region> sample=samples/F4_31.wav pitch_keycenter=65 "
+            "loop_start=52224 loop_end=166144 tune=40\n"
+            "<region> sample=samples/no_loop.wav lokey=1\n"  # no loop -> skipped
+        )
+        loops = prepare.parse_sfz_loops(sfz)
+        self.assertEqual(loops["drone_G2_1.wav"], (1858, 106496))
+        self.assertEqual(loops["F4_31.wav"], (52224, 166144))
+        self.assertNotIn("no_loop.wav", loops)
+
+    def _tone(self, sr, f0, n):
+        return [math.sin(2 * math.pi * f0 * i / sr) for i in range(n)]
+
+    def test_extract_loop_emits_a_seamless_wrap(self):
+        # a stable tone -> the endpoint search finds a near-whole-period loop
+        # whose modulo wrap is seamless, at ~target length.
+        sr = 44100
+        x = self._tone(sr, 441.0, 2 * sr)  # 2 s, period 100 samples
+        seg = prepare.extract_loop(x, sr, 8800, 441.0, target_s=0.4)
+        click = prepare._seam_click(seg)
+        self.assertLess(click, 2.0, f"wrap step x{click:.2f} of the p95 body step")
+        self.assertAlmostEqual(len(seg) / sr, 0.4, delta=0.01)  # ~target length
+
+    def test_extract_loop_removes_dc(self):
+        sr = 44100
+        x = [0.3 + v for v in self._tone(sr, 196.0, 2 * sr)]  # +0.3 DC like a drone
+        seg = prepare.extract_loop(x, sr, int(0.2 * sr), 196.0, target_s=0.5)
+        self.assertAlmostEqual(sum(seg) / len(seg), 0.0, places=6)
+
+    def test_extract_loop_normalizes_to_common_rms(self):
+        sr = 44100
+        quiet = self._tone(sr, 300.0, 2 * sr)
+        loud = [4.0 * v for v in quiet]
+
+        def rms(s):
+            return math.sqrt(sum(v * v for v in s) / len(s))
+
+        a = prepare.extract_loop(quiet, sr, int(0.2 * sr), 300.0, target_s=0.4)
+        b = prepare.extract_loop(loud, sr, int(0.2 * sr), 300.0, target_s=0.4)
+        self.assertAlmostEqual(rms(a), prepare.BAGPIPE_TARGET_RMS, places=4)
+        self.assertAlmostEqual(rms(b), prepare.BAGPIPE_TARGET_RMS, places=4)
+
+    def test_extract_loop_rejects_a_source_too_short(self):
+        with self.assertRaises(ValueError):
+            prepare.extract_loop([0.0] * 100, 44100, 10, 200.0, target_s=0.4)
+
+
 if __name__ == "__main__":
     unittest.main()

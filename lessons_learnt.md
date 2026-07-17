@@ -3,6 +3,8 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.17 — **Album-scale generative fan-outs don't fit the fleet-shared 5-h usage window — serialize composers and feed a digest, never parallelize.** Two parallel fleets died mid-window (10-wide, then 2-wide: ~0.9M tokens, zero tracks); one-at-a-time composers fed a compact pattern digest (Slipstream `COMPOSER-NOTES.md` instead of re-reading the 1.7k-line exemplar) landed 10/10 at ~150-250k tokens/track with per-track verify+commit making every landing durable.
+
 - 2026.07.16 — **A differential oracle is only as good as its INPUT POPULATION — take the
   parameters from measurement, never from the assumption you are trying to verify.** Fixing
   `prepare.py`'s de-click fade, I "proved inertness" with a test fed 8-300 ms of lead-in and

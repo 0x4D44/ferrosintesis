@@ -1,0 +1,772 @@
+{
+  "album": "Slipstream",
+  "artist": "Claude Fable 5",
+  "style": "Ten aerobatic display acts inspired by 'Three-Sixty-One': build-drop-build architectures, near-constant verified drum-fill escalations, soaring and sweeping synths, multiple independent counterpoints, and a two-guitar display team flying a different machine-verified formation on every track.  The finale flypast openly quotes the Three-Sixty-One orbit riff and scream.",
+  "track_count": 10,
+  "total_duration_seconds": 2776.71,
+  "total_duration_minutes": 46.28,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Wheels Up",
+      "file": "midi/01 - Wheels Up.mid",
+      "duration_seconds": 262.95,
+      "duration_minutes": 4.38,
+      "movements": [
+        {
+          "name": "I. Contact",
+          "start_beat": 0.0,
+          "end_beat": 48.0,
+          "start_seconds": 0.0,
+          "end_seconds": 21.82,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Taxi",
+          "start_beat": 48.0,
+          "end_beat": 112.0,
+          "start_seconds": 21.82,
+          "end_seconds": 50.91,
+          "time": "0:21"
+        },
+        {
+          "name": "III. Throttle Up",
+          "start_beat": 112.0,
+          "end_beat": 176.0,
+          "start_seconds": 50.91,
+          "end_seconds": 80.0,
+          "time": "0:50"
+        },
+        {
+          "name": "IV. First Pass",
+          "start_beat": 176.0,
+          "end_beat": 256.0,
+          "start_seconds": 80.0,
+          "end_seconds": 116.36,
+          "time": "1:20"
+        },
+        {
+          "name": "V. Coast",
+          "start_beat": 256.0,
+          "end_beat": 288.0,
+          "start_seconds": 116.36,
+          "end_seconds": 130.91,
+          "time": "1:56"
+        },
+        {
+          "name": "VI. Climb Out",
+          "start_beat": 288.0,
+          "end_beat": 368.0,
+          "start_seconds": 130.91,
+          "end_seconds": 167.27,
+          "time": "2:10"
+        },
+        {
+          "name": "VII. Full Power",
+          "start_beat": 368.0,
+          "end_beat": 496.0,
+          "start_seconds": 167.27,
+          "end_seconds": 225.45,
+          "time": "2:47"
+        },
+        {
+          "name": "VIII. Throttle Back",
+          "start_beat": 496.0,
+          "end_beat": 576.0,
+          "start_seconds": 225.45,
+          "end_seconds": 261.82,
+          "time": "3:45"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Knife Edge",
+      "file": "midi/02 - Knife Edge.mid",
+      "duration_seconds": 253.46,
+      "duration_minutes": 4.22,
+      "movements": [
+        {
+          "name": "I. Taxi",
+          "start_beat": 0.0,
+          "end_beat": 28.0,
+          "start_seconds": 0.0,
+          "end_seconds": 11.67,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Edge One (7/8 trades)",
+          "start_beat": 28.0,
+          "end_beat": 140.0,
+          "start_seconds": 11.67,
+          "end_seconds": 58.33,
+          "time": "0:11"
+        },
+        {
+          "name": "III. Drop One (4/4 locks)",
+          "start_beat": 140.0,
+          "end_beat": 268.0,
+          "start_seconds": 58.33,
+          "end_seconds": 111.67,
+          "time": "0:58"
+        },
+        {
+          "name": "IV. Edge Two (tighter)",
+          "start_beat": 268.0,
+          "end_beat": 366.0,
+          "start_seconds": 111.67,
+          "end_seconds": 152.5,
+          "time": "1:51"
+        },
+        {
+          "name": "V. The Wobble",
+          "start_beat": 366.0,
+          "end_beat": 394.0,
+          "start_seconds": 152.5,
+          "end_seconds": 164.17,
+          "time": "2:32"
+        },
+        {
+          "name": "VI. Build",
+          "start_beat": 394.0,
+          "end_beat": 458.0,
+          "start_seconds": 164.17,
+          "end_seconds": 190.83,
+          "time": "2:44"
+        },
+        {
+          "name": "VII. Drop Two",
+          "start_beat": 458.0,
+          "end_beat": 602.0,
+          "start_seconds": 190.83,
+          "end_seconds": 250.83,
+          "time": "3:10"
+        },
+        {
+          "name": "VIII. The Snap",
+          "start_beat": 602.0,
+          "end_beat": 610.0,
+          "start_seconds": 250.83,
+          "end_seconds": 254.17,
+          "time": "4:10"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Hammerhead",
+      "file": "midi/03 - Hammerhead.mid",
+      "duration_seconds": 284.31,
+      "duration_minutes": 4.74,
+      "movements": [
+        {
+          "name": "I. Run-In",
+          "start_beat": 0.0,
+          "end_beat": 32.0,
+          "start_seconds": 0.0,
+          "end_seconds": 15.24,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Climb One",
+          "start_beat": 32.0,
+          "end_beat": 112.0,
+          "start_seconds": 15.24,
+          "end_seconds": 53.33,
+          "time": "0:15"
+        },
+        {
+          "name": "III. Stall One",
+          "start_beat": 112.0,
+          "end_beat": 120.0,
+          "start_seconds": 53.33,
+          "end_seconds": 57.14,
+          "time": "0:53"
+        },
+        {
+          "name": "IV. Pivot One",
+          "start_beat": 120.0,
+          "end_beat": 124.0,
+          "start_seconds": 57.14,
+          "end_seconds": 59.05,
+          "time": "0:57"
+        },
+        {
+          "name": "V. Dive One",
+          "start_beat": 124.0,
+          "end_beat": 164.0,
+          "start_seconds": 59.05,
+          "end_seconds": 76.92,
+          "time": "0:59"
+        },
+        {
+          "name": "VI. Pull-Out One",
+          "start_beat": 164.0,
+          "end_beat": 292.0,
+          "start_seconds": 76.92,
+          "end_seconds": 137.87,
+          "time": "1:16"
+        },
+        {
+          "name": "VII. Climb Two",
+          "start_beat": 292.0,
+          "end_beat": 372.0,
+          "start_seconds": 137.87,
+          "end_seconds": 175.96,
+          "time": "2:17"
+        },
+        {
+          "name": "VIII. Stall Two",
+          "start_beat": 372.0,
+          "end_beat": 380.0,
+          "start_seconds": 175.96,
+          "end_seconds": 179.77,
+          "time": "2:55"
+        },
+        {
+          "name": "IX. Pivot Two",
+          "start_beat": 380.0,
+          "end_beat": 388.0,
+          "start_seconds": 179.77,
+          "end_seconds": 183.58,
+          "time": "2:59"
+        },
+        {
+          "name": "X. Dive Two",
+          "start_beat": 388.0,
+          "end_beat": 428.0,
+          "start_seconds": 183.58,
+          "end_seconds": 201.45,
+          "time": "3:03"
+        },
+        {
+          "name": "XI. Pull-Out Two",
+          "start_beat": 428.0,
+          "end_beat": 556.0,
+          "start_seconds": 201.45,
+          "end_seconds": 262.41,
+          "time": "3:21"
+        },
+        {
+          "name": "XII. Victory Pass",
+          "start_beat": 556.0,
+          "end_beat": 600.0,
+          "start_seconds": 262.41,
+          "end_seconds": 283.36,
+          "time": "4:22"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Cuban Eight",
+      "file": "midi/04 - Cuban Eight.mid",
+      "duration_seconds": 274.8,
+      "duration_minutes": 4.58,
+      "movements": [
+        {
+          "name": "I. Entry",
+          "start_beat": 0.0,
+          "end_beat": 64.0,
+          "start_seconds": 0.0,
+          "end_seconds": 30.0,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Loop One",
+          "start_beat": 64.0,
+          "end_beat": 192.0,
+          "start_seconds": 30.0,
+          "end_seconds": 90.0,
+          "time": "0:30"
+        },
+        {
+          "name": "III. Over the Top",
+          "start_beat": 192.0,
+          "end_beat": 200.0,
+          "start_seconds": 90.0,
+          "end_seconds": 93.75,
+          "time": "1:30"
+        },
+        {
+          "name": "IV. Drop One",
+          "start_beat": 200.0,
+          "end_beat": 264.0,
+          "start_seconds": 93.75,
+          "end_seconds": 123.75,
+          "time": "1:33"
+        },
+        {
+          "name": "V. Half-Roll",
+          "start_beat": 264.0,
+          "end_beat": 280.0,
+          "start_seconds": 123.75,
+          "end_seconds": 131.25,
+          "time": "2:03"
+        },
+        {
+          "name": "VI. Loop Two",
+          "start_beat": 280.0,
+          "end_beat": 408.0,
+          "start_seconds": 131.25,
+          "end_seconds": 191.25,
+          "time": "2:11"
+        },
+        {
+          "name": "VII. Drop Two",
+          "start_beat": 408.0,
+          "end_beat": 472.0,
+          "start_seconds": 191.25,
+          "end_seconds": 221.25,
+          "time": "3:11"
+        },
+        {
+          "name": "VIII. Exit Pass",
+          "start_beat": 472.0,
+          "end_beat": 536.0,
+          "start_seconds": 221.25,
+          "end_seconds": 251.25,
+          "time": "3:41"
+        },
+        {
+          "name": "IX. Out",
+          "start_beat": 536.0,
+          "end_beat": 584.0,
+          "start_seconds": 251.25,
+          "end_seconds": 273.75,
+          "time": "4:11"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Lomcevak",
+      "file": "midi/05 - Lomcevak.mid",
+      "duration_seconds": 255.79,
+      "duration_minutes": 4.26,
+      "movements": [
+        {
+          "name": "I. Launch",
+          "start_beat": 0.0,
+          "end_beat": 48.0,
+          "start_seconds": 0.0,
+          "end_seconds": 18.95,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Tumble One",
+          "start_beat": 48.0,
+          "end_beat": 168.0,
+          "start_seconds": 18.95,
+          "end_seconds": 66.32,
+          "time": "0:18"
+        },
+        {
+          "name": "III. Gather",
+          "start_beat": 168.0,
+          "end_beat": 232.0,
+          "start_seconds": 66.32,
+          "end_seconds": 91.58,
+          "time": "1:06"
+        },
+        {
+          "name": "IV. Drop One",
+          "start_beat": 232.0,
+          "end_beat": 296.0,
+          "start_seconds": 91.58,
+          "end_seconds": 116.84,
+          "time": "1:31"
+        },
+        {
+          "name": "V. Tumble Two",
+          "start_beat": 296.0,
+          "end_beat": 394.0,
+          "start_seconds": 116.84,
+          "end_seconds": 155.53,
+          "time": "1:56"
+        },
+        {
+          "name": "VI. Build Two",
+          "start_beat": 394.0,
+          "end_beat": 458.0,
+          "start_seconds": 155.53,
+          "end_seconds": 180.79,
+          "time": "2:35"
+        },
+        {
+          "name": "VII. Drop Two",
+          "start_beat": 458.0,
+          "end_beat": 554.0,
+          "start_seconds": 180.79,
+          "end_seconds": 218.68,
+          "time": "3:00"
+        },
+        {
+          "name": "VIII. Recovery",
+          "start_beat": 554.0,
+          "end_beat": 646.0,
+          "start_seconds": 218.68,
+          "end_seconds": 255.0,
+          "time": "3:38"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Mirror Pass",
+      "file": "midi/06 - Mirror Pass.mid",
+      "duration_seconds": 289.12,
+      "duration_minutes": 4.82,
+      "movements": [
+        {
+          "name": "I. Approach - the axis tone",
+          "start_beat": 0.0,
+          "end_beat": 40.0,
+          "start_seconds": 0.0,
+          "end_seconds": 20.0,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Pass One - canon at two beats",
+          "start_beat": 40.0,
+          "end_beat": 136.0,
+          "start_seconds": 20.0,
+          "end_seconds": 68.0,
+          "time": "0:20"
+        },
+        {
+          "name": "III. Build One",
+          "start_beat": 136.0,
+          "end_beat": 184.0,
+          "start_seconds": 68.0,
+          "end_seconds": 92.0,
+          "time": "1:08"
+        },
+        {
+          "name": "IV. Drop One - canon over the floor",
+          "start_beat": 184.0,
+          "end_beat": 280.0,
+          "start_seconds": 92.0,
+          "end_seconds": 140.0,
+          "time": "1:32"
+        },
+        {
+          "name": "V. Interlude - the handoff",
+          "start_beat": 280.0,
+          "end_beat": 360.0,
+          "start_seconds": 140.0,
+          "end_seconds": 180.0,
+          "time": "2:20"
+        },
+        {
+          "name": "VI. Build Two",
+          "start_beat": 360.0,
+          "end_beat": 408.0,
+          "start_seconds": 180.0,
+          "end_seconds": 204.0,
+          "time": "3:00"
+        },
+        {
+          "name": "VII. Drop Two - canon at one beat",
+          "start_beat": 408.0,
+          "end_beat": 520.0,
+          "start_seconds": 204.0,
+          "end_seconds": 260.0,
+          "time": "3:24"
+        },
+        {
+          "name": "VIII. Resolution - unison on the axis",
+          "start_beat": 520.0,
+          "end_beat": 576.0,
+          "start_seconds": 260.0,
+          "end_seconds": 288.0,
+          "time": "4:20"
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Vapour",
+      "file": "midi/07 - Vapour.mid",
+      "duration_seconds": 268.8,
+      "duration_minutes": 4.48,
+      "movements": [
+        {
+          "name": "I. Shimmer",
+          "start_beat": 0.0,
+          "end_beat": 64.0,
+          "start_seconds": 0.0,
+          "end_seconds": 27.83,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Vortex Groove",
+          "start_beat": 64.0,
+          "end_beat": 176.0,
+          "start_seconds": 27.83,
+          "end_seconds": 76.52,
+          "time": "0:27"
+        },
+        {
+          "name": "III. First Sweep",
+          "start_beat": 176.0,
+          "end_beat": 208.0,
+          "start_seconds": 76.52,
+          "end_seconds": 90.43,
+          "time": "1:16"
+        },
+        {
+          "name": "IV. Drop One",
+          "start_beat": 208.0,
+          "end_beat": 288.0,
+          "start_seconds": 90.43,
+          "end_seconds": 125.22,
+          "time": "1:30"
+        },
+        {
+          "name": "V. Thin Air",
+          "start_beat": 288.0,
+          "end_beat": 320.0,
+          "start_seconds": 125.22,
+          "end_seconds": 139.13,
+          "time": "2:05"
+        },
+        {
+          "name": "VI. Second Groove",
+          "start_beat": 320.0,
+          "end_beat": 400.0,
+          "start_seconds": 139.13,
+          "end_seconds": 173.91,
+          "time": "2:19"
+        },
+        {
+          "name": "VII. The Big Sweep",
+          "start_beat": 400.0,
+          "end_beat": 440.0,
+          "start_seconds": 173.91,
+          "end_seconds": 191.3,
+          "time": "2:53"
+        },
+        {
+          "name": "VIII. Drop Two",
+          "start_beat": 440.0,
+          "end_beat": 552.0,
+          "start_seconds": 191.3,
+          "end_seconds": 240.0,
+          "time": "3:11"
+        },
+        {
+          "name": "IX. Dissolve",
+          "start_beat": 552.0,
+          "end_beat": 616.0,
+          "start_seconds": 240.0,
+          "end_seconds": 267.83,
+          "time": "4:00"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Split-S",
+      "file": "midi/08 - Split-S.mid",
+      "duration_seconds": 251.64,
+      "duration_minutes": 4.19,
+      "movements": [
+        {
+          "name": "I. Drop Zero",
+          "start_beat": 0.0,
+          "end_beat": 64.0,
+          "start_seconds": 0.0,
+          "end_seconds": 28.66,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Roll",
+          "start_beat": 64.0,
+          "end_beat": 96.0,
+          "start_seconds": 28.66,
+          "end_seconds": 42.99,
+          "time": "0:28"
+        },
+        {
+          "name": "III. The Quiet",
+          "start_beat": 96.0,
+          "end_beat": 160.0,
+          "start_seconds": 42.99,
+          "end_seconds": 71.64,
+          "time": "0:42"
+        },
+        {
+          "name": "IV. Build One",
+          "start_beat": 160.0,
+          "end_beat": 240.0,
+          "start_seconds": 71.64,
+          "end_seconds": 107.46,
+          "time": "1:11"
+        },
+        {
+          "name": "V. Drop One",
+          "start_beat": 240.0,
+          "end_beat": 320.0,
+          "start_seconds": 107.46,
+          "end_seconds": 143.28,
+          "time": "1:47"
+        },
+        {
+          "name": "VI. Build Two",
+          "start_beat": 320.0,
+          "end_beat": 400.0,
+          "start_seconds": 143.28,
+          "end_seconds": 179.1,
+          "time": "2:23"
+        },
+        {
+          "name": "VII. Pull-Through",
+          "start_beat": 400.0,
+          "end_beat": 496.0,
+          "start_seconds": 179.1,
+          "end_seconds": 222.09,
+          "time": "2:59"
+        },
+        {
+          "name": "VIII. Exit Retrograde",
+          "start_beat": 496.0,
+          "end_beat": 560.0,
+          "start_seconds": 222.09,
+          "end_seconds": 250.75,
+          "time": "3:42"
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Night Launch",
+      "file": "midi/09 - Night Launch.mid",
+      "duration_seconds": 293.65,
+      "duration_minutes": 4.89,
+      "movements": [
+        {
+          "name": "I. Night Field",
+          "start_beat": 0.0,
+          "end_beat": 64.0,
+          "start_seconds": 0.0,
+          "end_seconds": 29.54,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Ignition",
+          "start_beat": 64.0,
+          "end_beat": 136.0,
+          "start_seconds": 29.54,
+          "end_seconds": 62.77,
+          "time": "0:29"
+        },
+        {
+          "name": "III. Burner Climb",
+          "start_beat": 136.0,
+          "end_beat": 208.0,
+          "start_seconds": 62.77,
+          "end_seconds": 96.0,
+          "time": "1:02"
+        },
+        {
+          "name": "IV. First Pass",
+          "start_beat": 208.0,
+          "end_beat": 288.0,
+          "start_seconds": 96.0,
+          "end_seconds": 132.92,
+          "time": "1:36"
+        },
+        {
+          "name": "V. Searchlight",
+          "start_beat": 288.0,
+          "end_beat": 376.0,
+          "start_seconds": 132.92,
+          "end_seconds": 173.54,
+          "time": "2:12"
+        },
+        {
+          "name": "VI. Second Climb",
+          "start_beat": 376.0,
+          "end_beat": 448.0,
+          "start_seconds": 173.54,
+          "end_seconds": 206.77,
+          "time": "2:53"
+        },
+        {
+          "name": "VII. Full Burn",
+          "start_beat": 448.0,
+          "end_beat": 568.0,
+          "start_seconds": 206.77,
+          "end_seconds": 262.15,
+          "time": "3:26"
+        },
+        {
+          "name": "VIII. Afterglow",
+          "start_beat": 568.0,
+          "end_beat": 636.0,
+          "start_seconds": 262.15,
+          "end_seconds": 293.54,
+          "time": "4:22"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "title": "The Flypast",
+      "file": "midi/10 - The Flypast.mid",
+      "duration_seconds": 342.19,
+      "duration_minutes": 5.7,
+      "movements": [
+        {
+          "name": "I. Muster",
+          "start_beat": 0.0,
+          "end_beat": 72.0,
+          "start_seconds": 0.0,
+          "end_seconds": 33.75,
+          "time": "0:00"
+        },
+        {
+          "name": "II. First Pass",
+          "start_beat": 72.0,
+          "end_beat": 224.0,
+          "start_seconds": 33.75,
+          "end_seconds": 105.0,
+          "time": "0:33"
+        },
+        {
+          "name": "III. Second Pass",
+          "start_beat": 224.0,
+          "end_beat": 392.0,
+          "start_seconds": 105.0,
+          "end_seconds": 183.75,
+          "time": "1:45"
+        },
+        {
+          "name": "IV. The Long Climb",
+          "start_beat": 392.0,
+          "end_beat": 504.0,
+          "start_seconds": 183.75,
+          "end_seconds": 236.25,
+          "time": "3:03"
+        },
+        {
+          "name": "V. The Flypast",
+          "start_beat": 504.0,
+          "end_beat": 648.0,
+          "start_seconds": 236.25,
+          "end_seconds": 303.75,
+          "time": "3:56"
+        },
+        {
+          "name": "VI. Clear Skies",
+          "start_beat": 648.0,
+          "end_beat": 728.0,
+          "start_seconds": 303.75,
+          "end_seconds": 341.25,
+          "time": "5:03"
+        }
+      ]
+    }
+  ]
+}

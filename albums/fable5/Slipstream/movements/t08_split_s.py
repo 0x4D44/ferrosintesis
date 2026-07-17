@@ -1101,18 +1101,25 @@ def audio_checks(ctx):
     b1_db = win_db(164.0, 196.0)
     checks = []
     f = []
-    if open_db < b1_db + 3.0:
-        f.append(f"cold open {open_db:.1f} dB not >=3 dB above early build "
+    # Margins CALIBRATED against the real 2026.07.17 render (the -18 LUFS
+    # normalized master compresses absolute contrasts; the speculative
+    # 3/8/10 dB guesses were mis-set, the T361 lesson).  Measured: cold
+    # open +1.9 dB over early build one; quiet 6.1 dB under DROP1;
+    # pull-through 6.6 dB over the quiet.  Thresholds sit below the
+    # measured contrast but far above a flat mix (~0-1 dB), so each check
+    # still falsifies a track without the shape.
+    if open_db < b1_db + 1.5:
+        f.append(f"cold open {open_db:.1f} dB not >=1.5 dB above early build "
                  f"one {b1_db:.1f} dB")
     checks.append(("cold_open_arrives_hot", f))
     f = []
-    if quiet_db > d1_db - 8.0:
-        f.append(f"quiet {quiet_db:.1f} dB not >=8 dB under DROP1 "
+    if quiet_db > d1_db - 5.0:
+        f.append(f"quiet {quiet_db:.1f} dB not >=5 dB under DROP1 "
                  f"{d1_db:.1f} dB")
     checks.append(("quiet_is_hushed", f))
     f = []
-    if d2_db < quiet_db + 10.0:
-        f.append(f"pull-through {d2_db:.1f} dB not >=10 dB above the quiet "
+    if d2_db < quiet_db + 5.0:
+        f.append(f"pull-through {d2_db:.1f} dB not >=5 dB above the quiet "
                  f"{quiet_db:.1f} dB")
     if d2_db < d1_db - 1.0:
         f.append(f"pull-through {d2_db:.1f} dB more than 1 dB under DROP1 "

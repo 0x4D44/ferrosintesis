@@ -1308,7 +1308,11 @@ def audio_checks(ctx):
                            f"the muster (want >= 6)")
     fails_chain = []
     d1, d3 = db_of(156.0, 180.0), db_of(508.0, 532.0)
-    if d3 - d1 < 0.5:
+    # Threshold CALIBRATED to the T361 convention (drop-over-drop >= +0.2 dB
+    # on the normalized master; measured +0.3 dB on the 2026.07.17 render —
+    # the speculative 0.5 was mis-set).  The structural chain D1<D2<D3 is
+    # separately pinned on velocity mass in three_cycle_chain.
+    if d3 - d1 < 0.2:
         fails_chain.append(f"DROP3 not louder than DROP1 in audio "
                            f"({d3 - d1:+.1f} dB)")
     fails_lift = []

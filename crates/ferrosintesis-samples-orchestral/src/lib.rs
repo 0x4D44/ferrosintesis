@@ -176,14 +176,8 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         "clarinet_F4_p.wav",
         include_bytes!("../samples/clarinet_F4_p.wav"),
     ),
-    (
-        "drone_G2.wav",
-        include_bytes!("../samples/drone_G2.wav"),
-    ),
-    (
-        "drone_G3.wav",
-        include_bytes!("../samples/drone_G3.wav"),
-    ),
+    ("drone_G2.wav", include_bytes!("../samples/drone_G2.wav")),
+    ("drone_G3.wav", include_bytes!("../samples/drone_G3.wav")),
     (
         "drum_crash1_ff_rr1.wav",
         include_bytes!("../samples/drum_crash1_ff_rr1.wav"),

@@ -715,6 +715,153 @@ pub fn steel_bank() -> &'static [Zone] {
     steel()
 }
 
+// --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
+//
+// These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
+// modulo wrap. The bake (prepare.py `extract_loop`) makes the seam continuous, so
+// no runtime crossfade / loop metadata is needed — `Zone` is untouched. Roots are
+// the MEASURED fundamentals (the pipe is ~30-50 cents flat; we repitch from the
+// real f0 so the flatness never reaches the render).
+
+/// GM 109 chanter, F4–G5, ~2.5-semitone spacing (RR1 takes, single flat layer).
+fn chanter() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "chanter_F4.wav" => 341.37,
+            "chanter_G4.wav" => 383.74,
+            "chanter_A4.wav" => 432.55,
+            "chanter_C5.wav" => 512.01,
+            "chanter_D5.wav" => 578.53,
+            "chanter_G5.wav" => 771.47,
+        )
+    })
+}
+
+/// GM 109 bass drone (single recorded G2). One zone — `nearest` always returns it.
+fn drone_g2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| bank!("drone_G2.wav" => 98.22))
+}
+
+/// GM 109 tenor drone (single recorded G3).
+fn drone_g3() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| bank!("drone_G3.wav" => 196.21))
+}
+
+pub fn chanter_bank() -> &'static [Zone] {
+    chanter()
+}
+pub fn drone_g2_bank() -> &'static [Zone] {
+    drone_g2()
+}
+pub fn drone_g3_bank() -> &'static [Zone] {
+    drone_g3()
+}
+
+/// A looped-sample voice: plays the whole (baked-seamless) sample on an endless
+/// modulo wrap under an `Adsr` amp envelope. Unlike `LaVoice` there is NO model
+/// underneath — the sample IS the sound, indefinitely (a bagpipe never decays).
+/// It deliberately does NOT implement `set_pitch`: GM 109 is in `vibrato_family`,
+/// and the engine calls `set_pitch` on every voice on the channel; the no-op
+/// default keeps CC1/bend from warbling the fixed-pitch pipe (matching the
+/// modeled drone, which is immune by the same omission).
+pub struct LoopVoice {
+    data: &'static [f32],
+    pos: f32,
+    step: f32,
+    gain: f32,
+    env: crate::dsp::Adsr,
+    #[cfg(test)]
+    name: &'static str,
+}
+
+impl LoopVoice {
+    pub fn new(
+        zones: &'static [Zone],
+        target_hz: f32,
+        sr: f32,
+        gain: f32,
+        attack: f32,
+        release: f32,
+        #[cfg_attr(not(test), allow(unused_variables))] name: &'static str,
+    ) -> Self {
+        let zone = nearest(zones, target_hz);
+        // Clamp the PITCH RATIO (the coverage guard — no model fallback exists),
+        // THEN apply sample-rate conversion. Never clamp the combined value: at
+        // 96 kHz a unison note would clamp 0.459 -> 0.5 and read 147 cents sharp
+        // (Codex review).
+        let ratio = (target_hz / zone.root).clamp(0.5, 2.0);
+        let step = ratio * 44100.0 / sr;
+        LoopVoice {
+            data: zone.data.as_slice(),
+            pos: 0.0,
+            step,
+            gain,
+            env: crate::dsp::Adsr::new(attack, 0.0, 1.0, release, sr),
+            #[cfg(test)]
+            name,
+        }
+    }
+}
+
+impl Voice for LoopVoice {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let n = self.data.len();
+        for o in out.iter_mut() {
+            let e = self.env.next();
+            let j = self.pos as usize;
+            let frac = self.pos - j as f32;
+            let a = self.data[j];
+            // WRAPPED neighbour — load-bearing: a one-shot player's `data[j+1]`
+            // would read out of bounds / a wrong sample at the seam and click
+            // once per loop.
+            let b = self.data[(j + 1) % n];
+            *o += (a + (b - a) * frac) * self.gain * e;
+            self.pos += self.step;
+            if self.pos >= n as f32 {
+                self.pos -= n as f32;
+            }
+        }
+        self.env.alive()
+    }
+
+    fn note_off(&mut self) {
+        self.env.release();
+    }
+
+    fn released(&self) -> bool {
+        self.env.released()
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        self.name
+    }
+}
+
+/// GM 109 sampled chanter. Constant amplitude (velocity ignored — constant bag
+/// pressure), ~10 ms attack, 0.11 s release (mirrors the modeled chanter env).
+pub fn bagpipe_chanter_loop(key: u8, sr: f32) -> LoopVoice {
+    LoopVoice::new(
+        chanter(),
+        key_freq(key),
+        sr,
+        BAGPIPE_CHANTER_GAIN,
+        0.010,
+        0.11,
+        "bagpipe_chanter",
+    )
+}
+
+/// Output gains for the sampled bagpipe. Samples are baked to a common RMS
+/// (prepare.py `BAGPIPE_TARGET_RMS`), so these set the MIX: the chanter ~2x the
+/// drone stack, mirroring the modeled 0.154 : 0.075. `DRONE` is per-loop (bass +
+/// tenor sum to roughly this given their octave-incoherent content).
+pub const BAGPIPE_CHANTER_GAIN: f32 = 0.85;
+pub const BAGPIPE_DRONE_GAIN: f32 = 0.30;
+
 pub fn prewarm() {
     if !crate::embedded_samples_available() {
         return;
@@ -746,6 +893,9 @@ pub fn prewarm() {
     let _ = strings_bank(127);
     let _ = guitar_bank();
     let _ = steel_bank();
+    let _ = chanter_bank();
+    let _ = drone_g2_bank();
+    let _ = drone_g3_bank();
 }
 
 fn nearest(zones: &'static [Zone], f: f32) -> &'static Zone {

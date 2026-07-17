@@ -8422,6 +8422,77 @@ pub(crate) fn bagpipe_drone(key: u8, vel: u8, sr: f32, seed: u32) -> BagpipeDron
     BagpipeDrone::new(key, vel, sr, seed)
 }
 
+/// The SAMPLED drone stack (HLD 2026.07.17): the real G-pipe's bass + tenor,
+/// each a looped recording repitched to track the chanter's key. Mirrors the
+/// modeled `BagpipeDrone`'s bass+tenor structure — but from real recordings, so
+/// there is NO tenor-pair beat (a real G-pipe has one tenor; BP-O2's beat is a
+/// model-only property, kept on the alt bank). `tenor_f` follows the same
+/// drone-control branch as the model: a control note (key <= MAX) sounds the
+/// tenor AT its pitch, else an octave below the chanter.
+pub(crate) struct BagpipeDroneSampled {
+    bass: crate::sampler::LoopVoice,
+    tenor: crate::sampler::LoopVoice,
+}
+
+impl BagpipeDroneSampled {
+    fn new(key: u8, sr: f32) -> Self {
+        let tenor_f = if key <= BAGPIPE_DRONE_CONTROL_MAX {
+            key_freq(key)
+        } else {
+            key_freq(key) * 0.5
+        };
+        let g = crate::sampler::BAGPIPE_DRONE_GAIN;
+        BagpipeDroneSampled {
+            bass: crate::sampler::LoopVoice::new(
+                crate::sampler::drone_g2_bank(),
+                tenor_f * 0.5,
+                sr,
+                g,
+                0.050,
+                0.22,
+                "bagpipe_drone",
+            ),
+            tenor: crate::sampler::LoopVoice::new(
+                crate::sampler::drone_g3_bank(),
+                tenor_f,
+                sr,
+                g,
+                0.050,
+                0.22,
+                "bagpipe_drone",
+            ),
+        }
+    }
+}
+
+impl Voice for BagpipeDroneSampled {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        // both loops add into `out`; alive if EITHER is (they release in lockstep)
+        let a = self.bass.render(out);
+        let b = self.tenor.render(out);
+        a || b
+    }
+
+    fn note_off(&mut self) {
+        self.bass.note_off();
+        self.tenor.note_off();
+    }
+
+    fn released(&self) -> bool {
+        // released only when BOTH are (they note_off together, so this is exact)
+        self.bass.released() && self.tenor.released()
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "reed"
+    }
+}
+
+pub(crate) fn bagpipe_drone_sampled(key: u8, sr: f32) -> BagpipeDroneSampled {
+    BagpipeDroneSampled::new(key, sr)
+}
+
 /// RD10 (§2.8.4) — the sax rasp stage state. Runs the source chain (pulse →
 /// leaky integrator → bias-tanh → decimation cliff) at `m`× the output rate;
 /// the owning `Reed` constructs its `ReedPulse` at `osr` when this stage is
@@ -10826,7 +10897,20 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // the width instead. 62/63 synth brass: pure model by design.
         61..=63 => Box::new(brass(program, key, vel, sr, seed)),
         // saxes, bagpipe, shanai: pure model (no clean CC0 source / idiomatic onset)
-        64..=67 | 109 | 111 => Box::new(reed(program, key, vel, sr, seed)),
+        64..=67 | 111 => Box::new(reed(program, key, vel, sr, seed)),
+        // GM 109 bagpipe chanter: sampled looped voice by default (HLD
+        // 2026.07.17), the modeled reed when samples are off or on the CC0 alt
+        // bank (altbank.rs pins samples=false for 109 — MANDATORY, else this
+        // arm makes the model unreachable). The drone is dispatched separately
+        // in engine.rs `ensure_bagpipe_drone`; the two agree by one rule:
+        // sampled iff (samples on AND not alt-bank).
+        109 => {
+            if samples {
+                Box::new(crate::sampler::bagpipe_chanter_loop(key, sr))
+            } else {
+                Box::new(reed(program, key, vel, sr, seed))
+            }
+        }
         68..=71 => {
             let model = Box::new(reed(program, key, vel, sr, seed));
             if samples {
@@ -20630,7 +20714,7 @@ mod tests {
     /// where `samples: true` renders a different signal (everything else
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
-        0, 1, 2, 3, 24, 40, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 110,
+        0, 1, 2, 3, 24, 40, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

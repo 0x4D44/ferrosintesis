@@ -1159,7 +1159,16 @@ impl EngineCore {
             return;
         }
         let seed = 0xBA60 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
-        let voice = Box::new(voices::bagpipe_drone(key, vel, self.opt.sr, seed));
+        // Sampled drone by default; modeled when samples are off or on the CC0
+        // alt bank — the same rule the chanter uses in voices::make, so the two
+        // paths agree (HLD 2026.07.17 §5). `opt.samples` already folds in
+        // embedded-availability.
+        let sampled = self.opt.samples && !self.strips[ch as usize].alt_bank;
+        let voice: Box<dyn voices::Voice> = if sampled {
+            Box::new(voices::bagpipe_drone_sampled(key, self.opt.sr))
+        } else {
+            Box::new(voices::bagpipe_drone(key, vel, self.opt.sr, seed))
+        };
         self.active.push(Active {
             ch,
             key: BAGPIPE_DRONE_KEY,

@@ -331,3 +331,10 @@
   means: drop `DRUM_SOURCES` from `prepare.py`, drop the 8 rows + 8 files, `FILE_COUNT` 139 ->
   131, and re-pin `test_all_samples_route_to_the_expected_package`. Check nothing external
   depends on the names first — the crate is published.
+
+- 2026.07.17 — **ChoirV2 CC70 cluster-shade is coupled to the F3 formant gain** (`sf_open =
+  vgains[2]/sf_ref_g3`, voices.rs:6103; the F5 adversarial finding). It SATURATES when the program's
+  default F3 gain is on the floor, so a dark-voiced preset silently kills the CC70 vowel morph's
+  cluster differentiation. Worked around in the darkening slice by keeping aah's default `vgains[2]`
+  at 0.15 (off the floor). A clean fix: give `sf_open` its own state driven by an EXPLICIT cluster-open
+  control from the CC70 path, independent of the F3 formant gain — a dedicated CC70 slice, not urgent.

@@ -5836,7 +5836,7 @@ const CH2_REG_FADE: f32 = 7.0; // semitones of gain fade outside a section reg
 const CH2_REG_FLOOR: f32 = 0.25; // a section never fully mutes
 const CH2_HUM_GAIN: f32 = 0.45; // closed-lips level (−6.9 dB)
 const CH2_MOUTH_RATE: f32 = 0.030; // mouth-open slew per control tick
-const CH2_HUM_LP: (f32, f32) = (900.0, 8000.0); // closed→open lowpass cutoff Hz
+const CH2_HUM_LP: (f32, f32) = (900.0, 3400.0); // closed→open lowpass cutoff Hz
 const CH2_BREATH_T60: f32 = 0.09; // onset breath decay, seconds
 const CH2_BREATH_SUS: f32 = 0.008; // sustained air floor (pre-tract)
 /// Klatt-style voicing (chest) branch — round 2 "thin, no body": the tract
@@ -5941,32 +5941,38 @@ fn choir(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> ChoirV2 {
     ) = match program {
         52 => (
             [660.0, 1120.0, 2500.0],
-            [1.0, 0.55, 0.28],
-            [0.30, 0.18],
+            [1.0, 0.45, 0.15],
+            [0.20, 0.09],
             1.0,
             1.0,
-            0.35,
-            0.85,
-        ), // aah
+            0.45,
+            0.75,
+        ), // aah — the one vowel SC-55 gives a real singer's formant (cluster
+        // 8-13x above the 4.1 kHz band); keep it. vgains[2]=0.15 is the F3 gain
+        // AND the CC70 cluster-open reference (sf_ref_g3) — kept off the floor so
+        // the CC70 vowel morph still differentiates mm (0.10→0.67) from ah
+        // (0.35→1.3); the brightness lives in the mouth cutoff + cluster, not F3.
         53 => (
             [330.0, 870.0, 2300.0],
-            [1.0, 0.45, 0.20],
-            [0.20, 0.12],
+            [1.0, 0.45, 0.12],
+            [0.06, 0.03],
             1.25,
             0.7,
             0.50,
             0.44,
-        ), // ooh — the most fundamental-dominant vowel
+        ), // ooh — the most fundamental-dominant vowel; SC-55 gives it no
+        // singer's-formant ring, so the cluster is trimmed near-off
         _ => (
-            [400.0, 1900.0, 2600.0],
-            [1.0, 0.70, 0.40],
-            [0.35, 0.22],
+            [400.0, 900.0, 1800.0],
+            [1.0, 0.28, 0.08],
+            [0.04, 0.02],
             0.5,
             1.3,
-            0.0,
-            1.0,
-        ), // eh — no chest: the synth stack already carries its fundamental
-           // (h1 −0.5 dB rel peak, measured) and renders exactly as before
+            0.42,
+            0.70,
+        ), // eh/synth voice — SC-55 renders GM54 the dark, flat voice (centroid
+           // ~640-790 across the register); low F2, trimmed cluster + light chest
+           // hold the fundamental and keep it dark
     };
     let qs = [9.0, 10.0, 9.0];
     let uniform = program == 54;
@@ -11959,14 +11965,16 @@ mod tests {
         }
     }
 
-    /// CH2-O2: vowel formant placement. Per the 2026.07.08 lesson the
-    /// measurement grid is FIXED (three F2 probe frequencies, band q 5) and
-    /// programs are compared against each other at the same probe, so pitch
-    /// and static detune cannot masquerade as timbre. Measured prominences
-    /// P(f) = band_rms(f)/rms at key 57:
-    ///   P870:  53 (own F2) 0.54 vs 54 0.12 | P1120: 52 (own F2) 0.32 vs 54
-    ///   0.13 | P1900: 54 (own F2) 0.28 vs 52 0.11, 53 0.11.
-    /// Plus the F1 ordering as centroid: ooh 939 < aah 1407 / eh 1477.
+    /// CH2-O2: vowel formant placement, re-anchored 2026.07.17 to the
+    /// full-register SC-55 measurement (keys 52-64, this slice's journal). SC-55
+    /// renders **aah the BRIGHTEST** vowel at every key (centroid ~920-1055)
+    /// and **GM54 "synth voice" DARK** — its F2 sits low (~900), NOT the old
+    /// 1900 Hz that made ours the brightest (the inversion this slice fixes).
+    /// ooh is fundamental-dominant/dark. The pre-slice oracle pinned eh bright
+    /// (F2 1900 dominant) and ooh *strictly* darkest; both are wrong against
+    /// hardware — ooh and GM54 swap darkest across the register (crossover
+    /// ~key 58), so no strict ordering between them can be frozen. Fixed probe
+    /// grid, band q 5 (2026.07.08 lesson: pitch must not masquerade as timbre).
     #[test]
     fn choir2_formant_placement_per_vowel() {
         let sr = 44100.0;
@@ -11976,56 +11984,89 @@ mod tests {
         };
         let (aah, ooh, eh) = (sus(52), sus(53), sus(54));
         let prom = |seg: &[f32], f: f32| band_rms(seg, sr, f, 5.0) / rms(seg).max(1e-9);
-        assert!(
-            prom(&ooh, 870.0) > 1.8 * prom(&eh, 870.0),
-            "ooh F2 870 not prominent: {} vs eh {}",
-            prom(&ooh, 870.0),
-            prom(&eh, 870.0)
-        );
-        assert!(
-            prom(&aah, 1120.0) > 1.6 * prom(&eh, 1120.0),
-            "aah F2 1120 not prominent: {} vs eh {}",
-            prom(&aah, 1120.0),
-            prom(&eh, 1120.0)
-        );
-        assert!(
-            prom(&eh, 1900.0) > 1.6 * prom(&aah, 1900.0).max(prom(&ooh, 1900.0)),
-            "eh F2 1900 not prominent: {} vs aah {} ooh {}",
-            prom(&eh, 1900.0),
-            prom(&aah, 1900.0),
-            prom(&ooh, 1900.0)
-        );
         let cent = |seg: &[f32]| crate::testutil::centroid(seg, sr);
+        // Measured (key 57, seed 7): cent aah 508 ooh 394 eh 315; eh P900 0.144
+        // vs P1900 0.048 (F2 moved low); aah P1120 0.171 vs ooh 0.130.
+        // (1) aah is the brightest vowel (SC-55: aah brightest at every key).
         assert!(
-            cent(&ooh) < 0.8 * cent(&aah) && cent(&ooh) < 0.8 * cent(&eh),
-            "ooh must be darkest: ooh {} aah {} eh {}",
-            cent(&ooh),
+            cent(&aah) > 1.15 * cent(&ooh) && cent(&aah) > 1.10 * cent(&eh),
+            "aah must be brightest: aah {} ooh {} eh {}",
             cent(&aah),
+            cent(&ooh),
             cent(&eh)
+        );
+        // (2) GM54 is DARK, not the pre-slice brightest — the inversion fix
+        //     (fails on the old eh@~1477 that exceeded aah).
+        assert!(
+            cent(&eh) < 0.95 * cent(&aah),
+            "GM54 must be dark, not inverted-bright: eh {} aah {}",
+            cent(&eh),
+            cent(&aah)
+        );
+        // (3) GM54's F2 now sits LOW (~900), not the old ~1900 — the fix,
+        //     encoded directly (fails on the old bright-F2 eh).
+        assert!(
+            prom(&eh, 900.0) > 1.5 * prom(&eh, 1900.0),
+            "GM54 F2 not moved low: P900 {} vs P1900 {}",
+            prom(&eh, 900.0),
+            prom(&eh, 1900.0)
+        );
+        // (4) aah's own F2 (1120) stands out vs the dark ooh — identity tooth
+        //     (maintenance guard; clauses 2-3 carry the inversion fail-first).
+        assert!(
+            prom(&aah, 1120.0) > 1.2 * prom(&ooh, 1120.0),
+            "aah F2 1120 not prominent vs ooh: {} vs {}",
+            prom(&aah, 1120.0),
+            prom(&ooh, 1120.0)
+        );
+        // (5) ooh is fundamental-dominant/dark (clearly darker than aah).
+        assert!(
+            cent(&ooh) < 0.85 * cent(&aah),
+            "ooh must be dark: ooh {} aah {}",
+            cent(&ooh),
+            cent(&aah)
         );
     }
 
-    /// CH2-O3: the singer's-formant cluster. (a) All three programs carry a
-    /// 2.8-3.3 kHz ring that stands clear of the spectrum just above it
-    /// (measured cluster/4100 ratios 1.6-1.9×); (b) a closed "mm" vowel via
-    /// the CC70 `set_vowel` path shades the cluster down with the lips
-    /// (measured 0.175 → 0.096 at prog 53).
+    /// CH2-O3: the singer's-formant cluster, re-anchored 2026.07.17 to the
+    /// full-register SC-55 measurement. Hardware gives only **aah** a real
+    /// 2.8-3.3 kHz ring (cluster 8-13× the 4.1 kHz band); the dark **ooh** and
+    /// **GM54** carry essentially none (ratio ≤1.4×). So the ring is asserted
+    /// for aah — standing clear of the band above it AND clearly stronger than
+    /// the dark vowels (the pre-slice oracle wrongly required it on all three,
+    /// which is why those vowels rendered too bright). (b) the CC70 `set_vowel`
+    /// path still shades aah's cluster down: an F3-gain below the program
+    /// default drives `sf_open` down (voices.rs `sf_open = vgains[2]/sf_ref_g3`).
     #[test]
     fn choir2_singers_formant_cluster() {
         let sr = 44100.0;
         let prom = |seg: &[f32], f: f32, q: f32| band_rms(seg, sr, f, q) / rms(seg).max(1e-9);
-        for prog in 52..=54u8 {
+        let sus_of = |prog: u8| {
             let sig = render_program(prog, 57, 100, 4.0, 7);
-            let sus = segment(&sig, sr, 2.0, 3.8);
-            let cluster = prom(sus, 2950.0, 5.0).max(prom(sus, 3250.0, 5.0));
-            let above = prom(sus, 4100.0, 5.0);
-            assert!(
-                cluster > 1.3 * above,
-                "GM{prog} singer's formant missing: cluster {cluster} vs 4100 band {above}"
-            );
-        }
+            segment(&sig, sr, 2.0, 3.8).to_vec()
+        };
+        let (aah, ooh, eh) = (sus_of(52), sus_of(53), sus_of(54));
+        let cl = |s: &[f32]| prom(s, 2950.0, 5.0).max(prom(s, 3250.0, 5.0));
+        // Measured (key 57, seed 7): cl aah 0.049 ooh 0.030 eh 0.028; aah/4100
+        // 1.59; cluster/total aah 0.049 ~ SC-55's 0.039 (present), dark vowels
+        // ~0.03 ~ SC-55 (near-absent).
+        assert!(
+            cl(&aah) > 1.3 * prom(&aah, 4100.0, 5.0),
+            "aah singer's formant missing: cluster {} vs 4100 band {}",
+            cl(&aah),
+            prom(&aah, 4100.0, 5.0)
+        );
+        assert!(
+            cl(&aah) > 1.4 * cl(&ooh) && cl(&aah) > 1.4 * cl(&eh),
+            "aah ring must exceed the dark vowels: aah {} ooh {} eh {}",
+            cl(&aah),
+            cl(&ooh),
+            cl(&eh)
+        );
+        // (b) CC70 shades aah's cluster: F3 gain (0.03) below aah's default
+        //     (0.08) drives sf_open down to ~0.4.
         let render_vowel = |vowel: Option<([f32; 3], [f32; 3], [f32; 3])>| {
-            let mut v = choir(53, 57, 100, sr, 7);
+            let mut v = choir(52, 57, 100, sr, 7);
             if let Some((f, q, g)) = vowel {
                 v.set_vowel(f, q, g);
             }
@@ -12037,14 +12078,15 @@ mod tests {
         let mm = render_vowel(Some((
             [500.0, 1400.0, 2400.0],
             [12.0, 10.0, 9.0],
-            [1.0, 0.30, 0.10],
+            [1.0, 0.30, 0.03],
         )));
         let sfr = |sig: &[f32]| {
             let sus = segment(sig, sr, 2.0, 3.8);
             band_rms(sus, sr, 3050.0, 3.0) / rms(sus).max(1e-9)
         };
+        // Measured: mm 0.044 vs open 0.068 (sf_open ~0.4 from F3-gain 0.03/0.08).
         assert!(
-            sfr(&mm) < 0.75 * sfr(&open),
+            sfr(&mm) < 0.80 * sfr(&open),
             "mm must close the singer's cluster: mm {} open {}",
             sfr(&mm),
             sfr(&open)
@@ -12088,6 +12130,14 @@ mod tests {
         }
     }
 
+    /// CH2-O4 (breath onset), re-anchored 2026.07.17. The soft consonant is
+    /// (1) quieter than the sustain, (2) closed-lips DARK in an ABSOLUTE sense
+    /// (centroid near the closed cutoff, ~900 Hz), and (3) breathy while the
+    /// sustain stays harmonic. The pre-slice oracle required the onset darker
+    /// than the sustain *relatively*; once the vowels are voiced to SC-55's
+    /// darkness the dark ooh/GM54 sustains are no brighter than a closed mouth,
+    /// so a relative gate is unachievable without an unphysically dark onset —
+    /// the absolute closed-lips ceiling is the honest marker.
     #[test]
     fn choir2_consonant_breath_onset() {
         let sr = 44100.0;
@@ -12095,23 +12145,26 @@ mod tests {
             let sig = render_program(prog, 57, 100, 4.0, 7);
             let onset = segment(&sig, sr, 0.005, 0.065);
             let sus = segment(&sig, sr, 2.0, 3.8);
+            let (c_on, c_sus) = (
+                crate::testutil::centroid(onset, sr),
+                crate::testutil::centroid(sus, sr),
+            );
+            let (f_on, f_sus) = (
+                crate::testutil::flatness(onset, sr, 300.0, 6000.0),
+                crate::testutil::flatness(sus, sr, 300.0, 6000.0),
+            );
+            // Measured (key 57, seed 7): rms ratio 0.22-0.34; onset centroid
+            // 314-342 (closed-lips ~900 Hz corner); onset flatness 0.16-0.33
+            // (breath); sustain flatness 0.03-0.08 (harmonic).
             assert!(
                 rms(onset) < 0.62 * rms(sus),
                 "GM{prog} onset not soft: onset {} sus {}",
                 rms(onset),
                 rms(sus)
             );
-            let (c_on, c_sus) = (
-                crate::testutil::centroid(onset, sr),
-                crate::testutil::centroid(sus, sr),
-            );
             assert!(
-                c_on < 0.62 * c_sus,
-                "GM{prog} onset not closed-lips dark: onset {c_on} sus {c_sus}"
-            );
-            let (f_on, f_sus) = (
-                crate::testutil::flatness(onset, sr, 300.0, 6000.0),
-                crate::testutil::flatness(sus, sr, 300.0, 6000.0),
+                c_on < 650.0,
+                "GM{prog} onset not closed-lips dark: onset centroid {c_on} (sus {c_sus})"
             );
             assert!(
                 f_on > 0.12,

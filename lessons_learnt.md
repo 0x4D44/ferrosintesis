@@ -13,6 +13,16 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 
 - 2026.07.17 — **Album-scale generative fan-outs don't fit the fleet-shared 5-h usage window — serialize composers and feed a digest, never parallelize.** Two parallel fleets died mid-window (10-wide, then 2-wide: ~0.9M tokens, zero tracks); one-at-a-time composers fed a compact pattern digest (Slipstream `COMPOSER-NOTES.md` instead of re-reading the 1.7k-line exemplar) landed 10/10 at ~150-250k tokens/track with per-track verify+commit making every landing durable.
 
+- 2026.07.17 — **"h3 re h1" (a single-harmonic notch) is an UNSTABLE timbre proxy — it swings ±40 dB
+  with which harmonic lands on a formant; measure BRIGHTNESS as centroid across the REGISTER, not one
+  key.** The choir "hollow-notch" fork chased SC-55's aah h3 "−14 at k60" — but SC-55's own h3 swings
+  +26 (k52) → −12 (k60) → +14 (k64); the whole notch target (and a prototype "validated" at k60) was a
+  register-snapshot artifact. The real, stable defect was centroid over-brightness (aah 1.6× / GM54 3×
+  & inverted), fixed by preset darkening (`CH2_HUM_LP` open 8000→3400, cluster/F2 trims), not a Klatt
+  cascade. Corollary: a rompler's per-vowel formant character is register-dependent — "GM54 is darkest"
+  held ONLY at k60 (GM53 is darkest below ~k58), so never freeze a single vowel ordering from one key.
+  Always measure a candidate voice at 5-6 keys spanning the register (`tools/choir_measure.py`).
+
 - 2026.07.16 — **A differential oracle is only as good as its INPUT POPULATION — take the
   parameters from measurement, never from the assumption you are trying to verify.** Fixing
   `prepare.py`'s de-click fade, I "proved inertness" with a test fed 8-300 ms of lead-in and

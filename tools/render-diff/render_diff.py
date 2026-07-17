@@ -119,9 +119,12 @@ def scan(path: str) -> tuple[set[int], set[int]]:
     return progs, keys
 
 
-def render_hash(exe: str, mid: str, tag: str) -> str:
+def render_hash(exe: str, mid: str, tag: str, rate: "int | None" = None) -> str:
     out = f".rd_{tag}_{hashlib.md5(mid.encode()).hexdigest()[:10]}.wav"
-    r = subprocess.run([exe, mid, "-o", out, "-q"], capture_output=True)
+    argv = [exe, mid, "-o", out, "-q"]
+    if rate is not None:
+        argv += ["--rate", str(rate)]
+    r = subprocess.run(argv, capture_output=True)
     if r.returncode != 0:
         raise RuntimeError(
             f"render FAILED ({exe}) for {mid}: {r.stderr.decode(errors='replace')[:200]}"
@@ -144,6 +147,11 @@ def main() -> int:
                     help="a channel-10 drum key your change TOUCHES (repeatable)")
     ap.add_argument("--glob", default="albums/**/*.mid", help="which MIDIs to render")
     ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--rate", type=int, default=None,
+                    help="sample rate passed to the binary. SAME/DIFF is rate-independent "
+                         "(byte-exact per channel), so a low rate (e.g. 11025) classifies "
+                         "identically ~4x faster — use it to keep a full-catalog diff from "
+                         "timing out.")
     a = ap.parse_args()
 
     touched_p, touched_k = set(a.program), set(a.key)
@@ -161,7 +169,7 @@ def main() -> int:
         progs, keys = scan(mid)
         hit_p, hit_k = progs & touched_p, keys & touched_k
         predicted = bool(hit_p or hit_k)
-        changed = render_hash(a.baseline, mid, "base") != render_hash(a.new, mid, "new")
+        changed = render_hash(a.baseline, mid, "base", a.rate) != render_hash(a.new, mid, "new", a.rate)
         why = []
         if hit_p:
             why.append("GM" + ",".join(map(str, sorted(hit_p))))

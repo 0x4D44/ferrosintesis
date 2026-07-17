@@ -3,6 +3,14 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.17 — **Inspect a candidate sample's ACTUAL AUDIO (spectral flatness + dominant-partial
+  concentration) before trusting its name/licence for a timbre role.** A licence-only search called
+  VCSL "Gong 1" a near-pitchless tam-tam; it is a PITCHED gong (sharp 143 Hz/D3, 95%-concentrated) —
+  wrong for a CC0=1 tam-tam. And measure the root over the RING, not the strike: the CdM Gong Ageng's
+  strike thumps ~80 Hz but its sustained partial is ~99 Hz (G2) → `GONG_ROOT_HZ=99.4` (`sampler.rs`);
+  an 80 Hz root rendered every key a major-third sharp. Three sourcing dead-ends this build were all
+  invisible to name/licence and only the spectrum (or a render) revealed them.
+
 - 2026.07.17 — **Album-scale generative fan-outs don't fit the fleet-shared 5-h usage window — serialize composers and feed a digest, never parallelize.** Two parallel fleets died mid-window (10-wide, then 2-wide: ~0.9M tokens, zero tracks); one-at-a-time composers fed a compact pattern digest (Slipstream `COMPOSER-NOTES.md` instead of re-reading the 1.7k-line exemplar) landed 10/10 at ~150-250k tokens/track with per-track verify+commit making every landing durable.
 
 - 2026.07.16 — **A differential oracle is only as good as its INPUT POPULATION — take the

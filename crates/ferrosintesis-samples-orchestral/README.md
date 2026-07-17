@@ -2,13 +2,14 @@
 
 Compile-time sample payload for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis). This crate embeds
-139 mono, 16-bit, 44.1 kHz WAV attack transients:
+147 mono, 16-bit, 44.1 kHz WAV recordings (attack transients + looped sustains):
 
 - 24 violin/cello ensemble onsets for the GM 48–49 string sections;
 - 56 brass onsets for trumpet, muted trumpet, trombone, tuba, and horn;
 - 36 reed onsets for oboe, bassoon, and clarinet;
 - 7 Spanish classical-guitar plucks for the nylon-guitar voice;
 - 8 steel-string acoustic-guitar plucks for the GM 25 voice;
+- 8 looped bagpipe recordings (2 drones, 6 chanter zones) for the GM 109 voice;
 - 8 drum overlays: two round robins each for crash cymbal, suspended cymbal,
   kick, and snare.
 
@@ -20,7 +21,7 @@ runtime filesystem or network access.
 The small public API exists for `ferrosintesis`:
 
 ```rust
-assert_eq!(ferrosintesis_samples_orchestral::FILE_COUNT, 139);
+assert_eq!(ferrosintesis_samples_orchestral::FILE_COUNT, 147);
 let wav = ferrosintesis_samples_orchestral::get("trumpet_C3_f.wav").unwrap();
 assert_eq!(&wav[..4], b"RIFF");
 ```
@@ -67,6 +68,21 @@ The generator therefore fetches from a pinned revision and must never track
 ```text
 05d5ed8befa042fd9d99a6d159dfc3673d3f8edc
 ```
+
+The two `drone_*` and six `chanter_*` WAVs are looped sustains (not attack
+transients) for the GM 109 bagpipe, trimmed from the
+[FreePats Bagpipe](https://freepats.zenvoid.org/Ethnic/Bagpipe/) bank (a G-pipe
+recorded by Gilles Sadowski), released under CC0 1.0 with the full legal code
+bundled as `cc0.txt`. The generator pins the versioned WAV archive
+`Bagpipe-SFZ-20221204.7z` by SHA-256:
+
+```text
+6f25f232065ebc51ab9d3b54aaedc8a29e59e454ec31d3f1b4a03b3d04256066
+```
+
+The bagpipe path emits a short seamless loop region (the whole file loops via a
+modulo wrap at render time) rather than an onset — see `extract_loop` in the
+generator.
 
 The repository's
 [`tools/ferrosintesis-samples/prepare.py`](https://github.com/0x4D44/ferrosintesis/blob/main/tools/ferrosintesis-samples/prepare.py)

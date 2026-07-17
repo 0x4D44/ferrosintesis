@@ -110,8 +110,8 @@ Module map (`src/`):
   CathedralOrgan, SawStack, Lead, Wind, Bowed). Instrument voicing constants live at the top.
 - `drums.rs` — parametric GM channel-10 percussion.
 - `dsp.rs` — filters, oscillators, shared DSP primitives.
-- `sampler.rs` — the **LA-synthesis** layer: 210 public-domain PCM attack transients
-  (17.27 MiB source, supplied by the `-core` and `-orchestral` asset crates; the
+- `sampler.rs` — the **LA-synthesis** layer: 218 public-domain PCM recordings
+  (17.73 MiB source, supplied by the `-core` and `-orchestral` asset crates; the
   separate `-drumkit` crate adds the 188-file sampled kit) crossfaded into
   modeled instrument bodies and sustains.
 - `reverb.rs`, `wav.rs` — Freeverb hall plus the cathedral feedback-delay network;
@@ -200,8 +200,8 @@ Two shapes:
 | `ALBUM.md`, `README.md` | human track notes + regenerate/verify instructions |
 
 `.gitignore` drops `.wav` and `.opus` (both reproducible build output) **except** the
-WAVs under `crates/ferrosintesis-samples-{core,orchestral}/samples/` — those 210 files
-are the synth's 17.27 MiB attack-transient bank, which is **source, not output**. Never
+WAVs under `crates/ferrosintesis-samples-{core,orchestral}/samples/` — those 218 files
+are the synth's 17.73 MiB sample bank, which is **source, not output**. Never
 treat them as regenerable. Commit an album as one atomic bundle (sources + `.mid` +
 manifest and docs); the `.opus` renders are **not** committed — regenerate them with
 `cargo run --release -p render-catalog`.

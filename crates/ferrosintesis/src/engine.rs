@@ -418,6 +418,57 @@ fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
     }
 }
 
+/// SC-55-referenced per-program loudness trim (dB), applied at the melodic
+/// channel strip. `0.0` = untouched.
+///
+/// ferrosintesis has no per-instrument loudness normalisation — each voice
+/// carries its own hand-tuned gain, and only the whole *mix* is normalised to
+/// −18 LUFS. That leaves the raw instrument-to-instrument balance uneven (e.g.
+/// solo strings/brass and flutes run hot; string sections and choir run quiet).
+/// This table nudges the sustained families toward the balance a Roland
+/// SC-55mkII produces for the same GM programs, measured at equal note/velocity
+/// (see `wrk_docs/2026.07.17 - CR - instrument level audit + SC-55 trim.md`).
+///
+/// It is deliberately CONSERVATIVE: sustained voices only (whole-note RMS is a
+/// fair loudness proxy there), 0.70× the measured delta, clamped to ±6 dB, with
+/// a 1 dB dead-band. Struck/plucked/percussive voices (piano, guitar, mallets,
+/// drums) and noise/FX are left at 0.0 — their apparent "deficit" is a faster
+/// decay envelope, not a level error, so trimming them would misfire.
+///
+/// Timbre-neutral: it scales the dry voice and all its FX sends together (the
+/// strip gain `g` feeds both), preserving each channel's wet/dry ratio.
+#[rustfmt::skip] // keep the 8-per-row GM grid aligned for readability
+pub(crate) const PROGRAM_TRIM_DB: [f32; 128] = [
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //   0-7   Piano      (untouched)
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //   8-15  ChromPerc  (untouched)
+    -4.5, -3.0, -1.5, -6.0, -3.0, -5.0, -1.0, -4.5, //  16-23  Organ
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  24-31  Guitar     (untouched)
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  32-39  Bass       (untouched)
+    -4.0, -4.0, -3.5, -6.0, -4.0,  0.0,  0.0,  0.0, //  40-47  Strings (bowed; pizz/harp/timpani=0)
+     5.5,  1.5,  6.0,  5.0,  2.5,  6.0,  5.0,  0.0, //  48-55  Ensemble (sections/choir; orch-hit=0)
+    -6.0, -6.0, -6.0, -2.0, -3.0, -2.0,  0.0,  5.0, //  56-63  Brass
+     0.0, -2.5, -3.0, -3.0,  2.0,  1.5,  0.0,  0.0, //  64-71  Reed
+    -4.0, -4.0, -2.0, -5.0, -6.0, -6.0,  0.0,  0.0, //  72-79  Pipe
+    -4.0,  0.0,  0.0,  0.0, -2.0,  5.5,  1.0,  1.0, //  80-87  SynthLead
+     4.0,  0.0,  2.0,  5.0,  3.0, -5.0,  0.0,  0.0, //  88-95  SynthPad
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  96-103 SynthFX    (untouched)
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, // 104-111 Ethnic     (untouched)
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, // 112-119 Percussive (untouched)
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, // 120-127 SoundFX    (untouched)
+];
+
+/// Linear gain for the SC-55-referenced per-program loudness trim (see
+/// `PROGRAM_TRIM_DB`). Returns exactly `1.0` for untouched programs.
+#[inline]
+pub(crate) fn program_trim_lin(program: u8) -> f32 {
+    let db = PROGRAM_TRIM_DB[program as usize];
+    if db == 0.0 {
+        1.0
+    } else {
+        10f32.powf(db / 20.0)
+    }
+}
+
 /// Stereo chorus bus: one modulated delay line, quadrature taps L/R.
 struct Chorus {
     dl: DelayLine,
@@ -2219,7 +2270,16 @@ impl EngineCore {
             if strip.breath_authored {
                 strip.breath += self.expr_smooth * (strip.breath_target - strip.breath);
             }
-            let g = strip.volume * strip.expr * strip.at_gain * strip.breath;
+            // SC-55-referenced per-program loudness trim (melodic channels only;
+            // ch9 drums are key-indexed and levelled by kit_balance()). `g` feeds
+            // both the dry mix and every FX send below, so this scales the whole
+            // voice together — pure level, timbre- and wet/dry-neutral.
+            let trim = if ci != 9 {
+                program_trim_lin(strip.program)
+            } else {
+                1.0
+            };
+            let g = strip.volume * strip.expr * strip.at_gain * strip.breath * trim;
             if g < 1e-6 {
                 continue;
             }
@@ -2564,6 +2624,75 @@ pub fn normalize_loudness(
 mod tests {
     use super::*;
     use crate::midi::Ev;
+
+    /// The SC-55-referenced per-program loudness trim (`PROGRAM_TRIM_DB`) is
+    /// CONSERVATIVE by design: it corrects sustained families only and leaves
+    /// struck/plucked/percussive voices and noise/FX untouched. This oracle pins
+    /// that scope contract — so a future edit cannot silently trim piano, guitar
+    /// or drums — plus the flagship calibrated anchors and the dB→linear mapping.
+    #[test]
+    fn program_trim_scope_and_calibration() {
+        // The corrected set = exactly the sustained ranges (bowed strings only;
+        // pizz/harp/timpani and the orchestra-hit stab stay out). Its complement
+        // MUST be untouched (0.0 dB, unity gain).
+        let is_corrected = |p: u8| {
+            matches!(p,
+                16..=23    // Organ
+                | 40..=44  // bowed strings (pizz 45 / harp 46 / timpani 47 excluded)
+                | 48..=54  // string & synth sections + choir (orch-hit 55 excluded)
+                | 56..=63  // Brass
+                | 64..=71  // Reed
+                | 72..=79  // Pipe
+                | 80..=87  // SynthLead
+                | 88..=95) // SynthPad
+        };
+        for p in 0u8..128 {
+            if !is_corrected(p) {
+                assert_eq!(
+                    PROGRAM_TRIM_DB[p as usize], 0.0,
+                    "program {p} is outside the conservative scope and must stay at 0.0 dB"
+                );
+                assert_eq!(
+                    program_trim_lin(p),
+                    1.0,
+                    "untouched program {p} must be unity gain"
+                );
+            }
+        }
+
+        // Flagship corrections: sections/choir lifted, solo strings/brass/flutes/
+        // organ trimmed.
+        assert_eq!(PROGRAM_TRIM_DB[50], 6.0); // SynthStrings1 — lifted
+        assert_eq!(PROGRAM_TRIM_DB[53], 6.0); // VoiceOohs     — lifted
+        assert_eq!(PROGRAM_TRIM_DB[56], -6.0); // Trumpet      — trimmed
+        assert_eq!(PROGRAM_TRIM_DB[58], -6.0); // Tuba         — trimmed
+        assert_eq!(PROGRAM_TRIM_DB[43], -6.0); // Contrabass   — trimmed
+        assert_eq!(PROGRAM_TRIM_DB[73], -4.0); // Flute        — trimmed
+        assert_eq!(PROGRAM_TRIM_DB[19], -6.0); // ChurchOrgan  — trimmed
+
+        // Every entry within the ±6 dB clamp.
+        for (p, &db) in PROGRAM_TRIM_DB.iter().enumerate() {
+            assert!(
+                (-6.0..=6.0).contains(&db),
+                "program {p} trim {db} dB is outside the ±6 dB clamp"
+            );
+        }
+
+        // dB → linear mapping.
+        assert!(
+            (program_trim_lin(56) - 0.5012).abs() < 1e-3,
+            "-6 dB ≈ 0.501×"
+        );
+        assert!(
+            (program_trim_lin(53) - 1.9953).abs() < 1e-3,
+            "+6 dB ≈ 1.995×"
+        );
+        assert_eq!(
+            program_trim_lin(0),
+            1.0,
+            "untouched program must be exactly unity"
+        );
+    }
 
     /// `render_with_progress` must be a pure observer: attaching a progress callback
     /// cannot move a single sample.

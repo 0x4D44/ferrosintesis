@@ -1054,7 +1054,14 @@ mod guards {
         (5, -19.40, 241.3),
         (6, -27.13, 194.4),
         (7, -24.35, 567.6),
-        (8, -37.21, 2382.1),
+        // Re-captured (ch 8 only) after the SC-55-referenced per-program loudness
+        // trim: StringEns1 (GM 48) is PROGRAM_TRIM_DB[48] = +5.5 dB louder to match
+        // the SC-55's section balance. RMS -37.21 -> -31.72 dB (+5.49); centroid
+        // 2382 -> 2381 Hz — unchanged, proving the trim is level-only (timbre-
+        // neutral). Every other row, including the ch 7 piano canary, is bit-exact
+        // vs the prior capture: the trim touches only the corrected programs, and
+        // this reference song uses just one (ch 8). See engine::PROGRAM_TRIM_DB.
+        (8, -31.72, 2380.6),
         // Re-captured after the default drum kit moved from V1 to V3:
         // channel 10 is deliberately brighter and slightly louder. Re-pinned
         // after the later V3 cymbal-density work moved the fixture within its

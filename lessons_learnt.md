@@ -3,6 +3,16 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.17 — **ferrosintesis has NO per-instrument loudness normalization — only whole-mix −18 LUFS;
+  per-program balance is now nudged toward the SC-55 by `engine::PROGRAM_TRIM_DB[128]` (applied at the
+  melodic strip `g*=trim`, ch9 exempt).** Two metric traps when auditing levels: (1) whole-note RMS
+  unfairly penalizes DECAYING voices (ferro guitars read −15 dB "quiet" vs SC-55 but it's faster decay,
+  not level — use early-window RMS for plucked/percussive, whole-note only for sustained); (2) instantaneous
+  PEAK is too spiky. Trim is level-only/timbre-neutral (`g` feeds dry+sends together); the master bus-glue
+  compressor is nonlinear so a solo-probe corrected voice lands ±0.5 dB off its nominal trim (benign). Probe
+  MIDI period = tick math not intended seconds (960+240 tick = 1.25 s, NOT 1.5). Reproducer + SC-55 compare:
+  `target/level_audit/` (mdmidiemu ROMs at `D:/language/mdsc55/roms/sc55`). See `wrk_docs/2026.07.17 - CR - instrument level audit + SC-55 trim.md`.
+
 - 2026.07.17 — **A fast-decaying plucked-KEYBOARD LA layer needs a LOWER wrap gain than the guitars
   (harpsichord `LA_HARPSICHORD`=0.28 vs `LA_GUITAR`=0.42): a real harpsichord's high strings damp fast
   in the MODEL but the recording's body still rings, so at 0.42 the sampled 50–150 ms window sits 2.9×

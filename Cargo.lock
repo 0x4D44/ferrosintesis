@@ -9,6 +9,7 @@ dependencies = [
  "ferrosintesis-samples-core",
  "ferrosintesis-samples-drumkit",
  "ferrosintesis-samples-gong",
+ "ferrosintesis-samples-grand",
  "ferrosintesis-samples-orchestral",
 ]
 
@@ -29,6 +30,10 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-gong"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-grand"
 version = "0.1.0"
 
 [[package]]

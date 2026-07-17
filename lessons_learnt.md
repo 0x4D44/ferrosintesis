@@ -12,6 +12,16 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   sections — the bake renames each zone to its sounding pitch and the MEASURED root lands in `sampler.rs`
   (`voices.rs` `LA_HARPSICHORD`, `prepare.py` `HARPSICHORD_URLS`, probe `tools/…` measured 0.91–1.00 conf).
 
+- 2026.07.17 — **Re-voicing a common GM voice breaks oracles that use it as a live CONTROL — grep
+  `stats(<prog>)`/`make(<prog>,…,true)` before changing its timbre.** Swapping GM0 upright→Salamander
+  grand broke `harpsichord_jangles_with_a_four_foot_choir` (`voices.rs`), which measured the harpsi
+  centroid against a GM0 render; the grand is brighter+2f0-rich so both clauses inverted. Fix: move the
+  control to GM1 (same upright the oracle was calibrated on) + rebar 1.75×→1.6× — recalibrate against the
+  intended reference IN the commit, don't weaken. Two more from this build: (1) a CC-BY sample bank goes
+  in its OWN crate (`-samples-grand`, mirroring `-gong`) — core was 9.55/10 MiB, at the crates.io cap;
+  (2) when a source has no round robins, `RR2` = an adjacent VELOCITY layer + `trim_to_onset`'s peak-norm
+  → same level, brighter-strike timbre = free RR variety, no machine-gun on repeats.
+
 - 2026.07.17 — **Inspect a candidate sample's ACTUAL AUDIO (spectral flatness + dominant-partial
   concentration) before trusting its name/licence for a timbre role.** A licence-only search called
   VCSL "Gong 1" a near-pitchless tam-tam; it is a PITCHED gong (sharp 143 Hz/D3, 95%-concentrated) —

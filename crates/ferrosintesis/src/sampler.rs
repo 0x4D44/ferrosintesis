@@ -51,6 +51,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
     ferrosintesis_samples_core::get(name)
         .or_else(|| ferrosintesis_samples_orchestral::get(name))
         .or_else(|| ferrosintesis_samples_gong::get(name))
+        .or_else(|| ferrosintesis_samples_grand::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 
@@ -599,6 +600,126 @@ pub fn piano_bank(vel: u8, rr2: bool) -> &'static [Zone] {
         (52..=95, true) => piano_mf_rr2(),
         (_, false) => piano_f(),
         (_, true) => piano_f_rr2(),
+    }
+}
+
+// GM 0 Acoustic Grand — Salamander Grand Piano V3 (Yamaha C5), CC BY 3.0, in the
+// ferrosintesis-samples-grand crate. A real concert grand, distinct from the CC0
+// VSCO upright that voices GM 1/3. Roots measured by autocorrelation in prepare.py
+// (F# zones stand in for the G positions — the nearest sampled pitch). RR2 is an
+// adjacent-higher velocity layer, peak-matched, so repeated notes vary.
+fn grand_pp() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "grand_C2_pp.wav" => 65.23,
+            "grand_F#2_pp.wav" => 92.00,
+            "grand_C3_pp.wav" => 130.39,
+            "grand_F#3_pp.wav" => 184.74,
+            "grand_C4_pp.wav" => 261.50,
+            "grand_F#4_pp.wav" => 369.37,
+            "grand_C5_pp.wav" => 524.09,
+            "grand_F#5_pp.wav" => 741.81,
+            "grand_C6_pp.wav" => 1051.21,
+        )
+    })
+}
+
+fn grand_pp_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "grand_C2_pp_rr2.wav" => 65.34,
+            "grand_F#2_pp_rr2.wav" => 92.14,
+            "grand_C3_pp_rr2.wav" => 130.39,
+            "grand_F#3_pp_rr2.wav" => 184.80,
+            "grand_C4_pp_rr2.wav" => 261.52,
+            "grand_F#4_pp_rr2.wav" => 369.43,
+            "grand_C5_pp_rr2.wav" => 524.17,
+            "grand_F#5_pp_rr2.wav" => 741.84,
+            "grand_C6_pp_rr2.wav" => 1051.95,
+        )
+    })
+}
+
+fn grand_mf() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "grand_C2_mf.wav" => 65.62,
+            "grand_F#2_mf.wav" => 92.38,
+            "grand_C3_mf.wav" => 130.45,
+            "grand_F#3_mf.wav" => 185.07,
+            "grand_C4_mf.wav" => 262.03,
+            "grand_F#4_mf.wav" => 370.25,
+            "grand_C5_mf.wav" => 524.71,
+            "grand_F#5_mf.wav" => 741.85,
+            "grand_C6_mf.wav" => 1053.01,
+        )
+    })
+}
+
+fn grand_mf_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "grand_C2_mf_rr2.wav" => 65.65,
+            "grand_F#2_mf_rr2.wav" => 92.49,
+            "grand_C3_mf_rr2.wav" => 130.47,
+            "grand_F#3_mf_rr2.wav" => 185.08,
+            "grand_C4_mf_rr2.wav" => 262.08,
+            "grand_F#4_mf_rr2.wav" => 370.29,
+            "grand_C5_mf_rr2.wav" => 524.79,
+            "grand_F#5_mf_rr2.wav" => 741.87,
+            "grand_C6_mf_rr2.wav" => 1053.05,
+        )
+    })
+}
+
+fn grand_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "grand_C2_f.wav" => 65.72,
+            "grand_F#2_f.wav" => 92.85,
+            "grand_C3_f.wav" => 130.77,
+            "grand_F#3_f.wav" => 185.32,
+            "grand_C4_f.wav" => 262.90,
+            "grand_F#4_f.wav" => 370.52,
+            "grand_C5_f.wav" => 525.38,
+            "grand_F#5_f.wav" => 741.92,
+            "grand_C6_f.wav" => 1054.71,
+        )
+    })
+}
+
+fn grand_f_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "grand_C2_f_rr2.wav" => 65.68,
+            "grand_F#2_f_rr2.wav" => 92.97,
+            "grand_C3_f_rr2.wav" => 130.85,
+            "grand_F#3_f_rr2.wav" => 185.42,
+            "grand_C4_f_rr2.wav" => 262.81,
+            "grand_F#4_f_rr2.wav" => 370.56,
+            "grand_C5_f_rr2.wav" => 525.99,
+            "grand_F#5_f_rr2.wav" => 742.05,
+            "grand_C6_f_rr2.wav" => 1055.09,
+        )
+    })
+}
+
+/// Velocity picks the dynamic layer; the seed alternates round robins, exactly
+/// like [`piano_bank`]. Voices GM 0 (the acoustic grand); GM 1/3 keep the upright.
+pub fn grand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
+    match (vel, rr2) {
+        (0..=51, false) => grand_pp(),
+        (0..=51, true) => grand_pp_rr2(),
+        (52..=95, false) => grand_mf(),
+        (52..=95, true) => grand_mf_rr2(),
+        (_, false) => grand_f(),
+        (_, true) => grand_f_rr2(),
     }
 }
 
@@ -1943,6 +2064,12 @@ mod tests {
             .chain(piano_pp_rr2())
             .chain(piano_mf_rr2())
             .chain(piano_f_rr2())
+            .chain(grand_pp())
+            .chain(grand_mf())
+            .chain(grand_f())
+            .chain(grand_pp_rr2())
+            .chain(grand_mf_rr2())
+            .chain(grand_f_rr2())
             .chain(trumpet_p())
             .chain(trumpet_f())
             .chain(mutetpt_p())

@@ -5,6 +5,7 @@ members = [
     "crates/ferrosintesis-samples-core",
     "crates/ferrosintesis-samples-drumkit",
     "crates/ferrosintesis-samples-gong",
+    "crates/ferrosintesis-samples-grand",
     "crates/ferrosintesis-samples-orchestral",
     "crates/render-catalog",
 ]

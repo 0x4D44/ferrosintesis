@@ -22,6 +22,7 @@ import socket
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.parse
 import urllib.request
@@ -239,10 +240,45 @@ BAGPIPE_LOOP_S = {"drone": 1.5, "chanter": 0.4}
 # then set by the per-voice gains in Rust (mirroring the modeled 0.154 : 0.075).
 BAGPIPE_TARGET_RMS = 0.18
 
+# GM 0 Acoustic Grand — Salamander Grand Piano V3 (a Yamaha C5 concert grand, AB
+# pair), by Alexander Holm, CC BY 3.0. Unlike the CC0 VSCO *upright* that voices
+# GM 1/3, this is a real grand, so GM 0 becomes its own instrument instead of the
+# upright with a treble shelf. Distributed as a .tar.bz2 — stdlib `tarfile` reads
+# bz2 directly (no 7z, unlike the LZMA FreePats archives), so this gets its own
+# fetch helper rather than growing `ensure_archive_sources`. 16-bit STEREO 44.1 kHz
+# (downmixed to mono like every other family), sampled every minor third across 16
+# velocity layers v1..v16, with NO round robins. We take 9 zones C2..C6 (F# is the
+# nearest sampled pitch to each G, matching the upright's C/G spacing) x 3 dynamics.
+# RR2 is sourced from an adjacent-higher velocity layer: `trim_to_onset` peak-
+# normalizes every file to 0.9, so RR1/RR2 land at the SAME level and differ only in
+# the natural harder-strike timbre — i.e. real round-robin variation, not a level
+# step. The rel*/harm* hammer-release and string-resonance layers are skipped.
+# Pinned by SHA-256 of the archive.org 16-bit tarball.
+SALAMANDER_ARCHIVE_URL = (
+    "https://archive.org/download/SalamanderGrandPianoV3/"
+    "SalamanderGrandPianoV3_44.1khz16bit.tar.bz2"
+)
+SALAMANDER_ARCHIVE_SHA256 = (
+    "fe595c7722b70860e6377f82948d1c0cfcf27ecebf500dc79534408a78a62892"
+)
+_SGP_MEMBERS = "SalamanderGrandPianoV3_44.1khz16bit/44.1khz16bit"
+_GRAND_ZONES = ["C2", "F#2", "C3", "F#3", "C4", "F#4", "C5", "F#5", "C6"]
+# dynamic -> (RR1 velocity layer, RR2 velocity layer). Salamander hivel bands:
+# v2 27-34, v3 35-36 (pp); v9 65-72, v10 73-80 (mf); v15 113-120, v16 121-127 (f).
+_GRAND_VEL = {"pp": (2, 3), "mf": (9, 10), "f": (15, 16)}
+GRAND_SOURCES = {
+    f"grand_{z}_{d}{rr}.wav": f"{_SGP_MEMBERS}/{z}v{v}.wav"
+    for z in _GRAND_ZONES
+    for d, (v_rr1, v_rr2) in _GRAND_VEL.items()
+    for rr, v in (("", v_rr1), ("_rr2", v_rr2))
+}
+
 # f0 search range per family (the default misses the piano's low octaves
 # and the low brass/bassoon fundamentals)
 F0_RANGE = {
     "piano": (45.0, 2500.0),
+    # grand spans C2 65 Hz … C6 1047 Hz, same window as the upright
+    "grand": (45.0, 2500.0),
     "trumpet": (80.0, 1200.0),
     "mutetpt": (80.0, 1200.0),
     "trombone": (35.0, 600.0),
@@ -279,6 +315,10 @@ F0_RANGE = {
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
 KEEP_FAM = {
     "piano": (1.8, 0.6),
+    # grand: keep a long body like the upright (the sample carries the note), but
+    # 1.5 s rather than 1.8 s holds the standalone -grand crate well under the
+    # crates.io 10 MiB limit (54 files, 16-bit mono) with headroom
+    "grand": (1.5, 0.6),
     "nylon": (0.9, 0.30),
     "steel": (0.9, 0.30),
     "harpsi": (0.9, 0.30),
@@ -316,6 +356,9 @@ LOCAL_SOURCES = {
 }
 
 CORE_FAMILIES = frozenset(("piano", "violin", "flute"))
+# Families that live in their OWN sample crate (not core/orchestral) — the grand is
+# a ~6.9 MiB CC-BY bank kept separate so core stays under the crates.io 10 MiB cap.
+FAMILY_PACKAGE = {"grand": "ferrosintesis-samples-grand"}
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
 PRE_S = 0.008      # pad kept before the onset
@@ -330,11 +373,12 @@ for octave in range(0, 8):
 def sample_output_path(filename, repo_root=REPO_ROOT):
     """Return the sample-package destination for a generated WAV."""
     family = filename.split("_", 1)[0]
-    package = (
-        "ferrosintesis-samples-core"
-        if family in CORE_FAMILIES
-        else "ferrosintesis-samples-orchestral"
-    )
+    if family in FAMILY_PACKAGE:
+        package = FAMILY_PACKAGE[family]
+    elif family in CORE_FAMILIES:
+        package = "ferrosintesis-samples-core"
+    else:
+        package = "ferrosintesis-samples-orchestral"
     return os.path.join(repo_root, "crates", package, "samples", filename)
 
 
@@ -427,6 +471,41 @@ def ensure_bagpipe_sources(src):
     members["bagpipe.sfz"] = BAGPIPE_SFZ_MEMBER
     ensure_archive_sources(src, BAGPIPE_ARCHIVE_URL, BAGPIPE_ARCHIVE_SHA256,
                            members, "bagpipe_extract")
+
+
+def ensure_salamander_sources(src):
+    """Fetch + sha256-verify + extract the pinned Salamander Grand Piano V3 subset.
+
+    A sibling of `ensure_archive_sources`, not a caller of it: the Salamander
+    archive is a `.tar.bz2` (stdlib `tarfile` decodes bz2 with no 7z), and bz2 is
+    not seekable, so we stream the tar ONCE and pull the wanted members in a single
+    pass rather than re-opening per file. Members copy straight to `src/grand_*.wav`
+    (no extract subdir); `sample_output_path` later routes them to the -grand crate.
+    """
+    if all(os.path.exists(os.path.join(src, fn)) for fn in GRAND_SOURCES):
+        return
+    arc = os.path.join(src, os.path.basename(SALAMANDER_ARCHIVE_URL))
+    if not os.path.exists(arc):
+        print(f"fetching {os.path.basename(arc)} ...", file=sys.stderr)
+        fetch(SALAMANDER_ARCHIVE_URL, arc)
+    digest = hashlib.sha256(open(arc, "rb").read()).hexdigest()
+    if digest != SALAMANDER_ARCHIVE_SHA256:
+        raise ValueError(f"{arc}: sha256 {digest} != pinned {SALAMANDER_ARCHIVE_SHA256}")
+    wanted = {member: fn for fn, member in GRAND_SOURCES.items()}
+    found = 0
+    with tarfile.open(arc, "r:bz2") as tf:
+        for member in tf:
+            fn = wanted.get(member.name)
+            if fn is None:
+                continue
+            extracted = tf.extractfile(member)
+            with open(os.path.join(src, fn), "wb") as out:
+                shutil.copyfileobj(extracted, out)
+            found += 1
+    if found != len(GRAND_SOURCES):
+        raise ValueError(
+            f"salamander: extracted {found}/{len(GRAND_SOURCES)} members "
+            f"(archive layout changed?)")
 
 
 def parse_sfz_loops(sfz_text):
@@ -702,10 +781,13 @@ def main():
             ensure_source(fn, url, src)
         ensure_guitar_sources(src)
         ensure_bagpipe_sources(src)
+        ensure_salamander_sources(src)
 
         # Looped bagpipe sustains (own transform: extract_loop, not trim_to_onset)
         rows += _bake_bagpipe(src)
-        for fn in sorted(SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS):
+        for fn in sorted(
+            SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | GRAND_SOURCES
+        ):
             x, sr = read_wav(os.path.join(src, fn))
             x = resample(x, sr, OUT_SR)
             sr = OUT_SR

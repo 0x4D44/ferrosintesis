@@ -10647,16 +10647,16 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                     },
                     _ => crate::sampler::LaFx::default(),
                 };
-                crate::sampler::LaVoice::wrap_fx(
-                    model,
-                    crate::sampler::piano_bank(vel, seed & 1 == 0),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                    fx,
-                )
+                // GM 0 plays the real Salamander grand; GM 1 (bright) and GM 3
+                // (honky-tonk) keep the CC0 VSCO upright + their LaFx cues. Both
+                // banks are peak-normalized to 0.9, so they share LA_PIANO's wrap
+                // gain/fade — the instrument difference is in the recording.
+                let bank = if program == 0 {
+                    crate::sampler::grand_bank(vel, seed & 1 == 0)
+                } else {
+                    crate::sampler::piano_bank(vel, seed & 1 == 0)
+                };
+                crate::sampler::LaVoice::wrap_fx(model, bank, key, vel, sr, gain, fade, fx)
             } else {
                 model
             }
@@ -13570,6 +13570,38 @@ mod tests {
         }
     }
 
+    /// Arthur's complaint that motivated the Salamander build: GM 0 (Acoustic
+    /// Grand) and GM 1 (Bright Acoustic) sounded the same, because both drew ONE
+    /// shared VSCO *upright* recording and GM 1 was merely GM 0 + a +5 dB treble
+    /// shelf. GM 0 now plays the Salamander grand bank, so they are different
+    /// instruments. Zero-lag normalized correlation of their early renders is
+    /// near zero for two distinct recordings, but ~1 if GM 0 regressed to the
+    /// shared upright — so this fails the instant the grand dispatch is lost.
+    /// Measured across four keys spanning the register (not a single snapshot).
+    #[test]
+    fn gm0_grand_and_gm1_upright_are_distinct_instruments() {
+        let sr = 44100.0;
+        for key in [36u8, 48, 60, 72] {
+            let g0 = render_voice(make(0, key, 100, sr, 7, true), sr, 0.6);
+            let g1 = render_voice(make(1, key, 100, sr, 7, true), sr, 0.6);
+            let a = &g0[(0.05 * sr) as usize..(0.45 * sr) as usize];
+            let b = &g1[(0.05 * sr) as usize..(0.45 * sr) as usize];
+            let dot: f64 = a.iter().zip(b).map(|(&x, &y)| x as f64 * y as f64).sum();
+            let na = a.iter().map(|&x| (x as f64).powi(2)).sum::<f64>().sqrt();
+            let nb = b.iter().map(|&y| (y as f64).powi(2)).sum::<f64>().sqrt();
+            let corr = if na > 0.0 && nb > 0.0 {
+                (dot / (na * nb)).abs()
+            } else {
+                0.0
+            };
+            assert!(
+                corr < 0.7,
+                "GM0 grand and GM1 upright too alike at key {key}: |corr| {corr:.3} \
+                 (>=0.7 means GM0 likely fell back to the shared upright bank)"
+            );
+        }
+    }
+
     /// Render an SFX program with the key held for `hold_s` then released,
     /// out to `total_s`. Key 60; the SFX voices ignore written pitch.
     fn render_sfx_hold(
@@ -14919,10 +14951,15 @@ mod tests {
 
     /// Round-3 U4 (plan §3.3): the harpsichord must JANGLE — persistent
     /// post-onset brightness — and carry its 4′ octave rank. Clause (a):
-    /// sustain-window centroid ≥ 1.75× the GM0 piano control (HEAD measured
-    /// 1.64×/1.37× at keys 55/67 — RED). Clause (b): 4′ choir energy,
-    /// 2f0/f0 ≥ 2× the control's (HEAD ~0.2 vs ~0.2 — RED; the plan's
-    /// original §3.3 choir clause, live because the rank is now built).
+    /// sustain-window centroid ≥ 1.6× the GM1 upright control. (The control was
+    /// GM 0 at 1.75× when GM 0 was the VSCO upright; GM 0 is now the Salamander
+    /// grand — brighter and 2f0-rich — so it is no longer a plain-piano
+    /// reference. The control moved to GM 1, the same upright, which carries a
+    /// +5 dB bright shelf and so reads a touch brighter than the old bare
+    /// control; the bar drops to 1.6× to match, measured 1.76×/1.68× at keys
+    /// 55/67.) Clause (b): 4′ choir energy, 2f0/f0 ≥ 2× the control's (measured
+    /// 3–14× — the strong discriminator; the plan's original §3.3 choir clause,
+    /// live because the rank is now built).
     ///
     /// What delivers it (each measured): the in-loop damper opened
     /// 6200→11000 (the 07.14 lesson — the damper's HF magnitude rules
@@ -14949,16 +14986,30 @@ mod tests {
                     / crate::testutil::mag_at(seg, sr, f0).max(1e-9);
                 (crate::testutil::centroid(seg, sr), choir)
             };
-            let ((c6, ch6), (c0, ch0)) = (stats(6), stats(0));
-            println!("harpsi key {key}: cent {c6:.0} vs GM0 {c0:.0}; 2f0/f0 {ch6:.2} vs {ch0:.2}");
+            // The "plain piano" control is GM 1 (Bright Acoustic), NOT GM 0.
+            // GM 0 became the Salamander GRAND (a brighter, 2f0-rich concert
+            // grand — control centroid 561 Hz / 2f0-f0 2.00 at key 55), which is
+            // no longer a plain-piano reference. GM 1 is the VSCO UPRIGHT this
+            // oracle was calibrated against (469 Hz / 0.18 — matching the HEAD
+            // upright it used when GM 0 was that upright), so the control moved
+            // here. The harpsichord must still out-jangle a normal upright piano.
+            let (c6, ch6) = stats(6);
+            let (c1, ch1) = stats(1);
+            println!("harpsi key {key}: cent {c6:.0} vs GM1 {c1:.0}; 2f0/f0 {ch6:.2} vs {ch1:.2}");
+            // 1.6× (was 1.75× vs the old bare-upright GM 0): GM 1 carries the
+            // +5 dB bright shelf, so it is a brighter reference than the retired
+            // control and the same harpsichord reads a lower ratio (1.68×/1.76×
+            // measured). Still encodes "much brighter sustain than a normal
+            // upright"; the 4′-choir clause below (0.59/2.02 vs 0.18/0.14 → 3–14×)
+            // remains the strong discriminator.
             assert!(
-                c6 >= 1.75 * c0,
+                c6 >= 1.6 * c1,
                 "key {key}: harpsichord sustain does not jangle: centroid {c6:.0} Hz \
-                 vs GM0 control {c0:.0} Hz"
+                 vs GM1 upright control {c1:.0} Hz"
             );
             assert!(
-                ch6 >= 2.0 * ch0,
-                "key {key}: no 4′ choir over the control: 2f0/f0 {ch6:.2} vs GM0 {ch0:.2}"
+                ch6 >= 2.0 * ch1,
+                "key {key}: no 4′ choir over the control: 2f0/f0 {ch6:.2} vs GM1 {ch1:.2}"
             );
         }
     }

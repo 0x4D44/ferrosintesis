@@ -4841,6 +4841,143 @@ mod tests {
         );
     }
 
+    // --- GM 109 sampled bagpipe oracles (HLD 2026.07.17 §7) ------------------
+
+    #[cfg(test)]
+    fn bp_opts(sr: f32, samples: bool) -> Options {
+        Options {
+            samples,
+            ..test_opts(sr)
+        }
+    }
+
+    /// A held note on ch0 program 109, optional alt-bank (CC0 = `bank`).
+    #[cfg(test)]
+    fn bagpipe_song(key: u8, secs: f64, bank: Option<u8>) -> Song {
+        let mut ev = vec![(0.0, EvKind::Prog { ch: 0, prog: 109 })];
+        if let Some(v) = bank {
+            ev.push((
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 0,
+                    val: v,
+                },
+            ));
+        }
+        ev.push((
+            0.05,
+            EvKind::NoteOn {
+                ch: 0,
+                key,
+                vel: 100,
+            },
+        ));
+        ev.push((secs - 0.1, EvKind::NoteOff { ch: 0, key }));
+        test_song(ev, secs)
+    }
+
+    /// Dispatch + the MANDATORY alt-bank arm (§7.2). Samples-on the default bank
+    /// engages the SAMPLED bagpipe (differs from the model); the CC0 alt bank and
+    /// samples-off both render the MODEL, byte-identical — proving the model
+    /// stays reachable and that BOTH halves (chanter via altbank::make, drone via
+    /// ensure_bagpipe_drone reading alt_bank) honour the bank.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn bagpipe_sampled_dispatch_and_alt_bank_are_coherent() {
+        let sr = 44100.0;
+        let bits = |v: &[f32]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        let (model, _) = render(&bagpipe_song(69, 1.0, None), &bp_opts(sr, false));
+        let (sampled, _) = render(&bagpipe_song(69, 1.0, None), &bp_opts(sr, true));
+        let (alt, _) = render(&bagpipe_song(69, 1.0, Some(1)), &bp_opts(sr, true));
+        assert_ne!(
+            bits(&model),
+            bits(&sampled),
+            "samples-on 109 did not engage the sampled bagpipe"
+        );
+        assert_eq!(
+            bits(&alt),
+            bits(&model),
+            "alt-bank (CC0=1) 109 must render the byte-identical model — the \
+             mandatory altbank arm is missing, or the drone ignored alt_bank"
+        );
+    }
+
+    /// The sampled drone's octave stack AND the drone-control branch (§7.6b).
+    /// A drone-control note (key <= 54) sounds the tenor AT its key pitch, with
+    /// the bass an octave below. Key 43 (G2, ~98 Hz) must therefore show energy
+    /// at ~98 (tenor at pitch) and ~49 (bass octave below). If the at-pitch
+    /// branch were dropped, the tenor would sit at ~49 and 98 would be empty.
+    /// Level stays near the modeled drone (§7.6c balance).
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn bagpipe_sampled_drone_octave_and_control_pitch() {
+        let sr = 44100.0;
+        // drone-control note only (no chanter): key 43 spawns the drone at pitch
+        let song = {
+            let ev = vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 109 }),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 43,
+                        vel: 100,
+                    },
+                ),
+                (1.4, EvKind::NoteOff { ch: 0, key: 43 }),
+            ];
+            test_song(ev, 1.5)
+        };
+        let (out, _) = render(&song, &bp_opts(sr, true));
+        let l = left(&out);
+        let win = &l[(0.4 * sr) as usize..(1.2 * sr) as usize];
+        let tenor = crate::testutil::band_rms(win, sr, 98.0, 8.0);
+        let bass = crate::testutil::band_rms(win, sr, 49.0, 6.0);
+        let body = rms(win).max(1e-9);
+        assert!(
+            tenor > 0.06 * body,
+            "no tenor at the control pitch (98 Hz {:.4} of body) — the \
+             drone-control at-pitch branch is missing",
+            tenor / body
+        );
+        assert!(
+            bass > 0.04 * body,
+            "no bass octave below (49 Hz {:.4} of body)",
+            bass / body
+        );
+        // balance: within a factor of the modeled drone's level (not swamping)
+        let (m, _) = render(&song, &bp_opts(sr, false));
+        let (rs, rm) = (rms(&left(&out)), rms(&left(&m)).max(1e-9));
+        assert!(
+            (0.4..=2.5).contains(&(rs / rm)),
+            "sampled drone level {rs:.4} is off the modeled {rm:.4} (x{:.2})",
+            rs / rm
+        );
+    }
+
+    /// Coverage extremes (§7.8): the step clamp and the ratio-then-SRC order.
+    /// Spawn keys 55 / 81 / 84 (drive the drone repitch past the guard) at
+    /// 44.1 / 48 / 96 kHz — every render must be finite and non-silent, never a
+    /// panic, NaN, silence, or wild pitch.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn bagpipe_sampled_coverage_extremes_are_finite() {
+        for &sr in &[44100.0f32, 48000.0, 96000.0] {
+            for &key in &[55u8, 81, 84] {
+                let (out, _) = render(&bagpipe_song(key, 0.6, None), &bp_opts(sr, true));
+                assert!(
+                    out.iter().all(|x| x.is_finite()),
+                    "non-finite sample at key {key}, {sr} Hz"
+                );
+                assert!(
+                    rms(&left(&out)) > 1e-4,
+                    "silent render at key {key}, {sr} Hz"
+                );
+            }
+        }
+    }
+
     /// Vibrato depth as max-min of a peak-located (Goertzel) pitch track —
     /// robust on the lead's bright, detuned spectrum where the zero-crossing
     /// `cycle_freq_spread` lies (repo lesson).

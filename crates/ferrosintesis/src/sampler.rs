@@ -1606,7 +1606,38 @@ mod tests {
     use super::*;
     use crate::dsp::OnePole;
     use crate::voices;
+    use crate::voices::Voice;
     use ferrosintesis_samples_drumkit as kitbank;
+
+    /// LoopVoice must sustain INDEFINITELY across many loop wraps — the runtime
+    /// counterpart to prepare.py's offline seam gate (§7.1). Rendered at a
+    /// REPITCHED key (A4 vs the F4-G5 zone roots, so step != 1) for far longer
+    /// than one loop (~0.4 s): the RMS stays flat across three disjoint windows.
+    /// This directly catches the two ways a wrap breaks — a one-shot player's
+    /// `data[j+1]` panics at the seam, and a "stop at end" player goes silent
+    /// after the first loop (later windows would read ~0).
+    #[test]
+    fn bagpipe_loop_sustains_across_wraps() {
+        let sr = 44100.0;
+        let mut v = bagpipe_chanter_loop(69, sr);
+        let mut buf = vec![0f32; (1.6 * sr) as usize];
+        assert!(v.render(&mut buf), "chanter loop finished early");
+        let rms = |s: &[f32]| {
+            (s.iter().map(|x| (x * x) as f64).sum::<f64>() / s.len() as f64).sqrt() as f32
+        };
+        let e = |t0: f32, t1: f32| rms(&buf[(t0 * sr) as usize..(t1 * sr) as usize]);
+        let (a, b, c) = (e(0.2, 0.4), e(0.7, 0.9), e(1.3, 1.5));
+        assert!(buf.iter().all(|x| x.is_finite()), "non-finite in the loop");
+        assert!(a > 1e-3, "loop is silent");
+        // flat within 20% across ~3 loop lengths -> the wrap keeps producing
+        for (lbl, x) in [("mid", b), ("late", c)] {
+            assert!(
+                (x / a - 1.0).abs() < 0.2,
+                "loop level not flat at {lbl}: {a:.4} -> {x:.4} (a broken wrap \
+                 would go silent or decay)"
+            );
+        }
+    }
 
     /// The thirteen GM-routed drum banks (35/36, 37, 38/40, 41/43, 42, 44,
     /// 45/47/48/50, 46, 49/57, 51/59, 53, 52, 55). `CRASH_SIZZLE` and

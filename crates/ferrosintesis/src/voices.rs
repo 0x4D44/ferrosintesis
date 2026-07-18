@@ -2770,6 +2770,17 @@ pub const BASS: PluckPreset = PluckPreset {
     stop_thump: 2.2,        // the damp lands with a thud
     ..DEFAULTS
 };
+/// Fingered Bass 2 — XG variation of Fingered Bass (33), bank LSB 45. XG's own
+/// second fingered bass is barely distinct, and the base BASS is a deliberately
+/// muffled flatwound — brightening it would contradict that authored intent. So
+/// this is the SAME dark voice with a single non-contradicting delta: a longer
+/// ring (a touch more sustain). Nothing above the fundamentals is touched.
+pub const FINGERED_BASS2: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "FINGERED_BASS2",
+    t60: 4.0, // was 3.2 — a longer-sustaining fingered bass, timbre unchanged
+    ..BASS
+};
 // Fretless (GM 35), the album's other bass. Already the darkest electric;
 // pushed deeper and warmer to match the new default character.
 pub const FRETLESS: PluckPreset = PluckPreset {
@@ -10818,6 +10829,8 @@ pub fn make_variation(
         (30, 41) => Box::new(Pluck::new(&DRIVE_LEAD, key, vel, sr, seed)),
         // Hollow Release — Atmosphere (99, LSB 19) with a long lingering tail.
         (99, 19) => Box::new(Fx::from_spec(&FX_HOLLOW_RELEASE, key, vel, sr, seed)),
+        // Fingered Bass 2 — same dark flatwound, a touch more sustain (33, LSB 45).
+        (33, 45) => Box::new(Pluck::new(&FINGERED_BASS2, key, vel, sr, seed)),
         _ => return None,
     };
     Some(voice)
@@ -15150,6 +15163,48 @@ mod tests {
                 "hollow release should decay slower than base 99 at seed {seed}: t60 {} vs {}",
                 t60(&hollow),
                 t60(&base)
+            );
+        }
+    }
+
+    /// Unit 8 (XG variation, subtle): Fingered Bass 2 (Fingered Bass 33, bank
+    /// LSB 45). XG's second fingered bass is barely distinct and the base is a
+    /// deliberately muffled flatwound, so the variation is the SAME dark voice
+    /// with one non-contradicting delta — a longer ring. Model-vs-model it must
+    /// ring measurably LONGER (larger t60_of) WITHOUT getting brighter (centroid
+    /// not raised), per the HLD acceptance table (and the "do not brighten"
+    /// review caveat).
+    #[test]
+    fn fingered_bass2_variation_rings_longer_without_brightening() {
+        let sr = 44100.0;
+        assert!(
+            make_variation(33, 45, 40, 100, sr, 7, false).is_some(),
+            "(33, 45) must dispatch the Fingered Bass 2 variation"
+        );
+        assert!(
+            make_variation(33, 113, 40, 100, sr, 7, false).is_none(),
+            "an undefined bank (113) must fall back to base GM (None)"
+        );
+
+        let body_lo = (0.030 * sr) as usize;
+        let body_hi = (0.420 * sr) as usize;
+        let centroid = |s: &[f32]| crate::testutil::centroid(&s[body_lo..body_hi], sr);
+        let t60 = |s: &[f32]| crate::testutil::t60_of(&s[(0.020 * sr) as usize..], sr);
+        for seed in [0x6510u32, 0x76A1, 0x1250] {
+            let bass2 = render_pluck(&FINGERED_BASS2, 40, 100, 5.0, seed);
+            let base = render_pluck(&BASS, 40, 100, 5.0, seed);
+            assert!(
+                t60(&bass2) > 1.15 * t60(&base),
+                "fingered bass 2 should ring longer than base at seed {seed}: t60 {} vs {}",
+                t60(&bass2),
+                t60(&base)
+            );
+            // Must NOT be brighter — the muffled flatwound character is intact.
+            assert!(
+                centroid(&bass2) <= 1.02 * centroid(&base),
+                "fingered bass 2 must not brighten the base flatwound at seed {seed}: cent {} vs {}",
+                centroid(&bass2),
+                centroid(&base)
             );
         }
     }

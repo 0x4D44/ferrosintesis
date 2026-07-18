@@ -10797,6 +10797,9 @@ pub fn make_variation(
         (105, 98) => Box::new(Pluck::new(&OUD, key, vel, sr, seed)),
         // Gran Cassa — orchestral bass drum (Taiko 116, LSB 96).
         (116, 96) => Box::new(gran_cassa(key, vel, sr, seed)),
+        // Slow Strings — the slow-attack ensemble (String Ensemble 48, LSB 3).
+        // Reuses the existing program-49 slow voicing (attack 0.45, darker).
+        (48, 3) => Box::new(strings(49, key, vel, sr, seed)),
         _ => return None,
     };
     Some(voice)
@@ -14999,6 +15002,54 @@ mod tests {
                 "gran cassa should ring longer than taiko at seed {seed}: t60 {} vs {}",
                 t60(&cassa),
                 t60(&taiko)
+            );
+        }
+    }
+
+    /// Unit 5 (XG variation): Slow Strings (String Ensemble 48, bank LSB 3) is
+    /// the slow-attack ensemble — it reuses the program-49 slow voicing, so
+    /// model-vs-model its envelope must RISE MUCH SLOWER than the base 48 fast
+    /// ensemble, per the HLD acceptance table. Also pins the dispatch.
+    #[test]
+    fn slow_strings_variation_has_longer_attack_than_base() {
+        let sr = 44100.0;
+        assert!(
+            make_variation(48, 3, 60, 100, sr, 7, false).is_some(),
+            "(48, 3) must dispatch the Slow Strings variation"
+        );
+        assert!(
+            make_variation(48, 113, 60, 100, sr, 7, false).is_none(),
+            "an undefined bank (113) must fall back to base GM (None)"
+        );
+
+        let render_saw = |mut s: SawStack| {
+            let mut buf = vec![0f32; (1.5 * sr) as usize];
+            s.render(&mut buf);
+            buf
+        };
+        // Time for the RMS envelope to reach 90% of the LATE steady level
+        // (taken after both attacks settle, so a 0.45 s attack isn't measured
+        // against a mid-rise reference).
+        let attack_rise = |sig: &[f32]| {
+            let win = (0.005 * sr) as usize;
+            let steady = &sig[(0.90 * sr) as usize..(1.30 * sr) as usize];
+            let mut levels: Vec<f32> = steady.chunks(win).map(rms).collect();
+            levels.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let target = 0.9 * levels[levels.len() / 2];
+            sig.chunks(win)
+                .position(|c| rms(c) >= target)
+                .map(|i| i as f32 * win as f32 / sr)
+                .unwrap_or(f32::INFINITY)
+        };
+        // Softer velocity: the 0.45 s attack is velocity-scaled, so a lower
+        // velocity lets the slow swell show its true length (a fortissimo hit
+        // shortens every attack). The gap is still a clearly-audible >0.08 s.
+        for seed in [0x6510u32, 0x76A1, 0x1250] {
+            let slow = attack_rise(&render_saw(strings(49, 60, 64, sr, seed)));
+            let fast = attack_rise(&render_saw(strings(48, 60, 64, sr, seed)));
+            assert!(
+                slow > 2.0 * fast && slow > fast + 0.05,
+                "slow strings should rise much later than base 48 at seed {seed}: {slow} vs {fast}"
             );
         }
     }

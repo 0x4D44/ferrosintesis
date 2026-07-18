@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00008 — Electric snare (key 40) collapses onto the acoustic snare (key 38) in the default sampled kit
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** drums
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, `d03e33d` — sampled electric snare (key 40) repitched 1.15× on the `SNARE` bank to match the modeled path's `center_mul 1.15`; +2.4 st, brighter/tighter. Regression `sampled_electric_snare_distinct_from_acoustic`: fail-first on bit-identity (both were `kit::SNARE`@1.0) + spectral centroid 2333 vs 2023 Hz. Level parity within 3 dB (`sampled_drum_level_parity`). render-diff over 109 album MIDIs: 4 changed (V3-kit key-40 albums), 0 contamination; 3 brush-kit albums (ch10 prog 40 → brush swirl) correctly unmoved.)
 
 ## Observation
 

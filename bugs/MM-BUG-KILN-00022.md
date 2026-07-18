@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00022 — GM2 extended percussion (keys 27–34, 83–87) render as a generic 1 kHz tick
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** drums
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, `055a849` — keys 27–34 and 83–87 aliased to their nearest modeled voices (sticks→side stick, slap→clap, scratch→guiro, clicks→side stick, high-Q/metro-bell→muted triangle, jingle bell→tambourine, belltree→open triangle, castanets→claves) via a key remap applied after the sampled-kit check; surdos 86/87 get a dedicated ~82 Hz membrane (mute damped / open ringing ~85 Hz) since no GM tom sits low enough. Regression `gm2_extended_percussion_not_generic_tick`: each key renders as its nearest voice, never the generic tick; surdos low and mute≠open. render-diff: 0 album renders move (no album sounds these keys).)
 
 ## Observation
 

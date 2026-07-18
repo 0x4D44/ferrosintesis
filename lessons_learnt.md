@@ -3,6 +3,16 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.18 — **A seam-clean sustain loop is NOT a flat loop — bias `find_sax_loop` to a SHORT window in
+  the steady body + penalise amplitude imbalance, or a long "clean" loop spans the note's decay and pulses
+  loud→silence→loud at ~3 Hz** (`sampler.rs` `find_sax_loop`; oracle `sax_loop_level_parity_and_flat`).
+  Integer-period + low value/slope seam only guarantees the WRAP joins; the interior can still ramp. Cost
+  must add |rms(first half) − rms(second half)|, and cap loop length (0.05–0.13 s) with le < ~0.50 s (clear
+  of the recorded release). Corollary: one output gain can't level-match GM 64-67 — the samples are peak-
+  normalised uniformly but the modeled reeds differ ~7 dB, so use a per-program `SAX_LOOP_GAIN[4]` calibrated
+  to the model each replaces (parity preserves album balance). Measure loop steadiness by spectral-centroid
+  drift across the loop halves, not the raw region's liveness (which includes the note's own envelope).
+
 - 2026.07.18 — **A render-diff baseline can be a SILENTLY STALE binary — verify its mtime/version before
   trusting the diff, or "contamination" is really just the trunk work your baseline predates.** A build
   wrapped in a wrong `mdtimeout` path (`No such file or directory`) never ran cargo; the follow-on

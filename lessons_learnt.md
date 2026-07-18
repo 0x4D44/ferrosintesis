@@ -3,6 +3,19 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.18 — **Class-identity oracle: range-assert the perceptual Passport's OWN fields
+  (`sustain_db` is THE class axis), NOT the existing voices.rs class-oracle numbers — those use a
+  different estimator (mag_at partial-ratios vs flatness/slope), so pasting them as Passport ranges
+  is wrong by construction** (`testutil.rs` `class_identity_ranges_hold`; dump `print_passport_fields`).
+  - `sustain_db` = dB(RMS(W5)) − dB(RMS(0.05–0.30 s)): sustained families (organ/bowed/brass/reed/
+    pipe/ensemble) hold ~0; struck/plucked (piano/guitar/bass/mallets) decay to −16..−118. One
+    threshold split (~≥−6 held / ~≤−10 decayed) separates them; other planned axes (organ flatness,
+    brass/reed harm_frac) FAILED in Passport space — measure first.
+  - MEASURE before trusting a design carve-out: GM29/30 driven guitar DECAY on a plain held note
+    (e-bow latch idle), GM38/39 synth bass HOLD — both the opposite of the design intent.
+  - Keep honest limits, don't fudge: reed↔flute overlap on flat_L (F2); synth lead/pad 80-95 too
+    heterogeneous to gate (F1, unasserted). §6: the Passport encodes CLASS; realism stays ear-only.
+
 - 2026.07.18 — **A seam-clean sustain loop is NOT a flat loop — bias `find_sax_loop` to a SHORT window in
   the steady body + penalise amplitude imbalance, or a long "clean" loop spans the note's decay and pulses
   loud→silence→loud at ~3 Hz** (`sampler.rs` `find_sax_loop`; oracle `sax_loop_level_parity_and_flat`).

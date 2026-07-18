@@ -2545,6 +2545,15 @@ mod perceptual_distinctness {
     // `sustain_db` (D1) is the load-bearing axis: sustained families hold near 0,
     // struck/plucked families decay to very negative. Ranges encode CLASS, not
     // realism (HLD §6 — realism stays ear-only).
+    //
+    // Coverage: 9 ranges over organ / keyboard+perc / plucked / bowed (sustain +
+    // vibrato) / ensemble+choir / brass / reed / pipe. `fm_depth` on bowed is the
+    // HLD §5 "strings FM depth" worked example. UNASSERTED BY DESIGN: synth lead/pad
+    // 80-95 (F1 — no envelope/spectral range spans a plucky lead and an evolving
+    // pad; ear-only). Reed and pipe OVERLAP on flat_L (F2 honest limit) so only the
+    // per-family sustain floor separates the blown families. Re-dump with
+    // `print_passport_fields` before any recalibration; NEVER widen a range to green
+    // a failing GOOD voice — that is a voice bug to file, not a range to relax.
 
     struct ClassRange {
         label: &'static str,

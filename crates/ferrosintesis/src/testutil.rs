@@ -2636,6 +2636,42 @@ mod perceptual_distinctness {
             lo: -7.0,
             hi: 20.0,
         },
+        // Brass 56-63 (incl. synth brass 62/63): blown/held. sustain_db measured
+        // -0.76..+4.9; a -6 dB floor clears all. harm_frac is NOT asserted — open
+        // brass ~0.37 and muted-tpt 59 ~0.02 in Passport space, so the survey-3
+        // "rich harmonics" idea does not hold here; sustain_db is the honest axis.
+        ClassRange {
+            label: "brass 56-63",
+            programs: &[56, 57, 58, 59, 60, 61, 62, 63],
+            field: "sustain_db",
+            get: |p| p.sustain_db,
+            lo: -6.0,
+            hi: 20.0,
+        },
+        // Reed 64-71 (saxes/oboe/eng-horn/bassoon/clarinet): blown/held. sustain_db
+        // measured -0.17..+2.2; -6 dB floor clears all.
+        ClassRange {
+            label: "reed 64-71",
+            programs: &[64, 65, 66, 67, 68, 69, 70, 71],
+            field: "sustain_db",
+            get: |p| p.sustain_db,
+            lo: -6.0,
+            hi: 20.0,
+        },
+        // Pipe/wind 72-79 (flutes/recorder/pan/bottle/shakuhachi/whistle/ocarina):
+        // blown/held. sustain_db measured -3.1..+2.8 (blown-bottle 76 lowest, whistle
+        // 78 = -0.09 holds); -6 dB floor clears all. F2 HONEST LIMIT: reeds and pipes
+        // OVERLAP on flat_L (reed 0.19-0.39 vs pipe 0.31-0.55), so breathiness cannot
+        // separate the two blown families — only the per-family sustain floor is
+        // asserted (see journal / lessons_learnt).
+        ClassRange {
+            label: "pipe 72-79",
+            programs: &[72, 73, 74, 75, 76, 77, 78, 79],
+            field: "sustain_db",
+            get: |p| p.sustain_db,
+            lo: -6.0,
+            hi: 20.0,
+        },
     ];
 
     /// The class-identity oracle: every in-scope voice's field-mean falls in its
@@ -2692,6 +2728,21 @@ mod perceptual_distinctness {
             ),
             (
                 "ensemble/choir 48-54",
+                0,
+                "piano decays (sustain_db ~ -18), must fail the held floor",
+            ),
+            (
+                "brass 56-63",
+                0,
+                "piano decays (sustain_db ~ -18), must fail the held floor",
+            ),
+            (
+                "reed 64-71",
+                0,
+                "piano decays (sustain_db ~ -18), must fail the held floor",
+            ),
+            (
+                "pipe 72-79",
                 0,
                 "piano decays (sustain_db ~ -18), must fail the held floor",
             ),

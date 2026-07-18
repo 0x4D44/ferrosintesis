@@ -265,6 +265,30 @@ VIOLA_URLS = {
     for d, v in (("p", "v1"), ("f", "v2"))
 }
 
+# Chromatic percussion LA onsets (MM-BUG-KILN-00015 batch 1) — VSCO-2-CE Percussion mallet
+# subdirs, same VSCO_REV pin (CC0). Single flat dynamic layer (no p/f, no RR), so LaVoice's
+# vel_amp does the dynamics. STRUCK -> KEEP_FAM (~0.9 s). Mallet bars are partial-heavy
+# (xylophone emphasises the 3rd partial a 12th up, glockenspiel is inharmonic/weak-f0), so all
+# three are in TWO_F_STRONG (per-note ceiling nominal*1.5) — assuming VSCO labels the recorded
+# SOUNDING pitch (glock sounds ~2 oct, xylo ~1 oct above WRITTEN; VERIFY by the measured roots).
+# Output -> -orchestral2 (CC0). No '#' in any zone label, so no URL-encoding needed.
+_MARIMBA_ZONES = ["F1", "C2", "G2", "B2", "F3", "C4", "G4", "B4", "F5", "C6"]
+MARIMBA_URLS = {
+    f"marimba_{n}.wav": f"{BASE}/Percussion/Marimba/Marimba_hit_Outrigger_{n}_loud_01.wav"
+    for n in _MARIMBA_ZONES
+}
+_XYLO_ZONES = ["G3", "C4", "G4", "C5", "G5", "C6", "G6", "C7"]
+XYLO_URLS = {
+    f"xylo_{n}.wav": f"{BASE}/Percussion/Xylo/Xylo_Medium_{n}_ff_01_far.wav" for n in _XYLO_ZONES
+}
+# Glock G4 + C6 DROPPED after measurement: G4 read 0.87-conf / +68 cents (weak low-f0),
+# C6 read an octave low (530 Hz ~= C5, autocorr grabbed a subharmonic). The 4 kept zones
+# span C5..C7 (523..2122 Hz); LaVoice's +-1 oct repitch covers glock's C5..C8 register.
+_GLOCK_ZONES = ["C5", "G5", "G6", "C7"]
+GLOCK_URLS = {
+    f"glock_{n}.wav": f"{BASE}/Percussion/Glock/glock_medium_{n}.wav" for n in _GLOCK_ZONES
+}
+
 # Ocarina (GM 79) — VCSL "Ocarina, Typical" sustains (CC0, VCSL_REV). A soft near-sine
 # vessel flute; the sample carries the breath onset and the Wind model keeps the body
 # (a wind onset like the flute, so the default 0.62 s keep, NOT a plucked keep). Output
@@ -524,12 +548,18 @@ F0_RANGE = {
     # one octave below sounding, like vlnens/celens). In TWO_F_STRONG, so the per-note cap
     # (nominal*1.5) blocks 2f; this global ceiling only needs to clear the top fundamental.
     "viola": (120.0, 1400.0),
+    # mallets (partial-heavy) — wide floor/ceiling; TWO_F_STRONG caps per-note at
+    # nominal*1.5 so autocorr can't lock onto the 2nd/3rd bar partial. Sounding ranges:
+    # marimba F1 44 .. C6 1047; xylophone G3 196 .. C7 2093; glock G4 392 .. C7 2093.
+    "marimba": (40.0, 1200.0),
+    "xylo": (180.0, 2400.0),
+    "glock": (380.0, 2400.0),
 }
 # Families whose recordings are 2f-DOMINANT (autocorr grabs the 2nd harmonic if the
 # ceiling admits it) AND span more than an octave, so a single fixed F0 ceiling can't
 # separate the fundamental from 2f. For these, main() caps the ceiling per-note at
 # label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
-TWO_F_STRONG = frozenset(("recorder", "banjo", "viola"))
+TWO_F_STRONG = frozenset(("recorder", "banjo", "viola", "marimba", "xylo", "glock"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -545,6 +575,9 @@ KEEP_FAM = {
     "harp": (0.9, 0.30),
     "timpani": (0.9, 0.30),
     "banjo": (0.9, 0.30),
+    "marimba": (0.9, 0.30),
+    "xylo": (0.9, 0.30),
+    "glock": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -591,6 +624,9 @@ FAMILY_PACKAGE = {
     "timpani": "ferrosintesis-samples-orchestral2",
     "banjo": "ferrosintesis-samples-orchestral2",
     "viola": "ferrosintesis-samples-orchestral2",
+    "marimba": "ferrosintesis-samples-orchestral2",
+    "xylo": "ferrosintesis-samples-orchestral2",
+    "glock": "ferrosintesis-samples-orchestral2",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1433,6 +1469,15 @@ def main():
         for fn, url in VIOLA_URLS.items():
             if want("viola"):
                 ensure_source(fn, url, src)
+        for fn, url in MARIMBA_URLS.items():
+            if want("marimba"):
+                ensure_source(fn, url, src)
+        for fn, url in XYLO_URLS.items():
+            if want("xylo"):
+                ensure_source(fn, url, src)
+        for fn, url in GLOCK_URLS.items():
+            if want("glock"):
+                ensure_source(fn, url, src)
         if want("banjo"):
             ensure_banjo_sources(src)
         if want("nylon"):
@@ -1485,6 +1530,7 @@ def main():
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
+            | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS
             | GRAND_SOURCES
         ):
             if not want(fn.split("_")[0]):

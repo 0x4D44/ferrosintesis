@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00023 — BAR_FULL anti-clone threshold has no failing negative anchor
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** testutil
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh)
+- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh); Fixed (2026-07-18, 2d8f0b3 — added a deterministic full-tier near-clone scoring 0.02625 below BAR_FULL 0.075. A threshold mutation to 0.020 fails the guard, while the existing positive calibration remains green.)
 
 ## Observation
 
@@ -26,6 +26,14 @@ Observation: testutil.rs BAR_FULL is accepted only by positive voice pairs; no s
 
 ## Fix
 
-<unfixed — raised only>
+2d8f0b3 adds bar_full_rejects_near_clone_negative_control. The synthetic
+Passport starts from a real samples-on GM64 render, then applies a barely
+full-tier 3% onset-level difference and half one attack-time JND. Its score is
+nonzero and frozen to 0.025..=0.030, yet it must remain below BAR_FULL because
+those changes do not create a distinct instrument.
+
+The regression passes at BAR_FULL 0.075 and fails when the bar is mutation-lowered
+to 0.020: score 0.02625 is no longer rejected. The existing positive calibration
+also passes, preserving both sides of the threshold gap.
 
 ## Notes

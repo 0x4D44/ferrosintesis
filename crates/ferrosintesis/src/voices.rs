@@ -7844,6 +7844,9 @@ const LA_HARPSICHORD: (f32, (f32, f32)) = (0.28, (0.05, 0.20));
 /// slightly restrained sample gain avoids overpowering the model at the seam
 /// (EAR-tunable; `la_level_continuity` guards the crossfade). Fade over [0.05, 0.22] s.
 const LA_HARP: (f32, (f32, f32)) = (0.38, (0.05, 0.22));
+/// GM 47 timpani: the mallet STRIKE (first ~50 ms) is what the modeled membrane fakes
+/// worst; the real hit owns it, then hands to the `timpani()` model for the settling body.
+const LA_TIMPANI: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
 /// String sections 48-49: the real section swell reads best with a longer
 /// crossfade than the solo bowed layer (a section "comes into focus", it
 /// does not bite), so the transient hands over across [0.10, 0.40] s.
@@ -10921,7 +10924,25 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        47 => Box::new(timpani(key, vel, sr, seed)),
+        // GM 47 timpani: LA sampled mallet strike (VCSL Timpani 2, CC0, -orchestral2)
+        // crossfaded into the timpani() model — the strike is what the model fakes worst.
+        47 => {
+            let model = Box::new(timpani(key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_TIMPANI;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::timpani_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         48..=49 => {
             let model = Box::new(strings(program, key, vel, sr, seed));
             if samples {
@@ -11104,6 +11125,7 @@ mod tests {
             ("LA_HARP", LA_HARP),
             ("LA_OCARINA", LA_OCARINA),
             ("LA_RECORDER", LA_RECORDER),
+            ("LA_TIMPANI", LA_TIMPANI),
         ] {
             assert!(
                 fade.1 < 0.90,
@@ -20906,8 +20928,8 @@ mod tests {
     /// where `samples: true` renders a different signal (everything else
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
-        0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 46, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73,
-        74, 79, 109, 110,
+        0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72,
+        73, 74, 79, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

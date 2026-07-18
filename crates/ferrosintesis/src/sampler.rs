@@ -944,6 +944,29 @@ pub fn recorder_bank() -> &'static [Zone] {
     recorder()
 }
 
+/// GM 47 timpani — VCSL "Timpani 2" single hits (CC0, `-orchestral2`). STRUCK: the
+/// sample owns the mallet strike + early ring, the `timpani()` model keeps the settling
+/// body. 5 zones A#1–F3, roots MEASURED — a timpani's perceived pitch is its principal
+/// mode, and the recorded tuning sits up to ~47 cents off the nearest note name, so we
+/// repitch from the real f0 (the note in the file name is only a label).
+fn timpani() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "timpani_A#1.wav" => 57.05,
+            "timpani_F2.wav" => 88.17,
+            "timpani_G#2.wav" => 105.64,
+            "timpani_D3.wav" => 142.91,
+            "timpani_F3.wav" => 173.12,
+        )
+    })
+}
+
+/// GM 47 timpani attack bank (see [`timpani`]).
+pub fn timpani_bank() -> &'static [Zone] {
+    timpani()
+}
+
 // --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
 //
 // These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
@@ -1125,6 +1148,7 @@ pub fn prewarm() {
     let _ = harp_bank();
     let _ = ocarina_bank();
     let _ = recorder_bank();
+    let _ = timpani_bank();
     let _ = chanter_bank();
     let _ = drone_g2_bank();
     let _ = drone_g3_bank();

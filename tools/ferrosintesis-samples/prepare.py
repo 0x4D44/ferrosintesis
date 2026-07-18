@@ -288,6 +288,30 @@ RECORDER_URLS = {
     for dest, d, src in _RECORDER_ZONES
 }
 
+# Timpani (GM 47) — VCSL "Timpani 2" single hits (CC0, VCSL_REV). STRUCK/pitched:
+# the sample carries the mallet strike + early ring, the timpani() model keeps the
+# settling body (like the plucked banks — KEEP_FAM 0.9 s). The VCSL source names
+# (Timpani<kettle><tuning>_hit_v<vel>_rr<n>) carry NO note, only kettle+tuning tokens,
+# so each hit's PITCH was probed offline (2026.07.18) and the dest is named by the
+# MEASURED pitch. One velocity (v3) + rr1 per chosen tuning; a high-confidence spread
+# A#1–F3 (conf 0.77–0.92). LaVoice repitches ±1 octave (covers ~A0–F4). Output →
+# -orchestral2 (CC0). Roots are re-measured at bake and printed (F0_RANGE below).
+_VCSL_TIMP_DIR = "Membranophones/Struck Membranophones/Timpani 2/Hit"
+_TIMPANI_ZONES = [
+    ("timpani_A#1.wav", "Timpani3A_hit_v3_rr1_main"),
+    ("timpani_F2.wav", "Timpani4A_hit_v3_rr1_main"),
+    ("timpani_G#2.wav", "Timpani7A_hit_v3_rr1_main"),
+    ("timpani_D3.wav", "Timpani6E_hit_v3_rr1_main"),
+    ("timpani_F3.wav", "Timpani6A_hit_v3_rr1_main"),
+]
+TIMPANI_URLS = {
+    dest: (
+        f"https://raw.githubusercontent.com/sgossner/VCSL/{VCSL_REV}/"
+        f"{urllib.parse.quote(_VCSL_TIMP_DIR)}/{urllib.parse.quote(src)}.wav"
+    )
+    for dest, src in _TIMPANI_ZONES
+}
+
 # GM 109 bagpipe (HLD 2026.07.17). A CC0 FreePats G-pipe: two separately-recorded
 # drones (bass G2, tenor G3) an octave apart, plus a chanter. These are LOOPED
 # sustains, not attack transients — `extract_loop` (not `trim_to_onset`) emits a
@@ -425,6 +449,10 @@ F0_RANGE = {
     # TWO_F_STRONG below — main() caps the ceiling PER NOTE at label×1.5 so only the
     # fundamental is in range. This 2000 is only the upper bound before that per-note cap.
     "recorder": (150.0, 2000.0),
+    # timpani A#1 58 … F3 173 Hz; ceiling 400 admits the principal (perceived) mode and
+    # keeps autocorr off the higher inharmonic modes. Roots probed offline first; the
+    # bake re-measures with this range (a struck membrane is mode-rich, conf 0.77–0.92).
+    "timpani": (40.0, 400.0),
     # violin section G2-name spans G3 196 Hz … D5-name D6 1175 Hz (VSCO's
     # octave labels sit one below sounding pitch here); ceiling 1300 keeps
     # autocorr off the top zone's 2nd harmonic (the brass/oboe lesson)
@@ -451,6 +479,7 @@ KEEP_FAM = {
     "steel": (0.9, 0.30),
     "harpsi": (0.9, 0.30),
     "harp": (0.9, 0.30),
+    "timpani": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -494,6 +523,7 @@ FAMILY_PACKAGE = {
     "harp": "ferrosintesis-samples-orchestral2",
     "ocarina": "ferrosintesis-samples-orchestral2",
     "recorder": "ferrosintesis-samples-orchestral2",
+    "timpani": "ferrosintesis-samples-orchestral2",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1135,6 +1165,9 @@ def main():
         for fn, url in RECORDER_URLS.items():
             if want("recorder"):
                 ensure_source(fn, url, src)
+        for fn, url in TIMPANI_URLS.items():
+            if want("timpani"):
+                ensure_source(fn, url, src)
         if want("nylon"):
             ensure_guitar_sources(src)
         if want("chanter"):
@@ -1154,7 +1187,7 @@ def main():
             rows += _bake_clavinet(clav_src)
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
-            | OCARINA_URLS | RECORDER_URLS | GRAND_SOURCES
+            | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | GRAND_SOURCES
         ):
             if not want(fn.split("_")[0]):
                 continue

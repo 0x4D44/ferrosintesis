@@ -65,6 +65,26 @@ static SAMPLES: &[(&str, &[u8])] = &[
         "recorder_F3.wav",
         include_bytes!("../samples/recorder_F3.wav"),
     ),
+    (
+        "timpani_A#1.wav",
+        include_bytes!("../samples/timpani_A#1.wav"),
+    ),
+    (
+        "timpani_D3.wav",
+        include_bytes!("../samples/timpani_D3.wav"),
+    ),
+    (
+        "timpani_F2.wav",
+        include_bytes!("../samples/timpani_F2.wav"),
+    ),
+    (
+        "timpani_F3.wav",
+        include_bytes!("../samples/timpani_F3.wav"),
+    ),
+    (
+        "timpani_G#2.wav",
+        include_bytes!("../samples/timpani_G#2.wav"),
+    ),
 ];
 
 /// Number of embedded WAV files.

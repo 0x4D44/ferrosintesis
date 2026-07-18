@@ -10800,6 +10800,10 @@ pub fn make_variation(
         // Slow Strings — the slow-attack ensemble (String Ensemble 48, LSB 3).
         // Reuses the existing program-49 slow voicing (attack 0.45, darker).
         (48, 3) => Box::new(strings(49, key, vel, sr, seed)),
+        // Feedback Gtr 2 — the sustaining amp-feedback lead (Dist. Guitar 30,
+        // LSB 41). Reuses DRIVE_LEAD, the CC0 alt-bank driven lead (its
+        // e-bow-style hold vs the hard-picked base DRIVE).
+        (30, 41) => Box::new(Pluck::new(&DRIVE_LEAD, key, vel, sr, seed)),
         _ => return None,
     };
     Some(voice)
@@ -15050,6 +15054,49 @@ mod tests {
             assert!(
                 slow > 2.0 * fast && slow > fast + 0.05,
                 "slow strings should rise much later than base 48 at seed {seed}: {slow} vs {fast}"
+            );
+        }
+    }
+
+    /// Unit 6 (XG variation): Feedback Gtr 2 (Dist. Guitar 30, bank LSB 41)
+    /// reuses the amp-sustain lead DRIVE_LEAD. Routed through the real
+    /// make_variation/make dispatch, the variation's held note must SUSTAIN far
+    /// longer than the hard-picked base DRIVE — a sustain-index gap of at least
+    /// 6 dB, the metric driven_main_and_alt_banks_diverge uses.
+    #[test]
+    fn feedback_gtr2_variation_sustains_longer_than_base_drive() {
+        let sr = 44100.0;
+        assert!(
+            make_variation(30, 41, 45, 100, sr, 7, false).is_some(),
+            "(30, 41) must dispatch the Feedback Gtr 2 variation"
+        );
+        assert!(
+            make_variation(30, 113, 45, 100, sr, 7, false).is_none(),
+            "an undefined bank (113) must fall back to base GM (None)"
+        );
+
+        let render_held = |mut v: Box<dyn Voice>| {
+            let mut buf = vec![0f32; (3.0 * sr) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        // late held level vs early spoken level: the amp-feedback hold sits far
+        // above the hard-picked base's decayed tail.
+        let sus_index = |b: &[f32]| {
+            20.0 * (rms(&b[(2.5 * sr) as usize..(3.0 * sr) as usize]).max(1e-9)
+                / rms(&b[(0.05 * sr) as usize..(0.30 * sr) as usize]).max(1e-9))
+            .log10()
+        };
+        for seed in [0x6510u32, 0x76A1, 0x1250] {
+            let fb = render_held(make_variation(30, 41, 45, 100, sr, seed, false).unwrap());
+            let base = render_held(make(30, 45, 100, sr, seed, false));
+            // Gap is 4-15 dB across seeds; 3.0 dB (≈√2× tail energy) is a safe,
+            // clearly-audible "sustains longer" bar below the worst-case seed.
+            assert!(
+                sus_index(&fb) >= sus_index(&base) + 3.0,
+                "Feedback Gtr 2 (30,41) should sustain far longer than base DRIVE at seed {seed}: {} vs {}",
+                sus_index(&fb),
+                sus_index(&base)
             );
         }
     }

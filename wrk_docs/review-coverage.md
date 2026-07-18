@@ -25,7 +25,7 @@ harmless. Never reorder columns or re-flow untouched rows.
 | crates/ferrosintesis-samples-grand/ | 2026-07-18 |
 | crates/ferrosintesis-samples-headroom/ | 2026-07-18 |
 | crates/ferrosintesis-samples-honkytonk/ | (never) |
-| crates/ferrosintesis-samples-musescore/ | (never) |
+| crates/ferrosintesis-samples-musescore/ | 2026-07-18 |
 | crates/ferrosintesis-samples-musescore-grand/ | 2026-07-18 |
 | crates/ferrosintesis-samples-orchestral/ | 2026-07-18 |
 | crates/ferrosintesis-samples-orchestral2/ | 2026-07-18 |

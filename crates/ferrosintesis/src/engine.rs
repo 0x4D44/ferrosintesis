@@ -613,6 +613,21 @@ impl Chorus {
             r[i] += tr * 0.55;
         }
     }
+
+    /// Re-tune the LFO in place (the XG Chorus Type mapping). `base_s + depth_s`
+    /// must fit inside the 40 ms delay line so the modulated tap never reads
+    /// past the buffer (asserted). Rate is the LFO frequency in Hz. Delay-line
+    /// length and phase are unchanged, so reconfiguring to the current values is
+    /// an exact no-op.
+    fn reconfigure(&mut self, rate_hz: f32, base_s: f32, depth_s: f32) {
+        assert!(
+            base_s + depth_s <= 0.040,
+            "chorus sweep {base_s}+{depth_s}s exceeds the 40 ms line"
+        );
+        self.rate = rate_hz;
+        self.base = base_s * self.sr;
+        self.depth = depth_s * self.sr;
+    }
 }
 
 /// Ping-pong echo bus: repeats alternate sides, darkening as they fade.
@@ -1234,6 +1249,21 @@ const HALL1_TYPE: [u8; 2] = [0x01, 0x00];
 const HALL1_ROOM: f32 = 0.92;
 const HALL1_DAMP: f32 = 0.22;
 
+/// XG Chorus Type Chorus 1 = type word (0x41, 0x00). Faithful moderate chorus:
+/// a touch faster and deeper than the engine default. Params are (LFO rate Hz,
+/// base delay s, sweep depth s); `base + depth` stays inside the 40 ms line.
+const CHORUS1_TYPE: [u8; 2] = [0x41, 0x00];
+const CHORUS1_RATE: f32 = 0.8;
+const CHORUS1_BASE_S: f32 = 0.018;
+const CHORUS1_DEPTH_S: f32 = 0.006;
+
+/// The engine chorus defaults — MIRROR `Chorus::new` (guarded by the
+/// reconfigure-to-defaults-is-a-no-op test). Single source for the System On
+/// reset.
+const DEFAULT_CHORUS_RATE: f32 = 0.35;
+const DEFAULT_CHORUS_BASE_S: f32 = 0.018;
+const DEFAULT_CHORUS_DEPTH_S: f32 = 0.005;
+
 /// XG effect-block state (Effect1): the pending variation-insertion config,
 /// mutated ONLY by XG effect SysEx (`EvKind::XgEffectParam` / `XgReset`). No
 /// album sends any SysEx, so every field's default leaves the render
@@ -1595,11 +1625,16 @@ impl EngineCore {
     /// units 3-5 wire the audio side).
     fn xg_reset(&mut self) {
         self.xg = XgEffects::new();
-        // Restore the hall to its construction tuning (a no-op unless a prior
-        // XG Reverb Type moved it). Only the shared hall — never the cathedral
-        // or the drum room.
+        // Restore the hall and chorus to their construction tuning (a no-op
+        // unless a prior XG type event moved them). Only the shared hall — never
+        // the cathedral or the drum room.
         self.reverb
             .reconfigure(DEFAULT_HALL_ROOM, DEFAULT_HALL_DAMP);
+        self.chorus.reconfigure(
+            DEFAULT_CHORUS_RATE,
+            DEFAULT_CHORUS_BASE_S,
+            DEFAULT_CHORUS_DEPTH_S,
+        );
         self.resolve_variation();
     }
 
@@ -1618,8 +1653,12 @@ impl EngineCore {
             // keeps the current bus (falls through to `_`). Reverb Return (0x0C)
             // is parsed-and-ignored — returns are unity here.
             0x00 if data == HALL1_TYPE => self.reverb.reconfigure(HALL1_ROOM, HALL1_DAMP),
-            // Chorus Type (MSB,LSB) — Chorus 1 recognizer wired in unit 4.
-            0x20 => {}
+            // Chorus Type: Chorus 1 re-tunes the chorus LFO; every other type
+            // keeps the current bus. Chorus Return (0x2C) parsed-and-ignored.
+            0x20 if data == CHORUS1_TYPE => {
+                self.chorus
+                    .reconfigure(CHORUS1_RATE, CHORUS1_BASE_S, CHORUS1_DEPTH_S)
+            }
             // Variation Type (MSB,LSB). Amp Simulator = 0x4B; LSB ignored.
             0x40 => {
                 self.xg.var_type_msb = data[0];
@@ -9257,6 +9296,91 @@ mod tests {
         let other = render(&song(Some([0x02, 0x00])), &opts).0;
         assert_ne!(base, hall1, "Hall 1 must change the hall render");
         assert_eq!(base, other, "an unrecognized reverb type must be inert");
+    }
+
+    /// Unit 4 (Chorus::reconfigure mechanism): reconfiguring the LFO changes the
+    /// processed output; reconfiguring to the engine defaults is an exact no-op
+    /// (this also PROVES DEFAULT_CHORUS_* mirror Chorus::new — the byte-identity
+    /// spine for System On); and rate alone is wired (Chorus 1 rate over the
+    /// default base/depth still changes the output).
+    #[test]
+    fn chorus_reconfigure_changes_output_and_defaults_are_noop() {
+        let sr = 44100.0;
+        let n = (0.5 * sr) as usize;
+        let send: Vec<f32> = (0..n)
+            .map(|i| (TAU * 220.0 * i as f32 / sr).sin())
+            .collect();
+        let run = |reconfig: Option<(f32, f32, f32)>| {
+            let mut c = Chorus::new(sr);
+            if let Some((r, b, d)) = reconfig {
+                c.reconfigure(r, b, d);
+            }
+            let mut l = vec![0.0; n];
+            let mut r = vec![0.0; n];
+            c.process(&send, &mut l, &mut r);
+            (l, r)
+        };
+        let default = run(None);
+        let same = run(Some((
+            DEFAULT_CHORUS_RATE,
+            DEFAULT_CHORUS_BASE_S,
+            DEFAULT_CHORUS_DEPTH_S,
+        )));
+        let chorus1 = run(Some((CHORUS1_RATE, CHORUS1_BASE_S, CHORUS1_DEPTH_S)));
+        let rate_only = run(Some((
+            CHORUS1_RATE,
+            DEFAULT_CHORUS_BASE_S,
+            DEFAULT_CHORUS_DEPTH_S,
+        )));
+        assert_eq!(default, same, "reconfigure to the defaults must be a no-op");
+        assert_ne!(default, chorus1, "Chorus 1 params must change the output");
+        assert_ne!(default, rate_only, "the LFO rate must be wired");
+    }
+
+    /// Unit 4 (Chorus 1 recognizer): with a pad on the chorus bus, a Chorus 1
+    /// type event changes the render vs no-XG; an unrecognized chorus type is
+    /// inert.
+    #[test]
+    fn xg_chorus1_changes_render_other_types_inert() {
+        let sr = 44100.0;
+        let opts = Options {
+            sr,
+            wet: 0.0,
+            tail: 0.5,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+        };
+        let song = |chorus_type: Option<[u8; 2]>| {
+            let mut ev: Vec<(f64, EvKind)> = Vec::new();
+            if let Some(t) = chorus_type {
+                ev.push((
+                    0.0,
+                    EvKind::XgEffectParam {
+                        addr_lo: 0x20,
+                        data: t,
+                        len: 2,
+                    },
+                ));
+            }
+            // pad (fx_profile 88..=95 -> chorus_send 0.45)
+            ev.push((0.0, EvKind::Prog { ch: 0, prog: 90 }));
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                },
+            ));
+            ev.push((0.6, EvKind::NoteOff { ch: 0, key: 60 }));
+            test_song(ev, 1.2)
+        };
+        let base = render(&song(None), &opts).0;
+        let chorus1 = render(&song(Some(CHORUS1_TYPE)), &opts).0;
+        let other = render(&song(Some([0x00, 0x00])), &opts).0;
+        assert_ne!(base, chorus1, "Chorus 1 must change the chorus render");
+        assert_eq!(base, other, "an unrecognized chorus type must be inert");
     }
 
     /// KP-O3 (v0.12 brush kit selection seam, re-anchored on trunk's V3

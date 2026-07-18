@@ -7865,6 +7865,12 @@ const LA_HARP: (f32, (f32, f32)) = (0.38, (0.05, 0.22));
 /// GM 47 timpani: the mallet STRIKE (first ~50 ms) is what the modeled membrane fakes
 /// worst; the real hit owns it, then hands to the `timpani()` model for the settling body.
 const LA_TIMPANI: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
+// Chromatic-perc mallet strikes (MM-BUG-KILN-00015): the sample carries the bar/plate
+// strike (what the modal bell()/wood_bar() fakes worst); the model keeps the pitched
+// decay. Short fade like timpani (struck), fade.1 < 0.90 for the guard.
+const LA_MARIMBA: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
+const LA_XYLO: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
+const LA_GLOCK: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
 /// GM 104 sitar: the pluck + jawari bridge-buzz is the identity cue and lives in the
 /// sampled onset; the `Pluck(&SITAR)` model carries the bendable decay. Plucked handover
 /// like the guitars (sample owns ~0–50 ms, model from ~200 ms).
@@ -10750,17 +10756,34 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             0.6,
             0.58,
         )),
-        9 => Box::new(bell(
-            key,
-            vel,
-            sr,
-            seed,
-            GLOCK,
-            (0.10, 0.004, 7000.0, 1.0),
-            0.0,
-            0.8,
-            0.40,
-        )),
+        // GM 9 glockenspiel: LA sampled strike (VSCO Glock, CC0, -orchestral2) over the bell() model.
+        9 => {
+            let model = Box::new(bell(
+                key,
+                vel,
+                sr,
+                seed,
+                GLOCK,
+                (0.10, 0.004, 7000.0, 1.0),
+                0.0,
+                0.8,
+                0.40,
+            ));
+            if samples {
+                let (gain, fade) = LA_GLOCK;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::glock_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         10 => Box::new(bell(
             key,
             vel,
@@ -10776,28 +10799,62 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             bell(key, vel, sr, seed, VIBES, noise_off, 0.002, 0.8, 0.45)
                 .with_amp_trem(VIBRAPHONE_MOTOR_RATE_HZ, VIBRAPHONE_MOTOR_DEPTH),
         ),
-        12 => Box::new(wood_bar(
-            key,
-            vel,
-            sr,
-            seed,
-            MARIMBA,
-            MARIMBA_NOISE,
-            MARIMBA_ATTACK_S,
-            MARIMBA_RELEASE_T60,
-            MARIMBA_GAIN,
-        )),
-        13 => Box::new(wood_bar(
-            key,
-            vel,
-            sr,
-            seed,
-            XYLOPHONE,
-            XYLOPHONE_NOISE,
-            XYLOPHONE_ATTACK_S,
-            XYLOPHONE_RELEASE_T60,
-            XYLOPHONE_GAIN,
-        )),
+        // GM 12 marimba: LA sampled strike (VSCO Marimba, CC0, -orchestral2) over the wood_bar() model.
+        12 => {
+            let model = Box::new(wood_bar(
+                key,
+                vel,
+                sr,
+                seed,
+                MARIMBA,
+                MARIMBA_NOISE,
+                MARIMBA_ATTACK_S,
+                MARIMBA_RELEASE_T60,
+                MARIMBA_GAIN,
+            ));
+            if samples {
+                let (gain, fade) = LA_MARIMBA;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::marimba_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
+        // GM 13 xylophone: LA sampled strike (VSCO Xylo, CC0, -orchestral2) over the wood_bar() model.
+        13 => {
+            let model = Box::new(wood_bar(
+                key,
+                vel,
+                sr,
+                seed,
+                XYLOPHONE,
+                XYLOPHONE_NOISE,
+                XYLOPHONE_ATTACK_S,
+                XYLOPHONE_RELEASE_T60,
+                XYLOPHONE_GAIN,
+            ));
+            if samples {
+                let (gain, fade) = LA_XYLO;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::xylo_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         14 => Box::new(bell(
             key,
             vel,
@@ -11205,6 +11262,9 @@ mod tests {
             ("LA_OCARINA", LA_OCARINA),
             ("LA_RECORDER", LA_RECORDER),
             ("LA_TIMPANI", LA_TIMPANI),
+            ("LA_MARIMBA", LA_MARIMBA),
+            ("LA_XYLO", LA_XYLO),
+            ("LA_GLOCK", LA_GLOCK),
             ("LA_SITAR", LA_SITAR),
             ("LA_BANJO", LA_BANJO),
             ("LA_PANFLUTE", LA_PANFLUTE),
@@ -21017,8 +21077,8 @@ mod tests {
     /// where `samples: true` renders a different signal (everything else
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
-        0, 1, 3, 6, 7, 24, 25, 40, 41, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71,
-        72, 73, 74, 75, 76, 77, 79, 104, 105, 109, 110,
+        0, 1, 3, 6, 7, 9, 12, 13, 24, 25, 40, 41, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68,
+        69, 70, 71, 72, 73, 74, 75, 76, 77, 79, 104, 105, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

@@ -2470,8 +2470,8 @@ mod perceptual_distinctness {
         // bare-model at both probe keys (it engages only ~C#5 and up). GM 78 whistle is
         // model-only by design.
         const LA_WRAPPED: &[u8] = &[
-            0, 1, 3, 6, 24, 25, 40, 41, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71,
-            72, 73, 74, 75, 77, 79, 104, 105, 110,
+            0, 1, 3, 6, 9, 12, 13, 24, 25, 40, 41, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68,
+            69, 70, 71, 72, 73, 74, 75, 77, 79, 104, 105, 110,
         ];
         let ps = passports();
         let mut failures = Vec::new();

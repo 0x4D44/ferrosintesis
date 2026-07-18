@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00007 — Sample playback (LA layer, drums, gong) pitch-shifts with 2-point linear interpolation: up-pitch aliasing and treble loss
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-18, `25ebc13`)
 
 ## Observation
 
@@ -38,12 +38,45 @@ explicit "buses keep the linear tap" decision (`dsp.rs:~337`).
 
 ## Fix
 
-Replace the linear read in `LoopVoice`/sampled-drum/gong with a 4-point
-cubic-Lagrange (or Hermite) resampler — the math already exists in `tap_cubic`,
-so this is reuse, not new DSP. It is the single change that lifts *every* sampled
-instrument at once. Optionally add a short anti-imaging lowpass (or oversample)
-on samples pitched above unison, since even cubic leaves some image when pitching
-up.
+Fixed in `25ebc13` (branch `task/20260718-TSK-HUM-ferrosintesis-cubic-sample-interpolation`).
+
+The KS loop's 4-point cubic-Lagrange kernel was factored into a shared
+`dsp::cubic4(pm1, p0, p1, p2, fr)`, and `DelayLine::tap_cubic` refactored onto it
+(bit-exact — the weight mapping was verified and the existing
+`cubic_tap_retains_treble_ring` oracle still passes). All six fractional sample
+reads now route through `cubic4` instead of 2-point linear:
+
+- `LoopVoice::render` (bagpipe drone) — **modulo-wrapped** neighbours `(j+n−1)%n …
+  (j+2)%n`, preserving the seamless loop.
+- `LaVoice::render` — the main seam read plus its two detuned side-reads
+  (`pos2`/`pos3`), **edge-clamped** (`j.saturating_sub(1)`, `(j+2).min(n−1)`).
+- `SampledDrum::render` (i16 kit), `GongOneShot::render`, `ClavinetSampled::render`
+  — edge-clamped.
+
+Linear interpolation at a fractional step both lowpasses the treble and folds
+interpolation images back as aliasing; the effect is worst when a zone is pitched
+up (step to ~2.0 across the LA zone splits), which is the normal case for the
+sample layer. Cubic-Lagrange on the central interval is passive (|H| ≤ 1).
+
+### Verification
+
+- **New differential oracle** `dsp::cubic4_is_exact_and_beats_linear_on_treble`:
+  `cubic4` is grid-exact, reconstructs a cubic exactly, and retains >1.04× the
+  energy of linear on a pitched-up near-Nyquist tone.
+- **Full lib suite green** — 488 passed, 0 failed. Every LA-seam oracle
+  (`la_level_continuity`, per-family pitch-integrity, attack-sharpness) held; the
+  tolerant `RenderSignature` freezes (±0.15 dB / ±2% / ±0.30 dB) absorbed the
+  change — no golden re-capture needed.
+- **clippy `-D warnings` clean; fmt applied.**
+- **Render-diff** (baseline `origin/main` vs new release binary, 4 representative
+  tracks — Slipstream/Hammerhead, Winter Guests, Bright Matter, opus4-8/First
+  Light): `--no-samples` renders **bit-identical** on all four (the change is
+  confined to the sample path — nothing in the modeled path moved), and samples-on
+  renders **differ** on all four (expected reach; default-on timbre improvement).
+  Confirms additive-only scoping with zero contamination.
+
+Shipped code → one version bump owed at integration (not applied on the branch).
+Second-eyes verification pending before `Closed` (two-eyes rule).
 
 ## Notes
 

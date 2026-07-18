@@ -10906,19 +10906,18 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        // GM 41 viola: give it the sampled bowed attack its siblings (violin 40,
-        // cello 42, contrabass 43) all carry — round-2, Arthur "replace with alt". It
-        // was uniquely the only solo-bowed default with no LA layer, which is why the
-        // CC0 alt (Bowed + samples) sounded better. Uses the violin bank repitched as a
-        // viola proxy, exactly as the alt bank does (altbank.rs 40..=43). The reversal of
-        // the prior model-only design is pinned by default_bowed_articulations_and_sample_routing.
+        // GM 41 viola: its OWN dedicated sampled onset (VSCO Viola Section susvib, CC0,
+        // -orchestral2), so 40 and 41 no longer share the solo-violin attack — the fix for
+        // the bit-identical first ~380 ms (MM-BUG-KILN-00005). The Bowed model + BODY_VIOLA
+        // owns the sustain. Previously the violin bank repitched as a proxy; the dedicated
+        // viola bank is the fix. Routing pinned by default_bowed_articulations_and_sample_routing.
         41 => {
             let model = Box::new(Bowed::new(41, key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_VIOLIN;
                 crate::sampler::LaVoice::wrap(
                     model,
-                    crate::sampler::violin_bank(vel),
+                    crate::sampler::viola_bank(vel),
                     key,
                     vel,
                     sr,

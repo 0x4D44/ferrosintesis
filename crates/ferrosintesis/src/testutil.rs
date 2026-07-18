@@ -2507,14 +2507,16 @@ mod perceptual_distinctness {
     #[test]
     fn onset_tier_classification_is_stable() {
         /// Pinned on the module's landing HEAD (2026-07-16 calibration run);
-        /// re-pinned after U3's piano sample-DSP un-shared the GM 0/1/3
-        /// onsets (the deliberate GREEN transition — the pairs now differ
-        /// inside W1 and score on the full metric). 40/41 share the violin
-        /// bank, 48/49 the strings bank, 29/30 a literal code arm. 72/73
-        /// share the flute bank but classify INDEPENDENT — the 0.06 s fade
-        /// start lets the piccolo/flute models diverge inside W1
-        /// (investigated, not a fallback), so full-tier is honest.
-        const SHARED_ONSET_PAIRS: &[(u8, u8)] = &[(29, 30), (40, 41), (48, 49)];
+        /// re-pinned after U3's piano sample-DSP un-shared the GM 0/1/3 onsets,
+        /// then again (2026-07-18) when GM 41 viola got its OWN dedicated onset
+        /// bank (VSCO Viola Section susvib, MM-BUG-KILN-00005): 40 and 41 no longer
+        /// share a bank, so the pair is now INDEPENDENT-onset and scores on the
+        /// full metric — the deliberate GREEN transition, and the viola fix itself.
+        /// 48/49 share the strings bank, 29/30 a literal code arm. 72/73 share the
+        /// flute bank but classify INDEPENDENT — the 0.06 s fade start lets the
+        /// piccolo/flute models diverge inside W1 (investigated, not a fallback), so
+        /// full-tier is honest.
+        const SHARED_ONSET_PAIRS: &[(u8, u8)] = &[(29, 30), (48, 49)];
         let ps = passports();
         let mut got = Vec::new();
         for fam in 0..16u8 {

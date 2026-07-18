@@ -2287,17 +2287,28 @@ pub struct PluckPreset {
     pub kick: f32,
     pub cab_lp: f32, // clean-amp cab rolloff, 0 = none (HLD G2)
     // --- HLD family B: parallel one-shot transients ---
-    pub click: f32,             // pick/slap onset hardness (0 = none)
-    pub click_hp: f32,          // click filter corner
-    pub click_post: bool,       // false: knocks the body (pre-EQ); true: post-out
-    pub attack_noise: f32,      // finger/fret noise level (0 = none, post-out)
-    pub stop_thump: f32,        // release thud level (0 = none, armed by note_off)
-    pub sub_shape: (f32, f32),  // sub waveshaper (2f, 3f) amounts (MUTED grit / B5)
-    pub sub_ramp: u32,          // sub fade-in samples
-    pub grit: bool,             // per-voice soft-clip (MUTED palm chug, G4)
-    pub buzz: f32,              // envelope-normalized yarn/fret contact buzz (round-3 U1)
-    pub wound_all: bool,        // K4: wound full-range (bass family) vs key-split (guitars)
-    pub wound_key_split: bool,  // when false, non-bass presets skip the guitar split
+    pub click: f32,            // pick/slap onset hardness (0 = none)
+    pub click_hp: f32,         // click filter corner
+    pub click_post: bool,      // false: knocks the body (pre-EQ); true: post-out
+    pub attack_noise: f32,     // finger/fret noise level (0 = none, post-out)
+    pub stop_thump: f32,       // release thud level (0 = none, armed by note_off)
+    pub sub_shape: (f32, f32), // sub waveshaper (2f, 3f) amounts (MUTED grit / B5)
+    pub sub_ramp: u32,         // sub fade-in samples
+    pub grit: bool,            // per-voice soft-clip (MUTED palm chug, G4)
+    pub buzz: f32,             // envelope-normalized yarn/fret contact buzz (round-3 U1)
+    pub wound_all: bool,       // K4: wound full-range (bass family) vs key-split (guitars)
+    pub wound_key_split: bool, // when false, non-bass presets skip the guitar split
+    /// Anchor Hz for the high-key damper hold (0 = off — bit-identical
+    /// path). Above the anchor the damper corner grows as (f/anchor)^1.5,
+    /// which holds the DAMPER's dB/s loss roughly flat instead of ~f³ (the
+    /// one-pole loss/trip ≈ ½(f/fc)² times f0 trips/s — the "E6 dies in
+    /// 100 ms" cliff, scratchpad 2026.07.18). The TOTAL decay still climbs
+    /// gently with the t60 key-scale; released notes stay G6-governed (the
+    /// release-darkening glide deliberately overrides the hold — guitar
+    /// block-two HLD §3). Working window ends where bright saturates the
+    /// sr·0.45 clamp (~key 86 steel / 91 nylon — the top of a 24-fret
+    /// neck); above that the cliff resumes, accepted.
+    pub treble_hold_hz: f32,
     pub harmonic: bool,         // prog-31 flageolet: loop retuned to 2f/3f (G7)
     pub mwah: Option<MwahSpec>, // fretless vocal formant bloom (GM 35)
     // --- v0.12 second-polarization "course" voicing (GM 15 dulcimer) ---
@@ -2383,6 +2394,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     buzz: 0.0,
     wound_all: false,
     wound_key_split: true,
+    treble_hold_hz: 0.0, // off by default — unauthored presets byte-identical
     harmonic: false,
     mwah: None,
     course_detune: 1.0013,
@@ -2430,6 +2442,9 @@ pub const NYLON: PluckPreset = PluckPreset {
     // model owns the note; the attack-side levers stay deferred — the
     // recorded onsets already carry the real pick/finger mechanics).
     stop_thump: 0.3,
+    // Guitar block two §3: hold the high-key damper (see the field docs).
+    // UKULELE inherits this via ..NYLON — same string physics, intended.
+    treble_hold_hz: 500.0,
     ..DEFAULTS
 };
 /// Ukulele — XG variation of Nylon Guitar (24), bank LSB 96. A small four-string
@@ -2478,6 +2493,9 @@ pub const OUD: PluckPreset = PluckPreset {
     course_bright: 1.0,
     course_mix: (0.56, 0.44),
     course_couple: 0.002,
+    // Guitar block two §3 (D6): the oud's warm, dark top is its character —
+    // explicitly OPT OUT of the NYLON-inherited high-key damper hold.
+    treble_hold_hz: 0.0,
     ..NYLON
 };
 pub const STEEL: PluckPreset = PluckPreset {
@@ -2519,6 +2537,8 @@ pub const STEEL: PluckPreset = PluckPreset {
     // Guitar-realism HLD §6 (4a): palm damp on steel strings — a firmer
     // thud than nylon's fingertip (see NYLON.stop_thump for the rationale).
     stop_thump: 0.4,
+    // Guitar block two §3: hold the high-key damper (see the field docs).
+    treble_hold_hz: 500.0,
     ..DEFAULTS
 };
 pub const CLEAN: PluckPreset = PluckPreset {
@@ -3637,7 +3657,21 @@ impl Pluck {
         // K4 Stage 1: wound strings are darker — the windings damp both the
         // ring (loop damper) and the pick transient — with a skewed decay
         let wound = wound_factor(p.wound_all, p.wound_key_split, key);
-        let bright = (bright * (1.0 - 0.30 * wound)).max(300.0);
+        // Guitar block two §3: the high-key damper hold — the corner grows
+        // as (f/anchor)^1.5 above the anchor, holding the damper's dB/s
+        // share ~flat instead of ~f³ (see the treble_hold_hz field docs).
+        // max(1,·) keeps every key at/below the anchor bit-identical; the
+        // explicit re-clamp is needed HERE because this line historically
+        // only ever reduced bright (wound) and so carried no .min — the
+        // hold multiplies UP (review I-M1).
+        let hold = if p.treble_hold_hz > 0.0 {
+            (f / p.treble_hold_hz).powf(1.5).max(1.0)
+        } else {
+            1.0
+        };
+        let bright = (bright * (1.0 - 0.30 * wound) * hold)
+            .min(sr * 0.45)
+            .max(300.0);
         let pick_lp = (pick_lp * (1.0 - 0.42 * wound)).max(300.0);
         let t60 = (t60_base * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
 
@@ -15409,6 +15443,94 @@ mod tests {
                 hf_frac(&base)
             );
         }
+    }
+
+    /// Guitar block two §3 — the high-key damper hold: HELD-note (no
+    /// note_off — release stays G6-governed by design) f0-band decay rate
+    /// at the formerly-cliffed keys must sit in the audibly-plucked-but-
+    /// ringing band. Estimator per the HLD: ±¼-octave f0 bandpass, frame
+    /// RMS at 0.10–0.20 s vs 0.50–0.60 s, seeds {5, 21, 99} averaged.
+    /// Pre-fix these read ≈ −62/−333 dB/s (steel 76/88) and −113/−687
+    /// (nylon) at vel 100 — E6 died inside 100 ms.
+    #[test]
+    fn guitar_treble_hold_decay_band() {
+        let sr = 44100.0;
+        let rate = |prog: u8, key: u8, vel: u8| -> f32 {
+            let mut acc = 0.0;
+            for seed in [5u32, 21, 99] {
+                let mut v = make(prog, key, vel, sr, seed, false);
+                let mut buf = vec![0f32; (0.7 * sr) as usize];
+                v.render(&mut buf);
+                let f0 = key_freq(key);
+                let band = |a: f32, b: f32| {
+                    crate::testutil::band_rms(
+                        &buf[(a * sr) as usize..(b * sr) as usize],
+                        sr,
+                        f0,
+                        2.0, // ~±1/4 octave
+                    )
+                };
+                let (early, late) = (band(0.10, 0.20), band(0.50, 0.60));
+                acc += 20.0 * (late / early.max(1e-12)).max(1e-12).log10() / 0.4;
+            }
+            acc / 3.0
+        };
+        for (prog, name) in [(25u8, "steel"), (24, "nylon")] {
+            for key in [76u8, 88] {
+                let r = rate(prog, key, 100);
+                assert!(
+                    (-80.0..=-15.0).contains(&r),
+                    "{name} key {key} vel 100: decay {r:.1} dB/s outside the \
+                     plucked-but-ringing band [-80, -15]"
+                );
+            }
+        }
+        // Vel-40 CANARY (documented limit, HLD §3): the corner scales with
+        // velocity, so the fix's reach shrinks at low velocity — the cliff
+        // is reduced, not removed. Honest wide bounds pin the measured
+        // state so silent regressions (or silent miracles) surface.
+        let r = rate(24, 88, 40);
+        assert!(
+            (-450.0..=-40.0).contains(&r),
+            "nylon key 88 vel 40 canary moved: {r:.1} dB/s (was ≈ −1198 \
+             pre-fix; the vel-40 limit is documented, not hidden)"
+        );
+    }
+
+    /// Guitar block two §3 — authoring pins (review C4): the hold is
+    /// exactly where the design says and nowhere else.
+    #[test]
+    fn treble_hold_authoring_pins() {
+        assert_eq!(DEFAULTS.treble_hold_hz, 0.0);
+        assert_eq!(NYLON.treble_hold_hz, 500.0);
+        assert_eq!(STEEL.treble_hold_hz, 500.0);
+        assert_eq!(UKULELE.treble_hold_hz, 500.0, "inherits ..NYLON by design");
+        assert_eq!(OUD.treble_hold_hz, 0.0, "explicit opt-out (warm top)");
+    }
+
+    /// Guitar block two §3 (review C4) — the OUD opt-out proven in the
+    /// ACTIVE range: a high-key oud render must be bit-identical to a
+    /// forced-zero twin. If someone drops the explicit 0.0 and the
+    /// ..NYLON-inherited 500 leaks in, this fails where key-60 ratio
+    /// tests cannot see it.
+    #[test]
+    fn oud_high_key_ignores_treble_hold() {
+        let sr = 44100.0;
+        let twin = PluckPreset {
+            treble_hold_hz: 0.0,
+            ..OUD
+        };
+        let render = |p: &PluckPreset| {
+            let mut v = Pluck::new(p, 88, 100, sr, 5);
+            let mut buf = vec![0f32; 22050];
+            v.render(&mut buf);
+            buf
+        };
+        let (a, b) = (render(&OUD), render(&twin));
+        assert!(
+            a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()),
+            "oud high keys must ignore the treble hold"
+        );
     }
 
     /// Guitar-realism HLD §6 (4a) / AC5 — the authored release thump is

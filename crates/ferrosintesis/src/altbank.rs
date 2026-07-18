@@ -55,6 +55,7 @@ const PIZZ: PluckPreset = PluckPreset {
     buzz: 0.0,
     wound_all: false,
     wound_key_split: true,
+    treble_hold_hz: 0.0, // frozen preset: no high-key damper hold
     harmonic: false,
     mwah: None, // no fretless vocal bloom on a pizzicato
     // v0.12 course fields: the exact literals the Pluck core used to hardcode

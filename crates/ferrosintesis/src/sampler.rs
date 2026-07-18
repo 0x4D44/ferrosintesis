@@ -4308,15 +4308,24 @@ mod tests {
     #[test]
     fn guitar_low_velocity_seam_continuity() {
         let sr = 44100.0;
-        // Steel key ≥ ~76 is EXCLUDED: the KS steel string over-damps at high
-        // keys (the one-pole damper magnitude lesson — B5 ≈ −390 dB/s), so
-        // the model collapses right after the crossfade while the recorded
-        // take still rings — a PRE-EXISTING handover cliff (strictly worse
-        // before this block: the old LA gain law played the vel-40 sample
-        // 4.5× hotter). Tracked in scratchpad.md 2026.07.18; not a
-        // variation defect.
-        for (program, key) in [(24u8, 52u8), (24, 64), (25, 52), (25, 64)] {
-            for vel in [40u8, 72] {
+        // Key-76 nylon rows ADDED by guitar block two: the treble_hold_hz
+        // damper hold fixed the high-key over-damp cliff that had excluded
+        // them from the start. Scoping measured (probe_k76_seam_excess):
+        // nylon k76 = 1.72×/1.61× at vel 72/100 (in contract) but 3.22× at
+        // vel 40 — the DOCUMENTED vel-40 limit (the corner scales with the
+        // velocity law), so the k76 row runs at vel 72 only. STEEL k76 is
+        // NOT added: 3.6–4.0× at EVERY velocity — a velocity-independent
+        // take-vs-model LEVEL parity gap at high keys (the peak-normalized
+        // recording speaks ~4× above the now-ringing model), a separate
+        // calibrated wrap-gain feature — scratchpad 2026.07.19.
+        for (program, key, vels) in [
+            (24u8, 52u8, &[40u8, 72][..]),
+            (24, 64, &[40, 72]),
+            (24, 76, &[72]),
+            (25, 52, &[40, 72]),
+            (25, 64, &[40, 72]),
+        ] {
+            for &vel in vels {
                 let label = format!("prog {program} key {key} vel {vel}");
                 let fine = assert_wrap_seam(program, key, vel, sr, 0, &label);
                 assert_attack_is_peak(&fine, &label);
@@ -4579,6 +4588,11 @@ mod tests {
             (25u8, 45, "steel-guitar-low", true),
             (25u8, 52, "steel-guitar", true),
             (25u8, 64, "steel-guitar-high", true),
+            // nylon key-76 row added with the guitar-block-two damper hold
+            // (decay cliff fixed; measured 1.61× at this vel-100 fixture).
+            // Steel k76 stays out: a velocity-independent take-vs-model
+            // LEVEL parity gap (~4×) remains — scratchpad 2026.07.19.
+            (24u8, 76, "nylon-guitar-top", true),
             (6u8, 48, "harpsichord-low", true),
             (6u8, 60, "harpsichord", true),
             (6u8, 72, "harpsichord-high", true),
@@ -4639,6 +4653,41 @@ mod tests {
             );
         }
         fine
+    }
+
+    /// Diagnostic (--ignored): print the worst wrap-seam excess per
+    /// candidate high-key row — the measurement behind guitar block two's
+    /// k76 row scoping.
+    #[test]
+    #[ignore]
+    fn probe_k76_seam_excess() {
+        let sr = 44100.0;
+        for (program, key) in [(24u8, 76u8), (25, 76)] {
+            for vel in [40u8, 72, 100] {
+                let win = |samples: bool| {
+                    let mut v = voices::make(program, key, vel, sr, 5, samples);
+                    let mut buf = vec![0f32; sr as usize];
+                    v.render(&mut buf);
+                    let w = (0.05 * sr) as usize;
+                    let rms = |a: usize, b: usize| {
+                        (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                    };
+                    (0..9)
+                        .map(|k| rms(w + k * 2 * w, w + (k + 1) * 2 * w))
+                        .collect::<Vec<f32>>()
+                };
+                let (wv, m) = (win(true), win(false));
+                let worst = wv
+                    .windows(2)
+                    .zip(m.windows(2))
+                    .map(|(pw, pm)| {
+                        let (rw, rm) = (pw[0] / pw[1].max(1e-12), pm[0] / pm[1].max(1e-12));
+                        (rw / rm).max(rm / rw)
+                    })
+                    .fold(0f32, f32::max);
+                println!("prog {program} key {key} vel {vel}: worst excess {worst:.2}x");
+            }
+        }
     }
 
     /// Companion leg for struck/plucked rows of [`assert_wrap_seam`].

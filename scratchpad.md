@@ -4,15 +4,20 @@
      subsystem audit; the meaningful findings were raised as MM-BUG-KILN-00005..00022.
      Parked here (not ledgered) per Arthur's "meaningful items; park trivia" call. -->
 
-- [ ] 2026.07.18 — **Steel-guitar (GM25) high keys (~≥76) have a post-crossfade handover
-  cliff: the KS string over-damps (one-pole damper magnitude — B5 ≈ −390 dB/s lesson) so
-  the model collapses right after the 200 ms fade while the recorded take still rings;
-  worst at low velocity.** Pre-existing (old LA gain law played the vel-40 sample 4.5×
-  hotter, so it was worse); surfaced by `guitar_low_velocity_seam_continuity`
-  (`crates/ferrosintesis/src/sampler.rs`, which excludes the row). Root fix lives in the
-  model's high-string decay (damper design), not the LA layer. Note: the 0.28 s fade
-  widen extends the sample's ownership at those keys, so the eventual model fix should
-  re-run the seam oracles with high-key rows restored (code-review L1).
+- [x] 2026.07.18 — **Steel-guitar (GM25) high keys (~≥76) have a post-crossfade handover
+  cliff: the KS string over-damps** — RESOLVED (decay half) 2026.07.19 by guitar block
+  two's `treble_hold_hz` damper hold (`voices.rs` PluckPreset; NYLON/STEEL 500 Hz):
+  high-key decay now −40…−67 dB/s at vel 100 (`guitar_treble_hold_decay_band`), nylon
+  k76 seam rows added. Residual split into the item below.
+
+- [ ] 2026.07.19 — **Steel (GM25) high-key wrap-gain LEVEL parity: the peak-normalized
+  recorded take speaks ~4× (12 dB) above the now-ringing model at key 76, at EVERY
+  velocity (measured 3.6–4.0× seam excess, `probe_k76_seam_excess`,
+  `crates/ferrosintesis/src/sampler.rs`).** The decay cliff is fixed; what remains is a
+  calibrated per-key wrap-gain taper for the guitar LA layer (sample gain should track
+  the model's spoken level vs key, like item-1's velocity law did per velocity). Nylon
+  passes (1.6–1.7×) — steel's take/model gap is the outlier. Also still documented:
+  the vel-40 decay limit (corner scales with the velocity law; canary row pins it).
 
 - [ ] 2026.07.18 — **Other LA banks' zones are unguarded against fade dry-out at
   non-44.1 kHz rates** — the source-domain fade-budget guard + ~5 ms end taper added for

@@ -234,12 +234,12 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                     let kind = status & 0xF0;
                     match kind {
                         0x80 => {
-                            let key = c.u8()?;
+                            let key = c.u8()? & 0x7F;
                             let _v = c.u8()?;
                             raw.push((tick, seq, EvKind::NoteOff { ch, key }));
                         }
                         0x90 => {
-                            let key = c.u8()?;
+                            let key = c.u8()? & 0x7F;
                             let vel = c.u8()?;
                             raw.push((
                                 tick,
@@ -272,7 +272,7 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                             raw.push((tick, seq, EvKind::Bend { ch, semis }));
                         }
                         0xA0 => {
-                            let key = c.u8()?;
+                            let key = c.u8()? & 0x7F;
                             let val = c.u8()?;
                             raw.push((tick, seq, EvKind::PolyAftertouch { ch, key, val }));
                         }
@@ -596,6 +596,37 @@ mod tests {
         assert!(matches!(
             song.events[2].kind,
             EvKind::NoteOff { ch: 0, key: 60 }
+        ));
+    }
+
+    #[test]
+    fn note_key_data_bytes_are_limited_to_seven_bits() {
+        let song = parse(&file_from_track(&[
+            0x00, 0x90, 200, 100, // NoteOn: 200 -> 72
+            0x00, 0xA0, 200, 64, // PolyAftertouch: 200 -> 72
+            0x60, 0x80, 200, 0, // NoteOff: 200 -> 72
+        ]))
+        .unwrap();
+
+        assert!(matches!(
+            song.events[0].kind,
+            EvKind::NoteOn {
+                ch: 0,
+                key: 72,
+                vel: 100
+            }
+        ));
+        assert!(matches!(
+            song.events[1].kind,
+            EvKind::PolyAftertouch {
+                ch: 0,
+                key: 72,
+                val: 64
+            }
+        ));
+        assert!(matches!(
+            song.events[2].kind,
+            EvKind::NoteOff { ch: 0, key: 72 }
         ));
     }
 }

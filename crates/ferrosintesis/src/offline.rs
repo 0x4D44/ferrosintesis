@@ -117,3 +117,60 @@ pub fn render_with_progress(
 ) -> (Vec<f32>, Stats) {
     crate::engine::render_with_progress(&song.0, opt, on_progress)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file_from_track(events: &[u8]) -> Vec<u8> {
+        let mut data = Vec::new();
+        data.extend(b"MThd");
+        data.extend(6u32.to_be_bytes());
+        data.extend(0u16.to_be_bytes());
+        data.extend(1u16.to_be_bytes());
+        data.extend(480u16.to_be_bytes());
+
+        let mut track = Vec::from(events);
+        track.extend([0x00, 0xFF, 0x2F, 0x00]);
+        data.extend(b"MTrk");
+        data.extend((track.len() as u32).to_be_bytes());
+        data.extend(track);
+        data
+    }
+
+    #[test]
+    fn malformed_note_keys_render_as_their_seven_bit_values() {
+        let opt = Options::default().with_samples(false).with_tail(0.2);
+        let cases: [(&str, &[u8], &[u8]); 2] = [
+            (
+                "melodic note and poly-aftertouch",
+                &[
+                    0x00, 0x90, 200, 100, 0x00, 0xA0, 200, 64, 0x60, 0x80, 200, 0,
+                ],
+                &[0x00, 0x90, 72, 100, 0x00, 0xA0, 72, 64, 0x60, 0x80, 72, 0],
+            ),
+            (
+                "channel-10 drum note",
+                &[0x00, 0x99, 163, 100, 0x60, 0x89, 163, 0],
+                &[0x00, 0x99, 35, 100, 0x60, 0x89, 35, 0],
+            ),
+        ];
+
+        for (name, malformed, canonical) in cases {
+            let malformed = parse(&file_from_track(malformed)).unwrap();
+            let canonical = parse(&file_from_track(canonical)).unwrap();
+            let (malformed_audio, malformed_stats) = render(&malformed, &opt);
+            let (canonical_audio, canonical_stats) = render(&canonical, &opt);
+
+            assert!(
+                malformed_audio.iter().any(|sample| sample.abs() > 1e-6),
+                "{name} rendered silence"
+            );
+            assert_eq!(malformed_audio, canonical_audio, "{name}");
+            assert_eq!(
+                malformed_stats.voices_spawned, canonical_stats.voices_spawned,
+                "{name}"
+            );
+        }
+    }
+}

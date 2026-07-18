@@ -1220,6 +1220,38 @@ impl CoreOptions {
     }
 }
 
+/// XG effect-block state (Effect1): the pending variation-insertion config,
+/// mutated ONLY by XG effect SysEx (`EvKind::XgEffectParam` / `XgReset`). No
+/// album sends any SysEx, so every field's default leaves the render
+/// bit-identical: `var_part = 127` (OFF) installs no insert, and the reverb /
+/// chorus recognizers only fire on the exact Hall 1 / Chorus 1 type words. The
+/// reverb/chorus *type* changes act on the live `Reverb`/`Chorus` in place, so
+/// no state is duplicated here — only the variation, which is resolved into a
+/// per-strip `xg_insert` after each parameter update.
+#[derive(Clone, Copy)]
+struct XgEffects {
+    var_type_msb: u8,   // Variation Type MSB (Amp Simulator = 0x4B)
+    var_type_lsb: u8,   // Variation Type LSB (0x11 undocumented -> basic Amp Sim)
+    var_connection: u8, // 0 = INSERTION, 1 = SYSTEM
+    var_part: u8,       // target Part 0..63; 127 = OFF (no insert)
+    var_drive: u8,      // Variation Param1 = Drive (0..127)
+    var_drywet: u8,     // Variation Param10 = Dry/Wet (1..127; 127 = full wet)
+}
+
+impl XgEffects {
+    fn new() -> Self {
+        // Defaults chosen so the resolve is a no-op: part OFF => no insert.
+        XgEffects {
+            var_type_msb: 0,
+            var_type_lsb: 0,
+            var_connection: 0,
+            var_part: 127,
+            var_drive: 0,
+            var_drywet: 127,
+        }
+    }
+}
+
 pub(crate) struct EngineCore {
     opt: CoreOptions,
     strips: Vec<Strip>,
@@ -1270,6 +1302,9 @@ pub(crate) struct EngineCore {
     // tremolo-restrike path in note_on.
     now: u64,
     key_on_at: Vec<[u64; 128]>,
+    // XG effect-block state (variation insertion + the reverb/chorus type
+    // recognizers). Defaults are inert; only XG SysEx mutates it.
+    xg: XgEffects,
 }
 
 /// TREM1: a same-key NoteOn this close (in seconds) to the previous one on
@@ -1326,6 +1361,7 @@ impl EngineCore {
             drum_rr: [0; 128],
             now: 0,
             key_on_at: vec![[u64::MAX; 128]; 16],
+            xg: XgEffects::new(),
         }
     }
 
@@ -1525,13 +1561,78 @@ impl EngineCore {
                     s.gs_drum = false;
                 }
             }
-            // XG effect SysEx (reverb/chorus type, variation Amp-Sim insertion).
-            // Unit 1: parsed but inert (no-op) — the engine handling lands in the
-            // following units. Inert here keeps every no-XG render bit-identical.
-            EvKind::XgReset => {}
-            EvKind::XgEffectParam { .. } => {}
+            // XG effect SysEx (reverb/chorus type + the variation Amp-Sim
+            // insertion). Byte-inert for every album (0 send any SysEx): the
+            // reverb/chorus recognizers only fire on the exact Hall 1 / Chorus 1
+            // words, and the variation resolves to an insert only when a real
+            // Part (< 64) is targeted — default part is OFF.
+            EvKind::XgReset => self.xg_reset(),
+            EvKind::XgEffectParam { addr_lo, data, len } => {
+                self.handle_xg_effect_param(addr_lo, data, len)
+            }
         }
     }
+
+    /// XG / GM System On: reset the XG effect block to its defaults ONLY. Never
+    /// routes through `hard_reset` and never touches `opt`, voices, or timing —
+    /// resetting the whole engine on a System On would (wrongly) drop live notes
+    /// and controller state. Reverb/chorus are returned to their constructor
+    /// configuration and every variation insert is cleared (both no-ops until
+    /// units 3-5 wire the audio side).
+    fn xg_reset(&mut self) {
+        self.xg = XgEffects::new();
+        self.resolve_variation();
+    }
+
+    /// Apply one XG Effect1 parameter. Semantics live here (the parser stays a
+    /// dumb decoder, per the GS idiom): reverb/chorus *type* recognizers act on
+    /// the live buses in place; variation params accumulate into `self.xg` and
+    /// re-resolve the insert idempotently, so the t=0 message order is
+    /// irrelevant. Unrecognized offsets (returns at 0x0C/0x2C/0x56, unknown
+    /// types) are parsed-and-ignored by design.
+    fn handle_xg_effect_param(&mut self, addr_lo: u8, data: [u8; 2], len: u8) {
+        // XG data words are 7-bit halves; a value <= 127 lives in the LSB.
+        let value14 = ((data[0] as u16) << 7) | (data[1] as u16);
+        let value7 = value14.min(127) as u8;
+        match addr_lo {
+            // Reverb Type (MSB,LSB) — Hall 1 recognizer wired in unit 3.
+            0x00 => {}
+            // Chorus Type (MSB,LSB) — Chorus 1 recognizer wired in unit 4.
+            0x20 => {}
+            // Variation Type (MSB,LSB). Amp Simulator = 0x4B; LSB ignored.
+            0x40 => {
+                self.xg.var_type_msb = data[0];
+                self.xg.var_type_lsb = if len >= 2 { data[1] } else { 0 };
+                self.resolve_variation();
+            }
+            // Variation Param 1 = Drive (0..127).
+            0x42 => {
+                self.xg.var_drive = value7;
+                self.resolve_variation();
+            }
+            // Variation Param 10 = Dry/Wet (1..127; 127 = full wet).
+            0x54 => {
+                self.xg.var_drywet = value7;
+                self.resolve_variation();
+            }
+            // Variation Connection: 0 = INSERTION, 1 = SYSTEM.
+            0x5A => {
+                self.xg.var_connection = data[0];
+                self.resolve_variation();
+            }
+            // Variation Part: 0..63 target part; 127 = OFF.
+            0x5B => {
+                self.xg.var_part = data[0];
+                self.resolve_variation();
+            }
+            _ => {}
+        }
+    }
+
+    /// (Re)resolve the variation config into the per-strip insert. Unit 5 fills
+    /// the install; until then this is a no-op stub so the config accumulates
+    /// with the final routing wired in one place.
+    fn resolve_variation(&mut self) {}
 
     fn note_on(&mut self, ch: u8, key: u8, vel: u8) {
         let sr = self.opt.sr;
@@ -8871,6 +8972,177 @@ mod tests {
             n1_cc84 > 5.0 * n2_cc84,
             "CC84 must be consumed once: note-1 source-pitch energy {n1_cc84:.5} vs note-2 {n2_cc84:.5}"
         );
+    }
+
+    // ---- XG effect SysEx (reverb/chorus type, variation Amp-Sim insertion) ----
+
+    /// Unit 2 (byte-identity spine): the XG effect block is inert until a real
+    /// effect is recognized. A song carrying XG System On + a non-Hall reverb
+    /// type + a non-Chorus chorus type + an Amp-Sim variation routed to SYSTEM
+    /// (never an insert) renders BYTE-IDENTICALLY to the same song with no XG
+    /// SysEx — even with the hall bus active (wet > 0). The per-unit face of
+    /// the album-wide render-diff = 0 hard gate; stays valid across units 3-5
+    /// because none of these words resolve to a recognized effect.
+    #[test]
+    fn xg_inert_effect_params_are_byte_identical() {
+        let sr = 44100.0;
+        let opts = Options {
+            sr,
+            wet: 0.3,
+            tail: 0.5,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+        };
+        let phrase: Vec<(f64, EvKind)> = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 29 }),
+            (0.0, EvKind::Prog { ch: 1, prog: 48 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 45,
+                    vel: 100,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 1,
+                    key: 60,
+                    vel: 90,
+                },
+            ),
+            (0.9, EvKind::NoteOff { ch: 0, key: 45 }),
+            (0.9, EvKind::NoteOff { ch: 1, key: 60 }),
+        ];
+        let mut with_inert_xg: Vec<(f64, EvKind)> = vec![
+            (0.0, EvKind::XgReset),
+            // reverb type = a non-Hall1 word -> recognizer no-op
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x00,
+                    data: [0x02, 0x00],
+                    len: 2,
+                },
+            ),
+            // chorus type = a non-Chorus1 word -> no-op
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x20,
+                    data: [0x42, 0x00],
+                    len: 2,
+                },
+            ),
+            // Amp-Sim variation type, real Drive/Dry-Wet, but SYSTEM connection
+            // and a real part -> resolves to NO insert (system bus is a non-goal).
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x40,
+                    data: [0x4B, 0x11],
+                    len: 2,
+                },
+            ),
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x42,
+                    data: [0x00, 0x18],
+                    len: 2,
+                },
+            ),
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x54,
+                    data: [0x00, 0x64],
+                    len: 2,
+                },
+            ),
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x5A,
+                    data: [0x01, 0x00],
+                    len: 1,
+                },
+            ),
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x5B,
+                    data: [0x0E, 0x00],
+                    len: 1,
+                },
+            ),
+        ];
+        with_inert_xg.extend(phrase.clone());
+        let base = render(&test_song(phrase, 1.6), &opts).0;
+        let xg = render(&test_song(with_inert_xg, 1.6), &opts).0;
+        assert_eq!(
+            base, xg,
+            "inert XG effect params must not perturb the render (byte-identity spine)"
+        );
+    }
+
+    /// Unit 2 (state wiring): the reference file's variation block decodes into
+    /// the `XgEffects` state exactly — Amp Simulator type, Drive 24, Dry/Wet
+    /// 100, INSERTION connection, Part 15 (0-based 14) — and a following XG
+    /// System On resets every field to its inert default.
+    #[test]
+    fn xg_effect_params_update_state() {
+        let sr = 44100.0;
+        let mut core = EngineCore::new(CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        });
+        for kind in [
+            EvKind::XgEffectParam {
+                addr_lo: 0x40,
+                data: [0x4B, 0x11],
+                len: 2,
+            },
+            EvKind::XgEffectParam {
+                addr_lo: 0x42,
+                data: [0x00, 0x18],
+                len: 2,
+            },
+            EvKind::XgEffectParam {
+                addr_lo: 0x54,
+                data: [0x00, 0x64],
+                len: 2,
+            },
+            EvKind::XgEffectParam {
+                addr_lo: 0x5A,
+                data: [0x00, 0x00],
+                len: 1,
+            },
+            EvKind::XgEffectParam {
+                addr_lo: 0x5B,
+                data: [0x0E, 0x00],
+                len: 1,
+            },
+        ] {
+            core.handle_event(kind);
+        }
+        assert_eq!(core.xg.var_type_msb, 0x4B, "Amp Simulator type MSB");
+        assert_eq!(core.xg.var_drive, 24, "Drive 24");
+        assert_eq!(core.xg.var_drywet, 100, "Dry/Wet 100");
+        assert_eq!(core.xg.var_connection, 0, "INSERTION");
+        assert_eq!(core.xg.var_part, 14, "Part 15 = 0-based channel 14");
+
+        core.handle_event(EvKind::XgReset);
+        assert_eq!(core.xg.var_part, 127, "System On resets Part to OFF");
+        assert_eq!(core.xg.var_drive, 0, "System On resets Drive");
     }
 
     /// KP-O3 (v0.12 brush kit selection seam, re-anchored on trunk's V3

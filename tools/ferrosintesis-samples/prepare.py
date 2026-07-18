@@ -209,6 +209,36 @@ HARPSICHORD_URLS = {
     for dest, label in _HARPSI_ZONES
 }
 
+# Harp (GM 46) — VCSL "Concert Harp" (Chordophones/Composite Chordophones/Concert
+# Harp), CC0 1.0 (same VCSL_REV pin as the harpsichord). Plucked with a long natural
+# decay: the sample carries the pluck onset + early ring (~0.9 s, like the guitars)
+# and the Pluck(&HARP) model keeps the bendable decay. Uses the FORTE layer (`_f1`)
+# — the only dynamic present at EVERY zone — over a ~7-semitone subset spanning
+# G1..F7. Output routes to the NEW CC0 crate `-orchestral2` (the original
+# `-orchestral` is at the ~10 MiB crates.io cap). Roots are MEASURED (printed by
+# prepare.py); the label is nominal only.
+_VCSL_HARP_DIR = "Chordophones/Composite Chordophones/Concert Harp"
+_HARP_ZONES = [
+    ("harp_G1.wav", "KSHarp_G1_f1"),
+    ("harp_D2.wav", "KSHarp_D2_f1"),
+    ("harp_A2.wav", "KSHarp_A2_f1"),
+    ("harp_E3.wav", "KSHarp_E3_f1"),
+    ("harp_B3.wav", "KSHarp_B3_f1"),
+    ("harp_F4.wav", "KSHarp_F4_f1"),
+    ("harp_C5.wav", "KSHarp_C5_f1"),
+    ("harp_G5.wav", "KSHarp_G5_f1"),
+    ("harp_D6.wav", "KSHarp_D6_f1"),
+    ("harp_A6.wav", "KSHarp_A6_f1"),
+    ("harp_F7.wav", "KSHarp_F7_f1"),
+]
+HARP_URLS = {
+    dest: (
+        f"https://raw.githubusercontent.com/sgossner/VCSL/{VCSL_REV}/"
+        f"{urllib.parse.quote(_VCSL_HARP_DIR)}/{src}.wav"
+    )
+    for dest, src in _HARP_ZONES
+}
+
 # GM 109 bagpipe (HLD 2026.07.17). A CC0 FreePats G-pipe: two separately-recorded
 # drones (bass G2, tenor G3) an octave apart, plus a chanter. These are LOOPED
 # sustains, not attack transients — `extract_loop` (not `trim_to_onset`) emits a
@@ -333,6 +363,9 @@ F0_RANGE = {
     # brass/oboe autocorr lesson. Bright and plucked, but the fundamental
     # dominates: the probe measured every zone correctly even at a 2200 ceiling.
     "harpsi": (55.0, 1500.0),
+    # harp G1 ~49 Hz … F7 ~2794 Hz; ceiling 3200 clears the top fundamental and
+    # stays under its 2nd harmonic; measure_f0 + the octave-snap correct any label offset
+    "harp": (40.0, 3200.0),
     # violin section G2-name spans G3 196 Hz … D5-name D6 1175 Hz (VSCO's
     # octave labels sit one below sounding pitch here); ceiling 1300 keeps
     # autocorr off the top zone's 2nd harmonic (the brass/oboe lesson)
@@ -353,6 +386,7 @@ KEEP_FAM = {
     "nylon": (0.9, 0.30),
     "steel": (0.9, 0.30),
     "harpsi": (0.9, 0.30),
+    "harp": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -389,7 +423,12 @@ LOCAL_SOURCES = {
 CORE_FAMILIES = frozenset(("piano", "violin", "flute"))
 # Families that live in their OWN sample crate (not core/orchestral) — the grand is
 # a ~6.9 MiB CC-BY bank kept separate so core stays under the crates.io 10 MiB cap.
-FAMILY_PACKAGE = {"grand": "ferrosintesis-samples-grand"}
+FAMILY_PACKAGE = {
+    "grand": "ferrosintesis-samples-grand",
+    # New CC0 onsets: `-orchestral` is at the ~10 MiB crates.io cap, so harp (and the
+    # timpani/recorder/ocarina/banjo units that follow) route to a second CC0 crate.
+    "harp": "ferrosintesis-samples-orchestral2",
+}
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
 PRE_S = 0.008      # pad kept before the onset
@@ -995,32 +1034,58 @@ def main():
     # `--local-only` skips the fetched full bank (network + rewriting the tracked
     # core/orchestral WAVs) and regenerates ONLY the local gong intake below.
     local_only = "--local-only" in sys.argv[1:]
+    # `--only=fam[,fam2]` regenerates ONLY the named families (by filename prefix),
+    # leaving every other tracked WAV untouched and skipping their fetches (incl. the
+    # 7z / SF3 / tarball sources) — used to ADD one instrument without rewriting the
+    # whole bank. `fam` is the sample-name prefix: harp, timpani, recorder, ocarina,
+    # banjo, sitar, panflute, bottle, shakuhachi, clavinet, chanter (bagpipe), grand, …
+    only = None
+    for a in sys.argv[1:]:
+        if a.startswith("--only="):
+            only = set(filter(None, a.split("=", 1)[1].split(",")))
+
+    def want(fam):
+        return only is None or fam in only
 
     rows = []
     if not local_only:
         src = os.path.join(tempfile.gettempdir(), "vsco2ce_src", VSCO_REV)
         os.makedirs(src, exist_ok=True)
         for fn, url in SOURCES.items():
-            ensure_source(fn, url, src)
+            if want(fn.split("_")[0]):
+                ensure_source(fn, url, src)
         for fn, url in STEEL_URLS.items():
-            ensure_source(fn, url, src)
+            if want("steel"):
+                ensure_source(fn, url, src)
         for fn, url in HARPSICHORD_URLS.items():
-            ensure_source(fn, url, src)
-        ensure_guitar_sources(src)
-        ensure_bagpipe_sources(src)
-        ensure_salamander_sources(src)
+            if want("harpsi"):
+                ensure_source(fn, url, src)
+        for fn, url in HARP_URLS.items():
+            if want("harp"):
+                ensure_source(fn, url, src)
+        if want("nylon"):
+            ensure_guitar_sources(src)
+        if want("chanter"):
+            ensure_bagpipe_sources(src)
+        if want("grand"):
+            ensure_salamander_sources(src)
 
         # Looped bagpipe sustains (own transform: extract_loop, not trim_to_onset)
-        rows += _bake_bagpipe(src)
+        if want("chanter"):
+            rows += _bake_bagpipe(src)
 
         # GM7 clavinet: own transform (SF3 Ogg extract + ffmpeg decode + decay bake),
         # cached by MuseScore rev, output to the separate MIT `-clavinet` crate.
-        clav_src = os.path.join(tempfile.gettempdir(), "musescore_sf3", MUSESCORE_REV)
-        os.makedirs(clav_src, exist_ok=True)
-        rows += _bake_clavinet(clav_src)
+        if want("clavinet"):
+            clav_src = os.path.join(tempfile.gettempdir(), "musescore_sf3", MUSESCORE_REV)
+            os.makedirs(clav_src, exist_ok=True)
+            rows += _bake_clavinet(clav_src)
         for fn in sorted(
-            SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | GRAND_SOURCES
+            SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
+            | GRAND_SOURCES
         ):
+            if not want(fn.split("_")[0]):
+                continue
             x, sr = read_wav(os.path.join(src, fn))
             x = resample(x, sr, OUT_SR)
             sr = OUT_SR
@@ -1043,7 +1108,11 @@ def main():
             rows.append((fn, root, f0, cand, cents, conf, len(seg) / sr))
 
     # Local-file intake (gong): full ring kept, one-shot (no f0), explicit routing.
+    # Gated by `want("gong")` so `--only=<other>` never rewrites the tracked gong WAVs
+    # (a full run or `--local-only` leaves `only` None, so gong still regenerates).
     for out_name, (src_fn, package, end_fade_s) in sorted(LOCAL_SOURCES.items()):
+        if not want("gong"):
+            continue
         x, sr = read_wav(os.path.join(GONG_SRC, src_fn))
         x = resample(x, sr, OUT_SR)
         sr = OUT_SR

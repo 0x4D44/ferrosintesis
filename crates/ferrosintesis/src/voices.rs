@@ -7830,6 +7830,13 @@ const LA_GUITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
 /// `la_level_continuity` cap with margin while keeping the sample dominant at the
 /// onset (the quill spike lives in the first 50 ms, before the seam window).
 const LA_HARPSICHORD: (f32, (f32, f32)) = (0.28, (0.05, 0.20));
+/// GM 46 orchestral harp: the sample owns the pluck onset + early shimmer, the
+/// `Pluck(&HARP)` model carries the bendable decay — the same onset-ownership split
+/// as the guitars/harpsichord. Gain sits between the guitar (0.42) and harpsichord
+/// (0.28): the harp's pluck is a clear attack, but its long recorded ring means a
+/// slightly restrained sample gain avoids overpowering the model at the seam
+/// (EAR-tunable; `la_level_continuity` guards the crossfade). Fade over [0.05, 0.22] s.
+const LA_HARP: (f32, (f32, f32)) = (0.38, (0.05, 0.22));
 /// String sections 48-49: the real section swell reads best with a longer
 /// crossfade than the solo bowed layer (a section "comes into focus", it
 /// does not bite), so the transient hands over across [0.10, 0.40] s.
@@ -10888,7 +10895,25 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         }
         44 => Box::new(Bowed::new(44, key, vel, sr, seed)),
         45 => Box::new(Pluck::new(&PIZZ, key, vel, sr, seed)),
-        46 => Box::new(Pluck::new(&HARP, key, vel, sr, seed)),
+        // GM 46 harp: LA sampled pluck onset (VCSL Concert Harp, CC0, -orchestral2)
+        // crossfaded into the Pluck(&HARP) model — same wrap as the nylon/steel guitars.
+        46 => {
+            let model = Box::new(Pluck::new(&HARP, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_HARP;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::harp_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         47 => Box::new(timpani(key, vel, sr, seed)),
         48..=49 => {
             let model = Box::new(strings(program, key, vel, sr, seed));
@@ -11067,6 +11092,7 @@ mod tests {
             ("LA_REED", LA_REED),
             ("LA_GUITAR", LA_GUITAR),
             ("LA_STRINGS", LA_STRINGS),
+            ("LA_HARP", LA_HARP),
         ] {
             assert!(
                 fade.1 < 0.90,
@@ -20869,8 +20895,8 @@ mod tests {
     /// where `samples: true` renders a different signal (everything else
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
-        0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 109,
-        110,
+        0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 46, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73,
+        109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

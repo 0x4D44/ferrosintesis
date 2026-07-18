@@ -50,6 +50,7 @@ fn parse_wav(bytes: &[u8]) -> Vec<f32> {
 fn embedded_wav(name: &str) -> &'static [u8] {
     ferrosintesis_samples_core::get(name)
         .or_else(|| ferrosintesis_samples_orchestral::get(name))
+        .or_else(|| ferrosintesis_samples_orchestral2::get(name))
         .or_else(|| ferrosintesis_samples_gong::get(name))
         .or_else(|| ferrosintesis_samples_grand::get(name))
         .or_else(|| ferrosintesis_samples_clavinet::get(name))
@@ -868,6 +869,35 @@ pub fn harpsichord_bank() -> &'static [Zone] {
     harpsichord()
 }
 
+/// GM 46 orchestral harp — VCSL "Concert Harp" (CC0, `-orchestral2` crate), forte
+/// layer, ~7-semitone zones G1–F7. The sample carries the pluck onset + early ring;
+/// the `Pluck(&HARP)` model keeps the bendable decay — the same LA wrap as the
+/// nylon/steel guitars. Roots are the MEASURED fundamentals (the harp is tuned a few
+/// cents flat; we repitch from the real f0, so the flatness never reaches the render).
+fn harp() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "harp_G1.wav" => 48.47,
+            "harp_D2.wav" => 73.35,
+            "harp_A2.wav" => 110.11,
+            "harp_E3.wav" => 164.84,
+            "harp_B3.wav" => 245.33,
+            "harp_F4.wav" => 348.62,
+            "harp_C5.wav" => 520.04,
+            "harp_G5.wav" => 779.98,
+            "harp_D6.wav" => 1165.80,
+            "harp_A6.wav" => 1739.41,
+            "harp_F7.wav" => 2744.97,
+        )
+    })
+}
+
+/// GM 46 harp attack bank (see [`harp`]).
+pub fn harp_bank() -> &'static [Zone] {
+    harp()
+}
+
 // --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
 //
 // These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
@@ -1046,6 +1076,7 @@ pub fn prewarm() {
     let _ = strings_bank(127);
     let _ = guitar_bank();
     let _ = steel_bank();
+    let _ = harp_bank();
     let _ = chanter_bank();
     let _ = drone_g2_bank();
     let _ = drone_g3_bank();

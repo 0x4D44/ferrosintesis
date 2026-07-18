@@ -8,6 +8,7 @@ members = [
     "crates/ferrosintesis-samples-gong",
     "crates/ferrosintesis-samples-grand",
     "crates/ferrosintesis-samples-orchestral",
+    "crates/ferrosintesis-samples-orchestral2",
     "crates/render-catalog",
 ]
 resolver = "2"

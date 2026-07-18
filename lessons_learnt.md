@@ -11,8 +11,11 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
     pipe/ensemble) hold ~0; struck/plucked (piano/guitar/bass/mallets) decay to −16..−118. One
     threshold split (~≥−6 held / ~≤−10 decayed) separates them; other planned axes (organ flatness,
     brass/reed harm_frac) FAILED in Passport space — measure first.
-  - MEASURE before trusting a design carve-out: GM29/30 driven guitar DECAY on a plain held note
-    (e-bow latch idle), GM38/39 synth bass HOLD — both the opposite of the design intent.
+  - MEASURE before trusting a design carve-out: GM29/30 driven guitar DECAY on a plain held note,
+    GM38/39 synth bass HOLD. (Correction 2026.07.18: the GM29/30 decay is not "opposite of design
+    intent" — it is round-3 U2's deliberate choice, `DRIVE.sustain=0.0` voices.rs:2503-2511; the
+    guitar-v2 sustain intent was superseded, and the sustaining voice is the alt bank's DRIVE_LEAD.
+    Don't "fix" it: `driven_main_and_alt_banks_diverge` + `class_identity_ranges_hold` pin it.)
   - Keep honest limits, don't fudge: reed↔flute overlap on flat_L (F2); synth lead/pad 80-95 too
     heterogeneous to gate (F1, unasserted). §6: the Passport encodes CLASS; realism stays ear-only.
 

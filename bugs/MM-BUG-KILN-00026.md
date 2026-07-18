@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00026 — GM42/43 brightness is guarded by the wrong struct: the brightness oracles render `Bowed::new` (CC0 alt-bank), not the shipping `BowedString`, and assert no direction — a recurrence of MM-BUG-KILN-00004's trap
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 via overnight code-review pass, deep-review workflow)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 via overnight code-review pass, deep-review workflow); Fixed (2026-07-18, c9634f5 — added a directional GM42/43 brightness oracle through the shipping make() route, averaged over three seeds at a shared pitch. The current cello is 8.9% brighter; the historical reversed voicing fails with the contrabass 44% brighter.)
 
 ## Observation
 
@@ -74,20 +74,17 @@ the committed source would flag it).
 
 ## Fix
 
-Add a brightness-ordering oracle that renders GM42 and GM43 **through `make()`** (as
-`bowed_string_tuning_is_pitch_independent` already does) at a pitch inside both
-compasses (cello 36–76, contrabass 28–55; e.g. key 43 or 48; samples off so the
-waveguide body is measured directly). Compute an HF fraction
-`hp_rms(settled_sustain, sr, ~2200-2500) / rms(settled_sustain).max(1e-9)` for each
-and assert the cello's clearly exceeds the contrabass's (e.g. `h42 > h43 * 1.15`, or
-`h43 < h42 * 0.85`), with a message naming the backwards +55% inversion. Model it on
-the vibrato oracle migrated off `Bowed` in the 00004 fix. It must be red if the
-`out_lp`/`refl_sustain` edits are reverted, green as shipped.
+c9634f5 adds bowed_string_cello_is_brighter_than_contrabass. It renders programs
+42 and 43 through make() with samples disabled, uses MIDI key 43 inside both
+compasses, measures the settled sustain's energy above 2.2 kHz relative to RMS,
+and averages three deterministic seeds. The oracle requires the cello to be at
+least 5% brighter than the contrabass. The proposed 15% margin was not accurate:
+the shipping values are 0.12193 versus 0.11193, an 8.9% delta.
 
-Consider, while there, whether `render_default_bowed` / the two body oracles should
-also move to `make()` for 42/43 (they currently give false coverage for those two
-programs) — but scope carefully: those oracles also cover GM40/41/110, which do use
-the `Bowed`/model path.
+The exact historical brightness parameters were mutation-tested. They fail the
+new oracle at 0.10874 versus 0.15674, reproducing the backwards ordering. The
+current parameters pass, as does the adjacent bowed-string tuning oracle. The
+stale nearby comment now accurately describes both output low-pass filters.
 
 ## Notes
 

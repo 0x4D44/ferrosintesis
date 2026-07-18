@@ -1347,6 +1347,68 @@ fn brush_kick(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
 /// already fired this render) — the sampled cymbals cycle their round-robin
 /// takes from it so consecutive hits of one key never repeat a take, no
 /// matter what other drums play in between. Model voices ignore it.
+/// Per-key body mix for the up-repitched high tom keys 47/48/50 (a fraction of the
+/// modeled tom's own gain). Rises with the sampled repitch (key 47 ≈1.33×, 48
+/// ≈1.62×, 50 ≈1.94× off the ~181 Hz htom root) so the modeled fill tracks how much
+/// the sample thins. Tuned by ear on the render — a named constant for exactly that.
+const HYBRID_TOM_MIX: [f32; 3] = [0.55, 0.70, 0.78];
+
+/// The modeled tom body layered under the sampled htom on the up-repitched high tom
+/// keys (MM-BUG-KILN-00009). Returns `(f0, t60, noise_hz, life, gain)` mirroring the
+/// key's `NN => tom(...)` arm in `make` below (keep the two in sync), with the gain
+/// scaled by [`HYBRID_TOM_MIX`]. `None` for the low toms (41/43/45), which barely
+/// repitch and need no fill.
+fn hybrid_tom_body(key: u8) -> Option<(f32, f32, f32, f32, f32)> {
+    let (f0, t60, noise_hz, life, modeled_g, mix) = match key {
+        47 => (240.0, 0.24, 1500.0, 0.4, 0.64, HYBRID_TOM_MIX[0]),
+        48 => (293.0, 0.22, 1700.0, 0.36, 0.61, HYBRID_TOM_MIX[1]),
+        50 => (352.0, 0.20, 1900.0, 0.33, 0.58, HYBRID_TOM_MIX[2]),
+        _ => return None,
+    };
+    Some((f0, t60, noise_hz, life, modeled_g * mix))
+}
+
+/// A sampled high tom plus a modeled tom body. The sampled htom repitched up the
+/// ladder thins on the high tom keys — key 48 plays it 1.62× and key 50 1.94× off
+/// its ~181 Hz root, which shortens the decay and lifts the shell out of the
+/// low-mid. `HybridTom` sums a modeled tom body (at the key's target pitch) under
+/// the sampled attack to put that shell and sustain back: the sample keeps the
+/// transient and character, the model fills what the repitch removed. Same
+/// sample-attack-plus-modeled-body idea the LA layer uses for melodic voices,
+/// applied to the drum path (MM-BUG-KILN-00009).
+struct HybridTom {
+    sample: Box<dyn Voice>,
+    body: Box<dyn Voice>,
+}
+
+impl Voice for HybridTom {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        // Both layers ADD into `out` (the Voice contract), so they mix in place.
+        // Keep the composite alive while EITHER still rings — the modeled body
+        // outlasts the short repitched sample, which is the whole point.
+        let sample_active = self.sample.render(out);
+        let body_active = self.body.render(out);
+        sample_active || body_active
+    }
+    fn note_off(&mut self) {
+        self.sample.note_off();
+        self.body.note_off();
+    }
+    // Percussion rings out and ignores note-off (same house rule as `Drum` /
+    // `SampledDrum`), so the composite is always "released".
+    fn released(&self) -> bool {
+        true
+    }
+    fn choke(&mut self) {
+        self.sample.choke();
+        self.body.choke();
+    }
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "hybridtom"
+    }
+}
+
 pub fn make(
     key: u8,
     vel: u8,
@@ -1449,6 +1511,20 @@ pub fn make(
     // closed/pedal hit chokes a ringing open hat via `Voice::choke`.
     if samples && matches!(kit, Kit::V3 | Kit::Brush) {
         if let Some(v) = sampler::sampled_drum(key, vel, seed, rr, sr) {
+            // MM-BUG-KILN-00009: on the up-repitched high tom keys, layer a modeled
+            // tom body under the sampled attack to restore the shell/decay the
+            // repitch thins (see `HybridTom`). Every other key passes through.
+            if let Some((f0, t60, noise_hz, life, g)) = hybrid_tom_body(key) {
+                if let Some(body) = tom(
+                    f0,
+                    t60,
+                    &one(0.2, 0.04, Biquad::bandpass(noise_hz, 0.8, sr)),
+                    life,
+                    g,
+                ) {
+                    return Some(Box::new(HybridTom { sample: v, body }) as Box<dyn Voice>);
+                }
+            }
             return Some(v);
         }
     }
@@ -2681,7 +2757,14 @@ mod tests {
         ];
         for key in kit_keys {
             let v = make(key, 100, sr, 7, Kit::V3, true, 0).unwrap();
-            assert_eq!(v.kind(), "sampleddrum", "key {key} V3+samples");
+            // The up-repitched high tom keys wrap the sampled drum in a modeled
+            // body (MM-BUG-KILN-00009) — still the sampled path, not the pure model.
+            let expected = if matches!(key, 47 | 48 | 50) {
+                "hybridtom"
+            } else {
+                "sampleddrum"
+            };
+            assert_eq!(v.kind(), expected, "key {key} V3+samples");
             let m = make(key, 100, sr, 7, Kit::V3, false, 0).unwrap();
             assert_ne!(m.kind(), "sampleddrum", "--no-samples key {key}");
             for (kit, name) in [(Kit::V1, "V1"), (Kit::V2, "V2")] {
@@ -2695,10 +2778,16 @@ mod tests {
             let v = make(key, 100, sr, 7, Kit::Brush, true, 0).unwrap();
             assert_ne!(v.kind(), "sampleddrum", "brush key {key} must stay brush");
         }
-        // …while toms and cymbals fall through to the sampled kit.
+        // …while toms and cymbals fall through to the sampled kit (the high tom
+        // keys wrap it in a modeled body, MM-BUG-KILN-00009 — still sample-based).
         for key in [41u8, 43, 45, 47, 48, 50, 49, 51, 52, 53, 55, 57, 59] {
             let v = make(key, 100, sr, 7, Kit::Brush, true, 0).unwrap();
-            assert_eq!(v.kind(), "sampleddrum", "brush fall-through key {key}");
+            let expected = if matches!(key, 47 | 48 | 50) {
+                "hybridtom"
+            } else {
+                "sampleddrum"
+            };
+            assert_eq!(v.kind(), expected, "brush fall-through key {key}");
         }
     }
 
@@ -2762,6 +2851,53 @@ mod tests {
             worst.0,
             worst.1
         );
+    }
+
+    /// MM-BUG-KILN-00009: the sampled htom repitched up for the high tom keys
+    /// thins the shell and shortens the decay (key 48 plays it 1.62×, key 50 1.94×
+    /// off the ~181 Hz root). The hybrid layers a modeled tom body under the sample
+    /// to put that body back. Assert the composite holds more sustained energy than
+    /// the sample alone on keys 48/50, and still lands on the target pitch. (The
+    /// full six-tom ladder stays ascending — `sampled_toms_repitch_preserves_the_ladder`.)
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn hybrid_tom_restores_body_on_stretched_high_toms() {
+        let sr = 44100.0;
+        for (key, target) in [(48u8, 293.0f32), (50, 352.0)] {
+            // sample-only (what the bug hears) vs the hybrid (make with samples on).
+            let mut solo = sampler::sampled_drum(key, 100, 7, 0, sr).unwrap();
+            let mut sbuf = vec![0f32; (sr * 0.4) as usize];
+            solo.render(&mut sbuf);
+            let hyb = render_drum_kit_samples(key, 100, 0.4, Kit::V3, true);
+            let win = |s: &[f32]| s[..(0.30 * sr) as usize].to_vec();
+            // (a) less "chipmunk": the modeled body adds low-mid weight, so the
+            // hybrid is LESS top-heavy than the bare up-repitched sample — a lower
+            // spectral centroid.
+            let c_solo = testutil::spectral_centroid(&win(&sbuf), sr, 80.0, 8000.0);
+            let c_hyb = testutil::spectral_centroid(&win(&hyb), sr, 80.0, 8000.0);
+            // (b) restored shell: more energy in the tom's low-mid body band.
+            let lm =
+                |s: &[f32]| testutil::spectral_band_rms(&win(s), sr, target * 0.5, target * 1.6);
+            let (lm_solo, lm_hyb) = (lm(&sbuf), lm(&hyb));
+            println!(
+                "key {key}: centroid solo={c_solo:.0} hyb={c_hyb:.0}; low-mid solo={lm_solo:.4} hyb={lm_hyb:.4}"
+            );
+            assert!(
+                c_hyb < c_solo * 0.93,
+                "key {key}: hybrid not less top-heavy ({c_hyb:.0} vs {c_solo:.0} Hz)"
+            );
+            assert!(
+                lm_hyb > lm_solo * 1.10,
+                "key {key}: hybrid did not add low-mid body ({lm_hyb:.4} vs {lm_solo:.4})"
+            );
+            // (c) the target pitch is preserved (the body reinforces it, not fights it).
+            let f =
+                testutil::peak_locate(&hyb[..(0.25 * sr) as usize], sr, target * 0.6, target * 1.4);
+            assert!(
+                (f - target).abs() < target * 0.15,
+                "key {key}: hybrid pitch {f:.0} Hz off target {target}"
+            );
+        }
     }
 
     /// Stage E tom repitch oracle: the six GM tom keys must render as six

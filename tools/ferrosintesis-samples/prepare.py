@@ -806,23 +806,22 @@ def resample(x, sr_in, sr_out):
     return out
 
 
-def measure_f0(x, sr, lo=80.0, hi=3000.0):
-    """Autocorrelation over a window starting past the attack."""
-    start = int(0.20 * sr)
-    win = int(0.10 * sr)
-    seg = x[start:start + win]
-    if len(seg) < win:
-        seg = x[len(x) // 3:len(x) // 3 + win]
-    mean = sum(seg) / len(seg)
+def _autocorr_f0(seg, sr, lo, hi):
+    """Normalized-autocorrelation f0 of ONE window: smallest near-maximal lag
+    (octave-safe), parabolic-refined. Returns (f0_hz, confidence)."""
+    n = len(seg)
+    min_lag = max(1, int(sr / hi))
+    max_lag = min(n - 1, int(sr / lo))
+    if max_lag <= min_lag or n < max_lag + 2:
+        return 0.0, -1.0
+    mean = sum(seg) / n
     seg = [v - mean for v in seg]
-    min_lag = int(sr / hi)
-    max_lag = int(sr / lo)
-    e0 = sum(v * v for v in seg[:win - max_lag])
+    e0 = sum(v * v for v in seg[:n - max_lag])
     corr = {}
     for lag in range(min_lag, max_lag):
         num = 0.0
         den = 0.0
-        for i in range(win - max_lag):
+        for i in range(n - max_lag):
             num += seg[i] * seg[i + lag]
             den += seg[i + lag] * seg[i + lag]
         corr[lag] = num / math.sqrt(e0 * den) if den > 0 and e0 > 0 else -1.0
@@ -838,6 +837,39 @@ def measure_f0(x, sr, lo=80.0, hi=3000.0):
         if den != 0:
             lag += 0.5 * (a - c) / den
     return sr / lag, corr[best_lag]
+
+
+def measure_f0(x, sr, lo=80.0, hi=3000.0):
+    """Autocorrelation over a window starting past the attack."""
+    start = int(0.20 * sr)
+    win = int(0.10 * sr)
+    seg = x[start:start + win]
+    if len(seg) < win:
+        seg = x[len(x) // 3:len(x) // 3 + win]
+    return _autocorr_f0(seg, sr, lo, hi)
+
+
+def measure_f0_robust(x, sr, nominal):
+    """Nominal-guided f0 for slow-attack notes: probe several STEADY-body windows and
+    return the highest-confidence reading. A single fixed-offset window can land in the
+    breathy sax/baritone attack, where the correlation is low and the pitch wobbles up
+    to a semitone; the steady interior is clean (measured: bar G#3 reads 221 Hz/0.57 at
+    0.2 s but a rock-solid 211 Hz/0.98 at 0.5-1.0 s). The band is +/-1.5 semitones of the
+    SFZ-documented key, so only the true fundamental (never a neighbour or a harmonic)
+    can fall in range."""
+    lo, hi = nominal * 0.915, nominal * 1.093   # +/- ~1.5 semitones
+    win = int(0.20 * sr)
+    dur = len(x) / sr
+    offsets = [o for o in (0.35, 0.60, 0.90, 1.30) if o + win / sr < dur - 0.03]
+    if not offsets:
+        offsets = [max(0.0, dur / 3.0)]
+    best = (nominal, -1.0)
+    for off in offsets:
+        start = int(off * sr)
+        f0, c = _autocorr_f0(x[start:start + win], sr, lo, hi)
+        if f0 > 0 and c > best[1]:
+            best = (f0, c)
+    return best
 
 
 def trim_to_onset(x, sr, keep_s, fade_s):
@@ -1221,6 +1253,99 @@ def ensure_banjo_sources(src):
         )
 
 
+# --- GM 64-67 saxophones: MTG.SoloSax LA sample layer (CC-BY 4.0) -------------
+# Source: github.com/sfzinstruments/MTG.SoloSax — the MTG good-sounds.org single-note
+# dataset (Neumann U87, 24-bit/48 kHz FLAC), pinned by commit. The FLAC filenames are
+# NUMBERED, not pitched, so the authoritative note is the `key=` in each SFZ region
+# file (Data/<inst>_<dyn>_rr1.txt). We still MEASURE f0 in a narrow window around the
+# key's frequency and store the measured fundamental as the zone root, so each take's
+# tuning offset (the SFZ `tune=` cents) never reaches the render — the repo's
+# "labels can lie, measure f0" rule. Output routes EXPLICITLY to the separate CC-BY
+# `ferrosintesis-samples-sax` crate (like the clavinet/gong intakes) so the CC0 core
+# banks stay pure CC0. rr1 take only; p and f dynamic layers are INDEPENDENT zone
+# lists (reed_bank picks a whole bank by velocity), so they need not be pitch-aligned.
+MTG_SAX_REV = "b494d256549b3d088fdec176ce82867f8a1f58b2"
+MTG_SAX_BASE = (
+    "https://raw.githubusercontent.com/sfzinstruments/MTG.SoloSax/"
+    f"{MTG_SAX_REV}/MTG%20Solo%20Saxophones"
+)
+# (out-prefix, sfz-prefix): GM 64 soprano, 65 alto, 66 tenor, 67 baritone
+MTG_SAX_INSTR = [("sop", "sop"), ("alt", "alt"), ("ten", "ten"), ("bar", "bar")]
+MTG_SAX_ZONE_STEP = 4   # keep every Nth sampled note (~N-semitone zones; max repitch ~N/2)
+MTG_SAX_KEEP_S = 0.62   # attack + early body; the model carries the sustain (reed recipe)
+MTG_SAX_FADE_S = 0.20
+MTG_SAX_MIN_CONF = 0.85  # drop a zone whose measured root is not trustworthy (neighbours cover)
+
+
+def _mtg_region_keys(src, prefix, dyn):
+    """Parse Data/<prefix>_<dyn>_rr1.txt -> {midi_key: sample_basename} for MTG sax."""
+    fn = f"{prefix}_{dyn}_rr1.txt"
+    path = os.path.join(src, fn)
+    if not os.path.exists(path):
+        fetch(f"{MTG_SAX_BASE}/Data/{fn}", path)
+    text = open(path, encoding="utf-8").read()
+    return {int(m.group(1)): m.group(2)
+            for m in re.finditer(r"key=(\d+)\s+sample=(\S+?)\.\$EXT", text)}
+
+
+def _bake_mtg_sax(src):
+    """Fetch + decode + bake the MTG.SoloSax LA layer for GM 64-67.
+
+    Writes `sax_<inst>_<midiname>_<p|f>.wav` (16-bit mono 44.1 kHz) into the CC-BY
+    `ferrosintesis-samples-sax` crate; returns print-table rows. FLAC decode shells
+    out to ffmpeg (mono 24-bit, source rate), matching the clavinet/drumkit path.
+    Zones are selected by index across each dynamic's available notes, so gaps in the
+    source do not break selection; the ROOT stored is the measured f0.
+    """
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-sax", "samples")
+    rows = []
+    for out_pre, sfz_pre in MTG_SAX_INSTR:
+        for dyn in ("f", "p"):
+            kmap = _mtg_region_keys(src, sfz_pre, dyn)
+            skeys = sorted(kmap)
+            chosen = skeys[::MTG_SAX_ZONE_STEP]
+            if skeys and skeys[-1] not in chosen:
+                chosen.append(skeys[-1])   # always cover the top note
+            for key in chosen:
+                base = kmap[key]
+                nominal = 440.0 * 2 ** ((key - 69) / 12.0)
+                flac = os.path.join(src, base + ".flac")
+                wav = os.path.join(src, base + ".wav")
+                if not os.path.exists(flac):
+                    fetch(f"{MTG_SAX_BASE}/Samples/{base}.flac", flac)
+                if not os.path.exists(wav):
+                    subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                                    "-i", flac, "-ac", "1", "-acodec", "pcm_s24le", wav],
+                                   check=True)
+                x, wsr = read_wav(wav)
+                x = resample(x, wsr, OUT_SR)
+                wsr = OUT_SR
+                # Measure on the RAW note's steady body (robust to the slow baritone
+                # attack); THEN trim for output. A zone whose root can't be measured
+                # confidently is dropped — its neighbours cover it under repitch.
+                f0, conf = measure_f0_robust(x, wsr, nominal)
+                if conf < MTG_SAX_MIN_CONF:
+                    print(f"  SKIP sax_{out_pre} {_midi_name(key)} ({dyn}): f0 conf "
+                          f"{conf:.2f} < {MTG_SAX_MIN_CONF}", file=sys.stderr)
+                    continue
+                seg = trim_to_onset(x, wsr, MTG_SAX_KEEP_S, MTG_SAX_FADE_S)
+                cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+                out_name = f"sax_{out_pre}_{_midi_name(key)}_{dyn}.wav"
+                write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
+                rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    return rows
+
+
+def _print_sample_rows(rows):
+    print(f"{'file':26} {'root_hz':>9} {'measured':>9} {'nominal':>9} {'cents':>7} {'conf':>5} {'len_s':>6}")
+    for r in rows:
+        if r[1] is None:
+            print(f"{r[0]:26} {'hit':>9} {'':>9} {'':>9} {'':>7} {'':>5} {r[6]:6.3f}")
+        else:
+            print(f"{r[0]:26} {r[1]:9.2f} {r[2]:9.2f} {r[3]:9.2f} {r[4]:7.1f} {r[5]:5.2f} {r[6]:6.3f}")
+
+
 def main():
     socket.setdefaulttimeout(60)
     # `--local-only` skips the fetched full bank (network + rewriting the tracked
@@ -1230,7 +1355,7 @@ def main():
     # leaving every other tracked WAV untouched and skipping their fetches (incl. the
     # 7z / SF3 / tarball sources) — used to ADD one instrument without rewriting the
     # whole bank. `fam` is the sample-name prefix: harp, timpani, recorder, ocarina,
-    # banjo, sitar, panflute, bottle, shakuhachi, clavinet, chanter (bagpipe), grand, …
+    # banjo, sitar, panflute, bottle, shakuhachi, clavinet, chanter (bagpipe), grand, sax, …
     only = None
     for a in sys.argv[1:]:
         if a.startswith("--only="):
@@ -1239,7 +1364,17 @@ def main():
     def want(fam):
         return only is None or fam in only
 
+    # `--sax-only` bakes ONLY the MTG saxophone LA layer (network + the -sax crate),
+    # skipping the slow VSCO fetch/rewrite — fast iteration on the sax bank alone.
+    sax_only = "--sax-only" in sys.argv[1:]
+
     rows = []
+    if sax_only:
+        sax_src = os.path.join(tempfile.gettempdir(), "mtg_sax_src", MTG_SAX_REV)
+        os.makedirs(sax_src, exist_ok=True)
+        rows += _bake_mtg_sax(sax_src)
+        _print_sample_rows(rows)
+        return
     if not local_only:
         src = os.path.join(tempfile.gettempdir(), "vsco2ce_src", VSCO_REV)
         os.makedirs(src, exist_ok=True)
@@ -1306,6 +1441,13 @@ def main():
                 rows += _bake_sf_onset(
                     ms_src, _preset, _prefix, "ferrosintesis-samples-musescore", 0.62, 0.24
                 )
+
+        # GM 64-67 saxophones: MTG.SoloSax LA layer (own transform: FLAC fetch +
+        # ffmpeg decode), cached by MTG rev, output to the separate CC-BY `-sax` crate.
+        if want("sax"):
+            sax_src = os.path.join(tempfile.gettempdir(), "mtg_sax_src", MTG_SAX_REV)
+            os.makedirs(sax_src, exist_ok=True)
+            rows += _bake_mtg_sax(sax_src)
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | GRAND_SOURCES
@@ -1352,12 +1494,7 @@ def main():
         write_wav_mono(output, seg, sr)
         rows.append((out_name, None, None, None, None, None, len(seg) / sr))
 
-    print(f"{'file':26} {'root_hz':>9} {'measured':>9} {'nominal':>9} {'cents':>7} {'conf':>5} {'len_s':>6}")
-    for r in rows:
-        if r[1] is None:
-            print(f"{r[0]:26} {'hit':>9} {'':>9} {'':>9} {'':>7} {'':>5} {r[6]:6.3f}")
-        else:
-            print(f"{r[0]:26} {r[1]:9.2f} {r[2]:9.2f} {r[3]:9.2f} {r[4]:7.1f} {r[5]:5.2f} {r[6]:6.3f}")
+    _print_sample_rows(rows)
 
 
 if __name__ == "__main__":

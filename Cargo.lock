@@ -14,6 +14,7 @@ dependencies = [
  "ferrosintesis-samples-musescore",
  "ferrosintesis-samples-orchestral",
  "ferrosintesis-samples-orchestral2",
+ "ferrosintesis-samples-sax",
 ]
 
 [[package]]
@@ -53,6 +54,10 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-orchestral2"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-sax"
 version = "0.1.0"
 
 [[package]]

@@ -144,24 +144,30 @@ are dramatically slower and are not worth timing.
 
 ## Sample provenance and licensing
 
-The 291 embedded recordings (attack transients, GM 109's looped bagpipe, and the
-GM 7 sampled clavinet) come from **CC0 1.0** sources — the VSCO 2 Community Edition
-orchestral library (violin, flutes, brass, reeds, string sections), the FreePats
-Spanish classical guitar bank, the Discord SFZ GM Bank's Martin HD28 steel-string
-acoustic, the Versilian Community Sample Library (harpsichord, concert harp,
-timpani, Baroque recorders, ocarina), and sfzinstruments/ganjo (6-string
-guitar-banjo) — plus **MIT** content from the MuseScore "MS Basic" soundfont: the
-GM 7 clavinet, the GM 104 sitar, and the GM 75/76/77 pipe onsets. The generator
-pins every source (VSCO and VCSL to exact commits, FreePats and the Martin to
-SHA-256-verified archives, ganjo to a commit, the MuseScore soundfont to a commit
-+ SHA-256); the full inventory, provenance and regeneration tooling live under
+The 365 embedded recordings (attack transients, GM 109's looped bagpipe, the GM 7
+sampled clavinet, and the GM 64-67 saxophones) come from **CC0 1.0** sources — the
+VSCO 2 Community Edition orchestral library (violin, flutes, brass, reeds, string
+sections), the FreePats Spanish classical guitar bank, the Discord SFZ GM Bank's
+Martin HD28 steel-string acoustic, the Versilian Community Sample Library
+(harpsichord, concert harp, timpani, Baroque recorders, ocarina), and
+sfzinstruments/ganjo (6-string guitar-banjo) — plus permissively licensed banks in
+their own crates: **MIT** content from the MuseScore "MS Basic" soundfont (the GM 7
+clavinet, the GM 104 sitar, and the GM 75/76/77 pipe onsets), the **CC BY 3.0**
+Salamander grand (GM 0) and tam-tam gong, and the **CC BY 4.0** MTG good-sounds
+saxophones (GM 64-67, from MTG.SoloSax). The generator pins every source (VSCO and
+VCSL to exact commits, FreePats and the Martin to SHA-256-verified archives, ganjo
+and MTG.SoloSax to commits, the MuseScore soundfont to a commit + SHA-256); the full
+inventory, provenance and regeneration tooling live under
 [`tools/ferrosintesis-samples/`](https://github.com/0x4D44/ferrosintesis/tree/main/tools/ferrosintesis-samples).
-The asset crates contain nothing but that PCM and `include_bytes!`. The
-code is licensed MIT OR Apache-2.0; the CC0 samples need no attribution (the newer
-CC0 families — harp, timpani, recorder, ocarina, banjo — ship in
-`ferrosintesis-samples-orchestral2`), while the **MIT** MS Basic samples do: the
-GM 7 clavinet in `ferrosintesis-samples-clavinet` and the sitar + pipe onsets in
-`ferrosintesis-samples-musescore`, each carrying the required attribution in `NOTICE`.
+The asset crates contain nothing but that PCM and `include_bytes!`. The code is
+licensed MIT OR Apache-2.0; the CC0 samples need no attribution (the newer CC0
+families — harp, timpani, recorder, ocarina, banjo — ship in
+`ferrosintesis-samples-orchestral2`), while the non-CC0 banks each carry the required
+attribution in their crate's `NOTICE`: the MIT MS Basic clavinet
+(`ferrosintesis-samples-clavinet`) and sitar + pipe onsets
+(`ferrosintesis-samples-musescore`), the CC BY 3.0 grand
+(`ferrosintesis-samples-grand`) and gong (`ferrosintesis-samples-gong`), and the
+CC BY 4.0 saxophones (`ferrosintesis-samples-sax`).
 
 ## MSRV and dependencies
 

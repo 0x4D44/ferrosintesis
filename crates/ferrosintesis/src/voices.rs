@@ -7825,6 +7825,10 @@ const LA_BRASS: (f32, (f32, f32)) = (0.45, (0.10, 0.32));
 /// (probed via la_level_continuity's differential windows).
 const LA_TUBA_GAIN_MUL: f32 = 1.8;
 const LA_REED: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
+/// GM 64-67 saxophones: the MTG.SoloSax sample owns the reedy attack + early body,
+/// the modeled reed (with its RD10 rasp / RD11 cone-fill) carries the sustain past the
+/// ~0.62 s kept window. Starts at the reed wrap gain; tune against la_sax_level_continuity.
+const LA_SAX: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
 /// GM 24 nylon guitar: the sample owns the pick transient (first ~30 ms),
 /// the Karplus-Strong string carries the bendable decay from 200 ms (HLD §4).
 /// Restored to the honest ~0.42 (voice-quality overhaul §2.7): the old 0.25
@@ -11006,8 +11010,30 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // (the wrong instrument); BR_SECTION's five scattered players carry
         // the width instead. 62/63 synth brass: pure model by design.
         61..=63 => Box::new(brass(program, key, vel, sr, seed)),
-        // saxes, bagpipe, shanai: pure model (no clean CC0 source / idiomatic onset)
-        64..=67 | 111 => Box::new(reed(program, key, vel, sr, seed)),
+        // GM 64-67 saxophones: modeled reed + MTG.SoloSax LA sample layer (CC-BY,
+        // separate crate), mirroring the 68..=71 double-reed/clarinet arm. The sample
+        // owns the reedy attack+body; the model carries the sustain (and its rasp/
+        // cone-fill). Gated on `samples` only — a modeled-only build renders the
+        // pre-sample-layer voice unchanged.
+        64..=67 => {
+            let model = Box::new(reed(program, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_SAX;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::sax_bank(program, vel),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
+        // shanai: pure model (no clean sample source / idiomatic onset)
+        111 => Box::new(reed(program, key, vel, sr, seed)),
         // GM 109 bagpipe chanter: sampled looped voice by default (HLD
         // 2026.07.17), the modeled reed when samples are off or on the CC0 alt
         // bank (altbank.rs pins samples=false for 109 — MANDATORY, else this

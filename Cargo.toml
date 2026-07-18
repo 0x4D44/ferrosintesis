@@ -10,6 +10,7 @@ members = [
     "crates/ferrosintesis-samples-musescore",
     "crates/ferrosintesis-samples-orchestral",
     "crates/ferrosintesis-samples-orchestral2",
+    "crates/ferrosintesis-samples-sax",
     "crates/render-catalog",
 ]
 resolver = "2"

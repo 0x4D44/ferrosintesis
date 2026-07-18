@@ -55,6 +55,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_grand::get(name))
         .or_else(|| ferrosintesis_samples_clavinet::get(name))
         .or_else(|| ferrosintesis_samples_musescore::get(name))
+        .or_else(|| ferrosintesis_samples_sax::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 
@@ -808,6 +809,185 @@ pub fn reed_bank(program: u8, vel: u8) -> &'static [Zone] {
                 oboe_f()
             } else {
                 oboe_p()
+            }
+        }
+    }
+}
+
+// --- GM 64-67 saxophones: MTG.SoloSax LA layer (CC-BY 4.0) --------------------
+// Per-instrument, per-dynamic zone banks; roots are the MEASURED fundamentals
+// (tools/ferrosintesis-samples/prepare.py `_bake_mtg_sax`). p/f are INDEPENDENT
+// zone lists picked by velocity in `sax_bank`, mirroring `reed_bank`.
+
+fn sax_sop_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "sax_sop_G#3_p.wav" => 209.75,
+            "sax_sop_C4_p.wav" => 261.55,
+            "sax_sop_E4_p.wav" => 330.82,
+            "sax_sop_G#4_p.wav" => 419.59,
+            "sax_sop_C5_p.wav" => 530.91,
+            "sax_sop_E5_p.wav" => 665.84,
+            "sax_sop_G#5_p.wav" => 843.37,
+            "sax_sop_C6_p.wav" => 1069.46,
+            "sax_sop_E6_p.wav" => 1329.38,
+        )
+    })
+}
+
+fn sax_sop_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "sax_sop_G#3_f.wav" => 209.85,
+            "sax_sop_C4_f.wav" => 261.43,
+            "sax_sop_E4_f.wav" => 332.00,
+            "sax_sop_G#4_f.wav" => 419.58,
+            "sax_sop_C5_f.wav" => 529.13,
+            "sax_sop_E5_f.wav" => 667.07,
+            "sax_sop_G#5_f.wav" => 842.03,
+            "sax_sop_C6_f.wav" => 1069.69,
+            "sax_sop_E6_f.wav" => 1344.32,
+        )
+    })
+}
+
+fn sax_alt_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "sax_alt_C#3_p.wav" => 139.90,
+            "sax_alt_F3_p.wav" => 173.47,
+            "sax_alt_A3_p.wav" => 219.58,
+            "sax_alt_C#4_p.wav" => 277.31,
+            "sax_alt_F4_p.wav" => 353.06,
+            "sax_alt_A4_p.wav" => 440.99,
+            "sax_alt_C#5_p.wav" => 560.01,
+            "sax_alt_F5_p.wav" => 707.98,
+            "sax_alt_A5_p.wav" => 890.68,
+        )
+    })
+}
+
+fn sax_alt_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "sax_alt_C#3_f.wav" => 140.43,
+            "sax_alt_F3_f.wav" => 174.15,
+            "sax_alt_A3_f.wav" => 220.50,
+            "sax_alt_C#4_f.wav" => 279.95,
+            "sax_alt_F4_f.wav" => 355.08,
+            "sax_alt_A4_f.wav" => 444.03,
+            "sax_alt_C#5_f.wav" => 562.81,
+            "sax_alt_F5_f.wav" => 710.03,
+            "sax_alt_A5_f.wav" => 889.20,
+        )
+    })
+}
+
+fn sax_ten_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "sax_ten_G#2_p.wav" => 104.63,
+            "sax_ten_C3_p.wav" => 131.41,
+            "sax_ten_E3_p.wav" => 166.22,
+            "sax_ten_G#3_p.wav" => 208.67,
+            "sax_ten_C4_p.wav" => 263.70,
+            "sax_ten_E4_p.wav" => 332.76,
+            "sax_ten_G#4_p.wav" => 419.05,
+            "sax_ten_C5_p.wav" => 528.68,
+            "sax_ten_E5_p.wav" => 673.20,
+        )
+    })
+}
+
+fn sax_ten_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "sax_ten_G#2_f.wav" => 104.54,
+            "sax_ten_C3_f.wav" => 131.32,
+            "sax_ten_E3_f.wav" => 166.28,
+            "sax_ten_G#3_f.wav" => 209.25,
+            "sax_ten_C4_f.wav" => 263.37,
+            "sax_ten_E4_f.wav" => 331.10,
+            "sax_ten_G#4_f.wav" => 417.77,
+            "sax_ten_C5_f.wav" => 527.47,
+            "sax_ten_E5_f.wav" => 674.90,
+        )
+    })
+}
+
+fn sax_bar_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "sax_bar_C2_p.wav" => 69.65,
+            "sax_bar_E2_p.wav" => 82.52,
+            "sax_bar_G#2_p.wav" => 103.47,
+            "sax_bar_C3_p.wav" => 130.04,
+            "sax_bar_E3_p.wav" => 163.27,
+            "sax_bar_G#3_p.wav" => 208.95,
+            "sax_bar_C4_p.wav" => 263.75,
+            "sax_bar_E4_p.wav" => 335.01,
+            "sax_bar_G#4_p.wav" => 421.23,
+            "sax_bar_A4_p.wav" => 450.50,
+        )
+    })
+}
+
+fn sax_bar_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "sax_bar_C2_f.wav" => 65.83,
+            "sax_bar_E2_f.wav" => 82.38,
+            "sax_bar_G#2_f.wav" => 103.46,
+            "sax_bar_C3_f.wav" => 130.22,
+            "sax_bar_E3_f.wav" => 162.90,
+            "sax_bar_G#3_f.wav" => 209.52,
+            "sax_bar_C4_f.wav" => 261.13,
+            "sax_bar_E4_f.wav" => 334.08,
+            "sax_bar_G#4_f.wav" => 420.54,
+            "sax_bar_A4_f.wav" => 448.84,
+        )
+    })
+}
+
+/// Bank for the GM 64-67 saxophone LA layer (MTG.SoloSax, CC-BY 4.0). Velocity
+/// picks the dynamic layer (same >= 80 threshold as `violin_bank`/`reed_bank`).
+pub fn sax_bank(program: u8, vel: u8) -> &'static [Zone] {
+    let f = vel >= 80;
+    match program {
+        64 => {
+            if f {
+                sax_sop_f()
+            } else {
+                sax_sop_p()
+            }
+        }
+        66 => {
+            if f {
+                sax_ten_f()
+            } else {
+                sax_ten_p()
+            }
+        }
+        67 => {
+            if f {
+                sax_bar_f()
+            } else {
+                sax_bar_p()
+            }
+        }
+        _ => {
+            if f {
+                sax_alt_f()
+            } else {
+                sax_alt_p()
             }
         }
     }
@@ -2592,6 +2772,64 @@ mod tests {
             assert!(
                 r_on < r_off * 1.05,
                 "{name}: sampled attack hissier than the model: hf-frac on {r_on:.4} vs off {r_off:.4}"
+            );
+        }
+    }
+
+    /// The saxophone LA sample layer (MTG.SoloSax, GM 64-67) must not shift
+    /// perceived pitch: Goertzel peak through the crossfade window (as
+    /// `la_reed_pitch_integrity`). Each key sits inside its sax's sampled range so
+    /// the layer engages rather than falling back to the bare model, and validates
+    /// that the MEASURED zone roots (`sax_*` banks) repitch to the requested note.
+    #[test]
+    fn la_sax_pitch_integrity() {
+        let sr = 44100.0;
+        for (program, key, name) in [
+            (64u8, 72u8, "soprano-sax"),
+            (65, 65, "alto-sax"),
+            (66, 60, "tenor-sax"),
+            (67, 48, "baritone-sax"),
+        ] {
+            let f0 = crate::dsp::key_freq(key);
+            let mut v = voices::make(program, key, 100, sr, 5, true);
+            let mut buf = vec![0f32; 44100];
+            v.render(&mut buf);
+            // 0.15–0.55 s spans the fade tail and the handed-over sustain
+            let hz = crate::testutil::peak_locate(&buf[6615..24255], sr, f0 * 0.8, f0 * 1.25);
+            let cents = 1200.0 * (hz / f0).log2();
+            assert!(
+                cents.abs() < 45.0,
+                "{name}: layered pitch {hz:.2} Hz vs nominal {f0:.2} Hz ({cents:.0} cents)"
+            );
+        }
+    }
+
+    /// The saxophone layer must be AUDIBLE, not a silent fallback: samples-on vs
+    /// samples-off must differ materially in the first 50 ms for every sax. Guards
+    /// the whole path — sax-crate resolution in `embedded_wav`, the `sax_bank`
+    /// dispatch, and `LaVoice` engagement (a repitch outside 0.5..=2.05 would fall
+    /// back to the bare model and this would catch it).
+    #[test]
+    fn la_sax_audible() {
+        let sr = 44100.0;
+        for (program, key, name) in [
+            (64u8, 72u8, "soprano-sax"),
+            (65, 65, "alto-sax"),
+            (66, 60, "tenor-sax"),
+            (67, 48, "baritone-sax"),
+        ] {
+            let early = |samples: bool| {
+                let mut v = voices::make(program, key, 100, sr, 5, samples);
+                let mut buf = vec![0f32; (0.05 * sr) as usize];
+                v.render(&mut buf);
+                buf
+            };
+            let (on, off) = (early(true), early(false));
+            let diff: Vec<f32> = on.iter().zip(&off).map(|(a, b)| a - b).collect();
+            let (d, o) = (crate::testutil::rms(&diff), crate::testutil::rms(&off));
+            assert!(
+                d > 0.3 * o,
+                "{name}: layer barely changes the onset (diff {d:.5} vs off {o:.5})"
             );
         }
     }

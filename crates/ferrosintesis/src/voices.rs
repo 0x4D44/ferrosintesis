@@ -21181,9 +21181,41 @@ mod tests {
                     .min_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
                     .unwrap();
                 if best_dev.abs() > 40.0 {
+                    // The sampled leg's dominant may sit on a different HARMONIC of
+                    // the (correct) written-key f0 than the model's mode table —
+                    // e.g. the VSCO xylophone sample is 2f-bright while the wood_bar
+                    // model emphasises the 3rd partial. That is timbre, not a pitch
+                    // error: accept an in-tune n·f0 harmonic, but (like the Harmonic
+                    // branch) only if the f0 lattice is populated at a NON-multiple
+                    // line — an octave/register-shifted sample would leave those
+                    // lines empty, so this still fails a genuinely mis-repitched zone.
+                    for n in 1..=4u32 {
+                        let dev = 1200.0 * (peak / (f0 * n as f32)).log2();
+                        if dev.abs() > 40.0 {
+                            continue;
+                        }
+                        if n == 1 {
+                            return Ok(format!(
+                                "{label}: dominant on the key fundamental, {dev:+.1} cents"
+                            ));
+                        }
+                        let (m_best, m_line) = (1..=4u32)
+                            .filter(|m| m % n != 0 && *m != n)
+                            .map(|m| (mag_at(seg, sr, f0 * m as f32), m))
+                            .max_by(|a, b| a.0.total_cmp(&b.0))
+                            .unwrap();
+                        if m_best >= 0.06 * m_peak {
+                            return Ok(format!(
+                                "{label}: dominant on h{n} of the key f0, {dev:+.1} cents \
+                                 (sample partial ≠ model mode; h{m_line} lattice present \
+                                 at {:.2}× line)",
+                                m_best / m_peak
+                            ));
+                        }
+                    }
                     return Err(format!(
-                        "{label}: dominant line {peak:.2} Hz is {best_dev:+.0} cents \
-                         from the nearest key-scaled mode (r {best_r})"
+                        "{label}: dominant line {peak:.2} Hz is {best_dev:+.0} cents from the \
+                         nearest key-scaled mode (r {best_r}) and on no in-tune key harmonic"
                     ));
                 }
                 Ok(format!(

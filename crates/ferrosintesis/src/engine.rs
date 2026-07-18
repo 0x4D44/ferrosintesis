@@ -432,14 +432,23 @@ fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
 /// It is deliberately CONSERVATIVE: sustained voices only (whole-note RMS is a
 /// fair loudness proxy there), 0.70× the measured delta, clamped to ±6 dB, with
 /// a 1 dB dead-band. Struck/plucked/percussive voices (piano, guitar, mallets,
-/// drums) and noise/FX are left at 0.0 — their apparent "deficit" is a faster
-/// decay envelope, not a level error, so trimming them would misfire.
+/// drums) and noise/FX are left at 0.0 — their apparent "deficit" is usually a
+/// faster decay envelope, not a level error, so trimming them would misfire.
+///
+/// GM6 harpsichord is the ONE documented plucked exception (+6 dB): the audit
+/// used the fair EARLY-window RMS (0–150 ms, immune to the decay-artifact trap)
+/// and still measured it ~10 dB under the SC-55 balance against the piano anchor;
+/// its too-fast decay is fixed independently in the `HARPSICHORD` preset, so the
+/// "deficit is only a decay artifact" objection does not apply here. The trim is
+/// the right lever because it lifts the sampled quill onset and the modeled body
+/// UNIFORMLY post-wrap (raising the model `amp` alone would shift the attack/
+/// sustain balance). See the 2026.07.18 holds audit.
 ///
 /// Timbre-neutral: it scales the dry voice and all its FX sends together (the
 /// strip gain `g` feeds both), preserving each channel's wet/dry ratio.
 #[rustfmt::skip] // keep the 8-per-row GM grid aligned for readability
 pub(crate) const PROGRAM_TRIM_DB: [f32; 128] = [
-     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //   0-7   Piano      (untouched)
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  6.0,  0.0, //   0-7   Piano (6 harpsichord +6dB; rest untouched)
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //   8-15  ChromPerc  (untouched)
     -4.5, -3.0, -1.5, -6.0, -3.0, -5.0, -1.0, -4.5, //  16-23  Organ
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  24-31  Guitar     (untouched)
@@ -2632,12 +2641,15 @@ mod tests {
     /// or drums — plus the flagship calibrated anchors and the dB→linear mapping.
     #[test]
     fn program_trim_scope_and_calibration() {
-        // The corrected set = exactly the sustained ranges (bowed strings only;
-        // pizz/harp/timpani and the orchestra-hit stab stay out). Its complement
-        // MUST be untouched (0.0 dB, unity gain).
+        // The corrected set = the sustained ranges (bowed strings only;
+        // pizz/harp/timpani and the orchestra-hit stab stay out) PLUS the one
+        // documented plucked exception, GM6 harpsichord (measured ~10 dB low by
+        // the fair early-window RMS — see PROGRAM_TRIM_DB). Its complement MUST be
+        // untouched (0.0 dB, unity gain).
         let is_corrected = |p: u8| {
             matches!(p,
-                16..=23    // Organ
+                6          // harpsichord (documented plucked exception)
+                | 16..=23  // Organ
                 | 40..=44  // bowed strings (pizz 45 / harp 46 / timpani 47 excluded)
                 | 48..=54  // string & synth sections + choir (orch-hit 55 excluded)
                 | 56..=63  // Brass
@@ -2669,6 +2681,7 @@ mod tests {
         assert_eq!(PROGRAM_TRIM_DB[43], -6.0); // Contrabass   — trimmed
         assert_eq!(PROGRAM_TRIM_DB[73], -4.0); // Flute        — trimmed
         assert_eq!(PROGRAM_TRIM_DB[19], -6.0); // ChurchOrgan  — trimmed
+        assert_eq!(PROGRAM_TRIM_DB[6], 6.0); // Harpsichord   — plucked exception, lifted
 
         // Every entry within the ±6 dB clamp.
         for (p, &db) in PROGRAM_TRIM_DB.iter().enumerate() {

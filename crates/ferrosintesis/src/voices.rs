@@ -2576,7 +2576,12 @@ pub const MUTED: PluckPreset = PluckPreset {
 pub const HARPSICHORD: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "HARPSICHORD",
-    t60: 1.9,
+    // 2026.07.18 holds audit: 1.9 → 3.0. The modeled ring damped far faster than
+    // a real harpsichord — the SC-55's still sits near piano level at 600 ms while
+    // ours had fallen ~19 dB. A longer 8′ decay restores the sustained ring AND lets
+    // LA_HARPSICHORD climb back off its 0.28 floor (a slower model no longer gets
+    // outlived by the sample body at the crossfade seam).
+    t60: 3.0,
     // Round-3 U4: 11000 (was 6200) — the quill excitation alone cannot make
     // the ring bright: the in-loop damper's magnitude at HF rules treble
     // decay (2026.07.14 lesson), and at 6200 the highs are ground down by
@@ -2611,7 +2616,11 @@ pub const HARPSICHORD: PluckPreset = PluckPreset {
     // 4′ clearly present; the shorter 4′ strings decay a little faster.
     // 2×f0 sits on the harmonic lattice, so every pitch oracle stays honest.
     course_detune: 2.0,
-    course_t60: 0.7,
+    // 0.7 → 1.1 alongside the longer 8′ t60: keep the 4′ rank a touch faster than
+    // the 8′ (shorter strings) but scale it up too, so the 4′-choir balance over the
+    // [0.20,0.45] s window (the `harpsichord_jangles_with_a_four_foot_choir` oracle)
+    // is preserved rather than swamped by the now slower-decaying 8′.
+    course_t60: 1.1,
     course_bright: 1.0,
     course_mix: (0.62, 0.38),
     ..DEFAULTS
@@ -7840,12 +7849,12 @@ const LA_SAX: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
 const LA_GUITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
 /// GM 6 harpsichord: the sample owns the quill pluck (first ~30 ms), the
 /// Karplus-Strong string carries the slow-damped jangle from ~200 ms — the same
-/// onset-ownership split as the plucked guitars. Gain is BELOW the guitar's 0.42:
-/// a harpsichord's high strings are short and damp fast, so the model's own decay
-/// is very quiet by 50-150 ms while the real recording's body still rings — at
-/// 0.42 that stepped the seam 2.9x beyond the model's shape at C5. 0.28 meets the
-/// `la_level_continuity` cap with margin while keeping the sample dominant at the
-/// onset (the quill spike lives in the first 50 ms, before the seam window).
+/// onset-ownership split as the plucked guitars. Held at 0.28 (below the guitar's
+/// 0.42): even with the lengthened t60 (2026.07.18 audit), a high harpsichord
+/// string still damps its treble fast, so at C5 a 0.42 onset steps the seam 2.75x
+/// beyond the model's shape — `la_level_continuity`'s cap. The +6 dB program trim
+/// lifts the onset AND the body together post-wrap, so the audible level rises
+/// without touching this onset/body ratio; 0.28 keeps the seam clean at every key.
 const LA_HARPSICHORD: (f32, (f32, f32)) = (0.28, (0.05, 0.20));
 /// GM 46 orchestral harp: the sample owns the pluck onset + early shimmer, the
 /// `Pluck(&HARP)` model carries the bendable decay — the same onset-ownership split

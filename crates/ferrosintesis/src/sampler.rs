@@ -898,6 +898,27 @@ pub fn harp_bank() -> &'static [Zone] {
     harp()
 }
 
+/// GM 79 ocarina — VCSL "Ocarina, Typical" sustains (CC0, `-orchestral2`). A soft
+/// near-sine vessel flute: the sample carries the breath onset and the Wind model keeps
+/// the body — the same wind-onset wrap as the flute. 3 zones E4–C5 (kept under one
+/// octave so the ocarina's strong 2nd harmonic can't steal the root measurement);
+/// `LaVoice` repitches ±1 octave, covering ~E3–C6. Roots MEASURED.
+fn ocarina() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "ocarina_E4.wav" => 329.00,
+            "ocarina_G#4.wav" => 414.48,
+            "ocarina_C5.wav" => 519.23,
+        )
+    })
+}
+
+/// GM 79 ocarina attack bank (see [`ocarina`]).
+pub fn ocarina_bank() -> &'static [Zone] {
+    ocarina()
+}
+
 // --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
 //
 // These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
@@ -1077,6 +1098,7 @@ pub fn prewarm() {
     let _ = guitar_bank();
     let _ = steel_bank();
     let _ = harp_bank();
+    let _ = ocarina_bank();
     let _ = chanter_bank();
     let _ = drone_g2_bank();
     let _ = drone_g3_bank();

@@ -239,6 +239,31 @@ HARP_URLS = {
     for dest, src in _HARP_ZONES
 }
 
+# Ocarina (GM 79) — VCSL "Ocarina, Typical" sustains (CC0, VCSL_REV). A soft near-sine
+# vessel flute; the sample carries the breath onset and the Wind model keeps the body
+# (a wind onset like the flute, so the default 0.62 s keep, NOT a plucked keep). Output
+# → -orchestral2 (CC0). `#` in the source names is URL-encoded via quote(src).
+#
+# The ocarina has a STRONG 2nd harmonic, so autocorr locks onto 2f whenever the F0
+# ceiling admits it (measured: A3/C#4 read 2f at a 600 ceiling; E4/G#4/C5 read the
+# fundamental). To let a SINGLE ceiling measure every zone's true fundamental, the zone
+# set is kept UNDER one octave — E4 330 … C5 523 Hz — so ceiling 600 is above every
+# fundamental yet below the lowest 2f (E4's 659). `LaVoice` repitches ±1 octave, so
+# these 3 zones still cover ~E3–C6 (ocarina is a high instrument; low notes are rare).
+_VCSL_OCARINA_DIR = "Aerophones/Edge-blown Aerophones/Ocarina, Typical/Sustains/Sus"
+_OCARINA_ZONES = [
+    ("ocarina_E4.wav", "StdOcarina_Sus_E4"),
+    ("ocarina_G#4.wav", "StdOcarina_Sus_G#4"),
+    ("ocarina_C5.wav", "StdOcarina_Sus_C5"),
+]
+OCARINA_URLS = {
+    dest: (
+        f"https://raw.githubusercontent.com/sgossner/VCSL/{VCSL_REV}/"
+        f"{urllib.parse.quote(_VCSL_OCARINA_DIR)}/{urllib.parse.quote(src)}.wav"
+    )
+    for dest, src in _OCARINA_ZONES
+}
+
 # GM 109 bagpipe (HLD 2026.07.17). A CC0 FreePats G-pipe: two separately-recorded
 # drones (bass G2, tenor G3) an octave apart, plus a chanter. These are LOOPED
 # sustains, not attack transients — `extract_loop` (not `trim_to_onset`) emits a
@@ -366,6 +391,10 @@ F0_RANGE = {
     # harp G1 ~49 Hz … F7 ~2794 Hz; ceiling 3200 clears the top fundamental and
     # stays under its 2nd harmonic; measure_f0 + the octave-snap correct any label offset
     "harp": (40.0, 3200.0),
+    # ocarina zones E4 330 … C5 523 Hz (kept under one octave); ceiling 600 is above
+    # every fundamental but below the lowest 2f (659) — the ocarina's strong 2nd
+    # harmonic otherwise steals autocorr (see the OCARINA block comment).
+    "ocarina": (250.0, 600.0),
     # violin section G2-name spans G3 196 Hz … D5-name D6 1175 Hz (VSCO's
     # octave labels sit one below sounding pitch here); ceiling 1300 keeps
     # autocorr off the top zone's 2nd harmonic (the brass/oboe lesson)
@@ -428,6 +457,7 @@ FAMILY_PACKAGE = {
     # New CC0 onsets: `-orchestral` is at the ~10 MiB crates.io cap, so harp (and the
     # timpani/recorder/ocarina/banjo units that follow) route to a second CC0 crate.
     "harp": "ferrosintesis-samples-orchestral2",
+    "ocarina": "ferrosintesis-samples-orchestral2",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1063,6 +1093,9 @@ def main():
         for fn, url in HARP_URLS.items():
             if want("harp"):
                 ensure_source(fn, url, src)
+        for fn, url in OCARINA_URLS.items():
+            if want("ocarina"):
+                ensure_source(fn, url, src)
         if want("nylon"):
             ensure_guitar_sources(src)
         if want("chanter"):
@@ -1082,7 +1115,7 @@ def main():
             rows += _bake_clavinet(clav_src)
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
-            | GRAND_SOURCES
+            | OCARINA_URLS | GRAND_SOURCES
         ):
             if not want(fn.split("_")[0]):
                 continue

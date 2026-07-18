@@ -25,6 +25,18 @@ static SAMPLES: &[(&str, &[u8])] = &[
     ("harp_F7.wav", include_bytes!("../samples/harp_F7.wav")),
     ("harp_G1.wav", include_bytes!("../samples/harp_G1.wav")),
     ("harp_G5.wav", include_bytes!("../samples/harp_G5.wav")),
+    (
+        "ocarina_C5.wav",
+        include_bytes!("../samples/ocarina_C5.wav"),
+    ),
+    (
+        "ocarina_E4.wav",
+        include_bytes!("../samples/ocarina_E4.wav"),
+    ),
+    (
+        "ocarina_G#4.wav",
+        include_bytes!("../samples/ocarina_G#4.wav"),
+    ),
 ];
 
 /// Number of embedded WAV files.

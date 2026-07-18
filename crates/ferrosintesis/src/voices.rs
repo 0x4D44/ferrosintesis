@@ -7780,6 +7780,10 @@ const LA_CONTRABASS: (f32, (f32, f32)) = (0.29, (0.16, 0.46));
 /// slightly faster handover than the bass (a cello bow speaks quicker).
 const LA_CELLO: (f32, (f32, f32)) = (0.30, (0.13, 0.40));
 const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
+/// GM 79 ocarina: a soft near-sine vessel flute. The VCSL ocarina sample carries the
+/// breath onset; the Wind model keeps the body — the same wind-onset handover as the
+/// flute, so it shares the flute's gain/fade.
+const LA_OCARINA: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 // GM 0-3 piano wrap gain, re-matched for the §2.7 onset-ownership contract:
 // the sample now REPLACES the model's onset instead of stacking on top of
 // it, so it must speak at the model onset's own level. Measured at vel 100
@@ -10998,23 +11002,24 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         }
         72..=79 => {
             let model = Box::new(Wind::from_preset(wind(program), key, vel, sr, seed));
-            // Sample policy: ONLY the concert flute (73) and the piccolo (72 — a
-            // flute attack repitched up is still a credible small-flute onset) get
-            // the flute LA bank. Smearing a transverse-flute attack across a stopped
-            // pipe, a vessel, end-blown bamboo or a human whistle destroyed identity
-            // exactly in the window where the ear decides what the instrument IS.
-            // 74..=79 are model-only, each with its own bespoke chiff.
-            if samples && matches!(program, 72 | 73) {
-                let (gain, fade) = LA_FLUTE;
-                crate::sampler::LaVoice::wrap(
-                    model,
-                    crate::sampler::flute_bank(),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                )
+            // LA sampled onset per wind program. The flute bank covers the concert
+            // flute (73) and piccolo (72 — a flute attack repitched up is a credible
+            // small-flute onset). The ocarina (79) has its own VCSL bank. The recorder
+            // (74) and SF3 pipes (75/76/77) are added in later units. GM 78 whistle
+            // stays model-only (no usable melodic-whistle source). Smearing a
+            // transverse-flute attack across the other pipes destroyed their identity,
+            // which is why each gets its OWN bank or none.
+            let la = if samples {
+                match program {
+                    72 | 73 => Some((LA_FLUTE, crate::sampler::flute_bank())),
+                    79 => Some((LA_OCARINA, crate::sampler::ocarina_bank())),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            if let Some(((gain, fade), bank)) = la {
+                crate::sampler::LaVoice::wrap(model, bank, key, vel, sr, gain, fade)
             } else {
                 model
             }
@@ -11093,6 +11098,7 @@ mod tests {
             ("LA_GUITAR", LA_GUITAR),
             ("LA_STRINGS", LA_STRINGS),
             ("LA_HARP", LA_HARP),
+            ("LA_OCARINA", LA_OCARINA),
         ] {
             assert!(
                 fade.1 < 0.90,
@@ -20896,7 +20902,7 @@ mod tests {
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
         0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 46, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73,
-        109, 110,
+        79, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

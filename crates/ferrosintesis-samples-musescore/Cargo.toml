@@ -1,0 +1,13 @@
+[package]
+name = "ferrosintesis-samples-musescore"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+description = "Embedded MIT-licensed MuseScore 'MS Basic' instrument-onset samples for ferrosintesis (GM 104 sitar, GM 75/76/77 pipes)"
+license = "MIT"
+repository = "https://github.com/0x4D44/ferrosintesis"
+readme = "README.md"
+include = ["src/**", "samples/**", "README.md", "NOTICE"]
+
+[lib]
+path = "src/lib.rs"

@@ -32,6 +32,7 @@ tools/*
 !crates/ferrosintesis-samples-drumkit/samples/*.wav
 !crates/ferrosintesis-samples-orchestral/samples/*.wav
 !crates/ferrosintesis-samples-orchestral2/samples/*.wav
+!crates/ferrosintesis-samples-musescore/samples/*.wav
 !crates/ferrosintesis-samples-gong/samples/*.wav
 !crates/ferrosintesis-samples-grand/samples/*.wav
 # ...and the un-re-fetchable CC BY 3.0 gong source WAVs (Freesound needs a login;

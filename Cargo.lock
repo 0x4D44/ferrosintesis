@@ -11,6 +11,7 @@ dependencies = [
  "ferrosintesis-samples-drumkit",
  "ferrosintesis-samples-gong",
  "ferrosintesis-samples-grand",
+ "ferrosintesis-samples-musescore",
  "ferrosintesis-samples-orchestral",
  "ferrosintesis-samples-orchestral2",
 ]
@@ -40,6 +41,10 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-grand"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-musescore"
 version = "0.1.0"
 
 [[package]]

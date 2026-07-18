@@ -1125,6 +1125,47 @@ def _bake_clavinet(src):
     return rows
 
 
+def _bake_sf_onset(src, preset, prefix, dest_crate, keep_s, fade_s):
+    """Extract a bank-0 preset's zones from MS Basic.sf3 as ONSET samples.
+
+    Unlike `_bake_clavinet` (which bakes a full decaying LOOPED note), this trims each
+    decoded zone to its attack + early body with `trim_to_onset`, exactly like the CC0
+    wind/pluck LA banks — the modeled voice carries the sustain/decay. Used for the GM
+    104 sitar and the GM 75/76/77 pipes. Ogg decode shells out to ffmpeg (same path as
+    `_bake_clavinet`); a zone whose SF3 sample rate differs from 44.1 kHz is resampled.
+    Writes `<prefix>_<sounding-pitch>.wav` into `dest_crate`/samples; returns print rows.
+    Roots are re-measured in a tight window around the SF3 `originalPitch` (`h[40]`,
+    trustworthy), so a 2f-dominant zone can't fool the measurement (window < 2×).
+    """
+    sf3 = open(ensure_musescore_sf3(src), "rb").read()
+    smpl_off, zones = _sf_preset_zones(sf3, preset)
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    out_dir = os.path.join(REPO_ROOT, "crates", dest_crate, "samples")
+    os.makedirs(out_dir, exist_ok=True)
+    rows = []
+    for root, start, end, _sl, _el, _sr in sorted(zones):
+        ogg = os.path.join(src, f"{prefix}_{root}.ogg")
+        wav = os.path.join(src, f"{prefix}_{root}.wav")
+        with open(ogg, "wb") as f:
+            f.write(sf3[smpl_off + start:smpl_off + end])
+        subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", ogg, "-acodec", "pcm_s16le", wav], check=True)
+        x, wsr = read_wav(wav)
+        if wsr != OUT_SR:
+            x = resample(x, wsr, OUT_SR)
+            wsr = OUT_SR
+        seg = trim_to_onset(x, wsr, keep_s, fade_s)
+        nominal = _midi_hz(root)
+        # measure near the known originalPitch; the window is < 2× so a 2f-dominant
+        # zone (some SF3 pipe presets) cannot pull the estimate to the 2nd harmonic
+        f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
+        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+        out_name = f"{prefix}_{_midi_name(root)}.wav"
+        write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
+        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    return rows
+
+
 def main():
     socket.setdefaulttimeout(60)
     # `--local-only` skips the fetched full bank (network + rewriting the tracked
@@ -1185,6 +1226,16 @@ def main():
             clav_src = os.path.join(tempfile.gettempdir(), "musescore_sf3", MUSESCORE_REV)
             os.makedirs(clav_src, exist_ok=True)
             rows += _bake_clavinet(clav_src)
+
+        # GM 104 sitar: SF3 onset (attack + jawari buzz) → the MIT `-musescore` crate
+        # (same MS Basic source/NOTICE as the clavinet; kept a separate crate so the
+        # published `-clavinet` crate stays clavinet-only). Plucked → 0.9 s keep.
+        if want("sitar"):
+            ms_src = os.path.join(tempfile.gettempdir(), "musescore_sf3", MUSESCORE_REV)
+            os.makedirs(ms_src, exist_ok=True)
+            rows += _bake_sf_onset(
+                ms_src, 104, "sitar", "ferrosintesis-samples-musescore", 0.9, 0.20
+            )
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | GRAND_SOURCES

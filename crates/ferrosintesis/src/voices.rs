@@ -7847,6 +7847,10 @@ const LA_HARP: (f32, (f32, f32)) = (0.38, (0.05, 0.22));
 /// GM 47 timpani: the mallet STRIKE (first ~50 ms) is what the modeled membrane fakes
 /// worst; the real hit owns it, then hands to the `timpani()` model for the settling body.
 const LA_TIMPANI: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
+/// GM 104 sitar: the pluck + jawari bridge-buzz is the identity cue and lives in the
+/// sampled onset; the `Pluck(&SITAR)` model carries the bendable decay. Plucked handover
+/// like the guitars (sample owns ~0–50 ms, model from ~200 ms).
+const LA_SITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
 /// String sections 48-49: the real section swell reads best with a longer
 /// crossfade than the solo bowed layer (a section "comes into focus", it
 /// does not bite), so the transient hands over across [0.10, 0.40] s.
@@ -11055,7 +11059,25 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // is the inert preset → bit-identical to the old `bell(... CRYSTAL ...)`.
         // Tier D: no sample layer.
         96..=103 => Box::new(Fx::from_spec(fx(program), key, vel, sr, seed)),
-        104 => Box::new(Pluck::new(&SITAR, key, vel, sr, seed)),
+        // GM 104 sitar: LA sampled pluck + jawari buzz (MS Basic SF3, MIT, -musescore)
+        // crossfaded into the Pluck(&SITAR) model — same wrap as the other plucked banks.
+        104 => {
+            let model = Box::new(Pluck::new(&SITAR, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_SITAR;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::sitar_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         105 => Box::new(Pluck::new(&BANJO, key, vel, sr, seed)),
         106 => Box::new(Pluck::new(&SHAMISEN, key, vel, sr, seed)),
         107 => Box::new(Pluck::new(&KOTO, key, vel, sr, seed)),
@@ -11126,6 +11148,7 @@ mod tests {
             ("LA_OCARINA", LA_OCARINA),
             ("LA_RECORDER", LA_RECORDER),
             ("LA_TIMPANI", LA_TIMPANI),
+            ("LA_SITAR", LA_SITAR),
         ] {
             assert!(
                 fade.1 < 0.90,
@@ -20929,7 +20952,7 @@ mod tests {
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
         0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72,
-        73, 74, 79, 109, 110,
+        73, 74, 79, 104, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

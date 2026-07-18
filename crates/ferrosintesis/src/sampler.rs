@@ -54,6 +54,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_gong::get(name))
         .or_else(|| ferrosintesis_samples_grand::get(name))
         .or_else(|| ferrosintesis_samples_clavinet::get(name))
+        .or_else(|| ferrosintesis_samples_musescore::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 
@@ -967,6 +968,32 @@ pub fn timpani_bank() -> &'static [Zone] {
     timpani()
 }
 
+/// GM 104 sitar — MS Basic SF3 preset 104 (MIT, `-musescore` crate). The sample owns the
+/// pluck + the characteristic jawari (bridge-buzz) onset, the `Pluck(&SITAR)` model carries
+/// the bendable decay and sympathetic ring. 8 zones E3–G6, roots MEASURED near the SF3
+/// originalPitch. (These are single struck notes — no separate sympathetic drone in the
+/// sample, which is exactly what an onset layer wants.) `LaVoice` repitches ±1 octave.
+fn sitar() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "sitar_E3.wav" => 165.05,
+            "sitar_G3.wav" => 196.17,
+            "sitar_C4.wav" => 262.53,
+            "sitar_E4.wav" => 330.02,
+            "sitar_C5.wav" => 524.23,
+            "sitar_E5.wav" => 659.16,
+            "sitar_C6.wav" => 1049.01,
+            "sitar_G6.wav" => 1587.62,
+        )
+    })
+}
+
+/// GM 104 sitar attack bank (see [`sitar`]).
+pub fn sitar_bank() -> &'static [Zone] {
+    sitar()
+}
+
 // --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
 //
 // These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
@@ -1149,6 +1176,7 @@ pub fn prewarm() {
     let _ = ocarina_bank();
     let _ = recorder_bank();
     let _ = timpani_bank();
+    let _ = sitar_bank();
     let _ = chanter_bank();
     let _ = drone_g2_bank();
     let _ = drone_g3_bank();

@@ -152,6 +152,30 @@ impl Reverb {
             r[i] += (wr + er * 0.011) * self.wet;
         }
     }
+
+    /// Re-tune the tank's decay in place (the XG Reverb Type mapping). Freeverb
+    /// models room size by comb *feedback* and brightness by comb *damping* —
+    /// not by delay length — so both are plain runtime fields. This is
+    /// allocation-free with no stale-buffer artifact: buffer lengths, the
+    /// pre-delay, and the early-reflection taps are all unchanged, so calling
+    /// it right after construction is bit-equivalent to constructing at the
+    /// target values. Meant for the shared hall only; the cathedral (a
+    /// different FDN type) and the drum room are never routed here. `room` is
+    /// the comb feedback gain (keep < 1 for stability); `damp` the one-pole
+    /// treble loss (0 = bright, →1 = dark).
+    pub fn reconfigure(&mut self, room: f32, damp: f32) {
+        for c in self.combs_l.iter_mut().chain(&mut self.combs_r) {
+            c.feedback = room;
+            c.damp = damp;
+        }
+    }
+
+    /// Test-only: the first comb's feedback, so a caller can prove which
+    /// `Reverb` instance a reconfigure touched.
+    #[cfg(test)]
+    pub(crate) fn debug_comb_feedback(&self) -> f32 {
+        self.combs_l[0].feedback
+    }
 }
 
 // Cathedral room size. Longer pre-delay (direct-to-reverb gap), longer and more
@@ -487,6 +511,64 @@ mod tests {
         let late = (late_energy / 7.0).sqrt().max(1e-20);
         let drop_db = 20.0 * (late / early).log10();
         -60.0 * 1.6 / drop_db
+    }
+
+    /// Unit 3 (reconfigure equivalence — the byte-identity spine for XgReset):
+    /// reconfiguring a freshly-built hall to some values is bit-identical to
+    /// constructing it at those values (feedback + damp are the only decay
+    /// state; buffers start zeroed either way), and reconfiguring to the SAME
+    /// values it already holds is an exact no-op. The latter is why an XG
+    /// System On, which reconfigures the hall to its construction defaults, does
+    /// not perturb a no-XG render.
+    #[test]
+    fn reconfigure_matches_construction_and_is_a_noop_at_same_values() {
+        let n = (2.0 * SR) as usize;
+        let mut send = vec![0.0; n];
+        send[0] = 1.0;
+        let ir = |mut rv: Reverb| {
+            let mut l = vec![0.0; n];
+            let mut r = vec![0.0; n];
+            rv.process(&send, &mut l, &mut r);
+            (l, r)
+        };
+        let mut a = Reverb::new(SR, 0.70, 0.50, 1.0);
+        a.reconfigure(0.92, 0.22);
+        assert_eq!(
+            ir(a),
+            ir(Reverb::new(SR, 0.92, 0.22, 1.0)),
+            "reconfigure right after construction must match constructing at the target"
+        );
+        let mut b = Reverb::new(SR, 0.86, 0.35, 1.0);
+        b.reconfigure(0.86, 0.35);
+        assert_eq!(
+            ir(b),
+            ir(Reverb::new(SR, 0.86, 0.35, 1.0)),
+            "reconfigure to the same values must be an exact no-op"
+        );
+    }
+
+    /// Unit 3 (mechanism): reconfigure measurably changes the tail — a larger,
+    /// brighter room (more feedback, less damping) rings substantially longer
+    /// than a small, dark one.
+    #[test]
+    fn reconfigure_lengthens_the_tail() {
+        let n = (3.0 * SR) as usize;
+        let mut send = vec![0.0; n];
+        send[0] = 1.0;
+        let late = |room: f32, damp: f32| {
+            let mut rv = Reverb::new(SR, 0.70, 0.50, 1.0);
+            rv.reconfigure(room, damp);
+            let mut l = vec![0.0; n];
+            let mut r = vec![0.0; n];
+            rv.process(&send, &mut l, &mut r);
+            stereo_rms(&l, &r, 1.5, 2.5)
+        };
+        let big = late(0.92, 0.20);
+        let small = late(0.70, 0.60);
+        assert!(
+            big > small * 1.5,
+            "a larger/brighter reconfigure must ring longer: big {big:.6} vs small {small:.6}"
+        );
     }
 
     #[test]

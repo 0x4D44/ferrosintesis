@@ -1220,6 +1220,20 @@ impl CoreOptions {
     }
 }
 
+/// The shared hall's default tuning (Freeverb comb feedback / damping). Single
+/// source of truth for `EngineCore::new` and the XG System On reset, so the two
+/// can never drift apart.
+const DEFAULT_HALL_ROOM: f32 = 0.86;
+const DEFAULT_HALL_DAMP: f32 = 0.35;
+
+/// XG Reverb Type Hall 1 = type word (0x01, 0x00). Re-tuned (Arthur's "faithful"
+/// steer) as a larger, brighter concert hall than the engine default: more comb
+/// feedback (longer RT) and less damping (brighter tail). Applied only when a
+/// file requests it; oracles check DIRECTION, not XG-exact numbers.
+const HALL1_TYPE: [u8; 2] = [0x01, 0x00];
+const HALL1_ROOM: f32 = 0.92;
+const HALL1_DAMP: f32 = 0.22;
+
 /// XG effect-block state (Effect1): the pending variation-insertion config,
 /// mutated ONLY by XG effect SysEx (`EvKind::XgEffectParam` / `XgReset`). No
 /// album sends any SysEx, so every field's default leaves the render
@@ -1327,7 +1341,7 @@ impl EngineCore {
             opt,
             strips: (0..16).map(|_| Strip::new(sr)).collect(),
             active: Vec::new(),
-            reverb: Reverb::new(sr, 0.86, 0.35, opt.wet),
+            reverb: Reverb::new(sr, DEFAULT_HALL_ROOM, DEFAULT_HALL_DAMP, opt.wet),
             cathedral: CathedralReverb::new(sr, opt.wet * CATHEDRAL_WET_SCALE),
             rev_hp: Biquad::highpass(150.0, 0.7, sr),
             chorus: Chorus::new(sr),
@@ -1581,6 +1595,11 @@ impl EngineCore {
     /// units 3-5 wire the audio side).
     fn xg_reset(&mut self) {
         self.xg = XgEffects::new();
+        // Restore the hall to its construction tuning (a no-op unless a prior
+        // XG Reverb Type moved it). Only the shared hall — never the cathedral
+        // or the drum room.
+        self.reverb
+            .reconfigure(DEFAULT_HALL_ROOM, DEFAULT_HALL_DAMP);
         self.resolve_variation();
     }
 
@@ -1595,8 +1614,10 @@ impl EngineCore {
         let value14 = ((data[0] as u16) << 7) | (data[1] as u16);
         let value7 = value14.min(127) as u8;
         match addr_lo {
-            // Reverb Type (MSB,LSB) — Hall 1 recognizer wired in unit 3.
-            0x00 => {}
+            // Reverb Type: Hall 1 re-tunes the shared hall; every other type
+            // keeps the current bus (falls through to `_`). Reverb Return (0x0C)
+            // is parsed-and-ignored — returns are unity here.
+            0x00 if data == HALL1_TYPE => self.reverb.reconfigure(HALL1_ROOM, HALL1_DAMP),
             // Chorus Type (MSB,LSB) — Chorus 1 recognizer wired in unit 4.
             0x20 => {}
             // Variation Type (MSB,LSB). Amp Simulator = 0x4B; LSB ignored.
@@ -9143,6 +9164,99 @@ mod tests {
         core.handle_event(EvKind::XgReset);
         assert_eq!(core.xg.var_part, 127, "System On resets Part to OFF");
         assert_eq!(core.xg.var_drive, 0, "System On resets Drive");
+    }
+
+    /// Unit 3 (Hall 1 recognizer targets ONLY the hall): the Hall 1 type word
+    /// re-tunes the shared hall's combs to HALL1_ROOM and leaves the drum room
+    /// untouched (the cathedral is a different type and has no reconfigure path
+    /// at all). A following XG System On restores the hall to its default.
+    #[test]
+    fn xg_hall1_reconfigures_only_the_hall() {
+        let sr = 44100.0;
+        let mut core = EngineCore::new(CoreOptions {
+            sr,
+            wet: 0.3,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        });
+        let hall_before = core.reverb.debug_comb_feedback();
+        let drum_before = core.drum_room.debug_comb_feedback();
+        core.handle_event(EvKind::XgEffectParam {
+            addr_lo: 0x00,
+            data: HALL1_TYPE,
+            len: 2,
+        });
+        assert_eq!(
+            core.reverb.debug_comb_feedback(),
+            HALL1_ROOM,
+            "hall re-tuned to Hall 1"
+        );
+        assert_ne!(
+            core.reverb.debug_comb_feedback(),
+            hall_before,
+            "hall feedback actually changed"
+        );
+        assert_eq!(
+            core.drum_room.debug_comb_feedback(),
+            drum_before,
+            "drum room must be untouched"
+        );
+        core.handle_event(EvKind::XgReset);
+        assert_eq!(
+            core.reverb.debug_comb_feedback(),
+            DEFAULT_HALL_ROOM,
+            "System On restores the hall default"
+        );
+    }
+
+    /// Unit 3 (Hall 1 changes the render; other reverb types are inert): with
+    /// the hall bus active, a Hall 1 type event changes the rendered tail vs a
+    /// no-XG render, while an unrecognized reverb type leaves it byte-identical.
+    #[test]
+    fn xg_hall1_changes_render_other_types_inert() {
+        let sr = 44100.0;
+        let opts = Options {
+            sr,
+            wet: 0.4,
+            tail: 0.8,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+        };
+        let song = |reverb_type: Option<[u8; 2]>| {
+            let mut ev: Vec<(f64, EvKind)> = Vec::new();
+            if let Some(t) = reverb_type {
+                ev.push((
+                    0.0,
+                    EvKind::XgEffectParam {
+                        addr_lo: 0x00,
+                        data: t,
+                        len: 2,
+                    },
+                ));
+            }
+            // strings: a sustained tone with a real tail into the hall
+            ev.push((0.0, EvKind::Prog { ch: 0, prog: 48 }));
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                },
+            ));
+            ev.push((0.5, EvKind::NoteOff { ch: 0, key: 60 }));
+            test_song(ev, 1.2)
+        };
+        let base = render(&song(None), &opts).0;
+        let hall1 = render(&song(Some(HALL1_TYPE)), &opts).0;
+        let other = render(&song(Some([0x02, 0x00])), &opts).0;
+        assert_ne!(base, hall1, "Hall 1 must change the hall render");
+        assert_eq!(base, other, "an unrecognized reverb type must be inert");
     }
 
     /// KP-O3 (v0.12 brush kit selection seam, re-anchored on trunk's V3

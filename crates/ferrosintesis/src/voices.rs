@@ -2424,6 +2424,12 @@ pub const NYLON: PluckPreset = PluckPreset {
     body: &[(98.0, 1.4, 4.5), (210.0, 1.2, 4.0), (420.0, 1.8, 2.5)],
     click: 0.9, // fingernail on nylon: soft
     click_hp: 1000.0,
+    // Guitar-realism HLD §6 (4a): the release mechanic — a fingertip damp
+    // lands with a soft low thud. This is the ONLY mechanical-noise lever
+    // audible on the default sampled path (it fires at note-off, when the
+    // model owns the note; the attack-side levers stay deferred — the
+    // recorded onsets already carry the real pick/finger mechanics).
+    stop_thump: 0.3,
     ..DEFAULTS
 };
 /// Ukulele — XG variation of Nylon Guitar (24), bank LSB 96. A small four-string
@@ -2510,6 +2516,9 @@ pub const STEEL: PluckPreset = PluckPreset {
         (4500.0, 1.8, 2.5),
     ],
     click: 2.0, // plectrum on steel (G4)
+    // Guitar-realism HLD §6 (4a): palm damp on steel strings — a firmer
+    // thud than nylon's fingertip (see NYLON.stop_thump for the rationale).
+    stop_thump: 0.4,
     ..DEFAULTS
 };
 pub const CLEAN: PluckPreset = PluckPreset {
@@ -15280,6 +15289,45 @@ mod tests {
                 "Str5 (50,65) should pass less HF energy than base 50 at seed {seed}: {} vs {}",
                 hf_frac(&str5),
                 hf_frac(&base)
+            );
+        }
+    }
+
+    /// Guitar-realism HLD §6 (4a) / AC5 — the authored release thump is
+    /// present and low-band: same seed, stop_thump on vs off, differential
+    /// isolated to the post-note-off window (the same differential pattern
+    /// as the pick-click oracle below; note_off never fires in the onset
+    /// oracles, so they cannot be confounded).
+    #[test]
+    fn guitar_release_thump_speaks_low() {
+        let sr = 44100.0;
+        for (preset, min_rel) in [(&NYLON, 0.25f32), (&STEEL, 0.25)] {
+            let render = |p: &PluckPreset| {
+                let mut v = Pluck::new(p, 52, 100, sr, 5);
+                let mut pre = vec![0f32; (0.4 * sr) as usize];
+                v.render(&mut pre);
+                v.note_off();
+                let mut post = vec![0f32; (0.15 * sr) as usize];
+                v.render(&mut post);
+                post
+            };
+            let quiet = PluckPreset {
+                stop_thump: 0.0,
+                ..*preset
+            };
+            let (on, off) = (render(preset), render(&quiet));
+            let diff: Vec<f32> = on.iter().zip(&off).map(|(a, b)| a - b).collect();
+            let (d, o) = (crate::testutil::rms(&diff), crate::testutil::rms(&off));
+            assert!(
+                d > min_rel * o,
+                "{}: release thump inaudible (diff {d:.6} vs ring {o:.6})",
+                preset.name
+            );
+            let hf = crate::testutil::hp_rms(&diff, sr, 1500.0) / d.max(1e-12);
+            assert!(
+                hf < 0.2,
+                "{}: release thump is not low-band (hf frac {hf:.3})",
+                preset.name
             );
         }
     }

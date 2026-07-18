@@ -1452,6 +1452,28 @@ pub fn make(
             return Some(v);
         }
     }
+    // GM2 extended percussion (keys 27–34, 83–87): alias each to its nearest
+    // modeled voice instead of the generic `_` tick (MM-BUG-KILN-00022).
+    // ferrosintesis is a faithful player of any GM file, so a foreign file using
+    // these keys should sound the instrument, not a toneless click. The in-repo
+    // albums never use them (program whitelists), so no committed render moves.
+    // Applied AFTER the sampled-kit check (these keys are never sampled), so both
+    // `--no-samples` and the default build gain. The surdos (86/87) have no
+    // low-enough tom to borrow, so they get their own membrane arms below.
+    let key = match key {
+        27 => 80, // High Q → muted triangle (short bright metallic tick)
+        28 => 39, // Slap → hand clap
+        29 => 73, // Scratch push → short guiro scrape
+        30 => 74, // Scratch pull → long guiro scrape
+        31 => 37, // Sticks → side stick
+        32 => 37, // Square click → side stick
+        33 => 37, // Metronome click → side stick
+        34 => 80, // Metronome bell → muted triangle (short ding)
+        83 => 54, // Jingle bell → tambourine (jingles)
+        84 => 81, // Belltree → open triangle (long bright wash)
+        85 => 75, // Castanets → claves (woody click)
+        k => k,
+    };
     match key {
         35 | 36 => {
             // beater knock over a sub drop (86 -> ~45 Hz): the chest thump,
@@ -2078,6 +2100,23 @@ pub fn make(
             &one(0.08, 0.01, Biquad::highpass(6000.0, 0.7, sr)),
             0.3,
             0.30,
+        ),
+        // surdos (86 mute / 87 open): a big Brazilian bass drum, lower than any
+        // GM tom (the low floor tom sits at 100 Hz). One ~82 Hz membrane — the
+        // mute damps short, the open rings on (MM-BUG-KILN-00022).
+        86 => tom(
+            82.0,
+            0.16,
+            &one(0.3, 0.03, Biquad::bandpass(360.0, 0.9, sr)),
+            0.28,
+            0.82,
+        ),
+        87 => tom(
+            82.0,
+            0.55,
+            &one(0.3, 0.05, Biquad::bandpass(360.0, 0.9, sr)),
+            0.9,
+            0.85,
         ),
         _ => d(
             // gentle generic tick so unmapped keys are audible, not silent
@@ -2957,6 +2996,63 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// MM-BUG-KILN-00022: GM2 extended percussion (keys 27–34, 83–87) must render
+    /// as a real nearest-neighbour voice, not the generic ~1 kHz tick the `_` arm
+    /// emits. Before the fix every one of these keys fell through to `_`, so each
+    /// rendered identically to any other unmapped key. Modeled path (samples off).
+    #[test]
+    fn gm2_extended_percussion_not_generic_tick() {
+        let sr = 44100.0;
+        // key 26 stays unmapped → the generic tick, our reference.
+        let generic = render_drum_kit(26, 100, 0.4, Kit::V3);
+        // each GM2 ext key must render EXACTLY as its nearest existing voice…
+        let aliases = [
+            (31u8, 37u8), // sticks → side stick
+            (32, 37),     // square click → side stick
+            (33, 37),     // metronome click → side stick
+            (28, 39),     // slap → hand clap
+            (29, 73),     // scratch push → short guiro
+            (30, 74),     // scratch pull → long guiro
+            (85, 75),     // castanets → claves
+            (83, 54),     // jingle bell → tambourine
+            (84, 81),     // belltree → open triangle
+            (27, 80),     // high Q → muted triangle
+            (34, 80),     // metronome bell → muted triangle
+        ];
+        for (src, dst) in aliases {
+            let rs = render_drum_kit(src, 100, 0.4, Kit::V3);
+            let rd = render_drum_kit(dst, 100, 0.4, Kit::V3);
+            assert!(
+                rs == rd,
+                "key {src} is not aliased to its nearest voice {dst}"
+            );
+            assert!(rs != generic, "key {src} still renders as the generic tick");
+        }
+        // surdos get their own low membrane: distinct from the tick and from each
+        // other (86 muted short vs 87 open ringing), and genuinely low-pitched.
+        let mute = render_drum_kit(86, 100, 0.5, Kit::V3);
+        let open = render_drum_kit(87, 100, 0.5, Kit::V3);
+        assert!(
+            mute != generic && open != generic,
+            "a surdo still renders as the generic tick"
+        );
+        assert!(
+            mute != open,
+            "mute (86) and open (87) surdo render identically"
+        );
+        let f_open = testutil::peak_locate(
+            &open[(0.12 * sr) as usize..(0.28 * sr) as usize],
+            sr,
+            40.0,
+            160.0,
+        );
+        println!("open surdo settled pitch: {f_open:.1} Hz");
+        assert!(
+            f_open < 130.0,
+            "open surdo (87) not a low drum: {f_open:.1} Hz"
+        );
     }
 
     /// Timbales: GM 65 (High/macho) must ring audibly above GM 66 (Low/hembra).

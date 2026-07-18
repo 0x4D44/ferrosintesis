@@ -20211,9 +20211,12 @@ mod tests {
     /// WD-O10 — routing, SAMPLE POLICY, and lifecycle.
     /// The sample-policy clause is a DIFFERENTIAL, not a `kind()` check: `LaVoice`
     /// is transparent for routing (it reports the inner model's kind), so kind()
-    /// cannot distinguish wrapped from bare. Instead: a program with no LA layer
-    /// renders BIT-IDENTICALLY with samples on and off.
-    /// Fail-first: today all eight are wrapped, so 74..=79 differ.
+    /// cannot distinguish wrapped from bare. Instead: a wind program renders
+    /// differently with samples on IFF its LA sample engages at the probe key.
+    /// Policy at C5 (key 72): flute 72/73, recorder 74, pan flute 75, shakuhachi 77
+    /// and ocarina 79 each engage their OWN bank (differ); blown bottle 76 has a
+    /// single C6 zone that repitches to 0.495 at C5 (< the 0.5 clamp) so it renders
+    /// bare-model here (engages ~C#5+); whistle 78 is model-only by design.
     #[test]
     fn wd_o10_routing_sample_policy_and_lifecycle() {
         for p in 72..=79u8 {
@@ -20223,7 +20226,6 @@ mod tests {
                 "program {p} left the Wind family"
             );
         }
-        // key 72 sits inside the flute bank's zone map (it has no zone below C4)
         for p in 72..=79u8 {
             let with = render_program_sampled(p, 72, 100, 0.5, 7, true);
             let without = render_program_sampled(p, 72, 100, 0.5, 7, false);
@@ -20232,15 +20234,18 @@ mod tests {
                 .zip(&without)
                 .all(|(a, b)| a.to_bits() == b.to_bits());
             match p {
-                72 | 73 => assert!(
+                72 | 73 | 74 | 75 | 77 | 79 => assert!(
                     !identical,
-                    "GM {p} should carry the flute LA attack, but samples=true changed nothing"
+                    "GM {p} should carry its own LA sampled attack at C5, but samples=true \
+                     changed nothing"
                 ),
-                _ => assert!(
+                // 76 blown bottle: single C6 zone, 0.495 repitch at C5 < 0.5 clamp → bare
+                // model here (engages ~C#5+). 78 whistle: model-only (no usable source).
+                76 | 78 => assert!(
                     identical,
-                    "GM {p} still borrows the transverse-flute attack — the wrong onset is \
-                     exactly what made it read as 'flute'"
+                    "GM {p} must render bare-model at C5 (76 single-zone fallback, 78 model-only)"
                 ),
+                _ => unreachable!("loop is 72..=79"),
             }
         }
         // lifecycle + hygiene (mirrors reed_o13)
@@ -20986,8 +20991,8 @@ mod tests {
     /// where `samples: true` renders a different signal (everything else
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
-        0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72,
-        73, 74, 75, 76, 77, 79, 104, 105, 109, 110,
+        0, 1, 3, 6, 7, 24, 25, 40, 41, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71,
+        72, 73, 74, 75, 76, 77, 79, 104, 105, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

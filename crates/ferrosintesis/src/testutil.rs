@@ -2464,8 +2464,14 @@ mod perceptual_distinctness {
     /// bare-model fallback, O(1) when a different (sampled) onset plays.
     #[test]
     fn sample_layer_engaged_at_probe_keys() {
+        // Every LaVoice::wrap arm whose sample engages at one of the two probe keys
+        // (C3=48, C5=72). GM 76 blown bottle is wrapped too but OMITTED: its single C6
+        // zone repitches to ratio 0.495 at C5 — just under the 0.5 clamp — so it renders
+        // bare-model at both probe keys (it engages only ~C#5 and up). GM 78 whistle is
+        // model-only by design.
         const LA_WRAPPED: &[u8] = &[
-            0, 1, 3, 6, 24, 40, 41, 42, 43, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73, 110,
+            0, 1, 3, 6, 24, 25, 40, 41, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71,
+            72, 73, 74, 75, 77, 79, 104, 105, 110,
         ];
         let ps = passports();
         let mut failures = Vec::new();

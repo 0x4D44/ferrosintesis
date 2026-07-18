@@ -29,7 +29,7 @@ harmless. Never reorder columns or re-flow untouched rows.
 | crates/ferrosintesis-samples-musescore-grand/ | (never) |
 | crates/ferrosintesis-samples-orchestral/ | 2026-07-18 |
 | crates/ferrosintesis-samples-orchestral2/ | (never) |
-| crates/ferrosintesis-samples-sax/ | (never) |
+| crates/ferrosintesis-samples-sax/ | 2026-07-18 |
 | crates/ferrosintesis-samples-strings/ | (never) |
 | crates/ferrosintesis-samples-vcsl-kawai/ | (never) |
 | crates/ferrosintesis-samples-vcsl-steinway/ | (never) |

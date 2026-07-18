@@ -817,13 +817,15 @@ def ensure_musescore_sf3(src):
     return path
 
 
-def _clavinet_zones(sf3):
-    """Parse an SF2/SF3 soundfont and return the GM7 clavinet's sample zones.
+def _sf_preset_zones(sf3, preset=7):
+    """Parse an SF2/SF3 soundfont and return a bank-0 preset's sample zones.
 
-    Returns (smpl_data_offset, [(root_midi, sample_start, sample_end, startloop,
-    endloop, samplerate), ...]) — SF3 start/end are BYTE offsets into `smpl`
-    (each slice is one self-contained Ogg-Vorbis stream); startloop/endloop are
-    decoded-frame offsets from the sample start.
+    `preset` is the GM program number in bank 0 (default 7 = clavinet, the
+    original caller; the GM 75/76/77 pipes and GM 104 sitar reuse this same
+    extractor). Returns (smpl_data_offset, [(root_midi, sample_start, sample_end,
+    startloop, endloop, samplerate), ...]) — SF3 start/end are BYTE offsets into
+    `smpl` (each slice is one self-contained Ogg-Vorbis stream); startloop/endloop
+    are decoded-frame offsets from the sample start.
     """
     assert sf3[0:4] == b"RIFF" and sf3[8:12] == b"sfbk", "not an SF2/SF3 file"
 
@@ -863,15 +865,17 @@ def _clavinet_zones(sf3):
     inst, ibag, igen = recs(b"inst", 22), recs(b"ibag", 4), recs(b"igen", 4)
     shdr = recs(b"shdr", 46)
 
-    # preset bank==0 (phdr[22]) preset==7 (phdr[20]); presetBagNdx at [24]
-    pi = next(i for i, r in enumerate(phdr) if u16(r, 22) == 0 and u16(r, 20) == 7)
+    # bank==0 (phdr[22]), program==preset (phdr[20]); presetBagNdx at [24]
+    pi = next(
+        i for i, r in enumerate(phdr) if u16(r, 22) == 0 and u16(r, 20) == preset
+    )
     instr = None
     for b in range(u16(phdr[pi], 24), u16(phdr[pi + 1], 24)):
         for g in range(u16(pbag[b], 0), u16(pbag[b + 1], 0)):
             if u16(pgen[g], 0) == 41:  # gen 41 = instrument index
                 instr = u16(pgen[g], 2)
     if instr is None:
-        raise ValueError("clavinet preset has no instrument generator")
+        raise ValueError(f"preset {preset} has no instrument generator")
 
     zones = []
     for b in range(u16(inst[instr], 20), u16(inst[instr + 1], 20)):
@@ -959,7 +963,7 @@ def _bake_clavinet(src):
     shells out to ffmpeg (mono 16-bit 44.1 kHz PCM), matching the drumkit's FLAC path.
     """
     sf3 = open(ensure_musescore_sf3(src), "rb").read()
-    smpl_off, zones = _clavinet_zones(sf3)
+    smpl_off, zones = _sf_preset_zones(sf3, 7)
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-clavinet", "samples")
     rows = []

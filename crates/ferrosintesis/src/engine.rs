@@ -387,7 +387,8 @@ fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
         16..=23 => (0.20, 0.0),        // legacy organs/free reeds: gentle ensemble
         24 | 25 => (0.12, 0.08),       // acoustic guitars: a touch of both
         26..=31 => (0.10, 0.30),       // electric guitars: the delayed-lead sound
-        40..=45 | 110 => (0.10, 0.10), // fiddle
+        42 | 43 => (0.0, 0.06), // solo cello/contrabass: dry & forward, no ensemble chorus to smear the single-voice identity, only a trace of slap
+        40..=45 | 110 => (0.10, 0.10), // fiddle + other bowed strings (40 == 110 kept for the gm110 oracle)
         46 => (0.15, 0.0),             // harp
         48..=51 => (0.35, 0.0),        // string ensembles
         52..=54 => (0.30, 0.0),        // choir
@@ -5286,10 +5287,12 @@ mod tests {
             let plain_c = autocorr_cents_spread(&plain[range.0..range.1], sr, f0);
             let mod_c = autocorr_cents_spread(&modded[range.0..range.1], sr, f0);
             let both_c = autocorr_cents_spread(&composed[range.0..range.1], sr, f0);
-            // autonomous pitch is a gentle vibrato + human drift (measured
-            // ~10-12 cents) — present, but never a warble
+            // autonomous pitch is the deepened natural arco vibrato + human drift.
+            // Measured ~28-32 cents pk-pk since the bass vibrato was deepened to a
+            // realistic depth (was ~10-12 when the vibrato ran ~5-10x too shallow) —
+            // present and expressive, but bounded, never a runaway warble.
             assert!(
-                (3.0..=22.0).contains(&plain_c),
+                (3.0..=42.0).contains(&plain_c),
                 "GM43 key={key} samples={samples}: autonomous excursion {plain_c:.1} cents"
             );
             // CC1 clearly deepens the vibrato
@@ -5298,9 +5301,10 @@ mod tests {
                 "GM43 key={key} samples={samples}: CC1 {mod_c:.1} vs natural {plain_c:.1} cents"
             );
             // CC1 + aftertouch compose without a runaway (the zero-crossing
-            // measure read a false ~1780 cents here; the true excursion is ~110)
+            // measure read a false ~1780 cents here; the true excursion is ~130
+            // with the deepened natural vibrato underneath the maxed controllers)
             assert!(
-                both_c < 130.0,
+                both_c < 150.0,
                 "GM43 key={key} samples={samples}: composed excursion {both_c:.1} cents"
             );
             // no controller-induced amplitude dropouts

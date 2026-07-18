@@ -7653,21 +7653,22 @@ impl BowedString {
                           // samples the bare `sr/f` never subtracted, so an uncompensated string
                           // renders progressively flat with pitch (≈ −5 cents at E1 but −31/−45
                           // cents at the C4/G4 the ear notices). Both values are MEASURED, never
-                          // guessed (lesson 2026.07.11): the cello's 3.85 by the original
-                          // autocorrelation sweep; the contrabass's 4.03 by the in-tree
-                          // `measure_bowedstring_loop_latency` harness (B4, HLD §2.4 — the
-                          // crossing-train sweep implies L ≈ 4.0 for BOTH programs across the
-                          // healthy register, so the two waveguides share one in-loop phase).
+                          // guessed (lesson 2026.07.11): the cello's 3.85 (refl_sustain 2600)
+                          // by the original autocorrelation sweep; the contrabass's 4.52 by the
+                          // in-tree `measure_bowedstring_loop_latency` harness (HLD §2.4). Its
+                          // darker refl_sustain 2200 lengthens the reflection filter's phase
+                          // delay, so the two waveguides NO LONGER share one in-loop phase and
+                          // each carries its own measured loop_comp.
         let (body_f, refl_sustain, amp_base, amp_span, out_lp_hz, loop_comp) = match program {
             42 => (
                 [110.0f32, 230.0, 500.0],
                 2600.0f32,
                 0.36f32,
                 0.82f32,
-                2100.0f32,
+                2600.0f32,
                 3.85f32,
             ),
-            _ => ([70.0, 180.0, 700.0], 2600.0, 0.55, 1.25, 0.0, 4.03),
+            _ => ([70.0, 180.0, 700.0], 2200.0, 0.55, 1.25, 1800.0, 4.52),
         };
         // Per-note character: the seed varies per voice (the engine's spawn
         // counter), so drawing the bow's force, grit, scratch and vibrato here
@@ -7681,13 +7682,32 @@ impl BowedString {
         // B3 (MM-BUG-KILN-00004, HLD §2.3): render advances this LFO once per
         // CTRL samples, so it must be BUILT at sr/CTRL — control_lfo() is the
         // one constructor that makes the 16×-slow idiom bug impossible. Base
-        // rates are per-program, matching the demoted Bowed presets (42 cello
-        // 4.8 Hz, 43 contrabass 4.2 Hz) so the vibrato oracle has a single
-        // source of truth.
-        let vib_rate = if program == 42 { 4.8 } else { 4.2 };
+        // rates are per-program: cello 5.2 Hz (its OWN deeper-voicing value - real
+        // cello vibrato is ~5.5-6.5 Hz, so the old 4.8 read as a slow wobble; it no
+        // longer mirrors a Bowed preset), contrabass 4.2 Hz (still matching its
+        // demoted CC0 alt-bank Bowed preset, and the slow-bass idiom). The 42/43
+        // vibrato oracle (default_bowed_natural_vibrato_runs_at_named_rate) is the
+        // single source of truth - its per-program nominals track these two literals.
+        let vib_rate = if program == 42 { 5.2 } else { 4.2 };
         let vib = control_lfo(vib_rate, 0.10, &mut rng, sr);
-        let vib_depth = 0.0016 + 0.0016 * u(&mut rng);
-        let vib_onset = (0.16 + 0.24 * u(&mut rng)) * sr;
+        // Natural arco vibrato, deepened ~3.4x from the old shared 0.0016+0.0016*u
+        // (~2.8-5.5 c peak, far shallower than a real cello/bass). Per-program: cello
+        // 0.0055+0.0055*u ~ 9.5-19 c peak (5.2 Hz); contrabass 0.0050+0.0050*u ~
+        // 8.6-17 c peak (4.2 Hz). GM43's onset is the VSCO Solo Contrabass SusNV
+        // (NON-vibrato) sample, so the model owns 100% of the bass vibrato and need
+        // not stay shallow to dodge a double-vibrato. GM42's onset (Bigcat sus) may
+        // carry mild baked vibrato but fades out by ~0.40 s, so the cello floor
+        // (0.12 s) waits for that fade to START (LA_CELLO fades 0.13->0.40 s) before
+        // the model wobble ramps in. The bass floor (0.10 s) is earlier: no sample
+        // vibrato to fight, and it gives short bass notes the vibrato the old 0.16 s
+        // floor denied them.
+        let (vib_base, vib_span, vib_floor) = if program == 42 {
+            (0.0055, 0.0055, 0.12)
+        } else {
+            (0.0050, 0.0050, 0.10)
+        };
+        let vib_depth = vib_base + vib_span * u(&mut rng);
+        let vib_onset = (vib_floor + 0.24 * u(&mut rng)) * sr;
         let grit_hz = 500.0 + 800.0 * u(&mut rng); // bow-hair fluctuation band (low-mid)
         let mut s = BowedString {
             bridge: DelayLine::new(320),
@@ -16387,7 +16407,7 @@ mod tests {
         // seeds showed the bass regime at keys 43–45 drowns the FM track for
         // some bow-force draws (same instability family as the wolf band —
         // scratchpad 2026.07.14), while key 38 detects cleanly on every seed.
-        for (program, key, nominal) in [(42u8, 52u8, 4.8f32), (43, 38, 4.2)] {
+        for (program, key, nominal) in [(42u8, 52u8, 5.2f32), (43, 38, 4.2)] {
             let sig = render_program_sampled(program, key, 100, 7.0, 11, false);
             let seg = segment(&sig, sr, 1.0, 6.95);
             let (peak, rate) = crate::testutil::fm_mod_rate(seg, sr, key_freq(key), 2.5, 7.5);
@@ -16740,8 +16760,10 @@ mod tests {
     /// one makes a fifth ~14 c narrow, so a sustained triad beats against itself. On
     /// the bass -- the harmonic foundation -- that is the worst place for it.
     ///
-    /// GM 42 (cello) is the in-code CONTROL: same waveguide, same refl_sustain, hence
-    /// the same latency, and it already carried the correct 3.85.
+    /// The two legs now run DIFFERENT in-loop brightness (GM 42 cello refl_sustain 2600,
+    /// GM 43 contrabass 2200 - the darker, more-damped bass string), so each carries its
+    /// own MEASURED loop_comp (cello 3.85, bass 4.52). Both still tune flat across their
+    /// compass; the bass reflection filter's extra phase delay is absorbed by its 4.52.
     #[test]
     fn bowed_string_tuning_is_pitch_independent() {
         let sr = 44100.0;

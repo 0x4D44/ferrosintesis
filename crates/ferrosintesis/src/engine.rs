@@ -720,6 +720,7 @@ struct Strip {
     kit: drums::Kit,    // channel-10 kit version; V3 by default
     alt_bank: bool,     // CC0 != 0 selects the alt orchestral voicings (altbank::make)
     alt_bank_value: u8, // raw CC0 value: 0 default, 1 legacy alt, 2 GM19 cathedral organ
+    xg_drum: bool,      // CC0 == 127: XG drum-kit bank — route this channel to the drum path
     volume: f32,        // CC7 as amplitude (squared curve)
     pan: f32,           // 0..1
     bend: f32,          // channel pitch multiplier: wheel × range × fine-tune
@@ -797,6 +798,7 @@ impl Strip {
             kit: drums::Kit::V3,
             alt_bank: false,
             alt_bank_value: 0,
+            xg_drum: false,
             volume: (100.0f32 / 127.0).powi(2),
             pan: 0.5,
             bend: 1.0,
@@ -1037,6 +1039,10 @@ struct Active {
     glide: Option<(f32, f32)>,
     alt: bool, // spawn-time bank: this voice is an alt-bank voicing (per-voice CC1 routing)
     alt_bank_value: u8, // spawn-time raw CC0 value (2 = GM19 cathedral organ routing)
+    // spawn-time routing: this voice goes to the drum path (ch9, or an XG-drum
+    // channel that had CC0==127). Frozen at spawn like `alt`, so a mid-note CC0
+    // change only affects later notes. Gates both mix passes.
+    is_drum: bool,
     // Poly (key) aftertouch (0xAn): a per-note pressure lane mirroring the
     // channel lane (same smoothing, LFO rate and depths). Channel and key
     // pressure COMPOSE: the dB gain lifts add and the vibrato factors
@@ -1239,6 +1245,7 @@ impl EngineCore {
             glide: None,
             alt: false,
             alt_bank_value: 0,
+            is_drum: false, // the bagpipe drone is a melodic voice, never a drum
             poly_authored: false,
             poly_target: 0.0,
             poly_cur: 0.0,
@@ -1484,10 +1491,14 @@ impl EngineCore {
         }
 
         let seed = 0x9E37 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
-        let voice = if ch == 9 {
+        // ch9 is always drums; an XG-drum channel (CC0==127) joins the drum path.
+        // `strips[ci].kit` is `strips[9].kit` when ch==9, so ch9 is unchanged; an
+        // XG-drum channel uses the default V3 kit (its kit is never reassigned).
+        let is_drum = ch == 9 || self.strips[ci].xg_drum;
+        let voice = if is_drum {
             let rr = self.drum_rr[key as usize];
             self.drum_rr[key as usize] = rr.wrapping_add(1);
-            drums::make(key, vel, sr, seed, self.strips[9].kit, self.opt.samples, rr)
+            drums::make(key, vel, sr, seed, self.strips[ci].kit, self.opt.samples, rr)
         } else {
             let prog = self.strips[ci].program;
             Some(if self.strips[ci].alt_bank {
@@ -1551,7 +1562,7 @@ impl EngineCore {
             self.active.push(Active {
                 ch,
                 key,
-                program: if ch == 9 {
+                program: if is_drum {
                     128
                 } else {
                     self.strips[ci].program
@@ -1562,6 +1573,7 @@ impl EngineCore {
                 glide,
                 alt: self.strips[ci].alt_bank,
                 alt_bank_value: self.strips[ci].alt_bank_value,
+                is_drum,
                 poly_authored: false,
                 poly_target: 0.0,
                 poly_cur: 0.0,
@@ -1612,8 +1624,19 @@ impl EngineCore {
         let v = val as f32 / 127.0;
         match num {
             0 => {
-                s.alt_bank = val != 0; // CC0 bank select: non-zero = alt voicings
-                s.alt_bank_value = val; // raw value: 1 = legacy alt, 2 = GM19 cathedral organ
+                // XG: bank MSB 127 selects a drum kit on this channel — route it to
+                // the drum path, not the alt orchestral bank. Every other value keeps
+                // the existing bank behavior (1/2 = alt voicings, 0 = default), so a
+                // channel that never sends 127 is byte-identical to before.
+                if val == 127 {
+                    s.xg_drum = true;
+                    s.alt_bank = false;
+                    s.alt_bank_value = 0;
+                } else {
+                    s.xg_drum = false;
+                    s.alt_bank = val != 0; // CC0 bank select: non-zero = alt voicings
+                    s.alt_bank_value = val; // raw value: 1 = legacy alt, 2 = GM19 cathedral organ
+                }
                 let (cho, del) = fx_profile(s.program, s.alt_bank_value);
                 if !s.chorus_authored {
                     s.chorus_send = cho;
@@ -2113,7 +2136,10 @@ impl EngineCore {
                     strip.at_phase -= TAU;
                 }
                 at_vib = 2f32.powf(strip.at_cur * AT_VIB_CENTS / 1200.0 * strip.at_phase.sin());
-                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                // `!a.is_drum`: an XG-drum channel on this strip keeps its at_gain
+                // (computed above) but its percussion voices must not be pitch-bent —
+                // the same reason ch9 skips this whole block (ci==9 continues earlier).
+                for a in self.active.iter_mut().filter(|a| a.ch == ch && !a.is_drum) {
                     // Alt strings/choir take CC1 via set_vib, so the coherent
                     // vib_mult factor must not compose into their aftertouch
                     // pitch (v0.9 kept 48-54 out of vibrato_family; aftertouch
@@ -2210,8 +2236,8 @@ impl EngineCore {
         }
         self.stats.max_polyphony = self.stats.max_polyphony.max(self.active.len());
         self.active.retain_mut(|a| {
-            if a.ch == 9 {
-                return true;
+            if a.is_drum {
+                return true; // drums render in the dedicated pass below
             }
             self.scratch[..n].fill(0.0);
             let alive = a.voice.render(&mut self.scratch[..n]);
@@ -2359,26 +2385,57 @@ impl EngineCore {
         }
 
         {
-            let s9 = &mut self.strips[9];
             self.drum_l[..n].fill(0.0);
             self.drum_r[..n].fill(0.0);
-            let pan_off = s9.pan - 0.5;
+            // ch9's kit placement offset, pre-copied so the closure can read
+            // strips[a.ch] for XG-drum voices without colliding with the s9 borrow
+            // (taken after the closure for the wah + bus master).
+            let pan_off = self.strips[9].pan - 0.5;
             self.active.retain_mut(|a| {
-                if a.ch != 9 {
+                if !a.is_drum {
                     return true;
                 }
                 self.scratch[..n].fill(0.0);
                 let alive = a.voice.render(&mut self.scratch[..n]);
-                let pan = (drum_pan(a.key) + pan_off).clamp(0.0, 1.0);
-                let theta = pan * FRAC_PI_2;
-                let bal = kit_balance(a.key);
-                let (ul, ur) = (theta.cos() * bal, theta.sin() * bal);
-                for i in 0..n {
-                    self.drum_l[i] += self.scratch[i] * ul;
-                    self.drum_r[i] += self.scratch[i] * ur;
+                if a.ch == 9 {
+                    // Main kit: accumulate raw into the drum bus; the shared wah +
+                    // bus master g9 are applied after the closure (path unchanged).
+                    let pan = (drum_pan(a.key) + pan_off).clamp(0.0, 1.0);
+                    let theta = pan * FRAC_PI_2;
+                    let bal = kit_balance(a.key);
+                    let (ul, ur) = (theta.cos() * bal, theta.sin() * bal);
+                    for i in 0..n {
+                        self.drum_l[i] += self.scratch[i] * ul;
+                        self.drum_r[i] += self.scratch[i] * ur;
+                    }
+                } else {
+                    // XG-drum channel: scaled by its OWN gain/pan straight into the
+                    // master mix — bypassing ch9's bus master and wah — with its own
+                    // CC91 reverb and the shared drum room. The `(scratch*ul)*gc`
+                    // association mirrors the ch9 path, so a single hit is byte-equal
+                    // to the same hit on ch9 (gc == g9 when the strips match).
+                    let s = &self.strips[a.ch as usize];
+                    let gc = s.volume * s.expr * s.at_gain * s.breath * DRUM_FORWARD;
+                    if gc >= 1e-6 {
+                        let pan = (drum_pan(a.key) + (s.pan - 0.5)).clamp(0.0, 1.0);
+                        let theta = pan * FRAC_PI_2;
+                        let bal = kit_balance(a.key);
+                        let (ul, ur) = (theta.cos() * bal, theta.sin() * bal);
+                        let rs = s.reverb_send * 0.9;
+                        for i in 0..n {
+                            let xl = (self.scratch[i] * ul) * gc;
+                            let xr = (self.scratch[i] * ur) * gc;
+                            self.mix_l[i] += xl;
+                            self.mix_r[i] += xr;
+                            let mono = 0.5 * (xl + xr);
+                            self.send_rev[i] += mono * rs;
+                            self.send_room[i] += mono * ROOM_SEND;
+                        }
+                    }
                 }
                 alive
             });
+            let s9 = &mut self.strips[9];
             if let Some(wl) = &mut s9.wah {
                 for x in self.drum_l[..n].iter_mut() {
                     *x = wl.process(*x);
@@ -3072,6 +3129,67 @@ mod tests {
                 "channel-10 Program Change {prog} changed the V3 kit"
             );
         }
+    }
+
+    /// XG drum-kit bank routing (CC0=127). Yamaha XG declares a drum kit on ANY
+    /// channel via bank MSB 127; the Incantations Part IV reference uses ch14 for a
+    /// conga part that way, which before this fix misrendered as a GM Drawbar Organ
+    /// (program 16) hammering the D4/Eb4/E4 conga keys. Three fresh-engine renders,
+    /// dry (`test_opts` wet=0):
+    ///   drum9  — key 62 on ch9 (the built-in drum channel)
+    ///   xg13   — key 62 on ch13 with CC0=127 + program 16  → must take the drum path
+    ///   organ  — key 62 on ch13 with program 16 but NO CC0=127 → the old behaviour
+    /// A SINGLE isolated hit, so the compared paths can't diverge on FP associativity
+    /// or voice overlap; the XG parallel path mirrors ch9's `(scratch*ul)*g`
+    /// association, so byte-equality with the ch9 hit holds exactly. Do NOT fold that
+    /// association, and do NOT extend this equality to overlapping voices.
+    #[test]
+    fn xg_bank_127_routes_channel_to_drums() {
+        let sr = 44100.0;
+        let opt = test_opts(sr);
+        let key = 62u8; // GM/XG "mute hi conga"; as GM program 16 it is D4 ≈ 293.66 Hz
+
+        let hit = |ch: u8, xg: bool| -> Vec<f32> {
+            let mut ev = Vec::new();
+            if xg {
+                ev.push((0.0, EvKind::Cc { ch, num: 0, val: 127 })); // XG drum-kit bank
+            }
+            ev.push((0.0, EvKind::Prog { ch, prog: 16 })); // XG Rock kit / GM Drawbar Organ
+            ev.push((0.05, EvKind::NoteOn { ch, key, vel: 100 }));
+            render(&test_song(ev, 1.5), &opt).0
+        };
+
+        let drum9 = hit(9, true); // ch9: CC0=127 is inert (already drums)
+        let xg13 = hit(13, true); // ch14 XG-drum: the fix routes this to the drum path
+        let organ = hit(13, false); // ch14 without CC0=127: the pre-fix Drawbar Organ
+
+        // The XG-drum hit takes the drum path — byte-identical to the same hit on ch9.
+        assert_eq!(
+            xg13, drum9,
+            "CC0=127 on ch13 must render key {key} as a drum, identical to ch9"
+        );
+        // ...and is NOT the melodic organ it produced before.
+        assert_ne!(
+            xg13, organ,
+            "CC0=127 must route away from the melodic Drawbar Organ"
+        );
+
+        // Bug-proof: the organ SUSTAINS the conga-key pitch (D4); a drum decays. Compare
+        // late-tail energy at D4 (1.0–1.4 s, long after the 0.05 s onset) — the organ's
+        // is far larger. (Raw onset magnitude is weaker: a conga has some D4 attack too.)
+        let f0 = crate::dsp::key_freq(key); // D4
+        let tail = |out: &[f32]| {
+            let m = left(out);
+            let a = sr as usize; // 1.0 s
+            let b = (1.4 * sr as f64) as usize;
+            crate::testutil::mag_at(&m[a..b], sr, f0)
+        };
+        assert!(
+            tail(&xg13) < 0.1 * tail(&organ),
+            "drum tail at D4 ({}) must be far below the sustained organ ({})",
+            tail(&xg13),
+            tail(&organ)
+        );
     }
 
     /// Oracle (D10d, kit internal balance): the kit voicing was cymbal-heavy and

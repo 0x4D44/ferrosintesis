@@ -723,8 +723,20 @@ struct Strip {
     xg_drum: bool,      // CC0 == 127: XG drum-kit bank — route this channel to the drum path
     gs_drum: bool,      // GS "Use for Rhythm Part" SysEx — same routing, separate origin
     // (a GS rhythm part still sends CC0=0, so it cannot share xg_drum)
-    volume: f32,   // CC7 as amplitude (squared curve)
-    pan: f32,      // 0..1
+    volume: f32, // CC7 as amplitude (squared curve); slewed current value
+    pan: f32,    // 0..1; slewed current value
+    // CC7 volume / CC10 pan controller slew (prime-on-first-block). The handler
+    // sets only `*_target` + `*_authored`; the per-block mix loop snaps the current
+    // value to the target on the first block after authoring (reproducing MIDI
+    // last-write-wins for a same-tick burst), then one-pole slews toward the target
+    // thereafter — so a foreign GM fade or pan sweep ramps instead of stepping at
+    // block boundaries. A channel that never authors CC7/CC10 keeps its default.
+    volume_target: f32,
+    volume_authored: bool,
+    volume_primed: bool,
+    pan_target: f32,
+    pan_authored: bool,
+    pan_primed: bool,
     bend: f32,     // channel pitch multiplier: wheel × range × fine-tune
     legato: bool,  // CC68: new notes slur into the ringing voice
     sustain: bool, // CC64: NoteOffs are held until the pedal lifts
@@ -804,6 +816,15 @@ impl Strip {
             gs_drum: false,
             volume: (100.0f32 / 127.0).powi(2),
             pan: 0.5,
+            // Targets equal the current defaults, so the slew is a bit-exact no-op
+            // until the first CC7/CC10 is authored (D6: the SAME expression, not a
+            // rounded literal).
+            volume_target: (100.0f32 / 127.0).powi(2),
+            volume_authored: false,
+            volume_primed: false,
+            pan_target: 0.5,
+            pan_authored: false,
+            pan_primed: false,
             bend: 1.0,
             legato: false,
             sustain: false,
@@ -1703,10 +1724,16 @@ impl EngineCore {
                     }
                 }
             }
-            7 => s.volume = v * v,
+            // CC7 volume / CC10 pan: author the target only; the per-block mix loop
+            // primes-then-slews the current value (and derives haas_delay from the
+            // slewed pan). See Strip's controller-slew fields.
+            7 => {
+                s.volume_target = v * v;
+                s.volume_authored = true;
+            }
             10 => {
-                s.pan = v;
-                s.haas_delay = 0.005 * sr * (v - 0.5).abs() * 2.0;
+                s.pan_target = v;
+                s.pan_authored = true;
             }
             11 => {
                 s.expr_target = v * v;
@@ -2322,6 +2349,30 @@ impl EngineCore {
                 for x in cathedral[..n].iter_mut() {
                     *x = wah.process(*x);
                 }
+            }
+            // CC7 volume / CC10 pan (prime-on-first-block): snap to the authored
+            // target on the first block after authoring — reproducing MIDI
+            // last-write-wins for a same-tick burst and the old instant set — then
+            // one-pole slew toward it thereafter, so a fade or pan sweep ramps rather
+            // than stepping at block boundaries. haas_delay is derived once per block
+            // from the slewed pan (single source of truth; tracks the sweep). A
+            // channel that never authors CC7/CC10 keeps its default byte-for-byte.
+            if strip.volume_authored {
+                if strip.volume_primed {
+                    strip.volume += self.expr_smooth * (strip.volume_target - strip.volume);
+                } else {
+                    strip.volume = strip.volume_target;
+                    strip.volume_primed = true;
+                }
+            }
+            if strip.pan_authored {
+                if strip.pan_primed {
+                    strip.pan += self.expr_smooth * (strip.pan_target - strip.pan);
+                } else {
+                    strip.pan = strip.pan_target;
+                    strip.pan_primed = true;
+                }
+                strip.haas_delay = 0.005 * sr * (strip.pan - 0.5).abs() * 2.0;
             }
             strip.expr += self.expr_smooth * (strip.expr_target - strip.expr);
             if strip.breath_authored {
@@ -3580,6 +3631,12 @@ mod tests {
             val: 0,
         });
 
+        // CC7/CC10 now prime at block rate (prime-on-first-block), so advance one
+        // block to snap volume/pan to their authored targets. CC121 does not reset
+        // volume or pan (correct GM semantics), so the block preserves them.
+        let mut sink = [0f32; BLOCK * 2];
+        core.render_block_add(BLOCK, &mut sink);
+
         let s = &core.strips[0];
         assert!((s.volume - (80.0f32 / 127.0).powi(2)).abs() < 1e-6);
         assert!((s.pan - 20.0 / 127.0).abs() < 1e-6);
@@ -3595,6 +3652,227 @@ mod tests {
         assert_eq!(s.bend, 1.0);
         assert_eq!(s.rpn_msb, 127);
         assert_eq!(s.rpn_lsb, 127);
+    }
+
+    // ---- MM-BUG-KILN-00011: CC7 volume / CC10 pan controller slew ----
+
+    fn slew_test_core(sr: f32) -> EngineCore {
+        EngineCore::new(CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        })
+    }
+
+    fn advance_blocks(core: &mut EngineCore, blocks: usize) {
+        let mut sink = [0f32; BLOCK * 2];
+        for _ in 0..blocks {
+            core.render_block_add(BLOCK, &mut sink);
+        }
+    }
+
+    /// AC1 (confinement) + AC3 (prime): a channel that never authors CC7/CC10 keeps
+    /// its defaults byte-for-byte across many blocks; authoring latches but does not
+    /// change the current value until a block primes it.
+    #[test]
+    fn cc7_cc10_unauthored_channel_is_unchanged() {
+        let sr = 44100.0;
+        let default_vol = (100.0f32 / 127.0).powi(2);
+        let mut core = slew_test_core(sr);
+        advance_blocks(&mut core, 50);
+        let s = &core.strips[0];
+        assert_eq!(s.volume, default_vol);
+        assert_eq!(s.pan, 0.5);
+        assert_eq!(s.haas_delay, 0.0);
+        assert!(!s.volume_authored && !s.pan_authored);
+        assert!(!s.volume_primed && !s.pan_primed);
+    }
+
+    /// AC3: the first block after authoring snaps volume/pan to the *last* value
+    /// authored before that block (MIDI last-write-wins for a same-tick burst), with
+    /// no glide from the default; haas_delay derives from the snapped pan.
+    #[test]
+    fn cc7_cc10_prime_on_first_block_is_last_write_wins() {
+        let sr = 44100.0;
+        let default_vol = (100.0f32 / 127.0).powi(2);
+        let mut core = slew_test_core(sr);
+        // ch0: a single set at t0 (volume 80, pan 96).
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 7,
+            val: 80,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 10,
+            val: 96,
+        });
+        // ch1: a same-tick pan burst 54 then 64 — the last write must win.
+        core.handle_event(EvKind::Cc {
+            ch: 1,
+            num: 10,
+            val: 54,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 1,
+            num: 10,
+            val: 64,
+        });
+
+        // Authored but not yet primed: current values are still the defaults.
+        assert!(core.strips[0].volume_authored && !core.strips[0].volume_primed);
+        assert_eq!(core.strips[0].volume, default_vol);
+        assert_eq!(core.strips[0].pan, 0.5);
+
+        advance_blocks(&mut core, 1);
+
+        // Snapped to the authored targets (no glide from the default).
+        assert!((core.strips[0].volume - (80.0f32 / 127.0).powi(2)).abs() < 1e-9);
+        assert!((core.strips[0].pan - 96.0 / 127.0).abs() < 1e-9);
+        assert!(core.strips[0].volume_primed && core.strips[0].pan_primed);
+        // Same-tick burst resolved to the LAST value (64/127), not the first (54/127).
+        assert!(
+            (core.strips[1].pan - 64.0 / 127.0).abs() < 1e-9,
+            "same-tick burst must snap to the last authored value; got {}",
+            core.strips[1].pan
+        );
+        // haas_delay follows the snapped pan.
+        let want_haas = 0.005 * sr * (96.0f32 / 127.0 - 0.5).abs() * 2.0;
+        assert!((core.strips[0].haas_delay - want_haas).abs() < 1e-6);
+    }
+
+    /// AC2 + AC6: a post-prime CC7/CC10 change slews as the CC11 one-pole (exact
+    /// step), moving a fraction per block, monotonically, without overshoot, and
+    /// converging to the target. haas_delay tracks the slewed pan.
+    #[test]
+    fn cc7_cc10_post_prime_change_slews_one_pole_monotone() {
+        let sr = 44100.0;
+        let smooth = 1.0 - (-(BLOCK as f32) / (0.03 * sr)).exp();
+        let mut core = slew_test_core(sr);
+        // Prime: volume to full, pan hard-left.
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 7,
+            val: 127,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 10,
+            val: 0,
+        });
+        advance_blocks(&mut core, 1);
+        assert!(
+            core.strips[0].pan.abs() < 1e-9,
+            "pan primed to hard-left (0)"
+        );
+        assert!(
+            (core.strips[0].volume - 1.0).abs() < 1e-9,
+            "volume primed to full"
+        );
+
+        // Post-prime change: volume -> 0 (fade), pan -> hard-right (sweep).
+        let v0 = core.strips[0].volume; // 1.0
+        let p0 = core.strips[0].pan; // 0.0
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 7,
+            val: 0,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 10,
+            val: 127,
+        });
+        advance_blocks(&mut core, 1);
+
+        // Exact one-pole step, not a jump.
+        let want_v = v0 + smooth * (0.0 - v0);
+        let want_p = p0 + smooth * (1.0 - p0);
+        assert!(
+            (core.strips[0].volume - want_v).abs() < 1e-6,
+            "volume one-pole step"
+        );
+        assert!(
+            (core.strips[0].pan - want_p).abs() < 1e-6,
+            "pan one-pole step"
+        );
+        assert!(core.strips[0].volume < v0 && core.strips[0].volume > 0.0);
+        assert!(core.strips[0].pan > p0 && core.strips[0].pan < 1.0);
+
+        // Monotone, no overshoot, converges.
+        let mut prev_v = core.strips[0].volume;
+        let mut prev_p = core.strips[0].pan;
+        for _ in 0..500 {
+            advance_blocks(&mut core, 1);
+            let (v, p) = (core.strips[0].volume, core.strips[0].pan);
+            assert!(
+                v <= prev_v + 1e-7 && v >= -1e-6,
+                "volume monotone down, no undershoot"
+            );
+            assert!(
+                p >= prev_p - 1e-7 && p <= 1.0 + 1e-6,
+                "pan monotone up, no overshoot"
+            );
+            prev_v = v;
+            prev_p = p;
+        }
+        assert!(core.strips[0].volume.abs() < 1e-3, "volume converges to 0");
+        assert!(
+            (core.strips[0].pan - 1.0).abs() < 1e-3,
+            "pan converges to 1"
+        );
+        // haas tracks the slewed pan each block.
+        let want_haas = 0.005 * sr * (core.strips[0].pan - 0.5).abs() * 2.0;
+        assert!((core.strips[0].haas_delay - want_haas).abs() < 1e-6);
+    }
+
+    /// AC7: during a realistic incremental auto-pan the Haas tap advances in small
+    /// per-block steps (no click), unlike the old instant retune which flipped the
+    /// whole ~220-sample delay to the other channel at each CC event.
+    #[test]
+    fn cc10_haas_tap_advances_smoothly_not_in_jumps() {
+        let sr = 44100.0;
+        let full_range = 0.005 * sr; // ~220 samples: hard-pan Haas delay
+        let mut core = slew_test_core(sr);
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 10,
+            val: 0,
+        });
+        advance_blocks(&mut core, 1); // prime hard-left
+
+        // Fast auto-pan: bump the target one CC unit every 4 blocks, 0 -> 127.
+        let mut prev = core.strips[0].haas_delay;
+        let mut max_block_step = 0.0f32;
+        let mut next_v = 1u8;
+        for block in 0..700usize {
+            if block % 4 == 0 && next_v <= 127 {
+                core.handle_event(EvKind::Cc {
+                    ch: 0,
+                    num: 10,
+                    val: next_v,
+                });
+                next_v += 1;
+            }
+            advance_blocks(&mut core, 1);
+            let h = core.strips[0].haas_delay;
+            max_block_step = max_block_step.max((h - prev).abs());
+            prev = h;
+        }
+        // A smooth tap moves well under a sample per block here; the old instant
+        // side-flip moved the full ~220-sample delay at once. Bound generously to
+        // stay robust while still catching a regression to jump behaviour.
+        assert!(
+            max_block_step < 0.02 * full_range,
+            "Haas tap should advance smoothly: max per-block step {:.3} samples (range {:.1})",
+            max_block_step,
+            full_range
+        );
     }
 
     /// Oracle 32a (D10, §5.2/§5.3 A/B): the drum room adds early energy a

@@ -239,6 +239,32 @@ HARP_URLS = {
     for dest, src in _HARP_ZONES
 }
 
+# Viola (GM 41) solo onset — VSCO Viola SECTION susvib as the proxy (VSCO has no solo
+# viola). The ~380 ms onset carries the viola formant; the Bowed + BODY_VIOLA model owns
+# the sustain, so the "section-ness" mostly stays out of the sound. This fixes 40==41 —
+# GM 41 stops sharing the SOLO VIOLIN onset. VSCO string-section labels sound ~1 OCTAVE
+# ABOVE the label (documented for vlnens/celens in F0_RANGE), so dest names use the
+# SOUNDING pitch mapping to the octave-down source label. Harmonic-rich bowed section
+# spanning >1 octave -> in TWO_F_STRONG, so main() caps the per-note ceiling at
+# nominal*1.5. v1 -> p, v2 -> f. Roots MEASURED at bake. Output -> -orchestral2 (CC0;
+# -orchestral is at the ~10 MiB crates.io cap).
+_VIOLA_ZONES = [
+    ("viola_C3", "C2"),
+    ("viola_G3", "G2"),
+    ("viola_D4", "D3"),
+    ("viola_A4", "A3"),
+    ("viola_E5", "E4"),
+    ("viola_B5", "B4"),
+    ("viola_D6", "D5"),
+]
+VIOLA_URLS = {
+    f"{dest}_{d}.wav": (
+        f"{BASE}/Strings/Viola%20Section/susvib/ViolaEns_susvib_{label}_{v}_1.wav"
+    )
+    for dest, label in _VIOLA_ZONES
+    for d, v in (("p", "v1"), ("f", "v2"))
+}
+
 # Ocarina (GM 79) — VCSL "Ocarina, Typical" sustains (CC0, VCSL_REV). A soft near-sine
 # vessel flute; the sample carries the breath onset and the Wind model keeps the body
 # (a wind onset like the flute, so the default 0.62 s keep, NOT a plucked keep). Output
@@ -494,12 +520,16 @@ F0_RANGE = {
     # cello section C1-name sounds C2 65.4 Hz … B3-name B4 493.9 Hz; ceiling
     # 550 sits just above the top fundamental, below its 2nd harmonic (988)
     "celens": (50.0, 550.0),
+    # solo viola onset (VSCO Viola SECTION susvib): sounding C3 131 … D6 1175 Hz (labels
+    # one octave below sounding, like vlnens/celens). In TWO_F_STRONG, so the per-note cap
+    # (nominal*1.5) blocks 2f; this global ceiling only needs to clear the top fundamental.
+    "viola": (120.0, 1400.0),
 }
 # Families whose recordings are 2f-DOMINANT (autocorr grabs the 2nd harmonic if the
 # ceiling admits it) AND span more than an octave, so a single fixed F0 ceiling can't
 # separate the fundamental from 2f. For these, main() caps the ceiling per-note at
 # label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
-TWO_F_STRONG = frozenset(("recorder", "banjo"))
+TWO_F_STRONG = frozenset(("recorder", "banjo", "viola"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -560,6 +590,7 @@ FAMILY_PACKAGE = {
     "recorder": "ferrosintesis-samples-orchestral2",
     "timpani": "ferrosintesis-samples-orchestral2",
     "banjo": "ferrosintesis-samples-orchestral2",
+    "viola": "ferrosintesis-samples-orchestral2",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1399,6 +1430,9 @@ def main():
         for fn, url in TIMPANI_URLS.items():
             if want("timpani"):
                 ensure_source(fn, url, src)
+        for fn, url in VIOLA_URLS.items():
+            if want("viola"):
+                ensure_source(fn, url, src)
         if want("banjo"):
             ensure_banjo_sources(src)
         if want("nylon"):
@@ -1450,7 +1484,8 @@ def main():
             rows += _bake_mtg_sax(sax_src)
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
-            | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | GRAND_SOURCES
+            | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
+            | GRAND_SOURCES
         ):
             if not want(fn.split("_")[0]):
                 continue

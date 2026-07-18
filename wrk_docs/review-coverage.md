@@ -15,7 +15,7 @@ harmless. Never reorder columns or re-flow untouched rows.
 | Area | Last reviewed |
 |------|---------------|
 | crates/ferrosintesis/ | 2026-07-18 |
-| crates/ferrosintesis-cli/ | (never) |
+| crates/ferrosintesis-cli/ | 2026-07-18 |
 | crates/render-catalog/ | (never) |
 | crates/ferrosintesis-samples-clavinet/ | (never) |
 | crates/ferrosintesis-samples-core/ | (never) |

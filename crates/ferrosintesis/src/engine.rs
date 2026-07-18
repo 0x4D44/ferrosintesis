@@ -722,12 +722,12 @@ struct Strip {
     alt_bank_value: u8, // raw CC0 value: 0 default, 1 legacy alt, 2 GM19 cathedral organ
     xg_drum: bool,      // CC0 == 127: XG drum-kit bank — route this channel to the drum path
     gs_drum: bool,      // GS "Use for Rhythm Part" SysEx — same routing, separate origin
-                        // (a GS rhythm part still sends CC0=0, so it cannot share xg_drum)
-    volume: f32,        // CC7 as amplitude (squared curve)
-    pan: f32,           // 0..1
-    bend: f32,          // channel pitch multiplier: wheel × range × fine-tune
-    legato: bool,       // CC68: new notes slur into the ringing voice
-    sustain: bool,      // CC64: NoteOffs are held until the pedal lifts
+    // (a GS rhythm part still sends CC0=0, so it cannot share xg_drum)
+    volume: f32,   // CC7 as amplitude (squared curve)
+    pan: f32,      // 0..1
+    bend: f32,     // channel pitch multiplier: wheel × range × fine-tune
+    legato: bool,  // CC68: new notes slur into the ringing voice
+    sustain: bool, // CC64: NoteOffs are held until the pedal lifts
     // v0.7 authored controllers (all inert until first touched)
     bend_wheel: f32, // last wheel position in ±2-normalised semitones
     bend_range: f32, // RPN 0: bend range in semitones (GM default 2)
@@ -3230,16 +3230,43 @@ mod tests {
 
         let gs = render_ev(vec![
             (0.0, EvKind::DrumMode { ch: 11, on: true }), // GS: ch11 is a rhythm part
-            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 11,
+                    key,
+                    vel: 100,
+                },
+            ),
         ]);
-        let drum9 = render_ev(vec![(0.05, EvKind::NoteOn { ch: 9, key, vel: 100 })]);
+        let drum9 = render_ev(vec![(
+            0.05,
+            EvKind::NoteOn {
+                ch: 9,
+                key,
+                vel: 100,
+            },
+        )]);
         let melodic = render_ev(vec![
             (0.0, EvKind::Prog { ch: 11, prog: 0 }), // grand piano, no rhythm-part flag
-            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 11,
+                    key,
+                    vel: 100,
+                },
+            ),
         ]);
 
-        assert_eq!(gs, drum9, "GS rhythm part (ch11) must render as a drum, identical to ch9");
-        assert_ne!(gs, melodic, "GS rhythm part must not render as a melodic voice");
+        assert_eq!(
+            gs, drum9,
+            "GS rhythm part (ch11) must render as a drum, identical to ch9"
+        );
+        assert_ne!(
+            gs, melodic,
+            "GS rhythm part must not render as a melodic voice"
+        );
     }
 
     /// The GS flag is separate from the XG flag: an ordinary `CC0=0` bank select (which
@@ -3252,20 +3279,55 @@ mod tests {
         let key = 62u8;
         let render_ev = |ev: Vec<(f64, EvKind)>| render(&test_song(ev, 1.5), &opt).0;
 
-        let drum9 = render_ev(vec![(0.05, EvKind::NoteOn { ch: 9, key, vel: 100 })]);
+        let drum9 = render_ev(vec![(
+            0.05,
+            EvKind::NoteOn {
+                ch: 9,
+                key,
+                vel: 100,
+            },
+        )]);
         let melodic = render_ev(vec![
             (0.0, EvKind::Prog { ch: 11, prog: 0 }),
-            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 11,
+                    key,
+                    vel: 100,
+                },
+            ),
         ]);
 
         // GS rhythm part, then the ordinary bank-select + program a real GS file sends
         // to pick the kit — still drums (gs_drum is immune to CC0, unlike xg_drum).
         let after_bank = render_ev(vec![
             (0.0, EvKind::DrumMode { ch: 11, on: true }),
-            (0.01, EvKind::Cc { ch: 11, num: 0, val: 0 }), // bank select MSB 0
-            (0.02, EvKind::Cc { ch: 11, num: 32, val: 0 }), // bank select LSB 0
+            (
+                0.01,
+                EvKind::Cc {
+                    ch: 11,
+                    num: 0,
+                    val: 0,
+                },
+            ), // bank select MSB 0
+            (
+                0.02,
+                EvKind::Cc {
+                    ch: 11,
+                    num: 32,
+                    val: 0,
+                },
+            ), // bank select LSB 0
             (0.03, EvKind::Prog { ch: 11, prog: 0 }),
-            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 11,
+                    key,
+                    vel: 100,
+                },
+            ),
         ]);
         assert_eq!(
             after_bank, drum9,
@@ -3277,7 +3339,14 @@ mod tests {
             (0.0, EvKind::DrumMode { ch: 11, on: true }),
             (0.02, EvKind::GsReset),
             (0.03, EvKind::Prog { ch: 11, prog: 0 }),
-            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 11,
+                    key,
+                    vel: 100,
+                },
+            ),
         ]);
         assert_eq!(
             after_reset, melodic,

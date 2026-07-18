@@ -62,9 +62,9 @@ pub enum EvKind {
 /// channel (the result is always 0..=15).
 fn gs_block_to_channel(block: u8) -> u8 {
     match block & 0x0F {
-        0 => 9,           // Part 10 (the default GM/GS drum channel)
+        0 => 9,             // Part 10 (the default GM/GS drum channel)
         n @ 1..=9 => n - 1, // Parts 1..9
-        n => n,           // A..F → Parts 11..16 (channels 11..16, index 10..15)
+        n => n,             // A..F → Parts 11..16 (channels 11..16, index 10..15)
     }
 }
 
@@ -210,10 +210,18 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                         && payload.len() >= 8
                         && (payload[5] & 0xF0) == 0x10 // part block 0x1n
                         && payload[6] == 0x15 // "Use for Rhythm Part"
-                        && payload[7] <= 2 // 0=off, 1=MAP1, 2=MAP2 (reject invalid)
+                        && payload[7] <= 2
+                    // 0=off, 1=MAP1, 2=MAP2 (reject invalid)
                     {
                         let ch = gs_block_to_channel(payload[5]);
-                        raw.push((tick, seq, EvKind::DrumMode { ch, on: payload[7] != 0 }));
+                        raw.push((
+                            tick,
+                            seq,
+                            EvKind::DrumMode {
+                                ch,
+                                on: payload[7] != 0,
+                            },
+                        ));
                         seq += 1;
                     } else if gs_dt1 && payload[5] == 0x00 && payload[6] == 0x7F {
                         // GS Reset — revert part modes to default.
@@ -423,7 +431,18 @@ mod tests {
     /// (low nibble), map value `mm`. The Roland checksum byte is arbitrary here —
     /// the parser is deliberately lenient about it.
     fn gs_rhythm(blk: u8, mm: u8) -> Vec<u8> {
-        let payload = [0x41, 0x10, 0x42, 0x12, 0x40, 0x10 | blk, 0x15, mm, 0x00, 0xF7];
+        let payload = [
+            0x41,
+            0x10,
+            0x42,
+            0x12,
+            0x40,
+            0x10 | blk,
+            0x15,
+            mm,
+            0x00,
+            0xF7,
+        ];
         let mut ev = vec![0x00, 0xF0, payload.len() as u8];
         ev.extend(payload);
         ev

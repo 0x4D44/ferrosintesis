@@ -200,11 +200,14 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                     let payload = c.bytes(len)?;
                     // Only two GS messages are decoded; every other SysEx is ignored,
                     // exactly as before (payload starts at the byte after F0).
-                    if payload.len() >= 8
+                    // A GS DT1 message to a System/Part address (`F0 41 <dev> 42 12 40 …`).
+                    let gs_dt1 = payload.len() >= 7
                         && payload[0] == 0x41 // Roland
                         && payload[2] == 0x42 // GS
                         && payload[3] == 0x12 // DT1
-                        && payload[4] == 0x40
+                        && payload[4] == 0x40;
+                    if gs_dt1
+                        && payload.len() >= 8
                         && (payload[5] & 0xF0) == 0x10 // part block 0x1n
                         && payload[6] == 0x15 // "Use for Rhythm Part"
                         && payload[7] <= 2 // 0=off, 1=MAP1, 2=MAP2 (reject invalid)
@@ -212,14 +215,7 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                         let ch = gs_block_to_channel(payload[5]);
                         raw.push((tick, seq, EvKind::DrumMode { ch, on: payload[7] != 0 }));
                         seq += 1;
-                    } else if payload.len() >= 7
-                        && payload[0] == 0x41
-                        && payload[2] == 0x42
-                        && payload[3] == 0x12
-                        && payload[4] == 0x40
-                        && payload[5] == 0x00
-                        && payload[6] == 0x7F
-                    {
+                    } else if gs_dt1 && payload[5] == 0x00 && payload[6] == 0x7F {
                         // GS Reset — revert part modes to default.
                         raw.push((tick, seq, EvKind::GsReset));
                         seq += 1;

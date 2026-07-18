@@ -8481,6 +8481,67 @@ mod tests {
         }
     }
 
+    /// Unit 10 (integration): a *defined* CC32 variation routes through the full
+    /// engine path — the CC32 handler sets `bank_lsb`, and note-on dispatches
+    /// `make_variation` — producing a render that genuinely differs from the
+    /// base program. Covers each of the eight defined `(program, LSB)` pairs
+    /// end-to-end (the per-voice character is pinned by the voices oracles; here
+    /// we prove the wiring reaches a distinct voice, not just the fallback).
+    #[test]
+    fn cc32_defined_bank_selects_the_variation() {
+        let sr = 44100.0;
+        // (program, bank LSB, a key in a sensible range for that program)
+        let variations: &[(u8, u8, u8)] = &[
+            (24, 96, 60),  // Ukulele
+            (105, 98, 60), // Oud
+            (116, 96, 45), // Gran Cassa
+            (48, 3, 60),   // Slow Strings
+            (30, 41, 45),  // Feedback Gtr 2
+            (99, 19, 60),  // Hollow Release
+            (33, 45, 40),  // Fingered Bass 2
+            (50, 65, 60),  // Str5
+        ];
+        let song = |lsb: Option<u8>, prog: u8, key: u8| {
+            let mut ev = vec![(0.0, EvKind::Prog { ch: 0, prog })];
+            if let Some(v) = lsb {
+                ev.push((
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 32,
+                        val: v,
+                    },
+                ));
+            }
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key,
+                    vel: 100,
+                },
+            ));
+            ev.push((1.6, EvKind::NoteOff { ch: 0, key }));
+            ev
+        };
+        for &(prog, lsb, key) in variations {
+            let base = left(&render(&test_song(song(None, prog, key), 2.0), &test_opts(sr)).0);
+            let var = left(&render(&test_song(song(Some(lsb), prog, key), 2.0), &test_opts(sr)).0);
+            assert_eq!(base.len(), var.len());
+            assert_ne!(
+                base, var,
+                "prog {prog} + CC32={lsb}: the variation must render differently from the base"
+            );
+            // And a non-trivial magnitude — a real voice swap, not a rounding blip.
+            let diff: Vec<f32> = base.iter().zip(&var).map(|(a, b)| a - b).collect();
+            let ratio = rms(&diff) / rms(&base).max(1e-9);
+            assert!(
+                ratio > 0.01,
+                "prog {prog} + CC32={lsb}: variation render too close to base (diff/base = {ratio:.4})"
+            );
+        }
+    }
+
     /// Unit 1 (CC84 portamento control): a `CC84=src` before a NoteOn makes
     /// that note glide up from `key_freq(src)` even with NO CC65 porta-on,
     /// honoring the CC5 glide time — and the pending source is consumed once,

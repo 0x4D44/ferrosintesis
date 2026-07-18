@@ -1498,7 +1498,15 @@ impl EngineCore {
         let voice = if is_drum {
             let rr = self.drum_rr[key as usize];
             self.drum_rr[key as usize] = rr.wrapping_add(1);
-            drums::make(key, vel, sr, seed, self.strips[ci].kit, self.opt.samples, rr)
+            drums::make(
+                key,
+                vel,
+                sr,
+                seed,
+                self.strips[ci].kit,
+                self.opt.samples,
+                rr,
+            )
         } else {
             let prog = self.strips[ci].program;
             Some(if self.strips[ci].alt_bank {
@@ -2387,40 +2395,35 @@ impl EngineCore {
         {
             self.drum_l[..n].fill(0.0);
             self.drum_r[..n].fill(0.0);
-            // ch9's kit placement offset, pre-copied so the closure can read
-            // strips[a.ch] for XG-drum voices without colliding with the s9 borrow
-            // (taken after the closure for the wah + bus master).
-            let pan_off = self.strips[9].pan - 0.5;
             self.active.retain_mut(|a| {
                 if !a.is_drum {
                     return true;
                 }
                 self.scratch[..n].fill(0.0);
                 let alive = a.voice.render(&mut self.scratch[..n]);
+                // Per-key placement, shared by both drum paths: the channel's own
+                // pan offset (strips[9] for the main kit, since a.ch == 9 there) plus
+                // the per-key kit map and balance.
+                let s = &self.strips[a.ch as usize];
+                let pan = (drum_pan(a.key) + (s.pan - 0.5)).clamp(0.0, 1.0);
+                let theta = pan * FRAC_PI_2;
+                let bal = kit_balance(a.key);
+                let (ul, ur) = (theta.cos() * bal, theta.sin() * bal);
                 if a.ch == 9 {
                     // Main kit: accumulate raw into the drum bus; the shared wah +
                     // bus master g9 are applied after the closure (path unchanged).
-                    let pan = (drum_pan(a.key) + pan_off).clamp(0.0, 1.0);
-                    let theta = pan * FRAC_PI_2;
-                    let bal = kit_balance(a.key);
-                    let (ul, ur) = (theta.cos() * bal, theta.sin() * bal);
                     for i in 0..n {
                         self.drum_l[i] += self.scratch[i] * ul;
                         self.drum_r[i] += self.scratch[i] * ur;
                     }
                 } else {
-                    // XG-drum channel: scaled by its OWN gain/pan straight into the
-                    // master mix — bypassing ch9's bus master and wah — with its own
-                    // CC91 reverb and the shared drum room. The `(scratch*ul)*gc`
-                    // association mirrors the ch9 path, so a single hit is byte-equal
-                    // to the same hit on ch9 (gc == g9 when the strips match).
-                    let s = &self.strips[a.ch as usize];
+                    // XG-drum channel: scaled by its OWN gain straight into the master
+                    // mix — bypassing ch9's bus master and wah — with its own CC91
+                    // reverb and the shared drum room. The `(scratch*ul)*gc` association
+                    // mirrors the ch9 path, so a single hit is byte-equal to the same
+                    // hit on ch9 (gc == g9 when the strips match).
                     let gc = s.volume * s.expr * s.at_gain * s.breath * DRUM_FORWARD;
                     if gc >= 1e-6 {
-                        let pan = (drum_pan(a.key) + (s.pan - 0.5)).clamp(0.0, 1.0);
-                        let theta = pan * FRAC_PI_2;
-                        let bal = kit_balance(a.key);
-                        let (ul, ur) = (theta.cos() * bal, theta.sin() * bal);
                         let rs = s.reverb_send * 0.9;
                         for i in 0..n {
                             let xl = (self.scratch[i] * ul) * gc;
@@ -3152,7 +3155,14 @@ mod tests {
         let hit = |ch: u8, xg: bool| -> Vec<f32> {
             let mut ev = Vec::new();
             if xg {
-                ev.push((0.0, EvKind::Cc { ch, num: 0, val: 127 })); // XG drum-kit bank
+                ev.push((
+                    0.0,
+                    EvKind::Cc {
+                        ch,
+                        num: 0,
+                        val: 127,
+                    },
+                )); // XG drum-kit bank
             }
             ev.push((0.0, EvKind::Prog { ch, prog: 16 })); // XG Rock kit / GM Drawbar Organ
             ev.push((0.05, EvKind::NoteOn { ch, key, vel: 100 }));

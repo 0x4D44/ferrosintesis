@@ -2537,6 +2537,94 @@ mod perceptual_distinctness {
         );
     }
 
+    // ===== Class-identity oracle (MM-BUG-KILN-00006) =====
+    // Absolute two-sided ranges on the probe-key MEAN of ONE physically-scaled
+    // Passport field, per instrument family — the §5 "is it really X" check that
+    // a voice belongs to its CLASS (not merely differs from siblings). Calibrated
+    // RED-before/GREEN-after from `print_passport_fields` (freeze 2026-07-18).
+    // `sustain_db` (D1) is the load-bearing axis: sustained families hold near 0,
+    // struck/plucked families decay to very negative. Ranges encode CLASS, not
+    // realism (HLD §6 — realism stays ear-only).
+
+    struct ClassRange {
+        label: &'static str,
+        programs: &'static [u8],
+        field: &'static str,
+        get: fn(&Passport) -> f32,
+        lo: f32,
+        hi: f32,
+    }
+
+    /// Probe-key mean (§2.1: keys 48 & 72) of one Passport field for a program.
+    fn class_field_mean(prog: u8, get: fn(&Passport) -> f32) -> f32 {
+        let p = &passports()[prog as usize];
+        0.5 * (get(&p[0]) + get(&p[1]))
+    }
+
+    const CLASS_RANGES: &[ClassRange] = &[
+        // Organ 16-23: pipe/free-reed organs HOLD their level with no decay (the
+        // §5 worked example). Measured sustain_db = -0.28..+5.5; a -6 dB floor
+        // clears every member with margin and REDs a decaying voice (piano -18).
+        // NOTE: the HLD's "low flatness" does NOT hold in Passport space (organs
+        // measure flat_L ~0.32-0.46) — sustain_db is the honest organ axis.
+        ClassRange {
+            label: "organ 16-23",
+            programs: &[16, 17, 18, 19, 20, 21, 22, 23],
+            field: "sustain_db",
+            get: |p| p.sustain_db,
+            lo: -6.0,
+            hi: 20.0,
+        },
+    ];
+
+    /// The class-identity oracle: every in-scope voice's field-mean falls in its
+    /// family's class range. A failure prints the program, field and value.
+    #[test]
+    fn class_identity_ranges_hold() {
+        for r in CLASS_RANGES {
+            for &prog in r.programs {
+                let v = class_field_mean(prog, r.get);
+                assert!(
+                    (r.lo..=r.hi).contains(&v),
+                    "{}: GM{prog} {} = {v:.4}, out of class range [{}, {}]",
+                    r.label,
+                    r.field,
+                    r.lo,
+                    r.hi
+                );
+            }
+        }
+    }
+
+    /// RED-before guard: each class range must have discriminating power — a
+    /// wrong-class exemplar must fall OUTSIDE it. This freezes that (e.g.) the
+    /// organ sustain floor genuinely rejects a decaying piano, so the range is a
+    /// real gate, not a vacuous always-true bound. One control per range.
+    #[test]
+    fn class_ranges_reject_wrong_class() {
+        // (range label, a wrong-class program that MUST be out of range, why)
+        let controls: &[(&str, u8, &str)] = &[(
+            "organ 16-23",
+            0,
+            "piano decays (sustain_db ~ -18), must fail the held-level floor",
+        )];
+        for &(label, wrong, why) in controls {
+            let r = CLASS_RANGES
+                .iter()
+                .find(|r| r.label == label)
+                .unwrap_or_else(|| panic!("no class range labelled {label}"));
+            let v = class_field_mean(wrong, r.get);
+            assert!(
+                !(r.lo..=r.hi).contains(&v),
+                "{label}: wrong-class GM{wrong} {} = {v:.4} is INSIDE [{}, {}] — \
+                 range lacks discriminating power ({why})",
+                r.field,
+                r.lo,
+                r.hi
+            );
+        }
+    }
+
     /// Calibration instrument for the class-identity oracle (MM-BUG-KILN-00006):
     /// dumps, per GM program, the probe-key MEAN (§2.1: keys 48 & 72) of the
     /// physically-scaled Passport fields the oracle asserts on. Not a gate — the

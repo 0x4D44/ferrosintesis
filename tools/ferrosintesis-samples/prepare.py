@@ -265,6 +265,51 @@ VIOLA_URLS = {
     for d, v in (("p", "v1"), ("f", "v2"))
 }
 
+# Solo cello (GM 42) onset — Karoryfer x bigcat "Bigcat Cello" arco sustains, down-bow
+# (CC0-1.0; github.com/sfzinstruments/karoryfer-bigcat.cello, pinned SHA). Replaces the
+# repitched cello-SECTION celens onset with a REAL SOLO cellist: one player (no ensemble
+# chorus) and a crisp bow-catch (measured onset t50 ~0-55 ms vs the section's ~85 ms slow
+# swell, which was ducking the model's own attack). File labels sit ONE OCTAVE BELOW
+# sounding pitch (measured: "A1" is a clean 110 Hz A2, no 55 Hz energy) — like the VSCO
+# sections — so dest names use the SOUNDING pitch and the URL the octave-down source label.
+# Harmonic-rich, spans >1 octave -> in TWO_F_STRONG (per-note ceiling nominal*1.5). Dynamic
+# p -> p, f -> f; down-bow ("_d") is the standard detache start. Roots MEASURED at bake.
+# Output -> the new CC0 -strings crate.
+BIGCAT_REV = "6fd75fbfc1dbb3109bf26220ba1adea46188a18b"
+BIGCAT_BASE = (
+    f"https://raw.githubusercontent.com/sfzinstruments/karoryfer-bigcat.cello/{BIGCAT_REV}"
+)
+_CELLO_ZONES = [
+    ("C2", "C1"), ("A2", "A1"), ("C3", "C2"), ("A3", "A2"),
+    ("C4", "C3"), ("A4", "A3"), ("C5", "C4"), ("F#5", "Gb4"),
+]
+SOLO_CELLO_URLS = {
+    f"cellosolo_{snd}_{d}.wav": f"{BIGCAT_BASE}/Samples/sus/{label}_{d}_d.wav"
+    for snd, label in _CELLO_ZONES
+    for d in ("p", "f")
+}
+
+# Solo double bass (GM 43) onset — VSCO 2 CE "Solo Contrabass" SusNV (NON-vibrato, so the
+# model's own vibrato is not doubled), same VSCO_REV pin (CC0). Replaces the repitched
+# cello-SECTION celens onset — GM43 was literally a cello section an octave low — with a
+# REAL solo double bass (correct body radiation, slower/noisier speech, low-string growl).
+# Labels sit ONE OCTAVE BELOW sounding pitch (measured: "C1" is 65.9 Hz C2), like the VSCO
+# sections; dest names use SOUNDING pitch. Bowed low strings are strongly 2f-dominant -> in
+# TWO_F_STRONG (per-note ceiling nominal*1.5). v1 -> p, v3 -> f. Roots MEASURED at bake.
+# Output -> the new CC0 -strings crate.
+_DBASS_ZONES = [
+    ("E1", "E0"), ("A#1", "A#0"), ("E2", "E1"), ("A2", "A1"),
+    ("C#3", "C#2"), ("E3", "E2"), ("G#3", "G#2"), ("B3", "B2"),
+]
+SOLO_DBASS_URLS = {
+    f"dbass_{snd}_{d}.wav": (
+        f"{BASE}/Strings/Solo%20Contrabass/SusNV/"
+        f"BKCtbss_SusNV_{label.replace('#', '%23')}_{v}_rr1.wav"
+    )
+    for snd, label in _DBASS_ZONES
+    for d, v in (("p", "v1"), ("f", "v3"))
+}
+
 # Chromatic percussion LA onsets (MM-BUG-KILN-00015 batch 1) — VSCO-2-CE Percussion mallet
 # subdirs, same VSCO_REV pin (CC0). Single flat dynamic layer (no p/f, no RR), so LaVoice's
 # vel_amp does the dynamics. STRUCK -> KEEP_FAM (~0.9 s). Mallet bars are partial-heavy
@@ -673,12 +718,20 @@ F0_RANGE = {
     "marimba": (40.0, 1200.0),
     "xylo": (180.0, 2400.0),
     "glock": (380.0, 2400.0),
+    # solo cello (Bigcat, GM 42): sounding C2 65 .. F#5 740 Hz (labels one octave below
+    # sounding). In TWO_F_STRONG -> per-note ceiling nominal*1.5 blocks 2f; this global
+    # ceiling only clears the top fundamental.
+    "cellosolo": (60.0, 1500.0),
+    # solo double bass (VSCO Solo Contrabass, GM 43): sounding E1 41 .. B3 247 Hz. In
+    # TWO_F_STRONG -> per-note cap does the work; global ceiling clears the top fundamental.
+    "dbass": (38.0, 520.0),
 }
 # Families whose recordings are 2f-DOMINANT (autocorr grabs the 2nd harmonic if the
 # ceiling admits it) AND span more than an octave, so a single fixed F0 ceiling can't
 # separate the fundamental from 2f. For these, main() caps the ceiling per-note at
 # label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
-TWO_F_STRONG = frozenset(("recorder", "banjo", "viola", "marimba", "xylo", "glock"))
+TWO_F_STRONG = frozenset(("recorder", "banjo", "viola", "marimba", "xylo", "glock",
+                          "cellosolo", "dbass"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -755,6 +808,10 @@ FAMILY_PACKAGE = {
     "marimba": "ferrosintesis-samples-orchestral2",
     "xylo": "ferrosintesis-samples-orchestral2",
     "glock": "ferrosintesis-samples-orchestral2",
+    # Solo bowed strings (GM 42 cello / GM 43 double bass) — real CC0 soloists in their own
+    # crate, replacing the repitched cello-SECTION celens onset.
+    "cellosolo": "ferrosintesis-samples-strings",
+    "dbass": "ferrosintesis-samples-strings",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1894,6 +1951,12 @@ def main():
         for fn, url in VIOLA_URLS.items():
             if want("viola"):
                 ensure_source(fn, url, src)
+        for fn, url in SOLO_CELLO_URLS.items():
+            if want("cellosolo"):
+                ensure_source(fn, url, src)
+        for fn, url in SOLO_DBASS_URLS.items():
+            if want("dbass"):
+                ensure_source(fn, url, src)
         for fn, url in MARIMBA_URLS.items():
             if want("marimba"):
                 ensure_source(fn, url, src)
@@ -1987,6 +2050,7 @@ def main():
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
             | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS
+            | SOLO_CELLO_URLS | SOLO_DBASS_URLS
             | GRAND_SOURCES
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):

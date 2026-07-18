@@ -47,6 +47,7 @@ tools/gm0-audition/renders/
 !crates/ferrosintesis-samples-ydp-grand/samples/*.wav
 !crates/ferrosintesis-samples-honkytonk/samples/*.wav
 !crates/ferrosintesis-samples-sax/samples/*.wav
+!crates/ferrosintesis-samples-strings/samples/*.wav
 # ...and the un-re-fetchable CC BY 3.0 gong source WAVs (Freesound needs a login;
 # committed so the processed bank is offline-reproducible via prepare.py).
 !tools/ferrosintesis-samples/gong-src/*.wav

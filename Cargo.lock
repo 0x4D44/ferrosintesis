@@ -19,6 +19,7 @@ dependencies = [
  "ferrosintesis-samples-orchestral",
  "ferrosintesis-samples-orchestral2",
  "ferrosintesis-samples-sax",
+ "ferrosintesis-samples-strings",
  "ferrosintesis-samples-vcsl-kawai",
  "ferrosintesis-samples-vcsl-steinway",
  "ferrosintesis-samples-ydp-grand",
@@ -81,6 +82,10 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-sax"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-strings"
 version = "0.1.0"
 
 [[package]]

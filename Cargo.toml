@@ -18,6 +18,7 @@ members = [
     "crates/ferrosintesis-samples-orchestral",
     "crates/ferrosintesis-samples-orchestral2",
     "crates/ferrosintesis-samples-sax",
+    "crates/ferrosintesis-samples-strings",
     "crates/render-catalog",
 ]
 resolver = "2"

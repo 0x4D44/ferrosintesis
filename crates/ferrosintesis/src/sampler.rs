@@ -63,6 +63,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_clavinet::get(name))
         .or_else(|| ferrosintesis_samples_musescore::get(name))
         .or_else(|| ferrosintesis_samples_sax::get(name))
+        .or_else(|| ferrosintesis_samples_strings::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 
@@ -524,18 +525,25 @@ fn strsec_f() -> &'static [Zone] {
     })
 }
 
-// GM 43 contrabass LA attack: the cello-section arco *bite*, whose low celens
-// zones already sit on the contrabass register (celens_C1 measures 65.4 Hz =
-// C2, celens_G1 = G2). Only the low zones are needed — the part never plays
-// above ~D3 — and `nearest` repitches them by well under a tone. The bite is
-// what synthesis fakes worst; the waveguide keeps the expressive sustain.
+// GM 43 contrabass LA attack: a REAL solo double-bass arco onset (VSCO 2 CE Solo
+// Contrabass, SusNV / non-vibrato so the model's own vibrato is not doubled; CC0),
+// replacing the old repitched cello-SECTION celens bite that read as a small cello
+// section an octave low. Roots MEASURED at bake (source labels sit one octave below
+// sounding pitch); zones span sounding E1 (~41 Hz) to B3 (~247 Hz), covering the GM43
+// register with far less repitch than the old 3 zones. `nearest` picks the closest
+// zone; the waveguide keeps the expressive sustain.
 fn contrabass_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
         bank!(
-            "celens_C1_p.wav" => 65.48,
-            "celens_G1_p.wav" => 97.46,
-            "celens_D2_p.wav" => 146.97,
+            "dbass_E1_p.wav" => 41.22,
+            "dbass_A#1_p.wav" => 57.95,
+            "dbass_E2_p.wav" => 82.31,
+            "dbass_A2_p.wav" => 108.96,
+            "dbass_C#3_p.wav" => 137.69,
+            "dbass_E3_p.wav" => 164.19,
+            "dbass_G#3_p.wav" => 207.89,
+            "dbass_B3_p.wav" => 244.89,
         )
     })
 }
@@ -544,15 +552,20 @@ fn contrabass_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
         bank!(
-            "celens_C1_f.wav" => 65.38,
-            "celens_G1_f.wav" => 97.71,
-            "celens_D2_f.wav" => 146.73,
+            "dbass_E1_f.wav" => 41.15,
+            "dbass_A#1_f.wav" => 57.63,
+            "dbass_E2_f.wav" => 82.21,
+            "dbass_A2_f.wav" => 109.20,
+            "dbass_C#3_f.wav" => 138.30,
+            "dbass_E3_f.wav" => 164.89,
+            "dbass_G#3_f.wav" => 206.22,
+            "dbass_B3_f.wav" => 243.45,
         )
     })
 }
 
-/// Attack-transient bank for the GM 43 contrabass (cello-section arco, low
-/// zones). Velocity picks the soft / loud layer as elsewhere (VSCO v1/v3).
+/// Attack-transient bank for the GM 43 contrabass (real solo double-bass arco,
+/// VSCO Solo Contrabass SusNV). Velocity picks the soft / loud layer (VSCO v1/v3).
 pub fn contrabass_bank(vel: u8) -> &'static [Zone] {
     if vel >= 80 {
         contrabass_f()
@@ -561,19 +574,24 @@ pub fn contrabass_bank(vel: u8) -> &'static [Zone] {
     }
 }
 
-// GM 42 cello LA attack: the cello-section arco bite across the cello's full
-// register — the celens zones ARE cellos (celens_C1 measures 65 Hz = C2 up to
-// celens_B3 ≈ B4), so `nearest` picks the right zone per note.
+// GM 42 cello LA attack: a REAL solo cello arco onset (Karoryfer x bigcat "Bigcat
+// Cello", down-bow sus, CC0), replacing the old cello-SECTION celens bite that carried
+// ensemble chorus and a slow section swell (which measurably ducked the model's own
+// crisper attack). Roots MEASURED at bake (source labels sit one octave below sounding
+// pitch); zones span sounding C2 (~65 Hz) to F#5 (~740 Hz), the cello's full range.
+// `nearest` picks the closest zone; the waveguide keeps the sustain.
 fn cello_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
         bank!(
-            "celens_C1_p.wav" => 65.48,
-            "celens_G1_p.wav" => 97.46,
-            "celens_D2_p.wav" => 146.97,
-            "celens_A2_p.wav" => 219.85,
-            "celens_E3_p.wav" => 329.02,
-            "celens_B3_p.wav" => 493.92,
+            "cellosolo_C2_p.wav" => 65.50,
+            "cellosolo_A2_p.wav" => 109.19,
+            "cellosolo_C3_p.wav" => 130.82,
+            "cellosolo_A3_p.wav" => 215.89,
+            "cellosolo_C4_p.wav" => 261.79,
+            "cellosolo_A4_p.wav" => 439.37,
+            "cellosolo_C5_p.wav" => 522.21,
+            "cellosolo_F#5_p.wav" => 739.94,
         )
     })
 }
@@ -582,17 +600,20 @@ fn cello_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
         bank!(
-            "celens_C1_f.wav" => 65.38,
-            "celens_G1_f.wav" => 97.71,
-            "celens_D2_f.wav" => 146.73,
-            "celens_A2_f.wav" => 219.17,
-            "celens_E3_f.wav" => 328.79,
-            "celens_B3_f.wav" => 493.91,
+            "cellosolo_C2_f.wav" => 65.29,
+            "cellosolo_A2_f.wav" => 109.39,
+            "cellosolo_C3_f.wav" => 130.50,
+            "cellosolo_A3_f.wav" => 220.00,
+            "cellosolo_C4_f.wav" => 261.55,
+            "cellosolo_A4_f.wav" => 439.31,
+            "cellosolo_C5_f.wav" => 521.47,
+            "cellosolo_F#5_f.wav" => 742.74,
         )
     })
 }
 
-/// Attack-transient bank for the GM 42 cello (cello-section arco, full range).
+/// Attack-transient bank for the GM 42 cello (real solo cello arco, Bigcat Cello
+/// down-bow). Velocity picks the soft / loud layer (Bigcat p / f dynamics).
 pub fn cello_bank(vel: u8) -> &'static [Zone] {
     if vel >= 80 {
         cello_f()
@@ -4174,6 +4195,9 @@ mod tests {
             (48u8, 48, "string-ens-low", false),
             (48u8, 76, "string-ens-high", false),
             (49u8, 55, "slow-strings", false),
+            (42u8, 48, "cello-low", false),
+            (42u8, 69, "cello-high", false),
+            (43u8, 40, "contrabass", false),
         ] {
             // 100 ms windows from 50 ms to 950 ms, wrapped and model-only
             let win = |samples: bool| {

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00006 — No absolute-realism (class-identity) oracle: timbre quality is unverified; only pairwise difference is checked
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** testutil
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-18, `12b1d78`)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-18, `12b1d78`) → Closed (2026-07-18, independently verified by OpenAI Codex on `55c829e`; residuals split to MM-BUG-KILN-00023/00024)
 
 ## Observation
 
@@ -76,11 +76,23 @@ decay on a plain held note; GM38/39 synth bass hold).
 
 Test-only change → no version bump. Second-eyes verification pending before `Closed`.
 
-### Deferred sub-items (smaller, separate follow-ups)
-- Anchoring `BAR_FULL` with a synthetic in-test near-clone (turn the full anti-clone tier
-  into a verified gate) — optional, not built here.
-- The standing `EarPending` adjudications: (40,41) was resolved by the viola fix
-  (MM-BUG-KILN-00005 — now independent-onset and distinct); (48,49) still awaits one ear A/B.
+### Independent closure verification (2026-07-18, OpenAI Codex)
+
+- Confirmed the original pre-fix observation at `aea7ef0`: the tree had the Passport
+  print harness but no executable `CLASS_RANGES`, `class_identity_ranges_hold`, or
+  `class_ranges_reject_wrong_class` oracle.
+- On trunk build `55c829e`, re-ran both focused tests. All nine family ranges accept
+  their intended programs, and every range rejects its recorded wrong-class control.
+- The independent workspace gate on the same build passed: `cargo test --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`.
+  The class-identity gap is fixed at the intended Passport layer.
+- The original record also named two anti-clone gaps that this fix explicitly deferred.
+  They remain real, so closure splits them into MM-BUG-KILN-00023 (`BAR_FULL` negative
+  anchor) and MM-BUG-KILN-00024 (GM 48/49 `EarPending` adjudication).
+
+### Split residuals
+- MM-BUG-KILN-00023 tracks a deterministic failing negative anchor for `BAR_FULL`.
+- MM-BUG-KILN-00024 tracks the human A/B and durable oracle verdict for GM 48/49.
 
 ## Notes
 

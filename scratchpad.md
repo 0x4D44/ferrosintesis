@@ -4,6 +4,14 @@
      subsystem audit; the meaningful findings were raised as MM-BUG-KILN-00005..00022.
      Parked here (not ledgered) per Arthur's "meaningful items; park trivia" call. -->
 
+- [ ] 2026.07.18 — **Steel-guitar (GM25) high keys (~≥76) have a post-crossfade handover
+  cliff: the KS string over-damps (one-pole damper magnitude — B5 ≈ −390 dB/s lesson) so
+  the model collapses right after the 200 ms fade while the recorded take still rings;
+  worst at low velocity.** Pre-existing (old LA gain law played the vel-40 sample 4.5×
+  hotter, so it was worse); surfaced by `guitar_low_velocity_seam_continuity`
+  (`crates/ferrosintesis/src/sampler.rs`, which excludes the row). Root fix lives in the
+  model's high-string decay (damper design), not the LA layer.
+
 - [ ] 2026.07.18 — **Closed vs pedal hi-hat are identical in the MODELED path, and the
   pedal hat carries a stick click it should not have.** Keys 42|44 share one `CymSpec`
   with `click: Some(...)` (`crates/ferrosintesis/src/drums.rs:~1661`). The sampled path

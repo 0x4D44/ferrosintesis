@@ -11091,7 +11091,11 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             let model = Box::new(Pluck::new(&NYLON, key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_GUITAR;
-                crate::sampler::LaVoice::wrap(
+                // guitar-realism HLD §4: per-note onset variation + a
+                // velocity-brightness readout filter (the two guitar arms
+                // are the ONLY wrap_var callers — non-guitar LA paths keep
+                // the jitter-free constructor by construction)
+                crate::sampler::LaVoice::wrap_var(
                     model,
                     crate::sampler::guitar_bank(),
                     key,
@@ -11099,6 +11103,12 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                     sr,
                     gain,
                     fade,
+                    crate::sampler::LaFx {
+                        vel_lp: Some(5000.0),
+                        ..Default::default()
+                    },
+                    crate::sampler::GUITAR_VAR,
+                    seed,
                 )
             } else {
                 model
@@ -11114,7 +11124,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             let model = Box::new(Pluck::new(&STEEL, key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_GUITAR;
-                crate::sampler::LaVoice::wrap(
+                crate::sampler::LaVoice::wrap_var(
                     model,
                     crate::sampler::steel_bank(),
                     key,
@@ -11122,6 +11132,12 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                     sr,
                     gain,
                     fade,
+                    crate::sampler::LaFx {
+                        vel_lp: Some(6000.0),
+                        ..Default::default()
+                    },
+                    crate::sampler::GUITAR_VAR,
+                    seed,
                 )
             } else {
                 model

@@ -2186,7 +2186,63 @@ pub struct LaFx {
     /// (per-read phase decorrelation — the §3.1 comb/flange watch) while
     /// their continuously-diverging phase makes true f0-band beating.
     pub detune: Option<(f32, f32, f32)>,
+    /// Velocity-tracking one-pole lowpass on the sample readout: base corner
+    /// (Hz). The guitar arms author this so the sampled onset darkens with a
+    /// soft pick the way the model's own excitation does (its pick_lp scales
+    /// by 0.10 + 1.30·vn) — without it the sample plays full brightness at
+    /// every velocity and the crossfade seam mismatches (guitar-realism HLD
+    /// §4). EXACT bypass — no filter state touched, no per-sample cost — at
+    /// vel ≥ 100: the LA oracle fixtures all render there.
+    pub vel_lp: Option<f32>,
 }
+
+/// Velocity→corner law for [`LaFx::vel_lp`]: mirrors the model's excitation
+/// brightness shape; returns the one-pole coefficient, 0.0 = hard bypass.
+fn vel_lp_alpha(base_hz: f32, vel: u8, sr: f32) -> f32 {
+    if vel >= 100 {
+        return 0.0;
+    }
+    let vn = vel as f32 / 127.0;
+    let corner = base_hz * (0.10 + 1.30 * vn);
+    1.0 - (-std::f32::consts::TAU * corner / sr).exp()
+}
+
+/// Per-note stochastic onset variation (guitar-realism HLD §4). Every draw
+/// comes ONCE from the voice seed at wrap time — same seed ⇒ bit-identical
+/// note; the engine's per-voice seed decorrelates repeats. Consumed only by
+/// [`LaVoice::wrap_var`] (the two acoustic-guitar arms): every other LA
+/// caller keeps the jitter-free path by construction, so non-guitar
+/// bit-identity needs no runtime branch at all.
+#[derive(Clone, Copy)]
+pub struct OnsetVar {
+    /// Full span of the 5 detune strata, in cents (values sit at ±half).
+    /// The offset is LOCKED: applied to the sample step AND composed into
+    /// every model pitch update, so the pair cannot beat through the
+    /// crossfade (HLD §4, review D7/C3).
+    pub detune_strata_c: f32,
+    /// Additional white detune, ± cents.
+    pub detune_white_c: f32,
+    /// Max onset delay, seconds (uniform in [0, max)). With gain jitter,
+    /// this carries most of the transient decorrelation — rate jitter is
+    /// pitch-bounded on a pitched instrument (HAT lesson).
+    pub onset_max_s: f32,
+    /// Strike-level jitter, ± fraction.
+    pub gain_frac: f32,
+}
+
+/// The acoustic guitars' variation: an intonation-scale musical budget
+/// (±5 c strata + ±1 c white ≈ ±6 c max — real fretted-intonation scatter,
+/// NOT the ±45 c pitch-integrity tolerance, which is a detection bound; it
+/// must also clear the ±15 c O-PITCH lattice bar stacked on the model's own
+/// few-cent tuning residue), 0–6 ms pick-timing scatter, ±6 % level. The
+/// transient decorrelation is carried by onset+gain (HAT lesson) — detune
+/// is intonation colour, not the anti-machine-gun lever.
+pub const GUITAR_VAR: OnsetVar = OnsetVar {
+    detune_strata_c: 10.0,
+    detune_white_c: 1.0,
+    onset_max_s: 0.006,
+    gain_frac: 0.06,
+};
 
 /// Sampled attack + modeled sustain, under the §2.7 onset-ownership
 /// contract — one owner per instant:
@@ -2222,6 +2278,15 @@ pub struct LaVoice {
     shelf_lp: f32,
     shelf_a: f32,
     shelf_g: f32,
+    /// Locked per-note detune (guitar-realism HLD §4): composed into every
+    /// model pitch update so sample and model can never beat apart. 1.0 for
+    /// every non-`wrap_var` caller.
+    var_mult: f32,
+    /// Onset-delay jitter in output samples (0 for non-`wrap_var` callers).
+    start: usize,
+    /// Velocity-brightness one-pole state + coefficient (0.0 = bypass).
+    vel_lp: f32,
+    vel_lp_a: f32,
 }
 
 impl LaVoice {
@@ -2252,11 +2317,84 @@ impl LaVoice {
         fade: (f32, f32),
         fx: LaFx,
     ) -> Box<dyn Voice> {
+        match Self::build(sustain, zones, key, vel, sr, gain, fade, fx) {
+            Ok(la) => Box::new(la),
+            Err(model) => model,
+        }
+    }
+
+    /// [`Self::wrap_fx`] plus per-note onset variation (guitar-realism HLD
+    /// §4) — the two acoustic-guitar arms only. Draws detune (locked across
+    /// sample AND model), onset delay, and gain jitter from the voice seed.
+    /// On the extreme-repitch fallback the bare model still gets the locked
+    /// detune, so per-note variation is uniform across the key range.
+    #[allow(clippy::too_many_arguments)] // wrap_fx's established shape + (var, seed)
+    pub fn wrap_var(
+        sustain: Box<dyn Voice>,
+        zones: &'static [Zone],
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+        fx: LaFx,
+        var: OnsetVar,
+        seed: u32,
+    ) -> Box<dyn Voice> {
+        let mut rng = crate::dsp::Rng::new(seed ^ 0x00A1_51C5);
+        let strata = [-0.5f32, -0.25, 0.0, 0.25, 0.5];
+        let cents = strata[(seed >> 3) as usize % strata.len()] * var.detune_strata_c
+            + rng.white() * var.detune_white_c;
+        let var_mult = (cents / 1200.0).exp2();
+        let mut gain = gain * (1.0 + var.gain_frac * rng.white());
+        // Track the MODEL's velocity-level law instead of the generic LA
+        // floor (0.35 + 0.65·vel_amp): one instrument, one dynamic curve —
+        // otherwise the sample rides ~3× above the quiet model through the
+        // low-velocity crossfade and steps at the seam (review C4; caught
+        // by guitar_low_velocity_seam_continuity). The exponent makes the
+        // law superlinear in the amp ratio: a soft pick sheds ENERGY faster
+        // than amplitude (the model darkens on three levers at once, losing
+        // spectral energy the amp law alone doesn't count). Anchored to be
+        // exactly 1.0 at vel 100 so every vel-100 fixture is untouched.
+        const VEL_ENERGY_EXP: f32 = 1.4;
+        let ref_amp = vel_amp(100);
+        gain *= (vel_amp(vel) / ref_amp).powf(VEL_ENERGY_EXP) * (0.35 + 0.65 * ref_amp)
+            / (0.35 + 0.65 * vel_amp(vel));
+        let start = (var.onset_max_s * sr * (0.5 + 0.5 * rng.white())) as usize;
+        match Self::build(sustain, zones, key, vel, sr, gain, fade, fx) {
+            Ok(mut la) => {
+                la.var_mult = var_mult;
+                la.base_step *= var_mult;
+                la.step = la.base_step;
+                la.start = start;
+                // seat the model at the locked detune; later performance
+                // pitch updates compose var_mult × mult in set_pitch()
+                la.sustain.set_pitch(var_mult);
+                Box::new(la)
+            }
+            Err(mut model) => {
+                model.set_pitch(var_mult);
+                model
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build(
+        sustain: Box<dyn Voice>,
+        zones: &'static [Zone],
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+        fx: LaFx,
+    ) -> Result<LaVoice, Box<dyn Voice>> {
         let f = key_freq(key);
         let zone = nearest(zones, f);
         let step = f / zone.root * 44100.0 / sr;
         if !(0.5..=2.05).contains(&step) {
-            return sustain;
+            return Err(sustain);
         }
         let (shelf_g, shelf_a) = match fx.shelf {
             Some((db, hz)) => (
@@ -2265,7 +2403,11 @@ impl LaVoice {
             ),
             None => (0.0, 0.0),
         };
-        Box::new(LaVoice {
+        let vel_lp_a = match fx.vel_lp {
+            Some(base_hz) => vel_lp_alpha(base_hz, vel, sr),
+            None => 0.0,
+        };
+        Ok(LaVoice {
             sustain,
             zone,
             pos: 0.0,
@@ -2286,6 +2428,10 @@ impl LaVoice {
             shelf_lp: 0.0,
             shelf_a,
             shelf_g,
+            var_mult: 1.0,
+            start: 0,
+            vel_lp: 0.0,
+            vel_lp_a,
         })
     }
 }
@@ -2306,7 +2452,7 @@ impl Voice for LaVoice {
             let u = smooth((t as f32 - self.fade_start as f32) / fade_len);
             let mut s = self.buf[i] * u;
             let j = self.pos as usize;
-            if t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
+            if t >= self.start && t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
                 sample_live = true;
                 let frac = self.pos - j as f32;
                 // 4-point cubic read (edge-clamped): linear interpolation dulls
@@ -2358,6 +2504,13 @@ impl Voice for LaVoice {
                     self.shelf_lp += (v - self.shelf_lp) * self.shelf_a;
                     v += self.shelf_g * (v - self.shelf_lp);
                 }
+                if self.vel_lp_a > 0.0 {
+                    // guitar-realism HLD §4: a soft pick darkens the sampled
+                    // onset like it darkens the string (vel ≥ 100 never
+                    // reaches here — vel_lp_alpha returns a hard 0.0)
+                    self.vel_lp += (v - self.vel_lp) * self.vel_lp_a;
+                    v = self.vel_lp;
+                }
                 s += v * (1.0 - u) * self.gain * self.rel_gain;
                 self.rel_gain *= self.rel_mul;
                 self.pos += self.step;
@@ -2379,9 +2532,13 @@ impl Voice for LaVoice {
     }
 
     fn set_pitch(&mut self, mult: f32) {
-        // bend the transient with the note, and the model underneath
+        // bend the transient with the note, and the model underneath. The
+        // locked per-note detune composes multiplicatively (var_mult is 1.0
+        // outside wrap_var): a bend/vibrato/glide update can never strip the
+        // model's detune while the sample keeps it (review C3) — base_step
+        // already carries var_mult, the model gets var_mult × mult.
         self.step = self.base_step * mult;
-        self.sustain.set_pitch(mult);
+        self.sustain.set_pitch(self.var_mult * mult);
     }
 
     fn legato_to(&mut self, key: u8, vel: u8) -> bool {
@@ -4041,6 +4198,143 @@ mod tests {
                 "nylon key {key}: sampled attack hissier than the model: hf-frac on {r_on:.4} vs off {r_off:.4}"
             );
         }
+    }
+
+    /// Guitar-realism HLD §4 / AC1 — a PRESENCE + DETERMINISM canary only:
+    /// different voice seeds must decorrelate the sample-owned onset (today
+    /// it replays identical PCM — the machine-gun tell), and the same seed
+    /// must stay bit-identical. Audible sufficiency is deliberately NOT
+    /// asserted here (HAT lesson: worst-pair NCC 0.494 still machine-gunned;
+    /// the ear judges at the audition checkpoint).
+    #[test]
+    fn guitar_onset_variation_presence_and_determinism() {
+        let sr = 44100.0;
+        for program in [24u8, 25] {
+            let render = |seed: u32| {
+                let mut v = voices::make(program, 52, 100, sr, seed, true);
+                let mut buf = vec![0f32; 2205]; // the sample-owned 50 ms
+                v.render(&mut buf);
+                buf
+            };
+            let (a, a2, b) = (render(5), render(5), render(6));
+            assert!(
+                a.iter().zip(&a2).all(|(x, y)| x.to_bits() == y.to_bits()),
+                "prog {program}: same seed must render bit-identically"
+            );
+            assert!(
+                a.iter().zip(&b).any(|(x, y)| x.to_bits() != y.to_bits()),
+                "prog {program}: different seeds replay identical onset PCM"
+            );
+            let dot = |x: &[f32], y: &[f32]| x.iter().zip(y).map(|(p, q)| p * q).sum::<f32>();
+            let ncc = dot(&a, &b) / (dot(&a, &a).sqrt() * dot(&b, &b).sqrt()).max(1e-12);
+            assert!(
+                ncc < 0.99,
+                "prog {program}: seeds {ncc:.4}-correlated — variation not reaching the onset"
+            );
+        }
+    }
+
+    /// Guitar-realism HLD §4 / AC2 — the sampled onset darkens with a soft
+    /// pick (mirroring the model's own velocity→brightness law), and the
+    /// filter is a HARD bypass at vel ≥ 100 so every existing vel-100
+    /// fixture is untouched by construction.
+    #[test]
+    fn guitar_sample_layer_tracks_velocity_brightness() {
+        // law-level: exact bypass at and above vel 100, active below
+        for vel in 100..=127 {
+            assert_eq!(super::vel_lp_alpha(5000.0, vel, 44100.0), 0.0);
+        }
+        assert!(super::vel_lp_alpha(5000.0, 99, 44100.0) > 0.0);
+        assert!(
+            super::vel_lp_alpha(5000.0, 32, 44100.0) < super::vel_lp_alpha(5000.0, 72, 44100.0),
+            "corner must open with velocity"
+        );
+        // render-level: soft-pick onset carries a smaller HF fraction
+        let sr = 44100.0;
+        for program in [24u8, 25] {
+            let hf_frac = |vel: u8| {
+                let mut v = voices::make(program, 52, vel, sr, 5, true);
+                let mut buf = vec![0f32; 2205];
+                v.render(&mut buf);
+                crate::testutil::hp_rms(&buf, sr, 1500.0) / crate::testutil::rms(&buf).max(1e-9)
+            };
+            let (soft, hard) = (hf_frac(32), hf_frac(110));
+            assert!(
+                soft < hard * 0.85,
+                "prog {program}: soft pick not darker (hf {soft:.4} vs {hard:.4})"
+            );
+        }
+    }
+
+    /// Guitar-realism HLD §4 / AC2 (review C4) — the existing continuity
+    /// fixtures all render at vel 100, where the velocity filter is
+    /// bypassed; these rows exercise the ACTIVE filter and the jitter at
+    /// low/mid velocity with the same differential seam contract.
+    #[test]
+    fn guitar_low_velocity_seam_continuity() {
+        let sr = 44100.0;
+        // Steel key ≥ ~76 is EXCLUDED: the KS steel string over-damps at high
+        // keys (the one-pole damper magnitude lesson — B5 ≈ −390 dB/s), so
+        // the model collapses right after the crossfade while the recorded
+        // take still rings — a PRE-EXISTING handover cliff (strictly worse
+        // before this block: the old LA gain law played the vel-40 sample
+        // 4.5× hotter). Tracked in scratchpad.md 2026.07.18; not a
+        // variation defect.
+        for (program, key) in [(24u8, 52u8), (24, 64), (25, 52), (25, 64)] {
+            for vel in [40u8, 72] {
+                let win = |samples: bool| {
+                    let mut v = voices::make(program, key, vel, sr, 5, samples);
+                    let mut buf = vec![0f32; 44100];
+                    v.render(&mut buf);
+                    let rms = |a: usize, b: usize| {
+                        (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                    };
+                    let coarse: Vec<f32> = (0..9)
+                        .map(|k| rms(2205 + k * 4410, 2205 + (k + 1) * 4410))
+                        .collect();
+                    let fine: Vec<f32> = (0..19).map(|k| rms(k * 2205, (k + 1) * 2205)).collect();
+                    (coarse, fine)
+                };
+                let ((w, fine), (m, _)) = (win(true), win(false));
+                for (pw, pm) in w.windows(2).zip(m.windows(2)) {
+                    let (rw, rm) = (pw[0] / pw[1].max(1e-12), pm[0] / pm[1].max(1e-12));
+                    let excess = (rw / rm).max(rm / rw);
+                    assert!(
+                        excess < 2.4,
+                        "prog {program} key {key} vel {vel}: wrap-introduced seam step \
+                         {excess:.2}x: wrapped {w:?} vs model {m:?}"
+                    );
+                }
+                let attack = fine[..3].iter().fold(0f32, |mx, &x| mx.max(x));
+                let late = fine[3..].iter().fold(0f32, |mx, &x| mx.max(x));
+                assert!(
+                    late <= attack,
+                    "prog {program} key {key} vel {vel}: attack is not the peak ({fine:?})"
+                );
+            }
+        }
+    }
+
+    /// Guitar-realism HLD §4 / AC8 — the variation machinery must not reach
+    /// any non-guitar LA path. FNV-1a pin over one wrapped program's exact
+    /// PCM (GM 56 trumpet, an LA arm untouched by this block): if this
+    /// moves, the guitar-only surface leaked. Same-box golden (like the
+    /// repo's other bit-exact canaries); re-pin only with an explained diff.
+    #[test]
+    fn non_guitar_la_render_is_pinned() {
+        let mut v = voices::make(56, 69, 100, 44100.0, 5, true);
+        let mut buf = vec![0f32; 22050];
+        v.render(&mut buf);
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for x in &buf {
+            for b in x.to_bits().to_le_bytes() {
+                h = (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+        assert_eq!(
+            h, 0x9be1_4fc8_51cd_9a19,
+            "non-guitar LA render changed (fnv {h:#x}) — guitar-only variation leaked?"
+        );
     }
 
     /// The string-section sample layer must not shift perceived pitch:

@@ -10,7 +10,16 @@
   worst at low velocity.** Pre-existing (old LA gain law played the vel-40 sample 4.5×
   hotter, so it was worse); surfaced by `guitar_low_velocity_seam_continuity`
   (`crates/ferrosintesis/src/sampler.rs`, which excludes the row). Root fix lives in the
-  model's high-string decay (damper design), not the LA layer.
+  model's high-string decay (damper design), not the LA layer. Note: the 0.28 s fade
+  widen extends the sample's ownership at those keys, so the eventual model fix should
+  re-run the seam oracles with high-key rows restored (code-review L1).
+
+- [ ] 2026.07.18 — **Other LA banks' zones are unguarded against fade dry-out at
+  non-44.1 kHz rates** — the source-domain fade-budget guard + ~5 ms end taper added for
+  guitars (`guitar_zone_fade_budget`, `LaVoice.end_taper`) cover GM24/25 only; any other
+  wrapped zone whose `fade_end × 44100 × (f/root)` exceeds its length at 48/96 kHz still
+  steps at dry-out (code-review A2). Generalize the taper (arming it globally breaks LA
+  bit-identity pins, so it needs a coordinated re-pin) or assert budgets across all banks.
 
 - [ ] 2026.07.18 — **Closed vs pedal hi-hat are identical in the MODELED path, and the
   pedal hat carries a stick click it should not have.** Keys 42|44 share one `CymSpec`

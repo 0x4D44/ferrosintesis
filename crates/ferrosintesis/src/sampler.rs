@@ -2194,7 +2194,21 @@ pub struct LaFx {
     /// §4). EXACT bypass — no filter state touched, no per-sample cost — at
     /// vel ≥ 100: the LA oracle fixtures all render there.
     pub vel_lp: Option<f32>,
+    /// Velocity-LEVEL law exponent: `Some(exp)` replaces the generic LA
+    /// floor law (0.35 + 0.65·vel_amp) with a model-tracking superlinear
+    /// law `(vel_amp/vel_amp(100))^exp`, anchored to equal the floor law
+    /// exactly at vel 100 (every vel-100 fixture untouched). The guitars
+    /// author this (`GUITAR_VEL_LEVEL_EXP`): a soft pick sheds ENERGY
+    /// faster than amplitude, and without it the sample rides ~3× above
+    /// the quiet model through the low-velocity crossfade (review C4).
+    /// Living HERE keeps one law site — review A1 killed the earlier
+    /// wrap_var-side algebraic cancellation of build()'s law.
+    pub vel_level: Option<f32>,
 }
+
+/// The guitars' velocity-level exponent (see [`LaFx::vel_level`]);
+/// calibrated by `guitar_low_velocity_seam_continuity`.
+pub(crate) const GUITAR_VEL_LEVEL_EXP: f32 = 1.4;
 
 /// Velocity→corner law for [`LaFx::vel_lp`]: mirrors the model's excitation
 /// brightness shape; returns the one-pole coefficient, 0.0 = hard bypass.
@@ -2224,7 +2238,9 @@ pub struct OnsetVar {
     pub detune_white_c: f32,
     /// Max onset delay, seconds (uniform in [0, max)). With gain jitter,
     /// this carries most of the transient decorrelation — rate jitter is
-    /// pitch-bounded on a pitched instrument (HAT lesson).
+    /// pitch-bounded on a pitched instrument (HAT lesson). One-sided
+    /// (always late) by causality: a voice cannot start before its
+    /// note-on; composers own anticipation.
     pub onset_max_s: f32,
     /// Strike-level jitter, ± fraction.
     pub gain_frac: f32,
@@ -2331,8 +2347,10 @@ impl LaVoice {
     /// [`Self::wrap_fx`] plus per-note onset variation (guitar-realism HLD
     /// §4) — the two acoustic-guitar arms only. Draws detune (locked across
     /// sample AND model), onset delay, and gain jitter from the voice seed.
-    /// On the extreme-repitch fallback the bare model still gets the locked
-    /// detune, so per-note variation is uniform across the key range.
+    /// The extreme-repitch fallback returns the bare model UNVARIED: a bare
+    /// model has no compose wrapper, so a seeded detune would be silently
+    /// stripped by the first performance pitch update (code-review T1) —
+    /// no variation is honest there, a half-locked one is not.
     #[allow(clippy::too_many_arguments)] // wrap_fx's established shape + (var, seed)
     pub fn wrap_var(
         sustain: Box<dyn Voice>,
@@ -2351,20 +2369,7 @@ impl LaVoice {
         let cents = strata[(seed >> 3) as usize % strata.len()] * var.detune_strata_c
             + rng.white() * var.detune_white_c;
         let var_mult = (cents / 1200.0).exp2();
-        let mut gain = gain * (1.0 + var.gain_frac * rng.white());
-        // Track the MODEL's velocity-level law instead of the generic LA
-        // floor (0.35 + 0.65·vel_amp): one instrument, one dynamic curve —
-        // otherwise the sample rides ~3× above the quiet model through the
-        // low-velocity crossfade and steps at the seam (review C4; caught
-        // by guitar_low_velocity_seam_continuity). The exponent makes the
-        // law superlinear in the amp ratio: a soft pick sheds ENERGY faster
-        // than amplitude (the model darkens on three levers at once, losing
-        // spectral energy the amp law alone doesn't count). Anchored to be
-        // exactly 1.0 at vel 100 so every vel-100 fixture is untouched.
-        const VEL_ENERGY_EXP: f32 = 1.4;
-        let ref_amp = vel_amp(100);
-        gain *= (vel_amp(vel) / ref_amp).powf(VEL_ENERGY_EXP) * (0.35 + 0.65 * ref_amp)
-            / (0.35 + 0.65 * vel_amp(vel));
+        let gain = gain * (1.0 + var.gain_frac * rng.white());
         let start = (var.onset_max_s * sr * (0.5 + 0.5 * rng.white())) as usize;
         match Self::build(sustain, zones, key, vel, sr, gain, fade, fx) {
             Ok(mut la) => {
@@ -2383,10 +2388,7 @@ impl LaVoice {
                 la.sustain.set_pitch(var_mult);
                 Box::new(la)
             }
-            Err(mut model) => {
-                model.set_pitch(var_mult);
-                model
-            }
+            Err(model) => model,
         }
     }
 
@@ -2418,13 +2420,22 @@ impl LaVoice {
             Some(base_hz) => vel_lp_alpha(base_hz, vel, sr),
             None => 0.0,
         };
+        // ONE velocity-level law site (review A1): generic floor, or the
+        // authored superlinear model-tracking law (see LaFx::vel_level)
+        let vel_gain = match fx.vel_level {
+            Some(exp) => {
+                let ref_amp = vel_amp(100);
+                (vel_amp(vel) / ref_amp).powf(exp) * (0.35 + 0.65 * ref_amp)
+            }
+            None => 0.35 + 0.65 * vel_amp(vel),
+        };
         Ok(LaVoice {
             sustain,
             zone,
             pos: 0.0,
             step,
             base_step: step,
-            gain: gain * (0.35 + 0.65 * vel_amp(vel)),
+            gain: gain * vel_gain,
             rel_gain: 1.0,
             rel_mul: 1.0,
             rel_t60_mul: 10f32.powf(-3.0 / (0.06 * sr)),
@@ -2527,8 +2538,10 @@ impl Voice for LaVoice {
                     // graceful dry-out (review C8): fade as the read nears
                     // the zone's last frames — exactly 1.0 (bit-transparent)
                     // while more than a taper-length of source remains
-                    let remaining_out = (n as f32 - 2.0 - self.pos) / self.step.max(1e-6);
-                    v *= (remaining_out / self.end_taper).clamp(0.0, 1.0);
+                    // (single division: taper × step is the source-domain
+                    // taper span)
+                    let remaining_src = n as f32 - 2.0 - self.pos;
+                    v *= (remaining_src / (self.end_taper * self.step.max(1e-6))).clamp(0.0, 1.0);
                 }
                 s += v * (1.0 - u) * self.gain * self.rel_gain;
                 self.rel_gain *= self.rel_mul;
@@ -4235,7 +4248,10 @@ mod tests {
                 v.render(&mut buf);
                 buf
             };
-            let (a, a2, b) = (render(5), render(5), render(6));
+            // seeds 5 and 21 land in DIFFERENT detune strata ((5>>3)%5=0 vs
+            // (21>>3)%5=2), so the strata axis is exercised, not just the
+            // xored white streams (code-review L4)
+            let (a, a2, b) = (render(5), render(5), render(21));
             assert!(
                 a.iter().zip(&a2).all(|(x, y)| x.to_bits() == y.to_bits()),
                 "prog {program}: same seed must render bit-identically"
@@ -4301,35 +4317,9 @@ mod tests {
         // variation defect.
         for (program, key) in [(24u8, 52u8), (24, 64), (25, 52), (25, 64)] {
             for vel in [40u8, 72] {
-                let win = |samples: bool| {
-                    let mut v = voices::make(program, key, vel, sr, 5, samples);
-                    let mut buf = vec![0f32; 44100];
-                    v.render(&mut buf);
-                    let rms = |a: usize, b: usize| {
-                        (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
-                    };
-                    let coarse: Vec<f32> = (0..9)
-                        .map(|k| rms(2205 + k * 4410, 2205 + (k + 1) * 4410))
-                        .collect();
-                    let fine: Vec<f32> = (0..19).map(|k| rms(k * 2205, (k + 1) * 2205)).collect();
-                    (coarse, fine)
-                };
-                let ((w, fine), (m, _)) = (win(true), win(false));
-                for (pw, pm) in w.windows(2).zip(m.windows(2)) {
-                    let (rw, rm) = (pw[0] / pw[1].max(1e-12), pm[0] / pm[1].max(1e-12));
-                    let excess = (rw / rm).max(rm / rw);
-                    assert!(
-                        excess < 2.4,
-                        "prog {program} key {key} vel {vel}: wrap-introduced seam step \
-                         {excess:.2}x: wrapped {w:?} vs model {m:?}"
-                    );
-                }
-                let attack = fine[..3].iter().fold(0f32, |mx, &x| mx.max(x));
-                let late = fine[3..].iter().fold(0f32, |mx, &x| mx.max(x));
-                assert!(
-                    late <= attack,
-                    "prog {program} key {key} vel {vel}: attack is not the peak ({fine:?})"
-                );
+                let label = format!("prog {program} key {key} vel {vel}");
+                let fine = assert_wrap_seam(program, key, vel, sr, 0, &label);
+                assert_attack_is_peak(&fine, &label);
             }
         }
     }
@@ -4363,34 +4353,12 @@ mod tests {
     /// mid-fade by construction.
     #[test]
     fn guitar_zone_dry_out_tapers_at_high_rate() {
-        let sr = 96000.0;
-        let win = |samples: bool| {
-            let mut v = voices::make(25, 100, 100, sr, 5, samples);
-            let mut buf = vec![0f32; 96000];
-            v.render(&mut buf);
-            let w = (0.05 * sr) as usize;
-            let rms = |a: usize, b: usize| {
-                (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
-            };
-            (0..9)
-                .map(|k| rms(w + k * 2 * w, w + (k + 1) * 2 * w))
-                .collect::<Vec<f32>>()
-        };
-        let (w, m) = (win(true), win(false));
         // Skip the FIRST pair: at key 100 the steel model's near-instant
         // high-key decay (the documented handover cliff, scratchpad
         // 2026.07.18) dominates the 50–250 ms windows regardless of the
         // taper. This oracle owns the DRY-OUT region (~0.26 s on) — the
         // taper must keep those pairs step-free.
-        for (pw, pm) in w.windows(2).zip(m.windows(2)).skip(1) {
-            let (rw, rm) = (pw[0] / pw[1].max(1e-12), pm[0] / pm[1].max(1e-12));
-            let excess = (rw / rm).max(rm / rw);
-            assert!(
-                excess < 2.4,
-                "steel key 100 @96k: dry-out steps the seam ({excess:.2}x): \
-                 wrapped {w:?} vs model {m:?}"
-            );
-        }
+        assert_wrap_seam(25, 100, 100, 96000.0, 1, "steel key 100 @96k dry-out");
     }
 
     /// Guitar-realism HLD §4 / AC8 — the variation machinery must not reach
@@ -4620,43 +4588,67 @@ mod tests {
             (42u8, 69, "cello-high", false),
             (43u8, 40, "contrabass", false),
         ] {
-            // 100 ms windows from 50 ms to 950 ms, wrapped and model-only
-            let win = |samples: bool| {
-                let mut v = voices::make(program, key, 100, sr, 5, samples);
-                let mut buf = vec![0f32; 44100]; // 1 s, note held
-                v.render(&mut buf);
-                let rms = |a: usize, b: usize| {
-                    (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
-                };
-                let coarse: Vec<f32> = (0..9)
-                    .map(|k| rms(2205 + k * 4410, 2205 + (k + 1) * 4410))
-                    .collect();
-                let fine: Vec<f32> = (0..19).map(|k| rms(k * 2205, (k + 1) * 2205)).collect();
-                (coarse, fine)
-            };
-            let ((w, fine), (m, _)) = (win(true), win(false));
-            for (pw, pm) in w.windows(2).zip(m.windows(2)) {
-                let (rw, rm) = (pw[0] / pw[1], pm[0] / pm[1]);
-                let excess = (rw / rm).max(rm / rw);
-                assert!(
-                    excess < 2.4,
-                    "{name}: wrap-introduced level step across the crossfade \
-                     ({excess:.2}x beyond the model's own shape): wrapped {w:?} \
-                     vs model {m:?}"
-                );
-            }
+            let fine = assert_wrap_seam(program, key, 100, sr, 0, name);
             // struck/plucked: the attack is the global peak — 50 ms windows
             // from t=0, the loudest must start inside the first 150 ms
             if struck {
-                let attack = fine[..3].iter().fold(0f32, |mx, &x| mx.max(x));
-                let late = fine[3..].iter().fold(0f32, |mx, &x| mx.max(x));
-                assert!(
-                    late <= attack,
-                    "{name}: attack is not the peak — late window {late:.5} \
-                     above attack {attack:.5} ({fine:?})"
-                );
+                assert_attack_is_peak(&fine, name);
             }
         }
+    }
+
+    /// The SINGLE seam-continuity contract (code-review A4 — three tests
+    /// used to carry private copies that could drift): the wrap may not add
+    /// more than a 2.4× level step across adjacent 100 ms windows beyond
+    /// the model's own envelope shape (windows scale with `sr`: 100 ms
+    /// coarse from 50 ms, 1 s render, seed 5). `skip` drops leading window
+    /// pairs a caller has documented reason to exclude. Returns the 50 ms
+    /// fine windows for attack-leg callers.
+    fn assert_wrap_seam(
+        program: u8,
+        key: u8,
+        vel: u8,
+        sr: f32,
+        skip: usize,
+        label: &str,
+    ) -> Vec<f32> {
+        let win = |samples: bool| {
+            let mut v = voices::make(program, key, vel, sr, 5, samples);
+            let mut buf = vec![0f32; sr as usize]; // 1 s, note held
+            v.render(&mut buf);
+            let w = (0.05 * sr) as usize;
+            let rms = |a: usize, b: usize| {
+                (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+            };
+            let coarse: Vec<f32> = (0..9)
+                .map(|k| rms(w + k * 2 * w, w + (k + 1) * 2 * w))
+                .collect();
+            let fine: Vec<f32> = (0..19).map(|k| rms(k * w, (k + 1) * w)).collect();
+            (coarse, fine)
+        };
+        let ((wv, fine), (m, _)) = (win(true), win(false));
+        for (pw, pm) in wv.windows(2).zip(m.windows(2)).skip(skip) {
+            let (rw, rm) = (pw[0] / pw[1].max(1e-12), pm[0] / pm[1].max(1e-12));
+            let excess = (rw / rm).max(rm / rw);
+            assert!(
+                excess < 2.4,
+                "{label}: wrap-introduced level step across the crossfade \
+                 ({excess:.2}x beyond the model's own shape): wrapped {wv:?} \
+                 vs model {m:?}"
+            );
+        }
+        fine
+    }
+
+    /// Companion leg for struck/plucked rows of [`assert_wrap_seam`].
+    fn assert_attack_is_peak(fine: &[f32], label: &str) {
+        let attack = fine[..3].iter().fold(0f32, |mx, &x| mx.max(x));
+        let late = fine[3..].iter().fold(0f32, |mx, &x| mx.max(x));
+        assert!(
+            late <= attack,
+            "{label}: attack is not the peak — late window {late:.5} \
+             above attack {attack:.5} ({fine:?})"
+        );
     }
 
     /// GM 7 clavinet routing (2026.07.17): the DEFAULT bank is the sampled voice,

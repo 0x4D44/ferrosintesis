@@ -254,10 +254,17 @@ pub(crate) fn cab_biquads(sr2: f32) -> [Biquad; 5] {
         Biquad::peak(100.0, 1.2, 4.0, sr2),
         Biquad::peak(500.0, 1.0, -3.0, sr2),
         Biquad::peak(2600.0, 1.5, 5.0, sr2),
+        // elements CAB_CLIFF.. are the anti-alias decimation cliff and must
+        // stay LAST in Drive::chain (MicroCab inserts before them)
         Biquad::lowpass(4000.0, 0.9, sr2),
         Biquad::lowpass(3800.0, 0.8, sr2),
     ]
 }
+
+/// Index of the first lowpass-cliff biquad in [`cab_biquads`]'s array — the
+/// named seam `Drive::chain` splits at so the fine-structure FIR can never
+/// silently drift to the wrong side of the anti-alias cliff (review A3).
+pub(crate) const CAB_CLIFF: usize = 3;
 
 /// MicroCab taps: (delay ms, gain), numerically optimized against the full
 /// constraint set at once (250 k-candidate search, journal 2026.07.18):
@@ -439,12 +446,13 @@ impl Drive {
         let mut y = self.dcb.process(s2);
         // voicing biquads, then the fine structure, then the lowpass cliff
         // LAST (it is the decimation filter — review I5/D6)
-        y = self.cab[0].process(y);
-        y = self.cab[1].process(y);
-        y = self.cab[2].process(y);
+        for c in &mut self.cab[..CAB_CLIFF] {
+            y = c.process(y);
+        }
         y = self.micro.process(y);
-        y = self.cab[3].process(y);
-        y = self.cab[4].process(y);
+        for c in &mut self.cab[CAB_CLIFF..] {
+            y = c.process(y);
+        }
         y
     }
 
@@ -4571,14 +4579,15 @@ mod tests {
             ir[0] = 1.0;
             for x in ir.iter_mut() {
                 let mut y = *x;
-                y = cab[0].process(y);
-                y = cab[1].process(y);
-                y = cab[2].process(y);
+                for c in &mut cab[..CAB_CLIFF] {
+                    y = c.process(y);
+                }
                 if with_micro {
                     y = mc.process(y);
                 }
-                y = cab[3].process(y);
-                y = cab[4].process(y);
+                for c in &mut cab[CAB_CLIFF..] {
+                    y = c.process(y);
+                }
                 *x = y;
             }
             ir

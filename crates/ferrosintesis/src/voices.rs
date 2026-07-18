@@ -11124,6 +11124,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                     fade,
                     crate::sampler::LaFx {
                         vel_lp: Some(5000.0),
+                        vel_level: Some(crate::sampler::GUITAR_VEL_LEVEL_EXP),
                         ..Default::default()
                     },
                     crate::sampler::GUITAR_VAR,
@@ -11153,6 +11154,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                     fade,
                     crate::sampler::LaFx {
                         vel_lp: Some(6000.0),
+                        vel_level: Some(crate::sampler::GUITAR_VEL_LEVEL_EXP),
                         ..Default::default()
                     },
                     crate::sampler::GUITAR_VAR,

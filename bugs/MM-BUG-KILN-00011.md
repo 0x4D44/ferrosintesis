@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00011 — CC7 volume and CC10 pan bypass the controller slew that CC11 gets, so a fade or pan sweep steps at block boundaries
 
-- **State:** Fixed (awaiting close)
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** engine
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, Claude Opus 4.8 (1M) — CC7/CC10 routed through a prime-on-first-block slew like CC11; render-diff 20 changed/89 same reconciles exactly to the multi-tick CC7/CC10 set, 0 contamination. NOTE: the bug's "catalog sets CC7/CC10 once, any diff is a bug" premise was false — 24 album MIDIs automate CC10 pan; Arthur chose to slew both, accepting the pan-automation albums re-render as a spatial-smoothing improvement.)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, Claude Opus 4.8 (1M) — CC7/CC10 routed through a prime-on-first-block slew like CC11; render-diff 20 changed/89 same reconciles exactly to the multi-tick CC7/CC10 set, 0 contamination. NOTE: the bug's "catalog sets CC7/CC10 once, any diff is a bug" premise was false — 24 album MIDIs automate CC10 pan; Arthur chose to slew both, accepting the pan-automation albums re-render as a spatial-smoothing improvement.); Closed (2026-07-18, Claude Opus 4.8 — independent fresh-context verification on the origin/main tree (v0.21.33). All four oracles green (`cc7_cc10_unauthored_channel_is_unchanged`, `cc7_cc10_prime_on_first_block_is_last_write_wins`, `cc7_cc10_post_prime_change_slews_one_pole_monotone`, `cc10_haas_tap_advances_smoothly_not_in_jumps`). Fails-before/passes-after confirmed by observation: emulating the old instant set (snap current→target each block) fails `..._slews_one_pole_monotone` at the one-pole-step assertion, and the real slew passes. Root cause — CC7/CC10 unsmoothed while CC11 is — is addressed at the mix-loop layer; unauthored-channel confinement and same-tick last-write-wins are preserved. Two-eyes: the Open→Fixed transition was the 1M-context session; this closure re-verified with no shared context.)
 
 ## Observation
 

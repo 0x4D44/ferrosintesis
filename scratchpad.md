@@ -416,3 +416,10 @@
   (16=Rock, 8=Room, 40=Brush…); ch9 only distinguishes 40=Brush. If XG files want kit-accurate
   percussion, map the kit-select program to `drums::Kit` for `xg_drum` strips too
   (`engine.rs` `program_change`, currently gated `ch == 9`).
+
+- 2026.07.18 — Pre-existing (NOT introduced by the GS change): `midi.rs::parse` does not
+  reset running status to 0 after a meta (0xFF) or SysEx (0xF0/0xF7) event. Well-formed
+  SMFs always emit an explicit status after meta/sysex, so it's correct for valid files;
+  a MALFORMED file using running status straight after a meta/sysex would misparse (treat
+  data as another meta). Cheap hardening if ever wanted: `status = 0;` in the 0xFF and
+  0xF0|0xF7 arms. Flagged by the GS external review; left out of the GS task's scope.

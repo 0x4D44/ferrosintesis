@@ -2588,6 +2588,22 @@ mod perceptual_distinctness {
             lo: -120.0,
             hi: -10.0,
         },
+        // Plucked strings 24-37,46,104-108: guitars, basses, harp, and ethnic
+        // plucks (sitar/banjo/shamisen/koto/kalimba) — all DECAY (KS/pluck models).
+        // Measured sustain_db = -39..-118; same -10 dB decays ceiling. Carve 38/39
+        // synth bass (they HOLD, +0.4 — a synth bass is not a plucked string). 29/30
+        // driven guitar are KEPT: the e-bow latch doesn't engage on a plain held
+        // note, so they measure decaying (-39.8) like the rest.
+        ClassRange {
+            label: "plucked 24-37,46,104-108",
+            programs: &[
+                24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 46, 104, 105, 106, 107, 108,
+            ],
+            field: "sustain_db",
+            get: |p| p.sustain_db,
+            lo: -120.0,
+            hi: -10.0,
+        },
     ];
 
     /// The class-identity oracle: every in-scope voice's field-mean falls in its
@@ -2626,6 +2642,11 @@ mod perceptual_distinctness {
                 "keyboard+chrom-perc 0-15",
                 19,
                 "organ holds (sustain_db ~ 0), must fail the decays ceiling",
+            ),
+            (
+                "plucked 24-37,46,104-108",
+                40,
+                "violin bows/holds (sustain_db ~ +7), must fail the decays ceiling",
             ),
         ];
         for &(label, wrong, why) in controls {

@@ -7656,8 +7656,8 @@ impl BowedString {
                           // higher and its output a touch lighter. Same waveguide, retuned.
                           // (body freqs, in-loop bridge damping, amp base/span, OUTPUT lowpass Hz,
                           // loop-latency tuning compensation in samples).
-                          // The output lowpass (0 = none) darkens the cello cleanly without touching
-                          // the loop's nonlinear dynamics; it is None for the contrabass.
+                          // The output lowpass darkens each string without touching the loop's
+                          // nonlinear dynamics; the contrabass cutoff sits below the cello's.
                           // loop_comp: the in-loop reflection filter + structural latency add ~4
                           // samples the bare `sr/f` never subtracted, so an uncompensated string
                           // renders progressively flat with pitch (≈ −5 cents at E1 but −31/−45
@@ -16880,6 +16880,33 @@ mod tests {
                  -- intervals are corrupted, not merely detuned. cents = {cents:?}"
             );
         }
+    }
+
+    /// GM42/43 ship through BowedString, not the alt-bank Bowed presets.
+    /// Keep the default cello audibly brighter than the contrabass at a shared
+    /// pitch; a direction-free "they differ" assertion permits the historical
+    /// backwards ordering to return unnoticed (MM-BUG-KILN-00026).
+    #[test]
+    fn bowed_string_cello_is_brighter_than_contrabass() {
+        let sr = 44100.0;
+        let brightness = |program: u8| {
+            [7u32, 11, 29]
+                .iter()
+                .map(|&seed| {
+                    let signal = render_program_sampled(program, 43, 96, 3.0, seed, false);
+                    let sustain = segment(&signal, sr, 0.8, 2.6);
+                    hp_rms(sustain, sr, 2200.0) / rms(sustain).max(1e-9)
+                })
+                .sum::<f32>()
+                / 3.0
+        };
+
+        let cello = brightness(42);
+        let contrabass = brightness(43);
+        assert!(
+            cello > contrabass * 1.05,
+            "GM42 cello must be brighter than GM43 contrabass: {cello:.5} vs {contrabass:.5}"
+        );
     }
 
     // -- Stage 4 (ensemble 48-51): the Synth Strings 50/51 string-machine split --

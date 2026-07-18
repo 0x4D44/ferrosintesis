@@ -2604,6 +2604,38 @@ mod perceptual_distinctness {
             lo: -120.0,
             hi: -10.0,
         },
+        // Bowed strings 40-43,110 (violin/viola/cello/contrabass/fiddle): HELD by
+        // the bow — sustain_db measured +3.3..+9.1. Carve 44 (tremolo strings —
+        // a member trait) and 45 (pizzicato — a PLUCK, sustain -105, decays).
+        ClassRange {
+            label: "bowed-sustain 40-43,110",
+            programs: &[40, 41, 42, 43, 110],
+            field: "sustain_db",
+            get: |p| p.sustain_db,
+            lo: -5.0,
+            hi: 20.0,
+        },
+        // Bowed strings carry VIBRATO — the HLD §5 "strings FM depth" worked
+        // example. fm_depth measured 0.45..0.92 (>> a non-vibrato piano's ~0.05).
+        ClassRange {
+            label: "bowed-vibrato 40-43,110",
+            programs: &[40, 41, 42, 43, 110],
+            field: "fm_depth",
+            get: |p| p.fm_depth,
+            lo: 0.1,
+            hi: 1.0,
+        },
+        // String/synth ensemble + choir 48-54: sustained pads/sections. sustain_db
+        // measured 48/49 = -5.5 (lowest), 50-54 = -1.0..+1.3; a -7 dB floor clears
+        // -5.5 with ~1.5 dB margin. Carve 55 (orchestra hit — a one-shot stab).
+        ClassRange {
+            label: "ensemble/choir 48-54",
+            programs: &[48, 49, 50, 51, 52, 53, 54],
+            field: "sustain_db",
+            get: |p| p.sustain_db,
+            lo: -7.0,
+            hi: 20.0,
+        },
     ];
 
     /// The class-identity oracle: every in-scope voice's field-mean falls in its
@@ -2647,6 +2679,21 @@ mod perceptual_distinctness {
                 "plucked 24-37,46,104-108",
                 40,
                 "violin bows/holds (sustain_db ~ +7), must fail the decays ceiling",
+            ),
+            (
+                "bowed-sustain 40-43,110",
+                0,
+                "piano decays (sustain_db ~ -18), must fail the held floor",
+            ),
+            (
+                "bowed-vibrato 40-43,110",
+                0,
+                "piano has no vibrato (fm_depth ~ 0.05), must fail the vibrato floor",
+            ),
+            (
+                "ensemble/choir 48-54",
+                0,
+                "piano decays (sustain_db ~ -18), must fail the held floor",
             ),
         ];
         for &(label, wrong, why) in controls {

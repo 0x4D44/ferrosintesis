@@ -416,6 +416,25 @@ impl Drive {
                 Biquad::peak(1200.0, 0.8, 2.0, sr2),
             )
         };
+        Drive::from_stages(program, sr2, voice, g1, bias, tilt, g2, post)
+    }
+
+    /// Shared field construction for both the program-gated `new` and the XG
+    /// `amp_sim` insert: the pre-HPF, the post-shaper DC blocker, the 5-biquad
+    /// cabinet, and the interpolation state are identical; only the voicing EQ
+    /// and gain staging differ. `program` is stored but DSP-irrelevant
+    /// (`chain`/`process` never read it).
+    #[allow(clippy::too_many_arguments)]
+    fn from_stages(
+        program: u8,
+        sr2: f32,
+        voice: Biquad,
+        g1: f32,
+        bias: f32,
+        tilt: Biquad,
+        g2: f32,
+        post: f32,
+    ) -> Self {
         Drive {
             program,
             pre: Biquad::highpass(90.0, 0.7, sr2),
@@ -433,6 +452,32 @@ impl Drive {
             micro: MicroCab::new(sr2),
             prev: 0.0,
         }
+    }
+
+    /// XG Amp Simulator (Variation) as a per-part insert: the same amp+cabinet
+    /// DSP as `new`, with the two gain stages scaled by the XG Drive parameter
+    /// (0..127). Voiced as an overdriven-guitar amp (the reference file targets
+    /// the electric-guitar channel); the cabinet is the shared 5-biquad
+    /// decimation filter — exactly ONE cabinet, since the insert REPLACES the
+    /// program drive rather than stacking after it. `post` trims the hotter
+    /// settings so the wet stage stays near unity for the apply-site dry/wet
+    /// blend; Arthur's ear is the final tuning (oracles check direction).
+    fn amp_sim(sr: f32, drive_0_127: u8) -> Self {
+        let sr2 = sr * 2.0;
+        let d = drive_0_127 as f32 / 127.0;
+        // Quadratic drive curve: nearly clean at low settings, hot at full, so
+        // the knob is expressive across its range (a linear map saturates the
+        // first stage too early and Drive barely moves the tone). The file's
+        // Drive 24 (d ~= 0.19) sits in gentle overdrive.
+        let g1 = 1.0 + d * d * 16.0;
+        let g2 = 1.5 + d * 1.5;
+        let bias = 0.7;
+        // more drive compresses harder, so trim output as gain rises to hold a
+        // roughly constant wet level for the blend.
+        let post = 0.28 / (1.0 + d * 1.5);
+        let voice = Biquad::peak(800.0, 0.8, 4.0, sr2);
+        let tilt = Biquad::peak(1200.0, 0.8, 2.0, sr2);
+        Drive::from_stages(0, sr2, voice, g1, bias, tilt, g2, post)
     }
 
     #[inline]
@@ -912,6 +957,12 @@ struct Strip {
     organ_wind: f32,
     organ_trem_phase: f32,
     drive: Option<Drive>,
+    // XG Variation Amp-Simulator insertion: an amp/cab insert that REPLACES the
+    // program `drive` on this channel, paired with its dry/wet weight (0..1).
+    // Set ONLY by XG effect SysEx (`resolve_variation`); program_change /
+    // needs_drive / rederive_program_defaults never touch it — so an album,
+    // which sends no SysEx, never installs one and stays byte-identical.
+    xg_insert: Option<(Drive, f32)>,
     wah: Option<Biquad>, // CC74 brightness filter; None = true bypass
     wah_legacy: Option<Biquad>,
     wah_cathedral: Option<Biquad>,
@@ -995,6 +1046,7 @@ impl Strip {
             organ_wind: 0.0,
             organ_trem_phase: 0.0,
             drive: None,
+            xg_insert: None,
             wah: None,
             wah_legacy: None,
             wah_cathedral: None,
@@ -1263,6 +1315,14 @@ const CHORUS1_DEPTH_S: f32 = 0.006;
 const DEFAULT_CHORUS_RATE: f32 = 0.35;
 const DEFAULT_CHORUS_BASE_S: f32 = 0.018;
 const DEFAULT_CHORUS_DEPTH_S: f32 = 0.005;
+
+/// XG Variation Type MSB for the Amp Simulator (the only variation type we
+/// model). The LSB (0x11 in the reference file) is undocumented in the MU100/
+/// MU128 map and ignored — treated as the basic Amp Sim.
+const AMP_SIM_TYPE_MSB: u8 = 0x4B;
+/// XG Variation Connection: 0 = INSERTION (a per-part insert), 1 = SYSTEM (a
+/// global send bus — a non-goal; SYSTEM installs no insert).
+const XG_VAR_INSERTION: u8 = 0x00;
 
 /// XG effect-block state (Effect1): the pending variation-insertion config,
 /// mutated ONLY by XG effect SysEx (`EvKind::XgEffectParam` / `XgReset`). No
@@ -1689,10 +1749,27 @@ impl EngineCore {
         }
     }
 
-    /// (Re)resolve the variation config into the per-strip insert. Unit 5 fills
-    /// the install; until then this is a no-op stub so the config accumulates
-    /// with the final routing wired in one place.
-    fn resolve_variation(&mut self) {}
+    /// (Re)resolve the variation config into the per-strip insert. Idempotent —
+    /// re-run after every parameter update, so the t=0 message order is
+    /// irrelevant and a later part/connection/type change moves or removes the
+    /// insert. At most one insert exists at a time (XG has a single variation
+    /// block): clear every strip, then install on the target iff it is an Amp
+    /// Simulator, INSERTION-connected, and aimed at a real part.
+    fn resolve_variation(&mut self) {
+        for s in &mut self.strips {
+            s.xg_insert = None;
+        }
+        let is_amp_sim = self.xg.var_type_msb == AMP_SIM_TYPE_MSB;
+        let insertion = self.xg.var_connection == XG_VAR_INSERTION;
+        let part = self.xg.var_part as usize;
+        if is_amp_sim && insertion && part < self.strips.len() {
+            // Dry/Wet 1..127 -> weight 0..1 (127 = full wet). Blended at the
+            // apply site; the Drive itself carries no blend.
+            let wet = f32::from(self.xg.var_drywet.saturating_sub(1)) / 126.0;
+            let insert = Drive::amp_sim(self.opt.sr, self.xg.var_drive);
+            self.strips[part].xg_insert = Some((insert, wet.clamp(0.0, 1.0)));
+        }
+    }
 
     fn note_on(&mut self, ch: u8, key: u8, vel: u8) {
         let sr = self.opt.sr;
@@ -2622,7 +2699,24 @@ impl EngineCore {
             let buf = &mut self.ch_buf[ci];
             let legacy = &mut self.legacy_buf[ci];
             let cathedral = &mut self.cathedral_buf[ci];
-            if let Some(drive) = &mut strip.drive {
+            if let Some((xg, wet)) = &mut strip.xg_insert {
+                // XG Amp-Simulator insertion REPLACES the program drive on this
+                // channel (one amp+cabinet, never two in series). Dry/Wet blend
+                // at BASE rate — outside Drive's internal 2x — so Drive::process
+                // stays byte-for-byte the program-drive path: copy the dry
+                // block, process 100% wet, then interpolate by the weight.
+                let wet = *wet;
+                if wet >= 1.0 {
+                    xg.process(&mut buf[..n]);
+                } else {
+                    let mut dry = [0f32; BLOCK];
+                    dry[..n].copy_from_slice(&buf[..n]);
+                    xg.process(&mut buf[..n]);
+                    for (b, d) in buf[..n].iter_mut().zip(&dry[..n]) {
+                        *b = *d * (1.0 - wet) + *b * wet;
+                    }
+                }
+            } else if let Some(drive) = &mut strip.drive {
                 drive.process(&mut buf[..n]);
             }
             if let Some(wah) = &mut strip.wah {
@@ -9381,6 +9475,241 @@ mod tests {
         let other = render(&song(Some([0x00, 0x00])), &opts).0;
         assert_ne!(base, chorus1, "Chorus 1 must change the chorus render");
         assert_eq!(base, other, "an unrecognized chorus type must be inert");
+    }
+
+    /// The XG Effect1 messages that install an Amp-Simulator variation on
+    /// `part`, with the given Drive / Dry-Wet / connection.
+    fn xg_amp_sim_block(part: u8, drive: u8, drywet: u8, connection: u8) -> Vec<(f64, EvKind)> {
+        vec![
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x40,
+                    data: [AMP_SIM_TYPE_MSB, 0x00],
+                    len: 2,
+                },
+            ),
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x42,
+                    data: [0x00, drive],
+                    len: 2,
+                },
+            ),
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x54,
+                    data: [0x00, drywet],
+                    len: 2,
+                },
+            ),
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x5A,
+                    data: [connection, 0x00],
+                    len: 1,
+                },
+            ),
+            (
+                0.0,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x5B,
+                    data: [part, 0x00],
+                    len: 1,
+                },
+            ),
+        ]
+    }
+
+    /// Unit 5 (routing): an Amp-Sim INSERTION on part 14 changes that channel's
+    /// render, leaves a non-target channel byte-identical, and installs nothing
+    /// when connection == SYSTEM or the part is OFF (127).
+    #[test]
+    fn xg_variation_routes_to_the_target_channel_only() {
+        let sr = 44100.0;
+        let opts = |solo: u16| Options {
+            sr,
+            wet: 0.0,
+            tail: 0.5,
+            delay_s: 0.0,
+            samples: false,
+            solo,
+        };
+        let song = |xg: Vec<(f64, EvKind)>| {
+            let mut ev = vec![
+                (0.0, EvKind::Prog { ch: 14, prog: 29 }),
+                (0.0, EvKind::Prog { ch: 0, prog: 29 }),
+            ];
+            ev.extend(xg);
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 14,
+                    key: 45,
+                    vel: 100,
+                },
+            ));
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 52,
+                    vel: 100,
+                },
+            ));
+            ev.push((0.9, EvKind::NoteOff { ch: 14, key: 45 }));
+            ev.push((0.9, EvKind::NoteOff { ch: 0, key: 52 }));
+            test_song(ev, 1.4)
+        };
+        let insert = xg_amp_sim_block(14, 24, 100, XG_VAR_INSERTION);
+        let all = 0xFFFF;
+        let ch0_only = 1u16 << 0;
+
+        let base = render(&song(vec![]), &opts(all)).0;
+        let with_var = render(&song(insert.clone()), &opts(all)).0;
+        assert_ne!(
+            base, with_var,
+            "the Amp-Sim insert must change the target render"
+        );
+
+        let ch0_base = render(&song(vec![]), &opts(ch0_only)).0;
+        let ch0_var = render(&song(insert.clone()), &opts(ch0_only)).0;
+        assert_eq!(
+            ch0_base, ch0_var,
+            "a non-target channel must be byte-identical"
+        );
+
+        let system = render(&song(xg_amp_sim_block(14, 24, 100, 0x01)), &opts(all)).0;
+        assert_eq!(system, base, "SYSTEM connection must install no insert");
+        let off = render(
+            &song(xg_amp_sim_block(127, 24, 100, XG_VAR_INSERTION)),
+            &opts(all),
+        )
+        .0;
+        assert_eq!(off, base, "part OFF (127) must install no insert");
+    }
+
+    /// Unit 5 (REPLACE, not stack — white-box): with the Amp-Sim insert on a
+    /// program-29 channel, the presence or absence of the program `drive` makes
+    /// no difference — the insert takes precedence and the program drive never
+    /// runs. Under a (wrong) STACK the two would differ.
+    #[test]
+    fn xg_variation_replaces_not_stacks_the_program_drive() {
+        let build = |clear_drive: bool| {
+            let mut core = EngineCore::new(CoreOptions {
+                sr: 44100.0,
+                wet: 0.0,
+                delay_s: 0.0,
+                samples: false,
+                solo: 0xFFFF,
+                gtr_symp_on: true,
+                drum_room_on: true,
+                sitar_symp_on: true,
+            });
+            core.handle_event(EvKind::Prog { ch: 14, prog: 29 });
+            assert!(
+                core.strips[14].drive.is_some(),
+                "program 29 builds a program drive"
+            );
+            for (_, kind) in xg_amp_sim_block(14, 24, 100, XG_VAR_INSERTION) {
+                core.handle_event(kind);
+            }
+            assert!(
+                core.strips[14].xg_insert.is_some(),
+                "Amp-Sim insert must be installed"
+            );
+            if clear_drive {
+                core.strips[14].drive = None;
+            }
+            core.handle_event(EvKind::NoteOn {
+                ch: 14,
+                key: 45,
+                vel: 100,
+            });
+            let mut out = Vec::new();
+            let mut sink = vec![0f32; BLOCK * 2];
+            for _ in 0..30 {
+                sink.iter_mut().for_each(|x| *x = 0.0);
+                core.render_block_add(BLOCK, &mut sink);
+                out.extend_from_slice(&sink);
+            }
+            out
+        };
+        assert_eq!(
+            build(false),
+            build(true),
+            "the insert must REPLACE the program drive (it never runs when an insert is present)"
+        );
+    }
+
+    /// Unit 5 (Dry/Wet blend): lower Dry/Wet moves the render monotonically away
+    /// from full-wet toward the dry (un-amped) signal — the base-rate apply-site
+    /// blend interpolates linearly.
+    #[test]
+    fn xg_variation_drywet_blends_toward_full_wet() {
+        let sr = 44100.0;
+        let opts = Options {
+            sr,
+            wet: 0.0,
+            tail: 0.5,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+        };
+        let render_dw = |drywet: u8| {
+            let mut ev = vec![(0.0, EvKind::Prog { ch: 14, prog: 29 })];
+            ev.extend(xg_amp_sim_block(14, 90, drywet, XG_VAR_INSERTION));
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 14,
+                    key: 45,
+                    vel: 100,
+                },
+            ));
+            ev.push((0.9, EvKind::NoteOff { ch: 14, key: 45 }));
+            left(&render(&test_song(ev, 1.4), &opts).0)
+        };
+        let full = render_dw(127);
+        let mid = render_dw(64);
+        let dry = render_dw(1);
+        let dist =
+            |a: &[f32], b: &[f32]| rms(&a.iter().zip(b).map(|(x, y)| x - y).collect::<Vec<_>>());
+        let d_dry = dist(&dry, &full);
+        let d_mid = dist(&mid, &full);
+        assert!(d_mid > 1e-6, "Dry/Wet 64 must differ from full wet");
+        assert!(
+            d_dry > d_mid * 1.3,
+            "lower Dry/Wet must move monotonically away from full wet: dry {d_dry:.6} mid {d_mid:.6}"
+        );
+    }
+
+    /// Unit 5 (Drive parameter): more XG Drive drives the amp-sim harder — a pure
+    /// sine picks up more 2nd/3rd-harmonic energy relative to its fundamental.
+    #[test]
+    fn amp_sim_higher_drive_adds_harmonics() {
+        let sr = 44100.0;
+        let f0 = 200.0;
+        let n = 8192;
+        let thd = |drive: u8| {
+            let mut buf: Vec<f32> = (0..n)
+                .map(|i| 0.3 * (TAU * f0 * i as f32 / sr).sin())
+                .collect();
+            Drive::amp_sim(sr, drive).process(&mut buf);
+            let fund = crate::testutil::mag_at(&buf, sr, f0).max(1e-9);
+            let h2 = crate::testutil::mag_at(&buf, sr, 2.0 * f0);
+            let h3 = crate::testutil::mag_at(&buf, sr, 3.0 * f0);
+            (h2 + h3) / fund
+        };
+        let mild = thd(20);
+        let hot = thd(110);
+        assert!(
+            hot > mild * 1.5,
+            "more XG Drive must add harmonics: mild {mild:.4} hot {hot:.4}"
+        );
     }
 
     /// KP-O3 (v0.12 brush kit selection seam, re-anchored on trunk's V3

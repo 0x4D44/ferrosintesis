@@ -2537,6 +2537,32 @@ mod perceptual_distinctness {
         );
     }
 
+    /// Calibration instrument for the class-identity oracle (MM-BUG-KILN-00006):
+    /// dumps, per GM program, the probe-key MEAN (§2.1: keys 48 & 72) of the
+    /// physically-scaled Passport fields the oracle asserts on. Not a gate — the
+    /// numbers it prints are what the `class_identity_ranges_hold` ranges freeze
+    /// against (RED-before/GREEN-after), never tuned to green.
+    /// Run: `cargo test print_passport_fields -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn print_passport_fields() {
+        let ps = passports();
+        println!("prog  attack_log10   sustain_db   flat_L   harm_frac_L   fm_depth   cent_log2_L");
+        for prog in 0..128u8 {
+            let p = &ps[prog as usize];
+            let km = |g: fn(&Passport) -> f32| 0.5 * (g(&p[0]) + g(&p[1]));
+            println!(
+                "GM{prog:3}  {:11.4}  {:10.3}  {:7.4}  {:10.4}  {:9.4}  {:10.4}",
+                km(|q| q.attack_log10),
+                km(|q| q.sustain_db),
+                km(|q| q.flat[V_LONG]),
+                km(|q| q.harm_frac[V_LONG]),
+                km(|q| q.fm_depth),
+                km(|q| q.cent_log2[V_LONG]),
+            );
+        }
+    }
+
     /// Calibration aid (not a gate): the §2.4/§7 control tables plus every
     /// within-family pair's tier, score and per-dimension distances.
     /// Run: `cargo test print_perceptual_matrix -- --ignored --nocapture`.

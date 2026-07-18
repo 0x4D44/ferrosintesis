@@ -3,6 +3,20 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.18 — **Adding an LA sample bank: MEASURE each zone's root before hardcoding — many sources are
+  2f-dominant or octave-mislabelled, and a wrong root plays the zone an octave off** (`prepare.py`
+  `TWO_F_STRONG` / `_bake_sf_onset`; per-family bank fns in `sampler.rs`).
+  - 2f trap: autocorr grabs the 2nd harmonic whenever the F0 ceiling admits it (ocarina, recorder,
+    banjo all did). Fix: keep a zone span UNDER one octave so a single ceiling separates f from 2f
+    (ocarina), OR add the family to `TWO_F_STRONG` for a per-note ceiling of label×1.5 (recorder, banjo).
+    Probe first: `measure_f0(x, sr, 150, label*1.5)` vs a generous ceiling.
+  - Octave-label traps: VCSL keyboard/ocarina file labels sit an octave BELOW sounding pitch; ganjo
+    banjo labels sit an octave ABOVE. Name the dest by the MEASURED pitch, never the source label.
+  - A NEW sample crate's WAVs are gitignored until you add `!crates/<crate>/samples/*.wav` to
+    `.gitignore` — else `git add <crate>` commits the crate WITHOUT its samples and it fails to build
+    from a clean checkout. Confirm with `git ls-files <crate>/samples` after committing.
+  - ganjo WAVs are IEEE-float (fmt tag 3); stdlib `wave` errors "unknown format: 3" — transcode to
+    16-bit PCM with ffmpeg at fetch (`ensure_banjo_sources`), like the SF3 Ogg / drumkit FLAC decodes.
 - 2026.07.17 — **ferrosintesis has NO per-instrument loudness normalization — only whole-mix −18 LUFS;
   per-program balance is now nudged toward the SC-55 by `engine::PROGRAM_TRIM_DB[128]` (applied at the
   melodic strip `g*=trim`, ch9 exempt).** Two metric traps when auditing levels: (1) whole-note RMS

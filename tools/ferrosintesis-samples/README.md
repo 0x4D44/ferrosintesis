@@ -8,13 +8,17 @@ and provenance live in `crates/ferrosintesis-samples-drumkit/PROVENANCE.md`.
 
 The rest of this README covers `prepare.py`: the generator, tests, full
 inventory, and provenance for
-ferrosintesis's 202 attack transients (16.68 MiB source). The generated mono
-16-bit 44.1 kHz WAVs are split between
-`crates/ferrosintesis-samples-core/samples/` (piano, violin, flute) and
-`crates/ferrosintesis-samples-orchestral/samples/` (all other families). Those
-two default asset crates embed the bytes with `include_bytes!`;
-`crates/ferrosintesis/src/sampler.rs` uses them for LA-style synthesis. Each WAV
-supplies the onset of a note, then crossfades into the modeled body or sustain.
+ferrosintesis's 254 attack transients. The generated mono 16-bit 44.1 kHz WAVs are
+split across `crates/ferrosintesis-samples-core/samples/` (piano, violin, flute),
+`crates/ferrosintesis-samples-orchestral/samples/` (brass, reeds, string sections,
+nylon/steel guitars, harpsichord), the newer CC0 crate
+`crates/ferrosintesis-samples-orchestral2/samples/` (harp, timpani, recorder,
+ocarina, banjo — the `-orchestral` crate is at the crates.io size cap), and the MIT
+`crates/ferrosintesis-samples-musescore/samples/` (GM 104 sitar + GM 75/76/77 pipe
+onsets from the MS Basic soundfont). Those asset crates embed the bytes with
+`include_bytes!`; `crates/ferrosintesis/src/sampler.rs` uses them for LA-style
+synthesis. Each WAV supplies the onset of a note, then crossfades into the modeled
+body or sustain.
 
 - `piano_*_{pp,mf,f}.wav` and `piano_*_{pp,mf,f}_rr2.wav` — upright piano
   strikes, 9 pitch zones (C2–C6) × 3 dynamic layers × **2 round robins**
@@ -50,8 +54,9 @@ supplies the onset of a note, then crossfades into the modeled body or sustain.
   A#2), kept 0.9 s so the sample carries the pick transient and early body
   resonance while the Karplus-Strong string keeps the bendable decay. The
   source has one take per note — no velocity layers, no round robins. GM 25
-  (steel) stays pure model: no clean CC0 steel-string source yet (the
-  FreePats FSS Steel-String set is GPL-with-exception).
+  (steel) is its own `steel_*.wav` bank: 8 zones E2–B5 from a 2017 Martin HD28,
+  CC0-dedicated in the Discord SFZ GM Bank (the FreePats FSS Steel-String set stays
+  rejected — its GPL-with-exception does not permit redistributing the sample bytes).
 - `harpsi_*.wav` — harpsichord (GM 6) quill-pluck onsets, 10 pitch zones
   sounding C2–F6 (~6-semitone C/F grid, one take per note: single register
   `Main`, single round robin), kept 0.9 s like the guitars so the sample carries
@@ -69,6 +74,16 @@ supplies the onset of a note, then crossfades into the modeled body or sustain.
   with a fast note-off damp. Output routes to the separate MIT `-clavinet` crate; the
   modeled Pluck stays the `--no-samples` / CC0-alt voice. `t60`/level are ear-tunable.
   **Unlike every other bank here, this one is MIT, not CC0.**
+- **LA onset banks added 2026.07.18** (all onset-only, roots MEASURED). **CC0 → the
+  `-orchestral2` crate:** `harp_*` (GM 46, 11 zones G1–F7, VCSL concert harp),
+  `timpani_*` (GM 47, 5 struck zones A#1–F3, VCSL Timpani 2), `recorder_*` (GM 74,
+  7 zones F3–C6, VCSL Baroque alto+soprano), `ocarina_*` (GM 79, 3 zones E4–C5, VCSL)
+  and `banjo_*` (GM 105, 8 zones D#2–B4, sfzinstruments/ganjo). **MIT (MS Basic SF3,
+  via `_bake_sf_onset`) → the `-musescore` crate:** `sitar_*` (GM 104, 8 zones E3–G6),
+  `panflute_*` (GM 75, 8 zones F#3–C7), `bottle_*` (GM 76, single C6) and `shakuhachi_*`
+  (GM 77, single C5). Some sources are 2f-dominant or octave-mislabelled, so roots are
+  measured with a per-note ceiling (`TWO_F_STRONG`) or at the SF3 `originalPitch`; the
+  ganjo WAVs are IEEE-float, transcoded to PCM by `ensure_banjo_sources` (ffmpeg).
 - `drum_sus_cymb1_*`, `drum_crash1_*`, `drum_kick_*`, `drum_snare2_*`
   — unpitched drum-hit overlays for the default kit: crash/suspended cymbal
   attacks kept to ~2.2 s, kick/snare attacks kept to ~0.46 s. The modeled drum
@@ -116,6 +131,18 @@ SF3's SHA-256 (`5ea2375e…3c2d99c`) before use. SF3 stores each sample as a
 self-contained Ogg-Vorbis stream in the `smpl` chunk, so extraction slices the
 GM 7 preset's zones out by their byte offsets and decodes them with **ffmpeg** (the
 same shell-out precedent as `prepare_drumkit.py`'s FLAC decode).
+
+The **2026.07.18 LA-onset additions** reuse those sources plus one new one. From **VCSL**
+(same CC0 pin `c1ea7bcc…`): the concert harp, Timpani 2, four Baroque recorders and the
+ocarina — CC0, routed to `ferrosintesis-samples-orchestral2`. The **GM 105 banjo** is from
+**sfzinstruments/ganjo** (a CC0 6-string guitar-banjo, <https://github.com/sfzinstruments/ganjo>)
+pinned to commit `ccff5cd5cd3b513873a48994c07724d9d3c39e1c`; its WAVs are IEEE-float and are
+transcoded to PCM with ffmpeg (`ensure_banjo_sources`), and its file labels sit an octave
+above sounding pitch (the dest is named by the MEASURED pitch). The **GM 104 sitar and
+GM 75/76/77 pipe onsets** come from the same **MIT MS Basic** soundfont as the clavinet (same
+commit + SHA-256 pin) via `_bake_sf_onset`, and ship in `ferrosintesis-samples-musescore` with
+a `NOTICE`. Exact zone/source tables live in `prepare.py` (`_HARP_ZONES`, `_TIMPANI_ZONES`,
+`_RECORDER_ZONES`, `_OCARINA_ZONES`, `_GANJO_ZONES`, and the `_bake_sf_onset` preset calls).
 
 ## Regenerating
 

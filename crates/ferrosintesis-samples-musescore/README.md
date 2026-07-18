@@ -17,8 +17,6 @@ access this crate through `ferrosintesis`, not directly.
 | `bottle_*` | 76 | Blown bottle (breath onset) |
 | `shakuhachi_*` | 77 | Shakuhachi (breath onset) |
 
-(Pipes 75/76/77 land here as their unit completes.)
-
 The GM 7 clavinet from the same soundfont ships separately in
 `ferrosintesis-samples-clavinet` (it is a full decaying note, not an onset).
 

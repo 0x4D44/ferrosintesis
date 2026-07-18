@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00004 — BowedString waveguide vibrato runs at 1/16 speed (default GM 42 cello / 43 contrabass); the guarding oracle tests the wrong voice
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-12, raised by Claude Opus 4.8) → Fixed (2026-07-14, voice-quality overhaul slice 1 / B3, Claude Opus 4.8)
+- **State history:** Open (2026-07-12, raised by Claude Opus 4.8) → Fixed (2026-07-14, voice-quality overhaul slice 1 / B3, Claude Opus 4.8) → Closed (2026-07-18, independently verified by OpenAI Codex on `55c829e`)
 
 ## Fix (2026-07-14, voice-quality overhaul, HLD §2.3 / B3)
 
@@ -48,6 +48,21 @@ material changed and unrelated albums did not.
 > different mechanism) — was fixed in parallel on trunk (`ff88e98`) AND independently in this
 > task (measured `loop_comp` 4.03); reconciled at integration. That tuning issue is NOT this
 > bug (this is vibrato); noted only to avoid confusion.
+
+### Independent closure verification (2026-07-18, OpenAI Codex)
+
+- Re-ran the shipped-voice observation on trunk build `55c829e` through
+  `voices::tests::default_bowed_natural_vibrato_runs_at_named_rate`: GM 42 measured
+  5.21 Hz and GM 43 measured 4.59 Hz with strong periodic autocorrelation.
+- Confirmed both red-before halves at pre-fix `0d147c0`: `BowedString` constructed
+  `Sine::new(vib_rate, sr, ...)`, yielding 0.300/0.2625 Hz after `CTRL = 16`, while
+  the old oracle directly constructed `Bowed` and bypassed the shipped 42/43 route.
+  Those rates fail the rewritten oracle's ±20% bands; the exact focused test passes
+  after the fix and now goes through `make()` for GM 42/43.
+- The independent workspace gate on the same build passed: `cargo test --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`.
+  The vibrato defect and the false-green oracle are both corrected; the separately
+  tracked contrabass-tuning issue is outside this bug, so no residual split is needed.
 
 ## Observation
 

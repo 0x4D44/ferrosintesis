@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00011 — CC7 volume and CC10 pan bypass the controller slew that CC11 gets, so a fade or pan sweep steps at block boundaries
 
-- **State:** Open
+- **State:** Fixed (awaiting close)
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** engine
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, Claude Opus 4.8 (1M) — CC7/CC10 routed through a prime-on-first-block slew like CC11; render-diff 20 changed/89 same reconciles exactly to the multi-tick CC7/CC10 set, 0 contamination. NOTE: the bug's "catalog sets CC7/CC10 once, any diff is a bug" premise was false — 24 album MIDIs automate CC10 pan; Arthur chose to slew both, accepting the pan-automation albums re-render as a spatial-smoothing improvement.)
 
 ## Observation
 

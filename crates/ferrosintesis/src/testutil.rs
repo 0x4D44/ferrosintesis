@@ -1904,6 +1904,7 @@ mod perceptual_distinctness {
 
     /// The 7-dimension timbre passport of one (program, probe-key) render
     /// (§2.2). Index convention for the per-view arrays: [V_SHORT, V_LONG].
+    #[derive(Clone)]
     struct Passport {
         /// Raw W1 segment — the §7 tier classifier and test 6 read it.
         w1: Vec<f32>,
@@ -2393,6 +2394,38 @@ mod perceptual_distinctness {
                  families"
             );
         }
+    }
+
+    /// MM-BUG-KILN-00023: BAR_FULL needs a nonzero negative anchor, not only
+    /// positive pairs that clear it. This synthetic near-clone differs by a
+    /// barely-full-tier 3% onset gain and half one attack-time JND. The metric
+    /// must still reject it as too similar.
+    #[test]
+    fn bar_full_rejects_near_clone_negative_control() {
+        let original: [Passport; NKEYS] = std::array::from_fn(|k| Passport::new(64, PROBE_KEYS[k]));
+        let mut near_clone = original.clone();
+        for passport in &mut near_clone {
+            for sample in &mut passport.w1 {
+                *sample *= 1.03;
+            }
+            passport.w1_rms *= 1.03;
+            passport.attack_log10 += 0.5 * JND_ATTACK_LOG10;
+        }
+
+        let (tier, score, bar) = score_pair(&original, &near_clone);
+        assert_eq!(
+            tier,
+            Tier::Full,
+            "3% onset delta must place the negative control in the full tier"
+        );
+        assert!(
+            (0.025..=0.030).contains(&score),
+            "full-tier near-clone score {score:.5} drifted outside its 0.025..=0.030 anchor"
+        );
+        assert!(
+            score < bar,
+            "full-tier near-clone score {score:.5} must remain below BAR_FULL {bar}"
+        );
     }
 
     /// §3 test 4 — while GM 29/30 share the literal `Pluck::new(&DRIVE)` arm

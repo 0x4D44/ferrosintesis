@@ -149,6 +149,58 @@ static SAMPLES: &[(&str, &[u8])] = &[
         "viola_G3_p.wav",
         include_bytes!("../samples/viola_G3_p.wav"),
     ),
+    (
+        "marimba_F1.wav",
+        include_bytes!("../samples/marimba_F1.wav"),
+    ),
+    (
+        "marimba_C2.wav",
+        include_bytes!("../samples/marimba_C2.wav"),
+    ),
+    (
+        "marimba_G2.wav",
+        include_bytes!("../samples/marimba_G2.wav"),
+    ),
+    (
+        "marimba_B2.wav",
+        include_bytes!("../samples/marimba_B2.wav"),
+    ),
+    (
+        "marimba_F3.wav",
+        include_bytes!("../samples/marimba_F3.wav"),
+    ),
+    (
+        "marimba_C4.wav",
+        include_bytes!("../samples/marimba_C4.wav"),
+    ),
+    (
+        "marimba_G4.wav",
+        include_bytes!("../samples/marimba_G4.wav"),
+    ),
+    (
+        "marimba_B4.wav",
+        include_bytes!("../samples/marimba_B4.wav"),
+    ),
+    (
+        "marimba_F5.wav",
+        include_bytes!("../samples/marimba_F5.wav"),
+    ),
+    (
+        "marimba_C6.wav",
+        include_bytes!("../samples/marimba_C6.wav"),
+    ),
+    ("xylo_G3.wav", include_bytes!("../samples/xylo_G3.wav")),
+    ("xylo_C4.wav", include_bytes!("../samples/xylo_C4.wav")),
+    ("xylo_G4.wav", include_bytes!("../samples/xylo_G4.wav")),
+    ("xylo_C5.wav", include_bytes!("../samples/xylo_C5.wav")),
+    ("xylo_G5.wav", include_bytes!("../samples/xylo_G5.wav")),
+    ("xylo_C6.wav", include_bytes!("../samples/xylo_C6.wav")),
+    ("xylo_G6.wav", include_bytes!("../samples/xylo_G6.wav")),
+    ("xylo_C7.wav", include_bytes!("../samples/xylo_C7.wav")),
+    ("glock_C5.wav", include_bytes!("../samples/glock_C5.wav")),
+    ("glock_G5.wav", include_bytes!("../samples/glock_G5.wav")),
+    ("glock_G6.wav", include_bytes!("../samples/glock_G6.wav")),
+    ("glock_C7.wav", include_bytes!("../samples/glock_C7.wav")),
 ];
 
 /// Number of embedded WAV files.

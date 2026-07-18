@@ -776,6 +776,67 @@ pub fn viola_bank(vel: u8) -> &'static [Zone] {
     }
 }
 
+fn marimba() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "marimba_F1.wav" => 43.68,
+            "marimba_C2.wav" => 65.62,
+            "marimba_G2.wav" => 98.00,
+            "marimba_B2.wav" => 123.40,
+            "marimba_F3.wav" => 174.45,
+            "marimba_C4.wav" => 262.15,
+            "marimba_G4.wav" => 391.46,
+            "marimba_B4.wav" => 493.90,
+            "marimba_F5.wav" => 697.02,
+            "marimba_C6.wav" => 1047.88,
+        )
+    })
+}
+
+/// GM 12 marimba onset (VSCO-2-CE Marimba, CC0) crossfaded over the wood_bar() body.
+pub fn marimba_bank() -> &'static [Zone] {
+    marimba()
+}
+
+fn xylo() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "xylo_G3.wav" => 195.77,
+            "xylo_C4.wav" => 264.37,
+            "xylo_G4.wav" => 395.62,
+            "xylo_C5.wav" => 528.10,
+            "xylo_G5.wav" => 789.28,
+            "xylo_C6.wav" => 1056.14,
+            "xylo_G6.wav" => 1584.39,
+            "xylo_C7.wav" => 2116.63,
+        )
+    })
+}
+
+/// GM 13 xylophone onset (VSCO-2-CE Xylo, CC0) over the wood_bar() body.
+pub fn xylo_bank() -> &'static [Zone] {
+    xylo()
+}
+
+fn glock() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "glock_C5.wav" => 524.98,
+            "glock_G5.wav" => 773.51,
+            "glock_G6.wav" => 1582.22,
+            "glock_C7.wav" => 2121.85,
+        )
+    })
+}
+
+/// GM 9 glockenspiel onset (VSCO-2-CE Glock, CC0) over the bell() body.
+pub fn glock_bank() -> &'static [Zone] {
+    glock()
+}
+
 pub fn flute_bank() -> &'static [Zone] {
     flute()
 }
@@ -1463,6 +1524,9 @@ pub fn prewarm() {
     let _ = violin_bank(127);
     let _ = viola_bank(1);
     let _ = viola_bank(127);
+    let _ = marimba_bank();
+    let _ = xylo_bank();
+    let _ = glock_bank();
     let _ = flute_bank();
     for program in 56..=60 {
         let _ = brass_bank(program, 1);

@@ -2757,6 +2757,14 @@ const TOM_LO_ROOT_HZ: f32 = 113.5;
 #[cfg(feature = "embedded-samples")]
 const TOM_HI_ROOT_HZ: f32 = 181.0;
 
+/// Electric snare (key 40) plays the acoustic `SNARE` bank repitched up, so the
+/// default sampled kit differentiates 38/40 the way the modeled path already
+/// does (drums.rs `center_mul 1.15` — a brighter, tighter electric snare;
+/// MM-BUG-KILN-00008). +2.4 st lifts the shell and shortens the decay, the
+/// electric-snare character; whole-note level parity is held by `DRUM_LEVEL[40]`.
+#[cfg(feature = "embedded-samples")]
+const ELECTRIC_SNARE_REPITCH: f32 = 1.15;
+
 /// Anti-machine-gun micro-variation (mechanism b), per bank profile: every
 /// hit gets a playback rate of 1 + stratum + U(-rate, +rate), a gain of
 /// ×(1 + U(-gain, +gain)), and an onset delay of U(0, onset_s) of silence.
@@ -2935,7 +2943,8 @@ const KICK_SUB_T60_S: f32 = 0.16;
 const KICK_SUB_LEVEL: f32 = 0.55;
 
 /// Sampled-drum voice for a GM channel-10 key (35/36 kick, 37 side stick,
-/// 38/40 snare, 41-50 toms, 42/44/46 hi-hats, 49/57 crash, 51/59 ride,
+/// 38 snare, 40 electric snare (SNARE repitched up), 41-50 toms, 42/44/46
+/// hi-hats, 49/57 crash, 51/59 ride,
 /// 53 ride bell, 52 china, 55 splash), or `None` for any other key. The
 /// engine's hi-hat choke group keeps working: a closed/pedal hit chokes a
 /// ringing open hat through `Voice::choke`, same as the modeled hats.
@@ -2945,7 +2954,8 @@ pub fn sampled_drum(key: u8, vel: u8, seed: u32, hit_index: u8, sr: f32) -> Opti
     let (bank, repitch): (&'static kit::Bank, f32) = match key {
         35 | 36 => (&kit::KICK, 1.0),
         37 => (&kit::SIDESTICK, 1.0),
-        38 | 40 => (&kit::SNARE, 1.0),
+        38 => (&kit::SNARE, 1.0),
+        40 => (&kit::SNARE, ELECTRIC_SNARE_REPITCH), // electric snare (MM-BUG-KILN-00008)
         41 => (&kit::TOM_LO, 100.0 / TOM_LO_ROOT_HZ),
         43 => (&kit::TOM_LO, 140.0 / TOM_LO_ROOT_HZ),
         45 => (&kit::TOM_HI, 190.0 / TOM_HI_ROOT_HZ),
@@ -3364,10 +3374,43 @@ mod tests {
         ]
     }
 
+    /// MM-BUG-KILN-00008: the sampled electric snare (key 40) must not be the
+    /// acoustic snare (key 38) verbatim. Before the fix both keys mapped to
+    /// `kit::SNARE` at repitch 1.0 with equal level, so at equal vel+seed+take
+    /// they rendered BIT-IDENTICALLY. The fix repitches key 40 up (matching the
+    /// modeled path's brighter/tighter electric snare) — a distinct, brighter drum.
+    #[test]
+    fn sampled_electric_snare_distinct_from_acoustic() {
+        let sr = 44100.0;
+        let render = |key: u8| {
+            let mut v = sampled_drum(key, 100, 7, 0, sr).expect("snare key has a sampled voice");
+            let mut buf = vec![0f32; (sr * 0.4) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        let ac = render(38);
+        let el = render(40);
+        // (b) un-foolable: equal vel+seed+take must not render bit-identically.
+        assert!(
+            ac != el,
+            "electric snare (40) renders identically to the acoustic snare (38) — same drum"
+        );
+        // (a) the electric snare is brighter — the whole spectrum lifts ~1.15x, so
+        // its centroid rises well clear of the ±2.5% per-hit rate jitter.
+        let win = |s: &[f32]| s[..(0.12 * sr) as usize].to_vec();
+        let c_ac = crate::testutil::spectral_centroid(&win(&ac), sr, 200.0, 12_000.0);
+        let c_el = crate::testutil::spectral_centroid(&win(&el), sr, 200.0, 12_000.0);
+        println!("snare centroid: acoustic(38)={c_ac:.0} Hz electric(40)={c_el:.0} Hz");
+        assert!(
+            c_el > c_ac * 1.08,
+            "electric snare (40) not brighter than acoustic (38): {c_el:.0} Hz vs {c_ac:.0} Hz"
+        );
+    }
+
     /// Anti-machine-gun mechanism (a): the engine's per-key hit counter must
-    /// walk the round-robin takes 0→1→2→3→0…, so four consecutive hits of
-    /// one key use four DISTINCT takes and no pair of consecutive hits ever
-    /// repeats one. (A seed-modulo pick would repeat ~25% of the time.)
+    /// walk the round-robin takes 0→1→2→3→0…, so four consecutive hits of one
+    /// key use four DISTINCT takes and no pair of consecutive hits ever repeats
+    /// one. (A seed-modulo pick would repeat ~25% of the time.)
     #[test]
     fn sampled_drum_round_robin_cycles() {
         let sr = 44100.0;

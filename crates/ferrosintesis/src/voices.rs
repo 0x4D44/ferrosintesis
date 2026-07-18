@@ -2402,6 +2402,25 @@ pub const NYLON: PluckPreset = PluckPreset {
     click_hp: 1000.0,
     ..DEFAULTS
 };
+/// Ukulele — XG variation of Nylon Guitar (24), bank LSB 96. A small four-string
+/// nylon instrument: it rings far shorter than a concert guitar and its tiny
+/// soundbox sits much higher. Derived from NYLON with a shorter decay/release, a
+/// higher damper and pick corner (brighter), and the small body's higher modes.
+pub const UKULELE: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "UKULELE",
+    t60: 1.8,        // small body / short strings ring far shorter than a guitar
+    bright: 4800.0,  // higher damper corner — the ukulele's brighter voice
+    pick_lp: 3400.0, // brighter fingernail excitation
+    rel_t60: 0.55,   // little sustain past note-off
+    pos: 0.24,
+    amp: 0.5,
+    // The tiny soundbox resonates well above a guitar's: higher Helmholtz air
+    // mode and top-plate colours.
+    body: &[(260.0, 1.3, 4.0), (520.0, 1.2, 3.0), (900.0, 1.6, 2.0)],
+    click_hp: 1100.0,
+    ..NYLON
+};
 pub const STEEL: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "STEEL",
@@ -10715,10 +10734,15 @@ pub fn make_variation(
     seed: u32,
     samples: bool,
 ) -> Option<Box<dyn Voice>> {
-    // Defined variation cells are added per-voice below; until then every pair
-    // is undefined and falls back to base GM.
-    let _ = (program, bank_lsb, key, vel, sr, seed, samples);
-    None
+    // Variations are modeled-only (no dedicated sample banks); `samples` is
+    // accepted for signature symmetry with `make` and is currently unused.
+    let _ = samples;
+    let voice: Box<dyn Voice> = match (program, bank_lsb) {
+        // Ukulele — small bright short nylon (Nylon Guitar 24, LSB 96).
+        (24, 96) => Box::new(Pluck::new(&UKULELE, key, vel, sr, seed)),
+        _ => return None,
+    };
+    Some(voice)
 }
 
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
@@ -14794,6 +14818,45 @@ mod tests {
                 t60(&sitar),
                 t60(&shamisen),
                 t60(&koto)
+            );
+        }
+    }
+
+    /// Unit 2 (XG variation): the Ukulele (Nylon Guitar 24, bank LSB 96) is a
+    /// small four-string nylon instrument — model-vs-model it must be BRIGHTER
+    /// (higher spectral centroid) and RING SHORTER (smaller t60) than the base
+    /// NYLON, per the HLD acceptance table. Also pins the dispatch: (24, 96)
+    /// selects a distinct voice; an undefined bank (113) falls back to None.
+    #[test]
+    fn ukulele_variation_is_brighter_and_shorter_than_nylon() {
+        let sr = 44100.0;
+        assert!(
+            make_variation(24, 96, 60, 100, sr, 7, false).is_some(),
+            "(24, 96) must dispatch the Ukulele variation"
+        );
+        assert!(
+            make_variation(24, 113, 60, 100, sr, 7, false).is_none(),
+            "an undefined bank (113) must fall back to base GM (None)"
+        );
+
+        let body_lo = (0.030 * sr) as usize;
+        let body_hi = (0.420 * sr) as usize;
+        let centroid = |s: &[f32]| crate::testutil::centroid(&s[body_lo..body_hi], sr);
+        let t60 = |s: &[f32]| crate::testutil::t60_of(&s[(0.020 * sr) as usize..], sr);
+        for seed in [0x6510u32, 0x76A1, 0x1250] {
+            let uke = render_pluck(&UKULELE, 60, 100, 4.0, seed);
+            let nylon = render_pluck(&NYLON, 60, 100, 4.0, seed);
+            assert!(
+                centroid(&uke) > 1.10 * centroid(&nylon),
+                "ukulele should be brighter than nylon at seed {seed}: cent {} vs {}",
+                centroid(&uke),
+                centroid(&nylon)
+            );
+            assert!(
+                t60(&uke) < 0.80 * t60(&nylon),
+                "ukulele should ring shorter than nylon at seed {seed}: t60 {} vs {}",
+                t60(&uke),
+                t60(&nylon)
             );
         }
     }

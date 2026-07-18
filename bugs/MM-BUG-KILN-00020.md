@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00020 — The perceptual anti-clone oracle silently vanishes under --no-default-features
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** testutil
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-19, c58e791 — a no-default-features test run now fails explicitly because the required samples-on perceptual oracle is unavailable; the default samples-on oracle remains green.)
 
 ## Observation
 
@@ -31,9 +31,15 @@ gets a false all-clear.
 
 ## Fix
 
-Make the ear-facing anti-clone coverage a hard requirement — either assert
-`embedded-samples` is present in a required test, or add a compile-time guard so a
-samples-off run fails loudly rather than silently skipping the gate.
+c58e791 adds perceptual_distinctness_requires_embedded_samples under the
+samples-off test configuration. Before the fix, the focused no-default-features
+command exited successfully after running zero tests. It now runs one deliberate
+failure whose message explains that perceptual anti-clone coverage requires the
+default embedded-samples feature and tells the caller to rerun without
+--no-default-features.
+
+The default-feature BAR_FULL negative-control test remains green, proving the
+samples-on perceptual module still compiles and runs normally.
 
 ## Notes
 

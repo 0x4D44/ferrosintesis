@@ -93,6 +93,62 @@ static SAMPLES: &[(&str, &[u8])] = &[
         "timpani_G#2.wav",
         include_bytes!("../samples/timpani_G#2.wav"),
     ),
+    (
+        "viola_A4_f.wav",
+        include_bytes!("../samples/viola_A4_f.wav"),
+    ),
+    (
+        "viola_A4_p.wav",
+        include_bytes!("../samples/viola_A4_p.wav"),
+    ),
+    (
+        "viola_B5_f.wav",
+        include_bytes!("../samples/viola_B5_f.wav"),
+    ),
+    (
+        "viola_B5_p.wav",
+        include_bytes!("../samples/viola_B5_p.wav"),
+    ),
+    (
+        "viola_C3_f.wav",
+        include_bytes!("../samples/viola_C3_f.wav"),
+    ),
+    (
+        "viola_C3_p.wav",
+        include_bytes!("../samples/viola_C3_p.wav"),
+    ),
+    (
+        "viola_D4_f.wav",
+        include_bytes!("../samples/viola_D4_f.wav"),
+    ),
+    (
+        "viola_D4_p.wav",
+        include_bytes!("../samples/viola_D4_p.wav"),
+    ),
+    (
+        "viola_D6_f.wav",
+        include_bytes!("../samples/viola_D6_f.wav"),
+    ),
+    (
+        "viola_D6_p.wav",
+        include_bytes!("../samples/viola_D6_p.wav"),
+    ),
+    (
+        "viola_E5_f.wav",
+        include_bytes!("../samples/viola_E5_f.wav"),
+    ),
+    (
+        "viola_E5_p.wav",
+        include_bytes!("../samples/viola_E5_p.wav"),
+    ),
+    (
+        "viola_G3_f.wav",
+        include_bytes!("../samples/viola_G3_f.wav"),
+    ),
+    (
+        "viola_G3_p.wav",
+        include_bytes!("../samples/viola_G3_p.wav"),
+    ),
 ];
 
 /// Number of embedded WAV files.

@@ -735,6 +735,47 @@ pub fn violin_bank(vel: u8) -> &'static [Zone] {
     }
 }
 
+fn viola_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "viola_C3_f.wav" => 130.50,
+            "viola_G3_f.wav" => 194.96,
+            "viola_D4_f.wav" => 292.40,
+            "viola_A4_f.wav" => 441.08,
+            "viola_E5_f.wav" => 660.40,
+            "viola_B5_f.wav" => 984.52,
+            "viola_D6_f.wav" => 1172.20,
+        )
+    })
+}
+
+fn viola_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "viola_C3_p.wav" => 130.59,
+            "viola_G3_p.wav" => 196.06,
+            "viola_D4_p.wav" => 292.94,
+            "viola_A4_p.wav" => 438.77,
+            "viola_E5_p.wav" => 659.14,
+            "viola_B5_p.wav" => 989.91,
+            "viola_D6_p.wav" => 1172.65,
+        )
+    })
+}
+
+/// GM 41 viola — its OWN dedicated onset bank (VSCO Viola Section susvib), so it no
+/// longer shares the solo-violin onset (fixes the 40==41 bit-shared attack). Velocity
+/// picks the dynamic layer (v1 -> p, v2 -> f), threshold as `violin_bank`.
+pub fn viola_bank(vel: u8) -> &'static [Zone] {
+    if vel >= 80 {
+        viola_f()
+    } else {
+        viola_p()
+    }
+}
+
 pub fn flute_bank() -> &'static [Zone] {
     flute()
 }
@@ -1420,6 +1461,8 @@ pub fn prewarm() {
     let _ = piano_bank(127, true);
     let _ = violin_bank(1);
     let _ = violin_bank(127);
+    let _ = viola_bank(1);
+    let _ = viola_bank(127);
     let _ = flute_bank();
     for program in 56..=60 {
         let _ = brass_bank(program, 1);

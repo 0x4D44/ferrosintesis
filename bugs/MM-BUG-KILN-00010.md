@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00010 — Cabasa, maracas and shaker (keys 69/70/82) render as one identical voice
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** drums
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-18, `f0e32b0`)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-18, `f0e32b0`) → Closed (2026-07-18, independently verified by OpenAI Codex on `55c829e`)
 
 ## Observation
 
@@ -48,6 +48,19 @@ Split the shared `69 | 70 | 82` arm (`drums.rs`) into three distinct arms, **lev
   two non-users are bit-identical (shaker 82 + all other drums untouched — zero contamination).
 
 Shipped code → one version bump owed at integration. Second-eyes pending before `Closed`.
+
+### Independent closure verification (2026-07-18, OpenAI Codex)
+
+- Re-ran `drums::tests::cabasa_maracas_shaker_are_distinct` on trunk build
+  `55c829e`: centroids measured 7221/6658/6411 Hz for cabasa/shaker/maracas,
+  and cabasa's late/early decay ratio remained above maracas.
+- Confirmed the original observation at pre-fix `e364471`: keys 69, 70, and 82
+  entered one shared arm with HP 4200 Hz, t60 0.055 s, and gain 0.40. That shared
+  parameterization cannot satisfy the regression's ordered brightness and decay
+  traits; the focused test passes after the three-way dispatch split.
+- The independent workspace gate on the same build passed: `cargo test --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`.
+  All three voices are distinct at equal level and no residual gap was found.
 
 ## Notes
 

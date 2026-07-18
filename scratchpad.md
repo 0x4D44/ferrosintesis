@@ -403,3 +403,16 @@
   cluster differentiation. Worked around in the darkening slice by keeping aah's default `vgains[2]`
   at 0.15 (off the floor). A clean fix: give `sf_open` its own state driven by an EXPLICIT cluster-open
   control from the CC70 path, independent of the F3 formant gain — a dedicated CC70 slice, not urgent.
+
+- 2026.07.18 — XG/GS extra drum channels: XG bank MSB (CC0) == 127 is now routed to the
+  drum path (`engine.rs` `Strip.xg_drum` / `Active.is_drum`), but two adjacent cases are
+  deferred: (1) **Roland GS** declares a rhythm part via SysEx (`F0 41 .. 40 1x 15 mm F7`,
+  "Use for Rhythm Part"), not bank select — needs SysEx part-mode parsing to give GS files
+  the same fix. (2) **XG SFX kit** (bank MSB == 126) is a note-mapped effects bank, distinct
+  from GM drums; it currently stays melodic (routing it through `drums::make` would be wrong).
+  Add a dedicated path if a corpus file needs it. See `wrk_docs/2026.07.18 - HLD - XG
+  drum-kit bank routing (CC0=127).md` (non-goals).
+- 2026.07.18 — XG-drum channels use the default V3 kit regardless of the XG kit number
+  (16=Rock, 8=Room, 40=Brush…); ch9 only distinguishes 40=Brush. If XG files want kit-accurate
+  percussion, map the kit-select program to `drums::Kit` for `xg_drum` strips too
+  (`engine.rs` `program_change`, currently gated `ch == 9`).

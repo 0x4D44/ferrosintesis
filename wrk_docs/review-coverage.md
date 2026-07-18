@@ -32,5 +32,5 @@ harmless. Never reorder columns or re-flow untouched rows.
 | crates/ferrosintesis-samples-sax/ | 2026-07-18 |
 | crates/ferrosintesis-samples-strings/ | (never) |
 | crates/ferrosintesis-samples-vcsl-kawai/ | (never) |
-| crates/ferrosintesis-samples-vcsl-steinway/ | (never) |
+| crates/ferrosintesis-samples-vcsl-steinway/ | 2026-07-18 |
 | crates/ferrosintesis-samples-ydp-grand/ | (never) |

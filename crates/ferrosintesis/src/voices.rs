@@ -7784,6 +7784,9 @@ const LA_FLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 /// breath onset; the Wind model keeps the body — the same wind-onset handover as the
 /// flute, so it shares the flute's gain/fade.
 const LA_OCARINA: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
+/// GM 74 recorder: a breathy fipple flute. The VCSL Baroque-recorder sample carries the
+/// chiffy breath onset; the Wind model keeps the body — same wind-onset handover as the flute.
+const LA_RECORDER: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 // GM 0-3 piano wrap gain, re-matched for the §2.7 onset-ownership contract:
 // the sample now REPLACES the model's onset instead of stacking on top of
 // it, so it must speak at the model onset's own level. Measured at vel 100
@@ -11012,6 +11015,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             let la = if samples {
                 match program {
                     72 | 73 => Some((LA_FLUTE, crate::sampler::flute_bank())),
+                    74 => Some((LA_RECORDER, crate::sampler::recorder_bank())),
                     79 => Some((LA_OCARINA, crate::sampler::ocarina_bank())),
                     _ => None,
                 }
@@ -11099,6 +11103,7 @@ mod tests {
             ("LA_STRINGS", LA_STRINGS),
             ("LA_HARP", LA_HARP),
             ("LA_OCARINA", LA_OCARINA),
+            ("LA_RECORDER", LA_RECORDER),
         ] {
             assert!(
                 fade.1 < 0.90,
@@ -20902,7 +20907,7 @@ mod tests {
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
         0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 46, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72, 73,
-        79, 109, 110,
+        74, 79, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

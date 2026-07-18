@@ -919,6 +919,31 @@ pub fn ocarina_bank() -> &'static [Zone] {
     ocarina()
 }
 
+/// GM 74 recorder — VCSL Baroque recorders (CC0, `-orchestral2`): alto lows + soprano
+/// mids/highs, one combined bank F3–C6 (both are recorders, one family timbre). A wind
+/// onset over the Wind model, like the flute. Roots MEASURED with a per-note tight
+/// ceiling — the recorder is strongly 2f-dominant (see prepare.py `TWO_F_STRONG`), so a
+/// generous ceiling would have read every zone's 2nd harmonic. `LaVoice` repitches ±1 octave.
+fn recorder() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "recorder_F3.wav" => 174.67,
+            "recorder_A#3.wav" => 232.62,
+            "recorder_E4.wav" => 329.88,
+            "recorder_A#4.wav" => 467.80,
+            "recorder_E5.wav" => 659.37,
+            "recorder_A#5.wav" => 937.94,
+            "recorder_C6.wav" => 1051.96,
+        )
+    })
+}
+
+/// GM 74 recorder attack bank (see [`recorder`]).
+pub fn recorder_bank() -> &'static [Zone] {
+    recorder()
+}
+
 // --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
 //
 // These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
@@ -1099,6 +1124,7 @@ pub fn prewarm() {
     let _ = steel_bank();
     let _ = harp_bank();
     let _ = ocarina_bank();
+    let _ = recorder_bank();
     let _ = chanter_bank();
     let _ = drone_g2_bank();
     let _ = drone_g3_bank();

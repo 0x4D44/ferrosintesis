@@ -37,6 +37,34 @@ static SAMPLES: &[(&str, &[u8])] = &[
         "ocarina_G#4.wav",
         include_bytes!("../samples/ocarina_G#4.wav"),
     ),
+    (
+        "recorder_A#3.wav",
+        include_bytes!("../samples/recorder_A#3.wav"),
+    ),
+    (
+        "recorder_A#4.wav",
+        include_bytes!("../samples/recorder_A#4.wav"),
+    ),
+    (
+        "recorder_A#5.wav",
+        include_bytes!("../samples/recorder_A#5.wav"),
+    ),
+    (
+        "recorder_C6.wav",
+        include_bytes!("../samples/recorder_C6.wav"),
+    ),
+    (
+        "recorder_E4.wav",
+        include_bytes!("../samples/recorder_E4.wav"),
+    ),
+    (
+        "recorder_E5.wav",
+        include_bytes!("../samples/recorder_E5.wav"),
+    ),
+    (
+        "recorder_F3.wav",
+        include_bytes!("../samples/recorder_F3.wav"),
+    ),
 ];
 
 /// Number of embedded WAV files.

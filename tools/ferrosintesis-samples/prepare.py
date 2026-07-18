@@ -264,6 +264,30 @@ OCARINA_URLS = {
     for dest, src in _OCARINA_ZONES
 }
 
+# Recorder (GM 74) — VCSL Baroque recorders (CC0, VCSL_REV): alto lows + soprano
+# mids/highs, one combined bank spanning F3–C6. Both are recorders (same family
+# timbre). Wind onset over the Wind model (default 0.62 s keep). Zones come from two
+# folders, so each zone carries its own dir. `#` in names → quote(src). Roots MEASURED
+# (recorder F0 strength checked per the ocarina 2f lesson before locking the ceiling).
+_VCSL_REC_SOP = "Aerophones/Edge-blown Aerophones/Baroque Soprano Recorder/Sustain"
+_VCSL_REC_ALT = "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder/Sustain"
+_RECORDER_ZONES = [
+    ("recorder_F3.wav", _VCSL_REC_ALT, "AltRecorder_Sus_F3_rr1_Main"),
+    ("recorder_A#3.wav", _VCSL_REC_ALT, "AltRecorder_Sus_A#3_rr1_Main"),
+    ("recorder_E4.wav", _VCSL_REC_SOP, "SopRecorder_Sus_E4_rr1_Main"),
+    ("recorder_A#4.wav", _VCSL_REC_SOP, "SopRecorder_Sus_A#4_rr1_Main"),
+    ("recorder_E5.wav", _VCSL_REC_SOP, "SopRecorder_Sus_E5_rr1_Main"),
+    ("recorder_A#5.wav", _VCSL_REC_SOP, "SopRecorder_Sus_A#5_rr1_Main"),
+    ("recorder_C6.wav", _VCSL_REC_SOP, "SopRecorder_Sus_C6_rr1_Main"),
+]
+RECORDER_URLS = {
+    dest: (
+        f"https://raw.githubusercontent.com/sgossner/VCSL/{VCSL_REV}/"
+        f"{urllib.parse.quote(d)}/{urllib.parse.quote(src)}.wav"
+    )
+    for dest, d, src in _RECORDER_ZONES
+}
+
 # GM 109 bagpipe (HLD 2026.07.17). A CC0 FreePats G-pipe: two separately-recorded
 # drones (bass G2, tenor G3) an octave apart, plus a chanter. These are LOOPED
 # sustains, not attack transients — `extract_loop` (not `trim_to_onset`) emits a
@@ -395,6 +419,12 @@ F0_RANGE = {
     # every fundamental but below the lowest 2f (659) — the ocarina's strong 2nd
     # harmonic otherwise steals autocorr (see the OCARINA block comment).
     "ocarina": (250.0, 600.0),
+    # recorder F3 175 … C6 1047 Hz. The recorder is STRONGLY 2f-dominant (probed
+    # 2026.07.18: at a 2000 ceiling every zone but C6 read its 2nd harmonic) and spans
+    # 2.5 octaves, so no single fixed ceiling separates f from 2f. It is therefore in
+    # TWO_F_STRONG below — main() caps the ceiling PER NOTE at label×1.5 so only the
+    # fundamental is in range. This 2000 is only the upper bound before that per-note cap.
+    "recorder": (150.0, 2000.0),
     # violin section G2-name spans G3 196 Hz … D5-name D6 1175 Hz (VSCO's
     # octave labels sit one below sounding pitch here); ceiling 1300 keeps
     # autocorr off the top zone's 2nd harmonic (the brass/oboe lesson)
@@ -403,6 +433,11 @@ F0_RANGE = {
     # 550 sits just above the top fundamental, below its 2nd harmonic (988)
     "celens": (50.0, 550.0),
 }
+# Families whose recordings are 2f-DOMINANT (autocorr grabs the 2nd harmonic if the
+# ceiling admits it) AND span more than an octave, so a single fixed F0 ceiling can't
+# separate the fundamental from 2f. For these, main() caps the ceiling per-note at
+# label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
+TWO_F_STRONG = frozenset(("recorder",))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -458,6 +493,7 @@ FAMILY_PACKAGE = {
     # timpani/recorder/ocarina/banjo units that follow) route to a second CC0 crate.
     "harp": "ferrosintesis-samples-orchestral2",
     "ocarina": "ferrosintesis-samples-orchestral2",
+    "recorder": "ferrosintesis-samples-orchestral2",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1096,6 +1132,9 @@ def main():
         for fn, url in OCARINA_URLS.items():
             if want("ocarina"):
                 ensure_source(fn, url, src)
+        for fn, url in RECORDER_URLS.items():
+            if want("recorder"):
+                ensure_source(fn, url, src)
         if want("nylon"):
             ensure_guitar_sources(src)
         if want("chanter"):
@@ -1115,7 +1154,7 @@ def main():
             rows += _bake_clavinet(clav_src)
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
-            | OCARINA_URLS | GRAND_SOURCES
+            | OCARINA_URLS | RECORDER_URLS | GRAND_SOURCES
         ):
             if not want(fn.split("_")[0]):
                 continue
@@ -1127,11 +1166,16 @@ def main():
             if fn in DRUM_SOURCES:
                 root = f0 = cand = cents = conf = None
             else:
-                lo, hi = F0_RANGE.get(fn.split("_")[0], (80.0, 3000.0))
-                f0, conf = measure_f0(seg, sr, lo, hi)
+                fam = fn.split("_")[0]
+                lo, hi = F0_RANGE.get(fam, (80.0, 3000.0))
                 # nominal pitch from the filename, e.g. violin_G3_f / flute_C4
                 note = next(p for p in fn[:-4].split("_") if p[0] in "ABCDEFG" and p[-1].isdigit())
                 nominal = NOTE_HZ[note]
+                # 2f-dominant families: cap the ceiling per-note just above the label
+                # so autocorr cannot lock onto the 2nd harmonic (see TWO_F_STRONG).
+                if fam in TWO_F_STRONG:
+                    hi = min(hi, nominal * 1.5)
+                f0, conf = measure_f0(seg, sr, lo, hi)
                 # snap measured f0 to the nearest octave of the nominal note
                 cand = min((nominal * 2 ** k for k in range(-2, 3)),
                            key=lambda c: abs(math.log(f0 / c)))

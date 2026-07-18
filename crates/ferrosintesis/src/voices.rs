@@ -2421,6 +2421,35 @@ pub const UKULELE: PluckPreset = PluckPreset {
     click_hp: 1100.0,
     ..NYLON
 };
+/// Oud — XG variation of Banjo (105), bank LSB 98. A warm fretless Arabic lute
+/// with a large rounded bowl and double (paired) courses. Its real timbral base
+/// is the nylon/gut string, NOT the banjo (whose identity is its drumhead
+/// membrane) — so it derives from NYLON, made warmer (lower damper, pick and
+/// body) and voiced as a true double course (the v0.12 dulcimer course params)
+/// for the paired-string shimmer.
+pub const OUD: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "OUD",
+    t60: 2.6,        // gut/nylon strings, medium ring
+    bright: 2200.0,  // much warmer than nylon's 3800 — the oud's mellow voice
+    pick_lp: 1500.0, // risha (plectrum) excitation, warm
+    pos: 0.22,
+    amp: 0.55,
+    rel_t60: 0.9,
+    // Large rounded bowl: low, warm air + plate resonances, no high sparkle.
+    body: &[(90.0, 1.3, 5.0), (160.0, 1.2, 4.0), (300.0, 1.6, 2.5)],
+    out_lp: 3200.0, // mellow lute rolloff — no guitar top end
+    click: 0.8,     // risha on gut: soft
+    click_hp: 900.0,
+    // Double courses — the paired-string shimmer (dulcimer course voicing).
+    wound_key_split: false,
+    course_detune: 1.0042,
+    course_t60: 0.85,
+    course_bright: 1.0,
+    course_mix: (0.56, 0.44),
+    course_couple: 0.002,
+    ..NYLON
+};
 pub const STEEL: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "STEEL",
@@ -10740,6 +10769,8 @@ pub fn make_variation(
     let voice: Box<dyn Voice> = match (program, bank_lsb) {
         // Ukulele — small bright short nylon (Nylon Guitar 24, LSB 96).
         (24, 96) => Box::new(Pluck::new(&UKULELE, key, vel, sr, seed)),
+        // Oud — warm double-course fretless lute (Banjo 105, LSB 98).
+        (105, 98) => Box::new(Pluck::new(&OUD, key, vel, sr, seed)),
         _ => return None,
     };
     Some(voice)
@@ -14857,6 +14888,38 @@ mod tests {
                 "ukulele should ring shorter than nylon at seed {seed}: t60 {} vs {}",
                 t60(&uke),
                 t60(&nylon)
+            );
+        }
+    }
+
+    /// Unit 3 (XG variation): the Oud (Banjo 105, bank LSB 98) is a warm
+    /// fretless double-course lute. Its timbral base is the nylon/gut string
+    /// (not the banjo's drumhead), so model-vs-model it must be WARMER — a
+    /// LOWER spectral centroid — than the base NYLON, per the HLD acceptance
+    /// table. Also pins the dispatch: (105, 98) selects a distinct voice.
+    #[test]
+    fn oud_variation_is_warmer_than_nylon() {
+        let sr = 44100.0;
+        assert!(
+            make_variation(105, 98, 60, 100, sr, 7, false).is_some(),
+            "(105, 98) must dispatch the Oud variation"
+        );
+        assert!(
+            make_variation(105, 113, 60, 100, sr, 7, false).is_none(),
+            "an undefined bank (113) must fall back to base GM (None)"
+        );
+
+        let body_lo = (0.030 * sr) as usize;
+        let body_hi = (0.420 * sr) as usize;
+        let centroid = |s: &[f32]| crate::testutil::centroid(&s[body_lo..body_hi], sr);
+        for seed in [0x6510u32, 0x76A1, 0x1250] {
+            let oud = render_pluck(&OUD, 60, 100, 4.0, seed);
+            let nylon = render_pluck(&NYLON, 60, 100, 4.0, seed);
+            assert!(
+                centroid(&oud) < 0.90 * centroid(&nylon),
+                "oud should be warmer (darker) than nylon at seed {seed}: cent {} vs {}",
+                centroid(&oud),
+                centroid(&nylon)
             );
         }
     }

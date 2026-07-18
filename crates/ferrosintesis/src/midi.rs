@@ -44,6 +44,28 @@ pub enum EvKind {
         key: u8,
         val: u8,
     },
+    /// Roland-GS "Use for Rhythm Part" (SysEx `40 1x 15`): declare/undeclare a
+    /// channel a drum/rhythm part. `on` = the value was MAP1 or MAP2 (not OFF).
+    DrumMode {
+        ch: u8,
+        on: bool,
+    },
+    /// Roland-GS Reset (SysEx `40 00 7F`): revert part modes to default — clears
+    /// every GS-declared rhythm part (channel 10 stays drums by the ch==9 rule).
+    GsReset,
+}
+
+/// GS "block number" (the low nibble of the `0x1n` part-address byte) → 0-based
+/// MIDI channel. The GS quirk: block 0 addresses Part 10 (channel 10); blocks
+/// 1..9 address Parts 1..9; blocks A..F address Parts 11..16. Masks the nibble
+/// internally so a malformed address byte can never produce an out-of-range
+/// channel (the result is always 0..=15).
+fn gs_block_to_channel(block: u8) -> u8 {
+    match block & 0x0F {
+        0 => 9,           // Part 10 (the default GM/GS drum channel)
+        n @ 1..=9 => n - 1, // Parts 1..9
+        n => n,           // A..F → Parts 11..16 (channels 11..16, index 10..15)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -175,7 +197,33 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                 }
                 0xF0 | 0xF7 => {
                     let len = c.vlq()? as usize;
-                    c.bytes(len)?;
+                    let payload = c.bytes(len)?;
+                    // Only two GS messages are decoded; every other SysEx is ignored,
+                    // exactly as before (payload starts at the byte after F0).
+                    if payload.len() >= 8
+                        && payload[0] == 0x41 // Roland
+                        && payload[2] == 0x42 // GS
+                        && payload[3] == 0x12 // DT1
+                        && payload[4] == 0x40
+                        && (payload[5] & 0xF0) == 0x10 // part block 0x1n
+                        && payload[6] == 0x15 // "Use for Rhythm Part"
+                        && payload[7] <= 2 // 0=off, 1=MAP1, 2=MAP2 (reject invalid)
+                    {
+                        let ch = gs_block_to_channel(payload[5]);
+                        raw.push((tick, seq, EvKind::DrumMode { ch, on: payload[7] != 0 }));
+                        seq += 1;
+                    } else if payload.len() >= 7
+                        && payload[0] == 0x41
+                        && payload[2] == 0x42
+                        && payload[3] == 0x12
+                        && payload[4] == 0x40
+                        && payload[5] == 0x00
+                        && payload[6] == 0x7F
+                    {
+                        // GS Reset — revert part modes to default.
+                        raw.push((tick, seq, EvKind::GsReset));
+                        seq += 1;
+                    }
                 }
                 _ => {
                     let ch = status & 0x0F;
@@ -357,6 +405,102 @@ mod tests {
             "{:?}",
             song.events[0].kind
         );
+    }
+
+    /// Format-0 file wrapping one track's raw event bytes (+ end-of-track).
+    fn file_from_track(events: &[u8]) -> Vec<u8> {
+        let mut d = Vec::new();
+        d.extend(b"MThd");
+        d.extend(6u32.to_be_bytes());
+        d.extend(0u16.to_be_bytes()); // format 0
+        d.extend(1u16.to_be_bytes()); // 1 track
+        d.extend(480u16.to_be_bytes());
+        let mut tr = Vec::from(events);
+        tr.extend([0x00, 0xFF, 0x2F, 0x00]); // end of track
+        d.extend(b"MTrk");
+        d.extend((tr.len() as u32).to_be_bytes());
+        d.extend(&tr);
+        d
+    }
+
+    /// A GS "Use for Rhythm Part" SysEx track event (delta 0): part block `blk`
+    /// (low nibble), map value `mm`. The Roland checksum byte is arbitrary here —
+    /// the parser is deliberately lenient about it.
+    fn gs_rhythm(blk: u8, mm: u8) -> Vec<u8> {
+        let payload = [0x41, 0x10, 0x42, 0x12, 0x40, 0x10 | blk, 0x15, mm, 0x00, 0xF7];
+        let mut ev = vec![0x00, 0xF0, payload.len() as u8];
+        ev.extend(payload);
+        ev
+    }
+
+    /// GS "Use for Rhythm Part" decodes to `DrumMode` with the GS block→channel map.
+    #[test]
+    fn gs_use_for_rhythm_part_decodes() {
+        // block A → Part 11 → channel index 10; MAP1 → on.
+        let s = parse(&file_from_track(&gs_rhythm(0x0A, 1))).unwrap();
+        assert_eq!(s.events.len(), 1);
+        assert!(
+            matches!(s.events[0].kind, EvKind::DrumMode { ch: 10, on: true }),
+            "{:?}",
+            s.events[0].kind
+        );
+        // block 0 → Part 10 → channel 9 (the GS quirk).
+        assert!(matches!(
+            parse(&file_from_track(&gs_rhythm(0x00, 2))).unwrap().events[0].kind,
+            EvKind::DrumMode { ch: 9, on: true }
+        ));
+        // block 1 → Part 1 → channel 0 (exercises the `1..=9 → n-1` arm).
+        assert!(matches!(
+            parse(&file_from_track(&gs_rhythm(0x01, 1))).unwrap().events[0].kind,
+            EvKind::DrumMode { ch: 0, on: true }
+        ));
+        // map value 0 → off.
+        assert!(matches!(
+            parse(&file_from_track(&gs_rhythm(0x0A, 0))).unwrap().events[0].kind,
+            EvKind::DrumMode { ch: 10, on: false }
+        ));
+    }
+
+    /// GS Reset decodes to `GsReset`; near-miss and malformed messages emit nothing
+    /// (and never panic) — the byte-identical-album invariant rests on this.
+    #[test]
+    fn gs_reset_and_near_misses() {
+        // GS Reset (40 00 7F) → GsReset, not DrumMode.
+        let reset = {
+            let p = [0x41u8, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7];
+            let mut e = vec![0x00, 0xF0, p.len() as u8];
+            e.extend(p);
+            e
+        };
+        assert!(matches!(
+            parse(&file_from_track(&reset)).unwrap().events[0].kind,
+            EvKind::GsReset
+        ));
+
+        // Wrong param offset (0x16 not 0x15) → ignored. payload[6] = ev[3+6].
+        let mut near = gs_rhythm(0x0A, 1);
+        near[3 + 6] = 0x16;
+        assert!(parse(&file_from_track(&near)).unwrap().events.is_empty());
+
+        // Non-part high nibble (address 40 2x 15) → ignored. payload[5] = ev[3+5].
+        let mut np = gs_rhythm(0x0A, 1);
+        np[3 + 5] = 0x2A;
+        assert!(parse(&file_from_track(&np)).unwrap().events.is_empty());
+
+        // Invalid map value (mm = 3) → no DrumMode.
+        assert!(parse(&file_from_track(&gs_rhythm(0x0A, 3)))
+            .unwrap()
+            .events
+            .is_empty());
+
+        // Truncated payload (len < 8) → no event, no panic.
+        let trunc = {
+            let p = [0x41u8, 0x10, 0x42, 0x12, 0x40];
+            let mut e = vec![0x00, 0xF0, p.len() as u8];
+            e.extend(p);
+            e
+        };
+        assert!(parse(&file_from_track(&trunc)).unwrap().events.is_empty());
     }
 
     /// A pitch-bend message decodes to the right signed semitone value.

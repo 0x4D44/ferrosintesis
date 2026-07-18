@@ -721,6 +721,8 @@ struct Strip {
     alt_bank: bool,     // CC0 != 0 selects the alt orchestral voicings (altbank::make)
     alt_bank_value: u8, // raw CC0 value: 0 default, 1 legacy alt, 2 GM19 cathedral organ
     xg_drum: bool,      // CC0 == 127: XG drum-kit bank — route this channel to the drum path
+    gs_drum: bool,      // GS "Use for Rhythm Part" SysEx — same routing, separate origin
+                        // (a GS rhythm part still sends CC0=0, so it cannot share xg_drum)
     volume: f32,        // CC7 as amplitude (squared curve)
     pan: f32,           // 0..1
     bend: f32,          // channel pitch multiplier: wheel × range × fine-tune
@@ -799,6 +801,7 @@ impl Strip {
             alt_bank: false,
             alt_bank_value: 0,
             xg_drum: false,
+            gs_drum: false,
             volume: (100.0f32 / 127.0).powi(2),
             pan: 0.5,
             bend: 1.0,
@@ -1385,6 +1388,16 @@ impl EngineCore {
                 }
             }
             EvKind::Prog { ch, prog } => self.program_change(ch, prog),
+            // GS "Use for Rhythm Part": flag/unflag the channel a drum part. Frozen
+            // into each voice's `is_drum` at spawn, so only later notes are affected.
+            EvKind::DrumMode { ch, on } => self.strips[ch as usize].gs_drum = on,
+            // GS Reset: revert part modes — clear every GS-declared rhythm part (ch9
+            // stays drums via the ch==9 rule; the other GS reset effects aren't modeled).
+            EvKind::GsReset => {
+                for s in &mut self.strips {
+                    s.gs_drum = false;
+                }
+            }
         }
     }
 
@@ -1491,10 +1504,11 @@ impl EngineCore {
         }
 
         let seed = 0x9E37 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
-        // ch9 is always drums; an XG-drum channel (CC0==127) joins the drum path.
-        // `strips[ci].kit` is `strips[9].kit` when ch==9, so ch9 is unchanged; an
-        // XG-drum channel uses the default V3 kit (its kit is never reassigned).
-        let is_drum = ch == 9 || self.strips[ci].xg_drum;
+        // ch9 is always drums; a channel declared a drum part by XG (CC0==127) or GS
+        // ("Use for Rhythm Part" SysEx) joins the drum path. `strips[ci].kit` is
+        // `strips[9].kit` when ch==9, so ch9 is unchanged; a declared drum channel uses
+        // the default V3 kit (its kit is never reassigned).
+        let is_drum = ch == 9 || self.strips[ci].xg_drum || self.strips[ci].gs_drum;
         let voice = if is_drum {
             let rr = self.drum_rr[key as usize];
             self.drum_rr[key as usize] = rr.wrapping_add(1);
@@ -2144,7 +2158,7 @@ impl EngineCore {
                     strip.at_phase -= TAU;
                 }
                 at_vib = 2f32.powf(strip.at_cur * AT_VIB_CENTS / 1200.0 * strip.at_phase.sin());
-                // `!a.is_drum`: an XG-drum channel on this strip keeps its at_gain
+                // `!a.is_drum`: an XG/GS drum channel on this strip keeps its at_gain
                 // (computed above) but its percussion voices must not be pitch-bent —
                 // the same reason ch9 skips this whole block (ci==9 continues earlier).
                 for a in self.active.iter_mut().filter(|a| a.ch == ch && !a.is_drum) {
@@ -2417,7 +2431,7 @@ impl EngineCore {
                         self.drum_r[i] += self.scratch[i] * ur;
                     }
                 } else {
-                    // XG-drum channel: scaled by its OWN gain straight into the master
+                    // XG/GS drum channel: scaled by its OWN gain straight into the master
                     // mix — bypassing ch9's bus master and wah — with its own CC91
                     // reverb and the shared drum room. The `(scratch*ul)*gc` association
                     // mirrors the ch9 path, so a single hit is byte-equal to the same
@@ -3199,6 +3213,75 @@ mod tests {
             "drum tail at D4 ({}) must be far below the sustained organ ({})",
             tail(&xg13),
             tail(&organ)
+        );
+    }
+
+    /// GS "Use for Rhythm Part" routes a non-drum channel to the drum path — the GS
+    /// counterpart of the XG test above. A GS rhythm hit on ch11 is byte-identical to
+    /// the same hit on ch9 (single hit; the parallel drum path mirrors ch9's
+    /// association, and a fresh ch11 strip shares ch9's default gain/pan), and differs
+    /// from the same note played as a melodic voice.
+    #[test]
+    fn gs_rhythm_part_routes_channel_to_drums() {
+        let sr = 44100.0;
+        let opt = test_opts(sr);
+        let key = 62u8;
+        let render_ev = |ev: Vec<(f64, EvKind)>| render(&test_song(ev, 1.5), &opt).0;
+
+        let gs = render_ev(vec![
+            (0.0, EvKind::DrumMode { ch: 11, on: true }), // GS: ch11 is a rhythm part
+            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+        ]);
+        let drum9 = render_ev(vec![(0.05, EvKind::NoteOn { ch: 9, key, vel: 100 })]);
+        let melodic = render_ev(vec![
+            (0.0, EvKind::Prog { ch: 11, prog: 0 }), // grand piano, no rhythm-part flag
+            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+        ]);
+
+        assert_eq!(gs, drum9, "GS rhythm part (ch11) must render as a drum, identical to ch9");
+        assert_ne!(gs, melodic, "GS rhythm part must not render as a melodic voice");
+    }
+
+    /// The GS flag is separate from the XG flag: an ordinary `CC0=0` bank select (which
+    /// a real GS rhythm part still sends) must NOT clear it, and a GS Reset MUST. These
+    /// guard the two-flag decision and the reset handling.
+    #[test]
+    fn gs_rhythm_survives_bank_select_but_not_reset() {
+        let sr = 44100.0;
+        let opt = test_opts(sr);
+        let key = 62u8;
+        let render_ev = |ev: Vec<(f64, EvKind)>| render(&test_song(ev, 1.5), &opt).0;
+
+        let drum9 = render_ev(vec![(0.05, EvKind::NoteOn { ch: 9, key, vel: 100 })]);
+        let melodic = render_ev(vec![
+            (0.0, EvKind::Prog { ch: 11, prog: 0 }),
+            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+        ]);
+
+        // GS rhythm part, then the ordinary bank-select + program a real GS file sends
+        // to pick the kit — still drums (gs_drum is immune to CC0, unlike xg_drum).
+        let after_bank = render_ev(vec![
+            (0.0, EvKind::DrumMode { ch: 11, on: true }),
+            (0.01, EvKind::Cc { ch: 11, num: 0, val: 0 }), // bank select MSB 0
+            (0.02, EvKind::Cc { ch: 11, num: 32, val: 0 }), // bank select LSB 0
+            (0.03, EvKind::Prog { ch: 11, prog: 0 }),
+            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+        ]);
+        assert_eq!(
+            after_bank, drum9,
+            "GS rhythm part must survive CC0=0 + PC (proves gs_drum is not the CC0-driven xg_drum)"
+        );
+
+        // GS Reset reverts the part mode → the same note is melodic again.
+        let after_reset = render_ev(vec![
+            (0.0, EvKind::DrumMode { ch: 11, on: true }),
+            (0.02, EvKind::GsReset),
+            (0.03, EvKind::Prog { ch: 11, prog: 0 }),
+            (0.05, EvKind::NoteOn { ch: 11, key, vel: 100 }),
+        ]);
+        assert_eq!(
+            after_reset, melodic,
+            "GS Reset must clear the rhythm part (renders melodic, identical to a plain ch11 note)"
         );
     }
 

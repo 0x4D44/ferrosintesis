@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00025 — Renderer panics (index out of bounds) on a MIDI note key ≥ 128; the parser never clamps the note-key data byte
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** midi
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 via overnight code-review pass, deep-review workflow)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 via overnight code-review pass, deep-review workflow); Fixed (2026-07-18, `a0d4995` — SMF NoteOn, NoteOff, and PolyAftertouch key bytes are normalized to seven bits at the parser trust boundary. Regression `malformed_note_keys_render_as_their_seven_bit_values` failed before at `engine.rs:1445` with key 200, then passed for melodic and channel-10 paths; `note_key_data_bytes_are_limited_to_seven_bits` covers all three key-bearing event kinds.)
 
 ## Observation
 
@@ -91,6 +91,15 @@ change needed downstream.
 **Regression test (write first, must fail on trunk):** parse + `render` a file whose
 NoteOn key byte is ≥ 128 (e.g. 200) on both a melodic channel and channel 10, and
 assert no panic (and, for masking, that the note sounds at `key & 0x7F`).
+
+### Fix summary (OpenAI Codex, 2026-07-18)
+
+Commit `a0d4995` applies the proposed seven-bit mask to NoteOn, NoteOff, and
+PolyAftertouch key reads in `midi.rs`. The public offline regression compares
+malformed melodic and drum renders with their canonical masked-key renders,
+including non-silence and voice-count checks. A parser-level regression separately
+pins all three event kinds. Focused validation:
+`cargo test --locked -p ferrosintesis note_key -- --nocapture` (2 passed).
 
 ## Notes
 

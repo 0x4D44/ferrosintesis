@@ -1,8 +1,10 @@
 //! Alt bank — GM Bank-Select alternate orchestral voicings.
 //!
 //! A frozen, isolated resurrection of the v0.9 strings (48-51), choir (52-54)
-//! and bowed (40-45) voicings from `v09-backup-pre-rebase`, which trunk's
-//! reqs-loop independently superseded. Selected per channel by `CC0 != 0`
+//! and bowed (42-45) voicings from `v09-backup-pre-rebase`, which trunk's
+//! reqs-loop independently superseded. (GM 40/41 violin/viola were scrapped
+//! 2026.07.18 — they delegate to the default voice; see `make`.) Selected per
+//! channel by `CC0 != 0`
 //! (engine `Strip.alt_bank`); the default bank and `voices::make` are untouched,
 //! so every committed album stays byte-identical. The voice code below is lifted
 //! verbatim from that ref — do NOT "improve" it; its whole point is fidelity to
@@ -1006,9 +1008,9 @@ pub(crate) fn choir2_reg_weight(key: u8, section: usize) -> f32 {
 }
 
 // ---------------------------------------------------------------------------
-// Factory — the alt bank remaps only 40-45/48-54; everything else delegates to
-// the default `voices::make`, so an alt-bank channel still plays its other
-// instruments normally.
+// Factory — the alt bank remaps only 42-45/48-54; GM 40/41 (violin/viola) and
+// everything else delegate to the default `voices::make`, so an alt-bank channel
+// still plays its other instruments normally.
 // ---------------------------------------------------------------------------
 
 pub fn make(
@@ -1031,7 +1033,18 @@ pub fn make(
             2 => crate::voices::cathedral_organ(key, vel, sr, seed),
             _ => crate::voices::legacy_church_organ(key, vel, sr, seed),
         },
-        40..=43 => {
+        // GM 40 violin / 41 viola: the CC0 alt bank is SCRAPPED (2026.07.18,
+        // Arthur). It earned its keep for neither — alt 40 was a frozen copy of
+        // the SAME Bowed model + the SAME violin onset sample the default bank
+        // already uses (measured within -50 dB of the default: inaudible), and
+        // alt 41 was a violin-onset PROXY, strictly worse than the default's
+        // dedicated viola onset (VSCO Viola Section, MM-BUG-KILN-00005). A
+        // channel that selects the alt bank on 40/41 now falls through to the
+        // default voice — alt == default, byte-for-byte, pinned by
+        // altbank_violin_viola_fall_through_to_default. 42/43 KEEP their alt
+        // Bowed set (a genuine alternative to the default arco waveguide).
+        40 | 41 => crate::voices::make(program, key, vel, sr, seed, samples),
+        42..=43 => {
             let model = Box::new(Bowed::new(program, key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_VIOLIN;
@@ -1145,7 +1158,8 @@ mod tests {
 
     /// Render an alt-factory `make` voice (note held) for `secs` seconds.
     /// (v0.9 called `crate::voices::make`; here it goes through the alt `make`
-    /// so 40–45 route to the resurrected Bowed/PIZZ voicings.)
+    /// so 42–45 route to the resurrected Bowed/PIZZ voicings. 40/41 were
+    /// scrapped — the alt `make` delegates them to the default voice.)
     fn render_make(program: u8, key: u8, vel: u8, secs: f32, seed: u32, samples: bool) -> Vec<f32> {
         let sr = 44100.0;
         let mut v = make(program, 1, key, vel, sr, seed, samples);
@@ -1247,7 +1261,9 @@ mod tests {
         }
     }
 
-    /// BW-O1 — pizzicato 45 decays like a pluck; arco 40 sustains.
+    /// BW-O1 — pizzicato 45 decays like a pluck; arco 40 sustains. (40 was
+    /// scrapped from the alt bank; `make(40)` now falls through to the default
+    /// violin, which is still a sustaining arco — the property this pins.)
     #[test]
     fn pizz_decays_like_a_pluck() {
         let sr = 44100.0;
@@ -1452,7 +1468,8 @@ mod tests {
     }
 
     /// BW-O7 — tremolo 44 and pizzicato 45 ignore the LA sample layer (no wrap):
-    /// samples on/off render byte-identical. Arco 40 still wraps (must differ).
+    /// samples on/off render byte-identical. Arco 40 (now the default violin via
+    /// the scrap fall-through) still wraps the sample layer (must differ).
     #[cfg(feature = "embedded-samples")]
     #[test]
     fn bowed_44_45_skip_sample_layer() {
@@ -1473,6 +1490,34 @@ mod tests {
             bits(&off),
             "arco 40 should wrap the sample layer"
         );
+    }
+
+    /// GM 40 violin / 41 viola: the CC0 alt bank was SCRAPPED (2026.07.18,
+    /// Arthur). It earned its keep for neither — alt 40 was a frozen copy of the
+    /// SAME `Bowed` model + the SAME violin onset sample the default bank already
+    /// uses (rendered within -50 dB of it: inaudible), and alt 41 was a
+    /// violin-onset PROXY, strictly worse than the default's dedicated viola
+    /// onset (VSCO Viola Section, MM-BUG-KILN-00005). Selecting the alt bank on a
+    /// 40/41 channel now falls straight through to the default voice, so
+    /// alt == default byte-for-byte. Pins the scrap: re-introducing a distinct
+    /// alt-bank 40/41 voicing (the thing we removed) breaks this.
+    #[test]
+    fn altbank_violin_viola_fall_through_to_default() {
+        let sr = 44100.0;
+        let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        for prog in [40u8, 41] {
+            // through the alt factory (bank 1 = "an alt bank is selected")
+            let alt = render_make(prog, 60, 100, 1.0, 6, true);
+            // the default voice, same note / seed / samples flag
+            let mut d = crate::voices::make(prog, 60, 100, sr, 6, true);
+            let mut def = vec![0f32; sr as usize];
+            d.render(&mut def);
+            assert_eq!(
+                bits(&alt),
+                bits(&def),
+                "alt-bank GM{prog} must render identically to the default (scrapped)"
+            );
+        }
     }
 
     /// Alt-bank strings 48-51 must ignore the default bank's LA_STRINGS

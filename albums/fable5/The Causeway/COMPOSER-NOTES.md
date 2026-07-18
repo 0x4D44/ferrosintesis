@@ -223,8 +223,9 @@ deepen seams by appending explicit dips.  Still points per the law table.
 7. **Low velocities disappear in render**: below vel ~30 a line is inaudible
    under the bus. pp = 35-45, not 20. Morse lanes: vel >= 50.
 8. **The leading-tone ban is global on T1-T4 cadence windows** — including
-   passing tones on ANY channel inside the pinned window. Place windows
-   where your counterpoint truly avoids the pc, or move the window.
+   passing tones on ANY melodic channel inside the pinned window (ch9 drum
+   keys are exempt — they are keys, not pitches). Place windows where your
+   counterpoint truly avoids the pc, or move the window.
 9. **Bank-select order**: any CC0 entry must precede the program change at
    the same tick — use PART.bank_selects + channels, never a late sc.cc(0).
 

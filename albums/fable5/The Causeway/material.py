@@ -444,6 +444,8 @@ def cadence_failures(sc: en.Score, bass_ch: int, lo: float, hi: float,
         fails.append(f"cadence at {downbeat}: no bass approach in window")
     leading = (tonic_pc - 1) % 12
     for ch in sorted(sc.events):
+        if ch == 9:
+            continue        # GM drum KEYS are not pitch classes
         for t, p, _v in note_ons(sc, ch):
             if lo - 1e-6 <= t / PPQ <= hi + 1e-6 and p % 12 == leading:
                 fails.append(f"cadence window [{lo},{hi}]: leading tone "

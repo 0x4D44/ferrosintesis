@@ -1726,6 +1726,193 @@ impl Voice for LaVoice {
 }
 
 // ---------------------------------------------------------------------------
+// GM 64-67 saxophone: looped real sustain (2026.07.18 holds audit)
+//
+// The held sax used to be 100% modeled reed past the 0.24 s sample fade — a
+// static drone (liveness 0.024 vs the SC-55's 0.050). Here the WHOLE voice is the
+// real recording: the attack plays through once, then a pitch-synchronous loop of
+// the recorded sustain (already present in the 0.62 s take, previously discarded)
+// carries the hold. The model is no longer the sustain source — a later increment
+// re-adds it purely as a modulator (vibrato/brightness/breath), never summed as a
+// second tonal oscillator at the same f0 (the comb trap the attack seam avoids).
+// ---------------------------------------------------------------------------
+
+/// Per-program output gain for the looped sax (index = program − 64: soprano / alto /
+/// tenor / baritone), calibrated so each sax's looped hold sits within ~1 dB of the
+/// modeled reed it replaces (RMS over the hold at vel 100), preserving album mix balance.
+/// A single constant can't: the samples are uniformly peak-normalised but the modeled
+/// reeds differ per sax, so the loop/model ratio spans ~7 dB. See
+/// `sax_loop_level_parity_and_flat`.
+const SAX_LOOP_GAIN: [f32; 4] = [0.390, 0.289, 0.511, 0.623];
+
+fn sax_program_gain(program: u8) -> f32 {
+    SAX_LOOP_GAIN[(program.saturating_sub(64)).min(3) as usize]
+}
+
+/// Find a pitch-synchronous sustain loop inside a recorded sax note. Returns
+/// `(loop_start, loop_end)` in source samples (the zone is 44.1 kHz). Runs an
+/// `extract_loop`-style search over integer-period lengths derived from the measured
+/// `root`, minimising a cost that combines the WRAP seam (value + slope mismatch) with
+/// the loop's amplitude IMBALANCE (first-half vs second-half RMS). The imbalance term
+/// is load-bearing: a clean seam alone does NOT mean a flat interior — the longest
+/// seam-clean loop can span the note's natural decay and turn the hold into a ~3 Hz
+/// loud→silence→loud sawtooth. The loop is therefore bounded to a SHORT window
+/// (`MIN_LEN_S..MAX_LEN_S`) inside the steady body (`le < BODY_END_S`), which stays
+/// clear of the recorded release. `None` when the note is too short (caller keeps the
+/// modeled reed).
+fn find_sax_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
+    let sr = 44100.0f32;
+    if root <= 0.0 {
+        return None;
+    }
+    let period = sr / root;
+    if period < 4.0 {
+        return None;
+    }
+    let n = data.len();
+    const START_LO_S: f32 = 0.30; // past the reed chiff, into the settled body
+    const START_HI_S: f32 = 0.40;
+    const MIN_LEN_S: f32 = 0.05; // >= a handful of periods; short enough to stay steady
+    const MAX_LEN_S: f32 = 0.13;
+    const BODY_END_S: f32 = 0.50; // keep the loop clear of the recorded release/decay
+    let start_lo = (START_LO_S * sr) as usize;
+    let min_len = (MIN_LEN_S * sr) as usize;
+    let body_end = ((BODY_END_S * sr) as usize).min(n.saturating_sub(2));
+    if start_lo == 0 || body_end <= start_lo + min_len {
+        return None;
+    }
+    let start_hi = ((START_HI_S * sr) as usize).min(body_end - min_len);
+    let max_len = (MAX_LEN_S * sr) as usize;
+    let stride = (period / 8.0).max(1.0) as usize;
+    // Interior amplitude imbalance: |rms(first half) - rms(second half)| / mean rms.
+    // A decaying loop reads high here even when its seam is clean.
+    let imbalance = |ls: usize, le: usize| -> f32 {
+        let mid = (ls + le) / 2;
+        let rms = |a: usize, b: usize| {
+            (data[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a).max(1) as f32).sqrt()
+        };
+        let (r1, r2) = (rms(ls, mid), rms(mid, le));
+        (r1 - r2).abs() / (0.5 * (r1 + r2) + 1e-6)
+    };
+    let mut best: Option<(f32, usize, usize)> = None; // (cost, ls, le)
+    let mut ls = start_lo;
+    while ls <= start_hi {
+        let mut k = ((min_len as f32 / period).ceil() as usize).max(1);
+        loop {
+            let l = (k as f32 * period).round() as usize;
+            if l > max_len {
+                break;
+            }
+            let le = ls + l;
+            if le + 1 >= body_end {
+                break;
+            }
+            let vseam = (data[le] - data[ls]).abs();
+            let sseam = ((data[le] - data[le - 1]) - (data[ls] - data[ls - 1])).abs();
+            // Weight imbalance heavily: a flat interior matters more than a perfect seam
+            // (the seam is baked-near-zero by integer periods anyway).
+            let cost = vseam + 0.5 * sseam + 4.0 * imbalance(ls, le);
+            if best.is_none_or(|(bc, _, _)| cost < bc) {
+                best = Some((cost, ls, le));
+            }
+            k += 1;
+        }
+        ls += stride;
+    }
+    best.map(|(_, ls, le)| (ls, le))
+}
+
+/// GM 64-67 sax voice: recorded attack played through into a looped recorded
+/// sustain. A fast-attack / short-release amp gate rides on top (the note's own
+/// attack shape lives in the sample); the loop is found once at construction.
+pub struct SaxLoopVoice {
+    data: &'static [f32],
+    loop_start: usize,
+    loop_end: usize,
+    pos: f32,
+    base_step: f32,
+    step: f32,
+    gain: f32,
+    env: crate::dsp::Adsr,
+}
+
+impl SaxLoopVoice {
+    fn new(zone: &'static Zone, target_hz: f32, vel: u8, sr: f32, base_gain: f32) -> Option<Self> {
+        let (loop_start, loop_end) = find_sax_loop(&zone.data, zone.root)?;
+        let ratio = target_hz / zone.root;
+        if !(0.5..=2.05).contains(&ratio) {
+            return None;
+        }
+        let base_step = ratio * 44100.0 / sr;
+        Some(SaxLoopVoice {
+            data: zone.data.as_slice(),
+            loop_start,
+            loop_end,
+            pos: 0.0,
+            base_step,
+            step: base_step,
+            // p/f banks already carry the bulk of the dynamic; a gentle vel taper on top.
+            gain: base_gain * (0.55 + 0.45 * vel_amp(vel)),
+            // near-instant attack (the sample owns the onset), ~70 ms release.
+            env: crate::dsp::Adsr::new(0.004, 0.0, 1.0, 0.07, sr),
+        })
+    }
+}
+
+impl Voice for SaxLoopVoice {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let loop_len = (self.loop_end - self.loop_start) as f32;
+        for o in out.iter_mut() {
+            let e = self.env.next();
+            let j = self.pos as usize;
+            let frac = self.pos - j as f32;
+            let a = self.data[j];
+            // Wrapped neighbour: at the last loop sample the interpolation partner is
+            // loop_start (the seam), not data[j+1] — an unwrapped read clicks once per loop.
+            let jn = j + 1;
+            let b = if jn >= self.loop_end {
+                self.data[self.loop_start]
+            } else {
+                self.data[jn]
+            };
+            *o += (a + (b - a) * frac) * self.gain * e;
+            self.pos += self.step;
+            if self.pos >= self.loop_end as f32 {
+                self.pos -= loop_len;
+            }
+        }
+        self.env.alive()
+    }
+
+    fn note_off(&mut self) {
+        self.env.release();
+    }
+
+    fn released(&self) -> bool {
+        self.env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.step = self.base_step * mult;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "saxloop"
+    }
+}
+
+/// Build the looped-sustain sax voice for GM 64-67, or `None` if no usable loop /
+/// the repitch is out of range (the caller keeps the modeled reed).
+pub fn sax_loop_voice(program: u8, key: u8, vel: u8, sr: f32) -> Option<Box<dyn Voice>> {
+    let zones = sax_bank(program, vel);
+    let f = key_freq(key);
+    let zone = nearest(zones, f);
+    SaxLoopVoice::new(zone, f, vel, sr, sax_program_gain(program))
+        .map(|v| Box::new(v) as Box<dyn Voice>)
+}
+
+// ---------------------------------------------------------------------------
 // Sampled drum kit (drum-kit bank, Stages B/E): unlike the old kick/snare
 // attack overlay there is no model underneath — the recorded hit IS the whole
 // voice. Unpitched except the toms, whose two sampled drums are repitched by
@@ -2878,6 +3065,72 @@ mod tests {
             assert!(
                 d > 0.3 * o,
                 "{name}: layer barely changes the onset (diff {d:.5} vs off {o:.5})"
+            );
+        }
+    }
+
+    /// The looped-sustain sax (2026.07.18 holds audit) must (a) actually engage — a
+    /// `SaxLoopVoice`, not the modeled fallback — for every sax at a representative key;
+    /// (b) sit within ~3 dB of the modeled reed it replaces over the hold, so album mix
+    /// balance is preserved; and (c) hold a FLAT sustain — no gross amplitude sawtooth
+    /// from a loop that spans the recorded decay (the `find_sax_loop` imbalance term
+    /// guards this; the bug read frame-RMS CoV ~0.6). Liveness is deliberately low here —
+    /// movement is re-added by the modulator increment, not baked into the raw loop.
+    #[test]
+    fn sax_loop_level_parity_and_flat() {
+        let sr = 44100.0;
+        for (program, key, name) in [
+            (64u8, 72u8, "soprano"),
+            (65, 65, "alto"),
+            (66, 60, "tenor"),
+            (67, 48, "baritone"),
+        ] {
+            assert_eq!(
+                voices::make(program, key, 100, sr, 5, true).kind(),
+                "saxloop",
+                "{name}: samples-on must engage the looped voice, not the modeled fallback"
+            );
+            let hold = |samples: bool| {
+                let mut v = voices::make(program, key, 100, sr, 5, samples);
+                let mut buf = vec![0f32; (1.5 * sr) as usize];
+                v.render(&mut buf);
+                buf[(0.6 * sr) as usize..(1.4 * sr) as usize].to_vec()
+            };
+            let (loop_h, model_h) = (hold(true), hold(false));
+            let (rl, rm) = (
+                crate::testutil::rms(&loop_h),
+                crate::testutil::rms(&model_h),
+            );
+            let db = 20.0 * (rl / rm).log10();
+            assert!(
+                db.abs() <= 3.0,
+                "{name}: looped hold {db:+.1} dB off the modeled reed it replaces \
+                 (loop {rl:.4} vs model {rm:.4})"
+            );
+            // Flatness: 20 ms frame-RMS CoV over the hold — the decay-sawtooth bug read ~0.6.
+            let fl = (0.02 * sr) as usize;
+            let frames: Vec<f32> = loop_h
+                .chunks(fl)
+                .filter(|c| c.len() == fl)
+                .map(crate::testutil::rms)
+                .collect();
+            let mean = frames.iter().sum::<f32>() / frames.len() as f32;
+            let var = frames.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / frames.len() as f32;
+            let cov = var.sqrt() / (mean + 1e-9);
+            assert!(
+                cov < 0.15,
+                "{name}: looped hold not flat (frame-RMS CoV {cov:.3}) — loop spanning the recorded decay?"
+            );
+            // Seam guard (deterministic): the chosen loop joins loop_end back to loop_start
+            // with a small value discontinuity — an integer-period, seam-minimised wrap must
+            // not click. Re-derive the exact loop the voice uses.
+            let zones = sax_bank(program, 100);
+            let zone = nearest(zones, crate::dsp::key_freq(key));
+            let (ls, le) = find_sax_loop(&zone.data, zone.root).expect("a loop was found above");
+            let wrap = (zone.data[le] - zone.data[ls]).abs();
+            assert!(
+                wrap < 0.03,
+                "{name}: loop wrap discontinuity {wrap:.4} (loop {ls}..{le}) — would click"
             );
         }
     }

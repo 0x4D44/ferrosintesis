@@ -7834,10 +7834,9 @@ const LA_BRASS: (f32, (f32, f32)) = (0.45, (0.10, 0.32));
 /// (probed via la_level_continuity's differential windows).
 const LA_TUBA_GAIN_MUL: f32 = 1.8;
 const LA_REED: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
-/// GM 64-67 saxophones: the MTG.SoloSax sample owns the reedy attack + early body,
-/// the modeled reed (with its RD10 rasp / RD11 cone-fill) carries the sustain past the
-/// ~0.62 s kept window. Starts at the reed wrap gain; tune against la_sax_level_continuity.
-const LA_SAX: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
+// GM 64-67 saxophones no longer use an onset-only LA layer — the whole voice is the
+// real recording (attack → looped recorded sustain, `sampler::SaxLoopVoice`), so there
+// is no `LA_SAX` wrap gain to tune. The modeled reed is the `--no-samples` voice.
 /// GM 24 nylon guitar: the sample owns the pick transient (first ~30 ms),
 /// the Karplus-Strong string carries the bendable decay from 200 ms (HLD §4).
 /// Restored to the honest ~0.42 (voice-quality overhaul §2.7): the old 0.25
@@ -11019,26 +11018,19 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // (the wrong instrument); BR_SECTION's five scattered players carry
         // the width instead. 62/63 synth brass: pure model by design.
         61..=63 => Box::new(brass(program, key, vel, sr, seed)),
-        // GM 64-67 saxophones: modeled reed + MTG.SoloSax LA sample layer (CC-BY,
-        // separate crate), mirroring the 68..=71 double-reed/clarinet arm. The sample
-        // owns the reedy attack+body; the model carries the sustain (and its rasp/
-        // cone-fill). Gated on `samples` only — a modeled-only build renders the
-        // pre-sample-layer voice unchanged.
+        // GM 64-67 saxophones (2026.07.18 holds audit): the WHOLE voice is the real
+        // MTG.SoloSax recording — attack played through into a pitch-synchronous loop of
+        // the recorded sustain (`SaxLoopVoice`). This replaces the onset-only LA layer,
+        // whose sample faded out at 0.24 s and handed the hold back to the model as a
+        // static drone. The modeled reed remains the `--no-samples` voice and the fallback
+        // when no usable loop exists / the repitch is out of range. (A later increment
+        // re-adds the model purely as a vibrato/brightness/breath modulator on the loop.)
         64..=67 => {
-            let model = Box::new(reed(program, key, vel, sr, seed));
             if samples {
-                let (gain, fade) = LA_SAX;
-                crate::sampler::LaVoice::wrap(
-                    model,
-                    crate::sampler::sax_bank(program, vel),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                )
+                crate::sampler::sax_loop_voice(program, key, vel, sr)
+                    .unwrap_or_else(|| Box::new(reed(program, key, vel, sr, seed)))
             } else {
-                model
+                Box::new(reed(program, key, vel, sr, seed))
             }
         }
         // shanai: pure model (no clean sample source / idiomatic onset)

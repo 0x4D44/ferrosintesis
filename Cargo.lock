@@ -8,13 +8,20 @@ version = "0.21.28"
 dependencies = [
  "ferrosintesis-samples-clavinet",
  "ferrosintesis-samples-core",
+ "ferrosintesis-samples-dark-salamander",
  "ferrosintesis-samples-drumkit",
  "ferrosintesis-samples-gong",
  "ferrosintesis-samples-grand",
+ "ferrosintesis-samples-headroom",
+ "ferrosintesis-samples-honkytonk",
  "ferrosintesis-samples-musescore",
+ "ferrosintesis-samples-musescore-grand",
  "ferrosintesis-samples-orchestral",
  "ferrosintesis-samples-orchestral2",
  "ferrosintesis-samples-sax",
+ "ferrosintesis-samples-vcsl-kawai",
+ "ferrosintesis-samples-vcsl-steinway",
+ "ferrosintesis-samples-ydp-grand",
 ]
 
 [[package]]
@@ -33,6 +40,10 @@ name = "ferrosintesis-samples-core"
 version = "0.1.0"
 
 [[package]]
+name = "ferrosintesis-samples-dark-salamander"
+version = "0.1.0"
+
+[[package]]
 name = "ferrosintesis-samples-drumkit"
 version = "0.1.0"
 
@@ -45,7 +56,19 @@ name = "ferrosintesis-samples-grand"
 version = "0.1.0"
 
 [[package]]
+name = "ferrosintesis-samples-headroom"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-honkytonk"
+version = "0.1.0"
+
+[[package]]
 name = "ferrosintesis-samples-musescore"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-musescore-grand"
 version = "0.1.0"
 
 [[package]]
@@ -58,6 +81,18 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-sax"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-vcsl-kawai"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-vcsl-steinway"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-ydp-grand"
 version = "0.1.0"
 
 [[package]]

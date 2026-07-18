@@ -1,0 +1,13 @@
+ferrosintesis-samples-vcsl-steinway
+===================================
+
+The embedded WAV samples in this crate are derived from the "Grand Piano,
+Steinway B" instrument of the Versilian Community Sample Library (VCSL) by
+Versilian Studios / Sam Gossner.
+
+VCSL is released under the Creative Commons CC0 1.0 Universal public-domain
+dedication (https://creativecommons.org/publicdomain/zero/1.0/): no rights
+reserved, no attribution required, commercial use permitted. This NOTICE is a
+courtesy credit, not a licence obligation.
+
+Source: https://github.com/sgossner/VCSL

@@ -456,6 +456,84 @@ GRAND_SOURCES = {
     for rr, v in (("", v_rr1), ("_rr2", v_rr2))
 }
 
+# --- GM0 alternate grand banks (CC0-selectable audition; see the 2026.07.18 PLN) ---
+# VCSL "Grand Piano, Steinway B" (CC0) -> GM0 alt bank 1. A warm, intimate vintage
+# Steinway, the tonal opposite of the bright Salamander C5. Whole-tone sampled, so
+# the grand's C/F# zone pitches are all present; labels are TRUE sounding pitch
+# (probed: C2=65.7, C4=262, C6=1050 Hz -> NOT octave-mislabelled like the VCSL
+# keyboard/ocarina). 24-bit stereo WAV (read_wav downmixes + decodes). 3 velocity
+# layers vl2/vl3/vl4 (pp/mf/f), single round robin -> RR2 is an adjacent velocity
+# layer (peak-normalized to 0.9, so same level, harder-strike timbre = real RR
+# variation, exactly the Salamander/grand trick that defeats the machine-gun tell).
+_VCSL_STEINWAY_BASE = (
+    "https://raw.githubusercontent.com/sgossner/VCSL/master/"
+    "Chordophones/Zithers/Grand%20Piano%2C%20Steinway%20B/Sus"
+)
+_STEINWAYB_ZONES = ["C2", "F#2", "C3", "F#3", "C4", "F#4", "C5", "F#5", "C6"]
+# dynamic -> (RR1 velocity layer, RR2 velocity layer). vl4 has no higher neighbour,
+# so f's RR2 borrows vl3 (a softer strike at the same normalized level).
+_STEINWAYB_VEL = {"pp": (2, 3), "mf": (3, 4), "f": (4, 3)}
+STEINWAYB_SOURCES = {
+    f"steinwayb_{z}_{d}{rr}.wav":
+        f"{_VCSL_STEINWAY_BASE}/JHPiano_Sus_Close_{z.replace('#', '%23')}_vl{v}_rr1.wav"
+    for z in _STEINWAYB_ZONES
+    for d, (v_rr1, v_rr2) in _STEINWAYB_VEL.items()
+    for rr, v in (("", v_rr1), ("_rr2", v_rr2))
+}
+
+# VCSL "Grand Piano, Kawai" (CC0) -> GM0 alt bank 2. A darker, rounder vintage grand.
+# CAUTION: Kawai labels sit ONE OCTAVE BELOW sounding pitch (probed: label C2 -> 131 Hz,
+# label C4 -> 525 Hz, label A#3 -> 469 Hz) -- the VCSL keyboard octave trap, UNLIKE the
+# Steinway B. So each dest zone (named by SOUNDING pitch) maps to the source file
+# labelled one octave DOWN. 16-bit stereo WAV, velocity layers v1..v4. Sampling is
+# irregular, so 8 zones from the pitches with full v1..v4 coverage (measured, verified).
+_VCSL_KAWAI_BASE = (
+    "https://raw.githubusercontent.com/sgossner/VCSL/master/"
+    "Chordophones/Zithers/Grand%20Piano%2C%20Kawai/Sustains"
+)
+# sounding-pitch dest zone -> source file label (one octave down); all have full v1..v4.
+# VERIFIED by measurement: a Kawai label sounds one octave ABOVE its nominal (label C1
+# -> C2 65 Hz, label A1 -> A2 110 Hz, label A#2 -> A#3 233 Hz). Sounding A3 (220) is not
+# reachable from Kawai's sparse A-labels, so A#3 fills that slot.
+_KAWAI_ZONE_LABEL = {
+    "C2": "C1", "A2": "A1", "C3": "C2", "A#3": "A#2",
+    "C4": "C3", "A#4": "A#3", "C5": "C4", "C6": "C5",
+}
+# dynamic -> (RR1 velocity, RR2 velocity) over v1..v4.
+_KAWAI_VEL = {"pp": (1, 2), "mf": (2, 3), "f": (4, 3)}
+KAWAI_SOURCES = {
+    f"kawai_{zone}_{d}{rr}.wav":
+        f"{_VCSL_KAWAI_BASE}/GPiano_sus_{lbl.replace('#', '%23')}_v{v}_rr1_Player.wav"
+    for zone, lbl in _KAWAI_ZONE_LABEL.items()
+    for d, (v_rr1, v_rr2) in _KAWAI_VEL.items()
+    for rr, v in (("", v_rr1), ("_rr2", v_rr2))
+}
+
+# Headroom / Intimate Piano (Bengt Nilsson, Yamaha C3), CC-BY 4.0 -> GM0 alt bank 3.
+# A warm, intimate close-mic C3 studio grand. Distributed as FLAC (ffmpeg-transcoded,
+# same precedent as the banjo/sax/drumkit). MIDI-number labels ARE sounding pitch
+# (probed: 36->65 Hz C2, 60->262 Hz C4, 84->1050 Hz C6) -- no octave trap. 5 velocity
+# LEVELs, single mic set (CLOSE). ATTRIBUTION REQUIRED (CC-BY): credit Bengt Nilsson +
+# keep the instrument name (see the crate NOTICE).
+_HEADROOM_BASE = (
+    "https://raw.githubusercontent.com/sfzinstruments/BengtNilsson.HeadroomPiano/"
+    "master/Samples"
+)
+# dest zone -> MIDI note (C/F# every minor third, C2..C6; all multiples of 3 in the set).
+_HEADROOM_ZONE_MIDI = {
+    "C2": 36, "F#2": 42, "C3": 48, "F#3": 54, "C4": 60,
+    "F#4": 66, "C5": 72, "F#5": 78, "C6": 84,
+}
+# dynamic -> (RR1 LEVEL, RR2 LEVEL) over LEVEL1..5. L5 is loudest; f's RR2 borrows L4.
+_HEADROOM_VEL = {"pp": (1, 2), "mf": (3, 4), "f": (5, 4)}
+HEADROOM_SOURCES = {
+    f"headroom_{z}_{d}{rr}.wav":
+        f"{_HEADROOM_BASE}/HEADROOM%20PIANO%20LEVEL{lv}%20CLOSE%20{midi}.flac"
+    for z, midi in _HEADROOM_ZONE_MIDI.items()
+    for d, (lv_rr1, lv_rr2) in _HEADROOM_VEL.items()
+    for rr, lv in (("", lv_rr1), ("_rr2", lv_rr2))
+}
+
 # Clavinet (GM 7) — the MuseScore "MS Basic" soundfont's clavinet (MIT, NOT CC0), the
 # default sampled voice; the modeled Pluck moves to the CC0-nonzero alt bank + the
 # --no-samples fallback. MS Basic is an SF3 soundfont: SF2 structure but each sample is
@@ -472,6 +550,43 @@ MUSESCORE_SF3_URL = (
 MUSESCORE_SF3_SHA256 = (
     "5ea2375e8bd7d8e71def1036978c1621e85b66934169b6a2744b27b9b3c2d99c"
 )
+# GM0 alt bank 4: the FULLER MuseScore_General soundfont's grand (MIT, S. Christian
+# Collins), distinct from MS Basic above. Its "Grand Piano" preset (0) is a
+# velocity-layered multisample across "Piano MF-low/high" + "Piano FF-low/high"
+# instruments; we extract the MF tier as a dense single-velocity multisample (the LA
+# layer + model carry dynamics). SHA-pinned (the FTP publishes no checksum).
+MUSESCORE_GENERAL_URL = (
+    "https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/"
+    "MuseScore_General.sf3"
+)
+MUSESCORE_GENERAL_SHA256 = (
+    "5b85b6c2c61d10b2b91cddd41efcce7b25cd31c8271d511c73afafbef20b6fa3"
+)
+# GM0 alt bank 7: FreePats YDP Grand (Zenph Yamaha Disklavier Pro / OLPC), CC-BY 3.0 —
+# a BRIGHTER, harder-onset Yamaha grand. A .tar.bz2 holding a real SF2 (raw 16-bit PCM,
+# NOT SF3/Ogg). One preset "Grand Piano" (program 0) with 5 velocity-layer instruments
+# "piano layer 1..5"; we extract the middle layer ("piano layer 3") as a single-velocity
+# multisample. SHA-pinned.
+YDP_URL = (
+    "https://freepats.zenvoid.org/Piano/YDP-GrandPiano/"
+    "YDP-GrandPiano-SF2-20160804.tar.bz2"
+)
+YDP_SHA256 = "d243dc3e182a60df2a16e92828c1821cf3eb5748b45e2e2bdcfa9cf7af056026"
+# C/F# every minor third, C2..C6 (MIDI) — same zone grid as the other grands.
+YDP_ZONE_MIDI = [36, 42, 48, 54, 60, 66, 72, 78, 84]
+
+# GM0 alt bank 8: FreePats Honky-tonk Piano (Frances Bacon player piano, Piotr Barcz),
+# CC0 — a DISTINCTIVE detuned/tack/jangly attack no other bank has. A .7z of per-note
+# FLAC (single velocity); extracted via 7z (as the guitar/bagpipe), then ffmpeg-decoded.
+HONKYTONK_URL = (
+    "https://github.com/freepats/old-piano-FB/releases/download/2020-04-01/"
+    "PianoFB-SFZ+FLAC-20200401.7z"
+)
+HONKYTONK_SHA256 = "da35c93967c421b17f7219c12a37830ffd2b19f54f8a0a71203fc6161b079b45"
+_HT_MEMBER_DIR = "PianoFB SFZ+FLAC-20200401/samples"
+# 9 zones spanning C2..C6 — F#2/F#4 are absent from the source (SFZ-filled), so F2/F4
+# stand in there. All measured (the detuned unisons read ~15 cents off — a tight window).
+HONKYTONK_NOTES = ["C2", "F2", "C3", "F#3", "C4", "F4", "C5", "F#5", "C6"]
 # Each clavinet zone is baked into a self-contained decaying note: the ~0.2 s decoded
 # Ogg body's sustain loop is made seamless (a short crossfade) and repeated under an
 # exponential decay, so a held note rings and decays like a real clavinet string.
@@ -493,6 +608,10 @@ F0_RANGE = {
     "piano": (45.0, 2500.0),
     # grand spans C2 65 Hz … C6 1047 Hz, same window as the upright
     "grand": (45.0, 2500.0),
+    # GM0 alternate grands: same C2..C6 window as the Salamander grand.
+    "steinwayb": (45.0, 2500.0),
+    "kawai": (45.0, 2500.0),
+    "headroom": (45.0, 2500.0),
     "trumpet": (80.0, 1200.0),
     "mutetpt": (80.0, 1200.0),
     "trombone": (35.0, 600.0),
@@ -569,6 +688,10 @@ KEEP_FAM = {
     # 1.5 s rather than 1.8 s holds the standalone -grand crate well under the
     # crates.io 10 MiB limit (54 files, 16-bit mono) with headroom
     "grand": (1.5, 0.6),
+    # GM0 alternate grand banks: same 1.5 s body as the Salamander grand.
+    "steinwayb": (1.5, 0.6),
+    "kawai": (1.5, 0.6),
+    "headroom": (1.5, 0.6),
     "nylon": (0.9, 0.30),
     "steel": (0.9, 0.30),
     "harpsi": (0.9, 0.30),
@@ -616,6 +739,11 @@ CORE_FAMILIES = frozenset(("piano", "violin", "flute"))
 # a ~6.9 MiB CC-BY bank kept separate so core stays under the crates.io 10 MiB cap.
 FAMILY_PACKAGE = {
     "grand": "ferrosintesis-samples-grand",
+    # GM0 alternate grand banks each get their own crate (attribution/licence
+    # isolation, and the crates.io 10 MiB cap): CC0 VCSL Steinway B.
+    "steinwayb": "ferrosintesis-samples-vcsl-steinway",
+    "kawai": "ferrosintesis-samples-vcsl-kawai",
+    "headroom": "ferrosintesis-samples-headroom",
     # New CC0 onsets: `-orchestral` is at the ~10 MiB crates.io cap, so harp (and the
     # timpani/recorder/ocarina/banjo units that follow) route to a second CC0 crate.
     "harp": "ferrosintesis-samples-orchestral2",
@@ -740,6 +868,40 @@ def ensure_bagpipe_sources(src):
     members["bagpipe.sfz"] = BAGPIPE_SFZ_MEMBER
     ensure_archive_sources(src, BAGPIPE_ARCHIVE_URL, BAGPIPE_ARCHIVE_SHA256,
                            members, "bagpipe_extract")
+
+
+def ensure_direct_sources(src, source_map, label):
+    """Fetch each `dest_name -> url` in `source_map` straight to `src/<dest_name>`.
+
+    For GM0 alternate banks distributed as individual raw files (not an archive):
+    VCSL etc. Idempotent — skips files already present. The main bake loop then
+    reads `src/<dest_name>`, trims, measures the root, and routes it to the crate.
+    """
+    for fn, url in source_map.items():
+        dst = os.path.join(src, fn)
+        if not os.path.exists(dst):
+            print(f"fetching {label} {fn} ...", file=sys.stderr)
+            fetch(url, dst)
+
+
+def ensure_flac_sources(src, source_map, label):
+    """Like `ensure_direct_sources`, but each URL is a FLAC that ffmpeg transcodes to
+    a 16-bit PCM WAV at `src/<dest_name>` (same shell-out precedent as the banjo/sax/
+    drumkit intakes). The `.flac` download is cached alongside the WAV."""
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    for fn, url in source_map.items():
+        wav = os.path.join(src, fn)
+        if os.path.exists(wav):
+            continue
+        flac = wav + ".flac"
+        if not os.path.exists(flac):
+            print(f"fetching {label} {fn} ...", file=sys.stderr)
+            fetch(url, flac)
+        subprocess.run(
+            [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+             "-i", flac, "-acodec", "pcm_s16le", wav],
+            check=True,
+        )
 
 
 def ensure_salamander_sources(src):
@@ -1301,6 +1463,269 @@ def _bake_sf_onset(src, preset, prefix, dest_crate, keep_s, fade_s):
     return rows
 
 
+def ensure_musescore_general_sf3(src):
+    """Fetch + sha256-verify the pinned MuseScore_General soundfont (~38 MB)."""
+    path = os.path.join(src, "MuseScore_General.sf3")
+    if not os.path.exists(path):
+        print("fetching MuseScore_General.sf3 (~38 MB) ...", file=sys.stderr)
+        fetch(MUSESCORE_GENERAL_URL, path)
+    digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    if digest != MUSESCORE_GENERAL_SHA256:
+        raise ValueError(f"{path}: sha256 {digest} != pinned {MUSESCORE_GENERAL_SHA256}")
+    return path
+
+
+def _bake_musescore_grand(src):
+    """Bake the MuseScore_General grand's MF tier as a dense single-velocity
+    multisample (GM0 alt bank 4). Resolves 'Piano MF-low' + 'Piano MF-high' by NAME,
+    takes one sample per distinct originalPitch in the C2..C6+ range, decodes each Ogg
+    (ffmpeg), keeps 1.5 s of body (`trim_to_onset`), and re-measures the root in a
+    tight window. Writes `musescoregrand_<pitch>.wav`; returns print rows. Single
+    velocity: the LA blend + model carry the dynamics."""
+    sf3 = open(ensure_musescore_general_sf3(src), "rb").read()
+    assert sf3[0:4] == b"RIFF" and sf3[8:12] == b"sfbk", "not an SF2/SF3 file"
+
+    def u16(b, o):
+        return struct.unpack("<H", b[o:o + 2])[0]
+
+    lists = {}
+    pos = 12
+    while pos + 12 <= len(sf3):
+        cid = sf3[pos:pos + 4]
+        sz = struct.unpack("<I", sf3[pos + 4:pos + 8])[0]
+        if cid == b"LIST":
+            lists[sf3[pos + 8:pos + 12]] = (pos + 12, sz - 4)
+        pos += 8 + sz + (sz & 1)
+
+    def walk(off, size):
+        end = off + size
+        subs = {}
+        p = off
+        while p + 8 <= end:
+            cid = sf3[p:p + 4]
+            sz = struct.unpack("<I", sf3[p + 4:p + 8])[0]
+            subs[cid] = (p + 8, sz)
+            p += 8 + sz + (sz & 1)
+        return subs
+
+    smpl_off = walk(*lists[b"sdta"])[b"smpl"][0]
+    pdta = walk(*lists[b"pdta"])
+
+    def recs(name, width):
+        o, s = pdta[name]
+        return [sf3[o + i * width:o + (i + 1) * width] for i in range(s // width)]
+
+    inst, ibag, igen = recs(b"inst", 22), recs(b"ibag", 4), recs(b"igen", 4)
+    shdr = recs(b"shdr", 46)
+
+    # one sample zone per distinct root (byte offsets into `smpl`), C2..C6+ range.
+    best = {}
+    for name in (b"Piano MF-low", b"Piano MF-high"):
+        ii = next(i for i, r in enumerate(inst) if r[:20].split(b"\x00")[0] == name)
+        for b in range(u16(inst[ii], 20), u16(inst[ii + 1], 20)):
+            sid = None
+            for g in range(u16(ibag[b], 0), u16(ibag[b + 1], 0)):
+                if u16(igen[g], 0) == 53:  # gen 53 = sampleID
+                    sid = u16(igen[g], 2)
+            if sid is None:
+                continue
+            h = shdr[sid]
+            start, end = struct.unpack("<II", h[20:28])
+            root = h[40]  # originalPitch (MIDI) — the trustworthy sounding root
+            if 34 <= root <= 88 and root not in best:
+                best[root] = (start, end)
+
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    out_dir = os.path.join(REPO_ROOT, "crates",
+                           "ferrosintesis-samples-musescore-grand", "samples")
+    os.makedirs(out_dir, exist_ok=True)
+    rows = []
+    for root in sorted(best):
+        start, end = best[root]
+        ogg = os.path.join(src, f"msgrand_{root}.ogg")
+        wav = os.path.join(src, f"msgrand_{root}.wav")
+        with open(ogg, "wb") as f:
+            f.write(sf3[smpl_off + start:smpl_off + end])
+        subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", ogg, "-acodec", "pcm_s16le", wav], check=True)
+        x, wsr = read_wav(wav)
+        if wsr != OUT_SR:
+            x = resample(x, wsr, OUT_SR)
+            wsr = OUT_SR
+        seg = trim_to_onset(x, wsr, 1.5, 0.6)
+        nominal = _midi_hz(root)
+        f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
+        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+        out_name = f"musescoregrand_{_midi_name(root)}.wav"
+        write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
+        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    return rows
+
+
+def ensure_ydp_sf2(src):
+    """Fetch + sha256-verify the YDP Grand .tar.bz2 and extract its SF2."""
+    sf2 = os.path.join(src, "YDP-GrandPiano.sf2")
+    if not os.path.exists(sf2):
+        arc = os.path.join(src, "ydp.tar.bz2")
+        if not os.path.exists(arc):
+            print("fetching YDP-GrandPiano SF2 (~36 MB) ...", file=sys.stderr)
+            fetch(YDP_URL, arc)
+        digest = hashlib.sha256(open(arc, "rb").read()).hexdigest()
+        if digest != YDP_SHA256:
+            raise ValueError(f"{arc}: sha256 {digest} != pinned {YDP_SHA256}")
+        with tarfile.open(arc, "r:bz2") as tf:
+            member = next(m for m in tf.getmembers() if m.name.endswith(".sf2"))
+            with tf.extractfile(member) as f, open(sf2, "wb") as out:
+                out.write(f.read())
+    return sf2
+
+
+def _bake_ydp_grand(src):
+    """Bake the YDP Grand's middle velocity layer as a single-velocity multisample
+    (GM0 alt bank 7). SF2 raw-PCM: resolves the "piano layer 3" instrument by name,
+    extracts the C/F# minor-third zones (`YDP_ZONE_MIDI`) straight from the `smpl`
+    chunk (shdr start/end are FRAME offsets — no ffmpeg), keeps 1.5 s of body, and
+    re-measures each root. Writes `ydpgrand_<pitch>.wav`; returns print rows."""
+    sf2 = open(ensure_ydp_sf2(src), "rb").read()
+    assert sf2[0:4] == b"RIFF" and sf2[8:12] == b"sfbk", "not an SF2 file"
+
+    def u16(b, o):
+        return struct.unpack("<H", b[o:o + 2])[0]
+
+    lists = {}
+    pos = 12
+    while pos + 12 <= len(sf2):
+        cid = sf2[pos:pos + 4]
+        sz = struct.unpack("<I", sf2[pos + 4:pos + 8])[0]
+        if cid == b"LIST":
+            lists[sf2[pos + 8:pos + 12]] = (pos + 12, sz - 4)
+        pos += 8 + sz + (sz & 1)
+
+    def walk(off, size):
+        end = off + size
+        subs = {}
+        p = off
+        while p + 8 <= end:
+            cid = sf2[p:p + 4]
+            sz = struct.unpack("<I", sf2[p + 4:p + 8])[0]
+            subs[cid] = (p + 8, sz)
+            p += 8 + sz + (sz & 1)
+        return subs
+
+    smpl_off = walk(*lists[b"sdta"])[b"smpl"][0]
+    pdta = walk(*lists[b"pdta"])
+
+    def recs(name, width):
+        o, s = pdta[name]
+        return [sf2[o + i * width:o + (i + 1) * width] for i in range(s // width)]
+
+    inst, ibag, igen = recs(b"inst", 22), recs(b"ibag", 4), recs(b"igen", 4)
+    shdr = recs(b"shdr", 46)
+
+    # one sample zone per distinct root within "piano layer 3".
+    ii = next(i for i, r in enumerate(inst)
+              if r[:20].split(b"\x00")[0] == b"piano layer 3")
+    by_root = {}
+    for b in range(u16(inst[ii], 20), u16(inst[ii + 1], 20)):
+        sid = None
+        for g in range(u16(ibag[b], 0), u16(ibag[b + 1], 0)):
+            if u16(igen[g], 0) == 53:
+                sid = u16(igen[g], 2)
+        if sid is None:
+            continue
+        h = shdr[sid]
+        start, end = struct.unpack("<II", h[20:28])  # FRAME offsets (SF2 raw PCM)
+        root = h[40]
+        by_root.setdefault(root, (start, end))
+
+    out_dir = os.path.join(REPO_ROOT, "crates",
+                           "ferrosintesis-samples-ydp-grand", "samples")
+    os.makedirs(out_dir, exist_ok=True)
+    rows = []
+    for midi in YDP_ZONE_MIDI:
+        start, end = by_root[midi]
+        pcm = sf2[smpl_off + start * 2:smpl_off + end * 2]
+        x = [v / 32768.0 for v in struct.unpack(f"<{len(pcm) // 2}h", pcm)]
+        seg = trim_to_onset(x, OUT_SR, 1.5, 0.6)
+        nominal = _midi_hz(midi)
+        f0, conf = measure_f0(seg, OUT_SR, nominal * 0.8, nominal * 1.4)
+        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+        out_name = f"ydpgrand_{_midi_name(midi)}.wav"
+        write_wav_mono(os.path.join(out_dir, out_name), seg, OUT_SR)
+        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / OUT_SR))
+    return rows
+
+
+def _bake_honkytonk(src):
+    """Bake the FreePats honky-tonk player piano as a single-velocity multisample
+    (GM0 alt bank 8). 7z-extract the per-note FLACs (as the guitar/bagpipe archives),
+    ffmpeg-decode each, keep 1.5 s of body, and measure the (detuned) root in a tight
+    window. Writes `honkytonk_<note>.wav`; returns print rows."""
+    member_map = {f"htsrc_{n}.flac": f"{_HT_MEMBER_DIR}/{n}.flac"
+                  for n in HONKYTONK_NOTES}
+    ensure_archive_sources(src, HONKYTONK_URL, HONKYTONK_SHA256,
+                           member_map, "honkytonk_extract")
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    out_dir = os.path.join(REPO_ROOT, "crates",
+                           "ferrosintesis-samples-honkytonk", "samples")
+    os.makedirs(out_dir, exist_ok=True)
+    rows = []
+    for n in HONKYTONK_NOTES:
+        flac = os.path.join(src, f"htsrc_{n}.flac")
+        wav = os.path.join(src, f"htsrc_{n}.wav")
+        subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", flac, "-acodec", "pcm_s16le", wav], check=True)
+        x, wsr = read_wav(wav)
+        if wsr != OUT_SR:
+            x = resample(x, wsr, OUT_SR)
+            wsr = OUT_SR
+        seg = trim_to_onset(x, wsr, 1.5, 0.6)
+        nominal = NOTE_HZ[n]
+        f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
+        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+        out_name = f"honkytonk_{n}.wav"
+        write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
+        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    return rows
+
+
+def _bake_darkened_grand(_src):
+    """GM0 alt bank 5: a WARMER Salamander — the committed `-grand` samples with a
+    high-shelf cut above ~2 kHz (a one-pole shelf: y = x - g*(x - lowpass(x))). Tests
+    whether the maintainer's dislike of the bright Salamander C5 is fixable by EQ
+    rather than a new instrument, and is itself a cheap shippable win. Same 54 zones
+    and roots as the grand; derives from the CC-BY 3.0 Salamander, so inherits that
+    licence. EAR-TUNABLE (this box has no ears): `DARK_SHELF_HZ` / `DARK_CUT_DB`."""
+    DARK_SHELF_HZ = 2000.0
+    DARK_CUT_DB = -6.0
+    grand_dir = os.path.join(REPO_ROOT, "crates",
+                             "ferrosintesis-samples-grand", "samples")
+    out_dir = os.path.join(REPO_ROOT, "crates",
+                           "ferrosintesis-samples-dark-salamander", "samples")
+    os.makedirs(out_dir, exist_ok=True)
+    a = 1.0 - math.exp(-2.0 * math.pi * DARK_SHELF_HZ / OUT_SR)
+    g = 1.0 - 10.0 ** (DARK_CUT_DB / 20.0)
+    rows = []
+    for fn in sorted(f for f in os.listdir(grand_dir) if f.endswith(".wav")):
+        x, sr = read_wav(os.path.join(grand_dir, fn))  # already mono 16-bit 44.1k
+        lp = 0.0
+        y = []
+        for v in x:
+            lp += a * (v - lp)
+            y.append(v - g * (v - lp))
+        pk = max(abs(v) for v in y) or 1.0
+        y = [v * 0.9 / pk for v in y]
+        out_name = "dark" + fn  # grand_C2_pp.wav -> darkgrand_C2_pp.wav
+        write_wav_mono(os.path.join(out_dir, out_name), y, sr)
+        note = next(p for p in fn[:-4].split("_")
+                    if p[0] in "ABCDEFG" and p[-1].isdigit())
+        nominal = NOTE_HZ[note]
+        f0, conf = measure_f0(y, sr, nominal * 0.8, nominal * 1.4)
+        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+        rows.append((out_name, f0, f0, nominal, cents, conf, len(y) / sr))
+    return rows
+
+
 def ensure_banjo_sources(src):
     """Fetch the ganjo banjo WAVs and transcode them to 16-bit PCM.
 
@@ -1486,6 +1911,12 @@ def main():
             ensure_bagpipe_sources(src)
         if want("grand"):
             ensure_salamander_sources(src)
+        if want("steinwayb"):
+            ensure_direct_sources(src, STEINWAYB_SOURCES, "steinwayb")
+        if want("kawai"):
+            ensure_direct_sources(src, KAWAI_SOURCES, "kawai")
+        if want("headroom"):
+            ensure_flac_sources(src, HEADROOM_SOURCES, "headroom")
 
         # Looped bagpipe sustains (own transform: extract_loop, not trim_to_onset)
         if want("chanter"):
@@ -1521,6 +1952,31 @@ def main():
                     ms_src, _preset, _prefix, "ferrosintesis-samples-musescore", 0.62, 0.24
                 )
 
+        # GM0 alt bank 4: MuseScore_General grand — own transform (SF3 preset extract
+        # + Ogg decode), MF-tier single-velocity multisample to the MIT -musescore-grand crate.
+        if want("musescoregrand"):
+            msg_src = os.path.join(tempfile.gettempdir(), "musescore_general")
+            os.makedirs(msg_src, exist_ok=True)
+            rows += _bake_musescore_grand(msg_src)
+
+        # GM0 alt bank 5: darkened Salamander — the committed -grand samples, high-shelf
+        # cut (warmer). No fetch: derives from the tracked grand crate.
+        if want("darkgrand"):
+            rows += _bake_darkened_grand(src)
+
+        # GM0 alt bank 7: FreePats YDP Grand — bright Yamaha Disklavier (SF2 raw-PCM
+        # extract of the middle velocity layer) to the CC-BY -ydp-grand crate.
+        if want("ydpgrand"):
+            ydp_src = os.path.join(tempfile.gettempdir(), "ydp_grand")
+            os.makedirs(ydp_src, exist_ok=True)
+            rows += _bake_ydp_grand(ydp_src)
+
+        # GM0 alt bank 8: FreePats honky-tonk (7z per-note FLAC) -> CC0 -honkytonk crate.
+        if want("honkytonk"):
+            ht_src = os.path.join(tempfile.gettempdir(), "honkytonk_fb")
+            os.makedirs(ht_src, exist_ok=True)
+            rows += _bake_honkytonk(ht_src)
+
         # GM 64-67 saxophones: MTG.SoloSax LA layer (own transform: FLAC fetch +
         # ffmpeg decode), cached by MTG rev, output to the separate CC-BY `-sax` crate.
         if want("sax"):
@@ -1532,6 +1988,7 @@ def main():
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
             | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS
             | GRAND_SOURCES
+            | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):
             if not want(fn.split("_")[0]):
                 continue

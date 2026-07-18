@@ -1,0 +1,13 @@
+ferrosintesis-samples-honkytonk
+===============================
+
+The embedded WAV samples in this crate are derived from the FreePats "Honky-tonk
+Piano" — a Francis Bacon player piano recorded by Piotr Barcz; the sound bank was
+assembled by roberto@zenvoid.org for the FreePats project.
+
+Published under the Creative Commons CC0 1.0 Universal public-domain dedication
+(https://creativecommons.org/publicdomain/zero/1.0/): no rights reserved, no
+attribution required, commercial use permitted. This NOTICE is a courtesy credit,
+not a licence obligation.
+
+Source: https://freepats.zenvoid.org/Piano/honky-tonk-piano.html

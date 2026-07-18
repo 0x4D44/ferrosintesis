@@ -1,0 +1,17 @@
+ferrosintesis-samples-musescore-grand
+=====================================
+
+The embedded WAV samples in this crate are extracted from the "Grand Piano"
+preset of the MuseScore_General soundfont (MuseScore_General.sf3), the MF
+velocity tier.
+
+MuseScore_General is shared under the MIT license (as described in its COPYING),
+"as was FluidR3Mono and FluidR3 before it".
+
+Copyright / acknowledgement notices retained per the MIT license:
+  - Adaptation for MuseScore_General.sf2 by S. Christian Collins,
+    Copyright (c) 2018-2019.
+  - Derived from FluidR3 / FluidR3Mono by Frank Wen and contributors.
+
+Source: https://musescore.org/en/node/306828
+        https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/

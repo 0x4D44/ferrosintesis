@@ -1,0 +1,13 @@
+[package]
+name = "ferrosintesis-samples-vcsl-steinway"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+description = "Embedded CC0 VCSL Steinway-B grand-piano samples for ferrosintesis (GM0 alternate bank)"
+license = "CC0-1.0"
+repository = "https://github.com/0x4D44/ferrosintesis"
+readme = "README.md"
+include = ["src/**", "samples/**", "README.md", "NOTICE", "PROVENANCE.md"]
+
+[lib]
+path = "src/lib.rs"

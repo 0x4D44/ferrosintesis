@@ -53,6 +53,13 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_orchestral2::get(name))
         .or_else(|| ferrosintesis_samples_gong::get(name))
         .or_else(|| ferrosintesis_samples_grand::get(name))
+        .or_else(|| ferrosintesis_samples_vcsl_steinway::get(name))
+        .or_else(|| ferrosintesis_samples_vcsl_kawai::get(name))
+        .or_else(|| ferrosintesis_samples_headroom::get(name))
+        .or_else(|| ferrosintesis_samples_musescore_grand::get(name))
+        .or_else(|| ferrosintesis_samples_dark_salamander::get(name))
+        .or_else(|| ferrosintesis_samples_ydp_grand::get(name))
+        .or_else(|| ferrosintesis_samples_honkytonk::get(name))
         .or_else(|| ferrosintesis_samples_clavinet::get(name))
         .or_else(|| ferrosintesis_samples_musescore::get(name))
         .or_else(|| ferrosintesis_samples_sax::get(name))
@@ -725,6 +732,575 @@ pub fn grand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
         (_, false) => grand_f(),
         (_, true) => grand_f_rr2(),
     }
+}
+
+// GM 0 Acoustic Grand ALTERNATE bank 1 - VCSL "Grand Piano, Steinway B" (CC0,
+// ferrosintesis-samples-vcsl-steinway). A warm vintage Steinway, the tonal
+// contrast to the default bright Salamander C5. Roots measured by autocorrelation
+// in prepare.py (family steinwayb); F# zones stand in for the G positions. RR2 is
+// an adjacent velocity layer, peak-matched, so repeated notes vary. Selected via
+// CC0 alt bank 1 on a GM 0 channel (altbank::make -> acoustic_grand_with_bank).
+fn steinwayb_pp() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "steinwayb_C2_pp.wav" => 65.88,
+            "steinwayb_F#2_pp.wav" => 92.54,
+            "steinwayb_C3_pp.wav" => 130.91,
+            "steinwayb_F#3_pp.wav" => 185.51,
+            "steinwayb_C4_pp.wav" => 262.25,
+            "steinwayb_F#4_pp.wav" => 371.37,
+            "steinwayb_C5_pp.wav" => 525.53,
+            "steinwayb_F#5_pp.wav" => 739.00,
+            "steinwayb_C6_pp.wav" => 1049.52,
+        )
+    })
+}
+
+fn steinwayb_pp_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "steinwayb_C2_pp_rr2.wav" => 65.79,
+            "steinwayb_F#2_pp_rr2.wav" => 92.40,
+            "steinwayb_C3_pp_rr2.wav" => 131.27,
+            "steinwayb_F#3_pp_rr2.wav" => 185.91,
+            "steinwayb_C4_pp_rr2.wav" => 262.92,
+            "steinwayb_F#4_pp_rr2.wav" => 372.55,
+            "steinwayb_C5_pp_rr2.wav" => 526.49,
+            "steinwayb_F#5_pp_rr2.wav" => 740.67,
+            "steinwayb_C6_pp_rr2.wav" => 1049.34,
+        )
+    })
+}
+
+fn steinwayb_mf() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "steinwayb_C2_mf.wav" => 65.79,
+            "steinwayb_F#2_mf.wav" => 92.40,
+            "steinwayb_C3_mf.wav" => 131.27,
+            "steinwayb_F#3_mf.wav" => 185.91,
+            "steinwayb_C4_mf.wav" => 262.92,
+            "steinwayb_F#4_mf.wav" => 372.55,
+            "steinwayb_C5_mf.wav" => 526.49,
+            "steinwayb_F#5_mf.wav" => 740.67,
+            "steinwayb_C6_mf.wav" => 1049.34,
+        )
+    })
+}
+
+fn steinwayb_mf_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "steinwayb_C2_mf_rr2.wav" => 65.67,
+            "steinwayb_F#2_mf_rr2.wav" => 92.39,
+            "steinwayb_C3_mf_rr2.wav" => 131.39,
+            "steinwayb_F#3_mf_rr2.wav" => 185.95,
+            "steinwayb_C4_mf_rr2.wav" => 262.84,
+            "steinwayb_F#4_mf_rr2.wav" => 372.49,
+            "steinwayb_C5_mf_rr2.wav" => 526.67,
+            "steinwayb_F#5_mf_rr2.wav" => 743.63,
+            "steinwayb_C6_mf_rr2.wav" => 1049.46,
+        )
+    })
+}
+
+fn steinwayb_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "steinwayb_C2_f.wav" => 65.67,
+            "steinwayb_F#2_f.wav" => 92.39,
+            "steinwayb_C3_f.wav" => 131.39,
+            "steinwayb_F#3_f.wav" => 185.95,
+            "steinwayb_C4_f.wav" => 262.84,
+            "steinwayb_F#4_f.wav" => 372.49,
+            "steinwayb_C5_f.wav" => 526.67,
+            "steinwayb_F#5_f.wav" => 743.63,
+            "steinwayb_C6_f.wav" => 1049.46,
+        )
+    })
+}
+
+fn steinwayb_f_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "steinwayb_C2_f_rr2.wav" => 65.79,
+            "steinwayb_F#2_f_rr2.wav" => 92.40,
+            "steinwayb_C3_f_rr2.wav" => 131.27,
+            "steinwayb_F#3_f_rr2.wav" => 185.91,
+            "steinwayb_C4_f_rr2.wav" => 262.92,
+            "steinwayb_F#4_f_rr2.wav" => 372.55,
+            "steinwayb_C5_f_rr2.wav" => 526.49,
+            "steinwayb_F#5_f_rr2.wav" => 740.67,
+            "steinwayb_C6_f_rr2.wav" => 1049.34,
+        )
+    })
+}
+
+/// Velocity picks the dynamic layer; the seed alternates round robins, exactly
+/// like [`grand_bank`]. Voices GM 0 CC0 alt bank 1 (VCSL Steinway B).
+pub fn steinwayb_bank(vel: u8, rr2: bool) -> &'static [Zone] {
+    match (vel, rr2) {
+        (0..=51, false) => steinwayb_pp(),
+        (0..=51, true) => steinwayb_pp_rr2(),
+        (52..=95, false) => steinwayb_mf(),
+        (52..=95, true) => steinwayb_mf_rr2(),
+        (_, false) => steinwayb_f(),
+        (_, true) => steinwayb_f_rr2(),
+    }
+}
+
+// GM 0 Acoustic Grand ALTERNATE bank 2 - VCSL "Grand Piano, Kawai" (CC0,
+// ferrosintesis-samples-vcsl-kawai). A darker, rounder vintage grand. Roots MEASURED
+// (Kawai labels sit an octave below sounding pitch - see the crate PROVENANCE); 8
+// zones from the pitches with full v1..v4 coverage. Selected via CC0 alt bank 2.
+fn kawai_pp() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "kawai_C2_pp.wav" => 64.82,
+            "kawai_A2_pp.wav" => 109.29,
+            "kawai_C3_pp.wav" => 130.04,
+            "kawai_A#3_pp.wav" => 231.94,
+            "kawai_C4_pp.wav" => 260.88,
+            "kawai_A#4_pp.wav" => 464.44,
+            "kawai_C5_pp.wav" => 522.09,
+            "kawai_C6_pp.wav" => 1046.16,
+        )
+    })
+}
+
+fn kawai_pp_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "kawai_C2_pp_rr2.wav" => 65.12,
+            "kawai_A2_pp_rr2.wav" => 109.50,
+            "kawai_C3_pp_rr2.wav" => 130.47,
+            "kawai_A#3_pp_rr2.wav" => 231.60,
+            "kawai_C4_pp_rr2.wav" => 261.05,
+            "kawai_A#4_pp_rr2.wav" => 464.18,
+            "kawai_C5_pp_rr2.wav" => 521.86,
+            "kawai_C6_pp_rr2.wav" => 1045.95,
+        )
+    })
+}
+
+fn kawai_mf() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "kawai_C2_mf.wav" => 65.12,
+            "kawai_A2_mf.wav" => 109.50,
+            "kawai_C3_mf.wav" => 130.47,
+            "kawai_A#3_mf.wav" => 231.60,
+            "kawai_C4_mf.wav" => 261.05,
+            "kawai_A#4_mf.wav" => 464.18,
+            "kawai_C5_mf.wav" => 521.86,
+            "kawai_C6_mf.wav" => 1045.95,
+        )
+    })
+}
+
+fn kawai_mf_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "kawai_C2_mf_rr2.wav" => 65.51,
+            "kawai_A2_mf_rr2.wav" => 109.95,
+            "kawai_C3_mf_rr2.wav" => 131.34,
+            "kawai_A#3_mf_rr2.wav" => 233.31,
+            "kawai_C4_mf_rr2.wav" => 261.90,
+            "kawai_A#4_mf_rr2.wav" => 466.39,
+            "kawai_C5_mf_rr2.wav" => 522.87,
+            "kawai_C6_mf_rr2.wav" => 1046.29,
+        )
+    })
+}
+
+fn kawai_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "kawai_C2_f.wav" => 65.64,
+            "kawai_A2_f.wav" => 110.15,
+            "kawai_C3_f.wav" => 131.01,
+            "kawai_A#3_f.wav" => 234.22,
+            "kawai_C4_f.wav" => 262.53,
+            "kawai_A#4_f.wav" => 467.69,
+            "kawai_C5_f.wav" => 524.03,
+            "kawai_C6_f.wav" => 1044.80,
+        )
+    })
+}
+
+fn kawai_f_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "kawai_C2_f_rr2.wav" => 65.51,
+            "kawai_A2_f_rr2.wav" => 109.95,
+            "kawai_C3_f_rr2.wav" => 131.34,
+            "kawai_A#3_f_rr2.wav" => 233.31,
+            "kawai_C4_f_rr2.wav" => 261.90,
+            "kawai_A#4_f_rr2.wav" => 466.39,
+            "kawai_C5_f_rr2.wav" => 522.87,
+            "kawai_C6_f_rr2.wav" => 1046.29,
+        )
+    })
+}
+
+/// Velocity picks the dynamic layer; the seed alternates round robins, like
+/// [`grand_bank`]. Voices GM 0 CC0 alt bank 2 (VCSL Kawai).
+pub fn kawai_bank(vel: u8, rr2: bool) -> &'static [Zone] {
+    match (vel, rr2) {
+        (0..=51, false) => kawai_pp(),
+        (0..=51, true) => kawai_pp_rr2(),
+        (52..=95, false) => kawai_mf(),
+        (52..=95, true) => kawai_mf_rr2(),
+        (_, false) => kawai_f(),
+        (_, true) => kawai_f_rr2(),
+    }
+}
+
+// GM 0 Acoustic Grand ALTERNATE bank 3 - Headroom / Intimate Piano (Bengt Nilsson,
+// Yamaha C3), CC-BY 4.0, ferrosintesis-samples-headroom. A warm, intimate close-mic
+// C3 grand. Roots MEASURED (MIDI-number labels are true sounding pitch); F# stands
+// in for G. Selected via CC0 alt bank 3. ATTRIBUTION REQUIRED - see the crate NOTICE.
+fn headroom_pp() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "headroom_C2_pp.wav" => 65.50,
+            "headroom_F#2_pp.wav" => 92.37,
+            "headroom_C3_pp.wav" => 131.18,
+            "headroom_F#3_pp.wav" => 185.59,
+            "headroom_C4_pp.wav" => 262.46,
+            "headroom_F#4_pp.wav" => 372.02,
+            "headroom_C5_pp.wav" => 526.16,
+            "headroom_F#5_pp.wav" => 744.53,
+            "headroom_C6_pp.wav" => 1054.19,
+        )
+    })
+}
+
+fn headroom_pp_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "headroom_C2_pp_rr2.wav" => 66.25,
+            "headroom_F#2_pp_rr2.wav" => 92.77,
+            "headroom_C3_pp_rr2.wav" => 131.60,
+            "headroom_F#3_pp_rr2.wav" => 185.93,
+            "headroom_C4_pp_rr2.wav" => 262.50,
+            "headroom_F#4_pp_rr2.wav" => 372.24,
+            "headroom_C5_pp_rr2.wav" => 526.29,
+            "headroom_F#5_pp_rr2.wav" => 745.36,
+            "headroom_C6_pp_rr2.wav" => 1054.02,
+        )
+    })
+}
+
+fn headroom_mf() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "headroom_C2_mf.wav" => 66.43,
+            "headroom_F#2_mf.wav" => 93.07,
+            "headroom_C3_mf.wav" => 132.09,
+            "headroom_F#3_mf.wav" => 186.21,
+            "headroom_C4_mf.wav" => 262.55,
+            "headroom_F#4_mf.wav" => 372.58,
+            "headroom_C5_mf.wav" => 526.52,
+            "headroom_F#5_mf.wav" => 745.43,
+            "headroom_C6_mf.wav" => 1054.45,
+        )
+    })
+}
+
+fn headroom_mf_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "headroom_C2_mf_rr2.wav" => 66.33,
+            "headroom_F#2_mf_rr2.wav" => 93.82,
+            "headroom_C3_mf_rr2.wav" => 132.37,
+            "headroom_F#3_mf_rr2.wav" => 186.66,
+            "headroom_C4_mf_rr2.wav" => 262.66,
+            "headroom_F#4_mf_rr2.wav" => 372.72,
+            "headroom_C5_mf_rr2.wav" => 526.85,
+            "headroom_F#5_mf_rr2.wav" => 745.73,
+            "headroom_C6_mf_rr2.wav" => 1055.27,
+        )
+    })
+}
+
+fn headroom_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "headroom_C2_f.wav" => 66.23,
+            "headroom_F#2_f.wav" => 94.08,
+            "headroom_C3_f.wav" => 132.59,
+            "headroom_F#3_f.wav" => 186.86,
+            "headroom_C4_f.wav" => 262.79,
+            "headroom_F#4_f.wav" => 372.89,
+            "headroom_C5_f.wav" => 527.10,
+            "headroom_F#5_f.wav" => 746.62,
+            "headroom_C6_f.wav" => 1055.91,
+        )
+    })
+}
+
+fn headroom_f_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "headroom_C2_f_rr2.wav" => 66.33,
+            "headroom_F#2_f_rr2.wav" => 93.82,
+            "headroom_C3_f_rr2.wav" => 132.37,
+            "headroom_F#3_f_rr2.wav" => 186.66,
+            "headroom_C4_f_rr2.wav" => 262.66,
+            "headroom_F#4_f_rr2.wav" => 372.72,
+            "headroom_C5_f_rr2.wav" => 526.85,
+            "headroom_F#5_f_rr2.wav" => 745.73,
+            "headroom_C6_f_rr2.wav" => 1055.27,
+        )
+    })
+}
+
+/// Velocity picks the dynamic layer; the seed alternates round robins, like
+/// [`grand_bank`]. Voices GM 0 CC0 alt bank 3 (Headroom/Intimate C3).
+pub fn headroom_bank(vel: u8, rr2: bool) -> &'static [Zone] {
+    match (vel, rr2) {
+        (0..=51, false) => headroom_pp(),
+        (0..=51, true) => headroom_pp_rr2(),
+        (52..=95, false) => headroom_mf(),
+        (52..=95, true) => headroom_mf_rr2(),
+        (_, false) => headroom_f(),
+        (_, true) => headroom_f_rr2(),
+    }
+}
+
+// GM 0 Acoustic Grand ALTERNATE bank 4 - MuseScore_General "Grand Piano" (MIT,
+// ferrosintesis-samples-musescore-grand). A warm-to-neutral GM grand. A DENSE
+// SINGLE-VELOCITY multisample (MF tier); dynamics come from the LA blend + model.
+// Roots MEASURED near each SF3 originalPitch. Selected via CC0 alt bank 4.
+fn musescoregrand_zones() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "musescoregrand_B1.wav" => 62.20,
+            "musescoregrand_D2.wav" => 74.09,
+            "musescoregrand_E2.wav" => 83.24,
+            "musescoregrand_G2.wav" => 98.56,
+            "musescoregrand_A2.wav" => 110.65,
+            "musescoregrand_B2.wav" => 124.31,
+            "musescoregrand_C3.wav" => 131.54,
+            "musescoregrand_D3.wav" => 147.97,
+            "musescoregrand_E3.wav" => 165.70,
+            "musescoregrand_G3.wav" => 196.77,
+            "musescoregrand_A3.wav" => 221.51,
+            "musescoregrand_B3.wav" => 248.60,
+            "musescoregrand_C4.wav" => 263.02,
+            "musescoregrand_D4.wav" => 295.29,
+            "musescoregrand_E4.wav" => 331.03,
+            "musescoregrand_G4.wav" => 393.37,
+            "musescoregrand_A4.wav" => 441.71,
+            "musescoregrand_B4.wav" => 496.71,
+            "musescoregrand_C5.wav" => 524.28,
+            "musescoregrand_E5.wav" => 661.14,
+            "musescoregrand_G5.wav" => 786.25,
+            "musescoregrand_G#5.wav" => 832.82,
+            "musescoregrand_B5.wav" => 990.56,
+            "musescoregrand_C#6.wav" => 1112.86,
+            "musescoregrand_D#6.wav" => 1254.21,
+        )
+    })
+}
+
+/// Single-velocity multisample: the same zones regardless of velocity/RR
+/// (dynamics are carried by the LA blend + model). Voices GM 0 CC0 alt bank 4.
+pub fn musescoregrand_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
+    musescoregrand_zones()
+}
+
+// GM 0 Acoustic Grand ALTERNATE bank 5 - DARKENED Salamander (CC-BY 3.0,
+// ferrosintesis-samples-dark-salamander). The default Salamander grand with a
+// high-shelf EQ cut (warmer). Same zones/roots as grand; the "is it EQ not
+// instrument?" A/B. Selected via CC0 alt bank 5.
+fn darkgrand_pp() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "darkgrand_C2_pp.wav" => 65.22,
+            "darkgrand_F#2_pp.wav" => 91.97,
+            "darkgrand_C3_pp.wav" => 130.41,
+            "darkgrand_F#3_pp.wav" => 184.72,
+            "darkgrand_C4_pp.wav" => 261.50,
+            "darkgrand_F#4_pp.wav" => 369.35,
+            "darkgrand_C5_pp.wav" => 524.09,
+            "darkgrand_F#5_pp.wav" => 741.86,
+            "darkgrand_C6_pp.wav" => 1051.48,
+        )
+    })
+}
+
+fn darkgrand_pp_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "darkgrand_C2_pp_rr2.wav" => 65.32,
+            "darkgrand_F#2_pp_rr2.wav" => 92.13,
+            "darkgrand_C3_pp_rr2.wav" => 130.40,
+            "darkgrand_F#3_pp_rr2.wav" => 184.77,
+            "darkgrand_C4_pp_rr2.wav" => 261.53,
+            "darkgrand_F#4_pp_rr2.wav" => 369.41,
+            "darkgrand_C5_pp_rr2.wav" => 524.11,
+            "darkgrand_F#5_pp_rr2.wav" => 741.87,
+            "darkgrand_C6_pp_rr2.wav" => 1052.11,
+        )
+    })
+}
+
+fn darkgrand_mf() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "darkgrand_C2_mf.wav" => 65.59,
+            "darkgrand_F#2_mf.wav" => 92.33,
+            "darkgrand_C3_mf.wav" => 130.44,
+            "darkgrand_F#3_mf.wav" => 185.00,
+            "darkgrand_C4_mf.wav" => 261.89,
+            "darkgrand_F#4_mf.wav" => 370.04,
+            "darkgrand_C5_mf.wav" => 524.45,
+            "darkgrand_F#5_mf.wav" => 741.86,
+            "darkgrand_C6_mf.wav" => 1052.95,
+        )
+    })
+}
+
+fn darkgrand_mf_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "darkgrand_C2_mf_rr2.wav" => 65.61,
+            "darkgrand_F#2_mf_rr2.wav" => 92.40,
+            "darkgrand_C3_mf_rr2.wav" => 130.44,
+            "darkgrand_F#3_mf_rr2.wav" => 185.02,
+            "darkgrand_C4_mf_rr2.wav" => 261.85,
+            "darkgrand_F#4_mf_rr2.wav" => 370.07,
+            "darkgrand_C5_mf_rr2.wav" => 524.50,
+            "darkgrand_F#5_mf_rr2.wav" => 741.86,
+            "darkgrand_C6_mf_rr2.wav" => 1052.99,
+        )
+    })
+}
+
+fn darkgrand_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "darkgrand_C2_f.wav" => 65.69,
+            "darkgrand_F#2_f.wav" => 92.72,
+            "darkgrand_C3_f.wav" => 130.61,
+            "darkgrand_F#3_f.wav" => 185.21,
+            "darkgrand_C4_f.wav" => 262.38,
+            "darkgrand_F#4_f.wav" => 370.24,
+            "darkgrand_C5_f.wav" => 524.86,
+            "darkgrand_F#5_f.wav" => 741.87,
+            "darkgrand_C6_f.wav" => 1054.35,
+        )
+    })
+}
+
+fn darkgrand_f_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "darkgrand_C2_f_rr2.wav" => 65.69,
+            "darkgrand_F#2_f_rr2.wav" => 92.82,
+            "darkgrand_C3_f_rr2.wav" => 130.67,
+            "darkgrand_F#3_f_rr2.wav" => 185.29,
+            "darkgrand_C4_f_rr2.wav" => 262.32,
+            "darkgrand_F#4_f_rr2.wav" => 370.26,
+            "darkgrand_C5_f_rr2.wav" => 525.27,
+            "darkgrand_F#5_f_rr2.wav" => 741.94,
+            "darkgrand_C6_f_rr2.wav" => 1054.56,
+        )
+    })
+}
+
+/// Velocity picks the dynamic layer; the seed alternates round robins, like
+/// [`grand_bank`]. Voices GM 0 CC0 alt bank 5 (darkened Salamander).
+pub fn darkgrand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
+    match (vel, rr2) {
+        (0..=51, false) => darkgrand_pp(),
+        (0..=51, true) => darkgrand_pp_rr2(),
+        (52..=95, false) => darkgrand_mf(),
+        (52..=95, true) => darkgrand_mf_rr2(),
+        (_, false) => darkgrand_f(),
+        (_, true) => darkgrand_f_rr2(),
+    }
+}
+
+// GM 0 Acoustic Grand ALTERNATE bank 7 - FreePats YDP Grand (Yamaha Disklavier Pro,
+// CC-BY 3.0, ferrosintesis-samples-ydp-grand). The BRIGHT grand: harder, more present
+// hammer than the distant Salamander C5. Single-velocity (middle SF2 layer); roots
+// MEASURED (the YDP is tuned ~15 cents sharp - the LA layer repitches by root).
+fn ydpgrand_zones() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "ydpgrand_C2.wav" => 66.38,
+            "ydpgrand_F#2.wav" => 93.06,
+            "ydpgrand_C3.wav" => 131.75,
+            "ydpgrand_F#3.wav" => 186.71,
+            "ydpgrand_C4.wav" => 263.56,
+            "ydpgrand_F#4.wav" => 372.67,
+            "ydpgrand_C5.wav" => 530.39,
+            "ydpgrand_F#5.wav" => 747.92,
+            "ydpgrand_C6.wav" => 1053.83,
+        )
+    })
+}
+
+/// Single-velocity multisample (bright YDP grand); dynamics from the LA blend +
+/// model. Voices GM 0 CC0 alt bank 7.
+pub fn ydpgrand_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
+    ydpgrand_zones()
+}
+
+// GM 0 Acoustic Grand ALTERNATE bank 8 - FreePats Honky-tonk (Frances Bacon player
+// piano, CC0, ferrosintesis-samples-honkytonk). The DISTINCTIVE one: a detuned/jangly
+// saloon/tack attack no tuned grand can make. Single-velocity; roots MEASURED (repitch
+// by root keeps the note in tune while the internal unison-beat jangle survives).
+fn honkytonk_zones() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "honkytonk_C2.wav" => 66.64,
+            "honkytonk_F2.wav" => 88.64,
+            "honkytonk_C3.wav" => 131.73,
+            "honkytonk_F#3.wav" => 186.74,
+            "honkytonk_C4.wav" => 264.42,
+            "honkytonk_F4.wav" => 350.12,
+            "honkytonk_C5.wav" => 524.27,
+            "honkytonk_F#5.wav" => 739.95,
+            "honkytonk_C6.wav" => 1041.02,
+        )
+    })
+}
+
+/// Single-velocity multisample (honky-tonk); dynamics from the LA blend + model.
+/// Voices GM 0 CC0 alt bank 8.
+pub fn honkytonk_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
+    honkytonk_zones()
 }
 
 pub fn violin_bank(vel: u8) -> &'static [Zone] {

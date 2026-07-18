@@ -1,0 +1,17 @@
+ferrosintesis-samples-headroom
+==============================
+
+The embedded WAV samples in this crate are derived from the "Headroom Piano" /
+"Intimate Piano" (a Yamaha C3 grand) recorded by **Bengt Nilsson**, SFZ conversion
+by kinwie, distributed at https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano.
+
+Licensed under the **Creative Commons Attribution 4.0 International (CC BY 4.0)**
+licence: https://creativecommons.org/licenses/by/4.0/
+
+ATTRIBUTION (required by CC BY 4.0):
+  - Original instrument recorded by Bengt Nilsson ("Headroom Piano" / "Intimate
+    Piano"). The original instrument name is retained per the author's terms.
+  - SFZ mapping by kinwie.
+
+This crate uses the close-mic ("Intimate") set only. No endorsement by the
+authors is implied.

@@ -22,6 +22,10 @@ tools/*
 # ...committed dev tools under tools/ ARE source (sample generator, render-diff harness).
 !tools/ferrosintesis-samples/
 !tools/render-diff/
+# GM0 alternate-bank audition harness (torture-MIDI + CC0 injector + render driver).
+!tools/gm0-audition/
+# ...but its rendered WAVs are build output, not source.
+tools/gm0-audition/renders/
 # Rendered audio — reproducible build output, not source.
 # Regenerate with `cargo run --release -p render-catalog`.
 *.wav
@@ -35,6 +39,13 @@ tools/*
 !crates/ferrosintesis-samples-musescore/samples/*.wav
 !crates/ferrosintesis-samples-gong/samples/*.wav
 !crates/ferrosintesis-samples-grand/samples/*.wav
+!crates/ferrosintesis-samples-vcsl-steinway/samples/*.wav
+!crates/ferrosintesis-samples-vcsl-kawai/samples/*.wav
+!crates/ferrosintesis-samples-headroom/samples/*.wav
+!crates/ferrosintesis-samples-musescore-grand/samples/*.wav
+!crates/ferrosintesis-samples-dark-salamander/samples/*.wav
+!crates/ferrosintesis-samples-ydp-grand/samples/*.wav
+!crates/ferrosintesis-samples-honkytonk/samples/*.wav
 !crates/ferrosintesis-samples-sax/samples/*.wav
 # ...and the un-re-fetchable CC BY 3.0 gong source WAVs (Freesound needs a login;
 # committed so the processed bank is offline-reproducible via prepare.py).

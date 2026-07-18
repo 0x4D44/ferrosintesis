@@ -1024,6 +1024,40 @@ pub fn make(
 ) -> Box<dyn Voice> {
     let samples = samples && crate::embedded_samples_available();
     match program {
+        // GM 0-1 pianos — CC0-selectable alternate recordings (2026.07.18 re-voicing;
+        // PLN in wrk_docs). CC0=0 (the program default: GM 0 upright, GM 1 Kawai) never
+        // reaches here (alt_bank false). CC0 selects a source recording:
+        //   GM 0 (plain model): 1 Salamander · 2 Steinway B · 3 Headroom · 4 dark-Salamander
+        //     (a warmer high-shelf EQ of the Salamander — kept as a 5th GM 0 option)
+        //   GM 1 (bright model): 1 YDP bright grand · 2 MuseScore grand
+        // The model matches the slot (GM 1 = the brighter model), same as the defaults.
+        0 | 1 => {
+            let bright = program == 1;
+            let src = if samples {
+                match (program, bank) {
+                    (0, 1) => Some(crate::sampler::grand_bank(vel, seed & 1 == 0)),
+                    (0, 2) => Some(crate::sampler::steinwayb_bank(vel, seed & 1 == 0)),
+                    (0, 3) => Some(crate::sampler::headroom_bank(vel, seed & 1 == 0)),
+                    // CC0=4: dark-Salamander — a warmer high-shelf EQ of the Salamander,
+                    // kept as a 5th GM 0 option (Arthur, 2026.07.18).
+                    (0, 4) => Some(crate::sampler::darkgrand_bank(vel, seed & 1 == 0)),
+                    (1, 1) => Some(crate::sampler::ydpgrand_bank(vel, seed & 1 == 0)),
+                    (1, 2) => Some(crate::sampler::musescoregrand_bank(vel, seed & 1 == 0)),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            match src {
+                Some(b) => {
+                    crate::voices::acoustic_grand_with_bank(b, key, vel, sr, seed, true, bright)
+                }
+                // --no-samples or an unknown source digit: the slot's model alone.
+                None => {
+                    crate::voices::acoustic_grand_with_bank(&[], key, vel, sr, seed, false, bright)
+                }
+            }
+        }
         // The default GM19 is the Leslie drawbar. CC0=1 selects the same legacy
         // Leslie voice for scores that intentionally want that secondary colour
         // (notably The Ninth Bell — byte-identical). CC0=2 selects the restored

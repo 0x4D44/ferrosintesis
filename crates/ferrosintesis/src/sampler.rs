@@ -1822,9 +1822,28 @@ fn find_sax_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
     best.map(|(_, ls, le)| (ls, le))
 }
 
-/// GM 64-67 sax voice: recorded attack played through into a looped recorded
-/// sustain. A fast-attack / short-release amp gate rides on top (the note's own
-/// attack shape lives in the sample); the loop is found once at construction.
+// Inc 2 — intrinsic humanisation so the looped hold BREATHES like the modeled reed did
+// (inc 1 was deliberately static), plus CC11/CC2 brightness/breath response. Restrained
+// by design; the numeric target is the SC-55's hold liveness (~0.05, a 20 ms frame-RMS
+// CoV). Real sax vibrato couples PITCH and AMPLITUDE, so both are modulated — pitch alone
+// barely moves an amplitude-based liveness metric. CC1 vibrato and pitch bend arrive
+// separately via `set_pitch` (engine-driven), composing on top of the intrinsic warble.
+const SAX_VIB_RATE_HZ: f32 = 5.4; // sax vibrato centre ~5–5.6 Hz
+const SAX_VIB_PITCH: f32 = 0.006; // ±0.6% read-rate ≈ ±10 cents intrinsic pitch warble
+const SAX_VIB_AMP: f32 = 0.05; // ±5% coupled amplitude tremolo
+const SAX_VIB_DELAY_S: f32 = 0.20; // vibrato blooms after the onset
+const SAX_VIB_BLOOM_S: f32 = 0.35; // ramp-in time
+const SAX_DRIFT_MAX: f32 = 0.0022; // ±0.22% slow random-walk on the rate (defeats the loop-tell)
+const SAX_DRIFT_SAMP: u32 = 1024; // new drift target ~ every 23 ms
+const SAX_BREATH_FLOOR: f32 = 0.004; // intrinsic breath/air, relative to the tone
+const SAX_BREATH_CC: f32 = 0.05; // extra breath at full CC11
+const SAX_BREATH_HP_HZ: f32 = 1800.0; // HP the noise into air, not rumble
+const SAX_BRIGHT_LO_HZ: f32 = 1400.0; // CC11 brightness sweep corner: soft → dark
+const SAX_BRIGHT_HI_HZ: f32 = 7000.0; // → loud, open (near pass-through)
+
+/// GM 64-67 sax voice: recorded attack played through into a looped recorded sustain,
+/// with the loop animated by intrinsic vibrato/tremolo/drift/breath (inc 2) so the hold
+/// is alive rather than a static repeat. The loop is found once at construction.
 pub struct SaxLoopVoice {
     data: &'static [f32],
     loop_start: usize,
@@ -1834,10 +1853,29 @@ pub struct SaxLoopVoice {
     step: f32,
     gain: f32,
     env: crate::dsp::Adsr,
+    sr: f32,
+    t: u32,
+    vib_phase: f32,
+    vib_inc: f32,
+    drift: f32,
+    drift_target: f32,
+    rng: Rng,
+    breath_hp: crate::dsp::OnePole,
+    breath_amt: f32, // intrinsic floor + CC11
+    growl: f32,      // aftertouch → deeper vibrato
+    bright: crate::dsp::OnePole,
+    bright_active: bool, // CC11/CC2 authored → brightness LP engaged
 }
 
 impl SaxLoopVoice {
-    fn new(zone: &'static Zone, target_hz: f32, vel: u8, sr: f32, base_gain: f32) -> Option<Self> {
+    fn new(
+        zone: &'static Zone,
+        target_hz: f32,
+        vel: u8,
+        sr: f32,
+        base_gain: f32,
+        seed: u32,
+    ) -> Option<Self> {
         let (loop_start, loop_end) = find_sax_loop(&zone.data, zone.root)?;
         let ratio = target_hz / zone.root;
         if !(0.5..=2.05).contains(&ratio) {
@@ -1855,6 +1893,18 @@ impl SaxLoopVoice {
             gain: base_gain * (0.55 + 0.45 * vel_amp(vel)),
             // near-instant attack (the sample owns the onset), ~70 ms release.
             env: crate::dsp::Adsr::new(0.004, 0.0, 1.0, 0.07, sr),
+            sr,
+            t: 0,
+            vib_phase: 0.0,
+            vib_inc: std::f32::consts::TAU * SAX_VIB_RATE_HZ / sr,
+            drift: 0.0,
+            drift_target: 0.0,
+            rng: Rng::new(seed ^ 0x5AC0_FFEE ^ ((zone.root as u32) << 3) ^ vel as u32),
+            breath_hp: crate::dsp::OnePole::lowpass(SAX_BREATH_HP_HZ, sr),
+            breath_amt: SAX_BREATH_FLOOR,
+            growl: 0.0,
+            bright: crate::dsp::OnePole::lowpass(SAX_BRIGHT_HI_HZ, sr),
+            bright_active: false,
         })
     }
 }
@@ -1864,22 +1914,48 @@ impl Voice for SaxLoopVoice {
         let loop_len = (self.loop_end - self.loop_start) as f32;
         for o in out.iter_mut() {
             let e = self.env.next();
+            let time = self.t as f32 / self.sr;
+            // Intrinsic vibrato: delayed bloom, deepened by aftertouch growl; couples a
+            // pitch warble and an amplitude tremolo (as a real reed's does).
+            let bloom = ((time - SAX_VIB_DELAY_S) / SAX_VIB_BLOOM_S).clamp(0.0, 1.0);
+            let s = self.vib_phase.sin();
+            self.vib_phase += self.vib_inc;
+            if self.vib_phase >= std::f32::consts::TAU {
+                self.vib_phase -= std::f32::consts::TAU;
+            }
+            let depth = bloom * (1.0 + 2.0 * self.growl);
+            // Slow bounded drift random-walk on the read rate.
+            if self.t.is_multiple_of(SAX_DRIFT_SAMP) {
+                self.drift_target = SAX_DRIFT_MAX * self.rng.white();
+            }
+            self.drift += 0.002 * (self.drift_target - self.drift);
+            let eff_step = self.step * (1.0 + SAX_VIB_PITCH * depth * s + self.drift);
+            let amp = 1.0 + SAX_VIB_AMP * depth * s;
+            // Read the looped sample. Wrapped neighbour at the seam: an unwrapped read
+            // clicks once per loop.
             let j = self.pos as usize;
             let frac = self.pos - j as f32;
             let a = self.data[j];
-            // Wrapped neighbour: at the last loop sample the interpolation partner is
-            // loop_start (the seam), not data[j+1] — an unwrapped read clicks once per loop.
             let jn = j + 1;
             let b = if jn >= self.loop_end {
                 self.data[self.loop_start]
             } else {
                 self.data[jn]
             };
-            *o += (a + (b - a) * frac) * self.gain * e;
-            self.pos += self.step;
+            let mut tone = a + (b - a) * frac;
+            if self.bright_active {
+                tone = self.bright.process(tone);
+            }
+            // Additive HP breath noise — uncorrelated with the tone, so it is the one
+            // layer that can be SUMMED without combing. Rides the note's own gain.
+            let w = self.rng.white();
+            let breath = (w - self.breath_hp.process(w)) * self.breath_amt;
+            *o += (tone * amp + breath) * self.gain * e;
+            self.pos += eff_step;
             if self.pos >= self.loop_end as f32 {
                 self.pos -= loop_len;
             }
+            self.t += 1;
         }
         self.env.alive()
     }
@@ -1896,6 +1972,20 @@ impl Voice for SaxLoopVoice {
         self.step = self.base_step * mult;
     }
 
+    fn set_breath(&mut self, pressure: f32, growl: f32) {
+        // CC11/CC2 pressure opens the timbre (brightness) and lifts breath noise; channel
+        // aftertouch deepens the vibrato. Only called on AUTHORED channels (engine RD9
+        // gate), so an unauthored sax keeps the intrinsic floor and its inc-1 brightness.
+        let p = pressure.clamp(0.0, 1.0);
+        self.bright_active = true;
+        self.bright.set_cutoff(
+            SAX_BRIGHT_LO_HZ + (SAX_BRIGHT_HI_HZ - SAX_BRIGHT_LO_HZ) * p,
+            self.sr,
+        );
+        self.breath_amt = SAX_BREATH_FLOOR + SAX_BREATH_CC * p;
+        self.growl = growl.clamp(0.0, 1.0);
+    }
+
     #[cfg(test)]
     fn kind(&self) -> &'static str {
         "saxloop"
@@ -1904,11 +1994,11 @@ impl Voice for SaxLoopVoice {
 
 /// Build the looped-sustain sax voice for GM 64-67, or `None` if no usable loop /
 /// the repitch is out of range (the caller keeps the modeled reed).
-pub fn sax_loop_voice(program: u8, key: u8, vel: u8, sr: f32) -> Option<Box<dyn Voice>> {
+pub fn sax_loop_voice(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
     let zones = sax_bank(program, vel);
     let f = key_freq(key);
     let zone = nearest(zones, f);
-    SaxLoopVoice::new(zone, f, vel, sr, sax_program_gain(program))
+    SaxLoopVoice::new(zone, f, vel, sr, sax_program_gain(program), seed)
         .map(|v| Box::new(v) as Box<dyn Voice>)
 }
 
@@ -3107,7 +3197,9 @@ mod tests {
                 "{name}: looped hold {db:+.1} dB off the modeled reed it replaces \
                  (loop {rl:.4} vs model {rm:.4})"
             );
-            // Flatness: 20 ms frame-RMS CoV over the hold — the decay-sawtooth bug read ~0.6.
+            // Liveness window: 20 ms frame-RMS CoV over the hold must sit in a BAND — the
+            // hold must BREATHE (inc-2 intrinsic vibrato/tremolo, > the static inc-1 floor)
+            // but not PULSE (the decay-sawtooth bug read ~0.6; a healthy hold is well under).
             let fl = (0.02 * sr) as usize;
             let frames: Vec<f32> = loop_h
                 .chunks(fl)
@@ -3118,8 +3210,9 @@ mod tests {
             let var = frames.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / frames.len() as f32;
             let cov = var.sqrt() / (mean + 1e-9);
             assert!(
-                cov < 0.15,
-                "{name}: looped hold not flat (frame-RMS CoV {cov:.3}) — loop spanning the recorded decay?"
+                (0.025..0.12).contains(&cov),
+                "{name}: hold liveness (frame-RMS CoV {cov:.3}) out of band — \
+                 static (dead loop) below 0.025, or a decay-sawtooth pulse above 0.12"
             );
             // Seam guard (deterministic): the chosen loop joins loop_end back to loop_start
             // with a small value discontinuity — an integer-period, seam-minimised wrap must

@@ -11027,7 +11027,7 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // re-adds the model purely as a vibrato/brightness/breath modulator on the loop.)
         64..=67 => {
             if samples {
-                crate::sampler::sax_loop_voice(program, key, vel, sr)
+                crate::sampler::sax_loop_voice(program, key, vel, sr, seed)
                     .unwrap_or_else(|| Box::new(reed(program, key, vel, sr, seed)))
             } else {
                 Box::new(reed(program, key, vel, sr, seed))

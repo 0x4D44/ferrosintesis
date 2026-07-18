@@ -14,6 +14,43 @@
 /// Embedded (file-name, bytes) pairs. Names include the `.wav` suffix and are
 /// case-sensitive. Kept as a slice so families can be added without a count constant.
 static SAMPLES: &[(&str, &[u8])] = &[
+    ("bottle_C6.wav", include_bytes!("../samples/bottle_C6.wav")),
+    (
+        "panflute_C4.wav",
+        include_bytes!("../samples/panflute_C4.wav"),
+    ),
+    (
+        "panflute_C5.wav",
+        include_bytes!("../samples/panflute_C5.wav"),
+    ),
+    (
+        "panflute_C6.wav",
+        include_bytes!("../samples/panflute_C6.wav"),
+    ),
+    (
+        "panflute_C7.wav",
+        include_bytes!("../samples/panflute_C7.wav"),
+    ),
+    (
+        "panflute_F#3.wav",
+        include_bytes!("../samples/panflute_F#3.wav"),
+    ),
+    (
+        "panflute_F#4.wav",
+        include_bytes!("../samples/panflute_F#4.wav"),
+    ),
+    (
+        "panflute_F#5.wav",
+        include_bytes!("../samples/panflute_F#5.wav"),
+    ),
+    (
+        "panflute_F#6.wav",
+        include_bytes!("../samples/panflute_F#6.wav"),
+    ),
+    (
+        "shakuhachi_C5.wav",
+        include_bytes!("../samples/shakuhachi_C5.wav"),
+    ),
     ("sitar_C4.wav", include_bytes!("../samples/sitar_C4.wav")),
     ("sitar_C5.wav", include_bytes!("../samples/sitar_C5.wav")),
     ("sitar_C6.wav", include_bytes!("../samples/sitar_C6.wav")),

@@ -1293,6 +1293,19 @@ def main():
             rows += _bake_sf_onset(
                 ms_src, 104, "sitar", "ferrosintesis-samples-musescore", 0.9, 0.20
             )
+
+        # GM 75/76/77 pipes: SF3 WIND onsets (keep 0.62) → the MIT -musescore crate. Pan
+        # flute (75) is a proper 8-zone multisample (mixed sample rates — _bake_sf_onset
+        # resamples per zone); blown bottle (76) and shakuhachi (77) are SINGLE-zone in MS
+        # Basic, so their onset engages only within ~1 octave of the sample and cleanly
+        # falls back to the model elsewhere (thin, but a real breath onset near that range).
+        for _preset, _prefix in ((75, "panflute"), (76, "bottle"), (77, "shakuhachi")):
+            if want(_prefix):
+                ms_src = os.path.join(tempfile.gettempdir(), "musescore_sf3", MUSESCORE_REV)
+                os.makedirs(ms_src, exist_ok=True)
+                rows += _bake_sf_onset(
+                    ms_src, _preset, _prefix, "ferrosintesis-samples-musescore", 0.62, 0.24
+                )
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | GRAND_SOURCES

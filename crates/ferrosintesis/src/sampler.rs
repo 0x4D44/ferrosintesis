@@ -1020,6 +1020,55 @@ pub fn banjo_bank() -> &'static [Zone] {
     banjo()
 }
 
+/// GM 75 pan flute — MS Basic SF3 preset 75 (MIT, `-musescore`). A wind onset over the Wind
+/// model, like the flute. 8 zones F#3–C7 (roots MEASURED; the SF3 zones have mixed sample
+/// rates, resampled to 44.1 kHz at bake). `LaVoice` repitches ±1 octave.
+fn panflute() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "panflute_F#3.wav" => 184.12,
+            "panflute_C4.wav" => 261.21,
+            "panflute_F#4.wav" => 368.91,
+            "panflute_C5.wav" => 523.07,
+            "panflute_F#5.wav" => 740.14,
+            "panflute_C6.wav" => 1046.07,
+            "panflute_F#6.wav" => 1478.67,
+            "panflute_C7.wav" => 2092.01,
+        )
+    })
+}
+
+/// GM 75 pan flute attack bank (see [`panflute`]).
+pub fn panflute_bank() -> &'static [Zone] {
+    panflute()
+}
+
+/// GM 76 blown bottle — MS Basic SF3 preset 76 (MIT, `-musescore`). The SF3 preset has a
+/// SINGLE sample (C6), so the onset engages only within ~1 octave of C6 (the `LaVoice` clamp)
+/// and falls back to the modeled bottle elsewhere — thin, but a real breath onset near range.
+fn bottle() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| bank!("bottle_C6.wav" => 1056.51))
+}
+
+/// GM 76 blown bottle attack bank (see [`bottle`]).
+pub fn bottle_bank() -> &'static [Zone] {
+    bottle()
+}
+
+/// GM 77 shakuhachi — MS Basic SF3 preset 77 (MIT, `-musescore`). A SINGLE sample (C5), same
+/// single-zone caveat as the blown bottle: the onset engages within ~1 octave of C5.
+fn shakuhachi() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| bank!("shakuhachi_C5.wav" => 521.06))
+}
+
+/// GM 77 shakuhachi attack bank (see [`shakuhachi`]).
+pub fn shakuhachi_bank() -> &'static [Zone] {
+    shakuhachi()
+}
+
 // --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
 //
 // These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
@@ -1204,6 +1253,9 @@ pub fn prewarm() {
     let _ = timpani_bank();
     let _ = sitar_bank();
     let _ = banjo_bank();
+    let _ = panflute_bank();
+    let _ = bottle_bank();
+    let _ = shakuhachi_bank();
     let _ = chanter_bank();
     let _ = drone_g2_bank();
     let _ = drone_g3_bank();

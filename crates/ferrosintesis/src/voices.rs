@@ -7787,6 +7787,12 @@ const LA_OCARINA: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 /// GM 74 recorder: a breathy fipple flute. The VCSL Baroque-recorder sample carries the
 /// chiffy breath onset; the Wind model keeps the body — same wind-onset handover as the flute.
 const LA_RECORDER: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
+/// GM 75 pan flute / 76 blown bottle / 77 shakuhachi: breathy pipe onsets from MS Basic SF3.
+/// Same wind-onset handover as the flute; the model carries the body. (76/77 are single-zone,
+/// so their sampled onset only engages within ~1 octave of the sample — model elsewhere.)
+const LA_PANFLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
+const LA_BOTTLE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
+const LA_SHAKUHACHI: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 // GM 0-3 piano wrap gain, re-matched for the §2.7 onset-ownership contract:
 // the sample now REPLACES the model's onset instead of stacking on top of
 // it, so it must speak at the model onset's own level. Measured at vel 100
@@ -11045,6 +11051,9 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 match program {
                     72 | 73 => Some((LA_FLUTE, crate::sampler::flute_bank())),
                     74 => Some((LA_RECORDER, crate::sampler::recorder_bank())),
+                    75 => Some((LA_PANFLUTE, crate::sampler::panflute_bank())),
+                    76 => Some((LA_BOTTLE, crate::sampler::bottle_bank())),
+                    77 => Some((LA_SHAKUHACHI, crate::sampler::shakuhachi_bank())),
                     79 => Some((LA_OCARINA, crate::sampler::ocarina_bank())),
                     _ => None,
                 }
@@ -11172,6 +11181,9 @@ mod tests {
             ("LA_TIMPANI", LA_TIMPANI),
             ("LA_SITAR", LA_SITAR),
             ("LA_BANJO", LA_BANJO),
+            ("LA_PANFLUTE", LA_PANFLUTE),
+            ("LA_BOTTLE", LA_BOTTLE),
+            ("LA_SHAKUHACHI", LA_SHAKUHACHI),
         ] {
             assert!(
                 fade.1 < 0.90,
@@ -20975,7 +20987,7 @@ mod tests {
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
         0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72,
-        73, 74, 79, 104, 105, 109, 110,
+        73, 74, 75, 76, 77, 79, 104, 105, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

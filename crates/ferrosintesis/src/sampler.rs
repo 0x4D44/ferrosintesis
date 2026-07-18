@@ -1738,12 +1738,17 @@ impl Voice for LaVoice {
 // ---------------------------------------------------------------------------
 
 /// Per-program output gain for the looped sax (index = program − 64: soprano / alto /
-/// tenor / baritone), calibrated so each sax's looped hold sits within ~1 dB of the
-/// modeled reed it replaces (RMS over the hold at vel 100), preserving album mix balance.
-/// A single constant can't: the samples are uniformly peak-normalised but the modeled
-/// reeds differ per sax, so the loop/model ratio spans ~7 dB. See
-/// `sax_loop_level_parity_and_flat`.
-const SAX_LOOP_GAIN: [f32; 4] = [0.390, 0.289, 0.511, 0.623];
+/// tenor / baritone). Per-program because the samples are uniformly peak-normalised but
+/// the modeled reeds differ per sax (~7 dB spread), so no single constant matches.
+///
+/// 2026.07.18 mix-consistency nudge: +2.3 dB over the raw-parity values. Raw parity with
+/// the model is NOT the right target — through the master bus-glue compressor the animated
+/// loop (tremolo + breath, a fuller envelope than the dry model) is pulled ~2 dB lower in
+/// the mix than the model+onset sax it replaced, leaving the sax quiet against the sibling
+/// reeds (68-71, still model+onset). The lift restores it to the old shipped mix level
+/// (alto hold ≈ −5.3 dB vs the piano anchor). Tuned by the in-mix measurement, guarded by
+/// `sax_loop_level_parity_and_flat` (raw offset band, widened to admit this deliberate lift).
+const SAX_LOOP_GAIN: [f32; 4] = [0.508, 0.377, 0.666, 0.812];
 
 fn sax_program_gain(program: u8) -> f32 {
     SAX_LOOP_GAIN[(program.saturating_sub(64)).min(3) as usize]
@@ -3192,10 +3197,14 @@ mod tests {
                 crate::testutil::rms(&model_h),
             );
             let db = 20.0 * (rl / rm).log10();
+            // Raw offset band, not symmetric parity: the mix-consistency nudge lifts the
+            // loop ~+2.3 dB over the dry model (the bus compressor pulls the animated loop
+            // down harder), so raw is deliberately hot. Band guards gross errors — too
+            // quiet below −1 dB, too hot above +4.5 dB. See SAX_LOOP_GAIN.
             assert!(
-                db.abs() <= 3.0,
-                "{name}: looped hold {db:+.1} dB off the modeled reed it replaces \
-                 (loop {rl:.4} vs model {rm:.4})"
+                (-1.0..=4.5).contains(&db),
+                "{name}: looped hold {db:+.1} dB vs the modeled reed — out of the raw offset \
+                 band (loop {rl:.4} vs model {rm:.4})"
             );
             // Liveness window: 20 ms frame-RMS CoV over the hold must sit in a BAND — the
             // hold must BREATHE (inc-2 intrinsic vibrato/tremolo, > the static inc-1 floor)

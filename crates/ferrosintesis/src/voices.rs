@@ -10318,6 +10318,18 @@ const FX_ATMOSPHERE: FxSpec = FxSpec {
     wob_hold_s: 0.0,
 };
 
+/// Hollow Release — XG variation of Atmosphere (99), bank LSB 19. Identical to
+/// FX_ATMOSPHERE but with a much longer amplitude release, so the low wash hangs
+/// on after note-off (the "hollow", lingering tail the XG name implies). Only the
+/// release is changed: the "hollow" spectral colour the name suggests is not
+/// verifiable here without ears/reference, so the model asserts the tail length
+/// alone (HLD decision log).
+const FX_HOLLOW_RELEASE: FxSpec = FxSpec {
+    // atmosphere's (attack, decay, sustain) unchanged; release 1.4 -> 3.0 s.
+    saw_env: (0.02, 0.7, 0.30, 3.0),
+    ..FX_ATMOSPHERE
+};
+
 /// 100 brightness — the high end arrives LATE: a one-shot MONOTONE filter rise so
 /// the air blooms on top over ~2 s. TEMPORAL-spectral. (SawStack's random-phase
 /// sweep LFO cannot do a deterministic monotone rise; the glide lives here.)
@@ -10804,6 +10816,8 @@ pub fn make_variation(
         // LSB 41). Reuses DRIVE_LEAD, the CC0 alt-bank driven lead (its
         // e-bow-style hold vs the hard-picked base DRIVE).
         (30, 41) => Box::new(Pluck::new(&DRIVE_LEAD, key, vel, sr, seed)),
+        // Hollow Release — Atmosphere (99, LSB 19) with a long lingering tail.
+        (99, 19) => Box::new(Fx::from_spec(&FX_HOLLOW_RELEASE, key, vel, sr, seed)),
         _ => return None,
     };
     Some(voice)
@@ -15097,6 +15111,45 @@ mod tests {
                 "Feedback Gtr 2 (30,41) should sustain far longer than base DRIVE at seed {seed}: {} vs {}",
                 sus_index(&fb),
                 sus_index(&base)
+            );
+        }
+    }
+
+    /// Unit 7 (XG variation): Hollow Release (Atmosphere 99, bank LSB 19) is
+    /// FX_ATMOSPHERE with a longer amplitude release, so its low wash lingers
+    /// after note-off. Model-vs-model, the post-release tail must decay SLOWER
+    /// (larger t60_of) than the base 99, per the HLD acceptance table (release
+    /// length only — the "hollow" spectral colour is a documented non-goal).
+    #[test]
+    fn hollow_release_variation_has_longer_tail_than_base() {
+        let sr = 44100.0;
+        assert!(
+            make_variation(99, 19, 60, 100, sr, 7, false).is_some(),
+            "(99, 19) must dispatch the Hollow Release variation"
+        );
+        assert!(
+            make_variation(99, 113, 60, 100, sr, 7, false).is_none(),
+            "an undefined bank (113) must fall back to base GM (None)"
+        );
+
+        // Hold the note, release it, then capture the tail alone.
+        let tail = |mut v: Box<dyn Voice>| {
+            let mut head = vec![0f32; (0.5 * sr) as usize];
+            v.render(&mut head);
+            v.note_off();
+            let mut tail = vec![0f32; (7.0 * sr) as usize];
+            v.render(&mut tail);
+            tail
+        };
+        let t60 = |s: &[f32]| crate::testutil::t60_of(s, sr);
+        for seed in [0x6510u32, 0x76A1, 0x1250] {
+            let hollow = tail(make_variation(99, 19, 60, 100, sr, seed, false).unwrap());
+            let base = tail(make(99, 60, 100, sr, seed, false));
+            assert!(
+                t60(&hollow) > 1.4 * t60(&base),
+                "hollow release should decay slower than base 99 at seed {seed}: t60 {} vs {}",
+                t60(&hollow),
+                t60(&base)
             );
         }
     }

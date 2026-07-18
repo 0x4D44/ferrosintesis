@@ -10696,6 +10696,31 @@ pub fn acoustic_grand_with_bank(
     }
 }
 
+/// XG bank-select-LSB variation dispatch (Bank MSB = 0 normal voices).
+///
+/// Returns a variation voice when `(program, bank_lsb)` names a *defined* XG
+/// variation cell, else `None` so the caller falls back to the base GM
+/// [`make`]. Undefined banks intentionally return `None`: a real XG synth also
+/// plays the basic GM voice there, so modeling them would be *less* faithful.
+///
+/// RNG-pure: every arm draws only from the passed `seed` (no extra RNG), so the
+/// `None` path is bit-identical to calling `make` directly — the album
+/// render-diff is the empirical confirmation.
+pub fn make_variation(
+    program: u8,
+    bank_lsb: u8,
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    samples: bool,
+) -> Option<Box<dyn Voice>> {
+    // Defined variation cells are added per-voice below; until then every pair
+    // is undefined and falls back to base GM.
+    let _ = (program, bank_lsb, key, vel, sr, seed, samples);
+    None
+}
+
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
     let samples = samples && crate::embedded_samples_available();
     let noise_off = (0.0, 0.01, 1000.0, 1.0);

@@ -748,18 +748,24 @@ struct Strip {
     rpn_lsb: u8,
     data_msb: u8, // last CC6, so CC38 can refine it
     porta_on: bool,
-    porta_time: f32,          // CC5 glide time in seconds
-    last_freq: Option<f32>,   // most recent NoteOn pitch (portamento origin)
-    bagpipe_drone_holds: u8,  // low GM109 notes currently holding the synthetic drone
+    porta_time: f32,        // CC5 glide time in seconds
+    last_freq: Option<f32>, // most recent NoteOn pitch (portamento origin)
+    // CC32 bank-select LSB: selects an XG variation voice via make_variation.
+    // Persists across Reset All Controllers (bank select is not a RAC controller).
+    bank_lsb: u8,
+    // CC84 portamento control: a pending one-shot glide source key, consumed by
+    // the next NoteOn (glides regardless of CC65 porta-on). Cleared by RAC.
+    porta_control: Option<u8>,
+    bagpipe_drone_holds: u8, // low GM109 notes currently holding the synthetic drone
     bagpipe_drone_live: bool, // a channel drone is sounding — gates the latch tick
-    bagpipe_drone_hang: u32,  // blocks of chanter silence so far (drone release countdown)
-    soft: bool,               // CC67 una corda
-    sost_down: bool,          // CC66 sostenuto pedal position
-    vowel_authored: bool,     // CC70 selects a static vowel on choir programs
-    vowel_target: f32,        // CC70 value 0..127
-    vowel_cur: f32,           // slewed per block
-    at_authored: bool,        // channel aftertouch seen on this channel
-    at_target: f32,           // pressure 0..1, smoothed like CC11
+    bagpipe_drone_hang: u32, // blocks of chanter silence so far (drone release countdown)
+    soft: bool,              // CC67 una corda
+    sost_down: bool,         // CC66 sostenuto pedal position
+    vowel_authored: bool,    // CC70 selects a static vowel on choir programs
+    vowel_target: f32,       // CC70 value 0..127
+    vowel_cur: f32,          // slewed per block
+    at_authored: bool,       // channel aftertouch seen on this channel
+    at_target: f32,          // pressure 0..1, smoothed like CC11
     at_cur: f32,
     at_phase: f32, // aftertouch vibrato LFO phase
     at_gain: f32,  // pressure gain lift (1.0 = none)
@@ -837,6 +843,8 @@ impl Strip {
             porta_on: false,
             porta_time: PORTA_MIN_S,
             last_freq: None,
+            bank_lsb: 0,
+            porta_control: None,
             bagpipe_drone_holds: 0,
             bagpipe_drone_live: false,
             bagpipe_drone_hang: 0,
@@ -1501,6 +1509,11 @@ impl EngineCore {
             }
         }
 
+        // CC84 (portamento control): consume the pending one-shot glide source
+        // now that every early-return path (bagpipe / legato / tremolo restrike)
+        // is past and a fresh voice will actually spawn.
+        let porta_ctrl = self.strips[ci].porta_control.take();
+
         let vel = if ch != 9
             && self.strips[ci].soft
             && voices::is_acoustic_piano(self.strips[ci].program)
@@ -1555,7 +1568,18 @@ impl EngineCore {
                     self.opt.samples,
                 )
             } else {
-                voices::make(prog, key, vel, sr, seed, self.opt.samples)
+                // XG bank-LSB variation, else base GM. Same `seed` on both paths,
+                // so an undefined (prog, bank_lsb) is bit-identical to base.
+                voices::make_variation(
+                    prog,
+                    self.strips[ci].bank_lsb,
+                    key,
+                    vel,
+                    sr,
+                    seed,
+                    self.opt.samples,
+                )
+                .unwrap_or_else(|| voices::make(prog, key, vel, sr, seed, self.opt.samples))
             })
         };
 
@@ -1590,8 +1614,14 @@ impl EngineCore {
             {
                 voice.set_breath((s.expr * s.breath).sqrt().min(1.0), 0.0);
             }
-            let glide = if ch != 9 && s.porta_on {
-                porta_from.and_then(|from| {
+            // Glide source: CC84 (an explicit one-shot source key that glides
+            // regardless of CC65 porta-on) takes precedence; otherwise the CC65
+            // legato-portamento path from the previous NoteOn pitch.
+            let glide = if ch != 9 {
+                let src = porta_ctrl
+                    .map(key_freq)
+                    .or(if s.porta_on { porta_from } else { None });
+                src.and_then(|from| {
                     let semis = 12.0 * (from / key_freq(key)).log2();
                     (semis.abs() > 1e-3).then(|| {
                         let k = 1.0 - (-(BLOCK as f32) / (s.porta_time.max(1e-3) * sr)).exp();
@@ -1739,6 +1769,7 @@ impl EngineCore {
                 s.expr_target = v * v;
                 s.expr_authored = true;
             }
+            32 => s.bank_lsb = val, // XG bank-select LSB: selects a variation voice at note-on
             64 => {
                 s.sustain = val >= 64;
                 if !s.sustain {
@@ -1809,6 +1840,7 @@ impl EngineCore {
                     }
                 }
             }
+            84 => s.porta_control = Some(val), // portamento control: one-shot glide source key
             91 => s.reverb_send = v,
             93 => {
                 s.chorus_send = v;
@@ -1938,6 +1970,7 @@ impl EngineCore {
         s.porta_on = false;
         s.porta_time = PORTA_MIN_S;
         s.last_freq = None;
+        s.porta_control = None; // pending CC84 source is cleared; bank_lsb persists (not a RAC controller)
         s.sustain = false;
         s.sost_down = false;
         s.soft = false;
@@ -8402,6 +8435,134 @@ mod tests {
         assert_eq!(
             alt_piano, def_piano,
             "alt bank must delegate non-orchestral programs to the default voice"
+        );
+    }
+
+    /// Unit 1 (XG CC32 infra): a bank-select LSB naming no *defined* XG
+    /// variation falls back to the base GM voice **byte-identically** — the
+    /// dispatch reuses the same `seed`, so an undefined `(program, bank_lsb)`
+    /// is bit-for-bit the pre-change render. LSB 113 is undefined for every
+    /// program (the reference file's 112/113/115/117 all sit past the max
+    /// defined XG bank, 101), so this invariant holds even as defined
+    /// variations get added in later units.
+    #[test]
+    fn cc32_undefined_bank_falls_back_byte_identical() {
+        let sr = 44100.0;
+        let song = |lsb: Option<u8>, prog: u8| {
+            let mut ev = vec![(0.0, EvKind::Prog { ch: 0, prog })];
+            if let Some(v) = lsb {
+                ev.push((
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 32,
+                        val: v,
+                    },
+                ));
+            }
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                },
+            ));
+            ev.push((1.0, EvKind::NoteOff { ch: 0, key: 60 }));
+            ev
+        };
+        for prog in [24u8, 0, 48, 30] {
+            let base = left(&render(&test_song(song(None, prog), 1.5), &test_opts(sr)).0);
+            let undef = left(&render(&test_song(song(Some(113), prog), 1.5), &test_opts(sr)).0);
+            assert_eq!(
+                base, undef,
+                "prog {prog}: an undefined CC32 bank must fall back to base GM byte-identically"
+            );
+        }
+    }
+
+    /// Unit 1 (CC84 portamento control): a `CC84=src` before a NoteOn makes
+    /// that note glide up from `key_freq(src)` even with NO CC65 porta-on,
+    /// honoring the CC5 glide time — and the pending source is consumed once,
+    /// so a following NoteOn with no CC84 starts at its own pitch. Detected by
+    /// source-pitch energy (`mag_at`), which is phase-insensitive.
+    #[test]
+    fn cc84_glides_from_source_without_porta_on_and_is_consumed_once() {
+        let sr = 44100.0;
+        let src = 48u8; // portamento source key — an octave below the played key
+        let key = 60u8;
+        let f_src = key_freq(src);
+        let events = |cc84: bool| {
+            let mut ev = vec![
+                // square lead: fast attack, clean fundamental, no sub-octave
+                (0.0, EvKind::Prog { ch: 0, prog: 80 }),
+                // long glide time so the scoop spans the onset window
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 5,
+                        val: 110,
+                    },
+                ),
+            ];
+            if cc84 {
+                ev.push((
+                    0.01,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 84,
+                        val: src,
+                    },
+                ));
+            }
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key,
+                    vel: 100,
+                },
+            ));
+            ev.push((0.90, EvKind::NoteOff { ch: 0, key }));
+            // A second note with no CC84 must not glide (source already consumed).
+            ev.push((
+                1.30,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key,
+                    vel: 100,
+                },
+            ));
+            ev.push((2.10, EvKind::NoteOff { ch: 0, key }));
+            ev
+        };
+        let render_mono = |cc84: bool| {
+            crate::testutil::mono(&render(&test_song(events(cc84), 2.4), &test_opts(sr)).0)
+        };
+        let with_cc84 = render_mono(true);
+        let baseline = render_mono(false);
+        let e_src = |buf: &[f32], t0: f32, t1: f32| {
+            crate::testutil::mag_at(&buf[(t0 * sr) as usize..(t1 * sr) as usize], sr, f_src)
+        };
+
+        // Note 1 onset: the CC84 render scoops up from key 48 → real energy at
+        // the source pitch; the no-CC84 baseline sits at key 60 with none.
+        let n1_cc84 = e_src(&with_cc84, 0.05, 0.12);
+        let n1_base = e_src(&baseline, 0.05, 0.12);
+        // Note 2 onset (CC84 render): no CC84 was sent → no source-pitch scoop.
+        let n2_cc84 = e_src(&with_cc84, 1.30, 1.37);
+        assert!(
+            n1_cc84 > 1e-3,
+            "note-1 onset should carry real energy: {n1_cc84:.6}"
+        );
+        assert!(
+            n1_cc84 > 5.0 * n1_base,
+            "CC84 must glide from key {src}: onset source-pitch energy cc84 {n1_cc84:.5} vs no-CC84 base {n1_base:.5}"
+        );
+        assert!(
+            n1_cc84 > 5.0 * n2_cc84,
+            "CC84 must be consumed once: note-1 source-pitch energy {n1_cc84:.5} vs note-2 {n2_cc84:.5}"
         );
     }
 

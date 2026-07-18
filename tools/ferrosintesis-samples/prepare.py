@@ -312,6 +312,36 @@ TIMPANI_URLS = {
     for dest, src in _TIMPANI_ZONES
 }
 
+# Banjo (GM 105) — sfzinstruments/ganjo (an SX 6-string guitar-banjo, recorded/mapped by
+# 'itsclipping'), CC0 1.0 (verified LICENSE.md). A NEW external source (its own repo + REV
+# pin, not VCSL/VSCO/MS Basic). Plucked, bright, fast decay — the sample owns the pick
+# transient + resonator-head twang, the Pluck(&BANJO) model carries the decay (0.9 s keep,
+# like the guitars). Source names carry spaces and `#` (URL-encoded via quote(src)); the
+# files are IEEE-float WAV, transcoded to PCM by ensure_banjo_sources (ffmpeg). The ganjo
+# labels sit ONE OCTAVE ABOVE sounding pitch (probed 2026.07.18: "…- A#4" sounds A#3), so
+# each dest is named by its SOUNDING pitch — the 8-zone subset sounds D#2–B4. The banjo is
+# harmonic-rich (a generous ceiling rails on upper harmonics for the low zones), so `banjo`
+# is in TWO_F_STRONG below. Output → the CC0 `-orchestral2` crate.
+GANJO_REV = "ccff5cd5cd3b513873a48994c07724d9d3c39e1c"
+_GANJO_DIR = "Common"
+_GANJO_ZONES = [
+    ("banjo_D#2.wav", "Banjo_Common - D#3"),
+    ("banjo_G#2.wav", "Banjo_Common - G#3"),
+    ("banjo_C#3.wav", "Banjo_Common - C#4"),
+    ("banjo_F#3.wav", "Banjo_Common - F#4"),
+    ("banjo_A#3.wav", "Banjo_Common - A#4"),
+    ("banjo_D#4.wav", "Banjo_Common - D#5"),
+    ("banjo_G4.wav", "Banjo_Common - G5"),
+    ("banjo_B4.wav", "Banjo_Common - B5"),
+]
+BANJO_URLS = {
+    dest: (
+        f"https://raw.githubusercontent.com/sfzinstruments/ganjo/{GANJO_REV}/"
+        f"{urllib.parse.quote(_GANJO_DIR)}/{urllib.parse.quote(src)}.wav"
+    )
+    for dest, src in _GANJO_ZONES
+}
+
 # GM 109 bagpipe (HLD 2026.07.17). A CC0 FreePats G-pipe: two separately-recorded
 # drones (bass G2, tenor G3) an octave apart, plus a chanter. These are LOOPED
 # sustains, not attack transients — `extract_loop` (not `trim_to_onset`) emits a
@@ -453,6 +483,10 @@ F0_RANGE = {
     # keeps autocorr off the higher inharmonic modes. Roots probed offline first; the
     # bake re-measures with this range (a struck membrane is mode-rich, conf 0.77–0.92).
     "timpani": (40.0, 400.0),
+    # banjo SOUNDS D#2 79 … B4 495 Hz (ganjo labels are an octave high; dest named by the
+    # sounding pitch). Harmonic-rich → in TWO_F_STRONG, so main() caps the ceiling per-note
+    # at label×1.5; lo 55 clears the low D#2 fundamental. 1000 is the pre-cap upper bound.
+    "banjo": (55.0, 1000.0),
     # violin section G2-name spans G3 196 Hz … D5-name D6 1175 Hz (VSCO's
     # octave labels sit one below sounding pitch here); ceiling 1300 keeps
     # autocorr off the top zone's 2nd harmonic (the brass/oboe lesson)
@@ -465,7 +499,7 @@ F0_RANGE = {
 # ceiling admits it) AND span more than an octave, so a single fixed F0 ceiling can't
 # separate the fundamental from 2f. For these, main() caps the ceiling per-note at
 # label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
-TWO_F_STRONG = frozenset(("recorder",))
+TWO_F_STRONG = frozenset(("recorder", "banjo"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -480,6 +514,7 @@ KEEP_FAM = {
     "harpsi": (0.9, 0.30),
     "harp": (0.9, 0.30),
     "timpani": (0.9, 0.30),
+    "banjo": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -524,6 +559,7 @@ FAMILY_PACKAGE = {
     "ocarina": "ferrosintesis-samples-orchestral2",
     "recorder": "ferrosintesis-samples-orchestral2",
     "timpani": "ferrosintesis-samples-orchestral2",
+    "banjo": "ferrosintesis-samples-orchestral2",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1166,6 +1202,25 @@ def _bake_sf_onset(src, preset, prefix, dest_crate, keep_s, fade_s):
     return rows
 
 
+def ensure_banjo_sources(src):
+    """Fetch the ganjo banjo WAVs and transcode them to 16-bit PCM.
+
+    The ganjo source is IEEE-float WAV (fmt tag 3), which stdlib `wave` cannot read, so
+    ffmpeg transcodes each to pcm_s16le (same shell-out precedent as the SF3/FLAC decodes)
+    into the name the main loop expects. The float download is cached as `<name>.f32`;
+    the PCM is (re)written each run so a prior crashed float file is overwritten.
+    """
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    for fn, url in BANJO_URLS.items():
+        ensure_source(fn + ".f32", url, src)
+        subprocess.run(
+            [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+             "-i", os.path.join(src, fn + ".f32"),
+             "-acodec", "pcm_s16le", os.path.join(src, fn)],
+            check=True,
+        )
+
+
 def main():
     socket.setdefaulttimeout(60)
     # `--local-only` skips the fetched full bank (network + rewriting the tracked
@@ -1209,6 +1264,8 @@ def main():
         for fn, url in TIMPANI_URLS.items():
             if want("timpani"):
                 ensure_source(fn, url, src)
+        if want("banjo"):
+            ensure_banjo_sources(src)
         if want("nylon"):
             ensure_guitar_sources(src)
         if want("chanter"):
@@ -1238,7 +1295,7 @@ def main():
             )
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
-            | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | GRAND_SOURCES
+            | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | GRAND_SOURCES
         ):
             if not want(fn.split("_")[0]):
                 continue

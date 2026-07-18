@@ -994,6 +994,32 @@ pub fn sitar_bank() -> &'static [Zone] {
     sitar()
 }
 
+/// GM 105 banjo — sfzinstruments/ganjo 6-string guitar-banjo (CC0, `-orchestral2`). Bright,
+/// fast-decaying pluck: the sample owns the pick transient + resonator-head twang, the
+/// `Pluck(&BANJO)` model carries the decay. 8 zones sounding D#2–B4 (the ganjo file labels
+/// sit an octave above sounding pitch; roots MEASURED at the true sounding pitch — the banjo
+/// is harmonic-rich, so a per-note ceiling was used). `LaVoice` repitches ±1 octave.
+fn banjo() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "banjo_D#2.wav" => 79.34,
+            "banjo_G#2.wav" => 106.27,
+            "banjo_C#3.wav" => 142.12,
+            "banjo_F#3.wav" => 190.22,
+            "banjo_A#3.wav" => 236.99,
+            "banjo_D#4.wav" => 321.32,
+            "banjo_G4.wav" => 395.43,
+            "banjo_B4.wav" => 495.06,
+        )
+    })
+}
+
+/// GM 105 banjo attack bank (see [`banjo`]).
+pub fn banjo_bank() -> &'static [Zone] {
+    banjo()
+}
+
 // --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
 //
 // These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
@@ -1177,6 +1203,7 @@ pub fn prewarm() {
     let _ = recorder_bank();
     let _ = timpani_bank();
     let _ = sitar_bank();
+    let _ = banjo_bank();
     let _ = chanter_bank();
     let _ = drone_g2_bank();
     let _ = drone_g3_bank();

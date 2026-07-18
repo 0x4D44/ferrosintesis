@@ -7851,6 +7851,10 @@ const LA_TIMPANI: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
 /// sampled onset; the `Pluck(&SITAR)` model carries the bendable decay. Plucked handover
 /// like the guitars (sample owns ~0–50 ms, model from ~200 ms).
 const LA_SITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
+/// GM 105 banjo: the bright pick transient + resonator-head twang is the identity cue,
+/// carried by the sampled onset; the `Pluck(&BANJO)` model keeps the fast decay. Plucked
+/// handover like the guitars.
+const LA_BANJO: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
 /// String sections 48-49: the real section swell reads best with a longer
 /// crossfade than the solo bowed layer (a section "comes into focus", it
 /// does not bite), so the transient hands over across [0.10, 0.40] s.
@@ -11078,7 +11082,25 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        105 => Box::new(Pluck::new(&BANJO, key, vel, sr, seed)),
+        // GM 105 banjo: LA sampled pick transient + head twang (ganjo, CC0, -orchestral2)
+        // crossfaded into the Pluck(&BANJO) model — same wrap as the other plucked banks.
+        105 => {
+            let model = Box::new(Pluck::new(&BANJO, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_BANJO;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::banjo_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         106 => Box::new(Pluck::new(&SHAMISEN, key, vel, sr, seed)),
         107 => Box::new(Pluck::new(&KOTO, key, vel, sr, seed)),
         108 => Box::new(bell(
@@ -11149,6 +11171,7 @@ mod tests {
             ("LA_RECORDER", LA_RECORDER),
             ("LA_TIMPANI", LA_TIMPANI),
             ("LA_SITAR", LA_SITAR),
+            ("LA_BANJO", LA_BANJO),
         ] {
             assert!(
                 fade.1 < 0.90,
@@ -20952,7 +20975,7 @@ mod tests {
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
         0, 1, 2, 3, 6, 7, 24, 40, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68, 69, 70, 71, 72,
-        73, 74, 79, 104, 109, 110,
+        73, 74, 79, 104, 105, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

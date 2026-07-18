@@ -14,6 +14,14 @@
 /// case-sensitive. Kept as a slice (not a fixed-size array) so families can be
 /// added without threading a count constant through the file.
 static SAMPLES: &[(&str, &[u8])] = &[
+    ("banjo_A#3.wav", include_bytes!("../samples/banjo_A#3.wav")),
+    ("banjo_B4.wav", include_bytes!("../samples/banjo_B4.wav")),
+    ("banjo_C#3.wav", include_bytes!("../samples/banjo_C#3.wav")),
+    ("banjo_D#2.wav", include_bytes!("../samples/banjo_D#2.wav")),
+    ("banjo_D#4.wav", include_bytes!("../samples/banjo_D#4.wav")),
+    ("banjo_F#3.wav", include_bytes!("../samples/banjo_F#3.wav")),
+    ("banjo_G#2.wav", include_bytes!("../samples/banjo_G#2.wav")),
+    ("banjo_G4.wav", include_bytes!("../samples/banjo_G4.wav")),
     ("harp_A2.wav", include_bytes!("../samples/harp_A2.wav")),
     ("harp_A6.wav", include_bytes!("../samples/harp_A6.wav")),
     ("harp_B3.wav", include_bytes!("../samples/harp_B3.wav")),

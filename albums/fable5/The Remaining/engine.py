@@ -323,6 +323,86 @@ def strum(sc: Score, ch: int, pitches: list[int], t0: float, dur: float,
         sc.note(ch, p, t0 + i * spread, dur - i * spread, vel - i, jt=3, jv=4)
 
 
+# -- guitar idiom helpers (2026.07.18 guitar block two; The Remaining is the
+# -- designated seed engine for these — unused here by design, oracle-tested
+# -- in test_verify.py, worked example in demos/guitar_idiom_demo.py) --------
+
+def _rake_offsets(n: int, sweep_span: float, rake: float) -> list[float]:
+    """Per-string onsets across a strum sweep. `sweep_span` is the WHOLE
+    sweep in beats (note: the older `strum` helper's `spread` is the
+    per-string gap instead). Concave for rake>1: gaps SHRINK toward the
+    sweep's end — strings bunch late, like a real pick sweep. rake=1 is the
+    linear sweep (identical to `strum` with spread = sweep_span/(n-1))."""
+    d = max(n - 1, 1)
+    return [sweep_span * (1.0 - (1.0 - i / d) ** rake) for i in range(n)]
+
+
+def strum_seq(sc: Score, ch: int, chord: list[int], t0: float,
+              strokes: list[tuple[float, float, str, int]], vel: int,
+              sweep_span: float = 0.10, rake: float = 1.6,
+              vel_up: int = -10) -> None:
+    """A strummed figure as first-class strokes: each stroke is
+    (beat, dur, dir, dv) with dir 'D' (down), 'U' (up, reversed string
+    order, vel_up applied) or 'x' (muted chuck: very short and quiet).
+    Per-string velocity tapers by string index exactly like `strum`;
+    note-offs align (`note_dur_i = dur - offset_i`)."""
+    offs = _rake_offsets(len(chord), sweep_span, rake)
+    for beat, dur, direction, dv in strokes:
+        if direction == 'U':
+            order = list(reversed(chord))
+            v0 = vel + dv + vel_up
+        else:
+            order = chord
+            v0 = vel + dv
+        if direction == 'x':
+            v0 -= 25
+        for i, p in enumerate(order):
+            d = 0.06 if direction == 'x' else dur - offs[i]
+            sc.note(ch, p, t0 + beat + offs[i], d, v0 - i, jt=3, jv=4)
+
+
+# Standard tuning, low to high; shape vectors are frets per string, -1 = mute.
+_GTR_STRINGS = (40, 45, 50, 55, 59, 64)  # E2 A2 D3 G3 B3 E4
+_GTR_SHAPES: dict[str, list[tuple[str, int, list[int]]]] = {
+    # quality -> [(shape name, root pitch-class of the OPEN form, frets)]
+    "maj": [("E", 4, [0, 2, 2, 1, 0, 0]),
+            ("A", 9, [-1, 0, 2, 2, 2, 0]),
+            ("D", 2, [-1, -1, 0, 2, 3, 2]),
+            ("G", 7, [3, 2, 0, 0, 0, 3]),
+            ("C", 0, [-1, 3, 2, 0, 1, 0])],
+    "min": [("E", 4, [0, 2, 2, 0, 0, 0]),
+            ("A", 9, [-1, 0, 2, 2, 1, 0]),
+            ("D", 2, [-1, -1, 0, 2, 3, 1])],
+    "7":   [("E", 4, [0, 2, 0, 1, 0, 0]),
+            ("A", 9, [-1, 0, 2, 0, 2, 0])],
+}
+_GTR_BARRE_SHAPES = ("E", "A")  # forms that barre cleanly up the neck
+
+
+def voicing(root: int, quality: str = "maj",
+            shape: str | None = None) -> list[int]:
+    """A PLAYABLE 6-string voicing: `root` is a pitch class 0-11, `quality`
+    in {'maj','min','7'}. Shapes are real fretboard forms (open E/A/D/G/C +
+    E-/A-shape barres), so the result carries genuine guitar doublings and a
+    one-note-per-string mapping. shape=None auto-picks the form with the
+    lowest bass note. Returns low->high MIDI pitches (4-6 strings)."""
+    root %= 12
+    forms = _GTR_SHAPES[quality]
+    candidates: list[tuple[int, list[int]]] = []  # (bass midi, pitches)
+    for name, open_pc, frets in forms:
+        barre = (root - open_pc) % 12
+        if shape is not None and name != shape:
+            continue
+        if barre != 0 and name not in _GTR_BARRE_SHAPES:
+            continue
+        pitches = [s + f + barre for s, f in zip(_GTR_STRINGS, frets)
+                   if f >= 0]
+        candidates.append((pitches[0], pitches))
+    if not candidates:
+        raise ValueError(f"no {quality} shape {shape!r} for root {root}")
+    return min(candidates)[1]
+
+
 def arp(sc: Score, ch: int, pitches: list[int], t0: float, count: int,
         step: float, vel: int, pattern: str = "up", gate: float = 1.25,
         accent_every: int = 0, accent: int = 10) -> None:
@@ -379,19 +459,23 @@ def bend_ramp(sc: Score, ch: int, t0: float, t1: float,
 def run(sc: Score, ch: int, t0: float, base: int, mode: str,
         degrees: list[int], spacing: float, vel0: int, vel1: int,
         gate: float = 0.95, jt: int = 1, octave_double: int | None = None,
-        legato: bool = False) -> float:
+        legato: bool = False, pitches: list[int] | None = None) -> float:
     """Rapid-fire line: evenly spaced degrees with a velocity ramp —
     the classic Oldfield machine-gun figure. Timing jitter is kept tight
     (the evenness IS the style); the life lives in the crescendo.
     With legato=True the notes overlap so the synth hammers instead of
-    re-picking (CC68 must be on for the channel). Returns the end beat."""
+    re-picking (CC68 must be on for the channel). `pitches` (guitar block
+    two) is a chromatic override: raw MIDI pitches instead of the diatonic
+    base/mode/degrees — the hammer-on idiom for lines a scale can't spell.
+    Returns the end beat."""
     if legato:
         sc.cc(ch, 68, 127, t0 - 0.05)
-    n = len(degrees)
-    for i, deg in enumerate(degrees):
+    seq = degrees if pitches is None else pitches
+    n = len(seq)
+    for i, deg in enumerate(seq):
         vel = int(round(lerp(vel0, vel1, i / max(1, n - 1))))
         dur = spacing * (1.25 if legato else gate)
-        p = pitch(base, mode, deg)
+        p = pitch(base, mode, deg) if pitches is None else deg
         sc.note(ch, p, t0 + i * spacing, dur, vel, jt=jt, jv=2)
         if octave_double is not None:
             sc.note(ch, p + octave_double, t0 + i * spacing, dur,

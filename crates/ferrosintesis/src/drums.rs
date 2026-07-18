@@ -1946,8 +1946,26 @@ pub fn make(
             0.5,
             0.50,
         ),
-        69 | 70 | 82 => d(
-            // cabasa / maracas / shaker
+        // cabasa / maracas / shaker — three DISTINCT shaken idiophones (were one
+        // shared HP-noise burst, so a latin groove alternating them got no contrast).
+        // Level-neutral split (all g = 0.40): timbre differs via HP corner + decay +
+        // length. Shaker 82 keeps the original voice exactly (renders bit-identical).
+        69 => d(
+            // cabasa: bright, sustained steel-bead rasp — highest band, longest wash
+            &[],
+            &one(1.0, 0.08, Biquad::highpass(5500.0, 0.7, sr)),
+            0.22,
+            0.40,
+        ),
+        70 => d(
+            // maracas: sharp, quick, woodier seed rattle — lower band, fast decay
+            &[],
+            &one(1.0, 0.030, Biquad::highpass(3600.0, 0.7, sr)),
+            0.10,
+            0.40,
+        ),
+        82 => d(
+            // shaker: smooth even hiss (the original shared voice — unchanged)
             &[],
             &one(1.0, 0.055, Biquad::highpass(4200.0, 0.7, sr)),
             0.18,
@@ -2963,6 +2981,47 @@ mod tests {
         assert!(
             f_hi > f_lo * 1.12,
             "timbales not pitch-distinct: hi={f_hi:.0} Hz lo={f_lo:.0} Hz (need hi >= 1.12x lo)"
+        );
+    }
+
+    /// Cabasa (69), maracas (70) and shaker (82) were one shared HP-noise burst;
+    /// they must now render as three distinct shaken idiophones. (b) none bit-
+    /// identical; (a) brightness ordered cabasa > shaker > maracas (HP corners
+    /// 5500/4200/3600 Hz); (c) cabasa sustains longer than the quick maracas.
+    #[test]
+    fn cabasa_maracas_shaker_are_distinct() {
+        let sr = 44100.0;
+        let cabasa = render_drum_kit(69, 100, 0.4, Kit::V3);
+        let maracas = render_drum_kit(70, 100, 0.4, Kit::V3);
+        let shaker = render_drum_kit(82, 100, 0.4, Kit::V3);
+        // (b) the un-foolable clause: equal vel+seed must not render bit-identical.
+        assert!(
+            cabasa != maracas && cabasa != shaker && maracas != shaker,
+            "cabasa/maracas/shaker render bit-identically -- still one shared voice"
+        );
+        // (a) brightness ordered by their HP corners: cabasa > shaker > maracas.
+        let n = (0.10 * sr) as usize;
+        let (cc, cs, cm) = (
+            testutil::centroid(&cabasa[..n], sr),
+            testutil::centroid(&shaker[..n], sr),
+            testutil::centroid(&maracas[..n], sr),
+        );
+        println!("shaken centroids: cabasa={cc:.0} shaker={cs:.0} maracas={cm:.0}");
+        assert!(
+            cc > cs && cs > cm,
+            "brightness not ordered cabasa>shaker>maracas: {cc:.0}/{cs:.0}/{cm:.0}"
+        );
+        // (c) cabasa's steel-bead wash sustains; maracas is a quick seed burst.
+        let decay = |s: &[f32]| {
+            let early = testutil::rms(&s[(0.005 * sr) as usize..(0.03 * sr) as usize]);
+            let late = testutil::rms(&s[(0.08 * sr) as usize..(0.16 * sr) as usize]);
+            late / early.max(1e-9)
+        };
+        let (dc, dm) = (decay(&cabasa), decay(&maracas));
+        println!("shaken decay ratios: cabasa={dc:.3} maracas={dm:.3}");
+        assert!(
+            dc > dm,
+            "cabasa should sustain longer than maracas: cabasa={dc:.3} maracas={dm:.3}"
         );
     }
 

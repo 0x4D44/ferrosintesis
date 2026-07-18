@@ -2575,6 +2575,19 @@ mod perceptual_distinctness {
             lo: -6.0,
             hi: 20.0,
         },
+        // Keyboards + chromatic percussion 0-15: struck/plucked — every member
+        // DECAYS (energy gone by W5). Measured sustain_db = -16..-118 (highest:
+        // piano GM1 -16.3, tubular-bell GM14 -17.1); a -10 dB ceiling clears all
+        // with margin and REDs a sustained voice (organ GM19 = -0.3). The decay
+        // TIME varies (xylophone vs tubular bell) but the LEVEL is always negative.
+        ClassRange {
+            label: "keyboard+chrom-perc 0-15",
+            programs: &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+            field: "sustain_db",
+            get: |p| p.sustain_db,
+            lo: -120.0,
+            hi: -10.0,
+        },
     ];
 
     /// The class-identity oracle: every in-scope voice's field-mean falls in its
@@ -2603,11 +2616,18 @@ mod perceptual_distinctness {
     #[test]
     fn class_ranges_reject_wrong_class() {
         // (range label, a wrong-class program that MUST be out of range, why)
-        let controls: &[(&str, u8, &str)] = &[(
-            "organ 16-23",
-            0,
-            "piano decays (sustain_db ~ -18), must fail the held-level floor",
-        )];
+        let controls: &[(&str, u8, &str)] = &[
+            (
+                "organ 16-23",
+                0,
+                "piano decays (sustain_db ~ -18), must fail the held-level floor",
+            ),
+            (
+                "keyboard+chrom-perc 0-15",
+                19,
+                "organ holds (sustain_db ~ 0), must fail the decays ceiling",
+            ),
+        ];
         for &(label, wrong, why) in controls {
             let r = CLASS_RANGES
                 .iter()

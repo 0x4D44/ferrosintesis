@@ -482,7 +482,11 @@ fn channel_event(status: u8, data: &[u8]) -> Option<EvKind> {
                 EvKind::NoteOn { ch, key, vel }
             })
         }
-        0xA0 => None,
+        0xA0 => Some(EvKind::PolyAftertouch {
+            ch,
+            key: data[0],
+            val: data[1],
+        }),
         0xB0 => Some(EvKind::Cc {
             ch,
             num: data[0],
@@ -548,19 +552,28 @@ mod tests {
     }
 
     #[test]
-    fn parser_consumes_ignored_poly_aftertouch_and_system_common() {
+    fn parser_emits_poly_aftertouch_and_consumes_system_common() {
         let mut parser = MidiByteParser::new();
         let mut out = Vec::new();
+        // 0xA0 poly-aftertouch is now forwarded (the engine acts on it); the 0xF2
+        // system-common message and its data bytes are still consumed and ignored.
         for b in [0xA0, 60, 12, 0x90, 60, 100, 0xF2, 1, 2, 64, 100] {
             parser.push(b, &mut out);
         }
         assert_eq!(
             out,
-            vec![LiveCommand::Channel(EvKind::NoteOn {
-                ch: 0,
-                key: 60,
-                vel: 100,
-            })]
+            vec![
+                LiveCommand::Channel(EvKind::PolyAftertouch {
+                    ch: 0,
+                    key: 60,
+                    val: 12,
+                }),
+                LiveCommand::Channel(EvKind::NoteOn {
+                    ch: 0,
+                    key: 60,
+                    vel: 100,
+                }),
+            ]
         );
     }
 

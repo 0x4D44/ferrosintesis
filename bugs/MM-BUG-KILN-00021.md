@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00021 — Poly-aftertouch (0xA0) is dropped by the live MIDI parser though the engine handles it
 
-- **State:** Open
+- **State:** Fixed (awaiting close)
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** live
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, Claude Opus 4.8 (1M) — live.rs:485 now forwards 0xA0 → EvKind::PolyAftertouch; parser test corrected; full crate suite green)
 
 ## Observation
 

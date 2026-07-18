@@ -10831,6 +10831,10 @@ pub fn make_variation(
         (99, 19) => Box::new(Fx::from_spec(&FX_HOLLOW_RELEASE, key, vel, sr, seed)),
         // Fingered Bass 2 — same dark flatwound, a touch more sustain (33, LSB 45).
         (33, 45) => Box::new(Pluck::new(&FINGERED_BASS2, key, vel, sr, seed)),
+        // Str5 — a wider/darker synth-string variant (Synth Strings 1 50, LSB
+        // 65). Reuses the program-51 lush machine (wider detune, darker) rather
+        // than inventing a timbre — measurably distinct, non-invented.
+        (50, 65) => Box::new(synth_strings(51, key, vel, sr, seed)),
         _ => return None,
     };
     Some(voice)
@@ -15205,6 +15209,41 @@ mod tests {
                 "fingered bass 2 must not brighten the base flatwound at seed {seed}: cent {} vs {}",
                 centroid(&bass2),
                 centroid(&base)
+            );
+        }
+    }
+
+    /// Unit 9 (XG variation, subtle): Str5 (Synth Strings 1 50, bank LSB 65) is
+    /// a wider/darker synth-string variant. It reuses the program-51 lush
+    /// machine, so — routed through the real make_variation/make dispatch — it
+    /// must pass measurably LESS high-frequency energy than base 50, the same
+    /// differentiator synth_strings_2_is_the_darker_variant uses.
+    #[test]
+    fn str5_variation_is_a_darker_synth_string_than_base() {
+        let sr = 44100.0;
+        assert!(
+            make_variation(50, 65, 60, 100, sr, 7, false).is_some(),
+            "(50, 65) must dispatch the Str5 variation"
+        );
+        assert!(
+            make_variation(50, 113, 60, 100, sr, 7, false).is_none(),
+            "an undefined bank (113) must fall back to base GM (None)"
+        );
+
+        let render_v = |mut v: Box<dyn Voice>| {
+            let mut buf = vec![0f32; (0.7 * sr) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        let hf_frac = |s: &[f32]| hp_rms(s, sr, 2800.0) / rms(s).max(1e-9);
+        for seed in [0x6510u32, 0x76A1, 0x1250] {
+            let str5 = render_v(make_variation(50, 65, 60, 100, sr, seed, false).unwrap());
+            let base = render_v(make(50, 60, 100, sr, seed, false));
+            assert!(
+                hf_frac(&str5) < 0.90 * hf_frac(&base),
+                "Str5 (50,65) should pass less HF energy than base 50 at seed {seed}: {} vs {}",
+                hf_frac(&str5),
+                hf_frac(&base)
             );
         }
     }

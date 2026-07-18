@@ -72,4 +72,4 @@ def build(sc: en.Score) -> None:
     feature(sc, "wah resonance drive", 4, 64, 184, {29, 30}, min_notes=180, ccs={71: (0, 127), 74: (24, 120), 10: (42, 86)})
     feature(sc, "default drum kit", 9, 0, 384, set(), min_notes=200, drum_kit=True)
     sc.audio_check(en.AudioCheck("wah resonance bite", "hf_up", 80, 88, 72, 80, 1.08))
-    sc.audio_check(en.AudioCheck("lead bloom", "hf_up", 128, 148, 112, 124, 1.08))
+    sc.audio_check(en.AudioCheck("lead bloom", "brightness_up", 128, 136, 112, 120, 1.05, channel=3))

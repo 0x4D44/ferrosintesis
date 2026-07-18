@@ -29,6 +29,7 @@ def run_all(spec_scores: list[tuple[en.TrackSpec, en.Score]], suite: bool = True
         prefix = f"{spec.number:02d} {spec.title}"
         results.append((f"{prefix} structure", check_structure(spec, sc)))
         results.append((f"{prefix} features", check_features(sc)))
+        results.append((f"{prefix} audio windows", check_audio_windows(sc)))
         results.append((f"{prefix} organ banks", check_organ_banks(sc)))
         results.append((f"{prefix} resets", check_resets(spec, sc)))
         results.append((f"{prefix} stereo", check_stereo(sc)))
@@ -120,6 +121,35 @@ def check_features(sc: en.Score) -> list[str]:
             hits = [n for n in note_spans(sc, 9) if f.start <= n[0] <= f.end]
             if not hits:
                 fails.append(f"{f.name}: missing drum hits")
+    return fails
+
+
+def check_audio_windows(sc: en.Score) -> list[str]:
+    """Keep matched audio deltas on one channel and one instrument program."""
+    fails = []
+    for check in sc.audio_checks:
+        if check.channel is None:
+            continue
+        if check.ref_start is None or check.ref_end is None:
+            fails.append(f"{check.name}: matched check lacks a reference window")
+            continue
+        windows = (("reference", check.ref_start, check.ref_end), ("sample", check.start, check.end))
+        programs = []
+        for label, start, end in windows:
+            if end <= start:
+                fails.append(f"{check.name}: {label} window {start}..{end} is empty")
+                continue
+            program = active_program(sc, check.channel, start)
+            programs.append(program)
+            changes = [beat for beat, _prog in program_events(sc, check.channel) if start < beat < end]
+            if changes:
+                fails.append(
+                    f"{check.name}: ch{check.channel} changes program inside {label} window at {changes}"
+                )
+        if len(programs) == 2 and (programs[0] is None or programs[0] != programs[1]):
+            fails.append(
+                f"{check.name}: ch{check.channel} compares programs {programs[0]} and {programs[1]}"
+            )
     return fails
 
 

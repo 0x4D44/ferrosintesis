@@ -79,5 +79,5 @@ def build(sc: en.Score) -> None:
     feature(sc, "organs free reeds", 2, 64, 288, organ_programs, min_notes=160, ccs={0: (0, 1), 1: (0, 127), 5: (76, 76), 11: (48, 115), 65: (0, 127)})
     feature(sc, "timpani refinement bed", 3, 160, 376, {47}, min_notes=20)
     feature(sc, "crystal programs", 4, 192, 352, set(range(96, 104)), min_notes=160, ccs={10: (36, 92)})
-    sc.audio_check(en.AudioCheck("soft pedal opens", "hf_up", 36, 52, 4, 20, 1.05))
+    sc.audio_check(en.AudioCheck("soft-piano dynamic rise", "rms_up", 16, 20, 4, 8, 1.08, channel=0))
     sc.audio_check(en.AudioCheck("cathedral mixture", "hf_up", 150, 166, 136, 146, 1.05))

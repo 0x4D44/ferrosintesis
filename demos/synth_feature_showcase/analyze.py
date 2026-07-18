@@ -72,6 +72,25 @@ def hf_proxy(frames: list[tuple[float, float]]) -> float:
     return (acc / (len(frames) - 1)) ** 0.5
 
 
+def brightness(frames: list[tuple[float, float]]) -> float:
+    """High-frequency energy relative to level, so dynamics do not mask timbre."""
+    return hf_proxy(frames) / max(1e-12, rms(frames))
+
+
+def dynamic_arc_failures(segs: list[float]) -> list[str]:
+    """Require a third-quarter climax, final drop, and audible overall span."""
+    fails = []
+    if len(segs) != 4:
+        return [f"dynamic arc needs four quarters, got {len(segs)}"]
+    if segs[2] <= max(segs[:2]):
+        fails.append(f"dynamic climax is not in the third quarter: {segs}")
+    if segs[3] >= segs[2] * 0.98:
+        fails.append(f"dynamic final drop is too small: {segs}")
+    if max(segs) < min(segs) * 1.08:
+        fails.append(f"dynamic span is too flat: {segs}")
+    return fails
+
+
 def mono_loss_db(frames: list[tuple[float, float]]) -> float:
     stereo = rms(frames)
     if stereo <= 1e-12:
@@ -105,8 +124,7 @@ def check_track(track: dict, wav_dir: Path) -> list[str]:
         fails.append(f"{wav.name} mono downmix loss {loss:.2f} dB")
     q = dur / 4.0
     segs = [rms(window(frames, rate, i * q, (i + 1) * q)) for i in range(4)]
-    if max(segs) < segs[0] * 1.12:
-        fails.append(f"{wav.name} dynamic arc too flat: {segs}")
+    fails.extend(f"{wav.name} {failure}" for failure in dynamic_arc_failures(segs))
     for check in track.get("audio_checks", []):
         got = window(frames, rate, check["start_seconds"], check["end_seconds"])
         ref = None
@@ -120,9 +138,11 @@ def check_track(track: dict, wav_dir: Path) -> list[str]:
             fails.append(f"{wav.name} {check['name']} HF delta too small")
         elif kind == "hf_down" and ref is not None and hf_proxy(got) > threshold * max(1e-9, hf_proxy(ref)):
             fails.append(f"{wav.name} {check['name']} HF did not drop")
+        elif kind == "brightness_up" and ref is not None and brightness(got) < threshold * max(1e-9, brightness(ref)):
+            fails.append(f"{wav.name} {check['name']} brightness delta too small")
         elif kind == "mono_loss" and mono_loss_db(got) > threshold:
             fails.append(f"{wav.name} {check['name']} mono loss {mono_loss_db(got):.2f} dB")
-        elif kind not in {"rms_up", "hf_up", "hf_down", "mono_loss"}:
+        elif kind not in {"rms_up", "hf_up", "hf_down", "brightness_up", "mono_loss"}:
             fails.append(f"{wav.name} {check['name']} unknown audio check kind {kind}")
     return fails
 

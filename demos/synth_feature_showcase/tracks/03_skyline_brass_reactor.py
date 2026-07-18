@@ -61,4 +61,4 @@ def build(sc: en.Score) -> None:
     feature(sc, "wind descants", 3, 160, 320, wind_programs, min_notes=160, ccs={10: (46, 82), 94: (18, 86)})
     feature(sc, "bowed strings", 4, 232, 352, set(range(40, 46)), min_notes=80, ccs={1: (0, 118), 68: (0, 127)}, bend=(0.0, 0.35), monophonic=True)
     feature(sc, "fiddle feature", 5, 352, 376, {110}, min_notes=25, ccs={1: (0, 118), 68: (0, 127)}, bend=(0.0, 0.35), monophonic=True)
-    sc.audio_check(en.AudioCheck("brass breath", "rms_up", 8, 20, 0, 8, 1.05))
+    sc.audio_check(en.AudioCheck("brass breath", "brightness_up", 8, 16, 0, 8, 1.10, channel=1))

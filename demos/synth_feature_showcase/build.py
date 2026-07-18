@@ -77,6 +77,7 @@ def build_outputs(track_number: int | None = None) -> tuple[list[dict], dict, di
                     "ref_start_seconds": None if c.ref_start is None else round(sc.seconds_at(c.ref_start), 2),
                     "ref_end_seconds": None if c.ref_end is None else round(sc.seconds_at(c.ref_end), 2),
                     "threshold": c.threshold,
+                    "channel": c.channel,
                 }
                 for c in sc.audio_checks
             ],

@@ -103,16 +103,18 @@
           "end_seconds": 33.85,
           "ref_start_seconds": 27.69,
           "ref_end_seconds": 30.77,
-          "threshold": 1.08
+          "threshold": 1.08,
+          "channel": null
         },
         {
           "name": "lead bloom",
-          "kind": "hf_up",
+          "kind": "brightness_up",
           "start_seconds": 49.23,
-          "end_seconds": 56.92,
+          "end_seconds": 52.31,
           "ref_start_seconds": 43.08,
-          "ref_end_seconds": 47.69,
-          "threshold": 1.08
+          "ref_end_seconds": 46.15,
+          "threshold": 1.05,
+          "channel": 3
         }
       ]
     },
@@ -211,13 +213,14 @@
       ],
       "audio_checks": [
         {
-          "name": "soft pedal opens",
-          "kind": "hf_up",
-          "start_seconds": 14.4,
-          "end_seconds": 20.8,
+          "name": "soft-piano dynamic rise",
+          "kind": "rms_up",
+          "start_seconds": 6.4,
+          "end_seconds": 8.0,
           "ref_start_seconds": 1.6,
-          "ref_end_seconds": 8.0,
-          "threshold": 1.05
+          "ref_end_seconds": 3.2,
+          "threshold": 1.08,
+          "channel": 0
         },
         {
           "name": "cathedral mixture",
@@ -226,7 +229,8 @@
           "end_seconds": 66.4,
           "ref_start_seconds": 54.4,
           "ref_end_seconds": 58.4,
-          "threshold": 1.05
+          "threshold": 1.05,
+          "channel": null
         }
       ]
     },
@@ -339,12 +343,13 @@
       "audio_checks": [
         {
           "name": "brass breath",
-          "kind": "rms_up",
+          "kind": "brightness_up",
           "start_seconds": 2.86,
-          "end_seconds": 7.14,
+          "end_seconds": 5.71,
           "ref_start_seconds": 0.0,
           "ref_end_seconds": 2.86,
-          "threshold": 1.05
+          "threshold": 1.1,
+          "channel": 1
         }
       ]
     },
@@ -440,16 +445,18 @@
           "end_seconds": 48.0,
           "ref_start_seconds": 36.0,
           "ref_end_seconds": 39.0,
-          "threshold": 0.97
+          "threshold": 0.97,
+          "channel": 1
         },
         {
           "name": "pad sweep",
           "kind": "hf_up",
-          "start_seconds": 84.0,
-          "end_seconds": 88.5,
+          "start_seconds": 73.5,
+          "end_seconds": 75.0,
           "ref_start_seconds": 72.0,
-          "ref_end_seconds": 76.5,
-          "threshold": 1.03
+          "ref_end_seconds": 73.5,
+          "threshold": 1.02,
+          "channel": 2
         }
       ]
     },
@@ -584,16 +591,18 @@
           "end_seconds": 102.86,
           "ref_start_seconds": 93.51,
           "ref_end_seconds": 96.62,
-          "threshold": 1.05
+          "threshold": 1.05,
+          "channel": null
         },
         {
           "name": "shanai pressure",
           "kind": "rms_up",
           "start_seconds": 138.7,
-          "end_seconds": 144.94,
-          "ref_start_seconds": 127.79,
-          "ref_end_seconds": 132.47,
-          "threshold": 1.05
+          "end_seconds": 140.26,
+          "ref_start_seconds": 137.14,
+          "ref_end_seconds": 138.7,
+          "threshold": 1.02,
+          "channel": 5
         }
       ]
     }

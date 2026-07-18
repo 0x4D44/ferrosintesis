@@ -58,5 +58,5 @@ def build(sc: en.Score) -> None:
     feature(sc, "pad filter resonance", 2, 192, 320, pad_programs, min_notes=80, ccs={10: (50, 78), 71: (0, 120), 74: (35, 118)})
     feature(sc, "orchestra hit", 3, 32, 370, {55}, min_notes=8, ccs={94: (18, 90)})
     feature(sc, "synth fx sustain", 4, 288, 368, fx_programs, min_notes=140, ccs={10: (30, 98), 94: (18, 100)})
-    sc.audio_check(en.AudioCheck("vowel shifts", "hf_down", 112, 128, 96, 104, 0.97))
-    sc.audio_check(en.AudioCheck("pad sweep", "hf_up", 224, 236, 192, 204, 1.03))
+    sc.audio_check(en.AudioCheck("vowel shifts", "hf_down", 112, 128, 96, 104, 0.97, channel=1))
+    sc.audio_check(en.AudioCheck("pad sweep", "hf_up", 196, 200, 192, 196, 1.02, channel=2))

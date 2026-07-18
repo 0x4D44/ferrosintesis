@@ -104,6 +104,7 @@ class AudioCheck:
     ref_start: float | None = None
     ref_end: float | None = None
     threshold: float = 1.0
+    channel: int | None = None
 
 
 @dataclass

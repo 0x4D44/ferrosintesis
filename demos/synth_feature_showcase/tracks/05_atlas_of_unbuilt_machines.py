@@ -87,4 +87,4 @@ def build(sc: en.Score) -> None:
     feature(sc, "sfx fallback", 4, 256, 320, set(range(120, 128)), min_notes=8, ccs={10: (24, 102), 94: (18, 84)})
     feature(sc, "bagpipe shanai placeholders", 5, 328, 376, {109, 111}, min_notes=60, ccs={1: (0, 116), 11: (40, 118), 68: (0, 127)}, aftertouch=(0, 100))
     sc.audio_check(en.AudioCheck("noise impact", "hf_up", 256, 264, 240, 248, 1.05))
-    sc.audio_check(en.AudioCheck("shanai pressure", "rms_up", 356, 372, 328, 340, 1.05))
+    sc.audio_check(en.AudioCheck("shanai pressure", "rms_up", 356, 360, 352, 356, 1.02, channel=5))

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00005 — Viola (GM 41) shares the violin sampled onset; 40 and 41 are near-identical for the first ~380 ms
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-18, `9d34950`)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-18, `9d34950`) → Closed (2026-07-18, independently verified by OpenAI Codex on `55c829e`)
 
 ## Observation
 
@@ -85,6 +85,22 @@ solo-violin onset:
 
 Shipped code → one version bump owed at integration. Second-eyes verification pending
 before `Closed` (two-eyes rule).
+
+### Independent closure verification (2026-07-18, OpenAI Codex)
+
+- Re-ran the original shared-onset observation on trunk build `55c829e`:
+  `onset_tier_classification_is_stable` confirms GM 40/41 no longer share an onset,
+  and the Passport matrix now scores the pair `Full 0.4801`.
+- Re-ran `every_gm_family_sounds_free_of_unexpected_clones`; the full 128-program
+  anti-clone matrix passes with GM 40/41 judged on the full metric.
+- Confirmed the regression's red side at pre-fix `28f30c2`: GM 41 still routed to
+  `violin_bank(vel)`, and the measured shared-onset oracle still contained `(40,41)`.
+  Applying the fixed expectation to that build therefore reports GM 40/41 as the
+  unexpected shared-onset pair; the focused classification test passes after routing
+  GM 41 to its dedicated viola bank.
+- The independent workspace gate on the same build passed: `cargo test --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`.
+  The original onset clone is gone and no residual gap was found.
 
 ## Notes
 

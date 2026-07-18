@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00007 — Sample playback (LA layer, drums, gong) pitch-shifts with 2-point linear interpolation: up-pitch aliasing and treble loss
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-18, `25ebc13`)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-18, `25ebc13`) → Closed (2026-07-18, independently verified by OpenAI Codex on `55c829e`)
 
 ## Observation
 
@@ -43,7 +43,7 @@ Fixed in `25ebc13` (branch `task/20260718-TSK-HUM-ferrosintesis-cubic-sample-int
 The KS loop's 4-point cubic-Lagrange kernel was factored into a shared
 `dsp::cubic4(pm1, p0, p1, p2, fr)`, and `DelayLine::tap_cubic` refactored onto it
 (bit-exact — the weight mapping was verified and the existing
-`cubic_tap_retains_treble_ring` oracle still passes). All six fractional sample
+`cubic_tap_retains_treble_ring` oracle still passes). All seven fractional sample
 reads now route through `cubic4` instead of 2-point linear:
 
 - `LoopVoice::render` (bagpipe drone) — **modulo-wrapped** neighbours `(j+n−1)%n …
@@ -77,6 +77,22 @@ sample layer. Cubic-Lagrange on the central interval is passive (|H| ≤ 1).
 
 Shipped code → one version bump owed at integration (not applied on the branch).
 Second-eyes verification pending before `Closed` (two-eyes rule).
+
+### Independent closure verification (2026-07-18, OpenAI Codex)
+
+- Re-ran `dsp::tests::cubic4_is_exact_and_beats_linear_on_treble` on trunk build
+  `55c829e`; the shared cubic kernel remains grid/cubic exact and clears the >1.04×
+  high-frequency-energy differential over linear interpolation.
+- Confirmed the original observation at pre-fix `9adbd1b`: all seven fractional
+  sample reads used two-point linear interpolation (the existing summary said six,
+  but its own enumeration contains seven: loop, LA main, two LA side reads, drum,
+  gong, and clavinet). The fixed tree routes all seven through `dsp::cubic4`.
+- The regression is genuinely red for the old implementation: substituting its
+  linear expression for the cubic side makes the test's energy ratio exactly 1.0,
+  below the required 1.04. The focused differential test passes with the fix.
+- The independent workspace gate on the same build passed: `cargo test --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`.
+  No unconverted sample reader or residual gap was found.
 
 ## Notes
 

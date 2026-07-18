@@ -346,14 +346,28 @@ impl DelayLine {
         let i = d.floor() as usize;
         let fr = d - i as f32;
         let at = |k: usize| self.buf[(self.idx + self.buf.len() - k) & self.mask];
-        let (p0, p1, p2, p3) = (at(i - 1), at(i), at(i + 1), at(i + 2));
-        // Lagrange weights on nodes {-1, 0, 1, 2} evaluated at fr ∈ [0, 1)
-        let w0 = -fr * (fr - 1.0) * (fr - 2.0) / 6.0;
-        let w1 = (fr + 1.0) * (fr - 1.0) * (fr - 2.0) / 2.0;
-        let w2 = -(fr + 1.0) * fr * (fr - 2.0) / 2.0;
-        let w3 = (fr + 1.0) * fr * (fr - 1.0) / 6.0;
-        w0 * p0 + w1 * p1 + w2 * p2 + w3 * p3
+        // point lies between at(i) and at(i+1) in delay-space; stencil {-1,0,1,2}
+        cubic4(at(i - 1), at(i), at(i + 1), at(i + 2), fr)
     }
+}
+
+/// 4-point cubic-Lagrange interpolation on the stencil {-1, 0, 1, 2}, evaluated
+/// at fractional offset `fr ∈ [0, 1)` measured from `p0` toward `p1` — the value
+/// at `fr` on the cubic through (`pm1`, `p0`, `p1`, `p2`).
+///
+/// The kernel behind [`DelayLine::tap_cubic`], and the read used by the sampler's
+/// fractional sample players (LA layer, drums, gong, clavinet, looped drone) in
+/// place of 2-point linear interpolation: linear both dulls the treble and folds
+/// interpolation images back as aliasing when a sample is pitched up (step > 1),
+/// which is exactly what the LA layer does across its zone splits (up to step
+/// 2.0). Lagrange evaluated on the central interval is passive (|H| ≤ 1).
+#[inline]
+pub fn cubic4(pm1: f32, p0: f32, p1: f32, p2: f32, fr: f32) -> f32 {
+    let w_m1 = -fr * (fr - 1.0) * (fr - 2.0) / 6.0;
+    let w_0 = (fr + 1.0) * (fr - 1.0) * (fr - 2.0) / 2.0;
+    let w_1 = -(fr + 1.0) * fr * (fr - 2.0) / 2.0;
+    let w_2 = (fr + 1.0) * fr * (fr - 1.0) / 6.0;
+    w_m1 * pm1 + w_0 * p0 + w_1 * p1 + w_2 * p2
 }
 
 /// A slow random pitch walk — the drift of a human player. `next()` is meant
@@ -763,6 +777,59 @@ mod tests {
             dl.push(i as f32);
         }
         assert!((dl.tap_cubic(3.0) - dl.tap(3.0)).abs() < 1e-4);
+    }
+
+    /// K1 extended to the sampler: the same 4-point cubic kernel that feeds the
+    /// KS loop now reads the sampler's fractional sample positions (LA layer,
+    /// drums, gong, clavinet, looped drone). It must (a) pass exactly through
+    /// the sample grid and reproduce a cubic exactly, and (b) retain the
+    /// high-frequency energy that 2-point linear interpolation eats when a
+    /// sample is read at a fractional, pitched-up step — the read step reaches
+    /// 2.0 across the LA zone splits, where linear both dulls treble and aliases.
+    #[test]
+    fn cubic4_is_exact_and_beats_linear_on_treble() {
+        // (a) exact on the grid: fr = 0 -> p0, fr = 1 -> p1
+        assert!((cubic4(3.0, 7.0, 11.0, 19.0, 0.0) - 7.0).abs() < 1e-6);
+        assert!((cubic4(3.0, 7.0, 11.0, 19.0, 1.0) - 11.0).abs() < 1e-6);
+        // exact reconstruction of a cubic on nodes {-1, 0, 1, 2}
+        let g = |x: f32| x * x * x - 2.0 * x + 1.0;
+        for &fr in &[0.1f32, 0.37, 0.5, 0.83] {
+            let got = cubic4(g(-1.0), g(0.0), g(1.0), g(2.0), fr);
+            assert!(
+                (got - g(fr)).abs() < 1e-4,
+                "cubic reconstruction fr={fr}: {got} vs {}",
+                g(fr)
+            );
+        }
+        // (b) resample a near-Nyquist tone at a fractional pitch-up step; cubic
+        // keeps more energy than linear, whose fractional read lowpasses/aliases.
+        let sr = 44100.0;
+        let n = 4096usize;
+        let src: Vec<f32> = (0..n)
+            .map(|k| (std::f32::consts::TAU * 9000.0 * k as f32 / sr).sin())
+            .collect();
+        let read = |cubic: bool| {
+            let step = 1.4993f32; // dense fractional coverage, pitched up
+            let mut pos = 1.0f32;
+            let mut acc = 0.0f64;
+            while (pos as usize) + 2 < n {
+                let j = pos as usize;
+                let fr = pos - j as f32;
+                let s = if cubic {
+                    cubic4(src[j - 1], src[j], src[j + 1], src[j + 2], fr)
+                } else {
+                    src[j] + (src[j + 1] - src[j]) * fr
+                };
+                acc += (s as f64) * (s as f64);
+                pos += step;
+            }
+            acc.sqrt()
+        };
+        let (c, l) = (read(true), read(false));
+        assert!(
+            c > 1.04 * l,
+            "cubic {c} vs linear {l} (cubic should retain more treble)"
+        );
     }
 
     /// Oracle 4a: a duty-0.5 `BlepPulse` is a band-limited square — its even

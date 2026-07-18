@@ -1347,12 +1347,18 @@ impl Voice for LoopVoice {
             let e = self.env.next();
             let j = self.pos as usize;
             let frac = self.pos - j as f32;
-            let a = self.data[j];
-            // WRAPPED neighbour — load-bearing: a one-shot player's `data[j+1]`
-            // would read out of bounds / a wrong sample at the seam and click
-            // once per loop.
-            let b = self.data[(j + 1) % n];
-            *o += (a + (b - a) * frac) * self.gain * e;
+            // WRAPPED 4-point cubic neighbours — load-bearing: a one-shot
+            // player's `data[j±k]` would read out of bounds / a wrong sample at
+            // the loop seam and click once per loop. Cubic (not linear) keeps the
+            // drone's treble when the pipe is repitched off its zone root.
+            let v = crate::dsp::cubic4(
+                self.data[(j + n - 1) % n],
+                self.data[j],
+                self.data[(j + 1) % n],
+                self.data[(j + 2) % n],
+                frac,
+            );
+            *o += v * self.gain * e;
             self.pos += self.step;
             if self.pos >= n as f32 {
                 self.pos -= n as f32;
@@ -1599,7 +1605,16 @@ impl Voice for LaVoice {
             if t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
                 sample_live = true;
                 let frac = self.pos - j as f32;
-                let mut v = self.zone.data[j] * (1.0 - frac) + self.zone.data[j + 1] * frac;
+                // 4-point cubic read (edge-clamped): linear interpolation dulls
+                // the treble and aliases the sampled attack when the zone is
+                // pitched up (step up to ~2.0 across the zone splits).
+                let mut v = crate::dsp::cubic4(
+                    self.zone.data[j.saturating_sub(1)],
+                    self.zone.data[j],
+                    self.zone.data[j + 1],
+                    self.zone.data[(j + 2).min(n - 1)],
+                    frac,
+                );
                 if let Some((ra, rb, mix)) = self.fx.detune {
                     // round-3 U3: two detuned reads of the SAME data — the
                     // continuously-diverging phase beats at f0·(1−ra) etc.,
@@ -1609,13 +1624,25 @@ impl Voice for LaVoice {
                     let k = self.pos2 as usize;
                     if k + 1 < n {
                         let fr = self.pos2 - k as f32;
-                        side += d[k] * (1.0 - fr) + d[k + 1] * fr;
+                        side += crate::dsp::cubic4(
+                            d[k.saturating_sub(1)],
+                            d[k],
+                            d[k + 1],
+                            d[(k + 2).min(n - 1)],
+                            fr,
+                        );
                     }
                     self.pos2 += self.step * ra;
                     let k = self.pos3 as usize;
                     if k + 1 < n {
                         let fr = self.pos3 - k as f32;
-                        side += d[k] * (1.0 - fr) + d[k + 1] * fr;
+                        side += crate::dsp::cubic4(
+                            d[k.saturating_sub(1)],
+                            d[k],
+                            d[k + 1],
+                            d[(k + 2).min(n - 1)],
+                            fr,
+                        );
                     }
                     self.pos3 += self.step * rb;
                     v += mix * side;
@@ -1999,9 +2026,16 @@ impl Voice for SampledDrum {
                 return false;
             }
             let frac = self.pos - j as f32;
-            let a = self.data[j] as f32;
-            let b = self.data[j + 1] as f32;
-            *o += (a + (b - a) * frac) * (1.0 / 32768.0) * self.gain * self.env;
+            // 4-point cubic read (edge-clamped): the kit samples are repitched
+            // along the tom ladder / hat set, and cubic keeps the transient bright.
+            let v = crate::dsp::cubic4(
+                self.data[j.saturating_sub(1)] as f32,
+                self.data[j] as f32,
+                self.data[j + 1] as f32,
+                self.data[(j + 2).min(n - 1)] as f32,
+                frac,
+            );
+            *o += v * (1.0 / 32768.0) * self.gain * self.env;
             // modeled kick sub (inert for every other drum: sub_amp == 0)
             if self.sub_amp > 1e-6 {
                 *o += self.sub_amp * self.env * self.sub_phase.sin();
@@ -2123,9 +2157,16 @@ impl Voice for GongOneShot {
                 return false;
             }
             let frac = self.pos - j as f32;
-            let a = self.data[j];
-            let b = self.data[j + 1];
-            *o += (a + (b - a) * frac) * self.gain;
+            // 4-point cubic read (edge-clamped): the gong is repitched off its
+            // ~99 Hz root to the written key, so a fractional step is the norm.
+            let v = crate::dsp::cubic4(
+                self.data[j.saturating_sub(1)],
+                self.data[j],
+                self.data[j + 1],
+                self.data[(j + 2).min(n - 1)],
+                frac,
+            );
+            *o += v * self.gain;
             self.pos += self.step;
         }
         true
@@ -2239,9 +2280,16 @@ impl Voice for ClavinetSampled {
                 return false;
             }
             let frac = self.pos - j as f32;
-            let a = self.data[j];
-            let b = self.data[j + 1];
-            *o += (a + (b - a) * frac) * self.gain * self.env;
+            // 4-point cubic read (edge-clamped): the clavinet zone is repitched
+            // to the key (and pitch-bent), so reads land between samples.
+            let v = crate::dsp::cubic4(
+                self.data[j.saturating_sub(1)],
+                self.data[j],
+                self.data[j + 1],
+                self.data[(j + 2).min(n - 1)],
+                frac,
+            );
+            *o += v * self.gain * self.env;
             self.pos += step;
             if self.releasing {
                 self.env *= self.rel_mul;

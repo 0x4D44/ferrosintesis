@@ -3,6 +3,17 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.18 — **A render-diff baseline can be a SILENTLY STALE binary — verify its mtime/version before
+  trusting the diff, or "contamination" is really just the trunk work your baseline predates.** A build
+  wrapped in a wrong `mdtimeout` path (`No such file or directory`) never ran cargo; the follow-on
+  `ls target/release/ferrosintesis.exe && echo READY` found a *previous session's* binary and printed a
+  false "BINARY READY" (exit 0 came from the `ls`, not the build). The stale baseline predated the sax LA
+  layer, so render-diff reported 107 non-GM6 albums as CONTAMINATION for a provably GM6-only change. Fix:
+  before any render-diff, confirm the baseline binary is a FRESH `origin/main` build (throwaway worktree or
+  rebuild the clean main clone) and check its mtime; a clean self-check is `render_diff.py --program X` on a
+  scoped change should show 0 contamination. Same trap poisons audio measurements — a "samples vs --no-samples"
+  probe on a pre-layer binary shows no difference for the wrong reason.
+
 - 2026.07.18 — **Adding an LA sample bank: MEASURE each zone's root before hardcoding — many sources are
   2f-dominant or octave-mislabelled, and a wrong root plays the zone an octave off** (`prepare.py`
   `TWO_F_STRONG` / `_bake_sf_onset`; per-family bank fns in `sampler.rs`).

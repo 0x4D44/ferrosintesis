@@ -3,6 +3,13 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.19 — **render-diff baseline MUST be the commit you rebased ONTO, not a fresh `origin/main`
+  build: in this multi-agent repo local `origin/main` drifts mid-session via concurrent fetch
+  (f58aceb→b308fd1 here, 2 commits, AFTER my rebase), so a baseline built from a newer tip reports the
+  trunk delta as false CONTAMINATION.** Rebase onto the current tip FIRST, then
+  `git worktree add BASELINE origin/main` so baseline == your branch's base; re-check `git rev-parse
+  origin/main` right before building the baseline (`tools/render-diff/render_diff.py`).
+
 - 2026.07.18 — **A composer/generator subagent emitting a big module can die on the per-response 64k
   output-token cap BEFORE any file write — instruct it to write the file in several small Write/Edit
   chunks, never one giant call** (The Remaining T5, ~900-line module; relaunch with the chunk

@@ -2287,6 +2287,11 @@ pub struct LaVoice {
     /// Velocity-brightness one-pole state + coefficient (0.0 = bypass).
     vel_lp: f32,
     vel_lp_a: f32,
+    /// End-of-zone taper length in OUTPUT samples (0.0 = off, the
+    /// non-`wrap_var` default): fades the sample out as the read approaches
+    /// the zone's last frames so a dry-out at any sample rate degrades
+    /// gracefully instead of stepping (review C8).
+    end_taper: f32,
 }
 
 impl LaVoice {
@@ -2367,6 +2372,12 @@ impl LaVoice {
                 la.base_step *= var_mult;
                 la.step = la.base_step;
                 la.start = start;
+                // ~5 ms end taper (review C8): at non-44.1 kHz rates the
+                // source can be consumed faster than the 44.1 k fade budget
+                // assumes (step folds in 44100/sr), so a zone may run dry
+                // mid-fade — taper instead of stepping. Armed only here so
+                // every non-guitar LA path stays bit-identical.
+                la.end_taper = 0.005 * sr;
                 // seat the model at the locked detune; later performance
                 // pitch updates compose var_mult × mult in set_pitch()
                 la.sustain.set_pitch(var_mult);
@@ -2432,6 +2443,7 @@ impl LaVoice {
             start: 0,
             vel_lp: 0.0,
             vel_lp_a,
+            end_taper: 0.0,
         })
     }
 }
@@ -2510,6 +2522,13 @@ impl Voice for LaVoice {
                     // reaches here — vel_lp_alpha returns a hard 0.0)
                     self.vel_lp += (v - self.vel_lp) * self.vel_lp_a;
                     v = self.vel_lp;
+                }
+                if self.end_taper > 0.0 {
+                    // graceful dry-out (review C8): fade as the read nears
+                    // the zone's last frames — exactly 1.0 (bit-transparent)
+                    // while more than a taper-length of source remains
+                    let remaining_out = (n as f32 - 2.0 - self.pos) / self.step.max(1e-6);
+                    v *= (remaining_out / self.end_taper).clamp(0.0, 1.0);
                 }
                 s += v * (1.0 - u) * self.gain * self.rel_gain;
                 self.rel_gain *= self.rel_mul;
@@ -4315,6 +4334,65 @@ mod tests {
         }
     }
 
+    /// Guitar-realism HLD §6 (4b) — static fade budget in the SOURCE domain
+    /// (step folds in 44100/sr, so a rate-relative bound would lie at
+    /// 48/96 kHz): at the default 44.1 kHz, the widened fade may consume at
+    /// most fade_end × 44100 × 2.05 source samples, and every guitar zone
+    /// must hold that much (steel_B5 at 0.706 s is the binding case).
+    #[test]
+    fn guitar_zone_fade_budget() {
+        let (_, fade) = crate::voices::LA_GUITAR;
+        let need = fade.1 * 44100.0 * 2.05;
+        for (bank, name) in [(guitar_bank(), "nylon"), (steel_bank(), "steel")] {
+            for z in bank {
+                assert!(
+                    (z.data.len() as f32) >= need,
+                    "{name} zone (root {:.1} Hz): {} samples < fade budget {:.0}",
+                    z.root,
+                    z.data.len(),
+                    need
+                );
+            }
+        }
+    }
+
+    /// Guitar-realism HLD §6 (4b, review C8) — at a non-44.1 kHz rate the
+    /// source is consumed faster than the 44.1 k budget assumes; the end
+    /// taper must hand over smoothly (same differential seam contract as
+    /// the continuity oracles). Key 100 at 96 kHz drives steel_B5 dry
+    /// mid-fade by construction.
+    #[test]
+    fn guitar_zone_dry_out_tapers_at_high_rate() {
+        let sr = 96000.0;
+        let win = |samples: bool| {
+            let mut v = voices::make(25, 100, 100, sr, 5, samples);
+            let mut buf = vec![0f32; 96000];
+            v.render(&mut buf);
+            let w = (0.05 * sr) as usize;
+            let rms = |a: usize, b: usize| {
+                (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+            };
+            (0..9)
+                .map(|k| rms(w + k * 2 * w, w + (k + 1) * 2 * w))
+                .collect::<Vec<f32>>()
+        };
+        let (w, m) = (win(true), win(false));
+        // Skip the FIRST pair: at key 100 the steel model's near-instant
+        // high-key decay (the documented handover cliff, scratchpad
+        // 2026.07.18) dominates the 50–250 ms windows regardless of the
+        // taper. This oracle owns the DRY-OUT region (~0.26 s on) — the
+        // taper must keep those pairs step-free.
+        for (pw, pm) in w.windows(2).zip(m.windows(2)).skip(1) {
+            let (rw, rm) = (pw[0] / pw[1].max(1e-12), pm[0] / pm[1].max(1e-12));
+            let excess = (rw / rm).max(rm / rw);
+            assert!(
+                excess < 2.4,
+                "steel key 100 @96k: dry-out steps the seam ({excess:.2}x): \
+                 wrapped {w:?} vs model {m:?}"
+            );
+        }
+    }
+
     /// Guitar-realism HLD §4 / AC8 — the variation machinery must not reach
     /// any non-guitar LA path. FNV-1a pin over one wrapped program's exact
     /// PCM (GM 56 trumpet, an LA arm untouched by this block): if this
@@ -4526,6 +4604,12 @@ mod tests {
             (24u8, 45, "nylon-guitar-low", true),
             (24u8, 52, "nylon-guitar", true),
             (24u8, 64, "nylon-guitar-high", true),
+            // steel rows added with the 0.30 s fade widen (HLD §6 4b — the
+            // dry-out case was previously unguarded; key ≥ ~76 excluded for
+            // the pre-existing high-key handover cliff, see scratchpad)
+            (25u8, 45, "steel-guitar-low", true),
+            (25u8, 52, "steel-guitar", true),
+            (25u8, 64, "steel-guitar-high", true),
             (6u8, 48, "harpsichord-low", true),
             (6u8, 60, "harpsichord", true),
             (6u8, 72, "harpsichord-high", true),

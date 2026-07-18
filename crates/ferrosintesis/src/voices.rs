@@ -7941,14 +7941,24 @@ const LA_REED: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
 // real recording (attack → looped recorded sustain, `sampler::SaxLoopVoice`), so there
 // is no `LA_SAX` wrap gain to tune. The modeled reed is the `--no-samples` voice.
 /// GM 24 nylon guitar: the sample owns the pick transient (first ~30 ms),
-/// the Karplus-Strong string carries the bendable decay from 200 ms (HLD §4).
+/// the Karplus-Strong string carries the bendable decay from 300 ms (HLD §4).
 /// Restored to the honest ~0.42 (voice-quality overhaul §2.7): the old 0.25
 /// was cut to pass the blind `la_level_continuity` step cap while the
 /// pre-contract crossfade ran the model's own onset UNDER the sample; with
 /// the onset-ownership contract (sample alone owns the pick, sum-to-one
 /// handover onto the model's decay) the loud pick no longer steps — and the
 /// rewritten attack-is-the-peak leg makes a quiet-pick hack fail instead.
-const LA_GUITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
+/// Fade end 0.20 → 0.28 s (guitar-realism HLD §6 4b): now that the onset
+/// varies per note (item 1), the sample can own more of the committed
+/// 0.9 s takes. 0.28 (not the drafted 0.30) is the HLD's designed fallback:
+/// at 0.30 the steel model's fast high-key decay can't hold the handover at
+/// key 64 (`la_level_continuity` steel-guitar-high read 2.48× vs the 2.4×
+/// differential cap — the documented high-key cliff, scratchpad 2026.07.18).
+/// Budget: consumption is fade_end × 44100 × (f/root) source samples;
+/// 0.28 × 44100 × 2.05 = 25.3 k clears every zone
+/// (`guitar_zone_fade_budget`; the `LaVoice` end-taper covers non-44.1 k
+/// rates gracefully).
+pub(crate) const LA_GUITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.28));
 /// GM 6 harpsichord: the sample owns the quill pluck (first ~30 ms), the
 /// Karplus-Strong string carries the slow-damped jangle from ~200 ms — the same
 /// onset-ownership split as the plucked guitars. Held at 0.28 (below the guitar's

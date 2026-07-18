@@ -1540,6 +1540,18 @@ mod distinctness {
     }
 }
 
+/// The samples-on perceptual oracle is a required gate. A samples-off test run
+/// cannot honestly claim that coverage, so fail loudly instead of compiling the
+/// entire module away without notice (MM-BUG-KILN-00020).
+#[cfg(not(feature = "embedded-samples"))]
+#[test]
+fn perceptual_distinctness_requires_embedded_samples() {
+    panic!(concat!(
+        "perceptual anti-clone coverage requires the default embedded-samples feature; ",
+        "rerun without --no-default-features"
+    ));
+}
+
 /// Round-3 Wave-0 perceptual anti-clone oracle — implements
 /// `wrk_docs/2026.07.16 - HLD - perceptual distinctness oracle.md` (ACCEPTED,
 /// including the §7 two-tier addendum).
@@ -1566,7 +1578,7 @@ mod distinctness {
 /// iterate weights/JNDs to green — that is how green-but-wrong oracles are
 /// born. The sanctioned maximum is ONE documented revision with a physical
 /// diagnosis (§2.4, T2), then the pair is ear-adjudicated (§6).
-#[cfg(all(test, feature = "embedded-samples"))]
+#[cfg(feature = "embedded-samples")]
 mod perceptual_distinctness {
     use super::*;
 

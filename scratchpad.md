@@ -12,7 +12,7 @@
 
 - [ ] 2026.07.19 — **Steel (GM25) high-key wrap-gain LEVEL parity: the peak-normalized
   recorded take speaks ~4× (12 dB) above the now-ringing model at key 76, at EVERY
-  velocity (measured 3.6–4.0× seam excess, `probe_k76_seam_excess`,
+  velocity (measured 3.6–4.0× seam excess 2026.07.19 via a since-removed temp probe,
   `crates/ferrosintesis/src/sampler.rs`).** The decay cliff is fixed; what remains is a
   calibrated per-key wrap-gain taper for the guitar LA layer (sample gain should track
   the model's spoken level vs key, like item-1's velocity law did per velocity). Nylon

@@ -333,6 +333,8 @@ def _rake_offsets(n: int, sweep_span: float, rake: float) -> list[float]:
     per-string gap instead). Concave for rake>1: gaps SHRINK toward the
     sweep's end — strings bunch late, like a real pick sweep. rake=1 is the
     linear sweep (identical to `strum` with spread = sweep_span/(n-1))."""
+    if rake <= 0:
+        raise ValueError(f"rake must be positive, got {rake}")
     d = max(n - 1, 1)
     return [sweep_span * (1.0 - (1.0 - i / d) ** rake) for i in range(n)]
 
@@ -348,14 +350,14 @@ def strum_seq(sc: Score, ch: int, chord: list[int], t0: float,
     note-offs align (`note_dur_i = dur - offset_i`)."""
     offs = _rake_offsets(len(chord), sweep_span, rake)
     for beat, dur, direction, dv in strokes:
-        if direction == 'U':
-            order = list(reversed(chord))
-            v0 = vel + dv + vel_up
+        if direction == 'D':
+            order, v0 = chord, vel + dv
+        elif direction == 'U':
+            order, v0 = list(reversed(chord)), vel + dv + vel_up
+        elif direction == 'x':
+            order, v0 = chord, vel + dv - 25
         else:
-            order = chord
-            v0 = vel + dv
-        if direction == 'x':
-            v0 -= 25
+            raise ValueError(f"stroke dir must be 'D', 'U' or 'x', got {direction!r}")
         for i, p in enumerate(order):
             d = 0.06 if direction == 'x' else dur - offs[i]
             sc.note(ch, p, t0 + beat + offs[i], d, v0 - i, jt=3, jv=4)
@@ -387,20 +389,18 @@ def voicing(root: int, quality: str = "maj",
     one-note-per-string mapping. shape=None auto-picks the form with the
     lowest bass note. Returns low->high MIDI pitches (4-6 strings)."""
     root %= 12
-    forms = _GTR_SHAPES[quality]
-    candidates: list[tuple[int, list[int]]] = []  # (bass midi, pitches)
-    for name, open_pc, frets in forms:
+    candidates: list[list[int]] = []
+    for name, open_pc, frets in _GTR_SHAPES[quality]:
         barre = (root - open_pc) % 12
         if shape is not None and name != shape:
             continue
         if barre != 0 and name not in _GTR_BARRE_SHAPES:
             continue
-        pitches = [s + f + barre for s, f in zip(_GTR_STRINGS, frets)
-                   if f >= 0]
-        candidates.append((pitches[0], pitches))
+        candidates.append([s + f + barre for s, f in zip(_GTR_STRINGS, frets)
+                           if f >= 0])
     if not candidates:
         raise ValueError(f"no {quality} shape {shape!r} for root {root}")
-    return min(candidates)[1]
+    return min(candidates, key=lambda ps: ps[0])
 
 
 def arp(sc: Score, ch: int, pitches: list[int], t0: float, count: int,

@@ -4310,7 +4310,8 @@ mod tests {
         let sr = 44100.0;
         // Key-76 nylon rows ADDED by guitar block two: the treble_hold_hz
         // damper hold fixed the high-key over-damp cliff that had excluded
-        // them from the start. Scoping measured (probe_k76_seam_excess):
+        // them from the start. Scoping measured 2026.07.19 (via a since-removed
+        // temp probe over assert_wrap_seam's exact windows):
         // nylon k76 = 1.72×/1.61× at vel 72/100 (in contract) but 3.22× at
         // vel 40 — the DOCUMENTED vel-40 limit (the corner scales with the
         // velocity law), so the k76 row runs at vel 72 only. STEEL k76 is
@@ -4653,41 +4654,6 @@ mod tests {
             );
         }
         fine
-    }
-
-    /// Diagnostic (--ignored): print the worst wrap-seam excess per
-    /// candidate high-key row — the measurement behind guitar block two's
-    /// k76 row scoping.
-    #[test]
-    #[ignore]
-    fn probe_k76_seam_excess() {
-        let sr = 44100.0;
-        for (program, key) in [(24u8, 76u8), (25, 76)] {
-            for vel in [40u8, 72, 100] {
-                let win = |samples: bool| {
-                    let mut v = voices::make(program, key, vel, sr, 5, samples);
-                    let mut buf = vec![0f32; sr as usize];
-                    v.render(&mut buf);
-                    let w = (0.05 * sr) as usize;
-                    let rms = |a: usize, b: usize| {
-                        (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
-                    };
-                    (0..9)
-                        .map(|k| rms(w + k * 2 * w, w + (k + 1) * 2 * w))
-                        .collect::<Vec<f32>>()
-                };
-                let (wv, m) = (win(true), win(false));
-                let worst = wv
-                    .windows(2)
-                    .zip(m.windows(2))
-                    .map(|(pw, pm)| {
-                        let (rw, rm) = (pw[0] / pw[1].max(1e-12), pm[0] / pm[1].max(1e-12));
-                        (rw / rm).max(rm / rw)
-                    })
-                    .fold(0f32, f32::max);
-                println!("prog {program} key {key} vel {vel}: worst excess {worst:.2}x");
-            }
-        }
     }
 
     /// Companion leg for struck/plucked rows of [`assert_wrap_seam`].

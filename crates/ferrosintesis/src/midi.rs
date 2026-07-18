@@ -53,6 +53,19 @@ pub enum EvKind {
     /// Roland-GS Reset (SysEx `40 00 7F`): revert part modes to default — clears
     /// every GS-declared rhythm part (channel 10 stays drums by the ch==9 rule).
     GsReset,
+    /// XG System On (`F0 43 1n 4C 00 00 7E 00`) or GM System On (universal
+    /// `F0 7E .. 09 01`): reset the XG effect state (reverb/chorus/variation
+    /// insert) to engine defaults. Voices/timing are untouched.
+    XgReset,
+    /// An XG Effect1-block parameter change (`F0 43 1n 4C 02 01 <lo> <data…>`).
+    /// `addr_lo` is the Effect1 offset (e.g. 0x00 reverb type, 0x40 variation
+    /// type); `data` holds the 1-2 7-bit data bytes (`len`). The engine holds
+    /// all XG-effect semantics — the parser just forwards the raw parameter.
+    XgEffectParam {
+        addr_lo: u8,
+        data: [u8; 2],
+        len: u8,
+    },
 }
 
 /// GS "block number" (the low nibble of the `0x1n` part-address byte) → 0-based
@@ -227,6 +240,43 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                         // GS Reset — revert part modes to default.
                         raw.push((tick, seq, EvKind::GsReset));
                         seq += 1;
+                    } else if payload.len() >= 4
+                        && payload[0] == 0x7E // universal non-realtime
+                        && payload[2] == 0x09 // General MIDI
+                        && payload[3] == 0x01
+                    {
+                        // GM System On — reset XG effect state to defaults.
+                        raw.push((tick, seq, EvKind::XgReset));
+                        seq += 1;
+                    } else if payload.len() >= 4
+                        && payload[0] == 0x43 // Yamaha
+                        && (payload[1] & 0xF0) == 0x10 // parameter change, device 1n
+                        && payload[2] == 0x4C
+                    {
+                        // XG parameter change (model ID 0x4C).
+                        if payload.len() >= 7
+                            && payload[3] == 0x00
+                            && payload[4] == 0x00
+                            && payload[5] == 0x7E
+                        {
+                            // XG System On.
+                            raw.push((tick, seq, EvKind::XgReset));
+                            seq += 1;
+                        } else if payload.len() >= 8 && payload[3] == 0x02 && payload[4] == 0x01 {
+                            // Effect1 block: `02 01 <lo> <d0> [d1]` (F7 terminator last).
+                            let addr_lo = payload[5];
+                            let mut end = payload.len();
+                            if end > 6 && payload[end - 1] == 0xF7 {
+                                end -= 1; // drop the SysEx terminator
+                            }
+                            let d = &payload[6..end];
+                            if !d.is_empty() {
+                                let len = d.len().min(2) as u8;
+                                let data = [d[0], if len >= 2 { d[1] } else { 0 }];
+                                raw.push((tick, seq, EvKind::XgEffectParam { addr_lo, data, len }));
+                                seq += 1;
+                            }
+                        }
                     }
                 }
                 _ => {
@@ -516,6 +566,71 @@ mod tests {
             e
         };
         assert!(parse(&file_from_track(&trunc)).unwrap().events.is_empty());
+    }
+
+    /// Wrap a raw SysEx payload (the bytes after F0, ending in F7) as a delta-0
+    /// track event.
+    fn sysex_event(payload: &[u8]) -> Vec<u8> {
+        let mut ev = vec![0x00, 0xF0, payload.len() as u8];
+        ev.extend(payload);
+        ev
+    }
+
+    /// XG effect-block parameter changes decode to `XgEffectParam` with the right
+    /// offset, data and length; XG/GM System On decode to `XgReset`; non-effect
+    /// XG addresses and near-misses are ignored (byte-identity rests on this).
+    #[test]
+    fn xg_effect_sysex_decodes() {
+        // Variation Type (02 01 40 = 4B 11) → 2-byte param at offset 0x40.
+        let var = sysex_event(&[0x43, 0x10, 0x4C, 0x02, 0x01, 0x40, 0x4B, 0x11, 0xF7]);
+        assert!(
+            matches!(
+                parse(&file_from_track(&var)).unwrap().events[0].kind,
+                EvKind::XgEffectParam {
+                    addr_lo: 0x40,
+                    data: [0x4B, 0x11],
+                    len: 2
+                }
+            ),
+            "{:?}",
+            parse(&file_from_track(&var)).unwrap().events[0].kind
+        );
+
+        // Variation Connection (02 01 5A = 00) → 1-byte param at offset 0x5A.
+        let conn = sysex_event(&[0x43, 0x10, 0x4C, 0x02, 0x01, 0x5A, 0x00, 0xF7]);
+        assert!(matches!(
+            parse(&file_from_track(&conn)).unwrap().events[0].kind,
+            EvKind::XgEffectParam {
+                addr_lo: 0x5A,
+                data: [0x00, _],
+                len: 1
+            }
+        ));
+
+        // XG System On (00 00 7E 00) → XgReset.
+        let xg_on = sysex_event(&[0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7]);
+        assert!(matches!(
+            parse(&file_from_track(&xg_on)).unwrap().events[0].kind,
+            EvKind::XgReset
+        ));
+
+        // GM System On (universal 7E 7F 09 01) → XgReset.
+        let gm_on = sysex_event(&[0x7E, 0x7F, 0x09, 0x01, 0xF7]);
+        assert!(matches!(
+            parse(&file_from_track(&gm_on)).unwrap().events[0].kind,
+            EvKind::XgReset
+        ));
+
+        // A non-effect XG address (System block 00 00 04 = master volume) → ignored.
+        let sysblk = sysex_event(&[0x43, 0x10, 0x4C, 0x00, 0x00, 0x04, 0x7F, 0xF7]);
+        assert!(parse(&file_from_track(&sysblk)).unwrap().events.is_empty());
+
+        // Wrong Yamaha model ID (0x4B not 0x4C) → ignored.
+        let badmodel = sysex_event(&[0x43, 0x10, 0x4B, 0x02, 0x01, 0x40, 0x4B, 0x11, 0xF7]);
+        assert!(parse(&file_from_track(&badmodel))
+            .unwrap()
+            .events
+            .is_empty());
     }
 
     /// A pitch-bend message decodes to the right signed semitone value.

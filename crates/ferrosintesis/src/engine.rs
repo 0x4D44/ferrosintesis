@@ -1525,6 +1525,11 @@ impl EngineCore {
                     s.gs_drum = false;
                 }
             }
+            // XG effect SysEx (reverb/chorus type, variation Amp-Sim insertion).
+            // Unit 1: parsed but inert (no-op) — the engine handling lands in the
+            // following units. Inert here keeps every no-XG render bit-identical.
+            EvKind::XgReset => {}
+            EvKind::XgEffectParam { .. } => {}
         }
     }
 

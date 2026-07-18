@@ -1,5 +1,62 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+<!-- 2026.07.18: the 10 items below are the low-value tail of the ferrosintesis
+     subsystem audit; the meaningful findings were raised as MM-BUG-KILN-00005..00022.
+     Parked here (not ledgered) per Arthur's "meaningful items; park trivia" call. -->
+
+- [ ] 2026.07.18 — **Closed vs pedal hi-hat are identical in the MODELED path, and the
+  pedal hat carries a stick click it should not have.** Keys 42|44 share one `CymSpec`
+  with `click: Some(...)` (`crates/ferrosintesis/src/drums.rs:~1661`). The sampled path
+  distinguishes them (`HH_CLOSED` vs `HH_PEDAL`, `sampler.rs:~1942`), so this only bites
+  `--no-samples`. Give 44 its own shorter/darker spec with the click removed.
+
+- [ ] 2026.07.18 — **Ride bell (key 53) skipped the MetalPlate upgrade in the modeled
+  path.** It is a fixed 6-mode inharmonic `d()` stack (`drums.rs:~1828`) while 49/51/52/
+  55/57/59 route to `metal_plate`; the sampled `RIDE_BELL` has only 3 round robins. A busy
+  bell ostinato is the most likely cymbal to sound mechanical. Modeled-path-only + niche.
+
+- [ ] 2026.07.18 — **Blown bottle (GM 76) still reads over-noisy vs a clean Helmholtz
+  tone** (tonal 0.68 vs SC-55 1.00; roadmap Open Question 1). Round-1 made noise the
+  primary source; the walk-back was never shipped, and its LA layer is a single C6 zone
+  (`~1 octave` credible). Unused in committed albums → nil blast radius, hence parked.
+
+- [ ] 2026.07.18 — **Cathedral reverb send skips the 150 Hz send high-pass and is boosted
+  1.30×.** `send_cathedral` goes straight to `cathedral.process` (`engine.rs:~2446`) with
+  no `rev_hp` (contrast the hall send) at `CATHEDRAL_WET_SCALE=1.30`, so sub-150 Hz feeds
+  the long FDN tail at +2.3 dB — possible LF mud. Scoped to GM19 CC0=2 organ, so contained.
+
+- [ ] 2026.07.18 — **BusGlue compression keys off the raw pre-normalization internal
+  level.** `BusGlue thr=0.32` detects on raw level (`engine.rs:~676`) and runs *before*
+  `normalize_loudness`, so two albums both landing at −18 LUFS can receive different glue
+  (a hidden program-level dependence in the master character). Effect small ("a dB or
+  two"); making it loudness-relative would re-voice every album, so treat as deliberate.
+
+- [ ] 2026.07.18 — **Rotating-phasor `Sine` is never renormalized** (`dsp.rs:~50`, 2-D
+  rotation, no periodic 1/|z| rescale), so float error slowly drifts amplitude (and
+  marginally frequency) on long held tones from the additive banks (pads/organ). Cheap
+  occasional rescale would fix it. Very low audible impact.
+
+- [ ] 2026.07.18 — **No denormal (FTZ/DAZ) protection in recursive filters / reverb
+  feedback.** `Biquad::process` (`dsp.rs:~519`), Comb/Allpass and CathedralLine states can
+  enter denormal range as tails decay → per-sample CPU stalls on x86 (offline-render
+  performance only, not an audio defect). Set MXCSR FTZ for the render, or add a tiny DC.
+
+- [ ] 2026.07.18 — **`embedded_wav()` resolves by bare filename across 8 crates,
+  first-match-wins, with no collision guard** (`sampler.rs:~49`, sequential `.or_else`
+  chain keyed only on `name`). Harmless today (prefixes distinct) but a future generic
+  name (`flute_A4.wav`) could silently shadow. Add a build-time global-uniqueness assert.
+
+- [ ] 2026.07.18 — **Two shipped drumkit banks are unreachable dead payload:**
+  `CRASH_SIZZLE` and `SNARE_OFF` exist in the drumkit crate but no GM key maps to them
+  (`sampler.rs:~2313` comment; absent from `sampled_drum` dispatch). Compiled-in but never
+  selectable — GM has no dedicated key for either. Drop or wire behind a CC0 alt-bank.
+
+- [ ] 2026.07.18 — **Asset-crate/doc count drift.** `ferrosintesis-samples-orchestral`
+  README says "embeds 147" but `FILE_COUNT=157`; drumkit README says "109 … WAVs" but
+  `FILE_COUNT=188`. And `DESIGN.md:~99` still calls GM 120–127 toneless SFX-noise while
+  `README.md:~109` correctly documents 121–127 as dedicated modeled voices. Fold into the
+  next docs-curation sweep (code constants are the truth).
+
 - [ ] 2026.07.17 — **`tools/ferrosintesis-samples/README.md` inventory is stale on GM25
   steel.** The `nylon_*` bullet still says "GM 25 (steel) stays pure model: no clean CC0
   steel-string source yet" — but steel got a CC0 Martin HD28 LA bank on 2026.07.16

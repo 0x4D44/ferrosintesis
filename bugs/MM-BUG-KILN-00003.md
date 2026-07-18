@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00003 — Wind voice internal vibrato runs at 1/16 speed (labelled 5 Hz renders at ~0.31 Hz)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-11, raised by Claude Opus 4.8) → Fixed (2026-07-12, `48a7e71`, verified 2026-07-13 by Claude Opus 4.8)
+- **State history:** Open (2026-07-11, raised by Claude Opus 4.8) → Fixed (2026-07-12, `48a7e71`, verified 2026-07-13 by Claude Opus 4.8) → Closed (2026-07-18, independently verified by OpenAI Codex on `55c829e`)
 
 ## Observation
 
@@ -99,6 +99,20 @@ attributed to Claude Opus 4.8, the same model as this verifier; independence res
 on the objective green regression oracle and on Codex's independent engagement
 with the same code (`65a7a7e`). Ready to move to **Closed** on that basis, or after
 a cross-model sign-off if strict actor-independence is preferred.
+
+### Independent closure verification (2026-07-18, OpenAI Codex)
+
+- Re-ran the original pipe-vibrato observation on trunk build `55c829e` through
+  `voices::tests::wd_o7_builtin_vibrato_rate_is_about_5hz`: flute measured 4.75 Hz
+  and shakuhachi 4.25 Hz, replacing the recorded ~0.31 Hz drift.
+- Confirmed the regression's red side against pre-fix `85680d7`: `Wind` built the
+  LFO at full `sr` while advancing at `CTRL = 16`, so a nominal 5 Hz becomes exactly
+  0.3125 Hz, outside the oracle's 4.3–5.7 Hz band. The focused WD-O7 regression and
+  `control_lfo_advances_at_the_requested_rate` both pass with the fix.
+- The independent workspace gate on the same build passed: `cargo test --workspace`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`.
+  The root cause is corrected at the shared control-rate LFO constructor; no residual
+  gap was found.
 
 ## Notes
 

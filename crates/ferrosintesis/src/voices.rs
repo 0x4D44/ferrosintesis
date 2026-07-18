@@ -1610,6 +1610,10 @@ const WOODBLOCK: &[(f32, f32, f32)] = &[(1.00, 1.00, 0.16), (2.65, 0.30, 0.07), 
 
 const TAIKO_MODES: &[(f32, f32, f32)] =
     &[(1.00, 1.00, 0.80), (1.59, 0.44, 0.52), (2.14, 0.24, 0.34)];
+// Gran cassa (orchestral bass drum): dominated by a long, deep fundamental with
+// only a faint, quickly-fading second mode — far darker and longer than the
+// taiko's ringing upper modes (the taiko keeps a third mode this drum lacks).
+const GRAN_CASSA_MODES: &[(f32, f32, f32)] = &[(1.00, 1.00, 1.40), (1.59, 0.10, 0.50)];
 const TOM_MODES: &[(f32, f32, f32)] = &[(1.00, 1.00, 0.40), (1.59, 0.90, 0.30), (2.14, 0.62, 0.22)];
 const SYNTH_DRUM_MODES: &[(f32, f32, f32)] = &[(1.00, 1.00, 0.26), (2.00, 0.03, 0.10)];
 
@@ -1764,6 +1768,26 @@ fn taiko_drum(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         2.8,
         0.105,
         0.10,
+    )
+}
+
+/// Gran cassa — the orchestral bass drum (XG variation of Taiko 116, LSB 96). A
+/// big, deep, soft-mallet boom: lower and darker than the taiko (a soft
+/// low-passed strike and a fundamental-dominated mode set) with a much longer
+/// roll-off and a gentler pitch drop.
+fn gran_cassa(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+    membrane_drum(
+        key,
+        vel,
+        sr,
+        seed,
+        GRAN_CASSA_MODES,
+        (0.45, 0.060, Biquad::lowpass(120.0, 0.8, sr)),
+        8.5, // long orchestral bass-drum sustain (taiko is 6.0)
+        0.78,
+        1.0, // gentle pitch drop, no taiko-like sweep (taiko is 2.8)
+        0.130,
+        0.08,
     )
 }
 
@@ -10771,6 +10795,8 @@ pub fn make_variation(
         (24, 96) => Box::new(Pluck::new(&UKULELE, key, vel, sr, seed)),
         // Oud — warm double-course fretless lute (Banjo 105, LSB 98).
         (105, 98) => Box::new(Pluck::new(&OUD, key, vel, sr, seed)),
+        // Gran Cassa — orchestral bass drum (Taiko 116, LSB 96).
+        (116, 96) => Box::new(gran_cassa(key, vel, sr, seed)),
         _ => return None,
     };
     Some(voice)
@@ -14920,6 +14946,59 @@ mod tests {
                 "oud should be warmer (darker) than nylon at seed {seed}: cent {} vs {}",
                 centroid(&oud),
                 centroid(&nylon)
+            );
+        }
+    }
+
+    /// Unit 4 (XG variation): the Gran Cassa (Taiko 116, bank LSB 96) is the
+    /// orchestral bass drum — model-vs-model it must be DARKER (lower spectral
+    /// centroid) and RING LONGER (larger t60) than the base taiko, per the HLD
+    /// acceptance table. Also pins the dispatch.
+    #[test]
+    fn gran_cassa_variation_is_darker_and_longer_than_taiko() {
+        let sr = 44100.0;
+        assert!(
+            make_variation(116, 96, 45, 100, sr, 7, false).is_some(),
+            "(116, 96) must dispatch the Gran Cassa variation"
+        );
+        assert!(
+            make_variation(116, 113, 45, 100, sr, 7, false).is_none(),
+            "an undefined bank (113) must fall back to base GM (None)"
+        );
+
+        let render_modal = |mut m: Modal| {
+            let mut buf = vec![0f32; (3.5 * sr) as usize];
+            m.render(&mut buf);
+            buf
+        };
+        let key = 45u8;
+        let f = key_freq(key);
+        let lo = (0.005 * sr) as usize;
+        let hi = (0.300 * sr) as usize;
+        // Both drums are bass-dominated, so a log-binned centroid barely
+        // separates them. The timbral difference lives in the upper-mode band
+        // (2f..6f): the taiko keeps a ringing third mode and a brighter strike
+        // there, while the gran cassa is a near-pure fundamental. Measure that
+        // band relative to the fundamental so drum-gain differences cancel.
+        let band =
+            |s: &[f32], a: f32, b: f32| crate::testutil::spectral_band_rms(&s[lo..hi], sr, a, b);
+        let upper_ratio =
+            |s: &[f32]| band(s, 2.0 * f, 6.0 * f) / band(s, 0.6 * f, 1.4 * f).max(1e-9);
+        let t60 = |s: &[f32]| crate::testutil::t60_of(&s[lo..], sr);
+        for seed in [0x6510u32, 0x76A1, 0x1250] {
+            let cassa = render_modal(gran_cassa(key, 100, sr, seed));
+            let taiko = render_modal(taiko_drum(key, 100, sr, seed));
+            assert!(
+                upper_ratio(&cassa) < 0.60 * upper_ratio(&taiko),
+                "gran cassa should be darker (weaker upper-mode band) than taiko at seed {seed}: {} vs {}",
+                upper_ratio(&cassa),
+                upper_ratio(&taiko)
+            );
+            assert!(
+                t60(&cassa) > 1.15 * t60(&taiko),
+                "gran cassa should ring longer than taiko at seed {seed}: t60 {} vs {}",
+                t60(&cassa),
+                t60(&taiko)
             );
         }
     }

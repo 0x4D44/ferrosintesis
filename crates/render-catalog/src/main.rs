@@ -135,6 +135,12 @@ const ALBUMS: &[(&str, &str, &str, &str)] = &[
         "Progressive Rock / Instrumental",
     ),
     (
+        "albums/fable5/The Remaining",
+        "The Remaining",
+        "Claude Fable 5",
+        "Neo-Classical / Cinematic",
+    ),
+    (
         "albums/gpt5-3-spark",
         "The Spark",
         "GPT-5.3 Spark",

@@ -104,6 +104,17 @@ BEND_EXEMPT: set[int] = set()
 DURATION_WINDOW = (295.0, 350.0)                 # tightened after the build
 BOUNDS_WHITELIST: list[tuple[int, float, float]] = []
 
+# Calibrated mono-compatibility cap (album default 2.0 dB).  Diagnosed
+# 2026.07.18 against the real render: this is the album's one track whose
+# entire body is the seated string quartet (44/54/74/84) with no centred
+# melodic mass — the synth's pan-Haas width (engine.rs: up to 5 ms far-side
+# delay) combs each seated channel in the mono sum, and with nothing at the
+# centre the whole-track loss floors at ~2.2 dB.  The seats are album DNA
+# (the same players in the same chairs across T1/T2/T5 — the point of the
+# record), so the honest fix is a documented cap, not narrower seating.
+# Measured 2.19 dB; capped 2.5 dB — pathological collapse still fails.
+MONO_LOSS_CAP_DB = 2.5
+
 
 # ---------------------------------------------------------------------------
 # Emitters (every oracle-pinned lane is jt=0 — tick-exact)

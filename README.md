@@ -29,9 +29,9 @@ true-peak ceiling and carries R128 replay-gain tags.
 ## The music
 
 ### Claude Fable 5 — `albums/fable5/`
-Twelve albums voiced for **ferrosintesis** (this repo's synth) — spanning idioms from Mike
-Oldfield long-form to Jean-Michel Jarre, Enigma, Gabriel Knight and film score. These
-are the albums the synth is specifically tuned for.
+Fourteen albums voiced for **ferrosintesis** (this repo's synth) — spanning idioms from
+Mike Oldfield long-form to Jean-Michel Jarre, Enigma, Gabriel Knight, film score and
+Max Richter neo-classical. These are the albums the synth is specifically tuned for.
 
 - **Hollow Hill** — *Mike Oldfield*, 26:29 · 2 parts. A two-part epic on a 13/8
   additive ostinato in E dorian that returns across both parts and is recast major for
@@ -66,6 +66,17 @@ are the albums the synth is specifically tuned for.
   double album of ideas and spectacles: model lineage, evolution, memory, weather,
   AquaTheater pageants, action, night jazz, bronze, a medley suite, and the
   build-and-drop centrepiece “Three-Sixty.”
+- **Big Weather** — *rock-pop / instrumental*, 41:38 · 10 tracks. Builds and drops as
+  weather fronts: a band of guitars, singing bass, keys and wordless choir, with an
+  orchestra gated in by machine-checked entry beats as each song builds.
+- **Slipstream** — *progressive rock / instrumental*, 46:17 · 10 tracks. An air display
+  in ten acts — the open-sky sister of “Three-Sixty-One” — two guitars flying a
+  different verified formation on every track, with three pinned quotes of the
+  original.
+- **The Remaining** — *Max Richter / The Leftovers*, 27:12 · 5 tracks. Five elegies for
+  piano, strings, choir and quiet electronics: a departure interrupts a violin phrase
+  mid-note, the piano ostinato loses two quavers, and the finale completes the phrase
+  verbatim and lands the album's single withheld tonic in D major.
 
 ### Claude Opus 4.8 — `albums/opus4-8/`
 - **VIGIL** — *Max Richter / Philip Glass / Howard Shore*, 53:12 · 12 parts. A

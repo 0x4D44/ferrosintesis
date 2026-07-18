@@ -3,6 +3,11 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.18 — **A composer/generator subagent emitting a big module can die on the per-response 64k
+  output-token cap BEFORE any file write — instruct it to write the file in several small Write/Edit
+  chunks, never one giant call** (The Remaining T5, ~900-line module; relaunch with the chunk
+  instruction went first-pass green; worktree was left clean both times, so just relaunch).
+
 - 2026.07.18 — **Class-identity oracle: range-assert the perceptual Passport's OWN fields
   (`sustain_db` is THE class axis), NOT the existing voices.rs class-oracle numbers — those use a
   different estimator (mag_at partial-ratios vs flatness/slope), so pasting them as Passport ranges

@@ -1623,6 +1623,30 @@ impl EngineCore {
         }
     }
 
+    /// Bound total polyphony to `cap`, stealing the oldest/quietest voices until
+    /// the count is back at `cap`. Called ONLY from the realtime wrapper
+    /// (`live::RealtimeSynth`), which has an audio-callback deadline a dense
+    /// stream of un-released voices could otherwise blow. The offline path never
+    /// calls this — it has no deadline, so its polyphony stays unbounded and its
+    /// renders bit-identical.
+    ///
+    /// Victim choice: the oldest **released** voice (already decaying, so the
+    /// quietest available proxy — the `Voice` trait exposes no level query),
+    /// else the oldest voice overall (`active` is push-ordered, so index 0 is
+    /// oldest — and the longest-ringing voice is the most decayed). Stealing is
+    /// a hard cut, so it can click under genuine overload; that is the safety
+    /// valve's cost versus xruns/dropouts.
+    pub(crate) fn enforce_voice_cap(&mut self, cap: usize) {
+        while self.active.len() > cap {
+            let victim = self
+                .active
+                .iter()
+                .position(|a| a.voice.released())
+                .unwrap_or(0);
+            self.active.remove(victim);
+        }
+    }
+
     pub(crate) fn handle_event(&mut self, kind: EvKind) {
         match kind {
             // --solo: muted channels keep their CCs but lose their notes
@@ -8049,6 +8073,54 @@ mod tests {
             .iter()
             .filter(|a| a.ch == ch && needs_drive(a.program) && !a.voice.released())
             .count()
+    }
+
+    /// MM-BUG-KILN-00013: the realtime voice cap (`enforce_voice_cap`) must never
+    /// touch the offline path — it has no deadline, so it keeps unbounded
+    /// polyphony and its goldens stay bit-identical. Spawn far more distinct
+    /// voices than `live::LIVE_MAX_VOICES` (128) through the shared event path and
+    /// confirm nothing was stolen.
+    #[test]
+    fn offline_polyphony_is_unbounded() {
+        let mut core = dry_core();
+        let mut spawned = 0usize;
+        'outer: for ch in 0u8..9 {
+            for key in 21u8..=108 {
+                core.handle_event(EvKind::NoteOn { ch, key, vel: 80 });
+                spawned += 1;
+                if spawned >= 300 {
+                    break 'outer;
+                }
+            }
+        }
+        assert_eq!(
+            core.active_voice_count(),
+            spawned,
+            "offline polyphony was capped: {} of {spawned} voices survived",
+            core.active_voice_count()
+        );
+    }
+
+    /// MM-BUG-KILN-00013: the cap steals the RIGHT voices — the oldest first,
+    /// and any released (decaying) voice before an older un-released one — not
+    /// just the right COUNT.
+    #[test]
+    fn enforce_voice_cap_steals_oldest_released_first() {
+        let mut core = dry_core();
+        for key in 60u8..66 {
+            core.handle_event(EvKind::NoteOn { ch: 0, key, vel: 100 });
+        }
+        assert_eq!(core.active_voice_count(), 6);
+        // No voice is released, so the two OLDEST (keys 60, 61) are stolen.
+        core.enforce_voice_cap(4);
+        let keys: Vec<u8> = core.active.iter().map(|a| a.key).collect();
+        assert_eq!(keys, vec![62, 63, 64, 65], "oldest not stolen first: {keys:?}");
+        // Release the NEWEST (65); capping to 3 must steal that released voice
+        // before any older un-released one.
+        core.handle_event(EvKind::NoteOff { ch: 0, key: 65 });
+        core.enforce_voice_cap(3);
+        let keys: Vec<u8> = core.active.iter().map(|a| a.key).collect();
+        assert_eq!(keys, vec![62, 63, 64], "released voice not stolen first: {keys:?}");
     }
 
     #[test]

@@ -6,6 +6,15 @@ use crate::sampler;
 
 const LIVE_BLOCK: usize = 64;
 
+/// Global polyphony ceiling for the realtime path. A dense live stream can stack
+/// hundreds of un-released voices, and rendering them all per block would blow
+/// the audio-callback deadline; capping bounds that worst case. Generous enough
+/// that real playing never hits it (a full ensemble plus pedal tails sits well
+/// under it) while still bounding the pathological case. Tunable — raise for more
+/// headroom, lower to protect a tighter deadline. Offline rendering ignores this
+/// entirely (no deadline → unbounded polyphony).
+const LIVE_MAX_VOICES: usize = 128;
+
 /// How to configure a [`RealtimeSynth`].
 ///
 /// Start from [`RealtimeOptions::default`] and refine with the `with_*` builders. As
@@ -265,6 +274,10 @@ impl RealtimeSynth {
                 LiveCommand::Reset(_) => self.core.hard_reset(),
             }
         }
+        // Bound polyphony before the (deadline-bearing) block render — this is
+        // the ONLY caller of enforce_voice_cap, so offline stays unbounded and
+        // bit-identical (MM-BUG-KILN-00013).
+        self.core.enforce_voice_cap(LIVE_MAX_VOICES);
         self.ring.fill(0.0);
         self.core.render_block_add(LIVE_BLOCK, &mut self.ring);
         for x in &mut self.ring {
@@ -517,6 +530,51 @@ mod tests {
             samples: false,
             master_gain: 1.0,
         }
+    }
+
+    /// Spawn `n` distinct (channel, key) melodic voices with no note-offs, then
+    /// render one block so the pending note-ons are applied. Distinct pairs (and
+    /// skipping the drum channel 9) keep every note a fresh voice rather than a
+    /// same-key retrigger. Returns the live voice count after the block.
+    fn spawn_voices_and_render(synth: &mut RealtimeSynth, n: usize) -> usize {
+        let mut spawned = 0usize;
+        'outer: for ch in 0u8..9 {
+            for key in 21u8..=108 {
+                synth.write_byte(0x90 | ch);
+                synth.write_byte(key);
+                synth.write_byte(80);
+                spawned += 1;
+                if spawned >= n {
+                    break 'outer;
+                }
+            }
+        }
+        let mut out = vec![0f32; LIVE_BLOCK * 2];
+        synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+        synth.active_voice_count()
+    }
+
+    /// MM-BUG-KILN-00013: the realtime path caps total polyphony. A stream that
+    /// stacks far more un-released voices than the cap must be stolen back down
+    /// to `LIVE_MAX_VOICES`, not left unbounded to blow the callback deadline.
+    #[test]
+    fn live_polyphony_is_capped() {
+        let mut synth = RealtimeSynth::new(opts());
+        let count = spawn_voices_and_render(&mut synth, LIVE_MAX_VOICES + 40);
+        assert_eq!(
+            count, LIVE_MAX_VOICES,
+            "live polyphony not capped at {LIVE_MAX_VOICES}: got {count}"
+        );
+    }
+
+    /// The cap must not fire spuriously: a normal voice count well under the
+    /// ceiling keeps every voice.
+    #[test]
+    fn live_under_cap_steals_nothing() {
+        let mut synth = RealtimeSynth::new(opts());
+        let n = 40;
+        let count = spawn_voices_and_render(&mut synth, n);
+        assert_eq!(count, n, "voices stolen below the cap");
     }
 
     fn assert_send<T: Send>() {}

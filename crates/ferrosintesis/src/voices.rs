@@ -2930,10 +2930,12 @@ pub const SLAP_POP: PluckPreset = PluckPreset {
 pub const PICK: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "PICK",
-    exc_model: ExcModel::Shaped, // Phase-2 Shaped, picked slope (calibrated Unit C)
-    slope: 1.4,
-    noise_mix: 0.30,
-    exc_trim: -2.23,
+    // Phase-2: DEFERRED to Legacy. PICK's Shaped sustain offset is KEY-dependent
+    // (+5.3 dB low → +0.8 dB high, velocity-flat), so a single exc_trim can't hold
+    // G7 across keys — a projection wrinkle beyond the per-preset-scalar model (the
+    // dark/wound bass's excitation→sustain gain varies with pitch). Needs a
+    // key-aware target; tracked as a follow-up. The other 4 (STEEL/JAZZ/DULCIMER/
+    // PIZZ) calibrate exactly.
     wound_all: true,
     t60: 3.2,
     bright: 2200.0,
@@ -3785,14 +3787,13 @@ fn shaped_excitation(
     for x in &mut exc {
         *x *= scale;
     }
-    // peak guard (§2.4): never let the burst peak exceed 1.6·v
-    let peak = exc.iter().fold(0f32, |m, &x| m.max(x.abs()));
-    if peak > 1.6 * v {
-        let s = 1.6 * v / peak.max(1e-9);
-        for x in &mut exc {
-            *x *= s;
-        }
-    }
+    // NO peak guard. LEVEL is a contract — the sustain-band normalization above is
+    // exact and nothing downstream may rescale the buffer (HLD amendment 2026.07.20,
+    // Fable). A post-normalization rescale is crest-dependent (key/velocity-varying)
+    // and PROVABLY makes exc_trim a no-op when it engages — it was the PICK bug.
+    // Crest/clipping is an ENVELOPE bounded at the render by G2 (crest) + G5 (slew);
+    // if a preset's crest runs high, the lever is deterministic phase dispersion for
+    // k>k_c (magnitude-domain-invariant), never a runtime rescale.
     exc
 }
 

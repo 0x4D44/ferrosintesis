@@ -3602,7 +3602,8 @@ mod pluck_baseline {
     #[test]
     #[ignore]
     fn print_shaped_loudness_offset() {
-        const MIGRATED: [&str; 5] = ["STEEL", "JAZZ", "PICK", "DULCIMER", "PIZZ"];
+        // PICK deferred to Legacy (key-dependent offset, follow-up); 4 migrated.
+        const MIGRATED: [&str; 4] = ["STEEL", "JAZZ", "DULCIMER", "PIZZ"];
         let head = |name: &str, key: u8, vel: u8| -> Option<f32> {
             HEAD_BASELINE
                 .iter()

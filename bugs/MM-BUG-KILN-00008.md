@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00008 — Electric snare (key 40) collapses onto the acoustic snare (key 38) in the default sampled kit
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** drums
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, `d03e33d` — sampled electric snare (key 40) repitched 1.15× on the `SNARE` bank to match the modeled path's `center_mul 1.15`; +2.4 st, brighter/tighter. Regression `sampled_electric_snare_distinct_from_acoustic`: fail-first on bit-identity (both were `kit::SNARE`@1.0) + spectral centroid 2333 vs 2023 Hz. Level parity within 3 dB (`sampled_drum_level_parity`). render-diff over 109 album MIDIs: 4 changed (V3-kit key-40 albums), 0 contamination; 3 brush-kit albums (ch10 prog 40 → brush swirl) correctly unmoved.)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, `d03e33d` — sampled electric snare (key 40) repitched 1.15× on the `SNARE` bank to match the modeled path's `center_mul 1.15`; +2.4 st, brighter/tighter. Regression `sampled_electric_snare_distinct_from_acoustic`: fail-first on bit-identity (both were `kit::SNARE`@1.0) + spectral centroid 2333 vs 2023 Hz. Level parity within 3 dB (`sampled_drum_level_parity`). render-diff over 109 album MIDIs: 4 changed (V3-kit key-40 albums), 0 contamination; 3 brush-kit albums (ch10 prog 40 → brush swirl) correctly unmoved.); Closed (2026-07-19, independent verification by a separate fresh-context agent — two-eyes, the fixer did not self-close. Passes-after: centroid 2333 vs 2023 Hz (electric brighter). Fails-before: reverting `ELECTRIC_SNARE_REPITCH`→1.0 makes key 40 render bit-identical to key 38, so the regression genuinely gates the fix. Fix is in the sampled path (the root cause); key 38 unchanged; key 40 level −0.64 dB (within ±3 dB); clippy `-D warnings` clean. Non-blocking note: the fix comment slightly overstates the `DRUM_LEVEL[40]` role — parity holds naturally from the repitch, no compensation entry was added.)
 
 ## Observation
 

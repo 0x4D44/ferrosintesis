@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00022 — GM2 extended percussion (keys 27–34, 83–87) render as a generic 1 kHz tick
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** drums
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, `055a849` — keys 27–34 and 83–87 aliased to their nearest modeled voices (sticks→side stick, slap→clap, scratch→guiro, clicks→side stick, high-Q/metro-bell→muted triangle, jingle bell→tambourine, belltree→open triangle, castanets→claves) via a key remap applied after the sampled-kit check; surdos 86/87 get a dedicated ~82 Hz membrane (mute damped / open ringing ~85 Hz) since no GM tom sits low enough. Regression `gm2_extended_percussion_not_generic_tick`: each key renders as its nearest voice, never the generic tick; surdos low and mute≠open. render-diff: 0 album renders move (no album sounds these keys).)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-18, `055a849` — keys 27–34 and 83–87 aliased to their nearest modeled voices (sticks→side stick, slap→clap, scratch→guiro, clicks→side stick, high-Q/metro-bell→muted triangle, jingle bell→tambourine, belltree→open triangle, castanets→claves) via a key remap applied after the sampled-kit check; surdos 86/87 get a dedicated ~82 Hz membrane (mute damped / open ringing ~85 Hz) since no GM tom sits low enough. Regression `gm2_extended_percussion_not_generic_tick`: each key renders as its nearest voice, never the generic tick; surdos low and mute≠open. render-diff: 0 album renders move (no album sounds these keys).); Closed (2026-07-19, independent verification by a separate fresh-context agent — two-eyes. Passes-after green; fails-before: neutralizing the GM2 remap (`let key = key;`) fails the test at "key 31 not aliased to 37", so it genuinely gates the fix. Mappings are sane nearest-neighbours and every destination arm exists; surdos 86/87 a genuine ~82 Hz low drum with 86≠87; the change is confined to keys 27–34/83–87 (purely additive — no existing 35–82 arm touched) and the generic `_` tick is intact. clippy `-D warnings` clean, `drums::tests` 68 passed. Non-blocking note: only the open surdo's settled pitch is asserted, not the mute — a cosmetic test-coverage gap, both share the 82 Hz construction.)
 
 ## Observation
 

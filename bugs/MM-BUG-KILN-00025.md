@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00025 — Renderer panics (index out of bounds) on a MIDI note key ≥ 128; the parser never clamps the note-key data byte
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** midi
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 via overnight code-review pass, deep-review workflow); Fixed (2026-07-18, `a0d4995` — SMF NoteOn, NoteOff, and PolyAftertouch key bytes are normalized to seven bits at the parser trust boundary. Regression `malformed_note_keys_render_as_their_seven_bit_values` failed before at `engine.rs:1445` with key 200, then passed for melodic and channel-10 paths; `note_key_data_bytes_are_limited_to_seven_bits` covers all three key-bearing event kinds.)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 via overnight code-review pass, deep-review workflow); Fixed (2026-07-18, `a0d4995` — SMF NoteOn, NoteOff, and PolyAftertouch key bytes are normalized to seven bits at the parser trust boundary. Regression `malformed_note_keys_render_as_their_seven_bit_values` failed before at `engine.rs:1445` with key 200, then passed for melodic and channel-10 paths; `note_key_data_bytes_are_limited_to_seven_bits` covers all three key-bearing event kinds.); Closed (2026-07-19, verified by Claude Opus 4.8 (1M context) - independent two-eyes (fixer Codex GPT-5); crafted key=200 melodic + key=163 drum SMFs render exit-0 on the release binary (was exit-101 panic); note_key regression tests green in the suite; gates green)
 
 ## Observation
 
@@ -100,6 +100,10 @@ malformed melodic and drum renders with their canonical masked-key renders,
 including non-silence and voice-count checks. A parser-level regression separately
 pins all three event kinds. Focused validation:
 `cargo test --locked -p ferrosintesis note_key -- --nocapture` (2 passed).
+
+### Verification summary (Claude Opus 4.8 (1M context), 2026-07-19)
+
+Independent two-eyes on a worktree off origin/main (0cc8e7f, contains fix 00a5d94, rebased from a0d4995; verifier is not the fixer, Codex GPT-5). Reproduced the original observation directly on the fixed release binary: crafted 34-byte format-0 SMFs with a NoteOn key=200 on a melodic channel and key=163 on channel 10 both render with exit 0 to valid non-silent WAVs (1 voice each) - the pre-fix index-out-of-bounds panic (exit 101) at the key_on_at / drum_rr index sites is gone. Both regressions passed in the green `cargo test --workspace` suite: `note_key_data_bytes_are_limited_to_seven_bits` (parser: 200->72 for NoteOn/PolyAftertouch/NoteOff) and `malformed_note_keys_render_as_their_seven_bit_values` (offline render, melodic + channel-10 paths, masked-key equivalence). Gates green.
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00026 — GM42/43 brightness is guarded by the wrong struct: the brightness oracles render `Bowed::new` (CC0 alt-bank), not the shipping `BowedString`, and assert no direction — a recurrence of MM-BUG-KILN-00004's trap
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 via overnight code-review pass, deep-review workflow); Fixed (2026-07-18, c9634f5 — added a directional GM42/43 brightness oracle through the shipping make() route, averaged over three seeds at a shared pitch. The current cello is 8.9% brighter; the historical reversed voicing fails with the contrabass 44% brighter.)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 via overnight code-review pass, deep-review workflow); Fixed (2026-07-18, c9634f5 — added a directional GM42/43 brightness oracle through the shipping make() route, averaged over three seeds at a shared pitch. The current cello is 8.9% brighter; the historical reversed voicing fails with the contrabass 44% brighter.); Closed (2026-07-19, verified by Claude Opus 4.8 (1M context) - independent two-eyes (fixer Codex GPT-5); bowed_string_cello_is_brighter_than_contrabass green via the shipping make()/BowedString route (not Bowed::new alt-bank), directional cello>contrabass x1.05; gates green)
 
 ## Observation
 
@@ -85,6 +85,10 @@ The exact historical brightness parameters were mutation-tested. They fail the
 new oracle at 0.10874 versus 0.15674, reproducing the backwards ordering. The
 current parameters pass, as does the adjacent bowed-string tuning oracle. The
 stale nearby comment now accurately describes both output low-pass filters.
+
+### Verification summary (Claude Opus 4.8 (1M context), 2026-07-19)
+
+Independent two-eyes on a worktree off origin/main (0cc8e7f, contains fix c9634f5; verifier is not the fixer, Codex GPT-5). The regression `bowed_string_cello_is_brighter_than_contrabass` passed in the green `cargo test --workspace` suite. I confirmed by reading the source that it renders GM42/43 through `render_program_sampled` -> `make()` -> the shipping `BowedString` (samples off), NOT the old `Bowed::new` CC0 alt-bank that the pre-fix oracles measured, and that it asserts a DIRECTIONAL cello > contrabass x1.05 brightness (HF>2.2kHz / RMS, 3 seeds). This closes both root-cause gaps in the observation (wrong struct + no direction); the fixer's mutation of the reversed historical voicing fails it (0.109 vs 0.157). Gates green.
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00002 — Showcase audio oracles reject three unchanged tracks
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** testing
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-10, raised by Codex GPT-5); Fixed (2026-07-18, b88d381 — corrected stale cross-program audio windows, added level-normalized brightness checks and a matched-window structural guard, and aligned the RMS arc oracle with the authored third-quarter climax/final-drop contour. The committed MIDI remains byte-identical; all five current renders pass.)
+- **State history:** Open (2026-07-10, raised by Codex GPT-5); Fixed (2026-07-18, b88d381 — corrected stale cross-program audio windows, added level-normalized brightness checks and a matched-window structural guard, and aligned the RMS arc oracle with the authored third-quarter climax/final-drop contour. The committed MIDI remains byte-identical; all five current renders pass.); Closed (2026-07-19, verified by Claude Opus 4.8 (1M context) - independent two-eyes (fixer Codex GPT-5); build.py --verify 37/37, test_analyze.py 4/4, and analyze.py PASS on all 5 released renders - the 4 original analyze.py failures no longer reproduce; repo gates green)
 
 ## Observation
 
@@ -53,6 +53,10 @@ RMS, so a dynamic change cannot hide the audible brightness delta. Structural
 verification rejects any future matched check that crosses a program boundary.
 The RMS arc now requires the authored shape: a distinct third-quarter climax, an
 audible final drop, and at least eight percent overall dynamic span.
+
+### Verification summary (Claude Opus 4.8 (1M context), 2026-07-19)
+
+Independent two-eyes on a worktree off origin/main (0cc8e7f, which contains fix b88d381; verifier is not the fixer, Codex GPT-5). Re-ran the original observation on the fixed oracles: `python build.py --verify` -> 37/37 MIDI-side oracles PASS; `python -m unittest test_analyze.py` -> 4/4 focused regressions PASS; rendered all five committed showcase MIDIs with the release ferrosintesis binary and `python analyze.py build/wav` -> RESULT: PASS on every track, including the four originally-failing checks (01 wah-resonance-bite, 04 vowel-shift HF-drop, 05 dynamic-arc, 05 shanai-pressure). The original 'exactly four failures' observation no longer reproduces. Repo gates green: fmt, clippy -D warnings, cargo test --workspace 548 passed / 0 failed.
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00014 — Acoustic string section (48/49) collapses to a bare detuned-saw ensemble under --no-samples / default-features off
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** voices
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-19, `83be8e8` — added a decaying modeled bow-air catch to GM48/49 while leaving every other SawStack caller inert. The regression failed before at 0.83× early/settled noise for GM48; after the fix GM48 reaches 1.97× and GM49 1.57×. Runtime samples-off and `--no-default-features` tests pass; synth-wide model/perceptual anti-clone and class-identity gates pass. Render diff: all 125 catalog tracks rendered; exactly the 103 MIDIs using GM48/49 changed and 22 unrelated tracks remained byte-identical.)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-19, `83be8e8` — added a decaying modeled bow-air catch to GM48/49 while leaving every other SawStack caller inert. The regression failed before at 0.83× early/settled noise for GM48; after the fix GM48 reaches 1.97× and GM49 1.57×. Runtime samples-off and `--no-default-features` tests pass; synth-wide model/perceptual anti-clone and class-identity gates pass. Render diff: all 125 catalog tracks rendered; exactly the 103 MIDIs using GM48/49 changed and 22 unrelated tracks remained byte-identical.); Closed (2026-07-19, verified by Claude Opus 4.8 (1M context) - independent two-eyes (fixer Codex GPT-5); string_section_model_has_bow_catch_onset green in BOTH the default and --no-default-features runs (early bow-catch noise > 1.5x settled); gates green)
 
 ## Observation
 
@@ -42,6 +42,10 @@ above its sustained air bed. Only `strings()` enables it: GM48 uses a 350 ms T60
 catch and GM49 an 800 ms T60 catch matched to its slower envelope. The transient
 reuses the existing deterministic string-noise stream and defaults to zero, so
 pads, leads, choir alternatives, and synth strings remain unchanged.
+
+### Verification summary (Claude Opus 4.8 (1M context), 2026-07-19)
+
+Independent two-eyes on a worktree off origin/main (0cc8e7f, contains fix 83be8e8; verifier is not the fixer, Codex GPT-5). The regression `string_section_model_has_bow_catch_onset` renders GM48/49 through the shipping `make()` with samples OFF and asserts an early bow-catch noise ratio > 1.5x the settled sustain. It passed in the green default `cargo test --workspace` suite AND in the `cargo test -p ferrosintesis --no-default-features` run - so the samples-off collapse to a bare detuned-saw ensemble (fixer's 0.83x fail-first for GM48) no longer reproduces. Gates green.
 
 ## Notes
 

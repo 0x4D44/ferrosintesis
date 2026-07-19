@@ -445,3 +445,14 @@
   a MALFORMED file using running status straight after a meta/sysex would misparse (treat
   data as another meta). Cheap hardening if ever wanted: `status = 0;` in the 0xFF and
   0xF0|0xF7 arms. Flagged by the GS external review; left out of the GS task's scope.
+
+- [ ] 2026.07.19 — **Three samples-off tests are not `cfg`-gated to `embedded-samples`,
+  so `cargo test -p ferrosintesis --no-default-features` reports them as failures**
+  (positive sample-engagement controls that hard-code `samples=true`):
+  `gm0_grand_and_gm1_upright_are_distinct_instruments` (`crates/ferrosintesis/src/voices.rs:14185`),
+  `keyboard_voices_programs_4_7_do_not_use_acoustic_piano_voice` (`voices.rs:13092`),
+  `wd_o10_routing_sample_policy_and_lifecycle` (`voices.rs:21290`). Spotted during the
+  MM-BUG-KILN verify-close pass. May be *intended* (MM-BUG-KILN-00020 establishes that
+  samples-off is a deliberately-not-green config that should fail loudly) — triage
+  whether to `#[cfg_attr(not(feature="embedded-samples"), ignore)]` these three so the
+  only samples-off failure is 00020's guard, or leave them as extra loud signal.

@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "ferrosintesis"
-version = "0.21.38"
+version = "0.21.39"
 dependencies = [
  "ferrosintesis-samples-clavinet",
  "ferrosintesis-samples-core",

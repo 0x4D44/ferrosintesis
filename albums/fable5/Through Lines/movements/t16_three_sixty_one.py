@@ -451,7 +451,7 @@ PART = conductor.Part(
         (CH_HARP, "harp / cascade", 46, 98, 64, 45),
         (CH_AERIAL, "aerial strings", 49, 90, 64, 60),
         (CH_CHOIR, "choir", 52, 92, 64, 55),
-        (CH_KIT, "kit v2", 0, 100, 64, 25),
+        (CH_KIT, "kit - synth", 0, 100, 64, 25),
         (CH_TOMS, "melodic toms", 117, 100, 64, 30),
         (CH_SYNDRUM, "synth drum", 118, 98, 64, 30),
         (CH_HIT, "orchestra hit", 55, 100, 64, 40),
@@ -461,7 +461,13 @@ PART = conductor.Part(
     ],
     bank_selects=[(0, 1), (10, 1), (11, 1), (13, 1),    # steel/toms/synth-drum/riser: set B
                   (14, 1)],   # -One: opt the lead guitar into the sustaining DRIVE_LEAD voice
-    program_changes=[(CH_KIT, 0.0, 1)],     # non-zero kit program (V3 default)
+    # ch-10 Program Change 24 (GM2 Electronic slot) selects ferrosintesis's
+    # modeled "synth kit": the V3 drum voices with the realistic sampled
+    # drum-kit replacement switched OFF.  The steel-drum album's simpler synth
+    # kit sat better here than the sampled kit; the melodic LA sample layers
+    # (steel drums, saw lead, choir, guitar) are unaffected — they are not
+    # gated by the kit selection.  See wrk_docs 2026.07.19 synth-kit note.
+    program_changes=[(CH_KIT, 0.0, 24)],
 )
 
 # -- verification config (consumed by verify.run_track) ---------------------

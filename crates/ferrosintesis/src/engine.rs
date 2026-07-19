@@ -2239,14 +2239,17 @@ impl EngineCore {
         s.program = prog;
         // Drums use the best current kit by default. GM/GM2 Program Changes on
         // channel 10 are retained as authored metadata, not a compatibility
-        // downgrade path — with one GM2 exception (v0.12): program 40 EXACTLY
-        // is the GM2 brush kit; any other program keeps selecting V3 (the
-        // committed showcase demo authors prog 8 and must stay V3).
+        // downgrade path — with two GM2 exceptions: program 40 EXACTLY is the
+        // GM2 brush kit (v0.12), and program 24 EXACTLY (the GM2 Electronic
+        // slot, v0.18) selects the modeled "synth kit" — V3 voices with the
+        // sampled drum-kit replacement layer off. Any other program keeps
+        // selecting V3 (the committed showcase demo authors prog 8 and must
+        // stay V3).
         if ch == 9 {
-            s.kit = if prog == 40 {
-                drums::Kit::Brush
-            } else {
-                drums::Kit::V3
+            s.kit = match prog {
+                40 => drums::Kit::Brush,
+                24 => drums::Kit::Synth,
+                _ => drums::Kit::V3,
             };
         }
         let (cho, del) = if ch == 9 {
@@ -3612,6 +3615,35 @@ mod tests {
                 "channel-10 Program Change {prog} changed the V3 kit"
             );
         }
+    }
+
+    /// Channel-10 Program Change 24 (the GM2 Electronic slot) selects the
+    /// modeled "synth kit": with samples ON it must NOT take the realistic
+    /// sampled drum kit the default V3 does, and it must render exactly as the
+    /// samples-OFF modeled path (the synth kit is inert to the global samples
+    /// flag). This is the seam Three-Sixty-One rides back onto the synth drums.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn channel_10_program_24_selects_the_synth_kit() {
+        let sr = 44100.0;
+        let sampled = Options {
+            samples: true,
+            ..test_opts(sr)
+        };
+        // Samples ON: the default V3 kit plays the realistic sampled kit...
+        let default_kit = render(&drum_prog_song(None), &sampled).0;
+        // ...but PC 24 switches to the modeled synth kit, which must differ.
+        let synth = render(&drum_prog_song(Some(24)), &sampled).0;
+        assert_ne!(
+            synth, default_kit,
+            "channel-10 PC 24 did not switch off the sampled kit"
+        );
+        // The synth kit ignores the samples flag — identical to samples-off.
+        let modeled = render(&drum_prog_song(Some(24)), &test_opts(sr)).0;
+        assert_eq!(
+            synth, modeled,
+            "synth kit differs from the samples-off modeled path"
+        );
     }
 
     /// XG drum-kit bank routing (CC0=127). Yamaha XG declares a drum kit on ANY

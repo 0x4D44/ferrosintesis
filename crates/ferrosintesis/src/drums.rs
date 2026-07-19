@@ -13,7 +13,12 @@ use std::f32::consts::TAU;
 /// differential tests. `V3` is the shipped default kit. `Brush` (v0.12)
 /// engages ONLY on a ch-10 Program Change of exactly 40 (the GM2 brush kit):
 /// seven brush voices (tap/slap/swirl/hats/rim/kick), every other key
-/// falling through to the V3 arms.
+/// falling through to the V3 arms. `Synth` (v0.18) is the V3 modeled voicing
+/// with the sampled drum-kit replacement layer switched OFF — "the synth kit" —
+/// selected by a ch-10 Program Change of exactly 24 (the GM2 Electronic slot).
+/// It voices identically to `V3` with `samples = false`; only the whole-mix
+/// sample-replacement is suppressed (melodic LA sample layers are unaffected,
+/// they are not gated by `Kit`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kit {
     // V1/V2 are constructed only by the differential tests: the lib-side kit
@@ -26,6 +31,7 @@ pub enum Kit {
     V2,
     V3,
     Brush,
+    Synth,
 }
 
 struct Tone {
@@ -968,7 +974,9 @@ fn crash_spec(
     // arms ever call this; if one ever reached here the v2 build is correct.
     let v2_kit = match kit {
         Kit::V1 => false,
-        Kit::V2 | Kit::V3 | Kit::Brush => true,
+        // Synth is collapsed to V3 in `make` before any crash arm runs; the arm
+        // is here for exhaustiveness and is correct if ever reached.
+        Kit::V2 | Kit::V3 | Kit::Brush | Kit::Synth => true,
     };
     let (t60_first, t60_last) = if v2_kit { t60_v2 } else { t60_v1 };
     // v2 inverts the decay order (shorter tonal t60 + longer, quieter wash).
@@ -1431,6 +1439,14 @@ pub fn make(
     rr: u8,
 ) -> Option<Box<dyn Voice>> {
     let samples = samples && crate::embedded_samples_available();
+    // `Kit::Synth` (ch-10 Program Change 24) is the modeled "synth kit": the V3
+    // voicing with the sampled drum-kit replacement layer switched OFF. Realize
+    // it as V3 voicing with `samples` forced off — so `samples && V3` below never
+    // fires and every modeled arm is shared with V3, byte-identical to
+    // `make(.., Kit::V3, samples = false, ..)`. Order matters: read `Kit::Synth`
+    // to clear `samples` BEFORE collapsing the kit to V3.
+    let samples = samples && kit != Kit::Synth;
+    let kit = if kit == Kit::Synth { Kit::V3 } else { kit };
     // `kit` selects the legacy test kits or the shipped V3 default. Only
     // V3/Brush get the sampled drum kit, and only when the caller's sample
     // flag is enabled.
@@ -1464,7 +1480,9 @@ pub fn make(
                     membrane_velocity(&tom_tones(start, t60, TOM_GLIDE_V2), noise, velnorm);
                 Drum::new(sr, seed, &tones, &nb, life, g * v).with_glide_floor(1.0 / TOM_OVERSHOOT)
             }
-            Kit::V3 | Kit::Brush => {
+            // Synth is collapsed to V3 in `make` before this closure runs; the
+            // arm is grouped with V3 for exhaustiveness (correct if reached).
+            Kit::V3 | Kit::Brush | Kit::Synth => {
                 // The richer 6-mode air-loaded ladder (P-T1). P-T2: append an HF
                 // ATTACK CLOUD (the unresolved high modes — a broadband HP wash)
                 // and a sharp STICK CLICK above the mid stick burst, the "snap" a
@@ -1630,8 +1648,9 @@ pub fn make(
             // as before, and the wires become a head-coupled `WireRes` cluster.
             // (Kit::Brush is unreachable here — brush 38 is intercepted by the
             // brush key map above and 40 is the swirl; the arm exists only for
-            // match exhaustiveness.)
-            Kit::V2 | Kit::V3 | Kit::Brush => {
+            // match exhaustiveness.)  Synth is collapsed to V3 in `make` before
+            // this arm runs; it is grouped with V3 (correct if ever reached).
+            Kit::V2 | Kit::V3 | Kit::Brush | Kit::Synth => {
                 // P-S4: V3/Brush re-seat the head onto Bessel ratios (richer,
                 // physical); V2 keeps SNARE_TONES byte-identical.
                 let head: &[(f32, f32, f32, f32)] = if matches!(kit, Kit::V2) {
@@ -2749,6 +2768,39 @@ mod tests {
             assert!(
                 delta_db.abs() <= 6.0,
                 "sampled kit level jump for key {key}: {delta_db:+.2} dB"
+            );
+        }
+    }
+
+    /// `Kit::Synth` (ch-10 PC 24) is the modeled "synth kit": it voices EXACTLY
+    /// like V3 with `samples = false`, and — unlike V3 — never takes the sampled
+    /// drum-kit replacement even when the caller enables samples. That is what
+    /// lets an album (Three-Sixty-One) put its drums back on the synth kit while
+    /// keeping every melodic LA sample layer (those are not gated by `Kit`).
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn synth_kit_is_modeled_v3_never_sampled() {
+        // Every key Three-Sixty-One's ch-10 kit plays — sampled and modeled alike.
+        for key in [36u8, 38, 39, 42, 46, 49, 54] {
+            let synth_on = render_drum_kit_samples(key, 110, 0.7, Kit::Synth, true);
+            let synth_off = render_drum_kit_samples(key, 110, 0.7, Kit::Synth, false);
+            let v3_modeled = render_drum_kit_samples(key, 110, 0.7, Kit::V3, false);
+            // The samples flag is inert for the synth kit...
+            assert_eq!(
+                synth_on, synth_off,
+                "synth kit key {key} reacted to the samples flag"
+            );
+            // ...and it is byte-identical to the modeled V3 voice.
+            assert_eq!(synth_on, v3_modeled, "synth kit key {key} != modeled V3");
+        }
+        // For the keys the sampled kit actually replaces (kick/snare/hats/crash),
+        // the synth kit must differ from V3-with-samples — proof it opted out.
+        for key in [36u8, 38, 42, 46, 49] {
+            let synth = render_drum_kit_samples(key, 110, 0.7, Kit::Synth, true);
+            let v3_sampled = render_drum_kit_samples(key, 110, 0.7, Kit::V3, true);
+            assert_ne!(
+                synth, v3_sampled,
+                "synth kit key {key} still took the sampled replacement"
             );
         }
     }

@@ -404,7 +404,7 @@ PART = conductor.Part(
     ],
     bank_selects=[(CH_TOMS, 1), (CH_SYN, 1), (CH_RISER, 1),
                   (CH_LEAD, 1), (CH_WING, 1)],
-    program_changes=[(CH_KIT, 0.0, 1)],
+    program_changes=[(CH_KIT, 0.0, 25)],   # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
 )
 
 # -- verification config (consumed by verify.run_track) ---------------------

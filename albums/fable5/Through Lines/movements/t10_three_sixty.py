@@ -246,7 +246,7 @@ PART = conductor.Part(
         (CH_RISER, "riser - reverse cymbal", 119, 88, 64, 55),
     ],
     bank_selects=[(0, 1), (10, 1), (11, 1), (13, 1)],   # steel/toms/synth-drum/riser: set B
-    program_changes=[(CH_KIT, 0.0, 1)],     # non-zero kit program (V3 default)
+    program_changes=[(CH_KIT, 0.0, 25)],   # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
 )
 
 # -- verification config (consumed by verify.run_track) ---------------------

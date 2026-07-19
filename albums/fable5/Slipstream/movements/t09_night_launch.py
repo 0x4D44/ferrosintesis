@@ -105,7 +105,7 @@ PART = conductor.Part(
         (LEAD, "lead ship", 29, 118, 64, 20),
         (WING, "wing ship", 30, 110, 64, 22),
     ],
-    program_changes=[(9, 0.0, 1),              # the V3 kit
+    program_changes=[(9, 0.0, 25),   # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
                      (A0, SL0, 9),             # ch0 -> glockenspiel (searchlight)
                      (A0, 374.0, 80)],         # ch0 back to square
     bank_selects=[(10, 1), (11, 1), (13, 1), (14, 1)],

@@ -94,7 +94,7 @@ PART = conductor.Part(
         (14, "lead ship", 29, 118, 64, 20),
         (15, "wing ship", 29, 112, 64, 22),
     ],
-    program_changes=[(9, 0.0, 1)],            # the V3 kit
+    program_changes=[(9, 0.0, 25)],   # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
     bank_selects=[(10, 1), (11, 1), (13, 1), (14, 1), (15, 1)],
 )
 

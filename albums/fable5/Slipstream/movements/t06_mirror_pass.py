@@ -93,7 +93,7 @@ PART = conductor.Part(
         (14, "lead ship", 29, 118, 64, 20),
         (15, "wing ship", 29, 112, 64, 26),
     ],
-    program_changes=[(9, 0.0, 1)],              # the V3 kit
+    program_changes=[(9, 0.0, 25)],   # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
     extra_markers=[
         (44.0, "lead ship in"),
         (46.0, "wing ship - inverted, two beats behind"),

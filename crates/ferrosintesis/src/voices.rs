@@ -7650,7 +7650,7 @@ impl BowedString {
     fn new(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let f = key_freq(key);
         let mut rng = Rng::new(seed);
-        let beta = 0.127; // bow ~1/8 from the bridge (arco bass idiom)
+        let beta = 0.140; // near 1/7; 0.127 mode-locked keys 46–50 onto a higher mode
                           // Register-dependent voicing: the cello (42) sits ~an octave above the
                           // contrabass (43), so its body resonances and string brightness are
                           // higher and its output a touch lighter. Same waveguide, retuned.
@@ -21611,13 +21611,13 @@ mod tests {
             // bowed strings
             hc(40, 69, (0.6, 1.8), 30.0),
             hc(41, 60, (0.6, 1.8), 30.0),
-            // 42/43 keys avoid 46–50: the BowedString waveguide mode-locks
-            // onto ~3·f0 there (a wolf band, both programs — found by the
-            // measure_bowedstring_loop_latency sweep, logged in scratchpad.md;
-            // fixing the waveguide's mode stability is outside this slice)
+            // BowedString's former 46–50 wolf band has a dedicated all-seed
+            // regression; keep one of those notes in the shared pitch inventory.
+            hc(42, 48, (0.8, 2.4), 30.0),
             hc(42, 52, (0.8, 2.4), 30.0),
             hc(42, 69, (0.8, 2.4), 30.0),
             hc(43, 36, (0.8, 2.8), 30.0),
+            hc(43, 48, (0.8, 2.4), 30.0),
             hc(43, 60, (0.8, 2.4), 30.0), // B4: −29 cents before the fix
             hc(43, 67, (0.8, 2.4), 30.0), // B4: −43 cents before the fix
             hc(44, 69, (0.6, 1.8), 30.0),
@@ -22000,10 +22000,8 @@ mod tests {
     #[ignore = "measurement harness, not a gate — HLD §2.4"]
     fn measure_bowedstring_loop_latency() {
         let sr = 44100.0;
-        // Keys 46–50 are included deliberately: the sweep that produced the
-        // loop_comp values also found the waveguide mode-locking onto ~3·f0
-        // there (a wolf band, both programs — implied L goes wild instead of
-        // sitting at ≈ 4.0). Logged in scratchpad.md; out of this task's scope.
+        // Keep the former 46–50 wolf band in this diagnostic so future tuning
+        // measurements cover the nonlinear mode-stability seam.
         for program in [42u8, 43] {
             for key in [36u8, 43, 45, 46, 47, 48, 49, 50, 51, 52, 55, 60, 67] {
                 let f0 = key_freq(key);
@@ -22025,6 +22023,33 @@ mod tests {
                         "GM{program} key {key} seed {seed}: T {t:.3} (ideal {:.3}) \
                          cents {cents:+.1} implied L {l:.3}",
                         sr / f0
+                    );
+                }
+            }
+        }
+    }
+
+    /// MM-BUG-KILN-00012: the 12.7%-from-bridge bow junction locked the
+    /// waveguide onto a higher mode throughout keys 46–50. Every per-note seed
+    /// must settle onto the requested fundamental in both shipping programs.
+    #[test]
+    fn bowed_string_wolf_band_holds_fundamental() {
+        let sr = 44100.0;
+        for program in [42u8, 43] {
+            for key in 46u8..=50 {
+                let f0 = key_freq(key);
+                for seed in [7u32, 17, 23] {
+                    let mut v = BowedString::new(program, key, 100, sr, seed);
+                    v.vib_depth = 0.0;
+                    v.drift = Drift::new(1, 0.0, 1);
+                    let mut buf = vec![0f32; (3.0 * sr) as usize];
+                    v.render(&mut buf);
+                    let t = crate::testutil::mean_period_samples(&buf[sr as usize..], sr, f0);
+                    assert!(t > 0.0, "GM{program} key {key} seed {seed}: no period");
+                    let cents = (1200.0 * ((sr / t) / f0).log2()).abs();
+                    assert!(
+                        cents <= 30.0,
+                        "GM{program} key {key} seed {seed}: {cents:.1} cents from f0"
                     );
                 }
             }

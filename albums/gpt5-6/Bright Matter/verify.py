@@ -7,9 +7,14 @@ import engine as en
 from tracks import common as c
 
 # Every melodic program used by the album is deliberately in a modeled or curated
-# ferrosintesis family. Program 1 on channel 10 is kit metadata.
+# ferrosintesis family. Channel 10 is the exception: there the program is a live
+# KIT SELECTOR, not inert metadata — this album authors 25, which selects
+# ferrosintesis's ORIGINAL drum kit (`Kit::V1`, the voices from before the
+# 9-10 Jul 2026 kit-v2/realism overhaul), matching Three-Sixty-One and Slipstream.
+# `curated_programs_only` below does NOT exempt channel 10, so the selector value
+# has to be listed here as well.
 PROGRAM_WHITELIST = {
-    0, 1, 4, 5, 8, 11, 12, 19, 28, 30, 38, 39, 46, 49, 52, 53,
+    0, 1, 4, 5, 8, 11, 12, 19, 25, 28, 30, 38, 39, 46, 49, 52, 53,
     55, 60, 61, 81, 82, 89, 90, 91, 95, 114, 117, 118, 119,
 }
 

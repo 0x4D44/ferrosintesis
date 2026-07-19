@@ -201,7 +201,7 @@ def build(sc: en.Score) -> None:
         (CH_HIT, "everything orchestra hit", 55, 101, 64, 44, 6, 4, 0),
         (CH_RISER, "matter reverse cymbal", 119, 92, 64, 64, 8, 0, 1),
     ])
-    sc.program(CH_KIT, 1, 0.0)
+    sc.program(CH_KIT, 25, 0.0)  # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
 
     c.section(sc, 0.0, "I. Particles", meter=(4, 4))
     c.section(sc, 64.0, "II. First Ascent")

@@ -137,7 +137,7 @@ def build(sc: en.Score) -> None:
         (CH_GUITAR, "overdriven guitar", 30, 96, 64, 34, 10, 18, 0),
         (CH_STRINGS, "high string canopy", 49, 87, 64, 69, 24, 4, 0),
     ])
-    sc.program(CH_KIT, 1, 0.0)
+    sc.program(CH_KIT, 25, 0.0)  # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
 
     c.section(sc, 0.0, "I. Count the Sparks", meter=(4, 4))
     c.section(sc, 32.0, "II. First Climb")

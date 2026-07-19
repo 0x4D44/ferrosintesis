@@ -144,7 +144,7 @@ def build(sc: en.Score) -> None:
         (CH_RISER, "streetlight reverse", 119, 92, 64, 62, 8, 0, 1),
         (CH_GUITAR, "roofline guitar", 30, 96, 64, 37, 10, 19, 0),
     ])
-    sc.program(CH_KIT, 1, 0.0)
+    sc.program(CH_KIT, 25, 0.0)  # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
 
     c.section(sc, 0.0, "I. City Blink", meter=(4, 4))
     c.section(sc, 48.0, "II. First Climb")

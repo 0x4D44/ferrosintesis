@@ -150,7 +150,7 @@ def build(sc: en.Score) -> None:
         (CH_RISER, "jet wash reverse", 119, 91, 64, 62, 8, 0, 1),
         (CH_HARP, "high-altitude harp", 46, 91, 64, 64, 14, 22, 0),
     ])
-    sc.program(CH_KIT, 1, 0.0)
+    sc.program(CH_KIT, 25, 0.0)  # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
 
     c.section(sc, 0.0, "I. Cold Lamps", meter=(4, 4))
     c.section(sc, 32.0, "II. Edge Lights")

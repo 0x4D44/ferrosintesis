@@ -116,7 +116,7 @@ def build(sc: en.Score) -> None:
         (CH_HIT, "gravity orchestra hit", 55, 100, 64, 43, 6, 4, 0),
         (CH_RISER, "mass reverse cymbal", 119, 91, 64, 63, 8, 0, 1),
     ])
-    sc.program(CH_KIT, 1, 0.0)
+    sc.program(CH_KIT, 25, 0.0)  # ch-10 PC 25: the ORIGINAL kit (Kit::V1) — matches Three-Sixty-One
 
     c.section(sc, 0.0, "I. Weightless Count", meter=(7, 8))
     c.section(sc, 56.0, "II. First Vector")

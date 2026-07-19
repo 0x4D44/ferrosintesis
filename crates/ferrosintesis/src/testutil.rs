@@ -3595,6 +3595,54 @@ mod pluck_baseline {
         println!("    // fiercest att/sus in the grid: {worst_name} = {worst_asr:.2} (FluidR3 natural ≈ 1.3)");
     }
 
+    /// Phase-2 Unit C calibration: for the migrated (now-Shaped) presets, the
+    /// sustain-window RMS offset vs HEAD_BASELINE (Legacy). Sustain RMS ∝ K_SUS,
+    /// so the mean offset gives the K_SUS that restores loudness parity (G7).
+    /// `cargo test print_shaped_loudness_offset -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn print_shaped_loudness_offset() {
+        const MIGRATED: [&str; 5] = ["STEEL", "JAZZ", "PICK", "DULCIMER", "PIZZ"];
+        let head = |name: &str, key: u8, vel: u8| -> Option<f32> {
+            HEAD_BASELINE
+                .iter()
+                .find(|r| r.0 == name && r.1 == key && r.2 == vel)
+                .map(|r| r.3)
+        };
+        let (mut sum, mut count) = (0f32, 0u32);
+        println!("preset     key  vel  shaped_rms  head_rms  offset_dB");
+        for &(name, program, bank) in GRID {
+            if !MIGRATED.contains(&name) {
+                continue;
+            }
+            let mut psum = 0f32;
+            let mut pcount = 0u32;
+            for &key in &KEYS {
+                for &vel in &VELS {
+                    let (r, _, _, _) = measure(program, bank, key, vel);
+                    if let Some(h) = head(name, key, vel) {
+                        let off = r - h;
+                        println!("{name:<10} {key:>3}  {vel:>3}  {r:9.2}  {h:8.2}  {off:+.2}");
+                        sum += off;
+                        count += 1;
+                        psum += off;
+                        pcount += 1;
+                    }
+                }
+            }
+            println!(
+                "  {name} mean offset {:+.2} dB (per-preset exc_trim to hit K_SUS)",
+                psum / pcount as f32
+            );
+        }
+        let mean = sum / count as f32;
+        println!("GLOBAL mean offset {mean:+.2} dB over {count} cells");
+        println!(
+            "implied K_SUS = 0.30 * 10^(-{mean:.2}/20) = {:.4}",
+            0.30 * 10f32.powf(-mean / 20.0)
+        );
+    }
+
     /// Phase-0 guard: the frozen baseline is well-formed and records the
     /// fierceness gap the redesign must close. This consumes `HEAD_BASELINE`
     /// (so a corrupt paste is caught) and pins the "before" state as checked

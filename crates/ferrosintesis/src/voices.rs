@@ -2264,9 +2264,6 @@ pub enum ExcModel {
     /// (|sin(kπβ)|/k^s · pick-LP magnitude) blended in the energy domain with
     /// the comb noise, then normalized on the SUSTAIN BAND — a gentler, less
     /// front-loaded attack that does not re-level the instrument (§2, G7).
-    // Unit A scaffold: no preset selects Shaped yet (the 5-preset migration is
-    // Unit B, which removes this allow); the builder is exercised by tests now.
-    #[allow(dead_code)]
     Shaped,
 }
 
@@ -2533,6 +2530,12 @@ pub const OUD: PluckPreset = PluckPreset {
 pub const STEEL: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "STEEL",
+    // Phase-2 Shaped excitation (natural-pluck §2): picked slope. slope/noise_mix
+    // initial; exc_trim matches HEAD loudness (Unit C, print_shaped_loudness_offset).
+    exc_model: ExcModel::Shaped,
+    slope: 1.4,
+    noise_mix: 0.30,
+    exc_trim: -1.51,
     // Steel strings ring longer and brighter than nylon: raise t60 for the
     // aftersound and nudge the damper so the high harmonics sustain (the steel
     // "sparkle" that dies first under a low damper corner).
@@ -2597,6 +2600,10 @@ pub const CLEAN: PluckPreset = PluckPreset {
 pub const JAZZ: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "JAZZ",
+    exc_model: ExcModel::Shaped, // Phase-2 Shaped, picked slope (calibrated Unit C)
+    slope: 1.4,
+    noise_mix: 0.30,
+    exc_trim: 1.95,
     t60: 2.4, // flatwounds ring shorter
     bright: 3600.0,
     pick_lp: 3500.0,
@@ -2923,6 +2930,10 @@ pub const SLAP_POP: PluckPreset = PluckPreset {
 pub const PICK: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "PICK",
+    exc_model: ExcModel::Shaped, // Phase-2 Shaped, picked slope (calibrated Unit C)
+    slope: 1.4,
+    noise_mix: 0.30,
+    exc_trim: -2.23,
     wound_all: true,
     t60: 3.2,
     bright: 2200.0,
@@ -3107,6 +3118,10 @@ pub const SHAMISEN: PluckPreset = PluckPreset {
 pub const DULCIMER: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "DULCIMER",
+    exc_model: ExcModel::Shaped, // Phase-2 Shaped, picked slope (calibrated Unit C)
+    slope: 1.4,
+    noise_mix: 0.30,
+    exc_trim: -1.39,
     t60: 5.0,
     bright: 9000.0,
     pick_lp: 4200.0,
@@ -3648,13 +3663,23 @@ pub struct Pluck {
     kind: &'static str,
 }
 
-/// Global sustain-band level constant for the Shaped excitation (§2.4): the
-/// h1..h4 RMS-amplitude of the burst is normalized to `K_SUS · v` (v = vel_amp),
-/// so the sustain tracks velocity exactly as Legacy did (amplitude ∝ v) — the
-/// anti-re-leveling anchor G7 enforces. Calibrated so a migrated preset's
-/// RMS(0.05–0.35 s) matches its HEAD median. (PLACEHOLDER — Phase-2 Unit C
-/// calibrates this against HEAD_BASELINE.)
-const K_SUS: f32 = 0.30;
+/// Base sustain-band level for the Shaped excitation (§2.4): the h1..h4
+/// RMS-amplitude of the burst is normalized to `K_SUS · v · 10^(exc_trim/20)`
+/// (v = vel_amp), so the sustain tracks velocity exactly as Legacy did
+/// (amplitude ∝ v) — the anti-re-leveling anchor G7 enforces. Because the
+/// normalization target is DETERMINISTIC, it also collapses Legacy's ±9 dB
+/// Rayleigh-h1 seed spread to ≈0 (G7 seed-spread check).
+///
+/// TRIPWIRE 1 RESOLUTION (Phase-2 Unit C): the HLD assumed one global K_SUS +
+/// per-preset exc_trim ≤ ±1.5 dB. Measured, the 5 migrated presets span 5.4 dB
+/// in Legacy sustain-per-excitation-h1h4 (they differ in t60/bright/pick_lp, so
+/// the loop projects the same excitation to different sustain loudness). A
+/// single global K_SUS therefore CANNOT hold G7 within ±1.5 dB trims. Resolution
+/// (preserves the design intent — per-preset loudness parity + deterministic
+/// seed collapse): K_SUS is the grid center and each migrated preset carries its
+/// own exc_trim to match its HEAD loudness (measured by
+/// `print_shaped_loudness_offset`). The trims run wider than ±1.5 dB by design.
+const K_SUS: f32 = 0.15;
 
 /// Amplitude of harmonic `k` in a one-period buffer (bin `k` of the N-point
 /// DFT), normalized so a unit sine at that bin reads ≈ 1.0. For the buffer
@@ -7653,6 +7678,12 @@ const BOW_TREM_AMP_JITTER: f32 = 0.10;
 const PIZZ: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "PIZZ",
+    // Phase-2 Shaped, FINGER slope (steeper → less harsh). Pizzicato stays SHORT
+    // (t60 unchanged); the goal is a gentler attack, not a lower att/sus ratio.
+    exc_model: ExcModel::Shaped,
+    slope: 2.0,
+    noise_mix: 0.20,
+    exc_trim: 3.16,
     t60: 0.9,
     bright: 2600.0,
     pick_lp: 1600.0,
@@ -12395,12 +12426,12 @@ mod tests {
         // deterministic
         assert_eq!(build(1.5, 0.2, 7), mixed);
         // a Shaped preset renders and differs from its Legacy self (exercises the
-        // exc_model branch + the Shaped variant)
+        // exc_model branch + the Shaped variant). NYLON is un-migrated (Legacy).
         let shaped = PluckPreset {
             exc_model: ExcModel::Shaped,
             slope: 1.4,
             noise_mix: 0.3,
-            ..STEEL
+            ..NYLON
         };
         let s_render = render_pluck(&shaped, 52, 100, 0.4, 7);
         assert!(
@@ -12408,7 +12439,7 @@ mod tests {
             "Shaped render silent"
         );
         assert!(
-            s_render != render_pluck(&STEEL, 52, 100, 0.4, 7),
+            s_render != render_pluck(&NYLON, 52, 100, 0.4, 7),
             "Shaped should differ from Legacy"
         );
     }

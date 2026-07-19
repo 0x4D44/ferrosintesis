@@ -4363,8 +4363,9 @@ mod tests {
 
     /// Guitar-realism HLD §4 / AC8 — the variation machinery must not reach
     /// any non-guitar LA path. FNV-1a pin over one wrapped program's exact
-    /// PCM (GM 56 trumpet, an LA arm untouched by this block): if this
-    /// moves, the guitar-only surface leaked. Same-box golden (like the
+    /// PCM (GM 56 trumpet). MM-BUG-KILN-00018 intentionally changed its
+    /// settled body ring; this pin captures that corrected render while still
+    /// guarding against later guitar-only leakage. Same-box golden (like the
     /// repo's other bit-exact canaries); re-pin only with an explained diff.
     #[test]
     fn non_guitar_la_render_is_pinned() {
@@ -4378,7 +4379,7 @@ mod tests {
             }
         }
         assert_eq!(
-            h, 0x9be1_4fc8_51cd_9a19,
+            h, 0x0d04_aef8_0dad_c3ba,
             "non-guitar LA render changed (fnv {h:#x}) — guitar-only variation leaked?"
         );
     }

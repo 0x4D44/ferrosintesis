@@ -5456,6 +5456,8 @@ pub struct SawStack {
     vib_depth: f32,
     vib_delay: u32,
     breath: f32,
+    breath_attack: f32,
+    breath_attack_k: f32,
     rng: Rng,
     sweep: Option<(f32, f32, f32, f32)>, // (lfo phase, rate Hz, base cutoff, octaves)
     sweep_q: f32,
@@ -5579,6 +5581,8 @@ impl SawStack {
             vib_depth: vib.1,
             vib_delay: (vib.2 * sr) as u32,
             breath,
+            breath_attack: 0.0,
+            breath_attack_k: 0.0,
             rng,
             sweep: sweep.map(|(rate, base, oct)| (sweep_phase, rate, base, oct)),
             sweep_q,
@@ -5615,6 +5619,18 @@ impl SawStack {
             self.fenv_k = t60_mul(t60, self.sr / CTRL as f32);
             self.base_cut = base_cut;
         }
+        self
+    }
+
+    /// Add a one-shot excess-air transient above the sustained breath bed.
+    /// Inert by default; acoustic strings use it for the noisy bow catch.
+    fn with_breath_attack(mut self, amount: f32, t60: f32) -> Self {
+        self.breath_attack = amount.max(0.0);
+        self.breath_attack_k = if t60 > 0.0 {
+            t60_mul(t60, self.sr)
+        } else {
+            0.0
+        };
         self
     }
 
@@ -5703,8 +5719,10 @@ impl Voice for SawStack {
                 s += layer.osc.next();
             }
             s /= self.layers.len() as f32;
-            if self.breath > 0.0 {
-                s += self.rng.white() * self.breath;
+            let breath = self.breath + self.breath_attack;
+            if breath > 0.0 {
+                s += self.rng.white() * breath;
+                self.breath_attack *= self.breath_attack_k;
             }
             s = match &mut self.filt {
                 StackFilter::Lp(b) => b.process(s),
@@ -5784,6 +5802,9 @@ fn vel_attack(base: f32, vel: u8) -> f32 {
 
 fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     let slow = program == 49;
+    // (excess bow-air level, T60): the fast section catches over its ~70 ms
+    // attack; the slow section's rosin noise follows its ~420 ms swell.
+    let bow_catch = if slow { (0.20, 0.80) } else { (0.24, 0.35) };
     let mut s = SawStack::new(
         key,
         vel,
@@ -5807,7 +5828,8 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         None,
         0.7,
         0.22,
-    );
+    )
+    .with_breath_attack(bow_catch.0, bow_catch.1);
     s.legato_enabled = true;
     s
 }
@@ -16820,6 +16842,46 @@ mod tests {
             ratio > 0.001,
             "string ensemble too periodic (synthy): inter/harm {ratio:.5} (need > 0.001 — bow air present)"
         );
+    }
+
+    /// MM-BUG-KILN-00014: samples-off acoustic strings need a noisy bow catch,
+    /// not just the constant sustain-air bed. Average across note-character
+    /// seeds so the oracle measures the envelope, not one white-noise window.
+    #[test]
+    fn string_section_model_has_bow_catch_onset() {
+        let sr = 44100.0;
+        let key = 60u8;
+        let f0 = key_freq(key);
+        let noise_ratio = |seg: &[f32]| {
+            spectral_band_rms(seg, sr, 2.35 * f0, 2.65 * f0)
+                / (spectral_band_rms(seg, sr, 0.95 * f0, 2.05 * f0)).max(1e-9)
+        };
+        for program in [48u8, 49] {
+            let mut early_sum = 0.0;
+            let mut late_sum = 0.0;
+            for seed in [7u32, 17, 23] {
+                let buf = render_program_sampled(program, key, 100, 2.0, seed, false);
+                let (early, late) = if program == 48 {
+                    (segment(&buf, sr, 0.04, 0.18), segment(&buf, sr, 0.70, 1.10))
+                } else {
+                    (segment(&buf, sr, 0.12, 0.52), segment(&buf, sr, 1.10, 1.60))
+                };
+                let e = noise_ratio(early);
+                let l = noise_ratio(late);
+                early_sum += e;
+                late_sum += l;
+            }
+            let early = early_sum / 3.0;
+            let late = late_sum / 3.0;
+            println!(
+                "GM{program} modeled bow catch: early {early:.5}, settled {late:.5}, ratio {:.2}",
+                early / late.max(1e-9)
+            );
+            assert!(
+                early > 1.5 * late,
+                "GM{program} has no modeled bow catch: early noise {early:.5}, settled {late:.5}"
+            );
+        }
     }
 
     /// BS-O1 (regression, GM 43 contrabass): the waveguide's loop latency must be

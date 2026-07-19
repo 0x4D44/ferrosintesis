@@ -574,6 +574,30 @@ pub fn contrabass_bank(vel: u8) -> &'static [Zone] {
     }
 }
 
+fn pizzbass() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "pizzbass_E1.wav" => 41.09,
+            "pizzbass_G1.wav" => 48.60,
+            "pizzbass_A#1.wav" => 58.25,
+            "pizzbass_C2.wav" => 65.04,
+            "pizzbass_E2.wav" => 82.41,
+            "pizzbass_G#2.wav" => 102.12,
+            "pizzbass_A2.wav" => 112.51,
+            "pizzbass_G#3.wav" => 205.95,
+        )
+    })
+}
+
+/// GM 32 acoustic (upright/double) bass PIZZICATO onset (VSCO Solo Contrabass Pizz,
+/// CC0, -strings) over the Pluck(&UPRIGHT) model. Roots MEASURED at bake (labels one
+/// octave below sounding, like the arco dbass); C#3/E3 dropped (weak low fundamentals).
+/// 8 zones sound E1..G#3.
+pub fn pizzbass_bank() -> &'static [Zone] {
+    pizzbass()
+}
+
 // GM 42 cello LA attack: a REAL solo cello arco onset (Karoryfer x bigcat "Bigcat
 // Cello", down-bow sus, CC0), replacing the old cello-SECTION celens bite that carried
 // ensemble chorus and a slow section swell (which measurably ducked the model's own

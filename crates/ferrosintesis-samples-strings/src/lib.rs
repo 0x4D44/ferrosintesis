@@ -145,6 +145,38 @@ static SAMPLES: &[(&str, &[u8])] = &[
         "dbass_G#3_p.wav",
         include_bytes!("../samples/dbass_G#3_p.wav"),
     ),
+    (
+        "pizzbass_E1.wav",
+        include_bytes!("../samples/pizzbass_E1.wav"),
+    ),
+    (
+        "pizzbass_G1.wav",
+        include_bytes!("../samples/pizzbass_G1.wav"),
+    ),
+    (
+        "pizzbass_A#1.wav",
+        include_bytes!("../samples/pizzbass_A#1.wav"),
+    ),
+    (
+        "pizzbass_C2.wav",
+        include_bytes!("../samples/pizzbass_C2.wav"),
+    ),
+    (
+        "pizzbass_E2.wav",
+        include_bytes!("../samples/pizzbass_E2.wav"),
+    ),
+    (
+        "pizzbass_G#2.wav",
+        include_bytes!("../samples/pizzbass_G#2.wav"),
+    ),
+    (
+        "pizzbass_A2.wav",
+        include_bytes!("../samples/pizzbass_A2.wav"),
+    ),
+    (
+        "pizzbass_G#3.wav",
+        include_bytes!("../samples/pizzbass_G#3.wav"),
+    ),
 ];
 
 /// Number of embedded WAV files.

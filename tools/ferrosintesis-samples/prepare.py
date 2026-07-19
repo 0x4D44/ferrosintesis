@@ -392,6 +392,30 @@ TUBULAR_URLS = {
     for dest, src in _TUBULAR_ZONES
 }
 
+# Acoustic (upright/double) bass PIZZICATO onset (GM 32) — VSCO 2 CE "Solo Contrabass" Pizz,
+# same VSCO_REV pin (CC0), SIBLING of the GM43 arco (dbass) above. MM-BUG-KILN-00016. The
+# sample carries the finger-pluck attack + string speech; the Pluck(&UPRIGHT) model keeps the
+# decay (0.9 s keep, like the other plucks). Labels sit ONE OCTAVE BELOW sounding pitch (a
+# MEASURED fact for this VSCO source — see dbass), so dest names use SOUNDING pitch; roots are
+# re-MEASURED at bake (verify, drop octave-mismeasures). Single v1 layer (v1 is the complete
+# layer; v3 exists for only 6 pitches). Low bass string → 2f-strong (per-note cap). Output ->
+# the CC0 -strings crate (with dbass/cellosolo).
+# C#3/E3 (source C#2/E2) DROPPED after measurement: autocorr grabbed a subharmonic (C#3 read
+# an octave low at 69 Hz/conf 0.59; E3 read garbage 55 Hz) — the low pizz fundamentals are
+# weak, like the dropped vibes/tubular zones. G#2->G#3 confirms the +1-octave convention. The
+# 8 kept zones sound E1 41 .. G#3 206 Hz; LaVoice +-1oct covers the GM32 bass register.
+_PIZZBASS_ZONES = [
+    ("E1", "E0"), ("G1", "G0"), ("A#1", "A#0"), ("C2", "C1"),
+    ("E2", "E1"), ("G#2", "G#1"), ("A2", "A1"), ("G#3", "G#2"),
+]
+PIZZBASS_URLS = {
+    f"pizzbass_{snd}.wav": (
+        f"{BASE}/Strings/Solo%20Contrabass/Pizz/"
+        f"BKCtbss_Pizz_{label.replace('#', '%23')}_v1_rr1.wav"
+    )
+    for snd, label in _PIZZBASS_ZONES
+}
+
 # Ocarina (GM 79) — VCSL "Ocarina, Typical" sustains (CC0, VCSL_REV). A soft near-sine
 # vessel flute; the sample carries the breath onset and the Wind model keeps the body
 # (a wind onset like the flute, so the default 0.62 s keep, NOT a plucked keep). Output
@@ -789,13 +813,16 @@ F0_RANGE = {
     # solo double bass (VSCO Solo Contrabass, GM 43): sounding E1 41 .. B3 247 Hz. In
     # TWO_F_STRONG -> per-note cap does the work; global ceiling clears the top fundamental.
     "dbass": (38.0, 520.0),
+    # acoustic bass pizzicato (VSCO Solo Contrabass Pizz): sounding E1 41 .. G#3 208, like
+    # dbass. In TWO_F_STRONG -> per-note cap; global ceiling clears the top fundamental.
+    "pizzbass": (38.0, 520.0),
 }
 # Families whose recordings are 2f-DOMINANT (autocorr grabs the 2nd harmonic if the
 # ceiling admits it) AND span more than an octave, so a single fixed F0 ceiling can't
 # separate the fundamental from 2f. For these, main() caps the ceiling per-note at
 # label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
 TWO_F_STRONG = frozenset(("recorder", "banjo", "viola", "marimba", "xylo", "glock",
-                          "vibes", "tubular", "cellosolo", "dbass"))
+                          "vibes", "tubular", "cellosolo", "dbass", "pizzbass"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -820,6 +847,7 @@ KEEP_FAM = {
     "glock": (0.9, 0.30),
     "vibes": (0.9, 0.30),
     "tubular": (0.9, 0.30),
+    "pizzbass": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -880,6 +908,7 @@ FAMILY_PACKAGE = {
     # crate, replacing the repitched cello-SECTION celens onset.
     "cellosolo": "ferrosintesis-samples-strings",
     "dbass": "ferrosintesis-samples-strings",
+    "pizzbass": "ferrosintesis-samples-strings",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -2025,6 +2054,9 @@ def main():
         for fn, url in SOLO_DBASS_URLS.items():
             if want("dbass"):
                 ensure_source(fn, url, src)
+        for fn, url in PIZZBASS_URLS.items():
+            if want("pizzbass"):
+                ensure_source(fn, url, src)
         for fn, url in MARIMBA_URLS.items():
             if want("marimba"):
                 ensure_source(fn, url, src)
@@ -2124,7 +2156,7 @@ def main():
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
             | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS | TUBULAR_URLS
-            | SOLO_CELLO_URLS | SOLO_DBASS_URLS
+            | SOLO_CELLO_URLS | SOLO_DBASS_URLS | PIZZBASS_URLS
             | GRAND_SOURCES
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):

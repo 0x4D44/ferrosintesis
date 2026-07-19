@@ -7966,6 +7966,10 @@ const LA_FIDDLE: (f32, (f32, f32)) = (0.32, (0.08, 0.28));
 /// sample owns the onset. A slightly longer handover than the violin: a bass
 /// bow speaks slower. Gain tuned by ear (Arthur): a restrained bite.
 const LA_CONTRABASS: (f32, (f32, f32)) = (0.29, (0.16, 0.46));
+// GM 32 acoustic bass: real VSCO Solo-Contrabass pizzicato pluck over the Pluck(&UPRIGHT)
+// model. The sample carries the finger-pluck attack + string speech; the model keeps the
+// decay. A pluck onset (quicker than the arco contrabass); gain/fade ear-tunable.
+const LA_PIZZBASS: (f32, (f32, f32)) = (0.40, (0.05, 0.35));
 /// GM 42 cello: the cello-section arco bite over the waveguide sustain. A
 /// slightly faster handover than the bass (a cello bow speaks quicker).
 const LA_CELLO: (f32, (f32, f32)) = (0.30, (0.13, 0.40));
@@ -11366,7 +11370,25 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         28 => Box::new(Pluck::new(&MUTED, key, vel, sr, seed)),
         29 | 30 => Box::new(Pluck::new(&DRIVE, key, vel, sr, seed)),
         31 => Box::new(Pluck::new(&HARMONIC, key, vel, sr, seed)), // G7 flageolet
-        32 => Box::new(Pluck::new(&UPRIGHT, key, vel, sr, seed)),  // B2
+        // GM 32 acoustic bass: LA sampled pizzicato pluck onset (VSCO Solo Contrabass Pizz,
+        // CC0, -strings) over the Pluck(&UPRIGHT) model. Pure model is the CC0!=0 alt.
+        32 => {
+            let model = Box::new(Pluck::new(&UPRIGHT, key, vel, sr, seed)); // B2
+            if samples {
+                let (gain, fade) = LA_PIZZBASS;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::pizzbass_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         33 => Box::new(Pluck::new(&BASS, key, vel, sr, seed)),
         38 | 39 => Box::new(SynthBass::new(program, key, vel, sr, seed)), // B4
         34 => Box::new(Pluck::new(&PICK, key, vel, sr, seed)),            // B2
@@ -11697,6 +11719,7 @@ mod tests {
             ("LA_VIOLIN", LA_VIOLIN),
             ("LA_FIDDLE", LA_FIDDLE),
             ("LA_CONTRABASS", LA_CONTRABASS),
+            ("LA_PIZZBASS", LA_PIZZBASS),
             ("LA_CELLO", LA_CELLO),
             ("LA_FLUTE", LA_FLUTE),
             ("LA_PIANO", LA_PIANO),

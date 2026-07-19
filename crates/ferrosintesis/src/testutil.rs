@@ -3281,3 +3281,311 @@ mod perceptual_distinctness {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Pluck-redesign HEAD baseline (natural-pluck HLD §8 Phase 0)
+//
+// The printer renders the BARE model (samples off) for the §2.6 migrated
+// presets over the P-grid and dumps a paste-ready table. The frozen
+// `HEAD_BASELINE` const is the pre-change reference: its `rms_db` column is the
+// loudness-parity anchor the Phase-2 G7 oracle holds to (±1.0 dB), and its
+// `att_sus`/`tilt` columns are the "before" fierceness the (cal) thresholds are
+// set against. Captured on the pre-work build; regenerate with
+// `cargo test print_pluck_head_baseline -- --ignored --nocapture`.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod pluck_baseline {
+    use super::*;
+    use crate::voices::{self, Voice};
+
+    const SR: f32 = 44100.0;
+    const KEYS: [u8; 3] = [40, 52, 64];
+    const VELS: [u8; 3] = [50, 100, 120];
+    const SEEDS: [u32; 3] = [3, 7, 11];
+
+    /// (name, program, bank_lsb): bank 0 routes through `make`, else
+    /// `make_variation` (the CC0 alt banks OUD/UKULELE). Every entry is a §2.6
+    /// migrated preset; the Legacy-exempt family is captured by bit-identity,
+    /// not by this table.
+    const GRID: &[(&str, u8, u8)] = &[
+        ("NYLON", 24, 0),
+        ("HARP", 46, 0),
+        ("PIZZ", 45, 0),
+        ("FRETLESS", 35, 0),
+        ("BASS", 33, 0),
+        ("UPRIGHT", 32, 0),
+        ("UKULELE", 24, 96),
+        ("OUD", 105, 98),
+        ("STEEL", 25, 0),
+        ("JAZZ", 26, 0),
+        ("CLEAN", 27, 0),
+        ("DRIVE", 30, 0),
+        ("PICK", 34, 0),
+        ("DULCIMER", 15, 0),
+    ];
+
+    /// Frozen HEAD (pre-change) reference, captured on the pre-work build by
+    /// `print_pluck_head_baseline`. Columns: (preset, key, vel, rms_db over
+    /// [0.05,0.35] s, att/sus ratio, onset tilt dB/oct, seed spread dB). The
+    /// `rms_db` column is the Phase-2 G7 loudness anchor (±1.0 dB); the rest is
+    /// the "before" fierceness the (cal) thresholds calibrate against. NEVER
+    /// regenerated on a post-change build — it is the baseline the redesign is
+    /// measured *against*.
+    #[rustfmt::skip]
+    const HEAD_BASELINE: &[(&str, u8, u8, f32, f32, f32, f32)] = &[
+        // (preset, key, vel, rms_db[0.05-0.35s], att_sus, onset_tilt_db_oct, seed_spread_db)
+        ("NYLON", 40, 50, -31.39, 1.69, -6.3, 3.68),
+        ("NYLON", 40, 100, -22.75, 1.72, -4.8, 2.43),
+        ("NYLON", 40, 120, -20.80, 1.78, -4.3, 2.06),
+        ("NYLON", 52, 50, -32.30, 2.23, -8.5, 5.30),
+        ("NYLON", 52, 100, -23.48, 2.22, -6.6, 5.58),
+        ("NYLON", 52, 120, -21.25, 2.24, -5.7, 5.81),
+        ("NYLON", 64, 50, -41.67, 8.21, -8.5, 3.77),
+        ("NYLON", 64, 100, -28.47, 4.65, -8.0, 0.80),
+        ("NYLON", 64, 120, -25.71, 4.16, -7.7, 1.18),
+        ("HARP", 40, 50, -30.33, 1.48, -5.2, 0.91),
+        ("HARP", 40, 100, -21.35, 1.54, -3.1, 0.22),
+        ("HARP", 40, 120, -18.79, 1.56, -2.7, 0.26),
+        ("HARP", 52, 50, -31.95, 1.81, -6.7, 2.02),
+        ("HARP", 52, 100, -22.56, 1.82, -4.7, 1.42),
+        ("HARP", 52, 120, -20.01, 1.86, -4.3, 1.39),
+        ("HARP", 64, 50, -37.76, 3.95, -10.4, 0.90),
+        ("HARP", 64, 100, -26.96, 3.04, -8.2, 2.11),
+        ("HARP", 64, 120, -24.27, 2.96, -7.0, 2.02),
+        ("PIZZ", 40, 50, -37.26, 4.35, -7.3, 2.60),
+        ("PIZZ", 40, 100, -27.12, 3.89, -6.6, 0.81),
+        ("PIZZ", 40, 120, -24.85, 3.80, -6.2, 0.57),
+        ("PIZZ", 52, 50, -38.01, 6.57, -10.4, 8.06),
+        ("PIZZ", 52, 100, -27.58, 4.88, -9.6, 9.03),
+        ("PIZZ", 52, 120, -25.07, 4.73, -8.8, 8.68),
+        ("PIZZ", 64, 50, -47.80, 41.06, -9.6, 5.52),
+        ("PIZZ", 64, 100, -33.89, 19.00, -8.2, 1.39),
+        ("PIZZ", 64, 120, -30.45, 15.32, -8.2, 0.85),
+        ("FRETLESS", 40, 50, -27.95, 1.86, -7.2, 1.92),
+        ("FRETLESS", 40, 100, -16.67, 1.50, -7.4, 2.77),
+        ("FRETLESS", 40, 120, -14.06, 1.48, -7.3, 2.80),
+        ("FRETLESS", 52, 50, -34.45, 2.36, -9.9, 2.17),
+        ("FRETLESS", 52, 100, -24.13, 3.43, -9.7, 3.38),
+        ("FRETLESS", 52, 120, -21.32, 3.27, -9.7, 3.13),
+        ("FRETLESS", 64, 50, -33.22, 1.85, -8.7, 0.92),
+        ("FRETLESS", 64, 100, -25.85, 2.82, -8.3, 1.32),
+        ("FRETLESS", 64, 120, -24.22, 3.10, -8.3, 1.79),
+        ("BASS", 40, 50, -21.85, 1.76, -6.5, 2.25),
+        ("BASS", 40, 100, -12.09, 1.56, -7.3, 3.09),
+        ("BASS", 40, 120, -9.86, 1.53, -7.6, 2.88),
+        ("BASS", 52, 50, -23.60, 1.42, -10.0, 1.72),
+        ("BASS", 52, 100, -17.55, 2.10, -10.9, 3.48),
+        ("BASS", 52, 120, -15.83, 2.38, -10.7, 4.26),
+        ("BASS", 64, 50, -23.31, 1.93, -8.4, 0.80),
+        ("BASS", 64, 100, -15.74, 2.41, -8.4, 0.94),
+        ("BASS", 64, 120, -14.19, 2.59, -8.3, 1.11),
+        ("UPRIGHT", 40, 50, -33.30, 2.80, -7.5, 3.91),
+        ("UPRIGHT", 40, 100, -22.19, 2.49, -8.3, 3.12),
+        ("UPRIGHT", 40, 120, -19.30, 2.44, -8.4, 2.79),
+        ("UPRIGHT", 52, 50, -37.70, 4.01, -8.7, 1.07),
+        ("UPRIGHT", 52, 100, -27.50, 4.36, -10.1, 2.67),
+        ("UPRIGHT", 52, 120, -24.39, 3.99, -10.4, 2.95),
+        ("UPRIGHT", 64, 50, -39.93, 3.13, -9.1, 1.44),
+        ("UPRIGHT", 64, 100, -31.13, 5.28, -9.2, 2.27),
+        ("UPRIGHT", 64, 120, -29.33, 6.13, -9.1, 3.49),
+        ("UKULELE", 40, 50, -34.25, 2.76, -5.7, 4.02),
+        ("UKULELE", 40, 100, -25.77, 2.54, -4.0, 3.75),
+        ("UKULELE", 40, 120, -23.44, 2.56, -3.5, 3.11),
+        ("UKULELE", 52, 50, -35.14, 2.90, -8.1, 6.89),
+        ("UKULELE", 52, 100, -26.01, 2.83, -5.8, 6.02),
+        ("UKULELE", 52, 120, -23.87, 2.86, -5.2, 6.06),
+        ("UKULELE", 64, 50, -41.72, 8.91, -9.1, 1.55),
+        ("UKULELE", 64, 100, -30.74, 5.54, -7.9, 3.19),
+        ("UKULELE", 64, 120, -28.05, 5.36, -7.5, 3.07),
+        ("OUD", 40, 50, -33.47, 2.10, -7.2, 2.23),
+        ("OUD", 40, 100, -25.33, 2.19, -6.4, 3.18),
+        ("OUD", 40, 120, -23.26, 2.26, -6.1, 3.05),
+        ("OUD", 52, 50, -38.94, 3.66, -10.2, 3.70),
+        ("OUD", 52, 100, -27.79, 3.29, -9.8, 4.34),
+        ("OUD", 52, 120, -24.93, 3.05, -9.2, 4.47),
+        ("OUD", 64, 50, -50.08, 19.47, -10.7, 8.16),
+        ("OUD", 64, 100, -36.75, 13.89, -10.1, 3.35),
+        ("OUD", 64, 120, -32.87, 12.03, -9.4, 2.03),
+        ("STEEL", 40, 50, -36.95, 2.72, -3.4, 1.89),
+        ("STEEL", 40, 100, -27.60, 3.13, -1.9, 2.08),
+        ("STEEL", 40, 120, -24.72, 3.20, -1.6, 2.03),
+        ("STEEL", 52, 50, -39.45, 3.52, -6.1, 2.63),
+        ("STEEL", 52, 100, -29.22, 3.88, -3.3, 2.18),
+        ("STEEL", 52, 120, -26.47, 4.00, -2.9, 2.26),
+        ("STEEL", 64, 50, -44.53, 8.10, -8.1, 3.33),
+        ("STEEL", 64, 100, -32.62, 6.57, -6.4, 2.77),
+        ("STEEL", 64, 120, -29.77, 6.46, -5.4, 2.72),
+        ("JAZZ", 40, 50, -34.82, 1.84, -8.8, 1.81),
+        ("JAZZ", 40, 100, -26.43, 1.88, -7.5, 3.36),
+        ("JAZZ", 40, 120, -24.22, 1.89, -7.2, 3.56),
+        ("JAZZ", 52, 50, -35.67, 2.45, -9.5, 8.41),
+        ("JAZZ", 52, 100, -26.15, 2.16, -8.5, 8.42),
+        ("JAZZ", 52, 120, -23.86, 2.13, -7.7, 8.30),
+        ("JAZZ", 64, 50, -43.46, 13.53, -8.5, 0.71),
+        ("JAZZ", 64, 100, -29.19, 5.24, -8.1, 2.26),
+        ("JAZZ", 64, 120, -25.98, 4.68, -7.9, 3.07),
+        ("CLEAN", 40, 50, -37.40, 2.49, -5.4, 2.55),
+        ("CLEAN", 40, 100, -27.96, 2.80, -4.2, 2.46),
+        ("CLEAN", 40, 120, -25.55, 2.83, -4.0, 1.91),
+        ("CLEAN", 52, 50, -37.34, 3.51, -8.5, 7.52),
+        ("CLEAN", 52, 100, -27.46, 3.69, -6.6, 7.12),
+        ("CLEAN", 52, 120, -24.74, 3.72, -6.1, 6.60),
+        ("CLEAN", 64, 50, -44.16, 10.66, -8.3, 1.94),
+        ("CLEAN", 64, 100, -32.01, 6.05, -7.7, 1.94),
+        ("CLEAN", 64, 120, -28.93, 5.49, -7.3, 1.71),
+        ("DRIVE", 40, 50, -24.80, 2.07, -4.4, 2.25),
+        ("DRIVE", 40, 100, -15.69, 2.10, -3.4, 1.08),
+        ("DRIVE", 40, 120, -13.52, 2.14, -3.3, 1.21),
+        ("DRIVE", 52, 50, -26.19, 2.23, -6.6, 2.53),
+        ("DRIVE", 52, 100, -16.39, 2.29, -4.0, 1.41),
+        ("DRIVE", 52, 120, -13.58, 2.30, -3.7, 1.34),
+        ("DRIVE", 64, 50, -28.88, 3.68, -7.9, 2.05),
+        ("DRIVE", 64, 100, -19.15, 3.25, -5.9, 1.69),
+        ("DRIVE", 64, 120, -16.53, 3.20, -5.6, 1.41),
+        ("PICK", 40, 50, -31.61, 2.20, -7.1, 2.10),
+        ("PICK", 40, 100, -22.08, 2.15, -6.1, 2.75),
+        ("PICK", 40, 120, -19.65, 2.23, -5.8, 2.80),
+        ("PICK", 52, 50, -35.65, 4.20, -9.0, 2.03),
+        ("PICK", 52, 100, -25.15, 3.99, -7.8, 1.76),
+        ("PICK", 52, 120, -22.40, 3.73, -7.6, 1.94),
+        ("PICK", 64, 50, -37.10, 3.74, -8.7, 1.95),
+        ("PICK", 64, 100, -27.90, 5.23, -8.9, 3.86),
+        ("PICK", 64, 120, -25.45, 5.41, -9.0, 3.99),
+        ("DULCIMER", 40, 50, -30.77, 2.37, -5.1, 1.72),
+        ("DULCIMER", 40, 100, -21.24, 2.32, -4.7, 1.89),
+        ("DULCIMER", 40, 120, -18.77, 2.31, -4.4, 1.99),
+        ("DULCIMER", 52, 50, -32.61, 3.23, -5.8, 3.27),
+        ("DULCIMER", 52, 100, -23.45, 3.29, -4.7, 2.65),
+        ("DULCIMER", 52, 120, -20.74, 3.19, -4.5, 2.44),
+        ("DULCIMER", 64, 50, -36.65, 6.49, -10.0, 2.06),
+        ("DULCIMER", 64, 100, -25.61, 4.70, -6.5, 1.79),
+        ("DULCIMER", 64, 120, -22.56, 4.28, -6.0, 1.78),
+    ];
+
+    fn f0_of(key: u8) -> f32 {
+        440.0 * 2f32.powf((key as f32 - 69.0) / 12.0)
+    }
+
+    /// The BARE model (no LA layer, no engine strip): `make`/`make_variation`
+    /// with `samples = false` returns the raw `Pluck`, exactly the excitation
+    /// path the P/G oracles read.
+    fn make_bare(program: u8, bank: u8, key: u8, vel: u8, seed: u32) -> Box<dyn Voice> {
+        if bank == 0 {
+            voices::make(program, key, vel, SR, seed, false)
+        } else {
+            voices::make_variation(program, bank, key, vel, SR, seed, false)
+                .expect("alt-bank preset must exist")
+        }
+    }
+
+    fn render_bare(program: u8, bank: u8, key: u8, vel: u8, seed: u32, secs: f32) -> Vec<f32> {
+        let mut v = make_bare(program, bank, key, vel, seed);
+        let mut buf = vec![0f32; (secs * SR) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    fn db(x: f32) -> f32 {
+        20.0 * x.max(1e-9).log10()
+    }
+
+    fn median3(mut v: [f32; 3]) -> f32 {
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        v[1]
+    }
+
+    /// One (preset, key, vel) cell: median sustain-window RMS (dB), median
+    /// att/sus, median onset tilt, and the seed spread in dB.
+    fn measure(program: u8, bank: u8, key: u8, vel: u8) -> (f32, f32, f32, f32) {
+        let f0 = f0_of(key);
+        let mut rms_db = [0f32; 3];
+        let mut asr = [0f32; 3];
+        let mut tilt = [0f32; 3];
+        for (i, &seed) in SEEDS.iter().enumerate() {
+            let buf = render_bare(program, bank, key, vel, seed, 0.40);
+            let sus = &buf[(0.05 * SR) as usize..(0.35 * SR) as usize];
+            rms_db[i] = db(rms(sus));
+            asr[i] = att_sus_ratio(&buf, SR, f0);
+            let onset = &buf[..(0.020 * SR) as usize];
+            tilt[i] = spectral_tilt_db_oct(onset, SR, 300.0, 9000.0);
+        }
+        let hi = rms_db.iter().copied().fold(f32::MIN, f32::max);
+        let lo = rms_db.iter().copied().fold(f32::MAX, f32::min);
+        (median3(rms_db), median3(asr), median3(tilt), hi - lo)
+    }
+
+    /// Regenerates `HEAD_BASELINE` (paste-ready). Run on the PRE-CHANGE build.
+    #[test]
+    #[ignore]
+    fn print_pluck_head_baseline() {
+        println!("    const HEAD_BASELINE: &[(&str, u8, u8, f32, f32, f32, f32)] = &[");
+        println!(
+            "        // (preset, key, vel, rms_db[0.05-0.35s], att_sus, onset_tilt_db_oct, seed_spread_db)"
+        );
+        let (mut worst_asr, mut worst_name) = (0f32, "");
+        for &(name, program, bank) in GRID {
+            for &key in &KEYS {
+                for &vel in &VELS {
+                    let (r, a, t, s) = measure(program, bank, key, vel);
+                    println!("        (\"{name}\", {key}, {vel}, {r:.2}, {a:.2}, {t:.1}, {s:.2}),");
+                    if a > worst_asr {
+                        worst_asr = a;
+                        worst_name = name;
+                    }
+                }
+            }
+        }
+        println!("    ];");
+        println!("    // fiercest att/sus in the grid: {worst_name} = {worst_asr:.2} (FluidR3 natural ≈ 1.3)");
+    }
+
+    /// Phase-0 guard: the frozen baseline is well-formed and records the
+    /// fierceness gap the redesign must close. This consumes `HEAD_BASELINE`
+    /// (so a corrupt paste is caught) and pins the "before" state as checked
+    /// fact — it does NOT re-render (the frozen numbers are the reference the
+    /// Phase-2 P/G/G7 oracles measure against).
+    #[test]
+    fn head_baseline_documents_the_fierceness_gap() {
+        // Shape: every GRID preset present at all 9 (key, vel) cells.
+        assert_eq!(HEAD_BASELINE.len(), GRID.len() * KEYS.len() * VELS.len());
+        for &(name, _, _) in GRID {
+            let cells = HEAD_BASELINE.iter().filter(|r| r.0 == name).count();
+            assert_eq!(cells, KEYS.len() * VELS.len(), "{name} cell count");
+        }
+        // Loudness anchors are finite, plausible dBFS; ratios/tilts sane.
+        for &(name, key, vel, rms_db, asr, tilt, spread) in HEAD_BASELINE {
+            assert!(
+                rms_db.is_finite() && (-70.0..0.0).contains(&rms_db),
+                "{name} {key} {vel}: rms {rms_db}"
+            );
+            assert!(
+                asr.is_finite() && asr > 0.0,
+                "{name} {key} {vel}: att/sus {asr}"
+            );
+            assert!(tilt.is_finite() && (-30.0..10.0).contains(&tilt));
+            assert!(spread >= 0.0);
+        }
+        // The documented problem (HLD §0): the HEAD model is far fiercer than
+        // the FluidR3 natural reference (~1.3). Most of the grid exceeds 2.0×,
+        // the fiercest is >10× (high keys, where the string decays before the
+        // sustain window), and the seed spread reaches multi-dB — the Rayleigh
+        // h1 luck the deterministic backbone must collapse to ≤1.0 dB (G7).
+        let fierce = HEAD_BASELINE.iter().filter(|r| r.4 > 2.0).count();
+        assert!(
+            fierce * 2 > HEAD_BASELINE.len(),
+            "expected most cells fierce; only {fierce}/{}",
+            HEAD_BASELINE.len()
+        );
+        let max_asr = HEAD_BASELINE.iter().map(|r| r.4).fold(0f32, f32::max);
+        assert!(
+            max_asr > 10.0,
+            "fiercest att/sus {max_asr} (expected the high-key blow-up)"
+        );
+        let max_spread = HEAD_BASELINE.iter().map(|r| r.6).fold(0f32, f32::max);
+        assert!(
+            max_spread > 4.0,
+            "max seed spread {max_spread} dB (expected the h1 luck)"
+        );
+    }
+}

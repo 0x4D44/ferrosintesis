@@ -662,6 +662,14 @@ impl Voice for MetalPlate {
     }
 }
 
+/// Velocity gain for a drum's noise bands: a soft hit keeps half the band
+/// energy, a full hit all of it. Shared so the brush slap's strand re-strike
+/// burst can scale by the SAME law as the first-contact noise it re-excites
+/// (MM-BUG-KILN-00001) — otherwise a fixed burst overpowers a soft ghost slap.
+fn noise_vel_gain(vn: f32) -> f32 {
+    0.5 + 0.5 * vn * vn
+}
+
 /// D1 velocity→timbre for membrane voices (HLD family A, §3.3): a harder hit
 /// starts slightly sharper, glides down faster, rings longer, and carries
 /// proportionally more click/noise energy (the 0.5 floor preserves ghost
@@ -686,7 +694,7 @@ fn membrane_velocity(
         .collect();
     let noise = noise
         .iter()
-        .map(|&(a, t, filt)| (a * (0.5 + 0.5 * vn * vn), t, filt))
+        .map(|&(a, t, filt)| (a * noise_vel_gain(vn), t, filt))
         .collect();
     (tones, noise)
 }
@@ -1207,8 +1215,12 @@ fn brush_slap(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
     let v = vel_amp(vel);
     let velnorm = vel as f32 / 127.0;
     let (tones, noise) = membrane_velocity(&BRUSH_TAP_TONES, &brush_tap_noise(sr), velnorm);
+    // The 12 ms strand re-strike scales with velocity like the noise bands it
+    // re-excites, anchored so full velocity keeps the calibrated 0.50
+    // (MM-BUG-KILN-00001: a fixed 0.50 burst dominated soft ghost slaps).
+    let reexcite = 0.50 * noise_vel_gain(velnorm);
     let drum = Drum::new(sr, seed, &tones, &noise, 0.40, BRUSH_SLAP_GAIN * v)
-        .with_bursts(&[(0.012, 0.50)]);
+        .with_bursts(&[(0.012, reexcite)]);
     Some(Box::new(drum) as Box<dyn Voice>)
 }
 
@@ -4454,6 +4466,32 @@ mod tests {
         );
     }
 
+    /// BR-O5b (regression, MM-BUG-KILN-00001): the 12 ms re-strike burst must
+    /// track note velocity, not sit at an absolute level. The first contact's
+    /// noise scales with velocity (`membrane_velocity`'s `0.5 + 0.5·vn²`), so a
+    /// fixed-amplitude burst overpowers a soft strike — at ghost velocity 30 the
+    /// second-contact window used to read 2.3× the first. With the burst scaled
+    /// by the same law the ratio is velocity-invariant: the ghost slap's
+    /// second/first ratio must stay near the calibrated velocity-100 ratio and
+    /// must not dominate its own first contact.
+    #[test]
+    fn brush_slap_reexcite_tracks_velocity() {
+        let ratio = |vel: u8| {
+            let s = render_drum_kit(39, vel, 0.3, Kit::Brush);
+            hp_win(&s, 800.0, 0.013, 0.022) / hp_win(&s, 800.0, 0.004, 0.011).max(1e-12)
+        };
+        let ghost = ratio(30);
+        let loud = ratio(100);
+        println!("BR-O5b re-strike ratio: ghost(30)={ghost:.3} loud(100)={loud:.3}");
+        // Velocity-invariance: the ghost slap's second/first ratio must stay
+        // near the calibrated velocity-100 ratio, never running away as the
+        // first contact shrinks (the pre-fix bug: 2.336 vs 1.590 = 1.47×).
+        assert!(
+            ghost <= 1.15 * loud,
+            "ghost re-strike ratio {ghost:.3} runs away from vel-100 {loud:.3}"
+        );
+    }
+
     /// SW-O1: the swirl SWELLS, it does not hit — the first 30 ms stays well
     /// under the eventual peak, which lands only after ≥50 ms.
     #[test]
@@ -4683,9 +4721,12 @@ mod tests {
             (
                 39,
                 testutil::RenderSignature {
-                    rms_db: -19.795,
-                    centroid_hz: 582.261,
-                    late_early_db: -35.832,
+                    // Re-frozen for MM-BUG-KILN-00001: the strand re-strike burst
+                    // now scales with velocity, so the vel-100 slap is a touch
+                    // quieter and darker than the fixed-0.50 burst.
+                    rms_db: -19.909,
+                    centroid_hz: 552.960,
+                    late_early_db: -36.990,
                 },
             ),
             (

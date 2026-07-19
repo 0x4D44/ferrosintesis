@@ -140,6 +140,16 @@ default-on with a diff-driven asset refresh.** Two regimes:
   anyone who renders after your change simply hears the improved synth, and the
   committed album source (the `.mid`) is unaffected.
 
+**The synth is a GENERIC GM player — never cull a feature just because no in-repo album
+uses it.** ferrosintesis is *voiced* for the fable5 albums but is a faithful player of **any**
+GM file, so "nothing under `albums/` authors this" is **not** evidence that a voice, kit,
+controller path or GM program is dead. The selectable channel-10 kits (PC 24 `Synth`,
+PC 25 `V1` the original kit, PC 40 `Brush`), GM programs no album happens to reach, and
+controller handling are all part of the public instrument — kept for foreign MIDI files and
+for future pieces. Judge a feature by whether it is **correct and reachable**, not by an
+in-repo usage count; a usage census is a fact about our albums, not about the synth. If you
+believe something is genuinely dead, ask Arthur rather than tidying it away.
+
 **Either way, run the render-diff inventory** for any voices.rs/engine.rs/drums.rs/
 sampler.rs change: build a baseline binary in a throwaway `git worktree add <path> HEAD`,
 render every album MIDI in `render-catalog`'s `ALBUMS` table with both binaries, and `cmp`.

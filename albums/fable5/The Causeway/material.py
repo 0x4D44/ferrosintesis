@@ -37,6 +37,23 @@ The through-lines (HLD: "wrk_docs/2026.07.18 - HLD - The Causeway album
                   REACH >= VOWEL_FLOOR_T5.
 - Cadence law     tracks 1-4 cadence modally (iv-i, v-i, bVII-i; leading
                   tone banned); T5 ends IV-I plagal with the Picardy third.
+
+ACT TWO (tracks 6-10 — HLD addendum "wrk_docs/2026.07.19 - HLD - The
+Causeway act two (five more crossings).md"): the tide returns, the strait
+re-opens, but the voices never part again.  Distance 0 on every Act Two
+track; overlap REQUIRED, not banned; the leading-tone ban stays scoped to
+1-4 and tracks 6/7/9/10 end on the plagal signature (T8 is pinned
+unresolved).  All new material grows from THE FUSION PHRASE:
+
+- HOOKS[6..10]    derived from FUSION (per-hook predicates, proven below);
+                  hooks 6 and 7 are literal sub-patterns, so Act Two
+                  density/medley counts use hook_statements_unnested().
+- FUSION_RETRO    the road home — the exact retrograde.  T6-T9 each state
+                  only their pinned REACH prefix (RETRO_REACH: 3, 5, 6, 8
+                  notes, never further); T10 walks it whole, once, right
+                  after a forward statement (the palindrome).
+- ISLAND in major play_island(major=True) — banned until T10 (the ice
+                  melts last; it still hangs on degree 2).
 """
 
 from __future__ import annotations
@@ -87,6 +104,21 @@ FUSION: list[tuple[float, float, int]] = [
 FUSION_LEN: float = 8.0
 
 
+def _retrograde(notes: list[tuple[float, float, int]]
+                ) -> list[tuple[float, float, int]]:
+    """Exact time-mirror of a contiguous (onset, dur, degree) phrase."""
+    total = max(on + du for on, du, _d in notes)
+    out = sorted((total - (on + du), du, d) for on, du, d in notes)
+    return [(round(on, 6), du, d) for on, du, d in out]
+
+
+# THE ROAD HOME (Act Two): the fusion phrase walked backward — the held
+# tonic, the scale climb, the incantation, home.  T6-T9 state only their
+# pinned REACH prefix of it; T10 states it whole, exactly once.
+FUSION_RETRO: list[tuple[float, float, int]] = _retrograde(FUSION)
+RETRO_REACH: dict[int, int] = {6: 3, 7: 5, 8: 6, 9: 8}
+
+
 def theme_cell(theme: list[tuple[float, float, int]],
                mode: str) -> list[tuple[float, float, int]]:
     """(onset, dur, semitones-relative-to-first-note) for a degree table."""
@@ -117,13 +149,16 @@ def _play_degrees(sc: en.Score, ch: int, t0: float, base: int, mode: str,
 def play_island(sc: en.Score, ch: int, t0: float, base: int,
                 stretch: float = 1.0, vel: int = 76,
                 vel_end: int | None = None, gate: float = 1.0,
-                jt: int = 0, jv: int = 3, count: int | None = None) -> float:
-    """State the ISLAND theme (aeolian) above tonic pitch `base`; jt=0 so
-    every statement is oracle-findable.  `count` limits to a prefix (T4's
-    reaching device is MAINLAND-side; island prefixes are for fragments that
-    must NOT register as statements — fewer than 10 notes never match)."""
+                jt: int = 0, jv: int = 3, count: int | None = None,
+                major: bool = False) -> float:
+    """State the ISLAND theme above tonic pitch `base`; jt=0 so every
+    statement is oracle-findable.  `count` limits to a prefix (fragments
+    that must NOT register — fewer than 10 notes never match).
+    `major=True` is THE MELTING (ionian; still hangs on degree 2) —
+    searchable as "island_major", banned before T10."""
     notes = ISLAND if count is None else ISLAND[:count]
-    return _play_degrees(sc, ch, t0, base, MODE_MINOR, notes, stretch,
+    mode = MODE_MAJOR if major else MODE_MINOR
+    return _play_degrees(sc, ch, t0, base, mode, notes, stretch,
                          vel, vel_end, gate, jt, jv)
 
 
@@ -142,10 +177,28 @@ def play_mainland(sc: en.Score, ch: int, t0: float, base: int,
 def play_fusion(sc: en.Score, ch: int, t0: float, base: int,
                 stretch: float = 1.0, vel: int = 80,
                 vel_end: int | None = None, gate: float = 1.0,
-                jt: int = 0, jv: int = 3) -> float:
-    """T5 only: the fusion phrase (ionian), the album's tonic landing."""
-    return _play_degrees(sc, ch, t0, base, MODE_MAJOR, FUSION, stretch,
+                jt: int = 0, jv: int = 3, retro: bool = False,
+                count: int | None = None) -> float:
+    """The fusion phrase (ionian).  Act One: forward, T5's landing.
+    Act Two: every track states it >= 1; `retro=True` is THE ROAD HOME
+    (searchable as "fusion_retro" — T10 only, exactly once), and
+    `retro=True, count=N` is the REACH (T6-T9's pinned prefixes — a
+    count < 9 never matches the full retro cell)."""
+    notes = FUSION_RETRO if retro else FUSION
+    if count is not None:
+        notes = notes[:count]
+        base_on = notes[0][0]
+        notes = [(on - base_on, du, d) for on, du, d in notes]
+    return _play_degrees(sc, ch, t0, base, MODE_MAJOR, notes, stretch,
                          vel, vel_end, gate, jt, jv)
+
+
+def retro_prefix_cell(count: int) -> list[tuple[float, float, int]]:
+    """The REACH search cell: the first `count` notes of FUSION_RETRO as a
+    (onset, dur, rel-semis) cell for find_statements."""
+    if not 2 <= count <= len(FUSION_RETRO):
+        raise ValueError(f"retro prefix count {count} out of range")
+    return theme_cell(FUSION_RETRO[:count], MODE_MAJOR)
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +209,13 @@ def play_fusion(sc: en.Score, ch: int, t0: float, base: int,
 CONVERGENCE: dict[int, tuple[str, str]] = {
     1: ("E", "Bb"), 2: ("E", "C"), 3: ("A", "C"), 4: ("A", "G"),
     5: ("D", "D"),
+    # Act Two: distance 0 everywhere — the pair travels TOGETHER through
+    # D's plagal neighbourhood and comes home to leave.
+    6: ("G", "G"), 7: ("C", "C"), 8: ("D", "D"), 9: ("F", "F"),
+    10: ("D", "D"),
 }
+ACT_ONE: tuple[int, ...] = (1, 2, 3, 4, 5)
+ACT_TWO: tuple[int, ...] = (6, 7, 8, 9, 10)
 
 
 def convergence_pcs(track: int) -> tuple[int, int]:
@@ -190,12 +249,33 @@ HOOKS: dict[int, list[tuple[float, float, int]]] = {
     3: [(0.0, 0.5, 0), (0.5, 0.5, 3), (1.0, 0.5, 7)],
     4: [(0.0, 0.25, 0), (0.25, 0.25, 7), (0.5, 0.25, 14), (0.75, 0.25, 15)],
     5: [(0.0, 1.0, 0), (1.0, 1.0, 2), (2.0, 0.5, 4), (2.5, 1.5, 7)],
+    # Act Two: every cell derived from THE FUSION PHRASE (per-hook
+    # predicates, proven in verify_material).  6 and 7 are literal
+    # sub-patterns of the forward fusion (interval + onset fractions);
+    # 8 is the pitch-retrograde of its head (own rhythm); 9 is the pitch
+    # head of FUSION_RETRO (own rhythm, searcher-disjoint from the retro,
+    # the mainland's 4-5-6 run and the island's 3-4-5 run); 10 is the
+    # frame (first note, crest, last note lifted an octave).
+    6: [(0.0, 1.0, 0), (1.0, 0.5, 9), (1.5, 0.5, 9), (2.0, 1.0, 9)],
+    7: [(0.0, 1.0, 0), (1.0, 1.0, -2), (2.0, 0.5, -3), (2.5, 0.5, -5),
+        (3.0, 1.0, -7)],
+    8: [(0.0, 0.5, 0), (0.5, 0.5, 0), (1.0, 0.5, 0), (1.5, 1.5, -9)],
+    9: [(0.0, 0.5, 0), (0.5, 1.5, 2), (2.0, 2.0, 4)],
+    10: [(0.0, 1.0, 0), (1.0, 1.5, 9), (2.5, 1.5, 12)],
 }
 
 HOOK_NAMES: dict[int, str] = {
     1: "the heartbeat", 2: "the ferry riff", 3: "the lattice",
     4: "the ice-arp", 5: "the pump call",
+    6: "the flood bell", 7: "the noon fall", 8: "the gale riff",
+    9: "the road-home head", 10: "the sail",
 }
+
+# Hooks that are literal sub-patterns of the forward fusion phrase: every
+# fusion statement auto-registers them once each, so Act Two density and
+# medley oracles count via hook_statements_unnested(), never raw
+# find_statements.
+FUSION_EMBEDDED_HOOKS: frozenset[int] = frozenset({6, 7})
 
 
 def play_hook(sc: en.Score, ch: int, t0: float, first_pitch: int, n: int,
@@ -273,8 +353,10 @@ def theme_statements(sc: en.Score, which: str,
     """
     theme, mode = {
         "island": (ISLAND, MODE_MINOR),
+        "island_major": (ISLAND, MODE_MAJOR),
         "mainland": (MAINLAND, MODE_MAJOR),
         "fusion": (FUSION, MODE_MAJOR),
+        "fusion_retro": (FUSION_RETRO, MODE_MAJOR),
     }[which]
     cell = theme_cell(theme, mode)
     total = max(on + du for on, du, _s in cell)
@@ -295,6 +377,27 @@ def overlapping_pairs(spans_a, spans_b, eps: float = 1e-6):
     return out
 
 
+def hook_statements_unnested(sc: en.Score, n: int
+                             ) -> list[tuple[int, float, float, int]]:
+    """HOOKS[n] hits NOT time-nested inside a same-channel fusion-family
+    statement (forward or retro).  Act Two's hooks 6/7 are literal
+    sub-patterns of the fusion phrase, so raw find_statements counts every
+    fusion statement too — density and medley oracles use THIS."""
+    spans = (theme_statements(sc, "fusion") +
+             theme_statements(sc, "fusion_retro"))
+    cell = HOOKS[n]
+    total = max(on + du for on, du, _s in cell)
+    out = []
+    for ch in sorted(sc.events):
+        for start, first, stretch in find_statements(note_ons(sc, ch), cell):
+            end = start + total * stretch
+            if any(s[0] == ch and s[1] - 1e-6 <= start and
+                   end <= s[2] + 1e-6 for s in spans):
+                continue
+            out.append((ch, start, end, first))
+    return sorted(out, key=lambda s: s[1])
+
+
 # ---------------------------------------------------------------------------
 # THE MORSE TIDE-TABLE.  Standard timing: dit = 1 unit on, dah = 3 on,
 # 1 off between symbols, 3 off between letters, 7 off between words.
@@ -310,11 +413,16 @@ MORSE_TABLE: dict[str, str] = {
 
 MORSE_WORDS: dict[int, str] = {
     1: "NEAP", 2: "WAIT", 3: "TURN", 4: "EBB", 5: "HOME",
+    6: "FLOOD", 7: "NOON", 8: "GALE", 9: "WANE", 10: "SAIL",
 }
 
 # The rotating timbre: GM program of each track's morse lane (the module
 # assigns the channel; ch9 woodblock uses the GM percussion key instead).
-MORSE_PROGRAMS: dict[int, int] = {1: 8, 2: 115, 3: 28, 4: 108, 5: 14}
+# Ten distinct programs across the album; T8's GALE is thunder on timpani.
+MORSE_PROGRAMS: dict[int, int] = {
+    1: 8, 2: 115, 3: 28, 4: 108, 5: 14,
+    6: 11, 7: 114, 8: 47, 9: 10, 10: 9,
+}
 
 
 def morse_rhythm(text: str, unit: float = 0.25) -> list[tuple[float, float]]:
@@ -383,13 +491,26 @@ def tide_breath(base_bpm: float, t0: float, t1: float,
 
 SHORE_PANS: dict[int, tuple[int, int]] = {
     1: (40, 88), 2: (44, 84), 3: (50, 78), 4: (54, 74), 5: (60, 68),
+    # Act Two: the tide re-opens the strait (widest at the gale, never as
+    # wide as the first winter); T10 = the one boat — the two
+    # THEME-CARRYING channels share the centre seat, accompaniment gets a
+    # symmetric seating plan pinned in the module.
+    6: (56, 72), 7: (54, 74), 8: (42, 86), 9: (46, 82), 10: (64, 64),
 }
 
-TOLLS: dict[int, int] = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
+TOLLS: dict[int, int] = {n: n for n in range(1, 11)}
 TOLL_SPACING: tuple[float, float] = (1.5, 4.0)   # beats between tolls
 
-VOWEL_CAPS: dict[int, int] = {1: 40, 2: 50, 3: 75, 4: 55, 5: 127}
+VOWEL_CAPS: dict[int, int] = {
+    1: 40, 2: 50, 3: 75, 4: 55, 5: 127,
+    6: 90, 7: 95, 8: 45, 9: 70, 10: 127,
+}
 VOWEL_FLOOR_T5: int = 80
+VOWEL_FLOOR_T10: int = 100   # the album's fullest voice, machine-comparable
+
+# Act Two cadence law: plagal finals on 6/7/9/10; T8 is pinned UNRESOLVED
+# (final bass on the iv, no tonic landing outside the bell-buoy channel).
+ACT2_PLAGAL_TRACKS: frozenset[int] = frozenset({6, 7, 9, 10})
 
 
 def play_tolls(sc: en.Score, ch: int, t0: float, track: int, pitch: int,
@@ -402,10 +523,11 @@ def play_tolls(sc: en.Score, ch: int, t0: float, track: int, pitch: int,
     for i in range(TOLLS[track]):
         sc.note(ch, pitch, t, dur, max(30, vel - 4 * i), jt=0, jv=2)
         last = t
-        gap = spacing + widen * i
-        if not lo - 1e-9 <= gap <= hi + 1e-9:
-            raise ValueError(f"toll gap {gap} outside {TOLL_SPACING}")
-        t += gap
+        if i < TOLLS[track] - 1:      # no phantom gap after the last strike
+            gap = spacing + widen * i
+            if not lo - 1e-9 <= gap <= hi + 1e-9:
+                raise ValueError(f"toll gap {gap} outside {TOLL_SPACING}")
+            t += gap
     return last
 
 
@@ -451,6 +573,31 @@ def cadence_failures(sc: en.Score, bass_ch: int, lo: float, hi: float,
                 fails.append(f"cadence window [{lo},{hi}]: leading tone "
                              f"pc {leading} on ch{ch} at beat {t / PPQ:.2f}")
                 break
+    return fails
+
+
+def plagal_final_failures(sc: en.Score, bass_ch: int, downbeat: float,
+                          tonic_pc: int, window: float = 8.0) -> list[str]:
+    """Act Two's final-cadence law (tracks 6/7/9/10): the bass lands the
+    tonic pc at `downbeat` (+-0.1 beat) and its LAST prior note within
+    `window` beats is pc offset 5 EXACTLY (the IV).  Deliberately NOT
+    built on cadence_failures: no leading-tone ban (Act Two lifted it),
+    and no {0, 7, 10} approach tolerance (a v-i or bVII-i final must not
+    pass a plagal oracle)."""
+    fails = []
+    ons = note_ons(sc, bass_ch)
+    landing = [p for t, p, _v in ons if abs(t / PPQ - downbeat) <= 0.1]
+    if not landing or all(p % 12 != tonic_pc for p in landing):
+        fails.append(f"plagal final at {downbeat}: bass does not land "
+                     f"pc {tonic_pc}")
+    prior = [p for t, p, _v in ons
+             if downbeat - window <= t / PPQ < downbeat - 0.1]
+    if not prior:
+        fails.append(f"plagal final at {downbeat}: no bass approach in "
+                     f"the window")
+    elif (prior[-1] % 12 - tonic_pc) % 12 != 5:
+        fails.append(f"plagal final at {downbeat}: approach pc offset "
+                     f"{(prior[-1] % 12 - tonic_pc) % 12} != 5 (the IV)")
     return fails
 
 
@@ -529,11 +676,19 @@ def verify_material() -> list[str]:
 
     # --- convergence ---
     want = [6, 4, 3, 2, 0]
-    got = [pc_distance(*convergence_pcs(t)) for t in (1, 2, 3, 4, 5)]
+    got = [pc_distance(*convergence_pcs(t)) for t in ACT_ONE]
     if got != want:
-        fails.append(f"convergence distances {got} != {want}")
+        fails.append(f"act-one convergence distances {got} != {want}")
     if CONVERGENCE[5] != ("D", "D"):
         fails.append("track 5 must converge on D")
+    # Act Two: distance 0 everywhere; the pair walks D's plagal
+    # neighbourhood and comes home to leave.
+    if any(pc_distance(*convergence_pcs(t)) != 0 for t in ACT_TWO):
+        fails.append("act-two tracks must keep distance 0")
+    if [convergence_pcs(t)[0] for t in ACT_TWO] != [7, 0, 2, 5, 2]:
+        fails.append("act-two walk must be G, C, D, F, D")
+    if CONVERGENCE[10] != ("D", "D"):
+        fails.append("track 10 must leave from D")
     if island_tonic_pc(en.n("B4")) != _pc("E"):
         fails.append("island tonic inference broken (B start -> E minor)")
     if mainland_tonic_pc(en.n("C4")) != _pc("C"):
@@ -561,34 +716,105 @@ def verify_material() -> list[str]:
     if len(HOOKS[3]) != 3:
         fails.append("hook 3 is the 3-quaver lattice cell")
 
-    # --- statement search: round-trips and no-false-positive claims ---
+    # --- Act Two hook derivations (per-hook predicates, as data) ---
+    fus_rel = [s - FUSION_CELL[0][2] for _o, _d, s in FUSION_CELL]
+    fus_on = [o for o, _d, _s in FUSION_CELL]
+    h = {n: ([o for o, _d, _s in HOOKS[n]],
+             [s for _o, _d, s in HOOKS[n]]) for n in (6, 7, 8, 9, 10)}
+    if h[6][1] != fus_rel[0:4] or h[6][0] != fus_on[0:4]:
+        fails.append("hook 6 must be fusion[0:4] verbatim (rels + onsets)")
+    want7 = [s - fus_rel[4] for s in fus_rel[4:9]]
+    won7 = [o - fus_on[4] for o in fus_on[4:9]]
+    if h[7][1] != want7 or h[7][0] != won7:
+        fails.append("hook 7 must be fusion[4:9] (rels + onsets)")
+    rev = list(reversed(fus_rel[0:4]))
+    if h[8][1] != [s - rev[0] for s in rev]:
+        fails.append("hook 8 must be the pitch-retrograde of fusion[0:4]")
+    retro_cell = theme_cell(FUSION_RETRO, MODE_MAJOR)
+    retro_rel = [s - retro_cell[0][2] for _o, _d, s in retro_cell]
+    if h[9][1] != retro_rel[0:3]:
+        fails.append("hook 9 must be the road-home head (retro rels 0:3)")
+    if h[9][0] == [o - retro_cell[0][0] for o, _d, _s in retro_cell[0:3]]:
+        fails.append("hook 9's rhythm must DIFFER from the retro head "
+                     "(searcher-disjointness is the design)")
+    if h[10][1] != [fus_rel[0], max(fus_rel), fus_rel[-1] + 12]:
+        fails.append("hook 10 must frame fusion: first, crest, last + 12")
+
+    # --- the retrograde and the reach ---
+    rdegs = [d for _on, _du, d in FUSION_RETRO]
+    fails += [f"retro: {m}" for m in _contiguous(FUSION_RETRO, FUSION_LEN)]
+    if rdegs != [1, 2, 3, 4, 5, 6, 6, 6, 1]:
+        fails.append(f"retro degrees {rdegs} wrong")
+    if FUSION_RETRO[0] != (0.0, 2.0, 1):
+        fails.append("retro must open on the held tonic")
+    if sorted(RETRO_REACH) != [6, 7, 8, 9]:
+        fails.append("the reach covers tracks 6-9")
+    reach_counts = [RETRO_REACH[t] for t in (6, 7, 8, 9)]
+    if reach_counts != sorted(set(reach_counts)) or \
+            any(not 2 <= c < len(FUSION_RETRO) for c in reach_counts):
+        fails.append("the reach must strictly grow and never complete")
+
+    # --- statement search: round-trips and the expected-match matrix ---
+    # ch0 island · ch1 mainland · ch2 fusion · ch3 all hooks · ch4 retro ·
+    # ch5 island-major · ch6 the longest reach prefix (8 notes).
     sc = en.Score(1)
     play_island(sc, 0, 8.0, en.n("E4"))
     play_mainland(sc, 1, 24.0, en.n("C4"))
     play_fusion(sc, 2, 40.0, en.n("D4"))
     for n in HOOKS:
         play_hook(sc, 3, 56.0 + 8.0 * n, en.n("A4"), n)
-    isl = theme_statements(sc, "island")
-    if len(isl) != 1 or isl[0][0] != 0 or abs(isl[0][1] - 8.0) > 1e-6:
-        fails.append(f"island round-trip failed ({isl})")
-    elif island_tonic_pc(isl[0][3]) != _pc("E"):
-        fails.append("island round-trip tonic wrong")
-    mnl = theme_statements(sc, "mainland")
-    if len(mnl) != 1 or mnl[0][0] != 1:
-        fails.append(f"mainland round-trip failed ({mnl})")
-    elif mainland_tonic_pc(mnl[0][3]) != _pc("C"):
-        fails.append("mainland round-trip tonic wrong")
-    fus = theme_statements(sc, "fusion")
-    if len(fus) != 1 or fus[0][0] != 2:
-        fails.append(f"fusion round-trip failed ({fus})")
+    play_fusion(sc, 4, 152.0, en.n("D4"), retro=True)
+    play_island(sc, 5, 168.0, en.n("D4"), major=True)
+    play_fusion(sc, 6, 184.0, en.n("D4"), retro=True, count=8)
+    for which, ch, tonic in (("island", 0, "E"), ("mainland", 1, "C"),
+                             ("fusion", 2, "D"), ("fusion_retro", 4, "D"),
+                             ("island_major", 5, "D")):
+        got = theme_statements(sc, which)
+        if [g[0] for g in got] != [ch]:
+            fails.append(f"{which} round-trip failed ({got})")
+        elif which.startswith("island") and \
+                island_tonic_pc(got[0][3]) != _pc(tonic):
+            fails.append(f"{which} round-trip tonic wrong")
+        elif which == "mainland" and \
+                mainland_tonic_pc(got[0][3]) != _pc(tonic):
+            fails.append("mainland round-trip tonic wrong")
+    # The expected hook-match matrix: exactly one own-channel hit each;
+    # hooks 6/7 REQUIRED exactly once inside the forward fusion (the
+    # derivation proof); nothing matches inside island / mainland / retro /
+    # island-major (8 and 9 are rhythm-saved — that is pinned here).
     for n in HOOKS:
-        hits = [(ch, s) for ch in sorted(sc.events)
-                for s in find_statements(note_ons(sc, ch), HOOKS[n])]
-        own = [(ch, s) for ch, s in hits if ch == 3]
-        if len(own) != 1:
-            fails.append(f"hook {n} round-trip failed ({len(own)} hits)")
-        if any(ch in (0, 1, 2) for ch, _s in hits):
-            fails.append(f"hook {n} false-positives inside a theme")
+        by_ch: dict[int, int] = {}
+        for ch in sorted(sc.events):
+            hit = find_statements(note_ons(sc, ch), HOOKS[n])
+            if hit:
+                by_ch[ch] = len(hit)
+        want_fus = 1 if n in FUSION_EMBEDDED_HOOKS else 0
+        if by_ch.get(3, 0) != 1:
+            fails.append(f"hook {n} round-trip failed ({by_ch})")
+        if by_ch.get(2, 0) != want_fus:
+            fails.append(f"hook {n}: {by_ch.get(2, 0)} fusion matches, "
+                         f"want {want_fus}")
+        if any(by_ch.get(ch, 0) for ch in (0, 1, 4, 5)):
+            fails.append(f"hook {n} false-positives ({by_ch})")
+    # The reach: the pinned prefixes register, and no prefix emission can
+    # ever satisfy the full road home.
+    if len(find_statements(note_ons(sc, 6), retro_prefix_cell(8))) != 1:
+        fails.append("reach round-trip failed (8-prefix not found)")
+    if theme_statements(sc, "fusion_retro") and \
+            any(g[0] == 6 for g in theme_statements(sc, "fusion_retro")):
+        fails.append("a reach prefix must never satisfy the full retro")
+    if any(len(find_statements(note_ons(sc, 2), retro_prefix_cell(c)))
+           for c in sorted(set(RETRO_REACH.values()))):
+        fails.append("reach prefixes must not match inside forward fusion")
+    # hook_statements_unnested: the fusion-embedded hooks vanish inside a
+    # fusion statement and survive standalone.
+    for n in sorted(FUSION_EMBEDDED_HOOKS):
+        raw = sum(len(find_statements(note_ons(sc, ch), HOOKS[n]))
+                  for ch in sorted(sc.events))
+        unn = hook_statements_unnested(sc, n)
+        if raw != 2 or len(unn) != 1 or unn[0][0] != 3:
+            fails.append(f"unnested filter wrong for hook {n} "
+                         f"(raw {raw}, unnested {len(unn)})")
     # An augmented statement still registers (stretch invariance).
     sc2 = en.Score(2)
     play_island(sc2, 0, 0.0, en.n("A4"), stretch=2.0)
@@ -620,11 +846,12 @@ def verify_material() -> list[str]:
     if morse_rhythm("T", 0.25) != [(0.0, 0.75)]:
         fails.append("morse: T must be a single dah")
     counts = {t: len(morse_rhythm(w)) for t, w in MORSE_WORDS.items()}
-    if counts != {1: 9, 2: 8, 3: 9, 4: 9, 5: 10}:
+    if counts != {1: 9, 2: 8, 3: 9, 4: 9, 5: 10,
+                  6: 17, 7: 10, 8: 10, 9: 8, 10: 11}:
         fails.append(f"morse symbol counts drifted: {counts}")
-    if sorted(MORSE_PROGRAMS) != [1, 2, 3, 4, 5] or \
-            len(set(MORSE_PROGRAMS.values())) != 5:
-        fails.append("the morse timbre must rotate (5 distinct programs)")
+    if sorted(MORSE_PROGRAMS) != list(range(1, 11)) or \
+            len(set(MORSE_PROGRAMS.values())) != 10:
+        fails.append("the morse timbre must rotate (10 distinct programs)")
 
     # --- tide breath ---
     tb = tide_breath(76.0, 0.0, 64.0, period=32.0, depth=4.0)
@@ -636,32 +863,62 @@ def verify_material() -> list[str]:
     if tb != tide_breath(76.0, 0.0, 64.0, period=32.0, depth=4.0):
         fails.append("tide_breath must be deterministic")
 
-    # --- the narrowing strait ---
+    # --- the narrowing strait (Act One) ---
     widths = []
-    for t in (1, 2, 3, 4, 5):
+    for t in ACT_ONE:
         isl_pan, main_pan = SHORE_PANS[t]
         if not 0 <= isl_pan < 64 < main_pan <= 127:
             fails.append(f"track {t}: island must sit left, mainland right")
         widths.append(main_pan - isl_pan)
     if widths != sorted(widths, reverse=True) or len(set(widths)) != 5:
-        fails.append("the strait must strictly narrow across the album")
+        fails.append("the strait must strictly narrow across Act One")
+
+    # --- the re-opening strait (Act Two) and the one boat ---
+    w2 = []
+    for t in (6, 7, 8, 9):
+        isl_pan, main_pan = SHORE_PANS[t]
+        if not 0 <= isl_pan < 64 < main_pan <= 127:
+            fails.append(f"track {t}: island left, mainland right")
+        w2.append(main_pan - isl_pan)
+    if w2 != [16, 20, 44, 36]:
+        fails.append(f"act-two widths {w2} != [16, 20, 44, 36]")
+    if max(w2) != SHORE_PANS[8][1] - SHORE_PANS[8][0]:
+        fails.append("the gale must be the act's widest water")
+    if max(w2) >= widths[0]:
+        fails.append("the water is never again as wide as the first winter")
+    if SHORE_PANS[10] != (64, 64):
+        fails.append("track 10 is one boat: both theme seats at centre")
 
     # --- the tolls ---
-    if TOLLS != {n: n for n in range(1, 6)}:
-        fails.append("track N must toll N times")
+    if TOLLS != {n: n for n in range(1, 11)}:
+        fails.append("track N must toll N times, all ten tracks")
     sc4 = en.Score(4)
     if abs(play_tolls(sc4, 0, 10.0, 3, 62) - 15.0) > 1e-9 or \
             len(note_ons(sc4, 0)) != 3:
         fails.append("play_tolls emits the wrong bell count/spacing")
+    # T10's widening peal: nine audible gaps, no phantom tenth-gap check.
+    sc4b = en.Score(44)
+    try:
+        play_tolls(sc4b, 0, 0.0, 10, 62, spacing=1.6, widen=0.3)
+    except ValueError:
+        fails.append("play_tolls phantom last-gap check is back")
+    else:
+        if len(note_ons(sc4b, 0)) != 10:
+            fails.append("play_tolls: ten tolls expected")
 
     # --- the vowel clock ---
-    if sorted(VOWEL_CAPS) != [1, 2, 3, 4, 5]:
-        fails.append("vowel caps must cover all five tracks")
+    if sorted(VOWEL_CAPS) != list(range(1, 11)):
+        fails.append("vowel caps must cover all ten tracks")
     if not (VOWEL_CAPS[1] < VOWEL_CAPS[2] <= VOWEL_CAPS[3] and
             VOWEL_CAPS[4] < VOWEL_CAPS[3] <= VOWEL_CAPS[5]):
         fails.append("vowel clock shape: rise to T3, dip at T4, open at T5")
     if VOWEL_FLOOR_T5 <= VOWEL_CAPS[4]:
         fails.append("T5 must open beyond T4's ceiling")
+    if not VOWEL_CAPS[8] < VOWEL_CAPS[7]:
+        fails.append("the gale must seal the mouths again (T8 < T7)")
+    if not (VOWEL_FLOOR_T10 > VOWEL_FLOOR_T5 and
+            VOWEL_FLOOR_T10 > VOWEL_CAPS[7]):
+        fails.append("T10 must open wider than the whole record before it")
 
     # --- cadence law ---
     if ALLOWED_APPROACH_OFFSETS != {5, 7, 10}:
@@ -679,5 +936,25 @@ def verify_material() -> list[str]:
     sc6.note(1, en.n("C#4"), 0.5, 0.5, 70, jt=0)    # the banned leading tone
     if not cadence_failures(sc6, 0, 0.0, 3.0, 1.0, _pc("D")):
         fails.append("cadence_failures misses a leading tone")
+
+    # --- Act Two cadence law: the plagal signature ---
+    if ACT2_PLAGAL_TRACKS != {6, 7, 9, 10}:
+        fails.append("plagal finals are T6/T7/T9/T10; T8 stays unresolved")
+    sc7 = en.Score(7)
+    sc7.note(0, en.n("G2"), 0.0, 1.0, 70, jt=0)      # the IV of D
+    sc7.note(0, en.n("D2"), 1.0, 2.0, 70, jt=0)
+    if plagal_final_failures(sc7, 0, 1.0, _pc("D")):
+        fails.append("plagal_final_failures rejects a legal IV-I")
+    sc8 = en.Score(8)
+    sc8.note(0, en.n("A2"), 0.0, 1.0, 70, jt=0)      # v-i must NOT pass
+    sc8.note(0, en.n("D2"), 1.0, 2.0, 70, jt=0)
+    if not plagal_final_failures(sc8, 0, 1.0, _pc("D")):
+        fails.append("plagal_final_failures accepts a v-i (not plagal)")
+    sc9 = en.Score(9)
+    sc9.note(0, en.n("G2"), 0.0, 1.0, 70, jt=0)
+    sc9.note(0, en.n("D2"), 1.0, 2.0, 70, jt=0)
+    sc9.note(1, en.n("C#4"), 0.5, 0.5, 70, jt=0)
+    if plagal_final_failures(sc9, 0, 1.0, _pc("D")):
+        fails.append("plagal_final_failures must NOT ban the leading tone")
 
     return fails

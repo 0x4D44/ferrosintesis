@@ -112,6 +112,57 @@ Import material; use its searchers — never hand-roll pattern matching.
     also RISE (8-bar-window means non-decreasing); T5's final movements rise
     monotonically and reach >= VOWEL_FLOOR_T5.
 
+## 2b. ACT TWO laws (tracks 6-10 — read the Act Two HLD addendum,
+"wrk_docs/2026.07.19 - HLD - The Causeway act two (five more crossings).md")
+
+Act One's laws 1-13 apply EXCEPT as inverted/replaced below:
+
+1. **Convergence** — distance 0: both themes' implied tonics ==
+   material.convergence_pcs(NUMBER) (same pc).  T9's single pinned
+   exception: the island theme once at pc E (the MEMORY), whitelisted by
+   YOUR oracle explicitly.
+2. **Simultaneity REQUIRED** — >= 1 overlapping island+mainland pair,
+   downbeat-consonant across the overlap (T8: >= 2 inside the storm
+   movement).  The Act One ban is dead.
+3. **Fusion everywhere** — >= 1 forward FUSION statement per track (T10:
+   ONLY in movement IV, right before the retrograde — the palindrome).
+4. **Hook counts are UNNESTED** — hooks 6/7 are literal sub-patterns of
+   the fusion phrase, so density (>= 6) and the T10 medley use
+   material.hook_statements_unnested(sc, n), never raw find_statements.
+5. **The REACH** — state exactly material.RETRO_REACH[NUMBER] notes of the
+   road home via material.play_fusion(..., retro=True, count=N) >= 1 time;
+   your oracle also proves NO longer prefix and no full retro exists
+   (search retro_prefix_cell(c) for c = N+1..8 == 0 matches, and
+   theme_statements(sc, "fusion_retro") == []).  T10 instead: full retro
+   exactly once, adjacent AFTER a forward fusion.
+6. **The withheld payoffs** — island_major and fusion_retro are BANNED on
+   6-9 (assert their searches come back empty); T10 requires island_major
+   >= 1 in its own becalmed window and the palindrome per law 5.
+7. **Cadence** — leading-tone ban does NOT apply (Act One only).  Finals:
+   material.plagal_final_failures(...) green on T6/T7/T9/T10; T8 pinned
+   UNRESOLVED (final bass lands the iv, no tonic landing on any melodic
+   channel in its final window; the bell/toll channel exempt).
+8. **Pans** — SHORE_PANS[NUMBER]; island-left/mainland-right applies 6-9;
+   T10: BOTH theme-carrying channels at 64, accompaniment on a symmetric
+   seating plan pinned in your module.
+9. **Vowels** — caps {6:90, 7:95, 8:45, 9:70, 10:127}; T10 must REACH
+   >= material.VOWEL_FLOOR_T10 (100) with a monotone rise.
+10. **Morse** — words {6:FLOOD, 7:NOON, 8:GALE, 9:WANE, 10:SAIL} on
+    programs {6:11 vibraphone, 7:114 steel drums, 8:47 timpani,
+    9:10 music box, 10:9 glockenspiel}.
+11. **Tempo** — tide-breath everywhere EXCEPT the pinned authored shapes:
+    T6 II's accelerando and T8's storm map own their movements (own
+    oracle, T2 pattern).  T10: every movement breathes, deepest swell
+    last (NO flat still point — they are on the water now).
+12. **Heralds** — T6's herald window is at the VERY TOP of the track
+    (before movement I's gait); T7/T10 herald their grooves; T8 arrives
+    unannounced, T9 exempt (both documented).  Protagonist bass + doubled
+    thumb on 6/7/8/10 (T9 exempt, documented).
+13. **Tolls** — unchanged: exactly NUMBER tolls, last onsets of the track
+    (T10's ten may widen: play_tolls(spacing=..., widen=...) — gaps stay
+    within TOLL_SPACING; a long pre-started held note, e.g. T10's
+    seashore 122, may legally ring through).
+
 ## 3. Oracle helpers (copy these into your module; proven on Slipstream)
 
 ```python

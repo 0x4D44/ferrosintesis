@@ -37,16 +37,22 @@ import engine as en
 
 ALBUM = "The Causeway"
 ARTIST = "Claude Fable 5"
-STYLE = ("Five crossings between a tidal island and the mainland: an icy "
-         "late-ABBA incantation and a warm McCartney tune begin a tritone "
-         "apart and converge track by track (6-4-3-2-0 semitones), kept "
-         "from ever sounding together — and from every leading-tone cadence "
-         "— until the causeway dries at dawn in track 5, where both themes "
-         "meet in invertible counterpoint over a piano-pump medley of the "
-         "album's hooks and a fusion phrase lands the record's only melodic "
-         "tonic, on a plagal Picardy.  Morse tide-words, a breath-flute "
-         "herald before every groove, and a bell buoy that tolls the track "
-         "number carry the letters across the water.")
+STYLE = ("Ten crossings in two acts between a tidal island and the "
+         "mainland.  Act One: an icy late-ABBA incantation and a warm "
+         "McCartney tune begin a tritone apart and converge track by track "
+         "(6-4-3-2-0 semitones), kept from ever sounding together — and "
+         "from every leading-tone cadence — until the causeway dries at "
+         "dawn in track 5, where both themes meet in invertible "
+         "counterpoint over a piano-pump medley of the album's hooks and a "
+         "fusion phrase lands Act One's only melodic tonic, on a plagal "
+         "Picardy.  Act Two: the tide comes back but the voices never part "
+         "again — every track grows from the fusion phrase, its retrograde "
+         "assembles 3-5-6-8 notes across the act (the road home, always "
+         "stopping short), a gale proves the storm cannot part them, and "
+         "the finale sails out on the full road walked backward, the "
+         "island's theme finally in the major, ten bell tolls into the "
+         "sea.  Morse tide-words on ten rotating timbres and a bell buoy "
+         "that tolls the track number carry the letters across the water.")
 
 # ---------------------------------------------------------------------------
 # The track registry — (number, module stem, title, midi file, seed).
@@ -66,6 +72,17 @@ REGISTRY: list[tuple[int, str, str, str, int]] = [
         "04 - The Ebb Letter.mid",     202607184),
     (5, "t05_low_water_crossing", "Low Water Crossing",
         "05 - Low Water Crossing.mid", 202607185),
+    # Act Two — the tide returns (HLD addendum 2026.07.19).
+    (6, "t06_the_flood",          "The Flood",
+        "06 - The Flood.mid",          202607186),
+    (7, "t07_noon_water",         "Noon Water",
+        "07 - Noon Water.mid",         202607187),
+    (8, "t08_the_equinox_gale",   "The Equinox Gale",
+        "08 - The Equinox Gale.mid",   202607188),
+    (9, "t09_the_wane",           "The Wane",
+        "09 - The Wane.mid",           202607189),
+    (10, "t10_out_on_the_tide",   "Out on the Tide",
+        "10 - Out on the Tide.mid",    202607190),
 ]
 
 

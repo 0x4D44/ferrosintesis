@@ -9,6 +9,14 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   skeptics in a separate worktree (or after the gate), and never trust a tail-masked gate exit — grep the
   `test result:` line. (Bit the MM-BUG-KILN-00013 gate; worktree source was intact, clean re-run → 553 green.)
 
+- 2026.07.19 — **`wrap_var` DETUNES the wrapped MODEL ±6c (`sampler.rs:wrap_var` → `set_pitch(var_mult)`) — an exact-multiple
+  Goertzel on a wrapped guitar render under-reads harmonics ~sinc(k·f·Δc·T), −9 dB at h6 over a 0.25 s window.**
+  Write spectral oracles on the BARE model or measure at k·f·var_mult; round 3's gates measured through the shipped
+  path and masked a near-perfect mechanism (probe localization tables in the 2026.07.19 JRN).
+- 2026.07.19 — **Preregistering seam-parity-vs-baseline AND move-toward-recording in ADJACENT windows caps timbre change
+  at the parity budget — a timbre feature that succeeds must fail one gate** (loop spectrum can't change between
+  0.25–0.35 s and 0.35–0.60 s). Judge pairs must not pin a mechanism to the baseline it exists to move away from
+  (`voices.rs:recmatch_*` r3 park, HLD as-built).
 - 2026.07.19 — **render-diff baseline MUST be the commit you rebased ONTO, not a fresh `origin/main`
   build: in this multi-agent repo local `origin/main` drifts mid-session via concurrent fetch
   (f58aceb→b308fd1 here, 2 commits, AFTER my rebase), so a baseline built from a newer tip reports the

@@ -475,3 +475,5 @@
   necessarily breaks. Code: `park/20260719-recmatch-excitation-r3` (8a9ee7a).
   If Arthur's audition (target/audition in the r3 worktree) prefers AFTER,
   re-preregister judges per the HLD §9 lead and re-land.
+
+- [ ] 2026-07-19 ferrosintesis render HANG: `ferrosintesis "<Hollow Hill Pt 1>.mid" --solo 8 -o x.wav` (nylon, prog 24) runs >400s and is killed, on BOTH the pre-Phase-1 baseline binary AND with --peak-normalize (so not LUFS, not my pluck change). The FULL-mix render of the same file finishes in ~2min, and --solo 7/10/14 finish in ~2min — only --solo 8 pathologically slow. Suspect a stuck/never-reaping voice or LA-sample loop specific to that channel. crates/ferrosintesis/src/engine.rs (solo path / voice reap) + sampler.rs. Repro: Hollow Hill Pt 1, --solo 8.

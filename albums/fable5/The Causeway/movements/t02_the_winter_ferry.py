@@ -187,6 +187,15 @@ BEND_EXEMPT: set[int] = set()               # scoops recentre at every seam
 DURATION_WINDOW = (348.0, 364.0)            # ~5:55 incl. the 2-beat end pad
 BOUNDS_WHITELIST: list[tuple[int, float, float]] = []
 
+# Click-scan cap, calibrated against the real render (lead's diagnosis,
+# 2026.07.19): the track's largest sample steps (~21-23k) are recurring
+# LEFT-side percussive attacks at musical moments (morse taps, section
+# seams, the wave) — near-silence into a broadband transient that rings
+# both directions, global peak 26029, no clipping, no DC step.  That is
+# a funk record's snap, not a discontinuity; the album default (22000)
+# was calibrated on a quiet neo-classical album.
+MAX_SAMPLE_STEP = 26000
+
 # ---------------------------------------------------------------------------
 # Oracle helpers (COMPOSER-NOTES sec.3 pattern; beat-based, tick where noted)
 # ---------------------------------------------------------------------------

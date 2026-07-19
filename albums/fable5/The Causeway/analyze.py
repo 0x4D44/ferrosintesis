@@ -87,13 +87,17 @@ def analyze_track(module) -> tuple[int, int]:
     rate, left, right = _load(path)
     fails: list[str] = []
 
-    # 1. Click scan.
+    # 1. Click scan.  A module may calibrate its own cap (see
+    #    t02_the_winter_ferry.py: percussive funk attacks legitimately
+    #    step ~23k — near-silence into a broadband transient that rings
+    #    both ways is an attack, not a discontinuity).
+    step_cap = getattr(module, "MAX_SAMPLE_STEP", MAX_SAMPLE_STEP)
     worst = max(abs(left[i] - left[i - 1]) for i in range(1, len(left)))
     worst = max(worst, max(abs(right[i] - right[i - 1])
                            for i in range(1, len(right))))
-    if worst > MAX_SAMPLE_STEP:
+    if worst > step_cap:
         fails.append(f"click scan: max sample step {worst} "
-                     f"(cap {MAX_SAMPLE_STEP})")
+                     f"(cap {step_cap})")
 
     # 2. Mono compatibility.  A module may calibrate its own cap (see
     #    t02_the_ninety_eight.py for the one diagnosed, documented case).

@@ -192,11 +192,11 @@ BEND_EXEMPT: set[int] = set()               # the rasp is aftertouch, not bend
 DURATION_WINDOW = (336.0, 356.0)            # ~5:45 incl. the 2-beat end pad
 BOUNDS_WHITELIST: list[tuple[int, float, float]] = []
 
-# Click-scan cap (analyze.py): this is the loudest, most distorted track on the
-# record - driven guitars, crashes and the timpani thunder legitimately snap
-# harder than the album default.  Provisional; to be calibrated against the
-# real render (the T2 precedent: percussive attacks are snap, not clicks).
-MAX_SAMPLE_STEP = 28000
+# Click-scan cap: the provisional 28000 was CALIBRATED against the real
+# render (lead's pass, 2026.07.19) and removed — the gale's measured max
+# step is 19412, comfortably inside the album default (22000).  The V3
+# kit's dense cymbals step far less than the sampled brush kit does
+# (see t07/t09), so the loudest track needs no override at all.
 
 # ---------------------------------------------------------------------------
 # Oracle helpers (COMPOSER-NOTES sec.3 pattern; beat-based, tick where noted)

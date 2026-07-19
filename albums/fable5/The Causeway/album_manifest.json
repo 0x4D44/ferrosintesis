@@ -1,10 +1,10 @@
 {
   "album": "The Causeway",
   "artist": "Claude Fable 5",
-  "style": "Five crossings between a tidal island and the mainland: an icy late-ABBA incantation and a warm McCartney tune begin a tritone apart and converge track by track (6-4-3-2-0 semitones), kept from ever sounding together \u2014 and from every leading-tone cadence \u2014 until the causeway dries at dawn in track 5, where both themes meet in invertible counterpoint over a piano-pump medley of the album's hooks and a fusion phrase lands the record's only melodic tonic, on a plagal Picardy.  Morse tide-words, a breath-flute herald before every groove, and a bell buoy that tolls the track number carry the letters across the water.",
-  "track_count": 5,
-  "total_duration_seconds": 1653.24,
-  "total_duration_minutes": 27.55,
+  "style": "Ten crossings in two acts between a tidal island and the mainland.  Act One: an icy late-ABBA incantation and a warm McCartney tune begin a tritone apart and converge track by track (6-4-3-2-0 semitones), kept from ever sounding together \u2014 and from every leading-tone cadence \u2014 until the causeway dries at dawn in track 5, where both themes meet in invertible counterpoint over a piano-pump medley of the album's hooks and a fusion phrase lands Act One's only melodic tonic, on a plagal Picardy.  Act Two: the tide comes back but the voices never part again \u2014 every track grows from the fusion phrase, its retrograde assembles 3-5-6-8 notes across the act (the road home, always stopping short), a gale proves the storm cannot part them, and the finale sails out on the full road walked backward, the island's theme finally in the major, ten bell tolls into the sea.  Morse tide-words on ten rotating timbres and a bell buoy that tolls the track number carry the letters across the water.",
+  "track_count": 10,
+  "total_duration_seconds": 3335.18,
+  "total_duration_minutes": 55.59,
   "tracks": [
     {
       "number": 1,
@@ -200,6 +200,211 @@
           "start_seconds": 309.11,
           "end_seconds": 393.9,
           "time": "5:09"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "title": "The Flood",
+      "file": "midi/06 - The Flood.mid",
+      "duration_seconds": 313.19,
+      "duration_minutes": 5.22,
+      "movements": [
+        {
+          "name": "I. Dry Shod",
+          "start_beat": 0.0,
+          "end_beat": 168.0,
+          "start_seconds": 0.0,
+          "end_seconds": 91.57,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Water at the Heels",
+          "start_beat": 168.0,
+          "end_beat": 336.0,
+          "start_seconds": 91.57,
+          "end_seconds": 174.4,
+          "time": "1:31"
+        },
+        {
+          "name": "III. The Last Stones",
+          "start_beat": 336.0,
+          "end_beat": 448.0,
+          "start_seconds": 174.4,
+          "end_seconds": 226.04,
+          "time": "2:54"
+        },
+        {
+          "name": "IV. Landed",
+          "start_beat": 448.0,
+          "end_beat": 584.0,
+          "start_seconds": 226.04,
+          "end_seconds": 317.1,
+          "time": "3:46"
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Noon Water",
+      "file": "midi/07 - Noon Water.mid",
+      "duration_seconds": 329.48,
+      "duration_minutes": 5.49,
+      "movements": [
+        {
+          "name": "I. Glare",
+          "start_beat": 0.0,
+          "end_beat": 96.0,
+          "start_seconds": 0.0,
+          "end_seconds": 66.99,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Long Afternoon",
+          "start_beat": 96.0,
+          "end_beat": 272.0,
+          "start_seconds": 66.99,
+          "end_seconds": 189.69,
+          "time": "1:06"
+        },
+        {
+          "name": "III. Heat Shimmer",
+          "start_beat": 272.0,
+          "end_beat": 376.0,
+          "start_seconds": 189.69,
+          "end_seconds": 264.28,
+          "time": "3:09"
+        },
+        {
+          "name": "IV. Evening Water",
+          "start_beat": 376.0,
+          "end_beat": 464.0,
+          "start_seconds": 264.28,
+          "end_seconds": 329.1,
+          "time": "4:24"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "title": "The Equinox Gale",
+      "file": "midi/08 - The Equinox Gale.mid",
+      "duration_seconds": 345.57,
+      "duration_minutes": 5.76,
+      "movements": [
+        {
+          "name": "I. Glass Falling",
+          "start_beat": 0.0,
+          "end_beat": 128.0,
+          "start_seconds": 0.0,
+          "end_seconds": 81.42,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Gale",
+          "start_beat": 128.0,
+          "end_beat": 400.0,
+          "start_seconds": 81.42,
+          "end_seconds": 213.95,
+          "time": "1:21"
+        },
+        {
+          "name": "III. Eye",
+          "start_beat": 400.0,
+          "end_beat": 448.0,
+          "start_seconds": 213.95,
+          "end_seconds": 250.89,
+          "time": "3:33"
+        },
+        {
+          "name": "IV. Blown Out",
+          "start_beat": 448.0,
+          "end_beat": 584.0,
+          "start_seconds": 250.89,
+          "end_seconds": 344.69,
+          "time": "4:10"
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "title": "The Wane",
+      "file": "midi/09 - The Wane.mid",
+      "duration_seconds": 318.29,
+      "duration_minutes": 5.3,
+      "movements": [
+        {
+          "name": "I. Shorter Days",
+          "start_beat": 0.0,
+          "end_beat": 96.0,
+          "start_seconds": 0.0,
+          "end_seconds": 79.27,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Letters",
+          "start_beat": 96.0,
+          "end_beat": 192.0,
+          "start_seconds": 79.27,
+          "end_seconds": 158.59,
+          "time": "1:19"
+        },
+        {
+          "name": "III. Don't Be Careless",
+          "start_beat": 192.0,
+          "end_beat": 304.0,
+          "start_seconds": 158.59,
+          "end_seconds": 250.67,
+          "time": "2:38"
+        },
+        {
+          "name": "IV. First Frost",
+          "start_beat": 304.0,
+          "end_beat": 384.0,
+          "start_seconds": 250.67,
+          "end_seconds": 317.06,
+          "time": "4:10"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Out on the Tide",
+      "file": "midi/10 - Out on the Tide.mid",
+      "duration_seconds": 375.41,
+      "duration_minutes": 6.26,
+      "movements": [
+        {
+          "name": "I. Eight Bells",
+          "start_beat": 0.0,
+          "end_beat": 112.0,
+          "start_seconds": 0.0,
+          "end_seconds": 71.4,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Boarding",
+          "start_beat": 112.0,
+          "end_beat": 320.0,
+          "start_seconds": 71.4,
+          "end_seconds": 198.67,
+          "time": "1:11"
+        },
+        {
+          "name": "III. The Slack",
+          "start_beat": 320.0,
+          "end_beat": 416.0,
+          "start_seconds": 198.67,
+          "end_seconds": 263.05,
+          "time": "3:18"
+        },
+        {
+          "name": "IV. Hull Down",
+          "start_beat": 416.0,
+          "end_beat": 596.0,
+          "start_seconds": 263.05,
+          "end_seconds": 376.72,
+          "time": "4:23"
         }
       ]
     }

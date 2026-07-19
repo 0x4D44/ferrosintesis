@@ -1,12 +1,17 @@
 # The Causeway
 
-A five-track album by Claude Fable 5 — five crossings between a tidal
-island (late-ABBA ice, Enigma/Delerium weather) and a mainland (McCartney
-songcraft, Oldfield patience) whose themes converge track by track until
-they finally sound together at dawn. Concept and track notes live in
-`ALBUM.md`; the design document is
-`wrk_docs/2026.07.18 - HLD - The Causeway album (five crossings).md` at the
-repo root.
+A ten-track, two-act album by Claude Fable 5 (~55:35) — crossings between a
+tidal island (late-ABBA ice, Enigma/Delerium weather) and a mainland
+(McCartney songcraft, Oldfield patience). Act One: the themes converge
+6-4-3-2-0 semitones until they finally sound together at dawn. Act Two: the
+tide returns but the voices never part again — everything new grows from
+the fusion phrase, its retrograde assembles across the act (the road home,
+always stopping short), and the finale sails out on the full road walked
+backward, the island's theme at last in the major, ten tolls into the sea.
+Concept and track notes live in `ALBUM.md`; the design documents are
+`wrk_docs/2026.07.18 - HLD - The Causeway album (five crossings).md` and
+`wrk_docs/2026.07.19 - HLD - The Causeway act two (five more crossings).md`
+at the repo root.
 
 ## Layout
 
@@ -28,7 +33,7 @@ emitter patterns, trip-wires).
 ## Rebuild and verify (stdlib Python only)
 
 ```
-python build.py                     # rebuild all 5 MIDIs + album_manifest.json
+python build.py                     # rebuild all 10 MIDIs + album_manifest.json
 python build.py --track N           # rebuild one track
 python build.py --verify            # every oracle over every track (exit != 0 on failure)
 python build.py --track N --verify  # one track's oracles (the composing loop)
@@ -45,7 +50,7 @@ Requires the repo synth (ferrosintesis v0.21+):
 
 ```
 cargo build --release -p ferrosintesis-cli      # from the repo root
-bash render_all.sh                              # all 5 tracks -> audio/*.wav (parallel)
+bash render_all.sh                              # all 10 tracks -> audio/*.wav (parallel)
 python analyze.py                               # generic + per-track audio oracles
 python analyze.py --track N                     # one track
 ```
@@ -54,10 +59,12 @@ python analyze.py --track N                     # one track
 oracles assert the headline claims on the *rendered* signal — the far-shore
 horn genuinely wetter and farther than the island, the ferry's accelerando
 audible in onset energy, the ice section's density against the candle's
-rubato, the finale's crescendo and the five tolls ringing into a quiet tail
-— because presence in the MIDI is not audibility in the render. Two
-generic-check calibrations are documented in the modules: T2 carries a
-diagnosed `MAX_SAMPLE_STEP = 26000` (percussive funk attacks, not clicks).
+rubato, the gale the loudest window on its track and the eye the quietest,
+the finale's crest and the ten tolls ringing into the sea wash — because
+presence in the MIDI is not audibility in the render. Generic-check
+calibrations are documented in the modules: T2 carries a diagnosed
+`MAX_SAMPLE_STEP = 26000` (percussive funk attacks, not clicks), T8 its own
+diagnosed cap for the storm's transients.
 
 ## Listening copies
 

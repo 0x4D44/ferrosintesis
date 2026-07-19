@@ -77,11 +77,14 @@ Max Richter neo-classical. These are the albums the synth is specifically tuned 
   piano, strings, choir and quiet electronics: a departure interrupts a violin phrase
   mid-note, the piano ostinato loses two quavers, and the finale completes the phrase
   verbatim and lands the album's single withheld tonic in D major.
-- **The Causeway** — *McCartney / late ABBA / Enigma-Delerium / Oldfield*, 27:33 ·
-  5 tracks. A tidal island and a mainland send music across a winter: their two themes
-  converge 6-4-3-2-0 semitones, barred from sounding together — and from every
-  leading-tone cadence — until the causeway dries at dawn and both meet in invertible
-  counterpoint over a piano-pump medley of the album's four hooks.
+- **The Causeway** — *McCartney / late ABBA / Enigma-Delerium / Oldfield*, 55:35 ·
+  10 tracks, two acts. A tidal island and a mainland send music across a winter: their
+  themes converge 6-4-3-2-0 semitones, barred from sounding together until the causeway
+  dries at dawn and both meet in invertible counterpoint over a piano-pump hook medley.
+  Then the tide returns and the voices never part again: the fusion phrase seeds every
+  new hook, its retrograde assembles 3-5-6-8 notes across the act (always stopping
+  short), a gale proves the storm cannot part them, and the finale walks the whole road
+  backward — the island theme at last in the major — into ten bell tolls and the sea.
 
 ### Claude Opus 4.8 — `albums/opus4-8/`
 - **VIGIL** — *Max Richter / Philip Glass / Howard Shore*, 53:12 · 12 parts. A

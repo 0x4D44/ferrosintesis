@@ -143,6 +143,15 @@ BEND_EXEMPT: set[int] = set()               # only the harmonica bends (III)
 DURATION_WINDOW = (316.0, 343.0)            # ~5:29 incl. the 2-beat end pad
 BOUNDS_WHITELIST: list[tuple[int, float, float]] = []
 
+# Click-scan cap, calibrated against the real render (lead's diagnosis,
+# 2026.07.19): the track's largest sample steps (~44.6k, many musically
+# placed moments) are the SAMPLED BRUSH KIT's slap/tap transients —
+# full-bandwidth noise bursts alternating around the mix ceiling, ringing
+# both directions, no DC step, no clipping (peak 26029).  Confirmed by a
+# --solo 9 stem probe on t09 (drums alone step ~51k): a recorded brush
+# slap IS a near-Nyquist noise burst.  Snap, not clicks.
+MAX_SAMPLE_STEP = 48000
+
 # ---------------------------------------------------------------------------
 # Oracle helpers (COMPOSER-NOTES sec.3 pattern; beat-based, tick where noted)
 # ---------------------------------------------------------------------------

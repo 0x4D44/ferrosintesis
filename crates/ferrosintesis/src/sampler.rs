@@ -1459,6 +1459,30 @@ pub fn vibraphone_bank() -> &'static [Zone] {
     vibes()
 }
 
+fn tubular() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "tubular_C4.wav" => 261.63,
+            "tubular_D4.wav" => 293.66,
+            "tubular_E4.wav" => 334.83,
+            "tubular_F4.wav" => 356.35,
+            "tubular_G4.wav" => 393.95,
+            "tubular_A4.wav" => 441.19,
+            "tubular_B4.wav" => 501.37,
+            "tubular_C5.wav" => 528.56,
+            "tubular_D5.wav" => 583.52,
+        )
+    })
+}
+
+/// GM 14 tubular bells onset (VCSL Tubular Bells 2, CC0, -orchestral2) over the
+/// bell(TUBULAR) model. Roots MEASURED at bake (strike tone = label); E5/F5 dropped
+/// (hum-tone octave error). 9 zones sound C4..D5.
+pub fn tubular_bank() -> &'static [Zone] {
+    tubular()
+}
+
 pub fn flute_bank() -> &'static [Zone] {
     flute()
 }

@@ -359,6 +359,39 @@ VIBES_URLS = {
     for n in _VIBES_ZONES
 }
 
+# Tubular bells / chimes (GM 14) — VCSL "Tubular Bells 2" (CC0, VCSL_REV). MM-BUG-KILN-00015
+# batch 2. Metal tubes: the sample carries the mallet strike + early metallic ring, the
+# bell(TUBULAR) model keeps the long ring (KEEP_FAM 0.9 s, like the other struck mallets).
+# The v4 (loud) TB_hit take gives a clean, defined strike onset. 11 zones C4..F5 cover the
+# GM14 register (60-77) exactly; LaVoice's +-1 octave repitch covers ~C3-F6. Tubular bells
+# have a complex partial structure (strike tone vs hum + inharmonic partials), so they are
+# in TWO_F_STRONG and the roots are MEASURED at bake — VERIFY the printed roots (drop any
+# zone whose measured pitch strays, like the dropped vibes/glock zones). rr suffix varies
+# per pitch, so each zone maps an explicit source name. Output → -orchestral2 (CC0).
+_TUBULAR_DIR = "Idiophones/Struck Idiophones/Tubular Bells 2"
+_TUBULAR_ZONES = [
+    ("tubular_C4.wav", "TB_hit_C4_v4_1"),
+    ("tubular_D4.wav", "TB_hit_D4_v4_2"),
+    ("tubular_E4.wav", "TB_hit_E4_v4_1"),
+    ("tubular_F4.wav", "TB_hit_F4_v4_1"),
+    ("tubular_G4.wav", "TB_hit_G4_v4_1"),
+    ("tubular_A4.wav", "TB_hit_A4_v4_1"),
+    ("tubular_B4.wav", "TB_hit_B4_v4_1"),
+    ("tubular_C5.wav", "TB_hit_C5_v4_1"),
+    ("tubular_D5.wav", "TB_hit_D5_v4_1"),
+    # E5/F5 DROPPED after measurement: autocorr locked the HUM tone (~octave below the
+    # strike), so the octave-snap set their root an octave low (E5->E4, F5->F4) — they would
+    # play an octave flat. The 9 kept zones sound C4 262 .. D5 584 Hz with correct strike-tone
+    # roots; D5 repitched up covers the top of the GM14 register (E5/F5).
+]
+TUBULAR_URLS = {
+    dest: (
+        f"https://raw.githubusercontent.com/sgossner/VCSL/{VCSL_REV}/"
+        f"{urllib.parse.quote(_TUBULAR_DIR)}/{urllib.parse.quote(src)}.wav"
+    )
+    for dest, src in _TUBULAR_ZONES
+}
+
 # Ocarina (GM 79) — VCSL "Ocarina, Typical" sustains (CC0, VCSL_REV). A soft near-sine
 # vessel flute; the sample carries the breath onset and the Wind model keeps the body
 # (a wind onset like the flute, so the default 0.62 s keep, NOT a plucked keep). Output
@@ -746,6 +779,9 @@ F0_RANGE = {
     # vibraphone (VCSL Soft Mallets): sounding F3 175 .. E5/E6. Metal bar (2f-strong) → the
     # per-note cap (nominal*1.5) blocks 2f; this global range only brackets the fundamentals.
     "vibes": (70.0, 1600.0),
+    # tubular bells (VCSL TB2): strike tones C4 262 .. F5 698. 2f-strong (complex partials);
+    # per-note cap does the work, this range brackets the strike-tone fundamentals.
+    "tubular": (200.0, 900.0),
     # solo cello (Bigcat, GM 42): sounding C2 65 .. F#5 740 Hz (labels one octave below
     # sounding). In TWO_F_STRONG -> per-note ceiling nominal*1.5 blocks 2f; this global
     # ceiling only clears the top fundamental.
@@ -759,7 +795,7 @@ F0_RANGE = {
 # separate the fundamental from 2f. For these, main() caps the ceiling per-note at
 # label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
 TWO_F_STRONG = frozenset(("recorder", "banjo", "viola", "marimba", "xylo", "glock",
-                          "vibes", "cellosolo", "dbass"))
+                          "vibes", "tubular", "cellosolo", "dbass"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -783,6 +819,7 @@ KEEP_FAM = {
     "xylo": (0.9, 0.30),
     "glock": (0.9, 0.30),
     "vibes": (0.9, 0.30),
+    "tubular": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -838,6 +875,7 @@ FAMILY_PACKAGE = {
     "xylo": "ferrosintesis-samples-orchestral2",
     "glock": "ferrosintesis-samples-orchestral2",
     "vibes": "ferrosintesis-samples-orchestral2",
+    "tubular": "ferrosintesis-samples-orchestral2",
     # Solo bowed strings (GM 42 cello / GM 43 double bass) — real CC0 soloists in their own
     # crate, replacing the repitched cello-SECTION celens onset.
     "cellosolo": "ferrosintesis-samples-strings",
@@ -1999,6 +2037,9 @@ def main():
         for fn, url in VIBES_URLS.items():
             if want("vibes"):
                 ensure_source(fn, url, src)
+        for fn, url in TUBULAR_URLS.items():
+            if want("tubular"):
+                ensure_source(fn, url, src)
         if want("banjo"):
             ensure_banjo_sources(src)
         if want("nylon"):
@@ -2082,7 +2123,7 @@ def main():
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
-            | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS
+            | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS | TUBULAR_URLS
             | SOLO_CELLO_URLS | SOLO_DBASS_URLS
             | GRAND_SOURCES
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES

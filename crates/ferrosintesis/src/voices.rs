@@ -8044,6 +8044,10 @@ const LA_GLOCK: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
 // gain/fade as the other struck mallets (ear-tunable); the sample carries the mallet
 // attack, the model keeps the settling body + motor tremolo.
 const LA_VIBES: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
+// GM 14 tubular bells: real VCSL chime strike over the bell(TUBULAR) model. The sample
+// carries the metallic strike attack; the model keeps the long ring. Same gain/fade as
+// the other struck mallets (ear-tunable).
+const LA_TUBULAR: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
 /// GM 104 sitar: the pluck + jawari bridge-buzz is the identity cue and lives in the
 /// sampled onset; the `Pluck(&SITAR)` model carries the bendable decay. Plucked handover
 /// like the guitars (sample owns ~0–50 ms, model from ~200 ms).
@@ -11248,17 +11252,35 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        14 => Box::new(bell(
-            key,
-            vel,
-            sr,
-            seed,
-            TUBULAR,
-            (0.07, 0.015, 2400.0, 1.0),
-            0.003,
-            2.5,
-            0.50,
-        )),
+        // GM 14 tubular bells: LA sampled strike (VCSL Tubular Bells 2, CC0, -orchestral2)
+        // over the bell(TUBULAR) model. The pure model is the CC0!=0 alt (altbank.rs).
+        14 => {
+            let model = Box::new(bell(
+                key,
+                vel,
+                sr,
+                seed,
+                TUBULAR,
+                (0.07, 0.015, 2400.0, 1.0),
+                0.003,
+                2.5,
+                0.50,
+            ));
+            if samples {
+                let (gain, fade) = LA_TUBULAR;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::tubular_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         15 => Box::new(Pluck::new(&DULCIMER, key, vel, sr, seed)),
         // 19 rejoined the drawbar arm in round 2: the audition preferred the
         // legacy Leslie drawbar over the CathedralOrgan pipe model (retired),
@@ -11677,6 +11699,7 @@ mod tests {
             ("LA_XYLO", LA_XYLO),
             ("LA_GLOCK", LA_GLOCK),
             ("LA_VIBES", LA_VIBES),
+            ("LA_TUBULAR", LA_TUBULAR),
             ("LA_SITAR", LA_SITAR),
             ("LA_BANJO", LA_BANJO),
             ("LA_PANFLUTE", LA_PANFLUTE),

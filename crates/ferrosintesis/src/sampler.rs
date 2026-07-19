@@ -1434,6 +1434,31 @@ pub fn glock_bank() -> &'static [Zone] {
     glock()
 }
 
+fn vibes() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "vibes_A2.wav" => 112.07,
+            "vibes_C3.wav" => 129.70,
+            "vibes_E3.wav" => 164.64,
+            "vibes_G3.wav" => 195.90,
+            "vibes_B3.wav" => 246.78,
+            "vibes_D4.wav" => 293.56,
+            "vibes_F4.wav" => 349.08,
+            "vibes_A4.wav" => 439.95,
+            "vibes_C5.wav" => 523.13,
+            "vibes_E5.wav" => 659.19,
+        )
+    })
+}
+
+/// GM 11 vibraphone onset (VCSL Soft Mallets, CC0, -orchestral2) over the
+/// bell()+motor-tremolo model. Roots MEASURED at bake (labels are sounding pitch);
+/// F2 dropped (weak low-bar f0). 10 zones sound A2..E5.
+pub fn vibraphone_bank() -> &'static [Zone] {
+    vibes()
+}
+
 pub fn flute_bank() -> &'static [Zone] {
     flute()
 }

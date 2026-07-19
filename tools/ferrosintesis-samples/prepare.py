@@ -334,6 +334,31 @@ GLOCK_URLS = {
     f"glock_{n}.wav": f"{BASE}/Percussion/Glock/glock_medium_{n}.wav" for n in _GLOCK_ZONES
 }
 
+# Vibraphone (GM 11) — VCSL "Vibraphone" Soft Mallets (CC0, VCSL_REV). MM-BUG-KILN-00015
+# batch 2. Struck metal bars: the sample carries the mallet strike + early ring; the
+# bell(VIBES) model keeps the settling body + motor tremolo (KEEP_FAM 0.9 s, like the other
+# mallets). Soft (yarn) mallets = the classic mellow vibe attack — v2 layer, the louder of
+# the two soft takes; the Hard Mallets are the bright/glassy alternative, left as an
+# ear-tunable follow-up. Single layer, no motor/tremolo take, so every onset is a clean
+# strike. Metal bar → 2f-strong (in TWO_F_STRONG, per-note ceiling nominal*1.5). VCSL
+# keyboard labels can sit an octave below sounding pitch, so dest is named by the source
+# label for the fetch and the SOUNDING root comes from the MEASURED bake — VERIFY the
+# printed roots. Output → -orchestral2 (CC0). No '#' in any zone label.
+_VIBES_DIR = "Idiophones/Struck Idiophones/Vibraphone/Soft Mallets"
+# F2 DROPPED after measurement: it read 127 Hz / -545 cents at 0.96 conf (the low bar's
+# fundamental is weak, so autocorr locked a partial) — same failure as the dropped glock
+# zones. The 10 kept zones sound A2 112 .. E5 659 Hz (labels ARE the sounding pitch here);
+# LaVoice's +-1 octave repitch covers vibraphone's F3-F6 register with margin.
+_VIBES_ZONES = ["A2", "C3", "E3", "G3", "B3", "D4", "F4", "A4", "C5", "E5"]
+VIBES_URLS = {
+    f"vibes_{n}.wav": (
+        f"https://raw.githubusercontent.com/sgossner/VCSL/{VCSL_REV}/"
+        f"{urllib.parse.quote(_VIBES_DIR)}/"
+        f"{urllib.parse.quote(f'Vibes_soft_{n}_v2_rr1_Main')}.wav"
+    )
+    for n in _VIBES_ZONES
+}
+
 # Ocarina (GM 79) — VCSL "Ocarina, Typical" sustains (CC0, VCSL_REV). A soft near-sine
 # vessel flute; the sample carries the breath onset and the Wind model keeps the body
 # (a wind onset like the flute, so the default 0.62 s keep, NOT a plucked keep). Output
@@ -718,6 +743,9 @@ F0_RANGE = {
     "marimba": (40.0, 1200.0),
     "xylo": (180.0, 2400.0),
     "glock": (380.0, 2400.0),
+    # vibraphone (VCSL Soft Mallets): sounding F3 175 .. E5/E6. Metal bar (2f-strong) → the
+    # per-note cap (nominal*1.5) blocks 2f; this global range only brackets the fundamentals.
+    "vibes": (70.0, 1600.0),
     # solo cello (Bigcat, GM 42): sounding C2 65 .. F#5 740 Hz (labels one octave below
     # sounding). In TWO_F_STRONG -> per-note ceiling nominal*1.5 blocks 2f; this global
     # ceiling only clears the top fundamental.
@@ -731,7 +759,7 @@ F0_RANGE = {
 # separate the fundamental from 2f. For these, main() caps the ceiling per-note at
 # label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
 TWO_F_STRONG = frozenset(("recorder", "banjo", "viola", "marimba", "xylo", "glock",
-                          "cellosolo", "dbass"))
+                          "vibes", "cellosolo", "dbass"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -754,6 +782,7 @@ KEEP_FAM = {
     "marimba": (0.9, 0.30),
     "xylo": (0.9, 0.30),
     "glock": (0.9, 0.30),
+    "vibes": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -808,6 +837,7 @@ FAMILY_PACKAGE = {
     "marimba": "ferrosintesis-samples-orchestral2",
     "xylo": "ferrosintesis-samples-orchestral2",
     "glock": "ferrosintesis-samples-orchestral2",
+    "vibes": "ferrosintesis-samples-orchestral2",
     # Solo bowed strings (GM 42 cello / GM 43 double bass) — real CC0 soloists in their own
     # crate, replacing the repitched cello-SECTION celens onset.
     "cellosolo": "ferrosintesis-samples-strings",
@@ -1966,6 +1996,9 @@ def main():
         for fn, url in GLOCK_URLS.items():
             if want("glock"):
                 ensure_source(fn, url, src)
+        for fn, url in VIBES_URLS.items():
+            if want("vibes"):
+                ensure_source(fn, url, src)
         if want("banjo"):
             ensure_banjo_sources(src)
         if want("nylon"):
@@ -2049,7 +2082,7 @@ def main():
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
-            | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS
+            | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS
             | SOLO_CELLO_URLS | SOLO_DBASS_URLS
             | GRAND_SOURCES
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES

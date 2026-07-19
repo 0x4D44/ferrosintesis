@@ -1158,6 +1158,12 @@ pub fn make(
         // freeze idiom as 24..=25 / 56..=61 / 68..=71 above. The drone half is
         // pinned by ensure_bagpipe_drone reading the strip's alt_bank.
         109 => crate::voices::make(program, key, vel, sr, seed, false),
+        // MM-BUG-KILN-00015 batch 2 — the pre-sampling model preserved as the CC0!=0 alt
+        // ("move the originals to alt", Arthur 2026-07-19). GM 11 vibraphone now carries a
+        // sampled onset in the default bank; forcing samples=false here keeps the pure
+        // bell()+motor model reachable. Same freeze idiom as 24..=25 / 56..=61 / 68..=71.
+        // Further batch-2 / bass programs join this arm as each sampled unit lands.
+        11 => crate::voices::make(program, key, vel, sr, seed, false),
         _ => crate::voices::make(program, key, vel, sr, seed, samples),
     }
 }
@@ -1624,6 +1630,48 @@ mod tests {
             dr > 0.3 * ar,
             "alt-bank steel 25 barely differs from the layered default \
              (diff {dr:.5} vs alt {ar:.5}) — is the LA layer leaking through?"
+        );
+    }
+
+    /// MM-BUG-KILN-00015 batch 2, GM 11 vibraphone: the sampled onset engages in the
+    /// DEFAULT bank, and the pre-sampling bell()+motor model is preserved as the CC0!=0
+    /// alt ("move the originals to alt", Arthur 2026-07-19). Two directions, mirroring the
+    /// steel pair: (a) alt-bank GM 11 is sample-independent → byte-identical on/off (the
+    /// `11 =>` samples-off arm), and (b) with samples the DEFAULT diverges from that pure
+    /// model in the attack window (the real VCSL strike is layered, not a no-op). Fails
+    /// before either half of the change; passes after both.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn altbank_vibraphone_preserves_pure_model_and_default_layers() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        // (a) alt bank ignores the sample layer → pure model, byte-identical on/off.
+        let alt_on = render_make(11, 60, 100, 0.5, 6, true);
+        let alt_off = render_make(11, 60, 100, 0.5, 6, false);
+        assert_eq!(
+            bits(&alt_on),
+            bits(&alt_off),
+            "alt-bank vibraphone 11 not sample-independent — LA layer leaking onto CC0!=0"
+        );
+        // (b) default bank layers the real onset → diverges from the pure-model alt in the
+        // attack window (both rendered raw the same way, so the diff is the LA onset).
+        let sr = 44100.0;
+        let mut d = crate::voices::make(11, 60, 100, sr, 6, true);
+        let mut def = vec![0f32; (0.5 * sr) as usize];
+        d.render(&mut def);
+        let win = (0.05 * sr) as usize;
+        let diff: Vec<f32> = alt_off[..win]
+            .iter()
+            .zip(&def[..win])
+            .map(|(a, b)| a - b)
+            .collect();
+        let (dr, ar) = (rms(&diff), rms(&def[..win]));
+        assert!(
+            dr > 0.3 * ar,
+            "default vibraphone 11 barely differs from the pure-model alt \
+             (diff {dr:.5} vs default {ar:.5}) — is the onset engaging?"
         );
     }
 

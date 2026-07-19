@@ -201,6 +201,16 @@ static SAMPLES: &[(&str, &[u8])] = &[
     ("glock_G5.wav", include_bytes!("../samples/glock_G5.wav")),
     ("glock_G6.wav", include_bytes!("../samples/glock_G6.wav")),
     ("glock_C7.wav", include_bytes!("../samples/glock_C7.wav")),
+    ("vibes_A2.wav", include_bytes!("../samples/vibes_A2.wav")),
+    ("vibes_C3.wav", include_bytes!("../samples/vibes_C3.wav")),
+    ("vibes_E3.wav", include_bytes!("../samples/vibes_E3.wav")),
+    ("vibes_G3.wav", include_bytes!("../samples/vibes_G3.wav")),
+    ("vibes_B3.wav", include_bytes!("../samples/vibes_B3.wav")),
+    ("vibes_D4.wav", include_bytes!("../samples/vibes_D4.wav")),
+    ("vibes_F4.wav", include_bytes!("../samples/vibes_F4.wav")),
+    ("vibes_A4.wav", include_bytes!("../samples/vibes_A4.wav")),
+    ("vibes_C5.wav", include_bytes!("../samples/vibes_C5.wav")),
+    ("vibes_E5.wav", include_bytes!("../samples/vibes_E5.wav")),
 ];
 
 /// Number of embedded WAV files.

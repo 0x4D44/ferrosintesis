@@ -461,13 +461,14 @@ PART = conductor.Part(
     ],
     bank_selects=[(0, 1), (10, 1), (11, 1), (13, 1),    # steel/toms/synth-drum/riser: set B
                   (14, 1)],   # -One: opt the lead guitar into the sustaining DRIVE_LEAD voice
-    # ch-10 Program Change 24 (GM2 Electronic slot) selects ferrosintesis's
-    # modeled "synth kit": the V3 drum voices with the realistic sampled
-    # drum-kit replacement switched OFF.  The steel-drum album's simpler synth
-    # kit sat better here than the sampled kit; the melodic LA sample layers
-    # (steel drums, saw lead, choir, guitar) are unaffected — they are not
-    # gated by the kit selection.  See wrk_docs 2026.07.19 synth-kit note.
-    program_changes=[(CH_KIT, 0.0, 24)],
+    # ch-10 Program Change 25 selects ferrosintesis's ORIGINAL drum kit
+    # ("bank 2", Kit::V1): the drum voices from before the 9-10 Jul 2026
+    # "kit-v2"/realism overhaul — no DR3 open-hat sizzle, original crash.  Chosen
+    # by ear over the later kits: the simpler original hi-hat suits this track.
+    # (PC 24 = the recent modeled "synth kit" (bank 1); default = the realistic
+    # sampled kit.)  The melodic LA sample layers (steel drums, saw lead, choir,
+    # guitar) are unaffected — they are not gated by the kit selection.
+    program_changes=[(CH_KIT, 0.0, 25)],
 )
 
 # -- verification config (consumed by verify.run_track) ---------------------

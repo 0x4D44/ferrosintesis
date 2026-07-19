@@ -2239,15 +2239,21 @@ impl EngineCore {
         s.program = prog;
         // Drums use the best current kit by default. GM/GM2 Program Changes on
         // channel 10 are retained as authored metadata, not a compatibility
-        // downgrade path — with two GM2 exceptions: program 40 EXACTLY is the
-        // GM2 brush kit (v0.12), and program 24 EXACTLY (the GM2 Electronic
-        // slot, v0.18) selects the modeled "synth kit" — V3 voices with the
-        // sampled drum-kit replacement layer off. Any other program keeps
-        // selecting V3 (the committed showcase demo authors prog 8 and must
-        // stay V3).
+        // downgrade path — with three GM2 exceptions, a small "kit bank" ladder:
+        //   40 EXACTLY — the GM2 brush kit (v0.12).
+        //   24 EXACTLY — the GM2 Electronic slot (v0.18): the modeled "synth
+        //                kit", V3 voices with the sampled replacement layer off.
+        //   25 EXACTLY — the ORIGINAL kit (v0.19): `V1`, the pre-"kit-v2" drum
+        //                voices from before the 9-10 Jul 2026 realism overhaul
+        //                (no DR3 open-hat sizzle, original crash). Three-Sixty-One
+        //                asks for it by name; V1 is held byte-stable by
+        //                `v1_drum_render_signatures_are_stable`.
+        // Any other program keeps selecting V3 (the committed showcase demo
+        // authors prog 8 and must stay V3).
         if ch == 9 {
             s.kit = match prog {
                 40 => drums::Kit::Brush,
+                25 => drums::Kit::V1,
                 24 => drums::Kit::Synth,
                 _ => drums::Kit::V3,
             };
@@ -3643,6 +3649,39 @@ mod tests {
         assert_eq!(
             synth, modeled,
             "synth kit differs from the samples-off modeled path"
+        );
+    }
+
+    /// Channel-10 Program Change 25 selects the ORIGINAL kit (`Kit::V1`) — the
+    /// drum voices from before the 9-10 Jul 2026 "kit-v2"/realism overhaul, which
+    /// Three-Sixty-One asks for. It must be a genuinely distinct kit from both the
+    /// sampled default and the PC-24 synth kit. V1's *sound* is pinned separately
+    /// (and byte-exactly) by `v1_drum_render_signatures_are_stable`; this test
+    /// pins the ch-10 selection wiring that makes it reachable.
+    #[test]
+    fn channel_10_program_25_selects_the_original_v1_kit() {
+        let sr = 44100.0;
+        let sampled = Options {
+            samples: true,
+            ..test_opts(sr)
+        };
+        let default_kit = render(&drum_prog_song(None), &sampled).0;
+        let original = render(&drum_prog_song(Some(25)), &sampled).0;
+        let synth = render(&drum_prog_song(Some(24)), &sampled).0;
+        assert!(rms(&original) > 1e-4, "PC 25 original kit should sound");
+        assert_ne!(
+            original, default_kit,
+            "channel-10 PC 25 did not leave the sampled default kit"
+        );
+        assert_ne!(
+            original, synth,
+            "channel-10 PC 25 selected the synth kit, not the original V1 kit"
+        );
+        // V1 predates the sampled layer entirely, so the samples flag is inert.
+        let dry = render(&drum_prog_song(Some(25)), &test_opts(sr)).0;
+        assert_eq!(
+            original, dry,
+            "the original V1 kit must ignore the samples flag"
         );
     }
 

@@ -9,24 +9,29 @@ use crate::sampler;
 use crate::voices::Voice;
 use std::f32::consts::TAU;
 
-/// Which channel-10 kit a hit is voiced with. `V1` and `V2` are retained for
-/// differential tests. `V3` is the shipped default kit. `Brush` (v0.12)
-/// engages ONLY on a ch-10 Program Change of exactly 40 (the GM2 brush kit):
-/// seven brush voices (tap/slap/swirl/hats/rim/kick), every other key
-/// falling through to the V3 arms. `Synth` (v0.18) is the V3 modeled voicing
-/// with the sampled drum-kit replacement layer switched OFF — "the synth kit" —
-/// selected by a ch-10 Program Change of exactly 24 (the GM2 Electronic slot).
-/// It voices identically to `V3` with `samples = false`; only the whole-mix
-/// sample-replacement is suppressed (melodic LA sample layers are unaffected,
-/// they are not gated by `Kit`).
+/// Which channel-10 kit a hit is voiced with — a small selectable "kit bank"
+/// ladder, chosen by ch-10 Program Change (see `engine.rs`).
+///
+/// `V3` is the shipped default kit. `Brush` (v0.12) engages ONLY on program 40
+/// (the GM2 brush kit): seven brush voices (tap/slap/swirl/hats/rim/kick), every
+/// other key falling through to the V3 arms. `Synth` (v0.18) is the V3 modeled
+/// voicing with the sampled drum-kit replacement layer switched OFF — "the synth
+/// kit" — on program 24 (the GM2 Electronic slot); it voices identically to `V3`
+/// with `samples = false`, suppressing only the whole-mix sample-replacement
+/// (melodic LA sample layers are unaffected, they are not gated by `Kit`).
+/// `V1` (v0.19) is the ORIGINAL kit — the drum voices from before the 9-10 Jul
+/// 2026 "kit-v2"/realism overhaul (no DR3 open-hat sizzle, original crash) — now
+/// selectable on program 25; Three-Sixty-One asks for it by name. `V2` is the
+/// intermediate kit-v2 step, still test-only.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kit {
-    // V1/V2 are constructed only by the differential tests: the lib-side kit
-    // dispatch is exhaustive matches (a `== Kit::V2`-style comparison would
-    // silently hand a new variant the wrong arm), so outside #[cfg(test)]
-    // nothing constructs them.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// The original pre-"kit-v2" voices. Selectable in production (ch-10 program
+    /// 25) and held byte-stable by `v1_drum_render_signatures_are_stable`, which
+    /// is what makes it safe to ship as a kit rather than only a test baseline.
     V1,
+    // V2 is constructed only by the differential tests: the lib-side kit dispatch
+    // is exhaustive matches (a `== Kit::V2`-style comparison would silently hand
+    // a new variant the wrong arm), so outside #[cfg(test)] nothing constructs it.
     #[cfg_attr(not(test), allow(dead_code))]
     V2,
     V3,

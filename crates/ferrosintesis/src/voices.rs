@@ -2434,7 +2434,10 @@ pub const NYLON: PluckPreset = PluckPreset {
     amp: 0.55,
     // Helmholtz air mode, top-plate mode, upper body colour
     body: &[(98.0, 1.4, 4.5), (210.0, 1.2, 4.0), (420.0, 1.8, 2.5)],
-    click: 0.9, // fingernail on nylon: soft
+    // Phase-1 pluck-redesign (HLD §8): fingernail snap cut 0.9 -> 0.3 (attack-
+    // side taming; the flat-noise front-load still carries the onset). UKULELE
+    // inherits this via ..NYLON. Phase 2 replaces the residual with a body knock.
+    click: 0.3,
     click_hp: 1000.0,
     // Guitar-realism HLD §6 (4a): the release mechanic — a fingertip damp
     // lands with a soft low thud. This is the ONLY mechanical-noise lever
@@ -2484,7 +2487,7 @@ pub const OUD: PluckPreset = PluckPreset {
     // Large rounded bowl: low, warm air + plate resonances, no high sparkle.
     body: &[(90.0, 1.3, 5.0), (160.0, 1.2, 4.0), (300.0, 1.6, 2.5)],
     out_lp: 3200.0, // mellow lute rolloff — no guitar top end
-    click: 0.8,     // risha on gut: soft
+    click: 0.3,     // risha on gut — Phase-1 pluck-redesign cut 0.8 -> 0.3
     click_hp: 900.0,
     // Double courses — the paired-string shimmer (dulcimer course voicing).
     wound_key_split: false,
@@ -2533,7 +2536,7 @@ pub const STEEL: PluckPreset = PluckPreset {
         (2800.0, 1.8, 3.5),
         (4500.0, 1.8, 2.5),
     ],
-    click: 2.0, // plectrum on steel (G4)
+    click: 0.9, // plectrum on steel — Phase-1 pluck-redesign cut 2.0 -> 0.9 (attack-side taming; G4)
     // Guitar-realism HLD §6 (4a): palm damp on steel strings — a firmer
     // thud than nylon's fingertip (see NYLON.stop_thump for the rationale).
     stop_thump: 0.4,
@@ -2556,7 +2559,7 @@ pub const CLEAN: PluckPreset = PluckPreset {
     pickup: 0.12,
     pickup_rlc: (4200.0, 1.8), // bright single-coil + cable resonance
     cab_lp: 4500.0,            // light clean-combo speaker rolloff
-    click: 1.8,
+    click: 0.8,                // Phase-1 pluck-redesign cut 1.8 -> 0.8
     ..DEFAULTS
 };
 /// Jazz guitar (GM 26, guitar v2 unit B): a hollowbody at the neck pickup
@@ -2577,7 +2580,7 @@ pub const JAZZ: PluckPreset = PluckPreset {
     pickup: 0.11,              // ×2 convention: senses at ~0.22 — neck position
     pickup_rlc: (2400.0, 1.1), // neck humbucker, tone rolled
     cab_lp: 3800.0,            // warm clean-combo rolloff
-    click: 1.2,                // soft pick, no snap
+    click: 0.55,               // soft pick, no snap — Phase-1 pluck-redesign cut 1.2 -> 0.55
     ..DEFAULTS
 };
 pub const DRIVE: PluckPreset = PluckPreset {
@@ -2610,7 +2613,7 @@ pub const DRIVE: PluckPreset = PluckPreset {
     // oracles live there now (driven_main_and_alt_banks_diverge pins the
     // contrast; the engine THD floor pins the lead's held edge).
     sustain: 0.0,
-    click: 2.2, // the pick hits harder through an amp
+    click: 1.0, // pick through an amp — Phase-1 pluck-redesign cut 2.2 -> 1.0 (gentles the ch14 lead)
     ..DEFAULTS
 };
 /// Opt-in (CC0 alt-bank) SUSTAINING lead voicing of the driven guitar. A
@@ -2637,7 +2640,9 @@ pub const DRIVE_LEAD: PluckPreset = PluckPreset {
     pickup: 0.10,
     pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
     sustain: 0.6,              // a lead holds close to its spoken level
-    click: 1.3,                // softer pick attack: a lead sings, it does not chug
+    // Phase-1 pluck-redesign cut 1.3 -> 0.6, tracking DRIVE's cut (2.2 -> 1.0)
+    // so the lead stays SOFTER-picked than the main bank (0.6 < 1.0).
+    click: 0.6, // softer pick attack: a lead sings, it does not chug
     // Round-3 U2: a soft SWELLING onset — the second dimension (with the
     // decay contrast) the ear reads through the shared Drive insert. A real
     // e-bow/feedback lead blooms into the note instead of snapping. τ = 30 ms
@@ -2893,7 +2898,7 @@ pub const PICK: PluckPreset = PluckPreset {
     pickup: 0.28,
     sub: 0.16,
     sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
-    click: 1.6,
+    click: 0.72,           // Phase-1 pluck-redesign cut 1.6 -> 0.72
     click_hp: 1800.0,
     click_post: true,
     stop_thump: 0.8,
@@ -3079,7 +3084,7 @@ pub const DULCIMER: PluckPreset = PluckPreset {
         (700.0, 1.5, 1.6),
         (2800.0, 1.4, 1.8),
     ],
-    click: 1.7, // wooden hammer knock (pre-EQ: it excites the body)
+    click: 0.77, // wooden hammer knock (pre-EQ) — Phase-1 pluck-redesign cut 1.7 -> 0.77
     click_hp: 2600.0,
     wound_key_split: false,
     course_detune: 1.0042,
@@ -15634,7 +15639,14 @@ mod tests {
                 / crate::testutil::rms(&s[(0.05 * sr) as usize..(0.08 * sr) as usize]).max(1e-9)
         };
         let (w, wo) = (onset_hf(&with), onset_hf(&without));
-        assert!(w > 1.3 * wo, "click on {w} vs off {wo}");
+        // Phase-1 pluck-redesign re-baseline (HLD §7): the STEEL pick click was
+        // cut 2.0 -> 0.9 (attack-side taming), so its onset-HF boost over the
+        // click-off case shrank from >1.3x to ~1.09x — the flat excitation
+        // dominates onset HF until Phase 2 gentles it, so the click is now a
+        // smaller (but still real, +9%) onset term. Bar recalibrated 1.3 -> 1.05
+        // (RED at no-click = 1.0; GREEN at the shipped 0.9 click = ~1.09). Phase 2
+        // widens this margin as the excitation's own onset HF falls.
+        assert!(w > 1.05 * wo, "click on {w} vs off {wo}");
         // NYLON's fingernail is softer than STEEL's plectrum
         let nylon = render_pluck(&NYLON, 45, 100, 0.1, 7);
         let no_nylon = render_pluck(
@@ -15651,6 +15663,65 @@ mod tests {
         assert!(
             gain(onset_hf(&nylon), onset_hf(&no_nylon)) < gain(w, wo),
             "NYLON click should be softer than STEEL's"
+        );
+    }
+
+    /// Phase-1 (natural-pluck HLD §8): cutting the pick click reduces the ONSET
+    /// HF transient — the pick "tick" that reads as fierce — the low-risk first
+    /// step before the Phase-2 excitation redesign. The broadband att/sus ratio
+    /// is EXCITATION-dominated (the click is a small term there — measured a
+    /// <0.1 % move on CLEAN), so the click's effect lives in the onset >1.5 kHz
+    /// band. Where the click DOMINATES that band (STEEL 2.0, DRIVE 2.2 — the
+    /// loud ch14-family clicks) the reduction is decisive and checked strictly;
+    /// where the excitation's own HF dominates (e.g. CLEAN's pick_lp 4500) the
+    /// per-cell effect is small and sign-unstable, so the whole set is checked in
+    /// AGGREGATE (≥10 % total reduction). (The remaining front-load — the att/sus
+    /// fierceness proper — is Phase 2's excitation redesign.)
+    #[test]
+    fn phase1_click_cut_reduces_onset_hf() {
+        let sr = 44100.0;
+        let onset_hf = |s: &[f32]| crate::testutil::hp_rms(&s[..(0.005 * sr) as usize], sr, 1500.0);
+        // (preset, pre-Phase-1 click value, strict-per-key check?)
+        let cases: &[(&PluckPreset, f32, bool)] = &[
+            (&STEEL, 2.0, true),
+            (&DRIVE, 2.2, true),
+            (&CLEAN, 1.8, false),
+            (&JAZZ, 1.2, false),
+            (&PICK, 1.6, false),
+            (&DULCIMER, 1.7, false),
+            (&NYLON, 0.9, false),
+            (&OUD, 0.8, false),
+        ];
+        let (mut now_sum, mut loud_sum) = (0.0f32, 0.0f32);
+        for &(preset, old_click, strict) in cases {
+            assert!(
+                preset.click < old_click,
+                "{}: Phase-1 must have cut the click below {old_click}",
+                preset.name
+            );
+            let loud = PluckPreset {
+                click: old_click,
+                ..*preset
+            };
+            for &key in &[40u8, 52, 64] {
+                let now = onset_hf(&render_pluck(preset, key, 100, 0.2, 7));
+                let loud_hf = onset_hf(&render_pluck(&loud, key, 100, 0.2, 7));
+                now_sum += now;
+                loud_sum += loud_hf;
+                if strict {
+                    assert!(
+                        now < loud_hf,
+                        "{} key {key}: onset HF {now:.5} not below pre-cut {loud_hf:.5}",
+                        preset.name
+                    );
+                }
+            }
+        }
+        // Aggregate across the whole cut set: the pick-tick energy is meaningfully
+        // down (robust to the few excitation-dominated cells).
+        assert!(
+            now_sum < 0.90 * loud_sum,
+            "total onset HF {now_sum:.4} not >=10% below pre-cut {loud_sum:.4}"
         );
     }
 

@@ -464,7 +464,10 @@
   whether to `#[cfg_attr(not(feature="embedded-samples"), ignore)]` these three so the
   only samples-off failure is 00020's guard, or leave them as extra loud signal.
 
-- [ ] 2026.07.19 — Recording-matched guitar excitation ROUND 4 (needs Arthur):
+- [x] 2026.07.19 — CLOSED same day: Arthur's audition heard no difference —
+  the preregistered kill condition fired, the park stands, round 4 is not
+  pursued. Entry kept for the pointer to the park branches only.
+  Recording-matched guitar excitation ROUND 4 (needs Arthur):
   the r3 mechanism is validated bare (~1 dB encode fidelity; the r2 killer zone
   E2 fixed to 1.27-vs-6.10) but re-parked because the frozen judges can't see
   it — gate 2 reads exact multiples through wrap_var's ±6c model detune (−9 dB

@@ -518,6 +518,205 @@ pub(crate) fn fm_mod_rate(seg: &[f32], sr: f32, f0: f32, rate_lo: f32, rate_hi: 
 }
 
 // ---------------------------------------------------------------------------
+// Pluck-redesign metric primitives (natural-pluck HLD §5)
+//
+// A single hand-rolled radix-2 FFT (4096, Hann) plus the attack-side metrics the
+// P/D/G oracle suite reads on the BARE model (`--no-samples`). All measure the
+// SHIPPED render — no internal synth state — so a re-leveling or a compensatory
+// brightening cannot hide from them. Calibrated on golden synthetic signals in
+// the `calibration` module (Oracle 0) before any feature oracle trusts them.
+// ---------------------------------------------------------------------------
+
+/// In-place iterative radix-2 Cooley–Tukey FFT (forward, −i exponent). `re`/`im`
+/// must share a power-of-two length. Real callers zero the imaginary part.
+fn fft_inplace(re: &mut [f32], im: &mut [f32]) {
+    let n = re.len();
+    debug_assert_eq!(n, im.len());
+    debug_assert!(n.is_power_of_two());
+    // Decimation-in-time bit-reversal permutation.
+    let mut j = 0usize;
+    for i in 1..n {
+        let mut bit = n >> 1;
+        while j & bit != 0 {
+            j ^= bit;
+            bit >>= 1;
+        }
+        j |= bit;
+        if i < j {
+            re.swap(i, j);
+            im.swap(i, j);
+        }
+    }
+    // Butterflies, stage length 2,4,8,…,n. Twiddles recur in f64 to keep the
+    // 4096-point transform's phase drift below a bin's worth.
+    let mut len = 2usize;
+    while len <= n {
+        let ang = -std::f64::consts::TAU / len as f64;
+        let (wr_step, wi_step) = (ang.cos(), ang.sin());
+        let half = len / 2;
+        let mut base = 0usize;
+        while base < n {
+            let (mut wr, mut wi) = (1.0f64, 0.0f64);
+            for k in 0..half {
+                let a = base + k;
+                let b = a + half;
+                let tr = wr as f32 * re[b] - wi as f32 * im[b];
+                let ti = wr as f32 * im[b] + wi as f32 * re[b];
+                re[b] = re[a] - tr;
+                im[b] = im[a] - ti;
+                re[a] += tr;
+                im[a] += ti;
+                let nwr = wr * wr_step - wi * wi_step;
+                wi = wr * wi_step + wi * wr_step;
+                wr = nwr;
+            }
+            base += len;
+        }
+        len <<= 1;
+    }
+}
+
+/// Hann-windowed magnitude spectrum of the first `n` (power-of-two) samples,
+/// zero-padded if the segment is shorter. Returns bins `0..n/2`; bin `b` is
+/// frequency `b·sr/n`. Scaled so a full-window on-bin unit sine reads ≈ 1.0
+/// (Hann coherent gain 0.5 compensated).
+pub(crate) fn fft_mag_hann(seg: &[f32], n: usize) -> Vec<f32> {
+    debug_assert!(n.is_power_of_two());
+    let mut re = vec![0f32; n];
+    let mut im = vec![0f32; n];
+    let m = seg.len().min(n);
+    for (i, slot) in re.iter_mut().enumerate().take(m) {
+        let w = 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (n - 1) as f32).cos();
+        *slot = seg[i] * w;
+    }
+    fft_inplace(&mut re, &mut im);
+    let norm = 4.0 / n as f32; // (N/4) peak → 1.0
+    (0..n / 2)
+        .map(|b| (re[b] * re[b] + im[b] * im[b]).sqrt() * norm)
+        .collect()
+}
+
+/// Spectral tilt in dB/octave: least-squares slope of `20·log10|X(f)|` against
+/// `log2(f)` over log-spaced probe frequencies in `[lo, hi]`, read off the
+/// 4096-Hann FFT (nearest bin). Natural plucks ≈ −9…−14; flat/harsh ≈ 0…−6.
+pub(crate) fn spectral_tilt_db_oct(seg: &[f32], sr: f32, lo: f32, hi: f32) -> f32 {
+    let n = 4096usize;
+    let mag = fft_mag_hann(seg, n);
+    let bin_hz = sr / n as f32;
+    let steps = 48u32;
+    let (mut xs, mut ys) = (Vec::new(), Vec::new());
+    for i in 0..steps {
+        let f = lo * (hi / lo).powf(i as f32 / (steps - 1) as f32);
+        let bin = (f / bin_hz).round() as usize;
+        if bin == 0 || bin >= mag.len() {
+            continue;
+        }
+        xs.push(f.log2());
+        ys.push(20.0 * mag[bin].max(1e-9).log10());
+    }
+    let nn = xs.len() as f32;
+    if nn < 2.0 {
+        return 0.0;
+    }
+    let sx: f32 = xs.iter().sum();
+    let sy: f32 = ys.iter().sum();
+    let sxx: f32 = xs.iter().map(|x| x * x).sum();
+    let sxy: f32 = xs.iter().zip(ys.iter()).map(|(x, y)| x * y).sum();
+    let denom = nn * sxx - sx * sx;
+    if denom.abs() < 1e-9 {
+        0.0
+    } else {
+        (nn * sxy - sx * sy) / denom
+    }
+}
+
+/// Crest factor: peak / RMS. A unit sine reads √2; a sparse impulse train reads
+/// far higher. The transient-hardness guard (HLD G2).
+pub(crate) fn crest(seg: &[f32]) -> f32 {
+    let r = rms(seg);
+    if r <= 1e-12 {
+        return 0.0;
+    }
+    seg.iter().fold(0f32, |a, &x| a.max(x.abs())) / r
+}
+
+/// Attack-to-sustain energy ratio — the HLD's PRIMARY metric (§5 P). att =
+/// RMS over `[0, max(15 ms, 1.5/f0)]`; sus = RMS over `[100, 250] ms`. `f0` in
+/// Hz (≤0 → a fixed 15 ms attack window). Fierce plucks read high; a gentle
+/// finger pluck sits near the physical ring-down ratio.
+pub(crate) fn att_sus_ratio(seg: &[f32], sr: f32, f0: f32) -> f32 {
+    let att_end = if f0 > 0.0 {
+        0.015f32.max(1.5 / f0)
+    } else {
+        0.015
+    };
+    let a_hi = ((att_end * sr) as usize).min(seg.len());
+    let s_lo = ((0.100 * sr) as usize).min(seg.len());
+    let s_hi = ((0.250 * sr) as usize).min(seg.len());
+    if a_hi == 0 || s_hi <= s_lo {
+        return 0.0;
+    }
+    let sus = rms(&seg[s_lo..s_hi]);
+    if sus <= 1e-12 {
+        return 0.0;
+    }
+    rms(&seg[..a_hi]) / sus
+}
+
+/// Inter-harmonic floor (HLD G6): median FFT magnitude at the mid-points BETWEEN
+/// harmonics, relative to the median harmonic-peak magnitude, in dB. A pure
+/// harmonic tone reads deeply negative (empty valleys); a live blend of texture
+/// raises it. Anti-sterile lower bound and anti-noisy upper bound both read here.
+pub(crate) fn inter_harmonic_floor_db(seg: &[f32], sr: f32, f0: f32) -> f32 {
+    let n = 4096usize;
+    let mag = fft_mag_hann(seg, n);
+    let bin_hz = sr / n as f32;
+    let bin_of = |f: f32| (f / bin_hz).round() as usize;
+    let (mut harm, mut inter) = (Vec::new(), Vec::new());
+    let mut k = 1u32;
+    while (k as f32) * f0 < 0.45 * sr && k <= 16 {
+        let hb = bin_of(k as f32 * f0);
+        if hb == 0 || hb >= mag.len() {
+            break;
+        }
+        let lo = hb.saturating_sub(2);
+        let hi = (hb + 2).min(mag.len() - 1);
+        harm.push((lo..=hi).map(|b| mag[b]).fold(0f32, f32::max));
+        let ib = bin_of((k as f32 + 0.5) * f0);
+        if ib < mag.len() {
+            inter.push(mag[ib]);
+        }
+        k += 1;
+    }
+    if harm.is_empty() || inter.is_empty() {
+        return -120.0;
+    }
+    let median = |v: &mut Vec<f32>| {
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        v[v.len() / 2]
+    };
+    let h = median(&mut harm).max(1e-9);
+    let ih = median(&mut inter).max(1e-9);
+    20.0 * (ih / h).log10()
+}
+
+/// Peak sample-to-sample slew, normalised by the segment peak (HLD G5). A
+/// compensatory brightening (sharper onset) shows up here even when tilt holds.
+pub(crate) fn max_slew_norm(seg: &[f32]) -> f32 {
+    let peak = seg.iter().fold(0f32, |a, &x| a.max(x.abs())).max(1e-9);
+    seg.windows(2).fold(0f32, |a, w| a.max((w[1] - w[0]).abs())) / peak
+}
+
+/// Mean (DC) offset of a segment (HLD G10 — a periodic excitation must be
+/// zero-mean; a stray DC step is an unbalanced burst).
+pub(crate) fn dc_offset(seg: &[f32]) -> f32 {
+    if seg.is_empty() {
+        return 0.0;
+    }
+    (seg.iter().map(|&x| x as f64).sum::<f64>() / seg.len() as f64) as f32
+}
+
+// ---------------------------------------------------------------------------
 // The fixed multi-family reference song (oracles 34/35/38)
 // ---------------------------------------------------------------------------
 
@@ -958,6 +1157,153 @@ mod calibration {
         );
         // SYN-B: high also peaks at t=0 → the detector must NOT report a bloom.
         assert!(high_b <= 0.020, "SYN-B false bloom: high={high_b}");
+    }
+
+    // -----------------------------------------------------------------------
+    // Oracle 0 — pluck-redesign metric primitives (natural-pluck HLD §5)
+    // -----------------------------------------------------------------------
+
+    /// The 4096-Hann FFT recovers a pure tone: peak in the exact bin, magnitude
+    /// ≈ 1.0 (normalisation), and an octave-away bin is ≥ 40 dB down (leakage).
+    #[test]
+    fn fft_mag_hann_recovers_a_tone() {
+        let sr = 44100.0;
+        let n = 4096usize;
+        let bin = 100usize;
+        let f = bin as f32 * sr / n as f32; // on-bin, no scalloping
+        let s = sine(f, 1.0, sr, 0.25);
+        let mag = fft_mag_hann(&s, n);
+        let (peak_bin, peak) =
+            mag.iter().enumerate().fold(
+                (0usize, 0f32),
+                |(bi, bm), (i, &m)| {
+                    if m > bm {
+                        (i, m)
+                    } else {
+                        (bi, bm)
+                    }
+                },
+            );
+        assert_eq!(peak_bin, bin, "peak bin {peak_bin} vs {bin}");
+        assert!((peak - 1.0).abs() < 0.15, "on-bin peak magnitude {peak}");
+        assert!(
+            mag[2 * bin] < 0.02 * peak,
+            "octave-away leakage {} vs peak {peak}",
+            mag[2 * bin]
+        );
+    }
+
+    /// `spectral_tilt_db_oct` orders and quantifies slope: white ≈ 0, one 50 Hz
+    /// pole ≈ −6 dB/oct, two poles ≈ −12. Averaged over 8 noise realisations to
+    /// tame single-window variance (the helper reads one 4096-pt window).
+    #[test]
+    fn spectral_tilt_orders_by_slope() {
+        let sr = 44100.0;
+        let mean_tilt = |poles: u32| -> f32 {
+            (0..8)
+                .map(|seed| {
+                    let white = noise(seed, sr, 0.2);
+                    let mut a = OnePole::lowpass(50.0, sr);
+                    let mut b = OnePole::lowpass(50.0, sr);
+                    let sig: Vec<f32> = white
+                        .iter()
+                        .map(|&x| match poles {
+                            0 => x,
+                            1 => a.process(x),
+                            _ => b.process(a.process(x)),
+                        })
+                        .collect();
+                    spectral_tilt_db_oct(&sig, sr, 300.0, 9000.0)
+                })
+                .sum::<f32>()
+                / 8.0
+        };
+        let (flat, t6, t12) = (mean_tilt(0), mean_tilt(1), mean_tilt(2));
+        assert!(flat.abs() < 2.0, "white tilt {flat}");
+        assert!((t6 + 6.0).abs() < 2.0, "one-pole tilt {t6} (expect ≈ −6)");
+        assert!(
+            (t12 + 12.0).abs() < 3.0,
+            "two-pole tilt {t12} (expect ≈ −12)"
+        );
+        assert!(t12 < t6 && t6 < flat, "ordering {t12} < {t6} < {flat}");
+    }
+
+    /// `crest` reads √2 for a sine and ≫ that for a sparse impulse train.
+    #[test]
+    fn crest_orders_sine_below_impulse() {
+        let sr = 44100.0;
+        let s = sine(500.0, 1.0, sr, 0.2);
+        let c = crest(&s);
+        assert!(
+            (c - std::f32::consts::SQRT_2).abs() < 0.05,
+            "sine crest {c}"
+        );
+        let mut imp = vec![0f32; (0.2 * sr) as usize];
+        imp[10] = 1.0;
+        imp[5000] = 1.0;
+        assert!(crest(&imp) > 10.0, "impulse crest {}", crest(&imp));
+    }
+
+    /// `att_sus_ratio` measures front-loading: a tone twice as loud in the first
+    /// 15 ms reads ≈ 2.0; a flat tone reads ≈ 1.0.
+    #[test]
+    fn att_sus_ratio_measures_front_load() {
+        let sr = 44100.0;
+        let f0 = 200.0;
+        let front: Vec<f32> = (0..(0.3 * sr) as usize)
+            .map(|i| {
+                let t = i as f32 / sr;
+                let a = if t < 0.015 { 2.0 } else { 1.0 };
+                a * (std::f32::consts::TAU * f0 * t).sin()
+            })
+            .collect();
+        let r = att_sus_ratio(&front, sr, f0);
+        assert!((r - 2.0).abs() < 0.2, "front-loaded att/sus {r}");
+        let flat = sine(f0, 1.0, sr, 0.3);
+        let rf = att_sus_ratio(&flat, sr, f0);
+        assert!((rf - 1.0).abs() < 0.15, "flat att/sus {rf}");
+    }
+
+    /// `inter_harmonic_floor_db` reads deeply negative for a pure harmonic tone
+    /// and rises when broadband noise fills the valleys.
+    #[test]
+    fn inter_harmonic_floor_separates_tone_from_noise() {
+        let sr = 44100.0;
+        let f0 = 220.0;
+        let tone: Vec<f32> = (0..(0.3 * sr) as usize)
+            .map(|i| {
+                let t = i as f32 / sr;
+                (1..=8)
+                    .map(|k| (1.0 / k as f32) * (std::f32::consts::TAU * k as f32 * f0 * t).sin())
+                    .sum()
+            })
+            .collect();
+        let clean = inter_harmonic_floor_db(&tone, sr, f0);
+        let mut rng = Rng::new(5);
+        let noisy: Vec<f32> = tone.iter().map(|&x| x + 0.3 * rng.white()).collect();
+        let dirty = inter_harmonic_floor_db(&noisy, sr, f0);
+        assert!(clean < -25.0, "pure-tone inter-harmonic floor {clean}");
+        assert!(
+            dirty > clean + 10.0,
+            "noise raises the floor: {dirty} vs {clean}"
+        );
+    }
+
+    /// `max_slew_norm` and `dc_offset` calibrate: a 1 kHz unit sine's per-sample
+    /// slew is ≈ 2πf/sr, and a constant added offset is recovered exactly.
+    #[test]
+    fn slew_and_dc_calibrate() {
+        let sr = 44100.0;
+        let s = sine(1000.0, 1.0, sr, 0.1);
+        let sl = max_slew_norm(&s);
+        assert!((0.10..0.20).contains(&sl), "sine slew {sl}");
+        assert!(dc_offset(&s).abs() < 0.01, "zero-mean dc {}", dc_offset(&s));
+        let biased: Vec<f32> = s.iter().map(|&x| x + 0.25).collect();
+        assert!(
+            (dc_offset(&biased) - 0.25).abs() < 0.01,
+            "biased dc {}",
+            dc_offset(&biased)
+        );
     }
 }
 

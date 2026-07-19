@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00013 — Live/realtime path has no global polyphony cap: a dense stream can blow the audio-callback deadline
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** live
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-19, `a0df299`, by Claude Opus 4.8 (1M))
 
 ## Observation
 
@@ -33,12 +33,29 @@ total polyphony and steals the oldest/quietest.
 
 ## Fix
 
-Add a global polyphony cap with oldest/quietest voice stealing, active only in
-the live path (`live.rs`); offline keeps unbounded polyphony since it has no
-deadline.
+Fixed in `a0df299`. Added `EngineCore::enforce_voice_cap(cap)`: while over the
+cap, steal the oldest **released** voice (the quietest available proxy — the
+`Voice` trait exposes no level query — and `active` is push-ordered so the front
+is the oldest), else the oldest voice overall. Called **only** from
+`RealtimeSynth::fill_ring` (after draining pending events, before
+`render_block_add`) with a new `LIVE_MAX_VOICES = 128` ceiling. Offline never
+calls it, so its polyphony stays unbounded and its goldens bit-identical **by
+construction** (not merely by a flag check).
+
+Verification: `live_polyphony_is_capped` (168 spawned → 128),
+`live_under_cap_steals_nothing` (40 → 40), `offline_polyphony_is_unbounded`
+(300 → 300), and `enforce_voice_cap_steals_oldest_released_first` (checks victim
+identity, not just count). An adversarial 3-skeptic panel confirmed the fix 3-of-3,
+including a dangling-state audit: no structure indexes `active` positionally (all
+voice access is a predicate re-scan; `drum_rr`/`key_on_at` are `(ch,key)`-keyed;
+choke groups and the driven-guitar count are recomputed; a stolen voice's
+`note_off` simply no-ops), so `active.remove()` cannot corrupt engine state.
+fmt + `clippy -D warnings` + 553 lib tests green. Left **Fixed**, not Closed —
+awaiting independent two-eyes verify.
 
 ## Notes
 
-- Scope to the realtime surface so offline determinism/goldens are untouched.
-- `live` is documented as the secondary surface — this is robustness, not a
-  render-quality defect.
+- Hard cut on steal can click under genuine overload — the safety valve's cost
+  versus xruns/dropouts. `LIVE_MAX_VOICES` is documented and tunable.
+- Scoped to the realtime surface; offline determinism/goldens untouched.
+- `live` is the secondary surface — this is robustness, not a render-quality defect.

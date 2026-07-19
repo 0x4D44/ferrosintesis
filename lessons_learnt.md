@@ -3,6 +3,12 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.19 — **A verification subagent that runs `cargo test`/`clippy` in YOUR worktree during a live
+  gate corrupts the gate's test binary (abnormal exit `0xffffffff`/"test exited abnormally"), and a
+  `cargo test … | tail` pipeline returns `tail`'s exit 0, MASKING the failure.** Run build-executing
+  skeptics in a separate worktree (or after the gate), and never trust a tail-masked gate exit — grep the
+  `test result:` line. (Bit the MM-BUG-KILN-00013 gate; worktree source was intact, clean re-run → 553 green.)
+
 - 2026.07.19 — **render-diff baseline MUST be the commit you rebased ONTO, not a fresh `origin/main`
   build: in this multi-agent repo local `origin/main` drifts mid-session via concurrent fetch
   (f58aceb→b308fd1 here, 2 commits, AFTER my rebase), so a baseline built from a newer tip reports the

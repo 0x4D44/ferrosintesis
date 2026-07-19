@@ -7970,6 +7970,9 @@ const LA_CONTRABASS: (f32, (f32, f32)) = (0.29, (0.16, 0.46));
 // model. The sample carries the finger-pluck attack + string speech; the model keeps the
 // decay. A pluck onset (quicker than the arco contrabass); gain/fade ear-tunable.
 const LA_PIZZBASS: (f32, (f32, f32)) = (0.40, (0.05, 0.35));
+// GM 33/34/35 electric bass: real FreePats RBX finger/pick pluck over the Pluck model. The
+// finger and pick banks differ (that's the timbre); the crossfade is shared. Ear-tunable.
+const LA_EBASS: (f32, (f32, f32)) = (0.42, (0.05, 0.35));
 /// GM 42 cello: the cello-section arco bite over the waveguide sustain. A
 /// slightly faster handover than the bass (a cello bow speaks quicker).
 const LA_CELLO: (f32, (f32, f32)) = (0.30, (0.13, 0.40));
@@ -11410,12 +11413,67 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        33 => Box::new(Pluck::new(&BASS, key, vel, sr, seed)),
+        // GM 33 fingered electric bass: LA sampled finger pluck onset (FreePats RBX, CC0,
+        // -bass) over the Pluck(&BASS) model. Pure model is the CC0!=0 alt (altbank.rs).
+        33 => {
+            let model = Box::new(Pluck::new(&BASS, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_EBASS;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::finger_bass_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         38 | 39 => Box::new(SynthBass::new(program, key, vel, sr, seed)), // B4
-        34 => Box::new(Pluck::new(&PICK, key, vel, sr, seed)),            // B2
-        36 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),            // B2: thumb slap
-        37 => Box::new(Pluck::new(&SLAP_POP, key, vel, sr, seed)),        // B2: bridge pop
-        35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
+        // GM 34 picked electric bass: LA sampled pick pluck onset (FreePats RBX, CC0, -bass)
+        // over the Pluck(&PICK) model. Pure model is the CC0!=0 alt.
+        34 => {
+            let model = Box::new(Pluck::new(&PICK, key, vel, sr, seed)); // B2
+            if samples {
+                let (gain, fade) = LA_EBASS;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::pick_bass_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
+        36 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)), // B2: thumb slap
+        37 => Box::new(Pluck::new(&SLAP_POP, key, vel, sr, seed)), // B2: bridge pop
+        // GM 35 fretless electric bass: LA sampled finger pluck onset (FreePats RBX, CC0,
+        // -bass — no free CC0 fretless exists, so the fingered onset stands in; the model
+        // carries the fretless "mwah"). Pure model is the CC0!=0 alt.
+        35 => {
+            let model = Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_EBASS;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::finger_bass_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         40 | 110 => {
             let model = Box::new(Bowed::new(program, key, vel, sr, seed));
             if samples {
@@ -11741,6 +11799,7 @@ mod tests {
             ("LA_FIDDLE", LA_FIDDLE),
             ("LA_CONTRABASS", LA_CONTRABASS),
             ("LA_PIZZBASS", LA_PIZZBASS),
+            ("LA_EBASS", LA_EBASS),
             ("LA_CELLO", LA_CELLO),
             ("LA_FLUTE", LA_FLUTE),
             ("LA_PIANO", LA_PIANO),

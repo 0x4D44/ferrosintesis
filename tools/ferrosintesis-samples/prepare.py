@@ -175,6 +175,42 @@ STEEL_URLS = {
     for dest, member in STEEL_SOURCES.items()
 }
 
+# Electric bass (GM 33 finger / 34 pick, + 35 fretless riding finger) — FreePats "Clean
+# Electric Bass" (electric-bass-YR), a real Yamaha RBX recorded by Andrea Biasior, CC0 1.0
+# (LICENSE.txt inside each archive). MM-BUG-KILN-00016. Two separate SFZ+WAV archives —
+# FingerBassYR (GM33) and PickedBassYR (GM34) — pinned by SHA-256, extracted with 7z. The
+# sample carries the finger/pick attack; the Pluck model keeps the decay (0.9 s keep). The
+# SFZ `key=` fields give the exact pitch (finger E1..D#2 = MIDI 28..39; pick E1..E2 = 28..40),
+# so dest names use the SFZ pitch and roots are re-measured near it. Whole-tone-spaced zone
+# subset (max repitch ±1 st). Low bass → 2f-strong (per-note cap). Output → the new CC0
+# -bass crate.
+EBASS_FINGER_URL = (
+    "https://github.com/freepats/electric-bass-YR/releases/download/2019-09-30/"
+    "FingerBassYR-SFZ+WAV-20190930.7z"
+)
+EBASS_FINGER_SHA256 = "7a8075f8560c0f397283b221e35139473a2517a6fc427beed4f3fffa0619333d"
+EBASS_PICK_URL = (
+    "https://github.com/freepats/electric-bass-YR/releases/download/2019-09-30/"
+    "PickedBassYR-SFZ+WAV-20190930.7z"
+)
+EBASS_PICK_SHA256 = "ba301f87e5e677d486d0c112950006531523479e54b891aef21dc71b754a0e3a"
+_FB_MEMBER = "FingerBassYR SFZ+WAV-20190930/samples/finger"
+_PB_MEMBER = "PickedBassYR SFZ+WAV-20190930/samples/pick"
+# (dest sounding pitch, source note-name in the archive)
+_FINGERBASS_ZONES = [
+    ("E1", "E"), ("F#1", "F#"), ("G#1", "G#"), ("A#1", "A#"), ("C2", "C"), ("D2", "D"),
+]
+_PICKBASS_ZONES = [
+    ("E1", "E"), ("F#1", "F#"), ("G#1", "G#"), ("A#1", "A#"), ("C2", "C"), ("D2", "D"),
+    ("E2", "E2"),
+]
+FINGERBASS_SOURCES = {
+    f"fingerbass_{d}.wav": f"{_FB_MEMBER}/{s}.wav" for d, s in _FINGERBASS_ZONES
+}
+PICKBASS_SOURCES = {
+    f"pickbass_{d}.wav": f"{_PB_MEMBER}/{s}.wav" for d, s in _PICKBASS_ZONES
+}
+
 # Harpsichord (GM 6) — VCSL "Harpsichord, Unk" (Harpsi4), a 5-octave FF–f''' plucked
 # keyboard, CC0 1.0 (github.com/sgossner/VCSL; the root LICENSE is the full CC0 1.0
 # Universal text, added in commit c1ea7bcc). Single register (Main), single round
@@ -816,13 +852,18 @@ F0_RANGE = {
     # acoustic bass pizzicato (VSCO Solo Contrabass Pizz): sounding E1 41 .. G#3 208, like
     # dbass. In TWO_F_STRONG -> per-note cap; global ceiling clears the top fundamental.
     "pizzbass": (38.0, 520.0),
+    # electric bass (FreePats RBX): sounding E1 41 .. E2 82. In TWO_F_STRONG → per-note cap;
+    # global ceiling clears the top fundamental.
+    "fingerbass": (36.0, 100.0),
+    "pickbass": (36.0, 100.0),
 }
 # Families whose recordings are 2f-DOMINANT (autocorr grabs the 2nd harmonic if the
 # ceiling admits it) AND span more than an octave, so a single fixed F0 ceiling can't
 # separate the fundamental from 2f. For these, main() caps the ceiling per-note at
 # label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
 TWO_F_STRONG = frozenset(("recorder", "banjo", "viola", "marimba", "xylo", "glock",
-                          "vibes", "tubular", "cellosolo", "dbass", "pizzbass"))
+                          "vibes", "tubular", "cellosolo", "dbass", "pizzbass",
+                          "fingerbass", "pickbass"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -848,6 +889,8 @@ KEEP_FAM = {
     "vibes": (0.9, 0.30),
     "tubular": (0.9, 0.30),
     "pizzbass": (0.9, 0.30),
+    "fingerbass": (0.9, 0.30),
+    "pickbass": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -909,6 +952,8 @@ FAMILY_PACKAGE = {
     "cellosolo": "ferrosintesis-samples-strings",
     "dbass": "ferrosintesis-samples-strings",
     "pizzbass": "ferrosintesis-samples-strings",
+    "fingerbass": "ferrosintesis-samples-bass",
+    "pickbass": "ferrosintesis-samples-bass",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1014,6 +1059,14 @@ def ensure_guitar_sources(src):
     """Fetch + verify + extract the pinned FreePats Spanish-guitar archive."""
     ensure_archive_sources(src, SCG_ARCHIVE_URL, SCG_ARCHIVE_SHA256,
                            GUITAR_SOURCES, "scg_extract")
+
+
+def ensure_ebass_sources(src):
+    """Fetch + verify + extract the pinned FreePats electric-bass-YR archives (finger+pick)."""
+    ensure_archive_sources(src, EBASS_FINGER_URL, EBASS_FINGER_SHA256,
+                           FINGERBASS_SOURCES, "fingerbass_extract")
+    ensure_archive_sources(src, EBASS_PICK_URL, EBASS_PICK_SHA256,
+                           PICKBASS_SOURCES, "pickbass_extract")
 
 
 def ensure_bagpipe_sources(src):
@@ -2076,6 +2129,8 @@ def main():
             ensure_banjo_sources(src)
         if want("nylon"):
             ensure_guitar_sources(src)
+        if want("fingerbass") or want("pickbass"):
+            ensure_ebass_sources(src)
         if want("chanter"):
             ensure_bagpipe_sources(src)
         if want("grand"):
@@ -2168,6 +2223,7 @@ def main():
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
             | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS | TUBULAR_URLS
             | SOLO_CELLO_URLS | SOLO_DBASS_URLS | PIZZBASS_URLS
+            | FINGERBASS_SOURCES | PICKBASS_SOURCES
             | GRAND_SOURCES
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):

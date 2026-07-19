@@ -64,6 +64,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_musescore::get(name))
         .or_else(|| ferrosintesis_samples_sax::get(name))
         .or_else(|| ferrosintesis_samples_strings::get(name))
+        .or_else(|| ferrosintesis_samples_bass::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 
@@ -596,6 +597,49 @@ fn pizzbass() -> &'static [Zone] {
 /// 8 zones sound E1..G#3.
 pub fn pizzbass_bank() -> &'static [Zone] {
     pizzbass()
+}
+
+fn finger_bass() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "fingerbass_E1.wav" => 41.22,
+            "fingerbass_F#1.wav" => 46.84,
+            "fingerbass_G#1.wav" => 52.12,
+            "fingerbass_A#1.wav" => 58.69,
+            "fingerbass_C2.wav" => 65.40,
+            "fingerbass_D2.wav" => 73.27,
+        )
+    })
+}
+
+/// GM 33 fingered electric-bass onset (FreePats RBX finger, CC0, -bass) over the
+/// Pluck(&BASS) model; also serves GM 35 fretless (rides the finger onset — the pluck
+/// attack is what the layer supplies; the model carries the fretless glide). Roots
+/// MEASURED at bake near the SFZ key. 6 zones sound E1..D2.
+pub fn finger_bass_bank() -> &'static [Zone] {
+    finger_bass()
+}
+
+fn pick_bass() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "pickbass_E1.wav" => 41.62,
+            "pickbass_F#1.wav" => 47.19,
+            "pickbass_G#1.wav" => 52.55,
+            "pickbass_A#1.wav" => 58.70,
+            "pickbass_C2.wav" => 65.83,
+            "pickbass_D2.wav" => 73.70,
+            "pickbass_E2.wav" => 82.13,
+        )
+    })
+}
+
+/// GM 34 picked electric-bass onset (FreePats RBX pick, CC0, -bass) over the Pluck(&PICK)
+/// model. Roots MEASURED at bake near the SFZ key. 7 zones sound E1..E2.
+pub fn pick_bass_bank() -> &'static [Zone] {
+    pick_bass()
 }
 
 // GM 42 cello LA attack: a REAL solo cello arco onset (Karoryfer x bigcat "Bigcat

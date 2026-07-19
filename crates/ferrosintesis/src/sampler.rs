@@ -2782,8 +2782,17 @@ const SAX_VIB_DELAY_S: f32 = 0.20; // vibrato blooms after the onset
 const SAX_VIB_BLOOM_S: f32 = 0.35; // ramp-in time
 const SAX_DRIFT_MAX: f32 = 0.0022; // ±0.22% slow random-walk on the rate (defeats the loop-tell)
 const SAX_DRIFT_SAMP: u32 = 1024; // new drift target ~ every 23 ms
-const SAX_BREATH_FLOOR: f32 = 0.004; // intrinsic breath/air, relative to the tone
-const SAX_BREATH_CC: f32 = 0.05; // extra breath at full CC11
+
+// The synthetic air rides on top of a REAL recording that already breathes, so it must
+// stay a subtle enhancement, not a second breath. Measured (2026.07.19, solo-sax stems,
+// stock minus a breath-zeroed build) the old 0.004/0.05 pair landed the layer at −30 dB
+// (Night Train, CC11 66–78) up to −24 dB mean / −21 dB peak (Atlas "corridor sax", CC11
+// peaking 114) below the tone — an audible hiss at the swells. The CC lift was the
+// offender (12.5× the floor at full CC): cut it ~12 dB and trim the floor ~4 dB, so even
+// the worst case sits ~−32 dB — a whisper of air under the recording's own breath. Degree
+// is Arthur's ear; these are the "don't double the breath" values.
+const SAX_BREATH_FLOOR: f32 = 0.0025; // intrinsic air floor (was 0.004)
+const SAX_BREATH_CC: f32 = 0.012; // extra air at full CC11/CC2 (was 0.05 — the too-strong "wind")
 const SAX_BREATH_HP_HZ: f32 = 1800.0; // HP the noise into air, not rumble
 const SAX_BRIGHT_LO_HZ: f32 = 1400.0; // CC11 brightness sweep corner: soft → dark
 const SAX_BRIGHT_HI_HZ: f32 = 7000.0; // → loud, open (near pass-through)

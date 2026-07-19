@@ -8065,6 +8065,9 @@ const LA_VIBES: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
 // carries the metallic strike attack; the model keeps the long ring. Same gain/fade as
 // the other struck mallets (ear-tunable).
 const LA_TUBULAR: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
+// GM 8 celesta: real MS Basic SF3 bell strike over the bell(CELESTA) model. Same gain/fade
+// as the other struck bells (ear-tunable); the sample carries the bright metal-bar attack.
+const LA_CELESTA: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
 /// GM 104 sitar: the pluck + jawari bridge-buzz is the identity cue and lives in the
 /// sampled onset; the `Pluck(&SITAR)` model carries the bendable decay. Plucked handover
 /// like the guitars (sample owns ~0–50 ms, model from ~200 ms).
@@ -11141,17 +11144,35 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 Box::new(Pluck::new(&CLAVINET, key, vel, sr, seed))
             }
         }
-        8 => Box::new(bell(
-            key,
-            vel,
-            sr,
-            seed,
-            CELESTA,
-            (0.08, 0.006, 2500.0, 1.0),
-            0.002,
-            0.6,
-            0.58,
-        )),
+        // GM 8 celesta: LA sampled bell strike (MS Basic SF3, MIT, -musescore) over the
+        // bell(CELESTA) model. The pure model is the CC0!=0 alt (altbank.rs).
+        8 => {
+            let model = Box::new(bell(
+                key,
+                vel,
+                sr,
+                seed,
+                CELESTA,
+                (0.08, 0.006, 2500.0, 1.0),
+                0.002,
+                0.6,
+                0.58,
+            ));
+            if samples {
+                let (gain, fade) = LA_CELESTA;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::celesta_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         // GM 9 glockenspiel: LA sampled strike (VSCO Glock, CC0, -orchestral2) over the bell() model.
         9 => {
             let model = Box::new(bell(
@@ -11736,6 +11757,7 @@ mod tests {
             ("LA_GLOCK", LA_GLOCK),
             ("LA_VIBES", LA_VIBES),
             ("LA_TUBULAR", LA_TUBULAR),
+            ("LA_CELESTA", LA_CELESTA),
             ("LA_SITAR", LA_SITAR),
             ("LA_BANJO", LA_BANJO),
             ("LA_PANFLUTE", LA_PANFLUTE),

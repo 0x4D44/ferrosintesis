@@ -2108,6 +2108,17 @@ def main():
                 ms_src, 104, "sitar", "ferrosintesis-samples-musescore", 0.9, 0.20
             )
 
+        # GM 8 celesta: SF3 struck-bell onset → the MIT `-musescore` crate (same MS Basic
+        # source/NOTICE). MM-BUG-KILN-00015 batch 2. A metal-bar keyboard — the sample carries
+        # the bright bell strike, the bell(CELESTA) model keeps the ring. Struck → 0.9 s keep.
+        # Roots re-measured near the SF3 originalPitch (verify the printed roots).
+        if want("celesta"):
+            ms_src = os.path.join(tempfile.gettempdir(), "musescore_sf3", MUSESCORE_REV)
+            os.makedirs(ms_src, exist_ok=True)
+            rows += _bake_sf_onset(
+                ms_src, 8, "celesta", "ferrosintesis-samples-musescore", 0.9, 0.24
+            )
+
         # GM 75/76/77 pipes: SF3 WIND onsets (keep 0.62) → the MIT -musescore crate. Pan
         # flute (75) is a proper 8-zone multisample (mixed sample rates — _bake_sf_onset
         # resamples per zone); blown bottle (76) and shakuhachi (77) are SINGLE-zone in MS

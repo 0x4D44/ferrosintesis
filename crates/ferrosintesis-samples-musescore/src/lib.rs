@@ -3,7 +3,8 @@
 //!
 //! Attack transients extracted from the MuseScore "MS Basic" soundfont (MIT;
 //! FluidR3Mono lineage) for programs whose modeled onset benefits from a real one:
-//! the GM 104 sitar (pluck + jawari buzz) and the GM 75/76/77 pipes. Each WAV is a
+//! the GM 104 sitar (pluck + jawari buzz), the GM 75/76/77 pipes, and the GM 8 celesta
+//! (metal-bar bell strike). Each WAV is a
 //! mono 16-bit 44.1 kHz onset; `ferrosintesis` crossfades it into the modeled sustain.
 //! Consumers normally access this crate through `ferrosintesis`. Attribution
 //! obligations (the FluidR3 / MuseScore_General notices) are in `NOTICE`; the GM 7
@@ -59,6 +60,38 @@ static SAMPLES: &[(&str, &[u8])] = &[
     ("sitar_E5.wav", include_bytes!("../samples/sitar_E5.wav")),
     ("sitar_G3.wav", include_bytes!("../samples/sitar_G3.wav")),
     ("sitar_G6.wav", include_bytes!("../samples/sitar_G6.wav")),
+    (
+        "celesta_F#3.wav",
+        include_bytes!("../samples/celesta_F#3.wav"),
+    ),
+    (
+        "celesta_C4.wav",
+        include_bytes!("../samples/celesta_C4.wav"),
+    ),
+    (
+        "celesta_F#4.wav",
+        include_bytes!("../samples/celesta_F#4.wav"),
+    ),
+    (
+        "celesta_C5.wav",
+        include_bytes!("../samples/celesta_C5.wav"),
+    ),
+    (
+        "celesta_F#5.wav",
+        include_bytes!("../samples/celesta_F#5.wav"),
+    ),
+    (
+        "celesta_C6.wav",
+        include_bytes!("../samples/celesta_C6.wav"),
+    ),
+    (
+        "celesta_F#6.wav",
+        include_bytes!("../samples/celesta_F#6.wav"),
+    ),
+    (
+        "celesta_C7.wav",
+        include_bytes!("../samples/celesta_C7.wav"),
+    ),
 ];
 
 /// Number of embedded WAV files.

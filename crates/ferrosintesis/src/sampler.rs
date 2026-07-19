@@ -1507,6 +1507,28 @@ pub fn tubular_bank() -> &'static [Zone] {
     tubular()
 }
 
+fn celesta() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "celesta_F#3.wav" => 184.77,
+            "celesta_C4.wav" => 261.14,
+            "celesta_F#4.wav" => 370.10,
+            "celesta_C5.wav" => 523.20,
+            "celesta_F#5.wav" => 739.76,
+            "celesta_C6.wav" => 1052.66,
+            "celesta_F#6.wav" => 1481.45,
+            "celesta_C7.wav" => 2098.53,
+        )
+    })
+}
+
+/// GM 8 celesta onset (MS Basic SF3, MIT, -musescore) over the bell(CELESTA) model.
+/// Roots MEASURED at bake near the SF3 originalPitch (all clean). 8 zones sound F#3..C7.
+pub fn celesta_bank() -> &'static [Zone] {
+    celesta()
+}
+
 pub fn flute_bank() -> &'static [Zone] {
     flute()
 }

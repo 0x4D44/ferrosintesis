@@ -1,5 +1,15 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.19 — **Consolidate the snare-wire D1 noise-gain into `noise_vel_gain`**
+  (`drums.rs:1597` `let d1_noise = 0.5 + 0.5 * velnorm * velnorm;`). This is a
+  hand-inlined 3rd copy of the `0.5 + 0.5·vn²` noise-velocity law that
+  MM-BUG-KILN-00001 factored into `fn noise_vel_gain`; its own comment already
+  cross-references membrane_velocity's noise map. Swapping to
+  `noise_vel_gain(velnorm)` is byte-identical (same f32 ops) but touches the
+  shared V3/Brush snare path, so it was parked out of the brush-slap fix to keep
+  that commit surgical. Low-risk dedup: fold in + confirm the frozen snare
+  signatures are unchanged + a scoped render-diff on keys 38/40.
+
 <!-- 2026.07.18: the 10 items below are the low-value tail of the ferrosintesis
      subsystem audit; the meaningful findings were raised as MM-BUG-KILN-00005..00022.
      Parked here (not ledgered) per Arthur's "meaningful items; park trivia" call. -->

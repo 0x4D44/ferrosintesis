@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00001 — Ghost brush slap re-strike dominates soft notes
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synthesis
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-10, raised by Codex GPT-5)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-10, raised by Codex GPT-5); Fixed (2026-07-19, `7328c70`, by Claude Opus 4.8 (1M))
 
 ## Observation
 
@@ -37,11 +37,30 @@ Reproduction: render `render_drum_kit(39, 30, 0.3, Kit::Brush)` and compare
 
 ## Fix
 
-Pending. Recalibrate the burst against velocity with a regression oracle before
-updating the pinned brush render and affected listening assets.
+Fixed in `7328c70`. Root cause: `brush_slap` re-struck the noise bands with a
+fixed absolute burst amplitude (`0.50` in `with_bursts`), but the first-contact
+noise scales with velocity (`membrane_velocity`'s `nf(vn) = 0.5 + 0.5·vn²`), so
+the second/first energy ratio ∝ `0.50/nf(vn)` blew up as velocity fell. The
+velocity-100 oracle and the frozen render never exercised low velocity
+(`nf→0.81` there bounds the ratio), so it went uncaught.
+
+Extracted `fn noise_vel_gain(vn) = 0.5 + 0.5·vn²` (also used by
+`membrane_velocity`, byte-identical) and scaled the burst by it
+(`reexcite = 0.50 · noise_vel_gain(velnorm)`), anchored so full velocity keeps
+the calibrated `0.50`. The ratio is now velocity-invariant: ghost(30)
+2.336→1.238, loud(100) 1.590→1.290.
+
+Verification: new regression oracle `brush_slap_reexcite_tracks_velocity`
+(fails pre-fix at 2.336, passes post-fix); `brush_slap_accent_and_double_contact`
+still green; re-froze the key-39 `brush_render_signatures_are_stable` fingerprint;
+render-diff reported 1 expected change (GM40 + key39) and zero contamination;
+549 lib tests + `clippy -D warnings` green. Diagnosis + fix confirmed 3-of-3 by
+an adversarial skeptic panel (which also caught a misplaced `#[allow]`, repaired
+pre-commit). Left **Fixed**, not Closed — awaiting independent two-eyes verify.
 
 ## Notes
 
-The current equal-velocity brush oracle uses velocity 100 and does not cover
-ghost notes. Any fix changes the `brush_render_is_frozen` fingerprint and must
-follow the repo's synth render-diff inventory and asset-refresh policy.
+The equal-velocity brush oracle (velocity 100) did not cover ghost notes — the
+new regression oracle does. The fix changes the `brush_render_signatures_are_stable`
+key-39 fingerprint (updated); the `.opus`/`.wav` renders are git-ignored build
+output, so there are no committed listening assets to refresh.

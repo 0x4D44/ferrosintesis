@@ -26,6 +26,8 @@ tools/*
 !tools/gm0-audition/
 # ...but its rendered WAVs are build output, not source.
 tools/gm0-audition/renders/
+# Pluck-redesign FluidR3 differential-golden generator (natural-pluck HLD §5 D).
+!tools/pluck-attack/
 # Rendered audio — reproducible build output, not source.
 # Regenerate with `cargo run --release -p render-catalog`.
 *.wav

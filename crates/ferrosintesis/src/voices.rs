@@ -9444,6 +9444,7 @@ pub struct BrassSpec {
     pub bias: f32,                  // BR1/BR2 law
     pub brassiness: f32,            // BR12 rasp/cuivré readiness (0 = no cascade; ~1 = rips easily)
     pub bore: [(f32, f32, f32); 2], // BR3 (Hz, Q, dB); Hz=0 → skip
+    pub body_hp: (f32, f32),        // BR17 bell/body radiation HP (Hz, Q); Hz=0 → disabled
     pub bell_fc: f32,
     pub bell_g: f32, // BR3
     // BR2 output brightness: an L-driven radiated lowpass `out_base·2^(out_oct·L)`
@@ -9482,6 +9483,7 @@ const BR_DEFAULTS: BrassSpec = BrassSpec {
     bias: 0.30,
     brassiness: 0.0, // BR12 off by default; naturals opt in below, synth stays 0
     bore: [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)],
+    body_hp: (0.0, 0.0),
     bell_fc: 1500.0,
     bell_g: 1.0,
     out_base: 400.0,
@@ -9512,6 +9514,7 @@ pub const BR_TRUMPET: BrassSpec = BrassSpec {
     bias: 0.30,
     brassiness: 1.0, // BR12 the brightest, most readily "brassing up" voice
     bore: [(1200.0, 1.2, 5.0), (2900.0, 1.6, 3.0)],
+    body_hp: (680.0, 1.0),
     bell_fc: 1500.0,
     bell_g: 1.1,
     breath: 0.012,
@@ -9533,8 +9536,10 @@ pub const BR_TROMBONE: BrassSpec = BrassSpec {
     bias: 0.35,
     brassiness: 1.0, // BR12 cylindrical bore + flare: rips as readily as the trumpet
     bore: [(600.0, 1.1, 5.0), (1500.0, 1.5, 2.5)],
+    body_hp: (1000.0, 0.5),
     bell_fc: 800.0,
     bell_g: 0.8,
+    out_base: 200.0,
     breath: 0.014,
     chiff: 0.30,
     env: (0.045, 0.12, 0.88, 0.15),
@@ -9553,9 +9558,14 @@ pub const BR_TUBA: BrassSpec = BrassSpec {
     k_max: 2.2,
     bias: 0.40,
     brassiness: 0.35, // BR12 wide conical bore barely brasses — a gentle edge only
-    bore: [(230.0, 1.0, 6.0), (600.0, 1.4, 2.0)],
+    // BR17: the tuba needs a resonant 230/600 Hz body, not broadband brightness.
+    // The paired peaks plus the low radiated cutoff form the measured low-mid
+    // ring while retaining BR-O9's darkest-family high-band identity.
+    bore: [(230.0, 1.0, 26.0), (600.0, 1.4, 30.0)],
+    body_hp: (1000.0, 0.6),
     bell_fc: 400.0,
     bell_g: 0.4,
+    out_base: 10.0,
     breath: 0.018,
     chiff: 0.22,
     env: (0.07, 0.14, 0.90, 0.18),
@@ -9575,6 +9585,9 @@ pub const BR_MUTE_TPT: BrassSpec = BrassSpec {
     bias: 0.30,
     brassiness: 0.9, // BR12 trumpet source rasps; the mute stage tames it downstream
     bore: [(1200.0, 1.2, 5.0), (2900.0, 1.6, 3.0)], // trumpet source
+    // Hardware's straight mute remains fundamental-dominant across the measured
+    // register; the old fixed 750 Hz HP over-suppressed h1 by about 21 dB.
+    body_hp: (170.0, 1.5),
     bell_fc: 1500.0,
     bell_g: 1.1,
     mute: true, // BR4 mute stage §3.7 (net ≈ −8 dB)
@@ -9582,7 +9595,7 @@ pub const BR_MUTE_TPT: BrassSpec = BrassSpec {
     chiff: 0.30,
     env: (0.03, 0.10, 0.88, 0.10),
     drift: 0.0015,
-    amp: 0.55,
+    amp: 0.30,
     ..BR_DEFAULTS
 };
 pub const BR_HORN: BrassSpec = BrassSpec {
@@ -9597,6 +9610,7 @@ pub const BR_HORN: BrassSpec = BrassSpec {
     bias: 0.45,
     brassiness: 0.5, // BR12 mellow until pushed hard — the cuivré only at fortissimo
     bore: [(340.0, 1.0, 6.0), (750.0, 1.4, 2.5)],
+    body_hp: (200.0, 0.7),
     bell_fc: 750.0,
     bell_g: 0.5, // darkest: hand-in-bell
     breath: 0.014,
@@ -9627,6 +9641,7 @@ pub const BR_SECTION: BrassSpec = BrassSpec {
     bias: 0.32,
     brassiness: 0.7, // BR12 the ensemble edge, a touch held back vs a solo lead
     bore: [(800.0, 1.0, 4.0), (1800.0, 1.4, 2.5)],
+    body_hp: (1000.0, 0.5),
     bell_fc: 1100.0,
     bell_g: 0.8,
     breath: 0.010,
@@ -9708,13 +9723,15 @@ pub struct Brass {
     vn: f32,            // velocity/127, timbre-law input
     fenv: Option<Adsr>, // BR8 synth resonant-sweep envelope (62/63)
     fenv_level: f32,
-    sweep: Option<Biquad>, // BR8 shared resonant LP, retuned at CTRL rate
-    dcb: Biquad,           // BR11 highpass 25 Hz — biased-tanh DC guard
-    bore: Vec<Biquad>,     // BR3 bore/mouthpiece peak EQ (linear, on the sum)
-    bell_lp: OnePole,      // BR3 first-order HF-shelf helper
+    sweep: Option<Biquad>,   // BR8 shared resonant LP, retuned at CTRL rate
+    dcb: Biquad,             // BR11 highpass 25 Hz — biased-tanh DC guard
+    bore: Vec<Biquad>,       // BR3 bore/mouthpiece peak EQ (linear, on the sum)
+    body_hp: Option<Biquad>, // BR17 bell/body radiation; natural preset-specific
+    body_onset_hp: Option<Biquad>, // BR17 mute keeps the praised 750 Hz attack
+    bell_lp: OnePole,        // BR3 first-order HF-shelf helper
     bell_g: f32,
     out_lp: Option<OnePole>, // BR2 L-driven radiated brightness (natural only)
-    mute: Option<[Biquad; 3]>, // BR4 prog 59 (HP + 2 nasal peaks + loss)
+    mute: Option<[Biquad; 2]>, // BR4 prog 59 (2 nasal peaks + loss; body_hp owns the HP)
     breath_filt: Biquad,     // BR6 sustained blowing noise, BP at upper bore formant
     breath: f32,
     chiff: Burst,   // BR6 tongue transient
@@ -9817,8 +9834,7 @@ impl Brass {
 
         let mute = if spec.mute {
             Some([
-                Biquad::highpass(750.0, 0.7, sr),
-                Biquad::peak(1600.0, 2.2, 7.0, sr),
+                Biquad::peak(1600.0, 2.2, 18.0, sr),
                 Biquad::peak(4000.0, 2.0, 3.0, sr),
             ])
         } else {
@@ -9876,6 +9892,9 @@ impl Brass {
             sweep,
             dcb: Biquad::highpass(25.0, 0.7, sr),
             bore,
+            body_hp: (spec.body_hp.0 > 0.0)
+                .then(|| Biquad::highpass(spec.body_hp.0, spec.body_hp.1, sr)),
+            body_onset_hp: spec.mute.then(|| Biquad::highpass(750.0, 0.7, sr)),
             bell_lp: OnePole::lowpass(spec.bell_fc, sr),
             bell_g: spec.bell_g,
             out_lp: (spec.out_base > 0.0).then(|| OnePole::lowpass(spec.out_base, sr)),
@@ -10087,13 +10106,27 @@ impl Voice for Brass {
             for b in &mut self.bore {
                 sum = b.process(sum);
             }
+            // BR17 measured bell/body radiation. The correction belongs to the
+            // hold: LA + the existing model already own a praised attack. Run the
+            // new filter from sample zero, but crossfade it in only after 120 ms
+            // so its state is settled and the onset remains bit-exact. The mute
+            // crossfades from its original 750 Hz attack HP to its measured hold HP.
+            if let Some(hp) = &mut self.body_hp {
+                let hold = hp.process(sum);
+                let onset = self
+                    .body_onset_hp
+                    .as_mut()
+                    .map_or(sum, |onset_hp| onset_hp.process(sum));
+                let mix = smoothstep(0.12, 0.35, self.t as f32 / self.sr);
+                sum = onset + mix * (hold - onset);
+            }
             // BR3 bell HF radiation shelf (first-order, phase-benign)
             sum += self.bell_g * (sum - self.bell_lp.process(sum));
             // BR2 L-driven radiated brightness (natural presets)
             if let Some(lp) = &mut self.out_lp {
                 sum = lp.process(sum);
             }
-            // BR4 mute: HP 750 ► peak 1600 ► peak 4000 ► ×0.40
+            // BR4 mute: body HP ► peak 1600 ► peak 4000 ► ×0.40
             if let Some(m) = &mut self.mute {
                 let mut y = sum;
                 for stage in m.iter_mut() {
@@ -17662,6 +17695,84 @@ mod tests {
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    /// Settled h2-h5 power relative to h1, with each partial peak-searched so
+    /// scoop, drift, and section vibrato do not masquerade as missing energy.
+    fn brass_low_mid_ring_db(prog: u8, key: u8) -> f32 {
+        let sr = 44100.0;
+        let buf = render_brass(prog, key, 96, 1.1, 7);
+        let seg = &buf[(0.45 * sr) as usize..(1.05 * sr) as usize];
+        let f0 = key_freq(key);
+        let partial_power = |harmonic: u8| {
+            let centre = f0 * harmonic as f32;
+            (0..=16)
+                .map(|i| {
+                    let f = centre * (0.97 + 0.06 * i as f32 / 16.0);
+                    mag_at(seg, sr, f)
+                })
+                .fold(0.0f32, f32::max)
+                .powi(2)
+        };
+        let h1 = partial_power(1).max(1e-18);
+        let ring = (2..=5).map(partial_power).sum::<f32>();
+        10.0 * (ring / h1).log10()
+    }
+
+    /// BR-O17: the natural-brass body ring follows the hardware-calibrated
+    /// SC-55 balance across the register. A five-key median avoids pinning an
+    /// accidental single-note formant. Program 59 is intentionally included:
+    /// its hardware mute is fundamental-dominant, so a blanket h2-h5 boost is
+    /// also a regression. Targets were measured at velocity 96, dry, 44.1 kHz.
+    #[test]
+    fn brass_o17_low_mid_formant_ring_matches_sc55() {
+        let targets = [
+            (56u8, [15.3f32, 14.2, 13.3, 10.4, 10.4]),
+            (57, [15.1, 14.0, 13.2, 11.1, 10.4]),
+            (58, [10.6, 8.5, 8.0, 6.8, 4.5]),
+            (59, [-8.3, -8.2, -8.2, -8.1, -8.0]),
+            (60, [-1.8, -3.3, 0.5, 2.5, -2.5]),
+            (61, [11.0, 10.8, 11.4, 11.6, 11.3]),
+        ];
+        for (prog, hardware_db) in targets {
+            let values: Vec<f32> = [48u8, 52, 56, 60, 64]
+                .into_iter()
+                .map(|key| brass_low_mid_ring_db(prog, key))
+                .collect();
+            for (key, (&actual_db, &target_db)) in [48u8, 52, 56, 60, 64]
+                .iter()
+                .zip(values.iter().zip(hardware_db.iter()))
+            {
+                assert!(
+                    (actual_db - target_db).abs() <= 10.0,
+                    "prog {prog} key {key}: h2-h5 {actual_db:.1} dB is outside the SC-55 {target_db:.1} +/-10 dB register band"
+                );
+            }
+            let mut sorted = values.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let median_db = sorted[sorted.len() / 2];
+            let mut hardware_sorted = hardware_db;
+            hardware_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let target_db = hardware_sorted[hardware_sorted.len() / 2];
+            eprintln!(
+                "BR-O17 prog {prog}: ring {values:?}, median {median_db:.1} dB, SC-55 {target_db:.1} dB"
+            );
+            assert!(
+                (median_db - target_db).abs() <= 7.0,
+                "prog {prog}: h2-h5 median {median_db:.1} dB is outside the SC-55 {target_db:.1} +/-7 dB band"
+            );
+        }
+    }
+
+    #[test]
+    fn brass_o17_synth_brass_body_eq_is_inert() {
+        for prog in [62u8, 63] {
+            let v = brass(prog, 60, 96, 44100.0, 7);
+            assert!(
+                v.body_hp.is_none() && v.body_onset_hp.is_none(),
+                "synth brass {prog} acquired the natural body correction"
+            );
+        }
     }
 
     /// Render a fresh brass voice with the production living-breath ON (solo naturals

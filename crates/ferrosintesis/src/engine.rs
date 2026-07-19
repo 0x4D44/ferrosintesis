@@ -8108,19 +8108,31 @@ mod tests {
     fn enforce_voice_cap_steals_oldest_released_first() {
         let mut core = dry_core();
         for key in 60u8..66 {
-            core.handle_event(EvKind::NoteOn { ch: 0, key, vel: 100 });
+            core.handle_event(EvKind::NoteOn {
+                ch: 0,
+                key,
+                vel: 100,
+            });
         }
         assert_eq!(core.active_voice_count(), 6);
         // No voice is released, so the two OLDEST (keys 60, 61) are stolen.
         core.enforce_voice_cap(4);
         let keys: Vec<u8> = core.active.iter().map(|a| a.key).collect();
-        assert_eq!(keys, vec![62, 63, 64, 65], "oldest not stolen first: {keys:?}");
+        assert_eq!(
+            keys,
+            vec![62, 63, 64, 65],
+            "oldest not stolen first: {keys:?}"
+        );
         // Release the NEWEST (65); capping to 3 must steal that released voice
         // before any older un-released one.
         core.handle_event(EvKind::NoteOff { ch: 0, key: 65 });
         core.enforce_voice_cap(3);
         let keys: Vec<u8> = core.active.iter().map(|a| a.key).collect();
-        assert_eq!(keys, vec![62, 63, 64], "released voice not stolen first: {keys:?}");
+        assert_eq!(
+            keys,
+            vec![62, 63, 64],
+            "released voice not stolen first: {keys:?}"
+        );
     }
 
     #[test]

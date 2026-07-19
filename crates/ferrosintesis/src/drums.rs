@@ -1665,12 +1665,13 @@ pub fn make(
                     Biquad::bandpass(WIRE_CENTERS[2] * center_mul, WIRE_QS[2], sr),
                 ];
                 // Wire level = the D1 noise-amp scale the old HP band saw
-                // (`0.75·(0.5+0.5·vn²)`) × the BP/HP bandwidth make-up. The
+                // (`0.75·noise_vel_gain(vn)`) × the BP/HP bandwidth make-up. The
                 // per-sample render multiplies `s` by `self.gain` (= 0.68·v),
                 // so `v` is applied there — carrying it here too would square
                 // the velocity term and diverge from the old band's law, so it
-                // is deliberately omitted (see membrane_velocity's noise map).
-                let d1_noise = 0.5 + 0.5 * velnorm * velnorm;
+                // is deliberately omitted. Same noise-velocity law as
+                // membrane_velocity's noise map, via the shared helper.
+                let d1_noise = noise_vel_gain(velnorm);
                 let base_amp = 0.75 * d1_noise * WIRE_MAKEUP;
                 // V2 keeps the periodic slap (grain None → byte-identical); V3
                 // and Brush get the aperiodic collision-grain gate + a level
@@ -4490,6 +4491,37 @@ mod tests {
             ghost <= 1.15 * loud,
             "ghost re-strike ratio {ghost:.3} runs away from vel-100 {loud:.3}"
         );
+    }
+
+    /// Audit guard for the MM-BUG-KILN-00001 class. The OTHER `with_bursts`
+    /// drums — hand clap (39) and guiros (73/74) — pass FIXED noise bands
+    /// straight to `Drum::new` (no `membrane_velocity`), so both the first
+    /// contact and the burst are absolute and the whole voice is a pure
+    /// gain-scaled shape: `render(v) = gain(v)·[fixed shape]`. Their burst /
+    /// first-contact ratio is therefore velocity-INVARIANT and cannot dominate a
+    /// soft hit the way the brush slap's fixed burst did against its
+    /// velocity-scaled first contact (00001). This pins that: `render(30)·c`
+    /// must reconstruct `render(100)` sample-for-sample (c = the gain ratio), so
+    /// any change that velocity-scales one side but not the other breaks it.
+    #[test]
+    fn absolute_burst_drums_scale_purely_by_gain() {
+        let c = vel_amp(100) / vel_amp(30);
+        for key in [39u8, 73, 74] {
+            let ghost = render_drum_kit(key, 30, 0.3, Kit::V3);
+            let loud = render_drum_kit(key, 100, 0.3, Kit::V3);
+            let (mut max_err, mut peak) = (0f32, 1e-9f32);
+            for (&g, &l) in ghost.iter().zip(loud.iter()) {
+                max_err = max_err.max((g * c - l).abs());
+                peak = peak.max(l.abs());
+            }
+            let rel = max_err / peak;
+            println!("key {key}: pure-gain reconstruction rel err {rel:.2e}");
+            assert!(
+                rel < 1e-4,
+                "key {key} burst drum is not pure-gain velocity scaling (rel err {rel:.2e}) \
+                 — a velocity-dependent burst/first-contact ratio (00001 class) may have crept in"
+            );
+        }
     }
 
     /// SW-O1: the swirl SWELLS, it does not hit — the first 30 ms stays well

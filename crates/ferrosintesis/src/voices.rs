@@ -2254,6 +2254,22 @@ pub struct JawariSpec {
     pub follow_s: f32,
 }
 
+/// Excitation model for a plucked voice (natural-pluck redesign HLD §2).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ExcModel {
+    /// The historic flat, peak-normalized comb-filtered noise burst. Every
+    /// preset defaults to this, so an un-migrated preset is bit-identical.
+    Legacy,
+    /// Harmonic-domain build: a deterministic natural-rolloff backbone
+    /// (|sin(kπβ)|/k^s · pick-LP magnitude) blended in the energy domain with
+    /// the comb noise, then normalized on the SUSTAIN BAND — a gentler, less
+    /// front-loaded attack that does not re-level the instrument (§2, G7).
+    // Unit A scaffold: no preset selects Shaped yet (the 5-preset migration is
+    // Unit B, which removes this allow); the builder is exercised by tests now.
+    #[allow(dead_code)]
+    Shaped,
+}
+
 pub struct PluckPreset {
     pub t60: f32,     // decay at 220 Hz
     pub bright: f32,  // loop damping cutoff
@@ -2363,6 +2379,15 @@ pub struct PluckPreset {
     // (harpsichord jack, clavinet yarn strip), whose fast repeats must keep
     // articulating.
     pub trem: bool,
+    // --- natural-pluck redesign §2: Shaped excitation (opt-in) ---
+    /// Legacy (default → bit-identical) or Shaped. Only the migrated presets set Shaped.
+    pub exc_model: ExcModel,
+    /// Shaped backbone slope s (1/k^s = −6.02·s dB/oct): finger ~2.0, picked ~1.3–1.5.
+    pub slope: f32,
+    /// Shaped noise-mix ρ (energy-domain): finger 0.20, picked 0.30.
+    pub noise_mix: f32,
+    /// Per-preset sustain-band trim, dB (≤ ±1.5; beyond = Tripwire 1). 0 = none.
+    pub exc_trim: f32,
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -2408,6 +2433,10 @@ const DEFAULTS: PluckPreset = PluckPreset {
     membrane: &[],
     vel_sense: 1.0,
     trem: true,
+    exc_model: ExcModel::Legacy, // default → every un-migrated preset bit-identical
+    slope: 0.0,
+    noise_mix: 0.0,
+    exc_trim: 0.0,
     #[cfg(test)]
     name: "DEFAULT",
 };
@@ -3619,6 +3648,129 @@ pub struct Pluck {
     kind: &'static str,
 }
 
+/// Global sustain-band level constant for the Shaped excitation (§2.4): the
+/// h1..h4 RMS-amplitude of the burst is normalized to `K_SUS · v` (v = vel_amp),
+/// so the sustain tracks velocity exactly as Legacy did (amplitude ∝ v) — the
+/// anti-re-leveling anchor G7 enforces. Calibrated so a migrated preset's
+/// RMS(0.05–0.35 s) matches its HEAD median. (PLACEHOLDER — Phase-2 Unit C
+/// calibrates this against HEAD_BASELINE.)
+const K_SUS: f32 = 0.30;
+
+/// Amplitude of harmonic `k` in a one-period buffer (bin `k` of the N-point
+/// DFT), normalized so a unit sine at that bin reads ≈ 1.0. For the buffer
+/// f0 = sr/N, so k·f0 lands exactly on bin k — no leakage.
+fn dft_bin_mag(buf: &[f32], k: usize) -> f32 {
+    let n = buf.len();
+    if n == 0 {
+        return 0.0;
+    }
+    let step = std::f32::consts::TAU * k as f32 / n as f32;
+    let (mut re, mut im) = (0f32, 0f32);
+    for (i, &x) in buf.iter().enumerate() {
+        let ph = step * i as f32;
+        re += x * ph.cos();
+        im -= x * ph.sin();
+    }
+    (re * re + im * im).sqrt() / (n as f32 / 2.0)
+}
+
+/// The Shaped excitation (natural-pluck HLD §2). Builds a deterministic harmonic
+/// backbone — weight `|sin(kπβ)|/k^s · P(k·f0)` (β = jittered pick position, s =
+/// finger↔pick slope, P = the same velocity/wound-scaled pick-LP magnitude, so
+/// the velocity→brightness and wound laws survive), physical phases (φ₁=0,
+/// φ_{k≥2}=±0.4 rad), amplitude jitter for k≥2 only (h1 deterministic) — then
+/// blends it in the ENERGY domain with the existing comb noise and normalizes on
+/// the SUSTAIN BAND (h1..h4 RMS-amp = k_sus·v, NOT the peak). Result: a sharp but
+/// far less front-loaded attack that cannot re-level the instrument (G7).
+#[allow(clippy::too_many_arguments)]
+fn shaped_excitation(
+    exc_len: usize,
+    beta: f32,
+    slope: f32,
+    noise_mix: f32,
+    pick_lp: f32,
+    noise: &[f32],
+    v: f32,
+    exc_trim_db: f32,
+    k_sus: f32,
+    sr: f32,
+    rng: &mut Rng,
+) -> Vec<f32> {
+    let n = exc_len.max(4);
+    let f0 = sr / n as f32;
+    let n_max = ((0.45 * n as f32) as usize).max(1);
+    // deterministic harmonic backbone
+    let mut bb = vec![0f32; n];
+    for k in 1..=n_max {
+        let fk = k as f32 * f0;
+        if fk >= 0.45 * sr {
+            break;
+        }
+        let comb = (std::f32::consts::PI * k as f32 * beta).sin().abs();
+        let p_mag = 1.0 / (1.0 + (fk / pick_lp).powi(2)).sqrt();
+        let mut w = comb / (k as f32).powf(slope) * p_mag;
+        // φ₁=0 & h1 deterministic; k≥2 get amplitude + phase jitter
+        let phi = if k == 1 {
+            0.0
+        } else {
+            w *= 1.0 + 0.25 * rng.white();
+            0.4 * rng.white()
+        };
+        let step = std::f32::consts::TAU * k as f32 / n as f32;
+        for (i, s) in bb.iter_mut().enumerate() {
+            *s += w * (step * i as f32 + phi).sin();
+        }
+    }
+    // zero-mean (exact sines are already ≈0; enforce against float drift)
+    let mean = bb.iter().sum::<f32>() / n as f32;
+    for x in &mut bb {
+        *x -= mean;
+    }
+    // energy-domain blend: each component to unit RMS, then √(1−ρ)·bb + √ρ·noise
+    let unit_rms = |buf: &mut [f32]| {
+        let r = (buf.iter().map(|&x| x * x).sum::<f32>() / buf.len() as f32)
+            .sqrt()
+            .max(1e-9);
+        for x in buf.iter_mut() {
+            *x /= r;
+        }
+    };
+    unit_rms(&mut bb);
+    let mut noise_n = noise.to_vec();
+    unit_rms(&mut noise_n);
+    let (a, b) = ((1.0 - noise_mix).sqrt(), noise_mix.sqrt());
+    let mut exc: Vec<f32> = (0..n).map(|i| a * bb[i] + b * noise_n[i]).collect();
+    // zero-mean the blend — the noise component carries residual DC (G10). Bin 0
+    // only, so h1..h4 (the sustain band) are untouched.
+    let mean = exc.iter().sum::<f32>() / n as f32;
+    for x in &mut exc {
+        *x -= mean;
+    }
+    // sustain-band amplitude normalization: h1..h4 RMS-amp = k_sus·v (∝ v, so the
+    // velocity level law is preserved — §4 "level unchanged"; G7 verifies).
+    let h_amp = (1..=4)
+        .map(|k| {
+            let m = dft_bin_mag(&exc, k);
+            0.5 * m * m
+        })
+        .sum::<f32>()
+        .sqrt()
+        .max(1e-9);
+    let scale = (k_sus * v / h_amp) * 10f32.powf(exc_trim_db / 20.0);
+    for x in &mut exc {
+        *x *= scale;
+    }
+    // peak guard (§2.4): never let the burst peak exceed 1.6·v
+    let peak = exc.iter().fold(0f32, |m, &x| m.max(x.abs()));
+    if peak > 1.6 * v {
+        let s = 1.6 * v / peak.max(1e-9);
+        for x in &mut exc {
+            *x *= s;
+        }
+    }
+    exc
+}
+
 impl Pluck {
     pub fn new(p: &PluckPreset, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let mut rng = Rng::new(seed);
@@ -3715,13 +3867,37 @@ impl Pluck {
         };
         let raw: Vec<f32> = (0..exc_len).map(|_| lp.process(exc_rng.white())).collect();
         let comb = ((exc_len as f32 * pos) as usize).max(1);
-        let mut exc: Vec<f32> = (0..exc_len)
+        // The comb-filtered noise burst — the historic excitation, and the noise
+        // component of the Shaped blend.
+        let noise: Vec<f32> = (0..exc_len)
             .map(|i| raw[i] - 0.9 * raw[(i + comb) % exc_len])
             .collect();
-        let peak = exc.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-6);
-        for x in &mut exc {
-            *x *= v / peak;
-        }
+        let mut exc: Vec<f32> = match p.exc_model {
+            // Legacy: peak-normalize to v (bit-identical to the historic path —
+            // no extra rng draws, so every un-migrated preset is unchanged).
+            ExcModel::Legacy => {
+                let mut e = noise;
+                let peak = e.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-6);
+                for x in &mut e {
+                    *x *= v / peak;
+                }
+                e
+            }
+            // Shaped: the natural-rolloff harmonic build, sustain-band normalized.
+            ExcModel::Shaped => shaped_excitation(
+                exc_len,
+                pos,
+                p.slope,
+                p.noise_mix,
+                pick_lp,
+                &noise,
+                v,
+                p.exc_trim,
+                K_SUS,
+                sr,
+                exc_rng,
+            ),
+        };
         // Floor the initial burst's fundamental (harp fix; inert at h1_floor = 0). Guards
         // against a weak-h1 Rayleigh draw letting the octave dominate — see `top_up_h1`.
         // Faded out above C4 (the octave-hollow is a low-mid phenomenon), so high notes —
@@ -12168,6 +12344,73 @@ mod tests {
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    /// Phase-2 Unit A (natural-pluck HLD §2): the Shaped excitation builder.
+    /// Validates the mechanism on the bare buffer — zero-mean, sustain-band
+    /// amplitude normalized to K_SUS·v (NOT the peak, so loudness stays ∝ v), a
+    /// steeper slope carries less high-harmonic energy, and it is deterministic —
+    /// and confirms a Shaped preset renders and differs from its Legacy self.
+    /// (Per-preset s/noise_mix and the global K_SUS are calibrated in Unit C.)
+    #[test]
+    fn shaped_excitation_builder_mechanism() {
+        let sr = 44100.0;
+        let exc_len = 200usize;
+        let v = 0.5f32;
+        let build = |slope: f32, rho: f32, seed: u32| {
+            let mut nrng = Rng::new(seed);
+            let noise: Vec<f32> = (0..exc_len).map(|_| nrng.white()).collect();
+            let mut jrng = Rng::new(seed ^ 0x555);
+            shaped_excitation(
+                exc_len, 0.25, slope, rho, 3000.0, &noise, v, 0.0, K_SUS, sr, &mut jrng,
+            )
+        };
+        // zero-mean
+        let mixed = build(1.5, 0.2, 7);
+        let dc = mixed.iter().sum::<f32>() / mixed.len() as f32;
+        assert!(dc.abs() < 1e-4, "excitation DC {dc}");
+        // sustain-band amplitude = K_SUS·v (the anti-re-leveling normalization)
+        let hamp = |b: &[f32]| {
+            (1..=4)
+                .map(|k| 0.5 * dft_bin_mag(b, k).powi(2))
+                .sum::<f32>()
+                .sqrt()
+        };
+        assert!(
+            (hamp(&mixed) - K_SUS * v).abs() < 0.02 * K_SUS * v,
+            "sustain-band amp {} vs target {}",
+            hamp(&mixed),
+            K_SUS * v
+        );
+        // a steeper slope carries less high-harmonic energy (pure backbone)
+        let hf_ratio = |b: &[f32]| {
+            let lo: f32 = (1..=4).map(|k| dft_bin_mag(b, k).powi(2)).sum();
+            let hi: f32 = (8..=16).map(|k| dft_bin_mag(b, k).powi(2)).sum();
+            hi / lo.max(1e-12)
+        };
+        assert!(
+            hf_ratio(&build(2.0, 0.0, 7)) < hf_ratio(&build(1.3, 0.0, 7)),
+            "steeper slope should carry less HF"
+        );
+        // deterministic
+        assert_eq!(build(1.5, 0.2, 7), mixed);
+        // a Shaped preset renders and differs from its Legacy self (exercises the
+        // exc_model branch + the Shaped variant)
+        let shaped = PluckPreset {
+            exc_model: ExcModel::Shaped,
+            slope: 1.4,
+            noise_mix: 0.3,
+            ..STEEL
+        };
+        let s_render = render_pluck(&shaped, 52, 100, 0.4, 7);
+        assert!(
+            crate::testutil::rms(&s_render) > 1e-4,
+            "Shaped render silent"
+        );
+        assert!(
+            s_render != render_pluck(&STEEL, 52, 100, 0.4, 7),
+            "Shaped should differ from Legacy"
+        );
     }
 
     fn render_program(program: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {

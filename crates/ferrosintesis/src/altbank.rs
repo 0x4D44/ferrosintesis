@@ -79,6 +79,12 @@ const PIZZ: PluckPreset = PluckPreset {
     // TREM: no tremolo restrike — plucked-tremolo is not the pizzicato
     // idiom (a fast string tremolo is bowed), and the alt bank stays frozen.
     trem: false,
+    // natural-pluck §2 fields at their inert default — the alt bank stays frozen
+    // on the Legacy excitation.
+    exc_model: crate::voices::ExcModel::Legacy,
+    slope: 0.0,
+    noise_mix: 0.0,
+    exc_trim: 0.0,
     #[cfg(test)]
     name: "PIZZ",
 };

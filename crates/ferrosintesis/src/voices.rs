@@ -2602,6 +2602,12 @@ pub const DRIVE: PluckPreset = PluckPreset {
     // knee; Drive::post is re-matched so rendered loudness is unchanged.
     amp: 1.5,
     rel_t60: 0.20,
+    // Phase-1 A/B follow-up (Arthur: "still quite plucky"): a short soft onset
+    // eases the string's front-load in over ~15 ms instead of snapping, so the
+    // amp-sim clips the attack transient far less — the driven lead sings a
+    // touch more, chugs a touch less. Half of DRIVE_LEAD's 0.03 swell, so the
+    // main bank still speaks faster than the sustaining lead (contrast intact).
+    attack_s: 0.015,
     pickup: 0.10,
     pickup_rlc: (3300.0, 1.5), // pushed humbucker resonance
     // Round-3 U2 (plan §3.6): NO e-bow hold — the default bank is a DECAYING
@@ -2613,7 +2619,9 @@ pub const DRIVE: PluckPreset = PluckPreset {
     // oracles live there now (driven_main_and_alt_banks_diverge pins the
     // contrast; the engine THD floor pins the lead's held edge).
     sustain: 0.0,
-    click: 1.0, // pick through an amp — Phase-1 pluck-redesign cut 2.2 -> 1.0 (gentles the ch14 lead)
+    // pick through an amp — cut 2.2 -> 1.0 (Phase 1) -> 0.7 (A/B follow-up); stays
+    // above DRIVE_LEAD's 0.6 so the main bank keeps a firmer pick than the lead.
+    click: 0.7,
     ..DEFAULTS
 };
 /// Opt-in (CC0 alt-bank) SUSTAINING lead voicing of the driven guitar. A
@@ -12249,9 +12257,20 @@ mod tests {
             sus_index(&main),
             sus_index(&lead)
         );
-        // (2) onset-shape gap: the lead SWELLS while the main is a hard
-        // pick — time to 90 % of the envelope peak differs by ≥ 25 ms
-        // (HEAD: both attack instantly → RED).
+        // (2) onset-shape gap: the lead swells MORE than the main — time to 90 %
+        // of the envelope peak differs by ≥ 5 ms (main ~20 ms, lead ~29 ms).
+        //
+        // RE-BASELINED 2026-07-19 (pluck-redesign A/B, Arthur): the bar was 25 ms
+        // (HEAD: main attacked instantly, lead swelled). Arthur's A/B call gave the
+        // DEFAULT driven bank a short soft onset (DRIVE.attack_s 0.015) so it sings
+        // in rather than snapping — deliberately narrowing the attack contrast. The
+        // alt lead CANNOT swell further to restore 25 ms: DRIVE_LEAD.attack_s 0.03
+        // is sized to complete inside the sustainer's 80 ms capture window
+        // (sus_ref_until) — a longer swell deflates the held reference (see that
+        // preset's field docs). So the attack-time contrast is now the minor axis
+        // (lead swells ~9 ms more) and clause (1) — the ≥6 dB SUSTAIN gap, unchanged
+        // — carries the bank distinction. Bar 5 ms: RED if the main softens until it
+        // swells as much as the lead (gap < 5 ms), GREEN at the current 9 ms.
         let attack = |b: &[f32]| {
             let span = &b[..(0.4 * sr) as usize];
             let mut lp = crate::dsp::OnePole::lowpass(200.0, sr);
@@ -12264,8 +12283,8 @@ mod tests {
         };
         let (a_main, a_lead) = (attack(&main), attack(&lead));
         assert!(
-            a_lead >= a_main + 0.025,
-            "the alt lead does not swell: attack main {a_main:.3} s vs lead {a_lead:.3} s"
+            a_lead >= a_main + 0.005,
+            "the alt lead does not swell more than the main: attack main {a_main:.3} s vs lead {a_lead:.3} s"
         );
     }
 
@@ -15718,10 +15737,14 @@ mod tests {
             }
         }
         // Aggregate across the whole cut set: the pick-tick energy is meaningfully
-        // down (robust to the few excitation-dominated cells).
+        // down (robust to the few excitation-dominated cells). Bar >=5%: the A/B
+        // follow-up gave DRIVE a soft onset (attack_s 0.015) that ramps its string
+        // front-load in, trimming the click's share of the onset-HF band, so the
+        // aggregate click-reduction eased ~10% -> ~9%. 5% stays robustly GREEN while
+        // still going RED if the clicks were restored.
         assert!(
-            now_sum < 0.90 * loud_sum,
-            "total onset HF {now_sum:.4} not >=10% below pre-cut {loud_sum:.4}"
+            now_sum < 0.95 * loud_sum,
+            "total onset HF {now_sum:.4} not >=5% below pre-cut {loud_sum:.4}"
         );
     }
 

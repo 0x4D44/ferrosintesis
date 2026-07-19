@@ -1,0 +1,207 @@
+{
+  "album": "The Causeway",
+  "artist": "Claude Fable 5",
+  "style": "Five crossings between a tidal island and the mainland: an icy late-ABBA incantation and a warm McCartney tune begin a tritone apart and converge track by track (6-4-3-2-0 semitones), kept from ever sounding together \u2014 and from every leading-tone cadence \u2014 until the causeway dries at dawn in track 5, where both themes meet in invertible counterpoint over a piano-pump medley of the album's hooks and a fusion phrase lands the record's only melodic tonic, on a plagal Picardy.  Morse tide-words, a breath-flute herald before every groove, and a bell buoy that tolls the track number carry the letters across the water.",
+  "track_count": 5,
+  "total_duration_seconds": 1653.24,
+  "total_duration_minutes": 27.55,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "Neap Light",
+      "file": "midi/01 - Neap Light.mid",
+      "duration_seconds": 331.39,
+      "duration_minutes": 5.52,
+      "movements": [
+        {
+          "name": "I. Grey Water",
+          "start_beat": 0.0,
+          "end_beat": 112.0,
+          "start_seconds": 0.0,
+          "end_seconds": 93.18,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Heartbeat",
+          "start_beat": 112.0,
+          "end_beat": 288.0,
+          "start_seconds": 93.18,
+          "end_seconds": 209.8,
+          "time": "1:33"
+        },
+        {
+          "name": "III. The Far Shore",
+          "start_beat": 288.0,
+          "end_beat": 360.0,
+          "start_seconds": 209.8,
+          "end_seconds": 271.34,
+          "time": "3:29"
+        },
+        {
+          "name": "IV. Neap",
+          "start_beat": 360.0,
+          "end_beat": 424.0,
+          "start_seconds": 271.34,
+          "end_seconds": 330.01,
+          "time": "4:31"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "The Winter Ferry",
+      "file": "midi/02 - The Winter Ferry.mid",
+      "duration_seconds": 355.15,
+      "duration_minutes": 5.92,
+      "movements": [
+        {
+          "name": "I. Harbour",
+          "start_beat": 0.0,
+          "end_beat": 96.0,
+          "start_seconds": 0.0,
+          "end_seconds": 82.32,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Open Water",
+          "start_beat": 96.0,
+          "end_beat": 296.0,
+          "start_seconds": 82.32,
+          "end_seconds": 178.7,
+          "time": "1:22"
+        },
+        {
+          "name": "III. Turned Back",
+          "start_beat": 296.0,
+          "end_beat": 384.0,
+          "start_seconds": 178.7,
+          "end_seconds": 261.92,
+          "time": "2:58"
+        },
+        {
+          "name": "IV. Harbour Again",
+          "start_beat": 384.0,
+          "end_beat": 472.0,
+          "start_seconds": 261.92,
+          "end_seconds": 353.01,
+          "time": "4:21"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Spring Tide",
+      "file": "midi/03 - Spring Tide.mid",
+      "duration_seconds": 300.24,
+      "duration_minutes": 5.0,
+      "movements": [
+        {
+          "name": "I. The Lattice",
+          "start_beat": 0.0,
+          "end_beat": 120.0,
+          "start_seconds": 0.0,
+          "end_seconds": 76.61,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Answer",
+          "start_beat": 120.0,
+          "end_beat": 288.0,
+          "start_seconds": 76.61,
+          "end_seconds": 176.51,
+          "time": "1:16"
+        },
+        {
+          "name": "III. High Water",
+          "start_beat": 288.0,
+          "end_beat": 400.0,
+          "start_seconds": 176.51,
+          "end_seconds": 239.55,
+          "time": "2:56"
+        },
+        {
+          "name": "IV. Slack",
+          "start_beat": 400.0,
+          "end_beat": 496.0,
+          "start_seconds": 239.55,
+          "end_seconds": 303.93,
+          "time": "3:59"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "The Ebb Letter",
+      "file": "midi/04 - The Ebb Letter.mid",
+      "duration_seconds": 280.3,
+      "duration_minutes": 4.67,
+      "movements": [
+        {
+          "name": "I. Candle",
+          "start_beat": 0.0,
+          "end_beat": 108.0,
+          "start_seconds": 0.0,
+          "end_seconds": 105.56,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Ice",
+          "start_beat": 108.0,
+          "end_beat": 300.0,
+          "start_seconds": 105.56,
+          "end_seconds": 201.56,
+          "time": "1:45"
+        },
+        {
+          "name": "III. Wax",
+          "start_beat": 300.0,
+          "end_beat": 366.0,
+          "start_seconds": 201.56,
+          "end_seconds": 276.77,
+          "time": "3:21"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Low Water Crossing",
+      "file": "midi/05 - Low Water Crossing.mid",
+      "duration_seconds": 386.16,
+      "duration_minutes": 6.44,
+      "movements": [
+        {
+          "name": "I. First Light",
+          "start_beat": 0.0,
+          "end_beat": 160.0,
+          "start_seconds": 0.0,
+          "end_seconds": 117.11,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Causeway",
+          "start_beat": 160.0,
+          "end_beat": 288.0,
+          "start_seconds": 117.11,
+          "end_seconds": 193.91,
+          "time": "1:57"
+        },
+        {
+          "name": "III. Both Shores",
+          "start_beat": 288.0,
+          "end_beat": 480.0,
+          "start_seconds": 193.91,
+          "end_seconds": 309.11,
+          "time": "3:13"
+        },
+        {
+          "name": "IV. The Other Shore",
+          "start_beat": 480.0,
+          "end_beat": 592.0,
+          "start_seconds": 309.11,
+          "end_seconds": 393.9,
+          "time": "5:09"
+        }
+      ]
+    }
+  ]
+}

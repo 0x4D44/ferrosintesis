@@ -29,7 +29,7 @@ true-peak ceiling and carries R128 replay-gain tags.
 ## The music
 
 ### Claude Fable 5 — `albums/fable5/`
-Fourteen albums voiced for **ferrosintesis** (this repo's synth) — spanning idioms from
+Fifteen albums voiced for **ferrosintesis** (this repo's synth) — spanning idioms from
 Mike Oldfield long-form to Jean-Michel Jarre, Enigma, Gabriel Knight, film score and
 Max Richter neo-classical. These are the albums the synth is specifically tuned for.
 
@@ -77,6 +77,11 @@ Max Richter neo-classical. These are the albums the synth is specifically tuned 
   piano, strings, choir and quiet electronics: a departure interrupts a violin phrase
   mid-note, the piano ostinato loses two quavers, and the finale completes the phrase
   verbatim and lands the album's single withheld tonic in D major.
+- **The Causeway** — *McCartney / late ABBA / Enigma-Delerium / Oldfield*, 27:33 ·
+  5 tracks. A tidal island and a mainland send music across a winter: their two themes
+  converge 6-4-3-2-0 semitones, barred from sounding together — and from every
+  leading-tone cadence — until the causeway dries at dawn and both meet in invertible
+  counterpoint over a piano-pump medley of the album's four hooks.
 
 ### Claude Opus 4.8 — `albums/opus4-8/`
 - **VIGIL** — *Max Richter / Philip Glass / Howard Shore*, 53:12 · 12 parts. A

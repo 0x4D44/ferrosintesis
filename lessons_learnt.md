@@ -16,6 +16,11 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   `git worktree add BASELINE origin/main` so baseline == your branch's base; re-check `git rev-parse
   origin/main` right before building the baseline (`tools/render-diff/render_diff.py`).
 
+- 2026.07.19 — **`deltic timeout <s> python - <<EOF` hangs: deltic timeout does not forward heredoc
+  stdin, so python drops into the REPL (_pyrepl crash-loops on the invalid console handle) until the
+  timeout kills it (exit 124)** — write the probe to a temp .py and run `deltic timeout N python file.py`,
+  or drop the wrapper for stdin-fed one-liners (The Causeway audio-probe loop burned two cycles on this).
+
 - 2026.07.18 — **A composer/generator subagent emitting a big module can die on the per-response 64k
   output-token cap BEFORE any file write — instruct it to write the file in several small Write/Edit
   chunks, never one giant call** (The Remaining T5, ~900-line module; relaunch with the chunk

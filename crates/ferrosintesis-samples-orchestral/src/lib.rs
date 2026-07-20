@@ -508,7 +508,11 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    const EXPECTED_BYTES: usize = 9833422;
+    // 2026.07.20: 9833422 -> 9414766, exactly -418656 bytes. The eight GM109
+    // bagpipe loops were re-baked to short whole-period windows (the old 0.4 s /
+    // 1.5 s buffers clicked once per loop), taking them from 238318 to 28990
+    // frames. FILE_COUNT is unchanged — this is the same bank, cut correctly.
+    const EXPECTED_BYTES: usize = 9414766;
 
     #[test]
     fn inventory_matches_packaged_wavs() {

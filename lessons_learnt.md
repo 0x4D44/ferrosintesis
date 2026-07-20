@@ -3,6 +3,25 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.20 — **`voices.rs::percentile` is NOT nearest-rank despite its doc comment — its body is
+  `sorted[floor(q*(len-1))]`, so at n=9 `percentile(x, 0.95)` returns the SECOND-largest, not the max.**
+  Reusing it for the instrument-balance level statistic put median 0.41 / max 18.77 dB of error into the
+  derived trims. For a single-note window use an explicit `max`, and never trust a percentile helper whose
+  convention you have not read (`crates/ferrosintesis-cli/examples/calmeter.rs` documents the three
+  conventions and why they are not approximations of each other below n≈20).
+
+- 2026.07.20 — **A SysEx event in a MIDI *file* is `F0 <vlq len> <payload>`, not the raw wire bytes** —
+  emitting `F0 7E 7F 09 01 F7` (GM System On) makes every parser read `0x7E` as a 126-byte length and
+  swallow the rest of the track, so the file renders as SILENCE on ferrosintesis, the SC-55 and the
+  S-YXG50 alike (`_cal/mkprobe.py`). A malformed probe fails identically on every engine — if *all*
+  references go quiet at once, suspect your generator, not the engines.
+
+- 2026.07.20 — **`BusGlue` is applied unconditionally to the master (`engine.rs:3071`) and cannot be
+  disabled through the public API** — it compresses 2:1 above `thr=0.32` with a +1.5 dB 95 Hz shelf, so it
+  squashes exactly the level differences a per-program calibration is trying to measure, and bass-heavy
+  programs trigger it first. Any level-calibration measurement needs a throwaway build that gates it out;
+  zeroing `PROGRAM_TRIM_DB` alone is NOT sufficient to recover raw voice levels.
+
 - 2026.07.20 — **`build.py --verify` does NOT write the `.mid` — it runs oracles on the in-memory Score
   and re-parses the EXISTING file, so after editing a movement it reports green on music the committed
   MIDI does not contain.** Always bare `python build.py` FIRST, then `--verify`; confirm with `cmp` on the

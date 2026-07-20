@@ -28,6 +28,10 @@ tools/*
 tools/gm0-audition/renders/
 # Pluck-redesign FluidR3 differential-golden generator (natural-pluck HLD §5 D).
 !tools/pluck-attack/
+# Instrument-balance calibration probe generator (SC-55 / S-YXG50 alignment).
+# Its plan TSV format is the contract `examples/calmeter.rs` reads, so the two
+# must stay together — the derivation is not reproducible without this.
+!tools/instrument-balance/
 # Rendered audio — reproducible build output, not source.
 # Regenerate with `cargo run --release -p render-catalog`.
 *.wav

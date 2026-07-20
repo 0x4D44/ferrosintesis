@@ -76,7 +76,10 @@ mod tests {
     }
 
     fn melodic_level(program: u8, key: u8, vel: u8) -> f32 {
-        level_db(&render(voices::make(program, key, vel, SR, SEED, true), 1.2))
+        level_db(&render(
+            voices::make(program, key, vel, SR, SEED, true),
+            1.2,
+        ))
     }
 
     fn drum_level(key: u8, vel: u8) -> Option<f32> {
@@ -188,10 +191,7 @@ mod tests {
             for key in [48u8, 60] {
                 print!("GM{p} key {key} raw:");
                 for &v in &[64u8, 80, 96, 110, 127] {
-                    let l = level_db(&render(
-                        make_uncorrected_for_census(p, key, v),
-                        1.2,
-                    ));
+                    let l = level_db(&render(make_uncorrected_for_census(p, key, v), 1.2));
                     print!("  v{v}={l:.2}");
                 }
                 println!();

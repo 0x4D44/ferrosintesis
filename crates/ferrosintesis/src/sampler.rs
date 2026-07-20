@@ -2438,7 +2438,6 @@ pub struct LaFx {
     pub vel_lp: Option<f32>,
 }
 
-
 /// Velocity→corner law for [`LaFx::vel_lp`]: mirrors the model's excitation
 /// brightness shape; returns the one-pole coefficient, 0.0 = hard bypass.
 fn vel_lp_alpha(base_hz: f32, vel: u8, sr: f32) -> f32 {

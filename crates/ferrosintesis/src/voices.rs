@@ -25,8 +25,8 @@
 //! Timing realism: sustained families speak slower at low velocity, the way
 //! a gently-bowed or gently-blown note actually starts.
 
-use crate::dsp::{vel_ctrl, 
-    key_freq, vel_amp, Adsr, Biquad, BlepPulse, BlepSaw, Burst, DelayLine, Drift, FmPair,
+use crate::dsp::{
+    key_freq, vel_amp, vel_ctrl, Adsr, Biquad, BlepPulse, BlepSaw, Burst, DelayLine, Drift, FmPair,
     GrainGate, OnePole, ReedPulse, Rng, Sine,
 };
 use std::f32::consts::TAU;

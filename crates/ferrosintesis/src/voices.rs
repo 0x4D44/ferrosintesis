@@ -6952,13 +6952,14 @@ pub const SHAKUHACHI: WindPreset = WindPreset {
     harm: [0.26, 0.26, 0.10, 0.05, 0.025, 0.012],
     vel_bright: 0.8,
     reg_dark: 0.5,
-    // Round-3: 0.30 → 0.20 (kept above the pan flute — shakuhachi is airier, and
-    // the WD-O5 `shak > 3·flute` clause needs the margin). The muraiki >8 kHz shelf
-    // (breath_hi) stays; the flutter fix removes the pulsing that read as shaking.
-    breath: 0.20,
+    // Round-3 cut 0.30 → 0.20; Arthur's ear then found the bamboo still too airy
+    // (2026.07.20), so 0.20 → 0.12 and the muraiki >8 kHz shelf 0.05 → 0.03. Still
+    // airier than the flute (WD-O5 clause relaxed to shak > 2·flute; WD-O4 shelf kept
+    // clear of the flute) — just no longer a hiss on top.
+    breath: 0.12,
     breath_f: 2.5,
     breath_q: 1.0,
-    breath_hi: 0.05,
+    breath_hi: 0.03,
     chiff: 0.20,
     chiff_t60: 0.040,
     vib: (4.5, 0.006, 0.35),
@@ -6977,10 +6978,10 @@ pub const WHISTLE: WindPreset = WindPreset {
     harm: [0.04, 0.008, 0.0, 0.0, 0.0, 0.0],
     vel_bright: 0.2,
     reg_dark: 0.2,
-    // 0.16 → 0.30 (§2.8.5.2): the focused air band AT the whistle pitch is
-    // this instrument's identity, and it sat ~35 dB under the tone. 0.30
-    // makes the hiss around the tone genuinely audible (WD-O5 re-pinned).
-    breath: 0.30,
+    // 0.16 → 0.30 (§2.8.5.2) made the focused air band audible; Arthur's ear then
+    // found 0.30 too airy (2026.07.20), so 0.30 → 0.16 pulls the hiss back to a
+    // present-but-subtle band around the whistle pitch (WD-O5 whistle band re-targeted).
+    breath: 0.16,
     breath_f: 1.0,
     breath_q: 4.0,
     breath_hi: 0.0,
@@ -7003,7 +7004,7 @@ pub const OCARINA: WindPreset = WindPreset {
     harm: [0.16, 0.0, 0.0, 0.0, 0.0, 0.0],
     vel_bright: 0.25,
     reg_dark: 0.0,
-    breath: 0.17,
+    breath: 0.10, // was 0.17 — Arthur's ear (2026.07.20): too airy; WD-O5 ocarina band re-targeted
     breath_f: 1.2,
     breath_q: 2.0,
     breath_hi: 0.0,
@@ -21158,9 +21159,9 @@ mod tests {
             "WD-O4 8-16kHz fraction — shakuhachi {shak:.5} flute {flute:.5} (ratio {:.0}x)",
             shak / flute.max(1e-9)
         );
-        assert!(shak >= 0.010, "no muraiki shelf: {shak}");
+        assert!(shak >= 0.006, "no muraiki shelf: {shak}"); // 2026.07.20: breath_hi 0.05→0.03 (de-wind)
         assert!(
-            shak >= 10.0 * flute,
+            shak >= 7.0 * flute,
             "shakuhachi shelf {shak} not clear of the flute's {flute}"
         );
     }
@@ -21218,10 +21219,10 @@ mod tests {
             ("recorder", rec, 0.006, 0.016),
             ("piccolo", picc, 0.007, 0.018),
             ("flute", fl, 0.010, 0.021), // tight: this IS today's accepted flute bed (R1)
-            ("whistle", wh, 0.022, 0.052),
-            ("ocarina", oc, 0.014, 0.031),
-            ("shakuhachi", shak, 0.040, 0.062), // round-3: breath 0.30→0.20 (de-shake)
-            ("pan_flute", pan, 0.021, 0.037),   // round-3: breath 0.24→0.12 (de-shake)
+            ("whistle", wh, 0.012, 0.026), // 2026.07.20: breath 0.30→0.16 (de-wind, Arthur's ear)
+            ("ocarina", oc, 0.008, 0.017), // 2026.07.20: breath 0.17→0.10 (de-wind)
+            ("shakuhachi", shak, 0.020, 0.040), // 2026.07.20: breath 0.20→0.12 (de-wind)
+            ("pan_flute", pan, 0.021, 0.037), // round-3: breath 0.24→0.12 (de-shake)
             ("blown_bottle", bot, 0.60, 0.95),
         ] {
             assert!(
@@ -21234,8 +21235,9 @@ mod tests {
             rec < fl && fl < pan && pan < bot,
             "breath ordering collapsed: rec {rec} < flute {fl} < pan {pan} < bottle {bot}"
         );
+        // 2026.07.20: was 3.0× — after the de-wind shak/flute ≈ 2.0×, still markedly airier.
         assert!(
-            shak > 3.0 * fl,
+            shak > 1.8 * fl,
             "shakuhachi {shak} is not markedly airier than the flute {fl}"
         );
     }
@@ -21641,8 +21643,9 @@ mod tests {
     ///   open (WD-O6b caps the dry tilt ratio at 1.25) — this rise is
     ///   almost all the duct hiss growing with pressure, which a fipple
     ///   genuinely does.
-    /// - WHISTLE 1.12 / OCARINA 1.30 (measured 1.21/1.45): near-sine
-    ///   vessels; the rise is the air bed's broadband upper skirt growing.
+    /// - WHISTLE 1.12 / OCARINA 1.22 (measured 1.185/1.277 after the 2026.07.20 breath
+    ///   cut; was 1.21/1.45): near-sine vessels; the rise IS the air bed's broadband upper
+    ///   skirt growing — a smaller bed means a smaller rise, so the ocarina target dropped.
     /// - BLOWN_BOTTLE 1.40 (measured 1.63): the §2.8.5.4 Helmholtz path —
     ///   the pressure-tracked jet spill grows and widens against the fixed
     ///   resonance.
@@ -21654,7 +21657,7 @@ mod tests {
         (&BLOWN_BOTTLE, 1.40),
         (&SHAKUHACHI, 1.45),
         (&WHISTLE, 1.12),
-        (&OCARINA, 1.30),
+        (&OCARINA, 1.22),
     ];
 
     /// Render a flue from its preset with vibrato zeroed, breath ON.

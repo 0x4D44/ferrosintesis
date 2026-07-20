@@ -300,11 +300,27 @@ GUITAR_LEAD: list[tuple[float, int, float, int]] = [
     # breath 595.5-600
     (600.0, 91, 2.0, 108),
     (602.0, 93, 6.0, 110),   # THE PEAK A6 (scream-flicks between the downbeats)
-    (608.0, 93, 2.0, 108), (610.0, 91, 0.5, 106), (610.5, 88, 0.5, 106),
-    (612.0, 88, 3.0, 106), (615.0, 86, 0.5, 104), (615.5, 84, 0.5, 104),
-    (616.0, 84, 4.0, 104), (620.0, 88, 3.0, 104),
-    (623.0, 86, 0.5, 102), (623.5, 88, 0.5, 104),
-    (624.0, 88, 8.0, 104),   # the farewell tone; exits 632
+    # The sign-off [608,640).  The written shape still DESCENDS (110 -> 106) so
+    # the lead bows out rather than shouting to the end, but it is lifted +4
+    # throughout: measured against the finale stack the passage was falling
+    # 5.3 dB behind the band from beat 608 (2026.07.20 journal), which read as
+    # the solo receding rather than as a composed decrescendo.
+    (608.0, 93, 2.0, 110), (610.0, 91, 0.5, 110), (610.5, 88, 0.5, 110),
+    (612.0, 88, 3.0, 110), (615.0, 86, 0.5, 108), (615.5, 84, 0.5, 108),
+    (616.0, 84, 4.0, 108), (620.0, 88, 3.0, 108),
+    (623.0, 86, 0.5, 106), (623.5, 88, 0.5, 108),
+    # The farewell tone rings 4 beats longer (was 8.0, exiting at 632).  The
+    # band plays on to 640 — orbit to 313.8 s, saw to 315.0 s, drums to
+    # 315.9 s — so the old length left the last ~3.75 s of the finale with no
+    # lead at all (guitar-to-band ratio -22.3 dB).  E6 is the tonic pitch class
+    # over the E pedal, so it stays consonant on every downbeat it now spans.
+    #
+    # NOT extended all the way to 640: at 16.0 the lead's finale duty hits 0.91
+    # and trips guitar_solo_arc's 0.88 breathing cap.  That cap is a deliberate
+    # compositional constraint — the lead must not blanket the section — so the
+    # farewell stops at 636 (duty 0.87) and the band's tail carries the last
+    # ~1.9 s, which is an ending, not a hole.
+    (624.0, 88, 12.0, 106),  # the farewell tone; rings to 636
 ]
 
 # (A2) The plucky under-layer (same ch14, polyphonic).  Short (<=0.35 beat) low
@@ -456,7 +472,11 @@ PART = conductor.Part(
         (CH_SYNDRUM, "synth drum", 118, 98, 64, 30),
         (CH_HIT, "orchestra hit", 55, 100, 64, 40),
         (CH_RISER, "riser - reverse cymbal", 119, 88, 64, 55),
-        (CH_GUITAR, "solo - overdrive lead", 29, 118, 64, 20),
+        # CC7 127: the lead sits at the top of its own fader.  Measured, it is
+        # +1.1 dB delivered and +1.1 dB against the rest of the band in
+        # 700-2500 Hz — the composition-layer half of restoring the solo's
+        # presence in the finale (2026.07.20 journal).
+        (CH_GUITAR, "solo - overdrive lead", 29, 127, 64, 20),
         (CH_CHOIR2, "choir - counterpoint", 53, 90, 64, 52),
     ],
     bank_selects=[(0, 1), (10, 1), (11, 1), (13, 1),    # steel/toms/synth-drum/riser: set B

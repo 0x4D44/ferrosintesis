@@ -11429,7 +11429,184 @@ pub fn make_variation(
     Some(voice)
 }
 
+/// Output-gain velocity exponent, per GM program. `2.0` = no correction.
+///
+/// `vel_amp` gives every voice's output gain the measured hardware law
+/// `amp ∝ (v/127)²`. For most voices that IS the rendered law. But a physically
+/// modelled voice also drives its EXCITATION from velocity — brass lip bite and
+/// chiff, a bowed string's bow speed, a guitar's waveshaper drive — and that adds
+/// slope on top, so the *rendered* aggregate comes out steeper than the reference.
+/// The reference modules are sample players, where velocity only scales a recording,
+/// so they have no such second path and land on 2.0 naturally.
+///
+/// This table carries the exponent `q` the output gain must contribute so the
+/// RENDERED aggregate lands on 2.0: with excitation slope `s`, the measured
+/// aggregate is `2 + s`, so `q = 4 − measured`. Timbre is untouched — the bite,
+/// chiff and bow-speed responses still track velocity exactly as before; only the
+/// level law is corrected.
+///
+/// **Every non-2.0 entry is MEASURED, never chosen.** Re-derive with
+/// `cargo test -p ferrosintesis --lib velocity_census -- --ignored --nocapture`,
+/// and `velocity_law::tests` fails if any entry drifts from what the render does.
+#[rustfmt::skip]
+pub(crate) const VEL_LEVEL_EXP: [f32; 128] = {
+    let mut t = [2.0f32; 128];
+    // Organ / plucked / driven models: drive and pick excitation track velocity.
+    t[22] = 1.837; t[26] = 1.860; t[27] = 1.560; t[28] = 2.165; t[29] = 1.562;
+    t[30] = 1.562; t[31] = 1.630; t[36] = 1.852; t[37] = 1.530; t[45] = 1.879;
+    // Basses.
+    t[33] = 2.320; t[35] = 2.160;
+    // Bowed strings 42/43 are deliberately NOT compensated. Their raw curve is
+    // non-monotonic at the top — measured, samples on, compensation bypassed:
+    //   GM42 key 60  v96 -9.67  v110 -5.54  v127 -7.14   (DROPS 1.60 dB)
+    //   GM43 key 60  v96 -7.51  v110 -3.33  v127 -4.44   (DROPS 1.11 dB)
+    // where the law says v110->v127 should RISE 2.49 dB. A scalar exponent cannot
+    // fix a curve that turns over; applying one makes fortissimo worse, not better.
+    // Pre-existing (the floor fold preserves v=127 exactly) and out of scope here —
+    // it is a defect in the bowed-string model, not in the velocity law. Excluded
+    // from the oracles by name in velocity_law.rs.
+    // Ensembles and the orchestra hit.
+    t[48] = 1.842; t[49] = 1.844; t[55] = 2.380;
+    // Brass: lip bite and chiff are velocity-driven excitation.
+    t[56] = 1.284; t[57] = 0.886; t[58] = 1.627; t[59] = 1.530; t[60] = 1.680;
+    t[61] = 1.380;
+    // Reeds and pipes: breath pressure drives the reed/edge tone.
+    t[65] = 2.066; t[66] = 2.085; t[68] = 1.675; t[69] = 1.760; t[70] = 1.590;
+    t[76] = 1.450;
+    // GM6 harpsichord is DELIBERATELY velocity-compressed (`vel_sense: 0.15` on the
+    // model). Its LA sample layer does not inherit that compression, so the composite
+    // over-responds; this brings the pair back to the documented <3 dB contract.
+    t[6] = 1.500;
+    // Ethnic / world models.
+    t[106] = 1.818; t[107] = 1.909; t[111] = 1.708;
+    t
+};
+
+/// A voice scaled by a constant gain. Used only to apply [`VEL_LEVEL_EXP`], which
+/// must wrap the COMPOSITE — correcting inside the model alone would leave any
+/// sampled onset layer uncorrected and drift the crossfade ratio with velocity.
+pub(crate) struct ScaledVoice {
+    pub(crate) inner: Box<dyn Voice>,
+    /// Kept so `legato_to` / `retrigger` can recompute the gain for the NEW
+    /// velocity — a stale gain would apply the old note's correction to the new one.
+    pub(crate) exp: f32,
+    pub(crate) g: f32,
+    pub(crate) scratch: Vec<f32>,
+}
+
+impl ScaledVoice {
+    pub(crate) fn gain(vel: u8, exp: f32) -> f32 {
+        let vn = vel as f32 / 127.0;
+        if vn > 0.0 {
+            vn.powf(exp - 2.0)
+        } else {
+            1.0
+        }
+    }
+}
+
+impl Voice for ScaledVoice {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        // Voices ADD into their output slice, so the inner voice needs a cleared
+        // buffer of its own; reused across blocks to keep the render loop
+        // allocation-free.
+        self.scratch.clear();
+        self.scratch.resize(out.len(), 0.0);
+        let alive = self.inner.render(&mut self.scratch);
+        for (o, t) in out.iter_mut().zip(self.scratch.iter()) {
+            *o += t * self.g;
+        }
+        alive
+    }
+    fn note_off(&mut self) {
+        self.inner.note_off()
+    }
+    fn released(&self) -> bool {
+        self.inner.released()
+    }
+    fn set_pitch(&mut self, mult: f32) {
+        self.inner.set_pitch(mult)
+    }
+    fn legato_to(&mut self, key: u8, vel: u8) -> bool {
+        let ok = self.inner.legato_to(key, vel);
+        if ok {
+            self.g = Self::gain(vel, self.exp);
+        }
+        ok
+    }
+    fn retrigger(&mut self, key: u8, vel: u8) -> bool {
+        let ok = self.inner.retrigger(key, vel);
+        if ok {
+            self.g = Self::gain(vel, self.exp);
+        }
+        ok
+    }
+    fn set_trem(&mut self, rate_hz: f32, depth: f32) {
+        self.inner.set_trem(rate_hz, depth)
+    }
+    fn set_vowel(&mut self, freqs: [f32; 3], qs: [f32; 3], gains: [f32; 3]) {
+        self.inner.set_vowel(freqs, qs, gains)
+    }
+    fn set_breath(&mut self, pressure: f32, growl: f32) {
+        self.inner.set_breath(pressure, growl)
+    }
+    fn set_vib(&mut self, depth: f32) {
+        self.inner.set_vib(depth)
+    }
+    fn set_organ_pressure(&mut self, pressure: f32, trem: f32) {
+        self.inner.set_organ_pressure(pressure, trem)
+    }
+    fn set_organ_swell(&mut self, drive: f32) {
+        self.inner.set_organ_swell(drive)
+    }
+    fn choke(&mut self) {
+        self.inner.choke()
+    }
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        // Transparent to the oracle-36 routing seam: a compensated voice must still
+        // report the family it wraps, or every kind-based oracle silently reroutes.
+        self.inner.kind()
+    }
+}
+
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
+    let voice = make_uncorrected(program, key, vel, sr, seed, samples);
+    let exp = VEL_LEVEL_EXP[program as usize];
+    if exp == 2.0 {
+        return voice;
+    }
+    // The voice already carries (v/127)^2 from `vel_amp`; scale it to (v/127)^exp.
+    Box::new(ScaledVoice {
+        inner: voice,
+        exp,
+        g: ScaledVoice::gain(vel, exp),
+        scratch: Vec::new(),
+    })
+}
+
+/// Test hook: construct a voice WITHOUT the `VEL_LEVEL_EXP` correction, so the
+/// census can distinguish a raw-voice defect from a compensation artifact.
+#[cfg(test)]
+pub(crate) fn make_uncorrected_for_test(
+    program: u8,
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    samples: bool,
+) -> Box<dyn Voice> {
+    make_uncorrected(program, key, vel, sr, seed, samples)
+}
+
+fn make_uncorrected(
+    program: u8,
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    samples: bool,
+) -> Box<dyn Voice> {
     let samples = samples && crate::embedded_samples_available();
     let noise_off = (0.0, 0.01, 1000.0, 1.0);
     match program {

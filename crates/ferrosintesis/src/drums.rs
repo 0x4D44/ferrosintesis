@@ -1434,7 +1434,46 @@ impl Voice for HybridTom {
     }
 }
 
+/// Output-gain velocity exponent per drum key. `2.0` = no correction.
+///
+/// The shared `vel_amp` already puts almost the whole kit on the reference law —
+/// every key not listed here measures exactly 2.000. These three carry extra
+/// velocity-driven excitation (the hi-hat's closing energy, the ride bell's strike),
+/// so their gain contributes less to compensate. Derived by `velocity_census`;
+/// see `wrk_docs/2026.07.20 - HLD - velocity law alignment to k=2.md`.
+#[rustfmt::skip]
+pub(crate) const DRUM_VEL_LEVEL_EXP: [f32; 128] = {
+    let mut t = [2.0f32; 128];
+    t[35] = 2.198; t[36] = 2.198;               // kick drums
+    t[42] = 1.506; t[46] = 1.791;               // closed / open hi-hat
+    t[43] = 2.171; t[47] = 2.263; t[48] = 2.170; // toms
+    t[49] = 1.846; t[53] = 1.394; t[57] = 1.846; // crash, ride bell, crash 2
+    t
+};
+
 pub fn make(
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    kit: Kit,
+    samples: bool,
+    rr: u8,
+) -> Option<Box<dyn Voice>> {
+    let voice = make_uncorrected(key, vel, sr, seed, kit, samples, rr)?;
+    let exp = DRUM_VEL_LEVEL_EXP[key as usize];
+    if exp == 2.0 {
+        return Some(voice);
+    }
+    Some(Box::new(crate::voices::ScaledVoice {
+        inner: voice,
+        exp,
+        g: crate::voices::ScaledVoice::gain(vel, exp),
+        scratch: Vec::new(),
+    }))
+}
+
+fn make_uncorrected(
     key: u8,
     vel: u8,
     sr: f32,

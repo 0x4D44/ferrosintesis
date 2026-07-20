@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "ferrosintesis"
-version = "0.21.45"
+version = "0.21.46"
 dependencies = [
  "ferrosintesis-samples-bass",
  "ferrosintesis-samples-ccby",

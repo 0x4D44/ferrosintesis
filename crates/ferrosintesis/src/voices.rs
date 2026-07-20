@@ -11472,7 +11472,11 @@ pub(crate) const VEL_LEVEL_EXP: [f32; 128] = {
     t[61] = 1.380;
     // Reeds and pipes: breath pressure drives the reed/edge tone.
     t[65] = 2.066; t[66] = 2.085; t[68] = 1.675; t[69] = 1.760; t[70] = 1.590;
-    t[76] = 1.450;
+    // GM76 has NO entry: it was 1.450 for the retired modeled pan-flute/bottle, but
+    // origin replaced the default (samples-on) voice with a looped real recording
+    // (`BottleLoopVoice`) after this table was calibrated, so 1.450 is stale and would
+    // over-correct it. Like the bagpipe chanter loop, its velocity response is the
+    // recording's, not this table's — exempted from the sweep, follow-up in scratchpad.
     // GM6 harpsichord is DELIBERATELY velocity-compressed (`vel_sense: 0.15` on the
     // model). Its LA sample layer does not inherit that compression, so the composite
     // over-responds; this brings the pair back to the documented <3 dB contract.

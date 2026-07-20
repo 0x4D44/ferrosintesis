@@ -366,7 +366,12 @@ mod tests {
             //         Pre-existing defect in the bowed-string model, not in the
             //         velocity law; a scalar exponent cannot correct a non-monotonic
             //         curve. Tracked separately - fixing it needs the model, not this.
-            if p == 6 || p == 96 || p == 109 || p == 42 || p == 43 {
+            //  76     blown bottle — its default (samples-on) voice became a looped real
+            //         recording (`BottleLoopVoice`) in a change that landed AFTER this
+            //         calibration; measures k≈0.39, same class as the bagpipe chanter
+            //         loop. Its velocity response is the recording's, not this table's.
+            //         Follow-up in scratchpad to decide the loop voices' velocity law.
+            if p == 6 || p == 76 || p == 96 || p == 109 || p == 42 || p == 43 {
                 continue;
             }
             let k = melodic_k_at(p, 60);

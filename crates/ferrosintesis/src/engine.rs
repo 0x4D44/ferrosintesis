@@ -285,6 +285,31 @@ const MICRO_CAB_TAPS: [(f32, f32); 5] = [
     (0.895, -0.238),
 ];
 
+/// Ripple depth for the SUSTAINING driven lead (the CC0 alt bank,
+/// `voices::DRIVE_LEAD`) as a fraction of `MICRO_CAB_TAPS`.
+///
+/// `MicroCab` normalizes its ripple to unity on the 900–3600 Hz band
+/// AVERAGE, which makes it level-neutral for broadband material — a chugging
+/// rhythm guitar spreads its energy across the band and averages the comb
+/// out. That assumption fails for a lead that HOLDS ONE PITCH for seconds:
+/// it samples the ripple at exactly one frequency and keeps whatever it
+/// finds there. With only 5 taps at 0.36–0.90 ms the comb is coarse (ripple
+/// periods 1.1–2.8 kHz), so a held tone can park squarely in a null:
+/// measured on Three-Sixty-One's finale, C6 lost 2.08 dB and E6 1.03 dB at
+/// the fundamental while their 2nd/3rd harmonics gained 2.8 dB — the note
+/// went thin, not merely quiet, and Arthur heard the lead recede
+/// (2026.07.20 journal).
+///
+/// So the depth is a property of the BANK, not of the amp: the default bank
+/// keeps the full ripple Arthur approved for rhythm work (depth 1.0 —
+/// bit-identical), and the sustaining lead gets a quarter of it. At 0.25 the
+/// worst deviation any held pitch can suffer anywhere in the band falls
+/// 3.39 dB → 0.85 dB (C6 −0.47, E6 −0.24) while the ripple stays measurably
+/// present at 1.54 dB swing, so the lead still speaks through a cabinet
+/// rather than a DI. The macro cab shape (`cab_biquads`) is untouched either
+/// way — this scales only the fine structure on top of it.
+pub(crate) const MICRO_CAB_LEAD_DEPTH: f32 = 0.25;
+
 /// Cabinet fine structure (guitar-realism HLD §5): the dense magnitude
 /// ripple a real cab's cone breakup and edge reflections put on top of the
 /// smooth biquad response — a sparse FIR (direct + 5 taps, `MICRO_CAB_TAPS`)
@@ -295,6 +320,10 @@ const MICRO_CAB_TAPS: [(f32, f32); 5] = [
 /// (review I5/D6 resolution). This deliberately revives the guitar-v2
 /// decision-log "ripple comb (deferred)" — v2 parked it as polish; this is
 /// that polish (review S10).
+///
+/// `depth` scales the tap gains before normalization (see
+/// [`MICRO_CAB_LEAD_DEPTH`]); the band-average stays unity at every depth,
+/// so depth changes the ripple's DEVIATION, never the band's level.
 pub(crate) struct MicroCab {
     buf: Vec<f32>,
     pos: usize,
@@ -303,10 +332,12 @@ pub(crate) struct MicroCab {
 }
 
 impl MicroCab {
-    pub(crate) fn new(sr2: f32) -> Self {
+    /// `depth` 1.0 is the full cabinet ripple (the default driven bank);
+    /// [`MICRO_CAB_LEAD_DEPTH`] is the sustaining lead's shallower one.
+    pub(crate) fn with_depth(sr2: f32, depth: f32) -> Self {
         let taps_s: Vec<(usize, f32)> = MICRO_CAB_TAPS
             .iter()
-            .map(|&(ms, g)| (((ms * 1e-3 * sr2).round() as usize).max(1), g))
+            .map(|&(ms, g)| (((ms * 1e-3 * sr2).round() as usize).max(1), g * depth))
             .collect();
         // band-average |H| over 900–3600 Hz (closed form for the sparse FIR)
         let mut avg = 0.0;
@@ -363,6 +394,11 @@ impl MicroCab {
 /// held-note sustain is the string's e-bow sustainer (`DRIVE.sustain`).
 struct Drive {
     program: u8,
+    /// Whether this insert was built for the CC0 alt bank (the sustaining
+    /// `DRIVE_LEAD` voicing). Stored so the strip can tell a stale insert
+    /// from a current one when the bank changes mid-song; it selects the
+    /// `MicroCab` depth at construction and is DSP-irrelevant thereafter.
+    alt: bool,
     pre: Biquad,
     voice: Biquad,
     g1: f32,
@@ -377,7 +413,12 @@ struct Drive {
 }
 
 impl Drive {
-    fn new(program: u8, sr: f32) -> Self {
+    /// `alt` = the channel's CC0 bank is non-zero, i.e. the strip is playing
+    /// the sustaining `DRIVE_LEAD` voicing rather than the decaying default.
+    /// It selects the cabinet fine-structure depth only (see
+    /// [`MICRO_CAB_LEAD_DEPTH`]); gain staging and voicing EQ are unchanged,
+    /// so the default bank stays bit-identical.
+    fn new(program: u8, alt: bool, sr: f32) -> Self {
         let sr2 = sr * 2.0;
         // 30 = distortion (scooped chug), 29 = overdrive (mid-push lead).
         // Two gentler stages replace v1's single hot tanh.
@@ -416,7 +457,7 @@ impl Drive {
                 Biquad::peak(1200.0, 0.8, 2.0, sr2),
             )
         };
-        Drive::from_stages(program, sr2, voice, g1, bias, tilt, g2, post)
+        Drive::from_stages(program, alt, sr2, voice, g1, bias, tilt, g2, post)
     }
 
     /// Shared field construction for both the program-gated `new` and the XG
@@ -427,6 +468,7 @@ impl Drive {
     #[allow(clippy::too_many_arguments)]
     fn from_stages(
         program: u8,
+        alt: bool,
         sr2: f32,
         voice: Biquad,
         g1: f32,
@@ -437,6 +479,7 @@ impl Drive {
     ) -> Self {
         Drive {
             program,
+            alt,
             pre: Biquad::highpass(90.0, 0.7, sr2),
             voice,
             g1,
@@ -449,7 +492,7 @@ impl Drive {
             // cannot remove (V4/CORR-1)
             dcb: Biquad::highpass(20.0, 0.7, sr2),
             cab: cab_biquads(sr2),
-            micro: MicroCab::new(sr2),
+            micro: MicroCab::with_depth(sr2, if alt { MICRO_CAB_LEAD_DEPTH } else { 1.0 }),
             prev: 0.0,
         }
     }
@@ -477,7 +520,8 @@ impl Drive {
         let post = 0.28 / (1.0 + d * 1.5);
         let voice = Biquad::peak(800.0, 0.8, 4.0, sr2);
         let tilt = Biquad::peak(1200.0, 0.8, 2.0, sr2);
-        Drive::from_stages(0, sr2, voice, g1, bias, tilt, g2, post)
+        // The XG insert is an amp simulator, not a bank voicing: full ripple.
+        Drive::from_stages(0, false, sr2, voice, g1, bias, tilt, g2, post)
     }
 
     #[inline]
@@ -2082,6 +2126,13 @@ impl EngineCore {
                 if !s.delay_authored {
                     s.delay_send = del;
                 }
+                // The bank selects the driven cabinet's fine-structure depth
+                // (MICRO_CAB_LEAD_DEPTH), so a CC0 that arrives AFTER the
+                // program change must rebuild the insert — our albums order
+                // bank-select first, but a foreign GM file need not.
+                if needs_drive(s.program) && s.drive.as_ref().map(|d| d.alt) != Some(s.alt_bank) {
+                    s.drive = Some(Drive::new(s.program, s.alt_bank, sr));
+                }
             }
             1 => {
                 s.mod_target = v;
@@ -2270,9 +2321,12 @@ impl EngineCore {
         if needs_drive(prog) {
             // rebuild on a program CHANGE too: 29<->30 mid-song choreography
             // is an authored idiom, and the two programs differ in voicing,
-            // stage gains and sag target (review C3)
-            if s.drive.as_ref().map(|d| d.program) != Some(prog) {
-                s.drive = Some(Drive::new(prog, self.opt.sr));
+            // stage gains and sag target (review C3). The BANK is part of the
+            // identity as well — it picks the cabinet fine-structure depth —
+            // so a bank change must rebuild just as a program change does.
+            let alt = s.alt_bank;
+            if s.drive.as_ref().map(|d| (d.program, d.alt)) != Some((prog, alt)) {
+                s.drive = Some(Drive::new(prog, alt, self.opt.sr));
             }
         } else {
             s.drive = None;
@@ -2292,7 +2346,7 @@ impl EngineCore {
         s.chorus_authored = false;
         s.delay_send = del;
         s.delay_authored = false;
-        s.drive = needs_drive(prog).then(|| Drive::new(prog, self.opt.sr));
+        s.drive = needs_drive(prog).then(|| Drive::new(prog, bank != 0, self.opt.sr));
     }
 
     fn all_sound_off(&mut self, ch: u8) {
@@ -4864,7 +4918,7 @@ mod tests {
     #[test]
     fn micro_cab_ripple_fine_structure() {
         let sr2 = 88_200.0;
-        let mut mc = MicroCab::new(sr2);
+        let mut mc = MicroCab::with_depth(sr2, 1.0);
         let mut ir = vec![0f32; 4096];
         ir[0] = 1.0;
         for x in ir.iter_mut() {
@@ -4920,6 +4974,138 @@ mod tests {
         );
     }
 
+    /// The cabinet ripple must not cost a SUSTAINING lead its money note.
+    ///
+    /// `MicroCab` normalizes to unity on the 900–3600 Hz band AVERAGE, which
+    /// is level-neutral for broadband material but not for a voice holding
+    /// ONE pitch: it keeps whatever the ripple does at that single frequency.
+    /// At full depth the comb is coarse enough to swallow a held tone whole —
+    /// measured on Three-Sixty-One's finale, C6 −2.08 dB and E6 −1.03 dB at
+    /// the fundamental with their harmonics +2.8 dB, i.e. thin rather than
+    /// merely quiet (2026.07.20 journal). [`MICRO_CAB_LEAD_DEPTH`] bounds
+    /// that for the CC0 alt bank while keeping the ripple audible.
+    ///
+    /// RED if the lead depth is restored to full (worst-case deviation goes
+    /// back over 3 dB), and RED the other way if someone zeroes the ripple
+    /// instead of shallowing it (the lead would stop speaking through a cab).
+    #[test]
+    fn sustaining_lead_cab_ripple_is_bounded_at_every_held_pitch() {
+        let sr2 = 88_200.0;
+        let curve = |depth: f32| -> Vec<f32> {
+            let mut mc = MicroCab::with_depth(sr2, depth);
+            let mut ir = vec![0f32; 4096];
+            ir[0] = 1.0;
+            for x in ir.iter_mut() {
+                *x = mc.process(*x);
+            }
+            let mut ident = vec![0f32; 4096];
+            ident[0] = 1.0;
+            (0..=270)
+                .map(|k| {
+                    let f = 900.0 + k as f32 * 10.0;
+                    20.0 * (crate::testutil::mag_at(&ir, sr2, f).max(1e-12)
+                        / crate::testutil::mag_at(&ident, sr2, f).max(1e-12))
+                    .log10()
+                })
+                .collect()
+        };
+        let worst = |c: &[f32]| c.iter().fold(0f32, |m, v| m.max(v.abs()));
+        let swing = |c: &[f32]| {
+            let (lo, hi) = c
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), &v| (a.min(v), b.max(v)));
+            hi - lo
+        };
+        let (full, lead) = (curve(1.0), curve(MICRO_CAB_LEAD_DEPTH));
+
+        // (1) the pathology is real at full depth — this is what the default
+        // bank still carries, deliberately, for broadband rhythm work
+        assert!(
+            worst(&full) > 2.5,
+            "full-depth ripple only {:.2} dB deep — the premise of this fix is gone",
+            worst(&full)
+        );
+        // (2) ... and is bounded below audibility for a held tone on the lead
+        assert!(
+            worst(&lead) < 1.0,
+            "sustaining lead can lose {:.2} dB on a held pitch (want < 1.0)",
+            worst(&lead)
+        );
+        // (3) ... without deleting the cabinet: the ripple is still there
+        assert!(
+            swing(&lead) > 0.8,
+            "lead ripple flattened to {:.2} dB swing — that is a DI, not a cab",
+            swing(&lead)
+        );
+        // (4) the specific tones that provoked this: C6 and E6 recover
+        let at = |c: &[f32], f: f32| c[((f - 900.0) / 10.0).round() as usize];
+        for (name, f0, want) in [("C6", 1050.0, 1.0), ("E6", 1320.0, 0.5)] {
+            let gain = at(&lead, f0) - at(&full, f0);
+            assert!(
+                gain >= want,
+                "{name} ({f0} Hz) recovers only {gain:.2} dB (want >= {want})"
+            );
+        }
+    }
+
+    /// The bank is part of the driven insert's identity, so a CC0 that lands
+    /// AFTER the program change must rebuild it. Our albums order bank-select
+    /// first (`fix(albums): order bank select before program changes`), but a
+    /// foreign GM file need not, and the two orderings must agree.
+    #[test]
+    fn cc0_bank_select_reaches_the_driven_cabinet_in_either_order() {
+        let sr = 44100.0;
+        let opts = test_opts(sr);
+        let song = |bank_first: bool, bank: u8| {
+            let mut ev = Vec::new();
+            if bank_first {
+                ev.push((
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 0,
+                        val: bank,
+                    },
+                ));
+                ev.push((0.0, EvKind::Prog { ch: 0, prog: 29 }));
+            } else {
+                ev.push((0.0, EvKind::Prog { ch: 0, prog: 29 }));
+                ev.push((
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 0,
+                        val: bank,
+                    },
+                ));
+            }
+            ev.push((
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 88,
+                    vel: 104,
+                },
+            ));
+            test_song(ev, 2.0)
+        };
+        let alt_first = render(&song(true, 1), &opts).0;
+        let alt_after = render(&song(false, 1), &opts).0;
+        let default_bank = render(&song(true, 0), &opts).0;
+
+        assert!(rms(&alt_first) > 1e-4, "the driven lead should sound");
+        assert_eq!(
+            alt_first, alt_after,
+            "CC0 after the program change did not reach the driven cabinet — \
+             the insert was left on the default bank's ripple depth"
+        );
+        assert_ne!(
+            alt_first, default_bank,
+            "the alt bank renders identically to the default — the shallower \
+             lead cabinet ripple is not wired up"
+        );
+    }
+
     /// Guitar-realism HLD §5 / AC4 (review C5) — the SHIPPED series response
     /// (MicroCab into the cab biquads) keeps the macro cabinet shape the
     /// coarse oracle pins on the biquads alone, bounds the ripple depth, and
@@ -4929,7 +5115,7 @@ mod tests {
         let sr2 = 88_200.0;
         let run = |with_micro: bool| {
             let mut cab = cab_biquads(sr2);
-            let mut mc = MicroCab::new(sr2);
+            let mut mc = MicroCab::with_depth(sr2, 1.0);
             let mut ir = vec![0f32; 16384];
             ir[0] = 1.0;
             for x in ir.iter_mut() {
@@ -4999,7 +5185,7 @@ mod tests {
     #[test]
     fn drive_asymmetry_and_dc() {
         let sr = 44100.0;
-        let mut drive = Drive::new(29, sr);
+        let mut drive = Drive::new(29, false, sr);
         let f0 = 110.0;
         let mut buf: Vec<f32> = (0..(sr as usize))
             .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
@@ -5025,7 +5211,7 @@ mod tests {
             (0..(sr as usize)).map(|_| rng.white() * 0.3).collect()
         };
         let ratio = |prog: u8, flat: bool| {
-            let mut d = Drive::new(prog, sr);
+            let mut d = Drive::new(prog, false, sr);
             if flat {
                 d = d.with_flat_voice();
             }
@@ -5180,7 +5366,7 @@ mod tests {
             }
         };
         for prog in [29u8, 30] {
-            let mut d = Drive::new(prog, sr);
+            let mut d = Drive::new(prog, false, sr);
             let mut buf: Vec<f32> = (0..(sr as usize))
                 .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
                 .collect();
@@ -5226,7 +5412,7 @@ mod tests {
         let sr = 44100.0;
         for prog in [29u8, 30] {
             for amp in [0.5f32, 0.05] {
-                let mut d = Drive::new(prog, sr);
+                let mut d = Drive::new(prog, false, sr);
                 let mut buf: Vec<f32> = (0..(sr as usize))
                     .map(|i| amp * (std::f32::consts::TAU * 220.0 * i as f32 / sr).sin())
                     .collect();
@@ -5397,7 +5583,7 @@ mod tests {
         let sr = 44100.0;
         let n = (2.0 * sr) as usize;
         for prog in [29u8, 30] {
-            let mut d = Drive::new(prog, sr);
+            let mut d = Drive::new(prog, false, sr);
             let mut buf: Vec<f32> = (0..n)
                 .map(|i| {
                     let t = i as f32 / sr;

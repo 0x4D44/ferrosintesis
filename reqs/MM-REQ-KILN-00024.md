@@ -1,11 +1,11 @@
 # MM-REQ-KILN-00024 — GM 106 shamisen must carry a sawari bridge-buzz
 
-- **State:** Draft
+- **State:** Implemented
 - **Priority:** Should
 - **Area:** voices / ethnic plucks
 - **Raised:** 2026-07-20
-- **Implemented-by:** —
-- **Satisfied-by:** —
+- **Implemented-by:** integrated 495f85d (branch task/20260720-DEV-HUM-shamisen-sawari-jawari @ ad994e0; crates/ferrosintesis/src/voices.rs SHAMISEN jawari)
+- **Satisfied-by:** voices::tests::shamisen_sawari_buzzes_gentler_than_sitar
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 495f85d; oracle red→green, render-diff 124 same/0 contamination)
 
 ## Statement
 

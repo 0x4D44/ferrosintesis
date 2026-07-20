@@ -4,7 +4,7 @@
 - **Priority:** Should
 - **Area:** voices / synth leads
 - **Raised:** 2026-07-20
-- **Implemented-by:** task/20260720-DEV-HUM-gm86-fifth-gm87-sub-octave @ 7255802 (crates/ferrosintesis/src/voices.rs — LeadSpec.interval + SawStack::push_interval_layer)
+- **Implemented-by:** integrated a3e0781 + f1106b1 (branch task/20260720-DEV-HUM-gm86-fifth-gm87-sub-octave; crates/ferrosintesis/src/voices.rs — LeadSpec.interval + SawStack::push_interval_layer; GM87 sub gain 0.55 after the o_pitch gate catch)
 - **Satisfied-by:** voices::tests::lead_fifths_sounds_the_parallel_fifth, voices::tests::lead_bass_lead_carries_the_sub_octave, voices::tests::lead_interval_tracks_legato_retune
 - **Violated-by:** —
 - **Flow:** light
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-20, held branch, oracles red→green; render-diff 2 expected/0 contamination)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-20, oracles red→green; render-diff 2 expected/0 contamination) → integrated (2026-07-21, a3e0781+f1106b1, full gate green)
 
 ## Statement
 

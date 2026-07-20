@@ -1434,22 +1434,82 @@ impl Voice for HybridTom {
     }
 }
 
-/// Output-gain velocity exponent per drum key. `2.0` = no correction.
+/// Output-gain velocity exponent, PER KIT and per drum key. `2.0` = no correction.
 ///
-/// The shared `vel_amp` already puts almost the whole kit on the reference law —
-/// every key not listed here measures exactly 2.000. These three carry extra
-/// velocity-driven excitation (the hi-hat's closing energy, the ride bell's strike),
-/// so their gain contributes less to compensate. Derived by `velocity_census`;
-/// see `wrk_docs/2026.07.20 - HLD - velocity law alignment to k=2.md`.
+/// The shared `vel_amp` already puts almost every drum voice on the reference law;
+/// only keys whose raw velocity slope diverges by more than 0.15 are listed. Crucially
+/// **the four shipping kits diverge from each other** — a hi-hat that over-responds in
+/// V3 sits on the law in V1, and vice versa — so a single V3-derived table over- or
+/// under-corrected the other kits by up to ~0.6 in exponent (multiple dB at low
+/// velocity). Since the original **V1** kit is live on several albums, each kit carries
+/// its own measured table. Derived by the per-kit block in `velocity_census`; see
+/// `wrk_docs/2026.07.20 - HLD - velocity law alignment to k=2.md`.
 #[rustfmt::skip]
-pub(crate) const DRUM_VEL_LEVEL_EXP: [f32; 128] = {
+pub(crate) const DRUM_VEL_LEVEL_EXP_V1: [f32; 128] = {
     let mut t = [2.0f32; 128];
-    t[35] = 2.198; t[36] = 2.198;               // kick drums
-    t[42] = 1.506; t[46] = 1.791;               // closed / open hi-hat
-    t[43] = 2.171; t[47] = 2.263; t[48] = 2.170; // toms
-    t[49] = 1.846; t[53] = 1.394; t[57] = 1.846; // crash, ride bell, crash 2
+    t[35] = 1.845; t[36] = 1.845;               // kick drums
+    t[38] = 1.651; t[40] = 1.651;               // snare / low tom
+    t[42] = 1.810; t[44] = 1.810;               // pedal / closed hi-hat
     t
 };
+#[rustfmt::skip]
+pub(crate) const DRUM_VEL_LEVEL_EXP_V3: [f32; 128] = {
+    let mut t = [2.0f32; 128];
+    t[35] = 2.198; t[36] = 2.198;
+    t[42] = 1.506; t[46] = 1.791;
+    t[43] = 2.171; t[47] = 2.263; t[48] = 2.170;
+    t[49] = 1.846; t[53] = 1.394; t[57] = 1.846;
+    t
+};
+#[rustfmt::skip]
+pub(crate) const DRUM_VEL_LEVEL_EXP_BRUSH: [f32; 128] = {
+    let mut t = [2.0f32; 128];
+    t[35] = 1.846; t[36] = 1.846;
+    t[38] = 1.822; t[39] = 1.776; t[40] = 1.816;
+    t[43] = 2.171; t[47] = 2.263; t[48] = 2.170;
+    t[49] = 1.846; t[53] = 1.394; t[57] = 1.846;
+    t
+};
+#[rustfmt::skip]
+pub(crate) const DRUM_VEL_LEVEL_EXP_SYNTH: [f32; 128] = {
+    let mut t = [2.0f32; 128];
+    t[35] = 1.769; t[36] = 1.769;
+    t[38] = 1.545; t[40] = 1.462;
+    t[42] = 1.810; t[44] = 1.810;
+    t[51] = 1.770; t[52] = 1.828; t[55] = 1.822; t[59] = 1.770;
+    t
+};
+#[rustfmt::skip]
+pub(crate) const DRUM_VEL_LEVEL_EXP_BRUSH_MODELED: [f32; 128] = {
+    let mut t = [2.0f32; 128];
+    t[35] = 1.846; t[36] = 1.846;
+    t[38] = 1.822; t[39] = 1.776; t[40] = 1.816;
+    t[51] = 1.770; t[52] = 1.828; t[55] = 1.822; t[59] = 1.770;
+    t
+};
+
+/// The velocity-level exponent for one rendered drum voice, which depends on the
+/// kit AND the samples flag — V1 and Synth are samples-inert (always modeled), but
+/// V3 and Brush swap keys onto the sampled bank when `samples`, so they render a
+/// DIFFERENT voice with a different velocity slope. Crucially `(V3, samples=false)`
+/// is byte-identical to the Synth kit (the modeled-V3 voice), so it reuses the Synth
+/// table — the `synth_kit_is_modeled_v3_never_sampled` invariant depends on it.
+/// `V2` is test-only and mirrors V3.
+pub(crate) fn drum_vel_level_exp(kit: Kit, samples: bool, key: u8) -> f32 {
+    let t = match (kit, samples) {
+        // V2 is a test-only differential baseline that the kit-seam oracle pins
+        // byte-identical to V1 on kit-agnostic keys; it shares V1's table so a uniform
+        // compensation gain cannot break that equality. Its timbre-differential tests are
+        // gain-invariant, so the choice does not affect them.
+        (Kit::V1 | Kit::V2, _) => &DRUM_VEL_LEVEL_EXP_V1,
+        (Kit::Synth, _) => &DRUM_VEL_LEVEL_EXP_SYNTH,
+        (Kit::V3, false) => &DRUM_VEL_LEVEL_EXP_SYNTH, // modeled V3 == Synth
+        (Kit::V3, true) => &DRUM_VEL_LEVEL_EXP_V3,
+        (Kit::Brush, true) => &DRUM_VEL_LEVEL_EXP_BRUSH,
+        (Kit::Brush, false) => &DRUM_VEL_LEVEL_EXP_BRUSH_MODELED,
+    };
+    t[key as usize]
+}
 
 pub fn make(
     key: u8,
@@ -1461,7 +1521,7 @@ pub fn make(
     rr: u8,
 ) -> Option<Box<dyn Voice>> {
     let voice = make_uncorrected(key, vel, sr, seed, kit, samples, rr)?;
-    let exp = DRUM_VEL_LEVEL_EXP[key as usize];
+    let exp = drum_vel_level_exp(kit, samples, key);
     if exp == 2.0 {
         return Some(voice);
     }
@@ -2604,7 +2664,7 @@ mod tests {
             (
                 36,
                 testutil::RenderSignature {
-                    rms_db: -12.791,
+                    rms_db: -12.058,
                     centroid_hz: 188.589,
                     late_early_db: -7.436,
                 },
@@ -2612,7 +2672,7 @@ mod tests {
             (
                 38,
                 testutil::RenderSignature {
-                    rms_db: -21.786,
+                    rms_db: -21.062,
                     centroid_hz: 957.116,
                     late_early_db: -15.458,
                 },
@@ -2620,7 +2680,7 @@ mod tests {
             (
                 42,
                 testutil::RenderSignature {
-                    rms_db: -35.507,
+                    rms_db: -36.138,
                     centroid_hz: 7887.204,
                     late_early_db: -59.097,
                 },
@@ -2628,7 +2688,7 @@ mod tests {
             (
                 49,
                 testutil::RenderSignature {
-                    rms_db: -18.956,
+                    rms_db: -19.276,
                     centroid_hz: 5960.781,
                     late_early_db: 1.826,
                 },
@@ -4833,7 +4893,7 @@ mod tests {
             (
                 36,
                 testutil::RenderSignature {
-                    rms_db: -14.204,
+                    rms_db: -13.473,
                     centroid_hz: 168.235,
                     late_early_db: -7.434,
                 },
@@ -4841,7 +4901,7 @@ mod tests {
             (
                 38,
                 testutil::RenderSignature {
-                    rms_db: -21.742,
+                    rms_db: -21.372,
                     centroid_hz: 474.734,
                     late_early_db: -40.576,
                 },
@@ -4852,7 +4912,7 @@ mod tests {
                     // Re-frozen for MM-BUG-KILN-00001: the strand re-strike burst
                     // now scales with velocity, so the vel-100 slap is a touch
                     // quieter and darker than the fixed-0.50 burst.
-                    rms_db: -20.739,
+                    rms_db: -20.274,
                     centroid_hz: 552.960,
                     late_early_db: -36.990,
                 },
@@ -4860,7 +4920,7 @@ mod tests {
             (
                 40,
                 testutil::RenderSignature {
-                    rms_db: -44.899,
+                    rms_db: -44.517,
                     centroid_hz: 2800.437,
                     late_early_db: 16.597,
                 },
@@ -4868,7 +4928,7 @@ mod tests {
             (
                 42,
                 testutil::RenderSignature {
-                    rms_db: -34.314,
+                    rms_db: -35.340,
                     centroid_hz: 6485.427,
                     late_early_db: -61.407,
                 },
@@ -4876,7 +4936,7 @@ mod tests {
             (
                 46,
                 testutil::RenderSignature {
-                    rms_db: -28.910,
+                    rms_db: -29.344,
                     centroid_hz: 6471.648,
                     late_early_db: -4.519,
                 },

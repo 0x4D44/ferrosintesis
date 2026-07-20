@@ -82,9 +82,17 @@ mod tests {
         ))
     }
 
-    fn drum_level(key: u8, vel: u8) -> Option<f32> {
-        let v = drums::make(key, vel, SR, SEED, drums::Kit::V3, true, 0)?;
+    fn drum_level_kit_s(key: u8, vel: u8, kit: drums::Kit, samples: bool) -> Option<f32> {
+        let v = drums::make(key, vel, SR, SEED, kit, samples, 0)?;
         Some(level_db(&render(v, 1.2)))
+    }
+
+    fn drum_level_kit(key: u8, vel: u8, kit: drums::Kit) -> Option<f32> {
+        drum_level_kit_s(key, vel, kit, true)
+    }
+
+    fn drum_level(key: u8, vel: u8) -> Option<f32> {
+        drum_level_kit(key, vel, drums::Kit::V3)
     }
 
     /// Least-squares slope of level(dB) against `20·log10(v/127)`.
@@ -195,6 +203,74 @@ mod tests {
                     print!("  v{v}={l:.2}");
                 }
                 println!();
+            }
+        }
+
+        // PER-KIT drum velocity law (Arthur: "shouldn't we do each drum set
+        // individually?"). DRUM_VEL_LEVEL_EXP is currently measured on V3 and applied
+        // to every kit; this shows whether the shipping kits (V1/V3/Brush/Synth)
+        // actually diverge. RAW k reported (the applied V3 correction is undone), so
+        // the columns are directly comparable across kits.
+        {
+            use drums::Kit::{Brush, Synth, V1, V3};
+            let kits = [("V1", V1), ("V3", V3), ("Brush", Brush), ("Synth", Synth)];
+            // Paste-ready per-kit needed exponent (4 - raw_k) for every drum key where a
+            // kit's raw slope is off 2.0 by more than 0.15 — the same guard the melodic
+            // table uses. Emits one block per kit.
+            // Does each kit's velocity RESPONSE change with the samples flag? (If not,
+            // one table per kit suffices; if yes, the table must key on samples too —
+            // which the Synth==V3-samples-off invariant forces for V3.)
+            println!("\nsamples on-vs-off divergence per kit (keys 35..57, worst dB at v64):");
+            for (name, kit) in kits {
+                let mut worst = 0.0f32;
+                let mut worst_key = 0u8;
+                for key in 35u8..=57 {
+                    if let (Some(on), Some(off)) = (
+                        drum_level_kit_s(key, 64, kit, true),
+                        drum_level_kit_s(key, 64, kit, false),
+                    ) {
+                        if (on - off).abs() > worst.abs() {
+                            worst = on - off;
+                            worst_key = key;
+                        }
+                    }
+                }
+                println!("  {name}: worst {worst:+.2} dB at key {worst_key}");
+            }
+
+            // Needed exponents for each shipping (kit, samples) config that renders a
+            // DISTINCT voice: V1/Synth are samples-inert (one entry each); V3 and Brush
+            // differ by samples, so both are listed. `raw k` undoes the currently-applied
+            // correction so `needed = 4 - raw_k` is the absolute target.
+            let configs = [
+                ("V1", V1, true),
+                ("V3+samples", V3, true),
+                ("V3-modeled(=Synth)", V3, false),
+                ("Brush+samples", Brush, true),
+                ("Brush-modeled", Brush, false),
+                ("Synth", Synth, true),
+            ];
+            for (name, kit, samples) in configs {
+                let mut entries: Vec<(u8, f32)> = Vec::new();
+                for key in 27u8..=87 {
+                    let levels: Vec<(u8, f32)> = FIT_VELS
+                        .iter()
+                        .filter_map(|&v| drum_level_kit_s(key, v, kit, samples).map(|l| (v, l)))
+                        .collect();
+                    if levels.len() != FIT_VELS.len() {
+                        continue;
+                    }
+                    let applied = crate::drums::drum_vel_level_exp(kit, samples, key);
+                    let k_raw = fit_k(&levels) - (applied - 2.0);
+                    if (k_raw - 2.0).abs() > 0.15 {
+                        entries.push((key, 4.0 - k_raw));
+                    }
+                }
+                print!("CFG {name}:");
+                for (key, exp) in &entries {
+                    print!(" [{key}]={exp:.3}");
+                }
+                println!("   ({} keys)", entries.len());
             }
         }
 
@@ -411,26 +487,44 @@ mod tests {
     /// what stops that symmetry being broken again.
     #[test]
     fn drums_follow_the_same_law_as_melodic_voices() {
-        let mut kd = Vec::new();
-        for key in [36u8, 38, 42, 45, 46, 49, 51] {
-            let levels: Vec<(u8, f32)> = FIT_VELS
-                .iter()
-                .filter_map(|&v| drum_level(key, v).map(|l| (v, l)))
-                .collect();
-            assert_eq!(levels.len(), FIT_VELS.len(), "drum key {key} did not sound");
-            let k = fit_k(&levels);
-            assert!(
-                (k - 2.0).abs() <= 0.2,
-                "drum key {key}: velocity exponent {k:.3}, want 2.0 +/- 0.2"
-            );
-            kd.push(k);
-        }
+        // EVERY shipping (kit, samples) config, not just V3 — the kits diverge, and V3
+        // and Brush ALSO diverge by the samples flag (they swap keys onto the sampled
+        // bank), so a single correction fits none of the others. The original V1 kit is
+        // live on several albums, and the samples-off configs ship in --no-samples
+        // builds, so both axes matter.
         let melodic = median(PROBE_PROGRAMS.iter().map(|&p| melodic_k(p)).collect());
-        let drums = median(kd);
-        assert!(
-            (drums - melodic).abs() <= 0.15,
-            "drums fit {drums:.3} but melodic voices fit {melodic:.3} — the kit would \
-             gain on the band as passages get louder"
-        );
+        for (name, kit, samples) in [
+            ("V1", drums::Kit::V1, true),
+            ("V3+samples", drums::Kit::V3, true),
+            ("V3-modeled", drums::Kit::V3, false),
+            ("Brush+samples", drums::Kit::Brush, true),
+            ("Brush-modeled", drums::Kit::Brush, false),
+            ("Synth", drums::Kit::Synth, true),
+        ] {
+            let mut kd = Vec::new();
+            for key in [36u8, 38, 42, 45, 46, 49, 51] {
+                let levels: Vec<(u8, f32)> = FIT_VELS
+                    .iter()
+                    .filter_map(|&v| drum_level_kit_s(key, v, kit, samples).map(|l| (v, l)))
+                    .collect();
+                assert_eq!(
+                    levels.len(),
+                    FIT_VELS.len(),
+                    "{name} key {key} did not sound"
+                );
+                let k = fit_k(&levels);
+                assert!(
+                    (k - 2.0).abs() <= 0.2,
+                    "{name} drum key {key}: velocity exponent {k:.3}, want 2.0 +/- 0.2"
+                );
+                kd.push(k);
+            }
+            let drums = median(kd);
+            assert!(
+                (drums - melodic).abs() <= 0.15,
+                "{name} drums fit {drums:.3} but melodic voices fit {melodic:.3} — the \
+                 kit would gain on the band as passages get louder"
+            );
+        }
     }
 }

@@ -3,6 +3,11 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.20 — **`build.py --verify` does NOT write the `.mid` — it runs oracles on the in-memory Score
+  and re-parses the EXISTING file, so after editing a movement it reports green on music the committed
+  MIDI does not contain.** Always bare `python build.py` FIRST, then `--verify`; confirm with `cmp` on the
+  `.mid` (a "fixed" T16 rendered byte-identical to the unfixed one and only a byte compare caught it).
+
 - 2026.07.19 — **A verification subagent that runs `cargo test`/`clippy` in YOUR worktree during a live
   gate corrupts the gate's test binary (abnormal exit `0xffffffff`/"test exited abnormally"), and a
   `cargo test … | tail` pipeline returns `tail`'s exit 0, MASKING the failure.** Run build-executing

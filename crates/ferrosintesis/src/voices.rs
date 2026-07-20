@@ -2255,7 +2255,7 @@ pub struct JawariSpec {
 }
 
 /// Excitation model for a plucked voice (natural-pluck redesign HLD §2).
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ExcModel {
     /// The historic flat, peak-normalized comb-filtered noise burst. Every
     /// preset defaults to this, so an un-migrated preset is bit-identical.
@@ -12442,6 +12442,62 @@ mod tests {
         assert!(
             s_render != render_pluck(&NYLON, 52, 100, 0.4, 7),
             "Shaped should differ from Legacy"
+        );
+
+        // GUARD-REGRESSION oracle (HLD amendment 2026.07.20 §4b, Fable): at the
+        // PICK-key-40-like cell that TRIPPED the deleted peak guard (long buffer,
+        // picked slope, dark pick_lp), the h1..h4 amplitude must STILL be exactly
+        // K_SUS·v at both a soft and a hard velocity — any post-normalization
+        // rescale (a guard creeping back) shrinks it crest-dependently and fails.
+        let build_cell = |vv: f32, seed: u32| {
+            let (n, beta, slope, rho, pick_lp) = (535usize, 0.15f32, 1.4f32, 0.30f32, 1500.0f32);
+            let mut nrng = Rng::new(seed);
+            let noise: Vec<f32> = (0..n).map(|_| nrng.white()).collect();
+            let mut jrng = Rng::new(seed ^ 0x555);
+            shaped_excitation(
+                n, beta, slope, rho, pick_lp, &noise, vv, 0.0, K_SUS, sr, &mut jrng,
+            )
+        };
+        for &vv in &[0.2f32, 0.95] {
+            let ha = hamp(&build_cell(vv, 11));
+            assert!(
+                (ha - K_SUS * vv).abs() < 0.02 * K_SUS * vv,
+                "guard-cell v={vv}: h1..h4 amp {ha} != K_SUS·v {} (a rescale crept back?)",
+                K_SUS * vv
+            );
+        }
+        // strict v-LINEARITY: same seed, the buffer at 2v is EXACTLY 2× the buffer
+        // at v — amplitude ∝ v, no hidden nonlinearity anywhere in the builder. The
+        // jitter draw count is v-independent, so the same seed aligns the streams.
+        let b1 = build_cell(0.3, 5);
+        let b2 = build_cell(0.6, 5);
+        for (i, (&x1, &x2)) in b1.iter().zip(&b2).enumerate() {
+            assert!(
+                (x2 - 2.0 * x1).abs() <= 1e-4 * (2.0 * x1).abs().max(1e-6),
+                "v-linearity broke at sample {i}: {x2} != 2·{x1}"
+            );
+        }
+    }
+
+    /// Phase-2 trim lint (HLD amendment §4c, Tripwire A): every migrated preset is
+    /// Shaped with a BOUNDED trim; a runaway trim means the projection model broke.
+    /// PICK stays Legacy (deferred — its key-dependent offset needs a key-aware
+    /// target). Note PIZZ is a private const, reachable from this in-crate test.
+    #[test]
+    fn shaped_migrated_presets_lint() {
+        for p in [&STEEL, &JAZZ, &DULCIMER, &PIZZ] {
+            assert_eq!(p.exc_model, ExcModel::Shaped, "{} should be Shaped", p.name);
+            assert!(
+                p.exc_trim.abs() <= 6.0,
+                "{} exc_trim {} exceeds ±6.0 (Tripwire A: projection model wrong)",
+                p.name,
+                p.exc_trim
+            );
+        }
+        assert_eq!(
+            PICK.exc_model,
+            ExcModel::Legacy,
+            "PICK is deferred — must stay Legacy until a key-aware target lands"
         );
     }
 

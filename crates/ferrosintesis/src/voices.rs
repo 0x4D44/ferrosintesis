@@ -7974,6 +7974,12 @@ const LA_PIZZBASS: (f32, (f32, f32)) = (0.40, (0.05, 0.35));
 // GM 33/34/35 electric bass: real FreePats RBX finger/pick pluck over the Pluck model. The
 // finger and pick banks differ (that's the timbre); the crossfade is shared. Ear-tunable.
 const LA_EBASS: (f32, (f32, f32)) = (0.42, (0.05, 0.35));
+// GM 4 Rhodes tine / 10 music box comb / 15 hammered dulcimer: real Freesound onsets over the
+// modeled voices. The sample carries the strike/pluck attack; the model keeps the body/decay.
+// Ear-tunable.
+const LA_RHODES: (f32, (f32, f32)) = (0.45, (0.05, 0.35));
+const LA_MUSICBOX: (f32, (f32, f32)) = (0.50, (0.05, 0.30));
+const LA_DULCIMER: (f32, (f32, f32)) = (0.45, (0.05, 0.30));
 /// GM 42 cello: the cello-section arco bite over the waveguide sustain. A
 /// slightly faster handover than the bass (a cello bow speaks quicker).
 const LA_CELLO: (f32, (f32, f32)) = (0.30, (0.13, 0.40));
@@ -11114,7 +11120,26 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
             }
         }
         2 => Box::new(electric_grand_piano(key, vel, sr, seed)),
-        4 => Box::new(electric_piano_1(key, vel, sr, seed)),
+        // GM 4 electric piano: LA sampled Rhodes Mk II tine onset (tim.kahn Freesound, CC-BY,
+        // -ccby) over the electric_piano_1 model. Pure model is the CC0!=0 alt. (GM 5 stays
+        // model-only — a DX EP is FM.)
+        4 => {
+            let model = Box::new(electric_piano_1(key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_RHODES;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::rhodes_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         5 => Box::new(fm_electric_piano(key, vel, sr)),
         // §2.10: the harpsichord is PLUCKED (jack plectrum), not an additive
         // sine stack — Pluck gives the physical decay and quill twang. The LA
@@ -11205,17 +11230,35 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        10 => Box::new(bell(
-            key,
-            vel,
-            sr,
-            seed,
-            MUSICBOX,
-            (0.06, 0.004, 5000.0, 1.0),
-            0.0,
-            0.5,
-            0.52,
-        )),
+        // GM 10 music box: LA sampled comb-pluck onset (moodyfingers Freesound, CC0,
+        // -orchestral2) over the bell(MUSICBOX) model. Pure model is the CC0!=0 alt.
+        10 => {
+            let model = Box::new(bell(
+                key,
+                vel,
+                sr,
+                seed,
+                MUSICBOX,
+                (0.06, 0.004, 5000.0, 1.0),
+                0.0,
+                0.5,
+                0.52,
+            ));
+            if samples {
+                let (gain, fade) = LA_MUSICBOX;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::musicbox_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         // GM 11 vibraphone: LA sampled strike (VCSL Soft Mallets, CC0, -orchestral2) over
         // the bell()+motor-tremolo model. The pure model is the CC0!=0 alt (altbank.rs).
         11 => {
@@ -11323,7 +11366,25 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
-        15 => Box::new(Pluck::new(&DULCIMER, key, vel, sr, seed)),
+        // GM 15 hammered dulcimer: LA sampled struck-string onset (iternetcone Freesound,
+        // CC-BY, -ccby) over the Pluck(&DULCIMER) model. Pure model is the CC0!=0 alt.
+        15 => {
+            let model = Box::new(Pluck::new(&DULCIMER, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_DULCIMER;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::dulcimer_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         // 19 rejoined the drawbar arm in round 2: the audition preferred the
         // legacy Leslie drawbar over the CathedralOrgan pipe model (retired),
         // so the default and the CC0 alt (legacy_church_organ) are now the
@@ -11801,6 +11862,9 @@ mod tests {
             ("LA_CONTRABASS", LA_CONTRABASS),
             ("LA_PIZZBASS", LA_PIZZBASS),
             ("LA_EBASS", LA_EBASS),
+            ("LA_RHODES", LA_RHODES),
+            ("LA_MUSICBOX", LA_MUSICBOX),
+            ("LA_DULCIMER", LA_DULCIMER),
             ("LA_CELLO", LA_CELLO),
             ("LA_FLUTE", LA_FLUTE),
             ("LA_PIANO", LA_PIANO),
@@ -13269,19 +13333,19 @@ mod tests {
                 render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, false);
             let sampled =
                 render_program_sampled(program, key, vel, 0.35, seed ^ program as u32, true);
-            if program == 6 || program == 7 {
-                // GM6 harpsichord gained its own VCSL quill LA onset (2026.07.17) and
-                // GM7 clavinet became a sampled voice by default (MuseScore, 2026.07.17):
-                // both must ENGAGE their sample bank (plain != sampled). Neither is the
-                // piano's bank — the distinct-from-GM0 and is_acoustic_piano checks above
-                // already prove they are not the acoustic-piano voice, so this is a
-                // positive engagement control.
+            if program == 4 || program == 6 || program == 7 {
+                // GM4 Rhodes gained a real tim.kahn tine LA onset (2026.07.20), GM6
+                // harpsichord its VCSL quill onset (2026.07.17), and GM7 clavinet became a
+                // sampled voice by default (MuseScore, 2026.07.17): all must ENGAGE their
+                // sample bank (plain != sampled). None is the piano's bank — the
+                // distinct-from-GM0 and is_acoustic_piano checks above already prove they are
+                // not the acoustic-piano voice, so this is a positive engagement control.
                 assert_ne!(
                     plain, sampled,
                     "GM{program} sample voice did not engage (plain == sampled)"
                 );
             } else {
-                // GM4/5 stay pure model — no sample layer, so sampled == plain.
+                // GM5 stays pure model (a DX EP is FM) — no sample layer, so sampled == plain.
                 assert_eq!(
                     plain, sampled,
                     "GM{program} unexpectedly uses a sample layer"

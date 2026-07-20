@@ -856,6 +856,12 @@ F0_RANGE = {
     # global ceiling clears the top fundamental.
     "fingerbass": (36.0, 100.0),
     "pickbass": (36.0, 100.0),
+    # Freesound onsets: rhodes E1 41..C6 1047; dulcimer ~C4 262..D5 587; music box E5 659..C7
+    # 2093. All in TWO_F_STRONG (per-note cap) — Rhodes tine + struck dulcimer + comb music box
+    # are 2f-heavy — so the octave-snap corrects any label-octave slip (esp. the guessed dulcimer).
+    "rhodes": (35.0, 1200.0),
+    "dulcimer": (200.0, 800.0),
+    "musicbox": (600.0, 2400.0),
 }
 # Families whose recordings are 2f-DOMINANT (autocorr grabs the 2nd harmonic if the
 # ceiling admits it) AND span more than an octave, so a single fixed F0 ceiling can't
@@ -863,7 +869,8 @@ F0_RANGE = {
 # label×1.5. (The ocarina avoids this list by keeping its zone span under one octave.)
 TWO_F_STRONG = frozenset(("recorder", "banjo", "viola", "marimba", "xylo", "glock",
                           "vibes", "tubular", "cellosolo", "dbass", "pizzbass",
-                          "fingerbass", "pickbass"))
+                          "fingerbass", "pickbass",
+                          "rhodes", "dulcimer", "musicbox"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -891,6 +898,9 @@ KEEP_FAM = {
     "pizzbass": (0.9, 0.30),
     "fingerbass": (0.9, 0.30),
     "pickbass": (0.9, 0.30),
+    "rhodes": (0.9, 0.30),
+    "dulcimer": (0.9, 0.30),
+    "musicbox": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -924,6 +934,19 @@ LOCAL_SOURCES = {
         "gong_ageng_loud_261893.wav", "ferrosintesis-samples-gong", 0.30),
 }
 
+# Freesound onset sources (GM4 Rhodes CC-BY, GM15 dulcimer CC-BY, GM10 music box CC0) —
+# Freesound gates downloads behind a login, so (like gong-src) the DECODED + trimmed source
+# notes are committed here, not auto-fetched. ensure_freesound_sources copies them into the
+# temp `src` so the main bake loop trims to onset + measures the root. Routed by
+# FAMILY_PACKAGE: rhodes/dulcimer → the CC-BY `-ccby` crate; musicbox → the CC0 `-orchestral2`.
+# Provenance (exact pack IDs/SHAs) in crates/ferrosintesis-samples-ccby/PROVENANCE.md.
+FREESOUND_SRC = os.path.join(TOOL_DIR, "freesound-src")
+FREESOUND_SOURCES = {
+    fn: fn
+    for fn in (sorted(os.listdir(FREESOUND_SRC)) if os.path.isdir(FREESOUND_SRC) else [])
+    if fn.endswith(".wav")
+}
+
 CORE_FAMILIES = frozenset(("piano", "violin", "flute"))
 # Families that live in their OWN sample crate (not core/orchestral) — the grand is
 # a ~6.9 MiB CC-BY bank kept separate so core stays under the crates.io 10 MiB cap.
@@ -954,6 +977,9 @@ FAMILY_PACKAGE = {
     "pizzbass": "ferrosintesis-samples-strings",
     "fingerbass": "ferrosintesis-samples-bass",
     "pickbass": "ferrosintesis-samples-bass",
+    "rhodes": "ferrosintesis-samples-ccby",
+    "dulcimer": "ferrosintesis-samples-ccby",
+    "musicbox": "ferrosintesis-samples-orchestral2",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1089,6 +1115,13 @@ def ensure_direct_sources(src, source_map, label):
         if not os.path.exists(dst):
             print(f"fetching {label} {fn} ...", file=sys.stderr)
             fetch(url, dst)
+
+
+def ensure_freesound_sources(src):
+    """Copy the committed Freesound onset sources (freesound-src/*.wav) into `src` for the
+    main bake loop (they are auth-gated, so committed as source like gong-src, not fetched)."""
+    for fn in FREESOUND_SOURCES:
+        shutil.copyfile(os.path.join(FREESOUND_SRC, fn), os.path.join(src, fn))
 
 
 def ensure_flac_sources(src, source_map, label):
@@ -2131,6 +2164,8 @@ def main():
             ensure_guitar_sources(src)
         if want("fingerbass") or want("pickbass"):
             ensure_ebass_sources(src)
+        if want("rhodes") or want("dulcimer") or want("musicbox"):
+            ensure_freesound_sources(src)
         if want("chanter"):
             ensure_bagpipe_sources(src)
         if want("grand"):
@@ -2223,7 +2258,7 @@ def main():
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
             | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS | TUBULAR_URLS
             | SOLO_CELLO_URLS | SOLO_DBASS_URLS | PIZZBASS_URLS
-            | FINGERBASS_SOURCES | PICKBASS_SOURCES
+            | FINGERBASS_SOURCES | PICKBASS_SOURCES | FREESOUND_SOURCES
             | GRAND_SOURCES
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):

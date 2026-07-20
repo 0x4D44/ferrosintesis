@@ -32,6 +32,7 @@ embedded-samples = [
     "dep:ferrosintesis-samples-sax",
     "dep:ferrosintesis-samples-strings",
     "dep:ferrosintesis-samples-bass",
+    "dep:ferrosintesis-samples-ccby",
 ]
 
 [dependencies]
@@ -65,6 +66,7 @@ ferrosintesis-samples-orchestral2 = { path = "../ferrosintesis-samples-orchestra
 ferrosintesis-samples-sax = { path = "../ferrosintesis-samples-sax", version = "=0.1.0", optional = true }
 ferrosintesis-samples-strings = { path = "../ferrosintesis-samples-strings", version = "=0.1.0", optional = true }
 ferrosintesis-samples-bass = { path = "../ferrosintesis-samples-bass", version = "=0.1.0", optional = true }
+ferrosintesis-samples-ccby = { path = "../ferrosintesis-samples-ccby", version = "=0.1.0", optional = true }
 
 [lib]
 path = "src/lib.rs"

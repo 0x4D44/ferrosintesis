@@ -247,6 +247,50 @@ static SAMPLES: &[(&str, &[u8])] = &[
         "tubular_D5.wav",
         include_bytes!("../samples/tubular_D5.wav"),
     ),
+    (
+        "musicbox_E5.wav",
+        include_bytes!("../samples/musicbox_E5.wav"),
+    ),
+    (
+        "musicbox_A5.wav",
+        include_bytes!("../samples/musicbox_A5.wav"),
+    ),
+    (
+        "musicbox_B5.wav",
+        include_bytes!("../samples/musicbox_B5.wav"),
+    ),
+    (
+        "musicbox_C6.wav",
+        include_bytes!("../samples/musicbox_C6.wav"),
+    ),
+    (
+        "musicbox_D6.wav",
+        include_bytes!("../samples/musicbox_D6.wav"),
+    ),
+    (
+        "musicbox_E6.wav",
+        include_bytes!("../samples/musicbox_E6.wav"),
+    ),
+    (
+        "musicbox_F6.wav",
+        include_bytes!("../samples/musicbox_F6.wav"),
+    ),
+    (
+        "musicbox_G#6.wav",
+        include_bytes!("../samples/musicbox_G#6.wav"),
+    ),
+    (
+        "musicbox_A6.wav",
+        include_bytes!("../samples/musicbox_A6.wav"),
+    ),
+    (
+        "musicbox_B6.wav",
+        include_bytes!("../samples/musicbox_B6.wav"),
+    ),
+    (
+        "musicbox_C7.wav",
+        include_bytes!("../samples/musicbox_C7.wav"),
+    ),
 ];
 
 /// Number of embedded WAV files.

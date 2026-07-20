@@ -1,0 +1,15 @@
+ferrosintesis-samples-ccby — attribution notices (CC BY 4.0)
+============================================================
+
+This crate embeds sound recordings licensed under Creative Commons Attribution 4.0
+International (https://creativecommons.org/licenses/by/4.0/). Attribution as required by
+that licence:
+
+- GM 4 electric piano (Rhodes tine) onsets — "C_S Fender Rhodes Mark II" by tim.kahn,
+  Freesound pack 3957 (https://freesound.org/people/tim.kahn/packs/3957/), CC BY 4.0.
+
+- GM 15 hammered-dulcimer onsets — "Multi-sampled Hammered Dulcimer" by iternetcone,
+  Freesound pack 19445 (https://freesound.org/people/iternetcone/packs/19445/), CC BY 4.0.
+
+The embedded WAVs are attack transients trimmed from the original recordings (and repitched
+per note at play time by ferrosintesis). No endorsement by the authors is implied.

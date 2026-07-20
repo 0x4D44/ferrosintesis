@@ -1168,7 +1168,7 @@ pub fn make(
         // sampled onset in the default bank; forcing samples=false here keeps the pure
         // bell()+motor model reachable. Same freeze idiom as 24..=25 / 56..=61 / 68..=71.
         // Further batch-2 / bass programs join this arm as each sampled unit lands.
-        8 | 11 | 32..=35 => crate::voices::make(program, key, vel, sr, seed, false),
+        4 | 8 | 10 | 11 | 15 | 32..=35 => crate::voices::make(program, key, vel, sr, seed, false),
         _ => crate::voices::make(program, key, vel, sr, seed, samples),
     }
 }
@@ -1664,6 +1664,9 @@ mod tests {
             (33u8, 33u8, 1u8),
             (34u8, 33u8, 1u8),
             (35u8, 33u8, 1u8),
+            (4u8, 48u8, 1u8),
+            (10u8, 84u8, 1u8),
+            (15u8, 62u8, 1u8),
         ] {
             // (a) alt bank ignores the sample layer → pure model, byte-identical on/off.
             let alt_on = render_make_bank(prog, alt, key, 100, 0.5, 6, true);

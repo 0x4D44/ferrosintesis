@@ -65,6 +65,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_sax::get(name))
         .or_else(|| ferrosintesis_samples_strings::get(name))
         .or_else(|| ferrosintesis_samples_bass::get(name))
+        .or_else(|| ferrosintesis_samples_ccby::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 
@@ -640,6 +641,80 @@ fn pick_bass() -> &'static [Zone] {
 /// model. Roots MEASURED at bake near the SFZ key. 7 zones sound E1..E2.
 pub fn pick_bass_bank() -> &'static [Zone] {
     pick_bass()
+}
+
+fn rhodes() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "rhodes_E1.wav" => 41.21,
+            "rhodes_A#1.wav" => 58.24,
+            "rhodes_C#2.wav" => 69.26,
+            "rhodes_E2.wav" => 82.35,
+            "rhodes_G#2.wav" => 104.18,
+            "rhodes_C#3.wav" => 138.59,
+            "rhodes_D#5.wav" => 622.77,
+            "rhodes_E5.wav" => 659.30,
+            "rhodes_G#5.wav" => 826.52,
+            "rhodes_A#5.wav" => 931.19,
+            "rhodes_C#6.wav" => 1106.02,
+        )
+    })
+}
+
+/// GM 4 electric piano onset (real Fender Rhodes Mk II tine, tim.kahn Freesound 3957,
+/// CC-BY, -ccby) over the electric_piano_1 model. Roots MEASURED at bake (filenames are the
+/// measured pitch). 11 zones sound E1..C#6 (source lacks octave 4 — repitch bridges it).
+pub fn rhodes_bank() -> &'static [Zone] {
+    rhodes()
+}
+
+fn dulcimer_la() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "dulcimer_C#4.wav" => 280.62,
+            "dulcimer_D4.wav" => 295.17,
+            "dulcimer_E4.wav" => 330.95,
+            "dulcimer_F#4.wav" => 373.89,
+            "dulcimer_G4.wav" => 394.73,
+            "dulcimer_A4.wav" => 442.73,
+            "dulcimer_B4.wav" => 496.11,
+            "dulcimer_C5.wav" => 525.46,
+            "dulcimer_D5.wav" => 594.66,
+        )
+    })
+}
+
+/// GM 15 hammered-dulcimer onset (iternetcone Freesound 19445, CC-BY, -ccby) over the
+/// Pluck(&DULCIMER) model. Roots MEASURED at bake. 9 zones sound C#4..D5.
+pub fn dulcimer_bank() -> &'static [Zone] {
+    dulcimer_la()
+}
+
+fn musicbox() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "musicbox_E5.wav" => 668.51,
+            "musicbox_A5.wav" => 873.59,
+            "musicbox_B5.wav" => 983.03,
+            "musicbox_C6.wav" => 1049.43,
+            "musicbox_D6.wav" => 1190.81,
+            "musicbox_E6.wav" => 1328.91,
+            "musicbox_F6.wav" => 1412.39,
+            "musicbox_G#6.wav" => 1686.54,
+            "musicbox_A6.wav" => 1784.92,
+            "musicbox_B6.wav" => 2006.59,
+            "musicbox_C7.wav" => 2127.34,
+        )
+    })
+}
+
+/// GM 10 music box onset (moodyfingers Freesound 44539, CC0, -orchestral2) over the
+/// bell(MUSICBOX) model. Roots MEASURED at bake. 11 zones sound E5..C7.
+pub fn musicbox_bank() -> &'static [Zone] {
+    musicbox()
 }
 
 // GM 42 cello LA attack: a REAL solo cello arco onset (Karoryfer x bigcat "Bigcat

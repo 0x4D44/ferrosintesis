@@ -99,12 +99,16 @@ fn k_weight_channel(samples: &[f32], fs: f64) -> Vec<f64> {
         .collect()
 }
 
-/// Integrated loudness (LUFS) of an interleaved-stereo f32 buffer per BS.1770-4.
-/// Returns `f32::NEG_INFINITY` for silence / signals with no gated blocks.
-pub fn integrated_lufs(interleaved_stereo: &[f32], fs: f32) -> f32 {
+/// Channel-weighted mean square (`z_j`) for each BS.1770 block: 400 ms window,
+/// 100 ms hop (75 % overlap), `z = z_L + z_R` with `G_L = G_R = 1.0`.
+///
+/// Shared by [`integrated_lufs`] and [`momentary_lufs`] so the two can never drift
+/// apart: the gating in the former and the per-block series in the latter are two
+/// readings of exactly the same numbers.
+fn block_mean_squares(interleaved_stereo: &[f32], fs: f32) -> Vec<f64> {
     let n_frames = interleaved_stereo.len() / 2;
     if n_frames == 0 {
-        return f32::NEG_INFINITY;
+        return Vec::new();
     }
     // De-interleave.
     let mut left = Vec::with_capacity(n_frames);
@@ -120,9 +124,8 @@ pub fn integrated_lufs(interleaved_stereo: &[f32], fs: f32) -> f32 {
     let block = (0.400 * fs).round() as usize; // 400 ms
     let hop = (0.100 * fs).round() as usize; // 100 ms (75 % overlap)
     if n_frames < block {
-        return f32::NEG_INFINITY;
+        return Vec::new();
     }
-    // Channel-weighted mean-square (z = z_L + z_R, G_L = G_R = 1.0) per block.
     let mut z: Vec<f64> = Vec::new();
     let mut start = 0;
     while start + block <= n_frames {
@@ -136,18 +139,47 @@ pub fn integrated_lufs(interleaved_stereo: &[f32], fs: f32) -> f32 {
         z.push((sl + sr) / block as f64); // sum of per-channel mean squares
         start += hop;
     }
+    z
+}
+
+/// Block loudness `l_j = OFFSET + 10 log10(z_j)`; `-inf` for a zero block.
+#[inline]
+fn block_loudness(zj: f64) -> f64 {
+    if zj <= 0.0 {
+        f64::NEG_INFINITY
+    } else {
+        OFFSET as f64 + 10.0 * zj.log10()
+    }
+}
+
+/// Momentary loudness (LUFS) per BS.1770: one value per 400 ms block on a 100 ms
+/// hop, **ungated** and in time order.
+///
+/// This is the short-window counterpart to [`integrated_lufs`]. Integrated loudness
+/// answers "how loud is this programme overall"; the momentary series answers "how
+/// loud is it *right now*", which is what you need to compare individual musical
+/// events whose decay envelopes differ — a long window would let tail length leak
+/// into a level estimate.
+///
+/// Returns an empty vector for silence or for a buffer shorter than one 400 ms block.
+/// Blocks that are exactly zero read `f32::NEG_INFINITY`; callers that want the
+/// standard gating should apply it themselves (or use [`integrated_lufs`]).
+pub fn momentary_lufs(interleaved_stereo: &[f32], fs: f32) -> Vec<f32> {
+    block_mean_squares(interleaved_stereo, fs)
+        .into_iter()
+        .map(|zj| block_loudness(zj) as f32)
+        .collect()
+}
+
+/// Integrated loudness (LUFS) of an interleaved-stereo f32 buffer per BS.1770-4.
+/// Returns `f32::NEG_INFINITY` for silence / signals with no gated blocks.
+pub fn integrated_lufs(interleaved_stereo: &[f32], fs: f32) -> f32 {
+    let z = block_mean_squares(interleaved_stereo, fs);
     if z.is_empty() {
         return f32::NEG_INFINITY;
     }
-    // Block loudness l_j = OFFSET + 10 log10(z_j).
     let offset = OFFSET as f64;
-    let loud = |zj: f64| -> f64 {
-        if zj <= 0.0 {
-            f64::NEG_INFINITY
-        } else {
-            offset + 10.0 * zj.log10()
-        }
-    };
+    let loud = block_loudness;
     // Absolute gate.
     let abs_kept: Vec<f64> = z
         .iter()
@@ -400,6 +432,57 @@ mod tests {
         assert!(
             (lufs - (-23.0)).abs() < 0.1,
             "44.1k 1kHz −23dBFS should read −23.0 LUFS, got {lufs}"
+        );
+    }
+
+    /// The momentary series inherits the EBU 3341 calibration: on steady tone
+    /// EVERY 400 ms block must read the same −23.0 LUFS the integrated meter does.
+    /// This pins the shared `block_mean_squares` path — if a future edit breaks the
+    /// block grid or the offset for one caller, it breaks for both.
+    #[test]
+    fn momentary_matches_ebu_calibration_on_steady_tone() {
+        let peak = 10f32.powf(-23.0 / 20.0);
+        for &fs in &[44100.0f32, 48000.0] {
+            let sig = stereo_sine(1000.0, peak, 5.0, fs);
+            let m = momentary_lufs(&sig, fs);
+            // 5 s at 400 ms/100 ms hop → floor((5.0 − 0.4)/0.1) + 1 = 47 blocks.
+            assert_eq!(m.len(), 47, "fs={fs}: unexpected block count");
+            for (i, &b) in m.iter().enumerate() {
+                assert!(
+                    (b - (-23.0)).abs() < 0.1,
+                    "fs={fs} block {i}: steady −23 dBFS tone should read −23.0 LUFS, got {b}"
+                );
+            }
+        }
+    }
+
+    /// The momentary series must TRACK a level change that integrated loudness
+    /// averages away — the property that makes it the right tool for comparing
+    /// individual musical events. A quiet half followed by a loud half reads as two
+    /// plateaus 20 LU apart, not as one mean.
+    #[test]
+    fn momentary_tracks_a_step_that_integrated_averages() {
+        let fs = 44100.0f32;
+        let mut sig = stereo_sine(1000.0, 10f32.powf(-43.0 / 20.0), 3.0, fs);
+        sig.extend(stereo_sine(1000.0, 10f32.powf(-23.0 / 20.0), 3.0, fs));
+        let m = momentary_lufs(&sig, fs);
+        // Sample well inside each plateau, clear of the 400 ms straddling blocks.
+        let quiet = m[10];
+        let loud = m[m.len() - 10];
+        assert!(
+            (quiet - (-43.0)).abs() < 0.1,
+            "first plateau should read −43.0, got {quiet}"
+        );
+        assert!(
+            (loud - (-23.0)).abs() < 0.1,
+            "second plateau should read −23.0, got {loud}"
+        );
+        // Integrated, by contrast, gates the quiet half out entirely and reports
+        // only the loud one — which is exactly why it cannot compare events.
+        let integrated = integrated_lufs(&sig, fs);
+        assert!(
+            (integrated - (-23.0)).abs() < 0.5,
+            "integrated should report ~−23.0 (quiet half relative-gated out), got {integrated}"
         );
     }
 

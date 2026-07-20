@@ -12,7 +12,7 @@ use std::path::Path;
 
 pub use crate::engine::{normalize_loudness, normalize_to_i16, Options, Progress, Stats};
 pub use crate::error::{MidiError, MAX_SONG_SECONDS};
-pub use crate::loudness::{integrated_lufs, limit_true_peak, true_peak_dbtp};
+pub use crate::loudness::{integrated_lufs, limit_true_peak, momentary_lufs, true_peak_dbtp};
 pub use crate::wav::write_wav;
 
 /// A parsed Standard MIDI File: its tempo map, events and markers, ready to render.

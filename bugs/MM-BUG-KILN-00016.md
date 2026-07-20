@@ -35,6 +35,15 @@ Add a sampled pluck onset for GM 32–39 (acoustic/fingered/picked/slap) using t
 proven `LaVoice::wrap` — mostly a sourcing + root-measurement task, not new DSP,
 since the wrap is already validated for the other plucks.
 
+### Progress (2026-07-20) — 32–35 LANDED; slap 36/37 deferred (bug STAYS OPEN)
+
+Acoustic pizz bass 32 (VSCO Solo Contrabass Pizz, CC0, `1a033e3`) and electric bass fingered 33 /
+picked 34 / fretless 35 (FreePats RBX, CC0, new `-bass` crate, `dbef98a`) landed — real onset as
+default, pure model as the CC0!=0 alt, oracle + render-diff (0 contamination) green. GM 38/39 synth
+bass stay model-only (they are *synth*). **Slap 36/37 is deferred** (2026-07-19 sourcing HLD,
+decision 4): no clean real-slap CC0/CC-BY multisample exists — its own future mini-hunt. This bug
+therefore **stays Open** on the slap sub-item.
+
 ## Notes
 
 - Enhancement filed as a bug per the maintainer routing decision (2026-07-18).

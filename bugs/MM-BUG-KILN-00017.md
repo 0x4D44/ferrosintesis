@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00017 — Electric pianos (GM 4–5) have no tine-strike LA onset layer
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-20, Claude Opus 4.8 (1M) — GM4 Rhodes onset landed `b8d47e1`; GM5 model-only by design)
 
 ## Observation
 
@@ -35,6 +35,14 @@ unit U8), blocked only on a human download-and-inspect of sample fitness.
 
 Add tine-strike onset banks for GM 4–5 via `LaVoice::wrap`, using
 `contrabass_bank` as the wiring template, once the CC0 source is vetted.
+
+### Fix summary (2026-07-20) — LANDED
+
+GM 4 got a real Fender Rhodes Mk II tine onset over `electric_piano_1`, in the new `-ccby` crate
+(`b8d47e1`). Source: **tim.kahn** Freesound pack 3957, **CC-BY 4.0** — the earmarked `jRhodes` set
+was *rejected* (its sample bytes are CC-BY-**NC**, correcting the round-3 "CC0 covers the WAV bytes"
+premise; see the 2026-07-19 sourcing HLD). GM 5 stays **model-only** by design (a DX EP *is* FM —
+round-3 §7.2). Pure model preserved as the CC0!=0 alt; oracle + render-diff (0 contamination) green.
 
 ## Notes
 

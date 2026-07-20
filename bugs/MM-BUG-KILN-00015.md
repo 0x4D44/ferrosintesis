@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00015 — Chromatic percussion (GM 8–15) has no LA onset layer despite being the ideal onset-only candidate
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-20, Claude Opus 4.8 (1M) — batch 2 landed: vibes `7cd06da`, tubular `943c6f2`, celesta `302a0dd`, music box + dulcimer `b8d47e1`)
 
 ## Observation
 
@@ -50,10 +50,15 @@ mode (the VSCO xylo is 2f-bright vs the wood_bar model's 3f). Full workspace sui
 render-diff GM 9/12/13-only reach, `--no-samples` bit-identical, zero contamination.
 **State stays Open** — batch 2 remains.
 
-### Batch 2 (deferred) — needs a CC0 source
+### Batch 2 — LANDED (2026-07-20)
 
-Vibraphone 11, tubular bells 14, celesta 8, music box 10, dulcimer 15 have no verified CC0 onset
-source (VSCO ships only marimba/xylo/glock). A follow-up batch once a source is found/pinned.
+All five gained a real sampled onset as the default over the modeled body, with the pure model
+preserved as the CC0!=0 alt: vibraphone 11 (VCSL, `7cd06da`), tubular bells 14 (VCSL, `943c6f2` —
+plus a CC0=3 model alt, since 14's CC0!=0 slot was already the tam-tam/gong), celesta 8 (MS Basic
+SF3 MIT, `302a0dd`), music box 10 (moodyfingers CC0) + dulcimer 15 (iternetcone CC-BY, new `-ccby`
+crate, `b8d47e1`). Each: `altbank_sampled_programs_preserve_pure_model_and_default_layers` oracle
+green, render-diff clean (0 contamination), `--no-samples` byte-identical. Sources + licensing per
+the 2026-07-19 sourcing HLD (which also corrected the round-3 jRhodes/celesta premises).
 
 ## Notes
 

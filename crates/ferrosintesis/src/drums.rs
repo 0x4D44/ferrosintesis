@@ -2604,7 +2604,7 @@ mod tests {
             (
                 36,
                 testutil::RenderSignature {
-                    rms_db: -11.549,
+                    rms_db: -12.791,
                     centroid_hz: 188.589,
                     late_early_db: -7.436,
                 },
@@ -2612,7 +2612,7 @@ mod tests {
             (
                 38,
                 testutil::RenderSignature {
-                    rms_db: -20.956,
+                    rms_db: -21.786,
                     centroid_hz: 957.116,
                     late_early_db: -15.458,
                 },
@@ -2620,7 +2620,7 @@ mod tests {
             (
                 42,
                 testutil::RenderSignature {
-                    rms_db: -35.702,
+                    rms_db: -35.507,
                     centroid_hz: 7887.204,
                     late_early_db: -59.097,
                 },
@@ -2628,7 +2628,7 @@ mod tests {
             (
                 49,
                 testutil::RenderSignature {
-                    rms_db: -18.445,
+                    rms_db: -18.956,
                     centroid_hz: 5960.781,
                     late_early_db: 1.826,
                 },
@@ -2636,7 +2636,7 @@ mod tests {
             (
                 41,
                 testutil::RenderSignature {
-                    rms_db: -15.054,
+                    rms_db: -15.884,
                     centroid_hz: 184.404,
                     late_early_db: -7.775,
                 },
@@ -4833,7 +4833,7 @@ mod tests {
             (
                 36,
                 testutil::RenderSignature {
-                    rms_db: -12.962,
+                    rms_db: -14.204,
                     centroid_hz: 168.235,
                     late_early_db: -7.434,
                 },
@@ -4841,7 +4841,7 @@ mod tests {
             (
                 38,
                 testutil::RenderSignature {
-                    rms_db: -20.911,
+                    rms_db: -21.742,
                     centroid_hz: 474.734,
                     late_early_db: -40.576,
                 },
@@ -4852,7 +4852,7 @@ mod tests {
                     // Re-frozen for MM-BUG-KILN-00001: the strand re-strike burst
                     // now scales with velocity, so the vel-100 slap is a touch
                     // quieter and darker than the fixed-0.50 burst.
-                    rms_db: -19.909,
+                    rms_db: -20.739,
                     centroid_hz: 552.960,
                     late_early_db: -36.990,
                 },
@@ -4860,7 +4860,7 @@ mod tests {
             (
                 40,
                 testutil::RenderSignature {
-                    rms_db: -44.069,
+                    rms_db: -44.899,
                     centroid_hz: 2800.437,
                     late_early_db: 16.597,
                 },
@@ -4868,7 +4868,7 @@ mod tests {
             (
                 42,
                 testutil::RenderSignature {
-                    rms_db: -34.509,
+                    rms_db: -34.314,
                     centroid_hz: 6485.427,
                     late_early_db: -61.407,
                 },

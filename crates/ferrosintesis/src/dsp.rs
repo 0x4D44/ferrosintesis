@@ -744,6 +744,22 @@ pub fn vel_amp(vel: u8) -> f32 {
     v * v
 }
 
+/// Velocity → EXPRESSIVE CONTROL depth. Deliberately **not** the loudness law.
+///
+/// A handful of sites map velocity to a timbre parameter rather than a level: the
+/// lead's filter cutoff, a bowed string's bow speed, a pipe's chiff colour. Those
+/// mappings were tuned by ear, and the reference-module measurement that fixed
+/// [`vel_amp`] at the square law says nothing whatever about what curve a filter
+/// cutoff should follow — it measures loudness.
+///
+/// So they keep the historic 1.6 curve. Sharing one helper with `vel_amp` would
+/// have meant that correcting the LOUDNESS law silently re-voiced every one of them
+/// (the lead's cutoff moved up to 5.2 % at mid velocities), which is exactly the
+/// coupling that makes "this change is level-only" false.
+pub fn vel_ctrl(vel: u8) -> f32 {
+    (vel as f32 / 127.0).powf(1.6)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

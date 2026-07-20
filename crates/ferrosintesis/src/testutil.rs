@@ -1325,116 +1325,35 @@ mod guards {
     /// oracle-34 procedure) — it is a drift trip-wire, not a freeze.
     /// Regenerate with: cargo test print_golden_fixture -- --ignored --nocapture
     const GOLDEN: &[(u8, f32, f32)] = &[
-        // Re-captured after Phase 3 (the Cabinet): CLEAN (ch 2) deliberately
-        // darker above 4.5 kHz, DRIVE (ch 4) re-voiced through the new cab;
-        // the Phase-1 velocity law shifts the guitar/bass channels slightly
-        // at their written velocities. The canaries (ch 7 piano, ch 8
-        // strings) are BIT-EXACT vs the pre-work capture — proof the
-        // untouched families are untouched.
-        // Re-captured after Phase 6 (KS core): K1's cubic tap keeps treble
-        // ring (guitars brighter), the K4 wound split darkens low DRIVE keys,
-        // and the re-voiced bass presets sit under the wound factor. The
-        // canaries (ch 7 piano, ch 8 strings) remain BIT-EXACT vs pre-work.
-        // Re-captured after the flatwound bass revoice (BASS/FRETLESS presets,
-        // GM 33/35): the two bass channels (ch 5, ch 6) now sit deeper and
-        // darker — more sub weight, highs rolled off (centroid 369->295 and
-        // 211->195 Hz). Every other channel, INCLUDING the ch 7 piano and ch 8
-        // strings canaries, is BIT-EXACT vs pre-revoice: the change is
-        // contained to the two bass presets, as intended.
-        // Re-captured after GM 35 fretless mwah: only ch 6's displayed RMS and
-        // centroid change at the displayed precision and the master peak moves
-        // by 0.00002; every other displayed channel, including canaries, is
-        // unchanged.
-        // Re-captured after guitar v2 unit A (pickup coil RLC on CLEAN /
-        // MUTED / DRIVE): ch 2 brighter (4.2 kHz single-coil peak), ch 3 a
-        // touch darker (3 kHz coil under the palm), ch 4 brighter through the
-        // drive (3.3 kHz humbucker peak). The nylon/steel/bass/piano/strings
-        // rows are BIT-EXACT vs the pre-work capture (see also the
-        // v2_untouched_pluck_signatures_are_stable portable signature guard).
-        // Re-captured after guitar v2 unit C (Drive v2: two stages + sag):
-        // ch 4 sits 7.0 dB higher and darker — the sag compressor holds
-        // decayed note tails up, and a decayed KS tail is fundamental-heavy
-        // (unit D's sustainer + the drive's re-harmonization act on the
-        // string itself). Loud-point level match vs v1 is +0.3/−0.1 dB
-        // (drive_level_probe); the tail lift is the feature, knob = sag_target.
-        // Every other row, including ch 2/ch 3, is BIT-EXACT vs the unit-A
-        // capture — the drive insert touches programs 29/30 only.
-        // Re-captured after guitar v2 unit B (the 26/27 split): ch 2 is now
-        // the JAZZ hollowbody — warmer and rounder (centroid 1216 -> 855 Hz)
-        // by design; every other row is BIT-EXACT vs the unit-C capture.
-        // Re-captured after guitar v2 unit D (the string sustainer): ch 4's
-        // held notes now hold their fundamental instead of dying (centroid
-        // 727 -> 468 Hz, RMS ~unchanged) — the V6b oracle pins the post-Drive
-        // 2f0 content so the held tone stays harmonic, and DRIVE_LEAD's
-        // 11 kHz damper is the brighter opt-in lead. All other rows
-        // BIT-EXACT vs the unit-B capture.
-        // Re-captured after the voice-quality overhaul §2.6 deleted the
-        // Drive's inverted sag gain (it slewed UP to 4x as the note decayed
-        // — a real amp clips hardest at the pick): ch 4 is 4.4 dB quieter
-        // and brighter (centroid 468 -> 814 Hz) with the tail no longer
-        // artificially held up and fundamental-heavy; held-note sustain now
-        // lives at the string layer (DRIVE.sustain 0.35 -> 0.5) and O-ATTACK
-        // pins the no-late-bloom shape. All other rows BIT-EXACT vs the
-        // unit-D capture — the drive insert touches programs 29/30 only.
-        // Re-captured (ch 1 STEEL + ch 2 JAZZ only) after Phase-2 Shaped
-        // excitation: both migrated presets appear in this reference song, so
-        // their gentler-attack onset drops their centroid hard — STEEL 2030 ->
-        // 803 Hz (a −3.1 dB softer, much darker pick), JAZZ 855 -> 540 Hz. The
-        // master peak eases 2.270 -> 2.250 with the two softer channels. NO
-        // OTHER channel is my doing: capturing the full fixture at the branch
-        // base (963def2) showed ch 0 (nylon 819), ch 4 (drive 846) and the ch 8
-        // strings canary (2139) ALREADY read those values there — the prior rows
-        // (899 / 808 / 2381) were stale patchwork that only passed on the ±20 %
-        // tolerance. Those pre-existing drifts are left untouched here (still in
-        // tolerance; not this task's change — scratchpad'd for a hygiene pass).
-        // The canaries confirm no contamination: ch 7 piano is BIT-EXACT
-        // everywhere, and ch 8 strings is base==HEAD (my branch never touches it).
-        (0, -40.22, 899.2),
-        (1, -44.60, 802.9),
-        (2, -41.94, 539.6),
-        (3, -39.97, 485.9),
-        // Re-captured (ch 4 only) after round 2's driven-guitar rework
-        // ("clean, dark sustain"): hotter drive staging (DRIVE amp/sustain/
-        // bright + Drive g1/bias, post level-re-matched end-to-end) leaves
-        // ch 4 −0.6 dB and darker (centroid 814 → 545 Hz).
-        // Re-captured (ch 4 only) after round-3 U2 restored the main/alt
-        // contrast: the default DRIVE bank lost its e-bow hold (sustain
-        // 0.7 → 0.0), so held tails decay instead of settling into the
-        // fundamental-heavy hold — near-identical RMS (−0.1 dB) but brighter
-        // on average (centroid 545 → 808 Hz). Every other row, including the
-        // ch 7 piano and ch 8 strings canaries, is BIT-EXACT vs the prior
-        // capture: the change is contained to the default drive preset.
-        (4, -32.96, 808.2),
-        // Re-captured after the muffled-flatwound bass re-voice (kick + big sub
-        // + muffle, GM33): ch 5 louder (the low-end WEIGHT Arthur approved) and
-        // darker (the muffle). Every other channel — INCLUDING the ch 7 piano
-        // and ch 8 strings canaries — is BIT-EXACT vs the pre-revoice capture:
-        // the change is contained to the BASS preset, as intended.
-        (5, -19.40, 241.3),
-        (6, -27.13, 194.4),
-        (7, -24.35, 567.6),
-        // Re-captured (ch 8 only) after the SC-55-referenced per-program loudness
-        // trim: StringEns1 (GM 48) is PROGRAM_TRIM_DB[48] = +5.5 dB louder to match
-        // the SC-55's section balance. RMS -37.21 -> -31.72 dB (+5.49); centroid
-        // 2382 -> 2381 Hz — unchanged, proving the trim is level-only (timbre-
-        // neutral). Every other row, including the ch 7 piano canary, is bit-exact
-        // vs the prior capture: the trim touches only the corrected programs, and
-        // this reference song uses just one (ch 8). See engine::PROGRAM_TRIM_DB.
-        (8, -31.72, 2380.6),
-        // Re-captured after the default drum kit moved from V1 to V3:
-        // channel 10 is deliberately brighter and slightly louder. Re-pinned
-        // after the later V3 cymbal-density work moved the fixture within its
-        // guard tolerance.
-        // Re-captured after the D10d kit-balance rebalance (hi-hats up, ride/crash
-        // down, snare/toms forward) + the D10e +6 dB drum-bus forward level: ch 10
-        // is 5.1 dB louder and brighter (centroid 685 -> 737 Hz, hats up), and the
-        // master peak nearly doubles. Every melodic channel (0-8), including the
-        // ch 7 piano and ch 8 strings canaries, is BIT-EXACT vs the prior capture —
-        // proof the change is contained to the drum bus.
-        (9, -17.16, 737.4),
+        // Re-captured for the k=2 velocity law (2026-07-20). Unlike every previous
+        // re-capture, THE CANARIES MOVE TOO — ch 7 piano -0.61 dB and ch 8 strings
+        // -2.93 dB — because this change is global by design: it corrects the
+        // velocity->level law for every voice, so there is no untouched family left
+        // to act as a canary. That is expected, not contamination.
+        //
+        // The reference song plays each channel at v40/v90/v120. The law makes quiet
+        // notes much quieter (GM48's v40 note falls ~12 dB once its velocity FLOOR is
+        // removed), so each channel's time-weighted spectrum re-weights toward its
+        // loud note. That is why CENTROIDS move without any per-note timbre change:
+        // ch 1 steel +22% and ch 8 strings -12% are re-weighting, not re-voicing.
+        // Per-note timbre is held by `vel_ctrl`, which keeps the historic 1.6 curve
+        // for the expressive control mappings.
+        //
+        // ch 4 (GM30 drive) RISES +0.42 dB: it carries a VEL_LEVEL_EXP correction
+        // below 2.0, which is a boost at sub-max velocities.
+        (0, -41.03, 905.9),
+        (1, -45.34, 979.7),
+        (2, -42.45, 553.6),
+        (3, -41.15, 478.6),
+        (4, -32.54, 843.8),
+        (5, -20.22, 239.6),
+        (6, -27.98, 188.5),
+        (7, -24.96, 580.5),
+        (8, -34.65, 2090.1),
+        (9, -17.78, 785.3),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 2.24977;
+    const GOLDEN_MASTER_PEAK: f32 = 2.22899;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause
@@ -3357,15 +3276,15 @@ mod pluck_baseline {
     #[rustfmt::skip]
     const HEAD_BASELINE: &[HeadRow] = &[
         // (preset, key, vel, rms_db[0.05-0.35s], att_sus, onset_tilt_db_oct, seed_spread_db)
-        ("NYLON", 40, 50, -31.39, 1.69, -6.3, 3.68),
-        ("NYLON", 40, 100, -22.75, 1.72, -4.8, 2.43),
-        ("NYLON", 40, 120, -20.80, 1.78, -4.3, 2.06),
-        ("NYLON", 52, 50, -32.30, 2.23, -8.5, 5.30),
-        ("NYLON", 52, 100, -23.48, 2.22, -6.6, 5.58),
-        ("NYLON", 52, 120, -21.25, 2.24, -5.7, 5.81),
-        ("NYLON", 64, 50, -41.67, 8.21, -8.5, 3.77),
-        ("NYLON", 64, 100, -28.47, 4.65, -8.0, 0.80),
-        ("NYLON", 64, 120, -25.71, 4.16, -7.7, 1.18),
+        ("NYLON", 40, 50, -34.63, 1.69, -6.3, 3.68),
+        ("NYLON", 40, 100, -23.58, 1.72, -4.8, 2.43),
+        ("NYLON", 40, 120, -21.00, 1.78, -4.3, 2.06),
+        ("NYLON", 52, 50, -35.54, 2.23, -8.5, 5.30),
+        ("NYLON", 52, 100, -24.31, 2.22, -6.6, 5.58),
+        ("NYLON", 52, 120, -21.45, 2.24, -5.7, 5.81),
+        ("NYLON", 64, 50, -44.91, 8.21, -8.5, 3.77),
+        ("NYLON", 64, 100, -29.3, 4.65, -8.0, 0.80),
+        ("NYLON", 64, 120, -25.91, 4.16, -7.7, 1.18),
         ("HARP", 40, 50, -30.33, 1.48, -5.2, 0.91),
         ("HARP", 40, 100, -21.35, 1.54, -3.1, 0.22),
         ("HARP", 40, 120, -18.79, 1.56, -2.7, 0.26),

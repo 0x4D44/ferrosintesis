@@ -276,8 +276,6 @@ mod tests {
             //
             //  6      harpsichord — deliberately velocity-compressed (`vel_sense`);
             //         asserted separately against its own <3 dB contract.
-            //  16-20  drawbar organs — include the velocity-independent cathedral
-            //         voice; a real pipe organ does not respond to key velocity.
             //  109    bagpipe — the chanter is a constant-pressure looped sample and
             //         takes no velocity at all (`bagpipe_chanter_loop(key, sr)`). A
             //         piper physically cannot play it louder; velocity-independence
@@ -292,7 +290,7 @@ mod tests {
             //         Pre-existing defect in the bowed-string model, not in the
             //         velocity law; a scalar exponent cannot correct a non-monotonic
             //         curve. Tracked separately - fixing it needs the model, not this.
-            if p == 6 || (16..=20).contains(&p) || p == 96 || p == 109 || p == 42 || p == 43 {
+            if p == 6 || p == 96 || p == 109 || p == 42 || p == 43 {
                 continue;
             }
             let k = melodic_k_at(p, 60);
@@ -364,6 +362,20 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// The excluded programs must STILL BE BROKEN. An exclusion that silently
+    /// becomes unnecessary is a dead blind spot: whoever fixes the bowed-string model
+    /// should be forced to delete the exemption, not left free to leave it rotting.
+    #[test]
+    fn excluded_programs_still_reproduce_their_defect() {
+        for p in [42u8, 43] {
+            let k = melodic_k_at(p, 60);
+            assert!(
+                (k - 2.0).abs() > 0.25,
+                "GM{p} now fits {k:.3} — the bowed-string turnover appears FIXED.                  Delete its exclusion in every_gm_program_follows_the_square_law and                  its VEL_LEVEL_EXP note, then remove this assertion."
+            );
         }
     }
 

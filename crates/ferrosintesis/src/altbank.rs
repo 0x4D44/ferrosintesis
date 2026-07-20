@@ -1762,7 +1762,7 @@ mod tests {
             "alt pad(89)",
             render_signature(&pad, sr, (0.2, 0.8), (0.1, 0.3), (0.9, 1.3)),
             RenderSignature {
-                rms_db: -21.567,
+                rms_db: -23.882,
                 centroid_hz: 611.243,
                 late_early_db: 1.923,
             },
@@ -1771,7 +1771,7 @@ mod tests {
             "alt choir(52)",
             render_signature(&choir, sr, (0.2, 0.8), (0.1, 0.3), (0.9, 1.3)),
             RenderSignature {
-                rms_db: -29.502,
+                rms_db: -31.817,
                 centroid_hz: 1308.458,
                 late_early_db: 2.215,
             },

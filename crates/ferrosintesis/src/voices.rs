@@ -12543,10 +12543,7 @@ mod tests {
                 exc_model: ExcModel::Legacy,
                 ..*p
             };
-            let no_click = PluckPreset {
-                click: 0.0,
-                ..*p
-            };
+            let no_click = PluckPreset { click: 0.0, ..*p };
             let c50 = attack_crest(&render(p, key, 50), sr, f0);
             let c120 = attack_crest(&render(p, key, 120), sr, f0);
             // G2a: rendered attack crest within the natural picked-family band.
@@ -12555,7 +12552,10 @@ mod tests {
                 "{name} G2a: crest(v120) {c120:.2} > {CREST_MAX} (spikier than a natural pick)"
             );
             // G2d: and not over-smeared into a mushy, peakless attack.
-            assert!(c120 >= 1.6, "{name} G2d: crest(v120) {c120:.2} < 1.6 (over-smeared)");
+            assert!(
+                c120 >= 1.6,
+                "{name} G2d: crest(v120) {c120:.2} < 1.6 (over-smeared)"
+            );
             // G2b: velocity may sharpen the pick, but only so far.
             assert!(
                 c120 / c50 <= 1.4,
@@ -12564,7 +12564,10 @@ mod tests {
             );
             // G2c: the click-free backbone crest holds the stricter natural median.
             let cbb = attack_crest(&render(&no_click, key, 120), sr, f0);
-            assert!(cbb <= 3.3, "{name} G2c: click-free backbone crest {cbb:.2} > 3.3");
+            assert!(
+                cbb <= 3.3,
+                "{name} G2c: click-free backbone crest {cbb:.2} > 3.3"
+            );
             // G5': the Shaped onset edge must be no sharper than its Legacy twin's.
             let g5s = slew_sus(&render(p, key, 120), f0);
             let g5l = slew_sus(&render(&legacy, key, 120), f0);
@@ -12587,7 +12590,9 @@ mod tests {
             v.render(&mut buf);
             buf
         };
-        println!("preset  key   crestS50 crestS120 crestL120 ratioS | slewS slewL sR | attsusS attsusL");
+        println!(
+            "preset  key   crestS50 crestS120 crestL120 ratioS | slewS slewL sR | attsusS attsusL"
+        );
         for &(name, p, key) in SHAPED_G_CASES {
             let f0 = key_freq(key);
             let legacy = PluckPreset {
@@ -12616,10 +12621,7 @@ mod tests {
                 noise_mix: 0.0,
                 ..*p
             };
-            let no_click = PluckPreset {
-                click: 0.0,
-                ..*p
-            };
+            let no_click = PluckPreset { click: 0.0, ..*p };
             let cd = attack_crest(&render(p, key, 120), sr, f0);
             let cn = attack_crest(&render(&no_noise, key, 120), sr, f0);
             let cc = attack_crest(&render(&no_click, key, 120), sr, f0);
@@ -12643,7 +12645,17 @@ mod tests {
             let noise: Vec<f32> = (0..exc_len).map(|_| nrng.white()).collect();
             let mut jrng = Rng::new(seed ^ 0x555);
             shaped_excitation(
-                exc_len, 0.25, slope, rho, 3000.0, &noise, v, 0.0, K_SUS, sr, SHAPED_DISP,
+                exc_len,
+                0.25,
+                slope,
+                rho,
+                3000.0,
+                &noise,
+                v,
+                0.0,
+                K_SUS,
+                sr,
+                SHAPED_DISP,
                 &mut jrng,
             )
         };
@@ -12705,7 +12717,17 @@ mod tests {
             let noise: Vec<f32> = (0..n).map(|_| nrng.white()).collect();
             let mut jrng = Rng::new(seed ^ 0x555);
             shaped_excitation(
-                n, beta, slope, rho, pick_lp, &noise, vv, 0.0, K_SUS, sr, SHAPED_DISP,
+                n,
+                beta,
+                slope,
+                rho,
+                pick_lp,
+                &noise,
+                vv,
+                0.0,
+                K_SUS,
+                sr,
+                SHAPED_DISP,
                 &mut jrng,
             )
         };
@@ -17271,7 +17293,10 @@ mod tests {
         let body = |s: &[f32]| crate::testutil::centroid(&s[(0.05 * sr) as usize..], sr);
         let cp = body(&render_pluck(&STEEL, 50, 100, 0.3, 7));
         let cw = body(&render_pluck(&wound_steel, 50, 100, 0.3, 7));
-        assert!(cw < 0.92 * cp, "wound {cw:.0} not darker than plain {cp:.0}");
+        assert!(
+            cw < 0.92 * cp,
+            "wound {cw:.0} not darker than plain {cp:.0}"
+        );
     }
 
     /// Oracle 43 (V4/INT-4): a range-24 full-down bend pitch-limits at the

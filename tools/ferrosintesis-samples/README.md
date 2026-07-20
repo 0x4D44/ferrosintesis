@@ -32,10 +32,12 @@ body or sustain.
 - `trumpet_*_{p,f}.wav`, `mutetpt_*_{p,f}.wav` (straight mute — its own
   bank, the mute identity is attack-critical), `trombone_*_{p,f}.wav`,
   `tuba_*_{p,f}.wav`, `horn_*_{p,f}.wav` — brass sustain onsets for
-  GM 56–61, 5–6 pitch zones × 2 dynamic layers (VSCO v1 → p, v3 → f;
+  GM 56–60, 5–6 pitch zones × 2 dynamic layers (VSCO v1 → p, v3 → f;
   the horn's top D4 zone exists only as v1 at the pinned rev and is
-  reused for both layers), ~0.63 s. GM 61 (section) layers the trumpet
-  bank at reduced gain over its scattered modeled players.
+  reused for both layers), ~0.63 s. GM 61 (brass section) is pure model —
+  the old fallback layered a solo trumpet attack over the section (the
+  wrong instrument) and was dropped; `BR_SECTION`'s five scattered
+  players carry the width.
 - `oboe_*_{p,f}.wav`, `bassoon_*_{p,f}.wav`, `clarinet_*_{p,f}.wav` — reed
   sustain onsets for GM 68–71, 6 pitch zones × 2 dynamic layers (VSCO
   v1 → p, v3 → f; the bassoon has only v1/v2 at the pinned rev, so
@@ -77,17 +79,20 @@ body or sustain.
 - **LA onset banks added 2026.07.18** (all onset-only, roots MEASURED). **CC0 → the
   `-orchestral2` crate:** `harp_*` (GM 46, 11 zones G1–F7, VCSL concert harp),
   `timpani_*` (GM 47, 5 struck zones A#1–F3, VCSL Timpani 2), `recorder_*` (GM 74,
-  7 zones F3–C6, VCSL Baroque alto+soprano), `ocarina_*` (GM 79, 3 zones E4–C5, VCSL)
-  and `banjo_*` (GM 105, 8 zones D#2–B4, sfzinstruments/ganjo). **MIT (MS Basic SF3,
+  7 zones F3–C6, VCSL Baroque alto+soprano), `ocarina_*` (GM 79, 3 zones E4–C5, VCSL),
+  `banjo_*` (GM 105, 8 zones D#2–B4, sfzinstruments/ganjo) and `viola_*` (GM 41,
+  7 zones sounding C3–D6 × forte/piano, VSCO Viola Section susvib). **MIT (MS Basic SF3,
   via `_bake_sf_onset`) → the `-musescore` crate:** `sitar_*` (GM 104, 8 zones E3–G6),
   `panflute_*` (GM 75, 8 zones F#3–C7), `bottle_*` (GM 76, single C6) and `shakuhachi_*`
   (GM 77, single C5). Some sources are 2f-dominant or octave-mislabelled, so roots are
   measured with a per-note ceiling (`TWO_F_STRONG`) or at the SF3 `originalPitch`; the
   ganjo WAVs are IEEE-float, transcoded to PCM by `ensure_banjo_sources` (ffmpeg).
 - `drum_sus_cymb1_*`, `drum_crash1_*`, `drum_kick_*`, `drum_snare2_*`
-  — unpitched drum-hit overlays for the default kit: crash/suspended cymbal
-  attacks kept to ~2.2 s, kick/snare attacks kept to ~0.46 s. The modeled drum
-  voice remains the sustain/body layer.
+  — **retired** drum-hit overlays for the pre-drumkit default kit. The WAVs
+  still ship in `-orchestral` (the published crate keeps its bytes) but the
+  synth no longer references them: the full sampled kit in
+  `crates/ferrosintesis-samples-drumkit/` (see `prepare_drumkit.py`)
+  superseded the overlay path.
 
 ## Provenance & license
 

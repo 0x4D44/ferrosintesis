@@ -110,10 +110,12 @@ Module map (`src/`):
   CathedralOrgan, SawStack, Lead, Wind, Bowed). Instrument voicing constants live at the top.
 - `drums.rs` — parametric GM channel-10 percussion.
 - `dsp.rs` — filters, oscillators, shared DSP primitives.
-- `sampler.rs` — the **LA-synthesis** layer: 218 public-domain PCM recordings
-  (17.73 MiB source, supplied by the `-core` and `-orchestral` asset crates; the
-  separate `-drumkit` crate adds the 188-file sampled kit) crossfaded into
-  modeled instrument bodies and sustains.
+- `sampler.rs` — the **LA-synthesis** layer: public-domain / permissively
+  licensed PCM recordings (supplied by the first-party `ferrosintesis-samples-*`
+  asset crates — onset banks, sustain loops, whole-voice instruments, and the
+  sampled drum kit) crossfaded into modeled instrument bodies and sustains. The
+  per-crate inventory lives in `tools/ferrosintesis-samples/README.md` — trust
+  it, not counts quoted here.
 - `reverb.rs`, `wav.rs` — Freeverb hall plus the cathedral feedback-delay network;
   16-bit PCM writer with TPDF dither.
 - `testutil.rs` — pitch (Goertzel), RMS, click-detection helpers for the audio oracles.
@@ -158,7 +160,8 @@ exactly the albums it should; *unexpected* diffs (a brass change altering a pian
 album, DC on silent channels) are bugs — investigate before committing. For a pure
 controller feature, any diff at all is a bug.
 
-ferrosintesis is versioned (`Cargo.toml`, currently 0.17.0); a shipped-code change needs one
+ferrosintesis is versioned (`crates/ferrosintesis/Cargo.toml` holds the current
+number — trust it, not versions quoted in docs); a shipped-code change needs one
 version bump per integrated task. The crate is **published to crates.io**, so its public API
 carries a semver promise: `Options`/`RealtimeOptions` are sealed (private fields — construct
 with `Options::default()` + the `with_*` builders, read with the accessors), and the error

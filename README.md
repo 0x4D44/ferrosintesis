@@ -144,21 +144,21 @@ engine.py  ─▶  .mid  ─▶  ferrosintesis ─▶ .wav ─▶ ropusenc ─�
 
 ## Use ferrosintesis as a crate
 
-The default build includes all 202 CC0 attack transients. Cargo retrieves the two
-sample packages once and embeds their bytes in your executable at compile time;
-there is no build-time or runtime asset downloader.
+The default build embeds the full recorded sample bank: Cargo retrieves the
+first-party `ferrosintesis-samples-*` packages once and compiles their bytes into
+your executable; there is no build-time or runtime asset downloader.
+(`crates/ferrosintesis/Cargo.toml` is the source of truth for the current
+version — `cargo add` resolves the latest published release.)
 
-```toml
-[dependencies]
-ferrosintesis = "0.13.5"
+```bash
+cargo add ferrosintesis
 ```
 
 Applications that want the modeled synth without downloading or compiling the
 sample packages can disable default features:
 
-```toml
-[dependencies]
-ferrosintesis = { version = "0.13.5", default-features = false }
+```bash
+cargo add ferrosintesis --no-default-features
 ```
 
 The repository's `ferrosintesis-cli` renderer uses the default embedded samples but

@@ -92,17 +92,17 @@
 
 - [ ] 2026.07.18 — **Asset-crate/doc count drift.** `ferrosintesis-samples-orchestral`
   README says "embeds 147" but `FILE_COUNT=157`; drumkit README says "109 … WAVs" but
-  `FILE_COUNT=188`. And `DESIGN.md:~99` still calls GM 120–127 toneless SFX-noise while
-  `README.md:~109` correctly documents 121–127 as dedicated modeled voices. Fold into the
-  next docs-curation sweep (code constants are the truth).
+  `FILE_COUNT=188`. Also `crates/ferrosintesis/README.md:~87`'s feature-flags counts
+  ("264 recorded attack transients … ~22 MiB") predate the newer asset crates — unverified.
+  Fold into the next docs-curation sweep (code constants are the truth).
+  (2026-07-20 partial: the `DESIGN.md:~99` GM 120–127 "toneless" clause that was also
+  tracked here is fixed by the docs-drift sweep.)
 
-- [ ] 2026.07.17 — **`tools/ferrosintesis-samples/README.md` inventory is stale on GM25
-  steel.** The `nylon_*` bullet still says "GM 25 (steel) stays pure model: no clean CC0
-  steel-string source yet" — but steel got a CC0 Martin HD28 LA bank on 2026.07.16
-  (`prepare.py` `STEEL_SOURCES`, `sampler.rs` `steel_bank`, `make()` program 25). The
-  README never got a `steel_*` inventory bullet or provenance paragraph. Add them (mirror
-  the new `harpsi_*` entry) when next curating that doc. (Spotted adding the harpsichord
-  bank; left steel alone to avoid touching another task's scope.)
+- [x] 2026.07.17 — **`tools/ferrosintesis-samples/README.md` inventory is stale on GM25
+  steel.** (Resolved 2026-07-20, docs-drift sweep verification: the README now documents
+  the steel bank at lines ~56–59 — "GM 25 (steel) is its own `steel_*.wav` bank: 8 zones
+  E2–B5 from a 2017 Martin HD28" — matching `sampler.rs` `steel_bank()` and the assets.
+  Fixed by an intervening task; entry obsolete.)
 
 - [ ] 2026.07.16 — **`LA_PROGRAMS` in voices.rs tests (~:19255) is stale vs the make()
   wiring.** It lists GM 2 (fully modeled electric grand — the samples flag changes
@@ -180,41 +180,37 @@
   workflow shifted: `.opus` is now git-ignored build output rendered via `build.py`, so a fresh
   harness should diff `.wav` renders, not committed assets.
 
-- [ ] 2026.07.13 — **`CLAUDE.md` version string is stale: says ferrosintesis is "currently
-  0.14.3", crate builds as 0.15.3** (`CLAUDE.md` ferrosintesis-architecture "is versioned …
-  currently 0.14.3" line vs `crates/ferrosintesis/Cargo.toml`). Root `README.md`'s crate
-  examples also pin `0.13.5`. Spotted while decommitting rendered opus; refresh all three
-  version strings in one pass.
+- [x] 2026.07.13 — **`CLAUDE.md` version string is stale** (was "currently 0.14.3", then
+  "0.17.0", actual 0.21.49; root `README.md` pinned `0.13.5`). (Resolved 2026-07-20,
+  docs-drift sweep: both now point at `crates/ferrosintesis/Cargo.toml` as the source of
+  truth instead of pinning a number — root README uses `cargo add` — so they cannot
+  re-stale.)
 
-- [ ] 2026.07.12 — **`crates/ferrosintesis/README.md`'s GM table contradicts the source in 8
-  places** — surfaced while auditing instrument coverage for the reference-audition demo
-  (`wrk_docs/2026.07.12 - HLD - ferrosintesis reference audition.md`). Source wins in each:
-  (1) **README:88 lists "crystal 96–103" as Modal, but README:90 lists "97/99/101/103" as
-  SawStack — the two rows contradict each other.** Only 96/98/100/102 are Modal
-  (`voices.rs:7229`); 97/99/103 are pads (`:7232`) and 101 is the sweep pad (`:7233`). The
-  SawStack row is the correct one.
-  (2) **GM 31's sounding pitch is NOT the written key** — the KS loop rings at 2f below key 64
-  and 3f at/above (`voices.rs:2083-2091`), non-monotonic across the boundary. Documented
-  nowhere outside a terse `// G7 flageolet` marker. This is the most surprising undocumented
-  behaviour in the melodic set and deserves an explicit README line.
-  (3) README:69-71's CC0 alt-bank list is **incomplete** — it omits 19 (legacy organ), 29/30
-  (DRIVE_LEAD), and that the bank *pins samples off* for 24/25, 56–61, 68–71
-  (`altbank.rs:1003, :1032, :1037, :1043, :1046`).
-  (4) README:97 says ReverseCymbal ignores the written key — true for the default bank, but
-  the **alt-bank 119 DOES read the key** (`drums.rs:2239`, clamped 48–72). Not stated.
-  (5) `drums.rs:1358`'s doc comment says `make` returns "`None` for unmapped keys" — **false**;
-  every arm returns `Some`, unmapped keys get a generic tick (`drums.rs:2023`). No ch10 key is
-  silent.
-  (6) README:94 implies GM 86 "fifths lead" and GM 87 "bass+lead" render an interval — the
-  **parallel fifth and the sub-octave are both unimplemented/deferred** (`voices.rs:4419`,
-  `:4428`). The names promise something that does not render.
-  (7) README:87 says GM 46 harp skips the wound-string key split — true, but **GM 15 dulcimer
-  also does** (`voices.rs:1755`) and the README omits it.
-  (8) **Seven shipped CC/engine features are entirely undocumented**: CC2 breath, CC66
-  sostenuto, CC67 una corda (acoustic piano 0–3 only), CC71 resonance, polyphonic key
-  aftertouch, the guitar sympathetic resonator (GM 24/25 only), and the channel-10 drum-room
-  reverb (which **ignores CC91** — `ROOM_SEND` is a const at `engine.rs:1918`, so a dry-drums
-  bar is impossible from MIDI). The engine reads **25** CCs; the README documents 8.
+- [x] 2026.07.12 — **`crates/ferrosintesis/README.md`'s GM table contradicts the source in 8
+  places.** (Resolved 2026-07-20 by the docs-drift sweep, each correction re-verified against
+  current source first: (1) both rows were stale — since Stage 3 ALL of 96–103 route through
+  the `Fx` wrapper (`voices.rs:12142`); README/DESIGN got a dedicated Fx row. (2) GM 31
+  flageolet documented (2f below E4, 3f at/above — monotonic with an upward leap, not
+  non-monotonic as first noted). (3) CC0 row rewritten from the full `altbank.rs:1023-1180`
+  dispatch — note the GM 19 claim had *inverted* meanwhile: default IS the drawbar, CC0=2 the
+  cathedral. (4) alt-119 key-tracking caveat added. (6) documented as-is; the missing
+  interval/sub-octave are now tracked reqs MM-REQ-KILN-00019/00020. (7) dulcimer wound-split
+  skip added. (8) CC2/CC66/CC67/CC71/CC84/CC32/CC120-123 rows + sympathetic buses added; the
+  ch-10 room send CC91 gap is documented honestly and raised as MM-BUG-KILN-00028.
+  Item (5) is a code comment — extracted to the 2026-07-20 stale-doc-comments entry below.)
+
+- [ ] 2026-07-20 — **Stale `.rs` doc comments the docs-drift sweep verified but could not fix
+  (docs-lane branch, no source edits):** `drums.rs:1358` claims `make` returns "`None` for
+  unmapped keys" — false, every arm returns `Some` (generic tick at `drums.rs:2023`);
+  `sampler.rs:903/:1137/:1479` grand/kawai/honkytonk bank docs still describe the pre-07.18
+  GM 0-centric piano mapping (kawai is now the GM 1 DEFAULT, honkytonk the GM 3 default);
+  `voices.rs:22978` justifies the SFX tuning-test exclusion with the retired "toneless-noise
+  fallbacks" claim; `engine.rs:1-11` header lists only the v0.7 controllers (omits
+  CC2/CC66/CC84/poly-AT); orphaned MS Basic bottle onset bank still embedded + prewarmed
+  (`sampler.rs:2154-2164`, `:2389`) with stale WD-O10/dispatch comments
+  (`voices.rs:22416-22419`, `:12115`). One comment-only source pass, no bump (pure docs in
+  code). Also verify `CLAUDE.md`'s publish-order claim ("`-core` → `-orchestral` →
+  `ferrosintesis`") against the actual `=x.y.z` pins — there are ~22 sample crates now.
 
 - [ ] 2026.07.13 — `distinctness::Why` (`crates/ferrosintesis/src/testutil.rs:1139`)
   is now a **single-variant enum** (`Collapse(u8)`) after Stage 4 deleted the last

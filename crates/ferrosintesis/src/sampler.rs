@@ -4820,6 +4820,13 @@ mod tests {
             (6u8, 48, "harpsichord-low", true),
             (6u8, 60, "harpsichord", true),
             (6u8, 72, "harpsichord-high", true),
+            // GM15 dulcimer: trunk added the LA onset (Freesound) while Phase-2
+            // made the model Shaped + de-impulsified its click, so the seam is
+            // re-guarded here like steel's — the sample was calibrated against
+            // the pre-Shaped model. Keys inside the sampled range (E4..C5).
+            (15u8, 64, "dulcimer-low", true),
+            (15u8, 69, "dulcimer", true),
+            (15u8, 72, "dulcimer-high", true),
             (48u8, 48, "string-ens-low", false),
             (48u8, 76, "string-ens-high", false),
             (49u8, 55, "slow-strings", false),

@@ -3108,6 +3108,20 @@ pub const SHAMISEN: PluckPreset = PluckPreset {
     out_lp: 5600.0,
     click: 1.2,
     click_hp: 1600.0,
+    // SAWARI (MM-REQ-KILN-00024): the shamisen's buzzing bridge — same
+    // contact physics as the sitar's jawari, deliberately subtler: a
+    // shallower graze that keeps its depth (no slow migration on a 0.55 s
+    // note), half the sitar's bridge-wrap, and a duller bounce. Amounts are
+    // engineering gut-feel (this box has no ears); the oracle pins presence
+    // AND that the uplift stays below the sitar's, by render evidence.
+    jawari: Some(JawariSpec {
+        ratio_start: 0.84,
+        ratio_end: 0.55,
+        sweep_s: 0.5,
+        restitution: 0.6,
+        wrap: 0.035,
+        follow_s: 0.014,
+    }),
     ..DEFAULTS
 };
 /// GM 15 hammered dulcimer (v0.12): bright steel double courses struck with
@@ -16089,6 +16103,64 @@ mod tests {
                 "program {program} note-off hard-choked the natural tail: short {short_tail}, held {held_tail}"
             );
         }
+    }
+
+    /// GM 106 shamisen sawari (MM-REQ-KILN-00024): the buzzing bridge
+    /// re-injects high partials every period, so the render's 2–6 kHz band
+    /// must DECAY MORE SLOWLY than an identical-preset `jawari: None`
+    /// control. Decay RATE is the mechanism's direct signature and is
+    /// measurable inside a 0.55 s-t60 note — the sitar oracle's late-window
+    /// share divergence needs more time than this short string has (measured
+    /// ceiling ~1.3× at every contact depth and brightness tried; see the
+    /// 2026-07-20 build-queue journal). Band energies aggregate across seeds
+    /// and keys before any ratio. Clause (b) pins the shamisen as the
+    /// subtler bridge by the same rendered measure, not struct fields.
+    #[test]
+    fn shamisen_sawari_buzzes_gentler_than_sitar() {
+        let sr = 44100.0;
+        // Windows scale with each preset's t60 so each bridge is judged on
+        // its own note's timescale (same-absolute-windows barely sample the
+        // sitar's 4× longer evolution): early 0.15–0.36·t60, late 0.58–0.91·t60.
+        // per-preset 2–6 kHz band decay early→late, dB, seed/key-aggregated;
+        // returns (with_decay_db, ctrl_decay_db)
+        let band_decay = |preset: &PluckPreset, t60: f32| {
+            let w = |frac: f32| (frac * t60 * sr) as usize;
+            let (e0, e1) = (w(0.15), w(0.36));
+            let (l0, l1) = (w(0.58), w(0.91));
+            let secs = t60 * 1.1;
+            let plain = PluckPreset {
+                jawari: None,
+                ..*preset
+            };
+            let mut acc = [[0f64; 2]; 2]; // [arm][window] band energy
+            for key in [55u8, 62, 69] {
+                for seed in [3u32, 11, 40, 57, 92] {
+                    let arms = [
+                        render_pluck(preset, key, 100, secs, seed),
+                        render_pluck(&plain, key, 100, secs, seed),
+                    ];
+                    for (a, sig) in arms.iter().enumerate() {
+                        let sq = |x: f32| (x as f64) * (x as f64);
+                        acc[a][0] += sq(spectral_band_rms(&sig[e0..e1], sr, 2000.0, 6000.0));
+                        acc[a][1] += sq(spectral_band_rms(&sig[l0..l1], sr, 2000.0, 6000.0));
+                    }
+                }
+            }
+            let db = |early: f64, late: f64| 10.0 * (early / late.max(1e-24)).log10();
+            (db(acc[0][0], acc[0][1]), db(acc[1][0], acc[1][1]))
+        };
+        let (sham_w, sham_c) = band_decay(&SHAMISEN, 0.55);
+        let (sitar_w, sitar_c) = band_decay(&SITAR, 2.1);
+        let sham_slow = sham_c - sham_w; // dB the sawari arm decays LESS
+        let sitar_slow = sitar_c - sitar_w;
+        assert!(
+            sham_slow > 2.0,
+            "sawari not re-pumping: band decay with {sham_w:.2} dB vs plain {sham_c:.2} dB (slowing {sham_slow:.2} dB)"
+        );
+        assert!(
+            sham_slow < sitar_slow,
+            "sawari should be the subtler bridge: shamisen slowing {sham_slow:.2} dB vs sitar {sitar_slow:.2} dB"
+        );
     }
 
     /// GM 104 sitar (v0.16, jawari oracle 1): the buzz SURVIVES the decay.

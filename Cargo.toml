@@ -20,6 +20,7 @@ members = [
     "crates/ferrosintesis-samples-sax",
     "crates/ferrosintesis-samples-strings",
     "crates/ferrosintesis-samples-ccby",
+    "crates/ferrosintesis-samples-rain",
     "crates/ferrosintesis-samples-bass",
     "crates/ferrosintesis-samples-bottle",
     "crates/render-catalog",

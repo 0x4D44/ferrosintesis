@@ -67,12 +67,25 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_bass::get(name))
         .or_else(|| ferrosintesis_samples_bottle::get(name))
         .or_else(|| ferrosintesis_samples_ccby::get(name))
+        .or_else(|| ferrosintesis_samples_rain::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 
 #[cfg(not(feature = "embedded-samples"))]
 fn embedded_wav(name: &str) -> &'static [u8] {
     panic!("sample {name} requested from a modeled-only ferrosintesis build")
+}
+
+/// The embedded real-rain ambience loop (owner-recorded 2017 field recording,
+/// CC0), decoded once to mono f32 at 44.1 kHz. Unlike the pitched attack banks
+/// this is a full seamless loop, not a zone set: the GM 96 rain FX voice reads
+/// it cyclically as a bed under its modeled shimmer, so the wash is a real
+/// downpour rather than synthetic hiss. Only present in `embedded-samples`
+/// builds; the modeled-only synth keeps the pure synthetic wash.
+#[cfg(feature = "embedded-samples")]
+pub fn rain_loop() -> &'static [f32] {
+    static L: OnceLock<Vec<f32>> = OnceLock::new();
+    L.get_or_init(|| parse_wav(embedded_wav("rain_loop.wav")))
 }
 
 macro_rules! bank {
@@ -4130,6 +4143,33 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The committed GM-96 rain loop (`rain_loop()`) must be SEAMLESS: read
+    /// cyclically, the wrap from the last sample back to the first must not
+    /// click. Rain is broadband, so "no click" is self-relative — the wrap step
+    /// must sit inside the signal's OWN adjacent-step distribution (here: at or
+    /// below p99). A future re-bake that broke the tail->head crossfade would
+    /// push the wrap discontinuity into outlier territory and this fails. Guards
+    /// the committed asset, not the renderer (the offline analogue of
+    /// prepare.py's seam gate).
+    #[test]
+    fn rain_loop_wraps_seamlessly() {
+        let s = rain_loop();
+        assert!(
+            s.len() as f32 > 44100.0,
+            "rain loop implausibly short: {} samples",
+            s.len()
+        );
+        let mut steps: Vec<f32> = s.windows(2).map(|w| (w[1] - w[0]).abs()).collect();
+        steps.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let p99 = steps[steps.len() * 99 / 100];
+        let wrap = (s[s.len() - 1] - s[0]).abs();
+        assert!(
+            wrap <= p99,
+            "rain loop wrap discontinuity {wrap:.4} exceeds the p99 adjacent step \
+             {p99:.4} — the loop seam clicks (the tail->head crossfade broke)"
+        );
     }
 
     /// The thirteen GM-routed drum banks (35/36, 37, 38/40, 41/43, 42, 44,

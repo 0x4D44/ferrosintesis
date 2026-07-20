@@ -34,6 +34,7 @@ embedded-samples = [
     "dep:ferrosintesis-samples-bass",
     "dep:ferrosintesis-samples-bottle",
     "dep:ferrosintesis-samples-ccby",
+    "dep:ferrosintesis-samples-rain",
 ]
 
 [dependencies]
@@ -69,6 +70,7 @@ ferrosintesis-samples-strings = { path = "../ferrosintesis-samples-strings", ver
 ferrosintesis-samples-bass = { path = "../ferrosintesis-samples-bass", version = "=0.1.0", optional = true }
 ferrosintesis-samples-bottle = { path = "../ferrosintesis-samples-bottle", version = "=0.1.0", optional = true }
 ferrosintesis-samples-ccby = { path = "../ferrosintesis-samples-ccby", version = "=0.1.0", optional = true }
+ferrosintesis-samples-rain = { path = "../ferrosintesis-samples-rain", version = "=0.1.0", optional = true }
 
 [lib]
 path = "src/lib.rs"

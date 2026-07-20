@@ -21,6 +21,7 @@ dependencies = [
  "ferrosintesis-samples-musescore-grand",
  "ferrosintesis-samples-orchestral",
  "ferrosintesis-samples-orchestral2",
+ "ferrosintesis-samples-rain",
  "ferrosintesis-samples-sax",
  "ferrosintesis-samples-strings",
  "ferrosintesis-samples-vcsl-kawai",
@@ -93,6 +94,10 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-orchestral2"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-rain"
 version = "0.1.0"
 
 [[package]]

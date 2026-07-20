@@ -52,6 +52,7 @@ tools/gm0-audition/renders/
 !crates/ferrosintesis-samples-bottle/samples/*.wav
 !crates/ferrosintesis-samples-strings/samples/*.wav
 !crates/ferrosintesis-samples-ccby/samples/*.wav
+!crates/ferrosintesis-samples-rain/samples/*.wav
 !crates/ferrosintesis-samples-bass/samples/*.wav
 # ...and the un-re-fetchable CC BY 3.0 gong source WAVs (Freesound needs a login;
 # committed so the processed bank is offline-reproducible via prepare.py).

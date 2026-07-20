@@ -10645,6 +10645,19 @@ const FX_SAW_DRIFT: f32 = 0.0;
 const FX_SAW_VIB: (f32, f32, f32) = (0.0, 0.0, 0.0);
 const FX_RNG_XOR: u32 = 0x0FC5_0FC5;
 const FX_WOBBLE_XOR: u32 = 0x6B0B_6B0B;
+/// Real-rain bed (samples-on GM 96 only). A short owner-recorded downpour loop
+/// (CC0) replaces the synthetic gated-noise wash — a real recording is a far
+/// better rain than any bandpass-noise model — while the 0.35 crystal bell stays
+/// on top as a faint pitched sparkle. Samples-off keeps the pure synthetic wash,
+/// so the modeled-only synth is unchanged (the model-to-alt discipline). The loop
+/// is peak-normalised to 0.9; 0.7 makes it the dominant wash without crowding the
+/// master limiter. Ear-tunable — this box has no ears.
+const FX_RAIN_LOOP_GAIN: f32 = 0.7;
+/// Rain-bed AR envelope (seconds): a short fade-in kills the onset click; the
+/// longer fade-out follows note-off so the wash decays smoothly and the voice
+/// then dies instead of looping forever.
+const FX_RAIN_ATK_S: f32 = 0.02;
+const FX_RAIN_REL_S: f32 = 0.4;
 /// Placeholder saw ADSR for the bell presets (unused — bells build the frozen
 /// crystal `Modal`, whose envelope is baked into the core, not this field).
 const FX_ENV_UNUSED: (f32, f32, f32, f32) = (0.0, 0.0, 0.0, 0.0);
@@ -11023,6 +11036,15 @@ pub struct Fx {
     // random-walk pitch wobble (goblins)
     wobble: Option<Drift>,
     wob: f32,
+    // real-rain bed (samples-on GM 96 only): a looped field recording read
+    // cyclically under the shimmer, AR-enveloped so it fades in/out cleanly and
+    // lets the voice die on release. `None` = the pure synthetic wash.
+    rain: Option<&'static [f32]>,
+    rain_pos: usize,
+    rain_env: f32,
+    rain_atk_step: f32,
+    rain_rel_step: f32,
+    rain_released: bool,
     rng: Rng,
     sr: f32,
     #[cfg(test)]
@@ -11030,7 +11052,20 @@ pub struct Fx {
 }
 
 impl Fx {
-    fn from_spec(spec: &FxSpec, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+    /// `samples` + `load_rain` together arm the real-rain bed: `load_rain` is set
+    /// only for the GM 96 rain preset, `samples` only in an embedded-samples build
+    /// with the LA layer enabled. When both hold, the field-recording loop replaces
+    /// the synthetic gated-noise wash; otherwise the pure synthetic preset renders
+    /// exactly as before.
+    fn from_spec(
+        spec: &FxSpec,
+        key: u8,
+        vel: u8,
+        sr: f32,
+        seed: u32,
+        samples: bool,
+        load_rain: bool,
+    ) -> Self {
         let core: Box<dyn Voice> = match spec.core {
             FxCore::Bell(table) => Box::new(bell(
                 key,
@@ -11124,6 +11159,20 @@ impl Fx {
             Drift::new(seed ^ FX_WOBBLE_XOR, spec.wob_depth, hold_ticks)
         });
 
+        // Real-rain bed: only when this is the rain preset AND the LA layer is on.
+        // The loader is feature-gated; a modeled-only build never references it and
+        // keeps the synthetic wash.
+        #[cfg(feature = "embedded-samples")]
+        let rain: Option<&'static [f32]> = (samples && load_rain).then(crate::sampler::rain_loop);
+        #[cfg(not(feature = "embedded-samples"))]
+        let rain: Option<&'static [f32]> = {
+            let _ = (samples, load_rain);
+            None
+        };
+        // When the real rain is playing it IS the wash, so mute the synthetic
+        // gated-noise layer (samples-off keeps it, so the model is unchanged).
+        let noise_amp = if rain.is_some() { 0.0 } else { spec.noise_amp };
+
         Fx {
             core,
             inert,
@@ -11131,7 +11180,7 @@ impl Fx {
             bend: 1.0,
             last_pitch: 1.0,
             onset,
-            noise_amp: spec.noise_amp,
+            noise_amp,
             noise_bp: Biquad::bandpass(spec.noise_fc.max(1.0).min(sr * 0.4), spec.noise_q, sr),
             grain,
             lp,
@@ -11147,6 +11196,12 @@ impl Fx {
             scoop_k,
             wobble,
             wob: 0.0,
+            rain,
+            rain_pos: 0,
+            rain_env: 0.0,
+            rain_atk_step: 1.0 / (FX_RAIN_ATK_S * sr),
+            rain_rel_step: 1.0 / (FX_RAIN_REL_S * sr),
+            rain_released: false,
             rng,
             sr,
             #[cfg(test)]
@@ -11205,6 +11260,21 @@ impl Voice for Fx {
                     };
                     s += self.noise_bp.process(self.rng.white()) * self.noise_amp * gate;
                 }
+                // Real-rain bed: a looped field recording read cyclically, AR-
+                // enveloped (fade-in on note-on, fade-out after note-off). Added
+                // uncoloured — GM 96 has no LP/echo, so it stays a clean wash.
+                if let Some(loop_) = self.rain {
+                    self.rain_env = if self.rain_released {
+                        (self.rain_env - self.rain_rel_step).max(0.0)
+                    } else {
+                        (self.rain_env + self.rain_atk_step).min(1.0)
+                    };
+                    s += loop_[self.rain_pos] * FX_RAIN_LOOP_GAIN * self.rain_env;
+                    self.rain_pos += 1;
+                    if self.rain_pos >= loop_.len() {
+                        self.rain_pos = 0;
+                    }
+                }
                 if let Some(lp) = &mut self.lp {
                     s = lp.process(s);
                 }
@@ -11222,12 +11292,17 @@ impl Voice for Fx {
             }
             base += n;
         }
-        // FX-O6: stay alive while the echo tail still rings.
-        core_alive || self.echo_tail > 0
+        // FX-O6: stay alive while the echo tail still rings. The rain bed also
+        // holds the voice open: while held it never releases, and after note-off
+        // it stays alive until its fade-out envelope reaches zero (so the wash is
+        // not truncated mid-loop with a click).
+        let rain_alive = self.rain.is_some() && (!self.rain_released || self.rain_env > 1e-4);
+        core_alive || self.echo_tail > 0 || rain_alive
     }
 
     fn note_off(&mut self) {
         self.core.note_off();
+        self.rain_released = true;
     }
 
     fn released(&self) -> bool {
@@ -11324,7 +11399,15 @@ pub fn make_variation(
         // e-bow-style hold vs the hard-picked base DRIVE).
         (30, 41) => Box::new(Pluck::new(&DRIVE_LEAD, key, vel, sr, seed)),
         // Hollow Release — Atmosphere (99, LSB 19) with a long lingering tail.
-        (99, 19) => Box::new(Fx::from_spec(&FX_HOLLOW_RELEASE, key, vel, sr, seed)),
+        (99, 19) => Box::new(Fx::from_spec(
+            &FX_HOLLOW_RELEASE,
+            key,
+            vel,
+            sr,
+            seed,
+            false,
+            false,
+        )),
         // Fingered Bass 2 — same dark flatwound, a touch more sustain (33, LSB 45).
         (33, 45) => Box::new(Pluck::new(&FINGERED_BASS2, key, vel, sr, seed)),
         // Str5 — a wider/darker synth-string variant (Synth Strings 1 50, LSB
@@ -12056,7 +12139,15 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         // the `Fx` voice that owns each preset's motion. GM 98 (crystal, 7 albums)
         // is the inert preset → bit-identical to the old `bell(... CRYSTAL ...)`.
         // Tier D: no sample layer.
-        96..=103 => Box::new(Fx::from_spec(fx(program), key, vel, sr, seed)),
+        96..=103 => Box::new(Fx::from_spec(
+            fx(program),
+            key,
+            vel,
+            sr,
+            seed,
+            samples,
+            program == 96,
+        )),
         // GM 104 sitar: LA sampled pluck + jawari buzz (MS Basic SF3, MIT, -musescore)
         // crossfaded into the Pluck(&SITAR) model — same wrap as the other plucked banks.
         104 => {
@@ -18577,6 +18668,79 @@ mod tests {
             (0.015..=0.40).contains(&bell_hint),
             "96 rain bell/total {bell_hint:.3} — want a FAINT pitched sparkle \
              under the wash (present, but never the lead)"
+        );
+    }
+
+    /// FX-O7 (rain v3 — real-recording bed): with the LA sample layer ON, GM 96
+    /// swaps its synthetic gated-noise wash for an owner-recorded rain loop (CC0),
+    /// keeping the faint crystal sparkle on top. Guards:
+    ///   (a) ENGAGED — samples-on differs materially from samples-off, so the
+    ///       real bed is really added (default-on with the LA layer);
+    ///   (b) STILL A FUSED WASH — the real bed has no deep inter-grain gaps and a
+    ///       low crest (a genuine downpour, and the loop seam adds no in-window
+    ///       periodic-click artifact);
+    ///   (c) FOLLOWS KEY HOLD — the bed sustains the voice for as long as the
+    ///       note is held, then the fade-out lets the voice DIE after note-off
+    ///       (it must not loop forever).
+    /// Samples-OFF is untouched (no rain loaded) — the modeled synth is preserved.
+    #[test]
+    fn fx_o7_rain_96_real_recording_bed() {
+        let sr = 44100.0;
+        let on = render_program_sampled(96, 60, 100, 2.0, 7, true);
+        let off = render_program_sampled(96, 60, 100, 2.0, 7, false);
+
+        // (a) ENGAGED: the steady wash (past the bell strike) differs materially.
+        let a = (1.0 * sr) as usize;
+        let b = (2.0 * sr) as usize;
+        let on_w = &on[a..b];
+        let off_w = &off[a..b];
+        let diff: Vec<f32> = on_w.iter().zip(off_w).map(|(x, y)| x - y).collect();
+        let rel = rms(&diff) / rms(off_w).max(1e-9);
+        println!(
+            "FX-O7 rain: on/off steady diff {rel:.2}x (on-rms {:.3}, off-rms {:.3})",
+            rms(on_w),
+            rms(off_w)
+        );
+        assert!(
+            rel >= 0.5,
+            "96 rain samples-on barely differs from samples-off ({rel:.2}x) — \
+             the real-rain bed is not engaged"
+        );
+
+        // (b) FUSED WASH: the real bed's droplet band has no deep gaps, low crest.
+        let mut bp = Biquad::bandpass(4800.0, 0.9, sr);
+        let hf: Vec<f32> = on.iter().map(|&x| bp.process(x)).collect();
+        let start = (0.30 * sr) as usize;
+        let win = (0.010 * sr) as usize;
+        let env: Vec<f32> = hf[start..].chunks_exact(win).map(rms).collect();
+        let mean = env.iter().sum::<f32>() / env.len() as f32;
+        let gaps = env.iter().filter(|&&e| e < 0.30 * mean).count() as f32 / env.len() as f32;
+        let mut sorted = env.clone();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let p95 = sorted[(sorted.len() as f32 * 0.95) as usize];
+        let crest = p95 / mean.max(1e-9);
+        println!("FX-O7 rain fused: gaps {gaps:.3}, crest {crest:.2}");
+        assert!(
+            gaps <= 0.05,
+            "96 real-rain bed has deep inter-grain gaps ({gaps:.3}) — not a fused wash"
+        );
+        assert!(
+            crest <= 2.5,
+            "96 real-rain bed crest {crest:.2} — spiky, not a fused wash"
+        );
+
+        // (c) FOLLOWS KEY HOLD: sustains while held, then dies after note-off.
+        assert!(
+            survives_until(make(96, 60, 100, sr, 7, true), sr, 5.0),
+            "96 rain (samples-on) died while the note was still held — the bed must sustain"
+        );
+        let mut v = make(96, 60, 100, sr, 7, true);
+        let mut held = vec![0f32; (1.5 * sr) as usize];
+        v.render(&mut held);
+        v.note_off();
+        assert!(
+            dies_within(v, sr, 4.0),
+            "96 rain (samples-on) did not terminate after note-off — the bed loops forever"
         );
     }
 

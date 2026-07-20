@@ -229,7 +229,7 @@ impl Bowed {
             t: 0,
             attack_samples: (attack * sr) as u32,
             last_env: 0.0,
-            amp: 0.40 * (0.4 + 0.6 * vel_amp(vel)),
+            amp: 0.40 * vel_amp(vel),
             sr,
         }
     }
@@ -461,7 +461,7 @@ impl SawStack {
             last_env: 0.0,
             ext: None, // v1 path: choir v2 is built by the separate `choir_v2` factory
             t: 0,
-            amp: amp * (0.4 + 0.6 * vel_amp(vel)),
+            amp: amp * vel_amp(vel),
             sr,
         }
     }
@@ -982,7 +982,7 @@ pub fn choir_v2(program: u8, key: u8, vel: u8, sr: f32, seed: u32, amt: f32) -> 
         last_env: 0.0,
         ext: Some(ext),
         t: 0,
-        amp: base_amp * (0.4 + 0.6 * vel_amp(vel)),
+        amp: base_amp * vel_amp(vel),
         sr,
     }
 }

@@ -2436,21 +2436,8 @@ pub struct LaFx {
     /// §4). EXACT bypass — no filter state touched, no per-sample cost — at
     /// vel ≥ 100: the LA oracle fixtures all render there.
     pub vel_lp: Option<f32>,
-    /// Velocity-LEVEL law exponent: `Some(exp)` replaces the generic LA
-    /// floor law (0.35 + 0.65·vel_amp) with a model-tracking superlinear
-    /// law `(vel_amp/vel_amp(100))^exp`, anchored to equal the floor law
-    /// exactly at vel 100 (every vel-100 fixture untouched). The guitars
-    /// author this (`GUITAR_VEL_LEVEL_EXP`): a soft pick sheds ENERGY
-    /// faster than amplitude, and without it the sample rides ~3× above
-    /// the quiet model through the low-velocity crossfade (review C4).
-    /// Living HERE keeps one law site — review A1 killed the earlier
-    /// wrap_var-side algebraic cancellation of build()'s law.
-    pub vel_level: Option<f32>,
 }
 
-/// The guitars' velocity-level exponent (see [`LaFx::vel_level`]);
-/// calibrated by `guitar_low_velocity_seam_continuity`.
-pub(crate) const GUITAR_VEL_LEVEL_EXP: f32 = 1.4;
 
 /// Velocity→corner law for [`LaFx::vel_lp`]: mirrors the model's excitation
 /// brightness shape; returns the one-pole coefficient, 0.0 = hard bypass.
@@ -2662,15 +2649,18 @@ impl LaVoice {
             Some(base_hz) => vel_lp_alpha(base_hz, vel, sr),
             None => 0.0,
         };
-        // ONE velocity-level law site (review A1): generic floor, or the
-        // authored superlinear model-tracking law (see LaFx::vel_level)
-        let vel_gain = match fx.vel_level {
-            Some(exp) => {
-                let ref_amp = vel_amp(100);
-                (vel_amp(vel) / ref_amp).powf(exp) * (0.35 + 0.65 * ref_amp)
-            }
-            None => 0.35 + 0.65 * vel_amp(vel),
-        };
+        // ONE velocity-level law, shared with the wrapped model: both are
+        // `vel_amp`, so the sampled onset and the modeled body track each other
+        // exactly and their crossfade ratio is velocity-invariant.
+        //
+        // This used to carry a second, superlinear branch for the guitars
+        // (`(vel_amp/vel_amp(100))^1.4`) whose whole job was to compensate for
+        // the model's velocity FLOOR: a floored model went flat at low velocity
+        // while the sample did not, so the sample rode far above it through the
+        // crossfade. With the floors gone and one square law everywhere, the
+        // compensation has nothing left to correct — keeping it would re-steepen
+        // the guitars to v^2.8.
+        let vel_gain = vel_amp(vel);
         Ok(LaVoice {
             sustain,
             zone,
@@ -3039,7 +3029,7 @@ impl SaxLoopVoice {
             base_step,
             step: base_step,
             // p/f banks already carry the bulk of the dynamic; a gentle vel taper on top.
-            gain: base_gain * (0.55 + 0.45 * vel_amp(vel)),
+            gain: base_gain * vel_amp(vel),
             // near-instant attack (the sample owns the onset), ~70 ms release.
             env: crate::dsp::Adsr::new(0.004, 0.0, 1.0, 0.07, sr),
             sr,

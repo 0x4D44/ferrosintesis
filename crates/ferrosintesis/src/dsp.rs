@@ -722,9 +722,26 @@ pub fn key_freq(key: u8) -> f32 {
     440.0 * 2f32.powf((key as f32 - 69.0) / 12.0)
 }
 
-/// Perceptual-ish velocity curve.
+/// GM velocity → amplitude: `amp = (v/127)²`.
+///
+/// This exponent is **measured, not chosen**. Both reference modules implement the
+/// square law — a Roland SC-55mkII fits 1.997 and a Yamaha S-YXG50 fits 1.981, and
+/// the law reproduces the SC-55's levels to within 0.22 dB at every probe point from
+/// v=32 to v=127. It is the DLS/SoundFont convention, so honouring it is what makes
+/// the pre-existing GM corpus play as its authors intended.
+///
+/// Do not "tune" it. If a patch genuinely needs a shallower response (a harpsichord,
+/// say), compress the velocity *before* this curve via `vel_sense` — that is how real
+/// hardware splits a global law from per-patch sensitivity. Never add a level floor
+/// of the form `X + Y·vel_amp(v)`: that is not a power law at all, it asymptotes to
+/// `X`, and a zoo of such floors is what previously collapsed this synth's aggregate
+/// response to 0.66 and left drums gaining on the band as passages got louder.
+///
+/// Pinned by `velocity_law::tests`; see
+/// `wrk_docs/2026.07.20 - HLD - velocity law alignment to k=2.md`.
 pub fn vel_amp(vel: u8) -> f32 {
-    (vel as f32 / 127.0).powf(1.6)
+    let v = vel as f32 / 127.0;
+    v * v
 }
 
 #[cfg(test)]

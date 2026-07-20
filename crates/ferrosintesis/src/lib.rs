@@ -89,5 +89,7 @@ pub(crate) mod reverb;
 pub(crate) mod sampler;
 #[cfg(test)]
 pub(crate) mod testutil;
+#[cfg(test)]
+mod velocity_law;
 pub(crate) mod voices;
 pub(crate) mod wav;

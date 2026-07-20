@@ -1271,7 +1271,7 @@ fn electric_grand_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
 fn electric_piano_1(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     let f = key_freq(key);
     let vn = vel as f32 / 127.0;
-    let v = 0.25 + 0.75 * vel_amp(vel);
+    let v = vel_amp(vel);
     let scale = (440.0 / f).powf(0.25).clamp(0.75, 1.5);
     // Column 0 is a RATIO of the key frequency (a Rhodes tine's inharmonic
     // series) — scale by f before handing Modal::new its (freq Hz, amp, T60)
@@ -1344,7 +1344,7 @@ struct FmEp {
 fn fm_electric_piano(key: u8, vel: u8, sr: f32) -> FmEp {
     let f = key_freq(key);
     let vn = vel as f32 / 127.0;
-    let v = 0.22 + 0.82 * vel_amp(vel);
+    let v = 1.04 * vel_amp(vel);
     // piano-like key-scaled decay, a touch longer than the old Modal's body
     let t60 = (2.6 * (440.0 / f).powf(0.25)).clamp(0.8, 5.0);
     FmEp {
@@ -3849,16 +3849,19 @@ impl Pluck {
     pub fn new(p: &PluckPreset, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let mut rng = Rng::new(seed);
         // §2.10 vel_sense: a near-velocity-insensitive preset (HARPSICHORD)
-        // compresses the key velocity toward the top of the range before
-        // every velocity law below. The `>= 1.0` branch keeps the historic
-        // arithmetic (and bit stream) for every pre-existing preset:
-        // vn.powf(1.6) there is the same expression `vel_amp` computes.
+        // compresses the key velocity toward the top of the range before the
+        // global velocity law. This is how real GM hardware splits one global
+        // curve from per-patch sensitivity, and it is the ONLY sanctioned way
+        // to give a voice a shallower response — never a level floor, which
+        // is not a power law at all (see `dsp::vel_amp`).
+        // Both branches must square: `vn * vn` here is exactly what `vel_amp`
+        // computes, just on the compressed velocity.
         let (vn, v) = if p.vel_sense >= 1.0 {
             let vn = vel as f32 / 127.0;
             (vn, vel_amp(vel))
         } else {
             let vn = 1.0 - p.vel_sense * (1.0 - vel as f32 / 127.0);
-            (vn, vn.powf(1.6))
+            (vn, vn * vn)
         };
         // round-robin variation: no two picks land identically
         let pos = (p.pos * (1.0 + 0.15 * rng.white())).clamp(0.06, 0.45);
@@ -4619,7 +4622,7 @@ impl SynthBass {
             depth: 900.0 + 2600.0 * vn, // velocity opens the sweep
             q: 4.0,
             t: 0,
-            amp: 0.62 * (0.4 + 0.6 * vel_amp(vel)),
+            amp: 0.62 * vel_amp(vel),
             sr,
         }
     }
@@ -4767,7 +4770,7 @@ impl Organ {
             reed_noise_filt: Biquad::bandpass((f * 3.0).clamp(240.0, sr * 0.4), 0.8, sr),
             rng,
             drive,
-            amp: amp * (0.4 + 0.6 * vel_amp(vel)),
+            amp: amp * vel_amp(vel),
             base_f: f,
             bend: 1.0,
             sr,
@@ -5364,6 +5367,8 @@ impl CathedralOrgan {
             output_hp: Biquad::highpass(10.0, 0.707, sr),
             chiff_filter: Biquad::bandpass(2_200.0, 0.8, sr),
             chiff_rng: Rng::new(event_seed ^ 0xC41F_F123),
+            // TIMBRE, not level — exempt from the k=2 law (HLD velocity-law §2.4).
+            // Onset chiff colour at 0.012 scale; its level contribution is negligible.
             chiff_amp: 0.012 * (0.35 + 0.65 * vel_amp(vel)),
             chiff_decay: t60_mul(0.045, sr),
             released: false,
@@ -5899,7 +5904,7 @@ impl SawStack {
             fenv_k: 0.0,
             base_cut: 0.0,
             t: 0,
-            amp: amp * (0.4 + 0.6 * vel_amp(vel)),
+            amp: amp * vel_amp(vel),
             sr,
             legato_enabled: false,
         }
@@ -6498,7 +6503,7 @@ fn choir(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> ChoirV2 {
         chest_gain,
         rng,
         t: 0,
-        amp: CH2_AMP * amp_mul * (0.4 + 0.6 * vel_amp(vel)),
+        amp: CH2_AMP * amp_mul * vel_amp(vel),
         sr,
     }
 }
@@ -6911,6 +6916,9 @@ const LEADS: [LeadSpec; 8] = [
 /// from the engine; `legato_enabled` opts this instance into slurs.
 fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     let spec = &LEADS[(program - 80) as usize];
+    // TIMBRE, not level — exempt from the k=2 law (HLD velocity-law §2.4). This is a
+    // filter CUTOFF: velocity opens the lead's brightness. Folding it as if it were a
+    // level floor would silently turn a timbre control into a gain.
     let cutoff = (spec.cutoff * (0.55 + 0.45 * vel_amp(vel))).min(sr * 0.45);
     let mut s = SawStack::new_wave(
         key,
@@ -7467,7 +7475,7 @@ impl Wind {
             flutter_val: 0.0,
             rng,
             t: 0,
-            amp: preset.amp * (0.4 + 0.6 * vel_amp(vel)),
+            amp: preset.amp * vel_amp(vel),
             sr,
         }
     }
@@ -7835,7 +7843,7 @@ impl Bowed {
             t: 0,
             attack_samples: (attack * sr) as u32,
             last_env: 0.0,
-            amp: 0.40 * (0.4 + 0.6 * vel_amp(vel)) * preset.amp_trim,
+            amp: 0.40 * vel_amp(vel) * preset.amp_trim,
             sr,
         }
     }
@@ -8077,6 +8085,8 @@ impl BowedString {
             env: Adsr::new(vel_attack(0.05, vel), 0.1, 0.9, 0.18, sr),
             // Bow SPEED drives brightness (a harder note is a faster bow, so it
             // is brighter — real bowing): quiet pedal ~dark, collision ~bright.
+            // TIMBRE, not level — exempt from the k=2 law (HLD velocity-law §2.4).
+            // Bow SPEED, per the comment above: it drives brightness, not gain.
             max_vel: 0.03 + 0.22 * vel_amp(vel),
             slope,
             vib,
@@ -8095,7 +8105,7 @@ impl BowedString {
             // limit-cycle amplitude barely tracks velocity, so the dynamic level
             // is applied here. Level-matched to the old contrabass so the album
             // mix balance holds (~0.11 at the quiet pedal, ~0.18 riff/collision).
-            amp: amp_base + amp_span * vel_amp(vel),
+            amp: (amp_base + amp_span) * vel_amp(vel),
             refl_sustain,
             loop_comp,
             out_lp: if out_lp_hz > 0.0 {
@@ -9401,7 +9411,7 @@ impl Reed {
             rng,
             t: 0,
             vn,
-            amp: preset.amp * (0.4 + 0.6 * vel_amp(vel)),
+            amp: preset.amp * vel_amp(vel),
             sr,
         }
     }
@@ -10298,7 +10308,7 @@ impl Brass {
             },
             rng,
             t: 0,
-            amp: spec.amp * (0.4 + 0.6 * vel_amp(vel)),
+            amp: spec.amp * vel_amp(vel),
             oversample,
             osr,
             sr,
@@ -11773,7 +11783,6 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                     fade,
                     crate::sampler::LaFx {
                         vel_lp: Some(5000.0),
-                        vel_level: Some(crate::sampler::GUITAR_VEL_LEVEL_EXP),
                         ..Default::default()
                     },
                     crate::sampler::GUITAR_VAR,
@@ -11803,7 +11812,6 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                     fade,
                     crate::sampler::LaFx {
                         vel_lp: Some(6000.0),
-                        vel_level: Some(crate::sampler::GUITAR_VEL_LEVEL_EXP),
                         ..Default::default()
                     },
                     crate::sampler::GUITAR_VAR,

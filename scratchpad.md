@@ -478,4 +478,15 @@
 
 - [ ] 2026-07-19 ferrosintesis render HANG: `ferrosintesis "<Hollow Hill Pt 1>.mid" --solo 8 -o x.wav` (nylon, prog 24) runs >400s and is killed, on BOTH the pre-Phase-1 baseline binary AND with --peak-normalize (so not LUFS, not my pluck change). The FULL-mix render of the same file finishes in ~2min, and --solo 7/10/14 finish in ~2min — only --solo 8 pathologically slow. Suspect a stuck/never-reaping voice or LA-sample loop specific to that channel. crates/ferrosintesis/src/engine.rs (solo path / voice reap) + sampler.rs. Repro: Hollow Hill Pt 1, --solo 8.
 
+- [ ] 2026-07-20 **GOLDEN mix fixture has pre-existing within-tolerance drift on 3
+  non-pluck rows** (`crates/ferrosintesis/src/testutil.rs` GOLDEN table). Capturing
+  the full fixture at the Phase-2 branch base (963def2) showed ch 0 nylon centroid
+  899→819 Hz, ch 4 drive 808→846 Hz, and the ch 8 strings canary 2381→2139 Hz all
+  ALREADY read the new values at the base — i.e. the committed rows are stale
+  patchwork that only passes on the ±20 % `CENTROID_TOL`. The Phase-2 STEEL/JAZZ
+  task deliberately re-pinned ONLY ch 1/ch 2 (its own migrated presets) + master
+  peak and left these three stale (not this task's change; verified base==HEAD, so
+  no contamination). A golden-hygiene pass should re-run `print_golden_fixture` and
+  re-pin all rows so the fixture reflects reality instead of leaning on tolerance.
+
 - [ ] 2026-07-19 FINGERED BASS (GM 33, `BASS` preset) and UPRIGHT bass (GM 32, `UPRIGHT`) sound "more or less the same" to Arthur (showcase audition), despite the v0.12 §2.12 "widened 32/33 split". Expected: an electric flatwound (muffled, pickup-comb identity) vs a woody ACOUSTIC upright (corpus modes, fingertip thud, no pickup) should be clearly distinct. Investigate whether the split is audibly insufficient (or the showcase phrase just does not reveal it). Separate from the pluck redesign (a distinctiveness issue). crates/ferrosintesis/src/voices.rs BASS (~2773) + UPRIGHT (~2903).

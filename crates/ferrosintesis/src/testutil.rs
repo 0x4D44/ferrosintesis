@@ -1376,9 +1376,22 @@ mod guards {
         // lives at the string layer (DRIVE.sustain 0.35 -> 0.5) and O-ATTACK
         // pins the no-late-bloom shape. All other rows BIT-EXACT vs the
         // unit-D capture — the drive insert touches programs 29/30 only.
+        // Re-captured (ch 1 STEEL + ch 2 JAZZ only) after Phase-2 Shaped
+        // excitation: both migrated presets appear in this reference song, so
+        // their gentler-attack onset drops their centroid hard — STEEL 2030 ->
+        // 803 Hz (a −3.1 dB softer, much darker pick), JAZZ 855 -> 540 Hz. The
+        // master peak eases 2.270 -> 2.250 with the two softer channels. NO
+        // OTHER channel is my doing: capturing the full fixture at the branch
+        // base (963def2) showed ch 0 (nylon 819), ch 4 (drive 846) and the ch 8
+        // strings canary (2139) ALREADY read those values there — the prior rows
+        // (899 / 808 / 2381) were stale patchwork that only passed on the ±20 %
+        // tolerance. Those pre-existing drifts are left untouched here (still in
+        // tolerance; not this task's change — scratchpad'd for a hygiene pass).
+        // The canaries confirm no contamination: ch 7 piano is BIT-EXACT
+        // everywhere, and ch 8 strings is base==HEAD (my branch never touches it).
         (0, -40.22, 899.2),
-        (1, -41.50, 2030.2),
-        (2, -41.49, 855.0),
+        (1, -44.60, 802.9),
+        (2, -41.94, 539.6),
         (3, -39.97, 485.9),
         // Re-captured (ch 4 only) after round 2's driven-guitar rework
         // ("clean, dark sustain"): hotter drive staging (DRIVE amp/sustain/
@@ -1421,7 +1434,7 @@ mod guards {
         (9, -17.16, 737.4),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 2.27034;
+    const GOLDEN_MASTER_PEAK: f32 = 2.24977;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

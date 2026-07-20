@@ -1,5 +1,6 @@
 import math
 import os
+import random
 import struct
 import tempfile
 import unittest
@@ -247,41 +248,105 @@ class BagpipeLoopTests(unittest.TestCase):
         self.assertEqual(loops["F4_31.wav"], (52224, 166144))
         self.assertNotIn("no_loop.wav", loops)
 
-    def _tone(self, sr, f0, n):
-        return [math.sin(2 * math.pi * f0 * i / sr) for i in range(n)]
+    def _tone(self, sr, f0, n, harmonics=4):
+        """A harmonically rich tone — a single sine is too easy: its value+slope
+        pair identifies the phase uniquely, so even the old broken search passed."""
+        return [sum(math.sin(2 * math.pi * f0 * k * i / sr) / k
+                    for k in range(1, harmonics + 1))
+                for i in range(n)]
 
     def test_extract_loop_emits_a_seamless_wrap(self):
-        # a stable tone -> the endpoint search finds a near-whole-period loop
-        # whose modulo wrap is seamless, at ~target length.
         sr = 44100
-        x = self._tone(sr, 441.0, 2 * sr)  # 2 s, period 100 samples
-        seg = prepare.extract_loop(x, sr, 8800, 441.0, target_s=0.4)
+        x = self._tone(sr, 441.0, 3 * sr)  # 3 s, period 100 samples
+        seg, wrap_db = prepare.extract_loop(x, sr, 8800, 441.0,
+                                            target_s=(0.06, 0.14))
+        self.assertLess(wrap_db, -40.0, f"wrap error {wrap_db:.1f} dB on a steady tone")
         click = prepare._seam_click(seg)
         self.assertLess(click, 2.0, f"wrap step x{click:.2f} of the p95 body step")
-        self.assertAlmostEqual(len(seg) / sr, 0.4, delta=0.01)  # ~target length
+        self.assertGreaterEqual(len(seg) / sr, 0.06)
+        self.assertLessEqual(len(seg) / sr, 0.14)
+
+    def test_extract_loop_picks_a_whole_number_of_periods(self):
+        """The defect that shipped: a loop of non-integer period count wraps with
+        every harmonic out of phase. A single sine hides it; a rich tone does not."""
+        sr = 44100
+        f0 = 441.0
+        x = self._tone(sr, f0, 3 * sr)
+        seg, _ = prepare.extract_loop(x, sr, 8800, f0, target_s=(0.06, 0.14))
+        cycles = len(seg) / (sr / f0)
+        self.assertLess(abs(cycles - round(cycles)), 0.02,
+                        f"loop spans {cycles:.3f} periods, not a whole number")
+
+    def test_extract_loop_avoids_a_window_that_spans_a_swell(self):
+        """`chanter_G4`/`chanter_D5` shipped a 4 dB ramp inside the loop, so the
+        wrap stepped 4 dB every 0.39 s. The search must reject such a window even
+        though its SEAM SAMPLES match — the old cost function could not see it."""
+        sr = 44100
+        f0 = 441.0
+        n = 3 * sr
+        base = self._tone(sr, f0, n)
+        # a loud ramp early, flat later: only the later region can loop cleanly
+        ramp_end = int(1.2 * sr)
+        x = [v * (1.0 + 3.0 * i / ramp_end) if i < ramp_end else v * 4.0
+             for i, v in enumerate(base)]
+        seg, _ = prepare.extract_loop(x, sr, int(0.1 * sr), f0,
+                                      target_s=(0.06, 0.14))
+        h = len(seg) // 2
+
+        def rms(s):
+            return math.sqrt(sum(v * v for v in s) / len(s))
+
+        imbalance = abs(20 * math.log10(rms(seg[:h]) / rms(seg[h:])))
+        self.assertLess(imbalance, 0.5,
+                        f"loop halves differ by {imbalance:.2f} dB — it spans the ramp")
+
+    def test_wrap_error_db_scores_a_phase_jump_far_worse_than_a_clean_wrap(self):
+        sr = 44100
+        f0 = 441.0
+        per = sr / f0
+        x = self._tone(sr, f0, sr)
+        start = 4410
+        clean = prepare.wrap_error_db(x, start, int(round(20 * per)), int(4 * per))
+        # half a period short -> every harmonic wraps out of phase
+        jump = prepare.wrap_error_db(x, start, int(round(19.5 * per)), int(4 * per))
+        self.assertLess(clean, -40.0, f"clean wrap scored {clean:.1f} dB")
+        self.assertGreater(jump, clean + 30.0,
+                           f"phase jump {jump:.1f} dB vs clean {clean:.1f} dB")
 
     def test_extract_loop_removes_dc(self):
         sr = 44100
-        x = [0.3 + v for v in self._tone(sr, 196.0, 2 * sr)]  # +0.3 DC like a drone
-        seg = prepare.extract_loop(x, sr, int(0.2 * sr), 196.0, target_s=0.5)
+        x = [0.3 + v for v in self._tone(sr, 196.0, 3 * sr)]  # +0.3 DC like a drone
+        seg, _ = prepare.extract_loop(x, sr, int(0.2 * sr), 196.0,
+                                      target_s=(0.08, 0.20))
         self.assertAlmostEqual(sum(seg) / len(seg), 0.0, places=6)
 
     def test_extract_loop_normalizes_to_common_rms(self):
         sr = 44100
-        quiet = self._tone(sr, 300.0, 2 * sr)
+        quiet = self._tone(sr, 300.0, 3 * sr)
         loud = [4.0 * v for v in quiet]
 
         def rms(s):
             return math.sqrt(sum(v * v for v in s) / len(s))
 
-        a = prepare.extract_loop(quiet, sr, int(0.2 * sr), 300.0, target_s=0.4)
-        b = prepare.extract_loop(loud, sr, int(0.2 * sr), 300.0, target_s=0.4)
+        a, _ = prepare.extract_loop(quiet, sr, int(0.2 * sr), 300.0,
+                                    target_s=(0.06, 0.14))
+        b, _ = prepare.extract_loop(loud, sr, int(0.2 * sr), 300.0,
+                                    target_s=(0.06, 0.14))
         self.assertAlmostEqual(rms(a), prepare.BAGPIPE_TARGET_RMS, places=4)
         self.assertAlmostEqual(rms(b), prepare.BAGPIPE_TARGET_RMS, places=4)
 
     def test_extract_loop_rejects_a_source_too_short(self):
         with self.assertRaises(ValueError):
-            prepare.extract_loop([0.0] * 100, 44100, 10, 200.0, target_s=0.4)
+            prepare.extract_loop([0.0] * 100, 44100, 10, 200.0,
+                                 target_s=(0.06, 0.14))
+
+    def test_extract_loop_enforces_the_wrap_gate(self):
+        """Noise cannot loop; the gate must refuse rather than ship a click."""
+        rng = random.Random(7)
+        x = [rng.uniform(-1.0, 1.0) for _ in range(3 * 44100)]
+        with self.assertRaises(ValueError):
+            prepare.extract_loop(x, 44100, 4410, 441.0, target_s=(0.06, 0.14),
+                                 max_wrap_db=prepare.BAGPIPE_MAX_WRAP_DB)
 
 
 if __name__ == "__main__":

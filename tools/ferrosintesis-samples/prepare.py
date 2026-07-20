@@ -580,8 +580,19 @@ BAGPIPE_SOURCES = {
     "chanter_G5.wav": f"{_BP_MEMBERS}/samples/G5_31.wav",
 }
 BAGPIPE_SFZ_MEMBER = f"{_BP_MEMBERS}/Bagpipe-20221204.sfz"
-# Target loop lengths: drones long (slow, low), chanter short (masked by the drone).
-BAGPIPE_LOOP_S = {"drone": 1.5, "chanter": 0.4}
+# Loop length RANGES (lo, hi) for the search. Short by design: the original 0.4 s
+# chanter / 1.5 s drone windows could not avoid the reed's own level and timbre
+# drift, and repeated at ~2.5 Hz / 0.7 Hz — squarely in the range the ear counts as
+# a periodic click. Under ~0.12 s the repeat sits above ~8 Hz and fuses into the
+# timbre instead. The drones are lower, so they need a longer window for the same
+# number of pitch periods.
+BAGPIPE_LOOP_S = {"drone": (0.08, 0.20), "chanter": (0.06, 0.14)}
+# Hard gate on the baked loop: the wrap must inject a discontinuity at least this
+# far below the note itself (see `wrap_error_db`). The loops that shipped the
+# periodic-click bug measured -11.8 dB (the one good zone) up to +4.8 dB (no
+# waveform continuity at all); a corrected search reaches -20 dB or better, so
+# this threshold passes every good bake and fails every bad one with margin.
+BAGPIPE_MAX_WRAP_DB = -14.0
 # Every bagpipe sample is normalized to this RMS at bake; the drone/chanter MIX is
 # then set by the per-voice gains in Rust (mirroring the modeled 0.154 : 0.075).
 BAGPIPE_TARGET_RMS = 0.18
@@ -1220,44 +1231,162 @@ def _seam_click(seg):
     return wrap / p95 if p95 > 0 else 0.0
 
 
-def extract_loop(x, sr, loop_start, f0, target_s, target_rms=None):
+def wrap_error_db(x, start, length, probe):
+    """The PHYSICAL wrap discontinuity, in dB relative to the loop's own RMS.
+
+    After the last sample of the loop, a modulo wrap plays `x[start:start+probe]`
+    (the head). What naturally FOLLOWED in the recording is
+    `x[start+length:start+length+probe]`. Their difference is exactly the signal
+    the wrap injects that the instrument never made — the click. Reported against
+    the loop's RMS, so it is a level-independent SNR: -20 dB is inaudible,
+    0 dB means the wrap error is as loud as the note, and +3 dB is the
+    decorrelation ceiling (two unrelated segments of equal level).
+
+    This is measurable only AT BAKE TIME: it needs the source continuation, which
+    the shipped buffer no longer carries. It sees every harmonic, a phase jump and
+    a level/timbre step alike — all the things a single-sample seam check misses.
+    """
+    num = 0.0
+    for i in range(probe):
+        d = x[start + i] - x[start + length + i]
+        num += d * d
+    den = 0.0
+    for i in range(length):
+        v = x[start + i]
+        den += v * v
+    if den <= 0.0 or num <= 0.0:
+        return -99.0
+    return 10.0 * math.log10((num / probe) / (den / length))
+
+
+def _prefix_sums(x):
+    """(energy, hf-energy) prefix sums, so any window's RMS and brightness are
+    O(1) to evaluate — the search below visits tens of thousands of windows and
+    prepare.py is stdlib-only (no numpy), so O(L) per candidate is far too slow."""
+    n = len(x)
+    cs = [0.0] * (n + 1)
+    ch = [0.0] * (n + 1)
+    prev = 0.0
+    for i in range(n):
+        v = x[i]
+        cs[i + 1] = cs[i] + v * v
+        d = v - prev
+        ch[i + 1] = ch[i] + d * d
+        prev = v
+    return cs, ch
+
+
+def find_loop(x, sr, search_from, f0, lo_s, hi_s, shortlist=24):
+    """Search a sustained recording for the best short loop window.
+
+    Returns `(start, length, wrap_db)`.
+
+    Two stages, because the objective we actually care about (`wrap_error_db`) is
+    too costly to evaluate everywhere:
+
+    1. A cheap O(1) cost ranks every candidate window. Lengths are INTEGER
+       multiples of the pitch period (a fractional count guarantees the harmonics
+       wrap out of phase), each also probed +/-2 samples to absorb error in `f0`.
+       Both the start AND the length are searched — the old code fixed the start
+       at the SFZ loop point and only moved the endpoint, which is why it could
+       never escape a window that straddled a swell in the take.
+       Cost terms: seam value and slope (normalised by the body's own p95 step),
+       the RMS imbalance between the window's two halves, and its brightness
+       imbalance. The last two are what stop a "seam-clean" window from spanning
+       the reed's own level/timbre drift — the failure recorded in
+       `lessons_learnt.md` for the sax loop, and the dominant defect in the
+       chanter G4/D5 zones.
+    2. The best `shortlist` candidates are then scored by `wrap_error_db` and the
+       winner returned. Ranking by the cheap proxy alone is what shipped the bug:
+       for `chanter_G5` the old cost rated the broken loop 11x BETTER than the
+       correct integer-period one.
+    """
+    period = sr / f0
+    cs, ch = _prefix_sums(x)
+
+    def energy(a, b):
+        return cs[b] - cs[a]
+
+    def hf(a, b):
+        return ch[b] - ch[a]
+
+    body = sorted(abs(x[i + 1] - x[i])
+                  for i in range(search_from, min(len(x) - 1, search_from + 40000)))
+    p95 = body[int(0.95 * (len(body) - 1))] if body else 1e-9
+    p95 = max(p95, 1e-12)
+
+    k_lo = max(2, int(math.ceil(lo_s * sr / period)))
+    k_hi = max(k_lo, int(hi_s * sr / period))
+    step = max(1, int(period / 2))
+    cands = []
+    for k in range(k_lo, k_hi + 1):
+        for length in (int(round(k * period)) + o for o in (-2, -1, 0, 1, 2)):
+            if length < 32:
+                continue
+            last = len(x) - length - int(4 * period) - 2
+            for s in range(search_from, last, step):
+                j = s + length
+                val = abs(x[s] - x[j]) / p95
+                slope = abs((x[s + 1] - x[s]) - (x[j] - x[j - 1])) / p95
+                h = length // 2
+                ea = energy(s, s + h) / h
+                eb = energy(s + h, s + length) / (length - h)
+                if ea <= 0.0 or eb <= 0.0:
+                    continue
+                dbal = abs(10.0 * math.log10(ea / eb))
+                ba = hf(s, s + h) / (ea * h)
+                bb = hf(s + h, s + length) / (eb * (length - h))
+                dbright = abs(10.0 * math.log10((ba + 1e-12) / (bb + 1e-12)))
+                cands.append((val + slope + 2.0 * dbal + 2.0 * dbright, s, length))
+    if not cands:
+        raise ValueError(f"no loop candidate in [{lo_s}, {hi_s}]s")
+    cands.sort()
+    probe = int(4 * period)
+    best = None
+    for _c, s, length in cands[:shortlist]:
+        w = wrap_error_db(x, s, length, probe)
+        if best is None or w < best[2]:
+            best = (s, length, w)
+    return best
+
+
+def extract_loop(x, sr, loop_start, f0, target_s, target_rms=None,
+                 max_wrap_db=None):
     """Emit a SHORT seamless loop region from a sustained sample.
 
     Unlike `trim_to_onset` (an attack extractor that seeks the onset, fades the
     tail to zero, and peak-normalizes) this keeps the STEADY interior and the
     whole returned buffer loops via a plain modulo wrap.
 
-    `loop_start` is the SFZ's expertly-placed loop entry (a trusted steady-state
-    point). The SFZ loop_end, though, spans nearly the whole file (chanter loops
-    run 4-6 s), which is far too large to ship — so we cut our OWN endpoint at
-    ~`target_s`, searching +/-1 period for the length whose modulo wrap has the
-    smallest seam step. Then DC-remove (the drones carry -35/-41 dB DC) and
-    normalize to a COMMON RMS (not per-file peak) so a `nearest()` zone switch on
-    a sustained voice doesn't jump in level.
+    `loop_start` is the SFZ's expertly-placed loop entry — trusted as the point
+    the ATTACK is over, i.e. the earliest sample the search may consider, not as
+    the loop start itself. `find_loop` then searches the whole steady remainder;
+    the best window is often seconds later.
+
+    `target_s` is a (lo, hi) length range. It is SHORT by design: a long window
+    cannot avoid the reed's own drift, and a loop repeating at ~2.5 Hz is heard as
+    a periodic click, while one repeating above ~10 Hz fuses into the timbre.
+
+    Finally DC-remove (the drones carry -35/-41 dB DC) and normalize to a COMMON
+    RMS (not per-file peak) so a `nearest()` zone switch on a sustained voice
+    doesn't jump in level. Both are constant across the window, so neither
+    disturbs the seam the search just optimized.
     """
-    period = sr / f0
-    base = int(round(target_s * sr))
-    span = int(2 * period)
-    if loop_start + base + span >= len(x):
-        raise ValueError(f"source too short for a {target_s}s loop at {loop_start}")
-    # search the endpoint over +/-2 periods for the length whose wrap best
-    # matches in BOTH value and slope (a small step and a continuing trend) —
-    # value-only can pick a point where level matches but the waveform is
-    # heading the wrong way, which still clicks.
-    def seam_cost(length):
-        i, j = loop_start, loop_start + length
-        val = abs(x[i] - x[j])
-        slope = abs((x[i + 1] - x[i]) - (x[j] - x[j - 1]))
-        return val + slope
-    length = min(range(base - span, base + span + 1),
-                 key=lambda L: seam_cost(L) if L >= 4 else 9e9)
-    seg = x[loop_start:loop_start + length]
+    lo_s, hi_s = target_s
+    if loop_start + int(hi_s * sr) + int(8 * sr / f0) >= len(x):
+        raise ValueError(f"source too short for a {hi_s}s loop at {loop_start}")
+    start, length, wrap_db = find_loop(x, sr, loop_start, f0, lo_s, hi_s)
+    if max_wrap_db is not None and wrap_db > max_wrap_db:
+        raise ValueError(
+            f"best loop wrap error {wrap_db:.1f} dB exceeds {max_wrap_db:.1f} dB "
+            f"(start={start} len={length}) — the take is too variable here")
+    seg = x[start:start + length]
     mean = sum(seg) / len(seg)
     seg = [v - mean for v in seg]
     rms = math.sqrt(sum(v * v for v in seg) / len(seg))
     tgt = BAGPIPE_TARGET_RMS if target_rms is None else target_rms
     g = tgt / rms if rms > 0 else 1.0
-    return [v * g for v in seg]
+    return [v * g for v in seg], wrap_db
 
 
 def resample(x, sr_in, sr_out):
@@ -1455,14 +1584,11 @@ def _bake_bagpipe(src):
         f0, conf = measure_f0(x[ls:], sr, nominal * 2 ** (-2 / 12),
                               nominal * 2 ** (2 / 12))
         target_s = BAGPIPE_LOOP_S[fn.split("_")[0]]
-        seg = extract_loop(x, sr, ls, f0, target_s)
-        click = _seam_click(seg)
-        if click > 3.0:
-            raise ValueError(f"{fn}: loop seam click x{click:.2f} of p95 step "
-                             f"— reed too variable here, widen search")
+        seg, wrap_db = extract_loop(x, sr, ls, f0, target_s,
+                                    max_wrap_db=BAGPIPE_MAX_WRAP_DB)
         write_wav_mono(sample_output_path(fn), seg, sr)
         rows.append((fn, f0, f0, nominal, 1200 * math.log2(f0 / nominal),
-                     click, len(seg) / sr))
+                     wrap_db, len(seg) / sr))
     return rows
 
 

@@ -8,6 +8,26 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   MIDI does not contain.** Always bare `python build.py` FIRST, then `--verify`; confirm with `cmp` on the
   `.mid` (a "fixed" T16 rendered byte-identical to the unfixed one and only a byte compare caught it).
 
+- 2026.07.20 — **A loop-extent search scored on seam value+slope at ONE sample pair is degenerate on a rich
+  tone — it rates the BROKEN non-integer-period window BETTER (chanter_G5 by 11x); score candidates by
+  `wrap_error_db` (head vs the source's real continuation) instead** (`prepare.py:find_loop`, oracle
+  `sampler.rs:looped_sustain_banks_are_loopable`). Value+slope is 2 constraints, satisfied at ~2H phases per
+  cycle. Corollaries: unit-test a loop finder with a HARMONICALLY RICH tone (a single sine identifies its
+  phase from value+slope, so the broken search passes); search the START too, not just the endpoint; and
+  keep the window SHORT (a 0.4 s loop repeats at ~2.5 Hz where the ear counts clicks, and cannot dodge the
+  take's own drift — two chanter zones carried a 4 dB monotone ramp INSIDE the loop).
+
+- 2026.07.20 — **`foldZ` (a z-score of folded novelty) SATURATES — it reads 5.7–6.5 on signals whose true
+  excess is 1.02; use peak/median with explicit DECOY-LAG nulls (x0.73/x1.37/x1.91) or you will "confirm" an
+  artifact that isn't there.** A looped signal is exactly periodic, so a fold at the loop lag peaks whether
+  or not the wrap is where the energy is; only the decoy null separates them. It falsely convicted the
+  bagpipe DRONES (real excess ~= decoy) while the chanter was the true culprit.
+
+- 2026.07.20 — **FreePats source WAVs are 24-bit (`sw=3`) — reading them as 16-bit yields noise that folds
+  FLAT and looks like a perfect loop**, so a "candidate fix" measures better than the real one
+  (`prepare.py:read_wav` handles sw==3; numpy `frombuffer('<i2')` does not). Cost me and an independent
+  subagent a cycle each. Check `getsampwidth()` before any numpy probe of a source sample.
+
 - 2026.07.19 — **A verification subagent that runs `cargo test`/`clippy` in YOUR worktree during a live
   gate corrupts the gate's test binary (abnormal exit `0xffffffff`/"test exited abnormally"), and a
   `cargo test … | tail` pipeline returns `tail`'s exit 0, MASKING the failure.** Run build-executing

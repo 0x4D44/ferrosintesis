@@ -2165,10 +2165,17 @@ pub fn shakuhachi_bank() -> &'static [Zone] {
 // --- GM 109 sampled bagpipe: looped drone + chanter (HLD 2026.07.17) ---------
 //
 // These are LOOPED sustains: `LoopVoice` plays the whole baked WAV on an endless
-// modulo wrap. The bake (prepare.py `extract_loop`) makes the seam continuous, so
-// no runtime crossfade / loop metadata is needed — `Zone` is untouched. Roots are
-// the MEASURED fundamentals (the pipe is ~30-50 cents flat; we repitch from the
-// real f0 so the flatness never reaches the render).
+// modulo wrap. The bake (prepare.py `extract_loop` / `find_loop`) makes the seam
+// continuous, so no runtime crossfade / loop metadata is needed — `Zone` is
+// untouched. Roots are the MEASURED fundamentals (the pipe is ~30-50 cents flat;
+// we repitch from the real f0 so the flatness never reaches the render).
+//
+// The buffers are SHORT (~60-145 ms) and span a WHOLE number of pitch periods.
+// Both matter, and the first bake got both wrong (2026.07.20): a fractional period
+// count wraps the harmonics out of phase, and a long window cannot avoid the reed's
+// own level/timbre drift — together they clicked once per loop at ~2.5 Hz. The bake
+// now scores candidates by the real wrap discontinuity against the source's
+// continuation; `looped_sustain_banks_are_loopable` pins both properties here.
 
 /// GM 109 chanter, F4–G5, ~2.5-semitone spacing (RR1 takes, single flat layer).
 fn chanter() -> &'static [Zone] {
@@ -2216,8 +2223,15 @@ pub fn drone_g3_bank() -> &'static [Zone] {
 /// modeled drone, which is immune by the same omission).
 pub struct LoopVoice {
     data: &'static [f32],
-    pos: f32,
-    step: f32,
+    /// f64 — NOT f32. The read phase is an accumulator that climbs to `n` and
+    /// resets at every wrap, so an f32 `pos` makes its rounding error a sawtooth
+    /// at exactly the loop rate: measured across a 0.4 s loop the per-step error
+    /// RMS ramped 28x (29 dB) from wrap to wrap, lifting the sidebands on a 5 kHz
+    /// partial from -97 dB to -68 dB. That is loop-synchronous noise — the very
+    /// artifact this voice must not have — for no benefit, since `data` is short
+    /// and the arithmetic is off the hot path's critical chain.
+    pos: f64,
+    step: f64,
     gain: f32,
     env: crate::dsp::Adsr,
     #[cfg(test)]
@@ -2240,7 +2254,7 @@ impl LoopVoice {
         // 96 kHz a unison note would clamp 0.459 -> 0.5 and read 147 cents sharp
         // (Codex review).
         let ratio = (target_hz / zone.root).clamp(0.5, 2.0);
-        let step = ratio * 44100.0 / sr;
+        let step = (ratio * 44100.0 / sr) as f64;
         LoopVoice {
             data: zone.data.as_slice(),
             pos: 0.0,
@@ -2259,7 +2273,7 @@ impl Voice for LoopVoice {
         for o in out.iter_mut() {
             let e = self.env.next();
             let j = self.pos as usize;
-            let frac = self.pos - j as f32;
+            let frac = (self.pos - j as f64) as f32;
             // WRAPPED 4-point cubic neighbours — load-bearing: a one-shot
             // player's `data[j±k]` would read out of bounds / a wrong sample at
             // the loop seam and click once per loop. Cubic (not linear) keeps the
@@ -2273,8 +2287,8 @@ impl Voice for LoopVoice {
             );
             *o += v * self.gain * e;
             self.pos += self.step;
-            if self.pos >= n as f32 {
-                self.pos -= n as f32;
+            if self.pos >= n as f64 {
+                self.pos -= n as f64;
             }
         }
         self.env.alive()
@@ -3762,6 +3776,95 @@ mod tests {
                 "loop level not flat at {lbl}: {a:.4} -> {x:.4} (a broken wrap \
                  would go silent or decay)"
             );
+        }
+    }
+
+    /// Every LOOPED-SUSTAIN bank must be loopable: a whole number of pitch
+    /// periods long, and steady in level and brightness across its own length.
+    ///
+    /// This is the oracle the bagpipe click needed and did not have. `LoopVoice`
+    /// plays these buffers on an endless modulo wrap, so a buffer that spans a
+    /// fractional period count wraps with every harmonic out of phase, and one
+    /// that spans a swell in the take steps in level — both once per loop, heard
+    /// as a periodic click. The shipped 0.4 s chanter buffers failed on both
+    /// counts (`chanter_G5` spanned 310.39 periods; `chanter_G4` and
+    /// `chanter_D5` ramped ~4 dB across the window), while the only gates were a
+    /// single-sample seam step at bake time and an RMS-flatness check here —
+    /// neither of which can see either defect.
+    ///
+    /// Deliberately written over the BANKS, not one instrument: any future looped
+    /// sustain added to these crates is covered the day it lands.
+    #[test]
+    fn looped_sustain_banks_are_loopable() {
+        // (label, zones) — every bank played by `LoopVoice` on a modulo wrap.
+        let banks: [(&str, &'static [Zone]); 3] = [
+            ("chanter", chanter_bank()),
+            ("drone_g2", drone_g2_bank()),
+            ("drone_g3", drone_g3_bank()),
+        ];
+        if !crate::embedded_samples_available() {
+            return; // modeled-only build: nothing to check
+        }
+        for (label, zones) in banks {
+            for z in zones {
+                let x = z.data.as_slice();
+                let n = x.len();
+                assert!(n > 512, "{label}: zone too short to loop ({n})");
+
+                // 1. WHOLE number of pitch periods. `z.root` is the measured f0,
+                //    so the period is known exactly — no estimation needed.
+                let period = 44100.0 / z.root;
+                let cycles = n as f64 / period as f64;
+                let off = (cycles - cycles.round()).abs();
+                assert!(
+                    off < 0.05,
+                    "{label} @{:.1} Hz: loop spans {cycles:.3} periods — a \
+                     fractional count wraps the harmonics out of phase",
+                    z.root
+                );
+
+                // 2. STEADY level across the loop. A window that straddles a
+                //    swell steps by that swell at every wrap.
+                let blk = (0.020 * 44100.0) as usize;
+                let nb = n / blk;
+                assert!(nb >= 3, "{label}: too short for a steadiness check");
+                let mut lo = f64::MAX;
+                let mut hi: f64 = 0.0;
+                let mut b_lo = f64::MAX;
+                let mut b_hi: f64 = 0.0;
+                for b in 0..nb {
+                    let s = &x[b * blk..(b + 1) * blk];
+                    let e: f64 = s.iter().map(|v| (*v as f64) * (*v as f64)).sum();
+                    let hf: f64 = s
+                        .windows(2)
+                        .map(|w| {
+                            let d = (w[1] - w[0]) as f64;
+                            d * d
+                        })
+                        .sum();
+                    assert!(e > 0.0, "{label}: silent block in a sustain loop");
+                    lo = lo.min(e);
+                    hi = hi.max(e);
+                    // brightness proxy: HF energy as a fraction of total energy
+                    let br = hf / e;
+                    b_lo = b_lo.min(br);
+                    b_hi = b_hi.max(br);
+                }
+                let spread_db = 10.0 * (hi / lo).log10();
+                assert!(
+                    spread_db < 3.0,
+                    "{label} @{:.1} Hz: level varies {spread_db:.2} dB across the \
+                     loop — the wrap steps by that much every cycle",
+                    z.root
+                );
+                let bright_db = 10.0 * (b_hi / b_lo).log10();
+                assert!(
+                    bright_db < 4.0,
+                    "{label} @{:.1} Hz: brightness varies {bright_db:.2} dB across \
+                     the loop — the wrap steps in timbre every cycle",
+                    z.root
+                );
+            }
         }
     }
 

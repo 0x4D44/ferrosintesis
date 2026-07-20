@@ -1,11 +1,11 @@
 # MM-REQ-KILN-00019 — GM 86 (Lead 7, fifths) must render its parallel fifth
 
-- **State:** Draft
+- **State:** Implemented
 - **Priority:** Should
 - **Area:** voices / synth leads
 - **Raised:** 2026-07-20
-- **Implemented-by:** —
-- **Satisfied-by:** —
+- **Implemented-by:** task/20260720-DEV-HUM-gm86-fifth-gm87-sub-octave @ 7255802 (crates/ferrosintesis/src/voices.rs — LeadSpec.interval + SawStack::push_interval_layer)
+- **Satisfied-by:** voices::tests::lead_fifths_sounds_the_parallel_fifth, voices::tests::lead_bass_lead_carries_the_sub_octave, voices::tests::lead_interval_tracks_legato_retune
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-20, held branch, oracles red→green; render-diff 2 expected/0 contamination)
 
 ## Statement
 

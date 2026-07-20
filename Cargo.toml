@@ -21,6 +21,7 @@ members = [
     "crates/ferrosintesis-samples-strings",
     "crates/ferrosintesis-samples-ccby",
     "crates/ferrosintesis-samples-bass",
+    "crates/ferrosintesis-samples-bottle",
     "crates/render-catalog",
 ]
 resolver = "2"

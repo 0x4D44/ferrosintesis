@@ -65,6 +65,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_sax::get(name))
         .or_else(|| ferrosintesis_samples_strings::get(name))
         .or_else(|| ferrosintesis_samples_bass::get(name))
+        .or_else(|| ferrosintesis_samples_bottle::get(name))
         .or_else(|| ferrosintesis_samples_ccby::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
@@ -3138,6 +3139,269 @@ pub fn sax_loop_voice(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Opti
 }
 
 // ---------------------------------------------------------------------------
+// GM 76 blown bottle — the whole voice is a real "blown bottle" recording
+// (Freesound 349867 "Blown Bottle Two" by Terry93D, CC0 1.0). Built exactly
+// like the sax (`SaxLoopVoice`): the recorded blow plays through once, then a
+// pitch-synchronous loop of the recorded plateau body carries the hold,
+// animated by the shared intrinsic vibrato/tremolo/drift/breath so the hold is
+// alive rather than a static repeat. A blown bottle already carries its own
+// breath in the recording, so the intrinsic air floor stays low. The modeled
+// Wind bottle remains the `--no-samples` voice and the fallback when no usable
+// loop exists / the repitch is out of range.
+// ---------------------------------------------------------------------------
+
+/// Per-program output gain for the looped blown bottle. One program, so one value
+/// (unlike the sax's per-program table). Calibrated for rough parity with the modeled
+/// Wind bottle it replaces: at 1.0 the peak-normalised recording ran ~+4.4 dB hot
+/// (bare-voice hold RMS over 0.6-1.4 s; key 55 +3.9 dB, key 60 +5.4 dB). 0.65 (−3.7 dB)
+/// lands the hold at +0.2 dB (key 55) to +1.6 dB (key 60) — inside 0..+2 dB. Guarded by
+/// `bottle_loop_level_parity_and_flat`. The bottle isn't in any album, so exact parity
+/// isn't critical — sane in-mix level is enough.
+const BOTTLE_LOOP_GAIN: f32 = 0.65;
+
+/// Single-zone bank for the GM 76 blown-bottle LA loop (Freesound 349867, CC0 1.0),
+/// measured root 205.0 Hz.
+fn bottle_loop_bank() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "bottleloop_G3.wav" => 205.0,
+        )
+    })
+}
+
+/// Find a pitch-synchronous sustain loop inside the recorded blown bottle. Copy of
+/// [`find_sax_loop`], re-windowed for the bottle's longer plateau (the recorded blow
+/// swells in over ~0.3 s then holds a ~1.2 s body). Returns `(loop_start, loop_end)`
+/// in source samples (the zone is 44.1 kHz); `None` when the note is too short (the
+/// caller keeps the modeled bottle).
+fn find_bottle_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
+    let sr = 44100.0f32;
+    if root <= 0.0 {
+        return None;
+    }
+    let period = sr / root;
+    if period < 4.0 {
+        return None;
+    }
+    let n = data.len();
+    const START_LO_S: f32 = 0.45; // past the blow swell, into the settled body
+    const START_HI_S: f32 = 0.90;
+    const MIN_LEN_S: f32 = 0.05; // >= a handful of periods; short enough to stay steady
+    const MAX_LEN_S: f32 = 0.15;
+    const BODY_END_S: f32 = 1.45; // keep the loop clear of the recorded fade
+    let start_lo = (START_LO_S * sr) as usize;
+    let min_len = (MIN_LEN_S * sr) as usize;
+    let body_end = ((BODY_END_S * sr) as usize).min(n.saturating_sub(2));
+    if start_lo == 0 || body_end <= start_lo + min_len {
+        return None;
+    }
+    let start_hi = ((START_HI_S * sr) as usize).min(body_end - min_len);
+    let max_len = (MAX_LEN_S * sr) as usize;
+    let stride = (period / 8.0).max(1.0) as usize;
+    // Interior amplitude imbalance: |rms(first half) - rms(second half)| / mean rms.
+    // A decaying loop reads high here even when its seam is clean.
+    let imbalance = |ls: usize, le: usize| -> f32 {
+        let mid = (ls + le) / 2;
+        let rms = |a: usize, b: usize| {
+            (data[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a).max(1) as f32).sqrt()
+        };
+        let (r1, r2) = (rms(ls, mid), rms(mid, le));
+        (r1 - r2).abs() / (0.5 * (r1 + r2) + 1e-6)
+    };
+    let mut best: Option<(f32, usize, usize)> = None; // (cost, ls, le)
+    let mut ls = start_lo;
+    while ls <= start_hi {
+        let mut k = ((min_len as f32 / period).ceil() as usize).max(1);
+        loop {
+            let l = (k as f32 * period).round() as usize;
+            if l > max_len {
+                break;
+            }
+            let le = ls + l;
+            if le + 1 >= body_end {
+                break;
+            }
+            let vseam = (data[le] - data[ls]).abs();
+            let sseam = ((data[le] - data[le - 1]) - (data[ls] - data[ls - 1])).abs();
+            // Weight imbalance heavily: a flat interior matters more than a perfect seam
+            // (the seam is baked-near-zero by integer periods anyway).
+            let cost = vseam + 0.5 * sseam + 4.0 * imbalance(ls, le);
+            if best.is_none_or(|(bc, _, _)| cost < bc) {
+                best = Some((cost, ls, le));
+            }
+            k += 1;
+        }
+        ls += stride;
+    }
+    best.map(|(_, ls, le)| (ls, le))
+}
+
+/// GM 76 blown-bottle voice: recorded blow played through into a looped recorded
+/// plateau body, animated by intrinsic vibrato/tremolo/drift/breath (the shared
+/// `SAX_VIB_*`/`SAX_DRIFT_*`/`SAX_BREATH_*` constants) so the hold is alive rather
+/// than a static repeat. The loop is found once at construction. Mirrors
+/// [`SaxLoopVoice`].
+pub struct BottleLoopVoice {
+    data: &'static [f32],
+    loop_start: usize,
+    loop_end: usize,
+    pos: f32,
+    base_step: f32,
+    step: f32,
+    gain: f32,
+    env: crate::dsp::Adsr,
+    sr: f32,
+    t: u32,
+    vib_phase: f32,
+    vib_inc: f32,
+    drift: f32,
+    drift_target: f32,
+    rng: Rng,
+    breath_hp: crate::dsp::OnePole,
+    breath_amt: f32, // intrinsic floor + CC11
+    growl: f32,      // aftertouch → deeper vibrato
+    bright: crate::dsp::OnePole,
+    bright_active: bool, // CC11/CC2 authored → brightness LP engaged
+}
+
+impl BottleLoopVoice {
+    fn new(
+        zone: &'static Zone,
+        target_hz: f32,
+        vel: u8,
+        sr: f32,
+        base_gain: f32,
+        seed: u32,
+    ) -> Option<Self> {
+        let (loop_start, loop_end) = find_bottle_loop(&zone.data, zone.root)?;
+        let ratio = target_hz / zone.root;
+        if !(0.5..=2.05).contains(&ratio) {
+            return None;
+        }
+        let base_step = ratio * 44100.0 / sr;
+        Some(BottleLoopVoice {
+            data: zone.data.as_slice(),
+            loop_start,
+            loop_end,
+            pos: 0.0,
+            base_step,
+            step: base_step,
+            // a gentle vel taper on top of the recorded dynamic.
+            gain: base_gain * (0.55 + 0.45 * vel_amp(vel)),
+            // near-instant attack (the sample owns the onset), ~70 ms release.
+            env: crate::dsp::Adsr::new(0.004, 0.0, 1.0, 0.07, sr),
+            sr,
+            t: 0,
+            vib_phase: 0.0,
+            vib_inc: std::f32::consts::TAU * SAX_VIB_RATE_HZ / sr,
+            drift: 0.0,
+            drift_target: 0.0,
+            rng: Rng::new(seed ^ 0x5AC0_FFEE ^ ((zone.root as u32) << 3) ^ vel as u32),
+            breath_hp: crate::dsp::OnePole::lowpass(SAX_BREATH_HP_HZ, sr),
+            // bottles carry their own breath in the sample — keep the intrinsic floor low.
+            breath_amt: SAX_BREATH_FLOOR,
+            growl: 0.0,
+            bright: crate::dsp::OnePole::lowpass(SAX_BRIGHT_HI_HZ, sr),
+            bright_active: false,
+        })
+    }
+}
+
+impl Voice for BottleLoopVoice {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let loop_len = (self.loop_end - self.loop_start) as f32;
+        for o in out.iter_mut() {
+            let e = self.env.next();
+            let time = self.t as f32 / self.sr;
+            // Intrinsic vibrato: delayed bloom, deepened by aftertouch growl; couples a
+            // pitch warble and an amplitude tremolo (as a real reed's does).
+            let bloom = ((time - SAX_VIB_DELAY_S) / SAX_VIB_BLOOM_S).clamp(0.0, 1.0);
+            let s = self.vib_phase.sin();
+            self.vib_phase += self.vib_inc;
+            if self.vib_phase >= std::f32::consts::TAU {
+                self.vib_phase -= std::f32::consts::TAU;
+            }
+            let depth = bloom * (1.0 + 2.0 * self.growl);
+            // Slow bounded drift random-walk on the read rate.
+            if self.t.is_multiple_of(SAX_DRIFT_SAMP) {
+                self.drift_target = SAX_DRIFT_MAX * self.rng.white();
+            }
+            self.drift += 0.002 * (self.drift_target - self.drift);
+            let eff_step = self.step * (1.0 + SAX_VIB_PITCH * depth * s + self.drift);
+            let amp = 1.0 + SAX_VIB_AMP * depth * s;
+            // Read the looped sample. Wrapped neighbour at the seam: an unwrapped read
+            // clicks once per loop.
+            let j = self.pos as usize;
+            let frac = self.pos - j as f32;
+            let a = self.data[j];
+            let jn = j + 1;
+            let b = if jn >= self.loop_end {
+                self.data[self.loop_start]
+            } else {
+                self.data[jn]
+            };
+            let mut tone = a + (b - a) * frac;
+            if self.bright_active {
+                tone = self.bright.process(tone);
+            }
+            // Additive HP breath noise — uncorrelated with the tone, so it is the one
+            // layer that can be SUMMED without combing. Rides the note's own gain.
+            let w = self.rng.white();
+            let breath = (w - self.breath_hp.process(w)) * self.breath_amt;
+            *o += (tone * amp + breath) * self.gain * e;
+            self.pos += eff_step;
+            if self.pos >= self.loop_end as f32 {
+                self.pos -= loop_len;
+            }
+            self.t += 1;
+        }
+        self.env.alive()
+    }
+
+    fn note_off(&mut self) {
+        self.env.release();
+    }
+
+    fn released(&self) -> bool {
+        self.env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.step = self.base_step * mult;
+    }
+
+    fn set_breath(&mut self, pressure: f32, growl: f32) {
+        // CC11/CC2 pressure opens the timbre (brightness) and lifts breath noise; channel
+        // aftertouch deepens the vibrato. Only called on AUTHORED channels (engine RD9
+        // gate), so an unauthored bottle keeps the intrinsic floor and its brightness.
+        let p = pressure.clamp(0.0, 1.0);
+        self.bright_active = true;
+        self.bright.set_cutoff(
+            SAX_BRIGHT_LO_HZ + (SAX_BRIGHT_HI_HZ - SAX_BRIGHT_LO_HZ) * p,
+            self.sr,
+        );
+        self.breath_amt = SAX_BREATH_FLOOR + SAX_BREATH_CC * p;
+        self.growl = growl.clamp(0.0, 1.0);
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "bottleloop"
+    }
+}
+
+/// Build the looped-sustain blown-bottle voice for GM 76, or `None` if no usable loop /
+/// the repitch is out of range (the caller keeps the modeled bottle).
+pub fn bottle_loop_voice(key: u8, vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+    let zones = bottle_loop_bank();
+    let f = key_freq(key);
+    let zone = nearest(zones, f);
+    BottleLoopVoice::new(zone, f, vel, sr, BOTTLE_LOOP_GAIN, seed)
+        .map(|v| Box::new(v) as Box<dyn Voice>)
+}
+
+// ---------------------------------------------------------------------------
 // Sampled drum kit (drum-kit bank, Stages B/E): unlike the old kick/snare
 // attack overlay there is no model underneath — the recorded hit IS the whole
 // voice. Unpitched except the toms, whose two sampled drums are repitched by
@@ -4495,6 +4759,96 @@ mod tests {
             assert!(
                 wrap < 0.03,
                 "{name}: loop wrap discontinuity {wrap:.4} (loop {ls}..{le}) — would click"
+            );
+        }
+    }
+
+    /// The looped blown bottle (GM 76) must (a) actually engage — a `BottleLoopVoice`,
+    /// not the modeled Wind fallback — at representative in-window keys; (b) sit within
+    /// rough parity of the modeled bottle it replaces over the hold (measured +0.2 dB at
+    /// key 55, +1.6 dB at key 60 with `BOTTLE_LOOP_GAIN` = 0.65); (c) hold a FLAT sustain
+    /// (frame-RMS CoV live-but-not-pulsing; measured ~0.037); and (d) wrap its loop seam
+    /// without a click. Built exactly like the sax (`sax_loop_level_parity_and_flat`);
+    /// every band is calibrated to the bottle's OWN measured values, not the sax's.
+    #[test]
+    fn bottle_loop_level_parity_and_flat() {
+        let sr = 44100.0;
+        for key in [55u8, 60] {
+            assert_eq!(
+                voices::make(76, key, 100, sr, 5, true).kind(),
+                "bottleloop",
+                "key {key}: samples-on must engage the looped voice, not the modeled fallback"
+            );
+            let hold = |samples: bool| {
+                let mut v = voices::make(76, key, 100, sr, 5, samples);
+                let mut buf = vec![0f32; (1.5 * sr) as usize];
+                v.render(&mut buf);
+                buf[(0.6 * sr) as usize..(1.4 * sr) as usize].to_vec()
+            };
+            let (loop_h, model_h) = (hold(true), hold(false));
+            let (rl, rm) = (
+                crate::testutil::rms(&loop_h),
+                crate::testutil::rms(&model_h),
+            );
+            let db = 20.0 * (rl / rm).log10();
+            // Raw offset band. Measured +0.2 dB (key 55) to +1.6 dB (key 60) at
+            // BOTTLE_LOOP_GAIN = 0.65; ±2 dB margin guards gross level errors either side.
+            assert!(
+                (-2.0..=4.0).contains(&db),
+                "key {key}: looped hold {db:+.1} dB vs the modeled bottle — out of the raw \
+                 offset band (loop {rl:.4} vs model {rm:.4}). See BOTTLE_LOOP_GAIN."
+            );
+            // Liveness: 20 ms frame-RMS CoV must sit in a band — the hold must BREATHE
+            // (intrinsic vibrato/tremolo) but not PULSE (a decay-sawtooth loop reads ~0.6).
+            // Measured ~0.037 for the bottle; band 0.02..0.08 gives margin both sides.
+            let fl = (0.02 * sr) as usize;
+            let frames: Vec<f32> = loop_h
+                .chunks(fl)
+                .filter(|c| c.len() == fl)
+                .map(crate::testutil::rms)
+                .collect();
+            let mean = frames.iter().sum::<f32>() / frames.len() as f32;
+            let var = frames.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / frames.len() as f32;
+            let cov = var.sqrt() / (mean + 1e-9);
+            assert!(
+                (0.02..0.08).contains(&cov),
+                "key {key}: hold liveness (frame-RMS CoV {cov:.3}) out of band — \
+                 static (dead loop) below 0.02, or a decay-sawtooth pulse above 0.08"
+            );
+        }
+        // Seam guard (deterministic, key-independent — single-zone bank): loop_end wraps
+        // back to loop_start with a small value discontinuity. Measured |d| ≈ 0.006.
+        let zone = nearest(bottle_loop_bank(), crate::dsp::key_freq(60));
+        let (ls, le) = find_bottle_loop(&zone.data, zone.root).expect("a loop was found above");
+        let wrap = (zone.data[le] - zone.data[ls]).abs();
+        assert!(
+            wrap < 0.03,
+            "loop wrap discontinuity {wrap:.4} (loop {ls}..{le}) — would click"
+        );
+    }
+
+    /// The blown-bottle loop (GM 76) must not shift perceived pitch across its repitch
+    /// window: Goertzel peak through the hold, keys spanning 0.5-2.05× the 205 Hz (≈G3)
+    /// root (48 = C3 up to 67 = G4). Each key must engage the sample (not the Wind
+    /// fallback) or the pitch check is meaningless. Mirrors `la_sax_pitch_integrity`.
+    #[test]
+    fn bottle_loop_pitch_integrity() {
+        let sr = 44100.0;
+        for key in [48u8, 55, 60, 67] {
+            let f0 = crate::dsp::key_freq(key);
+            let mut v = voices::make(76, key, 100, sr, 5, true);
+            assert_eq!(
+                v.kind(),
+                "bottleloop",
+                "key {key}: sample must engage (else the pitch check is meaningless)"
+            );
+            let mut buf = vec![0f32; 44100];
+            v.render(&mut buf);
+            let hz = crate::testutil::peak_locate(&buf[6615..24255], sr, f0 * 0.8, f0 * 1.25);
+            let cents = 1200.0 * (hz / f0).log2();
+            assert!(
+                cents.abs() < 45.0,
+                "bottle key {key}: located pitch {hz:.2} Hz vs nominal {f0:.2} Hz ({cents:.0} cents)"
             );
         }
     }

@@ -7,6 +7,7 @@ name = "ferrosintesis"
 version = "0.21.48"
 dependencies = [
  "ferrosintesis-samples-bass",
+ "ferrosintesis-samples-bottle",
  "ferrosintesis-samples-ccby",
  "ferrosintesis-samples-clavinet",
  "ferrosintesis-samples-core",
@@ -36,6 +37,10 @@ dependencies = [
 
 [[package]]
 name = "ferrosintesis-samples-bass"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-bottle"
 version = "0.1.0"
 
 [[package]]

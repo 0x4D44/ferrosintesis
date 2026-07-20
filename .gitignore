@@ -49,6 +49,7 @@ tools/gm0-audition/renders/
 !crates/ferrosintesis-samples-ydp-grand/samples/*.wav
 !crates/ferrosintesis-samples-honkytonk/samples/*.wav
 !crates/ferrosintesis-samples-sax/samples/*.wav
+!crates/ferrosintesis-samples-bottle/samples/*.wav
 !crates/ferrosintesis-samples-strings/samples/*.wav
 !crates/ferrosintesis-samples-ccby/samples/*.wav
 !crates/ferrosintesis-samples-bass/samples/*.wav

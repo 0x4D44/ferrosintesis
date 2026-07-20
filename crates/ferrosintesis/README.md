@@ -102,7 +102,7 @@ brass articulation) are what synthesis fakes worst.
 | **Brass** | per-player lip-valve saws (2× oversampled) through a fixed bore/bell body, an envelope-tracked **"waa"** brightness that opens with loudness, an onset pitch **scoop** and flutter-tongue **growl**. Pushed loud, the naturals **"brass up"**: a progressive-steepening **rasp cascade** (a second lip-valve stage that *splits* the drive across two knees for a slower, shock-like harmonic rolloff — the cuivré edge) blooms in over forte and opens the radiated output so the edge escapes the bell. It is scaled per program by a **brassiness** constant (trumpet/trombone rip; horn stays mellow until fortissimo; tuba barely brasses) and derated in the top register so it stays under the 2× alias floor; the synth-brass pair is untouched. **CC11 breath** opens the timbre, **channel aftertouch** adds growl (and rasps harder); **CC1** vibrato and **CC68** legato as elsewhere. Section/synth-brass get section-width chorus | trumpet 56, trombone 57, tuba 58, muted trumpet 59, french horn 60, brass section 61, synth brass 62–63 |
 | **Reed** | a band-limited **variable-duty pulse** source (a square for the clarinet's hollow odd spectrum, a narrow pulse for the double reeds' buzz) shaped by a tanh over-blow, a per-program **formant bank**, tongue **chiff** and breath onset, and control-rate vibrato. Bagpipe (GM 109) is **sampled by default** since 2026.07 (a CC0 FreePats G-pipe: looped drone + chanter); this modeled reed with one persistent channel drone is now its **CC0 alt-bank** voice. Shanai uses a bright double-reed preset. GM 22 harmonica is a free-reed preset — wide-duty odd-harmonic pulse, prominent breath, and a slow draw-bend scoop into the note. Velocity opens the timbre; saxes get a touch of slap echo. CC1/CC68 as elsewhere | harmonica 22, soprano/alto/tenor/bari sax 64–67, oboe 68, english horn 69, bassoon 70, clarinet 71, bagpipe 109, shanai 111 |
 | **Lead** | the SawStack voiced for a synth lead — **fast velocity-tracked attack, short release, a velocity-tracked filter** (harder = brighter), and a band-limited **square/pulse** oscillator for the square-lead class. No always-on vibrato: the **CC1 mod wheel** adds it, and **CC68 legato** slurs one note into the next. Per-program voicing (square, saw, calliope, chiff, charang, voice, fifths, bass+lead) via oscillator shape, count, detune and cutoff | synth leads 80–87 |
-| **Wind** | sine + weak harmonics + band-filtered breath that rides the vibrato, chiff, and a pitch **scoop** into each note — under an **LA sampled attack**; bends and CC68 legato slur the scoop instead of re-tonguing. Each wind carries its OWN onset bank: flute/piccolo 72–73 (real flute onset, 5 zones), recorder 74 (CC0 VCSL Baroque recorders), ocarina 79 (CC0 VCSL), and pan flute 75 / blown bottle 76 / shakuhachi 77 (MIT MuseScore MS Basic) — smearing one transverse-flute transient across all of them destroyed their identity, so each gets its own bank or none. **Only whistle 78 stays model-only** (no usable melodic-whistle source), with a bespoke chiff | flutes/whistles 72–79 |
+| **Wind** | sine + weak harmonics + band-filtered breath that rides the vibrato, chiff, and a pitch **scoop** into each note — under an **LA sampled attack**; bends and CC68 legato slur the scoop instead of re-tonguing. Each wind carries its OWN onset bank: flute/piccolo 72–73 (real flute onset, 5 zones), recorder 74 (CC0 VCSL Baroque recorders), ocarina 79 (CC0 VCSL), and pan flute 75 / shakuhachi 77 (MIT MuseScore MS Basic) — smearing one transverse-flute transient across all of them destroyed their identity, so each gets its own bank or none. **Blown bottle 76** is the exception in this family: instead of a modeled body under an onset it is a **whole-voice CC0 recording** (Freesound 349867 "Blown Bottle Two" by Terry93D, CC0 1.0) — the recorded blow played through into a pitch-synchronous loop of the plateau body (`BottleLoopVoice`, built exactly like the sax), with the modeled Wind bottle kept as the `--no-samples` voice and the fallback when the repitch falls outside the 0.5–2.05× window. **Only whistle 78 stays model-only** (no usable melodic-whistle source), with a bespoke chiff | flutes/whistles 72–79 |
 | **Bowed strings (polyBLEP)** | program-specific polyBLEP bowed voices: violin and viola own register-correct body resonances, bow-pressure ceilings, onset speeds and natural-vibrato rates; fiddle uses a quicker, brighter, noisier violin-style bow. Violin, viola and fiddle all play under the **LA sampled attack** (6 pitch zones × forte/piano; viola uses the violin bank repitched). GM44 is a velocity-sensitive 6–9 Hz bow-tremolo proxy with reversal re-bites; GM45 is a decaying, bendable violin-body **pizzicato pluck** — a pluck, not a bow. Bends and CC68 legato keep one bow stroke across several fingered notes | violin/viola 40–41, tremolo/pizzicato 44–45, fiddle 110 |
 | **Cello / contrabass (waveguide)** | the crate's most elaborate string model: a stick-slip digital **waveguide** with an STK-style friction table — not polyBLEP, not model-only — plus dedicated **arco sample banks** (`cello_bank`/`contrabass_bank`, their own recordings, not a repitched violin transient) crossfaded into the waveguide sustain | cello 42, contrabass 43 |
 | **ReverseCymbal** | fixed-length high-passed noise and inharmonic metal swell for the GM reverse-cymbal program. Written key is intentionally ignored; short melodic note-offs do not kill the pre-peak swell | reverse cymbal 119 |
@@ -144,25 +144,30 @@ are dramatically slower and are not worth timing.
 
 ## Sample provenance and licensing
 
-The 365 embedded recordings (attack transients, GM 109's looped bagpipe, the GM 7
-sampled clavinet, and the GM 64-67 saxophones) come from **CC0 1.0** sources — the
+The 366 embedded recordings (attack transients, GM 109's looped bagpipe, the GM 7
+sampled clavinet, the GM 64-67 saxophones, and the GM 76 blown bottle) come from
+**CC0 1.0** sources — the
 VSCO 2 Community Edition orchestral library (violin, flutes, brass, reeds, string
 sections), the FreePats Spanish classical guitar bank, the Discord SFZ GM Bank's
 Martin HD28 steel-string acoustic, the Versilian Community Sample Library
-(harpsichord, concert harp, timpani, Baroque recorders, ocarina), and
-sfzinstruments/ganjo (6-string guitar-banjo) — plus permissively licensed banks in
+(harpsichord, concert harp, timpani, Baroque recorders, ocarina),
+sfzinstruments/ganjo (6-string guitar-banjo), and the Freesound recording "Blown
+Bottle Two" (349867, by Terry93D) that is the whole GM 76 blown-bottle voice — plus
+permissively licensed banks in
 their own crates: **MIT** content from the MuseScore "MS Basic" soundfont (the GM 7
-clavinet, the GM 104 sitar, and the GM 75/76/77 pipe onsets), the **CC BY 3.0**
+clavinet, the GM 104 sitar, and the GM 75/77 pipe onsets), the **CC BY 3.0**
 Salamander grand (GM 0) and tam-tam gong, and the **CC BY 4.0** MTG good-sounds
 saxophones (GM 64-67, from MTG.SoloSax). The generator pins every source (VSCO and
 VCSL to exact commits, FreePats and the Martin to SHA-256-verified archives, ganjo
-and MTG.SoloSax to commits, the MuseScore soundfont to a commit + SHA-256); the full
+and MTG.SoloSax to commits, the MuseScore soundfont to a commit + SHA-256, the
+Freesound bottle to a committed SHA-256-verified source); the full
 inventory, provenance and regeneration tooling live under
 [`tools/ferrosintesis-samples/`](https://github.com/0x4D44/ferrosintesis/tree/main/tools/ferrosintesis-samples).
 The asset crates contain nothing but that PCM and `include_bytes!`. The code is
 licensed MIT OR Apache-2.0; the CC0 samples need no attribution (the newer CC0
 families — harp, timpani, recorder, ocarina, banjo — ship in
-`ferrosintesis-samples-orchestral2`), while the non-CC0 banks each carry the required
+`ferrosintesis-samples-orchestral2`, and the CC0 GM 76 blown bottle in
+`ferrosintesis-samples-bottle`), while the non-CC0 banks each carry the required
 attribution in their crate's `NOTICE`: the MIT MS Basic clavinet
 (`ferrosintesis-samples-clavinet`) and sitar + pipe onsets
 (`ferrosintesis-samples-musescore`), the CC BY 3.0 grand

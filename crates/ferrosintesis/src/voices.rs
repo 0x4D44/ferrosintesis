@@ -8258,11 +8258,11 @@ const LA_OCARINA: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 /// GM 74 recorder: a breathy fipple flute. The VCSL Baroque-recorder sample carries the
 /// chiffy breath onset; the Wind model keeps the body — same wind-onset handover as the flute.
 const LA_RECORDER: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
-/// GM 75 pan flute / 76 blown bottle / 77 shakuhachi: breathy pipe onsets from MS Basic SF3.
-/// Same wind-onset handover as the flute; the model carries the body. (76/77 are single-zone,
-/// so their sampled onset only engages within ~1 octave of the sample — model elsewhere.)
+/// GM 75 pan flute / 77 shakuhachi: breathy pipe onsets from MS Basic SF3. Same wind-onset
+/// handover as the flute; the model carries the body. (77 is single-zone, so its sampled
+/// onset only engages within ~1 octave of the sample — model elsewhere.) GM 76 blown bottle
+/// no longer uses an LA onset: it is the whole-voice CC0 recording (`BottleLoopVoice`).
 const LA_PANFLUTE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
-const LA_BOTTLE: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 const LA_SHAKUHACHI: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 // GM 0-3 piano wrap gain, re-matched for the §2.7 onset-ownership contract:
 // the sample now REPLACES the model's onset instead of stacking on top of
@@ -12009,6 +12009,21 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                 model
             }
         }
+        // GM 76 blown bottle: the WHOLE voice is the real CC0 recording (Freesound
+        // 349867, Terry93D, CC0 1.0) — the blow played through into a pitch-synchronous
+        // loop of the recorded plateau body (`BottleLoopVoice`), the same construction as
+        // the sax. This replaces the onset-only LA layer (single C6 zone, which only
+        // engaged within ~1 octave of C5). The modeled Wind bottle remains the
+        // `--no-samples` voice and the fallback when no usable loop / the repitch is out
+        // of range.
+        76 => {
+            let model = Box::new(Wind::from_preset(wind(76), key, vel, sr, seed));
+            if samples {
+                crate::sampler::bottle_loop_voice(key, vel, sr, seed).unwrap_or(model)
+            } else {
+                model
+            }
+        }
         72..=79 => {
             let model = Box::new(Wind::from_preset(wind(program), key, vel, sr, seed));
             // LA sampled onset per wind program. The flute bank covers the concert
@@ -12023,7 +12038,6 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
                     72 | 73 => Some((LA_FLUTE, crate::sampler::flute_bank())),
                     74 => Some((LA_RECORDER, crate::sampler::recorder_bank())),
                     75 => Some((LA_PANFLUTE, crate::sampler::panflute_bank())),
-                    76 => Some((LA_BOTTLE, crate::sampler::bottle_bank())),
                     77 => Some((LA_SHAKUHACHI, crate::sampler::shakuhachi_bank())),
                     79 => Some((LA_OCARINA, crate::sampler::ocarina_bank())),
                     _ => None,
@@ -12164,7 +12178,6 @@ mod tests {
             ("LA_SITAR", LA_SITAR),
             ("LA_BANJO", LA_BANJO),
             ("LA_PANFLUTE", LA_PANFLUTE),
-            ("LA_BOTTLE", LA_BOTTLE),
             ("LA_SHAKUHACHI", LA_SHAKUHACHI),
         ] {
             assert!(

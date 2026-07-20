@@ -6961,7 +6961,10 @@ const LEADS: [LeadSpec; 8] = [
         interval: (1.498_307, 0.85),
     },
     // 87 bass+lead — darker saw + an envelope-locked sub-octave bass layer
-    // (MM-REQ-KILN-00020); the sub rides the same env/filter as the lead
+    // (MM-REQ-KILN-00020); the sub rides the same env/filter as the lead.
+    // Gain 0.55 not 0.90: at 0.90 the sub was the DOMINANT spectral line and
+    // o_pitch_melodic_programs_model correctly read the patch an octave low —
+    // the req wants bass UNDER the lead, so the lead must stay the voice.
     LeadSpec {
         wave: Wave::Saw,
         n_osc: 2,
@@ -6969,7 +6972,7 @@ const LEADS: [LeadSpec; 8] = [
         cutoff: 2400.0,
         q: 1.0,
         breath: 0.0,
-        interval: (0.5, 0.90),
+        interval: (0.5, 0.55),
     },
 ];
 

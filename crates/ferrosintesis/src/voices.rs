@@ -14114,7 +14114,7 @@ mod tests {
                 // 0.0652 / 0.0667 / 0.0651 / 0.0635 at v = 60/75/90/105/120/127, i.e.
                 // it peaks at v≈105. The pickup's tanh shaper compresses the tine
                 // faster than the mode table grows it. Pre-existing and filed as
-                // MM-BUG-KILN-00027 (with the GM42/43 turnover — same class); NOT an
+                // MM-BUG-KILN-00029 (with the GM42/43 turnover — same class); NOT an
                 // artifact of the k=2 velocity law, which leaves v=127 unchanged.
                 //
                 // So this asserts growth only where the voice actually grows, and
@@ -14125,7 +14125,7 @@ mod tests {
                 );
                 assert!(
                     r120 <= r90,
-                    "GM4: bark now grows through v120 ({r90:.4} -> {r120:.4}) — the                      MM-BUG-KILN-00027 turnover appears FIXED. Restore the full                      r120 > r90 > r60 assertion and close the bug."
+                    "GM4: bark now grows through v120 ({r90:.4} -> {r120:.4}) — the                      MM-BUG-KILN-00029 turnover appears FIXED. Restore the full                      r120 > r90 > r60 assertion and close the bug."
                 );
             } else {
                 assert!(

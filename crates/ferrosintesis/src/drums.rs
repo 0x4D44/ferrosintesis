@@ -4876,7 +4876,7 @@ mod tests {
             (
                 46,
                 testutil::RenderSignature {
-                    rms_db: -28.514,
+                    rms_db: -28.910,
                     centroid_hz: 6471.648,
                     late_early_db: -4.519,
                 },

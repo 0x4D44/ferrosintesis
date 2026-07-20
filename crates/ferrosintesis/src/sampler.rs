@@ -5386,7 +5386,7 @@ mod tests {
             // model velocity is `vel_sense`-compressed. At v100 that dropped the sampled
             // quill onset ~2.3 dB relative to the model body, so a slightly-later window
             // (0.06607) now edges the first (0.05910): a ~12 % bloom. Filed as
-            // MM-BUG-KILN-00028 (LA onset should track a vel_sense model).
+            // MM-BUG-KILN-00030 (LA onset should track a vel_sense model).
             //
             // Bounded on BOTH sides so a fix cannot pass silently: if the bloom drops
             // back under 1.02, the model tracks again and this exception must be removed.
@@ -5394,7 +5394,7 @@ mod tests {
             assert!(
                 (1.02..1.25).contains(&bloom),
                 "harpsichord-low bloom {bloom:.3}: if <=1.02 the LA onset now tracks the \
-                 vel_sense model — delete this exception and close MM-BUG-KILN-00028; \
+                 vel_sense model — delete this exception and close MM-BUG-KILN-00030; \
                  if >1.25 the interaction WORSENED ({fine:?})"
             );
             return;

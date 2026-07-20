@@ -56,8 +56,16 @@ SETS = {
     "smoke": [0, 6, 40, 118],
     "preflight": [0, 6, 16, 24, 33, 40, 48, 55, 61, 73, 90, 115],
     "hot": [30, 48, 55, 61, 87, 116, 127],
+    "velcurve": [0, 6, 16, 24, 33, 40, 48, 55, 61, 73, 90, 115],
     "full": list(range(128)),
     **{f"chunk{n}": list(range(32 * n, 32 * n + 32)) for n in range(4)},
+}
+
+# Per-set overrides of (keys, velocities). The velocity-curve probe trades pitch
+# coverage for velocity coverage: it is characterising dv/dLevel, which is a
+# property of the velocity map, not of the register.
+SET_AXES = {
+    "velcurve": ((48, 60), (8, 16, 32, 48, 64, 80, 96, 110, 127)),
 }
 
 
@@ -102,12 +110,12 @@ def setup_events(prog: int) -> list:
     ]
 
 
-def build(programs, path, plan_path):
+def build(programs, path, plan_path, keys=KEYS, vels=VELS):
     plan = []
     onset = LEAD_IN_S
     for p in programs:
-        for key in KEYS:
-            for vel in VELS:
+        for key in keys:
+            for vel in vels:
                 plan.append((onset, p, key, vel))
                 onset += STRIDE_S
 
@@ -156,11 +164,12 @@ def main():
         print(f"unknown set {which!r}; choose from {', '.join(sorted(SETS))}")
         return 2
     progs = SETS[which]
+    keys, vels = SET_AXES.get(which, (KEYS, VELS))
     mid, plan_path = f"_cal/probe_{which}.mid", f"_cal/plan_{which}.tsv"
-    plan = build(progs, mid, plan_path)
+    plan = build(progs, mid, plan_path, keys, vels)
     total = plan[-1][0] + NOTE_S + TAIL_S
     print(
-        f"{mid}: {len(progs)} programs x {len(KEYS)} keys x {len(VELS)} vels "
+        f"{mid}: {len(progs)} programs x {len(keys)} keys x {len(vels)} vels "
         f"= {len(plan)} notes, {total:.1f} s ({total/60:.1f} min)"
     )
     # Invariants worth failing loudly on rather than debugging later.

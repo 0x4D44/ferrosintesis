@@ -621,31 +621,60 @@ pub struct Burst {
     gain: f32,
     env: f32,   // current amplitude (starts at 0 until triggered)
     decay: f32, // per-sample multiplier for the configured t60
+    // Optional raised-cosine attack (Fable click de-impulsify 2026.07.20): the
+    // envelope climbs 0→peak over `rise` samples before decaying, so the output
+    // peak no longer lands on the first (largest) white draw. `rise == 0.0` →
+    // the original decay-from-peak, so every existing Burst user is bit-identical.
+    rise: f32, // total attack-ramp samples (0 = none)
+    up: f32,   // ramp samples remaining
+    peak: f32, // ramp target (= trigger level)
 }
 
 impl Burst {
     pub fn new(filt: Biquad, gain: f32, t60: f32, sr: f32) -> Self {
+        Self::new_ramped(filt, gain, t60, 0.0, sr)
+    }
+
+    /// [`Self::new`] with a raised-cosine attack ramp of `rise_s` seconds (0 =
+    /// the plain decay-from-peak). The ramp spreads the peak in time so a
+    /// spread+energy-compensated burst reads a lower crest at constant energy.
+    pub fn new_ramped(filt: Biquad, gain: f32, t60: f32, rise_s: f32, sr: f32) -> Self {
         Burst {
             filt,
             gain,
             env: 0.0,
             decay: 10f32.powf(-3.0 / (t60.max(1e-4) * sr)),
+            rise: (rise_s * sr).max(0.0),
+            up: 0.0,
+            peak: 0.0,
         }
     }
 
     /// Arm the one-shot at `level` (relative to the configured gain).
     pub fn trigger(&mut self, level: f32) {
-        self.env = self.env.max(level);
+        if self.rise > 0.0 {
+            self.peak = self.peak.max(level);
+            self.up = self.rise;
+        } else {
+            self.env = self.env.max(level);
+        }
     }
 
     /// Next sample; ~0 cost once the envelope has died.
     #[inline]
     pub fn tick(&mut self, rng: &mut Rng) -> f32 {
-        if self.env < 1e-5 {
+        if self.env < 1e-5 && self.up <= 0.0 {
             return 0.0;
         }
         let y = self.filt.process(rng.white()) * self.gain * self.env;
-        self.env *= self.decay;
+        if self.up > 0.0 {
+            // raised-cosine 0→peak: frac runs 0→1 as `up` counts rise→0
+            self.up -= 1.0;
+            let frac = ((self.rise - self.up) / self.rise).clamp(0.0, 1.0);
+            self.env = self.peak * 0.5 * (1.0 - (std::f32::consts::PI * frac).cos());
+        } else {
+            self.env *= self.decay;
+        }
         y
     }
 }

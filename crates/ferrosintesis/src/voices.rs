@@ -5741,6 +5741,10 @@ impl LayerOsc {
 struct Layer {
     osc: LayerOsc,
     ratio: f32,
+    /// Amplitude relative to a stock layer. 1.0 everywhere except an authored
+    /// interval layer (GM 86 fifth / GM 87 sub) — `x × 1.0` is exact in f32,
+    /// so existing callers render byte-identically.
+    gain: f32,
     vib_phase: f32,
     vib_rate: f32, // Hz — every player's wobble is their own
     drift: Drift,
@@ -5761,6 +5765,10 @@ enum StackFilter {
 
 pub struct SawStack {
     layers: Vec<Layer>,
+    /// Σ layer gains — the layer-sum normalizer. Equals `layers.len() as f32`
+    /// for every caller without an authored interval layer (all gains 1.0), so
+    /// the historical `s / len` normalization is reproduced bit-exactly.
+    gain_norm: f32,
     base_f: f32,
     bend: f32, // channel pitch multiplier (bend / fine-tune / aftertouch vibrato)
     filt: StackFilter,
@@ -5877,6 +5885,7 @@ impl SawStack {
                 Layer {
                     osc,
                     ratio: 1.0 + detune * spread,
+                    gain: 1.0,
                     vib_phase: rng.white() * std::f32::consts::PI,
                     vib_rate: vib.0 * (1.0 + 0.15 * rng.white()),
                     drift: Drift::new(seed ^ (0x1234 + i as u32 * 977), drift_depth, 2800),
@@ -5886,6 +5895,7 @@ impl SawStack {
         let sweep_phase = rng.white() * std::f32::consts::PI;
         SawStack {
             layers,
+            gain_norm: n_osc as f32,
             base_f: f,
             bend: 1.0,
             filt,
@@ -5945,6 +5955,42 @@ impl SawStack {
             0.0
         };
         self
+    }
+
+    /// Push one authored interval layer (GM 86's parallel fifth, GM 87's
+    /// sub-octave) at `ratio` × the written pitch and `gain` relative to a
+    /// stock layer. It joins `layers` AFTER normal construction with its own
+    /// salted RNG, so every existing caller's draw sequence — and render —
+    /// stays byte-identical. The layer rides the shared env/filter and the
+    /// `base_f · ratio · bend` retune in `control_tick`, so pitch bend, the
+    /// engine's CC1 vibrato and CC68 legato keep the interval locked
+    /// (MM-REQ-KILN-00019 / MM-REQ-KILN-00020).
+    #[allow(clippy::too_many_arguments)]
+    fn push_interval_layer(
+        &mut self,
+        wave: Wave,
+        ratio: f32,
+        gain: f32,
+        drift_depth: f32,
+        seed: u32,
+    ) {
+        let mut rng = Rng::new(seed ^ 0x51B1_A7E5); // salt: decorrelated from the stack rng
+        let layer_f = self.base_f * ratio;
+        let phase = rng.white() * 0.5 + 0.5;
+        let osc = match wave {
+            Wave::Saw => LayerOsc::Saw(BlepSaw::new(layer_f, self.sr, phase)),
+            Wave::Pulse(duty) => LayerOsc::Pulse(BlepPulse::new(layer_f, self.sr, phase, duty)),
+        };
+        let idx = self.layers.len() as u32;
+        self.layers.push(Layer {
+            osc,
+            ratio,
+            gain,
+            vib_phase: rng.white() * std::f32::consts::PI,
+            vib_rate: 0.0, // leads carry no always-on vibrato; CC1 rides the bend
+            drift: Drift::new(seed ^ (0x1234 + idx * 977), drift_depth, 2800),
+        });
+        self.gain_norm += gain;
     }
 
     fn control_tick(&mut self) {
@@ -6029,9 +6075,9 @@ impl Voice for SawStack {
             }
             let mut s = 0.0;
             for layer in &mut self.layers {
-                s += layer.osc.next();
+                s += layer.osc.next() * layer.gain;
             }
-            s /= self.layers.len() as f32;
+            s /= self.gain_norm;
             let breath = self.breath + self.breath_attack;
             if breath > 0.0 {
                 s += self.rng.white() * breath;
@@ -6833,6 +6879,12 @@ struct LeadSpec {
     cutoff: f32,
     q: f32,
     breath: f32,
+    /// Authored interval layer: (frequency ratio vs the written pitch, gain
+    /// relative to a stock layer); `(0.0, 0.0)` = none. GM 86 authors the
+    /// parallel fifth (MM-REQ-KILN-00019), GM 87 the sub-octave
+    /// (MM-REQ-KILN-00020). Amounts are engineering gut-feel — this box has
+    /// no ears; the oracles assert presence and tracking, not taste.
+    interval: (f32, f32),
 }
 
 const LEADS: [LeadSpec; 8] = [
@@ -6844,6 +6896,7 @@ const LEADS: [LeadSpec; 8] = [
         cutoff: 3400.0,
         q: 1.0,
         breath: 0.0,
+        interval: (0.0, 0.0),
     },
     // 81 saw lead — the classic (the one used by albums)
     LeadSpec {
@@ -6853,6 +6906,7 @@ const LEADS: [LeadSpec; 8] = [
         cutoff: 3000.0,
         q: 1.1,
         breath: 0.0,
+        interval: (0.0, 0.0),
     },
     // 82 calliope — rounder pulse, breathy, no detune
     LeadSpec {
@@ -6862,6 +6916,7 @@ const LEADS: [LeadSpec; 8] = [
         cutoff: 2200.0,
         q: 0.8,
         breath: 0.015,
+        interval: (0.0, 0.0),
     },
     // 83 chiff — airy saw
     LeadSpec {
@@ -6871,6 +6926,7 @@ const LEADS: [LeadSpec; 8] = [
         cutoff: 2800.0,
         q: 1.0,
         breath: 0.05,
+        interval: (0.0, 0.0),
     },
     // 84 charang — brightest, edgiest saw
     LeadSpec {
@@ -6880,6 +6936,7 @@ const LEADS: [LeadSpec; 8] = [
         cutoff: 4200.0,
         q: 1.4,
         breath: 0.0,
+        interval: (0.0, 0.0),
     },
     // 85 voice lead — softer, breathy saw
     LeadSpec {
@@ -6889,8 +6946,11 @@ const LEADS: [LeadSpec; 8] = [
         cutoff: 2500.0,
         q: 1.2,
         breath: 0.02,
+        interval: (0.0, 0.0),
     },
-    // 86 fifths* — plain saw this pass (parallel fifth deferred)
+    // 86 fifths — saw pair + an authored parallel-fifth layer at 2^(7/12)
+    // (MM-REQ-KILN-00019); the fifth sits just under unison gain so the
+    // written pitch stays the tonal centre
     LeadSpec {
         wave: Wave::Saw,
         n_osc: 2,
@@ -6898,8 +6958,10 @@ const LEADS: [LeadSpec; 8] = [
         cutoff: 3000.0,
         q: 1.1,
         breath: 0.0,
+        interval: (1.498_307, 0.85),
     },
-    // 87 bass+lead* — darker saw this pass (sub octave deferred)
+    // 87 bass+lead — darker saw + an envelope-locked sub-octave bass layer
+    // (MM-REQ-KILN-00020); the sub rides the same env/filter as the lead
     LeadSpec {
         wave: Wave::Saw,
         n_osc: 2,
@@ -6907,6 +6969,7 @@ const LEADS: [LeadSpec; 8] = [
         cutoff: 2400.0,
         q: 1.0,
         breath: 0.0,
+        interval: (0.5, 0.90),
     },
 ];
 
@@ -6938,6 +7001,9 @@ fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         spec.wave,
     );
     s.legato_enabled = true;
+    if spec.interval.0 > 0.0 {
+        s.push_interval_layer(spec.wave, spec.interval.0, spec.interval.1, 0.002, seed);
+    }
     s
 }
 
@@ -19168,6 +19234,82 @@ mod tests {
         assert!(
             c_hard > 1.2 * c_soft,
             "vel brightness: hard {c_hard} soft {c_soft}"
+        );
+    }
+
+    /// MM-REQ-KILN-00019: GM 86 "fifths" must sound its parallel fifth. The
+    /// +7-semitone layer sits at ~1.5×f0 (equal-tempered 1.4983), which is not
+    /// a harmonic of f0 — so its Goertzel magnitude cleanly separates 86 from
+    /// the plain saw 81 (spectrum only at k·f0). Bare model, no LA wrap — no
+    /// wrap_var detune trap (lessons_learnt 2026.07.19).
+    #[test]
+    fn lead_fifths_sounds_the_parallel_fifth() {
+        let sr = 44100.0;
+        let f0 = key_freq(60);
+        let ffifth = f0 * 2f32.powf(7.0 / 12.0);
+        let skip = (sr * 0.15) as usize;
+        let sig86 = render_saw(&mut lead(86, 60, 100, sr, 7), sr, 0.6);
+        let m86 = crate::testutil::mag_at(&sig86[skip..], sr, ffifth);
+        let m86_f0 = crate::testutil::mag_at(&sig86[skip..], sr, f0);
+        let sig81 = render_saw(&mut lead(81, 60, 100, sr, 7), sr, 0.6);
+        let m81 = crate::testutil::mag_at(&sig81[skip..], sr, ffifth);
+        let m81_f0 = crate::testutil::mag_at(&sig81[skip..], sr, f0);
+        // Anchored, not ratio-of-skirts: the fifth must stand in proportion to
+        // 86's OWN fundamental (gain 0.85 of 2.85 ⇒ ~0.4×; floor 0.2), while
+        // on 81 the same frequency is skirt noise (< 0.05× its fundamental).
+        assert!(
+            m86 > 0.20 * m86_f0 && m81 < 0.05 * m81_f0,
+            "GM 86 parallel fifth missing: 86 mag(1.5·f0)={m86:.6} f0={m86_f0:.6}; \
+             81 mag(1.5·f0)={m81:.6} f0={m81_f0:.6}"
+        );
+    }
+
+    /// MM-REQ-KILN-00020: GM 87 "bass + lead" must carry its sub-octave bass
+    /// layer — energy at 0.5×f0, below the written fundamental, absent on the
+    /// plain saw 81 (0.5×f0 is likewise not a harmonic of f0).
+    #[test]
+    fn lead_bass_lead_carries_the_sub_octave() {
+        let sr = 44100.0;
+        let f0 = key_freq(60);
+        let skip = (sr * 0.15) as usize;
+        let sig87 = render_saw(&mut lead(87, 60, 100, sr, 7), sr, 0.6);
+        let m87 = crate::testutil::mag_at(&sig87[skip..], sr, 0.5 * f0);
+        let m87_f0 = crate::testutil::mag_at(&sig87[skip..], sr, f0);
+        let sig81 = render_saw(&mut lead(81, 60, 100, sr, 7), sr, 0.6);
+        let m81 = crate::testutil::mag_at(&sig81[skip..], sr, 0.5 * f0);
+        let m81_f0 = crate::testutil::mag_at(&sig81[skip..], sr, f0);
+        // Anchored against each voice's own fundamental — a ratio of two skirt
+        // magnitudes is noise and passed with the sub deleted (red-check).
+        assert!(
+            m87 > 0.20 * m87_f0 && m81 < 0.05 * m81_f0,
+            "GM 87 sub-octave missing: 87 mag(f0/2)={m87:.6} f0={m87_f0:.6}; \
+             81 mag(f0/2)={m81:.6} f0={m81_f0:.6}"
+        );
+    }
+
+    /// The authored interval is a layer RATIO, not a fixed frequency: after a
+    /// CC68 legato slur C4→E4 the fifth must ride at 1.5× the NEW pitch and
+    /// the old fifth must be gone.
+    #[test]
+    fn lead_interval_tracks_legato_retune() {
+        let sr = 44100.0;
+        let mut v = lead(86, 60, 100, sr, 7);
+        let mut pre = vec![0f32; (sr * 0.3) as usize];
+        v.render(&mut pre);
+        assert!(v.legato_to(64, 100), "leads slur on CC68");
+        let mut post = vec![0f32; (sr * 0.5) as usize];
+        v.render(&mut post);
+        let seg = &post[(sr * 0.2) as usize..];
+        let fifth_new = key_freq(64) * 2f32.powf(7.0 / 12.0);
+        let fifth_old = key_freq(60) * 2f32.powf(7.0 / 12.0);
+        let hit = crate::testutil::mag_at(seg, sr, fifth_new);
+        let stale = crate::testutil::mag_at(seg, sr, fifth_old);
+        let fund = crate::testutil::mag_at(seg, sr, key_freq(64));
+        // Anchored on the slurred note's own fundamental so an absent fifth
+        // cannot pass on skirt-noise luck.
+        assert!(
+            hit > 0.20 * fund && hit > 4.0 * stale,
+            "fifth did not track the slur: new={hit:.6} old={stale:.6} fund={fund:.6}"
         );
     }
 

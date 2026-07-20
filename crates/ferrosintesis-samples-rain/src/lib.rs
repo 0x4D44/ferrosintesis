@@ -9,9 +9,8 @@
 /// Number of WAV files embedded in this package.
 pub const FILE_COUNT: usize = 1;
 
-static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
-    ("rain_loop.wav", include_bytes!("../samples/rain_loop.wav")),
-];
+static SAMPLES: [(&str, &[u8]); FILE_COUNT] =
+    [("rain_loop.wav", include_bytes!("../samples/rain_loop.wav"))];
 
 /// Returns the embedded WAV bytes for an exact (case-sensitive) file name.
 pub fn get(name: &str) -> Option<&'static [u8]> {

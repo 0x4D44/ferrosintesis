@@ -1,5 +1,15 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.20 — **`gen_crate_lib.py` emits a non-rustfmt array for a SINGLE-file
+  sample crate** — a one-element `static SAMPLES: [...] = [ (..),\n ];` that rustfmt
+  rewrites to a one-line `= [(..)];`. Multi-file crates are unaffected (the multi-line
+  form is already fmt-clean), so it only bites single-file crates (e.g.
+  `ferrosintesis-samples-rain`), and only shows up in the workspace `cargo fmt --all
+  --check` gate — a per-crate build looks fine. Fix at source in
+  `tools/ferrosintesis-samples/gen_crate_lib.py` (emit the single-element case on one
+  line, or run rustfmt on its output) so a future single-file regen is gate-clean
+  without a manual `cargo fmt` pass.
+
 - [x] 2026.07.19 — **Consolidate the snare-wire D1 noise-gain into `noise_vel_gain`**
   — DONE 2026.07.19: folded `let d1_noise = 0.5 + 0.5 * velnorm * velnorm;` to
   `noise_vel_gain(velnorm)` (`drums.rs` snare-wire path). Byte-identical, confirmed by

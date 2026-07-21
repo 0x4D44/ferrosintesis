@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00030 — the harpsichord's LA sample onset does not track its vel_sense-compressed model, so at v100 the sustain edges out the quill attack (~12% late bloom)
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -19,7 +19,11 @@
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law
-  alignment to k=2; caused by this change and diagnosed to the mechanism below)
+  alignment to k=2; caused by this change and diagnosed to the mechanism below) → Blocked
+  (2026-07-21, Claude Opus 4.8 — the suggested fix (onset tracks the vel_sense model, `vn²`)
+  DOES restore the attack peak but INVERTS the harpsichord's aggregate velocity response,
+  failing `exempt_voices_keep_their_documented_velocity_behaviour`; the correct onset law is
+  a tuning/ears design extension entangled with MM-BUG-KILN-00029.)
 
 ## Observation
 
@@ -71,3 +75,38 @@ Found while implementing `wrk_docs/2026.07.20 - HLD - velocity law alignment to 
 Distinct from MM-BUG-KILN-00029 (voice-model velocity turnover): this is a
 sample/model **crossfade** interaction specific to the one `vel_sense` + LA voice, caused by
 this change rather than merely exposed by it.
+
+## Blocking analysis (2026-07-21, Claude Opus 4.8)
+
+Prototyped the exit condition literally: added a `vel_sense: Option<f32>` field to `LaFx`,
+made the LA-onset `vel_gain` square the same compressed velocity the model does
+(`vn = 1 − vel_sense·(1 − v/127)`, `vn²`), and passed `Some(0.15)` at the GM6 wrap site.
+
+- **The bloom IS fixed:** measured `assert_attack_is_peak` bloom fell from ~1.12 to **0.743**
+  at harpsichord-low — the quill attack owns the peak again, so the self-retiring exception
+  fired and was deleted, exactly as the exit condition anticipated.
+- **But it inverts the velocity response.** The `vn²` onset is nearly flat (0.87→0.96 over
+  v72→v127) yet ~18 dB LOUDER than the old `vel_amp` onset at low velocity. That loud onset
+  now dominates the momentary-LUFS meter and exposes the model's own inverted-in-LUFS
+  behaviour that the quiet onset previously masked. Measured GM6 key-60 momentary level
+  (samples on) flipped from monotonic-rising to monotonic-FALLING:
+
+  | v | 40 | 72 | 100 | 110 | 127 |
+  |---|---|---|---|---|---|
+  | pre-fix (dB) | −26.7 | −27.0 | −25.1 | −24.3 | −22.9 |
+  | post-fix (dB) | −19.9 | −21.7 | −22.5 | −22.7 | −22.9 |
+
+  So `exempt_voices_keep_their_documented_velocity_behaviour` (`loud(v110) > soft(v72)`)
+  fails: post-fix v72 (−21.7) is LOUDER than v110 (−22.7). A harpsichord that plays louder
+  when struck softer is wrong, so the fix cannot ship as-is.
+
+The tension is real: the bloom fix needs a louder onset at v100, but tracking the model fully
+(`vn²`) over-boosts low velocity and inverts the dynamics. The correct onset law is a tuning
+call that balances the two (e.g. a partial compensation between `vel_amp` and `vn²`, or a
+harpsichord-only floored onset — which re-introduces the very floor the k=2 task deliberately
+removed globally, itself a design decision). It is entangled with MM-BUG-KILN-00029: the
+underlying model momentary-LUFS turnover is what the quiet onset was hiding.
+
+**Missing input to unblock:** a design decision on the harpsichord onset law + an ears pass
+(the audible stakes are the harpsichord's dynamic feel). Severity stays Low and the existing
+self-retiring `harpsichord-low` exception keeps it contained meanwhile. Sequence after 00029.

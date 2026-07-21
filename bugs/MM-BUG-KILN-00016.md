@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00016 — Bass family (GM 32–39) is model-only; the finger/pick/slap attack lives in the LA window and is left unsampled
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-21, Claude Opus 4.8 — the only remaining sub-item is the slap-bass 36/37 onset, which the 2026-07-19 sourcing HLD deferred because "no clean real-slap CC0/CC-BY multisample exists"; it is blocked on an external licensed asset that must be sourced, not on code.)
 
 ## Observation
 
@@ -50,3 +50,10 @@ therefore **stays Open** on the slap sub-item.
 - Net-new CC0 sourcing → sequence with MM-BUG-KILN-00015 after the reuse-only
   fixes. Slap bass onset is the most identity-critical, worth prioritising within
   the family.
+- Blocked 2026-07-21 (Claude Opus 4.8) during a bug-drain pass. GM32–35 already landed
+  (real onsets, oracle + render-diff green); the family is otherwise complete. The
+  outstanding slap 36/37 sub-item needs a permissively-licensed (CC0/CC-BY) real slap-bass
+  multisample that, per the sourcing HLD, does not yet exist — a sourcing hunt this
+  unattended sandbox cannot perform (no asset-hunting, and the wrap is validated but has
+  nothing to wrap). **Missing input to unblock:** a sourced CC0/CC-BY slap-bass multisample
+  (or a maintainer decision to keep GM36/37 model-only and close this at GM35).

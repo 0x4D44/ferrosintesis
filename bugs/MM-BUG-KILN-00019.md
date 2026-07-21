@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00019 — Per-program loudness match is damped 0.70×; residuals remain and older album mixes were tuned to the old balance
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** engine
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-21, Claude Opus 4.8 — the bug is explicitly "not a defect so much as a deliberate stopping point awaiting a listening pass"; both the trim-tightening and the CC7/CC11 re-touch are ear-in-the-loop calls that need Arthur to listen first.)
 
 ## Observation
 
@@ -42,3 +42,8 @@ that were tuned to the old balance. Both are ear-in-the-loop calls.
   a deliberate stopping point awaiting a listening pass.
 - Any trim change is level-only/timbre-neutral but still triggers the master
   bus-glue by ~0.5 dB (benign) → render-diff expected on trimmed programs.
+- Blocked 2026-07-21 (Claude Opus 4.8) during a bug-drain pass: both halves (tighten the
+  0.70× damping toward a closer SC-55 match; re-touch CC7/CC11 on the album mixes tuned to
+  the old balance) are the bug's own words "ear-in-the-loop calls" — an unattended agent
+  cannot pick the trim strength or judge the re-touch without ears. **Missing input to
+  unblock:** Arthur's listening pass.

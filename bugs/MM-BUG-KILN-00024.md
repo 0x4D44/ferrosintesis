@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00024 — GM 48/49 ensemble identity remains EarPending and unenforced
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** testutil
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh)
+- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-21, Claude Opus 4.8 — the bug's resolution requires "one human A/B adjudication" of GM48/49 string-ensemble distinctness; a human ear verdict is a hard external dependency, not an unattended code fix.)
 
 ## Observation
 
@@ -26,6 +26,13 @@ Observation: perceptual_distinctness still carries GM 48/49 as an EarPending pai
 
 ## Fix
 
-<unfixed — raised only>
+<blocked — needs a human A/B ear adjudication>
 
 ## Notes
+
+- Blocked 2026-07-21 (Claude Opus 4.8) during a bug-drain pass. The defect is by
+  construction ear-gated: converting the standing GM48/49 `EarPending` entry into an
+  enforced positive/collapse expectation *is* recording a human A/B listening verdict.
+  An unattended agent (this box has no ears) cannot produce that verdict without
+  fabricating it. **Missing input to unblock:** Arthur's A/B adjudication of string
+  ensemble 1 vs 2, after which the enforced oracle is a small mechanical follow-up.

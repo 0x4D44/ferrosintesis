@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00029 — voice models turn over near full velocity: GM42/43 bowed strings DROP up to 1.6 dB from v110 to v127, and GM4's pickup bark peaks at v≈105
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -20,7 +20,10 @@
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law
   alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which
-  measured the EP sweep independently)
+  measured the EP sweep independently) → Blocked (2026-07-21, Claude Opus 4.8 — the bug's own
+  analysis establishes this needs the voice models re-voiced, "a different risk class [that]
+  re-voices instruments and needs ears plus the render-diff inventory"; not an unattended
+  code fix. Well-contained by self-retiring oracle exclusions meanwhile.)
 
 ## Observation
 
@@ -114,3 +117,15 @@ suspected instance of the same class and **confirmed by measurement** by Fable 5
 also corrected the proposed mechanism (the old 1.6 law drove sub-127 velocities *harder*,
 not softer — `x^1.6 > x^2` for `x < 1` — so it masked the turnover by over-saturating the
 middle rather than by never reaching the top).
+
+## Blocking note (2026-07-21, Claude Opus 4.8)
+
+Routed Open → Blocked during a bug-drain pass. This is not unattended-fixable code: the bug's
+own "Why this is filed rather than fixed" section is definitive — a scalar output-gain
+exponent cannot correct a curve that turns over, so it needs the GM42/43 bowed-string and GM4
+electric-piano voice **models** re-worked (gain staging into the nonlinearity / the drive
+law), which "re-voices instruments and needs ears plus the render-diff inventory" and is "a
+different risk class." This box has no ears, so it awaits a maintainer re-voicing decision.
+The defect stays honestly contained by the by-name, self-retiring exclusions in
+`velocity_law.rs` (`excluded_programs_still_reproduce_their_defect`), so it is not a silent
+blind spot. **Missing input to unblock:** Arthur's re-voicing pass + render-diff/ears review.

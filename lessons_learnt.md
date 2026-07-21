@@ -3,6 +3,16 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.21 — **A "controller feature" is only opt-in / render-preserving if the catalog does
+  not already author that controller — scan before you claim it.** MM-BUG-KILN-00028's fix
+  (couple the ch-10 drum-room send to CC91) looked inert, but a stdlib MIDI scan found **86 of
+  124 tracks author ch-10 CC91** (values 20–110 → room ×0.5–2.9), so it silently re-mixed the
+  catalog and failed the "any diff at all is a bug" controller rule. Grep the album MIDIs for
+  the CC on the target channel before trusting the opt-in argument; the unit test can't see it.
+  (Related: the harpsichord 00030 "onset tracks the model = vn²" fix fixes the bloom but
+  inverts the velocity response — momentary LUFS is not a monotone function of a flat gain law
+  once a loud sample onset dominates the window.)
+
 - 2026.07.20 — **`voices.rs::percentile` is NOT nearest-rank despite its doc comment — its body is
   `sorted[floor(q*(len-1))]`, so at n=9 `percentile(x, 0.95)` returns the SECOND-largest, not the max.**
   Reusing it for the instrument-balance level statistic put median 0.41 / max 18.77 dB of error into the

@@ -2489,6 +2489,15 @@ pub struct LaFx {
     /// §4). EXACT bypass — no filter state touched, no per-sample cost — at
     /// vel ≥ 100: the LA oracle fixtures all render there.
     pub vel_lp: Option<f32>,
+    /// Set for a `vel_sense`-compressed model (only the harpsichord). Such a model
+    /// is deliberately near velocity-INDEPENDENT, so — unlike every other voice —
+    /// its velocity dynamics must be carried by the sampled ONSET, not the body. A
+    /// bare-`vel_amp` onset is then too quiet at mid velocity and the sustain edges
+    /// out the quill attack (the bloom of MM-BUG-KILN-00030); a fully model-tracking
+    /// (`vn²`) onset is so flat it inverts the perceived dynamics. So a `vel_sense`
+    /// onset uses a floored law (see `vel_gain`) that both lifts the attack and keeps
+    /// a monotone velocity slope. `None` = every other voice, bare `vel_amp`.
+    pub vel_sense_onset: bool,
 }
 
 /// Velocity→corner law for [`LaFx::vel_lp`]: mirrors the model's excitation
@@ -2712,7 +2721,22 @@ impl LaVoice {
         // crossfade. With the floors gone and one square law everywhere, the
         // compensation has nothing left to correct — keeping it would re-steepen
         // the guitars to v^2.8.
-        let vel_gain = vel_amp(vel);
+        //
+        // The lone exception is a `vel_sense`-compressed model (the harpsichord):
+        // its body is near velocity-flat by design, so the ONSET must carry the
+        // dynamics. A floored onset (mirroring the pre-k2 `0.35 + 0.65·vel_amp`
+        // shape) lifts the mid/low-velocity attack back above the sustain — fixing
+        // the MM-BUG-KILN-00030 bloom — while its `vel_amp` term keeps the velocity
+        // slope a flat `vn²` onset would destroy. The 0.50 floor is calibrated
+        // against both oracles: it is the highest floor that still keeps the quill
+        // attack the peak across the velocity range WITHOUT inverting the (already
+        // shallow, by design) velocity response (0.65+ flips it). MM-BUG-KILN-00030.
+        let vel_gain = if fx.vel_sense_onset {
+            const ONSET_FLOOR: f32 = 0.50;
+            ONSET_FLOOR + (1.0 - ONSET_FLOOR) * vel_amp(vel)
+        } else {
+            vel_amp(vel)
+        };
         Ok(LaVoice {
             sustain,
             zone,
@@ -5433,6 +5457,56 @@ mod tests {
         }
     }
 
+    /// MM-BUG-KILN-00030: the harpsichord is the sole `vel_sense`-compressed voice
+    /// with an LA layer, so a bare-`vel_amp` onset dropped the quill attack below
+    /// the sustain at mid velocity (a late "bloom") while a fully model-tracking
+    /// (`vn²`) onset was so flat it INVERTED the velocity response. The floored
+    /// onset law must satisfy BOTH at once: the attack owns the peak at every
+    /// velocity AND louder strokes render louder. Guards against a future revert to
+    /// either failure mode.
+    #[test]
+    fn harpsichord_onset_floor_keeps_attack_peak_and_velocity_monotone() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let w = (0.05 * sr) as usize;
+        // Attack (first 150 ms) must own the peak across the velocity range — the
+        // exact bloom the bug reports, checked beyond just the vel-100 fixture.
+        for vel in [64u8, 90, 100, 120] {
+            let mut v = voices::make(6, 48, vel, sr, 5, true);
+            let mut buf = vec![0f32; sr as usize];
+            v.render(&mut buf);
+            let win = |k: usize| {
+                let (a, b) = (k * w, (k + 1) * w);
+                (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+            };
+            let attack = (0..3).map(win).fold(0f32, f32::max);
+            let late = (3..19).map(win).fold(0f32, f32::max);
+            assert!(
+                late <= attack * 1.01,
+                "harpsichord v{vel}: late window {late:.5} blooms above attack {attack:.5}"
+            );
+        }
+        // Velocity monotonicity: the whole-note level must rise from soft to loud
+        // (the vn² onset inverted this). Measured as max momentary loudness.
+        let level = |vel: u8| {
+            let mut v = voices::make(6, 60, vel, sr, 5, true);
+            let mut buf = vec![0f32; (1.2 * sr) as usize];
+            v.render(&mut buf);
+            let stereo: Vec<f32> = buf.iter().flat_map(|&s| [s, s]).collect();
+            crate::loudness::momentary_lufs(&stereo, sr)
+                .into_iter()
+                .fold(f32::NEG_INFINITY, f32::max)
+        };
+        let soft = level(72);
+        let loud = level(110);
+        assert!(
+            loud > soft,
+            "harpsichord velocity inverted: v72 {soft:.2} dB >= v110 {loud:.2} dB"
+        );
+    }
+
     /// The SINGLE seam-continuity contract (code-review A4 — three tests
     /// used to carry private copies that could drift): the wrap may not add
     /// more than a 2.4× level step across adjacent 100 ms windows beyond
@@ -5534,28 +5608,9 @@ mod tests {
         let attack = fine[..3].iter().fold(0f32, |mx, &x| mx.max(x));
         let late = fine[3..].iter().fold(0f32, |mx, &x| mx.max(x));
 
-        if label == "harpsichord-low" {
-            // KNOWN, NAMED interaction — self-retiring. The harpsichord is the only
-            // voice that combines `vel_sense` velocity compression with an LA sample
-            // layer. The k=2 work changed the generic LA onset gain from a floored
-            // `0.35 + 0.65·vel_amp` to bare `vel_amp`, which tracks the model for every
-            // voice whose model is now bare `vel_amp` — but NOT the harpsichord, whose
-            // model velocity is `vel_sense`-compressed. At v100 that dropped the sampled
-            // quill onset ~2.3 dB relative to the model body, so a slightly-later window
-            // (0.06607) now edges the first (0.05910): a ~12 % bloom. Filed as
-            // MM-BUG-KILN-00030 (LA onset should track a vel_sense model).
-            //
-            // Bounded on BOTH sides so a fix cannot pass silently: if the bloom drops
-            // back under 1.02, the model tracks again and this exception must be removed.
-            let bloom = late / attack.max(1e-9);
-            assert!(
-                (1.02..1.25).contains(&bloom),
-                "harpsichord-low bloom {bloom:.3}: if <=1.02 the LA onset now tracks the \
-                 vel_sense model — delete this exception and close MM-BUG-KILN-00030; \
-                 if >1.25 the interaction WORSENED ({fine:?})"
-            );
-            return;
-        }
+        // (MM-BUG-KILN-00030 retired the `harpsichord-low` exception here: the
+        // floored `vel_sense` onset law now lifts the quill attack back above the
+        // sustain, so the row runs the normal attack-is-peak check below.)
 
         // 1 % relative tolerance. The intent is "no LATE BLOOM" — the attack owns the
         // peak — and a bloom that matters is tens of percent. An exact float compare

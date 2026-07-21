@@ -11806,7 +11806,10 @@ fn make_uncorrected(
             let model = Box::new(Pluck::new(&HARPSICHORD, key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_HARPSICHORD;
-                crate::sampler::LaVoice::wrap(
+                // The harpsichord model is `vel_sense`-compressed (near
+                // velocity-flat), so its sampled quill onset carries the dynamics
+                // via a floored onset law (MM-BUG-KILN-00030).
+                crate::sampler::LaVoice::wrap_fx(
                     model,
                     crate::sampler::harpsichord_bank(),
                     key,
@@ -11814,6 +11817,10 @@ fn make_uncorrected(
                     sr,
                     gain,
                     fade,
+                    crate::sampler::LaFx {
+                        vel_sense_onset: true,
+                        ..Default::default()
+                    },
                 )
             } else {
                 model

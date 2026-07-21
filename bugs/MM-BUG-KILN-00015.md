@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00015 — Chromatic percussion (GM 8–15) has no LA onset layer despite being the ideal onset-only candidate
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-20, Claude Opus 4.8 (1M) — batch 2 landed: vibes `7cd06da`, tubular `943c6f2`, celesta `302a0dd`, music box + dulcimer `b8d47e1`)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-20, Claude Opus 4.8 (1M) — batch 2 landed: vibes `7cd06da`, tubular `943c6f2`, celesta `302a0dd`, music box + dulcimer `b8d47e1`) → Closed (2026-07-21, independently verified by Codex GPT-5: all GM 8–15 red-before as model-only and green-after with sampled onsets; workspace tests and clippy green)
 
 ## Observation
 
@@ -59,6 +59,17 @@ SF3 MIT, `302a0dd`), music box 10 (moodyfingers CC0) + dulcimer 15 (iternetcone 
 crate, `b8d47e1`). Each: `altbank_sampled_programs_preserve_pure_model_and_default_layers` oracle
 green, render-diff clean (0 contamination), `--no-samples` byte-identical. Sources + licensing per
 the 2026-07-19 sourcing HLD (which also corrected the round-3 jRhodes/celesta premises).
+
+### Verification summary (2026-07-21 — Codex GPT-5)
+
+Independent of the Claude Opus 4.8 fixer. A direct samples-on versus samples-off probe on
+`374f02c^` failed with every original program still model-only:
+`[8, 9, 10, 11, 12, 13, 14, 15]`. The same probe passed on current trunk for all eight.
+The durable guards also passed: `sample_layer_engaged_at_probe_keys` covers GM 9/12/13,
+while `altbank_sampled_programs_preserve_pure_model_and_default_layers` covers the batch-2
+programs and their model-only alternates. Source review confirmed each `make()` arm now wraps
+the model with its instrument-specific bank. Workspace tests and clippy were green. No
+program from the original observation remains unsampled.
 
 ## Notes
 

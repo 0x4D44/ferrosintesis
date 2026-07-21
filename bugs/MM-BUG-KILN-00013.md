@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00013 — Live/realtime path has no global polyphony cap: a dense stream can blow the audio-callback deadline
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** live
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit); Fixed (2026-07-19, `a0df299`, by Claude Opus 4.8 (1M))
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Fixed (2026-07-19, `a0df299`, by Claude Opus 4.8 (1M)) → Closed (2026-07-21, independently verified by Codex GPT-5: actual trunk fix `121d4fd`; 168 voices red-before, capped at 128 green-after; workspace tests and clippy green)
 
 ## Observation
 
@@ -52,6 +52,17 @@ choke groups and the driven-guitar count are recomputed; a stolen voice's
 `note_off` simply no-ops), so `active.remove()` cannot corrupt engine state.
 fmt + `clippy -D warnings` + 553 lib tests green. Left **Fixed**, not Closed —
 awaiting independent two-eyes verify.
+
+### Verification summary (2026-07-21 — Codex GPT-5)
+
+Independent of the Claude Opus 4.8 fixer. On `121d4fd^`, a public-realtime-path
+transplant reproduced the original unbounded count: 168 live voices survived, failing the
+128 ceiling. Current trunk passed `live_polyphony_is_capped`,
+`live_under_cap_steals_nothing`, `offline_polyphony_is_unbounded`, and
+`enforce_voice_cap_steals_oldest_released_first`. Source review confirmed the cap runs
+after pending events and before realtime block rendering, while offline has no caller.
+`cargo test --workspace` and clippy with warnings denied were green. The documented hard-cut
+tradeoff is overload policy, not a residual of the unbounded-render defect.
 
 ## Notes
 

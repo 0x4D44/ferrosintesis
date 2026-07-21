@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00031 — removing VEL_LEVEL_EXP[76] left the modeled GM76 bottle (--no-samples / repitch-fallback) un-compensated and off-law (k≈2.5), uncaught by the samples-on-only velocity sweep
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** synth
@@ -20,7 +20,9 @@
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the velocity-law
   loose-ends investigation; a regression introduced by `f7d585a`) → Fixed (2026-07-21,
-  `4569855`, bumped `7caec4c`)
+  `4569855`, bumped `7caec4c`) → Closed (2026-07-21, independently verified by Codex GPT-5:
+  modeled GM76 k=2.421/2.555 red-before, all routing and velocity guards green-after;
+  workspace tests and clippy green)
 
 ## Observation
 
@@ -76,6 +78,17 @@ Verification (on the fixed tree, integrated at `4569855`):
   an earlier flag-keyed attempt; the voice-keyed fix passes it.
 - Full ferrosintesis lib suite 598/598, clippy `-D warnings` clean, fmt clean. Render-diff
   clean by construction (change confined to the `76 =>` arm; GM76 unauthored by any album).
+
+### Verification summary (2026-07-21 — Codex GPT-5)
+
+Independent of the Claude Opus 4.8 fixer. On `4569855^`, the transplanted modeled-path
+oracle reproduced both recorded exponents: k=2.421 at key 48 and k=2.555 at key 60. Current
+trunk passed `modeled_gm76_follows_the_square_law_in_no_samples_builds`,
+`looped_recording_voices_keep_their_documented_velocity_behaviour`, and
+`wd_o10_routing_sample_policy_and_lifecycle`. Source review confirmed `ScaledVoice(1.512)`
+wraps only the modeled bottle before the sample/fallback decision, so both `--no-samples`
+and samples-on repitch fallback are corrected without double-scaling `BottleLoopVoice`.
+Workspace tests and clippy were green. No residual path gap.
 
 ## Notes
 

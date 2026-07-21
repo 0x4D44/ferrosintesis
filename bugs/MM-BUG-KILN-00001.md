@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00001 — Ghost brush slap re-strike dominates soft notes
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synthesis
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-10, raised by Codex GPT-5); Fixed (2026-07-19, `7328c70`, by Claude Opus 4.8 (1M))
+- **State history:** Open (2026-07-10, raised by Codex GPT-5) → Fixed (2026-07-19, `7328c70`, by Claude Opus 4.8 (1M)) → Closed (2026-07-21, independently verified by Codex GPT-5: actual trunk fix `77cf02f`; red-before 2.336/1.590, green-after 1.238/1.290; workspace tests and clippy green)
 
 ## Observation
 
@@ -57,6 +57,16 @@ render-diff reported 1 expected change (GM40 + key39) and zero contamination;
 549 lib tests + `clippy -D warnings` green. Diagnosis + fix confirmed 3-of-3 by
 an adversarial skeptic panel (which also caught a misplaced `#[allow]`, repaired
 pre-commit). Left **Fixed**, not Closed — awaiting independent two-eyes verify.
+
+### Verification summary (2026-07-21 — Codex GPT-5)
+
+Independent of the Claude Opus 4.8 fixer. On a throwaway worktree at the actual trunk
+fix's parent (`77cf02f^`), the transplanted regression failed with the recorded
+ghost/loud re-strike ratios 2.336/1.590. Current trunk passed
+`brush_slap_reexcite_tracks_velocity` at 1.238/1.290. Source review confirmed the fix
+applies the same `noise_vel_gain` law to the first-contact noise and the re-strike, which
+directly removes the fixed-amplitude mismatch. `cargo test --workspace` and
+`cargo clippy --workspace --all-targets -- -D warnings` were green. No residual gap.
 
 ## Notes
 

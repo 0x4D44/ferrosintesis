@@ -3,6 +3,17 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.21 — **A denormal-flush floor belongs just above subnormal (1e-34), NOT at 1e-20 — 1e-20 is a
+  NORMAL f32, so flushing there is not byte-transparent: the sub-floor δ surfaces via an f32 rounding-tie**
+  (`dsp.rs:flush_denormal`, MM-BUG-KILN-00027). Every f32 add's round-to-nearest is a discontinuity (one
+  threshold per ULP); zeroing a state the baseline kept makes δ teleport to a full 1-ULP jump the first time
+  an exact sum straddles a boundary, then BusGlue's transient-displaced `if level>env` atk/rel branch amplifies
+  it to ~2 LSB (measured: Wire and Wake, one 4.8 s −84 dBFS self-healing burst). 1e-34 keeps the perf fix
+  (still ≫ subnormal 1.18e-38) and drops the per-add tie hazard ~1e-12 → ~1e-26. Corollaries: localize such
+  diffs by flush-site bisect on the RAW f32 dump (`raw_dump` example), not the normalized WAV — the true-peak
+  limiter/normalizer will smear a sub-LSB signal diff into a visible span and mislead you; and
+  `cargo build -p ferrosintesis-cli --example X` does NOT rebuild the `ferrosintesis.exe` bin (use `--bins`).
+
 - 2026.07.20 — **`voices.rs::percentile` is NOT nearest-rank despite its doc comment — its body is
   `sorted[floor(q*(len-1))]`, so at n=9 `percentile(x, 0.95)` returns the SECOND-largest, not the max.**
   Reusing it for the instrument-balance level statistic put median 0.41 / max 18.77 dB of error into the

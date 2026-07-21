@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00034 — NRPN select (CC98/99) does not invalidate the RPN latch, so a later Data-Entry corrupts the RPN-set value (e.g. pitch-bend range → 24 semitones)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** engine
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — severity re-framed from "harmless absence" to active corruption by Fable 5) → Fixed (2026-07-21, `663752a`)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — severity re-framed from "harmless absence" to active corruption by Fable 5) → Fixed (2026-07-21, `48f359e`) → Closed (2026-07-21, independently two-eyes verified by a separate Claude Opus 4.8 session — did not author the fix: in its own throwaway worktree it reproduced fails-before RED at the exact corrupted value 24.0 semitones and passes-after GREEN, confirmed the guard is minimal, at the right layer, and does not break normal RPN selection; `engine::tests` gate 108/108 green)
 
 ## Observation
 
@@ -44,7 +44,7 @@ assert the channel bend range is still 2, not 24.
 
 ## Fix
 
-Fix (`663752a`): add a `98 | 99 => { s.rpn_msb = 127; s.rpn_lsb = 127; }` arm to the CC
+Fix (`48f359e`; `663752a` pre-rebase): add a `98 | 99 => { s.rpn_msb = 127; s.rpn_lsb = 127; }` arm to the CC
 dispatch (`engine.rs`, beside the CC100/101 RPN-select arms). An NRPN select now parks the RPN
 latch at null — the same inert state as an RPN-Null — so a following Data-Entry (CC6/38) matches
 neither `(0,0)` nor `(0,1)` in the data-entry handler (`engine.rs:2171`) and is dropped. This is
@@ -63,7 +63,9 @@ Verification:
   clean), so album renders are unchanged by construction — the render-diff is zero and was not run
   for that reason.
 
-Awaiting independent two-eyes verification before Closed (the fixer must not close their own bug).
+Closed after independent two-eyes verification (a separate Claude Opus 4.8 session, not the fixer):
+fails-before reproduced the exact 24.0-semitone corruption, passes-after green, `engine::tests`
+108/108, root cause and minimal-guard scope independently confirmed.
 
 ## Notes
 

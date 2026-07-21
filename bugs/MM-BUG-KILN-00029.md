@@ -114,3 +114,38 @@ suspected instance of the same class and **confirmed by measurement** by Fable 5
 also corrected the proposed mechanism (the old 1.6 law drove sub-127 velocities *harder*,
 not softer — `x^1.6 > x^2` for `x < 1` — so it masked the turnover by over-saturating the
 middle rather than by never reaching the top).
+
+## Investigation note (2026-07-21 — diagnosed, then deferred to a dedicated ears-in-loop session)
+
+Deferred by Arthur to prioritise the M-CAL instrument-balance work. Not a blocker for it:
+M-CAL's velocity guard already excludes GM42/43, so they simply stay un-trimmed (and flagged
+by the self-retiring guard) until this is fixed.
+
+**GM42/43 is a waveguide STABILITY problem, not a smooth turnover.** At high bow speed the
+stick-slip limit cycle enters an over-bowed **chaotic** regime in register- AND
+velocity-specific pockets. Measured on the unfixed model (`melodic_level` = `make()` max
+momentary LUFS, `SEED` fixed, samples on):
+
+- GM42 key60: v110 −5.16 → v115 **−9.60** → v120 −2.70 → v127 **−7.14** — ±4 dB across
+  *adjacent* velocities, i.e. chaotic, not a monotone dip. `slope` (bow force) is fixed per
+  seed across velocity, so the swing is the deterministic waveguide going unstable, not RNG.
+- Onset ~v105–110, i.e. `max_vel ≈ 0.19–0.20` where `max_vel = 0.03 + 0.22·vel_ctrl(vel)`
+  (`voices.rs` BowedString::new). Lower strings over-bow at a lower bow speed than the mid
+  register (longer wavelength / more inertia), so the onset is register-dependent.
+
+**A bow-speed clamp is necessary but NOT sufficient.** `vel_ctrl(vel).min(0.65)` made keys
+48/55/60/67 cleanly monotonic through v127, but chaotic pockets survived on other keys (GM42
+key50 still craters −4.7 dB at v127; key36 wobbled), and tightening the clamp over-darkens the
+whole instrument (a ~4 dB level discontinuity opened between key45 and key50). A robust fix
+likely needs **output-amplitude normalization** — decouple rendered level from the chaotic
+intrinsic limit-cycle amplitude so the clean `amp ∝ vel_amp` gain owns loudness; the model
+already carries an `amp_follow` output follower to build on — PLUS register tuning, and MUST be
+ear-validated (this box has none).
+
+**GM4 is a separate, smaller issue.** Its LEVEL is monotonic at every key through v127 — only
+the *bark* (h1) timbre measure turns over past v≈105 (the `PickupShaper` tanh, `voices.rs`,
+compressing the tine faster than the mode table grows it). No level fix needed; the bark tweak
+is independent of the bowed-string work.
+
+Exit condition and the self-retiring guards (`excluded_programs_still_reproduce_their_defect`,
+the `every_gm_program_follows_the_square_law` exclusion) are unchanged.

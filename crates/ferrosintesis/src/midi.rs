@@ -339,6 +339,13 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
     tempos.sort_unstable();
     if tempos.is_empty() {
         tempos.push((0, 500_000)); // MIDI default 120 bpm
+    } else if tempos[0].0 > 0 {
+        // The SMF default 120 bpm governs until the first Set-Tempo. Without a
+        // tick-0 anchor, the prefix [0, first_tempo_tick) would be timed at the
+        // first *authored* tempo, and every pre-tempo event would collapse onto
+        // that change's timestamp via the `to_sec` saturating-sub floor
+        // (MM-BUG-KILN-00032). Insert the default so the prefix is 120 bpm.
+        tempos.insert(0, (0, 500_000));
     }
     let tpq = division as f64;
     // cumulative seconds at each tempo change
@@ -431,6 +438,57 @@ mod tests {
             (song.events[1].sec - 1.5).abs() < 1e-9,
             "{}",
             song.events[1].sec
+        );
+    }
+
+    /// MM-BUG-KILN-00032: when the first Set-Tempo is at a tick > 0, the SMF
+    /// default 120 bpm must govern the prefix. Pre-tempo events must be timed at
+    /// 120 bpm — NOT at the later authored tempo, and NOT collapsed onto the
+    /// first tempo change's timestamp.
+    #[test]
+    fn default_tempo_governs_before_a_delayed_first_tempo() {
+        let mut d: Vec<u8> = Vec::new();
+        d.extend(b"MThd");
+        d.extend(6u32.to_be_bytes());
+        d.extend(0u16.to_be_bytes()); // format 0
+        d.extend(1u16.to_be_bytes()); // 1 track
+        d.extend(480u16.to_be_bytes()); // 480 ticks per quarter
+        let mut tr: Vec<u8> = Vec::new();
+        // Note-on at tick 0, BEFORE any Set-Tempo.
+        tr.extend([0x00, 0x90, 60, 100]);
+        // First Set-Tempo DELAYED to tick 480 (delta 480 = VLQ 0x83 0x60):
+        // 60 bpm = 1_000_000 us/quarter = 0x0F4240.
+        tr.extend([0x83, 0x60, 0xFF, 0x51, 0x03, 0x0F, 0x42, 0x40]);
+        // Note-on at tick 480.
+        tr.extend([0x00, 0x90, 62, 100]);
+        // Note-on at tick 960.
+        tr.extend([0x83, 0x60, 0x90, 64, 100]);
+        tr.extend([0x00, 0xFF, 0x2F, 0x00]);
+        d.extend(b"MTrk");
+        d.extend((tr.len() as u32).to_be_bytes());
+        d.extend(&tr);
+
+        let song = parse(&d).unwrap();
+        let secs: Vec<f64> = song.events.iter().map(|e| e.sec).collect();
+        assert_eq!(song.events.len(), 3, "{:?}", song.events);
+        // tick 0 at the 120 bpm default → 0.0 s (the bug times the prefix at 60
+        // bpm and collapses this to the first tempo change's time, 1.0 s).
+        assert!(
+            secs[0].abs() < 1e-9,
+            "pre-tempo note not at 0 s: {}",
+            secs[0]
+        );
+        // tick 480 = one quarter at the 120 bpm default → 0.5 s (bug: 1.0 s).
+        assert!(
+            (secs[1] - 0.5).abs() < 1e-9,
+            "tick-480 note mis-timed: {}",
+            secs[1]
+        );
+        // tick 960 = 480 ticks @120bpm (0.5 s) + 480 ticks @60bpm (1.0 s) → 1.5 s.
+        assert!(
+            (secs[2] - 1.5).abs() < 1e-9,
+            "post-tempo note mis-timed: {}",
+            secs[2]
         );
     }
 

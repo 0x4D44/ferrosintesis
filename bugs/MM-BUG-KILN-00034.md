@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — severity re-framed from "harmless absence" to active corruption by Fable 5) → Fixed (2026-07-21, `48f359e`) → Closed (2026-07-21, independently two-eyes verified by a separate Claude Opus 4.8 session — did not author the fix: in its own throwaway worktree it reproduced fails-before RED at the exact corrupted value 24.0 semitones and passes-after GREEN, confirmed the guard is minimal, at the right layer, and does not break normal RPN selection; `engine::tests` gate 108/108 green)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — severity re-framed from "harmless absence" to active corruption by Fable 5) → Fixed (2026-07-21, `48f359e`; `663752a` pre-rebase) → Closed (2026-07-21, independently two-eyes verified by a separate Claude Opus 4.8 session and Codex GPT-5: regression red-before at 24.0 and green-after at 2.0; direct sequence probe and full workspace gates green; root-cause guard confirmed)
 
 ## Observation
 
@@ -63,9 +63,23 @@ Verification:
   clean), so album renders are unchanged by construction — the render-diff is zero and was not run
   for that reason.
 
-Closed after independent two-eyes verification (a separate Claude Opus 4.8 session, not the fixer):
-fails-before reproduced the exact 24.0-semitone corruption, passes-after green, `engine::tests`
-108/108, root cause and minimal-guard scope independently confirmed.
+### Verification summary (2026-07-21 — independent two-eyes)
+
+A separate Claude Opus 4.8 session, which did not author the fix, independently reproduced
+the exact 24.0-semitone corruption before the fix and a green result after it. Its focused
+`engine::tests` gate passed 108/108, and it confirmed that the guard is minimal, at the right
+layer, and preserves normal RPN selection.
+
+Codex GPT-5 also verified independently from fixer Claude Opus 4.8 on the trunk build containing actual fix
+`48f359e`. A separate direct CC-dispatch probe replayed the recorded sequence verbatim:
+RPN 0,0 plus CC6=2, then NRPN CC99=1 / CC98=8 plus CC6=80. The bend range remained 2
+after both Data-Entry messages and the latch ended at `(127,127)`, so the original corruption
+is gone. The committed regression `engine::tests::nrpn_select_does_not_corrupt_the_rpn_bend_range`
+was transplanted unchanged to `48f359e^`, where it failed with `left: 24.0, right: 2.0`; it
+passed on the fixed tree. The new CC98/99 dispatch arm directly invalidates the stale RPN latch,
+matching the diagnosed root cause. `cargo fmt --all -- --check`, locked workspace clippy with
+warnings denied, and locked workspace tests all passed. NRPN parameter support remains explicitly
+out of scope rather than a residual of this corruption bug, so no split or reopen is needed.
 
 ## Notes
 

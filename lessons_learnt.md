@@ -3,6 +3,15 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.21 — **`voices::VEL_LEVEL_EXP` is PROGRAM-indexed, so a program whose samples-ON and samples-OFF
+  voices have different RAW velocity laws can't be compensated for both from the table — and the velocity
+  sweep runs `samples=true` ONLY, so a samples-off regression is invisible** (GM76: samples-on = self-
+  compensating `BottleLoopVoice` k≈0.39, samples-off / repitch-fallback = modeled Wind bottle k≈2.49). Fix by
+  wrapping the MODEL in `ScaledVoice` inside its `76 =>` route arm — the comp must track the VOICE, not the
+  `samples` flag (the `wd_o10` C5-fallback oracle fails a flag-keyed version, and it leaves the samples-on
+  fallback uncompensated too). Drums already solved this via `drum_vel_level_exp(kit, samples, key)`. Graduated
+  to a guard: `velocity_law::modeled_gm76_follows_the_square_law_in_no_samples_builds`.
+
 - 2026.07.21 — **A denormal-flush floor belongs just above subnormal (1e-34), NOT at 1e-20 — 1e-20 is a
   NORMAL f32, so flushing there is not byte-transparent: the sub-floor δ surfaces via an f32 rounding-tie**
   (`dsp.rs:flush_denormal`, MM-BUG-KILN-00027). Every f32 add's round-to-nearest is a discontinuity (one

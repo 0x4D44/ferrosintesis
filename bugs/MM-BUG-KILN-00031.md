@@ -18,11 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the velocity-law
-  loose-ends investigation; a regression introduced by `f7d585a`) → Fixed (2026-07-21,
-  `4569855`, bumped `7caec4c`) → Closed (2026-07-21, independently verified by Codex GPT-5:
-  modeled GM76 k=2.421/2.555 red-before, all routing and velocity guards green-after;
-  workspace tests and clippy green)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the velocity-law loose-ends investigation; a regression introduced by `f7d585a`) → Fixed (2026-07-21, `4569855`, bumped `7caec4c`) → Closed (2026-07-21, independently verified by Codex GPT-5: modeled GM76 k=2.421/2.555 red-before, all routing and velocity guards green-after; workspace tests and clippy green)
 
 ## Observation
 

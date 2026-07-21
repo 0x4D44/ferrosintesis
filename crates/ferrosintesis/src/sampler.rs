@@ -2243,9 +2243,6 @@ fn drone_g3() -> &'static [Zone] {
 pub fn chanter_bank() -> &'static [Zone] {
     chanter()
 }
-pub fn chanter_rr2_bank() -> &'static [Zone] {
-    chanter_rr2()
-}
 pub fn drone_g2_bank() -> &'static [Zone] {
     drone_g2()
 }
@@ -2287,6 +2284,7 @@ pub struct LoopVoice {
 }
 
 impl LoopVoice {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         zones: &'static [Zone],
         target_hz: f32,
@@ -4170,7 +4168,7 @@ mod tests {
         // (label, zones) — every bank played by `LoopVoice` on a modulo wrap.
         let banks: [(&str, &'static [Zone]); 4] = [
             ("chanter", chanter_bank()),
-            ("chanter_rr2", chanter_rr2_bank()),
+            ("chanter_rr2", chanter_rr2()),
             ("drone_g2", drone_g2_bank()),
             ("drone_g3", drone_g3_bank()),
         ];

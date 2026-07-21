@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00032 — SMF tempo map: a first Set-Tempo after tick 0 mis-times every event before it (the default-120bpm prefix is never applied)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** parser
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — found by gpt-5.6-sol-xhigh, corroborated by source read) → Fixed (2026-07-21, `395c8c1`)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — found by gpt-5.6-sol-xhigh, corroborated by source read) → Fixed (2026-07-21, `395c8c1`) → Closed (2026-07-21, independently two-eyes verified by a separate Claude Opus 4.8 verifier session — did not author the fix: reproduced fails-before RED in its own throwaway worktree at exactly 1.0 s / passes-after GREEN, traced the root cause and confirmed the tick-0 common case is not regressed, module gate 9/9 green)
 
 ## Observation
 

@@ -287,8 +287,17 @@ impl OnePole {
 
     #[inline]
     pub fn process(&mut self, x: f32) -> f32 {
-        self.z = flush_denormal(self.z + self.a * (x - self.z));
+        self.z += self.a * (x - self.z);
         self.z
+    }
+
+    /// Snap a denormal-parked state to zero (MM-BUG-KILN-00027). Called once
+    /// per block by the always-running BUS owners only — never from voice
+    /// paths, where a state nudge would recirculate through near-unity
+    /// feedback loops and diverge (measured: 24-LSB drift on one track when
+    /// the flush lived inside `process`).
+    pub fn flush(&mut self) {
+        self.z = flush_denormal(self.z);
     }
 }
 
@@ -555,9 +564,17 @@ impl Biquad {
             - self.a2 * self.y2;
         self.x2 = self.x1;
         self.x1 = x;
-        self.y2 = flush_denormal(self.y1);
-        self.y1 = flush_denormal(y);
+        self.y2 = self.y1;
+        self.y1 = y;
         y
+    }
+
+    /// Per-block denormal flush for BUS-owned biquads (see `OnePole::flush`).
+    pub fn flush(&mut self) {
+        self.x1 = flush_denormal(self.x1);
+        self.x2 = flush_denormal(self.x2);
+        self.y1 = flush_denormal(self.y1);
+        self.y2 = flush_denormal(self.y2);
     }
 }
 

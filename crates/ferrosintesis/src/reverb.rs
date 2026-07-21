@@ -351,6 +351,9 @@ impl CathedralReverb {
             self.active = true;
         }
 
+        // Per-block denormal flush (MM-BUG-KILN-00027).
+        self.return_hp_l.flush();
+        self.return_hp_r.flush();
         #[cfg(test)]
         let mut return_peak = 0.0f32;
         for i in 0..send.len() {

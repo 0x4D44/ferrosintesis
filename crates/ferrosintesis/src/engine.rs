@@ -743,6 +743,9 @@ impl PingPong {
     }
 
     fn process(&mut self, send: &[f32], l: &mut [f32], r: &mut [f32]) {
+        // Per-block denormal flush (MM-BUG-KILN-00027).
+        self.lp_l.flush();
+        self.lp_r.flush();
         for i in 0..send.len() {
             let out_l = self.left.tap(self.time);
             let out_r = self.right.tap(self.time);
@@ -849,6 +852,12 @@ impl Sympathetic {
     }
 
     fn process(&mut self, send: &[f32], l: &mut [f32], r: &mut [f32]) {
+        // Per-block denormal flush (MM-BUG-KILN-00027): the damp one-poles and
+        // the input HP otherwise park below the floor when the send goes quiet.
+        self.hp.flush();
+        for (_, _, damp) in &mut self.combs {
+            damp.flush();
+        }
         for i in 0..send.len() {
             let x = self.hp.process(send[i]) * self.input;
             let mut sum = 0.0;
@@ -894,6 +903,9 @@ impl BusGlue {
     }
 
     fn process(&mut self, l: &mut [f32], r: &mut [f32]) {
+        // Per-block denormal flush (MM-BUG-KILN-00027).
+        self.shelf_l.flush();
+        self.shelf_r.flush();
         for i in 0..l.len() {
             let xl = self.shelf_l.process(l[i]);
             let xr = self.shelf_r.process(r[i]);

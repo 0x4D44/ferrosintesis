@@ -65,13 +65,19 @@ const PORTA_MAX_S: f32 = 0.6;
 // keeps its body; the room is pre-hall).
 const ROOM_SEND: f32 = 0.35;
 
-// D10e: overall drum-bus forward level — the whole kit sits this much louder
-// against the band. The master normalizes to a fixed -18 LUFS, so a modest lift
-// shifts the internal drums-vs-band balance forward (the value is calibrated to
-// what actually reaches the master after normalization + the -1 dBTP limiter,
-// not the nominal number). 1.0 = the pre-change level; 2.0 (+6 dB nominal) is what
-// lands as an audible ~+3 dB of drum prominence once the limiter takes its share.
-const DRUM_FORWARD: f32 = 2.0;
+// D10e: overall drum-bus level relative to the band. The +6 dB "drum forward"
+// lift (was 2.0) is REMOVED — a global kit lift is a MIXING decision baked into
+// the instrument, and it dominated most mixes. A scalar -18 LUFS normalize is
+// balance-transparent (it multiplies every channel equally), so the fader passes
+// straight through as RELATIVE drums-vs-band level; the old comment's "+6 nominal
+// -> ~+3 audible via limiter absorption" was an ear-estimate under a backwards
+// model (the limiter only clamps transients above the ceiling, not integrated
+// loudness). The synth now presents the kit level-matched to the band (1.0),
+// consistent with the SC-55 reference; an album that genuinely wants drums forward
+// authors that as ch-10 CC7 in its own mix. Kept as a tunable constant rather than
+// deleted so the drums-vs-band point can be re-seated by ear.
+// See wrk_docs/2026.07.20 - HLD - instrument balance oracle + drum-forward recalibration.md.
+const DRUM_FORWARD: f32 = 1.0;
 
 // Channel aftertouch (0xDn): "crescendo inside a held note" — pressure adds
 // vibrato depth and gain on the sustained melodic families.
@@ -621,6 +627,10 @@ fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
 /// a 1 dB dead-band. Struck/plucked/percussive voices (piano, guitar, mallets,
 /// drums) and noise/FX are left at 0.0 — their apparent "deficit" is usually a
 /// faster decay envelope, not a level error, so trimming them would misfire.
+/// (An M-CAL v2 pass — an envelope-guarded, multi-window metric — will calibrate
+/// the percussive families; see `wrk_docs/2026.07.21 - HLD - M-CAL v2 envelope-
+/// guarded metric.md`. The 21-Jul max-momentary derivation was rejected: it is a
+/// temporal-envelope artifact for short/percussive voices, not a level reading.)
 ///
 /// GM6 harpsichord is the ONE documented plucked exception (+6 dB): the audit
 /// used the fair EARLY-window RMS (0–150 ms, immune to the decay-artifact trap)

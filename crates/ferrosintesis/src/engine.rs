@@ -2281,6 +2281,18 @@ impl EngineCore {
                 s.delay_send = v;
                 s.delay_authored = true;
             }
+            98 | 99 => {
+                // NRPN select (CC98 param LSB / CC99 param MSB): ferrosintesis
+                // models no NRPN parameter, but an NRPN select MUST still
+                // invalidate the RPN latch so a following Data-Entry (CC6/38)
+                // cannot write into the previously-selected RPN — e.g. corrupt the
+                // RPN 0,0 bend range to 24 semitones on a GS/XG file that used an
+                // RPN then an NRPN without an intervening RPN-Null. Park the latch
+                // at null (127,127), the same inert state as an RPN-Null
+                // (MM-BUG-KILN-00034). This is the guard only, not NRPN support.
+                s.rpn_msb = 127;
+                s.rpn_lsb = 127;
+            }
             100 => s.rpn_lsb = val,
             101 => s.rpn_msb = val,
             120 => self.all_sound_off(ch),
@@ -4207,6 +4219,48 @@ mod tests {
         assert_eq!(s.bend, 1.0);
         assert_eq!(s.rpn_msb, 127);
         assert_eq!(s.rpn_lsb, 127);
+    }
+
+    /// MM-BUG-KILN-00034: an NRPN select (CC98/99) must invalidate the RPN latch,
+    /// so a later Data-Entry cannot corrupt the RPN-set pitch-bend range. Without
+    /// the guard, CC6 after an NRPN select is still interpreted against the
+    /// latched RPN 0,0 (a common GS/XG sequence: set bend range, then use an NRPN
+    /// without an RPN-Null).
+    #[test]
+    fn nrpn_select_does_not_corrupt_the_rpn_bend_range() {
+        let sr = 44100.0;
+        let mut core = EngineCore::new(CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        });
+        let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
+
+        // Select RPN 0,0 and set the pitch-bend range to 2 semitones.
+        core.handle_event(cc(101, 0)); // RPN MSB = 0
+        core.handle_event(cc(100, 0)); // RPN LSB = 0
+        core.handle_event(cc(6, 2)); // data entry → bend range 2
+        assert_eq!(core.strips[0].bend_range, 2.0);
+
+        // Select an NRPN (no intervening RPN-Null) then send Data-Entry. The NRPN
+        // select must have parked the RPN latch, so this CC6 is inert — it must
+        // NOT be re-interpreted as the bend range (which would clamp to 24).
+        core.handle_event(cc(99, 1)); // NRPN MSB
+        core.handle_event(cc(98, 8)); // NRPN LSB
+        core.handle_event(cc(6, 80)); // would set bend range 24 without the guard
+
+        assert_eq!(
+            core.strips[0].bend_range, 2.0,
+            "NRPN select failed to invalidate the RPN latch — bend range corrupted"
+        );
+        // The latch sits at null, so a genuine RPN can still be re-selected later.
+        assert_eq!(core.strips[0].rpn_msb, 127);
+        assert_eq!(core.strips[0].rpn_lsb, 127);
     }
 
     // ---- MM-BUG-KILN-00011: CC7 volume / CC10 pan controller slew ----

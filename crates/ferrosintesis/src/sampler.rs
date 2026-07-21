@@ -2191,7 +2191,9 @@ pub fn shakuhachi_bank() -> &'static [Zone] {
 // now scores candidates by the real wrap discontinuity against the source's
 // continuation; `looped_sustain_banks_are_loopable` pins both properties here.
 
-/// GM 109 chanter, F4–G5, ~2.5-semitone spacing (RR1 takes, single flat layer).
+/// GM 109 chanter RR1: every loopable `_31` take in the archive — 10 zones
+/// F4–G5 at ≤2-semitone spacing except the D5→F#5 hole (D#5/E5/F5 fail the
+/// −14 dB wrap gate in both takes; see prepare.py `BAGPIPE_SOURCES`).
 fn chanter() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
@@ -2199,9 +2201,29 @@ fn chanter() -> &'static [Zone] {
             "chanter_F4.wav" => 341.37,
             "chanter_G4.wav" => 383.74,
             "chanter_A4.wav" => 432.55,
+            "chanter_A#4.wav" => 454.57,
+            "chanter_B4.wav" => 481.39,
             "chanter_C5.wav" => 512.01,
+            "chanter_C#5.wav" => 538.52,
             "chanter_D5.wav" => 578.53,
+            "chanter_F#5.wav" => 716.27,
             "chanter_G5.wav" => 771.47,
+        )
+    })
+}
+
+/// GM 109 chanter RR2: the five loopable `_32` takes. An odd note seed plays
+/// this bank (MM-REQ-KILN-00025) — real per-note take variation; keys outside
+/// A4–D5 repitch a touch further here, still inside the 0.5–2.0 clamp.
+fn chanter_rr2() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "chanter_A4_rr2.wav" => 431.28,
+            "chanter_A#4_rr2.wav" => 454.56,
+            "chanter_B4_rr2.wav" => 482.11,
+            "chanter_C5_rr2.wav" => 512.34,
+            "chanter_D5_rr2.wav" => 578.09,
         )
     })
 }
@@ -2220,6 +2242,9 @@ fn drone_g3() -> &'static [Zone] {
 
 pub fn chanter_bank() -> &'static [Zone] {
     chanter()
+}
+pub fn chanter_rr2_bank() -> &'static [Zone] {
+    chanter_rr2()
 }
 pub fn drone_g2_bank() -> &'static [Zone] {
     drone_g2()
@@ -2248,6 +2273,15 @@ pub struct LoopVoice {
     step: f64,
     gain: f32,
     env: crate::dsp::Adsr,
+    /// Slow bounded read-rate random walk (MM-REQ-KILN-00026): the same
+    /// `SAX_DRIFT_MAX` ±0.22 % walk `SaxLoopVoice` runs "to defeat the
+    /// loop-tell" — at the ~65 ms chanter loops (~15 wraps/s) a static rate
+    /// is the one residual periodicity cue. Rate only: constant amplitude is
+    /// the instrument (bp_o1 pins it).
+    drift: f32,
+    drift_target: f32,
+    t: u32,
+    rng: crate::dsp::Rng,
     #[cfg(test)]
     name: &'static str,
 }
@@ -2260,6 +2294,7 @@ impl LoopVoice {
         gain: f32,
         attack: f32,
         release: f32,
+        seed: u32,
         #[cfg_attr(not(test), allow(unused_variables))] name: &'static str,
     ) -> Self {
         let zone = nearest(zones, target_hz);
@@ -2275,6 +2310,10 @@ impl LoopVoice {
             step,
             gain,
             env: crate::dsp::Adsr::new(attack, 0.0, 1.0, release, sr),
+            drift: 0.0,
+            drift_target: 0.0,
+            t: 0,
+            rng: crate::dsp::Rng::new(seed ^ 0xBA6_71FE),
             #[cfg(test)]
             name,
         }
@@ -2300,7 +2339,14 @@ impl Voice for LoopVoice {
                 frac,
             );
             *o += v * self.gain * e;
-            self.pos += self.step;
+            // Slow bounded drift walk on the read rate (shared constants with
+            // the sax voice — same idiom, same bounds).
+            if self.t.is_multiple_of(SAX_DRIFT_SAMP) {
+                self.drift_target = SAX_DRIFT_MAX * self.rng.white();
+            }
+            self.drift += 0.002 * (self.drift_target - self.drift);
+            self.t = self.t.wrapping_add(1);
+            self.pos += self.step * (1.0 + self.drift) as f64;
             if self.pos >= n as f64 {
                 self.pos -= n as f64;
             }
@@ -2324,14 +2370,23 @@ impl Voice for LoopVoice {
 
 /// GM 109 sampled chanter. Constant amplitude (velocity ignored — constant bag
 /// pressure), ~10 ms attack, 0.11 s release (mirrors the modeled chanter env).
-pub fn bagpipe_chanter_loop(key: u8, sr: f32) -> LoopVoice {
+pub fn bagpipe_chanter_loop(key: u8, sr: f32, seed: u32) -> LoopVoice {
+    // Odd seeds take the RR2 bank (the archive's `_32` takes): deterministic
+    // per-note round-robin against machine-gunning, no level step (both banks
+    // bake to the same target RMS).
+    let bank = if seed & 1 == 1 {
+        chanter_rr2()
+    } else {
+        chanter()
+    };
     LoopVoice::new(
-        chanter(),
+        bank,
         key_freq(key),
         sr,
         BAGPIPE_CHANTER_GAIN,
         0.010,
         0.11,
+        seed,
         "bagpipe_chanter",
     )
 }
@@ -4025,7 +4080,7 @@ mod tests {
     #[test]
     fn bagpipe_loop_sustains_across_wraps() {
         let sr = 44100.0;
-        let mut v = bagpipe_chanter_loop(69, sr);
+        let mut v = bagpipe_chanter_loop(69, sr, 0);
         let mut buf = vec![0f32; (1.6 * sr) as usize];
         assert!(v.render(&mut buf), "chanter loop finished early");
         let rms = |s: &[f32]| {
@@ -4060,11 +4115,62 @@ mod tests {
     ///
     /// Deliberately written over the BANKS, not one instrument: any future looped
     /// sustain added to these crates is covered the day it lands.
+    /// MM-REQ-KILN-00025/00026: per-note variation is real. An ODD seed
+    /// plays the RR2 bank (a different recorded take) and two EVEN seeds
+    /// share the bank yet diverge through the read-rate drift walk; the same
+    /// seed stays bit-deterministic. Red-checked by neutering the mechanism.
+    #[test]
+    fn bagpipe_chanter_rr2_and_drift_decorrelate() {
+        let sr = 44100.0;
+        let render = |seed: u32| {
+            let mut v = bagpipe_chanter_loop(69, sr, seed);
+            let mut buf = vec![0f32; (sr * 1.5) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        let a = render(0);
+        let b = render(1); // RR2 bank
+        let c = render(2); // same bank as `a`, different drift walk
+        assert!(
+            a.iter().zip(&b).any(|(x, y)| x != y),
+            "RR2 bank not engaged"
+        );
+        let late = (sr * 1.0) as usize;
+        assert!(
+            a[late..].iter().zip(&c[late..]).any(|(x, y)| x != y),
+            "drift walk did not decorrelate same-bank renders"
+        );
+        let a2 = render(0);
+        assert_eq!(a, a2, "seeded render must stay deterministic");
+    }
+
+    /// MM-REQ-KILN-00025: the chanter bank covers every loopable take the
+    /// FreePats archive holds — 10 RR1 zones F4-G5. The only hole is
+    /// D5->F#5 (ratio 1.238): D#5/E5/F5 fail the -14 dB wrap gate in BOTH
+    /// takes (probe 2026-07-21), so 1.25 is the tightest honest adjacent-gap
+    /// bar. Fails against the old 6-zone table (D5->G5 = 1.333).
+    #[test]
+    fn bagpipe_chanter_zone_coverage() {
+        let z = chanter();
+        assert_eq!(z.len(), 10, "chanter RR1 zones: got {}", z.len());
+        let mut roots: Vec<f32> = z.iter().map(|z| z.root).collect();
+        roots.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        for w in roots.windows(2) {
+            assert!(
+                w[1] / w[0] <= 1.25,
+                "adjacent zone gap {} -> {} exceeds 1.25",
+                w[0],
+                w[1]
+            );
+        }
+    }
+
     #[test]
     fn looped_sustain_banks_are_loopable() {
         // (label, zones) — every bank played by `LoopVoice` on a modulo wrap.
-        let banks: [(&str, &'static [Zone]); 3] = [
+        let banks: [(&str, &'static [Zone]); 4] = [
             ("chanter", chanter_bank()),
+            ("chanter_rr2", chanter_rr2_bank()),
             ("drone_g2", drone_g2_bank()),
             ("drone_g3", drone_g3_bank()),
         ];

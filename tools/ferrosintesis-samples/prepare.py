@@ -569,15 +569,35 @@ BAGPIPE_ARCHIVE_SHA256 = (
 _BP_MEMBERS = "Bagpipe-SFZ-20221204"
 # dest -> member path in the archive. Two drones + six chanter zones (RR1, `_31`),
 # ~2.5-semitone spacing F4–G5. The `.sfz` is copied too, for its loop points.
+# The loopable chanter inventory (MM-REQ-KILN-00025): every take that meets
+# the -14 dB wrap gate (probe 2026-07-21). The archive holds 13 pitches F4-G5
+# (`_31`) + 11 `_32` round robins, but D#5/E5/F5 are UNLOOPABLE in either take
+# (best wrap -12.6 / -5.3 / +1.3 dB — the takes carry internal level/timbre
+# drift no window inside BAGPIPE_LOOP_S dodges), and 6 of the `_32` takes fail
+# likewise (G4 -0.1, C#5 -6.8, D#5 -10.4, E5 -6.2, F5 -13.0, F#5 -13.3). What
+# remains: 10 RR1 zones (worst gap D5->F#5, ~1.9-semitone max repitch, down
+# from ~2.5) + 5 RR2 takes. Do NOT re-add the failures without a better source;
+# never weaken the gate. Filenames keep the note token `_`-separated so the
+# bake's note parser and the `chanter` family prefix both keep working;
+# `_rr2` never matches the note regex.
 BAGPIPE_SOURCES = {
     "drone_G2.wav": f"{_BP_MEMBERS}/samples/drone_G2_1.wav",
     "drone_G3.wav": f"{_BP_MEMBERS}/samples/drone_G3_3.wav",
     "chanter_F4.wav": f"{_BP_MEMBERS}/samples/F4_31.wav",
     "chanter_G4.wav": f"{_BP_MEMBERS}/samples/G4_31.wav",
     "chanter_A4.wav": f"{_BP_MEMBERS}/samples/A4_31.wav",
+    "chanter_A#4.wav": f"{_BP_MEMBERS}/samples/A#4_31.wav",
+    "chanter_B4.wav": f"{_BP_MEMBERS}/samples/B4_31.wav",
     "chanter_C5.wav": f"{_BP_MEMBERS}/samples/C5_31.wav",
+    "chanter_C#5.wav": f"{_BP_MEMBERS}/samples/C#5_31.wav",
     "chanter_D5.wav": f"{_BP_MEMBERS}/samples/D5_31.wav",
+    "chanter_F#5.wav": f"{_BP_MEMBERS}/samples/F#5_31.wav",
     "chanter_G5.wav": f"{_BP_MEMBERS}/samples/G5_31.wav",
+    "chanter_A4_rr2.wav": f"{_BP_MEMBERS}/samples/A4_32.wav",
+    "chanter_A#4_rr2.wav": f"{_BP_MEMBERS}/samples/A#4_32.wav",
+    "chanter_B4_rr2.wav": f"{_BP_MEMBERS}/samples/B4_32.wav",
+    "chanter_C5_rr2.wav": f"{_BP_MEMBERS}/samples/C5_32.wav",
+    "chanter_D5_rr2.wav": f"{_BP_MEMBERS}/samples/D5_32.wav",
 }
 BAGPIPE_SFZ_MEMBER = f"{_BP_MEMBERS}/Bagpipe-20221204.sfz"
 # Loop length RANGES (lo, hi) for the search. Short by design: the original 0.4 s

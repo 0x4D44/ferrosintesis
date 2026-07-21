@@ -9086,6 +9086,9 @@ impl BagpipeDroneSampled {
         };
         let g = crate::sampler::BAGPIPE_DRONE_GAIN;
         BagpipeDroneSampled {
+            // Fixed, distinct drift seeds: the drones are per-channel
+            // singletons, so a note seed adds nothing — these just decorrelate
+            // the two drones' read-rate walks (MM-REQ-KILN-00026).
             bass: crate::sampler::LoopVoice::new(
                 crate::sampler::drone_g2_bank(),
                 tenor_f * 0.5,
@@ -9093,6 +9096,7 @@ impl BagpipeDroneSampled {
                 g,
                 0.050,
                 0.22,
+                0x0D20_0E01,
                 "bagpipe_drone",
             ),
             tenor: crate::sampler::LoopVoice::new(
@@ -9102,6 +9106,7 @@ impl BagpipeDroneSampled {
                 g,
                 0.050,
                 0.22,
+                0x0D20_0E02,
                 "bagpipe_drone",
             ),
         }
@@ -12358,7 +12363,7 @@ fn make_uncorrected(
         // sampled iff (samples on AND not alt-bank).
         109 => {
             if samples {
-                Box::new(crate::sampler::bagpipe_chanter_loop(key, sr))
+                Box::new(crate::sampler::bagpipe_chanter_loop(key, sr, seed))
             } else {
                 Box::new(reed(program, key, vel, sr, seed))
             }

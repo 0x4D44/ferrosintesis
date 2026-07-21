@@ -287,8 +287,27 @@ impl OnePole {
 
     #[inline]
     pub fn process(&mut self, x: f32) -> f32 {
-        self.z += self.a * (x - self.z);
+        self.z = flush_denormal(self.z + self.a * (x - self.z));
         self.z
+    }
+}
+
+/// Snap a magnitude below 1e-20 (~−400 dBFS) to exactly 0.0.
+///
+/// An IIR feedback state never reaches zero on its own: once a tail decays
+/// past this floor it parks there — nonzero, ever smaller, eventually
+/// subnormal — and every later sample pays the denormal arithmetic penalty.
+/// That is MM-BUG-KILN-00027: a sparse `--solo` mix left the always-running
+/// buses churning parked states for the whole render (456 s wall, 0 live
+/// voices). The floor matches the engine's original comb flush; anything
+/// below it is ~340 dB under the 16-bit dither floor, so flushed renders
+/// stay byte-identical after quantization.
+#[inline]
+pub(crate) fn flush_denormal(x: f32) -> f32 {
+    if x.abs() < 1e-20 {
+        0.0
+    } else {
+        x
     }
 }
 
@@ -536,8 +555,8 @@ impl Biquad {
             - self.a2 * self.y2;
         self.x2 = self.x1;
         self.x1 = x;
-        self.y2 = self.y1;
-        self.y1 = y;
+        self.y2 = flush_denormal(self.y1);
+        self.y1 = flush_denormal(y);
         y
     }
 }

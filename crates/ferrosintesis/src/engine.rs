@@ -746,9 +746,12 @@ impl PingPong {
         for i in 0..send.len() {
             let out_l = self.left.tap(self.time);
             let out_r = self.right.tap(self.time);
-            self.left
-                .push(send[i] + self.lp_r.process(out_r) * self.feedback);
-            self.right.push(self.lp_l.process(out_l) * self.feedback);
+            self.left.push(crate::dsp::flush_denormal(
+                send[i] + self.lp_r.process(out_r) * self.feedback,
+            ));
+            self.right.push(crate::dsp::flush_denormal(
+                self.lp_l.process(out_l) * self.feedback,
+            ));
             l[i] += out_l * 0.8;
             r[i] += out_r * 0.8;
         }
@@ -896,7 +899,7 @@ impl BusGlue {
             let xr = self.shelf_r.process(r[i]);
             let level = xl.abs().max(xr.abs());
             let k = if level > self.env { self.atk } else { self.rel };
-            self.env += k * (level - self.env);
+            self.env = crate::dsp::flush_denormal(self.env + k * (level - self.env));
             let target = if self.env > self.thr {
                 (self.thr / self.env).sqrt() // 2:1 above threshold
             } else {

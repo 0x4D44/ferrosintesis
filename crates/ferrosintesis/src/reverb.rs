@@ -40,8 +40,8 @@ impl Comb {
     #[inline]
     fn process(&mut self, x: f32) -> f32 {
         let out = self.buf[self.idx];
-        self.store = out * (1.0 - self.damp) + self.store * self.damp;
-        self.buf[self.idx] = x + self.store * self.feedback;
+        self.store = crate::dsp::flush_denormal(out * (1.0 - self.damp) + self.store * self.damp);
+        self.buf[self.idx] = crate::dsp::flush_denormal(x + self.store * self.feedback);
         self.idx = (self.idx + 1) % self.buf.len();
         out
     }
@@ -64,7 +64,7 @@ impl Allpass {
     fn process(&mut self, x: f32) -> f32 {
         let b = self.buf[self.idx];
         let out = b - x;
-        self.buf[self.idx] = x + b * 0.5;
+        self.buf[self.idx] = crate::dsp::flush_denormal(x + b * 0.5);
         self.idx = (self.idx + 1) % self.buf.len();
         out
     }
@@ -234,8 +234,9 @@ impl CathedralLine {
 
     #[inline]
     fn decay_filter(&mut self, x: f32, low_k: f32, high_k: f32) -> f32 {
-        self.low_state += low_k * (x - self.low_state);
-        self.high_state += high_k * (x - self.high_state);
+        self.low_state = crate::dsp::flush_denormal(self.low_state + low_k * (x - self.low_state));
+        self.high_state =
+            crate::dsp::flush_denormal(self.high_state + high_k * (x - self.high_state));
         let low = self.low_state;
         let mid = self.high_state - low;
         let high = x - self.high_state;
@@ -244,7 +245,7 @@ impl CathedralLine {
 
     #[inline]
     fn write(&mut self, x: f32) {
-        self.buf[self.idx] = x;
+        self.buf[self.idx] = crate::dsp::flush_denormal(x);
         self.idx += 1;
         if self.idx == self.buf.len() {
             self.idx = 0;
@@ -412,6 +413,65 @@ impl CathedralReverb {
 
 #[cfg(test)]
 mod tests {
+
+    /// MM-BUG-KILN-00027: an IIR feedback tail never reaches zero on its own —
+    /// once it decays past the flush floor it parks there (nonzero, ever-
+    /// smaller) and every later sample pays the denormal/near-denormal cost.
+    /// That is the --solo 8 sparse-mix crawl: 456 s wall for a 14-min render
+    /// with 0 live voices at most progress checkpoints — pure bus churn.
+    /// Burst → long silence through each tank, then assert no internal state
+    /// dwells nonzero below 1e-20 (the flush floor). Red before the flush
+    /// (states park), green after (they snap to exactly 0).
+    #[test]
+    fn tanks_do_not_park_below_the_flush_floor() {
+        let sr = 44100.0;
+        let dwell = |v: &[f32]| v.iter().any(|&x| x != 0.0 && x.abs() < 1e-20);
+        let one = |x: f32| x != 0.0 && x.abs() < 1e-20;
+        let burst: Vec<f32> = (0..512).map(|i| (i as f32 * 0.7).sin() * 0.6).collect();
+        let zeros = [0.0f32; 512];
+        let mut out_l = vec![0.0f32; 512];
+        let mut out_r = vec![0.0f32; 512];
+
+        let mut rv = Reverb::new(sr, 0.86, 0.3, 0.3);
+        rv.process(&burst, &mut out_l, &mut out_r);
+        for _ in 0..((sr * 25.0) as usize / 512) {
+            out_l.fill(0.0);
+            out_r.fill(0.0);
+            rv.process(&zeros, &mut out_l, &mut out_r);
+        }
+        for c in rv.combs_l.iter().chain(rv.combs_r.iter()) {
+            assert!(!dwell(&c.buf), "hall comb buffer parked below the floor");
+            assert!(!one(c.store), "hall comb damp state parked: {}", c.store);
+        }
+        for a in rv.aps_l.iter().chain(rv.aps_r.iter()) {
+            assert!(!dwell(&a.buf), "hall allpass buffer parked below the floor");
+        }
+
+        let mut cat = CathedralReverb::new(sr, 0.4);
+        cat.process(&burst, &mut out_l, &mut out_r);
+        for _ in 0..((sr * 60.0) as usize / 512) {
+            out_l.fill(0.0);
+            out_r.fill(0.0);
+            cat.process(&zeros, &mut out_l, &mut out_r);
+        }
+        for line in cat.lines.iter() {
+            assert!(
+                !dwell(&line.buf),
+                "cathedral line buffer parked below the floor"
+            );
+            assert!(
+                !one(line.low_state),
+                "cathedral low shelf parked: {}",
+                line.low_state
+            );
+            assert!(
+                !one(line.high_state),
+                "cathedral high shelf parked: {}",
+                line.high_state
+            );
+        }
+    }
+
     use super::*;
     use std::f32::consts::TAU;
 

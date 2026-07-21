@@ -10,8 +10,11 @@ Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
   catalog and failed the "any diff at all is a bug" controller rule. Grep the album MIDIs for
   the CC on the target channel before trusting the opt-in argument; the unit test can't see it.
   (Related: the harpsichord 00030 "onset tracks the model = vn²" fix fixes the bloom but
-  inverts the velocity response — momentary LUFS is not a monotone function of a flat gain law
-  once a loud sample onset dominates the window.)
+  INVERTS the velocity response — momentary LUFS is not a monotone function of a flat gain law
+  once a loud sample onset dominates the window. A `vel_sense`-compressed body is near
+  velocity-flat, so its ONSET must carry the dynamics: the fix that shipped is a floored
+  `0.50 + 0.50·vel_amp` onset, floor-swept against BOTH the attack-is-peak and
+  velocity-monotonicity oracles — the literal exit condition would have shipped the inversion.)
 
 - 2026.07.20 — **`voices.rs::percentile` is NOT nearest-rank despite its doc comment — its body is
   `sorted[floor(q*(len-1))]`, so at n=9 `percentile(x, 0.95)` returns the SECOND-largest, not the max.**

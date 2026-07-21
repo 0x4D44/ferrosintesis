@@ -1,11 +1,11 @@
 # MM-REQ-KILN-00025 — GM 109 bagpipe chanter zones must cover the FreePats bank
 
-- **State:** Draft
+- **State:** Implemented
 - **Priority:** Should
 - **Area:** sampler / samples pipeline
 - **Raised:** 2026-07-20
-- **Implemented-by:** —
-- **Satisfied-by:** —
+- **Implemented-by:** integrated 32eb8aa+27db13d (branch task/20260721-DEV-HUM-bagpipe-zones-rr2-loop-drift; sampler.rs chanter()/chanter_rr2() + prepare.py BAGPIPE_SOURCES + -orchestral 157→166 files)
+- **Satisfied-by:** sampler::tests::bagpipe_chanter_zone_coverage, sampler::tests::bagpipe_chanter_rr2_and_drift_decorrelate, sampler::tests::looped_sustain_banks_are_loopable
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 32eb8aa; render-diff 124 unchanged)
 
 ## Statement
 
@@ -40,3 +40,12 @@ repitch stretch in the chanter register stays small.
   automatically; extend the zone-coverage/pitch-integrity assertions to the new
   roots.
 - Builds on MM-REQ-KILN-00017 (Implemented — bagpipe as a sampled voice).
+
+### Outcome note (2026-07-21)
+
+Filled to **10 of 13** pitches + a 5-take RR2 bank — every take that meets the
+−14 dB wrap gate. **D#5, E5 and F5 are UNLOOPABLE in BOTH takes** (best wrap
+−12.6 / −5.3 / +1.3 dB for `_31`; −10.4 / −6.2 / −13.0 for `_32`): the takes
+carry internal level/timbre drift no window inside `BAGPIPE_LOOP_S` dodges.
+Kept out rather than weakening the gate; do not re-hunt without a better
+source. Worst remaining gap D5→F#5 (~1.9-semitone max repitch, down from ~2.5).

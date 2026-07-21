@@ -1,11 +1,11 @@
 # MM-REQ-KILN-00026 — LoopVoice must carry a slow read-rate drift against the loop-tell
 
-- **State:** Draft
+- **State:** Implemented
 - **Priority:** Could
 - **Area:** sampler
 - **Raised:** 2026-07-20
-- **Implemented-by:** —
-- **Satisfied-by:** —
+- **Implemented-by:** integrated 32eb8aa (LoopVoice drift fields + render walk; drones seeded 0x0D20_0E01/02)
+- **Satisfied-by:** sampler::tests::bagpipe_chanter_rr2_and_drift_decorrelate (drift clause), voices::tests::bp_o1_bagpipe_chanter_is_constant_amplitude_saxes_keep_dynamics (amplitude unchanged)
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 32eb8aa)
 
 ## Statement
 

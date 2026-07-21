@@ -1,0 +1,23 @@
+version = 1
+
+# Release-only: integration NEVER bumps a crate version. A shared-version bump
+# invalidates every crate's Cargo `-C metadata` fingerprint, forcing a full-workspace
+# recompile each integration (the fleet convention for Cargo workspaces — see deltic
+# and mddosem). ferrosintesis is published to crates.io; bump its version deliberately
+# as part of a release, not per task. Per-integration identity rides the git SHA.
+version_bump = "release-only"
+
+fallback = [
+  { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
+  { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["test", "--workspace", "--locked"] },
+]
+
+[[component]]
+name = "workspace"
+paths = ["crates/", "tools/"]
+gate = [
+  { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
+  { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["test", "--workspace", "--locked"] },
+]

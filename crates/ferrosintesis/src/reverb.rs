@@ -428,8 +428,8 @@ mod tests {
     #[test]
     fn tanks_do_not_park_below_the_flush_floor() {
         let sr = 44100.0;
-        let dwell = |v: &[f32]| v.iter().any(|&x| x != 0.0 && x.abs() < 1e-20);
-        let one = |x: f32| x != 0.0 && x.abs() < 1e-20;
+        let dwell = |v: &[f32]| v.iter().any(|&x| x != 0.0 && x.abs() < 1e-34);
+        let one = |x: f32| x != 0.0 && x.abs() < 1e-34;
         let burst: Vec<f32> = (0..512).map(|i| (i as f32 * 0.7).sin() * 0.6).collect();
         let zeros = [0.0f32; 512];
         let mut out_l = vec![0.0f32; 512];

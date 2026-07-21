@@ -301,19 +301,34 @@ impl OnePole {
     }
 }
 
-/// Snap a magnitude below 1e-20 (~−400 dBFS) to exactly 0.0.
+/// Snap a magnitude below the flush floor to exactly 0.0.
 ///
 /// An IIR feedback state never reaches zero on its own: once a tail decays
 /// past this floor it parks there — nonzero, ever smaller, eventually
 /// subnormal — and every later sample pays the denormal arithmetic penalty.
 /// That is MM-BUG-KILN-00027: a sparse `--solo` mix left the always-running
 /// buses churning parked states for the whole render (456 s wall, 0 live
-/// voices). The floor matches the engine's original comb flush; anything
-/// below it is ~340 dB under the 16-bit dither floor, so flushed renders
-/// stay byte-identical after quantization.
+/// voices).
+///
+/// The floor is `1e-34`, NOT the `1e-20` this shipped with first. `1e-20` is a
+/// perfectly normal f32 (subnormals only start ~1.18e-38), so flushing there
+/// zeroed ~14 orders of legitimate, if tiny, state — and that is NOT byte-
+/// transparent, however small it looks. Zeroing a state the baseline kept
+/// creates a difference δ, and the *round-to-nearest step of every f32 add* is
+/// a discontinuity with one threshold per ULP: the first time an exact sum
+/// straddles a boundary within δ, δ teleports to a full 1-ULP-of-signal jump
+/// (measured on "Wire and Wake": the piano `Sympathetic` per-block flush seeded
+/// δ≈1e-19 every staccato gap, one tie surfaced at t=123.65 s, and `BusGlue`'s
+/// transient-displaced atk/rel branch amplified it to a 4.8 s, ≤6.5e-5 burst
+/// before it self-healed). A floor of `1e-34` still snaps states ~4 orders
+/// above subnormal — so the perf fix is intact (state × smallest coefficient
+/// stays normal) — while shrinking δ enough that the per-add tie hazard drops
+/// from ~1e-12 to ~1e-26: catalog-clean, renders byte-identical to the
+/// unflushed baseline. Keep the guard test's floor
+/// (`reverb::tests::tanks_do_not_park_below_the_flush_floor`) in lockstep.
 #[inline]
 pub(crate) fn flush_denormal(x: f32) -> f32 {
-    if x.abs() < 1e-20 {
+    if x.abs() < 1e-34 {
         0.0
     } else {
         x

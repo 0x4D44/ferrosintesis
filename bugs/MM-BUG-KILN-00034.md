@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00034 — NRPN select (CC98/99) does not invalidate the RPN latch, so a later Data-Entry corrupts the RPN-set value (e.g. pitch-bend range → 24 semitones)
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** engine
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — severity re-framed from "harmless absence" to active corruption by Fable 5)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — severity re-framed from "harmless absence" to active corruption by Fable 5) → Fixed (2026-07-21, `663752a`)
 
 ## Observation
 
@@ -44,12 +44,26 @@ assert the channel bend range is still 2, not 24.
 
 ## Fix
 
-<to be filled by the fixer>
+Fix (`663752a`): add a `98 | 99 => { s.rpn_msb = 127; s.rpn_lsb = 127; }` arm to the CC
+dispatch (`engine.rs`, beside the CC100/101 RPN-select arms). An NRPN select now parks the RPN
+latch at null — the same inert state as an RPN-Null — so a following Data-Entry (CC6/38) matches
+neither `(0,0)` nor `(0,1)` in the data-entry handler (`engine.rs:2171`) and is dropped. This is
+the defensive guard only (correct MIDI semantics: an NRPN select must not leave a following
+Data-Entry writing into the previously-selected RPN); it is NOT NRPN parameter support (out of
+scope — large surface, no demonstrated demand).
 
-Sketch: add CC98/CC99 arms that park the RPN latch at null (`rpn_msb = rpn_lsb = 127`), so a
-subsequent Data-Entry is inert — a ~4-line **defensive guard**, matching correct MIDI
-semantics (an unauthored/NRPN parameter must not corrupt an RPN value). This is deliberately
-NOT full NRPN parameter support (large surface, no demonstrated demand — out of scope).
+Verification:
+- Regression `engine::tests::nrpn_select_does_not_corrupt_the_rpn_bend_range` — observed RED
+  without the arm (bend range corrupted to 24 after RPN 0,0 → NRPN select → CC6=80) → GREEN with
+  it (bend range stays 2). Fails-before/passes-after both confirmed by reverting and re-applying
+  the arm.
+- Full `cargo test -p ferrosintesis --lib` suite 600/600 (0 failed); `cargo clippy -p
+  ferrosintesis --all-targets -- -D warnings` clean; `cargo fmt --check` clean.
+- Pure controller guard: no in-repo composition engine emits CC98/99 (census of `albums/**/*.py`
+  clean), so album renders are unchanged by construction — the render-diff is zero and was not run
+  for that reason.
+
+Awaiting independent two-eyes verification before Closed (the fixer must not close their own bug).
 
 ## Notes
 

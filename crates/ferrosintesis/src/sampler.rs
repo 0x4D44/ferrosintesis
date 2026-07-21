@@ -5440,6 +5440,59 @@ mod tests {
     /// coarse from 50 ms, 1 s render, seed 5). `skip` drops leading window
     /// pairs a caller has documented reason to exclude. Returns the 50 ms
     /// fine windows for attack-leg callers.
+    /// MM-REQ-KILN-00027: steel high-key LEVEL parity. The seam-shape oracle
+    /// above cannot see this: at keys ≥76 the peak-normalized steel take
+    /// speaks ~3.6–4.0× (≈12 dB) OVER the ringing model at every velocity
+    /// (scratchpad 2026.07.19), because the flat LA_STEEL gain ignores how
+    /// the model's spoken level falls with key. Bar 2.2×: nylon's healthy
+    /// wrap sits at 1.6–1.7×, the un-tapered steel at 3.6–4.0× — red before
+    /// the per-key taper, green after, honest floor 0.8× against over-taper.
+    #[test]
+    fn la_steel_high_key_level_parity() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        for key in [76u8, 79, 83] {
+            for vel in [60u8, 100] {
+                let early = |samples: bool| {
+                    let mut v = voices::make(25, key, vel, sr, 5, samples);
+                    let mut buf = vec![0f32; (0.4 * sr) as usize];
+                    v.render(&mut buf);
+                    let (a, b) = ((0.05 * sr) as usize, (0.30 * sr) as usize);
+                    (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                };
+                let ratio = early(true) / early(false).max(1e-12);
+                assert!(
+                    (0.8..2.2).contains(&ratio),
+                    "steel key {key} vel {vel}: wrapped/model early-RMS ratio {ratio:.2} outside 0.8–2.2"
+                );
+            }
+        }
+    }
+
+    /// Calibration printer for the steel high-key taper (MM-REQ-KILN-00027).
+    #[test]
+    #[ignore = "calibration harness — run by hand"]
+    fn print_steel_wrap_level_ratios() {
+        let sr = 44100.0;
+        for key in [60u8, 64, 68, 72, 74, 76, 79, 83, 86, 90] {
+            for vel in [60u8, 100] {
+                let early = |samples: bool| {
+                    let mut v = voices::make(25, key, vel, sr, 5, samples);
+                    let mut buf = vec![0f32; (0.4 * sr) as usize];
+                    v.render(&mut buf);
+                    let (a, b) = ((0.05 * sr) as usize, (0.30 * sr) as usize);
+                    (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                };
+                println!(
+                    "steel key {key:3} vel {vel:3}: wrapped/model {:.2}",
+                    early(true) / early(false).max(1e-12)
+                );
+            }
+        }
+    }
+
     fn assert_wrap_seam(
         program: u8,
         key: u8,

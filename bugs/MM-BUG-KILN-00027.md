@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00027 — `--solo 8` render of Hollow Hill Pt 1 hangs (>400 s vs ~2 min full mix)
 
-- **State:** Open
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** engine / sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-20, promoted from the 2026-07-19 scratchpad entry — Claude Fable 5, GM sweep audit)
+- **State history:** Open (2026-07-20, promoted from the 2026-07-19 scratchpad entry — Claude Fable 5, GM sweep audit) → Fixed (2026-07-21, `85d215c`+`a2e6700`+`90f43f2`, bumped `58e487e`) → Closed (2026-07-21, two-eyes verified by an independent Claude Opus 4.8 session: root cause understood, byte-transparency confirmed, regression guard green on trunk)
 
 ## Observation
 
@@ -40,7 +40,28 @@ Repro: Hollow Hill Pt 1, `--solo 8`.
 
 ## Fix
 
-<unfixed — raised only>
+**Root cause.** The "hang" was a ~10× crawl (14-min render in 456 s wall) of a
+*completing* render, not a true hang. IIR feedback tails in the always-running buses
+(hall/cathedral reverbs, chorus/echo, sympathetic resonance) decay past ~1e-20 and park
+there as denormals; a sparse `--solo` mix leaves almost no live voices, so those buses churn
+denormal arithmetic for the whole render.
+
+**Fix.** A per-block `flush_denormal` snapping bus-owned feedback state to exactly 0, called
+by the bus owners only (`85d215c` flush; `a2e6700` narrowed it to bus-owned state after a
+byte-transparency sweep caught in-primitive flushing nudging voice KS loops). The flush floor
+was then lowered `1e-20 → 1e-34` (`90f43f2`): 1e-20 is a *normal* f32 (subnormals start
+~1.18e-38), so flushing there was not byte-transparent — the sub-floor δ surfaced via an f32
+rounding-tie and `BusGlue` amplified it to a ~2 LSB, −84 dBFS, 4.8 s self-healing burst on
+"Atlas of Becoming / Wire and Wake". 1e-34 keeps the perf fix (state × smallest coefficient
+stays normal) while dropping the per-add tie hazard ~1e-12 → ~1e-26.
+
+**Verification.** `--solo 8` of Hollow Hill Pt 1: 456 s → ~43 s, identical output stats.
+"Wire and Wake" (default + `--peak-normalize`) renders byte-identical to the unflushed
+baseline. Regression guard `reverb::tests::tanks_do_not_park_below_the_flush_floor` observed
+red → green and confirmed green on trunk in the 598-test ferrosintesis suite. Integrated at
+`58e487e`. Diagnosis with Fable 5 and gpt-5.6-sol (rounding-tie mechanism); flush-site bisect
+localized the seed (Sympathetic, PingPong exonerated). Full detail in
+`wrk_journals/2026.07.21 - JRN - U5 solo8 hang rounding-tie resolution.md`.
 
 ## Notes
 

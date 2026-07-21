@@ -355,7 +355,8 @@ mod tests {
             //  109    bagpipe — the chanter is a constant-pressure looped sample and
             //         takes no velocity at all (`bagpipe_chanter_loop(key, sr)`). A
             //         piper physically cannot play it louder; velocity-independence
-            //         is correct, exactly as for the organ.
+            //         is correct, exactly as for the organ. PINNED POSITIVELY by
+            //         `looped_recording_voices_keep_their_documented_velocity_behaviour`.
             //  96     FX 1 (rain) — measures k≈0.49. A noise texture whose level is
             //         dominated by a velocity-independent bed. UNDIAGNOSED: exempted
             //         rather than compensated because no reference measurement exists
@@ -366,11 +367,15 @@ mod tests {
             //         Pre-existing defect in the bowed-string model, not in the
             //         velocity law; a scalar exponent cannot correct a non-monotonic
             //         curve. Tracked separately - fixing it needs the model, not this.
-            //  76     blown bottle — its default (samples-on) voice became a looped real
-            //         recording (`BottleLoopVoice`) in a change that landed AFTER this
-            //         calibration; measures k≈0.39, same class as the bagpipe chanter
-            //         loop. Its velocity response is the recording's, not this table's.
-            //         Follow-up in scratchpad to decide the loop voices' velocity law.
+            //  76     blown bottle — its default (samples-on) voice is a looped real
+            //         recording (`BottleLoopVoice`) with a deliberately compressed
+            //         taper; measures k≈0.39, same class as the bagpipe chanter loop.
+            //         Its velocity response is the recording's, not this table's.
+            //         PINNED POSITIVELY: `looped_recording_voices_keep_their_documented_
+            //         velocity_behaviour` (samples-on span) and `modeled_gm76_follows_
+            //         the_square_law_in_no_samples_builds` (the modeled `--no-samples` /
+            //         repitch-fallback path, which is compensated samples-aware in
+            //         `voices::melodic_vel_level_exp`).
             if p == 6 || p == 76 || p == 96 || p == 109 || p == 42 || p == 43 {
                 continue;
             }
@@ -460,6 +465,41 @@ mod tests {
         }
     }
 
+    /// AC9 — the `--no-samples` / modeled path is ALSO on the law where the
+    /// samples-on voice is exempted for being a real recording.
+    ///
+    /// The whole sweep above runs `samples=true` (HLD §5). GM76's samples-on voice
+    /// is the exempted `BottleLoopVoice`, but two paths render the MODELED Wind
+    /// bottle instead: a `--no-samples` build, and — in ANY build — a GM76 note
+    /// more than ~1 octave from the bottle sample's zone root, which falls back via
+    /// `bottle_loop_voice(...).unwrap_or(model)` (`voices.rs`, the `76 =>` arm). That
+    /// model is a plain velocity-sensitive voice and must obey k=2 like any other.
+    ///
+    /// It regressed silently: removing `VEL_LEVEL_EXP[76]=1.450` (correct — it was
+    /// double-correcting the self-compensating loop) also dropped the modeled
+    /// path's compensation, because `VEL_LEVEL_EXP` is program-indexed, not
+    /// samples-aware. The samples-on sweep can't see it (there GM76 is the loop).
+    /// This pins the modeled path so the compensation stays samples-aware
+    /// (`voices::melodic_vel_level_exp`).
+    #[test]
+    fn modeled_gm76_follows_the_square_law_in_no_samples_builds() {
+        for &key in &FIT_KEYS {
+            let levels: Vec<(u8, f32)> = FIT_VELS
+                .iter()
+                .map(|&v| {
+                    let l = level_db(&render(voices::make(76, key, v, SR, SEED, false), 1.2));
+                    (v, l)
+                })
+                .collect();
+            let k = fit_k(&levels);
+            assert!(
+                (k - 2.0).abs() <= 0.2,
+                "modeled GM76 (--no-samples) key {key}: velocity exponent {k:.3}, want 2.0 +/- 0.2 \
+                 — the modeled Wind bottle lost its compensation when VEL_LEVEL_EXP[76] was removed"
+            );
+        }
+    }
+
     /// AC4 — the exemptions, asserted by name so that dropping one is a deliberate
     /// act rather than an omission. The cathedral organ has its own dedicated test
     /// (`cathedral_organ_steady_level_is_velocity_independent`) which must keep
@@ -479,6 +519,41 @@ mod tests {
         assert!(
             loud > soft,
             "GM6 must still respond to velocity, just weakly"
+        );
+    }
+
+    /// AC11 — the looped-recording voices keep their DOCUMENTED, deliberate
+    /// velocity behaviour, so their exemption from `every_gm_program_follows_the_
+    /// square_law` is a positive pin, not a silent blind spot. Each is a real
+    /// recording (or a constant-pressure sample) that cannot follow k=2 the way a
+    /// model does — but "exempt" must never mean "unchecked".
+    #[test]
+    fn looped_recording_voices_keep_their_documented_velocity_behaviour() {
+        // GM76 blown bottle: a single-dynamic recording (no p/f layers), so it
+        // CANNOT brighten with velocity. `BottleLoopVoice` gives it a deliberately
+        // COMPRESSED level taper (`0.55 + 0.45·vel_amp`, sampler.rs) — present but
+        // far shallower than k=2. Pin the compressed span so it can neither drift to
+        // velocity-flat (span → 0, a dead dynamic) nor to the full square law
+        // (~24 dB over v32→v127, which would mean a layer double-count crept back).
+        let bottle_span = melodic_level(76, 60, 127) - melodic_level(76, 60, 32);
+        assert!(
+            (2.5..=7.0).contains(&bottle_span),
+            "GM76 bottle velocity span {bottle_span:.2} dB (v32→v127) — outside the \
+             documented compressed band [2.5, 7.0]: <2.5 = drifted flat, >7.0 = a \
+             layer/compensation double-count reintroduced"
+        );
+
+        // GM109 bagpipe chanter: constant bag pressure — a piper physically cannot
+        // play it louder, so `LoopVoice` takes NO velocity (`bagpipe_chanter_loop`).
+        // Velocity-flat is the instrument, exactly as for the cathedral organ; the
+        // sampler's `bp_o1…constant_amplitude` oracle pins the waveform, this pins
+        // the rendered level.
+        let pipe_span = melodic_level(109, 60, 120) - melodic_level(109, 60, 40);
+        assert!(
+            pipe_span.abs() < 1.0,
+            "GM109 bagpipe velocity span {pipe_span:.2} dB — the chanter is \
+             constant-pressure (velocity-flat); a nonzero span means LoopVoice grew \
+             a velocity path"
         );
     }
 

@@ -12393,7 +12393,23 @@ fn make_uncorrected(
         // `--no-samples` voice and the fallback when no usable loop / the repitch is out
         // of range.
         76 => {
-            let model = Box::new(Wind::from_preset(wind(76), key, vel, sr, seed));
+            // The modeled Wind bottle fits k~=2.49 raw and needs a 1.512 exponent to
+            // reach the square law. Apply it HERE, wrapping the MODEL only, because
+            // the decision tracks the VOICE, not the `samples` flag: a note outside
+            // the bottle sample's +/-octave repitch range falls back to the model in a
+            // samples-ON build too (e.g. C5), and must be compensated there exactly as
+            // in --no-samples. `BottleLoopVoice` is a real recording carrying its own
+            // dynamic and stays BARE. GM76 therefore has NO `VEL_LEVEL_EXP` entry:
+            // that table is program-indexed and cannot express "compensate the model,
+            // not the loop" (the loop's taper is intrinsic; so is this). Pinned by
+            // velocity_law::modeled_gm76_follows_the_square_law_in_no_samples_builds
+            // and looped_recording_voices_keep_their_documented_velocity_behaviour.
+            let model: Box<dyn Voice> = Box::new(ScaledVoice {
+                inner: Box::new(Wind::from_preset(wind(76), key, vel, sr, seed)),
+                exp: 1.512,
+                g: ScaledVoice::gain(vel, 1.512),
+                scratch: Vec::new(),
+            });
             if samples {
                 crate::sampler::bottle_loop_voice(key, vel, sr, seed).unwrap_or(model)
             } else {

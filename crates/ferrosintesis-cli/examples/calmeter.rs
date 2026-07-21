@@ -109,14 +109,30 @@ fn read_wav(path: &str) -> Result<Wav, String> {
     Ok(Wav { samples, sr })
 }
 
-/// Max momentary block over the window, plus the index of the peak block (for the
-/// envelope-class guard) and the count of clipped samples inside the window.
-fn measure(w: &Wav, start: i64, window_frames: i64, preroll_frames: i64) -> (f32, i32, u32) {
+/// The valid momentary blocks in **onset-relative** order: index 0 is the first block
+/// at/after the true onset (absolute index `first_valid` into `m` — earlier blocks are
+/// K-weighting filter warm-up and are discarded), through `last_valid` (the last block
+/// whose 400 ms body is wholly inside the window). Returned as a plain series so the
+/// caller can both take the max (level) and compare the trajectory across engines (the
+/// M-CAL v2 shape guard). Pure — unit-tested below.
+fn onset_blocks(m: &[f32], first_valid: usize, last_valid: i64) -> Vec<f32> {
+    if last_valid < first_valid as i64 || first_valid >= m.len() {
+        return Vec::new();
+    }
+    let last = (last_valid as usize).min(m.len() - 1);
+    m[first_valid..=last].to_vec()
+}
+
+/// The onset-relative momentary-block trajectory over the window, plus the count of
+/// clipped samples inside it. The caller derives max_m / peak_block / sounded from the
+/// trajectory; emitting the whole series (not just the max) is what lets the derive step
+/// compare peak-normalised envelopes between engines.
+fn measure(w: &Wav, start: i64, window_frames: i64, preroll_frames: i64) -> (Vec<f32>, u32) {
     let n = (w.samples.len() / 2) as i64;
     let slice_start = (start - preroll_frames).max(0);
     let slice_end = (start + window_frames).min(n);
     if slice_end <= slice_start {
-        return (f32::NEG_INFINITY, -1, 0);
+        return (Vec::new(), 0);
     }
     let lo = (slice_start * 2) as usize;
     let hi = (slice_end * 2) as usize;
@@ -137,18 +153,35 @@ fn measure(w: &Wav, start: i64, window_frames: i64, preroll_frames: i64) -> (f32
     let block = 0.400 * w.sr as f64;
     let last_valid = (((actual_preroll + window_frames as f64) - block) / hop).floor() as i64;
 
-    let mut best = f32::NEG_INFINITY;
-    let mut best_idx: i32 = -1;
-    for (j, &b) in m.iter().enumerate() {
-        if j < first_valid || (j as i64) > last_valid {
-            continue;
-        }
-        if b > best {
-            best = b;
-            best_idx = (j - first_valid) as i32;
-        }
+    (onset_blocks(&m, first_valid, last_valid), clipped)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::onset_blocks;
+
+    #[test]
+    fn onset_blocks_drops_warmup_and_tail() {
+        // m indices 0..6; first_valid=2 drops the two warm-up blocks, last_valid=4
+        // drops block 5,6 (400 ms body would spill past the window).
+        let m = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0];
+        assert_eq!(onset_blocks(&m, 2, 4), vec![12.0, 13.0, 14.0]);
     }
-    (best, best_idx, clipped)
+
+    #[test]
+    fn onset_blocks_clamps_last_to_len() {
+        let m = [1.0, 2.0, 3.0];
+        // last_valid past the end -> clamp to the final block.
+        assert_eq!(onset_blocks(&m, 1, 99), vec![2.0, 3.0]);
+    }
+
+    #[test]
+    fn onset_blocks_empty_when_inverted_or_out_of_range() {
+        let m = [1.0, 2.0, 3.0];
+        assert!(onset_blocks(&m, 2, 1).is_empty()); // last < first
+        assert!(onset_blocks(&m, 5, 9).is_empty()); // first past the end
+        assert!(onset_blocks(&[], 0, 0).is_empty());
+    }
 }
 
 fn main() -> Result<(), String> {
@@ -171,8 +204,29 @@ fn main() -> Result<(), String> {
     let window_frames = (WINDOW_S * w.sr as f64).round() as i64;
     let preroll_frames = (PREROLL_S * w.sr as f64).round() as i64;
 
+    // Fixed onset-relative block count for the (unclamped) window geometry — every
+    // non-truncated probe note yields exactly this many blocks, so `b0..b{n-1}` is a
+    // stable schema. A block below the meter floor prints as -120.000 (sentinel).
+    let hopf = 0.100 * w.sr as f64;
+    let blockf = 0.400 * w.sr as f64;
+    let fv = (preroll_frames as f64 / hopf).ceil() as i64;
+    let lv = ((preroll_frames as f64 + window_frames as f64 - blockf) / hopf).floor() as i64;
+    let nblocks = (lv - fv + 1).max(0) as usize;
+    let fmt = |v: f32| {
+        if v.is_finite() {
+            format!("{v:.3}")
+        } else {
+            "-120.000".to_string()
+        }
+    };
+
     let plan = std::fs::read_to_string(plan_path).map_err(|e| format!("{plan_path}: {e}"))?;
-    println!("idx\tprogram\tkey\tvelocity\tmax_m\tpeak_block\tclipped\tsounded");
+    let mut header =
+        String::from("idx\tprogram\tkey\tvelocity\tmax_m\tpeak_block\tclipped\tsounded");
+    for j in 0..nblocks {
+        header.push_str(&format!("\tb{j}"));
+    }
+    println!("{header}");
     for line in plan.lines().skip(1) {
         let f: Vec<&str> = line.split('\t').collect();
         if f.len() < 6 {
@@ -183,12 +237,26 @@ fn main() -> Result<(), String> {
         // The engine dispatched this note at the last chunk boundary at or before the
         // nominal onset, then the module took `latency` frames to make sound.
         let start = (onset - onset % chunk) as i64 + latency;
-        let (max_m, peak_block, clipped) = measure(&w, start, window_frames, preroll_frames);
+        let (blocks, clipped) = measure(&w, start, window_frames, preroll_frames);
+        let max_m = blocks.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let peak_block = blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.is_finite())
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .map(|(i, _)| i as i32)
+            .unwrap_or(-1);
         let sounded = max_m > SILENCE_LUFS;
-        println!(
-            "{idx}\t{program}\t{key}\t{vel}\t{max_m:.3}\t{peak_block}\t{clipped}\t{}",
+        let mut row = format!(
+            "{idx}\t{program}\t{key}\t{vel}\t{}\t{peak_block}\t{clipped}\t{}",
+            fmt(max_m),
             if sounded { 1 } else { 0 }
         );
+        for j in 0..nblocks {
+            row.push('\t');
+            row.push_str(&fmt(blocks.get(j).copied().unwrap_or(f32::NEG_INFINITY)));
+        }
+        println!("{row}");
     }
     Ok(())
 }

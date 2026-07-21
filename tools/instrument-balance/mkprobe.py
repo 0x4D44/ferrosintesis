@@ -52,10 +52,35 @@ TAIL_S = 3.00  # silence after the last note-off
 KEYS = (48, 53, 58, 63, 68, 73)  # C3 F3 A#3 D#4 G#4 C#5
 VELS = (72, 110)
 
+# --- per-family register offset (SPEC_v2 / M-CAL v2 tooling HLD §1) ----------
+# One fixed key set for all 128 programs metered whole families out of register:
+# GM33's sample bank ends ~D2, so C3-C#5 fell to the fallback bare model for 10/12
+# pitches (Codex catch). Transpose the 6-pitch-class set into each family's home
+# register, preserving its shape (6 classes, 2 octaves) but centring it correctly.
+# Offsets are coarse and musical, NOT sampler zone-roots (duplicating the zone table
+# in Python is brittle); residual per-key fallback is surfaced by the derive-side
+# guards. Heterogeneous families (ChromPerc, some Pipe) still mismeasure a few
+# programs — a documented low-confidence residual (see the tooling HLD).
+def family_offset(p: int) -> int:
+    if 32 <= p <= 39:  # Bass — an octave+ below the base set (banks E1-D2)
+        return -24
+    if 72 <= p <= 79:  # Pipe — flute/piccolo register
+        return 12
+    if 112 <= p <= 115:  # tinkle-bell/agogo/steel-drum/woodblock — high/mid
+        return 12
+    # 116-119 taiko/melodic-tom/synth-drum are LOW membrane drums: +12 is out of
+    # idiom, so they (and every other family) stay on the base set.
+    return 0
+
+
 SETS = {
     "smoke": [0, 6, 40, 118],
     "preflight": [0, 6, 16, 24, 33, 40, 48, 55, 61, 73, 90, 115],
     "hot": [30, 48, 55, 61, 87, 116, 127],
+    # guardcheck: exercises every derive-side guard (28 palm-mute -> sub-hop; 33
+    # bass -> shape/decay; 107 koto -> pitch-tilt; 55 orch-hit -> short) against a
+    # vetted sustained cohort for the paired anchor (16 organ, 48-50 strings, 89 pad).
+    "guardcheck": [16, 28, 33, 48, 49, 50, 55, 89, 107],
     "velcurve": [0, 6, 16, 24, 33, 40, 48, 55, 61, 73, 90, 115],
     "full": list(range(128)),
     **{f"chunk{n}": list(range(32 * n, 32 * n + 32)) for n in range(4)},
@@ -114,7 +139,10 @@ def build(programs, path, plan_path, keys=KEYS, vels=VELS):
     plan = []
     onset = LEAD_IN_S
     for p in programs:
-        for key in keys:
+        off = family_offset(p)
+        for base_key in keys:
+            key = base_key + off
+            assert 0 <= key <= 127, f"transposed key {key} out of range (prog {p})"
             for vel in vels:
                 plan.append((onset, p, key, vel))
                 onset += STRIDE_S

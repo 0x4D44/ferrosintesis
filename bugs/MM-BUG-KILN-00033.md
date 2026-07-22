@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00033 — Authored effect sends (CC93 chorus / CC94 delay) are discarded on Program Change and Reset-All-Controllers; CC121 additionally over-resets RPN-set values and sound controllers (RP-015)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** engine
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — Program-Change facet found independently by Fable 5 and gpt-5.6-sol-xhigh; CC121 RP-015 scope from Fable 5) -> Fixed (2026-07-22, Claude Opus 4.8, `11dadcc` on `main`; audio review approved by Arthur after A/B listening of the four affected album tracks, then integrated — branch SHA before the integration rebase was `eae24cc`)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — Program-Change facet found independently by Fable 5 and gpt-5.6-sol-xhigh; CC121 RP-015 scope from Fable 5) -> Fixed (2026-07-22, Claude Opus 4.8, `11dadcc` on `main`; audio review approved by Arthur after A/B listening of the four affected album tracks, then integrated — branch SHA before the integration rebase was `eae24cc`) -> Closed (2026-07-22, independently verified by OpenAI Codex (GPT-5) on `c6e048d`; the pre-fix parent `758cae6` reproduced both recorded failure modes, both regressions passed with the fix, and all repository gates were green)
 
 ## Observation
 
@@ -83,6 +83,35 @@ right control, the post-reset channel is *identical* to a GM22 that never receiv
 not a Leslie leak. The absolute bound `reset_late <= reset_early + 2.0` was passing for the
 wrong reason; it is replaced by a comparison against that never-modulated control, which is
 *stricter* — it pins reset TO the un-modulated voice instead of to a range.
+
+### Verification summary (2026-07-22, OpenAI Codex GPT-5)
+
+Independent two-eyes review confirmed the fix with no residual. The verifier was not the
+fixer: Claude Opus 4.8 authored the Fixed transition and `11dadcc`.
+
+- On the immediate pre-fix parent `758cae6`, the transplanted
+  `program_change_preserves_authored_effect_sends` regression failed exactly on the
+  recorded symptom: Program Change replaced authored CC93 `100/127 = 0.787402` with the
+  program default `0.35`. The transplanted CC121 regression also failed because CC121
+  removed the authored CC74 filter.
+- A separate before/after probe exercised every value named in the original CC121
+  observation. Before the fix, CC121 changed chorus/delay `0.787402/0.314961 ->
+  0.10/0.30`, bend range `12 -> 2`, fine tune `1.014545 -> 1.0`, vowel `90 -> 0`,
+  resonance `4.766093 -> 1.4`, cutoff `536.308 -> 12000`, and removed the filter.
+  The identical probe passed on `c6e048d`; it was temporary and was removed after the
+  comparison.
+- On `c6e048d`, both recorded regressions passed. The corrected
+  `gm22_cc1_is_harmonica_vibrato_not_leslie` control oracle also passed
+  (plain spread `3.11 Hz`, modulated spread `20.39 Hz`).
+- Root-cause inspection matched the measurements: `program_change` now applies
+  `fx_profile` only to unauthored sends, while `reset_all_controllers` preserves the
+  recorded RP-015 state and rebuilds only the program-derived drive insert.
+- Repository gates passed on the fix-containing tree: `cargo fmt --all -- --check`,
+  `cargo clippy --workspace --all-targets --locked -- -D warnings`, and
+  `cargo test --workspace --locked` (stdin closed).
+
+**Verdict: Closed.** The original Program Change and CC121 symptoms are gone, the
+regressions distinguish pre-fix from post-fix behaviour, and no residual gap remains.
 
 ## Notes
 

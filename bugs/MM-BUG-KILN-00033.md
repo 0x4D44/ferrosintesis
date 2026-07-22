@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — Program-Change facet found independently by Fable 5 and gpt-5.6-sol-xhigh; CC121 RP-015 scope from Fable 5) -> Fixed (2026-07-22, Claude Opus 4.8, `eae24cc` on `task/20260722-FIX-HUM-effect-send-persistence-across-program-c`; **integration held pending Arthur's audio review** — see Notes)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — Program-Change facet found independently by Fable 5 and gpt-5.6-sol-xhigh; CC121 RP-015 scope from Fable 5) -> Fixed (2026-07-22, Claude Opus 4.8, `11dadcc` on `main`; audio review approved by Arthur after A/B listening of the four affected album tracks, then integrated — branch SHA before the integration rebase was `eae24cc`)
 
 ## Observation
 
@@ -48,7 +48,7 @@ authored sends); foreign-file fidelity is the beneficiary.
 
 ## Fix
 
-`eae24cc` — one controller-persistence semantics pass over
+`11dadcc` — one controller-persistence semantics pass over
 `crates/ferrosintesis/src/engine.rs`.
 
 - **`program_change`** — the program's `fx_profile` is now a *default* that fills an

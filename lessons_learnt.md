@@ -3,6 +3,24 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.22 — **An ABSOLUTE audio threshold can pass for the wrong reason: an unrelated wet signal masks the
+  thing it measures. Score against a CONTROL render, not a bound** (`engine.rs:gm22_cc1_is_harmonica_vibrato_not_leslie`).
+  Its `reset_late <= reset_early + 2.0` "no CC1 leak" check only held because the setup's authored `CC93=0` was
+  being DISCARDED at the next Program Change (MM-BUG-KILN-00033), restoring chorus 0.20 whose wash suppressed the
+  envelope detector. Fix the discard and the harmonica's own delayed-onset vibrato surfaces: AM 0.00->6.00. The
+  control settles it in one measurement — a never-modulated GM22 reads 0.00->6.00 and spread 3.11, IDENTICAL to
+  the post-reset channel, so there was no leak. Comparing to the control is also STRICTER than the bound (it pins
+  reset *to* the un-modulated voice, not to a range), so this is a fix, not a weakened assertion. Corollary: when
+  a test authors a controller purely as scaffolding, check the engine actually honours it — ours silently did not.
+
+- 2026.07.22 — **`render-catalog`'s `ALBUMS` table includes `demos/`, so a catalogue-wide render-diff is NEVER
+  "albums only"** (`crates/render-catalog/src/main.rs:ALBUMS`) — and `render_diff.py` classifies by touched GM
+  program/drum key, so a non-voice change (a send/controller-semantics fix) with no `--program`/`--key` reports
+  every moved track as "CONTAMINATION". Both are harness artifacts, not findings: predict the changed set with an
+  event census first, then read the inventory as confirmation. Explain the NON-diffs too — files carrying the
+  changed pattern that did *not* move pinned down exactly why (sends re-authored 48 ticks later with no notes in
+  the gap; a ch9 kit authoring the same value as the drum default).
+
 - 2026.07.21 — **`voices::VEL_LEVEL_EXP` is PROGRAM-indexed, so a program whose samples-ON and samples-OFF
   voices have different RAW velocity laws can't be compensated for both from the table — and the velocity
   sweep runs `samples=true` ONLY, so a samples-off regression is invisible** (GM76: samples-on = self-

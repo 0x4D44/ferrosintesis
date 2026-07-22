@@ -2359,15 +2359,25 @@ impl EngineCore {
                 _ => drums::Kit::V3,
             };
         }
+        // Effect send levels are persistent CHANNEL state, not program state: GM /
+        // MMA RP-015 keeps CC91/93/94 across a Program Change. So the program's
+        // fx_profile is only a DEFAULT — it may fill a send the file never authored,
+        // but it must not overwrite one the file did. This mirrors the CC0 bank arm
+        // above, which already guards on the same flags; Program Change used to
+        // clobber both the value and the authored flag, so a foreign file that set
+        // CC93/CC94 and then changed program mid-song lost its sends
+        // (MM-BUG-KILN-00033).
         let (cho, del) = if ch == 9 {
             (0.0, 0.0)
         } else {
             fx_profile(prog, s.alt_bank_value)
         };
-        s.chorus_send = cho;
-        s.chorus_authored = false;
-        s.delay_send = del;
-        s.delay_authored = false;
+        if !s.chorus_authored {
+            s.chorus_send = cho;
+        }
+        if !s.delay_authored {
+            s.delay_send = del;
+        }
         if needs_drive(prog) {
             // rebuild on a program CHANGE too: 29<->30 mid-song choreography
             // is an authored idiom, and the two programs differ in voicing,
@@ -2383,20 +2393,18 @@ impl EngineCore {
         }
     }
 
-    fn rederive_program_defaults(&mut self, ch: u8) {
+    /// Rebuild the program-derived drive insert after CC121.
+    ///
+    /// CC121 changes neither program nor bank, so the insert's *configuration* is
+    /// unchanged — this only returns its internal sag/filter memory to spawn state,
+    /// which is what CC121 has always done here. It no longer re-derives the effect
+    /// sends: those are persistent channel state RP-015 preserves, and resetting
+    /// them discarded an authored CC93/CC94 (MM-BUG-KILN-00033).
+    fn rederive_program_drive(&mut self, ch: u8) {
         let prog = self.strips[ch as usize].program;
         let bank = self.strips[ch as usize].alt_bank_value;
-        let s = &mut self.strips[ch as usize];
-        let (cho, del) = if ch == 9 {
-            (0.0, 0.0)
-        } else {
-            fx_profile(prog, bank)
-        };
-        s.chorus_send = cho;
-        s.chorus_authored = false;
-        s.delay_send = del;
-        s.delay_authored = false;
-        s.drive = needs_drive(prog).then(|| Drive::new(prog, bank != 0, self.opt.sr));
+        self.strips[ch as usize].drive =
+            needs_drive(prog).then(|| Drive::new(prog, bank != 0, self.opt.sr));
     }
 
     fn all_sound_off(&mut self, ch: u8) {
@@ -2435,27 +2443,34 @@ impl EngineCore {
         }
     }
 
+    /// CC121 Reset All Controllers.
+    ///
+    /// MMA RP-015 enumerates a SHORT list: modulation, expression, the four pedals,
+    /// portamento control's pending source key, the RPN/NRPN selector (→ Null),
+    /// pitch-bend position (→ centre) and channel/poly pressure. Everything else on
+    /// the channel is explicitly preserved — volume, pan, program, bank, the effect
+    /// sends, the CC70-79 sound controllers, and the VALUES an RPN wrote. That last
+    /// one is the subtle part: RAC nulls the RPN *selector*, it does not revert what
+    /// the selector set, so the pitch-bend range and fine tuning survive
+    /// (MM-BUG-KILN-00033).
     fn reset_all_controllers(&mut self, ch: u8) {
         let ci = ch as usize;
         let s = &mut self.strips[ci];
-        s.bend = 1.0;
+        // Pitch bend returns to CENTRE — which is the channel's fine tuning, not
+        // 1.0. `fine` (RPN 0,1) and `bend_range` (RPN 0,0) are RPN-set values and
+        // survive, so a later bend still spans the range the file asked for.
         s.bend_wheel = 0.0;
-        s.bend_range = 2.0;
-        s.fine = 1.0;
+        s.bend = s.fine;
         s.rpn_msb = 127;
         s.rpn_lsb = 127;
         s.data_msb = 0;
         s.porta_on = false;
-        s.porta_time = PORTA_MIN_S;
         s.last_freq = None;
         s.porta_control = None; // pending CC84 source is cleared; bank_lsb persists (not a RAC controller)
         s.sustain = false;
         s.sost_down = false;
         s.soft = false;
         s.legato = false;
-        s.vowel_authored = false;
-        s.vowel_target = 0.0;
-        s.vowel_cur = 0.0;
         s.at_authored = false;
         s.at_target = 0.0;
         s.at_cur = 0.0;
@@ -2466,24 +2481,22 @@ impl EngineCore {
         s.mod_authored = false;
         s.vib_mult = 1.0;
         s.organ_trem_phase = 0.0;
-        s.res = WAH_Q;
-        s.res_target = WAH_Q;
         s.expr_target = 1.0;
         s.expr = 1.0;
         s.expr_authored = false;
         s.breath_authored = false;
         s.breath_target = 1.0;
         s.breath = 1.0;
-        s.wah = None;
-        s.wah_legacy = None;
-        s.wah_cathedral = None;
-        s.wah_r = None;
-        s.cutoff = WAH_MAX_HZ;
-        s.cutoff_target = WAH_MAX_HZ;
-        self.rederive_program_defaults(ch);
+        // Deliberately NOT reset, because RP-015 preserves them: the CC5 portamento
+        // TIME (only the CC65 switch resets), the CC70 vowel / CC71 resonance /
+        // CC74 cutoff sound controllers together with the wah filters that realise
+        // them, and the CC93/94 effect sends.
+        self.rederive_program_drive(ch);
 
         let program = self.strips[ci].program;
-        let choir_vowel = matches!(program, 52..=54).then(|| vowel_at(0.0));
+        let bend = self.strips[ci].bend;
+        let vowel = self.strips[ci].vowel_cur;
+        let choir_vowel = matches!(program, 52..=54).then(|| vowel_at(vowel));
         for a in self.active.iter_mut().filter(|a| a.ch == ch) {
             if a.held || a.sost_held {
                 a.voice.note_off();
@@ -2500,7 +2513,8 @@ impl EngineCore {
             a.poly_phase = 0.0;
             a.poly_mult = 1.0;
             a.poly_gain = 1.0;
-            a.voice.set_pitch(1.0);
+            // Centred bend, but still scaled by the preserved fine tuning.
+            a.voice.set_pitch(bend);
             if organ_leslie_family(a.program, a.alt_bank_value) {
                 let (rate, depth) = voices::organ_trem_base(a.program);
                 a.voice.set_trem(rate, depth);
@@ -4215,6 +4229,39 @@ mod tests {
             num: 74,
             val: 20,
         });
+        // Effect sends, an RPN-set bend range, and a portamento TIME. RP-015
+        // preserves every one of these across CC121 (MM-BUG-KILN-00033).
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 93,
+            val: 100,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 94,
+            val: 40,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 5,
+            val: 90,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 101,
+            val: 0,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 100,
+            val: 0,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 6,
+            val: 12,
+        });
+        let porta_time_before = core.strips[0].porta_time;
         core.handle_event(EvKind::Cc {
             ch: 0,
             num: 121,
@@ -4228,20 +4275,59 @@ mod tests {
         core.render_block_add(BLOCK, &mut sink);
 
         let s = &core.strips[0];
+
+        // --- RP-015 RESETS these ---
+        assert!(!s.sustain, "CC64 must reset");
+        assert!(!s.mod_authored, "CC1 must reset");
+        assert_eq!(s.expr, 1.0, "CC11 must reset to full");
+        assert_eq!(s.expr_target, 1.0);
+        assert_eq!(s.rpn_msb, 127, "RPN selector must park at Null");
+        assert_eq!(s.rpn_lsb, 127);
+        assert_eq!(s.bend_wheel, 0.0, "pitch bend must return to centre");
+
+        // --- RP-015 PRESERVES these ---
         assert!((s.volume - (80.0f32 / 127.0).powi(2)).abs() < 1e-6);
         assert!((s.pan - 20.0 / 127.0).abs() < 1e-6);
-        assert!(!s.sustain);
-        assert!(!s.mod_authored);
-        assert_eq!(s.expr, 1.0);
-        assert_eq!(s.expr_target, 1.0);
-        assert!(s.wah.is_none());
         assert!(
             s.drive.is_some(),
             "program-derived drive should be restored"
         );
-        assert_eq!(s.bend, 1.0);
-        assert_eq!(s.rpn_msb, 127);
-        assert_eq!(s.rpn_lsb, 127);
+        // Effect sends are persistent channel state, not program state.
+        assert_eq!(
+            s.chorus_send,
+            100.0 / 127.0,
+            "CC121 discarded the authored CC93 chorus send"
+        );
+        assert_eq!(
+            s.delay_send,
+            40.0 / 127.0,
+            "CC121 discarded the authored CC94 delay send"
+        );
+        assert!(s.chorus_authored && s.delay_authored);
+        // CC121 nulls the RPN SELECTOR; it does not revert what the selector set.
+        assert_eq!(
+            s.bend_range, 12.0,
+            "CC121 reverted the RPN-set pitch-bend range"
+        );
+        assert_eq!(s.fine, 1.0);
+        // Bend is centred, but centre is scaled by the preserved fine tuning.
+        assert_eq!(s.bend, s.fine);
+        // CC70-79 sound controllers survive, and so must the filters realising them.
+        assert!(
+            s.wah.is_some(),
+            "CC121 tore down the CC74 filter — CC74 is a preserved sound controller"
+        );
+        assert!(
+            s.cutoff_target < WAH_MAX_HZ,
+            "CC121 reverted the authored CC74 cutoff"
+        );
+        assert_eq!(s.res_target, WAH_Q, "CC71 was never authored here");
+        // Only the CC65 portamento SWITCH resets; the CC5 TIME is setup state.
+        assert!(!s.porta_on, "CC65 must reset");
+        assert_eq!(
+            s.porta_time, porta_time_before,
+            "CC121 reverted the authored CC5 portamento time"
+        );
     }
 
     /// MM-BUG-KILN-00035: GM System On is a full synthesis/channel reset, but
@@ -4343,6 +4429,71 @@ mod tests {
         // The latch sits at null, so a genuine RPN can still be re-selected later.
         assert_eq!(core.strips[0].rpn_msb, 127);
         assert_eq!(core.strips[0].rpn_lsb, 127);
+    }
+
+    /// MM-BUG-KILN-00033: effect sends are persistent CHANNEL state (GM / RP-015),
+    /// so a Program Change must not discard a send the file authored with CC93 /
+    /// CC94. The program's `fx_profile` is a default that fills an UNauthored send
+    /// only — exactly the rule the CC0 bank arm already followed.
+    #[test]
+    fn program_change_preserves_authored_effect_sends() {
+        let sr = 44100.0;
+        let core_opts = || CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        };
+
+        // A channel that AUTHORS its sends keeps them across a Program Change.
+        let mut core = EngineCore::new(core_opts());
+        let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
+        core.handle_event(EvKind::Prog { ch: 0, prog: 30 });
+        core.handle_event(cc(93, 100));
+        core.handle_event(cc(94, 20));
+        let (authored_cho, authored_del) = (100.0 / 127.0, 20.0 / 127.0);
+        assert_eq!(core.strips[0].chorus_send, authored_cho);
+        assert_eq!(core.strips[0].delay_send, authored_del);
+
+        // Program 48 (string ensemble) profiles to (0.35, 0.0) — it must NOT
+        // overwrite the authored values, and the authored flags must survive:
+        // the mix reads them to pick the legacy/cathedral bus feeds.
+        core.handle_event(EvKind::Prog { ch: 0, prog: 48 });
+        assert_eq!(
+            core.strips[0].chorus_send, authored_cho,
+            "Program Change discarded the authored CC93 chorus send"
+        );
+        assert_eq!(
+            core.strips[0].delay_send, authored_del,
+            "Program Change discarded the authored CC94 delay send"
+        );
+        assert!(core.strips[0].chorus_authored);
+        assert!(core.strips[0].delay_authored);
+
+        // A channel that authors NOTHING still tracks the program's profile — the
+        // default path is unchanged, so silent files render exactly as before.
+        let mut bare = EngineCore::new(core_opts());
+        bare.handle_event(EvKind::Prog { ch: 0, prog: 30 });
+        assert_eq!(bare.strips[0].chorus_send, 0.10);
+        assert_eq!(bare.strips[0].delay_send, 0.30);
+        bare.handle_event(EvKind::Prog { ch: 0, prog: 48 });
+        assert_eq!(bare.strips[0].chorus_send, 0.35);
+        assert_eq!(bare.strips[0].delay_send, 0.0);
+
+        // Authoring only ONE of the pair leaves the other on the program default.
+        let mut half = EngineCore::new(core_opts());
+        half.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 93,
+            val: 64,
+        });
+        half.handle_event(EvKind::Prog { ch: 0, prog: 48 });
+        assert_eq!(half.strips[0].chorus_send, 64.0 / 127.0);
+        assert_eq!(half.strips[0].delay_send, 0.0);
     }
 
     // ---- MM-BUG-KILN-00011: CC7 volume / CC10 pan controller slew ----
@@ -7175,9 +7326,26 @@ mod tests {
         let reset_early = am_rate(&reset, sr, 0.15, 1.15);
         let reset_late = am_rate(&reset, sr, 2.9, 3.9);
         let reset_spread = cycle_freq_spread(&reset[a..b], sr);
+        // "CC121 did not leak CC1" means the post-reset channel must behave exactly
+        // like a GM22 that never received CC1 — so measure against THAT control
+        // rather than an absolute AM bound. GM22 has an intrinsic delayed-onset
+        // vibrato whose AM ramps 0 -> ~6 Hz across the note, so an absolute
+        // "must not rise" bound scores the harmonica's own voice, not a Leslie
+        // leak. It held only because a Program Change used to re-derive chorus 0.20
+        // over this setup's authored CC93=0, and that wash suppressed the envelope
+        // detector; effect sends now survive a Program Change per RP-015
+        // (MM-BUG-KILN-00033), so the control comparison is both correct and
+        // stricter — it pins reset to the un-modulated voice instead of to a range.
+        let plain_early = am_rate(&gm22_plain, sr, 0.15, 1.15);
+        let plain_late = am_rate(&gm22_plain, sr, 2.9, 3.9);
         assert!(
-            reset_late <= reset_early + 2.0 && reset_spread < mod_spread * 0.6,
-            "GM reset leaked CC1 into GM22: AM {reset_early:.2}->{reset_late:.2}, spread {reset_spread:.2}"
+            (reset_early - plain_early).abs() <= 1.0
+                && (reset_late - plain_late).abs() <= 1.0
+                && (reset_spread - plain_spread).abs() <= 1.0
+                && reset_spread < mod_spread * 0.6,
+            "GM reset leaked CC1 into GM22: AM {reset_early:.2}->{reset_late:.2} vs \
+             never-modulated control {plain_early:.2}->{plain_late:.2}; spread \
+             {reset_spread:.2} vs control {plain_spread:.2} / modulated {mod_spread:.2}"
         );
 
         let alt_plain = render_cc1_events(vec![

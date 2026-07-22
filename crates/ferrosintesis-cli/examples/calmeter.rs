@@ -47,8 +47,31 @@ use ferrosintesis::offline::momentary_lufs;
 const WINDOW_S: f64 = 1.2;
 /// Extra audio metered before the window purely to warm the K-weighting filters.
 const PREROLL_S: f64 = 0.4;
-/// A note quieter than this never sounded on this engine.
-const SILENCE_LUFS: f32 = -60.0;
+/// A note quieter than this never sounded on this engine. Lowered from -60 when the probe
+/// dropped to CC7=50 to keep the bus glue inert (`mkprobe.py PROBE_CC7`): that is a uniform
+/// -12.0 dB, so the floor moves with it to preserve the same sensitivity. It must stay below
+/// the quietest genuinely-sounding note at the probe's drive.
+const SILENCE_LUFS: f32 = -72.0;
+
+/// **Glue-inertness ceiling.** A calibration differential is only valid where ferro's
+/// chain is LINEAR, because the SC-55 reference has no equivalent master stage. ferro's
+/// `BusGlue` compresses 2:1 above `thr = 0.32` (`engine.rs`), and it is not disableable
+/// through the public API — so instead of adding a calibration knob we CERTIFY inertness
+/// from the output alone:
+///
+/// * Above threshold the compressor's gain is `sqrt(thr/env)`, so the post-glue envelope
+///   is `sqrt(thr*env)`, and `sqrt(thr*env) > thr  <=>  env > thr`. The output therefore
+///   reveals engagement exactly.
+/// * BusGlue's envelope follower is a one-pole smoother toward the instantaneous peak, so
+///   `env <= max|x|`. Hence **`max|sample| < thr` over a note proves the compressor never
+///   engaged for it** — no pre-glue access needed.
+/// * The always-on tanh term is `y = g + 0.12*(tanh(1.4g)/1.4 - g)`, i.e. a relative gain
+///   of `1 - 0.0784*g^2` — only -0.07 dB at g = 0.32 and < 0.01 dB at g <= 0.1, far inside
+///   the derivation's 1 dB dead-band. It also makes the OUTPUT slightly smaller than the
+///   pre-gain signal, so we certify at 0.30 rather than 0.32 to keep margin.
+///
+/// Only meaningful on a RAW (un-normalized) render — see `read_wav`.
+const GLUE_CEILING: f32 = 0.30;
 
 /// Event-dispatch quantization, in frames, per engine.
 fn chunk_frames(engine: &str) -> Result<u64, String> {
@@ -68,19 +91,27 @@ struct Wav {
     sr: u32,
 }
 
-/// Minimal 16-bit PCM reader — `wav.rs` in the library is write-only.
+/// Minimal WAV reader — `wav.rs` in the library is write-only. Accepts 16-bit PCM
+/// (format 1) and **32-bit IEEE float (format 3)**.
+///
+/// The float path is what makes the glue certificate possible: the CLI
+/// loudness-normalizes to -18 LUFS, which destroys absolute sample level, so a
+/// calibration render must come from the `raw_dump` example (pre-normalization
+/// `offline::render` output, written as f32). Absolute level is meaningless in a
+/// normalized 16-bit render — see `GLUE_CEILING`.
 fn read_wav(path: &str) -> Result<Wav, String> {
     let b = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
     if b.len() < 12 || &b[0..4] != b"RIFF" || &b[8..12] != b"WAVE" {
         return Err(format!("{path}: not a RIFF/WAVE file"));
     }
-    let (mut pos, mut sr, mut channels, mut bits) = (12usize, 0u32, 0u16, 0u16);
+    let (mut pos, mut sr, mut channels, mut bits, mut fmt) = (12usize, 0u32, 0u16, 0u16, 0u16);
     let mut data: &[u8] = &[];
     while pos + 8 <= b.len() {
         let id = &b[pos..pos + 4];
         let sz = u32::from_le_bytes([b[pos + 4], b[pos + 5], b[pos + 6], b[pos + 7]]) as usize;
         let body = pos + 8;
         if id == b"fmt " && body + 16 <= b.len() {
+            fmt = u16::from_le_bytes([b[body], b[body + 1]]);
             channels = u16::from_le_bytes([b[body + 2], b[body + 3]]);
             sr = u32::from_le_bytes([b[body + 4], b[body + 5], b[body + 6], b[body + 7]]);
             bits = u16::from_le_bytes([b[body + 14], b[body + 15]]);
@@ -89,17 +120,22 @@ fn read_wav(path: &str) -> Result<Wav, String> {
         }
         pos = body + sz + (sz & 1); // chunks are word-aligned
     }
-    if bits != 16 || channels == 0 {
+    if channels == 0 || !(bits == 16 || (bits == 32 && fmt == 3)) {
         return Err(format!(
-            "{path}: need 16-bit PCM, got {bits}-bit x{channels}"
+            "{path}: need 16-bit PCM or 32-bit IEEE float, got {bits}-bit fmt {fmt} x{channels}"
         ));
     }
-    let frames = data.len() / (2 * channels as usize);
+    let bytes = (bits / 8) as usize;
+    let frames = data.len() / (bytes * channels as usize);
     let mut samples = Vec::with_capacity(frames * 2);
     for f in 0..frames {
         let at = |c: usize| {
-            let o = (f * channels as usize + c) * 2;
-            i16::from_le_bytes([data[o], data[o + 1]]) as f32 / 32768.0
+            let o = (f * channels as usize + c) * bytes;
+            if bits == 16 {
+                i16::from_le_bytes([data[o], data[o + 1]]) as f32 / 32768.0
+            } else {
+                f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]])
+            }
         };
         let l = at(0);
         let r = if channels > 1 { at(1) } else { l };
@@ -107,6 +143,22 @@ fn read_wav(path: &str) -> Result<Wav, String> {
         samples.push(r);
     }
     Ok(Wav { samples, sr })
+}
+
+/// Did this note's audio change when the LA sample layer was disabled? Compares the note
+/// window of two renders of the SAME probe (`raw_dump` with and without `--no-samples`).
+/// Bit-identical means no sample ever engaged, so the note was measured on the modelled
+/// FALLBACK voice — which is a different instrument from the one real-register content
+/// plays, and therefore a calibration-quality flag. Empirical, so it cannot drift from the
+/// sampler's actual routing the way a re-implemented cutoff would.
+fn note_is_sampled(a: &Wav, b: &Wav, start: i64, window_frames: i64) -> bool {
+    let n = (a.samples.len().min(b.samples.len()) / 2) as i64;
+    let lo = (start.max(0) * 2) as usize;
+    let hi = ((start + window_frames).min(n).max(0) * 2) as usize;
+    if hi <= lo {
+        return false;
+    }
+    a.samples[lo..hi] != b.samples[lo..hi]
 }
 
 /// The valid momentary blocks in **onset-relative** order: index 0 is the first block
@@ -127,12 +179,12 @@ fn onset_blocks(m: &[f32], first_valid: usize, last_valid: i64) -> Vec<f32> {
 /// clipped samples inside it. The caller derives max_m / peak_block / sounded from the
 /// trajectory; emitting the whole series (not just the max) is what lets the derive step
 /// compare peak-normalised envelopes between engines.
-fn measure(w: &Wav, start: i64, window_frames: i64, preroll_frames: i64) -> (Vec<f32>, u32) {
+fn measure(w: &Wav, start: i64, window_frames: i64, preroll_frames: i64) -> (Vec<f32>, u32, f32) {
     let n = (w.samples.len() / 2) as i64;
     let slice_start = (start - preroll_frames).max(0);
     let slice_end = (start + window_frames).min(n);
     if slice_end <= slice_start {
-        return (Vec::new(), 0);
+        return (Vec::new(), 0, 0.0);
     }
     let lo = (slice_start * 2) as usize;
     let hi = (slice_end * 2) as usize;
@@ -142,6 +194,11 @@ fn measure(w: &Wav, start: i64, window_frames: i64, preroll_frames: i64) -> (Vec
         .iter()
         .filter(|v| v.abs() >= 32700.0 / 32768.0)
         .count() as u32;
+    // Absolute peak over the NOTE window (not the pre-roll): the glue certificate.
+    let note_lo = ((start.max(slice_start)) * 2) as usize;
+    let peak_abs = w.samples[note_lo.min(hi)..hi]
+        .iter()
+        .fold(0.0f32, |m, v| m.max(v.abs()));
 
     let m = momentary_lufs(slice, w.sr as f32);
     // Block j covers [j*hop, j*hop + 400ms) inside the slice. Keep only blocks that
@@ -153,7 +210,7 @@ fn measure(w: &Wav, start: i64, window_frames: i64, preroll_frames: i64) -> (Vec
     let block = 0.400 * w.sr as f64;
     let last_valid = (((actual_preroll + window_frames as f64) - block) / hop).floor() as i64;
 
-    (onset_blocks(&m, first_valid, last_valid), clipped)
+    (onset_blocks(&m, first_valid, last_valid), clipped, peak_abs)
 }
 
 #[cfg(test)]
@@ -201,6 +258,16 @@ fn main() -> Result<(), String> {
         .unwrap_or(0);
 
     let w = read_wav(wav_path)?;
+    // Optional second render of the same probe (typically the `--no-samples` twin) used to
+    // decide, per note, whether the LA sample layer actually engaged.
+    let vs: Option<Wav> = match args
+        .iter()
+        .position(|a| a == "--vs")
+        .and_then(|i| args.get(i + 1))
+    {
+        Some(p) => Some(read_wav(p)?),
+        None => None,
+    };
     let window_frames = (WINDOW_S * w.sr as f64).round() as i64;
     let preroll_frames = (PREROLL_S * w.sr as f64).round() as i64;
 
@@ -221,8 +288,9 @@ fn main() -> Result<(), String> {
     };
 
     let plan = std::fs::read_to_string(plan_path).map_err(|e| format!("{plan_path}: {e}"))?;
-    let mut header =
-        String::from("idx\tprogram\tkey\tvelocity\tmax_m\tpeak_block\tclipped\tsounded");
+    let mut header = String::from(
+        "idx\tprogram\tkey\tvelocity\tmax_m\tpeak_block\tclipped\tsounded\tpeak_abs\tglue_ok\tsampled",
+    );
     for j in 0..nblocks {
         header.push_str(&format!("\tb{j}"));
     }
@@ -237,7 +305,7 @@ fn main() -> Result<(), String> {
         // The engine dispatched this note at the last chunk boundary at or before the
         // nominal onset, then the module took `latency` frames to make sound.
         let start = (onset - onset % chunk) as i64 + latency;
-        let (blocks, clipped) = measure(&w, start, window_frames, preroll_frames);
+        let (blocks, clipped, peak_abs) = measure(&w, start, window_frames, preroll_frames);
         let max_m = blocks.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let peak_block = blocks
             .iter()
@@ -247,10 +315,16 @@ fn main() -> Result<(), String> {
             .map(|(i, _)| i as i32)
             .unwrap_or(-1);
         let sounded = max_m > SILENCE_LUFS;
+        // -1 = unknown (no `--vs` twin supplied), else 1 sampled / 0 modelled fallback.
+        let sampled = match vs.as_ref() {
+            Some(w2) => i32::from(note_is_sampled(&w, w2, start, window_frames)),
+            None => -1,
+        };
         let mut row = format!(
-            "{idx}\t{program}\t{key}\t{vel}\t{}\t{peak_block}\t{clipped}\t{}",
+            "{idx}\t{program}\t{key}\t{vel}\t{}\t{peak_block}\t{clipped}\t{}\t{peak_abs:.5}\t{}\t{sampled}",
             fmt(max_m),
-            if sounded { 1 } else { 0 }
+            if sounded { 1 } else { 0 },
+            if peak_abs < GLUE_CEILING { 1 } else { 0 }
         );
         for j in 0..nblocks {
             row.push('\t');

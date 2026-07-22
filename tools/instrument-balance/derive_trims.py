@@ -36,10 +36,29 @@ Method (tooling HLD §3, revised after review):
     |D_p| < DEADBAND else clamp(round(-DAMP * D_p), +-CLAMP). The implied undamped trim -D_p
     reproduces a correctly-shipped program's trim (the cross-check).
 
-PRECONDITION (Codex #1): the differential is valid only if the ferro BusGlue bus-compressor is
-inert for probe notes (single notes at CC7=100 should stay below its 0.32 threshold) — verify
-by peak-inspecting the ferro probe render. If not, the dB back-out and the shape guard are
-biased on loud notes.
+The run is CERTIFIED rather than assumed. Four certificates are printed with the derivation:
+
+  1. GLUE INERTNESS. The differential is only valid where ferro's chain is LINEAR (the SC-55
+     reference has no equivalent master stage). calmeter proves per note that the bus
+     compressor never engaged - see `GLUE_CEILING` there for the identity that makes this
+     observable from the output alone. Measured at the GM-default CC7=100, 23/128 programs
+     FAILED this, so the probe now runs at `mkprobe.PROBE_CC7 = 50`; that is a uniform gain,
+     which the anchor absorbs exactly, so nothing needs correcting for it.
+  2. RESIDUAL ORACLE. Every program carrying a nonzero shipped trim is an ear judgment already
+     made; `residual = anchor - g` measures how far its rendered output sits from the frame.
+     This is the cheapest detector for the one class the guards CANNOT see - a voice that is
+     spectrally broken but envelope-clean, which would otherwise collect a confident trim that
+     merely levels a broken sound.
+  3. SAMPLED/FALLBACK GROUND TRUTH. Obtained by diffing the probe against its `--no-samples`
+     twin (calmeter `--vs`), NOT by re-implementing the sampler's routing - its repitch cutoff
+     is applied at three separate call sites, so a re-implementation would silently drift. A
+     program whose probe straddles its bank edge measures two different instruments across
+     keys and is flagged low-confidence.
+  4. ANCHOR ADMISSION. Two passes: a provisional frame, then admission by measurement quality
+     (see the anchor block in `evaluate`), reporting cohort size and MAD.
+
+REQUIRES A RAW RENDER: the CLI loudness-normalizes to -18 LUFS, which destroys absolute sample
+level and so makes certificate 1 impossible. Render the probe with the `raw_dump` example.
 """
 from __future__ import annotations
 
@@ -64,8 +83,15 @@ FLOOR_REL_DB = 40.0  # a block this far below the note peak is "gone" (floored)
 PITCH_TILT_DB = 6.0  # per-key body-level spread that invalidates a single trim
 VEL_GUARD = 3.0  # within-program velocity-response mismatch that invalidates a trim
 MAX_FAIL_KEYS = 1  # exclude when MORE than this many keys fail (tolerate 1 fluke)
-MIN_COHORT = 4  # minimum vetted sustained programs for a trustworthy anchor
 FLOOR_ABS = -115.0  # a block at/below this is the calmeter -120 sentinel / dead silence
+
+# --- anchor admission (the anchor is the ONLY coupling between programs, so a bad
+# --- member contaminates every derived trim; admit by measurement quality, not family) --
+MIN_COHORT = 10  # a median over 4 is moved by one outlier; 10+ is robust
+MAD_MAX_DB = 1.0  # cohort median-absolute-deviation above this = the frame is mush
+ADMIT_TILT_DB = 3.0  # admitted members must be far inside the pitch-tilt guard
+ADMIT_RESIDUAL_DB = 2.0  # ...and must agree with their own ear-vetted shipped trim
+RESIDUAL_FLAG_DB = 2.5  # |implied - shipped| above this = metric contradicts the ear
 
 # --- current shipped table (engine.rs PROGRAM_TRIM_DB) ----------------------
 # 8 per row, GM order. Backed out of the ferro readings to recover raw level, and
@@ -123,7 +149,10 @@ _fam(120, 127, "never", "SoundFX")
 
 # --- loading (parse by header name; retain per-key trajectories) -------------
 def load(path):
-    """program -> key -> velocity -> trajectory [b0..bK], for sounded notes."""
+    """(data, glue) where data = program -> key -> velocity -> trajectory [b0..bK] for
+    sounded notes, and glue = program -> {n, viol, max_peak} summarising the per-note
+    glue-inertness certificate (`glue_ok`/`peak_abs` from calmeter; absent on old TSVs or
+    on the SC-55 side, which has no BusGlue)."""
     lines = open(path).read().splitlines()
     if not lines:
         raise SystemExit(f"{path}: empty")
@@ -140,17 +169,30 @@ def load(path):
         raise SystemExit(f"{path}: no bN trajectory columns - is this a calmeter v2 TSV?")
     bidx = [col[n] for n in bnames]
     maxcol = max(col["program"], col["key"], col["velocity"], col["sounded"], max(bidx))
-    data = {}
+    if "peak_abs" in col:
+        maxcol = max(maxcol, col["peak_abs"])
+    data, glue = {}, {}
     for line in lines[1:]:
         f = line.split("\t")
         if len(f) <= maxcol:
             continue
+        if "peak_abs" in col:
+            gp = glue.setdefault(int(f[col["program"]]),
+                                 {"n": 0, "viol": 0, "max_peak": 0.0, "smp": 0, "smp_n": 0})
+            pk = float(f[col["peak_abs"]])
+            gp["n"] += 1
+            gp["max_peak"] = max(gp["max_peak"], pk)
+            if col.get("glue_ok") is not None and f[col["glue_ok"]] != "1":
+                gp["viol"] += 1
+            if "sampled" in col and f[col["sampled"]] != "-1":
+                gp["smp_n"] += 1
+                gp["smp"] += 1 if f[col["sampled"]] == "1" else 0
         if f[col["sounded"]] != "1":
             continue
         p, k, v = int(f[col["program"]]), int(f[col["key"]]), int(f[col["velocity"]])
         traj = [float(f[i]) for i in bidx]
         data.setdefault(p, {}).setdefault(k, {})[v] = traj
-    return data
+    return data, glue
 
 
 # --- pure primitives (unit-tested by --selftest) ----------------------------
@@ -254,10 +296,17 @@ def vel_guard(fp, sp, keys):
     return abs((f110 - f72) - (s110 - s72))
 
 
-def clamp_trim(dp):
-    if abs(dp) < DEADBAND:
-        return 0.0
-    return max(-CLAMP, min(CLAMP, float(round(-DAMP * dp))))
+def new_trim(shipped, residual):
+    """Damped UPDATE of an existing trim. `residual = implied_total - shipped`, so the
+    correction is applied to the trim the program already carries.
+
+    Damp the CHANGE, not the total: `DAMP * implied_total` would drag a program that is
+    already correctly trimmed (residual 0) 30% back toward zero — for GM6 (+6 dB shipped)
+    that is a spurious -1.8 dB. Programs being derived from scratch carry shipped = 0, where
+    the two forms coincide, which is why this only bites the ear-vetted entries."""
+    if abs(residual) < DEADBAND:
+        return shipped  # inside the dead-band: keep the current trim untouched
+    return max(-CLAMP, min(CLAMP, float(round(shipped + DAMP * residual))))
 
 
 def evaluate(ferro, sc):
@@ -293,42 +342,121 @@ def evaluate(ferro, sc):
             {
                 "p": p, "name": name, "role": role, "shipped": shipped,
                 "excluded": bool(reasons), "reasons": reasons,
-                "clean": clean, "g": g, "tilt": tilt, "vel": vg, "med_shape": med_shape,
+                "clean": clean, "nkeys": len(keyset), "g": g, "tilt": tilt, "vel": vg,
+                "med_shape": med_shape,
             }
         )
-    # Paired anchor = engine offset K = median over the vetted (correctly-trimmed) sustained
-    # cohort of the RENDERED gap g. A percussive program's needed trim is then how far its own
-    # rendered gap (minus any shipped trim it already carries) sits from that frame.
-    cohort = [r for r in rows if r["role"] == "sustained" and not r["excluded"]
-              and r["g"] is not None]
+    # --- anchor: engine offset K = median RENDERED gap g over a vetted sustained cohort ---
+    # The anchor is the ONLY coupling between programs, so one bad member contaminates every
+    # derived trim. Admit by MEASUREMENT QUALITY, using family only as a prior. Two passes:
+    #
+    #   1. provisional frame over every non-excluded sustained program;
+    #   2. strict re-selection, then the final frame.
+    #
+    # The residual is `implied - shipped`, and since implied = anchor + shipped - g that is
+    # just `anchor - g`: how far a program's RENDERED output sits from the frame. For a
+    # program carrying a nonzero (ear-vetted) shipped trim, residual ~ 0 means the metric
+    # agrees with the ear. Admitting on |residual| is outlier rejection around the median,
+    # not tuning the frame toward a wanted answer.
+    loose = [r for r in rows
+             if r["role"] == "sustained" and not r["excluded"] and r["g"] is not None]
+    prov = statistics.median([r["g"] for r in loose]) if loose else None
+    for r in rows:
+        r["residual"] = (prov - r["g"]) if (prov is not None and r["g"] is not None) else None
+
+    cohort = [r for r in loose
+              if r["shipped"] != 0.0                       # ear-vetted, not merely untouched
+              and r["tilt"] < ADMIT_TILT_DB                # far inside the pitch-tilt guard
+              and len(r["clean"]) == r["nkeys"]            # no unmetrable key
+              and abs(r["residual"]) <= ADMIT_RESIDUAL_DB] # agrees with its own shipped trim
+    if len(cohort) < MIN_COHORT:
+        cohort = loose  # too few survived strict admission — fall back and say so loudly
     anchor = statistics.median([r["g"] for r in cohort]) if cohort else None
+    mad = (statistics.median([abs(r["g"] - anchor) for r in cohort])
+           if anchor is not None else None)
+
     for r in rows:
         if anchor is not None and r["g"] is not None:
             r["D_p"] = r["g"] - r["shipped"] - anchor
-            r["trim"] = 0.0 if r["excluded"] else clamp_trim(r["D_p"])
+            r["residual"] = anchor - r["g"]  # recompute against the FINAL frame
+            # An excluded program keeps whatever trim it already carries: we could not
+            # measure it, so we must not change it.
+            r["trim"] = r["shipped"] if r["excluded"] else new_trim(r["shipped"], r["residual"])
         else:
             r["D_p"] = None
-            r["trim"] = 0.0
+            r["trim"] = r["shipped"]
         if r["role"] == "never":
             r["trim"] = 0.0
-    return rows, anchor, cohort
+    return rows, anchor, cohort, mad
 
 
 def run(ferro_path, sc_path):
-    ferro, sc = load(ferro_path), load(sc_path)
+    (ferro, fglue), (sc, _) = load(ferro_path), load(sc_path)
     only_f, only_s = sorted(set(ferro) - set(sc)), sorted(set(sc) - set(ferro))
     if only_f or only_s:
         print(f"!! programs in one engine only (no differential): ferro-only={only_f} "
               f"sc-only={only_s}")
-    rows, anchor, cohort = evaluate(ferro, sc)
+    rows, anchor, cohort, mad = evaluate(ferro, sc)
 
-    print(f"# SHAPE_DB={SHAPE_DB} FLOOR_REL={FLOOR_REL_DB} PITCH_TILT={PITCH_TILT_DB} "
+    mixed = {}  # programs whose probe straddles their sample-bank edge (certificate 3)
+
+    # --- certificate 1: glue inertness (ferro side only; the SC-55 has no BusGlue) ------
+    print("=== glue-inertness certificate (ferro must be LINEAR where we measure) ===")
+    if not fglue:
+        print("  !! no peak_abs column - this render was metered from a NORMALIZED WAV, so "
+              "absolute level is meaningless. Re-render with the raw_dump example.")
+    else:
+        viol = {p: g for p, g in fglue.items() if g["viol"] > 0}
+        # A violation only matters if the program's measurement is actually consumed. The
+        # `never` families (SynthFX 96-103, SoundFX 120-127) are never trimmed and never
+        # anchor, so glue engagement there cannot reach a shipped number.
+        matters = {p: g for p, g in viol.items() if GM_FAMILY.get(p, ("?",))[0] != "never"}
+        worst = max(g["max_peak"] for g in fglue.values())
+        if matters:
+            print(f"  !! {len(matters)}/{len(fglue)} CONSUMED programs have notes at/above the "
+                  f"ceiling - their trims are NOT certified:")
+            for p, g in sorted(matters.items(), key=lambda kv: -kv[1]["max_peak"])[:12]:
+                print(f"     GM{p:<3} {g['viol']}/{g['n']} notes, peak {g['max_peak']:.3f}")
+            print("     Fix by lowering mkprobe.PROBE_CC7 (a uniform gain the anchor absorbs).")
+        else:
+            print(f"  all consumed programs certified inert. The differential is linear where "
+                  f"we measure, so the dB back-out is exact.")
+        unused = {p: g for p, g in viol.items() if p not in matters}
+        if unused:
+            names = ", ".join(f"GM{p}({g['max_peak']:.2f})" for p, g in sorted(unused.items()))
+            print(f"  (over ceiling but never trimmed/anchored, so harmless: {names})")
+        print(f"  worst peak anywhere {worst:.3f}; ceiling is calmeter::GLUE_CEILING.")
+
+    # --- certificate 3: sampled-vs-fallback ground truth -----------------------------
+    # From diffing the probe render against its `--no-samples` twin, so it cannot drift from
+    # the sampler's real routing. A program metered ENTIRELY on the modelled fallback is
+    # usually fine (many GM programs have no sample bank; the model IS the voice). The risk
+    # is MIXED: the probe straddles the bank edge, so different keys measure different
+    # instruments — which inflates per-key spread and can bias the median.
+    mixed = {p: g for p, g in fglue.items() if 0 < g["smp"] < g["smp_n"]}
+    if any(g["smp_n"] for g in fglue.values()):
+        full = sum(1 for g in fglue.values() if g["smp_n"] and g["smp"] == g["smp_n"])
+        none_ = sum(1 for g in fglue.values() if g["smp_n"] and g["smp"] == 0)
+        print(f"\n=== sampled/fallback ground truth (probe vs --no-samples twin) ===")
+        print(f"  {full} fully sampled, {len(mixed)} MIXED, {none_} fully modelled.")
+        if mixed:
+            names = ", ".join(f"GM{p}({g['smp']}/{g['smp_n']})"
+                              for p, g in sorted(mixed.items()))
+            print(f"  MIXED (probe straddles the bank edge - trims LOW-CONFIDENCE): {names}")
+
+    print(f"\n# SHAPE_DB={SHAPE_DB} FLOOR_REL={FLOOR_REL_DB} PITCH_TILT={PITCH_TILT_DB} "
           f"VEL_GUARD={VEL_GUARD} MAX_FAIL_KEYS={MAX_FAIL_KEYS} DAMP={DAMP} CLAMP=+/-{CLAMP}")
     if anchor is None:
         print("!! no sustained-cohort anchor could be formed - cannot derive trims.")
     else:
         print(f"# paired anchor = engine offset K (median rendered ferro-SC gap over "
-              f"{len(cohort)} sustained progs): {anchor:.2f} dB")
+              f"{len(cohort)} sustained progs): {anchor:.2f} dB   MAD {mad:.2f} dB")
+        if len(cohort) < MIN_COHORT:
+            print(f"!! cohort {len(cohort)} < MIN_COHORT {MIN_COHORT} - strict admission left "
+                  f"too few members, so this fell back to the loose cohort. LOW CONFIDENCE.")
+        if mad is not None and mad > MAD_MAX_DB:
+            print(f"!! cohort MAD {mad:.2f} > {MAD_MAX_DB} dB - the single-scalar engine-offset "
+                  f"model may be false (K family-dependent). Do not ship on this frame.")
         members = ", ".join(f"GM{r['p']}({r['name']})" for r in cohort)
         print(f"# cohort: {members}")
         cshape = statistics.median([r["med_shape"] for r in cohort if r["med_shape"] is not None])
@@ -347,14 +475,17 @@ def run(ferro_path, sc_path):
         print(f"{r['p']:>4} {r['name']:>18} {r['role']:>10} {d} {r['tilt']:5.1f} {r['vel']:5.1f} "
               f"{ms} {r['shipped']:5.1f} {r['trim']:4.0f} {note:<32}")
 
-    print("\n=== proposed NEW percussive-family trims (nonzero, non-excluded) ===")
+    print("\n=== proposed percussive-family trim CHANGES (non-excluded) ===")
     any_trim = False
     for r in rows:
-        if r["role"] == "percussive" and not r["excluded"] and r["trim"] != 0.0:
+        if r["role"] == "percussive" and not r["excluded"] and r["trim"] != r["shipped"]:
             any_trim = True
-            flag = "  [LOW-CONFIDENCE: heterogeneous family, verify fallback]" if (
-                8 <= r["p"] <= 15 or 72 <= r["p"] <= 79) else ""
-            print(f"    GM{r['p']:<3} {r['name']:<18} {r['trim']:+.0f} dB   (D_p {r['D_p']:+.1f}){flag}")
+            # Ground-truthed, not guessed by family: this program's probe measured a MIX of
+            # the sampled and modelled voices across keys.
+            flag = "  [LOW-CONFIDENCE: probe straddles the sample-bank edge]" if (
+                r["p"] in mixed) else ""
+            print(f"    GM{r['p']:<3} {r['name']:<18} {r['shipped']:+.0f} -> {r['trim']:+.0f} dB"
+                  f"   (residual {r['residual']:+.1f}){flag}")
     if not any_trim:
         print("    (none)")
 
@@ -363,19 +494,31 @@ def run(ferro_path, sc_path):
     for r in excl:
         print(f"    GM{r['p']:<3} {r['name']:<18} {r['role']:<10} {'; '.join(r['reasons'])}")
 
-    # Sustained cross-check: the metric's IMPLIED (undamped) trim is -D_p; for a
-    # correctly-shipped sustained program it should reproduce SHIPPED[p]. A gap flags a cohort
-    # member whose rendered level deviates from the frame (e.g. an outlier that should not
-    # anchor). ASCII only — Greek Δ crashes cp1252 stdout when redirected on Windows.
-    print("\n=== sustained cross-check (implied trim -D_p vs shipped; |d|>1.5 = drift) ===")
-    drift = [(r["p"], r["name"], r["shipped"], -r["D_p"], -r["D_p"] - r["shipped"])
-             for r in rows if r["role"] == "sustained" and not r["excluded"]
-             and r["D_p"] is not None and abs(-r["D_p"] - r["shipped"]) > 1.5]
-    if drift:
-        for p, name, ship, implied, dl in sorted(drift, key=lambda x: -abs(x[4])):
-            print(f"    GM{p:<3} {name:<12} shipped {ship:+.1f} implies {implied:+.1f} (d{dl:+.1f})")
+    # --- certificate 2: the residual oracle ------------------------------------------
+    # Every program carrying a NONZERO shipped trim is an ear-judgment someone already made.
+    # residual = implied - shipped = anchor - g: how far the program's rendered output sits
+    # from the frame. ~0 means the metric agrees with the ear. A large residual is the
+    # cheapest detector we have for the class the guards CANNOT see - a voice that is
+    # spectrally broken but envelope-clean (it passes shape/tilt/velocity and would other-
+    # wise collect a confident trim that merely levels a broken sound).
+    # ASCII only - a Greek delta crashes cp1252 stdout when redirected on Windows.
+    print(f"\n=== residual oracle (implied - shipped, over ear-vetted trims; "
+          f"|d|>{RESIDUAL_FLAG_DB} = metric contradicts the ear) ===")
+    vetted = [r for r in rows if r["shipped"] != 0.0 and r["residual"] is not None
+              and not r["excluded"]]
+    if not vetted:
+        print("    (no ear-vetted programs measured in this run)")
     else:
-        print("    all vetted sustained programs within 1.5 dB of shipped.")
+        med = statistics.median([r["residual"] for r in vetted])
+        flagged = sorted((r for r in vetted if abs(r["residual"]) > RESIDUAL_FLAG_DB),
+                         key=lambda r: -abs(r["residual"]))
+        print(f"    median residual over {len(vetted)} vetted programs: {med:+.2f} dB "
+              f"(want ~0; a systematic offset means the metric and the ear disagree at scale)")
+        for r in flagged:
+            print(f"    GM{r['p']:<3} {r['name']:<18} shipped {r['shipped']:+.1f} "
+                  f"implies {r['shipped'] + r['residual']:+.1f} (d{r['residual']:+.1f})")
+        if not flagged:
+            print(f"    no program disagrees by more than {RESIDUAL_FLAG_DB} dB.")
     return 0
 
 
@@ -402,14 +545,20 @@ def selftest():
     ferro, sc = {}, {}
 
     # Sustained cohort: correctly-calibrated -> RENDERED ferro == SC (engine offset K=0), so
-    # g=0 and anchor=0. Use real sustained programs with SHIPPED=0 (62 brass, 70/71 reed, 89/94
-    # pad) so their recomputed trim is a clean 0.
-    for p in (62, 70, 71, 89, 94):
+    # g=0, anchor=0, residual=0. Admission needs a NONZERO shipped trim (an ear judgment, not
+    # merely an untouched program), so use the organ + solo-strings blocks: 12 members, above
+    # MIN_COHORT. Each must come back with its trim UNCHANGED.
+    COHORT = (16, 17, 18, 19, 20, 21, 22, 23, 40, 41, 42, 43)
+    for p in COHORT:
         ferro[p], sc[p] = _prog({k: (_flat(-20.0), _flat(-20.0)) for k in keys})
 
-    # GM6 Piano (percussive, SHIPPED +6): CORRECTLY shipped -> rendered is +6 hot (raw==SC),
-    # so g=6 but D_p = g - SHIPPED - anchor = 6-6-0 = 0 -> trim 0. Tests the shipped back-out.
-    ferro[6], sc[6] = _prog({k: (_flat(-14.0), _flat(-20.0)) for k in keys})
+    # GM56 Brass (sustained, SHIPPED -6): 5 dB off the frame. Must be REJECTED from the
+    # cohort by admission (|residual| > ADMIT_RESIDUAL_DB) yet still reported by the oracle.
+    ferro[56], sc[56] = _prog({k: (_flat(-15.0), _flat(-20.0)) for k in keys})
+
+    # GM6 Piano (percussive, SHIPPED +6): already correctly trimmed -> residual 0 -> its trim
+    # must stay +6. Guards the damp-the-change fix: damping the TOTAL would return +4.
+    ferro[6], sc[6] = _prog({k: (_flat(-20.0), _flat(-20.0)) for k in keys})
 
     # GM8 ChromPerc (percussive, SHIPPED 0): matched flat, rendered 3 dB hot -> trim -2.
     ferro[8], sc[8] = _prog({k: (_flat(-17.0), _flat(-20.0)) for k in keys})
@@ -430,22 +579,29 @@ def selftest():
         {k: (_flat(-20.0 + 2.0 * i), _flat(-20.0)) for i, k in enumerate(keys)}
     )
 
-    rows, anchor, cohort = evaluate(ferro, sc)
+    rows, anchor, cohort, mad = evaluate(ferro, sc)
     byp = {r["p"]: r for r in rows}
+    inco = {r["p"] for r in cohort}
 
     assert anchor is not None and abs(anchor) < 1e-6, f"anchor {anchor}"
-    assert len(cohort) == 5, f"cohort {len(cohort)}"
-    assert not byp[6]["excluded"] and byp[6]["trim"] == 0.0, ("shipped back-out", byp[6])
+    assert mad is not None and mad < 1e-6, f"mad {mad}"
+    # Strict admission: the 12 clean members in, the 5 dB-off GM56 out.
+    assert inco == set(COHORT), f"cohort {sorted(inco)}"
+    assert abs(byp[56]["residual"] + 5.0) < 1e-6, ("GM56 residual", byp[56]["residual"])
+    # Damp-the-change: an already-correct trim survives untouched.
+    assert byp[6]["trim"] == 6.0, ("damp the change, not the total", byp[6]["trim"])
+    for p in COHORT:
+        assert not byp[p]["excluded"], (p, byp[p])
+        assert byp[p]["trim"] == SHIPPED[p], (p, byp[p]["trim"], SHIPPED[p])
+    # Fresh derivations (shipped 0) are unaffected by the damping change.
     assert not byp[8]["excluded"] and byp[8]["trim"] == -2.0, byp[8]
     assert not byp[9]["excluded"] and byp[9]["trim"] == -1.0, ("matched one-shot", byp[9])
     assert byp[24]["excluded"] and "shape" in byp[24]["reasons"][0], byp[24]
     assert byp[25]["excluded"] and "shape/short" in byp[25]["reasons"][0], byp[25]
     assert byp[26]["excluded"] and any("pitch-tilt" in r for r in byp[26]["reasons"]), byp[26]
-    for p in (62, 70, 71, 89, 94):  # cohort members: not excluded, recompute to 0.
-        assert not byp[p]["excluded"], (p, byp[p])
-        assert abs(byp[p]["trim"]) < 1e-6, (p, byp[p]["trim"])
-    print("selftest OK - anchor=0.00, cohort=5; GM6 back-out trim 0, GM8 trim -2, GM9 "
-          "(matched one-shot) kept trim -1; GM24 shape / GM25 sub-hop / GM26 pitch-tilt excluded.")
+    print(f"selftest OK - anchor 0.00 MAD 0.00 over {len(cohort)} admitted; GM56 (5 dB off) "
+          "rejected from the cohort; GM6 keeps +6 (damp the change); GM8 -2, GM9 (matched "
+          "one-shot) -1; GM24 shape / GM25 sub-hop / GM26 pitch-tilt excluded.")
     return 0
 
 

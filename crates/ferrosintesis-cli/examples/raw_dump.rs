@@ -42,9 +42,24 @@ fn write_f32_wav(path: &str, sr: u32, interleaved_stereo: &[f32]) -> std::io::Re
 }
 
 fn main() {
-    let mut args = std::env::args().skip(1);
-    let input = args.next().expect("usage: raw_dump <in.mid> <out.wav>");
-    let output = args.next().expect("usage: raw_dump <in.mid> <out.wav>");
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    // `--no-samples` disables the LA sample layer. Rendering a probe twice — once with, once
+    // without — and diffing per note is an EMPIRICAL sampled-vs-fallback ground truth: a note
+    // that renders bit-identically never engaged a sample, so it was measured on the modelled
+    // fallback voice. That matters for calibration, because a probe key outside a program's
+    // sample bank measures a different voice than real-register content plays. Deriving this
+    // by diff avoids replicating the sampler's routing (its repitch cutoff is applied at three
+    // separate call sites, so a re-implementation would silently drift).
+    let no_samples = argv.iter().any(|a| a == "--no-samples");
+    let mut pos = argv.iter().filter(|a| !a.starts_with("--"));
+    let input = pos
+        .next()
+        .expect("usage: raw_dump <in.mid> <out.wav> [--no-samples]")
+        .clone();
+    let output = pos
+        .next()
+        .expect("usage: raw_dump <in.mid> <out.wav> [--no-samples]")
+        .clone();
 
     let song = offline::load(std::path::Path::new(&input)).expect("load MIDI");
     // Identical echo-time policy to the CLI (main.rs): dotted quaver at opening
@@ -57,7 +72,7 @@ fn main() {
         .with_reverb(0.32)
         .with_tail(6.0)
         .with_echo(delay_s)
-        .with_samples(true)
+        .with_samples(!no_samples)
         .with_solo(0xFFFF);
     let (samples, stats) = offline::render(&song, &opt);
     let lufs = offline::integrated_lufs(&samples, 44100.0);

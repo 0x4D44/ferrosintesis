@@ -52,6 +52,24 @@ TAIL_S = 3.00  # silence after the last note-off
 KEYS = (48, 53, 58, 63, 68, 73)  # C3 F3 A#3 D#4 G#4 C#5
 VELS = (72, 110)
 
+# Probe channel volume. NOT the GM default 100 — deliberately reduced so the whole probe
+# renders BELOW ferro's master bus-compressor threshold, which is the precondition for a
+# valid differential (the SC-55 reference has no equivalent master stage, so any glue
+# engagement is a ferro-only nonlinearity that would corrupt both the shape guard and the
+# dB back-out).
+#
+# Measured at CC7=100 the raw render peaked at 1.196 (GM127) with 23/128 programs over the
+# 0.30 ceiling. ferro's volume law is exactly `(cc/127)^2` (`engine.rs`), so CC7=50 scales
+# amplitude by (50/100)^2 = 0.25 and brings even that worst case to 0.299 — under the
+# ceiling — while every other program clears it comfortably.
+#
+# Nothing needs correcting for this: CC7 is a post-voice per-channel gain, so it is a
+# UNIFORM offset across programs, and the derivation's anchor (a median over the same
+# offset) absorbs it exactly — `residual = anchor - g` is invariant. It does not touch
+# voice selection or the velocity law. The one real cost is headroom above the meter's
+# silence floor, which `calmeter::SILENCE_LUFS` is lowered to match.
+PROBE_CC7 = 50
+
 # --- per-family register offset (SPEC_v2 / M-CAL v2 tooling HLD §1) ----------
 # One fixed key set for all 128 programs metered whole families out of register:
 # GM33's sample bank ends ~D2, so C3-C#5 fell to the fallback bare model for 10/12
@@ -125,7 +143,7 @@ def setup_events(prog: int) -> list:
         bytes([0xB0, 0, 0]),  # bank select MSB (capital tone)
         bytes([0xB0, 32, 0]),  # bank select LSB
         bytes([0xC0, prog]),  # program change  <-- before the sends
-        bytes([0xB0, 7, 100]),  # volume  = GM default, authored explicitly
+        bytes([0xB0, 7, PROBE_CC7]),  # volume — reduced to keep the bus glue inert
         bytes([0xB0, 10, 64]),  # pan     = centre
         bytes([0xB0, 1, 0]),  # modulation off
         bytes([0xB0, 64, 0]),  # sustain off

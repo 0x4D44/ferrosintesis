@@ -1,5 +1,18 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.22 — **GM6 Harpsichord fails the M-CAL velocity guard at 9.6 dB** — its
+  ferro-vs-SC-55 level difference changes by 9.6 dB between v72 and v110, i.e. a
+  velocity-RESPONSE mismatch, not a level offset (a static `PROGRAM_TRIM_DB` entry cannot
+  fix it). It is the flagship +6 dB piano-family trim, so worth a look.
+  Evidence: `_cal/derivation_v3.txt`, GM6 row (`vel 9.6`); reproduce with
+  `derive_trims.py` on a full-128 certified run. Raised from the M-CAL v3 derivation review.
+
+- [ ] 2026.07.22 — **M-CAL residual watchlist: the metric disagrees with ear-vetted trims
+  on the slow-attack families** — GM56/57 brass (−6.7/−6.3 dB), GM67 (−4.8), GM48/50/51
+  ensembles (+3.7..+4.3). Either the single-held-note probe biases slow-attack voices, or
+  those shipped trims are stale. Only listening settles which; do NOT renumber them on the
+  metric alone. Evidence: residual-oracle section of `_cal/derivation_v3.txt`.
+
 - [ ] 2026.07.20 — **`gen_crate_lib.py` emits a non-rustfmt array for a SINGLE-file
   sample crate** — a one-element `static SAMPLES: [...] = [ (..),\n ];` that rustfmt
   rewrites to a one-line `= [(..)];`. Multi-file crates are unaffected (the multi-line

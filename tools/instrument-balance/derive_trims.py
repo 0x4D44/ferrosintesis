@@ -92,6 +92,10 @@ MAD_MAX_DB = 1.0  # cohort median-absolute-deviation above this = the frame is m
 ADMIT_TILT_DB = 3.0  # admitted members must be far inside the pitch-tilt guard
 ADMIT_RESIDUAL_DB = 2.0  # ...and must agree with their own ear-vetted shipped trim
 RESIDUAL_FLAG_DB = 2.5  # |implied - shipped| above this = metric contradicts the ear
+# Programs tilted between PITCH_TILT_DB and this are not auto-trimmed, but are surfaced as
+# ear-vet candidates: a median trim would be right on average and ~+-tilt/2 off at the
+# register extremes. Metric confidence alone does not justify shipping that; ears do.
+EARVET_TILT_DB = 10.0
 
 # --- current shipped table (engine.rs PROGRAM_TRIM_DB) ----------------------
 # 8 per row, GM order. Backed out of the ferro readings to recover raw level, and
@@ -472,8 +476,12 @@ def run(ferro_path, sc_path):
         ms = f"{r['med_shape']:5.1f}" if r["med_shape"] is not None else "  n/a"
         note = "; ".join(r["reasons"]) if r["excluded"] else (
             "FROZEN" if r["role"] == "sustained" else "never" if r["role"] == "never" else "")
+        # Only percussive rows can be PROPOSED, so printing a computed number for a FROZEN
+        # sustained row invites misreading it as a proposal. Show a dash; the residual oracle
+        # below is where a sustained program's disagreement is meant to be read.
+        new = f"{r['trim']:4.0f}" if r["role"] == "percussive" else "   -"
         print(f"{r['p']:>4} {r['name']:>18} {r['role']:>10} {d} {r['tilt']:5.1f} {r['vel']:5.1f} "
-              f"{ms} {r['shipped']:5.1f} {r['trim']:4.0f} {note:<32}")
+              f"{ms} {r['shipped']:5.1f} {new} {note:<32}")
 
     print("\n=== proposed percussive-family trim CHANGES (non-excluded) ===")
     any_trim = False
@@ -487,6 +495,25 @@ def run(ferro_path, sc_path):
             print(f"    GM{r['p']:<3} {r['name']:<18} {r['shipped']:+.0f} -> {r['trim']:+.0f} dB"
                   f"   (residual {r['residual']:+.1f}){flag}")
     if not any_trim:
+        print("    (none)")
+
+    # Programs held back ONLY by a moderate pitch tilt. A median trim would be right on
+    # average and off by ~tilt/2 at the register extremes — better than the nothing they
+    # carry today, but not on metric confidence alone. Surface them for a listening call:
+    # whatever Arthur accepts enters SHIPPED as an ear judgment, which the residual oracle
+    # then monitors forever.
+    print(f"\n=== ear-vet candidates (tilt {PITCH_TILT_DB}-{EARVET_TILT_DB} dB only; a median "
+          f"trim is ~+-tilt/2 off at the extremes) ===")
+    cands = [r for r in rows
+             if r["role"] == "percussive" and r["excluded"] and r["D_p"] is not None
+             and all("pitch-tilt" in x for x in r["reasons"])
+             and r["tilt"] < EARVET_TILT_DB
+             and new_trim(r["shipped"], r["residual"]) != r["shipped"]]
+    for r in sorted(cands, key=lambda r: r["tilt"]):
+        print(f"    GM{r['p']:<3} {r['name']:<18} {r['shipped']:+.0f} -> "
+              f"{new_trim(r['shipped'], r['residual']):+.0f} dB   (tilt {r['tilt']:.1f}, "
+              f"so ~+-{r['tilt']/2:.1f} dB across register)")
+    if not cands:
         print("    (none)")
 
     excl = [r for r in rows if r["excluded"]]

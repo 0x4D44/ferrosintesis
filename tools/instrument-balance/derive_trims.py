@@ -97,6 +97,20 @@ RESIDUAL_FLAG_DB = 2.5  # |implied - shipped| above this = metric contradicts th
 # register extremes. Metric confidence alone does not justify shipping that; ears do.
 EARVET_TILT_DB = 10.0
 
+# --- reference panel -------------------------------------------------------------------
+# A single reference cannot tell you whether IT or ferro is the outlier. Two INDEPENDENT
+# references can: where they agree, their consensus is a trustworthy target; where they
+# disagree with each other, there is no consensus GM answer for that patch and only ears
+# can settle it. Pick references whose errors are uncorrelated - the Roland SC-55mkII (ROM
+# sampler, 1991) and the Yamaha S-YXG50 (software wavetable) are different vendors, eras and
+# synthesis methods. The repo already trusts this pair: the velocity-law calibration fit
+# k=1.997 on the SC-55 and 1.981 on the S-YXG50 independently.
+#
+# 3 dB is where the measured distribution splits: agreeing programs land at 0.2-1.3 dB
+# (GM7 0.16, GM110 0.32, GM14 1.29) and disagreeing ones at 5-10 dB (GM0 5.5, GM38 9.2,
+# GM11 9.9). Nothing sits in between.
+PANEL_AGREE_DB = 3.0
+
 # --- current shipped table (engine.rs PROGRAM_TRIM_DB) ----------------------
 # 8 per row, GM order. Backed out of the ferro readings to recover raw level, and
 # the sustained rows are the cross-check reference.
@@ -118,6 +132,19 @@ SHIPPED = [
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,     # 112-119 Percussive
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,     # 120-127 SoundFX
 ]
+
+# --- recorded ear decisions -------------------------------------------------
+# A trim of 0.0 is ambiguous: it can mean "nobody has looked at this yet" or "someone
+# listened and ruled that 0.0 is right". Those must not be treated the same — the second is
+# an ear judgment and belongs under the residual oracle's watch, so that a later run REPORTS
+# its disagreement instead of silently re-proposing a change that was already rejected.
+#
+# GM0/1/3 (2026.07.22, Arthur): both references place their own pianos well below their own
+# median and would drag ferro's down with them; ferro's pianos sit at ferro's median and stay
+# there. All three are pitch-tilt excluded on both references anyway, so no single number was
+# reliable for them. GM11 (same date): the references split 10.8 dB, so there is no consensus
+# target to ship and it awaits a listening call.
+EAR_DECIDED = {0, 1, 3, 11}
 
 # --- family roles (HLD §5 O2) -----------------------------------------------
 # percussive: newly derived. sustained: FROZEN (cross-check + anchor cohort). never: stay 0.0.
@@ -531,8 +558,10 @@ def run(ferro_path, sc_path):
     # ASCII only - a Greek delta crashes cp1252 stdout when redirected on Windows.
     print(f"\n=== residual oracle (implied - shipped, over ear-vetted trims; "
           f"|d|>{RESIDUAL_FLAG_DB} = metric contradicts the ear) ===")
-    vetted = [r for r in rows if r["shipped"] != 0.0 and r["residual"] is not None
-              and not r["excluded"]]
+    # "Ear-vetted" = carries a nonzero trim OR is a recorded decision to stay at 0.0.
+    vetted = [r for r in rows
+              if (r["shipped"] != 0.0 or r["p"] in EAR_DECIDED)
+              and r["residual"] is not None and not r["excluded"]]
     if not vetted:
         print("    (no ear-vetted programs measured in this run)")
     else:
@@ -546,6 +575,96 @@ def run(ferro_path, sc_path):
                   f"implies {r['shipped'] + r['residual']:+.1f} (d{r['residual']:+.1f})")
         if not flagged:
             print(f"    no program disagrees by more than {RESIDUAL_FLAG_DB} dB.")
+    return 0
+
+
+def run_panel(ferro_path, ref_paths):
+    """Derive against a PANEL of independent references and gate on their agreement."""
+    ferro, fglue = load(ferro_path)
+    refs = []
+    for rp in ref_paths:
+        data, _ = load(rp)
+        rows, anchor, cohort, mad = evaluate(ferro, data)
+        label = rp.replace("\\", "/").split("/")[-1].split("_")[0]
+        refs.append({"label": label, "by": {r["p"]: r for r in rows},
+                     "anchor": anchor, "cohort": cohort, "mad": mad})
+
+    # ferro's own internal placement: a THIRD, weaker signal. Self-referential, so it is
+    # blind to a uniform whole-synth offset and "median over 128 programs" is not a musical
+    # truth - it is for spotting defects the panel cannot see, not for setting trims.
+    bodies = {p: prog_body(ferro[p], sorted(ferro[p])) for p in ferro}
+    fmed = statistics.median([b for b in bodies.values() if b is not None])
+
+    print("=== reference panel ===")
+    for r in refs:
+        n = len(r["cohort"])
+        print(f"  {r['label']:<6} anchor {r['anchor']:+6.2f} dB  cohort {n:>3}  MAD {r['mad']:.2f}"
+              + ("   !! cohort below MIN_COHORT" if n < MIN_COHORT else ""))
+    print(f"  agreement gate: references must agree within {PANEL_AGREE_DB} dB\n")
+
+    progs = sorted(set.intersection(*[set(r["by"]) for r in refs]))
+    out = []
+    for p in progs:
+        rows_p = [r["by"][p] for r in refs]
+        res = [x["residual"] for x in rows_p if x["residual"] is not None]
+        excl = [f"{r['label']}: {'; '.join(r['by'][p]['reasons'])}"
+                for r in refs if r["by"][p]["excluded"]]
+        if len(res) < len(refs):
+            consensus = spread = None
+        else:
+            consensus, spread = statistics.median(res), max(res) - min(res)
+        agree = spread is not None and spread <= PANEL_AGREE_DB
+        shipped = SHIPPED[p] if p < len(SHIPPED) else 0.0
+        role = GM_FAMILY.get(p, ("?", "?"))[0]
+        # A recorded ear decision outranks the panel: never auto-change it, however well the
+        # references agree. Ears are the final authority; the panel only sets the default.
+        held = p in EAR_DECIDED
+        trim = (new_trim(shipped, consensus)
+                if (agree and not excl and role == "percussive" and not held) else shipped)
+        out.append({"p": p, "name": GM_FAMILY.get(p, ("?", "?"))[1], "role": role,
+                    "shipped": shipped, "res": res, "consensus": consensus, "spread": spread,
+                    "agree": agree, "excl": excl, "trim": trim, "held": held,
+                    "int_f": (bodies[p] - fmed) if bodies.get(p) is not None else None})
+
+    labels = " ".join(f"{r['label']:>7}" for r in refs)
+    print(f"{'GM':>4} {'name':<18} {'int_F':>6} {labels} {'spread':>7} {'ship':>5} {'new':>4}")
+    for o in out:
+        res = " ".join(f"{v:+7.2f}" for v in o["res"]) if o["res"] else " " * 7 * len(refs)
+        sp = f"{o['spread']:7.2f}" if o["spread"] is not None else "    n/a"
+        it = f"{o['int_f']:+6.1f}" if o["int_f"] is not None else "   n/a"
+        new = f"{o['trim']:4.0f}" if o["role"] == "percussive" else "   -"
+        print(f"{o['p']:>4} {o['name']:<18} {it} {res} {sp} {o['shipped']:5.1f} {new}")
+
+    print("\n=== AUTO-SHIP: references agree, guards clean, trim changes ===")
+    ship = [o for o in out if o["agree"] and not o["excl"] and o["role"] == "percussive"
+            and o["trim"] != o["shipped"]]
+    for o in sorted(ship, key=lambda o: o["p"]):
+        print(f"    GM{o['p']:<3} {o['name']:<18} {o['shipped']:+.0f} -> {o['trim']:+.0f} dB   "
+              f"(consensus {o['consensus']:+.1f}, refs agree to {o['spread']:.1f} dB)")
+    if not ship:
+        print("    (none)")
+
+    print("\n=== HELD by a recorded ear decision (panel cannot override) ===")
+    for o in [x for x in out if x["held"]]:
+        would = (f"panel would say {new_trim(o['shipped'], o['consensus']):+.0f}"
+                 if o["consensus"] is not None and o["agree"]
+                 else f"panel has no consensus (spread {o['spread']:.1f} dB)"
+                 if o["spread"] is not None else "panel could not measure it")
+        print(f"    GM{o['p']:<3} {o['name']:<18} held at {o['shipped']:+.0f} dB   ({would})")
+
+    print("\n=== NO CONSENSUS: the references disagree with each other -> ears decide ===")
+    dis = [o for o in out if o["spread"] is not None and not o["agree"] and not o["excl"]]
+    for o in sorted(dis, key=lambda o: -o["spread"]):
+        imp = " / ".join(f"{r['label']} {new_trim(o['shipped'], v):+.0f}"
+                         for r, v in zip(refs, o["res"]))
+        print(f"    GM{o['p']:<3} {o['name']:<18} spread {o['spread']:5.1f} dB   implies {imp}")
+    if not dis:
+        print("    (none)")
+
+    print("\n=== guard-excluded on at least one reference (voice work) ===")
+    for o in out:
+        if o["excl"]:
+            print(f"    GM{o['p']:<3} {o['name']:<18} " + " | ".join(o["excl"]))
     return 0
 
 
@@ -636,8 +755,13 @@ def main():
     if len(sys.argv) == 2 and sys.argv[1] == "--selftest":
         return selftest()
     if len(sys.argv) < 3:
-        print("usage: derive_trims.py <ferro.levels.tsv> <sc55.levels.tsv>  |  --selftest")
+        print("usage: derive_trims.py <ferro.levels.tsv> <ref.levels.tsv> [ref2 ...]"
+              "  |  --selftest")
+        print("  two or more references switch on PANEL mode: the consensus is the target and"
+              " disagreement between references routes the program to ears.")
         return 2
+    if len(sys.argv) > 3:
+        return run_panel(sys.argv[1], sys.argv[2:])
     return run(sys.argv[1], sys.argv[2])
 
 

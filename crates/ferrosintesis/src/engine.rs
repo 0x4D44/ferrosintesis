@@ -643,10 +643,23 @@ fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
 ///
 /// Timbre-neutral: it scales the dry voice and all its FX sends together (the
 /// strip gain `g` feeds both), preserving each channel's wet/dry ratio.
+///
+/// **GM5 +1, GM8 +2, GM14 -6, GM110 -5, GM119 +1 are M-CAL v3 PANEL entries**
+/// (2026.07.22). A single reference cannot tell you whether IT or ferro is the
+/// outlier, so these are gated on TWO independent references agreeing with each
+/// other — the Roland SC-55mkII and the Yamaha S-YXG50 (different vendor, era and
+/// synthesis, so their patch quirks are uncorrelated). Each of these five agreed
+/// within 0.3–2.9 dB. Programs where the references disagree are deliberately NOT
+/// trimmed and go to a listening decision: GM11 vibraphone, for instance, splits
+/// 10.8 dB (SC-55 wants +6, S-YXG50 wants -2), and single-reference evidence would
+/// have shipped a 6 dB boost the panel does not support. The run is certified — the
+/// master bus compressor is proven inert over the probe, so the differential is
+/// linear where it was measured. See
+/// `wrk_docs/2026.07.22 - M-CAL v3 certified derivation report.md`.
 #[rustfmt::skip] // keep the 8-per-row GM grid aligned for readability
 pub(crate) const PROGRAM_TRIM_DB: [f32; 128] = [
-     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  6.0,  0.0, //   0-7   Piano (6 harpsichord +6dB; rest untouched)
-     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //   8-15  ChromPerc  (untouched)
+     0.0,  0.0,  0.0,  0.0,  0.0,  1.0,  6.0,  0.0, //   0-7   Piano (5 +1, 6 harpsichord +6dB)
+     2.0,  0.0,  0.0,  0.0,  0.0,  0.0, -6.0,  0.0, //   8-15  ChromPerc (8 celesta +2, 14 bells -6)
     -4.5, -3.0, -1.5, -6.0, -3.0, -5.0, -1.0, -4.5, //  16-23  Organ
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  24-31  Guitar     (untouched)
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  32-39  Bass       (untouched)
@@ -658,8 +671,8 @@ pub(crate) const PROGRAM_TRIM_DB: [f32; 128] = [
     -4.0,  0.0,  0.0,  0.0, -2.0,  5.5,  1.0,  1.0, //  80-87  SynthLead
      4.0,  0.0,  2.0,  5.0,  3.0, -5.0,  0.0,  0.0, //  88-95  SynthPad
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  96-103 SynthFX    (untouched)
-     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, // 104-111 Ethnic     (untouched)
-     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, // 112-119 Percussive (untouched)
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -5.0,  0.0, // 104-111 Ethnic     (110 fiddle -5)
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1.0, // 112-119 Percussive (119 rev-cymbal +1)
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, // 120-127 SoundFX    (untouched)
 ];
 
@@ -3301,11 +3314,20 @@ mod tests {
     use super::*;
     use crate::midi::Ev;
 
-    /// The SC-55-referenced per-program loudness trim (`PROGRAM_TRIM_DB`) is
-    /// CONSERVATIVE by design: it corrects sustained families only and leaves
-    /// struck/plucked/percussive voices and noise/FX untouched. This oracle pins
-    /// that scope contract — so a future edit cannot silently trim piano, guitar
-    /// or drums — plus the flagship calibrated anchors and the dB→linear mapping.
+    /// `PROGRAM_TRIM_DB` is CONSERVATIVE by design, and this oracle pins its scope
+    /// so a future edit cannot silently trim piano, guitar or drums — plus the
+    /// flagship calibrated anchors and the dB→linear mapping.
+    ///
+    /// The scope is the sustained families, the documented GM6 plucked exception,
+    /// AND (since 2026.07.22) a small set of percussive entries admitted by the
+    /// M-CAL v3 reference PANEL. The panel deliberately widened the scope: a single
+    /// reference cannot tell you whether it or ferro is the outlier, so an entry is
+    /// only admitted when TWO independent references (Roland SC-55mkII and Yamaha
+    /// S-YXG50 — uncorrelated vendor/era/synthesis) agree with each other about it.
+    /// Percussive programs where they disagree stay untouched by design, so the
+    /// "struck voices are untrimmed" intent still holds everywhere it was not
+    /// positively measured. Their values are pinned below for the same reason the
+    /// sustained anchors are.
     #[test]
     fn program_trim_scope_and_calibration() {
         // The corrected set = the sustained ranges (bowed strings only;
@@ -3316,6 +3338,12 @@ mod tests {
         let is_corrected = |p: u8| {
             matches!(p,
                 6          // harpsichord (documented plucked exception)
+                // M-CAL v3 panel-admitted percussive entries (both references agreed):
+                | 5        // Electric Piano 2
+                | 8        // Celesta
+                | 14       // Tubular Bells
+                | 110      // Fiddle
+                | 119      // Reverse Cymbal
                 | 16..=23  // Organ
                 | 40..=44  // bowed strings (pizz 45 / harp 46 / timpani 47 excluded)
                 | 48..=54  // string & synth sections + choir (orch-hit 55 excluded)
@@ -3349,6 +3377,30 @@ mod tests {
         assert_eq!(PROGRAM_TRIM_DB[73], -4.0); // Flute        — trimmed
         assert_eq!(PROGRAM_TRIM_DB[19], -6.0); // ChurchOrgan  — trimmed
         assert_eq!(PROGRAM_TRIM_DB[6], 6.0); // Harpsichord   — plucked exception, lifted
+
+        // M-CAL v3 panel entries, pinned with the reference agreement that admitted them.
+        assert_eq!(PROGRAM_TRIM_DB[5], 1.0); // ElecPiano2   — refs agreed to 0.7 dB
+        assert_eq!(PROGRAM_TRIM_DB[8], 2.0); // Celesta      — refs agreed to 0.8 dB
+        assert_eq!(PROGRAM_TRIM_DB[14], -6.0); // TubularBell — refs agreed to 0.3 dB
+        assert_eq!(PROGRAM_TRIM_DB[110], -5.0); // Fiddle     — refs agreed to 1.3 dB
+        assert_eq!(PROGRAM_TRIM_DB[119], 1.0); // RevCymbal   — refs agreed to 2.9 dB
+
+        // Deliberate ZEROS. These are recorded decisions, not merely-untouched programs, so
+        // they are pinned to stop a future derivation silently re-litigating them.
+        //
+        // GM11 vibraphone: the references split 10.8 dB (SC-55 +6 vs S-YXG50 -2), so there
+        // is no consensus target; awaiting a listening call.
+        assert_eq!(PROGRAM_TRIM_DB[11], 0.0);
+        // GM0/1/3 pianos: BOTH references place their pianos well below their own median
+        // (GM0: SC-55 -8.9, S-YXG50 -3.4) and would pull ferro's down with them. Arthur's
+        // ear ruled on 2026.07.22 that ferro's pianos are right at ferro's median and that
+        // both modules are wrong here — the acoustic grand is the most-played program in GM
+        // and a 4-6 dB cut on module authority alone is not a trade worth making. All three
+        // are also pitch-tilt excluded on both references, so no single number was reliable
+        // for them anyway.
+        assert_eq!(PROGRAM_TRIM_DB[0], 0.0);
+        assert_eq!(PROGRAM_TRIM_DB[1], 0.0);
+        assert_eq!(PROGRAM_TRIM_DB[3], 0.0);
 
         // Every entry within the ±6 dB clamp.
         for (p, &db) in PROGRAM_TRIM_DB.iter().enumerate() {

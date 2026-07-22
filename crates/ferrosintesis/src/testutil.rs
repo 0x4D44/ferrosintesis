@@ -3293,6 +3293,27 @@ mod pluck_baseline {
     /// 0.008 dB from the formula). The att/sus / tilt / seed-spread columns are
     /// gain-invariant and were left untouched. The NYLON canary (±0.05 dB) pins the
     /// transport methodology.
+    ///
+    /// **`rms_db` transported for the KILN-00042 damper hold (2026-07-23).** The
+    /// relative-budget damper hold opens the in-loop corner above each preset's
+    /// crossover, which raises the [0.05,0.35] s sustain RMS on the cells that sit
+    /// there. Unlike the analytic k=2 gain shift, this is a decay-shape change with
+    /// no closed form, so the six affected checked cells — NYLON 64 and JAZZ 64, all
+    /// three velocities — were transported by the MEASURED base-vs-branch delta
+    /// (`H_new = H + (F − B)`, F/B from `print_pluck_head_baseline` on the branch and
+    /// on the pre-KILN-00042 base at a6d043e): NYLON 64 +3.34/+1.28/+1.11, JAZZ 64
+    /// +1.10/+0.59/+0.47. STEEL/DULCIMER/PIZZ sit below their crossovers at these
+    /// keys and are unmoved. The transport reverts each offset to its base value, so
+    /// the anti-re-leveling MEAN check stays non-vacuous (it still measures the
+    /// Shaped-vs-Legacy EXCITATION residual, which the damper does not touch).
+    /// HONEST LIMITATION: because NYLON 64 is now in the hold region, its three canary
+    /// cells compare the branch render against a baseline transported BY that same
+    /// render's delta — i.e. they no longer pin the harness (they read ≈ B−H = 0 by
+    /// construction). The canary's genuine harness check now rests on NYLON 40 and 52,
+    /// which are below the crossover and remain bit-frozen. The att/sus columns are
+    /// NOT gain-invariant here (NYLON 64/50 att/sus fell 8.21→~2.85) but are left as
+    /// the frozen "before"; only `head_baseline_documents_the_fierceness_gap` reads
+    /// them, and it does not re-render.
     #[rustfmt::skip]
     const HEAD_BASELINE: &[HeadRow] = &[
         // (preset, key, vel, rms_db[0.05-0.35s], att_sus, onset_tilt_db_oct, seed_spread_db)
@@ -3302,9 +3323,9 @@ mod pluck_baseline {
         ("NYLON", 52, 50, -35.54, 2.23, -8.5, 5.30),
         ("NYLON", 52, 100, -24.31, 2.22, -6.6, 5.58),
         ("NYLON", 52, 120, -21.45, 2.24, -5.7, 5.81),
-        ("NYLON", 64, 50, -44.91, 8.21, -8.5, 3.77),
-        ("NYLON", 64, 100, -29.3, 4.65, -8.0, 0.80),
-        ("NYLON", 64, 120, -25.91, 4.16, -7.7, 1.18),
+        ("NYLON", 64, 50, -41.57, 8.21, -8.5, 3.77),  // KILN-00042 transport (+3.34)
+        ("NYLON", 64, 100, -28.02, 4.65, -8.0, 0.80), // KILN-00042 transport (+1.28)
+        ("NYLON", 64, 120, -24.80, 4.16, -7.7, 1.18), // KILN-00042 transport (+1.11)
         ("HARP", 40, 50, -30.33, 1.48, -5.2, 0.91),
         ("HARP", 40, 100, -21.35, 1.54, -3.1, 0.22),
         ("HARP", 40, 120, -18.79, 1.56, -2.7, 0.26),
@@ -3383,9 +3404,9 @@ mod pluck_baseline {
         ("JAZZ", 52, 50, -37.78, 2.45, -9.5, 8.41),
         ("JAZZ", 52, 100, -26.69, 2.16, -8.5, 8.42),
         ("JAZZ", 52, 120, -23.99, 2.13, -7.7, 8.30),
-        ("JAZZ", 64, 50, -45.57, 13.53, -8.5, 0.71),
-        ("JAZZ", 64, 100, -29.73, 5.24, -8.1, 2.26),
-        ("JAZZ", 64, 120, -26.11, 4.68, -7.9, 3.07),
+        ("JAZZ", 64, 50, -44.47, 13.53, -8.5, 0.71),  // KILN-00042 transport (+1.10)
+        ("JAZZ", 64, 100, -29.14, 5.24, -8.1, 2.26),  // KILN-00042 transport (+0.59)
+        ("JAZZ", 64, 120, -25.64, 4.68, -7.9, 3.07),  // KILN-00042 transport (+0.47)
         ("CLEAN", 40, 50, -37.40, 2.49, -5.4, 2.55),
         ("CLEAN", 40, 100, -27.96, 2.80, -4.2, 2.46),
         ("CLEAN", 40, 120, -25.55, 2.83, -4.0, 1.91),

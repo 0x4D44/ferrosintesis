@@ -11,7 +11,7 @@
 //! the v0.9 renders. See the 2026.07.09 alt-bank HLD in `wrk_docs/`.
 
 use crate::dsp::{key_freq, vel_amp, Adsr, Biquad, BlepSaw, Drift, OnePole, Rng, Sine};
-use crate::voices::{Pluck, PluckPreset, Voice};
+use crate::voices::{DamperHold, Pluck, PluckPreset, Voice};
 use std::f32::consts::TAU;
 
 /// Control-rate decimation (matches `voices::CTRL`): the SawStack/Bowed run
@@ -55,7 +55,11 @@ const PIZZ: PluckPreset = PluckPreset {
     buzz: 0.0,
     wound_all: false,
     wound_key_split: true,
-    treble_hold_hz: 0.0, // frozen preset: no high-key damper hold
+    // Frozen preset: no high-key damper hold. KILN-00042 made `Derived` the
+    // default, but this module's whole point is fidelity to the v0.9 renders,
+    // so the alt bank keeps the historic f³ damper. The DEFAULT-bank pizzicato
+    // (voices::make) does get the fix; only this CC0 resurrection stays put.
+    damper_hold: DamperHold::Off,
     harmonic: false,
     mwah: None, // no fretless vocal bloom on a pizzicato
     // v0.12 course fields: the exact literals the Pluck core used to hardcode

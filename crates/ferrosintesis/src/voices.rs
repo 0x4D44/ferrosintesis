@@ -2273,6 +2273,75 @@ pub enum ExcModel {
     Shaped,
 }
 
+/// The ceiling, in dB/s, on how much of a plucked note's decay the in-loop
+/// damper is allowed to contribute at the fundamental (KILN-00042).
+///
+/// The damper is a FIXED-cutoff one-pole inside the KS loop, so its loss per
+/// round trip is ≈ ½(f/fc)² and the loop makes f trips per second: left alone
+/// its share of the decay grows as **f³**, which is why an unmitigated preset's
+/// top octave dies 5–14x faster than its bottom while both reference synths sit
+/// at 1.7–1.8x. Capping that share turns the damper back into what it should be
+/// — a timbre control — and leaves the musical register tilt to the `t60`
+/// key-scale, which is exact and directly authored.
+///
+/// 1.5 dB/s keeps the damper subordinate: at the top of the register the median
+/// preset's `t60` term is ~28 dB/s, so this is a ~5 % perturbation. The value is
+/// forgiving — the derived anchor goes as its cube root, so doubling it moves
+/// every anchor only 26 %.
+pub const KS_DAMP_BUDGET: f32 = 0.30;
+
+/// How a `Pluck` preset holds its in-loop damper open at high keys.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DamperHold {
+    /// No hold: the damper corner stays at `bright` and its share of the decay
+    /// grows as f³. Only for voices deliberately voiced around that collapse.
+    Off,
+    /// Hold the damper's decay share inside [`KS_DAMP_BUDGET`] of the preset's
+    /// OWN authored `t60` loss, by growing the corner above the frequency where
+    /// this preset would otherwise exceed that budget.
+    ///
+    /// Since that share is ≈ 4.343·f³/fc², holding it constant means the corner
+    /// must grow as f^1.5 — the *unique* exponent that flattens a per-second
+    /// loss, because the per-trip loss has to fall as 1/f to cancel the trip
+    /// rate. The budget is RELATIVE, not absolute: an absolute ceiling makes the
+    /// required corner independent of `bright` (it cancels exactly), so every
+    /// preset converges on one damper curve and their timbres stop differing.
+    /// Bounding the damper against each preset's own `t60` loss instead means the
+    /// hold engages only where the damper has become a pathological share of that
+    /// preset's decay — late for a short, bright voice, early for a dark ringing
+    /// one — so identity survives.
+    ///
+    /// Below the anchor the note is bit-identical to `Off` (the hold clamps at
+    /// 1). Above ~key 72 the corner saturates the `sr·0.45` limit and the f³
+    /// cliff slowly resumes — accepted, and the same ceiling for every preset
+    /// because the bright-dependence cancels.
+    Derived,
+}
+
+impl DamperHold {
+    /// The smallest damper corner that keeps the damper's decay contribution
+    /// inside its budget at `f`: [`KS_DAMP_BUDGET`] of the preset's OWN authored
+    /// `t60` loss, `t60_dbps` = 60/t60 for this note.
+    ///
+    /// From 4.343·f³/fc² ≤ ρ·A, so `fc_min = f·√(4.343·f / (ρ·A))`. Shared with
+    /// the oracle so implementation and expectation cannot drift.
+    pub(crate) fn min_corner(f: f32, t60_dbps: f32) -> f32 {
+        f * (4.343 * f / (KS_DAMP_BUDGET * t60_dbps.max(1e-6))).sqrt()
+    }
+    /// Multiplier on the damper corner for a note ringing at `f`.
+    ///
+    /// `bright` is the preset's STATIC post-wound corner — deliberately not
+    /// the velocity-scaled one, so that the crossover sits at a fixed place
+    /// per key and velocity still opens the damper the way it always did.
+    /// Always ≥ 1.
+    fn corner_scale(self, f: f32, bright: f32, t60_dbps: f32) -> f32 {
+        match self {
+            DamperHold::Off => 1.0,
+            DamperHold::Derived => (Self::min_corner(f, t60_dbps) / bright).max(1.0),
+        }
+    }
+}
+
 pub struct PluckPreset {
     pub t60: f32,     // decay at 220 Hz
     pub bright: f32,  // loop damping cutoff
@@ -2317,17 +2386,11 @@ pub struct PluckPreset {
     pub buzz: f32,             // envelope-normalized yarn/fret contact buzz (round-3 U1)
     pub wound_all: bool,       // K4: wound full-range (bass family) vs key-split (guitars)
     pub wound_key_split: bool, // when false, non-bass presets skip the guitar split
-    /// Anchor Hz for the high-key damper hold (0 = off — bit-identical
-    /// path). Above the anchor the damper corner grows as (f/anchor)^1.5,
-    /// which holds the DAMPER's dB/s loss roughly flat instead of ~f³ (the
-    /// one-pole loss/trip ≈ ½(f/fc)² times f0 trips/s — the "E6 dies in
-    /// 100 ms" cliff, scratchpad 2026.07.18). The TOTAL decay still climbs
-    /// gently with the t60 key-scale; released notes stay G6-governed (the
-    /// release-darkening glide deliberately overrides the hold — guitar
-    /// block-two HLD §3). Working window ends where bright saturates the
-    /// sr·0.45 clamp (~key 86 steel / 91 nylon — the top of a 24-fret
-    /// neck); above that the cliff resumes, accepted.
-    pub treble_hold_hz: f32,
+    /// High-key damper hold — see [`DamperHold`]. `Derived` (the default)
+    /// caps the in-loop damper's contribution to the decay at
+    /// [`KS_DAMP_BUDGET`] of its authored decay, which stops the "E6 dies in 100 ms"
+    /// cliff (KILN-00042).
+    pub damper_hold: DamperHold,
     pub harmonic: bool,         // prog-31 flageolet: loop retuned to 2f/3f (G7)
     pub mwah: Option<MwahSpec>, // fretless vocal formant bloom (GM 35)
     // --- v0.12 second-polarization "course" voicing (GM 15 dulcimer) ---
@@ -2422,7 +2485,9 @@ const DEFAULTS: PluckPreset = PluckPreset {
     buzz: 0.0,
     wound_all: false,
     wound_key_split: true,
-    treble_hold_hz: 0.0, // off by default — unauthored presets byte-identical
+    // KILN-00042: default ON. The f³ damper collapse is a DEFECT, so a preset
+    // opts OUT of the fix (Off) rather than into it.
+    damper_hold: DamperHold::Derived,
     harmonic: false,
     mwah: None,
     course_detune: 1.0013,
@@ -2477,9 +2542,11 @@ pub const NYLON: PluckPreset = PluckPreset {
     // model owns the note; the attack-side levers stay deferred — the
     // recorded onsets already carry the real pick/finger mechanics).
     stop_thump: 0.3,
-    // Guitar block two §3: hold the high-key damper (see the field docs).
+    // Guitar block two §3 authored a hand-picked 500 Hz anchor here; KILN-00042
+    // showed it holds the damper at 37.6 dB/s — far above the ceiling — and so
+    // only lifted the E6 cliff onto a still-fast plateau. Now derived (~171 Hz).
     // UKULELE inherits this via ..NYLON — same string physics, intended.
-    treble_hold_hz: 500.0,
+    damper_hold: DamperHold::Derived,
     ..DEFAULTS
 };
 /// Ukulele — XG variation of Nylon Guitar (24), bank LSB 96. A small four-string
@@ -2530,7 +2597,9 @@ pub const OUD: PluckPreset = PluckPreset {
     course_couple: 0.002,
     // Guitar block two §3 (D6): the oud's warm, dark top is its character —
     // explicitly OPT OUT of the NYLON-inherited high-key damper hold.
-    treble_hold_hz: 0.0,
+    // KILN-00042 left this standing: it is pinned by an oracle and commented as
+    // deliberate voicing, so lifting it is an ear decision, not an inference.
+    damper_hold: DamperHold::Off,
     ..NYLON
 };
 pub const STEEL: PluckPreset = PluckPreset {
@@ -2578,8 +2647,9 @@ pub const STEEL: PluckPreset = PluckPreset {
     // Guitar-realism HLD §6 (4a): palm damp on steel strings — a firmer
     // thud than nylon's fingertip (see NYLON.stop_thump for the rationale).
     stop_thump: 0.4,
-    // Guitar block two §3: hold the high-key damper (see the field docs).
-    treble_hold_hz: 500.0,
+    // As NYLON: the hand-picked 500 Hz held the damper at 17.3 dB/s (KILN-00042);
+    // now derived (~221 Hz).
+    damper_hold: DamperHold::Derived,
     ..DEFAULTS
 };
 pub const CLEAN: PluckPreset = PluckPreset {
@@ -2676,6 +2746,24 @@ pub const DRIVE: PluckPreset = PluckPreset {
 pub const DRIVE_LEAD: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "DRIVE_LEAD",
+    // KILN-00042 EXCLUSION — and the one preset where the fix is redundant.
+    // DRIVE_LEAD is the ONLY preset carrying the e-bow sustainer (`sustain > 0`),
+    // whose whole job is to hold a note at constant level; the f³ decay collapse
+    // this bug fixes is therefore already masked here by a different mechanism.
+    // Holding the damper open on top of it breaks the sustainer's pitch
+    // invariance: `sus_headroom` pins the saturator equilibrium in the LOOP
+    // domain (k = 1.18 × deficit, so A_eq = 1.18 × knee at every pitch), but the
+    // oracles measure the OUTPUT, and the loop→output mapping is pitch-dependent.
+    // Measured with the hold on, held level rel-ref climbed monotonically
+    // -6.1 / -3.3 / -1.6 / +4.4 / +12.9 dB across keys 64/70/76/82/88 — a 19 dB
+    // spread where the design guarantees a flat one, and far outside the ±5 dB
+    // band. A single re-captured SUS_HOLD_REF_OFFSET_DB cannot absorb a spread.
+    // Cause: above key ~76 the derived corner saturates the sr*0.45 clamp, so the
+    // loop is nearly undamped and the circulating waveform — hence the output for
+    // a given loop amplitude — changes with pitch. Recalibrating the sustainer
+    // against the new law is its own piece of work; until then this preset keeps
+    // the historic damper and its shipped calibration.
+    damper_hold: DamperHold::Off,
     // Guitar v2 re-spec: the SUSTAINER is the hold mechanism now — the old
     // hot-amp hack (t60 40 / amp 1.5 pinning the engine tanh) is retired.
     // What stays DRIVE_LEAD's own: the gentle 11 kHz damper (harmonics ring —
@@ -2732,6 +2820,11 @@ pub const MUTED: PluckPreset = PluckPreset {
 pub const HARPSICHORD: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "HARPSICHORD",
+    // KILN-00042 SCOPE: the plucked-decay fix deliberately stops short of the
+    // piano family (GM6/GM7) — another agent is mid-flight on piano envelopes,
+    // and these two also carry the sample-onset crossfade of KILN-00030/00043.
+    // Off keeps this preset bit-identical; lift it once that work has landed.
+    damper_hold: DamperHold::Off,
     // 2026.07.18 holds audit: 1.9 → 3.0. The modeled ring damped far faster than
     // a real harpsichord — the SC-55's still sits near piano level at 600 ms while
     // ours had fallen ~19 dB. A longer 8′ decay restores the sustained ring AND lets
@@ -2784,6 +2877,11 @@ pub const HARPSICHORD: PluckPreset = PluckPreset {
 pub const CLAVINET: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "CLAVINET",
+    // KILN-00042 SCOPE: the plucked-decay fix deliberately stops short of the
+    // piano family (GM6/GM7) — another agent is mid-flight on piano envelopes,
+    // and these two also carry the sample-onset crossfade of KILN-00030/00043.
+    // Off keeps this preset bit-identical; lift it once that work has landed.
+    damper_hold: DamperHold::Off,
     t60: 0.78,
     bright: 5200.0,
     pick_lp: 5800.0,
@@ -2828,6 +2926,22 @@ pub const CLAVINET: PluckPreset = PluckPreset {
 pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "BASS",
+    // KILN-00042 EXCLUSION — blocked on a pre-existing coupling this fix
+    // exposes rather than causes. The in-loop damper corner scales with
+    // VELOCITY, so the decay RATE does too; on a real string, damping is a
+    // property of the string, not of how hard you hit it. Today that error
+    // is masked here because the corner is so dark that every note dies
+    // almost instantly at every velocity (GM35 key 60: 661 dB/s at vel 32,
+    // 144 at vel 127), so only the onset is measurable and level tracks
+    // vel² cleanly. Hold the damper open and the notes finally sustain —
+    // at which point their velocity-dependent decay starts contributing
+    // slope, and GM33/GM35 bend to k = 2.38/2.62 against the k = 2 ± 0.25
+    // square law. No global ceiling fixes both: it only passes at ~24 dB/s,
+    // which is more decay than the references show in total. The correct fix
+    // is to move velocity→brightness out of the loop damper and into the
+    // excitation (`pick_lp` already does this), which is a re-voicing, not
+    // this defect. Left Off until then.
+    damper_hold: DamperHold::Off,
     wound_all: true,
     t60: 3.2,
     // Muffled/flatwound top end: the loop and pluck are DARK (damped harmonics,
@@ -2870,6 +2984,22 @@ pub const FINGERED_BASS2: PluckPreset = PluckPreset {
 pub const FRETLESS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "FRETLESS",
+    // KILN-00042 EXCLUSION — blocked on a pre-existing coupling this fix
+    // exposes rather than causes. The in-loop damper corner scales with
+    // VELOCITY, so the decay RATE does too; on a real string, damping is a
+    // property of the string, not of how hard you hit it. Today that error
+    // is masked here because the corner is so dark that every note dies
+    // almost instantly at every velocity (GM35 key 60: 661 dB/s at vel 32,
+    // 144 at vel 127), so only the onset is measurable and level tracks
+    // vel² cleanly. Hold the damper open and the notes finally sustain —
+    // at which point their velocity-dependent decay starts contributing
+    // slope, and GM33/GM35 bend to k = 2.38/2.62 against the k = 2 ± 0.25
+    // square law. No global ceiling fixes both: it only passes at ~24 dB/s,
+    // which is more decay than the references show in total. The correct fix
+    // is to move velocity→brightness out of the loop damper and into the
+    // excitation (`pick_lp` already does this), which is a re-voicing, not
+    // this defect. Left Off until then.
+    damper_hold: DamperHold::Off,
     wound_all: true,
     t60: 2.6,
     bright: 1050.0, // was 1300: darker
@@ -3919,23 +4049,33 @@ impl Pluck {
         // K4 Stage 1: wound strings are darker — the windings damp both the
         // ring (loop damper) and the pick transient — with a skewed decay
         let wound = wound_factor(p.wound_all, p.wound_key_split, key);
-        // Guitar block two §3: the high-key damper hold — the corner grows
-        // as (f/anchor)^1.5 above the anchor, holding the damper's dB/s
-        // share ~flat instead of ~f³ (see the treble_hold_hz field docs).
-        // max(1,·) keeps every key at/below the anchor bit-identical; the
-        // explicit re-clamp is needed HERE because this line historically
-        // only ever reduced bright (wound) and so carried no .min — the
-        // hold multiplies UP (review I-M1).
-        let hold = if p.treble_hold_hz > 0.0 {
-            (f / p.treble_hold_hz).powf(1.5).max(1.0)
-        } else {
-            1.0
-        };
-        let bright = (bright * (1.0 - 0.30 * wound) * hold)
-            .min(sr * 0.45)
-            .max(300.0);
-        let pick_lp = (pick_lp * (1.0 - 0.42 * wound)).max(300.0);
+        // The high-key damper hold (see `DamperHold`): the corner grows as
+        // f^1.5 above the crossover, holding the damper's dB/s share at
+        // within KS_DAMP_BUDGET of the authored t60 loss instead of letting it run
+        // away as f³ (KILN-00042).
+        // `corner_scale` clamps at 1, so every key below the crossover stays
+        // bit-identical; the explicit re-clamp is needed HERE because this line
+        // historically only ever reduced bright (wound) and so carried no .min —
+        // the hold multiplies UP (review I-M1).
+        // The crossover is derived from the preset's STATIC corner (post-wound,
+        // PRE-velocity). Deriving it from the velocity-scaled corner instead
+        // makes the damper loss velocity-INDEPENDENT above the crossover, which
+        // silently deletes the velocity→timbre law for high notes — a harder
+        // pick would no longer open the damper — and measurably bends six
+        // programs off the k=2 square law. Keeping it static preserves both
+        // laws: the hold's reach shrinking at low velocity is the documented,
+        // canary-pinned behaviour (see the vel-40 canary in the tests).
+        let wound_bright = bright * (1.0 - 0.30 * wound);
         let t60 = (t60_base * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
+        // The budget is relative to THIS preset's authored decay, so t60 must be
+        // known first. Static (pre-velocity, pre-jitter) for the same reason the
+        // corner is: the crossover must not move with velocity.
+        let t60_static = (p.t60 * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
+        let hold =
+            p.damper_hold
+                .corner_scale(f, p.bright * (1.0 - 0.30 * wound), 60.0 / t60_static);
+        let bright = (wound_bright * hold).min(sr * 0.45).max(300.0);
+        let pick_lp = (pick_lp * (1.0 - 0.42 * wound)).max(300.0);
 
         // excitation: filtered noise burst with a pick-position comb.
         // (K2's deterministic triangle IC was BUILT AND REVERTED: the
@@ -12684,18 +12824,54 @@ mod tests {
         }
     }
 
-    /// Lowpass twice, then count rising zero crossings.
+    /// Fundamental of `seg` by normalised autocorrelation, over 150..1600 Hz.
+    ///
+    /// Deliberately NOT a zero-crossing count. A Karplus-Strong sustain can
+    /// carry a second harmonic STRONGER than its fundamental — after
+    /// KILN-00042 opened the in-loop damper, CLEAN's hammered D5 holds 2.8x
+    /// more energy at 1175 Hz than at 587 Hz — and a crossing counter then
+    /// reports a pitch part-way to 2*f0 no matter how the pre-filter is tuned
+    /// (that buffer read 890/978/1100 Hz behind a 250/700/1000 Hz lowpass; the
+    /// true f0 is 587.9 Hz). Autocorrelation locks to the PERIOD, so extra
+    /// harmonics reinforce the answer instead of inflating it.
     fn measure_pitch(seg: &[f32], sr: f32) -> f32 {
-        let mut lp1 = OnePole::lowpass(700.0, sr);
-        let mut lp2 = OnePole::lowpass(700.0, sr);
-        let f: Vec<f32> = seg.iter().map(|&x| lp2.process(lp1.process(x))).collect();
-        let mut c = 0;
-        for w in f.windows(2) {
-            if w[0] <= 0.0 && w[1] > 0.0 {
-                c += 1;
+        let (lo, hi) = (150.0f32, 1600.0f32);
+        let min_lag = (sr / hi).floor().max(2.0) as usize;
+        let max_lag = ((sr / lo).ceil() as usize).min(seg.len() / 2);
+        let mut r = Vec::with_capacity(max_lag - min_lag + 1);
+        for lag in min_lag..=max_lag {
+            let (mut num, mut da, mut db) = (0f64, 0f64, 0f64);
+            for i in 0..(seg.len() - lag) {
+                let (a, b) = (seg[i] as f64, seg[i + lag] as f64);
+                num += a * b;
+                da += a * a;
+                db += b * b;
             }
+            r.push(if da > 0.0 && db > 0.0 {
+                num / (da * db).sqrt()
+            } else {
+                0.0
+            });
         }
-        c as f32 / (seg.len() as f32 / sr)
+        let rmax = r.iter().cloned().fold(f64::MIN, f64::max);
+        // The SMALLEST period clearing 90 % of the best correlation: the
+        // standard guard against locking onto an octave-down multiple.
+        let i = (1..r.len() - 1)
+            .find(|&i| r[i] >= r[i - 1] && r[i] >= r[i + 1] && r[i] > 0.9 * rmax)
+            .unwrap_or(0);
+        let lag = (min_lag + i) as f32;
+        // Parabolic refinement — the lag grid is one sample, ~6 Hz at 500 Hz.
+        let refined = if i > 0 && i + 1 < r.len() {
+            let d = r[i - 1] - 2.0 * r[i] + r[i + 1];
+            if d.abs() > 1e-12 {
+                lag + (0.5 * (r[i - 1] - r[i + 1]) / d) as f32
+            } else {
+                lag
+            }
+        } else {
+            lag
+        };
+        sr / refined
     }
 
     /// Oracle 1: velocity opens the timbre, not just the level — a hard pick
@@ -12932,6 +13108,157 @@ mod tests {
         let mut buf = vec![0f32; (secs * sr) as usize];
         v.render(&mut buf);
         buf
+    }
+
+    /// KILN-00042 diagnostic probe 2 (temporary — not committed).
+    #[test]
+    fn probe_kiln42_bands() {
+        let sr = 44100.0;
+        let plain = PluckPreset {
+            jawari: None,
+            ..SITAR
+        };
+        let win = (0.05 * sr) as usize;
+        let span = (0.35 * sr) as usize;
+        const BANDS: &[(f32, f32)] = &[
+            (200.0, 1000.0),
+            (1000.0, 2000.0),
+            (2000.0, 4000.0),
+            (4000.0, 6000.0),
+            (6000.0, 8000.0),
+            (8000.0, 10500.0),
+            (12000.0, 20000.0),
+        ];
+        for key in [55u8, 62, 69, 76] {
+            let mut wb = [0f64; 7];
+            let mut cb = [0f64; 7];
+            let mut we = [0f64; 7];
+            let mut ce = [0f64; 7];
+            let (mut wt, mut ct) = (0f64, 0f64);
+            let n = 5.0f64;
+            for seed in [3u32, 11, 40, 57, 92] {
+                let with = render_pluck(&SITAR, key, 100, 3.2, seed);
+                let ctrl = render_pluck(&plain, key, 100, 3.2, seed);
+                let env: Vec<f32> = with.chunks(win).map(rms).collect();
+                let peak = env.iter().cloned().fold(0.0f32, f32::max);
+                let t30 = env
+                    .iter()
+                    .position(|&v| v > 0.0 && v <= peak * 10f32.powf(-1.5))
+                    .unwrap_or(env.len() / 2)
+                    * win
+                    + (0.20 * sr) as usize;
+                let l0 = t30.min(with.len() - span - 1);
+                let l1 = l0 + span;
+                let (e0, e1) = ((0.04 * sr) as usize, (0.25 * sr) as usize);
+                let sq = |x: f32| (x as f64) * (x as f64);
+                for (i, &(lo, hi)) in BANDS.iter().enumerate() {
+                    wb[i] += sq(spectral_band_rms(&with[l0..l1], sr, lo, hi));
+                    cb[i] += sq(spectral_band_rms(&ctrl[l0..l1], sr, lo, hi));
+                    we[i] += sq(spectral_band_rms(&with[e0..e1], sr, lo, hi));
+                    ce[i] += sq(spectral_band_rms(&ctrl[e0..e1], sr, lo, hi));
+                }
+                wt += sq(rms(&with[l0..l1]));
+                ct += sq(rms(&ctrl[l0..l1]));
+            }
+            let db = |x: f64| 20.0 * (x / n).sqrt().max(1e-30).log10();
+            println!("BANDS key {key} (late window, dB; last col = with-ctrl)");
+            for (i, &(lo, hi)) in BANDS.iter().enumerate() {
+                println!(
+                    "  {lo:>5.0}-{hi:>5.0} Hz  LATE with {:>8.2}  ctrl {:>8.2}  delta {:>7.2}   | EARLY with {:>8.2} ctrl {:>8.2} delta {:>7.2}",
+                    db(wb[i]),
+                    db(cb[i]),
+                    db(wb[i]) - db(cb[i]),
+                    db(we[i]),
+                    db(ce[i]),
+                    db(we[i]) - db(ce[i]),
+                );
+            }
+            println!(
+                "  TOTAL late with {:.2} ctrl {:.2} delta {:.2}",
+                db(wt),
+                db(ct),
+                db(wt) - db(ct)
+            );
+        }
+    }
+
+    /// KILN-00042 diagnostic probe (temporary — not committed).
+    #[test]
+    fn probe_kiln42_jawari() {
+        let sr = 44100.0;
+        let plain = PluckPreset {
+            jawari: None,
+            ..SITAR
+        };
+        let win = (0.05 * sr) as usize;
+        let span = (0.35 * sr) as usize;
+        for key in [55u8, 62, 69, 76] {
+            let (mut we_b, mut we_t, mut wl_b, mut wl_t) = (0f64, 0f64, 0f64, 0f64);
+            let (mut ce_b, mut ce_t, mut cl_b, mut cl_t) = (0f64, 0f64, 0f64, 0f64);
+            let mut dl = 0f64; // late-window with-minus-ctrl difference energy
+            let mut l0_acc = 0f64;
+            let n = 5.0f64;
+            for seed in [3u32, 11, 40, 57, 92] {
+                let with = render_pluck(&SITAR, key, 100, 3.2, seed);
+                let ctrl = render_pluck(&plain, key, 100, 3.2, seed);
+                let env: Vec<f32> = with.chunks(win).map(rms).collect();
+                let peak = env.iter().cloned().fold(0.0f32, f32::max);
+                let t30 = env
+                    .iter()
+                    .position(|&v| v > 0.0 && v <= peak * 10f32.powf(-1.5))
+                    .unwrap_or(env.len() / 2)
+                    * win
+                    + (0.20 * sr) as usize;
+                let l0 = t30.min(with.len() - span - 1);
+                let l1 = l0 + span;
+                l0_acc += l0 as f64 / sr as f64;
+                let (e0, e1) = ((0.04 * sr) as usize, (0.25 * sr) as usize);
+                let sq = |x: f32| (x as f64) * (x as f64);
+                we_b += sq(spectral_band_rms(&with[e0..e1], sr, 2000.0, 6000.0));
+                we_t += sq(rms(&with[e0..e1]));
+                wl_b += sq(spectral_band_rms(&with[l0..l1], sr, 2000.0, 6000.0));
+                wl_t += sq(rms(&with[l0..l1]));
+                ce_b += sq(spectral_band_rms(&ctrl[e0..e1], sr, 2000.0, 6000.0));
+                ce_t += sq(rms(&ctrl[e0..e1]));
+                cl_b += sq(spectral_band_rms(&ctrl[l0..l1], sr, 2000.0, 6000.0));
+                cl_t += sq(rms(&ctrl[l0..l1]));
+                let d: Vec<f32> = with[l0..l1]
+                    .iter()
+                    .zip(&ctrl[l0..l1])
+                    .map(|(a, b)| a - b)
+                    .collect();
+                dl += sq(rms(&d));
+            }
+            let share = |b: f64, t: f64| (b / t.max(1e-24)).sqrt();
+            let (we, wl) = (share(we_b, we_t), share(wl_b, wl_t));
+            let (ce, cl) = (share(ce_b, ce_t), share(cl_b, cl_t));
+            let db = |x: f64| 20.0 * (x / n).sqrt().max(1e-30).log10();
+            println!(
+                "PROBE key {key} l0_s {:.3} SHARE wl {:.5} cl {:.5} ratio {:.3} | we {:.5} ce {:.5} | surv_w {:.4} surv_c {:.4} surv_ratio {:.3}",
+                l0_acc / n,
+                wl,
+                cl,
+                wl / cl.max(1e-24),
+                we,
+                ce,
+                wl / we.max(1e-12),
+                cl / ce.max(1e-12),
+                (wl / we.max(1e-12)) / (cl / ce.max(1e-12)),
+            );
+            println!(
+                "PROBE key {key} ABSdB late: with band {:.2} tot {:.2} | ctrl band {:.2} tot {:.2} | early: with band {:.2} tot {:.2} ctrl band {:.2} tot {:.2} | diff(late) {:.2} (rel ctrl {:.2} dB)",
+                db(wl_b),
+                db(wl_t),
+                db(cl_b),
+                db(cl_t),
+                db(we_b),
+                db(we_t),
+                db(ce_b),
+                db(ce_t),
+                db(dl),
+                db(dl) - db(cl_t),
+            );
+        }
     }
 
     /// The four Shaped presets and a representative mid-register key. Their
@@ -13726,6 +14053,124 @@ mod tests {
         );
     }
 
+    /// Every `Pluck` preset, walked by the loop-stability and decay-law
+    /// oracles. Shared so the two cannot drift apart, and so a NEW preset is
+    /// covered by both the moment it is added here.
+    const ALL_PLUCK_PRESETS: &[(&str, &PluckPreset)] = &[
+        ("NYLON", &NYLON),
+        ("STEEL", &STEEL),
+        ("CLEAN", &CLEAN),
+        ("JAZZ", &JAZZ),
+        ("DRIVE", &DRIVE),
+        ("DRIVE_LEAD", &DRIVE_LEAD),
+        ("MUTED", &MUTED),
+        ("HARPSICHORD", &HARPSICHORD),
+        ("CLAVINET", &CLAVINET),
+        ("BASS", &BASS),
+        ("FRETLESS", &FRETLESS),
+        ("SLAP", &SLAP),
+        ("PICK", &PICK),
+        ("UPRIGHT", &UPRIGHT),
+        ("HARMONIC", &HARMONIC),
+        ("HARP", &HARP),
+        ("BANJO", &BANJO),
+        ("SITAR", &SITAR),
+        ("SHAMISEN", &SHAMISEN),
+        ("DULCIMER", &DULCIMER),
+        ("KOTO", &KOTO),
+        ("PIZZ", &PIZZ),
+        ("OUD", &OUD),
+        ("UKULELE", &UKULELE),
+    ];
+
+    /// The frequency a preset's KS loop actually rings at for `key` — the
+    /// fundamental, except on a flageolet preset, which retunes the loop to the
+    /// octave below key 64 and the twelfth above it (`Pluck::new`'s `harm`).
+    fn ring_f(p: &PluckPreset, key: u8) -> f32 {
+        let harm = if p.harmonic {
+            if key < 64 {
+                2.0
+            } else {
+                3.0
+            }
+        } else {
+            1.0
+        };
+        key_freq(key) * harm
+    }
+
+    /// KILN-00042 closed-form oracle — the register TILT the law produces.
+    ///
+    /// Asserts the one property of the decay law that is NOT self-fulfilling in
+    /// closed form: that the total decay (authored `t60` key-scale + the damper's
+    /// bounded share) tilts across the register by no more than the `t60` scale
+    /// intends. The relative budget pins the damper's own share at `ρ·A/vel_scale²`
+    /// by construction, so any assertion about that *level* would merely restate
+    /// the law — the emergent register TILT is the part with teeth here. Convergence
+    /// of instrument timbres is checked by the RENDERED
+    /// `damper_hold_preserves_instrument_identity`; this stays closed-form because a
+    /// rendered decay-RATE ratio is brittle (DRIVE reads through the engine's `Drive`
+    /// saturator — model/meas −11x vs 1.06 on linear presets; MUTED/SHAMISEN/BANJO
+    /// fall to the metric floor; momentary loudness conflates partials and the second
+    /// polarization per preset).
+    #[test]
+    fn ks_decay_law_holds_across_register() {
+        let sr = 44100.0f32;
+        let mut checked = 0usize;
+        for (name, p) in ALL_PLUCK_PRESETS {
+            // `Off` presets keep the historic collapse on purpose (documented
+            // opt-outs); the tilt guarantee is only about the held law.
+            if p.damper_hold != DamperHold::Derived {
+                continue;
+            }
+            checked += 1;
+            let total = |key: u8| {
+                let vn = if p.vel_sense >= 1.0 {
+                    100.0 / 127.0
+                } else {
+                    1.0 - p.vel_sense * (1.0 - 100.0 / 127.0)
+                };
+                let f = ring_f(p, key);
+                let wound = wound_factor(p.wound_all, p.wound_key_split, key);
+                let pre = (p.bright * (0.22 + 0.98 * vn)).min(sr * 0.45);
+                let wb = pre * (1.0 - 0.30 * wound);
+                let t60s =
+                    (p.t60 * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
+                let hold =
+                    p.damper_hold
+                        .corner_scale(f, p.bright * (1.0 - 0.30 * wound), 60.0 / t60s);
+                let fc = (wb * hold).min(sr * 0.45).max(300.0);
+                let d = -20.0 * OnePole::lowpass_mag(fc, f, sr).log10() * f;
+                // the CLAMPED t60 — long-t60 presets hit the 14 s cap low down
+                // and the raw law would misreport them
+                let t60 = (p.t60 * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
+                60.0 / t60 + d
+            };
+            let (bot, top) = (total(48), total(72));
+            let ratio = top / bot;
+            // The tilt the `t60` key-scale INTENDS over this span. Derived from
+            // the frequencies the loop actually rings at rather than assumed to
+            // be two octaves: HARMONIC's flageolet switches from the octave to
+            // the twelfth at key 64, so its span is 6x, not 4x, and a fixed
+            // bound would flag a preset that is behaving exactly as authored.
+            let f_ratio = ring_f(p, 72) / ring_f(p, 48);
+            let intended = f_ratio.powf(0.55);
+            assert!(
+                (0.8 * intended..=1.25 * intended).contains(&ratio),
+                "{name}: decay tilts {ratio:.2}x from key 48 ({bot:.1} dB/s) to key 72 \
+                 ({top:.1} dB/s), but the t60 key-scale intends {intended:.2}x over this \
+                 preset's {f_ratio:.1}x frequency span. Too high and the f³ register \
+                 collapse is back; too low and the hold has over-corrected into an \
+                 inverted, organ-like tilt."
+            );
+        }
+        assert!(
+            checked >= 15,
+            "oracle covered only {checked} Derived presets — it has gone vacuous \
+             (presets silently flipped to Off drop out of the tilt guarantee)"
+        );
+    }
+
     /// V8b (guitar v2): the coupled two-polarization step matrix
     /// [[a, k], [-k, a]] has |λ| = sqrt(a² + k²) — discrete skew coupling is
     /// NOT energy-neutral (it adds |λ|/a − 1 per step). With the sustainer
@@ -13736,30 +14181,7 @@ mod tests {
     #[test]
     fn coupled_loop_margin_holds() {
         let sr = 44100.0;
-        let presets: &[(&str, &PluckPreset)] = &[
-            ("NYLON", &NYLON),
-            ("STEEL", &STEEL),
-            ("CLEAN", &CLEAN),
-            ("JAZZ", &JAZZ),
-            ("DRIVE", &DRIVE),
-            ("DRIVE_LEAD", &DRIVE_LEAD),
-            ("MUTED", &MUTED),
-            ("HARPSICHORD", &HARPSICHORD),
-            ("CLAVINET", &CLAVINET),
-            ("BASS", &BASS),
-            ("FRETLESS", &FRETLESS),
-            ("SLAP", &SLAP),
-            ("PICK", &PICK),
-            ("UPRIGHT", &UPRIGHT),
-            ("HARMONIC", &HARMONIC),
-            ("HARP", &HARP),
-            ("BANJO", &BANJO),
-            ("SITAR", &SITAR),
-            ("SHAMISEN", &SHAMISEN),
-            ("DULCIMER", &DULCIMER),
-            ("KOTO", &KOTO),
-            ("PIZZ", &PIZZ),
-        ];
+        let presets = ALL_PLUCK_PRESETS;
         // the SAME closed form the shipped code uses - the oracle must not
         // hold a private copy that keeps passing against stale math
         let hmag = |bright: f32, f: f32| OnePole::lowpass_mag(bright, f, sr);
@@ -16240,6 +16662,68 @@ mod tests {
         );
     }
 
+    /// KILN-00042 identity-retention oracle — the rendered, REQUIREMENT-side twin
+    /// of the closed-form `ks_decay_law_holds_across_register`. Opening the loop
+    /// damper to stop high notes dying risks making different plucked instruments
+    /// converge on one timbre; this asserts they do not.
+    ///
+    /// For each authored-brighter/darker pair it renders the shipped voice and a
+    /// forced-`Off` twin (the same preset on its authored `bright` with NO hold, i.e.
+    /// the intended relationship), and measures the broadband spectral `centroid` —
+    /// the same energy-weighted metric the vetted `ukulele_variation` oracle uses,
+    /// which tracks perceived brightness, not the inaudible late-HF tail. The hold
+    /// must keep the SIGN of the authored contrast and most of its magnitude at the
+    /// key where each instrument speaks its identity. An absolute-ceiling law (the
+    /// rejected design, where `bright` cancels from the held corner) converges the
+    /// pair even here and fails; so would a future sample/filter change that
+    /// flattens identity — which is why this renders rather than reasoning in
+    /// closed form. (High-register identity above the crossover is a separate,
+    /// ledgered question — MM-BUG-KILN-00050.)
+    #[test]
+    fn damper_hold_preserves_instrument_identity() {
+        let sr = 44100.0;
+        // Key 60 (~C4) — where these instruments speak, and where both members of
+        // each pair are held, so a convergent law shows up.
+        let key = 60u8;
+        let lo_i = (0.030 * sr) as usize;
+        let hi_i = (0.420 * sr) as usize;
+        let centroid = |pp: &PluckPreset| -> f32 {
+            let mut acc = 0.0;
+            for &seed in &[0x6510u32, 0x76A1, 0x1250] {
+                acc += crate::testutil::centroid(
+                    &render_pluck(pp, key, 100, 4.0, seed)[lo_i..hi_i],
+                    sr,
+                );
+            }
+            acc / 3.0
+        };
+        // (label, brighter, darker) by authored `bright`.
+        let pairs: [(&str, &PluckPreset, &PluckPreset); 2] = [
+            ("ukulele>nylon", &UKULELE, &NYLON),
+            ("steel>nylon", &STEEL, &NYLON),
+        ];
+        for (label, hi, lo) in pairs {
+            let hi_off = PluckPreset {
+                damper_hold: DamperHold::Off,
+                ..*hi
+            };
+            let lo_off = PluckPreset {
+                damper_hold: DamperHold::Off,
+                ..*lo
+            };
+            let shipped = (centroid(hi) / centroid(lo)).ln();
+            let authored = (centroid(&hi_off) / centroid(&lo_off)).ln();
+            assert!(
+                shipped > 0.0,
+                "{label}: the hold inverted the authored brightness order at key {key}                  (shipped ln-contrast {shipped:+.3}, authored {authored:+.3})"
+            );
+            assert!(
+                shipped >= 0.55 * authored,
+                "{label}: the hold flattened instrument identity at key {key} — shipped                  ln-contrast {shipped:.3} kept < 55% of the authored {authored:.3}. The                  held corner has lost its per-preset `bright` dependence."
+            );
+        }
+    }
+
     /// GM 104 sitar (v0.16, jawari oracle 1): the buzz SURVIVES the decay.
     /// At the note's own −30 dB point the 2–6 kHz share of a jawari'd render
     /// sits far above the plain-KS control (identical preset with
@@ -16894,27 +17378,71 @@ mod tests {
         );
     }
 
-    /// Guitar block two §3 — authoring pins (review C4): the hold is
-    /// exactly where the design says and nowhere else.
+    /// Authoring pins (KILN-00042, succeeding guitar block two's review C4):
+    /// the hold is derived by default and OFF exactly where a documented
+    /// decision says so — nowhere else.
     #[test]
     fn treble_hold_authoring_pins() {
-        assert_eq!(DEFAULTS.treble_hold_hz, 0.0);
-        assert_eq!(NYLON.treble_hold_hz, 500.0);
-        assert_eq!(STEEL.treble_hold_hz, 500.0);
-        assert_eq!(UKULELE.treble_hold_hz, 500.0, "inherits ..NYLON by design");
-        assert_eq!(OUD.treble_hold_hz, 0.0, "explicit opt-out (warm top)");
+        // Default ON: the f³ collapse is a defect, so presets opt OUT, not in.
+        assert_eq!(DEFAULTS.damper_hold, DamperHold::Derived);
+        assert_eq!(NYLON.damper_hold, DamperHold::Derived);
+        assert_eq!(STEEL.damper_hold, DamperHold::Derived);
+        assert_eq!(
+            UKULELE.damper_hold,
+            DamperHold::Derived,
+            "inherits ..NYLON by design"
+        );
+        // The three documented opt-outs, each for a stated reason.
+        assert_eq!(
+            OUD.damper_hold,
+            DamperHold::Off,
+            "deliberate voicing (warm dark top) — lifting it is an ear decision"
+        );
+        for (p, who) in [(&HARPSICHORD, "HARPSICHORD"), (&CLAVINET, "CLAVINET")] {
+            assert_eq!(
+                p.damper_hold,
+                DamperHold::Off,
+                "{who} is held out of KILN-00042 while the piano family is in flight"
+            );
+        }
+
+        // ...and NOTHING ELSE is Off. This closes the loophole in the decay-law
+        // oracle, which skips `Off` presets by design: without this pin, quietly
+        // flipping a preset to `Off` would silently remove it from that oracle's
+        // coverage instead of failing anything.
+        // sorted so reordering ALL_PLUCK_PRESETS cannot fail this spuriously
+        const EXPECTED_OFF: &[&str] = &[
+            "BASS",
+            "CLAVINET",
+            "DRIVE_LEAD",
+            "FRETLESS",
+            "HARPSICHORD",
+            "OUD",
+        ];
+        let mut actual_off: Vec<&str> = ALL_PLUCK_PRESETS
+            .iter()
+            .filter(|(_, p)| p.damper_hold == DamperHold::Off)
+            .map(|(n, _)| *n)
+            .collect();
+        actual_off.sort_unstable();
+        assert_eq!(
+            actual_off, EXPECTED_OFF,
+            "the set of damper-hold opt-outs changed. Every opt-out needs a stated \
+             reason in the preset AND an entry here — otherwise it drops out of \
+             ks_decay_law_holds_across_register unnoticed."
+        );
     }
 
-    /// Guitar block two §3 (review C4) — the OUD opt-out proven in the
-    /// ACTIVE range: a high-key oud render must be bit-identical to a
-    /// forced-zero twin. If someone drops the explicit 0.0 and the
-    /// ..NYLON-inherited 500 leaks in, this fails where key-60 ratio
-    /// tests cannot see it.
+    /// The OUD opt-out proven in the ACTIVE range: a high-key oud render must
+    /// be bit-identical to a forced-`Off` twin, AND must genuinely differ from
+    /// a `Derived` one. The first half catches an inherited default leaking in;
+    /// the second half stops the test going vacuous if `Off` ever became a
+    /// no-op. Key-60 ratio tests cannot see either.
     #[test]
     fn oud_high_key_ignores_treble_hold() {
         let sr = 44100.0;
         let twin = PluckPreset {
-            treble_hold_hz: 0.0,
+            damper_hold: DamperHold::Off,
             ..OUD
         };
         let render = |p: &PluckPreset| {
@@ -16927,6 +17455,19 @@ mod tests {
         assert!(
             a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()),
             "oud high keys must ignore the treble hold"
+        );
+        // ...and the opt-out must MEAN something: a Derived twin has to differ,
+        // or this oracle would pass just as happily on a broken `Off`.
+        let derived = render(&PluckPreset {
+            damper_hold: DamperHold::Derived,
+            ..OUD
+        });
+        assert!(
+            a.iter()
+                .zip(&derived)
+                .any(|(x, y)| x.to_bits() != y.to_bits()),
+            "OUD's Off opt-out is vacuous — a Derived twin renders identically, \
+             so this key is not in the hold's active range and the oracle proves nothing"
         );
     }
 

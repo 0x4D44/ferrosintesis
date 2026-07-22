@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00042 — Karplus-Strong plucked decay is 2–12x too fast and steepens with register: the fixed-cutoff in-loop damper's f³ law plus the f^-0.55 t60 key-scale kill 22 GM programs' ring
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth
@@ -18,7 +18,9 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised from the M-CAL v3 certified full-128 derivation run; headline finding of `wrk_docs/2026.07.22 - M-CAL v3 certified derivation report.md`, verified independently against the raw measurement TSVs and the source)
+- **State history:**
+  - Open (2026-07-22, raised from the M-CAL v3 certified full-128 derivation run; headline finding of `wrk_docs/2026.07.22 - M-CAL v3 certified derivation report.md`, verified independently against the raw measurement TSVs and the source)
+  - Fixed (2026-07-23, Claude Opus 4.8 (1M) — relative-budget `DamperHold` in `crates/ferrosintesis/src/voices.rs`; median register tilt 5.00x → 3.42x vs references 1.72–1.82x, koto 14.1x → 1.0x; both vetted rendered identity oracles green; new closed-form tilt oracle + rendered `damper_hold_preserves_instrument_identity`. Six of the 22 programs are `Off` opt-outs deferred to follow-ups: GM6/GM7 (piano family in flight), GM33/GM35 (KILN-00048), the DRIVE_LEAD driven-guitar CC0 alt-bank sustainer (KILN-00049). Top-register identity residual is KILN-00050. Fixing commit on branch `847510e` (pre-integration; awaits independent two-eyes closure). Suite 619 pass / 0 fail.)
 
 ## Observation
 

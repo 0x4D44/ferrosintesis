@@ -3643,6 +3643,76 @@ mod tests {
         (seg.iter().map(|&x| (x * x) as f64).sum::<f64>() / seg.len() as f64).sqrt() as f32
     }
 
+    #[test]
+    fn gm0_fra_phrase_keeps_energy_through_short_key_up_gaps() {
+        let sr = 44100.0;
+        let onsets = [0.100f64, 0.475, 0.850];
+        let keys = [62u8, 66, 69];
+        let mut events = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 0 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 91,
+                    val: 0,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 93,
+                    val: 0,
+                },
+            ),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 94,
+                    val: 0,
+                },
+            ),
+        ];
+        for (&onset, &key) in onsets.iter().zip(keys.iter()) {
+            events.push((
+                onset,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key,
+                    vel: 104,
+                },
+            ));
+            events.push((onset + 0.3125, EvKind::NoteOff { ch: 0, key }));
+        }
+        events.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+        let mut opts = test_opts(sr);
+        opts.samples = true;
+        let rendered = left(&render(&test_song(events, 1.35), &opts).0);
+        let window = (0.020 * sr) as usize;
+        let mut drops = Vec::new();
+        for &onset in &onsets {
+            let note_off = onset + 0.3125;
+            let pre_end = (note_off * sr as f64) as usize;
+            let gap_end = ((note_off + 0.0625) * sr as f64) as usize;
+            let before = rms(&rendered[pre_end - window..pre_end]);
+            let after = rms(&rendered[gap_end - window..gap_end]);
+            drops.push(20.0 * (before / after.max(1e-9)).log10());
+        }
+
+        for (index, &drop) in drops.iter().enumerate() {
+            assert!(
+                drop <= 10.0,
+                "FRA note {} gap drop {:.2} dB exceeds 10 dB: {:?}",
+                index + 1,
+                drop,
+                drops
+            );
+        }
+    }
+
     /// A same-key repeated-note figure on one channel: `n` NoteOn/NoteOff
     /// pairs, `ioi` seconds apart, each gated `gate` seconds — the tremolo
     /// (and, at slow ioi, picked-repeat) test figure.
@@ -9642,11 +9712,12 @@ mod tests {
         let after_reset = left(&render(&test_song(reset, 2.0), &test_opts(sr)).0);
         assert_eq!(after_reset, def, "CC0=0 must return to the default bank");
 
-        // Alt bank + a non-orchestral program (piano 0) delegates to default.
-        let alt_piano = left(&render(&test_song(bank_song(Some(1), 0), 2.0), &test_opts(sr)).0);
-        let def_piano = left(&render(&test_song(bank_song(None, 0), 2.0), &test_opts(sr)).0);
+        // Alt bank + a program with no alternate definition delegates to default.
+        // Piano 0 is no longer such a control: CC0=1 selects its Salamander bank.
+        let alt_flute = left(&render(&test_song(bank_song(Some(1), 73), 2.0), &test_opts(sr)).0);
+        let def_flute = left(&render(&test_song(bank_song(None, 73), 2.0), &test_opts(sr)).0);
         assert_eq!(
-            alt_piano, def_piano,
+            alt_flute, def_flute,
             "alt bank must delegate non-orchestral programs to the default voice"
         );
     }

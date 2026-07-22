@@ -1057,11 +1057,11 @@ pub fn make(
             };
             match src {
                 Some(b) => {
-                    crate::voices::acoustic_grand_with_bank(b, key, vel, sr, seed, true, bright)
+                    crate::voices::acoustic_grand_with_bank(b, key, vel, sr, seed, bright, None)
                 }
                 // --no-samples or an unknown source digit: the slot's model alone.
                 None => {
-                    crate::voices::acoustic_grand_with_bank(&[], key, vel, sr, seed, false, bright)
+                    crate::voices::acoustic_grand_with_bank(&[], key, vel, sr, seed, bright, None)
                 }
             }
         }

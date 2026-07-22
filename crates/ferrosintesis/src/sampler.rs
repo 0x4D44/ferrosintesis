@@ -2591,6 +2591,8 @@ pub struct LaVoice {
     end_taper: f32,
 }
 
+const DEFAULT_LA_RELEASE_T60: f32 = 0.06;
+
 impl LaVoice {
     /// Wrap `sustain`; falls back to the bare model when the target is too
     /// far outside the sampled range for a credible repitch.
@@ -2619,7 +2621,47 @@ impl LaVoice {
         fade: (f32, f32),
         fx: LaFx,
     ) -> Box<dyn Voice> {
-        match Self::build(sustain, zones, key, vel, sr, gain, fade, fx) {
+        match Self::build(
+            sustain,
+            zones,
+            key,
+            vel,
+            sr,
+            gain,
+            fade,
+            fx,
+            DEFAULT_LA_RELEASE_T60,
+        ) {
+            Ok(la) => Box::new(la),
+            Err(model) => model,
+        }
+    }
+
+    /// [`Self::wrap`] with an explicit note-off release time. This is a narrow
+    /// opt-in for voices whose recorded attack needs a longer key-up bridge;
+    /// every existing wrapper keeps [`DEFAULT_LA_RELEASE_T60`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn wrap_release(
+        sustain: Box<dyn Voice>,
+        zones: &'static [Zone],
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+        release_t60: f32,
+    ) -> Box<dyn Voice> {
+        match Self::build(
+            sustain,
+            zones,
+            key,
+            vel,
+            sr,
+            gain,
+            fade,
+            LaFx::default(),
+            release_t60,
+        ) {
             Ok(la) => Box::new(la),
             Err(model) => model,
         }
@@ -2652,7 +2694,17 @@ impl LaVoice {
         let var_mult = (cents / 1200.0).exp2();
         let gain = gain * (1.0 + var.gain_frac * rng.white());
         let start = (var.onset_max_s * sr * (0.5 + 0.5 * rng.white())) as usize;
-        match Self::build(sustain, zones, key, vel, sr, gain, fade, fx) {
+        match Self::build(
+            sustain,
+            zones,
+            key,
+            vel,
+            sr,
+            gain,
+            fade,
+            fx,
+            DEFAULT_LA_RELEASE_T60,
+        ) {
             Ok(mut la) => {
                 la.var_mult = var_mult;
                 la.base_step *= var_mult;
@@ -2683,6 +2735,7 @@ impl LaVoice {
         gain: f32,
         fade: (f32, f32),
         fx: LaFx,
+        release_t60: f32,
     ) -> Result<LaVoice, Box<dyn Voice>> {
         let f = key_freq(key);
         let zone = nearest(zones, f);
@@ -2722,7 +2775,7 @@ impl LaVoice {
             gain: gain * vel_gain,
             rel_gain: 1.0,
             rel_mul: 1.0,
-            rel_t60_mul: 10f32.powf(-3.0 / (0.06 * sr)),
+            rel_t60_mul: 10f32.powf(-3.0 / (release_t60 * sr)),
             t: 0,
             fade_start: (fade.0 * sr) as usize,
             fade_end: (fade.1 * sr) as usize,
@@ -2839,7 +2892,7 @@ impl Voice for LaVoice {
 
     fn note_off(&mut self) {
         self.sustain.note_off();
-        // let the transient die quickly (~60 ms T60) on early releases
+        // Apply the configured key-up damping (60 ms T60 for default callers).
         self.rel_mul = self.rel_t60_mul;
     }
 
@@ -4565,12 +4618,6 @@ mod tests {
             .iter()
             .chain(violin_p())
             .chain(flute())
-            .chain(piano_pp())
-            .chain(piano_mf())
-            .chain(piano_f())
-            .chain(piano_pp_rr2())
-            .chain(piano_mf_rr2())
-            .chain(piano_f_rr2())
             .chain(grand_pp())
             .chain(grand_mf())
             .chain(grand_f())
@@ -4602,6 +4649,25 @@ mod tests {
             assert!((25.0..2500.0).contains(&z.root), "odd root {}", z.root);
             let peak = z.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
             assert!(peak > 0.5, "zone not normalised: peak {peak}");
+        }
+        // The conditioned GM0 upright preserves one smooth absolute body-level
+        // trend across keys, so its quieter high-register zones no longer all
+        // peak above the legacy per-file-normalisation floor.
+        for z in piano_pp()
+            .iter()
+            .chain(piano_mf())
+            .chain(piano_f())
+            .chain(piano_pp_rr2())
+            .chain(piano_mf_rr2())
+            .chain(piano_f_rr2())
+        {
+            assert!(z.data.len() > 20_000, "zone too short: {}", z.data.len());
+            assert!((25.0..2500.0).contains(&z.root), "odd root {}", z.root);
+            let peak = z.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
+            assert!(
+                (0.12..=0.91).contains(&peak),
+                "conditioned piano zone outside its shared-headroom range: peak {peak}"
+            );
         }
         // (the drum-kit bank's own asset crate tests guard the sampled kit)
     }
@@ -5501,8 +5567,21 @@ mod tests {
         skip: usize,
         label: &str,
     ) -> Vec<f32> {
+        assert_wrap_seam_seed(program, key, vel, sr, skip, label, 5)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn assert_wrap_seam_seed(
+        program: u8,
+        key: u8,
+        vel: u8,
+        sr: f32,
+        skip: usize,
+        label: &str,
+        seed: u32,
+    ) -> Vec<f32> {
         let win = |samples: bool| {
-            let mut v = voices::make(program, key, vel, sr, 5, samples);
+            let mut v = voices::make(program, key, vel, sr, seed, samples);
             let mut buf = vec![0f32; sr as usize]; // 1 s, note held
             v.render(&mut buf);
             let w = (0.05 * sr) as usize;
@@ -5529,10 +5608,305 @@ mod tests {
         fine
     }
 
+    fn piano_release_reading(mut voice: Box<dyn Voice>, sr: f32) -> (f32, f32, bool) {
+        let hold_len = (0.3125 * sr) as usize;
+        let window = (0.020 * sr) as usize;
+        let mut held = vec![0.0; hold_len];
+        assert!(voice.render(&mut held), "piano died before note-off");
+        let before = crate::testutil::rms(&held[hold_len - window..]);
+
+        voice.note_off();
+        let mut release = vec![0.0; (2.0 * sr) as usize];
+        voice.render(&mut release);
+        let mut probe = [0.0; 128];
+        let alive = voice.render(&mut probe);
+        let gap_start = (0.0425 * sr) as usize;
+        let gap_end = (0.0625 * sr) as usize;
+        let gap = crate::testutil::rms(&release[gap_start..gap_end]);
+        let tail_start = (0.230 * sr) as usize;
+        let tail_end = (0.250 * sr) as usize;
+        let tail = crate::testutil::rms(&release[tail_start..tail_end]);
+        (
+            20.0 * (before / gap.max(1e-12)).log10(),
+            20.0 * (before / tail.max(1e-12)).log10(),
+            alive,
+        )
+    }
+
+    #[test]
+    fn gm0_fra_gap_release_bridges_then_clears() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        for samples in [false, true] {
+            for key in [62u8, 66, 69] {
+                let mut rr_drops = Vec::new();
+                for seed in [1u32, 2] {
+                    // Hold the model seed fixed while selecting each sample RR
+                    // explicitly. Otherwise the measured "RR spread" also contains
+                    // the model's seeded modal variation (about 0.6 dB here).
+                    let voice = if samples {
+                        voices::acoustic_grand_with_bank(
+                            piano_bank(104, seed == 2),
+                            key,
+                            104,
+                            sr,
+                            1,
+                            false,
+                            Some(voices::GM0_RELEASE_T60),
+                        )
+                    } else {
+                        voices::make(0, key, 104, sr, seed, false)
+                    };
+                    let (gap_drop, tail_drop, alive) = piano_release_reading(voice, sr);
+                    println!(
+                        "GM0 key {key} seed {seed} samples={samples}: \
+                         gap {gap_drop:.2} dB, 250ms {tail_drop:.2} dB"
+                    );
+                    assert!(
+                        (4.0..=10.0).contains(&gap_drop),
+                        "GM0 key {key} seed {seed} samples={samples}: \
+                         62.5ms gap drop {gap_drop:.2} dB is outside 4..10 dB"
+                    );
+                    assert!(
+                        tail_drop >= 24.0,
+                        "GM0 key {key} seed {seed} samples={samples}: \
+                         only {tail_drop:.2} dB down after 250 ms"
+                    );
+                    assert!(
+                        !alive,
+                        "GM0 key {key} seed {seed} samples={samples}: \
+                         voice remained alive 2 seconds after note-off"
+                    );
+                    rr_drops.push(gap_drop);
+                }
+                if samples {
+                    assert!(
+                        (rr_drops[0] - rr_drops[1]).abs() <= 2.0,
+                        "GM0 key {key}: round-robin release spread {:.2} dB",
+                        (rr_drops[0] - rr_drops[1]).abs()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gm0_conditioned_bank_still_needs_the_release_override() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        for (key, seed) in [(62u8, 1u32), (66, 2), (69, 1)] {
+            let legacy = voices::acoustic_grand_with_bank(
+                piano_bank(104, seed & 1 == 0),
+                key,
+                104,
+                sr,
+                seed,
+                false,
+                None,
+            );
+            let (gap_drop, _, _) = piano_release_reading(legacy, sr);
+            println!("conditioned GM0 key {key} legacy gap: {gap_drop:.2} dB");
+            assert!(
+                gap_drop > 10.0,
+                "GM0 key {key}: conditioned bank unexpectedly meets the gap target \
+                 on legacy release ({gap_drop:.2} dB)"
+            );
+        }
+    }
+
+    #[test]
+    fn gm0_release_clears_across_the_piano_register() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        for samples in [false, true] {
+            for key in [36u8, 60, 84] {
+                let (_, tail_drop, alive) =
+                    piano_release_reading(voices::make(0, key, 104, sr, 1, samples), sr);
+                assert!(
+                    tail_drop >= 24.0,
+                    "GM0 key {key} samples={samples}: only {tail_drop:.2} dB down at 250 ms"
+                );
+                assert!(
+                    !alive,
+                    "GM0 key {key} samples={samples}: alive after the 2 s reap probe"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn gm0_release_override_does_not_leak_to_alternate_pianos() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let (default_drop, _, _) = piano_release_reading(voices::make(0, 66, 104, sr, 1, true), sr);
+        assert!(
+            default_drop <= 10.0,
+            "default GM0 did not opt into the calibrated release"
+        );
+        for (name, voice, legacy) in [
+            (
+                "GM0 Salamander alternate",
+                crate::altbank::make(0, 1, 66, 104, sr, 1, true),
+                voices::acoustic_grand_with_bank(
+                    grand_bank(104, false),
+                    66,
+                    104,
+                    sr,
+                    1,
+                    false,
+                    None,
+                ),
+            ),
+            (
+                "GM0 undefined-CC0 fallback",
+                crate::altbank::make(0, 99, 66, 104, sr, 1, true),
+                voices::acoustic_grand_with_bank(&[], 66, 104, sr, 1, false, None),
+            ),
+            (
+                "GM1 Bright",
+                voices::make(1, 66, 104, sr, 1, true),
+                voices::acoustic_grand_with_bank(
+                    kawai_bank(104, false),
+                    66,
+                    104,
+                    sr,
+                    1,
+                    true,
+                    None,
+                ),
+            ),
+        ] {
+            let (drop, _, _) = piano_release_reading(voice, sr);
+            let (legacy_drop, _, _) = piano_release_reading(legacy, sr);
+            assert!(
+                (drop - legacy_drop).abs() <= 0.01,
+                "{name}: release drifted from its explicit legacy control \
+                 ({drop:.2} dB vs {legacy_drop:.2} dB)"
+            );
+        }
+
+        let (honky_drop, _, _) = piano_release_reading(voices::make(3, 66, 104, sr, 1, true), sr);
+        assert!(
+            (35.5..=36.0).contains(&honky_drop),
+            "GM3 honky-tonk release drifted from its legacy window ({honky_drop:.2} dB)"
+        );
+
+        let (nylon_drop, _, _) = piano_release_reading(voices::make(24, 52, 104, sr, 1, true), sr);
+        assert!(
+            (5.5..=6.5).contains(&nylon_drop),
+            "GM24 nylon LA release drifted from its legacy window ({nylon_drop:.2} dB)"
+        );
+    }
+
+    /// Runtime zone-selection leg for the conditioned bank. The generator owns
+    /// source-time attack/body shape; this checks the repitched BODY at every
+    /// physical root and on both sides of each nearest-zone boundary. Attack
+    /// RMS is only a silence guard here because pitching different recordings
+    /// up/down changes their spectrum, which is explicitly outside conditioning.
+    #[test]
+    fn gm0_conditioned_bank_is_continuous_across_keys_layers_and_round_robins() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+
+        struct Silent;
+        impl Voice for Silent {
+            fn render(&mut self, _out: &mut [f32]) -> bool {
+                true
+            }
+            fn note_off(&mut self) {}
+            fn released(&self) -> bool {
+                false
+            }
+            fn kind(&self) -> &'static str {
+                "silent"
+            }
+        }
+
+        let sr = 44100.0;
+        let keys = [
+            36u8, 39, 40, 43, 45, 46, 48, 51, 52, 55, 57, 58, 60, 63, 64, 67, 69, 70, 72, 75, 76,
+            79, 81, 82, 84,
+        ];
+        let boundaries = [
+            (39u8, 40u8),
+            (45, 46),
+            (51, 52),
+            (57, 58),
+            (63, 64),
+            (69, 70),
+            (75, 76),
+            (81, 82),
+        ];
+        for vel in [48u8, 80, 104] {
+            for seed in [1u32, 2] {
+                let mut readings = Vec::new();
+                for &key in &keys {
+                    let (gain, _) = voices::LA_PIANO;
+                    let bank = piano_bank(vel, seed & 1 == 0);
+                    let step = key_freq(key) / nearest(bank, key_freq(key)).root * 44100.0 / sr;
+                    let mut sample = LaVoice::wrap_release(
+                        Box::new(Silent),
+                        bank,
+                        key,
+                        vel,
+                        sr,
+                        gain,
+                        (2.0, 3.0),
+                        crate::voices::GM0_RELEASE_T60,
+                    );
+                    let mut buf = vec![0.0; sr as usize];
+                    sample.render(&mut buf);
+                    let attack = crate::testutil::rms(&buf[..(0.030 * sr / step) as usize]);
+                    let body = crate::testutil::rms(
+                        &buf[(0.140 * sr / step) as usize..(0.220 * sr / step) as usize],
+                    );
+                    assert!(
+                        attack > 1e-4,
+                        "GM0 key {key} vel {vel} seed {seed} is silent"
+                    );
+                    readings.push((key, body));
+                }
+
+                for &(left_key, right_key) in &boundaries {
+                    let (_, left_body) = readings
+                        .iter()
+                        .copied()
+                        .find(|&(key, _)| key == left_key)
+                        .unwrap();
+                    let (_, right_body) = readings
+                        .iter()
+                        .copied()
+                        .find(|&(key, _)| key == right_key)
+                        .unwrap();
+                    let step_db = 20.0 * (left_body / right_body.max(1e-12)).log10();
+                    assert!(
+                        step_db.abs() <= 3.0,
+                        "GM0 body jumps {step_db:+.2} dB across keys \
+                         {left_key}/{right_key} at vel {vel} seed {seed}"
+                    );
+                }
+            }
+        }
+    }
+
     /// Companion leg for struck/plucked rows of [`assert_wrap_seam`].
     fn assert_attack_is_peak(fine: &[f32], label: &str) {
-        let attack = fine[..3].iter().fold(0f32, |mx, &x| mx.max(x));
-        let late = fine[3..].iter().fold(0f32, |mx, &x| mx.max(x));
+        // The conditioned bass-upright take reaches its hammer/body maximum in
+        // the 150-200 ms window, still inside LA_PIANO's 180 ms attack-owned
+        // region. Higher piano notes and every other struck voice must peak in
+        // the original 150 ms budget.
+        let attack_windows = if label == "piano-low" { 4 } else { 3 };
+        let attack = fine[..attack_windows].iter().fold(0f32, |mx, &x| mx.max(x));
+        let late = fine[attack_windows..].iter().fold(0f32, |mx, &x| mx.max(x));
 
         if label == "harpsichord-low" {
             // KNOWN, NAMED interaction — self-retiring. The harpsichord is the only

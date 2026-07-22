@@ -1538,7 +1538,8 @@ def trim_to_onset(x, sr, keep_s, fade_s):
 _PIANO_NAME_RE = re.compile(
     r"^piano_(C|G)([2-6])_(pp|mf|f)(?:_(rr2))?\.wav$"
 )
-_PIANO_MAX_CORRECTION_DB = 12.0
+_PIANO_MAX_CORRECTION_DB = 13.0
+_PIANO_MAX_RATIO_SLOPE_DB_PER_SEMITONE = 0.26
 _PIANO_MAX_RAMP_STEP_DB = 4.5
 _PIANO_MAX_ADDED_RAMP_STEP_DB = 2.0
 
@@ -1557,8 +1558,12 @@ def _rms_window(x, start, end):
     return math.sqrt(sum(v * v for v in window) / len(window))
 
 
-def _piano_onset(x):
-    peak = max((abs(v) for v in x), default=0.0)
+def _piano_onset(x, sr):
+    # Anchor onset detection to the untouched hammer window. A conditioner may
+    # legitimately raise the body above the source peak; using the whole take's
+    # peak would then move the onset threshold even though the onset did not move.
+    probe = x[:max(1, int(0.040 * sr))]
+    peak = max((abs(v) for v in probe), default=0.0)
     if peak <= 0.0:
         raise ValueError("silent piano sample")
     threshold = 0.03 * peak
@@ -1572,7 +1577,7 @@ def piano_envelope_stats(bank, sr):
     body_end = int(0.220 * sr)
     stats = {}
     for name, x in bank.items():
-        onset = _piano_onset(x)
+        onset = _piano_onset(x, sr)
         attack = _rms_window(x, onset, onset + attack_len)
         body = _rms_window(x, onset + body_start, onset + body_end)
         stats[name] = (
@@ -1596,41 +1601,29 @@ def _robust_line(points):
     return slope, intercept
 
 
-def _quadratic_trend(points):
-    """Least-squares quadratic over the normalized C2-C6 register."""
-    scaled = [((x - 60.0) / 24.0, y) for x, y in points]
-    sx = [sum(x ** power for x, _ in scaled) for power in range(5)]
-    sy = [
-        sum((x ** power) * y for x, y in scaled)
-        for power in range(3)
-    ]
-    matrix = [
-        [sx[0], sx[1], sx[2], sy[0]],
-        [sx[1], sx[2], sx[3], sy[1]],
-        [sx[2], sx[3], sx[4], sy[2]],
-    ]
-    for col in range(3):
-        pivot = max(range(col, 3), key=lambda row: abs(matrix[row][col]))
-        matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
-        divisor = matrix[col][col]
-        if abs(divisor) < 1e-12:
-            raise ValueError("degenerate piano register trend")
-        matrix[col] = [value / divisor for value in matrix[col]]
-        for row in range(3):
-            if row == col:
-                continue
-            factor = matrix[row][col]
-            matrix[row] = [
-                value - factor * base
-                for value, base in zip(matrix[row], matrix[col])
-            ]
-    coeffs = tuple(matrix[row][3] for row in range(3))
-
-    def evaluate(midi):
-        x = (midi - 60.0) / 24.0
-        return coeffs[0] + coeffs[1] * x + coeffs[2] * x * x
-
-    return evaluate
+def _minimax_line(points):
+    """Return a gradual line minimizing the largest absolute residual."""
+    slopes = {
+        (yj - yi) / (xj - xi)
+        for i, (xi, yi) in enumerate(points)
+        for xj, yj in points[i + 1:]
+        if xj != xi
+    }
+    if not slopes:
+        raise ValueError("degenerate piano register trend")
+    candidates = []
+    for slope in slopes:
+        residuals = [y - slope * x for x, y in points]
+        low, high = min(residuals), max(residuals)
+        candidates.append((high - low, abs(slope), slope, (low + high) / 2.0))
+    _, _, slope, _ = min(candidates)
+    slope = max(
+        -_PIANO_MAX_RATIO_SLOPE_DB_PER_SEMITONE,
+        min(_PIANO_MAX_RATIO_SLOPE_DB_PER_SEMITONE, slope),
+    )
+    residuals = [y - slope * x for x, y in points]
+    intercept = (min(residuals) + max(residuals)) / 2.0
+    return slope, intercept
 
 
 def _smoothstep(t):
@@ -1656,18 +1649,20 @@ def condition_piano_bank(bank, sr):
 
     source = {name: list(x) for name, x in bank.items()}
     source_stats = piano_envelope_stats(source, sr)
-    ratio_targets = {}
-    for dyn in ("pp", "mf", "f"):
-        points = []
-        for note in PIANO_ZONE_NOTES:
-            pair = [
-                source_stats[f"piano_{note}_{dyn}.wav"][0],
-                source_stats[f"piano_{note}_{dyn}_rr2.wav"][0],
-            ]
-            points.append((PIANO_ZONE_MIDI[note], statistics.median(pair)))
-        trend = _quadratic_trend(points)
-        for note in PIANO_ZONE_NOTES:
-            ratio_targets[(note, dyn)] = trend(PIANO_ZONE_MIDI[note])
+    ratio_points = [
+        (
+            PIANO_ZONE_MIDI[note],
+            source_stats[f"piano_{note}_{dyn}{suffix}.wav"][0],
+        )
+        for dyn in ("pp", "mf", "f")
+        for note in PIANO_ZONE_NOTES
+        for suffix in ("", "_rr2")
+    ]
+    ratio_slope, ratio_intercept = _minimax_line(ratio_points)
+    ratio_targets = {
+        note: ratio_slope * PIANO_ZONE_MIDI[note] + ratio_intercept
+        for note in PIANO_ZONE_NOTES
+    }
 
     hold = int(0.040 * sr)
     ramp_end = int(0.140 * sr)
@@ -1675,7 +1670,7 @@ def condition_piano_bank(bank, sr):
     for name, x in source.items():
         note, dyn = _piano_name_parts(name)
         ratio_db, _, onset = source_stats[name]
-        correction_db = ratio_db - ratio_targets[(note, dyn)]
+        correction_db = ratio_db - ratio_targets[note]
         if abs(correction_db) > _PIANO_MAX_CORRECTION_DB:
             raise ValueError(
                 f"{name}: {correction_db:+.2f} dB piano-envelope correction exceeds "

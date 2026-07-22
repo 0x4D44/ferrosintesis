@@ -876,8 +876,9 @@ mod tests {
         for b in [0xB0, 123, 0, 64, 0] {
             synth.write_byte(b);
         }
-        let mut out = vec![0.0f32; 44_100 * 2];
-        synth.render_add(22_050, &mut out).unwrap();
+        let frames = 44_100 * 2;
+        let mut out = vec![0.0f32; frames * 2];
+        synth.render_add(frames, &mut out).unwrap();
         assert_eq!(synth.active_voice_count(), 0);
     }
 

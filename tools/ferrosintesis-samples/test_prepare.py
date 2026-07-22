@@ -155,6 +155,12 @@ class PrepareSampleBankTests(unittest.TestCase):
                 self.assertLess(abs(a[1] - b[1]), 0.05)
 
         for note in prepare.PIANO_ZONE_NOTES:
+            shape_ratios = [
+                stats[f"piano_{note}_{dyn}{suffix}.wav"][0]
+                for dyn in ("pp", "mf", "f")
+                for suffix in ("", "_rr2")
+            ]
+            self.assertLess(max(shape_ratios) - min(shape_ratios), 0.05)
             body_levels = [
                 stats[f"piano_{note}_{dyn}{suffix}.wav"][1]
                 for dyn in ("pp", "mf", "f")
@@ -176,17 +182,15 @@ class PrepareSampleBankTests(unittest.TestCase):
 
         self.assertEqual(len(bank), 54)
         stats = prepare.piano_envelope_stats(bank, prepare.OUT_SR)
+        ratio_points = []
         for dyn in ("pp", "mf", "f"):
-            points = []
             for note in prepare.PIANO_ZONE_NOTES:
                 a = stats[f"piano_{note}_{dyn}.wav"]
                 b = stats[f"piano_{note}_{dyn}_rr2.wav"]
-                points.append(
-                    (
-                        prepare.PIANO_ZONE_MIDI[note],
-                        (a[0] + b[0]) / 2.0,
-                    )
-                )
+                ratio_points.extend([
+                    (prepare.PIANO_ZONE_MIDI[note], a[0]),
+                    (prepare.PIANO_ZONE_MIDI[note], b[0]),
+                ])
                 self.assertLess(
                     abs(a[0] - b[0]),
                     0.35,
@@ -197,16 +201,27 @@ class PrepareSampleBankTests(unittest.TestCase):
                     0.35,
                     f"{note} {dyn}: round-robin body-level mismatch",
                 )
-            trend = prepare._quadratic_trend(points)
-            for note in prepare.PIANO_ZONE_NOTES:
-                target = trend(prepare.PIANO_ZONE_MIDI[note])
+        ratio_slope, ratio_intercept = prepare._minimax_line(ratio_points)
+        for note in prepare.PIANO_ZONE_NOTES:
+            target = (
+                ratio_slope * prepare.PIANO_ZONE_MIDI[note]
+                + ratio_intercept
+            )
+            ratios = []
+            for dyn in ("pp", "mf", "f"):
                 for suffix in ("", "_rr2"):
                     ratio = stats[f"piano_{note}_{dyn}{suffix}.wav"][0]
+                    ratios.append(ratio)
                     self.assertLess(
                         abs(ratio - target),
                         0.35,
                         f"{note} {dyn}{suffix}: shape misses register trend",
                     )
+            self.assertLess(
+                max(ratios) - min(ratios),
+                0.35,
+                f"{note}: velocity layers do not share one macro envelope",
+            )
 
         level_points = []
         for note in prepare.PIANO_ZONE_NOTES:

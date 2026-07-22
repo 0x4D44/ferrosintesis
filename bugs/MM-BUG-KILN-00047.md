@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00047 — GM0 upright attacks thump across short piano phrases
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synthesis
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by OpenAI Codex from Arthur's FRA report)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-22, raised by OpenAI Codex from Arthur's FRA report) → Fixed (2026-07-22, default GM0 bank and release implementation by OpenAI Codex; independent verification pending)
 
 ## Observation
 
@@ -42,7 +42,26 @@ longer separations into sustain-pedal behaviour.
 
 ## Fix
 
-Pending.
+Fixed on `task/20260722-TSK-HUM-piano-envelope-and-release`. The sample generator
+now conditions all 54 default-upright takes against one slope-bounded whole-bank
+attack/body envelope and one shared absolute body-level trend. It preserves the
+first 40 ms hammer event, post-140 ms decay slope, spectra, pitch, and common
+headroom. Two consecutive bakes are hash-identical; no non-piano sample changes.
+
+The default GM0 route now gives its sample and model owners the same 0.45 s key-up
+T60. Its conditioned-bank handoff uses gain 4.0 and a 180–450 ms fade. A matched
+4.9 dB forte-owner trim preserves the repository's square perceived-velocity law.
+The override is explicit and default-bank-only: GM0 alternates, undefined-CC0
+fallbacks, GM1, GM3, and non-piano LA routes retain their legacy release and render
+identity.
+
+Direct sampled fixtures now lose 4.13–6.77 dB through the FRA 62.5 ms gaps;
+modeled fixtures lose 7.32–8.12 dB. Every path is at least 28.53 dB down 250 ms
+after note-off and reaps by 2 s. The exact dry three-note engine regression stays
+within the 10 dB gap ceiling. Full validation passed: 18 generator tests, workspace
+format/lint, 615 passing library tests plus every other workspace target, and a
+141-MIDI exact-base render comparison with 83 expected GM0 changes and zero
+contamination. Left Fixed pending independent two-eyes closure.
 
 ## Notes
 

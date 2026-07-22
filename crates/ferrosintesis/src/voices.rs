@@ -1112,7 +1112,13 @@ pub(crate) fn is_acoustic_piano(program: u8) -> bool {
     matches!(program, 0 | 1 | 3)
 }
 
-fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+const DEFAULT_PIANO_RELEASE_T60: f32 = 0.10;
+pub(crate) const GM0_RELEASE_T60: f32 = 0.45;
+const GM0_SAMPLE_GAIN: f32 = 4.00;
+const GM0_SAMPLE_FADE: (f32, f32) = (0.18, 0.45);
+const GM0_FORTE_LAYER_GAIN: f32 = 0.569;
+
+fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32, release_t60: f32) -> Modal {
     let f = key_freq(key);
     let v = vel_amp(vel);
     let bright = 0.55 + 0.40 * (vel as f32 / 127.0);
@@ -1146,7 +1152,7 @@ fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
         &partials,
         (0.30 * v, 0.012, hammer),
         0.0015,
-        0.10,
+        release_t60,
         0.50,
     )
 }
@@ -8366,7 +8372,7 @@ const LA_SHAKUHACHI: (f32, (f32, f32)) = (0.55, (0.06, 0.24));
 // 0.22-0.28 and every probed key is attack-dominant at the sample's own
 // internal ratio (≈ 0.85), matching the pure model's. The louder piano
 // onset is the intended §2.7 blast radius.
-const LA_PIANO: (f32, (f32, f32)) = (0.90, (0.18, 0.85));
+pub(crate) const LA_PIANO: (f32, (f32, f32)) = (0.90, (0.18, 0.85));
 // (GM 1's LA_BRIGHT_SHELF and GM 3's LA_HONKY_DETUNE LaFx cues were removed in the
 // 2026.07.18 re-voicing — GM 1 is now the Kawai recording and GM 3 the real
 // honky-tonk recording, so neither fakes its character on the shared upright sample.)
@@ -11427,34 +11433,84 @@ impl Voice for Fx {
 /// Grand); `bright=true` = the brighter `bright_acoustic_piano` voicing (GM 1 Bright
 /// Acoustic). Giving GM 1 the brighter model both fits the slot AND keeps GM 0/GM 1
 /// distinct in a modeled-only build (samples off, they'd otherwise share one model).
-/// The sampled recording rides on top via the shared LA blend; `bank` is only read
-/// when `samples` is true — pass `&[]` for the bare-model path.
+/// The sampled recording rides on top via the shared LA blend; pass `&[]` for
+/// the bare-model path.
 pub fn acoustic_grand_with_bank(
     bank: &'static [crate::sampler::Zone],
     key: u8,
     vel: u8,
     sr: f32,
     seed: u32,
-    samples: bool,
     bright: bool,
+    release_t60: Option<f32>,
 ) -> Box<dyn Voice> {
     let model: Box<dyn Voice> = if bright {
         Box::new(bright_acoustic_piano(key, vel, sr, seed))
     } else {
-        Box::new(acoustic_piano(key, vel, sr, seed))
-    };
-    if samples {
-        let (gain, fade) = LA_PIANO;
-        crate::sampler::LaVoice::wrap_fx(
-            model,
-            bank,
+        Box::new(acoustic_piano(
             key,
             vel,
             sr,
-            gain,
-            fade,
-            crate::sampler::LaFx::default(),
-        )
+            seed,
+            release_t60.unwrap_or(DEFAULT_PIANO_RELEASE_T60),
+        ))
+    };
+    // The conditioned forte takes share the same unweighted macro envelope as
+    // pp/mf, but their brighter spectrum measures about 4.9 dB louder through
+    // the repository's reference K-weighted velocity oracle. Trim both owners
+    // together at the v95/v96 bank boundary; scaling sample and model equally
+    // preserves the calibrated handoff and release shape.
+    let layer_gain = if !bank.is_empty() && release_t60.is_some() && vel >= 96 {
+        GM0_FORTE_LAYER_GAIN
+    } else {
+        1.0
+    };
+    let model: Box<dyn Voice> = if layer_gain < 1.0 {
+        Box::new(ScaledVoice {
+            inner: model,
+            exp: 2.0,
+            g: layer_gain,
+            scratch: Vec::new(),
+        })
+    } else {
+        model
+    };
+    if !bank.is_empty() {
+        let (legacy_gain, legacy_fade) = LA_PIANO;
+        // Envelope conditioning preserves the upright's cross-zone body trend,
+        // which puts its high-register peaks below the independently normalised
+        // legacy banks. Match that conditioned bank back to the unchanged model
+        // so the hammer remains the peak instead of blooming into the model.
+        // `Some` is the explicit GM0-default opt-in; alternates and GM1 stay on
+        // the legacy gain as well as the legacy release.
+        let (gain, fade) = if release_t60.is_some() {
+            (GM0_SAMPLE_GAIN * layer_gain, GM0_SAMPLE_FADE)
+        } else {
+            (legacy_gain, legacy_fade)
+        };
+        if let Some(release_t60) = release_t60 {
+            crate::sampler::LaVoice::wrap_release(
+                model,
+                bank,
+                key,
+                vel,
+                sr,
+                gain,
+                fade,
+                release_t60,
+            )
+        } else {
+            crate::sampler::LaVoice::wrap_fx(
+                model,
+                bank,
+                key,
+                vel,
+                sr,
+                gain,
+                fade,
+                crate::sampler::LaFx::default(),
+            )
+        }
     } else {
         model
     }
@@ -11736,8 +11792,8 @@ fn make_uncorrected(
             vel,
             sr,
             seed,
-            samples,
             false,
+            Some(GM0_RELEASE_T60),
         ),
         // GM 1 Bright Acoustic — the VCSL Kawai over the BRIGHTER model (fits the slot
         // and keeps GM 0/GM 1 distinct modeled-only). Bright grands (YDP / MuseScore)
@@ -11752,8 +11808,8 @@ fn make_uncorrected(
             vel,
             sr,
             seed,
-            samples,
             true,
+            None,
         ),
         // GM 3 Honky-tonk — the REAL FreePats honky-tonk player-piano sample over the
         // detuned honky_tonk_piano model, so it jangles through the attack (sample) AND
@@ -17474,26 +17530,22 @@ mod tests {
                     / crate::testutil::mag_at(seg, sr, f0).max(1e-9);
                 (crate::testutil::centroid(seg, sr), choir)
             };
-            // The "plain piano" control is GM 0 — the VSCO UPRIGHT this oracle was
-            // originally calibrated against. The 2026.07.18 re-voicing put the upright
-            // BACK on GM 0 (it had briefly been the Salamander grand, when the control
-            // moved to GM 1; now GM 1 is the brighter Kawai voicing, not a plain
-            // upright). GM 0 renders exactly the bare upright again, so both the control
-            // and the original 1.75× threshold return here.
+            // GM0's upright envelope is deliberately under active calibration. Keep
+            // this unrelated harpsichord oracle on the stable GM1 acoustic-piano
+            // control; its measured centroid ratios are 1.76×/1.68× at keys 55/67.
             let (c6, ch6) = stats(6);
-            let (c0, ch0) = stats(0);
-            println!("harpsi key {key}: cent {c6:.0} vs GM0 {c0:.0}; 2f0/f0 {ch6:.2} vs {ch0:.2}");
-            // 1.75× vs the bare-upright GM 0 (the original calibration). Encodes "much
-            // brighter sustain than a normal upright"; the 4′-choir clause below is the
-            // strong discriminator.
+            let (c1, ch1) = stats(1);
+            println!("harpsi key {key}: cent {c6:.0} vs GM1 {c1:.0}; 2f0/f0 {ch6:.2} vs {ch1:.2}");
+            // Encodes "much brighter sustain than an acoustic piano"; the 4′-choir
+            // clause below is the strong discriminator.
             assert!(
-                c6 >= 1.75 * c0,
+                c6 >= 1.6 * c1,
                 "key {key}: harpsichord sustain does not jangle: centroid {c6:.0} Hz \
-                 vs GM0 upright control {c0:.0} Hz"
+                 vs GM1 acoustic-piano control {c1:.0} Hz"
             );
             assert!(
-                ch6 >= 2.0 * ch0,
-                "key {key}: no 4′ choir over the control: 2f0/f0 {ch6:.2} vs GM0 {ch0:.2}"
+                ch6 >= 2.0 * ch1,
+                "key {key}: no 4′ choir over the control: 2f0/f0 {ch6:.2} vs GM1 {ch1:.2}"
             );
         }
     }

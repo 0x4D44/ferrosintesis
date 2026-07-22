@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00035 — GM System On means different things offline (XG-effect-only) vs live (full hard_reset); the live path's 4-byte SysEx buffer ignores XG/GS messages the offline parser decodes
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** parser / engine / live
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — both Fable 5 and gpt-5.6-sol-xhigh confirmed the entry-point split; the 4-byte live-buffer parity gap from Fable 5)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the cross-agent MIDI/GM support audit — both Fable 5 and gpt-5.6-sol-xhigh confirmed the entry-point split; the 4-byte live-buffer parity gap from Fable 5) → Fixed (2026-07-22, `384e88d`, OpenAI Codex; shared live/SMF decoder, full GM reset semantics, and live XG/GS capture/recovery regressions)
 
 ## Observation
 
@@ -47,12 +47,31 @@ in-repo album is affected.
 
 ## Fix
 
-<to be filled by the fixer>
+Fixed in `384e88d`.
 
-Sketch: (1) settle one GM System On semantic across both entry points — recommended: keep
-offline soft + documented, keep live `hard_reset` (the spec-faithful live behaviour), or
-factor a shared explicit GM-reset helper; (2) grow the live SysEx capture to recognise the
-XG System On / GS Reset / GS rhythm-part patterns the offline parser already handles.
+- `midi.rs::decode_sysex_payload` now strictly recognizes the complete fixed GM,
+  XG, and GS payloads once. Both SMF and live input use it, so message shapes and
+  event semantics cannot drift between entry points.
+- GM System On has its own `EvKind::GmReset`. `EngineCore::gm_system_on` restores
+  fresh synthesis, channel, voice, and effect state for both transports while
+  retaining whole-render public `Stats`. A private resettable seed position keeps
+  the existing live reset behavior without coupling synthesis state to diagnostics.
+- The live parser captures the longest modeled nine-byte payload, lets realtime
+  messages pass through an open SysEx, handles raw `FF` immediately, and recovers
+  another non-realtime status instead of swallowing later channel traffic.
+- GM reset events sort before same-tick setup across SMF tracks, so authored setup at
+  that tick overrides the newly established defaults regardless of track order.
+
+Verification:
+
+- Regressions cover exact/malformed SMF shapes, all modeled live XG/GS messages,
+  live overflow/status recovery, full live/core GM reset, same-tick ordering, and a
+  parsed mid-file reset that proves the old held voice is gone while Stats remain
+  cumulative.
+- `cargo fmt --check`, workspace Clippy with warnings denied, and
+  `cargo test --workspace` all passed.
+- The mandatory exact-base render inventory found all 124 catalog MIDIs
+  byte-identical: zero changed and zero contamination.
 
 ## Notes
 

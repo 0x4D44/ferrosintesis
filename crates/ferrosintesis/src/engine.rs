@@ -1443,6 +1443,9 @@ pub(crate) struct EngineCore {
     drum_room: Reverb,
     glue: BusGlue,
     stats: Stats,
+    // Deterministic voice-seed position. Usually advances with voices_spawned,
+    // but GM System On resets synthesis state while public Stats stay cumulative.
+    voice_seed_index: u64,
     ch_buf: Vec<[f32; BLOCK]>,
     legacy_buf: Vec<[f32; BLOCK]>,
     cathedral_buf: Vec<[f32; BLOCK]>,
@@ -1512,6 +1515,7 @@ impl EngineCore {
             drum_room: Reverb::with_predelay(sr, 0.42, 0.55, opt.wet * 0.9, 0.003),
             glue: BusGlue::new(sr),
             stats: Stats::default(),
+            voice_seed_index: 0,
             ch_buf: vec![[0f32; BLOCK]; 16],
             legacy_buf: vec![[0f32; BLOCK]; 16],
             cathedral_buf: vec![[0f32; BLOCK]; 16],
@@ -1543,6 +1547,14 @@ impl EngineCore {
         *self = Self::new(opt);
     }
 
+    /// Restore fresh GM synthesis/channel state while whole-render diagnostics
+    /// remain cumulative for the offline API.
+    fn gm_system_on(&mut self) {
+        let stats = self.stats;
+        self.hard_reset();
+        self.stats = stats;
+    }
+
     pub(crate) fn active_voice_count(&self) -> usize {
         self.active.len()
     }
@@ -1563,7 +1575,7 @@ impl EngineCore {
         {
             return;
         }
-        let seed = 0xBA60 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
+        let seed = 0xBA60 ^ (self.voice_seed_index as u32).wrapping_mul(2654435761);
         // Sampled drone by default; modeled when samples are off or on the CC0
         // alt bank — the same rule the chanter uses in voices::make, so the two
         // paths agree (HLD 2026.07.17 §5). `opt.samples` already folds in
@@ -1594,6 +1606,7 @@ impl EngineCore {
             voice,
         });
         self.stats.voices_spawned += 1;
+        self.voice_seed_index += 1;
         self.strips[ch as usize].bagpipe_drone_live = true;
         self.strips[ch as usize].bagpipe_drone_hang = 0;
     }
@@ -1758,6 +1771,7 @@ impl EngineCore {
                     s.gs_drum = false;
                 }
             }
+            EvKind::GmReset => self.gm_system_on(),
             // XG effect SysEx (reverb/chorus type + the variation Amp-Sim
             // insertion). Byte-inert for every album (0 send any SysEx): the
             // reverb/chorus recognizers only fire on the exact Hall 1 / Chorus 1
@@ -1770,12 +1784,9 @@ impl EngineCore {
         }
     }
 
-    /// XG / GM System On: reset the XG effect block to its defaults ONLY. Never
-    /// routes through `hard_reset` and never touches `opt`, voices, or timing —
-    /// resetting the whole engine on a System On would (wrongly) drop live notes
-    /// and controller state. Reverb/chorus are returned to their constructor
-    /// configuration and every variation insert is cleared (both no-ops until
-    /// units 3-5 wire the audio side).
+    /// XG System On resets the XG effect block to defaults only. Unlike GM
+    /// System On, it leaves voices and channel state untouched. Reverb/chorus
+    /// return to constructor tuning and every variation insert is cleared.
     fn xg_reset(&mut self) {
         self.xg = XgEffects::new();
         // Restore the hall and chorus to their construction tuning (a no-op
@@ -1938,6 +1949,7 @@ impl EngineCore {
                     // draws exactly the seed it would have pre-change — the
                     // render diff stays confined to the tremolo itself
                     self.stats.voices_spawned += 1;
+                    self.voice_seed_index += 1;
                     return;
                 }
             }
@@ -1971,7 +1983,7 @@ impl EngineCore {
             self.make_room_for_driven_guitar(ch);
         }
 
-        let seed = 0x9E37 ^ (self.stats.voices_spawned as u32).wrapping_mul(2654435761);
+        let seed = 0x9E37 ^ (self.voice_seed_index as u32).wrapping_mul(2654435761);
         // ch9 is always drums; a channel declared a drum part by XG (CC0==127) or GS
         // ("Use for Rhythm Part" SysEx) joins the drum path. `strips[ci].kit` is
         // `strips[9].kit` when ch==9, so ch9 is unchanged; a declared drum channel uses
@@ -2090,6 +2102,7 @@ impl EngineCore {
                 voice,
             });
             self.stats.voices_spawned += 1;
+            self.voice_seed_index += 1;
         }
     }
 
@@ -4229,6 +4242,65 @@ mod tests {
         assert_eq!(s.bend, 1.0);
         assert_eq!(s.rpn_msb, 127);
         assert_eq!(s.rpn_lsb, 127);
+    }
+
+    /// MM-BUG-KILN-00035: GM System On is a full synthesis/channel reset, but
+    /// public diagnostics still describe the complete offline render.
+    #[test]
+    fn gm_system_on_restores_fresh_state_and_preserves_stats() {
+        let mut core = slew_test_core(44_100.0);
+        let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
+        for kind in [
+            EvKind::Prog { ch: 0, prog: 30 },
+            cc(7, 80),
+            cc(101, 0),
+            cc(100, 0),
+            cc(6, 12),
+            EvKind::DrumMode { ch: 0, on: true },
+            EvKind::XgEffectParam {
+                addr_lo: 0x40,
+                data: [0x4B, 0x11],
+                len: 2,
+            },
+            EvKind::NoteOn {
+                ch: 0,
+                key: 60,
+                vel: 100,
+            },
+            EvKind::NoteOn {
+                ch: 1,
+                key: 64,
+                vel: 100,
+            },
+        ] {
+            core.handle_event(kind);
+        }
+        let mut audio = [0.0; BLOCK * 2];
+        core.render_block_add(BLOCK, &mut audio);
+        let before = core.stats();
+        assert_eq!(before.voices_spawned, 2);
+        assert_eq!(before.max_polyphony, 2);
+        assert!(before.peak > 0.0);
+        assert_eq!(core.voice_seed_index, 2);
+        assert_eq!(core.strips[0].program, 30);
+        assert_eq!(core.strips[0].bend_range, 12.0);
+        assert!(core.strips[0].gs_drum);
+        assert_eq!(core.xg.var_type_msb, 0x4B);
+
+        core.handle_event(EvKind::GmReset);
+
+        let strip = &core.strips[0];
+        assert_eq!(core.active_voice_count(), 0);
+        assert_eq!(strip.program, 0);
+        assert_eq!(strip.volume, (100.0f32 / 127.0).powi(2));
+        assert!(!strip.volume_authored);
+        assert_eq!(strip.bend_range, 2.0);
+        assert_eq!((strip.rpn_msb, strip.rpn_lsb), (127, 127));
+        assert!(!strip.gs_drum);
+        assert_eq!(core.xg.var_type_msb, 0);
+        assert_eq!(core.xg.var_part, 127);
+        assert_eq!(core.stats(), before);
+        assert_eq!(core.voice_seed_index, 0);
     }
 
     /// MM-BUG-KILN-00034: an NRPN select (CC98/99) must invalidate the RPN latch,

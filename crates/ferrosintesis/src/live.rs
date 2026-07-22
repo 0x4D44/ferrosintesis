@@ -1,10 +1,12 @@
 //! Realtime raw-MIDI byte input and block-render API.
 
 use crate::engine::{CoreOptions, EngineCore};
-use crate::midi::EvKind;
+use crate::midi::{decode_sysex_payload, EvKind};
 use crate::sampler;
 
 const LIVE_BLOCK: usize = 64;
+/// Longest modeled SysEx payload, excluding F0/F7 (GS DT1 reset/rhythm).
+const SYSEX_CAPTURE_LEN: usize = 9;
 
 /// Global polyphony ceiling for the realtime path. A dense live stream can stack
 /// hundreds of un-released voices, and rendering them all per block would blow
@@ -271,7 +273,7 @@ impl RealtimeSynth {
         for command in self.pending.drain(..) {
             match command {
                 LiveCommand::Channel(kind) => self.core.handle_event(kind),
-                LiveCommand::Reset(_) => self.core.hard_reset(),
+                LiveCommand::SystemReset => self.core.hard_reset(),
             }
         }
         // Bound polyphony before the (deadline-bearing) block render — this is
@@ -300,12 +302,6 @@ fn realtime_limit(x: f32) -> f32 {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum LiveCommand {
     Channel(EvKind),
-    Reset(ResetKind),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ResetKind {
-    GmSystemOn,
     SystemReset,
 }
 
@@ -317,7 +313,7 @@ pub(crate) struct MidiByteParser {
     len: usize,
     needed: usize,
     in_sysex: bool,
-    sysex: [u8; 4],
+    sysex: [u8; SYSEX_CAPTURE_LEN],
     sysex_len: usize,
     sysex_overflow: bool,
 }
@@ -331,7 +327,7 @@ impl MidiByteParser {
             len: 0,
             needed: 0,
             in_sysex: false,
-            sysex: [0; 4],
+            sysex: [0; SYSEX_CAPTURE_LEN],
             sysex_len: 0,
             sysex_overflow: false,
         }
@@ -373,29 +369,23 @@ impl MidiByteParser {
         match byte {
             0xF8..=0xFE => {}
             0xFF => {
-                out.push(LiveCommand::Reset(ResetKind::SystemReset));
+                out.push(LiveCommand::SystemReset);
                 self.reset();
             }
             0xF7 => {
-                if self.sysex_len == 4
-                    && !self.sysex_overflow
-                    && self.sysex[0] == 0x7E
-                    && self.sysex[2] == 0x09
-                    && self.sysex[3] == 0x01
-                {
-                    out.push(LiveCommand::Reset(ResetKind::GmSystemOn));
+                if !self.sysex_overflow {
+                    if let Some(kind) = decode_sysex_payload(&self.sysex[..self.sysex_len]) {
+                        out.push(LiveCommand::Channel(kind));
+                    }
                 }
                 self.reset();
             }
             0xF0 => {
-                self.in_sysex = true;
-                self.running = None;
-                self.status = None;
-                self.len = 0;
-                self.sysex_len = 0;
-                self.sysex_overflow = false;
+                // A nested F0 restarts the partial message.
+                self.reset();
+                self.push_status(0xF0, out);
             }
-            b if b < 0x80 => {
+            b @ 0x00..=0x7F => {
                 if self.sysex_len < self.sysex.len() {
                     self.sysex[self.sysex_len] = b;
                     self.sysex_len += 1;
@@ -403,7 +393,12 @@ impl MidiByteParser {
                     self.sysex_overflow = true;
                 }
             }
-            _ => {}
+            status @ 0x80..=0xEF | status @ 0xF1..=0xF6 => {
+                // Any non-realtime status terminates malformed SysEx. Reprocess
+                // it so a missing F7 cannot swallow channel/system traffic.
+                self.reset();
+                self.push_status(status, out);
+            }
         }
     }
 
@@ -444,7 +439,7 @@ impl MidiByteParser {
             }
             0xF8..=0xFE => {}
             0xFF => {
-                out.push(LiveCommand::Reset(ResetKind::SystemReset));
+                out.push(LiveCommand::SystemReset);
                 self.reset();
             }
             _ => {}
@@ -645,10 +640,102 @@ mod tests {
         assert_eq!(
             out,
             vec![
-                LiveCommand::Reset(ResetKind::GmSystemOn),
-                LiveCommand::Reset(ResetKind::SystemReset),
+                LiveCommand::Channel(EvKind::GmReset),
+                LiveCommand::SystemReset,
             ]
         );
+    }
+
+    #[test]
+    fn live_gm_system_on_uses_the_full_engine_reset() {
+        let mut synth = RealtimeSynth::new(opts());
+        assert_eq!(spawn_voices_and_render(&mut synth, 2), 2);
+        for byte in [0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7] {
+            synth.write_byte(byte);
+        }
+        let mut out = [0.0; LIVE_BLOCK * 2];
+        synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+        assert_eq!(synth.active_voice_count(), 0);
+    }
+
+    /// MM-BUG-KILN-00035: every fixed SysEx shape modeled by the SMF parser is
+    /// recognized from the raw live wire too.
+    #[test]
+    fn parser_emits_all_modeled_system_sysex() {
+        let mut parser = MidiByteParser::new();
+        let mut out = Vec::new();
+        let bytes = [
+            // XG System On, with transparent timing clock interleaved.
+            0xF0, 0x43, 0x10, 0xF8, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7,
+            // XG Effect1 one-byte parameter.
+            0xF0, 0x43, 0x10, 0x4C, 0x02, 0x01, 0x5A, 0x00, 0xF7, // GS Reset.
+            0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7,
+            // GS Use for Rhythm Part, block A => channel index 10.
+            0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x1A, 0x15, 0x01, 0x00, 0xF7,
+        ];
+        for byte in bytes {
+            parser.push(byte, &mut out);
+        }
+        assert_eq!(
+            out,
+            vec![
+                LiveCommand::Channel(EvKind::XgReset),
+                LiveCommand::Channel(EvKind::XgEffectParam {
+                    addr_lo: 0x5A,
+                    data: [0, 0],
+                    len: 1,
+                }),
+                LiveCommand::Channel(EvKind::GsReset),
+                LiveCommand::Channel(EvKind::DrumMode { ch: 10, on: true }),
+            ]
+        );
+    }
+
+    /// A non-realtime status terminates malformed SysEx and must itself be
+    /// processed; dropping it can both swallow notes and create a false GM reset.
+    #[test]
+    fn parser_recovers_channel_status_from_malformed_sysex() {
+        let mut parser = MidiByteParser::new();
+        let mut out = Vec::new();
+        for byte in [0xF0, 0x7E, 0x7F, 0x90, 60, 100] {
+            parser.push(byte, &mut out);
+        }
+        assert_eq!(
+            out,
+            vec![LiveCommand::Channel(EvKind::NoteOn {
+                ch: 0,
+                key: 60,
+                vel: 100,
+            })]
+        );
+    }
+
+    #[test]
+    fn parser_recovers_after_sysex_overflow_and_system_reset() {
+        let note = LiveCommand::Channel(EvKind::NoteOn {
+            ch: 0,
+            key: 60,
+            vel: 100,
+        });
+
+        let mut parser = MidiByteParser::new();
+        let mut out = Vec::new();
+        // A valid GM prefix extended past the fixed capture cannot become a reset.
+        for byte in [
+            0xF0, 0x7E, 0x7F, 0x09, 0x01, 0, 0, 0, 0, 0, 0, 0xF7, 0x90, 60, 100,
+        ] {
+            parser.push(byte, &mut out);
+        }
+        assert_eq!(out, vec![note]);
+
+        let mut parser = MidiByteParser::new();
+        let mut out = Vec::new();
+        // FF acts immediately and clears the partial GM prefix. Its remaining
+        // bytes cannot later complete a second reset; normal traffic recovers.
+        for byte in [0xF0, 0x7E, 0x7F, 0x09, 0xFF, 0x01, 0xF7, 0x90, 60, 100] {
+            parser.push(byte, &mut out);
+        }
+        assert_eq!(out, vec![LiveCommand::SystemReset, note]);
     }
 
     #[test]

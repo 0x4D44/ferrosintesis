@@ -53,9 +53,12 @@ pub enum EvKind {
     /// Roland-GS Reset (SysEx `40 00 7F`): revert part modes to default — clears
     /// every GS-declared rhythm part (channel 10 stays drums by the ch==9 rule).
     GsReset,
-    /// XG System On (`F0 43 1n 4C 00 00 7E 00`) or GM System On (universal
-    /// `F0 7E .. 09 01`): reset the XG effect state (reverb/chorus/variation
-    /// insert) to engine defaults. Voices/timing are untouched.
+    /// GM System On (universal `F0 7E .. 09 01 F7`): restore the full GM initial
+    /// state, stopping voices and resetting channels and effects.
+    GmReset,
+    /// XG System On (`F0 43 1n 4C 00 00 7E 00 F7`): reset the XG effect state
+    /// (reverb/chorus/variation insert) to engine defaults. Voices and channel
+    /// state are untouched.
     XgReset,
     /// An XG Effect1-block parameter change (`F0 43 1n 4C 02 01 <lo> <data…>`).
     /// `addr_lo` is the Effect1 offset (e.g. 0x00 reverb type, 0x40 variation
@@ -78,6 +81,52 @@ fn gs_block_to_channel(block: u8) -> u8 {
         0 => 9,             // Part 10 (the default GM/GS drum channel)
         n @ 1..=9 => n - 1, // Parts 1..9
         n => n,             // A..F → Parts 11..16 (channels 11..16, index 10..15)
+    }
+}
+
+/// Decode one complete modeled SysEx payload, excluding the framing `F0`/`F7`.
+///
+/// The live parser and the SMF parser both call this exact recognizer so message
+/// shapes and reset scopes cannot drift between entry points. SysEx data is
+/// seven-bit; rejecting any status byte here also keeps malformed SMFs aligned
+/// with the live byte parser, which terminates capture on status.
+pub(crate) fn decode_sysex_payload(payload: &[u8]) -> Option<EvKind> {
+    if payload.iter().any(|&byte| byte >= 0x80) {
+        return None;
+    }
+
+    match payload {
+        // Universal non-realtime, any device, General MIDI, System On.
+        [0x7E, _, 0x09, 0x01] => Some(EvKind::GmReset),
+        // Yamaha XG parameter change, System block, System On.
+        [0x43, device, 0x4C, 0x00, 0x00, 0x7E, 0x00] if device & 0xF0 == 0x10 => {
+            Some(EvKind::XgReset)
+        }
+        // Yamaha XG Effect1 parameter, one or two data bytes.
+        [0x43, device, 0x4C, 0x02, 0x01, addr_lo, d0] if device & 0xF0 == 0x10 => {
+            Some(EvKind::XgEffectParam {
+                addr_lo: *addr_lo,
+                data: [*d0, 0],
+                len: 1,
+            })
+        }
+        [0x43, device, 0x4C, 0x02, 0x01, addr_lo, d0, d1] if device & 0xF0 == 0x10 => {
+            Some(EvKind::XgEffectParam {
+                addr_lo: *addr_lo,
+                data: [*d0, *d1],
+                len: 2,
+            })
+        }
+        // Roland GS DT1, System block, GS Reset. Device/checksum stay lenient.
+        [0x41, _, 0x42, 0x12, 0x40, 0x00, 0x7F, _, _] => Some(EvKind::GsReset),
+        // Roland GS DT1, Part block, Use for Rhythm Part. 0=off, 1/2=maps.
+        [0x41, _, 0x42, 0x12, 0x40, block, 0x15, map @ 0..=2, _] if block & 0xF0 == 0x10 => {
+            Some(EvKind::DrumMode {
+                ch: gs_block_to_channel(*block),
+                on: *map != 0,
+            })
+        }
+        _ => None,
     }
 }
 
@@ -211,69 +260,13 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                 0xF0 | 0xF7 => {
                     let len = c.vlq()? as usize;
                     let payload = c.bytes(len)?;
-                    // Only two GS messages are decoded; every other SysEx is ignored,
-                    // exactly as before (payload starts at the byte after F0).
-                    // A GS DT1 message to a System/Part address (`F0 41 <dev> 42 12 40 …`).
-                    let gs_dt1 = payload.len() >= 7
-                        && payload[0] == 0x41 // Roland
-                        && payload[2] == 0x42 // GS
-                        && payload[3] == 0x12 // DT1
-                        && payload[4] == 0x40;
-                    if gs_dt1
-                        && payload.len() >= 8
-                        && (payload[5] & 0xF0) == 0x10 // part block 0x1n
-                        && payload[6] == 0x15 // "Use for Rhythm Part"
-                        && payload[7] <= 2
-                    // 0=off, 1=MAP1, 2=MAP2 (reject invalid)
-                    {
-                        let ch = gs_block_to_channel(payload[5]);
-                        raw.push((
-                            tick,
-                            seq,
-                            EvKind::DrumMode {
-                                ch,
-                                on: payload[7] != 0,
-                            },
-                        ));
-                        seq += 1;
-                    } else if gs_dt1 && payload[5] == 0x00 && payload[6] == 0x7F {
-                        // GS Reset — revert part modes to default.
-                        raw.push((tick, seq, EvKind::GsReset));
-                        seq += 1;
-                    } else if payload.len() >= 4
-                        && payload[0] == 0x7E // universal non-realtime
-                        && payload[2] == 0x09 // General MIDI
-                        && payload[3] == 0x01
-                    {
-                        // GM System On — reset XG effect state to defaults.
-                        raw.push((tick, seq, EvKind::XgReset));
-                        seq += 1;
-                    } else if payload.len() >= 4
-                        && payload[0] == 0x43 // Yamaha
-                        && (payload[1] & 0xF0) == 0x10 // parameter change, device 1n
-                        && payload[2] == 0x4C
-                    {
-                        // XG parameter change (model ID 0x4C).
-                        if payload.len() >= 7
-                            && payload[3] == 0x00
-                            && payload[4] == 0x00
-                            && payload[5] == 0x7E
-                        {
-                            // XG System On.
-                            raw.push((tick, seq, EvKind::XgReset));
-                            seq += 1;
-                        } else if payload.len() >= 8 && payload[3] == 0x02 && payload[4] == 0x01 {
-                            // Effect1 block: `02 01 <lo> <d0> [d1]` (F7 terminator last).
-                            let addr_lo = payload[5];
-                            let mut end = payload.len();
-                            if end > 6 && payload[end - 1] == 0xF7 {
-                                end -= 1; // drop the SysEx terminator
-                            }
-                            let d = &payload[6..end];
-                            if !d.is_empty() {
-                                let len = d.len().min(2) as u8;
-                                let data = [d[0], if len >= 2 { d[1] } else { 0 }];
-                                raw.push((tick, seq, EvKind::XgEffectParam { addr_lo, data, len }));
+                    // In an SMF only F0 begins a SysEx message. Accept a complete
+                    // single-event message; standalone F7 escape/continuation data
+                    // and unterminated F0 packets are deliberately not recognized.
+                    if status == 0xF0 {
+                        if let Some(body) = payload.strip_suffix(&[0xF7]) {
+                            if let Some(kind) = decode_sysex_payload(body) {
+                                raw.push((tick, seq, kind));
                                 seq += 1;
                             }
                         }
@@ -369,7 +362,9 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
         s0 + (tick.saturating_sub(t0)) as f64 * spt
     };
 
-    raw.sort_by_key(|&(tick, seq, _)| (tick, seq));
+    // GM System On establishes the defaults for a tick; simultaneous authored
+    // setup then overrides them. Format-1 track order must not reverse that.
+    raw.sort_by_key(|&(tick, seq, kind)| (tick, !matches!(kind, EvKind::GmReset), seq));
     let events: Vec<Ev> = raw
         .into_iter()
         .map(|(tick, _, kind)| Ev {
@@ -635,8 +630,8 @@ mod tests {
     }
 
     /// XG effect-block parameter changes decode to `XgEffectParam` with the right
-    /// offset, data and length; XG/GM System On decode to `XgReset`; non-effect
-    /// XG addresses and near-misses are ignored (byte-identity rests on this).
+    /// offset, data and length; XG and GM System On retain their distinct reset
+    /// scopes; non-effect XG addresses and near-misses are ignored.
     #[test]
     fn xg_effect_sysex_decodes() {
         // Variation Type (02 01 40 = 4B 11) → 2-byte param at offset 0x40.
@@ -672,11 +667,11 @@ mod tests {
             EvKind::XgReset
         ));
 
-        // GM System On (universal 7E 7F 09 01) → XgReset.
+        // GM System On (universal 7E 7F 09 01) → its own full reset.
         let gm_on = sysex_event(&[0x7E, 0x7F, 0x09, 0x01, 0xF7]);
         assert!(matches!(
             parse(&file_from_track(&gm_on)).unwrap().events[0].kind,
-            EvKind::XgReset
+            EvKind::GmReset
         ));
 
         // A non-effect XG address (System block 00 00 04 = master volume) → ignored.
@@ -689,6 +684,64 @@ mod tests {
             .unwrap()
             .events
             .is_empty());
+    }
+
+    /// MM-BUG-KILN-00035: destructive reset recognition requires a complete,
+    /// exact, seven-bit payload in an F0 event. Prefixes and standalone F7 escape
+    /// data must not change engine state.
+    #[test]
+    fn system_sysex_rejects_malformed_shapes() {
+        let cases = [
+            sysex_event(&[0x7E, 0x7F, 0x09, 0x01]), // unterminated GM On
+            sysex_event(&[0x7E, 0x7F, 0x09, 0x01, 0x00, 0xF7]), // extended prefix
+            sysex_event(&[0x7E, 0xFF, 0x09, 0x01, 0xF7]), // high-bit payload
+            sysex_event(&[0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x01, 0xF7]), // bad XG data
+            sysex_event(&[0x43, 0x10, 0x4C, 0x02, 0x01, 0x5A, 0, 1, 2, 0xF7]), // too long
+        ];
+        for events in cases {
+            assert!(
+                parse(&file_from_track(&events)).unwrap().events.is_empty(),
+                "malformed SysEx decoded: {events:02X?}"
+            );
+        }
+
+        let escaped_gm = [0x00, 0xF7, 0x05, 0x7E, 0x7F, 0x09, 0x01, 0xF7];
+        assert!(
+            parse(&file_from_track(&escaped_gm))
+                .unwrap()
+                .events
+                .is_empty(),
+            "standalone F7 escape data decoded as GM On"
+        );
+    }
+
+    /// A format-1 track holding GM On must establish defaults before simultaneous
+    /// setup events from earlier tracks, regardless of file track order.
+    #[test]
+    fn gm_reset_sorts_before_same_tick_setup_across_tracks() {
+        let mut data = Vec::new();
+        data.extend(b"MThd");
+        data.extend(6u32.to_be_bytes());
+        data.extend(1u16.to_be_bytes());
+        data.extend(2u16.to_be_bytes());
+        data.extend(480u16.to_be_bytes());
+        for events in [
+            vec![0x00, 0xC0, 30],
+            sysex_event(&[0x7E, 0x7F, 0x09, 0x01, 0xF7]),
+        ] {
+            let mut track = events;
+            track.extend([0x00, 0xFF, 0x2F, 0x00]);
+            data.extend(b"MTrk");
+            data.extend((track.len() as u32).to_be_bytes());
+            data.extend(track);
+        }
+
+        let song = parse(&data).unwrap();
+        assert!(matches!(song.events[0].kind, EvKind::GmReset));
+        assert!(matches!(
+            song.events[1].kind,
+            EvKind::Prog { ch: 0, prog: 30 }
+        ));
     }
 
     /// A pitch-bend message decodes to the right signed semitone value.

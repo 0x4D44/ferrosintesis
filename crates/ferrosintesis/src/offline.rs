@@ -173,4 +173,32 @@ mod tests {
             );
         }
     }
+
+    /// MM-BUG-KILN-00035: a mid-file GM On stops the old voice before the next
+    /// one, while Stats retain both allocations and the pre-reset audio peak.
+    #[test]
+    fn parsed_mid_file_gm_reset_preserves_whole_render_stats() {
+        let events = [
+            0x00, 0xC0, 30, // non-default program
+            0x00, 0x90, 60, 110, // held across the reset unless GM On is full
+            0x60, 0xF0, 0x05, 0x7E, 0x7F, 0x09, 0x01, 0xF7, // GM System On
+            0x00, 0x90, 64, 100, // fresh default-program voice
+            0x60, 0x80, 64, 0,
+        ];
+        let song = parse(&file_from_track(&events)).unwrap();
+        let opt = Options::default().with_samples(false).with_tail(0.1);
+        let (audio, stats) = render(&song, &opt);
+
+        assert!(audio.iter().any(|sample| sample.abs() > 1e-6));
+        assert_eq!(
+            stats.voices_spawned, 2,
+            "pre-reset voice vanished from Stats"
+        );
+        assert_eq!(
+            stats.max_polyphony, 1,
+            "pre-reset voice overlapped the post-reset voice"
+        );
+        let measured_peak = audio.iter().fold(0.0f32, |peak, &x| peak.max(x.abs()));
+        assert_eq!(stats.peak, measured_peak);
+    }
 }

@@ -88,6 +88,150 @@ class PrepareSampleBankTests(unittest.TestCase):
             any(name.startswith(("piano_", "violin_", "flute_")) for name in orchestral)
         )
 
+    @staticmethod
+    def _synthetic_piano_bank(sr=1000):
+        bank = {}
+        for dyn_i, dyn in enumerate(("pp", "mf", "f")):
+            for note_i, note in enumerate(prepare.PIANO_ZONE_NOTES):
+                for rr_i, suffix in enumerate(("", "_rr2")):
+                    body_db = -22.0 + 0.35 * note_i + (rr_i * 2.0 - 1.0)
+                    ratio_db = (
+                        -4.0
+                        + 1.7 * note_i
+                        + 1.5 * dyn_i
+                        + (rr_i * 4.0 - 2.0)
+                    )
+                    body = 10 ** (body_db / 20.0)
+                    attack = body * 10 ** (ratio_db / 20.0)
+                    x = [0.0] * 5
+                    for i in range(int(0.40 * sr)):
+                        t = i / sr
+                        if t < 0.03:
+                            amp = attack
+                        elif t < 0.12:
+                            u = (t - 0.03) / 0.09
+                            u = u * u * (3.0 - 2.0 * u)
+                            amp = attack + (body - attack) * u
+                        else:
+                            amp = body
+                        x.append(amp * math.sin(2.0 * math.pi * 50.0 * t))
+                    bank[f"piano_{note}_{dyn}{suffix}.wav"] = x
+        return bank
+
+    def test_piano_conditioner_matches_shape_and_absolute_level_trends(self):
+        sr = 1000
+        source = self._synthetic_piano_bank(sr)
+
+        conditioned = prepare.condition_piano_bank(source, sr)
+        stats = prepare.piano_envelope_stats(conditioned, sr)
+
+        self.assertEqual(set(conditioned), set(source))
+        self.assertEqual(
+            conditioned,
+            prepare.condition_piano_bank(source, sr),
+            "bank conditioning must be deterministic",
+        )
+        for name, before in source.items():
+            after = conditioned[name]
+            self.assertEqual(len(after), len(before))
+            self.assertLessEqual(max(abs(v) for v in after), 0.900001)
+            onset = prepare.piano_envelope_stats({name: before}, sr)[name][2]
+            scales = [
+                after[i] / before[i]
+                for i in range(onset, onset + int(0.035 * sr))
+                if abs(before[i]) > 1e-6
+            ]
+            self.assertLess(
+                max(scales) - min(scales),
+                1e-9,
+                f"{name}: hammer window received time-varying gain",
+            )
+
+        for dyn in ("pp", "mf", "f"):
+            for note in prepare.PIANO_ZONE_NOTES:
+                a = stats[f"piano_{note}_{dyn}.wav"]
+                b = stats[f"piano_{note}_{dyn}_rr2.wav"]
+                self.assertLess(abs(a[0] - b[0]), 0.05)
+                self.assertLess(abs(a[1] - b[1]), 0.05)
+
+        for note in prepare.PIANO_ZONE_NOTES:
+            body_levels = [
+                stats[f"piano_{note}_{dyn}{suffix}.wav"][1]
+                for dyn in ("pp", "mf", "f")
+                for suffix in ("", "_rr2")
+            ]
+            self.assertLess(max(body_levels) - min(body_levels), 0.05)
+
+    def test_committed_piano_bank_has_conditioned_macro_envelopes(self):
+        sample_dir = os.path.join(
+            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-core", "samples"
+        )
+        bank = {}
+        for name in sorted(prepare.SOURCES):
+            if not name.startswith("piano_"):
+                continue
+            x, sr = prepare.read_wav(os.path.join(sample_dir, name))
+            self.assertEqual(sr, prepare.OUT_SR)
+            bank[name] = x
+
+        self.assertEqual(len(bank), 54)
+        stats = prepare.piano_envelope_stats(bank, prepare.OUT_SR)
+        for dyn in ("pp", "mf", "f"):
+            points = []
+            for note in prepare.PIANO_ZONE_NOTES:
+                a = stats[f"piano_{note}_{dyn}.wav"]
+                b = stats[f"piano_{note}_{dyn}_rr2.wav"]
+                points.append(
+                    (
+                        prepare.PIANO_ZONE_MIDI[note],
+                        (a[0] + b[0]) / 2.0,
+                    )
+                )
+                self.assertLess(
+                    abs(a[0] - b[0]),
+                    0.35,
+                    f"{note} {dyn}: round-robin shape mismatch",
+                )
+                self.assertLess(
+                    abs(a[1] - b[1]),
+                    0.35,
+                    f"{note} {dyn}: round-robin body-level mismatch",
+                )
+            trend = prepare._quadratic_trend(points)
+            for note in prepare.PIANO_ZONE_NOTES:
+                target = trend(prepare.PIANO_ZONE_MIDI[note])
+                for suffix in ("", "_rr2"):
+                    ratio = stats[f"piano_{note}_{dyn}{suffix}.wav"][0]
+                    self.assertLess(
+                        abs(ratio - target),
+                        0.35,
+                        f"{note} {dyn}{suffix}: shape misses register trend",
+                    )
+
+        level_points = []
+        for note in prepare.PIANO_ZONE_NOTES:
+            levels = [
+                stats[f"piano_{note}_{dyn}{suffix}.wav"][1]
+                for dyn in ("pp", "mf", "f")
+                for suffix in ("", "_rr2")
+            ]
+            level_points.append(
+                (prepare.PIANO_ZONE_MIDI[note], sum(levels) / len(levels))
+            )
+        level_slope, level_intercept = prepare._robust_line(level_points)
+        for note in prepare.PIANO_ZONE_NOTES:
+            target = (
+                level_slope * prepare.PIANO_ZONE_MIDI[note] + level_intercept
+            )
+            for dyn in ("pp", "mf", "f"):
+                for suffix in ("", "_rr2"):
+                    body_db = stats[f"piano_{note}_{dyn}{suffix}.wav"][1]
+                    self.assertLess(
+                        abs(body_db - target),
+                        0.35,
+                        f"{note} {dyn}{suffix}: body level misses register trend",
+                    )
+
     def test_fade_in_is_inert_when_lead_in_exceeds_the_window(self):
         """A source with >= 2 ms of lead-in must be cut exactly as before.
 

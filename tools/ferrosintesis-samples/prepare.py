@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import socket
+import statistics
 import struct
 import subprocess
 import sys
@@ -40,6 +41,9 @@ DRUM_SOURCES = {
     "drum_snare2_v5_rr1.wav": f"{BASE}/Percussion/Snare2-HitSN_v5_rr1_Sum.wav",
     "drum_snare2_v5_rr2.wav": f"{BASE}/Percussion/Snare2-HitSN_v5_rr2_Sum.wav",
 }
+PIANO_ZONE_NOTES = ("C2", "G2", "C3", "G3", "C4", "G4", "C5", "G5", "C6")
+PIANO_ZONE_MIDI = dict(zip(PIANO_ZONE_NOTES, (36, 43, 48, 55, 60, 67, 72, 79, 84)))
+
 SOURCES = {
     f"violin_{n}_{d}.wav": f"{BASE}/Strings/Solo%20Violin/Arco%20Vib/LLVln_ArcoVib_{n}_{d}.wav"
     for n in ("G3", "E4", "C5", "G5", "C6", "E6")
@@ -49,14 +53,14 @@ SOURCES = {
     for n in ("C4", "A4", "E5", "A5", "C6")
 } | {
     f"piano_{n}_{d}.wav": f"{BASE}/Keys/Upright%20Nr1/UR1_{n}_{d}_RR1.wav"
-    for n in ("C2", "G2", "C3", "G3", "C4", "G4", "C5", "G5", "C6")
+    for n in PIANO_ZONE_NOTES
     for d in ("pp", "mf", "f")
 } | {
     # second round robin (VSCO has no pp RR2 for C2/G2; reuse RR1 there)
     f"piano_{n}_{d}_rr2.wav": f"{BASE}/Keys/Upright%20Nr1/UR1_{n}_{d}_RR{{}}.wav".format(
         1 if (d == "pp" and n in ("C2", "G2")) else 2
     )
-    for n in ("C2", "G2", "C3", "G3", "C4", "G4", "C5", "G5", "C6")
+    for n in PIANO_ZONE_NOTES
     for d in ("pp", "mf", "f")
 } | {
     # brass sustain onsets — VSCO dynamic layers: v1 -> p, v3 -> f
@@ -1531,6 +1535,240 @@ def trim_to_onset(x, sr, keep_s, fade_s):
     return [v * g for v in seg]
 
 
+_PIANO_NAME_RE = re.compile(
+    r"^piano_(C|G)([2-6])_(pp|mf|f)(?:_(rr2))?\.wav$"
+)
+_PIANO_MAX_CORRECTION_DB = 12.0
+_PIANO_MAX_RAMP_STEP_DB = 4.5
+_PIANO_MAX_ADDED_RAMP_STEP_DB = 2.0
+
+
+def _piano_name_parts(name):
+    match = _PIANO_NAME_RE.match(name)
+    if match is None:
+        raise ValueError(f"not a default-upright sample name: {name}")
+    return f"{match.group(1)}{match.group(2)}", match.group(3)
+
+
+def _rms_window(x, start, end):
+    window = x[max(0, start):min(len(x), end)]
+    if not window:
+        raise ValueError("piano envelope window falls outside the sample")
+    return math.sqrt(sum(v * v for v in window) / len(window))
+
+
+def _piano_onset(x):
+    peak = max((abs(v) for v in x), default=0.0)
+    if peak <= 0.0:
+        raise ValueError("silent piano sample")
+    threshold = 0.03 * peak
+    return next(i for i, v in enumerate(x) if abs(v) > threshold)
+
+
+def piano_envelope_stats(bank, sr):
+    """Return attack/body ratio dB, body RMS dB, and onset for piano takes."""
+    attack_len = int(0.030 * sr)
+    body_start = int(0.140 * sr)
+    body_end = int(0.220 * sr)
+    stats = {}
+    for name, x in bank.items():
+        onset = _piano_onset(x)
+        attack = _rms_window(x, onset, onset + attack_len)
+        body = _rms_window(x, onset + body_start, onset + body_end)
+        stats[name] = (
+            20.0 * math.log10(max(attack, 1e-12) / max(body, 1e-12)),
+            20.0 * math.log10(max(body, 1e-12)),
+            onset,
+        )
+    return stats
+
+
+def _robust_line(points):
+    """Theil-Sen median slope and median intercept for distinct x values."""
+    slopes = [
+        (yj - yi) / (xj - xi)
+        for i, (xi, yi) in enumerate(points)
+        for xj, yj in points[i + 1:]
+        if xj != xi
+    ]
+    slope = statistics.median(slopes)
+    intercept = statistics.median(y - slope * x for x, y in points)
+    return slope, intercept
+
+
+def _quadratic_trend(points):
+    """Least-squares quadratic over the normalized C2-C6 register."""
+    scaled = [((x - 60.0) / 24.0, y) for x, y in points]
+    sx = [sum(x ** power for x, _ in scaled) for power in range(5)]
+    sy = [
+        sum((x ** power) * y for x, y in scaled)
+        for power in range(3)
+    ]
+    matrix = [
+        [sx[0], sx[1], sx[2], sy[0]],
+        [sx[1], sx[2], sx[3], sy[1]],
+        [sx[2], sx[3], sx[4], sy[2]],
+    ]
+    for col in range(3):
+        pivot = max(range(col, 3), key=lambda row: abs(matrix[row][col]))
+        matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
+        divisor = matrix[col][col]
+        if abs(divisor) < 1e-12:
+            raise ValueError("degenerate piano register trend")
+        matrix[col] = [value / divisor for value in matrix[col]]
+        for row in range(3):
+            if row == col:
+                continue
+            factor = matrix[row][col]
+            matrix[row] = [
+                value - factor * base
+                for value, base in zip(matrix[row], matrix[col])
+            ]
+    coeffs = tuple(matrix[row][3] for row in range(3))
+
+    def evaluate(midi):
+        x = (midi - 60.0) / 24.0
+        return coeffs[0] + coeffs[1] * x + coeffs[2] * x * x
+
+    return evaluate
+
+
+def _smoothstep(t):
+    t = max(0.0, min(1.0, t))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def condition_piano_bank(bank, sr):
+    """Match default-upright macro shape and absolute level across the bank."""
+    expected = {
+        f"piano_{note}_{dyn}{suffix}.wav"
+        for note in PIANO_ZONE_NOTES
+        for dyn in ("pp", "mf", "f")
+        for suffix in ("", "_rr2")
+    }
+    if set(bank) != expected:
+        missing = sorted(expected - set(bank))
+        extra = sorted(set(bank) - expected)
+        raise ValueError(
+            f"piano conditioner needs the complete 54-take bank; "
+            f"missing={missing}, extra={extra}"
+        )
+
+    source = {name: list(x) for name, x in bank.items()}
+    source_stats = piano_envelope_stats(source, sr)
+    ratio_targets = {}
+    for dyn in ("pp", "mf", "f"):
+        points = []
+        for note in PIANO_ZONE_NOTES:
+            pair = [
+                source_stats[f"piano_{note}_{dyn}.wav"][0],
+                source_stats[f"piano_{note}_{dyn}_rr2.wav"][0],
+            ]
+            points.append((PIANO_ZONE_MIDI[note], statistics.median(pair)))
+        trend = _quadratic_trend(points)
+        for note in PIANO_ZONE_NOTES:
+            ratio_targets[(note, dyn)] = trend(PIANO_ZONE_MIDI[note])
+
+    hold = int(0.040 * sr)
+    ramp_end = int(0.140 * sr)
+    shaped = {}
+    for name, x in source.items():
+        note, dyn = _piano_name_parts(name)
+        ratio_db, _, onset = source_stats[name]
+        correction_db = ratio_db - ratio_targets[(note, dyn)]
+        if abs(correction_db) > _PIANO_MAX_CORRECTION_DB:
+            raise ValueError(
+                f"{name}: {correction_db:+.2f} dB piano-envelope correction exceeds "
+                f"the {_PIANO_MAX_CORRECTION_DB:.0f} dB safety limit"
+            )
+        body_gain = 10.0 ** (correction_db / 20.0)
+        log_gain = math.log(max(body_gain, 1e-12))
+        y = []
+        for i, value in enumerate(x):
+            age = i - onset
+            if age <= hold:
+                weight = 0.0
+            elif age < ramp_end:
+                weight = _smoothstep((age - hold) / max(1, ramp_end - hold))
+            else:
+                weight = 1.0
+            y.append(value * math.exp(log_gain * weight))
+
+        if correction_db > 0.0:
+            attack_end = onset + int(0.150 * sr)
+            attack_peak = max(abs(v) for v in y[:attack_end])
+            later_peak = max((abs(v) for v in y[attack_end:]), default=0.0)
+            if later_peak > attack_peak * 1.000001:
+                raise ValueError(
+                    f"{name}: requested body gain creates a late peak "
+                    f"({later_peak:.4f} > {attack_peak:.4f})"
+                )
+        shaped[name] = y
+
+    shaped_stats = piano_envelope_stats(shaped, sr)
+    level_points = []
+    for note in PIANO_ZONE_NOTES:
+        levels = [
+            shaped_stats[f"piano_{note}_{dyn}{suffix}.wav"][1]
+            for dyn in ("pp", "mf", "f")
+            for suffix in ("", "_rr2")
+        ]
+        level_points.append((PIANO_ZONE_MIDI[note], statistics.median(levels)))
+    level_slope, level_intercept = _robust_line(level_points)
+
+    level_scales = {}
+    max_peak = 0.0
+    for name, x in shaped.items():
+        note, _ = _piano_name_parts(name)
+        target_db = level_slope * PIANO_ZONE_MIDI[note] + level_intercept
+        scale = 10.0 ** ((target_db - shaped_stats[name][1]) / 20.0)
+        level_scales[name] = scale
+        max_peak = max(max_peak, max(abs(v) for v in x) * scale)
+    common_headroom = min(1.0, 0.9 / max(max_peak, 1e-12))
+
+    conditioned = {
+        name: [v * level_scales[name] * common_headroom for v in x]
+        for name, x in shaped.items()
+    }
+
+    ramp_windows = [
+        (int(a * sr), int((a + 0.020) * sr))
+        for a in (0.040, 0.060, 0.080, 0.100, 0.120)
+    ]
+    final_stats = piano_envelope_stats(conditioned, sr)
+    for name, x in conditioned.items():
+        onset = final_stats[name][2]
+        levels = [
+            20.0 * math.log10(
+                max(_rms_window(x, onset + a, onset + b), 1e-12)
+            )
+            for a, b in ramp_windows
+        ]
+        source_onset = source_stats[name][2]
+        source_levels = [
+            20.0 * math.log10(
+                max(_rms_window(source[name], source_onset + a, source_onset + b), 1e-12)
+            )
+            for a, b in ramp_windows
+        ]
+        out_steps = [b - a for a, b in zip(levels, levels[1:])]
+        source_steps = [b - a for a, b in zip(source_levels, source_levels[1:])]
+        worst_step = max((abs(step) for step in out_steps), default=0.0)
+        worst_added = max(
+            (abs(out) - abs(before) for out, before in zip(out_steps, source_steps)),
+            default=0.0,
+        )
+        if (
+            worst_step > _PIANO_MAX_RAMP_STEP_DB
+            and worst_added > _PIANO_MAX_ADDED_RAMP_STEP_DB
+        ):
+            raise ValueError(
+                f"{name}: conditioner creates a {worst_step:.2f} dB adjacent "
+                f"20 ms ramp step ({worst_added:+.2f} dB beyond the source)"
+            )
+    return conditioned
+
+
 def trim_lead_and_ring(x, sr, pre_s, end_fade_s):
     """Trim leading pre-onset silence, KEEP the full ring, de-click both ends,
     peak-normalize to 0.9.
@@ -2247,6 +2485,7 @@ def main():
     sax_only = "--sax-only" in sys.argv[1:]
 
     rows = []
+    piano_pending = []
     if sax_only:
         sax_src = os.path.join(tempfile.gettempdir(), "mtg_sax_src", MTG_SAX_REV)
         os.makedirs(sax_src, exist_ok=True)
@@ -2415,10 +2654,10 @@ def main():
             sr = OUT_SR
             keep_s, fade_s = KEEP_FILE.get(fn, KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S)))
             seg = trim_to_onset(x, sr, keep_s, fade_s)
+            fam = fn.split("_")[0]
             if fn in DRUM_SOURCES:
                 root = f0 = cand = cents = conf = None
             else:
-                fam = fn.split("_")[0]
                 lo, hi = F0_RANGE.get(fam, (80.0, 3000.0))
                 # nominal pitch from the filename, e.g. violin_G3_f / flute_C4
                 note = next(p for p in fn[:-4].split("_") if p[0] in "ABCDEFG" and p[-1].isdigit())
@@ -2433,8 +2672,20 @@ def main():
                            key=lambda c: abs(math.log(f0 / c)))
                 cents = 1200 * math.log2(f0 / cand)
                 root = f0 if abs(cents) < 60 else cand
-            write_wav_mono(sample_output_path(fn), seg, sr)
-            rows.append((fn, root, f0, cand, cents, conf, len(seg) / sr))
+            row = (fn, root, f0, cand, cents, conf, len(seg) / sr)
+            if fam == "piano":
+                piano_pending.append((fn, seg, row))
+            else:
+                write_wav_mono(sample_output_path(fn), seg, sr)
+                rows.append(row)
+
+        if piano_pending:
+            conditioned = condition_piano_bank(
+                {fn: seg for fn, seg, _ in piano_pending}, OUT_SR
+            )
+            for fn, _, row in piano_pending:
+                write_wav_mono(sample_output_path(fn), conditioned[fn], OUT_SR)
+                rows.append(row)
 
     # Local-file intake (gong): full ring kept, one-shot (no f0), explicit routing.
     # Gated by `want("gong")` so `--only=<other>` never rewrites the tracked gong WAVs

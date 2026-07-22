@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00047 — GM0 upright attacks thump across short piano phrases
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synthesis
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by OpenAI Codex from Arthur's FRA report) → Fixed (2026-07-22, default GM0 bank and release implementation by OpenAI Codex; independent verification pending)
+- **State history:** Open (2026-07-22, raised by OpenAI Codex from Arthur's FRA report) → Fixed (2026-07-22, default GM0 bank and release implementation by OpenAI Codex; independent verification pending) → Closed (2026-07-22, independently verified by OpenAI Codex on `11b930c`; generator, GM0 release, velocity-seam, and alternate-isolation checks green)
 
 ## Observation
 
@@ -62,6 +62,21 @@ within the 10 dB gap ceiling. Full validation passed: 18 generator tests, worksp
 format/lint, 615 passing library tests plus every other workspace target, and a
 141-MIDI exact-base render comparison with 83 expected GM0 changes and zero
 contamination. Left Fixed pending independent two-eyes closure.
+
+### Independent verification (2026-07-22)
+
+OpenAI Codex independently verified committed fix `11b930c`. The default program-0
+route alone supplies `GM0_RELEASE_T60 = 0.45`; GM0 alternate banks, the undefined
+CC0 fallback, GM1, and GM3 remain on their explicit legacy paths. The focused GM0
+fixtures measured 4.13–6.77 dB sampled and 7.32–8.12 dB modeled loss through the
+62.5 ms gaps, at least 28.53 dB clearing by 250 ms, and successful reap by 2 s.
+The conditioned-bank legacy control still lost 28.08–31.05 dB, confirming the
+release override addresses the reproduced gap rather than merely the asset shaping.
+
+Verification commands passed with stdin closed: all 18 `test_prepare.py` tests;
+all seven `gm0_` library tests; `sampled_voices_stay_linear_across_layer_seams`;
+and `gm0_release_override_does_not_leak_to_alternate_pianos` (the repository's
+narrow alternate-release isolation test).
 
 ## Notes
 

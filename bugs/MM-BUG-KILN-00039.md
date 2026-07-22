@@ -42,3 +42,24 @@ like the reference. Audit other long-ring plucks (shamisen, sitar, banjo) for th
 A flat PROGRAM_TRIM cannot fix a pitch-dependent gain — this is a model bug, not a calibration
 input. Feeds the M-CAL v2 per-key envelope guard (a program with a >3 dB per-key spread is
 guard-excluded from a static trim).
+
+## Correction: the stated mechanism is wrong (2026-07-22, M-CAL v3 run)
+
+**Do not implement this bug's proposed per-key level compensation.** The M-CAL v3 certified
+derivation, independently cross-checked, shows the koto's register tilt is a *decay-rate*
+symptom of the shared Karplus-Strong loss law now tracked as **MM-BUG-KILN-00042**, not a
+missing per-key gain:
+
+- KOTO's low `bright` (1900 Hz) against the in-loop damper's ~f^3 law predicts -203.5 dB/s at
+  key 73 from the damper alone; measured early decay is -213 dB/s (within 5%). At key 48 the
+  same term predicts only -2.4 dB/s.
+- The koto is **not "too loud low"**: GM107 at key 48 (-21.0 dB/s) sits BETWEEN the two
+  reference modules (SC-55 -17.3, S-YXG50 -26.2), and at key 53 it decays slower than both.
+  It is **dead high** - b2 is already -90.3 dBm at key 73 - and that is what tilts the median
+  a level-based reading sees.
+
+A per-key gain curve would therefore compensate a symptom and bake the decay defect in
+permanently, on top of a voice whose upper register has already stopped ringing. Fix 00042
+(generalise `treble_hold_hz` beyond NYLON/STEEL), then re-measure GM107; this bug should close
+or reduce to whatever residual tilt survives that fix.
+

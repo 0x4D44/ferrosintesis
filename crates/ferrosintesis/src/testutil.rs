@@ -1350,10 +1350,20 @@ mod guards {
         (6, -27.98, 188.5),
         (7, -24.96, 580.5),
         (8, -34.65, 2090.1),
-        (9, -17.78, 785.3),
+        // ch 9 re-pinned for the DRUM_FORWARD removal (2.0 -> 1.0, 2026-07-21): the kit
+        // is no longer lifted +6 dB over the band, so the drum channel drops -4.14 dB
+        // (-17.78 -> -21.92). This row is the ONLY one that moves — ch 0-8 re-capture
+        // bit-identical, so the canaries hold and the change is surgical, as intended.
+        //
+        // Its centroid also drifts -3.5% (785.3 -> 758.2). A pure gain change cannot move
+        // a centroid, so this is BusGlue: at the old level the kit drove the master bus's
+        // saturation harder and gained harmonics. Well inside the +-20% clause, and it
+        // corroborates that the glue engages on loud full-mix content.
+        (9, -21.92, 758.2),
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
-    const GOLDEN_MASTER_PEAK: f32 = 2.22899;
+    /// 2.22899 -> 1.37511 (-4.19 dB) tracks ch 9 exactly: the drums set the master peak.
+    const GOLDEN_MASTER_PEAK: f32 = 1.37511;
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

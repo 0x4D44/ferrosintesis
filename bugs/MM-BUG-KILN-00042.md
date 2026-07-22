@@ -244,3 +244,82 @@ bass family partly below the K-weighting knee. That investigation converged on T
 only probe keys 24-34 are knee-polluted, while keys 39/44/49 (78-139 Hz, where the RLB filter
 is within ~1 dB of flat) still show the decline - so the slope is a real property of ferro's
 plucked voices, not a measurement artefact.
+
+## The GM29/30 driven-guitar `PROGRAM_TRIM_DB` lift is a workaround for THIS bug (2026-07-22)
+
+An unintegrated branch, `task/20260719-TSK-HUM-driven-guitar-29-30-mix-presence-trim`
+(commit `006fda6`, clean worktree, raised 3 days before this bug), sets
+`PROGRAM_TRIM_DB[29] = [30] = +6.0` — the table's clamp maximum. Its stated root cause is
+"the Drive stage was calibrated for SOLO loudness", evidenced by a distortion lead
+rendering 8.2 dB band-RMS under a fingered bass on the Incantations Part IV reference
+despite a higher CC7 (68 vs 44).
+
+**That diagnosis is wrong, and the measurement it rests on is a symptom of this bug.**
+GM29/30 route to `Pluck::new(&DRIVE, …)` (`voices.rs:12112`), and `DRIVE`
+(`voices.rs:2622`) never sets `treble_hold_hz`, so it inherits the 0.0 default — the
+unmitigated f³ damper law. Direct measurement on the standard 6-key probe (v110, note
+held 1.30 s, peak-normalised b0..b8):
+
+| | GM29 decay over 1.2 s | GM30 decay over 1.2 s |
+|---|---|---|
+| key 48 (C3) | 6.6 dB | 14.2 dB |
+| key 63 (D#4) | 7.1 dB | 13.0 dB |
+| key 68 (G#4) | 20.0 dB | 31.2 dB |
+| key 73 (C#5) | 22.6 dB | 29.4 dB |
+| **register spread (k73 − k48)** | **+15.9 dB** | **+15.2 dB** |
+
+A lead line sits at keys 63–80; a fingered bass sits at keys 28–48. The lead loses
+20–31 dB inside one second while the bass loses 14 — which *is* the reported ~8 dB
+inversion. The defect is register-dependent decay, so a flat per-program scalar is the
+wrong lever in kind, not merely in magnitude: it lifts the low register (already correct,
+and the loudest row at −30.8 dB) by the same amount it lifts the top.
+
+**Counterfactual — the correct fix delivers the missing level by itself.** Authoring
+`treble_hold_hz` on `DRIVE` (experiment only, reverted; the anchor sweep is the useful
+result):
+
+| anchor | GM29 register spread | GM30 register spread |
+|---|---|---|
+| 0 (today) | +15.9 dB | +15.2 dB |
+| 500 Hz (the NYLON/STEEL value) | +12.7 dB | +11.9 dB |
+| **300 Hz** | **−0.1 dB** | **−1.9 dB** |
+| 200 Hz | −0.1 dB | −1.9 dB |
+
+500 Hz barely helps because the measured cliff sits between keys 63 (311 Hz) and 68
+(415 Hz), below the anchor. **300 Hz flattens the register response almost exactly**, and
+200 Hz buys no further tilt correction while beginning to over-hold the mid register
+(GM29 key 63: 7.07 → 5.25 dB) — so 300 is a well-conditioned optimum for this preset, not
+a fitted guess. Keys 48/53/58 are **bit-unchanged** at 300 Hz: the fix is surgical to the
+broken register.
+
+Integrated note loudness recovered by the 300 Hz fix alone, no trim:
+
+```
+GM29  k63 +0.19   k68 +4.50   k73 +6.42      lead register (63/68/73) mean +4.03 dB
+GM30  k63 +0.41   k68 +5.50   k73 +7.14      low register  (48/53/58) mean +0.00 dB
+```
+
+So the fix returns **+6.4 / +7.1 dB exactly where the complaint was**, and 0 dB where it
+was not. Landing both would put the lead register ~12 dB up — roughly 6 dB too loud — and
+would raise the low register by 6 dB it never needed.
+
+**Decision (2026-07-22, Arthur): DISCARD the +6 dB lift; do not integrate `006fda6`.**
+The branch is left in place as the record of the original observation. The real complaint
+it captured — the driven guitars sit under the mix — is now tracked here, and the M-CAL
+panel independently agrees on the direction but a smaller magnitude (GM29 residual: SC-55
++4.3 dB, S-YXG50 +1.7 dB, spread 2.65 dB so the panel AGREES; GM30 has no reference datum
+at all, both guards failed on all 6 keys). That residual was itself measured on the broken
+decay, so it should shrink once the fix lands. **Re-derive after fixing, and only then ask
+whether GM29/30 need any static trim.**
+
+**Adopt 300 Hz as `DRIVE`'s anchor when fixing this bug**, and note that this contradicts
+the "author `treble_hold_hz` at the NYLON/STEEL 500 Hz value" reading of Fix direction §1 —
+the anchor is per-preset and must be fitted below each instrument's cliff.
+
+**Open design question for Arthur, NOT part of this bug.** `DRIVE` sets `sustain: 0.0`
+deliberately (round-3 U2, `voices.rs:2650-2656`): the default driven bank is a *decaying*
+overdriven pluck, with the sustaining voice reserved for the CC0 alt bank `DRIVE_LEAD`
+(`sustain: 0.6`). Both references render GM29/30 as sustaining, which is why ferro fails
+the shape guard on 4/6 and 6/6 keys against both. Flattening the register tilt does not
+resolve that divergence — it is a deliberate voicing choice against GM convention, and
+changing it is a decision, not a defect fix.

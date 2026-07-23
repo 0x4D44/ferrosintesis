@@ -142,12 +142,12 @@ LSB (CC98) = the index below, value on Data Entry MSB (CC6):
 
 | LSB | knob | what it moves | at the extremes |
 |-----|------|---------------|-----------------|
-| 0 | Drive | pedal gain (both clip stages) | g1 ×0.44 … ×2.28 |
-| 1 | Tone | pre-clip voice EQ — pedal "tone" | −9 … +9 dB. **Dynamics-dependent**: a pre-clip control is largely swallowed by the saturator, so it colours strongly on quiet notes and subtly under a hard pick. For a level-independent tone, use Cab Tone. |
-| 2 | Tightness | pre-shaper high-pass corner | ×0.66 … ×1.5, capped 180 Hz — focus vs woolly |
-| 3 | Body | cabinet low-mid | −9 … +9 dB |
-| 4 | Presence | cabinet presence | −9 … +9 dB |
-| 5 | Cab Tone | cabinet high-frequency corner, **downward only** | full … halved. The main "which cabinet" axis; level-independent. Values above 64 are inert (it can only darken, never brighten past the shipped cliff). |
+| 0 | Drive | pedal gain (both clip stages) | g1 ×0.25 … ×3.91 — near-clean to heavy. **Changes level** as a real gain control does (a static makeup trim cannot fully cancel a level shift that also depends on how hard you play); use CC7 to balance. |
+| 1 | Tone | pre-clip voice EQ — pedal "tone" | −12 … +12 dB. **Dynamics-dependent**: a pre-clip control is largely swallowed by the saturator, so it colours strongly on quiet notes and subtly under a hard pick. For a level-independent tone, use Cab Tone. |
+| 2 | Tightness | pre-shaper high-pass corner | ×0.54 … ×1.87, capped 200 Hz — focus vs woolly |
+| 3 | Body | cabinet low-mid | −15 … +15 dB |
+| 4 | Presence | cabinet presence | −15 … +15 dB |
+| 5 | Cab Tone | cabinet high-frequency corner, **downward only** | full … ×0.30 (a 4000 Hz cliff closing to 1200 Hz). The main "which cabinet" axis, and the widest-moving knob; level-independent. Values above 64 are inert (it can only darken, never brighten past the shipped cliff). |
 
 Every value is a **signed offset from the shipped voicing, with 64 = as-shipped**,
 so the offset composes with whatever GM29/GM30 already sound like. The base
@@ -164,10 +164,14 @@ points — the offset is relative to each. The shipped base for each is:
 
 Notes: the parameters are inert on any channel not playing GM29/30; changing a
 knob mid-note is click-free (smoothed); and a channel that authors no amp NRPN
-renders bit-identically. The values are channel state — they survive Program
-Change, CC0 and CC121, and reset only on GM System On. Drive is level-compensated
-only in part (a static trim cannot fully cancel a level change that also depends
-on pitch and pick strength); use CC7 for channel balance.
+renders exactly as the program voicing does. The values are channel state — they
+survive Program Change, CC0 and CC121, and reset only on GM System On.
+
+The driven-guitar shaper runs at **4× oversampling**. That is what makes these
+ranges possible: the `tanh` stages generate harmonics above the internal Nyquist
+which fold back into the audible band, and at 2× that fold-back consumed the
+whole alias budget with Drive alone at maximum, forcing every knob to stay narrow.
+4× buys about 10 dB of margin for roughly 0.5 % of a CPU core per driven channel.
 
 ## Realtime
 

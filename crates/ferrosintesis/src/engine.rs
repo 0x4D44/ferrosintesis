@@ -437,23 +437,88 @@ const AMP_BODY: usize = 3; // cabinet low-mid peak gain (cab[1])
 const AMP_PRES: usize = 4; // cabinet presence peak gain (cab[2])
 const AMP_CABTONE: usize = 5; // cabinet high-frequency cliff, DOWNWARD only
 
+/// Oversampling factor for the driven-guitar shaper. The nonlinearity runs at
+/// `sr * this`, and the cabinet's lowpass cliff is the decimation filter.
+///
+/// **Raised 2 -> 4 on 2026-07-23, and it is the enabling change for the whole
+/// score-authored amp.** The `tanh` stages generate harmonics far above the
+/// internal Nyquist; those fold back INTO the audible band, where no downstream
+/// filter can remove them. At 2x, that fold-back consumed the entire -40 dBc
+/// budget with Drive alone at maximum, so every EQ knob had to stay narrow or the
+/// combination breached (measured: Drive 127 + Tone + Presence = -35.0 dBc). At 4x
+/// the same worst case measures -44.8 dBc — 9.8 dB of headroom bought back, which
+/// is what lets the knobs be genuinely wide.
+///
+/// The cost is small and was measured, not assumed: one driven channel goes from
+/// 0.4 % to 0.9 % of a core (241x -> 118x realtime). It also slightly cleans up
+/// every driven-guitar render, which is a timbre change Arthur accepted
+/// deliberately (2026-07-23) rather than a silent side effect.
+const DRIVE_OVERSAMPLE: usize = 4;
+
 /// Drive gain exponent: `g1 *= 2^(k*n)`, `g2 *= 2^(k*n/2)`, `n in [-1, +0.984]`.
 /// The TOP of this knob is bounded by the alias floor, not taste — the 2x
 /// shaper folds harmonics into the passband and `drive_alias_floor` asserts
-/// -40 dBc. Measured (`amp_drive_knob_holds_alias_floor`): k=1.2 holds it with
-/// margin while still giving g1 x0.44..x2.28, a musically large move.
-const AMP_DRIVE_K: f32 = 1.2;
+/// -40 dBc.
+///
+/// Widened 1.2 -> 2.0 once [`DRIVE_OVERSAMPLE`] went to 4x, spanning g1
+/// x0.25 .. x3.91 (1.7x the old range: near-clean at 0, heavy at 127).
+///
+/// At 2x this constant was pinned AT the alias ceiling — k=1.2 measured -42.5 dBc
+/// and k=1.5 already breached. At 4x that ceiling is gone: `amp_drive_ceiling
+/// _sweep` reads -52.6 dBc here and even k=3.0 is safe at -49.4 dBc. **So the
+/// bound on this number is no longer aliasing — it is the LEVEL residual.** A
+/// wider gain span pulls the makeup trim further out of its depth (see
+/// [`AMP_DRIVE_POST_C`]); 2.0 keeps the worst-case residual at 8.2 dB, and going
+/// to 2.5 pushed it past 10 dB, which starts to make the knob feel like a volume
+/// control rather than a gain control.
+const AMP_DRIVE_K: f32 = 2.0;
 /// Makeup trim: `post *= 2^(-c*n)`. Strictly positive at every n and k (unlike
 /// the reciprocal `amp_sim` form, which goes singular for n<0). c is set by the
 /// level residual, not asserted — see `amp_drive_level_residual_bounded`.
-const AMP_DRIVE_POST_C: f32 = 0.9;
-/// Tone / Body / Presence EQ swing at the knob extremes, in dB (`+/- this * n`).
-const AMP_EQ_DB: f32 = 9.0;
+///
+/// Re-balanced 0.9 -> 1.6 when [`AMP_DRIVE_K`] widened to 2.0, and 1.6 is the
+/// measured MINIMAX rather than a guess: swept at k=2.0 the worst-case residual
+/// is 9.40 dB at c=1.4, **8.21 dB at c=1.6**, and 9.40 dB again at c=1.8.
+///
+/// It cannot do better than that, for a reason worth stating: the error depends
+/// on INPUT LEVEL as much as on knob position. At low drive a quiet note never
+/// reaches the knee, so its output tracks gain almost linearly and wants a lot of
+/// makeup; a loud note at the same setting still clips and wants almost none. One
+/// static exponent has to sit between those, so the residual is irreducible, not
+/// under-tuned. Drive is a gain control and will change level — CC7 is the
+/// balance control, exactly as on a real amp.
+const AMP_DRIVE_POST_C: f32 = 1.6;
+/// Body / Presence CABINET EQ swing at the knob extremes, in dB (`+/- this * n`).
+///
+/// Widened 9 -> 15 dB (Arthur, 2026-07-23: "I like the variance... we could allow
+/// more"). Measured headroom (`amp_range_headroom_sweep`): the Body axis spreads
+/// 14.7 dB at +/-9 and 24.0 dB at +/-15, with peak 0.22 and DC 1.9e-5. Free of
+/// alias cost because these two are POST-clip linear cabinet EQ — nothing they do
+/// reaches the shaper.
+const AMP_EQ_DB: f32 = 15.0;
+/// TONE swing. Separate from the cabinet EQ because Tone is PRE-clip: its boost
+/// feeds the clipper harder, so it spends the same alias budget Drive does.
+///
+/// At 2x that coupling forced an awkward asymmetric range (+5 boost / -15 cut),
+/// because the joint ceiling with Drive at 127 crossed -40 dBc between +5 and +6.
+/// At 4x the same sweep sits at about -53 dBc across the whole 4..9 dB span, so
+/// the constraint no longer binds and the knob is symmetric again — the
+/// asymmetry existed only to dodge a limit that is now gone. Kept a little under
+/// the cabinet's +/-15 because a pre-clip EQ is largely swallowed by the shaper,
+/// so extra range there buys less than it does post-clip.
+const AMP_TONE_DB: f32 = 12.0;
 /// Tightness pre-HPF corner: `pre_hz *= 2^(TIGHT_OCT*n)`, clamped `<= TIGHT_MAX`.
-/// Narrow and capped on purpose: a wide corner mutes the low register (round 1
-/// measured a 120 Hz corner costing ~7.5 dB at E2) rather than voicing it.
-const AMP_TIGHT_OCT: f32 = 0.6;
-const AMP_TIGHT_MAX_HZ: f32 = 180.0;
+/// Kept modest: a wide corner MUTES the low register (round 1 measured a 120 Hz
+/// corner costing ~7.5 dB at E2) rather than voicing it, so this widened only
+/// 0.6 -> 0.9 octaves with the cap lifted 180 -> 200 Hz.
+const AMP_TIGHT_OCT: f32 = 0.9;
+const AMP_TIGHT_MAX_HZ: f32 = 200.0;
+/// Cab Tone: `cliff *= 2^(CABTONE_OCT*n)` for `n <= 0` (downward only, so it can
+/// only ever strengthen alias rejection). 1.74 octaves puts the knob's dark end
+/// at x0.30 — a 4000 Hz cliff closing to 1200 Hz. Measured: the HF axis spreads
+/// 11.3 dB at the old x0.50 and 20.7 dB here, and x0.25 adds only 0.1 dB more,
+/// so this is the point of diminishing return rather than an arbitrary pick.
+const AMP_CABTONE_OCT: f32 = 1.74;
 
 /// Cabinet fine structure (guitar-realism HLD §5): the dense magnitude
 /// ripple a real cab's cone breakup and edge reflections put on top of the
@@ -579,7 +644,7 @@ struct Drive {
     // `*_target` scalars are the block-rate goals the per-sample slew chases so
     // a swept Drive cannot staircase at the block frequency.
     base: DriveBase,
-    sr2: f32,
+    sr_os: f32,
     g1_target: f32,
     g2_target: f32,
     post_target: f32,
@@ -609,7 +674,7 @@ impl Drive {
     ///
     /// The main bank is UNCHANGED and stays bit-identical.
     fn new(program: u8, alt: bool, sr: f32) -> Self {
-        let sr2 = sr * 2.0;
+        let sr_os = sr * DRIVE_OVERSAMPLE as f32;
         if alt {
             // ---- LEAD amp (CC0 alt bank) -------------------------------
             // A lead amp is not a louder rhythm amp. Three things make it, and
@@ -675,7 +740,7 @@ impl Drive {
                     (650.0, 1.0, -4.5),
                     // and a scooped feed into stage 2, gentler and LOWER than
                     // the rhythm 30's −4 dB @ 700
-                    Biquad::peak(800.0, 0.9, -2.0, sr2),
+                    Biquad::peak(800.0, 0.9, -2.0, sr_os),
                 )
             } else {
                 (
@@ -688,13 +753,13 @@ impl Drive {
                     (1000.0, 0.8, 4.0),
                     // a gentle, LOW feed into stage 2 (see note 3 above) —
                     // deliberately NOT a presence boost, which would fizz
-                    Biquad::peak(1400.0, 0.8, 2.5, sr2),
+                    Biquad::peak(1400.0, 0.8, 2.5, sr_os),
                 )
             };
             return Drive::from_stages(
                 program,
                 alt,
-                sr2,
+                sr_os,
                 120.0,
                 voice,
                 g1,
@@ -702,7 +767,7 @@ impl Drive {
                 tilt,
                 g2,
                 post,
-                cab_biquads_lead(sr2, program),
+                cab_biquads_lead(sr_os, program),
                 cab_spec_lead(program),
             );
         }
@@ -735,19 +800,19 @@ impl Drive {
                 (650.0, 0.9, -5.0),
                 // deepen the scoop between the stages: stage 2 re-saturates
                 // the mids the voicing pulled, so pull again where it counts
-                Biquad::peak(700.0, 0.9, -4.0, sr2),
+                Biquad::peak(700.0, 0.9, -4.0, sr_os),
             )
         } else {
             (
                 (800.0, 0.8, 4.0),
                 // upper-mid push into stage 2: the singing lead bite
-                Biquad::peak(1200.0, 0.8, 2.0, sr2),
+                Biquad::peak(1200.0, 0.8, 2.0, sr_os),
             )
         };
         Drive::from_stages(
             program,
             alt,
-            sr2,
+            sr_os,
             90.0,
             voice,
             g1,
@@ -755,7 +820,7 @@ impl Drive {
             tilt,
             g2,
             post,
-            cab_biquads(sr2),
+            cab_biquads(sr_os),
             cab_spec(),
         )
     }
@@ -779,7 +844,7 @@ impl Drive {
     fn from_stages(
         program: u8,
         alt: bool,
-        sr2: f32,
+        sr_os: f32,
         pre_hz: f32,
         voice: (f32, f32, f32),
         g1: f32,
@@ -794,8 +859,8 @@ impl Drive {
         Drive {
             program,
             alt,
-            pre: Biquad::highpass(pre_hz, 0.7, sr2),
-            voice: Biquad::peak(voice.0, voice.1, voice.2, sr2),
+            pre: Biquad::highpass(pre_hz, 0.7, sr_os),
+            voice: Biquad::peak(voice.0, voice.1, voice.2, sr_os),
             g1,
             bias,
             tilt,
@@ -804,9 +869,9 @@ impl Drive {
             // a real DC blocker after the shapers: the biased tanh produces
             // large signal-dependent DC that the cab's unity-at-DC biquads
             // cannot remove (V4/CORR-1)
-            dcb: Biquad::highpass(20.0, 0.7, sr2),
+            dcb: Biquad::highpass(20.0, 0.7, sr_os),
             cab,
-            micro: MicroCab::with_depth(sr2, if alt { MICRO_CAB_LEAD_DEPTH } else { 1.0 }),
+            micro: MicroCab::with_depth(sr_os, if alt { MICRO_CAB_LEAD_DEPTH } else { 1.0 }),
             prev: 0.0,
             // Base voicing for the score-authored offsets; all inert until the
             // strip authors an amp NRPN (`apply_params` sets `active`).
@@ -820,13 +885,13 @@ impl Drive {
                 cab2: peaks[2],
                 cliff,
             },
-            sr2,
+            sr_os,
             g1_target: g1,
             g2_target: g2,
             post_target: post,
             // one-pole scalar slew at the shared 20 ms controller time constant
             // (base rate: process() steps once per base-rate sample)
-            slew: 1.0 - (-1.0 / (WAH_SLEW_S * (sr2 * 0.5))).exp(),
+            slew: 1.0 - (-(DRIVE_OVERSAMPLE as f32) / (WAH_SLEW_S * sr_os)).exp(),
             active: false,
         }
     }
@@ -840,7 +905,7 @@ impl Drive {
     /// settings so the wet stage stays near unity for the apply-site dry/wet
     /// blend; Arthur's ear is the final tuning (oracles check direction).
     fn amp_sim(sr: f32, drive_0_127: u8) -> Self {
-        let sr2 = sr * 2.0;
+        let sr_os = sr * DRIVE_OVERSAMPLE as f32;
         let d = drive_0_127 as f32 / 127.0;
         // Quadratic drive curve: nearly clean at low settings, hot at full, so
         // the knob is expressive across its range (a linear map saturates the
@@ -853,13 +918,13 @@ impl Drive {
         // roughly constant wet level for the blend.
         let post = 0.28 / (1.0 + d * 1.5);
         let voice = (800.0, 0.8, 4.0);
-        let tilt = Biquad::peak(1200.0, 0.8, 2.0, sr2);
+        let tilt = Biquad::peak(1200.0, 0.8, 2.0, sr_os);
         // The XG insert is an amp simulator, not a bank voicing: full ripple,
         // and the shared rhythm cabinet (the lead cab belongs to the CC0 bank).
         Drive::from_stages(
             0,
             false,
-            sr2,
+            sr_os,
             90.0,
             voice,
             g1,
@@ -867,7 +932,7 @@ impl Drive {
             tilt,
             g2,
             post,
-            cab_biquads(sr2),
+            cab_biquads(sr_os),
             cab_spec(),
         )
     }
@@ -893,15 +958,31 @@ impl Drive {
         y
     }
 
+    /// Run one base-rate sample through the `DRIVE_OVERSAMPLE`x shaper.
+    ///
+    /// The input is linearly upsampled from the previous sample; the intermediate
+    /// steps are evaluated purely to keep the nonlinearity's state advancing at
+    /// the internal rate, and only the sample-aligned output is kept. The
+    /// cabinet's lowpass cliff (the last two `cab` biquads) is the decimation
+    /// filter, so there is no separate downsampler.
+    #[inline]
+    fn step(&mut self, x: f32) -> f32 {
+        let prev = self.prev;
+        self.prev = x;
+        for i in 1..DRIVE_OVERSAMPLE {
+            let t = i as f32 / DRIVE_OVERSAMPLE as f32;
+            let _ = self.chain(prev + (x - prev) * t);
+        }
+        self.chain(x) * self.post
+    }
+
     fn process(&mut self, buf: &mut [f32]) {
         if !self.active {
-            // No amp NRPN authored on this channel: the exact original path,
-            // bit-identical (the inertness invariant). No slew, no branches.
+            // No amp NRPN authored on this channel: no slew, no branches — the
+            // inertness invariant is that an unauthored channel takes exactly the
+            // program-drive path.
             for x in buf.iter_mut() {
-                let mid = 0.5 * (self.prev + *x);
-                self.prev = *x;
-                let _ = self.chain(mid);
-                *x = self.chain(*x) * self.post;
+                *x = self.step(*x);
             }
             return;
         }
@@ -913,10 +994,7 @@ impl Drive {
             self.g1 += self.slew * (self.g1_target - self.g1);
             self.g2 += self.slew * (self.g2_target - self.g2);
             self.post += self.slew * (self.post_target - self.post);
-            let mid = 0.5 * (self.prev + *x);
-            self.prev = *x;
-            let _ = self.chain(mid);
-            *x = self.chain(*x) * self.post;
+            *x = self.step(*x);
         }
     }
 
@@ -926,7 +1004,7 @@ impl Drive {
     /// with `snap = true` right after a rebuild so the fresh insert starts at
     /// the authored rig instead of slewing up from its base voicing.
     fn apply_params(&mut self, cur: &[f32; AMP_PARAM_COUNT], snap: bool) {
-        let sr2 = self.sr2;
+        let sr_os = self.sr_os;
         let n = |i: usize| (cur[i] - 64.0) / 64.0; // in [-1, +0.984]
 
         // Drive (idx 0): gain, with a strictly-positive makeup trim on post.
@@ -938,24 +1016,24 @@ impl Drive {
         // Tone (idx 1): pre-clip voice EQ gain.
         let (vh, vq, vdb) = self.base.voice;
         self.voice
-            .retune_peak(vh, vq, vdb + AMP_EQ_DB * n(AMP_TONE), sr2);
+            .retune_peak(vh, vq, vdb + AMP_TONE_DB * n(AMP_TONE), sr_os);
 
         // Tightness (idx 2): pre-shaper high-pass corner, capped.
         let pre_hz =
             (self.base.pre_hz * 2f32.powf(AMP_TIGHT_OCT * n(AMP_TIGHT))).min(AMP_TIGHT_MAX_HZ);
-        self.pre.retune_highpass(pre_hz, 0.7, sr2);
+        self.pre.retune_highpass(pre_hz, 0.7, sr_os);
 
         // Body (idx 3) and Presence (idx 4): cabinet peak gains.
         let (b1h, b1q, b1db) = self.base.cab1;
-        self.cab[1].retune_peak(b1h, b1q, b1db + AMP_EQ_DB * n(AMP_BODY), sr2);
+        self.cab[1].retune_peak(b1h, b1q, b1db + AMP_EQ_DB * n(AMP_BODY), sr_os);
         let (b2h, b2q, b2db) = self.base.cab2;
-        self.cab[2].retune_peak(b2h, b2q, b2db + AMP_EQ_DB * n(AMP_PRES), sr2);
+        self.cab[2].retune_peak(b2h, b2q, b2db + AMP_EQ_DB * n(AMP_PRES), sr_os);
 
         // Cab Tone (idx 5): the anti-alias cliff corner, DOWNWARD only, so it
         // can only ever strengthen alias rejection (never trade it for brightness).
-        let f = 2f32.powf(n(AMP_CABTONE).min(0.0));
-        self.cab[3].retune_lowpass(self.base.cliff[0].0 * f, self.base.cliff[0].1, sr2);
-        self.cab[4].retune_lowpass(self.base.cliff[1].0 * f, self.base.cliff[1].1, sr2);
+        let f = 2f32.powf(AMP_CABTONE_OCT * n(AMP_CABTONE).min(0.0));
+        self.cab[3].retune_lowpass(self.base.cliff[0].0 * f, self.base.cliff[0].1, sr_os);
+        self.cab[4].retune_lowpass(self.base.cliff[1].0 * f, self.base.cliff[1].1, sr_os);
 
         // Snap the scalars to target on the first application (so a rig authored
         // at t=0 is in effect on the first sample) and after a rebuild; slew
@@ -6766,7 +6844,7 @@ mod tests {
                         if fh <= sr / 2.0 {
                             continue; // a true harmonic, not an alias
                         }
-                        let alias = fold(fold(fh, sr * 2.0), sr);
+                        let alias = fold(fold(fh, sr * DRIVE_OVERSAMPLE as f32), sr);
                         if !(100.0..=20_000.0).contains(&alias) {
                             continue;
                         }
@@ -6925,11 +7003,11 @@ mod tests {
             min_db,
         };
         let cases = [
-            c(AMP_TONE, 110.0, 0.02, 400.0, 1600.0, 127, 0, 1.4),
-            c(AMP_TIGHT, 82.4, 0.30, 40.0, 110.0, 0, 127, 1.4), // more low end at value 0
-            c(AMP_BODY, 150.0, 0.10, 350.0, 750.0, 127, 0, 10.0),
-            c(AMP_PRES, 150.0, 0.10, 2000.0, 3400.0, 127, 0, 10.0),
-            c(AMP_CABTONE, 150.0, 0.10, 2500.0, 3600.0, 127, 0, 9.0), // downward-only
+            c(AMP_TONE, 110.0, 0.02, 400.0, 1600.0, 127, 0, 2.4),
+            c(AMP_TIGHT, 82.4, 0.30, 40.0, 110.0, 0, 127, 3.0), // more low end at value 0
+            c(AMP_BODY, 150.0, 0.10, 350.0, 750.0, 127, 0, 22.0),
+            c(AMP_PRES, 150.0, 0.10, 2000.0, 3400.0, 127, 0, 22.0),
+            c(AMP_CABTONE, 150.0, 0.10, 2500.0, 3600.0, 127, 0, 13.0), // downward-only
         ];
         for prog in [29u8, 30] {
             for alt in [false, true] {
@@ -6981,6 +7059,269 @@ mod tests {
         }
     }
 
+    /// Diagnostic (`--ignored --nocapture`): where is the Drive knob's REAL
+    /// ceiling? `AMP_DRIVE_K` was first set to 1.2 on a review's *prediction*
+    /// that 2.0 would breach the −40 dBc alias budget; that prediction was never
+    /// measured. This sweeps candidate exponents through the same fold-bin logic
+    /// `amp_drive_knob_holds_alias_floor` asserts, over both programs, both banks
+    /// and three fundamentals, and reports the worst alias for each — so the
+    /// shipped value is set by measurement instead of by inherited caution.
+    #[test]
+    #[ignore]
+    fn amp_drive_ceiling_sweep() {
+        let sr = 44100.0;
+        let fold = |f: f32, fs: f32| {
+            let r = f % fs;
+            if r > fs / 2.0 {
+                fs - r
+            } else {
+                r
+            }
+        };
+        let n_max = (127.0 - 64.0) / 64.0; // the knob's top end
+        println!("\n k     worst alias (dBc)   headroom vs -40   verdict");
+        for k in [1.2f32, 1.5, 1.8, 2.0, 2.2, 2.5, 3.0] {
+            let mut worst_all = -200.0f32;
+            for prog in [29u8, 30] {
+                for alt in [false, true] {
+                    for f0 in [997.0f32, 1301.0, 1763.0] {
+                        let mut d = Drive::new(prog, alt, sr);
+                        // Apply the candidate curve directly (active stays false,
+                        // so `process` reads these scalars on the original path).
+                        d.g1 = d.base.g1 * 2f32.powf(k * n_max);
+                        d.g2 = d.base.g2 * 2f32.powf(0.5 * k * n_max);
+                        d.post = d.base.post * 2f32.powf(-AMP_DRIVE_POST_C * n_max);
+                        let mut buf: Vec<f32> = (0..(sr as usize))
+                            .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
+                            .collect();
+                        d.process(&mut buf);
+                        let seg = &buf[(0.2 * sr) as usize..];
+                        let m0 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+                        for h in 2..=80u32 {
+                            let fh = h as f32 * f0;
+                            if fh <= sr / 2.0 {
+                                continue;
+                            }
+                            let alias = fold(fold(fh, sr * DRIVE_OVERSAMPLE as f32), sr);
+                            if !(100.0..=20_000.0).contains(&alias) {
+                                continue;
+                            }
+                            if (alias / f0 - (alias / f0).round()).abs() * f0 < 8.0 {
+                                continue;
+                            }
+                            let rel = 20.0 * (crate::testutil::mag_at(seg, sr, alias) / m0).log10();
+                            worst_all = worst_all.max(rel);
+                        }
+                    }
+                }
+            }
+            let g1x = 2f32.powf(k * n_max);
+            println!(
+                "{k:4.1}   {worst_all:8.1}          {:+6.1}          {}   (g1 x{g1x:.2} at 127)",
+                -40.0 - worst_all,
+                if worst_all <= -40.0 { "OK " } else { "OVER" }
+            );
+        }
+    }
+
+    /// Diagnostic (`--ignored --nocapture`): how much WIDER can the post-clip
+    /// knobs go? Body/Presence/Tone are linear cabinet EQ and Cab Tone only ever
+    /// darkens, so none of them is alias-bounded — the real limits are range
+    /// safety (finite, DC-free, not pinned into clip) and musical usefulness.
+    /// Reports the spread each candidate range buys, plus peak and DC.
+    #[test]
+    #[ignore]
+    fn amp_range_headroom_sweep() {
+        let sr = 44100.0;
+        let n_max = (127.0 - 64.0) / 64.0;
+        let probe = sine(sr, 0.6, 150.0, 0.10);
+
+        println!("\n--- cabinet EQ swing (Body, cab[1]) ---");
+        println!(" +/-dB   spread(dB)   peak    DC        verdict");
+        for eq in [9.0f32, 12.0, 15.0, 18.0] {
+            let mut spread_min = 999.0f32;
+            let mut peak_max = 0.0f32;
+            let mut dc_max = 0.0f32;
+            for prog in [29u8, 30] {
+                for alt in [false, true] {
+                    let band = |sign: f32| {
+                        let mut d = Drive::new(prog, alt, sr);
+                        let (h, q, db) = d.base.cab1;
+                        d.cab[1].retune_peak(h, q, db + eq * sign * n_max, d.sr_os);
+                        let mut b = probe.clone();
+                        d.process(&mut b);
+                        let seg = &b[(0.2 * sr) as usize..];
+                        (
+                            20.0 * crate::testutil::spectral_band_rms(seg, sr, 350.0, 750.0)
+                                .max(1e-12)
+                                .log10(),
+                            b.iter().fold(0.0f32, |m, x| m.max(x.abs())),
+                            crate::testutil::dc_offset(seg).abs(),
+                        )
+                    };
+                    let (hi, p1, d1) = band(1.0);
+                    let (lo, p2, d2) = band(-1.0);
+                    spread_min = spread_min.min(hi - lo);
+                    peak_max = peak_max.max(p1.max(p2));
+                    dc_max = dc_max.max(d1.max(d2));
+                }
+            }
+            println!(
+                "{eq:6.0}   {spread_min:8.1}   {peak_max:6.3}  {dc_max:.2e}   {}",
+                if peak_max < 1.5 && dc_max < 1e-3 {
+                    "safe"
+                } else {
+                    "CHECK"
+                }
+            );
+        }
+
+        println!("\n--- JOINT pre-clip ceiling: Tone swing at Drive 127 ---");
+        println!(" toneDB   worst alias(dBc)   verdict   (both pre-clip knobs at max)");
+        {
+            let fold = |f: f32, fs: f32| {
+                let r = f % fs;
+                if r > fs / 2.0 {
+                    fs - r
+                } else {
+                    r
+                }
+            };
+            let n_max = (127.0 - 64.0) / 64.0;
+            for tone_db in [4.0f32, 5.0, 6.0, 7.0, 8.0, 9.0] {
+                let mut worst_all = -200.0f32;
+                for prog in [29u8, 30] {
+                    for alt in [false, true] {
+                        for f0 in [997.0f32, 1301.0, 1763.0] {
+                            let mut d = Drive::new(prog, alt, sr);
+                            d.g1 = d.base.g1 * 2f32.powf(AMP_DRIVE_K * n_max);
+                            d.g2 = d.base.g2 * 2f32.powf(0.5 * AMP_DRIVE_K * n_max);
+                            d.post = d.base.post * 2f32.powf(-AMP_DRIVE_POST_C * n_max);
+                            let (vh, vq, vdb) = d.base.voice;
+                            d.voice.retune_peak(vh, vq, vdb + tone_db * n_max, d.sr_os);
+                            let mut b: Vec<f32> = (0..(sr as usize))
+                                .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
+                                .collect();
+                            d.process(&mut b);
+                            let seg = &b[(0.2 * sr) as usize..];
+                            let m0 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+                            for h in 2..=80u32 {
+                                let fh = h as f32 * f0;
+                                if fh <= sr / 2.0 {
+                                    continue;
+                                }
+                                let alias = fold(fold(fh, sr * DRIVE_OVERSAMPLE as f32), sr);
+                                if !(100.0..=20_000.0).contains(&alias) {
+                                    continue;
+                                }
+                                if (alias / f0 - (alias / f0).round()).abs() * f0 < 8.0 {
+                                    continue;
+                                }
+                                worst_all = worst_all.max(
+                                    20.0 * (crate::testutil::mag_at(seg, sr, alias) / m0).log10(),
+                                );
+                            }
+                        }
+                    }
+                }
+                println!(
+                    "{tone_db:6.0}   {worst_all:12.1}       {}",
+                    if worst_all <= -40.0 { "OK " } else { "OVER" }
+                );
+            }
+        }
+
+        println!("\n--- WORST CASE: Presence boost at Drive 127 + Tone boost max ---");
+        println!(" presDB   worst alias(dBc)   verdict");
+        {
+            let fold = |f: f32, fs: f32| {
+                let r = f % fs;
+                if r > fs / 2.0 {
+                    fs - r
+                } else {
+                    r
+                }
+            };
+            let nm = (127.0 - 64.0) / 64.0;
+            for pres_db in [3.0f32, 4.0, 5.0, 6.0, 9.0, 12.0, 15.0] {
+                let mut worst_all = -200.0f32;
+                for prog in [29u8, 30] {
+                    for alt in [false, true] {
+                        for f0 in [997.0f32, 1301.0, 1763.0] {
+                            let mut d = Drive::new(prog, alt, sr);
+                            d.g1 = d.base.g1 * 2f32.powf(AMP_DRIVE_K * nm);
+                            d.g2 = d.base.g2 * 2f32.powf(0.5 * AMP_DRIVE_K * nm);
+                            d.post = d.base.post * 2f32.powf(-AMP_DRIVE_POST_C * nm);
+                            let (vh, vq, vdb) = d.base.voice;
+                            d.voice.retune_peak(vh, vq, vdb + AMP_TONE_DB * nm, d.sr_os);
+                            let (ph, pq, pdb) = d.base.cab2;
+                            d.cab[2].retune_peak(ph, pq, pdb + pres_db * nm, d.sr_os);
+                            let mut b: Vec<f32> = (0..(sr as usize))
+                                .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
+                                .collect();
+                            d.process(&mut b);
+                            let seg = &b[(0.2 * sr) as usize..];
+                            let m0 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+                            for h in 2..=80u32 {
+                                let fh = h as f32 * f0;
+                                if fh <= sr / 2.0 {
+                                    continue;
+                                }
+                                let a = fold(fold(fh, sr * DRIVE_OVERSAMPLE as f32), sr);
+                                if !(100.0..=20_000.0).contains(&a) {
+                                    continue;
+                                }
+                                if (a / f0 - (a / f0).round()).abs() * f0 < 8.0 {
+                                    continue;
+                                }
+                                worst_all = worst_all
+                                    .max(20.0 * (crate::testutil::mag_at(seg, sr, a) / m0).log10());
+                            }
+                        }
+                    }
+                }
+                println!(
+                    "{pres_db:6.0}   {worst_all:12.1}       {}",
+                    if worst_all <= -40.0 { "OK " } else { "OVER" }
+                );
+            }
+        }
+
+        println!("\n--- Cab Tone floor (cliff corner multiplier at knob 0) ---");
+        println!(" floor   corner(Hz)   HF spread(dB)   peak    verdict");
+        for floor in [0.5f32, 0.4, 0.3, 0.25] {
+            let mut spread_min = 999.0f32;
+            let mut peak_max = 0.0f32;
+            for prog in [29u8, 30] {
+                for alt in [false, true] {
+                    let meas = |f: f32| {
+                        let mut d = Drive::new(prog, alt, sr);
+                        d.cab[3].retune_lowpass(d.base.cliff[0].0 * f, d.base.cliff[0].1, d.sr_os);
+                        d.cab[4].retune_lowpass(d.base.cliff[1].0 * f, d.base.cliff[1].1, d.sr_os);
+                        let mut b = probe.clone();
+                        d.process(&mut b);
+                        let seg = &b[(0.2 * sr) as usize..];
+                        (
+                            20.0 * crate::testutil::spectral_band_rms(seg, sr, 2500.0, 3600.0)
+                                .max(1e-12)
+                                .log10(),
+                            b.iter().fold(0.0f32, |m, x| m.max(x.abs())),
+                        )
+                    };
+                    let (bright, p1) = meas(1.0);
+                    let (dark, p2) = meas(floor);
+                    spread_min = spread_min.min(bright - dark);
+                    peak_max = peak_max.max(p1.max(p2));
+                }
+            }
+            println!(
+                "{floor:6.2}   {:8.0}   {spread_min:11.1}   {peak_max:6.3}   {}",
+                4000.0 * floor,
+                if peak_max < 1.5 { "safe" } else { "CHECK" }
+            );
+        }
+    }
+
     /// AC8: the Drive knob's TOP end is bounded by the alias floor, not taste.
     /// Runs `drive_alias_floor`'s exact fold-bin logic at Drive 0/64/127 across
     /// both programs, both banks and three fundamentals, and asserts the shipped
@@ -6996,12 +7337,32 @@ mod tests {
                 r
             }
         };
-        for drive in [0u8, 64, 127] {
+        // Sweep every knob that can move the fold-back floor, not just Drive.
+        // Two mechanisms, both real:
+        //  * PRE-clip (Drive, Tone boost) drives the shaper harder, generating
+        //    more of the very-high-order harmonics that fold back.
+        //  * POST-clip Presence is a boost centred at 2.6-2.8 kHz, which lifts
+        //    whatever alias already sits in that band RELATIVE to a fundamental
+        //    that sits below it — so it can breach the budget without creating a
+        //    single new alias product.
+        // The last row is the genuine worst case: everything that costs headroom
+        // at maximum together.
+        for (drive, tone, pres) in [
+            (0u8, 64u8, 64u8),
+            (64, 64, 64),
+            (127, 64, 64),
+            (64, 127, 64),
+            (64, 0, 64),
+            (64, 64, 127),
+            (127, 127, 127),
+        ] {
             for prog in [29u8, 30] {
                 for alt in [false, true] {
                     for f0 in [997.0f32, 1301.0, 1763.0] {
                         let mut p = [64u8; AMP_PARAM_COUNT];
                         p[AMP_DRIVE] = drive;
+                        p[AMP_TONE] = tone;
+                        p[AMP_PRES] = pres;
                         let input = sine(sr, 1.0, f0, 0.5);
                         let buf = amp_settled(prog, alt, sr, p, &input);
                         let seg = &buf[(0.2 * sr) as usize..];
@@ -7012,7 +7373,7 @@ mod tests {
                             if fh <= sr / 2.0 {
                                 continue;
                             }
-                            let alias = fold(fold(fh, sr * 2.0), sr);
+                            let alias = fold(fold(fh, sr * DRIVE_OVERSAMPLE as f32), sr);
                             if !(100.0..=20_000.0).contains(&alias) {
                                 continue;
                             }
@@ -7024,7 +7385,7 @@ mod tests {
                         }
                         assert!(
                             worst <= -40.0,
-                            "Drive {drive} prog {prog} {} f0 {f0:.0}: alias {worst:.1} dBc > -40",
+                            "Drive {drive} Tone {tone} Pres {pres} prog {prog} {} f0 {f0:.0}: alias {worst:.1} dBc > -40",
                             if alt { "alt" } else { "main" }
                         );
                     }
@@ -7096,12 +7457,18 @@ mod tests {
         let sr = 44100.0;
         // `post` is a PARTIAL makeup trim (§2.2): the level error depends on
         // input level and pitch, not the knob alone, so no static law flattens
-        // it — loud input wants less trim, quiet input more. Measured worst case
-        // is 5.18 dB (whisper 0.05 input) / ~4 dB at playing level; the tolerance
-        // catches a GROSS regression (e.g. compensation disabled ≈ 12 dB swing),
-        // it does not claim perfect level-matching, which the design does not
+        // it — loud input wants less trim, quiet input more.
+        //
+        // Re-baselined 6.0 -> 9.0 dB when the Drive span widened from x2.3 to
+        // x3.9 (2026-07-23). This is NOT a check weakened to make a failure go
+        // away: `AMP_DRIVE_POST_C` was re-swept and set to its measured minimax
+        // (8.21 dB worst case, vs 9.40 dB either side of it), and the tolerance
+        // then follows the wider knob it now has to cover. The check still does
+        // its job — catching a GROSS regression such as compensation disabled or
+        // inverted — and it still does not claim perfect level-matching, which
+        // the design does not
         // promise. Reported, not asserted away — this is the honest residual.
-        let tol_db = 6.0;
+        let tol_db = 9.0;
         for prog in [29u8, 30] {
             for alt in [false, true] {
                 for f0 in [147.0f32, 330.0] {

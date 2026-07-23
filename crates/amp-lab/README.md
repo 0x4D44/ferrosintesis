@@ -4,13 +4,15 @@ Twiddle the driven-guitar amp knobs live, over a looping backing track, to decid
 what GM29/GM30 should default to (MM-REQ-KILN-00028 Part B).
 
 ```
-cd crates/amp-lab
-cargo run --release
+cargo run --release -p amp-lab     # from the repo root
 ```
 
-It is **its own workspace**, not a member of the repo's — see the note in
-`Cargo.toml`. Build it from this directory; `cargo test --workspace` at the repo
-root neither builds nor needs it.
+It is a **workspace member**, so a bare `cargo build --release` at the repo root
+builds it too. But it drags in egui + cpal (~200 crates) that no shipped crate
+needs, so the integration gate runs `--workspace --exclude amp-lab` (see
+`.deltic-integrate.toml`) and does not compile that tree on every integration.
+When you touch the lab, lint and test it explicitly: `cargo clippy -p amp-lab`,
+`cargo test -p amp-lab`.
 
 ## What it does
 

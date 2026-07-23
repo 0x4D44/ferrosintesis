@@ -7,10 +7,17 @@ version = 1
 # as part of a release, not per task. Per-integration identity rides the git SHA.
 version_bump = "release-only"
 
+# `amp-lab` is a workspace member (so a root `cargo build --release` builds it) but a
+# dev-only GUI: it drags in egui + cpal (~200 crates) that no shipped crate needs.
+# clippy/test therefore run `--workspace --exclude amp-lab`, so the gate does not
+# compile that tree on every integration. `fmt --all` keeps it, since fmt is a cheap
+# parse with no build cost and keeps the lab formatted. The lab has its own tests and
+# rides a small, sealed slice of the ferrosintesis realtime API; run its checks with
+# `cargo clippy -p amp-lab` / `cargo test -p amp-lab` when touching it.
 fallback = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
-  { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },
-  { program = "cargo", args = ["test", "--workspace", "--locked"] },
+  { program = "cargo", args = ["clippy", "--workspace", "--exclude", "amp-lab", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["test", "--workspace", "--exclude", "amp-lab", "--locked"] },
 ]
 
 [[component]]
@@ -18,6 +25,6 @@ name = "workspace"
 paths = ["crates/", "tools/"]
 gate = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
-  { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },
-  { program = "cargo", args = ["test", "--workspace", "--locked"] },
+  { program = "cargo", args = ["clippy", "--workspace", "--exclude", "amp-lab", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["test", "--workspace", "--exclude", "amp-lab", "--locked"] },
 ]

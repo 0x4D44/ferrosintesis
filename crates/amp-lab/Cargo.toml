@@ -1,11 +1,10 @@
 # Dev tool for choosing the driven-guitar defaults by ear (Part B).
 #
-# Deliberately its OWN workspace, not a member of the repo's: `cargo test
-# --workspace` at the repo root is the integration gate, and pulling egui + cpal
-# into it would make every future integration build a ~200-crate tree for a tool
-# it never runs. Costs this crate its own lock file; saves everyone else the gate.
-[workspace]
-
+# A workspace MEMBER so a bare `cargo build --release` at the repo root builds it.
+# It pulls in egui + cpal (~200 crates), which the shipped crates do not — so the
+# integration gate in `.deltic-integrate.toml` runs `--workspace --exclude
+# amp-lab` to avoid compiling that tree on every integration for a tool it never
+# gates. The release profile (LTO) is inherited from the workspace root.
 [package]
 name = "amp-lab"
 version = "0.1.0"
@@ -16,6 +15,3 @@ publish = false
 eframe = { version = "0.28", default-features = false, features = ["glow", "default_fonts"] }
 cpal = "0.15"
 ferrosintesis = { path = "../ferrosintesis" }
-
-[profile.release]
-opt-level = 3

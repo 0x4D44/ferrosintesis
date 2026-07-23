@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00042 — Karplus-Strong plucked decay is 2–12x too fast and steepens with register: the fixed-cutoff in-loop damper's f³ law plus the f^-0.55 t60 key-scale kill 22 GM programs' ring
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth
@@ -21,6 +21,7 @@
 - **State history:**
   - Open (2026-07-22, raised from the M-CAL v3 certified full-128 derivation run; headline finding of `wrk_docs/2026.07.22 - M-CAL v3 certified derivation report.md`, verified independently against the raw measurement TSVs and the source)
   - Fixed (2026-07-23, Claude Opus 4.8 (1M) — relative-budget `DamperHold` in `crates/ferrosintesis/src/voices.rs`; median register tilt 5.00x → 3.42x vs references 1.72–1.82x, koto 14.1x → 1.0x; both vetted rendered identity oracles green; new closed-form tilt oracle + rendered `damper_hold_preserves_instrument_identity`. Six of the 22 programs are `Off` opt-outs deferred to follow-ups: GM6/GM7 (piano family in flight), GM33/GM35 (KILN-00048), the DRIVE_LEAD driven-guitar CC0 alt-bank sustainer (KILN-00049). Top-register identity residual is KILN-00050. Fixing commit on branch `847510e` (pre-integration; awaits independent two-eyes closure). Suite 619 pass / 0 fail.)
+  - Closed (2026-07-23, independent two-eyes verify by **gpt-5.6-sol** (Codex, a different model family) — verdict CLOSE-WITH-RESIDUAL, high confidence, scribed by Claude Opus 4.8 (1M) per the two-eyes rule since Opus was the fixer. Root cause confirmed addressed: raising the loop-damper corner with frequency bounds the one-pole's ~½(f/fc)² per-trip loss so the f³ collapse cannot form. Both focused oracles re-ran green on trunk `aadcd57` (`ks_decay_law_holds_across_register`, `damper_hold_preserves_instrument_identity` — the latter confirmed non-tautological: it renders real voices and requires positive early spectral-centroid contrast). Residual split to **KILN-00052**: the tilt oracle checks the closed-form `corner_scale` helper, not the *rendered* `Pluck::new` path, so a future rewiring that dropped the hold in the render loop would not be caught. GM6/GM7 modeled paths remain `Off` (harpsichord KILN-00044 / clavinet KILN-00043-parked); GM33/35, DRIVE_LEAD, top-register identity already tracked as KILN-00048/00049/00050.)
 
 ## Observation
 

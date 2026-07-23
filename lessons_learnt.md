@@ -78,10 +78,11 @@ belong in `CLAUDE.md`, not here.
     SC-55, but that is faster decay, not level — use an early-window RMS for plucked/percussive, whole-note only
     for sustained); instantaneous PEAK is too spiky.
   - `voices.rs::percentile` is NOT nearest-rank despite its doc comment — its body is `sorted[floor(q*(len-1))]`,
-    so at n=9 `percentile(x, 0.95)` returns the SECOND-largest, not the max. Reusing it for the
-    instrument-balance statistic put median 0.41 / max 18.77 dB of error into the derived trims; for a
-    single-note window use an explicit `max` (`crates/ferrosintesis-cli/examples/calmeter.rs` documents the
-    three conventions and why they are not approximations of each other below n≈20).
+    so at n=9 `percentile(x, 0.95)` returns the SECOND-largest, not the max (MM-BUG-KILN-00055; the misleading
+    comment is still armed). Reusing it for the instrument-balance statistic put median 0.41 / max 18.77 dB of
+    error into the derived trims; for a single-note window use an explicit `max`
+    (`crates/ferrosintesis-cli/examples/calmeter.rs` documents the three conventions and why they are not
+    approximations of each other below n≈20).
   - `voices::VEL_LEVEL_EXP` is PROGRAM-indexed, so a program whose samples-ON and samples-OFF voices have
     different RAW velocity laws can't be compensated for both from the table (GM76: samples-on
     `BottleLoopVoice` k≈0.39, samples-off modeled Wind bottle k≈2.49). Wrap the MODEL in `ScaledVoice` inside its
@@ -231,11 +232,12 @@ belong in `CLAUDE.md`, not here.
     `SawStack`, and designed in parallel one added a stack-level `vib_depth` the other deleted. Per-family review
     passed both; only a cross-section critic caught it. Add an explicit assembly/critic pass over shared structs
     (`SawStack`, `Layer`, `fx_profile`, the golden fixture) before trusting the union.
-  - `deltic timeout <s> python - <<EOF` hangs — deltic timeout does not forward heredoc stdin, so python drops
-    into the REPL (`_pyrepl` crash-loops on the invalid console handle) until the timeout kills it (exit 124).
-    Write the probe to a temp `.py`. Likewise `deltic timeout <s> bash script.sh` hands the script to a bash whose
-    exported-function children can't exec `D:/...` paths ("No such file or directory" on an exe that exists) — run
-    repo shell scripts via the harness Git Bash directly.
+  - `deltic timeout <s> python - <<EOF` hangs — deltic timeout gives the child `Stdio::null()` (no stdin
+    passthrough, no opt-in flag), so on Windows python takes the REPL path and `_pyrepl` crash-loops on the
+    invalid console handle until the deadline (exit 124). STILL TRUE — MDK-BUG-KILN-00115. Write the probe to a
+    temp `.py`; redirecting (`… < file`) does NOT help (it redirects deltic's own stdin). (The old "`deltic
+    timeout bash script.sh` can't exec `D:/…` paths" gotcha was WSL-bash program resolution, not exec/path
+    mangling — FIXED in MDK-BUG-KILN-00107, so current deltic resolves the caller's Git Bash correctly.)
 
 - 2026.07.17 — **Prove an estimator can SEE the effect before pinning a threshold — zero-crossing pitch and log-bin `centroid` lie** (`testutil.rs`).
   - Pitch: zero-crossing counters read the 2nd harmonic leaking through their lowpass (452.5 Hz for a true 440) —
@@ -411,10 +413,12 @@ belong in `CLAUDE.md`, not here.
     Q 120–150 has a ~7 ms ring time against an 18 ms beat period — decorrelated before one cycle, no beat
     survives. Ring time Q/(πf) must span the beat period (Q ≈ 800 here); Δf > f/Q alone is not sufficient.
 
-- 2026.07.13 — **`render_drum` hardcodes `Kit::V1` but the engine ships V3 — every "V3" drum oracle measures a dead voice** (`drums.rs:2615`).
-  - `engine.rs` forces V3, so `china_splash_crash_are_distinct`, `crash_blooms_hat_does_not` and friends were all
-    measuring the legacy voice the engine never selects. Any new drum oracle in the house idiom inherits the trap:
-    render via `render_drum_kit(…, Kit::V3)`.
+- 2026.07.13 — **`render_drum` hardcodes `Kit::V1` while the DEFAULT kit is V3 — a coverage gap, not a dead-voice test** (`drums.rs:2615`, MM-BUG-KILN-00054).
+  - Both kits SHIP: V3 is the default but `engine.rs:2932` selects V1 on ch-10 PC 25, and Slipstream authors it,
+    so the ~13 `render_drum` oracles are valid V1 oracles — the gap is that the 6 behaviours V3 re-voices (keys
+    36/38/49/51/52/55) have no V3 oracle. New drum oracles for the default kit must use `render_drum_kit(…,
+    Kit::V3)`. (The false "the legacy voice the engine never selects" wording also lives in the `drums.rs:3259`
+    source comment — fix it there too.)
   - A golden can PIN a bug: `drums.rs:v3_toms_settle_near_table_pitch` asserted key 48 → 240 Hz, which encoded the
     collapsed `47 | 48 | 50 => tom(240.0)` arm (the top three GM toms were bit-identical but for pan). **Fix a
     golden's EXPECTED value, never its tolerance.** Corollary invariant now enforced in `Modal::new`:
@@ -429,7 +433,10 @@ belong in `CLAUDE.md`, not here.
     debug↔release and was "re-pinned" for months, each pin reddening the other profile. Freeze AGGREGATE features
     (rms / centroid / band energy) with a relative tolerance — they average out per-sample reorder noise (~1e-7
     across profiles) yet still catch contamination (voices differ 30–130%). In-build RELATIVE bit-compares (two
-    renders in ONE build) stay valid; `drums.rs`'s frozen-hash goldens are the same class, green today but latent.
+    renders in ONE build) stay valid. `drums.rs`'s goldens were since MIGRATED to `RenderSignature`; the last
+    raw-float-hash golden is now `sampler.rs:non_guitar_la_render_is_pinned` (MM-BUG-KILN-00057) — though it
+    tested green in BOTH debug and release here, so its risk is fragility + no failure diagnostic, not a
+    demonstrated flip.
   - The feared cross-BINARY LTO divergence did NOT happen: two release binaries linking the same rlib produced
     byte-identical `.opus` for all 6 demo tracks, so a cross-binary byte-compare IS a usable parity oracle here
     (`ropusenc`'s Ogg serial is the fixed constant `0xC0DEC0DE`). When porting, capture the golden from the OLD
@@ -438,9 +445,11 @@ belong in `CLAUDE.md`, not here.
     `.gitattributes` (`core.autocrlf=true` here rewrites LF→CRLF and desynchronises every length prefix); verify
     with `git cat-file -p :<file> | cmp - <file>`.
 
-- 2026.07.10 — **Same-pitch overlapping notes chop the re-strike on kill-newest GM synths — clamp at write time** (`Score._resolve_overlaps()`).
-  - ferrosintesis matches note-offs oldest-first, so the bug is invisible locally. 23 album engines now carry the
-    write-time clamp; **Hollow Hill's still does not** (verified 2026.07.23) and will reintroduce it if regenerated.
+- 2026.07.10 — **Same-pitch overlapping notes chop the re-strike on kill-newest GM synths — clamp at write time** (`Score._resolve_overlaps()`, MM-BUG-KILN-00056).
+  - ferrosintesis matches note-offs oldest-first, so the bug is invisible locally. Measured 2026.07.24: 16 album
+    writers carry the clamp, **6 do NOT**, and those 6 have 10,398 overlaps COMMITTED today (not "if regenerated")
+    — Riverwake alone is 8,426 (81%), Hollow Hill only 580; also the standalone `the_iron_tide.py`. Back-porting
+    the clamp RE-VOICES those albums (it truncates the earlier note), so it is not a free hygiene fix.
   - A movement-verified render does not verify the ALBUM: engines with one seeded RNG stream re-roll every
     downstream jitter when any upstream movement changes an event count, so per-movement click scans and velocity
     means shift on final assembly. Always re-measure the assembled build. Corollary: a note authored AT a section

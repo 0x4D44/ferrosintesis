@@ -95,3 +95,24 @@ the render-diff inventory and an ear pass, and should extend
 - Depends indirectly on MM-BUG-KILN-00048: if the velocity→brightness coupling is moved
   out of the loop damper (as 00048 proposes), the held corner's relationship to timbre
   changes and this ordering question should be re-derived.
+
+## Amplified by the 2026.07.23 plucked t60 re-fit
+
+The plucked-family t60 re-fit (matching the SC-55/S-YXG50 ring; nylon 3.8→7.7, steel
+4.5→7.0, etc.) makes this residual materially worse. A longer `t60` lowers the KILN-00042
+hold's crossover (smaller `A` → larger `fc_min`), so the hold now engages at the PLAYING
+register (key ~60), not just the top octave — and where it engages, the bright-independent
+held corner compresses the brightness SPREAD between neighbours. Measured (key 60, early
+window): steel-vs-nylon authored contrast 0.39 → shipped ~0.08 under the hold. Consequences
+already visible in the oracles:
+- `damper_hold_preserves_instrument_identity` was re-scoped from a 55%-magnitude-retention
+  bar to sign-preservation only, because no honest magnitude bound survives the re-fit's
+  range of hold engagement.
+- `sitar_shamisen_koto_have_distinct_pluck_presets`: the ringing banjo's upper partials now
+  rival the sitar's jawari; the sitar assertion dropped to a marginal cent/t60 edge.
+
+So this is now a **playing-register** brightness-homogenisation of the whole modelled
+plucked family, not just a top-octave curiosity. Bumping Severity considerations: still
+Low-ish audibly (the owner approved the re-fit's rings by ear, with each instrument in
+isolation), but it is the reason the family's *mutual* contrast has narrowed. The fix is
+unchanged (per-instrument voicing, or a bright-dependent held corner); its value rose.

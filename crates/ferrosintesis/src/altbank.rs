@@ -1727,8 +1727,14 @@ mod tests {
             d_arco <= 3.0,
             "pizz louder than arco ({d_arco} dB) — would jump out"
         );
+        // Loose family-range sanity bound widened 10 -> 12 dB for the 2026.07.23
+        // plucked t60 re-fit: the DEFAULT-bank HARP (GM46, t60 4.5 -> 6.0) now rings
+        // louder, so the frozen alt-bank PIZZ sits further below it (-9.3 -> -11.0 dB).
+        // The load-bearing clause (pizz must not exceed arco, d_arco <= 3.0) is
+        // untouched; a frozen reference for this clause is tracked under the same
+        // structural note as KILN-00042.
         assert!(
-            d_harp.abs() <= 10.0,
+            d_harp.abs() <= 12.0,
             "pizz {d_harp} dB off the HARP pluck reference"
         );
         // (b) per-instrument bodies 41/42/43 vs violin 40 at A3 (key 57), same

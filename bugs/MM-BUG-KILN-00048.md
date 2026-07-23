@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00048 — the Karplus-Strong loop damper's corner scales with VELOCITY, so a plucked string's decay RATE depends on how hard you pluck it; today it is masked by the f³ collapse, and it blocks KILN-00042 on the dark basses
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,9 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) — surfaced while fixing KILN-00042; it is the reason GM33/GM35 had to be excluded from that fix)
+- **State history:**
+  - Open (2026-07-22, raised by Claude Opus 4.8 (1M) — surfaced while fixing KILN-00042; it is the reason GM33/GM35 had to be excluded from that fix)
+  - Fixed (2026-07-24, Claude Opus 4.8 (1M), designed with Fable via HLD `wrk_docs/2026.07.23 - HLD - KS damper velocity decouple + bass reconciliation (KILN-00048-00045).md`. The KS loop damper corner is now ANCHORED at its vel-100 value (`KS_ANCHOR_VN`, `crates/ferrosintesis/src/voices.rs`), so decay RATE is a function of pitch and t60 alone; the velocity→brightness the damper used to supply is transferred ONCE onto the excitation (`pick_lp`, with only the floor-truncated share spilling to `out_lp`). Bit-identical at vel 100 by construction (`v2_untouched_pluck_signatures_are_stable` green). Two bugs in the transfer surfaced in implementation and were caught by Fable on re-escalation: (a) applying the factor to pick AND out was t² for dual-filter presets (koto/shamisen) — fixed to single-application; (b) the shortfall denominator must be floored at 300 so a pre-decouple wound-bass clip is not double-counted. `VEL_LEVEL_EXP` re-derived for the plucked family via `velocity_census`; a machine-checked [1.5, 2.35] anti-papering bound (`pluck_vel_level_exp_within_anti_papering_bound`) replaces the informal 2.2 red line. Koto (the darkest, longest-ring preset) needed a pitch-relative pp excitation floor (`KS_PICK_F0_FLOOR`, item 4) plus a bound-capped e=2.35 to hold the square law. Regression coverage: `ks_decay_rate_is_velocity_invariant` (a RENDERED end-to-end oracle for the velocity-decouple property — a rewiring that re-coupled velocity into decay trips it; it does NOT cover the register-tilt hold, so KILN-00052's rendered tilt guard is still its own item) + the square law + the bound test, all green. **The GM33/GM35 hold-flip — the exclusion-lift this bug names — is DEFERRED to §3 (MM-BUG-KILN-00045):** flipping them exposes a velocity-KEY-dependent sub/mwah LEVEL bend no scalar `VEL_LEVEL_EXP` can fit (FRETLESS spread 0.58), which is §3's domain, and the final landing sequence groups the flip WITH that fix. The decay-rate coupling — the actual defect here — is gone regardless of the hold state, proven by the rendered oracle. Fixing commit on this task branch; awaits independent two-eyes closure.)
 
 ## Observation
 

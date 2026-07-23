@@ -395,6 +395,33 @@ mod tests {
         );
     }
 
+    /// KILN-00048 anti-papering bound: no `Pluck`-rendered program's
+    /// `VEL_LEVEL_EXP` may leave [1.5, 2.35]. A Pluck's excitation is level-exact
+    /// (∝ v), so `e − 2` IS the onset-law distortion the compensation buys, and
+    /// 0.35 matches the reference hardware's own worst per-patch velocity spread
+    /// (SC-55 per-program k ranges 1.67–2.06 on this estimator). An entry past
+    /// 2.35 means the pp/ff spectral swing is out of family — the fix is the
+    /// voicing (a pitch-relative pp excitation floor, `KS_PICK_F0_FLOOR`), never
+    /// a fatter table. This machine-checks what was the informal 2.2 red line
+    /// (KILN-00048 Tripwire 2). koto (107) sits AT the bound with the pitch floor
+    /// closing the remainder; t[28]/t[106] ride just under it — all named.
+    #[test]
+    fn pluck_vel_level_exp_within_anti_papering_bound() {
+        // Programs dispatched through `Pluck` (the KILN-00042 in-scope set).
+        const PLUCK_PROGRAMS: [u8; 23] = [
+            6, 7, 15, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 45, 46, 104, 105,
+            106, 107,
+        ];
+        for p in PLUCK_PROGRAMS {
+            let e = crate::voices::VEL_LEVEL_EXP[p as usize];
+            assert!(
+                (1.5..=2.35).contains(&e),
+                "GM{p} VEL_LEVEL_EXP {e:.3} outside the [1.5, 2.35] anti-papering bound — \
+                 a compensation this large is a mechanism, not a trim; fix the pp voicing"
+            );
+        }
+    }
+
     /// AC3 — sampled voices compose an embedded per-layer loudness with the synth's
     /// gain law. If a layer step is not compensated, the composite stops being a
     /// straight line on the log-log fit even when its endpoints look right, and it

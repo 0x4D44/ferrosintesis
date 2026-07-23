@@ -2290,6 +2290,53 @@ pub enum ExcModel {
 /// every anchor only 26 %.
 pub const KS_DAMP_BUDGET: f32 = 0.30;
 
+/// KILN-00048: the normalized velocity at which the KS loop damper corner is
+/// anchored. String damping is a property of the string, the bridge and the
+/// air — NOT of how hard the string is plucked — so the in-loop damper corner
+/// (which is applied once per round trip, `f` trips/s, and therefore sets a
+/// decay RATE) must be velocity-INDEPENDENT: pinned at this preset velocity so
+/// decay rate is a function of pitch and `t60` alone. The velocity→brightness
+/// the damper used to supply is transferred onto the excitation (a once-applied
+/// spectrum). Anchoring at vel 100 (rather than 1.0) makes every vel-100 render
+/// bit-identical to the pre-decouple synth: `vn == vn_anchor` there, so the
+/// same IEEE f32 corner is computed. `vn_anchor` folds in `vel_sense` exactly
+/// as `vn` does, so the compressed presets stay bit-identical at vel 100 too.
+pub(crate) const KS_ANCHOR_VN: f32 = 100.0 / 127.0;
+
+/// KILN-00048: exponent γ on the excitation `pick_lp` velocity-transfer factor.
+/// The velocity→brightness factor `t` removed from the loop damper is applied
+/// ONCE across the excitation path (see `Pluck::new`): it goes onto `pick_lp`,
+/// and only the share the pick floor truncates spills onto `out_lp`. At γ=δ=1
+/// the total excitation-corner product = exactly one `t`, so the first-order
+/// velocity→timbre tilt (what the centroid oracle and the K-weighted LUFS slope
+/// respond to) is preserved for EVERY preset — single-filter (STEEL/NYLON) and
+/// dual-filter (koto/shamisen) alike. NB the first cut of this fix applied `t`
+/// to pick AND out independently (t², an extra factor of `t` of pp darkening);
+/// that over-darkened the dual-filter presets and is the bug the shortfall
+/// routing corrects. Raise γ to recover more ff/pp contrast if the damper's
+/// removed *compounding* term proves load-bearing (calibrated by
+/// `velocity_opens_pluck_timbre`, not guessed).
+pub(crate) const KS_EXC_VEL_TRANSFER: f32 = 1.0;
+
+/// KILN-00048: exponent δ on the FLOOR-TRUNCATED share of the transfer that
+/// spills onto `out_lp`. The wound basses' `pick_lp` is floor-pinned at pp, so
+/// their pp darkening cannot ride the pick and must come from `out_lp` — that
+/// spilled share is what this scales. Separate knob from γ so the basses can be
+/// tuned without touching the unfloored presets (where the spill is ~nil).
+pub(crate) const KS_OUT_VEL_TRANSFER: f32 = 1.0;
+
+/// KILN-00048 item 4: the pitch-relative pp excitation floor coefficient. An
+/// absolute 300 Hz `pick_lp` floor is pitch-blind — in the koto's register it
+/// lets a soft note collapse to a near-sine (300 Hz ≈ 1.15·f0 at key 60), which
+/// the held damper makes near-immortal and which flattens the windowed velocity
+/// law past the [1.5, 2.35] compensation bound. Flooring `pick_lp` at `c·f0`
+/// instead keeps a pp pluck off the pure fundamental. CAPPED at the no-transfer
+/// pick, so it can only ever undo the decouple's *transfer* darkening — never
+/// re-voice the preset's own authored darkness — which keeps every vel-100
+/// render bit-identical (there the cap equals the pick). Generic physics, but
+/// measurably inert for every current preset except koto.
+pub(crate) const KS_PICK_F0_FLOOR: f32 = 2.2;
+
 /// How a `Pluck` preset holds its in-loop damper open at high keys.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DamperHold {
@@ -2926,21 +2973,16 @@ pub const CLAVINET: PluckPreset = PluckPreset {
 pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "BASS",
-    // KILN-00042 EXCLUSION — blocked on a pre-existing coupling this fix
-    // exposes rather than causes. The in-loop damper corner scales with
-    // VELOCITY, so the decay RATE does too; on a real string, damping is a
-    // property of the string, not of how hard you hit it. Today that error
-    // is masked here because the corner is so dark that every note dies
-    // almost instantly at every velocity (GM35 key 60: 661 dB/s at vel 32,
-    // 144 at vel 127), so only the onset is measurable and level tracks
-    // vel² cleanly. Hold the damper open and the notes finally sustain —
-    // at which point their velocity-dependent decay starts contributing
-    // slope, and GM33/GM35 bend to k = 2.38/2.62 against the k = 2 ± 0.25
-    // square law. No global ceiling fixes both: it only passes at ~24 dB/s,
-    // which is more decay than the references show in total. The correct fix
-    // is to move velocity→brightness out of the loop damper and into the
-    // excitation (`pick_lp` already does this), which is a re-voicing, not
-    // this defect. Left Off until then.
+    // KILN-00048 DECOUPLED velocity from the loop-damper decay RATE (the coupling
+    // this was `Off` for under KILN-00042): the corner no longer scales with
+    // velocity, proven by `ks_decay_rate_is_velocity_invariant` (which covers
+    // BASS). So this CAN now flip to `Derived` — but flipping it (tried, reverted)
+    // makes the notes ring long enough to expose a velocity-KEY-dependent
+    // sub/mwah LEVEL bend that a scalar `VEL_LEVEL_EXP` cannot fit (FRETLESS
+    // spread 0.58 — no single exponent lands both keys in ±0.25). That bend is
+    // the §3 bass-family reconciliation (KILN-00045), so the flip lands there,
+    // WITH the fix, not here. The decay-rate coupling — the actual KILN-00048
+    // defect — is gone regardless of the hold. Left `Off` until §3.
     damper_hold: DamperHold::Off,
     wound_all: true,
     t60: 3.2,
@@ -2984,21 +3026,13 @@ pub const FINGERED_BASS2: PluckPreset = PluckPreset {
 pub const FRETLESS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "FRETLESS",
-    // KILN-00042 EXCLUSION — blocked on a pre-existing coupling this fix
-    // exposes rather than causes. The in-loop damper corner scales with
-    // VELOCITY, so the decay RATE does too; on a real string, damping is a
-    // property of the string, not of how hard you hit it. Today that error
-    // is masked here because the corner is so dark that every note dies
-    // almost instantly at every velocity (GM35 key 60: 661 dB/s at vel 32,
-    // 144 at vel 127), so only the onset is measurable and level tracks
-    // vel² cleanly. Hold the damper open and the notes finally sustain —
-    // at which point their velocity-dependent decay starts contributing
-    // slope, and GM33/GM35 bend to k = 2.38/2.62 against the k = 2 ± 0.25
-    // square law. No global ceiling fixes both: it only passes at ~24 dB/s,
-    // which is more decay than the references show in total. The correct fix
-    // is to move velocity→brightness out of the loop damper and into the
-    // excitation (`pick_lp` already does this), which is a re-voicing, not
-    // this defect. Left Off until then.
+    // KILN-00048 decoupled velocity from the loop-damper decay rate (see BASS),
+    // so this CAN flip to `Derived`. But GM35 is the case that proves the flip
+    // belongs in §3, not here: flipping it (tried, reverted) exposes a
+    // velocity-KEY-dependent mwah/sub level bend of spread 0.58 (k48 2.06, k60
+    // 2.64) that NO scalar `VEL_LEVEL_EXP` can fit into the square law. That is
+    // the §3 bass-family reconciliation (KILN-00045). Left `Off` until §3; the
+    // decay-rate coupling is already gone (`ks_decay_rate_is_velocity_invariant`).
     damper_hold: DamperHold::Off,
     wound_all: true,
     t60: 2.6,
@@ -4022,21 +4056,65 @@ impl Pluck {
         };
         // round-robin variation: no two picks land identically
         let pos = (p.pos * (1.0 + 0.15 * rng.white())).clamp(0.06, 0.45);
-        // velocity→timbre law (HLD family A, G3/B1): a harder pick opens both
-        // the loop damper and the excitation lowpass — velocity changes the
-        // tone, not just the level (the single biggest "sampled at one
-        // dynamic" tell). The soft end is steeper than the HLD's first-guess
-        // constants so bright presets (STEEL, damper ≥ 5 kHz) genuinely
-        // darken at low velocity — tuned to pass oracle 1's 1.4×/1.3×
-        // centroid contrast. Tuning stays exact: KsLoop compensates the
-        // damper's phase delay at whatever cutoff it is given (oracle 2).
-        let bright = (p.bright * (0.22 + 0.98 * vn) * (1.0 + 0.08 * rng.white())).min(sr * 0.45);
+        // velocity→timbre law (HLD family A, G3/B1), DECOUPLED from decay
+        // (KILN-00048). A harder pick opens the EXCITATION (`pick_lp`, `out_lp`
+        // — each applied ONCE, so they set a spectrum), NOT the loop damper
+        // corner (applied `f` trips/s, so it sets a decay RATE). The loop corner
+        // is therefore anchored at the vel-100 value per preset (`v_anchor`),
+        // making decay rate a function of pitch and `t60` alone; the
+        // velocity→brightness the damper used to supply is transferred onto the
+        // excitation via `t` — the exact factor removed from the loop,
+        // normalized to 1.0 at the anchor. At vel 100 `vn == vn_anchor`, so `t`
+        // is exactly 1 and every corner is bit-identical to the pre-decouple
+        // synth. rng draw order (pos → bright-jitter → t60-jitter) is preserved.
+        let vn_anchor = if p.vel_sense >= 1.0 {
+            KS_ANCHOR_VN
+        } else {
+            1.0 - p.vel_sense * (1.0 - KS_ANCHOR_VN)
+        };
+        let v_timbre = 0.22 + 0.98 * vn; // the old velocity→corner factor
+        let v_anchor = 0.22 + 0.98 * vn_anchor; // …evaluated at the anchor velocity
+        let t = v_timbre / v_anchor; // velocity-transfer factor, ≡ 1.0 at vel 100
+        let bright = (p.bright * v_anchor * (1.0 + 0.08 * rng.white())).min(sr * 0.45);
         let t60_base = p.t60 * (1.0 + 0.10 * rng.white());
-        let pick_lp = (p.pick_lp * (0.10 + 1.30 * vn)).max(200.0);
-        // the output lowpass (electric/bass presets) opens with velocity too —
-        // without this the fixed out_lp caps the ff brightness of BASS-family
-        // presets and the velocity contrast cannot reach oracle 1's floor
-        let out_lp = p.out_lp * (0.30 + 0.95 * vn);
+        // K4 Stage 1: wound strings are darker — the windings damp both the ring
+        // (loop damper) and the pick transient. `wound` is a pure function of
+        // preset + key; hoisted here because the single-application transfer
+        // below needs it (and the corner/t60 use it later).
+        let wound = wound_factor(p.wound_all, p.wound_key_split, key);
+        // KILN-00048 SINGLE-APPLICATION transfer (Fable mid-flight correction).
+        // The velocity→brightness factor `t` removed from the loop damper must be
+        // applied ONCE across the excitation path, not once per filter. Route it
+        // onto `pick_lp`; only the share the 300 Hz floor TRUNCATES spills onto
+        // `out_lp`. Applying `t` to BOTH (the first cut of this fix) darkened the
+        // dual-filter presets — koto/shamisen, where pick_lp AND out_lp are both
+        // active and neither floored — by t², over-flattening their windowed
+        // velocity law (the census witness). STEEL/NYLON (no out_lp) and the
+        // floor-pinned wound basses are unaffected either way; this keeps the
+        // corner product = a single `t` for EVERY preset. At vel 100 `t` = 1 and
+        // the pick clears the floor, so both corners are bit-identical.
+        let pick_base = p.pick_lp * (0.10 + 1.30 * vn) * (1.0 - 0.42 * wound);
+        let tg = t.powf(KS_EXC_VEL_TRANSFER);
+        let pick_want = pick_base * tg;
+        // out_lp carries ONLY the t-share the 300 Hz floor TRUNCATED. The
+        // DENOMINATOR is floored at 300 too (Fable review): a pre-decouple clip —
+        // the dark wound basses, whose no-transfer pp pick already sits below 300
+        // and was VOICED around that — must not be double-counted onto out_lp.
+        // Unfloored → delivered = t → out unscaled (single application); fully
+        // floored → delivered = 1 → out ×t (the wound-bass behaviour they were
+        // voiced against); partial → only the truncated share. `t` = 1 at vel 100
+        // makes both ratios 1, so every corner stays bit-identical there.
+        let delivered_t = pick_want.max(300.0) / pick_base.max(300.0);
+        let out_lp = p.out_lp * (0.30 + 0.95 * vn) * (tg / delivered_t).powf(KS_OUT_VEL_TRANSFER);
+        // (The 200 pre-wound floor the old code carried was dead code:
+        // 200·(1−0.42w) ≤ 200 < 300, so the 300 post-wound floor always subsumed
+        // it.) KILN-00048 item 4 pitch-relative floor: capped at the no-transfer
+        // pick so it is vel-100-inert and can only undo the transfer's darkening;
+        // its c·f0 truncation is deliberately NOT routed to out_lp (routing it
+        // would re-darken the very spectrum this floor exists to protect).
+        let pick_lp = pick_want
+            .max((KS_PICK_F0_FLOOR * key_freq(key)).min(pick_base))
+            .max(300.0);
 
         // G7 flageolet: the loop itself resonates at the touched harmonic —
         // 2f below E4, 3f from E4 up (natural-harmonic playability); the
@@ -4053,9 +4131,6 @@ impl Pluck {
         let note_f = key_freq(key);
         let f = note_f * harm; // the frequency the LOOP rings at
         let period = sr / f;
-        // K4 Stage 1: wound strings are darker — the windings damp both the
-        // ring (loop damper) and the pick transient — with a skewed decay
-        let wound = wound_factor(p.wound_all, p.wound_key_split, key);
         // The high-key damper hold (see `DamperHold`): the corner grows as
         // f^1.5 above the crossover, holding the damper's dB/s share at
         // within KS_DAMP_BUDGET of the authored t60 loss instead of letting it run
@@ -4082,7 +4157,6 @@ impl Pluck {
             p.damper_hold
                 .corner_scale(f, p.bright * (1.0 - 0.30 * wound), 60.0 / t60_static);
         let bright = (wound_bright * hold).min(sr * 0.45).max(300.0);
-        let pick_lp = (pick_lp * (1.0 - 0.42 * wound)).max(300.0);
 
         // excitation: filtered noise burst with a pick-position comb.
         // (K2's deterministic triangle IC was BUILT AND REVERTED: the
@@ -11833,8 +11907,18 @@ pub fn make_variation(
 pub(crate) const VEL_LEVEL_EXP: [f32; 128] = {
     let mut t = [2.0f32; 128];
     // Organ / plucked / driven models: drive and pick excitation track velocity.
-    t[22] = 1.837; t[26] = 1.860; t[27] = 1.560; t[28] = 2.165; t[29] = 1.562;
-    t[30] = 1.562; t[31] = 1.630; t[36] = 1.852; t[37] = 1.530; t[45] = 1.879;
+    // KILN-00048: the plucked/driven exponents were RE-DERIVED after the damper
+    // velocity-decouple + the single-application transfer fix (via
+    // `velocity_census`). Anchoring the loop corner and removing the out_lp
+    // velocity swing flatten the honest windowed law, so the compensation rises
+    // to hold it at 2.0. GM24 gained an explicit entry (was default 2.0). Two
+    // flags: t[28] and t[106] ride near the [1.5, 2.35] anti-papering bound
+    // (dark voices, out-swing removed) — named so drift is visible; t[36]/t[37]
+    // carry a KEY-DEPENDENT spread whose suspect is the f0-locked `sub`, not this
+    // task — that is the §3 bass-family re-measure (KILN-00045), not chased here.
+    t[22] = 1.837; t[24] = 2.119; t[26] = 2.005; t[27] = 2.190; t[28] = 2.315;
+    t[29] = 2.060; t[30] = 2.060; t[31] = 2.109; t[36] = 2.191; t[37] = 1.882;
+    t[45] = 1.879;
     // Basses.
     t[33] = 2.320; t[35] = 2.160;
     // Bowed strings 42/43 are deliberately NOT compensated. Their raw curve is
@@ -11862,8 +11946,18 @@ pub(crate) const VEL_LEVEL_EXP: [f32; 128] = {
     // model). Its LA sample layer does not inherit that compression, so the composite
     // over-responds; this brings the pair back to the documented <3 dB contract.
     t[6] = 1.500;
-    // Ethnic / world models.
-    t[106] = 1.818; t[107] = 1.909; t[111] = 1.708;
+    // Ethnic / world models. KILN-00048: GM105 banjo re-derived (2.0 -> 2.138);
+    // GM106 shamisen re-derived to 2.348 (near the [1.5, 2.35] bound — a dark
+    // dual-filter voice; flagged). GM107 koto gets the pitch-relative pp floor
+    // (KS_PICK_F0_FLOOR) + a bound-capped e = 2.35: its honest windowed exponent
+    // (~2.55) exceeds the bound because it is the darkest, longest-ring preset,
+    // so the scalar is spent to the bound and the voice closes the rest (Fable's
+    // cap-and-close rule). The c=2.2 floor lifts koto's census k60 to 1.351
+    // (spread 0.269 -> 0.141) so under the bound-capped e = 2.35 it lands at
+    // k48 1.93 / k60 1.79 — both inside 2.0±0.25 with ~0.04 margin. The residual
+    // (honest e 2.49 capped to 2.35) is the documented Pareto-frontier trade
+    // between the windowed and attack laws for the darkest, longest-ring preset.
+    t[105] = 2.138; t[106] = 2.348; t[107] = 2.350; t[111] = 1.708;
     t
 };
 
@@ -14156,6 +14250,14 @@ mod tests {
     /// further into the late window still. (Earlier the acoustic-guitar sustain
     /// task moved it t60 2.8→3.8, bright 3200→3800.) BASS (GM33) is the untouched
     /// control — excluded from the re-fit (KILN-00048) — and must not move.
+    ///
+    /// KILN-00048 (velocity/damper decouple) re-pinned NYLON's `rms_db` alone
+    /// (−21.948→−22.195): its `centroid_hz` and `late_early_db` are BIT-IDENTICAL
+    /// here (this fixture renders at vel 100, the anchor velocity, so the loop
+    /// corner and decay shape are unchanged), but re-deriving `VEL_LEVEL_EXP[24]`
+    /// 2.0→2.119 pivots the level law at vel 127, dropping the vel-100 level by
+    /// (100/127)^0.119 = 0.972 (−0.247 dB). BASS (GM33) is un-re-derived, so its
+    /// signature stays bit-identical and remains the control.
     #[test]
     fn v2_untouched_pluck_signatures_are_stable() {
         let nylon_render = render_program(24, 52, 100, 1.0, 0xE1);
@@ -14170,7 +14272,7 @@ mod tests {
                 (0.5, 0.8),
             ),
             RenderSignature {
-                rms_db: -21.948,
+                rms_db: -22.195,
                 centroid_hz: 247.419,
                 late_early_db: -16.290,
             },
@@ -17553,6 +17655,83 @@ mod tests {
         );
     }
 
+    /// KILN-00048 / KILN-00052: RENDERED decay-rate velocity invariance. The
+    /// velocity/damper decouple makes a plucked string's decay RATE a function
+    /// of pitch and `t60` alone, never of pluck strength.
+    /// `ks_decay_law_holds_across_register` guards the corner MATH (closed form);
+    /// THIS guards the rendered loop path (loop_gain, coupling, the whole KS
+    /// loop) end-to-end, so a rewiring that re-coupled velocity to decay trips a
+    /// test — which is the KILN-00052 residual the two-eyes closure asked for.
+    ///
+    /// Decay is measured in the SETTLED regime (both windows past 0.45 s, so the
+    /// front-loaded early cliff is excluded), band-limited to f0 (and 3·f0) to
+    /// remove the "which partials died" confound, and ENERGY-averaged across
+    /// seeds BEFORE the log (the per-note ±10 % t60 / ±8 % bright jitter).
+    /// `sub`/`kick`/`attack_noise`/`mwah` are stripped on twins: an f0-locked
+    /// sine (the sub) with a velocity-weighted amplitude decaying at its OWN rate
+    /// would manufacture the exact velocity-dependent f0-band slope this oracle
+    /// forbids; the shamisen jawari buzz is level-dependent contact, stripped the
+    /// same way. Fail-first: the pre-decouple synth read STEEL key 60 at
+    /// 11.9 dB/s (vel 127) vs 20.8 (vel 32) — a 1.75× f0-band spread.
+    #[test]
+    fn ks_decay_rate_is_velocity_invariant() {
+        let sr = 44100.0;
+        let strip = |base: &PluckPreset| PluckPreset {
+            sub: 0.0,
+            kick: 0.0,
+            attack_noise: 0.0,
+            mwah: None,
+            ..*base
+        };
+        let cases: [(&str, PluckPreset, u8); 6] = [
+            ("STEEL", STEEL, 60),
+            ("NYLON", NYLON, 60),
+            ("BASS", strip(&BASS), 34),
+            ("FRETLESS", strip(&FRETLESS), 34),
+            ("KOTO", KOTO, 60),
+            ("SHAMISEN", strip(&SHAMISEN), 60),
+        ];
+        let rate = |p: &PluckPreset, key: u8, vel: u8, harm: f32| -> f32 {
+            let f0 = key_freq(key) * harm;
+            let (mut e_early, mut e_late) = (0.0f32, 0.0f32);
+            for &seed in &[5u32, 21, 99] {
+                let mut v = Pluck::new(p, key, vel, sr, seed);
+                let mut buf = vec![0f32; (1.1 * sr) as usize];
+                v.render(&mut buf);
+                let e = |a: f32, b: f32| {
+                    let r = crate::testutil::band_rms(
+                        &buf[(a * sr) as usize..(b * sr) as usize],
+                        sr,
+                        f0,
+                        2.0,
+                    );
+                    r * r
+                };
+                e_early += e(0.45, 0.60);
+                e_late += e(0.90, 1.05);
+            }
+            20.0 * (e_late.sqrt() / e_early.sqrt().max(1e-12))
+                .max(1e-12)
+                .log10()
+                / 0.45
+        };
+        for (name, p, key) in &cases {
+            for &(harm, k_tol, floor) in &[(1.0f32, 0.15f32, 1.5f32), (3.0, 0.20, 2.5)] {
+                let r100 = rate(p, *key, 100, harm);
+                let tol = (k_tol * r100.abs()).max(floor);
+                for &vel in &[32u8, 64, 127] {
+                    let rv = rate(p, *key, vel, harm);
+                    assert!(
+                        (rv - r100).abs() <= tol,
+                        "{name} key {key} band×{harm}: decay {rv:.1} dB/s @vel {vel} vs \
+                         {r100:.1} @vel 100 — Δ {:.1} > tol {tol:.1}: velocity leaked into decay",
+                        (rv - r100).abs()
+                    );
+                }
+            }
+        }
+    }
+
     /// Authoring pins (KILN-00042, succeeding guitar block two's review C4):
     /// the hold is derived by default and OFF exactly where a documented
     /// decision says so — nowhere else.
@@ -17586,6 +17765,10 @@ mod tests {
         // flipping a preset to `Off` would silently remove it from that oracle's
         // coverage instead of failing anything.
         // sorted so reordering ALL_PLUCK_PRESETS cannot fail this spuriously
+        // BASS/FRETLESS stay `Off`: KILN-00048 decoupled the decay-rate coupling
+        // they were held out for, but flipping their hold exposes a key-dependent
+        // sub/mwah LEVEL bend a scalar can't fit — deferred to the §3 bass-family
+        // reconciliation (KILN-00045), which flips them WITH that fix.
         const EXPECTED_OFF: &[&str] = &[
             "BASS",
             "CLAVINET",

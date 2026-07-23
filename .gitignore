@@ -49,6 +49,7 @@ _cal/
 !crates/ferrosintesis-samples-orchestral2/samples/*.wav
 !crates/ferrosintesis-samples-musescore/samples/*.wav
 !crates/ferrosintesis-samples-gong/samples/*.wav
+!crates/ferrosintesis-samples-mandolin/samples/*.wav
 !crates/ferrosintesis-samples-grand/samples/*.wav
 !crates/ferrosintesis-samples-vcsl-steinway/samples/*.wav
 !crates/ferrosintesis-samples-vcsl-kawai/samples/*.wav
@@ -72,6 +73,7 @@ _cal/
 # committed so the processed bank is offline-reproducible via prepare.py).
 !tools/ferrosintesis-samples/gong-src/*.wav
 !tools/ferrosintesis-samples/freesound-src/*.wav
+!tools/ferrosintesis-samples/mandolin-src/*.wav
 
 # Third-party reference MIDI test corpus (fan transcriptions of copyrighted works,
 # used only to stress-test ferrosintesis against real-world MIDI content). Never

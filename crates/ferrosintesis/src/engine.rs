@@ -333,18 +333,18 @@ pub(crate) const CAB_CLIFF: usize = 3;
 pub(crate) fn cab_biquads_lead(sr2: f32, program: u8) -> [Biquad; 5] {
     // (body lift, presence centre, presence lift)
     let (body, pres_hz, pres) = if program == 30 {
-        (4.5, 2600.0, 3.0) // darker, thicker
+        (-1.0, 2600.0, 2.0) // darker, thicker
     } else {
-        (2.5, 2800.0, 5.0) // brighter, more open
+        (0.0, 2800.0, 3.5) // brighter, more open
     };
     [
-        Biquad::peak(120.0, 1.0, 2.0, sr2),
+        Biquad::peak(190.0, 0.8, 6.0, sr2),
         Biquad::peak(600.0, 0.75, body, sr2),
         Biquad::peak(pres_hz, 1.2, pres, sr2),
         // elements CAB_CLIFF.. are the anti-alias decimation cliff and must
         // stay LAST in Drive::chain (MicroCab inserts before them)
-        Biquad::lowpass(4000.0, 0.9, sr2),
-        Biquad::lowpass(3800.0, 0.8, sr2),
+        Biquad::lowpass(5000.0, 0.9, sr2),
+        Biquad::lowpass(4600.0, 0.8, sr2),
     ]
 }
 
@@ -592,7 +592,7 @@ impl Drive {
                     0.85,
                     // 29 is the OPEN lead: a pre-clip mid push, higher and
                     // broader than the rhythm 29's +4 dB @ 800.
-                    Biquad::peak(1000.0, 0.8, 4.0, sr2),
+                    Biquad::peak(1000.0, 0.8, 1.5, sr2),
                     // a gentle, LOW feed into stage 2 (see note 3 above) —
                     // deliberately NOT a presence boost, which would fizz
                     Biquad::peak(1400.0, 0.8, 2.5, sr2),
@@ -602,7 +602,7 @@ impl Drive {
                 program,
                 alt,
                 sr2,
-                120.0,
+                75.0,
                 voice,
                 g1,
                 bias,

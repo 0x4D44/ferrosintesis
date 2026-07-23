@@ -32,6 +32,9 @@ tools/gm0-audition/renders/
 # Its plan TSV format is the contract `examples/calmeter.rs` reads, so the two
 # must stay together — the derivation is not reproducible without this.
 !tools/instrument-balance/
+# B1-upright sample slicer: turns Arthur's raw DR-05 ladder takes into per-note
+# source slices + a measured manifest (the contract the bake reads).
+!tools/b1-slice/
 # ...and its scratch directory. The calibration tools WRITE here by design
 # (mkprobe.py emits `_cal/probe_*.mid` + `_cal/plan_*.tsv`; calmeter level TSVs and
 # the ferro/SC-55 probe renders land alongside). All of it is regenerable build

@@ -129,9 +129,45 @@ The kalimba's lamella bank lives under GM 108, grouped with the Modal chromatic-
 | aftertouch | channel pressure adds vibrato and a gentle swell on the sustained families, growl on brass; polyphonic key pressure does the same to just the pressed note |
 | CC0 bank select | alternate voicings, latched per channel: selectable piano recordings on GM 0–1; the CathedralOrgan pipe model at GM 19 CC0=2 (the default GM 19 is the Leslie drawbar); a sustaining driven-guitar lead on 29/30; the frozen v0.9 bowed 42–45, strings 48–51 and choir 52–54; a tam-tam at 14 (CC0=2 a recorded gong ageng, CC0=3 the pure bell model); a second percussion set at 112–119; and the pre-sampling pure models under many sampled-by-default voices (clavinet 7, bagpipe 109, guitars 24–25, brass 56–61, reeds 68–71, EP 4, celesta 8, music box 10, vibraphone 11, dulcimer 15, basses 32–35); 127 declares the channel an XG drum part |
 | CC32, CC120/121/123 | XG bank-LSB variation voices at note-on (undefined banks play the base GM voice, as real XG hardware does); all sound off; reset all controllers (bank select persists); all notes off |
+| NRPN 0x30 | **score-authored amp** on the driven guitars 29/30 — see below |
 
 The rule throughout: an unauthored controller is inert. A channel that never
 sends one renders exactly as if the feature did not exist.
+
+### Score-authored amp (driven guitars 29/30)
+
+A file can shape the driven-guitar amp and cabinet per channel, so two channels
+can be two different rigs. Address the six knobs by NRPN — MSB (CC99) = `0x30`,
+LSB (CC98) = the index below, value on Data Entry MSB (CC6):
+
+| LSB | knob | what it moves | at the extremes |
+|-----|------|---------------|-----------------|
+| 0 | Drive | pedal gain (both clip stages) | g1 ×0.44 … ×2.28 |
+| 1 | Tone | pre-clip voice EQ — pedal "tone" | −9 … +9 dB. **Dynamics-dependent**: a pre-clip control is largely swallowed by the saturator, so it colours strongly on quiet notes and subtly under a hard pick. For a level-independent tone, use Cab Tone. |
+| 2 | Tightness | pre-shaper high-pass corner | ×0.66 … ×1.5, capped 180 Hz — focus vs woolly |
+| 3 | Body | cabinet low-mid | −9 … +9 dB |
+| 4 | Presence | cabinet presence | −9 … +9 dB |
+| 5 | Cab Tone | cabinet high-frequency corner, **downward only** | full … halved. The main "which cabinet" axis; level-independent. Values above 64 are inert (it can only darken, never brighten past the shipped cliff). |
+
+Every value is a **signed offset from the shipped voicing, with 64 = as-shipped**,
+so the offset composes with whatever GM29/GM30 already sound like. The base
+voicing differs by program (29 overdrive vs 30 distortion) and by bank (the CC0
+alt bank is a lead amp), so the same NRPN value lands on four different starting
+points — the offset is relative to each. The shipped base for each is:
+
+| | pre-HPF | Tone centre | Body (cab) | Presence (cab) | HF cliff |
+|---|---|---|---|---|---|
+| 29 main | 90 Hz | 800 Hz +4 dB | 500 Hz −3 dB | 2600 Hz +5 dB | 4000/3800 Hz |
+| 30 main | 90 Hz | 650 Hz −5 dB | 500 Hz −3 dB | 2600 Hz +5 dB | 4000/3800 Hz |
+| 29 alt (lead) | 120 Hz | 1000 Hz +4 dB | 600 Hz +2.5 dB | 2800 Hz +5 dB | 4000/3800 Hz |
+| 30 alt (lead) | 120 Hz | 650 Hz −4.5 dB | 600 Hz +4.5 dB | 2600 Hz +3 dB | 4000/3800 Hz |
+
+Notes: the parameters are inert on any channel not playing GM29/30; changing a
+knob mid-note is click-free (smoothed); and a channel that authors no amp NRPN
+renders bit-identically. The values are channel state — they survive Program
+Change, CC0 and CC121, and reset only on GM System On. Drive is level-compensated
+only in part (a static trim cannot fully cancel a level change that also depends
+on pitch and pick strength); use CC7 for channel balance.
 
 ## Realtime
 

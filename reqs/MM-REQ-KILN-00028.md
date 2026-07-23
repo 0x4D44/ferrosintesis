@@ -1,11 +1,11 @@
 # MM-REQ-KILN-00028 — A MIDI file must be able to author the driven-guitar amp and cabinet per channel
 
-- **State:** Draft
+- **State:** Implemented
 - **Priority:** Should
 - **Area:** engine / Drive
 - **Raised:** 2026-07-23
-- **Implemented-by:** —
-- **Satisfied-by:** —
+- **Implemented-by:** crates/ferrosintesis/src/engine.rs (Strip amp_params/amp_cur/amp_primed + NRPN latch; Drive::apply_params + DriveBase; the three rebuild reseed sites; CC 6/38/98/99/100/101 arms) — on branch, pending integration
+- **Satisfied-by:** engine::tests::amp_neutral_is_bit_identical (inertness), amp_each_knob_moves_its_axis, amp_drive_knob_holds_alias_floor, amp_drive_level_residual_bounded, amp_sweep_has_no_block_rate_zipper, amp_single_step_does_not_click, amp_params_follow_the_state_table (state table + rebuild timing), amp_nrpn_never_corrupts_the_rpn_bend_range (KILN-00034 all directions)
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
@@ -16,7 +16,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-23, Arthur asked for authorable amp/distortion knobs so GM29 and GM30 can be built into genuinely different rigs — Claude Opus 4.8)
+- **State history:** Draft (2026-07-23, Arthur asked for authorable amp/distortion knobs so GM29 and GM30 can be built into genuinely different rigs — Claude Opus 4.8) → Accepted (2026-07-23, HLD Part A self-approved: 3-lens adversarial + Codex cross-family review) → Implemented (2026-07-23, on branch — 8 oracles green, render-diff clean, awaiting integration)
 
 ## Statement
 

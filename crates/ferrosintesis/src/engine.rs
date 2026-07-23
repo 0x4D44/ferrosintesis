@@ -256,14 +256,34 @@ fn kit_balance(key: u8) -> f32 {
 /// amp and acts as the decimation filter for the 2× nonlinear path. Built
 /// at the 2× rate; shared with the oracle-3 response test.
 pub(crate) fn cab_biquads(sr2: f32) -> [Biquad; 5] {
-    [
-        Biquad::peak(100.0, 1.2, 4.0, sr2),
-        Biquad::peak(500.0, 1.0, -3.0, sr2),
-        Biquad::peak(2600.0, 1.5, 5.0, sr2),
+    cab_from_spec(cab_spec(), sr2)
+}
+
+/// The rhythm cabinet as raw parameter triples: three `peak` (Hz, Q, dB) and
+/// two lowpass-cliff (Hz, Q) specs. Split out from [`cab_biquads`] so the SAME
+/// literals feed both the built biquads and [`DriveBase`] (the score-authored
+/// amp offsets in the part-A HLD need the base values, and a live `Biquad`
+/// cannot be read back). [`cab_biquads`] is bit-identical either way.
+fn cab_spec() -> CabSpec {
+    (
+        [(100.0, 1.2, 4.0), (500.0, 1.0, -3.0), (2600.0, 1.5, 5.0)],
         // elements CAB_CLIFF.. are the anti-alias decimation cliff and must
         // stay LAST in Drive::chain (MicroCab inserts before them)
-        Biquad::lowpass(4000.0, 0.9, sr2),
-        Biquad::lowpass(3800.0, 0.8, sr2),
+        [(4000.0, 0.9), (3800.0, 0.8)],
+    )
+}
+
+/// A cabinet as raw specs: 3 `peak` (Hz, Q, dB) then 2 lowpass (Hz, Q). The
+/// `CAB_CLIFF`-split topology of [`cab_biquads`] is preserved by construction.
+type CabSpec = ([(f32, f32, f32); 3], [(f32, f32); 2]);
+
+fn cab_from_spec((peaks, cliff): CabSpec, sr2: f32) -> [Biquad; 5] {
+    [
+        Biquad::peak(peaks[0].0, peaks[0].1, peaks[0].2, sr2),
+        Biquad::peak(peaks[1].0, peaks[1].1, peaks[1].2, sr2),
+        Biquad::peak(peaks[2].0, peaks[2].1, peaks[2].2, sr2),
+        Biquad::lowpass(cliff[0].0, cliff[0].1, sr2),
+        Biquad::lowpass(cliff[1].0, cliff[1].1, sr2),
     ]
 }
 
@@ -331,21 +351,23 @@ pub(crate) const CAB_CLIFF: usize = 3;
 /// brighter, more open overdrive lead; 30's is the darker, thicker distortion
 /// lead.** Body and presence move in opposite directions between them.
 pub(crate) fn cab_biquads_lead(sr2: f32, program: u8) -> [Biquad; 5] {
+    cab_from_spec(cab_spec_lead(program), sr2)
+}
+
+/// The lead cabinet as raw parameter triples (see [`cab_spec`]).
+fn cab_spec_lead(program: u8) -> CabSpec {
     // (body lift, presence centre, presence lift)
     let (body, pres_hz, pres) = if program == 30 {
         (4.5, 2600.0, 3.0) // darker, thicker
     } else {
         (2.5, 2800.0, 5.0) // brighter, more open
     };
-    [
-        Biquad::peak(120.0, 1.0, 2.0, sr2),
-        Biquad::peak(600.0, 0.75, body, sr2),
-        Biquad::peak(pres_hz, 1.2, pres, sr2),
+    (
+        [(120.0, 1.0, 2.0), (600.0, 0.75, body), (pres_hz, 1.2, pres)],
         // elements CAB_CLIFF.. are the anti-alias decimation cliff and must
         // stay LAST in Drive::chain (MicroCab inserts before them)
-        Biquad::lowpass(4000.0, 0.9, sr2),
-        Biquad::lowpass(3800.0, 0.8, sr2),
-    ]
+        [(4000.0, 0.9), (3800.0, 0.8)],
+    )
 }
 
 /// MicroCab taps: (delay ms, gain), numerically optimized against the full
@@ -391,6 +413,47 @@ const MICRO_CAB_TAPS: [(f32, f32); 5] = [
 /// rather than a DI. The macro cab shape (`cab_biquads`) is untouched either
 /// way — this scales only the fine structure on top of it.
 pub(crate) const MICRO_CAB_LEAD_DEPTH: f32 = 0.25;
+
+// ---- Score-authored amp parameters (MM-REQ-KILN-00028, part-A HLD) --------
+//
+// Six per-channel knobs that let a MIDI file AUTHOR the driven-guitar amp and
+// cabinet, addressed by NRPN MSB `AMP_NRPN_MSB` / LSB = the index below, value
+// via Data Entry MSB (CC6). Every value is a SIGNED OFFSET from the shipped
+// program voicing with 64 = "as shipped", so a channel that authors nothing
+// runs the existing path bit-identically (the inertness invariant), and the
+// oracle-tuned 29/30 x main/alt matrix survives. The offsets are applied in
+// place by `Drive::apply_params` — no rebuild, no allocation, click-free.
+
+/// NRPN MSB (CC99) selecting the ferrosintesis amp block. NRPN has no
+/// manufacturer namespace, so this is CONTAINED, not collision-free: the
+/// parameters are inert on any channel not playing GM29/30, and the worst case
+/// on a driven channel is a timbre tweak (never a stuck note or wrong pitch).
+const AMP_NRPN_MSB: u8 = 0x30;
+const AMP_PARAM_COUNT: usize = 6;
+const AMP_DRIVE: usize = 0; // pedal gain: g1, g2 (+ derived post makeup)
+const AMP_TONE: usize = 1; // pre-clip voice EQ gain (dynamics-dependent by nature)
+const AMP_TIGHT: usize = 2; // pre-shaper high-pass corner
+const AMP_BODY: usize = 3; // cabinet low-mid peak gain (cab[1])
+const AMP_PRES: usize = 4; // cabinet presence peak gain (cab[2])
+const AMP_CABTONE: usize = 5; // cabinet high-frequency cliff, DOWNWARD only
+
+/// Drive gain exponent: `g1 *= 2^(k*n)`, `g2 *= 2^(k*n/2)`, `n in [-1, +0.984]`.
+/// The TOP of this knob is bounded by the alias floor, not taste — the 2x
+/// shaper folds harmonics into the passband and `drive_alias_floor` asserts
+/// -40 dBc. Measured (`amp_drive_knob_holds_alias_floor`): k=1.2 holds it with
+/// margin while still giving g1 x0.44..x2.28, a musically large move.
+const AMP_DRIVE_K: f32 = 1.2;
+/// Makeup trim: `post *= 2^(-c*n)`. Strictly positive at every n and k (unlike
+/// the reciprocal `amp_sim` form, which goes singular for n<0). c is set by the
+/// level residual, not asserted — see `amp_drive_level_residual_bounded`.
+const AMP_DRIVE_POST_C: f32 = 0.9;
+/// Tone / Body / Presence EQ swing at the knob extremes, in dB (`+/- this * n`).
+const AMP_EQ_DB: f32 = 9.0;
+/// Tightness pre-HPF corner: `pre_hz *= 2^(TIGHT_OCT*n)`, clamped `<= TIGHT_MAX`.
+/// Narrow and capped on purpose: a wide corner mutes the low register (round 1
+/// measured a 120 Hz corner costing ~7.5 dB at E2) rather than voicing it.
+const AMP_TIGHT_OCT: f32 = 0.6;
+const AMP_TIGHT_MAX_HZ: f32 = 180.0;
 
 /// Cabinet fine structure (guitar-realism HLD §5): the dense magnitude
 /// ripple a real cab's cone breakup and edge reflections put on top of the
@@ -474,6 +537,23 @@ impl MicroCab {
 /// note decayed) had the temporal polarity backwards — it faked sustain by
 /// blooming the tail — and was deleted (voice-quality overhaul §2.6);
 /// held-note sustain is the string's e-bow sustainer (`DRIVE.sustain`).
+/// The program+bank base voicing an authored offset is measured from. A live
+/// `Biquad` cannot report its own centre/Q/gain, so the knob-relevant base
+/// values are stored here (written once by `from_stages` from the literals in
+/// `Drive::new`) and read by `apply_params` — one source of truth, so a future
+/// re-voicing (part B) cannot silently desync from the offset math.
+#[derive(Clone, Copy)]
+struct DriveBase {
+    pre_hz: f32,
+    voice: (f32, f32, f32), // Tone knob: (Hz, Q, dB)
+    g1: f32,
+    g2: f32,
+    post: f32,
+    cab1: (f32, f32, f32),  // Body knob: cab[1] (Hz, Q, dB)
+    cab2: (f32, f32, f32),  // Presence knob: cab[2] (Hz, Q, dB)
+    cliff: [(f32, f32); 2], // Cab Tone knob: cab[3]/cab[4] (Hz, Q)
+}
+
 struct Drive {
     program: u8,
     /// Whether this insert was built for the CC0 alt bank (the sustaining
@@ -492,6 +572,19 @@ struct Drive {
     cab: [Biquad; 5],
     micro: MicroCab,
     prev: f32,
+    // ---- score-authored amp parameters (MM-REQ-KILN-00028) ----
+    // All inert unless the strip authors an amp NRPN: `apply_params` is only
+    // called for an authored channel, so `active` stays false and `process`
+    // runs the original path. `base` is this insert's shipped voicing; the
+    // `*_target` scalars are the block-rate goals the per-sample slew chases so
+    // a swept Drive cannot staircase at the block frequency.
+    base: DriveBase,
+    sr2: f32,
+    g1_target: f32,
+    g2_target: f32,
+    post_target: f32,
+    slew: f32,
+    active: bool,
 }
 
 impl Drive {
@@ -579,7 +672,7 @@ impl Drive {
                     // 30 keeps a pre-clip SCOOP, shallower than the rhythm
                     // amp's −5: the saturation character stays chuggy/dark
                     // while the lead cab restores the body post-clip.
-                    Biquad::peak(650.0, 1.0, -4.5, sr2),
+                    (650.0, 1.0, -4.5),
                     // and a scooped feed into stage 2, gentler and LOWER than
                     // the rhythm 30's −4 dB @ 700
                     Biquad::peak(800.0, 0.9, -2.0, sr2),
@@ -592,7 +685,7 @@ impl Drive {
                     0.85,
                     // 29 is the OPEN lead: a pre-clip mid push, higher and
                     // broader than the rhythm 29's +4 dB @ 800.
-                    Biquad::peak(1000.0, 0.8, 4.0, sr2),
+                    (1000.0, 0.8, 4.0),
                     // a gentle, LOW feed into stage 2 (see note 3 above) —
                     // deliberately NOT a presence boost, which would fizz
                     Biquad::peak(1400.0, 0.8, 2.5, sr2),
@@ -610,6 +703,7 @@ impl Drive {
                 g2,
                 post,
                 cab_biquads_lead(sr2, program),
+                cab_spec_lead(program),
             );
         }
         // ---- RHYTHM amp (default bank) — UNCHANGED, bit-identical ------
@@ -638,14 +732,14 @@ impl Drive {
         };
         let (voice, tilt) = if program == 30 {
             (
-                Biquad::peak(650.0, 0.9, -5.0, sr2),
+                (650.0, 0.9, -5.0),
                 // deepen the scoop between the stages: stage 2 re-saturates
                 // the mids the voicing pulled, so pull again where it counts
                 Biquad::peak(700.0, 0.9, -4.0, sr2),
             )
         } else {
             (
-                Biquad::peak(800.0, 0.8, 4.0, sr2),
+                (800.0, 0.8, 4.0),
                 // upper-mid push into stage 2: the singing lead bite
                 Biquad::peak(1200.0, 0.8, 2.0, sr2),
             )
@@ -662,6 +756,7 @@ impl Drive {
             g2,
             post,
             cab_biquads(sr2),
+            cab_spec(),
         )
     }
 
@@ -686,19 +781,21 @@ impl Drive {
         alt: bool,
         sr2: f32,
         pre_hz: f32,
-        voice: Biquad,
+        voice: (f32, f32, f32),
         g1: f32,
         bias: f32,
         tilt: Biquad,
         g2: f32,
         post: f32,
         cab: [Biquad; 5],
+        cab_base: CabSpec,
     ) -> Self {
+        let (peaks, cliff) = cab_base;
         Drive {
             program,
             alt,
             pre: Biquad::highpass(pre_hz, 0.7, sr2),
-            voice,
+            voice: Biquad::peak(voice.0, voice.1, voice.2, sr2),
             g1,
             bias,
             tilt,
@@ -711,6 +808,26 @@ impl Drive {
             cab,
             micro: MicroCab::with_depth(sr2, if alt { MICRO_CAB_LEAD_DEPTH } else { 1.0 }),
             prev: 0.0,
+            // Base voicing for the score-authored offsets; all inert until the
+            // strip authors an amp NRPN (`apply_params` sets `active`).
+            base: DriveBase {
+                pre_hz,
+                voice,
+                g1,
+                g2,
+                post,
+                cab1: peaks[1],
+                cab2: peaks[2],
+                cliff,
+            },
+            sr2,
+            g1_target: g1,
+            g2_target: g2,
+            post_target: post,
+            // one-pole scalar slew at the shared 20 ms controller time constant
+            // (base rate: process() steps once per base-rate sample)
+            slew: 1.0 - (-1.0 / (WAH_SLEW_S * (sr2 * 0.5))).exp(),
+            active: false,
         }
     }
 
@@ -735,7 +852,7 @@ impl Drive {
         // more drive compresses harder, so trim output as gain rises to hold a
         // roughly constant wet level for the blend.
         let post = 0.28 / (1.0 + d * 1.5);
-        let voice = Biquad::peak(800.0, 0.8, 4.0, sr2);
+        let voice = (800.0, 0.8, 4.0);
         let tilt = Biquad::peak(1200.0, 0.8, 2.0, sr2);
         // The XG insert is an amp simulator, not a bank voicing: full ripple,
         // and the shared rhythm cabinet (the lead cab belongs to the CC0 bank).
@@ -751,6 +868,7 @@ impl Drive {
             g2,
             post,
             cab_biquads(sr2),
+            cab_spec(),
         )
     }
 
@@ -776,15 +894,78 @@ impl Drive {
     }
 
     fn process(&mut self, buf: &mut [f32]) {
+        if !self.active {
+            // No amp NRPN authored on this channel: the exact original path,
+            // bit-identical (the inertness invariant). No slew, no branches.
+            for x in buf.iter_mut() {
+                let mid = 0.5 * (self.prev + *x);
+                self.prev = *x;
+                let _ = self.chain(mid);
+                *x = self.chain(*x) * self.post;
+            }
+            return;
+        }
+        // Authored: the scalar knobs (Drive -> g1/g2/post) slew PER SAMPLE
+        // toward this block's target, so a swept Drive cannot staircase at the
+        // block frequency. The filter knobs are retuned per block in
+        // `apply_params` (the biquad's own state smooths the small steps).
         for x in buf.iter_mut() {
-            // 2x oversampling via midpoint interpolation; the cab's steep
-            // lowpass cliff is the decimation filter, so we keep the
-            // sample-aligned output instead of box-averaging
+            self.g1 += self.slew * (self.g1_target - self.g1);
+            self.g2 += self.slew * (self.g2_target - self.g2);
+            self.post += self.slew * (self.post_target - self.post);
             let mid = 0.5 * (self.prev + *x);
             self.prev = *x;
             let _ = self.chain(mid);
             *x = self.chain(*x) * self.post;
         }
+    }
+
+    /// Apply the strip's slewed amp-knob positions (`cur`, each 0..127 with
+    /// 64 = neutral) as signed offsets from `self.base`, in place — no rebuild,
+    /// no allocation. Called once per block for an authored channel, and once
+    /// with `snap = true` right after a rebuild so the fresh insert starts at
+    /// the authored rig instead of slewing up from its base voicing.
+    fn apply_params(&mut self, cur: &[f32; AMP_PARAM_COUNT], snap: bool) {
+        let sr2 = self.sr2;
+        let n = |i: usize| (cur[i] - 64.0) / 64.0; // in [-1, +0.984]
+
+        // Drive (idx 0): gain, with a strictly-positive makeup trim on post.
+        let nd = n(AMP_DRIVE);
+        self.g1_target = self.base.g1 * 2f32.powf(AMP_DRIVE_K * nd);
+        self.g2_target = self.base.g2 * 2f32.powf(0.5 * AMP_DRIVE_K * nd);
+        self.post_target = self.base.post * 2f32.powf(-AMP_DRIVE_POST_C * nd);
+
+        // Tone (idx 1): pre-clip voice EQ gain.
+        let (vh, vq, vdb) = self.base.voice;
+        self.voice
+            .retune_peak(vh, vq, vdb + AMP_EQ_DB * n(AMP_TONE), sr2);
+
+        // Tightness (idx 2): pre-shaper high-pass corner, capped.
+        let pre_hz =
+            (self.base.pre_hz * 2f32.powf(AMP_TIGHT_OCT * n(AMP_TIGHT))).min(AMP_TIGHT_MAX_HZ);
+        self.pre.retune_highpass(pre_hz, 0.7, sr2);
+
+        // Body (idx 3) and Presence (idx 4): cabinet peak gains.
+        let (b1h, b1q, b1db) = self.base.cab1;
+        self.cab[1].retune_peak(b1h, b1q, b1db + AMP_EQ_DB * n(AMP_BODY), sr2);
+        let (b2h, b2q, b2db) = self.base.cab2;
+        self.cab[2].retune_peak(b2h, b2q, b2db + AMP_EQ_DB * n(AMP_PRES), sr2);
+
+        // Cab Tone (idx 5): the anti-alias cliff corner, DOWNWARD only, so it
+        // can only ever strengthen alias rejection (never trade it for brightness).
+        let f = 2f32.powf(n(AMP_CABTONE).min(0.0));
+        self.cab[3].retune_lowpass(self.base.cliff[0].0 * f, self.base.cliff[0].1, sr2);
+        self.cab[4].retune_lowpass(self.base.cliff[1].0 * f, self.base.cliff[1].1, sr2);
+
+        // Snap the scalars to target on the first application (so a rig authored
+        // at t=0 is in effect on the first sample) and after a rebuild; slew
+        // otherwise.
+        if snap || !self.active {
+            self.g1 = self.g1_target;
+            self.g2 = self.g2_target;
+            self.post = self.post_target;
+        }
+        self.active = true;
     }
 
     /// Test-only: neutralise the pre-voicing EQ (oracle 5's gain-matched
@@ -1210,7 +1391,15 @@ struct Strip {
     fine: f32,       // RPN 1: fine tune as a frequency multiplier
     rpn_msb: u8,     // CC101/CC100 select; 127/127 = null
     rpn_lsb: u8,
-    data_msb: u8, // last CC6, so CC38 can refine it
+    data_msb: u8, // last CC6 under the RPN latch, so CC38 can refine it
+    // NRPN latch (CC99/CC98 select; 127/127 = null), mutually exclusive with
+    // the RPN latch — the most recent select wins and nulls the other, so a
+    // Data Entry can never write into a stale selector (MM-BUG-KILN-00034).
+    // `nrpn_data_msb` is the NRPN-domain CC6, kept separate from `data_msb` so
+    // an amp Data Entry cannot leak into the RPN bend range.
+    nrpn_msb: u8,
+    nrpn_lsb: u8,
+    nrpn_data_msb: u8,
     porta_on: bool,
     porta_time: f32,        // CC5 glide time in seconds
     last_freq: Option<f32>, // most recent NoteOn pitch (portamento origin)
@@ -1263,6 +1452,17 @@ struct Strip {
     organ_wind: f32,
     organ_trem_phase: f32,
     drive: Option<Drive>,
+    // Score-authored amp parameters (MM-REQ-KILN-00028): six per-channel knobs
+    // offset from the program voicing, 64 = as-shipped. `amp_authored` gates the
+    // whole path — false keeps the driven render bit-identical. `amp_cur` slews
+    // toward `amp_params` at block rate; `amp_primed` snaps each knob on its
+    // first authoring so a t=0 rig is in effect immediately. All PERSIST across
+    // Program Change / CC0 / CC121 (they are channel state, not program state);
+    // only GM System On clears them (via Strip::new).
+    amp_params: [u8; AMP_PARAM_COUNT],
+    amp_cur: [f32; AMP_PARAM_COUNT],
+    amp_primed: [bool; AMP_PARAM_COUNT],
+    amp_authored: bool,
     // XG Variation Amp-Simulator insertion: an amp/cab insert that REPLACES the
     // program `drive` on this channel, paired with its dry/wet weight (0..1).
     // Set ONLY by XG effect SysEx (`resolve_variation`); program_change /
@@ -1282,6 +1482,20 @@ struct Strip {
 }
 
 impl Strip {
+    /// Snap any not-yet-primed amp knob to its authored value. Called right
+    /// before a `Drive` rebuild re-applies the rig, so a rebuild that fires
+    /// AFTER the channel authored a knob but BEFORE its first audio block starts
+    /// the rig at the authored value rather than ramping up from neutral (the
+    /// per-block priming would otherwise not have run yet).
+    fn amp_prime_all(&mut self) {
+        for i in 0..AMP_PARAM_COUNT {
+            if !self.amp_primed[i] {
+                self.amp_cur[i] = self.amp_params[i] as f32;
+                self.amp_primed[i] = true;
+            }
+        }
+    }
+
     fn new(sr: f32) -> Self {
         Strip {
             program: 0,
@@ -1310,6 +1524,9 @@ impl Strip {
             rpn_msb: 127,
             rpn_lsb: 127,
             data_msb: 0,
+            nrpn_msb: 127,
+            nrpn_lsb: 127,
+            nrpn_data_msb: 0,
             porta_on: false,
             porta_time: PORTA_MIN_S,
             last_freq: None,
@@ -1352,6 +1569,10 @@ impl Strip {
             organ_wind: 0.0,
             organ_trem_phase: 0.0,
             drive: None,
+            amp_params: [64; AMP_PARAM_COUNT],
+            amp_cur: [64.0; AMP_PARAM_COUNT],
+            amp_primed: [false; AMP_PARAM_COUNT],
+            amp_authored: false,
             xg_insert: None,
             wah: None,
             wah_legacy: None,
@@ -2406,7 +2627,12 @@ impl EngineCore {
                 // program change must rebuild the insert — our albums order
                 // bank-select first, but a foreign GM file need not.
                 if needs_drive(s.program) && s.drive.as_ref().map(|d| d.alt) != Some(s.alt_bank) {
-                    s.drive = Some(Drive::new(s.program, s.alt_bank, sr));
+                    let mut d = Drive::new(s.program, s.alt_bank, sr);
+                    if s.amp_authored {
+                        s.amp_prime_all();
+                        d.apply_params(&s.amp_cur, true);
+                    }
+                    s.drive = Some(d);
                 }
             }
             1 => {
@@ -2420,28 +2646,49 @@ impl EngineCore {
             }
             5 => s.porta_time = PORTA_MIN_S * (PORTA_MAX_S / PORTA_MIN_S).powf(v),
             6 | 38 => {
-                if num == 6 {
-                    s.data_msb = val;
-                }
-                let (msb, lsb) = if num == 6 {
-                    (val, 0)
-                } else {
-                    (s.data_msb, val)
-                };
-                match (s.rpn_msb, s.rpn_lsb) {
-                    (0, 0) => s.bend_range = msb.clamp(1, 24) as f32 + lsb as f32 / 100.0,
-                    (0, 1) => {
-                        let raw = ((msb as i32) << 7 | lsb as i32) - 8192;
-                        let cents = raw as f32 * (100.0 / 8192.0);
-                        s.fine = 2f32.powf(cents / 1200.0);
+                // Data Entry is scoped to whichever latch is live. The two are
+                // mutually exclusive (the select arms below null the other), so
+                // a CC6/CC38 with NO live selector is meaningless MIDI and is
+                // dropped — never stored — closing the KILN-00034 stale-MSB path
+                // in every direction, including from the initial null/null state.
+                if s.rpn_msb != 127 || s.rpn_lsb != 127 {
+                    // ---- RPN Data Entry (bend range / fine tune) — unchanged ----
+                    if num == 6 {
+                        s.data_msb = val;
                     }
-                    _ => {}
-                }
-                if matches!((s.rpn_msb, s.rpn_lsb), (0, 0) | (0, 1)) {
-                    s.bend = 2f32.powf(s.bend_wheel * (s.bend_range * 0.5) / 12.0) * s.fine;
-                    let mult = s.bend;
-                    for a in self.active.iter_mut().filter(|a| a.ch == ch) {
-                        a.voice.set_pitch(mult);
+                    let (msb, lsb) = if num == 6 {
+                        (val, 0)
+                    } else {
+                        (s.data_msb, val)
+                    };
+                    match (s.rpn_msb, s.rpn_lsb) {
+                        (0, 0) => s.bend_range = msb.clamp(1, 24) as f32 + lsb as f32 / 100.0,
+                        (0, 1) => {
+                            let raw = ((msb as i32) << 7 | lsb as i32) - 8192;
+                            let cents = raw as f32 * (100.0 / 8192.0);
+                            s.fine = 2f32.powf(cents / 1200.0);
+                        }
+                        _ => {}
+                    }
+                    if matches!((s.rpn_msb, s.rpn_lsb), (0, 0) | (0, 1)) {
+                        s.bend = 2f32.powf(s.bend_wheel * (s.bend_range * 0.5) / 12.0) * s.fine;
+                        let mult = s.bend;
+                        for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                            a.voice.set_pitch(mult);
+                        }
+                    }
+                } else if s.nrpn_msb != 127 || s.nrpn_lsb != 127 {
+                    // ---- NRPN Data Entry — the ferrosintesis amp block ----
+                    // Only the amp block (MSB 0x30) is modeled; every other NRPN
+                    // is inert (the latch still absorbs the Data Entry so it
+                    // cannot fall through to the RPN path). The 0..127 value is
+                    // the Data Entry MSB (CC6); the LSB (CC38) is ignored.
+                    if num == 6 {
+                        s.nrpn_data_msb = val;
+                        if s.nrpn_msb == AMP_NRPN_MSB && (s.nrpn_lsb as usize) < AMP_PARAM_COUNT {
+                            s.amp_params[s.nrpn_lsb as usize] = val;
+                            s.amp_authored = true;
+                        }
                     }
                 }
             }
@@ -2541,20 +2788,33 @@ impl EngineCore {
                 s.delay_send = v;
                 s.delay_authored = true;
             }
-            98 | 99 => {
-                // NRPN select (CC98 param LSB / CC99 param MSB): ferrosintesis
-                // models no NRPN parameter, but an NRPN select MUST still
-                // invalidate the RPN latch so a following Data-Entry (CC6/38)
-                // cannot write into the previously-selected RPN — e.g. corrupt the
-                // RPN 0,0 bend range to 24 semitones on a GS/XG file that used an
-                // RPN then an NRPN without an intervening RPN-Null. Park the latch
-                // at null (127,127), the same inert state as an RPN-Null
-                // (MM-BUG-KILN-00034). This is the guard only, not NRPN support.
+            // NRPN and RPN selects are mutually exclusive: the most recent one
+            // wins and NULLS the other. This is correct MIDI semantics AND makes
+            // the KILN-00034 stale-latch corruption impossible in both
+            // directions — a Data Entry can only ever reach the selector the file
+            // most recently chose. ferrosintesis models one NRPN block (the amp,
+            // MSB 0x30); the latch is real either way so an unmodeled NRPN still
+            // absorbs its Data Entry rather than leaking to the RPN path.
+            98 => {
+                s.nrpn_lsb = val;
                 s.rpn_msb = 127;
                 s.rpn_lsb = 127;
             }
-            100 => s.rpn_lsb = val,
-            101 => s.rpn_msb = val,
+            99 => {
+                s.nrpn_msb = val;
+                s.rpn_msb = 127;
+                s.rpn_lsb = 127;
+            }
+            100 => {
+                s.rpn_lsb = val;
+                s.nrpn_msb = 127;
+                s.nrpn_lsb = 127;
+            }
+            101 => {
+                s.rpn_msb = val;
+                s.nrpn_msb = 127;
+                s.nrpn_lsb = 127;
+            }
             120 => self.all_sound_off(ch),
             121 => self.reset_all_controllers(ch),
             123 => self.all_notes_off(ch),
@@ -2623,7 +2883,15 @@ impl EngineCore {
             // so a bank change must rebuild just as a program change does.
             let alt = s.alt_bank;
             if s.drive.as_ref().map(|d| (d.program, d.alt)) != Some((prog, alt)) {
-                s.drive = Some(Drive::new(prog, alt, self.opt.sr));
+                let mut d = Drive::new(prog, alt, self.opt.sr);
+                // Authored amp params are channel state (RP-015 / KILN-00033):
+                // re-apply them to the rebuilt insert, seeded from the persisted
+                // slew position so the rig does not ramp up from base.
+                if s.amp_authored {
+                    s.amp_prime_all();
+                    d.apply_params(&s.amp_cur, true);
+                }
+                s.drive = Some(d);
             }
         } else {
             s.drive = None;
@@ -2638,10 +2906,20 @@ impl EngineCore {
     /// sends: those are persistent channel state RP-015 preserves, and resetting
     /// them discarded an authored CC93/CC94 (MM-BUG-KILN-00033).
     fn rederive_program_drive(&mut self, ch: u8) {
-        let prog = self.strips[ch as usize].program;
-        let bank = self.strips[ch as usize].alt_bank_value;
-        self.strips[ch as usize].drive =
-            needs_drive(prog).then(|| Drive::new(prog, bank != 0, self.opt.sr));
+        let ci = ch as usize;
+        let prog = self.strips[ci].program;
+        let bank = self.strips[ci].alt_bank_value;
+        let mut drive = needs_drive(prog).then(|| Drive::new(prog, bank != 0, self.opt.sr));
+        // CC121 preserves authored amp params (RP-015 nulls the selector, not the
+        // values it wrote), so re-apply them to the fresh insert.
+        if let Some(d) = drive.as_mut() {
+            let s = &mut self.strips[ci];
+            if s.amp_authored {
+                s.amp_prime_all();
+                d.apply_params(&s.amp_cur, true);
+            }
+        }
+        self.strips[ci].drive = drive;
     }
 
     fn all_sound_off(&mut self, ch: u8) {
@@ -2701,6 +2979,12 @@ impl EngineCore {
         s.rpn_msb = 127;
         s.rpn_lsb = 127;
         s.data_msb = 0;
+        // RP-015's "RPN/NRPN selector" is both latches; the NRPN half exists now
+        // (the amp block), so null it too. The amp PARAMETER VALUES are preserved
+        // — RAC nulls the selector, not what a selector wrote.
+        s.nrpn_msb = 127;
+        s.nrpn_lsb = 127;
+        s.nrpn_data_msb = 0;
         s.porta_on = false;
         s.last_freq = None;
         s.porta_control = None; // pending CC84 source is cleared; bank_lsb persists (not a RAC controller)
@@ -3105,6 +3389,20 @@ impl EngineCore {
                     }
                 }
             } else if let Some(drive) = &mut strip.drive {
+                if strip.amp_authored {
+                    // Advance each knob toward its authored target at block rate
+                    // (snap on first authoring), then apply the offsets in place.
+                    for i in 0..AMP_PARAM_COUNT {
+                        let target = strip.amp_params[i] as f32;
+                        if strip.amp_primed[i] {
+                            strip.amp_cur[i] += self.wah_smooth * (target - strip.amp_cur[i]);
+                        } else {
+                            strip.amp_cur[i] = target;
+                            strip.amp_primed[i] = true;
+                        }
+                    }
+                    drive.apply_params(&strip.amp_cur, false);
+                }
                 drive.process(&mut buf[..n]);
             }
             if let Some(wah) = &mut strip.wah {
@@ -6494,6 +6792,613 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ===== Score-authored amp parameters (MM-REQ-KILN-00028, part-A HLD) =====
+
+    /// A settled authored render: snap the six knobs to `params` and process
+    /// `input` through the resulting amp. Used by the steady-state oracles.
+    fn amp_settled(
+        prog: u8,
+        alt: bool,
+        sr: f32,
+        params: [u8; AMP_PARAM_COUNT],
+        input: &[f32],
+    ) -> Vec<f32> {
+        let mut d = Drive::new(prog, alt, sr);
+        let cur = params.map(|v| v as f32);
+        d.apply_params(&cur, true);
+        let mut out = input.to_vec();
+        d.process(&mut out);
+        out
+    }
+
+    /// Block-accurate authored render: mirrors the engine's per-block handling
+    /// exactly (prime-on-first-block, block-rate `amp_cur` slew, per-block
+    /// `apply_params`, per-sample scalar slew inside `process`) so the zipper /
+    /// click oracles see the real smoothing path.
+    fn amp_blocks(
+        prog: u8,
+        alt: bool,
+        sr: f32,
+        input: &[f32],
+        params: impl Fn(usize) -> [u8; AMP_PARAM_COUNT],
+    ) -> Vec<f32> {
+        let mut d = Drive::new(prog, alt, sr);
+        let mut cur = [64.0f32; AMP_PARAM_COUNT];
+        let mut primed = [false; AMP_PARAM_COUNT];
+        let smooth = 1.0 - (-(BLOCK as f32) / (WAH_SLEW_S * sr)).exp();
+        let mut out = input.to_vec();
+        for (bi, chunk) in out.chunks_mut(BLOCK).enumerate() {
+            let p = params(bi);
+            for i in 0..AMP_PARAM_COUNT {
+                let t = p[i] as f32;
+                if primed[i] {
+                    cur[i] += smooth * (t - cur[i]);
+                } else {
+                    cur[i] = t;
+                    primed[i] = true;
+                }
+            }
+            d.apply_params(&cur, false);
+            d.process(chunk);
+        }
+        out
+    }
+
+    fn noise(sr: f32, secs: f32, amp: f32, seed: u32) -> Vec<f32> {
+        let mut rng = crate::dsp::Rng::new(seed);
+        (0..(secs * sr) as usize)
+            .map(|_| rng.white() * amp)
+            .collect()
+    }
+
+    fn sine(sr: f32, secs: f32, f0: f32, amp: f32) -> Vec<f32> {
+        (0..(secs * sr) as usize)
+            .map(|i| amp * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
+            .collect()
+    }
+
+    /// AC2/AC4: a channel authoring every knob at the neutral 64 renders
+    /// BIT-IDENTICALLY to the unauthored path, for all four program × bank
+    /// combinations. This is the inertness invariant at the sample level and
+    /// simultaneously proves the offset math is an exact identity at n=0 (so a
+    /// future base-value desync could not hide).
+    #[test]
+    fn amp_neutral_is_bit_identical() {
+        let sr = 44100.0;
+        let input = noise(sr, 1.0, 0.2, 0x0028_0001);
+        for prog in [29u8, 30] {
+            for alt in [false, true] {
+                let mut d0 = Drive::new(prog, alt, sr);
+                let mut base = input.clone();
+                d0.process(&mut base); // unauthored path
+
+                let authored = amp_blocks(prog, alt, sr, &input, |_| [64; AMP_PARAM_COUNT]);
+                assert_eq!(
+                    base.len(),
+                    authored.len(),
+                    "prog {prog} alt {alt}: length mismatch"
+                );
+                for (i, (a, b)) in base.iter().zip(&authored).enumerate() {
+                    assert_eq!(
+                        a.to_bits(),
+                        b.to_bits(),
+                        "prog {prog} alt {alt} sample {i}: neutral render is not bit-identical ({a} vs {b})"
+                    );
+                }
+            }
+        }
+    }
+
+    /// AC4: each knob moves its OWN primary axis in the intended direction and
+    /// by at least a pinned minimum, and reads exactly the neutral value at 64.
+    /// The measured spread is well above the asserted floor — the floor exists
+    /// so a `/63`-scaled or epsilon-sized knob would fail.
+    #[test]
+    fn amp_each_knob_moves_its_axis() {
+        let sr = 44100.0;
+        // The floor rules out an epsilon-sized or wrongly scaled knob; it is not
+        // the effect size. The two PRE-CLIP knobs (Tone, Tightness) are
+        // deliberately subtle — a pre-clip EQ is largely swallowed by the
+        // saturator (§2.1), so they colour rather than transform, and move
+        // ~1.7–4 dB. The three CABINET knobs are post-clip (linear) and move
+        // 11–17 dB. Measured spreads are printed for the coupling report.
+        struct Case {
+            knob: usize,
+            f0: f32,
+            amp: f32,
+            lo: f32,
+            hi: f32,
+            more: u8, // knob value producing MORE of the measured band
+            less: u8,
+            min_db: f32,
+        }
+        let c = |knob, f0, amp, lo, hi, more, less, min_db| Case {
+            knob,
+            f0,
+            amp,
+            lo,
+            hi,
+            more,
+            less,
+            min_db,
+        };
+        let cases = [
+            c(AMP_TONE, 110.0, 0.02, 400.0, 1600.0, 127, 0, 1.4),
+            c(AMP_TIGHT, 82.4, 0.30, 40.0, 110.0, 0, 127, 1.4), // more low end at value 0
+            c(AMP_BODY, 150.0, 0.10, 350.0, 750.0, 127, 0, 10.0),
+            c(AMP_PRES, 150.0, 0.10, 2000.0, 3400.0, 127, 0, 10.0),
+            c(AMP_CABTONE, 150.0, 0.10, 2500.0, 3600.0, 127, 0, 9.0), // downward-only
+        ];
+        for prog in [29u8, 30] {
+            for alt in [false, true] {
+                for &Case {
+                    knob,
+                    f0,
+                    amp,
+                    lo,
+                    hi,
+                    more,
+                    less,
+                    min_db,
+                } in &cases
+                {
+                    let input = sine(sr, 0.6, f0, amp);
+                    let band = |v: u8| {
+                        let mut p = [64u8; AMP_PARAM_COUNT];
+                        p[knob] = v;
+                        let out = amp_settled(prog, alt, sr, p, &input);
+                        let seg = &out[(0.2 * sr) as usize..];
+                        20.0 * crate::testutil::spectral_band_rms(seg, sr, lo, hi)
+                            .max(1e-12)
+                            .log10()
+                    };
+                    let hi_db = band(more);
+                    let lo_db = band(less);
+                    let spread = hi_db - lo_db;
+                    println!(
+                        "knob {knob} prog {prog} {}: spread {spread:.2} dB (more {hi_db:.2} less {lo_db:.2})",
+                        if alt { "alt" } else { "main" }
+                    );
+                    // 64 is the neutral identity: authoring it equals not touching it.
+                    let neutral = amp_settled(prog, alt, sr, [64; AMP_PARAM_COUNT], &input);
+                    let mut plain = Drive::new(prog, alt, sr);
+                    let mut plain_out = input.clone();
+                    plain.process(&mut plain_out);
+                    assert_eq!(
+                        neutral.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+                        plain_out.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+                        "prog {prog} alt {alt} knob {knob}: value 64 is not identity"
+                    );
+                    assert!(
+                        spread >= min_db,
+                        "prog {prog} alt {alt} knob {knob}: spread {spread:.2} dB < {min_db} \
+                         (more={more} {hi_db:.2} less={less} {lo_db:.2})"
+                    );
+                }
+            }
+        }
+    }
+
+    /// AC8: the Drive knob's TOP end is bounded by the alias floor, not taste.
+    /// Runs `drive_alias_floor`'s exact fold-bin logic at Drive 0/64/127 across
+    /// both programs, both banks and three fundamentals, and asserts the shipped
+    /// -40 dBc budget holds — this is what pins `AMP_DRIVE_K`.
+    #[test]
+    fn amp_drive_knob_holds_alias_floor() {
+        let sr = 44100.0;
+        let fold = |f: f32, fs: f32| {
+            let r = f % fs;
+            if r > fs / 2.0 {
+                fs - r
+            } else {
+                r
+            }
+        };
+        for drive in [0u8, 64, 127] {
+            for prog in [29u8, 30] {
+                for alt in [false, true] {
+                    for f0 in [997.0f32, 1301.0, 1763.0] {
+                        let mut p = [64u8; AMP_PARAM_COUNT];
+                        p[AMP_DRIVE] = drive;
+                        let input = sine(sr, 1.0, f0, 0.5);
+                        let buf = amp_settled(prog, alt, sr, p, &input);
+                        let seg = &buf[(0.2 * sr) as usize..];
+                        let m0 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+                        let mut worst = -200.0f32;
+                        for n in 2..=80u32 {
+                            let fh = n as f32 * f0;
+                            if fh <= sr / 2.0 {
+                                continue;
+                            }
+                            let alias = fold(fold(fh, sr * 2.0), sr);
+                            if !(100.0..=20_000.0).contains(&alias) {
+                                continue;
+                            }
+                            if (alias / f0 - (alias / f0).round()).abs() * f0 < 8.0 {
+                                continue;
+                            }
+                            let rel = 20.0 * (crate::testutil::mag_at(seg, sr, alias) / m0).log10();
+                            worst = worst.max(rel);
+                        }
+                        assert!(
+                            worst <= -40.0,
+                            "Drive {drive} prog {prog} {} f0 {f0:.0}: alias {worst:.1} dBc > -40",
+                            if alt { "alt" } else { "main" }
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// AC5 (diagnostic, `--ignored --nocapture`): the 6×6 cross-coupling matrix.
+    /// Row = knob driven 64→127 (Tightness/Cab Tone 64→0, their "more" end);
+    /// column = the change in each knob's OWN primary band-measure, in dB. The
+    /// diagonal is a knob's own effect; off-diagonal is leakage. Pre-clip knobs
+    /// (Tone, Tightness) share the mid path with Body, so some overlap is
+    /// expected and by design (§residual risks) — the matrix documents it rather
+    /// than pretending the six are orthogonal.
+    #[test]
+    #[ignore]
+    fn amp_coupling_matrix() {
+        let sr = 44100.0;
+        // (knob, f0, amp, band lo, band hi, "more" value)
+        let axes = [
+            (AMP_DRIVE, 220.0f32, 0.30f32, 1500.0f32, 6000.0f32, 127u8),
+            (AMP_TONE, 110.0, 0.02, 400.0, 1600.0, 127),
+            (AMP_TIGHT, 82.4, 0.30, 40.0, 110.0, 0),
+            (AMP_BODY, 150.0, 0.10, 350.0, 750.0, 127),
+            (AMP_PRES, 150.0, 0.10, 2000.0, 3400.0, 127),
+            (AMP_CABTONE, 150.0, 0.10, 2500.0, 3600.0, 0), // active end is DOWNWARD
+        ];
+        let names = ["Drive", "Tone", "Tight", "Body", "Pres", "CabTn"];
+        for prog in [29u8, 30] {
+            for alt in [false, true] {
+                println!(
+                    "\n=== coupling prog {prog} {} (row=driven knob, col=measured axis, dB) ===",
+                    if alt { "alt" } else { "main" }
+                );
+                print!("{:8}", "");
+                for n in names {
+                    print!("{n:>8}");
+                }
+                println!();
+                for &(rk, _, _, _, _, more) in &axes {
+                    print!("{:8}", names[rk]);
+                    for &(_, f0, amp, lo, hi, _) in &axes {
+                        let input = sine(sr, 0.6, f0, amp);
+                        let meas = |v: u8| {
+                            let mut p = [64u8; AMP_PARAM_COUNT];
+                            p[rk] = v;
+                            let out = amp_settled(prog, alt, sr, p, &input);
+                            let seg = &out[(0.2 * sr) as usize..];
+                            20.0 * crate::testutil::spectral_band_rms(seg, sr, lo, hi)
+                                .max(1e-12)
+                                .log10()
+                        };
+                        print!("{:8.1}", meas(more) - meas(64));
+                    }
+                    println!();
+                }
+            }
+        }
+    }
+
+    /// AC7: `post` is a partial makeup trim; the residual level change across
+    /// the whole Drive range is BOUNDED and reported. This pins `AMP_DRIVE_POST_C`
+    /// — not by asserting perfect compensation (no static law can), but by
+    /// measuring the band RMS at Drive 0/64/127 and holding it inside a stated
+    /// tolerance at two pitches and two input levels.
+    #[test]
+    fn amp_drive_level_residual_bounded() {
+        let sr = 44100.0;
+        // `post` is a PARTIAL makeup trim (§2.2): the level error depends on
+        // input level and pitch, not the knob alone, so no static law flattens
+        // it — loud input wants less trim, quiet input more. Measured worst case
+        // is 5.18 dB (whisper 0.05 input) / ~4 dB at playing level; the tolerance
+        // catches a GROSS regression (e.g. compensation disabled ≈ 12 dB swing),
+        // it does not claim perfect level-matching, which the design does not
+        // promise. Reported, not asserted away — this is the honest residual.
+        let tol_db = 6.0;
+        for prog in [29u8, 30] {
+            for alt in [false, true] {
+                for f0 in [147.0f32, 330.0] {
+                    for amp in [0.3f32, 0.05] {
+                        let input = sine(sr, 0.6, f0, amp);
+                        let level = |drive: u8| {
+                            let mut p = [64u8; AMP_PARAM_COUNT];
+                            p[AMP_DRIVE] = drive;
+                            let out = amp_settled(prog, alt, sr, p, &input);
+                            let seg = &out[(0.2 * sr) as usize..];
+                            20.0 * crate::testutil::spectral_band_rms(seg, sr, 120.0, 6000.0)
+                                .max(1e-12)
+                                .log10()
+                        };
+                        let (l0, l64, l127) = (level(0), level(64), level(127));
+                        let spread = (l0 - l64).abs().max((l127 - l64).abs());
+                        println!(
+                            "level prog {prog} {} f0 {f0:.0} amp {amp}: 0={l0:.2} 64={l64:.2} 127={l127:.2} spread {spread:.2}",
+                            if alt { "alt" } else { "main" }
+                        );
+                        assert!(
+                            spread <= tol_db,
+                            "prog {prog} {} f0 {f0:.0} amp {amp}: level residual {spread:.2} dB > {tol_db}",
+                            if alt { "alt" } else { "main" }
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// AC6a: a knob swept mid-note must not add a spectral line at the block
+    /// frequency (`sr/BLOCK`). This is the zipper a peak sample-difference
+    /// detector cannot see, and the reason the scalar knobs slew PER SAMPLE.
+    #[test]
+    fn amp_sweep_has_no_block_rate_zipper() {
+        let sr = 44100.0;
+        let block_hz = sr / BLOCK as f32; // 689 Hz at 44.1k
+        let f0 = 220.0;
+        let input = sine(sr, 1.2, f0, 0.3);
+        let nb = input.len().div_ceil(BLOCK);
+        // Drive ramps 64 -> 127 across the middle third of the render.
+        let swept = amp_blocks(29, false, sr, &input, |bi| {
+            let mut p = [64u8; AMP_PARAM_COUNT];
+            let frac = ((bi as f32 / nb as f32) - 0.33) / 0.34;
+            p[AMP_DRIVE] = (64.0 + 63.0 * frac.clamp(0.0, 1.0)) as u8;
+            p
+        });
+        let control = amp_blocks(29, false, sr, &input, |_| [96; AMP_PARAM_COUNT]);
+        let seg = &swept[(0.1 * sr) as usize..];
+        let ctl = &control[(0.1 * sr) as usize..];
+        // Any block-rate sideband would sit at f0 +/- k*block_hz. Measure the
+        // strongest such bin against the same bin in a steady control.
+        let mut worst = -200.0f32;
+        for k in 1..=3 {
+            for side in [-1.0f32, 1.0] {
+                let f = f0 + side * k as f32 * block_hz;
+                if f < 40.0 || f > sr / 2.0 - 40.0 {
+                    continue;
+                }
+                let s = 20.0 * crate::testutil::mag_at(seg, sr, f).max(1e-12).log10();
+                let c = 20.0 * crate::testutil::mag_at(ctl, sr, f).max(1e-12).log10();
+                worst = worst.max(s - c);
+            }
+        }
+        println!("zipper: worst block-rate sideband {worst:.1} dB over control");
+        assert!(
+            worst <= 12.0,
+            "swept Drive raised a block-rate ({block_hz:.0} Hz) sideband {worst:.1} dB above the steady control — zipper"
+        );
+    }
+
+    /// AC6b: a single large knob step authored mid-note (after the rig is
+    /// already primed) must not click. The block-rate `amp_cur` slew turns the
+    /// jump into small coefficient steps; the per-sample scalar slew smooths the
+    /// gain. Compared against a steady control's peak sample slew.
+    #[test]
+    fn amp_single_step_does_not_click() {
+        let sr = 44100.0;
+        let f0 = 196.0;
+        let input = sine(sr, 1.0, f0, 0.3);
+        let nb = input.len().div_ceil(BLOCK);
+        let step_block = nb / 2;
+        // Primed at neutral, then a hard Body+Drive jump at the half-way block.
+        let stepped = amp_blocks(29, true, sr, &input, |bi| {
+            if bi >= step_block {
+                let mut p = [64u8; AMP_PARAM_COUNT];
+                p[AMP_DRIVE] = 127;
+                p[AMP_BODY] = 127;
+                p
+            } else {
+                [64; AMP_PARAM_COUNT]
+            }
+        });
+        let steady = amp_blocks(29, true, sr, &input, |_| [64; AMP_PARAM_COUNT]);
+        let s_click = crate::testutil::max_slew_norm(&stepped);
+        let base_click = crate::testutil::max_slew_norm(&steady);
+        println!("step click {s_click:.4} vs steady {base_click:.4}");
+        assert!(
+            s_click <= base_click * 2.0 + 0.02,
+            "single-step Body/Drive jump clicked: peak slew {s_click:.4} vs steady {base_click:.4}"
+        );
+    }
+
+    /// AC10: authored amp params are CHANNEL state — they survive Program Change,
+    /// CC0 bank select and CC121, and are cleared only by GM System On. Each row
+    /// of the state table, exercised through the real event dispatch.
+    #[test]
+    fn amp_params_follow_the_state_table() {
+        let sr = 44100.0;
+        let opts = || CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        };
+        let author = |core: &mut EngineCore| {
+            core.handle_event(EvKind::Prog { ch: 0, prog: 29 });
+            core.handle_event(EvKind::Cc {
+                ch: 0,
+                num: 99,
+                val: AMP_NRPN_MSB,
+            });
+            core.handle_event(EvKind::Cc {
+                ch: 0,
+                num: 98,
+                val: AMP_DRIVE as u8,
+            });
+            core.handle_event(EvKind::Cc {
+                ch: 0,
+                num: 6,
+                val: 100,
+            });
+        };
+
+        // Program Change preserves.
+        let mut core = EngineCore::new(opts());
+        author(&mut core);
+        assert!(core.strips[0].amp_authored);
+        assert_eq!(core.strips[0].amp_params[AMP_DRIVE], 100);
+        core.handle_event(EvKind::Prog { ch: 0, prog: 30 });
+        assert!(
+            core.strips[0].amp_authored,
+            "Program Change dropped amp authoring"
+        );
+        assert_eq!(
+            core.strips[0].amp_params[AMP_DRIVE], 100,
+            "Program Change reset an amp param"
+        );
+        assert!(
+            core.strips[0].drive.as_ref().unwrap().active,
+            "rebuilt Drive did not re-apply the rig"
+        );
+
+        // CC0 bank select preserves.
+        let mut core = EngineCore::new(opts());
+        author(&mut core);
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 0,
+            val: 1,
+        });
+        assert_eq!(
+            core.strips[0].amp_params[AMP_DRIVE], 100,
+            "CC0 reset an amp param"
+        );
+        assert!(
+            core.strips[0].drive.as_ref().unwrap().active,
+            "CC0-rebuilt Drive did not re-apply the rig"
+        );
+
+        // CC121 Reset All Controllers preserves the VALUES (nulls only the selector).
+        let mut core = EngineCore::new(opts());
+        author(&mut core);
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 121,
+            val: 0,
+        });
+        assert_eq!(
+            core.strips[0].amp_params[AMP_DRIVE], 100,
+            "CC121 reset an amp param value"
+        );
+        assert_eq!(
+            core.strips[0].nrpn_msb, 127,
+            "CC121 did not null the NRPN selector"
+        );
+        assert!(
+            core.strips[0].drive.as_ref().unwrap().active,
+            "CC121-rebuilt Drive did not re-apply the rig"
+        );
+
+        // GM System On clears everything.
+        let mut core = EngineCore::new(opts());
+        author(&mut core);
+        core.handle_event(EvKind::GmReset);
+        assert!(
+            !core.strips[0].amp_authored,
+            "GM System On did not clear amp authoring"
+        );
+        assert_eq!(
+            core.strips[0].amp_params[AMP_DRIVE], 64,
+            "GM System On did not reset amp params to neutral"
+        );
+
+        // A rebuild that fires AFTER authoring but BEFORE the channel's first
+        // audio block must start the rig at the authored value, not ramp up from
+        // neutral: the per-block priming has not run yet, so the reseed itself
+        // primes the knobs (amp_prime_all). Author Drive=127, then a bank change
+        // rebuilds — the rebuilt insert's g1 must already be the Drive=127 gain.
+        let mut core = EngineCore::new(opts());
+        core.handle_event(EvKind::Prog { ch: 0, prog: 29 });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 99,
+            val: AMP_NRPN_MSB,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 98,
+            val: AMP_DRIVE as u8,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 6,
+            val: 127,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
+            num: 0,
+            val: 1,
+        }); // bank change -> rebuild
+        let g1 = core.strips[0].drive.as_ref().unwrap().g1;
+        let neutral_g1 = Drive::new(29, true, sr).g1;
+        assert!(
+            g1 > neutral_g1 * 1.5,
+            "rebuild before first block left g1 at {g1} (neutral {neutral_g1}); the authored Drive=127 did not snap"
+        );
+    }
+
+    /// AC11: the RPN⇄NRPN latch is mutually exclusive and Data Entry is scoped to
+    /// the live selector, so the KILN-00034 bend-range corruption is impossible
+    /// in every direction — including the amp-authoring direction this feature
+    /// introduces, and the initial null/null state.
+    #[test]
+    fn amp_nrpn_never_corrupts_the_rpn_bend_range() {
+        let sr = 44100.0;
+        let opts = CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        };
+        let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
+
+        // Direction A: amp NRPN then RPN select then a bare CC38 must not leak
+        // the amp value into the bend range.
+        let mut core = EngineCore::new(opts);
+        core.handle_event(cc(99, AMP_NRPN_MSB));
+        core.handle_event(cc(98, AMP_DRIVE as u8));
+        core.handle_event(cc(6, 100)); // authors the amp; nrpn_data_msb = 100
+        assert_eq!(core.strips[0].amp_params[AMP_DRIVE], 100);
+        core.handle_event(cc(101, 0)); // select RPN 0,0 — nulls the NRPN latch
+        core.handle_event(cc(100, 0));
+        core.handle_event(cc(38, 0)); // LSB-only Data Entry
+        assert_ne!(
+            core.strips[0].bend_range, 24.0,
+            "amp NRPN Data Entry leaked into the RPN bend range (KILN-00034 direction A)"
+        );
+
+        // Direction B (null/null): a Data Entry with no live selector is dropped,
+        // so it cannot poison a later RPN write.
+        let mut core = EngineCore::new(opts);
+        core.handle_event(cc(6, 100)); // no selector live — must be ignored
+        core.handle_event(cc(101, 0));
+        core.handle_event(cc(100, 0));
+        core.handle_event(cc(38, 0));
+        assert_ne!(
+            core.strips[0].bend_range, 24.0,
+            "null-selector Data Entry leaked into the RPN bend range (KILN-00034 null path)"
+        );
+
+        // And the amp block still authors correctly when it IS the live selector.
+        let mut core = EngineCore::new(opts);
+        core.handle_event(cc(99, AMP_NRPN_MSB));
+        core.handle_event(cc(98, AMP_PRES as u8));
+        core.handle_event(cc(6, 120));
+        assert_eq!(core.strips[0].amp_params[AMP_PRES], 120);
+        assert!(core.strips[0].amp_authored);
     }
 
     /// Level-match probe (diagnostic, `--ignored --nocapture`): post-drive RMS

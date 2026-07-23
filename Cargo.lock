@@ -700,6 +700,7 @@ dependencies = [
 name = "ferrosintesis"
 version = "0.21.56"
 dependencies = [
+ "ferrosintesis-samples-b1-upright",
  "ferrosintesis-samples-bass",
  "ferrosintesis-samples-bottle",
  "ferrosintesis-samples-ccby",
@@ -731,6 +732,10 @@ version = "0.14.2"
 dependencies = [
  "ferrosintesis",
 ]
+
+[[package]]
+name = "ferrosintesis-samples-b1-upright"
+version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-bass"

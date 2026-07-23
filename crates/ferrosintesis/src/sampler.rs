@@ -83,6 +83,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_dark_salamander::get(name))
         .or_else(|| ferrosintesis_samples_ydp_grand::get(name))
         .or_else(|| ferrosintesis_samples_honkytonk::get(name))
+        .or_else(|| ferrosintesis_samples_b1_upright::get(name))
         .or_else(|| ferrosintesis_samples_clavinet::get(name))
         .or_else(|| ferrosintesis_samples_musescore::get(name))
         .or_else(|| ferrosintesis_samples_sax::get(name))
@@ -1633,6 +1634,128 @@ fn honkytonk_zones() -> &'static [Zone] {
 /// Voices GM 0 CC0 alt bank 8.
 pub fn honkytonk_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
     honkytonk_zones()
+}
+
+// GM 0 Acoustic Grand ALTERNATE bank 5 - Arthur's own Yamaha B1 acoustic UPRIGHT
+// (first-party Tascam DR-05 recording, MIT/Apache, ferrosintesis-samples-b1-upright).
+// A real upright, not a grand: warmer and boxier, with THREE genuinely-recorded
+// timbre layers (soft/normal/hard dynamic passes) rather than one sample re-EQ'd.
+// Roots are the MEASURED first partial of each note, so it plays at exact equal
+// temperament while its per-note inharmonicity and Railsback stretch ride along;
+// the one exception is the hard-layer B7, whose top-octave pitch is unmeasurable,
+// so its root is B7's ET frequency. A0 and the very top of the soft pass are
+// absent (weak/near-inaudible at those dynamics) — `nearest()` covers those keys.
+fn b1_soft_zones() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "b1_soft_C1.wav" => 31.71,
+            "b1_soft_E1.wav" => 40.27,
+            "b1_soft_G1.wav" => 47.78,
+            "b1_soft_B1.wav" => 60.92,
+            "b1_soft_D2.wav" => 72.53,
+            "b1_soft_F2.wav" => 86.55,
+            "b1_soft_A2.wav" => 108.91,
+            "b1_soft_C3.wav" => 130.09,
+            "b1_soft_E3.wav" => 163.72,
+            "b1_soft_G3.wav" => 194.84,
+            "b1_soft_B3.wav" => 245.03,
+            "b1_soft_C4.wav" => 261.10,
+            "b1_soft_E4.wav" => 327.67,
+            "b1_soft_G4.wav" => 390.32,
+            "b1_soft_B4.wav" => 490.61,
+            "b1_soft_D5.wav" => 584.55,
+            "b1_soft_F5.wav" => 694.56,
+            "b1_soft_A5.wav" => 875.81,
+            "b1_soft_C6.wav" => 1046.86,
+            "b1_soft_E6.wav" => 1319.38,
+            "b1_soft_G6.wav" => 1576.32,
+            "b1_soft_B6.wav" => 1963.85,
+        )
+    })
+}
+
+fn b1_normal_zones() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "b1_normal_C1.wav" => 31.71,
+            "b1_normal_E1.wav" => 40.28,
+            "b1_normal_G1.wav" => 47.86,
+            "b1_normal_B1.wav" => 60.91,
+            "b1_normal_D2.wav" => 72.53,
+            "b1_normal_F2.wav" => 86.54,
+            "b1_normal_A2.wav" => 108.90,
+            "b1_normal_C3.wav" => 130.11,
+            "b1_normal_E3.wav" => 163.54,
+            "b1_normal_G3.wav" => 194.82,
+            "b1_normal_B3.wav" => 245.03,
+            "b1_normal_D4.wav" => 291.58,
+            "b1_normal_F4.wav" => 347.39,
+            "b1_normal_A4.wav" => 437.40,
+            "b1_normal_C5.wav" => 521.81,
+            "b1_normal_E5.wav" => 655.74,
+            "b1_normal_G5.wav" => 782.45,
+            "b1_normal_B5.wav" => 983.28,
+            "b1_normal_D6.wav" => 1172.50,
+            "b1_normal_F6.wav" => 1390.01,
+            "b1_normal_A6.wav" => 1762.43,
+            "b1_normal_C7.wav" => 2076.71,
+            "b1_normal_E7.wav" => 2671.42,
+            "b1_normal_G7.wav" => 3149.78,
+            "b1_normal_B7.wav" => 3972.30,
+        )
+    })
+}
+
+fn b1_hard_zones() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "b1_hard_A0.wav" => 26.77,
+            "b1_hard_C1.wav" => 31.73,
+            "b1_hard_E1.wav" => 40.28,
+            "b1_hard_G1.wav" => 48.03,
+            "b1_hard_B1.wav" => 60.98,
+            "b1_hard_D2.wav" => 72.63,
+            "b1_hard_F2.wav" => 86.68,
+            "b1_hard_A2.wav" => 108.93,
+            "b1_hard_C3.wav" => 130.33,
+            "b1_hard_E3.wav" => 163.51,
+            "b1_hard_G3.wav" => 195.12,
+            "b1_hard_B3.wav" => 245.29,
+            "b1_hard_D4.wav" => 291.92,
+            "b1_hard_F4.wav" => 347.83,
+            "b1_hard_A4.wav" => 438.14,
+            "b1_hard_C5.wav" => 522.30,
+            "b1_hard_E5.wav" => 656.13,
+            "b1_hard_G5.wav" => 782.37,
+            "b1_hard_B5.wav" => 983.98,
+            "b1_hard_D6.wav" => 1171.69,
+            "b1_hard_F6.wav" => 1385.93,
+            "b1_hard_A6.wav" => 1758.61,
+            "b1_hard_C7.wav" => 2068.31,
+            "b1_hard_E7.wav" => 2672.11,
+            "b1_hard_G7.wav" => 3152.84,
+            "b1_hard_B7.wav" => 3951.07,
+            "b1_hard_C8.wav" => 4255.38,
+        )
+    })
+}
+
+/// Three RECORDED timbre layers (soft/normal/hard) selected by velocity — the
+/// property no other bank has: the dynamics are genuinely different captured
+/// spectra. Loudness still comes from the engine's shared velocity law; the layer
+/// only supplies timbre. Split: `vel < 50` soft, `50..=89` normal, `>= 90` hard.
+/// `rr2` is ignored (no round robins in v1). Voices GM 0 CC0 alt bank 5.
+pub fn b1upright_bank(vel: u8, _rr2: bool) -> &'static [Zone] {
+    if vel < 50 {
+        b1_soft_zones()
+    } else if vel < 90 {
+        b1_normal_zones()
+    } else {
+        b1_hard_zones()
+    }
 }
 
 pub fn violin_bank(vel: u8) -> &'static [Zone] {

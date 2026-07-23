@@ -14,6 +14,7 @@ members = [
     "crates/ferrosintesis-samples-dark-salamander",
     "crates/ferrosintesis-samples-ydp-grand",
     "crates/ferrosintesis-samples-honkytonk",
+    "crates/ferrosintesis-samples-b1-upright",
     "crates/ferrosintesis-samples-musescore",
     "crates/ferrosintesis-samples-orchestral",
     "crates/ferrosintesis-samples-orchestral2",

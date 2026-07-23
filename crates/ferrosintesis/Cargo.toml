@@ -26,6 +26,7 @@ embedded-samples = [
     "dep:ferrosintesis-samples-dark-salamander",
     "dep:ferrosintesis-samples-ydp-grand",
     "dep:ferrosintesis-samples-honkytonk",
+    "dep:ferrosintesis-samples-b1-upright",
     "dep:ferrosintesis-samples-musescore",
     "dep:ferrosintesis-samples-orchestral",
     "dep:ferrosintesis-samples-orchestral2",
@@ -56,6 +57,7 @@ ferrosintesis-samples-musescore-grand = { path = "../ferrosintesis-samples-muses
 ferrosintesis-samples-dark-salamander = { path = "../ferrosintesis-samples-dark-salamander", version = "=0.1.0", optional = true }
 ferrosintesis-samples-ydp-grand = { path = "../ferrosintesis-samples-ydp-grand", version = "=0.1.0", optional = true }
 ferrosintesis-samples-honkytonk = { path = "../ferrosintesis-samples-honkytonk", version = "=0.1.0", optional = true }
+ferrosintesis-samples-b1-upright = { path = "../ferrosintesis-samples-b1-upright", version = "=0.1.0", optional = true }
 ferrosintesis-samples-musescore = { path = "../ferrosintesis-samples-musescore", version = "=0.1.0", optional = true }
 ferrosintesis-samples-orchestral = { path = "../ferrosintesis-samples-orchestral", version = "=0.1.0", optional = true }
 ferrosintesis-samples-orchestral2 = { path = "../ferrosintesis-samples-orchestral2", version = "=0.1.0", optional = true }

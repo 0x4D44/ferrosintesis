@@ -1040,6 +1040,7 @@ pub fn make(
         // reaches here (alt_bank false). CC0 selects a source recording:
         //   GM 0 (plain model): 1 Salamander · 2 Steinway B · 3 Headroom · 4 dark-Salamander
         //     (a warmer high-shelf EQ of the Salamander — kept as a 5th GM 0 option)
+        //     · 5 B1 upright (Arthur's own Yamaha B1, three recorded dynamic layers)
         //   GM 1 (bright model): 1 YDP bright grand · 2 MuseScore grand
         // The model matches the slot (GM 1 = the brighter model), same as the defaults.
         0 | 1 => {
@@ -1052,6 +1053,9 @@ pub fn make(
                     // CC0=4: dark-Salamander — a warmer high-shelf EQ of the Salamander,
                     // kept as a 5th GM 0 option (Arthur, 2026.07.18).
                     (0, 4) => Some(crate::sampler::darkgrand_bank(vel, seed & 1 == 0)),
+                    // CC0=5: Arthur's own Yamaha B1 acoustic upright (first-party DR-05
+                    // recording, three recorded soft/normal/hard timbre layers).
+                    (0, 5) => Some(crate::sampler::b1upright_bank(vel, seed & 1 == 0)),
                     (1, 1) => Some(crate::sampler::ydpgrand_bank(vel, seed & 1 == 0)),
                     (1, 2) => Some(crate::sampler::musescoregrand_bank(vel, seed & 1 == 0)),
                     _ => None,

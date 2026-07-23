@@ -711,6 +711,7 @@ dependencies = [
  "ferrosintesis-samples-grand",
  "ferrosintesis-samples-headroom",
  "ferrosintesis-samples-honkytonk",
+ "ferrosintesis-samples-mandolin",
  "ferrosintesis-samples-musescore",
  "ferrosintesis-samples-musescore-grand",
  "ferrosintesis-samples-orchestral",
@@ -772,6 +773,10 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-honkytonk"
+version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-mandolin"
 version = "0.1.0"
 
 [[package]]

@@ -68,6 +68,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_bottle::get(name))
         .or_else(|| ferrosintesis_samples_ccby::get(name))
         .or_else(|| ferrosintesis_samples_rain::get(name))
+        .or_else(|| ferrosintesis_samples_mandolin::get(name))
         .unwrap_or_else(|| panic!("embedded sample inventory is missing {name}"))
 }
 

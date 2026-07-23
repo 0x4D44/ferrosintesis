@@ -10,6 +10,25 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.24 — **Bank layers must differ in TIMBRE, not level — `vel_amp` owns loudness** (`sampler.rs:LaVoice`).
+  - `LaVoice` scales the sample by `vel_amp(vel)`, the SAME law as the wrapped model, so a multi-velocity
+    bank's soft/hard captures supply spectrum, never gain. Per-file peak-normalise-to-0.9 in
+    `prepare.py:trim_to_onset` is therefore CORRECT, not a calibration bug: baking a measured soft-to-hard
+    level span into the samples would fight `vel_amp` and unbalance the bank against every other instrument.
+  - Corollary for tuning: set `Zone.root` = the MEASURED f1 and the engine repitches to exact ET
+    (`ratio = target_hz/zone.root`), so a flat, Railsback-stretched real piano plays in tune while keeping the
+    per-note inharmonicity that makes it sound like itself. Normalise intonation, keep timbre.
+  - Corollary for LAYER COUNT: measure the captures against each other before shipping one per dynamic. The
+    B1 upright's soft pass sat +0.8 dB from normal in noise-subtracted tilt — the same timbre — for 11 dB less
+    SNR, so it was hiss with no tone to pay for it and got dropped. Two captures, split at velocity 60.
+
+- 2026.07.24 — **Commit bulky sample sources as 160 kbps opus — roots re-slice to <0.75 cents** (`prepare.py:_bake_b1upright`).
+  - The raw DR-05 takes are hundreds of MiB as WAV, far too big to commit, which would leave the baked crate
+    unreproducible. `ropusenc` then `ropusdec` at 160 kbps is transparent enough to be the SOURCE OF RECORD:
+    re-slicing the decoded takes reproduced every measured root to under 0.75 cents, so `prepare.py` regen stays
+    byte-identical to what ships. One marginal note (a -15 dBFS B7) fell below the onset detector after the lossy
+    pass and needed a `--assign` override — expect a handful of those, not a systematic shift.
+
 - 2026.07.24 — **A dotted-quaver echo lands on the OFF-BEAT of a quaver line — fine on a sparse voice, shimmer on a fast one** (`engine.rs:fx_profile`).
   - The Tubular Bells glockenspiel entry sounded "echoy shimmer" and the file authors NOTHING — no CC93, no CC94,
     no CC91 until beat 775. `fx_profile` gave GM 8–10 an unauthored 0.15 echo send; the bus time is a dotted

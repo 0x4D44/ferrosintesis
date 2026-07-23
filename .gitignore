@@ -74,6 +74,11 @@ _cal/
 !tools/ferrosintesis-samples/gong-src/*.wav
 !tools/ferrosintesis-samples/freesound-src/*.wav
 !tools/ferrosintesis-samples/mandolin-src/*.wav
+# ...and the per-zone bake sources under the repo-root samples/ store. That store is
+# otherwise Opus-only (the `!samples/**/*.opus` rule above): the Eastman guitar
+# additionally commits its 16 pre-cut LOSSLESS zone WAVs, so prepare.py can rebake the
+# bank offline with no opus decoder. See samples/README.md.
+!samples/**/zones/*.wav
 
 # Third-party reference MIDI test corpus (fan transcriptions of copyrighted works,
 # used only to stress-test ferrosintesis against real-world MIDI content). Never

@@ -1,0 +1,11 @@
+ferrosintesis-samples-b1-upright
+================================
+
+The embedded WAV samples in this crate are a FIRST-PARTY recording: Arthur's own
+Yamaha B1 acoustic upright piano, recorded by the author on a Tascam DR-05
+(24-bit / 48 kHz / stereo) on 2026-07-23. There is no third-party source and no
+external attribution requirement.
+
+Licensed under the repository's own terms: MIT OR Apache-2.0 (see LICENSE-MIT /
+LICENSE-APACHE). Full provenance and the exact processing pipeline are in
+PROVENANCE.md.

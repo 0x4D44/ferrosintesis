@@ -1,0 +1,13 @@
+[package]
+name = "ferrosintesis-samples-b1-upright"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+description = "Embedded first-party Yamaha B1 upright-piano samples for ferrosintesis (GM0 alternate bank 5)"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/0x4D44/ferrosintesis"
+readme = "README.md"
+include = ["src/**", "samples/**", "README.md", "NOTICE", "PROVENANCE.md", "LICENSE-MIT", "LICENSE-APACHE"]
+
+[lib]
+path = "src/lib.rs"

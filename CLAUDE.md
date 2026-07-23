@@ -78,6 +78,12 @@ byte-identical and `--verify` reasons about the same Score that produced the fil
 (`--verify` covers all fable5 + gpt5 albums; VIGIL's builder only rebuilds. Some
 fable5 albums also add `--check` for in-memory-only oracles, safe to run while composing.)
 
+**Always run bare `python build.py` FIRST, then `--verify`.** Neither `--verify` nor
+`--track N --verify` writes the `.mid` — they run the oracles on the in-memory Score and
+re-parse the *existing* file, so after editing a movement they report green on music the
+committed MIDI does not contain. The order is: edit → `build.py` (writes) → `--verify` →
+render → analyze; confirm with `cmp` on the `.mid` when it matters.
+
 ### Rendering audio — from the **repo root**
 The `.opus` listening copies are git-ignored build output, regenerated on demand by
 `render-catalog` (pure Rust — no Python in the audio pipeline):
@@ -170,6 +176,12 @@ error variant is therefore a minor bump, not a major one — keep it that way. P
 forced by the `=0.1.0` pins: `ferrosintesis-samples-core` → `-orchestral` → `ferrosintesis`.
 `ferrosintesis-cli` and `render-catalog` are `publish = false`.
 
+Every crate declares **`rust-version = "1.87"`** — that declaration is what turns clippy's
+`incompatible_msrv` lint on, so keep it. An MSRV is only real once a toolchain at that
+version has compiled it: prove it with `cargo +1.87 check --workspace`, not by grepping for
+the newest std API. **Keep every dependency on ONE line** — a multi-line inline table is
+invalid TOML 1.0, and cargo 1.87 refuses the manifest outright where newer cargo accepts it.
+
 ## Composition-engine architecture
 
 Every album is a self-contained Python bundle that shares one design philosophy but comes
@@ -215,7 +227,10 @@ Two shapes:
 `.gitignore` drops `.wav` and `.opus` (both reproducible build output) **except** the
 WAVs under `crates/ferrosintesis-samples-{core,orchestral}/samples/` — those 218 files
 are the synth's 17.73 MiB sample bank, which is **source, not output**. Never
-treat them as regenerable. Commit an album as one atomic bundle (sources + `.mid` +
+treat them as regenerable. A **new** sample crate's WAVs stay ignored until you add its own
+`!crates/<crate>/samples/*.wav` line — otherwise `git add <crate>` commits the crate
+*without* its samples and it fails to build from a clean checkout; confirm with
+`git ls-files <crate>/samples` after committing. Commit an album as one atomic bundle (sources + `.mid` +
 manifest and docs); the `.opus` renders are **not** committed — regenerate them with
 `cargo run --release -p render-catalog`.
 

@@ -1,0 +1,21 @@
+# Dev tool for choosing the driven-guitar defaults by ear (Part B).
+#
+# Deliberately its OWN workspace, not a member of the repo's: `cargo test
+# --workspace` at the repo root is the integration gate, and pulling egui + cpal
+# into it would make every future integration build a ~200-crate tree for a tool
+# it never runs. Costs this crate its own lock file; saves everyone else the gate.
+[workspace]
+
+[package]
+name = "amp-lab"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+eframe = { version = "0.28", default-features = false, features = ["glow", "default_fonts"] }
+cpal = "0.15"
+ferrosintesis = { path = "../ferrosintesis" }
+
+[profile.release]
+opt-level = 3

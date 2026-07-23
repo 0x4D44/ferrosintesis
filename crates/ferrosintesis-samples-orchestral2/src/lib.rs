@@ -307,6 +307,70 @@ static SAMPLES: &[(&str, &[u8])] = &[
         "musicbox_C7.wav",
         include_bytes!("../samples/musicbox_C7.wav"),
     ),
+    (
+        "eastpick_E2.wav",
+        include_bytes!("../samples/eastpick_E2.wav"),
+    ),
+    (
+        "eastpick_B2.wav",
+        include_bytes!("../samples/eastpick_B2.wav"),
+    ),
+    (
+        "eastpick_E3.wav",
+        include_bytes!("../samples/eastpick_E3.wav"),
+    ),
+    (
+        "eastpick_A#3.wav",
+        include_bytes!("../samples/eastpick_A#3.wav"),
+    ),
+    (
+        "eastpick_E4.wav",
+        include_bytes!("../samples/eastpick_E4.wav"),
+    ),
+    (
+        "eastpick_A#4.wav",
+        include_bytes!("../samples/eastpick_A#4.wav"),
+    ),
+    (
+        "eastpick_F5.wav",
+        include_bytes!("../samples/eastpick_F5.wav"),
+    ),
+    (
+        "eastpick_B5.wav",
+        include_bytes!("../samples/eastpick_B5.wav"),
+    ),
+    (
+        "eastpluck_E2.wav",
+        include_bytes!("../samples/eastpluck_E2.wav"),
+    ),
+    (
+        "eastpluck_A#2.wav",
+        include_bytes!("../samples/eastpluck_A#2.wav"),
+    ),
+    (
+        "eastpluck_E3.wav",
+        include_bytes!("../samples/eastpluck_E3.wav"),
+    ),
+    (
+        "eastpluck_A#3.wav",
+        include_bytes!("../samples/eastpluck_A#3.wav"),
+    ),
+    (
+        "eastpluck_E4.wav",
+        include_bytes!("../samples/eastpluck_E4.wav"),
+    ),
+    (
+        "eastpluck_B4.wav",
+        include_bytes!("../samples/eastpluck_B4.wav"),
+    ),
+    (
+        "eastpluck_F5.wav",
+        include_bytes!("../samples/eastpluck_F5.wav"),
+    ),
+    (
+        "eastpluck_B5.wav",
+        include_bytes!("../samples/eastpluck_B5.wav"),
+    ),
 ];
 
 /// Number of embedded WAV files.

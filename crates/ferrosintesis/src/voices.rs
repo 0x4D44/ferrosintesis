@@ -8699,7 +8699,7 @@ pub(crate) const LA_GUITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.28));
 /// tracks that drop (0.42 · 10^(−6.5/20) ≈ 0.20) so the sample fade-out meets
 /// the gentler model fade-in continuously. Fade window unchanged — only the
 /// level was mismatched, not the timing.
-const LA_STEEL: (f32, (f32, f32)) = (0.20, (0.05, 0.28));
+pub(crate) const LA_STEEL: (f32, (f32, f32)) = (0.20, (0.05, 0.28));
 /// Mandolin LA onset (owner-recorded, CC0, `-mandolin` crate) reached at GM 25 +
 /// bank LSB 96: the sample owns the pick attack and the first ~0.9 s — including
 /// the real double-course shimmer — and the `MANDOLIN` model carries the decay
@@ -8709,6 +8709,75 @@ const LA_STEEL: (f32, (f32, f32)) = (0.20, (0.05, 0.28));
 /// The 0.28 s fade-end sits safely inside the 0.9 s sample even at the bank's
 /// widest repitch (±2.5 semitones → step ≤ ~1.15 → ≥0.78 s of sample consumed).
 const LA_MANDOLIN: (f32, (f32, f32)) = (0.20, (0.05, 0.28));
+/// GM 25 default bank since 2026.07.23 — Arthur's own Eastman E1D dreadnought,
+/// plectrum take (`samples/acoustic-guitar-eastman-e1d/picked.opus`, CC0).
+///
+/// Derived in two steps, and the first step alone is NOT sufficient. The bake
+/// peak-normalises every zone to 0.9, so what moves between banks is envelope
+/// SHAPE — RMS inside the 0.05..0.28 s crossfade window relative to peak.
+/// Averaged over all zones the Eastman picked take sits 1.19 dB below the
+/// Martin (0.1909 vs 0.2191), suggesting 0.20 × 0.2191/0.1909 ≈ 0.229. But the
+/// mean hides a TREBLE deficit: this take's top zones are far quieter relative
+/// to peak than the Martin's (A#4 0.110 / F5 0.095 vs B4 0.206 / F5 0.210), so
+/// at 0.229 `print_steel_wrap_level_ratios` read 0.78–0.80 on keys 76/79 —
+/// astride `la_steel_high_key_level_parity`'s 0.8 floor. Scaling by 1.14 to
+/// **0.26** recentres the checked keys at 0.89–1.33 and lifts the whole sweep's
+/// maximum only to ~1.42, well inside the 2.2 ceiling. Fade window unchanged:
+/// only the level moved, not the timing (HLD §7).
+///
+/// The lesson is that a bank-wide mean is the wrong statistic for a gain the
+/// TREBLE oracles police — measure with the harness before pinning.
+pub(crate) const LA_EASTPICK: (f32, (f32, f32)) = (0.26, (0.05, 0.28));
+/// GM 25 CC0=1 alternate — the same guitar, fingerstyle (`plucked.opus`).
+/// Warmer and ~4–5× darker than the picked take (centroid ~480–630 Hz vs
+/// ~2400–3000 Hz). Its crossfade-window mean sits 0.54 dB below the Martin
+/// (0.2059), giving 0.20 × 0.2191/0.2059 ≈ 0.213, and it shares the picked
+/// take's treble deficit (B4 0.106 / F5 0.110 against the Martin's 0.206 /
+/// 0.210), so it takes the same 1.14 treble correction → **0.242**. It is an
+/// alternate bank, so `la_steel_high_key_level_parity` (which measures the
+/// default) does not police it; `altbank_steel_alternates_are_level_sane`
+/// covers it instead.
+pub(crate) const LA_EASTPLUCK: (f32, (f32, f32)) = (0.242, (0.05, 0.28));
+
+/// Build a GM 25 steel voice: the `STEEL` Karplus-Strong model carrying the
+/// decay, with `zones` crossfaded over its onset at LA gain/fade `la`.
+///
+/// GM 25 now has three sampled banks (Eastman picked = default, Eastman plucked
+/// = CC0 1, Martin HD28 = CC0 2) that differ ONLY in their zones and LA gain, so
+/// they share this one constructor rather than repeating the wrap — a divergence
+/// between the default and alt paths is exactly the bug class
+/// `altbank_steel_banks_share_the_model` guards. `samples = false` yields the
+/// bare model, which is what the CC0 3 alt (and any samples-off build) wants.
+pub(crate) fn steel_layered(
+    zones: &'static [crate::sampler::Zone],
+    la: (f32, (f32, f32)),
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    samples: bool,
+) -> Box<dyn Voice> {
+    let model = Box::new(Pluck::new(&STEEL, key, vel, sr, seed));
+    if !samples {
+        return model;
+    }
+    let (gain, fade) = la;
+    crate::sampler::LaVoice::wrap_var(
+        model,
+        zones,
+        key,
+        vel,
+        sr,
+        gain,
+        fade,
+        crate::sampler::LaFx {
+            vel_lp: Some(6000.0),
+            ..Default::default()
+        },
+        crate::sampler::GUITAR_VAR,
+        seed,
+    )
+}
 /// GM 6 harpsichord: the sample owns the quill pluck (first ~30 ms), the
 /// Karplus-Strong string carries the slow-damped jangle from ~200 ms — the same
 /// onset-ownership split as the plucked guitars. Held at 0.28 (below the guitar's
@@ -12562,32 +12631,19 @@ fn make_uncorrected(
         // 25 steel: LA layer added 2026.07.16, closing HLD §2.2's open question.
         // The FreePats steel set stays rejected (GPL-with-exception — its
         // composition-scoped carve-out does not reach redistributing the sample
-        // DATA via include_bytes!). The bank is instead a 2017 Martin HD28,
-        // CC0-dedicated by Jeff Learman in the Discord SFZ GM Bank — see
-        // tools/ferrosintesis-samples/prepare.py STEEL_REV for the pinned SHA.
-        25 => {
-            let model = Box::new(Pluck::new(&STEEL, key, vel, sr, seed));
-            if samples {
-                let (gain, fade) = LA_STEEL;
-                crate::sampler::LaVoice::wrap_var(
-                    model,
-                    crate::sampler::steel_bank(),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                    crate::sampler::LaFx {
-                        vel_lp: Some(6000.0),
-                        ..Default::default()
-                    },
-                    crate::sampler::GUITAR_VAR,
-                    seed,
-                )
-            } else {
-                model
-            }
-        }
+        // DATA via include_bytes!). Since 2026.07.23 the DEFAULT bank is Arthur's
+        // own Eastman E1D (picked take, CC0, first-party — no SHA pin needed);
+        // the 2017 Martin HD28 that held this slot is now the CC0=2 alternate and
+        // the fingerstyle Eastman take is CC0=1. See `altbank::make`'s `25` arm.
+        25 => steel_layered(
+            crate::sampler::eastman_picked_bank(),
+            LA_EASTPICK,
+            key,
+            vel,
+            sr,
+            seed,
+            samples,
+        ),
         26 => Box::new(Pluck::new(&JAZZ, key, vel, sr, seed)),
         27 => Box::new(Pluck::new(&CLEAN, key, vel, sr, seed)),
         28 => Box::new(Pluck::new(&MUTED, key, vel, sr, seed)),

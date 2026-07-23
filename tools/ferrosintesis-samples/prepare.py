@@ -831,6 +831,11 @@ F0_RANGE = {
     # lesson. The Martin is tuned ~12 cents flat throughout; harmless, because
     # the MEASURED root is what lands in the zone table.
     "steel": (70.0, 1050.0),
+    # Eastman E1D picked/plucked: same E2 (82.4) … B5 (987.8) span and the same
+    # reasoning as steel above — ceiling 1050 clears the top zone's fundamental
+    # but stays under its 2nd harmonic (1976).
+    "eastpick": (70.0, 1050.0),
+    "eastpluck": (70.0, 1050.0),
     # harpsichord sounds C2 65 Hz … F6 1396 Hz; ceiling 1500 clears the top
     # zone's fundamental but stays under its 2nd harmonic (2792) — the
     # brass/oboe autocorr lesson. Bright and plucked, but the fundamental
@@ -929,6 +934,8 @@ KEEP_FAM = {
     "headroom": (1.5, 0.6),
     "nylon": (0.9, 0.30),
     "steel": (0.9, 0.30),
+    "eastpick": (0.9, 0.30),
+    "eastpluck": (0.9, 0.30),
     "harpsi": (0.9, 0.30),
     "harp": (0.9, 0.30),
     "timpani": (0.9, 0.30),
@@ -1005,6 +1012,32 @@ MANDOLIN_SOURCES = {
     for fn in (sorted(os.listdir(MANDOLIN_SRC)) if os.path.isdir(MANDOLIN_SRC) else [])
     if fn.endswith(".wav")
 }
+# Steel-string acoustic (GM 25), FIRST-PARTY alternates — Arthur's own Eastman E1D
+# dreadnought, recorded 2026-07-23 and dedicated CC0-1.0. Unlike every other family
+# here there is NO URL and NO SHA pin, and that is not an omission: the sources are
+# not fetched from a third party at all, they are committed in THIS repo, so git
+# history (not a remote digest) is the integrity record — there is no upstream that
+# could move under us. The full-length masters live at
+# `samples/acoustic-guitar-eastman-e1d/{picked,plucked}.opus`; the per-note bake
+# sources under that dir's `zones/` are already PRE-CUT single notes (lossless mono
+# 44.1 kHz, target onset near the start) — exactly the shape the Martin `steel_*`
+# files arrive in, so they run the SAME one-file-per-zone path (read_wav → resample →
+# trim_to_onset → write_wav_mono). No slicing/segmentation happens here.
+#
+# Two picking styles = two independent banks: `eastpick` (plectrum — brighter, harder
+# transient) and `eastpluck` (fingerstyle — rounder). The zone grids differ by one
+# pitch each; each is what the style was cleanly recorded at. One take per note — no
+# velocity layers, no round robins — so, exactly like nylon/steel, these are single
+# flat layers and LaVoice's vel_amp does the dynamic scaling. Bake params mirror steel
+# (KEEP_FAM 0.9/0.30, F0_RANGE 70–1050); roots are MEASURED at bake and printed — the
+# measured value, not the label, is what belongs in sampler.rs. Output → the CC0
+# `-orchestral2` crate (`-orchestral` is at the ~10 MiB crates.io cap).
+EASTMAN_SRC = os.path.join(REPO_ROOT, "samples", "acoustic-guitar-eastman-e1d", "zones")
+_EASTPICK_ZONES = ("E2", "B2", "E3", "A#3", "E4", "A#4", "F5", "B5")
+_EASTPLUCK_ZONES = ("E2", "A#2", "E3", "A#3", "E4", "B4", "F5", "B5")
+# dest name -> source filename under EASTMAN_SRC
+EASTPICK_SOURCES = {f"eastpick_{n}.wav": f"picked_{n}.wav" for n in _EASTPICK_ZONES}
+EASTPLUCK_SOURCES = {f"eastpluck_{n}.wav": f"plucked_{n}.wav" for n in _EASTPLUCK_ZONES}
 
 CORE_FAMILIES = frozenset(("piano", "violin", "flute"))
 # Families that live in their OWN sample crate (not core/orchestral) — the grand is
@@ -1042,6 +1075,9 @@ FAMILY_PACKAGE = {
     # Owner-recorded CC0 mandolin (GM 25 + bank LSB 96) — its own crate, like the
     # other owner-recorded bank (-rain), keeping licence provenance isolated.
     "mandolin": "ferrosintesis-samples-mandolin",
+    # First-party CC0 Eastman E1D guitar banks (GM 25 alternates).
+    "eastpick": "ferrosintesis-samples-orchestral2",
+    "eastpluck": "ferrosintesis-samples-orchestral2",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1192,6 +1228,16 @@ def ensure_mandolin_sources(src):
     as gong-src and freesound-src)."""
     for fn in MANDOLIN_SOURCES:
         shutil.copyfile(os.path.join(MANDOLIN_SRC, fn), os.path.join(src, fn))
+def ensure_eastman_sources(src, source_map):
+    """Copy the committed Eastman E1D zone WAVs into `src` under their DEST names.
+
+    First-party recordings tracked in this repo (see the EASTMAN block above), so
+    there is nothing to fetch and no digest to verify — same local-file intake shape
+    as `ensure_freesound_sources` / the gong sources, never `ensure_source`. The main
+    bake loop then reads `src/<dest>` and runs the normal trim / measure / route chain.
+    """
+    for dest, fn in source_map.items():
+        shutil.copyfile(os.path.join(EASTMAN_SRC, fn), os.path.join(src, dest))
 
 
 def ensure_flac_sources(src, source_map, label):
@@ -2501,7 +2547,8 @@ def main():
     # leaving every other tracked WAV untouched and skipping their fetches (incl. the
     # 7z / SF3 / tarball sources) — used to ADD one instrument without rewriting the
     # whole bank. `fam` is the sample-name prefix: harp, timpani, recorder, ocarina,
-    # banjo, sitar, panflute, bottle, shakuhachi, clavinet, chanter (bagpipe), grand, sax, …
+    # banjo, sitar, panflute, bottle, shakuhachi, clavinet, chanter (bagpipe), grand, sax,
+    # eastpick, eastpluck (the first-party Eastman E1D guitars), …
     only = None
     for a in sys.argv[1:]:
         if a.startswith("--only="):
@@ -2586,6 +2633,10 @@ def main():
             ensure_freesound_sources(src)
         if want("mandolin"):
             ensure_mandolin_sources(src)
+        if want("eastpick"):
+            ensure_eastman_sources(src, EASTPICK_SOURCES)
+        if want("eastpluck"):
+            ensure_eastman_sources(src, EASTPLUCK_SOURCES)
         if want("chanter"):
             ensure_bagpipe_sources(src)
         if want("grand"):
@@ -2680,6 +2731,7 @@ def main():
             | SOLO_CELLO_URLS | SOLO_DBASS_URLS | PIZZBASS_URLS
             | FINGERBASS_SOURCES | PICKBASS_SOURCES | FREESOUND_SOURCES
             | MANDOLIN_SOURCES
+            | EASTPICK_SOURCES | EASTPLUCK_SOURCES
             | GRAND_SOURCES
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):

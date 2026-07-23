@@ -1118,14 +1118,47 @@ pub fn make(
         // sampled attack layer (voices.rs LA_BRASS) must not reach alt-bank
         // channels, so the fall-through pins samples off for 56–61.
         56..=61 => crate::voices::make(program, key, vel, sr, seed, false),
-        // Same freeze for the alt-bank guitars: the default bank's LA_GUITAR
-        // layer (voices.rs, GM 24 nylon and — since 2026.07.16 — GM 25 steel)
-        // must not reach alt-bank channels. This pin was placed for 24 while 25
-        // still had no layer, explicitly so 25 "stays frozen if one lands"; the
-        // Martin HD28 bank landed, so it is now load-bearing for both, and CC0!=0
-        // is how a score keeps the pure-model steel. Pinned by
-        // altbank_guitars_skip_sample_layer.
-        24..=25 => crate::voices::make(program, key, vel, sr, seed, false),
+        // Same freeze for the alt-bank NYLON guitar: the default bank's LA_GUITAR
+        // layer (voices.rs, GM 24) must not reach alt-bank channels. Pinned by
+        // altbank_guitars_skip_sample_layer, which now covers 24 alone — GM 25
+        // split out below and is deliberately layered on two of its banks.
+        24 => crate::voices::make(program, key, vel, sr, seed, false),
+        // GM 25 steel carries THREE sampled banks plus the pure model, selected by
+        // CC0 (bank-select MSB) — the "move the originals to alt" idiom, applied
+        // when Arthur's own Eastman E1D took the default slot on 2026.07.23:
+        //
+        //   CC0 0  Eastman E1D, picked      — the default (voices::make)
+        //   CC0 1  Eastman E1D, fingerstyle — same guitar, warmer articulation
+        //   CC0 2  Martin HD28              — the bank that used to be the default
+        //   CC0 3  pure Karplus-Strong      — what CC0!=0 meant before this split
+        //
+        // Unlike the frozen 24/56..=61/68..=71 arms, banks 1 and 2 KEEP their
+        // sample layer: they are alternate instruments, not a pure-model escape
+        // hatch. Bank 3 is that escape hatch, and every other CC0 value falls
+        // through to it so an unknown bank can never silently pick an instrument.
+        // No committed album authors CC0 on a melodic GM 25 channel, so this
+        // remap moves no existing render.
+        25 => match bank {
+            1 => crate::voices::steel_layered(
+                crate::sampler::eastman_plucked_bank(),
+                crate::voices::LA_EASTPLUCK,
+                key,
+                vel,
+                sr,
+                seed,
+                samples,
+            ),
+            2 => crate::voices::steel_layered(
+                crate::sampler::steel_bank(),
+                crate::voices::LA_STEEL,
+                key,
+                vel,
+                sr,
+                seed,
+                samples,
+            ),
+            _ => crate::voices::make(program, key, vel, sr, seed, false),
+        },
         // Opt-in SUSTAINING lead voicing of the driven guitar (GM 29/30): a
         // held note rings for its whole duration (amp sustain) for a soaring
         // lead with bends and legato. The default-bank 29/30 voice (the
@@ -1593,36 +1626,46 @@ mod tests {
         }
     }
 
-    /// Alt-bank guitars 24-25 must ignore the default bank's LA_GUITAR sampled
+    /// Alt-bank NYLON (24) must ignore the default bank's LA_GUITAR sampled
     /// attack layer: samples on/off render byte-identical (the same guard as
     /// brass/reeds/strings).
     ///
-    /// This became load-bearing for 25 on 2026.07.16, when the Martin HD28 CC0
-    /// bank gave the default steel an LA layer for the first time. Before that
-    /// the assertion was vacuous — 25 had no layer to skip — so the `24..=25`
-    /// pin in `make` was untested and a future edit could have silently let the
-    /// sampled attack through to alt-bank channels. CC0!=0 is how a score asks
-    /// for the pure-model steel, so this test is what keeps that promise.
+    /// GM 25 used to be covered by the same `24..=25` sweep, but on 2026.07.23
+    /// it gained three sampled banks (Eastman picked = default, Eastman plucked
+    /// = CC0 1, Martin HD28 = CC0 2), so "every alt bank is pure model" is no
+    /// longer true of it — banks 1 and 2 are deliberately layered ALTERNATE
+    /// INSTRUMENTS. What survives, and is checked here, is that bank 3 is still
+    /// the pure-model escape hatch, and that an UNKNOWN bank falls through to it
+    /// rather than silently landing on an instrument.
     #[cfg(feature = "embedded-samples")]
     #[test]
     fn altbank_guitars_skip_sample_layer() {
         let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
-        for prog in 24..=25u8 {
-            let on = render_make(prog, 52, 100, 0.5, 6, true);
-            let off = render_make(prog, 52, 100, 0.5, 6, false);
+        let on = render_make(24, 52, 100, 0.5, 6, true);
+        let off = render_make(24, 52, 100, 0.5, 6, false);
+        assert_eq!(
+            bits(&on),
+            bits(&off),
+            "alt-bank guitar 24 not sample-independent"
+        );
+        for bank in [3u8, 4, 17, 64, 126] {
+            let on = render_make_bank(25, bank, 52, 100, 0.5, 6, true);
+            let off = render_make_bank(25, bank, 52, 100, 0.5, 6, false);
             assert_eq!(
                 bits(&on),
                 bits(&off),
-                "alt-bank guitar {prog} not sample-independent"
+                "alt-bank steel CC0={bank} not sample-independent — an unknown \
+                 bank must fall through to the pure model, not an instrument"
             );
         }
     }
 
-    /// The alt-bank steel must be a real alternative to the default, not a
-    /// copy of it: with samples available, default-bank GM 25 (LA-layered) and
-    /// alt-bank GM 25 (pure model) must diverge in the attack window. Guards
-    /// the other direction from `altbank_guitars_skip_sample_layer` — together
-    /// they pin that CC0!=0 selects a genuinely different, un-layered voice.
+    /// Every GM 25 bank must be a genuinely different voice from the default,
+    /// not a copy of it: CC0 1 (Eastman fingerstyle), CC0 2 (Martin HD28) and
+    /// CC0 3 (pure model) each diverge from the default Eastman picked bank in
+    /// the attack window, which is where the sample layer lives. Guards the
+    /// other direction from `altbank_guitars_skip_sample_layer`: together they
+    /// pin that each CC0 value selects the instrument it advertises.
     #[cfg(feature = "embedded-samples")]
     #[test]
     fn altbank_steel_differs_from_the_layered_default() {
@@ -1630,22 +1673,79 @@ mod tests {
             return;
         }
         let sr = 44100.0;
-        let alt = render_make(25, 52, 100, 0.5, 6, true);
         let mut d = crate::voices::make(25, 52, 100, sr, 6, true);
         let mut def = vec![0f32; (0.5 * sr) as usize];
         d.render(&mut def);
         let win = (0.05 * sr) as usize;
-        let diff: Vec<f32> = alt[..win]
-            .iter()
-            .zip(&def[..win])
-            .map(|(a, b)| a - b)
-            .collect();
-        let (dr, ar) = (rms(&diff), rms(&alt[..win]));
-        assert!(
-            dr > 0.3 * ar,
-            "alt-bank steel 25 barely differs from the layered default \
-             (diff {dr:.5} vs alt {ar:.5}) — is the LA layer leaking through?"
-        );
+        for bank in [1u8, 2, 3] {
+            let alt = render_make_bank(25, bank, 52, 100, 0.5, 6, true);
+            let diff: Vec<f32> = alt[..win]
+                .iter()
+                .zip(&def[..win])
+                .map(|(a, b)| a - b)
+                .collect();
+            let (dr, ar) = (rms(&diff), rms(&alt[..win]));
+            assert!(
+                dr > 0.15 * ar,
+                "GM 25 CC0={bank} barely differs from the layered default \
+                 (diff {dr:.5} vs alt {ar:.5}) — is it aliasing the default bank?"
+            );
+        }
+    }
+
+    /// All four GM 25 banks share ONE model: with samples off they collapse to
+    /// the same `STEEL` Karplus-Strong voice, byte for byte. The banks are meant
+    /// to differ only in their zone set and LA gain — both routed through
+    /// `voices::steel_layered` — so a divergence here means a bank grew its own
+    /// model behind the sample layer, which would make the CC0 3 pure-model
+    /// escape hatch a different instrument depending on which bank preceded it.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn altbank_steel_banks_share_the_model() {
+        let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        let sr = 44100.0;
+        let mut d = crate::voices::make(25, 52, 100, sr, 6, false);
+        let mut def = vec![0f32; (0.5 * sr) as usize];
+        d.render(&mut def);
+        for bank in [1u8, 2, 3] {
+            let off = render_make_bank(25, bank, 52, 100, 0.5, 6, false);
+            assert_eq!(
+                bits(&off),
+                bits(&def),
+                "GM 25 CC0={bank} model diverges from the default's with samples off"
+            );
+        }
+    }
+
+    /// The two SAMPLED alternates carry their own LA gain (`LA_EASTPLUCK`,
+    /// `LA_STEEL`), which `la_steel_high_key_level_parity` cannot police because
+    /// that oracle measures the DEFAULT bank only. Same contract, same treble
+    /// keys: the wrapped voice must sit within 0.8–2.2× the bare model's early
+    /// RMS, so a mis-fitted alternate gain cannot ship unnoticed.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn altbank_steel_alternates_are_level_sane() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let (a, b) = ((0.05 * sr) as usize, (0.30 * sr) as usize);
+        for bank in [1u8, 2] {
+            for key in [76u8, 79, 83] {
+                for vel in [60u8, 100] {
+                    let early = |samples: bool| {
+                        let buf = render_make_bank(25, bank, key, vel, 0.4, 5, samples);
+                        rms(&buf[a..b])
+                    };
+                    let ratio = early(true) / early(false).max(1e-12);
+                    assert!(
+                        (0.8..2.2).contains(&ratio),
+                        "GM 25 CC0={bank} key {key} vel {vel}: wrapped/model \
+                         early-RMS ratio {ratio:.2} outside 0.8–2.2"
+                    );
+                }
+            }
+        }
     }
 
     /// MM-BUG-KILN-00015 batch 2 / 00016: each newly-sampled program engages its onset in

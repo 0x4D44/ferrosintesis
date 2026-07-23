@@ -497,6 +497,60 @@ fn steel() -> &'static [Zone] {
     })
 }
 
+/// GM 25 DEFAULT since 2026.07.23 — Arthur's own Eastman E1D dreadnought,
+/// plectrum take, CC0 and first-party (no upstream, so no SHA pin to keep).
+/// Masters: `samples/acoustic-guitar-eastman-e1d/picked.opus`.
+///
+/// Two zones stand off the nominal grid. The take's A#2 begins inside the
+/// previous note's decay and its B4 is quiet and barely isolated, and
+/// `trim_to_onset` finds the attack as the first sample above 3 % of peak —
+/// under ~30 dB of pre-onset quiet it latches onto the wrong note. **B2** and
+/// **A#4** are the well-isolated neighbours (~40–46 dB) and stand in; roots are
+/// MEASURED, so a zone only has to sit near its slot. The nylon bank does the
+/// same thing (B2 for its source's missing A#2).
+///
+/// The take reads consistently sharp (mean ≈ +11 cents) — a harder plectrum
+/// attack stretches the string, and the 0.9 s window is attack-dominated. That
+/// never reaches the render: the sampler repitches from these measured roots.
+fn eastpick() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "eastpick_E2.wav" => 83.56,
+            "eastpick_B2.wav" => 124.31,
+            "eastpick_E3.wav" => 166.21,
+            "eastpick_A#3.wav" => 233.27,
+            "eastpick_E4.wav" => 331.56,
+            "eastpick_A#4.wav" => 469.73,
+            "eastpick_F5.wav" => 702.02,
+            "eastpick_B5.wav" => 991.03,
+        )
+    })
+}
+
+/// GM 25 CC0=1 alternate — the same Eastman E1D, fingerstyle take
+/// (`samples/acoustic-guitar-eastman-e1d/plucked.opus`, CC0). Warmer and much
+/// darker than the picked take (centroid ~480–630 Hz vs ~2400–3000 Hz), and the
+/// cleaner recording of the two: every zone sits on the nominal grid with
+/// 34–56 dB of onset isolation, so no substitutions were needed. Tuning is
+/// closer to nominal than the picked take (mean ≈ +4 cents) — a softer
+/// fingerstyle attack stretches the string less.
+fn eastpluck() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "eastpluck_E2.wav" => 83.33,
+            "eastpluck_A#2.wav" => 116.61,
+            "eastpluck_E3.wav" => 165.49,
+            "eastpluck_A#3.wav" => 232.21,
+            "eastpluck_E4.wav" => 330.31,
+            "eastpluck_B4.wav" => 495.27,
+            "eastpluck_F5.wav" => 699.35,
+            "eastpluck_B5.wav" => 987.59,
+        )
+    })
+}
+
 fn nylon() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
@@ -1954,11 +2008,23 @@ pub fn guitar_bank() -> &'static [Zone] {
     nylon()
 }
 
-/// GM 25 steel-string acoustic. One take per note upstream — no velocity
-/// layers, no round robins — so this is a single flat layer exactly like
-/// nylon, and `LaVoice`'s `vel_amp` does the dynamic scaling.
+/// GM 25 steel-string acoustic, Martin HD28 — the CC0=2 alternate since
+/// 2026.07.23 (it held the default slot until the Eastman banks landed). One
+/// take per note upstream — no velocity layers, no round robins — so this is a
+/// single flat layer exactly like nylon, and `LaVoice`'s `vel_amp` does the
+/// dynamic scaling.
 pub fn steel_bank() -> &'static [Zone] {
     steel()
+}
+
+/// GM 25 DEFAULT bank — Eastman E1D, plectrum. See [`eastpick`].
+pub fn eastman_picked_bank() -> &'static [Zone] {
+    eastpick()
+}
+
+/// GM 25 CC0=1 alternate — Eastman E1D, fingerstyle. See [`eastpluck`].
+pub fn eastman_plucked_bank() -> &'static [Zone] {
+    eastpluck()
 }
 
 /// GM 6 harpsichord — VCSL "Harpsichord, Unk" (Harpsi4), a 5-octave FF–f'''
@@ -2623,6 +2689,8 @@ pub fn prewarm() {
     let _ = flute_bank();
     let _ = guitar_bank();
     let _ = steel_bank();
+    let _ = eastman_picked_bank();
+    let _ = eastman_plucked_bank();
     let _ = harp_bank();
     let _ = ocarina_bank();
     let _ = recorder_bank();
@@ -5950,7 +6018,12 @@ mod tests {
     fn guitar_zone_fade_budget() {
         let (_, fade) = crate::voices::LA_GUITAR;
         let need = fade.1 * 44100.0 * 2.05;
-        for (bank, name) in [(guitar_bank(), "nylon"), (steel_bank(), "steel")] {
+        for (bank, name) in [
+            (guitar_bank(), "nylon"),
+            (steel_bank(), "steel"),
+            (eastman_picked_bank(), "eastpick"),
+            (eastman_plucked_bank(), "eastpluck"),
+        ] {
             for z in bank {
                 assert!(
                     (z.data.len() as f32) >= need,

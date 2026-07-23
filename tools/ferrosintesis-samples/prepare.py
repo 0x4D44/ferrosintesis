@@ -1091,6 +1091,12 @@ FAMILY_PACKAGE = {
     # First-party CC0 Eastman E1D guitar banks (GM 25 alternates).
     "eastpick": "ferrosintesis-samples-orchestral2",
     "eastpluck": "ferrosintesis-samples-orchestral2",
+    # GM0 alt bank 5: Arthur's own Yamaha B1 upright. `_bake_b1upright` direct-writes
+    # into this crate (like ydp/honkytonk), so this entry is belt-and-braces — the
+    # key is the OUTPUT filename prefix (`b1_normal_C3.wav`.split("_", 1)[0] == "b1"),
+    # not the `--only=b1upright` family selector, so `sample_output_path` routes a
+    # `b1_*.wav` correctly if it is ever called on one.
+    "b1": "ferrosintesis-samples-b1-upright",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1597,6 +1603,51 @@ def resample(x, sr_in, sr_out):
         b = x[j + 1] if j + 1 < len(x) else a
         out.append(a + (b - a) * f)
     return out
+
+
+def _biquad_hp(x, sr, fc, q):
+    """One RBJ 2nd-order high-pass section (Direct Form I, single forward pass).
+
+    Phase is irrelevant for a piano slice trimmed to its own onset, so one
+    forward pass is enough; two of these in series make a 4th-order filter.
+    """
+    w0 = 2.0 * math.pi * fc / sr
+    cw, sw = math.cos(w0), math.sin(w0)
+    alpha = sw / (2.0 * q)
+    b0 = (1.0 + cw) / 2.0
+    b1 = -(1.0 + cw)
+    b2 = (1.0 + cw) / 2.0
+    a0 = 1.0 + alpha
+    a1 = -2.0 * cw
+    a2 = 1.0 - alpha
+    b0, b1, b2, a1, a2 = b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0
+    out = [0.0] * len(x)
+    x1 = x2 = y1 = y2 = 0.0
+    for i, v in enumerate(x):
+        o = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        x2, x1 = x1, v
+        y2, y1 = y1, o
+        out[i] = o
+    return out
+
+
+# A 4th-order Butterworth is two 2nd-order sections whose poles sit at +/-22.5 deg
+# and +/-67.5 deg — i.e. these two section Qs (1/(2*cos(theta))). Cascaded they give
+# a maximally-flat passband: -3 dB at fc and just -0.08 dB at C1 (32.7 Hz) for a
+# 20 Hz corner, exactly the figure the B1-upright HLD specifies.
+_BUTTER4_HP_QS = (0.541196100146197, 1.306562964876377)
+
+
+def _butter_hp4(x, sr, fc):
+    """20 Hz-class 4th-order Butterworth high-pass.
+
+    Kills the DR-05 takes' strong 2-5 Hz infrasonic rumble (peak ~-46 dBFS) and
+    any DC before resampling, while leaving the piano body untouched (24 dB/oct,
+    so 5 Hz is ~48 dB down from a 20 Hz corner). stdlib math only.
+    """
+    for q in _BUTTER4_HP_QS:
+        x = _biquad_hp(x, sr, fc, q)
+    return x
 
 
 def _autocorr_f0(seg, sr, lo, hi):
@@ -2479,6 +2530,95 @@ def _bake_honkytonk(src):
     return rows
 
 
+# GM 0 alt bank 5: Arthur's own Yamaha B1 acoustic upright, recorded on a Tascam
+# DR-05. The reproducible source of record is the committed Opus archive under
+# `samples/b1-upright/`; the raw 24-bit takes are far too large to commit. Each
+# take is decoded to a temp WAV named for the b1-slice TAKES table, sliced into
+# per-note archival WAVs by that tool (run as a subprocess — the `b1-slice`
+# directory name has a hyphen and cannot be imported), then baked here.
+B1_OPUS_DIR = os.path.join(REPO_ROOT, "samples", "b1-upright")
+# decoded WAV name (matches the slicer's TAKES keys) -> committed opus file
+B1_OPUS_TAKES = {
+    "DR0000_0195.wav": "DR0000_0195_normal_soft.opus",  # normal then soft pass
+    "DR0000_0200.wav": "DR0000_0200_hard.opus",         # hard pass (re-recorded)
+}
+# Per-take slicer overrides. The top-octave inharmonic detector cannot pitch the
+# hard take's B7 strike (a single weak partial under the soundboard knock — it
+# reads ~2 octaves low), but B7 sits cleanly between G7 and C8 in the ladder, so
+# it is force-assigned by position. Its measured f1 is meaningless, so the bake
+# falls back to B7's ET frequency for that one zone's root (see below).
+B1_SLICE_OVERRIDES = {
+    "DR0000_0200.wav": ["--assign=hard:27:B7"],
+}
+B1_HPF_HZ = 20.0
+# Beyond a semitone the slicer's measured f1 cannot be trusted as a repitch root
+# (only the force-assigned B7 exceeds this); fall back to the note's ET frequency.
+B1_ROOT_FALLBACK_CENTS = 100.0
+
+
+def _bake_b1upright(src):
+    """Bake Arthur's Yamaha B1 upright as a 3-timbre-layer GM0 alt bank (bank 5).
+
+    Decodes the committed Opus takes, slices them with `tools/b1-slice/slice.py`
+    (subprocess), then for every *assigned* slice: a 20 Hz 4th-order Butterworth
+    high-pass on the 48 kHz signal, band-limited resample to 44.1 kHz,
+    `trim_to_onset` (1.5 s body, 0.6 s fade, per-file 0.9 peak-normalise — the
+    same path every alt-bank piano uses), 16-bit mono. Writes
+    `b1_<layer>_<note>.wav` (layer = the slicer pass name: soft/normal/hard)
+    straight into the crate `samples/` dir, and returns print rows.
+
+    root = the slicer's measured first partial f1 (exact-ET repitch that keeps
+    the per-note inharmonicity — the house convention), falling back to the
+    note's ET frequency when the measurement lands more than a semitone off
+    (only the force-assigned B7)."""
+    ropusdec = shutil.which("ropusdec") or "ropusdec"
+    slicer = os.path.join(REPO_ROOT, "tools", "b1-slice", "slice.py")
+    slice_out = os.path.join(src, "slices")
+    os.makedirs(src, exist_ok=True)
+    os.makedirs(slice_out, exist_ok=True)
+    out_dir = os.path.join(REPO_ROOT, "crates",
+                           "ferrosintesis-samples-b1-upright", "samples")
+    os.makedirs(out_dir, exist_ok=True)
+
+    manifests = []
+    for decoded_name, opus_name in B1_OPUS_TAKES.items():
+        opus_path = os.path.join(B1_OPUS_DIR, opus_name)
+        wav_path = os.path.join(src, decoded_name)
+        subprocess.run([ropusdec, opus_path, "-o", wav_path, "-q"], check=True,
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+        argv = [sys.executable, slicer, f"--take={decoded_name}",
+                f"--src={src}", f"--out={slice_out}", "--no-hash", "--no-extras"]
+        argv += B1_SLICE_OVERRIDES.get(decoded_name, [])
+        subprocess.run(argv, check=True, stdin=subprocess.DEVNULL)
+        mpath = os.path.join(slice_out,
+                             os.path.splitext(decoded_name)[0] + ".manifest.json")
+        with open(mpath, encoding="utf-8") as f:
+            manifests.append(json.load(f))
+
+    rows = []
+    for man in manifests:
+        for sl in man["slices"]:
+            if sl.get("status") != "assigned":
+                continue
+            layer = sl["pass"]               # soft / normal / hard
+            note = sl["assigned_note"]       # e.g. C3 (both ladders are all-natural)
+            midi = sl["assigned_midi"]
+            x, sr = read_wav(os.path.join(slice_out, sl["file"]))
+            x = _butter_hp4(x, sr, B1_HPF_HZ)          # on the 48 kHz signal
+            x = resample(x, sr, OUT_SR)
+            seg = trim_to_onset(x, OUT_SR, 1.5, 0.6)
+            et = _midi_hz(midi)
+            f1 = sl["f1_hz"] or 0.0
+            cents = 1200.0 * math.log2(f1 / et) if f1 > 0 else 0.0
+            root = f1 if (f1 > 0 and abs(cents) <= B1_ROOT_FALLBACK_CENTS) else et
+            out_name = f"b1_{layer}_{note}.wav"
+            write_wav_mono(os.path.join(out_dir, out_name), seg, OUT_SR)
+            rows.append((out_name, root, f1, et, cents,
+                         sl.get("pitch_confidence") or 0.0, len(seg) / OUT_SR))
+    return rows
+
+
 def _bake_darkened_grand(_src):
     """GM0 alt bank 5: a WARMER Salamander — the committed `-grand` samples with a
     high-shelf cut above ~2 kHz (a one-pole shelf: y = x - g*(x - lowpass(x))). Tests
@@ -2863,6 +3003,15 @@ def main():
             ht_src = os.path.join(tempfile.gettempdir(), "honkytonk_fb")
             os.makedirs(ht_src, exist_ok=True)
             rows += _bake_honkytonk(ht_src)
+
+        # GM0 alt bank 5: Arthur's own Yamaha B1 upright (first-party DR-05 recording)
+        # -> the first-party -b1-upright crate. Own transform: decode the committed
+        # opus takes, slice them (b1-slice subprocess), 3 timbre layers (soft/normal/
+        # hard). No network; the opus archive is the reproducible source.
+        if want("b1upright"):
+            b1_src = os.path.join(tempfile.gettempdir(), "b1_upright")
+            os.makedirs(b1_src, exist_ok=True)
+            rows += _bake_b1upright(b1_src)
 
         # GM 64-67 saxophones: MTG.SoloSax LA layer (own transform: FLAC fetch +
         # ffmpeg decode), cached by MTG rev, output to the separate CC-BY `-sax` crate.

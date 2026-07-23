@@ -44,6 +44,9 @@ _cal/
 # Regenerate with `cargo run --release -p render-catalog`.
 *.wav
 *.opus
+# ...but the B1-upright bank's committed opus takes ARE source — the reproducible
+# record the bake re-slices (the raw 24-bit takes are too large to commit).
+!samples/b1-upright/*.opus
 # ...but the synth's attack-transient sample banks are source, not output
 !crates/ferrosintesis-samples-clavinet/samples/*.wav
 !crates/ferrosintesis-samples-core/samples/*.wav
@@ -61,6 +64,7 @@ _cal/
 !crates/ferrosintesis-samples-dark-salamander/samples/*.wav
 !crates/ferrosintesis-samples-ydp-grand/samples/*.wav
 !crates/ferrosintesis-samples-honkytonk/samples/*.wav
+!crates/ferrosintesis-samples-b1-upright/samples/*.wav
 !crates/ferrosintesis-samples-sax/samples/*.wav
 !crates/ferrosintesis-samples-bottle/samples/*.wav
 !crates/ferrosintesis-samples-strings/samples/*.wav

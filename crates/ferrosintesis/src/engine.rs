@@ -270,7 +270,83 @@ pub(crate) fn cab_biquads(sr2: f32) -> [Biquad; 5] {
 /// Index of the first lowpass-cliff biquad in [`cab_biquads`]'s array — the
 /// named seam `Drive::chain` splits at so the fine-structure FIR can never
 /// silently drift to the wrong side of the anti-alias cliff (review A3).
+///
+/// [`cab_biquads_lead`] MUST keep the same 3-peaks-then-2-lowpasses topology,
+/// because this one index splits the chain for BOTH cabinets.
 pub(crate) const CAB_CLIFF: usize = 3;
+
+/// The LEAD speaker cabinet — the CC0 alt bank's own cab (2026.07.23 amp+cab
+/// HLD). Same 5-biquad topology as [`cab_biquads`] (so [`CAB_CLIFF`] still
+/// splits it correctly), voiced for a soaring lead instead of a rhythm chug.
+///
+/// A driven guitar's identity lives in its amp and cabinet, and until now the
+/// alt bank borrowed the rhythm cab wholesale — only the [`MicroCab`] ripple
+/// depth differed — which is why Arthur heard "GM029 main sounds the same as
+/// GM029 alt" and why the lead sounded THIN.
+///
+/// **This cabinet is where the lead's tone actually comes from.** Both `tanh`
+/// stages run deeply saturated at the shipped operating points, so the
+/// pre-clip EQ (`voice`/`tilt`) mostly decides *which partials dominate the
+/// clipper* rather than acting as tone control — the cab is the only truly
+/// LINEAR tone stage in the chain. Curing "thin" is therefore a cab job.
+/// Three moves against [`cab_biquads`]:
+///
+/// * **Body FILLED, not scooped** (a −3 dB dip at 500 Hz becomes a broad
+///   +2 dB lift at 700 Hz, Q 0.8). The rhythm cab's mid scoop is what makes a
+///   power chord sit under a vocal; on a single-note lead the same scoop
+///   hollows out exactly where the note lives. Deliberately WIDE and centred
+///   at 700: its skirt still leaves ~+4 dB at 500 Hz against the rhythm cab
+///   while filling 400–1200 Hz, which is the fundamental-and-low-harmonic
+///   band for the keys 57–69 lead register (f0 220–440 Hz). Single biggest
+///   cure for "thin".
+/// * **Tighter, higher low resonance** (100 Hz +4 dB → 120 Hz +2 dB). A lead
+///   does not need the chug's low-end bloom, and trimming it keeps the lead
+///   amp's body in the MIDRANGE instead of flub.
+/// * **Presence moved up and OPENED, not cranked** (2600 Hz +5 dB Q 1.5 →
+///   2800 Hz +4.5 dB Q 1.2). A lead cuts here — but 3–3.5 kHz at high Q is the
+///   ear-canal harshness band, and a narrow peak sitting just under the cliff
+///   reads as a cocked-wah honk. Presence is the garnish; the body fill above
+///   is the cure.
+///
+/// **The anti-alias cliff is deliberately IDENTICAL to [`cab_biquads`]**
+/// (4000/3800 Hz). Raising it for "air" was considered and dropped: on a
+/// driven guitar 5–7 kHz is fizz rather than sparkle, and the cliff is the
+/// first thing to retreat on if the alt alias margin tightens — the 2× shaper
+/// can fold harmonics straight into the passband, which no cliff can fix.
+/// `drive_alias_floor` covers `alt=true` to keep that measured, not assumed.
+///
+/// **Why the lead cab is keyed on the program while the rhythm cab is not.**
+/// The first cut shared ONE lead cab between 29 and 30, and it failed
+/// `driven_banks_diverge_at_lead_pitches`: 30's lead was only 0.68–0.78 dB from
+/// its own main at keys 63/65. The cause is that 30's lead deliberately keeps a
+/// deep pre-clip SCOOP (it inherits the distortion amp's chuggy saturation
+/// character — that is what makes it 30 and not 29), which cancels most of a
+/// shared cab's body fill. So 30's cab has to put back MORE body to reach the
+/// same "vocal lead" destination.
+///
+/// That also resolves a constraint clash. 30's lead must differ from 30's main
+/// (more body) AND from 29's lead — and if both leads are separated on the same
+/// mid axis, those two pull against each other. They are therefore separated on
+/// the axis that is musically true of the pair instead: **29's lead is the
+/// brighter, more open overdrive lead; 30's is the darker, thicker distortion
+/// lead.** Body and presence move in opposite directions between them.
+pub(crate) fn cab_biquads_lead(sr2: f32, program: u8) -> [Biquad; 5] {
+    // (body lift, presence centre, presence lift)
+    let (body, pres_hz, pres) = if program == 30 {
+        (4.5, 2600.0, 3.0) // darker, thicker
+    } else {
+        (2.5, 2800.0, 5.0) // brighter, more open
+    };
+    [
+        Biquad::peak(120.0, 1.0, 2.0, sr2),
+        Biquad::peak(600.0, 0.75, body, sr2),
+        Biquad::peak(pres_hz, 1.2, pres, sr2),
+        // elements CAB_CLIFF.. are the anti-alias decimation cliff and must
+        // stay LAST in Drive::chain (MicroCab inserts before them)
+        Biquad::lowpass(4000.0, 0.9, sr2),
+        Biquad::lowpass(3800.0, 0.8, sr2),
+    ]
+}
 
 /// MicroCab taps: (delay ms, gain), numerically optimized against the full
 /// constraint set at once (250 k-candidate search, journal 2026.07.18):
@@ -421,11 +497,122 @@ struct Drive {
 impl Drive {
     /// `alt` = the channel's CC0 bank is non-zero, i.e. the strip is playing
     /// the sustaining `DRIVE_LEAD` voicing rather than the decaying default.
-    /// It selects the cabinet fine-structure depth only (see
-    /// [`MICRO_CAB_LEAD_DEPTH`]); gain staging and voicing EQ are unchanged,
-    /// so the default bank stays bit-identical.
+    ///
+    /// It selects a WHOLE AMP, not a trim (2026.07.23 amp+cab HLD): the main
+    /// bank is the rhythm amp, the alt bank a soaring lead amp with its own
+    /// gain staging, voicing EQ and cabinet ([`cab_biquads_lead`]). Before
+    /// that, `alt` moved only the cabinet fine-structure depth
+    /// ([`MICRO_CAB_LEAD_DEPTH`]) — so main and alt ran the IDENTICAL amp, and
+    /// the two banks were told apart only by their string (a decaying pluck vs
+    /// the e-bow sustainer). Arthur heard them converge ("GM029 main sounds the
+    /// same as GM029 alt"), with the lead thin.
+    ///
+    /// Measured, the two inserts differed by 0.05 dB in the low end — they were
+    /// the same amp. And the string does NOT cover for that: its sustain gap is
+    /// large and GROWS with pitch (14→60 dB over keys 45–69). It simply is not
+    /// audible on the material, because a lead line's notes last a few hundred
+    /// milliseconds and that gap lives in a tail nobody hears — over the span
+    /// that is audible, both banks went through one amp.
+    ///
+    /// The main bank is UNCHANGED and stays bit-identical.
     fn new(program: u8, alt: bool, sr: f32) -> Self {
         let sr2 = sr * 2.0;
+        if alt {
+            // ---- LEAD amp (CC0 alt bank) -------------------------------
+            // A lead amp is not a louder rhythm amp. Three things make it, and
+            // NONE of them is "more presence into the clipper":
+            //
+            // 1. FOCUS — cut lows BEFORE the shaper (`pre` 90→120 Hz). This is
+            //    the biggest single lever and the one the old design missed.
+            //    Low end that enters a clipper eats headroom and smears
+            //    intermodulation sidebands across every harmonic; that mush is
+            //    generated INSIDE the nonlinearity, so no amount of post-cab EQ
+            //    removes it. Cutting it first is what makes a lead channel
+            //    sound tight and vocal rather than woolly. 120 rather than 130
+            //    is the deliberate compromise: the alt bank does carry low
+            //    notes (Slipstream authors CC0=1 down to key 36), and a 2-pole
+            //    corner at 130 would thin them audibly.
+            // 2. BODY — carried by the cabinet ([`cab_biquads_lead`]), which is
+            //    the only linear tone stage here. See its docs.
+            // 3. A DARKER feed into stage 2 (`tilt`). The rhythm amps push
+            //    700–1200 Hz into stage 2 for bite; a lead pushes LOWER and
+            //    gentler (1400 Hz, +2.5 dB). Boosting presence into a clipper
+            //    multiplies its harmonic/IMD skirt — that is fizz, not cut —
+            //    so presence is added AFTER the shapers, linearly, in the cab.
+            //
+            // NOT a lever, despite the intuition: extra g2 does NOT buy
+            // sustain here. Amp compression lengthens a DECAYING note by
+            // holding it at the knee, but the alt bank's string is the e-bow
+            // sustainer (`voices::DRIVE_LEAD`, sustain 0.6), which already
+            // holds at constant level — so g2 changes the TONE of the hold
+            // (denser odd harmonics, squarer duty), not its length. It is
+            // therefore raised only modestly, for edge thickness.
+            //
+            // 29 vs 30 inside the alt bank is preserved on the SAME axis the
+            // main banks use — pre-clip push vs pre-clip scoop — plus aligned
+            // g1 and g2. Three coherent axes, rather than several sub-audible
+            // ones: a small shift of `tilt` centre or of g2 alone would be
+            // inaudible through a saturated stage, and the two leads would
+            // collapse into each other the way main and alt just did. The
+            // measured signature is that 29 compresses LESS than its own main
+            // (the open, dynamic lead) while 30 compresses MORE (the saturated
+            // one) — see `alt_bank_gain_staging_separates_the_two_leads`.
+            //
+            // `bias` is deliberately NOT one of those axes and stays 0.85 on
+            // both. It was tempting (0.8 vs 0.9 reads as "open vs warm"), but
+            // dropping to 0.8 raises small-signal gain ~1.2 dB while shrinking
+            // the duty asymmetry that generates H2 — measured, 29's H2 falls
+            // ~3.5 dB while H3 rises, against `driven_sustain_stays_distorted`
+            // floors that only carry 1.4–4.1 dB of margin. 0.85 keeps useful
+            // H2 on both; below ~0.75 the referenced-tanh asymmetry washes out
+            // altogether.
+            //
+            // `post` is level-matched to the main bank (`drive_level_probe`,
+            // measured on a 300–3400 Hz band so the low-resonance difference
+            // does not skew it) so the A/B isolates TIMBRE, not loudness.
+            let (g1, g2, post, bias, voice, tilt) = if program == 30 {
+                (
+                    9.0,
+                    3.4,
+                    0.0714,
+                    0.85,
+                    // 30 keeps a pre-clip SCOOP, shallower than the rhythm
+                    // amp's −5: the saturation character stays chuggy/dark
+                    // while the lead cab restores the body post-clip.
+                    Biquad::peak(650.0, 1.0, -4.5, sr2),
+                    // and a scooped feed into stage 2, gentler and LOWER than
+                    // the rhythm 30's −4 dB @ 700
+                    Biquad::peak(800.0, 0.9, -2.0, sr2),
+                )
+            } else {
+                (
+                    8.0,
+                    2.8,
+                    0.0789,
+                    0.85,
+                    // 29 is the OPEN lead: a pre-clip mid push, higher and
+                    // broader than the rhythm 29's +4 dB @ 800.
+                    Biquad::peak(1000.0, 0.8, 4.0, sr2),
+                    // a gentle, LOW feed into stage 2 (see note 3 above) —
+                    // deliberately NOT a presence boost, which would fizz
+                    Biquad::peak(1400.0, 0.8, 2.5, sr2),
+                )
+            };
+            return Drive::from_stages(
+                program,
+                alt,
+                sr2,
+                120.0,
+                voice,
+                g1,
+                bias,
+                tilt,
+                g2,
+                post,
+                cab_biquads_lead(sr2, program),
+            );
+        }
+        // ---- RHYTHM amp (default bank) — UNCHANGED, bit-identical ------
         // 30 = distortion (scooped chug), 29 = overdrive (mid-push lead).
         // Two gentler stages replace v1's single hot tanh.
         //
@@ -463,30 +650,54 @@ impl Drive {
                 Biquad::peak(1200.0, 0.8, 2.0, sr2),
             )
         };
-        Drive::from_stages(program, alt, sr2, voice, g1, bias, tilt, g2, post)
+        Drive::from_stages(
+            program,
+            alt,
+            sr2,
+            90.0,
+            voice,
+            g1,
+            bias,
+            tilt,
+            g2,
+            post,
+            cab_biquads(sr2),
+        )
     }
 
-    /// Shared field construction for both the program-gated `new` and the XG
-    /// `amp_sim` insert: the pre-HPF, the post-shaper DC blocker, the 5-biquad
-    /// cabinet, and the interpolation state are identical; only the voicing EQ
-    /// and gain staging differ. `program` is stored but DSP-irrelevant
+    /// Shared field construction for the program-gated `new` (both banks) and
+    /// the XG `amp_sim` insert: the pre-HPF, the post-shaper DC blocker and the
+    /// interpolation state are identical; the voicing EQ, gain staging and
+    /// CABINET differ. `program` is stored but DSP-irrelevant
     /// (`chain`/`process` never read it).
+    ///
+    /// `cab` must keep [`cab_biquads`]' 3-peaks-then-2-lowpasses topology —
+    /// [`CAB_CLIFF`] splits it for the `MicroCab` insert, and the last two
+    /// elements are the anti-alias decimation cliff.
+    ///
+    /// `pre_hz` is the PRE-shaper high-pass corner. It is a voicing parameter,
+    /// not hygiene: low end that reaches the clipper eats headroom and smears
+    /// intermodulation across the harmonics, so raising it is how a lead
+    /// channel buys focus (90 Hz for the rhythm amps and the XG sim, 120 Hz
+    /// for the lead — see `Drive::new`).
     #[allow(clippy::too_many_arguments)]
     fn from_stages(
         program: u8,
         alt: bool,
         sr2: f32,
+        pre_hz: f32,
         voice: Biquad,
         g1: f32,
         bias: f32,
         tilt: Biquad,
         g2: f32,
         post: f32,
+        cab: [Biquad; 5],
     ) -> Self {
         Drive {
             program,
             alt,
-            pre: Biquad::highpass(90.0, 0.7, sr2),
+            pre: Biquad::highpass(pre_hz, 0.7, sr2),
             voice,
             g1,
             bias,
@@ -497,7 +708,7 @@ impl Drive {
             // large signal-dependent DC that the cab's unity-at-DC biquads
             // cannot remove (V4/CORR-1)
             dcb: Biquad::highpass(20.0, 0.7, sr2),
-            cab: cab_biquads(sr2),
+            cab,
             micro: MicroCab::with_depth(sr2, if alt { MICRO_CAB_LEAD_DEPTH } else { 1.0 }),
             prev: 0.0,
         }
@@ -526,8 +737,21 @@ impl Drive {
         let post = 0.28 / (1.0 + d * 1.5);
         let voice = Biquad::peak(800.0, 0.8, 4.0, sr2);
         let tilt = Biquad::peak(1200.0, 0.8, 2.0, sr2);
-        // The XG insert is an amp simulator, not a bank voicing: full ripple.
-        Drive::from_stages(0, false, sr2, voice, g1, bias, tilt, g2, post)
+        // The XG insert is an amp simulator, not a bank voicing: full ripple,
+        // and the shared rhythm cabinet (the lead cab belongs to the CC0 bank).
+        Drive::from_stages(
+            0,
+            false,
+            sr2,
+            90.0,
+            voice,
+            g1,
+            bias,
+            tilt,
+            g2,
+            post,
+            cab_biquads(sr2),
+        )
     }
 
     #[inline]
@@ -5606,22 +5830,87 @@ mod tests {
     /// Oracle 4 (§5.3): the biased shaper adds a real 2nd harmonic (a pure
     /// sine in, so 2f can only come from the new asymmetry) and the DC
     /// blocker holds the sustained output DC-free.
+    ///
+    /// Extended 2026.07.23 to both programs, both banks and two drive levels
+    /// (16 points, up from 1). The lead bank runs a relaxed bias (0.85 vs the
+    /// rhythm amps' 0.9), so this is the pin that it did not trade its
+    /// even-harmonic warmth away.
+    ///
+    /// The extension exposed a physics fact worth recording, because it looks
+    /// like a bug and is not: **at the LOUD operating point both banks are
+    /// legitimately ODD-harmonic dominated.** A deeply clipped wave is nearly a
+    /// square, and a square is odd. Measured H2−H3 at amp 0.5, f0 110 Hz:
+    /// 29-main −14.4 dB, 30-main −15.6, 29-alt −22.6, 30-alt −23.7 — negative
+    /// for the SHIPPED rhythm amps too. So "H2 must exceed a tenth of H3" is a
+    /// meaningful test of the asymmetry mechanism only at moderate drive, where
+    /// the bias — not the rail — is what breaks the waveform's symmetry. Do not
+    /// "fix" a future loud-point failure by re-biasing; check the tail first.
+    ///
+    /// Hence three claims, each asserted where it is actually the design's:
+    ///   1. DC-free at EVERY operating point (unconditional).
+    ///   2. Real even-harmonic content present at every operating point
+    ///      (H2 ≥ −40 dBc; worst measured −34.3 dBc).
+    ///   3. Even harmonics DOMINATE the odd at the moderate/tail point, which
+    ///      is where the "tube warmth" claim lives (worst measured +6.1 dB).
+    ///
+    /// Plus the original single-point pin, retained verbatim so nothing this
+    /// oracle used to catch is lost.
     #[test]
     fn drive_asymmetry_and_dc() {
         let sr = 44100.0;
-        let mut drive = Drive::new(29, false, sr);
         let f0 = 110.0;
-        let mut buf: Vec<f32> = (0..(sr as usize))
-            .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
-            .collect();
-        drive.process(&mut buf);
-        // skip the DC-blocker settling (§5.3: window starts ≥50 ms in)
-        let seg = &buf[(0.05 * sr) as usize..];
-        let dc = seg.iter().map(|&x| x as f64).sum::<f64>() / seg.len() as f64;
+        let measure = |prog: u8, alt: bool, amp: f32| {
+            let mut drive = Drive::new(prog, alt, sr);
+            let mut buf: Vec<f32> = (0..(sr as usize))
+                .map(|i| amp * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
+                .collect();
+            drive.process(&mut buf);
+            // skip the DC-blocker settling (§5.3: window starts ≥50 ms in)
+            let seg = &buf[(0.05 * sr) as usize..];
+            let dc = seg.iter().map(|&x| x as f64).sum::<f64>() / seg.len() as f64;
+            let m1 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+            let m2 = crate::testutil::mag_at(seg, sr, 2.0 * f0);
+            let m3 = crate::testutil::mag_at(seg, sr, 3.0 * f0);
+            (dc, m1, m2, m3)
+        };
+
+        // The ORIGINAL pin, unchanged: prog 29, default bank, loud, 110 Hz.
+        let (dc, _, m2, m3) = measure(29, false, 0.5);
         assert!(dc.abs() < 1e-3, "sustained DC {dc}");
-        let m2 = crate::testutil::mag_at(seg, sr, 2.0 * f0);
-        let m3 = crate::testutil::mag_at(seg, sr, 3.0 * f0);
         assert!(m2 > 0.1 * m3, "2nd harmonic {m2} vs 3rd {m3}");
+
+        for prog in [29u8, 30] {
+            for alt in [false, true] {
+                for amp in [0.5f32, 0.05] {
+                    let (dc, m1, m2, m3) = measure(prog, alt, amp);
+                    let bank = if alt { "alt " } else { "main" };
+
+                    // (1) DC-free everywhere.
+                    assert!(
+                        dc.abs() < 1e-3,
+                        "prog {prog} {bank} amp {amp}: sustained DC {dc}"
+                    );
+
+                    // (2) the asymmetry mechanism is alive everywhere.
+                    let h2 = 20.0 * (m2 / m1).log10();
+                    assert!(
+                        h2 >= -40.0,
+                        "prog {prog} {bank} amp {amp}: the biased shaper produced no real 2nd \
+                         harmonic — H2 {h2:.1} dBc"
+                    );
+
+                    // (3) and it DOMINATES where the warmth claim lives.
+                    if amp < 0.1 {
+                        assert!(
+                            m2 > 0.1 * m3,
+                            "prog {prog} {bank} amp {amp}: the biased shaper lost its \
+                             even-harmonic warmth at the tail operating point — \
+                             2nd harmonic {m2} vs 3rd {m3}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /// Oracle 5 (§5.1 differential): the program-keyed pre-voicing shifts
@@ -5651,6 +5940,219 @@ mod tests {
         assert!(
             ratio(29, false) > ratio(29, true),
             "prog 29 should push the mids"
+        );
+    }
+
+    /// Small-signal response of the alt (LEAD) insert against the main
+    /// (RHYTHM) insert, at named frequencies. Shared by the amp/cab oracles
+    /// below; driven at 0.02 so the shapers stay near-linear and the numbers
+    /// read as the DESIGNED EQ rather than as clipping products.
+    #[cfg(test)]
+    fn insert_band_db(prog: u8, alt: bool, sr: f32, freqs: &[f32]) -> Vec<f32> {
+        let mut b: Vec<f32> = {
+            let mut rng = crate::dsp::Rng::new(7);
+            (0..(4.0 * sr) as usize)
+                .map(|_| rng.white() * 0.02)
+                .collect()
+        };
+        Drive::new(prog, alt, sr).process(&mut b);
+        freqs
+            .iter()
+            .map(|&f| {
+                20.0 * crate::testutil::band_rms(&b[(0.2 * sr) as usize..], sr, f, 4.0)
+                    .max(1e-12)
+                    .log10()
+            })
+            .collect()
+    }
+
+    #[cfg(test)]
+    fn lead_minus_main_db(prog: u8, sr: f32, freqs: &[f32]) -> Vec<f32> {
+        let m = insert_band_db(prog, false, sr, freqs);
+        let a = insert_band_db(prog, true, sr, freqs);
+        a.iter().zip(&m).map(|(x, y)| x - y).collect()
+    }
+
+    /// 2026.07.23 amp+cab HLD — THE core oracle: the CC0 alt bank is a
+    /// genuinely different AMP, not the rhythm amp with a trim.
+    ///
+    /// Until this change `alt` moved only the `MicroCab` ripple depth, so main
+    /// and alt ran identical gain staging, voicing EQ and cabinet — which is
+    /// what Arthur heard ("GM029 main sounds the same as GM029 alt") and why
+    /// the lead sounded thin. The string-side oracle
+    /// (`voices::driven_main_and_alt_banks_diverge`) could not catch it: it
+    /// renders the bare presets and never touches the insert. Its sustain-index
+    /// gap is in fact LARGE and grows with pitch (14→60 dB over keys 45–69) —
+    /// but a lead line's notes last a few hundred milliseconds, and over that
+    /// span the two banks went through the same amp. Hence this pin.
+    ///
+    /// Every clause is a DIFFERENCE OF DIFFERENCES, so it is invariant to the
+    /// `post` level-match: re-trimming `post` shifts all three named-frequency
+    /// deltas equally and cancels here. That is deliberate — the contract is
+    /// the voicing SHAPE, not a level. Each clause is BOUNDED both ways: the
+    /// floor is roughly half the designed move (so it fails long before the
+    /// contrast is inaudible) and the ceiling stops a future "more is better"
+    /// tweak ratcheting the lead into a honking, fizzy caricature.
+    #[test]
+    fn alt_drive_is_a_distinct_lead_voicing() {
+        let sr = 44100.0;
+        // (100 Hz low, 800 Hz body, 2800 Hz presence, 6000 Hz fizz)
+        for (prog, tilt_floor, low_floor) in [(29u8, 1.5f32, -2.5f32), (30, 2.5, -4.0)] {
+            let d = lead_minus_main_db(prog, sr, &[100.0, 800.0, 2800.0, 6000.0]);
+            let (low, body, pres, fizz) = (d[0], d[1], d[2], d[3]);
+
+            // (1) BODY-vs-PRESENCE tilt — the cure for "thin". The lead must be
+            // more mid-forward relative to its own presence than the rhythm amp
+            // is. Measured: 29 +3.0 dB, 30 +7.1 dB.
+            let tilt = body - pres;
+            println!(
+                "lead voicing prog {prog}: tilt(800-2800) {tilt:+.2} dB, \
+                 low(100-800) {:+.2}, fizz(6000-800) {:+.2}",
+                low - body,
+                fizz - body
+            );
+            assert!(
+                tilt >= tilt_floor,
+                "prog {prog}: the lead amp is not more body-forward than the rhythm amp \
+                 — tilt(800-2800) {tilt:+.2} dB < {tilt_floor:+.1}"
+            );
+            assert!(
+                tilt <= 12.0,
+                "prog {prog}: the lead amp has ratcheted into a mid honk — \
+                 tilt(800-2800) {tilt:+.2} dB > +12"
+            );
+
+            // (2) LOW-END FOCUS — lows are cut relative to the body (the raised
+            // pre-shaper high-pass plus the tighter cab resonance). Bounded
+            // below so the lead never becomes a thin, bass-less buzz.
+            let low_rel = low - body;
+            assert!(
+                low_rel <= low_floor,
+                "prog {prog}: the lead amp did not tighten the low end — \
+                 low(100-800) {low_rel:+.2} dB > {low_floor:+.1}"
+            );
+            assert!(
+                low_rel >= -16.0,
+                "prog {prog}: the lead amp gutted the low end — \
+                 low(100-800) {low_rel:+.2} dB < -16"
+            );
+
+            // (3) NO FIZZ — presence is added in the CAB, after the shapers, so
+            // the lead must not end up brighter-relative-to-body than the
+            // rhythm amp. This is the clause that fails if someone "adds cut"
+            // by boosting the interstage tilt into the clipper, or by raising
+            // the cabinet's anti-alias cliff for "air".
+            let fizz_rel = fizz - body;
+            assert!(
+                fizz_rel <= -1.0,
+                "prog {prog}: the lead amp is fizzier than the rhythm amp — \
+                 fizz(6000-800) {fizz_rel:+.2} dB > -1"
+            );
+        }
+    }
+
+    /// 2026.07.23 amp+cab HLD: 29 and 30 must stay DIFFERENT inside the alt
+    /// bank, on the same push-vs-scoop axis their main banks use — otherwise
+    /// fixing "main sounds like alt" just moves the collapse to "GM029 alt
+    /// sounds like GM030 alt".
+    ///
+    /// Three axes, so a change has to defeat all three to erase the contrast.
+    ///
+    /// **A note on the constraint clash here, because it shaped the voicing.**
+    /// 30's lead has two obligations that pull against each other on the mid
+    /// axis: it must differ from 30's MAIN (which wants more mid body, since
+    /// 30's main is mid-scooped) and from 29's LEAD (which on that axis wants
+    /// less). A single shared lead cabinet could not serve both — it left 30's
+    /// lead only 0.68 dB from its own main at some pitches. The resolution is
+    /// the per-program lead cabinet (`cab_biquads_lead`): 30's puts back more
+    /// body and less presence, 29's the reverse, so the two leads keep the
+    /// push-vs-scoop relationship their mains have while each still separates
+    /// cleanly from its own main.
+    ///
+    /// Clause (a) is direction-agnostic (a distance), so it states the real
+    /// requirement — "these are two different amps" — without prescribing how.
+    /// Clause (b) pins the direction, so the pair cannot drift into being
+    /// different-but-backwards; it deliberately uses the same 600 Hz : 2 kHz
+    /// axis `drive_pre_voicing_direction` uses for the main banks. Clause (c)
+    /// is gain staging: a SMALLER loud-to-quiet span means more compression.
+    #[test]
+    fn alt_bank_leads_stay_distinct_from_each_other() {
+        let sr = 44100.0;
+        const F: [f32; 6] = [120.0, 300.0, 600.0, 1200.0, 2400.0, 3400.0];
+
+        // (a) the two leads are different amps at all: level-normalised
+        // spectral distance between the inserts, same input, no string in the
+        // path. Direction-agnostic and immune to the per-program `post` match.
+        let shape = |prog: u8, alt: bool| {
+            let v = insert_band_db(prog, alt, sr, &F);
+            let mean = v.iter().sum::<f32>() / v.len() as f32;
+            v.into_iter().map(|x| x - mean).collect::<Vec<f32>>()
+        };
+        let dist = |a: &[f32], b: &[f32]| {
+            (a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum::<f32>() / a.len() as f32).sqrt()
+        };
+        let (l29, l30) = (shape(29, true), shape(30, true));
+        let (m29, m30) = (shape(29, false), shape(30, false));
+        let lead_d = dist(&l29, &l30);
+        let main_d = dist(&m29, &m30);
+        println!(
+            "alt leads: 29-vs-30 spectral distance {lead_d:.2} dB (their mains: {main_d:.2} dB)"
+        );
+        assert!(
+            lead_d >= 1.5,
+            "the two alt leads have collapsed into one amp: spectral distance only \
+             {lead_d:.2} dB (their mains differ by {main_d:.2} dB)"
+        );
+
+        // (b) and they differ in the RIGHT direction — the SAME direction their
+        // main banks do: 29 is mid-pushed, 30 is mid-scooped. Measured on the
+        // 600 Hz : 2 kHz axis, the same axis `drive_pre_voicing_direction` uses
+        // for the mains, so the two oracles speak about one thing. Level-
+        // invariant, and compared lead-to-lead rather than each to its own main.
+        let mid = |prog: u8, alt: bool| {
+            let v = insert_band_db(prog, alt, sr, &[600.0, 2000.0]);
+            v[0] - v[1]
+        };
+        let (lead_gap, main_gap) = (
+            mid(29, true) - mid(30, true),
+            mid(29, false) - mid(30, false),
+        );
+        println!(
+            "alt leads: 29-vs-30 600:2000 mid balance {lead_gap:+.2} dB \
+             (their mains {main_gap:+.2} dB — same sign required)"
+        );
+        assert!(
+            lead_gap >= 1.0,
+            "the two alt leads no longer sit on the push-vs-scoop axis their mains use: \
+             29's lead should be the mid-pushed one and 30's the mid-scooped one, \
+             measured {lead_gap:+.2} dB (their mains differ by {main_gap:+.2} dB)"
+        );
+
+        // (c) compression: band-limited output span from a loud to a quiet input
+        let span = |prog: u8| {
+            let at = |amp: f32| {
+                let mut d = Drive::new(prog, true, sr);
+                let mut buf: Vec<f32> = (0..(sr as usize))
+                    .map(|i| amp * (std::f32::consts::TAU * 220.0 * i as f32 / sr).sin())
+                    .collect();
+                d.process(&mut buf);
+                20.0 * crate::testutil::spectral_band_rms(
+                    &buf[(0.2 * sr) as usize..],
+                    sr,
+                    300.0,
+                    3400.0,
+                )
+                .max(1e-12)
+                .log10()
+            };
+            at(0.5) - at(0.05)
+        };
+        let (s29, s30) = (span(29), span(30));
+        println!("alt leads: loud-quiet span — 29 {s29:.2} dB, 30 {s30:.2} dB (smaller = more compressed)");
+        assert!(
+            s30 <= s29 - 0.5,
+            "the two alt leads share gain staging: 30-lead should compress harder than \
+             29-lead, spans {s30:.2} vs {s29:.2} dB"
         );
     }
 
@@ -5768,7 +6270,159 @@ mod tests {
                 "prog {prog} key {key}: held sustain went clean — THD {thd:.1} dB \
                  rel f0 (floor {floor})"
             );
+            // CEILING added 2026.07.23 with the lead amp. The floors alone are
+            // a one-sided contract, and every lever the lead voicing pulls
+            // (more stage-2 gain, a raised pre-shaper high-pass that thins f0
+            // at low keys) pushes THD UP — so the failure mode this change can
+            // actually introduce is the opposite of "went clean": a hold that
+            // has turned into a square-wave fuzz. −12 dB rel f0 is the
+            // harshness ceiling both consults independently proposed; the
+            // worst row today measures −15.7 dB (prog 29 key 40, where the
+            // 120 Hz pre-HPF legitimately shrinks the 82 Hz fundamental).
+            assert!(
+                thd <= -12.0,
+                "prog {prog} key {key}: held sustain turned to fuzz — THD {thd:.1} dB \
+                 rel f0 exceeds the −12 dB harshness ceiling"
+            );
         }
+    }
+
+    /// 2026.07.23 amp+cab HLD — the END-TO-END pin: through the whole engine,
+    /// at the pitches Arthur actually listens to, the CC0 alt bank must read as
+    /// a different instrument from the default bank.
+    ///
+    /// `alt_drive_is_a_distinct_lead_voicing` attributes the change to the amp
+    /// by feeding both inserts the same input; this one asks the question the
+    /// listener asks, with the real string, the real sends and the real mix in
+    /// the path.
+    ///
+    /// **Read this as an INTEGRATION guard, not as the pin for the amp/cab
+    /// change.** The two banks already differed here before that change — they
+    /// play different strings (`DRIVE` vs `DRIVE_LEAD`) and the sample layer is
+    /// disabled on the alt bank — so this oracle was green at HEAD too. What it
+    /// protects is the wiring: that CC0 still reaches a genuinely different
+    /// voice end-to-end. The fix-specific, observed-RED-at-HEAD evidence lives
+    /// on `alt_drive_is_a_distinct_lead_voicing`, whose six clauses all fail on
+    /// the unmodified baseline.
+    ///
+    /// Window choice matters and is the crux of the original complaint. The
+    /// string-side sustain gap is enormous and grows with pitch (14→60 dB over
+    /// keys 45–69, see `voices::driven_main_and_alt_banks_diverge`) — but a
+    /// lead line's notes last a few hundred milliseconds, so almost nobody ever
+    /// hears that tail. 0.15–0.55 s is past the onset transient and inside the
+    /// span a real lead note occupies: exactly the region where the two banks
+    /// used to be nearly identical, because they shared an amp.
+    ///
+    /// **Metric choice, and a trap worth recording.** The obvious end-to-end
+    /// metric — a SIGNED body:presence band ratio, alt minus main — does not
+    /// work here, and measuring it was how I found out. Its per-key values
+    /// swung from −1.7 to +8.8 dB across adjacent keys for a fixed pair of
+    /// amps, because at these fundamentals a two-band ratio is dominated by
+    /// which harmonics happen to land in which band, and the two banks also
+    /// play different STRINGS (`DRIVE` bright 9000 vs `DRIVE_LEAD` 11000). So
+    /// it mostly measured the string's harmonic comb, not the amp.
+    ///
+    /// Instead this asserts a level-normalised multi-band spectral DISTANCE.
+    /// Any real timbral difference accumulates into it whatever direction the
+    /// individual bands moved, so it is robust to the comb; and normalising
+    /// each vector by its own mean makes it invariant to level, so it cannot be
+    /// passed by making the lead louder. The signed, bounded, amp-attributed
+    /// claim lives in `alt_drive_is_a_distinct_lead_voicing`, which feeds both
+    /// inserts the SAME input and so has no string in the path at all. Between
+    /// them: that oracle says the amp changed in the designed direction, this
+    /// one says the listener hears two different instruments.
+    #[test]
+    fn driven_banks_diverge_at_lead_pitches() {
+        let sr = 44100.0;
+        const BANDS: [(f32, f32); 6] = [
+            (200.0, 400.0),
+            (400.0, 800.0),
+            (800.0, 1600.0),
+            (1600.0, 2400.0),
+            (2400.0, 3200.0),
+            (3200.0, 4200.0),
+        ];
+        let render_bank = |prog: u8, key: u8, bank: u8| {
+            let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
+            let events = vec![
+                (0.0, cc(0, bank)),
+                (0.0, EvKind::Prog { ch: 0, prog }),
+                // silence the sends so the pin reads the dry voice
+                (0.0, cc(93, 0)),
+                (0.0, cc(94, 0)),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key,
+                        vel: 100,
+                    },
+                ),
+            ];
+            left(&render(&test_song(events, 1.2), &test_opts(sr)).0)
+        };
+        // per-band dB, then mean-removed => level-invariant spectral shape
+        let shape = |b: &[f32]| {
+            let s = &b[(0.15 * sr) as usize..(0.55 * sr) as usize];
+            let mut v: Vec<f32> = BANDS
+                .iter()
+                .map(|&(lo, hi)| {
+                    20.0 * crate::testutil::spectral_band_rms(s, sr, lo, hi)
+                        .max(1e-12)
+                        .log10()
+                })
+                .collect();
+            let mean = v.iter().sum::<f32>() / v.len() as f32;
+            for x in v.iter_mut() {
+                *x -= mean;
+            }
+            v
+        };
+        let distance = |a: &[f32], b: &[f32]| {
+            (a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum::<f32>() / a.len() as f32).sqrt()
+        };
+
+        // Scored as a per-program MEAN over the register plus a per-key
+        // non-collapse floor, rather than a flat per-key bar. Even this metric
+        // varies with which harmonics land in which band at a given
+        // fundamental (1.1–5.4 dB across these seven keys for a fixed pair of
+        // amps), so a per-key bar tight enough to mean anything is brittle,
+        // while the mean over the register is stable. The floor still catches a
+        // single pitch at which the two banks fall together.
+        let mut bad: Vec<String> = Vec::new();
+        for prog in [29u8, 30] {
+            let mut ds = Vec::new();
+            for key in [57u8, 59, 61, 63, 65, 67, 69] {
+                let main = shape(&render_bank(prog, key, 0));
+                let alt = shape(&render_bank(prog, key, 1));
+                let d = distance(&main, &alt);
+                println!(
+                    "lead-pitch divergence prog {prog} key {key}: spectral distance {d:.2} dB"
+                );
+                if d < 0.8 {
+                    bad.push(format!("prog {prog} key {key} collapsed: {d:.2} dB"));
+                }
+                ds.push(d);
+            }
+            let mean = ds.iter().sum::<f32>() / ds.len() as f32;
+            println!("lead-pitch divergence prog {prog}: MEAN {mean:.2} dB over the register");
+            if mean < 2.0 {
+                bad.push(format!("prog {prog} register mean {mean:.2} dB"));
+            }
+        }
+        // Vacuity control: the metric must report ZERO for a bank against
+        // itself, so a passing distance above can never be an artefact of the
+        // measurement manufacturing difference out of nothing.
+        let ctl = shape(&render_bank(29, 62, 0));
+        assert!(
+            distance(&ctl, &ctl) < 1e-6,
+            "the spectral-distance metric is not self-consistent"
+        );
+        assert!(
+            bad.is_empty(),
+            "the alt bank still sounds like the default bank through the full engine \
+             (per-key distance < 0.8 dB, or register mean < 2.0 dB) at: {bad:?}"
+        );
     }
 
     /// V9 (guitar v2): aliasing floor — a pure steady sine fed DIRECTLY into
@@ -5780,7 +6434,6 @@ mod tests {
     #[test]
     fn drive_alias_floor() {
         let sr = 44100.0;
-        let f0 = 1301.0; // high-lead register, harmonics off any tidy divisor
         let fold = |f: f32, fs: f32| {
             let r = f % fs;
             if r > fs / 2.0 {
@@ -5789,40 +6442,57 @@ mod tests {
                 r
             }
         };
+        // Extended 2026.07.23 to the LEAD bank across three fundamentals. This
+        // is the load-bearing safety check for the alt amp: the cabinet's
+        // lowpass cliff is the DECIMATION filter, but harmonics the 2× shapers
+        // generate above 44.1 kHz fold back INSIDE the 2× domain and can land
+        // anywhere in the audible passband, where no cliff can remove them.
+        // Their level is the tanh harmonic tail at very high orders, which is
+        // exponentially sensitive to drive — so raising the lead's g2 has to be
+        // measured here, not reasoned about. Three fundamentals because the
+        // fold-landing pattern is f0-dependent and one value can get lucky.
         for prog in [29u8, 30] {
-            let mut d = Drive::new(prog, false, sr);
-            let mut buf: Vec<f32> = (0..(sr as usize))
-                .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
-                .collect();
-            d.process(&mut buf);
-            let seg = &buf[(0.2 * sr) as usize..];
-            let m0 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
-            let mut worst = -200.0f32;
-            let mut worst_bin = 0.0f32;
-            for n in 2..=80u32 {
-                let fh = n as f32 * f0;
-                if fh <= sr / 2.0 {
-                    continue; // a true harmonic, not an alias
-                }
-                let alias = fold(fold(fh, sr * 2.0), sr);
-                if !(100.0..=20_000.0).contains(&alias) {
-                    continue;
-                }
-                // skip bins that coincide with legitimate harmonics
-                if (alias / f0 - (alias / f0).round()).abs() * f0 < 8.0 {
-                    continue;
-                }
-                let rel = 20.0 * (crate::testutil::mag_at(seg, sr, alias) / m0).log10();
-                if rel > worst {
-                    worst = rel;
-                    worst_bin = alias;
+            for alt in [false, true] {
+                for f0 in [997.0f32, 1301.0, 1763.0] {
+                    let mut d = Drive::new(prog, alt, sr);
+                    let mut buf: Vec<f32> = (0..(sr as usize))
+                        .map(|i| 0.5 * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
+                        .collect();
+                    d.process(&mut buf);
+                    let seg = &buf[(0.2 * sr) as usize..];
+                    let m0 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+                    let mut worst = -200.0f32;
+                    let mut worst_bin = 0.0f32;
+                    for n in 2..=80u32 {
+                        let fh = n as f32 * f0;
+                        if fh <= sr / 2.0 {
+                            continue; // a true harmonic, not an alias
+                        }
+                        let alias = fold(fold(fh, sr * 2.0), sr);
+                        if !(100.0..=20_000.0).contains(&alias) {
+                            continue;
+                        }
+                        // skip bins that coincide with legitimate harmonics
+                        if (alias / f0 - (alias / f0).round()).abs() * f0 < 8.0 {
+                            continue;
+                        }
+                        let rel = 20.0 * (crate::testutil::mag_at(seg, sr, alias) / m0).log10();
+                        if rel > worst {
+                            worst = rel;
+                            worst_bin = alias;
+                        }
+                    }
+                    println!(
+                "V9 prog {prog} {} f0 {f0:.0}: worst alias {worst:.1} dB rel f0 at {worst_bin:.0} Hz",
+                if alt { "alt " } else { "main" }
+            );
+                    assert!(
+                worst <= -40.0,
+                "prog {prog} {} f0 {f0:.0}: alias at {worst_bin:.0} Hz is {worst:.1} dB rel f0",
+                if alt { "alt" } else { "main" }
+            );
                 }
             }
-            println!("V9 prog {prog}: worst alias {worst:.1} dB rel f0 at {worst_bin:.0} Hz");
-            assert!(
-                worst <= -40.0,
-                "prog {prog}: alias at {worst_bin:.0} Hz is {worst:.1} dB rel f0"
-            );
         }
     }
 
@@ -5834,18 +6504,102 @@ mod tests {
     #[ignore]
     fn drive_level_probe() {
         let sr = 44100.0;
+        // Both banks, so the LEAD amp's `post` can be re-matched to the rhythm
+        // amp's the same way (2026.07.23 amp+cab HLD): the bank difference is
+        // meant to be TIMBRE, so the two should read within ~1 dB here and the
+        // A/B then isolates voicing rather than loudness.
         for prog in [29u8, 30] {
-            for amp in [0.5f32, 0.05] {
-                let mut d = Drive::new(prog, false, sr);
-                let mut buf: Vec<f32> = (0..(sr as usize))
-                    .map(|i| amp * (std::f32::consts::TAU * 220.0 * i as f32 / sr).sin())
-                    .collect();
-                d.process(&mut buf);
-                let r = crate::testutil::rms(&buf[(0.2 * sr) as usize..]);
-                println!(
-                    "drive probe prog {prog} amp {amp}: rms {r:.5} ({:.2} dBFS)",
-                    20.0 * r.max(1e-12).log10()
-                );
+            for alt in [false, true] {
+                for amp in [0.5f32, 0.05] {
+                    let mut d = Drive::new(prog, alt, sr);
+                    let mut buf: Vec<f32> = (0..(sr as usize))
+                        .map(|i| amp * (std::f32::consts::TAU * 220.0 * i as f32 / sr).sin())
+                        .collect();
+                    d.process(&mut buf);
+                    let seg = &buf[(0.2 * sr) as usize..];
+                    let r = crate::testutil::rms(seg);
+                    // Match `post` on the BAND, not the wideband RMS: the two
+                    // cabinets differ at the low resonance (100 vs 120 Hz), and
+                    // a 220 Hz source puts enough energy there to skew a
+                    // wideband match by ~1 dB. 300–3400 Hz is where the ear
+                    // places a driven guitar.
+                    let b = crate::testutil::spectral_band_rms(seg, sr, 300.0, 3400.0);
+                    println!(
+                        "drive probe prog {prog} {} amp {amp}: wide {:.2} dBFS  band300-3400 {:.2} dBFS",
+                        if alt { "alt " } else { "main" },
+                        20.0 * r.max(1e-12).log10(),
+                        20.0 * b.max(1e-12).log10()
+                    );
+                }
+            }
+        }
+    }
+
+    /// Voicing fingerprint (diagnostic, `--ignored --nocapture`): the LEAD
+    /// bank's response against the RHYTHM bank's at named frequencies, plus
+    /// the harmonic balance at a tail operating point. This is the tuning
+    /// bench for `cab_biquads_lead` and the alt voicing EQ (2026.07.23 amp+cab
+    /// HLD) — the oracles assert the DIRECTIONS, this prints the magnitudes.
+    ///
+    /// The sweep is driven small-signal (0.02) on purpose: the shapers stay
+    /// near-linear, so the printed deltas read as the DESIGNED EQ rather than
+    /// as clipping products.
+    #[test]
+    #[ignore]
+    fn drive_voicing_fingerprint_probe() {
+        let sr = 44100.0;
+        let input: Vec<f32> = {
+            let mut rng = crate::dsp::Rng::new(7);
+            (0..(4.0 * sr) as usize)
+                .map(|_| rng.white() * 0.02)
+                .collect()
+        };
+        for prog in [29u8, 30] {
+            let run = |alt: bool| {
+                let mut d = Drive::new(prog, alt, sr);
+                let mut b = input.clone();
+                d.process(&mut b);
+                b
+            };
+            let (m, a) = (run(false), run(true));
+            let db = |b: &[f32], f: f32| {
+                20.0 * crate::testutil::band_rms(&b[(0.2 * sr) as usize..], sr, f, 4.0)
+                    .max(1e-12)
+                    .log10()
+            };
+            print!("fingerprint prog {prog} (lead-main dB):");
+            for f in [
+                100.0f32, 250.0, 500.0, 800.0, 1400.0, 2500.0, 2800.0, 3000.0, 6000.0,
+            ] {
+                print!("  {f:.0}:{:+.2}", db(&a, f) - db(&m, f));
+            }
+            println!();
+        }
+        // Harmonic balance — the H2 (even-harmonic "warmth") the bias choice
+        // trades against, swept over fundamental and drive so the
+        // operating-point dependence is visible rather than sampled at one
+        // lucky point.
+        for prog in [29u8, 30] {
+            for alt in [false, true] {
+                for f0 in [110.0f32, 165.0, 220.0, 330.0] {
+                    for amp in [0.5f32, 0.05] {
+                        let mut d = Drive::new(prog, alt, sr);
+                        let mut buf: Vec<f32> = (0..(sr as usize))
+                            .map(|i| amp * (std::f32::consts::TAU * f0 * i as f32 / sr).sin())
+                            .collect();
+                        d.process(&mut buf);
+                        let seg = &buf[(0.2 * sr) as usize..];
+                        let m1 = crate::testutil::mag_at(seg, sr, f0).max(1e-12);
+                        let h2 = 20.0 * (crate::testutil::mag_at(seg, sr, 2.0 * f0) / m1).log10();
+                        let h3 = 20.0 * (crate::testutil::mag_at(seg, sr, 3.0 * f0) / m1).log10();
+                        println!(
+                            "harmonics prog {prog} {} f0 {f0:.0} amp {amp}: \
+                             H2 {h2:+.1} dBc  H3 {h3:+.1} dBc  H2-H3 {:+.1}",
+                            if alt { "alt " } else { "main" },
+                            h2 - h3
+                        );
+                    }
+                }
             }
         }
     }

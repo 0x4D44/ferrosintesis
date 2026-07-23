@@ -13812,11 +13812,30 @@ mod tests {
     /// defect (that floor now lives on the alt bank where the hold lives).
     /// This is the MAIN ≠ ALT invariant round 2 lacked; both clauses were
     /// observed RED at HEAD.
+    ///
+    /// This oracle is the STRING half of the bank distinction and renders the
+    /// bare presets — `render_pluck_phased` does NOT route through the engine's
+    /// `Drive` insert. The AMP/CABINET half (which is what actually tells the
+    /// banks apart now) is pinned in engine.rs by
+    /// `alt_drive_is_a_distinct_lead_voicing` and
+    /// `driven_banks_diverge_at_lead_pitches`.
+    ///
+    /// **Both halves are needed, and the printed numbers here say why.** The
+    /// sustain-index gap is not small and does not shrink with pitch — it is
+    /// 14.3 dB at key 45 and GROWS to 60.3 dB at key 69 (the main decays to
+    /// nothing while the lead holds). Yet the two banks still sounded the same
+    /// to Arthur, because a lead line's notes last a few hundred milliseconds
+    /// and nobody ever hears that tail; over the span that IS audible the banks
+    /// shared one amp. A large gap in a long-tail metric can coexist with
+    /// "sounds identical" — which is the whole reason the fix had to happen at
+    /// the amp/cabinet layer (2026.07.23 amp+cab HLD).
+    ///
+    /// Keys: 45 is the historic low-register case; 57/62/69 are the lead
+    /// register Arthur actually listens to, added 2026.07.23 so a future change
+    /// that preserves the contrast at A2 but loses it at A4 fails here.
     #[test]
     fn driven_main_and_alt_banks_diverge() {
         let sr = 44100.0;
-        let main = render_pluck_phased(&DRIVE, 45, 3.0, 0.5, 0xE1);
-        let lead = render_pluck_phased(&DRIVE_LEAD, 45, 3.0, 0.5, 0xE1);
         // (1) sustain-index gap: late held level relative to the spoken
         // level — the lead must sit ≥ 6 dB above the main (HEAD: the MAIN
         // held 0.7 vs the lead's 0.6, gap −1 dB → RED).
@@ -13825,14 +13844,26 @@ mod tests {
                 / rms(&b[(0.05 * sr) as usize..(0.30 * sr) as usize]).max(1e-9))
             .log10()
         };
-        let gap = sus_index(&lead) - sus_index(&main);
-        assert!(
-            gap >= 6.0,
-            "main/alt driven banks hold alike: sustain-index gap {gap:.1} dB < 6 \
-             (main {:.1}, lead {:.1})",
-            sus_index(&main),
-            sus_index(&lead)
-        );
+        for key in [45u8, 57, 62, 69] {
+            let main = render_pluck_phased(&DRIVE, key, 3.0, 0.5, 0xE1);
+            let lead = render_pluck_phased(&DRIVE_LEAD, key, 3.0, 0.5, 0xE1);
+            let gap = sus_index(&lead) - sus_index(&main);
+            println!(
+                "bank divergence key {key}: sustain-index gap {gap:.1} dB \
+                 (main {:.1}, lead {:.1})",
+                sus_index(&main),
+                sus_index(&lead)
+            );
+            assert!(
+                gap >= 6.0,
+                "key {key}: main/alt driven banks hold alike — sustain-index gap \
+                 {gap:.1} dB < 6 (main {:.1}, lead {:.1})",
+                sus_index(&main),
+                sus_index(&lead)
+            );
+        }
+        let main = render_pluck_phased(&DRIVE, 45, 3.0, 0.5, 0xE1);
+        let lead = render_pluck_phased(&DRIVE_LEAD, 45, 3.0, 0.5, 0xE1);
         // (2) onset-shape gap: the lead swells MORE than the main — time to 90 %
         // of the envelope peak differs by ≥ 5 ms (main ~20 ms, lead ~29 ms).
         //

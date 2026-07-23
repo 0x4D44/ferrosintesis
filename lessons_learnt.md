@@ -3,6 +3,19 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
+- 2026.07.23 — **A band-limited spectral metric whose LOWEST band starts above the thing you changed
+  reports your change as a no-op** (`_cal/amp_ab/analyze.py:BANDS`, driven-guitar lead amp). Bands from
+  200 Hz said the new lead amp/cab moved main-vs-alt separation +0.08 dB with some probes going the
+  WRONG way; the identical comparison with bands from 80 Hz says +0.80 dB, rising on every probe —
+  because the two biggest moves (pre-clip HPF 90→120 Hz, cab resonance 100→120 Hz) sit BELOW 200 Hz.
+  I nearly concluded my own change did nothing. Always check the metric's support against what moved.
+  Two corollaries from the same task: (1) a SIGNED two-band ratio through the full engine is dominated
+  by which harmonics land in which band — it swung −1.7…+8.8 dB across ADJACENT keys for a FIXED pair
+  of amps — so use a direction-agnostic multi-band DISTANCE, scored as a register mean plus a per-key
+  non-collapse floor; (2) a large gap in a long-tail metric can coexist with "sounds identical": the
+  driven banks' sustain-index gap is 14→60 dB over keys 45–69, yet they sounded the same, because a
+  lead line's notes last a few hundred ms and over THAT span both ran the same amp.
+
 - 2026.07.22 — **An ABSOLUTE audio threshold can pass for the wrong reason: an unrelated wet signal masks the
   thing it measures. Score against a CONTROL render, not a bound** (`engine.rs:gm22_cc1_is_harmonica_vibrato_not_leslie`).
   Its `reset_late <= reset_early + 2.0` "no CC1 leak" check only held because the setup's authored `CC93=0` was

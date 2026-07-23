@@ -55,10 +55,27 @@ body or sustain.
   zones E2–E5 (~6-semitone spacing; B2 stands in for the source's missing
   A#2), kept 0.9 s so the sample carries the pick transient and early body
   resonance while the Karplus-Strong string keeps the bendable decay. The
-  source has one take per note — no velocity layers, no round robins. GM 25
-  (steel) is its own `steel_*.wav` bank: 8 zones E2–B5 from a 2017 Martin HD28,
-  CC0-dedicated in the Discord SFZ GM Bank (the FreePats FSS Steel-String set stays
-  rejected — its GPL-with-exception does not permit redistributing the sample bytes).
+  source has one take per note — no velocity layers, no round robins.
+- **GM 25 (steel) carries three sampled banks**, selected by CC0 (bank-select MSB);
+  all three are flat single layers like nylon, with `LaVoice`'s `vel_amp` doing the
+  dynamic scaling, and all three are built by `voices::steel_layered` so they differ
+  only in zones and LA gain:
+  - `eastpick_*.wav` — **the default (CC0 0)**. 8 zones from Arthur's own **Eastman
+    E1D** dreadnought, plectrum take; first-party and CC0-1.0, so unlike the Martin
+    there is no upstream and no SHA pin to keep. Two zones stand off the nominal
+    grid — **B2** and **A#4** in place of A#2/B4 — because those notes are too poorly
+    isolated in the take for `trim_to_onset`'s 3 %-of-peak rule; roots are measured,
+    so a zone only has to sit near its slot (nylon does the same for A#2).
+  - `eastpluck_*.wav` — **CC0 1**, the same guitar fingerstyle: warmer and ~4–5×
+    darker (centroid ~480–630 Hz vs ~2400–3000 Hz), all 8 zones on the nominal grid.
+  - `steel_*.wav` — **CC0 2**, the 2017 Martin HD28 that held the default slot until
+    2026.07.23; 8 zones E2–B5, CC0-dedicated in the Discord SFZ GM Bank. **Its SHA pin
+    stays load-bearing** (mixed CC0/CC-BY repo, no repo-level licence).
+  CC0 3 — and any unknown bank — is the pure Karplus-Strong model. The FreePats FSS
+  Steel-String set stays rejected: its GPL-with-exception does not permit
+  redistributing the sample bytes.
+  Masters and per-zone bake sources for the Eastman banks live in the repo-root
+  `samples/acoustic-guitar-eastman-e1d/`.
 - `harpsi_*.wav` — harpsichord (GM 6) quill-pluck onsets, 10 pitch zones
   sounding C2–F6 (~6-semitone C/F grid, one take per note: single register
   `Main`, single round robin), kept 0.9 s like the guitars so the sample carries

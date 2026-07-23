@@ -10,6 +10,31 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.23 — **Sample anchors are gated by onset ISOLATION, not pitch: under ~30 dB of pre-onset quiet `trim_to_onset` grabs the PREVIOUS note** (`prepare.py:trim_to_onset`).
+  - Adopting Arthur's Eastman E1D, isolation — not tuning, not note availability — was the binding
+    constraint: it cut ~80 notes per take to 48/56 usable and forced two substitutions in the picked bank
+    (B2 for A#2, A#4 for B4). That is free, because zone roots are MEASURED, not nominal; the nylon bank
+    already stands B2 in for its source's missing A#2.
+  - Octave trap 1: a bare harmonic template scores a SUBHARMONIC exactly as well as the fundamental (every
+    harmonic of f0 is also one of f0/2), so a single note won three different zone slots at once. Score
+    `energy x harmonic-coverage` instead — a subharmonic is missing all of its odd multiples.
+  - Octave trap 2: a dominance-weighted detector calls a normal dreadnought low E an octave high (the picked
+    E2's H1 sits 3.5 dB under H3). NOT a defect — the shipped Martin `steel_E2` it replaces has an even
+    weaker H1 (-6.0 dB) at its pinned root. Settle it against the SHIPPED reference, never an absolute
+    threshold; perceived pitch follows the harmonic series, not the loudest partial.
+  - Independently corroborated: `banjo_extract.py`, landed the same day by another task, arrived at the same
+    two gates — an octave-correct f0 and a next-pluck bleed/"contamination" check.
+
+- 2026.07.23 — **A bank-wide MEAN level is the wrong statistic for an LA gain that TREBLE oracles police** (`voices.rs:LA_EASTPICK`).
+  - Fitting the new steel gain on mean crossfade-window RMS (0.05-0.28 s over all zones) gave 0.229 and looked
+    right, but a real guitar's top zones are far quieter relative to peak than its middle (A#4 0.110 / F5 0.095
+    against the Martin's 0.206 / 0.210), so keys 76/79 landed at 0.78-0.80 — astride
+    `la_steel_high_key_level_parity`'s 0.8 floor. The mean hides the only region under test.
+  - Fit with `print_steel_wrap_level_ratios` (the `#[ignore]` harness exists for exactly this) and re-check the
+    sweep's maximum against the 2.2 ceiling. Corrected to 0.26 picked / 0.242 plucked.
+  - Corollary: an oracle that measures only the DEFAULT bank silently stops covering a program once it grows
+    alternates — `altbank_steel_alternates_are_level_sane` restores that cover.
+
 - 2026.07.23 — **Sweep the worst COMBINATION — a one-knob-at-a-time oracle misses a shared-budget breach** (`engine.rs:amp_drive_knob_holds_alias_floor`).
   - The driven-guitar amp exposes six knobs that all draw on ONE −40 dBc alias budget. The oracle swept Drive
     while holding every other knob neutral, so it passed at −42.5 dBc — but Drive 127 + Tone 127 measured −39.0,
@@ -413,65 +438,3 @@ belong in `CLAUDE.md`, not here.
     Q 120–150 has a ~7 ms ring time against an 18 ms beat period — decorrelated before one cycle, no beat
     survives. Ring time Q/(πf) must span the beat period (Q ≈ 800 here); Δf > f/Q alone is not sufficient.
 
-- 2026.07.13 — **`render_drum` hardcodes `Kit::V1` while the DEFAULT kit is V3 — a coverage gap, not a dead-voice test** (`drums.rs:2615`, MM-BUG-KILN-00054).
-  - Both kits SHIP: V3 is the default but `engine.rs:2932` selects V1 on ch-10 PC 25, and Slipstream authors it,
-    so the ~13 `render_drum` oracles are valid V1 oracles — the gap is that the 6 behaviours V3 re-voices (keys
-    36/38/49/51/52/55) have no V3 oracle. New drum oracles for the default kit must use `render_drum_kit(…,
-    Kit::V3)`. (The false "the legacy voice the engine never selects" wording also lives in the `drums.rs:3259`
-    source comment — fix it there too.)
-  - A golden can PIN a bug: `drums.rs:v3_toms_settle_near_table_pitch` asserted key 48 → 240 Hz, which encoded the
-    collapsed `47 | 48 | 50 => tom(240.0)` arm (the top three GM toms were bit-identical but for pan). **Fix a
-    golden's EXPECTED value, never its tolerance.** Corollary invariant now enforced in `Modal::new`:
-    `attack_s < strike-noise t60`, else the attack ramp gates the very transient it exists to pass (GM 114's alt
-    steel pan shipped 10 ms attack vs 8 ms mallet burst → strike at 12% of peak → metalness 0.0002).
-  - Put untouched-family CANARIES in the golden fixture: the realism build's per-channel table included
-    piano/strings channels no phase touched; they stayed bit-exact for six phases and caught the one real leak (a
-    rebuilt Drive emitting tanh(bias) DC on SILENT channels) that every feature oracle missed. Level guards find
-    drift; canaries find contamination (`testutil.rs`).
-  - But a bit-exact HASH of an f32 render is NOT a valid *frozen* golden across build profiles: release
-    (opt-level 3 + LTO) reorders the SawStack's summed-oscillator float ops, so a frozen SawStack canary flipped
-    debug↔release and was "re-pinned" for months, each pin reddening the other profile. Freeze AGGREGATE features
-    (rms / centroid / band energy) with a relative tolerance — they average out per-sample reorder noise (~1e-7
-    across profiles) yet still catch contamination (voices differ 30–130%). In-build RELATIVE bit-compares (two
-    renders in ONE build) stay valid. `drums.rs`'s goldens were since MIGRATED to `RenderSignature`; the last
-    raw-float-hash golden is now `sampler.rs:non_guitar_la_render_is_pinned` (MM-BUG-KILN-00057) — though it
-    tested green in BOTH debug and release here, so its risk is fragility + no failure diagnostic, not a
-    demonstrated flip.
-  - The feared cross-BINARY LTO divergence did NOT happen: two release binaries linking the same rlib produced
-    byte-identical `.opus` for all 6 demo tracks, so a cross-binary byte-compare IS a usable parity oracle here
-    (`ropusenc`'s Ogg serial is the fixed constant `0xC0DEC0DE`). When porting, capture the golden from the OLD
-    implementation *before* deleting it — it caught that the retired `render_opus.py` tagged `TRACKTOTAL` with the
-    count of *selected* tracks, not the album's true size. A byte-exact fixture MUST be marked `-text` in
-    `.gitattributes` (`core.autocrlf=true` here rewrites LF→CRLF and desynchronises every length prefix); verify
-    with `git cat-file -p :<file> | cmp - <file>`.
-
-- 2026.07.10 — **Same-pitch overlapping notes chop the re-strike on kill-newest GM synths — clamp at write time** (`Score._resolve_overlaps()`, MM-BUG-KILN-00056).
-  - ferrosintesis matches note-offs oldest-first, so the bug is invisible locally. Measured 2026.07.24: 16 album
-    writers carry the clamp, **6 do NOT**, and those 6 have 10,398 overlaps COMMITTED today (not "if regenerated")
-    — Riverwake alone is 8,426 (81%), Hollow Hill only 580; also the standalone `the_iron_tide.py`. Back-porting
-    the clamp RE-VOICES those albums (it truncates the earlier note), so it is not a free hygiene fix.
-  - A movement-verified render does not verify the ALBUM: engines with one seeded RNG stream re-roll every
-    downstream jitter when any upstream movement changes an event count, so per-movement click scans and velocity
-    means shift on final assembly. Always re-measure the assembled build. Corollary: a note authored AT a section
-    boundary with jt>0 can jitter ACROSS it into a stricter oracle's counted window — an outro harp arp (beat 640,
-    `en.arp` jt=4) bled into the finale's [544,640) dive count (385 vs 384) even while `check_movement_bounds`'
-    0.05 seam tolerated it. Make boundary-straddling emitters jt=0.
-  - Generated GM43 contrabass lanes need a floor and a centred pan: Spark and Hours After Rain both wrote
-    `chord["bass"] - 12` into program 43, producing MIDI 12–23 sustained notes panned left, which ferrosintesis
-    turns into sub-bass flatulence. Clamp contrabass beds to at least C2 (MIDI 36) and keep sustained low strings
-    centred without an explicit reason otherwise.
-  - Mono-collapse comes from the pan Haas micro-delay, not the chorus: a choir-heavy, sparse, wet movement lost
-    5.6 dB summed to mono because every off-centre CC10 pan adds a Haas delay that comb-filters sustained tonal
-    voices. Fix at the COMPOSITION layer — centre sustained beds (pan 64) and get width from panned transient
-    sources; don't touch the shared chorus bus (near mono-neutral, shared across all albums). A hard-panned
-    CONTINUOUS stream is pinned near 3 dB mono loss regardless of pan value (the Haas copy stays decorrelated at
-    pan 16 or 22), so moderating the pan doesn't help — centre it or make it genuinely transient.
-  - Presence in the MIDI is not audibility in the render, and full-mix deltas follow the rendered signal rather
-    than the control's intuition: a tick-perfect CC1 Leslie ramp measured flat (the organ's idle tremulant was
-    already near LESLIE_FAST), and the synth demos' wah/Leslie/vowel checks guessed "darkens"/"louder" while the
-    full mix measured the opposite after other parts and normalization. Verify headline effects on rendered stems
-    (`--solo`).
-  - "Authored-channel" is not the same as old-album byte-identity: MM-REQ-KILN-00008 made existing Modal/Organ
-    pitch controls start working, but 13 committed MIDIs had already authored those controls while the synth
-    ignored them. Scan the `ALBUMS` table's entries for authored controls before promising byte identity, then
-    make the waiver set explicit.

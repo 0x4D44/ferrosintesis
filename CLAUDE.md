@@ -39,8 +39,12 @@ offline WAV renderer; `crates/render-catalog/` is the catalog renderer (album MI
 tagged `.opus`, holding the `ALBUMS` metadata table).
 `crates/ferrosintesis-samples-{core,orchestral}/` are the two
 default embedded asset crates; their generator and full provenance live under
-`tools/ferrosintesis-samples/`. `demos/` holds synth test pieces; `wrk_docs/` holds
-design and review docs; `wrk_journals/` is the engineer's log.
+`tools/ferrosintesis-samples/`. `samples/` (repo root) is the store of **our own
+instrument recordings** — the performance masters we own outright, kept as Opus
+plus the pre-cut per-zone sources the bake consumes; it is **source, not output**,
+and distinct from the baked banks inside the asset crates (see `samples/README.md`
+for the per-instrument convention). `demos/` holds synth test pieces; `wrk_docs/`
+holds design and review docs; `wrk_journals/` is the engineer's log.
 
 ## Commands
 
@@ -258,9 +262,11 @@ Two shapes:
 | `ALBUM.md`, `README.md` | human track notes + regenerate/verify instructions |
 
 `.gitignore` drops `.wav` and `.opus` (both reproducible build output) **except** the
-WAVs under `crates/ferrosintesis-samples-{core,orchestral}/samples/` — those 218 files
-are the synth's 17.73 MiB sample bank, which is **source, not output**. Never
-treat them as regenerable. A **new** sample crate's WAVs stay ignored until you add its own
+WAVs under `crates/ferrosintesis-samples-*/samples/` — the synth's embedded sample bank,
+which is **source, not output** — and everything under the repo-root `samples/` store,
+which holds our own first-party instrument recordings and their per-zone bake sources.
+Never treat either as regenerable: the masters are performances that cannot be re-derived.
+A **new** sample crate's WAVs stay ignored until you add its own
 `!crates/<crate>/samples/*.wav` line — otherwise `git add <crate>` commits the crate
 *without* its samples and it fails to build from a clean checkout; confirm with
 `git ls-files <crate>/samples` after committing. Commit an album as one atomic bundle (sources + `.mid` +

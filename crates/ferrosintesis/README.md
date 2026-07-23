@@ -127,7 +127,7 @@ The kalimba's lamella bank lives under GM 108, grouped with the Modal chromatic-
 | CC91, CC93, CC94 | reverb, chorus and echo sends. Drums take CC91 like any channel; the kit's fixed drum-room reverb is a separate send that no controller moves |
 | CC5, CC65, CC84 | portamento: exponential glide time (5 ms–0.6 s), legato-glide on/off, and portamento control — a one-shot glide from an explicit source key that works even with CC65 off |
 | aftertouch | channel pressure adds vibrato and a gentle swell on the sustained families, growl on brass; polyphonic key pressure does the same to just the pressed note |
-| CC0 bank select | alternate voicings, latched per channel: selectable piano recordings on GM 0–1; the CathedralOrgan pipe model at GM 19 CC0=2 (the default GM 19 is the Leslie drawbar); a sustaining driven-guitar lead on 29/30; the frozen v0.9 bowed 42–45, strings 48–51 and choir 52–54; a tam-tam at 14 (CC0=2 a recorded gong ageng, CC0=3 the pure bell model); a second percussion set at 112–119; and the pre-sampling pure models under many sampled-by-default voices (clavinet 7, bagpipe 109, guitars 24–25, brass 56–61, reeds 68–71, EP 4, celesta 8, music box 10, vibraphone 11, dulcimer 15, basses 32–35); 127 declares the channel an XG drum part |
+| CC0 bank select | alternate voicings, latched per channel: selectable piano recordings on GM 0–1; the CathedralOrgan pipe model at GM 19 CC0=2 (the default GM 19 is the Leslie drawbar); a sustaining driven-guitar lead on 29/30; the frozen v0.9 bowed 42–45, strings 48–51 and choir 52–54; a tam-tam at 14 (CC0=2 a recorded gong ageng, CC0=3 the pure bell model); **three steel-string acoustics at GM 25** (CC0=0 the default Eastman E1D picked, CC0=1 the same guitar fingerstyle, CC0=2 the Martin HD28, CC0=3 the pure model); a second percussion set at 112–119; and the pre-sampling pure models under many sampled-by-default voices (clavinet 7, bagpipe 109, nylon guitar 24, brass 56–61, reeds 68–71, EP 4, celesta 8, music box 10, vibraphone 11, dulcimer 15, basses 32–35); 127 declares the channel an XG drum part |
 | CC32, CC120/121/123 | XG bank-LSB variation voices at note-on (undefined banks play the base GM voice, as real XG hardware does) — **LSB 96 on program 25 is the mandolin**, the one variation with its own sample bank; all sound off; reset all controllers (bank select persists); all notes off |
 | NRPN 0x30 | **score-authored amp** on the driven guitars 29/30 — see below |
 
@@ -228,7 +228,11 @@ came to be omitted before (MM-BUG-KILN-00060).
 
 The remaining eleven need no attribution: the VSCO 2 Community Edition orchestral
 library (violin, flutes, brass, reeds, string sections), the FreePats Spanish
-classical guitar bank, the Discord SFZ GM Bank's Martin HD28 steel-string acoustic,
+classical guitar bank, **our own recordings of an Eastman E1D steel-string acoustic**
+(the GM 25 default bank in two articulations, picked and fingerstyle — first-party and
+CC0-dedicated, so there is no upstream to pin), the Discord SFZ GM Bank's Martin HD28
+steel-string acoustic (which held that default slot until 2026.07.23 and is now the
+GM 25 CC0=2 alternate),
 the Versilian Community Sample Library (harpsichord, concert harp, timpani, Baroque
 recorders, ocarina — in `ferrosintesis-samples-orchestral2`), the VCSL Steinway and
 Kawai grands, sfzinstruments/ganjo, and the Freesound recording "Blown Bottle Two"

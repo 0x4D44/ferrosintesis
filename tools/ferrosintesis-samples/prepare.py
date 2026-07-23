@@ -529,6 +529,9 @@ TIMPANI_URLS = {
     for dest, src in _TIMPANI_ZONES
 }
 
+# === RETIRED 2026-07-23 — kept for history only, NOT baked (see the note by the fetch
+# dispatch above). The GM 105 banjo is now a real 5-string banjo (samples/banjo/*.opus,
+# extracted by banjo_extract.py). The ganjo below was spectrally dull (a guitar-banjo). ===
 # Banjo (GM 105) — sfzinstruments/ganjo (an SX 6-string guitar-banjo, recorded/mapped by
 # 'itsclipping'), CC0 1.0 (verified LICENSE.md). A NEW external source (its own repo + REV
 # pin, not VCSL/VSCO/MS Basic). Plucked, bright, fast decay — the sample owns the pick
@@ -2538,8 +2541,11 @@ def main():
         for fn, url in TUBULAR_URLS.items():
             if want("tubular"):
                 ensure_source(fn, url, src)
-        if want("banjo"):
-            ensure_banjo_sources(src)
+        # NB: the GM 105 banjo is NO LONGER baked here. As of 2026-07-23 it is a real
+        # 5-string banjo recorded by Arthur (samples/banjo/*.opus), extracted by the
+        # standalone `banjo_extract.py` — NOT the sfzinstruments/ganjo URL fetch below,
+        # which is retained only as history. Do not re-enable `ensure_banjo_sources`: it
+        # would overwrite the real-banjo WAVs with the dull ganjo ones.
         if want("nylon"):
             ensure_guitar_sources(src)
         if want("fingerbass") or want("pickbass"):
@@ -2635,7 +2641,7 @@ def main():
             rows += _bake_mtg_sax(sax_src)
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
-            | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | BANJO_URLS | VIOLA_URLS
+            | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | VIOLA_URLS
             | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS | TUBULAR_URLS
             | SOLO_CELLO_URLS | SOLO_DBASS_URLS | PIZZBASS_URLS
             | FINGERBASS_SOURCES | PICKBASS_SOURCES | FREESOUND_SOURCES

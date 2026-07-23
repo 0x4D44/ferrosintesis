@@ -2101,23 +2101,45 @@ pub fn sitar_bank() -> &'static [Zone] {
     sitar()
 }
 
-/// GM 105 banjo — sfzinstruments/ganjo 6-string guitar-banjo (CC0, `-orchestral2`). Bright,
-/// fast-decaying pluck: the sample owns the pick transient + resonator-head twang, the
-/// `Pluck(&BANJO)` model carries the decay. 8 zones sounding D#2–B4 (the ganjo file labels
-/// sit an octave above sounding pitch; roots MEASURED at the true sounding pitch — the banjo
-/// is harmonic-rich, so a per-note ceiling was used). `LaVoice` repitches ±1 octave.
+/// GM 105 banjo — a real open-back 5-string bluegrass banjo (standard open-G gDGBD),
+/// recorded by Arthur (CC0, `-orchestral2`). This REPLACES the earlier sfzinstruments/ganjo
+/// 6-string guitar-banjo, whose recordings were spectrally dull (99.9% of energy below ~1.5 kHz,
+/// no twang) and which the LA layer used to crossfade OVER the model's already-bright onset —
+/// muffling the banjo. The real 5-string carries the bright pick attack + head twang the model
+/// only approximates; the `Pluck(&BANJO)` model carries the decay as before. 24 zones sounding
+/// D#3–G#5 (near-chromatic — every take QC-gated for pitch-clarity, no clipping, no next-pluck
+/// bleed), roots MEASURED at the true sounding pitch (file names ARE the sounding pitch — no
+/// octave trap; the source's sharp fretting up the neck is captured per-root so repitch plays
+/// each note in tune). Near-chromatic spacing keeps repitch stretch under a tone. `LaVoice`
+/// repitches ±1 octave.
 fn banjo() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
         bank!(
-            "banjo_D#2.wav" => 79.34,
-            "banjo_G#2.wav" => 106.27,
-            "banjo_C#3.wav" => 142.12,
-            "banjo_F#3.wav" => 190.22,
-            "banjo_A#3.wav" => 236.99,
-            "banjo_D#4.wav" => 321.32,
-            "banjo_G4.wav" => 395.43,
-            "banjo_B4.wav" => 495.06,
+            "banjo_D#3.wav" => 156.43,
+            "banjo_F3.wav" => 176.25,
+            "banjo_G3.wav" => 196.19,
+            "banjo_G#3.wav" => 209.28,
+            "banjo_A3.wav" => 221.81,
+            "banjo_A#3.wav" => 235.29,
+            "banjo_B3.wav" => 247.19,
+            "banjo_C4.wav" => 263.44,
+            "banjo_D4.wav" => 293.46,
+            "banjo_D#4.wav" => 314.67,
+            "banjo_E4.wav" => 330.58,
+            "banjo_F4.wav" => 351.26,
+            "banjo_F#4.wav" => 371.23,
+            "banjo_G4.wav" => 390.90,
+            "banjo_G#4.wav" => 414.57,
+            "banjo_A4.wav" => 440.86,
+            "banjo_A#4.wav" => 468.37,
+            "banjo_C5.wav" => 526.41,
+            "banjo_C#5.wav" => 560.81,
+            "banjo_D5.wav" => 593.49,
+            "banjo_D#5.wav" => 629.48,
+            "banjo_E5.wav" => 669.23,
+            "banjo_G5.wav" => 805.64,
+            "banjo_G#5.wav" => 850.14,
         )
     })
 }

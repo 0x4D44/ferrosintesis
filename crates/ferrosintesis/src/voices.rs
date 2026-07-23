@@ -12775,7 +12775,15 @@ fn make_uncorrected(
             let model = Box::new(Pluck::new(&BANJO, key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_BANJO;
-                crate::sampler::LaVoice::wrap(
+                // Presence shelf on the sampled attack: a close-mic 5-string banjo
+                // carries a lot of low-mid body, so its onset (centroid ~700-900 Hz)
+                // reads muffled next to a real banjo's steel-string "ring". A one-pole
+                // high-shelf above 2.5 kHz restores that twang on the sample ONLY (the
+                // modeled sustain and its ear-tuned voicing are untouched — a model
+                // `bright` bump was tried and made ~no difference to the render, since
+                // the shelf-lifted attack dominates the spectrum). +14 dB is Arthur's
+                // "most" preference off the brightness ladder.
+                crate::sampler::LaVoice::wrap_fx(
                     model,
                     crate::sampler::banjo_bank(),
                     key,
@@ -12783,6 +12791,10 @@ fn make_uncorrected(
                     sr,
                     gain,
                     fade,
+                    crate::sampler::LaFx {
+                        shelf: Some((14.0, 2500.0)),
+                        ..Default::default()
+                    },
                 )
             } else {
                 model

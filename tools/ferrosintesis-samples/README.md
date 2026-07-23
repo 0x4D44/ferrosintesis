@@ -80,7 +80,8 @@ body or sustain.
   `-orchestral2` crate:** `harp_*` (GM 46, 11 zones G1–F7, VCSL concert harp),
   `timpani_*` (GM 47, 5 struck zones A#1–F3, VCSL Timpani 2), `recorder_*` (GM 74,
   7 zones F3–C6, VCSL Baroque alto+soprano), `ocarina_*` (GM 79, 3 zones E4–C5, VCSL),
-  `banjo_*` (GM 105, 8 zones D#2–B4, sfzinstruments/ganjo) and `viola_*` (GM 41,
+  `banjo_*` (GM 105, 24 zones D#3–G#5 — a real 5-string banjo, see below; was 8 zones
+  from sfzinstruments/ganjo) and `viola_*` (GM 41,
   7 zones sounding C3–D6 × forte/piano, VSCO Viola Section susvib). **MIT (MS Basic SF3,
   via `_bake_sf_onset`) → the `-musescore` crate:** `sitar_*` (GM 104, 8 zones E3–G6),
   `panflute_*` (GM 75, 8 zones F#3–C7), `bottle_*` (GM 76, single C6) and `shakuhachi_*`
@@ -139,11 +140,16 @@ same shell-out precedent as `prepare_drumkit.py`'s FLAC decode).
 
 The **2026.07.18 LA-onset additions** reuse those sources plus one new one. From **VCSL**
 (same CC0 pin `c1ea7bcc…`): the concert harp, Timpani 2, four Baroque recorders and the
-ocarina — CC0, routed to `ferrosintesis-samples-orchestral2`. The **GM 105 banjo** is from
-**sfzinstruments/ganjo** (a CC0 6-string guitar-banjo, <https://github.com/sfzinstruments/ganjo>)
-pinned to commit `ccff5cd5cd3b513873a48994c07724d9d3c39e1c`; its WAVs are IEEE-float and are
-transcoded to PCM with ffmpeg (`ensure_banjo_sources`), and its file labels sit an octave
-above sounding pitch (the dest is named by the MEASURED pitch). The **GM 104 sitar and
+ocarina — CC0, routed to `ferrosintesis-samples-orchestral2`. **GM 105 banjo (2026-07-23):**
+now a REAL 5-string bluegrass banjo (open-G gDGBD), close-mic recorded by Arthur and
+CC0-dedicated — replacing the earlier CC0 sfzinstruments/ganjo, a 6-string *guitar*-banjo
+whose recordings were spectrally dull (99.9 % of energy below ~1.5 kHz, no twang). The source
+take is archived in-repo at `samples/banjo/banjo-5string-openG-2026-07-23.opus`; the 24 per-note
+zones (D#3–G#5, near-chromatic) are extracted from it by `banjo_extract.py` (onset-segment →
+robust octave-correct pitch → QC gate for clarity/clipping/next-pluck-bleed → trim to a ~0.5 s
+onset → peak-normalize → TPDF-dither to 16-bit). Roots are the MEASURED sounding pitch, so the
+player's slightly-sharp fretting up the neck is captured per-root and repitched back in tune.
+The **GM 104 sitar and
 GM 75/76/77 pipe onsets** come from the same **MIT MS Basic** soundfont as the clavinet (same
 commit + SHA-256 pin) via `_bake_sf_onset`, and ship in `ferrosintesis-samples-musescore` with
 a `NOTICE`. Exact zone/source tables live in `prepare.py` (`_HARP_ZONES`, `_TIMPANI_ZONES`,

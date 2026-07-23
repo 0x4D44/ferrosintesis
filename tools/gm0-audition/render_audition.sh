@@ -18,26 +18,19 @@ TB="${TB_MIDI:-/d/language/midi-music/test-corpus/reference-midi/mike-oldfield/0
 OUT="$HERE/renders"; mkdir -p "$OUT"
 TRIM="${TRIM_SECONDS:-30}"
 
-# "bank:label" — extend as candidates land.
+# "bank:label" = the CC0 value injected on the piano channel and its label. These
+# are the GM 0 CC0 alternates the program-0 torture MIDI can reach via altbank::make
+# (raw CC0, no tens-digit encoding): 0 injects nothing (the GM0 default voice), 1..
+# select the alternate sample crates. Extend as candidates land.
+#   (Refreshed 2026.07.24 to the real altbank map — the old array + the tens-digit
+#    "lever B/C" set encoded a CC0 scheme the code no longer has.)
 BANKS=(
-  "0:salamander"
-  "1:vcsl-steinwayb"
-  "2:vcsl-kawai"
+  "0:default-gm0"
+  "1:salamander"
+  "2:vcsl-steinwayb"
   "3:headroom"
-  "4:musescore-grand"
-  "5:dark-salamander"
-  "6:vsco-upright-old-gm0"
-  "7:ydp-bright-grand"
-  "8:honkytonk"
-)
-
-# Lever B/C demo (CC0 tens digit: 1=wide blend, 2=bright model). A focused set on a
-# warm source (upright, 6) and the bright grand (ydp, 7) so the levers are audible.
-BC_BANKS=(
-  "16:upright+wideblend"
-  "26:upright+brightmodel"
-  "17:ydp+wideblend"
-  "27:ydp+brightmodel"
+  "4:dark-salamander"
+  "5:b1-upright"
 )
 
 echo "binary: $BIN"
@@ -52,19 +45,13 @@ render_bank () { # <bank-num> <label>
   echo "rendered bank $num ($lbl)"
 }
 
-for b in "${BANKS[@]}";    do render_bank "${b%%:*}" "${b#*:}"; done
-for b in "${BC_BANKS[@]}"; do render_bank "${b%%:*}" "${b#*:}"; done
+for b in "${BANKS[@]}"; do render_bank "${b%%:*}" "${b#*:}"; done
 
-# Model-only references (--no-samples): normal model, and the C bright model (tens=2).
+# Model-only reference (--no-samples): the pure GM0 model, as the source-vs-blend A/B.
 "$BIN" "$OUT/torture.mid" -o "$OUT/torture_model.wav" --no-samples -q
 python "$HERE/prep_audition.py" "$TB" -o "$OUT/_tbm.mid" --bank 0 --channel 0 --max-seconds "$TRIM" >/dev/null
 "$BIN" "$OUT/_tbm.mid" -o "$OUT/tubularbells_model.wav" --no-samples --solo 0 -q
-# bright model alone: CC0=20 (tens=2 bright, ones=0) + --no-samples
-python "$HERE/prep_audition.py" "$OUT/torture.mid" -o "$OUT/_tmb.mid" --bank 20 --channel 0 >/dev/null
-"$BIN" "$OUT/_tmb.mid" -o "$OUT/torture_model-bright.wav" --no-samples -q
-python "$HERE/prep_audition.py" "$TB" -o "$OUT/_tbmb.mid" --bank 20 --channel 0 --max-seconds "$TRIM" >/dev/null
-"$BIN" "$OUT/_tbmb.mid" -o "$OUT/tubularbells_model-bright.wav" --no-samples --solo 0 -q
-echo "rendered model refs (normal + bright)"
+echo "rendered model ref"
 
 rm -f "$OUT"/_*.mid
 echo "done -> $OUT"

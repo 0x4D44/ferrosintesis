@@ -62,6 +62,11 @@ _cal/
 !crates/ferrosintesis-samples-strings/samples/*.wav
 !crates/ferrosintesis-samples-ccby/samples/*.wav
 !crates/ferrosintesis-samples-rain/samples/*.wav
+# Root-level source instrument recordings (trimmed, opus-compressed): the raw takes the
+# per-note crate sample banks are extracted from. SOURCE, not the render output above —
+# a small, rarely-changing archive (one file per recording), NOT the album .opus renders
+# that previously bloated .git.
+!samples/**/*.opus
 !crates/ferrosintesis-samples-bass/samples/*.wav
 # ...and the un-re-fetchable CC BY 3.0 gong source WAVs (Freesound needs a login;
 # committed so the processed bank is offline-reproducible via prepare.py).

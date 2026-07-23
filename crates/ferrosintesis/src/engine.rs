@@ -11803,6 +11803,7 @@ mod tests {
         // (program, bank LSB, a key in a sensible range for that program)
         let variations: &[(u8, u8, u8)] = &[
             (24, 96, 60),  // Ukulele
+            (25, 96, 60),  // Mandolin (owner-recorded LA onset over the double-course model)
             (105, 98, 60), // Oud
             (116, 96, 45), // Gran Cassa
             (48, 3, 60),   // Slow Strings
@@ -11850,6 +11851,63 @@ mod tests {
                 "prog {prog} + CC32={lsb}: variation render too close to base (diff/base = {ratio:.4})"
             );
         }
+    }
+
+    /// The mandolin's full engine chain — CC32=96 dispatch → `make_variation` →
+    /// `mandolin_bank` → repitch → mix — must render an AUDIBLE voice at the
+    /// PLAYED pitch, and its MODEL must not be octave-broken. A4 (key 69) is an
+    /// in-tune open-string zone, so it plays with essentially no repitch; holds in
+    /// `--no-samples` builds too, since the pure `MANDOLIN` model renders the same
+    /// fundamental.
+    ///
+    /// Scope note — this is deliberately NOT the guard for a sample-root octave
+    /// error. That failure is owned by `sampler::tests::mandolin_zone_roots_match_
+    /// the_fretboard`, which checks the zone-table floats directly. It has to be:
+    /// a root stored an octave high drives `LaVoice`'s repitch `step` to ~0.5,
+    /// which lands on the edge of the `0.5..=2.05` window and often falls back to
+    /// the bare model — and the model plays the correct pitch, masking the error
+    /// at the render level (the classic "a fallback hides the thing you measure"
+    /// trap). So this test's f0/2 check catches a MODEL octave error (the fallback
+    /// is octave-wrong too), not a table one; the table one is caught upstream.
+    #[test]
+    fn mandolin_variation_renders_at_the_played_pitch() {
+        let sr = 44100.0;
+        let key = 69u8; // A4 = 440 Hz, an in-tune open-string zone
+        let f0 = key_freq(key);
+        let ev = vec![
+            (0.0, EvKind::Prog { ch: 0, prog: 25 }),
+            (
+                0.0,
+                EvKind::Cc {
+                    ch: 0,
+                    num: 32,
+                    val: 96,
+                },
+            ),
+            (
+                0.05,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key,
+                    vel: 100,
+                },
+            ),
+            (1.6, EvKind::NoteOff { ch: 0, key }),
+        ];
+        let out = left(&render(&test_song(ev, 2.0), &test_opts(sr)).0);
+        // After the onset settles, before the note-off release.
+        let seg = &out[(0.15 * sr) as usize..(1.2 * sr) as usize];
+        let fund = crate::testutil::mag_at(seg, sr, f0);
+        let oct_down = crate::testutil::mag_at(seg, sr, f0 * 0.5);
+        assert!(
+            fund > 1e-3,
+            "mandolin A4 is silent or not at pitch (fundamental {fund:.5})"
+        );
+        assert!(
+            fund > 4.0 * oct_down,
+            "mandolin A4 has too much energy an octave down (fund {fund:.5} vs \
+             f0/2 {oct_down:.5}) — the MANDOLIN model is octave-broken"
+        );
     }
 
     /// Unit 1 (CC84 portamento control): a `CC84=src` before a NoteOn makes

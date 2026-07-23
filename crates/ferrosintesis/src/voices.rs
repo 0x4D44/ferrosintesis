@@ -2699,6 +2699,65 @@ pub const STEEL: PluckPreset = PluckPreset {
     damper_hold: DamperHold::Derived,
     ..DEFAULTS
 };
+/// Mandolin — GM 25 "steel guitar" + bank-select LSB 96 (the XG Mandolin cell;
+/// GM itself has no mandolin program, and GM2/GS/XG all place one as a bank
+/// variation of the steel guitar). A short-scale, steel-strung, DOUBLE-COURSE
+/// plucked instrument: the picked excitation is the steel guitar's, but the tail
+/// decays far faster (a small archtop body) and carries the unison-course beat
+/// that makes a mandolin shimmer.
+///
+/// The double course is the signature, modelled exactly as the hammered
+/// dulcimer's is — two near-equal strings a few cents apart (wide `course_detune`,
+/// ~50/50 `course_mix`, weak `course_couple` so the beat is not buried by
+/// bridge coupling). It shapes the MODEL's decay tail; the sampled onset already
+/// carries the real pair's beat in its first ~0.9 s, and `LaVoice` fades the model
+/// in only as the sample fades out, so the two never sound at full weight together
+/// (no double-counted shimmer).
+///
+/// The numeric voicing (t60, body EQ, exact detune, and `LA_MANDOLIN`'s gain) is a
+/// principled steel-string/dulcimer starting point, NOT an ear-tuned final — this
+/// box has no ears. It is verified by oracle for the things a machine can check
+/// (pitch, sample engagement, no onset click, no double strike); subjective timbre
+/// wants an Arthur listening pass.
+pub const MANDOLIN: PluckPreset = PluckPreset {
+    #[cfg(test)]
+    name: "MANDOLIN",
+    exc_model: ExcModel::Shaped,
+    slope: 1.4,
+    noise_mix: 0.30,
+    exc_trim: -1.51, // steel-string reference; the level wants an ear-calibrate
+    // Short scale + small archtop: the tail dies far faster than a guitar's
+    // (STEEL t60 7.0) — a plucked mandolin note is essentially gone in ~1-2 s.
+    t60: 3.2,
+    bright: 7200.0,
+    pick_lp: 5200.0,
+    pos: 0.14,
+    amp: 0.50,
+    rel_t60: 0.6,
+    // Small archtop body: air + top-plate modes sit higher than a dreadnought,
+    // with a bright plectrum sparkle. Approximate — an ear pass may refine.
+    body: &[
+        (280.0, 1.1, 3.0),
+        (560.0, 1.2, 2.0),
+        (2400.0, 1.6, 2.5),
+        (5000.0, 1.8, 2.0),
+    ],
+    click: 0.9, // plectrum on steel, as STEEL
+    click_hp: 2600.0,
+    stop_thump: 0.3,
+    damper_hold: DamperHold::Derived,
+    // Double course tuned in UNISON, like the hammered dulcimer (which sets these
+    // same fields) — but a well-tuned mandolin is a touch tighter than the
+    // dulcimer's 0.42%. Unlike the dulcimer, the low courses (G, D) are wound like
+    // a guitar, so the guitar wound-key split stays on (the DEFAULTS value).
+    wound_key_split: true,
+    course_detune: 1.0035, // ~6 cents
+    course_t60: 0.9,
+    course_bright: 1.0,
+    course_mix: (0.5, 0.5),
+    course_couple: 0.002,
+    ..DEFAULTS
+};
 pub const CLEAN: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "CLEAN",
@@ -8641,6 +8700,15 @@ pub(crate) const LA_GUITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.28));
 /// the gentler model fade-in continuously. Fade window unchanged — only the
 /// level was mismatched, not the timing.
 const LA_STEEL: (f32, (f32, f32)) = (0.20, (0.05, 0.28));
+/// Mandolin LA onset (owner-recorded, CC0, `-mandolin` crate) reached at GM 25 +
+/// bank LSB 96: the sample owns the pick attack and the first ~0.9 s — including
+/// the real double-course shimmer — and the `MANDOLIN` model carries the decay
+/// from the crossfade on. Gain and window are seeded from `LA_STEEL` (the same
+/// steel-string sample family); the gain wants an ear-calibrate against the model
+/// level at the crossfade, the one parameter no oracle or render-diff can settle.
+/// The 0.28 s fade-end sits safely inside the 0.9 s sample even at the bank's
+/// widest repitch (±2.5 semitones → step ≤ ~1.15 → ≥0.78 s of sample consumed).
+const LA_MANDOLIN: (f32, (f32, f32)) = (0.20, (0.05, 0.28));
 /// GM 6 harpsichord: the sample owns the quill pluck (first ~30 ms), the
 /// Karplus-Strong string carries the slow-damped jangle from ~200 ms — the same
 /// onset-ownership split as the plucked guitars. Held at 0.28 (below the guitar's
@@ -11846,12 +11914,34 @@ pub fn make_variation(
     seed: u32,
     samples: bool,
 ) -> Option<Box<dyn Voice>> {
-    // Variations are modeled-only (no dedicated sample banks); `samples` is
-    // accepted for signature symmetry with `make` and is currently unused.
-    let _ = samples;
+    // Most variations are modelled-only and ignore `samples`; the mandolin
+    // (25, 96) is the one SAMPLED variation and threads it through to its LA onset
+    // layer. The function's RNG-purity contract is unchanged: every arm still
+    // draws only from `seed` (`LaVoice::wrap` takes no RNG of its own), so the
+    // `None` path stays bit-identical to calling `make`.
     let voice: Box<dyn Voice> = match (program, bank_lsb) {
         // Ukulele — small bright short nylon (Nylon Guitar 24, LSB 96).
         (24, 96) => Box::new(Pluck::new(&UKULELE, key, vel, sr, seed)),
+        // Mandolin — Steel Guitar (25) + LSB 96, the XG cell (GM has no mandolin
+        // program). Owner-recorded LA onset over the short-scale double-course
+        // MANDOLIN model; the pure model is the `--no-samples` fallback.
+        (25, 96) => {
+            let model: Box<dyn Voice> = Box::new(Pluck::new(&MANDOLIN, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_MANDOLIN;
+                crate::sampler::LaVoice::wrap(
+                    model,
+                    crate::sampler::mandolin_bank(vel),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                )
+            } else {
+                model
+            }
+        }
         // Oud — warm double-course fretless lute (Banjo 105, LSB 98).
         (105, 98) => Box::new(Pluck::new(&OUD, key, vel, sr, seed)),
         // Gran Cassa — orchestral bass drum (Taiko 116, LSB 96).

@@ -8616,6 +8616,96 @@ const LA_BANJO: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
 /// does not bite), so the transient hands over across [0.10, 0.40] s.
 const LA_STRINGS: (f32, (f32, f32)) = (0.40, (0.10, 0.40));
 
+/// GM48/49 string-section seam taper (MM-BUG-KILN-00046). One flat `LA_STRINGS`
+/// gain sat the sampled section onset +1..+6 dB over the `strings()` model
+/// through the [0.10, 0.40] s crossfade at most keys — inverting GM49 Slow
+/// Strings' swell (ferro was loudest at note-on where both references rise) —
+/// while repitched `celens` zones near keys 58/76 sat *below* it. The mismatch
+/// is a 2-D surface, not one scalar: `strings_bank` splits at vel 80
+/// (`strsec_p` below, `strsec_f` at/above), the two ensemble sample sets sit at
+/// different levels vs the model, and `nearest` mixes their `celens`
+/// cello-ensemble and `vlnens` violin-ensemble zones differently by key.
+///
+/// Each per-layer table is the INVERSE of the measured wrapped/model
+/// fade-window RMS mismatch — a 3-SEED GEOMEAN over GM48/49 (printer
+/// `sampler::tests::print_strings_wrap_level_ratios`; the model's per-note
+/// jitter swings a single-seed ratio ~0.3, so it is calibrated against the
+/// seed-robust central value, not one seed's luck) — landing the ratio near 1.0
+/// across the whole active-wrap range (~keys 28-96, where the repitch step
+/// stays inside `LaVoice::build`'s [0.5, 2.05] window).
+///
+/// Program-aware cap. GM49 (Slow Strings, a SWELL patch) caps the taper at 1.0:
+/// the sample must never speak OVER a still-swelling model, so where a zone sits
+/// under the model the onset is left soft (a soft onset *helps* the swell)
+/// rather than boosted. GM48 (String Ensemble 1, a normal attack) takes the
+/// full taper, including the modest boosts that pull its under-level zones up to
+/// parity. Linear-interp between anchors; clamped flat past the ends.
+fn strings_seam_gain(program: u8, key: u8, vel: u8) -> f32 {
+    const P: [(f32, f32); 19] = [
+        (28.0, 0.64),
+        (32.0, 0.63),
+        (36.0, 0.63),
+        (40.0, 0.82),
+        (44.0, 0.71),
+        (48.0, 0.68),
+        (52.0, 0.60),
+        (55.0, 0.88),
+        (58.0, 1.08),
+        (60.0, 1.01),
+        (64.0, 0.56),
+        (68.0, 0.54),
+        (72.0, 0.67),
+        (76.0, 1.16),
+        (80.0, 0.94),
+        (84.0, 0.81),
+        (88.0, 0.80),
+        (92.0, 0.64),
+        (96.0, 0.55),
+    ];
+    const F: [(f32, f32); 19] = [
+        (28.0, 0.89),
+        (32.0, 0.79),
+        (36.0, 0.71),
+        (40.0, 0.48),
+        (44.0, 0.48),
+        (48.0, 0.49),
+        (52.0, 0.50),
+        (55.0, 0.80),
+        (58.0, 0.62),
+        (60.0, 0.95),
+        (64.0, 0.68),
+        (68.0, 0.71),
+        (72.0, 0.71),
+        (76.0, 0.67),
+        (80.0, 1.09),
+        (84.0, 1.01),
+        (88.0, 0.87),
+        (92.0, 0.73),
+        (96.0, 0.63),
+    ];
+    let a = if vel >= 80 { &F } else { &P };
+    let k = key as f32;
+    let mut g = a[a.len() - 1].1;
+    if k <= a[0].0 {
+        g = a[0].1;
+    } else {
+        for w in a.windows(2) {
+            let (k0, g0) = w[0];
+            let (k1, g1) = w[1];
+            if k <= k1 {
+                g = g0 + (k - k0) / (k1 - k0) * (g1 - g0);
+                break;
+            }
+        }
+    }
+    // GM49 swell protection: the sample must never speak over the model.
+    if program == 49 {
+        g.min(1.0)
+    } else {
+        g
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Orchestra Hit (GM 55)
 // ---------------------------------------------------------------------------
@@ -12502,7 +12592,7 @@ fn make_uncorrected(
                     key,
                     vel,
                     sr,
-                    gain,
+                    gain * strings_seam_gain(program, key, vel),
                     fade,
                 )
             } else {

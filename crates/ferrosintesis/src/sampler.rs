@@ -5559,6 +5559,163 @@ mod tests {
         }
     }
 
+    /// Calibration printer for the GM48/49 string-section seam taper
+    /// (MM-BUG-KILN-00046). Measures the wrapped/model RMS ratio over the
+    /// strings fade window [0.10, 0.40] s — where the whole excess lives
+    /// (0.00 dB from b4 on) — across the sampled range and both velocity
+    /// layers, so the per-key taper can be calibrated against the model's
+    /// actual output rather than hand-tuned.
+    #[test]
+    #[ignore = "calibration harness — run by hand"]
+    fn print_strings_wrap_level_ratios() {
+        let sr = 44100.0;
+        // Full active-wrap range: `LaVoice::build` falls back to the bare model
+        // only when the repitch step leaves [0.5, 2.05], which at 44.1 kHz keeps
+        // the wrap live roughly keys 25-98 — so the taper must cover the edges,
+        // not just 40-84. Two seeds spot-check that the ratio is seed-stable
+        // (the model carries +/-10% t60 / +/-8% bright jitter).
+        for program in [48u8, 49] {
+            for key in [
+                28u8, 32, 36, 40, 44, 48, 52, 55, 58, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96,
+            ] {
+                for vel in [72u8, 110] {
+                    let early = |seed: u32, samples: bool| {
+                        let mut v = voices::make(program, key, vel, sr, seed, samples);
+                        let mut buf = vec![0f32; (0.5 * sr) as usize];
+                        v.render(&mut buf);
+                        let (a, b) = ((0.10 * sr) as usize, (0.40 * sr) as usize);
+                        (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                    };
+                    let r = |s: u32| early(s, true) / early(s, false).max(1e-12);
+                    // geomean over 3 seeds — the model's per-note jitter swings a
+                    // single-seed ratio by up to ~0.3, so calibrate against the
+                    // seed-robust central value, not one seed's luck.
+                    let seeds = [5u32, 21, 99];
+                    let g =
+                        (seeds.iter().map(|&s| r(s).ln()).sum::<f32>() / seeds.len() as f32).exp();
+                    println!(
+                        "strings gm{program} key {key:3} vel {vel:3}: geomean {g:5.2} ({:+5.1} dB)  [s5 {:.2} s21 {:.2} s99 {:.2}]",
+                        20.0 * g.max(1e-12).log10(),
+                        r(5),
+                        r(21),
+                        r(99)
+                    );
+                }
+            }
+        }
+    }
+
+    /// MM-BUG-KILN-00046: the GM48/49 string-section sampled onset must land on
+    /// the `strings()` model's level through the [0.10, 0.40] s crossfade —
+    /// a level-PARITY band, which the slope-only `la_level_continuity` cannot
+    /// see. Before the `strings_seam_gain` taper the single `LA_STRINGS` gain
+    /// sat the sample +1..+6 dB over the model at most keys (inverting GM49's
+    /// swell) while repitched `celens` zones near keys 58/76 sat under it.
+    ///
+    /// Metric is a 3-SEED GEOMEAN — the model's per-note jitter swings a
+    /// single-seed ratio ~0.3, so a single-seed bound would false-fail on other
+    /// seeds. Coverage spans the edge zones (keys 33/90, near the ends of the
+    /// active-wrap range) and the velocity EXTREMES (40/120, either side of the
+    /// vel-80 sample-layer split), not just the mids. Fail-first: at vel ≥ 80
+    /// the low-key ratio is 2.0–2.1× untapered — well outside 1.30. The band is
+    /// program-aware: GM48 takes the full taper (parity both sides), GM49 is
+    /// capped at 1.0 for swell protection so its under-zones sit legitimately
+    /// low — hence one honest band wide enough for both, ±~2.5 dB, which the
+    /// seed geomean makes meaningful rather than noise-dominated.
+    #[test]
+    fn la_strings_seam_level_parity() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let seeds = [5u32, 21, 99];
+        let geo_ratio = |program: u8, key: u8, vel: u8| -> f32 {
+            let early = |seed: u32, samples: bool| {
+                let mut v = voices::make(program, key, vel, sr, seed, samples);
+                let mut buf = vec![0f32; (0.5 * sr) as usize];
+                v.render(&mut buf);
+                let (a, b) = ((0.10 * sr) as usize, (0.40 * sr) as usize);
+                (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+            };
+            (seeds
+                .iter()
+                .map(|&s| (early(s, true) / early(s, false).max(1e-12)).ln())
+                .sum::<f32>()
+                / seeds.len() as f32)
+                .exp()
+        };
+        for program in [48u8, 49] {
+            for key in [33u8, 48, 58, 68, 90] {
+                for vel in [40u8, 72, 110, 120] {
+                    let g = geo_ratio(program, key, vel);
+                    assert!(
+                        (0.75..=1.30).contains(&g),
+                        "strings gm{program} key {key} vel {vel}: 3-seed-geomean wrapped/model seam ratio {g:.2} outside 0.75-1.30"
+                    );
+                }
+            }
+        }
+    }
+
+    /// MM-BUG-KILN-00046: the sampled GM49 onset must not DEGRADE the envelope
+    /// shape the `strings()` model produces on its own. Deliberately RELATIVE,
+    /// not an absolute "body >= onset": at low keys the model itself does not
+    /// swell (the strings MODEL's low-register envelope, KILN-00053, out of this
+    /// sampler seam's scope) and the sample owns a real section-attack PUNCH in
+    /// [0, 0.10] s that costs body/onset even at a level-matched seam — so
+    /// demanding an absolute swell would guard something this bug cannot deliver.
+    /// What it pins: where the model swells (m > 1.05), the wrapped body/onset
+    /// stays within 30% of the model's — which fails hard on the original +6 dB
+    /// onset (w/m ~0.5-0.6) and passes the taper (worst ~0.73). 3-seed geomean
+    /// (the metric swings ~0.3 per seed). Non-vacuity is asserted so the guard
+    /// cannot pass by simply finding no swelling case.
+    #[test]
+    fn la_strings_onset_preserves_model_swell() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let seeds = [5u32, 21, 99];
+        // 3-seed geomean of body(0.8..1.2 s)/onset(0..0.4 s), for GM49.
+        let geo_rise = |key: u8, vel: u8, samples: bool| -> f32 {
+            let one = |seed: u32| {
+                let mut v = voices::make(49, key, vel, sr, seed, samples);
+                let mut buf = vec![0f32; (1.3 * sr) as usize];
+                v.render(&mut buf);
+                let m = |t0: f32, t1: f32| {
+                    let (a, b) = ((t0 * sr) as usize, (t1 * sr) as usize);
+                    (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                };
+                m(0.8, 1.2) / m(0.0, 0.4).max(1e-12)
+            };
+            (seeds.iter().map(|&s| one(s).ln()).sum::<f32>() / seeds.len() as f32).exp()
+        };
+        let mut guarded = 0usize;
+        let mut worst: Option<(u8, u8, f32)> = None;
+        for key in [48u8, 55, 58, 64, 68, 72] {
+            for vel in [72u8, 110] {
+                let (w, m) = (geo_rise(key, vel, true), geo_rise(key, vel, false));
+                let wm = w / m;
+                println!("gm49 swell key {key} vel {vel}: body/onset wrapped {w:.2}  model-only {m:.2}  w/m {wm:.2}");
+                if m > 1.05 {
+                    guarded += 1;
+                    if worst.map(|(.., x)| wm < x).unwrap_or(true) {
+                        worst = Some((key, vel, wm));
+                    }
+                }
+            }
+        }
+        assert!(
+            guarded >= 6,
+            "non-vacuous guard broken: only {guarded} of 12 GM49 cases have a swelling model (m > 1.05) — the model or probe changed; re-derive before trusting this oracle"
+        );
+        let (key, vel, wm) = worst.expect("guarded >= 6 implies a worst case");
+        assert!(
+            wm >= 0.70,
+            "gm49 key {key} vel {vel}: sampled onset degrades the model's swell — wrapped/model-only body/onset ratio {wm:.2} < 0.70"
+        );
+    }
+
     fn assert_wrap_seam(
         program: u8,
         key: u8,

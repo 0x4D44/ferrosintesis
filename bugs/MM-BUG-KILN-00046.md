@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00046 — GM48/49 string-section LA onset is not level-matched to the model it hands over to (−2.5 .. +7.6 dB, zone-dependent): "Slow Strings" peaks in its first 400 ms
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,9 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) — triage of M-CAL v3 reference-panel finding E)
+- **State history:**
+  - Open (2026-07-22, raised by Claude Opus 4.8 (1M) — triage of M-CAL v3 reference-panel finding E)
+  - Fixed (2026-07-23, Claude Opus 4.8 (1M) — `strings_seam_gain(program, key, vel)` in `crates/ferrosintesis/src/voices.rs`: a per-velocity-LAYER (strsec_p/strsec_f), per-key taper on the LA wrap gain, each table the inverse of the measured wrapped/model fade-window mismatch (3-SEED GEOMEAN over GM48/49 — the metric swings ~0.3 per seed). Seam excess cut from +1..+6 dB to a [0.75,1.30] parity band across the whole active-wrap range (keys ~28-96, edges + velocity extremes covered); GM49's swell handed back to the model. Program-aware cap: GM48 takes full parity (incl. the modest boosts that fix the −2.5 dB under-level zones); GM49 (a swell patch) caps at 1.0 so the sample never speaks over the still-swelling model. Two new oracles: `la_strings_seam_level_parity` (fail-first: untapered ratio 2.0-2.1× at vel≥80 low keys) and `la_strings_onset_preserves_model_swell` (relative, non-vacuous). Independently reviewed by gpt-5.6-sol (REQUEST-CHANGES → all three points addressed: under-level half, oracle honesty, edge/velocity coverage). render-diff: 104 GM48/49 tracks changed, **0 contamination**, 0 not-reached. ferrosintesis suite green, clippy + fmt clean. Found while fixing: KILN-00053 (the strings MODEL's low-key non-swell — out of this sampler seam's scope). GM48/49 mutual distinctness (KILN-00024, EarPending) unchanged — needs an ear A/B. Fixing commit on this task branch; awaits independent two-eyes closure.)
 
 ## Observation
 

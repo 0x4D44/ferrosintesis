@@ -28,25 +28,43 @@ performances are preserved uncut (the takes are wall-to-wall, with note tails ri
 decays). The 44.1 kHz/16-bit lossless originals are Arthur's authoritative masters;
 these Opus copies are the in-repo archive and the re-slice source.
 
-## Zone slice map (approximate anchor times, seconds into each take)
+## Zone slice map (verified anchors)
 
-The bank keeps the Martin/nylon layout — 8 zones at ~6-semitone spacing, E2–B5 — one
-onset (~0.9 s) per zone; the Karplus-Strong model carries the decay. `prepare.py`
-slices a generous window around each anchor and `trim_to_onset` finds the exact onset,
-so these times only need to bracket the right note. Final pinned windows live in
-`tools/ferrosintesis-samples/prepare.py`.
+The banks keep the Martin/nylon layout — 8 zones at ~6-semitone spacing spanning
+E2–B5 — one onset (~0.9 s) per zone; the Karplus-Strong model carries the decay.
+The pre-cut single-note sources live in `zones/` and are what `prepare.py` bakes;
+they are committed lossless so the bank is reproducible offline (same rationale as
+`tools/ferrosintesis-samples/gong-src/`). Times below are the onset in each master.
 
-| Zone | `picked.opus` (0192) | `plucked.opus` (0191) |
-|------|----------------------|-----------------------|
-| E2   | ~1.7 s   | ~5.7 s   |
-| A#2  | ~39.3 s  | ~64.1 s  |
-| E3   | ~85.0 s  | ~102.8 s |
-| A#3  | ~132.2 s | ~143.8 s |
-| E4   | ~180.4 s | ~189.4 s |
-| B4   | ~215.9 s | ~282.0 s |
-| F5   | ~244.1 s | ~254.1 s |
-| B5   | ~276.2 s | ~277.4 s |
+Anchors were chosen by octave-resolved harmonic matching over every note in the take,
+then filtered on **isolation** — the quiet before the onset must exceed ~30 dB, because
+`trim_to_onset` locates the attack as the first sample above 3 % of peak (−30 dB) and
+would otherwise trigger on the previous note's decay.
 
-The top zones (F5, B5) ring shorter and quieter — expected acoustic-guitar physics,
-and the same situation the Martin bank already lives with (its `steel_B5` is 0.706 s,
-the binding case of the `guitar_zone_fade_budget` oracle).
+| Zone | `picked` (0192) | measured f0 | `plucked` (0191) | measured f0 |
+|------|-----------------|-------------|------------------|-------------|
+| low E   | 1.720 s  | 82.94 Hz  | 5.700 s   | 83.45 Hz  |
+| ~A#2    | **B2** 44.490 s | 124.23 Hz | A#2 64.120 s | 117.16 Hz |
+| E3      | 81.150 s | 166.01 Hz | 102.840 s | 166.01 Hz |
+| A#3     | 132.250 s | 233.06 Hz | 139.040 s | 233.06 Hz |
+| E4      | 180.480 s | 330.23 Hz | 189.450 s | 331.25 Hz |
+| ~B4     | **A#4** 211.480 s | 467.92 Hz | B4 228.900 s | 494.63 Hz |
+| F5      | 244.080 s | 700.86 Hz | 254.100 s | 700.86 Hz |
+| B5      | 276.320 s | 993.07 Hz | 282.050 s | 990.02 Hz |
+
+**Two picked-take substitutions.** Zone roots are *measured*, not nominal, so an anchor
+only has to sit near its slot on the grid. The picked take's A#2 falls inside the
+preceding note's decay (28 dB isolation) and its B4 is both quiet and poorly isolated
+(20 dB), so **B2** and **A#4** stand in — each with ~40–46 dB isolation. This mirrors
+the nylon bank, where B2 already stands in for that source's missing A#2.
+
+**On the picked low E.** Its fundamental sits below the 2nd/3rd harmonics in the attack
+window (H1 −3.5 dB, H3 dominant), so a dominance-weighted pitch detector reports it an
+octave high. That is normal dreadnought low-E behaviour and *not* a defect: the zone it
+replaces — the shipped Martin `steel_E2` — has an even weaker fundamental (H1 −6.0 dB,
+H3 dominant) at the same pinned root. Perceived pitch follows the harmonic series, not
+the loudest partial. Pin the root to the true fundamental.
+
+The top zones (F5, B5) ring shorter and quieter — expected acoustic-guitar physics, and
+the same situation the Martin bank already lives with (its `steel_B5` is 0.706 s, the
+binding case of the `guitar_zone_fade_budget` oracle).

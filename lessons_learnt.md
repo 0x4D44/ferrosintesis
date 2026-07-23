@@ -3,7 +3,18 @@
 Distilled, non-obvious gotchas for future sessions in this repo. Cap: 20.
 (Currently over cap — due a prune pass.)
 
-- 2026.07.23 — **A band-limited spectral metric whose LOWEST band starts above the thing you changed
+- 2026.07.23 — **Sweep the worst COMBINATION: a one-knob-at-a-time oracle misses a shared-budget breach**
+  (`engine.rs:amp_drive_knob_holds_alias_floor`). The driven-guitar amp exposes six knobs that all draw on
+  ONE −40 dBc alias budget. My oracle swept Drive while holding every other knob neutral, so it passed at
+  −42.5 dBc — while Drive 127 + Tone 127 was −39.0 and adding Presence was −35.0, i.e. 5 dB over. **The
+  breach shipped to trunk** and was only caught when a later task widened a range and re-tested pairs.
+  Two corollaries. (1) *Post-clip is not automatically safe.* I had reasoned "cabinet EQ is after the
+  shaper, so it cannot alias" — wrong for a RATIO metric: Presence boosts 2.6–2.8 kHz, exactly where alias
+  lands and ABOVE the fundamental, so it lifts alias-to-signal without creating one new alias product.
+  (2) *A shallow constraint curve hides the cliff.* Alias moved only −42.5→−33.7 dBc as `k` went 1.2→3.0,
+  so nothing looked dramatic while the budget was being consumed. Wherever several controls spend one
+  budget (alias headroom, gain staging, voice count, CPU), the worst case is a combination — assert it
+  explicitly, and treat a per-parameter green as evidence about that parameter only.
   reports your change as a no-op** (`_cal/amp_ab/analyze.py:BANDS`, driven-guitar lead amp). Bands from
   200 Hz said the new lead amp/cab moved main-vs-alt separation +0.08 dB with some probes going the
   WRONG way; the identical comparison with bands from 80 Hz says +0.80 dB, rising on every probe —

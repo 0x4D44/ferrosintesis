@@ -900,6 +900,11 @@ F0_RANGE = {
     "rhodes": (35.0, 1200.0),
     "dulcimer": (200.0, 800.0),
     "musicbox": (600.0, 2400.0),
+    # Owner-recorded mandolin: G3 (~196 Hz) open to E6 (~1328 Hz) at the 12th fret.
+    # Also in TWO_F_STRONG below — the bank spans nearly three octaves and a mandolin's
+    # low fundamentals are weak (a small body radiates them poorly), so a single fixed
+    # ceiling cannot separate f0 from 2f on the low zones.
+    "mandolin": (170.0, 1450.0),
 }
 # Families whose recordings are 2f-DOMINANT (autocorr grabs the 2nd harmonic if the
 # ceiling admits it) AND span more than an octave, so a single fixed F0 ceiling can't
@@ -908,7 +913,7 @@ F0_RANGE = {
 TWO_F_STRONG = frozenset(("recorder", "banjo", "viola", "marimba", "xylo", "glock",
                           "vibes", "tubular", "cellosolo", "dbass", "pizzbass",
                           "fingerbass", "pickbass",
-                          "rhodes", "dulcimer", "musicbox"))
+                          "rhodes", "dulcimer", "musicbox", "mandolin"))
 # the piano has no expressive sustain to preserve: keep much more of the
 # real recording and let the model take only the long tail
 # plucks decay — keep more real body than the 0.62 s default (HLD §3)
@@ -939,6 +944,7 @@ KEEP_FAM = {
     "rhodes": (0.9, 0.30),
     "dulcimer": (0.9, 0.30),
     "musicbox": (0.9, 0.30),
+    "mandolin": (0.9, 0.30),
 }  # (keep_s, fade_s)
 KEEP_FILE = {
     "drum_sus_cymb1_mp_rr1.wav": (2.2, 0.35),
@@ -985,6 +991,21 @@ FREESOUND_SOURCES = {
     if fn.endswith(".wav")
 }
 
+# Owner-recorded mandolin onsets (GM 25 steel guitar + bank LSB 96 — the XG Mandolin
+# cell; GM itself has no mandolin program). Like gong-src/freesound-src these are not
+# fetchable, so the per-note source cuts are committed here already downmixed to mono
+# 16-bit 44.1 kHz — exactly what the bake consumes — and ensure_mandolin_sources copies
+# them into the temp `src` for the main loop to trim and measure. Ten zones (open + 5th
+# fret on all four courses, plus 10th and 12th on the E course) x two dynamic layers.
+# Provenance, the measured roots and the intonation notes are in
+# crates/ferrosintesis-samples-mandolin/PROVENANCE.md.
+MANDOLIN_SRC = os.path.join(TOOL_DIR, "mandolin-src")
+MANDOLIN_SOURCES = {
+    fn: fn
+    for fn in (sorted(os.listdir(MANDOLIN_SRC)) if os.path.isdir(MANDOLIN_SRC) else [])
+    if fn.endswith(".wav")
+}
+
 CORE_FAMILIES = frozenset(("piano", "violin", "flute"))
 # Families that live in their OWN sample crate (not core/orchestral) — the grand is
 # a ~6.9 MiB CC-BY bank kept separate so core stays under the crates.io 10 MiB cap.
@@ -1018,6 +1039,9 @@ FAMILY_PACKAGE = {
     "rhodes": "ferrosintesis-samples-ccby",
     "dulcimer": "ferrosintesis-samples-ccby",
     "musicbox": "ferrosintesis-samples-orchestral2",
+    # Owner-recorded CC0 mandolin (GM 25 + bank LSB 96) — its own crate, like the
+    # other owner-recorded bank (-rain), keeping licence provenance isolated.
+    "mandolin": "ferrosintesis-samples-mandolin",
 }
 OUT_SR = 44100
 KEEP_S = 0.62      # length kept after the pre-onset pad
@@ -1160,6 +1184,14 @@ def ensure_freesound_sources(src):
     main bake loop (they are auth-gated, so committed as source like gong-src, not fetched)."""
     for fn in FREESOUND_SOURCES:
         shutil.copyfile(os.path.join(FREESOUND_SRC, fn), os.path.join(src, fn))
+
+
+def ensure_mandolin_sources(src):
+    """Copy the committed owner-recorded mandolin cuts (mandolin-src/*.wav) into `src`
+    for the main bake loop (owner-held recording, nothing to fetch — same intake shape
+    as gong-src and freesound-src)."""
+    for fn in MANDOLIN_SOURCES:
+        shutil.copyfile(os.path.join(MANDOLIN_SRC, fn), os.path.join(src, fn))
 
 
 def ensure_flac_sources(src, source_map, label):
@@ -2552,6 +2584,8 @@ def main():
             ensure_ebass_sources(src)
         if want("rhodes") or want("dulcimer") or want("musicbox"):
             ensure_freesound_sources(src)
+        if want("mandolin"):
+            ensure_mandolin_sources(src)
         if want("chanter"):
             ensure_bagpipe_sources(src)
         if want("grand"):
@@ -2645,6 +2679,7 @@ def main():
             | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS | TUBULAR_URLS
             | SOLO_CELLO_URLS | SOLO_DBASS_URLS | PIZZBASS_URLS
             | FINGERBASS_SOURCES | PICKBASS_SOURCES | FREESOUND_SOURCES
+            | MANDOLIN_SOURCES
             | GRAND_SOURCES
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):

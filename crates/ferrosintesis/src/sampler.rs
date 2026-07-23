@@ -2164,6 +2164,73 @@ pub fn banjo_bank() -> &'static [Zone] {
     banjo()
 }
 
+/// Mandolin pluck onsets — owner-recorded, CC0, `-mandolin` crate. Reached at GM 25 (steel
+/// guitar) with bank-select LSB 96: General MIDI has no mandolin program, and GM2/GS/XG all
+/// place one as a bank variation of the steel guitar. Same LA shape as the nylon/steel/banjo
+/// banks — the sample owns the pick attack and the first ~0.9 s (including the double course's
+/// unison shimmer, which a real pair of strings gives for free), the `Pluck` model carries the
+/// decay.
+///
+/// Ten zones sounding G3–E6 from three hand positions: open and 5th fret on all four courses,
+/// plus the 10th and 12th frets on the E course. Those positions are chosen so no two coincide
+/// in pitch — the courses are a fifth apart and the frets a semitone, so open/5th and 10th/12th
+/// never collide, whereas the 7th fret would have duplicated the next open string exactly.
+///
+/// Roots are **MEASURED, not nominal**, and here that matters more than usual: the instrument's
+/// open strings are in tune (within a few cents) but its fretted notes run sharp — up to
+/// **+29 cents** at the 5th fret on the thickest course — so nominal pitches would detune every
+/// fretted zone. `LaVoice` repitches ±1 octave from the measured root.
+///
+/// Two dynamic layers, split at the repo-wide `vel >= 80`. A third "normal" pass was recorded,
+/// measured and dropped: its spectral centroid was indistinguishable from the hard pass (6/10
+/// sign consistency across the ten zones, median shift +0.09 harmonics), so a third layer would
+/// have cost ~1.1 MiB in a size-capped crate for no timbral information.
+fn mandolin_p() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "mandolin_G3_p.wav" => 195.83,
+            "mandolin_C4_p.wav" => 265.96,
+            "mandolin_D4_p.wav" => 292.89,
+            "mandolin_G4_p.wav" => 394.71,
+            "mandolin_A4_p.wav" => 440.67,
+            "mandolin_D5_p.wav" => 594.24,
+            "mandolin_E5_p.wav" => 658.05,
+            "mandolin_A5_p.wav" => 885.88,
+            "mandolin_D6_p.wav" => 1182.41,
+            "mandolin_E6_p.wav" => 1329.52,
+        )
+    })
+}
+
+/// Loud mandolin layer (see [`mandolin_p`]).
+fn mandolin_f() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "mandolin_G3_f.wav" => 196.09,
+            "mandolin_C4_f.wav" => 266.08,
+            "mandolin_D4_f.wav" => 293.51,
+            "mandolin_G4_f.wav" => 393.78,
+            "mandolin_A4_f.wav" => 440.66,
+            "mandolin_D5_f.wav" => 591.60,
+            "mandolin_E5_f.wav" => 658.70,
+            "mandolin_A5_f.wav" => 885.43,
+            "mandolin_D6_f.wav" => 1183.78,
+            "mandolin_E6_f.wav" => 1326.84,
+        )
+    })
+}
+
+/// Mandolin attack bank, velocity-selected (see [`mandolin_p`]).
+pub fn mandolin_bank(vel: u8) -> &'static [Zone] {
+    if vel >= 80 {
+        mandolin_f()
+    } else {
+        mandolin_p()
+    }
+}
+
 /// GM 75 pan flute — MS Basic SF3 preset 75 (MIT, `-musescore`). A wind onset over the Wind
 /// model, like the flute. 8 zones F#3–C7 (roots MEASURED; the SF3 zones have mixed sample
 /// rates, resampled to 44.1 kHz at bake). `LaVoice` repitches ±1 octave.
@@ -2471,6 +2538,7 @@ pub fn prewarm() {
         let _ = cello_bank(vel);
         let _ = contrabass_bank(vel);
         let _ = strings_bank(vel);
+        let _ = mandolin_bank(vel);
     }
 
     for program in 56..=60 {
@@ -4399,6 +4467,76 @@ mod tests {
                 (x / a - 1.0).abs() < 0.2,
                 "loop level not flat at {lbl}: {a:.4} -> {x:.4} (a broken wrap \
                  would go silent or decay)"
+            );
+        }
+    }
+
+    /// The mandolin zone tables are twenty hand-transcribed floats, and the failure
+    /// they invite is silent: a mistyped or octave-shifted root still renders, just
+    /// at the wrong pitch. This checks them WITHOUT re-typing the same numbers,
+    /// which would only prove the copy-paste.
+    ///
+    /// Two independent, non-circular oracles:
+    ///
+    /// 1. **Interval structure.** The ten zones are open + 5th fret on four courses
+    ///    plus the 10th and 12th on the E course, so their semitone steps are fixed
+    ///    by the fretboard: 5, 2, 5, 2, 5, 2, 5, 5, 2. Any octave error, swapped
+    ///    file or fat-fingered digit breaks that sequence. The ±60-cent tolerance
+    ///    absorbs the instrument's real intonation (fretted notes run up to +29
+    ///    cents sharp, so a nominal-2-semitone step genuinely measures ~1.67) while
+    ///    still being four times tighter than the smallest error it must catch.
+    /// 2. **Cross-layer agreement.** `_p` and `_f` are the same ten physical notes
+    ///    measured from independent takes, so their roots must agree closely. A
+    ///    wrong root in one layer cannot hide, because the other layer disagrees.
+    ///
+    /// Forcing both banks to decode also exercises `parse_wav`'s 16-bit/mono/44100
+    /// assertion and proves `embedded_wav` can actually resolve the names through
+    /// the asset-crate chain — a missing crate arm panics here rather than at a
+    /// user's first mandolin note.
+    #[test]
+    fn mandolin_zone_roots_match_the_fretboard() {
+        const STEPS: [f32; 9] = [5.0, 2.0, 5.0, 2.0, 5.0, 2.0, 5.0, 5.0, 2.0];
+        let cents = |a: f32, b: f32| 1200.0 * (b / a).log2();
+
+        let p = mandolin_bank(1);
+        let f = mandolin_bank(127);
+        assert!(
+            !std::ptr::eq(p, f),
+            "vel 1 and vel 127 must select different layers"
+        );
+
+        for (label, zones) in [("p", p), ("f", f)] {
+            assert_eq!(zones.len(), 10, "{label} layer must have ten zones");
+            for (i, z) in zones.iter().enumerate() {
+                assert!(!z.data.is_empty(), "{label} zone {i} decoded empty");
+                assert!(
+                    (170.0..=1450.0).contains(&z.root),
+                    "{label} zone {i} root {} Hz is outside the G3-E6 bank",
+                    z.root
+                );
+            }
+            for (i, w) in zones.windows(2).enumerate() {
+                let got = cents(w[0].root, w[1].root) / 100.0;
+                assert!(
+                    (got - STEPS[i]).abs() < 0.6,
+                    "{label} zones {i}->{} span {got:.2} semitones, expected {} \
+                     (roots {:.2} -> {:.2} Hz) — an octave or transcription error",
+                    i + 1,
+                    STEPS[i],
+                    w[0].root,
+                    w[1].root
+                );
+            }
+        }
+
+        for (i, (zp, zf)) in p.iter().zip(f.iter()).enumerate() {
+            let d = cents(zp.root, zf.root).abs();
+            assert!(
+                d < 25.0,
+                "zone {i}: layers disagree by {d:.1} cents ({:.2} vs {:.2} Hz) — \
+                 the two takes are the same physical note, so this is a bad root",
+                zp.root,
+                zf.root
             );
         }
     }

@@ -10,46 +10,166 @@
 pub const FILE_COUNT: usize = 40;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
-    ("mandolin_A4_rr1.wav", include_bytes!("../samples/mandolin_A4_rr1.wav")),
-    ("mandolin_A4_rr2.wav", include_bytes!("../samples/mandolin_A4_rr2.wav")),
-    ("mandolin_A4_rr3.wav", include_bytes!("../samples/mandolin_A4_rr3.wav")),
-    ("mandolin_A4_rr4.wav", include_bytes!("../samples/mandolin_A4_rr4.wav")),
-    ("mandolin_A5_rr1.wav", include_bytes!("../samples/mandolin_A5_rr1.wav")),
-    ("mandolin_A5_rr2.wav", include_bytes!("../samples/mandolin_A5_rr2.wav")),
-    ("mandolin_A5_rr3.wav", include_bytes!("../samples/mandolin_A5_rr3.wav")),
-    ("mandolin_A5_rr4.wav", include_bytes!("../samples/mandolin_A5_rr4.wav")),
-    ("mandolin_C4_rr1.wav", include_bytes!("../samples/mandolin_C4_rr1.wav")),
-    ("mandolin_C4_rr2.wav", include_bytes!("../samples/mandolin_C4_rr2.wav")),
-    ("mandolin_C4_rr3.wav", include_bytes!("../samples/mandolin_C4_rr3.wav")),
-    ("mandolin_C4_rr4.wav", include_bytes!("../samples/mandolin_C4_rr4.wav")),
-    ("mandolin_D4_rr1.wav", include_bytes!("../samples/mandolin_D4_rr1.wav")),
-    ("mandolin_D4_rr2.wav", include_bytes!("../samples/mandolin_D4_rr2.wav")),
-    ("mandolin_D4_rr3.wav", include_bytes!("../samples/mandolin_D4_rr3.wav")),
-    ("mandolin_D4_rr4.wav", include_bytes!("../samples/mandolin_D4_rr4.wav")),
-    ("mandolin_D5_rr1.wav", include_bytes!("../samples/mandolin_D5_rr1.wav")),
-    ("mandolin_D5_rr2.wav", include_bytes!("../samples/mandolin_D5_rr2.wav")),
-    ("mandolin_D5_rr3.wav", include_bytes!("../samples/mandolin_D5_rr3.wav")),
-    ("mandolin_D5_rr4.wav", include_bytes!("../samples/mandolin_D5_rr4.wav")),
-    ("mandolin_D6_rr1.wav", include_bytes!("../samples/mandolin_D6_rr1.wav")),
-    ("mandolin_D6_rr2.wav", include_bytes!("../samples/mandolin_D6_rr2.wav")),
-    ("mandolin_D6_rr3.wav", include_bytes!("../samples/mandolin_D6_rr3.wav")),
-    ("mandolin_D6_rr4.wav", include_bytes!("../samples/mandolin_D6_rr4.wav")),
-    ("mandolin_E5_rr1.wav", include_bytes!("../samples/mandolin_E5_rr1.wav")),
-    ("mandolin_E5_rr2.wav", include_bytes!("../samples/mandolin_E5_rr2.wav")),
-    ("mandolin_E5_rr3.wav", include_bytes!("../samples/mandolin_E5_rr3.wav")),
-    ("mandolin_E5_rr4.wav", include_bytes!("../samples/mandolin_E5_rr4.wav")),
-    ("mandolin_E6_rr1.wav", include_bytes!("../samples/mandolin_E6_rr1.wav")),
-    ("mandolin_E6_rr2.wav", include_bytes!("../samples/mandolin_E6_rr2.wav")),
-    ("mandolin_E6_rr3.wav", include_bytes!("../samples/mandolin_E6_rr3.wav")),
-    ("mandolin_E6_rr4.wav", include_bytes!("../samples/mandolin_E6_rr4.wav")),
-    ("mandolin_G3_rr1.wav", include_bytes!("../samples/mandolin_G3_rr1.wav")),
-    ("mandolin_G3_rr2.wav", include_bytes!("../samples/mandolin_G3_rr2.wav")),
-    ("mandolin_G3_rr3.wav", include_bytes!("../samples/mandolin_G3_rr3.wav")),
-    ("mandolin_G3_rr4.wav", include_bytes!("../samples/mandolin_G3_rr4.wav")),
-    ("mandolin_G4_rr1.wav", include_bytes!("../samples/mandolin_G4_rr1.wav")),
-    ("mandolin_G4_rr2.wav", include_bytes!("../samples/mandolin_G4_rr2.wav")),
-    ("mandolin_G4_rr3.wav", include_bytes!("../samples/mandolin_G4_rr3.wav")),
-    ("mandolin_G4_rr4.wav", include_bytes!("../samples/mandolin_G4_rr4.wav")),
+    (
+        "mandolin_A4_rr1.wav",
+        include_bytes!("../samples/mandolin_A4_rr1.wav"),
+    ),
+    (
+        "mandolin_A4_rr2.wav",
+        include_bytes!("../samples/mandolin_A4_rr2.wav"),
+    ),
+    (
+        "mandolin_A4_rr3.wav",
+        include_bytes!("../samples/mandolin_A4_rr3.wav"),
+    ),
+    (
+        "mandolin_A4_rr4.wav",
+        include_bytes!("../samples/mandolin_A4_rr4.wav"),
+    ),
+    (
+        "mandolin_A5_rr1.wav",
+        include_bytes!("../samples/mandolin_A5_rr1.wav"),
+    ),
+    (
+        "mandolin_A5_rr2.wav",
+        include_bytes!("../samples/mandolin_A5_rr2.wav"),
+    ),
+    (
+        "mandolin_A5_rr3.wav",
+        include_bytes!("../samples/mandolin_A5_rr3.wav"),
+    ),
+    (
+        "mandolin_A5_rr4.wav",
+        include_bytes!("../samples/mandolin_A5_rr4.wav"),
+    ),
+    (
+        "mandolin_C4_rr1.wav",
+        include_bytes!("../samples/mandolin_C4_rr1.wav"),
+    ),
+    (
+        "mandolin_C4_rr2.wav",
+        include_bytes!("../samples/mandolin_C4_rr2.wav"),
+    ),
+    (
+        "mandolin_C4_rr3.wav",
+        include_bytes!("../samples/mandolin_C4_rr3.wav"),
+    ),
+    (
+        "mandolin_C4_rr4.wav",
+        include_bytes!("../samples/mandolin_C4_rr4.wav"),
+    ),
+    (
+        "mandolin_D4_rr1.wav",
+        include_bytes!("../samples/mandolin_D4_rr1.wav"),
+    ),
+    (
+        "mandolin_D4_rr2.wav",
+        include_bytes!("../samples/mandolin_D4_rr2.wav"),
+    ),
+    (
+        "mandolin_D4_rr3.wav",
+        include_bytes!("../samples/mandolin_D4_rr3.wav"),
+    ),
+    (
+        "mandolin_D4_rr4.wav",
+        include_bytes!("../samples/mandolin_D4_rr4.wav"),
+    ),
+    (
+        "mandolin_D5_rr1.wav",
+        include_bytes!("../samples/mandolin_D5_rr1.wav"),
+    ),
+    (
+        "mandolin_D5_rr2.wav",
+        include_bytes!("../samples/mandolin_D5_rr2.wav"),
+    ),
+    (
+        "mandolin_D5_rr3.wav",
+        include_bytes!("../samples/mandolin_D5_rr3.wav"),
+    ),
+    (
+        "mandolin_D5_rr4.wav",
+        include_bytes!("../samples/mandolin_D5_rr4.wav"),
+    ),
+    (
+        "mandolin_D6_rr1.wav",
+        include_bytes!("../samples/mandolin_D6_rr1.wav"),
+    ),
+    (
+        "mandolin_D6_rr2.wav",
+        include_bytes!("../samples/mandolin_D6_rr2.wav"),
+    ),
+    (
+        "mandolin_D6_rr3.wav",
+        include_bytes!("../samples/mandolin_D6_rr3.wav"),
+    ),
+    (
+        "mandolin_D6_rr4.wav",
+        include_bytes!("../samples/mandolin_D6_rr4.wav"),
+    ),
+    (
+        "mandolin_E5_rr1.wav",
+        include_bytes!("../samples/mandolin_E5_rr1.wav"),
+    ),
+    (
+        "mandolin_E5_rr2.wav",
+        include_bytes!("../samples/mandolin_E5_rr2.wav"),
+    ),
+    (
+        "mandolin_E5_rr3.wav",
+        include_bytes!("../samples/mandolin_E5_rr3.wav"),
+    ),
+    (
+        "mandolin_E5_rr4.wav",
+        include_bytes!("../samples/mandolin_E5_rr4.wav"),
+    ),
+    (
+        "mandolin_E6_rr1.wav",
+        include_bytes!("../samples/mandolin_E6_rr1.wav"),
+    ),
+    (
+        "mandolin_E6_rr2.wav",
+        include_bytes!("../samples/mandolin_E6_rr2.wav"),
+    ),
+    (
+        "mandolin_E6_rr3.wav",
+        include_bytes!("../samples/mandolin_E6_rr3.wav"),
+    ),
+    (
+        "mandolin_E6_rr4.wav",
+        include_bytes!("../samples/mandolin_E6_rr4.wav"),
+    ),
+    (
+        "mandolin_G3_rr1.wav",
+        include_bytes!("../samples/mandolin_G3_rr1.wav"),
+    ),
+    (
+        "mandolin_G3_rr2.wav",
+        include_bytes!("../samples/mandolin_G3_rr2.wav"),
+    ),
+    (
+        "mandolin_G3_rr3.wav",
+        include_bytes!("../samples/mandolin_G3_rr3.wav"),
+    ),
+    (
+        "mandolin_G3_rr4.wav",
+        include_bytes!("../samples/mandolin_G3_rr4.wav"),
+    ),
+    (
+        "mandolin_G4_rr1.wav",
+        include_bytes!("../samples/mandolin_G4_rr1.wav"),
+    ),
+    (
+        "mandolin_G4_rr2.wav",
+        include_bytes!("../samples/mandolin_G4_rr2.wav"),
+    ),
+    (
+        "mandolin_G4_rr3.wav",
+        include_bytes!("../samples/mandolin_G4_rr3.wav"),
+    ),
+    (
+        "mandolin_G4_rr4.wav",
+        include_bytes!("../samples/mandolin_G4_rr4.wav"),
+    ),
 ];
 
 /// Returns the embedded WAV bytes for an exact (case-sensitive) file name.

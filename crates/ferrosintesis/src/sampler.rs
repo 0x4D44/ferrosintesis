@@ -15,6 +15,29 @@ use std::sync::OnceLock;
 pub struct Zone {
     root: f32,
     data: Vec<f32>,
+    /// Memoized pitch-synchronous sustain-loop bounds — see [`Zone::sustain_loop`].
+    /// `Some(None)` means "searched, no usable loop"; that verdict is cached too.
+    sustain_loop: OnceLock<Option<(usize, usize)>>,
+}
+
+/// A pitch-synchronous sustain-loop search: `(zone PCM, zone root Hz)` in,
+/// `(loop_start, loop_end)` out. `find_sax_loop` and `find_bottle_loop` are the two.
+type LoopFinder = fn(&[f32], f32) -> Option<(usize, usize)>;
+
+impl Zone {
+    /// This zone's sustain-loop bounds, searched **at most once per zone**.
+    ///
+    /// `find` is an O(starts x lengths x window) scan of the zone's static PCM — for the
+    /// blown bottle, 67.4 million multiply-accumulates and 30,560 square roots. Running
+    /// it per NoteOn inside the audio callback blows the realtime deadline
+    /// (MM-BUG-KILN-00064). The zone and its PCM are `'static` and immutable, so the
+    /// answer is a constant: compute it once, here, and let
+    /// [`prewarm`] force it off the realtime thread.
+    fn sustain_loop(&self, find: LoopFinder) -> Option<(usize, usize)> {
+        *self
+            .sustain_loop
+            .get_or_init(|| find(&self.data, self.root))
+    }
 }
 
 /// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).
@@ -101,6 +124,21 @@ pub fn rain_loop() -> &'static [f32] {
 pub(crate) static BANK_INITS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
+/// Counts how many pitch-synchronous sustain-loop SEARCHES have actually run.
+///
+/// Test-only, and the basis of `prewarm_leaves_no_sustain_loop_unsearched` and
+/// `live::realtime_note_on_after_prewarm_does_no_decode_or_loop_search`
+/// (MM-BUG-KILN-00064). Incremented in the body of each `find_*_loop`, not at the
+/// memo, so it also catches a rewiring that bypasses [`Zone::sustain_loop`] and
+/// reintroduces the per-NoteOn scan.
+///
+/// Reading it is race-free *after* `prewarm()` returns, for the same reason as
+/// [`BANK_INITS`]: prewarm resolves every zone's loop, so no later voice
+/// construction on any thread can move it.
+#[cfg(test)]
+pub(crate) static LOOP_SEARCHES: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
 macro_rules! bank {
     ($($file:literal => $root:expr),+ $(,)?) => {{
         #[cfg(test)]
@@ -108,6 +146,7 @@ macro_rules! bank {
         vec![$(Zone {
             root: $root,
             data: parse_wav(embedded_wav($file)),
+            sustain_loop: OnceLock::new(),
         }),+]
     }};
 }
@@ -2710,6 +2749,24 @@ pub fn prewarm() {
     let _ = pizzbass_bank();
     let _ = finger_bass_bank();
     let _ = pick_bass_bank();
+
+    // Whole-voice LOOPED-SUSTAIN zones (GM 64-67 sax, GM 76 blown bottle). Decoding the
+    // bank is only half the setup: `SaxLoopVoice::new` / `BottleLoopVoice::new` also need
+    // the zone's pitch-synchronous loop bounds, and finding those scans the static PCM
+    // (67.4 M multiply-accumulates for the bottle's 72,765-frame recording). Resolve every
+    // zone's loop here, so no NoteOn ever runs that search inside the audio callback
+    // (MM-BUG-KILN-00064). `bottle_loop_bank` is the ACTIVE GM 76 route; the `bottle_bank`
+    // onset bank above is the retired one and is prewarmed separately.
+    for program in 64..=67 {
+        for vel in [1u8, 127] {
+            for zone in sax_bank(program, vel) {
+                let _ = zone.sustain_loop(find_sax_loop);
+            }
+        }
+    }
+    for zone in bottle_loop_bank() {
+        let _ = zone.sustain_loop(find_bottle_loop);
+    }
 }
 
 fn nearest(zones: &'static [Zone], f: f32) -> &'static Zone {
@@ -3409,6 +3466,8 @@ fn sax_program_gain(program: u8) -> f32 {
 /// clear of the recorded release. `None` when the note is too short (caller keeps the
 /// modeled reed).
 fn find_sax_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
+    #[cfg(test)]
+    LOOP_SEARCHES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let sr = 44100.0f32;
     if root <= 0.0 {
         return None;
@@ -3533,11 +3592,13 @@ impl SaxLoopVoice {
         base_gain: f32,
         seed: u32,
     ) -> Option<Self> {
-        let (loop_start, loop_end) = find_sax_loop(&zone.data, zone.root)?;
+        // Cheap rejection FIRST: an out-of-range key falls back to the modeled reed, and
+        // must not pay for a loop search to learn that (MM-BUG-KILN-00064).
         let ratio = target_hz / zone.root;
         if !(0.5..=2.05).contains(&ratio) {
             return None;
         }
+        let (loop_start, loop_end) = zone.sustain_loop(find_sax_loop)?;
         let base_step = ratio * 44100.0 / sr;
         Some(SaxLoopVoice {
             data: zone.data.as_slice(),
@@ -3697,6 +3758,8 @@ fn bottle_loop_bank() -> &'static [Zone] {
 /// in source samples (the zone is 44.1 kHz); `None` when the note is too short (the
 /// caller keeps the modeled bottle).
 fn find_bottle_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
+    #[cfg(test)]
+    LOOP_SEARCHES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let sr = 44100.0f32;
     if root <= 0.0 {
         return None;
@@ -3795,11 +3858,13 @@ impl BottleLoopVoice {
         base_gain: f32,
         seed: u32,
     ) -> Option<Self> {
-        let (loop_start, loop_end) = find_bottle_loop(&zone.data, zone.root)?;
+        // Cheap rejection FIRST: an out-of-range key falls back to the modeled Wind
+        // bottle, and must not pay for a loop search to learn that (MM-BUG-KILN-00064).
         let ratio = target_hz / zone.root;
         if !(0.5..=2.05).contains(&ratio) {
             return None;
         }
+        let (loop_start, loop_end) = zone.sustain_loop(find_bottle_loop)?;
         let base_step = ratio * 44100.0 / sr;
         Some(BottleLoopVoice {
             data: zone.data.as_slice(),
@@ -4721,6 +4786,145 @@ mod tests {
             after_exercise - after_prewarm
         );
     }
+
+    /// After `prewarm()`, no NoteOn runs a sustain-loop SEARCH — the other half of the
+    /// realtime contract (MM-BUG-KILN-00064).
+    ///
+    /// Decoding the bank is only half the setup. `SaxLoopVoice`/`BottleLoopVoice`
+    /// construction also needs the zone's pitch-synchronous loop bounds, and finding those
+    /// is an O(starts x lengths x window) scan of the static PCM — 67.4 million
+    /// multiply-accumulates and 30,560 square roots for the blown bottle's 72,765-frame
+    /// recording, *per NoteOn*, inside `fill_ring()`'s deadline-bearing block.
+    ///
+    /// The OUT-OF-WINDOW keys are load-bearing. Those repitch outside 0.5..=2.05x the
+    /// zone root and fall back to the modeled voice — and before the fix they still paid
+    /// the whole search to learn that, because the constructor searched before it checked
+    /// the ratio. A window-only key list would let that cost hide behind the fallback.
+    ///
+    /// Race-free after `prewarm()` for the same reason as
+    /// `prewarm_leaves_no_bank_uninitialized`: once it returns, every reachable zone's
+    /// `sustain_loop` cell is resolved, so no other thread can move the counter. The
+    /// failure mode is therefore safe in one direction — when the invariant holds nothing
+    /// increments at all, so a concurrent test cannot manufacture a false RED; when it is
+    /// already broken, a sibling oracle's own burst can inflate the reported count. Read
+    /// the number as "at least this many", and rerun with `--test-threads=1` to attribute.
+    #[test]
+    fn prewarm_leaves_no_sustain_loop_unsearched() {
+        use std::sync::atomic::Ordering;
+
+        prewarm();
+        let searches_before = LOOP_SEARCHES.load(Ordering::SeqCst);
+        let banks_before = BANK_INITS.load(Ordering::SeqCst);
+
+        assert!(
+            searches_before > 0,
+            "prewarm() resolved no sustain loop at all — the counter is not wired to the \
+             searches, so this oracle proves nothing"
+        );
+
+        // GM 76 blown bottle. The 205 Hz root gives a ~102..420 Hz window (keys ~44..68);
+        // 30/40 and 70/100 sit outside it, on both sides.
+        for key in [30u8, 40, 44, 48, 55, 60, 67, 68, 70, 100] {
+            let _ = bottle_loop_voice(key, 100, 44_100.0, 7);
+        }
+        // GM 64-67 sax, both velocity layers, across the keyboard.
+        for program in 64u8..=67 {
+            for vel in [1u8, 127] {
+                for key in [12u8, 21, 48, 60, 72, 108, 127] {
+                    let _ = sax_loop_voice(program, key, vel, 44_100.0, 7);
+                }
+            }
+        }
+
+        let searched = LOOP_SEARCHES.load(Ordering::SeqCst) - searches_before;
+        let decoded = BANK_INITS.load(Ordering::SeqCst) - banks_before;
+        assert_eq!(
+            searched, 0,
+            "{searched} sustain-loop search(es) ran during voice construction after \
+             prewarm(). Each one scans static PCM inside the audio callback (67.4 M \
+             multiply-accumulates for the bottle) and is exactly the dropout \
+             prewarm_samples() exists to prevent. Resolve the zone's loop in \
+             sampler::prewarm() and read it through Zone::sustain_loop."
+        );
+        assert_eq!(
+            decoded, 0,
+            "{decoded} sample bank(s) decoded during looped-sustain voice construction \
+             after prewarm(). Add them to sampler::prewarm()."
+        );
+    }
+
+    /// Every sustain-loop search must be reachable ONLY through the memo, and every one
+    /// must be warmed by `prewarm()` (MM-BUG-KILN-00064).
+    ///
+    /// The behavioural oracle above enumerates the looped-sustain voices by hand, so on
+    /// its own it silently shrinks the moment someone adds a third one — the same
+    /// hand-maintained-list defect that produced KILN-00059/00060/00069. This one derives
+    /// the set from the source instead: it finds every `find_*_loop` the file declares,
+    /// then requires (a) no call site bypasses `Zone::sustain_loop`, and (b) `prewarm()`
+    /// mentions each. A new looped bank therefore cannot land un-prewarmed.
+    #[test]
+    fn every_sustain_loop_search_is_memoized_and_prewarmed() {
+        let src = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join("sampler.rs"),
+        )
+        .expect("sampler.rs is readable from its own crate");
+
+        let declared: Vec<&str> = src
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("fn find_"))
+            .filter_map(|rest| rest.split('(').next())
+            .filter(|name| name.ends_with("_loop"))
+            .collect();
+        assert!(
+            declared.len() >= 2,
+            "found only {} sustain-loop searches ({declared:?}) — the scan is not reading \
+             what it thinks it is",
+            declared.len()
+        );
+
+        // (a) Every call site goes through the memo. Code lines only: a doc comment naming
+        // a search must not launder a real bypass, and vice versa.
+        let bypasses: Vec<String> = src
+            .lines()
+            .enumerate()
+            .filter(|(_, l)| !l.trim_start().starts_with("//"))
+            .filter(|(_, l)| !l.trim_start().starts_with("fn find_"))
+            .filter(|(_, l)| {
+                declared
+                    .iter()
+                    .any(|n| l.contains(&format!("find_{n}(")) && !l.contains("sustain_loop("))
+            })
+            .map(|(i, l)| format!("sampler.rs:{}: {}", i + 1, l.trim()))
+            .collect();
+        assert!(
+            bypasses.is_empty(),
+            "{} sustain-loop call site(s) bypass Zone::sustain_loop and re-run the search \
+             on every call:\n  {}\n\nCall it as zone.sustain_loop(find_..._loop) so the \
+             answer is computed once, off the realtime thread.",
+            bypasses.len(),
+            bypasses.join("\n  ")
+        );
+
+        // (b) prewarm() forces each one, so no first NoteOn pays for it.
+        let body = src
+            .split_once("pub fn prewarm() {")
+            .expect("prewarm must exist")
+            .1;
+        let body = body.split_once("\n}").expect("its body must terminate").0;
+        let unwarmed: Vec<&&str> = declared
+            .iter()
+            .filter(|n| !body.contains(&format!("find_{n}")))
+            .collect();
+        assert!(
+            unwarmed.is_empty(),
+            "sustain-loop search(es) {unwarmed:?} are never forced by sampler::prewarm(), \
+             so the first NoteOn that needs one still runs it inside the audio callback. \
+             Warm every zone of the owning bank there."
+        );
+    }
+
     use ferrosintesis_samples_drumkit as kitbank;
 
     /// LoopVoice must sustain INDEFINITELY across many loop wraps — the runtime
@@ -5751,7 +5955,11 @@ mod tests {
             // not click. Re-derive the exact loop the voice uses.
             let zones = sax_bank(program, 100);
             let zone = nearest(zones, crate::dsp::key_freq(key));
-            let (ls, le) = find_sax_loop(&zone.data, zone.root).expect("a loop was found above");
+            // Through the memo, exactly as the voice does — a direct `find_sax_loop` call
+            // would bypass it and move `LOOP_SEARCHES` under a parallel prewarm oracle.
+            let (ls, le) = zone
+                .sustain_loop(find_sax_loop)
+                .expect("a loop was found above");
             let wrap = (zone.data[le] - zone.data[ls]).abs();
             assert!(
                 wrap < 0.03,
@@ -5816,7 +6024,11 @@ mod tests {
         // Seam guard (deterministic, key-independent — single-zone bank): loop_end wraps
         // back to loop_start with a small value discontinuity. Measured |d| ≈ 0.006.
         let zone = nearest(bottle_loop_bank(), crate::dsp::key_freq(60));
-        let (ls, le) = find_bottle_loop(&zone.data, zone.root).expect("a loop was found above");
+        // Through the memo, exactly as the voice does — a direct `find_bottle_loop` call
+        // would bypass it and move `LOOP_SEARCHES` under a parallel prewarm oracle.
+        let (ls, le) = zone
+            .sustain_loop(find_bottle_loop)
+            .expect("a loop was found above");
         let wrap = (zone.data[le] - zone.data[ls]).abs();
         assert!(
             wrap < 0.03,

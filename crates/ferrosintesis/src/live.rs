@@ -893,4 +893,66 @@ mod tests {
     fn sample_prewarm_is_available() {
         RealtimeSynth::new(opts()).prewarm_samples();
     }
+
+    /// MM-BUG-KILN-00064: after `prewarm_samples()`, a burst of GM 76 NoteOns driven
+    /// through the REAL realtime path must decode nothing and search no sustain loop.
+    ///
+    /// `sample_prewarm_is_available` above only proves the call does not panic. This one
+    /// proves the contract the call actually makes — that nothing is left to do inside
+    /// `fill_ring()`'s deadline-bearing block. Every voice is constructed there, *before*
+    /// the voice cap is applied, so a NoteOn burst multiplies any per-note setup cost even
+    /// when stealing is about to discard the voices.
+    ///
+    /// The out-of-window keys are deliberate: they fall back to the modeled Wind bottle,
+    /// and the pre-fix constructor still ran the full 67-million-operation loop search
+    /// before the pitch-ratio check could reject the sample. Testing only in-window keys
+    /// would let the fallback hide that cost.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn realtime_note_on_after_prewarm_does_no_decode_or_loop_search() {
+        use std::sync::atomic::Ordering;
+
+        let mut synth = RealtimeSynth::new(RealtimeOptions {
+            samples: true,
+            ..opts()
+        });
+        synth.prewarm_samples();
+        let banks_before = crate::sampler::BANK_INITS.load(Ordering::SeqCst);
+        let searches_before = crate::sampler::LOOP_SEARCHES.load(Ordering::SeqCst);
+        assert!(
+            searches_before > 0,
+            "prewarm_samples() resolved no sustain loop — this oracle would pass vacuously"
+        );
+
+        // Program change to GM 76 on channel 0, then NoteOns spanning the sample's
+        // ~keys 44..68 repitch window and both sides of it.
+        synth.write_byte(0xC0);
+        synth.write_byte(76);
+        for key in [30u8, 40, 44, 48, 55, 60, 67, 68, 70, 100] {
+            synth.write_byte(0x90);
+            synth.write_byte(key);
+            synth.write_byte(100);
+        }
+        let mut out = vec![0f32; LIVE_BLOCK * 2];
+        synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+        assert!(
+            synth.active_voice_count() > 0,
+            "no voice sounded — the NoteOns never reached voice construction, so this \
+             oracle measured nothing"
+        );
+
+        let searched = crate::sampler::LOOP_SEARCHES.load(Ordering::SeqCst) - searches_before;
+        let decoded = crate::sampler::BANK_INITS.load(Ordering::SeqCst) - banks_before;
+        assert_eq!(
+            searched, 0,
+            "{searched} sustain-loop search(es) ran inside the realtime render block \
+             after prewarm_samples(). Each scans static PCM (67.4 M multiply-accumulates \
+             for the blown bottle) under the audio deadline."
+        );
+        assert_eq!(
+            decoded, 0,
+            "{decoded} sample bank(s) decoded inside the realtime render block after \
+             prewarm_samples() promised they would not."
+        );
+    }
 }

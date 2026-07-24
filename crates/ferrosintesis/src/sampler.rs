@@ -5929,6 +5929,24 @@ mod tests {
         render(true) != render(false)
     }
 
+    /// [`la_engaged`] for a CC0 alt bank. Same exact (not thresholded) test, routed
+    /// through `altbank::make` instead of `voices::make`.
+    ///
+    /// Needed because GM 32–35's sampled bass onset LIVES on the alt bank as of
+    /// MM-BUG-KILN-00075 — asking `voices::make` whether it engages would now answer
+    /// "no" for a reason that has nothing to do with the rate-eligibility guard this
+    /// is here to police.
+    #[cfg(test)]
+    fn la_engaged_bank(program: u8, bank: u8, key: u8, sr: f32) -> bool {
+        let render = |samples: bool| {
+            let mut v = crate::altbank::make(program, bank, key, 100, sr, 5, samples);
+            let mut buf = vec![0f32; (0.03 * sr) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        render(true) != render(false)
+    }
+
     /// MM-BUG-KILN-00061: whether a note gets its sampled onset must be a property of
     /// the MUSICAL PITCH, never of the output sample rate.
     ///
@@ -5997,6 +6015,16 @@ mod tests {
     /// 35 cents between 44.1 and 48 kHz on an unmodified tree. Pinning a threshold there
     /// would measure the estimator, not the synth. Repitch pitch integrity at 44.1 kHz is
     /// already covered by `la_reed_pitch_integrity` and `la_sax_pitch_integrity`.
+    /// BANK NOTE (MM-BUG-KILN-00075, 2026-07-24): these onsets moved to the CC0=1 ALT
+    /// bank when the modeled bass was restored as the default, so this probes
+    /// `la_engaged_bank(.., 1, ..)`. The KILN-00061 property under test is unchanged and
+    /// undiluted — eligibility must follow the pitch ratio, never the output clock — it
+    /// is simply asserted where the bass sample layer now lives. Asserting it on the
+    /// default bank would now be vacuous: `voices::make` is samples-blind for 32..=35,
+    /// so `la_engaged` is uniformly false there at every rate and would pass while
+    /// testing nothing. (The all-program sweep above keeps its default-bank reading for
+    /// the same reason — for 32..=35 it is consistent-because-absent, which is why this
+    /// alt-bank rung is the one that carries the bass coverage.)
     #[test]
     fn la_bass_onset_engages_at_every_supported_rate() {
         for (program, key, name) in [
@@ -6007,9 +6035,10 @@ mod tests {
         ] {
             for &sr in &[44_100.0f32, 48_000.0, 96_000.0] {
                 assert!(
-                    la_engaged(program, key, sr),
-                    "{name}: the sampled onset does not engage at {sr:.0} Hz — this note's \
-                     repitch ratio is ~1.0, the most credible there is"
+                    la_engaged_bank(program, 1, key, sr),
+                    "{name}: the sampled onset does not engage on the CC0=1 alt bank at \
+                     {sr:.0} Hz — this note's repitch ratio is ~1.0, the most credible \
+                     there is"
                 );
             }
         }

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00059 — Realtime prewarm omits the Rhodes and dulcimer sample banks
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** sampler / realtime
@@ -22,6 +22,16 @@
   → Fixed (2026-07-24, Claude Opus 4.8 (1M). The omission was **56 banks**, not 2 — see
   "Scope on investigation". Fixed with two derived oracles so the list cannot drift
   again. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24 — independent two-eyes verification by **Codex gpt-5.6-sol**,
+  cross-family, read-only on post-fix trunk. Verdict: **CLOSE+SPLIT**. Verdict recorded by
+  Claude Opus 4.8 (1M), which authored the fix and did NOT perform the verification.
+  Confirmed: Rhodes, dulcimer and all 22 omitted public accessors are prewarmed, the
+  measured 56 cold caches are gone, and an independent audio A/B found no render change.
+  **Residual split to MM-BUG-KILN-00073:** the oracle enumerates only `pub fn *_bank`, so
+  four realtime lazy caches are outside it — `bottle_loop_bank` and `chanter_rr2` (private
+  fns), `rain_loop` (public but not `*_bank`), and `GONG_LAYERS` (an `OnceLock<(Vec<f32>,
+  Vec<f32>)>`, which the `bank!` counter never sees). Each independently confirmed present
+  and absent from `prewarm()`.)
 
 ## Observation
 

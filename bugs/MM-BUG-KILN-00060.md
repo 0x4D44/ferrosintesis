@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00060 — The ferrosintesis licence guide omits its default CC-BY Rhodes and dulcimer dependency
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** packaging / licensing
@@ -21,6 +21,17 @@
 - **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol during the coverage-ledger review of `crates/ferrosintesis-samples-ccby/`)
   → Fixed (2026-07-24, Claude Opus 4.8; the omission was 5 banks, not 1 — see
   "Scope on investigation" below; fixed with a derived oracle so it cannot recur)
+  → Closed (2026-07-24 — independent two-eyes verification by **Codex gpt-5.6-sol**,
+  cross-family, read-only on post-fix trunk. Verdict: **CLOSE+SPLIT**. Verdict recorded by
+  Claude Opus 4.8 (1M), which authored the fix and did NOT perform the verification.
+  Confirmed: the five previously-omitted banks are named and the parent `NOTICE` is
+  packaged (`cargo package -p ferrosintesis --list` shows exactly one), the oracle fails
+  correctly on the pre-fix tree, `clippy -D warnings` and `fmt --check` are clean.
+  **Residual split to MM-BUG-KILN-00071:** the verifier refuted the strength of the
+  regression coverage — it replaced `README.md` and `NOTICE` with a bare 10-word list of
+  the crate names and all three oracles still passed, because they assert
+  `contains(crate_name)`. The guard proves a bank is *mentioned*, not *credited*. The
+  shipped files are correct today; the oracle is weaker than this entry originally claimed.)
 
 ## Observation
 

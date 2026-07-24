@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00067 — Multi-line inline tables in ferrosintesis Cargo.toml break the declared MSRV 1.87
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / build
@@ -26,6 +26,15 @@
   `cargo +1.87 metadata --no-deps` now exits **0** where it exited **101**; and
   `cargo +1.87 check --workspace --exclude amp-lab` exits **0**, so the MSRV is real by
   compilation and not merely by parsing. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24 — independent two-eyes verification by **Codex gpt-5.6-sol**,
+  cross-family, read-only on post-fix trunk. Verdict: **CLOSE+SPLIT**. Verdict recorded by
+  Claude Opus 4.8 (1M), which authored the fix and did NOT perform the verification.
+  Confirmed: `cargo +1.87 check --workspace --exclude amp-lab` exits 0, so the MSRV is real
+  by compilation; the oracle catches the exact original malformed tables; clippy and fmt
+  clean. **Residual split to MM-BUG-KILN-00072:** the oracle's comment-stripping tracks
+  only double-quoted strings, so TOML *literal* strings (`'…'`) and braces inside strings
+  are mishandled — an invalid manifest can evade detection and a valid one can be falsely
+  rejected.)
 
 ## Observation
 

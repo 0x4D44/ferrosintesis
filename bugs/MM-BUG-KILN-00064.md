@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00064 — GM76 searches 67 million sample points for every NoteOn inside the realtime callback
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** sampler / realtime
@@ -23,6 +23,9 @@
   same defect**, not just GM 76 — see "Scope on investigation". Memoized per zone, ratio
   checked first, both warmed by `prewarm()`; three oracles, two behavioural and one
   source-derived. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

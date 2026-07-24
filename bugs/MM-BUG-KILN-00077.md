@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00077 — amp-lab Copy Settings emits a nonexistent album authoring API
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** amp-lab / export
@@ -21,6 +21,9 @@
 - **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/amp-lab/`)
   → Fixed (2026-07-24, Claude Opus 4.8 (1M). Export now calls the real `Score` API and is
   proven byte-equal to `Rig::bytes()`. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

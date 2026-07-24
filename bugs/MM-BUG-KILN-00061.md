@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00061 — LA sample eligibility changes with output rate and drops bass onsets at 96 kHz
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler / sample-rate conversion
@@ -22,6 +22,9 @@
   → Fixed (2026-07-24, Claude Opus 4.8 (1M). Scope on investigation: **186** (program, key,
   rate) combinations were affected, not the 3 bass programs reported, and there was a
   **second** SRC-scaled guard in `LaVoice::retrigger`. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

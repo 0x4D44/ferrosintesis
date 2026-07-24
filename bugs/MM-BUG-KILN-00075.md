@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00075 — the LA bass onset (GM 32–35) sits ~15–18 dB under the model its sum-to-one crossfade mutes, costing a real bass line 13–18 dB
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth
@@ -23,6 +23,9 @@
   `ebass_seam_gain` taper + a level-and-peak parity oracle. **Items 3 and 4 are NOT done and
   are split to MM-BUG-KILN-00085** — the crossfade shape needs Arthur's ear and new sample
   reach. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

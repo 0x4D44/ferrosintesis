@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00079 — amp-lab's advertised eight-bar loop lasts 32.983 beats
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** amp-lab / backing loop
@@ -23,6 +23,9 @@
   eight-bar line and the parser reads that authored End-of-Track as the loop boundary
   instead of inventing "last event + one beat". Asset regenerated; contract test added.
   Evidence under "Fix landed" below. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

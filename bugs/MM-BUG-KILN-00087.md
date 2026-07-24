@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00087 — Fast same-key bank switches retrigger the previous voice
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth / tremolo retrigger routing
@@ -24,6 +24,9 @@
   raw value, CC32 bank LSB, and melodic/drum routing, with drum routing resolved before
   the predicate rather than after it. Four-transition regression added. Evidence under
   "Fix landed" below. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

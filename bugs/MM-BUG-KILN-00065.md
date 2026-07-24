@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00065 — Bottle regeneration fails clean-cache runs and routes the source to the wrong crate
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / provenance
@@ -24,6 +24,9 @@
   crate routing, and the whole-voice source excluded from onset discovery. The recipe was
   RECOVERED by measurement and is machine-pinned. The retired MuseScore onset is
   deliberately NOT removed — see "Fix landed". Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

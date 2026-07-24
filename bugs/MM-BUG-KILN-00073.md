@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00073 — prewarm oracle enumerates only pub *_bank, missing four realtime lazy caches
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler / realtime
@@ -26,6 +26,9 @@
   pristine child process and is derived from the source's own declarations. Three caches
   were uncovered, not four — `bottle_loop_bank` was already prewarmed by KILN-00064's fix.
   Evidence under "Fix landed" below. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00071 — licensing.rs validates crate-name substrings, not actual attribution content
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / licensing
@@ -26,6 +26,9 @@
   heading, and a distinctive token from its own NOTICE travelled into both documents.
   The bug’s verbatim repro now fails. Evidence under "Fix landed" below. Awaits
   independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00074 — GM 42/43 bowed strings PANIC at C1 when rendering at 96 kHz: BowedString's delay lines are sized in fixed samples, ignoring the sample rate
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth / sample-rate conversion
@@ -23,6 +23,9 @@
   is therefore owed to someone else**. Correction on investigation: the reported "exactly
   two panicking combinations" was an undercount of a **30-combination** defect that also
   breaks at **48 kHz** — see "Correction on investigation".)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

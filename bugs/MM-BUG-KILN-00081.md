@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00081 — valid default audio configurations can fail or stay silent in amp-lab
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** amp-lab / audio device
@@ -23,6 +23,9 @@
   in bounded chunks instead of bailing to silence; `start` selects a supported f32 config
   or fails with the exact reason. Callback-size + channel-mapping tests added. Evidence
   under "Fix landed" below. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

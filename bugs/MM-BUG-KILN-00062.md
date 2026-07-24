@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00062 — Warm archive caches bypass the sample generator's pinned SHA-256
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / provenance
@@ -24,6 +24,9 @@
   rebuilds. Covers all five archive-backed banks, not just electric bass. Nine tests, seven
   of which fail on the old code. Evidence under "Fix landed" below. Awaits independent
   two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

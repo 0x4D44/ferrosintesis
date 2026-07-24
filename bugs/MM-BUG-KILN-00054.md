@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00054 — Default drum kit V3 has no oracle for six behaviours the render_drum helper guards only on the legacy V1 kit
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -25,6 +25,9 @@
   found three behaviours V3 satisfies only marginally — measured and split to
   MM-BUG-KILN-00091. Evidence under "Fix landed" below. Awaits independent two-eyes
   closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

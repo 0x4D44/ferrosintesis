@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00070 — The --no-default-features build is ungated: six dead-code warnings and vanishing oracles
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** build / test coverage
@@ -25,6 +25,9 @@
   TEST step is NOT added and is split to MM-BUG-KILN-00090: 31 tests fail in that
   configuration and each needs classifying. Evidence under "Fix landed" below. Awaits
   independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

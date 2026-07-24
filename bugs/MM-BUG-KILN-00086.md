@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00086 — GM 96 rain plays at the output clock instead of its recorded 44.1 kHz
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth / GM 96 sampled rain
@@ -24,6 +24,9 @@
   `fx_o8_rain_96_bed_plays_at_its_recorded_44100_clock` measures the RENDER at 44.1 / 48 /
   96 kHz. Fails-before / passes-after and a byte-identical 44.1 kHz render-diff are recorded
   under "Fix landed" below. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

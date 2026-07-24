@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00040 — GM120 Guitar Fret Noise is pinned near-silent (~18 dB under the SC-55 reference)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -22,6 +22,9 @@
   instrument-audition review; effectively inaudible vs SC-55, code-confirmed) → Fixed
   (2026-07-24, `1780465`+`30e6877`, GM 120 given a sampled finger-slide voice; awaiting
   two-eyes verification)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

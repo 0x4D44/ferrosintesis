@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00082 — amp-lab allocates inside the deadline-bearing audio callback
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** amp-lab / realtime audio
@@ -24,6 +24,9 @@
   and the reservations took the rest to zero. The per-voice `Box` residual needs an
   architectural decision and is split to MM-BUG-KILN-00092. Evidence under "Fix landed"
   below. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

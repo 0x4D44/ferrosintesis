@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00069 — Sample-crate NOTICE/PROVENANCE files under-enumerate contents and drop named creators
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** packaging / licensing
@@ -24,6 +24,9 @@
   licence-agnostic `inventory.rs` oracle derived from the packaged WAVs, which found MORE
   than the nine filed items. All nine addressed, five new PROVENANCE.md files written and
   packaged. Evidence under "Fix landed" below. Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

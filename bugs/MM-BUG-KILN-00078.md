@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00078 — amp-lab quantizes every MIDI event to an audio-callback boundary
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** amp-lab / sequencer
@@ -23,6 +23,9 @@
   in spans; the callback core is factored out of the cpal closure so it is testable without
   a device. Residual is the synth's own 64-frame block, as the report anticipated. Awaits
   independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

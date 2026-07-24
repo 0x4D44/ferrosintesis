@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00076 — amp-lab silently reverts the selected program and bank at every loop wrap
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** High
 - **Area:** amp-lab / audition state
@@ -22,6 +22,9 @@
   → Fixed (2026-07-24, Claude Opus 4.8 (1M). Took the asset route: channel 1's bank +
   program removed from the generator and `backing.mid` regenerated, guarded by two oracles.
   Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00080 — amp-lab's safe ring API can violate its unsafe SPSC invariant
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** amp-lab / concurrency
@@ -23,6 +23,9 @@
   `PhantomData<Cell<()>>`, so they are `Send` but no longer `Sync`, and a compile-time
   assertion (with a positive control) proves it. Evidence under "Fix landed" below.
   Awaits independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

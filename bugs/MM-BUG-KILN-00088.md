@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00088 — Mandolin round-robin phase splits across engine spawns and voice retriggers
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth / mandolin round robin
@@ -24,6 +24,9 @@
   hands its sounding take back through the new `Voice::rr_phase`. Engine-level oracle
   added; both defects proved independently. Evidence under "Fix landed" below. Awaits
   independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

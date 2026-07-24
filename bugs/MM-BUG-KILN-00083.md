@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00083 — amp-lab silently drops authoritative UI commands when its ring fills
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** amp-lab / command delivery
@@ -24,6 +24,9 @@
   retries a dropped panic — so the audio thread converges to the displayed state. One
   drain-bounding suggestion is deliberately not taken; see "Fix landed". Awaits
   independent two-eyes closure.)
+  → Closed (2026-07-24, independently verified by Codex GPT-5.6-Sol; fails-before,
+  passes-after, root-cause review, and green gate evidence are recorded in
+  `wrk_journals/2026.07.24 - JRN - Fixed queue two-eyes closure pass.md`.)
 
 ## Observation
 

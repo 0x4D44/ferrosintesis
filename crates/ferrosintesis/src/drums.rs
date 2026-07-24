@@ -2612,8 +2612,28 @@ mod tests {
         assert!((n_hard[0].0 / n_soft[0].0 - 2.0).abs() < 1e-4);
     }
 
-    fn render_drum(key: u8, vel: u8, secs: f32) -> Vec<f32> {
+    /// Render one hit on the LEGACY V1 kit.
+    ///
+    /// Named for its kit on purpose. It used to be `render_drum`, which read like "the
+    /// drum" and hid that every oracle using it guarded V1 while the engine's default
+    /// (and every album but Slipstream) is V3 — so the behaviours V3 re-voices had no
+    /// guard on the kit that actually ships (MM-BUG-KILN-00054). V1 is NOT dead: channel-10
+    /// Program Change 25 selects it and all ten Slipstream movements author it, so these
+    /// stay valid V1 oracles. Where a behaviour matters on both kits, prefer
+    /// [`for_each_kit`] over calling this.
+    fn render_drum_v1(key: u8, vel: u8, secs: f32) -> Vec<f32> {
         render_drum_kit(key, vel, secs, Kit::V1)
+    }
+
+    /// The two MODELLED kits an oracle should hold a behaviour to: the shipping default
+    /// and the legacy voice albums still select.
+    ///
+    /// Taking the closure per kit rather than duplicating a test body keeps one statement
+    /// of the behaviour, so the two cannot drift apart — which is the failure this bug is
+    /// an instance of, one layer up.
+    fn for_each_kit(mut check: impl FnMut(Kit, &str)) {
+        check(Kit::V3, "V3 (engine default)");
+        check(Kit::V1, "V1 (legacy, PC 25)");
     }
 
     fn render_drum_kit(key: u8, vel: u8, secs: f32, kit: Kit) -> Vec<f32> {
@@ -3256,8 +3276,10 @@ mod tests {
     /// (b) is what actually failed before the fix (47 vs 50 were the same bytes), and
     /// it cannot be fooled by a pitch estimator latching onto the wrong partial.
     ///
-    /// NOTE: uses `render_drum_kit(..., Kit::V3)`, not the `render_drum` helper --
-    /// that helper hardcodes `Kit::V1`, the legacy voice the engine never selects.
+    /// NOTE: uses `render_drum_kit(..., Kit::V3)`, the engine's default kit, rather than
+    /// the `render_drum_v1` helper. (This note used to say V1 was "the legacy voice the
+    /// engine never selects" — that is FALSE and it seeded MM-BUG-KILN-00054: channel-10
+    /// Program Change 25 selects V1, and all ten Slipstream movements author it.)
     #[test]
     fn tom_ladder_is_six_distinct_drums() {
         let sr = 44100.0;
@@ -3588,16 +3610,24 @@ mod tests {
     #[test]
     fn kick_beater_point_superlinear() {
         let sr = 44100.0;
-        let hard = render_drum(36, 120, 0.5);
-        let soft = render_drum(36, 30, 0.5);
-        let early = (0.004 * sr) as usize;
-        let point = |s: &[f32]| testutil::hp_rms(&s[..early], sr, 3500.0);
-        let gain_ratio = crate::dsp::vel_amp(120) / crate::dsp::vel_amp(30);
-        let point_ratio = point(&hard) / point(&soft).max(1e-9);
-        assert!(
-            point_ratio > 1.3 * gain_ratio,
-            "beater ratio {point_ratio} vs amplitude ratio {gain_ratio}"
-        );
+        for_each_kit(|kit, name| {
+            let hard = render_drum_kit(36, 120, 0.5, kit);
+            let soft = render_drum_kit(36, 30, 0.5, kit);
+            let early = (0.004 * sr) as usize;
+            let point = |s: &[f32]| testutil::hp_rms(&s[..early], sr, 3500.0);
+            let gain_ratio = crate::dsp::vel_amp(120) / crate::dsp::vel_amp(30);
+            let point_ratio = point(&hard) / point(&soft).max(1e-9);
+            // Both kits are superlinear; V3 is materially LESS so, and its bound is
+            // MEASURED (18.04 vs a gain ratio of 16.0 = 1.128x) rather than designed.
+            // Whether the default kit should match V1's 1.3x is an ear call, tracked as
+            // MM-BUG-KILN-00091 — do not quietly relax either number to close the gap.
+            let want = if kit == Kit::V3 { 1.08 } else { 1.3 };
+            assert!(
+                point_ratio > want * gain_ratio,
+                "{name}: beater ratio {point_ratio} vs amplitude ratio {gain_ratio} \
+                 (needs {want}x)"
+            );
+        });
     }
 
     /// Oracle 28: the ride bell is a dense inharmonic stack (≥5 partials)
@@ -3605,7 +3635,7 @@ mod tests {
     #[test]
     fn ride_bell_dense_and_clicky() {
         let sr = 44100.0;
-        let buf = render_drum(53, 110, 1.0);
+        let buf = render_drum_v1(53, 110, 1.0);
         let floor = testutil::mag_at(&buf, sr, 1650.0) * 0.04;
         let mut found = 0;
         for r in METAL_RATIOS {
@@ -3642,27 +3672,29 @@ mod tests {
     #[test]
     fn china_splash_crash_are_distinct() {
         let sr = 44100.0;
-        let china = render_drum(52, 110, 1.6);
-        let splash = render_drum(55, 110, 1.2);
-        let crash = render_drum(49, 110, 4.2);
-        let (lc, ls, lx) = (
-            last_audible(&china),
-            last_audible(&splash),
-            last_audible(&crash),
-        );
-        assert!((0.6..=1.2).contains(&lc), "china life {lc}");
-        assert!(ls < 0.7, "splash life {ls}");
-        assert!(lx > 3.0, "crash life {lx}");
-        // spectral distinctness: china's >8 kHz : 2-4 kHz balance exceeds
-        // the crash's by a clear margin at matched velocity
-        let trash = |s: &[f32]| {
-            testutil::hp_rms(s, sr, 8000.0) / testutil::band_rms(s, sr, 3000.0, 0.8).max(1e-9)
-        };
-        let (tc, tx) = (
-            trash(&china[..(0.5 * sr) as usize]),
-            trash(&crash[..(0.5 * sr) as usize]),
-        );
-        assert!(tc > 1.5 * tx, "china trash {tc} vs crash {tx}");
+        for_each_kit(|kit, name| {
+            let china = render_drum_kit(52, 110, 1.6, kit);
+            let splash = render_drum_kit(55, 110, 1.2, kit);
+            let crash = render_drum_kit(49, 110, 4.2, kit);
+            let (lc, ls, lx) = (
+                last_audible(&china),
+                last_audible(&splash),
+                last_audible(&crash),
+            );
+            assert!((0.6..=1.2).contains(&lc), "{name}: china life {lc}");
+            assert!(ls < 0.7, "{name}: splash life {ls}");
+            assert!(lx > 3.0, "{name}: crash life {lx}");
+            // spectral distinctness: china's >8 kHz : 2-4 kHz balance exceeds
+            // the crash's by a clear margin at matched velocity
+            let trash = |s: &[f32]| {
+                testutil::hp_rms(s, sr, 8000.0) / testutil::band_rms(s, sr, 3000.0, 0.8).max(1e-9)
+            };
+            let (tc, tx) = (
+                trash(&china[..(0.5 * sr) as usize]),
+                trash(&crash[..(0.5 * sr) as usize]),
+            );
+            assert!(tc > 1.5 * tx, "{name}: china trash {tc} vs crash {tx}");
+        });
     }
 
     /// Oracle 31 (§5.3 calibrated): D8's anti-correlated strike dither makes
@@ -3708,21 +3740,23 @@ mod tests {
             }
             bi as f32 * 5.0
         };
-        let crash = render_drum(49, 110, 0.5);
-        assert!(
-            hf_argmax_ms(&crash) > 20.0,
-            "crash wash peaked at {} ms — no bloom",
-            hf_argmax_ms(&crash)
-        );
-        // the chick still lands at t=0: real HF in the first 3 ms
-        let chick = testutil::hp_rms(&crash[..(0.003 * sr) as usize], sr, 6000.0);
-        assert!(chick > 0.02, "no chick at the front: {chick}");
-        let hat = render_drum(42, 110, 0.2);
-        assert!(
-            hf_argmax_ms(&hat) < 10.0,
-            "hat should not bloom ({} ms)",
-            hf_argmax_ms(&hat)
-        );
+        for_each_kit(|kit, name| {
+            let crash = render_drum_kit(49, 110, 0.5, kit);
+            assert!(
+                hf_argmax_ms(&crash) > 20.0,
+                "{name}: crash wash peaked at {} ms — no bloom",
+                hf_argmax_ms(&crash)
+            );
+            // the chick still lands at t=0: real HF in the first 3 ms
+            let chick = testutil::hp_rms(&crash[..(0.003 * sr) as usize], sr, 6000.0);
+            assert!(chick > 0.02, "{name}: no chick at the front: {chick}");
+            let hat = render_drum_kit(42, 110, 0.2, kit);
+            assert!(
+                hf_argmax_ms(&hat) < 10.0,
+                "{name}: hat should not bloom ({} ms)",
+                hf_argmax_ms(&hat)
+            );
+        });
     }
 
     /// P-C1 (fail-first): the V3 MetalPlate crash gains the Föppl–von Kármán
@@ -3939,7 +3973,7 @@ mod tests {
                 / testutil::hp_rms(&s[(0.010 * sr) as usize..(0.030 * sr) as usize], sr, 9000.0)
                     .max(1e-9)
         };
-        let with = render_drum(42, 110, 0.15);
+        let with = render_drum_v1(42, 110, 0.15);
         // tickless comparison: same spec, click stripped
         let spec = CymSpec {
             base: 3300.0,
@@ -3966,7 +4000,7 @@ mod tests {
             ratio(&without)
         );
         // velocity: the tick's absolute energy grows with the hit
-        let soft = render_drum(42, 40, 0.15);
+        let soft = render_drum_v1(42, 40, 0.15);
         let tick = |s: &[f32]| testutil::hp_rms(&s[..(0.002 * sr) as usize], sr, 9000.0);
         assert!(
             tick(&with) > tick(&soft),
@@ -3979,16 +4013,25 @@ mod tests {
     #[test]
     fn ride_ping_over_wash() {
         let sr = 44100.0;
-        let ride = render_drum(51, 110, 2.0);
-        let early = testutil::hp_rms(&ride[..(0.030 * sr) as usize], sr, 7500.0);
-        let late = testutil::hp_rms(
-            &ride[(0.150 * sr) as usize..(0.300 * sr) as usize],
-            sr,
-            7500.0,
-        );
-        assert!(early > 3.0 * late, "no ping: early {early} vs late {late}");
-        let wash = testutil::rms(&ride[(1.4 * sr) as usize..(1.8 * sr) as usize]);
-        assert!(wash > 5e-6, "the wash died with the ping: {wash}");
+        for_each_kit(|kit, name| {
+            let ride = render_drum_kit(51, 110, 2.0, kit);
+            let early = testutil::hp_rms(&ride[..(0.030 * sr) as usize], sr, 7500.0);
+            let late = testutil::hp_rms(
+                &ride[(0.150 * sr) as usize..(0.300 * sr) as usize],
+                sr,
+                7500.0,
+            );
+            // V1 pings 3x over its wash; V3's metal_plate ride measures 2.90x, so the
+            // bound is per-kit and MEASURED (MM-BUG-KILN-00091 asks whether V3's weaker
+            // ping is intended).
+            let want = if kit == Kit::V3 { 2.5 } else { 3.0 };
+            assert!(
+                early > want * late,
+                "{name}: no ping: early {early} vs late {late} (needs {want}x)"
+            );
+            let wash = testutil::rms(&ride[(1.4 * sr) as usize..(1.8 * sr) as usize]);
+            assert!(wash > 5e-6, "{name}: the wash died with the ping: {wash}");
+        });
     }
 
     /// Oracle 33 (D5, §5.3 ratio form): the snare wires engage ~1.5 ms after
@@ -3997,15 +4040,20 @@ mod tests {
     #[test]
     fn snare_wires_engage_late() {
         let sr = 44100.0;
-        let snare = render_drum(38, 110, 0.3);
-        let wire = |a: f32, b: f32| {
-            testutil::hp_rms(&snare[(a * sr) as usize..(b * sr) as usize], sr, 2800.0)
-        };
-        let pre = wire(0.0, 0.001);
-        let post = wire(0.002, 0.006);
-        assert!(pre < 0.35 * post, "wires too early: {pre} vs {post}");
-        let shell = testutil::band_rms(&snare[..(0.001 * sr) as usize], sr, 1300.0, 0.7);
-        assert!(shell > 1e-3, "shell slap missing at t=0: {shell}");
+        for_each_kit(|kit, name| {
+            let snare = render_drum_kit(38, 110, 0.3, kit);
+            let wire = |a: f32, b: f32| {
+                testutil::hp_rms(&snare[(a * sr) as usize..(b * sr) as usize], sr, 2800.0)
+            };
+            let pre = wire(0.0, 0.001);
+            let post = wire(0.002, 0.006);
+            assert!(
+                pre < 0.35 * post,
+                "{name}: wires too early: {pre} vs {post}"
+            );
+            let shell = testutil::band_rms(&snare[..(0.001 * sr) as usize], sr, 1300.0, 0.7);
+            assert!(shell > 1e-3, "{name}: shell slap missing at t=0: {shell}");
+        });
     }
 
     /// P-S1 (fail-first, differential V3-vs-V2): the V3 snare replaces V2's
@@ -4197,22 +4245,28 @@ mod tests {
     #[test]
     fn drum_velocity_shapes_timbre() {
         let sr = 44100.0;
-        let hard = render_drum(36, 120, 1.0);
-        let soft = render_drum(36, 30, 1.0);
-        // beater-click energy normalised by the exact velocity gain the
-        // engine applies (gain = g·vel_amp) — on main this ratio is 1.0
-        // because the click amp is velocity-independent relative to gain
-        let click = |s: &[f32], vel: u8| {
-            testutil::hp_rms(&s[..(0.005 * sr) as usize], sr, 2500.0)
-                / crate::dsp::vel_amp(vel).max(1e-9)
-        };
-        let (ch, cs) = (click(&hard, 120), click(&soft, 30));
-        assert!(
-            ch > 1.3 * cs,
-            "click (gain-normalised) hard {ch} vs soft {cs}"
-        );
-        let (th, ts) = (testutil::t60_of(&hard, sr), testutil::t60_of(&soft, sr));
-        assert!(th > ts, "t60 hard {th} vs soft {ts}");
+        for_each_kit(|kit, name| {
+            let hard = render_drum_kit(36, 120, 1.0, kit);
+            let soft = render_drum_kit(36, 30, 1.0, kit);
+            // beater-click energy normalised by the exact velocity gain the
+            // engine applies (gain = g·vel_amp) — on main this ratio is 1.0
+            // because the click amp is velocity-independent relative to gain
+            let click = |s: &[f32], vel: u8| {
+                testutil::hp_rms(&s[..(0.005 * sr) as usize], sr, 2500.0)
+                    / crate::dsp::vel_amp(vel).max(1e-9)
+            };
+            let (ch, cs) = (click(&hard, 120), click(&soft, 30));
+            // The gain-normalised click grows with velocity on both kits, but V3's
+            // re-voiced kick barely does: 1.097x measured against V1's 1.3x bound
+            // (MM-BUG-KILN-00091).
+            let want = if kit == Kit::V3 { 1.05 } else { 1.3 };
+            assert!(
+                ch > want * cs,
+                "{name}: click (gain-normalised) hard {ch} vs soft {cs} (needs {want}x)"
+            );
+            let (th, ts) = (testutil::t60_of(&hard, sr), testutil::t60_of(&soft, sr));
+            assert!(th > ts, "{name}: t60 hard {th} vs soft {ts}");
+        });
     }
 
     /// DR-O8(a) (differential): the v2 snare wires ring as resonant bandpass
@@ -4339,7 +4393,7 @@ mod tests {
     #[test]
     fn vibraslap_rattles_and_decays() {
         let sr = 44100.0;
-        let vib = render_drum(58, 100, 1.0);
+        let vib = render_drum_v1(58, 100, 1.0);
         // shimmer-stripped twin of the shipped 58 build (tables mirrored)
         let mut plain = Drum::new(
             sr,
@@ -4377,8 +4431,8 @@ mod tests {
     #[test]
     fn agogo_pair_pitched_and_fast() {
         let sr = 44100.0;
-        let hi = render_drum(67, 100, 0.6);
-        let lo = render_drum(68, 100, 0.6);
+        let hi = render_drum_v1(67, 100, 0.6);
+        let lo = render_drum_v1(68, 100, 0.6);
         fn live(b: &[f32]) -> &[f32] {
             let sr = 44100.0;
             &b[(0.005 * sr) as usize..(0.15 * sr) as usize]
@@ -4417,8 +4471,8 @@ mod tests {
     #[test]
     fn whistles_pitched_short_vs_long() {
         let sr = 44100.0;
-        let short = render_drum(71, 100, 0.8);
-        let long = render_drum(72, 100, 0.8);
+        let short = render_drum_v1(71, 100, 0.8);
+        let long = render_drum_v1(72, 100, 0.8);
         for (name, b) in [("short", &short), ("long", &long)] {
             let f = testutil::peak_locate(&b[..(0.10 * sr) as usize], sr, 1900.0, 2700.0);
             assert!((f - 2350.0).abs() < 200.0, "{name} whistle pitch {f} Hz");
@@ -4437,8 +4491,8 @@ mod tests {
     /// and the two strokes have clearly different lengths.
     #[test]
     fn guiros_notched_short_vs_long() {
-        let short = render_drum(73, 100, 0.8);
-        let long = render_drum(74, 100, 0.8);
+        let short = render_drum_v1(73, 100, 0.8);
+        let long = render_drum_v1(74, 100, 0.8);
         let sr = 44100.0;
         let (ps, rs) = testutil::env_autocorr_peak(
             &short[..(0.15 * sr) as usize],
@@ -4467,8 +4521,8 @@ mod tests {
     #[test]
     fn cuicas_glide_opposite_ways() {
         let sr = 44100.0;
-        let mute = render_drum(78, 100, 0.6);
-        let open = render_drum(79, 100, 0.8);
+        let mute = render_drum_v1(78, 100, 0.6);
+        let open = render_drum_v1(79, 100, 0.8);
         let peak = |b: &[f32], a: f32, z: f32, lo: f32, hi: f32| {
             testutil::peak_locate(&b[(a * sr) as usize..(z * sr) as usize], sr, lo, hi)
         };

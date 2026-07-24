@@ -182,31 +182,54 @@ impl Core {
     /// `&mut self`. `mem::take` on a `Vec` swaps a pointer — no allocation, so this stays
     /// realtime-safe.
     pub fn fill_device(&mut self, out: &mut [f32], channels: usize) -> Result<f32, ()> {
-        let frames = out.len() / channels.max(1);
+        let channels = channels.max(1);
+        let frames = out.len() / channels;
         out.fill(0.0);
         let mut scratch = std::mem::take(&mut self.scratch);
-        if scratch.len() < frames * 2 {
-            // Should not happen after construction, and growing here would be a
-            // realtime violation — count it and bail.
+
+        // Render in CHUNKS of whatever the scratch holds, rather than demanding the whole
+        // callback fit in it. A host is entitled to hand us a buffer larger than the
+        // 4096 frames we sized for, and it typically does so on EVERY callback — so
+        // bailing out (as this used to) was not a one-off underrun, it was permanent
+        // silence with a rising xrun count (MM-BUG-KILN-00081).
+        //
+        // Chunking keeps the realtime contract: no allocation, and no reliance on the
+        // host's buffer size. The sequencer stays sample-accurate because `process`
+        // advances the player by exactly the frames it renders.
+        let chunk = scratch.len() / 2;
+        if chunk == 0 {
             self.scratch = scratch;
             self.xruns += 1;
             return Err(());
         }
-        let r = self.process(&mut scratch, frames);
-        if r.is_ok() {
-            for f in 0..frames {
+
+        let mut peak = 0f32;
+        let mut done = 0usize;
+        let mut result = Ok(0.0);
+        while done < frames {
+            let n = chunk.min(frames - done);
+            match self.process(&mut scratch, n) {
+                Ok(p) => peak = peak.max(p),
+                Err(()) => {
+                    result = Err(());
+                    break;
+                }
+            }
+            for f in 0..n {
                 let (l, rr) = (scratch[f * 2], scratch[f * 2 + 1]);
+                let o = (done + f) * channels;
                 match channels {
-                    1 => out[f] = 0.5 * (l + rr),
+                    1 => out[o] = 0.5 * (l + rr),
                     _ => {
-                        out[f * channels] = l;
-                        out[f * channels + 1] = rr;
+                        out[o] = l;
+                        out[o + 1] = rr;
                     }
                 }
             }
+            done += n;
         }
         self.scratch = scratch;
-        r
+        result.map(|_: f32| peak)
     }
 }
 
@@ -216,9 +239,29 @@ pub fn start(rx: Consumer, midi: &[u8]) -> Result<Engine, String> {
         .default_output_device()
         .ok_or_else(|| "no default output device".to_string())?;
     let device_name = device.name().unwrap_or_else(|_| "<unnamed>".into());
-    let config = device
+    let default_config = device
         .default_output_config()
         .map_err(|e| format!("no default output config: {e}"))?;
+    // The callback renders `&mut [f32]`, so the STREAM has to be f32. The default
+    // config is not guaranteed to be: a device whose default is i16/u16 previously
+    // failed to open with cpal's own error, which says nothing about the real cause
+    // (MM-BUG-KILN-00081). Take the default when it is f32, else find a supported f32
+    // config, else say exactly what the device offered and why we refused it.
+    let config = if default_config.sample_format() == cpal::SampleFormat::F32 {
+        default_config
+    } else {
+        let wanted = device
+            .supported_output_configs()
+            .map_err(|e| format!("cannot enumerate output configs: {e}"))?
+            .find(|c| c.sample_format() == cpal::SampleFormat::F32)
+            .ok_or_else(|| {
+                format!(
+                    "{device_name} offers no f32 output configuration (its default is                      {:?}); amp-lab renders f32 and does not convert",
+                    default_config.sample_format()
+                )
+            })?;
+        wanted.with_max_sample_rate()
+    };
     let sample_rate = config.sample_rate().0;
     let channels = config.channels() as usize;
 
@@ -397,6 +440,82 @@ mod tests {
             note <= 16,
             "a single NoteOn allocated {note} times — the per-voice Box is ~13; more              than that means something new allocates in the callback (KILN-00092)"
         );
+    }
+
+    /// MM-BUG-KILN-00081: a callback LARGER than the scratch must still produce audio.
+    ///
+    /// `fill_device` used to require the whole callback to fit in its 4096-frame scratch
+    /// and return `Err` otherwise. A host that picks a bigger buffer does so on every
+    /// callback, so that was not a one-off underrun — it was permanent silence with a
+    /// rising xrun count, on a configuration cpal considers perfectly valid.
+    ///
+    /// Sizes below, at and above the scratch, because the boundary is exactly where the
+    /// old code changed behaviour.
+    #[test]
+    fn any_callback_size_produces_audio() {
+        for &frames in &[1024usize, 4096, 4097, 8192] {
+            let mut core = core_for(&smf(&[(0, &[0x90, 60, 100]), (960, &[0x80, 60, 0])]));
+            let mut out = vec![0f32; frames * 2];
+            let before = core.xruns;
+            let peak = core
+                .fill_device(&mut out, 2)
+                .unwrap_or_else(|()| panic!("{frames}-frame callback failed to render"));
+            assert!(
+                peak > 0.0,
+                "{frames}-frame callback rendered silence (peak {peak})"
+            );
+            assert_eq!(
+                core.xruns, before,
+                "{frames}-frame callback counted an xrun"
+            );
+        }
+    }
+
+    /// The chunked path must not change WHAT is rendered — only how many passes it takes.
+    ///
+    /// One 8192-frame callback and eight 1024-frame callbacks are the same span of the
+    /// same loop, so they must produce the same samples. This is what proves chunking did
+    /// not disturb the sequencer's frame accounting.
+    #[test]
+    fn chunking_does_not_change_the_audio() {
+        let midi = smf(&[(0, &[0x90, 60, 100]), (960, &[0x80, 60, 0])]);
+        let mut one = core_for(&midi);
+        let mut many = core_for(&midi);
+        let frames = 8192usize;
+
+        let mut big = vec![0f32; frames * 2];
+        one.fill_device(&mut big, 2).expect("one big callback");
+
+        let mut small = vec![0f32; frames * 2];
+        for c in 0..8 {
+            let mut buf = vec![0f32; 1024 * 2];
+            many.fill_device(&mut buf, 2).expect("small callback");
+            small[c * 1024 * 2..(c + 1) * 1024 * 2].copy_from_slice(&buf);
+        }
+        assert_eq!(big, small, "chunked output differs from one-shot output");
+    }
+
+    /// Mono and multichannel devices get the stereo render mapped, not dropped.
+    #[test]
+    fn device_channel_counts_are_mapped() {
+        let midi = smf(&[(0, &[0x90, 60, 100]), (960, &[0x80, 60, 0])]);
+        for &ch in &[1usize, 2, 4] {
+            let mut core = core_for(&midi);
+            let mut out = vec![0f32; 5000 * ch];
+            let peak = core.fill_device(&mut out, ch).expect("render");
+            assert!(peak > 0.0, "{ch}-channel device rendered silence");
+            if ch > 2 {
+                // Channels beyond the first pair stay silent rather than being fed
+                // garbage; the buffer was zeroed and never written there.
+                let mut extra = 0f32;
+                for f in 0..5000 {
+                    for c in 2..ch {
+                        extra += out[f * ch + c].abs();
+                    }
+                }
+                assert_eq!(extra, 0.0, "{ch}-channel device got noise on the extras");
+            }
+        }
     }
 
     fn core_for(midi: &[u8]) -> Core {

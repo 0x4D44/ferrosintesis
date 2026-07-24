@@ -7,305 +7,61 @@
 #![forbid(unsafe_code)]
 
 /// Number of WAV files embedded in this package.
-pub const FILE_COUNT: usize = 74;
+pub const FILE_COUNT: usize = 52;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
-    (
-        "b1_hard_A0.wav",
-        include_bytes!("../samples/b1_hard_A0.wav"),
-    ),
-    (
-        "b1_hard_A2.wav",
-        include_bytes!("../samples/b1_hard_A2.wav"),
-    ),
-    (
-        "b1_hard_A4.wav",
-        include_bytes!("../samples/b1_hard_A4.wav"),
-    ),
-    (
-        "b1_hard_A6.wav",
-        include_bytes!("../samples/b1_hard_A6.wav"),
-    ),
-    (
-        "b1_hard_B1.wav",
-        include_bytes!("../samples/b1_hard_B1.wav"),
-    ),
-    (
-        "b1_hard_B3.wav",
-        include_bytes!("../samples/b1_hard_B3.wav"),
-    ),
-    (
-        "b1_hard_B5.wav",
-        include_bytes!("../samples/b1_hard_B5.wav"),
-    ),
-    (
-        "b1_hard_B7.wav",
-        include_bytes!("../samples/b1_hard_B7.wav"),
-    ),
-    (
-        "b1_hard_C1.wav",
-        include_bytes!("../samples/b1_hard_C1.wav"),
-    ),
-    (
-        "b1_hard_C3.wav",
-        include_bytes!("../samples/b1_hard_C3.wav"),
-    ),
-    (
-        "b1_hard_C5.wav",
-        include_bytes!("../samples/b1_hard_C5.wav"),
-    ),
-    (
-        "b1_hard_C7.wav",
-        include_bytes!("../samples/b1_hard_C7.wav"),
-    ),
-    (
-        "b1_hard_C8.wav",
-        include_bytes!("../samples/b1_hard_C8.wav"),
-    ),
-    (
-        "b1_hard_D2.wav",
-        include_bytes!("../samples/b1_hard_D2.wav"),
-    ),
-    (
-        "b1_hard_D4.wav",
-        include_bytes!("../samples/b1_hard_D4.wav"),
-    ),
-    (
-        "b1_hard_D6.wav",
-        include_bytes!("../samples/b1_hard_D6.wav"),
-    ),
-    (
-        "b1_hard_E1.wav",
-        include_bytes!("../samples/b1_hard_E1.wav"),
-    ),
-    (
-        "b1_hard_E3.wav",
-        include_bytes!("../samples/b1_hard_E3.wav"),
-    ),
-    (
-        "b1_hard_E5.wav",
-        include_bytes!("../samples/b1_hard_E5.wav"),
-    ),
-    (
-        "b1_hard_E7.wav",
-        include_bytes!("../samples/b1_hard_E7.wav"),
-    ),
-    (
-        "b1_hard_F2.wav",
-        include_bytes!("../samples/b1_hard_F2.wav"),
-    ),
-    (
-        "b1_hard_F4.wav",
-        include_bytes!("../samples/b1_hard_F4.wav"),
-    ),
-    (
-        "b1_hard_F6.wav",
-        include_bytes!("../samples/b1_hard_F6.wav"),
-    ),
-    (
-        "b1_hard_G1.wav",
-        include_bytes!("../samples/b1_hard_G1.wav"),
-    ),
-    (
-        "b1_hard_G3.wav",
-        include_bytes!("../samples/b1_hard_G3.wav"),
-    ),
-    (
-        "b1_hard_G5.wav",
-        include_bytes!("../samples/b1_hard_G5.wav"),
-    ),
-    (
-        "b1_hard_G7.wav",
-        include_bytes!("../samples/b1_hard_G7.wav"),
-    ),
-    (
-        "b1_normal_A2.wav",
-        include_bytes!("../samples/b1_normal_A2.wav"),
-    ),
-    (
-        "b1_normal_A4.wav",
-        include_bytes!("../samples/b1_normal_A4.wav"),
-    ),
-    (
-        "b1_normal_A6.wav",
-        include_bytes!("../samples/b1_normal_A6.wav"),
-    ),
-    (
-        "b1_normal_B1.wav",
-        include_bytes!("../samples/b1_normal_B1.wav"),
-    ),
-    (
-        "b1_normal_B3.wav",
-        include_bytes!("../samples/b1_normal_B3.wav"),
-    ),
-    (
-        "b1_normal_B5.wav",
-        include_bytes!("../samples/b1_normal_B5.wav"),
-    ),
-    (
-        "b1_normal_B7.wav",
-        include_bytes!("../samples/b1_normal_B7.wav"),
-    ),
-    (
-        "b1_normal_C1.wav",
-        include_bytes!("../samples/b1_normal_C1.wav"),
-    ),
-    (
-        "b1_normal_C3.wav",
-        include_bytes!("../samples/b1_normal_C3.wav"),
-    ),
-    (
-        "b1_normal_C5.wav",
-        include_bytes!("../samples/b1_normal_C5.wav"),
-    ),
-    (
-        "b1_normal_C7.wav",
-        include_bytes!("../samples/b1_normal_C7.wav"),
-    ),
-    (
-        "b1_normal_D2.wav",
-        include_bytes!("../samples/b1_normal_D2.wav"),
-    ),
-    (
-        "b1_normal_D4.wav",
-        include_bytes!("../samples/b1_normal_D4.wav"),
-    ),
-    (
-        "b1_normal_D6.wav",
-        include_bytes!("../samples/b1_normal_D6.wav"),
-    ),
-    (
-        "b1_normal_E1.wav",
-        include_bytes!("../samples/b1_normal_E1.wav"),
-    ),
-    (
-        "b1_normal_E3.wav",
-        include_bytes!("../samples/b1_normal_E3.wav"),
-    ),
-    (
-        "b1_normal_E5.wav",
-        include_bytes!("../samples/b1_normal_E5.wav"),
-    ),
-    (
-        "b1_normal_E7.wav",
-        include_bytes!("../samples/b1_normal_E7.wav"),
-    ),
-    (
-        "b1_normal_F2.wav",
-        include_bytes!("../samples/b1_normal_F2.wav"),
-    ),
-    (
-        "b1_normal_F4.wav",
-        include_bytes!("../samples/b1_normal_F4.wav"),
-    ),
-    (
-        "b1_normal_F6.wav",
-        include_bytes!("../samples/b1_normal_F6.wav"),
-    ),
-    (
-        "b1_normal_G1.wav",
-        include_bytes!("../samples/b1_normal_G1.wav"),
-    ),
-    (
-        "b1_normal_G3.wav",
-        include_bytes!("../samples/b1_normal_G3.wav"),
-    ),
-    (
-        "b1_normal_G5.wav",
-        include_bytes!("../samples/b1_normal_G5.wav"),
-    ),
-    (
-        "b1_normal_G7.wav",
-        include_bytes!("../samples/b1_normal_G7.wav"),
-    ),
-    (
-        "b1_soft_A2.wav",
-        include_bytes!("../samples/b1_soft_A2.wav"),
-    ),
-    (
-        "b1_soft_A5.wav",
-        include_bytes!("../samples/b1_soft_A5.wav"),
-    ),
-    (
-        "b1_soft_B1.wav",
-        include_bytes!("../samples/b1_soft_B1.wav"),
-    ),
-    (
-        "b1_soft_B3.wav",
-        include_bytes!("../samples/b1_soft_B3.wav"),
-    ),
-    (
-        "b1_soft_B4.wav",
-        include_bytes!("../samples/b1_soft_B4.wav"),
-    ),
-    (
-        "b1_soft_B6.wav",
-        include_bytes!("../samples/b1_soft_B6.wav"),
-    ),
-    (
-        "b1_soft_C1.wav",
-        include_bytes!("../samples/b1_soft_C1.wav"),
-    ),
-    (
-        "b1_soft_C3.wav",
-        include_bytes!("../samples/b1_soft_C3.wav"),
-    ),
-    (
-        "b1_soft_C4.wav",
-        include_bytes!("../samples/b1_soft_C4.wav"),
-    ),
-    (
-        "b1_soft_C6.wav",
-        include_bytes!("../samples/b1_soft_C6.wav"),
-    ),
-    (
-        "b1_soft_D2.wav",
-        include_bytes!("../samples/b1_soft_D2.wav"),
-    ),
-    (
-        "b1_soft_D5.wav",
-        include_bytes!("../samples/b1_soft_D5.wav"),
-    ),
-    (
-        "b1_soft_E1.wav",
-        include_bytes!("../samples/b1_soft_E1.wav"),
-    ),
-    (
-        "b1_soft_E3.wav",
-        include_bytes!("../samples/b1_soft_E3.wav"),
-    ),
-    (
-        "b1_soft_E4.wav",
-        include_bytes!("../samples/b1_soft_E4.wav"),
-    ),
-    (
-        "b1_soft_E6.wav",
-        include_bytes!("../samples/b1_soft_E6.wav"),
-    ),
-    (
-        "b1_soft_F2.wav",
-        include_bytes!("../samples/b1_soft_F2.wav"),
-    ),
-    (
-        "b1_soft_F5.wav",
-        include_bytes!("../samples/b1_soft_F5.wav"),
-    ),
-    (
-        "b1_soft_G1.wav",
-        include_bytes!("../samples/b1_soft_G1.wav"),
-    ),
-    (
-        "b1_soft_G3.wav",
-        include_bytes!("../samples/b1_soft_G3.wav"),
-    ),
-    (
-        "b1_soft_G4.wav",
-        include_bytes!("../samples/b1_soft_G4.wav"),
-    ),
-    (
-        "b1_soft_G6.wav",
-        include_bytes!("../samples/b1_soft_G6.wav"),
-    ),
+    ("b1_hard_A0.wav", include_bytes!("../samples/b1_hard_A0.wav")),
+    ("b1_hard_A2.wav", include_bytes!("../samples/b1_hard_A2.wav")),
+    ("b1_hard_A4.wav", include_bytes!("../samples/b1_hard_A4.wav")),
+    ("b1_hard_A6.wav", include_bytes!("../samples/b1_hard_A6.wav")),
+    ("b1_hard_B1.wav", include_bytes!("../samples/b1_hard_B1.wav")),
+    ("b1_hard_B3.wav", include_bytes!("../samples/b1_hard_B3.wav")),
+    ("b1_hard_B5.wav", include_bytes!("../samples/b1_hard_B5.wav")),
+    ("b1_hard_B7.wav", include_bytes!("../samples/b1_hard_B7.wav")),
+    ("b1_hard_C1.wav", include_bytes!("../samples/b1_hard_C1.wav")),
+    ("b1_hard_C3.wav", include_bytes!("../samples/b1_hard_C3.wav")),
+    ("b1_hard_C5.wav", include_bytes!("../samples/b1_hard_C5.wav")),
+    ("b1_hard_C7.wav", include_bytes!("../samples/b1_hard_C7.wav")),
+    ("b1_hard_C8.wav", include_bytes!("../samples/b1_hard_C8.wav")),
+    ("b1_hard_D2.wav", include_bytes!("../samples/b1_hard_D2.wav")),
+    ("b1_hard_D4.wav", include_bytes!("../samples/b1_hard_D4.wav")),
+    ("b1_hard_D6.wav", include_bytes!("../samples/b1_hard_D6.wav")),
+    ("b1_hard_E1.wav", include_bytes!("../samples/b1_hard_E1.wav")),
+    ("b1_hard_E3.wav", include_bytes!("../samples/b1_hard_E3.wav")),
+    ("b1_hard_E5.wav", include_bytes!("../samples/b1_hard_E5.wav")),
+    ("b1_hard_E7.wav", include_bytes!("../samples/b1_hard_E7.wav")),
+    ("b1_hard_F2.wav", include_bytes!("../samples/b1_hard_F2.wav")),
+    ("b1_hard_F4.wav", include_bytes!("../samples/b1_hard_F4.wav")),
+    ("b1_hard_F6.wav", include_bytes!("../samples/b1_hard_F6.wav")),
+    ("b1_hard_G1.wav", include_bytes!("../samples/b1_hard_G1.wav")),
+    ("b1_hard_G3.wav", include_bytes!("../samples/b1_hard_G3.wav")),
+    ("b1_hard_G5.wav", include_bytes!("../samples/b1_hard_G5.wav")),
+    ("b1_hard_G7.wav", include_bytes!("../samples/b1_hard_G7.wav")),
+    ("b1_normal_A2.wav", include_bytes!("../samples/b1_normal_A2.wav")),
+    ("b1_normal_A4.wav", include_bytes!("../samples/b1_normal_A4.wav")),
+    ("b1_normal_A6.wav", include_bytes!("../samples/b1_normal_A6.wav")),
+    ("b1_normal_B1.wav", include_bytes!("../samples/b1_normal_B1.wav")),
+    ("b1_normal_B3.wav", include_bytes!("../samples/b1_normal_B3.wav")),
+    ("b1_normal_B5.wav", include_bytes!("../samples/b1_normal_B5.wav")),
+    ("b1_normal_B7.wav", include_bytes!("../samples/b1_normal_B7.wav")),
+    ("b1_normal_C1.wav", include_bytes!("../samples/b1_normal_C1.wav")),
+    ("b1_normal_C3.wav", include_bytes!("../samples/b1_normal_C3.wav")),
+    ("b1_normal_C5.wav", include_bytes!("../samples/b1_normal_C5.wav")),
+    ("b1_normal_C7.wav", include_bytes!("../samples/b1_normal_C7.wav")),
+    ("b1_normal_D2.wav", include_bytes!("../samples/b1_normal_D2.wav")),
+    ("b1_normal_D4.wav", include_bytes!("../samples/b1_normal_D4.wav")),
+    ("b1_normal_D6.wav", include_bytes!("../samples/b1_normal_D6.wav")),
+    ("b1_normal_E1.wav", include_bytes!("../samples/b1_normal_E1.wav")),
+    ("b1_normal_E3.wav", include_bytes!("../samples/b1_normal_E3.wav")),
+    ("b1_normal_E5.wav", include_bytes!("../samples/b1_normal_E5.wav")),
+    ("b1_normal_E7.wav", include_bytes!("../samples/b1_normal_E7.wav")),
+    ("b1_normal_F2.wav", include_bytes!("../samples/b1_normal_F2.wav")),
+    ("b1_normal_F4.wav", include_bytes!("../samples/b1_normal_F4.wav")),
+    ("b1_normal_F6.wav", include_bytes!("../samples/b1_normal_F6.wav")),
+    ("b1_normal_G1.wav", include_bytes!("../samples/b1_normal_G1.wav")),
+    ("b1_normal_G3.wav", include_bytes!("../samples/b1_normal_G3.wav")),
+    ("b1_normal_G5.wav", include_bytes!("../samples/b1_normal_G5.wav")),
+    ("b1_normal_G7.wav", include_bytes!("../samples/b1_normal_G7.wav")),
 ];
 
 /// Returns the embedded WAV bytes for an exact (case-sensitive) file name.
@@ -325,7 +81,7 @@ mod tests {
 
     // Aggregate byte size of the embedded WAVs; regenerate with
     // gen_crate_lib.py and re-pin if the bank changes.
-    const EXPECTED_BYTES: usize = 9797410;
+    const EXPECTED_BYTES: usize = 6918496;
 
     #[test]
     fn inventory_matches_packaged_wavs() {

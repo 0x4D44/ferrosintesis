@@ -10,6 +10,19 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.24 — **Subtract noise before comparing tilt — hiss inflates it and a noisy layer reads BRIGHT** (`sampler.rs:b1upright_bank`).
+  - Any tilt/centroid statistic puts broadband noise in its NUMERATOR, so the noisiest capture scores
+    brightest — exactly backwards. Raw, the B1 upright's soft layer (28 dB SNR) sat ~1 dB from its normal
+    layer (39 dB) and I could not tell whether that was real or an artefact. Estimating the noise PSD from
+    each strike's own pre-onset gap and subtracting it in the power domain showed the +0.8 dB was genuine —
+    which is what justified deleting a whole recorded layer. Match SNR across the takes you compare, or
+    subtract; never compare tilts across unequal noise floors.
+  - Same task, same shape of error one level up: **prove an A/B actually differs before measuring it.**
+    `tools/gm0-audition/renders/_tb_b1.mid` is the OUTPUT of `prep_audition.py`, so it already carries
+    `CC0=5`; a mid-piece excerpt tool replayed that latched controller as carried-forward state and it beat
+    the bank being injected, making five "variants" byte-identical. Every one sounded plausible. An A/B
+    harness must compare samples and say "IDENTICAL — no-op" before reporting any number.
+
 - 2026.07.24 — **Bank layers must differ in TIMBRE, not level — `vel_amp` owns loudness** (`sampler.rs:LaVoice`).
   - `LaVoice` scales the sample by `vel_amp(vel)`, the SAME law as the wrapped model, so a multi-velocity
     bank's soft/hard captures supply spectrum, never gain. Per-file peak-normalise-to-0.9 in

@@ -1054,7 +1054,7 @@ pub fn make(
                     // kept as a 5th GM 0 option (Arthur, 2026.07.18).
                     (0, 4) => Some(crate::sampler::darkgrand_bank(vel, seed & 1 == 0)),
                     // CC0=5: Arthur's own Yamaha B1 acoustic upright (first-party DR-05
-                    // recording, three recorded soft/normal/hard timbre layers).
+                    // recording, two recorded normal/hard timbre layers).
                     (0, 5) => Some(crate::sampler::b1upright_bank(vel, seed & 1 == 0)),
                     (1, 1) => Some(crate::sampler::ydpgrand_bank(vel, seed & 1 == 0)),
                     (1, 2) => Some(crate::sampler::musescoregrand_bank(vel, seed & 1 == 0)),

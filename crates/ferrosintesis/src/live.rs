@@ -209,6 +209,13 @@ impl RealtimeSynth {
     /// The banks decode lazily on first use, which would otherwise happen inside your
     /// audio callback and blow the deadline. Call this once during setup, off the
     /// realtime thread. A no-op without the `embedded-samples` feature.
+    ///
+    /// This decodes **every** bank, not just the ones a default program set reaches —
+    /// a live stream can select any program or alternate bank at any moment, so a
+    /// partial prewarm leaves exactly the dropout this call exists to prevent. That is
+    /// the trade you are opting into: it costs setup time and holds the decoded PCM
+    /// (roughly twice the embedded sample payload) resident for the process lifetime.
+    /// If you would rather pay in occasional first-use stalls, simply do not call it.
     pub fn prewarm_samples(&self) {
         sampler::prewarm();
     }

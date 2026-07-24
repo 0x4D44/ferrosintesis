@@ -88,13 +88,27 @@ pub fn rain_loop() -> &'static [f32] {
     L.get_or_init(|| parse_wav(embedded_wav("rain_loop.wav")))
 }
 
+/// Counts how many sample banks have run their one-time decode.
+///
+/// Test-only, and the whole basis of `prewarm_leaves_no_bank_uninitialized`
+/// (MM-BUG-KILN-00059). Every `bank!` expansion runs exactly once, inside its
+/// `OnceLock::get_or_init`, so this counts distinct bank initializations.
+///
+/// Reading it is race-free *after* `prewarm()` returns: at that point every bank it
+/// covers is initialized, so no later call from any thread can increment it again.
+#[cfg(test)]
+pub(crate) static BANK_INITS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
 macro_rules! bank {
-    ($($file:literal => $root:expr),+ $(,)?) => {
+    ($($file:literal => $root:expr),+ $(,)?) => {{
+        #[cfg(test)]
+        crate::sampler::BANK_INITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         vec![$(Zone {
             root: $root,
             data: parse_wav(embedded_wav($file)),
         }),+]
-    };
+    }};
 }
 
 // Roots measured by autocorrelation in the prep script
@@ -2428,20 +2442,36 @@ pub fn prewarm() {
     {
         let _ = ferrosintesis_samples_drumkit::RIDE.pcm(0, 0);
     }
-    let _ = piano_bank(1, false);
-    let _ = piano_bank(1, true);
-    let _ = piano_bank(80, false);
-    let _ = piano_bank(80, true);
-    let _ = piano_bank(127, false);
-    let _ = piano_bank(127, true);
-    let _ = violin_bank(1);
-    let _ = violin_bank(127);
-    let _ = viola_bank(1);
-    let _ = viola_bank(127);
-    let _ = marimba_bank();
-    let _ = xylo_bank();
-    let _ = glock_bank();
-    let _ = flute_bank();
+    // Piano-shaped banks fan out over (velocity layer x round-robin), so touching one
+    // combination leaves the rest to decode inside the audio callback. Cover the grid.
+    for &(vel, rr2) in &[
+        (1u8, false),
+        (1, true),
+        (80, false),
+        (80, true),
+        (127, false),
+        (127, true),
+    ] {
+        let _ = piano_bank(vel, rr2);
+        let _ = grand_bank(vel, rr2);
+        let _ = steinwayb_bank(vel, rr2);
+        let _ = kawai_bank(vel, rr2);
+        let _ = headroom_bank(vel, rr2);
+        let _ = musescoregrand_bank(vel, rr2);
+        let _ = darkgrand_bank(vel, rr2);
+        let _ = ydpgrand_bank(vel, rr2);
+        let _ = honkytonk_bank(vel, rr2);
+    }
+
+    // Banks split into a soft and a loud layer.
+    for vel in [1u8, 127] {
+        let _ = violin_bank(vel);
+        let _ = viola_bank(vel);
+        let _ = cello_bank(vel);
+        let _ = contrabass_bank(vel);
+        let _ = strings_bank(vel);
+    }
+
     for program in 56..=60 {
         let _ = brass_bank(program, 1);
         let _ = brass_bank(program, 127);
@@ -2450,8 +2480,19 @@ pub fn prewarm() {
         let _ = reed_bank(program, 1);
         let _ = reed_bank(program, 127);
     }
-    let _ = strings_bank(1);
-    let _ = strings_bank(127);
+    for program in 64..=67 {
+        let _ = sax_bank(program, 1);
+        let _ = sax_bank(program, 127);
+    }
+
+    let _ = marimba_bank();
+    let _ = xylo_bank();
+    let _ = glock_bank();
+    let _ = vibraphone_bank();
+    let _ = tubular_bank();
+    let _ = celesta_bank();
+    let _ = musicbox_bank();
+    let _ = flute_bank();
     let _ = guitar_bank();
     let _ = steel_bank();
     let _ = harp_bank();
@@ -2466,6 +2507,13 @@ pub fn prewarm() {
     let _ = chanter_bank();
     let _ = drone_g2_bank();
     let _ = drone_g3_bank();
+    let _ = clavinet_bank();
+    let _ = harpsichord_bank();
+    let _ = rhodes_bank();
+    let _ = dulcimer_bank();
+    let _ = pizzbass_bank();
+    let _ = finger_bass_bank();
+    let _ = pick_bass_bank();
 }
 
 fn nearest(zones: &'static [Zone], f: f32) -> &'static Zone {
@@ -4141,6 +4189,187 @@ mod tests {
     use crate::dsp::OnePole;
     use crate::voices;
     use crate::voices::Voice;
+
+    // ---------------------------------------------------------------------------
+    // Prewarm coverage (MM-BUG-KILN-00059)
+    //
+    // `RealtimeSynth::prewarm_samples()` promises that no sample bank decodes inside
+    // the deadline-bearing audio callback. That promise was kept by a hand-maintained
+    // list of calls in `prewarm()`, and the list had drifted: 22 of the 46 public bank
+    // accessors were never touched, including every alternative piano bank, the
+    // saxophones, the clavinet, the harpsichord and the whole bass family. Each new
+    // bank landed in its own change and nobody re-read the whole list.
+    //
+    // Two oracles close that loop. One pins the exercise list against the source, so a
+    // new accessor cannot land without being covered; the other proves prewarm reaches
+    // everything the exercise list can reach. Neither can be satisfied by a partial
+    // list.
+    //
+    // Scope: `bank!`-built `Zone` banks. The drum-kit crate's PCM cache is a separate
+    // mechanism and is prewarmed by its own explicit call.
+    // ---------------------------------------------------------------------------
+
+    /// Every public bank accessor, swept across its full argument space.
+    ///
+    /// The sweep is deliberately exhaustive rather than representative: several
+    /// accessors fan out internally on velocity or program boundaries (`grand_bank`
+    /// selects among six statics, `sax_bank` among eight), and representative values
+    /// walk straight past a boundary a real MIDI file would hit.
+    ///
+    /// Hand-maintained by necessity — Rust cannot enumerate functions — which is
+    /// exactly the drift this bug was about, so
+    /// `every_public_bank_accessor_is_exercised` pins it against the source.
+    fn exercise_every_public_bank() {
+        for &(vel, rr2) in &[
+            (1u8, false),
+            (1, true),
+            (80, false),
+            (80, true),
+            (127, false),
+            (127, true),
+        ] {
+            let _ = piano_bank(vel, rr2);
+            let _ = grand_bank(vel, rr2);
+            let _ = steinwayb_bank(vel, rr2);
+            let _ = kawai_bank(vel, rr2);
+            let _ = headroom_bank(vel, rr2);
+            let _ = musescoregrand_bank(vel, rr2);
+            let _ = darkgrand_bank(vel, rr2);
+            let _ = ydpgrand_bank(vel, rr2);
+            let _ = honkytonk_bank(vel, rr2);
+        }
+        for vel in 0u8..=127 {
+            let _ = violin_bank(vel);
+            let _ = viola_bank(vel);
+            let _ = cello_bank(vel);
+            let _ = contrabass_bank(vel);
+            let _ = strings_bank(vel);
+        }
+        for program in 0u8..=127 {
+            for vel in [0u8, 64, 127] {
+                let _ = brass_bank(program, vel);
+                let _ = reed_bank(program, vel);
+                let _ = sax_bank(program, vel);
+            }
+        }
+        let _ = banjo_bank();
+        let _ = bottle_bank();
+        let _ = celesta_bank();
+        let _ = chanter_bank();
+        let _ = clavinet_bank();
+        let _ = drone_g2_bank();
+        let _ = drone_g3_bank();
+        let _ = dulcimer_bank();
+        let _ = finger_bass_bank();
+        let _ = flute_bank();
+        let _ = glock_bank();
+        let _ = guitar_bank();
+        let _ = harp_bank();
+        let _ = harpsichord_bank();
+        let _ = marimba_bank();
+        let _ = musicbox_bank();
+        let _ = ocarina_bank();
+        let _ = panflute_bank();
+        let _ = pick_bass_bank();
+        let _ = pizzbass_bank();
+        let _ = recorder_bank();
+        let _ = rhodes_bank();
+        let _ = shakuhachi_bank();
+        let _ = sitar_bank();
+        let _ = steel_bank();
+        let _ = timpani_bank();
+        let _ = tubular_bank();
+        let _ = vibraphone_bank();
+        let _ = xylo_bank();
+    }
+
+    /// The exercise list above covers every public bank accessor the source declares.
+    ///
+    /// Without this, adding a bank and forgetting `exercise_every_public_bank` would
+    /// silently shrink what `prewarm_leaves_no_bank_uninitialized` can detect — the
+    /// coverage oracle would keep passing while covering less.
+    #[test]
+    fn every_public_bank_accessor_is_exercised() {
+        let src = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join("sampler.rs"),
+        )
+        .expect("sampler.rs is readable from its own crate");
+
+        let declared: Vec<String> = src
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("pub fn "))
+            .filter_map(|rest| rest.split('(').next())
+            .filter(|name| name.ends_with("_bank"))
+            .map(str::to_string)
+            .collect();
+
+        assert!(
+            declared.len() > 20,
+            "found only {} public bank accessors — the scan is not reading what it \
+             thinks it is",
+            declared.len()
+        );
+
+        // The body of the exercise fn, so a mention in this comment cannot count.
+        let body = src
+            .split_once("fn exercise_every_public_bank() {")
+            .expect("exercise_every_public_bank must exist")
+            .1;
+        let body = body
+            .split_once("\n    }")
+            .expect("its body must terminate")
+            .0;
+
+        let missing: Vec<&String> = declared
+            .iter()
+            .filter(|name| !body.contains(&format!("{name}(")))
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "{} public bank accessor(s) are not exercised, so the prewarm-coverage \
+             oracle silently does not cover them:\n  {}\n\nAdd each to \
+             exercise_every_public_bank().",
+            missing.len(),
+            missing
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join("\n  ")
+        );
+    }
+
+    /// After `prewarm()`, no bank decodes again — the realtime contract.
+    ///
+    /// Race-free despite parallel tests: once `prewarm()` returns, every bank it covers
+    /// is initialized, so `BANK_INITS` is stable and no other thread can move it. A
+    /// concurrent test that raced ahead of `prewarm()` incremented the counter *before*
+    /// the snapshot, because `OnceLock::get_or_init` runs its closure exactly once.
+    ///
+    /// If this fails, the named count is how many banks a realtime NoteOn would decode
+    /// inside the audio callback.
+    #[test]
+    fn prewarm_leaves_no_bank_uninitialized() {
+        use std::sync::atomic::Ordering;
+
+        prewarm();
+        let after_prewarm = BANK_INITS.load(Ordering::SeqCst);
+
+        exercise_every_public_bank();
+        let after_exercise = BANK_INITS.load(Ordering::SeqCst);
+
+        assert_eq!(
+            after_prewarm,
+            after_exercise,
+            "{} sample bank(s) were still uninitialized after prewarm() and decoded on \
+             first use. In the realtime path that decode happens inside fill_ring()'s \
+             deadline-bearing block, which is the dropout prewarm_samples() exists to \
+             prevent. Add the missing bank(s) to sampler::prewarm().",
+            after_exercise - after_prewarm
+        );
+    }
     use ferrosintesis_samples_drumkit as kitbank;
 
     /// LoopVoice must sustain INDEFINITELY across many loop wraps — the runtime

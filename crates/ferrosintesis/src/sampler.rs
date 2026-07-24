@@ -100,6 +100,30 @@ fn embedded_wav(name: &str) -> &'static [u8] {
     panic!("sample {name} requested from a modeled-only ferrosintesis build")
 }
 
+/// The ONE way a lazily-initialized static cache in this module may be filled.
+///
+/// Every `static _: OnceLock<_>` here is a realtime hazard: whatever it decodes runs on
+/// whichever thread touches it first, and in a live session that is the audio callback.
+/// [`prewarm`] exists to force that work onto the setup thread, and the oracles below
+/// prove it did — but they can only see initializations they are told about. This funnel
+/// is what makes that total: `no_lazy_cache_bypasses_init_once` refuses a bare
+/// `get_or_init`, so a new cache cannot be added without being recorded.
+///
+/// A macro rather than a function so the expansion stays byte-for-byte the old
+/// `get_or_init` (the `&Vec<T>` -> `&[T]` coercion every accessor's return type relies on
+/// survives), and so `line!()` reports the CACHE's own site rather than the funnel's.
+/// Release builds compile to exactly the bare `get_or_init` — the bookkeeping is
+/// `cfg(test)` and inside the closure, so it runs once, only on a real initialization.
+macro_rules! init_once {
+    ($cell:ident, $build:expr) => {
+        $cell.get_or_init(|| {
+            #[cfg(test)]
+            crate::sampler::record_cache_init(line!());
+            $build
+        })
+    };
+}
+
 /// The embedded real-rain ambience loop (owner-recorded 2017 field recording,
 /// CC0), decoded once to mono f32 at 44.1 kHz. Unlike the pitched attack banks
 /// this is a full seamless loop, not a zone set: the GM 96 rain FX voice reads
@@ -109,7 +133,7 @@ fn embedded_wav(name: &str) -> &'static [u8] {
 #[cfg(feature = "embedded-samples")]
 pub fn rain_loop() -> &'static [f32] {
     static L: OnceLock<Vec<f32>> = OnceLock::new();
-    L.get_or_init(|| parse_wav(embedded_wav("rain_loop.wav")))
+    init_once!(L, parse_wav(embedded_wav("rain_loop.wav")))
 }
 
 /// Counts how many sample banks have run their one-time decode.
@@ -139,6 +163,27 @@ pub(crate) static BANK_INITS: std::sync::atomic::AtomicUsize =
 pub(crate) static LOOP_SEARCHES: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
+/// Source lines of every `init_once` call that has actually run its builder.
+///
+/// Test-only. `BANK_INITS` counts `bank!` expansions, which is narrower than "lazy
+/// cache": a bank-less cache (`rain_loop`, the gong layer pair) never touches it, so
+/// a coverage oracle built on it could not see one (MM-BUG-KILN-00073). Recording the
+/// call SITE instead of a count makes the failure name the accessor that escaped, and
+/// lets `every_lazy_cache_is_reached_by_the_exercise_sweep` check the set against the
+/// `static _: OnceLock<_>` declarations the source itself carries — a derived total,
+/// not a second hand-written list.
+#[cfg(test)]
+pub(crate) static CACHE_INIT_SITES: std::sync::Mutex<std::collections::BTreeSet<u32>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+
+#[cfg(test)]
+pub(crate) fn record_cache_init(line: u32) {
+    CACHE_INIT_SITES
+        .lock()
+        .expect("cache-site registry")
+        .insert(line);
+}
+
 macro_rules! bank {
     ($($file:literal => $root:expr),+ $(,)?) => {{
         #[cfg(test)]
@@ -155,7 +200,7 @@ macro_rules! bank {
 // (see ../../tools/ferrosintesis-samples/README.md).
 fn violin_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "violin_G3_f.wav" => 196.00,
             "violin_E4_f.wav" => 329.33,
@@ -169,7 +214,7 @@ fn violin_f() -> &'static [Zone] {
 
 fn violin_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "violin_G3_p.wav" => 195.11,
             "violin_E4_p.wav" => 329.51,
@@ -183,7 +228,7 @@ fn violin_p() -> &'static [Zone] {
 
 fn flute() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "flute_C4.wav" => 523.23,
             "flute_A4.wav" => 879.92,
@@ -196,7 +241,7 @@ fn flute() -> &'static [Zone] {
 
 fn piano_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "piano_C2_pp.wav" => 65.05,
             "piano_G2_pp.wav" => 97.77,
@@ -213,7 +258,7 @@ fn piano_pp() -> &'static [Zone] {
 
 fn piano_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "piano_C2_mf.wav" => 65.17,
             "piano_G2_mf.wav" => 98.10,
@@ -230,7 +275,7 @@ fn piano_mf() -> &'static [Zone] {
 
 fn piano_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "piano_C2_f.wav" => 65.52,
             "piano_G2_f.wav" => 98.33,
@@ -247,7 +292,7 @@ fn piano_f() -> &'static [Zone] {
 
 fn piano_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "piano_C2_pp_rr2.wav" => 65.05,
             "piano_G2_pp_rr2.wav" => 97.77,
@@ -264,7 +309,7 @@ fn piano_pp_rr2() -> &'static [Zone] {
 
 fn piano_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "piano_C2_mf_rr2.wav" => 65.51,
             "piano_G2_mf_rr2.wav" => 98.28,
@@ -281,7 +326,7 @@ fn piano_mf_rr2() -> &'static [Zone] {
 
 fn piano_f_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "piano_C2_f_rr2.wav" => 65.58,
             "piano_G2_f_rr2.wav" => 98.43,
@@ -298,7 +343,7 @@ fn piano_f_rr2() -> &'static [Zone] {
 
 fn trumpet_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "trumpet_F2_p.wav" => 174.88,
             "trumpet_C3_p.wav" => 259.21,
@@ -311,7 +356,7 @@ fn trumpet_p() -> &'static [Zone] {
 
 fn trumpet_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "trumpet_F2_f.wav" => 172.61,
             "trumpet_C3_f.wav" => 261.15,
@@ -324,7 +369,7 @@ fn trumpet_f() -> &'static [Zone] {
 
 fn mutetpt_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "mutetpt_A#2_p.wav" => 232.97,
             "mutetpt_D3_p.wav" => 293.86,
@@ -337,7 +382,7 @@ fn mutetpt_p() -> &'static [Zone] {
 
 fn mutetpt_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "mutetpt_A#2_f.wav" => 233.07,
             "mutetpt_D3_f.wav" => 293.30,
@@ -350,7 +395,7 @@ fn mutetpt_f() -> &'static [Zone] {
 
 fn trombone_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "trombone_F1_p.wav" => 87.34,
             "trombone_A#1_p.wav" => 116.31,
@@ -364,7 +409,7 @@ fn trombone_p() -> &'static [Zone] {
 
 fn trombone_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "trombone_F1_f.wav" => 87.21,
             "trombone_A#1_f.wav" => 116.56,
@@ -378,7 +423,7 @@ fn trombone_f() -> &'static [Zone] {
 
 fn tuba_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "tuba_A#0_p.wav" => 58.01,
             "tuba_D#1_p.wav" => 78.25,
@@ -392,7 +437,7 @@ fn tuba_p() -> &'static [Zone] {
 
 fn tuba_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "tuba_A#0_f.wav" => 58.35,
             "tuba_D#1_f.wav" => 77.78,
@@ -406,7 +451,7 @@ fn tuba_f() -> &'static [Zone] {
 
 fn horn_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "horn_A#1_p.wav" => 116.90,
             "horn_D2_p.wav" => 148.36,
@@ -420,7 +465,7 @@ fn horn_p() -> &'static [Zone] {
 
 fn horn_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "horn_A#1_f.wav" => 116.81,
             "horn_D2_f.wav" => 146.41,
@@ -434,7 +479,7 @@ fn horn_f() -> &'static [Zone] {
 
 fn oboe_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "oboe_D3_p.wav" => 293.50,
             "oboe_F3_p.wav" => 347.64,
@@ -448,7 +493,7 @@ fn oboe_p() -> &'static [Zone] {
 
 fn oboe_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "oboe_D3_f.wav" => 294.16,
             "oboe_F3_f.wav" => 349.95,
@@ -462,7 +507,7 @@ fn oboe_f() -> &'static [Zone] {
 
 fn bassoon_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "bassoon_A#0_p.wav" => 58.31,
             "bassoon_F1_p.wav" => 87.26,
@@ -476,7 +521,7 @@ fn bassoon_p() -> &'static [Zone] {
 
 fn bassoon_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "bassoon_A#0_f.wav" => 58.25,
             "bassoon_F1_f.wav" => 87.29,
@@ -490,7 +535,7 @@ fn bassoon_f() -> &'static [Zone] {
 
 fn clarinet_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "clarinet_A#2_p.wav" => 232.55,
             "clarinet_D3_p.wav" => 293.36,
@@ -504,7 +549,7 @@ fn clarinet_p() -> &'static [Zone] {
 
 fn clarinet_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "clarinet_A#2_f.wav" => 233.09,
             "clarinet_D3_f.wav" => 292.97,
@@ -522,7 +567,7 @@ fn clarinet_f() -> &'static [Zone] {
 /// real f0, so the flatness never reaches the render.
 fn steel() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "steel_E2.wav" => 81.98,
             "steel_A#2.wav" => 116.33,
@@ -553,7 +598,7 @@ fn steel() -> &'static [Zone] {
 /// never reaches the render: the sampler repitches from these measured roots.
 fn eastpick() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "eastpick_E2.wav" => 83.56,
             "eastpick_B2.wav" => 124.31,
@@ -576,7 +621,7 @@ fn eastpick() -> &'static [Zone] {
 /// fingerstyle attack stretches the string less.
 fn eastpluck() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "eastpluck_E2.wav" => 83.33,
             "eastpluck_A#2.wav" => 116.61,
@@ -592,7 +637,7 @@ fn eastpluck() -> &'static [Zone] {
 
 fn nylon() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "nylon_E2.wav" => 82.47,
             "nylon_B2.wav" => 124.07,
@@ -611,7 +656,7 @@ fn nylon() -> &'static [Zone] {
 // by autocorrelation (both sections sound one octave above their VSCO labels).
 fn strsec_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "celens_C1_p.wav" => 65.48,
             "celens_G1_p.wav" => 97.46,
@@ -631,7 +676,7 @@ fn strsec_p() -> &'static [Zone] {
 
 fn strsec_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "celens_C1_f.wav" => 65.38,
             "celens_G1_f.wav" => 97.71,
@@ -658,7 +703,7 @@ fn strsec_f() -> &'static [Zone] {
 // zone; the waveguide keeps the expressive sustain.
 fn contrabass_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "dbass_E1_p.wav" => 41.22,
             "dbass_A#1_p.wav" => 57.95,
@@ -674,7 +719,7 @@ fn contrabass_p() -> &'static [Zone] {
 
 fn contrabass_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "dbass_E1_f.wav" => 41.15,
             "dbass_A#1_f.wav" => 57.63,
@@ -700,7 +745,7 @@ pub fn contrabass_bank(vel: u8) -> &'static [Zone] {
 
 fn pizzbass() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "pizzbass_E1.wav" => 41.09,
             "pizzbass_G1.wav" => 48.60,
@@ -724,7 +769,7 @@ pub fn pizzbass_bank() -> &'static [Zone] {
 
 fn finger_bass() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "fingerbass_E1.wav" => 41.22,
             "fingerbass_F#1.wav" => 46.84,
@@ -746,7 +791,7 @@ pub fn finger_bass_bank() -> &'static [Zone] {
 
 fn pick_bass() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "pickbass_E1.wav" => 41.62,
             "pickbass_F#1.wav" => 47.19,
@@ -767,7 +812,7 @@ pub fn pick_bass_bank() -> &'static [Zone] {
 
 fn rhodes() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "rhodes_E1.wav" => 41.21,
             "rhodes_A#1.wav" => 58.24,
@@ -793,7 +838,7 @@ pub fn rhodes_bank() -> &'static [Zone] {
 
 fn dulcimer_la() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "dulcimer_C#4.wav" => 280.62,
             "dulcimer_D4.wav" => 295.17,
@@ -816,7 +861,7 @@ pub fn dulcimer_bank() -> &'static [Zone] {
 
 fn musicbox() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "musicbox_E5.wav" => 668.51,
             "musicbox_A5.wav" => 873.59,
@@ -847,7 +892,7 @@ pub fn musicbox_bank() -> &'static [Zone] {
 // `nearest` picks the closest zone; the waveguide keeps the sustain.
 fn cello_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "cellosolo_C2_p.wav" => 65.50,
             "cellosolo_A2_p.wav" => 109.19,
@@ -863,7 +908,7 @@ fn cello_p() -> &'static [Zone] {
 
 fn cello_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "cellosolo_C2_f.wav" => 65.29,
             "cellosolo_A2_f.wav" => 109.39,
@@ -907,7 +952,7 @@ pub fn piano_bank(vel: u8, rr2: bool) -> &'static [Zone] {
 // adjacent-higher velocity layer, peak-matched, so repeated notes vary.
 fn grand_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "grand_C2_pp.wav" => 65.23,
             "grand_F#2_pp.wav" => 92.00,
@@ -924,7 +969,7 @@ fn grand_pp() -> &'static [Zone] {
 
 fn grand_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "grand_C2_pp_rr2.wav" => 65.34,
             "grand_F#2_pp_rr2.wav" => 92.14,
@@ -941,7 +986,7 @@ fn grand_pp_rr2() -> &'static [Zone] {
 
 fn grand_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "grand_C2_mf.wav" => 65.62,
             "grand_F#2_mf.wav" => 92.38,
@@ -958,7 +1003,7 @@ fn grand_mf() -> &'static [Zone] {
 
 fn grand_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "grand_C2_mf_rr2.wav" => 65.65,
             "grand_F#2_mf_rr2.wav" => 92.49,
@@ -975,7 +1020,7 @@ fn grand_mf_rr2() -> &'static [Zone] {
 
 fn grand_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "grand_C2_f.wav" => 65.72,
             "grand_F#2_f.wav" => 92.85,
@@ -992,7 +1037,7 @@ fn grand_f() -> &'static [Zone] {
 
 fn grand_f_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "grand_C2_f_rr2.wav" => 65.68,
             "grand_F#2_f_rr2.wav" => 92.97,
@@ -1028,7 +1073,7 @@ pub fn grand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
 // CC0 alt bank 1 on a GM 0 channel (altbank::make -> acoustic_grand_with_bank).
 fn steinwayb_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "steinwayb_C2_pp.wav" => 65.88,
             "steinwayb_F#2_pp.wav" => 92.54,
@@ -1045,7 +1090,7 @@ fn steinwayb_pp() -> &'static [Zone] {
 
 fn steinwayb_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "steinwayb_C2_pp_rr2.wav" => 65.79,
             "steinwayb_F#2_pp_rr2.wav" => 92.40,
@@ -1062,7 +1107,7 @@ fn steinwayb_pp_rr2() -> &'static [Zone] {
 
 fn steinwayb_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "steinwayb_C2_mf.wav" => 65.79,
             "steinwayb_F#2_mf.wav" => 92.40,
@@ -1079,7 +1124,7 @@ fn steinwayb_mf() -> &'static [Zone] {
 
 fn steinwayb_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "steinwayb_C2_mf_rr2.wav" => 65.67,
             "steinwayb_F#2_mf_rr2.wav" => 92.39,
@@ -1096,7 +1141,7 @@ fn steinwayb_mf_rr2() -> &'static [Zone] {
 
 fn steinwayb_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "steinwayb_C2_f.wav" => 65.67,
             "steinwayb_F#2_f.wav" => 92.39,
@@ -1113,7 +1158,7 @@ fn steinwayb_f() -> &'static [Zone] {
 
 fn steinwayb_f_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "steinwayb_C2_f_rr2.wav" => 65.79,
             "steinwayb_F#2_f_rr2.wav" => 92.40,
@@ -1147,7 +1192,7 @@ pub fn steinwayb_bank(vel: u8, rr2: bool) -> &'static [Zone] {
 // zones from the pitches with full v1..v4 coverage. Selected via CC0 alt bank 2.
 fn kawai_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "kawai_C2_pp.wav" => 64.82,
             "kawai_A2_pp.wav" => 109.29,
@@ -1163,7 +1208,7 @@ fn kawai_pp() -> &'static [Zone] {
 
 fn kawai_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "kawai_C2_pp_rr2.wav" => 65.12,
             "kawai_A2_pp_rr2.wav" => 109.50,
@@ -1179,7 +1224,7 @@ fn kawai_pp_rr2() -> &'static [Zone] {
 
 fn kawai_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "kawai_C2_mf.wav" => 65.12,
             "kawai_A2_mf.wav" => 109.50,
@@ -1195,7 +1240,7 @@ fn kawai_mf() -> &'static [Zone] {
 
 fn kawai_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "kawai_C2_mf_rr2.wav" => 65.51,
             "kawai_A2_mf_rr2.wav" => 109.95,
@@ -1211,7 +1256,7 @@ fn kawai_mf_rr2() -> &'static [Zone] {
 
 fn kawai_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "kawai_C2_f.wav" => 65.64,
             "kawai_A2_f.wav" => 110.15,
@@ -1227,7 +1272,7 @@ fn kawai_f() -> &'static [Zone] {
 
 fn kawai_f_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "kawai_C2_f_rr2.wav" => 65.51,
             "kawai_A2_f_rr2.wav" => 109.95,
@@ -1260,7 +1305,7 @@ pub fn kawai_bank(vel: u8, rr2: bool) -> &'static [Zone] {
 // in for G. Selected via CC0 alt bank 3. ATTRIBUTION REQUIRED - see the crate NOTICE.
 fn headroom_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "headroom_C2_pp.wav" => 65.50,
             "headroom_F#2_pp.wav" => 92.37,
@@ -1277,7 +1322,7 @@ fn headroom_pp() -> &'static [Zone] {
 
 fn headroom_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "headroom_C2_pp_rr2.wav" => 66.25,
             "headroom_F#2_pp_rr2.wav" => 92.77,
@@ -1294,7 +1339,7 @@ fn headroom_pp_rr2() -> &'static [Zone] {
 
 fn headroom_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "headroom_C2_mf.wav" => 66.43,
             "headroom_F#2_mf.wav" => 93.07,
@@ -1311,7 +1356,7 @@ fn headroom_mf() -> &'static [Zone] {
 
 fn headroom_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "headroom_C2_mf_rr2.wav" => 66.33,
             "headroom_F#2_mf_rr2.wav" => 93.82,
@@ -1328,7 +1373,7 @@ fn headroom_mf_rr2() -> &'static [Zone] {
 
 fn headroom_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "headroom_C2_f.wav" => 66.23,
             "headroom_F#2_f.wav" => 94.08,
@@ -1345,7 +1390,7 @@ fn headroom_f() -> &'static [Zone] {
 
 fn headroom_f_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "headroom_C2_f_rr2.wav" => 66.33,
             "headroom_F#2_f_rr2.wav" => 93.82,
@@ -1379,7 +1424,7 @@ pub fn headroom_bank(vel: u8, rr2: bool) -> &'static [Zone] {
 // Roots MEASURED near each SF3 originalPitch. Selected via CC0 alt bank 4.
 fn musescoregrand_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "musescoregrand_B1.wav" => 62.20,
             "musescoregrand_D2.wav" => 74.09,
@@ -1422,7 +1467,7 @@ pub fn musescoregrand_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
 // instrument?" A/B. Selected via CC0 alt bank 5.
 fn darkgrand_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "darkgrand_C2_pp.wav" => 65.22,
             "darkgrand_F#2_pp.wav" => 91.97,
@@ -1439,7 +1484,7 @@ fn darkgrand_pp() -> &'static [Zone] {
 
 fn darkgrand_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "darkgrand_C2_pp_rr2.wav" => 65.32,
             "darkgrand_F#2_pp_rr2.wav" => 92.13,
@@ -1456,7 +1501,7 @@ fn darkgrand_pp_rr2() -> &'static [Zone] {
 
 fn darkgrand_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "darkgrand_C2_mf.wav" => 65.59,
             "darkgrand_F#2_mf.wav" => 92.33,
@@ -1473,7 +1518,7 @@ fn darkgrand_mf() -> &'static [Zone] {
 
 fn darkgrand_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "darkgrand_C2_mf_rr2.wav" => 65.61,
             "darkgrand_F#2_mf_rr2.wav" => 92.40,
@@ -1490,7 +1535,7 @@ fn darkgrand_mf_rr2() -> &'static [Zone] {
 
 fn darkgrand_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "darkgrand_C2_f.wav" => 65.69,
             "darkgrand_F#2_f.wav" => 92.72,
@@ -1507,7 +1552,7 @@ fn darkgrand_f() -> &'static [Zone] {
 
 fn darkgrand_f_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "darkgrand_C2_f_rr2.wav" => 65.69,
             "darkgrand_F#2_f_rr2.wav" => 92.82,
@@ -1541,7 +1586,7 @@ pub fn darkgrand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
 // MEASURED (the YDP is tuned ~15 cents sharp - the LA layer repitches by root).
 fn ydpgrand_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "ydpgrand_C2.wav" => 66.38,
             "ydpgrand_F#2.wav" => 93.06,
@@ -1568,7 +1613,7 @@ pub fn ydpgrand_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
 // by root keeps the note in tune while the internal unison-beat jangle survives).
 fn honkytonk_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "honkytonk_C2.wav" => 66.64,
             "honkytonk_F2.wav" => 88.64,
@@ -1599,7 +1644,7 @@ pub fn violin_bank(vel: u8) -> &'static [Zone] {
 
 fn viola_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "viola_C3_f.wav" => 130.50,
             "viola_G3_f.wav" => 194.96,
@@ -1614,7 +1659,7 @@ fn viola_f() -> &'static [Zone] {
 
 fn viola_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "viola_C3_p.wav" => 130.59,
             "viola_G3_p.wav" => 196.06,
@@ -1640,7 +1685,7 @@ pub fn viola_bank(vel: u8) -> &'static [Zone] {
 
 fn marimba() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "marimba_F1.wav" => 43.68,
             "marimba_C2.wav" => 65.62,
@@ -1663,7 +1708,7 @@ pub fn marimba_bank() -> &'static [Zone] {
 
 fn xylo() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "xylo_G3.wav" => 195.77,
             "xylo_C4.wav" => 264.37,
@@ -1684,7 +1729,7 @@ pub fn xylo_bank() -> &'static [Zone] {
 
 fn glock() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "glock_C5.wav" => 524.98,
             "glock_G5.wav" => 773.51,
@@ -1701,7 +1746,7 @@ pub fn glock_bank() -> &'static [Zone] {
 
 fn vibes() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "vibes_A2.wav" => 112.07,
             "vibes_C3.wav" => 129.70,
@@ -1726,7 +1771,7 @@ pub fn vibraphone_bank() -> &'static [Zone] {
 
 fn tubular() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "tubular_C4.wav" => 261.63,
             "tubular_D4.wav" => 293.66,
@@ -1750,7 +1795,7 @@ pub fn tubular_bank() -> &'static [Zone] {
 
 fn celesta() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "celesta_F#3.wav" => 184.77,
             "celesta_C4.wav" => 261.14,
@@ -1856,7 +1901,7 @@ pub fn reed_bank(program: u8, vel: u8) -> &'static [Zone] {
 
 fn sax_sop_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "sax_sop_G#3_p.wav" => 209.75,
             "sax_sop_C4_p.wav" => 261.55,
@@ -1873,7 +1918,7 @@ fn sax_sop_p() -> &'static [Zone] {
 
 fn sax_sop_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "sax_sop_G#3_f.wav" => 209.85,
             "sax_sop_C4_f.wav" => 261.43,
@@ -1890,7 +1935,7 @@ fn sax_sop_f() -> &'static [Zone] {
 
 fn sax_alt_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "sax_alt_C#3_p.wav" => 139.90,
             "sax_alt_F3_p.wav" => 173.47,
@@ -1907,7 +1952,7 @@ fn sax_alt_p() -> &'static [Zone] {
 
 fn sax_alt_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "sax_alt_C#3_f.wav" => 140.43,
             "sax_alt_F3_f.wav" => 174.15,
@@ -1924,7 +1969,7 @@ fn sax_alt_f() -> &'static [Zone] {
 
 fn sax_ten_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "sax_ten_G#2_p.wav" => 104.63,
             "sax_ten_C3_p.wav" => 131.41,
@@ -1941,7 +1986,7 @@ fn sax_ten_p() -> &'static [Zone] {
 
 fn sax_ten_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "sax_ten_G#2_f.wav" => 104.54,
             "sax_ten_C3_f.wav" => 131.32,
@@ -1958,7 +2003,7 @@ fn sax_ten_f() -> &'static [Zone] {
 
 fn sax_bar_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "sax_bar_C2_p.wav" => 69.65,
             "sax_bar_E2_p.wav" => 82.52,
@@ -1976,7 +2021,7 @@ fn sax_bar_p() -> &'static [Zone] {
 
 fn sax_bar_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "sax_bar_C2_f.wav" => 65.83,
             "sax_bar_E2_f.wav" => 82.38,
@@ -2076,7 +2121,7 @@ pub fn eastman_plucked_bank() -> &'static [Zone] {
 /// its sounding pitch and measures the real f0 (roots printed by prepare.py).
 fn harpsichord() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "harpsi_C2.wav" => 65.64,
             "harpsi_F2.wav" => 87.44,
@@ -2104,7 +2149,7 @@ pub fn harpsichord_bank() -> &'static [Zone] {
 /// cents flat; we repitch from the real f0, so the flatness never reaches the render).
 fn harp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "harp_G1.wav" => 48.47,
             "harp_D2.wav" => 73.35,
@@ -2133,7 +2178,7 @@ pub fn harp_bank() -> &'static [Zone] {
 /// `LaVoice` repitches ±1 octave, covering ~E3–C6. Roots MEASURED.
 fn ocarina() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "ocarina_E4.wav" => 329.00,
             "ocarina_G#4.wav" => 414.48,
@@ -2154,7 +2199,7 @@ pub fn ocarina_bank() -> &'static [Zone] {
 /// generous ceiling would have read every zone's 2nd harmonic. `LaVoice` repitches ±1 octave.
 fn recorder() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "recorder_F3.wav" => 174.67,
             "recorder_A#3.wav" => 232.62,
@@ -2179,7 +2224,7 @@ pub fn recorder_bank() -> &'static [Zone] {
 /// repitch from the real f0 (the note in the file name is only a label).
 fn timpani() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "timpani_A#1.wav" => 57.05,
             "timpani_F2.wav" => 88.17,
@@ -2202,7 +2247,7 @@ pub fn timpani_bank() -> &'static [Zone] {
 /// sample, which is exactly what an onset layer wants.) `LaVoice` repitches ±1 octave.
 fn sitar() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "sitar_E3.wav" => 165.05,
             "sitar_G3.wav" => 196.17,
@@ -2234,7 +2279,7 @@ pub fn sitar_bank() -> &'static [Zone] {
 /// repitches ±1 octave.
 fn banjo() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "banjo_D#3.wav" => 156.43,
             "banjo_F3.wav" => 176.25,
@@ -2301,7 +2346,7 @@ pub fn banjo_bank() -> &'static [Zone] {
 /// different notes.
 fn mandolin_rr1() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "mandolin_G3_rr1.wav" => 195.57,
             "mandolin_C4_rr1.wav" => 264.95,
@@ -2320,7 +2365,7 @@ fn mandolin_rr1() -> &'static [Zone] {
 /// Mandolin take 2 — an up-stroke (see [`mandolin_rr1`]).
 fn mandolin_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "mandolin_G3_rr2.wav" => 195.74,
             "mandolin_C4_rr2.wav" => 264.82,
@@ -2339,7 +2384,7 @@ fn mandolin_rr2() -> &'static [Zone] {
 /// Mandolin take 3 (see [`mandolin_rr1`]).
 fn mandolin_rr3() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "mandolin_G3_rr3.wav" => 195.84,
             "mandolin_C4_rr3.wav" => 264.59,
@@ -2358,7 +2403,7 @@ fn mandolin_rr3() -> &'static [Zone] {
 /// Mandolin take 4 (see [`mandolin_rr1`]).
 fn mandolin_rr4() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "mandolin_G3_rr4.wav" => 195.61,
             "mandolin_C4_rr4.wav" => 264.64,
@@ -2395,7 +2440,7 @@ pub fn mandolin_bank(rr: usize) -> &'static [Zone] {
 /// rates, resampled to 44.1 kHz at bake). `LaVoice` repitches ±1 octave.
 fn panflute() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "panflute_F#3.wav" => 184.12,
             "panflute_C4.wav" => 261.21,
@@ -2419,7 +2464,7 @@ pub fn panflute_bank() -> &'static [Zone] {
 /// and falls back to the modeled bottle elsewhere — thin, but a real breath onset near range.
 fn bottle() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| bank!("bottle_C6.wav" => 1056.51))
+    init_once!(B, bank!("bottle_C6.wav" => 1056.51))
 }
 
 /// GM 76 blown bottle attack bank (see [`bottle`]).
@@ -2431,7 +2476,7 @@ pub fn bottle_bank() -> &'static [Zone] {
 /// single-zone caveat as the blown bottle: the onset engages within ~1 octave of C5.
 fn shakuhachi() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| bank!("shakuhachi_C5.wav" => 521.06))
+    init_once!(B, bank!("shakuhachi_C5.wav" => 521.06))
 }
 
 /// GM 77 shakuhachi attack bank (see [`shakuhachi`]).
@@ -2459,7 +2504,7 @@ pub fn shakuhachi_bank() -> &'static [Zone] {
 /// −14 dB wrap gate in both takes; see prepare.py `BAGPIPE_SOURCES`).
 fn chanter() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "chanter_F4.wav" => 341.37,
             "chanter_G4.wav" => 383.74,
@@ -2480,7 +2525,7 @@ fn chanter() -> &'static [Zone] {
 /// A4–D5 repitch a touch further here, still inside the 0.5–2.0 clamp.
 fn chanter_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "chanter_A4_rr2.wav" => 431.28,
             "chanter_A#4_rr2.wav" => 454.56,
@@ -2494,13 +2539,13 @@ fn chanter_rr2() -> &'static [Zone] {
 /// GM 109 bass drone (single recorded G2). One zone — `nearest` always returns it.
 fn drone_g2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| bank!("drone_G2.wav" => 98.22))
+    init_once!(B, bank!("drone_G2.wav" => 98.22))
 }
 
 /// GM 109 tenor drone (single recorded G3).
 fn drone_g3() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| bank!("drone_G3.wav" => 196.21))
+    init_once!(B, bank!("drone_G3.wav" => 196.21))
 }
 
 pub fn chanter_bank() -> &'static [Zone] {
@@ -2766,6 +2811,17 @@ pub fn prewarm() {
     }
     for zone in bottle_loop_bank() {
         let _ = zone.sustain_loop(find_bottle_loop);
+    }
+
+    // Caches with no public `*_bank` wrapper, which is exactly why they were missed
+    // (MM-BUG-KILN-00073): `chanter_rr2` is reached only by an odd note seed, and the
+    // rain bed and the gong's dynamic layer pair are not `Zone` banks at all. Each still
+    // decodes megabytes of PCM on whichever thread reaches it first.
+    #[cfg(feature = "embedded-samples")]
+    {
+        let _ = chanter_rr2();
+        let _ = rain_loop();
+        let _ = gong_layers();
     }
 }
 
@@ -3766,7 +3822,7 @@ const BOTTLE_LOOP_GAIN: f32 = 0.65;
 /// measured root 205.0 Hz.
 fn bottle_loop_bank() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "bottleloop_G3.wav" => 205.0,
         )
@@ -4388,7 +4444,7 @@ static GONG_LAYERS: OnceLock<(Vec<f32>, Vec<f32>)> = OnceLock::new();
 
 #[cfg(feature = "embedded-samples")]
 fn gong_layers() -> &'static (Vec<f32>, Vec<f32>) {
-    GONG_LAYERS.get_or_init(|| {
+    init_once!(GONG_LAYERS, {
         (
             parse_wav(embedded_wav("gong_ageng_soft.wav")),
             parse_wav(embedded_wav("gong_ageng_loud.wav")),
@@ -4498,7 +4554,7 @@ const CLAVINET_RELEASE_T60: f32 = 0.06;
 /// so the sustained pitch is dead-on and `nearest` repitches minimally per key.
 fn clavinet() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "clavinet_G1.wav" => 49.00,
             "clavinet_C2.wav" => 65.41,
@@ -4718,6 +4774,218 @@ mod tests {
         let _ = tubular_bank();
         let _ = vibraphone_bank();
         let _ = xylo_bank();
+    }
+
+    /// Every lazy cache in the module, not only the ones behind a `pub *_bank`.
+    ///
+    /// `exercise_every_public_bank` is the bulk of it, but a cache reached by a private
+    /// accessor (`chanter_rr2`, `bottle_loop_bank`), or holding something other than a
+    /// `Zone` bank (`rain_loop`, `gong_layers`), has no public `*_bank` wrapper to be
+    /// swept through — which is exactly how four of them stayed invisible to the
+    /// KILN-00059 oracles (MM-BUG-KILN-00073).
+    /// `every_lazy_cache_is_reached_by_the_exercise_sweep` pins this against the
+    /// `static _: OnceLock<_>` declarations the source carries, so it cannot drift.
+    fn exercise_every_lazy_cache() {
+        exercise_every_public_bank();
+        let _ = chanter_rr2();
+        let _ = bottle_loop_bank();
+        let _ = rain_loop();
+        let _ = gong_layers();
+    }
+
+    /// The source's own `static _: OnceLock<_>` declarations: (line, enclosing item).
+    ///
+    /// The enumeration predicate IS the fix here. `pub fn *_bank` was a hand-maintained
+    /// assumption wearing a source-scan's clothing: it described the naming convention
+    /// most caches happen to follow, not the property that makes one a realtime hazard —
+    /// being lazily initialized. This keys off the `OnceLock` itself.
+    fn declared_lazy_caches(src: &str) -> Vec<(u32, String)> {
+        let mut item = String::from("<module>");
+        let mut out = Vec::new();
+        for (i, l) in src.lines().enumerate() {
+            let t = l.trim_start();
+            if let Some(rest) = t
+                .strip_prefix("pub fn ")
+                .or_else(|| t.strip_prefix("pub(crate) fn "))
+                .or_else(|| t.strip_prefix("fn "))
+            {
+                if let Some(name) = rest.split('(').next() {
+                    item = name.to_string();
+                }
+            }
+            if t.starts_with("static ") && t.contains(": OnceLock<") {
+                // A cache inside an accessor is named by that accessor; a module-level
+                // one (`GONG_LAYERS`) has no enclosing fn, so it is named by itself —
+                // never by whatever function happened to be declared above it.
+                let label = if l.starts_with("static ") {
+                    t.trim_start_matches("static ")
+                        .split(':')
+                        .next()
+                        .unwrap_or("<static>")
+                        .to_string()
+                } else {
+                    item.clone()
+                };
+                out.push((i as u32 + 1, label));
+            }
+        }
+        out
+    }
+
+    /// Read `sampler.rs`, the module these oracles are derived from.
+    fn sampler_source() -> String {
+        std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join("sampler.rs"),
+        )
+        .expect("sampler.rs is readable from its own crate")
+    }
+
+    /// No cache may be initialized outside the counted `init_once!` funnel.
+    ///
+    /// This is what makes the coverage oracles TOTAL rather than merely current: a new
+    /// `static _: OnceLock<_>` filled by a bare `get_or_init` would be invisible to the
+    /// site registry, and both oracles below would keep passing while covering less —
+    /// the precise failure mode of MM-BUG-KILN-00073, where `GONG_LAYERS` was invisible
+    /// to *both* guards because it was not built by `bank!`.
+    ///
+    /// One sanctioned exception: `Zone::sustain_loop`'s memo, which is not a static and
+    /// carries its own counter (`LOOP_SEARCHES`) and its own oracle.
+    #[test]
+    fn no_lazy_cache_bypasses_init_once() {
+        let src = sampler_source();
+        // Only the shipped module: this module's own test code is not a realtime path,
+        // and its string literals would otherwise match themselves.
+        let shipped = src
+            .split_once("#[cfg(all(test, feature = \"embedded-samples\"))]")
+            .expect("the test module marks the end of the shipped module")
+            .0;
+        let lines: Vec<&str> = shipped.lines().collect();
+        let offenders: Vec<(usize, &str)> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| l.contains("get_or_init("))
+            .filter(|(i, l)| {
+                // The funnel's own definition, and `Zone::sustain_loop`'s memo — a
+                // struct field, not a static, with its own counter and oracle.
+                let t = l.trim_start();
+                let near = lines[i.saturating_sub(3)..*i].join(" ");
+                !t.starts_with("$cell.get_or_init(") && !near.contains(".sustain_loop")
+            })
+            .map(|(i, l)| (i + 1, l.trim()))
+            .collect();
+
+        assert!(
+            offenders.is_empty(),
+            "{} cache initialization(s) bypass the counted `init_once!` funnel, so the \
+             prewarm-coverage oracles cannot see them:\n  {}\n\nUse `init_once!(CELL, \
+             <builder>)` instead of a bare `get_or_init`.",
+            offenders.len(),
+            offenders
+                .iter()
+                .map(|(n, l)| format!("sampler.rs:{n}: {l}"))
+                .collect::<Vec<_>>()
+                .join("\n  ")
+        );
+    }
+
+    /// `prewarm()` initializes EVERY lazy cache — measured in a pristine process.
+    ///
+    /// Two properties, both required, both order-dependent and so both measured where
+    /// nothing else has run:
+    ///   (a) the exercise sweep REACHES every declared cache — otherwise (b) is vacuous
+    ///       for whatever it misses, which is how four caches hid behind the KILN-00059
+    ///       oracles;
+    ///   (b) prewarm leaves NOTHING for the sweep to initialize — the realtime contract.
+    ///
+    /// **The re-exec is load-bearing.** `CACHE_INIT_SITES` is process-global and
+    /// `get_or_init` runs its builder exactly once ever, so any cache a *concurrent* test
+    /// happened to touch first is already recorded when this test snapshots: the delta
+    /// would be empty and the assertion would pass while prewarm covered nothing. That is
+    /// a false GREEN, not a flake — it cannot be retried away, and it is precisely the
+    /// "oracle silently covers less" failure MM-BUG-KILN-00073 is about. So the real work
+    /// runs in a child process running this test alone.
+    #[test]
+    fn prewarm_covers_every_lazy_cache() {
+        const PROBE: &str = "FERRO_PREWARM_PROBE";
+        const NAME: &str = "sampler::tests::prewarm_covers_every_lazy_cache";
+
+        if std::env::var_os(PROBE).is_none() {
+            let out = std::process::Command::new(
+                std::env::current_exe().expect("the test binary's own path"),
+            )
+            .args([NAME, "--exact", "--nocapture", "--test-threads=1"])
+            .env(PROBE, "1")
+            .output()
+            .expect("re-exec this test binary");
+            assert!(
+                out.status.success(),
+                "the pristine-process probe failed:\n{}\n{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            return;
+        }
+
+        // --- child: nothing else in this process has touched a cache ---
+        let src = sampler_source();
+        let declared = declared_lazy_caches(&src);
+        assert!(
+            declared.len() > 100,
+            "found only {} lazy caches — the scan is not reading what it thinks it is",
+            declared.len()
+        );
+        // Nearest preceding declaration owns each recorded init site.
+        let owner = |line: u32| {
+            declared
+                .iter()
+                .rfind(|(decl, _)| *decl <= line)
+                .map(|(decl, item)| (*decl, item.clone()))
+                .expect("an init site always follows its own static declaration")
+        };
+        let sites = || CACHE_INIT_SITES.lock().expect("registry").clone();
+
+        prewarm();
+        let after_prewarm = sites();
+        exercise_every_lazy_cache();
+        let after_exercise = sites();
+
+        // (a) the sweep reaches everything the source declares
+        let reached: std::collections::BTreeSet<u32> =
+            after_exercise.iter().map(|&l| owner(l).0).collect();
+        let unreached: Vec<String> = declared
+            .iter()
+            .filter(|(line, _)| !reached.contains(line))
+            .map(|(line, item)| format!("sampler.rs:{line} ({item})"))
+            .collect();
+        assert!(
+            unreached.is_empty(),
+            "{} of {} lazy cache(s) are never initialized by prewarm() + the exercise \
+             sweep, so the coverage check is blind to them:\n  {}\n\nAdd each to \
+             exercise_every_lazy_cache().",
+            unreached.len(),
+            declared.len(),
+            unreached.join("\n  ")
+        );
+
+        // (b) prewarm left nothing for the sweep to initialize
+        let late: Vec<String> = after_exercise
+            .difference(&after_prewarm)
+            .map(|&line| {
+                let (decl, item) = owner(line);
+                format!("sampler.rs:{decl} ({item})")
+            })
+            .collect();
+        assert!(
+            late.is_empty(),
+            "{} lazy cache(s) were still uninitialized after prewarm() and initialized on \
+             first use. In the realtime path that work happens inside fill_ring()'s \
+             deadline-bearing block, which is the dropout prewarm_samples() exists to \
+             prevent:\n  {}\n\nAdd each to sampler::prewarm().",
+            late.len(),
+            late.join("\n  ")
+        );
     }
 
     /// The exercise list above covers every public bank accessor the source declares.

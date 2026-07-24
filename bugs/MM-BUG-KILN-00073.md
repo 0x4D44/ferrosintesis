@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00073 — prewarm oracle enumerates only pub *_bank, missing four realtime lazy caches
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler / realtime
@@ -21,6 +21,11 @@
 - **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00059 on its independent
   two-eyes closure. Found by Codex gpt-5.6-sol; each item independently re-confirmed by
   Claude Opus 4.8 (1M), who wrote the oracle.)
+  → Fixed (2026-07-24, Claude Opus 4.8 (1M). Every `static _: OnceLock<_>` in `sampler.rs`
+  now initializes through one counted `init_once!` funnel; the coverage oracle runs in a
+  pristine child process and is derived from the source's own declarations. Three caches
+  were uncovered, not four — `bottle_loop_bank` was already prewarmed by KILN-00064's fix.
+  Evidence under "Fix landed" below. Awaits independent two-eyes closure.)
 
 ## Observation
 

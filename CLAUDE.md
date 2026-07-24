@@ -181,6 +181,39 @@ Every crate declares **`rust-version = "1.87"`** — that declaration is what tu
 version has compiled it: prove it with `cargo +1.87 check --workspace`, not by grepping for
 the newest std API. **Keep every dependency on ONE line** — a multi-line inline table is
 invalid TOML 1.0, and cargo 1.87 refuses the manifest outright where newer cargo accepts it.
+(That rule is now enforced by `sampler`-adjacent oracle `manifest.rs`; it used to be only a
+comment, and the MSRV was quietly broken for ten days — MM-BUG-KILN-00067.)
+
+### Hand-maintained lists are the recurring defect here — derive them
+
+Three separate lists drifted the same way, and in each case the *reported* bug was the
+newest missing entry rather than the gap: the licensing guide named 5 of 10
+attribution-bearing sample banks (KILN-00060), `sampler::prewarm()` reached 24 of 80 banks
+(KILN-00059), and per-crate provenance tables had fallen behind their own `samples/`
+directories (KILN-00069). Each list grew one entry per feature change, and nobody re-read
+the whole.
+
+**So when a bug reports "X is missing from list L", enumerate all of L before fixing.** The
+reported item is evidence the list is unmaintained, not a spec of the work.
+
+Three oracles now derive these sets instead of trusting a list, and are the pattern to copy:
+
+- `crates/ferrosintesis/src/licensing.rs` — derives the attribution-bearing banks from the
+  `embedded-samples` feature list plus each bank's own `license` field, then requires the
+  README table, the parent `NOTICE`, and each crate's packaged `NOTICE` to cover them. It
+  reads the feature list as *text* rather than via `cfg!(feature = …)`, so it still asserts
+  under `--no-default-features`.
+- `crates/ferrosintesis/src/manifest.rs` — scans every workspace manifest for inline tables
+  that TOML 1.0 forbids. A *text* check on purpose: the fleet's current toolchain parses
+  the broken form happily, so no build can catch it.
+- `crates/ferrosintesis/src/sampler.rs` — `prewarm_leaves_no_bank_uninitialized` counts
+  bank initialisations through the `bank!` macro and proves none happen after `prewarm()`;
+  `every_public_bank_accessor_is_exercised` source-scans so a new accessor cannot land
+  outside that sweep. **Two oracles, because one is not enough** — without the second, a
+  new bank silently shrinks what the first covers while it keeps passing.
+
+The shared trick: assert against something *derived from the source*, never against a
+second hand-written list. A guard that is itself hand-maintained inherits the defect.
 
 ## Composition-engine architecture
 

@@ -2823,6 +2823,7 @@ pub fn prewarm() {
         let _ = chanter_rr2();
         let _ = rain_loop();
         let _ = gong_layers();
+        let _ = fret_noise_takes();
     }
 }
 
@@ -4539,6 +4540,123 @@ impl Voice for GongOneShot {
     }
 }
 
+// ---------------------------------------------------------------------------
+// GM 120 Guitar Fret Noise — the DEFAULT sampled voice (owner-recorded Eastman
+// E1D finger slides, CC0, -fretnoise). A round-robin one-shot: each NoteOn plays
+// one of twelve real fret-slide takes, picked from the note seed so consecutive
+// events do not repeat. `--no-samples` and modeled-only builds fall back to the
+// `voices::SfxNoise` white-noise burst (routed in `voices::make`).
+//
+// GM SFX are pitch-less, so the take plays at native rate (no key repitch), only
+// resampled to the engine rate — this preserves the recorded winding-rasp band
+// that the pitch-independence oracle (and real GM semantics) require.
+// ---------------------------------------------------------------------------
+
+/// GM 120 fret-noise output level — an EAR-tunable knob (this box has no ears),
+/// fitted so the sampled slide sits ~11 dB under a steel-guitar chord, matching
+/// the Roland SC-55mkII / Yamaha S-YXG50 references (MM-BUG-KILN-00040). The
+/// takes are body-RMS-equalised in the bake, so this one scalar sets the whole
+/// bank's level.
+#[cfg(feature = "embedded-samples")]
+const FRETNOISE_LEVEL: f32 = 0.23;
+
+/// The twelve fret-noise takes, each decoded once to mono f32, in the crate's
+/// canonical round-robin order. Not a `Zone` bank (no pitch), so it is a plain
+/// lazy cache like `rain_loop` / `gong_layers` — and, like them, it must be
+/// reached by both `prewarm()` and `exercise_every_lazy_cache()`.
+#[cfg(feature = "embedded-samples")]
+static FRETNOISE_TAKES: OnceLock<Vec<Vec<f32>>> = OnceLock::new();
+
+#[cfg(feature = "embedded-samples")]
+fn fret_noise_takes() -> &'static [Vec<f32>] {
+    init_once!(FRETNOISE_TAKES, {
+        (0..ferrosintesis_samples_fretnoise::ROUND_ROBINS)
+            .map(|rr| parse_wav(embedded_wav(ferrosintesis_samples_fretnoise::take_name(rr))))
+            .collect::<Vec<Vec<f32>>>()
+    })
+    .as_slice()
+}
+
+/// A fret-noise one-shot that OWNS the whole voice (like `GongOneShot`). The
+/// prepared take already fades to silence, so the voice plays to the end of the
+/// slide and then reaps its slot — it ignores note-off, because a fret slide is a
+/// fixed gesture whose length is the recording's, not the key's.
+#[cfg(feature = "embedded-samples")]
+pub struct FretNoiseOneShot {
+    data: &'static [f32],
+    pos: f32,
+    step: f32,
+    gain: f32,
+}
+
+/// The default GM 120 voice. `seed` picks the round-robin take (hashed so the
+/// choice decorrelates from other uses of the same note seed); `vel` scales
+/// level. `None` on a modeled-only build, where `voices::make` falls back to
+/// `SfxNoise`.
+#[cfg(feature = "embedded-samples")]
+pub fn sampled_fret_noise(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+    let takes = fret_noise_takes();
+    if takes.is_empty() {
+        return None;
+    }
+    let rr = (seed.wrapping_mul(2_654_435_761) >> 16) as usize % takes.len();
+    Some(Box::new(FretNoiseOneShot {
+        data: takes[rr].as_slice(),
+        pos: 0.0,
+        // native rate, resampled to the engine rate — GM SFX carry no pitch, so
+        // the written key does NOT repitch the take.
+        step: 44_100.0 / sr,
+        gain: FRETNOISE_LEVEL * vel_amp(vel),
+    }))
+}
+
+/// Modeled-only builds have no fret-noise bank; the caller falls back to the
+/// modeled `SfxNoise` burst.
+#[cfg(not(feature = "embedded-samples"))]
+pub fn sampled_fret_noise(_vel: u8, _sr: f32, _seed: u32) -> Option<Box<dyn Voice>> {
+    None
+}
+
+#[cfg(feature = "embedded-samples")]
+impl Voice for FretNoiseOneShot {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let n = self.data.len();
+        for o in out.iter_mut() {
+            let j = self.pos as usize;
+            // reap at the bounded tail: the prepared take ends at zero.
+            if j + 1 >= n {
+                return false;
+            }
+            let frac = self.pos - j as f32;
+            // 4-point cubic read (edge-clamped): the take is resampled off 44.1 kHz
+            // to the engine rate, so a fractional step is the norm.
+            let v = crate::dsp::cubic4(
+                self.data[j.saturating_sub(1)],
+                self.data[j],
+                self.data[j + 1],
+                self.data[(j + 2).min(n - 1)],
+                frac,
+            );
+            *o += v * self.gain;
+            self.pos += self.step;
+        }
+        true
+    }
+
+    // A fret slide is a fixed gesture; it ignores note-off and plays to its end
+    // (house rule, same as the ring-out gong / struck drum).
+    fn note_off(&mut self) {}
+
+    fn released(&self) -> bool {
+        true
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "fretnoise"
+    }
+}
+
 // --- GM 7 clavinet: the DEFAULT sampled voice (MuseScore MS Basic, MIT) ----------
 //
 // Eleven baked decaying notes (sounding G1-G6, pitch-synchronous loops) picked by
@@ -4798,6 +4916,7 @@ mod tests {
         let _ = bottle_loop_bank();
         let _ = rain_loop();
         let _ = gong_layers();
+        let _ = fret_noise_takes();
     }
 
     /// The source's own `static _: OnceLock<_>` declarations: (line, enclosing item).

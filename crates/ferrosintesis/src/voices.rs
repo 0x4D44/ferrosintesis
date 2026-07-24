@@ -13280,9 +13280,20 @@ fn make_uncorrected(
         117 => Box::new(melodic_tom(key, vel, sr, seed)),
         118 => Box::new(synth_drum(key, vel, sr, seed)),
         119 => Box::new(ReverseCymbal::new(vel, sr, seed)),
-        // GM sound effects: 120 keeps the toneless squeak transient; the other
-        // seven are dedicated voices (see the SFX block above SfxEnv).
-        120 => Box::new(SfxNoise::new(program, vel, sr, seed)),
+        // GM 120 fret noise: DEFAULT is the owner-recorded Eastman E1D fret-slide
+        // round-robin one-shot (LA sample layer, CC0, -fretnoise), which replaced the
+        // toneless white-noise burst it measured ~12 dB under the SC-55/S-YXG50
+        // references (MM-BUG-KILN-00040). `--no-samples` and modeled-only builds keep
+        // the `SfxNoise` burst. The other seven SFX are dedicated voices (see the SFX
+        // block above SfxEnv).
+        120 => {
+            if samples {
+                crate::sampler::sampled_fret_noise(vel, sr, seed)
+                    .unwrap_or_else(|| Box::new(SfxNoise::new(program, vel, sr, seed)))
+            } else {
+                Box::new(SfxNoise::new(program, vel, sr, seed))
+            }
+        }
         121 => Box::new(SfxBreath::new(vel, sr, seed)),
         122 => Box::new(SfxSeashore::new(vel, sr, seed)),
         123 => Box::new(SfxBird::new(vel, sr, seed)),
@@ -16728,6 +16739,146 @@ mod tests {
         assert!(
             late < 0.02 * level,
             "fret squeak is a one-shot even while held: late {late} vs body {level}"
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // GM 120 SAMPLED path (the DEFAULT in an embedded-samples build): the
+    // owner-recorded Eastman E1D fret-slide round-robin one-shot. The modeled
+    // oracle above renders `samples = false`, so it polices only the fallback
+    // burst; these oracles render `samples = true` so the sampled layer is not
+    // vacuously green. Targets are the measured SC-55mkII / S-YXG50 references
+    // (band ~1.7-2.0 kHz, little energy above 4 kHz, ~-11 dB under a steel
+    // guitar chord) — see MM-BUG-KILN-00040 and the fret-noise store README.
+    // ---------------------------------------------------------------------
+
+    /// Render program `program` at `key` with the SAMPLE layer ON, holding the
+    /// key `hold_s` then releasing, into a `total_s` buffer.
+    #[cfg(feature = "embedded-samples")]
+    fn render_sampled_hold(
+        program: u8,
+        key: u8,
+        vel: u8,
+        sr: f32,
+        seed: u32,
+        hold_s: f32,
+        total_s: f32,
+    ) -> Vec<f32> {
+        let mut v = make(program, key, vel, sr, seed, true);
+        let mut buf = vec![0f32; (total_s * sr) as usize];
+        let hold = ((hold_s * sr) as usize).min(buf.len());
+        let (a, b) = buf.split_at_mut(hold);
+        if v.render(a) {
+            v.note_off();
+            v.render(b);
+        }
+        buf
+    }
+
+    /// The fix for MM-BUG-KILN-00040: the sampled fret noise is audibly present,
+    /// where the modeled burst was ~47 dB under the piano / ~23 dB under a steel
+    /// guitar. Scored against the modeled control render, not an absolute bound.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn gm120_sampled_beats_the_modeled_burst_level() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 120;
+        let win = |b: &[f32]| {
+            crate::testutil::rms(&b[(0.015 * sr) as usize..(0.40 * sr) as usize])
+        };
+        let sampled = win(&render_sampled_hold(120, 60, 100, sr, seed, 2.5, 3.0));
+        let modeled = win(&render_sfx_hold(120, 100, sr, seed, 2.5, 3.0));
+        // measured jump is ~+22 dB peak / +18 dB rms; require at least +9 dB so the
+        // fix cannot silently regress toward the old near-silent burst.
+        assert!(
+            sampled > 2.8 * modeled,
+            "sampled GM120 must be clearly louder than the modeled burst it replaces: \
+             sampled rms {sampled}, modeled rms {modeled}"
+        );
+    }
+
+    /// The sampled fret noise is a NARROWBAND RASP centred near 2 kHz, not the
+    /// modeled burst's broadband hiss (which put ~37 % of its energy above 4 kHz
+    /// and centred ~3.8 kHz). This is the timbre half of the fix.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn gm120_sampled_is_a_narrowband_rasp_not_a_hiss() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 120;
+        let buf = render_sampled_hold(120, 60, 100, sr, seed, 0.5, 1.0);
+        let body = &buf[(0.010 * sr) as usize..(0.30 * sr) as usize];
+        // most energy sits in the 1-3 kHz rasp band, not the 4-12 kHz hiss band.
+        let rasp = crate::testutil::spectral_band_rms(body, sr, 1_000.0, 3_000.0);
+        let hiss = crate::testutil::spectral_band_rms(body, sr, 4_000.0, 12_000.0);
+        assert!(
+            rasp > 2.0 * hiss,
+            "sampled GM120 must be a rasp not a hiss: 1-3 kHz {rasp} vs 4-12 kHz {hiss}"
+        );
+        // centroid sits well below the modeled burst's ~3.8 kHz, near the references.
+        let c = crate::testutil::spectral_centroid(body, sr, 200.0, 12_000.0);
+        assert!(
+            c < 2_800.0,
+            "sampled GM120 centroid {c} Hz is too bright — should sit near the \
+             ~1.7-2.0 kHz references, not the modeled burst's ~3.8 kHz"
+        );
+    }
+
+    /// A fret slide is a fixed one-shot gesture: it plays to the end of the take
+    /// and is silent thereafter even while the key is held. The longest take is
+    /// ~1.77 s, so the tail past 2.0 s must be effectively silent.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn gm120_sampled_is_a_one_shot_even_while_held() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 120;
+        let buf = render_sampled_hold(120, 60, 100, sr, seed, 3.0, 3.5);
+        let body = crate::testutil::rms(&buf[(0.015 * sr) as usize..(0.40 * sr) as usize]);
+        let late = crate::testutil::rms(&buf[(2.0 * sr) as usize..(2.5 * sr) as usize]);
+        assert!(
+            late < 0.02 * body,
+            "sampled fret noise must be a one-shot even while held: late {late} vs body {body}"
+        );
+    }
+
+    /// GM SFX carry no pitch: the sampled take plays at native rate regardless of
+    /// the written key, so two keys sharing a seed render bit-identically.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn gm120_sampled_ignores_written_pitch() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 120;
+        let lo = render_sampled_hold(120, 40, 100, sr, seed, 1.0, 1.5);
+        let hi = render_sampled_hold(120, 76, 100, sr, seed, 1.0, 1.5);
+        assert_eq!(
+            lo, hi,
+            "sampled GM120 must ignore the written key — same seed, different key \
+             produced different output, so the take was repitched"
+        );
+    }
+
+    /// The bank is a round-robin: consecutive fret-noise events (distinct note
+    /// seeds) draw varied takes, so a run of them does not machine-gun one sample.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn gm120_sampled_round_robin_varies_by_seed() {
+        let sr = 44100.0;
+        // fingerprint each render by its first 2000 post-onset samples.
+        let fp = |seed: u32| -> Vec<u32> {
+            let b = render_sampled_hold(120, 60, 100, sr, seed, 0.5, 0.8);
+            b[(0.02 * sr) as usize..(0.02 * sr) as usize + 2000]
+                .iter()
+                .map(|s| (s * 1e6) as i32 as u32)
+                .collect()
+        };
+        // 24 distinct seeds; count distinct takes.
+        let mut seen = std::collections::HashSet::new();
+        for i in 0..24u32 {
+            seen.insert(fp(0x5F58_0100 ^ 120 ^ (i.wrapping_mul(0x9E37_79B1))));
+        }
+        assert!(
+            seen.len() >= 8,
+            "round-robin should surface many of the 12 takes across 24 seeds, saw {}",
+            seen.len()
         );
     }
 

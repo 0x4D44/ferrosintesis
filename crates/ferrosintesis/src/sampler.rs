@@ -4520,6 +4520,12 @@ mod tests {
             let _ = contrabass_bank(vel);
             let _ = strings_bank(vel);
         }
+        // The mandolin fans out on ROUND ROBIN rather than velocity (it is a
+        // single-dynamic bank). Sweep past the wrap so the modulo is exercised —
+        // the engine feeds this a strike counter that grows without bound.
+        for rr in 0..(MANDOLIN_ROUND_ROBINS * 2 + 1) {
+            let _ = mandolin_bank(rr);
+        }
         for program in 0u8..=127 {
             for vel in [0u8, 64, 127] {
                 let _ = brass_bank(program, vel);

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00074 — GM 42/43 bowed strings PANIC at C1 when rendering at 96 kHz: BowedString's delay lines are sized in fixed samples, ignoring the sample rate
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth / sample-rate conversion
@@ -19,6 +19,10 @@
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) — found incidentally while building the all-program rate-sweep oracle for MM-BUG-KILN-00061, not by a hunt for it)
+  → Fixed (2026-07-24, Claude Opus 4.8 (1M), same author as the raise — **two-eyes closure
+  is therefore owed to someone else**. Correction on investigation: the reported "exactly
+  two panicking combinations" was an undercount of a **30-combination** defect that also
+  breaks at **48 kHz** — see "Correction on investigation".)
 
 ## Observation
 
@@ -87,6 +91,75 @@ Note `DelayLine::tap`'s own arithmetic is the reason this is a panic in debug an
 corruption in release. Consider whether `tap` should clamp or debug-assert its delay
 against the buffer length, so a future undersized line fails loudly at its source in both
 profiles rather than only in debug.
+
+## Correction on investigation (2026-07-24)
+
+**The "exactly two panicking combinations" figure in the Observation above is an
+undercount, and the severity framing there understates the reach.** It counted *panics*.
+An over-long delay only panics when `self.idx + self.buf.len() - i` happens to underflow;
+for other values of `idx` the expression stays non-negative, the `& self.mask` wraps the
+index, and `tap` quietly returns an unrelated sample. Those cases were invisible to a
+panic scan.
+
+Re-measured with the new `debug_assert` in `DelayLine::tap`, which catches every
+undersized read rather than only the ones that underflow — same grid extended to five
+rates (programs 0..=127 x keys {0, 12, 21, 24, 36}):
+
+| rate | undersized reads |
+|---|---|
+| 44 100 Hz | 0 |
+| 48 000 Hz | **4** |
+| 88 200 Hz | 8 |
+| 96 000 Hz | 8 |
+| 192 000 Hz | 10 |
+| **total** | **30** |
+
+So this was never a 96 kHz corner case: **it breaks at 48 kHz**, silently, in release.
+44.1 kHz is clean, which is why no album render was ever affected — that is the CLI
+default.
+
+## Resolution
+
+`crates/ferrosintesis/src/voices.rs`:
+
+- New `bow_line_len(sr, share)` sizes each waveguide line from the **same arithmetic
+  `set_freq` uses** — `sr / BOW_MIN_HZ * share` — so a rate change cannot outgrow it.
+  `loop_comp` is deliberately not subtracted (it only shortens the delay, so ignoring it
+  keeps the bound safe), and `+ 2` covers `tap`'s two-point interpolated read.
+- `BOW_MIN_HZ` is now a named constant used by **both** `set_freq`'s pitch floor and the
+  sizing, so the two cannot drift. Lowering the floor without regrowing the lines was the
+  latent way to re-create this bug; now it is one edit.
+
+`crates/ferrosintesis/src/dsp.rs`:
+
+- `DelayLine::tap` gains a `debug_assert!` that the requested delay fits, naming both the
+  reach and the line length. This is the guard the Fix section asked for, and it is the
+  general one: it protects **every** `DelayLine` call site, not just the bowed string, and
+  it converts the silent-wrap failure mode into a loud, self-explaining one. Debug-only —
+  `tap` is a per-sample path.
+
+Oracles, both proven red on the pre-fix tree:
+
+- `voices::every_program_renders_at_every_common_rate` — all 128 programs x 5 low keys x
+  {44.1, 48, 88.2, 96, 192} kHz, asserting finite output and no panic. Swept over every
+  program rather than the two reported, because a fixed-size literal is a mistake any
+  voice could carry and only a sweep says which do.
+- `voices::bowed_string_survives_a_downward_bend_at_high_rate` — `set_freq` runs per
+  sample off `base_f * bend * vib * drift`, so the loop grows *after* construction. A
+  sweep that only renders at the written pitch would miss a line sized from
+  `key_freq(key)` rather than from the floor.
+
+The rate set is chosen because **nothing validates it**: `Options::with_sample_rate` and
+`RealtimeOptions::with_sample_rate` accept any value, so every rate a caller can pick is a
+rate we ship.
+
+Also removed the two-entry skip list this bug had forced into
+`sampler::la_engagement_never_depends_on_output_rate` (MM-BUG-KILN-00061); that sweep now
+covers GM 42/43 at C1 like everything else, and passes.
+
+Behaviour at 44.1 kHz is unchanged: the old buffers were large enough there, and
+`DelayLine`'s reads are `& mask` into a circular history, so a larger power-of-two buffer
+returns the identical sample for any delay that fitted in the smaller one.
 
 ## Notes
 

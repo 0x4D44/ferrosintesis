@@ -371,6 +371,20 @@ impl DelayLine {
     pub fn tap(&self, delay: f32) -> f32 {
         let d = delay.max(1.0);
         let i = d.floor() as usize;
+        // The interpolated read reaches `i + 1` samples back, so the line must be longer
+        // than that. An undersized line otherwise wraps the index and returns an
+        // unrelated sample in release, while panicking with a bare "subtract with
+        // overflow" in debug — which gives no hint that the SIZE is what is wrong. That
+        // is exactly how MM-BUG-KILN-00074 presented. Fail here instead, at the source,
+        // naming both numbers. Debug-only: this is a per-sample path.
+        debug_assert!(
+            i + 1 < self.buf.len(),
+            "DelayLine::tap({delay}) reaches {} samples back but the line holds only {} — \
+             the line is sized too short for the delay it is asked for. Size it from `sr` \
+             and the longest delay the caller can request, not from a literal.",
+            i + 2,
+            self.buf.len()
+        );
         let frac = d - i as f32;
         let a = self.buf[(self.idx + self.buf.len() - i) & self.mask];
         let b = self.buf[(self.idx + self.buf.len() - i - 1) & self.mask];

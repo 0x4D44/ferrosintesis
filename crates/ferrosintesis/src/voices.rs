@@ -8360,6 +8360,28 @@ fn bow_friction(delta_v: f32, slope: f32) -> f32 {
     (1.0 / (s2 * s2)).min(1.0) // (|Δv·slope| + 0.75)^-4, clamped to the stick region
 }
 
+/// The lowest pitch [`BowedString::set_freq`] will ever tune to. It floors `f` at this
+/// value, so `sr / BOW_MIN_HZ` is the longest loop either delay line can be asked for —
+/// including under a downward pitch bend, which drives `set_freq` per sample.
+const BOW_MIN_HZ: f32 = 20.0;
+
+/// How long a bowed-waveguide delay line must be at `sr` to hold its `share` of the
+/// longest loop `set_freq` can request.
+///
+/// Sized from the SAME arithmetic `set_freq` uses, because a literal cannot be right at
+/// more than one sample rate: the loop needs ~`sr / f` samples, so doubling the rate
+/// doubles the requirement. The old fixed `DelayLine::new(320)` / `new(1600)` held C1 at
+/// 44.1 kHz (~1349 samples) but not at 96 kHz (~2936), and `DelayLine::tap` then walked
+/// off the front of the buffer — a debug panic, and a silent wrong-sample read in release
+/// (MM-BUG-KILN-00074).
+///
+/// `loop_comp` is deliberately not subtracted: it only ever shortens the delay, so
+/// ignoring it keeps this a safe upper bound. `+ 2` covers `tap`'s two-point
+/// interpolated read, which reaches one sample further back than the delay itself.
+fn bow_line_len(sr: f32, share: f32) -> usize {
+    ((sr / BOW_MIN_HZ) * share).ceil() as usize + 2
+}
+
 impl BowedString {
     fn new(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let f = key_freq(key);
@@ -8433,8 +8455,8 @@ impl BowedString {
         let vib_onset = (vib_floor + 0.24 * u(&mut rng)) * sr;
         let grit_hz = 500.0 + 800.0 * u(&mut rng); // bow-hair fluctuation band (low-mid)
         let mut s = BowedString {
-            bridge: DelayLine::new(320),
-            neck: DelayLine::new(1600),
+            bridge: DelayLine::new(bow_line_len(sr, beta)),
+            neck: DelayLine::new(bow_line_len(sr, 1.0 - beta)),
             bridge_delay: 1.0,
             neck_delay: 1.0,
             beta,
@@ -8494,7 +8516,10 @@ impl BowedString {
         // delay — ≈ 4 samples for both programs); split at the bow into the
         // two sections. Compensating this is what keeps the higher register
         // in tune.
-        let total = (self.sr / f.max(20.0) - self.loop_comp).max(8.0);
+        // The `BOW_MIN_HZ` floor is what bounds the loop length, and `bow_line_len` sizes
+        // the two delay lines from the same constant. Keep them coupled: lowering this
+        // floor without regrowing the lines re-creates MM-BUG-KILN-00074.
+        let total = (self.sr / f.max(BOW_MIN_HZ) - self.loop_comp).max(8.0);
         self.bridge_delay = (total * self.beta).max(1.0);
         self.neck_delay = (total * (1.0 - self.beta)).max(1.0);
     }
@@ -13089,6 +13114,64 @@ mod tests {
         hp_rms, mag_at, peak_locate, render_signature, rms, spectral_band_rms, spectral_centroid,
         traj, traj_peak_time_s, RenderSignature, BW_TREM_PEAK_FLOOR,
     };
+
+    /// MM-BUG-KILN-00074: every program must render at every plausible output rate,
+    /// right down to the bottom of the keyboard, without crashing.
+    ///
+    /// `Options::with_sample_rate` and `RealtimeOptions::with_sample_rate` validate
+    /// nothing, so any rate a caller picks is a rate we ship. GM 42/43 at C1 used to
+    /// panic at 96 kHz: `BowedString`'s waveguide lines were sized with literal sample
+    /// counts, and a delay line's requirement scales with `sr / f` — so the lowest notes
+    /// at the highest rates overflowed it. In release the index wrapped instead and
+    /// returned unrelated samples, which is worse than the crash.
+    ///
+    /// Swept over ALL 128 programs, not just the two that were reported: the fixed-size
+    /// literal was a mistake any voice could carry, and only a sweep says which do.
+    /// Low keys and high rates are the stress corner — the requirement is `sr / f`, so it
+    /// is largest exactly where those meet. Key 0 sits below the 20 Hz floor `set_freq`
+    /// clamps to, which is the deepest any voice can be driven.
+    #[test]
+    fn every_program_renders_at_every_common_rate() {
+        for &sr in &[44_100.0f32, 48_000.0, 88_200.0, 96_000.0, 192_000.0] {
+            for program in 0u8..=127 {
+                for &key in &[0u8, 12, 21, 24, 36] {
+                    let mut v = make(program, key, 100, sr, 5, true);
+                    let mut buf = vec![0f32; (0.02 * sr) as usize];
+                    v.render(&mut buf);
+                    assert!(
+                        buf.iter().all(|x| x.is_finite()),
+                        "GM {program} key {key} at {sr:.0} Hz rendered a non-finite sample"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The bowed waveguide must survive a downward bend at a high rate too
+    /// (MM-BUG-KILN-00074).
+    ///
+    /// `set_freq` runs per SAMPLE off `base_f * bend * vib * drift`, so the loop can grow
+    /// long after construction — the delay lines have to be sized for the floor
+    /// `set_freq` clamps to, not for the note's own pitch. A sweep that only ever renders
+    /// at the written pitch would miss a line sized from `key_freq(key)`.
+    #[test]
+    fn bowed_string_survives_a_downward_bend_at_high_rate() {
+        for &sr in &[96_000.0f32, 192_000.0] {
+            for program in [42u8, 43] {
+                let mut v = make(program, 24, 100, sr, 5, true);
+                let mut buf = vec![0f32; (0.05 * sr) as usize];
+                v.render(&mut buf);
+                // Two octaves down — far past anything a pitch-bend range authorises,
+                // and straight into the `BOW_MIN_HZ` clamp.
+                v.set_pitch(0.25);
+                v.render(&mut buf);
+                assert!(
+                    buf.iter().all(|x| x.is_finite()),
+                    "GM {program} at {sr:.0} Hz went non-finite under a downward bend"
+                );
+            }
+        }
+    }
 
     /// Tripwire T7 of the perceptual-distinctness oracle (round-3 Wave 0):
     /// its windows W4/W5 (0.90 s+) are "model-owned for every LA-wrapped

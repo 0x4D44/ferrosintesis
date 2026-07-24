@@ -5966,17 +5966,9 @@ mod tests {
     #[test]
     fn la_engagement_never_depends_on_output_rate() {
         let keys = [24u8, 28, 33, 40, 52, 64, 76, 88];
-        // GM 42/43 at C1 PANIC at 96 kHz — `BowedString`'s delay lines are sized in fixed
-        // samples and overflow (MM-BUG-KILN-00074, a separate defect in voices.rs found by
-        // this very sweep). Skipped so an unrelated crash cannot redden this oracle.
-        // DELETE THIS LIST when KILN-00074 lands; the sweep should cover them.
-        let panics_kiln_00074 = |program: u8, key: u8| matches!((program, key), (42 | 43, 24));
         let mut broken: Vec<String> = Vec::new();
         for program in 0u8..=127 {
             for &key in &keys {
-                if panics_kiln_00074(program, key) {
-                    continue;
-                }
                 let reference = la_engaged(program, key, 44_100.0);
                 for &sr in &[48_000.0f32, 96_000.0] {
                     if la_engaged(program, key, sr) != reference {

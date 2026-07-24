@@ -144,6 +144,20 @@ impl Producer {
         true
     }
 
+    /// How many more commands the ring can accept right now.
+    ///
+    /// Lets a caller preflight a multi-command snapshot as one unit — push it only when
+    /// the WHOLE thing fits, so it can never be partially applied
+    /// (MM-BUG-KILN-00083). Like the `push_midi` preflight, it is a lower bound from the
+    /// producer's view: the consumer can only make room, never take it.
+    pub fn free(&self) -> usize {
+        let r = &*self.0;
+        let head = r.head.load(Ordering::Relaxed);
+        let tail = r.tail.load(Ordering::Acquire);
+        let used = (head + CAP - tail) % CAP;
+        CAP - 1 - used
+    }
+
     /// Push a whole MIDI message, all-or-nothing, so a CC can never be torn
     /// across a full-ring boundary and leave the parser mid-message.
     pub fn push_midi(&self, bytes: &[u8]) -> bool {

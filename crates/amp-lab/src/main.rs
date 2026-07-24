@@ -6,6 +6,7 @@
 
 mod amp;
 mod audio;
+mod outbox;
 mod ring;
 #[cfg(test)]
 mod rtalloc;
@@ -23,6 +24,7 @@ use std::sync::atomic::Ordering;
 use eframe::egui;
 
 use amp::{Rig, KNOBS, NEUTRAL};
+use outbox::Outbox;
 use ring::{Cmd, Producer};
 
 /// The backing loop, embedded so the tool is self-contained.
@@ -52,7 +54,7 @@ fn main() -> eframe::Result<()> {
 }
 
 struct Lab {
-    tx: Producer,
+    out: Outbox,
     engine: Option<audio::Engine>,
     rig: Rig,
     slot_a: Rig,
@@ -66,8 +68,8 @@ struct Lab {
 impl Lab {
     fn new(tx: Producer, engine: Option<audio::Engine>) -> Self {
         let rig = Rig::default();
-        let me = Lab {
-            tx,
+        let mut me = Lab {
+            out: Outbox::new(tx, GUITAR_CH),
             engine,
             rig,
             slot_a: rig,
@@ -77,21 +79,16 @@ impl Lab {
             solo: false,
             status: String::new(),
         };
-        me.send_rig();
+        me.out.send_rig(&me.rig);
         me
     }
 
-    /// Push the whole rig (bank, program, six knobs) to the audio thread.
-    fn send_rig(&self) {
-        self.tx.push_midi(&self.rig.bytes(GUITAR_CH));
+    fn send_rig(&mut self) {
+        self.out.send_rig(&self.rig);
     }
 
-    fn send_knob(&self, idx: u8) {
-        self.tx.push_midi(&Rig::knob_bytes(
-            GUITAR_CH,
-            idx,
-            self.rig.vals[idx as usize],
-        ));
+    fn send_knob(&mut self, idx: u8) {
+        self.out.send_knob(&self.rig, idx);
     }
 
     fn apply(&mut self, r: Rig, label: Option<char>) {
@@ -113,8 +110,16 @@ impl Lab {
 impl eframe::App for Lab {
     fn update(&mut self, ctx: &egui::Context, _f: &mut eframe::Frame) {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        // Reconcile the audio thread to the displayed state every frame: if a previous
+        // command was dropped by a full ring (a transient audio stall), this resends the
+        // complete latest state and retries a pending panic, so the heard synth converges
+        // to what the UI shows (MM-BUG-KILN-00083).
+        self.out.pump(&self.rig, self.playing, self.solo);
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("amp lab — driven guitar");
+            if self.out.saturated() {
+                ui.colored_label(egui::Color32::YELLOW, "audio busy — re-syncing controls…");
+            }
 
             match &self.engine {
                 Some(e) => {
@@ -228,14 +233,14 @@ impl eframe::App for Lab {
                     .clicked()
                 {
                     self.playing = !self.playing;
-                    self.tx.push(Cmd::Play(self.playing));
+                    self.out.send_cmd(Cmd::Play(self.playing));
                 }
                 if ui.selectable_label(self.solo, "solo guitar").clicked() {
                     self.solo = !self.solo;
-                    self.tx.push(Cmd::Solo(self.solo));
+                    self.out.send_cmd(Cmd::Solo(self.solo));
                 }
                 if ui.button("panic").clicked() {
-                    self.tx.push(Cmd::Panic);
+                    self.out.request_panic();
                 }
                 if ui.button("reset knobs").clicked() {
                     let mut r = self.rig;

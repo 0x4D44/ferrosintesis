@@ -2892,6 +2892,15 @@ pub struct LaVoice {
     pos: f32,
     step: f32,
     base_step: f32,
+    /// The musical repitch ratio `target_hz / zone.root` that produced `base_step`,
+    /// kept free of the `44100 / sr` output-clock conversion.
+    ///
+    /// Eligibility is a property of the PITCH, not of the output rate, so the
+    /// `0.5..=2.05` window must be applied to this and never to `base_step`
+    /// (MM-BUG-KILN-00061). Held on the struct because [`LaVoice::retrigger`] has to
+    /// re-check the window against a different zone root and cannot recover the ratio
+    /// from `base_step` without knowing `sr`.
+    base_ratio: f32,
     gain: f32,
     rel_gain: f32,
     rel_mul: f32,
@@ -3160,10 +3169,17 @@ impl LaVoice {
     ) -> Result<LaVoice, Box<dyn Voice>> {
         let f = key_freq(key);
         let zone = nearest(zones, f);
-        let step = f / zone.root * 44100.0 / sr;
-        if !(0.5..=2.05).contains(&step) {
+        // Guard the musical PITCH RATIO, then convert to the output clock — never the
+        // other way round. Checking the sample-rate-converted step made eligibility a
+        // function of the output rate: at 96 kHz a GM 33 E1 against the 41.22 Hz
+        // finger-bass zone reads step ~0.459 and silently lost its sampled onset, while
+        // a far less credible octave-up repitch read ~0.922 and engaged
+        // (MM-BUG-KILN-00061). Same order as the looped-sustain voices below.
+        let ratio = f / zone.root;
+        if !(0.5..=2.05).contains(&ratio) {
             return Err(sustain);
         }
+        let step = ratio * 44100.0 / sr;
         let (shelf_g, shelf_a) = match fx.shelf {
             Some((db, hz)) => (
                 10f32.powf(db / 20.0) - 1.0,
@@ -3193,6 +3209,7 @@ impl LaVoice {
             pos: 0.0,
             step,
             base_step: step,
+            base_ratio: ratio,
             gain: gain * vel_gain,
             rel_gain: 1.0,
             rel_mul: 1.0,
@@ -3368,17 +3385,21 @@ impl Voice for LaVoice {
             // rather than recomputing from `sr`, which also preserves any active
             // bend held in `step` relative to `base_step`.
             let ratio = self.zone.root / zone.root;
-            let next_step = self.base_step * ratio;
-            if !(0.5..=2.05).contains(&next_step) {
+            let next_ratio = self.base_ratio * ratio;
+            if !(0.5..=2.05).contains(&next_ratio) {
                 // Out of the credible repitch window — fall back to the modeled
-                // stroke rather than playing a badly-pitched sample.
+                // stroke rather than playing a badly-pitched sample. Checked on the
+                // PITCH ratio, not on `base_step`, which carries the 44100/sr output
+                // clock and would make this depend on the render rate
+                // (MM-BUG-KILN-00061).
                 self.rel_mul = self.rel_t60_mul;
                 return true;
             }
             self.rr = Some(RoundRobin { idx, ..rr });
             self.zone = zone;
             self.step *= ratio;
-            self.base_step = next_step;
+            self.base_step *= ratio;
+            self.base_ratio = next_ratio;
             // Re-arm the onset: restart the crossfade clock and the read head,
             // and undo any release decay so the new stroke is at full level.
             self.t = 0;
@@ -5888,6 +5909,109 @@ mod tests {
                 d > 0.3 * o,
                 "{name}: layer barely changes the onset (diff {d:.5} vs off {o:.5})"
             );
+        }
+    }
+
+    /// Does the LA layer engage for this `(program, key)` at this rate?
+    ///
+    /// EXACT, not thresholded. When `LaVoice::build` rejects a note it returns
+    /// `Err(sustain)` and the caller unwraps the very same model it would have built
+    /// with `samples: false` — same program, same key, same seed — so the two renders
+    /// are bit-identical. Any difference at all therefore means the sample engaged.
+    #[cfg(test)]
+    fn la_engaged(program: u8, key: u8, sr: f32) -> bool {
+        let render = |samples: bool| {
+            let mut v = voices::make(program, key, 100, sr, 5, samples);
+            let mut buf = vec![0f32; (0.03 * sr) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        render(true) != render(false)
+    }
+
+    /// MM-BUG-KILN-00061: whether a note gets its sampled onset must be a property of
+    /// the MUSICAL PITCH, never of the output sample rate.
+    ///
+    /// `LaVoice::build` used to check the sample-rate-converted playback step against
+    /// the `0.5..=2.05` repitch window. At 96 kHz that scales every step by 44100/96000
+    /// = 0.459, so notes sitting near their zone root fell straight through the lower
+    /// bound and silently lost the sample — while an octave-up repitch, far less
+    /// credible, landed mid-window and engaged. Merely choosing a legal output rate
+    /// changed the instrument.
+    ///
+    /// Swept over EVERY program and a spread of keys rather than the three bass
+    /// programs the report named, because the guard is shared by every LA-wrapped
+    /// voice — a hand-written program list would have covered only the reported
+    /// symptom (the recurring defect this repo keeps re-learning). 44.1 kHz is the
+    /// reference: it is the rate the zone roots were measured at, where step == ratio
+    /// and the two orderings agree, so it is the only rate the old code got right.
+    #[test]
+    fn la_engagement_never_depends_on_output_rate() {
+        let keys = [24u8, 28, 33, 40, 52, 64, 76, 88];
+        // GM 42/43 at C1 PANIC at 96 kHz — `BowedString`'s delay lines are sized in fixed
+        // samples and overflow (MM-BUG-KILN-00074, a separate defect in voices.rs found by
+        // this very sweep). Skipped so an unrelated crash cannot redden this oracle.
+        // DELETE THIS LIST when KILN-00074 lands; the sweep should cover them.
+        let panics_kiln_00074 = |program: u8, key: u8| matches!((program, key), (42 | 43, 24));
+        let mut broken: Vec<String> = Vec::new();
+        for program in 0u8..=127 {
+            for &key in &keys {
+                if panics_kiln_00074(program, key) {
+                    continue;
+                }
+                let reference = la_engaged(program, key, 44_100.0);
+                for &sr in &[48_000.0f32, 96_000.0] {
+                    if la_engaged(program, key, sr) != reference {
+                        broken.push(format!(
+                            "GM {program} key {key}: engages={reference} at 44100 Hz but \
+                             {} at {sr:.0} Hz",
+                            !reference
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            broken.is_empty(),
+            "{} (program, key, rate) combination(s) change LA sample eligibility with the \
+             output rate. Eligibility must be decided on the pitch ratio \
+             `target_hz / zone.root`, and only then converted to the output clock by \
+             `* 44100 / sr`:\n  {}",
+            broken.len(),
+            broken.join("\n  ")
+        );
+    }
+
+    /// The report's own repro, kept as a named regression: the bass onsets that
+    /// vanished at 96 kHz (MM-BUG-KILN-00061).
+    ///
+    /// GM 33/35 E1 sit essentially ON the 41.22 Hz finger-bass zone root and GM 34 E2 on
+    /// the 82.13 Hz pick-bass root — ratio ~1.0, the most credible repitch there is —
+    /// yet all three read step ~0.46 at 96 kHz and fell back to the bare model. A1 is
+    /// included as an in-window control that survived even the broken guard.
+    ///
+    /// Engagement only — pitch is deliberately NOT scored here. The playback step is
+    /// still `ratio * 44100 / sr`, algebraically untouched by this fix; only the guard
+    /// moved. And a Goertzel peak cannot resolve these notes well enough to score across
+    /// rates: at 41 Hz over a 0.5 s window the bin spacing alone shifted GM 35 E1 by
+    /// 35 cents between 44.1 and 48 kHz on an unmodified tree. Pinning a threshold there
+    /// would measure the estimator, not the synth. Repitch pitch integrity at 44.1 kHz is
+    /// already covered by `la_reed_pitch_integrity` and `la_sax_pitch_integrity`.
+    #[test]
+    fn la_bass_onset_engages_at_every_supported_rate() {
+        for (program, key, name) in [
+            (33u8, 28u8, "GM33 fingered bass E1"),
+            (33, 33, "GM33 fingered bass A1"),
+            (34, 40, "GM34 picked bass E2"),
+            (35, 28, "GM35 fretless bass E1"),
+        ] {
+            for &sr in &[44_100.0f32, 48_000.0, 96_000.0] {
+                assert!(
+                    la_engaged(program, key, sr),
+                    "{name}: the sampled onset does not engage at {sr:.0} Hz — this note's \
+                     repitch ratio is ~1.0, the most credible there is"
+                );
+            }
         }
     }
 

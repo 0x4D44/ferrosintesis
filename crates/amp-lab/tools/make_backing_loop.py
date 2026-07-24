@@ -8,7 +8,7 @@ register Arthur's original "GM029 sounds the same" complaint was about.
 
 Channel map (amp-lab solos ch0+ch1):
     0  rhythm guitar  GM30 main bank   — the chug
-    1  LEAD guitar    GM29 lead bank   — the knobs act on this one
+    1  LEAD guitar    voice owned by the GUI, not by this file — the knobs act on it
     2  bass           GM33
     9  drums
 
@@ -59,8 +59,14 @@ t.prog(0, RHY, 30)                 # distortion, rhythm
 t.cc(0, RHY, 7, 88)
 t.cc(0, RHY, 10, 44)               # slightly left
 
-t.cc(0, LEAD, 0, 1)                # lead bank — amp-lab drives this channel
-t.prog(0, LEAD, 29)                # overdrive, lead
+# LEAD carries NO bank select and NO program change: amp-lab owns this channel's
+# voice. The loop restarts its event list at every wrap, so a tick-zero CC0 +
+# Program Change here silently reverted the user's selected rig every 8 bars while
+# the UI kept showing the old choice (MM-BUG-KILN-00076). `Lab::new` sends the
+# current `Rig` at startup and on every change, so the channel is initialized
+# either way. Volume and pan stay backing-owned: they are mix placement, not voice.
+# Guarded by `seq::tests::backing_asset_leaves_the_ui_channel_voice_alone` and
+# `seq::tests::two_wraps_never_re_send_the_ui_channel_voice`.
 t.cc(0, LEAD, 7, 96)
 t.cc(0, LEAD, 10, 78)              # slightly right
 

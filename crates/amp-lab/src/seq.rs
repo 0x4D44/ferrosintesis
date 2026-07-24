@@ -234,4 +234,94 @@ mod tests {
         }
         assert!(n >= 6, "expected >= 6 events over three loops, got {n}");
     }
+
+    /// Is this message something that changes a channel's VOICE (as opposed to its
+    /// mix placement)? Program Change, or a Bank Select MSB/LSB.
+    fn is_voice_change(msg: &[u8]) -> bool {
+        match msg[0] & 0xF0 {
+            0xC0 => true,
+            0xB0 => msg.len() >= 2 && (msg[1] == 0 || msg[1] == 32),
+            _ => false,
+        }
+    }
+
+    /// MM-BUG-KILN-00076: the committed backing asset must not author the VOICE of the
+    /// channel the GUI owns.
+    ///
+    /// `Player::advance` resets its event index to zero at every wrap, so a tick-zero
+    /// Program Change or Bank Select on the UI channel is not a one-off — it is replayed
+    /// every 8 bars, silently reverting whatever rig the user selected while the UI keeps
+    /// showing their choice. UI rig changes are one-shot messages, so the backing wins.
+    ///
+    /// Derived from the ASSET, not from a list of what the generator happens to write:
+    /// this parses the same `include_bytes!` blob the binary ships and rejects the whole
+    /// class. Regenerating `backing.mid` from an edited `make_backing_loop.py` therefore
+    /// cannot quietly reintroduce it, and neither can a hand-edited asset.
+    ///
+    /// Volume and pan on that channel stay legitimately backing-owned — they place the
+    /// guitar in the mix; they do not choose which guitar it is.
+    #[test]
+    fn backing_asset_leaves_the_ui_channel_voice_alone() {
+        let lp = Loop::parse(crate::BACKING, 44100.0).expect("the shipped backing parses");
+        let offenders: Vec<String> = lp
+            .events
+            .iter()
+            .filter(|e| {
+                let m = &e.bytes[..e.len as usize];
+                m[0] < 0xF0 && (m[0] & 0x0F) == crate::GUITAR_CH && is_voice_change(m)
+            })
+            .map(|e| {
+                format!(
+                    "frame {} bytes {:02X?}",
+                    e.frame,
+                    &e.bytes[..e.len as usize]
+                )
+            })
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "backing.mid authors {} voice-change message(s) on channel {}, which amp-lab's \
+             GUI owns. Every loop wrap replays them and reverts the user's selected rig:\n  \
+             {}\n\nRemove them from crates/amp-lab/tools/make_backing_loop.py and \
+             regenerate the asset — `Lab::new` already initializes the channel from the \
+             current Rig.",
+            offenders.len(),
+            crate::GUITAR_CH,
+            offenders.join("\n  ")
+        );
+    }
+
+    /// The same claim through the PLAYER, across two wraps (MM-BUG-KILN-00076).
+    ///
+    /// The census above reads the asset; this reads what actually reaches the synth, so a
+    /// future `advance()` that re-emitted setup state at a boundary would be caught even
+    /// with a clean asset. Two full wraps, because the defect is invisible on the first
+    /// pass — it needs the index reset.
+    #[test]
+    fn two_wraps_never_re_send_the_ui_channel_voice() {
+        let lp = Loop::parse(crate::BACKING, 44100.0).expect("the shipped backing parses");
+        let mut p = Player::new();
+        let mut offenders = Vec::new();
+        let blocks = (lp.frames * 2).div_ceil(512) + 1;
+        for _ in 0..blocks {
+            p.advance(&lp, 512, |msg| {
+                if msg[0] < 0xF0 && (msg[0] & 0x0F) == crate::GUITAR_CH && is_voice_change(msg) {
+                    offenders.push(format!("{msg:02X?}"));
+                }
+            });
+        }
+        assert!(
+            lp.frames > 0 && blocks > 2,
+            "the backing loop is degenerate, so this proves nothing"
+        );
+        assert!(
+            offenders.is_empty(),
+            "over two loop wraps the player emitted {} voice-change message(s) on the \
+             GUI-owned channel {}: {:?}. The user's selected program/bank would revert at \
+             the wrap.",
+            offenders.len(),
+            crate::GUITAR_CH,
+            offenders
+        );
+    }
 }

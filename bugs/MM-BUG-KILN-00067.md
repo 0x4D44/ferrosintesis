@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00067 — Multi-line inline tables in ferrosintesis Cargo.toml break the declared MSRV 1.87
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / build
@@ -20,6 +20,12 @@
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-24, raised by Claude Opus 4.8 while fixing
   KILN-00060 in the same manifest; reproduced against the 1.87 toolchain)
+  → Fixed (2026-07-24, Claude Opus 4.8 (1M). Both dependencies put back on one line;
+  regression oracle added in `crates/ferrosintesis/src/manifest.rs`. Proven three ways:
+  the oracle fails on the pre-fix manifest naming `Cargo.toml:47` and `:62`;
+  `cargo +1.87 metadata --no-deps` now exits **0** where it exited **101**; and
+  `cargo +1.87 check --workspace --exclude amp-lab` exits **0**, so the MSRV is real by
+  compilation and not merely by parsing. Awaits independent two-eyes closure.)
 
 ## Observation
 
@@ -74,9 +80,33 @@ same line — that fails on the current tree and needs no second toolchain to ru
 Prove the fix with `cargo +1.87 check --workspace` (an MSRV is only real once a
 toolchain at that version has compiled it).
 
+## Fix as landed
+
+- `crates/ferrosintesis/Cargo.toml` — `ferrosintesis-samples-drumkit` and
+  `ferrosintesis-samples-orchestral` are single-line inline tables again, matching the
+  other 19 and the comment at lines 43-44.
+- `crates/ferrosintesis/src/manifest.rs` (new, `#[cfg(test)]`) — scans every workspace
+  manifest and fails on any line that opens an inline table without closing it.
+
+**Why a text oracle and not a build gate.** The fleet builds on a current toolchain,
+which parses the broken form happily, so no ordinary `cargo` invocation can catch this —
+that leniency is exactly why it survived ten days. A text check fails on any machine in
+the normal test run, with no second toolchain installed. Proving the MSRV *properly*
+still means `cargo +1.87 check --workspace`; this oracle just stops the one mistake that
+has actually happened from recurring silently.
+
+The comment-stripping is quote-aware. Splitting naively on `#` would corrupt any line
+holding a `#` in a value — a URL fragment, or a sample name like `F#6.wav` — and could
+invent or hide a brace. A companion test, `the_oracle_detects_the_shape_it_is_meant_to_
+catch`, pins the detector against five shapes: the exact broken form, the corrected
+form, a `#` inside a string, a commented-out brace, and a multi-line **array** (valid
+TOML 1.0, must not be flagged).
+
 ## Notes
 
 - Found while fixing KILN-00060 in the same file; the two defects are independent and
-  are being landed as separate changes.
+  were landed as separate changes.
 - The lenient parse means every `cargo` invocation on a current toolchain succeeds, which
   is why this survived ten days and two code reviews unnoticed.
+- Raised as KILN-00064 and renumbered to 00067: a concurrent Codex review minted its own
+  00064-00066 from the same per-host sequence and landed first.

@@ -1,5 +1,19 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.24 — **8 clean body-knock (tap) samples were captured in the GM120 fret-noise
+  session but PARKED** — `DR0000_0204` (the taps at ~26/56/60/61 s, and more), soundboard/side
+  knocks. They are the raw material for fixing the guitar's thin note-off `stop_thump`
+  (currently modeled). Not folded into the fret-noise change (kept it focused, Arthur's steer).
+  Source archive: `samples/fret-noise-eastman-e1d/DR0000_0204.opus`. A future job: cut the taps,
+  bake, and drive the guitar note-off thump from them.
+
+- [ ] 2026.07.24 — **Workspace MSRV is broken by a transitive dep, pre-existing on origin/main**
+  — `cargo +1.87 check --workspace` fails: `image@0.25.10` requires rustc 1.88 (pulled via the
+  eframe/egui GUI stack, i.e. `amp-lab`). Not from the audio crates — `ferrosintesis` + the
+  sample crates all pass `+1.87`. So the fleet's "prove MSRV with `check --workspace`" gate
+  cannot pass here until `image` is pinned back (`cargo update image --precise <1.88-compatible>`)
+  or amp-lab's MSRV is bumped. Confirmed identical on the `dfbf1f7` baseline.
+
 - [ ] 2026.07.22 — **GM6 Harpsichord fails the M-CAL velocity guard at 9.6 dB** — its
   ferro-vs-SC-55 level difference changes by 9.6 dB between v72 and v110, i.e. a
   velocity-RESPONSE mismatch, not a level offset (a static `PROGRAM_TRIM_DB` entry cannot

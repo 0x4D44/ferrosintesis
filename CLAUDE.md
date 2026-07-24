@@ -134,8 +134,9 @@ Module map (`src/`):
 filled: **brass 56–63** and **reeds 64–71** are now modelled voices (v0.9), joining the
 orchestra hit 55, strings 48–51 and choir 52–54. GM sound effects 121–127 are dedicated
 voices since 2026.07.14 (sustained seashore/helicopter/applause/breath textures that follow
-key hold; telephone/bird/gunshot one-shots); only fret noise 120 remains a toneless
-squeak transient. Album engines keep a program
+key hold; telephone/bird/gunshot one-shots); fret noise 120 plays a sampled finger-slide
+round-robin by default since 2026.07.24 (owner-recorded Eastman E1D, CC0; the toneless
+squeak burst is now the `--no-samples` fallback). Album engines keep a program
 whitelist and verify nothing strays into an unintended range. Read the family/GM-program
 table in `crates/ferrosintesis/README.md` before assuming a program will sound right.
 

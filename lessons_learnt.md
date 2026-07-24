@@ -10,6 +10,14 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.24 — **A fret/slide RASP is quasi-periodic — a harmonicity or pitch gate rejects the sound you want; select fret-noise cuts on peak-band + low-mid instead** (`voices.rs:gm120_sampled_is_a_narrowband_rasp_not_a_hiss`).
+  - Selecting GM 120 one-shots from Arthur's damped-string takes, a "no ringing note under the rasp"
+    harmonicity gate rejected ALL 42 clean candidates: the winding-pass rate gives a real slide autocorrelation
+    0.28–0.44 — that IS the zip we want, not a note. The genuine note contaminants show differently: they peak at
+    50–160 Hz with the 125 Hz band AT the peak, while a rasp peaks at 1–3 kHz with low-mid 20–30 dB below.
+  - Gate on rasp character (peak band 1–3 kHz, ≤20 % energy >4 kHz, low-mid ≤ −15 dB), NOT on periodicity or
+    pitch. And a self-cut bank does NOT need the 30 dB pre-onset isolation `trim_to_onset` demands — cut at the
+    local envelope minimum before onset and fade; the isolation gate is only for blind onset-trimming.
 - 2026.07.23 — **Sample anchors are gated by onset ISOLATION, not pitch: under ~30 dB of pre-onset quiet `trim_to_onset` grabs the PREVIOUS note** (`prepare.py:trim_to_onset`).
   - Adopting Arthur's Eastman E1D, isolation — not tuning, not note availability — was the binding
     constraint: it cut ~80 notes per take to 48/56 usable and forced two substitutions in the picked bank

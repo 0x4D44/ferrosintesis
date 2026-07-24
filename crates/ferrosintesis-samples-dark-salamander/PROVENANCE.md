@@ -1,7 +1,7 @@
 # Provenance — ferrosintesis-samples-dark-salamander
 
 A **warmer voicing of the Salamander grand** for a **GM 0 Acoustic Grand
-alternate** (CC0 bank 5): 54 mono 16-bit 44.1 kHz WAVs, the same 9 pitch zones
+alternate** (bank select CC0=5): 54 mono 16-bit 44.1 kHz WAVs, the same 9 pitch zones
 (C2–C6) × 3 dynamics × 2 round robins as `ferrosintesis-samples-grand`, with a
 high-shelf EQ cut applied to darken the bright top end. The WAVs under `samples/`
 are **source, not build output** — committed and embedded via `include_bytes!`.

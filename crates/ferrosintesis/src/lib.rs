@@ -86,6 +86,9 @@ pub(crate) mod drums;
 pub(crate) mod dsp;
 pub(crate) mod engine;
 #[cfg(test)]
+mod inventory;
+
+#[cfg(test)]
 mod licensing;
 pub(crate) mod loudness;
 #[cfg(test)]

@@ -13,6 +13,7 @@ access this crate through `ferrosintesis`, not directly.
 | Prefix | GM | Instrument |
 |--------|----|-----------|
 | `sitar_*` | 104 | Sitar (pluck + jawari buzz onset) |
+| `celesta_*` | 8 | Celesta (struck-bar onset), 8 zones |
 | `panflute_*` | 75 | Pan flute (breath onset) |
 | `bottle_*` | 76 | Blown bottle (breath onset) |
 | `shakuhachi_*` | 77 | Shakuhachi (breath onset) |

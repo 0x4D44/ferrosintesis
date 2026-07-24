@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00069 — Sample-crate NOTICE/PROVENANCE files under-enumerate contents and drop named creators
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** packaging / licensing
@@ -20,6 +20,10 @@
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-24, raised by Claude Opus 4.8 from the per-crate
   licence audit run while fixing KILN-00060; each item below is file-quoted)
+  → Fixed (2026-07-24, Claude Opus 4.8 (1M). The durable fix landed first: a
+  licence-agnostic `inventory.rs` oracle derived from the packaged WAVs, which found MORE
+  than the nine filed items. All nine addressed, five new PROVENANCE.md files written and
+  packaged. Evidence under "Fix landed" below. Awaits independent two-eyes closure.)
 
 ## Observation
 
@@ -138,6 +142,65 @@ widening that one: it keys off each bank's declared `license` field and delibera
 skips CC0 crates, because its question is "is the attribution guide complete?". The
 question here is different — "has a crate's sample inventory outgrown its provenance
 table?" — and it applies to CC0 crates too. Two oracles, two questions.
+
+## Fix landed (2026-07-24)
+
+**The oracle went first, and it found more than the report.** `crates/ferrosintesis/src/
+inventory.rs` derives its expectations from what is actually PACKAGED
+(`crates/ferrosintesis-samples-*/samples/*.wav`) and asserts two things: every family
+prefix is named somewhere in its own crate's README / PROVENANCE / NOTICE, and every
+sample crate ships a `PROVENANCE.md` that its `include` list actually packages.
+
+Run before any fixing, it named:
+
+- **5** crates with no `PROVENANCE.md` — `-core`, `-musescore`, `-orchestral`,
+  `-orchestral2`, `-strings`. The bug listed two.
+- **15** undocumented families across 4 crates. The bug listed three (`celesta`,
+  `pizzbass`, and orchestral2's set); it did not mention `-orchestral`'s `celens`,
+  `harpsi`, `mutetpt` and `vlnens`.
+
+That is the bug's own thesis — a hand-maintained list drifts, and the reported item is
+evidence of the gap rather than its extent — confirmed on itself.
+
+**Why a separate module and not a wider `licensing.rs`.** The bug says not to widen it and
+is right: licensing asks "is the attribution guide complete?" and deliberately skips CC0
+crates, because CC0 waives credit. This asks "has a crate's inventory outgrown its own
+documentation?", which applies to CC0 crates equally — four of the five crates missing a
+provenance file are CC0. One predicate answering both questions would answer neither.
+
+**The nine filed items.**
+
+1. `-musescore` celesta — added to the README table, the crate description and the new
+   `PROVENANCE.md`.
+2. `-musescore` `PROVENANCE.md` — written, with the `MS Basic.sf3` revision and SHA-256
+   transcribed from `prepare.py`.
+3. `-gong` — `NOTICE` now names the two works used (Freesound 261890 soft, 261893 loud)
+   and carries a single canonical credit string to copy.
+4. `-ydp-grand` README — now names **roberto@zenvoid.org** and says to copy the `NOTICE`,
+   not the summary.
+5. `-ccby` `PROVENANCE.md` — regeneration command corrected (`musicbox` ships in
+   `-orchestral2`, not here), and the missing checksums added: SHA-256 of all 20 committed
+   source WAVs, so `prepare.py`'s "exact pack IDs/SHAs" claim is now true.
+6. "CC0 bank N" — rewritten as "bank select CC0=N" in **six** files. The bug named two
+   crates; the phrasing had also spread to `-headroom`, `-honkytonk` and `-vcsl-kawai`.
+7. `-strings` pizzbass — README row added, `PROVENANCE.md` written, and the regeneration
+   command corrected to `--only=cellosolo,dbass,pizzbass` (it rebuilt 32 of 40 files).
+8. `-orchestral2` — `PROVENANCE.md` written covering all 14 families.
+9. GM 10 music box — the verified eleven-sound table transcribed into
+   `-orchestral2/PROVENANCE.md`, including the near-miss warning about pack 40874, so the
+   external check is never repeated.
+
+Every pin in the five new files is transcribed from `prepare.py`'s own pinned tables
+(`VSCO_REV`, `VCSL_REV`, `MUSESCORE_REV` + SHA-256, the FreePats archive hashes) or from
+this bug's verified music-box table — nothing was inferred.
+
+**Fails before / passes after.** The oracle is red on the pre-fix tree, naming all five
+crates and all fifteen families; green after. It stays honest going forward because it
+reads the filesystem, not a list: a new bank cannot ship without a row.
+
+**Gates.** `cargo test --release -p ferrosintesis` 661 passed / 0 failed / 26 ignored (+4
+doc-tests); clippy `-D warnings` clean; `cargo fmt --check` clean. No audio changed —
+documentation, one new test-only module, and five `include` lists.
 
 ## Notes
 

@@ -14,6 +14,7 @@ soloist, and (for GM 43) as a cello an octave low rather than a double bass.
 |--------|----|-----------|--------|---------|
 | `cellosolo_*` | 42 | Solo cello (arco, down-bow) | Karoryfer × bigcat "Bigcat Cello" ([github](https://github.com/sfzinstruments/karoryfer-bigcat.cello), rev `6fd75fb`) | CC0-1.0 |
 | `dbass_*` | 43 | Solo double bass (arco, non-vibrato) | VSCO 2 CE "Solo Contrabass" SusNV ([github](https://github.com/sgossner/VSCO-2-CE), rev `44030090`) | CC0-1.0 |
+| `pizzbass_*` | 32 | Solo double bass (**pizzicato**), voices the acoustic bass | VSCO 2 CE "Solo Contrabass" pizz ([github](https://github.com/sgossner/VSCO-2-CE), rev `44030090`) | CC0-1.0 |
 
 File names encode the **measured sounding pitch** (e.g. `cellosolo_C2_f.wav` sounds
 C2 ≈ 65 Hz). Both source libraries label their files one octave below sounding

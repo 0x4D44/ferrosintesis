@@ -9,6 +9,8 @@ bank 7) in [ferrosintesis](https://github.com/0x4D44/ferrosintesis).
 `include_bytes!`. Extracted from the SF2's middle velocity layer; dynamics come
 from the LA blend + model (see `PROVENANCE.md`).
 
-**Licence: CC BY 3.0 — attribution required.** `NOTICE` credits Zenph/OLPC/FreePats.
+**Licence: CC BY 3.0 — attribution required.** `NOTICE` credits **roberto@zenvoid.org**
+(who produced the SoundFont for FreePats) and the underlying Zenph Studios / One Laptop
+Per Child recordings. Copy the `NOTICE`, not this summary.
 
 Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=ydpgrand`.

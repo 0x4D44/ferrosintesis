@@ -1841,6 +1841,10 @@ struct Active {
     glide: Option<(f32, f32)>,
     alt: bool, // spawn-time bank: this voice is an alt-bank voicing (per-voice CC1 routing)
     alt_bank_value: u8, // spawn-time raw CC0 value (2 = GM19 cathedral organ routing)
+    // spawn-time CC32 bank LSB: which VARIATION voice this is (25+96 is the mandolin,
+    // 25+0 the steel guitar). Frozen at spawn like `alt`, and part of the routing
+    // identity the tremolo-restrike path matches on (MM-BUG-KILN-00087).
+    bank_lsb: u8,
     // spawn-time routing: this voice goes to the drum path (ch9, or an XG-drum
     // channel that had CC0==127). Frozen at spawn like `alt`, so a mid-note CC0
     // change only affects later notes. Gates both mix passes.
@@ -2144,6 +2148,7 @@ impl EngineCore {
             glide: None,
             alt: false,
             alt_bank_value: 0,
+            bank_lsb: 0,    // the drone is not a bank variation
             is_drum: false, // the bagpipe drone is a melodic voice, never a drum
             poly_authored: false,
             poly_target: 0.0,
@@ -2469,6 +2474,12 @@ impl EngineCore {
                 }
             }
         }
+        // Current drum routing, resolved BEFORE the tremolo path rather than at
+        // spawn: the restrike predicate below is a routing-identity check, and it
+        // cannot compare against a value that has not been computed yet
+        // (MM-BUG-KILN-00087). Reading it here changes nothing else — no code
+        // between here and the spawn mutates `xg_drum` / `gs_drum`.
+        let is_drum = ch == 9 || self.strips[ci].xg_drum || self.strips[ci].gs_drum;
         // TREM1: a fast same-key restrike (IOI ≤ 100 ms — a tremolo stroke)
         // re-picks the still-ringing plucked voice instead of spawning a new
         // one from silence: a fresh spawn is a broadband restart transient,
@@ -2479,15 +2490,27 @@ impl EngineCore {
         // per-note re-articulation — their legato_to (a slur) must never be
         // conscripted for this. The explicit CC68 legato path above still
         // wins where authored.
-        if ch != 9 && trem_restrike {
+        //
+        // The predicate is the voice's COMPLETE spawn-time routing identity, not a
+        // subset of it: program, CC0 alt bank AND its raw value (1 legacy alt vs 2
+        // cathedral organ are different voices), CC32 bank LSB (steel guitar 25 vs
+        // mandolin 25+96), and melodic-vs-drum routing. A partial match let a bank
+        // change inside the 100 ms window re-pick the PREVIOUS bank's voice, so the
+        // newly selected one never spawned (MM-BUG-KILN-00087).
+        if ch != 9 && trem_restrike && !is_drum {
             let prog = self.strips[ci].program;
             let alt = self.strips[ci].alt_bank;
-            if let Some(a) = self
-                .active
-                .iter_mut()
-                .rev()
-                .find(|a| a.ch == ch && a.key == key && a.program == prog && a.alt == alt)
-            {
+            let alt_value = self.strips[ci].alt_bank_value;
+            let bank_lsb = self.strips[ci].bank_lsb;
+            if let Some(a) = self.active.iter_mut().rev().find(|a| {
+                a.ch == ch
+                    && a.key == key
+                    && a.program == prog
+                    && a.alt == alt
+                    && a.alt_bank_value == alt_value
+                    && a.bank_lsb == bank_lsb
+                    && !a.is_drum
+            }) {
                 if a.voice.retrigger(key, vel) {
                     // the stroke re-opens the voice's gate: its NoteOff (and
                     // the pedal state at that time) now governs it afresh
@@ -2535,8 +2558,8 @@ impl EngineCore {
         // ch9 is always drums; a channel declared a drum part by XG (CC0==127) or GS
         // ("Use for Rhythm Part" SysEx) joins the drum path. `strips[ci].kit` is
         // `strips[9].kit` when ch==9, so ch9 is unchanged; a declared drum channel uses
-        // the default V3 kit (its kit is never reassigned).
-        let is_drum = ch == 9 || self.strips[ci].xg_drum || self.strips[ci].gs_drum;
+        // the default V3 kit (its kit is never reassigned). `is_drum` is resolved
+        // above, before the tremolo-restrike predicate that also needs it.
         let voice = if is_drum {
             let rr = self.drum_rr[key as usize];
             self.drum_rr[key as usize] = rr.wrapping_add(1);
@@ -2651,6 +2674,7 @@ impl EngineCore {
                 glide,
                 alt: self.strips[ci].alt_bank,
                 alt_bank_value: self.strips[ci].alt_bank_value,
+                bank_lsb: self.strips[ci].bank_lsb,
                 is_drum,
                 poly_authored: false,
                 poly_target: 0.0,
@@ -4435,6 +4459,124 @@ mod tests {
             "slow same-note picking lost its articulation: f0 p10/p90 = \
              {slow_carrier:.3} (articulated ≈ 0.006) — the tremolo IOI gate \
              has widened into picking territory"
+        );
+    }
+
+    /// MM-BUG-KILN-00087: a bank change inside the tremolo window must spawn the
+    /// NEWLY selected voice, never re-pick the previous bank's still-ringing one.
+    ///
+    /// The restrike path (TREM1) matched only channel, key, program and the CC0-alt
+    /// *boolean*, so a voice whose routing had since changed still satisfied it: a
+    /// steel-guitar voice was re-picked for a mandolin note (and the reverse), one
+    /// nonzero CC0 bank stood in for another, and a melodic voice could be re-picked
+    /// on a channel that had become an XG drum part. The requested voice then never
+    /// spawned at all — the wrong instrument sounds, for as long as the tremolo runs.
+    ///
+    /// Observable: whether a SECOND voice appears. A retrigger re-excites the one
+    /// ringing voice (`active.len() == 1`); a correct spawn leaves the old voice
+    /// ringing and adds the new one (`== 2`), carrying the routing now selected.
+    /// The final clause is the positive control — an UNCHANGED bank must still take
+    /// the retrigger path, or this fix would have silently disabled TREM1.
+    #[test]
+    fn a_routing_change_inside_the_tremolo_window_spawns_the_new_voice() {
+        let sr = 44100.0;
+        let opts = || CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: true,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        };
+        const KEY: u8 = 74;
+        // Well inside TREM_IOI_MAX_S (0.10 s) — the reported 75 ms tremolo stroke.
+        let ioi = (0.075 * sr) as u64;
+
+        // (channel setup, second-stroke setup, description) — each pair is a routing
+        // change, so each must spawn rather than retrigger.
+        let cc = |ch: u8, num: u8, val: u8| EvKind::Cc { ch, num, val };
+        #[allow(clippy::type_complexity)]
+        let cases: Vec<(&str, Vec<EvKind>, Vec<EvKind>)> = vec![
+            (
+                "steel guitar -> mandolin (CC32 0 -> 96)",
+                vec![EvKind::Prog { ch: 0, prog: 25 }, cc(0, 32, 0)],
+                vec![cc(0, 32, 96), EvKind::Prog { ch: 0, prog: 25 }],
+            ),
+            (
+                "mandolin -> steel guitar (CC32 96 -> 0)",
+                vec![EvKind::Prog { ch: 0, prog: 25 }, cc(0, 32, 96)],
+                vec![cc(0, 32, 0), EvKind::Prog { ch: 0, prog: 25 }],
+            ),
+            (
+                "alt bank 1 -> alt bank 2 (both CC0 nonzero, on a plucked program)",
+                vec![EvKind::Prog { ch: 0, prog: 25 }, cc(0, 0, 1)],
+                vec![cc(0, 0, 2)],
+            ),
+            (
+                "melodic -> XG drum part (CC0 -> 127)",
+                vec![EvKind::Prog { ch: 0, prog: 25 }, cc(0, 0, 0)],
+                vec![cc(0, 0, 127)],
+            ),
+        ];
+
+        // Collected, not short-circuited: a partial fix that handles one transition
+        // must not hide behind the first assertion.
+        let mut wrong: Vec<&str> = Vec::new();
+        for (what, setup, change) in cases {
+            let mut core = EngineCore::new(opts());
+            for ev in setup {
+                core.handle_event(ev);
+            }
+            core.note_on(0, KEY, 100);
+            assert_eq!(core.active.len(), 1, "{what}: the first note did not spawn");
+
+            core.now += ioi;
+            for ev in change {
+                core.handle_event(ev);
+            }
+            core.note_on(0, KEY, 100);
+            if core.active.len() != 2 {
+                wrong.push(what);
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "{} routing change(s) re-picked the PREVIOUS bank's voice instead of \
+             spawning the newly selected one — the requested voice never sounds:\n  {}",
+            wrong.len(),
+            wrong.join("\n  ")
+        );
+
+        // Positive control: no routing change, so TREM1 still re-picks the voice.
+        let mut core = EngineCore::new(opts());
+        core.handle_event(EvKind::Prog { ch: 0, prog: 25 });
+        core.handle_event(cc(0, 32, 96));
+        core.note_on(0, KEY, 100);
+        core.now += ioi;
+        core.handle_event(cc(0, 32, 96)); // re-sent, same value
+        core.note_on(0, KEY, 100);
+        assert_eq!(
+            core.active.len(),
+            1,
+            "an UNCHANGED bank stopped taking the tremolo-restrike path — TREM1 is \
+             disabled and a fast repeated figure is back to a click train"
+        );
+
+        // And the spawned voice carries the routing that was selected, not the old one.
+        let mut core = EngineCore::new(opts());
+        core.handle_event(EvKind::Prog { ch: 0, prog: 25 });
+        core.handle_event(cc(0, 32, 0));
+        core.note_on(0, KEY, 100);
+        core.now += ioi;
+        core.handle_event(cc(0, 32, 96));
+        core.note_on(0, KEY, 100);
+        let spawned = core.active.last().expect("the new voice");
+        assert_eq!(
+            spawned.bank_lsb, 96,
+            "the spawned voice froze the OLD bank LSB — its routing identity is wrong \
+             and the next restrike would match on a lie"
         );
     }
 

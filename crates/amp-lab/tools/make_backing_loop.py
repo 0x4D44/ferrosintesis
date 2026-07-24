@@ -127,7 +127,10 @@ last = 0
 for tick, data in t.ev:
     trk += vlq(tick - last) + bytes(data)
     last = tick
-trk += vlq(0) + bytes([0xFF, 0x2F, 0x00])
+# End-of-Track ON the eight-bar line, not on the last note-off. It is the only
+# authored statement of where the loop ends, and the parser reads it as the loop
+# boundary; closing at the last event made the loop 32.983 beats (MM-BUG-KILN-00079).
+trk += vlq(BARS * BAR - last) + bytes([0xFF, 0x2F, 0x00])
 
 hdr = b"MThd" + struct.pack(">IHHH", 6, 0, 1, PPQ)
 mid = hdr + b"MTrk" + struct.pack(">I", len(trk)) + bytes(trk)

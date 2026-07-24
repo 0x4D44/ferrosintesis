@@ -67,6 +67,11 @@ impl Loop {
         // Pass 1: gather (tick, message) across all tracks.
         let mut raw: Vec<(u64, [u8; 3], u8)> = Vec::new();
         let mut tempo_us = 500_000f64; // 120 bpm until a Set-Tempo says otherwise
+                                       // The latest End-of-Track any track declares. This is the AUTHORED loop
+                                       // boundary: the generator places it on the bar line, past the last note-off,
+                                       // so the tail inside the final bar is deliberate and the seam is metric
+                                       // (MM-BUG-KILN-00079).
+        let mut eot_tick: Option<u64> = None;
         let mut pos = 14usize;
         for _ in 0..ntrk {
             if pos + 8 > data.len() || &data[pos..pos + 4] != b"MTrk" {
@@ -97,6 +102,9 @@ impl Loop {
                         let ty = data[i];
                         i += 1;
                         let l = vlq(data, &mut i) as usize;
+                        if ty == 0x2F {
+                            eot_tick = Some(eot_tick.map_or(tick, |e: u64| e.max(tick)));
+                        }
                         if ty == 0x51 && l == 3 && i + 3 <= data.len() {
                             tempo_us = f64::from(
                                 (u32::from(data[i]) << 16)
@@ -137,9 +145,17 @@ impl Loop {
             })
             .collect();
         let last_tick = raw.last().map(|e| e.0).unwrap_or(0);
-        // Round the loop out to a whole bar-ish boundary so the seam lands
-        // musically: one beat of tail past the last event, minimum one beat.
-        let end_tick = last_tick + ppq as u64;
+        // The authored End-of-Track IS the loop boundary when the file declares one
+        // past the last event. Inventing "last event + one beat" made the shipped
+        // eight-bar loop 32.983 beats long — its downbeat period was not a bar
+        // multiple at all, so every wrap drifted (MM-BUG-KILN-00079).
+        //
+        // The fallback survives for a file that ends its track ON the last event (or
+        // omits the meta entirely): a loop must still have somewhere to breathe.
+        let end_tick = match eot_tick {
+            Some(t) if t > last_tick => t,
+            _ => last_tick + ppq as u64,
+        };
         let frames = (end_tick as f64 * spt * sample_rate) as u64;
         Ok(Loop { events, frames })
     }
@@ -230,6 +246,43 @@ mod tests {
         out
     }
 
+    /// MM-BUG-KILN-00079: the shipped loop is EXACTLY eight bars.
+    ///
+    /// The parser used to set the loop length to "last event + one beat", which is not a
+    /// bar boundary and has nothing to do with the authored meter: the committed loop
+    /// came out at 32.983 beats, so every wrap drifted ~0.567 s past the downbeat. The
+    /// README and HLD both call this an eight-bar seamless loop.
+    ///
+    /// Asserted against the METER, not against the generator's constants, so an edit to
+    /// `make_backing_loop.py` that moved the last note-off could not quietly redefine
+    /// what "eight bars" means. 104 bpm, 4/4: one bar is 4 * 60/104 s.
+    #[test]
+    fn the_backing_loop_is_exactly_eight_bars() {
+        const SR: f64 = 44100.0;
+        const BPM: f64 = 104.0;
+        const BARS: f64 = 8.0;
+        let lp = Loop::parse(crate::BACKING, SR).expect("the shipped backing parses");
+
+        let bar_s = 4.0 * 60.0 / BPM;
+        let want = BARS * bar_s * SR;
+        let got = lp.frames as f64;
+        let err_beats = (got - want) / (60.0 / BPM * SR);
+        assert!(
+            err_beats.abs() < 0.01,
+            "the eight-bar loop is {:.4} beats long ({:.3} beats off the bar line) -              {} frames against {want:.0} for {BARS} bars at {BPM} bpm",
+            got / (60.0 / BPM * SR),
+            err_beats,
+            lp.frames
+        );
+
+        // ...and the wrap lands on a downbeat: the first event of the loop is at frame 0,
+        // so the first event after a wrap must be too.
+        let first = lp.events.first().expect("the loop authors events");
+        assert_eq!(
+            first.frame, 0,
+            "the loop does not start on its own downbeat, so wrapping cannot land on one"
+        );
+    }
     #[test]
     fn parses_and_schedules_by_frame() {
         let lp = Loop::parse(&tiny(), 44100.0).expect("parse");

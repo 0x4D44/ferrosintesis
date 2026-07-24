@@ -24,6 +24,7 @@ members = [
     "crates/ferrosintesis-samples-bass",
     "crates/ferrosintesis-samples-bottle",
     "crates/ferrosintesis-samples-mandolin",
+    "crates/ferrosintesis-samples-fretnoise",
     "crates/render-catalog",
     # Dev tool (egui/cpal GUI). A member so a root `cargo build --release` builds
     # it, but excluded from the integration gate (see .deltic-integrate.toml) so

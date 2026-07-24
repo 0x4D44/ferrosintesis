@@ -27,6 +27,7 @@ Keep this archive small: one file per recording, rarely changed.
 | 5-string banjo (open-G gDGBD) | `banjo/banjo-5string-openG-2026-07-23.opus` | 2026-07-23 | Arthur (Tascam DR-series, close-mic) | `crates/ferrosintesis-samples-orchestral2/samples/banjo_*.wav` (GM 105) |
 | Steel-string acoustic, Eastman E1D — **picked** | `acoustic-guitar-eastman-e1d/picked.opus` | 2026-07-23 | Arthur (coincident stereo pair) | `crates/ferrosintesis-samples-orchestral2/samples/eastpick_*.wav` (GM 25 **default**) |
 | Steel-string acoustic, Eastman E1D — **fingerstyle** | `acoustic-guitar-eastman-e1d/plucked.opus` | 2026-07-23 | Arthur (coincident stereo pair) | `crates/ferrosintesis-samples-orchestral2/samples/eastpluck_*.wav` (GM 25 **CC0 1**) |
+| Eastman E1D **fret noise** (damped-string slides) | `fret-noise-eastman-e1d/DR0000_020{3,4}.opus` + `cuts/fret_rr*.wav` | 2026-07-24 | Arthur (same guitar/strings as GM 25) | `crates/ferrosintesis-samples-fretnoise/samples/fretnoise_rr*.wav` (GM 120) |
 
 Per-instrument provenance (signal chain, tuning, zone slice map) lives in each
 instrument's own `README.md` where one is present.

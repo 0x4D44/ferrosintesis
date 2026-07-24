@@ -63,6 +63,7 @@ _cal/
 !crates/ferrosintesis-samples-strings/samples/*.wav
 !crates/ferrosintesis-samples-ccby/samples/*.wav
 !crates/ferrosintesis-samples-rain/samples/*.wav
+!crates/ferrosintesis-samples-fretnoise/samples/*.wav
 # Root-level source instrument recordings (trimmed, opus-compressed): the raw takes the
 # per-note crate sample banks are extracted from. SOURCE, not the render output above —
 # a small, rarely-changing archive (one file per recording), NOT the album .opus renders
@@ -79,6 +80,9 @@ _cal/
 # additionally commits its 16 pre-cut LOSSLESS zone WAVs, so prepare.py can rebake the
 # bank offline with no opus decoder. See samples/README.md.
 !samples/**/zones/*.wav
+# ...and, on the same principle, the fret-noise store's pre-cut LOSSLESS one-shot
+# sources under cuts/, the authoritative input to fretnoise_bake.py.
+!samples/**/cuts/*.wav
 
 # Third-party reference MIDI test corpus (fan transcriptions of copyrighted works,
 # used only to stress-test ferrosintesis against real-world MIDI content). Never

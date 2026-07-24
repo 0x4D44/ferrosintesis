@@ -4548,9 +4548,11 @@ impl Voice for GongOneShot {
 
 /// Clavinet output level — an EAR-tunable knob (this box has no ears), roughly
 /// level-matched to the modeled clavinet it replaces as the default voice.
+#[cfg(feature = "embedded-samples")]
 const CLAVINET_LEVEL: f32 = 0.80;
 /// Note-off damp time (t60): a clavinet string is stopped by the key, so it mutes
 /// fast — the release, not the baked body decay, governs a short note.
+#[cfg(feature = "embedded-samples")]
 const CLAVINET_RELEASE_T60: f32 = 0.06;
 
 /// GM 7 clavinet sampled bank: 11 baked decaying notes, sounding G1-G6. Roots are the

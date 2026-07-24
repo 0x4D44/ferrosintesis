@@ -7,6 +7,18 @@ version = 1
 # as part of a release, not per task. Per-integration identity rides the git SHA.
 version_bump = "release-only"
 
+# `--no-default-features` (the modeled-only synth the README offers to anyone who does
+# not want the embedded samples) gets its OWN clippy step. It is a shipped configuration,
+# and the default-feature clippy above cannot see it: every item reachable only through
+# `embedded-samples` is compiled out, so dead code accumulated there unnoticed until
+# MM-BUG-KILN-00070. One crate, no asset crates to build, so the cost is small.
+#
+# There is deliberately NO matching `test --no-default-features` step yet: 31 tests fail
+# in that configuration because they assume the sampled voices are present, and each
+# needs classifying as should-be-feature-gated vs a real modeled-only defect. Tracked as
+# MM-BUG-KILN-00090 — add the test step here when it goes green, never by weakening the
+# tests to suit it.
+#
 # `amp-lab` is a workspace member (so a root `cargo build --release` builds it) but a
 # dev-only GUI: it drags in egui + cpal (~200 crates) that no shipped crate needs.
 # clippy/test therefore run `--workspace --exclude amp-lab`, so the gate does not
@@ -17,6 +29,7 @@ version_bump = "release-only"
 fallback = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
   { program = "cargo", args = ["clippy", "--workspace", "--exclude", "amp-lab", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["clippy", "-p", "ferrosintesis", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["test", "--workspace", "--exclude", "amp-lab", "--locked"] },
 ]
 
@@ -26,5 +39,6 @@ paths = ["crates/", "tools/"]
 gate = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
   { program = "cargo", args = ["clippy", "--workspace", "--exclude", "amp-lab", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["clippy", "-p", "ferrosintesis", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["test", "--workspace", "--exclude", "amp-lab", "--locked"] },
 ]

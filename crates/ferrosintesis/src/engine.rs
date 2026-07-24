@@ -4494,6 +4494,9 @@ mod tests {
     /// ringing and adds the new one (`== 2`), carrying the routing now selected.
     /// The final clause is the positive control — an UNCHANGED bank must still take
     /// the retrigger path, or this fix would have silently disabled TREM1.
+    // Sampled-bank routing: the mandolin variation is an embedded-samples bank, and a
+    // modeled-only build panics on the first sample request.
+    #[cfg(feature = "embedded-samples")]
     #[test]
     fn a_routing_change_inside_the_tremolo_window_spawns_the_new_voice() {
         let sr = 44100.0;
@@ -4612,6 +4615,9 @@ mod tests {
     ///
     /// Asserted on the SOUNDING take (`Voice::rr_phase`), not on the counter, so
     /// the test measures what a listener would hear.
+    // Sampled-bank routing: `rr_phase` exists only on the LA voice, so the round-robin
+    // this pins is not present in a modeled-only build.
+    #[cfg(feature = "embedded-samples")]
     #[test]
     fn the_mandolin_strike_phase_is_bank_scoped_and_survives_a_retrigger() {
         let sr = 44100.0;
@@ -5910,6 +5916,7 @@ mod tests {
 
     /// Normalized cross-correlation of two equal windows, max |r| over
     /// ±`max_lag` samples — the anti-machine-gun similarity measure.
+    #[cfg(feature = "embedded-samples")]
     fn ncc_max(a: &[f32], b: &[f32], max_lag: usize) -> f32 {
         fn ncc_at(a: &[f32], b: &[f32]) -> f32 {
             let (mut sab, mut saa, mut sbb) = (0f64, 0f64, 0f64);
@@ -5931,6 +5938,7 @@ mod tests {
 
     /// First sample above 5% of the window's peak — a hit's true onset,
     /// undoing the engine's block-quantized voice spawn.
+    #[cfg(feature = "embedded-samples")]
     fn hit_onset(w: &[f32]) -> usize {
         let peak = w.iter().fold(0f32, |m, &x| m.max(x.abs()));
         w.iter().position(|&x| x.abs() > 0.05 * peak).unwrap_or(0)
@@ -5945,6 +5953,7 @@ mod tests {
     /// every warp. Plain NCC cannot make this distinction — ±2.5% rate
     /// jitter alone already decorrelates the window (measured ~0.07-0.19 for
     /// the same take), which would let a seed-modulo repeat sail through.
+    #[cfg(feature = "embedded-samples")]
     fn warp_ncc(a: &[f32], b: &[f32]) -> f32 {
         let (a, b) = (&a[hit_onset(a)..], &b[hit_onset(b)..]);
         let w0 = 1323usize; // window start: 30 ms
@@ -9104,7 +9113,7 @@ mod tests {
 
     // --- GM 109 sampled bagpipe oracles (HLD 2026.07.17 §7) ------------------
 
-    #[cfg(test)]
+    #[cfg(feature = "embedded-samples")]
     fn bp_opts(sr: f32, samples: bool) -> Options {
         Options {
             samples,
@@ -9113,7 +9122,7 @@ mod tests {
     }
 
     /// A held note on ch0 program 109, optional alt-bank (CC0 = `bank`).
-    #[cfg(test)]
+    #[cfg(feature = "embedded-samples")]
     fn bagpipe_song(key: u8, secs: f64, bank: Option<u8>) -> Song {
         let mut ev = vec![(0.0, EvKind::Prog { ch: 0, prog: 109 })];
         if let Some(v) = bank {

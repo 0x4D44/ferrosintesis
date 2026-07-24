@@ -20523,6 +20523,7 @@ mod tests {
 
     /// Normalised cross-correlation of two equal-length windows (mean-removed).
     /// 1.0 = the same waveform, ~0 = unrelated noise.
+    #[cfg(feature = "embedded-samples")]
     fn ncc_windows(a: &[f32], b: &[f32]) -> f32 {
         assert_eq!(a.len(), b.len());
         let ma = a.iter().sum::<f32>() / a.len() as f32;

@@ -25,7 +25,13 @@ When you touch the lab, lint and test it explicitly: `cargo clippy -p amp-lab`,
 - **A/B slots** — store two settings and flip between them. Ears cannot compare
   against a 30-second-old memory; this is the single most useful control here.
 - **Copy settings** — the tool's actual output. Puts the rig on the clipboard as
-  the `engine.py` calls and raw NRPN an album would author.
+  `Score.cc` / `Score.program` calls against the album engines' real API, with
+  `SC`/`CH`/`BEAT` left as placeholders to fill in, plus a raw NRPN summary for
+  hand transcription. All six knobs are written, so pasting it *sets* the rig
+  rather than nudging whatever the channel already carried.
+  `amp::tests::export_snippet_reproduces_the_rig_bytes` reads the snippet back as
+  MIDI and requires it to equal the bytes the live audition sends, so this promise
+  is checked rather than asserted (MM-BUG-KILN-00077).
 
 ## Why it talks MIDI
 

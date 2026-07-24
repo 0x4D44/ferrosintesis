@@ -14,6 +14,7 @@ python tools/ferrosintesis-samples/prepare.py
 """
 
 import hashlib
+import json
 import math
 import os
 import re
@@ -1152,6 +1153,92 @@ def ensure_source(fn, url, src):
     return path
 
 
+def sha256_file(path):
+    """SHA-256 of a file, read in chunks (these archives are hundreds of MB)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def member_manifest_path(src, url):
+    """Where the extracted-member hash manifest for `url`'s archive lives."""
+    return os.path.join(src, os.path.basename(url) + ".members.json")
+
+
+def cached_members_match(src, url, sha256, member_map):
+    """Do the cached members provably come from the archive pinned at `sha256`?
+
+    The manifest binds the extracted members to the archive PIN, so a warm cache
+    can be trusted without re-fetching hundreds of megabytes. Any doubt — no
+    manifest (including every cache written before this existed), a different
+    pin, a member missing, altered or truncated — answers False, and the caller
+    rebuilds. That is the whole fix for MM-BUG-KILN-00062: the old warm path
+    returned on `os.path.exists` alone, so the pinned hash below it was
+    unreachable and a stale or altered member was rebaked into the tracked crate
+    as if it came from the pinned archive.
+    """
+    try:
+        with open(member_manifest_path(src, url), "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if manifest.get("archive_sha256") != sha256:
+        return False
+    recorded = manifest.get("members") or {}
+    if set(recorded) < set(member_map):  # a caller added a member since
+        return False
+    for fn in member_map:
+        path = os.path.join(src, fn)
+        if not os.path.exists(path) or sha256_file(path) != recorded.get(fn):
+            return False
+    return True
+
+
+def rebuild_archive_cache(src, url, sha256, member_map, extract_subdir):
+    """Fetch (if needed), verify against the pin, extract, copy members out.
+
+    A local archive whose digest does not match the pin is removed and re-fetched
+    ONCE — the common cause is a truncated or superseded download, and self-healing
+    beats failing a rebuild that a `rm` would fix. A second mismatch raises: at that
+    point the served bytes disagree with the pin, which is not ours to paper over.
+    """
+    arc = os.path.join(src, os.path.basename(url))
+    for attempt in (1, 2):
+        if not os.path.exists(arc):
+            print(f"fetching {os.path.basename(arc)} ...", file=sys.stderr)
+            fetch(url, arc)
+        digest = sha256_file(arc)
+        if digest == sha256:
+            break
+        if attempt == 2:
+            raise ValueError(f"{arc}: sha256 {digest} != pinned {sha256}")
+        print(f"{os.path.basename(arc)}: sha256 {digest} != pinned — refetching once",
+              file=sys.stderr)
+        os.remove(arc)
+    seven = shutil.which("7z") or r"C:\Program Files\7-Zip\7z.exe"
+    ext = os.path.join(src, extract_subdir)
+    subprocess.run([seven, "x", "-y", f"-o{ext}", arc], check=True,
+                   stdout=subprocess.DEVNULL)
+    for fn, member in member_map.items():
+        shutil.copyfile(os.path.join(ext, *member.split("/")),
+                        os.path.join(src, fn))
+
+
+def write_member_manifest(src, url, sha256, member_map):
+    """Record the pin and each extracted member's hash, so a later run can trust them."""
+    manifest = {
+        "archive_sha256": sha256,
+        "members": {fn: sha256_file(os.path.join(src, fn)) for fn in member_map},
+    }
+    path = member_manifest_path(src, url)
+    tmp = path + ".part"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, sort_keys=True)
+    os.replace(tmp, path)
+
+
 def ensure_archive_sources(src, url, sha256, member_map, extract_subdir):
     """Fetch + sha256-verify + 7z-extract an archive, copying members into `src`.
 
@@ -1160,23 +1247,14 @@ def ensure_archive_sources(src, url, sha256, member_map, extract_subdir):
     archives use an LZMA filter bsdtar cannot decode), members copied out by a
     dest -> member-path map. Kept to exactly these four params; if a third caller
     ever needs a post-process hook, copy-paste rather than grow this.
+
+    The cache is CONTENT-ADDRESSED: a warm cache is used only when a manifest
+    proves its members came from this exact pin (MM-BUG-KILN-00062).
     """
-    if all(os.path.exists(os.path.join(src, fn)) for fn in member_map):
+    if cached_members_match(src, url, sha256, member_map):
         return
-    arc = os.path.join(src, os.path.basename(url))
-    if not os.path.exists(arc):
-        print(f"fetching {os.path.basename(arc)} ...", file=sys.stderr)
-        fetch(url, arc)
-    digest = hashlib.sha256(open(arc, "rb").read()).hexdigest()
-    if digest != sha256:
-        raise ValueError(f"{arc}: sha256 {digest} != pinned {sha256}")
-    seven = shutil.which("7z") or r"C:\Program Files\7-Zip\7z.exe"
-    ext = os.path.join(src, extract_subdir)
-    subprocess.run([seven, "x", "-y", f"-o{ext}", arc], check=True,
-                   stdout=subprocess.DEVNULL)
-    for fn, member in member_map.items():
-        shutil.copyfile(os.path.join(ext, *member.split("/")),
-                        os.path.join(src, fn))
+    rebuild_archive_cache(src, url, sha256, member_map, extract_subdir)
+    write_member_manifest(src, url, sha256, member_map)
 
 
 def ensure_guitar_sources(src):

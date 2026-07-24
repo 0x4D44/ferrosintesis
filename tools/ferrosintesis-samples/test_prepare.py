@@ -1,6 +1,8 @@
+import hashlib
 import math
 import os
 import random
+import shutil
 import struct
 import tempfile
 import unittest
@@ -506,6 +508,154 @@ class BagpipeLoopTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             prepare.extract_loop(x, 44100, 4410, 441.0, target_s=(0.06, 0.14),
                                  max_wrap_db=prepare.BAGPIPE_MAX_WRAP_DB)
+
+
+class ArchiveCacheTest(unittest.TestCase):
+    """MM-BUG-KILN-00062: a warm cache must PROVE it came from the pinned archive.
+
+    The old `ensure_archive_sources` returned as soon as every destination path
+    existed, which made the SHA-256 check below it unreachable: an altered,
+    truncated or superseded cached member was rebaked into the tracked asset crate
+    as if it had come from the pinned archive.
+
+    Each case here drives the real `ensure_archive_sources` with the fetch/extract
+    step stubbed, so it tests the cache DECISION — the part that was wrong — with
+    no network and no 7z. `rebuilt` counts how often the stub ran: 0 means the warm
+    cache was trusted, 1 means it was rejected and rebuilt.
+    """
+
+    PIN = "a" * 64
+    MEMBERS = {"one.wav": "pack/one.wav", "two.wav": "pack/two.wav"}
+
+    def setUp(self):
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.url = "https://example.invalid/pack.7z"
+        self.rebuilt = 0
+        self.real_rebuild = prepare.rebuild_archive_cache
+        prepare.rebuild_archive_cache = self.fake_rebuild
+        self.addCleanup(setattr, prepare, "rebuild_archive_cache", self.real_rebuild)
+
+    def fake_rebuild(self, *_args, **_kwargs):
+        """Stand in for fetch + verify + 7z extract: write the pinned member bytes."""
+        self.rebuilt += 1
+        for fn in self.MEMBERS:
+            with open(os.path.join(self.src, fn), "wb") as f:
+                f.write(b"PINNED-" + fn.encode())
+
+    def warm(self, pin=None):
+        """Populate a cache the way a successful run leaves it."""
+        prepare.ensure_archive_sources(self.src, self.url, pin or self.PIN,
+                                       self.MEMBERS, "ext")
+
+    def member(self, fn):
+        with open(os.path.join(self.src, fn), "rb") as f:
+            return f.read()
+
+    def test_a_valid_warm_cache_is_reused(self):
+        self.warm()
+        self.assertEqual(self.rebuilt, 1, "cold cache must build once")
+        self.warm()
+        self.assertEqual(self.rebuilt, 1, "a verified warm cache must not refetch")
+
+    def test_an_altered_member_is_rejected_and_restored(self):
+        """Wave-valid but altered: the old code could not see this at all."""
+        self.warm()
+        with open(os.path.join(self.src, "one.wav"), "wb") as f:
+            f.write(b"ALTERED-BUT-STILL-A-FILE")
+        self.warm()
+        self.assertEqual(self.rebuilt, 2, "an altered member must force a rebuild")
+        self.assertEqual(self.member("one.wav"), b"PINNED-one.wav")
+
+    def test_a_truncated_member_is_rejected_and_restored(self):
+        self.warm()
+        with open(os.path.join(self.src, "two.wav"), "wb") as f:
+            f.write(b"PIN")
+        self.warm()
+        self.assertEqual(self.rebuilt, 2, "a truncated member must force a rebuild")
+        self.assertEqual(self.member("two.wav"), b"PINNED-two.wav")
+
+    def test_a_changed_pin_with_unchanged_member_names_is_rejected(self):
+        """The nastiest case: nothing about the FILENAMES says the source moved."""
+        self.warm()
+        self.warm(pin="b" * 64)
+        self.assertEqual(self.rebuilt, 2, "a new archive pin must force a rebuild")
+
+    def test_a_missing_member_is_rejected(self):
+        self.warm()
+        os.remove(os.path.join(self.src, "one.wav"))
+        self.warm()
+        self.assertEqual(self.rebuilt, 2, "a missing member must force a rebuild")
+
+    def test_a_legacy_cache_without_a_manifest_is_not_trusted(self):
+        """Every cache on every machine predates the manifest — none may be trusted."""
+        for fn in self.MEMBERS:
+            with open(os.path.join(self.src, fn), "wb") as f:
+                f.write(b"WHO-KNOWS")
+        self.warm()
+        self.assertEqual(self.rebuilt, 1, "an unmanifested cache must be rebuilt")
+        self.assertEqual(self.member("one.wav"), b"PINNED-one.wav")
+
+    def test_a_corrupt_manifest_is_not_trusted(self):
+        self.warm()
+        with open(prepare.member_manifest_path(self.src, self.url), "w",
+                  encoding="utf-8") as f:
+            f.write("{not json")
+        self.warm()
+        self.assertEqual(self.rebuilt, 2, "an unreadable manifest must force a rebuild")
+
+
+class ArchiveRefetchTest(unittest.TestCase):
+    """A local archive that does not match the pin self-heals once, then raises."""
+
+    PIN = hashlib.sha256(b"GOOD").hexdigest()
+    MEMBERS = {"one.wav": "pack/one.wav"}
+
+    def setUp(self):
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.url = "https://example.invalid/pack.7z"
+        self.arc = os.path.join(self.src, "pack.7z")
+        self.fetches = 0
+        self.real_fetch = prepare.fetch
+        self.real_run = prepare.subprocess.run
+        self.addCleanup(setattr, prepare, "fetch", self.real_fetch)
+        self.addCleanup(setattr, prepare.subprocess, "run", self.real_run)
+        prepare.subprocess.run = self.fake_extract
+
+    def fake_extract(self, *_args, **_kwargs):
+        ext = os.path.join(self.src, "ext", "pack")
+        os.makedirs(ext, exist_ok=True)
+        with open(os.path.join(ext, "one.wav"), "wb") as f:
+            f.write(b"MEMBER")
+
+    def fetch_good(self, _url, path):
+        self.fetches += 1
+        with open(path, "wb") as f:
+            f.write(b"GOOD")
+
+    def fetch_bad(self, _url, path):
+        self.fetches += 1
+        with open(path, "wb") as f:
+            f.write(b"BAD")
+
+    def test_a_corrupt_local_archive_is_refetched_once(self):
+        prepare.fetch = self.fetch_good
+        with open(self.arc, "wb") as f:
+            f.write(b"STALE")
+        prepare.ensure_archive_sources(self.src, self.url, self.PIN,
+                                       self.MEMBERS, "ext")
+        self.assertEqual(self.fetches, 1, "the mismatched archive must be refetched once")
+        self.assertTrue(prepare.cached_members_match(self.src, self.url, self.PIN,
+                                                     self.MEMBERS))
+
+    def test_a_served_archive_that_still_mismatches_raises(self):
+        """Self-healing stops at one attempt: disagreeing bytes are not ours to accept."""
+        prepare.fetch = self.fetch_bad
+        with self.assertRaises(ValueError):
+            prepare.ensure_archive_sources(self.src, self.url, self.PIN,
+                                           self.MEMBERS, "ext")
+        self.assertEqual(self.fetches, 2, "one initial fetch plus exactly one refetch")
 
 
 if __name__ == "__main__":

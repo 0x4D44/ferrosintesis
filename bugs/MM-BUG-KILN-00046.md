@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00046 — GM48/49 string-section LA onset is not level-matched to the model it hands over to (−2.5 .. +7.6 dB, zone-dependent): "Slow Strings" peaks in its first 400 ms
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -21,6 +21,26 @@
 - **State history:**
   - Open (2026-07-22, raised by Claude Opus 4.8 (1M) — triage of M-CAL v3 reference-panel finding E)
   - Fixed (2026-07-23, Claude Opus 4.8 (1M) — `strings_seam_gain(program, key, vel)` in `crates/ferrosintesis/src/voices.rs`: a per-velocity-LAYER (strsec_p/strsec_f), per-key taper on the LA wrap gain, each table the inverse of the measured wrapped/model fade-window mismatch (3-SEED GEOMEAN over GM48/49 — the metric swings ~0.3 per seed). Seam excess cut from +1..+6 dB to a [0.75,1.30] parity band across the whole active-wrap range (keys ~28-96, edges + velocity extremes covered); GM49's swell handed back to the model. Program-aware cap: GM48 takes full parity (incl. the modest boosts that fix the −2.5 dB under-level zones); GM49 (a swell patch) caps at 1.0 so the sample never speaks over the still-swelling model. Two new oracles: `la_strings_seam_level_parity` (fail-first: untapered ratio 2.0-2.1× at vel≥80 low keys) and `la_strings_onset_preserves_model_swell` (relative, non-vacuous). Independently reviewed by gpt-5.6-sol (REQUEST-CHANGES → all three points addressed: under-level half, oracle honesty, edge/velocity coverage). render-diff: 104 GM48/49 tracks changed, **0 contamination**, 0 not-reached. ferrosintesis suite green, clippy + fmt clean. Found while fixing: KILN-00053 (the strings MODEL's low-key non-swell — out of this sampler seam's scope). GM48/49 mutual distinctness (KILN-00024, EarPending) unchanged — needs an ear A/B. Fixing commit on this task branch; awaits independent two-eyes closure.)
+  - Closed (2026-07-24 — independent two-eyes verification by **Codex gpt-5.6-sol**,
+    cross-family, on a clean worktree at post-fix trunk. Verdict: CLOSE+SPLIT. Verdict
+    recorded by Claude Opus 4.8 (1M), which did NOT perform the verification and did not
+    author the fix. Evidence the verifier produced:
+    (a) **Fails-before proven properly** — it transplanted ONLY the new tests onto the
+    fix's parent `e23def1` and observed both fail there: `la_strings_seam_level_parity`
+    GM48 key33 vel40 ratio **1.55**, outside the [0.75, 1.30] band; and
+    `la_strings_onset_preserves_model_swell` GM49 key68 vel72 wrapped/model **0.42**,
+    below the 0.70 floor. Both pass on the fixed tree.
+    (b) **Root cause addressed at the right layer** — the single wrap gain is replaced by
+    velocity-layer/key tapers at `crates/ferrosintesis/src/voices.rs:8717`, which is the
+    `strsec_p`/`strsec_f` split and zone-dependent mismatch the bug describes.
+    (c) **Assertions are substantive, not vacuous** — parity covers 40 program/key/velocity
+    combinations; the swell guard requires ≥6 genuinely swelling model cases before it will
+    accept its 0.70 minimum. A calibration sweep measured every key 28-96 at vel 72/110
+    landing in **0.88-1.22** (−1.1 to +1.7 dB).
+    **Split residual:** GM49 still lacks an absolute low-register swell — key48 vel110
+    measured wrapped body/onset 0.81 against model-only 1.01. That is the strings MODEL's
+    envelope, not this sampler seam, and it is **already tracked Open as
+    MM-BUG-KILN-00053**, so no new ID was minted.)
 
 ## Observation
 

@@ -6719,6 +6719,172 @@ mod tests {
         }
     }
 
+    /// Calibration printer for the GM 32-35 bass seam taper (MM-BUG-KILN-00075).
+    ///
+    /// Measures the wrapped/model RMS ratio over the bass fade window [0.05, 0.35] s —
+    /// the window `LaVoice` hands from sample to model, and where the whole deficit
+    /// lives. Same method as the GM48/49 printer below: 3-seed geomean, because the
+    /// model's per-note jitter swings a single-seed ratio enough to mis-fit a taper.
+    ///
+    /// Measured through `bass_la_alt`, which is where the LA bass now lives (Arthur
+    /// moved it off the default bank on 2026-07-24), so this reads the real shipped
+    /// path rather than a reconstruction of it.
+    #[test]
+    #[ignore = "calibration harness — run by hand"]
+    fn print_ebass_wrap_level_ratios() {
+        let sr = 44100.0;
+        for program in [32u8, 33, 34, 35] {
+            for key in [
+                16u8, 20, 24, 28, 31, 34, 38, 40, 43, 46, 50, 52, 55, 58, 62, 64,
+            ] {
+                for vel in [48u8, 72, 100, 120] {
+                    // Decomposed by window, because the deficit is NOT uniform across the
+                    // crossfade: `LaVoice` mutes the model entirely until `fade.0`, so
+                    // [0, 0.05] is sample-owned and carries the whole hit, while
+                    // [0.15, 0.35] is nearly model-owned and barely moves. Measuring only
+                    // the [0.05, 0.35] fade span (the GM48/49 printer's window, where the
+                    // strings mismatch did live) reads this bug as a mild -2..-5 dB and
+                    // would mis-fit the taper by ~10 dB.
+                    let win = |seed: u32, samples: bool, t0: f32, t1: f32| {
+                        let mut v = voices::bass_la_alt(program, key, vel, sr, seed, samples);
+                        let mut buf = vec![0f32; (0.5 * sr) as usize];
+                        v.render(&mut buf);
+                        let (a, b) = ((t0 * sr) as usize, (t1 * sr) as usize);
+                        (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                    };
+                    let seeds = [5u32, 21, 99];
+                    let geo = |t0: f32, t1: f32| {
+                        let r = |s: u32| win(s, true, t0, t1) / win(s, false, t0, t1).max(1e-12);
+                        (seeds.iter().map(|&s| r(s).ln()).sum::<f32>() / seeds.len() as f32).exp()
+                    };
+                    let (w0, w1, w2, all) = (
+                        geo(0.0, 0.05),
+                        geo(0.05, 0.15),
+                        geo(0.15, 0.35),
+                        geo(0.0, 0.35),
+                    );
+                    // Peak ratio too: an RMS match is NOT a peak match when the sampled
+                    // onset and the modeled attack have different crest factors, so a
+                    // taper fitted on RMS alone can push the sample into clipping.
+                    let pk = |samples: bool| {
+                        let mut v = voices::bass_la_alt(program, key, vel, sr, 5, samples);
+                        let mut buf = vec![0f32; (0.5 * sr) as usize];
+                        v.render(&mut buf);
+                        buf[..(0.35 * sr) as usize]
+                            .iter()
+                            .fold(0f32, |m, x| m.max(x.abs()))
+                    };
+                    let (pk_on, pk_off) = (pk(true), pk(false));
+                    let db = |g: f32| 20.0 * g.max(1e-12).log10();
+                    println!(
+                        "ebass gm{program} key {key:3} vel {vel:3}: \
+                         muted[0,50ms] {w0:5.3} ({:+6.1} dB) | \
+                         [50,150] {w1:5.3} ({:+6.1}) | [150,350] {w2:5.3} ({:+6.1}) | \
+                         all[0,350] {all:5.3} ({:+6.1}) | peak {pk_on:.3}/{pk_off:.3} = {:.2}x",
+                        db(w0),
+                        db(w1),
+                        db(w2),
+                        db(all),
+                        pk_on / pk_off.max(1e-12)
+                    );
+                }
+            }
+        }
+    }
+
+    /// MM-BUG-KILN-00075: the GM 32-35 sampled bass onset must land on the level of the
+    /// model it displaces, through the window where it is the ONLY thing sounding.
+    ///
+    /// `LaVoice`'s crossfade is sum-to-one: the model is muted outright until `fade.0`
+    /// (50 ms here), so in `[0, 50 ms]` the wrap gain IS the output level and nothing
+    /// fills a deficit. One flat `LA_EBASS` / `LA_PIZZBASS` gain sat that window at 0.389
+    /// geomean — **-8.2 dB, worst point -19 dB** — and a real bass line never recovers it,
+    /// because 90% of its notes are shorter than the 350 ms handover.
+    ///
+    /// **Measured on the sample-owned window, not the fade span.** Measuring `[0.05,
+    /// 0.35]` (the GM48/49 oracle's window, correct for *that* bug) reads this one as a
+    /// mild -2..-5 dB, because the model term progressively dominates there and a gain
+    /// barely moves it. That mis-reads the defect by ~10 dB and would pass a taper fitted
+    /// 10 dB short. The printer prints all three windows so the trap stays visible.
+    ///
+    /// **Peak is bounded as well as level.** An RMS match is not a peak match when the
+    /// sampled onset and the modeled attack have different crest factors, so a
+    /// level-only bound would license a taper that restores RMS by shipping a spike.
+    ///
+    /// 3-seed geomean, as the strings oracle: the model's per-note jitter swings a
+    /// single-seed ratio enough to false-fail. Fail-first: untapered, the GM33 low keys
+    /// sit at 0.11-0.25 — far outside the 0.60 floor.
+    ///
+    /// The band is honestly wide on the low side because GM32 is a deliberate compromise:
+    /// it is fitted on the whole handover rather than the onset (its pizzicato sample
+    /// outlives the `UPRIGHT` model, so onset parity would buy a +10 dB bloom later), which
+    /// leaves its onset ~3.7 dB under. That residual is a decay-SHAPE mismatch, not a gain
+    /// error, and no scalar can close it.
+    #[test]
+    fn la_ebass_seam_level_parity() {
+        let sr = 44100.0;
+        let seeds = [5u32, 21, 99];
+        for program in [32u8, 33, 34, 35] {
+            for key in [20u8, 24, 28, 34, 40, 46, 50] {
+                for vel in [48u8, 100, 120] {
+                    let render = |seed: u32, samples: bool| {
+                        let mut v = voices::bass_la_alt(program, key, vel, sr, seed, samples);
+                        let mut buf = vec![0f32; (0.5 * sr) as usize];
+                        v.render(&mut buf);
+                        buf
+                    };
+                    let rms_win = |b: &[f32], t0: f32, t1: f32| {
+                        let (a, z) = ((t0 * sr) as usize, (t1 * sr) as usize);
+                        (b[a..z].iter().map(|&x| x * x).sum::<f32>() / (z - a) as f32).sqrt()
+                    };
+                    // Skip keys where the repitch leaves LaVoice's window: there the wrap
+                    // legitimately falls back to the bare model and the ratio is exactly 1.
+                    let engaged = render(5, true) != render(5, false);
+                    if !engaged {
+                        continue;
+                    }
+                    let ratio = |t0: f32, t1: f32| {
+                        let r = |s: u32| {
+                            rms_win(&render(s, true), t0, t1)
+                                / rms_win(&render(s, false), t0, t1).max(1e-12)
+                        };
+                        (seeds.iter().map(|&s| r(s).ln()).sum::<f32>() / seeds.len() as f32).exp()
+                    };
+                    let onset = ratio(0.0, 0.05);
+                    let handover = ratio(0.0, 0.35);
+                    let peak = |samples: bool| {
+                        render(5, samples)[..(0.35 * sr) as usize]
+                            .iter()
+                            .fold(0f32, |m, x| m.max(x.abs()))
+                    };
+                    let pk = peak(true) / peak(false).max(1e-12);
+
+                    assert!(
+                        (0.40..=1.35).contains(&onset),
+                        "GM{program} key {key} vel {vel}: sampled onset sits at {onset:.3}x \
+                         the model over [0, 50 ms] ({:+.1} dB). The model is MUTED there, so \
+                         this gain is the whole output level — re-fit ebass_seam_gain with \
+                         sampler::tests::print_ebass_wrap_level_ratios.",
+                        20.0 * onset.max(1e-12).log10()
+                    );
+                    assert!(
+                        (0.60..=1.45).contains(&handover),
+                        "GM{program} key {key} vel {vel}: the whole [0, 350 ms] handover \
+                         sits at {handover:.3}x the model ({:+.1} dB) — the sampled layer \
+                         is not level-matched across the crossfade.",
+                        20.0 * handover.max(1e-12).log10()
+                    );
+                    assert!(
+                        pk <= 1.60,
+                        "GM{program} key {key} vel {vel}: the wrapped peak is {pk:.2}x the \
+                         model's. An RMS match is not a peak match — a taper must not buy \
+                         level parity by shipping a transient spike."
+                    );
+                }
+            }
+        }
+    }
+
     /// Calibration printer for the GM48/49 string-section seam taper
     /// (MM-BUG-KILN-00046). Measures the wrapped/model RMS ratio over the
     /// strings fade window [0.10, 0.40] s — where the whole excess lives

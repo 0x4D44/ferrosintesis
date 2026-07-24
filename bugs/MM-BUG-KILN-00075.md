@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00075 — the LA bass onset (GM 32–35) sits ~15–18 dB under the model its sum-to-one crossfade mutes, costing a real bass line 13–18 dB
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth
@@ -19,6 +19,10 @@
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) from Arthur's A/B of a Tubular Bells render against one made 2026-07-19 07:07; measured, code-confirmed)
+  → Fixed (2026-07-24, Claude Opus 4.8 (1M). Items 1 and 2 of the suggested fix landed: the
+  `ebass_seam_gain` taper + a level-and-peak parity oracle. **Items 3 and 4 are NOT done and
+  are split to MM-BUG-KILN-00085** — the crossfade shape needs Arthur's ear and new sample
+  reach. Awaits independent two-eyes closure.)
 
 ## Observation
 
@@ -118,6 +122,95 @@ level-matched and guarded.
 4. Extend the sample banks upward, or tighten the repitch guard for the basses — +12
    semitones on a bass onset is not a credible repitch, and the guard's `44100.0/sr` factor
    makes eligibility rate-dependent (see MM-BUG-KILN-00061).
+
+## Resolution (2026-07-24) — items 1 and 2 only
+
+### The measurement window was the whole problem
+
+The obvious window to measure — the `[0.05, 0.35]` fade span, which is what the GM48/49
+oracle uses and correct for *that* bug — reads this defect as a mild **−2 to −5 dB**. I
+fitted a taper against it first and it was wrong by ~10 dB.
+
+`LaVoice`'s crossfade is sum-to-one, so the model is **muted outright** until `fade.0`.
+That makes `[0, 50 ms]` the only window where the wrap gain *is* the output level; across
+the fade span the model term progressively dominates and a gain barely moves it. Measuring
+the span therefore averages the defect away with the region the gain cannot affect.
+
+Decomposed, pre-fix, over the engaged grid (187 points, keys 16–64, vel 48–120):
+
+| window | geomean | range |
+|---|---|---|
+| `[0, 50 ms]` sample-owned | **0.389 (−8.2 dB)** | 0.112 … 0.966 |
+| `[50, 150]` | 0.480 (−6.4 dB) | 0.169 … 1.292 |
+| `[150, 350]` | 0.746 (−2.5 dB) | 0.623 … 1.354 |
+| `[0, 350]` whole handover | 0.582 (−4.7 dB) | 0.432 … 0.947 |
+
+The worst single point is GM33 key 34 at **−19 dB**, which matches the report's 15–18 dB.
+
+### What landed
+
+`ebass_seam_gain(program, key)` — per-program, per-key, linear between measured anchors.
+Each value is the inverse of a 3-seed geomean.
+
+- **Per program, not one table.** GM33 and GM35 share the finger bank yet need different
+  tapers, because the `BASS` and `FRETLESS` models they sit against differ in level. The
+  mismatch is a property of the sample/model *pair*.
+- **No velocity split**, unlike GM48/49: the measured spread across vel 48–120 is only
+  1.06–1.46× (~1 dB), because the bass banks have no velocity layers to split on.
+- **GM32 is fitted on the whole handover, not the onset** — the one deliberate compromise.
+  Fitted like its siblings it reaches onset parity but then runs **+6 to +10 dB OVER** the
+  model through `[50, 350]`, because the real pizzicato contrabass recording rings on while
+  `Pluck(&UPRIGHT)`'s short `t60` has already decayed. That is a decay-**shape** mismatch —
+  the mechanism MM-BUG-KILN-00045 describes for UPRIGHT — and one scalar cannot fix both
+  ends. Buying onset parity would have shipped the KILN-00046 defect with the sign flipped.
+
+Result:
+
+| window | before | after |
+|---|---|---|
+| `[0, 50 ms]` | 0.389 (−8.2 dB) | **0.866 (−1.2 dB)** |
+| `[50, 150]` | 0.480 (−6.4 dB) | **1.025 (+0.2 dB)** |
+| `[150, 350]` | 0.746 (−2.5 dB) | **0.900 (−0.9 dB)** |
+| `[0, 350]` | 0.582 (−4.7 dB) | **0.939 (−0.6 dB)** |
+
+No window's geomean is further than 1.2 dB from parity; the worst overshoot fell from 3.23×
+to 1.58×. Per program, onset ratio: GM33 1.002, GM34 0.998, GM35 0.997, GM32 0.654 (the
+deliberate compromise above).
+
+`la_ebass_seam_level_parity` pins it — **level and peak**. An RMS match is not a peak match
+when sample and model have different crest factors, so a level-only bound would license a
+taper that restores RMS by shipping a transient spike. Measured peak ratio is 0.80 geomean,
+1.40 max, and the largest absolute peak (2.55 at GM33 key 34 vel 120) sits against a model
+that already peaks at 2.16 there — the same regime, not a new one. Fail-first: untapered,
+GM32 key 20 reports 0.296× (−10.6 dB), well outside the 0.40 floor.
+
+`print_ebass_wrap_level_ratios` is the calibration harness, printing all three windows plus
+the peak ratio *specifically* so the window trap above stays visible to the next fitter.
+
+### What did NOT land, and why
+
+- **"Add bass rows to `la_level_continuity`" is not possible as written.** That helper
+  routes through `voices::make`, which since Arthur's 2026-07-24 reversal returns the BARE
+  model for GM 32–35 — the LA bass lives on the alt bank via `bass_la_alt`. Bass rows there
+  would exercise no wrap and pass vacuously, which is the silently-shrinking-oracle failure
+  KILN-00059/00060/00069 all shared. Reaching it needs `assert_wrap_seam` generalised to
+  take a constructor, a refactor of a helper three tests share. The dedicated parity oracle
+  covers the level property the bug cared about, plus peak, over a 4×7×3 grid.
+- **Items 3 and 4 — split to MM-BUG-KILN-00085.** The crossfade window and the banks'
+  repitch reach are what remain, and neither is a gain.
+
+### Honest residual
+
+This does **not** by itself make the LA bass fit to return to the default bank. The
+instruction at the top of this entry still stands, because:
+
+- the 50 ms model mute still erases the `BASS` preset's 75 ms `kick` thump, level-matched
+  or not;
+- the 350 ms handover is still longer than 90% of a typical bass line's notes;
+- GM32's onset remains ~3.7 dB under parity, bounded by its decay-shape mismatch.
+
+Those are MM-BUG-KILN-00085. Promotion to the default bank remains **Arthur's call**, on
+ears, after that lands.
 
 ## Related
 

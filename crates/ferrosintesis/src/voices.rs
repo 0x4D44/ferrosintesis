@@ -8866,6 +8866,129 @@ const LA_BANJO: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
 /// does not bite), so the transient hands over across [0.10, 0.40] s.
 const LA_STRINGS: (f32, (f32, f32)) = (0.40, (0.10, 0.40));
 
+/// GM 32-35 bass seam taper (MM-BUG-KILN-00075).
+///
+/// One flat `LA_EBASS` / `LA_PIZZBASS` gain sat the sampled bass onset 5-18 dB UNDER the
+/// model it displaces. `LaVoice`'s crossfade is sum-to-one, so nothing fills the deficit:
+/// the model is muted outright until `fade.0` (50 ms) and only sole owner at `fade.1`
+/// (350 ms). On a real bass line — Tubular Bells' bass part has a 146 ms median note, 90%
+/// shorter than the handover — the model never speaks and the part simply loses that
+/// level, along with the `BASS` preset's 75 ms `kick` thump.
+///
+/// **Fitted on the SAMPLE-OWNED window [0, 50 ms], not the fade span.** That is the
+/// window where the model is muted and the sample is the only source, so it is the only
+/// window where this gain is the whole story: `output = sample * gain` there, and the
+/// ratio scales linearly with the taper. Over the fade span the model term dominates
+/// progressively, so a gain barely moves it — measuring there (the GM48/49 printer's
+/// window, correct for *that* bug) reads this one as a mild -2..-5 dB and mis-fits the
+/// taper by ~10 dB. See `sampler::tests::print_ebass_wrap_level_ratios`, which prints all
+/// three windows precisely so that trap is visible.
+///
+/// Per-program AND per-key. GM33 and GM35 share the finger bank yet need different
+/// tapers, because the `BASS` and `FRETLESS` models they sit against differ in level —
+/// the mismatch is a property of the pair, not of the sample. Velocity is deliberately
+/// NOT split: the measured spread across vel 48-120 is only 1.06-1.46x (~1 dB), unlike
+/// the GM48/49 case where the sample bank itself splits at vel 80. Each value is the
+/// inverse of a 3-seed geomean, because the model's per-note jitter swings a single-seed
+/// ratio enough to mis-fit.
+///
+/// Measured result across the engaged grid (187 points, keys 16-64, vel 48-120):
+/// the sample-owned window moves from 0.389 (-8.2 dB, worst point -19 dB) to 0.866
+/// (-1.2 dB), and the whole handover from 0.582 (-4.7 dB) to 0.939 (-0.6 dB), with no
+/// window's geomean further than 1.2 dB from parity. Pinned by
+/// `sampler::tests::la_ebass_seam_level_parity`, which bounds BOTH the level and the peak
+/// — an RMS match is not a peak match when sample and model have different crest factors.
+fn ebass_seam_gain(program: u8, key: u8) -> f32 {
+    // (key, 1 / measured w0) — anchors at the measured keys, linear between, clamped flat
+    // past the ends. Ranges differ per program because the banks differ: GM32's pizzbass
+    // reaches far higher than the finger/pick banks.
+    // GM32 is the ONE program fitted on the whole handover [0, 350 ms] rather than on the
+    // sample-owned window. Fitted like its siblings it lands w0 at parity but then runs
+    // +6..+10 dB OVER the model through [50, 350] ms — because the real pizzicato
+    // contrabass recording rings on while `Pluck(&UPRIGHT)`'s short t60 has already
+    // decayed away. That is a decay-SHAPE mismatch (the mechanism MM-BUG-KILN-00045
+    // describes for UPRIGHT), and one scalar cannot fix both ends of it: buying onset
+    // parity here would buy a pizzicato that blooms after its own attack, which is the
+    // KILN-00046 defect with the sign flipped. Bounding the whole handover instead leaves
+    // GM32's onset ~3-5 dB under parity — the smallest residual available from a gain.
+    const PIZZ: [(f32, f32); 16] = [
+        (16.0, 1.91),
+        (20.0, 1.78),
+        (24.0, 1.76),
+        (28.0, 1.95),
+        (31.0, 1.73),
+        (34.0, 1.97),
+        (38.0, 1.70),
+        (40.0, 1.45),
+        (43.0, 1.19),
+        (46.0, 1.51),
+        (50.0, 1.10),
+        (52.0, 1.40),
+        (55.0, 1.60),
+        (58.0, 1.22),
+        (62.0, 1.65),
+        (64.0, 1.73),
+    ];
+    const FINGER: [(f32, f32); 10] = [
+        (20.0, 4.35),
+        (24.0, 4.17),
+        (28.0, 5.88),
+        (31.0, 5.26),
+        (34.0, 7.69),
+        (38.0, 4.55),
+        (40.0, 3.45),
+        (43.0, 3.13),
+        (46.0, 3.57),
+        (50.0, 2.78),
+    ];
+    const PICK: [(f32, f32); 11] = [
+        (20.0, 2.50),
+        (24.0, 2.33),
+        (28.0, 2.78),
+        (31.0, 2.17),
+        (34.0, 2.27),
+        (38.0, 2.04),
+        (40.0, 2.38),
+        (43.0, 2.17),
+        (46.0, 2.27),
+        (50.0, 2.27),
+        (52.0, 2.04),
+    ];
+    const FRETLESS: [(f32, f32); 10] = [
+        (20.0, 1.92),
+        (24.0, 1.92),
+        (28.0, 2.56),
+        (31.0, 2.44),
+        (34.0, 3.23),
+        (38.0, 2.27),
+        (40.0, 1.56),
+        (43.0, 1.54),
+        (46.0, 1.69),
+        (50.0, 1.14),
+    ];
+    let a: &[(f32, f32)] = match program {
+        32 => &PIZZ,
+        34 => &PICK,
+        35 => &FRETLESS,
+        _ => &FINGER,
+    };
+    let k = key as f32;
+    let mut g = a[a.len() - 1].1;
+    if k <= a[0].0 {
+        g = a[0].1;
+    } else {
+        for w in a.windows(2) {
+            let (k0, g0) = w[0];
+            let (k1, g1) = w[1];
+            if k <= k1 {
+                g = g0 + (k - k0) / (k1 - k0) * (g1 - g0);
+                break;
+            }
+        }
+    }
+    g
+}
+
 /// GM48/49 string-section seam taper (MM-BUG-KILN-00046). One flat `LA_STRINGS`
 /// gain sat the sampled section onset +1..+6 dB over the `strings()` model
 /// through the [0.10, 0.40] s crossfade at most keys — inverting GM49 Slow
@@ -12327,7 +12450,15 @@ pub(crate) fn bass_la_alt(
             // fretless take exists; the model carries the fretless "mwah").
             _ => (crate::sampler::finger_bass_bank(), LA_EBASS),
         };
-        crate::sampler::LaVoice::wrap(model, bank, key, vel, sr, gain, fade)
+        crate::sampler::LaVoice::wrap(
+            model,
+            bank,
+            key,
+            vel,
+            sr,
+            gain * ebass_seam_gain(program, key),
+            fade,
+        )
     } else {
         model
     };

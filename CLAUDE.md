@@ -220,6 +220,25 @@ Three oracles now derive these sets instead of trusting a list, and are the patt
 The shared trick: assert against something *derived from the source*, never against a
 second hand-written list. A guard that is itself hand-maintained inherits the defect.
 
+**But a derived oracle is only as good as its enumeration predicate, and the predicate
+is itself an assumption.** All three above were written on 2026.07.24 and all three were
+holed the same day by an adversarial review that tried to *defeat* them rather than
+confirm them:
+
+- the licensing oracles assert `contains(crate_name)`, so they pass on a README and
+  NOTICE gutted to a bare list of crate names — mentioned is not credited (KILN-00071);
+- `manifest.rs` models basic strings but not TOML literal strings, so its five self-tests
+  all used `"` and never exercised `'` (KILN-00072);
+- the prewarm scan keys off `pub fn *_bank`, which misses private bank fns, public fns
+  not named `*_bank`, and caches not built by `bank!` at all — four realtime caches sit
+  outside it (KILN-00073).
+
+So: **write the adversarial document that *should* fail your oracle, and check that it
+does.** "Derived from the source" is not a guarantee — `pub fn *_bank` was a
+hand-maintained assumption wearing a source-scan's clothing. The cheapest way to find
+this is a fresh-context reviewer briefed to refute rather than confirm; that is what
+caught all three.
+
 ## Composition-engine architecture
 
 Every album is a self-contained Python bundle that shares one design philosophy but comes

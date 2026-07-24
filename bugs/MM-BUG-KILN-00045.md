@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00045 — Bass family (GM 32–39) spans 21–25 dB internally where both reference synths span ~9 dB: the plucked basses' held body collapses while SynthBass 38 holds flat and hot
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth
@@ -19,6 +19,10 @@
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) from the M-CAL v3 certified reference-panel run; measured against two independent references, code-confirmed)
+  → Blocked (2026-07-24, Claude Opus 4.8 (1M) during an autonomous fixing pass. **Needs
+  Arthur's listening call** — see "Why this is Blocked". Not a judgement on the bug, which
+  is well-evidenced and still real; it cannot be finished unattended because the target
+  numbers are not derivable.)
 
 ## Observation
 
@@ -157,6 +161,38 @@ so every album with a bass part will move).
 
 `PROGRAM_TRIM_DB` is the wrong lever for all of this — it is a static per-program gain and
 the dominant term is a decay-shape mismatch.
+
+## Why this is Blocked (2026-07-24)
+
+Blocked on **Arthur's ear**, not on analysis. Every one of the four fix items resolves to
+a judgement this bug's own evidence says cannot be derived:
+
+- **The target magnitude is not derivable from the panel.** The two references disagree on
+  GM38 by 9 dB (SC-55 implies −13.3, S-YXG50 −5.6), and this entry already warns "do not
+  treat the SC-55's −13.3 dB implied trim as the target". There is no number to compute.
+- **Two of the offending values are authored choices, not accidents.** UPRIGHT's short
+  `t60` and BASS's flatwound voicing are deliberate (`voices.rs:2966`, `:2822`), and the
+  Fix direction says so: "this needs Arthur's ear, not a blind number change".
+- **An existing oracle pins the disparity.** `bass_articulations_distinct`
+  (`voices.rs:17547`) asserts `UPRIGHT.t60 < BASS.t60`. Any fix must consciously reconcile
+  with it — a decision about intended voicing, not a mechanical edit.
+- It touches `voices.rs`, so it moves every album with a bass part, and the fix direction
+  requires a full render-diff inventory plus listening.
+
+**What unblocks it, in order:**
+
+1. **The prerequisite is now clear.** This entry says "fix MM-BUG-KILN-00042 first, then
+   re-measure" — and **00042 is Closed** as of 2026-07-24. So the next concrete step is a
+   re-measure, which is unattended-doable: the reference-panel tooling is present on KILN
+   (`/c/apps/mdmidiemu.exe`, `mdsc55/mdmu80-syxg50-helper/assets/syxg50.dll`,
+   `tools/instrument-balance/`). Re-run the Repro section and restate the residual.
+2. **Then Arthur decides** the family target: how hot GM38 should sit, and whether
+   UPRIGHT/BASS keep their authored decay contrast.
+
+Item 1 of the Fix direction — the **within-family spread oracle** — is the durable,
+generalisable piece and needs no ear. It cannot land alone, though: written honestly it
+fails on today's tree, and a knowingly-red test is not a landable change. It should land
+together with whatever calibration Arthur signs off.
 
 ## Notes
 

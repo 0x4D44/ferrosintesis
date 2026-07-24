@@ -1210,8 +1210,14 @@ pub fn make(
         // ("move the originals to alt", Arthur 2026-07-19). GM 11 vibraphone now carries a
         // sampled onset in the default bank; forcing samples=false here keeps the pure
         // bell()+motor model reachable. Same freeze idiom as 24..=25 / 56..=61 / 68..=71.
-        // Further batch-2 / bass programs join this arm as each sampled unit lands.
-        4 | 8 | 10 | 11 | 15 | 32..=35 => crate::voices::make(program, key, vel, sr, seed, false),
+        4 | 8 | 10 | 11 | 15 => crate::voices::make(program, key, vel, sr, seed, false),
+        // GM 32-35 basses are the one INVERTED pair (MM-BUG-KILN-00075, Arthur
+        // 2026-07-24): the modeled bass went back to the default bank, so it is the
+        // SAMPLED onset that lives here. Routed through `bass_la_alt` rather than
+        // `make(.., true)` because `make` no longer wraps these programs at all —
+        // going through it would silently hand the alt bank the default model and
+        // make the LA layer unreachable, the same trap GM 7 / 109 above document.
+        32..=35 => crate::voices::bass_la_alt(program, key, vel, sr, seed, samples),
         _ => crate::voices::make(program, key, vel, sr, seed, samples),
     }
 }
@@ -1756,6 +1762,10 @@ mod tests {
     /// pure model in the attack window (the real strike/pluck is layered, not a no-op).
     /// Fails before either half of a program's change; passes after both. Each new
     /// sampled+alt program appends its (program, a key inside its sampled register) below.
+    ///
+    /// GM 32-35 are the one INVERTED pair and are asserted in a second loop: there the
+    /// MODEL is the default and the sampled onset is the alt (MM-BUG-KILN-00075). Both
+    /// loops assert the same two directions, so neither arrangement can drift silently.
     #[cfg(feature = "embedded-samples")]
     #[test]
     fn altbank_sampled_programs_preserve_pure_model_and_default_layers() {
@@ -1764,16 +1774,18 @@ mod tests {
         }
         let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
         let sr = 44100.0;
-        // (program, a key inside its sampled register, the CC0 alt bank that selects its
-        // pure model). GM14's same-instrument model alt is CC0=3 (CC0=1/2 are tam-tam/gong).
+        let win = (0.05 * sr) as usize;
+        // The two halves below assert the SAME pair of directions — one bank is
+        // sample-independent (the pure model, byte-identical samples on/off) and the
+        // other layers the real onset (diverging in the attack window). They differ
+        // only in WHICH bank plays which role.
+        //
+        // (program, a key inside its sampled register, the CC0 alt bank).
+        // GM14's same-instrument model alt is CC0=3 (CC0=1/2 are tam-tam/gong).
         for (prog, key, alt) in [
             (11u8, 60u8, 1u8),
             (14u8, 65u8, 3u8),
-            (32u8, 40u8, 1u8),
             (8u8, 72u8, 1u8),
-            (33u8, 33u8, 1u8),
-            (34u8, 33u8, 1u8),
-            (35u8, 33u8, 1u8),
             (4u8, 48u8, 1u8),
             (10u8, 84u8, 1u8),
             (15u8, 62u8, 1u8),
@@ -1791,7 +1803,6 @@ mod tests {
             let mut d = crate::voices::make(prog, key, 100, sr, 6, true);
             let mut def = vec![0f32; (0.5 * sr) as usize];
             d.render(&mut def);
-            let win = (0.05 * sr) as usize;
             let diff: Vec<f32> = alt_off[..win]
                 .iter()
                 .zip(&def[..win])
@@ -1802,6 +1813,50 @@ mod tests {
                 dr > 0.3 * ar,
                 "default program {prog} barely differs from the pure-model alt \
                  (diff {dr:.5} vs default {ar:.5}) — is the onset engaging?"
+            );
+        }
+        // GM 32-35 basses: the pair is INVERTED (MM-BUG-KILN-00075, Arthur 2026-07-24).
+        // The modeled bass is the DEFAULT and the sampled onset is the CC0!=0 alt,
+        // because `LaVoice`'s sum-to-one crossfade mutes the model for the first 50 ms
+        // and the flat wrap gain sits the sampled onset ~15-18 dB under it, which costs
+        // a real bass line (median note 146 ms) 13-18 dB. Same two directions, swapped
+        // banks — this half fails if the inversion is reverted in EITHER file, and
+        // half (b) fails if the alt bank stops reaching the sample layer at all.
+        for (prog, key, alt) in [
+            (32u8, 40u8, 1u8),
+            (33u8, 33u8, 1u8),
+            (34u8, 33u8, 1u8),
+            (35u8, 33u8, 1u8),
+        ] {
+            // (a) DEFAULT bank ignores the sample layer → pure model, byte-identical.
+            // NOTE: `render_make` hardcodes bank=1, so it is an ALT-bank helper — the
+            // default bank has to come from `voices::make` directly.
+            let render_default = |samples: bool| {
+                let mut v = crate::voices::make(prog, key, 100, sr, 6, samples);
+                let mut buf = vec![0f32; (0.5 * sr) as usize];
+                v.render(&mut buf);
+                buf
+            };
+            let def_on = render_default(true);
+            let def_off = render_default(false);
+            assert_eq!(
+                bits(&def_on),
+                bits(&def_off),
+                "default-bank bass {prog} not sample-independent — the LA onset is back \
+                 on the default bank (MM-BUG-KILN-00075 regression)"
+            );
+            // (b) ALT bank layers the real onset → diverges from the modeled default.
+            let alt_on = render_make_bank(prog, alt, key, 100, 0.5, 6, true);
+            let diff: Vec<f32> = def_off[..win]
+                .iter()
+                .zip(&alt_on[..win])
+                .map(|(a, b)| a - b)
+                .collect();
+            let (dr, ar) = (rms(&diff), rms(&def_off[..win]));
+            assert!(
+                dr > 0.3 * ar,
+                "alt-bank bass {prog} barely differs from the modeled default \
+                 (diff {dr:.5} vs default {ar:.5}) — is the sampled onset reachable?"
             );
         }
     }

@@ -12244,7 +12244,20 @@ impl Voice for ScaledVoice {
 }
 
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
-    let voice = make_uncorrected(program, key, vel, sr, seed, samples);
+    apply_vel_correction(
+        make_uncorrected(program, key, vel, sr, seed, samples),
+        program,
+        vel,
+    )
+}
+
+/// Apply the [`VEL_LEVEL_EXP`] composite correction to an already-built voice.
+///
+/// Factored out of [`make`] so the alt-bank bass constructor ([`bass_la_alt`])
+/// applies the IDENTICAL law. A divergence here would make the CC0 alt bank a
+/// differently-scaled instrument rather than a different timbre, which is
+/// exactly the confusion `ScaledVoice`'s own doc comment warns about.
+fn apply_vel_correction(voice: Box<dyn Voice>, program: u8, vel: u8) -> Box<dyn Voice> {
     let exp = VEL_LEVEL_EXP[program as usize];
     if exp == 2.0 {
         return voice;
@@ -12256,6 +12269,44 @@ pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) ->
         g: ScaledVoice::gain(vel, exp),
         scratch: Vec::new(),
     })
+}
+
+/// GM 32–35 CC0!=0 alt bank: the LA sampled bass onset crossfaded over the model.
+///
+/// This is the INVERSE of the 2026-07-20 arrangement. The sampled onset used to be
+/// the default and the pure model the alt; Arthur's 2026-07-24 A/B against a 19 July
+/// render reversed it, because `LaVoice`'s sum-to-one crossfade mutes the model for
+/// the first 50 ms and only hands it back at 350 ms, while the flat `LA_EBASS` /
+/// `LA_PIZZBASS` wrap gain sits the sampled onset ~15–18 dB UNDER the model it
+/// displaces. On a real bass line (Tubular Bells' ch-4: median note 146 ms, 90% of
+/// notes shorter than the 350 ms handover) the model never speaks, so the part lost
+/// 13–18 dB and its low `kick` thump. The seam mismatch itself is unfixed and tracked
+/// as MM-BUG-KILN-00075 — do NOT promote this back to the default bank until that is
+/// level-matched and guarded, the way MM-BUG-KILN-00046 did for the GM48/49 strings.
+pub(crate) fn bass_la_alt(
+    program: u8,
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    samples: bool,
+) -> Box<dyn Voice> {
+    // `make_uncorrected` now yields the BARE model for 32..=35, so this reuses the
+    // preset selection rather than restating it.
+    let model = make_uncorrected(program, key, vel, sr, seed, false);
+    let voice = if samples {
+        let (bank, (gain, fade)) = match program {
+            32 => (crate::sampler::pizzbass_bank(), LA_PIZZBASS),
+            34 => (crate::sampler::pick_bass_bank(), LA_EBASS),
+            // 33 fingered and 35 fretless share the finger bank (no free CC0
+            // fretless take exists; the model carries the fretless "mwah").
+            _ => (crate::sampler::finger_bass_bank(), LA_EBASS),
+        };
+        crate::sampler::LaVoice::wrap(model, bank, key, vel, sr, gain, fade)
+    } else {
+        model
+    };
+    apply_vel_correction(voice, program, vel)
 }
 
 /// Test hook: construct a voice WITHOUT the `VEL_LEVEL_EXP` correction, so the
@@ -12663,86 +12714,19 @@ fn make_uncorrected(
         28 => Box::new(Pluck::new(&MUTED, key, vel, sr, seed)),
         29 | 30 => Box::new(Pluck::new(&DRIVE, key, vel, sr, seed)),
         31 => Box::new(Pluck::new(&HARMONIC, key, vel, sr, seed)), // G7 flageolet
-        // GM 32 acoustic bass: LA sampled pizzicato pluck onset (VSCO Solo Contrabass Pizz,
-        // CC0, -strings) over the Pluck(&UPRIGHT) model. Pure model is the CC0!=0 alt.
-        32 => {
-            let model = Box::new(Pluck::new(&UPRIGHT, key, vel, sr, seed)); // B2
-            if samples {
-                let (gain, fade) = LA_PIZZBASS;
-                crate::sampler::LaVoice::wrap(
-                    model,
-                    crate::sampler::pizzbass_bank(),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                )
-            } else {
-                model
-            }
-        }
-        // GM 33 fingered electric bass: LA sampled finger pluck onset (FreePats RBX, CC0,
-        // -bass) over the Pluck(&BASS) model. Pure model is the CC0!=0 alt (altbank.rs).
-        33 => {
-            let model = Box::new(Pluck::new(&BASS, key, vel, sr, seed));
-            if samples {
-                let (gain, fade) = LA_EBASS;
-                crate::sampler::LaVoice::wrap(
-                    model,
-                    crate::sampler::finger_bass_bank(),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                )
-            } else {
-                model
-            }
-        }
+        // GM 32-35 basses: the MODELED Pluck is the default bank (restored 2026-07-24,
+        // MM-BUG-KILN-00075). The LA sampled onset that briefly held the default from
+        // 2026-07-20 is now the CC0!=0 alt — see `bass_la_alt`, which owns the banks,
+        // the wrap gains and the reason. These arms are deliberately `samples`-blind:
+        // the default bass is the model at every rate and with or without the asset
+        // crates, so `--no-samples` is bit-identical here rather than a second voicing.
+        32 => Box::new(Pluck::new(&UPRIGHT, key, vel, sr, seed)), // B2
+        33 => Box::new(Pluck::new(&BASS, key, vel, sr, seed)),
         38 | 39 => Box::new(SynthBass::new(program, key, vel, sr, seed)), // B4
-        // GM 34 picked electric bass: LA sampled pick pluck onset (FreePats RBX, CC0, -bass)
-        // over the Pluck(&PICK) model. Pure model is the CC0!=0 alt.
-        34 => {
-            let model = Box::new(Pluck::new(&PICK, key, vel, sr, seed)); // B2
-            if samples {
-                let (gain, fade) = LA_EBASS;
-                crate::sampler::LaVoice::wrap(
-                    model,
-                    crate::sampler::pick_bass_bank(),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                )
-            } else {
-                model
-            }
-        }
-        36 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)), // B2: thumb slap
-        37 => Box::new(Pluck::new(&SLAP_POP, key, vel, sr, seed)), // B2: bridge pop
-        // GM 35 fretless electric bass: LA sampled finger pluck onset (FreePats RBX, CC0,
-        // -bass — no free CC0 fretless exists, so the fingered onset stands in; the model
-        // carries the fretless "mwah"). Pure model is the CC0!=0 alt.
-        35 => {
-            let model = Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed));
-            if samples {
-                let (gain, fade) = LA_EBASS;
-                crate::sampler::LaVoice::wrap(
-                    model,
-                    crate::sampler::finger_bass_bank(),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                )
-            } else {
-                model
-            }
-        }
+        34 => Box::new(Pluck::new(&PICK, key, vel, sr, seed)),            // B2
+        36 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),            // B2: thumb slap
+        37 => Box::new(Pluck::new(&SLAP_POP, key, vel, sr, seed)),        // B2: bridge pop
+        35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
         40 | 110 => {
             let model = Box::new(Bowed::new(program, key, vel, sr, seed));
             if samples {

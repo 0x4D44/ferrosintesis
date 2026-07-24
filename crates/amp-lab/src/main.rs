@@ -7,6 +7,15 @@
 mod amp;
 mod audio;
 mod ring;
+#[cfg(test)]
+mod rtalloc;
+
+/// Test builds route every allocation through a counter so the audio callback's
+/// "no allocation after setup" contract can be MEASURED rather than reasoned about
+/// (MM-BUG-KILN-00082). Inert unless armed, and absent from release builds.
+#[cfg(test)]
+#[global_allocator]
+static COUNTING_ALLOCATOR: rtalloc::Counting = rtalloc::Counting;
 mod seq;
 
 use std::sync::atomic::Ordering;

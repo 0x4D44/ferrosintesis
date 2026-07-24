@@ -185,7 +185,11 @@ impl RealtimeSynth {
         Self {
             core,
             parser: MidiByteParser::new(),
-            pending: Vec::new(),
+            // Sized at construction, not grown in the callback: a completed MIDI message
+            // pushes here, and a zero-capacity Vec would allocate on the FIRST message
+            // the audio thread ever completes (MM-BUG-KILN-00082). One command per live
+            // voice is far more than any single block can complete.
+            pending: Vec::with_capacity(LIVE_MAX_VOICES),
             ring: [0.0; LIVE_BLOCK * 2],
             ring_pos: 0,
             ring_len: 0,
@@ -218,6 +222,15 @@ impl RealtimeSynth {
     /// If you would rather pay in occasional first-use stalls, simply do not call it.
     pub fn prewarm_samples(&self) {
         sampler::prewarm();
+    }
+
+    /// Reserve the voice storage a live session can need, so a NoteOn in the callback
+    /// does not grow a `Vec` on the audio thread (MM-BUG-KILN-00082).
+    ///
+    /// Separate from [`prewarm_samples`](Self::prewarm_samples) because it is not about
+    /// samples: a `--no-samples` build needs this just as much. Call both at setup.
+    pub fn reserve_realtime_storage(&mut self) {
+        self.core.reserve_voices(LIVE_MAX_VOICES);
     }
 
     /// Feed one byte of a live MIDI stream.

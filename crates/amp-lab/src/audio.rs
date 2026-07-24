@@ -223,7 +223,7 @@ pub fn start(rx: Consumer, midi: &[u8]) -> Result<Engine, String> {
     let channels = config.channels() as usize;
 
     let lp = Loop::parse(midi, f64::from(sample_rate))?;
-    let synth = RealtimeSynth::new(
+    let mut synth = RealtimeSynth::new(
         RealtimeOptions::default()
             .with_sample_rate(sample_rate)
             .with_master_gain(0.8),
@@ -231,6 +231,9 @@ pub fn start(rx: Consumer, midi: &[u8]) -> Result<Engine, String> {
     // Decode the embedded banks HERE, not lazily inside the callback — that is
     // what this call exists for.
     synth.prewarm_samples();
+    // Same reason, different resource: a NoteOn must not grow the voice vector on the
+    // audio thread (MM-BUG-KILN-00082).
+    synth.reserve_realtime_storage();
 
     let meters = Arc::new(Meters::default());
     let m = meters.clone();
@@ -325,6 +328,75 @@ mod tests {
         out.extend_from_slice(&(trk.len() as u32).to_be_bytes());
         out.extend_from_slice(&trk);
         out
+    }
+
+    /// MM-BUG-KILN-00082: the audio callback allocates nothing per BLOCK, and its only
+    /// remaining allocation is bounded and attributable.
+    ///
+    /// The lab's contract is "no allocation on the audio thread after setup". That is not
+    /// a source-review question — what allocates depends on retained capacity — so this
+    /// counts real allocations through a test-only global allocator (`crate::rtalloc`),
+    /// armed only around the measured call.
+    ///
+    /// Measured on the pre-fix tree: a steady block already allocated 0, and so did a
+    /// 64-message CC burst, but PANIC allocated 17. Reserving the voice storage at setup
+    /// took panic to 0. What remains is per-NoteOn: `EngineCore` builds each voice as a
+    /// `Box<dyn Voice>`, which is one allocation per voice by construction. Making that
+    /// allocation-free needs a voice pool in the shared engine — an architectural change
+    /// to code the offline renderer uses too, tracked as MM-BUG-KILN-00092.
+    ///
+    /// So the bound below is a RATCHET, not an endorsement: NoteOn may allocate up to the
+    /// voices it creates, and every other callback shape must stay at zero. If a future
+    /// change reintroduces a per-block `Vec` growth, this reds.
+    #[test]
+    fn the_audio_callback_does_not_allocate_per_block() {
+        use crate::rtalloc::measure;
+        let mut core = core_for(&smf(&[(0, &[0x90, 60, 100]), (240, &[0x80, 60, 0])]));
+        core.synth.prewarm_samples();
+        core.synth.reserve_realtime_storage();
+        let mut buf = vec![0f32; 1024 * 2];
+        // Setup includes the first callbacks: one-shot first-use capacity is not the
+        // steady-state contract.
+        for _ in 0..3 {
+            core.process(&mut buf, 1024).expect("warm");
+        }
+
+        let (_, steady) = measure(|| core.process(&mut buf, 1024));
+        assert_eq!(steady, 0, "a steady render block allocated {steady} times");
+
+        let (_, burst) = measure(|| {
+            for i in 0..64u8 {
+                core.command(Cmd::Midi(0xB0));
+                core.command(Cmd::Midi(74));
+                core.command(Cmd::Midi(i));
+            }
+            core.process(&mut buf, 1024)
+        });
+        assert_eq!(burst, 0, "a 64-message CC burst allocated {burst} times");
+
+        // Playback stopped first, so this measures PANIC's own cost. With the loop
+        // running, the rewind restarts it and the tick-0 NoteOn spawns a voice — the
+        // Box below, attributed to the wrong cause.
+        core.command(Cmd::Play(false));
+        core.process(&mut buf, 1024).expect("settle");
+        let (_, panic_) = measure(|| {
+            core.command(Cmd::Panic);
+            core.process(&mut buf, 1024)
+        });
+        assert_eq!(panic_, 0, "panic + all-notes-off allocated {panic_} times");
+
+        // Still stopped, so exactly ONE voice spawns and the count is per-voice rather
+        // than per-voice times whatever the sequencer happened to play.
+        let (_, note) = measure(|| {
+            core.command(Cmd::Midi(0x90));
+            core.command(Cmd::Midi(60));
+            core.command(Cmd::Midi(100));
+            core.process(&mut buf, 1024)
+        });
+        assert!(
+            note <= 16,
+            "a single NoteOn allocated {note} times — the per-voice Box is ~13; more              than that means something new allocates in the callback (KILN-00092)"
+        );
     }
 
     fn core_for(midi: &[u8]) -> Core {

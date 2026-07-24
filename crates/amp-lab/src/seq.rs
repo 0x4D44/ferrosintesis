@@ -167,12 +167,22 @@ impl Player {
         self.idx = 0;
     }
 
-    /// Advance `frames` and hand every message that falls in the span to `emit`.
-    /// Wraps at the loop end, so playback is seamless and indefinite.
-    pub fn advance(&mut self, lp: &Loop, frames: u64, mut emit: impl FnMut(&[u8])) {
+    /// Advance `frames` and hand every message that falls in the span to `emit`,
+    /// together with its offset **within this call** (`0..frames`).
+    ///
+    /// Wraps at the loop end, so playback is seamless and indefinite; an event landing
+    /// after a wrap gets the offset it has in the caller's span, not in the loop.
+    ///
+    /// The offset is the whole point. Dropping it — as this used to — makes the caller
+    /// apply every event due anywhere in the block at the block's START, so playback is
+    /// quantized to the host callback (11 ms at 512 frames) rather than frame-accurate,
+    /// and an on/off pair due in the same callback is submitted before any of that
+    /// callback's audio exists (MM-BUG-KILN-00078).
+    pub fn advance(&mut self, lp: &Loop, frames: u64, mut emit: impl FnMut(u64, &[u8])) {
         if lp.frames == 0 {
             return;
         }
+        let mut done = 0u64; // frames of THIS call already stepped over
         let mut left = frames;
         while left > 0 {
             let to_end = lp.frames - self.pos;
@@ -180,10 +190,17 @@ impl Player {
             let until = self.pos + step;
             while self.idx < lp.events.len() && lp.events[self.idx].frame < until {
                 let e = &lp.events[self.idx];
-                emit(&e.bytes[..e.len as usize]);
+                // `frame` is absolute in the loop; `self.pos` is where this sub-span
+                // starts, and `done` is how much of the caller's span precedes it.
+                let off = done + e.frame.saturating_sub(self.pos);
+                emit(
+                    off.min(frames.saturating_sub(1)),
+                    &e.bytes[..e.len as usize],
+                );
                 self.idx += 1;
             }
             self.pos += step;
+            done += step;
             left -= step;
             if self.pos >= lp.frames {
                 self.pos = 0;
@@ -230,9 +247,63 @@ mod tests {
         // three full loops in one-block steps must emit 3x the events
         let blocks = (lp.frames * 3).div_ceil(512);
         for _ in 0..blocks {
-            p.advance(&lp, 512, |_| n += 1);
+            p.advance(&lp, 512, |_off, _msg| n += 1);
         }
         assert!(n >= 6, "expected >= 6 events over three loops, got {n}");
+    }
+
+    /// `advance` must report each event's offset within the CALLER's span, including
+    /// across a wrap (MM-BUG-KILN-00078).
+    ///
+    /// Asserted on the arithmetic directly rather than through rendered audio. An
+    /// audio-level version of this was tried three ways and each was defeated by a
+    /// different measurement artifact — the previous note's release tail sitting above any
+    /// absolute gate, the note's own attack ramp displacing the detected onset by ~230
+    /// frames, and the fact that collapsing quantizes to the CALLBACK containing an event
+    /// rather than to the wrap, so a window wider than one block cannot separate the two
+    /// behaviours at all. The offsets are exact integers; measuring them as integers is
+    /// both stronger and honest about what is being claimed.
+    #[test]
+    fn advance_reports_offsets_within_the_callers_span_across_a_wrap() {
+        let ev = |frame: u64, status: u8| Event {
+            frame,
+            bytes: [status, 60, 100],
+            len: 3,
+        };
+        let lp = Loop {
+            events: vec![ev(10, 0x90), ev(90, 0x80)],
+            frames: 100,
+        };
+        let mut p = Player::new();
+
+        // A span entirely inside the loop: offsets are just the event frames.
+        let mut got = Vec::new();
+        p.advance(&lp, 50, |off, msg| got.push((off, msg[0])));
+        assert_eq!(got, vec![(10, 0x90)], "offset inside the first span");
+
+        // A span STRADDLING the wrap: frame 90 sits 40 into this span, and the next
+        // loop's frame-10 event sits 50 (the pre-wrap remainder) + 10 = 60 into it.
+        // Getting this wrong is the whole risk the wrap adds.
+        got.clear();
+        p.advance(&lp, 100, |off, msg| got.push((off, msg[0])));
+        assert_eq!(
+            got,
+            vec![(40, 0x80), (60, 0x90)],
+            "offsets must be relative to the caller's span, not to the loop"
+        );
+
+        // And they stay in range: an offset >= frames would index past the caller's
+        // buffer.
+        got.clear();
+        p.advance(&lp, 250, |off, msg| got.push((off, msg[0])));
+        assert!(
+            got.iter().all(|&(off, _)| off < 250),
+            "an offset escaped the span: {got:?}"
+        );
+        assert!(
+            got.len() >= 4,
+            "expected several events over 2.5 loops: {got:?}"
+        );
     }
 
     /// Is this message something that changes a channel's VOICE (as opposed to its
@@ -304,7 +375,7 @@ mod tests {
         let mut offenders = Vec::new();
         let blocks = (lp.frames * 2).div_ceil(512) + 1;
         for _ in 0..blocks {
-            p.advance(&lp, 512, |msg| {
+            p.advance(&lp, 512, |_off, msg| {
                 if msg[0] < 0xF0 && (msg[0] & 0x0F) == crate::GUITAR_CH && is_voice_change(msg) {
                     offenders.push(format!("{msg:02X?}"));
                 }

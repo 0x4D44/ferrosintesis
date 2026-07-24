@@ -11905,6 +11905,7 @@ pub fn acoustic_grand_with_bank(
 /// RNG-pure: every arm draws only from the passed `seed` (no extra RNG), so the
 /// `None` path is bit-identical to calling `make` directly — the album
 /// render-diff is the empirical confirmation.
+#[allow(clippy::too_many_arguments)] // mirrors make()'s shape + bank_lsb and the RR index
 pub fn make_variation(
     program: u8,
     bank_lsb: u8,
@@ -11913,12 +11914,14 @@ pub fn make_variation(
     sr: f32,
     seed: u32,
     samples: bool,
+    rr: u8,
 ) -> Option<Box<dyn Voice>> {
-    // Most variations are modelled-only and ignore `samples`; the mandolin
-    // (25, 96) is the one SAMPLED variation and threads it through to its LA onset
-    // layer. The function's RNG-purity contract is unchanged: every arm still
-    // draws only from `seed` (`LaVoice::wrap` takes no RNG of its own), so the
-    // `None` path stays bit-identical to calling `make`.
+    // Most variations are modelled-only and ignore `samples` and `rr`; the
+    // mandolin (25, 96) is the one SAMPLED variation and threads both through to
+    // its LA onset layer. The function's RNG-purity contract is unchanged: every
+    // arm still draws only from `seed` (`LaVoice::wrap` takes no RNG of its own,
+    // and `rr` is a plain strike counter, not a random source), so the `None`
+    // path stays bit-identical to calling `make`.
     let voice: Box<dyn Voice> = match (program, bank_lsb) {
         // Ukulele — small bright short nylon (Nylon Guitar 24, LSB 96).
         (24, 96) => Box::new(Pluck::new(&UKULELE, key, vel, sr, seed)),
@@ -11931,7 +11934,7 @@ pub fn make_variation(
                 let (gain, fade) = LA_MANDOLIN;
                 crate::sampler::LaVoice::wrap(
                     model,
-                    crate::sampler::mandolin_bank(vel),
+                    crate::sampler::mandolin_bank(rr as usize),
                     key,
                     vel,
                     sr,
@@ -17364,11 +17367,11 @@ mod tests {
     fn ukulele_variation_is_brighter_and_shorter_than_nylon() {
         let sr = 44100.0;
         assert!(
-            make_variation(24, 96, 60, 100, sr, 7, false).is_some(),
+            make_variation(24, 96, 60, 100, sr, 7, false, 0).is_some(),
             "(24, 96) must dispatch the Ukulele variation"
         );
         assert!(
-            make_variation(24, 113, 60, 100, sr, 7, false).is_none(),
+            make_variation(24, 113, 60, 100, sr, 7, false, 0).is_none(),
             "an undefined bank (113) must fall back to base GM (None)"
         );
 
@@ -17403,11 +17406,11 @@ mod tests {
     fn oud_variation_is_warmer_than_nylon() {
         let sr = 44100.0;
         assert!(
-            make_variation(105, 98, 60, 100, sr, 7, false).is_some(),
+            make_variation(105, 98, 60, 100, sr, 7, false, 0).is_some(),
             "(105, 98) must dispatch the Oud variation"
         );
         assert!(
-            make_variation(105, 113, 60, 100, sr, 7, false).is_none(),
+            make_variation(105, 113, 60, 100, sr, 7, false, 0).is_none(),
             "an undefined bank (113) must fall back to base GM (None)"
         );
 
@@ -17434,11 +17437,11 @@ mod tests {
     fn gran_cassa_variation_is_darker_and_longer_than_taiko() {
         let sr = 44100.0;
         assert!(
-            make_variation(116, 96, 45, 100, sr, 7, false).is_some(),
+            make_variation(116, 96, 45, 100, sr, 7, false, 0).is_some(),
             "(116, 96) must dispatch the Gran Cassa variation"
         );
         assert!(
-            make_variation(116, 113, 45, 100, sr, 7, false).is_none(),
+            make_variation(116, 113, 45, 100, sr, 7, false, 0).is_none(),
             "an undefined bank (113) must fall back to base GM (None)"
         );
 
@@ -17487,11 +17490,11 @@ mod tests {
     fn slow_strings_variation_has_longer_attack_than_base() {
         let sr = 44100.0;
         assert!(
-            make_variation(48, 3, 60, 100, sr, 7, false).is_some(),
+            make_variation(48, 3, 60, 100, sr, 7, false, 0).is_some(),
             "(48, 3) must dispatch the Slow Strings variation"
         );
         assert!(
-            make_variation(48, 113, 60, 100, sr, 7, false).is_none(),
+            make_variation(48, 113, 60, 100, sr, 7, false, 0).is_none(),
             "an undefined bank (113) must fall back to base GM (None)"
         );
 
@@ -17536,11 +17539,11 @@ mod tests {
     fn feedback_gtr2_variation_sustains_longer_than_base_drive() {
         let sr = 44100.0;
         assert!(
-            make_variation(30, 41, 45, 100, sr, 7, false).is_some(),
+            make_variation(30, 41, 45, 100, sr, 7, false, 0).is_some(),
             "(30, 41) must dispatch the Feedback Gtr 2 variation"
         );
         assert!(
-            make_variation(30, 113, 45, 100, sr, 7, false).is_none(),
+            make_variation(30, 113, 45, 100, sr, 7, false, 0).is_none(),
             "an undefined bank (113) must fall back to base GM (None)"
         );
 
@@ -17557,7 +17560,7 @@ mod tests {
             .log10()
         };
         for seed in [0x6510u32, 0x76A1, 0x1250] {
-            let fb = render_held(make_variation(30, 41, 45, 100, sr, seed, false).unwrap());
+            let fb = render_held(make_variation(30, 41, 45, 100, sr, seed, false, 0).unwrap());
             let base = render_held(make(30, 45, 100, sr, seed, false));
             // Gap is 4-15 dB across seeds; 3.0 dB (≈√2× tail energy) is a safe,
             // clearly-audible "sustains longer" bar below the worst-case seed.
@@ -17579,11 +17582,11 @@ mod tests {
     fn hollow_release_variation_has_longer_tail_than_base() {
         let sr = 44100.0;
         assert!(
-            make_variation(99, 19, 60, 100, sr, 7, false).is_some(),
+            make_variation(99, 19, 60, 100, sr, 7, false, 0).is_some(),
             "(99, 19) must dispatch the Hollow Release variation"
         );
         assert!(
-            make_variation(99, 113, 60, 100, sr, 7, false).is_none(),
+            make_variation(99, 113, 60, 100, sr, 7, false, 0).is_none(),
             "an undefined bank (113) must fall back to base GM (None)"
         );
 
@@ -17598,7 +17601,7 @@ mod tests {
         };
         let t60 = |s: &[f32]| crate::testutil::t60_of(s, sr);
         for seed in [0x6510u32, 0x76A1, 0x1250] {
-            let hollow = tail(make_variation(99, 19, 60, 100, sr, seed, false).unwrap());
+            let hollow = tail(make_variation(99, 19, 60, 100, sr, seed, false, 0).unwrap());
             let base = tail(make(99, 60, 100, sr, seed, false));
             assert!(
                 t60(&hollow) > 1.4 * t60(&base),
@@ -17620,11 +17623,11 @@ mod tests {
     fn fingered_bass2_variation_rings_longer_without_brightening() {
         let sr = 44100.0;
         assert!(
-            make_variation(33, 45, 40, 100, sr, 7, false).is_some(),
+            make_variation(33, 45, 40, 100, sr, 7, false, 0).is_some(),
             "(33, 45) must dispatch the Fingered Bass 2 variation"
         );
         assert!(
-            make_variation(33, 113, 40, 100, sr, 7, false).is_none(),
+            make_variation(33, 113, 40, 100, sr, 7, false, 0).is_none(),
             "an undefined bank (113) must fall back to base GM (None)"
         );
 
@@ -17660,11 +17663,11 @@ mod tests {
     fn str5_variation_is_a_darker_synth_string_than_base() {
         let sr = 44100.0;
         assert!(
-            make_variation(50, 65, 60, 100, sr, 7, false).is_some(),
+            make_variation(50, 65, 60, 100, sr, 7, false, 0).is_some(),
             "(50, 65) must dispatch the Str5 variation"
         );
         assert!(
-            make_variation(50, 113, 60, 100, sr, 7, false).is_none(),
+            make_variation(50, 113, 60, 100, sr, 7, false, 0).is_none(),
             "an undefined bank (113) must fall back to base GM (None)"
         );
 
@@ -17675,7 +17678,7 @@ mod tests {
         };
         let hf_frac = |s: &[f32]| hp_rms(s, sr, 2800.0) / rms(s).max(1e-9);
         for seed in [0x6510u32, 0x76A1, 0x1250] {
-            let str5 = render_v(make_variation(50, 65, 60, 100, sr, seed, false).unwrap());
+            let str5 = render_v(make_variation(50, 65, 60, 100, sr, seed, false, 0).unwrap());
             let base = render_v(make(50, 60, 100, sr, seed, false));
             assert!(
                 hf_frac(&str5) < 0.90 * hf_frac(&base),

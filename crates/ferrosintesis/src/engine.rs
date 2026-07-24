@@ -2014,6 +2014,17 @@ pub(crate) struct EngineCore {
     // tremolo-restrike path in note_on.
     now: u64,
     key_on_at: Vec<[u64; 128]>,
+    // Per-(channel, key) strike counter for PITCHED round-robin banks (today:
+    // the mandolin at GM 25 + bank-LSB 96). Same guarantee as `drum_rr`, and for
+    // the same reason: consecutive strikes of the SAME key step 0→1→2→3→0…
+    // deterministically, so the takes cycle in the order they were recorded —
+    // which for the mandolin encodes the player's down/up pick alternation — no
+    // matter what other notes interleave. Per-CHANNEL as well as per-key, unlike
+    // drum_rr, because pitched voices are not confined to one channel.
+    // Deliberately NOT `seed % n`: the seed counter is global and advances on
+    // every voice spawn, so it only decorrelates — two same-key strikes with
+    // other notes between them can draw the same take.
+    pitched_rr: Vec<[u8; 128]>,
     // XG effect-block state (variation insertion + the reverb/chorus type
     // recognizers). Defaults are inert; only XG SysEx mutates it.
     xg: XgEffects,
@@ -2074,6 +2085,7 @@ impl EngineCore {
             drum_rr: [0; 128],
             now: 0,
             key_on_at: vec![[u64::MAX; 128]; 16],
+            pitched_rr: vec![[0u8; 128]; 16],
             xg: XgEffects::new(),
         }
     }
@@ -2552,6 +2564,16 @@ impl EngineCore {
             } else {
                 // XG bank-LSB variation, else base GM. Same `seed` on both paths,
                 // so an undefined (prog, bank_lsb) is bit-identical to base.
+                // Read-and-advance this (channel, key)'s strike counter. Done for
+                // every melodic note, not just the ones that use it: the counter
+                // is inert for voices without a round-robin bank, so this cannot
+                // move any existing render.
+                let rr = {
+                    let c = &mut self.pitched_rr[ci][key as usize];
+                    let r = *c;
+                    *c = c.wrapping_add(1);
+                    r
+                };
                 voices::make_variation(
                     prog,
                     self.strips[ci].bank_lsb,
@@ -2560,6 +2582,7 @@ impl EngineCore {
                     sr,
                     seed,
                     self.opt.samples,
+                    rr,
                 )
                 .unwrap_or_else(|| voices::make(prog, key, vel, sr, seed, self.opt.samples))
             })

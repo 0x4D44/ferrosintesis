@@ -3523,7 +3523,7 @@ mod pluck_baseline {
         if bank == 0 {
             voices::make(program, key, vel, SR, seed, false)
         } else {
-            voices::make_variation(program, bank, key, vel, SR, seed, false)
+            voices::make_variation(program, bank, key, vel, SR, seed, false, 0)
                 .expect("alt-bank preset must exist")
         }
     }

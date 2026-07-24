@@ -2181,53 +2181,107 @@ pub fn banjo_bank() -> &'static [Zone] {
 /// **+29 cents** at the 5th fret on the thickest course — so nominal pitches would detune every
 /// fretted zone. `LaVoice` repitches ±1 octave from the measured root.
 ///
-/// Two dynamic layers, split at the repo-wide `vel >= 80`. A third "normal" pass was recorded,
-/// measured and dropped: its spectral centroid was indistinguishable from the hard pass (6/10
-/// sign consistency across the ten zones, median shift +0.09 harmonics), so a third layer would
-/// have cost ~1.1 MiB in a size-capped crate for no timbral information.
-fn mandolin_p() -> &'static [Zone] {
+/// **One dynamic, four ROUND ROBINS.** A mandolin cannot be played at meaningfully different
+/// dynamics (the owner's own finding, and a recorded 3-dynamic take measured out: the loud and
+/// normal passes' spectral centroids were indistinguishable — 6/10 sign consistency, median
+/// shift +0.09 harmonics). The recording budget therefore buys take VARIETY instead of dynamic
+/// layers: four separate plucks of every note, so a repeated note does not replay byte-identical
+/// PCM.
+///
+/// **The four takes are ordered, and the order is meaningful** — they were played
+/// down/up/down/up, so cycling them strictly (never randomly) reproduces a real player's
+/// alternating pick direction. `rr1` is the earliest of the four.
+///
+/// Take-to-take root spread is ~2–5 cents, i.e. the same note played four times, not four
+/// different notes.
+fn mandolin_rr1() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
         bank!(
-            "mandolin_G3_p.wav" => 195.83,
-            "mandolin_C4_p.wav" => 265.96,
-            "mandolin_D4_p.wav" => 292.89,
-            "mandolin_G4_p.wav" => 394.71,
-            "mandolin_A4_p.wav" => 440.67,
-            "mandolin_D5_p.wav" => 594.24,
-            "mandolin_E5_p.wav" => 658.05,
-            "mandolin_A5_p.wav" => 885.88,
-            "mandolin_D6_p.wav" => 1182.41,
-            "mandolin_E6_p.wav" => 1329.52,
+            "mandolin_G3_rr1.wav" => 195.57,
+            "mandolin_C4_rr1.wav" => 264.95,
+            "mandolin_D4_rr1.wav" => 292.93,
+            "mandolin_G4_rr1.wav" => 394.37,
+            "mandolin_A4_rr1.wav" => 440.41,
+            "mandolin_D5_rr1.wav" => 591.60,
+            "mandolin_E5_rr1.wav" => 658.52,
+            "mandolin_A5_rr1.wav" => 883.17,
+            "mandolin_D6_rr1.wav" => 1182.91,
+            "mandolin_E6_rr1.wav" => 1328.92,
         )
     })
 }
 
-/// Loud mandolin layer (see [`mandolin_p`]).
-fn mandolin_f() -> &'static [Zone] {
+/// Mandolin take 2 — an up-stroke (see [`mandolin_rr1`]).
+fn mandolin_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     B.get_or_init(|| {
         bank!(
-            "mandolin_G3_f.wav" => 196.09,
-            "mandolin_C4_f.wav" => 266.08,
-            "mandolin_D4_f.wav" => 293.51,
-            "mandolin_G4_f.wav" => 393.78,
-            "mandolin_A4_f.wav" => 440.66,
-            "mandolin_D5_f.wav" => 591.60,
-            "mandolin_E5_f.wav" => 658.70,
-            "mandolin_A5_f.wav" => 885.43,
-            "mandolin_D6_f.wav" => 1183.78,
-            "mandolin_E6_f.wav" => 1326.84,
+            "mandolin_G3_rr2.wav" => 195.74,
+            "mandolin_C4_rr2.wav" => 264.82,
+            "mandolin_D4_rr2.wav" => 292.65,
+            "mandolin_G4_rr2.wav" => 395.11,
+            "mandolin_A4_rr2.wav" => 439.28,
+            "mandolin_D5_rr2.wav" => 591.17,
+            "mandolin_E5_rr2.wav" => 656.88,
+            "mandolin_A5_rr2.wav" => 883.72,
+            "mandolin_D6_rr2.wav" => 1181.88,
+            "mandolin_E6_rr2.wav" => 1328.13,
         )
     })
 }
 
-/// Mandolin attack bank, velocity-selected (see [`mandolin_p`]).
-pub fn mandolin_bank(vel: u8) -> &'static [Zone] {
-    if vel >= 80 {
-        mandolin_f()
-    } else {
-        mandolin_p()
+/// Mandolin take 3 (see [`mandolin_rr1`]).
+fn mandolin_rr3() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "mandolin_G3_rr3.wav" => 195.84,
+            "mandolin_C4_rr3.wav" => 264.59,
+            "mandolin_D4_rr3.wav" => 293.03,
+            "mandolin_G4_rr3.wav" => 394.68,
+            "mandolin_A4_rr3.wav" => 440.40,
+            "mandolin_D5_rr3.wav" => 591.36,
+            "mandolin_E5_rr3.wav" => 657.51,
+            "mandolin_A5_rr3.wav" => 882.60,
+            "mandolin_D6_rr3.wav" => 1181.48,
+            "mandolin_E6_rr3.wav" => 1327.97,
+        )
+    })
+}
+
+/// Mandolin take 4 (see [`mandolin_rr1`]).
+fn mandolin_rr4() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    B.get_or_init(|| {
+        bank!(
+            "mandolin_G3_rr4.wav" => 195.61,
+            "mandolin_C4_rr4.wav" => 264.64,
+            "mandolin_D4_rr4.wav" => 293.33,
+            "mandolin_G4_rr4.wav" => 394.98,
+            "mandolin_A4_rr4.wav" => 439.17,
+            "mandolin_D5_rr4.wav" => 590.84,
+            "mandolin_E5_rr4.wav" => 656.93,
+            "mandolin_A5_rr4.wav" => 883.22,
+            "mandolin_D6_rr4.wav" => 1181.42,
+            "mandolin_E6_rr4.wav" => 1327.72,
+        )
+    })
+}
+
+/// How many round-robin takes the mandolin bank carries. `LaVoice` treats a bank with
+/// `> 1` round robin as rotatable — that is what unlocks replaying the sampled attack on
+/// every tremolo stroke instead of suppressing it.
+pub const MANDOLIN_ROUND_ROBINS: usize = 4;
+
+/// Mandolin attack bank, round-robin selected (see [`mandolin_rr1`]). `rr` is a strike
+/// counter, not a random draw: cycling in order reproduces the recorded pick alternation.
+pub fn mandolin_bank(rr: usize) -> &'static [Zone] {
+    match rr % MANDOLIN_ROUND_ROBINS {
+        0 => mandolin_rr1(),
+        1 => mandolin_rr2(),
+        2 => mandolin_rr3(),
+        _ => mandolin_rr4(),
     }
 }
 
@@ -2538,7 +2592,12 @@ pub fn prewarm() {
         let _ = cello_bank(vel);
         let _ = contrabass_bank(vel);
         let _ = strings_bank(vel);
-        let _ = mandolin_bank(vel);
+    }
+
+    // The mandolin is ONE dynamic and four round robins, so it fans out over
+    // takes rather than velocity layers.
+    for rr in 0..MANDOLIN_ROUND_ROBINS {
+        let _ = mandolin_bank(rr);
     }
 
     for program in 56..=60 {
@@ -4498,15 +4557,22 @@ mod tests {
         const STEPS: [f32; 9] = [5.0, 2.0, 5.0, 2.0, 5.0, 2.0, 5.0, 5.0, 2.0];
         let cents = |a: f32, b: f32| 1200.0 * (b / a).log2();
 
-        let p = mandolin_bank(1);
-        let f = mandolin_bank(127);
+        let sets: Vec<&'static [Zone]> =
+            (0..MANDOLIN_ROUND_ROBINS).map(mandolin_bank).collect();
+        for i in 1..sets.len() {
+            assert!(
+                !std::ptr::eq(sets[0], sets[i]),
+                "round robin {i} must be a distinct take-set from rr1"
+            );
+        }
         assert!(
-            !std::ptr::eq(p, f),
-            "vel 1 and vel 127 must select different layers"
+            std::ptr::eq(sets[0], mandolin_bank(MANDOLIN_ROUND_ROBINS)),
+            "the round-robin index must WRAP, so a strike counter can grow without bound"
         );
 
-        for (label, zones) in [("p", p), ("f", f)] {
-            assert_eq!(zones.len(), 10, "{label} layer must have ten zones");
+        for (i, zones) in sets.iter().enumerate() {
+            let label = format!("rr{}", i + 1);
+            assert_eq!(zones.len(), 10, "{label} take-set must have ten zones");
             for (i, z) in zones.iter().enumerate() {
                 assert!(!z.data.is_empty(), "{label} zone {i} decoded empty");
                 assert!(
@@ -4529,14 +4595,18 @@ mod tests {
             }
         }
 
-        for (i, (zp, zf)) in p.iter().zip(f.iter()).enumerate() {
-            let d = cents(zp.root, zf.root).abs();
+        // Cross-TAKE agreement: the four round robins are four plucks of the same
+        // ten physical notes, so their roots must agree closely. A bad root in one
+        // take cannot hide, because the other three disagree with it.
+        for z in 0..10 {
+            let roots: Vec<f32> = sets.iter().map(|s| s[z].root).collect();
+            let lo = roots.iter().cloned().fold(f32::INFINITY, f32::min);
+            let hi = roots.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+            let spread = cents(lo, hi);
             assert!(
-                d < 25.0,
-                "zone {i}: layers disagree by {d:.1} cents ({:.2} vs {:.2} Hz) — \
-                 the two takes are the same physical note, so this is a bad root",
-                zp.root,
-                zf.root
+                spread < 30.0,
+                "zone {z}: the four takes' roots span {spread:.1} cents ({lo:.2}..{hi:.2} Hz) \
+                 — they are the same note played four times, so this is a bad root"
             );
         }
     }

@@ -11754,7 +11754,12 @@ pub struct Fx {
     // cyclically under the shimmer, AR-enveloped so it fades in/out cleanly and
     // lets the voice die on release. `None` = the pure synthetic wash.
     rain: Option<&'static [f32]>,
-    rain_pos: usize,
+    /// Fractional read head into the 44.1 kHz recording, advanced by `rain_step`
+    /// output frames — NOT by one per output frame (MM-BUG-KILN-00086).
+    rain_pos: f64,
+    /// Source-to-output clock ratio, `44100 / sr`. Exactly 1.0 at 44.1 kHz, where
+    /// the read head therefore stays integral and reads the original samples.
+    rain_step: f64,
     rain_env: f32,
     rain_atk_step: f32,
     rain_rel_step: f32,
@@ -11911,7 +11916,8 @@ impl Fx {
             wobble,
             wob: 0.0,
             rain,
-            rain_pos: 0,
+            rain_pos: 0.0,
+            rain_step: 44100.0 / sr as f64,
             rain_env: 0.0,
             rain_atk_step: 1.0 / (FX_RAIN_ATK_S * sr),
             rain_rel_step: 1.0 / (FX_RAIN_REL_S * sr),
@@ -11977,16 +11983,40 @@ impl Voice for Fx {
                 // Real-rain bed: a looped field recording read cyclically, AR-
                 // enveloped (fade-in on note-on, fade-out after note-off). Added
                 // uncoloured — GM 96 has no LP/echo, so it stays a clean wash.
+                //
+                // The recording is 44.1 kHz (`parse_wav` enforces it) but the
+                // output clock is whatever the caller asked for, so the head
+                // advances by `44100 / sr` source frames per output frame and
+                // reads with WRAPPED cubic interpolation — the `LoopVoice`
+                // pattern. Stepping by one per output frame instead played the
+                // downpour 8.8% fast at 48 kHz and 2.18x fast at 96 kHz
+                // (MM-BUG-KILN-00086). At 44.1 kHz the step is exactly 1.0, so
+                // `frac` is exactly 0.0 and the branch below reads the original
+                // integer sample — the default render is untouched.
                 if let Some(loop_) = self.rain {
                     self.rain_env = if self.rain_released {
                         (self.rain_env - self.rain_rel_step).max(0.0)
                     } else {
                         (self.rain_env + self.rain_atk_step).min(1.0)
                     };
-                    s += loop_[self.rain_pos] * FX_RAIN_LOOP_GAIN * self.rain_env;
-                    self.rain_pos += 1;
-                    if self.rain_pos >= loop_.len() {
-                        self.rain_pos = 0;
+                    let len = loop_.len();
+                    let j = self.rain_pos as usize;
+                    let frac = (self.rain_pos - j as f64) as f32;
+                    let v = if frac == 0.0 {
+                        loop_[j]
+                    } else {
+                        crate::dsp::cubic4(
+                            loop_[(j + len - 1) % len],
+                            loop_[j],
+                            loop_[(j + 1) % len],
+                            loop_[(j + 2) % len],
+                            frac,
+                        )
+                    };
+                    s += v * FX_RAIN_LOOP_GAIN * self.rain_env;
+                    self.rain_pos += self.rain_step;
+                    if self.rain_pos >= len as f64 {
+                        self.rain_pos -= len as f64;
                     }
                 }
                 if let Some(lp) = &mut self.lp {
@@ -20458,6 +20488,79 @@ mod tests {
         assert!(
             dies_within(v, sr, 4.0),
             "96 rain (samples-on) did not terminate after note-off — the bed loops forever"
+        );
+    }
+
+    /// Normalised cross-correlation of two equal-length windows (mean-removed).
+    /// 1.0 = the same waveform, ~0 = unrelated noise.
+    fn ncc_windows(a: &[f32], b: &[f32]) -> f32 {
+        assert_eq!(a.len(), b.len());
+        let ma = a.iter().sum::<f32>() / a.len() as f32;
+        let mb = b.iter().sum::<f32>() / b.len() as f32;
+        let (mut num, mut da, mut db) = (0.0f64, 0.0f64, 0.0f64);
+        for (x, y) in a.iter().zip(b) {
+            let (u, v) = ((x - ma) as f64, (y - mb) as f64);
+            num += u * v;
+            da += u * u;
+            db += v * v;
+        }
+        (num / (da.sqrt() * db.sqrt()).max(1e-30)) as f32
+    }
+
+    /// FX-O8 (MM-BUG-KILN-00086): the real-rain bed is a 44.1 kHz field recording,
+    /// so it must play at ITS OWN clock at every output rate. The voice used to
+    /// advance its read head one source frame per OUTPUT frame, which played the
+    /// downpour 8.8% fast at 48 kHz and 2.18x fast at 96 kHz — the recording's
+    /// tempo and spectrum tracked the requested sample rate.
+    ///
+    /// Both halves measure the RENDER, not the stored step:
+    ///   (a) LOOP PERIOD IS WALL-CLOCK INVARIANT — the bed repeats exactly, so a
+    ///       window correlated against itself one loop period later returns ~1.
+    ///       The lag is `len(recording)/44100` seconds, derived from the asset;
+    ///       a head that runs at the wrong rate recurs at a different lag and the
+    ///       correlation collapses into the rain's own noise floor.
+    ///   (b) THE SAME AUDIO COMES OUT — 88.2 kHz is exactly 2x, so the bed reads
+    ///       every source frame on alternate output frames: decimating that render
+    ///       by 2 must reproduce the 44.1 kHz control.
+    #[test]
+    #[cfg(feature = "embedded-samples")]
+    fn fx_o8_rain_96_bed_plays_at_its_recorded_44100_clock() {
+        // Derived from the committed asset — never a hardcoded duration.
+        let loop_s = crate::sampler::rain_loop().len() as f32 / 44100.0;
+        let (head_s, win_s) = (1.0f32, 1.5f32);
+
+        // (a) the loop period is the same wall-clock duration at every rate.
+        for &sr in &[44100.0f32, 48000.0, 96000.0] {
+            let x = render_voice(
+                make(96, 60, 100, sr, 7, true),
+                sr,
+                head_s + win_s + loop_s + 0.1,
+            );
+            let a = (head_s * sr) as usize;
+            let n = (win_s * sr) as usize;
+            let b = a + (loop_s * sr).round() as usize;
+            let r = ncc_windows(&x[a..a + n], &x[b..b + n]);
+            println!("FX-O8 rain @{sr} Hz: NCC at the {loop_s:.3} s loop lag = {r:.3}");
+            assert!(
+                r >= 0.80,
+                "96 rain bed at {sr} Hz does not repeat after its own {loop_s:.3} s loop \
+                 (NCC {r:.3}) — the recording is playing at the output clock, not at 44.1 kHz"
+            );
+        }
+
+        // (b) 88.2 kHz decimated by 2 == the 44.1 kHz control (the bed reads the
+        // same source frames; only the interleaved half-frames are new).
+        let ctl = render_voice(make(96, 60, 100, 44100.0, 7, true), 44100.0, head_s + win_s);
+        let hi = render_voice(make(96, 60, 100, 88200.0, 7, true), 88200.0, head_s + win_s);
+        let a = (head_s * 44100.0) as usize;
+        let n = (win_s * 44100.0) as usize;
+        let dec: Vec<f32> = hi[2 * a..].iter().step_by(2).take(n).copied().collect();
+        let r2 = ncc_windows(&ctl[a..a + n], &dec);
+        println!("FX-O8 rain: 88.2 kHz decimated-by-2 vs 44.1 kHz control NCC = {r2:.3}");
+        assert!(
+            r2 >= 0.80,
+            "96 rain rendered at 88.2 kHz does not decimate back to the 44.1 kHz \
+             control (NCC {r2:.3}) — the bed is not rate-converted"
         );
     }
 

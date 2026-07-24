@@ -372,6 +372,11 @@ def summoning(sc, t):
     sc.tempo(t, 100)
     sc.marker(t, "VII. The Summoning")
     sc.program(10, 29, t)          # overdriven lead for the theme
+    # XG Mandolin = Steel Guitar (25) + bank LSB 96. GM has no mandolin program,
+    # so this used to be a bare steel guitar tremolo'd with 32nd-note repeats;
+    # the cell gets the real recorded instrument. Bank select goes BEFORE the
+    # Program Change so a hardware player latches it too.
+    sc.cc(15, 32, 96, t + 151)
     sc.program(15, 25, t + 152)    # timpani channel doubles as mandolin later
     sc.cc(12, 11, 100, t)
     E2, E3, E4, E5 = n("E2"), n("E3"), n("E4"), n("E5")
@@ -480,6 +485,7 @@ def summoning(sc, t):
         sc.hit(36, b, 96)
         sc.hit(49, b, 84 if i % 2 == 0 else 66)
         sc.hit(38, b + 2, 88)
+    sc.cc(15, 32, 0, tc + 27)      # base bank back: this channel is timpani again
     sc.program(15, 47, tc + 28)
     for k in range(16):                    # timpani roll into the final chord
         sc.note(15, n("E2"), tc + 28 + k * 0.25, 0.24, int(lerp(56, 104, k / 15)), jt=2)

@@ -375,6 +375,9 @@ def reel(sc, t):
     sc.tempo(t + 176, 138)
     for ch in (4, 5, 6):
         sc.cc(ch, 11, 100, t)
+    # XG Mandolin = Steel Guitar (25) + bank LSB 96 (GM has no mandolin program).
+    # Bank select first, so a hardware player latches it at the Program Change.
+    sc.cc(14, 32, 96, t - 0.5)
     sc.program(14, 25, t)          # harp channel becomes a tremolo mandolin
     sc.cc(14, 7, 0, t)
     D2, D3, D4 = n("D2"), n("D3"), n("D4")

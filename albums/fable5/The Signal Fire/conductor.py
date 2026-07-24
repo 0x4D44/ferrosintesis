@@ -129,6 +129,19 @@ PROGRAM_CHANGES: list[tuple[int, float, int]] = [
     (CH_BELLS,  1290.0, 14),    # mandolin -> tubular bells for the peal
 ]
 
+# Bank-select LSB changes: (ch, beat, LSB). ferrosintesis has a real mandolin at
+# the XG cell "Steel Guitar (25) + bank LSB 96" — General MIDI has no mandolin
+# program at all, which is why this channel used to be a bare steel guitar played
+# with 32nd-note repeats to imply the tremolo. Selecting the cell gets the actual
+# recorded instrument, and its tremolo strokes are real recorded picks.
+#
+# The LSB must be back to 0 before the channel becomes tubular bells, or a player
+# would look up the undefined cell (14, 96) there.
+BANK_CHANGES: list[tuple[int, float, int]] = [
+    (CH_BELLS,     0.0, 96),    # XG Mandolin for M3's tremolo
+    (CH_BELLS,  1289.0, 0),     # base bank back for the M4/M5 bell peal
+]
+
 
 def setup(sc: en.Score) -> None:
     """Write the conductor lane and all channel setups into `sc`."""
@@ -142,3 +155,11 @@ def setup(sc: en.Score) -> None:
         sc.channel(ch, name, prog, volume=vol, pan=pan, reverb=rev)
     for ch, beat, prog in PROGRAM_CHANGES:
         sc.program(ch, prog, beat)
+    for ch, beat, lsb in BANK_CHANGES:
+        sc.cc(ch, 32, lsb, beat)
+    # `Score.channel` writes each initial Program Change at beat 0, and events at
+    # one tick sort program-before-CC, so the beat-0 bank select above lands just
+    # AFTER it. ferrosintesis reads the bank at note-on and is correct either way,
+    # but a hardware XG player latches the bank at the Program Change — so re-issue
+    # the mandolin program once the bank is set, and the file is right on both.
+    sc.program(CH_BELLS, 25, 1.0)

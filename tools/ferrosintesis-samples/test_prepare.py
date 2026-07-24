@@ -658,5 +658,66 @@ class ArchiveRefetchTest(unittest.TestCase):
         self.assertEqual(self.fetches, 2, "one initial fetch plus exactly one refetch")
 
 
+class BottleLoopTest(unittest.TestCase):
+    """MM-BUG-KILN-00065: the GM 76 whole-voice loop must have exactly one owner.
+
+    Before this, nothing emitted the active `bottleloop_G3.wav`; the generic onset
+    discovery would have trimmed its source to an attack and routed the result to
+    `ferrosintesis-samples-orchestral`, and `--only=bottle` never staged the source.
+    """
+
+    def test_the_bottle_source_is_not_a_generic_onset_source(self):
+        """Discovery must not sweep the whole-voice source into the onset loop."""
+        self.assertNotIn(prepare.BOTTLE_LOOP_SOURCE, prepare.FREESOUND_SOURCES)
+
+    def test_bottle_output_never_routes_to_the_orchestral_crate(self):
+        with tempfile.TemporaryDirectory() as root:
+            for name in (prepare.BOTTLE_LOOP_OUT, prepare.BOTTLE_LOOP_SOURCE):
+                path = prepare.sample_output_path(name, root)
+                crate = os.path.relpath(path, root).split(os.sep)[1]
+                self.assertEqual(
+                    crate, "ferrosintesis-samples-bottle",
+                    f"{name} routes to {crate} - the bottle owns its own crate")
+
+    def test_bottle_loop_reproduces_the_committed_asset(self):
+        """The recovered recipe is pinned against the shipped bytes.
+
+        It reproduces the committed asset to within a few LSB but NOT byte-for-byte
+        (the original bake is not checked in, so its exact float path is unknown).
+        The bound is what makes the recipe a real pin rather than a plausible story:
+        a wrong trim, fade or gain moves it by thousands of LSB, not a handful.
+        """
+        with tempfile.TemporaryDirectory() as root:
+            got = prepare.bake_bottle_loop(repo_root=root)
+            written = os.path.join(root, "crates", "ferrosintesis-samples-bottle",
+                                   "samples", prepare.BOTTLE_LOOP_OUT)
+            self.assertTrue(os.path.exists(written), "the bake wrote no file")
+        committed = os.path.join(prepare.REPO_ROOT, "crates",
+                                 "ferrosintesis-samples-bottle", "samples",
+                                 prepare.BOTTLE_LOOP_OUT)
+        with wave.open(committed, "rb") as w:
+            n = w.getnframes()
+            want = list(struct.unpack(f"<{n}h", w.readframes(n)))
+        self.assertEqual(len(got), len(want), "the bake produced a different length")
+        worst = max(abs(a - b) for a, b in zip(got, want))
+        peak = max(abs(v) for v in want)
+        self.assertLessEqual(
+            worst, 24,
+            f"the bake drifted {worst} LSB from the committed asset (peak {peak}) - "
+            f"the recipe no longer describes what is shipped")
+
+    def test_a_tampered_source_is_refused(self):
+        """The pin is the point: a changed source must not be baked silently."""
+        with tempfile.TemporaryDirectory() as src_dir:
+            path = os.path.join(src_dir, prepare.BOTTLE_LOOP_SOURCE)
+            with wave.open(path, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(prepare.OUT_SR)
+                w.writeframes(struct.pack("<8h", *([1000] * 8)))
+            with self.assertRaises(ValueError):
+                prepare.bake_bottle_loop(src_dir=src_dir)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -993,10 +993,17 @@ LOCAL_SOURCES = {
 # FAMILY_PACKAGE: rhodes/dulcimer → the CC-BY `-ccby` crate; musicbox → the CC0 `-orchestral2`.
 # Provenance (exact pack IDs/SHAs) in crates/ferrosintesis-samples-ccby/PROVENANCE.md.
 FREESOUND_SRC = os.path.join(TOOL_DIR, "freesound-src")
+# The GM 76 blown bottle is a WHOLE-VOICE loop, not an onset: it is baked by
+# `bake_bottle_loop` into its own crate, with its own trim and its own source pin. The
+# generic onset loop below would trim it to an attack and route it to `-orchestral`
+# (family "bottle" has no FAMILY_PACKAGE entry), so it is excluded from discovery here
+# rather than special-cased in five downstream places (MM-BUG-KILN-00065).
+BOTTLE_LOOP_SOURCE = "bottle_G3.wav"
+
 FREESOUND_SOURCES = {
     fn: fn
     for fn in (sorted(os.listdir(FREESOUND_SRC)) if os.path.isdir(FREESOUND_SRC) else [])
-    if fn.endswith(".wav")
+    if fn.endswith(".wav") and fn != BOTTLE_LOOP_SOURCE
 }
 
 # Owner-recorded mandolin onsets (GM 25 steel guitar + bank LSB 96 — the XG Mandolin
@@ -1045,6 +1052,11 @@ CORE_FAMILIES = frozenset(("piano", "violin", "flute"))
 # a ~6.9 MiB CC-BY bank kept separate so core stays under the crates.io 10 MiB cap.
 FAMILY_PACKAGE = {
     "grand": "ferrosintesis-samples-grand",
+    # GM 76 blown bottle: a whole-voice loop in its own CC0 crate. Both spellings are
+    # mapped so a stray onset-style `bottle_*.wav` cannot land in `-orchestral` either
+    # (MM-BUG-KILN-00065).
+    "bottle": "ferrosintesis-samples-bottle",
+    "bottleloop": "ferrosintesis-samples-bottle",
     # GM0 alternate grand banks each get their own crate (attribution/licence
     # isolation, and the crates.io 10 MiB cap): CC0 VCSL Steinway B.
     "steinwayb": "ferrosintesis-samples-vcsl-steinway",
@@ -2558,6 +2570,62 @@ def _mtg_region_keys(src, prefix, dyn):
             for m in re.finditer(r"key=(\d+)\s+sample=(\S+?)\.\$EXT", text)}
 
 
+# --- GM 76 blown bottle: the whole-voice loop -------------------------------------
+#
+# MM-BUG-KILN-00065: no checked-in tool emitted the ACTIVE `bottleloop_G3.wav`. The
+# generic onset loop would have trimmed the source to an attack and written it to the
+# wrong crate, and `--only=bottle` on a clean cache never staged the source at all.
+# This is the asset's one owner.
+#
+# The recipe below was RECOVERED from the committed asset by measurement, not taken
+# from the provenance note (which describes a 0.45-2.10 s trim of a 2.0 s source - an
+# interval that does not exist). Measured against the committed WAV: the packaged audio
+# is the source interval [0.1000 s, 1.7500 s) at gain 0.9/peak, with a short linear
+# fade-in and a quadratic fade-out. `bottle_loop_matches_the_committed_asset` pins that,
+# so the recipe cannot drift silently.
+BOTTLE_LOOP_SRC_SHA256 = "56421959ee1aa62d43fa171b11f7626fa7ef08636abf9a3afed821c8d0e965fd"
+BOTTLE_LOOP_OUT = "bottleloop_G3.wav"
+BOTTLE_LOOP_TRIM = (4411, 72765)   # (start frame, length) at 44.1 kHz = 0.1000 s, 1.6500 s
+BOTTLE_LOOP_FADE_IN = 131          # samples, linear
+BOTTLE_LOOP_FADE_OUT = 2647        # samples, quadratic (1 - t)^2
+BOTTLE_LOOP_PEAK = 0.9
+
+
+def bake_bottle_loop(src_dir=FREESOUND_SRC, repo_root=REPO_ROOT, verify_source=True):
+    """Bake the GM 76 whole-voice bottle loop from its pinned committed source.
+
+    Returns the quantized 16-bit samples it wrote, so a test can compare them against
+    the committed asset without reading the file back.
+    """
+    source = os.path.join(src_dir, BOTTLE_LOOP_SOURCE)
+    if verify_source:
+        digest = sha256_file(source)
+        if digest != BOTTLE_LOOP_SRC_SHA256:
+            raise ValueError(
+                f"{source}: sha256 {digest} != pinned {BOTTLE_LOOP_SRC_SHA256} - the "
+                f"committed CC0 source changed, so the bake cannot be trusted")
+    x, sr = read_wav(source)
+    if sr != OUT_SR:
+        raise ValueError(f"{source}: {sr} Hz, expected {OUT_SR}")
+    start, length = BOTTLE_LOOP_TRIM
+    seg = x[start:start + length]
+    if len(seg) != length:
+        raise ValueError(f"{source}: too short for the {length}-frame bottle trim")
+    for i in range(BOTTLE_LOOP_FADE_IN):
+        seg[i] *= i / BOTTLE_LOOP_FADE_IN
+    for i in range(BOTTLE_LOOP_FADE_OUT):
+        j = length - BOTTLE_LOOP_FADE_OUT + i
+        t = 1.0 - i / BOTTLE_LOOP_FADE_OUT
+        seg[j] *= t * t
+    peak = max(abs(v) for v in seg)
+    gain = BOTTLE_LOOP_PEAK / peak if peak > 0 else 1.0
+    seg = [v * gain for v in seg]
+    out = os.path.join(repo_root, "crates", "ferrosintesis-samples-bottle", "samples",
+                       BOTTLE_LOOP_OUT)
+    write_wav_mono(out, seg, OUT_SR)
+    return [max(-32768, min(32767, int(v * 32767))) for v in seg]
+
+
 def _bake_mtg_sax(src):
     """Fetch + decode + bake the MTG.SoloSax LA layer for GM 64-67.
 
@@ -2707,7 +2775,7 @@ def main():
             ensure_guitar_sources(src)
         if want("fingerbass") or want("pickbass"):
             ensure_ebass_sources(src)
-        if want("rhodes") or want("dulcimer") or want("musicbox"):
+        if want("rhodes") or want("dulcimer") or want("musicbox") or want("bottle"):
             ensure_freesound_sources(src)
         if want("mandolin"):
             ensure_mandolin_sources(src)
@@ -2866,6 +2934,14 @@ def main():
         output = os.path.join(REPO_ROOT, "crates", package, "samples", out_name)
         write_wav_mono(output, seg, sr)
         rows.append((out_name, None, None, None, None, None, len(seg) / sr))
+
+    # GM 76 blown bottle: a whole-voice loop with its own owner, source pin and crate.
+    # Gated like the gong so `--only=<other>` never rewrites the tracked WAV
+    # (MM-BUG-KILN-00065).
+    if want("bottle"):
+        seg = bake_bottle_loop()
+        rows.append((BOTTLE_LOOP_OUT, None, None, None, None, None,
+                     len(seg) / OUT_SR))
 
     _print_sample_rows(rows)
 

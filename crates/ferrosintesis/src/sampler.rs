@@ -2645,13 +2645,23 @@ pub fn prewarm() {
 }
 
 fn nearest(zones: &'static [Zone], f: f32) -> &'static Zone {
+    &zones[nearest_idx(zones, f)]
+}
+
+/// [`nearest`] as an INDEX. Round-robin rotation needs the index rather than the
+/// reference: every take-set covers the same pitches (a few cents apart at most),
+/// so holding the index guarantees a restrike rotates to another take of the SAME
+/// zone rather than re-running the pitch search against slightly different roots.
+fn nearest_idx(zones: &[Zone], f: f32) -> usize {
     zones
         .iter()
-        .min_by(|a, b| {
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
             let da = (a.root / f).ln().abs();
             let db = (b.root / f).ln().abs();
             da.partial_cmp(&db).unwrap()
         })
+        .map(|(i, _)| i)
         .unwrap()
 }
 
@@ -2787,6 +2797,27 @@ pub struct LaVoice {
     /// the zone's last frames so a dry-out at any sample rate degrades
     /// gracefully instead of stepping (review C8).
     end_taper: f32,
+    /// Round-robin rotation state — `Some` ONLY for banks carrying more than one
+    /// take. Its presence is what licenses [`LaVoice::retrigger`] to replay the
+    /// sampled attack on a tremolo stroke instead of suppressing it; every
+    /// single-take bank keeps `None` and therefore keeps the original behaviour
+    /// bit-identically. See the retrigger doc comment for why that scoping is
+    /// load-bearing.
+    rr: Option<RoundRobin>,
+}
+
+/// Which take a round-robin bank is currently playing, and how to reach the next.
+#[derive(Clone, Copy)]
+struct RoundRobin {
+    /// The bank accessor (e.g. [`mandolin_bank`]); takes an index, wraps internally.
+    bank: fn(usize) -> &'static [Zone],
+    /// How many distinct takes the bank carries (> 1 by construction).
+    takes: usize,
+    /// The pitch zone this voice selected at note-on. Held as an INDEX so a
+    /// restrike rotates takes of the same zone (see [`nearest_idx`]).
+    zone_idx: usize,
+    /// The take currently sounding.
+    idx: usize,
 }
 
 const DEFAULT_LA_RELEASE_T60: f32 = 0.06;
@@ -2804,6 +2835,73 @@ impl LaVoice {
         fade: (f32, f32),
     ) -> Box<dyn Voice> {
         Self::wrap_fx(sustain, zones, key, vel, sr, gain, fade, LaFx::default())
+    }
+
+    /// [`Self::wrap`] for a bank that carries several ROUND-ROBIN takes.
+    ///
+    /// `bank(i)` returns take `i` (wrapping internally); `takes` is how many there
+    /// are; `rr` is the engine's per-`(channel, key)` strike counter, so the first
+    /// take of a fresh note follows the recorded order rather than a random draw.
+    ///
+    /// Unlike every other wrapper this arms tremolo-stroke rotation: see
+    /// [`LaVoice::retrigger`]. With `takes < 2` it degrades to a plain
+    /// [`Self::wrap`], so it is safe to call from a voice whose bank may not have
+    /// round robins.
+    #[allow(clippy::too_many_arguments)] // wrap()'s shape + the round-robin trio
+    pub fn wrap_rr(
+        sustain: Box<dyn Voice>,
+        bank: fn(usize) -> &'static [Zone],
+        takes: usize,
+        rr: u8,
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+    ) -> Box<dyn Voice> {
+        match Self::build_rr(sustain, bank, takes, rr, key, vel, sr, gain, fade) {
+            Ok(la) => Box::new(la),
+            Err(model) => model,
+        }
+    }
+
+    /// [`Self::wrap_rr`]'s body, kept concrete so the rotation oracle can inspect
+    /// the resulting voice's state directly instead of inferring it from audio.
+    #[allow(clippy::too_many_arguments)]
+    fn build_rr(
+        sustain: Box<dyn Voice>,
+        bank: fn(usize) -> &'static [Zone],
+        takes: usize,
+        rr: u8,
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+    ) -> Result<LaVoice, Box<dyn Voice>> {
+        let idx = (rr as usize) % takes.max(1);
+        let zones = bank(idx);
+        let zone_idx = nearest_idx(zones, key_freq(key));
+        let mut la = Self::build(
+            sustain,
+            zones,
+            key,
+            vel,
+            sr,
+            gain,
+            fade,
+            LaFx::default(),
+            DEFAULT_LA_RELEASE_T60,
+        )?;
+        if takes >= 2 {
+            la.rr = Some(RoundRobin {
+                bank,
+                takes,
+                zone_idx,
+                idx,
+            });
+        }
+        Ok(la)
     }
 
     /// [`Self::wrap`] with per-program sample DSP (round-3 U3). Only the
@@ -2990,6 +3088,7 @@ impl LaVoice {
             vel_lp: 0.0,
             vel_lp_a,
             end_taper: 0.0,
+            rr: None,
         })
     }
 }
@@ -3119,6 +3218,54 @@ impl Voice for LaVoice {
     }
 
     fn retrigger(&mut self, key: u8, vel: u8) -> bool {
+        // ROUND-ROBIN BANKS ONLY: rotate to the next take and REPLAY the sampled
+        // attack, so a tremolo is carried by real recorded strokes.
+        //
+        // This is the deliberate exception to the rule stated below, and it is
+        // scoped to `rr.is_some()` for a reason that is easy to break: this
+        // method is shared by EVERY sampled voice, and GM 25 steel tremolo is
+        // used by two committed albums. Replaying a SINGLE take 13×/s is exactly
+        // the machine-gun artifact the suppression exists to prevent — having N
+        // genuinely different takes to rotate is the precondition that makes
+        // replaying safe. A bank without round robins therefore keeps the
+        // original path untouched, bit for bit.
+        //
+        // Each stroke is naturally truncated by the next retrigger, so what
+        // sounds is the recorded pick attack — which is the whole point.
+        if let Some(rr) = self.rr {
+            if !self.sustain.retrigger(key, vel) {
+                return false;
+            }
+            let idx = rr.idx.wrapping_add(1);
+            let zones = (rr.bank)(idx % rr.takes);
+            let zone = &zones[rr.zone_idx];
+            // Same key, so the pitch is unchanged: rescale by the root ratio
+            // rather than recomputing from `sr`, which also preserves any active
+            // bend held in `step` relative to `base_step`.
+            let ratio = self.zone.root / zone.root;
+            let next_step = self.base_step * ratio;
+            if !(0.5..=2.05).contains(&next_step) {
+                // Out of the credible repitch window — fall back to the modeled
+                // stroke rather than playing a badly-pitched sample.
+                self.rel_mul = self.rel_t60_mul;
+                return true;
+            }
+            self.rr = Some(RoundRobin { idx, ..rr });
+            self.zone = zone;
+            self.step *= ratio;
+            self.base_step = next_step;
+            // Re-arm the onset: restart the crossfade clock and the read head,
+            // and undo any release decay so the new stroke is at full level.
+            self.t = 0;
+            self.pos = 0.0;
+            self.pos2 = 220.0;
+            self.pos3 = 397.0;
+            self.rel_gain = 1.0;
+            self.rel_mul = 1.0;
+            self.shelf_lp = 0.0;
+            self.vel_lp = 0.0;
+            return true;
+        }
         // TREM: a tremolo restrike re-picks the MODEL string; the sampled
         // attack transient is NOT replayed (the identical PCM 13×/s is the
         // machine-gun artifact the drum round-robins exist to avoid) — it
@@ -4557,8 +4704,7 @@ mod tests {
         const STEPS: [f32; 9] = [5.0, 2.0, 5.0, 2.0, 5.0, 2.0, 5.0, 5.0, 2.0];
         let cents = |a: f32, b: f32| 1200.0 * (b / a).log2();
 
-        let sets: Vec<&'static [Zone]> =
-            (0..MANDOLIN_ROUND_ROBINS).map(mandolin_bank).collect();
+        let sets: Vec<&'static [Zone]> = (0..MANDOLIN_ROUND_ROBINS).map(mandolin_bank).collect();
         for i in 1..sets.len() {
             assert!(
                 !std::ptr::eq(sets[0], sets[i]),
@@ -4609,6 +4755,122 @@ mod tests {
                  — they are the same note played four times, so this is a bad root"
             );
         }
+    }
+
+    /// A tremolo stroke on the mandolin must ROTATE to the next recorded take and
+    /// REPLAY its attack; a single-take bank must keep suppressing it.
+    ///
+    /// This is checked on the voice's own state rather than on rendered audio,
+    /// deliberately. At 14 strokes/s the previous strokes' ring dominates any
+    /// short analysis window — an attack-similarity measurement decays
+    /// monotonically with stroke lag (measured 0.33/-0.05/-0.19/-0.22) and simply
+    /// cannot see the take periodicity underneath. State is unambiguous where
+    /// audio is not.
+    ///
+    /// The second half is the load-bearing one: `retrigger` is shared by EVERY
+    /// sampled voice, and GM 25 steel tremolo is used by two committed albums, so
+    /// a single-take bank must come out of a restrike with its read head and
+    /// crossfade clock untouched — sample retiring, model re-picking, exactly as
+    /// before.
+    #[test]
+    fn mandolin_tremolo_rotates_takes_while_single_take_banks_still_suppress() {
+        let sr = 44100.0;
+        let key = 76u8; // E5 — an in-tune open-string zone
+        let model = || voices::make(25, key, 100, sr, 7, false);
+
+        let mut la = match LaVoice::build_rr(
+            model(),
+            mandolin_bank,
+            MANDOLIN_ROUND_ROBINS,
+            0,
+            key,
+            100,
+            sr,
+            0.20,
+            (0.05, 0.28),
+        ) {
+            Ok(la) => la,
+            Err(_) => panic!("the mandolin bank must wrap at E5"),
+        };
+        assert!(
+            la.rr.is_some(),
+            "a 4-take bank must arm round-robin rotation"
+        );
+
+        // Walk two full cycles, recording which take each stroke plays.
+        let mut seen: Vec<*const Zone> = vec![la.zone as *const Zone];
+        for _ in 0..(2 * MANDOLIN_ROUND_ROBINS - 1) {
+            assert!(
+                la.retrigger(key, 100),
+                "a plucked voice must accept a restrike"
+            );
+            // The onset is re-armed, i.e. the sample WILL sound again: crossfade
+            // clock and read head back to zero, release decay undone.
+            assert_eq!(la.t, 0, "restrike must restart the crossfade clock");
+            assert_eq!(la.pos, 0.0, "restrike must rewind the sample read head");
+            assert_eq!(la.rel_gain, 1.0, "restrike must undo the release decay");
+            assert_eq!(
+                la.rel_mul, 1.0,
+                "restrike must not leave the sample decaying"
+            );
+            seen.push(la.zone as *const Zone);
+        }
+
+        // Strict cycling: the first four takes are pairwise distinct, and the
+        // second cycle repeats them in the same order. Random selection would
+        // fail the distinctness half; a stuck index would fail both.
+        for i in 0..MANDOLIN_ROUND_ROBINS {
+            for j in (i + 1)..MANDOLIN_ROUND_ROBINS {
+                assert_ne!(
+                    seen[i], seen[j],
+                    "strokes {i} and {j} of one cycle must play DIFFERENT takes"
+                );
+            }
+            assert_eq!(
+                seen[i],
+                seen[i + MANDOLIN_ROUND_ROBINS],
+                "stroke {i} and stroke {} must play the SAME take — the takes were \
+                 recorded in pick-direction order, so the cycle must be strict",
+                i + MANDOLIN_ROUND_ROBINS
+            );
+        }
+
+        // The scoping: a single-take bank keeps the original suppress-and-model
+        // path. Its read head and clock must NOT be re-armed.
+        let mut steel = match LaVoice::build(
+            model(),
+            steel_bank(),
+            key,
+            100,
+            sr,
+            0.20,
+            (0.05, 0.28),
+            LaFx::default(),
+            DEFAULT_LA_RELEASE_T60,
+        ) {
+            Ok(la) => la,
+            Err(_) => panic!("the steel bank must wrap at E5"),
+        };
+        assert!(
+            steel.rr.is_none(),
+            "a single-take bank must NOT arm rotation"
+        );
+        let mut buf = vec![0f32; 512];
+        steel.render(&mut buf);
+        let (t_before, pos_before) = (steel.t, steel.pos);
+        assert!(steel.retrigger(key, 100));
+        assert_eq!(
+            steel.t, t_before,
+            "a single-take bank must not restart its crossfade clock on a restrike"
+        );
+        assert_eq!(
+            steel.pos, pos_before,
+            "a single-take bank must not rewind its sample read head on a restrike"
+        );
+        assert!(
+            steel.rel_mul < 1.0,
+            "a single-take bank must still RETIRE its sampled attack on a restrike"
+        );
     }
 
     /// Every LOOPED-SUSTAIN bank must be loopable: a whole number of pitch

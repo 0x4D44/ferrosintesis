@@ -11932,9 +11932,11 @@ pub fn make_variation(
             let model: Box<dyn Voice> = Box::new(Pluck::new(&MANDOLIN, key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_MANDOLIN;
-                crate::sampler::LaVoice::wrap(
+                crate::sampler::LaVoice::wrap_rr(
                     model,
-                    crate::sampler::mandolin_bank(rr as usize),
+                    crate::sampler::mandolin_bank,
+                    crate::sampler::MANDOLIN_ROUND_ROBINS,
+                    rr,
                     key,
                     vel,
                     sr,

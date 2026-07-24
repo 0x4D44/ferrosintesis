@@ -16783,9 +16783,7 @@ mod tests {
     fn gm120_sampled_beats_the_modeled_burst_level() {
         let sr = 44100.0;
         let seed = 0x5F58_0100 ^ 120;
-        let win = |b: &[f32]| {
-            crate::testutil::rms(&b[(0.015 * sr) as usize..(0.40 * sr) as usize])
-        };
+        let win = |b: &[f32]| crate::testutil::rms(&b[(0.015 * sr) as usize..(0.40 * sr) as usize]);
         let sampled = win(&render_sampled_hold(120, 60, 100, sr, seed, 2.5, 3.0));
         let modeled = win(&render_sfx_hold(120, 100, sr, seed, 2.5, 3.0));
         // measured jump is ~+22 dB peak / +18 dB rms; require at least +9 dB so the

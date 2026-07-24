@@ -11,18 +11,54 @@
 pub const FILE_COUNT: usize = 12;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
-    ("fretnoise_rr01.wav", include_bytes!("../samples/fretnoise_rr01.wav")),
-    ("fretnoise_rr02.wav", include_bytes!("../samples/fretnoise_rr02.wav")),
-    ("fretnoise_rr03.wav", include_bytes!("../samples/fretnoise_rr03.wav")),
-    ("fretnoise_rr04.wav", include_bytes!("../samples/fretnoise_rr04.wav")),
-    ("fretnoise_rr05.wav", include_bytes!("../samples/fretnoise_rr05.wav")),
-    ("fretnoise_rr06.wav", include_bytes!("../samples/fretnoise_rr06.wav")),
-    ("fretnoise_rr07.wav", include_bytes!("../samples/fretnoise_rr07.wav")),
-    ("fretnoise_rr08.wav", include_bytes!("../samples/fretnoise_rr08.wav")),
-    ("fretnoise_rr09.wav", include_bytes!("../samples/fretnoise_rr09.wav")),
-    ("fretnoise_rr10.wav", include_bytes!("../samples/fretnoise_rr10.wav")),
-    ("fretnoise_rr11.wav", include_bytes!("../samples/fretnoise_rr11.wav")),
-    ("fretnoise_rr12.wav", include_bytes!("../samples/fretnoise_rr12.wav")),
+    (
+        "fretnoise_rr01.wav",
+        include_bytes!("../samples/fretnoise_rr01.wav"),
+    ),
+    (
+        "fretnoise_rr02.wav",
+        include_bytes!("../samples/fretnoise_rr02.wav"),
+    ),
+    (
+        "fretnoise_rr03.wav",
+        include_bytes!("../samples/fretnoise_rr03.wav"),
+    ),
+    (
+        "fretnoise_rr04.wav",
+        include_bytes!("../samples/fretnoise_rr04.wav"),
+    ),
+    (
+        "fretnoise_rr05.wav",
+        include_bytes!("../samples/fretnoise_rr05.wav"),
+    ),
+    (
+        "fretnoise_rr06.wav",
+        include_bytes!("../samples/fretnoise_rr06.wav"),
+    ),
+    (
+        "fretnoise_rr07.wav",
+        include_bytes!("../samples/fretnoise_rr07.wav"),
+    ),
+    (
+        "fretnoise_rr08.wav",
+        include_bytes!("../samples/fretnoise_rr08.wav"),
+    ),
+    (
+        "fretnoise_rr09.wav",
+        include_bytes!("../samples/fretnoise_rr09.wav"),
+    ),
+    (
+        "fretnoise_rr10.wav",
+        include_bytes!("../samples/fretnoise_rr10.wav"),
+    ),
+    (
+        "fretnoise_rr11.wav",
+        include_bytes!("../samples/fretnoise_rr11.wav"),
+    ),
+    (
+        "fretnoise_rr12.wav",
+        include_bytes!("../samples/fretnoise_rr12.wav"),
+    ),
 ];
 
 /// The number of round-robin takes in the bank. The synth cycles these so

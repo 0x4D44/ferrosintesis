@@ -4622,6 +4622,8 @@ mod tests {
         let _ = pick_bass_bank();
         let _ = pizzbass_bank();
         let _ = recorder_bank();
+        let _ = eastman_picked_bank();
+        let _ = eastman_plucked_bank();
         let _ = rhodes_bank();
         let _ = shakuhachi_bank();
         let _ = sitar_bank();

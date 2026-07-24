@@ -8720,24 +8720,38 @@ const LA_MANDOLIN: (f32, (f32, f32)) = (0.20, (0.05, 0.28));
 /// mean hides a TREBLE deficit: this take's top zones are far quieter relative
 /// to peak than the Martin's (A#4 0.110 / F5 0.095 vs B4 0.206 / F5 0.210), so
 /// at 0.229 `print_steel_wrap_level_ratios` read 0.78–0.80 on keys 76/79 —
-/// astride `la_steel_high_key_level_parity`'s 0.8 floor. Scaling by 1.14 to
-/// **0.26** recentres the checked keys at 0.89–1.33 and lifts the whole sweep's
-/// maximum only to ~1.42, well inside the 2.2 ceiling. Fade window unchanged:
-/// only the level moved, not the timing (HLD §7).
+/// astride `la_steel_high_key_level_parity`'s 0.8 floor. Fade window unchanged
+/// throughout: only the level moves, not the timing (HLD §7).
 ///
-/// The lesson is that a bank-wide mean is the wrong statistic for a gain the
-/// TREBLE oracles police — measure with the harness before pinning.
-pub(crate) const LA_EASTPICK: (f32, (f32, f32)) = (0.26, (0.05, 0.28));
+/// **Re-fitted to 0.32 on integration.** KILN-00048 (decouple velocity from the
+/// KS loop-damper decay rate) landed on trunk while this was in flight and moved
+/// the model's level in the crossfade window, dropping key 79 back to 0.79 — the
+/// same failure the first fit had cured. Measured response of the checked keys
+/// (76/79/83) to the gain: 0.26 → min 0.79 (fails); 0.30 → 0.85; **0.32 → 0.88**;
+/// 0.34 → 0.91 but pushes key 83 to 1.65. 0.32 clears the floor with margin while
+/// keeping the whole sweep (0.87–1.59) nearest unity, so it is both safe and the
+/// most continuous seam.
+///
+/// Two lessons here. A bank-wide mean is the wrong statistic for a gain the TREBLE
+/// oracles police — measure with the harness before pinning. And this gain is
+/// coupled to the STEEL model: any change to the model's level in the 0.05..0.28 s
+/// window invalidates the fit, so re-run the harness after rebasing onto one.
+pub(crate) const LA_EASTPICK: (f32, (f32, f32)) = (0.32, (0.05, 0.28));
 /// GM 25 CC0=1 alternate — the same guitar, fingerstyle (`plucked.opus`).
 /// Warmer and ~4–5× darker than the picked take (centroid ~480–630 Hz vs
 /// ~2400–3000 Hz). Its crossfade-window mean sits 0.54 dB below the Martin
 /// (0.2059), giving 0.20 × 0.2191/0.2059 ≈ 0.213, and it shares the picked
 /// take's treble deficit (B4 0.106 / F5 0.110 against the Martin's 0.206 /
-/// 0.210), so it takes the same 1.14 treble correction → **0.242**. It is an
-/// alternate bank, so `la_steel_high_key_level_parity` (which measures the
-/// default) does not police it; `altbank_steel_alternates_are_level_sane`
-/// covers it instead.
-pub(crate) const LA_EASTPLUCK: (f32, (f32, f32)) = (0.242, (0.05, 0.28));
+/// 0.210), so it takes the same treble correction. **Carried to 0.298 on
+/// integration** by the same factor as `LA_EASTPICK` (0.32/0.26), because
+/// KILN-00048 moved the shared STEEL model under both banks. This one was not
+/// forced by a red test — `altbank_steel_alternates_are_level_sane` passed at
+/// 0.242 — but the two Eastman banks share one derivation, and leaving the
+/// alternate un-refitted would park it just above a floor the default had
+/// already fallen through. It is an alternate bank, so
+/// `la_steel_high_key_level_parity` (which measures only the default) does not
+/// police it; that oracle covers it instead.
+pub(crate) const LA_EASTPLUCK: (f32, (f32, f32)) = (0.298, (0.05, 0.28));
 
 /// Build a GM 25 steel voice: the `STEEL` Karplus-Strong model carrying the
 /// decay, with `zones` crossfaded over its onset at LA gain/fade `la`.

@@ -109,23 +109,134 @@ mod tests {
         license != "CC0-1.0"
     }
 
-    /// Every attribution-bearing bank in the default build is named in the licensing
-    /// guide a distributor reads.
+    /// Spellings of a licence id that count as naming it.
+    ///
+    /// The repo uses both the SPDX form (`CC-BY-4.0`, in manifests) and the prose form
+    /// (`CC BY 4.0`, in the notices a human reads); either satisfies "this document says
+    /// which licence applies".
+    fn license_spellings(license: &str) -> Vec<String> {
+        let mut out = vec![license.to_string()];
+        if license.starts_with("CC-BY-") {
+            out.push(license.replace('-', " "));
+        }
+        out
+    }
+
+    /// Does `text` name this licence in any accepted spelling?
+    fn names_license(text: &str, license: &str) -> bool {
+        license_spellings(license).iter().any(|s| text.contains(s))
+    }
+
+    /// The DISTINCTIVE credit tokens a crate's own NOTICE carries: quoted work titles
+    /// and source URLs.
+    ///
+    /// This is what turns "the guide mentions the crate" into "the credit travelled".
+    /// A crate name is our own identifier and proves nothing about attribution — the
+    /// verifier's repro for MM-BUG-KILN-00071 replaced the README and NOTICE with ten
+    /// crate names, one per line, and every oracle still passed. A work title or source
+    /// URL is the licensor's, so it cannot be reproduced by accident.
+    ///
+    /// The licence's own URL is excluded deliberately: it appears in every notice, so it
+    /// would make the check pass for a bank whose credit was never carried over.
+    fn credit_tokens(notice: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut rest = notice;
+        while let Some((_, after)) = rest.split_once('"') {
+            match after.split_once('"') {
+                Some((inner, tail)) => {
+                    let title = inner.trim();
+                    if title.len() >= 4 && !title.contains('\n') {
+                        out.push(title.to_string());
+                    }
+                    rest = tail;
+                }
+                None => break,
+            }
+        }
+        for word in notice.split_whitespace() {
+            if let Some(i) = word.find("http") {
+                let url = word[i..].trim_end_matches([')', ',', '.', ';', '—']);
+                if url.len() > 12 && !url.contains("creativecommons.org") {
+                    out.push(url.to_string());
+                }
+            }
+        }
+        out
+    }
+
+    /// The licence-section heading in force where `krate` is named in the parent NOTICE.
+    ///
+    /// The file groups banks under `---- / MIT / ----` style rules, and several banks
+    /// share one credit body under a heading (the three MuseScore-lineage crates do), so
+    /// a naive "span to the next crate name" would read an empty block for all but the
+    /// last of a group. Keying off the heading matches how the document is actually
+    /// written, and still catches a bank filed under the wrong licence.
+    fn notice_section_for(notice: &str, krate: &str) -> Option<String> {
+        let lines: Vec<&str> = notice.lines().collect();
+        let is_rule = |l: &str| l.len() >= 20 && l.chars().all(|c| c == '-');
+        let mut section: Option<String> = None;
+        for (i, line) in lines.iter().enumerate() {
+            if is_rule(line) && i + 2 < lines.len() && is_rule(lines[i + 2]) {
+                section = Some(lines[i + 1].trim().to_string());
+            }
+            if mentions(line, krate) {
+                return section;
+            }
+        }
+        None
+    }
+
+    /// Does `text` name `krate` as an identifier rather than as a prefix of a longer one?
+    fn mentions(text: &str, krate: &str) -> bool {
+        let mut from = 0;
+        while let Some(i) = text[from..].find(krate) {
+            let at = from + i;
+            let after = text[at + krate.len()..].chars().next();
+            if !matches!(after, Some(c) if c.is_alphanumeric() || c == '-') {
+                return true;
+            }
+            from = at + krate.len();
+        }
+        false
+    }
+
+    /// Every attribution-bearing bank in the default build is CREDITED in the licensing
+    /// guide a distributor reads — named, with its licence, and carrying the licensor's
+    /// own words.
+    ///
+    /// "Mentioned" is not "credited": the row must also state the licence and repeat a
+    /// distinctive token (a work title or source URL) from the bank's own NOTICE, so a
+    /// gutted table cannot pass (MM-BUG-KILN-00071).
     #[test]
     fn readme_names_every_attribution_bearing_sample_bank() {
         let readme = read(&crates_dir().join("ferrosintesis").join("README.md"));
 
         let mut missing = Vec::new();
+        let mut unlicensed = Vec::new();
+        let mut uncredited = Vec::new();
         let mut covered = 0usize;
         for krate in default_sample_crates() {
             let license = declared_license(&krate);
             if !requires_attribution(&license) {
                 continue;
             }
-            if readme.contains(&krate) {
-                covered += 1;
-            } else {
+            let Some(row) = readme.lines().find(|l| mentions(l, &krate)) else {
                 missing.push(format!("{krate} ({license})"));
+                continue;
+            };
+            covered += 1;
+            if !names_license(row, &license) {
+                unlicensed.push(format!("{krate}: declares {license}, row says none"));
+            }
+            let tokens = credit_tokens(&read(&crates_dir().join(&krate).join("NOTICE")));
+            assert!(
+                !tokens.is_empty(),
+                "{krate}/NOTICE carries no quoted work title and no source URL, so \
+                 there is nothing distinctive to check travelled — that notice cannot \
+                 be a real attribution"
+            );
+            if !tokens.iter().any(|t| row.contains(t.as_str())) {
+                uncredited.push(format!("{krate}: none of {tokens:?} appear in its row"));
             }
         }
 
@@ -138,6 +249,20 @@ mod tests {
              \"Sample provenance and licensing\" section.",
             missing.len(),
             missing.join("\n  ")
+        );
+        assert!(
+            unlicensed.is_empty(),
+            "{} README row(s) name a bank without stating which licence applies, so a \
+             distributor cannot tell what obligation they are under:\n  {}",
+            unlicensed.len(),
+            unlicensed.join("\n  ")
+        );
+        assert!(
+            uncredited.is_empty(),
+            "{} README row(s) name a bank but carry none of the credit its own NOTICE \
+             requires — a row of bare crate names is not an attribution:\n  {}",
+            uncredited.len(),
+            uncredited.join("\n  ")
         );
         assert!(
             covered > 0,
@@ -178,10 +303,32 @@ mod tests {
 
         let notice = read(&notice_path);
         let mut missing = Vec::new();
+        let mut misfiled = Vec::new();
+        let mut uncredited = Vec::new();
         for krate in default_sample_crates() {
             let license = declared_license(&krate);
-            if requires_attribution(&license) && !notice.contains(&krate) {
+            if !requires_attribution(&license) {
+                continue;
+            }
+            if !mentions(&notice, &krate) {
                 missing.push(format!("{krate} ({license})"));
+                continue;
+            }
+            // Filed under a heading that states ITS licence, not some other bank's.
+            match notice_section_for(&notice, &krate) {
+                Some(section) if names_license(&section, &license) => {}
+                Some(section) => misfiled.push(format!(
+                    "{krate} declares {license} but is listed under \"{section}\""
+                )),
+                None => misfiled.push(format!(
+                    "{krate} is named outside any licence section, so the notice never \
+                     says what applies to it"
+                )),
+            }
+            // The licensor's own words reached this file.
+            let tokens = credit_tokens(&read(&crates_dir().join(&krate).join("NOTICE")));
+            if !tokens.iter().any(|t| notice.contains(t.as_str())) {
+                uncredited.push(format!("{krate}: none of {tokens:?} appear"));
             }
         }
         assert!(
@@ -189,6 +336,21 @@ mod tests {
             "crates/ferrosintesis/NOTICE omits {} attribution-bearing bank(s):\n  {}",
             missing.len(),
             missing.join("\n  ")
+        );
+        assert!(
+            misfiled.is_empty(),
+            "{} bank(s) are named in crates/ferrosintesis/NOTICE under a licence heading \
+             that is not their own:\n  {}",
+            misfiled.len(),
+            misfiled.join("\n  ")
+        );
+        assert!(
+            uncredited.is_empty(),
+            "{} bank(s) are named in crates/ferrosintesis/NOTICE but none of the credit \
+             from their own NOTICE travelled with them — a list of crate names satisfies \
+             no licence:\n  {}",
+            uncredited.len(),
+            uncredited.join("\n  ")
         );
     }
 
@@ -210,6 +372,18 @@ mod tests {
             assert!(
                 text.trim().len() > 40,
                 "{krate}/NOTICE exists but is too short to carry a real attribution"
+            );
+            // A length floor is satisfied by any 41 characters. These are the parts a
+            // licence actually requires: who is credited, and under what terms.
+            assert!(
+                !credit_tokens(&text).is_empty(),
+                "{krate}/NOTICE names no work and cites no source (no quoted title, no \
+                 URL) — it is text, not an attribution"
+            );
+            assert!(
+                names_license(&text, &license),
+                "{krate}/NOTICE never states the {license} licence it is reproducing, so \
+                 a distributor cannot tell what the obligation is"
             );
             assert!(
                 notice_packaged(&krate),

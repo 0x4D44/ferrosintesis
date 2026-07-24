@@ -1079,15 +1079,24 @@ fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
         // values — part of the 7-album freeze. 102 (echoes) gets a LOW bus-echo
         // send: its repeats are INTERNAL to the voice, so a bus echo would double
         // them. The rest are gut-feel (chorus shimmer + a little bus echo).
-        96 => (0.30, 0.20),    // rain: droplets are internal; light shimmer
-        97 => (0.35, 0.25),    // soundtrack: wide swell
-        98 => (0.30, 0.35),    // crystal: FROZEN — unchanged from the pre-split arm
-        99 => (0.30, 0.25),    // atmosphere: wash
-        100 => (0.30, 0.30),   // brightness: shimmer as it blooms
-        101 => (0.25, 0.30),   // goblins: a touch less width, more echo scatter
-        102 => (0.30, 0.05),   // echoes: internal repeats — starve the bus echo
-        103 => (0.20, 0.30),   // sci-fi: focused zap, echoed
-        8..=10 => (0.0, 0.15), // celesta / glockenspiel / music box
+        96 => (0.30, 0.20),  // rain: droplets are internal; light shimmer
+        97 => (0.35, 0.25),  // soundtrack: wide swell
+        98 => (0.30, 0.35),  // crystal: FROZEN — unchanged from the pre-split arm
+        99 => (0.30, 0.25),  // atmosphere: wash
+        100 => (0.30, 0.30), // brightness: shimmer as it blooms
+        101 => (0.25, 0.30), // goblins: a touch less width, more echo scatter
+        102 => (0.30, 0.05), // echoes: internal repeats — starve the bus echo
+        103 => (0.20, 0.30), // sci-fi: focused zap, echoed
+        // Mallets (2026.07.24): the old shared 0.15 was too much echo for a
+        // BRIGHT, FAST line. The bus time is a dotted quaver, so on a metronomic
+        // quaver ostinato every repeat lands 1.5 slots late — dead on the
+        // off-beat, carrying the wrong pitch for its position, ping-ponged hard
+        // L/R. That reads as a strange shimmer rather than as space. Heard on
+        // the Tubular Bells glockenspiel entry (200 ms quavers at 150 bpm vs a
+        // 300 ms echo), where GM 9 is also the ONLY echoed voice in the opening.
+        // Celesta/music box are sprinkled, not run, so they keep a trace.
+        8 | 10 => (0.0, 0.06), // celesta / music box: a trace of slap
+        9 => (0.0, 0.0),       // glockenspiel: brightest and fastest — no bus echo
         14 => (0.0, 0.08),     // tubular bells
         15 => (0.10, 0.0),     // hammered dulcimer: sub-beat width, no echo
         _ => (0.0, 0.0),
@@ -11684,6 +11693,82 @@ mod tests {
             e >= FLOOR,
             "sax echo missing in the difference window: rms {e:.3e}"
         );
+    }
+
+    /// One mallet strike, optionally AUTHORING its own CC94 echo send. Rendered
+    /// twice — echo bus on, echo bus off — so the difference is the bus echo and
+    /// nothing else (`wet: 0.0`, so no reverb tail contaminates the window).
+    fn mallet_echo_rms(prog: u8, authored_del: Option<u8>) -> f32 {
+        let sr = 44100.0;
+        let render_one = |delay_s: f32| {
+            let mut ev = vec![(0.0, EvKind::Prog { ch: 0, prog })];
+            if let Some(val) = authored_del {
+                ev.push((
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 94,
+                        val,
+                    },
+                ));
+            }
+            ev.push((
+                0.0,
+                EvKind::NoteOn {
+                    ch: 0,
+                    key: 76,
+                    vel: 64,
+                },
+            ));
+            ev.push((0.1, EvKind::NoteOff { ch: 0, key: 76 }));
+            crate::testutil::mono(&render(&test_song(ev, 1.6), &opts_delay(delay_s)).0)
+        };
+        let wet = render_one(0.30);
+        let dry = render_one(0.0);
+        // From just before the first repeat (0.30 s) out past the third.
+        let (a, b) = ((0.28 * sr) as usize, (1.20 * sr) as usize);
+        let d: Vec<f32> = wet[a..b]
+            .iter()
+            .zip(&dry[a..b])
+            .map(|(x, y)| x - y)
+            .collect();
+        rms(&d)
+    }
+
+    /// The mallet bus-echo defaults (2026.07.24). GM 9 glockenspiel takes NO bus
+    /// echo at all; GM 8 celesta and GM 10 music box keep a 0.06 trace, down from
+    /// the shared 0.15.
+    ///
+    /// DERIVED, not a constant pin: the send scales a linear (LTI) bus, so the
+    /// echo's energy is exactly proportional to it. Each voice is rendered a
+    /// second time AUTHORING CC94 = 19 (0.1496 — the retired default), and the
+    /// unauthored render is required to sit at 0.06/0.1496 of it. A silent edit
+    /// of either number moves the ratio and fails here.
+    #[test]
+    fn mallet_bus_echo_is_off_for_glockenspiel_and_a_trace_for_its_neighbours() {
+        // GM 9 feeds the bus nothing, so the two renders are bit-identical.
+        let glock = mallet_echo_rms(9, None);
+        assert!(
+            glock < 1e-9,
+            "GM 9 glockenspiel must take NO bus echo: difference rms {glock:.3e}"
+        );
+
+        const OLD_CC94: u8 = 19; // 19/127 = 0.14961 — the retired 8..=10 default
+        let expect = 0.06 / (OLD_CC94 as f32 / 127.0);
+        for prog in [8u8, 10u8] {
+            let got = mallet_echo_rms(prog, None);
+            let reference = mallet_echo_rms(prog, Some(OLD_CC94));
+            assert!(
+                reference > 1e-4,
+                "GM {prog} reference echo too quiet to divide by: rms {reference:.3e}"
+            );
+            let ratio = got / reference;
+            assert!(
+                (ratio - expect).abs() < 0.02,
+                "GM {prog} echo send is not 0.06: measured ratio {ratio:.4} vs the \
+                 expected {expect:.4} against an authored CC94={OLD_CC94}"
+            );
+        }
     }
 
     fn render_brass_cc11(ramp: bool) -> Vec<f32> {

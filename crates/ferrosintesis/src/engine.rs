@@ -2516,6 +2516,16 @@ impl EngineCore {
                     // the pedal state at that time) now governs it afresh
                     a.held = false;
                     a.sost_held = false;
+                    // A retriggered round-robin voice rotated its OWN take, so the
+                    // engine counter must resume from where the voice actually is,
+                    // not from the count it had when the voice spawned. Mirroring
+                    // the sounding take (rather than adding 1 per stroke) is what
+                    // keeps a declined rotation — a next take that would repitch out
+                    // of window holds its take — from desyncing the two
+                    // (MM-BUG-KILN-00088).
+                    if let Some(sounding) = a.voice.rr_phase() {
+                        self.pitched_rr[ci][key as usize] = (sounding as u8).wrapping_add(1);
+                    }
                     // consume this stroke's seed slot so every LATER spawn
                     // draws exactly the seed it would have pre-change — the
                     // render diff stays confined to the tremolo itself
@@ -2587,15 +2597,22 @@ impl EngineCore {
             } else {
                 // XG bank-LSB variation, else base GM. Same `seed` on both paths,
                 // so an undefined (prog, bank_lsb) is bit-identical to base.
-                // Read-and-advance this (channel, key)'s strike counter. Done for
-                // every melodic note, not just the ones that use it: the counter
-                // is inert for voices without a round-robin bank, so this cannot
-                // move any existing render.
-                let rr = {
+                //
+                // Read-and-advance this (channel, key)'s strike counter, but ONLY for
+                // a variation that actually rotates takes. It used to advance on every
+                // melodic spawn on the theory that the counter is inert elsewhere —
+                // which is true of the voice it builds, and false of the phase: a base
+                // steel or unrelated-LSB note on the same channel and key ate the
+                // mandolin's next take, so the recorded down/up pick order broke at
+                // the phrase boundary (MM-BUG-KILN-00088).
+                let rr = if voices::variation_round_robins(prog, self.strips[ci].bank_lsb).is_some()
+                {
                     let c = &mut self.pitched_rr[ci][key as usize];
                     let r = *c;
                     *c = c.wrapping_add(1);
                     r
+                } else {
+                    0
                 };
                 voices::make_variation(
                     prog,
@@ -4578,6 +4595,120 @@ mod tests {
             "the spawned voice froze the OLD bank LSB — its routing identity is wrong \
              and the next restrike would match on a lie"
         );
+    }
+
+    /// MM-BUG-KILN-00088: the mandolin's strike phase advances exactly once per
+    /// accepted stroke, and only for the bank that owns it.
+    ///
+    /// The takes encode the player's alternating pick direction, so a phase that
+    /// slips replays a take and reads as down/up/up with identical onset PCM. Two
+    /// ownership defects did that:
+    ///   (a) a fast stroke retriggered the voice, which rotated its PRIVATE index
+    ///       while the engine counter stood still — so the next fresh voice after
+    ///       the gap replayed the take just heard;
+    ///   (b) the engine advanced its counter on EVERY melodic spawn, so a base
+    ///       steel or unrelated-LSB note on the same channel and key ate the
+    ///       mandolin's next take.
+    ///
+    /// Asserted on the SOUNDING take (`Voice::rr_phase`), not on the counter, so
+    /// the test measures what a listener would hear.
+    #[test]
+    fn the_mandolin_strike_phase_is_bank_scoped_and_survives_a_retrigger() {
+        let sr = 44100.0;
+        let opts = || CoreOptions {
+            sr,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: true,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        };
+        const KEY: u8 = 74;
+        let takes = voices::variation_round_robins(25, 96).expect("the mandolin rotates takes");
+        let fast = (0.075 * sr) as u64; // inside TREM_IOI_MAX_S
+        let gap = (0.400 * sr) as u64; // well outside it
+        let cc = |num: u8, val: u8| EvKind::Cc { ch: 0, num, val };
+        let mandolin = |core: &mut EngineCore| {
+            core.handle_event(EvKind::Prog { ch: 0, prog: 25 });
+            core.handle_event(cc(32, 96));
+        };
+        // The take the newest voice is sounding.
+        let sounding = |core: &EngineCore| {
+            core.active
+                .last()
+                .expect("a voice")
+                .voice
+                .rr_phase()
+                .expect("the mandolin voice owns a round-robin phase")
+        };
+
+        // (a) fresh 0 -> fast retrigger 1 -> gap -> fresh 2: one continuous sequence
+        // across the spawn/retrigger boundary.
+        let mut core = EngineCore::new(opts());
+        mandolin(&mut core);
+        core.note_on(0, KEY, 100);
+        assert_eq!(sounding(&core), 0, "the first stroke is not take 0");
+        core.now += fast;
+        core.note_on(0, KEY, 100);
+        assert_eq!(
+            sounding(&core),
+            1,
+            "the fast stroke did not rotate to the next take"
+        );
+        core.now += gap;
+        core.note_on(0, KEY, 100);
+        assert_eq!(
+            sounding(&core),
+            2,
+            "the fresh voice after the gap replayed a take the retrigger already \
+             played — the engine counter did not follow the voice's rotation, so the \
+             recorded down/up pick order breaks at every phrase boundary"
+        );
+
+        // (b) several fast strokes, then a fresh phrase — and the wrap past the last
+        // take is continuous, not a reset.
+        let mut core = EngineCore::new(opts());
+        mandolin(&mut core);
+        core.note_on(0, KEY, 100);
+        for _ in 0..takes {
+            core.now += fast;
+            core.note_on(0, KEY, 100);
+        }
+        // takes+1 strokes total: 0,1,..,takes-1,0 — the last wrapped back to 0.
+        assert_eq!(sounding(&core), 0, "the take sequence did not wrap");
+        core.now += gap;
+        core.note_on(0, KEY, 100);
+        assert_eq!(
+            sounding(&core),
+            1,
+            "the phrase after a wrapped tremolo run restarted the sequence instead of \
+             continuing it"
+        );
+
+        // (c) unrelated voices on the SAME channel and key must not consume phase.
+        for (what, setup) in [
+            ("base steel guitar (LSB 0)", 0u8),
+            ("an undefined LSB variation", 7u8),
+        ] {
+            let mut core = EngineCore::new(opts());
+            core.handle_event(EvKind::Prog { ch: 0, prog: 25 });
+            core.handle_event(cc(32, setup));
+            for _ in 0..3 {
+                core.now += gap;
+                core.note_on(0, KEY, 100);
+            }
+            core.now += gap;
+            mandolin(&mut core);
+            core.note_on(0, KEY, 100);
+            assert_eq!(
+                sounding(&core),
+                0,
+                "{what} consumed the mandolin's strike phase: its first stroke is not \
+                 take 0"
+            );
+        }
     }
 
     fn drum_song(hits: &[(f64, u8, u8)], secs: f64, ccs: &[(u8, u8)]) -> Song {

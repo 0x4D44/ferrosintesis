@@ -3482,6 +3482,10 @@ impl Voice for LaVoice {
         }
     }
 
+    fn rr_phase(&self) -> Option<usize> {
+        self.rr.map(|rr| rr.idx % rr.takes.max(1))
+    }
+
     #[cfg(test)]
     fn kind(&self) -> &'static str {
         // the LA wrapper is transparent for routing: report the model inside

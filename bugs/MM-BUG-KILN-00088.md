@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00088 — Mandolin round-robin phase splits across engine spawns and voice retriggers
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth / mandolin round robin
@@ -19,6 +19,11 @@
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-mandolin/`)
+  → Fixed (2026-07-24, Claude Opus 4.8 (1M). One bank-scoped strike phase: the engine
+  counter now advances only for a variation that rotates takes, and a retriggered voice
+  hands its sounding take back through the new `Voice::rr_phase`. Engine-level oracle
+  added; both defects proved independently. Evidence under "Fix landed" below. Awaits
+  independent two-eyes closure.)
 
 ## Observation
 
@@ -70,6 +75,52 @@ Add an engine-level state oracle covering:
 - counter wrap after take 3.
 
 Estimated effort: Small–Medium.
+
+## Fix landed (2026-07-24)
+
+**Code.** The phase now has exactly ONE owner at a time.
+
+- `voices::variation_round_robins(program, bank_lsb)` is the single table of which
+  variations own a strike phase. Both `make_variation`'s construction and the engine's
+  counter read it, so the two cannot disagree about who consumes a take.
+- `crates/ferrosintesis/src/engine.rs` advances `pitched_rr` only when that table says the
+  variation rotates. It used to advance on every melodic spawn, on the theory that the
+  counter is inert elsewhere — true of the voice it builds, false of the phase.
+- New `Voice::rr_phase()` (default `None`, implemented by `LaVoice`) reports the take
+  currently SOUNDING. On a successful retrigger the engine mirrors it as `sounding + 1`, so
+  the next fresh spawn resumes the sequence. Mirroring the sounding take rather than adding
+  one per stroke is deliberate: `LaVoice::retrigger` declines the rotation when the next
+  take would repitch outside 0.5..=2.05, and a blind increment would desync there.
+
+**Regression** — `the_mandolin_strike_phase_is_bank_scoped_and_survives_a_retrigger`
+(`engine.rs`). It asserts on the SOUNDING take, not on the counter, so it measures what a
+listener hears: fresh 0 → fast retrigger 1 → gap → fresh 2; a tremolo run that wraps past
+the last take continues rather than restarting; and neither base steel (LSB 0) nor an
+undefined LSB on the same channel and key consumes the phase.
+
+**Fails before, each defect independently.** Removing only the retrigger hand-back:
+"the fresh voice after the gap replayed a take the retrigger already played" (left 1, right
+2). Restoring only the advance-on-every-spawn: "base steel guitar (LSB 0) consumed the
+mandolin's strike phase" (left 3, right 0).
+
+**Blast radius — predicted, then falsified against the renders.** A census of all 141
+committed MIDIs finds three files using the mandolin bank, and predicts which can move:
+Hollow Hill Pt 1 (4 mandolin key-pairs, no fast restrikes, no keys shared with other
+voices) cannot; Pt 2 (3 shared keys) and The Signal Fire (459 fast restrikes, 2 shared
+keys) must. Rendering against a baseline built at `31468cd` matched the prediction exactly
+— Pt 1 identical, Pt 2 and The Signal Fire differing, and both controls (Big Weather 01, a
+GM-sweep demo) identical.
+
+**Where the diff sits.** A whole-file `cmp` is misleading here: the renders are
+loudness-normalized, so any local change shifts the global gain and every sample differs.
+Removing that gain (median per-second RMS ratio 1.000046) localizes the real change — the
+12 worst-affected seconds of Hollow Hill Pt 2 are ALL inside the 718–747 s mandolin
+passage (3.5–4.2% residual) against a median second of 0.014%. The change reached the
+mandolin and nothing else, which is the intended improvement: the takes rotate in the
+recorded down/up pick order instead of replaying at phrase boundaries.
+
+**Gates.** `cargo test --release -p ferrosintesis` 659 passed / 0 failed / 26 ignored (+4
+doc-tests); clippy `-D warnings` clean; `cargo fmt --check` clean.
 
 ## Notes
 

@@ -54,6 +54,20 @@ pub trait Voice: Send {
     fn retrigger(&mut self, _key: u8, _vel: u8) -> bool {
         false
     }
+    /// Which round-robin take this voice is currently sounding, if it has a
+    /// round-robin bank at all.
+    ///
+    /// The strike phase has exactly ONE owner at a time: the engine's
+    /// per-(channel, key) counter while no voice holds it, the voice itself while
+    /// it lives and rotates under `retrigger`. This hands it back, so the engine
+    /// can resume the sequence at the next fresh spawn instead of continuing from
+    /// a stale count (MM-BUG-KILN-00088). Reporting the SOUNDING take, not "how
+    /// many strokes happened", is what keeps the two in step when a rotation is
+    /// declined — a retrigger whose next take would repitch out of window keeps
+    /// its take and must not advance the engine either.
+    fn rr_phase(&self) -> Option<usize> {
+        None
+    }
     /// Tremulant control (organs): absolute rate in Hz and depth. The engine
     /// slews these toward the CC1 mod-wheel target so the Leslie rotor has
     /// real inertia. Voices without a tremulant ignore it.
@@ -12166,6 +12180,22 @@ pub fn acoustic_grand_with_bank(
 /// RNG-pure: every arm draws only from the passed `seed` (no extra RNG), so the
 /// `None` path is bit-identical to calling `make` directly — the album
 /// render-diff is the empirical confirmation.
+/// How many round-robin takes the `(program, bank_lsb)` variation rotates, or
+/// `None` if it has no round-robin bank.
+///
+/// The SINGLE source of truth for which variations own a strike phase: both
+/// [`make_variation`]'s construction and the engine's per-(channel, key) counter
+/// read it, so the two cannot disagree about who consumes a take. Before this, the
+/// engine advanced its counter for EVERY melodic spawn, so a base steel or
+/// unrelated-LSB note on the same channel and key silently ate the mandolin's next
+/// take (MM-BUG-KILN-00088).
+pub fn variation_round_robins(program: u8, bank_lsb: u8) -> Option<usize> {
+    match (program, bank_lsb) {
+        (25, 96) => Some(crate::sampler::MANDOLIN_ROUND_ROBINS),
+        _ => None,
+    }
+}
+
 #[allow(clippy::too_many_arguments)] // mirrors make()'s shape + bank_lsb and the RR index
 pub fn make_variation(
     program: u8,
@@ -12196,7 +12226,7 @@ pub fn make_variation(
                 crate::sampler::LaVoice::wrap_rr(
                     model,
                     crate::sampler::mandolin_bank,
-                    crate::sampler::MANDOLIN_ROUND_ROBINS,
+                    variation_round_robins(25, 96).expect("the mandolin owns a strike phase"),
                     rr,
                     key,
                     vel,

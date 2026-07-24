@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00068 — ferrosintesis and -sax license fields do not disclose the embedded non-MIT/Apache audio
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / licensing
@@ -20,6 +20,13 @@
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-24, raised by Claude Opus 4.8 from the licence audit
   run while fixing KILN-00060; two independent review agents flagged the parent field)
+  → Blocked (2026-07-24, Claude Opus 4.8 (1M) during a fixing pass. NOT a difficulty
+  block — both edits are one line each. It needs a decision only **Arthur** can make, and
+  the bug says so itself: changing the declared licence expression of a published
+  crates.io crate is a distribution-semantics change that can break dependents’ licence
+  gates on a version bump. Confirmed while routing: neither `ferrosintesis` nor
+  `-samples-sax` sets `publish = false`, so both are publishable and both carry that risk.
+  See "What is needed to unblock" below.)
 
 ## Observation
 
@@ -63,6 +70,28 @@ Options, in rough order of preference:
 - Or move to an explicit compound expression and accept the downstream churn.
 - The `-sax` case is narrower and lower-risk: that crate is not the one downstreams
   gate on, and `CC-BY-4.0 AND CC-BY-3.0` is simply more accurate.
+
+## What is needed to unblock (2026-07-24)
+
+**Owner: Arthur.** Two independent decisions; either can be taken alone.
+
+1. **`ferrosintesis`** (`license = "MIT OR Apache-2.0"`). Choose one:
+   - *Leave as-is* — the field describes the crate’s own source, and the audio lives in
+     separately-licensed dependency crates that each declare correctly. If this is the
+     call, the bug closes as working-as-intended and the reasoning is recorded, which is
+     itself worth having: the question will be asked again.
+   - *Move to a compound expression* and accept that dependents’ `cargo-deny` /
+     `cargo-about` gates may start failing at the next version bump.
+2. **`ferrosintesis-samples-sax`** (`license = "CC-BY-4.0"`). Lower risk, and the bug
+   judges `CC-BY-4.0 AND CC-BY-3.0` simply more accurate — its own `NOTICE` and
+   `PROVENANCE.md` already record that the underlying MTG good-sounds recordings are
+   CC BY 3.0. Still a published crate, so still Arthur’s call.
+
+**Why this was not just done.** The fix is trivial to type and impossible to un-ship: a
+licence expression is a promise to downstream consumers, and a fixing pass has no
+authority to change what the project promises. Nothing else is blocked on it — the
+human-readable disclosure landed with MM-BUG-KILN-00060, and MM-BUG-KILN-00069 has since
+added packaged per-crate provenance. This is metadata accuracy alone.
 
 ## Notes
 

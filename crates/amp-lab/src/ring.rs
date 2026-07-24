@@ -8,6 +8,8 @@
 //! does not justify a dependency, and the realtime path is worth keeping short
 //! enough to audit by eye.
 
+use std::cell::Cell;
+use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -51,12 +53,79 @@ impl Ring {
             head: AtomicUsize::new(0),
             tail: AtomicUsize::new(0),
         });
-        (Producer(ring.clone()), Consumer(ring))
+        (
+            Producer(ring.clone(), PhantomData),
+            Consumer(ring, PhantomData),
+        )
     }
 }
 
-pub struct Producer(Arc<Ring>);
-pub struct Consumer(Arc<Ring>);
+/// The write end. `Send` (it is handed to whichever thread produces) but
+/// deliberately **not** `Sync`.
+///
+/// `Ring`'s `unsafe impl Sync` is sound only under a genuine single-producer /
+/// single-consumer discipline, and nothing but this marker enforces it. Without it,
+/// `Producer` inherited `Sync` from its `Arc<Ring>`, so safe code could share
+/// `&Producer` across scoped threads or an `Arc<Producer>`: two `push()` calls would
+/// load the same head, both pass the capacity check and both write the same
+/// `UnsafeCell<Cmd>` — a data race, and undefined behaviour, reachable without a single
+/// `unsafe` block at the call site (MM-BUG-KILN-00080).
+///
+/// `PhantomData<Cell<()>>` is the marker of choice because `Cell` is exactly "`Send`,
+/// never `Sync`". Taking `&mut self` on the push methods would also work, but it would
+/// push exclusive ownership through every caller to state something the type system can
+/// say once, here.
+pub struct Producer(Arc<Ring>, PhantomData<Cell<()>>);
+
+/// The read end. `Send`, not `Sync`, for the mirror-image reason: two concurrent
+/// `pop()` calls could claim the same tail, letting the producer reuse a slot while
+/// another reader is still reading it.
+pub struct Consumer(Arc<Ring>, PhantomData<Cell<()>>);
+
+/// Compile-time proof of the endpoints' auto-traits: `Send`, and **not** `Sync`.
+///
+/// This cannot be a runtime test. The contract is that a program which shares an
+/// endpoint across threads must FAIL TO COMPILE, and a test that runs has already
+/// compiled. If someone later adds a field that reintroduces `Sync` — or deletes the
+/// `PhantomData` as an unused-looking marker — the build stops here rather than in a
+/// data race nobody can reproduce.
+mod auto_traits {
+    use super::{Consumer, Producer};
+    use std::marker::PhantomData;
+
+    const fn assert_send<T: Send>() {}
+
+    /// Asserting a NEGATIVE bound needs an inversion: `NOT_SYNC` is `true` from the
+    /// blanket trait impl, and `false` for `T: Sync`, because an inherent associated
+    /// const shadows a trait one when its bound is satisfied.
+    struct IsSync<T>(PhantomData<T>);
+    trait NotSyncFallback {
+        const NOT_SYNC: bool = true;
+    }
+    impl<T> NotSyncFallback for IsSync<T> {}
+    impl<T: Sync> IsSync<T> {
+        const NOT_SYNC: bool = false;
+    }
+
+    const _: () = assert_send::<Producer>();
+    const _: () = assert_send::<Consumer>();
+    const _: () = assert!(
+        IsSync::<Producer>::NOT_SYNC,
+        "Producer is Sync: safe code can now share the write end across threads, and \
+         two concurrent push() calls race on the same slot"
+    );
+    const _: () = assert!(
+        IsSync::<Consumer>::NOT_SYNC,
+        "Consumer is Sync: safe code can now share the read end across threads, and two \
+         concurrent pop() calls can claim the same slot"
+    );
+    /// Positive control. Without it the two assertions above would still pass if the
+    /// inversion silently stopped working and `NOT_SYNC` were always `true`.
+    const _: () = assert!(
+        !IsSync::<u32>::NOT_SYNC,
+        "the !Sync assertions are vacuous — the inversion no longer detects a Sync type"
+    );
+}
 
 impl Producer {
     /// Push one command. Returns false if the ring is full (dropped rather than
@@ -111,6 +180,35 @@ impl Consumer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The endpoints still cross threads in the shape the app actually uses: the
+    /// consumer is MOVED to the audio thread while the producer stays on the UI
+    /// thread. `!Sync` must forbid SHARING an endpoint, not moving one — a marker
+    /// that broke this would break the lab.
+    #[test]
+    fn one_endpoint_per_thread_still_works() {
+        let (p, c) = Ring::channel();
+        let reader = std::thread::spawn(move || {
+            let mut got = Vec::new();
+            while got.len() < 200 {
+                if let Some(cmd) = c.pop() {
+                    got.push(cmd);
+                }
+            }
+            got
+        });
+        let mut sent = 0u32;
+        while sent < 200 {
+            if p.push(Cmd::Midi((sent % 128) as u8)) {
+                sent += 1;
+            }
+        }
+        let got = reader.join().expect("consumer thread");
+        assert_eq!(got.len(), 200);
+        for (i, cmd) in got.iter().enumerate() {
+            assert_eq!(*cmd, Cmd::Midi((i % 128) as u8), "out of order at {i}");
+        }
+    }
 
     #[test]
     fn round_trips_in_order() {

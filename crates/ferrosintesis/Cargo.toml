@@ -44,11 +44,7 @@ embedded-samples = [
 # TOML 1.0 and cargo at our MSRV (1.87) refuses to parse it.
 ferrosintesis-samples-clavinet = { path = "../ferrosintesis-samples-clavinet", version = "=0.1.0", optional = true }
 ferrosintesis-samples-core = { path = "../ferrosintesis-samples-core", version = "=0.1.0", optional = true }
-ferrosintesis-samples-drumkit = {
-    path = "../ferrosintesis-samples-drumkit",
-    version = "=0.1.0",
-    optional = true,
-}
+ferrosintesis-samples-drumkit = { path = "../ferrosintesis-samples-drumkit", version = "=0.1.0", optional = true }
 ferrosintesis-samples-gong = { path = "../ferrosintesis-samples-gong", version = "=0.1.0", optional = true }
 ferrosintesis-samples-grand = { path = "../ferrosintesis-samples-grand", version = "=0.1.0", optional = true }
 ferrosintesis-samples-vcsl-steinway = { path = "../ferrosintesis-samples-vcsl-steinway", version = "=0.1.0", optional = true }
@@ -59,11 +55,7 @@ ferrosintesis-samples-dark-salamander = { path = "../ferrosintesis-samples-dark-
 ferrosintesis-samples-ydp-grand = { path = "../ferrosintesis-samples-ydp-grand", version = "=0.1.0", optional = true }
 ferrosintesis-samples-honkytonk = { path = "../ferrosintesis-samples-honkytonk", version = "=0.1.0", optional = true }
 ferrosintesis-samples-musescore = { path = "../ferrosintesis-samples-musescore", version = "=0.1.0", optional = true }
-ferrosintesis-samples-orchestral = {
-    path = "../ferrosintesis-samples-orchestral",
-    version = "=0.1.0",
-    optional = true,
-}
+ferrosintesis-samples-orchestral = { path = "../ferrosintesis-samples-orchestral", version = "=0.1.0", optional = true }
 ferrosintesis-samples-orchestral2 = { path = "../ferrosintesis-samples-orchestral2", version = "=0.1.0", optional = true }
 ferrosintesis-samples-sax = { path = "../ferrosintesis-samples-sax", version = "=0.1.0", optional = true }
 ferrosintesis-samples-strings = { path = "../ferrosintesis-samples-strings", version = "=0.1.0", optional = true }

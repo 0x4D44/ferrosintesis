@@ -88,6 +88,8 @@ pub(crate) mod engine;
 #[cfg(test)]
 mod licensing;
 pub(crate) mod loudness;
+#[cfg(test)]
+mod manifest;
 pub(crate) mod midi;
 pub(crate) mod reverb;
 pub(crate) mod sampler;

@@ -1,0 +1,109 @@
+ferrosintesis — third-party attribution notices
+===============================================
+
+The ferrosintesis SOURCE CODE is licensed MIT OR Apache-2.0 (see LICENSE-MIT and
+LICENSE-APACHE). This file covers something different: the EMBEDDED SOUND RECORDINGS.
+
+A build with default features (`embedded-samples`) compiles twenty-one first-party
+sample-asset crates into the binary. Eleven are CC0 1.0 and require nothing. The ten
+below are not, and their licences require that credit travel with any distribution —
+including a binary.
+
+IF YOU DISTRIBUTE A BINARY BUILT WITH DEFAULT FEATURES, YOU MUST REPRODUCE THE TEN
+NOTICES LISTED HERE. Each asset crate packages its own NOTICE file carrying the exact
+required text; concatenating those ten satisfies every obligation below. This file is
+the index, not a replacement for them.
+
+To build without any of this, disable default features — the fully modeled synth needs
+no samples at all.
+
+---------------------------------------------------------------------------------
+MIT
+---------------------------------------------------------------------------------
+
+ferrosintesis-samples-clavinet — GM 7 clavinet
+ferrosintesis-samples-musescore — GM 104 sitar, GM 75/76/77 pipe onsets, GM 8 celesta
+ferrosintesis-samples-musescore-grand — GM 0 grand piano (MF velocity tier)
+
+    All three are extracted from the MuseScore "MS Basic" / MuseScore_General
+    soundfont lineage. Retained upstream copyright notices:
+
+      FluidR3 (original version) by Frank Wen, Copyright (c) 2000-02
+      Mono conversion (FluidR3Mono) by Michael Cowgill, Copyright (c) 2014-17
+      Adaptation for MuseScore_General.sf2 by S. Christian Collins, Copyright (c) 2018-19
+      Copyright (c) 2014-16 Michael Cowgill
+      Copyright (c) 2000-2002, 2008 Frank Wen <getfrank@gmail.com>
+
+    The MIT permission notice must accompany these; it is reproduced in full in
+    crates/ferrosintesis-samples-clavinet/NOTICE and
+    crates/ferrosintesis-samples-musescore/NOTICE.
+
+---------------------------------------------------------------------------------
+CC BY 3.0  (https://creativecommons.org/licenses/by/3.0/)
+---------------------------------------------------------------------------------
+
+ferrosintesis-samples-grand — GM 0 grand piano (Yamaha C5)
+
+    "Salamander Grand Piano V3" by Alexander Holm, CC BY 3.0.
+    https://archive.org/details/SalamanderGrandPianoV3
+    Modified: trimmed, downmixed to mono, split into attack/body transients.
+
+ferrosintesis-samples-dark-salamander — GM 0 grand piano, darkened voicing
+
+    "Salamander Grand Piano V3" by Alexander Holm, CC BY 3.0.
+    https://archive.org/details/SalamanderGrandPianoV3
+    Modified: high-shelf EQ cut (a warmer voicing) by the ferrosintesis project.
+
+ferrosintesis-samples-ydp-grand — GM 0 grand piano (Yamaha Disklavier Pro)
+
+    "YDP Grand Piano" SoundFont by roberto@zenvoid.org for the FreePats project,
+    CC BY 3.0. Underlying samples: Zenph Studios / One Laptop Per Child (OLPC).
+    https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html
+
+ferrosintesis-samples-gong — tam-tam gong
+
+    "CdM Gamelan Sample Library" by Digitópia / Casa da Música (Freesound user
+    "Digitopia_CdM"), CC BY 3.0. Freesound sounds 261890 and 261893.
+    https://freesound.org/people/Digitopia_CdM/
+    Modified: trimmed and resampled.
+
+---------------------------------------------------------------------------------
+CC BY 4.0  (https://creativecommons.org/licenses/by/4.0/)
+---------------------------------------------------------------------------------
+
+ferrosintesis-samples-headroom — GM 0 grand piano (Yamaha C3)
+
+    "Headroom Piano" / "Intimate Piano" recorded by Bengt Nilsson; SFZ mapping by
+    kinwie. CC BY 4.0. The original instrument name is retained per the author's terms.
+    https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano
+    This crate uses the close-mic ("Intimate") set only.
+
+ferrosintesis-samples-sax — GM 64-67 saxophones
+
+    Solo saxophone single notes from the MTG "good-sounds" dataset (Music Technology
+    Group, Universitat Pompeu Fabra, Barcelona), assembled as the "MTG Solo Saxophones"
+    SFZ instrument by kinwie, CC BY 4.0.
+    https://github.com/sfzinstruments/MTG.SoloSax
+    The underlying good-sounds recordings published on Freesound are CC BY 3.0.
+    Modified: decoded from FLAC, trimmed, downmixed to mono, resampled, repitched.
+
+ferrosintesis-samples-ccby — GM 4 Rhodes and GM 15 hammered-dulcimer onsets
+
+    "C_S Fender Rhodes Mark II" by tim.kahn, Freesound pack 3957, CC BY 4.0.
+    https://freesound.org/people/tim.kahn/packs/3957/
+
+    "Multi-sampled Hammered Dulcimer" by iternetcone, Freesound pack 19445, CC BY 4.0.
+    https://freesound.org/people/iternetcone/packs/19445/
+
+    Modified: attack transients trimmed from the originals, repitched per note at
+    play time.
+
+---------------------------------------------------------------------------------
+
+No endorsement by any of the authors above is implied. The per-bank inventory,
+provenance and pinned source hashes live under tools/ferrosintesis-samples/.
+
+This index is machine-checked: crates/ferrosintesis/src/licensing.rs derives the
+attribution-bearing set from the embedded-samples feature list and each bank's declared
+license field, and fails the build if a bank is missing from this file or from the
+README's licensing table.

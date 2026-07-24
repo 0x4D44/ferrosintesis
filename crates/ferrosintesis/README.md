@@ -190,35 +190,53 @@ are dramatically slower and are not worth timing.
 
 ## Sample provenance and licensing
 
-The 366 embedded recordings (attack transients, GM 109's looped bagpipe, the GM 7
-sampled clavinet, the GM 64-67 saxophones, and the GM 76 blown bottle) come from
-**CC0 1.0** sources — the
-VSCO 2 Community Edition orchestral library (violin, flutes, brass, reeds, string
-sections), the FreePats Spanish classical guitar bank, the Discord SFZ GM Bank's
-Martin HD28 steel-string acoustic, the Versilian Community Sample Library
-(harpsichord, concert harp, timpani, Baroque recorders, ocarina),
-sfzinstruments/ganjo (6-string guitar-banjo), and the Freesound recording "Blown
-Bottle Two" (349867, by Terry93D) that is the whole GM 76 blown-bottle voice — plus
-permissively licensed banks in
-their own crates: **MIT** content from the MuseScore "MS Basic" soundfont (the GM 7
-clavinet, the GM 104 sitar, and the GM 75/77 pipe onsets), the **CC BY 3.0**
-Salamander grand (GM 0) and tam-tam gong, and the **CC BY 4.0** MTG good-sounds
-saxophones (GM 64-67, from MTG.SoloSax). The generator pins every source (VSCO and
-VCSL to exact commits, FreePats and the Martin to SHA-256-verified archives, ganjo
-and MTG.SoloSax to commits, the MuseScore soundfont to a commit + SHA-256, the
-Freesound bottle to a committed SHA-256-verified source); the full
-inventory, provenance and regeneration tooling live under
-[`tools/ferrosintesis-samples/`](https://github.com/0x4D44/ferrosintesis/tree/main/tools/ferrosintesis-samples).
-The asset crates contain nothing but that PCM and `include_bytes!`. The code is
-licensed MIT OR Apache-2.0; the CC0 samples need no attribution (the newer CC0
-families — harp, timpani, recorder, ocarina, banjo — ship in
-`ferrosintesis-samples-orchestral2`, and the CC0 GM 76 blown bottle in
-`ferrosintesis-samples-bottle`), while the non-CC0 banks each carry the required
-attribution in their crate's `NOTICE`: the MIT MS Basic clavinet
-(`ferrosintesis-samples-clavinet`) and sitar + pipe onsets
-(`ferrosintesis-samples-musescore`), the CC BY 3.0 grand
-(`ferrosintesis-samples-grand`) and gong (`ferrosintesis-samples-gong`), and the
-CC BY 4.0 saxophones (`ferrosintesis-samples-sax`).
+The code is licensed **MIT OR Apache-2.0**. The embedded PCM is not: it comes from
+twenty-one first-party asset crates, and while most of them are **CC0 1.0** and need
+no credit, ten are not. The asset crates contain nothing but that PCM and
+`include_bytes!`; the per-crate inventory, provenance and regeneration tooling live
+under
+[`tools/ferrosintesis-samples/`](https://github.com/0x4D44/ferrosintesis/tree/main/tools/ferrosintesis-samples),
+which is the authority on what each bank contains.
+
+### If you distribute a binary
+
+A build with default features embeds all twenty-one banks. **You must reproduce the
+notices of the ten attribution-bearing banks below.** Each ships the exact required
+text in its own crate's `NOTICE` file — concatenating those ten files satisfies every
+licence here. The remaining eleven banks are CC0 and require nothing.
+
+| Crate | Licence | Supplies | Credit required |
+|---|---|---|---|
+| `ferrosintesis-samples-clavinet` | MIT | GM 7 clavinet | MuseScore "MS Basic" (MuseScore_General lineage): FluidR3 by Frank Wen, FluidR3Mono by Michael Cowgill, adaptation by S. Christian Collins |
+| `ferrosintesis-samples-musescore` | MIT | GM 104 sitar, GM 75/76/77 pipe onsets | same MS Basic lineage as above |
+| `ferrosintesis-samples-musescore-grand` | MIT | GM 0 grand (MF velocity tier) | MuseScore_General "Grand Piano", adaptation by S. Christian Collins, derived from FluidR3 by Frank Wen |
+| `ferrosintesis-samples-grand` | CC BY 3.0 | GM 0 grand (Yamaha C5) | "Salamander Grand Piano V3" by Alexander Holm |
+| `ferrosintesis-samples-dark-salamander` | CC BY 3.0 | GM 0 grand, darkened voicing | "Salamander Grand Piano V3" by Alexander Holm — **modified** (high-shelf EQ cut) |
+| `ferrosintesis-samples-ydp-grand` | CC BY 3.0 | GM 0 grand (Disklavier Pro) | "YDP Grand Piano" by roberto@zenvoid.org for FreePats; underlying samples Zenph Studios / One Laptop Per Child |
+| `ferrosintesis-samples-gong` | CC BY 3.0 | tam-tam gong | "CdM Gamelan Sample Library" by Digitópia / Casa da Música |
+| `ferrosintesis-samples-headroom` | CC BY 4.0 | GM 0 grand (Yamaha C3) | "Headroom Piano" / "Intimate Piano" recorded by Bengt Nilsson; SFZ mapping by kinwie |
+| `ferrosintesis-samples-sax` | CC BY 4.0 | GM 64-67 saxophones | MTG good-sounds dataset (Music Technology Group, Universitat Pompeu Fabra); "MTG Solo Saxophones" SFZ by kinwie |
+| `ferrosintesis-samples-ccby` | CC BY 4.0 | GM 4 Rhodes, GM 15 hammered-dulcimer onsets | "C_S Fender Rhodes Mark II" by tim.kahn; "Multi-sampled Hammered Dulcimer" by iternetcone |
+
+This table is not maintained by hand. `licensing.rs` derives the attribution-bearing
+set from the `embedded-samples` feature list and each bank's own `license` field, and
+fails the build if a bank is missing here or ships without a packaged `NOTICE` — so a
+new CC-BY bank cannot land silently uncredited, which is exactly how five of these ten
+came to be omitted before (MM-BUG-KILN-00060).
+
+### The CC0 banks
+
+The remaining eleven need no attribution: the VSCO 2 Community Edition orchestral
+library (violin, flutes, brass, reeds, string sections), the FreePats Spanish
+classical guitar bank, the Discord SFZ GM Bank's Martin HD28 steel-string acoustic,
+the Versilian Community Sample Library (harpsichord, concert harp, timpani, Baroque
+recorders, ocarina — in `ferrosintesis-samples-orchestral2`), the VCSL Steinway and
+Kawai grands, sfzinstruments/ganjo, and the Freesound recording "Blown Bottle Two"
+(349867, by Terry93D) that is the whole GM 76 blown-bottle voice
+(`ferrosintesis-samples-bottle`). The generator pins every source — VSCO and VCSL to
+exact commits, FreePats and the Martin to SHA-256-verified archives, ganjo and
+MTG.SoloSax to commits, the MuseScore soundfont to a commit + SHA-256, and the
+Freesound bottle to a committed SHA-256-verified source.
 
 ## MSRV and dependencies
 

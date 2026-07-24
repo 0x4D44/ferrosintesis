@@ -7,7 +7,7 @@ description = "A General MIDI synthesizer and MIDI-to-WAV renderer with no Sound
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/0x4D44/ferrosintesis"
 readme = "README.md"
-include = ["src/**", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
+include = ["src/**", "README.md", "NOTICE", "LICENSE-APACHE", "LICENSE-MIT"]
 keywords = ["midi", "synthesizer", "audio", "dsp"]
 categories = ["multimedia::audio"]
 

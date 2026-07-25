@@ -178,6 +178,26 @@ class Score:
                             Message('control_change', control=control,
                                     value=int(max(0, min(127, value))), channel=ch)))
 
+    def _resolve_overlaps(self):
+        """Truncate same-pitch overlaps before serializing the score."""
+        for events in self.ev.values():
+            on_ticks = {}
+            off_indices = {}
+            for i, (tick, _order, msg) in enumerate(events):
+                if msg.type == 'note_on' and msg.velocity > 0:
+                    on_ticks.setdefault(msg.note, []).append(tick)
+                elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
+                    off_indices.setdefault(msg.note, []).append(i)
+            for pitch, starts in on_ticks.items():
+                indices = off_indices.get(pitch, [])
+                if len(indices) != len(starts):
+                    continue
+                starts.sort()
+                indices.sort(key=lambda i: events[i][0])
+                for start, index in zip(starts[1:], indices):
+                    if events[index][0] > start:
+                        events[index] = (start, events[index][1], events[index][2])
+
 
 # ----------------------------------------------------------------------------
 # Dynamic Arc — the long emotional swell + per-bar breathing
@@ -411,6 +431,7 @@ def _ascii(s):
 
 
 def write_midi(sc, path, title='', text='', key='Dm', time_sig=(4, 4)):
+    sc._resolve_overlaps()
     ctx = sc.ctx
     title, text = _ascii(title), _ascii(text)
     mid = MidiFile(type=1, ticks_per_beat=ctx.tpb)

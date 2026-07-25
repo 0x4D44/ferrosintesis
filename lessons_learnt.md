@@ -348,6 +348,11 @@ belong in `CLAUDE.md`, not here.
     be telling you the "bug" was a design choice — escalate, don't override on an unverifiable ear judgment.
 
 - 2026.07.19 — **Album-scale generative fan-outs don't fit the shared 5-h window — serialize composers and feed a digest, never parallelize.**
+  - Generated album MIDI is committed source today, not a hypothetical future regeneration.
+    A copied writer can therefore corrupt many live files at once: six stale overlap-clamp
+    lineages left 10,398 ambiguous re-strikes across 39 MIDIs. Regenerate every owned output
+    and gate the whole catalog with positional `(track, channel, pitch)` pairing
+    (`crates/render-catalog/tests/album_midi_overlaps.rs`), never a pending-note queue.
   - Two parallel fleets died mid-window (10-wide, then 2-wide: ~0.9 M tokens, zero tracks). One-at-a-time
     composers fed a compact pattern digest (Slipstream's `COMPOSER-NOTES.md` instead of re-reading the 1.7k-line
     exemplar) landed 10/10 at ~150–250k tokens/track, with per-track verify+commit making every landing durable.

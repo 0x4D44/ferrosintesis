@@ -159,7 +159,31 @@ class MidiTrack:
         self.add(start_tick, bytes([0x90 | channel, pitch, velocity]), priority=5)
         self.add(stop_tick, bytes([0x80 | channel, pitch, 0]), priority=4)
 
+    def resolve_overlaps(self) -> None:
+        """Truncate same-channel, same-pitch overlaps before serialization."""
+        on_ticks: dict[tuple[int, int], list[int]] = {}
+        off_events: dict[tuple[int, int], list[Event]] = {}
+        for event in self.events:
+            status = event.data[0] & 0xF0
+            if status not in (0x80, 0x90):
+                continue
+            key = (event.data[0] & 0x0F, event.data[1])
+            if status == 0x90 and event.data[2] > 0:
+                on_ticks.setdefault(key, []).append(event.tick)
+            else:
+                off_events.setdefault(key, []).append(event)
+        for key, starts in on_ticks.items():
+            ends = off_events.get(key, [])
+            if len(ends) != len(starts):
+                continue
+            starts.sort()
+            ends.sort(key=lambda event: event.tick)
+            for start, event in zip(starts[1:], ends):
+                if event.tick > start:
+                    event.tick = start
+
     def render(self) -> bytes:
+        self.resolve_overlaps()
         body = bytearray()
         last = 0
         for event in sorted(self.events):

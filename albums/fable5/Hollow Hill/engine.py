@@ -200,7 +200,29 @@ class Score:
     def duration_seconds(self) -> float:
         return self.seconds_at(self.last_beat)
 
+    def _resolve_overlaps(self) -> None:
+        """Truncate same-pitch overlaps before serializing the score."""
+        for ev in self.events.values():
+            on_ticks: dict[int, list[int]] = {}
+            off_indices: dict[int, list[int]] = {}
+            for i, (tick, _priority, data) in enumerate(ev):
+                status = data[0] & 0xF0
+                if status == 0x90 and data[2] > 0:
+                    on_ticks.setdefault(data[1], []).append(tick)
+                elif status == 0x80 or (status == 0x90 and data[2] == 0):
+                    off_indices.setdefault(data[1], []).append(i)
+            for pitch, starts in on_ticks.items():
+                indices = off_indices.get(pitch, [])
+                if len(indices) != len(starts):
+                    continue
+                starts.sort()
+                indices.sort(key=lambda i: ev[i][0])
+                for start, index in zip(starts[1:], indices):
+                    if ev[index][0] > start:
+                        ev[index] = (start, ev[index][1], ev[index][2])
+
     def write(self, path: Path, title: str, comment: str = "") -> None:
+        self._resolve_overlaps()
         end = _tick(self.last_beat) + 2 * PPQ
 
         def meta(kind: int, payload: bytes) -> bytes:

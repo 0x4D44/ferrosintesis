@@ -4,18 +4,36 @@ ferrosintesis — third-party attribution notices
 The ferrosintesis SOURCE CODE is licensed MIT OR Apache-2.0 (see LICENSE-MIT and
 LICENSE-APACHE). This file covers something different: the EMBEDDED SOUND RECORDINGS.
 
-A build with default features (`embedded-samples`) compiles twenty-one first-party
-sample-asset crates into the binary. Eleven are CC0 1.0 and require nothing. The ten
-below are not, and their licences require that credit travel with any distribution —
-including a binary.
+A build with default features (`embedded-samples`) compiles twenty-four first-party
+sample-asset crates into the binary. Thirteen are CC0 1.0 and require nothing. The
+eleven below are not, and their licences require that credit travel with any
+distribution — including a binary.
 
-IF YOU DISTRIBUTE A BINARY BUILT WITH DEFAULT FEATURES, YOU MUST REPRODUCE THE TEN
+IF YOU DISTRIBUTE A BINARY BUILT WITH DEFAULT FEATURES, YOU MUST REPRODUCE THE ELEVEN
 NOTICES LISTED HERE. Each asset crate packages its own NOTICE file carrying the exact
-required text; concatenating those ten satisfies every obligation below. This file is
-the index, not a replacement for them.
+required text; concatenating those eleven satisfies every obligation below. This file
+is the index, not a replacement for them.
 
 To build without any of this, disable default features — the fully modeled synth needs
 no samples at all.
+
+---------------------------------------------------------------------------------
+MIT OR Apache-2.0
+---------------------------------------------------------------------------------
+
+ferrosintesis-samples-b1-upright — GM 0 acoustic grand, CC0 alternate bank 5
+
+    The one bank here with no outside rightsholder: the author's own Yamaha B1
+    upright, played and recorded by the author for this project. It is listed
+    anyway because MIT and Apache-2.0 both require the copyright notice to travel
+    with a redistribution, so a binary distributor still has something to reproduce.
+
+      "Yamaha B1 Acoustic Upright — ferrosintesis multisample"
+      Copyright (c) 2026 0x4D44
+      Recorded on a Tascam DR-05 (24-bit / 48 kHz / stereo), 2026-07-23.
+      https://github.com/0x4D44/ferrosintesis
+
+    Reproduced in full in crates/ferrosintesis-samples-b1-upright/NOTICE.
 
 ---------------------------------------------------------------------------------
 MIT

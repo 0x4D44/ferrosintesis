@@ -1,11 +1,21 @@
 ferrosintesis-samples-b1-upright
 ================================
 
-The embedded WAV samples in this crate are a FIRST-PARTY recording: Arthur's own
-Yamaha B1 acoustic upright piano, recorded by the author on a Tascam DR-05
-(24-bit / 48 kHz / stereo) on 2026-07-23. There is no third-party source and no
-external attribution requirement.
+The embedded WAV samples in this crate are a FIRST-PARTY recording. No third-party
+rights are involved: the instrument, the performance and the recording are all the
+author's own.
 
-Licensed under the repository's own terms: MIT OR Apache-2.0 (see LICENSE-MIT /
-LICENSE-APACHE). Full provenance and the exact processing pipeline are in
-PROVENANCE.md.
+    "Yamaha B1 Acoustic Upright — ferrosintesis multisample"
+    Copyright (c) 2026 0x4D44
+    Recorded on a Tascam DR-05 (24-bit / 48 kHz / stereo), 2026-07-23.
+    https://github.com/0x4D44/ferrosintesis
+
+Licensed under the repository's own terms: MIT OR Apache-2.0 (see LICENSE-MIT and
+LICENSE-APACHE). That is why this file exists even though nobody outside the project
+needs crediting — both licences require the copyright notice above to be reproduced
+in redistributions, including binary ones.
+
+Two recorded velocity layers ship here (normal and hard). A third, softer pass was
+recorded and deliberately dropped: it measured the same timbre as the normal layer
+while carrying 11 dB less signal-to-noise, so it contributed recorder hiss and no
+tone. Full provenance and the exact processing pipeline are in PROVENANCE.md.

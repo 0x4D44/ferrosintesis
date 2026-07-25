@@ -27,12 +27,17 @@
   Source archive: `samples/fret-noise-eastman-e1d/DR0000_0204.opus`. A future job: cut the taps,
   bake, and drive the guitar note-off thump from them.
 
-- [ ] 2026.07.24 — **Workspace MSRV is broken by a transitive dep, pre-existing on origin/main**
+- [x] 2026.07.24 — **Workspace MSRV is broken by a transitive dep, pre-existing on origin/main**
   — `cargo +1.87 check --workspace` fails: `image@0.25.10` requires rustc 1.88 (pulled via the
   eframe/egui GUI stack, i.e. `amp-lab`). Not from the audio crates — `ferrosintesis` + the
   sample crates all pass `+1.87`. So the fleet's "prove MSRV with `check --workspace`" gate
   cannot pass here until `image` is pinned back (`cargo update image --precise <1.88-compatible>`)
   or amp-lab's MSRV is bumped. Confirmed identical on the `dfbf1f7` baseline.
+  (Done 2026-07-25: neither pin nor bump was needed — the command was wrong. `amp-lab` is a
+  dev-only GUI with `publish = false`, and `.deltic-integrate.toml` already excludes it from
+  clippy and test for exactly this reason. `cargo +1.87 check --workspace --exclude amp-lab
+  --locked` passes on this box, so every SHIPPED crate really is 1.87-clean; CLAUDE.md now
+  documents that form and says why the exclusion is not a dodge.)
 
 - [ ] 2026.07.22 — **GM6 Harpsichord fails the M-CAL velocity guard at 9.6 dB** — its
   ferro-vs-SC-55 level difference changes by 9.6 dB between v72 and v110, i.e. a

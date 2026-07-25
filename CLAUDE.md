@@ -192,13 +192,19 @@ carries a semver promise: `Options`/`RealtimeOptions` are sealed (private fields
 with `Options::default()` + the `with_*` builders, read with the accessors), and the error
 enums plus every data-carrying variant are `#[non_exhaustive]`. Adding a render knob or an
 error variant is therefore a minor bump, not a major one — keep it that way. Publish order is
-forced by the `=0.1.0` pins: `ferrosintesis-samples-core` → `-orchestral` → `ferrosintesis`.
-`ferrosintesis-cli` and `render-catalog` are `publish = false`.
+forced by the `=0.1.0` pins, and there are **25 sample crates**, not two: publish the 24
+independent ones in any order, then `-drumkit2` (the only crate that depends on another,
+`-drumkit`), then `ferrosintesis` last. Derive the order from the manifests rather than
+trusting a list here — that is what this sentence got wrong before.
+`ferrosintesis-cli`, `render-catalog` and `amp-lab` are `publish = false`.
 
 Every crate declares **`rust-version = "1.87"`** — that declaration is what turns clippy's
 `incompatible_msrv` lint on, so keep it. An MSRV is only real once a toolchain at that
-version has compiled it: prove it with `cargo +1.87 check --workspace`, not by grepping for
-the newest std API. **Keep every dependency on ONE line** — a multi-line inline table is
+version has compiled it: prove it with `cargo +1.87 check --workspace --exclude amp-lab`,
+not by grepping for the newest std API. The exclusion is not a dodge — `amp-lab` is the
+dev-only egui GUI (`publish = false`), and its `image` dep declares `rust-version = 1.88`,
+so a bare `--workspace` fails on a crate nobody ships. `.deltic-integrate.toml` excludes it
+from clippy and test for the same reason. Every shipped crate compiles on 1.87. **Keep every dependency on ONE line** — a multi-line inline table is
 invalid TOML 1.0, and cargo 1.87 refuses the manifest outright where newer cargo accepts it.
 (That rule is now enforced by `sampler`-adjacent oracle `manifest.rs`; it used to be only a
 comment, and the MSRV was quietly broken for ten days — MM-BUG-KILN-00067.)

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00102 — modeled-only builds panic on GM 25: the sample bank is an eager argument, evaluated before the fallback
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** High
 - **Area:** voices / sampler
@@ -18,12 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, found while classifying the 28 `--no-default-features`
-  failures of MM-BUG-KILN-00090; a first classification pass proposed gating most of the
-  affected tests, and an adversarial second pass caught that the failures were one shipped
-  panic rather than a test problem)
-  → Fixed (2026-07-25, Claude Opus 4.5; `steel_layered` now takes the bank lazily.
-  Modeled-only failures fell 28 → 9 from this one change. Awaits independent two-eyes closure.)
+- **State history:** Open (2026-07-25, found while classifying the 28 `--no-default-features` failures of MM-BUG-KILN-00090; a first classification pass proposed gating most of the affected tests, and an adversarial second pass caught that the failures were one shipped panic rather than a test problem) → Fixed (2026-07-25, Claude Opus 4.5; `steel_layered` now takes the bank lazily. Modeled-only failures fell 28 → 9 from this one change. Awaits independent two-eyes closure.) → Closed (2026-07-25, Codex GPT-5; independently reproduced the GM25 modeled-only sample-bank panic on the pre-fix parent, proved the same focused render test passes after the lazy-bank fix, confirmed the remaining nine modeled-only failures are the separate MM-BUG-KILN-00090 set, and passed the complete repository gate.)
 
 ## Observation
 
@@ -102,3 +97,21 @@ that is Arthur's call.
 Note also that this panic was **masking two full sweeps**: `every_gm_program_follows_the_square_law`
 and `every_program_renders_at_every_common_rate` both died at GM 25, so programs 26–127
 have never actually been exercised modeled-only. The remaining work is not yet sized.
+
+### Independent closure verification (2026-07-25 — Codex GPT-5)
+
+- Inspected the fix at the owning layer. `steel_layered` now accepts a bank function,
+  returns the modeled `Pluck` before invoking it when `samples` is false, and resolves the
+  bank only on the sampled path. The default, CC0=1, and CC0=2 call sites all pass function
+  items, so the eager-call shape no longer type-checks.
+- On the pre-fix parent `7cbf8dd4dbb178aa57f5d1bda62cddcbf38fbbdd`, the existing
+  `engine::tests::solo_mutes_other_channels` regression under `--no-default-features`
+  failed at `sampler.rs:102`: `sample eastpick_E2.wav requested from a modeled-only
+  ferrosintesis build`.
+- The identical focused test passed on the fixed tree after rebasing onto current
+  `origin/main`.
+- The full modeled-only library run completed with 575 passed, 9 failed, and 21 ignored.
+  None of the nine failures was the GM25 sample-bank panic; they are the distinct,
+  already-recorded MM-BUG-KILN-00090 residual set.
+- The repository gate passed: formatting, workspace Clippy excluding `amp-lab`, modeled-only
+  `ferrosintesis` Clippy, and workspace tests excluding `amp-lab`.

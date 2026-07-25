@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00108 — GM85 (Lead 6, voice) lost 16 dB: its new formant bandpass bank has no make-up gain, unlike GM84 in the same commit
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** High
 - **Area:** synth / voices
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high)
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high) → Fixed (2026-07-25, Claude Opus 5 (1M) in `ff31237`; `SawStack.formant_makeup` set from `LEAD85_FORMANT_MAKEUP_DB = 16.0`, guarded by `balance::tests::gm85_formant_bank_keeps_its_make_up_gain`) → Closed (2026-07-25, independent verification by Claude Opus 5 (1M) @ high, fresh context; guard observed to bite under mutation — see the verification note below)
 
 ## Observation
 
@@ -92,3 +92,40 @@ Guarded by `balance::tests::gm85_formant_bank_keeps_its_make_up_gain`, which
 pins GM85 within 6 dB of GM84 (post-fix +3.5; the regression was -12.6).
 
 NOT closed by its own fixer - the ledger's two-eyes rule applies.
+
+### Verification summary (2026-07-25, independent second eyes)
+
+Verified by a fresh-context Claude Opus 5 (1M) chain (one verifier plus two
+adversarial refuters briefed to BLOCK closure), on trunk 802753c. Closed.
+
+The defect is gone and the guard was observed to bite, by mutation in an isolated
+worktree - not taken from the fix note:
+
+| run | observed |
+|---|---|
+| trunk source | `GM85 -21.38 dB vs GM84 -24.88 dB -> +3.50 dB` - ok |
+| `LEAD85_FORMANT_MAKEUP_DB = 0.0` | `-12.50 dB` - FAILED at `balance.rs:271`, reproducing the recorded -12.6 |
+| `LEAD85_FORMANT_MAKEUP_DB = 6.5` | `-6.00 dB` - green (see caveat 1) |
+
+The fix is at the right layer. `formant_makeup` has exactly four references in
+`voices.rs` (decl :6369, init `1.0` :6469, use `y * self.formant_makeup` :6660
+inside the `StackFilter::Formant` arm only, sole assignment :7720). Non-formant
+voices take `StackFilter::Lp(b) => b.process(s)` and never reach the multiply, so
+the bit-identity claim is structural rather than diff-evidenced. GM85's spec has
+`drive: 0.0`, so the make-up is an exactly linear multiply.
+
+TWO CAVEATS RECORDED RATHER THAN GLOSSED:
+
+1. The +/-6 dB sibling band tolerates a 9.5 dB re-loss (observed green at makeup
+   6.5). The band is deliberate (`balance.rs:262`) and does catch the regression
+   as it occurred, so this is a strengthening opportunity, not a repair.
+2. Whether 16.0 dB is the RIGHT amount, as distinct from correctly wired, is NOT
+   verified here. A linear scalar necessarily moves the level by its own value,
+   so "-38.27 -> -22.27 dB" evidences wiring, not calibration. The reference
+   measurements (SC-55 16.08 / S-YXG50 15.95 dB) were not reproduced - the `_cal/`
+   artifacts are git-ignored and re-running needs mdmidiemu plus the SC-55 ROMs.
+
+The systemic hole named in the bug's own "WHY NOTHING CAUGHT IT" - that a
+guard-excluded program is silently dropped from the residual oracle rather than
+reported - is NOT closed by this fix. It is a separate defect and does not block
+this closure; see MM-BUG-KILN-00107, which remains open on related ground.

@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00016 — Harp (GM 46) should have a soundboard
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Could
 - **Area:** ferrosintesis / voices (Pluck)
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09) → Satisfied (2026-07-25, verified)
 
 ## Statement
 The harp (GM 46) must have a body/soundboard resonance (a small peak-EQ set, e.g.

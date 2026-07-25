@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00019 — GM 86 (Lead 7, fifths) must render its parallel fifth
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Should
 - **Area:** voices / synth leads
 - **Raised:** 2026-07-20
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-20, oracles red→green; render-diff 2 expected/0 contamination) → integrated (2026-07-21, a3e0781+f1106b1, full gate green)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-20, oracles red→green; render-diff 2 expected/0 contamination) → integrated (2026-07-21, a3e0781+f1106b1, full gate green) → Satisfied (2026-07-25, verified)
 
 ## Statement
 

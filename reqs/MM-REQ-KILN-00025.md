@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00025 — GM 109 bagpipe chanter zones must cover the FreePats bank
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Should
 - **Area:** sampler / samples pipeline
 - **Raised:** 2026-07-20
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 32eb8aa; render-diff 124 unchanged)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 32eb8aa; render-diff 124 unchanged) → Satisfied (2026-07-25, verified)
 
 ## Statement
 

@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00007 — Sitar/shamisen/koto (104/106/107) need their own plucked voices
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Could
 - **Area:** ferrosintesis / voices
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `8b1c36686b60cc7a8561a3054f32bcc53440a670`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `8b1c36686b60cc7a8561a3054f32bcc53440a670`) → Satisfied (2026-07-25, verified)
 
 ## Statement
 GM 104 (sitar), 106 (shamisen) and 107 (koto) must render with distinct plucked

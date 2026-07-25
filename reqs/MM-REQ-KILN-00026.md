@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00026 — LoopVoice must carry a slow read-rate drift against the loop-tell
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Could
 - **Area:** sampler
 - **Raised:** 2026-07-20
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 32eb8aa)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 32eb8aa) → Satisfied (2026-07-25, verified)
 
 ## Statement
 

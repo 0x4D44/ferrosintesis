@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00005 — Orchestra hit (GM 55) should be a real stab, not a guitar note
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Could
 - **Area:** ferrosintesis / voices
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `6cc4a25d357d839ebb1ec83e8ef0c4ddb46aab03`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `6cc4a25d357d839ebb1ec83e8ef0c4ddb46aab03`) → Satisfied (2026-07-25, verified)
 
 ## Statement
 A NoteOn on GM program 55 (Orchestra Hit) must render as a short, layered

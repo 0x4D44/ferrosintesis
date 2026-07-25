@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00024 — GM 106 shamisen must carry a sawari bridge-buzz
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Should
 - **Area:** voices / ethnic plucks
 - **Raised:** 2026-07-20
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 495f85d; oracle red→green, render-diff 124 same/0 contamination)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 495f85d; oracle red→green, render-diff 124 same/0 contamination) → Satisfied (2026-07-25, verified)
 
 ## Statement
 

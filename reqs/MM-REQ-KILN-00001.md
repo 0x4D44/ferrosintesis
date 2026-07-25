@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00001 — Fiddle (GM 110) should render as a bowed string, not a guitar
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Should
 - **Area:** ferrosintesis / voices dispatch
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `073ea2c7348a25de62f927a7b4bbf09809196ec1`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `073ea2c7348a25de62f927a7b4bbf09809196ec1`) → Satisfied (2026-07-25, verified)
 
 ## Statement
 A NoteOn on GM program 110 (Fiddle) must render through the bowed-string voice

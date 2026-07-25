@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00002 — Kalimba (GM 108) should have a tine voice, not a guitar
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Could
 - **Area:** ferrosintesis / voices
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `d8628ed969e6eb5f140cab0825fc25ecf91a64ab`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `d8628ed969e6eb5f140cab0825fc25ecf91a64ab`) → Satisfied (2026-07-25, verified)
 
 ## Statement
 A NoteOn on GM program 108 (Kalimba) must render as a plucked-tine timbre — a

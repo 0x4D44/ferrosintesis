@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00015 — Electric pianos, harpsichord, clavinet (GM 4-7) need their own voices
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Should
 - **Area:** ferrosintesis / voices (piano)
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** heavy
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-09) → Satisfied (2026-07-25, verified)
 
 ## Statement
 GM 4/5 (electric pianos — Rhodes tine, FM/DX bell), 6 (harpsichord) and 7

@@ -1,11 +1,11 @@
 # MM-REQ-KILN-00027 — Steel-guitar LA layer must hold seam level parity at high keys
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Should
 - **Area:** sampler / LA layer
 - **Raised:** 2026-07-20
 - **Implemented-by:** integrated 6de727e (parity oracle + calibration printer); the underlying fix landed earlier via the pluck-redesign Phase-2 STEEL seam re-baselines + the k=2 velocity law (93fdf53, 0.21.50)
-- **Satisfied-by:** sampler::tests::la_steel_high_key_level_parity (0.8–2.2 band, keys 76/79/83 × vel 60/100)
+- **Satisfied-by:** `sampler::tests::la_steel_high_key_level_parity` — asserts a 0.8–2.2 seam-level band over keys 76/79/83 × velocities 60/100
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
@@ -17,7 +17,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 6de727e — measured healthy, oracle pinned)
+- **State history:** Draft (2026-07-20, captured from the GM instrument sweep audit — Claude Fable 5) → Implemented (2026-07-21, integrated 6de727e — measured healthy, oracle pinned) → Satisfied (2026-07-25, verified)
 
 ## Statement
 

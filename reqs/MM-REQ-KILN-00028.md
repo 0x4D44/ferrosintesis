@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00028 — A MIDI file must be able to author the driven-guitar amp and cabinet per channel
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Should
 - **Area:** engine / Drive
 - **Raised:** 2026-07-23
@@ -16,7 +16,7 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-23, Arthur asked for authorable amp/distortion knobs so GM29 and GM30 can be built into genuinely different rigs — Claude Opus 4.8) → Accepted (2026-07-23, HLD Part A self-approved: 3-lens adversarial + Codex cross-family review) → Implemented (2026-07-23, on branch — 8 oracles green, render-diff clean, awaiting integration)
+- **State history:** Draft (2026-07-23, Arthur asked for authorable amp/distortion knobs so GM29 and GM30 can be built into genuinely different rigs — Claude Opus 4.8) → Accepted (2026-07-23, HLD Part A self-approved: 3-lens adversarial + Codex cross-family review) → Implemented (2026-07-23, on branch — 8 oracles green, render-diff clean, awaiting integration) → Satisfied (2026-07-25, verified)
 
 ## Statement
 

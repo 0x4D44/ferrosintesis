@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00010 — CC70 vowel morph should extend beyond the choir
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Could
 - **Area:** ferrosintesis / engine
 - **Raised:** 2026-07-08
@@ -9,7 +9,7 @@
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `df0ae7daa90a8f3b4f9fa13bce4aa13346e8ada3`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `df0ae7daa90a8f3b4f9fa13bce4aa13346e8ada3`) → Satisfied (2026-07-25, verified)
 
 ## Statement
 The CC70 vowel-morph control must be available to the formant-capable SawStack

@@ -96,3 +96,34 @@ Post-integration rebase note: rebased onto `origin/main` at `112d3b9` after
 `MM-REQ-KILN-00002` landed. The implementation commit became
 `a3eecb96c93646fb382867f14d250ac3f9eadb81`; the package version was advanced to
 `0.8.8` because trunk already carried `0.8.7`.
+
+
+## Acceptance blocked (2026-07-25) — stale oracle, superseded Statement
+
+Held at `Implemented` during the batch acceptance of the other 23 reqs. Two
+problems, both needing a human spec decision before this can move to `Satisfied`:
+
+1. **The recorded oracle no longer exists and fails silently.** The
+   `Satisfied-by` command filters on `synth_fx_97_99_101_103_sustain_as_pads`,
+   which was renamed to `voices::tests::synth_fx_96_103_route_to_fx_voice` and
+   had its assertion deliberately changed. Run verbatim today it reports
+   `test result: ok. 0 passed; 0 failed; ... 700 filtered out` and **exits 0** —
+   it looks green while asserting nothing. A cargo name filter that matches
+   nothing is not a failure, so this cannot be caught by running the command.
+
+2. **The Statement is contradicted by the shipped design.** It requires 97/99/103
+   to "render as sustaining pad textures (route to `pad()`)". Stage 3 routes all
+   of 96-103 to the `Fx` wrapper with per-program identities; the retired oracle's
+   replacement comment states "the eight presets are no longer pads". Two current
+   identities directly contradict the wording: 99 is "a percussive pluck DECAYING
+   into a soft dark wash" (`voices.rs:11536`) and 103 "a falling resonant ZAP"
+   (`voices.rs:11681`).
+
+The code did not regress -- the requirement's wording went stale when a better
+design landed. Two dispositions, for Arthur:
+
+- **Re-state** to the shipped intent ("each of the eight synth-FX programs must
+  have a distinct sustained identity, not one shared decaying chime") and point
+  `Satisfied-by` at the `fx_o1`-`fx_o8` oracles, keeping the regression alarm.
+- **Retire** as superseded by the Stage-3 FX work, accepting that the FX-O
+  oracles carry the spec from here.

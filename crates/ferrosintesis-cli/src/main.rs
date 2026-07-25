@@ -11,6 +11,8 @@
 
 #![forbid(unsafe_code)]
 
+mod output;
+
 use ferrosintesis::offline::{self, Options};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -102,6 +104,11 @@ fn main() {
     let input = input.unwrap_or_else(|| usage());
     let output = output.unwrap_or_else(|| input.with_extension("wav"));
 
+    if let Err(e) = output::reject_input_alias(&input, &output) {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    }
+
     let song = match offline::load(&input) {
         Ok(s) => s,
         Err(e) => {
@@ -158,7 +165,7 @@ fn main() {
         // `tp_ceiling` true-peak limit (see the loudness overhaul PLN/CR docs).
         offline::normalize_loudness(&samples, rate, target_lufs, tp_ceiling)
     };
-    if let Err(e) = offline::write_wav(&output, rate, &pcm) {
+    if let Err(e) = output::write_wav_atomically(&output, rate, &pcm) {
         eprintln!("error writing {}: {e}", output.display());
         std::process::exit(1);
     }

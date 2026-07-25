@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00097 — CLI output alias can replace the input MIDI with WAV data
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** High
 - **Area:** crates/ferrosintesis-cli
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol during the `crates/ferrosintesis-cli/` coverage review)
+- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol during the `crates/ferrosintesis-cli/` coverage review) → Fixed (2026-07-25, Codex GPT-5.6-Sol; same-file identity rejection and atomic output replacement landed with regression coverage; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -47,14 +47,21 @@ unchecked.
 
 ## Fix
 
-Not fixed in this review. Before rendering, reject input/output same-file
-identity using canonical paths and platform file identity where available.
-Write normal output through a unique same-directory temporary file and
-atomically replace the destination only after a successful flush, so a failed
-write does not leave a prior output truncated.
+The CLI now rejects an output that resolves to the input before loading or
+rendering. Canonical paths cover exact, normalized, and symbolic-link aliases;
+Unix device/inode identity and a Windows kernel sharing probe cover hard links
+without adding a dependency or weakening the crate's `forbid(unsafe_code)`.
 
-Add regression coverage for exact-path, normalized-path, and supported
-symlink/hard-link aliases, including the default-output collision.
+Normal output is written to a unique temporary file beside the destination,
+flushed to stable storage, then atomically renamed over the destination. A
+failed temporary write leaves any prior output intact.
+
+The two command-level collision regressions failed before the fix because the
+CLI returned success after replacing the source MIDI. They pass after the fix,
+alongside normalized-path, symbolic-link, hard-link, distinct-file, failed-write
+preservation, and successful-replacement unit coverage. The focused
+`ferrosintesis-cli` suite passes on Rust 1.87, and focused clippy is
+warning-free.
 
 ## Notes
 

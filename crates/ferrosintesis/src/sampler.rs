@@ -3123,7 +3123,7 @@ struct RoundRobin {
     idx: usize,
 }
 
-const DEFAULT_LA_RELEASE_T60: f32 = 0.06;
+pub(crate) const DEFAULT_LA_RELEASE_T60: f32 = 0.06;
 
 impl LaVoice {
     /// Wrap `sustain`; falls back to the bare model when the target is too
@@ -7665,7 +7665,7 @@ mod tests {
                             sr,
                             1,
                             false,
-                            Some(voices::GM0_RELEASE_T60),
+                            voices::GM0_DEFAULT_VOICING,
                         )
                     } else {
                         voices::make(0, key, 104, sr, seed, false)
@@ -7717,7 +7717,7 @@ mod tests {
                 sr,
                 seed,
                 false,
-                None,
+                voices::LEGACY_VOICING,
             );
             let (gap_drop, _, _) = piano_release_reading(legacy, sr);
             println!("conditioned GM0 key {key} legacy gap: {gap_drop:.2} dB");
@@ -7751,8 +7751,23 @@ mod tests {
         }
     }
 
+    /// The GM0 damper reaches the GM0 ALTERNATES, and stops there.
+    ///
+    /// RESPECIFIED 2026.07.25 (MM-BUG-KILN-00097, Arthur). This oracle used to assert
+    /// the opposite — that the calibrated release must NOT reach the alternates — back
+    /// when one `Option` argument switched the sample-layer gain and the damper
+    /// together. That coupling was the bug: choosing a different *recording* also cut
+    /// the string release from 0.45 s to 0.10 s (and the sampled layer's to 0.06 s),
+    /// which is not something a microphone can do. Arthur heard it as the B1 upright
+    /// sounding thin on Tubular Bells.
+    ///
+    /// The bar is unchanged in strength — each voice must still match an explicitly
+    /// constructed control to 0.01 dB. Only WHICH control is correct has changed, and
+    /// only for the GM0 alternates. GM1's alternates, GM3 and GM24 keep the legacy
+    /// damper and are still pinned here, so this test also proves the change did not
+    /// spill sideways.
     #[test]
-    fn gm0_release_override_does_not_leak_to_alternate_pianos() {
+    fn gm0_damper_reaches_gm0_alternates_and_stops_there() {
         if !crate::embedded_samples_available() {
             return;
         }
@@ -7762,8 +7777,10 @@ mod tests {
             default_drop <= 10.0,
             "default GM0 did not opt into the calibrated release"
         );
-        for (name, voice, legacy) in [
+        for (name, voice, control) in [
             (
+                // GM0 alternate: legacy sample calibration (its PCM is independently
+                // peak-normalized), but the GM0 damper — that is the 00097 fix.
                 "GM0 Salamander alternate",
                 crate::altbank::make(0, 1, 66, 104, sr, 1, true),
                 voices::acoustic_grand_with_bank(
@@ -7773,15 +7790,25 @@ mod tests {
                     sr,
                     1,
                     false,
-                    None,
+                    voices::GM0_ALTERNATE_VOICING,
                 ),
             ),
             (
                 "GM0 undefined-CC0 fallback",
                 crate::altbank::make(0, 99, 66, 104, sr, 1, true),
-                voices::acoustic_grand_with_bank(&[], 66, 104, sr, 1, false, None),
+                voices::acoustic_grand_with_bank(
+                    &[],
+                    66,
+                    104,
+                    sr,
+                    1,
+                    false,
+                    voices::GM0_ALTERNATE_VOICING,
+                ),
             ),
             (
+                // GM1 is deliberately NOT part of the fix: it keeps the legacy damper
+                // until Step 2 replaces the flat constant with a key-dependent curve.
                 "GM1 Bright",
                 voices::make(1, 66, 104, sr, 1, true),
                 voices::acoustic_grand_with_bank(
@@ -7791,16 +7818,16 @@ mod tests {
                     sr,
                     1,
                     true,
-                    None,
+                    voices::LEGACY_VOICING,
                 ),
             ),
         ] {
             let (drop, _, _) = piano_release_reading(voice, sr);
-            let (legacy_drop, _, _) = piano_release_reading(legacy, sr);
+            let (control_drop, _, _) = piano_release_reading(control, sr);
             assert!(
-                (drop - legacy_drop).abs() <= 0.01,
-                "{name}: release drifted from its explicit legacy control \
-                 ({drop:.2} dB vs {legacy_drop:.2} dB)"
+                (drop - control_drop).abs() <= 0.01,
+                "{name}: release drifted from its explicit control \
+                 ({drop:.2} dB vs {control_drop:.2} dB)"
             );
         }
 

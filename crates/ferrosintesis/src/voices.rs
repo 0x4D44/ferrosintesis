@@ -1137,6 +1137,88 @@ pub(crate) fn is_acoustic_piano(program: u8) -> bool {
 
 const DEFAULT_PIANO_RELEASE_T60: f32 = 0.10;
 pub(crate) const GM0_RELEASE_T60: f32 = 0.45;
+
+/// How a sampled piano onset bank was normalized when it was baked. This decides
+/// the layer's make-up gain and crossfade — and NOTHING else.
+///
+/// Split out of the old `release_t60: Option<f32>` argument (MM-BUG-KILN-00097).
+/// That one `Option` silently switched FIVE unrelated things at once: the model's
+/// release, the sampled layer's release, the layer gain, the crossfade, and the
+/// forte trim. The consequence was that picking a different *recording* also
+/// changed the *damper physics* by 4.5x, which is not a thing a microphone can do.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum PianoSampleCal {
+    /// The GM0 default bank: envelope-conditioned at bake time (its cross-zone body
+    /// trend is preserved instead of each zone being peak-normalized), so it needs
+    /// the large make-up gain and the short crossfade.
+    Gm0Conditioned,
+    /// Independently peak-normalized banks — every CC0 alternate, and GM1.
+    LegacyNormalized,
+}
+
+/// What the damper does after key-up.
+///
+/// Physically this is ONE thing: the felt stops the string, and the recorded onset
+/// and the modeled body are the same note. It is carried as two fields only because
+/// the model and the sampled layer take their release through different
+/// constructors. Step 2 (the key-dependent damper) collapses them.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PianoDamper {
+    /// Modal (string) release T60. The *bright* model ignores this — it fixes its
+    /// own release inside `grand_piano_variant`.
+    pub model_t60: f32,
+    /// Sampled-onset-layer release T60.
+    pub la_t60: f32,
+}
+
+/// The GM0 default's damper — a plausible felt damper on a mid-register note.
+pub(crate) const GM0_DAMPER: PianoDamper = PianoDamper {
+    model_t60: GM0_RELEASE_T60,
+    la_t60: GM0_RELEASE_T60,
+};
+
+/// The pre-2026.07.18 damper: a 0.10 s string release over a 0.06 s sample release.
+/// Far too short for a piano — that is a muted/staccato character, not a damper.
+/// Retained only for GM1 and the GM1 alternates, whose voicing Step 2 revisits.
+pub(crate) const LEGACY_DAMPER: PianoDamper = PianoDamper {
+    model_t60: DEFAULT_PIANO_RELEASE_T60,
+    la_t60: crate::sampler::DEFAULT_LA_RELEASE_T60,
+};
+
+/// How one piano slot is voiced: how its bank was baked, and what its damper does.
+///
+/// These travel together because they are what distinguishes the piano slots from
+/// each other — but they are INDEPENDENT of each other, which is the whole point of
+/// MM-BUG-KILN-00097. A slot may take the legacy sample calibration with the GM0
+/// damper (every GM0 alternate does exactly that).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PianoVoicing {
+    /// How the sampled onset bank was normalized when baked.
+    pub cal: PianoSampleCal,
+    /// What the damper does after key-up.
+    pub damper: PianoDamper,
+}
+
+/// GM0 default: the envelope-conditioned bank with the calibrated damper.
+pub(crate) const GM0_DEFAULT_VOICING: PianoVoicing = PianoVoicing {
+    cal: PianoSampleCal::Gm0Conditioned,
+    damper: GM0_DAMPER,
+};
+
+/// Every GM0 CC0 alternate: independently peak-normalized PCM, GM0 damper.
+/// The damper no longer depends on which recording was selected (KILN-00097).
+pub(crate) const GM0_ALTERNATE_VOICING: PianoVoicing = PianoVoicing {
+    cal: PianoSampleCal::LegacyNormalized,
+    damper: GM0_DAMPER,
+};
+
+/// The pre-fix voicing: legacy sample calibration over the legacy damper.
+/// Still correct for GM1 and its alternates (unchanged pending Step 2), and used
+/// as the explicit control wherever a test needs the old behaviour reproduced.
+pub(crate) const LEGACY_VOICING: PianoVoicing = PianoVoicing {
+    cal: PianoSampleCal::LegacyNormalized,
+    damper: LEGACY_DAMPER,
+};
 const GM0_SAMPLE_GAIN: f32 = 4.00;
 const GM0_SAMPLE_FADE: (f32, f32) = (0.18, 0.45);
 const GM0_FORTE_LAYER_GAIN: f32 = 0.569;
@@ -8390,7 +8472,7 @@ const BOW_MIN_HZ: f32 = 20.0;
 /// doubles the requirement. The old fixed `DelayLine::new(320)` / `new(1600)` held C1 at
 /// 44.1 kHz (~1349 samples) but not at 96 kHz (~2936), and `DelayLine::tap` then walked
 /// off the front of the buffer — a debug panic, and a silent wrong-sample read in release
-/// (MM-BUG-KILN-00074).
+/// (MM-BUG-KILN-00097).
 ///
 /// `loop_comp` is deliberately not subtracted: it only ever shortens the delay, so
 /// ignoring it keeps this a safe upper bound. `+ 2` covers `tap`'s two-point
@@ -8535,7 +8617,7 @@ impl BowedString {
         // in tune.
         // The `BOW_MIN_HZ` floor is what bounds the loop length, and `bow_line_len` sizes
         // the two delay lines from the same constant. Keep them coupled: lowering this
-        // floor without regrowing the lines re-creates MM-BUG-KILN-00074.
+        // floor without regrowing the lines re-creates MM-BUG-KILN-00097.
         let total = (self.sr / f.max(BOW_MIN_HZ) - self.loop_comp).max(8.0);
         self.bridge_delay = (total * self.beta).max(1.0);
         self.neck_delay = (total * (1.0 - self.beta)).max(1.0);
@@ -12107,25 +12189,20 @@ pub fn acoustic_grand_with_bank(
     sr: f32,
     seed: u32,
     bright: bool,
-    release_t60: Option<f32>,
+    voicing: PianoVoicing,
 ) -> Box<dyn Voice> {
+    let PianoVoicing { cal, damper } = voicing;
     let model: Box<dyn Voice> = if bright {
         Box::new(bright_acoustic_piano(key, vel, sr, seed))
     } else {
-        Box::new(acoustic_piano(
-            key,
-            vel,
-            sr,
-            seed,
-            release_t60.unwrap_or(DEFAULT_PIANO_RELEASE_T60),
-        ))
+        Box::new(acoustic_piano(key, vel, sr, seed, damper.model_t60))
     };
     // The conditioned forte takes share the same unweighted macro envelope as
     // pp/mf, but their brighter spectrum measures about 4.9 dB louder through
     // the repository's reference K-weighted velocity oracle. Trim both owners
     // together at the v95/v96 bank boundary; scaling sample and model equally
     // preserves the calibrated handoff and release shape.
-    let layer_gain = if !bank.is_empty() && release_t60.is_some() && vel >= 96 {
+    let layer_gain = if !bank.is_empty() && cal == PianoSampleCal::Gm0Conditioned && vel >= 96 {
         GM0_FORTE_LAYER_GAIN
     } else {
         1.0
@@ -12141,41 +12218,18 @@ pub fn acoustic_grand_with_bank(
         model
     };
     if !bank.is_empty() {
-        let (legacy_gain, legacy_fade) = LA_PIANO;
         // Envelope conditioning preserves the upright's cross-zone body trend,
         // which puts its high-register peaks below the independently normalised
         // legacy banks. Match that conditioned bank back to the unchanged model
         // so the hammer remains the peak instead of blooming into the model.
-        // `Some` is the explicit GM0-default opt-in; alternates and GM1 stay on
-        // the legacy gain as well as the legacy release.
-        let (gain, fade) = if release_t60.is_some() {
-            (GM0_SAMPLE_GAIN * layer_gain, GM0_SAMPLE_FADE)
-        } else {
-            (legacy_gain, legacy_fade)
+        //
+        // This is a statement about how the PCM was baked, nothing more. The
+        // damper is chosen independently by the caller.
+        let (gain, fade) = match cal {
+            PianoSampleCal::Gm0Conditioned => (GM0_SAMPLE_GAIN * layer_gain, GM0_SAMPLE_FADE),
+            PianoSampleCal::LegacyNormalized => LA_PIANO,
         };
-        if let Some(release_t60) = release_t60 {
-            crate::sampler::LaVoice::wrap_release(
-                model,
-                bank,
-                key,
-                vel,
-                sr,
-                gain,
-                fade,
-                release_t60,
-            )
-        } else {
-            crate::sampler::LaVoice::wrap_fx(
-                model,
-                bank,
-                key,
-                vel,
-                sr,
-                gain,
-                fade,
-                crate::sampler::LaFx::default(),
-            )
-        }
+        crate::sampler::LaVoice::wrap_release(model, bank, key, vel, sr, gain, fade, damper.la_t60)
     } else {
         model
     }
@@ -12594,7 +12648,7 @@ fn make_uncorrected(
             sr,
             seed,
             false,
-            Some(GM0_RELEASE_T60),
+            GM0_DEFAULT_VOICING,
         ),
         // GM 1 Bright Acoustic — the VCSL Kawai over the BRIGHTER model (fits the slot
         // and keeps GM 0/GM 1 distinct modeled-only). Bright grands (YDP / MuseScore)
@@ -12610,7 +12664,7 @@ fn make_uncorrected(
             sr,
             seed,
             true,
-            None,
+            LEGACY_VOICING,
         ),
         // GM 3 Honky-tonk — the REAL FreePats honky-tonk player-piano sample over the
         // detuned honky_tonk_piano model, so it jangles through the attack (sample) AND
@@ -13349,7 +13403,7 @@ mod tests {
         traj, traj_peak_time_s, RenderSignature, BW_TREM_PEAK_FLOOR,
     };
 
-    /// MM-BUG-KILN-00074: every program must render at every plausible output rate,
+    /// MM-BUG-KILN-00097: every program must render at every plausible output rate,
     /// right down to the bottom of the keyboard, without crashing.
     ///
     /// `Options::with_sample_rate` and `RealtimeOptions::with_sample_rate` validate
@@ -13382,7 +13436,7 @@ mod tests {
     }
 
     /// The bowed waveguide must survive a downward bend at a high rate too
-    /// (MM-BUG-KILN-00074).
+    /// (MM-BUG-KILN-00097).
     ///
     /// `set_freq` runs per SAMPLE off `base_f * bend * vib * drift`, so the loop can grow
     /// long after construction — the delay lines have to be sized for the floor

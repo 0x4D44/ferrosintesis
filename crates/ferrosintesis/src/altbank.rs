@@ -1063,14 +1063,37 @@ pub fn make(
             } else {
                 None
             };
+            // Every alternate bank is independently peak-normalized, so it keeps the
+            // legacy layer gain. Its DAMPER is a different question, and until
+            // MM-BUG-KILN-00097 the two were welded together by one `Option`: the
+            // GM0 alternates inherited a 0.10 s string release over a 0.06 s sample
+            // release, against the GM0 default's 0.45 s. Arthur heard it as the B1
+            // upright sounding thin and quiet on Tubular Bells, whose piano never
+            // exceeds velocity 77 and so never reached the band where that deficit
+            // is masked by the default's forte trim.
+            //
+            // GM 0 alternates now share the GM0 default's damper. The GM 1 (bright)
+            // alternates stay on the legacy damper so they remain byte-identical to
+            // their own default, which Step 2 revisits with a key-dependent curve.
+            let voicing = if bright {
+                crate::voices::LEGACY_VOICING
+            } else {
+                crate::voices::GM0_ALTERNATE_VOICING
+            };
             match src {
                 Some(b) => {
-                    crate::voices::acoustic_grand_with_bank(b, key, vel, sr, seed, bright, None)
+                    crate::voices::acoustic_grand_with_bank(b, key, vel, sr, seed, bright, voicing)
                 }
                 // --no-samples or an unknown source digit: the slot's model alone.
-                None => {
-                    crate::voices::acoustic_grand_with_bank(&[], key, vel, sr, seed, bright, None)
-                }
+                None => crate::voices::acoustic_grand_with_bank(
+                    &[],
+                    key,
+                    vel,
+                    sr,
+                    seed,
+                    bright,
+                    voicing,
+                ),
             }
         }
         // The default GM19 is the Leslie drawbar. CC0=1 selects the same legacy

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00117 — EAR_DECIDED is a surviving hand-copy of engine.rs's deliberate-zero pins, so a fifth pin silently lets the tool re-litigate an ear decision
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** tooling / instrument balance
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00109; it falsifies that bug's fix-note claim (e))
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00109; it falsifies that bug's fix-note claim (e)) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the tool now derives every recorded zero decision from engine.rs in the same read as the shipped trim table)
 
 ## Observation
 
@@ -59,3 +59,31 @@ Derive it, and raise if the parse finds nothing, matching the fail-loud contract
 Fix alongside MM-BUG-KILN-00116 — same file, same function, same defect class.
 
 ## Notes
+
+## Resolution — 2026-07-25
+
+`derive_trims.py` no longer contains a literal program-number set. Its one
+`engine.rs` load now returns both the shipped trim table and the programs named
+by canonical ``assert_eq!(PROGRAM_TRIM_DB[P], 0.0);`` pins. A newly added pin
+there immediately becomes held by the panel and monitored by the residual
+oracle.
+
+The parser fails loudly when it finds no pins, a duplicate pin, or a program
+outside 0–127. A normal-gate Rust source oracle requires the parser safeguards
+and exactly one joint `SHIPPED, EAR_DECIDED = load_shipped()` assignment, so a
+future literal or second load recreates a test failure rather than drift.
+
+## Verification — 2026-07-25
+
+- `python tools/instrument-balance/derive_trims.py --selftest` passes. Its
+  fixtures prove a fifth multiline pin is derived and that empty, duplicate,
+  out-of-range, and nonzero pseudo-pins are rejected.
+- The focused Rust balance suite passes five tests with one diagnostic ignored.
+- `$null | cargo test --locked -p ferrosintesis`: **720 unit tests and 4 doc
+  tests passed; 27 diagnostics ignored**.
+- `$null | cargo test --locked -p ferrosintesis --no-default-features`: **619
+  unit tests and 4 doc tests passed; 22 diagnostics ignored**.
+- Strict all-target clippy passes with all features and with no default
+  features. Formatting and `git diff --check` pass.
+- No audio render inventory is required: the Rust change is `#[cfg(test)]`, and
+  the Python derivation tool does not ship in the synth.

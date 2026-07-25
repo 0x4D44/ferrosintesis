@@ -135,6 +135,10 @@ _SHIPPED_RE = re.compile(
     r"\[\s*f32\s*;\s*128\s*\]\s*=\s*\[(.*?)\]\s*;",
     re.S,
 )
+_EAR_DECIDED_RE = re.compile(
+    r"(?m)^[ \t]*assert_eq!\(\s*PROGRAM_TRIM_DB\[\s*(\d+)\s*\]"
+    r"\s*,\s*0\.0\s*\)\s*;"
+)
 
 
 def parse_shipped(text: str, source: object = "engine.rs") -> list[float]:
@@ -160,16 +164,43 @@ def parse_shipped(text: str, source: object = "engine.rs") -> list[float]:
         raise SystemExit(f"derive_trims: non-numeric entry in PROGRAM_TRIM_DB: {e}") from e
 
 
-def load_shipped(path: pathlib.Path = ENGINE_RS) -> list[float]:
-    """Read and parse `PROGRAM_TRIM_DB` out of engine.rs."""
+def parse_ear_decided(text: str, source: object = "engine.rs") -> set[int]:
+    """Derive the programs whose explicit zero pins record an ear decision."""
+    matches = _EAR_DECIDED_RE.findall(text)
+    if not matches:
+        raise SystemExit(
+            f"derive_trims: found no canonical "
+            f"`assert_eq!(PROGRAM_TRIM_DB[P], 0.0);` pins in {source}. "
+            "The pins were removed or reshaped; fix this parser rather than "
+            "re-copying their program numbers (MM-BUG-KILN-00117)."
+        )
+    programs = [int(program) for program in matches]
+    invalid = sorted(program for program in programs if program not in range(128))
+    if invalid:
+        raise SystemExit(
+            f"derive_trims: ear-decision pins outside GM program 0..127 in "
+            f"{source}: {invalid}."
+        )
+    if len(programs) != len(set(programs)):
+        duplicates = sorted(
+            program for program in set(programs) if programs.count(program) > 1
+        )
+        raise SystemExit(
+            f"derive_trims: duplicate ear-decision pins in {source}: {duplicates}."
+        )
+    return set(programs)
+
+
+def load_shipped(path: pathlib.Path = ENGINE_RS) -> tuple[list[float], set[int]]:
+    """Read and parse the shipped trims and recorded zero decisions out of engine.rs."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as e:
         raise SystemExit(f"derive_trims: cannot read {path}: {e}") from e
-    return parse_shipped(text, path)
+    return parse_shipped(text, path), parse_ear_decided(text, path)
 
 
-SHIPPED = load_shipped()
+SHIPPED, EAR_DECIDED = load_shipped()
 
 # --- recorded ear decisions -------------------------------------------------
 # A trim of 0.0 is ambiguous: it can mean "nobody has looked at this yet" or "someone
@@ -177,12 +208,8 @@ SHIPPED = load_shipped()
 # an ear judgment and belongs under the residual oracle's watch, so that a later run REPORTS
 # its disagreement instead of silently re-proposing a change that was already rejected.
 #
-# GM0/1/3 (2026.07.22, Arthur): both references place their own pianos well below their own
-# median and would drag ferro's down with them; ferro's pianos sit at ferro's median and stay
-# there. All three are pitch-tilt excluded on both references anyway, so no single number was
-# reliable for them. GM11 (same date): the references split 10.8 dB, so there is no consensus
-# target to ship and it awaits a listening call.
-EAR_DECIDED = {0, 1, 3, 11}
+# The canonical decisions and their rationale live beside the zero-valued assertions in
+# engine.rs. Parsing those assertions makes a new pin take effect here without a second list.
 
 # --- family roles (HLD §5 O2) -----------------------------------------------
 # percussive: newly derived. sustained: FROZEN (cross-check + anchor cohort). never: stay 0.0.
@@ -730,7 +757,11 @@ def _trim_declaration(name, value):
     return f"pub(crate) const {name}: [f32; 128] = [{body}];\n"
 
 
-def _selftest_shipped_parser():
+def _zero_pin(program):
+    return f"assert_eq!(PROGRAM_TRIM_DB[{program}], 0.0);\n"
+
+
+def _selftest_engine_parser():
     real = _trim_declaration("PROGRAM_TRIM_DB", 1.25)
     sibling = _trim_declaration("SC55_PROGRAM_TRIM_DB", -9.9)
     assert parse_shipped(sibling + real, "sibling fixture") == [1.25] * 128
@@ -749,6 +780,28 @@ def _selftest_shipped_parser():
             raise AssertionError(
                 f"shipped-table parser accepted {expected_count} exact declarations"
             )
+
+    pins = "".join(_zero_pin(program) for program in [0, 1, 3, 11])
+    assert parse_ear_decided(pins, "pin fixture") == {0, 1, 3, 11}
+    fifth_pin = """assert_eq!(
+        PROGRAM_TRIM_DB[99],
+        0.0
+    );
+"""
+    assert parse_ear_decided(pins + fifth_pin, "fifth-pin fixture") == {0, 1, 3, 11, 99}
+
+    for source, expected in [
+        (real, "found no canonical"),
+        (pins + _zero_pin(11), "duplicate ear-decision pins"),
+        (_zero_pin(128), "outside GM program 0..127"),
+        ("assert_eq!(PROGRAM_TRIM_DB[99], 1.0);", "found no canonical"),
+    ]:
+        try:
+            parse_ear_decided(source, "ear-decision rejection fixture")
+        except SystemExit as e:
+            assert expected in str(e), e
+        else:
+            raise AssertionError(f"ear-decision parser accepted invalid fixture: {expected}")
 
 
 # Fixture shipped table - DELIBERATELY independent of the live PROGRAM_TRIM_DB.
@@ -769,7 +822,7 @@ for _p, _v in {
 
 
 def selftest():
-    _selftest_shipped_parser()
+    _selftest_engine_parser()
     keys = [48, 53, 58, 63, 68, 73]
     ferro, sc = {}, {}
 
@@ -828,7 +881,7 @@ def selftest():
     assert byp[24]["excluded"] and "shape" in byp[24]["reasons"][0], byp[24]
     assert byp[25]["excluded"] and "shape/short" in byp[25]["reasons"][0], byp[25]
     assert byp[26]["excluded"] and any("pitch-tilt" in r for r in byp[26]["reasons"]), byp[26]
-    print(f"selftest OK - exact/unique shipped parser; anchor 0.00 MAD 0.00 over "
+    print(f"selftest OK - exact/unique engine-state parser; anchor 0.00 MAD 0.00 over "
           f"{len(cohort)} admitted; GM56 (5 dB off) rejected from the cohort; GM6 keeps "
           "+6 (damp the change); GM8 -2, GM9 (matched one-shot) -1; GM24 shape / GM25 "
           "sub-hop / GM26 pitch-tilt excluded.")

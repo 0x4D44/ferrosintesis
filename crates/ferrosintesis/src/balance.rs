@@ -207,14 +207,15 @@ mod tests {
         );
     }
 
-    /// The derivation tool must read one exact shipped table, never a sibling or copy.
+    /// The derivation tool must read one exact shipped table and derive every zero pin.
     ///
     /// Python's self-test exercises the parser semantics, but the repository gate does
     /// not invoke that script. This source oracle keeps the invariant in the ordinary
     /// Rust suite: an anchored `findall` must reject zero or multiple exact declarations,
-    /// and the production `SHIPPED` value must have one derived assignment.
+    /// the zero-pin parser must fail when it finds no canonical decisions, and both
+    /// production values must come from one read of `engine.rs`.
     #[test]
-    fn trim_derivation_reads_one_exact_shipped_table() {
+    fn trim_derivation_reads_one_exact_engine_state() {
         let tool = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .ancestors()
             .nth(2)
@@ -222,15 +223,19 @@ mod tests {
             .join("tools/instrument-balance/derive_trims.py");
         let src = std::fs::read_to_string(&tool)
             .unwrap_or_else(|e| panic!("cannot read {}: {e}", tool.display()));
-        let loader = src
+        let parsers = src
             .split_once("def parse_shipped(")
             .and_then(|(_, rest)| rest.split_once("\ndef load_shipped("))
             .map(|(body, _)| body)
-            .expect("derive_trims.py must define parse_shipped before load_shipped");
+            .expect("derive_trims.py must define its engine parsers before load_shipped");
+        let ear_parser = parsers
+            .split_once("def parse_ear_decided(")
+            .map(|(_, body)| body)
+            .expect("derive_trims.py must define parse_ear_decided");
 
         for required in ["_SHIPPED_RE.findall(text)", "if len(matches) != 1:"] {
             assert!(
-                loader.contains(required),
+                parsers.contains(required),
                 "derive_trims.py no longer enforces `{required}` while parsing the shipped \
                  trim table; a sibling, missing, or cfg-gated duplicate declaration could \
                  silently produce proposals against the wrong table"
@@ -241,21 +246,43 @@ mod tests {
             "derive_trims.py no longer anchors the shipped-table parser to the exact \
              `const PROGRAM_TRIM_DB` declaration; a prefixed sibling can match"
         );
+        for required in [
+            "_EAR_DECIDED_RE.findall(text)",
+            "if not matches:",
+            "if invalid:",
+            "if len(programs) != len(set(programs)):",
+        ] {
+            assert!(
+                ear_parser.contains(required),
+                "derive_trims.py no longer enforces `{required}` while deriving recorded \
+                 zero-valued ear decisions; a missing, duplicate, or invalid pin could \
+                 silently change which programs the tool is allowed to propose"
+            );
+        }
+        assert!(
+            src.contains(r"assert_eq!\(\s*PROGRAM_TRIM_DB\["),
+            "derive_trims.py no longer derives ear decisions from canonical \
+             `assert_eq!(PROGRAM_TRIM_DB[P], 0.0);` pins"
+        );
 
         let assignments: Vec<&str> = src
             .lines()
             .map(|line| line.split('#').next().unwrap_or("").trim())
             .filter(|line| {
                 line.split_once('=')
-                    .map(|(lhs, _)| lhs.trim() == "SHIPPED")
+                    .map(|(lhs, _)| {
+                        lhs.split(',')
+                            .map(str::trim)
+                            .any(|name| name == "SHIPPED" || name == "EAR_DECIDED")
+                    })
                     .unwrap_or(false)
             })
             .collect();
         assert_eq!(
             assignments,
-            ["SHIPPED = load_shipped()"],
-            "derive_trims.py must assign SHIPPED exactly once from load_shipped(); \
-             a second literal or alternate assignment recreates trim-table drift"
+            ["SHIPPED, EAR_DECIDED = load_shipped()"],
+            "derive_trims.py must assign SHIPPED and EAR_DECIDED exactly once from the \
+             same engine.rs read; a literal or alternate assignment recreates source drift"
         );
     }
 

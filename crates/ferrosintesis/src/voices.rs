@@ -26,8 +26,8 @@
 //! a gently-bowed or gently-blown note actually starts.
 
 use crate::dsp::{
-    key_freq, vel_amp, vel_ctrl, Adsr, Biquad, BlepPulse, BlepSaw, Burst, DelayLine, Drift, FmPair,
-    GrainGate, OnePole, ReedPulse, Rng, Sine,
+    key_freq, vel_amp, vel_ctrl, vel_sense_norm, Adsr, Biquad, BlepPulse, BlepSaw, Burst,
+    DelayLine, Drift, FmPair, GrainGate, OnePole, ReedPulse, Rng, Sine,
 };
 use std::f32::consts::TAU;
 
@@ -4120,13 +4120,11 @@ impl Pluck {
         // is not a power law at all (see `dsp::vel_amp`).
         // Both branches must square: `vn * vn` here is exactly what `vel_amp`
         // computes, just on the compressed velocity.
-        let (vn, v) = if p.vel_sense >= 1.0 {
-            let vn = vel as f32 / 127.0;
-            (vn, vel_amp(vel))
-        } else {
-            let vn = 1.0 - p.vel_sense * (1.0 - vel as f32 / 127.0);
-            (vn, vn * vn)
-        };
+        // One shared definition (`dsp::vel_sense_norm`), so the sampled LA onset in
+        // `sampler.rs` can apply the SAME compression this model does instead of a
+        // second copy that drifts from it (MM-BUG-KILN-00030).
+        let vn = vel_sense_norm(vel as f32 / 127.0, p.vel_sense);
+        let v = vn * vn;
         // round-robin variation: no two picks land identically
         let pos = (p.pos * (1.0 + 0.15 * rng.white())).clamp(0.06, 0.45);
         // velocity→timbre law (HLD family A, G3/B1), DECOUPLED from decay
@@ -4140,11 +4138,7 @@ impl Pluck {
         // normalized to 1.0 at the anchor. At vel 100 `vn == vn_anchor`, so `t`
         // is exactly 1 and every corner is bit-identical to the pre-decouple
         // synth. rng draw order (pos → bright-jitter → t60-jitter) is preserved.
-        let vn_anchor = if p.vel_sense >= 1.0 {
-            KS_ANCHOR_VN
-        } else {
-            1.0 - p.vel_sense * (1.0 - KS_ANCHOR_VN)
-        };
+        let vn_anchor = vel_sense_norm(KS_ANCHOR_VN, p.vel_sense);
         let v_timbre = 0.22 + 0.98 * vn; // the old velocity→corner factor
         let v_anchor = 0.22 + 0.98 * vn_anchor; // …evaluated at the anchor velocity
         let t = v_timbre / v_anchor; // velocity-transfer factor, ≡ 1.0 at vel 100
@@ -12328,10 +12322,24 @@ pub(crate) const VEL_LEVEL_EXP: [f32; 128] = {
     // (`BottleLoopVoice`) after this table was calibrated, so 1.450 is stale and would
     // over-correct it. Like the bagpipe chanter loop, its velocity response is the
     // recording's, not this table's — exempted from the sweep, follow-up in scratchpad.
-    // GM6 harpsichord is DELIBERATELY velocity-compressed (`vel_sense: 0.15` on the
-    // model). Its LA sample layer does not inherit that compression, so the composite
-    // over-responds; this brings the pair back to the documented <3 dB contract.
-    t[6] = 1.500;
+    // GM6 harpsichord has NO entry, and must not get one. It is the sole voice whose
+    // model is DELIBERATELY velocity-compressed (`vel_sense: 0.15`), which breaks this
+    // table's founding premise — `apply_vel_correction` states it outright: "the voice
+    // already carries (v/127)^2 from `vel_amp`". GM6 does not; it carries `vn^2` on a
+    // compressed `vn`. So an entry here does not RESHAPE a square law, it multiplies a
+    // nearly-flat one by (v/127)^(e-2) — a gain that RISES as velocity falls.
+    //
+    // It used to read `t[6] = 1.500`, justified as: "Its LA sample layer does not
+    // inherit that compression, so the composite over-responds; this brings the pair
+    // back to the <3 dB contract." That was a level correction for a CROSSFADE defect,
+    // and it mis-billed the whole voice for it: (v/127)^-0.5 made the model body 5.02 dB
+    // LOUDER at v40 than v127 — backwards, and applied even under `--no-samples`, where
+    // there is no LA layer to over-respond. That was MM-BUG-KILN-00044.
+    //
+    // The real defect was the onset not inheriting `vel_sense` (MM-BUG-KILN-00030),
+    // fixed at its own layer via `LaFx::vel_sense`, so the compensation has nothing
+    // left to compensate. `vel_sense_exempt_voices_take_no_exponent_correction` pins
+    // this: a `vel_sense`-compressed model must never carry an entry in this table.
     // Ethnic / world models. KILN-00048: GM105 banjo re-derived (2.0 -> 2.138);
     // GM106 shamisen re-derived to 2.348 (near the [1.5, 2.35] bound — a dark
     // dual-filter voice; flagged). GM107 koto gets the pitch-relative pp floor
@@ -12638,7 +12646,10 @@ fn make_uncorrected(
             let model = Box::new(Pluck::new(&HARPSICHORD, key, vel, sr, seed));
             if samples {
                 let (gain, fade) = LA_HARPSICHORD;
-                crate::sampler::LaVoice::wrap(
+                // The one voice combining an LA layer with `vel_sense` compression:
+                // hand the onset the SAME sensitivity the model squares, so the
+                // quill keeps the peak at every velocity (MM-BUG-KILN-00030).
+                crate::sampler::LaVoice::wrap_fx(
                     model,
                     crate::sampler::harpsichord_bank(),
                     key,
@@ -12646,6 +12657,10 @@ fn make_uncorrected(
                     sr,
                     gain,
                     fade,
+                    crate::sampler::LaFx {
+                        vel_sense: Some(HARPSICHORD.vel_sense),
+                        ..Default::default()
+                    },
                 )
             } else {
                 model

@@ -527,6 +527,54 @@ mod tests {
         }
     }
 
+    /// A program that CARRIES a `VEL_LEVEL_EXP` correction must still get louder as it
+    /// is played harder — derived from the table itself, so it needs no maintenance.
+    ///
+    /// The correction is `(v/127)^(e-2)`, which for `e < 2` RISES as velocity falls. It
+    /// is safe only under the premise `apply_vel_correction` states — "the voice already
+    /// carries (v/127)^2 from `vel_amp`" — because then the two powers compose to
+    /// `(v/127)^e`, still rising for any `e > 0`. Where that premise is false the
+    /// correction is not reshaping a curve, it is inverting one.
+    ///
+    /// It WAS false: GM6's model squares a `vel_sense`-COMPRESSED velocity, so
+    /// `t[6] = 1.500` multiplied a near-flat law by `(v/127)^-0.5` and made the
+    /// harpsichord 5.02 dB louder at v40 than at v127 — backwards, and under
+    /// `--no-samples` too (MM-BUG-KILN-00044). This is the guard that fails on that.
+    ///
+    /// Derived, not a list: it walks every program the table actually corrects, so a
+    /// future entry on another compressed voice is caught the day it lands. The
+    /// uncorrected voices are covered by the square-law sweep and its named exemptions.
+    #[test]
+    fn corrected_programs_still_rise_with_velocity() {
+        let corrected: Vec<u8> = (0u8..128)
+            .filter(|&p| voices::VEL_LEVEL_EXP[p as usize] != 2.0)
+            .collect();
+        assert!(
+            corrected.len() > 10,
+            "only {} corrected programs — the table lookup is not reaching VEL_LEVEL_EXP",
+            corrected.len()
+        );
+        let mut backwards = Vec::new();
+        for p in corrected {
+            let soft = melodic_level(p, 60, 48);
+            let loud = melodic_level(p, 60, 120);
+            if loud <= soft {
+                backwards.push(format!(
+                    "GM{p} (e={:.3}): v48 {soft:.2} dB -> v120 {loud:.2} dB ({:+.2})",
+                    voices::VEL_LEVEL_EXP[p as usize],
+                    loud - soft
+                ));
+            }
+        }
+        assert!(
+            backwards.is_empty(),
+            "these corrected programs get QUIETER as velocity rises — the \
+             `(v/127)^(e-2)` correction is being applied to a voice that does not carry \
+             the plain square law:\n  {}",
+            backwards.join("\n  ")
+        );
+    }
+
     /// AC4 — the exemptions, asserted by name so that dropping one is a deliberate
     /// act rather than an omission. The cathedral organ has its own dedicated test
     /// (`cathedral_organ_steady_level_is_velocity_independent`) which must keep

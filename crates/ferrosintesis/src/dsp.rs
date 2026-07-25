@@ -809,6 +809,34 @@ pub fn vel_amp(vel: u8) -> f32 {
     v * v
 }
 
+/// Apply a patch's `vel_sense` to a NORMALIZED velocity, before [`vel_amp`]'s curve.
+///
+/// `sense >= 1.0` is full sensitivity and returns `vn` untouched; `sense < 1.0`
+/// compresses toward the top of the range, which is how real hardware gives one
+/// patch a shallower response than the global law (see [`vel_amp`]).
+///
+/// This is the SINGLE definition of that compression. It used to be open-coded
+/// in `voices::Pluck::new` alone, so the sampled-onset gain in `sampler.rs` —
+/// which is supposed to track the wrapped model exactly — silently did not for the
+/// one voice that uses it (MM-BUG-KILN-00030). Both call here now; a second copy
+/// of this arithmetic is the bug.
+pub fn vel_sense_norm(vn: f32, sense: f32) -> f32 {
+    if sense >= 1.0 {
+        vn
+    } else {
+        1.0 - sense * (1.0 - vn)
+    }
+}
+
+/// GM velocity → amplitude for a patch of velocity sensitivity `sense`.
+///
+/// `vel_amp_sensed(v, 1.0)` is bit-identical to `vel_amp(v)` — same operations in
+/// the same order — so a fully-sensitive patch is unaffected by construction.
+pub fn vel_amp_sensed(vel: u8, sense: f32) -> f32 {
+    let vn = vel_sense_norm(vel as f32 / 127.0, sense);
+    vn * vn
+}
+
 /// Velocity → EXPRESSIVE CONTROL depth. Deliberately **not** the loudness law.
 ///
 /// A handful of sites map velocity to a timbre parameter rather than a level: the

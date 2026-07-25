@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00030 — the harpsichord's LA sample onset does not track its vel_sense-compressed model, so at v100 the sustain edges out the quill attack (~12% late bloom)
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -17,7 +17,7 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
+- **Attempts:** fix=1, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law
   alignment to k=2; caused by this change and diagnosed to the mechanism below)
 
@@ -64,6 +64,79 @@ The harpsichord's LA sample onset tracks its `vel_sense`-compressed model veloci
 onset law sees the same compressed velocity the model does), so the quill attack owns the
 peak again at every velocity and the `harpsichord-low` exception in `assert_attack_is_peak`
 can be removed.
+
+## Fix (2026-07-25)
+
+Both halves of the exit condition met, exactly as written and with `vel_sense` preserved.
+
+**The onset now sees the same compressed velocity the model does.** The compression law was
+open-coded in `voices::Pluck::new` only, so `sampler.rs`'s onset gain — whose own comment
+claims "ONE velocity-level law, shared with the wrapped model" — could not honour that claim
+for the one voice that compresses. It is now a single shared definition, `dsp::vel_sense_norm`
+/ `dsp::vel_amp_sensed`, called by both sides; `LaFx::vel_sense` carries the wrapped model's
+sensitivity, and GM 6 moves from `LaVoice::wrap` to `wrap_fx` to pass it. `None` (every other
+voice) is bit-identical to the previous bare `vel_amp`.
+
+**Confinement.** Every path this change touches is gated on either `LaFx::vel_sense` (set at
+the GM 6 wrap site alone) or `VEL_LEVEL_EXP[6]`, so only GM 6 can move. Measured corroboration:
+the `--no-samples` body levels are bit-identical to trunk at every probed velocity
+(−16.42 / −17.70 / −18.20 / −18.75 / −18.97 / −19.16 / −19.44 dB) *before* the
+`VEL_LEVEL_EXP[6]` removal, which is the `vel_sense_norm` refactor proving itself inert.
+A census of all 141 committed album/demo MIDIs finds **4** that author GM 6 — `Atlas of
+Becoming/11 - Clockwork Orchard`, `demos/ferrosintesis_reference/01`,
+`demos/synth_feature_showcase/02` and `/05` — and those are the only renders that may change.
+(Note for the record: MM-BUG-KILN-00044 states "no committed album authors GM6"; that was a
+grep for the word *harpsichord* in album Python sources, which misses both the demos and
+Clockwork Orchard's own program change. The program-change census above supersedes it.)
+
+Deliberately NOT the floored `X + Y·vel_amp` onset the abandoned 2026-07-21 branch
+(`origin/claude/bugs-queue-2q-drain-609csu`) used. `dsp::vel_amp`'s doc comment forbids that
+shape by name — "Never add a level floor of the form `X + Y·vel_amp(v)`: that is not a power
+law at all" — and names compressing velocity before the curve as the sanctioned alternative.
+That branch is superseded and can be reaped.
+
+**Result.** `assert_attack_is_peak`'s harpsichord-low bloom falls **1.118 → 0.743**, tripping
+the `<= 1.02` side of its own bound, so the named exception is deleted and the harpsichord now
+meets the same attack-owns-the-peak rule as every other struck voice.
+
+**This unmasked, and required fixing, half of MM-BUG-KILN-00044.** `VEL_LEVEL_EXP[6] = 1.500`
+existed *only* to compensate for this bug — its comment said so: "Its LA sample layer does not
+inherit that compression, so the composite over-responds." It billed the whole voice for a
+crossfade defect: `(v/127)^-0.5` made the model body 5.02 dB LOUDER at v40 than v127, and
+applied even under `--no-samples` where there is no LA layer at all. With the onset tracking,
+the compensation had nothing left to compensate, so the entry is removed. Measured at key 60:
+
+| | v40 | v72 | v110 | v127 | span |
+|---|---|---|---|---|---|
+| body, before | −16.42 | −18.20 | −19.16 | −19.44 | **−3.02 dB** |
+| body, after | −21.44 | −20.67 | −19.78 | −19.44 | **+2.00 dB** |
+| composite, after | −24.85 | −24.15 | −23.34 | −23.00 | **+1.85 dB** |
+
+Monotone rising, matching the `vn²` law's predicted +1.88 dB, and composite ≈ body — the
+velocity-invariant crossfade ratio the LA design intended. The body's +2.42 dBFS peak at v40
+is gone too.
+
+**Not weakened, any of them.** The three guards MM-BUG-KILN-00044 warns must be re-decided
+together all pass **unmodified**: the `< 3.0` contract and `loud > soft`
+(`exempt_voices_keep_their_documented_velocity_behaviour`), the `<= 1.5` body-spread pin in
+`keyboard_voices_programs_4_7_do_not_use_acoustic_piano_voice`, and the GM6 square-law
+exclusion. This change removes a workaround; it relaxes no assertion.
+
+### New guard
+
+`velocity_law::corrected_programs_still_rise_with_velocity` — derived from `VEL_LEVEL_EXP`
+itself, so it needs no maintenance: every program the table actually corrects must still get
+louder as it is played harder. Verified adversarially — re-introducing `t[6] = 1.500` makes it
+fail naming the exact program and margin (`GM6 (e=1.500): v48 -20.45 dB -> v120 -22.89 dB
+(-2.44)`), then passes again when removed.
+
+### What this does NOT fix
+
+MM-BUG-KILN-00044's *reference-fidelity* half is untouched and that bug stays open. Both
+reference modules give GM6 a near-square-law +6.6/+8.3 dB over v72→v110; ferrosintesis now
+gives +0.89 dB (was −0.96). The remaining gap is `vel_sense: 0.15` itself — a deliberate
+physical-realism choice, and changing it is a re-voicing needing ears and all three guards
+re-decided together. See that bug.
 
 ## Provenance
 

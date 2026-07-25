@@ -1,4 +1,4 @@
-# MM-BUG-KILN-00044 — GM6 harpsichord's sustained body moves −1.1 dB from v72 to v110 where both reference modules move +6.6 / +8.3 dB — a 9.6 dB velocity-response mismatch (`vel_sense` 0.15 compounded by `VEL_LEVEL_EXP[6]` = 1.5) that the attack-peak oracle cannot see
+# MM-BUG-KILN-00044 — GM6 harpsichord's held body rises only +0.9 dB from v72 to v110 where both reference modules rise +6.6 / +8.3 dB — a ~7 dB velocity-response gap that is `vel_sense` 0.15 itself: physical realism vs GM convention, an ears/design call
 
 - **State:** Open
 - **Priority:** Should
@@ -19,6 +19,48 @@
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) from the M-CAL v3 certified/panel derivation runs; triaged and root-caused against the source and the raw measurement TSVs)
+  → NARROWED (2026-07-25, Claude Opus 5 (1M) @ xhigh, Arthur's call after a listening pass;
+  the INVERSION half is fixed and struck from this record, the reference gap remains and is
+  now the whole of this bug — see "Narrowed" below)
+
+## Narrowed (2026-07-25) — the inversion half is FIXED; only the design question remains
+
+This bug originally carried two defects. **The inversion is gone.**
+
+`VEL_LEVEL_EXP[6] = 1.500` — root-cause item 3 below, worth −1.837 dB over v72→v110 — has been
+**deleted**, along with the reason it existed. Its comment justified it as compensation for the
+LA layer "not inheriting that compression", i.e. for MM-BUG-KILN-00030; that bug is now fixed at
+its own layer (`LaFx::vel_sense`, so the sampled onset applies the same `vel_sense` compression
+the model does), leaving the compensation nothing to compensate. Measured at key 60:
+
+| | v40 | v72 | v110 | v127 | span |
+|---|---|---|---|---|---|
+| body, before | −16.42 | −18.20 | −19.16 | −19.44 | **−3.02 dB** |
+| body, after | −21.44 | −20.67 | −19.78 | −19.44 | **+2.00 dB** |
+
+So the two claims in this record that rested on the inversion no longer hold:
+- *"A composed crescendo on a GM6 channel renders flat, and marginally backwards"* — it now
+  renders **forwards**, at the `vn²` law's predicted slope.
+- *"fails the repo's own documented contract regardless … it responds negatively"* — it now
+  responds positively. `velocity_law.rs`'s "GM6 must still respond to velocity, just weakly"
+  passes on merit rather than on the wrong window.
+
+Root-cause item 4 ("why no oracle caught it") is also addressed: the new derived guard
+`velocity_law::corrected_programs_still_rise_with_velocity` fails on any program that carries a
+`VEL_LEVEL_EXP` correction while rendering backwards. Verified adversarially against
+`t[6] = 1.500`.
+
+**What is left, and is now the whole of this bug:** the reference-fidelity gap. ferrosintesis
+gives GM6 **+0.89 dB** over v72→v110 (was −0.96); the SC-55mkII gives +8.33 and the S-YXG50
++6.61. That residual is `vel_sense: 0.15` itself, exactly as root-cause item 1 says — and per
+Arthur (2026-07-25, after A/B listening) **`vel_sense: 0.15` stays**: a real jack plectrum
+displaces the string the same distance however hard the key falls, and physical realism wins
+over GM convention here. This bug therefore remains open as the standing record of a *known,
+deliberate* divergence from the reference panel, not as a defect to be silently fixed.
+
+Anyone re-opening the question must still re-decide root-cause item 5's three guards together
+(the GM6 square-law exclusion, the `< 3.0` contract, and the `<= 1.5` spread pin) — all three
+pass unmodified today, and none was weakened to land the inversion fix.
 
 ## Observation
 
@@ -119,6 +161,10 @@ law wants +7.37. Across the whole range v1→v127 the model spans just 2.82 dB. 
 (`:3890`) and `pick_lp` (`:3892`) ride the same compressed `vn`, so the velocity→timbre law is
 compressed identically.
 
+**3. ~~`VEL_LEVEL_EXP[6] = 1.500`~~ — FIXED 2026-07-25, entry deleted (see "Narrowed" above).**
+The analysis below remains correct and is kept as the record of why it was wrong; the arithmetic
+it predicts no longer applies to the shipped synth. Historic text:
+
 **3. `crates/ferrosintesis/src/voices.rs:11571`** — `VEL_LEVEL_EXP[6] = 1.500`, applied to the
 COMPOSITE by `voices::make` (`:11683`) through `ScaledVoice::gain` (`:11612`) as
 `(v/127)^(exp − 2)` = `(v/127)^-0.5`. Its stated job (comment at `:11568-11570`) is to pull the
@@ -178,12 +224,28 @@ Not fixed. Direction, for whoever picks it up:
   `velocity_law.rs:519` requires a positive response and the composite currently delivers a
   negative one. At minimum the compensation must stop out-running the model.
 
-## Exit condition
+## Exit condition (rewritten 2026-07-25 — the inversion half is done)
 
-GM6's **held body** (blocks b2..b8, the M-CAL metric) tracks the reference panel: the
-`vel_guard` for GM6 drops below 3.0 dB against both the SC-55mkII and the S-YXG50, and the GM6
-velocity guard in `velocity_law.rs` measures the sustained body rather than the attack peak and
-asserts a **lower** bound, not only a ceiling.
+This is now a **design question, not a defect to fix silently**. It closes one of two ways, and
+either way needs Arthur and ears, not a unilateral agent change:
+
+- **Accept the divergence (current standing decision, 2026-07-25).** `vel_sense: 0.15` stays;
+  GM6 is deliberately near-velocity-flat because a real jack plectrum is, and we knowingly
+  differ from both reference modules on this one program. Closing on this basis means recording
+  it as a documented exception — ideally an oracle that PINS the ~7 dB divergence so it cannot
+  drift unnoticed in either direction, the way `looped_recording_voices_keep_their_documented_
+  velocity_behaviour` pins the bottle and bagpipe.
+- **Adopt GM convention.** `vel_sense` → ~1.0, putting GM6 on the plain square law and matching
+  the panel (`vel_guard` < 3.0 dB against both). That is a re-voicing: it needs a listening pass
+  plus the render-diff inventory, and root-cause item 5's three guards must be re-decided
+  **together** — the GM6 square-law exclusion (`velocity_law.rs`), the `< 3.0` contract, and the
+  `<= 1.5` body-spread pin. Note the LA onset now inherits whatever `vel_sense` becomes, so this
+  no longer requires touching the crossfade.
+
+Superseded: the original exit condition also demanded the velocity guard move from the attack
+peak to the held body with a lower bound. Partly moot — the composite and body now track each
+other (+1.85 vs +2.00 dB span), so the attack-window measurement is no longer masking a
+different body behaviour. Still worth doing on its own merits if this bug is picked up.
 
 ## Notes
 

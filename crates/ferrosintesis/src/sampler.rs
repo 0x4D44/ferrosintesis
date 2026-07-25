@@ -8,7 +8,7 @@
 //! remains a single self-contained executable. Each zone's root frequency was
 //! measured by autocorrelation, so repitching is cent-accurate.
 
-use crate::dsp::{key_freq, vel_amp, Rng};
+use crate::dsp::{key_freq, vel_amp, vel_amp_sensed, Rng};
 use crate::voices::Voice;
 use std::sync::OnceLock;
 
@@ -2967,6 +2967,13 @@ fn smooth(x: f32) -> f32 {
 /// renders byte-identically (the render-diff inventory is the guard).
 #[derive(Clone, Copy, Default)]
 pub struct LaFx {
+    /// The wrapped model's `vel_sense`, when it is velocity-COMPRESSED (< 1.0).
+    ///
+    /// The sampled onset must follow the same velocity law as the body it fades
+    /// into, and for a compressed model that law squares a compressed velocity —
+    /// see the `vel_gain` site. `None` = the model uses the plain global law, so the
+    /// onset does too. Only GM 6 sets it (MM-BUG-KILN-00030).
+    pub vel_sense: Option<f32>,
     /// One-pole high-shelf on the sample readout: (gain_db, corner_hz).
     /// GM 1 Bright's hammer-band brightness, moved INTO the sampled onset.
     pub shelf: Option<(f32, f32)>,
@@ -3353,9 +3360,23 @@ impl LaVoice {
             Some(base_hz) => vel_lp_alpha(base_hz, vel, sr),
             None => 0.0,
         };
-        // ONE velocity-level law, shared with the wrapped model: both are
-        // `vel_amp`, so the sampled onset and the modeled body track each other
-        // exactly and their crossfade ratio is velocity-invariant.
+        // ONE velocity-level law, shared with the wrapped model, so the sampled
+        // onset and the modeled body track each other exactly and their crossfade
+        // ratio is velocity-invariant.
+        //
+        // "The same law" means the same law ON THE SAME COMPRESSED VELOCITY. A
+        // model with `vel_sense < 1` (only HARPSICHORD) squares a compressed `vn`
+        // rather than the raw one, so a bare `vel_amp(vel)` onset did NOT track it:
+        // at v100 the sampled quill sat ~2.3 dB under the body it was supposed to
+        // ride, and a later window edged out the attack — the ~12 % late bloom of
+        // MM-BUG-KILN-00030, wrong for an instrument whose whole identity is the
+        // pluck transient. `fx.vel_sense` carries the wrapped model's sensitivity so
+        // both sides compress identically. `None` (every other voice) is
+        // bit-identical to the previous bare `vel_amp`.
+        //
+        // NOT fixed with a floored `X + Y·vel_amp` onset: `dsp::vel_amp` forbids
+        // that shape outright (it is not a power law, it asymptotes to X, and a zoo
+        // of such floors is what collapsed this synth's aggregate response before).
         //
         // This used to carry a second, superlinear branch for the guitars
         // (`(vel_amp/vel_amp(100))^1.4`) whose whole job was to compensate for
@@ -3364,7 +3385,10 @@ impl LaVoice {
         // crossfade. With the floors gone and one square law everywhere, the
         // compensation has nothing left to correct — keeping it would re-steepen
         // the guitars to v^2.8.
-        let vel_gain = vel_amp(vel);
+        let vel_gain = match fx.vel_sense {
+            Some(sense) => vel_amp_sensed(vel, sense),
+            None => vel_amp(vel),
+        };
         Ok(LaVoice {
             sustain,
             zone,
@@ -7895,28 +7919,12 @@ mod tests {
         let attack = fine[..attack_windows].iter().fold(0f32, |mx, &x| mx.max(x));
         let late = fine[attack_windows..].iter().fold(0f32, |mx, &x| mx.max(x));
 
-        if label == "harpsichord-low" {
-            // KNOWN, NAMED interaction — self-retiring. The harpsichord is the only
-            // voice that combines `vel_sense` velocity compression with an LA sample
-            // layer. The k=2 work changed the generic LA onset gain from a floored
-            // `0.35 + 0.65·vel_amp` to bare `vel_amp`, which tracks the model for every
-            // voice whose model is now bare `vel_amp` — but NOT the harpsichord, whose
-            // model velocity is `vel_sense`-compressed. At v100 that dropped the sampled
-            // quill onset ~2.3 dB relative to the model body, so a slightly-later window
-            // (0.06607) now edges the first (0.05910): a ~12 % bloom. Filed as
-            // MM-BUG-KILN-00030 (LA onset should track a vel_sense model).
-            //
-            // Bounded on BOTH sides so a fix cannot pass silently: if the bloom drops
-            // back under 1.02, the model tracks again and this exception must be removed.
-            let bloom = late / attack.max(1e-9);
-            assert!(
-                (1.02..1.25).contains(&bloom),
-                "harpsichord-low bloom {bloom:.3}: if <=1.02 the LA onset now tracks the \
-                 vel_sense model — delete this exception and close MM-BUG-KILN-00030; \
-                 if >1.25 the interaction WORSENED ({fine:?})"
-            );
-            return;
-        }
+        // The `harpsichord-low` exception that used to sit here is GONE, retired by its
+        // own bounded assertion exactly as designed: once `LaFx::vel_sense` made the LA
+        // onset inherit the model's compression (MM-BUG-KILN-00030), the bloom fell from
+        // ~1.118 to 0.743 and tripped the `<= 1.02` side of the bound. The harpsichord
+        // now meets the same attack-owns-the-peak rule as every other struck voice, so
+        // it needs no special case here.
 
         // KNOWN, NAMED interaction — the plucked-family t60 re-fit (2026.07.23) —
         // self-retiring. The nylon/steel guitars now ring far longer, so the MODEL

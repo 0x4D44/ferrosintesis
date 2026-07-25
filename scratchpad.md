@@ -309,7 +309,7 @@
 
 - [ ] 2026-07-19 ferrosintesis render HANG: `ferrosintesis "<Hollow Hill Pt 1>.mid" --solo 8 -o x.wav` (nylon, prog 24) runs >400s and is killed, on BOTH the pre-Phase-1 baseline binary AND with --peak-normalize (so not LUFS, not my pluck change). The FULL-mix render of the same file finishes in ~2min, and --solo 7/10/14 finish in ~2min — only --solo 8 pathologically slow. Suspect a stuck/never-reaping voice or LA-sample loop specific to that channel. crates/ferrosintesis/src/engine.rs (solo path / voice reap) + sampler.rs. Repro: Hollow Hill Pt 1, --solo 8.
 
-- [ ] 2026-07-20 **render-diff harness mis-attributes ch-10 (drum) program changes as
+- [x] 2026-07-20 **render-diff harness mis-attributes ch-10 (drum) program changes as
   melodic GM programs** (`tools/render-diff/render_diff.py:116-118`). `scan()` does
   `for ch, ps in ch_prog.items(): if ch in ch_sounded: progs.update(ps)` — it adds
   channel 9's program changes to `progs` too, so an album selecting a ch-10 DRUM KIT
@@ -318,6 +318,9 @@
   NOT-REACHED GM25 albums (Slipstream, Three-Sixty/-One) that actually use PC25 only on
   ch-10. Fix: skip `ch == 9` in the progs loop (ch-10 program = kit, already tracked via
   drum `keys`). Low-risk, isolated to the harness; do when next touching render-diff.
+  (Done 2026-07-25: `scan()` now skips `ch == 9` in the program roll-up. Verified on the
+  three named albums — Slipstream 01/02/03 reported GM25 before the fix and do not after,
+  with their drum keys untouched.)
 
 - [ ] 2026-07-20 **GOLDEN mix fixture has pre-existing within-tolerance drift on 3
   non-pluck rows** (`crates/ferrosintesis/src/testutil.rs` GOLDEN table). Capturing

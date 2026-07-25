@@ -114,7 +114,11 @@ def scan(path: str) -> tuple[set[int], set[int]]:
                 i += 1
         i = end
     for ch, ps in ch_prog.items():
-        if ch in ch_sounded:
+        # Channel 10 (index 9) program changes select a drum KIT, not a melodic voice
+        # (PC 24 Synth, PC 25 V1, PC 40 Brush) — folding them into `progs` would report
+        # e.g. a Brush-kit album as sounding melodic GM 40, and `--program 40` would then
+        # list it as NOT REACHED. Its percussion is already tracked through `keys`.
+        if ch != 9 and ch in ch_sounded:
             progs.update(ps)
     return progs, keys
 

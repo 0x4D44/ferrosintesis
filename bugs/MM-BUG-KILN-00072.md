@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00072 — manifest.rs comment-stripping ignores TOML literal strings and braces in strings
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** packaging / build
@@ -18,9 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00067 on its independent
-  two-eyes closure. Found by Codex gpt-5.6-sol; recorded by Claude Opus 4.8 (1M), who
-  wrote the oracle.)
+- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00067 on independent two-eyes closure; found by Codex GPT-5.6-Sol; recorded by Claude Opus 4.8 (1M)) → Fixed (2026-07-25, Codex GPT-5.6-Sol; TOML basic/literal string scanner and regressions landed; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -54,17 +52,25 @@ cannot — a guard with a parser hole is worth less than its docstring claims.
 
 ## Fix
 
-Track both string forms in `strip_comment` and in the brace counter: on `'` enter a
-literal string (no escapes, terminated by the next `'`); on `"` enter a basic string
-(backslash escapes apply). Ignore `#`, `{` and `}` inside either.
+Implemented in `crates/ferrosintesis/src/manifest.rs`. `structural_braces` now scans
+comments and braces in one pass while tracking both TOML string forms. Basic strings
+honour backslash escapes; literal strings do not. `#`, `{`, and `}` are data inside
+either form.
 
-Multi-line basic (`"""`) and literal (`'''`) strings are also legal TOML and would need
-state across lines if this is ever pointed at a manifest that uses them; note the
-limitation explicitly if not handled, rather than leaving it silent.
+The oracle documents its deliberate single-line limit. Multi-line basic (`"""`) and
+literal (`'''`) strings need state across lines; no workspace manifest uses either.
+If that changes, the narrow oracle must be replaced with a stateful TOML lexer.
 
-Extend `the_oracle_detects_the_shape_it_is_meant_to_catch` with the cases that exposed
-this: `foo = { path = 'vendor/a#b' }` must pass, and a malformed table following a
-literal string containing `"` must still fail.
+The focused regression first failed on valid
+`foo = { path = 'vendor/a#b' }`, proving the historical false positive. It now covers
+that line, braces inside a literal string, and a literal `"` that previously hid a real
+comment and malformed inline table.
+
+Validation on 2026-07-25:
+
+- Native focused manifest suite: 2 passed.
+- Rust 1.87 focused manifest suite: 2 passed.
+- `cargo clippy -p ferrosintesis --lib --tests -- -D warnings`: passed.
 
 ## Notes
 

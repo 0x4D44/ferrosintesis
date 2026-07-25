@@ -59,31 +59,66 @@ mod tests {
         out
     }
 
-    /// Strip a trailing `#` comment, ignoring `#` inside a double-quoted string.
+    #[derive(Clone, Copy)]
+    enum StringKind {
+        Basic,
+        Literal,
+    }
+
+    /// Count structural braces before a comment, ignoring string contents.
     ///
-    /// Naive splitting on `#` would corrupt any line holding a `#` in a value — a URL
-    /// fragment, or a sample name like `F#6.wav` — and could invent or hide a brace.
-    fn strip_comment(line: &str) -> &str {
-        let mut in_string = false;
-        let mut prev_backslash = false;
-        for (i, c) in line.char_indices() {
-            match c {
-                '"' if !prev_backslash => in_string = !in_string,
-                '#' if !in_string => return &line[..i],
-                _ => {}
+    /// TOML basic strings (`"..."`) use backslash escapes; literal strings
+    /// (`'...'`) do not. A `#`, `{`, `}` or `"` inside a literal string is data,
+    /// just as those characters inside a basic string are data.
+    ///
+    /// This deliberately handles the single-line forms only. Multi-line basic and
+    /// literal strings need lexer state across lines; no workspace manifest uses
+    /// either form. If that changes, replace this narrow inline-table oracle with a
+    /// stateful TOML lexer rather than extending it with another line-local special
+    /// case.
+    fn structural_braces(line: &str) -> (usize, usize) {
+        let mut string = None;
+        let mut escaped = false;
+        let mut opens = 0;
+        let mut closes = 0;
+
+        for c in line.chars() {
+            match string {
+                Some(StringKind::Basic) => {
+                    if escaped {
+                        escaped = false;
+                    } else {
+                        match c {
+                            '\\' => escaped = true,
+                            '"' => string = None,
+                            _ => {}
+                        }
+                    }
+                }
+                Some(StringKind::Literal) => {
+                    if c == '\'' {
+                        string = None;
+                    }
+                }
+                None => match c {
+                    '"' => string = Some(StringKind::Basic),
+                    '\'' => string = Some(StringKind::Literal),
+                    '#' => break,
+                    '{' => opens += 1,
+                    '}' => closes += 1,
+                    _ => {}
+                },
             }
-            prev_backslash = c == '\\' && !prev_backslash;
         }
-        line
+
+        (opens, closes)
     }
 
     /// Lines that open an inline table without closing it — invalid under TOML 1.0.
     fn unclosed_inline_tables(text: &str) -> Vec<(usize, String)> {
         let mut out = Vec::new();
         for (idx, raw) in text.lines().enumerate() {
-            let code = strip_comment(raw);
-            let opens = code.matches('{').count();
-            let closes = code.matches('}').count();
+            let (opens, closes) = structural_braces(raw);
             if opens > closes {
                 out.push((idx + 1, raw.trim().to_string()));
             }
@@ -134,6 +169,17 @@ mod tests {
         // would drop the closing brace and report a false positive.
         let hashed = "a = { file = \"F#6.wav\" } # trailing comment\n";
         assert!(unclosed_inline_tables(hashed).is_empty());
+
+        // Literal strings use single quotes: `#`, `"` and braces inside them are data.
+        let literal_hash = "foo = { path = 'vendor/a#b' }\n";
+        assert!(unclosed_inline_tables(literal_hash).is_empty());
+        let literal_braces = "foo = { pattern = '{not structure}' }\n";
+        assert!(unclosed_inline_tables(literal_braces).is_empty());
+
+        // A double quote inside a literal string must not hide the real comment.
+        // The closing brace is commented out, so this inline table is genuinely open.
+        let hidden_by_literal_quote = "foo = { path = 'vendor/\"quoted' # }\n";
+        assert_eq!(unclosed_inline_tables(hidden_by_literal_quote).len(), 1);
 
         // A genuinely commented-out brace must not count as an opener.
         let commented = "# foo = {\nbar = 1\n";

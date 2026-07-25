@@ -9,10 +9,10 @@ root.
 
 | Family | Files | Instrument | Source | Licence |
 |--------|------:|------------|--------|---------|
-| `sitar_*` | 6 | Sitar (GM 104) onsets | MuseScore "MS Basic" SF3 | MIT |
-| `panflute_*` | 6 | Pan flute (GM 75) onsets | MuseScore "MS Basic" SF3 | MIT |
+| `sitar_*` | 8 | Sitar (GM 104) onsets | MuseScore "MS Basic" SF3 | MIT |
+| `panflute_*` | 8 | Pan flute (GM 75) onsets | MuseScore "MS Basic" SF3 | MIT |
 | `bottle_*` | 1 | Blown bottle (GM 76) onset - retired, superseded by `ferrosintesis-samples-bottle` | MuseScore "MS Basic" SF3 | MIT |
-| `shakuhachi_*` | 5 | Shakuhachi (GM 77) onsets | MuseScore "MS Basic" SF3 | MIT |
+| `shakuhachi_*` | 1 | Shakuhachi (GM 77) onset | MuseScore "MS Basic" SF3 | MIT |
 | `celesta_*` | 8 | Celesta (GM 8) onsets | MuseScore "MS Basic" SF3 | MIT |
 
 **Source pin.** MuseScore `MS Basic.sf3`, revision `d307a2bd899f15bf650efc3c2891211af5cb78b5`

@@ -1,5 +1,11 @@
 # Clavinet sample provenance
 
+## Packaged family inventory
+
+| Family | Files |
+|--------|------:|
+| `clavinet_*` | 11 |
+
 The 11 WAVs in `samples/` are the GM7 clavinet extracted from the **MuseScore
 "MS Basic"** soundfont and baked into self-contained decaying notes for
 ferrosintesis's default sampled clavinet (GM program 7). They are **MIT-licensed**,

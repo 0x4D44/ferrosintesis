@@ -1,5 +1,12 @@
 # Provenance — ferrosintesis-samples-ccby
 
+## Packaged family inventory
+
+| Family | Files |
+|--------|------:|
+| `dulcimer_*` | 9 |
+| `rhodes_*` | 11 |
+
 Two real recordings from Freesound, each **CC BY 4.0**. The upstream evidence is **retained in
 this repository**: each pack's bundled `_readme_and_license.txt` is committed verbatim under
 `tools/ferrosintesis-samples/freesound-src/`, so the licence can be audited offline — without a

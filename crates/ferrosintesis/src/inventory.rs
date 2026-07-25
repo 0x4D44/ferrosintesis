@@ -25,6 +25,7 @@
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::path::{Path, PathBuf};
 
     fn crates_dir() -> PathBuf {
@@ -179,61 +180,159 @@ mod tests {
             .collect())
     }
 
-    /// The FAMILY prefixes a crate actually ships (`pizzbass_C2.wav` -> `pizzbass`).
-    fn packaged_families(krate: &str) -> Vec<String> {
-        let mut fams: Vec<String> = std::fs::read_dir(crates_dir().join(krate).join("samples"))
+    /// The FAMILY prefixes and counts a crate actually ships (`pizzbass_C2.wav` ->
+    /// `pizzbass`).
+    fn packaged_family_counts(krate: &str) -> BTreeMap<String, usize> {
+        let mut families = BTreeMap::new();
+        for name in std::fs::read_dir(crates_dir().join(krate).join("samples"))
             .expect("a sample crate has a samples/ directory")
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().to_string())
-            .filter(|n| n.ends_with(".wav"))
-            .filter_map(|n| n.split('_').next().map(str::to_string))
-            .collect();
-        fams.sort();
-        fams.dedup();
-        fams
-    }
-
-    /// Everything the crate's own package says about itself, lowercased.
-    ///
-    /// Deliberately the PACKAGED documents only. A pin that lives in `prepare.py` is
-    /// invisible to a crates.io consumer, which is the whole complaint.
-    fn crate_documentation(krate: &str) -> String {
-        let root = crates_dir().join(krate);
-        let mut text = String::new();
-        for name in ["README.md", "PROVENANCE.md", "NOTICE"] {
-            if let Ok(s) = std::fs::read_to_string(root.join(name)) {
-                text.push_str(&s.to_lowercase());
-                text.push('\n');
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .filter(|name| name.ends_with(".wav"))
+        {
+            if let Some(family) = name.split('_').next() {
+                *families.entry(family.to_owned()).or_insert(0) += 1;
             }
         }
-        text
+        families
     }
 
-    /// Every packaged sample family is named in the documents its own crate ships.
+    /// Canonical Markdown rows: ``| `family_*` | 12 | ... |``.
+    ///
+    /// Returning a list rather than a map preserves duplicates so the oracle can reject
+    /// them instead of silently letting the last row win.
+    fn provenance_family_rows(provenance: &str) -> Result<Vec<(String, usize)>, String> {
+        let mut rows = Vec::new();
+        for (index, line) in provenance.lines().enumerate() {
+            let line = line.trim();
+            if !line.starts_with('|') || !line.ends_with('|') {
+                continue;
+            }
+            let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
+            let Some(pattern) = cells
+                .first()
+                .and_then(|cell| cell.strip_prefix('`'))
+                .and_then(|cell| cell.strip_suffix("_*`"))
+            else {
+                continue;
+            };
+            if pattern.is_empty() {
+                return Err(format!("line {} has an empty family pattern", index + 1));
+            }
+            let count = cells
+                .get(1)
+                .ok_or_else(|| format!("line {} has no file count", index + 1))?
+                .parse::<usize>()
+                .map_err(|_| {
+                    format!(
+                        "line {} has a non-numeric file count for `{pattern}_*`",
+                        index + 1
+                    )
+                })?;
+            rows.push((pattern.to_owned(), count));
+        }
+        Ok(rows)
+    }
+
+    fn provenance_inventory_errors(
+        packaged: &BTreeMap<String, usize>,
+        provenance: &str,
+    ) -> Vec<String> {
+        let rows = match provenance_family_rows(provenance) {
+            Ok(rows) => rows,
+            Err(error) => return vec![error],
+        };
+        let mut errors = Vec::new();
+
+        for (family, packaged_count) in packaged {
+            let matches: Vec<usize> = rows
+                .iter()
+                .filter_map(|(row_family, count)| (row_family == family).then_some(*count))
+                .collect();
+            match matches.as_slice() {
+                [] => errors.push(format!("missing canonical row for `{family}_*`")),
+                [documented_count] if documented_count != packaged_count => errors.push(format!(
+                    "`{family}_*` documents {documented_count} files but packages {packaged_count}"
+                )),
+                [_] => {}
+                _ => errors.push(format!(
+                    "`{family}_*` has {} canonical rows; expected exactly one",
+                    matches.len()
+                )),
+            }
+        }
+
+        for (family, _) in &rows {
+            if !packaged.contains_key(family) {
+                errors.push(format!(
+                    "canonical row `{family}_*` has no packaged sample family"
+                ));
+            }
+        }
+        errors
+    }
+
+    /// Every packaged sample family has one counted row in its crate's provenance.
     #[test]
-    fn every_packaged_sample_family_is_documented_by_its_own_crate() {
-        let mut undocumented = Vec::new();
+    fn every_packaged_sample_family_has_one_counted_provenance_row() {
+        let mut errors = Vec::new();
         let mut checked = 0usize;
         for krate in sample_crates() {
-            let docs = crate_documentation(&krate);
-            for family in packaged_families(&krate) {
-                checked += 1;
-                if !docs.contains(&family.to_lowercase()) {
-                    undocumented.push(format!("{krate}: {family}_*.wav"));
-                }
-            }
+            let packaged = packaged_family_counts(&krate);
+            checked += packaged.len();
+            let provenance =
+                std::fs::read_to_string(crates_dir().join(&krate).join("PROVENANCE.md"))
+                    .expect("a sample crate has a PROVENANCE.md");
+            errors.extend(
+                provenance_inventory_errors(&packaged, &provenance)
+                    .into_iter()
+                    .map(|error| format!("{krate}: {error}")),
+            );
         }
         assert!(
             checked > 40,
             "only {checked} families scanned — the scan is broken"
         );
         assert!(
-            undocumented.is_empty(),
-            "{} sample family/families are packaged but named nowhere in their own \
-             crate's README, PROVENANCE or NOTICE, so a consumer receives audio it \
-             cannot trace:\n  {}",
-            undocumented.len(),
-            undocumented.join("\n  ")
+            errors.is_empty(),
+            "{} provenance inventory error(s); each packaged family needs exactly one \
+             canonical `| `family_*` | FILES |` row in its own PROVENANCE.md:\n  {}",
+            errors.len(),
+            errors.join("\n  ")
+        );
+    }
+
+    #[test]
+    fn provenance_inventory_ignores_a_family_mention_outside_provenance() {
+        let packaged = BTreeMap::from([("piano".to_owned(), 52)]);
+        let readme = "The package contains the piano_* family.";
+        let provenance = "# Provenance\n\nNo canonical inventory row.\n";
+
+        assert!(readme.contains("piano_*"));
+        assert_eq!(
+            provenance_inventory_errors(&packaged, provenance),
+            ["missing canonical row for `piano_*`"]
+        );
+    }
+
+    #[test]
+    fn provenance_inventory_rejects_wrong_duplicate_and_extra_rows() {
+        let packaged = BTreeMap::from([("piano".to_owned(), 52), ("violin".to_owned(), 12)]);
+        let provenance = "\
+| Family | Files |\n\
+| --- | ---: |\n\
+| `piano_*` | 51 |\n\
+| `violin_*` | 12 |\n\
+| `violin_*` | 12 |\n\
+| `obsolete_*` | 1 |\n";
+
+        assert_eq!(
+            provenance_inventory_errors(&packaged, provenance),
+            [
+                "`piano_*` documents 51 files but packages 52",
+                "`violin_*` has 2 canonical rows; expected exactly one",
+                "canonical row `obsolete_*` has no packaged sample family",
+            ]
         );
     }
 

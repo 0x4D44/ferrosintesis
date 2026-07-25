@@ -1,5 +1,11 @@
 # Provenance — ferrosintesis-samples-mandolin
 
+## Packaged family inventory
+
+| Family | Files |
+|--------|------:|
+| `mandolin_*` | 40 |
+
 `mandolin_*.wav` — owner-recorded mandolin pluck onsets, recorded by the repository owner on
 **2026-07-24** on his own instrument, dedicated **CC0 1.0 Universal** (public domain). The owner
 holds the recording and grants it to the public domain; no third-party licence applies.

@@ -1,5 +1,11 @@
 # Provenance — ferrosintesis-samples-fretnoise
 
+## Packaged family inventory
+
+| Family | Files |
+|--------|------:|
+| `fretnoise_*` | 12 |
+
 ## Source
 
 Twelve fret-noise (finger-slide) one-shots recorded by the repo owner (Arthur) on his

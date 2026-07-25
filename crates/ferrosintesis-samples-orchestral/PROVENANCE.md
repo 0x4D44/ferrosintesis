@@ -11,14 +11,14 @@ root.
 |--------|------:|------------|--------|---------|
 | `bassoon_*` | 12 | Bassoon (GM 70) sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `celens_*` | 12 | Cello section (GM 42 ensemble) sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
-| `chanter_*` | 10 | Bagpipe chanter (GM 109) loops | FreePats Bagpipe-SFZ-20221204 archive, SHA-256 pinned in `prepare.py` | CC0-1.0 |
+| `chanter_*` | 15 | Bagpipe chanter (GM 109) loops | FreePats Bagpipe-SFZ-20221204 archive, SHA-256 pinned in `prepare.py` | CC0-1.0 |
 | `clarinet_*` | 12 | Clarinet (GM 71) long sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `drone_*` | 2 | Bagpipe drones (GM 109), G2 + G3 | FreePats Bagpipe-SFZ-20221204 archive, SHA-256 pinned in `prepare.py` | CC0-1.0 |
 | `drum_*` | 8 | Percussion hits (channel 10) | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
-| `harpsi_*` | 6 | Harpsichord (GM 6) onsets | VCSL (Versilian Community Sample Library), pinned `c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e` | CC0-1.0 |
+| `harpsi_*` | 10 | Harpsichord (GM 6) onsets | VCSL (Versilian Community Sample Library), pinned `c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e` | CC0-1.0 |
 | `horn_*` | 12 | French horn (GM 60) sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `mutetpt_*` | 10 | Muted trumpet (GM 59) sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
-| `nylon_*` | 12 | Nylon guitar (GM 24) onsets | FreePats SpanishClassicalGuitar-SFZ-20190618 archive, SHA-256 pinned in `prepare.py` | CC0-1.0 |
+| `nylon_*` | 7 | Nylon guitar (GM 24) onsets | FreePats SpanishClassicalGuitar-SFZ-20190618 archive, SHA-256 pinned in `prepare.py` | CC0-1.0 |
 | `oboe_*` | 12 | Oboe (GM 68) sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `steel_*` | 8 | Steel-string guitar (GM 25) onsets, Martin GM2 | sfzinstruments/Discord-SFZ-GM-Bank, REV pinned in `prepare.py` | CC0-1.0 |
 | `trombone_*` | 12 | Tenor trombone (GM 57) sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |

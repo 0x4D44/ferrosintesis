@@ -1,5 +1,11 @@
 # Provenance — ferrosintesis-samples-dark-salamander
 
+## Packaged family inventory
+
+| Family | Files |
+|--------|------:|
+| `darkgrand_*` | 54 |
+
 A **warmer voicing of the Salamander grand** for a **GM 0 Acoustic Grand
 alternate** (bank select CC0=5): 54 mono 16-bit 44.1 kHz WAVs, the same 9 pitch zones
 (C2–C6) × 3 dynamics × 2 round robins as `ferrosintesis-samples-grand`, with a

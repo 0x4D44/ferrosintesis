@@ -1,5 +1,11 @@
 # Provenance — ferrosintesis-samples-musescore-grand
 
+## Packaged family inventory
+
+| Family | Files |
+|--------|------:|
+| `musescoregrand_*` | 25 |
+
 Grand-piano attack/body bank for a **GM 0 Acoustic Grand alternate** (CC0
 bank 4): a **dense single-velocity multisample** (one sample per distinct sampled
 pitch across C2..C6+, ~every 2–3 semitones) of mono 16-bit 44.1 kHz WAVs.

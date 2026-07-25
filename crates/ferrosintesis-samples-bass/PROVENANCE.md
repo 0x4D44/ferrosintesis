@@ -1,5 +1,12 @@
 # Provenance — ferrosintesis-samples-bass
 
+## Packaged family inventory
+
+| Family | Files |
+|--------|------:|
+| `fingerbass_*` | 6 |
+| `pickbass_*` | 7 |
+
 FreePats "Clean Electric Bass" (**electric-bass-YR**), a real Yamaha RBX bass guitar
 recorded by Andrea Biasior, released **CC0 1.0 Universal** (public-domain dedication —
 `LICENSE.txt` ships inside each archive, and the FreePats page:

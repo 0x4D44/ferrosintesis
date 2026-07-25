@@ -1,5 +1,11 @@
 # Provenance — ferrosintesis-samples-bottle
 
+## Packaged family inventory
+
+| Family | Files |
+|--------|------:|
+| `bottleloop_*` | 1 |
+
 A single real "blown bottle" recording, released **CC0 1.0 Universal** (public-domain
 dedication — no attribution required; provenance given with thanks).
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00055 — voices.rs::percentile doc comment claims nearest-rank but the body is floor-rank, and no test pins the convention
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass — filing the still-armed trap the earlier incident documented but never disarmed)
+- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass) → Fixed (2026-07-25, Codex GPT-5.6-Sol; the test helper now implements its documented nearest-rank convention and a nine-value p95 regression pins it; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -57,7 +57,22 @@ unit test locks whichever convention is chosen.
 
 ## Fix
 
-<unfixed — raised only>
+Implemented in `crates/ferrosintesis/src/voices.rs`. `percentile()` now computes
+the one-based nearest rank `ceil(q × n)`, clamps it to the documented endpoint
+range, then converts it to a zero-based index.
+
+The focused regression uses the historical distinguishing case: p95 of nine
+sorted values. Before the fix it failed with 7.0; it now returns the nearest-rank
+maximum, 8.0.
+
+Validation on 2026-07-25:
+
+- Focused nearest-rank regression: 1 passed natively and on Rust 1.87.
+- `brass_sustain_breathes_off_the_frozen_hold`, which exercises both live
+  percentile consumers: passed; wander 136.4 Hz versus 4.2 Hz and ripple 0.52 dB.
+- `cargo clippy -p ferrosintesis --lib --tests -- -D warnings`: passed.
+- Mandatory render inventory: exact baseline `f122f2c`, all 124 catalog MIDIs
+  at 11,025 Hz; 124 byte-identical, zero changed, zero contamination.
 
 ## Notes
 

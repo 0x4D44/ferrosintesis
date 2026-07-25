@@ -22106,7 +22106,14 @@ mod tests {
 
     /// Nearest-rank percentile of an ALREADY-SORTED slice (q in [0,1]).
     fn percentile(sorted: &[f32], q: f32) -> f32 {
-        sorted[((sorted.len() - 1) as f32 * q) as usize]
+        let rank = (q * sorted.len() as f32).ceil() as usize;
+        sorted[rank.clamp(1, sorted.len()) - 1]
+    }
+
+    #[test]
+    fn percentile_uses_nearest_rank() {
+        let sorted = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        assert_eq!(percentile(&sorted, 0.95), 8.0);
     }
 
     /// p5–p95 spread (Hz) of a sliding spectral-centroid time-series over the sustain —

@@ -35,6 +35,17 @@ members = [
 ]
 resolver = "2"
 
+# `cargo test` renders real audio. Unoptimised, the lib-test suite takes 287.6 s on KILN;
+# at opt-level 2 it is a fraction of that (measured, see the commit that added this). The
+# integration gate runs this profile on every integration, and a multi-minute wait is what
+# pushes agents toward scoped runs instead of the full suite.
+#
+# `test` inherits from `dev`, so this covers the crate's own unit tests. Dependencies still
+# build under `dev` — fine, the sample crates are inert data and the DSP being timed is all
+# in ferrosintesis itself. No assertion changes: this is purely how fast the same tests run.
+[profile.test]
+opt-level = 2
+
 [profile.release]
 opt-level = 3
 lto = true

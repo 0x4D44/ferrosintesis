@@ -15846,10 +15846,19 @@ mod tests {
                 // sample bank (plain != sampled). None is the piano's bank — the
                 // distinct-from-GM0 and is_acoustic_piano checks above already prove they are
                 // not the acoustic-piano voice, so this is a positive engagement control.
-                assert_ne!(
-                    plain, sampled,
-                    "GM{program} sample voice did not engage (plain == sampled)"
-                );
+                //
+                // Runtime probe, not #[cfg]: what this measures is that a PCM onset bank
+                // actually mixes into the render (plain != sampled), a difference that can
+                // only exist when a bank is embedded. Everything else in this test — the
+                // engine-gate matrix, the GM4-7 mutual distinctness, GM5's model-only
+                // equality below, and the spectral clauses after the loop — is a modeled
+                // property and stays live in both configurations.
+                if crate::embedded_samples_available() {
+                    assert_ne!(
+                        plain, sampled,
+                        "GM{program} sample voice did not engage (plain == sampled)"
+                    );
+                }
             } else {
                 // GM5 stays pure model (a DX EP is FM) — no sample layer, so sampled == plain.
                 assert_eq!(
@@ -16933,6 +16942,11 @@ mod tests {
     /// near zero for two distinct recordings, but ~1 if GM 0 regressed to the
     /// shared upright — so this fails the instant the grand dispatch is lost.
     /// Measured across four keys spanning the register (not a single snapshot).
+    // Gated whole: what this measures is the decorrelation of TWO DIFFERENT PIANO
+    // RECORDINGS (Salamander grand vs the shared VSCO upright). Without the sample
+    // banks GM 0 and GM 1 are the same modeled piano differing only by a treble
+    // shelf, so |corr| is ~1 by construction and the property is not meant to hold.
+    #[cfg(feature = "embedded-samples")]
     #[test]
     fn gm0_grand_and_gm1_upright_are_distinct_instruments() {
         let sr = 44100.0;
@@ -20926,48 +20940,58 @@ mod tests {
     #[test]
     fn fx_o7_rain_96_real_recording_bed() {
         let sr = 44100.0;
-        let on = render_program_sampled(96, 60, 100, 2.0, 7, true);
-        let off = render_program_sampled(96, 60, 100, 2.0, 7, false);
 
-        // (a) ENGAGED: the steady wash (past the bell strike) differs materially.
-        let a = (1.0 * sr) as usize;
-        let b = (2.0 * sr) as usize;
-        let on_w = &on[a..b];
-        let off_w = &off[a..b];
-        let diff: Vec<f32> = on_w.iter().zip(off_w).map(|(x, y)| x - y).collect();
-        let rel = rms(&diff) / rms(off_w).max(1e-9);
-        println!(
-            "FX-O7 rain: on/off steady diff {rel:.2}x (on-rms {:.3}, off-rms {:.3})",
-            rms(on_w),
-            rms(off_w)
-        );
-        assert!(
-            rel >= 0.5,
-            "96 rain samples-on barely differs from samples-off ({rel:.2}x) — \
-             the real-rain bed is not engaged"
-        );
+        // (a)+(b) are gated: they measure the owner-recorded rain LOOP as an artefact —
+        // that the LA layer adds a materially different steady signal, and that the
+        // recorded downpour has no inter-grain gaps and a low crest. Both read the PCM
+        // asset, which a --no-default-features build does not contain, so there is
+        // nothing to add or to measure. Clause (c) below is deliberately NOT gated:
+        // key-hold sustain is the GM 96 voice's own contract in every build.
+        #[cfg(feature = "embedded-samples")]
+        {
+            let on = render_program_sampled(96, 60, 100, 2.0, 7, true);
+            let off = render_program_sampled(96, 60, 100, 2.0, 7, false);
 
-        // (b) FUSED WASH: the real bed's droplet band has no deep gaps, low crest.
-        let mut bp = Biquad::bandpass(4800.0, 0.9, sr);
-        let hf: Vec<f32> = on.iter().map(|&x| bp.process(x)).collect();
-        let start = (0.30 * sr) as usize;
-        let win = (0.010 * sr) as usize;
-        let env: Vec<f32> = hf[start..].chunks_exact(win).map(rms).collect();
-        let mean = env.iter().sum::<f32>() / env.len() as f32;
-        let gaps = env.iter().filter(|&&e| e < 0.30 * mean).count() as f32 / env.len() as f32;
-        let mut sorted = env.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let p95 = sorted[(sorted.len() as f32 * 0.95) as usize];
-        let crest = p95 / mean.max(1e-9);
-        println!("FX-O7 rain fused: gaps {gaps:.3}, crest {crest:.2}");
-        assert!(
-            gaps <= 0.05,
-            "96 real-rain bed has deep inter-grain gaps ({gaps:.3}) — not a fused wash"
-        );
-        assert!(
-            crest <= 2.5,
-            "96 real-rain bed crest {crest:.2} — spiky, not a fused wash"
-        );
+            // (a) ENGAGED: the steady wash (past the bell strike) differs materially.
+            let a = (1.0 * sr) as usize;
+            let b = (2.0 * sr) as usize;
+            let on_w = &on[a..b];
+            let off_w = &off[a..b];
+            let diff: Vec<f32> = on_w.iter().zip(off_w).map(|(x, y)| x - y).collect();
+            let rel = rms(&diff) / rms(off_w).max(1e-9);
+            println!(
+                "FX-O7 rain: on/off steady diff {rel:.2}x (on-rms {:.3}, off-rms {:.3})",
+                rms(on_w),
+                rms(off_w)
+            );
+            assert!(
+                rel >= 0.5,
+                "96 rain samples-on barely differs from samples-off ({rel:.2}x) — \
+                 the real-rain bed is not engaged"
+            );
+
+            // (b) FUSED WASH: the real bed's droplet band has no deep gaps, low crest.
+            let mut bp = Biquad::bandpass(4800.0, 0.9, sr);
+            let hf: Vec<f32> = on.iter().map(|&x| bp.process(x)).collect();
+            let start = (0.30 * sr) as usize;
+            let win = (0.010 * sr) as usize;
+            let env: Vec<f32> = hf[start..].chunks_exact(win).map(rms).collect();
+            let mean = env.iter().sum::<f32>() / env.len() as f32;
+            let gaps = env.iter().filter(|&&e| e < 0.30 * mean).count() as f32 / env.len() as f32;
+            let mut sorted = env.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let p95 = sorted[(sorted.len() as f32 * 0.95) as usize];
+            let crest = p95 / mean.max(1e-9);
+            println!("FX-O7 rain fused: gaps {gaps:.3}, crest {crest:.2}");
+            assert!(
+                gaps <= 0.05,
+                "96 real-rain bed has deep inter-grain gaps ({gaps:.3}) — not a fused wash"
+            );
+            assert!(
+                crest <= 2.5,
+                "96 real-rain bed crest {crest:.2} — spiky, not a fused wash"
+            );
+        }
 
         // (c) FOLLOWS KEY HOLD: sustains while held, then dies after note-off.
         assert!(
@@ -25383,26 +25407,35 @@ mod tests {
                 "program {p} left the Wind family"
             );
         }
-        for p in 72..=79u8 {
-            let with = render_program_sampled(p, 72, 100, 0.5, 7, true);
-            let without = render_program_sampled(p, 72, 100, 0.5, 7, false);
-            let identical = with
-                .iter()
-                .zip(&without)
-                .all(|(a, b)| a.to_bits() == b.to_bits());
-            match p {
-                72 | 73 | 74 | 75 | 77 | 79 => assert!(
-                    !identical,
-                    "GM {p} should carry its own LA sampled attack at C5, but samples=true \
-                     changed nothing"
-                ),
-                // 76 blown bottle: single C6 zone, 0.495 repitch at C5 < 0.5 clamp → bare
-                // model here (engages ~C#5+). 78 whistle: model-only (no usable source).
-                76 | 78 => assert!(
-                    identical,
-                    "GM {p} must render bare-model at C5 (76 single-zone fallback, 78 model-only)"
-                ),
-                _ => unreachable!("loop is 72..=79"),
+        // Runtime probe, not #[cfg]: the sample-policy clause measures WHICH wind
+        // programs a per-program PCM attack bank reaches at the C5 probe key, read as a
+        // samples-on/samples-off render differential. Without an embedded bank both
+        // sides of every differential are the same bytes, so neither arm — the six that
+        // must differ nor the two that must not — says anything. The routing and
+        // lifecycle clauses around it are modeled and stay live in both builds.
+        if crate::embedded_samples_available() {
+            for p in 72..=79u8 {
+                let with = render_program_sampled(p, 72, 100, 0.5, 7, true);
+                let without = render_program_sampled(p, 72, 100, 0.5, 7, false);
+                let identical = with
+                    .iter()
+                    .zip(&without)
+                    .all(|(a, b)| a.to_bits() == b.to_bits());
+                match p {
+                    72 | 73 | 74 | 75 | 77 | 79 => assert!(
+                        !identical,
+                        "GM {p} should carry its own LA sampled attack at C5, but samples=true \
+                         changed nothing"
+                    ),
+                    // 76 blown bottle: single C6 zone, 0.495 repitch at C5 < 0.5 clamp → bare
+                    // model here (engages ~C#5+). 78 whistle: model-only (no usable source).
+                    76 | 78 => assert!(
+                        identical,
+                        "GM {p} must render bare-model at C5 (76 single-zone fallback, \
+                         78 model-only)"
+                    ),
+                    _ => unreachable!("loop is 72..=79"),
+                }
             }
         }
         // lifecycle + hygiene (mirrors reed_o13)

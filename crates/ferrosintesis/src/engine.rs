@@ -440,6 +440,13 @@ pub(crate) const MICRO_CAB_LEAD_DEPTH: f32 = 0.25;
 /// on a driven channel is a timbre tweak (never a stuck note or wrong pitch).
 const AMP_NRPN_MSB: u8 = 0x30;
 const AMP_PARAM_COUNT: usize = 6;
+/// Data Entry MSB value meaning "as shipped" — the neutral every knob is a
+/// signed offset from, and the midpoint of the 0..127 range (so it is also the
+/// span below neutral). Named because it is part of the PROTOCOL, not an
+/// implementation detail: `amp-lab` publishes the same number as `amp::NEUTRAL`
+/// and the README states it, and `amp_protocol_has_one_definition`
+/// (MM-REQ-KILN-00030) checks all three still agree.
+const AMP_NEUTRAL: u8 = 64;
 const AMP_DRIVE: usize = 0; // pedal gain: g1, g2 (+ derived post makeup)
 const AMP_TONE: usize = 1; // pre-clip voice EQ gain (dynamics-dependent by nature)
 const AMP_TIGHT: usize = 2; // pre-shaper high-pass corner
@@ -1015,7 +1022,7 @@ impl Drive {
     /// the authored rig instead of slewing up from its base voicing.
     fn apply_params(&mut self, cur: &[f32; AMP_PARAM_COUNT], snap: bool) {
         let sr_os = self.sr_os;
-        let n = |i: usize| (cur[i] - 64.0) / 64.0; // in [-1, +0.984]
+        let n = |i: usize| (cur[i] - AMP_NEUTRAL as f32) / AMP_NEUTRAL as f32; // in [-1, +0.984]
 
         // Drive (idx 0): gain, with a strictly-positive makeup trim on post.
         let nd = n(AMP_DRIVE);
@@ -1668,8 +1675,8 @@ impl Strip {
             organ_wind: 0.0,
             organ_trem_phase: 0.0,
             drive: None,
-            amp_params: [64; AMP_PARAM_COUNT],
-            amp_cur: [64.0; AMP_PARAM_COUNT],
+            amp_params: [AMP_NEUTRAL; AMP_PARAM_COUNT],
+            amp_cur: [AMP_NEUTRAL as f32; AMP_PARAM_COUNT],
             amp_primed: [false; AMP_PARAM_COUNT],
             amp_authored: false,
             xg_insert: None,
@@ -4109,6 +4116,199 @@ mod tests {
     /// "struck voices are untrimmed" intent still holds everywhere it was not
     /// positively measured. Their values are pinned below for the same reason the
     /// sustained anchors are.
+    /// MM-REQ-KILN-00030: the amp-control protocol has THREE independent
+    /// statements — this crate's constants, `amp-lab`'s published `amp::KNOBS`
+    /// table, and the README's NRPN table — and nothing forced them to agree.
+    /// Each crate's own tests pass whichever way they drift, so a knob renamed
+    /// or renumbered in one place stays green everywhere.
+    ///
+    /// This is the repo's standing defect (hand-maintained lists that drift), so
+    /// the oracle DERIVES all three sides from source text rather than checking
+    /// them against a fourth copied table — a guard that is itself hand-written
+    /// inherits the defect it exists to catch.
+    ///
+    /// It lives in `ferrosintesis`, not `amp-lab`, deliberately: `amp-lab` is
+    /// excluded from the integration gate (`.deltic-integrate.toml` — it drags
+    /// in egui + cpal, ~200 crates), so a parity test living there would not run
+    /// when it matters. Reading amp-lab's source as TEXT keeps the check on the
+    /// gated side without taking the dependency.
+    ///
+    /// Names are compared by prefix after normalising to uppercase letters only,
+    /// because this crate's identifiers are abbreviations of the published names
+    /// (`AMP_TIGHT` / "Tightness", `AMP_PRES` / "Presence", `AMP_CABTONE` /
+    /// "Cab Tone"). That is a derived relationship, not a mapping table.
+    #[test]
+    fn amp_protocol_has_one_definition() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("crates/")
+            .parent()
+            .expect("repo root")
+            .to_path_buf();
+        let read = |rel: &str| {
+            std::fs::read_to_string(root.join(rel))
+                .unwrap_or_else(|e| panic!("cannot read {rel}: {e}"))
+        };
+        let lab = read("crates/amp-lab/src/amp.rs");
+        let readme = read("crates/ferrosintesis/README.md");
+        let norm = |s: &str| -> String {
+            s.chars()
+                .filter(|c| c.is_ascii_alphabetic())
+                .collect::<String>()
+                .to_uppercase()
+        };
+        let prefix_match = |a: &str, b: &str| {
+            let (a, b) = (norm(a), norm(b));
+            !a.is_empty() && (a.starts_with(&b) || b.starts_with(&a))
+        };
+
+        // ---- MSB: this crate vs amp-lab vs the README ----
+        let lab_msb = u8::from_str_radix(
+            lab.split("pub const AMP_NRPN_MSB: u8 = 0x")
+                .nth(1)
+                .expect("amp-lab AMP_NRPN_MSB")
+                .split(';')
+                .next()
+                .unwrap()
+                .trim(),
+            16,
+        )
+        .expect("amp-lab MSB hex");
+        assert_eq!(
+            lab_msb, AMP_NRPN_MSB,
+            "amp-lab publishes NRPN MSB 0x{lab_msb:02X} but the synth uses 0x{AMP_NRPN_MSB:02X} \
+             — a file authored against amp-lab would address a different block"
+        );
+        let readme_msb = u8::from_str_radix(
+            readme
+                .split("MSB (CC99) = `0x")
+                .nth(1)
+                .expect("README NRPN MSB")
+                .split('`')
+                .next()
+                .unwrap()
+                .trim(),
+            16,
+        )
+        .expect("README MSB hex");
+        assert_eq!(
+            readme_msb, AMP_NRPN_MSB,
+            "the README documents NRPN MSB 0x{readme_msb:02X}, the synth uses \
+             0x{AMP_NRPN_MSB:02X}"
+        );
+
+        // ---- neutral value ----
+        let lab_neutral: u8 = lab
+            .split("pub const NEUTRAL: u8 = ")
+            .nth(1)
+            .expect("amp-lab NEUTRAL")
+            .split(';')
+            .next()
+            .unwrap()
+            .trim()
+            .parse()
+            .expect("amp-lab NEUTRAL value");
+        assert_eq!(
+            lab_neutral, AMP_NEUTRAL,
+            "amp-lab's neutral is {lab_neutral}, the synth's is {AMP_NEUTRAL} — every \
+             knob would be offset from a different origin"
+        );
+        assert!(
+            readme.contains(&format!("{AMP_NEUTRAL} = as-shipped")),
+            "the README no longer states `{AMP_NEUTRAL} = as-shipped` as the neutral"
+        );
+
+        // ---- this crate's index constants, read from ITS OWN source ----
+        let engine_src = read("crates/ferrosintesis/src/engine.rs");
+        let mut mine: Vec<(usize, String)> = Vec::new();
+        for line in engine_src.lines() {
+            let t = line.trim();
+            if let Some(rest) = t.strip_prefix("const AMP_") {
+                if let Some((name, tail)) = rest.split_once(": usize = ") {
+                    // the declaration carries a trailing `// ...` comment
+                    if let Ok(idx) = tail.split(';').next().unwrap_or("").trim().parse::<usize>() {
+                        if name != "PARAM_COUNT" {
+                            mine.push((idx, name.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+        mine.sort();
+        assert_eq!(
+            mine.len(),
+            AMP_PARAM_COUNT,
+            "found {} AMP_* index constants in engine.rs but AMP_PARAM_COUNT is \
+             {AMP_PARAM_COUNT} — the protocol gained or lost a knob without the count \
+             following: {mine:?}",
+            mine.len()
+        );
+        for (i, (idx, name)) in mine.iter().enumerate() {
+            assert_eq!(
+                *idx, i,
+                "engine.rs AMP_{name} sits at index {idx}, breaking the contiguous \
+                 0..{AMP_PARAM_COUNT} block the NRPN LSB addresses"
+            );
+        }
+
+        // ---- amp-lab's KNOBS table ----
+        let knobs: Vec<(usize, String)> = lab
+            .split("Knob {")
+            .skip(1)
+            .filter_map(|b| {
+                let idx = b
+                    .split("idx:")
+                    .nth(1)?
+                    .split(',')
+                    .next()?
+                    .trim()
+                    .parse()
+                    .ok()?;
+                let name = b.split("name: \"").nth(1)?.split('"').next()?.to_string();
+                Some((idx, name))
+            })
+            .collect();
+        assert_eq!(
+            knobs.len(),
+            AMP_PARAM_COUNT,
+            "amp-lab publishes {} knobs, the synth implements {AMP_PARAM_COUNT}",
+            knobs.len()
+        );
+
+        // ---- the README's NRPN table ----
+        let rows: Vec<(usize, String)> = readme
+            .lines()
+            .filter_map(|l| {
+                let mut c = l.trim().strip_prefix('|')?.split('|');
+                let idx = c.next()?.trim().parse().ok()?;
+                Some((idx, c.next()?.trim().to_string()))
+            })
+            .filter(|(i, _)| *i < AMP_PARAM_COUNT)
+            .collect();
+        assert_eq!(
+            rows.len(),
+            AMP_PARAM_COUNT,
+            "the README's NRPN table documents {} of {AMP_PARAM_COUNT} knobs",
+            rows.len()
+        );
+
+        // ---- all three agree, knob by knob ----
+        for (i, (_, mine_name)) in mine.iter().enumerate() {
+            let (_, lab_name) = knobs.iter().find(|(k, _)| *k == i).expect("amp-lab knob");
+            let (_, doc_name) = rows.iter().find(|(k, _)| *k == i).expect("README row");
+            assert!(
+                prefix_match(mine_name, lab_name),
+                "LSB {i}: the synth calls it AMP_{mine_name}, amp-lab calls it \
+                 \"{lab_name}\" — the same index means two different knobs"
+            );
+            assert!(
+                prefix_match(lab_name, doc_name),
+                "LSB {i}: amp-lab calls it \"{lab_name}\", the README documents \
+                 \"{doc_name}\""
+            );
+        }
+    }
+
     #[test]
     fn program_trim_scope_and_calibration() {
         // The corrected set = the sustained ranges (bowed strings only;
@@ -7325,7 +7525,7 @@ mod tests {
         params: impl Fn(usize) -> [u8; AMP_PARAM_COUNT],
     ) -> Vec<f32> {
         let mut d = Drive::new(prog, alt, sr);
-        let mut cur = [64.0f32; AMP_PARAM_COUNT];
+        let mut cur = [AMP_NEUTRAL as f32; AMP_PARAM_COUNT];
         let mut primed = [false; AMP_PARAM_COUNT];
         let smooth = 1.0 - (-(BLOCK as f32) / (WAH_SLEW_S * sr)).exp();
         let mut out = input.to_vec();
@@ -7374,7 +7574,8 @@ mod tests {
                 let mut base = input.clone();
                 d0.process(&mut base); // unauthored path
 
-                let authored = amp_blocks(prog, alt, sr, &input, |_| [64; AMP_PARAM_COUNT]);
+                let authored =
+                    amp_blocks(prog, alt, sr, &input, |_| [AMP_NEUTRAL; AMP_PARAM_COUNT]);
                 assert_eq!(
                     base.len(),
                     authored.len(),
@@ -7985,7 +8186,7 @@ mod tests {
                 [64; AMP_PARAM_COUNT]
             }
         });
-        let steady = amp_blocks(29, true, sr, &input, |_| [64; AMP_PARAM_COUNT]);
+        let steady = amp_blocks(29, true, sr, &input, |_| [AMP_NEUTRAL; AMP_PARAM_COUNT]);
         let s_click = crate::testutil::max_slew_norm(&stepped);
         let base_click = crate::testutil::max_slew_norm(&steady);
         println!("step click {s_click:.4} vs steady {base_click:.4}");

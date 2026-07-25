@@ -1076,7 +1076,7 @@ pub fn make(
             // alternates stay on the legacy damper so they remain byte-identical to
             // their own default, which Step 2 revisits with a key-dependent curve.
             let voicing = if bright {
-                crate::voices::LEGACY_VOICING
+                crate::voices::GM1_VOICING
             } else {
                 crate::voices::GM0_ALTERNATE_VOICING
             };

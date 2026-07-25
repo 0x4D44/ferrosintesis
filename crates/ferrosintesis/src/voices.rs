@@ -1135,6 +1135,10 @@ pub(crate) fn is_acoustic_piano(program: u8) -> bool {
     matches!(program, 0 | 1 | 3)
 }
 
+/// The pre-2026.07.18 flat piano release. Test-only since MM-BUG-KILN-00098:
+/// no shipped voice uses a flat damper any more, but the oracles need the old
+/// value to prove the new curve actually differs from it.
+#[cfg(test)]
 const DEFAULT_PIANO_RELEASE_T60: f32 = 0.10;
 pub(crate) const GM0_RELEASE_T60: f32 = 0.45;
 
@@ -1156,31 +1160,88 @@ pub(crate) enum PianoSampleCal {
     LegacyNormalized,
 }
 
+/// The highest key that HAS a damper.
+///
+/// On essentially every standard 88-key piano the damper assembly stops around
+/// F6, leaving the top ~1.5 octaves permanently undamped: those strings ring on
+/// after key-up until they decay naturally, no matter when the key is released.
+/// MIDI 88 is that F6 neighbourhood (A0 = 21, C8 = 108), so keys 89 and above
+/// take [`UNDAMPED_T60`].
+pub(crate) const DAMPER_TOP_KEY: u8 = 88;
+
+/// Release T60 for the undamped top register.
+///
+/// Not literally infinite: the modal body already decays on its own (its slowest
+/// partial is clamped to 12 s in [`acoustic_piano`]), so this only has to be long
+/// enough not to truncate that decay. Bounding it rather than disabling release
+/// keeps voice reaping and polyphony predictable.
+pub(crate) const UNDAMPED_T60: f32 = 12.0;
+
+/// Bounds on the felt curve: fastest treble damper, slowest bass damper.
+const DAMPER_T60_MIN: f32 = 0.18;
+const DAMPER_T60_MAX: f32 = 0.95;
+
+/// Halving distance of the felt curve, in semitones — the release contracts by
+/// 2x every two octaves going up.
+const DAMPER_HALVING_SEMITONES: f32 = 24.0;
+
 /// What the damper does after key-up.
 ///
-/// Physically this is ONE thing: the felt stops the string, and the recorded onset
-/// and the modeled body are the same note. It is carried as two fields only because
-/// the model and the sampled layer take their release through different
-/// constructors. Step 2 (the key-dependent damper) collapses them.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct PianoDamper {
-    /// Modal (string) release T60. The *bright* model ignores this — it fixes its
-    /// own release inside `grand_piano_variant`.
-    pub model_t60: f32,
-    /// Sampled-onset-layer release T60.
-    pub la_t60: f32,
+/// Physically this is ONE thing — the felt stops the string, and the recorded
+/// onset and the modeled body are the same note — so the variants below return
+/// one release for both layers.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum PianoDamper {
+    /// A real felt damper: release contracts with pitch, and disappears entirely
+    /// above [`DAMPER_TOP_KEY`]. See [`PianoDamper::t60_for`].
+    Felt,
+    /// A flat release applied to every key. Physically wrong for a piano — no
+    /// damper behaves the same at A0 and C8 — so no shipped voice selects it.
+    /// Retained as the explicit control the oracles measure the felt curve against.
+    #[cfg(test)]
+    Flat {
+        /// Modal (string) release T60.
+        model_t60: f32,
+        /// Sampled-onset-layer release T60.
+        la_t60: f32,
+    },
 }
 
-/// The GM0 default's damper — a plausible felt damper on a mid-register note.
-pub(crate) const GM0_DAMPER: PianoDamper = PianoDamper {
-    model_t60: GM0_RELEASE_T60,
-    la_t60: GM0_RELEASE_T60,
-};
+impl PianoDamper {
+    /// `(model_t60, la_t60)` for this key. Both layers get the same release for
+    /// [`Felt`](PianoDamper::Felt) — one damper, one note.
+    ///
+    /// The felt curve is anchored so that key 60 returns exactly
+    /// [`GM0_RELEASE_T60`], the value the GM0 default shipped as a flat constant.
+    /// Middle-register notes therefore barely move; the change is concentrated
+    /// where the flat constant was most wrong — the bass rings longer, the treble
+    /// damps faster, and the top register stops being damped at all.
+    pub fn t60_for(self, key: u8) -> (f32, f32) {
+        match self {
+            #[cfg(test)]
+            PianoDamper::Flat { model_t60, la_t60 } => (model_t60, la_t60),
+            PianoDamper::Felt => {
+                if key > DAMPER_TOP_KEY {
+                    return (UNDAMPED_T60, UNDAMPED_T60);
+                }
+                let semitones_below_middle_c = 60.0 - key as f32;
+                let t60 = (GM0_RELEASE_T60
+                    * 2f32.powf(semitones_below_middle_c / DAMPER_HALVING_SEMITONES))
+                .clamp(DAMPER_T60_MIN, DAMPER_T60_MAX);
+                (t60, t60)
+            }
+        }
+    }
+}
 
-/// The pre-2026.07.18 damper: a 0.10 s string release over a 0.06 s sample release.
-/// Far too short for a piano — that is a muted/staccato character, not a damper.
-/// Retained only for GM1 and the GM1 alternates, whose voicing Step 2 revisits.
-pub(crate) const LEGACY_DAMPER: PianoDamper = PianoDamper {
+/// The GM0 damper: a modelled felt damper (MM-BUG-KILN-00098).
+pub(crate) const GM0_DAMPER: PianoDamper = PianoDamper::Felt;
+
+/// The pre-2026.07.18 damper: a 0.10 s string release over a 0.06 s sample release,
+/// flat across the whole keyboard. Far too short for a piano — that is a muted or
+/// staccato character, not a damper. Retained only as an explicit test control.
+#[cfg(test)]
+pub(crate) const LEGACY_DAMPER: PianoDamper = PianoDamper::Flat {
     model_t60: DEFAULT_PIANO_RELEASE_T60,
     la_t60: crate::sampler::DEFAULT_LA_RELEASE_T60,
 };
@@ -1212,9 +1273,16 @@ pub(crate) const GM0_ALTERNATE_VOICING: PianoVoicing = PianoVoicing {
     damper: GM0_DAMPER,
 };
 
-/// The pre-fix voicing: legacy sample calibration over the legacy damper.
+/// GM1 and its alternates: peak-normalized PCM over the modelled felt damper.
+pub(crate) const GM1_VOICING: PianoVoicing = PianoVoicing {
+    cal: PianoSampleCal::LegacyNormalized,
+    damper: GM0_DAMPER,
+};
+
+/// The pre-fix voicing: legacy sample calibration over the legacy FLAT damper.
 /// Still correct for GM1 and its alternates (unchanged pending Step 2), and used
 /// as the explicit control wherever a test needs the old behaviour reproduced.
+#[cfg(test)]
 pub(crate) const LEGACY_VOICING: PianoVoicing = PianoVoicing {
     cal: PianoSampleCal::LegacyNormalized,
     damper: LEGACY_DAMPER,
@@ -1281,6 +1349,7 @@ fn grand_piano_variant(
     unison_amp: f32,
     unison_k: u32,
     third_string: bool,
+    release_t60: f32,
 ) -> Modal {
     let f = key_freq(key);
     let v = vel_amp(vel);
@@ -1316,16 +1385,27 @@ fn grand_piano_variant(
         &partials,
         (0.30 * v, 0.012, hammer),
         0.0015,
-        0.10,
+        release_t60,
         0.50,
     )
 }
 
 /// GM1 Bright Acoustic (round 2): the same grand, voiced brighter — a
 /// higher per-harmonic brightness base and a harder, higher strike band.
-fn bright_acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
+fn bright_acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32, release_t60: f32) -> Modal {
     grand_piano_variant(
-        key, vel, sr, seed, 0.12, 12.0, 4800.0, 1.0007, 0.6, 4, false,
+        key,
+        vel,
+        sr,
+        seed,
+        0.12,
+        12.0,
+        4800.0,
+        1.0007,
+        0.6,
+        4,
+        false,
+        release_t60,
     )
 }
 
@@ -1333,7 +1413,12 @@ fn bright_acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
 /// detuned WIDE (±~12 cents vs the grand's 1.2) and loud on both sides, so
 /// held notes beat audibly; a slightly harder tack-hammer band on top.
 fn honky_tonk_piano(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
-    grand_piano_variant(key, vel, sr, seed, 0.05, 11.0, 4300.0, 1.007, 0.85, 6, true)
+    // GM3 keeps the flat 0.10 s release its voicing is pinned to: the saloon
+    // upright is a deliberately different instrument, and its release window is
+    // asserted by `gm0_damper_reaches_gm0_alternates_and_stops_there`.
+    grand_piano_variant(
+        key, vel, sr, seed, 0.05, 11.0, 4300.0, 1.007, 0.85, 6, true, 0.10,
+    )
 }
 
 /// GM2 Electric Grand (round 2): the CP-style stage piano — real short
@@ -12192,10 +12277,13 @@ pub fn acoustic_grand_with_bank(
     voicing: PianoVoicing,
 ) -> Box<dyn Voice> {
     let PianoVoicing { cal, damper } = voicing;
+    // One damper, one note: the modeled body and the sampled onset release
+    // together, at a rate that depends on WHERE on the keyboard this note sits.
+    let (model_t60, la_t60) = damper.t60_for(key);
     let model: Box<dyn Voice> = if bright {
-        Box::new(bright_acoustic_piano(key, vel, sr, seed))
+        Box::new(bright_acoustic_piano(key, vel, sr, seed, model_t60))
     } else {
-        Box::new(acoustic_piano(key, vel, sr, seed, damper.model_t60))
+        Box::new(acoustic_piano(key, vel, sr, seed, model_t60))
     };
     // The conditioned forte takes share the same unweighted macro envelope as
     // pp/mf, but their brighter spectrum measures about 4.9 dB louder through
@@ -12229,7 +12317,7 @@ pub fn acoustic_grand_with_bank(
             PianoSampleCal::Gm0Conditioned => (GM0_SAMPLE_GAIN * layer_gain, GM0_SAMPLE_FADE),
             PianoSampleCal::LegacyNormalized => LA_PIANO,
         };
-        crate::sampler::LaVoice::wrap_release(model, bank, key, vel, sr, gain, fade, damper.la_t60)
+        crate::sampler::LaVoice::wrap_release(model, bank, key, vel, sr, gain, fade, la_t60)
     } else {
         model
     }
@@ -12664,7 +12752,7 @@ fn make_uncorrected(
             sr,
             seed,
             true,
-            LEGACY_VOICING,
+            GM1_VOICING,
         ),
         // GM 3 Honky-tonk — the REAL FreePats honky-tonk player-piano sample over the
         // detuned honky_tonk_piano model, so it jangles through the attack (sample) AND
@@ -25694,5 +25782,176 @@ mod tests {
                 }
             }
         }
+    }
+}
+
+/// Oracles for the modelled felt damper (MM-BUG-KILN-00098, Step 2).
+///
+/// Two layers, deliberately. The first pins the CURVE as a pure function — cheap,
+/// exact, and it fails loudly if anyone re-flattens it. The second proves the
+/// curve actually reaches the rendered audio, because a constant that no voice
+/// reads is a constant that silently does nothing.
+#[cfg(test)]
+mod damper_tests {
+    use super::*;
+    use crate::testutil::rms;
+
+    /// Render one note, releasing at `off_s`, and return the buffer.
+    fn note(mut v: Box<dyn Voice>, off_s: f32, total_s: f32, sr: f32) -> Vec<f32> {
+        let n = (total_s * sr) as usize;
+        let off = (off_s * sr) as usize;
+        let mut buf = vec![0.0f32; n];
+        let mut i = 0;
+        let mut released = false;
+        while i < n {
+            let k = 64.min(n - i);
+            if !released && i >= off {
+                v.note_off();
+                released = true;
+            }
+            v.render(&mut buf[i..i + k]);
+            i += k;
+        }
+        buf
+    }
+
+    /// The felt curve is anchored at middle C, falls monotonically with pitch,
+    /// stays inside its bounds, and stops damping above the cutoff.
+    #[test]
+    fn felt_damper_curve_is_anchored_monotonic_and_bounded() {
+        let felt = PianoDamper::Felt;
+
+        // Anchor: key 60 is exactly the value the GM0 default shipped as a flat
+        // constant, so the middle register barely moves.
+        let (m, l) = felt.t60_for(60);
+        assert!(
+            (m - GM0_RELEASE_T60).abs() < 1e-6 && (l - GM0_RELEASE_T60).abs() < 1e-6,
+            "felt damper must be anchored at GM0_RELEASE_T60 for key 60, got {m}"
+        );
+
+        // One damper, one note: both layers always agree.
+        for key in 0..=127u8 {
+            let (m, l) = felt.t60_for(key);
+            assert!(
+                (m - l).abs() < 1e-9,
+                "key {key}: model and sampled layers disagree ({m} vs {l}) — \
+                 a damper stops the whole string, not one layer of it"
+            );
+        }
+
+        // Monotonic non-increasing across the damped span, and bounded.
+        let mut prev = f32::INFINITY;
+        for key in 0..=DAMPER_TOP_KEY {
+            let (t, _) = felt.t60_for(key);
+            assert!(
+                t <= prev + 1e-6,
+                "key {key}: release {t} rose above the previous key's {prev} — \
+                 a higher string cannot damp slower"
+            );
+            assert!(
+                (DAMPER_T60_MIN..=DAMPER_T60_MAX).contains(&t),
+                "key {key}: release {t} outside [{DAMPER_T60_MIN}, {DAMPER_T60_MAX}]"
+            );
+            prev = t;
+        }
+
+        // The bass really is slower than the treble — not merely non-increasing.
+        let (bass, _) = felt.t60_for(28);
+        let (treble, _) = felt.t60_for(DAMPER_TOP_KEY);
+        assert!(
+            bass >= treble * 3.0,
+            "the curve is nearly flat (bass {bass:.3} s vs treble {treble:.3} s). \
+             A flat damper is the defect this models away"
+        );
+
+        // Above the cutoff there is no damper at all.
+        for key in [DAMPER_TOP_KEY + 1, 100, 108] {
+            let (t, _) = felt.t60_for(key);
+            assert!(
+                (t - UNDAMPED_T60).abs() < 1e-6,
+                "key {key} is above the damper cutoff and must ring on, got {t} s"
+            );
+        }
+        let (last_damped, _) = felt.t60_for(DAMPER_TOP_KEY);
+        assert!(
+            last_damped < UNDAMPED_T60,
+            "the cutoff does not actually step: key {DAMPER_TOP_KEY} already reads undamped"
+        );
+    }
+
+    /// The oracle above must REJECT a flat damper. Without this, re-flattening the
+    /// curve could pass by construction and the guard would be decorative.
+    #[test]
+    fn the_curve_oracle_rejects_a_flat_damper() {
+        let flat = PianoDamper::Flat {
+            model_t60: GM0_RELEASE_T60,
+            la_t60: GM0_RELEASE_T60,
+        };
+        let (bass, _) = flat.t60_for(28);
+        let (treble, _) = flat.t60_for(DAMPER_TOP_KEY);
+        assert!(
+            bass < treble * 3.0,
+            "a flat damper would satisfy the bass-vs-treble clause, so that clause \
+             cannot detect re-flattening"
+        );
+        let (above_cutoff, _) = flat.t60_for(100);
+        assert!(
+            (above_cutoff - UNDAMPED_T60).abs() >= 1e-6,
+            "a flat damper would satisfy the undamped-register clause"
+        );
+    }
+
+    /// The curve reaches the AUDIO: a note above the damper cutoff still rings
+    /// after key-up, while one below it is stopped.
+    #[test]
+    fn the_undamped_register_still_rings_after_key_up() {
+        let sr = 44100.0;
+        let tail = |key: u8| {
+            let b = note(
+                acoustic_grand_with_bank(&[], key, 90, sr, 7, false, GM0_DEFAULT_VOICING),
+                0.5,
+                2.5,
+                sr,
+            );
+            // energy well after key-up, relative to the held note
+            let held = rms(&b[(0.20 * sr) as usize..(0.45 * sr) as usize]).max(1e-9);
+            let after = rms(&b[(1.20 * sr) as usize..(2.20 * sr) as usize]).max(1e-9);
+            20.0 * (after / held).log10()
+        };
+        let damped = tail(DAMPER_TOP_KEY - 12);
+        let undamped = tail(DAMPER_TOP_KEY + 6);
+        println!("tail after key-up: damped {damped:.1} dB, undamped {undamped:.1} dB");
+        assert!(
+            undamped > damped + 12.0,
+            "the undamped register is not ringing on: key {} held {undamped:.1} dB \
+             vs damped key {} at {damped:.1} dB (need a 12 dB separation). Either the \
+             cutoff is not wired into the voice, or the release is being overridden \
+             downstream",
+            DAMPER_TOP_KEY + 6,
+            DAMPER_TOP_KEY - 12
+        );
+    }
+
+    /// Every piano slot that shares the felt damper actually carries it, and GM3 —
+    /// which is deliberately excluded — does not.
+    #[test]
+    fn felt_damper_is_wired_to_every_shared_piano_slot() {
+        for (name, voicing) in [
+            ("GM0 default", GM0_DEFAULT_VOICING),
+            ("GM0 alternates", GM0_ALTERNATE_VOICING),
+            ("GM1", GM1_VOICING),
+        ] {
+            assert_eq!(
+                voicing.damper,
+                PianoDamper::Felt,
+                "{name} is not on the modelled felt damper"
+            );
+        }
+        assert_ne!(
+            LEGACY_VOICING.damper,
+            PianoDamper::Felt,
+            "LEGACY_VOICING is the explicit pre-fix control and must stay flat, \
+             otherwise the tests that use it as a control assert nothing"
+        );
     }
 }

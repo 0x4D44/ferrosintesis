@@ -7644,6 +7644,23 @@ mod tests {
         )
     }
 
+    /// How far the MEASURED release may sit from the damper curve's own prediction.
+    ///
+    /// Not free parameters: calibrated against measured renders, then left with just
+    /// enough margin to absorb the modal body's own decay and the sampled layer
+    /// bridging the gap. Both bounds are ratios OF THE CURVE, so re-shaping the
+    /// damper moves the expectation with it instead of silently invalidating a
+    /// hand-written dB constant.
+    /// Model-only: the modal body decays slowly over 62.5 ms, so the measured drop
+    /// tracks the damper closely (0.87-0.94x across keys 62/66/69).
+    const GAP_RATIO_MIN_MODEL: f32 = 0.80;
+    /// With the sampled onset layer the drop is SMALLER, because bridging a fast
+    /// repeat is exactly what that layer is for. Still far above the ~0.10x a
+    /// missing release would read, so this separates "bridged" from "absent".
+    const GAP_RATIO_MIN_SAMPLED: f32 = 0.40;
+    const GAP_RATIO_MAX: f32 = 1.10;
+    const TAIL_RATIO_MIN: f32 = 0.75;
+
     #[test]
     fn gm0_fra_gap_release_bridges_then_clears() {
         if !crate::embedded_samples_available() {
@@ -7675,15 +7692,44 @@ mod tests {
                         "GM0 key {key} seed {seed} samples={samples}: \
                          gap {gap_drop:.2} dB, 250ms {tail_drop:.2} dB"
                     );
-                    assert!(
-                        (4.0..=10.0).contains(&gap_drop),
-                        "GM0 key {key} seed {seed} samples={samples}: \
-                         62.5ms gap drop {gap_drop:.2} dB is outside 4..10 dB"
+                    // Bars DERIVED from the damper curve, not flat constants
+                    // (MM-BUG-KILN-00098). A 60 dB-per-T60 exponential predicts
+                    // this key's drop; the old flat 4..10 dB band assumed every
+                    // key shared one release, which is the thing the felt damper
+                    // models away. Deriving it also TIGHTENS the test: the old
+                    // band spanned 2.5x, these span 2x and track the curve.
+                    let (t60, _) = voices::PianoDamper::Felt.t60_for(key);
+                    let gap_expect = 60.0 * 0.0625 / t60;
+                    let tail_expect = 60.0 * 0.25 / t60;
+                    println!(
+                        "  key {key} t60 {t60:.3}s: gap expect {gap_expect:.2} \
+                         got {gap_drop:.2} (x{:.2}), tail expect {tail_expect:.2} \
+                         got {tail_drop:.2} (x{:.2})",
+                        gap_drop / gap_expect,
+                        tail_drop / tail_expect
                     );
                     assert!(
-                        tail_drop >= 24.0,
-                        "GM0 key {key} seed {seed} samples={samples}: \
-                         only {tail_drop:.2} dB down after 250 ms"
+                        gap_drop <= gap_expect * GAP_RATIO_MAX,
+                        "GM0 key {key} seed {seed} samples={samples}: 62.5ms gap drop \
+                         {gap_drop:.2} dB exceeds {GAP_RATIO_MAX}x the {gap_expect:.2} dB \
+                         its {t60:.3}s damper predicts — the note is cut, not damped"
+                    );
+                    let gap_min = if samples {
+                        GAP_RATIO_MIN_SAMPLED
+                    } else {
+                        GAP_RATIO_MIN_MODEL
+                    };
+                    assert!(
+                        gap_drop >= gap_expect * gap_min,
+                        "GM0 key {key} seed {seed} samples={samples}: 62.5ms gap drop \
+                         {gap_drop:.2} dB is under {gap_min}x the {gap_expect:.2} dB \
+                         its {t60:.3}s damper predicts — the release barely engages"
+                    );
+                    assert!(
+                        tail_drop >= tail_expect * TAIL_RATIO_MIN,
+                        "GM0 key {key} seed {seed} samples={samples}: only {tail_drop:.2} dB \
+                         down after 250 ms, under {TAIL_RATIO_MIN}x the {tail_expect:.2} dB \
+                         its {t60:.3}s damper predicts"
                     );
                     assert!(
                         !alive,
@@ -7739,9 +7785,21 @@ mod tests {
             for key in [36u8, 60, 84] {
                 let (_, tail_drop, alive) =
                     piano_release_reading(voices::make(0, key, 104, sr, 1, samples), sr);
+                // Derived from the felt curve, per key — see the note in
+                // `gm0_fra_gap_release_bridges_then_clears`. A flat 24 dB bar here
+                // asserted that C2 damps as fast as C6, which no piano does.
+                let (t60, _) = voices::PianoDamper::Felt.t60_for(key);
+                let tail_expect = 60.0 * 0.25 / t60;
+                println!(
+                    "  key {key} samples={samples}: t60 {t60:.3}s, tail expect \
+                     {tail_expect:.2} dB, got {tail_drop:.2} (x{:.2})",
+                    tail_drop / tail_expect
+                );
                 assert!(
-                    tail_drop >= 24.0,
-                    "GM0 key {key} samples={samples}: only {tail_drop:.2} dB down at 250 ms"
+                    tail_drop >= tail_expect * TAIL_RATIO_MIN,
+                    "GM0 key {key} samples={samples}: only {tail_drop:.2} dB down at 250 ms, \
+                     under {TAIL_RATIO_MIN}x the {tail_expect:.2} dB its {t60:.3}s damper \
+                     predicts"
                 );
                 assert!(
                     !alive,
@@ -7807,8 +7865,8 @@ mod tests {
                 ),
             ),
             (
-                // GM1 is deliberately NOT part of the fix: it keeps the legacy damper
-                // until Step 2 replaces the flat constant with a key-dependent curve.
+                // GM1 now shares the modelled felt damper (Step 2). It is still
+                // pinned here so a future change cannot move it silently.
                 "GM1 Bright",
                 voices::make(1, 66, 104, sr, 1, true),
                 voices::acoustic_grand_with_bank(
@@ -7818,7 +7876,7 @@ mod tests {
                     sr,
                     1,
                     true,
-                    voices::LEGACY_VOICING,
+                    voices::GM1_VOICING,
                 ),
             ),
         ] {

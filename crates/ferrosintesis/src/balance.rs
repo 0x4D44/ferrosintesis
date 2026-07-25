@@ -286,6 +286,89 @@ mod tests {
         );
     }
 
+    /// The cross-run oracle needs a complete, reference-addressed baseline and must keep
+    /// guard-excluded rows in its comparison. Otherwise a large regression can exclude
+    /// itself from the very check intended to detect it (MM-BUG-KILN-00118).
+    #[test]
+    fn residual_baseline_covers_every_program_and_both_references() {
+        let tools = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("crates/ferrosintesis sits two levels below the repo root")
+            .join("tools/instrument-balance");
+        let baseline_path = tools.join("residual-baseline.csv");
+        let baseline = std::fs::read_to_string(&baseline_path)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", baseline_path.display()));
+        let mut data = baseline
+            .lines()
+            .filter(|line| !line.trim().is_empty() && !line.starts_with('#'));
+        assert_eq!(
+            data.next(),
+            Some("program,reference,residual_db,shipped_db,guard_excluded")
+        );
+
+        let mut keys = std::collections::BTreeSet::new();
+        let mut gm6 = Vec::new();
+        for line in data {
+            let columns: Vec<&str> = line.split(',').collect();
+            assert_eq!(columns.len(), 5, "malformed residual baseline row: {line}");
+            let program: u8 = columns[0]
+                .parse()
+                .unwrap_or_else(|e| panic!("bad program in `{line}`: {e}"));
+            assert!(
+                matches!(columns[1], "sc55" | "yxg"),
+                "unidentified reference in `{line}`"
+            );
+            if !columns[2].is_empty() {
+                let residual: f32 = columns[2]
+                    .parse()
+                    .unwrap_or_else(|e| panic!("bad residual in `{line}`: {e}"));
+                assert!(residual.is_finite(), "non-finite residual in `{line}`");
+            }
+            let shipped: f32 = columns[3]
+                .parse()
+                .unwrap_or_else(|e| panic!("bad shipped trim in `{line}`: {e}"));
+            assert!(shipped.is_finite(), "non-finite shipped trim in `{line}`");
+            assert!(
+                matches!(columns[4], "true" | "false"),
+                "bad guard state in `{line}`"
+            );
+            assert!(
+                keys.insert((program, columns[1])),
+                "duplicate residual baseline row: {line}"
+            );
+            if program == 6 {
+                gm6.push((columns[1], columns[2], columns[4]));
+            }
+        }
+        let expected: std::collections::BTreeSet<(u8, &str)> = (0..128)
+            .flat_map(|program| [(program, "sc55"), (program, "yxg")])
+            .collect();
+        assert_eq!(keys, expected, "baseline must cover all 256 reference rows");
+        assert_eq!(
+            gm6,
+            [("sc55", "-5.58", "true"), ("yxg", "-3.12", "true")],
+            "GM6 is the live excluded-on-both residual example"
+        );
+
+        let tool_path = tools.join("derive_trims.py");
+        let tool = std::fs::read_to_string(&tool_path)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", tool_path.display()));
+        for required in [
+            "DRIFT_FLAG_DB = 1.0",
+            "def residual_baseline_findings(",
+            "old[\"guard_excluded\"] != new[\"guard_excluded\"]",
+            "new_residual + new[\"shipped_db\"]",
+            "baseline excluded={old['guard_excluded']}",
+            "return 0 if compare_residual_baseline(refs) else 1",
+        ] {
+            assert!(
+                tool.contains(required),
+                "derive_trims.py no longer enforces cross-run invariant `{required}`"
+            );
+        }
+    }
+
     /// The gate above must REJECT a table/gain divergence, otherwise it is decorative.
     ///
     /// Written because this repo has been bitten by oracles that passed on documents

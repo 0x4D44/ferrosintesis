@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00118 — PROGRAM_TRIM_DB has no committed residual baseline, so trim staleness can only ever be found by a manual re-derive
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth / instrument balance
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00107; it is that report's own section-4 remedy, left unimplemented)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00107; it is that report's own section-4 remedy, left unimplemented) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — every panel run now checks a committed two-reference residual/guard baseline, including excluded programs)
 
 ## Observation
 
@@ -67,3 +67,43 @@ Note this needs mdmidiemu plus the SC-55 ROMs to regenerate, so the baseline is
 the only thing that makes the check cheap enough to run routinely.
 
 ## Notes
+
+## Resolution — 2026-07-25
+
+`tools/instrument-balance/residual-baseline.csv` records all 128 programs for
+both canonical references. Every row retains the residual, contemporaneous
+shipped trim, and guard-excluded state; a blank residual explicitly means the
+program/reference pair was unmeasurable. The seed is the complete, observed
+2026-07-22 panel recorded in
+`wrk_docs/2026.07.22 - M-CAL v3 reference-panel derivation report.md`.
+
+Panel mode now compares all 256 rows by default. It fails on normalized residual
+drift over 1.0 dB, measurability changes, missing rows, or guard-state changes.
+The normalized quantity is `residual + shipped_db`, so an intentional scalar
+trim change does not masquerade as voice drift. Guard-excluded rows remain in
+the same comparison and failure path; they are never filtered out.
+
+An explicit `--write-baseline PATH` mode writes a complete candidate after a
+new SC-55/Yamaha capture run. It does not replace the accepted baseline unless
+the caller deliberately names that path and reviews the result.
+
+## Verification — 2026-07-25
+
+- `python tools/instrument-balance/derive_trims.py --selftest` passes. It proves
+  an intentional trim change cancels, an excluded GM6 residual drift still
+  fails, guard/measurability transitions fail, and an incomplete baseline is
+  rejected.
+- The focused Rust balance suite passes six tests with one diagnostic ignored.
+  Its ordinary-gate source/data oracle requires 256 unique program/reference
+  rows, pins GM6 excluded on both references, and requires the comparison to
+  remain on panel mode's exit path.
+- `$null | cargo test --locked -p ferrosintesis`: **721 unit tests and 4 doc
+  tests passed; 27 diagnostics ignored**.
+- `$null | cargo test --locked -p ferrosintesis --no-default-features`: **620
+  unit tests and 4 doc tests passed; 22 diagnostics ignored**.
+- Strict all-target clippy passes for the workspace and for ferrosintesis
+  without default features. Formatting, Python byte-compilation, and
+  `git diff --check` pass.
+- No audio render inventory is required: this pass changes the offline
+  calibration tool, its baseline data, a Rust test oracle, and the bug ledger;
+  it does not change rendered audio.

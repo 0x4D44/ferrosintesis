@@ -10,6 +10,8 @@ ferro/SC-55 envelopes differ in shape).
 
     python tools/instrument-balance/derive_trims.py \
         _cal/ferro_guardcheck.levels.tsv _cal/sc55_guardcheck.levels.tsv
+    python tools/instrument-balance/derive_trims.py \
+        _cal/ferro_full.levels.tsv _cal/sc55_full.levels.tsv _cal/yxg_full.levels.tsv
     python tools/instrument-balance/derive_trims.py --selftest
 
 Inputs are calmeter v2 level TSVs, parsed BY HEADER NAME (columns may be added/reordered):
@@ -62,6 +64,9 @@ level and so makes certificate 1 impossible. Render the probe with the `raw_dump
 """
 from __future__ import annotations
 
+import csv
+import io
+import math
 import pathlib
 import re
 import statistics
@@ -112,6 +117,16 @@ EARVET_TILT_DB = 10.0
 # (GM7 0.16, GM110 0.32, GM14 1.29) and disagreeing ones at 5-10 dB (GM0 5.5, GM38 9.2,
 # GM11 9.9). Nothing sits in between.
 PANEL_AGREE_DB = 3.0
+
+# --- cross-run residual oracle ---------------------------------------------------------
+# A standalone derivation can miss exactly the regression it is meant to catch: a large
+# voice-level change may trip a guard, then disappear from the ordinary residual oracle.
+# Compare every program/reference row, INCLUDING guard-excluded rows, with the last accepted
+# panel. Intentional trim changes cancel because the stable voice-level quantity is
+# `residual + shipped_db` (residual moves by the inverse of an applied scalar trim).
+DRIFT_FLAG_DB = 1.0
+BASELINE_REFERENCES = ("sc55", "yxg")
+RESIDUAL_BASELINE = pathlib.Path(__file__).with_name("residual-baseline.csv")
 
 # --- current shipped table -------------------------------------------------
 # DERIVED from engine.rs at start-up, never hand-copied. It used to be a literal,
@@ -201,6 +216,234 @@ def load_shipped(path: pathlib.Path = ENGINE_RS) -> tuple[list[float], set[int]]
 
 
 SHIPPED, EAR_DECIDED = load_shipped()
+
+
+def parse_residual_baseline(text: str, source: object = "residual-baseline.csv"):
+    """Parse one complete 128-program x 2-reference baseline, or fail loudly."""
+    columns = [
+        "program",
+        "reference",
+        "residual_db",
+        "shipped_db",
+        "guard_excluded",
+    ]
+    data_lines = [
+        line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    ]
+    reader = csv.DictReader(data_lines)
+    if reader.fieldnames != columns:
+        raise SystemExit(
+            f"derive_trims: {source} columns must be {columns}, found {reader.fieldnames}."
+        )
+
+    rows = {}
+    for line_no, row in enumerate(reader, 2):
+        if None in row or any(row[column] is None for column in columns):
+            raise SystemExit(
+                f"derive_trims: malformed baseline row at {source}:{line_no}: {row}."
+            )
+        try:
+            program = int(row["program"])
+            reference = row["reference"]
+            residual = float(row["residual_db"]) if row["residual_db"] else None
+            shipped = float(row["shipped_db"])
+        except (TypeError, ValueError) as e:
+            raise SystemExit(
+                f"derive_trims: invalid numeric baseline row at {source}:{line_no}: {e}"
+            ) from e
+        if program not in range(128):
+            raise SystemExit(
+                f"derive_trims: baseline program outside 0..127 at {source}:{line_no}: {program}."
+            )
+        if reference not in BASELINE_REFERENCES:
+            raise SystemExit(
+                f"derive_trims: unsupported baseline reference at {source}:{line_no}: "
+                f"{reference!r}; expected one of {BASELINE_REFERENCES}."
+            )
+        if residual is not None and not math.isfinite(residual):
+            raise SystemExit(
+                f"derive_trims: non-finite residual at {source}:{line_no}: {residual}."
+            )
+        if not math.isfinite(shipped):
+            raise SystemExit(
+                f"derive_trims: non-finite shipped trim at {source}:{line_no}: {shipped}."
+            )
+        excluded_text = row["guard_excluded"].lower()
+        if excluded_text not in ("true", "false"):
+            raise SystemExit(
+                f"derive_trims: guard_excluded must be true or false at "
+                f"{source}:{line_no}, found {row['guard_excluded']!r}."
+            )
+        key = (reference, program)
+        if key in rows:
+            raise SystemExit(f"derive_trims: duplicate baseline row at {source}:{line_no}: {key}.")
+        rows[key] = {
+            "residual_db": residual,
+            "shipped_db": shipped,
+            "guard_excluded": excluded_text == "true",
+        }
+
+    expected = {(reference, program) for reference in BASELINE_REFERENCES for program in range(128)}
+    if set(rows) != expected:
+        missing = sorted(expected - set(rows))
+        extra = sorted(set(rows) - expected)
+        raise SystemExit(
+            f"derive_trims: {source} must contain exactly every program 0..127 for "
+            f"{BASELINE_REFERENCES}; missing={missing[:8]}, extra={extra[:8]}."
+        )
+    return rows
+
+
+def load_residual_baseline(path: pathlib.Path = RESIDUAL_BASELINE):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise SystemExit(f"derive_trims: cannot read residual baseline {path}: {e}") from e
+    return parse_residual_baseline(text, path)
+
+
+def residual_snapshot(refs):
+    """Return reference-addressed residual, shipped-trim and guard state for every row."""
+    labels = [ref["label"] for ref in refs]
+    if len(labels) != len(set(labels)):
+        raise SystemExit(f"derive_trims: duplicate reference labels in panel: {labels}.")
+    if set(labels) != set(BASELINE_REFERENCES):
+        raise SystemExit(
+            f"derive_trims: residual oracle requires references {BASELINE_REFERENCES}, "
+            f"found {tuple(labels)}. Name input files with canonical sc55_/yxg_ prefixes."
+        )
+    return {
+        (ref["label"], program): {
+            "residual_db": row["residual"],
+            "shipped_db": row["shipped"],
+            "guard_excluded": row["excluded"],
+        }
+        for ref in refs
+        for program, row in ref["by"].items()
+    }
+
+
+def residual_baseline_findings(baseline, current, drift_bar=DRIFT_FLAG_DB):
+    """Return all measurement, guard-state and level changes; excluded rows stay included."""
+    findings = []
+    for reference, program in sorted(baseline, key=lambda key: (key[1], key[0])):
+        old = baseline[(reference, program)]
+        new = current.get((reference, program))
+        if new is None:
+            findings.append(
+                {
+                    "program": program,
+                    "reference": reference,
+                    "kind": "missing",
+                    "detail": "program/reference is absent from the current derivation",
+                }
+            )
+            continue
+
+        if old["guard_excluded"] != new["guard_excluded"]:
+            findings.append(
+                {
+                    "program": program,
+                    "reference": reference,
+                    "kind": "guard",
+                    "detail": "guard-excluded changed "
+                    f"{old['guard_excluded']} -> {new['guard_excluded']}",
+                }
+            )
+
+        old_residual, new_residual = old["residual_db"], new["residual_db"]
+        if (old_residual is None) != (new_residual is None):
+            findings.append(
+                {
+                    "program": program,
+                    "reference": reference,
+                    "kind": "measurement",
+                    "detail": "measurability changed "
+                    f"{'unmeasurable' if old_residual is None else 'measured'} -> "
+                    f"{'unmeasurable' if new_residual is None else 'measured'}",
+                }
+            )
+        elif old_residual is not None:
+            # Applying +t dB moves residual by -t dB. Adding the contemporaneous shipped
+            # trim removes that intentional table change and leaves voice/reference drift.
+            delta = (new_residual + new["shipped_db"]) - (
+                old_residual + old["shipped_db"]
+            )
+            if abs(delta) > drift_bar:
+                findings.append(
+                    {
+                        "program": program,
+                        "reference": reference,
+                        "kind": "drift",
+                        "delta": delta,
+                        "detail": f"normalized residual drift {delta:+.2f} dB "
+                        f"(baseline excluded={old['guard_excluded']}, "
+                        f"current excluded={new['guard_excluded']})",
+                    }
+                )
+    return findings
+
+
+def serialize_residual_baseline(snapshot):
+    expected = {(reference, program) for reference in BASELINE_REFERENCES for program in range(128)}
+    if set(snapshot) != expected:
+        missing = sorted(expected - set(snapshot))
+        raise SystemExit(
+            "derive_trims: cannot write an incomplete residual baseline; "
+            f"missing={missing[:8]}."
+        )
+    out = io.StringIO(newline="")
+    out.write("# generated by tools/instrument-balance/derive_trims.py --write-baseline\n")
+    out.write("# residual_db is anchor minus rendered ferro/reference gap; blank means unmeasurable.\n")
+    out.write("# shipped_db lets comparisons remove intentional PROGRAM_TRIM_DB changes.\n")
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(
+        ["program", "reference", "residual_db", "shipped_db", "guard_excluded"]
+    )
+    for program in range(128):
+        for reference in BASELINE_REFERENCES:
+            row = snapshot[(reference, program)]
+            residual = row["residual_db"]
+            writer.writerow(
+                [
+                    program,
+                    reference,
+                    "" if residual is None else f"{residual:+.2f}",
+                    f"{row['shipped_db']:.1f}",
+                    str(row["guard_excluded"]).lower(),
+                ]
+            )
+    return out.getvalue()
+
+
+def write_residual_baseline(refs, path):
+    snapshot = residual_snapshot(refs)
+    try:
+        pathlib.Path(path).write_text(
+            serialize_residual_baseline(snapshot), encoding="utf-8", newline="\n"
+        )
+    except OSError as e:
+        raise SystemExit(f"derive_trims: cannot write residual baseline {path}: {e}") from e
+    print(f"\n=== residual baseline written for explicit review: {path} ===")
+
+
+def compare_residual_baseline(refs):
+    baseline = load_residual_baseline()
+    findings = residual_baseline_findings(baseline, residual_snapshot(refs))
+    print(
+        f"\n=== cross-run residual oracle (normalized drift > {DRIFT_FLAG_DB:.1f} dB fails; "
+        "guard-excluded rows included) ==="
+    )
+    if not findings:
+        print("    all 256 program/reference rows match the accepted baseline.")
+        return True
+    for finding in findings:
+        print(
+            f"    GM{finding['program']:<3} {finding['reference']:<5} "
+            f"{finding['kind']}: {finding['detail']}"
+        )
+    print(f"    FAIL: {len(findings)} cross-run baseline difference(s).")
+    return False
 
 # --- recorded ear decisions -------------------------------------------------
 # A trim of 0.0 is ambiguous: it can mean "nobody has looked at this yet" or "someone
@@ -644,14 +887,14 @@ def run(ferro_path, sc_path):
     return 0
 
 
-def run_panel(ferro_path, ref_paths):
+def run_panel(ferro_path, ref_paths, write_baseline_path=None):
     """Derive against a PANEL of independent references and gate on their agreement."""
     ferro, fglue = load(ferro_path)
     refs = []
     for rp in ref_paths:
         data, _ = load(rp)
         rows, anchor, cohort, mad = evaluate(ferro, data)
-        label = rp.replace("\\", "/").split("/")[-1].split("_")[0]
+        label = pathlib.Path(rp).name.split("_", 1)[0].lower()
         refs.append({"label": label, "by": {r["p"]: r for r in rows},
                      "anchor": anchor, "cohort": cohort, "mad": mad})
 
@@ -731,7 +974,10 @@ def run_panel(ferro_path, ref_paths):
     for o in out:
         if o["excl"]:
             print(f"    GM{o['p']:<3} {o['name']:<18} " + " | ".join(o["excl"]))
-    return 0
+    if write_baseline_path is not None:
+        write_residual_baseline(refs, write_baseline_path)
+        return 0
+    return 0 if compare_residual_baseline(refs) else 1
 
 
 # --- self-test (A3): synthetic tables through the guards + anchor ------------
@@ -804,6 +1050,61 @@ def _selftest_engine_parser():
             raise AssertionError(f"ear-decision parser accepted invalid fixture: {expected}")
 
 
+def _selftest_residual_baseline():
+    fixture = {}
+    for program in range(128):
+        for reference in BASELINE_REFERENCES:
+            fixture[(reference, program)] = {
+                "residual_db": 0.0,
+                "shipped_db": 0.0,
+                "guard_excluded": False,
+            }
+    fixture[("sc55", 6)] = {
+        "residual_db": 1.46,
+        "shipped_db": 6.0,
+        "guard_excluded": True,
+    }
+    fixture[("yxg", 6)] = {
+        "residual_db": -1.07,
+        "shipped_db": 6.0,
+        "guard_excluded": True,
+    }
+    parsed = parse_residual_baseline(serialize_residual_baseline(fixture), "fixture")
+    assert parsed == fixture
+
+    current = {key: dict(value) for key, value in fixture.items()}
+    # A newly-applied scalar trim changes residual by its inverse and is not voice drift.
+    current[("sc55", 5)]["residual_db"] = -1.0
+    current[("sc55", 5)]["shipped_db"] = 1.0
+    assert not residual_baseline_findings(parsed, current)
+
+    # The MM-BUG-KILN-00108 hole: excluded GM6 must still report and fail on level drift.
+    current[("sc55", 6)]["residual_db"] += 1.25
+    findings = residual_baseline_findings(parsed, current)
+    assert any(
+        finding["program"] == 6
+        and finding["reference"] == "sc55"
+        and finding["kind"] == "drift"
+        for finding in findings
+    ), findings
+
+    current = {key: dict(value) for key, value in fixture.items()}
+    current[("yxg", 6)]["guard_excluded"] = False
+    current[("sc55", 7)]["residual_db"] = None
+    findings = residual_baseline_findings(parsed, current)
+    assert {finding["kind"] for finding in findings} == {"guard", "measurement"}, findings
+
+    malformed = serialize_residual_baseline(fixture).replace(
+        "127,yxg,+0.00,0.0,false\n", ""
+    )
+    try:
+        parse_residual_baseline(malformed, "missing-row fixture")
+    except SystemExit as e:
+        assert "exactly every program" in str(e), e
+    else:
+        raise AssertionError("residual baseline parser accepted a missing program/reference row")
+
+
 # Fixture shipped table - DELIBERATELY independent of the live PROGRAM_TRIM_DB.
 # A self-test whose expectations move whenever a production trim changes is not a
 # self-test. That coupling is exactly what surfaced when SHIPPED stopped being a
@@ -823,6 +1124,7 @@ for _p, _v in {
 
 def selftest():
     _selftest_engine_parser()
+    _selftest_residual_baseline()
     keys = [48, 53, 58, 63, 68, 73]
     ferro, sc = {}, {}
 
@@ -881,7 +1183,8 @@ def selftest():
     assert byp[24]["excluded"] and "shape" in byp[24]["reasons"][0], byp[24]
     assert byp[25]["excluded"] and "shape/short" in byp[25]["reasons"][0], byp[25]
     assert byp[26]["excluded"] and any("pitch-tilt" in r for r in byp[26]["reasons"]), byp[26]
-    print(f"selftest OK - exact/unique engine-state parser; anchor 0.00 MAD 0.00 over "
+    print(f"selftest OK - exact/unique engine-state and residual-baseline parsers; excluded "
+          f"cross-run drift retained; anchor 0.00 MAD 0.00 over "
           f"{len(cohort)} admitted; GM56 (5 dB off) rejected from the cohort; GM6 keeps "
           "+6 (damp the change); GM8 -2, GM9 (matched one-shot) -1; GM24 shape / GM25 "
           "sub-hop / GM26 pitch-tilt excluded.")
@@ -891,15 +1194,30 @@ def selftest():
 def main():
     if len(sys.argv) == 2 and sys.argv[1] == "--selftest":
         return selftest()
-    if len(sys.argv) < 3:
+    args = sys.argv[1:]
+    write_baseline_path = None
+    if "--write-baseline" in args:
+        if args.count("--write-baseline") != 1:
+            print("derive_trims: --write-baseline may appear only once.")
+            return 2
+        option = args.index("--write-baseline")
+        if option + 1 >= len(args):
+            print("derive_trims: --write-baseline requires an output path.")
+            return 2
+        write_baseline_path = args[option + 1]
+        del args[option : option + 2]
+    if len(args) < 2:
         print("usage: derive_trims.py <ferro.levels.tsv> <ref.levels.tsv> [ref2 ...]"
-              "  |  --selftest")
+              " [--write-baseline PATH]  |  --selftest")
         print("  two or more references switch on PANEL mode: the consensus is the target and"
               " disagreement between references routes the program to ears.")
         return 2
-    if len(sys.argv) > 3:
-        return run_panel(sys.argv[1], sys.argv[2:])
-    return run(sys.argv[1], sys.argv[2])
+    if write_baseline_path is not None and len(args) < 3:
+        print("derive_trims: --write-baseline requires panel mode with both references.")
+        return 2
+    if len(args) > 2:
+        return run_panel(args[0], args[1:], write_baseline_path)
+    return run(args[0], args[1])
 
 
 if __name__ == "__main__":

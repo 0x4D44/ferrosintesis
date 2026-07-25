@@ -32,6 +32,18 @@ account level. All eleven sounds were checked individually on 2026-07-24 and eac
 page states "Creative Commons 0". The record is committed here so the check is never
 repeated (MM-BUG-KILN-00069 item 9).
 
+That check no longer rests on someone having read eleven web pages. The pack's bundled
+[`_readme_and_license_44539.txt`](../../tools/ferrosintesis-samples/freesound-src/_readme_and_license_44539.txt)
+(SHA-256 `3e75a460120b3b5b7a87d3511d7dc1c45e639b189a0884303c2471470d347e08`) is now committed
+verbatim, and it states "Creative Commons 0" for all 11 sounds — 11/11, no exceptions
+(MM-REQ-KILN-00029). The manifest also pins the pack as 44539, which is what rules out the
+near-miss noted below.
+
+The `Sound`→`Note` column pairs were independently **verified by content**: each committed
+source WAV was cross-correlated against the decoded pack originals and every row matched at
+1.0000, runner-up never above 0.33. The upstream label is not always the sounding pitch —
+sound 832342 is labelled `g6` upstream but measures G#6, which is why it is filed as G#6 here.
+
 | Sound | Note | Licence |
 |-------|------|---------|
 | 832332 | A5 | Creative Commons 0 |
@@ -48,6 +60,26 @@ repeated (MM-BUG-KILN-00069 item 9).
 
 Beware the near-miss: a *different* moodyfingers pack (40874, sound 732943) is also a
 "Hand Crank Music Box" and is easy to confuse with the pinned 44539.
+
+### Committed-source checksums
+
+SHA-256 of each committed music-box source WAV under
+`tools/ferrosintesis-samples/freesound-src/` (MM-REQ-KILN-00029 — these eleven previously
+carried no hash).
+
+| Source file | SHA-256 |
+|-------------|---------|
+| `musicbox_A5.wav` | `8b0ad0ce24ff58148f7e6b3c6ff55ad8225769885160ec2db4809126ad0a2717` |
+| `musicbox_A6.wav` | `12ec5930f37a9b5aff8dfcec1497998c6d8b91cea140d0ad64f9fc4e9a3b025f` |
+| `musicbox_B5.wav` | `f849bb15e2801fa777b1e1b74c5ff4893bd6594d1847e2f3e55220afbd3c1d87` |
+| `musicbox_B6.wav` | `4140e8804c80e5d1ec9c13e1c9042f673055c5061b41eacac061295a62ded886` |
+| `musicbox_C6.wav` | `2c6d2e2b438328d2d6b51d6816b34007a2bfa1207bab676cdc4a992beeed1059` |
+| `musicbox_C7.wav` | `eca6609fe9300031a159a1501a4cac9acad84d79c310a726aa322066af17a8a4` |
+| `musicbox_D6.wav` | `d59935877a0d9d02c9fc5f8fe406811b53c769380a0c83cac294f24daa7a77f1` |
+| `musicbox_E5.wav` | `5ac847a57d4b281426fac561de4336c0806f0c7d10aab74c1b76dd5ea3196676` |
+| `musicbox_E6.wav` | `8b793348ed0fa4bbe2722c54bd721c30854c2a64bd40d864c712e4fa8d4ac630` |
+| `musicbox_F6.wav` | `0bb131859fefb0dfa3a276f0c617cce167f98d499bde847334d46ca7f75def46` |
+| `musicbox_G#6.wav` | `5026d0f7fbac42e1fea46e2b90590f6bc99cb3f71d6f3c4b61634c15a5b3af85` |
 
 **Retired source.** The banjo was previously baked from `sfzinstruments/ganjo` (CC0); that
 route was retired on 2026-07-23 in favour of the owner recording and is kept in

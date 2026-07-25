@@ -108,6 +108,8 @@ pub(crate) mod midi;
 mod parse_robustness;
 #[cfg(test)]
 mod payload;
+#[cfg(test)]
+mod provenance;
 pub(crate) mod reverb;
 pub(crate) mod sampler;
 #[cfg(test)]

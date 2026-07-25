@@ -34,6 +34,28 @@ stereo originals.
   *software* licence) on the identical audio — do NOT source from there; the
   Freesound copies are unambiguously CC BY 3.0.
 
+## Committed-source checksums
+
+SHA-256 of each committed source WAV under `tools/ferrosintesis-samples/gong-src/`
+(MM-REQ-KILN-00029 — this bank previously recorded no source hash at all).
+
+| Source file | SHA-256 |
+|-------------|---------|
+| `gong_ageng_loud_261893.wav` | `f6444d1a48ad29b9c75df905f6560df864e64291374c0447f50614f46153d226` |
+| `gong_ageng_soft_261890.wav` | `417f383ed7d17b70c3d1dfa637e374a00726e0ba0f0946c01506ffd2fdf8f642` |
+
+These two files are **byte-identical to the Freesound downloads** — verified against the
+originals, which still carry their upstream filenames `261890__digitopia_cdm__gong_gap.wav` and
+`261893__digitopia_cdm__gong_gaf.wav`. Nothing was decoded, trimmed or re-encoded on the way in.
+
+That makes the gong evidence a stronger class than the packs': the committed file *is* the
+upstream artifact, and its sound ID is carried in its own name. What is **not** retained is a
+licence manifest — Freesound bundles a `_readme_and_license.txt` only with a *pack* download, and
+these two were fetched as individual sounds. The CC BY 3.0 claim therefore still rests on a human
+having read two sound pages on 2026-07-19. Re-fetching either sound reproduces these exact bytes,
+so the audio is fully auditable; the licence line is not, and cannot be made so without either a
+pack download or an upstream page snapshot.
+
 ## Inventory
 
 Gong ageng chosen for the lowest/clearest fundamental (matches *Bronze Water*'s

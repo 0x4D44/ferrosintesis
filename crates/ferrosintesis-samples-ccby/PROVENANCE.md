@@ -1,7 +1,9 @@
 # Provenance — ferrosintesis-samples-ccby
 
-Two real recordings from Freesound, each **CC BY 4.0** (per-sound license confirmed in each
-pack's bundled `_readme_and_license.txt` — all sounds "Attribution 4.0", no exceptions):
+Two real recordings from Freesound, each **CC BY 4.0**. The upstream evidence is **retained in
+this repository**: each pack's bundled `_readme_and_license.txt` is committed verbatim under
+`tools/ferrosintesis-samples/freesound-src/`, so the licence can be audited offline — without a
+Freesound account, and without trusting a mutable upstream page (MM-REQ-KILN-00029).
 
 | GM | Instrument | Source | Author | Pack |
 |----|-----------|--------|--------|------|
@@ -17,6 +19,61 @@ To fully regenerate from scratch: download packs 3957 (Rhodes) + 19445 (dulcimer
 Freesound (login required), re-decode/trim the chosen notes into `freesound-src/`, then run
 `prepare.py`. The `jRhodes` set was rejected — its sample bytes are CC-BY-**NC** (see the
 round-3 voice-quality HLD); tim.kahn's pack is plain CC-BY and safe for a published crate.
+
+## Retained upstream licence manifests
+
+Freesound bundles a `_readme_and_license.txt` in every pack download. Both are committed here
+verbatim, unmodified, as the primary licence evidence. They name the pack, the author, and every
+sound in the pack by ID and licence — so they settle both *which* licence applies and *which
+version* of it, neither of which is recoverable from a sound page that the author can edit.
+
+| Manifest | Pack | Sounds | Licence tally | SHA-256 |
+|----------|------|--------|---------------|---------|
+| [`_readme_and_license_3957.txt`](../../tools/ferrosintesis-samples/freesound-src/_readme_and_license_3957.txt) | 3957 (Rhodes, tim.kahn) | 53 | 53/53 "Attribution 4.0" | `5b6e87bc35b225215f90d87fc0e92872851befa7a331514040abf8fd2234a099` |
+| [`_readme_and_license_19445.txt`](../../tools/ferrosintesis-samples/freesound-src/_readme_and_license_19445.txt) | 19445 (dulcimer, iternetcone) | 15 | 15/15 "Attribution 4.0" | `5de6b40b93943d6b29634aa0069710069aad6e8a07152d71f3e64e7083a2d36a` |
+
+The tallies are counted from the manifests themselves, and they are what license the "no
+exceptions" claim above. Note the licence **version**: pack IDs 3957 and 19445 predate CC BY 4.0,
+so a 4.0 declaration is not something you could assume from the pack's age — the manifests state
+Attribution 4.0 explicitly for every sound, and that is why this crate declares `CC-BY-4.0`.
+
+## Per-sound identity
+
+Each committed source WAV was renamed to its **measured** pitch before it was first committed
+(the upstream note labels were up to a semitone low — see the 2026.07.20 journal), which severed
+the link back to the individual Freesound sound. That link is restored here by matching each
+committed clip against the decoded pack originals: every row below matched at a normalised
+cross-correlation of **1.0000**, with the runner-up never above 0.62.
+
+Note the upstream label is not the sounding pitch. `rhodes_A#1.wav` really is sound 65754, whose
+pack label is `a1`; the E-natural files are the ones whose labels were already correct.
+
+| Committed source | Freesound sound | Upstream label | Source page |
+|------------------|-----------------|----------------|-------------|
+| `rhodes_A#1.wav` | 65754 | `a1` | <https://freesound.org/s/65754/> |
+| `rhodes_A#5.wav` | 65650 | `a5` | <https://freesound.org/s/65650/> |
+| `rhodes_C#2.wav` | 65717 | `c2` | <https://freesound.org/s/65717/> |
+| `rhodes_C#3.wav` | 65718 | `c3` | <https://freesound.org/s/65718/> |
+| `rhodes_C#6.wav` | 65653 | `c6` | <https://freesound.org/s/65653/> |
+| `rhodes_D#5.wav` | 65655 | `d5` | <https://freesound.org/s/65655/> |
+| `rhodes_E1.wav` | 65758 | `e1` | <https://freesound.org/s/65758/> |
+| `rhodes_E2.wav` | 65725 | `e2` | <https://freesound.org/s/65725/> |
+| `rhodes_E5.wav` | 65659 | `e5` | <https://freesound.org/s/65659/> |
+| `rhodes_G#2.wav` | 65729 | `g2` | <https://freesound.org/s/65729/> |
+| `rhodes_G#5.wav` | 65663 | `g5` | <https://freesound.org/s/65663/> |
+| `dulcimer_A4.wav` | 342914 | `a` | <https://freesound.org/s/342914/> |
+| `dulcimer_B4.wav` | 342913 | `b` | <https://freesound.org/s/342913/> |
+| `dulcimer_C#4.wav` | 342911 | `c` | <https://freesound.org/s/342911/> |
+| `dulcimer_C5.wav` | 342919 | `high-c` | <https://freesound.org/s/342919/> |
+| `dulcimer_D4.wav` | 342918 | `d` | <https://freesound.org/s/342918/> |
+| `dulcimer_D5.wav` | 342921 | `high-d` | <https://freesound.org/s/342921/> |
+| `dulcimer_E4.wav` | 342917 | `e` | <https://freesound.org/s/342917/> |
+| `dulcimer_F#4.wav` | 342915 | `f` | <https://freesound.org/s/342915/> |
+| `dulcimer_G4.wav` | 342920 | `g` | <https://freesound.org/s/342920/> |
+
+The pack originals are **not** committed — they are 53 + 15 sounds against the 20 we use, and the
+manifests already identify them. Re-deriving this table needs the packs; auditing the licence
+does not.
 
 ## Committed-source checksums
 

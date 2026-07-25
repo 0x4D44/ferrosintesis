@@ -1,2 +1,10 @@
 # Shell scripts must check out with LF — bash rejects CRLF (core.autocrlf=true otherwise converts them).
 *.sh text eol=lf
+
+# Retained upstream licence manifests are EVIDENCE, not source. Their SHA-256 is recorded in
+# the packaged PROVENANCE.md files and checked by crates/ferrosintesis/src/provenance.rs, so
+# any line-ending conversion silently changes the bytes being attested. With core.autocrlf=true
+# (the fleet default on Windows) these check out as CRLF and every recorded hash misses — on a
+# fresh clone, not on the machine that committed them. `-text` disables the conversion in both
+# directions. Applies at any depth, so a future pack's manifest is covered on arrival.
+_readme_and_license_*.txt -text

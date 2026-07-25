@@ -344,6 +344,21 @@ mod tests {
                 "{} carries no per-sound licence lines",
                 p.display()
             );
+            // Diagnostic, not decoration. These are the only TEXT files whose exact bytes are
+            // attested, and `core.autocrlf=true` is the fleet default on Windows: without the
+            // `-text` rule in .gitattributes they check out as CRLF and every recorded hash
+            // misses — on a fresh clone, never on the machine that committed them. Caught
+            // exactly that way while landing MM-REQ-KILN-00029. Asserting it here turns a
+            // baffling "77 files unpinned" into one sentence naming the cause.
+            assert!(
+                !text.contains("\r\n"),
+                "{} has CRLF line endings, so its bytes no longer match the SHA-256 recorded \
+                 for it. Git converted it on checkout — check that .gitattributes still \
+                 carries `_readme_and_license_*.txt -text`. Do NOT re-hash the converted file: \
+                 that would attest a transformed copy rather than the manifest Freesound \
+                 shipped.",
+                p.display()
+            );
         }
     }
 }

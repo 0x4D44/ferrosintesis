@@ -302,7 +302,13 @@
   If it stays single-variant through Stages 5/7a/7b (none of which add `Legit`),
   collapse it to a bare stage id: `ALLOW: &[(u8, u8, u8)]` and `allow_reason ->
   Option<u8>`. Deferred to avoid widening Stage 4 into a shared-infra refactor.
-
+  (Re-verified 2026-07-25: still single-variant, and the Stages 5/7a/7b condition the note set has
+  been met - no `Legit` came back. One correction: it is ONE destructure site but TWO consumption
+  sites (the irrefutable `let Why::Collapse(stage) = why;` and a `Some(Why::Collapse(_)) =>` arm
+  in the diagnostic printer), so the collapse touches five places, not two. Deliberately NOT done
+  in this pass: it is cosmetic, and `testutil.rs` is a hot file in a repo where several agents
+  work concurrently, so the conflict risk outweighs the tidy. Note the sibling
+  `perceptual_distinctness::Why` IS genuinely two-variant - do not collapse that one.)
 - [x] 2026.07.13 - `render_opus.py --jobs 4` can emit a different Opus container
   from a subsequent `--jobs 1` render of the same MIDI and synth, while decoded
   float PCM is SHA-256 identical. Seen on Atlas of Becoming 05 during cello-v2
@@ -377,7 +383,16 @@
   means: drop `DRUM_SOURCES` from `prepare.py`, drop the 8 rows + 8 files, `FILE_COUNT` 139 ->
   131, and re-pin `test_all_samples_route_to_the_expected_package`. Check nothing external
   depends on the names first — the crate is published.
-
+  (Re-verified 2026-07-25: dead in the synth - `grep -rn '\"drum_' crates/ferrosintesis/src/` is
+  still empty and nothing outside the crate's own inventory array names them. Two corrections to
+  the note's numbers: FILE_COUNT goes 166 -> 158, not 139 -> 131, and `test_prepare.py`'s pins go
+  210 -> 202 and 139 -> 131. And one thing the note did not know: two HLDs
+  (`2026.07.13 - HLD - cymbal plate synthesis`, `2026.07.14 - HLD - MetalPlate V4`) cite
+  `drum_crash1_ff_rr1.wav` as the REAL-CYMBAL MEASUREMENT REFERENCE for the shipped MetalPlate
+  model. No code reads it, but deleting it deletes the provenance of a shipped model's
+  calibration. Still a published-payload decision for Arthur; the README now at least states the
+  files are superseded. NOTE the CLAUDE.md rule that unused-by-our-albums is not evidence of
+  death - the stronger claim here is that no GM key can reach them, which does hold.)
 - 2026.07.17 — **ChoirV2 CC70 cluster-shade is coupled to the F3 formant gain** (`sf_open =
   vgains[2]/sf_ref_g3`, voices.rs:6103; the F5 adversarial finding). It SATURATES when the program's
   default F3 gain is on the floor, so a dark-voiced preset silently kills the CC70 vowel morph's

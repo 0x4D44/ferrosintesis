@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00043 — GM7 clavinet's baked decay is ~3x too fast: its body level reads 13.4 dB under both references while its attack level is correctly placed (a 1.6 s sample wall also exists, but measures inaudible)
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision)
 
 ## Observation
 
@@ -204,3 +204,16 @@ from the default voice.
   level ("the plucked families fail on ENVELOPE, not level — that is voice work");
   this entry pins the specific program, the specific constant and the specific
   truncation.
+
+## Blocker (2026-07-25)
+
+The hard 1.6-second wall is objectively wrong, but it cannot be removed safely in
+isolation: exposing more of the current baked 2.4→0.9-second decay would preserve the
+measured 13.4 dB body deficit, while lengthening only the bake would make the existing wall
+an audible chop. The replacement therefore couples an ear-tuned decay target to a longer
+asset or a runtime loop/envelope.
+
+Unblock when Arthur auditions and chooses the GM7 target—physical Clavinet brevity versus
+the 3–10-second GM-reference idiom—and approves whether the source should be re-baked
+longer or looped under a runtime decay envelope. The existing reference panel and pinned
+MS Basic source can then drive the implementation and render-diff validation.

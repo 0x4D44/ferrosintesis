@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00104 — Piano damper release is a flat constant across the whole keyboard: no register dependence and no undamped top octaves
 
-- **State:** Open
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth / piano voicing
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high)
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high) → Fixed (2026-07-25, Claude Opus 5; `70b7067` replaced the flat release with a bounded register-aware felt damper and undamped top register) → Closed (2026-07-25, Codex GPT-5.6-Sol; independently inspected the release law and reran the curve, anti-flat, rendered-tail, and register-release oracles on native Rust and 1.87)
 
 ## Observation
 
@@ -44,6 +44,19 @@ notes sit above key 84 - the register a real piano does not damp at all.
 
 ## Fix
 
-<unfixed — raised only>
+Commit `70b7067` replaced the flat piano release with `PianoDamper::Felt`.
+The release halves every two octaves, remains bounded from 0.18 to 0.95
+seconds through the damped range, and stays anchored at the prior 0.45-second
+middle-C value. Keys above F6 use a bounded 12-second release so their modal
+body rings naturally without making voice reaping unbounded.
+
+Independent closure verification confirmed the law reaches GM0, all GM0
+alternates, and GM1, while the deliberately separate GM3 honky-tonk remains
+outside it. The adversarial oracle rejects the old flat law. The rendered-path
+oracle measured the damped tail at -162.8 dB and the undamped tail at -30.6 dB,
+a 132.2 dB separation after key-up. The register sweep also matched the
+derived 60 dB/T60 expectations at keys 36, 60, and 84 with samples both off
+and on. All focused tests pass on native Rust; the four damper oracles also
+pass on Rust 1.87.
 
 ## Notes

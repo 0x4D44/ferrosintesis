@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """Bake the GM 120 fret-noise round-robin bank (stdlib + numpy).
 
-Input : samples/fret-noise-eastman-e1d/cuts/fret_rr{01..12}.wav  (24-bit, 48 kHz, mono)
-Output: crates/ferrosintesis-samples-fretnoise/samples/fretnoise_rr{01..12}.wav
+Input : samples/fret-noise-eastman-e1d/cuts/fret_rrNN.wav  (24-bit, 48 kHz, mono)
+Output: crates/ferrosintesis-samples-fretnoise/samples/fretnoise_rrNN.wav
         (16-bit, 44.1 kHz, mono — the format parse_wav / the drum path require)
+
+The set of NN is DISCOVERED from the cuts directory, never hard-coded: the cuts are
+the authoritative inventory, so adding a 13th cut bakes a 13th take instead of being
+silently ignored. The ordinals must run contiguously from 01 (a hole would renumber
+the round-robin slots against the crate's committed table), which `discover_cuts`
+asserts.
 
 Steps, per file:
   1. resample 48 kHz -> 44.1 kHz (band-limited, FFT method — no scipy on this box)
@@ -21,6 +27,7 @@ Run from the repo (worktree) root:
 """
 from __future__ import annotations
 
+import re
 import struct
 import sys
 from pathlib import Path
@@ -29,7 +36,7 @@ import numpy as np
 
 SRC_SR = 48000
 DST_SR = 44100
-N = 12
+CUT_RE = re.compile(r"^fret_rr(\d{2})\.wav$")
 # Common body-RMS target for the round-robin set. Chosen so the loudest take lands
 # just under full scale after resampling; the actual GM 120 output level is set in
 # the synth (FRETNOISE_LEVEL), not here — this only EQUALISES takes to each other.
@@ -43,6 +50,37 @@ def find_repo_root(start: Path) -> Path:
         if (p / "crates" / "ferrosintesis").is_dir():
             return p
     raise SystemExit("run from inside the ferrosintesis repo/worktree")
+
+
+def discover_cuts(src_dir: Path) -> list[int]:
+    """The source cuts' ordinals, ascending — the bank's authoritative inventory.
+
+    Requires them to run contiguously from 01. The crate embeds the outputs in
+    ordinal order and indexes them positionally (`take_name`), so a hole would
+    shift every later round-robin slot; and a stray non-conforming name is a
+    mistake worth failing on rather than skipping.
+    """
+    if not src_dir.is_dir():
+        raise SystemExit(f"missing source cuts directory {src_dir}")
+    ordinals, strays = [], []
+    for p in sorted(src_dir.iterdir()):
+        if p.suffix.lower() != ".wav":
+            continue
+        m = CUT_RE.match(p.name)
+        if m is None:
+            strays.append(p.name)
+        else:
+            ordinals.append(int(m.group(1)))
+    if strays:
+        raise SystemExit(f"{src_dir}: unexpected cut name(s) {strays} (want fret_rrNN.wav)")
+    if not ordinals:
+        raise SystemExit(f"{src_dir}: no fret_rrNN.wav cuts found")
+    ordinals.sort()
+    if ordinals != list(range(1, len(ordinals) + 1)):
+        raise SystemExit(
+            f"{src_dir}: cut ordinals must be contiguous from 01, got {ordinals}"
+        )
+    return ordinals
 
 
 def read_wav(path: Path) -> tuple[np.ndarray, int, int]:
@@ -117,10 +155,14 @@ def main() -> int:
     out_dir = root / "crates" / "ferrosintesis-samples-fretnoise" / "samples"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    ordinals = discover_cuts(src_dir)
+    # One shared RNG consumed sequentially, so every file's dither depends on the
+    # total sample count of all its predecessors — the ordinal order below is what
+    # keeps a re-bake byte-identical.
     rng = np.random.default_rng(DITHER_SEED)
     total_bytes = 0
     print(f"{'file':>18} {'src rms':>8} {'gain':>7} {'peak':>7} {'ms':>6}")
-    for i in range(1, N + 1):
+    for i in ordinals:
         src = src_dir / f"fret_rr{i:02d}.wav"
         x, sr, bits = read_wav(src)
         assert sr == SRC_SR, f"{src}: expected {SRC_SR} Hz"
@@ -139,7 +181,7 @@ def main() -> int:
         print(f"{out.name:>18} {rms:>8.4f} {20*np.log10(gain):>+6.1f}dB "
               f"{20*np.log10(float(np.abs(y).max())+1e-12):>+6.1f}dB {len(y)/DST_SR*1000:>5.0f}")
 
-    print(f"\nbaked {N} files, {total_bytes/1024:.0f} KiB total, into {out_dir}")
+    print(f"\nbaked {len(ordinals)} files, {total_bytes/1024:.0f} KiB total, into {out_dir}")
     return 0
 
 

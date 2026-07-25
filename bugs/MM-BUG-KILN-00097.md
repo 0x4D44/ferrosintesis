@@ -90,6 +90,12 @@ clean; `cargo test -p ferrosintesis --no-default-features --locked` 614 passed /
 
 ## Notes
 
+- **Residual split out as MM-BUG-KILN-00120** (2026-07-25, independent two-eyes): the Windows
+  identity probe at `crates/ferrosintesis-cli/src/output.rs:59-65` maps ANY sharing violation
+  on the output to "same file", so a third-party exclusive lock produces a false alias
+  refusal (reproduced on Windows). It is fail-safe — it refuses rather than destroys — so it
+  does not disturb this closure.
+
 The devil's-advocate pass rejected the claim that ordinary `-o` overwrite
 semantics make this harmless: replacing an existing output may be intentional,
 but replacing the input artifact is irreversible data loss and has no

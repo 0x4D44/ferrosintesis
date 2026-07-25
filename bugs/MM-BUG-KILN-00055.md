@@ -93,6 +93,10 @@ clean; `cargo test -p ferrosintesis --no-default-features --locked` 614 passed /
 
 ## Notes
 
+- **Residual split out as MM-BUG-KILN-00119** (2026-07-25, independent two-eyes): the fix
+  inverted `crates/ferrosintesis-cli/examples/calmeter.rs:21-24`, which still describes the
+  OLD floor-rank body as current. Not part of this bug's root cause, so this stays Closed.
+
 - **Word it as "misleading doc comment on a test helper", not "percentile is broken".**
   Shipped audio is unaffected; this is Could/Low.
 - **This is a known, twice-documented trap, filed because the comment outlived the incident

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00101 — MIDI parser overflows on 32-bit targets; a truncated track silently parses as an empty song
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** High
 - **Area:** midi / parser
@@ -18,12 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, found while building the parser-robustness test suite
-  that the ferrosintesis review flagged as the crate's largest coverage gap; found by reading
-  the arithmetic, not by the fuzzer, which builds 64-bit and cannot reach it)
-  → Fixed (2026-07-25, Claude Opus 4.5; all three sites saturated. The crafted fixtures now
-  pass under `--target i686-pc-windows-msvc`, where they previously panicked. Awaits
-  independent two-eyes closure.)
+- **State history:** Open (2026-07-25, found while building the parser-robustness test suite that the ferrosintesis review flagged as the crate's largest coverage gap; found by reading the arithmetic, not by the fuzzer, which builds 64-bit and cannot reach it) → Fixed (2026-07-25, Claude Opus 4.5; all three sites saturated. The crafted fixtures now pass under `--target i686-pc-windows-msvc`, where they previously panicked. Awaits independent two-eyes closure.) → Closed (2026-07-25, Codex GPT-5; independently reproduced the 32-bit debug overflow and the release-only silent empty parse on the pre-fix parent, then proved all four fixtures reject correctly in debug and release on the fixed tree; the complete repository gate passed.)
 
 ## Observation
 
@@ -106,3 +101,20 @@ cargo test -p ferrosintesis --lib --target i686-pc-windows-msvc --no-default-fea
 64-bit only, where these fixtures cannot fail. Adding a 32-bit target to the gate is a
 separate decision (it needs the target installed on every runner); until then, this bug is
 the record of why the fixtures exist and how to exercise them meaningfully.
+
+### Independent closure verification (2026-07-25 — Codex GPT-5)
+
+- Inspected the fix and confirmed all three attacker-controlled additions now saturate:
+  `Cursor::bytes` computes and stores a saturated end, while the header and track chunk
+  boundaries use `saturating_add`.
+- On the pre-fix parent `8eaaa1914ff1cec73d69c9d9e0332c64c47d3aac`, overlaid the exact
+  committed parser-robustness suite and ran it on `i686-pc-windows-msvc`. The debug run
+  failed at `midi.rs:217` with `attempt to add with overflow`.
+- On that same pre-fix parent in release mode, isolated the exact `0xFFFF_FFFF` track-length
+  fixture from the suite. `offline::parse` returned `Ok` with zero events and `0.00 s`,
+  reproducing the silent-empty-song observation.
+- On the fixed tree, the four parser-robustness tests passed in both debug and release under
+  `--target i686-pc-windows-msvc --no-default-features`; each crafted length now yields the
+  expected typed error.
+- The repository gate passed: formatting, workspace Clippy excluding `amp-lab`, modeled-only
+  `ferrosintesis` Clippy, and workspace tests excluding `amp-lab`.

@@ -10,8 +10,10 @@ its default `embedded-samples` feature. With `--no-samples` (or a channel select
 the CC0 alt bank, `CC0 != 0`), GM7 falls back to ferrosintesis's fully-modeled
 Karplus-Strong clavinet and this crate is not used.
 
-- **License:** MIT (the samples are MIT, unlike ferrosintesis's other, CC0, sample
-  crates). Attribution obligations are in [`NOTICE`](NOTICE).
+- **License:** MIT. Some sibling banks are CC0, while others use MIT or CC BY;
+  see the
+  [complete embedded-sample licence inventory](https://github.com/0x4D44/ferrosintesis/blob/main/crates/ferrosintesis/README.md#sample-provenance-and-licensing).
+  This bank's attribution obligations are in [`NOTICE`](NOTICE).
 - **Provenance & regeneration:** [`PROVENANCE.md`](PROVENANCE.md) — pinned source,
   SHA-256, and the SF3-extraction / bake pipeline in
   `tools/ferrosintesis-samples/prepare.py`.

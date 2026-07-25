@@ -47,7 +47,7 @@
   those shipped trims are stale. Only listening settles which; do NOT renumber them on the
   metric alone. Evidence: residual-oracle section of `_cal/derivation_v3.txt`.
 
-- [ ] 2026.07.20 — **`gen_crate_lib.py` emits a non-rustfmt array for a SINGLE-file
+- [x] 2026.07.20 — **`gen_crate_lib.py` emits a non-rustfmt array for a SINGLE-file
   sample crate** — a one-element `static SAMPLES: [...] = [ (..),\n ];` that rustfmt
   rewrites to a one-line `= [(..)];`. Multi-file crates are unaffected (the multi-line
   form is already fmt-clean), so it only bites single-file crates (e.g.
@@ -56,6 +56,9 @@
   `tools/ferrosintesis-samples/gen_crate_lib.py` (emit the single-element case on one
   line, or run rustfmt on its output) so a future single-file regen is gate-clean
   without a manual `cargo fmt` pass.
+  (Done 2026-07-25: the generator now shells out to rustfmt, which covers this case and
+  the wider long-name one below. Verified by regenerating `-rain` into a scratch dir —
+  byte-identical to the committed `src/lib.rs`.)
 
 <!-- 2026.07.18: the items below are the low-value tail of the ferrosintesis
      subsystem audit; the meaningful findings were raised as MM-BUG-KILN-00005..00022.
@@ -339,7 +342,12 @@
 
 - [ ] 2026-07-20 `LoopVoice` has NO intrinsic animation while `SaxLoopVoice` runs a +/-0.22% read-rate random walk explicitly commented "defeats the loop-tell" (`sampler.rs:SAX_DRIFT_MAX`). Now that the bagpipe loops are ~65 ms they repeat ~15x/s; a slow drift would dissolve any residual static "tell". Add the DRIFT only — NOT the sax tremolo: `bp_o1_bagpipe_chanter_is_constant_amplitude_saxes_keep_dynamics` pins constant amplitude, and constant bag pressure is the instrument. `crates/ferrosintesis/src/sampler.rs:LoopVoice::render`.
 
-- [ ] 2026-07-24 `gen_crate_lib.py` emits a generated `src/lib.rs` that is NOT rustfmt-clean once a bank's WAV names are long: it writes each entry as a one-line `("name.wav", include_bytes!("../samples/name.wav")),` and rustfmt wraps that past ~100 chars. Every existing asset crate happens to have short enough names to fit, so the trap only fires on a NEW bank — the mandolin's `mandolin_G3_rr1.wav` style names crossed the limit and failed the integration gate's `cargo fmt --all -- --check` after everything else was green. Either have the generator emit the wrapped form, or make it shell out to `rustfmt` on the file it just wrote. `tools/ferrosintesis-samples/gen_crate_lib.py`.
+- [x] 2026-07-24 `gen_crate_lib.py` emits a generated `src/lib.rs` that is NOT rustfmt-clean once a bank's WAV names are long: it writes each entry as a one-line `("name.wav", include_bytes!("../samples/name.wav")),` and rustfmt wraps that past ~100 chars. Every existing asset crate happens to have short enough names to fit, so the trap only fires on a NEW bank — the mandolin's `mandolin_G3_rr1.wav` style names crossed the limit and failed the integration gate's `cargo fmt --all -- --check` after everything else was green. Either have the generator emit the wrapped form, or make it shell out to `rustfmt` on the file it just wrote. `tools/ferrosintesis-samples/gen_crate_lib.py`.
+  (Done 2026-07-25: shells out to rustfmt. The threshold is not ~100 chars — an entry is
+  `2*len(name)+35` wide against rustfmt's 60-char `fn_call_width`, so ANY name over 12
+  characters wraps, which is why 23 of the 25 generated crates already carry the wrapped
+  form and every past regen was silently followed by a manual `cargo fmt`. Verified a
+  long-name crate now passes `rustfmt --check`, and `-rain` still reproduces byte-exactly.)
 
 - [ ] 2026-07-24 `tools/ferrosintesis-samples/test_prepare.py` (27 tests) is not run by any gate: `.deltic-integrate.toml`'s `workspace` component lists `tools/` in its paths but every command in its gate is cargo, so a change under `tools/` triggers a Rust-only gate and the Python suite never runs. Noticed while adding the KILN-00062 cache tests — they would have landed unexecuted by CI-equivalent. Same shape as MM-BUG-KILN-00070 (a real configuration no gate builds). Adding `{ program = "python", args = ["-m", "unittest", "discover", "-s", "tools/ferrosintesis-samples"] }` would close it, but check the runner has a `python` on PATH first. `.deltic-integrate.toml`.
 

@@ -12,6 +12,7 @@ tests are self-consistent by construction.
         --doc "Embedded CC0 VCSL Steinway-B grand samples (GM0 alternate bank 1)."
 """
 import os
+import subprocess
 import sys
 
 
@@ -120,6 +121,21 @@ def main():
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", newline="\n") as f:
         f.write("\n".join(lines))
+
+    # rustfmt the result rather than trying to reproduce its heuristics here. An entry is
+    # `2*len(name) + 35` chars wide, so any WAV name over 12 characters exceeds rustfmt's
+    # 60-char fn_call_width and gets wrapped; a one-file crate goes the other way and gets
+    # folded onto one line. Emitting either form by hand is wrong for the other case, and
+    # the mismatch only ever surfaced at the integration gate's `cargo fmt --all --check`.
+    try:
+        subprocess.run(["rustfmt", "--edition", "2021", out], check=True)
+    except FileNotFoundError:
+        raise SystemExit(
+            f"wrote {out}, but `rustfmt` is not on PATH — the generated table is not "
+            "fmt-clean and will fail `cargo fmt --all --check`. Install it with "
+            "`rustup component add rustfmt`, then re-run."
+        )
+
     print(f"wrote {out}: {len(names)} files, {total} bytes")
 
 

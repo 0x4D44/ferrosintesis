@@ -1,5 +1,16 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.25 — **`percentile_uses_nearest_rank` pins the historical failing value, not the
+  convention** — `crates/ferrosintesis/src/voices.rs` (the test beside `fn percentile`). It
+  asserts one case, p95 of nine values. An adversarial review of the KILN-00055 closure showed
+  at least three broken variants still pass it: `sorted[((len-1) as f32 * q).ceil()]`,
+  `(q*n).round()`, and `sorted[(q*n) as usize]` — each selecting a different element for the
+  two live callers. It never exercises **q=0.05**, which is the value BOTH live consumers
+  actually use, never hits the `clamp(1, ..)` lower branch, and never uses an n where `q*n` is
+  integral. KILN-00055 is correctly Closed (the fix is right, and the red-before/green-after
+  was run against the real body) — this is test strength, not a defect. Add a q=0.05 case and
+  an integral-`q*n` case.
+
 - [ ] 2026.07.25 — **`render-diff` is not bank-aware, so an alt-bank-only voice
   change is misclassified as contamination or not-reached** —
   `tools/render-diff/render_diff.py:scan` records only program numbers and drum

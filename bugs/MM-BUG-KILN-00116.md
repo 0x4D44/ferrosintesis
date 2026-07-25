@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00116 — derive_trims.py's SHIPPED parser is unanchored and unchecked for uniqueness, so a sibling declaration silently yields a wrong table
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** High
 - **Area:** tooling / instrument balance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00109; found by adversarially perturbing the parser the 00109 fix introduced) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the parser now accepts one exact declaration, rejects missing/duplicate tables, and the ordinary Rust gate pins its derivation invariant)
+- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00109; found by adversarially perturbing the parser the 00109 fix introduced) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the parser now accepts one exact declaration, rejects missing/duplicate tables, and the ordinary Rust gate pins its derivation invariant) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; the recorded SC55_ sibling repro returns all -9.9 with no raise pre-fix and the real table after; the new Rust oracle is load-bearing)
 
 ## Observation
 
@@ -74,6 +74,47 @@ would not run in any gate. The guard that would actually run is a Rust source-sc
 oracle beside `crates/ferrosintesis/src/licensing.rs` and `manifest.rs`, asserting
 that `derive_trims.py` assigns `SHIPPED` only from `load_shipped()`. That is the
 pattern CLAUDE.md already prescribes for this defect class.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+Raised by this model during the two-eyes verification of MM-BUG-KILN-00109 but **fixed by
+GPT-5.6 Codex** in `3c7829c`, so verifying it here is the reporter's normal role, not a
+self-closure.
+
+**The recorded repro, executed on both sides.** Inserting
+`pub const SC55_PROGRAM_TRIM_DB: [f32; 128] = [-9.9; 128]` (expanded to 128 literals) above the
+real declaration in a scratch copy of `engine.rs`, then calling `load_shipped()` from each
+version of the tool:
+
+| perturbation | pre-fix (`3c7829c^`) | post-fix (trunk) |
+|---|---|---|
+| `SC55_`-prefixed sibling above the real table | **no raise, 128 values all `-9.9`** | no raise, **the real table** |
+| a second, duplicate real declaration | no raise, first match wins | **raises loudly** |
+
+The first row is the Observation's "EXECUTED REPRO" reproduced exactly — silently deriving
+against a table that is not the shipped one. The second row is the uniqueness hole the
+Suggested-fix section asked for; pre-fix it was silently accepted, and post-fix it fails with
+*"expected exactly one `const PROGRAM_TRIM_DB: [f32; 128] = [...]` … found 2"*. The real table
+parsed by the fixed tool is 128 values with 54 non-zero, matching the shipped `engine.rs`.
+
+**The guard runs where the bug said it had to.** The Observation was explicit that a
+Python-side test would not run in any gate, and that the guard needed to be a Rust source
+oracle beside `licensing.rs` and `manifest.rs`. That is what landed:
+`balance::tests::trim_derivation_reads_one_exact_shipped_table` pins the `\bconst\s+PROGRAM_TRIM_DB\b`
+anchor, the `findall` + `len(matches) != 1` uniqueness check, and that `SHIPPED` has exactly one
+derived assignment.
+
+**And that oracle is load-bearing.** It reads `derive_trims.py` at run time, so restoring the
+pre-fix tool under the *same* test binary is a clean red-before: it fails immediately with
+*"derive_trims.py must define parse_shipped before load_shipped"*. `python
+tools/instrument-balance/derive_trims.py --selftest` also passes, reporting the exact/unique
+shipped parser.
+
+Gates on the verification worktree at `902a808`: `cargo fmt --all --check` clean; `cargo clippy
+--workspace --exclude amp-lab --all-targets --locked -- -D warnings` clean; the same clippy with
+`--no-default-features` clean; `cargo test -p ferrosintesis --no-default-features --locked` 617 passed / 0 failed / 22 ignored plus 4 doc-tests;
+`cargo test --workspace --exclude amp-lab --locked` all suites ok, 718 passed / 0 failed / 27 ignored in the ferrosintesis lib suite and no failures anywhere; `python
+tools/ferrosintesis-samples/test_prepare.py` 33/33.
 
 ## Notes
 

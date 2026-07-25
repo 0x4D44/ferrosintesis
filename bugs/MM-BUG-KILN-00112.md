@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00112 — Two soft low-piano round robins replay identical onsets
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** core piano sample bank / round robins
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the bank now reports quiet C2/G2 as single-take cells, removes their duplicate payloads, and rejects undeclared duplicate round robins)
+- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the bank now reports quiet C2/G2 as single-take cells, removes their duplicate payloads, and rejects undeclared duplicate round robins) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; both recorded SHA-256 clone pairs reproduced at 2c38b71^, and an independent sweep finds zero byte-identical payloads in the shipped bank)
 
 ## Observation
 
@@ -66,6 +66,58 @@ documentation instead of calling duplicated bytes round robins.
 
 Estimated effort: Medium. Asset selection or regeneration needs the usual
 piano calibration and render-diff/listening validation.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+**Original observation reproduced verbatim.** At the pre-fix commit `2c38b71^` the two
+recorded pairs hash exactly as the Observation states:
+
+| file | SHA-256 |
+|---|---|
+| `piano_C2_pp.wav` | `3df14ec899d37728fb9d4a41f9e850d2962d81aaf87c4fdf3aa9934953f242c5` |
+| `piano_C2_pp_rr2.wav` | `3df14ec899d37728fb9d4a41f9e850d2962d81aaf87c4fdf3aa9934953f242c5` |
+| `piano_G2_pp.wav` | `b1dcc70f9663b8bd8b4e6a211fae38a9daa94c9cad39df69d891fded2003ae41` |
+| `piano_G2_pp_rr2.wav` | `b1dcc70f9663b8bd8b4e6a211fae38a9daa94c9cad39df69d891fded2003ae41` |
+
+Every digit matches the recorded values.
+
+**Independent post-fix sweep of the whole shipped bank** (hashing every WAV under
+`crates/ferrosintesis-samples-core/samples/`, written for this pass rather than reusing the
+fixer's oracle):
+
+- **69** physical WAVs, down from 71 — both duplicated RR2 payloads are gone;
+- **69 distinct payloads, zero byte-identical groups** anywhere in the bank, not just in the
+  two reported cells;
+- **25** advertised RR2 payloads remain, and **none** is byte-identical to its base.
+
+**The bug's own Fix clause is satisfied on the fallback branch it named.** It asked for
+distinct takes *or* explicit single-take representation plus a derived oracle rejecting clone
+pairs. The pinned VSCO revision has no defensible alternate, so the fallback was taken
+honestly: `PIANO_SINGLE_TAKE_CELLS` is public API in the core crate
+(`crates/ferrosintesis-samples-core/src/lib.rs:11`) and mirrored in
+`tools/ferrosintesis-samples/prepare.py:47`, so the exception is declared rather than implied.
+
+**The gated oracle is load-bearing — checked adversarially, not assumed.**
+`sampler::tests::upright_round_robin_bank_only_aliases_declared_single_takes` passes on trunk;
+re-pointing quiet zone 2 at its own base sample (an undeclared clone) makes it fail at once
+with *"every other quiet cell must have a real second take"*. The Python side is the better
+guard — `test_committed_piano_round_robins_are_distinct_or_declared_single_take` walks every
+zone x dynamic through `piano_take_names()` and asserts distinct-payload-or-no-rr2-file — and
+the full `test_prepare.py` suite passes 33/33.
+
+**One note, deliberately not split into an id.** The Rust oracle hardcodes `0..2` as the
+single-take zones instead of deriving them from `PIANO_SINGLE_TAKE_CELLS`, and the derived
+Python oracle runs in no repo gate (the integration contract is cargo-only — the same coverage
+gap MM-BUG-KILN-00116's Observation records for `derive_trims.py`). It is worth knowing, but
+it is not an unfixed part of *this* defect and it fails **closed**: a newly introduced
+undeclared clone trips `assert_ne!` inside the ordinary gate, as demonstrated above. Nothing
+here needs a new id.
+
+Gates on the verification worktree at `902a808`: `cargo fmt --all --check` clean; `cargo clippy
+--workspace --exclude amp-lab --all-targets --locked -- -D warnings` clean; the same clippy with
+`--no-default-features` clean; `cargo test -p ferrosintesis --no-default-features --locked` 617 passed / 0 failed / 22 ignored plus 4 doc-tests;
+`cargo test --workspace --exclude amp-lab --locked` all suites ok, 718 passed / 0 failed / 27 ignored in the ferrosintesis lib suite and no failures anywhere; `python
+tools/ferrosintesis-samples/test_prepare.py` 33/33.
 
 ## Notes
 

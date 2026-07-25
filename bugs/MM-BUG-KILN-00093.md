@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00093 — The fret-noise asset crate declares a README that does not exist
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** fret-noise sample package / publication
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`)
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`) → Fixed (2026-07-25, Codex GPT-5.6-Sol; `4ad6947` supplied the missing README, then its API/bake contract and a source-derived package-path oracle completed the fix; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -42,15 +42,19 @@ from the manifest naming an absent file; exact Cargo failure text remains unveri
 
 ## Fix
 
-Add `crates/ferrosintesis-samples-fretnoise/README.md` with the bank purpose,
-16-bit mono/44.1 kHz format, public lookup and round-robin API, CC0 status,
-provenance pointer, and bake command. Keep it in the package include list.
+Commit `4ad6947` added the missing README after this bug was raised and before
+this fixing pass began. `cargo package -p ferrosintesis-samples-fretnoise
+--list --allow-dirty --locked` now succeeds and lists the README, provenance,
+source, and all twelve WAVs.
 
-Add a source-derived package-content check that verifies every sample crate's
-explicit `readme` and literal package include paths exist, so a path build cannot
-hide another incomplete publication archive.
+This pass completed the README contract with the public `get`, `take_name`, and
+`ROUND_ROBINS` API plus the exact bake command. It also added a source-derived
+oracle over all 25 `ferrosintesis-samples-*` crates: every explicit `readme` and
+literal `include` path must exist. An adversarial multi-line manifest proves a
+missing README is reported while glob entries remain Cargo's responsibility.
 
-Estimated effort: Small.
+The complete inventory module and focused clippy pass. The new package-path
+checks also pass on Rust 1.87.
 
 ## Notes
 

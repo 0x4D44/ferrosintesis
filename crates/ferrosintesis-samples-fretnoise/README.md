@@ -10,6 +10,9 @@ and no ringing pitch. The bank is a round-robin one-shot: successive notes advan
 takes so repeated fret noise does not machine-gun, and the written pitch is ignored, as GM
 specifies for the sound-effects block.
 
+The public API exposes `get` for lookup by exact WAV name, plus `take_name` and
+`ROUND_ROBINS` for the wrapping 0-based round-robin sequence.
+
 It is the **default** GM 120 voice. The modeled band-passed noise burst it replaced is retained
 as the `--no-samples` (and `default-features = false`) fallback — that burst measured ~12 dB
 quieter than the Roland SC-55mkII and Yamaha S-YXG50 references relative to their own steel
@@ -20,3 +23,9 @@ Recorded by the repository owner (2026) on the same guitar and string set as the
 banks, and dedicated **CC0 1.0** (public domain) — no attribution required. The takes, level
 measurements, cut map and bake procedure are in `PROVENANCE.md`. Consumers normally reach this
 crate through `ferrosintesis`.
+
+From a `midi-music` checkout, regenerate the embedded WAVs with:
+
+```console
+python tools/ferrosintesis-samples/fretnoise_bake.py
+```

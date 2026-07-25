@@ -1366,7 +1366,9 @@ fn brush_kick(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
     )) as Box<dyn Voice>)
 }
 
-/// Build a drum voice for a GM key, or None for unmapped keys.
+/// Build a drum voice for a GM key. The `Option` is never `None` today: an unmapped key
+/// falls through to a gentle generic tick (`make_uncorrected`'s catch-all) so it is
+/// audible rather than silent. The return type stays `Option` for callers' sake.
 ///
 /// `rr` is the engine's per-key hit counter (how many times this key has
 /// already fired this render) — the sampled cymbals cycle their round-robin

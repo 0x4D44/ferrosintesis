@@ -132,13 +132,21 @@
   (`sampler.rs:~2313` comment; absent from `sampled_drum` dispatch). Compiled-in but never
   selectable — GM has no dedicated key for either. Drop or wire behind a CC0 alt-bank.
 
-- [ ] 2026.07.18 — **Asset-crate/doc count drift.** `ferrosintesis-samples-orchestral`
+- [x] 2026.07.18 — **Asset-crate/doc count drift.** `ferrosintesis-samples-orchestral`
   README says "embeds 147" but `FILE_COUNT=157`; drumkit README says "109 … WAVs" but
   `FILE_COUNT=188`. Also `crates/ferrosintesis/README.md:~87`'s feature-flags counts
   ("264 recorded attack transients … ~22 MiB") predate the newer asset crates — unverified.
   Fold into the next docs-curation sweep (code constants are the truth).
   (2026-07-20 partial: the `DESIGN.md:~99` GM 120–127 "toneless" clause that was also
   tracked here is fixed by the docs-drift sweep.)
+  (Done 2026-07-25: enumerated ALL 25 crate READMEs rather than fixing the three named —
+  the reported items are evidence of an unmaintained list, not a spec of the work. Only
+  three claims were actually wrong. Orchestral: 147 → 166, bagpipe 8 → 17, and a missing
+  10-file harpsichord row. Drumkit: 109 → 140, and its whole instrument list was wrong —
+  today's cymbal split moved crash/sizzle/splash/china to `-drumkit2` and the README still
+  described the crate as cymbals-only. `ferrosintesis/README.md`'s "264 transients / 22 MiB"
+  was ALREADY fixed (now 1156 WAVs / 111 MiB, and `payload.rs` derives it). Mandolin's
+  README is wrong too — deliberately left alone, it is tracked as open MM-BUG-KILN-00089.)
 
 - [ ] 2026.07.16 — **`LA_PROGRAMS` in voices.rs tests (~:19255) is stale vs the make()
   wiring.** It lists GM 2 (fully modeled electric grand — the samples flag changes
@@ -198,7 +206,7 @@
   workflow shifted: `.opus` is now git-ignored build output rendered via `build.py`, so a fresh
   harness should diff `.wav` renders, not committed assets.
 
-- [ ] 2026-07-20 — **Stale `.rs` doc comments the docs-drift sweep verified but could not fix
+- [x] 2026-07-20 — **Stale `.rs` doc comments the docs-drift sweep verified but could not fix
   (docs-lane branch, no source edits):** `drums.rs:1358` claims `make` returns "`None` for
   unmapped keys" — false, every arm returns `Some` (generic tick at `drums.rs:2023`);
   `sampler.rs:903/:1137/:1479` grand/kawai/honkytonk bank docs still describe the pre-07.18
@@ -210,6 +218,16 @@
   (`voices.rs:22416-22419`, `:12115`). One comment-only source pass, no bump (pure docs in
   code). Also verify `CLAUDE.md`'s publish-order claim ("`-core` → `-orchestral` →
   `ferrosintesis`") against the actual `=x.y.z` pins — there are ~22 sample crates now.
+  (Done 2026-07-25, all comment-only — `git diff` confirms not one non-comment line moved,
+  so no render-diff applies. `drums.rs::make` now says the `Option` is never `None`;
+  grand/kawai/honkytonk banks state their real routes (GM 0 CC0 alt 1 / GM 1 default /
+  GM 3 default); the SFX exclusion cites "unpitched by design" instead of the retired
+  toneless-noise claim; the `engine.rs` header adds CC2, CC84 and poly-AT and drops the
+  v0.7-specific framing. CC66 was already listed — that part had been fixed. The orphaned
+  `bottle_bank` accessor now says outright that it is a RETIRED route kept only because the
+  crate is published; whether to actually drop it is a payload decision left for Arthur.
+  The CLAUDE.md publish-order half is fixed in its own commit. The WD-O10 comments the note
+  flagged turned out to be ACCURATE — verifying beat fixing on those.)
 
 - [ ] 2026.07.13 — `distinctness::Why` (`crates/ferrosintesis/src/testutil.rs:1139`)
   is now a **single-variant enum** (`Collapse(u8)`) after Stage 4 deleted the last

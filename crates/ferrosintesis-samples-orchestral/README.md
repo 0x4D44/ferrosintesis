@@ -2,16 +2,18 @@
 
 Compile-time sample payload for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis). This crate embeds
-147 mono, 16-bit, 44.1 kHz WAV recordings (attack transients + looped sustains):
+166 mono, 16-bit, 44.1 kHz WAV recordings (attack transients + looped sustains):
 
 - 24 violin/cello ensemble onsets for the GM 48–49 string sections;
 - 56 brass onsets for trumpet, muted trumpet, trombone, tuba, and horn;
 - 36 reed onsets for oboe, bassoon, and clarinet;
+- 10 harpsichord onsets for the GM 6 voice;
 - 7 Spanish classical-guitar plucks for the nylon-guitar voice;
 - 8 steel-string acoustic-guitar plucks for the GM 25 voice;
-- 8 looped bagpipe recordings (2 drones, 6 chanter zones) for the GM 109 voice;
+- 17 looped bagpipe recordings (2 drones, 15 chanter takes) for the GM 109 voice;
 - 8 drum overlays: two round robins each for crash cymbal, suspended cymbal,
-  kick, and snare.
+  kick, and snare. These are superseded — no ferrosintesis code reads them, and
+  the sampled kit lives in `ferrosintesis-samples-drumkit`.
 
 `ferrosintesis` uses these recordings for the onset of a note, then crossfades
 into its modeled sustain. Cargo retrieves this package at build time and
@@ -21,7 +23,7 @@ runtime filesystem or network access.
 The small public API exists for `ferrosintesis`:
 
 ```rust
-assert_eq!(ferrosintesis_samples_orchestral::FILE_COUNT, 147);
+assert_eq!(ferrosintesis_samples_orchestral::FILE_COUNT, 166);
 let wav = ferrosintesis_samples_orchestral::get("trumpet_C3_f.wav").unwrap();
 assert_eq!(&wav[..4], b"RIFF");
 ```

@@ -1058,7 +1058,8 @@ fn grand_f_rr2() -> &'static [Zone] {
 }
 
 /// Velocity picks the dynamic layer; the seed alternates round robins, exactly
-/// like [`piano_bank`]. Voices GM 0 (the acoustic grand); GM 1/3 keep the upright.
+/// like [`piano_bank`]. Voices GM 0's CC0 alt bank 1 — the GM 0 DEFAULT is
+/// [`piano_bank`], and GM 1/3 have their own defaults ([`kawai_bank`], [`honkytonk_bank`]).
 pub fn grand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     match (vel, rr2) {
         (0..=51, false) => grand_pp(),
@@ -1292,7 +1293,7 @@ fn kawai_f_rr2() -> &'static [Zone] {
 }
 
 /// Velocity picks the dynamic layer; the seed alternates round robins, like
-/// [`grand_bank`]. Voices GM 0 CC0 alt bank 2 (VCSL Kawai).
+/// [`grand_bank`]. Voices the GM 1 DEFAULT (VCSL Kawai) since the 2026.07.18 re-voicing.
 pub fn kawai_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     match (vel, rr2) {
         (0..=51, false) => kawai_pp(),
@@ -1634,7 +1635,7 @@ fn honkytonk_zones() -> &'static [Zone] {
 }
 
 /// Single-velocity multisample (honky-tonk); dynamics from the LA blend + model.
-/// Voices GM 0 CC0 alt bank 8.
+/// Voices the GM 3 DEFAULT since the 2026.07.18 re-voicing.
 pub fn honkytonk_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
     honkytonk_zones()
 }
@@ -2575,6 +2576,10 @@ fn bottle() -> &'static [Zone] {
 }
 
 /// GM 76 blown bottle attack bank (see [`bottle`]).
+///
+/// RETIRED as a render route: GM 76 now plays [`bottle_loop_voice`] (the whole-voice
+/// `-bottle` recording), so no voice reaches this bank. It stays embedded and public
+/// because the crate is published; do not read its presence as evidence it is live.
 pub fn bottle_bank() -> &'static [Zone] {
     bottle()
 }
@@ -7359,8 +7364,10 @@ mod tests {
             (25u8, 64, "steel-guitar-high", true),
             // nylon key-76 row added with the guitar-block-two damper hold
             // (decay cliff fixed; measured 1.61× at this vel-100 fixture).
-            // Steel k76 stays out: a velocity-independent take-vs-model
-            // LEVEL parity gap (~4×) remains — scratchpad 2026.07.19.
+            // Steel k76 stays out of THIS fixture, but its level parity is no
+            // longer open: the ~4× gap closed with the Phase-2 STEEL re-baselines
+            // + the k=2 velocity law, and `la_steel_high_key_level_parity` now
+            // pins keys 76/79/83 (MM-REQ-KILN-00027).
             (24u8, 76, "nylon-guitar-top", true),
             (6u8, 48, "harpsichord-low", true),
             (6u8, 60, "harpsichord", true),

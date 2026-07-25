@@ -26437,7 +26437,8 @@ mod tests {
     //       steady post-onset window cannot see a mistuned sample).
     // Excluded, with reasons: GM 55 (orchestra hit — a chord stab, not a
     // single-pitch program), GM 119 (reverse cymbal — unpitched by design),
-    // GM 120–127 (SFX — toneless-noise fallbacks per the README).
+    // GM 120–127 (SFX — unpitched by design; they are dedicated voices and a
+    // sampled fret-slide bank now, NOT the retired toneless-noise fallbacks).
     // -----------------------------------------------------------------------
 
     #[derive(Clone, Copy)]

@@ -2,13 +2,15 @@
 //! mixes voices per channel, applies each channel's strip (program-aware
 //! distortion insert, CC74 brightness filter + CC71 resonance, CC7 volume,
 //! CC11 expression, CC1 mod-wheel vibrato / Leslie ramp, CC64 sustain and
-//! CC66 sostenuto pedals, CC67 una corda, CC5/CC65 portamento, CC70 choir
-//! vowel morph, channel aftertouch, RPN 0/1 bend range and fine tune,
+//! CC66 sostenuto pedals, CC67 una corda, CC5/CC65/CC84 portamento, CC70 choir
+//! vowel morph, CC2 breath, channel and polyphonic aftertouch,
+//! RPN 0/1 bend range and fine tune,
 //! CC10 pan with a Haas micro-delay for real width, CC91 reverb send) and
 //! three global buses: a hall reverb, a stereo chorus (ensembles breathe),
 //! and a tempo-derived ping-pong echo (the classic delayed-lead sound).
-//! Every v0.7 controller is opt-in ("authored"): a file that never sends it
-//! renders bit-identically to v0.6.
+//! Every controller here is opt-in ("authored"): a file that never sends one
+//! renders exactly as it did before that controller existed. That is correct
+//! MIDI semantics, not conservatism — an unauthored controller must be inert.
 
 use crate::dsp::{key_freq, Biquad, DelayLine, OnePole, Rng};
 use crate::midi::{EvKind, Song};

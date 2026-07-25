@@ -171,6 +171,20 @@ exactly the albums it should; *unexpected* diffs (a brass change altering a pian
 album, DC on silent channels) are bugs — investigate before committing. For a pure
 controller feature, any diff at all is a bug.
 
+Three things make that inventory lie, and each has already cost a session — so do an event
+census of your own change FIRST and read the inventory as *confirmation* of it. **The baseline
+must be the commit you rebased ONTO**, not a fresh `origin/main` build: in this multi-agent repo
+local `origin/main` drifts mid-session under concurrent fetch, so a newer-tip baseline reports
+the trunk delta as false contamination — rebase onto the current tip, `git worktree add BASELINE
+<that commit>`, and re-check `git rev-parse origin/main` right before building. **Check the
+baseline binary's mtime**: a build wrapped in a bad path never runs cargo, and a stale binary
+left by an earlier session reports the whole catalogue as contamination. **`ALBUMS` covers
+`demos/`**, so a catalogue-wide diff is never "albums only". And `tools/render-diff/render_diff.py`
+classifies by touched GM program / drum key, so a non-voice change (a send or
+controller-semantics fix) run with no `--program`/`--key` flags reports **every** moved track as
+contamination. Explain the NON-diffs too — a file carrying the changed pattern that did *not*
+move usually pins down exactly why.
+
 ferrosintesis is versioned (`crates/ferrosintesis/Cargo.toml` holds the current
 number — trust it, not versions quoted in docs); a shipped-code change needs one
 version bump per integrated task. The crate is **published to crates.io**, so its public API

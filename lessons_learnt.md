@@ -10,6 +10,15 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.25 — **A file with a pinned SHA-256 needs `-text` — core.autocrlf greens it locally, reds every fresh clone** (`.gitattributes:_readme_and_license_*.txt`).
+  - The retained Freesound licence manifests are committed as byte-exact EVIDENCE: their SHA-256 is recorded in
+    `crates/ferrosintesis-samples-ccby/PROVENANCE.md` and checked by `crates/ferrosintesis/src/provenance.rs`.
+    With `core.autocrlf=true` (the fleet default on Windows) git rewrote them to CRLF on checkout, so every
+    recorded hash missed — but only on a FRESH clone, never on the machine that committed and hashed them, which
+    is exactly why the attestation looked green to its author and to every local re-run.
+  - Verify a byte-pinned file by re-hashing the COMMITTED TREE, never the working copy: `git checkout-index` into
+    a scratch prefix and hash there. A working-copy hash attests the bytes your own filters produced, not the
+    bytes anyone else gets. The same trap waits for any hash, signature or golden pinned on a `text`-eligible file.
 - 2026.07.25 — **A tanh drive normalised by `tanh(g)` is a VOLUME knob — solve make-up at the level the voice really runs at** (`voices.rs:LEAD84_NOMINAL`).
 - 2026.07.25 — **A compensation constant marks an unfixed upstream bug — fix the cause and delete it** (`voices.rs:VEL_LEVEL_EXP`).
   - `t[6] = 1.500` was added to drag GM6's composite back under the <3 dB velocity contract, justified in its own
@@ -23,19 +32,6 @@ belong in `CLAUDE.md`, not here.
   - The guard for this class must be DERIVED from the compensation table itself:
     `velocity_law::corrected_programs_still_rise_with_velocity` walks every program the table corrects and requires
     it still get louder with velocity. A hand-listed exception would have inherited the same blind spot.
-- 2026.07.24 — **Subtract noise before comparing tilt — hiss inflates it and a noisy layer reads BRIGHT** (`sampler.rs:b1upright_bank`).
-  - Any tilt/centroid statistic puts broadband noise in its NUMERATOR, so the noisiest capture scores
-    brightest — exactly backwards. Raw, the B1 upright's soft layer (28 dB SNR) sat ~1 dB from its normal
-    layer (39 dB) and I could not tell whether that was real or an artefact. Estimating the noise PSD from
-    each strike's own pre-onset gap and subtracting it in the power domain showed the +0.8 dB was genuine —
-    which is what justified deleting a whole recorded layer. Match SNR across the takes you compare, or
-    subtract; never compare tilts across unequal noise floors.
-  - Same task, same shape of error one level up: **prove an A/B actually differs before measuring it.**
-    `tools/gm0-audition/renders/_tb_b1.mid` is the OUTPUT of `prep_audition.py`, so it already carries
-    `CC0=5`; a mid-piece excerpt tool replayed that latched controller as carried-forward state and it beat
-    the bank being injected, making five "variants" byte-identical. Every one sounded plausible. An A/B
-    harness must compare samples and say "IDENTICAL — no-op" before reporting any number.
-
 - 2026.07.24 — **Bank layers must differ in TIMBRE, not level — `vel_amp` owns loudness** (`sampler.rs:LaVoice`).
   - `LaVoice` scales the sample by `vel_amp(vel)`, the SAME law as the wrapped model, so a multi-velocity
     bank's soft/hard captures supply spectrum, never gain. Per-file peak-normalise-to-0.9 in
@@ -54,30 +50,6 @@ belong in `CLAUDE.md`, not here.
     re-slicing the decoded takes reproduced every measured root to under 0.75 cents, so `prepare.py` regen stays
     byte-identical to what ships. One marginal note (a -15 dBFS B7) fell below the onset detector after the lossy
     pass and needed a `--assign` override — expect a handful of those, not a systematic shift.
-
-- 2026.07.24 — **A dotted-quaver echo lands on the OFF-BEAT of a quaver line — fine on a sparse voice, shimmer on a fast one** (`engine.rs:fx_profile`).
-  - The Tubular Bells glockenspiel entry sounded "echoy shimmer" and the file authors NOTHING — no CC93, no CC94,
-    no CC91 until beat 775. `fx_profile` gave GM 8–10 an unauthored 0.15 echo send; the bus time is a dotted
-    quaver at the opening tempo (300 ms at 150 bpm) against a metronomic 200 ms quaver ostinato, so every repeat
-    landed 1.5 slots late, carrying the wrong pitch for its position and ping-ponged hard L/R. GM 9 was also the
-    ONLY echoed voice in the opening (piano and bass profile to `(0.0, 0.0)`). Cut to 0.06 for 8/10, zero for 9.
-  - SIDE/mid energy is the tell for a stereo bus effect, and it finds the mechanism: 0.000 fully dry, 0.033
-    reverb-only, 0.092 default — then cross-correlating the side signal against the DRY render peaks exactly at
-    the echo time (0.299 s, r = 0.86). Level alone would have missed it: inside the dense line the echo sat
-    −21 dB under the programme and lifted the off-beats only 0.14 dB. It is spatial DETECTION, not loudness —
-    which is why such a thing reads as "strange" rather than as an obvious delay.
-  - Pin a bus send by RATIO, never as a constant: the send scales a linear bus, so render the voice a second time
-    AUTHORING the retired value as CC94 and assert the unauthored render sits at new/old of it
-    (`engine.rs:mallet_bus_echo_is_off_for_glockenspiel_and_a_trace_for_its_neighbours`). Calibrate against the
-    OLD constants before believing it.
-
-- 2026.07.24 — **A fret RASP is quasi-periodic, so a harmonicity gate rejects it — select on peak-band + low-mid** (`voices.rs:gm120_sampled_is_a_narrowband_rasp_not_a_hiss`).
-  - Selecting GM 120 one-shots from Arthur's damped-string takes, a "no ringing note under the rasp"
-    harmonicity gate rejected ALL 42 clean candidates: the winding-pass rate gives a real slide autocorrelation
-    0.28–0.44 — that IS the zip we want, not a note. The genuine note contaminants show differently: they peak at
-    50–160 Hz with the 125 Hz band AT the peak, while a rasp peaks at 1–3 kHz with low-mid 20–30 dB below.
-  - Gate on rasp character (peak band 1–3 kHz, ≤20 % energy >4 kHz, low-mid ≤ −15 dB), NOT on periodicity or
-    pitch. (The self-cut bank's onset-trim exemption is folded into the 2026.07.23 sampling entry below.)
 
 - 2026.07.23 — **Measure a sample's root, width, format and onset ISOLATION — never trust its name or label** (`prepare.py:trim_to_onset`).
   - Isolation, not tuning or note availability, is usually the BINDING constraint: `trim_to_onset` needs ~30 dB
@@ -107,6 +79,12 @@ belong in `CLAUDE.md`, not here.
   - The spectrum, not the name or licence, decides fitness: a licence-only search called VCSL "Gong 1" a
     near-pitchless tam-tam, but it is a PITCHED gong (sharp 143 Hz/D3, 95%-concentrated) — wrong for a CC0=1
     tam-tam. Three sourcing dead-ends in one build were all invisible to name/licence.
+  - Gate a candidate on the CHARACTER you want, not on a proxy for it: a fret RASP is quasi-periodic, so a "no
+    ringing note under the rasp" harmonicity gate rejected ALL 42 clean GM 120 candidates — the winding-pass
+    rate gives a real slide autocorrelation of 0.28–0.44, and that IS the zip we want. The genuine note
+    contaminants separate on spectrum instead: they peak at 50–160 Hz with the 125 Hz band AT the peak, while a
+    rasp peaks at 1–3 kHz with low-mid 20–30 dB below. Gate on peak band 1–3 kHz, ≤20 % energy >4 kHz, low-mid
+    ≤ −15 dB — never on periodicity or pitch (`voices.rs:gm120_sampled_is_a_narrowband_rasp_not_a_hiss`).
   - Re-micing cannot create low end the instrument never produced: Virtuosity's 18" jazz kick has NO 30–70 Hz sub
     in ANY mic set (fundamental ~80 Hz; the overhead's "sub" reading is room rumble). A deep-kick ask needs a
     modeled-sub layer or a ~100 Hz-hinged shelf on the fundamental.
@@ -141,6 +119,14 @@ belong in `CLAUDE.md`, not here.
     comparison with bands from 80 Hz says +0.80 dB, rising on every probe — because the two biggest moves
     (pre-clip HPF 90→120 Hz, cab resonance 100→120 Hz) sit BELOW 200 Hz. I nearly concluded my own change
     did nothing.
+  - Score against a CONTROL render, not an absolute bound. `engine.rs:gm22_cc1_is_harmonica_vibrato_not_leslie`
+    held its `reset_late <= reset_early + 2.0` "no CC1 leak" bound only because the setup's authored `CC93=0`
+    was being DISCARDED at the next Program Change (MM-BUG-KILN-00033), and the restored chorus wash suppressed
+    the envelope detector; fix the discard and the harmonica's own delayed-onset vibrato surfaces (AM 0.00→6.00).
+    A never-modulated GM22 control settles it in ONE measurement — 0.00→6.00, spread 3.11, identical to the
+    post-reset channel, so there was no leak. The control is also STRICTER than the bound (it pins reset *to* the
+    un-modulated voice, not to a range), so switching to it is a fix, not a weakened assertion. Corollary: when a
+    test authors a controller purely as scaffolding, check the engine actually honours it — ours silently did not.
   - A SIGNED two-band ratio through the full engine is dominated by which harmonics land in which band — it
     swung −1.7…+8.8 dB across ADJACENT keys for a FIXED pair of amps. Use a direction-agnostic multi-band
     DISTANCE, scored as a register mean plus a per-key non-collapse floor.
@@ -159,6 +145,17 @@ belong in `CLAUDE.md`, not here.
     Hann-windowed exact-DFT `testutil::spectral_centroid` on a settled window. It is also magnitude-weighted, so
     an amplitude taper inside the measurement window drags it toward the loud end (a sin-windowed chirp read
     ×1.17 where the sweep was ×1.4) — flatten the envelope or move the window.
+  - Noise: any tilt/centroid statistic puts broadband noise in its NUMERATOR, so the NOISIEST capture scores
+    brightest — exactly backwards. The B1 upright's soft layer (28 dB SNR) sat ~1 dB from its normal layer
+    (39 dB) and raw the gap was unreadable; estimating the noise PSD from each strike's own pre-onset gap and
+    subtracting it in the power domain showed the +0.8 dB was genuine, which is what justified deleting a whole
+    recorded layer (`sampler.rs:b1upright_bank`). Match SNR across the takes you compare, or subtract — never
+    compare tilts across unequal noise floors.
+  - Prove the A/B actually DIFFERS before measuring it. `tools/gm0-audition/renders/_tb_b1.mid` is the OUTPUT of
+    `prep_audition.py`, so it already carries `CC0=5`; a mid-piece excerpt tool replayed that latched controller
+    as carried-forward state and it beat the bank being injected, making five "variants" byte-identical. Every
+    one sounded plausible. An A/B harness must compare samples and say "IDENTICAL — no-op" before reporting any
+    number.
   - Levels: `Rng::white()` is UNIFORM in [-1,1), so its RMS is 1/√3 ≈ 0.577, not 1.0 — the WD-O5 breath-fraction
     oracles were designed against a unit-RMS assumption and every band came out ≈1/0.61× too high while the model
     was correct throughout. `Biquad::bandpass(fc,Q)` on white outputs RMS ≈ √(π·fc/(Q·sr)) — a narrow, cheap way
@@ -191,35 +188,6 @@ belong in `CLAUDE.md`, not here.
     the resonance section colours everything after it. Measured: CC120 + zeroed sends hits the −96 dB dither
     floor within 50 ms.
 
-- 2026.07.22 — **Score an audio oracle against a CONTROL render, not an absolute bound** (`engine.rs:gm22_cc1_is_harmonica_vibrato_not_leslie`).
-  - Its `reset_late <= reset_early + 2.0` "no CC1 leak" check only held because the setup's authored `CC93=0`
-    was being DISCARDED at the next Program Change (MM-BUG-KILN-00033), restoring chorus 0.20 whose wash
-    suppressed the envelope detector. Fix the discard and the harmonica's own delayed-onset vibrato surfaces:
-    AM 0.00→6.00.
-  - The control settles it in one measurement: a never-modulated GM22 reads 0.00→6.00 and spread 3.11,
-    IDENTICAL to the post-reset channel — so there was no leak. Comparing to the control is also STRICTER than
-    the bound (it pins reset *to* the un-modulated voice, not to a range), so this is a fix, not a weakened
-    assertion.
-  - Corollary: when a test authors a controller purely as scaffolding, check the engine actually honours it —
-    ours silently did not.
-
-- 2026.07.22 — **Render-diff false alarms: `ALBUMS` covers `demos/`; non-voice diffs read as CONTAMINATION — do an event census first.**
-  - Both are harness artifacts, not findings. `crates/render-catalog/src/main.rs:ALBUMS` covers `demos/`, so a
-    catalogue-wide diff is NEVER "albums only"; and `tools/render-diff/render_diff.py` classifies by touched GM
-    program/drum key, so a non-voice change (a send/controller-semantics fix) with no `--program`/`--key` flags
-    every moved track as contamination. Read the inventory as *confirmation* of the census.
-  - Explain the NON-diffs too — files carrying the changed pattern that did *not* move pinned down exactly why
-    (sends re-authored 48 ticks later with no notes in the gap; a ch9 kit authoring the same value as the drum
-    default).
-  - The baseline MUST be the commit you rebased ONTO, not a fresh `origin/main` build: in this multi-agent repo
-    local `origin/main` drifts mid-session via concurrent fetch (f58aceb→b308fd1 once, AFTER a rebase), so a
-    newer-tip baseline reports the trunk delta as false contamination. Rebase onto the current tip first, then
-    `git worktree add BASELINE <that commit>`; re-check `git rev-parse origin/main` right before building.
-  - Verify the baseline binary is FRESH — check its mtime. A build wrapped in a wrong `mdtimeout` path never ran
-    cargo, and the follow-on `ls target/release/ferrosintesis.exe && echo READY` found a *previous session's*
-    binary and printed a false "BINARY READY" (exit 0 came from the `ls`). That stale baseline predated the sax
-    LA layer, so render-diff reported 107 non-GM6 albums as contamination for a provably GM6-only change.
-
 - 2026.07.21 — **Level measurements lie until you gate out the unconditional master `BusGlue` — it squashes what you're measuring** (`engine.rs`).
   - It compresses 2:1 above `thr=0.32` with a +1.5 dB 95 Hz shelf, is applied unconditionally to the master, and
     cannot be disabled through the public API; bass-heavy programs trigger it first. A per-program calibration
@@ -231,12 +199,12 @@ belong in `CLAUDE.md`, not here.
   - Metric traps: whole-note RMS unfairly penalizes DECAYING voices (ferro guitars read −15 dB "quiet" vs the
     SC-55, but that is faster decay, not level — use an early-window RMS for plucked/percussive, whole-note only
     for sustained); instantaneous PEAK is too spiky.
-  - `voices.rs::percentile` is NOT nearest-rank despite its doc comment — its body is `sorted[floor(q*(len-1))]`,
-    so at n=9 `percentile(x, 0.95)` returns the SECOND-largest, not the max (MM-BUG-KILN-00055; the misleading
-    comment is still armed). Reusing it for the instrument-balance statistic put median 0.41 / max 18.77 dB of
-    error into the derived trims; for a single-note window use an explicit `max`
-    (`crates/ferrosintesis-cli/examples/calmeter.rs` documents the three conventions and why they are not
-    approximations of each other below n≈20).
+  - Reusing a percentile helper as a MAX put median 0.41 / max 18.77 dB of error into the derived trims:
+    `voices.rs::percentile` was floor-rank, not the nearest-rank its doc comment claimed, so at n=9
+    `percentile(x, 0.95)` returned the SECOND-largest (MM-BUG-KILN-00055 — now fixed and pinned by
+    `voices.rs:percentile_uses_nearest_rank`). For a single-note window use an explicit `max`;
+    `crates/ferrosintesis-cli/examples/calmeter.rs` documents the three conventions and why they are not
+    approximations of each other below n≈20.
   - `voices::VEL_LEVEL_EXP` is PROGRAM-indexed, so a program whose samples-ON and samples-OFF voices have
     different RAW velocity laws can't be compensated for both from the table (GM76: samples-on
     `BottleLoopVoice` k≈0.39, samples-off modeled Wind bottle k≈2.49). Wrap the MODEL in `ScaledVoice` inside its
@@ -328,6 +296,17 @@ belong in `CLAUDE.md`, not here.
     `prepare.py`'s fixed 2 ms fade-in was sized for day-one violin (`ce99cda`, ONE commit ever) and every family
     added since inherited it — 74 of 210 sources had their onset INSIDE the fade window and their attack crushed.
     Re-measure a shared generator's constants against NEW material.
+  - "The file authors nothing, so nothing is applied" is another such false premise: `engine.rs:fx_profile`
+    hands GM 8–10 an UNAUTHORED 0.15 echo send, and at the Tubular Bells opening that bus time is a dotted
+    quaver (300 ms at 150 bpm) against a metronomic 200 ms quaver ostinato, so every repeat landed 1.5 slots
+    late carrying the wrong pitch for its position and ping-ponged hard L/R — the "echoy shimmer". SIDE/mid
+    energy is the tell for a stereo bus effect and it finds the mechanism (0.000 dry, 0.033 reverb-only, 0.092
+    default; the side signal cross-correlates with the DRY render at exactly the echo time, r = 0.86). Level
+    alone would have missed it — inside the dense line the echo sat −21 dB under the programme and lifted the
+    off-beats 0.14 dB. Pin the corrected send by RATIO, never as a constant: render again AUTHORING the retired
+    value as CC94 and assert the unauthored render sits at new/old of it
+    (`engine.rs:mallet_bus_echo_is_off_for_glockenspiel_and_a_trace_for_its_neighbours`). Calibrate against the
+    OLD constants before believing the new ones.
   - The "harpsichordy" cathedral organ was assumed integer-buzzy + fast-attack; measurement showed buzz already
     −27 dB (key 84) and onset already 143 ms. The real driver was static-ness — a per-pipe wind-wander (`Drift`
     off `age`, ±2.5 cents, seeded from the STABLE rank/key seed so `--verify` stays byte-identical) dropped the

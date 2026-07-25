@@ -8,7 +8,7 @@ and provenance live in `crates/ferrosintesis-samples-drumkit/PROVENANCE.md`.
 
 The rest of this README covers `prepare.py`: the generator, tests, full
 inventory, and provenance for
-ferrosintesis's 254 attack transients. The generated mono 16-bit 44.1 kHz WAVs are
+ferrosintesis's 252 attack transients. The generated mono 16-bit 44.1 kHz WAVs are
 split across `crates/ferrosintesis-samples-core/samples/` (piano, violin, flute),
 `crates/ferrosintesis-samples-orchestral/samples/` (brass, reeds, string sections,
 nylon/steel guitars, harpsichord), the newer CC0 crate
@@ -20,10 +20,12 @@ onsets from the MS Basic soundfont). Those asset crates embed the bytes with
 synthesis. Each WAV supplies the onset of a note, then crossfades into the modeled
 body or sustain.
 
-- `piano_*_{pp,mf,f}.wav` and `piano_*_{pp,mf,f}_rr2.wav` — upright piano
-  strikes, 9 pitch zones (C2–C6) × 3 dynamic layers × **2 round robins**
-  (picked by the note's random seed, so repeated notes don't sound
-  cloned). Kept much longer (1.8 s) than the other families — the piano
+- `piano_*_{pp,mf,f}.wav` and available `piano_*_{pp,mf,f}_rr2.wav` — 52
+  upright-piano strikes over 9 pitch zones (C2–C6) × 3 dynamic layers.
+  Twenty-five cells have **2 real round robins**, picked by the note's random
+  seed so repeats vary. Quiet C2 and G2 are explicitly single-take because the
+  pinned VSCO revision has no pp RR2 for those zones. Kept much longer (1.8 s)
+  than the other families — the piano
   has no expressive sustain to preserve, so the real recording carries
   most of the note and the model only supplies the long tail.
 - `violin_*_f.wav` / `violin_*_p.wav` — solo violin arco, forte / piano

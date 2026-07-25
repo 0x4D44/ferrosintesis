@@ -44,6 +44,15 @@ DRUM_SOURCES = {
 }
 PIANO_ZONE_NOTES = ("C2", "G2", "C3", "G3", "C4", "G4", "C5", "G5", "C6")
 PIANO_ZONE_MIDI = dict(zip(PIANO_ZONE_NOTES, (36, 43, 48, 55, 60, 67, 72, 79, 84)))
+PIANO_SINGLE_TAKE_CELLS = frozenset({("C2", "pp"), ("G2", "pp")})
+
+
+def piano_take_names(note, dynamic):
+    """Return the real output takes available for one upright-piano cell."""
+    first = f"piano_{note}_{dynamic}.wav"
+    if (note, dynamic) in PIANO_SINGLE_TAKE_CELLS:
+        return (first,)
+    return (first, f"piano_{note}_{dynamic}_rr2.wav")
 
 SOURCES = {
     f"violin_{n}_{d}.wav": f"{BASE}/Strings/Solo%20Violin/Arco%20Vib/LLVln_ArcoVib_{n}_{d}.wav"
@@ -57,12 +66,12 @@ SOURCES = {
     for n in PIANO_ZONE_NOTES
     for d in ("pp", "mf", "f")
 } | {
-    # second round robin (VSCO has no pp RR2 for C2/G2; reuse RR1 there)
-    f"piano_{n}_{d}_rr2.wav": f"{BASE}/Keys/Upright%20Nr1/UR1_{n}_{d}_RR{{}}.wav".format(
-        1 if (d == "pp" and n in ("C2", "G2")) else 2
-    )
+    # The pinned VSCO revision has no pp RR2 for C2/G2. Those cells are
+    # deliberately single-take instead of manufacturing duplicate output files.
+    f"piano_{n}_{d}_rr2.wav": f"{BASE}/Keys/Upright%20Nr1/UR1_{n}_{d}_RR2.wav"
     for n in PIANO_ZONE_NOTES
     for d in ("pp", "mf", "f")
+    if (n, d) not in PIANO_SINGLE_TAKE_CELLS
 } | {
     # brass sustain onsets — VSCO dynamic layers: v1 -> p, v3 -> f
     f"trumpet_{n}_{d}.wav":
@@ -1733,14 +1742,14 @@ def trim_to_onset(x, sr, keep_s, fade_s):
     # `start` clamps at 0, so a source trimmed tight to its onset yields less
     # than PRE_S of lead-in — and a fixed 2 ms fade then runs straight over the
     # attack, attenuating precisely the transient the LA layer exists to
-    # capture. That is not hypothetical: 74 of the 210 sources have their onset
-    # inside 2 ms (measured), worst among them the Martin steel takes (median
-    # onset 8 samples, 0.18 ms) which would lose their entire pick attack.
+    # capture. That is not hypothetical: many measured sources have their onset
+    # inside 2 ms, worst among them the Martin steel takes (median onset 8
+    # samples, 0.18 ms) which would lose their entire pick attack.
     # Every source begins at near-silence (max |x[0]| over the bank is 0.015),
     # so there is no step to de-click in the first place and shortening the
     # fade cannot introduce one. Capping the fade at `lead` therefore fixes the
-    # tight-trim case and is exactly inert for the 136 sources with >= 2 ms of
-    # lead-in. Pinned by test_fade_in_never_exceeds_available_lead_in and
+    # tight-trim case and is exactly inert for sources with >= 2 ms of lead-in.
+    # Pinned by test_fade_in_never_exceeds_available_lead_in and
     # test_fade_in_is_inert_when_lead_in_exceeds_the_window.
     lead = onset - start
     fin = min(int(0.002 * sr), lead)
@@ -1856,16 +1865,16 @@ def _smoothstep(t):
 def condition_piano_bank(bank, sr):
     """Match default-upright macro shape and absolute level across the bank."""
     expected = {
-        f"piano_{note}_{dyn}{suffix}.wav"
+        name
         for note in PIANO_ZONE_NOTES
         for dyn in ("pp", "mf", "f")
-        for suffix in ("", "_rr2")
+        for name in piano_take_names(note, dyn)
     }
     if set(bank) != expected:
         missing = sorted(expected - set(bank))
         extra = sorted(set(bank) - expected)
         raise ValueError(
-            f"piano conditioner needs the complete 54-take bank; "
+            f"piano conditioner needs the complete 52-take bank; "
             f"missing={missing}, extra={extra}"
         )
 
@@ -1874,11 +1883,11 @@ def condition_piano_bank(bank, sr):
     ratio_points = [
         (
             PIANO_ZONE_MIDI[note],
-            source_stats[f"piano_{note}_{dyn}{suffix}.wav"][0],
+            source_stats[name][0],
         )
         for dyn in ("pp", "mf", "f")
         for note in PIANO_ZONE_NOTES
-        for suffix in ("", "_rr2")
+        for name in piano_take_names(note, dyn)
     ]
     ratio_slope, ratio_intercept = _minimax_line(ratio_points)
     ratio_targets = {
@@ -1926,9 +1935,9 @@ def condition_piano_bank(bank, sr):
     level_points = []
     for note in PIANO_ZONE_NOTES:
         levels = [
-            shaped_stats[f"piano_{note}_{dyn}{suffix}.wav"][1]
+            shaped_stats[name][1]
             for dyn in ("pp", "mf", "f")
-            for suffix in ("", "_rr2")
+            for name in piano_take_names(note, dyn)
         ]
         level_points.append((PIANO_ZONE_MIDI[note], statistics.median(levels)))
     level_slope, level_intercept = _robust_line(level_points)

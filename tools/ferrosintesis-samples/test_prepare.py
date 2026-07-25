@@ -100,8 +100,8 @@ class PrepareSampleBankTests(unittest.TestCase):
                 else:
                     self.fail(f"unexpected sample package for {filename}: {relative[1]}")
 
-        self.assertEqual(len(filenames), 210)
-        self.assertEqual(len(core), 71)
+        self.assertEqual(len(filenames), 208)
+        self.assertEqual(len(core), 69)
         self.assertEqual(len(orchestral), 139)
         self.assertTrue(
             all(name.startswith(("piano_", "violin_", "flute_")) for name in core)
@@ -115,7 +115,7 @@ class PrepareSampleBankTests(unittest.TestCase):
         bank = {}
         for dyn_i, dyn in enumerate(("pp", "mf", "f")):
             for note_i, note in enumerate(prepare.PIANO_ZONE_NOTES):
-                for rr_i, suffix in enumerate(("", "_rr2")):
+                for rr_i, name in enumerate(prepare.piano_take_names(note, dyn)):
                     body_db = -22.0 + 0.35 * note_i + (rr_i * 2.0 - 1.0)
                     ratio_db = (
                         -4.0
@@ -137,7 +137,7 @@ class PrepareSampleBankTests(unittest.TestCase):
                         else:
                             amp = body
                         x.append(amp * math.sin(2.0 * math.pi * 50.0 * t))
-                    bank[f"piano_{note}_{dyn}{suffix}.wav"] = x
+                    bank[name] = x
         return bank
 
     def test_piano_conditioner_matches_shape_and_absolute_level_trends(self):
@@ -171,22 +171,23 @@ class PrepareSampleBankTests(unittest.TestCase):
 
         for dyn in ("pp", "mf", "f"):
             for note in prepare.PIANO_ZONE_NOTES:
-                a = stats[f"piano_{note}_{dyn}.wav"]
-                b = stats[f"piano_{note}_{dyn}_rr2.wav"]
-                self.assertLess(abs(a[0] - b[0]), 0.05)
-                self.assertLess(abs(a[1] - b[1]), 0.05)
+                names = prepare.piano_take_names(note, dyn)
+                if len(names) == 2:
+                    a, b = (stats[name] for name in names)
+                    self.assertLess(abs(a[0] - b[0]), 0.05)
+                    self.assertLess(abs(a[1] - b[1]), 0.05)
 
         for note in prepare.PIANO_ZONE_NOTES:
             shape_ratios = [
-                stats[f"piano_{note}_{dyn}{suffix}.wav"][0]
+                stats[name][0]
                 for dyn in ("pp", "mf", "f")
-                for suffix in ("", "_rr2")
+                for name in prepare.piano_take_names(note, dyn)
             ]
             self.assertLess(max(shape_ratios) - min(shape_ratios), 0.05)
             body_levels = [
-                stats[f"piano_{note}_{dyn}{suffix}.wav"][1]
+                stats[name][1]
                 for dyn in ("pp", "mf", "f")
-                for suffix in ("", "_rr2")
+                for name in prepare.piano_take_names(note, dyn)
             ]
             self.assertLess(max(body_levels) - min(body_levels), 0.05)
 
@@ -202,27 +203,28 @@ class PrepareSampleBankTests(unittest.TestCase):
             self.assertEqual(sr, prepare.OUT_SR)
             bank[name] = x
 
-        self.assertEqual(len(bank), 54)
+        self.assertEqual(len(bank), 52)
         stats = prepare.piano_envelope_stats(bank, prepare.OUT_SR)
         ratio_points = []
         for dyn in ("pp", "mf", "f"):
             for note in prepare.PIANO_ZONE_NOTES:
-                a = stats[f"piano_{note}_{dyn}.wav"]
-                b = stats[f"piano_{note}_{dyn}_rr2.wav"]
-                ratio_points.extend([
-                    (prepare.PIANO_ZONE_MIDI[note], a[0]),
-                    (prepare.PIANO_ZONE_MIDI[note], b[0]),
-                ])
-                self.assertLess(
-                    abs(a[0] - b[0]),
-                    0.35,
-                    f"{note} {dyn}: round-robin shape mismatch",
+                names = prepare.piano_take_names(note, dyn)
+                ratio_points.extend(
+                    (prepare.PIANO_ZONE_MIDI[note], stats[name][0])
+                    for name in names
                 )
-                self.assertLess(
-                    abs(a[1] - b[1]),
-                    0.35,
-                    f"{note} {dyn}: round-robin body-level mismatch",
-                )
+                if len(names) == 2:
+                    a, b = (stats[name] for name in names)
+                    self.assertLess(
+                        abs(a[0] - b[0]),
+                        0.35,
+                        f"{note} {dyn}: round-robin shape mismatch",
+                    )
+                    self.assertLess(
+                        abs(a[1] - b[1]),
+                        0.35,
+                        f"{note} {dyn}: round-robin body-level mismatch",
+                    )
         ratio_slope, ratio_intercept = prepare._minimax_line(ratio_points)
         for note in prepare.PIANO_ZONE_NOTES:
             target = (
@@ -231,13 +233,13 @@ class PrepareSampleBankTests(unittest.TestCase):
             )
             ratios = []
             for dyn in ("pp", "mf", "f"):
-                for suffix in ("", "_rr2"):
-                    ratio = stats[f"piano_{note}_{dyn}{suffix}.wav"][0]
+                for name in prepare.piano_take_names(note, dyn):
+                    ratio = stats[name][0]
                     ratios.append(ratio)
                     self.assertLess(
                         abs(ratio - target),
                         0.35,
-                        f"{note} {dyn}{suffix}: shape misses register trend",
+                        f"{name}: shape misses register trend",
                     )
             self.assertLess(
                 max(ratios) - min(ratios),
@@ -248,9 +250,9 @@ class PrepareSampleBankTests(unittest.TestCase):
         level_points = []
         for note in prepare.PIANO_ZONE_NOTES:
             levels = [
-                stats[f"piano_{note}_{dyn}{suffix}.wav"][1]
+                stats[name][1]
                 for dyn in ("pp", "mf", "f")
-                for suffix in ("", "_rr2")
+                for name in prepare.piano_take_names(note, dyn)
             ]
             level_points.append(
                 (prepare.PIANO_ZONE_MIDI[note], sum(levels) / len(levels))
@@ -261,12 +263,37 @@ class PrepareSampleBankTests(unittest.TestCase):
                 level_slope * prepare.PIANO_ZONE_MIDI[note] + level_intercept
             )
             for dyn in ("pp", "mf", "f"):
-                for suffix in ("", "_rr2"):
-                    body_db = stats[f"piano_{note}_{dyn}{suffix}.wav"][1]
+                for name in prepare.piano_take_names(note, dyn):
+                    body_db = stats[name][1]
                     self.assertLess(
                         abs(body_db - target),
                         0.35,
-                        f"{note} {dyn}{suffix}: body level misses register trend",
+                        f"{name}: body level misses register trend",
+                    )
+
+    def test_committed_piano_round_robins_are_distinct_or_declared_single_take(self):
+        sample_dir = os.path.join(
+            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-core", "samples"
+        )
+        self.assertEqual(
+            prepare.PIANO_SINGLE_TAKE_CELLS,
+            frozenset({("C2", "pp"), ("G2", "pp")}),
+        )
+        for dyn in ("pp", "mf", "f"):
+            for note in prepare.PIANO_ZONE_NOTES:
+                names = prepare.piano_take_names(note, dyn)
+                payloads = []
+                for name in names:
+                    with open(os.path.join(sample_dir, name), "rb") as sample:
+                        payloads.append(sample.read())
+                if len(names) == 1:
+                    missing_rr2 = f"piano_{note}_{dyn}_rr2.wav"
+                    self.assertFalse(os.path.exists(os.path.join(sample_dir, missing_rr2)))
+                else:
+                    self.assertNotEqual(
+                        hashlib.sha256(payloads[0]).digest(),
+                        hashlib.sha256(payloads[1]).digest(),
+                        f"{note} {dyn}: advertised round robins are byte-identical",
                     )
 
     def test_fade_in_is_inert_when_lead_in_exceeds_the_window(self):
@@ -274,8 +301,8 @@ class PrepareSampleBankTests(unittest.TestCase):
 
         Differential oracle against the pre-fix algorithm. This is the claim the
         already-committed WAVs rest on, and it is deliberately narrow: the fade
-        cap only bites when the onset sits INSIDE the 2 ms window, so the 136
-        sources with more lead-in than that must come out bit-identical.
+        cap only bites when the onset sits INSIDE the 2 ms window, so sources
+        with more lead-in than that must come out bit-identical.
 
         Note the sizing. An earlier attempt at this fix padded up to PRE_S
         (8 ms) and asserted inertness with test inputs that had 8-300 ms of

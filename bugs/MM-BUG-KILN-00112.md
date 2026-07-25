@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00112 — Two soft low-piano round robins replay identical onsets
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** core piano sample bank / round robins
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the bank now reports quiet C2/G2 as single-take cells, removes their duplicate payloads, and rejects undeclared duplicate round robins)
 
 ## Observation
 
@@ -73,3 +73,36 @@ No synth, render, test, or exploratory harness ran in the review. The duplicate
 payloads and the sample-ownership call chain were confirmed by read-only file
 and source inspection; audible severity beyond the identical 180 ms onset was
 not measured.
+
+## Resolution — 2026-07-25
+
+The pinned VSCO revision has no defensible alternate quiet C2/G2 recordings, so
+the bank now takes the expected fallback in this record: it represents those
+cells explicitly as single-take exceptions.
+
+- `prepare.py` declares `PIANO_SINGLE_TAKE_CELLS`, generates 52 real piano
+  recordings, and no longer manufactures two RR2 files from RR1 sources.
+- The core crate embeds 69 physical WAVs instead of 71 and publishes the two
+  exceptions. Its old low-level RR2 filename lookups remain compatibility
+  aliases to the single takes.
+- The runtime RR2 bank names the C2/G2 base samples directly. All other piano
+  cells retain distinct second takes.
+- Package, generator, and provenance documentation now report 25 two-take
+  cells plus the two quiet single-take exceptions.
+
+## Verification — 2026-07-25
+
+- A committed-bank oracle proves every advertised RR pair is SHA-256-distinct,
+  the exception set is exactly quiet C2/G2, and no fake RR2 files exist.
+- A runtime-bank oracle proves only the two declared cells alias between the
+  primary and alternate banks; every other zone differs.
+- All 33 generator tests and both core-package parity tests pass.
+- `$null | cargo test --locked -p ferrosintesis`: **717 unit tests and 4 doc
+  tests passed; 27 diagnostics ignored**.
+- `$null | cargo test --locked -p ferrosintesis --no-default-features`: **616
+  unit tests and 4 doc tests passed; 22 diagnostics ignored**.
+- Strict all-target clippy passes with all features and with no default
+  features. Formatting and `git diff --check` pass.
+- Fresh release binaries from exact baseline `2b25655`, full 124-MIDI inventory
+  at 11.025 kHz: **124 byte-identical, 0 contamination**. The explicit aliases
+  preserve the shipped audio while making the inventory truthful.

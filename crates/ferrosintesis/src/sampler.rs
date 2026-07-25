@@ -296,8 +296,10 @@ fn piano_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "piano_C2_pp_rr2.wav" => 65.05,
-            "piano_G2_pp_rr2.wav" => 97.77,
+            // The pinned VSCO bank has only one pp take for C2/G2. Alias those
+            // zones honestly; every other cell below contains a real second take.
+            "piano_C2_pp.wav" => 65.05,
+            "piano_G2_pp.wav" => 97.77,
             "piano_C3_pp_rr2.wav" => 130.60,
             "piano_G3_pp_rr2.wav" => 194.91,
             "piano_C4_pp_rr2.wav" => 261.00,
@@ -934,8 +936,9 @@ pub fn cello_bank(vel: u8) -> &'static [Zone] {
     }
 }
 
-/// Velocity picks the dynamic layer; alternating round robins keep
-/// repeated notes from being byte-identical (the machine-gun tell).
+/// Velocity picks the dynamic layer; alternating round robins keep repeated
+/// notes from being byte-identical, except quiet C2/G2 where the pinned source
+/// has one take and both banks deliberately select it.
 pub fn piano_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     match (vel, rr2) {
         (0..=51, false) => piano_pp(),
@@ -6292,6 +6295,35 @@ mod tests {
             );
         }
         // (the drum-kit bank's own asset crate tests guard the sampled kit)
+    }
+
+    #[test]
+    fn upright_round_robin_bank_only_aliases_declared_single_takes() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let pp1 = piano_pp();
+        let pp2 = piano_pp_rr2();
+        for zone in 0..2 {
+            assert_eq!(
+                pp1[zone].data, pp2[zone].data,
+                "quiet C2/G2 are the declared single-take cells"
+            );
+        }
+        for zone in 2..pp1.len() {
+            assert_ne!(
+                pp1[zone].data, pp2[zone].data,
+                "every other quiet cell must have a real second take"
+            );
+        }
+        for (first, second) in [(piano_mf(), piano_mf_rr2()), (piano_f(), piano_f_rr2())] {
+            for zone in 0..first.len() {
+                assert_ne!(
+                    first[zone].data, second[zone].data,
+                    "mf/f cells must have real second takes"
+                );
+            }
+        }
     }
 
     fn pitch_of(seg: &[f32], sr: f32) -> f32 {

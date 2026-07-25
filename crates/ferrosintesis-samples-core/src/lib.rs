@@ -5,7 +5,10 @@
 #![forbid(unsafe_code)]
 
 /// Number of WAV files embedded in this package.
-pub const FILE_COUNT: usize = 71;
+pub const FILE_COUNT: usize = 69;
+
+/// Upright-piano pitch/dynamic cells with only one take in the pinned source.
+pub const PIANO_SINGLE_TAKE_CELLS: [(&str, &str); 2] = [("C2", "pp"), ("G2", "pp")];
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ("flute_A4.wav", include_bytes!("../samples/flute_A4.wav")),
@@ -14,220 +17,212 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ("flute_C6.wav", include_bytes!("../samples/flute_C6.wav")),
     ("flute_E5.wav", include_bytes!("../samples/flute_E5.wav")),
     (
-        "piano_C2_f_rr2.wav",
-        include_bytes!("../samples/piano_C2_f_rr2.wav"),
-    ),
-    (
         "piano_C2_f.wav",
         include_bytes!("../samples/piano_C2_f.wav"),
     ),
     (
-        "piano_C2_mf_rr2.wav",
-        include_bytes!("../samples/piano_C2_mf_rr2.wav"),
+        "piano_C2_f_rr2.wav",
+        include_bytes!("../samples/piano_C2_f_rr2.wav"),
     ),
     (
         "piano_C2_mf.wav",
         include_bytes!("../samples/piano_C2_mf.wav"),
     ),
     (
-        "piano_C2_pp_rr2.wav",
-        include_bytes!("../samples/piano_C2_pp_rr2.wav"),
+        "piano_C2_mf_rr2.wav",
+        include_bytes!("../samples/piano_C2_mf_rr2.wav"),
     ),
     (
         "piano_C2_pp.wav",
         include_bytes!("../samples/piano_C2_pp.wav"),
     ),
     (
-        "piano_C3_f_rr2.wav",
-        include_bytes!("../samples/piano_C3_f_rr2.wav"),
-    ),
-    (
         "piano_C3_f.wav",
         include_bytes!("../samples/piano_C3_f.wav"),
     ),
     (
-        "piano_C3_mf_rr2.wav",
-        include_bytes!("../samples/piano_C3_mf_rr2.wav"),
+        "piano_C3_f_rr2.wav",
+        include_bytes!("../samples/piano_C3_f_rr2.wav"),
     ),
     (
         "piano_C3_mf.wav",
         include_bytes!("../samples/piano_C3_mf.wav"),
     ),
     (
-        "piano_C3_pp_rr2.wav",
-        include_bytes!("../samples/piano_C3_pp_rr2.wav"),
+        "piano_C3_mf_rr2.wav",
+        include_bytes!("../samples/piano_C3_mf_rr2.wav"),
     ),
     (
         "piano_C3_pp.wav",
         include_bytes!("../samples/piano_C3_pp.wav"),
     ),
     (
-        "piano_C4_f_rr2.wav",
-        include_bytes!("../samples/piano_C4_f_rr2.wav"),
+        "piano_C3_pp_rr2.wav",
+        include_bytes!("../samples/piano_C3_pp_rr2.wav"),
     ),
     (
         "piano_C4_f.wav",
         include_bytes!("../samples/piano_C4_f.wav"),
     ),
     (
-        "piano_C4_mf_rr2.wav",
-        include_bytes!("../samples/piano_C4_mf_rr2.wav"),
+        "piano_C4_f_rr2.wav",
+        include_bytes!("../samples/piano_C4_f_rr2.wav"),
     ),
     (
         "piano_C4_mf.wav",
         include_bytes!("../samples/piano_C4_mf.wav"),
     ),
     (
-        "piano_C4_pp_rr2.wav",
-        include_bytes!("../samples/piano_C4_pp_rr2.wav"),
+        "piano_C4_mf_rr2.wav",
+        include_bytes!("../samples/piano_C4_mf_rr2.wav"),
     ),
     (
         "piano_C4_pp.wav",
         include_bytes!("../samples/piano_C4_pp.wav"),
     ),
     (
-        "piano_C5_f_rr2.wav",
-        include_bytes!("../samples/piano_C5_f_rr2.wav"),
+        "piano_C4_pp_rr2.wav",
+        include_bytes!("../samples/piano_C4_pp_rr2.wav"),
     ),
     (
         "piano_C5_f.wav",
         include_bytes!("../samples/piano_C5_f.wav"),
     ),
     (
-        "piano_C5_mf_rr2.wav",
-        include_bytes!("../samples/piano_C5_mf_rr2.wav"),
+        "piano_C5_f_rr2.wav",
+        include_bytes!("../samples/piano_C5_f_rr2.wav"),
     ),
     (
         "piano_C5_mf.wav",
         include_bytes!("../samples/piano_C5_mf.wav"),
     ),
     (
-        "piano_C5_pp_rr2.wav",
-        include_bytes!("../samples/piano_C5_pp_rr2.wav"),
+        "piano_C5_mf_rr2.wav",
+        include_bytes!("../samples/piano_C5_mf_rr2.wav"),
     ),
     (
         "piano_C5_pp.wav",
         include_bytes!("../samples/piano_C5_pp.wav"),
     ),
     (
-        "piano_C6_f_rr2.wav",
-        include_bytes!("../samples/piano_C6_f_rr2.wav"),
+        "piano_C5_pp_rr2.wav",
+        include_bytes!("../samples/piano_C5_pp_rr2.wav"),
     ),
     (
         "piano_C6_f.wav",
         include_bytes!("../samples/piano_C6_f.wav"),
     ),
     (
-        "piano_C6_mf_rr2.wav",
-        include_bytes!("../samples/piano_C6_mf_rr2.wav"),
+        "piano_C6_f_rr2.wav",
+        include_bytes!("../samples/piano_C6_f_rr2.wav"),
     ),
     (
         "piano_C6_mf.wav",
         include_bytes!("../samples/piano_C6_mf.wav"),
     ),
     (
-        "piano_C6_pp_rr2.wav",
-        include_bytes!("../samples/piano_C6_pp_rr2.wav"),
+        "piano_C6_mf_rr2.wav",
+        include_bytes!("../samples/piano_C6_mf_rr2.wav"),
     ),
     (
         "piano_C6_pp.wav",
         include_bytes!("../samples/piano_C6_pp.wav"),
     ),
     (
-        "piano_G2_f_rr2.wav",
-        include_bytes!("../samples/piano_G2_f_rr2.wav"),
+        "piano_C6_pp_rr2.wav",
+        include_bytes!("../samples/piano_C6_pp_rr2.wav"),
     ),
     (
         "piano_G2_f.wav",
         include_bytes!("../samples/piano_G2_f.wav"),
     ),
     (
-        "piano_G2_mf_rr2.wav",
-        include_bytes!("../samples/piano_G2_mf_rr2.wav"),
+        "piano_G2_f_rr2.wav",
+        include_bytes!("../samples/piano_G2_f_rr2.wav"),
     ),
     (
         "piano_G2_mf.wav",
         include_bytes!("../samples/piano_G2_mf.wav"),
     ),
     (
-        "piano_G2_pp_rr2.wav",
-        include_bytes!("../samples/piano_G2_pp_rr2.wav"),
+        "piano_G2_mf_rr2.wav",
+        include_bytes!("../samples/piano_G2_mf_rr2.wav"),
     ),
     (
         "piano_G2_pp.wav",
         include_bytes!("../samples/piano_G2_pp.wav"),
     ),
     (
-        "piano_G3_f_rr2.wav",
-        include_bytes!("../samples/piano_G3_f_rr2.wav"),
-    ),
-    (
         "piano_G3_f.wav",
         include_bytes!("../samples/piano_G3_f.wav"),
     ),
     (
-        "piano_G3_mf_rr2.wav",
-        include_bytes!("../samples/piano_G3_mf_rr2.wav"),
+        "piano_G3_f_rr2.wav",
+        include_bytes!("../samples/piano_G3_f_rr2.wav"),
     ),
     (
         "piano_G3_mf.wav",
         include_bytes!("../samples/piano_G3_mf.wav"),
     ),
     (
-        "piano_G3_pp_rr2.wav",
-        include_bytes!("../samples/piano_G3_pp_rr2.wav"),
+        "piano_G3_mf_rr2.wav",
+        include_bytes!("../samples/piano_G3_mf_rr2.wav"),
     ),
     (
         "piano_G3_pp.wav",
         include_bytes!("../samples/piano_G3_pp.wav"),
     ),
     (
-        "piano_G4_f_rr2.wav",
-        include_bytes!("../samples/piano_G4_f_rr2.wav"),
+        "piano_G3_pp_rr2.wav",
+        include_bytes!("../samples/piano_G3_pp_rr2.wav"),
     ),
     (
         "piano_G4_f.wav",
         include_bytes!("../samples/piano_G4_f.wav"),
     ),
     (
-        "piano_G4_mf_rr2.wav",
-        include_bytes!("../samples/piano_G4_mf_rr2.wav"),
+        "piano_G4_f_rr2.wav",
+        include_bytes!("../samples/piano_G4_f_rr2.wav"),
     ),
     (
         "piano_G4_mf.wav",
         include_bytes!("../samples/piano_G4_mf.wav"),
     ),
     (
-        "piano_G4_pp_rr2.wav",
-        include_bytes!("../samples/piano_G4_pp_rr2.wav"),
+        "piano_G4_mf_rr2.wav",
+        include_bytes!("../samples/piano_G4_mf_rr2.wav"),
     ),
     (
         "piano_G4_pp.wav",
         include_bytes!("../samples/piano_G4_pp.wav"),
     ),
     (
-        "piano_G5_f_rr2.wav",
-        include_bytes!("../samples/piano_G5_f_rr2.wav"),
+        "piano_G4_pp_rr2.wav",
+        include_bytes!("../samples/piano_G4_pp_rr2.wav"),
     ),
     (
         "piano_G5_f.wav",
         include_bytes!("../samples/piano_G5_f.wav"),
     ),
     (
-        "piano_G5_mf_rr2.wav",
-        include_bytes!("../samples/piano_G5_mf_rr2.wav"),
+        "piano_G5_f_rr2.wav",
+        include_bytes!("../samples/piano_G5_f_rr2.wav"),
     ),
     (
         "piano_G5_mf.wav",
         include_bytes!("../samples/piano_G5_mf.wav"),
     ),
     (
-        "piano_G5_pp_rr2.wav",
-        include_bytes!("../samples/piano_G5_pp_rr2.wav"),
+        "piano_G5_mf_rr2.wav",
+        include_bytes!("../samples/piano_G5_mf_rr2.wav"),
     ),
     (
         "piano_G5_pp.wav",
         include_bytes!("../samples/piano_G5_pp.wav"),
+    ),
+    (
+        "piano_G5_pp_rr2.wav",
+        include_bytes!("../samples/piano_G5_pp_rr2.wav"),
     ),
     (
         "violin_C5_f.wav",
@@ -283,6 +278,13 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
 ///
 /// Names include the `.wav` suffix and are case-sensitive.
 pub fn get(name: &str) -> Option<&'static [u8]> {
+    // Preserve the old low-level lookups while representing these cells
+    // truthfully as aliases rather than embedding duplicate payload files.
+    let name = match name {
+        "piano_C2_pp_rr2.wav" => "piano_C2_pp.wav",
+        "piano_G2_pp_rr2.wav" => "piano_G2_pp.wav",
+        _ => name,
+    };
     SAMPLES
         .iter()
         .find(|(candidate, _)| *candidate == name)
@@ -296,7 +298,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    const EXPECTED_BYTES: usize = 9555776;
+    const EXPECTED_BYTES: usize = 9236760;
 
     #[test]
     fn inventory_matches_packaged_wavs() {
@@ -339,5 +341,7 @@ mod tests {
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);
+        assert_eq!(get("piano_C2_pp_rr2.wav"), get("piano_C2_pp.wav"));
+        assert_eq!(get("piano_G2_pp_rr2.wav"), get("piano_G2_pp.wav"));
     }
 }

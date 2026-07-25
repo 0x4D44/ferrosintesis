@@ -374,8 +374,10 @@ mod tests {
             //         PINNED POSITIVELY: `looped_recording_voices_keep_their_documented_
             //         velocity_behaviour` (samples-on span) and `modeled_gm76_follows_
             //         the_square_law_in_no_samples_builds` (the modeled `--no-samples` /
-            //         repitch-fallback path, which is compensated samples-aware in
-            //         `voices::melodic_vel_level_exp`).
+            //         repitch-fallback path). NOTE: that path is NOT compensated
+            //         samples-aware — there is no `melodic_vel_level_exp`;
+            //         `VEL_LEVEL_EXP` is program-indexed, so the modeled voice inherits
+            //         the sampled voice's exponent. MM-BUG-KILN-00105.
             if p == 6 || p == 76 || p == 96 || p == 109 || p == 42 || p == 43 {
                 continue;
             }
@@ -506,8 +508,9 @@ mod tests {
     /// double-correcting the self-compensating loop) also dropped the modeled
     /// path's compensation, because `VEL_LEVEL_EXP` is program-indexed, not
     /// samples-aware. The samples-on sweep can't see it (there GM76 is the loop).
-    /// This pins the modeled path so the compensation stays samples-aware
-    /// (`voices::melodic_vel_level_exp`).
+    /// This pins the modeled path. NOTE: the compensation is NOT samples-aware — there
+    /// is no `melodic_vel_level_exp`; `VEL_LEVEL_EXP` is program-indexed and the modeled
+    /// voice inherits the sampled exponent. MM-BUG-KILN-00105.
     #[test]
     fn modeled_gm76_follows_the_square_law_in_no_samples_builds() {
         for &key in &FIT_KEYS {
@@ -610,13 +613,21 @@ mod tests {
         // far shallower than k=2. Pin the compressed span so it can neither drift to
         // velocity-flat (span → 0, a dead dynamic) nor to the full square law
         // (~24 dB over v32→v127, which would mean a layer double-count crept back).
-        let bottle_span = melodic_level(76, 60, 127) - melodic_level(76, 60, 32);
-        assert!(
-            (2.5..=7.0).contains(&bottle_span),
-            "GM76 bottle velocity span {bottle_span:.2} dB (v32→v127) — outside the \
-             documented compressed band [2.5, 7.0]: <2.5 = drifted flat, >7.0 = a \
-             layer/compensation double-count reintroduced"
-        );
+        // Only meaningful where the recording EXISTS. The compressed taper is a property
+        // of `BottleLoopVoice`; under `--no-default-features` GM76 is the modeled `Wind`,
+        // which correctly renders the full square law (~25 dB measured) and so would fail
+        // this band for the right reason. The modeled path is pinned separately by
+        // `modeled_gm76_follows_the_square_law_in_no_samples_builds`, so gating here loses
+        // no coverage. MM-BUG-KILN-00105.
+        if crate::embedded_samples_available() {
+            let bottle_span = melodic_level(76, 60, 127) - melodic_level(76, 60, 32);
+            assert!(
+                (2.5..=7.0).contains(&bottle_span),
+                "GM76 bottle velocity span {bottle_span:.2} dB (v32→v127) — outside the \
+                 documented compressed band [2.5, 7.0]: <2.5 = drifted flat, >7.0 = a \
+                 layer/compensation double-count reintroduced"
+            );
+        }
 
         // GM109 bagpipe chanter: constant bag pressure — a piper physically cannot
         // play it louder, so `LoopVoice` takes NO velocity (`bagpipe_chanter_loop`).

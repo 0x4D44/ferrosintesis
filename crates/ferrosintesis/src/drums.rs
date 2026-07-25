@@ -1520,6 +1520,12 @@ pub fn make(
     samples: bool,
     rr: u8,
 ) -> Option<Box<dyn Voice>> {
+    // Clamp ONCE, here, so the voice and its velocity compensation are chosen from the
+    // same flag. `make_uncorrected` clamps internally; `drum_vel_level_exp` did not, so on
+    // a `--no-default-features` build a caller passing `samples = true` got the MODELED
+    // voice corrected by the SAMPLED exponent. Byte-identical in a default build, where
+    // `embedded_samples_available()` is true and the clamp is a no-op. MM-BUG-KILN-00105.
+    let samples = samples && crate::embedded_samples_available();
     let voice = make_uncorrected(key, vel, sr, seed, kit, samples, rr)?;
     let exp = drum_vel_level_exp(kit, samples, key);
     if exp == 2.0 {

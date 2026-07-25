@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00099 — measure_wav meters every WAV as 44.1 kHz signed 16-bit stereo
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli/examples/measure_wav
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol during the `crates/ferrosintesis-cli/` coverage review)
+- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol during the `crates/ferrosintesis-cli/` coverage review) → Fixed (2026-07-25, Codex GPT-5.6-Sol; strict shared WAV parsing and sample-rate propagation landed with regression coverage; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -42,15 +42,17 @@ results even when its interpretation is wrong.
 
 ## Fix
 
-Not fixed in this review. Parse and validate RIFF/WAVE plus `fmt ` before
-decoding: PCM format 1, 16 bits, two channels, a positive supported sample rate,
-consistent block alignment, and complete `data`. Pass the parsed rate to both
-meters.
+`measure_wav` and `calmeter` now use one bounded RIFF/WAVE reader. It validates
+the container and declared RIFF extent, chunk sizes and padding, `fmt ` metadata,
+supported sample rate, byte rate, block alignment, complete frames, and required
+`data`. The meter selects strict 16-bit stereo PCM mode; calmeter retains its
+existing mono/stereo PCM and float support.
 
-Prefer sharing the WAV reader with `calmeter` so the two development tools do
-not continue to diverge. Add fixtures for 44.1 and 48 kHz PCM stereo and
-rejection cases for mono, float/non-PCM, missing/truncated `fmt `, and missing
-`data`.
+`measure_wav` passes the parsed sample rate to both loudness and true-peak
+meters. Regression fixtures prove 44.1 and 48 kHz propagation, strict mono and
+float rejection, non-PCM and unsupported-rate rejection, and malformed or
+missing `fmt ` and `data` handling. The focused tests and clippy pass on the
+native toolchain and the declared Rust 1.87 floor.
 
 ## Notes
 

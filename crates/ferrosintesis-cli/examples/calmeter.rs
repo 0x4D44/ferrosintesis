@@ -41,17 +41,16 @@
 //! programs, i.e. program-dependent and NOT cancelling in the differential. We meter a
 //! slice that starts `PREROLL_S` early and discard the blocks that overlap it.
 
+#[path = "support/wav.rs"]
+mod wav;
+
 use ferrosintesis::offline::momentary_lufs;
+use wav::{read_wav, Wav};
 
 /// Analysis window per note (SPEC_v2 §3.2).
 const WINDOW_S: f64 = 1.2;
 /// Extra audio metered before the window purely to warm the K-weighting filters.
 const PREROLL_S: f64 = 0.4;
-/// Lowest supported input rate for the calibration meter.
-///
-/// 8 kHz is the lowest conventional PCM rate with enough bandwidth for the
-/// BS.1770 K-weighting filter.
-const MIN_SAMPLE_RATE: u32 = 8_000;
 /// A note quieter than this never sounded on this engine. Lowered from -60 when the probe
 /// dropped to CC7=50 to keep the bus glue inert (`mkprobe.py PROBE_CC7`): that is a uniform
 /// -12.0 dB, so the floor moves with it to preserve the same sensitivity. It must stay below
@@ -91,70 +90,10 @@ fn chunk_frames(engine: &str) -> Result<u64, String> {
     }
 }
 
-struct Wav {
-    samples: Vec<f32>, // interleaved stereo
-    sr: u32,
-}
-
-/// Minimal WAV reader — `wav.rs` in the library is write-only. Accepts sample
-/// rates of at least 8 kHz, 16-bit PCM (format 1), and **32-bit IEEE float
-/// (format 3)**.
-///
-/// The float path is what makes the glue certificate possible: the CLI
-/// loudness-normalizes to -18 LUFS, which destroys absolute sample level, so a
-/// calibration render must come from the `raw_dump` example (pre-normalization
-/// `offline::render` output, written as f32). Absolute level is meaningless in a
-/// normalized 16-bit render — see `GLUE_CEILING`.
-fn read_wav(path: &str) -> Result<Wav, String> {
-    let b = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
-    if b.len() < 12 || &b[0..4] != b"RIFF" || &b[8..12] != b"WAVE" {
-        return Err(format!("{path}: not a RIFF/WAVE file"));
-    }
-    let (mut pos, mut sr, mut channels, mut bits, mut fmt) = (12usize, 0u32, 0u16, 0u16, 0u16);
-    let mut data: &[u8] = &[];
-    while pos + 8 <= b.len() {
-        let id = &b[pos..pos + 4];
-        let sz = u32::from_le_bytes([b[pos + 4], b[pos + 5], b[pos + 6], b[pos + 7]]) as usize;
-        let body = pos + 8;
-        if id == b"fmt " && body + 16 <= b.len() {
-            fmt = u16::from_le_bytes([b[body], b[body + 1]]);
-            channels = u16::from_le_bytes([b[body + 2], b[body + 3]]);
-            sr = u32::from_le_bytes([b[body + 4], b[body + 5], b[body + 6], b[body + 7]]);
-            bits = u16::from_le_bytes([b[body + 14], b[body + 15]]);
-        } else if id == b"data" {
-            data = &b[body..(body + sz).min(b.len())];
-        }
-        pos = body + sz + (sz & 1); // chunks are word-aligned
-    }
-    if channels == 0 || !(bits == 16 || (bits == 32 && fmt == 3)) {
-        return Err(format!(
-            "{path}: need 16-bit PCM or 32-bit IEEE float, got {bits}-bit fmt {fmt} x{channels}"
-        ));
-    }
-    if sr < MIN_SAMPLE_RATE {
-        return Err(format!(
-            "{path}: unsupported sample rate {sr} Hz; need at least {MIN_SAMPLE_RATE} Hz"
-        ));
-    }
-    let bytes = (bits / 8) as usize;
-    let frames = data.len() / (bytes * channels as usize);
-    let mut samples = Vec::with_capacity(frames * 2);
-    for f in 0..frames {
-        let at = |c: usize| {
-            let o = (f * channels as usize + c) * bytes;
-            if bits == 16 {
-                i16::from_le_bytes([data[o], data[o + 1]]) as f32 / 32768.0
-            } else {
-                f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]])
-            }
-        };
-        let l = at(0);
-        let r = if channels > 1 { at(1) } else { l };
-        samples.push(l);
-        samples.push(r);
-    }
-    Ok(Wav { samples, sr })
-}
+// The shared reader in `support/wav.rs` accepts sample rates of at least 8 kHz,
+// 16-bit PCM, and 32-bit IEEE float. The float path makes the glue certificate
+// possible: the CLI loudness-normalizes to -18 LUFS, which destroys absolute
+// sample level, so calibration uses the `raw_dump` example's f32 output.
 
 /// Did this note's audio change when the LA sample layer was disabled? Compares the note
 /// window of two renders of the SAME probe (`raw_dump` with and without `--no-samples`).
@@ -272,7 +211,7 @@ mod tests {
     #[test]
     fn read_wav_rejects_a_one_hz_meter_input() {
         let wav = TestWav::at_rate(1);
-        let error = match read_wav(wav.path()) {
+        let error = match read_wav(wav.path(), false) {
             Ok(_) => panic!("1 Hz must be rejected"),
             Err(error) => error,
         };
@@ -285,7 +224,7 @@ mod tests {
     #[test]
     fn read_wav_accepts_the_lowest_supported_rate() {
         let wav = TestWav::at_rate(8_000);
-        let decoded = read_wav(wav.path()).expect("8 kHz is supported");
+        let decoded = read_wav(wav.path(), false).expect("8 kHz is supported");
         assert_eq!(decoded.sr, 8_000);
         assert_eq!(decoded.samples.len(), 2);
     }
@@ -330,7 +269,7 @@ fn main() -> Result<(), String> {
         .map(|v| v.parse().unwrap_or(0))
         .unwrap_or(0);
 
-    let w = read_wav(wav_path)?;
+    let w = read_wav(wav_path, false)?;
     // Optional second render of the same probe (typically the `--no-samples` twin) used to
     // decide, per note, whether the LA sample layer actually engaged.
     let vs: Option<Wav> = match args
@@ -338,7 +277,7 @@ fn main() -> Result<(), String> {
         .position(|a| a == "--vs")
         .and_then(|i| args.get(i + 1))
     {
-        Some(p) => Some(read_wav(p)?),
+        Some(p) => Some(read_wav(p, false)?),
         None => None,
     };
     let window_frames = (WINDOW_S * w.sr as f64).round() as i64;

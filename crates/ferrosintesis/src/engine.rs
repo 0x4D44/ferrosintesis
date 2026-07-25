@@ -61,8 +61,9 @@ const RES_MAX_Q: f32 = 8.0;
 const PORTA_MIN_S: f32 = 0.005;
 const PORTA_MAX_S: f32 = 0.6;
 
-// D10: fixed drum-room send level (ch 9 only, un-highpassed so the kick
-// keeps its body; the room is pre-hall).
+// D10: default drum-room send level (un-highpassed so the kick keeps its
+// body; the room is pre-hall). An authored CC91 scales this default across
+// the full dry-to-room range; unauthored channels take this exact constant.
 const ROOM_SEND: f32 = 0.35;
 
 // D10e: overall drum-bus level relative to the band. The +6 dB "drum forward"
@@ -1561,6 +1562,7 @@ struct Strip {
     leslie_rate: f32, // current tremulant rate/depth, slewed with inertia
     leslie_depth: f32,
     reverb_send: f32,
+    reverb_authored: bool,
     chorus_send: f32,
     chorus_authored: bool,
     delay_send: f32,
@@ -1598,6 +1600,18 @@ struct Strip {
 }
 
 impl Strip {
+    /// Drum-room send for this channel. An unauthored CC91 takes the exact
+    /// historical constant; once authored, CC91 owns the full dry-to-room
+    /// range just as it owns the shared-hall send.
+    #[inline]
+    fn drum_room_send(&self) -> f32 {
+        if self.reverb_authored {
+            ROOM_SEND * self.reverb_send
+        } else {
+            ROOM_SEND
+        }
+    }
+
     /// Snap any not-yet-primed amp knob to its authored value. Called right
     /// before a `Drive` rebuild re-applies the rig, so a rebuild that fires
     /// AFTER the channel authored a knob but BEFORE its first audio block starts
@@ -1678,6 +1692,7 @@ impl Strip {
             leslie_rate: 0.0,
             leslie_depth: 0.0,
             reverb_send: 0.3,
+            reverb_authored: false,
             chorus_send: 0.0,
             chorus_authored: false,
             delay_send: 0.0,
@@ -2984,7 +2999,10 @@ impl EngineCore {
                 }
             }
             84 => s.porta_control = Some(val), // portamento control: one-shot glide source key
-            91 => s.reverb_send = v,
+            91 => {
+                s.reverb_send = v;
+                s.reverb_authored = true;
+            }
             93 => {
                 s.chorus_send = v;
                 s.chorus_authored = true;
@@ -3830,12 +3848,14 @@ impl EngineCore {
             } else {
                 // XG/GS drum channel: scaled by its OWN gain straight into the master
                 // mix — bypassing ch9's bus master and wah — with its own CC91
-                // reverb and the shared drum room. The `(scratch*ul)*gc` association
-                // mirrors the ch9 path, so a single hit is byte-equal to the same
-                // hit on ch9 (gc == g9 when the strips match).
+                // reverb and a room send controlled by its own authored CC91.
+                // The `(scratch*ul)*gc` association mirrors the ch9 path, so a
+                // single hit is byte-equal to the same hit on ch9 (gc == g9 when
+                // the strips match).
                 let gc = s.volume * s.expr * s.at_gain * s.breath * DRUM_FORWARD;
                 if gc >= 1e-6 {
                     let rs = s.reverb_send * 0.9;
+                    let room_send = s.drum_room_send();
                     for i in 0..n {
                         let xl = (self.scratch[i] * ul) * gc;
                         let xr = (self.scratch[i] * ur) * gc;
@@ -3843,7 +3863,7 @@ impl EngineCore {
                         self.mix_r[i] += xr;
                         let mono = 0.5 * (xl + xr);
                         self.send_rev[i] += mono * rs;
-                        self.send_room[i] += mono * ROOM_SEND;
+                        self.send_room[i] += mono * room_send;
                     }
                 }
             }
@@ -3864,13 +3884,14 @@ impl EngineCore {
         let g9 = s9.volume * s9.expr * s9.at_gain * s9.breath * DRUM_FORWARD;
         if g9 >= 1e-6 {
             let rs = s9.reverb_send * 0.9;
+            let room_send = s9.drum_room_send();
             for i in 0..n {
                 let (xl, xr) = (self.drum_l[i] * g9, self.drum_r[i] * g9);
                 self.mix_l[i] += xl;
                 self.mix_r[i] += xr;
                 let mono = 0.5 * (xl + xr);
                 self.send_rev[i] += mono * rs;
-                self.send_room[i] += mono * ROOM_SEND;
+                self.send_room[i] += mono * room_send;
             }
         }
     }
@@ -5584,6 +5605,11 @@ mod tests {
         // preserves every one of these across CC121 (MM-BUG-KILN-00033).
         core.handle_event(EvKind::Cc {
             ch: 0,
+            num: 91,
+            val: 50,
+        });
+        core.handle_event(EvKind::Cc {
+            ch: 0,
             num: 93,
             val: 100,
         });
@@ -5645,6 +5671,11 @@ mod tests {
         );
         // Effect sends are persistent channel state, not program state.
         assert_eq!(
+            s.reverb_send,
+            50.0 / 127.0,
+            "CC121 discarded the authored CC91 reverb send"
+        );
+        assert_eq!(
             s.chorus_send,
             100.0 / 127.0,
             "CC121 discarded the authored CC93 chorus send"
@@ -5654,7 +5685,7 @@ mod tests {
             40.0 / 127.0,
             "CC121 discarded the authored CC94 delay send"
         );
-        assert!(s.chorus_authored && s.delay_authored);
+        assert!(s.reverb_authored && s.chorus_authored && s.delay_authored);
         // CC121 nulls the RPN SELECTOR; it does not revert what the selector set.
         assert_eq!(
             s.bend_range, 12.0,
@@ -6073,7 +6104,7 @@ mod tests {
     #[test]
     fn drum_room_early_reflections() {
         let sr = 44100.0;
-        let song = drum_song(&[(0.05, 36, 115)], 1.0, &[(91, 0)]);
+        let song = drum_song(&[(0.05, 36, 115)], 1.0, &[]);
         let opts = Options {
             wet: 0.32,
             ..test_opts(sr)
@@ -6110,6 +6141,114 @@ mod tests {
             a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()),
             "non-ch9 audio leaked into the drum room"
         );
+    }
+
+    /// MM-BUG-KILN-00028: once channel 10 authors CC91, that controller owns
+    /// both of its reverberant sends. CC91=0 must therefore make the kit
+    /// bit-identical whether the private drum-room bus is enabled or disabled.
+    #[test]
+    fn authored_cc91_zero_dries_the_channel_10_room() {
+        let sr = 44100.0;
+        let song = drum_song(&[(0.05, 36, 115)], 1.0, &[(91, 0)]);
+        let opts = Options {
+            wet: 0.32,
+            ..test_opts(sr)
+        };
+        let with_room = render_buses(&song, &opts, true, true, true).0;
+        let without_room = render_buses(&song, &opts, true, false, true).0;
+        assert!(
+            with_room
+                .iter()
+                .zip(&without_room)
+                .all(|(with, without)| with.to_bits() == without.to_bits()),
+            "authored channel-10 CC91=0 left drum-room energy"
+        );
+    }
+
+    #[test]
+    fn authored_cc91_scales_the_drum_room_linearly() {
+        let sr = 44100.0;
+        let mut core = EngineCore::new(CoreOptions {
+            sr,
+            wet: 0.32,
+            delay_s: 0.0,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        });
+        assert_eq!(
+            core.strips[9].drum_room_send(),
+            ROOM_SEND,
+            "unauthored CC91 must retain the exact historical room constant"
+        );
+        for &val in &[0u8, 32, 64, 96, 127] {
+            core.handle_event(EvKind::Cc {
+                ch: 9,
+                num: 91,
+                val,
+            });
+            assert_eq!(
+                core.strips[9].drum_room_send(),
+                ROOM_SEND * (val as f32 / 127.0),
+                "CC91={val} did not scale the drum room linearly"
+            );
+        }
+    }
+
+    /// GS and XG rhythm parts share the secondary drum mix path. Their OWN
+    /// authored CC91 must dry their room rather than consulting channel 10.
+    #[test]
+    fn authored_cc91_zero_dries_gs_and_xg_drum_rooms() {
+        let sr = 44100.0;
+        let opts = Options {
+            wet: 0.32,
+            ..test_opts(sr)
+        };
+        for (name, route) in [
+            ("GS", EvKind::DrumMode { ch: 11, on: true }),
+            (
+                "XG",
+                EvKind::Cc {
+                    ch: 11,
+                    num: 0,
+                    val: 127,
+                },
+            ),
+        ] {
+            let song = test_song(
+                vec![
+                    (0.0, route),
+                    (
+                        0.01,
+                        EvKind::Cc {
+                            ch: 11,
+                            num: 91,
+                            val: 0,
+                        },
+                    ),
+                    (
+                        0.05,
+                        EvKind::NoteOn {
+                            ch: 11,
+                            key: 36,
+                            vel: 115,
+                        },
+                    ),
+                ],
+                1.0,
+            );
+            let with_room = render_buses(&song, &opts, true, true, true).0;
+            let without_room = render_buses(&song, &opts, true, false, true).0;
+            assert!(
+                with_room
+                    .iter()
+                    .zip(&without_room)
+                    .all(|(with, without)| with.to_bits() == without.to_bits()),
+                "authored {name} rhythm-part CC91=0 left drum-room energy"
+            );
+        }
     }
 
     /// Oracle 19 (G5, §5.3 difference signal): the guitar-sympathetic bus

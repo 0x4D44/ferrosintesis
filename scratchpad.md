@@ -11,7 +11,7 @@
   was run against the real body) — this is test strength, not a defect. Add a q=0.05 case and
   an integral-`q*n` case.
 
-- [ ] 2026.07.25 — **`render-diff` is not bank-aware, so an alt-bank-only voice
+- [x] 2026.07.25 — **`render-diff` is not bank-aware, so an alt-bank-only voice
   change is misclassified as contamination or not-reached** —
   `tools/render-diff/render_diff.py:scan` records only program numbers and drum
   keys; it ignores CC0/CC32. KILN-00049 changed DRIVE_LEAD only on GM29/30
@@ -19,14 +19,23 @@
   bank-aware scan proved those same 11 are the complete CC0-nonzero GM29/30 set,
   but the tool called them contamination without that context. Extend the
   touched identity and MIDI scanner to include bank selectors.
-
-- [ ] 2026.07.24 — **8 clean body-knock (tap) samples were captured in the GM120 fret-noise
+  (Promoted 2026-07-25: MM-REQ-KILN-00033. Re-verified first - `scan()` still returns only
+  (programs, drum keys) and its event loop lumps CC into the skip-2-bytes arm, and albums really
+  do author bank selects (every Slipstream movement sends CC0 on four channels). Filed rather
+  than fixed here because it is not a one-liner: it needs a new CLI axis, a third return value,
+  per-channel (program, bank) pairing at note-on, and a decision on MSB-vs-LSB semantics - the
+  repo uses CC0 AND LSB 96. The sibling ch-10 mis-attribution defect IS fixed in this pass.)
+- [x] 2026.07.24 — **8 clean body-knock (tap) samples were captured in the GM120 fret-noise
   session but PARKED** — `DR0000_0204` (the taps at ~26/56/60/61 s, and more), soundboard/side
   knocks. They are the raw material for fixing the guitar's thin note-off `stop_thump`
   (currently modeled). Not folded into the fret-noise change (kept it focused, Arthur's steer).
   Source archive: `samples/fret-noise-eastman-e1d/DR0000_0204.opus`. A future job: cut the taps,
   bake, and drive the guitar note-off thump from them.
-
+  (Promoted 2026-07-25: MM-REQ-KILN-00034. Re-verified: the archive is still there, the bank's own
+  README still records the reservation, and `stop_thump` is still a synthetic Burst through a
+  250 Hz lowpass with no sample layer. Filed rather than actioned - it is a multi-step build
+  (cut, bake, wire, oracle) AND a default-on timbre change needing the render-diff inventory and
+  Arthur's ear, so it does not belong in a triage pass.)
 - [x] 2026.07.24 — **Workspace MSRV is broken by a transitive dep, pre-existing on origin/main**
   — `cargo +1.87 check --workspace` fails: `image@0.25.10` requires rustc 1.88 (pulled via the
   eframe/egui GUI stack, i.e. `amp-lab`). Not from the audio crates — `ferrosintesis` + the

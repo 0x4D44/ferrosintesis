@@ -110,6 +110,12 @@ fn block_mean_squares(interleaved_stereo: &[f32], fs: f32) -> Vec<f64> {
     if n_frames == 0 {
         return Vec::new();
     }
+    let fs = fs as f64;
+    let block = (0.400 * fs).round() as usize; // 400 ms
+    let hop = (0.100 * fs).round() as usize; // 100 ms (75 % overlap)
+    if block == 0 || hop == 0 || n_frames < block {
+        return Vec::new();
+    }
     // De-interleave.
     let mut left = Vec::with_capacity(n_frames);
     let mut right = Vec::with_capacity(n_frames);
@@ -117,15 +123,9 @@ fn block_mean_squares(interleaved_stereo: &[f32], fs: f32) -> Vec<f64> {
         left.push(interleaved_stereo[2 * f]);
         right.push(interleaved_stereo[2 * f + 1]);
     }
-    let fs = fs as f64;
     let l = k_weight_channel(&left, fs);
     let r = k_weight_channel(&right, fs);
 
-    let block = (0.400 * fs).round() as usize; // 400 ms
-    let hop = (0.100 * fs).round() as usize; // 100 ms (75 % overlap)
-    if n_frames < block {
-        return Vec::new();
-    }
     let mut z: Vec<f64> = Vec::new();
     let mut start = 0;
     while start + block <= n_frames {
@@ -161,9 +161,10 @@ fn block_loudness(zj: f64) -> f64 {
 /// events whose decay envelopes differ — a long window would let tail length leak
 /// into a level estimate.
 ///
-/// Returns an empty vector for silence or for a buffer shorter than one 400 ms block.
-/// Blocks that are exactly zero read `f32::NEG_INFINITY`; callers that want the
-/// standard gating should apply it themselves (or use [`integrated_lufs`]).
+/// Returns an empty vector for a buffer shorter than one 400 ms block or a sample
+/// rate too small to represent a nonzero 400 ms block and 100 ms hop. Blocks that
+/// are exactly zero read `f32::NEG_INFINITY`; callers that want the standard
+/// gating should apply it themselves (or use [`integrated_lufs`]).
 pub fn momentary_lufs(interleaved_stereo: &[f32], fs: u32) -> Vec<f32> {
     let fs = fs as f32;
     block_mean_squares(interleaved_stereo, fs)
@@ -456,6 +457,23 @@ mod tests {
                     "fs={fs} block {i}: steady −23 dBFS tone should read −23.0 LUFS, got {b}"
                 );
             }
+        }
+    }
+
+    /// Invalid tiny rates must not turn the 100 ms hop into a zero increment.
+    #[test]
+    fn sub_five_hz_rates_return_without_looping() {
+        let one_frame = [0.0, 0.0];
+        for fs in 0..=4 {
+            assert!(
+                momentary_lufs(&one_frame, fs).is_empty(),
+                "fs={fs} should have no representable momentary block"
+            );
+            assert_eq!(
+                integrated_lufs(&one_frame, fs),
+                f32::NEG_INFINITY,
+                "fs={fs} should have no integrated loudness"
+            );
         }
     }
 

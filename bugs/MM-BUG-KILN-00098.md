@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00098 — A 1–4 Hz WAV makes calmeter loop forever while growing memory
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli/examples/calmeter
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol during the `crates/ferrosintesis-cli/` coverage review)
+- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol during the `crates/ferrosintesis-cli/` coverage review) → Fixed (2026-07-25, Codex GPT-5.6-Sol; calmeter rate validation and zero-hop loudness hardening landed with regression coverage; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -44,13 +44,20 @@ and memory-growing.
 
 ## Fix
 
-Not fixed in this review. Validate `sr` against the meter's documented supported
-range in `calmeter::read_wav`. Also harden the public loudness primitive so a
-rounded zero block or hop returns an error/empty result instead of looping,
-protecting future callers.
+`calmeter::read_wav` now documents and enforces an 8 kHz minimum input rate,
+which is the lowest conventional PCM rate with enough bandwidth for its
+BS.1770 K-weighting filter. A one-frame 1 Hz RIFF is rejected immediately, and
+an 8 kHz boundary fixture is accepted.
 
-Add a minimal 1 Hz RIFF regression that proves prompt rejection, plus boundary
-coverage for the lowest supported rate.
+The shared loudness block builder now computes and validates its rounded 400 ms
+block and 100 ms hop before allocating or filtering. A zero block or hop returns
+an empty momentary series; integrated loudness consequently returns negative
+infinity. Coverage exercises every rate from 0 through 4 Hz, while the existing
+44.1/48 kHz EBU calibration and all other loudness tests remain green.
+
+The 1 Hz calmeter regression failed before the fix because `read_wav` accepted
+the file. The complete calmeter example suite, all loudness tests, and focused
+clippy pass after the fix.
 
 ## Notes
 

@@ -47,6 +47,11 @@ use ferrosintesis::offline::momentary_lufs;
 const WINDOW_S: f64 = 1.2;
 /// Extra audio metered before the window purely to warm the K-weighting filters.
 const PREROLL_S: f64 = 0.4;
+/// Lowest supported input rate for the calibration meter.
+///
+/// 8 kHz is the lowest conventional PCM rate with enough bandwidth for the
+/// BS.1770 K-weighting filter.
+const MIN_SAMPLE_RATE: u32 = 8_000;
 /// A note quieter than this never sounded on this engine. Lowered from -60 when the probe
 /// dropped to CC7=50 to keep the bus glue inert (`mkprobe.py PROBE_CC7`): that is a uniform
 /// -12.0 dB, so the floor moves with it to preserve the same sensitivity. It must stay below
@@ -91,8 +96,9 @@ struct Wav {
     sr: u32,
 }
 
-/// Minimal WAV reader — `wav.rs` in the library is write-only. Accepts 16-bit PCM
-/// (format 1) and **32-bit IEEE float (format 3)**.
+/// Minimal WAV reader — `wav.rs` in the library is write-only. Accepts sample
+/// rates of at least 8 kHz, 16-bit PCM (format 1), and **32-bit IEEE float
+/// (format 3)**.
 ///
 /// The float path is what makes the glue certificate possible: the CLI
 /// loudness-normalizes to -18 LUFS, which destroys absolute sample level, so a
@@ -123,6 +129,11 @@ fn read_wav(path: &str) -> Result<Wav, String> {
     if channels == 0 || !(bits == 16 || (bits == 32 && fmt == 3)) {
         return Err(format!(
             "{path}: need 16-bit PCM or 32-bit IEEE float, got {bits}-bit fmt {fmt} x{channels}"
+        ));
+    }
+    if sr < MIN_SAMPLE_RATE {
+        return Err(format!(
+            "{path}: unsupported sample rate {sr} Hz; need at least {MIN_SAMPLE_RATE} Hz"
         ));
     }
     let bytes = (bits / 8) as usize;
@@ -215,7 +226,69 @@ fn measure(w: &Wav, start: i64, window_frames: i64, preroll_frames: i64) -> (Vec
 
 #[cfg(test)]
 mod tests {
-    use super::onset_blocks;
+    use super::{onset_blocks, read_wav};
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TestWav(PathBuf);
+
+    impl TestWav {
+        fn at_rate(sample_rate: u32) -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock before Unix epoch")
+                .as_nanos();
+            let path = std::env::temp_dir()
+                .join(format!("calmeter-rate-{}-{nonce}.wav", std::process::id()));
+            let mut wav = Vec::new();
+            wav.extend_from_slice(b"RIFF");
+            wav.extend_from_slice(&40u32.to_le_bytes());
+            wav.extend_from_slice(b"WAVEfmt ");
+            wav.extend_from_slice(&16u32.to_le_bytes());
+            wav.extend_from_slice(&1u16.to_le_bytes());
+            wav.extend_from_slice(&2u16.to_le_bytes());
+            wav.extend_from_slice(&sample_rate.to_le_bytes());
+            wav.extend_from_slice(&(sample_rate * 4).to_le_bytes());
+            wav.extend_from_slice(&4u16.to_le_bytes());
+            wav.extend_from_slice(&16u16.to_le_bytes());
+            wav.extend_from_slice(b"data");
+            wav.extend_from_slice(&4u32.to_le_bytes());
+            wav.extend_from_slice(&[0; 4]);
+            std::fs::write(&path, wav).expect("write WAV fixture");
+            Self(path)
+        }
+
+        fn path(&self) -> &str {
+            self.0.to_str().expect("temporary path is UTF-8")
+        }
+    }
+
+    impl Drop for TestWav {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    #[test]
+    fn read_wav_rejects_a_one_hz_meter_input() {
+        let wav = TestWav::at_rate(1);
+        let error = match read_wav(wav.path()) {
+            Ok(_) => panic!("1 Hz must be rejected"),
+            Err(error) => error,
+        };
+        assert!(
+            error.contains("unsupported sample rate 1 Hz"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn read_wav_accepts_the_lowest_supported_rate() {
+        let wav = TestWav::at_rate(8_000);
+        let decoded = read_wav(wav.path()).expect("8 kHz is supported");
+        assert_eq!(decoded.sr, 8_000);
+        assert_eq!(decoded.samples.len(), 2);
+    }
 
     #[test]
     fn onset_blocks_drops_warmup_and_tail() {

@@ -8805,7 +8805,14 @@ pub(crate) const LA_EASTPLUCK: (f32, (f32, f32)) = (0.298, (0.05, 0.28));
 /// `altbank_steel_banks_share_the_model` guards. `samples = false` yields the
 /// bare model, which is what the CC0 3 alt (and any samples-off build) wants.
 pub(crate) fn steel_layered(
-    zones: &'static [crate::sampler::Zone],
+    // LAZY on purpose. This used to take `&'static [Zone]`, so every caller evaluated
+    // its bank accessor as an ARGUMENT — before this function could reach the
+    // `if !samples { return model; }` below. On a `--no-default-features` build that
+    // accessor panics ("sample requested from a modeled-only build"), so GM 25 killed
+    // the render even though the modeled fallback was sitting right here, correct and
+    // unreachable. Taking `fn() -> _` moves the call inside the sampled branch, where
+    // the `samples` decision has already been made. MM-BUG-KILN-00102.
+    zones: fn() -> &'static [crate::sampler::Zone],
     la: (f32, (f32, f32)),
     key: u8,
     vel: u8,
@@ -8817,6 +8824,7 @@ pub(crate) fn steel_layered(
     if !samples {
         return model;
     }
+    let zones = zones();
     let (gain, fade) = la;
     crate::sampler::LaVoice::wrap_var(
         model,
@@ -12941,7 +12949,7 @@ fn make_uncorrected(
         // the 2017 Martin HD28 that held this slot is now the CC0=2 alternate and
         // the fingerstyle Eastman take is CC0=1. See `altbank::make`'s `25` arm.
         25 => steel_layered(
-            crate::sampler::eastman_picked_bank(),
+            crate::sampler::eastman_picked_bank,
             LA_EASTPICK,
             key,
             vel,

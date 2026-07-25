@@ -1144,7 +1144,7 @@ pub fn make(
         // remap moves no existing render.
         25 => match bank {
             1 => crate::voices::steel_layered(
-                crate::sampler::eastman_plucked_bank(),
+                crate::sampler::eastman_plucked_bank,
                 crate::voices::LA_EASTPLUCK,
                 key,
                 vel,
@@ -1153,7 +1153,7 @@ pub fn make(
                 samples,
             ),
             2 => crate::voices::steel_layered(
-                crate::sampler::steel_bank(),
+                crate::sampler::steel_bank,
                 crate::voices::LA_STEEL,
                 key,
                 vel,

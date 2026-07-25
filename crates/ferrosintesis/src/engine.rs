@@ -135,8 +135,13 @@ fn aftertouch_family(program: u8) -> bool {
         )
 }
 
+/// Programs carrying a vocal formant bank, so CC70 can morph their vowel.
+/// GM 85 (Lead 6, voice) joined on 2026-07-25 with MM-REQ-KILN-00022: a voice
+/// that speaks through formants but cannot be re-vowelled would be an odd gap.
+/// Opt-in as always — the arms guarded by this are reached only once a channel
+/// has AUTHORED CC70, so a lead that never sends it renders exactly as before.
 fn vowel_family(program: u8) -> bool {
-    matches!(program, 52..=54 | 91)
+    matches!(program, 52..=54 | 85 | 91)
 }
 
 // CC70 vowel morph anchors for the choir programs (52-54). Bass/baritone
@@ -176,7 +181,12 @@ const VOWEL_ANCHORS: [VowelAnchor; 4] = [
 ];
 
 /// Interpolate the vowel tables at a (smoothed) CC70 position.
-fn vowel_at(pos: f32) -> Vowel {
+///
+/// `pub(crate)` because GM 85 (Lead 6, voice) builds its default formant bank
+/// from this same table rather than carrying its own copy of the numbers
+/// (MM-REQ-KILN-00022) — a second hand-written vowel table is exactly the
+/// drift this repo keeps paying for.
+pub(crate) fn vowel_at(pos: f32) -> Vowel {
     let p = pos.clamp(0.0, 127.0);
     let hi = VOWEL_ANCHORS
         .iter()

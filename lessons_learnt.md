@@ -10,6 +10,7 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.25 — **A tanh drive normalised by `tanh(g)` is a VOLUME knob — solve make-up at the level the voice really runs at** (`voices.rs:LEAD84_NOMINAL`).
 - 2026.07.25 — **A compensation constant marks an unfixed upstream bug — fix the cause and delete it** (`voices.rs:VEL_LEVEL_EXP`).
   - `t[6] = 1.500` was added to drag GM6's composite back under the <3 dB velocity contract, justified in its own
     comment as "its LA sample layer does not inherit that compression" — i.e. purely to paper over MM-BUG-KILN-00030.

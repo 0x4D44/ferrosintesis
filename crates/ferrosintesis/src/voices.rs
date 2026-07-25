@@ -6287,6 +6287,17 @@ pub struct SawStack {
     amp: f32,
     sr: f32,
     legato_enabled: bool, // strings/choir/leads slur on CC68; pads re-attack
+    // Post-filter tanh drive (GM 84 charang, MM-REQ-KILN-00021). 0.0 for every
+    // other caller, and the render loop tests `> 0.0` OUTSIDE the multiply, so
+    // those renders are bit-identical. Placed AFTER the filter on purpose: a
+    // shaper before the tone control has its new harmonics filtered straight
+    // back off, which is the opposite of what an overdriven lead sounds like.
+    drive: f32,
+    /// Make-up divisor `tanh(drive · x_nom) / x_nom`, giving the stage unity
+    /// gain at the level the voice actually runs at (`LEAD84_NOMINAL`), so
+    /// engaging the drive changes the wave's SHAPE without stepping its
+    /// loudness.
+    drive_norm: f32,
 }
 
 impl SawStack {
@@ -6384,6 +6395,8 @@ impl SawStack {
             bend: 1.0,
             filt,
             vowel_morph_start: None,
+            drive: 0.0,
+            drive_norm: 1.0,
             env,
             vib_depth: vib.1,
             vib_delay: (vib.2 * sr) as u32,
@@ -6577,6 +6590,9 @@ impl Voice for SawStack {
                     y
                 }
             };
+            if self.drive > 0.0 {
+                s = (s * self.drive).tanh() / self.drive_norm;
+            }
             *o += s * self.amp * self.env.next();
             self.t += 1;
         }
@@ -7173,6 +7189,13 @@ impl Voice for ChoirV2 {
 /// chiefly the one-shot filter envelope (`with_fenv`). The FX-family aliases
 /// 97/99/103 (base pad) and 101 (dispatched as `pad(95)`) fall through to the
 /// frozen arms until Stage 3 gives the FX family its own voice.
+/// Transverse mode ratios of an ideal free-free BAR — the glockenspiel /
+/// tubular-bell series (1 : 2.756 : 5.404 : 8.933). GM 93's inharmonic layers
+/// (MM-REQ-KILN-00023). Mode 4 is left out: at C4 it lands at 2.3 kHz, above the
+/// preset's 1600 Hz cutoff, so it would cost a layer to buy almost nothing.
+const PAD93_BAR_MODE_2: f32 = 2.756;
+const PAD93_BAR_MODE_3: f32 = 5.404;
+
 fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     match program {
         // 95 sweep — FROZEN. The sweep IS the instrument (1.8 octaves of slow
@@ -7288,29 +7311,55 @@ fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
             0.44,
         )
         .with_fenv(0.30, 1.4, 2000.0),
-        // 93 metallic — a resonant CLANG: a narrow pulse (even-rich, buzzy) under
-        // a self-resonant lowpass (Q 6.5) that clangs on the fenv onset and
-        // shimmers via a fast shallow sweep. HONEST LIMIT: this is a clang, not a
-        // bell — every SawStack partial is harmonic, so a true *inharmonic*
-        // metallic needs a Modal voice (a separate req, not this preset).
-        93 => SawStack::new_wave(
-            key,
-            vel,
-            sr,
-            seed,
-            4,
-            0.014,
-            0.0030,
-            StackFilter::Lp(Biquad::lowpass(1600.0, 6.5, sr)),
-            Adsr::new(0.15, 0.6, 0.8, 1.0, sr),
-            (0.0, 0.0, 0.0),
-            0.0,
-            Some((0.9, 1600.0, 0.35)),
-            6.5,
-            0.26,
-            Wave::Pulse(0.22),
-        )
-        .with_fenv(4.0, 0.18, 1600.0),
+        // 93 metallic — a resonant CLANG with GENUINELY INHARMONIC partials
+        // (MM-REQ-KILN-00003's sibling, MM-REQ-KILN-00023). A narrow pulse
+        // (even-rich, buzzy) under a self-resonant lowpass (Q 6.5) that clangs on
+        // the fenv onset and shimmers via a fast shallow sweep — and, on top of
+        // that harmonic body, two oscillator layers tuned to NON-integer ratios.
+        //
+        // The ratios are physics, not taste: 1 : 2.756 : 5.404 are the transverse
+        // mode frequencies of an ideal free-free BAR (the glockenspiel / tubular-
+        // bell series), which is why struck metal reads as metal and not as a
+        // pitched pipe. Laying them in as interval layers — the same
+        // `push_interval_layer` machinery the 86 fifth and 87 sub-octave use —
+        // keeps the voice a SUSTAINING pad, which a `Modal` bell (the route the
+        // old comment here proposed) could not: a Modal rings and decays, and
+        // GM 93 has to hold under a held key.
+        //
+        // Gains sit under the harmonic body on purpose: the brief is "metallic
+        // pad", so the written pitch must stay the tonal centre and the
+        // inharmonic modes colour it. Distinct seeds keep the two layers'
+        // phase/drift decorrelated (`push_interval_layer` salts from the seed it
+        // is given, so passing the same one twice would start both in step).
+        93 => {
+            let mut s = SawStack::new_wave(
+                key,
+                vel,
+                sr,
+                seed,
+                4,
+                0.014,
+                0.0030,
+                StackFilter::Lp(Biquad::lowpass(1600.0, 6.5, sr)),
+                Adsr::new(0.15, 0.6, 0.8, 1.0, sr),
+                (0.0, 0.0, 0.0),
+                0.0,
+                Some((0.9, 1600.0, 0.35)),
+                6.5,
+                0.26,
+                Wave::Pulse(0.22),
+            )
+            .with_fenv(4.0, 0.18, 1600.0);
+            s.push_interval_layer(Wave::Pulse(0.22), PAD93_BAR_MODE_2, 0.45, 0.0030, seed);
+            s.push_interval_layer(
+                Wave::Pulse(0.22),
+                PAD93_BAR_MODE_3,
+                0.30,
+                0.0030,
+                seed ^ 0x9E37_79B9,
+            );
+            s
+        }
         // 94 halo — AIR: a soft tonal core almost buried in a *swept band of
         // noise*. The only pad where noise is first-class; injected pre-filter,
         // so the sweep shapes the noise band as much as the tone (free shimmer).
@@ -7353,9 +7402,43 @@ fn pad(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     }
 }
 
+/// GM 85's vowel, given as a POSITION in the shared CC70 vowel bank rather than
+/// as its own copy of the formant numbers: 84.0 is the bank's "ah" anchor
+/// (`engine::VOWEL_ANCHORS`). Deriving it means a retune of the vowel table
+/// moves the choir and the voice lead together, instead of leaving a second
+/// hand-maintained table to drift (MM-REQ-KILN-00022).
+const LEAD85_VOWEL_CC: f32 = 84.0;
+
+/// GM 84's tanh drive depth (MM-REQ-KILN-00021). The charang is defined by a
+/// driven, edgy character, which no cutoff setting can produce: a filter can
+/// only REMOVE harmonics, and the patch's identity is harmonics that are not in
+/// the oscillator at all. Engineering gut-feel — this box has no ears; the
+/// oracle asserts that a nonlinearity is present and that it does not alias,
+/// not that the amount is tasteful.
+const LEAD84_DRIVE: f32 = 3.0;
+
+/// The shaper's OPERATING POINT: the input amplitude at which the drive stage
+/// has exactly unity gain, `tanh(drive·x)/x = 1`. It is what keeps the drive a
+/// TIMBRE control rather than a volume knob.
+///
+/// SOLVED, not guessed. The stage's RMS gain on this voice measures 1.918x, so
+/// the value is the root of `tanh(LEAD84_DRIVE · x) / x = 1.918`, which lands at
+/// 0.46 — nearer the waveform's peak than its RMS, because a tanh's compression
+/// is dominated by the peaks it flattens. Change `LEAD84_DRIVE` and this must be
+/// re-solved; LD-O2(c) fails if the two drift apart.
+///
+/// Both obvious normalisations move the level instead of the timbre, which is
+/// why neither is used: dividing by `tanh(drive)` maps full scale to full scale,
+/// but this voice never approaches full scale, so the stage runs at nearly its
+/// 3x small-signal gain and the patch jumps +5.7 dB; dividing by `drive` (unity
+/// small-signal) leaves the compression uncompensated, about -3.8 dB. A patch
+/// that got 5.7 dB louder would pass an "it sounds edgier" ear test for entirely
+/// the wrong reason — and would unbalance the five album tracks that play GM 84.
+const LEAD84_NOMINAL: f32 = 0.46;
+
 /// Per-program voicing for the GM synth leads (80-87). Kept to the cheap knobs
-/// the SawStack already exposes; bespoke per-program DSP (charang drive, voice
-/// formants, the 86 fifth / 87 sub-octave interval) is deferred to reqs.
+/// the SawStack already exposes, plus the two per-program identities that could
+/// not be reached that way: 84's drive and 85's formants.
 struct LeadSpec {
     wave: Wave,
     n_osc: usize,
@@ -7369,6 +7452,16 @@ struct LeadSpec {
     /// (MM-REQ-KILN-00020). Amounts are engineering gut-feel — this box has
     /// no ears; the oracles assert presence and tracking, not taste.
     interval: (f32, f32),
+    /// Position in the shared CC70 vowel bank whose formants REPLACE this
+    /// program's lowpass. `None` = the plain velocity-tracked lowpass (every
+    /// lead but 85). GM 85 is "Lead 6 (voice)", so its defining character is
+    /// spectral, not a filter setting (MM-REQ-KILN-00022).
+    vowel_cc: Option<f32>,
+    /// tanh drive depth applied AFTER the filter (0.0 = a clean lead). GM 84
+    /// ("charang") is the driven patch of the family (MM-REQ-KILN-00021); every
+    /// other lead passes 0.0 and its render is bit-identical (the render loop
+    /// branches on `> 0.0` outside the multiply).
+    drive: f32,
 }
 
 const LEADS: [LeadSpec; 8] = [
@@ -7381,6 +7474,8 @@ const LEADS: [LeadSpec; 8] = [
         q: 1.0,
         breath: 0.0,
         interval: (0.0, 0.0),
+        vowel_cc: None,
+        drive: 0.0,
     },
     // 81 saw lead — the classic (the one used by albums)
     LeadSpec {
@@ -7391,6 +7486,8 @@ const LEADS: [LeadSpec; 8] = [
         q: 1.1,
         breath: 0.0,
         interval: (0.0, 0.0),
+        vowel_cc: None,
+        drive: 0.0,
     },
     // 82 calliope — rounder pulse, breathy, no detune
     LeadSpec {
@@ -7401,6 +7498,8 @@ const LEADS: [LeadSpec; 8] = [
         q: 0.8,
         breath: 0.015,
         interval: (0.0, 0.0),
+        vowel_cc: None,
+        drive: 0.0,
     },
     // 83 chiff — airy saw
     LeadSpec {
@@ -7411,6 +7510,8 @@ const LEADS: [LeadSpec; 8] = [
         q: 1.0,
         breath: 0.05,
         interval: (0.0, 0.0),
+        vowel_cc: None,
+        drive: 0.0,
     },
     // 84 charang — brightest, edgiest saw
     LeadSpec {
@@ -7421,6 +7522,8 @@ const LEADS: [LeadSpec; 8] = [
         q: 1.4,
         breath: 0.0,
         interval: (0.0, 0.0),
+        vowel_cc: None,
+        drive: LEAD84_DRIVE,
     },
     // 85 voice lead — softer, breathy saw
     LeadSpec {
@@ -7431,6 +7534,8 @@ const LEADS: [LeadSpec; 8] = [
         q: 1.2,
         breath: 0.02,
         interval: (0.0, 0.0),
+        vowel_cc: Some(LEAD85_VOWEL_CC),
+        drive: 0.0,
     },
     // 86 fifths — saw pair + an authored parallel-fifth layer at 2^(7/12)
     // (MM-REQ-KILN-00019); the fifth sits just under unison gain so the
@@ -7443,6 +7548,8 @@ const LEADS: [LeadSpec; 8] = [
         q: 1.1,
         breath: 0.0,
         interval: (1.498_307, 0.85),
+        vowel_cc: None,
+        drive: 0.0,
     },
     // 87 bass+lead — darker saw + an envelope-locked sub-octave bass layer
     // (MM-REQ-KILN-00020); the sub rides the same env/filter as the lead.
@@ -7457,6 +7564,8 @@ const LEADS: [LeadSpec; 8] = [
         q: 1.0,
         breath: 0.0,
         interval: (0.5, 0.55),
+        vowel_cc: None,
+        drive: 0.0,
     },
 ];
 
@@ -7470,6 +7579,33 @@ fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     // filter CUTOFF: velocity opens the lead's brightness. Folding it as if it were a
     // level floor would silently turn a timbre control into a gain.
     let cutoff = (spec.cutoff * (0.55 + 0.45 * vel_ctrl(vel))).min(sr * 0.45);
+    // GM 85 (voice) speaks through a vocal formant bank instead of the lowpass:
+    // "Lead 6 (voice)" is a SPECTRAL identity — three resonant bands at the
+    // vowel's formants — which no cutoff setting on a saw can imitate
+    // (MM-REQ-KILN-00022). Every other lead keeps the velocity-tracked lowpass.
+    //
+    // `cur` is left at `tgt`, so the bank is static from the first sample, the
+    // way choir 91 does it: the "mm-ah" onset morph belongs to a sung entry, and
+    // a lead has to speak immediately. Velocity still tracks amplitude and the
+    // ADSR; it no longer opens a cutoff on this one program, because there is no
+    // cutoff to open — the formants ARE the timbre.
+    let filt = match spec.vowel_cc {
+        Some(pos) => {
+            let (freqs, qs, gains) = crate::engine::vowel_at(pos);
+            StackFilter::Formant {
+                bands: [
+                    Biquad::bandpass(freqs[0], qs[0], sr),
+                    Biquad::bandpass(freqs[1], qs[1], sr),
+                    Biquad::bandpass(freqs[2], qs[2], sr),
+                ],
+                gains,
+                cur: freqs,
+                tgt: freqs,
+                qs,
+            }
+        }
+        None => StackFilter::Lp(Biquad::lowpass(cutoff, spec.q, sr)),
+    };
     let mut s = SawStack::new_wave(
         key,
         vel,
@@ -7478,7 +7614,7 @@ fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         spec.n_osc,
         spec.detune,
         0.002, // light per-layer drift — leads sit tighter than pads
-        StackFilter::Lp(Biquad::lowpass(cutoff, spec.q, sr)),
+        filt,
         Adsr::new(vel_attack(0.010, vel), 0.06, 0.82, 0.10, sr),
         (0.0, 0.0, 0.0), // no always-on vibrato — CC1 mod wheel provides it
         spec.breath,
@@ -7488,6 +7624,10 @@ fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         spec.wave,
     );
     s.legato_enabled = true;
+    if spec.drive > 0.0 {
+        s.drive = spec.drive;
+        s.drive_norm = (spec.drive * LEAD84_NOMINAL).tanh() / LEAD84_NOMINAL;
+    }
     if spec.interval.0 > 0.0 {
         s.push_interval_layer(spec.wave, spec.interval.0, spec.interval.1, 0.002, seed);
     }
@@ -21295,6 +21435,321 @@ mod tests {
                      ordinary harmonic balance, so FX-O11 proves nothing"
                 );
             }
+        }
+    }
+
+    /// Prominence, in dB, of whatever peak sits within ±0.06·f0 of `ratio`·f0,
+    /// measured over the MEDIAN of its ±0.40·f0 neighbourhood (the peak's own
+    /// window excluded). Prominence — not height against the loudest partial —
+    /// is what separates a real partial from noise: pad 94 (halo) carries a
+    /// first-class noise bed whose ripple peak-picks as dozens of "inharmonic
+    /// partials" up to −18 dB below the strongest peak, yet its prominence never
+    /// exceeds +5.7 dB, where a genuine partial towers +22 dB or more.
+    fn partial_prominence_db(seg: &[f32], sr: f32, f0: f32, ratio: f32) -> f32 {
+        let (lo, step) = (0.5f32, 0.01f32);
+        let hi = 8.5f32;
+        let n = ((hi - lo) / step) as usize;
+        let mag: Vec<f32> = (0..=n)
+            .map(|i| {
+                let r = lo + i as f32 * step;
+                if r * f0 < sr * 0.45 {
+                    mag_at(seg, sr, r * f0)
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let idx = |r: f32| (((r - lo) / step).max(0.0) as usize).min(mag.len() - 1);
+        let (a, b) = (idx(ratio - 0.06), idx(ratio + 0.06));
+        let top = mag[a..=b].iter().cloned().fold(0.0f32, f32::max);
+        let mut floor: Vec<f32> = (idx(ratio - 0.40)..=idx(ratio + 0.40))
+            .filter(|i| *i < a || *i > b)
+            .map(|i| mag[i])
+            .collect();
+        floor.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        let med = floor[floor.len() / 2].max(1e-12);
+        20.0 * (top / med).max(1e-12).log10()
+    }
+
+    /// PD-O1 (MM-REQ-KILN-00023): GM 93 (Pad 6, metallic) must carry genuinely
+    /// INHARMONIC partials. Until 2026-07-25 it did not — it was a harmonic saw
+    /// stack under a resonant filter, and `voices.rs` said so in a comment
+    /// ("HONEST LIMIT: this is a clang, not a bell — every SawStack partial is
+    /// harmonic"). Two interval layers at the ideal free-free BAR mode ratios
+    /// (1 : 2.756 : 5.404 — the glockenspiel / tubular-bell series) supply them.
+    ///
+    /// Four claims, because "inharmonic" is easy to fake:
+    ///   (a) PRESENT — 93 has a prominent partial at each bar-mode ratio;
+    ///   (b) SPECIFIC — 93 has NO such partial at 2.50·f0, an inharmonic ratio
+    ///       nothing is designed at. Without this, a voice that simply got
+    ///       noisier everywhere would pass (a);
+    ///   (c) NOT MERELY DETUNED — the bar ratios sit ≥ 0.15 from every integer,
+    ///       asserted directly, so rounding 2.756 → 3.0 fails the oracle instead
+    ///       of quietly turning the partials back into harmonics;
+    ///   (d) STILL A PAD — the harmonic body survives (a strong partial at
+    ///       3·f0), so the written pitch stays the tonal centre. This is what
+    ///       keeps 93 a metallic PAD rather than a bell, and is why the layers
+    ///       ride under the body rather than replacing it.
+    ///
+    /// The controls are the other seven pads (88-92, 94, 95), which must show
+    /// nothing at the bar ratios. Measured: 93 reads +22.0 dB or better at every
+    /// key; the loudest control reads +5.9 dB. The threshold sits in that gap.
+    #[test]
+    fn pd_o1_metallic_93_carries_inharmonic_bar_modes() {
+        let sr = 44100.0;
+        // (c) the ratios are inharmonic BY CONSTRUCTION — pin it.
+        for r in [PAD93_BAR_MODE_2, PAD93_BAR_MODE_3] {
+            let d = (r - r.round()).abs();
+            assert!(
+                d >= 0.15,
+                "bar-mode ratio {r} is only {d:.3} from the integer {} — these layers \
+                 would be near-harmonic, which is the very thing MM-REQ-KILN-00023 \
+                 exists to prevent",
+                r.round()
+            );
+        }
+        for &(key, vel, seed) in &[(48u8, 100u8, 7u32), (60, 100, 7), (67, 90, 3)] {
+            let f0 = key_freq(key);
+            let sustain = |prog: u8| {
+                let s = render_voice(make(prog, key, vel, sr, seed, false), sr, 3.0);
+                s[(1.4 * sr) as usize..(1.75 * sr) as usize].to_vec()
+            };
+            let metallic = sustain(93);
+            let m2 = partial_prominence_db(&metallic, sr, f0, PAD93_BAR_MODE_2);
+            let m3 = partial_prominence_db(&metallic, sr, f0, PAD93_BAR_MODE_3);
+            let undesigned = partial_prominence_db(&metallic, sr, f0, 2.50);
+            let harmonic = partial_prominence_db(&metallic, sr, f0, 3.00);
+            println!(
+                "PD-O1 key {key} vel {vel} seed {seed}: 93 prominence @{PAD93_BAR_MODE_2}f0 \
+                 {m2:+.1} dB, @{PAD93_BAR_MODE_3}f0 {m3:+.1} dB | @2.50f0 (undesigned) \
+                 {undesigned:+.1} dB | @3f0 (harmonic body) {harmonic:+.1} dB"
+            );
+            // (a) present
+            assert!(
+                m2 >= 15.0,
+                "GM 93 (key {key}) has only {m2:+.1} dB of partial at the {PAD93_BAR_MODE_2}·f0 \
+                 bar mode — the metallic pad is a harmonic stack again"
+            );
+            assert!(
+                m3 >= 15.0,
+                "GM 93 (key {key}) has only {m3:+.1} dB of partial at the {PAD93_BAR_MODE_3}·f0 \
+                 bar mode"
+            );
+            // (b) specific, not just noisier everywhere
+            assert!(
+                undesigned <= 12.0,
+                "GM 93 (key {key}) reads {undesigned:+.1} dB at 2.50·f0, where nothing is \
+                 designed — the metric is seeing broadband roughness, not bar modes, so \
+                 (a) proves nothing"
+            );
+            // (d) still a pad: the harmonic body carries the written pitch
+            assert!(
+                harmonic >= 15.0,
+                "GM 93 (key {key}) has only {harmonic:+.1} dB at 3·f0 — the harmonic body \
+                 is gone, so this is a bell, not a metallic PAD"
+            );
+            // controls: no other pad has anything at the bar ratios
+            for ctl in [88u8, 89, 90, 91, 92, 94, 95] {
+                let s = sustain(ctl);
+                for r in [PAD93_BAR_MODE_2, PAD93_BAR_MODE_3] {
+                    let p = partial_prominence_db(&s, sr, f0, r);
+                    assert!(
+                        p <= 12.0,
+                        "harmonic pad {ctl} (key {key}) reads {p:+.1} dB at {r}·f0 — the \
+                         prominence metric fires on ordinary pads, so PD-O1 proves nothing"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The three formant band centres GM 85 speaks through, read from the SHARED
+    /// CC70 vowel bank rather than restated here.
+    fn lead85_formants() -> [f32; 3] {
+        crate::engine::vowel_at(LEAD85_VOWEL_CC).0
+    }
+
+    /// Contrast, in dB, between the three formant bands and the two valleys
+    /// BETWEEN them. A three-band resonant bank digs notches at fixed absolute
+    /// frequencies; a lowpass — however it is tuned — cannot make them.
+    fn formant_contrast_db(seg: &[f32], sr: f32) -> f32 {
+        let e = |lo: f32, hi: f32| spectral_band_rms(seg, sr, lo, hi).powi(2);
+        let peaks = e(555.0, 650.0) + e(985.0, 1100.0) + e(2130.0, 2380.0);
+        let valleys = e(760.0, 880.0) + e(1450.0, 1700.0);
+        10.0 * (peaks / valleys.max(1e-24)).max(1e-12).log10()
+    }
+
+    /// LD-O1 (MM-REQ-KILN-00022): GM 85 (Lead 6, voice) must shape its spectrum
+    /// with VOCAL FORMANTS, not render as another filtered saw. Until 2026-07-25
+    /// it was a saw stack under a 2500 Hz lowpass — the `LeadSpec` comment named
+    /// "voice formants" as deferred work and no req had been filed.
+    ///
+    /// The measurement is the peak/valley contrast above, and the statistic is
+    /// its MINIMUM ACROSS KEYS. That choice is the oracle's whole robustness
+    /// argument: a fixed formant bank digs its notches at the same absolute
+    /// frequencies for every note, so the contrast must hold at EVERY key —
+    /// whereas a coincidence produces it at some keys and not others. The
+    /// square-lead pulse waves (80, 82) are exactly that trap: `Wave::Pulse(0.5)`
+    /// has no even harmonics, and at key 55 its missing 4th and 8th land in both
+    /// valley bands, reading a spurious +97.6 dB. Their minima across keys are
+    /// −8.8 and −14.2 dB, so the minimum sees through it and a single-key
+    /// threshold would not.
+    ///
+    /// Measured: 85's minimum is +11.8 dB; the largest control minimum is
+    /// −2.6 dB. The thresholds sit inside that 14 dB gap.
+    ///
+    /// Keys stay in the low/mid register on purpose. Formants are only
+    /// observable where the harmonic comb is dense enough to sample the filter's
+    /// envelope: by key 72 (f0 523 Hz) the valleys at 800 and 1550 Hz have no
+    /// harmonic in them at all, so neither a formant bank nor a lowpass puts
+    /// energy there and the contrast stops being diagnostic for ANY voice. That
+    /// is a limit of what a spectrum can show, not of the feature — the bank is
+    /// key-independent by construction.
+    #[test]
+    fn ld_o1_voice_lead_85_speaks_through_formants() {
+        let sr = 44100.0;
+        let keys = [40u8, 45, 50, 55, 58, 60];
+
+        // The bands above must actually bracket the vowel bank's formants. If the
+        // shared table is ever retuned, this fails LOUDLY rather than letting the
+        // contrast silently measure empty spectrum — the derived-oracle trap
+        // (a source-derived predicate is still an assumption).
+        let f = lead85_formants();
+        for (i, (lo, hi)) in [(555.0, 650.0), (985.0, 1100.0), (2130.0, 2380.0)]
+            .iter()
+            .enumerate()
+        {
+            assert!(
+                f[i] >= *lo && f[i] <= *hi,
+                "vowel bank formant {} is {} Hz, outside LD-O1's measurement band \
+                 [{lo}, {hi}] — the bank was retuned and this oracle now measures the \
+                 wrong place; move the bands to follow it",
+                i + 1,
+                f[i]
+            );
+        }
+
+        let min_contrast = |prog: u8| -> f32 {
+            keys.iter()
+                .map(|&key| {
+                    let s = render_voice(make(prog, key, 100, sr, 7, false), sr, 1.2);
+                    formant_contrast_db(&s[(0.25 * sr) as usize..(0.85 * sr) as usize], sr)
+                })
+                .fold(f32::INFINITY, f32::min)
+        };
+        let voice = min_contrast(85);
+        println!("LD-O1: GM 85 formant contrast, min over {keys:?} = {voice:+.1} dB");
+        assert!(
+            voice >= 8.0,
+            "GM 85 formant contrast bottoms out at {voice:+.1} dB across {keys:?} — the \
+             voice lead has no formant bank; it is a filtered saw again"
+        );
+        for ctl in [80u8, 81, 82, 83, 84, 86, 87] {
+            let c = min_contrast(ctl);
+            println!("LD-O1:   control lead {ctl} = {c:+.1} dB");
+            assert!(
+                c <= 6.0,
+                "lead {ctl} reads {c:+.1} dB of formant contrast at every key — the \
+                 metric fires on ordinary leads, so LD-O1 proves nothing"
+            );
+        }
+    }
+
+    /// LD-O2 (MM-REQ-KILN-00021): GM 84 (Lead 5, charang) must carry the DRIVEN
+    /// edge that defines the patch, not be another clean saw made bright by a
+    /// higher cutoff. Until 2026-07-25 it was exactly that — the `LeadSpec`
+    /// comment listed "charang drive" as deferred work and no req had been filed.
+    ///
+    /// The control is an exact LINEAR TWIN: the same voice, same key, velocity
+    /// and seed, with only `drive` zeroed. Comparing against a different program
+    /// would confound the drive with that program's own cutoff; the twin isolates
+    /// the nonlinearity and nothing else. Three claims:
+    ///
+    ///   (a) DRIVEN — the twin cannot reach the high harmonics the shaper makes.
+    ///       This is the part no filter can imitate: a lowpass only REMOVES
+    ///       harmonics, and the charang's identity is harmonics the oscillator
+    ///       never had. Measured +5.2 dB or better over the twin.
+    ///   (b) CLEAN, NOT FIZZY — a waveshaper on a band-limited saw folds new
+    ///       harmonics back under Nyquist as INHARMONIC aliases, so the guard is
+    ///       the on/off-lattice contrast: the strongest magnitude on the harmonic
+    ///       lattice n·f0 against the strongest between its teeth. It must stay
+    ///       above the crate's existing 30 dB standard AND not fall meaningfully
+    ///       below the twin's, which is what says the drive added no alias floor.
+    ///   (c) TIMBRE, NOT LEVEL — RMS parity with the twin inside 1 dB. Without
+    ///       this the oracle would bless a drive that is really a volume knob:
+    ///       the naive `tanh(drive)` normalisation passes (a) handsomely while
+    ///       making the patch 5.7 dB louder, which would also unbalance the five
+    ///       album tracks that play GM 84.
+    #[test]
+    fn ld_o2_charang_84_is_driven_not_merely_bright() {
+        let sr = 44100.0;
+        // The drive is 84's identity ALONE — derived from the table, so adding it
+        // to a second lead has to be a deliberate edit here.
+        for p in 80u8..=87 {
+            assert_eq!(
+                LEADS[(p - 80) as usize].drive > 0.0,
+                p == 84,
+                "lead {p} drive presence changed — GM 84 is the driven patch of the family"
+            );
+        }
+        for &(key, vel, seed) in &[(48u8, 100u8, 7u32), (60, 100, 7), (69, 120, 7), (72, 70, 3)] {
+            let f0 = key_freq(key);
+            let mut driven = lead(84, key, vel, sr, seed);
+            let mut twin = lead(84, key, vel, sr, seed);
+            twin.drive = 0.0; // the exact linear counterfactual
+            let d = render_saw(&mut driven, sr, 1.0);
+            let t = render_saw(&mut twin, sr, 1.0);
+            let win = |x: &[f32]| x[(0.15 * sr) as usize..(0.75 * sr) as usize].to_vec();
+            let (ds, ts) = (win(&d), win(&t));
+
+            let hf = |x: &[f32]| {
+                spectral_band_rms(x, sr, 6000.0, 12000.0)
+                    / spectral_band_rms(x, sr, 200.0, 4000.0).max(1e-12)
+            };
+            let hf_gain = 20.0 * (hf(&ds) / hf(&ts).max(1e-12)).log10();
+            // strongest ON-lattice magnitude vs strongest BETWEEN the teeth; an
+            // alias lands off the lattice, so this collapses when the shaper
+            // folds energy back under Nyquist.
+            let lattice = |x: &[f32]| {
+                let (mut on, mut off) = (0.0f32, 0.0f32);
+                let mut n = 1.0f32;
+                while n * f0 < 15000.0 {
+                    on = on.max(mag_at(x, sr, n * f0));
+                    off = off.max(mag_at(x, sr, (n + 0.5) * f0));
+                    n += 1.0;
+                }
+                20.0 * (on / off.max(1e-12)).log10()
+            };
+            let (d_lat, t_lat) = (lattice(&ds), lattice(&ts));
+            let level = 20.0 * (rms(&ds) / rms(&ts).max(1e-12)).log10();
+            println!(
+                "LD-O2 key {key} vel {vel}: HF over linear twin {hf_gain:+.1} dB | \
+                 lattice {d_lat:.1} dB (twin {t_lat:.1}) | level {level:+.2} dB"
+            );
+            // (a) driven
+            assert!(
+                hf_gain >= 4.0,
+                "GM 84 (key {key}) puts only {hf_gain:+.1} dB more energy above 6 kHz than \
+                 its undriven twin — the charang has no drive; it is a clean saw again"
+            );
+            // (b) clean
+            assert!(
+                d_lat >= 30.0,
+                "GM 84 (key {key}) on/off-lattice contrast {d_lat:.1} dB is below the 30 dB \
+                 standard — the drive is aliasing"
+            );
+            assert!(
+                d_lat >= t_lat - 6.0,
+                "GM 84 (key {key}) lattice contrast {d_lat:.1} dB fell well below its \
+                 undriven twin's {t_lat:.1} dB — the shaper folded an alias floor in"
+            );
+            // (c) timbre, not level
+            assert!(
+                level.abs() <= 1.0,
+                "GM 84 (key {key}) is {level:+.2} dB off its undriven twin — the drive is \
+                 acting as a volume knob, so (a) proves brightness-by-loudness, not \
+                 waveshaping. Re-solve LEAD84_NOMINAL for the current LEAD84_DRIVE."
+            );
         }
     }
 

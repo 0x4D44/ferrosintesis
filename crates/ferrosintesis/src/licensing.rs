@@ -14,17 +14,17 @@
 //! omitted the other five (MM-BUG-KILN-00060), because each new sample crate landed in
 //! its own change and nobody re-read the inventory.
 //!
-//! These oracles remove the hand-maintenance. They derive the truth from the manifests —
-//! the default feature list, then each bank's own `license` field — and fail the build if
-//! the guide has drifted. Adding a new CC-BY bank to the default set and forgetting the
-//! README is now a red test, not a compliance risk discovered later.
+//! These oracles remove the hand-maintenance. They derive the default bank set from the
+//! manifest, derive each bank's attribution obligation independently from `PROVENANCE.md`,
+//! and fail the build if the guide has drifted. Adding a new CC-BY bank to the default set
+//! and forgetting the README is now a red test, not a compliance risk discovered later.
 //!
 //! ## What is deliberately NOT asserted here
 //!
-//! Whether each bank's declared licence is *correct* for the PCM it actually ships. That
-//! is a provenance question, answered by the per-crate `PROVENANCE.md` and its pinned
-//! source hashes, not something a text oracle can settle. This module takes each crate's
-//! declared `license` at face value and only checks that the guide is consistent with it.
+//! Whether each bank's provenance record is *correct* for the PCM it actually ships. The
+//! per-crate `PROVENANCE.md` and its pinned source hashes preserve the evidence, but a text
+//! oracle cannot settle that human judgement. This module does ensure that the provenance
+//! record and the crate's declared `license` agree about whether attribution is required.
 
 use std::path::{Path, PathBuf};
 
@@ -110,6 +110,49 @@ mod tests {
         license != "CC0-1.0"
     }
 
+    /// Attribution-bearing licences accepted in sample-bank provenance records.
+    ///
+    /// This is deliberately a licence vocabulary, not a list of crates. An unfamiliar
+    /// non-CC0 licence therefore fails closed until the oracle learns how the provenance
+    /// document spells it.
+    const ATTRIBUTION_LICENSES: &[&str] = &["MIT", "CC-BY-3.0", "CC-BY-4.0"];
+
+    /// Derive the obligation from the independent provenance record.
+    fn provenance_requires_attribution(provenance: &str) -> bool {
+        ATTRIBUTION_LICENSES
+            .iter()
+            .any(|license| names_license(provenance, license))
+    }
+
+    /// Whether the manifest's attribution claim agrees with the crate's provenance.
+    fn attribution_claim_agrees(declared_license: &str, provenance: &str) -> bool {
+        requires_attribution(declared_license) == provenance_requires_attribution(provenance)
+    }
+
+    /// Cross-check both records, then return the provenance-derived obligation.
+    fn crate_requires_attribution(krate: &str, declared_license: &str) -> bool {
+        let provenance = read(&crates_dir().join(krate).join("PROVENANCE.md"));
+        let provenance_requires = provenance_requires_attribution(&provenance);
+        assert!(
+            attribution_claim_agrees(declared_license, &provenance),
+            "{krate}/Cargo.toml declares {declared_license}, which says attribution is {}, \
+             but {krate}/PROVENANCE.md says it is {}. The manifest cannot exempt its own \
+             audio from the attribution oracles; reconcile the declaration with the \
+             retained provenance evidence.",
+            if requires_attribution(declared_license) {
+                "required"
+            } else {
+                "not required"
+            },
+            if provenance_requires {
+                "required"
+            } else {
+                "not required"
+            }
+        );
+        provenance_requires
+    }
+
     /// Spellings of a licence id that count as naming it.
     ///
     /// The repo uses both the SPDX form (`CC-BY-4.0`, in manifests) and the prose form
@@ -188,6 +231,15 @@ mod tests {
         );
     }
 
+    #[test]
+    fn provenance_prevents_a_manifest_from_self_exempting() {
+        let provenance = "Two real recordings from Freesound, each licensed under **CC BY 4.0**.";
+        assert!(
+            !attribution_claim_agrees("CC0-1.0", provenance),
+            "a CC0 manifest declaration must disagree with provenance that records CC BY audio"
+        );
+    }
+
     /// The licence-section heading in force where `krate` is named in the parent NOTICE.
     ///
     /// The file groups banks under `---- / MIT / ----` style rules, and several banks
@@ -241,7 +293,7 @@ mod tests {
         let mut covered = 0usize;
         for krate in default_sample_crates() {
             let license = declared_license(&krate);
-            if !requires_attribution(&license) {
+            if !crate_requires_attribution(&krate, &license) {
                 continue;
             }
             let Some(row) = readme.lines().find(|l| mentions(l, &krate)) else {
@@ -335,7 +387,7 @@ mod tests {
         let mut uncredited = Vec::new();
         for krate in default_sample_crates() {
             let license = declared_license(&krate);
-            if !requires_attribution(&license) {
+            if !crate_requires_attribution(&krate, &license) {
                 continue;
             }
             if !mentions(&notice, &krate) {
@@ -392,7 +444,7 @@ mod tests {
         let mut missing = Vec::new();
         for krate in default_sample_crates() {
             let license = declared_license(&krate);
-            if !requires_attribution(&license) {
+            if !crate_requires_attribution(&krate, &license) {
                 continue;
             }
             let notice = crates_dir().join(&krate).join("NOTICE");

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00111 — Changing one manifest field removes a sample crate from every attribution oracle
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** licensing oracles / attribution
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 4.6 from an adversarial review of the licensing oracles while landing MM-REQ-KILN-00029.)
+- **State history:** Open (2026-07-25, raised by Claude Opus 4.6 from an adversarial review of the licensing oracles while landing MM-REQ-KILN-00029) → Fixed (2026-07-25, Codex GPT-5.6-Sol; all attribution oracles now derive the obligation from packaged provenance and reject a conflicting manifest declaration; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -59,17 +59,24 @@ itself was reasoned through, not applied to the tracked tree.**
 
 ## Fix
 
-The declaration should be cross-checked against something the crate cannot restate. Since
-MM-REQ-KILN-00029 landed, there is now such a thing: `PROVENANCE.md` carries the retained
-upstream licence manifests and per-sound licence records, and
-`crates/ferrosintesis/src/provenance.rs` already pins every committed source by hash.
+Implemented in `crates/ferrosintesis/src/licensing.rs`. Each attribution oracle now reads
+the sample crate's packaged `PROVENANCE.md`, recognizes the repository's supported
+attribution-bearing licence vocabulary, and derives the obligation from that independent
+record. It then asserts that the crate's manifest declaration agrees before deciding
+whether to check the README or notices. The enumeration remains derived; there is no list
+of attribution-bearing crates.
 
-Suggested shape: derive the attribution obligation from the crate's **provenance document**
-(does it record a non-CC0 upstream licence?) and assert it agrees with the manifest's
-`license` field. A disagreement is then a red test rather than a silent exemption. That
-keeps the enumeration derived — both sides come from files already required to exist — and
-introduces no hand-maintained list of "crates that really do need attribution", which would
-inherit the defect it exists to catch.
+The adversarial regression pins the original one-token mutation: a `CC0-1.0` manifest
+declaration disagrees with provenance recording CC BY 4.0 and therefore cannot exempt the
+crate. Before the fix, the test failed because the manifest compared only with itself. All
+25 current default sample crates agree with their provenance records.
+
+Validation on 2026-07-25:
+
+- Five licensing tests, including the manifest self-exemption regression: passed.
+- The same five tests under `--no-default-features`: passed.
+- The same five tests on Rust 1.87: passed.
+- `cargo clippy -p ferrosintesis --lib --tests -- -D warnings`: passed.
 
 ## Notes
 

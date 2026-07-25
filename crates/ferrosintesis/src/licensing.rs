@@ -139,7 +139,9 @@ mod tests {
     ///
     /// The licence's own URL is excluded deliberately: it appears in every notice, so it
     /// would make the check pass for a bank whose credit was never carried over.
-    fn credit_tokens(notice: &str) -> Vec<String> {
+    /// Likewise, tokens contained in our crate, project or licence names are identifiers
+    /// we own, not evidence that a third party was credited.
+    fn credit_tokens(notice: &str, krate: &str, license: &str) -> Vec<String> {
         let mut out = Vec::new();
         let mut rest = notice;
         while let Some((_, after)) = rest.split_once('"') {
@@ -162,7 +164,28 @@ mod tests {
                 }
             }
         }
+        let krate = krate.to_ascii_lowercase();
+        let license_spellings: Vec<String> = license_spellings(license)
+            .into_iter()
+            .map(|s| s.to_ascii_lowercase())
+            .collect();
+        out.retain(|candidate| {
+            let candidate = candidate.to_ascii_lowercase();
+            !krate.contains(&candidate)
+                && !"ferrosintesis".contains(&candidate)
+                && !license_spellings.iter().any(|s| s.contains(&candidate))
+        });
         out
+    }
+
+    #[test]
+    fn a_crates_own_name_is_not_a_credit_token() {
+        let gutted =
+            "ferrosintesis-samples-ccby audio is licensed CC BY 4.0. See the \"ccby\" bank.";
+        assert!(
+            credit_tokens(gutted, "ferrosintesis-samples-ccby", "CC-BY-4.0").is_empty(),
+            "our own crate name cannot stand in for a licensor, work title, or source URL"
+        );
     }
 
     /// The licence-section heading in force where `krate` is named in the parent NOTICE.
@@ -229,7 +252,11 @@ mod tests {
             if !names_license(row, &license) {
                 unlicensed.push(format!("{krate}: declares {license}, row says none"));
             }
-            let tokens = credit_tokens(&read(&crates_dir().join(&krate).join("NOTICE")));
+            let tokens = credit_tokens(
+                &read(&crates_dir().join(&krate).join("NOTICE")),
+                &krate,
+                &license,
+            );
             assert!(
                 !tokens.is_empty(),
                 "{krate}/NOTICE carries no quoted work title and no source URL, so \
@@ -327,7 +354,11 @@ mod tests {
                 )),
             }
             // The licensor's own words reached this file.
-            let tokens = credit_tokens(&read(&crates_dir().join(&krate).join("NOTICE")));
+            let tokens = credit_tokens(
+                &read(&crates_dir().join(&krate).join("NOTICE")),
+                &krate,
+                &license,
+            );
             if !tokens.iter().any(|t| notice.contains(t.as_str())) {
                 uncredited.push(format!("{krate}: none of {tokens:?} appear"));
             }
@@ -377,7 +408,7 @@ mod tests {
             // A length floor is satisfied by any 41 characters. These are the parts a
             // licence actually requires: who is credited, and under what terms.
             assert!(
-                !credit_tokens(&text).is_empty(),
+                !credit_tokens(&text, &krate, &license).is_empty(),
                 "{krate}/NOTICE names no work and cites no source (no quoted title, no \
                  URL) — it is text, not an attribution"
             );

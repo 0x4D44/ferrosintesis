@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00110 — A crate's own name still counts as a credit token, so a gutted NOTICE passes
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** licensing oracles / attribution
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 4.6 from an adversarial re-check of the MM-BUG-KILN-00071 fix while landing MM-REQ-KILN-00029. Found by re-implementing the predicate and running it against a document built to defeat it, per the repo's "write the adversarial document that *should* fail your oracle" rule.)
+- **State history:** Open (2026-07-25, raised by Claude Opus 4.6 from an adversarial re-check of the MM-BUG-KILN-00071 fix while landing MM-REQ-KILN-00029) → Fixed (2026-07-25, Codex GPT-5.6-Sol; extracted credits now reject tokens derived from the crate, project, or licence names, with the gutted NOTICE pinned red-before/green-after; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -60,14 +60,21 @@ observed end-to-end.**
 
 ## Fix
 
-A one-line predicate closes the demonstrated break, and it is derivable rather than
-hand-maintained: reject any candidate token that is a substring of the crate name, of
-`ferrosintesis`, or of the licence spellings. The crate name comes from the directory and
-the licence from the manifest, so no list is introduced and no guard inherits the defect.
+Implemented in `crates/ferrosintesis/src/licensing.rs`. `credit_tokens()` now receives
+the derived crate name and declared licence. After extracting quoted titles and source
+URLs, it case-folds and rejects any candidate that is a substring of the crate name,
+`ferrosintesis`, or an accepted spelling of the licence. No attribution list was added.
 
-Land it with the gutted document above as a fixture that must go **red** — the repo's rule
-is that a derived oracle is only as good as its enumeration predicate, and the way to find
-out is to write the document that should fail it and check that it does.
+The exact gutted `ferrosintesis-samples-ccby` NOTICE is now a fixture. Before the fix it
+failed because `ccby` survived as the sole credit. It now yields no credit token, while
+all real notices still satisfy the three end-to-end attribution oracles.
+
+Validation on 2026-07-25:
+
+- Four licensing tests, including the adversarial fixture: passed with default features.
+- The same four tests under `--no-default-features`: passed.
+- The same four tests on Rust 1.87: passed.
+- `cargo clippy -p ferrosintesis --lib --tests -- -D warnings`: passed.
 
 ## Notes
 

@@ -57,22 +57,9 @@
   line, or run rustfmt on its output) so a future single-file regen is gate-clean
   without a manual `cargo fmt` pass.
 
-- [x] 2026.07.19 — **Consolidate the snare-wire D1 noise-gain into `noise_vel_gain`**
-  — DONE 2026.07.19: folded `let d1_noise = 0.5 + 0.5 * velnorm * velnorm;` to
-  `noise_vel_gain(velnorm)` (`drums.rs` snare-wire path). Byte-identical, confirmed by
-  the frozen `v1`/`brush` drum signatures + snare oracles passing unchanged (the
-  stronger byte-identity oracle, so no render-diff needed). Same worktree also added
-  the `absolute_burst_drums_scale_purely_by_gain` guard closing the with_bursts audit.
-
-<!-- 2026.07.18: the 10 items below are the low-value tail of the ferrosintesis
+<!-- 2026.07.18: the items below are the low-value tail of the ferrosintesis
      subsystem audit; the meaningful findings were raised as MM-BUG-KILN-00005..00022.
      Parked here (not ledgered) per Arthur's "meaningful items; park trivia" call. -->
-
-- [x] 2026.07.18 — **Steel-guitar (GM25) high keys (~≥76) have a post-crossfade handover
-  cliff: the KS string over-damps** — RESOLVED (decay half) 2026.07.19 by guitar block
-  two's `treble_hold_hz` damper hold (`voices.rs` PluckPreset; NYLON/STEEL 500 Hz):
-  high-key decay now −40…−67 dB/s at vel 100 (`guitar_treble_hold_decay_band`), nylon
-  k76 seam rows added. Residual split into the item below.
 
 - [ ] 2026.07.19 — **Steel (GM25) high-key wrap-gain LEVEL parity: the peak-normalized
   recorded take speaks ~4× (12 dB) above the now-ringing model at key 76, at EVERY
@@ -145,12 +132,6 @@
   (2026-07-20 partial: the `DESIGN.md:~99` GM 120–127 "toneless" clause that was also
   tracked here is fixed by the docs-drift sweep.)
 
-- [x] 2026.07.17 — **`tools/ferrosintesis-samples/README.md` inventory is stale on GM25
-  steel.** (Resolved 2026-07-20, docs-drift sweep verification: the README now documents
-  the steel bank at lines ~56–59 — "GM 25 (steel) is its own `steel_*.wav` bank: 8 zones
-  E2–B5 from a 2017 Martin HD28" — matching `sampler.rs` `steel_bank()` and the assets.
-  Fixed by an intervening task; entry obsolete.)
-
 - [ ] 2026.07.16 — **`LA_PROGRAMS` in voices.rs tests (~:19255) is stale vs the make()
   wiring.** It lists GM 2 (fully modeled electric grand — the samples flag changes
   nothing) and omits GM 41 (which DOES wrap the violin bank since round 2). Consequence
@@ -167,30 +148,6 @@
   entries carry their own), so registers can no longer silently diverge. Delete the
   function and the comment references to it, or rewrite it against REGISTER_MAY_DIVERGE
   if any check is still wanted. (Spotted during the round-2 tam-tam audition work.)
-
-- [x] 2026.07.14 — **`tests/test_render_opus.py` is orphaned dead code.** It does
-  `import render_opus` (`tests/test_render_opus.py:7`), but `render_opus.py` was retired
-  when the Rust `render-catalog` replaced it (`crates/render-catalog/src/main.rs:3`
-  states it "Replaces the retired `render_opus.py`"). No `render_opus.py` exists anywhere
-  in the tree, so the whole module now errors at import/collection (`ModuleNotFoundError`)
-  and every body call is dead (`:20` `render_opus.lyrics_for`, `:55` `encoder_comments`,
-  `:63` `all_midis`, `:66` `validate_lyrics_sidecars`). The render pipeline's coverage now
-  lives in Rust (`crates/render-catalog/tests/`). Spotted during the root
-  analysis-script triage (the five loudness-measurement leftovers were removed in the same
-  task; this Python test is the same post-Rust-port leftover class but was parked for a
-  separate dead-test-cleanup decision).
-  (Done 2026-07-14: deleted `tests/test_render_opus.py` and the now-purposeless
-  `tests/__init__.py` — its only reason to exist was to package that one test — so the
-  empty root `tests/` scaffold is gone entirely. No pytest/unittest config referenced it.)
-
-- [x] 2026.07.13 — **DONE (2026.07.13, weak-voices task): reusable render-diff harness at
-  `tools/render-diff/render_diff.py`.** Parameterized `--baseline`/`--new` binaries +
-  `--program`/`--key` "touched voice" declarations → per-album WAV-hash table classifying
-  every track EXPECTED-changed / EXPECTED-same / CONTAMINATION / NOT-REACHED, exit nonzero on
-  contamination. Diffs `.wav` renders (not committed assets), as the note asked. It scans each
-  MIDI for the programs/keys it actually SOUNDS (program changes with no notes don't count).
-  Validated on the weak-voices change across 99 album MIDIs: 76 changed, 23 same, 0
-  contamination. NOTE the `tools/` gitignore trap it exposed (see lessons_learnt).
 
 - [ ] 2026.07.14 — **BowedString (GM 42/43) has a wolf band at keys 46–50 (B♭2–D3): the
   waveguide abandons its fundamental and mode-locks onto ~3·f0** (both programs, all seeds
@@ -227,25 +184,6 @@
   workflow shifted: `.opus` is now git-ignored build output rendered via `build.py`, so a fresh
   harness should diff `.wav` renders, not committed assets.
 
-- [x] 2026.07.13 — **`CLAUDE.md` version string is stale** (was "currently 0.14.3", then
-  "0.17.0", actual 0.21.49; root `README.md` pinned `0.13.5`). (Resolved 2026-07-20,
-  docs-drift sweep: both now point at `crates/ferrosintesis/Cargo.toml` as the source of
-  truth instead of pinning a number — root README uses `cargo add` — so they cannot
-  re-stale.)
-
-- [x] 2026.07.12 — **`crates/ferrosintesis/README.md`'s GM table contradicts the source in 8
-  places.** (Resolved 2026-07-20 by the docs-drift sweep, each correction re-verified against
-  current source first: (1) both rows were stale — since Stage 3 ALL of 96–103 route through
-  the `Fx` wrapper (`voices.rs:12142`); README/DESIGN got a dedicated Fx row. (2) GM 31
-  flageolet documented (2f below E4, 3f at/above — monotonic with an upward leap, not
-  non-monotonic as first noted). (3) CC0 row rewritten from the full `altbank.rs:1023-1180`
-  dispatch — note the GM 19 claim had *inverted* meanwhile: default IS the drawbar, CC0=2 the
-  cathedral. (4) alt-119 key-tracking caveat added. (6) documented as-is; the missing
-  interval/sub-octave are now tracked reqs MM-REQ-KILN-00019/00020. (7) dulcimer wound-split
-  skip added. (8) CC2/CC66/CC67/CC71/CC84/CC32/CC120-123 rows + sympathetic buses added; the
-  ch-10 room send CC91 gap is documented honestly and raised as MM-BUG-KILN-00028.
-  Item (5) is a code comment — extracted to the 2026-07-20 stale-doc-comments entry below.)
-
 - [ ] 2026-07-20 — **Stale `.rs` doc comments the docs-drift sweep verified but could not fix
   (docs-lane branch, no source edits):** `drums.rs:1358` claims `make` returns "`None` for
   unmapped keys" — false, every arm returns `Some` (generic tick at `drums.rs:2023`);
@@ -267,109 +205,6 @@
   collapse it to a bare stage id: `ALLOW: &[(u8, u8, u8)]` and `allow_reason ->
   Option<u8>`. Deferred to avoid widening Stage 4 into a shared-infra refactor.
 
-- [x] 2026.07.12 — **ferrosintesis renders are NOT bit-reproducible across the
-  fleet's machines** — surfaced completing the guitar-v2 opus refresh. This box
-  renders SawStack pad(89) to hash `7190932198068575567`, while the frozen canary
-  `altbank::tests::sawstack_v1_canary_frozen` is pinned to `7408265371089978107`
-  (another machine's render) — the exact pair logged 2026.07.09. The brass-ADAA
-  re-pin `0a7bbc3` re-froze it to the pin-machine, so it is RED on THIS box at
-  v0.15.1 (green on whatever box gates it — not a trunk regression). Same
-  nondeterminism in opus: rendering Through Lines 07 German Bight at identical
-  v0.15.1 code+MIDI on this box gives different bytes than the brass agent's
-  committed copy. Consequences: (1) exact-hash render canaries are non-portable —
-  make `sawstack_v1_canary_frozen` (+ peers) tolerance-based or scope them to one
-  gating machine; (2) the "deterministic render ⇒ git sees only changed tracks"
-  listening model holds within ONE box only — decide opus staleness by synth
-  VERSION / render-history, not by byte-diffing another box's render, and run any
-  catalog-wide refresh from a single machine. Promote to lessons_learnt at the
-  next prune. (Guitar-v2 opus itself is complete: all 20 tracks at the right synth
-  version on origin/main; this is a separate fleet-repro issue.)
-  (Done 2026-07-12: replaced all nine stored full-buffer fingerprints with
-  tolerance-based RMS, spectral-centroid, and late/early-envelope signatures.
-  Exact comparisons remain only for buffers rendered within the same test run.)
-- [x] 2026.07.12 — **Push-loop process bug**: a per-file `git push origin
-  <sha>:main` loop that rebases on race used `git rebase … | tail`; the pipe's
-  exit code (from `tail`, always 0) MASKED a rebase conflict, so the loop kept
-  pushing the partially-applied stack and falsely reported success. Capture the
-  rebase rc directly (`git rebase …; rc=$?`) and STOP on conflict — never gate
-  control flow on a piped git command's exit status (same class as the Git-Bash
-  python-shim exit-swallow already in this repo's lessons).
-  (Done 2026-07-13: Deltic 3.36.561 adds `deltic integrate --push
-  --incremental`, restricted to per-commit-preflighted `listening/**/*.opus` plus
-  docs. It uses direct Git statuses, fetch/rebase/re-gate between commits, a
-  bounded retry budget, remote reconciliation for uncertain pushes, explicit
-  partial-progress errors, and worktree retention on conflict. Local-Git
-  regressions cover the original mid-stack conflict, hidden source changes,
-  already-landed reruns, and uncertain/rebased push retries; integrated to Deltic
-  `origin/main` at `5bc98d39`.)
-- [x] 2026.07.12 — **Extract a `control_lfo(rate, rng, sr) -> Sine` helper.** The
-  control-rate LFO line `Sine::new(rate*(1.0+0.08*rng.white()), sr/CTRL as f32, 0.0)`
-  is now duplicated verbatim in three voices — `Wind` (`crates/ferrosintesis/src/voices.rs:4548`),
-  `Reed` (`:5673`), `Bowed` (`~:4810`) — and it is the *exact* line whose `sr` vs
-  `sr/CTRL` form caused MM-BUG-KILN-00003. A one-line helper would put the invariant
-  in one place so a future 4th voice can't reintroduce the bug. Deferred from Stage 1
-  (pipes) deliberately: it touches Reed/Bowed, which are out of scope and whose renders
-  must be re-verified byte-identical after the extraction (the RNG-draw order must be
-  preserved exactly). Small, safe, but cross-cutting — do it as its own task.
-  (Done 2026-07-12: Wind, Reed, and Bowed now share `control_lfo`; focused
-  frequency tests pass and the catalog render inventory verifies output identity.)
-
-- [x] **2026.07.08 — ARTHUR'S CALL: pre-existing vibrato bug in the shipped
-  Wind + Bowed voices.** The 55-71 review found the reed vibrato ran 16x too slow
-  (fixed); the SAME bug is latent in Wind (`voices.rs` ~1730/1747) and Bowed
-  (~1841/1860) — an LFO `Sine` built at full `sr` but ticked once per `CTRL`
-  samples, so the labelled ~5 Hz flute/whistle/fiddle vibrato is actually a
-  ~0.3 Hz drift. It is a genuine quality bug. Fixing it (build at `sr/CTRL`, like
-  the corrected reed/brass) CHANGES committed renders — Hollow Hill P1/P2
-  (flute 73, whistle 78, fiddle 40), The Signal Fire, Winter Guests, Sub Rosa.
-  Left OUT of v0.9 (scope = brass/reeds/orchestral) and flagged for Arthur: fix
-  in a follow-up (its own listen), or fold into v0.9 under the relaxed policy.
-  (Verified 2026-07-10 at `voices.rs:3726` and `voices.rs:3837`; decision still needed.)
-  (Already fixed 2026-07-12: Bowed was already corrected; Stage 1 commit
-  `48a7e71` fixed Wind and `ede3347` refreshed all 32 affected listening assets.
-  `MM-BUG-KILN-00003` remains the independent two-eyes closure record.)
-- [x] 2026.07.10 - `altbank::tests::sawstack_v1_canary_frozen` FAILS under
-  `cargo test --release` at trunk 66fa84a (pad(89) fingerprint mismatch,
-  `crates/ferrosintesis/src/altbank.rs:1422`); passes in debug. The exact-hash
-  pin is opt-level-sensitive (float codegen differs in release). Pre-existing,
-  unrelated to the choir-v2 unit; either pin per-profile hashes or run the
-  canary debug-only.
-  (Done 2026-07-12: accepted the two exact fingerprints observed across fleet
-  machines/profiles while continuing to reject every other render. Portable
-  metric-based canaries remain in the cross-machine-repro item above.)
-- [x] 2026.07.12 - Guitar v2 sustainer: latched 29/30 voices never decay while
-  held, so CC64 (deferred note_off, `engine.rs` pedal path) or heavily stacked
-  long notes accumulate permanently-held voices (polyphony/CPU wall + an organ-
-  like bed). Out of catalog today (no album authors CC64 on driven guitars -
-  2026.07.11 usage survey) and documented in the README, but a follow-up design
-  should give the engine a per-channel cap or newest-wins policy for LATCHED
-  voices (needs a small Voice-trait surface, e.g. `is_holding()`), review C1.
-  (Verified 2026-07-12: still real; `EngineCore::note_on` pushes without a cap
-  and `Pluck::render` holds driven notes indefinitely. Decision still needed.
-  Recommend an eight-voice per-channel cap for unreleased GM 29/30 voices,
-  releasing the oldest when the ninth spawns; newest-wins would break power chords.)
-  (Done 2026-07-12: the engine releases the oldest unreleased GM 29/30 voice
-  before spawning a ninth on the same channel, overriding sustain and sostenuto.)
-- [x] 2026.07.12 - Trunk's cello-v2 task (GM 42/43 waveguide+LA, `sampler.rs`
-  cello/contrabass banks) left several **cello-only** committed `listening/*.opus`
-  lagging its own synth — surfaced during guitar-v2 integration by re-rendering
-  with the merged binary: `listening/GPT-5.6/Atlas of Becoming/{05 - One Cell Many
-  Skies, 10 - The Library at the End of Weather, 11 - Clockwork Orchard, 12 -
-  Letters to a Future Ocean}.opus` and `listening/OpenAI Codex/Synth Feature
-  Showcase/03 - Skyline Brass Reactor.opus` all render different bytes than
-  committed. These have NO guitar 26-31 content, so guitar-v2 does not touch them —
-  left at trunk's committed bytes (out of guitar-v2 scope). A cello/catalog-refresh
-  sweep should re-render every GM 42/43 album against the current trunk binary (the
-  full list is likely broader than these 5 — only guitar-cello overlaps were
-  rendered here). Verify against a render-diff (baseline = current origin/main).
-  (Verified 2026-07-12: still stale on `origin/main`, but
-  `task/20260711-TSK-claude-cello-waveguide` already contains 36 refreshed GM42
-  assets in seven commits; it is ahead 7 / behind 14. Rebase and integrate that
-  existing branch instead of duplicating the render.)
-  (Done 2026-07-13: rebased the seven commits from 43-behind onto v0.15.3,
-  rescanned the expanded 104-MIDI catalog, and rerendered all 36 committed-Opus
-  GM42 tracks. Nine were already current through later trunk refreshes; the final
-  recovered delta contains the remaining 27 listening assets.)
 - [ ] 2026.07.13 - `render_opus.py --jobs 4` can emit a different Opus container
   from a subsequent `--jobs 1` render of the same MIDI and synth, while decoded
   float PCM is SHA-256 identical. Seen on Atlas of Becoming 05 during cello-v2
@@ -378,57 +213,6 @@
   Opus equality as the audio oracle. Investigate whether `ropusenc` stream serial
   assignment depends on parallel launch timing, then make it deterministic or
   compare decoded PCM in render-refresh tooling.
-- [x] 2026.07.11 - The GOLDEN fixture's drum row (ch 9: pinned −22.51 dB / 726.7 Hz,
-  currently rendering −22.30 dB / 685.2 Hz) has drifted within tolerance since the
-  V3-kit recapture — later drum commits (e.g. `87b794c` cymbal detuned-pair density)
-  moved it without re-pinning (`crates/ferrosintesis/src/testutil.rs` GOLDEN table).
-  Harmless (guard passes), but the next drum task should re-pin ch 9 so the fixture
-  reflects what it actually renders. Spotted during the guitar v2 unit-A recapture.
-  (Done 2026-07-12: re-ran `print_golden_fixture` and re-pinned ch 9 to
-  −22.30 dB / 685.2 Hz; `golden_mix_balance_holds` passes.)
-- [x] 2026.07.11 - Committed `listening/*.opus` look **stale vs the 0.13.4 trunk**
-  ("finalize strings on cathedral trunk" `3c8e7ee`). Re-running `python
-  render_opus.py` with the current binary regenerates *different* bytes for
-  non-organ albums the reed-rasp task cannot touch (e.g. Through Lines — no GM19)
-  and even creates fresh MIDI-only opus (VIGIL/RIVERWAKE under
-  `listening/Claude Opus 4.8/`). Spotted while scoping the reed-rasp refresh; the
-  reed-rasp task only refreshed its own 3 GM19+CC11 albums (Architecture of Air,
-  Atlas #14, Hollow Hill). A separate catalog-refresh pass should re-render the
-  strings-affected albums to bring the published audio current — verify against a
-  `render_diff.py` (baseline = 0.13.4 trunk binary) so only genuine deltas land.
-  (Promoted 2026-07-12: `MM-REQ-KILN-00018`; the old render-all branch is now
-  20 commits behind and differs from current trunk in 52 listening files, so it
-  must be re-scoped against current trunk rather than integrated as-is.)
-- [x] 2026.07.11 - **Review the distorted-guitar synthesis quality** (Arthur, separate
-  pass). The T16 soaring lead is "sort-of OK" but the guitar timbre isn't convincing.
-  The voice is Karplus-Strong pluck + tanh/cabinet Drive (`voices.rs` DRIVE/DRIVE_LEAD
-  presets, `engine.rs` Drive insert). High notes decay fast even with DRIVE_LEAD (the KS
-  loop; a plucked string has no feedback sustain). Options to evaluate: a feedback/e-bow
-  loop_gain>1 for true infinite sustain; a compressor/sustainer stage in the Drive; a
-  richer cabinet/tone stack; or a hybrid oscillator+pluck lead. Affects the 5 albums that
-  use GM 29/30 (Hollow Hill, Seven Kinds, Signal Fire, Estuary, Three-Sixty-One) — treat
-  as a timbre improvement with a render-diff refresh. See
-  `wrk_docs/2026.07.11 - HLD - Three-Sixty-One soaring lead.md`.
-  (Already fixed 2026-07-12: integrated guitar v2 added pickup RLC, two-stage
-  drive with sag, richer cabinet voicing, and the proposed e-bow sustainer;
-  commits `fcd0653`, `1423b2e`, and `09293e5`, with review fixes in `463b438`.)
-- [x] 2026.07.11 — Big Weather review latents (report-only, benign today):
-  (a) `albums/fable5/Big Weather/conductor.py:101-104` — Part.setup writes
-  BANK_SELECTS CC0 (priority 2) after channel()'s program change (priority 1)
-  at tick 0, wrong order per GM semantics; harmless for ferrosintesis (CC0 is
-  per-strip state read at voice spawn) and no Big Weather module uses
-  BANK_SELECTS — same pattern exists in the Through Lines conductor it was
-  copied from. (b) `albums/fable5/Big Weather/verify.py` section_energy /
-  check_drum_solo compute bars from the meter at section START; a mid-section
-  meter change would skew per-bar math — all ten tracks are uniform 4/4, so
-  latent.
-  (Verified 2026-07-12: both assumptions remain. Decision still needed. Recommend
-  a priority-0 bank-select event before program changes in the shared/copied
-  engine path; defer meter-span integration until variable meter is introduced,
-  but make the current verifier fail clearly if a checked span crosses a meter change.)
-  (Done 2026-07-12: both copied engines now order CC0 before program changes;
-  both verifiers enforce the ordering; Big Weather's energy and drum-solo checks
-  now reject checked spans containing an interior meter change with a clear error.)
 
 - [ ] 2026.07.15 — **Drum-bus glue compressor (ch9) — unshipped idea recovered from the
   superseded `dry-drum-bus-for-forward-kit` branch before reaping it.** A feed-forward
@@ -440,6 +224,7 @@
   DrumGlue bus-compressor idea before reaping dry-drum-bus branch.md`. Would slot into
   `crates/ferrosintesis/src/engine.rs` next to `BusGlue`. Worth a look if "kit still
   not prominent enough" comes back up after the shipped `kit_balance()` fix.
+
 - [ ] 2026-07-13 — **No root LICENSE** (`d:\language\midi-music\`). Only the four crate dirs
   carry licence text, so everything outside them — `tools/ferrosintesis-samples/prepare.py`
   (the very file the published crate READMEs cite as CC0 provenance evidence), `albums/`,
@@ -448,23 +233,27 @@
   requires, and all three publishable crates have it). **Needs Arthur:** a blanket root
   MIT/Apache would also sweep in nineteen albums of creative work, which may not be wanted —
   a carve-out (code MIT/Apache, `albums/` separate) is probably the right shape.
+
 - [ ] 2026-07-13 — **MSRV could be lowered from 1.87 to ~1.70** by replacing `is_multiple_of`
   (`altbank.rs:215,527`, `voices.rs:2311,2340`) with `% CTRL == 0` and `is_none_or`
   (`altbank.rs:471`) with `map_or(true, ..)`. Both are provably equivalent on unsigned ints,
   but they sit in DSP hot loops, so the synth-change policy applies: needs the render-diff
   inventory to confirm bit-identical output. Low value, non-zero cost — only worth it if a
   low MSRV is a goal for the published crate.
+
 - [ ] 2026-07-13 — **Ship a `PROVENANCE.md` inside each samples `.crate`.** The per-file
   source map (202 outputs → upstream URLs) lives only in `tools/ferrosintesis-samples/prepare.py`,
   which is outside both packages' `include` lists — so a crates.io consumer gets the prose
   summary and the CC0 text, but must follow a GitHub link for the evidence. CC0 requires no
   attribution so this is not a legal gap, but crates.io tarballs are immutable forever while
   repos are not. `prepare.py` already holds every field needed to emit it.
+
 - [ ] 2026-07-13 — **`ferrosintesis-cli` is `publish = false`**, so `cargo install ferrosintesis`
   will not work — the library publishes, the renderer binary does not. Deliberate per the
   2026.07.09 HLD, but it is a product decision worth restating (and worth revisiting at 1.0):
   if the CLI should ship, it needs `README.md`, `LICENSE-*`, an `include` list, and to be
   published last.
+
 - [ ] 2026-07-16 — **The 8 `drum_*` WAVs in `ferrosintesis-samples-orchestral` are DEAD
   WEIGHT — nothing loads them.** `crash1`/`kick_v3`/`snare2_v5`/`sus_cymb1` (2 RRs each) are
   referenced only by the crate's own inventory array
@@ -494,6 +283,7 @@
   from GM drums; it currently stays melodic (routing it through `drums::make` would be wrong).
   Add a dedicated path if a corpus file needs it. See `wrk_docs/2026.07.18 - HLD - XG
   drum-kit bank routing (CC0=127).md` (non-goals).
+
 - 2026.07.18 — XG-drum channels use the default V3 kit regardless of the XG kit number
   (16=Rock, 8=Room, 40=Brush…); ch9 only distinguishes 40=Brush. If XG files want kit-accurate
   percussion, map the kit-select program to `drums::Kit` for `xg_drum` strips too
@@ -516,18 +306,6 @@
   samples-off is a deliberately-not-green config that should fail loudly) — triage
   whether to `#[cfg_attr(not(feature="embedded-samples"), ignore)]` these three so the
   only samples-off failure is 00020's guard, or leave them as extra loud signal.
-
-- [x] 2026.07.19 — CLOSED same day: Arthur's audition heard no difference —
-  the preregistered kill condition fired, the park stands, round 4 is not
-  pursued. Entry kept for the pointer to the park branches only.
-  Recording-matched guitar excitation ROUND 4 (needs Arthur):
-  the r3 mechanism is validated bare (~1 dB encode fidelity; the r2 killer zone
-  E2 fixed to 1.27-vs-6.10) but re-parked because the frozen judges can't see
-  it — gate 2 reads exact multiples through wrap_var's ±6c model detune (−9 dB
-  sinc masking at h6) and gate 3 pins the seam to burst parity that success
-  necessarily breaks. Code: `park/20260719-recmatch-excitation-r3` (8a9ee7a).
-  If Arthur's audition (target/audition in the r3 worktree) prefers AFTER,
-  re-preregister judges per the HLD §9 lead and re-land.
 
 - [ ] 2026-07-19 ferrosintesis render HANG: `ferrosintesis "<Hollow Hill Pt 1>.mid" --solo 8 -o x.wav` (nylon, prog 24) runs >400s and is killed, on BOTH the pre-Phase-1 baseline binary AND with --peak-normalize (so not LUFS, not my pluck change). The FULL-mix render of the same file finishes in ~2min, and --solo 7/10/14 finish in ~2min — only --solo 8 pathologically slow. Suspect a stuck/never-reaping voice or LA-sample loop specific to that channel. crates/ferrosintesis/src/engine.rs (solo path / voice reap) + sampler.rs. Repro: Hollow Hill Pt 1, --solo 8.
 
@@ -553,12 +331,10 @@
   re-pin all rows so the fixture reflects reality instead of leaning on tolerance.
 
 - [ ] 2026-07-19 FINGERED BASS (GM 33, `BASS` preset) and UPRIGHT bass (GM 32, `UPRIGHT`) sound "more or less the same" to Arthur (showcase audition), despite the v0.12 §2.12 "widened 32/33 split". Expected: an electric flatwound (muffled, pickup-comb identity) vs a woody ACOUSTIC upright (corpus modes, fingertip thud, no pickup) should be clearly distinct. Investigate whether the split is audibly insufficient (or the showcase phrase just does not reveal it). Separate from the pluck redesign (a distinctiveness issue). crates/ferrosintesis/src/voices.rs BASS (~2773) + UPRIGHT (~2903).
+
 - [ ] 2026-07-20 GM109 bagpipe zone coverage: the FreePats archive holds 26 WAVs (24 chanter takes + 2 drones) but `BAGPIPE_SOURCES` bakes only 8, ignoring A#4/B4/C#5/D#5/E5/F5/F#5 and every `_32` round robin. With `find_loop` now able to cut a clean short loop from any steady take, filling the ~2.5-semitone gaps (and adding an RR2) is cheap and would cut the repitch stretch. `tools/ferrosintesis-samples/prepare.py:572` (BAGPIPE_SOURCES), `crates/ferrosintesis/src/sampler.rs:2099` (chanter zones).
+
 - [ ] 2026-07-20 `LoopVoice` has NO intrinsic animation while `SaxLoopVoice` runs a +/-0.22% read-rate random walk explicitly commented "defeats the loop-tell" (`sampler.rs:SAX_DRIFT_MAX`). Now that the bagpipe loops are ~65 ms they repeat ~15x/s; a slow drift would dissolve any residual static "tell". Add the DRIFT only — NOT the sax tremolo: `bp_o1_bagpipe_chanter_is_constant_amplitude_saxes_keep_dynamics` pins constant amplitude, and constant bag pressure is the instrument. `crates/ferrosintesis/src/sampler.rs:LoopVoice::render`.
-- [x] 2026-07-20 `DRUM_VEL_LEVEL_EXP` (the k=2 velocity-law drum compensation) was measured on Kit::V3 ONLY, but `drums::make` applies it to all four kits (V1/V3/Synth/Brush). origin/main has since moved several albums onto the ORIGINAL V1 kit, so V1's hi-hat/ride/tom corrections are LIVE and UNMEASURED — worst case ~+2 dB at v80 if V1's raw velocity slope differs from V3's. Extend the velocity_census dev tool to sweep V1/Brush/Synth and add per-kit rows if they diverge. Also: alt banks (`make_variation`) deliberately bypass the compensation (no ScaledVoice wrap) — document that as intended. `crates/ferrosintesis/src/drums.rs` DRUM_VEL_LEVEL_EXP, `velocity_law.rs` census. (Raised by Fable 5 final review; not a blocker for the velocity-law task.)
-  - RESOLVED (verified 2026-07-21): already closed — `drum_vel_level_exp(kit, samples, key)` is now per-(kit×samples), and `drums_follow_the_same_law_as_melodic_voices` asserts each of V1/V3/Brush/Synth × samples on/off fits k=2±0.2 (and the census loops all kits). The V1-unmeasured risk is now oracle-covered; no divergence outstanding.
-- [x] 2026-07-21 GM76 blown bottle (and the loop-recording voices generally: sax, bagpipe chanter) do NOT follow the k=2 velocity law — GM76's default samples-on BottleLoopVoice measures k≈0.39, near velocity-insensitive. It replaced the modeled pan-flute/bottle AFTER the velocity-law calibration, so its stale VEL_LEVEL_EXP[76]=1.450 was removed and it is EXEMPTED from every_gm_program_follows_the_square_law (like the bagpipe chanter). Decide the correct velocity law for looped-recording voices: should a harder blow scale the loop by (v/127)^2, or is a constant-pressure loop legitimately velocity-flat? If the former, BottleLoopVoice/SaxLoopVoice/LoopVoice need a velocity-gain path. `crates/ferrosintesis/src/voices.rs:12303` (GM76 route), `sampler.rs` bottle_loop_voice. (Surfaced at integration when origin's GM76 bottle rebased in.)
-  - RESOLVED 2026-07-21 (branch `task/20260721-FIX-HUM-gm76-samples-aware-velocity-law-and-loop`, held @ bb922fd): the question was a false dichotomy — the three loop voices already have three DELIBERATE, defensible laws (bagpipe LoopVoice velocity-FLAT = constant bag pressure; sax full square law via p/f banks + unfloored vel_amp; bottle compressed floored `0.55+0.45·vel_amp` ~5 dB). The task was to PIN them, not change them: added `looped_recording_voices_keep_their_documented_velocity_behaviour`. The real bug hiding here was the MODELED GM76 samples-off path losing its compensation when 1.450 was removed (k=2.42/2.56, ~6.6 dB too quiet at v32) — fixed by wrapping the model in ScaledVoice(1.512) in the `76 =>` arm + `modeled_gm76_follows_the_square_law_in_no_samples_builds`. (sax/SaxLoopVoice already tracks velocity; no change needed there.)
 
 - [ ] 2026-07-24 `gen_crate_lib.py` emits a generated `src/lib.rs` that is NOT rustfmt-clean once a bank's WAV names are long: it writes each entry as a one-line `("name.wav", include_bytes!("../samples/name.wav")),` and rustfmt wraps that past ~100 chars. Every existing asset crate happens to have short enough names to fit, so the trap only fires on a NEW bank — the mandolin's `mandolin_G3_rr1.wav` style names crossed the limit and failed the integration gate's `cargo fmt --all -- --check` after everything else was green. Either have the generator emit the wrapped form, or make it shell out to `rustfmt` on the file it just wrote. `tools/ferrosintesis-samples/gen_crate_lib.py`.
 

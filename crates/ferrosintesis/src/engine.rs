@@ -1987,6 +1987,12 @@ pub(crate) struct EngineCore {
     opt: CoreOptions,
     strips: Vec<Strip>,
     active: Vec<Active>,
+    // Per-channel index buckets into `active`, rebuilt once per block by
+    // `rebuild_voice_buckets`. The control-lane phases each want "every active
+    // voice on channel N"; without this they rescan the whole voice vector once
+    // per (phase, channel) — 100+ full passes per block. Preallocated and only
+    // ever `clear()`ed, so the render path never allocates.
+    voice_by_ch: [Vec<usize>; 16],
     reverb: Reverb,
     cathedral: CathedralReverb,
     rev_hp: Biquad,
@@ -2072,6 +2078,7 @@ impl EngineCore {
             opt,
             strips: (0..16).map(|_| Strip::new(sr)).collect(),
             active: Vec::new(),
+            voice_by_ch: std::array::from_fn(|_| Vec::with_capacity(64)),
             reverb: Reverb::new(sr, DEFAULT_HALL_ROOM, DEFAULT_HALL_DAMP, opt.wet),
             cathedral: CathedralReverb::new(sr, opt.wet * CATHEDRAL_WET_SCALE),
             rev_hp: Biquad::highpass(150.0, 0.7, sr),
@@ -3224,6 +3231,7 @@ impl EngineCore {
         let sr = self.opt.sr;
 
         self.tick_bagpipe_drone_latch();
+        self.rebuild_voice_buckets();
         self.apply_mod_wheel_leslie_and_vibrato(n, sr);
         self.apply_cathedral_organ_wind(n, sr);
         self.apply_vowel_aftertouch_breath_and_glide(n, sr);
@@ -3234,6 +3242,31 @@ impl EngineCore {
         self.accumulate_output(n, out);
     }
 
+    /// Rebuild the per-channel voice index buckets for this block.
+    ///
+    /// Filled by scanning `self.active` FRONT TO BACK, so each bucket lists its
+    /// channel's voices in `active` index order — exactly the order the
+    /// `active.iter_mut().filter(|a| a.ch == ch)` scans these buckets replace
+    /// used to yield. That is what keeps the render bit-identical: the visit
+    /// order (and hence every summation order downstream) is unchanged.
+    ///
+    /// Valid for the whole control prologue that follows: `self.active` is
+    /// neither pushed to (note-on handling runs outside `render_block_add`) nor
+    /// retained (`render_melodic_voices` and the drum pass both run after)
+    /// between here and the end of the last control phase — so one build per
+    /// block is correct and no phase may rebuild.
+    ///
+    /// Allocation-free on the render path: `clear()` keeps each bucket's
+    /// capacity, so after the first blocks nothing here touches the allocator.
+    fn rebuild_voice_buckets(&mut self) {
+        for bucket in self.voice_by_ch.iter_mut() {
+            bucket.clear();
+        }
+        for (i, a) in self.active.iter().enumerate() {
+            self.voice_by_ch[a.ch as usize].push(i);
+        }
+    }
+
     /// Advance the CC1 modulation lane on every melodic strip: Leslie
     /// rate/depth for the organ family, coherent pitch vibrato for the
     /// vibrato family.
@@ -3241,20 +3274,19 @@ impl EngineCore {
         for (ci, strip) in self.strips.iter_mut().enumerate() {
             strip.mod_cur += self.expr_smooth * (strip.mod_target - strip.mod_cur);
             let on = strip.mod_cur > 1e-3;
-            let ch = ci as u8;
-            let leslie_program = self
-                .active
+            let leslie_program = self.voice_by_ch[ci]
                 .iter()
-                .find(|a| a.ch == ch && organ_leslie_family(a.program, a.alt_bank_value))
+                .map(|&i| &self.active[i])
+                .find(|a| organ_leslie_family(a.program, a.alt_bank_value))
                 .map(|a| a.program)
                 .or_else(|| {
                     (strip.mod_authored && organ_leslie_family(strip.program, strip.alt_bank_value))
                         .then_some(strip.program)
                 });
-            let active_pitch_vibrato = self
-                .active
+            let active_pitch_vibrato = self.voice_by_ch[ci]
                 .iter()
-                .any(|a| a.ch == ch && cc1_pitch_vibrato_target(a.program, a.alt));
+                .map(|&i| &self.active[i])
+                .any(|a| cc1_pitch_vibrato_target(a.program, a.alt));
             let pending_pitch_vibrato = vibrato_family(strip.program);
             if ci == 9 || (!on && !strip.mod_engaged && leslie_program.is_none()) {
                 continue;
@@ -3279,11 +3311,11 @@ impl EngineCore {
                 let target_depth = base_depth + LESLIE_DEPTH_ADD * m;
                 strip.leslie_rate += self.leslie_k * (target_rate - strip.leslie_rate);
                 strip.leslie_depth += self.leslie_k * (target_depth - strip.leslie_depth);
-                for a in self
-                    .active
-                    .iter_mut()
-                    .filter(|a| a.ch == ch && organ_leslie_family(a.program, a.alt_bank_value))
-                {
+                for &i in &self.voice_by_ch[ci] {
+                    let a = &mut self.active[i];
+                    if !organ_leslie_family(a.program, a.alt_bank_value) {
+                        continue;
+                    }
                     a.voice.set_trem(strip.leslie_rate, strip.leslie_depth);
                 }
                 engaged |= strip.mod_authored || on || (strip.leslie_rate - base_rate).abs() > 0.01;
@@ -3296,7 +3328,8 @@ impl EngineCore {
                 let factor = 2f32.powf(m * VIB_DEPTH_CENTS / 1200.0 * strip.vib_phase.sin());
                 strip.vib_mult = factor;
                 let mult = strip.bend * factor;
-                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+                for &i in &self.voice_by_ch[ci] {
+                    let a = &mut self.active[i];
                     // Alt-bank strings/choir restore v0.9 CC1 semantics PER HELD
                     // voice (a.alt is the spawn-time bank): strings deepen their
                     // own decorrelated per-layer vibrato via set_vib (not the
@@ -3334,11 +3367,10 @@ impl EngineCore {
             if ci == 9 {
                 continue;
             }
-            let ch = ci as u8;
-            let cat_notes = self
-                .active
+            let cat_notes = self.voice_by_ch[ci]
                 .iter()
-                .filter(|a| a.ch == ch && cathedral_organ(a.program, a.alt_bank_value))
+                .map(|&i| &self.active[i])
+                .filter(|a| cathedral_organ(a.program, a.alt_bank_value))
                 .count();
             let load = cat_notes.saturating_sub(1).min(9) as f32 / 9.0;
             let target = load;
@@ -3366,11 +3398,11 @@ impl EngineCore {
             } else {
                 0.0
             };
-            for a in self
-                .active
-                .iter_mut()
-                .filter(|a| a.ch == ch && cathedral_organ(a.program, a.alt_bank_value))
-            {
+            for &i in &self.voice_by_ch[ci] {
+                let a = &mut self.active[i];
+                if !cathedral_organ(a.program, a.alt_bank_value) {
+                    continue;
+                }
                 a.voice.set_organ_pressure(strip.organ_wind, trem);
                 a.voice.set_organ_swell(drive);
             }
@@ -3385,12 +3417,11 @@ impl EngineCore {
             if ci == 9 {
                 continue;
             }
-            let ch = ci as u8;
             if strip.vowel_authored && vowel_family(strip.program) {
                 strip.vowel_cur += self.expr_smooth * (strip.vowel_target - strip.vowel_cur);
                 let (f, q, g) = vowel_at(strip.vowel_cur);
-                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_vowel(f, q, g);
+                for &i in &self.voice_by_ch[ci] {
+                    self.active[i].voice.set_vowel(f, q, g);
                 }
             }
             // Poly (key) aftertouch: advance each authored note's private
@@ -3398,11 +3429,11 @@ impl EngineCore {
             // compose its factor in. Unauthored notes keep poly_mult/poly_gain
             // at exactly 1.0 (a bit-exact no-op).
             let mut any_poly = false;
-            for a in self
-                .active
-                .iter_mut()
-                .filter(|a| a.ch == ch && a.poly_authored)
-            {
+            for &i in &self.voice_by_ch[ci] {
+                let a = &mut self.active[i];
+                if !a.poly_authored {
+                    continue;
+                }
                 a.poly_cur += self.expr_smooth * (a.poly_target - a.poly_cur);
                 a.poly_gain = 10f32.powf(a.poly_cur * AT_GAIN_DB / 20.0);
                 a.poly_phase += TAU * AT_VIB_RATE_HZ * n as f32 / sr;
@@ -3425,7 +3456,11 @@ impl EngineCore {
                 // `!a.is_drum`: an XG/GS drum channel on this strip keeps its at_gain
                 // (computed above) but its percussion voices must not be pitch-bent —
                 // the same reason ch9 skips this whole block (ci==9 continues earlier).
-                for a in self.active.iter_mut().filter(|a| a.ch == ch && !a.is_drum) {
+                for &i in &self.voice_by_ch[ci] {
+                    let a = &mut self.active[i];
+                    if a.is_drum {
+                        continue;
+                    }
                     // Alt strings/choir take CC1 via set_vib, so the coherent
                     // vib_mult factor must not compose into their aftertouch
                     // pitch (v0.9 kept 48-54 out of vibrato_family; aftertouch
@@ -3441,11 +3476,11 @@ impl EngineCore {
             // Poly-only channels: no channel-AT loop ran, so authored notes
             // apply their own pitch factor here (glides are handled below).
             if any_poly && !channel_at {
-                for a in self
-                    .active
-                    .iter_mut()
-                    .filter(|a| a.ch == ch && a.poly_authored && a.glide.is_none())
-                {
+                for &i in &self.voice_by_ch[ci] {
+                    let a = &mut self.active[i];
+                    if !(a.poly_authored && a.glide.is_none()) {
+                        continue;
+                    }
                     let vm = if a.alt && (matches!(a.program, 48..=54) || a.program == 22) {
                         1.0
                     } else {
@@ -3462,8 +3497,8 @@ impl EngineCore {
                 // breath-authored brass line also opens/closes its timbre.
                 let p = (strip.expr * strip.breath).sqrt().min(1.3);
                 let g = if strip.at_authored { strip.at_cur } else { 0.0 };
-                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_breath(p, g);
+                for &i in &self.voice_by_ch[ci] {
+                    self.active[i].voice.set_breath(p, g);
                 }
             }
             // RD9 (§2.8.3): the reed breath seam, AUTHORED-only (§2.8.2 — an
@@ -3475,8 +3510,8 @@ impl EngineCore {
             {
                 let p = (strip.expr * strip.breath).sqrt().min(1.0);
                 let g = if strip.at_authored { strip.at_cur } else { 0.0 };
-                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_breath(p, g);
+                for &i in &self.voice_by_ch[ci] {
+                    self.active[i].voice.set_breath(p, g);
                 }
             }
             // WD9 (§2.8.5.3): the flue breath seam — same authored-only gate,
@@ -3487,11 +3522,12 @@ impl EngineCore {
                 && (strip.expr_authored || strip.breath_authored || strip.at_authored)
             {
                 let p = (strip.expr * strip.breath).sqrt().min(1.0);
-                for a in self.active.iter_mut().filter(|a| a.ch == ch) {
-                    a.voice.set_breath(p, 0.0);
+                for &i in &self.voice_by_ch[ci] {
+                    self.active[i].voice.set_breath(p, 0.0);
                 }
             }
-            for a in self.active.iter_mut().filter(|a| a.ch == ch) {
+            for &i in &self.voice_by_ch[ci] {
+                let a = &mut self.active[i];
                 if let Some((semis, k)) = &mut a.glide {
                     *semis -= *k * *semis;
                     let done = semis.abs() < 0.005;

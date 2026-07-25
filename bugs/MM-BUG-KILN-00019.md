@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00019 — Per-program loudness match is damped 0.70×; residuals remain and older album mixes were tuned to the old balance
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** engine
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; current balance spread matches the reference modules, while changing the 0.70 damping/±6 dB clamp and retouching album controllers require Arthur's listening decision)
 
 ## Observation
 
@@ -68,3 +68,15 @@ work, and Could/Low is why a subject Arthur raises repeatedly never gets selecte
 Split these if any is picked up independently. The staleness of the table is
 tracked separately as MM-BUG-KILN-00107; the standing guard is the within-family
 spread oracle from MM-BUG-KILN-00045.
+
+## Blocker (2026-07-25)
+
+There is no unattended correctness fix to apply. The current control measurement says the
+shipped program-to-program spread is statistically indistinguishable from the SC-55 and
+S-YXG50 references, so increasing trim strength is a taste choice rather than a measured
+defect. The album CC7/CC11 retouch likewise needs listening against any chosen trim law.
+
+Unblock when Arthur chooses whether to retain or change the 0.70 damping and ±6 dB clamp
+after listening to the raw proposals, and identifies the album renders that need a
+controller-balance pass under that choice. Implementation and render-diff validation can
+then proceed against a concrete target.

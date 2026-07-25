@@ -105,7 +105,7 @@
   needed - and `la_steel_high_key_level_parity` now pins 0.8..2.2 wrapped/model over keys
   76/79/83 x vel 60/100. GM25 also moved to the Eastman picked bank. The stale `sampler.rs`
   comment that still called the gap open is corrected in this pass.)
-- [ ] 2026.07.18 — **Other LA banks' zones are unguarded against fade dry-out at
+- [x] 2026.07.18 — **Other LA banks' zones are unguarded against fade dry-out at
   non-44.1 kHz rates** — the source-domain fade-budget guard + ~5 ms end taper added for
   guitars (`guitar_zone_fade_budget`, `LaVoice.end_taper`) cover GM24/25 only; any other
   wrapped zone whose `fade_end × 44100 × (f/root)` exceeds its length at 48/96 kHz still
@@ -122,6 +122,15 @@
   UNPROVEN - the tail may already be near-silent, and `rel_gain` may have closed. Next step is a
   measurement (extend `assert_wrap_seam` to celesta ~key 90 and sitar ~key 91), NOT a fix:
   arming `end_taper` globally moves every LA voice and needs the full render-diff inventory.)
+  (Refuted 2026-07-25 - 3 of 3 independent skeptics killed it, on an asset-side mechanism nobody
+  had looked at. Every LA onset bank is baked through
+  `tools/ferrosintesis-samples/prepare.py::trim_to_onset`, which applies a squared fade-OUT to
+  the end of each cut, so the recording is already at digital silence before the read pointer
+  reaches dry-out. The gate then switches off a sample that is already zero - there is no step to
+  hear. The structural facts in the note are all true (one armed constructor, guitar-only budget
+  test, ~25 unguarded wrap sites); the HARM is not. Reopen only if a seam measurement ever shows
+  a real discontinuity - do not arm `end_taper` globally on this note's say-so, since that moves
+  every LA voice.)
 - [ ] 2026.07.18 — **Closed vs pedal hi-hat are identical in the MODELED path, and the
   pedal hat carries a stick click it should not have.** Keys 42|44 share one `CymSpec`
   with `click: Some(...)` (`crates/ferrosintesis/src/drums.rs:~1661`). The sampled path
@@ -132,6 +141,14 @@
   (Kit::Synth, which forces samples=false) - and the brush kit collapses 42|44 too
   (`42 | 44 => brush_closed_hat`). Several albums are on the V1 kit. A `drums.rs` timbre change,
   so it needs the full render-diff inventory; the pedal-hat voicing itself is an ear call.)
+  (Adversarially reviewed 2026-07-25; NOT filed as a bug, because the premise is wrong in a way
+  worth recording. The shared profile INCLUDING the stick tick is a deliberate, signed-off design
+  decision: `wrk_docs/2026.07.09 - HLD - ferrosintesis drum kit v3 default.md` is
+  `Status: SIGNED-OFF` and its line 109 reads "42/44 closed/pedal hats: short stick tick plus
+  bright metal burst". I confirmed both the status line and the entry myself. So changing it is a
+  design REVISION needing Arthur, not a bug fix - even though the physical argument (a
+  foot-closed hat has no stick) is sound, and no oracle anywhere asserts 42 != 44. Leaving it
+  open as a question for Arthur rather than filing against a signed-off doc.)
 - [ ] 2026.07.18 — **Ride bell (key 53) skipped the MetalPlate upgrade in the modeled
   path.** It is a fixed 6-mode inharmonic `d()` stack (`drums.rs:~1828`) while 49/51/52/
   55/57/59 route to `metal_plate`; the sampled `RIDE_BELL` has only 3 round robins. A busy
@@ -159,7 +176,20 @@
   rotation, no periodic 1/|z| rescale), so float error slowly drifts amplitude (and
   marginally frequency) on long held tones from the additive banks (pads/organ). Cheap
   occasional rescale would fix it. Very low audible impact.
-
+  (Measured and adversarially reviewed 2026-07-25; NOT filed as a bug, 2 of 3 independent
+  skeptics refuted it. The MECHANISM is real and worse than "float error": f32 rounding of
+  cos/sin bakes in a fixed |c| != 1 bias, so |z| follows |c|^n - systematic, growing LINEARLY in
+  dB (I measured +0.022 / +0.089 / +0.397 dB at 200k / 800k / 3.2M ticks, x4 per 4x ticks; a
+  random walk would be x2). What kills it as a defect is EXPOSURE, and this is the correction
+  worth keeping: there is no `Sine` in `engine.rs` at all - all 24 sites are per-note voice
+  fields, control-rate LFOs, or bounded table loops - so the accumulator lives for a NOTE, not a
+  track. The longest held note on a sustaining program in the whole catalogue is 114.72 s (GM 16
+  organ, Through Lines 14), where the drawbar partials spread only ~1.6 dB, and any voice that
+  retunes under vibrato destroys the bias entirely (a fresh (cr,ci) draws a fresh random-sign
+  delta - measured 100x smaller). So: inaudible in-repo, and a fix would move every render for
+  no gain. Keep open, low priority, because ferrosintesis is a GENERIC GM player: a foreign
+  10-minute drone or a held note on the realtime `live.rs` path still reaches ~8 dB of
+  inter-partial spread. `dsp.rs::sine_stays_bounded` does NOT cover this - it runs 1 s.)
 - [x] 2026.07.18 — **No denormal (FTZ/DAZ) protection in recursive filters / reverb
   feedback.** `Biquad::process` (`dsp.rs:~519`), Comb/Allpass and CathedralLine states can
   enter denormal range as tails decay → per-sample CPU stalls on x86 (offline-render

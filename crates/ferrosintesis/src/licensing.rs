@@ -4,7 +4,7 @@
 //! ## Why this exists
 //!
 //! `ferrosintesis` embeds its PCM in first-party asset crates, and the default
-//! `embedded-samples` feature pulls in twenty-four of them. Most are **CC0-1.0** and need
+//! `embedded-samples` feature pulls in twenty-five of them. Most are **CC0-1.0** and need
 //! no credit. The rest are **MIT**, **CC-BY-3.0** or **CC-BY-4.0**, and a downstream
 //! binary distributor must reproduce their notices to ship legally.
 //!

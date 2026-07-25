@@ -193,7 +193,7 @@ are dramatically slower and are not worth timing.
 
 The code is licensed **MIT OR Apache-2.0**. The embedded PCM is not: it comes from
 twenty-five first-party asset crates, and while most of them are **CC0 1.0** and need
-no credit, eleven are not. The asset crates contain nothing but that PCM and
+no credit, ten are not. The asset crates contain nothing but that PCM and
 `include_bytes!`; the per-crate inventory, provenance and regeneration tooling live
 under
 [`tools/ferrosintesis-samples/`](https://github.com/0x4D44/ferrosintesis/tree/main/tools/ferrosintesis-samples),
@@ -202,13 +202,12 @@ which is the authority on what each bank contains.
 ### If you distribute a binary
 
 A build with default features embeds all twenty-five banks. **You must reproduce the
-notices of the eleven attribution-bearing banks below.** Each ships the exact required
-text in its own crate's `NOTICE` file — concatenating those eleven files satisfies
-every licence here. The remaining fourteen banks are CC0 and require nothing.
+notices of the ten attribution-bearing banks below.** Each ships the exact required
+text in its own crate's `NOTICE` file — concatenating those ten files satisfies
+every licence here. The remaining fifteen banks are CC0 and require nothing.
 
 | Crate | Licence | Supplies | Credit required |
 |---|---|---|---|
-| `ferrosintesis-samples-b1-upright` | MIT OR Apache-2.0 | GM 0 acoustic grand, CC0 alternate bank 5 | "Yamaha B1 Acoustic Upright — ferrosintesis multisample", Copyright (c) 2026 0x4D44 — the author's own instrument and recording; listed because MIT and Apache-2.0 both require the copyright notice to travel with a redistribution |
 | `ferrosintesis-samples-clavinet` | MIT | GM 7 clavinet | MuseScore "MS Basic" (MuseScore_General lineage): FluidR3 by Frank Wen, FluidR3Mono by Michael Cowgill, adaptation by S. Christian Collins |
 | `ferrosintesis-samples-musescore` | MIT | GM 104 sitar, GM 75/76/77 pipe onsets | same MS Basic lineage as above |
 | `ferrosintesis-samples-musescore-grand` | MIT | GM 0 grand (MF velocity tier) | MuseScore_General "Grand Piano", adaptation by S. Christian Collins, derived from FluidR3 by Frank Wen |
@@ -224,14 +223,18 @@ This table is not maintained by hand. `licensing.rs` derives the attribution-bea
 set from the `embedded-samples` feature list and each bank's own `license` field, and
 fails the build if a bank is missing here or ships without a packaged `NOTICE` — so a
 new CC-BY bank cannot land silently uncredited, which is exactly how five of these ten
-came to be omitted before (MM-BUG-KILN-00060). It caught the B1 upright the same way:
-a first-party bank still declares a licence that requires attribution, and "we own it"
-is not an exemption the derivation recognises — correctly, since a downstream
-distributor has no way to know that.
+came to be omitted before (MM-BUG-KILN-00060). It caught the B1 upright the same way
+back when that first-party bank still declared MIT OR Apache-2.0: "we own it" is not
+an exemption the derivation recognises — correctly, since a downstream distributor has
+no way to know that. The B1 was re-dedicated **CC0 1.0** on 2026.07.25 and so has left
+this table entirely. That is the point: it is the declared `license` field that moves a
+bank in or out here, never who happens to own it.
 
 ### The CC0 banks
 
-The remaining fourteen need no attribution: the VSCO 2 Community Edition orchestral
+The remaining fifteen need no attribution: **our own Yamaha B1 acoustic upright**
+(the GM 0 CC0=5 alternate — Arthur's instrument, performance and recording, dedicated
+to the public domain), the VSCO 2 Community Edition orchestral
 library (violin, flutes, brass, reeds, string sections), the FreePats Spanish
 classical guitar bank, **our own recordings of an Eastman E1D steel-string acoustic**
 (the GM 25 default bank in two articulations, picked and fingerstyle — first-party and

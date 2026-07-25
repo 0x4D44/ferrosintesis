@@ -22,8 +22,8 @@ a future capture makes it worth carrying.
 Roots are the **measured first partial** of each note, so the bank plays at exact
 equal temperament while keeping the upright's inharmonicity and Railsback stretch.
 
-**Licence: MIT OR Apache-2.0** (the repo's own terms — this is Arthur's recording,
-no third-party attribution required). See `LICENSE-MIT` / `LICENSE-APACHE`.
+**Licence: CC0 1.0** — Arthur's own instrument, performance and recording, dedicated
+to the public domain. No attribution required, for source or binary redistribution.
 
 Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=b1upright`
 (decodes the committed opus archive under `samples/b1-upright/`, slices, and bakes).

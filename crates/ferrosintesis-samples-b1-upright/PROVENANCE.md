@@ -15,8 +15,8 @@ acoustic with genuine per-note inharmonicity and Railsback stretch.
 Arthur recorded his own **Yamaha B1 acoustic upright** on a **Tascam DR-05**
 (24-bit / 48 kHz / stereo) on **2026-07-23**. Each pass plays the keyboard
 ascending in thirds, every note held to full ring-out, sustain pedal up. No
-third-party licence: the recording is Arthur's, released under the repo's own
-MIT OR Apache-2.0 terms.
+third-party licence: the recording is Arthur's, dedicated to the public domain
+under **CC0 1.0**. No attribution is required to use, modify or redistribute it.
 
 The reproducible source of record is the committed Opus archive (the raw 24-bit
 takes are hundreds of MiB and are not committed):

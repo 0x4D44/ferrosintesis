@@ -1637,7 +1637,7 @@ pub fn honkytonk_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
 }
 
 // GM 0 Acoustic Grand ALTERNATE bank 5 - Arthur's own Yamaha B1 acoustic UPRIGHT
-// (first-party Tascam DR-05 recording, MIT/Apache, ferrosintesis-samples-b1-upright).
+// (first-party Tascam DR-05 recording, CC0-1.0, ferrosintesis-samples-b1-upright).
 // A real upright, not a grand: warmer and boxier, with TWO genuinely-recorded
 // timbre layers (normal/hard dynamic passes) rather than one sample re-EQ'd.
 // Roots are the MEASURED first partial of each note, so it plays at exact equal

@@ -56,7 +56,7 @@
 //! [`embedded_samples_available`] reports which build this is. No unsafe
 //! code, no build scripts.
 //!
-//! Most of that audio is CC0; eleven of the twenty-five crates carry an
+//! Most of that audio is CC0; ten of the twenty-five crates carry an
 //! attribution obligation that travels with a distributed binary. The
 //! `NOTICE` file at the repository root is the index of what you must
 //! reproduce, and each asset crate packages the exact required text.

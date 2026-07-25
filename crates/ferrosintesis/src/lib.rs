@@ -49,16 +49,24 @@
 //!
 //! Renders are deterministic: the same MIDI, options and build produce
 //! byte-identical output. The default `embedded-samples` feature compiles
-//! 16.68 MiB of CC0 attack transients (two first-party asset crates) into
-//! the binary; `default-features = false` builds the fully modeled synth
-//! instead — smaller, with more synthetic note onsets.
+//! roughly 111 MiB of recorded audio — 1156 WAVs across twenty-five
+//! first-party asset crates — into the binary; `default-features = false`
+//! builds the fully modeled synth instead, a far smaller artifact with
+//! synthetic note onsets in place of the recorded ones.
 //! [`embedded_samples_available`] reports which build this is. No unsafe
 //! code, no build scripts.
 //!
-//! GM coverage is broad but honest about its edges: every melodic program has
-//! a real model behind it, while the GM sound-effects block 120–127 renders
-//! as low-level noise fallbacks. The README carries the program-by-program
-//! table; DESIGN.md in the repository carries the full design essay.
+//! Most of that audio is CC0; eleven of the twenty-five crates carry an
+//! attribution obligation that travels with a distributed binary. The
+//! `NOTICE` file at the repository root is the index of what you must
+//! reproduce, and each asset crate packages the exact required text.
+//!
+//! GM coverage is broad: every melodic program has a real model behind it,
+//! and the GM sound-effects block 120–127 is fully voiced — 121–127 as
+//! dedicated models, and 120 (fret noise) as a round-robin bank of real
+//! finger-slide recordings, falling back to a modeled burst when samples are
+//! disabled. The README carries the program-by-program table; DESIGN.md in
+//! the repository carries the full design essay.
 
 #![forbid(unsafe_code)]
 // The public surface ships to docs.rs. An undocumented public item is a bug, and the
@@ -94,6 +102,8 @@ pub(crate) mod loudness;
 #[cfg(test)]
 mod manifest;
 pub(crate) mod midi;
+#[cfg(test)]
+mod payload;
 pub(crate) mod reverb;
 pub(crate) mod sampler;
 #[cfg(test)]

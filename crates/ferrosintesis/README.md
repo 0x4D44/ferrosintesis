@@ -82,8 +82,9 @@ is what lets a later release add or rename a knob without breaking you.
 
 ## Feature flags
 
-`embedded-samples` (default) compiles the first-party asset crates into the
-binary: 264 recorded attack transients plus an 11-zone sampled clavinet, ~22 MiB
+`embedded-samples` (default) compiles twenty-five first-party asset crates into
+the binary: 1156 recorded WAVs -- attack transients, sustain loops, whole-voice
+instruments and the sampled drum kit -- embedding ~111 MiB
 of PCM. The synth uses them
 the way the Roland D-50 did — LA synthesis: play a real onset, crossfade into
 the modeled body — because the ear judges an instrument mostly by its first
@@ -191,7 +192,7 @@ are dramatically slower and are not worth timing.
 ## Sample provenance and licensing
 
 The code is licensed **MIT OR Apache-2.0**. The embedded PCM is not: it comes from
-twenty-four first-party asset crates, and while most of them are **CC0 1.0** and need
+twenty-five first-party asset crates, and while most of them are **CC0 1.0** and need
 no credit, eleven are not. The asset crates contain nothing but that PCM and
 `include_bytes!`; the per-crate inventory, provenance and regeneration tooling live
 under
@@ -200,10 +201,10 @@ which is the authority on what each bank contains.
 
 ### If you distribute a binary
 
-A build with default features embeds all twenty-four banks. **You must reproduce the
+A build with default features embeds all twenty-five banks. **You must reproduce the
 notices of the eleven attribution-bearing banks below.** Each ships the exact required
 text in its own crate's `NOTICE` file — concatenating those eleven files satisfies
-every licence here. The remaining thirteen banks are CC0 and require nothing.
+every licence here. The remaining fourteen banks are CC0 and require nothing.
 
 | Crate | Licence | Supplies | Credit required |
 |---|---|---|---|
@@ -230,7 +231,7 @@ distributor has no way to know that.
 
 ### The CC0 banks
 
-The remaining thirteen need no attribution: the VSCO 2 Community Edition orchestral
+The remaining fourteen need no attribution: the VSCO 2 Community Edition orchestral
 library (violin, flutes, brass, reeds, string sections), the FreePats Spanish
 classical guitar bank, **our own recordings of an Eastman E1D steel-string acoustic**
 (the GM 25 default bank in two articulations, picked and fingerstyle — first-party and

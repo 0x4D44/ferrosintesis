@@ -4,7 +4,7 @@
 //! ## Why this exists
 //!
 //! `ferrosintesis` embeds its PCM in first-party asset crates, and the default
-//! `embedded-samples` feature pulls in twenty-one of them. Most are **CC0-1.0** and need
+//! `embedded-samples` feature pulls in twenty-four of them. Most are **CC0-1.0** and need
 //! no credit. The rest are **MIT**, **CC-BY-3.0** or **CC-BY-4.0**, and a downstream
 //! binary distributor must reproduce their notices to ship legally.
 //!
@@ -26,82 +26,83 @@
 //! source hashes, not something a text oracle can settle. This module takes each crate's
 //! declared `license` at face value and only checks that the guide is consistent with it.
 
-#[cfg(test)]
+use std::path::{Path, PathBuf};
+
+/// `crates/`, the directory holding this crate and every sample-asset crate.
+pub(crate) fn crates_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("crates/ferrosintesis always has a parent")
+        .to_path_buf()
+}
+
+pub(crate) fn read(path: &Path) -> String {
+    std::fs::read_to_string(path).unwrap_or_else(|e| {
+        panic!(
+            "licensing oracle cannot read {}: {e}.\n\
+             These oracles derive the attribution guide from the sibling asset \
+             manifests, so they only run inside the ferrosintesis workspace.",
+            path.display()
+        )
+    })
+}
+
+/// The sample crates a **default** build embeds.
+///
+/// Read from the `embedded-samples` feature list rather than from `cfg!(feature)`, so
+/// the oracle asserts the same thing under `--no-default-features`. An oracle that
+/// quietly evaporates with a feature flag is how MM-BUG-KILN-00020 happened.
+pub(crate) fn default_sample_crates() -> Vec<String> {
+    let manifest = read(&crates_dir().join("ferrosintesis").join("Cargo.toml"));
+    let mut out = Vec::new();
+    let mut inside = false;
+    for line in manifest.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("embedded-samples") && trimmed.contains('[') {
+            inside = true;
+            continue;
+        }
+        if inside {
+            if trimmed.starts_with(']') {
+                break;
+            }
+            if let Some(dep) = quoted(trimmed) {
+                out.push(dep.trim_start_matches("dep:").to_string());
+            }
+        }
+    }
+    assert!(
+        !out.is_empty(),
+        "could not parse the `embedded-samples` feature list out of \
+         crates/ferrosintesis/Cargo.toml — the oracle would otherwise pass vacuously"
+    );
+    out
+}
+
+/// The first double-quoted run in `line`, if any.
+pub(crate) fn quoted(line: &str) -> Option<&str> {
+    let rest = line.split_once('"')?.1;
+    rest.split_once('"').map(|(inner, _)| inner)
+}
+
+/// The `license` field a sample crate declares in its `[package]` table.
+pub(crate) fn declared_license(krate: &str) -> String {
+    let manifest = read(&crates_dir().join(krate).join("Cargo.toml"));
+    for line in manifest.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("license") {
+            if rest.trim_start().starts_with('=') {
+                if let Some(value) = quoted(trimmed) {
+                    return value.to_string();
+                }
+            }
+        }
+    }
+    panic!("{krate}/Cargo.toml declares no `license` field");
+}
+
 mod tests {
-    use std::path::{Path, PathBuf};
-
-    /// `crates/`, the directory holding this crate and every sample-asset crate.
-    fn crates_dir() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("crates/ferrosintesis always has a parent")
-            .to_path_buf()
-    }
-
-    fn read(path: &Path) -> String {
-        std::fs::read_to_string(path).unwrap_or_else(|e| {
-            panic!(
-                "licensing oracle cannot read {}: {e}.\n\
-                 These oracles derive the attribution guide from the sibling asset \
-                 manifests, so they only run inside the ferrosintesis workspace.",
-                path.display()
-            )
-        })
-    }
-
-    /// The sample crates a **default** build embeds.
-    ///
-    /// Read from the `embedded-samples` feature list rather than from `cfg!(feature)`, so
-    /// the oracle asserts the same thing under `--no-default-features`. An oracle that
-    /// quietly evaporates with a feature flag is how MM-BUG-KILN-00020 happened.
-    fn default_sample_crates() -> Vec<String> {
-        let manifest = read(&crates_dir().join("ferrosintesis").join("Cargo.toml"));
-        let mut out = Vec::new();
-        let mut inside = false;
-        for line in manifest.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("embedded-samples") && trimmed.contains('[') {
-                inside = true;
-                continue;
-            }
-            if inside {
-                if trimmed.starts_with(']') {
-                    break;
-                }
-                if let Some(dep) = quoted(trimmed) {
-                    out.push(dep.trim_start_matches("dep:").to_string());
-                }
-            }
-        }
-        assert!(
-            !out.is_empty(),
-            "could not parse the `embedded-samples` feature list out of \
-             crates/ferrosintesis/Cargo.toml — the oracle would otherwise pass vacuously"
-        );
-        out
-    }
-
-    /// The first double-quoted run in `line`, if any.
-    fn quoted(line: &str) -> Option<&str> {
-        let rest = line.split_once('"')?.1;
-        rest.split_once('"').map(|(inner, _)| inner)
-    }
-
-    /// The `license` field a sample crate declares in its `[package]` table.
-    fn declared_license(krate: &str) -> String {
-        let manifest = read(&crates_dir().join(krate).join("Cargo.toml"));
-        for line in manifest.lines() {
-            let trimmed = line.trim();
-            if let Some(rest) = trimmed.strip_prefix("license") {
-                if rest.trim_start().starts_with('=') {
-                    if let Some(value) = quoted(trimmed) {
-                        return value.to_string();
-                    }
-                }
-            }
-        }
-        panic!("{krate}/Cargo.toml declares no `license` field");
-    }
+    use super::*;
 
     /// CC0 waives attribution. Everything else here (MIT, CC-BY-3.0, CC-BY-4.0) requires
     /// the credit to travel with a binary distribution.

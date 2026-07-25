@@ -4,8 +4,8 @@ ferrosintesis — third-party attribution notices
 The ferrosintesis SOURCE CODE is licensed MIT OR Apache-2.0 (see LICENSE-MIT and
 LICENSE-APACHE). This file covers something different: the EMBEDDED SOUND RECORDINGS.
 
-A build with default features (`embedded-samples`) compiles twenty-four first-party
-sample-asset crates into the binary. Thirteen are CC0 1.0 and require nothing. The
+A build with default features (`embedded-samples`) compiles twenty-five first-party
+sample-asset crates into the binary. Fourteen are CC0 1.0 and require nothing. The
 eleven below are not, and their licences require that credit travel with any
 distribution — including a binary.
 

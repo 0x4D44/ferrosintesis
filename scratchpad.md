@@ -1,5 +1,14 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.25 — **`render-diff` is not bank-aware, so an alt-bank-only voice
+  change is misclassified as contamination or not-reached** —
+  `tools/render-diff/render_diff.py:scan` records only program numbers and drum
+  keys; it ignores CC0/CC32. KILN-00049 changed DRIVE_LEAD only on GM29/30
+  alternate banks: the full 124-MIDI diff moved exactly 11 tracks, and a
+  bank-aware scan proved those same 11 are the complete CC0-nonzero GM29/30 set,
+  but the tool called them contamination without that context. Extend the
+  touched identity and MIDI scanner to include bank selectors.
+
 - [ ] 2026.07.24 — **8 clean body-knock (tap) samples were captured in the GM120 fret-noise
   session but PARKED** — `DR0000_0204` (the taps at ~26/56/60/61 s, and more), soundboard/side
   knocks. They are the raw material for fixing the guitar's thin note-off `stop_thump`

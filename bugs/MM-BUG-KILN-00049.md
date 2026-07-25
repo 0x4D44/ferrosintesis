@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00049 — the e-bow sustainer pins its hold level in the LOOP domain but is calibrated against an OUTPUT measurement, so any damper change breaks its pitch invariance (+12.9 dB at key 88)
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) — surfaced while fixing KILN-00042; it is the reason DRIVE_LEAD had to be excluded from that fix)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) — surfaced while fixing KILN-00042; it is the reason DRIVE_LEAD had to be excluded from that fix) → Fixed (2026-07-25, Codex GPT-5.6-Sol; closed the hold-level invariant on DRIVE_LEAD's audible post-pickup/body output, restored the derived damper law, and added a two-seed five-key register-spread oracle)
 
 ## Observation
 
@@ -110,12 +110,62 @@ explicit assertion that the *spread across keys* is small, so a future change th
 mapping fails on the invariant itself rather than on whichever key happens to leave the band
 first.
 
+## Fix (2026-07-25)
+
+`DRIVE_LEAD` now uses `DamperHold::Derived`, removing KILN-00042's sole
+e-bow exclusion. The string-loop driver remains unchanged and bounded by
+`sus_headroom`; its one-way energy injection still owns sustain and release.
+
+The correction is at the layer that was uncalibrated:
+
+- `Pluck::apply_sustainer_output_gain` measures the main string signal after
+  pickup, body, cabinet, output filter, amplitude, and attack/release envelopes.
+- Once the existing e-bow latch engages, a 50 ms log-amplitude slew tracks the
+  audible target `sustain × captured output reference`.
+- Make-up is bounded to `[0.05, 4.0]`. The lower bound covers the reported
+  key-88 overshoot with margin; the upper bound prevents a silent or broken
+  projection from becoming unbounded gain.
+- The path is constructed only for a preset that has both an authored e-bow
+  (`sustain > 0`) and a derived damper. Tremolo-installed holds and every other
+  `Pluck` keep their prior render path.
+- Release freezes the last scalar while the bounded driver drops immediately,
+  preserving the existing natural-release contract.
+
+The first attempted output-to-knee feedback was rejected: the driver can add
+energy but cannot remove overshoot, so it pumped against the string's eight-second
+decay. A post-projection scalar can correct both directions without changing loop
+stability or timbre.
+
+## Verification (2026-07-25)
+
+- Red before: changing only `DRIVE_LEAD.damper_hold` to `Derived` reproduced the
+  reported failure. Key 88 rose from `+8.0` to `+12.0 dB` relative to its spoken
+  reference across seconds 2–8, outside the expected `[-13.3, -3.3] dB` band.
+- Green after: `voices::tests::sustain_holds_high_notes` now covers keys
+  64/70/76/82/88 and seeds `0xD6`/`0xD8`. Every one-second window passes the
+  existing level and flatness bounds; worst cross-register spread is `2.4 dB`,
+  down from the reported `19 dB`.
+- The four `voices::tests::sustain_*` oracles pass with default features and
+  `--no-default-features`, natively and on Rust 1.87. Bends, slurs, release, and
+  self-oscillation behavior remain green.
+- `voices::tests::treble_hold_authoring_pins`,
+  `voices::tests::ks_decay_law_holds_across_register`,
+  `voices::tests::driven_main_and_alt_banks_diverge`, and
+  `voices::tests::feedback_gtr2_variation_sustains_longer_than_base_drive` pass.
+- Strict clippy passes for all targets with all features and with no default
+  features; `cargo fmt --all --check` passes.
+- Exact baseline `b2a7000`, full 124-MIDI render inventory at 11,025 Hz:
+  11 changed and 113 byte-identical. A bank-aware MIDI census proves the 11
+  changed tracks are exactly the complete CC0-nonzero GM29/30 set (all ten
+  Slipstream tracks plus Through Lines 16), so there is no contamination.
+  `render-diff` itself labels them contamination because its scanner ignores
+  bank selectors; that separate tooling limitation is parked in `scratchpad.md`.
+
 ## Notes
 
-- **Blocks MM-BUG-KILN-00042 for DRIVE_LEAD.** That preset is `DamperHold::Off` purely
-  because of this. The cost is low — DRIVE_LEAD's sustainer already holds notes at constant
-  level, so the f³ decay collapse 00042 fixes is masked there anyway — which is why the
-  exclusion was the right call rather than a workaround.
+- **Resolved the MM-BUG-KILN-00042 block for DRIVE_LEAD.** Before this fix the
+  preset was `DamperHold::Off` purely because the derived law exposed this
+  output-domain tilt. It now rejoins `Derived` with the audible invariant closed.
 - Above key ~76 the derived corner saturates the `sr * 0.45` clamp, so the loop is nearly
   undamped; that is where the mapping tilts hardest.
 - Same underlying habit as MM-BUG-KILN-00048: a loop-internal quantity calibrated against an

@@ -3042,24 +3042,12 @@ pub const DRIVE: PluckPreset = PluckPreset {
 pub const DRIVE_LEAD: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "DRIVE_LEAD",
-    // KILN-00042 EXCLUSION — and the one preset where the fix is redundant.
-    // DRIVE_LEAD is the ONLY preset carrying the e-bow sustainer (`sustain > 0`),
-    // whose whole job is to hold a note at constant level; the f³ decay collapse
-    // this bug fixes is therefore already masked here by a different mechanism.
-    // Holding the damper open on top of it breaks the sustainer's pitch
-    // invariance: `sus_headroom` pins the saturator equilibrium in the LOOP
-    // domain (k = 1.18 × deficit, so A_eq = 1.18 × knee at every pitch), but the
-    // oracles measure the OUTPUT, and the loop→output mapping is pitch-dependent.
-    // Measured with the hold on, held level rel-ref climbed monotonically
-    // -6.1 / -3.3 / -1.6 / +4.4 / +12.9 dB across keys 64/70/76/82/88 — a 19 dB
-    // spread where the design guarantees a flat one, and far outside the ±5 dB
-    // band. A single re-captured SUS_HOLD_REF_OFFSET_DB cannot absorb a spread.
-    // Cause: above key ~76 the derived corner saturates the sr*0.45 clamp, so the
-    // loop is nearly undamped and the circulating waveform — hence the output for
-    // a given loop amplitude — changes with pitch. Recalibrating the sustainer
-    // against the new law is its own piece of work; until then this preset keeps
-    // the historic damper and its shipped calibration.
-    damper_hold: DamperHold::Off,
+    // KILN-00049: the e-bow now closes its level loop on the audible output when
+    // paired with the derived damper. `sus_headroom` still bounds injection in the
+    // string loop; a bounded post-projection level controller corrects the
+    // pitch-dependent pickup/body mapping. This removes KILN-00042's sole
+    // exclusion without turning the controller into a per-pitch fitted table.
+    damper_hold: DamperHold::Derived,
     // Guitar v2 re-spec: the SUSTAINER is the hold mechanism now — the old
     // hot-amp hack (t60 40 / amp 1.5 pinning the engine tanh) is retired.
     // What stays DRIVE_LEAD's own: the gentle 11 kHz damper (harmonics ring —
@@ -3724,6 +3712,13 @@ const SUS_K_MAX: f32 = 0.12;
 const SUS_L_SCALE: f32 = 0.7;
 const SUS_RAMP_S: f32 = 0.060; // drive engage ramp
 
+// KILN-00049 output-controller bounds. The −26 dB cut covers the reported
+// key-88 overshoot (about 21 dB above target) with margin; the +12 dB boost
+// prevents a silent/broken projection from turning into unbounded make-up gain.
+const SUS_OUT_GAIN_MIN: f32 = 0.05;
+const SUS_OUT_GAIN_MAX: f32 = 4.0;
+const SUS_OUT_GAIN_TAU_S: f32 = 0.050;
+
 impl KsLoop {
     /// Loop delay (in samples) for frequency `f`, compensating the damper's
     /// phase delay and the one-sample write→read latency.
@@ -3770,9 +3765,9 @@ impl KsLoop {
     /// Driver gain at `f`: PROPORTIONALLY supercritical — k = SUS_K_OVER ×
     /// the loop's per-trip deficit at the fundamental (damper included; a
     /// bare scalar cannot hold anything above ~A4, review D1/O1). Keeping
-    /// k/deficit constant pins the saturator's equilibrium amplitude at the
-    /// SAME multiple of the knee L at every pitch — the hold level is
-    /// calibrated by construction instead of trimmed at runtime.
+    /// k/deficit constant pins the LOOP equilibrium at the same multiple of the
+    /// knee L at every pitch. KILN-00049 separately closes the derived-damper
+    /// e-bow's audible level after the pitch-dependent pickup/body projection.
     fn sus_headroom(&self, f: f32) -> f32 {
         let lg = 10f32.powf(-3.0 / (self.t60 * f));
         let deficit = 1.0 - lg * self.damp_mag(f);
@@ -4034,7 +4029,15 @@ pub struct Pluck {
     sus_target: f32, // preset `sustain` (0 = feature absent)
     sus_acc: f32,    // per-control-window peak of |string mix|
     sus_env: f32,    // smoothed envelope of the above
-    sus_ref: f32,    // reference level captured 100–200 ms post-onset
+    sus_ref: f32,    // reference level captured 20–80 ms post-onset
+    // KILN-00049: a derived damper changes the pitch-dependent loop→output
+    // projection. Only that e-bow pairing closes its calibration on the audible
+    // post-pickup/body signal; tremolo-installed holds keep their historic path.
+    sus_out_control: bool,
+    sus_out_acc: f32,
+    sus_out_env: f32,
+    sus_out_ref: f32,
+    sus_out_gain: f32,
     sus_hold: bool,
     sus_ramp: f32,
     sus_l: f32,                    // saturator knee, frozen at latch engage
@@ -4509,6 +4512,11 @@ impl Pluck {
             sus_acc: 0.0,
             sus_env: 0.0,
             sus_ref: 0.0,
+            sus_out_control: p.sustain > 0.0 && p.damper_hold == DamperHold::Derived,
+            sus_out_acc: 0.0,
+            sus_out_env: 0.0,
+            sus_out_ref: 0.0,
+            sus_out_gain: 1.0,
             sus_hold: false,
             sus_ramp: 0.0,
             sus_l: 0.0,
@@ -4674,6 +4682,41 @@ impl Pluck {
         if let Some((osc, _, _)) = &mut self.sub {
             osc.set_freq(f, self.sr);
         }
+    }
+
+    /// KILN-00049: close the e-bow's level loop in the domain the listener hears.
+    ///
+    /// The driver remains bounded by `sus_headroom`. Once its one-way hold latches,
+    /// this controller applies a slow, bounded scalar after the pitch-dependent
+    /// pickup/body projection. Unlike changing the saturator knee, it can remove
+    /// overshoot without waiting for the eight-second string decay, and it follows
+    /// bends or later damper changes without a fitted pitch table.
+    fn apply_sustainer_output_gain(&mut self, output: f32) -> f32 {
+        if self.sus_target <= 0.0 || self.released {
+            return output * self.sus_out_gain;
+        }
+        self.sus_out_acc = self.sus_out_acc.max(output.abs());
+        let now = self.t + 1;
+        if now.is_multiple_of(CTRL) {
+            self.sus_out_env = self.sus_out_env * 0.9 + self.sus_out_acc * 0.1;
+            self.sus_out_acc = 0.0;
+            let win = (0.06 * self.sr) as u32;
+            if now < self.sus_ref_until {
+                if now + win >= self.sus_ref_until {
+                    self.sus_out_ref = self.sus_out_ref.max(self.sus_out_env);
+                }
+            } else if self.sus_hold {
+                let target = self.sus_target * self.sus_out_ref;
+                let target_gain =
+                    (target / self.sus_out_env.max(1e-9)).clamp(SUS_OUT_GAIN_MIN, SUS_OUT_GAIN_MAX);
+                // 50 ms: slow beside the waveform/body filters, but fast beside
+                // the multi-second hold. Interpolate in log amplitude so equal-dB
+                // boosts and cuts converge symmetrically without zipper noise.
+                let alpha = (CTRL as f32 / (SUS_OUT_GAIN_TAU_S * self.sr)).min(1.0);
+                self.sus_out_gain *= (alpha * (target_gain / self.sus_out_gain).ln()).exp();
+            }
+        }
+        output * self.sus_out_gain
     }
 }
 
@@ -4885,6 +4928,9 @@ impl Voice for Pluck {
                 self.release_env = (self.release_env * self.rel_rec).min(1.0);
             }
             let mut y = y * self.amp * self.att_env * self.release_env;
+            if self.sus_out_control {
+                y = self.apply_sustainer_output_gain(y);
+            }
             if let Some(b) = &mut self.onset_post {
                 // slap pop / finger noise, after the out-LP AND outside the
                 // attack ramp — the finger contact happens at t=0 even when
@@ -4971,6 +5017,14 @@ impl Voice for Pluck {
             self.sus_hold = false;
             self.sus_ramp = 0.0;
             self.sus_ref = 0.0;
+            if self.sus_out_control {
+                self.sus_acc = 0.0;
+                self.sus_env = 0.0;
+                self.sus_out_acc = 0.0;
+                self.sus_out_env = 0.0;
+                self.sus_out_ref = 0.0;
+                self.sus_out_gain = 1.0;
+            }
             self.sus_ref_until = self.t + (0.06 * self.sr) as u32;
         }
         true
@@ -5043,6 +5097,14 @@ impl Voice for Pluck {
             self.sus_hold = false;
             self.sus_ramp = 0.0;
             self.sus_ref = 0.0;
+            if self.sus_out_control {
+                self.sus_acc = 0.0;
+                self.sus_env = 0.0;
+                self.sus_out_acc = 0.0;
+                self.sus_out_env = 0.0;
+                self.sus_out_ref = 0.0;
+                self.sus_out_gain = 1.0;
+            }
             self.sus_ref_until = self.t + (0.06 * self.sr) as u32;
         }
         self.trem_last_strike = self.t;
@@ -14682,8 +14744,9 @@ mod tests {
     /// oracles off DRIVE (softer click and a 30 ms swell change the
     /// crest-vs-smoothed statistics): E5 −12.0 / E6 −4.6 rel-ref → center
     /// −8.3 → offset −8.3 − 20·log10(0.6) = −3.9. (The pre-U2 DRIVE capture
-    /// was −7.3.) Re-capture this the same way if the lead's click,
-    /// attack_s, or sustain change.
+    /// was −7.3.) KILN-00049's output-domain controller removes damper/pitch
+    /// dependence from this statistic; re-capture only if the lead's click or
+    /// `attack_s` changes the crest/reference relationship.
     const SUS_HOLD_REF_OFFSET_DB: f32 = -3.9;
 
     /// Drive a Pluck through a held phase then a released tail (V6/V7/V8).
@@ -14709,74 +14772,103 @@ mod tests {
     /// V6a (guitar v2 unit D; round-3 U2 migrated the sustainer oracles from
     /// DRIVE to DRIVE_LEAD — the alt-bank lead is where the hold lives now,
     /// the default bank decays): the sustainer HOLDS a high held note — solo
-    /// voice (no engine Drive, isolating unit D from unit C), E5 and E6 (the
-    /// worst case the T16 lead exposed), 8 s: every late 1-s window sits
+    /// voice (no engine Drive, isolating unit D from unit C), five keys spanning
+    /// E4–E6, 8 s: every late 1-s window sits
     /// within ±5 dB of the constant-derived hold level (upper AND lower
     /// bounds: growth or a dead sustainer fails), the windows stay FLAT
     /// within 3 dB (the pumping catch), DC/sub-fundamental energy stays
-    /// ≥ 40 dB down, and every sample is finite.
+    /// ≥ 40 dB down, and every sample is finite. KILN-00049 adds the invariant
+    /// the design actually claims: steady held level may spread by at most 3 dB
+    /// across the register, checked on both the historic and reported-failure
+    /// seeds.
     #[test]
     fn sustain_holds_high_notes() {
         let sr = 44100.0;
-        for key in [76u8, 88] {
-            let buf = render_pluck_phased(&DRIVE_LEAD, key, 8.0, 0.0, 0xD6);
-            assert!(buf.iter().all(|x| x.is_finite()), "key {key}: non-finite");
-            let db = |a: f32, b: f32| {
-                20.0 * rms(&buf[(a * sr) as usize..(b * sr) as usize])
-                    .max(1e-12)
-                    .log10()
-            };
-            // reference = the note's spoken level: peak over 20-80 ms
-            // Reference = the note's spoken CREST. The lead's 30 ms swell
-            // (round-3 U2) moves the crest per pitch — E5 peaks post-swell
-            // ~90 ms, E6's whole string life sits inside the swell and
-            // crests ~40 ms — so the window spans [0.02, 0.20] and the max
-            // finds the crest wherever the swell puts it (a fixed 20-80 ms
-            // read deflates one key or the other and shifts everything
-            // measured "rel ref"). Ends at 200 ms: past that the sustainer
-            // hold — not the spoken crest — would own the max.
-            let refl = 20.0
-                * buf[(0.02 * sr) as usize..(0.20 * sr) as usize]
-                    .iter()
-                    .fold(0f32, |m, &x| m.max(x.abs()))
-                    .max(1e-12)
-                    .log10();
-            // Expected hold: the preset constant with the measured −11.6 dB
-            // systematic offset (onset-crest-vs-held-RMS, the controller's
-            // smoothed window-max envelope vs instantaneous peak, and the
-            // saturator equilibrium multiple). The ±5 dB band absorbs the
-            // per-pitch remainder of those statistics (E5 −23.5 / E6 −17.9
-            // at capture); the FLATNESS clause below is the pumping catch.
-            let hold = 20.0 * DRIVE_LEAD.sustain.log10() + SUS_HOLD_REF_OFFSET_DB;
-            let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
-            let mut bad = Vec::new();
-            for w in 2..8 {
-                let rel = db(w as f32, w as f32 + 1.0) - refl;
-                println!("V6a key {key} window {w}s: {rel:.1} dB rel ref (hold {hold:.1})");
-                lo = lo.min(rel);
-                hi = hi.max(rel);
-                if !(rel >= hold - 5.0 && rel <= hold + 5.0) {
-                    bad.push((w, rel));
+        for seed in [0xD6u32, 0xD8] {
+            let mut register_levels = Vec::new();
+            for key in [64u8, 70, 76, 82, 88] {
+                let buf = render_pluck_phased(&DRIVE_LEAD, key, 8.0, 0.0, seed);
+                assert!(
+                    buf.iter().all(|x| x.is_finite()),
+                    "seed {seed:#x} key {key}: non-finite"
+                );
+                let db = |a: f32, b: f32| {
+                    20.0 * rms(&buf[(a * sr) as usize..(b * sr) as usize])
+                        .max(1e-12)
+                        .log10()
+                };
+                // reference = the note's spoken level: peak over 20-80 ms
+                // Reference = the note's spoken CREST. The lead's 30 ms swell
+                // (round-3 U2) moves the crest per pitch — E5 peaks post-swell
+                // ~90 ms, E6's whole string life sits inside the swell and
+                // crests ~40 ms — so the window spans [0.02, 0.20] and the max
+                // finds the crest wherever the swell puts it (a fixed 20-80 ms
+                // read deflates one key or the other and shifts everything
+                // measured "rel ref"). Ends at 200 ms: past that the sustainer
+                // hold — not the spoken crest — would own the max.
+                let refl = 20.0
+                    * buf[(0.02 * sr) as usize..(0.20 * sr) as usize]
+                        .iter()
+                        .fold(0f32, |m, &x| m.max(x.abs()))
+                        .max(1e-12)
+                        .log10();
+                // Expected hold: the preset constant with the measured −3.9 dB
+                // systematic offset (onset-crest-vs-held-RMS, the controller's
+                // smoothed window-max envelope vs instantaneous peak, and the
+                // saturator equilibrium multiple). The ±5 dB band absorbs the
+                // per-note remainder of those statistics; the flatness and
+                // cross-register clauses below catch pumping or pitch tilt.
+                let hold = 20.0 * DRIVE_LEAD.sustain.log10() + SUS_HOLD_REF_OFFSET_DB;
+                let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+                let mut bad = Vec::new();
+                let mut steady_sum = 0.0;
+                for w in 2..8 {
+                    let rel = db(w as f32, w as f32 + 1.0) - refl;
+                    println!(
+                        "V6a seed {seed:#x} key {key} window {w}s: \
+                         {rel:.1} dB rel ref (hold {hold:.1})"
+                    );
+                    lo = lo.min(rel);
+                    hi = hi.max(rel);
+                    steady_sum += rel;
+                    if !(rel >= hold - 5.0 && rel <= hold + 5.0) {
+                        bad.push((w, rel));
+                    }
                 }
+                assert!(
+                    bad.is_empty(),
+                    "key {key}: windows outside [{:.1}, {:.1}]: {bad:?}",
+                    hold - 5.0,
+                    hold + 5.0
+                );
+                assert!(
+                    hi - lo <= 3.0,
+                    "key {key}: hold not flat — {:.1} dB spread across windows",
+                    hi - lo
+                );
+                register_levels.push((key, steady_sum / 6.0));
+                let f0 = key_freq(key);
+                let late = &buf[(6.0 * sr) as usize..(8.0 * sr) as usize];
+                let sub = spectral_band_rms(late, sr, 2.0, f0 * 0.5);
+                let fund = spectral_band_rms(late, sr, f0 * 0.9, f0 * 1.1);
+                assert!(
+                    sub <= fund * 0.01,
+                    "key {key}: sub-f0 energy {sub} vs fundamental {fund}"
+                );
             }
-            assert!(
-                bad.is_empty(),
-                "key {key}: windows outside [{:.1}, {:.1}]: {bad:?}",
-                hold - 5.0,
-                hold + 5.0
-            );
+            let lo = register_levels
+                .iter()
+                .map(|(_, level)| *level)
+                .fold(f32::INFINITY, f32::min);
+            let hi = register_levels
+                .iter()
+                .map(|(_, level)| *level)
+                .fold(f32::NEG_INFINITY, f32::max);
             assert!(
                 hi - lo <= 3.0,
-                "key {key}: hold not flat — {:.1} dB spread across windows",
+                "seed {seed:#x}: held level spreads {:.1} dB across keys: \
+                 {register_levels:?}",
                 hi - lo
-            );
-            let f0 = key_freq(key);
-            let late = &buf[(6.0 * sr) as usize..(8.0 * sr) as usize];
-            let sub = spectral_band_rms(late, sr, 2.0, f0 * 0.5);
-            let fund = spectral_band_rms(late, sr, f0 * 0.9, f0 * 1.1);
-            assert!(
-                sub <= fund * 0.01,
-                "key {key}: sub-f0 energy {sub} vs fundamental {fund}"
             );
         }
     }
@@ -15010,13 +15102,17 @@ mod tests {
             let mut b = vec![0f32; (0.2 * sr) as usize];
             v.render(&mut b);
             println!(
-                "t={:.1}s out_rms {:.5} env {:.5} ref {:.5} hold {} ramp {:.2} k_max {:.5} k {:.5}",
+                "t={:.1}s out_rms {:.5} raw_env {:.5} raw_ref {:.5} out_env {:.5} out_ref {:.5} out_gain {:.5} hold {} ramp {:.2} l {:.5} k_max {:.5} k {:.5}",
                 (step as f32 + 1.0) * 0.2,
                 rms(&b),
                 v.sus_env,
                 v.sus_ref,
+                v.sus_out_env,
+                v.sus_out_ref,
+                v.sus_out_gain,
                 v.sus_hold,
                 v.sus_ramp,
+                v.sus_l,
                 v.horiz.drv.as_ref().map(|d| d.k_max).unwrap_or(0.0),
                 v.horiz.drv.as_ref().map(|d| d.k).unwrap_or(0.0)
             );
@@ -18704,14 +18800,9 @@ mod tests {
         // they were held out for, but flipping their hold exposes a key-dependent
         // sub/mwah LEVEL bend a scalar can't fit — deferred to the §3 bass-family
         // reconciliation (KILN-00045), which flips them WITH that fix.
-        const EXPECTED_OFF: &[&str] = &[
-            "BASS",
-            "CLAVINET",
-            "DRIVE_LEAD",
-            "FRETLESS",
-            "HARPSICHORD",
-            "OUD",
-        ];
+        // DRIVE_LEAD left this list in KILN-00049: its output-domain sustainer
+        // controller now makes the derived hold safe across the full register.
+        const EXPECTED_OFF: &[&str] = &["BASS", "CLAVINET", "FRETLESS", "HARPSICHORD", "OUD"];
         let mut actual_off: Vec<&str> = ALL_PLUCK_PRESETS
             .iter()
             .filter(|(_, p)| p.damper_hold == DamperHold::Off)

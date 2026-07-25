@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00049 — the e-bow sustainer pins its hold level in the LOOP domain but is calibrated against an OUTPUT measurement, so any damper change breaks its pitch invariance (+12.9 dB at key 88)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) — surfaced while fixing KILN-00042; it is the reason DRIVE_LEAD had to be excluded from that fix) → Fixed (2026-07-25, Codex GPT-5.6-Sol; closed the hold-level invariant on DRIVE_LEAD's audible post-pickup/body output, restored the derived damper law, and added a two-seed five-key register-spread oracle)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) — surfaced while fixing KILN-00042; it is the reason DRIVE_LEAD had to be excluded from that fix) → Fixed (2026-07-25, Codex GPT-5.6-Sol; closed the hold-level invariant on DRIVE_LEAD's audible post-pickup/body output, restored the derived damper law, and added a two-seed five-key register-spread oracle) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; the recorded key-88 failure reproduced digit-for-digit on a pre-fix build, and the controller is load-bearing on trunk)
 
 ## Observation
 
@@ -160,6 +160,35 @@ stability or timbre.
   Slipstream tracks plus Through Lines 16), so there is no contamination.
   `render-diff` itself labels them contamination because its scanner ignores
   bank selectors; that separate tooling limitation is parked in `scratchpad.md`.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+Reproduced the **original recorded observation verbatim**. A throwaway worktree at
+`620e5b6^` (`b2a7000`) with DRIVE_LEAD's opt-out removed exactly as the Reproduce block
+specifies (`damper_hold: DamperHold::Derived`, nothing else changed) fails with:
+
+```
+key 88: windows outside [-13.3, -3.3]: [(2, 8.027917), (3, 9.786356), (4, 10.788551),
+ (5, 11.396221), (6, 11.777503), (7, 12.02174)]
+```
+
+Every digit the ledger quotes — `(2, 8.03) (3, 9.79) (4, 10.79) (5, 11.40) (6, 11.78)
+(7, 12.02)` — matches. The register climb reproduced too: key 76 held at −9.3 dB while key 88
+sat at +12.0 dB rel-ref.
+
+Green on trunk: `voices::tests::sustain_holds_high_notes` passes across keys 64/70/76/82/88
+and seeds `0xD6`/`0xD8`.
+
+The fix is load-bearing, not incidental: on trunk, setting **only** `sus_out_control: false`
+(keeping `DamperHold::Derived`) turns the oracle red again — so the output-domain controller,
+not the damper flip, is what closes the invariant.
+Repo gates on the verification worktree: `cargo fmt --all --check` clean;
+`cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings` clean;
+`cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings`
+clean; `cargo test -p ferrosintesis --no-default-features --locked` 614 passed / 0 failed;
+`cargo test --workspace --exclude amp-lab --locked` all suites ok, 714 passed / 0 failed /
+27 ignored in the ferrosintesis lib suite and no failures anywhere; `cargo test -p amp-lab` 26/26;
+`python tools/ferrosintesis-samples/test_prepare.py` 32/32.
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00072 — manifest.rs comment-stripping ignores TOML literal strings and braces in strings
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** packaging / build
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00067 on independent two-eyes closure; found by Codex GPT-5.6-Sol; recorded by Claude Opus 4.8 (1M)) → Fixed (2026-07-25, Codex GPT-5.6-Sol; TOML basic/literal string scanner and regressions landed; awaiting independent two-eyes verification)
+- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00067 on independent two-eyes closure; found by Codex GPT-5.6-Sol; recorded by Claude Opus 4.8 (1M)) → Fixed (2026-07-25, Codex GPT-5.6-Sol; TOML basic/literal string scanner and regressions landed; awaiting independent two-eyes verification) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; the recorded literal-string false positive reproduced by reverting only the scanner)
 
 ## Observation
 
@@ -71,6 +71,23 @@ Validation on 2026-07-25:
 - Native focused manifest suite: 2 passed.
 - Rust 1.87 focused manifest suite: 2 passed.
 - `cargo clippy -p ferrosintesis --lib --tests -- -D warnings`: passed.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+Red-before: reverting **only** `structural_braces` to the pre-fix basic-string-only
+comment stripper fails `the_oracle_detects_the_shape_it_is_meant_to_catch` at the assertion on
+`foo = { path = 'vendor/a#b' }` — the recorded false positive, where the `#` inside a TOML
+literal string truncates the line and discards its closing brace.
+
+Green after: passes on trunk, including the two further literal-string shapes the fix added
+(braces inside a literal string, and a literal `"` that previously hid a real comment).
+Repo gates on the verification worktree: `cargo fmt --all --check` clean;
+`cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings` clean;
+`cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings`
+clean; `cargo test -p ferrosintesis --no-default-features --locked` 614 passed / 0 failed;
+`cargo test --workspace --exclude amp-lab --locked` all suites ok, 714 passed / 0 failed /
+27 ignored in the ferrosintesis lib suite and no failures anywhere; `cargo test -p amp-lab` 26/26;
+`python tools/ferrosintesis-samples/test_prepare.py` 32/32.
 
 ## Notes
 

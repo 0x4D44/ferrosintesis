@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00063 — Sample regeneration can truncate tracked WAVs on interruption
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample generation / output durability
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex during the coverage-ledger review of `crates/ferrosintesis-samples-bass/`) → Fixed (2026-07-25, Codex GPT-5.6-Sol; shared WAV generation now stages through a sibling `.part` and atomically replaces the destination after close; awaiting independent two-eyes verification)
+- **State history:** Open (2026-07-24, raised by Codex during the coverage-ledger review of `crates/ferrosintesis-samples-bass/`) → Fixed (2026-07-25, Codex GPT-5.6-Sol; shared WAV generation now stages through a sibling `.part` and atomically replaces the destination after close; awaiting independent two-eyes verification) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; the recorded 44-byte truncation reproduced by reverting only write_wav_mono)
 
 ## Observation
 
@@ -54,6 +54,24 @@ Validation on 2026-07-25:
 
 - Focused injected-write-failure regression: 1 passed.
 - Full `tools/ferrosintesis-samples/test_prepare.py` suite: 32 passed.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+Red-before: reverting **only** `write_wav_mono` to the pre-fix in-place `wave.open(path,
+"wb")` fails `test_failed_wav_write_preserves_the_existing_destination`. The injected write
+failure leaves the destination as a header-only WAV — the bytes begin `RIFF$\x00\x00\x00`
+(declared size 36, zero data frames) where the original held 1,024 data bytes. That is the
+recorded destructive window, observed rather than inferred.
+
+Green after: the full `tools/ferrosintesis-samples/test_prepare.py` suite passes, 32/32, and
+no `.part` file survives the failure.
+Repo gates on the verification worktree: `cargo fmt --all --check` clean;
+`cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings` clean;
+`cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings`
+clean; `cargo test -p ferrosintesis --no-default-features --locked` 614 passed / 0 failed;
+`cargo test --workspace --exclude amp-lab --locked` all suites ok, 714 passed / 0 failed /
+27 ignored in the ferrosintesis lib suite and no failures anywhere; `cargo test -p amp-lab` 26/26;
+`python tools/ferrosintesis-samples/test_prepare.py` 32/32.
 
 ## Notes
 

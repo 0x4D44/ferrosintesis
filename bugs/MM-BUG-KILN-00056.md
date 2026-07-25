@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00056 — Six album MIDI writers lack the _resolve_overlaps() write-time clamp: 10,398 same-pitch overlaps are committed (8,426 in Riverwake), ambiguous on kill-newest GM synths
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** albums
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass; scope corrected from the original "Hollow Hill only / if regenerated" to the measured 6-writer, committed-today reality) → Fixed (2026-07-25, Codex GPT-5.6-Sol; back-ported positional overlap clamps to all six lagging writer lineages, regenerated their committed MIDI, and added a catalog-wide serialized-MIDI oracle)
+- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass; scope corrected from the original "Hollow Hill only / if regenerated" to the measured 6-writer, committed-today reality) → Fixed (2026-07-25, Codex GPT-5.6-Sol; back-ported positional overlap clamps to all six lagging writer lineages, regenerated their committed MIDI, and added a catalog-wide serialized-MIDI oracle) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; an independently written scanner reproduced the 10,398 pre-fix total and 0 after)
 
 ## Observation
 
@@ -90,6 +90,29 @@ sources: 38 changed audibly. `albums/opus4-8/midi/07 - Snow.mid` is byte-changed
 identically because its sole repaired overlap is a percussion note-off, which ferrosintesis
 does not voice. Every unchanged album MIDI is byte-identical, so no unrelated source can
 contaminate this MIDI-only fix.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+Verified with a scanner **written fresh for this pass**, deliberately not the fixer's
+`crates/render-catalog/tests/album_midi_overlaps.rs` oracle, so a shared defect in that oracle
+could not green both halves. It parses every committed album SMF (running status, meta and
+sysex events included) and pairs the k-th sorted note-on with the k-th sorted note-off per
+`(track, channel, pitch)`.
+
+- Pre-fix (`ff3928c^`), 124 files: **10,398** overlaps — the recorded total, exactly.
+  The per-writer split matches the ledger table: Riverwake **8,426**, Hollow Hill
+  342 + 238 = **580**, The Long Turning **203**.
+- Post-fix trunk, 124 files: **0** overlaps, 0 unbalanced pitch keys.
+
+The measured pre-fix total landing on the recorded figure from an independent implementation
+is what makes this a confirmation rather than a re-assertion.
+Repo gates on the verification worktree: `cargo fmt --all --check` clean;
+`cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings` clean;
+`cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings`
+clean; `cargo test -p ferrosintesis --no-default-features --locked` 614 passed / 0 failed;
+`cargo test --workspace --exclude amp-lab --locked` all suites ok, 714 passed / 0 failed /
+27 ignored in the ferrosintesis lib suite and no failures anywhere; `cargo test -p amp-lab` 26/26;
+`python tools/ferrosintesis-samples/test_prepare.py` 32/32.
 
 ## Notes
 

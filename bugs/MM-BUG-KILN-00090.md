@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00090 — 31 tests fail under `--no-default-features`, blocking a test gate for the modeled-only build
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** build config / test coverage
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00070 by Claude Opus 4.8 (1M) while fixing it — 00070 delivered the clippy half and its gate; this is the residual that blocks the matching test step. Measured, not inferred.) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the exact locked modeled-only suite passes and is now required by both integration gates)
+- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00070 by Claude Opus 4.8 (1M) while fixing it — 00070 delivered the clippy half and its gate; this is the residual that blocks the matching test step. Measured, not inferred.) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the exact locked modeled-only suite passes and is now required by both integration gates) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; the pre-fix parent reproduced exactly the 3 classified failures; trunk is 614/0)
 
 ## Observation
 
@@ -146,6 +146,40 @@ Evidence:
 - MM-BUG-KILN-00105 remains the separate runtime concern: a default-feature binary that is
   asked not to use samples, or falls outside a sample zone, still chooses compensation by
   program rather than the voice actually built.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+Red-before at the **exact pre-fix parent** `d3ac026`:
+`cargo test -p ferrosintesis --no-default-features --locked` → **609 passed, 3 failed,
+22 ignored**. The three are precisely the ones the Resolution classifies:
+
+- `testutil::perceptual_distinctness_requires_embedded_samples` — the deliberate sentinel panic;
+- `velocity_law::tests::melodic_voices_follow_the_square_law` — GM24 key 48 exponent **1.704**
+  against a 2.0 ± 0.2 band;
+- `velocity_law::tests::every_gm_program_follows_the_square_law` — GM24=**1.72**, GM64=**2.37**,
+  GM65=**2.45**, GM66=**2.47**, GM67=**2.41**.
+
+That run independently confirms the "28 no longer reproduced and remained enabled" claim: the
+other 28 of the stale list pass at the baseline, so the fix did not hide them behind gates.
+
+Green after on trunk: **614 passed, 0 failed, 22 ignored**, plus 4 doc-tests. (The ledger
+records 612 at the fix; the tree has since gained two tests. Higher count, still zero failures.)
+
+The contract half also holds — this bug's whole point was that the configuration must be
+gated, not merely green once:
+
+- the modeled-only test step appears in **both** `.deltic-integrate.toml` `fallback` and the
+  `workspace` component gate;
+- `crates/ferrosintesis/src/testutil.rs:no_default_gate_is_paired_with_embedded_sample_coverage`
+  exists and passes, so the pairing cannot silently lapse;
+- `deltic integrate-config validate --json` reports the policy valid.
+Repo gates on the verification worktree: `cargo fmt --all --check` clean;
+`cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings` clean;
+`cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings`
+clean; `cargo test -p ferrosintesis --no-default-features --locked` 614 passed / 0 failed;
+`cargo test --workspace --exclude amp-lab --locked` all suites ok, 714 passed / 0 failed /
+27 ignored in the ferrosintesis lib suite and no failures anywhere; `cargo test -p amp-lab` 26/26;
+`python tools/ferrosintesis-samples/test_prepare.py` 32/32.
 
 ## Notes
 

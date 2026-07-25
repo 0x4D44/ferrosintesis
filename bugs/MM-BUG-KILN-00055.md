@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00055 — voices.rs::percentile doc comment claims nearest-rank but the body is floor-rank, and no test pins the convention
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass) → Fixed (2026-07-25, Codex GPT-5.6-Sol; the test helper now implements its documented nearest-rank convention and a nine-value p95 regression pins it; awaiting independent two-eyes verification)
+- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass) → Fixed (2026-07-25, Codex GPT-5.6-Sol; the test helper now implements its documented nearest-rank convention and a nine-value p95 regression pins it; awaiting independent two-eyes verification) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; the recorded n=9/q=0.95 floor-rank result reproduced by reverting only the helper body)
 
 ## Observation
 
@@ -73,6 +73,23 @@ Validation on 2026-07-25:
 - `cargo clippy -p ferrosintesis --lib --tests -- -D warnings`: passed.
 - Mandatory render inventory: exact baseline `f122f2c`, all 124 catalog MIDIs
   at 11,025 Hz; 124 byte-identical, zero changed, zero contamination.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+Red-before: reverting **only** `percentile`'s body to the pre-fix floor-rank expression
+(leaving the new test in place) fails `voices::tests::percentile_uses_nearest_rank` with
+`left: 7.0, right: 8.0` — precisely the recorded pathology, the second-largest of nine values
+where nearest rank returns the maximum.
+
+Green after: passes on trunk. `brass_sustain_breathes_off_the_frozen_hold`, which exercises
+both live consumers of the helper, is green.
+Repo gates on the verification worktree: `cargo fmt --all --check` clean;
+`cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings` clean;
+`cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings`
+clean; `cargo test -p ferrosintesis --no-default-features --locked` 614 passed / 0 failed;
+`cargo test --workspace --exclude amp-lab --locked` all suites ok, 714 passed / 0 failed /
+27 ignored in the ferrosintesis lib suite and no failures anywhere; `cargo test -p amp-lab` 26/26;
+`python tools/ferrosintesis-samples/test_prepare.py` 32/32.
 
 ## Notes
 

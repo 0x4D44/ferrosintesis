@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00106 — GM 96 rain is cut off while the key is still held: the noise layer has no liveness term
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** voices / FX
@@ -18,13 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 4.5 while splitting the
-  `--no-default-features` test failures of MM-BUG-KILN-00090. The failing clause was
-  deliberately left LIVE and red rather than gated, because gating it would have buried a
-  shipped defect — which is the whole point of KILN-00090's no-mass-gating rule.) → Fixed
-  (2026-07-25, Codex GPT-5.6-Sol; synthetic rain liveness now follows key hold with
-  default, samples-off, and modeled-only regression coverage; awaiting independent
-  two-eyes verification)
+- **State history:** Open (2026-07-25, raised by Claude Opus 4.5 while splitting the `--no-default-features` test failures of MM-BUG-KILN-00090. The failing clause was deliberately left LIVE and red rather than gated, because gating it would have buried a shipped defect — which is the whole point of KILN-00090's no-mass-gating rule.) → Fixed (2026-07-25, Codex GPT-5.6-Sol; synthetic rain liveness now follows key hold with default, samples-off, and modeled-only regression coverage; awaiting independent two-eyes verification) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; the recorded mid-hold cut-off reproduced by removing only the liveness term)
 
 ## Observation
 
@@ -100,3 +94,26 @@ proves the changed samples-off path is reached.
 test. Clauses (a) and (b) remain gated as genuinely sample-specific; clause (c)
 remains active in every build because key-hold lifetime is the voice's contract,
 not an asset property.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+Red-before: removing **only** the `synthetic_rain_alive` term from `Fx::is_alive` fails
+`fx_o7_rain_96_real_recording_bed` with
+
+```
+96 rain (samples-off) died while the note was still held — the wash must sustain
+```
+
+which is the recorded symptom — GM 96 cut off while the key is still down — on the modeled
+path, where the noise layer has no liveness term of its own.
+
+Green after: passes on trunk, as does `fx_o2_rain_96_is_a_fused_aperiodic_wash`. The
+modeled-only suite (614 tests, `--no-default-features`) is green, which is the configuration
+where the synthetic wash is the only rain there is.
+Repo gates on the verification worktree: `cargo fmt --all --check` clean;
+`cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings` clean;
+`cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings`
+clean; `cargo test -p ferrosintesis --no-default-features --locked` 614 passed / 0 failed;
+`cargo test --workspace --exclude amp-lab --locked` all suites ok, 714 passed / 0 failed /
+27 ignored in the ferrosintesis lib suite and no failures anywhere; `cargo test -p amp-lab` 26/26;
+`python tools/ferrosintesis-samples/test_prepare.py` 32/32.

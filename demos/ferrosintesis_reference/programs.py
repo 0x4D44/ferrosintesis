@@ -138,7 +138,7 @@ OVERRIDE: dict[int, dict] = {
     110: {"register": (55, 84), "gesture": SUSTAIN},   # Fiddle
     111: {"register": (60, 84), "gesture": SUSTAIN},   # Shanai
     # Percussive - modelled melodic percussion registers. 112/113/116 have a
-    # same-instrument set-B ALT bank -- match its register (see check_dual_bank_registers).
+    # same-instrument set-B ALT bank; melodic_slots() gives it the default's register.
     112: {"register": (72, 96)},                       # Tinkle bell: strike bp 7200Hz, voices.rs:741
     113: {"register": (60, 84)},                       # Agogo
     114: {"register": (48, 79)},                       # Steel drum
@@ -271,7 +271,16 @@ def melodic_slots(lo: int, hi: int) -> list[Slot]:
     The alt twin inherits the default's register and gesture so the A/B compares
     timbre at matched pitch, velocity and phrase (check_ab_parity). STANDALONE_ALT
     programs are appended at the end of the walk instead - the alt is a different
-    instrument, so it gets its own slot, register and gesture."""
+    instrument, so it gets its own slot, register and gesture.
+
+    That inheritance is load-bearing, and it was learnt the hard way: the contrabass
+    (GM 43) once took its main register from the strings family row (48, 79) and its
+    alt from (28, 60), so the main was auditioned an octave-and-a-fourth ABOVE a double
+    bass's compass - exactly where its loop-latency pitch bug was worst (-45 cents) -
+    while the alt played in compass. The A/B was rigged against the main, and "the alt
+    sounds better" was half real defect, half harness artefact. Twelve of the
+    twenty-four dual-bank rows were mismatched that way. Taking `default.register`
+    here makes that class of mismatch unconstructable, so no check guards it."""
     out: list[Slot] = []
     tail: list[Slot] = []
     for p in range(lo, hi + 1):
@@ -302,42 +311,3 @@ def melodic_slots(lo: int, hi: int) -> list[Slot]:
 def alias_index() -> list[tuple[int, int]]:
     """(program, canonical) pairs, ascending - for the marker/lyrics cross-reference."""
     return sorted(ALIAS.items())
-
-
-# Dual-bank programs whose ALT is a genuinely DIFFERENT instrument, so a shared register
-# would be wrong. Every other dual-bank program must audition both banks in the SAME
-# register - see check_dual_bank_registers().
-REGISTER_MAY_DIVERGE = {
-    14: "alt is a tam-tam/gong, not tubular bells; it folds to one octave (voices.rs:1184)",
-    119: "main ignores the key entirely (fixed 1.02s swell); the alt IS key-tracked",
-}
-
-
-def check_dual_bank_registers() -> list[str]:
-    """An A/B must vary ONE thing: the bank. Not the notes.
-
-    Every dual-bank program whose alt is the same instrument must audition both banks in
-    the same register, or the listener is comparing pitches rather than voices. This is
-    not hypothetical: the contrabass (GM 43) used to inherit the strings family row
-    (48, 79) for its main and (28, 60) for its alt -- so the main was auditioned an
-    octave-and-a-fourth ABOVE a double bass's compass, exactly where its loop-latency
-    pitch bug was worst (-45 cents), while the alt was played in compass. The A/B was
-    rigged against the main, and the resulting "the alt sounds better" was half real
-    defect and half harness artefact. Twelve of the twenty-four dual-bank rows were
-    mismatched like this.
-
-    Returns a list of human-readable failures (empty == good).
-    """
-    problems: list[str] = []
-    for program, (alt_register, _gesture, label) in sorted(ALT_BANK.items()):
-        if program in REGISTER_MAY_DIVERGE:
-            continue
-        main_register = _resolve(program).register
-        if main_register != alt_register:
-            problems.append(
-                f"GM {program:03d} ({GM_NAMES[program]}): the A/B compares DIFFERENT "
-                f"REGISTERS - main {main_register} vs alt {alt_register} ({label}). "
-                f"Add an OVERRIDE so both banks audition the same notes, or document the "
-                f"divergence in REGISTER_MAY_DIVERGE."
-            )
-    return problems

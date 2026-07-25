@@ -147,7 +147,7 @@
   The perceptual oracle's `sample_layer_engaged_at_probe_keys` (testutil.rs) carries the
   code-true list — sync `LA_PROGRAMS` to it, or derive both from one shared const.
 
-- [ ] 2026.07.14 — **`check_dual_bank_registers` is dead code with a latent unpack bug.**
+- [x] 2026.07.14 — **`check_dual_bank_registers` is dead code with a latent unpack bug.**
   `demos/ferrosintesis_reference/programs.py` (`check_dual_bank_registers`) is never
   called from verify.py or anywhere else, and its loop unpacks `ALT_BANK.items()` values
   as 3-tuples (`for program, (alt_register, _gesture, label) in ...`) while ALT_BANK
@@ -156,6 +156,12 @@
   entries carry their own), so registers can no longer silently diverge. Delete the
   function and the comment references to it, or rewrite it against REGISTER_MAY_DIVERGE
   if any check is still wanted. (Spotted during the round-2 tam-tam audition work.)
+  (Done 2026-07-25: deleted, with all three claims proven first — no caller anywhere, and
+  calling it really does raise `ValueError: too many values to unpack (expected 3)`, which
+  I observed rather than inferred. Its premise is gone: `melodic_slots` passes
+  `default.register` to the alt slot, so a divergence is unconstructable. The contrabass
+  A/B-rigging story from its docstring is preserved on `melodic_slots`, which is where the
+  invariant now lives — the knowledge was worth keeping even though the code was not.)
 
 - [ ] 2026.07.14 — **BowedString (GM 42/43) has a wolf band at keys 46–50 (B♭2–D3): the
   waveguide abandons its fundamental and mode-locks onto ~3·f0** (both programs, all seeds

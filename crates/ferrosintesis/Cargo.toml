@@ -7,9 +7,22 @@ description = "A General MIDI synthesizer and MIDI-to-WAV renderer with no Sound
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/0x4D44/ferrosintesis"
 readme = "README.md"
-include = ["src/**", "README.md", "NOTICE", "LICENSE-APACHE", "LICENSE-MIT"]
+# `examples/**` ships deliberately: `examples/quickstart.rs` IS the README's code block, and
+# it exists so `clippy --all-targets` fails when the API drifts from what the front page
+# claims. A published crate without it invites the drift the file was written to prevent.
+include = ["src/**", "examples/**", "README.md", "NOTICE", "LICENSE-APACHE", "LICENSE-MIT"]
 keywords = ["midi", "synthesizer", "audio", "dsp"]
 categories = ["multimedia::audio"]
+
+# docs.rs builds with default features unless told otherwise, and our default feature pulls
+# in 24 asset crates embedding ~107 MiB of PCM — a download-and-compile that risks blowing
+# the docs.rs build timeout and shipping the crate with NO documentation at all.
+#
+# Building docs without them costs nothing: no public item is `cfg`-gated on
+# `embedded-samples`. The single visible difference is the runtime VALUE returned by
+# `embedded_samples_available()`, which is documented as build-dependent anyway.
+[package.metadata.docs.rs]
+no-default-features = true
 
 [features]
 default = ["embedded-samples"]

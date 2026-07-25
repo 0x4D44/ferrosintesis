@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00108 — GM85 (Lead 6, voice) lost 16 dB: its new formant bandpass bank has no make-up gain, unlike GM84 in the same commit
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** High
 - **Area:** synth / voices
@@ -17,7 +17,7 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
+- **Attempts:** fix=1, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high)
 
 ## Observation
@@ -70,3 +70,25 @@ program should be reported rather than silently dropped.
 <unfixed — raised only>
 
 ## Notes
+
+## Fix (2026-07-25)
+
+Fixed in ff31237. `SawStack` gained a `formant_makeup` field (default 1.0, an
+exact IEEE-754 identity so every non-formant render stays bit-identical), set
+only by the GM85 spec via `LEAD85_FORMANT_MAKEUP_DB = 16.0`.
+
+16.0 dB is the fall the two references measured independently (SC-55 16.08,
+S-YXG50 15.95), so this restores the level both had blessed before the
+re-voicing rather than aiming at a family median. Verified: GM85 moved
+-38.27 -> -22.27 dB and now sits +1.48 dB against its family median, matching
+its pre-regression SC-55 residual of +1.74 dB.
+
+The register tilt is deliberately left in: vocal formants sit at absolute
+frequencies and do not transpose, which is what makes a formant read as a voice.
+Flattening it would need a pitch-tracking gain - a voicing decision, not part of
+this regression fix.
+
+Guarded by `balance::tests::gm85_formant_bank_keeps_its_make_up_gain`, which
+pins GM85 within 6 dB of GM84 (post-fix +3.5; the regression was -12.6).
+
+NOT closed by its own fixer - the ledger's two-eyes rule applies.

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00109 — derive_trims.py's SHIPPED table is a stale hand-copy of PROGRAM_TRIM_DB and would undo shipped trims
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** tooling / instrument balance
@@ -17,7 +17,7 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
+- **Attempts:** fix=1, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high)
 
 ## Observation
@@ -53,3 +53,17 @@ defect here — derive them".
 <unfixed — raised only>
 
 ## Notes
+
+## Fix (2026-07-25)
+
+Fixed in ff31237. `SHIPPED` is now parsed from `PROGRAM_TRIM_DB` in engine.rs at
+tool start-up and raises rather than falling back to zeros - a silently-empty
+table looks exactly like "nothing is trimmed yet" and would bias every proposal
+the same way. There is no second list left to drift.
+
+The fix exposed a second coupling of the same kind: the selftest was asserting
+its expectations against the LIVE production table, so a shipped trim could turn
+it red. Its fixture now carries its own `ST_SHIPPED`, deliberately independent.
+`--selftest` passes.
+
+NOT closed by its own fixer - the ledger's two-eyes rule applies.

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00107 — PROGRAM_TRIM_DB is calibrated against 2026-07-17 voices and was never re-verified; several trimmed programs have been re-voiced since
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth / instrument balance
@@ -17,7 +17,7 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
+- **Attempts:** fix=1, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high)
 
 ## Observation
@@ -66,3 +66,21 @@ on ~8 voices by that pass.
 <unfixed — raised only>
 
 ## Notes
+
+## Fix (2026-07-25)
+
+Discharged by the closed-loop re-derive on 2026-07-25 (commit 1f80dbf, report
+`wrk_docs/2026.07.25 - M-CAL closed-loop re-derive report.md`). All four
+certificates passed: glue all-inert, residual oracle -0.22 dB (SC-55) /
+-0.09 dB (S-YXG50), anchor 8.16 against a bar of 8.13 +/- 0.1, MAD 0.51 against
+a bar of 1.0.
+
+The staleness question is answered: 94 of 106 comparable programs drift under
+0.5 dB, and of 60 sustained programs only two exceed it. The five trims applied
+on 2026-07-22 verified within 0.01 dB once each reference's own anchor shift is
+removed. The calibration held for three days under 165 commits of voice work.
+
+The one real drift it found was NOT trim staleness but a voice regression,
+raised separately as MM-BUG-KILN-00108 and fixed in ff31237.
+
+NOT closed by its own fixer - the ledger's two-eyes rule applies.

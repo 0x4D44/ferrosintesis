@@ -122,10 +122,17 @@
   enter denormal range as tails decay → per-sample CPU stalls on x86 (offline-render
   performance only, not an audio defect). Set MXCSR FTZ for the render, or add a tiny DC.
 
-- [ ] 2026.07.18 — **`embedded_wav()` resolves by bare filename across 8 crates,
+- [x] 2026.07.18 — **`embedded_wav()` resolves by bare filename across 8 crates,
   first-match-wins, with no collision guard** (`sampler.rs:~49`, sequential `.or_else`
   chain keyed only on `name`). Harmless today (prefixes distinct) but a future generic
   name (`flute_A4.wav`) could silently shadow. Add a build-time global-uniqueness assert.
+  (Done 2026-07-25: `payload.rs::no_two_asset_crates_ship_the_same_wav_basename`. The chain
+  is 24 crates now, not 8, and there is no live collision today — 1156 WAVs, zero duplicate
+  basenames — so this guards a future crate rather than fixing a present bug. It scans every
+  `ferrosintesis-samples-*/samples/` on disk, a superset of the lookup chain, so no feature
+  combination can slip past it. Adversarially verified per the repo's own rule: planting a
+  duplicate `rain_loop.wav` in `-gong` turns it red with both crate names, and removing it
+  turns it green again — an oracle nobody has seen fail is not evidence.)
 
 - [ ] 2026.07.18 — **Two shipped drumkit banks are unreachable dead payload:**
   `CRASH_SIZZLE` and `SNARE_OFF` exist in the drumkit crate but no GM key maps to them

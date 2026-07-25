@@ -425,4 +425,75 @@ mod tests {
             "payload scan found only {files} files / {bytes} bytes"
         );
     }
+
+    /// No two asset crates may ship the same WAV basename.
+    ///
+    /// `sampler::embedded_wav` resolves a bare filename down a `.or_else` chain across
+    /// every asset crate, first match wins, with no collision check. Today that is safe
+    /// only because the banks happen to use distinct prefixes — nothing enforces it. A
+    /// future crate adding a generically-named `flute_A4.wav` would silently shadow the
+    /// existing one, and the symptom would be a wrong TIMBRE on a voice nobody edited:
+    /// the hardest kind of bug to trace back to its cause.
+    ///
+    /// Scanning every `ferrosintesis-samples-*` directory on disk rather than the default
+    /// feature list is deliberate — it is a superset of the lookup chain, so a collision
+    /// is caught before any feature combination can reach it.
+    #[test]
+    fn no_two_asset_crates_ship_the_same_wav_basename() {
+        let mut owner: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut clashes: Vec<String> = Vec::new();
+        let mut scanned = 0usize;
+
+        let mut crate_dirs: Vec<_> = std::fs::read_dir(crates_dir())
+            .expect("readable crates/ directory")
+            .map(|e| e.expect("readable entry").path())
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("ferrosintesis-samples-"))
+            })
+            .collect();
+        crate_dirs.sort();
+
+        for dir in &crate_dirs {
+            let krate = dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .expect("crate dir name")
+                .to_owned();
+            let samples = dir.join("samples");
+            let Ok(entries) = std::fs::read_dir(&samples) else {
+                continue;
+            };
+            for entry in entries {
+                let path = entry.expect("readable directory entry").path();
+                if path.extension().is_some_and(|e| e == "wav") {
+                    let name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .expect("wav file name")
+                        .to_owned();
+                    scanned += 1;
+                    if let Some(first) = owner.insert(name.clone(), krate.clone()) {
+                        clashes.push(format!("{name} is in both {first} and {krate}"));
+                    }
+                }
+            }
+        }
+
+        assert!(
+            crate_dirs.len() > 15 && scanned > 500,
+            "basename scan collapsed to {} crates / {scanned} WAVs — it would pass \
+             vacuously. Check that crates/ still holds the asset crates.",
+            crate_dirs.len()
+        );
+        assert!(
+            clashes.is_empty(),
+            "{} duplicate WAV basename(s) across asset crates; `embedded_wav` resolves by \
+             bare filename, first match wins, so the later crate's copy is unreachable and \
+             a voice would silently play the wrong recording:\n  {}",
+            clashes.len(),
+            clashes.join("\n  ")
+        );
+    }
 }

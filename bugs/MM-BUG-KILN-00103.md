@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00103 — GM0 alternate pianos inherit a 0.10 s damper release because one Option argument conflates sample calibration with damper physics
 
-- **State:** Open
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth / piano voicing
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high)
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high) → Fixed (2026-07-25, Claude Opus 5; `f6ed468` separated sample calibration from damper physics, followed by the felt-damper model in `70b7067`) → Closed (2026-07-25, Codex GPT-5.6-Sol; independently inspected all five GM0 alternate mappings and reran the release and damper-wiring regressions on native Rust and 1.87)
 
 ## Observation
 
@@ -48,6 +48,19 @@ confirmed by a byte-identical render-diff.
 
 ## Fix
 
-<unfixed — raised only>
+Commit `f6ed468` replaced the overloaded release `Option` with two independent
+axes: `PianoSampleCal` controls only layer gain and crossfade, while
+`PianoDamper` controls model and sampled-layer release. Every GM0 alternate now
+uses `GM0_ALTERNATE_VOICING`, pairing its legacy-normalized recording calibration
+with the GM0 damper. Commit `70b7067` subsequently replaced the flat release with
+the shared register-aware felt-damper model.
+
+Independent closure verification confirmed that all five GM0 alternate source
+mappings pass through the same voicing selection, while GM1 uses its own explicit
+voicing. `gm0_damper_reaches_gm0_alternates_and_stops_there` matches the routed
+alternate against an independently constructed control to 0.01 dB.
+`felt_damper_curve_is_anchored_monotonic_and_bounded` and
+`felt_damper_is_wired_to_every_shared_piano_slot` also pass. The release-control
+test passes on both the native toolchain and Rust 1.87.
 
 ## Notes

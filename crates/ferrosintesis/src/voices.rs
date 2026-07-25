@@ -6298,6 +6298,13 @@ pub struct SawStack {
     /// engaging the drive changes the wave's SHAPE without stepping its
     /// loudness.
     drive_norm: f32,
+    /// Broadband make-up for the formant bank, `1.0` for every voice that does not
+    /// use one. Three bandpasses pass far less energy than the lowpass they
+    /// replace, so a formant voice needs its level restored at the point the bank
+    /// is summed — the same principle as `drive_norm`, applied to a different
+    /// stage. `1.0` is an exact identity under IEEE-754, so every non-formant
+    /// render stays bit-identical.
+    formant_makeup: f32,
 }
 
 impl SawStack {
@@ -6397,6 +6404,7 @@ impl SawStack {
             vowel_morph_start: None,
             drive: 0.0,
             drive_norm: 1.0,
+            formant_makeup: 1.0,
             env,
             vib_depth: vib.1,
             vib_delay: (vib.2 * sr) as u32,
@@ -6587,7 +6595,7 @@ impl Voice for SawStack {
                     for (b, g) in bands.iter_mut().zip(gains.iter()) {
                         y += b.process(s) * *g;
                     }
-                    y
+                    y * self.formant_makeup
                 }
             };
             if self.drive > 0.0 {
@@ -7436,6 +7444,28 @@ const LEAD84_DRIVE: f32 = 3.0;
 /// the wrong reason — and would unbalance the five album tracks that play GM 84.
 const LEAD84_NOMINAL: f32 = 0.46;
 
+/// Broadband make-up for GM 85's vocal formant bank, in dB.
+///
+/// `ec8bfd7` replaced GM 85's velocity-tracked lowpass with three vocal formant
+/// bandpasses and landed them WITHOUT compensating for how much less broadband
+/// energy a narrow bandpass bank passes. GM 85 lost 16.0 dB and fell out of the
+/// M-CAL anchor cohort (MM-BUG-KILN-00108). Its sibling GM 84, in that same
+/// commit, did get its make-up — see `LEAD84_NOMINAL` directly above.
+///
+/// 16.0 dB is measured, not fitted. The 2026.07.25 closed-loop re-derive put the
+/// fall at 16.08 dB against a Roland SC-55mkII and 15.95 dB against a Yamaha
+/// S-YXG50 — two independent references agreeing to 0.13 dB. Restoring exactly
+/// that returns GM 85 to the level BOTH references had already blessed before the
+/// re-voicing, which is a stronger target than any family median.
+///
+/// A RESIDUAL TILT IS LEFT IN, deliberately. The loss is register-dependent
+/// (-17.2 dB at key 40 against -6.6 dB at key 84, measured against GM 84), because
+/// vocal formants sit at ABSOLUTE frequencies and do not transpose with the note —
+/// which is what makes a formant read as a voice rather than a filter sweep. A real
+/// singer has that tilt too. Flattening it would need a pitch-tracking gain, which
+/// is a voicing decision, not a regression fix; see MM-BUG-KILN-00108.
+const LEAD85_FORMANT_MAKEUP_DB: f32 = 16.0;
+
 /// Per-program voicing for the GM synth leads (80-87). Kept to the cheap knobs
 /// the SawStack already exposes, plus the two per-program identities that could
 /// not be reached that way: 84's drive and 85's formants.
@@ -7624,6 +7654,9 @@ fn lead(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         spec.wave,
     );
     s.legato_enabled = true;
+    if spec.vowel_cc.is_some() {
+        s.formant_makeup = 10f32.powf(LEAD85_FORMANT_MAKEUP_DB / 20.0);
+    }
     if spec.drive > 0.0 {
         s.drive = spec.drive;
         s.drive_norm = (spec.drive * LEAD84_NOMINAL).tanh() / LEAD84_NOMINAL;

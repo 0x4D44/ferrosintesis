@@ -246,6 +246,34 @@ mod tests {
         }
     }
 
+    /// GM85's formant bank keeps its make-up gain.
+    ///
+    /// The regression this pins (MM-BUG-KILN-00108) is the exact shape nothing in
+    /// the suite could see: `ec8bfd7` replaced GM85's lowpass with three vocal
+    /// formant bandpasses and left off the make-up, dropping it 16.0 dB. Every
+    /// existing level check stayed green, and the M-CAL residual oracle could not
+    /// catch it either — the fall was large enough to trip that tool's own
+    /// pitch-tilt guard, so the program excluded itself from the check meant to
+    /// flag it.
+    ///
+    /// Bar: GM85 must sit within 6 dB of GM84, its nearest sibling in the same
+    /// family and the same commit. Measured post-fix at +3.4 dB; the regression put
+    /// it at -12.6 dB, so this fails loudly if the make-up is removed or the
+    /// formant bank is re-voiced without one. Deliberately a BAND, not a target:
+    /// GM85 is allowed to be voiced louder or quieter than GM84, just not by an
+    /// order of magnitude.
+    #[test]
+    fn gm85_formant_bank_keeps_its_make_up_gain() {
+        let gm84 = voice_level_mean(84);
+        let gm85 = voice_level_mean(85);
+        let delta = gm85 - gm84;
+        println!("GM85 {gm85:.2} dB vs GM84 {gm84:.2} dB -> {delta:+.2} dB");
+        assert!(
+            delta.abs() <= 6.0,
+            "GM85 sits {delta:+.2} dB from GM84 (bar +/-6). A formant bandpass bank              passes far less broadband energy than a lowpass, so it needs a make-up              gain - see LEAD85_FORMANT_MAKEUP_DB in voices.rs. MM-BUG-KILN-00108 was              exactly this, at -12.6 dB."
+        );
+    }
+
     /// REPORT ONLY — per-family internal spread, and what the trim does to it.
     ///
     /// Diagnostic, not a gate: see the module docs for why "the trim must narrow" is

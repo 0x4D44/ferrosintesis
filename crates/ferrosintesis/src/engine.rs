@@ -1178,7 +1178,7 @@ fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
 #[rustfmt::skip] // keep the 8-per-row GM grid aligned for readability
 pub(crate) const PROGRAM_TRIM_DB: [f32; 128] = [
      0.0,  0.0,  0.0,  0.0,  0.0,  1.0,  6.0,  0.0, //   0-7   Piano (5 +1, 6 harpsichord +6dB)
-     2.0,  0.0,  0.0,  0.0,  0.0,  0.0, -6.0,  0.0, //   8-15  ChromPerc (8 celesta +2, 14 bells -6)
+     3.0,  0.0,  0.0,  0.0,  0.0,  0.0, -6.0,  0.0, //   8-15  ChromPerc (8 celesta +3, 14 bells -6)
     -4.5, -3.0, -1.5, -6.0, -3.0, -5.0, -1.0, -4.5, //  16-23  Organ
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  24-31  Guitar     (untouched)
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  32-39  Bass       (untouched)
@@ -1190,7 +1190,7 @@ pub(crate) const PROGRAM_TRIM_DB: [f32; 128] = [
     -4.0,  0.0,  0.0,  0.0, -2.0,  5.5,  1.0,  1.0, //  80-87  SynthLead
      4.0,  0.0,  2.0,  5.0,  3.0, -5.0,  0.0,  0.0, //  88-95  SynthPad
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  96-103 SynthFX    (untouched)
-     0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -5.0,  0.0, // 104-111 Ethnic     (110 fiddle -5)
+     0.0,  0.0,  0.0,  0.0,  0.0,  0.0, -6.0,  0.0, // 104-111 Ethnic     (110 fiddle -6)
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1.0, // 112-119 Percussive (119 rev-cymbal +1)
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, // 120-127 SoundFX    (untouched)
 ];
@@ -4371,9 +4371,9 @@ mod tests {
 
         // M-CAL v3 panel entries, pinned with the reference agreement that admitted them.
         assert_eq!(PROGRAM_TRIM_DB[5], 1.0); // ElecPiano2   — refs agreed to 0.7 dB
-        assert_eq!(PROGRAM_TRIM_DB[8], 2.0); // Celesta      — refs agreed to 0.8 dB
+        assert_eq!(PROGRAM_TRIM_DB[8], 3.0); // Celesta      — 2nd damped iteration, 2026.07.25
         assert_eq!(PROGRAM_TRIM_DB[14], -6.0); // TubularBell — refs agreed to 0.3 dB
-        assert_eq!(PROGRAM_TRIM_DB[110], -5.0); // Fiddle     — refs agreed to 1.3 dB
+        assert_eq!(PROGRAM_TRIM_DB[110], -6.0); // Fiddle    — 2nd damped iteration, 2026.07.25
         assert_eq!(PROGRAM_TRIM_DB[119], 1.0); // RevCymbal   — refs agreed to 2.9 dB
 
         // Deliberate ZEROS. These are recorded decisions, not merely-untouched programs, so

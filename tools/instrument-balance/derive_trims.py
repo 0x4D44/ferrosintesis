@@ -62,6 +62,8 @@ level and so makes certificate 1 impossible. Render the probe with the `raw_dump
 """
 from __future__ import annotations
 
+import pathlib
+import re
 import statistics
 import sys
 
@@ -111,27 +113,54 @@ EARVET_TILT_DB = 10.0
 # GM11 9.9). Nothing sits in between.
 PANEL_AGREE_DB = 3.0
 
-# --- current shipped table (engine.rs PROGRAM_TRIM_DB) ----------------------
-# 8 per row, GM order. Backed out of the ferro readings to recover raw level, and
-# the sustained rows are the cross-check reference.
-SHIPPED = [
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0, 0.0,     # 0-7   Piano
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,     # 8-15  ChromPerc
-    -4.5, -3.0, -1.5, -6.0, -3.0, -5.0, -1.0, -4.5,  # 16-23 Organ
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,     # 24-31 Guitar
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,     # 32-39 Bass
-    -4.0, -4.0, -3.5, -6.0, -4.0, 0.0, 0.0, 0.0,  # 40-47 Strings (pizz/harp/timp=0)
-    5.5, 1.5, 6.0, 5.0, 2.5, 6.0, 5.0, 0.0,     # 48-55 Ensemble (orch-hit 55=0)
-    -6.0, -6.0, -6.0, -2.0, -3.0, -2.0, 0.0, 5.0,  # 56-63 Brass
-    0.0, -2.5, -3.0, -3.0, 2.0, 1.5, 0.0, 0.0,  # 64-71 Reed
-    -4.0, -4.0, -2.0, -5.0, -6.0, -6.0, 0.0, 0.0,  # 72-79 Pipe
-    -4.0, 0.0, 0.0, 0.0, -2.0, 5.5, 1.0, 1.0,   # 80-87 SynthLead
-    4.0, 0.0, 2.0, 5.0, 3.0, -5.0, 0.0, 0.0,    # 88-95 SynthPad
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,     # 96-103 SynthFX
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,     # 104-111 Ethnic
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,     # 112-119 Percussive
-    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,     # 120-127 SoundFX
-]
+# --- current shipped table -------------------------------------------------
+# DERIVED from engine.rs at start-up, never hand-copied. It used to be a literal,
+# and fc1ef10 shipped five trims to engine.rs without updating it. Run on
+# 2026-07-25 data the stale copy proposed GM14 -> -5 and GM110 -> -2, i.e. it
+# would have UNDONE trims already in place, a +3 dB move in the wrong direction
+# on GM110 -- and it silently dropped those five programs out of the residual
+# oracle's watch list (MM-BUG-KILN-00109).
+#
+# Parsing the one source of truth removes the whole class: there is no second
+# list to drift. Fail loudly rather than falling back to zeros, because a
+# silently-empty table looks exactly like "nothing is trimmed yet" and would
+# make every proposal wrong in the same direction.
+ENGINE_RS = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "crates" / "ferrosintesis" / "src" / "engine.rs"
+)
+
+
+def load_shipped(path: pathlib.Path = ENGINE_RS) -> list[float]:
+    """Parse `PROGRAM_TRIM_DB` out of engine.rs. Raises if it cannot."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise SystemExit(f"derive_trims: cannot read {path}: {e}") from e
+    m = re.search(
+        r"PROGRAM_TRIM_DB\s*:\s*\[\s*f32\s*;\s*128\s*\]\s*=\s*\[(.*?)\]\s*;",
+        text,
+        re.S,
+    )
+    if not m:
+        raise SystemExit(
+            f"derive_trims: could not find `PROGRAM_TRIM_DB: [f32; 128] = [...]` in {path}. "
+            "The table was renamed or reshaped; fix this parser rather than re-copying "
+            "the numbers (MM-BUG-KILN-00109)."
+        )
+    body = re.sub(r"//.*", "", m.group(1))  # strip the per-row comments
+    vals = [v.strip() for v in body.split(",") if v.strip()]
+    if len(vals) != 128:
+        raise SystemExit(
+            f"derive_trims: parsed {len(vals)} entries from PROGRAM_TRIM_DB, expected 128."
+        )
+    try:
+        return [float(v) for v in vals]
+    except ValueError as e:
+        raise SystemExit(f"derive_trims: non-numeric entry in PROGRAM_TRIM_DB: {e}") from e
+
+
+SHIPPED = load_shipped()
 
 # --- recorded ear decisions -------------------------------------------------
 # A trim of 0.0 is ambiguous: it can mean "nobody has looked at this yet" or "someone
@@ -340,7 +369,7 @@ def new_trim(shipped, residual):
     return max(-CLAMP, min(CLAMP, float(round(shipped + DAMP * residual))))
 
 
-def evaluate(ferro, sc):
+def evaluate(ferro, sc, shipped_tbl=None):
     """Run all guards + level for every shared program. Returns a list of row dicts and the
     anchor. Pure over the two loaded tables — the heart of the derivation and the selftest."""
     progs = sorted(set(ferro) & set(sc))
@@ -348,7 +377,8 @@ def evaluate(ferro, sc):
     for p in progs:
         fp, sp = ferro[p], sc[p]
         role, name = GM_FAMILY.get(p, ("?", "?"))
-        shipped = SHIPPED[p] if p < len(SHIPPED) else 0.0
+        tbl = SHIPPED if shipped_tbl is None else shipped_tbl
+        shipped = tbl[p] if p < len(tbl) else 0.0
         excl_shape, fail_keys, clean = shape_guard(fp, sp)
         keyset = clean or sorted(set(fp) & set(sp))
         tilt = pitch_tilt(fp, sp, keyset)
@@ -686,6 +716,23 @@ def _prog(traj_by_key):
     return fp, sp
 
 
+# Fixture shipped table - DELIBERATELY independent of the live PROGRAM_TRIM_DB.
+# A self-test whose expectations move whenever a production trim changes is not a
+# self-test. That coupling is exactly what surfaced when SHIPPED stopped being a
+# stale hand-copy and became derived (MM-BUG-KILN-00109): the fixture below had
+# silently been asserting against 2026-07-17 production values.
+ST_SHIPPED = [0.0] * 128
+for _p, _v in {
+    # the sustained cohort: nonzero trims, so they are admissible ear judgments
+    16: -4.5, 17: -3.0, 18: -1.5, 19: -6.0,
+    20: -3.0, 21: -5.0, 22: -1.0, 23: -4.5,
+    40: -4.0, 41: -4.0, 42: -3.5, 43: -6.0,
+    6: 6.0,    # already-correct percussive trim: must survive untouched
+    56: -6.0,  # 5 dB off the frame: rejected from the cohort, still reported
+}.items():
+    ST_SHIPPED[_p] = _v
+
+
 def selftest():
     keys = [48, 53, 58, 63, 68, 73]
     ferro, sc = {}, {}
@@ -725,7 +772,7 @@ def selftest():
         {k: (_flat(-20.0 + 2.0 * i), _flat(-20.0)) for i, k in enumerate(keys)}
     )
 
-    rows, anchor, cohort, mad = evaluate(ferro, sc)
+    rows, anchor, cohort, mad = evaluate(ferro, sc, ST_SHIPPED)
     byp = {r["p"]: r for r in rows}
     inco = {r["p"] for r in cohort}
 
@@ -738,7 +785,7 @@ def selftest():
     assert byp[6]["trim"] == 6.0, ("damp the change, not the total", byp[6]["trim"])
     for p in COHORT:
         assert not byp[p]["excluded"], (p, byp[p])
-        assert byp[p]["trim"] == SHIPPED[p], (p, byp[p]["trim"], SHIPPED[p])
+        assert byp[p]["trim"] == ST_SHIPPED[p], (p, byp[p]["trim"], ST_SHIPPED[p])
     # Fresh derivations (shipped 0) are unaffected by the damping change.
     assert not byp[8]["excluded"] and byp[8]["trim"] == -2.0, byp[8]
     assert not byp[9]["excluded"] and byp[9]["trim"] == -1.0, ("matched one-shot", byp[9])

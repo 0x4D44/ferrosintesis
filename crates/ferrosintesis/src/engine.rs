@@ -3224,7 +3224,20 @@ impl EngineCore {
         let sr = self.opt.sr;
 
         self.tick_bagpipe_drone_latch();
+        self.apply_mod_wheel_leslie_and_vibrato(n, sr);
+        self.apply_cathedral_organ_wind(n, sr);
+        self.apply_vowel_aftertouch_breath_and_glide(n, sr);
+        self.render_melodic_voices(n);
+        self.mix_channel_strips(n, sr);
+        self.render_and_mix_drums(n, sr);
+        self.apply_master_buses(n);
+        self.accumulate_output(n, out);
+    }
 
+    /// Advance the CC1 modulation lane on every melodic strip: Leslie
+    /// rate/depth for the organ family, coherent pitch vibrato for the
+    /// vibrato family.
+    fn apply_mod_wheel_leslie_and_vibrato(&mut self, n: usize, sr: f32) {
         for (ci, strip) in self.strips.iter_mut().enumerate() {
             strip.mod_cur += self.expr_smooth * (strip.mod_target - strip.mod_cur);
             let on = strip.mod_cur > 1e-3;
@@ -3308,11 +3321,15 @@ impl EngineCore {
             }
             strip.mod_engaged = engaged;
         }
+    }
 
-        // The cathedral organ breathes as one wind chest. Pressure and the
-        // signed tremulant sample are channel-global, while each rank applies
-        // its own sensitivity inside the voice. Legacy GM19 remains on the
-        // Leslie path above.
+    /// Drive the cathedral-organ wind chest for every melodic strip.
+    ///
+    /// The cathedral organ breathes as one wind chest. Pressure and the
+    /// signed tremulant sample are channel-global, while each rank applies
+    /// its own sensitivity inside the voice. Legacy GM19 remains on the
+    /// Leslie path above.
+    fn apply_cathedral_organ_wind(&mut self, n: usize, sr: f32) {
         for (ci, strip) in self.strips.iter_mut().enumerate() {
             if ci == 9 {
                 continue;
@@ -3358,7 +3375,12 @@ impl EngineCore {
                 a.voice.set_organ_swell(drive);
             }
         }
+    }
 
+    /// Advance the per-strip expression lanes that reach into held notes:
+    /// CC70 vowel, poly (key) and channel aftertouch, the brass/reed/flue
+    /// breath seams, and portamento glides.
+    fn apply_vowel_aftertouch_breath_and_glide(&mut self, n: usize, sr: f32) {
         for (ci, strip) in self.strips.iter_mut().enumerate() {
             if ci == 9 {
                 continue;
@@ -3488,7 +3510,11 @@ impl EngineCore {
                 }
             }
         }
+    }
 
+    /// Clear the per-channel accumulation buffers and render every melodic
+    /// (non-drum) voice into them, retiring the voices that have finished.
+    fn render_melodic_voices(&mut self, n: usize) {
         for buf in self.ch_buf.iter_mut() {
             buf[..n].fill(0.0);
         }
@@ -3525,7 +3551,12 @@ impl EngineCore {
             }
             alive
         });
+    }
 
+    /// Clear the master mix and the effect sends, then run each channel
+    /// strip: insert effects, wah, CC7/CC10 slew, and the pan/level/send
+    /// matrix into the mix and the send buses.
+    fn mix_channel_strips(&mut self, n: usize, sr: f32) {
         self.mix_l[..n].fill(0.0);
         self.mix_r[..n].fill(0.0);
         self.send_rev[..n].fill(0.0);
@@ -3702,79 +3733,86 @@ impl EngineCore {
                 }
             }
         }
+    }
 
-        {
-            self.drum_l[..n].fill(0.0);
-            self.drum_r[..n].fill(0.0);
-            self.active.retain_mut(|a| {
-                if !a.is_drum {
-                    return true;
-                }
-                self.scratch[..n].fill(0.0);
-                let alive = a.voice.render(&mut self.scratch[..n]);
-                // Per-key placement, shared by both drum paths: the channel's own
-                // pan offset (strips[9] for the main kit, since a.ch == 9 there) plus
-                // the per-key kit map and balance.
-                let s = &self.strips[a.ch as usize];
-                let pan = (drum_pan(a.key) + (s.pan - 0.5)).clamp(0.0, 1.0);
-                let theta = pan * FRAC_PI_2;
-                let bal = kit_balance(a.key);
-                let (ul, ur) = (theta.cos() * bal, theta.sin() * bal);
-                if a.ch == 9 {
-                    // Main kit: accumulate raw into the drum bus; the shared wah +
-                    // bus master g9 are applied after the closure (path unchanged).
-                    for i in 0..n {
-                        self.drum_l[i] += self.scratch[i] * ul;
-                        self.drum_r[i] += self.scratch[i] * ur;
-                    }
-                } else {
-                    // XG/GS drum channel: scaled by its OWN gain straight into the master
-                    // mix — bypassing ch9's bus master and wah — with its own CC91
-                    // reverb and the shared drum room. The `(scratch*ul)*gc` association
-                    // mirrors the ch9 path, so a single hit is byte-equal to the same
-                    // hit on ch9 (gc == g9 when the strips match).
-                    let gc = s.volume * s.expr * s.at_gain * s.breath * DRUM_FORWARD;
-                    if gc >= 1e-6 {
-                        let rs = s.reverb_send * 0.9;
-                        for i in 0..n {
-                            let xl = (self.scratch[i] * ul) * gc;
-                            let xr = (self.scratch[i] * ur) * gc;
-                            self.mix_l[i] += xl;
-                            self.mix_r[i] += xr;
-                            let mono = 0.5 * (xl + xr);
-                            self.send_rev[i] += mono * rs;
-                            self.send_room[i] += mono * ROOM_SEND;
-                        }
-                    }
-                }
-                alive
-            });
-            let s9 = &mut self.strips[9];
-            if let Some(wl) = &mut s9.wah {
-                for x in self.drum_l[..n].iter_mut() {
-                    *x = wl.process(*x);
-                }
+    /// Render the drum voices - ch9's main kit and any XG/GS drum channel -
+    /// and fold the main drum bus through its wah pair and master gain into
+    /// the mix.
+    fn render_and_mix_drums(&mut self, n: usize, sr: f32) {
+        self.drum_l[..n].fill(0.0);
+        self.drum_r[..n].fill(0.0);
+        self.active.retain_mut(|a| {
+            if !a.is_drum {
+                return true;
             }
-            if let Some(wr) = &mut s9.wah_r {
-                wr.retune_lowpass(s9.cutoff, s9.res, sr);
-                for x in self.drum_r[..n].iter_mut() {
-                    *x = wr.process(*x);
-                }
-            }
-            let g9 = s9.volume * s9.expr * s9.at_gain * s9.breath * DRUM_FORWARD;
-            if g9 >= 1e-6 {
-                let rs = s9.reverb_send * 0.9;
+            self.scratch[..n].fill(0.0);
+            let alive = a.voice.render(&mut self.scratch[..n]);
+            // Per-key placement, shared by both drum paths: the channel's own
+            // pan offset (strips[9] for the main kit, since a.ch == 9 there) plus
+            // the per-key kit map and balance.
+            let s = &self.strips[a.ch as usize];
+            let pan = (drum_pan(a.key) + (s.pan - 0.5)).clamp(0.0, 1.0);
+            let theta = pan * FRAC_PI_2;
+            let bal = kit_balance(a.key);
+            let (ul, ur) = (theta.cos() * bal, theta.sin() * bal);
+            if a.ch == 9 {
+                // Main kit: accumulate raw into the drum bus; the shared wah +
+                // bus master g9 are applied after the closure (path unchanged).
                 for i in 0..n {
-                    let (xl, xr) = (self.drum_l[i] * g9, self.drum_r[i] * g9);
-                    self.mix_l[i] += xl;
-                    self.mix_r[i] += xr;
-                    let mono = 0.5 * (xl + xr);
-                    self.send_rev[i] += mono * rs;
-                    self.send_room[i] += mono * ROOM_SEND;
+                    self.drum_l[i] += self.scratch[i] * ul;
+                    self.drum_r[i] += self.scratch[i] * ur;
                 }
+            } else {
+                // XG/GS drum channel: scaled by its OWN gain straight into the master
+                // mix — bypassing ch9's bus master and wah — with its own CC91
+                // reverb and the shared drum room. The `(scratch*ul)*gc` association
+                // mirrors the ch9 path, so a single hit is byte-equal to the same
+                // hit on ch9 (gc == g9 when the strips match).
+                let gc = s.volume * s.expr * s.at_gain * s.breath * DRUM_FORWARD;
+                if gc >= 1e-6 {
+                    let rs = s.reverb_send * 0.9;
+                    for i in 0..n {
+                        let xl = (self.scratch[i] * ul) * gc;
+                        let xr = (self.scratch[i] * ur) * gc;
+                        self.mix_l[i] += xl;
+                        self.mix_r[i] += xr;
+                        let mono = 0.5 * (xl + xr);
+                        self.send_rev[i] += mono * rs;
+                        self.send_room[i] += mono * ROOM_SEND;
+                    }
+                }
+            }
+            alive
+        });
+        let s9 = &mut self.strips[9];
+        if let Some(wl) = &mut s9.wah {
+            for x in self.drum_l[..n].iter_mut() {
+                *x = wl.process(*x);
             }
         }
+        if let Some(wr) = &mut s9.wah_r {
+            wr.retune_lowpass(s9.cutoff, s9.res, sr);
+            for x in self.drum_r[..n].iter_mut() {
+                *x = wr.process(*x);
+            }
+        }
+        let g9 = s9.volume * s9.expr * s9.at_gain * s9.breath * DRUM_FORWARD;
+        if g9 >= 1e-6 {
+            let rs = s9.reverb_send * 0.9;
+            for i in 0..n {
+                let (xl, xr) = (self.drum_l[i] * g9, self.drum_r[i] * g9);
+                self.mix_l[i] += xl;
+                self.mix_r[i] += xr;
+                let mono = 0.5 * (xl + xr);
+                self.send_rev[i] += mono * rs;
+                self.send_room[i] += mono * ROOM_SEND;
+            }
+        }
+    }
 
+    /// Run the shared buses - sympathetic resonance, chorus, echo, drum
+    /// room, reverb, cathedral - and the bus-glue compressor.
+    fn apply_master_buses(&mut self, n: usize) {
         self.symp.process(
             &self.send_sym[..n],
             &mut self.mix_l[..n],
@@ -3837,7 +3875,11 @@ impl EngineCore {
         }
         self.glue
             .process(&mut self.mix_l[..n], &mut self.mix_r[..n]);
+    }
 
+    /// Add the finished stereo mix into the caller's output buffer and
+    /// track the render peak.
+    fn accumulate_output(&mut self, n: usize, out: &mut [f32]) {
         for i in 0..n {
             out[i * 2] += self.mix_l[i];
             out[i * 2 + 1] += self.mix_r[i];

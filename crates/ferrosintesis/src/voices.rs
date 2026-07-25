@@ -21046,6 +21046,258 @@ mod tests {
         );
     }
 
+    /// The key/velocity/seed grid the three directional FX oracles below run on.
+    /// One lucky key is not evidence: 97's brightness axis reads +15.9 dB at key
+    /// 48 and +21.6 dB at key 67, and the neutral control's worst case (-4.0 dB)
+    /// only appears at key 48. Every threshold here is calibrated against the
+    /// WORST cell of this grid, not against a single render.
+    const FX_DIR_GRID: &[(u8, u8, u32)] =
+        &[(60, 100, 7), (55, 100, 7), (67, 100, 7), (48, 120, 11)];
+
+    /// Brightness tilt in dB: the energy in the filter's travel band against the
+    /// energy at the written fundamental.
+    ///
+    /// The HF band is ABSOLUTE (1.8-4.2 kHz) on purpose — the one-shot LP's
+    /// cutoff travels in absolute Hz (97: 420 -> 4600; 99: 3600 -> 520), so the
+    /// measurement band has to straddle THAT, not the note. A key-relative HF
+    /// band tracks the fundamental instead of the filter and goes blind at low
+    /// keys: `f0*5.5 .. f0*15` reads 97's whole opening as +1.2 dB at key 48,
+    /// where this band reads +15.9 dB (lessons_learnt 2026.07.23 — prove the
+    /// metric can SEE the change by checking its band support). The reference
+    /// band stays key-relative because the fundamental is where the note is.
+    fn fx_tilt_db(sig: &[f32], sr: f32, f0: f32, a: f32, b: f32) -> f32 {
+        let seg = &sig[(a * sr) as usize..(b * sr) as usize];
+        let lf = spectral_band_rms(seg, sr, f0 * 0.7, f0 * 1.6);
+        let hf = spectral_band_rms(seg, sr, 1800.0, 4200.0);
+        20.0 * (hf / lf.max(1e-12)).max(1e-12).log10()
+    }
+
+    /// How much the tilt moves between the early window (the filter has barely
+    /// left `fc0`) and the late window (the glide has finished for every preset:
+    /// 97 lands at 2.6 s, 99 at 0.9 s). Positive = opens, negative = closes.
+    fn fx_tilt_delta_db(sig: &[f32], sr: f32, f0: f32) -> f32 {
+        fx_tilt_db(sig, sr, f0, 2.4, 3.0) - fx_tilt_db(sig, sr, f0, 0.05, 0.35)
+    }
+
+    /// Level growth across the same two windows: >1 swells, <1 decays. A ratio
+    /// within one render, so it is immune to the renderer's peak-normalise.
+    fn fx_growth(sig: &[f32], sr: f32) -> f32 {
+        rms(&sig[(2.4 * sr) as usize..(3.0 * sr) as usize])
+            / rms(&sig[(0.05 * sr) as usize..(0.35 * sr) as usize]).max(1e-12)
+    }
+
+    /// When the note-band energy first reaches 90% of its maximum — the "does it
+    /// swell or is it struck?" clock. Band-limited around the note so the onset
+    /// Burst (a bandpass ping at 2.6 kHz on 99) cannot masquerade as the peak.
+    fn fx_peak_time_s(sig: &[f32], sr: f32, f0: f32) -> f32 {
+        traj_peak_time_s(&traj(sig, sr, f0 * 0.6, f0 * 3.4))
+    }
+
+    /// FX-O9: 97 (soundtrack) is the SLOW CINEMATIC SWELL — the only preset that
+    /// OPENS. "Cinematic swell" is two independent claims, so this checks both:
+    ///   (a) SPECTRALLY OPENS — the 1.8-4.2 kHz band climbs against the
+    ///       fundamental as the one-shot LP glides 420 -> 4600 Hz over ~2.6 s;
+    ///   (b) AMPLITUDE SWELLS — the level is still GROWING a second in (2.2 s
+    ///       ADSR attack), where every struck preset peaks in the first 300 ms.
+    ///
+    /// The control is 101 (goblins): the SAME `Fx` wrapper over the SAME kind of
+    /// saw core, but with a static filter (fc0 == fc1) and a sustaining
+    /// envelope. It must read flat on both axes — that is what proves the metric
+    /// is reading 97's motion rather than something the wrapper does to
+    /// everything it wraps. Measured worst cases over `FX_DIR_GRID`:
+    /// 97 tilt +15.9 dB / growth 3.24x / peak 1.10 s; 101 tilt |4.0| dB /
+    /// growth 0.92-1.04x. Every threshold sits in the gap between them.
+    #[test]
+    fn fx_o9_soundtrack_97_opens_and_swells() {
+        let sr = 44100.0;
+        for &(key, vel, seed) in FX_DIR_GRID {
+            let f0 = key_freq(key);
+            let swell = render_voice(make(97, key, vel, sr, seed, false), sr, 3.2);
+            let flat = render_voice(make(101, key, vel, sr, seed, false), sr, 3.2);
+            let (s_tilt, f_tilt) = (
+                fx_tilt_delta_db(&swell, sr, f0),
+                fx_tilt_delta_db(&flat, sr, f0),
+            );
+            let (s_grow, f_grow) = (fx_growth(&swell, sr), fx_growth(&flat, sr));
+            let s_peak = fx_peak_time_s(&swell, sr, f0);
+            println!(
+                "FX-O9 key {key} vel {vel} seed {seed}: 97 tilt {s_tilt:+.2} dB growth \
+                 {s_grow:.2}x peak {s_peak:.3}s | 101 tilt {f_tilt:+.2} dB growth {f_grow:.2}x"
+            );
+            // (a) 97 opens ...
+            assert!(
+                s_tilt >= 8.0,
+                "97 soundtrack (key {key}) brightness only moved {s_tilt:+.2} dB over \
+                 the glide — the filter does not open"
+            );
+            // ... and the static-filter control does not, in either direction.
+            assert!(
+                f_tilt.abs() <= 8.0,
+                "the static-filter control 101 (key {key}) moved {f_tilt:+.2} dB — the \
+                 tilt metric is reading something other than the one-shot filter"
+            );
+            assert!(
+                s_tilt >= f_tilt + 10.0,
+                "97's opening {s_tilt:+.2} dB is not clearly above the static control's \
+                 {f_tilt:+.2} dB"
+            );
+            // (b) 97 swells: still growing a second in, where 101 holds level.
+            assert!(
+                s_grow >= 2.0,
+                "97 soundtrack (key {key}) grew only {s_grow:.2}x from 0.05-0.35 s to \
+                 2.4-3.0 s — it is struck, not swelled"
+            );
+            assert!(
+                s_peak >= 0.8,
+                "97 soundtrack (key {key}) peaked at {s_peak:.3}s — a slow cinematic \
+                 swell must still be climbing well past the strike"
+            );
+            assert!(
+                f_grow <= 1.5,
+                "the sustaining control 101 (key {key}) grew {f_grow:.2}x — the growth \
+                 metric is not isolating 97's long attack"
+            );
+        }
+    }
+
+    /// FX-O10: 99 (atmosphere) is 97's MIRROR — a percussive pluck decaying into
+    /// a soft dark wash. Both are detuned saw stacks under the same `Fx`
+    /// wrapper, so NOTHING separates them but the direction of their motion;
+    /// the oracle is therefore a two-sided contrast, not a lone threshold:
+    ///   (a) 99's brightness FALLS (LP 3600 -> 520 Hz) where 97's RISES;
+    ///   (b) 99's level peaks in the first 300 ms and shrinks (0.02 s attack,
+    ///       0.30 sustain) where 97's peaks a second in and grows.
+    ///
+    /// This is the "distinct identity" half of MM-REQ-KILN-00003. Measured worst
+    /// cases over `FX_DIR_GRID`: 99 tilt -25.9 dB, growth 0.49x, peak 0.297 s.
+    #[test]
+    fn fx_o10_atmosphere_99_closes_and_plucks() {
+        let sr = 44100.0;
+        for &(key, vel, seed) in FX_DIR_GRID {
+            let f0 = key_freq(key);
+            let close = render_voice(make(99, key, vel, sr, seed, false), sr, 3.2);
+            let open = render_voice(make(97, key, vel, sr, seed, false), sr, 3.2);
+            let (c_tilt, o_tilt) = (
+                fx_tilt_delta_db(&close, sr, f0),
+                fx_tilt_delta_db(&open, sr, f0),
+            );
+            let (c_grow, c_peak) = (fx_growth(&close, sr), fx_peak_time_s(&close, sr, f0));
+            let o_peak = fx_peak_time_s(&open, sr, f0);
+            println!(
+                "FX-O10 key {key} vel {vel} seed {seed}: 99 tilt {c_tilt:+.2} dB growth \
+                 {c_grow:.2}x peak {c_peak:.3}s | 97 tilt {o_tilt:+.2} dB peak {o_peak:.3}s"
+            );
+            // (a) 99 closes, and does so in the OPPOSITE direction to 97.
+            assert!(
+                c_tilt <= -12.0,
+                "99 atmosphere (key {key}) brightness moved {c_tilt:+.2} dB — the filter \
+                 does not close into a dark wash"
+            );
+            assert!(
+                o_tilt - c_tilt >= 20.0,
+                "97 ({o_tilt:+.2} dB) and 99 ({c_tilt:+.2} dB) are not separated on the \
+                 brightness axis — the two saw presets have collapsed into one identity"
+            );
+            // (b) 99 is struck and decays, where 97 swells.
+            assert!(
+                c_grow <= 0.7,
+                "99 atmosphere (key {key}) grew {c_grow:.2}x — it must DECAY into the wash"
+            );
+            assert!(
+                c_peak <= 0.6,
+                "99 atmosphere (key {key}) peaked at {c_peak:.3}s — the pluck must be \
+                 immediate, not a swell"
+            );
+            assert!(
+                o_peak >= c_peak + 0.5,
+                "97 peaks at {o_peak:.3}s and 99 at {c_peak:.3}s — not distinguishable \
+                 as swell vs pluck"
+            );
+        }
+    }
+
+    /// Octave-over-fundamental, in dB: band energy an octave above the WRITTEN
+    /// pitch against band energy at the written pitch. This is the octave-SAFE
+    /// way to detect a pitch scoop, and the safety is the whole point.
+    ///
+    /// The obvious reader — `peak_locate` over [0.8·f0, 2.6·f0] — is fooled by a
+    /// plain detuned saw stack: in short windows the beating 2nd harmonic wins
+    /// the argmax, so the NON-scooped 99 and 101 both read a phantom ~1200-cent
+    /// "scoop" that decays exactly like a real one. An oracle built on it would
+    /// have passed on presets that never fall — a green light for the very bug
+    /// it exists to catch. Band energy cannot be fooled that way: a voice
+    /// sounding an octave up has its partials at 2f0, 4f0, ... and essentially
+    /// NOTHING at f0, which no harmonic-balance accident imitates.
+    fn fx_octave_over_fundamental_db(sig: &[f32], sr: f32, f0: f32, a: f32, b: f32) -> f32 {
+        let seg = &sig[(a * sr) as usize..(b * sr) as usize];
+        let fund = spectral_band_rms(seg, sr, f0 * 0.85, f0 * 1.18);
+        let up = spectral_band_rms(seg, sr, f0 * 1.7, f0 * 2.36);
+        20.0 * (up / fund.max(1e-12)).max(1e-12).log10()
+    }
+
+    /// FX-O11: 103 (sci-fi) FALLS — the classic laser zap. It is the only FX
+    /// preset carrying a pitch scoop (`scoop0` 2.0), so it speaks a full octave
+    /// above written pitch and glides down onto it in ~0.28 s.
+    ///
+    ///   (a) AT ONSET it is an octave up — nothing at the written fundamental;
+    ///   (b) BY 0.34 s it has ARRIVED, back in the same octave balance as every
+    ///       non-scooped preset (so this is a scoop, not a permanent transpose);
+    ///   (c) the four non-scooped presets (97/98/99/101) never show (a) — they
+    ///       are the population 103 has to stand outside of at onset and rejoin
+    ///       by (b).
+    ///
+    /// Measured over `FX_DIR_GRID`-style cells: 103 onset +38.9 .. +54.8 dB and
+    /// settled -9.9 .. -0.4 dB; the four controls span -24.9 .. +6.0 dB at
+    /// onset. The +20 dB threshold sits in a 33 dB-wide empty gap.
+    #[test]
+    fn fx_o11_scifi_103_falls_an_octave_onto_pitch() {
+        let sr = 44100.0;
+        for &(key, vel, seed) in &[
+            (72u8, 100u8, 7u32),
+            (60, 100, 7),
+            (67, 70, 3),
+            (79, 120, 11),
+        ] {
+            let f0 = key_freq(key);
+            let zap = render_voice(make(103, key, vel, sr, seed, false), sr, 1.2);
+            let onset = fx_octave_over_fundamental_db(&zap, sr, f0, 0.0, 0.03);
+            let settled = fx_octave_over_fundamental_db(&zap, sr, f0, 0.18, 0.34);
+            println!(
+                "FX-O11 key {key} vel {vel} seed {seed}: 103 octave/fundamental \
+                 onset {onset:+.1} dB -> settled {settled:+.1} dB"
+            );
+            // (a) speaks an octave up
+            assert!(
+                onset >= 20.0,
+                "103 sci-fi (key {key}) has {onset:+.1} dB octave-over-fundamental at \
+                 onset — it starts AT written pitch; the falling scoop is gone"
+            );
+            // (b) and arrives at written pitch — a scoop, not a transpose
+            assert!(
+                settled <= 12.0,
+                "103 sci-fi (key {key}) still reads {settled:+.1} dB an octave up at \
+                 0.18-0.34 s — it never lands on the written pitch"
+            );
+            assert!(
+                onset - settled >= 25.0,
+                "103 sci-fi (key {key}) barely moved ({onset:+.1} -> {settled:+.1} dB) — \
+                 the pitch does not fall"
+            );
+            // (c) no non-scooped preset does this — the metric reads the scoop,
+            // not some property of a bright onset.
+            for ctl in [97u8, 98, 99, 101] {
+                let s = render_voice(make(ctl, key, vel, sr, seed, false), sr, 1.2);
+                let c_onset = fx_octave_over_fundamental_db(&s, sr, f0, 0.0, 0.03);
+                assert!(
+                    c_onset <= 12.0,
+                    "non-scooped control {ctl} (key {key}) reads {c_onset:+.1} dB \
+                     octave-over-fundamental at onset — the scoop metric is picking up \
+                     ordinary harmonic balance, so FX-O11 proves nothing"
+                );
+            }
+        }
+    }
+
     /// Oracle 1: a lead speaks fast; a pad swells slowly. Guard is the ratio —
     /// absolute pad thresholds near 300 ms are fragile.
     #[test]

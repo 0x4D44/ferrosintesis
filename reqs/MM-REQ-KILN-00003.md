@@ -1,27 +1,36 @@
-# MM-REQ-KILN-00003 — Sustaining synth-FX programs (97/99/101/103) should sustain
+# MM-REQ-KILN-00003 — Each synth-FX program (96–103) must have a distinct identity
 
-- **State:** Implemented
+- **State:** Satisfied
 - **Priority:** Could
 - **Area:** ferrosintesis / voices dispatch
 - **Raised:** 2026-07-08
-- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::make`, `crates/ferrosintesis/src/voices.rs::tests::synth_fx_97_99_101_103_sustain_as_pads`, `crates/ferrosintesis/src/testutil.rs::guards::gm_routing_pins_voice_kinds`
-- **Satisfied-by:** `$null | deltic timeout 180 cargo test synth_fx_97_99_101_103_sustain_as_pads --manifest-path crates/ferrosintesis/Cargo.toml`
+- **Implemented-by:** `crates/ferrosintesis/src/voices.rs::make`, `crates/ferrosintesis/src/voices.rs::fx`, the eight `FxSpec` presets, `crates/ferrosintesis/src/testutil.rs::guards::gm_routing_pins_voice_kinds`
+- **Satisfied-by:** `voices::tests::synth_fx_96_103_route_to_fx_voice`, `voices::tests::fx_o2_rain_96_is_a_fused_aperiodic_wash` (96), `voices::tests::fx_o9_soundtrack_97_opens_and_swells` (97), `voices::tests::fx_o5_crystal_98_is_frozen_bit_for_bit` (98), `voices::tests::fx_o10_atmosphere_99_closes_and_plucks` (99), `voices::tests::fx_o3_brightness_100_blooms_late` (100), `voices::tests::fx_o4_goblins_101_pitch_is_unstable` (101), `voices::tests::fx_o1_echoes_102_repeat_at_the_delay` (102), `voices::tests::fx_o11_scifi_103_falls_an_octave_onto_pitch` (103)
 - **Violated-by:** —
 - **Flow:** light
 - **Claimed-by:** —
-- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `a3eecb96c93646fb382867f14d250ac3f9eadb81`)
+- **State history:** Draft (2026-07-08) → Accepted (2026-07-08) → Implemented (2026-07-08, `a3eecb96c93646fb382867f14d250ac3f9eadb81`) → re-stated (2026-07-25, see below) → Satisfied (2026-07-25, verified)
 
 ## Statement
-GM 97 (soundtrack), 99 (atmosphere), 103 (sci-fi) must render as sustaining pad
-textures (route to `pad()`), and 101 (goblins) to the LFO-swept sweep-pad path,
-rather than the one decaying `bell(CRYSTAL)` chime that all eight FX programs
-currently share and which fades to silence in ~3 s on a held note.
+Each of the eight GM synth-FX programs (96–103) must render a DISTINCT identity,
+not the single decaying `bell(CRYSTAL)` chime that all eight shared and which
+faded to silence in ~3 s on a held note. Each identity is separated from its
+neighbours on a different axis: 96 aperiodic, 97 opens, 98 static, 99 closes,
+100 blooms late, 101 never settles, 102 periodic, 103 falls.
+
+Every one of the eight must be pinned by an oracle that goes RED when its
+identity is removed — a routing assertion alone is not acceptance.
 
 ## Rationale
-These are sustained-texture programs; a struck chime is structurally wrong. The
-SawStack pad voice already provides the right character; this is dispatch-arm
-work. Byte-identical for existing albums (only FX 98/crystal is used, and it
-stays on the bell path). 2026-07-08 GM gap audit (synth FX).
+These are texture programs; one shared struck chime is structurally wrong.
+2026-07-08 GM gap audit (synth FX).
+
+The original Statement named the fix ("route to `pad()`") rather than the
+requirement, and the shipped Stage-3 design is better than the one it prescribed:
+all eight programs route to an `Fx` wrapper carrying a per-program preset, so 99
+is "a percussive pluck decaying into a soft dark wash" and 103 "a falling
+resonant zap" — neither of which is a pad. Re-stated on 2026-07-25 to the intent
+the code actually serves. See "Acceptance blocked" below for the full history.
 
 ## Notes
 
@@ -127,3 +136,62 @@ design landed. Two dispositions, for Arthur:
   `Satisfied-by` at the `fx_o1`-`fx_o8` oracles, keeping the regression alarm.
 - **Retire** as superseded by the Stage-3 FX work, accepting that the FX-O
   oracles carry the spec from here.
+
+## Resolution (2026-07-25) — re-stated, oracle gap closed, Satisfied
+
+Arthur chose **re-state**. Mapping the existing FX-O oracles to programs first
+exposed a hole that would have made a re-stated `Satisfied` dishonest:
+
+| program | 96 | 97 | 98 | 99 | 100 | 101 | 102 | 103 |
+|---------|----|----|----|----|-----|-----|-----|-----|
+| before  | O2/O7/O8 | **none** | O5 | **none** | O3 | O4 | O1/O6 | **none** |
+
+The three unoracled programs were **exactly the three the requirement was
+originally about**. `synth_fx_96_103_route_to_fx_voice` proves only that all
+eight reach the `Fx` wrapper — it says nothing about their identities being
+distinct, so 97/99/103 could have collapsed into one another undetected.
+
+Three new oracles close the gap:
+
+- **FX-O9** `fx_o9_soundtrack_97_opens_and_swells` — 97 opens spectrally
+  (+15.9 dB worst case over a key/vel/seed grid) and swells in amplitude
+  (≥3.2×, peaking ≥1.10 s in), against the static-filter control 101 (≤|4.0| dB,
+  ~1.0× growth).
+- **FX-O10** `fx_o10_atmosphere_99_closes_and_plucks` — 99 is 97's mirror:
+  brightness falls (≤ −25.9 dB) where 97's rises, and it peaks in the first
+  300 ms and decays where 97 peaks past a second and grows. A two-sided
+  contrast, because 97 and 99 are both saw stacks under the same wrapper and
+  nothing but the direction of their motion separates them.
+- **FX-O11** `fx_o11_scifi_103_falls_an_octave_onto_pitch` — 103 is the only
+  preset with a pitch scoop: at onset it has +38.9 dB or more energy an octave
+  above written pitch versus at it, settling back into the non-scooped
+  population (≤ +6 dB) by 0.34 s.
+
+**Each oracle was proven to go RED** by removing the identity it guards, which
+is the acceptance evidence the honesty rule asks for (repo doctrine: write the
+adversarial change that *should* fail your oracle and check that it does):
+
+| adversarial change | result |
+|---|---|
+| 97 `lp_fc0` 420 → 4600 (filter no longer opens) | FX-O9 red |
+| 97 attack 2.2 s → 0.02 s (no swell) | FX-O9 red |
+| 99 `lp_fc0` 3600 → 520 (filter no longer closes) | FX-O10 red |
+| 99 attack 0.02 s → 2.2 s, sustain → 1.0 (no pluck) | FX-O10 red |
+| 103 `scoop0` 2.0 → 1.0 (scoop removed) | FX-O11 red |
+
+Two measurement traps were found and avoided while calibrating, both recorded in
+the oracle doc comments:
+
+1. **A key-relative brightness band goes blind at low keys.** The one-shot LP's
+   cutoff travels in absolute Hz, so the measurement band has to straddle *that*,
+   not the note. A `f0*5.5 .. f0*15` band read 97's entire opening as +1.2 dB at
+   key 48, where the absolute 1.8–4.2 kHz band reads +15.9 dB.
+2. **The obvious pitch reader would have made FX-O11 a false green.**
+   `peak_locate` over `[0.8·f0, 2.6·f0]` is fooled by a plain detuned saw stack —
+   its beating 2nd harmonic wins the argmax in short windows, so the NON-scooped
+   99 and 101 both read a phantom ~1200-cent "scoop" that decays like a real one.
+   The shipped oracle compares band ENERGY at the octave against band energy at
+   the fundamental instead, which a harmonic-balance accident cannot imitate.
+
+The stale `Satisfied-by` command (a cargo name filter matching nothing, exiting 0
+while running zero tests) is replaced by an explicit list of oracle symbols.

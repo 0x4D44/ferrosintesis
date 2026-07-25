@@ -773,12 +773,21 @@ impl GrainGate {
     /// Next gate value in [0, 1]; draws exactly one uniform sample from `rng`.
     #[inline]
     pub fn next(&mut self, rng: &mut Rng) -> f32 {
-        if rng.white() * 0.5 + 0.5 < self.p {
+        self.next_with_trigger(rng).0
+    }
+
+    /// Next gate value and whether this sample starts a fresh grain.
+    ///
+    /// Like [`Self::next`], this draws exactly one uniform sample from `rng`.
+    #[inline]
+    pub(crate) fn next_with_trigger(&mut self, rng: &mut Rng) -> (f32, bool) {
+        let fired = rng.white() * 0.5 + 0.5 < self.p;
+        if fired {
             self.e = 1.0;
         }
         let out = self.e;
         self.e *= self.decay;
-        out
+        (out, fired)
     }
 }
 

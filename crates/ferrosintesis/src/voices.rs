@@ -632,29 +632,68 @@ impl Voice for SfxHelicopter {
     }
 }
 
-/// GM 126 applause: two interleaved PhISEM clap-grain trains (150 + 210
-/// claps/s through distinct clap-band filters), swelling in and sustaining
-/// while the key is held — a crowd, not a hiss.
+/// One independently filtered clap stream within the GM 126 crowd.
+///
+/// A fresh event retunes both resonators. The broad low-mid resonator supplies
+/// the hand/body impact; the upper one supplies the sharper palm/finger snap.
+struct ClapGrain {
+    gate: GrainGate,
+    body: Biquad,
+    snap: Biquad,
+}
+
+impl ClapGrain {
+    fn new(rate: f32, t60: f32, body_hz: f32, snap_hz: f32, sr: f32) -> Self {
+        ClapGrain {
+            gate: GrainGate::new(rate, t60, sr),
+            body: Biquad::bandpass(body_hz.min(sr * 0.40), 0.55, sr),
+            snap: Biquad::bandpass(snap_hz.min(sr * 0.40), 0.65, sr),
+        }
+    }
+
+    fn next(&mut self, rng: &mut Rng, sr: f32) -> f32 {
+        let (gate, fired) = self.gate.next_with_trigger(rng);
+        if fired {
+            let body_unit = rng.white() * 0.5 + 0.5;
+            let snap_unit = rng.white() * 0.5 + 0.5;
+            let body_hz = 250.0 * 4.0f32.powf(body_unit);
+            let snap_hz = 800.0 * 5.0f32.powf(snap_unit);
+            self.body = Biquad::bandpass(body_hz.min(sr * 0.40), 0.55, sr);
+            self.snap = Biquad::bandpass(snap_hz.min(sr * 0.40), 0.65, sr);
+        }
+        let noise = rng.white();
+        (self.body.process(noise) * 0.90 + self.snap.process(noise) * 0.55) * gate
+    }
+}
+
+/// GM 126 applause: four sparse interleaved PhISEM clap trains, swelling in
+/// and sustaining while the key is held. Their 84 combined events/s leave
+/// individual claps resolvable, while per-event resonator tuning avoids a
+/// fixed-frequency sizzle.
 struct SfxApplause {
     rng: Rng,
-    gate1: GrainGate,
-    gate2: GrainGate,
-    clap1: Biquad,
-    clap2: Biquad,
+    claps: [ClapGrain; 4],
     env: SfxEnv,
     amp: f32,
+    sr: f32,
 }
 
 impl SfxApplause {
     fn new(vel: u8, sr: f32, seed: u32) -> Self {
         SfxApplause {
             rng: Rng::new(seed ^ 0x5F58_007E),
-            gate1: GrainGate::new(150.0, 0.010, sr),
-            gate2: GrainGate::new(210.0, 0.008, sr),
-            clap1: Biquad::bandpass(2_400.0f32.min(sr * 0.40), 0.8, sr),
-            clap2: Biquad::bandpass(3_100.0f32.min(sr * 0.40), 0.9, sr),
+            claps: [
+                ClapGrain::new(18.0, 0.022, 350.0, 1_200.0, sr),
+                ClapGrain::new(20.0, 0.019, 500.0, 1_800.0, sr),
+                ClapGrain::new(22.0, 0.017, 700.0, 2_600.0, sr),
+                ClapGrain::new(24.0, 0.015, 900.0, 3_600.0, sr),
+            ],
             env: SfxEnv::new(0.25, 0.60, sr),
-            amp: vel_amp(vel) * 1.30,
+            // The old 1.30 gain plus 360 events/s measured +9.13 dB against
+            // the M-CAL reference. Sparse grains remove most of that excess;
+            // this final trim places the redesigned crowd on the reference.
+            amp: vel_amp(vel) * 0.71,
+            sr,
         }
     }
 }
@@ -662,11 +701,11 @@ impl SfxApplause {
 impl Voice for SfxApplause {
     fn render(&mut self, out: &mut [f32]) -> bool {
         for o in out.iter_mut() {
-            let g1 = self.gate1.next(&mut self.rng);
-            let n1 = self.rng.white();
-            let g2 = self.gate2.next(&mut self.rng);
-            let n2 = self.rng.white();
-            let s = self.clap1.process(n1) * g1 + self.clap2.process(n2) * g2;
+            let s = self
+                .claps
+                .iter_mut()
+                .map(|clap| clap.next(&mut self.rng, self.sr))
+                .sum::<f32>();
             *o += s * self.amp * self.env.next();
         }
         !self.env.dead()
@@ -17651,7 +17690,7 @@ mod tests {
         );
         let ratio = r_hold / p_rms;
         assert!(
-            (0.15..=1.1).contains(&ratio),
+            (0.10..=0.20).contains(&ratio),
             "applause level vs piano out of band: {ratio:.4} (held rms {r_hold})"
         );
         let seg = &held[(0.8 * sr) as usize..(2.0 * sr) as usize];
@@ -17666,6 +17705,55 @@ mod tests {
         assert!(
             flat > 0.18,
             "applause should stay toneless, flatness {flat}"
+        );
+    }
+
+    /// MM-BUG-KILN-00041: applause needs individually resolvable broadband
+    /// handclaps, not a continuous pair of narrow 2.4/3.1 kHz noise bands.
+    #[test]
+    fn gm126_applause_has_resolvable_broadband_claps() {
+        let sr = 44100.0;
+        let seed = 0x5F58_0100 ^ 126;
+        let held = render_sfx_hold(126, 100, sr, seed, 2.5, 3.0);
+        let seg = &held[(0.8 * sr) as usize..(2.0 * sr) as usize];
+        let body = spectral_band_rms(seg, sr, 200.0, 1_200.0);
+        let presence = spectral_band_rms(seg, sr, 1_200.0, 4_500.0);
+        let air = spectral_band_rms(seg, sr, 4_500.0, 9_000.0);
+        let (_, piano_rms) = piano_ref(sr);
+        let level_ratio = rms(&held[(1.5 * sr) as usize..(2.0 * sr) as usize]) / piano_rms;
+
+        let hop = (0.005 * sr) as usize;
+        let levels: Vec<f32> = seg.chunks_exact(hop).map(rms).collect();
+        let mean = levels.iter().sum::<f32>() / levels.len() as f32;
+        let variance = levels
+            .iter()
+            .map(|level| (level - mean).powi(2))
+            .sum::<f32>()
+            / levels.len() as f32;
+        let pulse_cv = variance.sqrt() / mean.max(1e-9);
+        println!(
+            "GM126 clap body/presence {:.3}, air/presence {:.3}, 5ms envelope CV {:.3}, piano RMS ratio {:.3}",
+            body / presence.max(1e-9),
+            air / presence.max(1e-9),
+            pulse_cv,
+            level_ratio
+        );
+
+        assert!(
+            body >= 0.45 * presence,
+            "applause has no hand/body energy: 200-1200 Hz {body:.6} vs 1.2-4.5 kHz {presence:.6}"
+        );
+        assert!(
+            air >= 0.12 * presence,
+            "applause is trapped in fixed mid bands: 4.5-9 kHz {air:.6} vs 1.2-4.5 kHz {presence:.6}"
+        );
+        assert!(
+            pulse_cv >= 0.32,
+            "applause grains smear into continuous noise: 5 ms envelope CV {pulse_cv:.3}"
+        );
+        assert!(
+            (0.10..=0.16).contains(&level_ratio),
+            "applause is not balanced against the piano: RMS ratio {level_ratio:.3}"
         );
     }
 

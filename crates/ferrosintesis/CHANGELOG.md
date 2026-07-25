@@ -19,6 +19,11 @@ and `wrk_journals/`.
   the seam. Sample rates are integers; the float was the odd one out. Taken deliberately
   before the first publish, when it costs nothing.
 
+  Affects `Options::with_sample_rate`, `Options::sample_rate`, and the five loudness
+  functions re-exported from `offline`: `momentary_lufs`, `integrated_lufs`,
+  `true_peak_dbtp`, `limit_true_peak` and `normalize_loudness`. Renders are unchanged —
+  verified byte-identical across all 124 catalog MIDIs.
+
 ### Added
 
 - `ferrosintesis-samples-drumkit2`, carrying the four accent-cymbal banks (crash, sizzle

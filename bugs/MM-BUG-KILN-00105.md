@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00105 — velocity compensation is chosen by program number, not by the voice actually built
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** voices / velocity law
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=2, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 4.5 while draining the `--no-default-features` failures of MM-BUG-KILN-00090; the drums half landed there and the melodic half was parked) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — velocity calibration now follows the constructed sample/composite or modeled fallback, including runtime sample opt-out and pitch-range rejection)
+- **State history:** Open (2026-07-25, raised by Claude Opus 4.5 while draining the `--no-default-features` failures of MM-BUG-KILN-00090; the drums half landed there and the melodic half was parked) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — velocity calibration now follows the constructed sample/composite or modeled fallback, including runtime sample opt-out and pitch-range rejection) → Closed (2026-07-25, Claude Opus 5, independent two-eyes — did not author the fix; the fix's own oracle ported onto 4c24cb9^ fails at the recorded GM24 k=1.704, and the render-diff denominator was re-derived independently)
 
 ## Observation
 
@@ -174,3 +174,58 @@ feature configurations. Their pitch, spectrum, and envelope expectations did not
   `Atlas of Becoming/06 - Late for the Ordinary.mid` (GM56/57). The other 19 tracks
   using a listed program remained byte-identical because their notes stayed on eligible
   sample paths.
+
+### Verification summary (2026-07-25, Claude Opus 5, independent — did not author the fix)
+
+Fixed by GPT-5.6 Codex in `4c24cb9`; verified here by a session that did not author it.
+
+**The framing had to be corrected first, and that is the substance of this check.** The
+obvious red-before — run the modeled-only velocity census at `4c24cb9^` and watch GM24 come
+out at 1.704 — **does not reproduce**. At that commit the census flags GM6, 32, 34, 36, 42,
+43, 46, 49, 68, 96, 107 and 109, and *none* of GM24/56/57/59/64–67. MM-BUG-KILN-00090's
+compile-time modeled-only table fork had already corrected those eight for
+`--no-default-features` builds.
+
+So the defect this fix actually closes is the **dispatch seam**, not the modeled-only build:
+a *default-feature* binary that disables samples at runtime, or that falls through
+`SaxLoopVoice::new`'s extreme-repitch guard to the bare model, still received the sampled
+program-table exponent. A compile-time fork cannot see either case.
+
+**Red-before, in the right configuration and exact.** Porting the fix's own oracle
+`runtime_sample_opt_out_models_follow_the_square_law` (with its `melodic_level_with_samples`
+helper) verbatim onto `4c24cb9^` and running it with **default features** fails immediately:
+
+```
+modeled GM24 (--no-samples) key 48: velocity exponent 1.704, want 2.0 +/- 0.2
+```
+
+`1.704` is exactly the value this bug's Measured-impact table records for GM24 at key 48.
+
+**Green after.** On trunk the same oracle passes for all eight programs at keys 48 and 60.
+The modeled-only census flags none of the eight. All five velocity-law oracles pass under
+`--no-default-features`, including `melodic_voices_follow_the_square_law` and
+`every_gm_program_follows_the_square_law` — the two this bug's body recorded as "Still
+failing, and owned elsewhere".
+
+**Render-diff denominator re-derived independently.** A census written for this pass (channel
+10 excluded; a program counts only when a note-on sounds while it is selected) finds **22** of
+the 124 catalog MIDIs sound a note on GM 24/56/57/59/64–67 — matching the fix's accounting of
+3 changed plus 19 byte-identical. The three tracks it names carry exactly the programs
+claimed: `Big Weather/03 - Run the Rooftops` (GM57), `Atlas of Becoming/02 - Wire and Wake`
+(GM65), `Atlas of Becoming/06 - Late for the Ordinary` (GM56 and GM57). A naive
+"file mentions the program" count returns 23; `Heliopause/02` selects a listed program but
+never sounds a note on it, which is why it cannot move.
+
+**No residual split.** This bug's body flags nine further "structurally at risk" programs. The
+trunk census still marks GM49 OFF-LAW (k 1.947/1.839) and GM68 KEY-DEPENDENT (spread 0.252)
+in modeled-only — but both are flagged **identically at `4c24cb9^`**, so neither is a
+regression from this fix, and both sit inside the gating oracles' ±0.2 / ±0.25 bands. That is
+the census tool's tighter advisory threshold, not an unfixed remainder of this bug. Nothing
+here warrants a new id.
+
+Gates on current trunk (`9e3b8aa`): `cargo fmt --all --check` clean; `cargo clippy --workspace
+--exclude amp-lab --all-targets --locked -- -D warnings` clean; the same clippy with
+`--no-default-features` clean; `cargo test -p ferrosintesis --no-default-features --locked`
+616 passed / 0 failed / 22 ignored plus 4 doc-tests; `cargo test --workspace --exclude amp-lab
+--locked` all suites ok, 716 passed / 0 failed / 27 ignored in the ferrosintesis lib suite and
+no failures anywhere.

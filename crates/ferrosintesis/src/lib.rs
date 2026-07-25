@@ -103,6 +103,8 @@ pub(crate) mod loudness;
 mod manifest;
 pub(crate) mod midi;
 #[cfg(test)]
+mod parse_robustness;
+#[cfg(test)]
 mod payload;
 pub(crate) mod reverb;
 pub(crate) mod sampler;

@@ -1,0 +1,32 @@
+# Deliberately NOT a member of the root workspace: cargo-fuzz needs a nightly
+# toolchain and a sanitizer runtime, and the repo gates locally on stable. The empty
+# `[workspace]` table below makes this directory its own workspace root, which is what
+# keeps `cargo build` / `cargo clippy` at the repo root from ever reaching it.
+#
+# Keep every dependency on ONE line — a multi-line inline table is invalid TOML 1.0 and
+# cargo at the workspace MSRV refuses the manifest outright (MM-BUG-KILN-00067).
+
+[package]
+name = "ferrosintesis-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# `default-features = false` drops the 25 embedded sample crates (~111 MiB of PCM).
+# `offline::parse` never touches a sample, so they are pure link-time cost — and a
+# fuzzer's value is iterations per second.
+[dependencies]
+libfuzzer-sys = "0.4"
+ferrosintesis = { path = "../crates/ferrosintesis", default-features = false }
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

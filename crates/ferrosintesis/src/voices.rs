@@ -1043,11 +1043,19 @@ impl Voice for Modal {
                 }
             }
             self.bloom = Some(ModeBloom { from, env, att });
-        } else if self.pickup.is_some() {
+        } else if let Some(mut pickup) = self.pickup.take() {
             // EP pickup branch (round 2): the shaper acts on THIS voice's
             // contribution only (the out buffer already carries other
             // voices), so it lives inside the loop — but the branch that
             // selects it is out here, and a pickup-less Modal never takes it.
+            //
+            // The shaper is MOVED OUT for the duration of the loop and put
+            // back below, rather than re-checked as an `Option` on every
+            // sample. It cannot simply be borrowed across the loop: the body
+            // calls `self.advance_strike_glide()`, which needs `&mut self`.
+            // Taking it also removes the only `expect` on the render path —
+            // it was infallible, guarded by this very branch, but it still
+            // compiled to a discriminant test and a panic edge per sample.
             for o in out.iter_mut() {
                 let mut s = 0.0;
                 for m in &mut self.modes {
@@ -1068,9 +1076,10 @@ impl Voice for Modal {
                 }
                 let amp_trem = self.amp_trem.as_mut().map_or(1.0, ModalAmpTrem::gain);
                 let dry = s * self.gain * self.att_env * self.release_env * amp_trem;
-                *o += self.pickup.as_mut().expect("branch guard").process(dry);
+                *o += pickup.process(dry);
                 self.advance_strike_glide();
             }
+            self.pickup = Some(pickup);
         } else {
             for o in out.iter_mut() {
                 let mut s = 0.0;

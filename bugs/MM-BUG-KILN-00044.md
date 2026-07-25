@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00044 — GM6 harpsichord's held body rises only +0.9 dB from v72 to v110 where both reference modules rise +6.6 / +8.3 dB — a ~7 dB velocity-response gap that is `vel_sense` 0.15 itself: physical realism vs GM convention, an ears/design call
 
-- **State:** Open
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,10 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) from the M-CAL v3 certified/panel derivation runs; triaged and root-caused against the source and the raw measurement TSVs)
-  → NARROWED (2026-07-25, Claude Opus 5 (1M) @ xhigh, Arthur's call after a listening pass;
-  the INVERSION half is fixed and struck from this record, the reference gap remains and is
-  now the whole of this bug — see "Narrowed" below)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) from the M-CAL v3 certified/panel derivation runs; triaged and root-caused against the source and the raw measurement TSVs) → Fixed (2026-07-25, Claude Opus 5 (1M) @ xhigh in `d1245e9`; removed the stale GM6 exponent correction so the body rises monotonically, while Arthur accepted the remaining weak `vel_sense: 0.15` response after A/B listening) → Closed (2026-07-25, independent verification by Codex GPT-5.6-Sol; current source preserves the accepted physical-harpsichord exception, the positive sub-3 dB velocity span, and the no-compensation invariant, with all focused guards green)
 
 ## Narrowed (2026-07-25) — the inversion half is FIXED; only the design question remains
 
@@ -246,6 +243,23 @@ Superseded: the original exit condition also demanded the velocity guard move fr
 peak to the held body with a lower bound. Partly moot — the composite and body now track each
 other (+1.85 vs +2.00 dB span), so the attack-window measurement is no longer masking a
 different body behaviour. Still worth doing on its own merits if this bug is picked up.
+
+## Verification (2026-07-25)
+
+Independent verification on current trunk confirmed:
+
+- Arthur's standing A/B decision is recorded in the landed `d1245e9` fix: physical
+  harpsichord behavior wins here, so `HARPSICHORD.vel_sense` remains `0.15`.
+- `velocity_law::tests::corrected_programs_still_rise_with_velocity`: passed. GM6 has no
+  `VEL_LEVEL_EXP` correction that can reintroduce the former inversion.
+- `velocity_law::tests::exempt_voices_keep_their_documented_velocity_behaviour`: passed.
+  The rendered GM6 response remains positive and below the documented 3 dB ceiling.
+- `voices::tests::keyboard_voices_programs_4_7_do_not_use_acoustic_piano_voice`: passed.
+  Its held-body ratio guard remains below 1.5, preserving the deliberately compressed
+  harpsichord response.
+
+The remaining reference-panel gap is therefore a documented product choice, not an
+unresolved defect.
 
 ## Notes
 

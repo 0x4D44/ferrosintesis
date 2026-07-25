@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00106 — GM 96 rain is cut off while the key is still held: the noise layer has no liveness term
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** voices / FX
@@ -21,7 +21,10 @@
 - **State history:** Open (2026-07-25, raised by Claude Opus 4.5 while splitting the
   `--no-default-features` test failures of MM-BUG-KILN-00090. The failing clause was
   deliberately left LIVE and red rather than gated, because gating it would have buried a
-  shipped defect — which is the whole point of KILN-00090's no-mass-gating rule.)
+  shipped defect — which is the whole point of KILN-00090's no-mass-gating rule.) → Fixed
+  (2026-07-25, Codex GPT-5.6-Sol; synthetic rain liveness now follows key hold with
+  default, samples-off, and modeled-only regression coverage; awaiting independent
+  two-eyes verification)
 
 ## Observation
 
@@ -75,18 +78,25 @@ same expression collapses to the same broken case.
 
 ## Suggested fix
 
-Add a liveness term for the noise/grain layer: it is key-driven and should hold the voice
-open while unreleased, exactly as `rain_alive` does for the recorded bed. Narrow and at the
-right layer — the defect is a missing term in one boolean, not a design flaw in the voice.
+The `Fx` liveness expression now includes the synthetic grain wash while its key
+is held. Note-off clears that term, so the modeled wash yields to the existing
+core release; the sampled rain bed keeps its envelope-driven fade-out unchanged.
 
-**This changes the render** (GM 96 will sustain where it previously stopped), so it needs a
-full render-diff inventory with EXPECTED diffs on tracks using GM 96, and no diffs elsewhere.
-Worth an ear check on the sustained result too: the wash was never previously heard past the
-bell's decay, so its steady-state character is effectively unaudited.
+The previously red modeled-only regression now passes. It also exercises explicit
+samples-off mode, proves the wash remains audibly nonzero near five seconds, and
+proves both sampled and modeled paths terminate after note-off. All eleven
+default-feature FX oracles and all ten modeled-only FX oracles pass, as do strict
+clippy and the focused test on Rust 1.87.
+
+The required render inventory compared release binaries from `origin/main`
+`583d8d3` and this fix over all 124 catalog MIDIs at 11.025 kHz: all 124 were
+byte-identical, with zero contamination. The scanner found no catalog MIDI that
+sounds GM 96, so no album render was expected to move; the focused regression
+proves the changed samples-off path is reached.
 
 ## Regression
 
-`voices::tests::fx_o7_rain_96_real_recording_bed` clause (c) is the regression test and is
-**deliberately left failing** in the modeled-only build (commit `5700759`). Clauses (a) and
-(b) of that test were gated as genuinely sample-specific; (c) was not, precisely because it
-catches this. Do not gate it to reach green.
+`voices::tests::fx_o7_rain_96_real_recording_bed` clause (c) is the regression
+test. Clauses (a) and (b) remain gated as genuinely sample-specific; clause (c)
+remains active in every build because key-hold lifetime is the voice's contract,
+not an asset property.

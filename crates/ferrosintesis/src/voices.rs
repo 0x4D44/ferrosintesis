@@ -12401,12 +12401,14 @@ impl Voice for Fx {
             }
             base += n;
         }
-        // FX-O6: stay alive while the echo tail still rings. The rain bed also
-        // holds the voice open: while held it never releases, and after note-off
-        // it stays alive until its fade-out envelope reaches zero (so the wash is
-        // not truncated mid-loop with a click).
+        // FX-O6: stay alive while the echo tail still rings. Either rain wash
+        // holds the voice open while the key is down. After note-off, the real
+        // bed stays alive through its fade-out; the synthetic wash yields to the
+        // core's release.
+        let synthetic_rain_alive =
+            self.noise_amp > 0.0 && self.grain.is_some() && !self.rain_released;
         let rain_alive = self.rain.is_some() && (!self.rain_released || self.rain_env > 1e-4);
-        core_alive || self.echo_tail > 0 || rain_alive
+        core_alive || self.echo_tail > 0 || synthetic_rain_alive || rain_alive
     }
 
     fn note_off(&mut self) {
@@ -21027,18 +21029,27 @@ mod tests {
         }
 
         // (c) FOLLOWS KEY HOLD: sustains while held, then dies after note-off.
+        let modeled = render_program_sampled(96, 60, 100, 5.0, 7, false);
+        let modeled_tail = rms(segment(&modeled, sr, 4.8, 5.0));
         assert!(
-            survives_until(make(96, 60, 100, sr, 7, true), sr, 5.0),
-            "96 rain (samples-on) died while the note was still held — the bed must sustain"
+            modeled_tail >= 0.01,
+            "96 rain (samples-off) is alive but inaudible near five seconds \
+             (tail RMS {modeled_tail:.4})"
         );
-        let mut v = make(96, 60, 100, sr, 7, true);
-        let mut held = vec![0f32; (1.5 * sr) as usize];
-        v.render(&mut held);
-        v.note_off();
-        assert!(
-            dies_within(v, sr, 4.0),
-            "96 rain (samples-on) did not terminate after note-off — the bed loops forever"
-        );
+        for (samples, layer) in [(true, "samples-on"), (false, "samples-off")] {
+            assert!(
+                survives_until(make(96, 60, 100, sr, 7, samples), sr, 5.0),
+                "96 rain ({layer}) died while the note was still held — the wash must sustain"
+            );
+            let mut v = make(96, 60, 100, sr, 7, samples);
+            let mut held = vec![0f32; (1.5 * sr) as usize];
+            v.render(&mut held);
+            v.note_off();
+            assert!(
+                dies_within(v, sr, 4.0),
+                "96 rain ({layer}) did not terminate after note-off — the wash loops forever"
+            );
+        }
     }
 
     /// Normalised cross-correlation of two equal-length windows (mean-removed).

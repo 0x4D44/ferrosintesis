@@ -1381,7 +1381,7 @@ impl Sympathetic {
                 // floor lives in ONE place: this site used to hard-code `1e-20`, the
                 // value that function's doc comment argues at length is wrong, and it
                 // survived the MM-BUG-KILN-00027 fix that corrected the per-block
-                // flushes eight lines above (MM-BUG-KILN-00097).
+                // flushes eight lines above (MM-BUG-KILN-00100).
                 let y = crate::dsp::flush_denormal(dl.tap(*d));
                 dl.push(x + damp.process(y) * self.feedback);
                 sum += y;

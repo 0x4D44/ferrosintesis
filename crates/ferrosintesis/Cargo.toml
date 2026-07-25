@@ -10,7 +10,7 @@ readme = "README.md"
 # `examples/**` ships deliberately: `examples/quickstart.rs` IS the README's code block, and
 # it exists so `clippy --all-targets` fails when the API drifts from what the front page
 # claims. A published crate without it invites the drift the file was written to prevent.
-include = ["src/**", "examples/**", "README.md", "NOTICE", "LICENSE-APACHE", "LICENSE-MIT"]
+include = ["src/**", "examples/**", "README.md", "CHANGELOG.md", "NOTICE", "LICENSE-APACHE", "LICENSE-MIT"]
 keywords = ["midi", "synthesizer", "audio", "dsp"]
 categories = ["multimedia::audio"]
 
@@ -30,6 +30,7 @@ embedded-samples = [
     "dep:ferrosintesis-samples-clavinet",
     "dep:ferrosintesis-samples-core",
     "dep:ferrosintesis-samples-drumkit",
+    "dep:ferrosintesis-samples-drumkit2",
     "dep:ferrosintesis-samples-gong",
     "dep:ferrosintesis-samples-grand",
     "dep:ferrosintesis-samples-vcsl-steinway",
@@ -61,6 +62,7 @@ embedded-samples = [
 ferrosintesis-samples-clavinet = { path = "../ferrosintesis-samples-clavinet", version = "=0.1.0", optional = true }
 ferrosintesis-samples-core = { path = "../ferrosintesis-samples-core", version = "=0.1.0", optional = true }
 ferrosintesis-samples-drumkit = { path = "../ferrosintesis-samples-drumkit", version = "=0.1.0", optional = true }
+ferrosintesis-samples-drumkit2 = { path = "../ferrosintesis-samples-drumkit2", version = "=0.1.0", optional = true }
 ferrosintesis-samples-gong = { path = "../ferrosintesis-samples-gong", version = "=0.1.0", optional = true }
 ferrosintesis-samples-grand = { path = "../ferrosintesis-samples-grand", version = "=0.1.0", optional = true }
 ferrosintesis-samples-vcsl-steinway = { path = "../ferrosintesis-samples-vcsl-steinway", version = "=0.1.0", optional = true }

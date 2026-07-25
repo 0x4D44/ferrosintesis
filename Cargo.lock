@@ -708,6 +708,7 @@ dependencies = [
  "ferrosintesis-samples-core",
  "ferrosintesis-samples-dark-salamander",
  "ferrosintesis-samples-drumkit",
+ "ferrosintesis-samples-drumkit2",
  "ferrosintesis-samples-fretnoise",
  "ferrosintesis-samples-gong",
  "ferrosintesis-samples-grand",
@@ -764,6 +765,13 @@ version = "0.1.0"
 [[package]]
 name = "ferrosintesis-samples-drumkit"
 version = "0.1.0"
+
+[[package]]
+name = "ferrosintesis-samples-drumkit2"
+version = "0.1.0"
+dependencies = [
+ "ferrosintesis-samples-drumkit",
+]
 
 [[package]]
 name = "ferrosintesis-samples-fretnoise"

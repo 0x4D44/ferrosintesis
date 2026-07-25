@@ -4414,6 +4414,10 @@ const KICK_SUB_LEVEL: f32 = 0.55;
 #[cfg(feature = "embedded-samples")]
 pub fn sampled_drum(key: u8, vel: u8, seed: u32, hit_index: u8, sr: f32) -> Option<Box<dyn Voice>> {
     use ferrosintesis_samples_drumkit as kit;
+    // The accent cymbals live in a second crate purely so neither package exceeds the
+    // crates.io 10 MiB limit; `kit2::CRASH` is the same `kit::Bank` type, carrying its
+    // own crate's `BankSource`. The split is invisible from here on out.
+    use ferrosintesis_samples_drumkit2 as kit2;
     let (bank, repitch): (&'static kit::Bank, f32) = match key {
         35 | 36 => (&kit::KICK, 1.0),
         37 => (&kit::SIDESTICK, 1.0),
@@ -4428,11 +4432,11 @@ pub fn sampled_drum(key: u8, vel: u8, seed: u32, hit_index: u8, sr: f32) -> Opti
         42 => (&kit::HH_CLOSED, 1.0),
         44 => (&kit::HH_PEDAL, 1.0),
         46 => (&kit::HH_OPEN, 1.0),
-        49 | 57 => (&kit::CRASH, 1.0),
+        49 | 57 => (&kit2::CRASH, 1.0),
         51 | 59 => (&kit::RIDE, 1.0),
         53 => (&kit::RIDE_BELL, 1.0),
-        52 => (&kit::CHINA, 1.0),
-        55 => (&kit::SPLASH, 1.0),
+        52 => (&kit2::CHINA, 1.0),
+        55 => (&kit2::SPLASH, 1.0),
         _ => return None,
     };
     // the unpitched hats take the hard-decorrelation profile; everything
@@ -5446,6 +5450,7 @@ mod tests {
     }
 
     use ferrosintesis_samples_drumkit as kitbank;
+    use ferrosintesis_samples_drumkit2 as kitbank2;
 
     /// LoopVoice must sustain INDEFINITELY across many loop wraps — the runtime
     /// counterpart to prepare.py's offline seam gate (§7.1). Rendered at a
@@ -5845,11 +5850,11 @@ mod tests {
     /// `SNARE_OFF` ship in the bank but have no GM key yet.
     fn routed_banks() -> [&'static kitbank::Bank; 13] {
         [
-            &kitbank::CRASH,
+            &kitbank2::CRASH,
             &kitbank::RIDE,
             &kitbank::RIDE_BELL,
-            &kitbank::CHINA,
-            &kitbank::SPLASH,
+            &kitbank2::CHINA,
+            &kitbank2::SPLASH,
             &kitbank::KICK,
             &kitbank::SNARE,
             &kitbank::SIDESTICK,
@@ -6041,7 +6046,7 @@ mod tests {
     fn sampled_drum_choke_reaches_silence_within_20_ms() {
         let sr = 44100.0;
         let mut v = SampledDrum::new(
-            &kitbank::CRASH,
+            &kitbank2::CRASH,
             0.4,
             DrumHit {
                 vel: 110,

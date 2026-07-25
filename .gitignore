@@ -51,6 +51,7 @@ _cal/
 !crates/ferrosintesis-samples-clavinet/samples/*.wav
 !crates/ferrosintesis-samples-core/samples/*.wav
 !crates/ferrosintesis-samples-drumkit/samples/*.wav
+!crates/ferrosintesis-samples-drumkit2/samples/*.wav
 !crates/ferrosintesis-samples-orchestral/samples/*.wav
 !crates/ferrosintesis-samples-orchestral2/samples/*.wav
 !crates/ferrosintesis-samples-musescore/samples/*.wav

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00111 — Changing one manifest field removes a sample crate from every attribution oracle
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** licensing oracles / attribution
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 4.6 from an adversarial review of the licensing oracles while landing MM-REQ-KILN-00029) → Fixed (2026-07-25, Codex GPT-5.6-Sol; all attribution oracles now derive the obligation from packaged provenance and reject a conflicting manifest declaration; awaiting independent two-eyes verification)
+- **State history:** Open (2026-07-25, raised by Claude Opus 4.6 from an adversarial review of the licensing oracles while landing MM-REQ-KILN-00029) → Fixed (2026-07-25, Codex GPT-5.6-Sol; all attribution oracles now derive the obligation from packaged provenance and reject a conflicting manifest declaration; awaiting independent two-eyes verification) → Closed (2026-07-25, verified by Claude Opus 4.6 — raised but did not fix, so eligible as the second pair of eyes. Verified by applying the attack: `crates/ferrosintesis-samples-ccby/Cargo.toml` `license` was flipped `CC-BY-4.0` → `CC0-1.0` and the licensing suite went RED with the reconcile-your-declaration message. Restored; `git status` clean. Note the fix is better than the shape proposed below: deriving the obligation from ATTRIBUTION licence spellings, rather than looking for CC0 spellings, sidesteps a real ambiguity — this repo writes `CC0=2` to mean MIDI **Continuous Controller 0**, so a CC0-spelling search would have read `crates/ferrosintesis-samples-gong/PROVENANCE.md` as claiming a public-domain dedication. The chosen direction cannot hit that. One residual fragility found and fixed alongside: `names_license` used a bare substring test, and `MIT` occurs inside `LIMITED`/`LIMITATION`/`PERMIT`, so MIT boilerplate could read as an MIT declaration. No crate tripped it; now word-boundary matched.)
 
 ## Observation
 

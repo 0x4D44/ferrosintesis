@@ -51,10 +51,38 @@ originals, which still carry their upstream filenames `261890__digitopia_cdm__go
 That makes the gong evidence a stronger class than the packs': the committed file *is* the
 upstream artifact, and its sound ID is carried in its own name. What is **not** retained is a
 licence manifest — Freesound bundles a `_readme_and_license.txt` only with a *pack* download, and
-these two were fetched as individual sounds. The CC BY 3.0 claim therefore still rests on a human
-having read two sound pages on 2026-07-19. Re-fetching either sound reproduces these exact bytes,
-so the audio is fully auditable; the licence line is not, and cannot be made so without either a
-pack download or an upstream page snapshot.
+these two were fetched as individual sounds. Re-fetching either sound reproduces these exact
+bytes, so the audio is fully auditable; the licence line is a separate question, below.
+
+### Licence-line verification record
+
+The CC BY 3.0 claim rests on someone reading the two sound pages. That reading has now been
+repeated independently, and the result recorded here so the next reader need not repeat it a
+third time:
+
+| Checked | Sound | Title | Uploader | Licence as stated | Uploaded |
+|---------|-------|-------|----------|-------------------|----------|
+| 2026-07-19 | 261890 | — | Digitopia_CdM | "Attribution 3.0" | — |
+| 2026-07-19 | 261893 | — | Digitopia_CdM | "Attribution 3.0" | — |
+| 2026-07-25 | 261890 | `GONG_GAp.wav` | Digitopia_CdM | "Attribution 3.0" (`http://creativecommons.org/licenses/by/3.0/`) | 2015-01-20 |
+| 2026-07-25 | 261893 | `GONG_GAf.wav` | Digitopia_CdM | "Attribution 3.0" (`http://creativecommons.org/licenses/by/3.0/`) | 2015-01-20 |
+
+Two independent readings six days apart agree, and the 2026-07-25 reading corroborates the
+audio: sound 261893's page reports a duration of 20.048 s against the 20.049 s this bank
+records for `gong_ageng_loud.wav` in the inventory below. That is a cross-check between the
+licence record and the bytes, which a transcription alone does not give you.
+
+**This is still a transcription, not an upstream artifact**, and is deliberately labelled as
+such (MM-REQ-KILN-00029). It is weaker evidence than the retained
+`_readme_and_license_*.txt` manifests the `-ccby` and `-orchestral2` banks now carry.
+
+**How to close this properly.** Sound 261893's page names its pack: **CdM-Gamelan-Sample-Library,
+Freesound pack 16058** (281 sounds, <https://freesound.org/people/Digitopia_CdM/packs/16058/>).
+A *pack* download bundles `_readme_and_license.txt`, which would list both 261890 and 261893 by
+ID with their per-sound licence — exactly the artifact the other two banks have. That download
+is login-gated, so it needs a human with a Freesound account; once fetched, commit the manifest
+to `tools/ferrosintesis-samples/gong-src/` and add its SHA-256 above, and this section can be
+replaced by a citation.
 
 ## Inventory
 

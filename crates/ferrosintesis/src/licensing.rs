@@ -166,9 +166,107 @@ mod tests {
         out
     }
 
+    /// Does `text` contain `needle` as a whole token rather than inside a longer word?
+    ///
+    /// `MIT` is three letters that occur inside ordinary English: `LIMITED`, `LIMITATION`,
+    /// `PERMIT`, `TRANSMIT`. A bare `contains` therefore reads the MIT licence into any
+    /// document containing "WITHOUT LIMITATION" — which is most licence texts. No crate
+    /// trips it today, but the failure it would produce is a CC0 bank being told to
+    /// reconcile its manifest with a licence nobody claimed, which is a baffling place to
+    /// start debugging.
+    fn contains_word(text: &str, needle: &str) -> bool {
+        let boundary = |c: Option<char>| !matches!(c, Some(c) if c.is_ascii_alphanumeric());
+        let mut from = 0;
+        while let Some(i) = text[from..].find(needle) {
+            let at = from + i;
+            let before = text[..at].chars().next_back();
+            let after = text[at + needle.len()..].chars().next();
+            if boundary(before) && boundary(after) {
+                return true;
+            }
+            from = at + needle.len();
+        }
+        false
+    }
+
     /// Does `text` name this licence in any accepted spelling?
     fn names_license(text: &str, license: &str) -> bool {
-        license_spellings(license).iter().any(|s| text.contains(s))
+        license_spellings(license)
+            .iter()
+            .any(|s| contains_word(text, s))
+    }
+
+    /// Does this NOTICE carry something only the LICENSOR could have supplied?
+    ///
+    /// `credit_tokens` answers "did a distinctive token travel into the guide", and for
+    /// that it is right to be permissive. It is the wrong instrument for "is this document
+    /// an attribution at all", because it extracts *any* quoted phrase — and licence
+    /// boilerplate is full of them. Reduce `ferrosintesis-samples-clavinet`'s NOTICE to the
+    /// bare MIT text and it still yields `"Software"` and `"AS IS"`, while Frank Wen,
+    /// Michael Cowgill and S. Christian Collins — the people the MIT licence actually
+    /// obliges us to credit — are gone (MM-BUG-KILN-00115).
+    ///
+    /// A source URL and a `Copyright (c) …` line are the two signals that cannot come from
+    /// the licence text or from our own identifiers. Every attribution-bearing crate in the
+    /// tree carries at least one: the Freesound/GitHub/archive.org banks have URLs, and the
+    /// two MuseScore-lineage banks carry the FluidR3 copyright block instead.
+    ///
+    /// The licence's own `creativecommons.org` URL is excluded for the reason
+    /// `credit_tokens` excludes it: it appears in every CC notice, so it identifies nobody.
+    fn carries_licensor_owned_signal(notice: &str) -> bool {
+        let has_source_url = notice.split_whitespace().any(|word| {
+            word.find("http")
+                .map(|i| word[i..].len() > 12 && !word.contains("creativecommons.org"))
+                .unwrap_or(false)
+        });
+        // `©` alone is a copyright notice; the spelled-out word is only one when it is
+        // making a claim (`Copyright (c) <holder>`), because every licence body contains
+        // the sentence "The above copyright notice … shall be included".
+        let has_copyright_line = notice.lines().any(|line| {
+            let lower = line.to_ascii_lowercase();
+            line.contains('©') || (lower.contains("copyright") && lower.contains("(c)"))
+        });
+        has_source_url || has_copyright_line
+    }
+
+    #[test]
+    fn licence_boilerplate_alone_is_not_an_attribution() {
+        // The exact reduction that defeats the credit-token check: clavinet's NOTICE with
+        // every real credit removed, leaving only the MIT grant.
+        let gutted = "MIT License\n\nPermission is hereby granted, free of charge, to any \
+                      person obtaining a copy of this software and associated documentation \
+                      files (the \"Software\"), to deal in the Software without \
+                      restriction.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY \
+                      OF ANY KIND.";
+        assert!(
+            !carries_licensor_owned_signal(gutted),
+            "bare licence boilerplate must not read as an attribution"
+        );
+        // …and the parts that make it a real one, each sufficient on its own.
+        assert!(carries_licensor_owned_signal(
+            "Copyright (c) 2000-2002, 2008 Frank Wen <getfrank@gmail.com>"
+        ));
+        assert!(carries_licensor_owned_signal("© 2014-16 Michael Cowgill"));
+        assert!(carries_licensor_owned_signal(
+            "Source: https://freesound.org/people/tim.kahn/packs/3957/"
+        ));
+        // The licence's own URL identifies nobody, so it must not qualify.
+        assert!(!carries_licensor_owned_signal(
+            "Licensed CC BY 4.0, see https://creativecommons.org/licenses/by/4.0/"
+        ));
+    }
+
+    #[test]
+    fn a_licence_id_inside_a_longer_word_does_not_name_that_licence() {
+        assert!(names_license("distributed under the MIT License", "MIT"));
+        assert!(names_license("**CC BY 4.0**, irrevocable", "CC-BY-4.0"));
+        assert!(names_license("licensed CC-BY-3.0.", "CC-BY-3.0"));
+        // The whole point: MIT boilerplate prose must not read as an MIT declaration.
+        assert!(!names_license(
+            "including without LIMITATION the rights to use",
+            "MIT"
+        ));
+        assert!(!names_license("PERMITTED USES ARE LIMITED", "MIT"));
     }
 
     /// The DISTINCTIVE credit tokens a crate's own NOTICE carries: quoted work titles
@@ -468,6 +566,15 @@ mod tests {
                 names_license(&text, &license),
                 "{krate}/NOTICE never states the {license} licence it is reproducing, so \
                  a distributor cannot tell what the obligation is"
+            );
+            assert!(
+                carries_licensor_owned_signal(&text),
+                "{krate}/NOTICE carries no source URL and no `Copyright (c) …` line, so \
+                 nothing in it identifies a licensor.\nA quoted phrase is not enough on \
+                 its own: strip this crate's NOTICE down to bare MIT boilerplate and the \
+                 quoted tokens \"Software\" and \"AS IS\" survive, so the credit check \
+                 passes while every real credit has been deleted (MM-BUG-KILN-00115). A \
+                 URL and a copyright line are the licensor's, not the licence text's."
             );
             assert!(
                 notice_packaged(&krate),

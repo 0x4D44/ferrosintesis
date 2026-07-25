@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00110 — A crate's own name still counts as a credit token, so a gutted NOTICE passes
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** licensing oracles / attribution
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 4.6 from an adversarial re-check of the MM-BUG-KILN-00071 fix while landing MM-REQ-KILN-00029) → Fixed (2026-07-25, Codex GPT-5.6-Sol; extracted credits now reject tokens derived from the crate, project, or licence names, with the gutted NOTICE pinned red-before/green-after; awaiting independent two-eyes verification)
+- **State history:** Open (2026-07-25, raised by Claude Opus 4.6 from an adversarial re-check of the MM-BUG-KILN-00071 fix while landing MM-REQ-KILN-00029) → Fixed (2026-07-25, Codex GPT-5.6-Sol; extracted credits now reject tokens derived from the crate, project, or licence names, with the gutted NOTICE pinned red-before/green-after; awaiting independent two-eyes verification) → Closed (2026-07-25, verified by Claude Opus 4.6 — who raised this bug but did not fix it, so is eligible as the second pair of eyes. Verified by applying the attack to the real tree, not by reading the fix: `crates/ferrosintesis-samples-ccby/NOTICE` was replaced with the exact self-referential document from the Observation below, and `cargo test -p ferrosintesis --lib licensing` went RED with "names no work and cites no source (no quoted title, no URL)". Restored afterwards; `git status` clean. Also audited every one of the 13 attribution-bearing NOTICEs to confirm the new self-reference filter drops no legitimate token — none is a substring of its own crate name, so the fix costs nothing.)
 
 ## Observation
 

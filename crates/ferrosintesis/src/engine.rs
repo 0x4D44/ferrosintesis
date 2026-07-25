@@ -1377,10 +1377,12 @@ impl Sympathetic {
             let x = self.hp.process(send[i]) * self.input;
             let mut sum = 0.0;
             for (dl, d, damp) in &mut self.combs {
-                let mut y = dl.tap(*d);
-                if y.abs() < 1e-20 {
-                    y = 0.0; // denormal flush
-                }
+                // Per-sample tap flush. Routed through `dsp::flush_denormal` so the
+                // floor lives in ONE place: this site used to hard-code `1e-20`, the
+                // value that function's doc comment argues at length is wrong, and it
+                // survived the MM-BUG-KILN-00027 fix that corrected the per-block
+                // flushes eight lines above (MM-BUG-KILN-00097).
+                let y = crate::dsp::flush_denormal(dl.tap(*d));
                 dl.push(x + damp.process(y) * self.feedback);
                 sum += y;
             }

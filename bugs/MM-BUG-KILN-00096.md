@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00096 — MIDI parser desyncs on running status after a meta or SysEx event
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** midi
@@ -18,11 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` by Claude Opus 5 (1M) @ xhigh
-  — found while auditing an abandoned 2026-07-17 branch, `task/20260717-FIX-CDX-fix-smf-running-status-across-meta-event`,
-  whose fix never integrated; the defect was still live on trunk `715f8a3`)
-  → Fixed (2026-07-25, Claude Opus 5 (1M) @ xhigh; running status latched from channel-voice
-  status bytes only; three regressions added; awaiting two-eyes verification)
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` by Claude Opus 5 (1M) @ xhigh — found while auditing abandoned branch `task/20260717-FIX-CDX-fix-smf-running-status-across-meta-event`, whose fix never integrated; defect live on trunk `715f8a3`) → Fixed (2026-07-25, Claude Opus 5 (1M) @ xhigh; running status latched from channel-voice status bytes only; three regressions added; awaiting two-eyes verification) → Closed (2026-07-25, independently verified by Codex GPT-5; exact meta/SysEx regressions red with `UnexpectedEof` on `715f8a3` and green on `1244b58`; full repo gate green)
 
 ## Observation
 
@@ -103,6 +99,18 @@ misparse.
 - All 11 pre-existing `midi::tests` still green (14/14), so no parse behaviour moved for
   well-formed files.
 - Confinement scan: 141/141 committed MIDIs unaffected (above).
+
+### Independent closure verification (2026-07-25 — Codex GPT-5)
+
+- Applied only the three committed regression tests to pre-fix parent `715f8a3`.
+  `running_status_survives_meta_event`, `running_status_survives_sysex_event`, and
+  `system_status_never_becomes_the_running_status` all failed with the recorded
+  `UnexpectedEof` desynchronisation.
+- Re-ran the same three tests on post-fix trunk `1244b58`; all passed.
+- Reviewed `midi::parse`: only explicit channel-voice bytes update `running_status`;
+  meta and SysEx bytes remain event-local, directly removing the recorded root cause.
+- The repo gate passed: fmt, workspace clippy, modeled-only clippy, and workspace tests.
+  No residual gap was found.
 
 ## Notes
 

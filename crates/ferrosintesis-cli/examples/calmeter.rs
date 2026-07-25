@@ -200,7 +200,7 @@ fn measure(w: &Wav, start: i64, window_frames: i64, preroll_frames: i64) -> (Vec
         .iter()
         .fold(0.0f32, |m, v| m.max(v.abs()));
 
-    let m = momentary_lufs(slice, w.sr as f32);
+    let m = momentary_lufs(slice, w.sr);
     // Block j covers [j*hop, j*hop + 400ms) inside the slice. Keep only blocks that
     // start at or after the true window origin — everything earlier is filter warm-up.
     let hop = 0.100 * w.sr as f64;

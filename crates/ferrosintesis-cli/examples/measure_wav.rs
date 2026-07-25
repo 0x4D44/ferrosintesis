@@ -36,7 +36,7 @@ fn main() {
         .chunks_exact(2)
         .map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0)
         .collect();
-    let lufs = offline::integrated_lufs(&samples, 44100.0);
-    let tp = offline::true_peak_dbtp(&samples, 44100.0);
+    let lufs = offline::integrated_lufs(&samples, 44100);
+    let tp = offline::true_peak_dbtp(&samples, 44100);
     println!("{lufs:.2},{tp:.2}");
 }

@@ -164,7 +164,8 @@ fn block_loudness(zj: f64) -> f64 {
 /// Returns an empty vector for silence or for a buffer shorter than one 400 ms block.
 /// Blocks that are exactly zero read `f32::NEG_INFINITY`; callers that want the
 /// standard gating should apply it themselves (or use [`integrated_lufs`]).
-pub fn momentary_lufs(interleaved_stereo: &[f32], fs: f32) -> Vec<f32> {
+pub fn momentary_lufs(interleaved_stereo: &[f32], fs: u32) -> Vec<f32> {
+    let fs = fs as f32;
     block_mean_squares(interleaved_stereo, fs)
         .into_iter()
         .map(|zj| block_loudness(zj) as f32)
@@ -173,7 +174,8 @@ pub fn momentary_lufs(interleaved_stereo: &[f32], fs: f32) -> Vec<f32> {
 
 /// Integrated loudness (LUFS) of an interleaved-stereo f32 buffer per BS.1770-4.
 /// Returns `f32::NEG_INFINITY` for silence / signals with no gated blocks.
-pub fn integrated_lufs(interleaved_stereo: &[f32], fs: f32) -> f32 {
+pub fn integrated_lufs(interleaved_stereo: &[f32], fs: u32) -> f32 {
+    let fs = fs as f32;
     let z = block_mean_squares(interleaved_stereo, fs);
     if z.is_empty() {
         return f32::NEG_INFINITY;
@@ -277,7 +279,7 @@ fn channel_true_peak(c: &[f32], phases: &[[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPL
 
 /// True peak of an interleaved-stereo buffer in dBTP (dB relative to full scale,
 /// inter-sample). Returns `f32::NEG_INFINITY` for pure silence.
-pub fn true_peak_dbtp(interleaved_stereo: &[f32], _fs: f32) -> f32 {
+pub fn true_peak_dbtp(interleaved_stereo: &[f32], _fs: u32) -> f32 {
     let phases = tp_polyphase();
     let n_frames = interleaved_stereo.len() / 2;
     let mut left = Vec::with_capacity(n_frames);
@@ -366,7 +368,8 @@ fn limit_pass(
 /// click-free anticipatory attack and a gentle release. One shared gain per frame
 /// preserves the stereo image. Content already under the ceiling is unchanged.
 /// Iterated to convergence so a fast attack ramp can't leave residual overshoot.
-pub fn limit_true_peak(interleaved_stereo: &mut [f32], fs: f32, ceiling_dbtp: f32) {
+pub fn limit_true_peak(interleaved_stereo: &mut [f32], fs: u32, ceiling_dbtp: f32) {
+    let fs = fs as f32;
     let n_frames = interleaved_stereo.len() / 2;
     if n_frames == 0 {
         return;
@@ -416,7 +419,7 @@ mod tests {
     fn ebu_3341_minus23_calibration_48k() {
         let peak = 10f32.powf(-23.0 / 20.0); // −23 dBFS
         let sig = stereo_sine(1000.0, peak, 5.0, 48000.0);
-        let lufs = integrated_lufs(&sig, 48000.0);
+        let lufs = integrated_lufs(&sig, 48000);
         assert!(
             (lufs - (-23.0)).abs() < 0.1,
             "48k 1kHz −23dBFS should read −23.0 LUFS, got {lufs}"
@@ -428,7 +431,7 @@ mod tests {
     fn ebu_3341_minus23_calibration_44k1() {
         let peak = 10f32.powf(-23.0 / 20.0);
         let sig = stereo_sine(1000.0, peak, 5.0, 44100.0);
-        let lufs = integrated_lufs(&sig, 44100.0);
+        let lufs = integrated_lufs(&sig, 44100);
         assert!(
             (lufs - (-23.0)).abs() < 0.1,
             "44.1k 1kHz −23dBFS should read −23.0 LUFS, got {lufs}"
@@ -444,7 +447,7 @@ mod tests {
         let peak = 10f32.powf(-23.0 / 20.0);
         for &fs in &[44100.0f32, 48000.0] {
             let sig = stereo_sine(1000.0, peak, 5.0, fs);
-            let m = momentary_lufs(&sig, fs);
+            let m = momentary_lufs(&sig, fs as u32);
             // 5 s at 400 ms/100 ms hop → floor((5.0 − 0.4)/0.1) + 1 = 47 blocks.
             assert_eq!(m.len(), 47, "fs={fs}: unexpected block count");
             for (i, &b) in m.iter().enumerate() {
@@ -465,7 +468,7 @@ mod tests {
         let fs = 44100.0f32;
         let mut sig = stereo_sine(1000.0, 10f32.powf(-43.0 / 20.0), 3.0, fs);
         sig.extend(stereo_sine(1000.0, 10f32.powf(-23.0 / 20.0), 3.0, fs));
-        let m = momentary_lufs(&sig, fs);
+        let m = momentary_lufs(&sig, fs as u32);
         // Sample well inside each plateau, clear of the 400 ms straddling blocks.
         let quiet = m[10];
         let loud = m[m.len() - 10];
@@ -479,7 +482,7 @@ mod tests {
         );
         // Integrated, by contrast, gates the quiet half out entirely and reports
         // only the loud one — which is exactly why it cannot compare events.
-        let integrated = integrated_lufs(&sig, fs);
+        let integrated = integrated_lufs(&sig, fs as u32);
         assert!(
             (integrated - (-23.0)).abs() < 0.5,
             "integrated should report ~−23.0 (quiet half relative-gated out), got {integrated}"
@@ -492,8 +495,8 @@ mod tests {
     fn scaling_is_minus_6db() {
         let a = stereo_sine(1000.0, 0.5, 5.0, 44100.0);
         let b = stereo_sine(1000.0, 0.25, 5.0, 44100.0);
-        let la = integrated_lufs(&a, 44100.0);
-        let lb = integrated_lufs(&b, 44100.0);
+        let la = integrated_lufs(&a, 44100);
+        let lb = integrated_lufs(&b, 44100);
         assert!(
             ((la - lb) - 6.0206).abs() < 0.02,
             "halving amplitude should be −6.02 LU, got {}",
@@ -508,8 +511,8 @@ mod tests {
         let fs = 44100.0;
         let mut sig = stereo_sine(1000.0, 0.5, 3.0, fs); // 3 s loud
         sig.extend(std::iter::repeat_n(0.0f32, (10.0 * fs) as usize * 2)); // 10 s silence
-        let gated = integrated_lufs(&sig, fs);
-        let loud_only = integrated_lufs(&stereo_sine(1000.0, 0.5, 5.0, fs), fs);
+        let gated = integrated_lufs(&sig, fs as u32);
+        let loud_only = integrated_lufs(&stereo_sine(1000.0, 0.5, 5.0, fs), fs as u32);
         // Naive time-averaging would sit ~11 LU lower; gating must recover the
         // loud passage to within a few tenths (boundary blocks aside).
         assert!(
@@ -522,7 +525,7 @@ mod tests {
     #[test]
     fn silence_is_neg_inf() {
         let sig = vec![0.0f32; 44100 * 2];
-        assert_eq!(integrated_lufs(&sig, 44100.0), f32::NEG_INFINITY);
+        assert_eq!(integrated_lufs(&sig, 44100), f32::NEG_INFINITY);
     }
 
     fn sample_peak_dbfs(interleaved: &[f32]) -> f32 {
@@ -536,7 +539,7 @@ mod tests {
     fn true_peak_recovers_intersample() {
         let fs = 44100.0;
         let sig = stereo_sine_phase(fs / 4.0, 1.0, 1.0, fs, std::f32::consts::FRAC_PI_4);
-        let tp = true_peak_dbtp(&sig, fs);
+        let tp = true_peak_dbtp(&sig, fs as u32);
         let sp = sample_peak_dbfs(&sig); // ≈ −3.01 dBFS
         assert!(
             tp > sp + 2.0,
@@ -553,7 +556,7 @@ mod tests {
     fn true_peak_low_tone_matches_sample() {
         let fs = 44100.0;
         let sig = stereo_sine(100.0, 0.5, 1.0, fs);
-        let tp = true_peak_dbtp(&sig, fs);
+        let tp = true_peak_dbtp(&sig, fs as u32);
         assert!(
             (tp - (-6.0206)).abs() < 0.2,
             "0.5-amp low tone should read ~-6.02 dBTP, got {tp}"
@@ -563,7 +566,7 @@ mod tests {
     #[test]
     fn true_peak_silence_neg_inf() {
         let sig = vec![0.0f32; 4410 * 2];
-        assert_eq!(true_peak_dbtp(&sig, 44100.0), f32::NEG_INFINITY);
+        assert_eq!(true_peak_dbtp(&sig, 44100), f32::NEG_INFINITY);
     }
 
     /// The limiter must bring an over-ceiling signal's true peak to the ceiling.
@@ -571,9 +574,9 @@ mod tests {
     fn limiter_meets_ceiling() {
         let fs = 44100.0;
         let mut sig = stereo_sine(1000.0, 2.0, 1.0, fs); // true peak ≈ +6 dBTP
-        assert!(true_peak_dbtp(&sig, fs) > 5.0);
-        limit_true_peak(&mut sig, fs, -1.0);
-        let tp = true_peak_dbtp(&sig, fs);
+        assert!(true_peak_dbtp(&sig, fs as u32) > 5.0);
+        limit_true_peak(&mut sig, fs as u32, -1.0);
+        let tp = true_peak_dbtp(&sig, fs as u32);
         assert!(
             tp <= -0.9,
             "limited true peak must sit at/under the -1 dBTP ceiling, got {tp}"
@@ -586,7 +589,7 @@ mod tests {
         let fs = 44100.0;
         let orig = stereo_sine(440.0, 0.3, 1.0, fs); // ~-10.5 dBTP, well under -1
         let mut sig = orig.clone();
-        limit_true_peak(&mut sig, fs, -1.0);
+        limit_true_peak(&mut sig, fs as u32, -1.0);
         let max_diff = orig
             .iter()
             .zip(&sig)
@@ -606,7 +609,7 @@ mod tests {
         let tail = stereo_sine(300.0, 0.2, 0.6, fs); // quiet tail, under ceiling
         burst.extend_from_slice(&tail);
         let orig = burst.clone();
-        limit_true_peak(&mut burst, fs, -1.0);
+        limit_true_peak(&mut burst, fs as u32, -1.0);
         // Compare only the LAST 0.2 s (well past the 100 ms release): must be unchanged.
         let start = orig.len() - (0.2 * fs) as usize * 2;
         let max_diff = orig[start..]

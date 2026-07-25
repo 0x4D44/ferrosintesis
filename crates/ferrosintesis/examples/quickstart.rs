@@ -36,6 +36,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Integrated loudness to -18 LUFS (BS.1770-4) under a -1 dBTP true-peak
     // ceiling, TPDF-dithered to 16-bit.
     let pcm = offline::normalize_loudness(&samples, opt.sample_rate(), -18.0, -1.0);
-    offline::write_wav(Path::new(&output), opt.sample_rate() as u32, &pcm)?;
+    offline::write_wav(Path::new(&output), opt.sample_rate(), &pcm)?;
     Ok(())
 }

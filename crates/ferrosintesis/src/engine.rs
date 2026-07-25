@@ -1683,15 +1683,24 @@ impl Strip {
 /// use ferrosintesis::offline::Options;
 ///
 /// let opt = Options::default()
-///     .with_sample_rate(48_000.0)
+///     .with_sample_rate(48_000)
 ///     .with_echo(0.0); // no echo bus
 ///
-/// assert_eq!(opt.sample_rate(), 48_000.0);
+/// assert_eq!(opt.sample_rate(), 48_000);
 /// assert_eq!(opt.echo(), 0.0);
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct Options {
+    /// Output sample rate, held as `f32` because that is what every DSP site wants:
+    /// `sr` appears in ~130 voice/filter/envelope constructors and is divided into
+    /// coefficients on the render path. The PUBLIC type is `u32` (see
+    /// [`Options::with_sample_rate`] and [`Options::sample_rate`]) — sample rates are
+    /// integers, and `write_wav` and `RealtimeOptions` have always taken `u32`.
+    ///
+    /// Do NOT "finish the job" by making this field `u32` and converting at each use:
+    /// the conversion points are the render path, and moving them changes the order of
+    /// float operations. Renders are byte-identical only while this stays `f32`.
     pub(crate) sr: f32,
     pub(crate) wet: f32,
     pub(crate) tail: f32,
@@ -1715,8 +1724,8 @@ impl Default for Options {
 
 impl Options {
     /// Set the output sample rate in Hz. Default 44100.
-    pub fn with_sample_rate(mut self, sr: f32) -> Self {
-        self.sr = sr;
+    pub fn with_sample_rate(mut self, sr: u32) -> Self {
+        self.sr = sr as f32;
         self
     }
 
@@ -1755,8 +1764,8 @@ impl Options {
     }
 
     /// The output sample rate in Hz.
-    pub fn sample_rate(&self) -> f32 {
-        self.sr
+    pub fn sample_rate(&self) -> u32 {
+        self.sr as u32
     }
 
     /// The reverb send, 0.0 (dry) to 1.0.
@@ -3968,7 +3977,7 @@ const LOUDNESS_TOL_DB: f32 = 0.3;
 /// (no gated blocks) passes through ungained.
 pub fn normalize_loudness(
     samples: &[f32],
-    sr: f32,
+    sr: u32,
     target_lufs: f32,
     ceiling_dbtp: f32,
 ) -> Vec<i16> {
@@ -4205,10 +4214,10 @@ mod tests {
             sig.push(s);
             sig.push(s);
         }
-        let pcm = normalize_loudness(&sig, fs, -18.0, -1.0);
+        let pcm = normalize_loudness(&sig, fs as u32, -18.0, -1.0);
         let dec: Vec<f32> = pcm.iter().map(|&s| s as f32 / 32768.0).collect();
-        let lufs = crate::loudness::integrated_lufs(&dec, fs);
-        let tp = crate::loudness::true_peak_dbtp(&dec, fs);
+        let lufs = crate::loudness::integrated_lufs(&dec, fs as u32);
+        let tp = crate::loudness::true_peak_dbtp(&dec, fs as u32);
         assert!(
             (lufs - (-18.0)).abs() < 0.5,
             "decoded loudness should be ~-18 LUFS, got {lufs}"
@@ -4232,8 +4241,8 @@ mod tests {
             sig.push(s);
         }
         // Target the signal's own loudness → gain ≈ 1, no limiting.
-        let measured = crate::loudness::integrated_lufs(&sig, fs);
-        let pcm = normalize_loudness(&sig, fs, measured, 0.0);
+        let measured = crate::loudness::integrated_lufs(&sig, fs as u32);
+        let pcm = normalize_loudness(&sig, fs as u32, measured, 0.0);
         // Reference: same dither/quantise with unity scale, no gain, no limiter.
         let reference = normalize_to_i16(&sig, 1.0, 1.0);
         let max_lsb = pcm
@@ -4266,21 +4275,21 @@ mod tests {
             sig.push(s);
         }
         // Single-pass reference (what the old code did): gain to target, limit once.
-        let raw = crate::loudness::integrated_lufs(&sig, fs);
+        let raw = crate::loudness::integrated_lufs(&sig, fs as u32);
         let g = 10f32.powf((-18.0 - raw) / 20.0);
         let mut once: Vec<f32> = sig.iter().map(|&x| x * g).collect();
-        crate::loudness::limit_true_peak(&mut once, fs, -6.0);
-        let single = crate::loudness::integrated_lufs(&once, fs);
+        crate::loudness::limit_true_peak(&mut once, fs as u32, -6.0);
+        let single = crate::loudness::integrated_lufs(&once, fs as u32);
         assert!(
             single < -18.0 - 0.5,
             "test signal must under-shoot single-pass (got {single}) or it proves nothing"
         );
 
         // Full path with the recovery loop.
-        let pcm = normalize_loudness(&sig, fs, -18.0, -6.0);
+        let pcm = normalize_loudness(&sig, fs as u32, -18.0, -6.0);
         let dec: Vec<f32> = pcm.iter().map(|&s| s as f32 / 32768.0).collect();
-        let lufs = crate::loudness::integrated_lufs(&dec, fs);
-        let tp = crate::loudness::true_peak_dbtp(&dec, fs);
+        let lufs = crate::loudness::integrated_lufs(&dec, fs as u32);
+        let tp = crate::loudness::true_peak_dbtp(&dec, fs as u32);
         assert!(
             (lufs - (-18.0)).abs() < 0.4,
             "recovery loop should reach ~-18 LUFS, got {lufs} (single-pass was {single})"

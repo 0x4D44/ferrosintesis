@@ -272,7 +272,7 @@ fn default_delay_s(bpm: f64) -> f32 {
 /// parameter-parity test both read *this*, so the test observes what actually runs.
 fn synth_options(song: &Song) -> Options {
     Options::default()
-        .with_sample_rate(SR as f32)
+        .with_sample_rate(SR)
         .with_reverb(WET)
         .with_tail(TAIL)
         .with_echo(default_delay_s(song.initial_bpm()))
@@ -619,7 +619,7 @@ impl Drop for TempWav {
 fn render_wav(midi: &Path, wav: &Path) -> Result<(), String> {
     let song = offline::load(midi).map_err(|e| e.to_string())?;
     let (samples, _stats) = offline::render(&song, &synth_options(&song));
-    let pcm = offline::normalize_loudness(&samples, SR as f32, TARGET_LUFS, TP_CEILING);
+    let pcm = offline::normalize_loudness(&samples, SR, TARGET_LUFS, TP_CEILING);
     offline::write_wav(wav, SR, &pcm).map_err(|e| format!("writing {}: {e}", wav.display()))
 }
 
@@ -923,7 +923,7 @@ mod tests {
             repo().join("demos/ferrosintesis_reference/midi/06 - Controllers and Effects.mid");
         let song = offline::load(&midi).expect("load fixture midi");
         let opt = synth_options(&song);
-        assert_eq!(opt.sample_rate(), 44100.0);
+        assert_eq!(opt.sample_rate(), 44100);
         assert_eq!(opt.reverb(), 0.32);
         assert_eq!(opt.tail(), 6.0);
         assert!(opt.samples());

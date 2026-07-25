@@ -132,7 +132,7 @@ fn main() {
 
     let started = Instant::now();
     let opt = Options::default()
-        .with_sample_rate(rate as f32)
+        .with_sample_rate(rate)
         .with_reverb(wet)
         .with_tail(tail)
         .with_echo(delay_s)
@@ -156,7 +156,7 @@ fn main() {
     } else {
         // Default: per-track loudness normalization to `target_lufs` with a
         // `tp_ceiling` true-peak limit (see the loudness overhaul PLN/CR docs).
-        offline::normalize_loudness(&samples, rate as f32, target_lufs, tp_ceiling)
+        offline::normalize_loudness(&samples, rate, target_lufs, tp_ceiling)
     };
     if let Err(e) = offline::write_wav(&output, rate, &pcm) {
         eprintln!("error writing {}: {e}", output.display());

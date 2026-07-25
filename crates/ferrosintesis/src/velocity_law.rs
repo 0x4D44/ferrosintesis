@@ -52,7 +52,7 @@ mod tests {
     fn level_db(samples: &[f32]) -> f32 {
         // The meter takes interleaved stereo; these are mono voice renders.
         let stereo: Vec<f32> = samples.iter().flat_map(|&s| [s, s]).collect();
-        crate::loudness::momentary_lufs(&stereo, SR)
+        crate::loudness::momentary_lufs(&stereo, SR as u32)
             .into_iter()
             .fold(f32::NEG_INFINITY, f32::max)
     }

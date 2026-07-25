@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Integrated loudness to -18 LUFS (BS.1770-4) under a -1 dBTP true-peak
     // ceiling, TPDF-dithered to 16-bit.
     let pcm = offline::normalize_loudness(&samples, opt.sample_rate(), -18.0, -1.0);
-    offline::write_wav(Path::new("output.wav"), opt.sample_rate() as u32, &pcm)?;
+    offline::write_wav(Path::new("output.wav"), opt.sample_rate(), &pcm)?;
     Ok(())
 }
 ```
@@ -69,7 +69,7 @@ want your own gain staging.
 
 | builder | accessor | default | meaning |
 |---------|----------|---------|---------|
-| `with_sample_rate` | `sample_rate()` | `44100.0` | output sample rate (Hz) |
+| `with_sample_rate` | `sample_rate()` | `44100` | output sample rate (Hz), `u32` |
 | `with_reverb` | `reverb()` | `0.32` | reverb return level |
 | `with_tail` | `tail()` | `6.0` | seconds of reverb tail rendered past the last note |
 | `with_echo` | `echo()` | `0.375` | echo-bus delay in seconds; `0.0` disables the bus |

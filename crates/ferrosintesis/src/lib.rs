@@ -39,7 +39,7 @@
 //! let opt = Options::default().with_tail(1.0); // short reverb tail
 //! let (samples, stats) = offline::render(&song, &opt);
 //!
-//! // Interleaved stereo f32 at `opt.sr`, un-normalized; from here,
+//! // Interleaved stereo f32 at `opt.sample_rate()`, un-normalized; from here,
 //! // `offline::normalize_loudness` and `offline::write_wav` make a WAV.
 //! assert!(!samples.is_empty() && samples.len() % 2 == 0);
 //! assert!(stats.voices_spawned >= 1 && stats.peak > 0.0);

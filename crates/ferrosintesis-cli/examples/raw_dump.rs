@@ -68,15 +68,15 @@ fn main() {
     // Identical defaults to render_opus.py's invocation (it passes only -o/-q):
     // rate 44100, wet 0.32, tail 6.0, samples on, all channels.
     let opt = Options::default()
-        .with_sample_rate(44100.0)
+        .with_sample_rate(44100)
         .with_reverb(0.32)
         .with_tail(6.0)
         .with_echo(delay_s)
         .with_samples(!no_samples)
         .with_solo(0xFFFF);
     let (samples, stats) = offline::render(&song, &opt);
-    let lufs = offline::integrated_lufs(&samples, 44100.0);
-    let tp = offline::true_peak_dbtp(&samples, 44100.0);
+    let lufs = offline::integrated_lufs(&samples, 44100);
+    let tp = offline::true_peak_dbtp(&samples, 44100);
     write_f32_wav(&output, 44100, &samples).expect("write float WAV");
     // raw_sample_peak, voices, max_polyphony, our_integrated_LUFS, our_true_peak_dBTP
     // (for the differential check vs ffmpeg ebur128 on the same WAV).

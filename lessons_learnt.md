@@ -10,6 +10,18 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.25 — **A compensation constant marks an unfixed upstream bug — fix the cause and delete it** (`voices.rs:VEL_LEVEL_EXP`).
+  - `t[6] = 1.500` was added to drag GM6's composite back under the <3 dB velocity contract, justified in its own
+    comment as "its LA sample layer does not inherit that compression" — i.e. purely to paper over MM-BUG-KILN-00030.
+    But `ScaledVoice` applies it to the WHOLE voice, so `(v/127)^-0.5` made the harpsichord body 5.02 dB LOUDER at
+    v40 than v127 — backwards — and applied under `--no-samples` too, where there is no sample layer to compensate.
+  - That collateral damage was filed separately as MM-BUG-KILN-00044, and the two then deadlocked: 00044's record
+    said "do not fix 00030 separately before this is decided", while fixing 00030 properly was exactly what made the
+    constant removable. Fixing the cause (`LaFx::vel_sense`, so the onset inherits the model's compression)
+    dissolved both. **Read a compensation constant's comment as a bug report — it names the defect it hides.**
+  - The guard for this class must be DERIVED from the compensation table itself:
+    `velocity_law::corrected_programs_still_rise_with_velocity` walks every program the table corrects and requires
+    it still get louder with velocity. A hand-listed exception would have inherited the same blind spot.
 - 2026.07.24 — **Subtract noise before comparing tilt — hiss inflates it and a noisy layer reads BRIGHT** (`sampler.rs:b1upright_bank`).
   - Any tilt/centroid statistic puts broadband noise in its NUMERATOR, so the noisiest capture scores
     brightest — exactly backwards. Raw, the B1 upright's soft layer (28 dB SNR) sat ~1 dB from its normal
@@ -471,19 +483,3 @@ belong in `CLAUDE.md`, not here.
     their parity.
   - Beware the golden mix-balance fixture (re-pin ch10 only) and the stereo-imaging oracle (a hat-forward kit
     correlates more; give its test pattern a present ride so it still exercises the L/R spread).
-
-- 2026.07.13 — **Judge a cymbal or plate by decay RATES, never spectral snapshots — the noise wash's filter corner dominates every snapshot.**
-  - Every cheap scalar (flatness, centroid, kurtosis, peak prominence, band ratios) is a time-marginal of the
-    spectrum, and a noise-wash's corner is free to sit anywhere, so the feature is blind to the actual defect.
-    Proven: 11 of 16 proposed cymbal-oracle clauses were measured worthless — already green on the broken voice,
-    unsatisfiable, or rejecting the real recording as a reference.
-  - The two real crash round-robins we own agree to the decimal on decay features (spectral-tilt −11.0 dB/s both)
-    while disagreeing ~30% on snapshots — decay rates are a property of the PLATE, snapshots of the STRIKE. Use a
-    DIFFERENTIAL oracle against the recording, but only in the decay domain: t60(f) shape is material physics and
-    transfers across cymbals; mode frequencies don't.
-  - Today's `MetalPlate` is a time-invariant highpassed noise wash decayed by ONE scalar with the 44-mode plate
-    17 dB under it — t60 flat ~3.0 s from 200 Hz–14 kHz, where a real cymbal darkens (1.0 s at 10–14 kHz). Full
-    design + oracle: `wrk_docs/2026.07.13 - HLD - cymbal plate synthesis and its oracle.md`.
-  - Noise-fed resonator pairs only beat if they can remember a beat: CYM-1's 6000/6055 Hz pair at the HLD's
-    Q 120–150 has a ~7 ms ring time against an 18 ms beat period — decorrelated before one cycle, no beat
-    survives. Ring time Q/(πf) must span the beat period (Q ≈ 800 here); Δf > f/Q alone is not sufficient.

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00016 — Bass family (GM 32–39) is model-only; the finger/pick/slap attack lives in the LA window and is left unsampled
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source)
 
 ## Observation
 
@@ -42,7 +42,20 @@ picked 34 / fretless 35 (FreePats RBX, CC0, new `-bass` crate, `dbef98a`) landed
 default, pure model as the CC0!=0 alt, oracle + render-diff (0 contamination) green. GM 38/39 synth
 bass stay model-only (they are *synth*). **Slap 36/37 is deferred** (2026-07-19 sourcing HLD,
 decision 4): no clean real-slap CC0/CC-BY multisample exists — its own future mini-hunt. This bug
-therefore **stays Open** on the slap sub-item.
+therefore **stayed Open** on the slap sub-item until the blocker was recorded below.
+
+### Blocker (2026-07-25)
+
+The remaining GM36/37 work is an external asset-sourcing decision, not an unattended code
+fix. The repository contains fingered, picked and acoustic-pizzicato bass recordings, but
+no real slap-bass source. The approved sourcing design
+`wrk_docs/2026.07.19 - HLD - LA sample sourcing plus model-to-alt (GM4-8-10-11-14-15, 32-37).md`
+explicitly defers GM36/37 until a clean real-slap CC0 source is hand-curated.
+
+Unblock when Arthur either supplies an owner-recorded slap/pop take suitable for a
+multisample bank, or approves a discovered CC0/CC-BY source with retained provenance and
+any required attribution. Reusing the existing finger/pick assets would not resolve the
+recorded identity defect.
 
 ## Notes
 

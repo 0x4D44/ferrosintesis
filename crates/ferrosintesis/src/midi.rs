@@ -161,11 +161,18 @@ impl<'a> Cursor<'a> {
     }
 
     fn bytes(&mut self, n: usize) -> Result<&'a [u8], MidiError> {
+        // `n` comes from an attacker-controlled VLQ length. `self.pos + n` is not safe
+        // to compute: on a 32-bit `usize` (i686, armv7, wasm32) a length near u32::MAX
+        // overflows — panicking in debug, and WRAPPING in release to a small value that
+        // yields a plausible-looking slice. Saturating turns both into the honest
+        // UnexpectedEof, because a saturated end is always past `data.len()`.
+        // MM-BUG-KILN-00101.
+        let end = self.pos.saturating_add(n);
         let s = self
             .data
-            .get(self.pos..self.pos + n)
+            .get(self.pos..end)
             .ok_or(MidiError::UnexpectedEof)?;
-        self.pos += n;
+        self.pos = end;
         Ok(s)
     }
 
@@ -214,7 +221,10 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
     if fmt > 1 {
         return Err(MidiError::UnsupportedFormat { format: fmt });
     }
-    c.pos = 8 + hlen;
+    // Saturating for the same reason as `Cursor::bytes`: `hlen` is the header's own
+    // declared length, straight off the wire. A saturated position simply reads as EOF.
+    // MM-BUG-KILN-00101.
+    c.pos = 8usize.saturating_add(hlen);
 
     // pass over every track, collecting tick-stamped events
     let mut raw: Vec<(u32, u32, EvKind)> = Vec::new(); // (tick, seq, kind)
@@ -228,7 +238,10 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
             return Err(MidiError::MissingTrack { index: track_index });
         }
         let len = c.u32()? as usize;
-        let end = c.pos + len;
+        // Attacker-controlled track length; saturate rather than overflow on 32-bit.
+        // Unguarded, a wrapped `end` made a truncated track parse as an EMPTY SONG with
+        // no error at all — silently, in release. MM-BUG-KILN-00101.
+        let end = c.pos.saturating_add(len);
         let mut tick: u32 = 0;
         // The running status is the last CHANNEL VOICE status byte (0x80..=0xEF).
         // A system byte — meta (0xFF) or SysEx (0xF0/0xF7) — applies to its own

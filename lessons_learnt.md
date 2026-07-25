@@ -10,28 +10,61 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
-- 2026.07.24 — **A fret/slide RASP is quasi-periodic — a harmonicity or pitch gate rejects the sound you want; select fret-noise cuts on peak-band + low-mid instead** (`voices.rs:gm120_sampled_is_a_narrowband_rasp_not_a_hiss`).
+- 2026.07.24 — **A dotted-quaver echo lands on the OFF-BEAT of a quaver line — fine on a sparse voice, shimmer on a fast one** (`engine.rs:fx_profile`).
+  - The Tubular Bells glockenspiel entry sounded "echoy shimmer" and the file authors NOTHING — no CC93, no CC94,
+    no CC91 until beat 775. `fx_profile` gave GM 8–10 an unauthored 0.15 echo send; the bus time is a dotted
+    quaver at the opening tempo (300 ms at 150 bpm) against a metronomic 200 ms quaver ostinato, so every repeat
+    landed 1.5 slots late, carrying the wrong pitch for its position and ping-ponged hard L/R. GM 9 was also the
+    ONLY echoed voice in the opening (piano and bass profile to `(0.0, 0.0)`). Cut to 0.06 for 8/10, zero for 9.
+  - SIDE/mid energy is the tell for a stereo bus effect, and it finds the mechanism: 0.000 fully dry, 0.033
+    reverb-only, 0.092 default — then cross-correlating the side signal against the DRY render peaks exactly at
+    the echo time (0.299 s, r = 0.86). Level alone would have missed it: inside the dense line the echo sat
+    −21 dB under the programme and lifted the off-beats only 0.14 dB. It is spatial DETECTION, not loudness —
+    which is why such a thing reads as "strange" rather than as an obvious delay.
+  - Pin a bus send by RATIO, never as a constant: the send scales a linear bus, so render the voice a second time
+    AUTHORING the retired value as CC94 and assert the unauthored render sits at new/old of it
+    (`engine.rs:mallet_bus_echo_is_off_for_glockenspiel_and_a_trace_for_its_neighbours`). Calibrate against the
+    OLD constants before believing it.
+
+- 2026.07.24 — **A fret RASP is quasi-periodic, so a harmonicity gate rejects it — select on peak-band + low-mid** (`voices.rs:gm120_sampled_is_a_narrowband_rasp_not_a_hiss`).
   - Selecting GM 120 one-shots from Arthur's damped-string takes, a "no ringing note under the rasp"
     harmonicity gate rejected ALL 42 clean candidates: the winding-pass rate gives a real slide autocorrelation
     0.28–0.44 — that IS the zip we want, not a note. The genuine note contaminants show differently: they peak at
     50–160 Hz with the 125 Hz band AT the peak, while a rasp peaks at 1–3 kHz with low-mid 20–30 dB below.
   - Gate on rasp character (peak band 1–3 kHz, ≤20 % energy >4 kHz, low-mid ≤ −15 dB), NOT on periodicity or
-    pitch. And a self-cut bank does NOT need the 30 dB pre-onset isolation `trim_to_onset` demands — cut at the
-    local envelope minimum before onset and fade; the isolation gate is only for blind onset-trimming.
-- 2026.07.23 — **Sample anchors are gated by onset ISOLATION, not pitch: under ~30 dB of pre-onset quiet `trim_to_onset` grabs the PREVIOUS note** (`prepare.py:trim_to_onset`).
-  - Adopting Arthur's Eastman E1D, isolation — not tuning, not note availability — was the binding
-    constraint: it cut ~80 notes per take to 48/56 usable and forced two substitutions in the picked bank
-    (B2 for A#2, A#4 for B4). That is free, because zone roots are MEASURED, not nominal; the nylon bank
-    already stands B2 in for its source's missing A#2.
-  - Octave trap 1: a bare harmonic template scores a SUBHARMONIC exactly as well as the fundamental (every
-    harmonic of f0 is also one of f0/2), so a single note won three different zone slots at once. Score
-    `energy x harmonic-coverage` instead — a subharmonic is missing all of its odd multiples.
-  - Octave trap 2: a dominance-weighted detector calls a normal dreadnought low E an octave high (the picked
-    E2's H1 sits 3.5 dB under H3). NOT a defect — the shipped Martin `steel_E2` it replaces has an even
-    weaker H1 (-6.0 dB) at its pinned root. Settle it against the SHIPPED reference, never an absolute
-    threshold; perceived pitch follows the harmonic series, not the loudest partial.
-  - Independently corroborated: `banjo_extract.py`, landed the same day by another task, arrived at the same
-    two gates — an octave-correct f0 and a next-pluck bleed/"contamination" check.
+    pitch. (The self-cut bank's onset-trim exemption is folded into the 2026.07.23 sampling entry below.)
+
+- 2026.07.23 — **Measure a sample's root, width, format and onset ISOLATION — never trust its name or label** (`prepare.py:trim_to_onset`).
+  - Isolation, not tuning or note availability, is usually the BINDING constraint: `trim_to_onset` needs ~30 dB
+    of pre-onset quiet and grabs the PREVIOUS note without it. On Arthur's Eastman E1D it cut ~80 notes per take
+    to 48/56 usable and forced two substitutions in the picked bank (B2 for A#2, A#4 for B4). That is free,
+    because zone roots are MEASURED, not nominal — the nylon bank already stands B2 in for a missing A#2. A
+    SELF-cut bank does not need that 30 dB at all: cut at the local envelope minimum before onset and fade; the
+    isolation gate is only for blind onset-trimming.
+  - Octave traps, four of them, all fixed by measuring rather than trusting. (1) A bare harmonic template scores
+    a SUBHARMONIC exactly as well as the fundamental — score `energy x harmonic-coverage` instead, since a
+    subharmonic misses all its odd multiples. (2) A dominance-weighted detector calls a normal dreadnought low E
+    an octave high (the picked E2's H1 sits 3.5 dB under H3); settle it against the SHIPPED reference, never an
+    absolute threshold — perceived pitch follows the harmonic series, not the loudest partial. (3) Autocorr grabs
+    the 2nd harmonic whenever the F0 ceiling admits it (ocarina, recorder, banjo all did): keep a zone span UNDER
+    one octave so one ceiling separates f from 2f, or add the family to `TWO_F_STRONG` for a per-note ceiling of
+    label×1.5 — probe first, `measure_f0(x, sr, 150, label*1.5)` vs a generous ceiling. (4) File labels lie in
+    BOTH directions — VCSL keyboard/ocarina sit an octave BELOW sounding pitch, ganjo banjo an octave ABOVE;
+    name the destination by the MEASURED pitch, never the source label. Independently corroborated:
+    `banjo_extract.py`, landed the same day by another task, arrived at the same two gates.
+  - Measure the root over the RING, not the strike: the CdM Gong Ageng strikes ~80 Hz but its sustained partial
+    is ~99 Hz (G2) → `sampler.rs:GONG_ROOT_HZ=99.4`; an 80 Hz root rendered every key a major third sharp.
+  - Check `getsampwidth()` and the format tag BEFORE any numpy probe. FreePats WAVs are 24-bit (`sw=3`) — reading
+    them as 16-bit yields noise that folds FLAT and looks like a perfect loop, so a "candidate fix" measures
+    better than the real one (`prepare.py:read_wav` handles sw==3; numpy `frombuffer('<i2')` does not). Cost me
+    and an independent subagent a cycle each. ganjo WAVs are IEEE-float (fmt tag 3) and stdlib `wave` errors
+    "unknown format: 3" — transcode to 16-bit PCM with ffmpeg at fetch (`ensure_banjo_sources`).
+  - The spectrum, not the name or licence, decides fitness: a licence-only search called VCSL "Gong 1" a
+    near-pitchless tam-tam, but it is a PITCHED gong (sharp 143 Hz/D3, 95%-concentrated) — wrong for a CC0=1
+    tam-tam. Three sourcing dead-ends in one build were all invisible to name/licence.
+  - Re-micing cannot create low end the instrument never produced: Virtuosity's 18" jazz kick has NO 30–70 Hz sub
+    in ANY mic set (fundamental ~80 Hz; the overhead's "sub" reading is room rumble). A deep-kick ask needs a
+    modeled-sub layer or a ~100 Hz-hinged shelf on the fundamental.
 
 - 2026.07.23 — **A bank-wide MEAN level is the wrong statistic for an LA gain that TREBLE oracles police** (`voices.rs:LA_EASTPICK`).
   - Fitting the new steel gain on mean crossfade-window RMS (0.05-0.28 s over all zones) gave 0.229 and looked
@@ -57,7 +90,7 @@ belong in `CLAUDE.md`, not here.
     is a combination — assert it explicitly, and treat a per-parameter green as evidence about that parameter
     only.
 
-- 2026.07.23 — **A metric whose lowest band sits ABOVE what you changed reads your fix as a no-op — check its support first.**
+- 2026.07.23 — **Prove a metric can SEE your change — check its band support; zero-crossing pitch and log-bin `centroid` lie** (`testutil.rs`).
   - Driven-guitar lead amp A/B (scratch `_cal/amp_ab` harness, not in-tree): bands from 200 Hz said the new
     amp/cab moved main-vs-alt separation +0.08 dB with some probes going the WRONG way; the identical
     comparison with bands from 80 Hz says +0.80 dB, rising on every probe — because the two biggest moves
@@ -69,6 +102,49 @@ belong in `CLAUDE.md`, not here.
   - A large gap in a long-tail metric can coexist with "sounds identical": the driven banks' sustain-index gap
     is 14→60 dB over keys 45–69, yet they sound the same — a lead line's notes last a few hundred ms, and over
     THAT span both ran the same amp.
+  - Pitch estimators (merged from 2026.07.17): zero-crossing counters read the 2nd harmonic leaking through their
+    lowpass (452.5 Hz for a true 440) — three separate "pitch broke" scares were this. Use the Goertzel
+    `testutil::peak_locate` + parabolic refinement; keep crossings for pure-sine calibration only. A fixed
+    Goertzel bin (~1.5 Hz) misses harmonics wandering ±60 Hz under vibrato — use band-integrated FFT fractions.
+    Never `peak_locate` an FM carrier when β≳0.5 (the first sideband can outrank it) — use the known pitch.
+    Reading a harmonic ratio inside a vibrato'd window under-reads upper partials (harmonic n carries n× the
+    modulation index, so its energy leaks into sidebands a fixed bin misses) — read harmonics strictly PRE-vibrato.
+  - Centroid: the 20-log-bin `testutil::centroid` is leakage-dominated on a clean harmonic lattice — a real 3×
+    filter-cutoff sweep reads as ~1.1×, because its fixed Goertzel bins almost never land on a harmonic. Use the
+    Hann-windowed exact-DFT `testutil::spectral_centroid` on a settled window. It is also magnitude-weighted, so
+    an amplitude taper inside the measurement window drags it toward the loud end (a sin-windowed chirp read
+    ×1.17 where the sweep was ×1.4) — flatten the envelope or move the window.
+  - Levels: `Rng::white()` is UNIFORM in [-1,1), so its RMS is 1/√3 ≈ 0.577, not 1.0 — the WD-O5 breath-fraction
+    oracles were designed against a unit-RMS assumption and every band came out ≈1/0.61× too high while the model
+    was correct throughout. `Biquad::bandpass(fc,Q)` on white outputs RMS ≈ √(π·fc/(Q·sr)) — a narrow, cheap way
+    to size a tracked breath bed. `spectral_band_rms` is Hann-windowed, so ratioing it against raw `rms()` bakes
+    in the window's power factor and deflates any "band fraction" — compare spectral-vs-spectral only.
+  - A single-harmonic ratio ("h3 re h1") is an UNSTABLE timbre proxy — it swings ±40 dB with which harmonic lands
+    on a formant. The choir "hollow-notch" fork chased the SC-55's aah h3 "−14 at k60", but the SC-55's own h3
+    swings +26 (k52) → −12 (k60) → +14 (k64): the whole target, and a prototype "validated" at k60, was a
+    register-snapshot artifact. The real, stable defect was centroid over-brightness, fixed by preset darkening
+    (`CH2_HUM_LP` 8000→3400, cluster/F2 trims), not a Klatt cascade. Measure brightness as centroid across the
+    REGISTER at 5–6 keys, and never freeze a vowel ordering from one key ("GM54 is darkest" held ONLY at k60).
+  - A "spread" oracle across instruments must fix PITCH, or it measures pitch not timbre. Four v0.9 oracles
+    measured the wrong thing while the mechanism was fine: brass `centroid/f0` ordered tuba<trumpet, but at
+    E1-vs-C5 the 100 Hz centroid floor drops the tuba's fundamental and inverts it; the reed anti-alias test used
+    the bari (best case) not the soprano (worst); choir shimmer's ±3–7 Hz FM grid overlapped the static detune
+    cluster; the crash-twin oracle measured a window where the twins were already −70 dB. Render at matched pitch
+    / worst case / the feature's live window, clear of confounding static structure.
+  - `--solo` stems are INDEPENDENTLY peak-normalized, so a solo-stem RMS measures crest/decay, NOT the channel's
+    level in the mix — un-normalize via the CLI's reported `peak`, and judge lead audibility band-limited
+    (700–2500 Hz), not broadband (a single lead sits ~18–24 dB under a full mix by nature).
+  - Auditioning voices one at a time (`demos/ferrosintesis_reference/`) has four load-bearing harness facts.
+    CC120 is the ONLY MIDI lever that stops a ringing voice — CC121 only note-offs *held* notes
+    (`engine.rs:1468`) and CC123 is a release, while plucks decay up to 14 s, so without it the tail bleeds into
+    the next slot. CC120 does NOT flush the reverb/chorus/echo tanks (the gap is silent only because the sends
+    are zeroed), and CC91=0 alone is not dry: a program change re-derives a NON-ZERO CC93/CC94 from `fx_profile`
+    for ~76/128 programs, so author CC91/93/94=0 *after* every PC. Oracles there must be RATIOS, never absolute
+    floors — the CLI peak-normalises the whole render (`normalize_to_i16`, `scale=target/peak`), so one louder
+    voice rescales every other slot. And a "raw voice" reset must OMIT CC71/CC74 (they instantiate the wah
+    filter, `engine.rs:1286`); an effects track that DOES use the filter must reset with CC121 between demos, or
+    the resonance section colours everything after it. Measured: CC120 + zeroed sends hits the −96 dB dither
+    floor within 50 ms.
 
 - 2026.07.22 — **Score an audio oracle against a CONTROL render, not an absolute bound** (`engine.rs:gm22_cc1_is_harmonica_vibrato_not_leslie`).
   - Its `reset_late <= reset_early + 2.0` "no CC1 leak" check only held because the setup's authored `CC93=0`
@@ -176,27 +252,6 @@ belong in `CLAUDE.md`, not here.
     energy is. Use peak/median with explicit DECOY-LAG nulls (×0.73/×1.37/×1.91), or you will "confirm" an
     artifact that isn't there — it falsely convicted the bagpipe DRONES while the chanter was the true culprit.
 
-- 2026.07.20 — **Measure a source sample's real root, sample width and format before trusting its name or licence** (`prepare.py`).
-  - FreePats source WAVs are 24-bit (`sw=3`) — reading them as 16-bit yields noise that folds FLAT and looks like
-    a perfect loop, so a "candidate fix" measures better than the real one (`prepare.py:read_wav` handles sw==3;
-    numpy `frombuffer('<i2')` does not). Check `getsampwidth()` before any numpy probe. Cost me and an
-    independent subagent a cycle each. ganjo WAVs are IEEE-float (fmt tag 3) and stdlib `wave` errors "unknown
-    format: 3" — transcode to 16-bit PCM with ffmpeg at fetch (`ensure_banjo_sources`).
-  - MEASURE each zone's root before hardcoding — a wrong root plays the zone an octave off. The 2f trap: autocorr
-    grabs the 2nd harmonic whenever the F0 ceiling admits it (ocarina, recorder, banjo all did). Fix by keeping a
-    zone span UNDER one octave so a single ceiling separates f from 2f, OR adding the family to `TWO_F_STRONG`
-    for a per-note ceiling of label×1.5. Probe first: `measure_f0(x, sr, 150, label*1.5)` vs a generous ceiling.
-  - Octave-label traps: VCSL keyboard/ocarina file labels sit an octave BELOW sounding pitch, ganjo banjo labels
-    an octave ABOVE. Name the destination by the MEASURED pitch, never the source label.
-  - Measure the root over the RING, not the strike: the CdM Gong Ageng strikes ~80 Hz but its sustained partial
-    is ~99 Hz (G2) → `sampler.rs:GONG_ROOT_HZ=99.4`; an 80 Hz root rendered every key a major third sharp.
-  - The spectrum, not the name or licence, decides fitness: a licence-only search called VCSL "Gong 1" a
-    near-pitchless tam-tam, but it is a PITCHED gong (sharp 143 Hz/D3, 95%-concentrated) — wrong for a CC0=1
-    tam-tam. Three sourcing dead-ends in one build were all invisible to name/licence.
-  - Re-micing cannot create low end the instrument never produced: Virtuosity's 18" jazz kick has NO 30–70 Hz sub
-    in ANY mic set (fundamental ~80 Hz; the overhead's "sub" reading is room rumble). A deep-kick ask needs a
-    modeled-sub layer or a ~100 Hz-hinged shelf on the fundamental.
-
 - 2026.07.19 — **LA sampling is ONSET-ONLY — a sustain or noise complaint needs MODEL work, never a new sample** (`sampler.rs`).
   - Proven: brass HOLDS render bit-identical with `--no-samples` (the LA layer has crossfaded out by ~0.3 s). So
     an IDENTITY/attack complaint (40==41 viola sameness, recorder identity, timpani strike) wants a new CC0 onset
@@ -271,51 +326,6 @@ belong in `CLAUDE.md`, not here.
     temp `.py`; redirecting (`… < file`) does NOT help (it redirects deltic's own stdin). (The old "`deltic
     timeout bash script.sh` can't exec `D:/…` paths" gotcha was WSL-bash program resolution, not exec/path
     mangling — FIXED in MDK-BUG-KILN-00107, so current deltic resolves the caller's Git Bash correctly.)
-
-- 2026.07.17 — **Prove an estimator can SEE the effect before pinning a threshold — zero-crossing pitch and log-bin `centroid` lie** (`testutil.rs`).
-  - Pitch: zero-crossing counters read the 2nd harmonic leaking through their lowpass (452.5 Hz for a true 440) —
-    three separate "pitch broke" scares were this. Use the Goertzel `testutil::peak_locate` + parabolic
-    refinement; keep crossings for pure-sine calibration only. A fixed Goertzel bin (~1.5 Hz) misses harmonics
-    wandering ±60 Hz under vibrato — use band-integrated FFT fractions. Never `peak_locate` an FM carrier when
-    β≳0.5 (the first sideband can outrank it) — use the known pitch. Reading a harmonic ratio inside a vibrato'd
-    window under-reads upper partials (harmonic n carries n× the modulation index, so its energy leaks into
-    sidebands a fixed bin misses) — read harmonics in a strictly PRE-vibrato window.
-  - Centroid: the 20-log-bin `testutil::centroid` is leakage-dominated on a clean harmonic lattice — a real 3×
-    filter-cutoff sweep reads as ~1.1×, because its fixed Goertzel bins almost never land on a harmonic. Use the
-    Hann-windowed exact-DFT `testutil::spectral_centroid` on a settled window. It is also magnitude-weighted, so
-    an amplitude taper inside the measurement window drags it toward the loud end (a sin-windowed chirp read
-    ×1.17 where the sweep was ×1.4) — flatten the envelope or move the window.
-  - Levels: `Rng::white()` is UNIFORM in [-1,1), so its RMS is 1/√3 ≈ 0.577, not 1.0 — the WD-O5 breath-fraction
-    oracles were designed against a unit-RMS assumption and every band came out ≈1/0.61× too high while the model
-    was correct throughout. `Biquad::bandpass(fc,Q)` on white outputs RMS ≈ √(π·fc/(Q·sr)) — a narrow, cheap way
-    to size a tracked breath bed. `spectral_band_rms` is Hann-windowed, so ratioing it against raw `rms()` bakes
-    in the window's power factor and deflates any "band fraction" — compare spectral-vs-spectral only.
-  - A single-harmonic ratio ("h3 re h1") is an UNSTABLE timbre proxy — it swings ±40 dB with which harmonic lands
-    on a formant. The choir "hollow-notch" fork chased the SC-55's aah h3 "−14 at k60", but the SC-55's own h3
-    swings +26 (k52) → −12 (k60) → +14 (k64): the whole target, and a prototype "validated" at k60, was a
-    register-snapshot artifact. The real, stable defect was centroid over-brightness, fixed by preset darkening
-    (`CH2_HUM_LP` 8000→3400, cluster/F2 trims), not a Klatt cascade. Measure brightness as centroid across the
-    REGISTER at 5–6 keys, and never freeze a vowel ordering from one key ("GM54 is darkest" held ONLY at k60).
-  - A "spread" oracle across instruments must fix PITCH, or it measures pitch not timbre. Four v0.9 oracles
-    measured the wrong thing while the mechanism was fine: brass `centroid/f0` ordered tuba<trumpet, but at
-    E1-vs-C5 the 100 Hz centroid floor drops the tuba's fundamental and inverts it; the reed anti-alias test used
-    the bari (best case) not the soprano (worst); choir shimmer's ±3–7 Hz FM grid overlapped the static detune
-    cluster; the crash-twin oracle measured a window where the twins were already −70 dB. Render at matched pitch
-    / worst case / the feature's live window, clear of confounding static structure.
-  - `--solo` stems are INDEPENDENTLY peak-normalized, so a solo-stem RMS measures crest/decay, NOT the channel's
-    level in the mix — un-normalize via the CLI's reported `peak`, and judge lead audibility band-limited
-    (700–2500 Hz), not broadband (a single lead sits ~18–24 dB under a full mix by nature).
-  - Auditioning voices one at a time (`demos/ferrosintesis_reference/`) has four load-bearing harness facts.
-    CC120 is the ONLY MIDI lever that stops a ringing voice — CC121 only note-offs *held* notes
-    (`engine.rs:1468`) and CC123 is a release, while plucks decay up to 14 s, so without it the tail bleeds into
-    the next slot. CC120 does NOT flush the reverb/chorus/echo tanks (the gap is silent only because the sends
-    are zeroed), and CC91=0 alone is not dry: a program change re-derives a NON-ZERO CC93/CC94 from `fx_profile`
-    for ~76/128 programs, so author CC91/93/94=0 *after* every PC. Oracles there must be RATIOS, never absolute
-    floors — the CLI peak-normalises the whole render (`normalize_to_i16`, `scale=target/peak`), so one louder
-    voice rescales every other slot. And a "raw voice" reset must OMIT CC71/CC74 (they instantiate the wah
-    filter, `engine.rs:1286`); an effects track that DOES use the filter must reset with CC121 between demos, or
-    the resonance section colours everything after it. Measured: CC120 + zeroed sends hits the −96 dB dither
-    floor within 50 ms.
 
 - 2026.07.16 — **White noise through a memoryless nonlinearity stays FLAT — band-limit turbulence below f0 or you get hiss, not growl skirts.**
   - S_y(f) = Σ|W_k|²·S_n(f−k·f0): shifting and summing a flat PSD is still flat, whatever the drive. For skirts
@@ -395,7 +405,7 @@ belong in `CLAUDE.md`, not here.
     a small parallel feature drops BELOW the rng-realization noise floor — test the MECHANISM on a sub/kick-free
     clone, don't weaken the assertion.
 
-- 2026.07.14 — **±2.5% rate jitter decorrelates the SAME take to NCC 0.07–0.19 — use a rate-WARP NCC on first differences** (`sampled_ride_hits_are_decorrelated`).
+- 2026.07.14 — **Rate jitter decorrelates the SAME take to NCC 0.07–0.19 — warp the rate, diff, then correlate** (`sampled_ride_hits_are_decorrelated`).
   - Plain correlation therefore waves a round-robin repeat straight through an anti-machine-gun oracle. Warp one
     hit over ratio candidates (±the spread of two jitter draws), anchor at the detected onset, and correlate FIRST
     DIFFERENCES — that tilts toward the take-specific HF sizzle and away from the low plate modes every take of
@@ -445,4 +455,3 @@ belong in `CLAUDE.md`, not here.
   - Noise-fed resonator pairs only beat if they can remember a beat: CYM-1's 6000/6055 Hz pair at the HLD's
     Q 120–150 has a ~7 ms ring time against an 18 ms beat period — decorrelated before one cycle, no beat
     survives. Ring time Q/(πf) must span the beat period (Q ≈ 800 here); Δf > f/Q alone is not sufficient.
-

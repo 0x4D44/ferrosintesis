@@ -442,12 +442,17 @@
   Add a dedicated path if a corpus file needs it. See `wrk_docs/2026.07.18 - HLD - XG
   drum-kit bank routing (CC0=127).md` (non-goals).
 
+  (Half done 2026-07-25: deferral (1) is FIXED - GS "Use for Rhythm Part" SysEx is parsed
+  (`midi.rs` `EvKind::DrumMode`) and routed via a `gs_drum` strip flag kept separate from
+  `xg_drum` (a GS rhythm part still sends CC0=0), with GS Reset handling and tests. Deferral
+  (2), the XG SFX kit at bank MSB 126, is still deliberately melodic - `engine.rs` branches on
+  `val == 127` only. That half stands as written.)
 - 2026.07.18 — XG-drum channels use the default V3 kit regardless of the XG kit number
   (16=Rock, 8=Room, 40=Brush…); ch9 only distinguishes 40=Brush. If XG files want kit-accurate
   percussion, map the kit-select program to `drums::Kit` for `xg_drum` strips too
   (`engine.rs` `program_change`, currently gated `ch == 9`).
 
-- 2026.07.18 — Pre-existing (NOT introduced by the GS change): `midi.rs::parse` does not
+- [x] 2026.07.18 — Pre-existing (NOT introduced by the GS change): `midi.rs::parse` does not
   reset running status to 0 after a meta (0xFF) or SysEx (0xF0/0xF7) event. Well-formed
   SMFs always emit an explicit status after meta/sysex, so it's correct for valid files;
   a MALFORMED file using running status straight after a meta/sysex would misparse (treat

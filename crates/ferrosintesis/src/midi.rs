@@ -230,12 +230,29 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
         let len = c.u32()? as usize;
         let end = c.pos + len;
         let mut tick: u32 = 0;
-        let mut status: u8 = 0;
+        // The running status is the last CHANNEL VOICE status byte (0x80..=0xEF).
+        // A system byte — meta (0xFF) or SysEx (0xF0/0xF7) — applies to its own
+        // event only and must NOT be latched here: latching it made the next
+        // running-status event re-enter the meta/SysEx arm, where its data bytes
+        // were read as a `kind`+`len` pair and `len` further bytes were swallowed,
+        // desyncing the rest of the track (usually surfacing as `UnexpectedEof`).
+        // SMF 1.0 says meta/SysEx cancel running status, so continuing it is
+        // strictly malformed — but sequencers emit such files and ferrosintesis
+        // plays any GM file, so we carry the latch across instead of desyncing.
+        let mut running_status: u8 = 0;
         while c.pos < end {
             tick = tick.wrapping_add(c.vlq()?);
-            if c.peek()? >= 0x80 {
-                status = c.u8()?;
-            }
+            let status = if c.peek()? >= 0x80 {
+                let explicit = c.u8()?;
+                if (0x80..=0xEF).contains(&explicit) {
+                    running_status = explicit;
+                }
+                explicit
+            } else {
+                // No channel status seen yet leaves the latch at 0, which falls to
+                // the catch-all arm below and errors as `BadStatusByte { status: 0 }`.
+                running_status
+            };
             match status {
                 0xFF => {
                     let kind = c.u8()?;
@@ -854,5 +871,73 @@ mod tests {
             song.events[2].kind,
             EvKind::NoteOff { ch: 0, key: 72 }
         ));
+    }
+
+    /// Running status must survive an interleaved META event.
+    ///
+    /// SMF 1.0 says meta/SysEx cancel running status, so a file that continues it
+    /// is strictly malformed — but real sequencers emit these, and ferrosintesis is
+    /// a faithful player of ANY GM file. The failure mode we are ruling out is not
+    /// a clean rejection but a SILENT DESYNC: with the system byte latched as the
+    /// running status, the following data bytes are read as a meta `kind` + `len`
+    /// pair and `len` further bytes are swallowed, corrupting the rest of the track.
+    #[test]
+    fn running_status_survives_meta_event() {
+        let song = parse(&file_from_track(&[
+            0x00, 0xB6, 0x0A, 0x4B, // explicit CC10=75 on channel 6
+            0x00, 0xFF, 0x59, 0x02, 0x00, 0x00, // key-signature meta
+            0x00, 0x40, 0x7F, // CC64=127 through the preceding running status
+        ]))
+        .unwrap();
+
+        assert_eq!(song.events.len(), 2, "{:?}", song.events);
+        assert!(
+            matches!(
+                song.events[1].kind,
+                EvKind::Cc {
+                    ch: 6,
+                    num: 64,
+                    val: 127
+                }
+            ),
+            "{:?}",
+            song.events[1].kind
+        );
+    }
+
+    /// The same guarantee across a SysEx event — the `0xF0` arm reads its own
+    /// length, so a latched `0xF0` swallows an arbitrary run of the track.
+    #[test]
+    fn running_status_survives_sysex_event() {
+        let mut track = vec![0x00, 0x92, 60, 100]; // explicit NoteOn ch 2
+        track.extend(gs_rhythm(0x0A, 1)); // GS SysEx between the two
+        track.extend([0x60, 60, 0]); // NoteOff via running status
+
+        let song = parse(&file_from_track(&track)).unwrap();
+
+        assert_eq!(song.events.len(), 3, "{:?}", song.events);
+        assert!(
+            matches!(song.events[2].kind, EvKind::NoteOff { ch: 2, key: 60 }),
+            "{:?}",
+            song.events[2].kind
+        );
+    }
+
+    /// A system status byte is used for its own event but must NOT become the
+    /// running status: after meta/SysEx the latch still holds the last CHANNEL
+    /// status, which is what the two tests above rely on.
+    #[test]
+    fn system_status_never_becomes_the_running_status() {
+        // No channel status has been seen when the data byte arrives, so the latch
+        // is still empty — that must surface as a clean error, never as a meta
+        // event parsed from the preceding 0xFF.
+        match parse(&file_from_track(&[
+            0x00, 0xFF, 0x59, 0x02, 0x00, 0x00, // meta first
+            0x00, 0x40, 0x7F, // data bytes with no channel status ever set
+        ])) {
+            Err(MidiError::BadStatusByte { status: 0 }) => {}
+            Err(e) => panic!("expected BadStatusByte {{ status: 0 }}, got {e:?}"),
+            Ok(_) => panic!("expected a clean error, not a silently parsed song"),
+        }
     }
 }

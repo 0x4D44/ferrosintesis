@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00030 — the harpsichord's LA sample onset does not track its vel_sense-compressed model, so at v100 the sustain edges out the quill attack (~12% late bloom)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,8 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law
-  alignment to k=2; caused by this change and diagnosed to the mechanism below)
+- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; caused by this change and diagnosed to the mechanism below) → Fixed (2026-07-25, Claude Opus 5 (1M) @ xhigh, `d1245e9`; shared `vel_sense` onset law and regression coverage landed) → Closed (2026-07-25, independently verified by Codex GPT-5; exact late-bloom observation red on `b736bd7` and green on `da8215c`; full repo gate green)
 
 ## Observation
 
@@ -137,6 +136,27 @@ reference modules give GM6 a near-square-law +6.6/+8.3 dB over v72→v110; ferro
 gives +0.89 dB (was −0.96). The remaining gap is `vel_sense: 0.15` itself — a deliberate
 physical-realism choice, and changing it is a re-voicing needing ears and all three guards
 re-decided together. See that bug.
+
+### Independent closure verification (2026-07-25 — Codex GPT-5)
+
+- Applied the fixed `assert_attack_is_peak` rule to pre-fix parent `b736bd7`.
+  `la_level_continuity` reproduced the recorded harpsichord-low failure exactly:
+  late window `0.06607` exceeded attack `0.05910`. The same test passed on
+  post-fix trunk `da8215c`.
+- `corrected_programs_still_rise_with_velocity` passed on post-fix trunk. Its
+  documented adversarial condition was also checked: reintroducing
+  `VEL_LEVEL_EXP[6] = 1.500` made it fail on GM6 with the recorded −2.44 dB
+  inversion, then it passed again after removing the temporary change. On the
+  complete pre-fix tree this secondary guard passes because the two old defects
+  cancel in the sampled composite; the attack oracle above is the red-before
+  regression for MM-BUG-KILN-00030.
+- Reviewed the root cause: both `Pluck` and `LaVoice` now use the shared sensed
+  velocity law, and only GM6 supplies `LaFx::vel_sense`. This directly restores
+  velocity-invariant onset/body tracking without changing the physical
+  `vel_sense` choice.
+- The refreshed repo gate passed on `da8215c`: fmt, workspace clippy,
+  modeled-only clippy, and workspace tests. No residual gap remains in this
+  bug; the distinct reference-fidelity question remains MM-BUG-KILN-00044.
 
 ## Provenance
 

@@ -80,3 +80,31 @@ to 0.02 (+1.7 dB).
 Blast radius: GM 93 appears in **no album** — only two demo files
 (`demos/ferrosintesis_reference/midi/03`, `demos/synth_feature_showcase/midi/04`),
 confirmed by scanning program-change events in all 141 committed MIDI files.
+
+## Render-diff inventory (2026-07-25) — complete, no unexpected diffs
+
+Baseline `3d64dc2` vs the change, all **141** committed MIDI files rendered by
+both release binaries and compared byte-for-byte: **132 identical, 10 changed,
+0 failures.** Every changed file is in the predicted set and nothing else moved.
+
+| changed file | why |
+|---|---|
+| `albums/fable5/Big Weather/midi/03 - Run the Rooftops.mid` | GM 84 |
+| `albums/fable5/The Burning Meridian/midi/01 - The Muster.mid` | GM 84 |
+| `albums/fable5/The Burning Meridian/midi/03 - Meridian.mid` | GM 84 |
+| `albums/fable5/Tuxedo Noir/midi/01 - Tuxedo Noir.mid` | GM 84 |
+| `albums/fable5/Big Weather/midi/04 - Glass Anthem.mid` | GM 85 |
+| `albums/fable5/Heliopause/midi/01 - Heliopause, Part One.mid` | GM 85 |
+| `albums/fable5/Heliopause/midi/02 - Heliopause, Part Two.mid` | GM 85 |
+| `demos/ferrosintesis_reference/midi/03 - Reed, Pipe, Lead, Pad.mid` | GM 84 + 85 + 93 |
+| `demos/synth_feature_showcase/midi/01 - Ignition Court.mid` | GM 84 + 85 |
+| `demos/synth_feature_showcase/midi/04 - Choir of Circuitry.mid` | GM 93 |
+
+One PREDICTED file did not change, and the reason is worth keeping:
+`albums/fable5/The Burning Meridian/midi/02 - Lanterns on the Water.mid` selects
+GM 84 but plays **zero note-ons** while that program is current — verified by
+counting note-ons per (channel, active program). Presence of a program-change
+event is not evidence a program sounds; only notes under it are. An inventory
+predicted from program changes alone will over-count.
+
+No album plays GM 93 — its two diffs are both demos.

@@ -58,7 +58,14 @@
   ensembles (+3.7..+4.3). Either the single-held-note probe biases slow-attack voices, or
   those shipped trims are stale. Only listening settles which; do NOT renumber them on the
   metric alone. Evidence: residual-oracle section of `_cal/derivation_v3.txt`.
-
+  (Re-verified 2026-07-25 and it REPRODUCES - every parked number lands within ~0.5 dB on a fresh
+  two-reference panel run on a different build. Evidence pointer moved: `_cal/derivation_v3.txt`
+  is git-ignored scratch and is gone; use `wrk_docs/2026.07.25 - M-CAL closed-loop re-derive
+  report.md` (appendix). Two things the note could not know: the AGGREGATE residual oracle passes
+  (median -0.22 dB SC-55 over 38 vetted programs), so these six are tails rather than a systemic
+  failure; and commit `4c24cb9` later changed the MODELED velocity exponents for GM 56/57/67 -
+  three of the six - so the residuals above predate it and should be re-read before acting.
+  MM-BUG-KILN-00118 covers the systemic half, that there is no committed residual baseline.)
 - [x] 2026.07.20 — **`gen_crate_lib.py` emits a non-rustfmt array for a SINGLE-file
   sample crate** — a one-element `static SAMPLES: [...] = [ (..),\n ];` that rustfmt
   rewrites to a one-line `= [(..)];`. Multi-file crates are unaffected (the multi-line
@@ -95,13 +102,27 @@
   wrapped zone whose `fade_end × 44100 × (f/root)` exceeds its length at 48/96 kHz still
   steps at dry-out (code-review A2). Generalize the taper (arming it globally breaks LA
   bit-identity pins, so it needs a coordinated re-pin) or assert budgets across all banks.
-
+  (Re-verified 2026-07-25, and RESCOPED - the "at 48/96 kHz" framing is wrong. Source-domain
+  consumption is `fade_end x 44100 x ratio`, which is rate-INDEPENDENT (the 44100/sr in `step`
+  cancels the longer output-domain fade), and KILN-00061 already fixed the eligibility guard to
+  key off the pitch ratio. What is real, at 44.1 kHz, is a SHORT zone against a LONG fade:
+  `end_taper` is armed in exactly one constructor (`wrap_var_classified`, guitars only) and
+  `guitar_zone_fade_budget` iterates only the four guitar banks, so ~25 other wrap sites are
+  unguarded. Candidates found on disk: LA_CELESTA fade end 0.30 s vs celesta_F#6 0.222 s /
+  celesta_C7 0.263 s; LA_SITAR 0.20 s vs sitar_G6 0.163 s / sitar_C6 0.192 s. Audibility is
+  UNPROVEN - the tail may already be near-silent, and `rel_gain` may have closed. Next step is a
+  measurement (extend `assert_wrap_seam` to celesta ~key 90 and sitar ~key 91), NOT a fix:
+  arming `end_taper` globally moves every LA voice and needs the full render-diff inventory.)
 - [ ] 2026.07.18 — **Closed vs pedal hi-hat are identical in the MODELED path, and the
   pedal hat carries a stick click it should not have.** Keys 42|44 share one `CymSpec`
   with `click: Some(...)` (`crates/ferrosintesis/src/drums.rs:~1661`). The sampled path
   distinguishes them (`HH_CLOSED` vs `HH_PEDAL`, `sampler.rs:~1942`), so this only bites
   `--no-samples`. Give 44 its own shorter/darker spec with the click removed.
-
+  (Re-verified 2026-07-25, and WIDER than parked: not `--no-samples`-only. Key 44 also reaches the
+  shared arm in a DEFAULT sampled build through ch-10 program change - PC 25 (Kit::V1) and PC 24
+  (Kit::Synth, which forces samples=false) - and the brush kit collapses 42|44 too
+  (`42 | 44 => brush_closed_hat`). Several albums are on the V1 kit. A `drums.rs` timbre change,
+  so it needs the full render-diff inventory; the pedal-hat voicing itself is an ear call.)
 - [ ] 2026.07.18 — **Ride bell (key 53) skipped the MetalPlate upgrade in the modeled
   path.** It is a fixed 6-mode inharmonic `d()` stack (`drums.rs:~1828`) while 49/51/52/
   55/57/59 route to `metal_plate`; the sampled `RIDE_BELL` has only 3 round robins. A busy
@@ -354,7 +375,10 @@
   cluster differentiation. Worked around in the darkening slice by keeping aah's default `vgains[2]`
   at 0.15 (off the floor). A clean fix: give `sf_open` its own state driven by an EXPLICIT cluster-open
   control from the CC70 path, independent of the F3 formant gain — a dedicated CC70 slice, not urgent.
-
+  (Re-verified 2026-07-25: still real, `sf_open = (vgains[2] / sf_ref_g3).min(1.3)`, and the aah
+  workaround is still load-bearing and commented as such. One thing to check first when someone
+  picks this up: the oracle `choir2_singers_formant_cluster` documents aah's default vgains[2] as
+  0.08 while the source says 0.15 - one of the two is stale.)
 - 2026.07.18 — XG/GS extra drum channels: XG bank MSB (CC0) == 127 is now routed to the
   drum path (`engine.rs` `Strip.xg_drum` / `Active.is_drum`), but two adjacent cases are
   deferred: (1) **Roland GS** declares a rhythm part via SysEx (`F0 41 .. 40 1x 15 mm F7`,
@@ -441,7 +465,15 @@
   for golden captures, or accept the tolerance as doing its job and drop this item.)
 
 - [ ] 2026-07-19 FINGERED BASS (GM 33, `BASS` preset) and UPRIGHT bass (GM 32, `UPRIGHT`) sound "more or less the same" to Arthur (showcase audition), despite the v0.12 §2.12 "widened 32/33 split". Expected: an electric flatwound (muffled, pickup-comb identity) vs a woody ACOUSTIC upright (corpus modes, fingertip thud, no pickup) should be clearly distinct. Investigate whether the split is audibly insufficient (or the showcase phrase just does not reveal it). Separate from the pluck redesign (a distinctiveness issue). crates/ferrosintesis/src/voices.rs BASS (~2773) + UPRIGHT (~2903).
-
+  (Re-verified 2026-07-25: the CODE does not corroborate "more or less the same" - the presets now
+  differ on t60 3.2 vs 1.8, out_lp 1150 vs 2200 Hz, sub 0.72 vs 0.15, attack_noise 0.12 vs 0.90,
+  and different body topologies. Two leads that survive anyway. (1) The framing is off: BASS has
+  `pickup: 0.34` but `pickup_rlc: (0,0)` - the electric bite is deliberately switched OFF for the
+  flatwound voicing - so the "pickup comb vs corpus modes" contrast does not actually exist.
+  (2) The real gap is oracle-shaped: `bass_articulations_distinct` only checks UPRIGHT.t60 <
+  BASS.t60 plus a body mode; NOTHING asserts the two RENDER distinguishably. Add that oracle
+  before touching the presets. Both `pos` values are ~0.37, i.e. effectively identical pluck
+  position, which is a plausible cause of the impression.)
 - [x] 2026-07-20 GM109 bagpipe zone coverage: the FreePats archive holds 26 WAVs (24 chanter takes + 2 drones) but `BAGPIPE_SOURCES` bakes only 8, ignoring A#4/B4/C#5/D#5/E5/F5/F#5 and every `_32` round robin. With `find_loop` now able to cut a clean short loop from any steady take, filling the ~2.5-semitone gaps (and adding an RR2) is cheap and would cut the repitch stretch. `tools/ferrosintesis-samples/prepare.py:572` (BAGPIPE_SOURCES), `crates/ferrosintesis/src/sampler.rs:2099` (chanter zones).
   (Already fixed: MM-REQ-KILN-00025, Satisfied 2026-07-25. `BAGPIPE_SOURCES` now bakes 17 members
   (2 drones + 10 chanter pitches + 5 `_32` round robins), worst repitch stretch ~1.9 semitones.
@@ -475,3 +507,12 @@
   atomic work cursor, sharing one decoded bank; the only `Mutex` in the synth is `#[cfg(test)]`.
   Nothing to fix. If the number is still wanted, `--jobs 1` vs `--jobs 6` on one file set
   answers it in minutes.)
+
+- [ ] 2026-07-25 - **BowedString keys 43-45: for some bow-force draws the bass regime turns noisy
+  enough to bury the vibrato FM entirely.** Split out of the 2026.07.14 wolf-band entry, whose main
+  claim (keys 46-50 mode-locking onto 3*f0) was fixed by MM-BUG-KILN-00012 (beta 0.127 -> 0.140).
+  This part was NOT fixed: pitch lands correctly on f0 at 43-45, but the vibrato oracle still routes
+  AROUND those keys, and the comment recording why is still live in `crates/ferrosintesis/src/
+  voices.rs` at the vibrato test ("same instability family as the wolf band"). Probed across seeds
+  7/11/13/17/23; keys 38 and 55 are clean on every seed. Re-parked so the residual does not
+  disappear with its parent entry.

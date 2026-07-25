@@ -1,6 +1,7 @@
 //! raw_dump — DEV-ONLY measurement tool (not shipped in the product binary).
 //!
-//! Renders a MIDI exactly as `render_opus.py` does (all CLI defaults) but writes
+//! Renders a MIDI on the shipping profile (`Options::default()`, as the CLI and
+//! `render-catalog` use) but writes
 //! the RAW, UN-normalized float buffer straight from `offline::render` to a
 //! 32-bit IEEE-float WAV — bypassing `normalize_to_i16` (the per-track peak
 //! normalizer). ffmpeg's ebur128 meter then reads that WAV to report the synth's
@@ -65,19 +66,21 @@ fn main() {
     // Identical echo-time policy to the CLI (main.rs): dotted quaver at opening
     // tempo, clamped [0.20, 0.62] s.
     let delay_s = (0.75 * 60.0 / song.initial_bpm() as f32).clamp(0.20, 0.62);
-    // Identical defaults to render_opus.py's invocation (it passes only -o/-q):
-    // rate 44100, wet 0.32, tail 6.0, samples on, all channels.
+    // Calibration only means anything if this renders exactly what ships, so take
+    // the profile from the library default — the same source the CLI now reads
+    // (MM-REQ-KILN-00032). The previous copy pinned rate/wet/tail/solo to literals
+    // and cited `render_opus.py`, which was retired when render-catalog replaced it.
+    //
+    // Only the two knobs this tool genuinely varies are set: the tempo-derived echo,
+    // and `--no-samples`, which is what makes the sampled-vs-modeled comparison
+    // possible (a note that renders bit-identically never engaged a sample).
     let opt = Options::default()
-        .with_sample_rate(44100)
-        .with_reverb(0.32)
-        .with_tail(6.0)
         .with_echo(delay_s)
-        .with_samples(!no_samples)
-        .with_solo(0xFFFF);
+        .with_samples(!no_samples);
     let (samples, stats) = offline::render(&song, &opt);
-    let lufs = offline::integrated_lufs(&samples, 44100);
-    let tp = offline::true_peak_dbtp(&samples, 44100);
-    write_f32_wav(&output, 44100, &samples).expect("write float WAV");
+    let lufs = offline::integrated_lufs(&samples, opt.sample_rate());
+    let tp = offline::true_peak_dbtp(&samples, opt.sample_rate());
+    write_f32_wav(&output, opt.sample_rate(), &samples).expect("write float WAV");
     // raw_sample_peak, voices, max_polyphony, our_integrated_LUFS, our_true_peak_dBTP
     // (for the differential check vs ffmpeg ebur128 on the same WAV).
     println!(

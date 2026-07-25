@@ -23,10 +23,19 @@ use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 // ---------------------------------------------------------------------------
-// Constants — kept in lockstep with ferrosintesis-cli's defaults, because the
-// retired render_opus.py drove the CLI with only `-q --tp-ceiling -4.5` and took
-// every other value from the CLI's own defaults. Changing one here silently
-// changes the whole catalog's sound: see the parameter-parity test below.
+// Constants — the catalog PINS its render profile rather than following the
+// library, deliberately: these values are the committed sound of every album, and
+// they must not move because a `ferrosintesis` default moved. (The retired
+// render_opus.py drove the CLI with only `-q --tp-ceiling -4.5` and inherited the
+// rest, which is where the values came from.)
+//
+// A pin is only a pin if something notices when it stops matching, so parity with
+// `Options::default()` is asserted from the gated side by
+// `ferrosintesis::render_profile::catalog_pins_match_the_library_default`, which
+// reads this file as source text. If a library default changes, that oracle goes
+// red and a human decides whether the albums re-render. `catalog_synth_options_
+// hold_their_pinned_values` below covers the other direction — an edit here.
+// MM-REQ-KILN-00032.
 // ---------------------------------------------------------------------------
 
 const BITRATE: &str = "96000"; // VBR; Opus at 96k is near-transparent for music
@@ -312,7 +321,19 @@ fn encoder_comments(artist: &str, track_total: usize, lyrics: Option<&str>) -> V
         format!("ALBUMARTIST={artist}"),
         format!("COMPOSER={artist}"),
         format!("TRACKTOTAL={track_total}"),
-        "ENCODER_SETTINGS=ferrosintesis(-18 LUFS)->ropusenc 96k VBR".to_string(),
+        // Derived from TARGET_LUFS and BITRATE, not restated. This tag is written
+        // into every shipped .opus, so a copied literal here is the one drift a
+        // listener could actually read: change TARGET_LUFS and the tag would have
+        // gone on claiming the old figure (MM-REQ-KILN-00032). Formatted to drop a
+        // trailing `.0`, which is what keeps the existing goldens byte-identical.
+        format!(
+            "ENCODER_SETTINGS=ferrosintesis({} LUFS)->ropusenc {}k VBR",
+            TARGET_LUFS,
+            BITRATE
+                .parse::<u32>()
+                .expect("BITRATE is a decimal integer")
+                / 1000
+        ),
         format!("R128_TRACK_GAIN={gain}"),
         format!("R128_ALBUM_GAIN={gain}"),
     ];
@@ -908,8 +929,24 @@ mod tests {
         );
     }
 
+    /// The catalog's own profile is PINNED — this proves the pin holds.
+    ///
+    /// Renamed from `synth_options_match_ferrosintesis_cli_defaults`, which is what it was
+    /// called while comparing these constants against literals written in this same file.
+    /// It never observed ferrosintesis-cli and structurally could not: the CLI has no lib
+    /// target (`Cargo.toml` declares only `[[bin]]`) and its defaults are `let mut` locals
+    /// inside `fn main`, so no Rust code anywhere can read them. A CLI-only change left this
+    /// green, which is the whole of MM-REQ-KILN-00032.
+    ///
+    /// The cross-entry-point half now lives in
+    /// `ferrosintesis::render_profile::catalog_pins_match_the_library_default`, which reads
+    /// `impl Default for Options` and this file as source text — the same technique
+    /// `engine.rs` already uses to reach `amp-lab` without depending on it.
+    ///
+    /// This test is still worth its lines: it detects a CATALOG-side edit, and it runs
+    /// `synth_options` for real, so it observes what this binary actually renders with.
     #[test]
-    fn synth_options_match_ferrosintesis_cli_defaults() {
+    fn catalog_synth_options_hold_their_pinned_values() {
         // These are the values render_opus.py caused the CLI to use: it passed only
         // `-q --tp-ceiling -4.5` and inherited every other default. If one of these
         // drifts, the whole catalog silently changes sound.

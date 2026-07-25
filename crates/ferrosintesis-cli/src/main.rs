@@ -27,12 +27,17 @@ fn usage() -> ! {
 fn main() {
     let mut input: Option<PathBuf> = None;
     let mut output: Option<PathBuf> = None;
-    let mut rate = 44100u32;
-    let mut wet = 0.32f32;
-    let mut tail = 6.0f32;
+    // The shipping renderer's defaults ARE the library's defaults, so read them
+    // rather than restate them (MM-REQ-KILN-00032). `impl Default for Options` in
+    // `ferrosintesis::offline` is the one definition; a copy here could drift from
+    // it silently, which is exactly what happened across the three entry points.
+    let d = Options::default();
+    let mut rate = d.sample_rate();
+    let mut wet = d.reverb();
+    let mut tail = d.tail();
     let mut delay_ms: Option<f32> = None;
-    let mut samples = true;
-    let mut solo = 0xFFFFu16; // all channels
+    let mut samples = d.samples();
+    let mut solo = d.solo(); // all channels
     let mut verbose = true;
     let mut peak_normalize = false; // legacy per-track peak normalization
     let mut target_lufs = -18.0f32; // BS.1770 integrated-loudness target

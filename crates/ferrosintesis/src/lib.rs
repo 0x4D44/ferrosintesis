@@ -110,6 +110,8 @@ mod parse_robustness;
 mod payload;
 #[cfg(test)]
 mod provenance;
+#[cfg(test)]
+mod render_profile;
 pub(crate) mod reverb;
 pub(crate) mod sampler;
 #[cfg(test)]

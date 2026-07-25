@@ -7693,7 +7693,7 @@ mod tests {
                          gap {gap_drop:.2} dB, 250ms {tail_drop:.2} dB"
                     );
                     // Bars DERIVED from the damper curve, not flat constants
-                    // (MM-BUG-KILN-00098). A 60 dB-per-T60 exponential predicts
+                    // (MM-BUG-KILN-00104). A 60 dB-per-T60 exponential predicts
                     // this key's drop; the old flat 4..10 dB band assumed every
                     // key shared one release, which is the thing the felt damper
                     // models away. Deriving it also TIGHTENS the test: the old
@@ -7811,7 +7811,7 @@ mod tests {
 
     /// The GM0 damper reaches the GM0 ALTERNATES, and stops there.
     ///
-    /// RESPECIFIED 2026.07.25 (MM-BUG-KILN-00097, Arthur). This oracle used to assert
+    /// RESPECIFIED 2026.07.25 (MM-BUG-KILN-00103, Arthur). This oracle used to assert
     /// the opposite — that the calibrated release must NOT reach the alternates — back
     /// when one `Option` argument switched the sample-layer gain and the damper
     /// together. That coupling was the bug: choosing a different *recording* also cut
@@ -7838,7 +7838,7 @@ mod tests {
         for (name, voice, control) in [
             (
                 // GM0 alternate: legacy sample calibration (its PCM is independently
-                // peak-normalized), but the GM0 damper — that is the 00097 fix.
+                // peak-normalized), but the GM0 damper — that is the 00103 fix.
                 "GM0 Salamander alternate",
                 crate::altbank::make(0, 1, 66, 104, sr, 1, true),
                 voices::acoustic_grand_with_bank(

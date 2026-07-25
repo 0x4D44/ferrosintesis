@@ -1065,7 +1065,7 @@ pub fn make(
             };
             // Every alternate bank is independently peak-normalized, so it keeps the
             // legacy layer gain. Its DAMPER is a different question, and until
-            // MM-BUG-KILN-00097 the two were welded together by one `Option`: the
+            // MM-BUG-KILN-00103 the two were welded together by one `Option`: the
             // GM0 alternates inherited a 0.10 s string release over a 0.06 s sample
             // release, against the GM0 default's 0.45 s. Arthur heard it as the B1
             // upright sounding thin and quiet on Tubular Bells, whose piano never

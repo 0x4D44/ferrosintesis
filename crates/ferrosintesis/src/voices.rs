@@ -1135,7 +1135,7 @@ pub(crate) fn is_acoustic_piano(program: u8) -> bool {
     matches!(program, 0 | 1 | 3)
 }
 
-/// The pre-2026.07.18 flat piano release. Test-only since MM-BUG-KILN-00098:
+/// The pre-2026.07.18 flat piano release. Test-only since MM-BUG-KILN-00104:
 /// no shipped voice uses a flat damper any more, but the oracles need the old
 /// value to prove the new curve actually differs from it.
 #[cfg(test)]
@@ -1145,7 +1145,7 @@ pub(crate) const GM0_RELEASE_T60: f32 = 0.45;
 /// How a sampled piano onset bank was normalized when it was baked. This decides
 /// the layer's make-up gain and crossfade — and NOTHING else.
 ///
-/// Split out of the old `release_t60: Option<f32>` argument (MM-BUG-KILN-00097).
+/// Split out of the old `release_t60: Option<f32>` argument (MM-BUG-KILN-00103).
 /// That one `Option` silently switched FIVE unrelated things at once: the model's
 /// release, the sampled layer's release, the layer gain, the crossfade, and the
 /// forte trim. The consequence was that picking a different *recording* also
@@ -1234,7 +1234,7 @@ impl PianoDamper {
     }
 }
 
-/// The GM0 damper: a modelled felt damper (MM-BUG-KILN-00098).
+/// The GM0 damper: a modelled felt damper (MM-BUG-KILN-00104).
 pub(crate) const GM0_DAMPER: PianoDamper = PianoDamper::Felt;
 
 /// The pre-2026.07.18 damper: a 0.10 s string release over a 0.06 s sample release,
@@ -1250,7 +1250,7 @@ pub(crate) const LEGACY_DAMPER: PianoDamper = PianoDamper::Flat {
 ///
 /// These travel together because they are what distinguishes the piano slots from
 /// each other — but they are INDEPENDENT of each other, which is the whole point of
-/// MM-BUG-KILN-00097. A slot may take the legacy sample calibration with the GM0
+/// MM-BUG-KILN-00103. A slot may take the legacy sample calibration with the GM0
 /// damper (every GM0 alternate does exactly that).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PianoVoicing {
@@ -1267,7 +1267,7 @@ pub(crate) const GM0_DEFAULT_VOICING: PianoVoicing = PianoVoicing {
 };
 
 /// Every GM0 CC0 alternate: independently peak-normalized PCM, GM0 damper.
-/// The damper no longer depends on which recording was selected (KILN-00097).
+/// The damper no longer depends on which recording was selected (KILN-00103).
 pub(crate) const GM0_ALTERNATE_VOICING: PianoVoicing = PianoVoicing {
     cal: PianoSampleCal::LegacyNormalized,
     damper: GM0_DAMPER,
@@ -8557,7 +8557,7 @@ const BOW_MIN_HZ: f32 = 20.0;
 /// doubles the requirement. The old fixed `DelayLine::new(320)` / `new(1600)` held C1 at
 /// 44.1 kHz (~1349 samples) but not at 96 kHz (~2936), and `DelayLine::tap` then walked
 /// off the front of the buffer — a debug panic, and a silent wrong-sample read in release
-/// (MM-BUG-KILN-00097).
+/// (MM-BUG-KILN-00074).
 ///
 /// `loop_comp` is deliberately not subtracted: it only ever shortens the delay, so
 /// ignoring it keeps this a safe upper bound. `+ 2` covers `tap`'s two-point
@@ -8702,7 +8702,7 @@ impl BowedString {
         // in tune.
         // The `BOW_MIN_HZ` floor is what bounds the loop length, and `bow_line_len` sizes
         // the two delay lines from the same constant. Keep them coupled: lowering this
-        // floor without regrowing the lines re-creates MM-BUG-KILN-00097.
+        // floor without regrowing the lines re-creates MM-BUG-KILN-00074.
         let total = (self.sr / f.max(BOW_MIN_HZ) - self.loop_comp).max(8.0);
         self.bridge_delay = (total * self.beta).max(1.0);
         self.neck_delay = (total * (1.0 - self.beta)).max(1.0);
@@ -13491,7 +13491,7 @@ mod tests {
         traj, traj_peak_time_s, RenderSignature, BW_TREM_PEAK_FLOOR,
     };
 
-    /// MM-BUG-KILN-00097: every program must render at every plausible output rate,
+    /// MM-BUG-KILN-00074: every program must render at every plausible output rate,
     /// right down to the bottom of the keyboard, without crashing.
     ///
     /// `Options::with_sample_rate` and `RealtimeOptions::with_sample_rate` validate
@@ -13524,7 +13524,7 @@ mod tests {
     }
 
     /// The bowed waveguide must survive a downward bend at a high rate too
-    /// (MM-BUG-KILN-00097).
+    /// (MM-BUG-KILN-00074).
     ///
     /// `set_freq` runs per SAMPLE off `base_f * bend * vib * drift`, so the loop can grow
     /// long after construction — the delay lines have to be sized for the floor
@@ -25785,7 +25785,7 @@ mod tests {
     }
 }
 
-/// Oracles for the modelled felt damper (MM-BUG-KILN-00098, Step 2).
+/// Oracles for the modelled felt damper (MM-BUG-KILN-00104, Step 2).
 ///
 /// Two layers, deliberately. The first pins the CURVE as a pure function — cheap,
 /// exact, and it fails loudly if anyone re-flattens it. The second proves the

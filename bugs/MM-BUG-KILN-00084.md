@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00084 — amp-lab's peak meter misses peaks between UI polls
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** amp-lab / telemetry
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/amp-lab/`)
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/amp-lab/`) → Fixed (2026-07-25, Codex GPT-5.6-Sol; callbacks now retain the interval maximum and the UI consumes it exactly once; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -34,10 +34,23 @@ because Drive changes level.
 
 ## Fix
 
-Accumulate with an atomic maximum in the callback and have the UI consume/reset
-the interval using `swap(0, ...)`. Add a deterministic test that publishes a
-high peak followed by quieter callbacks before one UI read, then proves the high
-peak is returned exactly once.
+Implemented in `crates/amp-lab/src/audio.rs` and `crates/amp-lab/src/main.rs`.
+The audio callback now publishes through relaxed `AtomicU32::fetch_max`; the UI
+consumes and resets the interval with `swap(0, Ordering::Relaxed)`. The atomic's
+field is private so callers cannot accidentally restore last-block load/store
+semantics.
+
+The regression publishes 0.42, 1.25, then 0.73 before one read. It proves the
+read returns 1.25 and the following read returns zero.
+
+Validation on 2026-07-25:
+
+- Focused interval peak regression: 1 passed.
+- Full `amp-lab` suite: 26 passed.
+- `cargo clippy -p amp-lab --all-targets -- -D warnings`: passed.
+- Rust 1.87 probe: not runnable because the existing `image 0.25.10` dev-tool
+  dependency requires Rust 1.88. The repository already excludes `amp-lab`
+  from its Rust 1.87 integration component.
 
 ## Notes
 

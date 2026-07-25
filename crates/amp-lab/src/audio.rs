@@ -20,8 +20,21 @@ use crate::seq::{Loop, Player};
 pub struct Meters {
     pub voices: AtomicUsize,
     /// Peak output since the last read, as a fixed-point 0..10000 of full scale.
-    pub peak_x1e4: AtomicU32,
+    peak_x1e4: AtomicU32,
     pub xruns: AtomicUsize,
+}
+
+impl Meters {
+    /// Retain the loudest callback until the UI consumes this polling interval.
+    fn publish_peak(&self, peak: f32) {
+        let peak_x1e4 = (peak.min(9.999) * 1e4) as u32;
+        self.peak_x1e4.fetch_max(peak_x1e4, Ordering::Relaxed);
+    }
+
+    /// Consume the peak accumulated since the previous call.
+    pub fn take_peak_x1e4(&self) -> u32 {
+        self.peak_x1e4.swap(0, Ordering::Relaxed)
+    }
 }
 
 pub struct Engine {
@@ -306,8 +319,7 @@ pub fn start(rx: Consumer, midi: &[u8]) -> Result<Engine, String> {
                     last_xruns = core.xruns;
                 }
                 m.voices.store(core.active_voice_count(), Ordering::Relaxed);
-                m.peak_x1e4
-                    .store((peak.min(9.999) * 1e4) as u32, Ordering::Relaxed);
+                m.publish_peak(peak);
             },
             move |e| {
                 eprintln!("audio stream error: {e}");
@@ -346,6 +358,17 @@ mod tests {
     /// `RealtimeSynth`'s internal block — the residual quantization a span-splitting
     /// caller cannot beat without a timestamped command surface in the synth itself.
     const SYNTH_BLOCK: usize = 64;
+
+    #[test]
+    fn interval_peak_survives_quieter_callbacks_and_is_consumed_once() {
+        let meters = Meters::default();
+        meters.publish_peak(0.42);
+        meters.publish_peak(1.25);
+        meters.publish_peak(0.73);
+
+        assert_eq!(meters.take_peak_x1e4(), 12_500);
+        assert_eq!(meters.take_peak_x1e4(), 0);
+    }
 
     /// A one-track SMF with the given (tick, bytes) events at 480 ppq / 120 bpm, so one
     /// tick is 1/960 s and tick 1000 lands on frame 45937.

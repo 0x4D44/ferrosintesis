@@ -275,7 +275,7 @@ impl eframe::App for Lab {
             // ---- meters ----
             if let Some(e) = &self.engine {
                 let v = e.meters.voices.load(Ordering::Relaxed);
-                let peak = e.meters.peak_x1e4.load(Ordering::Relaxed) as f32 / 1e4;
+                let peak = e.meters.take_peak_x1e4() as f32 / 1e4;
                 let xr = e.meters.xruns.load(Ordering::Relaxed);
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(format!("voices {v}")).small().weak());

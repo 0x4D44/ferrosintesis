@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00100 — Sympathetic comb tap still flushes at 1e-20, the floor KILN-00027 proved wrong
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** engine / dsp
@@ -18,13 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 4.5 during the
-  ferrosintesis review-remediation build; found by reading `dsp::flush_denormal`'s own
-  doc comment against the call sites it was written to govern)
-  → Fixed (2026-07-25, Claude Opus 4.5; routed through `dsp::flush_denormal`. Render-diff
-  over 124 catalog MIDIs: 0 changed / 124 identical / 0 contamination — byte-neutral, which
-  contradicted the raising prediction of audible diffs; the "Suggested fix" section records
-  why. Awaits independent two-eyes closure.)
+- **State history:** Open (2026-07-25, raised by Claude Opus 4.5 during the ferrosintesis review-remediation build; found by reading `dsp::flush_denormal`'s own doc comment against the call sites it was written to govern) → Fixed (2026-07-25, Claude Opus 4.5; routed through `dsp::flush_denormal`. Render-diff over 124 catalog MIDIs: 0 changed / 124 identical / 0 contamination — byte-neutral, which contradicted the raising prediction of audible diffs; the "Suggested fix" section records why. Awaits independent two-eyes closure.) → Closed (2026-07-25, Codex GPT-5; independently proved the pre-fix Sympathetic path discards a normal `1e-25` tap and the fixed path preserves it bit-exactly through the shared `1e-34` floor; the persistent floor and sympathetic-bus tests plus the complete repository gate passed.)
 
 ## Observation
 
@@ -101,3 +95,19 @@ wrong site.
 
 Keep `reverb::tests::tanks_do_not_park_below_the_flush_floor` in lockstep, as
 `dsp.rs:327` instructs.
+
+### Independent closure verification (2026-07-25 — Codex GPT-5)
+
+- Inspected the fixed path and confirmed `Sympathetic::process` now passes every comb tap
+  through `dsp::flush_denormal`; the only threshold is the shared `1e-34` floor.
+- Added the same temporary behavioral verifier to the pre-fix parent
+  `dba058983f9fb4dc8e9211d235c2dc363a0fe859` and the fixed tree. It seeded a
+  `Sympathetic` comb so its next tap was exactly `1e-25`, then processed one silent frame.
+  The pre-fix path failed because the output was zero, directly reproducing the hand-rolled
+  `1e-20` truncation.
+- The fixed tree passed the same verifier bit-for-bit: both wet channels retained the
+  `1e-25` tap. The temporary verifier was then removed cleanly from both worktrees.
+- The persistent `reverb::tests::tanks_do_not_park_below_the_flush_floor` shared-floor
+  guard and `engine::tests::guitar_sympathetic_rings_open_strings` functional oracle passed.
+- The repository gate passed: formatting, workspace Clippy excluding `amp-lab`, modeled-only
+  `ferrosintesis` Clippy, and workspace tests excluding `amp-lab`.

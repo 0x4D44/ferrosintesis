@@ -3109,6 +3109,17 @@ pub struct LaVoice {
     rr: Option<RoundRobin>,
 }
 
+/// Result of attempting to layer an LA sample over a modeled sustain.
+///
+/// Most callers only need [`LaVoiceBuild::voice`]. Voice construction also uses
+/// [`LaVoiceBuild::used_sample`] to select the velocity calibration for the
+/// voice that was actually built: an extreme-repitch fallback is the bare model
+/// even when samples were requested.
+pub(crate) struct LaVoiceBuild {
+    pub(crate) voice: Box<dyn Voice>,
+    pub(crate) used_sample: bool,
+}
+
 /// Which take a round-robin bank is currently playing, and how to reach the next.
 #[derive(Clone, Copy)]
 struct RoundRobin {
@@ -3137,7 +3148,24 @@ impl LaVoice {
         gain: f32,
         fade: (f32, f32),
     ) -> Box<dyn Voice> {
-        Self::wrap_fx(sustain, zones, key, vel, sr, gain, fade, LaFx::default())
+        Self::wrap_classified(sustain, zones, key, vel, sr, gain, fade).voice
+    }
+
+    /// [`Self::wrap`] plus whether the sample layer was actually constructed.
+    ///
+    /// A `false` result means the pitch was outside the credible repitch range
+    /// and [`LaVoice::build`] returned the bare modeled sustain.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn wrap_classified(
+        sustain: Box<dyn Voice>,
+        zones: &'static [Zone],
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+    ) -> LaVoiceBuild {
+        Self::wrap_fx_classified(sustain, zones, key, vel, sr, gain, fade, LaFx::default())
     }
 
     /// [`Self::wrap`] for a bank that carries several ROUND-ROBIN takes.
@@ -3220,6 +3248,20 @@ impl LaVoice {
         fade: (f32, f32),
         fx: LaFx,
     ) -> Box<dyn Voice> {
+        Self::wrap_fx_classified(sustain, zones, key, vel, sr, gain, fade, fx).voice
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn wrap_fx_classified(
+        sustain: Box<dyn Voice>,
+        zones: &'static [Zone],
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+        fx: LaFx,
+    ) -> LaVoiceBuild {
         match Self::build(
             sustain,
             zones,
@@ -3231,8 +3273,14 @@ impl LaVoice {
             fx,
             DEFAULT_LA_RELEASE_T60,
         ) {
-            Ok(la) => Box::new(la),
-            Err(model) => model,
+            Ok(la) => LaVoiceBuild {
+                voice: Box::new(la),
+                used_sample: true,
+            },
+            Err(model) => LaVoiceBuild {
+                voice: model,
+                used_sample: false,
+            },
         }
     }
 
@@ -3286,6 +3334,23 @@ impl LaVoice {
         var: OnsetVar,
         seed: u32,
     ) -> Box<dyn Voice> {
+        Self::wrap_var_classified(sustain, zones, key, vel, sr, gain, fade, fx, var, seed).voice
+    }
+
+    /// [`Self::wrap_var`] plus whether the sample layer was actually constructed.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn wrap_var_classified(
+        sustain: Box<dyn Voice>,
+        zones: &'static [Zone],
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+        fx: LaFx,
+        var: OnsetVar,
+        seed: u32,
+    ) -> LaVoiceBuild {
         let mut rng = crate::dsp::Rng::new(seed ^ 0x00A1_51C5);
         let strata = [-0.5f32, -0.25, 0.0, 0.25, 0.5];
         let cents = strata[(seed >> 3) as usize % strata.len()] * var.detune_strata_c
@@ -3318,9 +3383,15 @@ impl LaVoice {
                 // seat the model at the locked detune; later performance
                 // pitch updates compose var_mult × mult in set_pitch()
                 la.sustain.set_pitch(var_mult);
-                Box::new(la)
+                LaVoiceBuild {
+                    voice: Box::new(la),
+                    used_sample: true,
+                }
             }
-            Err(model) => model,
+            Err(model) => LaVoiceBuild {
+                voice: model,
+                used_sample: false,
+            },
         }
     }
 

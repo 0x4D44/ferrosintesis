@@ -75,11 +75,15 @@ mod tests {
         voices::make_uncorrected_for_test(program, key, vel, SR, SEED, true)
     }
 
-    fn melodic_level(program: u8, key: u8, vel: u8) -> f32 {
+    fn melodic_level_with_samples(program: u8, key: u8, vel: u8, samples: bool) -> f32 {
         level_db(&render(
-            voices::make(program, key, vel, SR, SEED, true),
+            voices::make(program, key, vel, SR, SEED, samples),
             1.2,
         ))
+    }
+
+    fn melodic_level(program: u8, key: u8, vel: u8) -> f32 {
+        melodic_level_with_samples(program, key, vel, true)
     }
 
     fn drum_level_kit_s(key: u8, vel: u8, kit: drums::Kit, samples: bool) -> Option<f32> {
@@ -178,7 +182,9 @@ mod tests {
             //   k = s + e_old  =>  e_new = e_old + (2 - k)
             // Using `4 - k` here would be right only for an uncompensated voice, and
             // silently wrong for every entry already in the table.
-            let e_old = crate::voices::VEL_LEVEL_EXP[p as usize];
+            let e48 = crate::voices::velocity_exp_for_test(p, 48, 127, SR, SEED, true);
+            let e60 = crate::voices::velocity_exp_for_test(p, 60, 127, SR, SEED, true);
+            let e_old = 0.5 * (e48 + e60);
             let e_new = e_old + (2.0 - k);
             let mut flag = String::new();
             if (k48 - 2.0).abs() > 0.15 || (k60 - 2.0).abs() > 0.15 {
@@ -190,7 +196,7 @@ mod tests {
             if !flag.is_empty() {
                 println!(
                     "GM{p:<5} {k48:>9.3} {k60:>10.3} {spread:>10.3}   \
-                     e_old {e_old:.3} -> e_new {e_new:.3}{flag}"
+                     e_old {e_old:.3} ({e48:.3}/{e60:.3}) -> e_new {e_new:.3}{flag}"
                 );
             }
         }
@@ -374,10 +380,8 @@ mod tests {
             //         PINNED POSITIVELY: `looped_recording_voices_keep_their_documented_
             //         velocity_behaviour` (samples-on span) and `modeled_gm76_follows_
             //         the_square_law_in_no_samples_builds` (the modeled `--no-samples` /
-            //         repitch-fallback path). NOTE: that path is NOT compensated
-            //         samples-aware — there is no `melodic_vel_level_exp`;
-            //         `VEL_LEVEL_EXP` is program-indexed, so the modeled voice inherits
-            //         the sampled voice's exponent. MM-BUG-KILN-00105.
+            //         repitch-fallback path). That model carries its measured exponent
+            //         in-arm, while the recording stays bare.
             if p == 6 || p == 76 || p == 96 || p == 109 || p == 42 || p == 43 {
                 continue;
             }
@@ -415,12 +419,15 @@ mod tests {
             106, 107,
         ];
         for p in PLUCK_PROGRAMS {
-            let e = crate::voices::VEL_LEVEL_EXP[p as usize];
-            assert!(
-                (1.5..=2.35).contains(&e),
-                "GM{p} VEL_LEVEL_EXP {e:.3} outside the [1.5, 2.35] anti-papering bound — \
-                 a compensation this large is a mechanism, not a trim; fix the pp voicing"
-            );
+            for samples in [true, false] {
+                let e = crate::voices::velocity_exp_for_test(p, 60, 100, SR, SEED, samples);
+                assert!(
+                    (1.5..=2.35).contains(&e),
+                    "GM{p} effective velocity exponent {e:.3} (samples={samples}) outside \
+                     the [1.5, 2.35] anti-papering bound — a compensation this large is a \
+                     mechanism, not a trim; fix the pp voicing"
+                );
+            }
         }
     }
 
@@ -506,11 +513,8 @@ mod tests {
     ///
     /// It regressed silently: removing `VEL_LEVEL_EXP[76]=1.450` (correct — it was
     /// double-correcting the self-compensating loop) also dropped the modeled
-    /// path's compensation, because `VEL_LEVEL_EXP` is program-indexed, not
-    /// samples-aware. The samples-on sweep can't see it (there GM76 is the loop).
-    /// This pins the modeled path. NOTE: the compensation is NOT samples-aware — there
-    /// is no `melodic_vel_level_exp`; `VEL_LEVEL_EXP` is program-indexed and the modeled
-    /// voice inherits the sampled exponent. MM-BUG-KILN-00105.
+    /// path's compensation. GM76 now carries that exponent on its model branch,
+    /// which covers both explicit sample opt-out and repitch fallback.
     #[test]
     fn modeled_gm76_follows_the_square_law_in_no_samples_builds() {
         for &key in &FIT_KEYS {
@@ -530,8 +534,72 @@ mod tests {
         }
     }
 
-    /// A program that CARRIES a `VEL_LEVEL_EXP` correction must still get louder as it
-    /// is played harder — derived from the table itself, so it needs no maintenance.
+    /// MM-BUG-KILN-00105: a requested sample layer may still produce a bare model
+    /// after the embedded-sample clamp or an extreme-repitch rejection. The
+    /// correction must follow that result, not the GM program or caller flag.
+    #[test]
+    fn modeled_velocity_calibration_follows_the_voice_actually_built() {
+        const CASES: [(u8, f32); 8] = [
+            (24, 2.350),
+            (56, 1.428),
+            (57, 1.118),
+            (59, 1.308),
+            (64, 1.716),
+            (65, 1.685),
+            (66, 1.645),
+            (67, 1.599),
+        ];
+
+        for (program, modeled_exp) in CASES {
+            let explicit_model = voices::velocity_exp_for_test(program, 60, 100, SR, SEED, false);
+            assert_eq!(
+                explicit_model, modeled_exp,
+                "GM{program} explicit model selected the sampled/composite calibration"
+            );
+
+            if crate::embedded_samples_available() {
+                let sampled = voices::velocity_exp_for_test(program, 60, 100, SR, SEED, true);
+                assert_eq!(
+                    sampled,
+                    voices::VEL_LEVEL_EXP[program as usize],
+                    "GM{program} eligible sample path selected the modeled calibration"
+                );
+
+                let repitch_fallback =
+                    voices::velocity_exp_for_test(program, 0, 100, SR, SEED, true);
+                assert_eq!(
+                    repitch_fallback, modeled_exp,
+                    "GM{program} extreme-repitch fallback kept the sampled calibration"
+                );
+            }
+        }
+    }
+
+    /// The eight model paths whose sampled voices have a different measured
+    /// response must satisfy the square law in a default binary with runtime
+    /// samples disabled. Compile-time no-sample coverage alone cannot catch that
+    /// dispatch seam.
+    #[test]
+    fn runtime_sample_opt_out_models_follow_the_square_law() {
+        for program in [24u8, 56, 57, 59, 64, 65, 66, 67] {
+            for key in FIT_KEYS {
+                let levels: Vec<(u8, f32)> = FIT_VELS
+                    .iter()
+                    .map(|&vel| (vel, melodic_level_with_samples(program, key, vel, false)))
+                    .collect();
+                let k = fit_k(&levels);
+                assert!(
+                    (k - 2.0).abs() <= 0.2,
+                    "modeled GM{program} (--no-samples) key {key}: velocity exponent \
+                     {k:.3}, want 2.0 +/- 0.2"
+                );
+            }
+        }
+    }
+
+    /// A program that carries an effective velocity correction must still get
+    /// louder as it is played harder. The set is derived from voice construction,
+    /// so it includes model-only overrides as well as the program table.
     ///
     /// The correction is `(v/127)^(e-2)`, which for `e < 2` RISES as velocity falls. It
     /// is safe only under the premise `apply_vel_correction` states — "the voice already
@@ -544,13 +612,15 @@ mod tests {
     /// harpsichord 5.02 dB louder at v40 than at v127 — backwards, and under
     /// `--no-samples` too (MM-BUG-KILN-00044). This is the guard that fails on that.
     ///
-    /// Derived, not a list: it walks every program the table actually corrects, so a
-    /// future entry on another compressed voice is caught the day it lands. The
-    /// uncorrected voices are covered by the square-law sweep and its named exemptions.
+    /// Derived, not a list: it walks every program construction that applies a
+    /// correction, so a future entry on another compressed voice is caught the day
+    /// it lands. Uncorrected voices are covered by the square-law sweep and its
+    /// named exemptions.
     #[test]
     fn corrected_programs_still_rise_with_velocity() {
-        let corrected: Vec<u8> = (0u8..128)
-            .filter(|&p| voices::VEL_LEVEL_EXP[p as usize] != 2.0)
+        let corrected: Vec<(u8, f32)> = (0u8..128)
+            .map(|p| (p, voices::velocity_exp_for_test(p, 60, 120, SR, SEED, true)))
+            .filter(|(_, exp)| *exp != 2.0)
             .collect();
         assert!(
             corrected.len() > 10,
@@ -558,14 +628,13 @@ mod tests {
             corrected.len()
         );
         let mut backwards = Vec::new();
-        for p in corrected {
+        for (p, exp) in corrected {
             let soft = melodic_level(p, 60, 48);
             let loud = melodic_level(p, 60, 120);
             if loud <= soft {
                 backwards.push(format!(
-                    "GM{p} (e={:.3}): v48 {soft:.2} dB -> v120 {loud:.2} dB ({:+.2})",
-                    voices::VEL_LEVEL_EXP[p as usize],
-                    loud - soft
+                    "GM{p} (e={exp:.3}): v48 {soft:.2} dB -> v120 {loud:.2} dB ({:+.2})",
+                    loud - soft,
                 ));
             }
         }

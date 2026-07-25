@@ -12670,11 +12670,12 @@ pub fn make_variation(
 /// The reference modules are sample players, where velocity only scales a recording,
 /// so they have no such second path and land on 2.0 naturally.
 ///
-/// This table carries the exponent `q` the output gain must contribute so the
-/// RENDERED aggregate lands on 2.0: with excitation slope `s`, the measured
-/// aggregate is `2 + s`, so `q = 4 − measured`. Timbre is untouched — the bite,
-/// chiff and bow-speed responses still track velocity exactly as before; only the
-/// level law is corrected.
+/// This table carries the default exponent `q` the output gain must contribute so
+/// the RENDERED aggregate lands on 2.0: with excitation slope `s`, the measured
+/// aggregate is `2 + s`, so `q = 4 − measured`. Programs whose sampled and modeled
+/// constructions differ carry a model-only override on [`UncorrectedVoice`].
+/// Timbre is untouched — the bite, chiff and bow-speed responses still track
+/// velocity exactly as before; only the level law is corrected.
 ///
 /// **Every non-2.0 entry is MEASURED, never chosen.** Re-derive with
 /// `cargo test -p ferrosintesis --lib velocity_census -- --ignored --nocapture`,
@@ -12751,35 +12752,38 @@ const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     t
 };
 
-/// Samples-on calibration for the default composite voices.
-#[cfg(feature = "embedded-samples")]
+/// Default calibration for program-stable voices and sampled composites.
+///
+/// Programs whose sampled and modeled constructions need different calibration
+/// carry the model exponent on [`UncorrectedVoice`] instead. That provenance is
+/// selected by the branch that actually built the voice, including repitch
+/// fallback in a samples-on build.
 pub(crate) const VEL_LEVEL_EXP: [f32; 128] = EMBEDDED_VEL_LEVEL_EXP;
 
-/// Modeled-only calibration for the shipped `--no-default-features` build.
+/// Measured model-only calibration for programs whose sampled construction has
+/// a different velocity response. `None` means the program table remains valid.
 ///
-/// These eight programs use sampled/composite calibrations in the default
-/// build but dispatch only to their physical models here. The overrides were
-/// re-derived with the modeled-only velocity census. GM24 is capped at the
-/// pluck anti-papering bound; its residual still lands inside the square-law
-/// oracle. Runtime sample opt-out and out-of-zone fallback in a default build
-/// remain the separate voice-aware calibration defect MM-BUG-KILN-00105.
-#[cfg(not(feature = "embedded-samples"))]
-pub(crate) const VEL_LEVEL_EXP: [f32; 128] = {
-    let mut t = EMBEDDED_VEL_LEVEL_EXP;
-    t[24] = 2.350;
-    t[56] = 1.428;
-    t[57] = 1.118;
-    t[59] = 1.308;
-    t[64] = 1.716;
-    t[65] = 1.685;
-    t[66] = 1.645;
-    t[67] = 1.599;
-    t
-};
+/// This is consulted only after the constructor reports that it built the bare
+/// model. GM24 is capped at the pluck anti-papering bound; its residual remains
+/// inside the square-law oracle.
+fn modeled_vel_level_exp(program: u8) -> Option<f32> {
+    match program {
+        24 => Some(2.350),
+        56 => Some(1.428),
+        57 => Some(1.118),
+        59 => Some(1.308),
+        64 => Some(1.716),
+        65 => Some(1.685),
+        66 => Some(1.645),
+        67 => Some(1.599),
+        _ => None,
+    }
+}
 
-/// A voice scaled by a constant gain. Used only to apply [`VEL_LEVEL_EXP`], which
-/// must wrap the COMPOSITE — correcting inside the model alone would leave any
-/// sampled onset layer uncorrected and drift the crossfade ratio with velocity.
+/// A voice scaled by a constant gain. Used only to apply the measured velocity
+/// exponent, which must wrap the COMPOSITE when a sample layer is present —
+/// correcting inside the model alone would leave the sampled onset uncorrected
+/// and drift the crossfade ratio with velocity.
 ///
 /// **Hazard for differential tests.** Because this wraps at `make()`, a test that
 /// subtracts a directly-constructed model (`Pluck::new`, `render_pluck`, …) from a
@@ -12882,21 +12886,23 @@ impl Voice for ScaledVoice {
 }
 
 pub fn make(program: u8, key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
-    apply_vel_correction(
-        make_uncorrected(program, key, vel, sr, seed, samples),
-        program,
-        vel,
-    )
+    let built = make_uncorrected(program, key, vel, sr, seed, samples);
+    apply_vel_correction(built.voice, program, vel, built.vel_exp_override)
 }
 
-/// Apply the [`VEL_LEVEL_EXP`] composite correction to an already-built voice.
+/// Apply the constructed voice's measured velocity correction.
 ///
 /// Factored out of [`make`] so the alt-bank bass constructor ([`bass_la_alt`])
 /// applies the IDENTICAL law. A divergence here would make the CC0 alt bank a
 /// differently-scaled instrument rather than a different timbre, which is
 /// exactly the confusion `ScaledVoice`'s own doc comment warns about.
-fn apply_vel_correction(voice: Box<dyn Voice>, program: u8, vel: u8) -> Box<dyn Voice> {
-    let exp = VEL_LEVEL_EXP[program as usize];
+fn apply_vel_correction(
+    voice: Box<dyn Voice>,
+    program: u8,
+    vel: u8,
+    exp_override: Option<f32>,
+) -> Box<dyn Voice> {
+    let exp = exp_override.unwrap_or(VEL_LEVEL_EXP[program as usize]);
     if exp == 2.0 {
         return voice;
     }
@@ -12931,7 +12937,7 @@ pub(crate) fn bass_la_alt(
 ) -> Box<dyn Voice> {
     // `make_uncorrected` now yields the BARE model for 32..=35, so this reuses the
     // preset selection rather than restating it.
-    let model = make_uncorrected(program, key, vel, sr, seed, false);
+    let model = make_uncorrected(program, key, vel, sr, seed, false).voice;
     let voice = if samples {
         let (bank, (gain, fade)) = match program {
             32 => (crate::sampler::pizzbass_bank(), LA_PIZZBASS),
@@ -12952,7 +12958,7 @@ pub(crate) fn bass_la_alt(
     } else {
         model
     };
-    apply_vel_correction(voice, program, vel)
+    apply_vel_correction(voice, program, vel, None)
 }
 
 /// Test hook: construct a voice WITHOUT the `VEL_LEVEL_EXP` correction, so the
@@ -12966,7 +12972,30 @@ pub(crate) fn make_uncorrected_for_test(
     seed: u32,
     samples: bool,
 ) -> Box<dyn Voice> {
-    make_uncorrected(program, key, vel, sr, seed, samples)
+    make_uncorrected(program, key, vel, sr, seed, samples).voice
+}
+
+/// Test hook for the correction selected by the voice constructor.
+#[cfg(test)]
+pub(crate) fn velocity_exp_for_test(
+    program: u8,
+    key: u8,
+    vel: u8,
+    sr: f32,
+    seed: u32,
+    samples: bool,
+) -> f32 {
+    let built = make_uncorrected(program, key, vel, sr, seed, samples);
+    built
+        .vel_exp_override
+        .unwrap_or(VEL_LEVEL_EXP[program as usize])
+}
+
+struct UncorrectedVoice {
+    voice: Box<dyn Voice>,
+    /// Present only when the actual constructed voice needs a different
+    /// calibration from the program's default sampled/composite voice.
+    vel_exp_override: Option<f32>,
 }
 
 fn make_uncorrected(
@@ -12976,10 +13005,11 @@ fn make_uncorrected(
     sr: f32,
     seed: u32,
     samples: bool,
-) -> Box<dyn Voice> {
+) -> UncorrectedVoice {
     let samples = samples && crate::embedded_samples_available();
     let noise_off = (0.0, 0.01, 1000.0, 1.0);
-    match program {
+    let mut vel_exp_override = None;
+    let voice: Box<dyn Voice> = match program {
         // GM 0-3 pianos — re-voiced 2026.07.18 (PLN in wrk_docs). Each program has a
         // DISTINCT default recording + its own CC0 alternates (altbank::make); 2 is the
         // CP-style electric grand, fully modeled. 0/1 ride the shared
@@ -13327,7 +13357,7 @@ fn make_uncorrected(
                 // velocity-brightness readout filter (the two guitar arms
                 // are the ONLY wrap_var callers — non-guitar LA paths keep
                 // the jitter-free constructor by construction)
-                crate::sampler::LaVoice::wrap_var(
+                let built = crate::sampler::LaVoice::wrap_var_classified(
                     model,
                     crate::sampler::guitar_bank(),
                     key,
@@ -13341,8 +13371,13 @@ fn make_uncorrected(
                     },
                     crate::sampler::GUITAR_VAR,
                     seed,
-                )
+                );
+                if !built.used_sample {
+                    vel_exp_override = modeled_vel_level_exp(program);
+                }
+                built.voice
             } else {
+                vel_exp_override = modeled_vel_level_exp(program);
                 model
             }
         }
@@ -13509,7 +13544,7 @@ fn make_uncorrected(
                 } else {
                     gain
                 };
-                crate::sampler::LaVoice::wrap(
+                let built = crate::sampler::LaVoice::wrap_classified(
                     model,
                     crate::sampler::brass_bank(program, vel),
                     key,
@@ -13517,8 +13552,13 @@ fn make_uncorrected(
                     sr,
                     gain,
                     fade,
-                )
+                );
+                if !built.used_sample {
+                    vel_exp_override = modeled_vel_level_exp(program);
+                }
+                built.voice
             } else {
+                vel_exp_override = modeled_vel_level_exp(program);
                 model
             }
         }
@@ -13536,9 +13576,15 @@ fn make_uncorrected(
         // re-adds the model purely as a vibrato/brightness/breath modulator on the loop.)
         64..=67 => {
             if samples {
-                crate::sampler::sax_loop_voice(program, key, vel, sr, seed)
-                    .unwrap_or_else(|| Box::new(reed(program, key, vel, sr, seed)))
+                match crate::sampler::sax_loop_voice(program, key, vel, sr, seed) {
+                    Some(voice) => voice,
+                    None => {
+                        vel_exp_override = modeled_vel_level_exp(program);
+                        Box::new(reed(program, key, vel, sr, seed))
+                    }
+                }
             } else {
+                vel_exp_override = modeled_vel_level_exp(program);
                 Box::new(reed(program, key, vel, sr, seed))
             }
         }
@@ -13741,6 +13787,10 @@ fn make_uncorrected(
         80..=87 => Box::new(lead(program, key, vel, sr, seed)),
         88..=95 => Box::new(pad(program, key, vel, sr, seed)),
         _ => Box::new(Pluck::new(&STEEL, key, vel, sr, seed)),
+    };
+    UncorrectedVoice {
+        voice,
+        vel_exp_override,
     }
 }
 
@@ -15162,9 +15212,10 @@ mod tests {
     /// corner and decay shape are unchanged), but re-deriving `VEL_LEVEL_EXP[24]`
     /// 2.0→2.119 pivots the level law at vel 127, dropping the vel-100 level by
     /// (100/127)^0.119 = 0.972 (−0.247 dB). BASS (GM33) is un-re-derived, so its
-    /// signature stays bit-identical and remains the control. The modeled-only
-    /// GM24 calibration (2.350) moves only NYLON's RMS to -22.675 dB; its
-    /// gain-invariant centroid and envelope remain identical.
+    /// signature stays bit-identical and remains the control. This fixture
+    /// explicitly requests the bare model (`samples=false`), whose GM24
+    /// calibration (2.350) moves only NYLON's RMS to -22.675 dB in either feature
+    /// configuration; its gain-invariant centroid and envelope remain identical.
     #[test]
     fn v2_untouched_pluck_signatures_are_stable() {
         let nylon_render = render_program(24, 52, 100, 1.0, 0xE1);
@@ -15179,11 +15230,7 @@ mod tests {
                 (0.5, 0.8),
             ),
             RenderSignature {
-                rms_db: if cfg!(feature = "embedded-samples") {
-                    -22.195
-                } else {
-                    -22.675
-                },
+                rms_db: -22.675,
                 centroid_hz: 247.419,
                 late_early_db: -16.290,
             },

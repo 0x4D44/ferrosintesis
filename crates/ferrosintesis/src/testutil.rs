@@ -3695,11 +3695,10 @@ mod pluck_baseline {
                     let (r, _, _, spread) = measure(program, bank, key, vel);
                     let (h_rms, h_spread) = head(name, key, vel);
                     // HEAD was captured with the default composite calibration.
-                    // The modeled-only build deliberately gives GM24's bare model
-                    // its own exponent (2.350 instead of 2.119), so transport only
-                    // this gain-sensitive canary by the exact analytic delta. The
-                    // default gate still compares the untouched frozen row.
-                    #[cfg(not(feature = "embedded-samples"))]
+                    // `measure` deliberately builds the bare model (`samples=false`),
+                    // which now selects GM24's model exponent (2.350 instead of
+                    // 2.119) in either feature configuration. Transport only this
+                    // gain-sensitive canary by the exact analytic delta.
                     let h_rms = if name == CANARY {
                         h_rms + (2.350 - 2.119) * 20.0 * (vel as f32 / 127.0).log10()
                     } else {

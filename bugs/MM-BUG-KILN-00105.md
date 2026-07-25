@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00105 — velocity compensation is chosen by program number, not by the voice actually built
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** voices / velocity law
@@ -17,10 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 4.5 while draining the
-  `--no-default-features` failures of MM-BUG-KILN-00090. The DRUMS half is fixed in the same
-  change; the MELODIC half is deliberately PARKED — see "Why the melodic half is parked".)
+- **Attempts:** fix=2, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-25, raised by Claude Opus 4.5 while draining the `--no-default-features` failures of MM-BUG-KILN-00090; the drums half landed there and the melodic half was parked) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — velocity calibration now follows the constructed sample/composite or modeled fallback, including runtime sample opt-out and pitch-range rejection)
 
 ## Observation
 
@@ -135,3 +133,44 @@ cargo test -p ferrosintesis --lib --release               690 passed, 0 failed
 Default-build byte-identity is by construction, not argument: `velocity_law` is
 `#[cfg(test)] mod` (`lib.rs:114`) so it is compiled out of every shipped build, and the
 `drums.rs` clamp is a no-op wherever `embedded_samples_available()` is `true`.
+
+## Resolution — 2026-07-25
+
+The melodic constructor now carries the correction selected for the voice it actually
+built:
+
+- `LaVoiceBuild` reports whether an LA composite was constructed or whether the
+  extreme-repitch guard returned the bare model.
+- `UncorrectedVoice` carries an optional measured model exponent from that result to the
+  single outer `ScaledVoice`. The raw census hook discards this metadata and therefore
+  remains genuinely uncorrected.
+- GM24, GM56/57/59, and GM64–67 select their measured model calibration only on explicit
+  sample opt-out, missing embedded assets, or actual repitch fallback. Eligible sampled
+  and composite voices keep the existing default program-table calibration byte-for-byte.
+- The compile-time modeled-only table fork is gone. The same construction rule now covers
+  default and `--no-default-features` binaries without guessing from a Cargo feature or the
+  caller's raw `samples` flag.
+
+The two nylon model canaries now transport only the exact analytic exponent delta in both
+feature configurations. Their pitch, spectrum, and envelope expectations did not move.
+
+## Verification — 2026-07-25
+
+- New routing coverage proves all eight explicit model paths select their model exponent,
+  eligible sample paths retain the program-table exponent, and an extreme-pitch
+  samples-on request selects the modeled fallback exponent.
+- A new rendered-law oracle covers all eight programs at keys 48 and 60 in a
+  default-feature binary with runtime samples disabled. Every path fits `k = 2.0 ± 0.2`.
+- `$null | cargo test -p ferrosintesis --locked`: **714 unit tests and 4 doc tests passed;
+  27 diagnostics ignored**.
+- `$null | cargo test -p ferrosintesis --no-default-features --locked`: **614 unit tests
+  and 4 doc tests passed; 22 diagnostics ignored**.
+- Strict all-target clippy passes with default features and with
+  `--no-default-features`; formatting and `git diff --check` pass.
+- Fresh release binaries from exact baseline `c0c6f82`, full 124-MIDI inventory at
+  11.025 kHz: **3 expected fallback-path changes, 121 byte-identical, 0 contamination**.
+  The changed tracks are `Big Weather/03 - Run the Rooftops.mid` (GM57),
+  `Atlas of Becoming/02 - Wire and Wake.mid` (GM65), and
+  `Atlas of Becoming/06 - Late for the Ordinary.mid` (GM56/57). The other 19 tracks
+  using a listed program remained byte-identical because their notes stayed on eligible
+  sample paths.

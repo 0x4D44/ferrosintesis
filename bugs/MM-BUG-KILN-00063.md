@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00063 — Sample regeneration can truncate tracked WAVs on interruption
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample generation / output durability
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex during the coverage-ledger review of `crates/ferrosintesis-samples-bass/`)
+- **State history:** Open (2026-07-24, raised by Codex during the coverage-ledger review of `crates/ferrosintesis-samples-bass/`) → Fixed (2026-07-25, Codex GPT-5.6-Sol; shared WAV generation now stages through a sibling `.part` and atomically replaces the destination after close; awaiting independent two-eyes verification)
 
 ## Observation
 
@@ -40,11 +40,20 @@ from opening the final path in `wb` mode and writing it in place.
 
 ## Fix
 
-Write the WAV to a same-directory temporary file, close it successfully, then replace
-the final path atomically with `os.replace()`. Remove the temporary file on error.
+Implemented in `tools/ferrosintesis-samples/prepare.py`. `write_wav_mono()` now
+writes and closes a sibling `.part`, then publishes it with `os.replace()`. Any
+exception removes the staged file and leaves the tracked destination unchanged.
+This follows the tool's existing durable-download pattern.
 
-Add an injected mid-write failure test that begins with known final bytes and proves
-they remain unchanged after the failure.
+The focused regression patches `Wave_write.writeframes()` to raise after the
+destination is known to exist. Before the fix, it failed because the known bytes
+became a partial 44-byte WAV. It now proves the destination remains byte-identical
+and no `.part` survives.
+
+Validation on 2026-07-25:
+
+- Focused injected-write-failure regression: 1 passed.
+- Full `tools/ferrosintesis-samples/test_prepare.py` suite: 32 passed.
 
 ## Notes
 

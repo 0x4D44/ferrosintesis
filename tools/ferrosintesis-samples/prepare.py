@@ -2019,15 +2019,22 @@ def trim_lead_and_ring(x, sr, pre_s, end_fade_s):
 
 
 def write_wav_mono(path, seg, sr):
-    """Quantize a float mono signal to 16-bit PCM and write it as a WAV."""
+    """Quantize a float mono signal and atomically replace its 16-bit PCM WAV."""
     pcm = struct.pack(f"<{len(seg)}h",
                       *[max(-32768, min(32767, int(v * 32767))) for v in seg])
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with wave.open(path, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(sr)
-        w.writeframes(pcm)
+    part = path + ".part"
+    try:
+        with wave.open(part, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(sr)
+            w.writeframes(pcm)
+        os.replace(part, path)
+    except Exception:
+        if os.path.exists(part):
+            os.remove(part)
+        raise
 
 
 def _bake_bagpipe(src):

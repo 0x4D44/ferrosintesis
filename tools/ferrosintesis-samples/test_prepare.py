@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import urllib.error
 import wave
+from unittest import mock
 
 import prepare
 
@@ -57,6 +58,25 @@ def write_wav(path, sample_width, channels):
 
 
 class PrepareSampleBankTests(unittest.TestCase):
+    def test_failed_wav_write_preserves_the_existing_destination(self):
+        with tempfile.TemporaryDirectory() as output_dir:
+            destination = os.path.join(output_dir, "tracked.wav")
+            write_wav(destination, sample_width=2, channels=1)
+            with open(destination, "rb") as f:
+                original = f.read()
+
+            with mock.patch.object(
+                wave.Wave_write,
+                "writeframes",
+                side_effect=OSError("injected write failure"),
+            ):
+                with self.assertRaisesRegex(OSError, "injected write failure"):
+                    prepare.write_wav_mono(destination, [0.25, -0.25], 44100)
+
+            with open(destination, "rb") as f:
+                self.assertEqual(f.read(), original)
+            self.assertEqual(os.listdir(output_dir), ["tracked.wav"])
+
     def test_all_samples_route_to_the_expected_package(self):
         filenames = (
             set(prepare.SOURCES)

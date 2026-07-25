@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00090 — 31 tests fail under `--no-default-features`, blocking a test gate for the modeled-only build
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** build config / test coverage
@@ -17,10 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00070 by Claude Opus 4.8 (1M)
-  while fixing it — 00070 delivered the clippy half and its gate; this is the residual that
-  blocks the matching test step. Measured, not inferred.)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00070 by Claude Opus 4.8 (1M) while fixing it — 00070 delivered the clippy half and its gate; this is the residual that blocks the matching test step. Measured, not inferred.) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the exact locked modeled-only suite passes and is now required by both integration gates)
 
 ## Observation
 
@@ -115,10 +113,44 @@ while classifying, since it may explain several of the 31.
    to `.deltic-integrate.toml`'s `workspace` gate and fallback, next to the
    `--no-default-features` clippy step 00070 added, so it cannot regress.
 
+## Resolution — 2026-07-25
+
+The stale 31-test list was reclassified against `origin/main` at `d3ac026`:
+
+- **28 no longer reproduced and remained enabled.** They passed in the modeled-only run,
+  which proves they were not hidden by feature gates in this fix.
+- **One genuinely sample-dependent coverage case** was the deliberate
+  `perceptual_distinctness_requires_embedded_samples` panic. The real perceptual oracle
+  remains sample-feature-gated. Its failing sentinel became a positive source oracle that
+  requires the integration contract to pair the default-feature workspace suite with the
+  modeled-only suite in both fallback and component gates. This preserves
+  MM-BUG-KILN-00020's anti-silent-omission invariant without making a supported build fail
+  by design.
+- **Two velocity-law failures were real modeled-only defects.** The default
+  `VEL_LEVEL_EXP` values describe sampled/composite voices, but a no-default build always
+  constructs physical models. A compile-time modeled-only calibration now overrides the
+  measured GM24, GM56/57/59, and GM64–67 values. GM24 stays capped at the existing 2.350
+  anti-papering bound.
+- The repaired calibration exposed **two level-sensitive GM24 canaries**. Their default
+  baselines remain frozen; the modeled-only expectations carry only the analytic exponent
+  delta. Spectral and envelope expectations did not move.
+
+Evidence:
+
+- `$null | cargo test -p ferrosintesis --no-default-features --locked`:
+  **612 unit tests + 4 doc tests passed; 22 diagnostic tests ignored**.
+- `deltic integrate-config validate --json`: candidate policy valid; AUTO remains off.
+- Fresh release binaries from exact baseline `d3ac026` and the fixed branch rendered every
+  catalog MIDI at 11.025 kHz: **124 same, 0 changed, 0 contamination**. The default product
+  is byte-identical.
+- MM-BUG-KILN-00105 remains the separate runtime concern: a default-feature binary that is
+  asked not to use samples, or falls outside a sample zone, still chooses compensation by
+  program rather than the voice actually built.
+
 ## Notes
 
 - MM-BUG-KILN-00020 ("the perceptual anti-clone oracle silently vanishes under
-  `--no-default-features`") is one instance of the coverage half of this and is still
-  Open; expect the two to resolve together.
+  `--no-default-features`") is the coverage half of this and is Closed. Its required
+  samples-on oracle is now pinned through the paired integration-contract test above.
 - Measured on `cargo test -p ferrosintesis --no-default-features` at the 00070 fix branch;
   the count excludes the two tests that fix already gated.

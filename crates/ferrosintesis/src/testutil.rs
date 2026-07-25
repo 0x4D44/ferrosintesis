@@ -1828,16 +1828,33 @@ mod distinctness {
     }
 }
 
-/// The samples-on perceptual oracle is a required gate. A samples-off test run
-/// cannot honestly claim that coverage, so fail loudly instead of compiling the
-/// entire module away without notice (MM-BUG-KILN-00020).
+/// The samples-on perceptual oracle is a required companion to the modeled-only
+/// gate. The latter cannot render embedded recordings, so pin the repository
+/// contract that always runs both shipped configurations (MM-BUG-KILN-00020,
+/// MM-BUG-KILN-00090).
 #[cfg(not(feature = "embedded-samples"))]
 #[test]
-fn perceptual_distinctness_requires_embedded_samples() {
-    panic!(concat!(
-        "perceptual anti-clone coverage requires the default embedded-samples feature; ",
-        "rerun without --no-default-features"
-    ));
+fn no_default_gate_is_paired_with_embedded_sample_coverage() {
+    const POLICY: &str = include_str!("../../../.deltic-integrate.toml");
+    const DEFAULT_TEST: &str = concat!(
+        r#"{ program = "cargo", args = ["test", "--workspace", "#,
+        r#""--exclude", "amp-lab", "--locked"] }"#
+    );
+    const MODELED_TEST: &str = concat!(
+        r#"{ program = "cargo", args = ["test", "-p", "ferrosintesis", "#,
+        r#""--no-default-features", "--locked"] }"#
+    );
+
+    assert_eq!(
+        POLICY.matches(DEFAULT_TEST).count(),
+        2,
+        "fallback and workspace gates must both retain the embedded-sample test suite"
+    );
+    assert_eq!(
+        POLICY.matches(MODELED_TEST).count(),
+        2,
+        "fallback and workspace gates must both retain the modeled-only test suite"
+    );
 }
 
 /// Round-3 Wave-0 perceptual anti-clone oracle — implements
@@ -3677,6 +3694,17 @@ mod pluck_baseline {
                 for &vel in &VELS {
                     let (r, _, _, spread) = measure(program, bank, key, vel);
                     let (h_rms, h_spread) = head(name, key, vel);
+                    // HEAD was captured with the default composite calibration.
+                    // The modeled-only build deliberately gives GM24's bare model
+                    // its own exponent (2.350 instead of 2.119), so transport only
+                    // this gain-sensitive canary by the exact analytic delta. The
+                    // default gate still compares the untouched frozen row.
+                    #[cfg(not(feature = "embedded-samples"))]
+                    let h_rms = if name == CANARY {
+                        h_rms + (2.350 - 2.119) * 20.0 * (vel as f32 / 127.0).log10()
+                    } else {
+                        h_rms
+                    };
                     let o = r - h_rms;
                     if migrated {
                         // Per-cell parity — a LOOSE sanity bound (the tight guarantee is

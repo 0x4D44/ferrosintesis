@@ -12680,7 +12680,7 @@ pub fn make_variation(
 /// `cargo test -p ferrosintesis --lib velocity_census -- --ignored --nocapture`,
 /// and `velocity_law::tests` fails if any entry drifts from what the render does.
 #[rustfmt::skip]
-pub(crate) const VEL_LEVEL_EXP: [f32; 128] = {
+const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     let mut t = [2.0f32; 128];
     // Organ / plucked / driven models: drive and pick excitation track velocity.
     // KILN-00048: the plucked/driven exponents were RE-DERIVED after the damper
@@ -12748,6 +12748,32 @@ pub(crate) const VEL_LEVEL_EXP: [f32; 128] = {
     // (honest e 2.49 capped to 2.35) is the documented Pareto-frontier trade
     // between the windowed and attack laws for the darkest, longest-ring preset.
     t[105] = 2.138; t[106] = 2.348; t[107] = 2.350; t[111] = 1.708;
+    t
+};
+
+/// Samples-on calibration for the default composite voices.
+#[cfg(feature = "embedded-samples")]
+pub(crate) const VEL_LEVEL_EXP: [f32; 128] = EMBEDDED_VEL_LEVEL_EXP;
+
+/// Modeled-only calibration for the shipped `--no-default-features` build.
+///
+/// These eight programs use sampled/composite calibrations in the default
+/// build but dispatch only to their physical models here. The overrides were
+/// re-derived with the modeled-only velocity census. GM24 is capped at the
+/// pluck anti-papering bound; its residual still lands inside the square-law
+/// oracle. Runtime sample opt-out and out-of-zone fallback in a default build
+/// remain the separate voice-aware calibration defect MM-BUG-KILN-00105.
+#[cfg(not(feature = "embedded-samples"))]
+pub(crate) const VEL_LEVEL_EXP: [f32; 128] = {
+    let mut t = EMBEDDED_VEL_LEVEL_EXP;
+    t[24] = 2.350;
+    t[56] = 1.428;
+    t[57] = 1.118;
+    t[59] = 1.308;
+    t[64] = 1.716;
+    t[65] = 1.685;
+    t[66] = 1.645;
+    t[67] = 1.599;
     t
 };
 
@@ -15136,7 +15162,9 @@ mod tests {
     /// corner and decay shape are unchanged), but re-deriving `VEL_LEVEL_EXP[24]`
     /// 2.0→2.119 pivots the level law at vel 127, dropping the vel-100 level by
     /// (100/127)^0.119 = 0.972 (−0.247 dB). BASS (GM33) is un-re-derived, so its
-    /// signature stays bit-identical and remains the control.
+    /// signature stays bit-identical and remains the control. The modeled-only
+    /// GM24 calibration (2.350) moves only NYLON's RMS to -22.675 dB; its
+    /// gain-invariant centroid and envelope remain identical.
     #[test]
     fn v2_untouched_pluck_signatures_are_stable() {
         let nylon_render = render_program(24, 52, 100, 1.0, 0xE1);
@@ -15151,7 +15179,11 @@ mod tests {
                 (0.5, 0.8),
             ),
             RenderSignature {
-                rms_db: -22.195,
+                rms_db: if cfg!(feature = "embedded-samples") {
+                    -22.195
+                } else {
+                    -22.675
+                },
                 centroid_hz: 247.419,
                 late_early_db: -16.290,
             },

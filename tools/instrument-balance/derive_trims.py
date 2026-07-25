@@ -129,26 +129,26 @@ ENGINE_RS = (
     pathlib.Path(__file__).resolve().parents[2]
     / "crates" / "ferrosintesis" / "src" / "engine.rs"
 )
+_SHIPPED_RE = re.compile(
+    r"(?m)^[ \t]*(?:pub(?:\s*\([^)\r\n]*\))?[ \t]+)?"
+    r"\bconst\s+PROGRAM_TRIM_DB\b\s*:\s*"
+    r"\[\s*f32\s*;\s*128\s*\]\s*=\s*\[(.*?)\]\s*;",
+    re.S,
+)
 
 
-def load_shipped(path: pathlib.Path = ENGINE_RS) -> list[float]:
-    """Parse `PROGRAM_TRIM_DB` out of engine.rs. Raises if it cannot."""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as e:
-        raise SystemExit(f"derive_trims: cannot read {path}: {e}") from e
-    m = re.search(
-        r"PROGRAM_TRIM_DB\s*:\s*\[\s*f32\s*;\s*128\s*\]\s*=\s*\[(.*?)\]\s*;",
-        text,
-        re.S,
-    )
-    if not m:
+def parse_shipped(text: str, source: object = "engine.rs") -> list[float]:
+    """Parse the one exact `PROGRAM_TRIM_DB` declaration, or fail loudly."""
+    matches = _SHIPPED_RE.findall(text)
+    if len(matches) != 1:
         raise SystemExit(
-            f"derive_trims: could not find `PROGRAM_TRIM_DB: [f32; 128] = [...]` in {path}. "
-            "The table was renamed or reshaped; fix this parser rather than re-copying "
-            "the numbers (MM-BUG-KILN-00109)."
+            f"derive_trims: expected exactly one "
+            f"`const PROGRAM_TRIM_DB: [f32; 128] = [...]` in {source}, "
+            f"found {len(matches)}. The table was renamed, duplicated, or reshaped; "
+            "fix this parser rather than re-copying the numbers "
+            "(MM-BUG-KILN-00109, MM-BUG-KILN-00116)."
         )
-    body = re.sub(r"//.*", "", m.group(1))  # strip the per-row comments
+    body = re.sub(r"//.*", "", matches[0])  # strip the per-row comments
     vals = [v.strip() for v in body.split(",") if v.strip()]
     if len(vals) != 128:
         raise SystemExit(
@@ -158,6 +158,15 @@ def load_shipped(path: pathlib.Path = ENGINE_RS) -> list[float]:
         return [float(v) for v in vals]
     except ValueError as e:
         raise SystemExit(f"derive_trims: non-numeric entry in PROGRAM_TRIM_DB: {e}") from e
+
+
+def load_shipped(path: pathlib.Path = ENGINE_RS) -> list[float]:
+    """Read and parse `PROGRAM_TRIM_DB` out of engine.rs."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise SystemExit(f"derive_trims: cannot read {path}: {e}") from e
+    return parse_shipped(text, path)
 
 
 SHIPPED = load_shipped()
@@ -716,6 +725,32 @@ def _prog(traj_by_key):
     return fp, sp
 
 
+def _trim_declaration(name, value):
+    body = ", ".join([str(value)] * 128)
+    return f"pub(crate) const {name}: [f32; 128] = [{body}];\n"
+
+
+def _selftest_shipped_parser():
+    real = _trim_declaration("PROGRAM_TRIM_DB", 1.25)
+    sibling = _trim_declaration("SC55_PROGRAM_TRIM_DB", -9.9)
+    assert parse_shipped(sibling + real, "sibling fixture") == [1.25] * 128
+
+    for source, expected_count in [
+        (sibling, 0),
+        ("// " + real, 0),
+        (real + real, 2),
+        ("#[cfg(feature = \"alternate\")]\n" + real + real, 2),
+    ]:
+        try:
+            parse_shipped(source, "rejection fixture")
+        except SystemExit as e:
+            assert f"found {expected_count}" in str(e), e
+        else:
+            raise AssertionError(
+                f"shipped-table parser accepted {expected_count} exact declarations"
+            )
+
+
 # Fixture shipped table - DELIBERATELY independent of the live PROGRAM_TRIM_DB.
 # A self-test whose expectations move whenever a production trim changes is not a
 # self-test. That coupling is exactly what surfaced when SHIPPED stopped being a
@@ -734,6 +769,7 @@ for _p, _v in {
 
 
 def selftest():
+    _selftest_shipped_parser()
     keys = [48, 53, 58, 63, 68, 73]
     ferro, sc = {}, {}
 
@@ -792,9 +828,10 @@ def selftest():
     assert byp[24]["excluded"] and "shape" in byp[24]["reasons"][0], byp[24]
     assert byp[25]["excluded"] and "shape/short" in byp[25]["reasons"][0], byp[25]
     assert byp[26]["excluded"] and any("pitch-tilt" in r for r in byp[26]["reasons"]), byp[26]
-    print(f"selftest OK - anchor 0.00 MAD 0.00 over {len(cohort)} admitted; GM56 (5 dB off) "
-          "rejected from the cohort; GM6 keeps +6 (damp the change); GM8 -2, GM9 (matched "
-          "one-shot) -1; GM24 shape / GM25 sub-hop / GM26 pitch-tilt excluded.")
+    print(f"selftest OK - exact/unique shipped parser; anchor 0.00 MAD 0.00 over "
+          f"{len(cohort)} admitted; GM56 (5 dB off) rejected from the cohort; GM6 keeps "
+          "+6 (damp the change); GM8 -2, GM9 (matched one-shot) -1; GM24 shape / GM25 "
+          "sub-hop / GM26 pitch-tilt excluded.")
     return 0
 
 

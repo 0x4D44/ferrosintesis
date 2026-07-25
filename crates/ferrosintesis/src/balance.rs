@@ -207,6 +207,58 @@ mod tests {
         );
     }
 
+    /// The derivation tool must read one exact shipped table, never a sibling or copy.
+    ///
+    /// Python's self-test exercises the parser semantics, but the repository gate does
+    /// not invoke that script. This source oracle keeps the invariant in the ordinary
+    /// Rust suite: an anchored `findall` must reject zero or multiple exact declarations,
+    /// and the production `SHIPPED` value must have one derived assignment.
+    #[test]
+    fn trim_derivation_reads_one_exact_shipped_table() {
+        let tool = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("crates/ferrosintesis sits two levels below the repo root")
+            .join("tools/instrument-balance/derive_trims.py");
+        let src = std::fs::read_to_string(&tool)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", tool.display()));
+        let loader = src
+            .split_once("def parse_shipped(")
+            .and_then(|(_, rest)| rest.split_once("\ndef load_shipped("))
+            .map(|(body, _)| body)
+            .expect("derive_trims.py must define parse_shipped before load_shipped");
+
+        for required in ["_SHIPPED_RE.findall(text)", "if len(matches) != 1:"] {
+            assert!(
+                loader.contains(required),
+                "derive_trims.py no longer enforces `{required}` while parsing the shipped \
+                 trim table; a sibling, missing, or cfg-gated duplicate declaration could \
+                 silently produce proposals against the wrong table"
+            );
+        }
+        assert!(
+            src.contains(r"\bconst\s+PROGRAM_TRIM_DB\b"),
+            "derive_trims.py no longer anchors the shipped-table parser to the exact \
+             `const PROGRAM_TRIM_DB` declaration; a prefixed sibling can match"
+        );
+
+        let assignments: Vec<&str> = src
+            .lines()
+            .map(|line| line.split('#').next().unwrap_or("").trim())
+            .filter(|line| {
+                line.split_once('=')
+                    .map(|(lhs, _)| lhs.trim() == "SHIPPED")
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert_eq!(
+            assignments,
+            ["SHIPPED = load_shipped()"],
+            "derive_trims.py must assign SHIPPED exactly once from load_shipped(); \
+             a second literal or alternate assignment recreates trim-table drift"
+        );
+    }
+
     /// The gate above must REJECT a table/gain divergence, otherwise it is decorative.
     ///
     /// Written because this repo has been bitten by oracles that passed on documents

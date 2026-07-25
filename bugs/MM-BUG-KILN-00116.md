@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00116 — derive_trims.py's SHIPPED parser is unanchored and unchecked for uniqueness, so a sibling declaration silently yields a wrong table
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** High
 - **Area:** tooling / instrument balance
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00109; found by adversarially perturbing the parser the 00109 fix introduced)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00109; found by adversarially perturbing the parser the 00109 fix introduced) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the parser now accepts one exact declaration, rejects missing/duplicate tables, and the ordinary Rust gate pins its derivation invariant)
 
 ## Observation
 
@@ -76,3 +76,31 @@ that `derive_trims.py` assigns `SHIPPED` only from `load_shipped()`. That is the
 pattern CLAUDE.md already prescribes for this defect class.
 
 ## Notes
+
+## Resolution — 2026-07-25
+
+`derive_trims.py` now separates source loading from a testable
+`parse_shipped()` function. Its pattern is line-anchored to the exact Rust
+`const PROGRAM_TRIM_DB` declaration, so prefixed siblings and commented-out
+declarations do not match. It uses `findall` and requires exactly one match;
+zero, duplicate, and cfg-gated alternate declarations fail loudly.
+
+`SHIPPED` remains assigned exactly once from `load_shipped()`. A test-only Rust
+source oracle in `balance.rs` runs in the normal repository gate and pins the
+anchor, uniqueness check, and one derived assignment. This prevents the Python
+self-test from being the only guard.
+
+## Verification — 2026-07-25
+
+- `python tools/instrument-balance/derive_trims.py --selftest` passes. Its new
+  fixtures prove a preceding `SC55_PROGRAM_TRIM_DB` sibling is ignored and
+  missing, commented, duplicate, and cfg-gated exact declarations are rejected.
+- The new Rust source oracle passes with default and no default features.
+- `$null | cargo test --locked -p ferrosintesis`: **718 unit tests and 4 doc
+  tests passed; 27 diagnostics ignored**.
+- `$null | cargo test --locked -p ferrosintesis --no-default-features`: **617
+  unit tests and 4 doc tests passed; 22 diagnostics ignored**.
+- Strict all-target clippy passes with all features and with no default
+  features. Formatting and `git diff --check` pass.
+- No audio render inventory is required: the changed Rust module is
+  `#[cfg(test)]`, and the Python derivation tool does not ship in the synth.

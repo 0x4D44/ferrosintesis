@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00085 — the LA bass crossfade SHAPE still costs the onset: a 50 ms model mute erases the kick thump and a 350 ms handover outlasts 90% of a bass line's notes
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-24
-- **Owner:** -
-- **Owner role:** -
+- **Owner:** Arthur
+- **Owner role:** human
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4)
+- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material)
 
 ## Observation
 
@@ -72,6 +72,21 @@ Needs **Arthur's ear**, which is why it is split rather than attempted:
 
 The measurement infrastructure is in place: re-run the printer after any change and require
 every window's geomean within ~1 dB of parity with a tightened per-point spread.
+
+### Blocker (2026-07-25)
+
+Blocking owner: **Arthur**. Unblock when Arthur supplies these two decisions:
+
+1. Audition and choose the bass onset contract: keep the current sum-to-one 50–350 ms
+   handover, shorten it, or preserve the modeled kick with an additive onset window. This
+   must include an accepted handover endpoint because 90% of the motivating part's notes
+   end before 350 ms and Arthur previously reversed the sampled-bass A/B.
+2. Choose the out-of-zone policy above D2/E2: accept up to +12 semitones of sample repitch,
+   disable the LA layer above its recorded range, or provide/approve higher owner-recorded
+   or CC0/CC-BY bass-onset samples with retained provenance.
+
+Those choices determine different audible behavior and asset scope. An unattended change
+would guess at the product contract rather than fix a settled defect.
 
 ## Notes
 

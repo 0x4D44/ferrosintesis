@@ -1647,7 +1647,7 @@ pub fn honkytonk_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
 // dynamic, and the ladder stops short) — `nearest()` covers those keys.
 fn b1_normal_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "b1_normal_C1.wav" => 31.71,
             "b1_normal_E1.wav" => 40.28,
@@ -1680,7 +1680,7 @@ fn b1_normal_zones() -> &'static [Zone] {
 
 fn b1_hard_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    B.get_or_init(|| {
+    init_once!(B, {
         bank!(
             "b1_hard_A0.wav" => 26.77,
             "b1_hard_C1.wav" => 31.73,

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00029 — voice models turn over near full velocity: GM42/43 bowed strings DROP up to 1.6 dB from v110 to v127, and GM4's pickup bark peaks at v≈105
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,9 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law
-  alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which
-  measured the EP sweep independently)
+- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change)
 
 ## Observation
 
@@ -149,3 +147,16 @@ is independent of the bowed-string work.
 
 Exit condition and the self-retiring guards (`excluded_programs_still_reproduce_their_defect`,
 the `every_gm_program_follows_the_square_law` exclusion) are unchanged.
+
+## Blocker (2026-07-25)
+
+The current diagnosis already refuted the unattended low-risk fix: a bow-speed clamp removes
+some chaotic pockets but leaves others and creates an audible register discontinuity. The
+remaining bowed-string path is output-amplitude normalization plus register tuning, which
+changes the instrument's response and must be judged by ear. GM4 is a separate timbre retune
+of the pickup nonlinearity and has the same listening requirement.
+
+Unblock when Arthur can audition candidate GM42/43 normalization across the documented key
+and velocity grid, and separately approve a GM4 bark curve through v127. The existing
+self-retiring velocity-law guards provide the machine exit conditions after those voicing
+targets are chosen.

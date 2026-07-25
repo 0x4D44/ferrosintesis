@@ -1136,10 +1136,20 @@ fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
 /// a 1 dB dead-band. Struck/plucked/percussive voices (piano, guitar, mallets,
 /// drums) and noise/FX are left at 0.0 — their apparent "deficit" is usually a
 /// faster decay envelope, not a level error, so trimming them would misfire.
-/// (An M-CAL v2 pass — an envelope-guarded, multi-window metric — will calibrate
-/// the percussive families; see `wrk_docs/2026.07.21 - HLD - M-CAL v2 envelope-
-/// guarded metric.md`. The 21-Jul max-momentary derivation was rejected: it is a
-/// temporal-envelope artifact for short/percussive voices, not a level reading.)
+/// That 0.0 is a MEASURED VERDICT, not a pending TODO. This comment used to
+/// promise that an M-CAL v2 pass "will calibrate the percussive families". That
+/// pass was built and run (2026.07.22), and it returned the opposite answer: 37
+/// programs failed its shape/short guards, concentrated in exactly those families
+/// (Guitar 8/8, Percussive 6, Bass 5, Ethnic 5), because ferrosintesis's plucked
+/// decays are 2–4× faster than the SC-55's and no scalar reconciles a gap that
+/// grows ~30 dB over 900 ms. The verdict was "this is voice work, not trim work",
+/// and the per-family voice fixes are tracked in the bug ledger (MM-BUG-KILN-00045
+/// bass, 00043 GM7 clavinet, 00039 GM107 koto) rather than here. Reaching for the
+/// trim table again on these families is measuring a decay envelope, not a level.
+/// See `wrk_docs/2026.07.22 - M-CAL v3 certified derivation report.md`; the
+/// superseded plan is `2026.07.21 - HLD - M-CAL v2 envelope-guarded metric.md`.
+/// (The earlier 21-Jul max-momentary derivation was rejected for the same reason:
+/// it is a temporal-envelope artifact for short voices, not a level reading.)
 ///
 /// GM6 harpsichord is the ONE documented plucked exception (+6 dB): the audit
 /// used the fair EARLY-window RMS (0–150 ms, immune to the decay-artifact trap)

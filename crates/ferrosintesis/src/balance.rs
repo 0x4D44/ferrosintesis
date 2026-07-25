@@ -1,0 +1,285 @@
+//! Instrument-balance oracles: does `PROGRAM_TRIM_DB` reach the audio, and by
+//! exactly how much?
+//!
+//! ## The gap this closes
+//!
+//! Before this module, **nothing in the suite measured a rendered program level at
+//! all**. `engine::tests::program_trim_scope_and_calibration` asserts the TABLE'S
+//! CONTENTS — which programs are non-zero and by how much — and is blind to what
+//! those numbers do to the audio. The one full-128 sweep asserts the velocity
+//! SLOPE, which is blind to absolute gain by construction. A trim could have been
+//! silently dropped from the signal path, or applied twice, and both would have
+//! stayed green. Two oracles close it: one proves the dB->gain conversion is
+//! exact, the other proves the strip actually applies it. Either alone is
+//! insufficient - a correct conversion nothing calls is a silent no-op.
+//!
+//! ## What is deliberately NOT asserted here, and why
+//!
+//! Not that programs are equally loud, and **not that the trim narrows any family's
+//! internal spread**. Both would be wrong.
+//!
+//! `PROGRAM_TRIM_DB` levels the melodic programs toward the balance a Roland
+//! SC-55mkII produces. The stated goal is fidelity to the GM corpus, not flatness:
+//! "Arthur chose to level toward a real GM module's balance (keeps
+//! flute-quieter-than-trumpet) rather than flatten to equal loudness"
+//! (`wrk_docs/2026.07.17 - CR - instrument level audit + SC-55 trim.md`). A control
+//! taken 2026.07.25 found ferrosintesis's program-to-program spread statistically
+//! indistinguishable from the reference modules' own — within ±1 dB of its own
+//! median, ferro 11–16 %, SC-55 14 %, S-YXG50 14 %.
+//!
+//! Measured on 2026.07.25, the trim NARROWS six families (Ensemble −6.0, Lead −5.5,
+//! Pad −4.6, Reed −2.2, Brass −2.2, Percussive −1.0 dB) and WIDENS five (Ethnic
+//! +5.0, Pipe +4.1, ChromPerc +1.5, Organ +0.9, Strings +0.5 dB). Widening is not a
+//! defect: if the SC-55's Pipe family is internally wide, then widening ferro's Pipe
+//! family is the trim working correctly. An oracle asserting "the trim must narrow"
+//! would encode precisely the flatness goal this design rejected, so it is not
+//! written here. Deciding whether each widening is faithful needs the reference
+//! module, which a unit test cannot reach — that lives in the closed-loop re-derive
+//! (MM-BUG-KILN-00107). `report_trim_effect_on_family_spread` below prints the
+//! table for whoever runs it.
+//!
+//! ## Method
+//!
+//! Early-window RMS, 0–150 ms. That is this repo's own documented fair metric for
+//! cross-program comparison — the `PROGRAM_TRIM_DB` doc comment used it for GM6
+//! precisely because it is "immune to the decay-artifact trap". A whole-note RMS
+//! penalises a fast decay for decaying, which is how the rejected 21-Jul
+//! max-momentary derivation came out wrong in SIGN on ~8 voices.
+//!
+//! Known blind spot, stated rather than hidden: the early window is unfair to
+//! voices that SWELL. GM119 Reverse Cymbal is a swell by definition, reads as near
+//! silence at 0–150 ms, and single-handedly makes the Percussive family span 45 dB
+//! in the report below. That is a metric artifact, not a balance defect. It is why
+//! the report tests are diagnostics rather than gates.
+
+#[cfg(test)]
+mod tests {
+    use crate::engine::PROGRAM_TRIM_DB;
+
+    const SR: f32 = 44100.0;
+    /// This repo's documented fair cross-program window (see module docs).
+    const EARLY_WINDOW_S: f32 = 0.150;
+
+    /// The sixteen GM families, in program order; each is exactly 8 programs.
+    const FAMILIES: [&str; 16] = [
+        "Piano",
+        "ChromPerc",
+        "Organ",
+        "Guitar",
+        "Bass",
+        "Strings",
+        "Ensemble",
+        "Brass",
+        "Reed",
+        "Pipe",
+        "Lead",
+        "Pad",
+        "SynthFX",
+        "Ethnic",
+        "Percussive",
+        "SoundFX",
+    ];
+
+    /// The measurement grid. Several keys so one unlucky sample-bank root cannot
+    /// dominate, and both a soft and a loud velocity.
+    const CELLS: [(u8, u8); 5] = [(48, 80), (60, 80), (72, 80), (60, 55), (60, 105)];
+
+    /// Raw early-window level of a voice in dB, with NO trim applied. This is what
+    /// `voices::make` produces; the trim lives downstream at the channel strip.
+    fn voice_level_db(program: u8, key: u8, vel: u8) -> f32 {
+        let n = (EARLY_WINDOW_S * SR) as usize;
+        let mut buf = vec![0.0f32; n];
+        let mut v = crate::voices::make(program, key, vel, SR, 0x5EED_1234, true);
+        let mut i = 0;
+        while i < n {
+            let k = 64.min(n - i);
+            v.render(&mut buf[i..i + k]);
+            i += k;
+        }
+        let energy: f32 = buf.iter().map(|x| x * x).sum();
+        20.0 * (energy / n as f32).sqrt().max(1e-12).log10()
+    }
+
+    /// Mean raw level over the grid.
+    fn voice_level_mean(program: u8) -> f32 {
+        CELLS
+            .iter()
+            .map(|&(k, v)| voice_level_db(program, k, v))
+            .sum::<f32>()
+            / CELLS.len() as f32
+    }
+
+    /// THE GATE. Every program's trim reaches the audio, at exactly its tabled value.
+    ///
+    /// `program_trim_lin` is the one conversion from the table to a strip gain. This
+    /// asserts the round trip: the linear gain it hands the strip, expressed back in
+    /// dB, equals the table entry — for all 128 programs, including the 0.0 entries
+    /// which must yield EXACTLY unity so an untouched program is bit-identical.
+    ///
+    /// SCOPE, stated honestly: this exercises the pure conversion, so it catches a
+    /// wrong sign, a wrong logarithm base (the classic power-vs-amplitude factor of
+    /// two), a non-unity gain on an untouched program, and any table/gain
+    /// divergence. It does NOT by itself prove the trim reaches the audio — if the
+    /// strip stopped calling `program_trim_lin`, this test would still pass. That
+    /// second half is `the_strip_actually_applies_the_program_trim` below; the two
+    /// are only sufficient together.
+    #[test]
+    fn every_program_trim_reaches_the_strip_at_its_tabled_value() {
+        let mut worst = (0u8, 0.0f32);
+        for p in 0..128u8 {
+            let tabled = PROGRAM_TRIM_DB[p as usize];
+            let lin = crate::engine::program_trim_lin(p);
+
+            if tabled == 0.0 {
+                assert_eq!(
+                    lin, 1.0,
+                    "GM{p} has no trim but program_trim_lin returned {lin}, not exactly 1.0. \
+                     An untouched program must be bit-identical, so this must be exact \
+                     equality and not a tolerance."
+                );
+                continue;
+            }
+
+            assert!(
+                lin > 0.0 && lin.is_finite(),
+                "GM{p}: trim {tabled} dB produced a non-positive or non-finite gain {lin}"
+            );
+            let round_trip = 20.0 * lin.log10();
+            let err = (round_trip - tabled).abs();
+            if err > worst.1 {
+                worst = (p, err);
+            }
+            assert!(
+                err < 1e-4,
+                "GM{p}: tabled {tabled:+.2} dB but program_trim_lin gives {lin} \
+                 = {round_trip:+.4} dB (error {err:.6} dB). The table and the gain \
+                 conversion have diverged."
+            );
+            assert_eq!(
+                lin > 1.0,
+                tabled > 0.0,
+                "GM{p}: trim {tabled:+.2} dB produced gain {lin}, which moves the level \
+                 the WRONG WAY. A boost must be >1.0 and a cut <1.0."
+            );
+        }
+        println!(
+            "all 128 program trims round-trip; worst error GM{} at {:.2e} dB",
+            worst.0, worst.1
+        );
+    }
+
+    /// The strip actually APPLIES the trim — the half the round-trip cannot see.
+    ///
+    /// Two oracles, because one is not enough: a correct conversion that nothing
+    /// calls is a silent no-op. This asserts, from the source, that the melodic
+    /// channel-strip gain is multiplied by `program_trim_lin(strip.program)`, and
+    /// that ch9 drums are excluded (they are key-indexed and levelled by
+    /// `kit_balance`, so a program trim there would be wrong).
+    ///
+    /// A source scan rather than a render diff on purpose: an end-to-end level
+    /// comparison between two DIFFERENT programs cannot isolate the trim, because
+    /// their voices, their `fx_profile` sends and their bus contributions all differ
+    /// too. The wiring is the checkable invariant.
+    #[test]
+    fn the_strip_actually_applies_the_program_trim() {
+        let src = include_str!("engine.rs");
+        let call = "program_trim_lin(strip.program)";
+        assert!(
+            src.contains(call),
+            "the channel strip no longer calls `{call}` — the per-program trim has              been disconnected from the signal path, and every level oracle that              checks only the TABLE would stay green through that regression"
+        );
+
+        // The gain that reaches the mix must include the trim as a factor.
+        let g_line = src
+            .lines()
+            .find(|l| l.contains("let g = strip.volume"))
+            .expect("the strip gain line `let g = strip.volume ...` has moved or been renamed");
+        assert!(
+            g_line.contains("trim"),
+            "the strip gain no longer includes the program trim:
+  {g_line}"
+        );
+
+        // Drums must stay out of it.
+        assert!(
+            src.contains("if ci != 9 {"),
+            "the ch9 drum exclusion around the program trim has gone; a program-indexed              trim on the key-indexed drum channel would mis-level the kit"
+        );
+    }
+
+    /// The gate above must REJECT a table/gain divergence, otherwise it is decorative.
+    ///
+    /// Written because this repo has been bitten by oracles that passed on documents
+    /// gutted to a bare list of names: a guard that cannot fail proves nothing.
+    #[test]
+    fn the_trim_gate_rejects_a_divergent_conversion() {
+        // A deliberately wrong conversion: amplitude law (20·log10) applied as a
+        // power law (10·log10) — the classic factor-of-two dB bug.
+        let wrong = |db: f32| 10f32.powf(db / 10.0);
+        let mut caught = 0;
+        for p in 0..128u8 {
+            let tabled = PROGRAM_TRIM_DB[p as usize];
+            if tabled == 0.0 {
+                continue;
+            }
+            let round_trip = 20.0 * wrong(tabled).log10();
+            if (round_trip - tabled).abs() >= 1e-4 {
+                caught += 1;
+            }
+        }
+        assert!(
+            caught > 0,
+            "the round-trip check cannot detect a power-vs-amplitude dB error, so it \
+             would pass on a synth whose trims were all half as strong as tabled"
+        );
+        // And it must not fire on the correct conversion.
+        let right = |db: f32| 10f32.powf(db / 20.0);
+        for p in 0..128u8 {
+            let tabled = PROGRAM_TRIM_DB[p as usize];
+            if tabled == 0.0 {
+                continue;
+            }
+            assert!(
+                (20.0 * right(tabled).log10() - tabled).abs() < 1e-4,
+                "the check rejects the CORRECT conversion at GM{p} — it is too tight"
+            );
+        }
+    }
+
+    /// REPORT ONLY — per-family internal spread, and what the trim does to it.
+    ///
+    /// Diagnostic, not a gate: see the module docs for why "the trim must narrow" is
+    /// the wrong assertion, and for the swell-voice blind spot that inflates
+    /// Percussive. Run with `--ignored` when reviewing the balance.
+    #[test]
+    #[ignore = "diagnostic; run with --ignored when reviewing instrument balance"]
+    fn report_trim_effect_on_family_spread() {
+        let spread = |family: usize, trimmed: bool| -> f32 {
+            let levels: Vec<f32> = ((family * 8)..(family * 8 + 8))
+                .map(|p| voice_level_mean(p as u8) + if trimmed { PROGRAM_TRIM_DB[p] } else { 0.0 })
+                .collect();
+            levels.iter().cloned().fold(f32::NEG_INFINITY, f32::max)
+                - levels.iter().cloned().fold(f32::INFINITY, f32::min)
+        };
+        println!(
+            "\n{:>3} {:<11} {:>10} {:>10} {:>10}   effect",
+            "#", "family", "untrimmed", "trimmed", "change"
+        );
+        for (f, name) in FAMILIES.iter().enumerate() {
+            let (un, tr) = (spread(f, false), spread(f, true));
+            let d = tr - un;
+            let touched = ((f * 8)..(f * 8 + 8)).any(|p| PROGRAM_TRIM_DB[p] != 0.0);
+            let effect = if !touched {
+                "untouched"
+            } else if d < -0.05 {
+                "narrows"
+            } else if d > 0.05 {
+                "widens"
+            } else {
+                "neutral"
+            };
+            println!("{f:>3} {name:<11} {un:>9.2}  {tr:>9.2}  {d:>+9.2}   {effect}");
+        }
+        println!("\n(widening is not a defect - the target is SC-55 fidelity, not flatness)\n");
+    }
+}

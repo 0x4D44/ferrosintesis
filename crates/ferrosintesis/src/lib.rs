@@ -97,6 +97,8 @@ pub(crate) mod engine;
 mod inventory;
 
 #[cfg(test)]
+mod balance;
+#[cfg(test)]
 mod licensing;
 pub(crate) mod loudness;
 #[cfg(test)]

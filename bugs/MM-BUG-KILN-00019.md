@@ -1,8 +1,8 @@
 # MM-BUG-KILN-00019 — Per-program loudness match is damped 0.70×; residuals remain and older album mixes were tuned to the old balance
 
 - **State:** Open
-- **Priority:** Could
-- **Severity:** Low
+- **Priority:** Should
+- **Severity:** Medium
 - **Area:** engine
 - **Raised:** 2026-07-18
 - **Owner:** -
@@ -42,3 +42,29 @@ that were tuned to the old balance. Both are ear-in-the-loop calls.
   a deliberate stopping point awaiting a listening pass.
 - Any trim change is level-only/timbre-neutral but still triggers the master
   bus-glue by ~0.5 dB (benign) → render-diff expected on trimmed programs.
+
+## Note (2026-07-25, re-ranked)
+
+Re-ranked Could/Low -> Should/Medium. Not because the 0.70x damping is wrong — a
+control measurement on 2026-07-25 found ferrosintesis's program-to-program spread
+statistically indistinguishable from the reference modules' own (within +/-1 dB of
+own median: ferro 11-16%, SC-55 14%, S-YXG50 14%), so the residual is not a defect.
+
+The re-rank is because this ONE entry silently carries three separable pieces of
+work, and Could/Low is why a subject Arthur raises repeatedly never gets selected:
+
+  1. The un-taken decision on the damping and clamp. The 2026.07.20 HLD ordered a
+     "Full reappraisal — not anchored by the past; the 0.70x damping and +-6 dB
+     clamp are re-examined, not inherited", to be settled "once the full D_p
+     distribution is in". The distribution arrived 2026-07-22 and DAMP=0.7
+     CLAMP=+-6.0 were carried forward unchanged. Arthur's "go undamped" steer was
+     honoured for the DERIVATION (both committed reports print raw undamped
+     proposals); the follow-on "then decide how much to apply" conversation is what
+     never happened. A missing decision, not a disobeyed instruction.
+  2. The album CC7/CC11 re-touch — step 2 of the original two-step plan, never
+     started.
+  3. The residual itself, which is the part that is arguably working as designed.
+
+Split these if any is picked up independently. The staleness of the table is
+tracked separately as MM-BUG-KILN-00107; the standing guard is the within-family
+spread oracle from MM-BUG-KILN-00045.

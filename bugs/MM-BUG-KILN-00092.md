@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00092 — every NoteOn allocates in the audio callback: voices are `Box<dyn Voice>`
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** engine / realtime
 - **Raised:** 2026-07-24
-- **Owner:** -
-- **Owner role:** -
+- **Owner:** Arthur
+- **Owner role:** human
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,9 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00082 by Claude Opus 4.8 (1M)
-  while fixing it. 00082 fixed the bounded part; this is the part that needs an
-  architectural decision. MEASURED, not inferred.)
+- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00082 by Claude Opus 4.8 (1M) while fixing it. 00082 fixed the bounded part; this is the part that needs an architectural decision. MEASURED, not inferred.) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — option 3 measured ample 1024-frame deadline margin; Arthur must choose the bounded construction exception or authorize a whole-engine voice-pool design)
 
 ## Observation
 
@@ -67,6 +65,34 @@ allocation is free — uses the same path. The options are not local:
    frames at 44.1 kHz = 23 ms) and let the number decide between 1 and 2.
 
 Option 3 is the obvious first step and needs no decision.
+
+### Option 3 measurement — 2026-07-25
+
+A temporary ignored release-profile probe swept every GM melodic program after
+`prewarm_samples()` and `reserve_realtime_storage()`. Each timing covered one Program
+Change, one NoteOn, and the full 1024-frame callback; an untimed Panic removed the voice
+between samples. The probe was removed before this ledger-only commit.
+
+| 1,536 warmed callbacks | Time | Share of 23.220 ms deadline |
+|------------------------|-----:|-----------------------------:|
+| p50 | 0.438 ms | 1.89% |
+| p95 | 0.704 ms | 3.03% |
+| p99 | 0.973 ms | 4.19% |
+| maximum (GM52) | 2.566 ms | 11.05% |
+
+This is one-host evidence, not a hard realtime proof, but it finds a large margin and still
+no observed xrun. The existing allocation ratchet keeps NoteOn at most 16 allocations
+and every other measured callback shape at zero.
+
+**Blocked decision for Arthur:**
+
+1. **Recommended — accept the bounded voice-construction exception.** Amend
+   `wrk_docs/2026.07.23 - HLD - amp lab (live knob GUI for Part B).md` acceptance criterion
+   7 to permit voice construction capped by `LIVE_MAX_VOICES`, retain the current
+   allocation ratchet, then close this as an accepted design constraint.
+2. **Authorize the voice-pool build.** This is a major engine refactor: pre-allocate 128
+   heterogeneous voice slots and make every concrete voice constructible in place, while
+   preserving the unbounded offline renderer and all render identities.
 
 ## Notes
 

@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** synthesis / engine
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T103423Z-p51164-n194166100-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00133-run-fix-20260726T103423Z-p51164-n194166100-c1
+- **Owner base:** 548d43996cd14e590e532097cfefda930031485f
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T10:34:23Z
+- **Owner until:** 2026-07-26T12:34:23Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-20
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260726T215802Z-p9812-n612744600-c5
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00029-run-fix-20260726T215802Z-p9812-n612744600-c5
-- **Owner base:** a2b5537898f152a9a9a265f09f9da8f51813dafb
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T21:58:02Z
-- **Owner until:** 2026-07-26T22:53:26Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00029-run-fix-20260726T215802Z-p9812-n612744600-c5-code-1785103974747
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below)

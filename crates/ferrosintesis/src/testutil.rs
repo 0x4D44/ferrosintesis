@@ -1341,14 +1341,28 @@ mod guards {
         //
         // ch 4 (GM30 drive) RISES +0.42 dB: it carries a VEL_LEVEL_EXP correction
         // below 2.0, which is a boost at sub-max velocities.
-        (0, -38.45, 1048.8), // KILN t60 re-fit: nylon rings longer
-        (1, -44.29, 986.1),  // KILN t60 re-fit: steel
-        (2, -38.76, 603.9),  // KILN t60 re-fit: jazz guitar
-        (3, -41.15, 478.6),
-        (4, -32.54, 843.8),
-        (5, -20.22, 239.6),
-        (6, -27.98, 188.5),
-        (7, -24.96, 580.5),
+        // Whole table re-pinned 2026-07-26 (golden-hygiene pass). Every row now states what
+        // the mix ACTUALLY renders, rather than a value inherited from an older capture that
+        // only still passed because the tolerances are wide (+-2.5 dB, +-20% centroid). Eight
+        // rows had accumulated 0.1-0.7 dB and up to 4% of centroid drift across several
+        // partial re-pins; ch 8 and ch 9 were already exact and are unchanged.
+        //
+        // No behaviour changed here — this commit moves only the pins. The drift was spent
+        // detection budget: a row already 0.7 dB out has that much less room before a real
+        // regression trips the guard.
+        //
+        // Captured on one box under BOTH profiles: debug and release agree on all ten rows
+        // and on the master peak, so these numbers are not opt-level-sensitive. (That matters
+        // because a previous exact-hash canary WAS opt-level-sensitive, which is part of why
+        // the fixture drifted rather than being re-pinned.)
+        (0, -39.19, 1079.7),
+        (1, -44.37, 989.4),
+        (2, -39.05, 604.8),
+        (3, -41.51, 481.6),
+        (4, -33.04, 811.3),
+        (5, -20.37, 245.9),
+        (6, -28.19, 190.8),
+        (7, -24.95, 588.8),
         (8, -34.65, 2090.1),
         // ch 9 re-pinned for the DRUM_FORWARD removal (2.0 -> 1.0, 2026-07-21): the kit
         // is no longer lifted +6 dB over the band, so the drum channel drops -4.14 dB
@@ -1363,7 +1377,7 @@ mod guards {
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
     /// 2.22899 -> 1.37511 (-4.19 dB) tracks ch 9 exactly: the drums set the master peak.
-    const GOLDEN_MASTER_PEAK: f32 = 1.37866; // +0.02 dB: guitars ring louder (t60 re-fit)
+    const GOLDEN_MASTER_PEAK: f32 = 1.37333; // re-pinned 2026-07-26 with the table above
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

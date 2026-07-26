@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00085 — the LA bass crossfade SHAPE still costs the onset: a 50 ms model mute erases the kick thump and a 350 ms handover outlasts 90% of a bass line's notes
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18-code-1785108252883
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B)
+- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T230602Z-p9812-n782377700-c18 branch=task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18 code=0bd4fe1e756f gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -127,6 +127,26 @@ The autonomous fix must add focused regression evidence:
 Leave the bug **Fixed**, not Closed, after the code and regression tests land. Independent
 verification should inspect the automated evidence and audition a short representative
 GM 32–35 alternate-bank render before closure.
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T230602Z-p9812-n782377700-c18 code=0bd4fe1e756f gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00085 by making the GM32-35 alternate bass sampled layer additive instead of letting it replace the modeled bass onset. The modeled bass now plays at full level from sample zero, while the sampled overlay fades out by 150 ms. The bass alternate path also refuses upward sample repitching beyond five semitones and falls back to the bare model above that ceiling. Regression tests cover onset preservation, the 150 ms taper, the upward repitch ceiling, and the unchanged ordinary LA replacement wrapper. Focused ferrosintesis tests are green.
+
+Root cause: The shared LA sampled wrapper only implemented a sum-to-one replacement crossfade, so the bass alternate path inherited a 50 ms model mute and 350 ms handover. That envelope displaced the modeled kick/transient for bass notes that are often shorter than the handover, and the sample zone also remained eligible for overly broad upward repitching.
+
+Changed:
+- crates/ferrosintesis/src/sampler.rs: added explicit LA replacement/additive blend handling, a bass-only additive limited wrapper, and focused regression coverag
+- crates/ferrosintesis/src/voices.rs: routed GM32-35 alternate bass through the additive wrapper with a 150 ms fade and five-semitone upward repitch ceiling.
+
+Tests:
+- $null | deltic timeout 300 cargo test -p ferrosintesis la_bass_alt -- --nocapture
+- $null | deltic timeout 300 cargo test -p ferrosintesis la_ebass_additive_level_parity -- --nocapture
+- $null | deltic timeout 300 cargo test -p ferrosintesis ordinary_la_wrap_keeps_sum_to_one_onset_ownership -- --nocapture
+- $null | deltic timeout 300 cargo test -p ferrosintesis print_ebass_wrap_level_ratios -- --ignored --nocapture
+
+Left alone:
+- bugs ledger
+- Cargo.toml and Cargo.lock
 
 ## Notes
 

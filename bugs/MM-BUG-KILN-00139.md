@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00139 — Headroom rebakes trust mutable sources and invalid caches
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample assets / Headroom source intake
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T133112Z-p49604-n076479100-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00139-run-fix-20260726T133112Z-p49604-n076479100-c1
-- **Owner base:** 445ee4f44e1aaaa40242b787828d4caec2f25890
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T13:31:12Z
-- **Owner until:** 2026-07-26T15:31:12Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new`)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T133112Z-p49604-n076479100-c1 branch=task/bug-MM-BUG-KILN-00139-run-fix-20260726T133112Z-p49604-n076479100-c1 code=40cc61da138b1dc7226abbcd1271a10d5855dce2 gate=manual)
 
 ## Observation
 

@@ -1258,6 +1258,48 @@ class HeadroomOutputInventoryTest(unittest.TestCase):
         )
 
 
+class HonkytonkOutputInventoryTest(unittest.TestCase):
+    """MM-BUG-KILN-00143: rebakes must reject obsolete owned outputs."""
+
+    def assert_rebake_rejects_before_writing(self, notes, existing, unexpected):
+        with tempfile.TemporaryDirectory() as repo_root:
+            out_dir = os.path.join(
+                repo_root, "crates", "ferrosintesis-samples-honkytonk", "samples")
+            os.makedirs(out_dir)
+            for name in existing:
+                open(os.path.join(out_dir, name), "wb").close()
+
+            with mock.patch.object(prepare, "REPO_ROOT", repo_root), mock.patch.object(
+                prepare, "HONKYTONK_NOTES", notes
+            ), mock.patch.object(
+                prepare, "ensure_archive_sources"
+            ) as ensure_sources, mock.patch.object(
+                prepare.subprocess, "run"
+            ) as decode, mock.patch.object(
+                prepare, "write_wav_mono"
+            ) as write_output:
+                with self.assertRaisesRegex(ValueError, unexpected):
+                    prepare._bake_honkytonk("unused-source-cache")
+
+            ensure_sources.assert_not_called()
+            decode.assert_not_called()
+            write_output.assert_not_called()
+
+    def test_extra_output_is_rejected_before_the_first_write(self):
+        self.assert_rebake_rejects_before_writing(
+            ["C4"],
+            ["honkytonk_C4.wav", "honkytonk_old.wav"],
+            r"honkytonk_old\.wav",
+        )
+
+    def test_renamed_note_rejects_the_old_name_before_the_first_write(self):
+        self.assert_rebake_rejects_before_writing(
+            ["D4"],
+            ["honkytonk_C4.wav"],
+            r"honkytonk_C4\.wav",
+        )
+
+
 class LocalBankSelectionTest(unittest.TestCase):
     """MM-BUG-KILN-00128: command modes must not rewrite an unrelated local bank."""
 

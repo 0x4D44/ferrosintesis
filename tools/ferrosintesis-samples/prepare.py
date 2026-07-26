@@ -1144,6 +1144,7 @@ FAMILY_PACKAGE = {
     "steinwayb": "ferrosintesis-samples-vcsl-steinway",
     "kawai": "ferrosintesis-samples-vcsl-kawai",
     "headroom": "ferrosintesis-samples-headroom",
+    "honkytonk": "ferrosintesis-samples-honkytonk",
     # New CC0 onsets: `-orchestral` is at the ~10 MiB crates.io cap, so harp (and the
     # timpani/recorder/ocarina/banjo units that follow) route to a second CC0 crate.
     "harp": "ferrosintesis-samples-orchestral2",
@@ -2730,6 +2731,8 @@ def _bake_honkytonk(src):
     (the GM 3 default). 7z-extract the per-note FLACs (as the guitar/bagpipe archives),
     ffmpeg-decode each, keep 1.5 s of body, and measure the (detuned) root in a tight
     window. Writes `honkytonk_<note>.wav`; returns print rows."""
+    _validate_generated_output_inventory(
+        "honkytonk", {f"honkytonk_{n}.wav" for n in HONKYTONK_NOTES})
     member_map = {f"htsrc_{n}.flac": f"{_HT_MEMBER_DIR}/{n}.flac"
                   for n in HONKYTONK_NOTES}
     ensure_archive_sources(src, HONKYTONK_URL, HONKYTONK_SHA256,
@@ -3081,22 +3084,22 @@ def _wants_family(only, family):
     return only is None or family in only
 
 
-def _validate_headroom_output_inventory(sources=None, repo_root=None):
-    """Fail closed when the Headroom package retains an obsolete generated WAV."""
-    expected = set(HEADROOM_SOURCES if sources is None else sources)
+def _validate_generated_output_inventory(family, expected, repo_root=None):
+    """Fail closed when a package retains an obsolete family-owned WAV."""
+    expected = set(expected)
     root = REPO_ROOT if repo_root is None else repo_root
-    out_dir = os.path.dirname(sample_output_path("headroom_.wav", root))
+    out_dir = os.path.dirname(sample_output_path(f"{family}_.wav", root))
     if not os.path.isdir(out_dir):
         return
     unexpected = sorted(
         name for name in os.listdir(out_dir)
-        if name.startswith("headroom_")
+        if name.startswith(f"{family}_")
         and name.endswith(".wav")
         and name not in expected
     )
     if unexpected:
         raise ValueError(
-            "Headroom output contains unexpected generated WAVs: "
+            f"{family} output contains unexpected generated WAVs: "
             + ", ".join(unexpected)
         )
 
@@ -3144,7 +3147,7 @@ def main():
     # Reject stale owned assets before fetching a source or writing any selected
     # output. Silently retaining or deleting one can republish a removed sample.
     if want("headroom"):
-        _validate_headroom_output_inventory()
+        _validate_generated_output_inventory("headroom", HEADROOM_SOURCES)
 
     # `--sax-only` bakes ONLY the MTG saxophone LA layer (network + the -sax crate),
     # skipping the slow VSCO fetch/rewrite — fast iteration on the sax bank alone.

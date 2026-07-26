@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00122 — Dark-Salamander documentation selects the B1 upright and names the wrong A/B baseline
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample assets / GM0 alternate-bank routing
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T073254Z-p43624-n750388200-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00122-run-fix-20260726T073254Z-p43624-n750388200-c1
-- **Owner base:** 653f4a8eb9f597ec80fed33121b7ec38aec101d3
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T07:32:54Z
-- **Owner until:** 2026-07-26T09:32:54Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-dark-salamander/`)
+- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-dark-salamander/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T073254Z-p43624-n750388200-c1 branch=task/bug-MM-BUG-KILN-00122-run-fix-20260726T073254Z-p43624-n750388200-c1 code=9c2baab298ed33ac1cfce2fd7f10144e14bfacfa gate=manual)
 
 ## Observation
 

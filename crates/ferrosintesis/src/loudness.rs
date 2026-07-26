@@ -16,6 +16,8 @@
 //! at −23 dBFS reads −23.0 LUFS) in the unit tests below — an external, non-circular
 //! oracle that needs no reference implementation.
 
+use std::collections::VecDeque;
+
 const ABS_GATE_LUFS: f32 = -70.0;
 const REL_GATE_LU: f32 = -10.0;
 const OFFSET: f32 = -0.691; // BS.1770 loudness constant
@@ -152,32 +154,7 @@ fn block_loudness(zj: f64) -> f64 {
     }
 }
 
-/// Momentary loudness (LUFS) per BS.1770: one value per 400 ms block on a 100 ms
-/// hop, **ungated** and in time order.
-///
-/// This is the short-window counterpart to [`integrated_lufs`]. Integrated loudness
-/// answers "how loud is this programme overall"; the momentary series answers "how
-/// loud is it *right now*", which is what you need to compare individual musical
-/// events whose decay envelopes differ — a long window would let tail length leak
-/// into a level estimate.
-///
-/// Returns an empty vector for a buffer shorter than one 400 ms block or a sample
-/// rate too small to represent a nonzero 400 ms block and 100 ms hop. Blocks that
-/// are exactly zero read `f32::NEG_INFINITY`; callers that want the standard
-/// gating should apply it themselves (or use [`integrated_lufs`]).
-pub fn momentary_lufs(interleaved_stereo: &[f32], fs: u32) -> Vec<f32> {
-    let fs = fs as f32;
-    block_mean_squares(interleaved_stereo, fs)
-        .into_iter()
-        .map(|zj| block_loudness(zj) as f32)
-        .collect()
-}
-
-/// Integrated loudness (LUFS) of an interleaved-stereo f32 buffer per BS.1770-4.
-/// Returns `f32::NEG_INFINITY` for silence / signals with no gated blocks.
-pub fn integrated_lufs(interleaved_stereo: &[f32], fs: u32) -> f32 {
-    let fs = fs as f32;
-    let z = block_mean_squares(interleaved_stereo, fs);
+fn integrated_from_blocks(z: &[f64]) -> f32 {
     if z.is_empty() {
         return f32::NEG_INFINITY;
     }
@@ -204,6 +181,120 @@ pub fn integrated_lufs(interleaved_stereo: &[f32], fs: u32) -> f32 {
     }
     let mean_rel: f64 = rel_kept.iter().sum::<f64>() / rel_kept.len() as f64;
     (offset + 10.0 * mean_rel.log10()) as f32
+}
+
+/// Incremental BS.1770 meter for the scratch-backed offline renderer.
+///
+/// Each overlapping window is deliberately re-summed from zero in chronological
+/// order. A rolling subtract/add sum would be faster, but its different floating-point
+/// association can move a gate boundary and change normalized PCM.
+pub(crate) struct StreamLoudness {
+    shelf_l: Biquad,
+    hp_l: Biquad,
+    shelf_r: Biquad,
+    hp_r: Biquad,
+    left: VecDeque<f64>,
+    right: VecDeque<f64>,
+    block: usize,
+    hop: usize,
+    frames: usize,
+    blocks: Vec<f64>,
+}
+
+impl StreamLoudness {
+    pub(crate) fn new(fs: u32) -> Self {
+        // Match `block_mean_squares`: it first receives the public rate as f32,
+        // then promotes that rounded value for coefficient/window calculations.
+        let fs = fs as f32 as f64;
+        let (shelf_l, hp_l) = k_weighting(fs);
+        let (shelf_r, hp_r) = k_weighting(fs);
+        let block = (0.400 * fs).round() as usize;
+        let hop = (0.100 * fs).round() as usize;
+        Self {
+            shelf_l,
+            hp_l,
+            shelf_r,
+            hp_r,
+            left: VecDeque::with_capacity(block),
+            right: VecDeque::with_capacity(block),
+            block,
+            hop,
+            frames: 0,
+            blocks: Vec::new(),
+        }
+    }
+
+    pub(crate) fn push(&mut self, interleaved_stereo: &[f32]) {
+        assert!(
+            interleaved_stereo.len().is_multiple_of(2),
+            "stereo block must contain complete frames"
+        );
+        for frame in interleaved_stereo.chunks_exact(2) {
+            let l = self.hp_l.process(self.shelf_l.process(frame[0] as f64));
+            let r = self.hp_r.process(self.shelf_r.process(frame[1] as f64));
+            self.left.push_back(l);
+            self.right.push_back(r);
+            if self.left.len() > self.block {
+                self.left.pop_front();
+                self.right.pop_front();
+            }
+            self.frames += 1;
+
+            if self.block == 0
+                || self.hop == 0
+                || self.frames < self.block
+                || !(self.frames - self.block).is_multiple_of(self.hop)
+            {
+                continue;
+            }
+
+            let mut sl = 0.0f64;
+            let mut sr = 0.0f64;
+            for (&l, &r) in self.left.iter().zip(self.right.iter()) {
+                sl += l * l;
+                sr += r * r;
+            }
+            self.blocks.push((sl + sr) / self.block as f64);
+        }
+    }
+
+    pub(crate) fn finish(self) -> f32 {
+        integrated_from_blocks(&self.blocks)
+    }
+
+    #[cfg(test)]
+    fn block_count(&self) -> usize {
+        self.blocks.len()
+    }
+}
+
+/// Momentary loudness (LUFS) per BS.1770: one value per 400 ms block on a 100 ms
+/// hop, **ungated** and in time order.
+///
+/// This is the short-window counterpart to [`integrated_lufs`]. Integrated loudness
+/// answers "how loud is this programme overall"; the momentary series answers "how
+/// loud is it *right now*", which is what you need to compare individual musical
+/// events whose decay envelopes differ — a long window would let tail length leak
+/// into a level estimate.
+///
+/// Returns an empty vector for a buffer shorter than one 400 ms block or a sample
+/// rate too small to represent a nonzero 400 ms block and 100 ms hop. Blocks that
+/// are exactly zero read `f32::NEG_INFINITY`; callers that want the standard
+/// gating should apply it themselves (or use [`integrated_lufs`]).
+pub fn momentary_lufs(interleaved_stereo: &[f32], fs: u32) -> Vec<f32> {
+    let fs = fs as f32;
+    block_mean_squares(interleaved_stereo, fs)
+        .into_iter()
+        .map(|zj| block_loudness(zj) as f32)
+        .collect()
+}
+
+/// Integrated loudness (LUFS) of an interleaved-stereo f32 buffer per BS.1770-4.
+/// Returns `f32::NEG_INFINITY` for silence / signals with no gated blocks.
+pub fn integrated_lufs(interleaved_stereo: &[f32], fs: u32) -> f32 {
+    let fs = fs as f32;
+    let z = block_mean_squares(interleaved_stereo, fs);
+    integrated_from_blocks(&z)
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +360,77 @@ fn channel_true_peak_env(
         *e = peak;
     }
     env
+}
+
+#[derive(Default)]
+struct StreamTruePeakChannel {
+    history: [f32; TP_TAPS_PER_PHASE],
+    next: usize,
+    len: usize,
+    peak: f32,
+}
+
+impl StreamTruePeakChannel {
+    fn push(&mut self, sample: f32, phases: &[[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE]) -> f32 {
+        self.history[self.next] = sample;
+        self.len = (self.len + 1).min(TP_TAPS_PER_PHASE);
+
+        let mut peak = sample.abs();
+        for phase in phases {
+            let mut acc = 0.0f32;
+            for (k, &coef) in phase.iter().enumerate().take(self.len) {
+                let i = (self.next + TP_TAPS_PER_PHASE - k) % TP_TAPS_PER_PHASE;
+                acc += self.history[i] * coef;
+            }
+            peak = peak.max(acc.abs());
+        }
+        self.peak = self.peak.max(peak);
+        self.next = (self.next + 1) % TP_TAPS_PER_PHASE;
+        peak
+    }
+}
+
+/// Incremental form of the existing causal four-phase true-peak meter.
+pub(crate) struct StreamTruePeak {
+    phases: [[f32; TP_TAPS_PER_PHASE]; TP_OVERSAMPLE],
+    left: StreamTruePeakChannel,
+    right: StreamTruePeakChannel,
+}
+
+impl StreamTruePeak {
+    pub(crate) fn new() -> Self {
+        Self {
+            phases: tp_polyphase(),
+            left: StreamTruePeakChannel::default(),
+            right: StreamTruePeakChannel::default(),
+        }
+    }
+
+    /// Feed one stereo frame and return its shared true-peak envelope.
+    pub(crate) fn push_frame(&mut self, left: f32, right: f32) -> f32 {
+        self.left
+            .push(left, &self.phases)
+            .max(self.right.push(right, &self.phases))
+    }
+
+    pub(crate) fn push(&mut self, interleaved_stereo: &[f32]) {
+        assert!(
+            interleaved_stereo.len().is_multiple_of(2),
+            "stereo block must contain complete frames"
+        );
+        for frame in interleaved_stereo.chunks_exact(2) {
+            self.push_frame(frame[0], frame[1]);
+        }
+    }
+
+    pub(crate) fn finish(self) -> f32 {
+        let peak = self.left.peak.max(self.right.peak);
+        if peak <= 0.0 {
+            f32::NEG_INFINITY
+        } else {
+            20.0 * peak.log10()
+        }
+    }
 }
 
 /// Max 4×-oversampled true peak (linear) of one channel.
@@ -411,6 +573,68 @@ mod tests {
             v.push(s);
         }
         v
+    }
+
+    fn push_irregular_chunks(
+        loudness: &mut StreamLoudness,
+        true_peak: &mut StreamTruePeak,
+        signal: &[f32],
+    ) {
+        let chunk_frames = [1usize, 7, 64, 3, 257, 2, 19, 1024];
+        let mut frame = 0;
+        let total = signal.len() / 2;
+        let mut chunk = 0;
+        while frame < total {
+            let end = (frame + chunk_frames[chunk % chunk_frames.len()]).min(total);
+            let samples = &signal[frame * 2..end * 2];
+            loudness.push(samples);
+            true_peak.push(samples);
+            frame = end;
+            chunk += 1;
+        }
+    }
+
+    #[test]
+    fn streaming_meters_are_bit_exact_across_irregular_chunks() {
+        let fs = 44100u32;
+        let mut signal = stereo_sine(997.0, 0.15, 1.3, fs as f32);
+        signal.extend(std::iter::repeat_n(0.0, fs as usize / 3 * 2));
+        signal.extend(stereo_sine_phase(
+            fs as f32 / 4.0,
+            0.81,
+            0.73,
+            fs as f32,
+            std::f32::consts::FRAC_PI_4,
+        ));
+
+        let expected_loudness = integrated_lufs(&signal, fs);
+        let expected_true_peak = true_peak_dbtp(&signal, fs);
+        let mut loudness = StreamLoudness::new(fs);
+        let mut true_peak = StreamTruePeak::new();
+        push_irregular_chunks(&mut loudness, &mut true_peak, &signal);
+
+        assert_eq!(
+            loudness.finish().to_bits(),
+            expected_loudness.to_bits(),
+            "streaming BS.1770 changed a floating-point operation"
+        );
+        assert_eq!(
+            true_peak.finish().to_bits(),
+            expected_true_peak.to_bits(),
+            "streaming true peak changed a floating-point operation"
+        );
+    }
+
+    #[test]
+    fn streaming_loudness_emits_only_complete_windows() {
+        let fs = 10u32; // block=4, hop=1: tiny exact boundary fixture
+        let mut meter = StreamLoudness::new(fs);
+        meter.push(&[0.1, -0.1, 0.2, -0.2, 0.3, -0.3]);
+        assert_eq!(meter.block_count(), 0);
+        meter.push(&[0.4, -0.4]);
+        assert_eq!(meter.block_count(), 1);
+        meter.push(&[0.5, -0.5, 0.6, -0.6]);
+        assert_eq!(meter.block_count(), 3);
     }
 
     /// EBU Tech 3341 normative calibration: a stereo 1 kHz sine at −23 dBFS reads

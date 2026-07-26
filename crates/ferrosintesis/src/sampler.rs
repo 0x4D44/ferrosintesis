@@ -2925,13 +2925,16 @@ pub fn prewarm() {
     let _ = finger_bass_bank();
     let _ = pick_bass_bank();
 
-    // Whole-voice LOOPED-SUSTAIN zones (GM 64-67 sax, GM 76 blown bottle). Decoding the
-    // bank is only half the setup: `SaxLoopVoice::new` / `BottleLoopVoice::new` also need
-    // the zone's pitch-synchronous loop bounds, and finding those scans the static PCM
-    // (67.4 M multiply-accumulates for the bottle's 72,765-frame recording). Resolve every
-    // zone's loop here, so no NoteOn ever runs that search inside the audio callback
-    // (MM-BUG-KILN-00064). `bottle_loop_bank` is the ACTIVE GM 76 route; the `bottle_bank`
-    // onset bank above is the retired one and is prewarmed separately.
+    // Whole-voice LOOPED-SUSTAIN zones (GM 7 clavinet, GM 64-67 sax, GM 76 blown bottle).
+    // Decoding the bank is only half the setup: the looped voices also need the zone's
+    // pitch-synchronous loop bounds, and finding those scans the static PCM (67.4 M
+    // multiply-accumulates for the bottle's 72,765-frame recording). Resolve every zone's
+    // loop here, so no NoteOn ever runs that search inside the audio callback
+    // (MM-BUG-KILN-00064/00043). `bottle_loop_bank` is the ACTIVE GM 76 route; the
+    // `bottle_bank` onset bank above is the retired one and is prewarmed separately.
+    for zone in clavinet_bank() {
+        let _ = zone.sustain_loop(find_clavinet_loop);
+    }
     for program in 64..=67 {
         for vel in [1u8, 127] {
             for zone in sax_bank(program, vel) {
@@ -5076,11 +5079,12 @@ impl Voice for FretNoiseOneShot {
 
 // --- GM 7 clavinet: the DEFAULT sampled voice (MuseScore MS Basic, MIT) ----------
 //
-// Eleven baked decaying notes (sounding G1-G6, pitch-synchronous loops) picked by
-// `nearest` and repitched per key. Unlike the ring-out gong, a clavinet string is
-// DAMPED on key release, so note-off starts a fast release fade. `--no-samples` and
-// the CC0-nonzero alt bank use the modeled `Pluck(&CLAVINET)` instead (routed in
-// `voices::make` / `altbank::make`).
+// Eleven legacy baked-decay assets (sounding G1-G6, pitch-synchronous bodies) picked
+// by `nearest` and repitched per key. Runtime now loops the body before the old tail
+// and applies the GM-reference decay in output time. Unlike the ring-out gong, a
+// clavinet string is DAMPED on key release, so note-off starts a fast release fade.
+// `--no-samples` and the CC0-nonzero alt bank use the modeled `Pluck(&CLAVINET)`
+// instead (routed in `voices::make` / `altbank::make`).
 
 /// Clavinet output level — an EAR-tunable knob (this box has no ears), roughly
 /// level-matched to the modeled clavinet it replaces as the default voice.
@@ -5090,8 +5094,107 @@ const CLAVINET_LEVEL: f32 = 0.80;
 /// fast — the release, not the baked body decay, governs a short note.
 #[cfg(feature = "embedded-samples")]
 const CLAVINET_RELEASE_T60: f32 = 0.06;
+#[cfg(feature = "embedded-samples")]
+const CLAVINET_SOURCE_SR: f32 = 44_100.0;
 
-/// GM 7 clavinet sampled bank: 11 baked decaying notes, sounding G1-G6. Roots are the
+#[cfg(feature = "embedded-samples")]
+fn clavinet_body_t60(key: u8) -> f32 {
+    let x = ((key as f32 - 58.0) / 15.0).clamp(0.0, 1.0);
+    let u = x * x * (3.0 - 2.0 * x);
+    5.0 + (3.3 - 5.0) * u
+}
+
+#[cfg(feature = "embedded-samples")]
+fn clavinet_baked_t60(root: f32) -> f32 {
+    let midi = 69.0 + 12.0 * (root / 440.0).log2();
+    let frac = ((midi - 31.0) / 60.0).clamp(0.0, 1.0);
+    2.4 - 1.5 * frac
+}
+
+/// Find a pitch-synchronous loop in the baked GM7 asset, before its old 1.6 s tail fade.
+///
+/// The committed WAV already has a too-fast exponential baked into the repeated body.
+/// The search scores a decay-compensated view of each candidate so the runtime loop can
+/// wrap click-free, then [`ClavinetSampled`] applies the approved output-time decay.
+#[cfg(feature = "embedded-samples")]
+fn find_clavinet_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
+    #[cfg(test)]
+    LOOP_SEARCHES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    if root <= 0.0 {
+        return None;
+    }
+    let period = CLAVINET_SOURCE_SR / root;
+    if period < 4.0 {
+        return None;
+    }
+    let n = data.len();
+    const START_LO_S: f32 = 0.16;
+    const START_HI_S: f32 = 0.34;
+    const MIN_LEN_S: f32 = 0.035;
+    const MAX_LEN_S: f32 = 0.11;
+    const BODY_END_S: f32 = 1.45;
+    let start_lo = (START_LO_S * CLAVINET_SOURCE_SR) as usize;
+    let min_len = (MIN_LEN_S * CLAVINET_SOURCE_SR) as usize;
+    let body_end = ((BODY_END_S * CLAVINET_SOURCE_SR) as usize).min(n.saturating_sub(2));
+    if start_lo == 0 || body_end <= start_lo + min_len {
+        return None;
+    }
+    let start_hi = ((START_HI_S * CLAVINET_SOURCE_SR) as usize).min(body_end - min_len);
+    let max_len = (MAX_LEN_S * CLAVINET_SOURCE_SR) as usize;
+    let stride = (period / 8.0).max(1.0) as usize;
+    let baked_t60 = clavinet_baked_t60(root);
+    let flatten = |i: usize, ls: usize| {
+        let dt = i.saturating_sub(ls) as f32 / CLAVINET_SOURCE_SR;
+        data[i] * 10f32.powf(3.0 * dt / baked_t60)
+    };
+    let imbalance = |ls: usize, le: usize| -> f32 {
+        let mid = (ls + le) / 2;
+        let rms = |a: usize, b: usize| {
+            (data[a..b]
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    let x = flatten(a + i, ls);
+                    x * x
+                })
+                .sum::<f32>()
+                / (b - a).max(1) as f32)
+                .sqrt()
+        };
+        let (r1, r2) = (rms(ls, mid), rms(mid, le));
+        (r1 - r2).abs() / (0.5 * (r1 + r2) + 1e-6)
+    };
+    let mut best: Option<(f32, usize, usize)> = None;
+    let mut ls = start_lo;
+    while ls <= start_hi {
+        let mut k = ((min_len as f32 / period).ceil() as usize).max(1);
+        loop {
+            let l = (k as f32 * period).round() as usize;
+            if l > max_len {
+                break;
+            }
+            let le = ls + l;
+            if le + 1 >= body_end {
+                break;
+            }
+            let a = flatten(ls, ls);
+            let b = flatten(le, ls);
+            let prev_a = flatten(ls - 1, ls);
+            let prev_b = flatten(le - 1, ls);
+            let vseam = (b - a).abs();
+            let sseam = ((b - prev_b) - (a - prev_a)).abs();
+            let cost = vseam + 0.5 * sseam + 4.0 * imbalance(ls, le);
+            if best.is_none_or(|(bc, _, _)| cost < bc) {
+                best = Some((cost, ls, le));
+            }
+            k += 1;
+        }
+        ls += stride;
+    }
+    best.map(|(_, ls, le)| (ls, le))
+}
+
+/// GM 7 clavinet sampled bank: 11 legacy baked-decay notes, sounding G1-G6. Roots are the
 /// exact nominal fundamentals — the bake loops pitch-synchronously to `originalPitch`,
 /// so the sustained pitch is dead-on and `nearest` repitches minimally per key.
 fn clavinet() -> &'static [Zone] {
@@ -5118,16 +5221,21 @@ pub fn clavinet_bank() -> &'static [Zone] {
     clavinet()
 }
 
-/// GM 7 clavinet: the DEFAULT sampled voice. Plays the nearest baked zone repitched
-/// to the key (like [`GongOneShot`]), but a clavinet is DAMPED on key release, so
-/// note-off starts a fast release fade instead of ringing out.
+/// GM 7 clavinet: the DEFAULT sampled voice. Plays the nearest zone's real onset,
+/// then loops its body under an output-time decay envelope. A clavinet is DAMPED on
+/// key release, so note-off starts a fast release fade instead of ringing out.
 #[cfg(feature = "embedded-samples")]
 pub struct ClavinetSampled {
     data: &'static [f32],
+    loop_start: usize,
+    loop_end: usize,
     pos: f32,
     base_step: f32,
     bend: f32,
     gain: f32,
+    body_mul: f32,
+    body_env: f32,
+    baked_t60: f32,
     rel_mul: f32,
     env: f32,
     releasing: bool,
@@ -5139,12 +5247,20 @@ pub struct ClavinetSampled {
 pub fn clavinet_sampled(key: u8, vel: u8, sr: f32, _seed: u32) -> Box<dyn Voice> {
     let f = key_freq(key);
     let zone = nearest(clavinet_bank(), f);
+    let (loop_start, loop_end) = zone
+        .sustain_loop(find_clavinet_loop)
+        .expect("embedded clavinet zone must contain a sustain loop");
     Box::new(ClavinetSampled {
         data: zone.data.as_slice(),
+        loop_start,
+        loop_end,
         pos: 0.0,
         base_step: 44_100.0 / sr * (f / zone.root),
         bend: 1.0,
         gain: CLAVINET_LEVEL * vel_amp(vel),
+        body_mul: 10f32.powf(-3.0 / (clavinet_body_t60(key) * sr)),
+        body_env: 1.0,
+        baked_t60: clavinet_baked_t60(zone.root),
         rel_mul: 10f32.powf(-3.0 / (CLAVINET_RELEASE_T60 * sr)),
         env: 1.0,
         releasing: false,
@@ -5160,33 +5276,59 @@ pub fn clavinet_sampled(_key: u8, _vel: u8, _sr: f32, _seed: u32) -> Box<dyn Voi
 }
 
 #[cfg(feature = "embedded-samples")]
+impl ClavinetSampled {
+    fn sample_at(&self, idx: isize) -> f32 {
+        let n = self.data.len() as isize;
+        let loop_start = self.loop_start as isize;
+        let loop_len = (self.loop_end - self.loop_start) as isize;
+        let idx = if idx < loop_start {
+            idx.clamp(0, n - 1) as usize
+        } else {
+            self.loop_start + (idx - loop_start).rem_euclid(loop_len) as usize
+        };
+        self.data[idx]
+    }
+
+    fn baked_makeup(&self) -> f32 {
+        if self.pos < self.loop_start as f32 {
+            1.0
+        } else {
+            let offset = self.pos - self.loop_start as f32;
+            10f32.powf(3.0 * offset / (self.baked_t60 * CLAVINET_SOURCE_SR))
+        }
+    }
+}
+
+#[cfg(feature = "embedded-samples")]
 impl Voice for ClavinetSampled {
     fn render(&mut self, out: &mut [f32]) -> bool {
-        let n = self.data.len();
         let step = self.base_step * self.bend;
+        let loop_len = (self.loop_end - self.loop_start) as f32;
         for o in out.iter_mut() {
             let j = self.pos as usize;
-            // reap at the bounded tail: the baked note ends on a fade to zero.
-            if j + 1 >= n {
-                return false;
-            }
             let frac = self.pos - j as f32;
-            // 4-point cubic read (edge-clamped): the clavinet zone is repitched
-            // to the key (and pitch-bent), so reads land between samples.
+            // 4-point cubic read with looped neighbours: the old asset's tail is bounded,
+            // but a GM held note owns its duration, so sustained reads wrap before the fade.
             let v = crate::dsp::cubic4(
-                self.data[j.saturating_sub(1)],
-                self.data[j],
-                self.data[j + 1],
-                self.data[(j + 2).min(n - 1)],
+                self.sample_at(j as isize - 1),
+                self.sample_at(j as isize),
+                self.sample_at(j as isize + 1),
+                self.sample_at(j as isize + 2),
                 frac,
-            );
-            *o += v * self.gain * self.env;
+            ) * self.baked_makeup();
+            *o += v * self.gain * self.body_env * self.env;
             self.pos += step;
+            while self.pos >= self.loop_end as f32 {
+                self.pos -= loop_len;
+            }
+            self.body_env *= self.body_mul;
             if self.releasing {
                 self.env *= self.rel_mul;
                 if self.env < 1e-4 {
                     return false;
                 }
+            } else if self.body_env < 1e-5 {
+                return false;
             }
         }
         true
@@ -5216,6 +5358,59 @@ mod tests {
     use crate::dsp::OnePole;
     use crate::voices;
     use crate::voices::Voice;
+
+    fn render_held(mut voice: Box<dyn Voice>, sr: f32, secs: f32) -> (Vec<f32>, bool) {
+        let mut buf = vec![0.0; (secs * sr) as usize];
+        let mut alive = true;
+        for chunk in buf.chunks_mut(128) {
+            if alive {
+                alive = voice.render(chunk);
+            }
+        }
+        (buf, alive)
+    }
+
+    fn dies_within(mut voice: Box<dyn Voice>, sr: f32, secs: f32) -> bool {
+        let mut left = (secs * sr) as usize;
+        while left > 0 {
+            let n = left.min(128);
+            let mut scratch = vec![0.0; n];
+            if !voice.render(&mut scratch) {
+                return true;
+            }
+            left -= n;
+        }
+        false
+    }
+
+    fn window_rms(buf: &[f32], sr: f32, start_s: f32, len_s: f32) -> f32 {
+        let a = (start_s * sr) as usize;
+        let b = ((start_s + len_s) * sr) as usize;
+        crate::testutil::rms(&buf[a..b])
+    }
+
+    fn decay_t60_between(buf: &[f32], sr: f32, early_s: f32, late_s: f32) -> f32 {
+        let early = window_rms(buf, sr, early_s, 0.10).max(1e-12);
+        let late = window_rms(buf, sr, late_s, 0.10).max(1e-12);
+        let drop_db = 20.0 * (early / late).log10();
+        60.0 * (late_s - early_s) / drop_db.max(1e-6)
+    }
+
+    fn band_decay_t60_between(buf: &[f32], sr: f32, f: f32, early_s: f32, late_s: f32) -> f32 {
+        let band = |start_s: f32| {
+            let a = (start_s * sr) as usize;
+            let b = ((start_s + 0.12) * sr) as usize;
+            crate::testutil::band_rms(&buf[a..b], sr, f, 2.0).max(1e-12)
+        };
+        let drop_db = 20.0 * (band(early_s) / band(late_s)).log10();
+        60.0 * (late_s - early_s) / drop_db.max(1e-6)
+    }
+
+    fn gm7_reference_t60_target(key: u8) -> f32 {
+        let x = ((key as f32 - 58.0) / 15.0).clamp(0.0, 1.0);
+        let u = x * x * (3.0 - 2.0 * x);
+        5.0 + (3.3 - 5.0) * u
+    }
 
     fn assert_gong_provenance_matches_velocity_boundary(provenance: &str, loud_vel: u8) {
         let soft_max = loud_vel
@@ -5257,6 +5452,91 @@ mod tests {
     fn gong_provenance_guard_rejects_a_stale_velocity_boundary() {
         let provenance = include_str!("../../ferrosintesis-samples-gong/PROVENANCE.md");
         assert_gong_provenance_matches_velocity_boundary(provenance, GONG_LOUD_VEL + 1);
+    }
+
+    #[test]
+    fn clavinet_sampled_hold_survives_the_baked_tail_and_decays_in_output_time() {
+        let sr = 44100.0;
+        for &key in &[48u8, 53, 58, 63, 68, 73] {
+            let (buf, alive) = render_held(
+                voices::make(7, key, 110, sr, 0x4300 + key as u32, true),
+                sr,
+                3.0,
+            );
+            assert!(
+                alive,
+                "GM7 sampled key {key} died before 3.0 s; this is the baked 1.6 s wall"
+            );
+
+            let body = window_rms(&buf, sr, 2.10, 0.12);
+            assert!(
+                body > 2.0e-5,
+                "GM7 sampled key {key} is effectively silent after the old tail: rms {body:.8}"
+            );
+
+            let t60 = decay_t60_between(&buf, sr, 0.55, 2.55);
+            let want = gm7_reference_t60_target(key);
+            assert!(
+                (t60 - want).abs() <= 0.55,
+                "GM7 sampled key {key} t60 {t60:.2}s, expected {want:.2}s"
+            );
+        }
+    }
+
+    #[test]
+    fn clavinet_sampled_attack_and_release_stay_bounded() {
+        let sr = 44100.0;
+        let (buf, alive) = render_held(voices::make(7, 60, 110, sr, 0x4301, true), sr, 0.08);
+        assert!(alive, "GM7 sampled attack should still be alive at 80 ms");
+        let peak = buf.iter().copied().map(f32::abs).fold(0.0, f32::max);
+        assert!(
+            (0.06..=0.65).contains(&peak),
+            "GM7 sampled attack peak moved outside the calibrated band: {peak:.4}"
+        );
+
+        let mut v = voices::make(7, 60, 110, sr, 0x4302, true);
+        let mut attack = vec![0.0; (0.45 * sr) as usize];
+        assert!(
+            v.render(&mut attack),
+            "held GM7 should survive into note-off"
+        );
+        v.note_off();
+        assert!(
+            dies_within(v, sr, 0.35),
+            "GM7 sampled note-off release should still terminate promptly"
+        );
+
+        assert!(
+            dies_within(voices::make(7, 48, 110, sr, 0x4303, true), sr, 12.0),
+            "GM7 sampled held decay must not leave a permanently live voice"
+        );
+    }
+
+    #[test]
+    fn clavinet_modeled_fallback_uses_the_same_multi_second_decay_idiom() {
+        let sr = 44100.0;
+        for &key in &[48u8, 63, 73] {
+            let (buf, alive) = render_held(
+                voices::make(7, key, 110, sr, 0x4310 + key as u32, false),
+                sr,
+                2.4,
+            );
+            assert!(
+                alive,
+                "GM7 modeled fallback key {key} died before a held 2.4 s note"
+            );
+            let t60 = decay_t60_between(&buf, sr, 0.35, 1.85);
+            let bt60 = band_decay_t60_between(&buf, sr, key_freq(key), 0.35, 1.85);
+            let want = gm7_reference_t60_target(key);
+            assert!(
+                (0.55 * want..=1.55 * want).contains(&t60),
+                "GM7 modeled fallback key {key} t60 {t60:.2}s, expected broadly around {want:.2}s"
+            );
+            assert!(
+                (0.55 * want..=1.55 * want).contains(&bt60),
+                "GM7 modeled fallback key {key} fundamental-band t60 {bt60:.2}s, expected broadly around {want:.2}s"
+            );
+        }
     }
 
     // ---------------------------------------------------------------------------

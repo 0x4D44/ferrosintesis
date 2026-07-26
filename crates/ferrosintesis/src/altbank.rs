@@ -31,6 +31,7 @@ fn t60_mul(t60: f32, sr: f32) -> f32 {
 /// alt bank stays frozen (it does NOT share `voices::DEFAULTS`, which may drift).
 const PIZZ: PluckPreset = PluckPreset {
     t60: 0.9,
+    t60_key_exp: 0.55,
     bright: 2600.0,
     pick_lp: 1600.0,
     pos: 0.30,

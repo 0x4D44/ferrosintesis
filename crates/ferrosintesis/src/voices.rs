@@ -2776,7 +2776,11 @@ impl DamperHold {
 }
 
 pub struct PluckPreset {
-    pub t60: f32,     // decay at 220 Hz
+    pub t60: f32, // decay at 220 Hz
+    /// Key-scaling exponent for the authored t60: `t60 * (220 Hz / f)^exp`.
+    /// The historic pluck family law is 0.55; GM7 clavinet flattens it to match
+    /// the General MIDI reference idiom instead of a physical short-string collapse.
+    pub t60_key_exp: f32,
     pub bright: f32,  // loop damping cutoff
     pub pick_lp: f32, // excitation lowpass
     pub pos: f32,     // pick position (0..0.5)
@@ -2897,6 +2901,7 @@ pub struct PluckPreset {
 /// Base values every preset starts from (struct-update in const context).
 const DEFAULTS: PluckPreset = PluckPreset {
     t60: 3.0,
+    t60_key_exp: 0.55,
     bright: 3000.0,
     pick_lp: 2500.0,
     pos: 0.2,
@@ -3361,12 +3366,11 @@ pub const HARPSICHORD: PluckPreset = PluckPreset {
 pub const CLAVINET: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "CLAVINET",
-    // KILN-00042 SCOPE: the plucked-decay fix deliberately stops short of the
-    // piano family (GM6/GM7) — another agent is mid-flight on piano envelopes,
-    // and these two also carry the sample-onset crossfade of KILN-00030/00043.
-    // Off keeps this preset bit-identical; lift it once that work has landed.
-    damper_hold: DamperHold::Off,
-    t60: 0.78,
+    // MM-BUG-KILN-00043: the modeled fallback follows the sampled default's GM
+    // idiom — multi-second body through the low/mid register, tapering at the top.
+    damper_hold: DamperHold::Derived,
+    t60: 13.0,
+    t60_key_exp: 1.20,
     bright: 5200.0,
     pick_lp: 5800.0,
     pos: 0.11,
@@ -4762,11 +4766,13 @@ impl Pluck {
         // laws: the hold's reach shrinking at low velocity is the documented,
         // canary-pinned behaviour (see the vel-40 canary in the tests).
         let wound_bright = bright * (1.0 - 0.30 * wound);
-        let t60 = (t60_base * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
+        let t60 =
+            (t60_base * (220.0 / f).powf(p.t60_key_exp)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
         // The budget is relative to THIS preset's authored decay, so t60 must be
         // known first. Static (pre-velocity, pre-jitter) for the same reason the
         // corner is: the crossover must not move with velocity.
-        let t60_static = (p.t60 * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
+        let t60_static =
+            (p.t60 * (220.0 / f).powf(p.t60_key_exp)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
         let hold =
             p.damper_hold
                 .corner_scale(f, p.bright * (1.0 - 0.30 * wound), 60.0 / t60_static);
@@ -16145,6 +16151,11 @@ mod tests {
                 continue;
             }
             checked += 1;
+            let authored_t60 = |key: u8| {
+                let f = ring_f(p, key);
+                let wound = wound_factor(p.wound_all, p.wound_key_split, key);
+                (p.t60 * (220.0 / f).powf(p.t60_key_exp)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound)
+            };
             let total = |key: u8| {
                 let vn = if p.vel_sense >= 1.0 {
                     100.0 / 127.0
@@ -16155,16 +16166,14 @@ mod tests {
                 let wound = wound_factor(p.wound_all, p.wound_key_split, key);
                 let pre = (p.bright * (0.22 + 0.98 * vn)).min(sr * 0.45);
                 let wb = pre * (1.0 - 0.30 * wound);
-                let t60s =
-                    (p.t60 * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
+                let t60s = authored_t60(key);
                 let hold =
                     p.damper_hold
                         .corner_scale(f, p.bright * (1.0 - 0.30 * wound), 60.0 / t60s);
                 let fc = (wb * hold).min(sr * 0.45).max(300.0);
                 let d = -20.0 * OnePole::lowpass_mag(fc, f, sr).log10() * f;
-                // the CLAMPED t60 — long-t60 presets hit the 14 s cap low down
-                // and the raw law would misreport them
-                let t60 = (p.t60 * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
+                // the CLAMPED t60 — long-t60 presets hit the 14 s cap low down.
+                let t60 = authored_t60(key);
                 60.0 / t60 + d
             };
             let (bot, top) = (total(48), total(72));
@@ -16174,8 +16183,17 @@ mod tests {
             // be two octaves: HARMONIC's flageolet switches from the octave to
             // the twelfth at key 64, so its span is 6x, not 4x, and a fixed
             // bound would flag a preset that is behaving exactly as authored.
+            // Long-t60 presets can hit the 14 s clamp low down; only then does
+            // the raw power-law ratio stop being the intended tilt.
             let f_ratio = ring_f(p, 72) / ring_f(p, 48);
-            let intended = f_ratio.powf(0.55);
+            let raw_t60 = |key: u8| p.t60 * (220.0 / ring_f(p, key)).powf(p.t60_key_exp);
+            let clamped = (raw_t60(48) - raw_t60(48).clamp(0.25, 14.0)).abs() > 1e-6
+                || (raw_t60(72) - raw_t60(72).clamp(0.25, 14.0)).abs() > 1e-6;
+            let intended = if clamped {
+                authored_t60(48) / authored_t60(72)
+            } else {
+                f_ratio.powf(p.t60_key_exp)
+            };
             assert!(
                 (0.8 * intended..=1.25 * intended).contains(&ratio),
                 "{name}: decay tilts {ratio:.2}x from key 48 ({bot:.1} dB/s) to key 72 \
@@ -16267,7 +16285,8 @@ mod tests {
                     ),
                 ] {
                     let bright = (p.bright * bright_mul * 1.2 * 1.08).min(sr * 0.45);
-                    let t60 = (p.t60 * 1.1 * (220.0 / f).powf(0.55)).clamp(0.25, 14.0) * t60_mul_c;
+                    let t60 = (p.t60 * 1.1 * (220.0 / f).powf(p.t60_key_exp)).clamp(0.25, 14.0)
+                        * t60_mul_c;
                     let lg = 10f32.powf(-3.0 / (t60 * f));
                     let m = (lg * hmag(bright, f)).powi(2) + p.course_couple * p.course_couple;
                     if m > worst {
@@ -19801,19 +19820,17 @@ mod tests {
             DamperHold::Derived,
             "inherits ..NYLON by design"
         );
-        // The three documented opt-outs, each for a stated reason.
+        // The documented opt-outs, each for a stated reason.
         assert_eq!(
             OUD.damper_hold,
             DamperHold::Off,
             "deliberate voicing (warm dark top) — lifting it is an ear decision"
         );
-        for (p, who) in [(&HARPSICHORD, "HARPSICHORD"), (&CLAVINET, "CLAVINET")] {
-            assert_eq!(
-                p.damper_hold,
-                DamperHold::Off,
-                "{who} is held out of KILN-00042 while the piano family is in flight"
-            );
-        }
+        assert_eq!(
+            HARPSICHORD.damper_hold,
+            DamperHold::Off,
+            "HARPSICHORD is held out of KILN-00042 while its LA layer remains separately calibrated"
+        );
 
         // ...and NOTHING ELSE is Off. This closes the loophole in the decay-law
         // oracle, which skips `Off` presets by design: without this pin, quietly
@@ -19824,7 +19841,7 @@ mod tests {
         // back to the derived hold, so they must no longer appear in this opt-out list.
         // DRIVE_LEAD left this list in KILN-00049: its output-domain sustainer
         // controller now makes the derived hold safe across the full register.
-        const EXPECTED_OFF: &[&str] = &["CLAVINET", "HARPSICHORD", "OUD"];
+        const EXPECTED_OFF: &[&str] = &["HARPSICHORD", "OUD"];
         let mut actual_off: Vec<&str> = ALL_PLUCK_PRESETS
             .iter()
             .filter(|(_, p)| p.damper_hold == DamperHold::Off)

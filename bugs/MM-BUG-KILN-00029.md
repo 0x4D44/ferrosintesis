@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00029 — voice models turn over near full velocity: GM42/43 bowed strings DROP up to 1.6 dB from v110 to v127, and GM4's pickup bark peaks at v≈105
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00029-run-fix-20260726T215802Z-p9812-n612744600-c5-code-1785103974747
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below)
+- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below) → Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T215802Z-p9812-n612744600-c5 branch=task/bug-MM-BUG-KILN-00029-run-fix-20260726T215802Z-p9812-n612744600-c5 code=ac143d62b4a9 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -241,3 +241,25 @@ Arthur approved the following product targets, so candidate audition is no longe
 5. Preserve all existing voice-character, velocity-law, DC, anti-alias, and deterministic
    render guards. Land the fix with failing-before/passing-after regression coverage and leave
    the bug `Fixed` for independent verification.
+
+## Fix
+
+### Fix summary (2026-07-26, deltic:auto run=fix-20260726T215802Z-p9812-n612744600-c5 code=ac143d62b4a9 gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00029 by making MIDI velocity own the affected voices' rendered loudness instead of letting nonlinear timbre controls push the output curve backward. GM42/43 now use a low-string BowedString contact-speed map that stays inside the playable region, so the compensation-bypassed high-velocity render is monotonic and the normal all-program velocity-law oracle no longer needs an exemption. GM4 keeps its pickup color, but the pickup drive rises gently enough that the 2.82*f0 bark partial no longer gets compressed down after v105. Added regression coverage for the documented bowed-string key and velocity grid, and tightened the GM4 bark oracle through v127. Focused tests are green
+
+Root cause: GM42/43 used MIDI velocity both as output gain and as bow contact speed; near full velocity that over-bowed the waveguide, reducing intrinsic source amplitude and fighting the shared square-law gain. GM4's raised tine partial was fed through a tanh pickup drive that grew too aggressively with velocity, so shaper compression ate the bark partial faster than the mode table grew it above about v105.
+
+Changed:
+- crates/ferrosintesis/src/voices.rs: retuned GM42/43 BowedString bow-speed mapping and GM4 pickup drive
+- crates/ferrosintesis/src/velocity_law.rs: removed GM42/43 square-law exemption and added MM-BUG-KILN-00029 regression coverage
+
+Tests:
+- cargo test -p ferrosintesis --lib velocity_law -- --nocapture
+- cargo test -p ferrosintesis --lib electric_piano -- --nocapture
+- cargo test -p ferrosintesis --lib e_pianos -- --nocapture
+- cargo test -p ferrosintesis --lib bowed_string -- --nocapture
+- git diff --check
+
+Left alone:
+- bugs/ ledger

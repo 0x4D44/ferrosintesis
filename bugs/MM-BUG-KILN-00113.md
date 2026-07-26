@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00113 — Core provenance assigns the upright bank to the wrong GM program
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** core sample package / provenance
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — corrected the shipped VSCO upright mapping to zero-based GM 0)
 
 ## Observation
 
@@ -48,6 +48,21 @@ routing label and describe only the source instrument if provenance is not
 intended to track consumer dispatch.
 
 Estimated effort: Trivial.
+
+## Resolution — 2026-07-26
+
+The packaged provenance now identifies `piano_*` as the upright piano onset
+bank for zero-based GM 0. This matches `make_uncorrected(0)`, which dispatches
+to `sampler::piano_bank`; zero-based GM 1 continues to dispatch to the separate
+VCSL Kawai bank.
+
+## Verification — 2026-07-26
+
+- The focused provenance inventory oracle passed for all packaged sample
+  families and their documented file counts.
+- `cargo package --list --allow-dirty` for
+  `ferrosintesis-samples-core` includes the corrected `PROVENANCE.md`.
+- Formatting and `git diff --check` passed.
 
 ## Notes
 

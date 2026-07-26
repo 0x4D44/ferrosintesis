@@ -9,7 +9,7 @@ root.
 
 | Family | Files | Instrument | Source | Licence |
 |--------|------:|------------|--------|---------|
-| `piano_*` | 52 | Upright piano (GM 1) onsets, 3 velocity tiers; 25 cells have 2 round robins, quiet C2/G2 are single-take | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
+| `piano_*` | 52 | Upright piano (GM 0) onsets, 3 velocity tiers; 25 cells have 2 round robins, quiet C2/G2 are single-take | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `violin_*` | 12 | Solo violin (GM 40) arco onsets, p/f layers | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `flute_*` | 5 | Flute (GM 73) sustain onsets | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 

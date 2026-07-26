@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample generation / grand-piano provenance
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T132336Z-p3016-n723439500-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00134-run-fix-20260726T132336Z-p3016-n723439500-c1
+- **Owner base:** daf18d1dec63435698eea1829740a72d131abf48
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T13:23:36Z
+- **Owner until:** 2026-07-26T15:23:36Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

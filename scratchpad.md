@@ -1,5 +1,29 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.26 — **ASK ARTHUR BEFORE TOUCHING THIS.** He asked for it to be parked, not
+  actioned: do not start work on it without checking with him first, whatever the item looks
+  like on a later read. **The b1-upright re-bake breaks its own crate's inventory gate** —
+  `D:\language\midi-music\tools\ferrosintesis-samples\prepare.py` (`_bake_b1upright`) and
+  `D:\language\midi-music\crates\ferrosintesis-samples-b1-upright\src\lib.rs:254`
+  (`assert_eq!(packaged.len(), FILE_COUNT)`). Running the documented
+  `python prepare.py --only=b1upright` emits **74** WAVs where the crate ships **52**: 22
+  stray `b1_soft_*.wav` from a velocity layer that was deliberately deleted to get the crate
+  under the crates.io 10 MiB package limit. The bake was never updated to stop producing the
+  layer, so a fresh re-bake fails the crate's own `FILE_COUNT` assert. Observed 2026-07-26 by
+  baking into a scratch dir during the offline-rebuild audit; not fixed there because that
+  task was scoped to the workspace-resolution and VCSL-pin defects.
+  Why it matters: b1-upright is the **largest first-party bank and the GM0 default**, built
+  from Arthur's own performances — the one bank we most need to be able to re-derive. It is
+  currently the only first-party bank whose documented re-bake command cannot succeed.
+  Shape of the fix (unverified, needs his steer on which he wants): either stop emitting the
+  soft layer in `_bake_b1upright`, or emit it and have the crate ship it (reopening the 10 MiB
+  question). There is also **no `_validate_generated_output_inventory` guard for this
+  family** — that guard exists only for headroom (`prepare.py:3150`) and honkytonk
+  (`prepare.py:2734`), which is why the drift went unnoticed; adding one for b1-upright would
+  turn a silent 74-vs-52 mismatch into a bake-time error. Given the repo's
+  hand-maintained-list defect class, the enumeration question ("which families lack the
+  guard?") is probably the real unit of work rather than b1-upright alone.
+
 - [x] 2026.07.26 — **GM 59 (Ride Cymbal 2) has the identical defect just fixed on GM 57, and is
   still unfixed** — `crates/ferrosintesis/src/sampler.rs` (`sampled_drum`, the `51 | 59 =>
   (&kit::RIDE, 1.0)` arm). Found while fixing crash 2, not fixed there to keep that change to

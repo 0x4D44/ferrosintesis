@@ -4,6 +4,7 @@ import io
 import math
 import os
 import random
+import re
 import shutil
 import struct
 import tarfile
@@ -1215,6 +1216,119 @@ class PinnedFlacCacheTest(unittest.TestCase):
             self.src, "source-a", "recipe-b")
         self.assertNotEqual(first, changed_source)
         self.assertNotEqual(first, changed_recipe)
+
+
+#: URL ref position in a GitHub fetch: raw.githubusercontent.com/<owner>/<repo>/<REF>/…
+#: and github.com/<owner>/<repo>/(archive|raw)/<REF>/…. Stops at the quote/brace that
+#: ends the ref so an f-string interpolation is captured whole, as `{VCSL_REV}`.
+_GH_REF_RE = re.compile(
+    r"""raw\.githubusercontent\.com/[^/"'\s]+/[^/"'\s]+/([^/"'\s]+)/"""
+    r"""|github\.com/[^/"'\s]+/[^/"'\s]+/(?:archive|raw)/([^/"'\s]+)/"""
+)
+_SHA1_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+_INTERPOLATION_RE = re.compile(r"\A\{[A-Za-z_][A-Za-z0-9_]*\}\Z")
+
+
+def unpinned_github_refs(text):
+    """Return every GitHub URL ref in `text` that is not immutable.
+
+    Immutable means a literal 40-hex commit SHA, or an f-string interpolation of a
+    single name (`{VCSL_REV}`) whose value is checked separately. A branch (`master`,
+    `main`) or a tag is mutable: the bytes it serves can change under us, which for a
+    sample bake means a silent re-voicing of a shipped bank.
+
+    Text-based on purpose. The point is to catch a URL family added LATER, and a
+    check that imported the constants could only see the families that already exist.
+    """
+    bad = []
+    for m in _GH_REF_RE.finditer(text):
+        ref = m.group(1) or m.group(2)
+        if _SHA1_RE.match(ref) or _INTERPOLATION_RE.match(ref):
+            continue
+        bad.append(ref)
+    return bad
+
+
+class UpstreamRefsArePinnedTest(unittest.TestCase):
+    """Every upstream GitHub fetch must name an immutable commit.
+
+    Written after two of the ten VCSL URLs were found interpolating the literal
+    `master` while the other eight used `VCSL_REV` — 102 WAVs off a moving branch in a
+    tool where everything else is SHA-pinned. The per-family
+    `test_headroom_urls_and_all_unique_payloads_are_pinned` could not catch it: it
+    asserts about headroom and nothing else, so each new family arrived unguarded.
+    This derives the set of URLs from the source text instead.
+    """
+
+    def bake_scripts(self):
+        here = os.path.dirname(os.path.abspath(prepare.__file__))
+        found = {}
+        for name in sorted(os.listdir(here)):
+            if name.endswith(".py") and not name.startswith("test_"):
+                with open(os.path.join(here, name), encoding="utf-8") as f:
+                    found[name] = f.read()
+        self.assertIn("prepare.py", found)
+        return found
+
+    def test_no_bake_script_fetches_from_a_mutable_ref(self):
+        offenders = {
+            name: unpinned_github_refs(text)
+            for name, text in self.bake_scripts().items()
+        }
+        offenders = {k: v for k, v in offenders.items() if v}
+        self.assertEqual(offenders, {}, f"unpinned GitHub refs: {offenders}")
+
+    def test_every_rev_constant_used_in_a_url_is_a_commit_sha(self):
+        """The interpolation escape hatch must not smuggle in a branch name."""
+        names = set()
+        for text in self.bake_scripts().values():
+            for m in _GH_REF_RE.finditer(text):
+                ref = m.group(1) or m.group(2)
+                if _INTERPOLATION_RE.match(ref):
+                    names.add(ref[1:-1])
+        self.assertIn("VCSL_REV", names, "expected the VCSL pin among the URL refs")
+        for name in sorted(names):
+            value = getattr(prepare, name, None)
+            self.assertIsNotNone(value, f"{name} interpolated but not defined")
+            self.assertRegex(
+                value, _SHA1_RE, f"{name} = {value!r} is not a 40-hex commit SHA")
+
+    def test_the_scan_rejects_the_refs_it_is_meant_to_reject(self):
+        """The adversarial half: a scan nobody has seen fail proves nothing.
+
+        Each case below is a URL this tool would plausibly grow, written the wrong
+        way. If any stops being reported, the predicate has a hole.
+        """
+        owner = "raw.githubusercontent.com/sgossner/VCSL"
+        cases = {
+            f'"https://{owner}/master/Chordophones/x.wav"': ["master"],
+            f'"https://{owner}/main/Chordophones/x.wav"': ["main"],
+            f'"https://{owner}/HEAD/Chordophones/x.wav"': ["HEAD"],
+            f'"https://{owner}/v1.2.0/Chordophones/x.wav"': ["v1.2.0"],
+            # A tag looks pinned but GitHub lets it move; treat it as mutable.
+            '"https://github.com/freepats/x/archive/refs.tar.gz/"': ["refs.tar.gz"],
+            # f-string form, the shape the real bug took.
+            f'f"https://{owner}/master/{{d}}/x.wav"': ["master"],
+            # Short SHA: not 40 hex, so not accepted.
+            f'"https://{owner}/c1ea7bc/Chordophones/x.wav"': ["c1ea7bc"],
+            # Two offenders in one file must both surface, not just the first.
+            f'"https://{owner}/master/a.wav" "https://{owner}/main/b.wav"':
+                ["master", "main"],
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(unpinned_github_refs(text), expected)
+
+    def test_the_scan_accepts_the_real_pinned_forms(self):
+        """The converse: it must not cry wolf on correctly-pinned URLs."""
+        owner = "raw.githubusercontent.com/sgossner/VCSL"
+        for text in (
+            f'"https://{owner}/{prepare.VCSL_REV}/Chordophones/x.wav"',
+            f'f"https://{owner}/{{VCSL_REV}}/Chordophones/x.wav"',
+            'f"https://raw.githubusercontent.com/a/b/{SOME_REV}/p/x.wav"',
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(unpinned_github_refs(text), [])
 
 
 class HeadroomOutputInventoryTest(unittest.TestCase):

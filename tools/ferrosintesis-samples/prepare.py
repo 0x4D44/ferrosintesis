@@ -693,7 +693,7 @@ GRAND_SOURCES = {
 # layer (peak-normalized to 0.9, so same level, harder-strike timbre = real RR
 # variation, exactly the Salamander/grand trick that defeats the machine-gun tell).
 _VCSL_STEINWAY_BASE = (
-    "https://raw.githubusercontent.com/sgossner/VCSL/master/"
+    f"https://raw.githubusercontent.com/sgossner/VCSL/{VCSL_REV}/"
     "Chordophones/Zithers/Grand%20Piano%2C%20Steinway%20B/Sus"
 )
 _STEINWAYB_ZONES = ["C2", "F#2", "C3", "F#3", "C4", "F#4", "C5", "F#5", "C6"]
@@ -716,7 +716,7 @@ STEINWAYB_SOURCES = {
 # labelled one octave DOWN. 16-bit stereo WAV, velocity layers v1..v4. Sampling is
 # irregular, so 8 zones from the pitches with full v1..v4 coverage (measured, verified).
 _VCSL_KAWAI_BASE = (
-    "https://raw.githubusercontent.com/sgossner/VCSL/master/"
+    f"https://raw.githubusercontent.com/sgossner/VCSL/{VCSL_REV}/"
     "Chordophones/Zithers/Grand%20Piano%2C%20Kawai/Sustains"
 )
 # sounding-pitch dest zone -> source file label (one octave down); all have full v1..v4.

@@ -593,6 +593,8 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ),
 ];
 
+static PCM_CACHE: OnceLock<Vec<Vec<i16>>> = OnceLock::new();
+
 /// Where a bank's embedded takes actually live.
 ///
 /// A `Bank` descriptor and the WAVs it names are not always in the same crate. The four
@@ -777,12 +779,30 @@ pub fn get(name: &str) -> Option<&'static [u8]> {
 
 /// Returns the decoded mono 16-bit 44.1 kHz PCM for an exact file name.
 pub fn pcm(name: &str) -> Option<&'static [i16]> {
-    static CACHE: OnceLock<Vec<Vec<i16>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| SAMPLES.iter().map(|(_, b)| decode_wav(b)).collect());
+    let cache = decoded_samples();
     let idx = SAMPLES
         .iter()
         .position(|(candidate, _)| *candidate == name)?;
     Some(&cache[idx])
+}
+
+/// Decode this package's complete PCM inventory now.
+///
+/// Call away from a realtime thread so the first drum hit does no decoding.
+pub fn prewarm() {
+    let _ = decoded_samples();
+}
+
+/// Number of times this package's PCM cache has initialized (zero or one).
+///
+/// Hidden diagnostic used to enforce the realtime prewarm contract end to end.
+#[doc(hidden)]
+pub fn pcm_cache_initializations() -> usize {
+    usize::from(PCM_CACHE.get().is_some())
+}
+
+fn decoded_samples() -> &'static Vec<Vec<i16>> {
+    PCM_CACHE.get_or_init(|| SAMPLES.iter().map(|(_, bytes)| decode_wav(bytes)).collect())
 }
 
 /// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).

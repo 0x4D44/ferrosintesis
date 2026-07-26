@@ -2820,11 +2820,12 @@ pub fn prewarm() {
     if !crate::embedded_samples_available() {
         return;
     }
-    // One decode call fills the drum-kit crate's whole PCM cache (all takes
-    // decode inside a single OnceLock init).
+    // Each package owns an independent OnceLock cache. Use the packages' explicit
+    // hooks so a bank move never masquerades as a shared cache.
     #[cfg(feature = "embedded-samples")]
     {
-        let _ = ferrosintesis_samples_drumkit::RIDE.pcm(0, 0);
+        ferrosintesis_samples_drumkit::prewarm();
+        ferrosintesis_samples_drumkit2::prewarm();
     }
     // Piano-shaped banks fan out over (velocity layer x round-robin), so touching one
     // combination leaves the rest to decode inside the audio callback. Cover the grid.
@@ -5430,6 +5431,54 @@ mod tests {
              deadline-bearing block, which is the dropout prewarm_samples() exists to \
              prevent. Add the missing bank(s) to sampler::prewarm().",
             after_exercise - after_prewarm
+        );
+    }
+
+    /// Every independently packaged drum-kit cache must have an explicit prewarm
+    /// hook. Derive the package set from Cargo.toml so a third size split cannot
+    /// silently repeat MM-BUG-KILN-00125.
+    #[test]
+    fn every_drumkit_package_cache_is_explicitly_prewarmed() {
+        let manifest = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"),
+        )
+        .expect("ferrosintesis Cargo.toml is readable");
+        let packages: Vec<&str> = manifest
+            .lines()
+            .filter_map(|line| line.split_once(" = {").map(|(name, _)| name))
+            .filter(|name| name.starts_with("ferrosintesis-samples-drumkit"))
+            .collect();
+        assert!(
+            packages.len() >= 2,
+            "found only {} drum-kit packages — the package scan proves nothing",
+            packages.len()
+        );
+
+        let src = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join("sampler.rs"),
+        )
+        .expect("sampler.rs is readable from its own crate");
+        let body = src
+            .split_once("pub fn prewarm() {")
+            .expect("prewarm must exist")
+            .1
+            .split_once("\n}")
+            .expect("its body must terminate")
+            .0;
+        let missing: Vec<&str> = packages
+            .iter()
+            .copied()
+            .filter(|package| {
+                let crate_name = package.replace('-', "_");
+                !body.contains(&format!("{crate_name}::prewarm();"))
+            })
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "drum-kit package cache(s) {missing:?} are absent from sampler::prewarm(); \
+             the first routed NoteOn would decode them inside the realtime callback"
         );
     }
 

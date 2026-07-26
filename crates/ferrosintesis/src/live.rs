@@ -968,4 +968,41 @@ mod tests {
              prewarm_samples() promised they would not."
         );
     }
+
+    /// MM-BUG-KILN-00125: the accent-cymbal package has its own PCM cache, separate
+    /// from the core drum-kit crate. Prewarm it before a channel-10 NoteOn reaches
+    /// `fill_ring()`, then exercise every routed companion articulation.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn realtime_accent_cymbals_are_prewarmed_before_the_audio_block() {
+        let mut synth = RealtimeSynth::new(RealtimeOptions {
+            samples: true,
+            ..opts()
+        });
+        synth.prewarm_samples();
+        let before = ferrosintesis_samples_drumkit2::pcm_cache_initializations();
+        assert_eq!(
+            before, 1,
+            "prewarm_samples() returned while the companion drum cache was still cold"
+        );
+
+        // Channel 10 crash, china and splash routes. Key 57 aliases crash, but is
+        // included because it is a separately reachable GM NoteOn path.
+        for key in [49u8, 52, 55, 57] {
+            synth.write_byte(0x99);
+            synth.write_byte(key);
+            synth.write_byte(100);
+        }
+        let mut out = vec![0f32; LIVE_BLOCK * 2];
+        synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+        assert!(
+            synth.active_voice_count() >= 4,
+            "accent NoteOns did not reach realtime voice construction"
+        );
+        assert_eq!(
+            ferrosintesis_samples_drumkit2::pcm_cache_initializations(),
+            before,
+            "the companion drum cache initialized inside the realtime audio block"
+        );
+    }
 }

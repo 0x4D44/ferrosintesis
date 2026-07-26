@@ -5118,26 +5118,46 @@ mod tests {
     use crate::voices;
     use crate::voices::Voice;
 
-    #[test]
-    fn gong_provenance_describes_the_shipped_velocity_boundary() {
-        let layers = gong_layers();
+    fn assert_gong_provenance_matches_velocity_boundary(provenance: &str, loud_vel: u8) {
+        let soft_max = loud_vel
+            .checked_sub(1)
+            .expect("the loud gong boundary must leave a soft velocity range");
+        let hard_switch = format!("hard switch at velocity {loud_vel}");
+        let soft_range = format!("soft through velocity {soft_max}");
         assert!(
-            std::ptr::eq(gong_layer(GONG_LOUD_VEL - 1, layers), layers.0.as_slice()),
-            "velocity 83 must select only the soft gong take"
+            provenance.contains(&hard_switch),
+            "gong provenance must name the shipped {hard_switch}"
         );
         assert!(
-            std::ptr::eq(gong_layer(GONG_LOUD_VEL, layers), layers.1.as_slice()),
-            "velocity 84 must select only the loud gong take"
-        );
-        let provenance = include_str!("../../ferrosintesis-samples-gong/PROVENANCE.md");
-        assert!(
-            provenance.contains("hard switch at velocity 84"),
-            "gong provenance must name the shipped hard-switch boundary"
+            provenance.contains(&soft_range),
+            "gong provenance must name the shipped {soft_range}"
         );
         assert!(
             !provenance.contains("velocity-crossfades"),
             "gong provenance must not claim that the two recordings are summed"
         );
+    }
+
+    #[test]
+    fn gong_provenance_describes_the_shipped_velocity_boundary() {
+        let layers = gong_layers();
+        assert!(
+            std::ptr::eq(gong_layer(GONG_LOUD_VEL - 1, layers), layers.0.as_slice()),
+            "the velocity below GONG_LOUD_VEL must select only the soft gong take"
+        );
+        assert!(
+            std::ptr::eq(gong_layer(GONG_LOUD_VEL, layers), layers.1.as_slice()),
+            "GONG_LOUD_VEL must select only the loud gong take"
+        );
+        let provenance = include_str!("../../ferrosintesis-samples-gong/PROVENANCE.md");
+        assert_gong_provenance_matches_velocity_boundary(provenance, GONG_LOUD_VEL);
+    }
+
+    #[test]
+    #[should_panic(expected = "gong provenance must name the shipped hard switch")]
+    fn gong_provenance_guard_rejects_a_stale_velocity_boundary() {
+        let provenance = include_str!("../../ferrosintesis-samples-gong/PROVENANCE.md");
+        assert_gong_provenance_matches_velocity_boundary(provenance, GONG_LOUD_VEL + 1);
     }
 
     // ---------------------------------------------------------------------------

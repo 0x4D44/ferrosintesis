@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00091 — the default V3 kit is measurably weaker than legacy V1 on three velocity/attack behaviours
 
-- **State:** Blocked
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** drums / kit voicing
 - **Raised:** 2026-07-24
-- **Owner:** Arthur
-- **Owner role:** human
+- **Owner:** -
+- **Owner role:** -
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00054 by Claude Opus 4.8 (1M) while fixing it. 00054 was a coverage gap; extending those oracles to the default kit MEASURED this difference, which nobody had looked at before because no oracle rendered V3.) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the measurements cannot decide whether V3's softer kick attack and washier ride are the intended default voicing)
+- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00054 by Claude Opus 4.8 (1M) while fixing it. 00054 was a coverage gap; extending those oracles to the default kit MEASURED this difference, which nobody had looked at before because no oracle rendered V3.) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the measurements cannot decide whether V3's softer kick attack and washier ride are the intended default voicing) → Closed (2026-07-26, Arthur accepted V3's softer coupled kick response and washier ride as intentional default-kit voicing; the existing per-kit oracles already verify all three selected contracts)
 
 ## Observation
 
@@ -103,3 +103,20 @@ If all current V3 values are intentional, the follow-up is documentation-only:
 remove the “measured, not designed” caveats while retaining the per-kit bounds.
 Any raised target requires a Build pass to revoice V3 and prove the selected
 contract without changing unrelated drum keys.
+
+## Decision — 2026-07-26
+
+Arthur accepted the current V3 character:
+
+- keep the `1.128×` beater-point response and `1.097×` gain-normalised click
+  response together as one intentionally softer kick voicing;
+- keep the `2.90×` ride ping-over-wash response as an intentionally washier
+  ride;
+- retain V1's stronger contracts independently rather than homogenising the
+  two kits.
+
+No audio implementation changed. The existing per-kit tests already verify
+that every response moves in the designed direction and meets its selected
+floor. The provisional “measured, not designed” comments were replaced with
+the deliberate kit-specific contracts. This is therefore closed as
+working-as-intended, not fixed by revoicing.

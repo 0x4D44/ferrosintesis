@@ -3668,10 +3668,9 @@ mod tests {
             let point = |s: &[f32]| testutil::hp_rms(&s[..early], sr, 3500.0);
             let gain_ratio = crate::dsp::vel_amp(120) / crate::dsp::vel_amp(30);
             let point_ratio = point(&hard) / point(&soft).max(1e-9);
-            // Both kits are superlinear; V3 is materially LESS so, and its bound is
-            // MEASURED (18.04 vs a gain ratio of 16.0 = 1.128x) rather than designed.
-            // Whether the default kit should match V1's 1.3x is an ear call, tracked as
-            // MM-BUG-KILN-00091 — do not quietly relax either number to close the gap.
+            // Both kits are superlinear. V3 deliberately keeps the softer beater
+            // character measured at 1.128x, while V1 retains its punchier 1.3x contract.
+            // These are kit-specific voicing bounds; do not homogenise them.
             let want = if kit == Kit::V3 { 1.08 } else { 1.3 };
             assert!(
                 point_ratio > want * gain_ratio,
@@ -4320,9 +4319,8 @@ mod tests {
                 sr,
                 7500.0,
             );
-            // V1 pings 3x over its wash; V3's metal_plate ride measures 2.90x, so the
-            // bound is per-kit and MEASURED (MM-BUG-KILN-00091 asks whether V3's weaker
-            // ping is intended).
+            // V1 pings 3x over its wash. V3 deliberately keeps its washier metal_plate
+            // ride, measured at 2.90x, so the bound is kit-specific.
             let want = if kit == Kit::V3 { 2.5 } else { 3.0 };
             assert!(
                 early > want * late,
@@ -4555,9 +4553,8 @@ mod tests {
                     / crate::dsp::vel_amp(vel).max(1e-9)
             };
             let (ch, cs) = (click(&hard, 120), click(&soft, 30));
-            // The gain-normalised click grows with velocity on both kits, but V3's
-            // re-voiced kick barely does: 1.097x measured against V1's 1.3x bound
-            // (MM-BUG-KILN-00091).
+            // The gain-normalised click grows with velocity on both kits. V3
+            // deliberately keeps its softer 1.097x response; V1 remains at 1.3x.
             let want = if kit == Kit::V3 { 1.05 } else { 1.3 };
             assert!(
                 ch > want * cs,

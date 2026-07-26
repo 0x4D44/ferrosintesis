@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00085 — the LA bass crossfade SHAPE still costs the onset: a 50 ms model mute erases the kick thump and a 350 ms handover outlasts 90% of a bass line's notes
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-24
-- **Owner:** Arthur
-- **Owner role:** human
+- **Owner:** -
+- **Owner role:** -
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material)
+- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B)
 
 ## Observation
 
@@ -87,6 +87,46 @@ Blocking owner: **Arthur**. Unblock when Arthur supplies these two decisions:
 
 Those choices determine different audible behavior and asset scope. An unattended change
 would guess at the product contract rather than fix a settled defect.
+
+### Decision and autonomous implementation brief (2026-07-26)
+
+Arthur approved a bass-specific additive LA contract:
+
+1. Keep the modeled bass at full weight from time zero. Layer the sampled transient over
+   it at full onset weight, then taper the sample smoothly to zero by approximately
+   150 ms. Do not reuse the current sum-to-one 50–350 ms replacement crossfade for
+   GM 32–35: the model's `kick` and decay must remain present throughout.
+2. Limit upward sample repitch to **five semitones** from the selected zone root
+   (`2^(5/12)`, approximately `1.33484×`). Above that ceiling, return the bare modeled
+   voice. Do not stretch the existing recordings upward by an octave and do not add or
+   source new audio in this fix.
+3. Recalibrate `LA_PIZZBASS` and `LA_EBASS` sample gain for additive layering. The old
+   seam gains describe a replacement crossfade and are not automatically valid.
+4. Keep this sampled path on the CC0 alternate bank. Do not promote it back to the
+   default in this bug; a representative musical A/B is required before that separate
+   product decision.
+
+Implement the additive shape as a narrowly selected `LaVoice` mode or bass wrapper so
+every existing sum-to-one LA voice remains unchanged. Avoid duplicating the sample
+reader or weakening its lifecycle rules.
+
+The autonomous fix must add focused regression evidence:
+
+- In the first 50 ms, the wrapped bass preserves the bare model's low-frequency kick
+  energy within 1 dB while also retaining a measurable sample contribution.
+- The sample contribution reaches zero smoothly by 150 ms, with no amplitude step at
+  the endpoint; the model remains live on notes longer than the handover.
+- The combined onset is gain-calibrated rather than allowed to jump arbitrarily from
+  additive summing. Re-run the existing bass-window measurement across GM 32–35 and
+  representative keys/velocities, adapting its windows to the new 0–150 ms contract.
+- A zone engages at exactly the five-semitone ceiling and falls back to the bit-identical
+  bare model immediately above it. Cover both the finger/pizzicato and pick banks.
+- Note-off, end-of-sample handling and voice reaping remain correct, and a regression
+  proves a non-bass `LaVoice` caller retains its existing sum-to-one behaviour.
+
+Leave the bug **Fixed**, not Closed, after the code and regression tests land. Independent
+verification should inspect the automated evidence and audition a short representative
+GM 32–35 alternate-bank render before closure.
 
 ## Notes
 

@@ -1231,7 +1231,10 @@ pub(crate) enum PianoSampleCal {
     /// mismatch: sample/model correlation measured −0.64..−0.87 before the seam,
     /// then turned positive. `wrap_release_b1` therefore flips the inaudible sample
     /// polarity, brings the model in 10% faster, and freezes that ratio at key-up.
-    /// The held-note rebound is now at most 1.5 dB without losing the damper gap.
+    /// Because the recording is fixed, the paired model phase is fixed too:
+    /// randomizing only the model changed reinforcement into cancellation on the
+    /// engine's normal seed (MM-BUG-KILN-00133). The held-note rebound is now at
+    /// most 1.5 dB without losing the damper gap.
     B1Upright,
 }
 
@@ -1462,6 +1465,10 @@ const B1_SAMPLE_GAIN: f32 = 1.30;
 /// The B1 keeps the conditioned bank's short sample retirement window. Its
 /// model uses a separate, slower rise from note start; see `LaFx`.
 const B1_SAMPLE_FADE: (f32, f32) = (0.18, 0.45);
+/// The B1 handoff phase-matches one fixed recording per key to its modeled body.
+/// A randomized model phase changes that relationship on every note and can turn
+/// the intended reinforcement back into a cancellation trough.
+const B1_MODEL_PHASE_SEED: u32 = 5;
 
 fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32, release_t60: f32) -> Modal {
     let f = key_freq(key);
@@ -12759,10 +12766,15 @@ pub fn acoustic_grand_with_bank(
     // One damper, one note: the modeled body and the sampled onset release
     // together, at a rate that depends on WHERE on the keyboard this note sits.
     let (model_t60, la_t60) = damper.t60_for(key);
-    let model: Box<dyn Voice> = if bright {
-        Box::new(bright_acoustic_piano(key, vel, sr, seed, model_t60))
+    let model_seed = if !bank.is_empty() && cal == PianoSampleCal::B1Upright {
+        B1_MODEL_PHASE_SEED
     } else {
-        Box::new(acoustic_piano(key, vel, sr, seed, model_t60))
+        seed
+    };
+    let model: Box<dyn Voice> = if bright {
+        Box::new(bright_acoustic_piano(key, vel, sr, model_seed, model_t60))
+    } else {
+        Box::new(acoustic_piano(key, vel, sr, model_seed, model_t60))
     };
     // The conditioned forte takes share the same unweighted macro envelope as
     // pp/mf, but their brighter spectrum measures about 4.9 dB louder through

@@ -11938,6 +11938,67 @@ mod tests {
         left(&render(&test_song(ev, 3.5), &test_opts(44100.0)).0)
     }
 
+    #[cfg(feature = "embedded-samples")]
+    fn render_held_gm0(key: u8, samples: bool) -> Vec<f32> {
+        let song = test_song(
+            vec![
+                (0.0, EvKind::Prog { ch: 0, prog: 0 }),
+                (
+                    0.0,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key,
+                        vel: 100,
+                    },
+                ),
+                (0.75, EvKind::NoteOff { ch: 0, key }),
+            ],
+            0.75,
+        );
+        let opt = Options {
+            samples,
+            tail: 0.0,
+            ..test_opts(44_100.0)
+        };
+        left(&render(&song, &opt).0)
+    }
+
+    #[cfg(feature = "embedded-samples")]
+    fn held_note_rebound_db(signal: &[f32], sr: f32) -> (f32, Vec<f32>) {
+        let window = (0.050 * sr) as usize;
+        let levels: Vec<f32> = signal
+            .chunks_exact(window)
+            .map(crate::testutil::rms)
+            .collect();
+        let rebound_db = (3..9)
+            .map(|i| {
+                let later = levels[i + 1..14].iter().copied().fold(0.0f32, f32::max);
+                20.0 * (later / levels[i].max(1e-12)).log10()
+            })
+            .fold(f32::NEG_INFINITY, f32::max);
+        (rebound_db, levels)
+    }
+
+    /// MM-BUG-KILN-00133: the engine must preserve a monotone GM0 envelope with
+    /// either voice source. The old voice-level oracle pinned seed 5 and could
+    /// not see the cancellation produced by the engine's normal seeded phase.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_gm0_treble_does_not_rebound_through_the_engine() {
+        let sr = 44_100.0;
+        for key in [72u8, 78, 84] {
+            for samples in [false, true] {
+                let signal = render_held_gm0(key, samples);
+                let (rebound_db, levels) = held_note_rebound_db(&signal, sr);
+                assert!(
+                    rebound_db <= 1.5,
+                    "GM0 key {key} samples={samples} rebounds {rebound_db:.2} dB through \
+                     the engine after its 150 ms attack budget (50 ms RMS: {levels:?})"
+                );
+            }
+        }
+    }
+
     fn render_keyboard_una_corda(program: u8, soft: bool) -> Vec<f32> {
         let mut ev = vec![
             (

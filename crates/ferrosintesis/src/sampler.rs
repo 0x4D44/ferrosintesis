@@ -1733,9 +1733,9 @@ fn b1_hard_zones() -> &'static [Zone] {
 /// no other bank has: the dynamics are genuinely different captured spectra, not
 /// one sample re-EQ'd. Loudness still comes from the engine's shared velocity
 /// law; the layer only supplies timbre. Split: `vel < 60` normal, `>= 60` hard.
-/// `rr2` is ignored (no round robins in v1) — so unlike the banks it replaced,
-/// the GM 0 default no longer varies repeated notes at the sample layer; the
-/// model's own seeded modal variation is what keeps repeats from being identical.
+/// `rr2` is ignored (no round robins in v1). The fixed recording also requires a
+/// fixed modeled phase during its phase-matched handoff; randomizing only one side
+/// recreates a cancellation trough (MM-BUG-KILN-00133).
 /// Voices the GM 0 DEFAULT (CC0=0) since 2026.07.26; it was the CC0=5 alternate.
 ///
 /// A third `soft` capture was recorded and dropped (2026.07.24). Measured

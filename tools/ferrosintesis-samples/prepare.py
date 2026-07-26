@@ -2841,24 +2841,61 @@ def _print_sample_rows(rows):
             print(f"{r[0]:26} {r[1]:9.2f} {r[2]:9.2f} {r[3]:9.2f} {r[4]:7.1f} {r[5]:5.2f} {r[6]:6.3f}")
 
 
+def _family_selection(args):
+    """Return (`local_only`, selected families) for command-line arguments."""
+    local_only = "--local-only" in args
+    only = None
+    for arg in args:
+        if arg.startswith("--only="):
+            only = set(filter(None, arg.split("=", 1)[1].split(",")))
+    if local_only:
+        only = {"gong"}
+    return local_only, only
+
+
+def _wants_family(only, family):
+    return only is None or family in only
+
+
+def _bake_gong_bank():
+    """Regenerate the local-source gong bank and return its report rows."""
+    rows = []
+    for out_name, (src_fn, package, end_fade_s) in sorted(LOCAL_SOURCES.items()):
+        x, sr = read_wav(os.path.join(GONG_SRC, src_fn))
+        x = resample(x, sr, OUT_SR)
+        sr = OUT_SR
+        seg = trim_lead_and_ring(x, sr, PRE_S, end_fade_s)
+        output = os.path.join(REPO_ROOT, "crates", package, "samples", out_name)
+        write_wav_mono(output, seg, sr)
+        rows.append((out_name, None, None, None, None, None, len(seg) / sr))
+    return rows
+
+
+def _bake_selected_local_banks(only):
+    """Run the selected local-source bank recipes and return their report rows."""
+    rows = []
+    if _wants_family(only, "gong"):
+        rows += _bake_gong_bank()
+    if _wants_family(only, "bottle"):
+        seg = bake_bottle_loop()
+        rows.append((BOTTLE_LOOP_OUT, None, None, None, None, None,
+                     len(seg) / OUT_SR))
+    return rows
+
+
 def main():
     socket.setdefaulttimeout(60)
     # `--local-only` skips the fetched full bank (network + rewriting the tracked
     # core/orchestral WAVs) and regenerates ONLY the local gong intake below.
-    local_only = "--local-only" in sys.argv[1:]
+    local_only, only = _family_selection(sys.argv[1:])
     # `--only=fam[,fam2]` regenerates ONLY the named families (by filename prefix),
     # leaving every other tracked WAV untouched and skipping their fetches (incl. the
     # 7z / SF3 / tarball sources) — used to ADD one instrument without rewriting the
     # whole bank. `fam` is the sample-name prefix: harp, timpani, recorder, ocarina,
     # banjo, sitar, panflute, bottle, shakuhachi, clavinet, chanter (bagpipe), grand, sax,
     # eastpick, eastpluck (the first-party Eastman E1D guitars), …
-    only = None
-    for a in sys.argv[1:]:
-        if a.startswith("--only="):
-            only = set(filter(None, a.split("=", 1)[1].split(",")))
-
     def want(fam):
-        return only is None or fam in only
+        return _wants_family(only, fam)
 
     # `--sax-only` bakes ONLY the MTG saxophone LA layer (network + the -sax crate),
     # skipping the slow VSCO fetch/rewrite — fast iteration on the sax bank alone.
@@ -3087,27 +3124,9 @@ def main():
                 write_wav_mono(sample_output_path(fn), conditioned[fn], OUT_SR)
                 rows.append(row)
 
-    # Local-file intake (gong): full ring kept, one-shot (no f0), explicit routing.
-    # Gated by `want("gong")` so `--only=<other>` never rewrites the tracked gong WAVs
-    # (a full run or `--local-only` leaves `only` None, so gong still regenerates).
-    for out_name, (src_fn, package, end_fade_s) in sorted(LOCAL_SOURCES.items()):
-        if not want("gong"):
-            continue
-        x, sr = read_wav(os.path.join(GONG_SRC, src_fn))
-        x = resample(x, sr, OUT_SR)
-        sr = OUT_SR
-        seg = trim_lead_and_ring(x, sr, PRE_S, end_fade_s)
-        output = os.path.join(REPO_ROOT, "crates", package, "samples", out_name)
-        write_wav_mono(output, seg, sr)
-        rows.append((out_name, None, None, None, None, None, len(seg) / sr))
-
-    # GM 76 blown bottle: a whole-voice loop with its own owner, source pin and crate.
-    # Gated like the gong so `--only=<other>` never rewrites the tracked WAV
-    # (MM-BUG-KILN-00065).
-    if want("bottle"):
-        seg = bake_bottle_loop()
-        rows.append((BOTTLE_LOOP_OUT, None, None, None, None, None,
-                     len(seg) / OUT_SR))
+    # Local-file recipes: gong one-shots plus the GM 76 whole-voice bottle loop.
+    # Family selection keeps `--only=<other>` from rewriting either tracked bank.
+    rows += _bake_selected_local_banks(only)
 
     _print_sample_rows(rows)
 

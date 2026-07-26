@@ -705,6 +705,32 @@ class ArchiveRefetchTest(unittest.TestCase):
         self.assertEqual(self.fetches, 2, "one initial fetch plus exactly one refetch")
 
 
+class LocalBankSelectionTest(unittest.TestCase):
+    """MM-BUG-KILN-00128: command modes must not rewrite an unrelated local bank."""
+
+    def test_command_modes_select_only_the_intended_local_banks(self):
+        cases = [
+            (["--local-only"], ["gong"]),
+            (["--only=bottle"], ["bottle"]),
+            ([], ["gong", "bottle"]),
+        ]
+        for args, expected in cases:
+            with self.subTest(args=args):
+                calls = []
+                with mock.patch.object(
+                    prepare,
+                    "_bake_gong_bank",
+                    side_effect=lambda: calls.append("gong") or [],
+                ), mock.patch.object(
+                    prepare,
+                    "bake_bottle_loop",
+                    side_effect=lambda: calls.append("bottle") or [],
+                ):
+                    _local_only, only = prepare._family_selection(args)
+                    prepare._bake_selected_local_banks(only)
+                self.assertEqual(calls, expected)
+
+
 class BottleLoopTest(unittest.TestCase):
     """MM-BUG-KILN-00065: the GM 76 whole-voice loop must have exactly one owner.
 

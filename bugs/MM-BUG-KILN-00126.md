@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** drum-kit package documentation / provenance
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T083911Z-p34720-n358957300-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00126-run-fix-20260726T083911Z-p34720-n358957300-c1
+- **Owner base:** fce100f88b04508f2c0c805851fca842fb41efe7
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T08:39:11Z
+- **Owner until:** 2026-07-26T10:39:11Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

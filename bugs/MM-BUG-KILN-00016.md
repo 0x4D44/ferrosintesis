@@ -63,3 +63,29 @@ recorded identity defect.
 - Net-new CC0 sourcing → sequence with MM-BUG-KILN-00015 after the reuse-only
   fixes. Slap bass onset is the most identity-critical, worth prioritising within
   the family.
+
+### Focused source search (2026-07-26)
+
+Arthur authorised a focused search for a CC0/CC-BY source. No immediately
+admissible live multisample was found:
+
+- The strongest match is Jonpv's 2019 public-domain bank: real six-string bass,
+  slap from B0–C#2, pop from D2–F3, sampled per fret with three round robins.
+  The creator's post explicitly dedicates it to the public domain, but both
+  Dropbox links now return an error and the Wayback Machine did not archive the
+  asset. Source:
+  <https://www.reddit.com/r/Bitwig/comments/e5jt15/slap_bass_multisample_96mb_3x_round_robin_sampled/>.
+- JohnSlap is live and contains slap/pop samples across two octaves, but its
+  repository and sample release contain no redistribution licence. It is not
+  usable without an explicit licence from its author. Source:
+  <https://github.com/johnmanjohnston/JohnSlap>.
+- Karoryfer's CC0 Swagbass contains five real muted-slap noise round robins, but
+  no pitched slap/pop multisample. It could add an unpitched transient but cannot
+  establish distinct GM36 slap and GM37 pop identities. Source:
+  <https://github.com/sfzinstruments/karoryfer.swagbass>.
+- The live CC0 Freesound candidates are single riffs/noises, or a synthesized
+  two-note imitation, rather than an isolated real multisample bank.
+
+The bug remains Blocked. It can be unblocked by recovering the Jonpv archive,
+obtaining an explicit redistributable licence for JohnSlap, finding another
+live CC0/CC-BY bank, or supplying an owner recording.

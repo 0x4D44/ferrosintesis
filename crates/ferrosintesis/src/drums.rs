@@ -3748,89 +3748,161 @@ mod tests {
         });
     }
 
-    /// GM 49 (Crash Cymbal 1) and GM 57 (Crash Cymbal 2) must not be the same cymbal.
+    /// GM 57 (Crash Cymbal 2) is GM 49's cymbal one semitone up — the SC-55's own answer.
     ///
-    /// They played one bank until 2026-07-26, so a file that scored two crashes heard
-    /// one — while `CRASH_SIZZLE` sat in the drumkit2 crate with no key able to reach
-    /// it. Key 57 now plays it.
+    /// Decoded from the SC-55mkII control ROM (see `sampler::CRASH_2_REPITCH`): both keys
+    /// share tone 0x0174 "Crash Cymbal" at identical level and sends, and differ in exactly
+    /// two bytes — play note 60 vs 61, and a symmetric pan split. So "crash 2" never named
+    /// a second cymbal; it named the same cymbal, smaller. We already had the pan split
+    /// (`engine::drum_pan`) and a level split (`engine::kit_balance`); this oracle guards
+    /// the pitch axis, the one that was missing.
     ///
-    /// Sampled path only, deliberately: this is a routing property of the sampled kit,
-    /// and the modelled path still voices both keys from the same crash model. That
-    /// remains true and is not what this oracle is about.
+    /// Two earlier attempts are worth recording, because both were wrong in instructive ways:
+    ///
+    /// 1. Until 2026-07-26 both keys played `CRASH` at rate 1.0, so a file scoring two
+    ///    crashes heard one.
+    /// 2. For one commit, 57 played `CRASH_SIZZLE` on the theory that it was the kit's
+    ///    second cymbal. It is not: measured on the raw WAVs, the two banks' sub-4 kHz
+    ///    plate modes agree to a median of 0.32 Hz (445.8 vs 445.5, 1387.0 vs 1386.6) —
+    ///    the same plate with a sizzler, not a second cymbal. The control is decisive:
+    ///    `splash`, same library and mic set, shares essentially nothing with either.
+    ///    By ear the two rendered the same, which is what sent us back to the ROM.
+    ///
+    /// A correction to this test's own history. The version at (2) recorded that "an
+    /// earlier version asserted that rivets sustain the high band; measured, these two
+    /// banks differ by only 6.5% there, so that hypothesis was wrong". **The hypothesis
+    /// was right and the measurement window was wrong.** That profile windowed
+    /// `&s[..(1.0 * sr)]` — the first second, before a sizzler's contribution develops.
+    /// Measured at 1.5–2.4 s instead, `sizzle` carries +14.3 dB more 6–12 kHz energy than
+    /// `crash`, unanimously across all 12 matched velocity/round-robin pairs, against a
+    /// within-bank spread of 0.8–2.7 dB. A null from the wrong window is not evidence.
+    ///
+    /// Sampled path only, deliberately: this is a routing property of the sampled kit, and
+    /// the modelled path still voices both keys from one crash model with cosmetic
+    /// parameter nudges. That remains true and is not what this oracle is about.
     #[cfg(feature = "embedded-samples")]
     #[test]
-    fn crash_1_and_crash_2_are_different_cymbals() {
+    fn crash_2_is_crash_1_a_semitone_up() {
         let sr = 44100.0;
-        let c1 = render_drum_kit_samples(49, 110, 4.0, Kit::V3, true);
-        let c2 = render_drum_kit_samples(57, 110, 4.0, Kit::V3, true);
 
-        // (a) The un-foolable clause: same velocity and seed must not render the same.
-        assert!(
-            c1 != c2,
-            "keys 49 and 57 render bit-identically — still one shared crash bank"
-        );
-
-        // (b) ...and a DIFFERENT BANK, not merely a different round robin of the same
-        //     one — which would also pass (a). Stated without assuming what a sizzle
-        //     crash sounds like: measure how far apart two round robins of key 49 are,
-        //     then require 49-vs-57 to be substantially further. That calibrates the
-        //     "same cymbal, different take" distance from the data instead of guessing
-        //     a threshold. (An earlier version asserted that rivets sustain the high
-        //     band; measured, these two banks differ by only 6.5% there, so that
-        //     hypothesis was wrong and asserting it would have meant fitting the test
-        //     to whatever the recordings happened to do.)
-        let render_rr = |key: u8, rr: u8| {
-            let mut v = make(key, 110, sr, 7, Kit::V3, true, rr).unwrap();
+        // Same seed and same round robin, so the ONLY difference between the two renders
+        // is the playback rate. That isolates the property under test: anything else the
+        // sampler does (round-robin choice, anti-machine-gun jitter) is held constant.
+        let render_rr = |key: u8, vel: u8, rr: u8| {
+            let mut v = make(key, vel, sr, 7, Kit::V3, true, rr).unwrap();
             let mut buf = vec![0f32; (sr * 4.0) as usize];
             v.render(&mut buf);
             buf
         };
-        // A coarse normalised spectral profile: shape only, so a level difference
-        // between two cymbals cannot masquerade as a timbre difference.
-        let profile = |s: &[f32]| {
-            let w = &s[..(1.0 * sr) as usize];
-            let bands = [
-                testutil::spectral_band_rms(w, sr, 300.0, 1000.0),
-                testutil::spectral_band_rms(w, sr, 1000.0, 2500.0),
-                testutil::spectral_band_rms(w, sr, 2500.0, 5000.0),
-                testutil::spectral_band_rms(w, sr, 5000.0, 10000.0),
-                testutil::spectral_band_rms(w, sr, 10000.0, 18000.0),
-            ];
-            let sum: f32 = bands.iter().sum::<f32>().max(1e-12);
-            bands.map(|b| b / sum)
-        };
-        let dist =
-            |a: [f32; 5], b: [f32; 5]| a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f32>();
 
-        //     What the assertion can honestly be is STRUCTURAL: key 57 must not render
-        //     as any round robin of key 49. Reverting the routing makes 57 rr(n) equal
-        //     49 rr(n) exactly, so this catches the regression precisely.
+        // (a) The two keys must not render as the same signal at different volumes.
+        //
+        //     Note the peak-normalisation, which is the entire point of this clause. A
+        //     raw `a != b` is VACUOUS here: `DRUM_LEVEL` (sampler.rs) is applied inside
+        //     `sampled_drum`, and holds 0.65 for key 49 against 0.68 for key 57, so the
+        //     two buffers differ by gain alone whatever bank or rate they play. The
+        //     previous version of this test asserted exactly that raw inequality, and
+        //     its comment claimed a revert "makes 57 rr(n) equal 49 rr(n) exactly" —
+        //     it does not, so that guard would have passed straight through the
+        //     regression it was written to catch. Divide the gain out and it bites.
+        let peak_norm = |s: &[f32]| -> Vec<f32> {
+            let p = s.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-12);
+            s.iter().map(|&x| x / p).collect()
+        };
         for rr in 0..4u8 {
-            let a = render_rr(49, rr);
-            let b = render_rr(57, rr);
+            let a = peak_norm(&render_rr(49, 110, rr));
+            let b = peak_norm(&render_rr(57, 110, rr));
+            let dev = a
+                .iter()
+                .zip(&b)
+                .fold(0f32, |m, (x, y)| m.max((x - y).abs()));
+            println!("rr {rr}: peak-normalised max deviation {dev:.4}");
             assert!(
-                a != b,
-                "key 57 round robin {rr} is bit-identical to key 49's — the two crash \
-                 keys are sharing a bank again"
+                dev > 0.05,
+                "key 57 round robin {rr} is key 49's signal at another volume (max \
+                 deviation {dev:.4} after peak normalisation) — the crash keys are \
+                 sharing one voice again"
             );
         }
 
-        //     The perceptual claim is NOT asserted, because the measurement does not
-        //     support it. Two round robins of key 49 differ from each other about four
-        //     times more than key 49 differs from key 57 (within-bank max ~0.099 vs
-        //     49-vs-57 ~0.025 on the profile below). So this routing buys a genuinely
-        //     different recording, but on this metric it does not obviously buy two
-        //     cymbals a listener would call distinct. Left as a printed measurement for
-        //     whoever revisits it; an ear is the arbiter, not this number.
-        let p49 = profile(&render_rr(49, 0));
-        let within = (1..4)
-            .map(|rr| dist(p49, profile(&render_rr(49, rr))))
-            .fold(0f32, f32::max);
-        let between = dist(p49, profile(&render_rr(57, 0)));
-        println!(
-            "spectral profile distance: within-bank (49 round robins) max={within:.4}, \
-             49-vs-57={between:.4}"
-        );
+        // (b) ...and the difference must be the RIGHT one: 57 sits a semitone ABOVE 49.
+        //     (a) alone passes on ANY perturbation — a different bank, a detune the wrong
+        //     way, a stray gain change — so on its own it does not test the property.
+        //
+        //     ALIGN THE WHOLE SPECTRUM rather than tracking any single feature. Two
+        //     simpler instruments were tried first and both are recorded here because
+        //     each fails in a way worth not repeating:
+        //
+        //       - Spectral centroid registered only +2.6% of the +5.95% really present.
+        //         A fixed analysis band truncates content the shift pushes past its
+        //         ceiling, and the resampler's linear interpolation is itself a
+        //         rate-dependent lowpass; both drag the centroid back down.
+        //       - The argmax of a low plate mode (`peak_locate`, 350-700 Hz) got the
+        //         right answer at high velocity and nonsense at low: that band holds
+        //         several partials of similar strength, so the shifted spectrum can hand
+        //         the argmax to a DIFFERENT partial, which then lands anywhere. Three of
+        //         twelve takes read 1.005 — a null — for exactly that reason.
+        //
+        //     Resampling scales every partial together, so the robust readout is the
+        //     shift that best aligns the two spectra on a LOG-frequency grid, using all
+        //     of them at once. No single partial can capture it, and the measure is
+        //     level-invariant — which keeps this decoupled from `DRUM_LEVEL[57]`, the
+        //     trap that broke the pedal-hat oracle when an absolute measure silently
+        //     coupled that test to a gain calibration.
+        //
+        //     Same seed and round robin means both keys play the SAME recorded strike,
+        //     so the alignment shift is a clean readout of playback rate.
+        let grid: Vec<f32> = {
+            let (mut v, mut f) = (Vec::new(), 300.0f32);
+            while f <= 3500.0 {
+                v.push(f);
+                f *= 1.005;
+            }
+            v
+        };
+        let spectrum = |s: &[f32]| -> Vec<f32> {
+            let w = &s[..(0.5 * sr) as usize];
+            grid.iter().map(|&f| testutil::mag_at(w, sr, f)).collect()
+        };
+        // Cosine similarity of b against a shifted right by k grid steps (k * 0.5%).
+        let similarity = |a: &[f32], b: &[f32], k: usize| -> f32 {
+            let (mut dot, mut na, mut nb) = (0f32, 0f32, 0f32);
+            for i in k..a.len() {
+                let (x, y) = (a[i - k], b[i]);
+                dot += x * y;
+                na += x * x;
+                nb += y * y;
+            }
+            dot / (na.sqrt() * nb.sqrt()).max(1e-12)
+        };
+        // 2^(1/12) = 1.05946 = 1.005^11.6, so a correct render peaks at k = 11 or 12.
+        // Scanning from k = 0 means "no repitch at all" is inside the search space and
+        // has to LOSE on its own terms — the scan is not rigged to find a shift.
+        for vel in [70u8, 110] {
+            for rr in 0..4u8 {
+                let a = spectrum(&render_rr(49, vel, rr));
+                let b = spectrum(&render_rr(57, vel, rr));
+                let (mut best_k, mut best_s) = (0usize, f32::NEG_INFINITY);
+                for k in 0..=24usize {
+                    let s = similarity(&a, &b, k);
+                    if s > best_s {
+                        best_s = s;
+                        best_k = k;
+                    }
+                }
+                let ratio = 1.005f32.powi(best_k as i32);
+                println!(
+                    "vel {vel} rr {rr}: best log-spectral shift k={best_k} \
+                     (ratio {ratio:.4}, similarity {best_s:.3})"
+                );
+                assert!(
+                    (10..=13).contains(&best_k),
+                    "key 57 is not one semitone above key 49: best spectral alignment is \
+                     k={best_k} (ratio {ratio:.4}) at vel {vel} rr {rr}, expected k=11-12 \
+                     (2^(1/12) = 1.0595). k=0 means the repitch is gone."
+                );
+            }
+        }
     }
 
     /// A pedal hat (key 44) is closed by the FOOT — nothing strikes it. So it must not

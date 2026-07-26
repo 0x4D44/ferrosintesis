@@ -4481,6 +4481,31 @@ const TOM_HI_ROOT_HZ: f32 = 181.0;
 #[cfg(feature = "embedded-samples")]
 const ELECTRIC_SNARE_REPITCH: f32 = 1.15;
 
+/// Crash Cymbal 2 (key 57) plays the crash bank one semitone up — exactly what
+/// the reference hardware does.
+///
+/// Decoded from the SC-55mkII control ROM's STANDARD kit record (`rom2.bin`
+/// @ 0x038500, the sibling `mdsc55` repo): keys 49 and 57 share tone index
+/// 0x0174 "Crash Cymbal" and carry identical level, reverb depth, chorus depth
+/// and assign group. Exactly two bytes differ — PLAY NOTE 60 vs 61 (+1 semitone,
+/// the units proven by the tom ladder's even 8-semitone steps in the same array)
+/// and PANPOT 0x54 vs 0x2C (a symmetric split either side of centre). There is
+/// no "Crash Cymbal 2" waveform anywhere in that ROM; China and Ride Bell get
+/// their own tones, Crash 2 deliberately does not. Roland plays the same trick
+/// on Ride 1/Ride 2 and derives the Splash from this crash at +9 semitones.
+///
+/// So GM 57 is not a second cymbal — it is the first one, smaller. `drum_pan`
+/// (engine.rs) already supplies the pan split and `kit_balance` a ~2.65 dB level
+/// split, which together with this pitch offset gives the pair MORE separation
+/// than the SC-55 has. `DRUM_LEVEL[57]` holds level parity against the model.
+///
+/// History: 57 played `CRASH_SIZZLE` for one commit (2026-07-26). That bank is
+/// the same physical plate with a sizzler — its sub-4 kHz modes match the plain
+/// crash to a median 0.32 Hz — so it was never the "second cymbal" that routing
+/// claimed, and by ear it did not read as a second cymbal either.
+#[cfg(feature = "embedded-samples")]
+const CRASH_2_REPITCH: f32 = 1.059_463_1; // 2^(1/12)
+
 /// Anti-machine-gun micro-variation (mechanism b), per bank profile: every
 /// hit gets a playback rate of 1 + stratum + U(-rate, +rate), a gain of
 /// ×(1 + U(-gain, +gain)), and an onset delay of U(0, onset_s) of silence.
@@ -4686,13 +4711,7 @@ pub fn sampled_drum(key: u8, vel: u8, seed: u32, hit_index: u8, sr: f32) -> Opti
         44 => (&kit::HH_PEDAL, 1.0),
         46 => (&kit::HH_OPEN, 1.0),
         49 => (&kit2::CRASH, 1.0),
-        // GM names 49 "Crash Cymbal 1" and 57 "Crash Cymbal 2" — two different cymbals.
-        // Both played the same bank until 2026-07-26, so a file that scored two crashes
-        // heard one, and the sizzle crash shipped in `-drumkit2` with no key able to
-        // select it. A sizzle (rivetted) crash is not literally what "crash 2" names,
-        // but it IS the second crash this kit owns, and a distinct second cymbal is
-        // closer to what the notation asks for than a duplicate of the first.
-        57 => (&kit2::CRASH_SIZZLE, 1.0),
+        57 => (&kit2::CRASH, CRASH_2_REPITCH), // crash 2 = crash 1, one semitone up
         51 | 59 => (&kit::RIDE, 1.0),
         53 => (&kit::RIDE_BELL, 1.0),
         52 => (&kit2::CHINA, 1.0),

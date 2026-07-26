@@ -5,15 +5,15 @@
 - **Severity:** High
 - **Area:** sampler / realtime drum kit
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T070129Z-p8852-n850611500-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00125-run-fix-20260726T070129Z-p8852-n850611500-c1
+- **Owner base:** 240f0b9d3f7a1962c0785cd51a5fdd6168efc9d2
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T07:01:29Z
+- **Owner until:** 2026-07-26T09:01:29Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

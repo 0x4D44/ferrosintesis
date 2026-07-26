@@ -1296,7 +1296,7 @@ def cached_members_match(src, url, sha256, member_map):
     return True
 
 
-def verified_archive_path(src, url, sha256):
+def verified_archive_path(src, url, sha256, cache_name=None):
     """Return the locally cached archive after verifying its pinned digest.
 
     A local archive whose digest does not match the pin is removed and re-fetched
@@ -1304,7 +1304,7 @@ def verified_archive_path(src, url, sha256):
     beats failing a rebuild that a `rm` would fix. A second mismatch raises: at that
     point the served bytes disagree with the pin, which is not ours to paper over.
     """
-    arc = os.path.join(src, os.path.basename(url))
+    arc = os.path.join(src, cache_name or os.path.basename(url))
     for attempt in (1, 2):
         if not os.path.exists(arc):
             print(f"fetching {os.path.basename(arc)} ...", file=sys.stderr)
@@ -2612,21 +2612,40 @@ def _bake_musescore_grand(src):
     return rows
 
 
-def ensure_ydp_sf2(src):
-    """Fetch + sha256-verify the YDP Grand .tar.bz2 and extract its SF2."""
+def rebuild_ydp_cache(src):
+    """Verify and stage the YDP SF2 before replacing the warm cache."""
+    arc = verified_archive_path(src, YDP_URL, YDP_SHA256, "ydp.tar.bz2")
     sf2 = os.path.join(src, "YDP-GrandPiano.sf2")
-    if not os.path.exists(sf2):
-        arc = os.path.join(src, "ydp.tar.bz2")
-        if not os.path.exists(arc):
-            print("fetching YDP-GrandPiano SF2 (~36 MB) ...", file=sys.stderr)
-            fetch(YDP_URL, arc)
-        digest = hashlib.sha256(open(arc, "rb").read()).hexdigest()
-        if digest != YDP_SHA256:
-            raise ValueError(f"{arc}: sha256 {digest} != pinned {YDP_SHA256}")
+    with tempfile.TemporaryDirectory(prefix=".ydp-", dir=src) as staging:
+        staged = os.path.join(staging, "YDP-GrandPiano.sf2")
+        found = None
         with tarfile.open(arc, "r:bz2") as tf:
-            member = next(m for m in tf.getmembers() if m.name.endswith(".sf2"))
-            with tf.extractfile(member) as f, open(sf2, "wb") as out:
-                out.write(f.read())
+            for member in tf:
+                if not member.name.endswith(".sf2"):
+                    continue
+                if found is not None or not member.isfile():
+                    raise ValueError(
+                        f"YDP archive has an ambiguous SF2 member: {member.name!r}")
+                extracted = tf.extractfile(member)
+                if extracted is None:
+                    raise ValueError(
+                        f"YDP archive could not extract SF2 member: {member.name!r}")
+                with extracted, open(staged, "wb") as out:
+                    shutil.copyfileobj(extracted, out)
+                found = member.name
+        if found is None:
+            raise ValueError("YDP archive contains no SF2 member")
+        os.replace(staged, sf2)
+
+
+def ensure_ydp_sf2(src):
+    """Return a YDP SF2 whose content manifest binds it to the pinned archive."""
+    members = {"YDP-GrandPiano.sf2": None}
+    if cached_members_match(src, YDP_URL, YDP_SHA256, members):
+        return os.path.join(src, "YDP-GrandPiano.sf2")
+    rebuild_ydp_cache(src)
+    write_member_manifest(src, YDP_URL, YDP_SHA256, members)
+    sf2 = os.path.join(src, "YDP-GrandPiano.sf2")
     return sf2
 
 

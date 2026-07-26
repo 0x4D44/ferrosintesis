@@ -1,3 +1,4 @@
+import ast
 import hashlib
 import io
 import math
@@ -713,6 +714,207 @@ class ArchiveRefetchTest(unittest.TestCase):
             prepare.ensure_archive_sources(self.src, self.url, self.PIN,
                                            self.MEMBERS, "ext")
         self.assertEqual(self.fetches, 2, "one initial fetch plus exactly one refetch")
+
+
+class YdpArchiveCacheTest(unittest.TestCase):
+    """MM-BUG-KILN-00141: YDP warm caches remain bound to the archive pin."""
+
+    MEMBER = "pack/YDP-GrandPiano.sf2"
+
+    @staticmethod
+    def archive_bytes(payload):
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode="w:bz2") as tf:
+            info = tarfile.TarInfo(YdpArchiveCacheTest.MEMBER)
+            info.size = len(payload)
+            tf.addfile(info, io.BytesIO(payload))
+        return stream.getvalue()
+
+    def setUp(self):
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.url = "https://example.invalid/ydp.tar.bz2"
+        self.payload = b"PINNED-SF2"
+        self.served = self.archive_bytes(self.payload)
+        self.pin = hashlib.sha256(self.served).hexdigest()
+        self.fetches = 0
+        patches = [
+            mock.patch.object(prepare, "YDP_URL", self.url),
+            mock.patch.object(prepare, "YDP_SHA256", self.pin),
+            mock.patch.object(prepare, "fetch", side_effect=self.fake_fetch),
+        ]
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    @property
+    def sf2(self):
+        return os.path.join(self.src, "YDP-GrandPiano.sf2")
+
+    @property
+    def archive(self):
+        return os.path.join(self.src, os.path.basename(self.url))
+
+    @property
+    def manifest(self):
+        return prepare.member_manifest_path(self.src, self.url)
+
+    def fake_fetch(self, _url, path):
+        self.fetches += 1
+        with open(path, "wb") as f:
+            f.write(self.served)
+
+    def ensure(self):
+        return prepare.ensure_ydp_sf2(self.src)
+
+    def cached_payload(self):
+        with open(self.sf2, "rb") as f:
+            return f.read()
+
+    def test_valid_manifested_warm_cache_is_reused_without_archive(self):
+        self.ensure()
+        os.remove(self.archive)
+        self.ensure()
+        self.assertEqual(self.fetches, 1)
+        self.assertEqual(self.cached_payload(), self.payload)
+
+    def test_altered_warm_sf2_is_rebuilt(self):
+        self.ensure()
+        with open(self.sf2, "wb") as f:
+            f.write(b"ALTERED")
+        self.ensure()
+        self.assertEqual(self.cached_payload(), self.payload)
+
+    def test_legacy_sf2_without_a_manifest_is_not_trusted(self):
+        with open(self.sf2, "wb") as f:
+            f.write(b"UNPROVEN")
+        self.ensure()
+        self.assertEqual(self.cached_payload(), self.payload)
+        self.assertTrue(os.path.exists(self.manifest))
+
+    def test_changed_pin_replaces_the_archive_and_sf2(self):
+        self.ensure()
+        self.payload = b"NEW-PINNED-SF2"
+        self.served = self.archive_bytes(self.payload)
+        new_pin = hashlib.sha256(self.served).hexdigest()
+        with mock.patch.object(prepare, "YDP_SHA256", new_pin):
+            self.ensure()
+        self.assertEqual(self.cached_payload(), self.payload)
+        self.assertEqual(self.fetches, 2)
+
+
+class PinnedWarmCacheAuthenticationTest(unittest.TestCase):
+    """Every pinned ensure helper must authenticate an already-present cache."""
+
+    AUTHENTICATORS = {"cached_members_match", "sha256_file"}
+
+    @classmethod
+    def unauthenticated_helpers(cls, source):
+        tree = ast.parse(source)
+        functions = {
+            node.name: node for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+
+        def call_name(call):
+            if isinstance(call.func, ast.Name):
+                return call.func.id
+            if isinstance(call.func, ast.Attribute):
+                return call.func.attr
+            return None
+
+        def is_missing_guard(test):
+            return (
+                isinstance(test, ast.UnaryOp)
+                and isinstance(test.op, ast.Not)
+                and any(
+                    isinstance(node, ast.Call) and call_name(node) == "exists"
+                    for node in ast.walk(test)
+                )
+            )
+
+        calls = {}
+        direct_auth = set()
+        for name, function in functions.items():
+            calls[name] = set()
+
+            def walk(node, behind_missing_guard=False):
+                if isinstance(node, ast.If):
+                    guarded = behind_missing_guard or is_missing_guard(node.test)
+                    walk(node.test, behind_missing_guard)
+                    for child in node.body:
+                        walk(child, guarded)
+                    for child in node.orelse:
+                        walk(child, behind_missing_guard)
+                    return
+                if isinstance(node, ast.Call):
+                    called = call_name(node)
+                    if called:
+                        calls[name].add((called, behind_missing_guard))
+                        if not behind_missing_guard and (
+                            called in cls.AUTHENTICATORS
+                            or (
+                                called == "sha256"
+                                and isinstance(node.func, ast.Attribute)
+                                and isinstance(node.func.value, ast.Name)
+                                and node.func.value.id == "hashlib"
+                            )
+                        ):
+                            direct_auth.add(name)
+                for child in ast.iter_child_nodes(node):
+                    walk(child, behind_missing_guard)
+
+            for statement in function.body:
+                walk(statement)
+
+        pinned = set()
+        for name, function in functions.items():
+            if not name.startswith("ensure_"):
+                continue
+            referenced_names = {
+                node.id for node in ast.walk(function) if isinstance(node, ast.Name)
+            }
+            parameter_names = {
+                arg.arg for arg in function.args.args + function.args.kwonlyargs
+            }
+            if (
+                any(ref.endswith("SHA256") for ref in referenced_names)
+                or any("sha256" in param.lower() for param in parameter_names)
+            ):
+                pinned.add(name)
+
+        authenticated = set(direct_auth)
+        changed = True
+        while changed:
+            changed = False
+            for name, edges in calls.items():
+                if name in authenticated:
+                    continue
+                if any(
+                    not guarded and called in authenticated
+                    for called, guarded in edges
+                ):
+                    authenticated.add(name)
+                    changed = True
+        return sorted(pinned - authenticated)
+
+    def test_every_pinned_ensure_helper_authenticates_its_warm_cache(self):
+        with open(prepare.__file__, encoding="utf-8") as f:
+            source = f.read()
+        self.assertEqual(self.unauthenticated_helpers(source), [])
+
+    def test_oracle_rejects_hashing_hidden_behind_a_missing_file_guard(self):
+        source = """
+PIN_SHA256 = "00"
+def ensure_bad(src):
+    path = src + "/cached"
+    if not os.path.exists(path):
+        digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+        if digest != PIN_SHA256:
+            raise ValueError
+    return path
+"""
+        self.assertEqual(self.unauthenticated_helpers(source), ["ensure_bad"])
 
 
 class SalamanderArchiveCacheTest(unittest.TestCase):

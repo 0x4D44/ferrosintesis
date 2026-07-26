@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00058 — GM45 pizzicato's Shaped-vs-Legacy loudness parity broke KEY-DEPENDENTLY after the KILN-00048 decouple (offsets span ~7.5 dB, unfittable by the scalar exc_trim)
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
 - **Raised:** 2026-07-24
-- **Owner:** -
-- **Owner role:** -
+- **Owner:** Arthur
+- **Owner role:** human
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it)
+- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction)
 
 ## Observation
 
@@ -80,3 +80,35 @@ Needs ears (this box has none) and re-inclusion in `SHAPED_MIGRATED` as the acce
   offset) and GM42/43's square-law exclusion (a scalar cannot fit a non-scalar curve).
 - Raised while landing KILN-00048; the decouple is the trigger, not the whole cause (the
   underlying Shaped/Legacy corner-response asymmetry pre-existed, latent).
+
+## Blocker — 2026-07-26
+
+Blocking owner: **Arthur**. The nine measured cells prove a scalar trim cannot
+restore parity, but they do not choose the audible repair. A key/velocity gain
+surface would preserve the current Shaped spectrum while matching Legacy level;
+changing the excitation slope would also alter brightness and attack character.
+Choosing between them is a product/voicing decision, not a numerical inference.
+
+Unblock with paired 1.0 s renders of current Shaped PIZZ and an otherwise
+identical forced-Legacy twin. Use:
+
+- keys **40, 52, and 64**;
+- velocities **50, 100, and 120**;
+- matched seeds **5, 21, and 99**;
+- one raw-level comparison for parity, then a body-level-matched comparison to
+  isolate timbre.
+
+Return these exact product inputs:
+
+1. Choose **retain Shaped timbre with key/velocity gain** or **re-fit the
+   excitation slope**.
+2. If retaining timbre, confirm that the acceptance target is mean
+   Shaped-minus-Legacy body level within **±0.5 dB at all nine cells**.
+3. If re-fitting slope, identify whether keys 40, 52, and 64 should each sound
+   **darker**, **unchanged**, or **brighter** than the current Shaped render.
+4. Confirm whether Legacy parity is the desired level contract, or provide the
+   preferred dB offset at each of the three keys.
+
+Those answers are enough for a Build pass to implement the narrowest
+key-aware law, restore PIZZ to `SHAPED_MIGRATED`, and present a bounded final
+A/B. Without them, changing `slope` or gain would silently invent the voice.

@@ -1,9 +1,11 @@
 import hashlib
+import io
 import math
 import os
 import random
 import shutil
 import struct
+import tarfile
 import tempfile
 import unittest
 import urllib.error
@@ -711,6 +713,148 @@ class ArchiveRefetchTest(unittest.TestCase):
             prepare.ensure_archive_sources(self.src, self.url, self.PIN,
                                            self.MEMBERS, "ext")
         self.assertEqual(self.fetches, 2, "one initial fetch plus exactly one refetch")
+
+
+class SalamanderArchiveCacheTest(unittest.TestCase):
+    """MM-BUG-KILN-00134: Salamander warm caches remain bound to the archive pin."""
+
+    MEMBERS = {
+        "grand_A.wav": "pack/A.wav",
+        "grand_B.wav": "pack/B.wav",
+    }
+
+    @staticmethod
+    def archive_bytes(contents):
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode="w:bz2") as tf:
+            for member, data in contents.items():
+                info = tarfile.TarInfo(member)
+                info.size = len(data)
+                tf.addfile(info, io.BytesIO(data))
+        return stream.getvalue()
+
+    def setUp(self):
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.url = "https://example.invalid/salamander.tar.bz2"
+        self.contents = {"pack/A.wav": b"PINNED-A", "pack/B.wav": b"PINNED-B"}
+        self.served = self.archive_bytes(self.contents)
+        self.pin = hashlib.sha256(self.served).hexdigest()
+        self.fetches = 0
+
+        patches = [
+            mock.patch.object(prepare, "SALAMANDER_ARCHIVE_URL", self.url),
+            mock.patch.object(prepare, "SALAMANDER_ARCHIVE_SHA256", self.pin),
+            mock.patch.object(prepare, "GRAND_SOURCES", self.MEMBERS),
+            mock.patch.object(prepare, "fetch", side_effect=self.fake_fetch),
+        ]
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    @property
+    def archive(self):
+        return os.path.join(self.src, os.path.basename(self.url))
+
+    @property
+    def manifest(self):
+        return prepare.member_manifest_path(self.src, self.url)
+
+    def fake_fetch(self, _url, path):
+        self.fetches += 1
+        with open(path, "wb") as f:
+            f.write(self.served)
+
+    def ensure(self):
+        prepare.ensure_salamander_sources(self.src)
+
+    def member(self, fn):
+        with open(os.path.join(self.src, fn), "rb") as f:
+            return f.read()
+
+    def test_valid_manifested_warm_cache_is_reused_without_archive(self):
+        self.ensure()
+        self.assertTrue(prepare.cached_members_match(
+            self.src, self.url, self.pin, self.MEMBERS))
+        os.remove(self.archive)
+        self.ensure()
+        self.assertEqual(self.fetches, 1)
+
+    def test_altered_member_is_rebuilt(self):
+        self.ensure()
+        with open(os.path.join(self.src, "grand_A.wav"), "wb") as f:
+            f.write(b"ALTERED")
+        self.ensure()
+        self.assertEqual(self.member("grand_A.wav"), b"PINNED-A")
+
+    def test_truncated_member_is_rebuilt(self):
+        self.ensure()
+        with open(os.path.join(self.src, "grand_B.wav"), "wb") as f:
+            f.write(b"")
+        self.ensure()
+        self.assertEqual(self.member("grand_B.wav"), b"PINNED-B")
+
+    def test_missing_member_is_rebuilt(self):
+        self.ensure()
+        os.remove(os.path.join(self.src, "grand_A.wav"))
+        self.ensure()
+        self.assertEqual(self.member("grand_A.wav"), b"PINNED-A")
+
+    def test_changed_pin_replaces_archive_and_members(self):
+        self.ensure()
+        self.contents = {"pack/A.wav": b"NEW-A", "pack/B.wav": b"NEW-B"}
+        self.served = self.archive_bytes(self.contents)
+        new_pin = hashlib.sha256(self.served).hexdigest()
+        with mock.patch.object(prepare, "SALAMANDER_ARCHIVE_SHA256", new_pin):
+            self.ensure()
+            self.assertTrue(prepare.cached_members_match(
+                self.src, self.url, new_pin, self.MEMBERS))
+        self.assertEqual(self.member("grand_A.wav"), b"NEW-A")
+        self.assertEqual(self.fetches, 2)
+
+    def test_missing_manifest_is_not_trusted(self):
+        self.ensure()
+        os.remove(self.manifest)
+        with open(os.path.join(self.src, "grand_A.wav"), "wb") as f:
+            f.write(b"UNMANIFESTED")
+        self.ensure()
+        self.assertEqual(self.member("grand_A.wav"), b"PINNED-A")
+
+    def test_corrupt_manifest_is_not_trusted(self):
+        self.ensure()
+        with open(self.manifest, "w", encoding="utf-8") as f:
+            f.write("{not json")
+        with open(os.path.join(self.src, "grand_A.wav"), "wb") as f:
+            f.write(b"UNTRUSTED")
+        self.ensure()
+        self.assertEqual(self.member("grand_A.wav"), b"PINNED-A")
+
+    def test_corrupt_cached_archive_is_refetched_once(self):
+        with open(self.archive, "wb") as f:
+            f.write(b"STALE")
+        self.ensure()
+        self.assertEqual(self.fetches, 1)
+        self.assertEqual(self.member("grand_A.wav"), b"PINNED-A")
+
+    def test_served_archive_that_still_mismatches_fails_closed(self):
+        self.served = b"BAD"
+        with self.assertRaises(ValueError):
+            self.ensure()
+        self.assertEqual(self.fetches, 2)
+        self.assertFalse(os.path.exists(self.manifest))
+
+    def test_incomplete_archive_does_not_partially_replace_members(self):
+        for fn in self.MEMBERS:
+            with open(os.path.join(self.src, fn), "wb") as f:
+                f.write(b"ORIGINAL-" + fn.encode())
+        self.served = self.archive_bytes({"pack/A.wav": b"NEW-A"})
+        new_pin = hashlib.sha256(self.served).hexdigest()
+        with mock.patch.object(prepare, "SALAMANDER_ARCHIVE_SHA256", new_pin):
+            with self.assertRaises(ValueError):
+                self.ensure()
+        self.assertEqual(self.member("grand_A.wav"), b"ORIGINAL-grand_A.wav")
+        self.assertEqual(self.member("grand_B.wav"), b"ORIGINAL-grand_B.wav")
+        self.assertFalse(os.path.exists(self.manifest))
 
 
 class LocalBankSelectionTest(unittest.TestCase):

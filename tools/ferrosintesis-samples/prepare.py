@@ -655,7 +655,7 @@ BAGPIPE_TARGET_RMS = 0.18
 # GM 1/3, this is a real grand, so GM 0 becomes its own instrument instead of the
 # upright with a treble shelf. Distributed as a .tar.bz2 — stdlib `tarfile` reads
 # bz2 directly (no 7z, unlike the LZMA FreePats archives), so this gets its own
-# fetch helper rather than growing `ensure_archive_sources`. 16-bit STEREO 44.1 kHz
+# extraction helper while sharing the pinned-archive cache verifier. 16-bit STEREO 44.1 kHz
 # (downmixed to mono like every other family), sampled every minor third across 16
 # velocity layers v1..v16, with NO round robins. We take 9 zones C2..C6 (F# is the
 # nearest sampled pitch to each G, matching the upright's C/G spacing) x 3 dynamics.
@@ -1241,8 +1241,8 @@ def cached_members_match(src, url, sha256, member_map):
     return True
 
 
-def rebuild_archive_cache(src, url, sha256, member_map, extract_subdir):
-    """Fetch (if needed), verify against the pin, extract, copy members out.
+def verified_archive_path(src, url, sha256):
+    """Return the locally cached archive after verifying its pinned digest.
 
     A local archive whose digest does not match the pin is removed and re-fetched
     ONCE — the common cause is a truncated or superseded download, and self-healing
@@ -1262,6 +1262,12 @@ def rebuild_archive_cache(src, url, sha256, member_map, extract_subdir):
         print(f"{os.path.basename(arc)}: sha256 {digest} != pinned — refetching once",
               file=sys.stderr)
         os.remove(arc)
+    return arc
+
+
+def rebuild_archive_cache(src, url, sha256, member_map, extract_subdir):
+    """Verify a pinned 7z archive, extract it, and copy its selected members."""
+    arc = verified_archive_path(src, url, sha256)
     seven = shutil.which("7z") or r"C:\Program Files\7-Zip\7z.exe"
     ext = os.path.join(src, extract_subdir)
     subprocess.run([seven, "x", "-y", f"-o{ext}", arc], check=True,
@@ -1383,39 +1389,53 @@ def ensure_flac_sources(src, source_map, label):
         )
 
 
+def rebuild_salamander_cache(src, url, sha256, member_map):
+    """Verify and stage the selected tar members before replacing the warm cache."""
+    arc = verified_archive_path(src, url, sha256)
+    wanted = {member: fn for fn, member in member_map.items()}
+    with tempfile.TemporaryDirectory(prefix=".salamander-", dir=src) as staging:
+        found = set()
+        with tarfile.open(arc, "r:bz2") as tf:
+            for member in tf:
+                fn = wanted.get(member.name)
+                if fn is None:
+                    continue
+                if member.name in found or not member.isfile():
+                    raise ValueError(
+                        f"salamander: invalid archive member {member.name!r}")
+                extracted = tf.extractfile(member)
+                if extracted is None:
+                    raise ValueError(
+                        f"salamander: could not extract archive member {member.name!r}")
+                staged = os.path.join(staging, fn)
+                os.makedirs(os.path.dirname(staged), exist_ok=True)
+                with extracted, open(staged, "wb") as out:
+                    shutil.copyfileobj(extracted, out)
+                found.add(member.name)
+        if found != set(wanted):
+            raise ValueError(
+                f"salamander: extracted {len(found)}/{len(wanted)} members "
+                f"(archive layout changed?)")
+        for fn in member_map:
+            os.replace(os.path.join(staging, fn), os.path.join(src, fn))
+
+
 def ensure_salamander_sources(src):
     """Fetch + sha256-verify + extract the pinned Salamander Grand Piano V3 subset.
 
     A sibling of `ensure_archive_sources`, not a caller of it: the Salamander
     archive is a `.tar.bz2` (stdlib `tarfile` decodes bz2 with no 7z), and bz2 is
     not seekable, so we stream the tar ONCE and pull the wanted members in a single
-    pass rather than re-opening per file. Members copy straight to `src/grand_*.wav`
-    (no extract subdir); `sample_output_path` later routes them to the -grand crate.
+    pass rather than re-opening per file. Extraction is staged before any warm
+    member is replaced. A content manifest binds every member to the archive pin.
     """
-    if all(os.path.exists(os.path.join(src, fn)) for fn in GRAND_SOURCES):
+    if cached_members_match(
+            src, SALAMANDER_ARCHIVE_URL, SALAMANDER_ARCHIVE_SHA256, GRAND_SOURCES):
         return
-    arc = os.path.join(src, os.path.basename(SALAMANDER_ARCHIVE_URL))
-    if not os.path.exists(arc):
-        print(f"fetching {os.path.basename(arc)} ...", file=sys.stderr)
-        fetch(SALAMANDER_ARCHIVE_URL, arc)
-    digest = hashlib.sha256(open(arc, "rb").read()).hexdigest()
-    if digest != SALAMANDER_ARCHIVE_SHA256:
-        raise ValueError(f"{arc}: sha256 {digest} != pinned {SALAMANDER_ARCHIVE_SHA256}")
-    wanted = {member: fn for fn, member in GRAND_SOURCES.items()}
-    found = 0
-    with tarfile.open(arc, "r:bz2") as tf:
-        for member in tf:
-            fn = wanted.get(member.name)
-            if fn is None:
-                continue
-            extracted = tf.extractfile(member)
-            with open(os.path.join(src, fn), "wb") as out:
-                shutil.copyfileobj(extracted, out)
-            found += 1
-    if found != len(GRAND_SOURCES):
-        raise ValueError(
-            f"salamander: extracted {found}/{len(GRAND_SOURCES)} members "
-            f"(archive layout changed?)")
+    rebuild_salamander_cache(
+        src, SALAMANDER_ARCHIVE_URL, SALAMANDER_ARCHIVE_SHA256, GRAND_SOURCES)
+    write_member_manifest(
+        src, SALAMANDER_ARCHIVE_URL, SALAMANDER_ARCHIVE_SHA256, GRAND_SOURCES)
 
 
 def parse_sfz_loops(sfz_text):

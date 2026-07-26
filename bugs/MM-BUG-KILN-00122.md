@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00122 — Dark-Salamander documentation selects the B1 upright and names the wrong A/B baseline
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample assets / GM0 alternate-bank routing
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-dark-salamander/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T073254Z-p43624-n750388200-c1 branch=task/bug-MM-BUG-KILN-00122-run-fix-20260726T073254Z-p43624-n750388200-c1 code=9c2baab298ed33ac1cfce2fd7f10144e14bfacfa gate=manual)
+- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-dark-salamander/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T073254Z-p43624-n750388200-c1 branch=task/bug-MM-BUG-KILN-00122-run-fix-20260726T073254Z-p43624-n750388200-c1 code=9c2baab298ed33ac1cfce2fd7f10144e14bfacfa gate=manual) -> Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: deltic:auto role=fix), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (630 passed) and `test --workspace --exclude amp-lab --locked` (735 passed) - 1468 tests, 0 failures. Original observation re-run at source, on both halves the bug separates. FIRST, the routing is genuinely UNCHANGED, as the fix direction required: `altbank.rs` still maps GM0 CC0=1 to `grand_bank`, CC0=4 to `darkgrand_bank` and CC0=5 to `b1upright_bank`, and the 108 lines this commit added to that file are entirely a new `#[cfg(test)]` oracle - no shipped dispatch moved. SECOND, every documentation surface the bug enumerated now names bank 4: the crate module docs ("GM0 acoustic-grand alternate bank 4"), the manifest description, the README ("CC0 bank 4"), `PROVENANCE.md` ("bank select CC0=4"), `sampler.rs` and `prepare.py`. A repo-wide grep for a dark-Salamander claim tied to bank 5 or CC0=5 returns nothing. The A/B endpoint the bug called wrong is corrected too: the provenance now reads "it A/Bs CC0=4 directly against CC0=1 (raw Salamander)", which is the comparison the bug said was intended. So following the packaged README now selects `darkgrand_bank`, not `b1upright_bank` - the reproduction's step 2 no longer holds. I checked the new guard is derived rather than a second hand-copy by re-implementing its predicate myself: it parses the live GM0 match arms out of `altbank.rs` and recovers dark=4, raw=1, b1=5, then requires each document to carry text built from those derived numbers. And I proved it is non-vacuous by REINTRODUCING the bug - editing the tracked README back to "CC0 bank 5" turned it red with "crate README does not identify the routed selector: expected \"CC0 bank 4\"". Restored; `git status --porcelain` clean.)
 
 ## Observation
 

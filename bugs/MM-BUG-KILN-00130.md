@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00130 — B1 upright bass notes dip ~5 dB then swell back across the LA crossfade
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** GM0 piano voicing / LA sample-to-model crossfade
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T092559Z-p45536-n826874200-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00130-run-fix-20260726T092559Z-p45536-n826874200-c1
-- **Owner base:** 2caa732dae19862207e68c84c9e22d97ab89d857
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T09:25:59Z
-- **Owner until:** 2026-07-26T11:25:59Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised while promoting the B1 upright to the GM0 default)
+- **State history:** Open (2026-07-26, raised while promoting the B1 upright to the GM0 default) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T092559Z-p45536-n826874200-c1 branch=task/bug-MM-BUG-KILN-00130-run-fix-20260726T092559Z-p45536-n826874200-c1 code=248de621baa8c8a42db3884a7e610e6c114852f0 gate=manual)
 
 ## Observation
 

@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00038 — GM61 Brass Section has no LA sample layer (pure 5-player waveshaper) and reads synthetic
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-21
-- **Owner:** Arthur
-- **Owner role:** human
+- **Owner:** -
+- **Owner role:** -
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -20,6 +20,7 @@
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL
   instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target)
+  → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research)
 
 ## Observation
 
@@ -62,3 +63,67 @@ oracle, preserve the existing brass-family controls, and run the full catalog
 render-diff required for `voices.rs`/`sampler.rs` changes. Selecting an asset
 source or voicing character unattended would guess at both product and
 licensing decisions.
+
+### Decision and researched implementation contract — 2026-07-26
+
+Arthur selected the **modeled-section** route. Do not search for or add a
+sample layer for this fix.
+
+Relevant prior art:
+
+- Harrison, Bilbao, and Perry split a valved-brass physical model into an
+  excitation mechanism, bore/valve resonator, and bell radiation model:
+  <https://www.research.ed.ac.uk/files/21857362/DAFx_15_harrison.pdf>.
+- Smith's economical digital-waveguide summary uses the same mouthpiece,
+  bore, and bell decomposition, and notes that high-level bore nonlinearity is
+  part of natural brass behaviour:
+  <https://www.dsprelated.com/freebooks/pasp/Brasses.html>.
+- D'haes and Rodet show that even a simplified trumpet model couples a
+  resonating lip valve to the instrument body's reflection response, under
+  physically constrained controls:
+  <https://dafx.de/papers/DAFX02_DHaes_Rodet_trumpet_model.pdf>.
+- Norman et al. found that players can change brassiness through embouchure at
+  similar loudness, while nonlinear propagation creates the resulting
+  high-harmonic enrichment:
+  <https://doi.org/10.3813/AAA.918316>.
+- Myers et al. relate spectral enrichment to bore profile and absolute bore
+  size, so player-to-player timbral identity should not be represented by
+  pitch scatter alone:
+  <https://pubmed.ncbi.nlm.nih.gov/22280689/>.
+
+Apply those principles at the current model's scale:
+
+1. Retain the five modeled players, seeded determinism, onset scatter, and
+   modest detuning. Those already create timing and pitch spread; increasing
+   them is not the primary fix.
+2. Give every player a stable, seed-derived identity across all three physical
+   stages: lip/exciter resonance, damping and nonlinear brightness;
+   bore/formant centre and gain; and bell/radiation cutoff. Bound the spread so
+   the result remains one natural brass section, with a balanced mixture of
+   brighter, middle, and warmer players rather than five clones.
+3. Drive each player from the shared musical controls, but give it a subtly
+   different pressure/attack response and independent breath variation.
+   Never use one shared amplitude modulator, which would make the section pump
+   coherently.
+4. Preserve velocity/expression-driven nonlinear spectral enrichment. Do not
+   replace brassiness with static EQ, broadband noise, or chorus.
+5. Keep GM56–60 solo brass and GM62/63 synth brass behaviour unchanged. Add no
+   sample asset or dependency.
+6. Recalibrate output level only after the timbre is correct; the existing
+   −1.15 dB M-CAL residual does not justify a gain-first fix.
+
+The regression oracle must prove:
+
+- isolated same-note players have distinct exciter/resonator/radiator
+  parameters and are not near-identical waveforms;
+- the complete section occupies a broader, stable spectrum than any one
+  player without relying on excessive detune;
+- higher velocity/expression increases high-harmonic energy while pitch and
+  level remain controlled;
+- existing section onset-spread and seeded-determinism tests remain green;
+- GM61 remains measurably distinct from natural solo brass and synth-brass
+  programs, with no NaN, aliasing, or material render-cost regression.
+
+After the focused oracle passes, run the required full catalog render diff and
+audition low, middle, and high GM61 notes. Land the fix as **Fixed**, not
+Closed, for independent listening verification.

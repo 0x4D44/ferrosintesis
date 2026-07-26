@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample assets / honky-tonk generation
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T151951Z-p14020-n937483200-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00143-run-fix-20260726T151951Z-p14020-n937483200-c1
+- **Owner base:** e31a9bf99700928e88c0315cf7ccea0cb345773e
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T15:19:51Z
+- **Owner until:** 2026-07-26T17:19:51Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

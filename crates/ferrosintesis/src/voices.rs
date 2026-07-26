@@ -9107,7 +9107,12 @@ fn string_voicing(program: u8) -> StringVoicing {
     const CELLO: StringVoicing = StringVoicing {
         body_f: [110.0, 230.0, 500.0],
         refl_sustain: 2600.0,
-        amp: 1.18, // was amp_base 0.36 + amp_span 0.82
+        // Written as the SUM, not as 1.18: in f32 those differ by 1.2e-7
+        // (0.36 + 0.82 = 1.18000007, the literal 1.18 = 1.17999995), and that is
+        // enough to change every sample of a cello render. Const arithmetic is
+        // evaluated with the same f32 semantics, so this reproduces the exact bits
+        // the pre-refactor `amp_base + amp_span` produced.
+        amp: 0.36 + 0.82,
         out_lp_hz: 2600.0,
         loop_comp: 3.85,
         beta: 0.140,
@@ -9131,7 +9136,7 @@ fn string_voicing(program: u8) -> StringVoicing {
     const CONTRABASS: StringVoicing = StringVoicing {
         body_f: [70.0, 180.0, 700.0],
         refl_sustain: 2200.0,
-        amp: 1.80, // was amp_base 0.55 + amp_span 1.25
+        amp: 0.55 + 1.25, // same reasoning; this pair happens to be exact
         out_lp_hz: 1800.0,
         loop_comp: 4.52,
         vib_rate: 4.2,
@@ -9247,13 +9252,13 @@ fn string_voicing(program: u8) -> StringVoicing {
 /// 81–83 take full force while 77–79 do not): the failures are discrete
 /// mode-crossing resonances, and a ceiling that dips back up between them would
 /// encode the measurement's grid rather than the physics.
-fn bow_force_ceiling(v: &StringVoicing, key: u8) -> f32 {
+fn bow_force_ceiling(v: &StringVoicing, key: u8) -> Option<f32> {
     if key < v.slope_hi_key || v.top_key <= v.slope_hi_key {
-        return 2.9;
+        return None;
     }
     let lo = v.slope_hi_key as f32;
     let t = ((key as f32 - lo) / (v.top_key as f32 - lo)).clamp(0.0, 1.0);
-    2.9 + (v.slope_hi - 2.9) * t
+    Some(2.9 + (v.slope_hi - 2.9) * t)
 }
 
 impl BowedString {
@@ -9281,7 +9286,16 @@ impl BowedString {
         // violin family it cannot be cured by moving `beta`, because 0.140 is
         // what holds its own 46–50 wolf band. Real players press less hard high
         // on a string anyway, so the ceiling is physically right where it bites.
-        let slope = 2.2 + (bow_force_ceiling(&voicing, key) - 2.2) * u(&mut rng);
+        // `None` keeps the ORIGINAL expression, character for character. Writing
+        // the unrestricted case as `2.2 + (2.9 - 2.2) * u` looks equivalent and is
+        // not: in f32, 2.9 - 2.2 is 0.70000005 and 0.7 is 0.69999999. Six parts in
+        // 10^8 of bow force, fed into a chaotic stick-slip loop, is enough to
+        // change every sample of the render — it moved two cello-only albums that
+        // this change must not touch, and the render-diff inventory caught it.
+        let slope = match bow_force_ceiling(&voicing, key) {
+            None => 2.2 + 0.7 * u(&mut rng),
+            Some(hi) => 2.2 + (hi - 2.2) * u(&mut rng),
+        };
         let bow_noise = (0.05 + 0.06 * u(&mut rng)) * voicing.bite; // how gritty this stroke is
                                                                     // the sampled arco bite now owns the onset, so the model's own synth
                                                                     // scratch is dialled right back — just a hint under the sample.

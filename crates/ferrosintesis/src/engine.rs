@@ -4070,10 +4070,53 @@ pub(crate) fn render_buses_with_progress(
     sitar_symp_on: bool,
     on_progress: &mut dyn FnMut(Progress),
 ) -> (Vec<f32>, Stats) {
-    let sr = opt.sr;
-    let total = ((song.seconds + opt.tail as f64) * sr as f64) as usize;
+    let total = render_sample_count(song, opt);
     let mut out = vec![0f32; total * 2]; // interleaved stereo
+    let stats = drive_render(
+        song,
+        opt,
+        gtr_symp_on,
+        drum_room_on,
+        sitar_symp_on,
+        on_progress,
+        |core, block_start, n| {
+            core.render_block_add(n, &mut out[block_start * 2..(block_start + n) * 2]);
+            Ok::<(), std::convert::Infallible>(())
+        },
+    )
+    .expect("an infallible render sink cannot fail");
+    (out, stats)
+}
 
+pub(crate) fn render_sample_count(song: &Song, opt: &Options) -> usize {
+    ((song.seconds + opt.tail as f64) * opt.sr as f64) as usize
+}
+
+pub(crate) fn render_stream_with_progress(
+    song: &Song,
+    opt: &Options,
+    on_progress: &mut dyn FnMut(Progress),
+    emit: &mut dyn FnMut(&[f32]) -> std::io::Result<()>,
+) -> std::io::Result<Stats> {
+    let mut block = [0.0f32; BLOCK * 2];
+    drive_render(song, opt, true, true, true, on_progress, |core, _, n| {
+        block[..n * 2].fill(0.0);
+        core.render_block_add(n, &mut block[..n * 2]);
+        emit(&block[..n * 2])
+    })
+}
+
+fn drive_render<E>(
+    song: &Song,
+    opt: &Options,
+    gtr_symp_on: bool,
+    drum_room_on: bool,
+    sitar_symp_on: bool,
+    on_progress: &mut dyn FnMut(Progress),
+    mut emit_block: impl FnMut(&mut EngineCore, usize, usize) -> Result<(), E>,
+) -> Result<Stats, E> {
+    let sr = opt.sr;
+    let total = render_sample_count(song, opt);
     let mut core = EngineCore::new(CoreOptions::from_options(
         opt,
         gtr_symp_on,
@@ -4102,7 +4145,7 @@ pub(crate) fn render_buses_with_progress(
             core.handle_event(kind);
         }
 
-        core.render_block_add(n, &mut out[block_start * 2..(block_start + n) * 2]);
+        emit_block(&mut core, block_start, n)?;
 
         block_start += n;
         if block_start >= next_report {
@@ -4114,22 +4157,36 @@ pub(crate) fn render_buses_with_progress(
             next_report += total / 10;
         }
     }
-    (out, core.stats())
+    Ok(core.stats())
 }
 
 /// Scale by `scale`, TPDF-dither, and quantise to interleaved i16. Shared by the
 /// peak- and loudness-normalisation paths so both dither identically.
 fn dither_quantize(samples: &[f32], scale: f32) -> Vec<i16> {
-    let mut rng = Rng::new(0xD17E);
+    let mut quantizer = DitherQuantizer::new();
     samples
         .iter()
-        .map(|&x| {
-            let dither = (rng.white() + rng.white()) * 0.5; // triangular, ±1 LSB
-            ((x * scale).clamp(-1.0, 1.0) * 32767.0 + dither)
-                .round()
-                .clamp(-32768.0, 32767.0) as i16
-        })
+        .map(|&x| quantizer.quantize(x, scale))
         .collect()
+}
+
+pub(crate) struct DitherQuantizer {
+    rng: Rng,
+}
+
+impl DitherQuantizer {
+    pub(crate) fn new() -> Self {
+        Self {
+            rng: Rng::new(0xD17E),
+        }
+    }
+
+    pub(crate) fn quantize(&mut self, sample: f32, scale: f32) -> i16 {
+        let dither = (self.rng.white() + self.rng.white()) * 0.5;
+        ((sample * scale).clamp(-1.0, 1.0) * 32767.0 + dither)
+            .round()
+            .clamp(-32768.0, 32767.0) as i16
+    }
 }
 
 /// Peak-normalise to `target` and convert to interleaved i16 with TPDF dither.
@@ -4556,11 +4613,22 @@ mod tests {
 
         let mut seen = Vec::new();
         let (observed, observed_stats) = render_with_progress(&song, &opt, &mut |p| seen.push(p));
+        let mut streamed = Vec::new();
+        let streamed_stats = render_stream_with_progress(&song, &opt, &mut |_| {}, &mut |block| {
+            streamed.extend_from_slice(block);
+            Ok(())
+        })
+        .unwrap();
 
         assert_eq!(
             plain, observed,
             "attaching a progress callback changed the rendered audio"
         );
+        assert_eq!(
+            plain, streamed,
+            "streaming blocks changed the rendered audio"
+        );
+        assert_eq!(plain_stats, streamed_stats);
         assert_eq!(plain_stats.peak, observed_stats.peak);
         assert_eq!(plain_stats.voices_spawned, observed_stats.voices_spawned);
 

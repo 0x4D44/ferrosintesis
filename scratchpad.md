@@ -131,7 +131,7 @@
   test, ~25 unguarded wrap sites); the HARM is not. Reopen only if a seam measurement ever shows
   a real discontinuity - do not arm `end_taper` globally on this note's say-so, since that moves
   every LA voice.)
-- [ ] 2026.07.18 — **Closed vs pedal hi-hat are identical in the MODELED path, and the
+- [x] 2026.07.18 — **Closed vs pedal hi-hat are identical in the MODELED path, and the
   pedal hat carries a stick click it should not have.** Keys 42|44 share one `CymSpec`
   with `click: Some(...)` (`crates/ferrosintesis/src/drums.rs:~1661`). The sampled path
   distinguishes them (`HH_CLOSED` vs `HH_PEDAL`, `sampler.rs:~1942`), so this only bites
@@ -149,6 +149,20 @@
   design REVISION needing Arthur, not a bug fix - even though the physical argument (a
   foot-closed hat has no stick) is sound, and no oracle anywhere asserts 42 != 44. Leaving it
   open as a question for Arthur rather than filing against a signed-off doc.)
+  (Done 2026-07-26, Arthur's call - the signed-off spec was a mistake. Key 44 now has its own
+  CymSpec: no stick click, shorter (life 0.10 vs 0.14), duller (noise highpass 5200 vs 6500 Hz),
+  and 0.39 vs 0.42 gain - the gain ratio copied from the SAMPLED pair (DRUM_LEVEL 0.13/0.14) so
+  the two paths agree on the closed-to-pedal balance instead of drifting. The 2026.07.09 kit-v3
+  HLD is corrected in place, marked as superseded rather than silently edited.
+  Guarded by `pedal_hat_is_not_a_closed_hat`, held for BOTH modelled kits, and adversarially
+  verified (restoring the click turns it red). Note for whoever writes the next drum oracle:
+  two obvious metrics CANNOT see this change - attack/body energy moves the WRONG way (23.5 vs
+  20.5, because the pedal's shorter envelope shrinks the denominator faster than the missing
+  click shrinks the numerator) and broadband centroid moves 5%. Only ABSOLUTE >9 kHz RMS in the
+  first 5 ms isolates the click (0.081 -> 0.049).
+  Blast radius, by event census: 7 MIDIs author ch-10 key 44 and NONE selects a modelled kit -
+  all are V3 or Brush, which take the sampled path (Brush intercepts key 44 earlier still). So
+  no committed album track changes.)
 - [ ] 2026.07.18 — **Ride bell (key 53) skipped the MetalPlate upgrade in the modeled
   path.** It is a fixed 6-mode inharmonic `d()` stack (`drums.rs:~1828`) while 49/51/52/
   55/57/59 route to `metal_plate`; the sampled `RIDE_BELL` has only 3 round robins. A busy
@@ -394,13 +408,17 @@
   `inventory.rs` checks both existence and packaging, `provenance.rs` pins a SHA-256 for every
   committed upstream source. The named worry - evidence reachable only through `prepare.py`,
   outside the include lists - no longer applies.)
-- [ ] 2026-07-13 — **`ferrosintesis-cli` is `publish = false`**, so `cargo install ferrosintesis`
+- [x] 2026-07-13 — **`ferrosintesis-cli` is `publish = false`**, so `cargo install ferrosintesis`
   will not work — the library publishes, the renderer binary does not. Deliberate per the
   2026.07.09 HLD, but it is a product decision worth restating (and worth revisiting at 1.0):
   if the CLI should ship, it needs `README.md`, `LICENSE-*`, an `include` list, and to be
   published last.
-
-- [ ] 2026-07-16 — **The 8 `drum_*` WAVs in `ferrosintesis-samples-orchestral` are DEAD
+  (Done 2026-07-26, Arthur's call - the CLI joins the crates.io work. `publish` flipped and the
+  four things it lacked added: README, LICENSE-MIT, LICENSE-APACHE, and an `include` list (plus
+  readme/keywords/categories). `cargo package --list` verified - licences, README, src, examples
+  and tests ship, nothing else. CLAUDE.md now states the publish order with the CLI LAST, after
+  the library, because its dependency pins a version that must already be on the registry.)
+- [x] 2026-07-16 — **The 8 `drum_*` WAVs in `ferrosintesis-samples-orchestral` are DEAD
   WEIGHT — nothing loads them.** `crash1`/`kick_v3`/`snare2_v5`/`sus_cymb1` (2 RRs each) are
   referenced only by the crate's own inventory array
   (`crates/ferrosintesis-samples-orchestral/src/lib.rs`); no `ferrosintesis` code reads them
@@ -423,6 +441,18 @@
   calibration. Still a published-payload decision for Arthur; the README now at least states the
   files are superseded. NOTE the CLAUDE.md rule that unused-by-our-albums is not evidence of
   death - the stronger claim here is that no GM key can reach them, which does hold.)
+  (Done 2026-07-26, Arthur's call - keep them in the repo, out of crates.io and out of the binary.
+  Moved to `tools/ferrosintesis-samples/retired-drum-overlays/` with a gitignore whitelist, so
+  they leave both the published tarball and every `include_bytes!` payload while staying in git.
+  FILE_COUNT 166 -> 158, EXPECTED_BYTES -919 KiB, test_prepare pins 208 -> 200 and 139 -> 131,
+  all recomputed by running the routing code rather than subtracting 8. `DRUM_SOURCES` is no
+  longer merged into `SOURCES` so a regen cannot restore them, but the table stays as the
+  upstream pin. Provenance preserved and VERIFIED: `drum_crash1_ff_rr1.wav`, the measurement
+  reference two MetalPlate HLDs cite, hashes byte-identical to its trunk blob after the move.
+  Two things to leave alone: the PROVENANCE attribution had to move BELOW the table (inventory.rs
+  rejects a `family_*` row with no packaged samples), and the new directory deliberately does not
+  match provenance.rs's `*-src` glob - nothing packages these files, so no packaged document
+  could carry their hash. Git history is their integrity record.)
 - 2026.07.17 — **ChoirV2 CC70 cluster-shade is coupled to the F3 formant gain** (`sf_open =
   vgains[2]/sf_ref_g3`, voices.rs:6103; the F5 adversarial finding). It SATURATES when the program's
   default F3 gain is on the floor, so a dark-voiced preset silently kills the CC70 vowel morph's
@@ -501,7 +531,7 @@
   three named albums — Slipstream 01/02/03 reported GM25 before the fix and do not after,
   with their drum keys untouched.)
 
-- [ ] 2026-07-20 **GOLDEN mix fixture has pre-existing within-tolerance drift on 3
+- [x] 2026-07-20 **GOLDEN mix fixture has pre-existing within-tolerance drift on 3
   non-pluck rows** (`crates/ferrosintesis/src/testutil.rs` GOLDEN table). Capturing
   the full fixture at the Phase-2 branch base (963def2) showed ch 0 nylon centroid
   899→819 Hz, ch 4 drive 808→846 Hz, and the ch 8 strings canary 2381→2139 Hz all
@@ -522,7 +552,16 @@
   2026.07.12 entry), and these tolerances are what absorb that. Re-pinning to one box's
   numbers could red the fixture on another. Needs Arthur: either designate a gating machine
   for golden captures, or accept the tolerance as doing its job and drop this item.)
-
+  (Done 2026-07-26, Arthur's call - re-pinned, and the objection to re-pinning turned out to be
+  unfounded. The claim that ferrosintesis renders are not reproducible across fleet machines does
+  not survive checking: the 2026.07.12 journal finding is titled "cross-environment ENCODER
+  nondeterminism" and observed differing .opus BYTES, blamed on a different ropusenc/libopus
+  build. It says nothing about the synth's own output. The other strand was an exact-hash canary
+  failing release-vs-debug on ONE box. Those two got merged into a claim neither supports, and it
+  had been repeated ever since - nobody has actually run ferrosintesis on a second box.
+  The opt-level half WAS the real risk, so it was measured: captured under debug and release,
+  all ten rows and the master peak agree exactly. Whole table re-pinned; guard green in both
+  profiles.)
 - [ ] 2026-07-19 FINGERED BASS (GM 33, `BASS` preset) and UPRIGHT bass (GM 32, `UPRIGHT`) sound "more or less the same" to Arthur (showcase audition), despite the v0.12 §2.12 "widened 32/33 split". Expected: an electric flatwound (muffled, pickup-comb identity) vs a woody ACOUSTIC upright (corpus modes, fingertip thud, no pickup) should be clearly distinct. Investigate whether the split is audibly insufficient (or the showcase phrase just does not reveal it). Separate from the pluck redesign (a distinctiveness issue). crates/ferrosintesis/src/voices.rs BASS (~2773) + UPRIGHT (~2903).
   (Re-verified 2026-07-25: the CODE does not corroborate "more or less the same" - the presets now
   differ on t60 3.2 vs 1.8, out_lp 1150 vs 2200 Hz, sub 0.72 vs 0.15, attack_noise 0.12 vs 0.90,

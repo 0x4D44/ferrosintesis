@@ -1900,7 +1900,7 @@ fn make_uncorrected(
             0.33,
             0.58,
         ),
-        42 | 44 => cymbal(
+        42 => cymbal(
             &CymSpec {
                 base: 3300.0,
                 tone_amp: 0.10,
@@ -1909,8 +1909,51 @@ fn make_uncorrected(
                 noise: (0.8, 0.035, 6500.0),
                 life: 0.14,
                 gain: 0.42,
-                // CYM-3: the stick tick a closed/pedal hat leads with
+                // CYM-3: the stick tick a CLOSED hat leads with. Key 44 is played
+                // with the foot and must not have it — see below.
                 click: Some((1.8 * velnorm, 0.005, 9000.0)),
+                swell: false,
+                pairs: false,
+                v2: None,
+                noise2: None,
+                shimmer: None,
+            },
+            sr,
+            seed,
+            vel,
+        ),
+        // Pedal hat (the "chick"): the two cymbals clapped together by the foot.
+        // Nothing strikes it, so it has NO stick click — that is the whole point of
+        // splitting it from key 42, which shared this spec until 2026-07-26. The
+        // 2026.07.09 kit-v3 HLD specified one profile for both; that was a mistake,
+        // and the HLD is corrected alongside this change.
+        //
+        // Voiced against its own sampled twin (`kit::HH_PEDAL`), which is what a
+        // default build actually plays: shorter and duller than the closed hat.
+        //
+        // The lower noise highpass is what makes it duller: 6500 Hz keeps only the
+        // thin top a stick excites, while a foot close is a fuller, lower clap.
+        //
+        // `gain` is CALIBRATED, not chosen. It looks wrong at a glance — 0.60 against
+        // the closed hat's 0.42, i.e. the "quieter" voice carrying the larger number —
+        // so here is why. `sampled_drum_level_parity` holds every modelled drum within
+        // 3 dB of the recording it stands in for, measured as RMS over 3 s; this voice
+        // is deliberately short-lived (life 0.10 vs 0.14) and has no click, and both of
+        // those remove energy from that window. A first attempt at 0.39, picked to
+        // mirror the sampled pair's DRUM_LEVEL ratio, came out 3.74 dB under its own
+        // recording and turned that oracle red. 0.60 measures +0.00 dB against it.
+        // The lesson: a peak gain is not a loudness, and the sampled twin is the
+        // reference — do not "correct" this number to look like the closed hat's.
+        44 => cymbal(
+            &CymSpec {
+                base: 2900.0,
+                tone_amp: 0.08,
+                t60_first: 0.04,
+                t60_last: 0.025,
+                noise: (0.85, 0.028, 5200.0),
+                life: 0.10,
+                gain: 0.60,
+                click: None,
                 swell: false,
                 pairs: false,
                 v2: None,
@@ -3702,6 +3745,82 @@ mod tests {
                 trash(&crash[..(0.5 * sr) as usize]),
             );
             assert!(tc > 1.5 * tx, "{name}: china trash {tc} vs crash {tx}");
+        });
+    }
+
+    /// A pedal hat (key 44) is closed by the FOOT — nothing strikes it. So it must not
+    /// carry the stick click that a closed hat (key 42) leads with, and the two must not
+    /// render identically.
+    ///
+    /// Both shared one `CymSpec` (click included) until 2026-07-26, specified that way by
+    /// `wrk_docs/2026.07.09 - HLD - ferrosintesis drum kit v3 default.md`. That spec was
+    /// wrong; the HLD is corrected alongside this oracle.
+    ///
+    /// Held for every MODELLED kit, because that is the real blast radius: this is not a
+    /// `--no-samples` curiosity. A default sampled build reaches the modelled hats through
+    /// the ch-10 kit ladder — PC 25 (V1) and PC 24 (Synth, which forces samples off) — and
+    /// albums in this repo select V1.
+    #[test]
+    fn pedal_hat_is_not_a_closed_hat() {
+        let sr = 44100.0;
+        for_each_kit(|kit, name| {
+            let closed = render_drum_kit(42, 100, 0.3, kit);
+            let pedal = render_drum_kit(44, 100, 0.3, kit);
+
+            // (a) The un-foolable clause: equal vel + seed must not render bit-identical.
+            assert!(
+                closed != pedal,
+                "{name}: keys 42 and 44 render bit-identically — still one shared voice"
+            );
+
+            // (b) No stick click. Deliberately NOT an attack/body energy ratio: the pedal
+            //     spec is also shorter-lived, so its body window is quieter and that metric
+            //     moves the WRONG way (measured 23.5 vs 20.5) while the click is genuinely
+            //     gone. The click is a 9 kHz-highpassed transient, so what identifies it is
+            //     the COLOUR of the first few milliseconds, not their level.
+            //     Choosing this metric took four attempts, and the failures are worth keeping
+            //     because each is a trap a future drum oracle can fall into:
+            //       - attack/body ENERGY ratio moved the WRONG way (23.5 vs 20.5): the pedal
+            //         is shorter-lived, so its body window is quieter and swamps the effect;
+            //       - broadband early centroid: 7422 vs 7024, 5% — the click is diluted
+            //         across a band that is mostly wash;
+            //       - 2 ms crest factor: 2.65 vs 2.66, nil;
+            //       - >9 kHz referenced to a 1–6 kHz band: 2.512 vs 2.427, 3% — that
+            //         reference sits BELOW the closed hat's own 6.5 kHz noise corner, so the
+            //         pedal's lower corner inflates the denominator and cancels the signal;
+            //       - ABSOLUTE >9 kHz RMS separated well (0.081 vs 0.049) but is not
+            //         gain-invariant, so it silently couples this oracle to the level
+            //         calibration — it broke the moment `sampled_drum_level_parity` forced a
+            //         gain change.
+            //     What works is a ratio whose reference band lies ABOVE both noise corners
+            //     (6.5 kHz closed, 5.2 kHz pedal) and BELOW the click's 9 kHz corner. Then the
+            //     reference is wash-only for both voices, the numerator carries the click for
+            //     the closed hat alone, and both terms scale with gain so the ratio does not.
+            let click_ratio = |s: &[f32]| {
+                let w = &s[..(0.005 * sr) as usize];
+                testutil::spectral_band_rms(w, sr, 9000.0, 20000.0)
+                    / testutil::spectral_band_rms(w, sr, 6500.0, 8500.0).max(1e-9)
+            };
+            let cr = click_ratio(&closed);
+            let pr = click_ratio(&pedal);
+            println!("{name}: 9k+/6.5-8.5k in first 5 ms closed={cr:.3} pedal={pr:.3}");
+            assert!(
+                pr < cr * 0.8,
+                "{name}: the pedal hat still leads with a 9 kHz stick tick \
+                 (9k+/ref closed={cr:.3} pedal={pr:.3}) — it is played with the foot"
+            );
+
+            // (c) Duller. A foot close is a fuller, lower clap than a stick on the edge;
+            //     the pedal spec's noise highpass sits well below the closed hat's.
+            let n = (0.05 * sr) as usize;
+            let cc = testutil::centroid(&closed[..n], sr);
+            let pc = testutil::centroid(&pedal[..n], sr);
+            println!("{name}: centroid closed={cc:.0} pedal={pc:.0}");
+            assert!(
+                pc < cc,
+                "{name}: pedal hat is not darker than the closed hat \
+                 (centroid closed={cc:.0} pedal={pc:.0})"
+            );
         });
     }
 

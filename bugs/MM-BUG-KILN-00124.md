@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00124 — Drum-kit regeneration ignores the two-crate package split
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** sample generation / drum-kit packaging
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T065055Z-p11864-n480023400-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00124-run-fix-20260726T065055Z-p11864-n480023400-c1
-- **Owner base:** fec65febd24038bc2d8ef195cb649cb606e0a903
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T06:50:55Z
-- **Owner until:** 2026-07-26T08:50:55Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`)
+- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T065055Z-p11864-n480023400-c1 branch=task/bug-MM-BUG-KILN-00124-run-fix-20260726T065055Z-p11864-n480023400-c1 code=2a3c656e0199ac2303d6ba7cd4653c3e8b5c9cc4 gate=manual)
 
 ## Observation
 

@@ -1850,24 +1850,48 @@ mod distinctness {
 #[test]
 fn no_default_gate_is_paired_with_embedded_sample_coverage() {
     const POLICY: &str = include_str!("../../../.deltic-integrate.toml");
-    const DEFAULT_TEST: &str = concat!(
-        r#"{ program = "cargo", args = ["test", "--workspace", "#,
-        r#""--exclude", "amp-lab", "--locked"] }"#
-    );
-    const MODELED_TEST: &str = concat!(
-        r#"{ program = "cargo", args = ["test", "-p", "ferrosintesis", "#,
-        r#""--no-default-features", "--locked"] }"#
-    );
+
+    // Classify each `cargo test` step by the tokens that decide WHICH shipped
+    // configuration it exercises, rather than by its exact argv. The previous version
+    // pinned the whole argv string, including `"--exclude", "amp-lab"` — so when
+    // amp-lab left the workspace on 2026.07.26 and that flag was correctly dropped,
+    // this oracle failed while the contract it guards was still perfectly intact. A
+    // false red teaches people to edit the oracle to match, which is how a guard stops
+    // guarding. Match the invariant: both gate arrays run the workspace with default
+    // features, and ferrosintesis again with --no-default-features.
+    let steps: Vec<&str> = POLICY
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.starts_with('#'))
+        .filter(|l| l.contains(r#"program = "cargo""#) && l.contains(r#""test""#))
+        .collect();
+
+    let modeled = |l: &&str| l.contains(r#""--no-default-features""#);
+    let embedded_workspace = steps
+        .iter()
+        .filter(|l| l.contains(r#""--workspace""#) && !modeled(l))
+        .count();
+    let modeled_only = steps
+        .iter()
+        .filter(|l| modeled(l) && l.contains(r#""ferrosintesis""#))
+        .count();
 
     assert_eq!(
-        POLICY.matches(DEFAULT_TEST).count(),
-        2,
-        "fallback and workspace gates must both retain the embedded-sample test suite"
+        embedded_workspace, 2,
+        "fallback and workspace gates must both retain the embedded-sample test suite; \
+         cargo test steps seen: {steps:#?}"
     );
     assert_eq!(
-        POLICY.matches(MODELED_TEST).count(),
-        2,
-        "fallback and workspace gates must both retain the modeled-only test suite"
+        modeled_only, 2,
+        "fallback and workspace gates must both retain the modeled-only test suite; \
+         cargo test steps seen: {steps:#?}"
+    );
+    // Every `cargo test` step must fall in exactly one bucket, so a third
+    // configuration cannot be added without this oracle being taught about it.
+    assert_eq!(
+        embedded_workspace + modeled_only,
+        steps.len(),
+        "unclassified cargo test step in the gate: {steps:#?}"
     );
 }
 

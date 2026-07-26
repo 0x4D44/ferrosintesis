@@ -227,6 +227,15 @@ const DRIVEN_GUITAR_VOICE_LIMIT: usize = 8;
 /// [0, 1], 0.5 = centre. Kick/snare stay centred; hats sit left; the toms
 /// sweep across; ride/bell and china/crash-2 sit right, crash-1 left.
 /// Authored CC10 OFFSETS this table (centre leaves it verbatim).
+///
+/// Ride 2 (59) sits just outside ride 1, mirroring the SC-55's own proportion.
+/// That ROM separates its two RIDES by 10 panpot units where it separates the
+/// two CRASHES by 40 (see `sampler::SECOND_CYMBAL_REPITCH` for the decode), and
+/// the reason is physical: a drummer's two crashes are at opposite ends of the
+/// kit, while a second ride sits alongside the first. 10/128 of the field is
+/// 0.078 here, so 0.70 -> 0.78 — further from centre in the same direction the
+/// rides already occupy. Copying the crashes' wide split would place two
+/// cymbals that belong next to each other across the stereo image.
 pub(crate) fn drum_pan(key: u8) -> f32 {
     match key {
         42 | 44 | 46 => 0.33,
@@ -234,7 +243,8 @@ pub(crate) fn drum_pan(key: u8) -> f32 {
         43 | 45 => 0.62,
         47 | 48 => 0.42,
         50 => 0.32,
-        51 | 53 | 59 => 0.70,
+        51 | 53 => 0.70,
+        59 => 0.78,
         49 | 55 => 0.25,
         52 | 57 => 0.75,
         _ => 0.5,

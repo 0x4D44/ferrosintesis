@@ -1,6 +1,6 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
-- [ ] 2026.07.26 — **GM 59 (Ride Cymbal 2) has the identical defect just fixed on GM 57, and is
+- [x] 2026.07.26 — **GM 59 (Ride Cymbal 2) has the identical defect just fixed on GM 57, and is
   still unfixed** — `crates/ferrosintesis/src/sampler.rs` (`sampled_drum`, the `51 | 59 =>
   (&kit::RIDE, 1.0)` arm). Found while fixing crash 2, not fixed there to keep that change to
   the one key Arthur signed off. The SC-55mkII ROM handles the two ride keys exactly as it
@@ -12,6 +12,15 @@
   gives 51 and 59 the SAME value 0.70, so unlike the crash pair there is no pan split to lean
   on either — worth splitting at the same time. In-repo usage is 1 file / 1 hit, but per
   CLAUDE.md that is a fact about our albums, not about the synth.
+  (Done 2026-07-26, Arthur's steer, same day. Shared constant rather than a second one:
+  `CRASH_2_REPITCH` became `sampler::SECOND_CYMBAL_REPITCH`, serving 57 and 59. I re-decoded
+  the ROM myself rather than trust the note above — the tone indices are 372/373 in decimal,
+  and the pan deltas are NOT symmetric between the pairs: crashes split by 40 panpot units,
+  rides by only 10. So `drum_pan` gives 59 = 0.78 against 51's 0.70, a proportional nudge,
+  not a copy of the crashes' wide split — two rides sit next to each other on a real kit.
+  The oracle was generalised over a `PAIRS` table rather than copied, and both its clauses
+  were proven red for the ride INDEPENDENTLY of the crash: the whole-constant break aborts on
+  the crash first, so it proves nothing about the ride.)
 
 - [ ] 2026.07.25 — **`percentile_uses_nearest_rank` pins the historical failing value, not the
   convention** — `crates/ferrosintesis/src/voices.rs` (the test beside `fn percentile`). It

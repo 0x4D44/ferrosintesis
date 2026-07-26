@@ -3748,19 +3748,27 @@ mod tests {
         });
     }
 
-    /// GM 57 (Crash Cymbal 2) is GM 49's cymbal one semitone up — the SC-55's own answer.
+    /// GM's second crash (57) and second ride (59) are the FIRST one a semitone up — the
+    /// SC-55's own answer, applied to both pairs.
     ///
-    /// Decoded from the SC-55mkII control ROM (see `sampler::CRASH_2_REPITCH`): both keys
-    /// share tone 0x0174 "Crash Cymbal" at identical level and sends, and differ in exactly
-    /// two bytes — play note 60 vs 61, and a symmetric pan split. So "crash 2" never named
-    /// a second cymbal; it named the same cymbal, smaller. We already had the pan split
-    /// (`engine::drum_pan`) and a level split (`engine::kit_balance`); this oracle guards
-    /// the pitch axis, the one that was missing.
+    /// Decoded from the SC-55mkII control ROM (see `sampler::SECOND_CYMBAL_REPITCH` for the
+    /// full table): 49/57 share tone 372 "Crash Cymbal" and 51/59 share tone 373 "Ride
+    /// Cymbal", each pair at identical level and sends, each differing in exactly two bytes
+    /// — play note 60 vs 61, and a pan nudge. So neither "crash 2" nor "ride 2" ever named
+    /// a second cymbal; each named the same cymbal, smaller. `engine::drum_pan` carries the
+    /// stereo half; this oracle guards the pitch axis, the one that was missing on both.
     ///
-    /// Two earlier attempts are worth recording, because both were wrong in instructive ways:
+    /// Covering both pairs in ONE test is deliberate. They are the same defect with the same
+    /// fix, and the crash half was found first only because an album happened to score it
+    /// more often. A second hand-written copy for the rides would be the exact pattern
+    /// CLAUDE.md warns about — a list that grows one entry per bug report. Add a pair to
+    /// `PAIRS` when the kit gains one.
     ///
-    /// 1. Until 2026-07-26 both keys played `CRASH` at rate 1.0, so a file scoring two
-    ///    crashes heard one.
+    /// Two earlier attempts on the crash are worth recording, because both were wrong in
+    /// instructive ways:
+    ///
+    /// 1. Until 2026-07-26 keys 49 and 57 both played `CRASH` at rate 1.0, so a file
+    ///    scoring two crashes heard one. Keys 51 and 59 had the identical bug, unnoticed.
     /// 2. For one commit, 57 played `CRASH_SIZZLE` on the theory that it was the kit's
     ///    second cymbal. It is not: measured on the raw WAVs, the two banks' sub-4 kHz
     ///    plate modes agree to a median of 0.32 Hz (445.8 vs 445.5, 1387.0 vs 1386.6) —
@@ -3778,12 +3786,14 @@ mod tests {
     /// within-bank spread of 0.8–2.7 dB. A null from the wrong window is not evidence.
     ///
     /// Sampled path only, deliberately: this is a routing property of the sampled kit, and
-    /// the modelled path still voices both keys from one crash model with cosmetic
-    /// parameter nudges. That remains true and is not what this oracle is about.
+    /// the modelled path still voices each pair from one model with cosmetic parameter
+    /// nudges. That remains true and is not what this oracle is about.
     #[cfg(feature = "embedded-samples")]
     #[test]
-    fn crash_2_is_crash_1_a_semitone_up() {
+    fn second_cymbal_of_each_pair_is_the_first_a_semitone_up() {
         let sr = 44100.0;
+        // (first, second, label). Both GM pairs the ROM builds by transposition.
+        const PAIRS: [(u8, u8, &str); 2] = [(49, 57, "crash"), (51, 59, "ride")];
 
         // Same seed and same round robin, so the ONLY difference between the two renders
         // is the playback rate. That isolates the property under test: anything else the
@@ -3809,20 +3819,22 @@ mod tests {
             let p = s.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-12);
             s.iter().map(|&x| x / p).collect()
         };
-        for rr in 0..4u8 {
-            let a = peak_norm(&render_rr(49, 110, rr));
-            let b = peak_norm(&render_rr(57, 110, rr));
-            let dev = a
-                .iter()
-                .zip(&b)
-                .fold(0f32, |m, (x, y)| m.max((x - y).abs()));
-            println!("rr {rr}: peak-normalised max deviation {dev:.4}");
-            assert!(
-                dev > 0.05,
-                "key 57 round robin {rr} is key 49's signal at another volume (max \
-                 deviation {dev:.4} after peak normalisation) — the crash keys are \
-                 sharing one voice again"
-            );
+        for (first, second, label) in PAIRS {
+            for rr in 0..4u8 {
+                let a = peak_norm(&render_rr(first, 110, rr));
+                let b = peak_norm(&render_rr(second, 110, rr));
+                let dev = a
+                    .iter()
+                    .zip(&b)
+                    .fold(0f32, |m, (x, y)| m.max((x - y).abs()));
+                println!("{label} rr {rr}: peak-normalised max deviation {dev:.4}");
+                assert!(
+                    dev > 0.05,
+                    "key {second} round robin {rr} is key {first}'s signal at another \
+                     volume (max deviation {dev:.4} after peak normalisation) — the two \
+                     {label} keys are sharing one voice again"
+                );
+            }
         }
 
         // (b) ...and the difference must be the RIGHT one: 57 sits a semitone ABOVE 49.
@@ -3878,29 +3890,32 @@ mod tests {
         // 2^(1/12) = 1.05946 = 1.005^11.6, so a correct render peaks at k = 11 or 12.
         // Scanning from k = 0 means "no repitch at all" is inside the search space and
         // has to LOSE on its own terms — the scan is not rigged to find a shift.
-        for vel in [70u8, 110] {
-            for rr in 0..4u8 {
-                let a = spectrum(&render_rr(49, vel, rr));
-                let b = spectrum(&render_rr(57, vel, rr));
-                let (mut best_k, mut best_s) = (0usize, f32::NEG_INFINITY);
-                for k in 0..=24usize {
-                    let s = similarity(&a, &b, k);
-                    if s > best_s {
-                        best_s = s;
-                        best_k = k;
+        for (first, second, label) in PAIRS {
+            for vel in [70u8, 110] {
+                for rr in 0..4u8 {
+                    let a = spectrum(&render_rr(first, vel, rr));
+                    let b = spectrum(&render_rr(second, vel, rr));
+                    let (mut best_k, mut best_s) = (0usize, f32::NEG_INFINITY);
+                    for k in 0..=24usize {
+                        let s = similarity(&a, &b, k);
+                        if s > best_s {
+                            best_s = s;
+                            best_k = k;
+                        }
                     }
+                    let ratio = 1.005f32.powi(best_k as i32);
+                    println!(
+                        "{label} vel {vel} rr {rr}: best log-spectral shift k={best_k} \
+                         (ratio {ratio:.4}, similarity {best_s:.3})"
+                    );
+                    assert!(
+                        (10..=13).contains(&best_k),
+                        "key {second} is not one semitone above key {first} ({label}): best \
+                         spectral alignment is k={best_k} (ratio {ratio:.4}) at vel {vel} \
+                         rr {rr}, expected k=11-12 (2^(1/12) = 1.0595). k=0 means the \
+                         repitch is gone."
+                    );
                 }
-                let ratio = 1.005f32.powi(best_k as i32);
-                println!(
-                    "vel {vel} rr {rr}: best log-spectral shift k={best_k} \
-                     (ratio {ratio:.4}, similarity {best_s:.3})"
-                );
-                assert!(
-                    (10..=13).contains(&best_k),
-                    "key 57 is not one semitone above key 49: best spectral alignment is \
-                     k={best_k} (ratio {ratio:.4}) at vel {vel} rr {rr}, expected k=11-12 \
-                     (2^(1/12) = 1.0595). k=0 means the repitch is gone."
-                );
             }
         }
     }

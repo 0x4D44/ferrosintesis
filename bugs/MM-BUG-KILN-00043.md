@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00043 — GM7 clavinet's baked decay is ~3x too fast: its body level reads 13.4 dB under both references while its attack level is correctly placed (a 1.6 s sample wall also exists, but measures inaudible)
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment)
 
 ## Observation
 
@@ -217,3 +217,44 @@ Unblock when Arthur auditions and chooses the GM7 target—physical Clavinet bre
 the 3–10-second GM-reference idiom—and approves whether the source should be re-baked
 longer or looped under a runtime decay envelope. The existing reference panel and pinned
 MS Basic source can then drive the implementation and render-diff validation.
+
+## Decision and autonomous implementation brief (2026-07-26)
+
+Arthur approved the GM-reference idiom. Ferrosintesis is a General MIDI player, and the
+independent SC-55 and S-YXG50 measurements agree that GM7 should retain substantially more
+body than the physically brief interpretation. The sampled voice should target approximately
+5.0 seconds t60 through the low and middle register, tapering smoothly to approximately
+3.3 seconds at the top. These are calibration anchors, not a demand for one exact curve:
+the implementation may fit the per-zone law within the references' 4–6-second low/mid and
+3.0–3.8-second top envelope.
+
+Implement this as a click-free runtime loop plus decay envelope, rather than by committing
+several seconds of redundant audio per zone. Remove the 1.6-second held-note reap. Choose a
+stable loop segment and use a zero-crossing or short crossfade so the loop boundary does not
+click. Measure the decay envelope in output seconds, independent of sample playback rate,
+so repitching a zone cannot silently shorten or lengthen t60. Keep note-off release and voice
+reaping independent from the held-note decay.
+
+Preserve the already-correct attack: `CLAVINET_LEVEL` and `PROGRAM_TRIM_DB[7] = 0.0` are not
+calibration levers for this fix. Align the modeled `CLAVINET` fallback's broad decay curve
+with the sampled voice so `--no-samples` and the CC0 alt bank no longer die in under one
+second; exact timbral identity is not required.
+
+The implementation is autonomously decidable when it carries these focused regression
+oracles:
+
+1. A held GM7 note remains live and non-silent beyond 1.6 seconds, then reaches the
+   key-dependent decay target without an end-of-sample discontinuity.
+2. Representative MIDI keys 48, 53, 58, 63, 68 and 73 follow a smooth curve through the
+   target envelope above. The test should measure rendered output time, not infer it from
+   source-frame counts.
+3. The attack peak remains within the existing calibration tolerance, note-off release
+   still terminates the voice, and no permanently live voice remains after silence.
+4. The modeled fallback receives an equivalent held-note decay oracle.
+5. Re-run the focused M-CAL GM7 probe when the reference setup is available. The expected
+   external result is removal of the `shape/short` guard on both references and `int_F`
+   near -5 dB; lack of ROM access must not block the in-tree timing and lifecycle tests.
+
+Re-bake the existing sample bank only if stable loop material or loop metadata requires it.
+Do not add a dependency. Leave the bug **Fixed**, not Closed, after implementation so a
+fresh verifier can inspect a representative low/mid/high render and the automated evidence.

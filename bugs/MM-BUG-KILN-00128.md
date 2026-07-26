@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00128 — Gong-only regeneration also rewrites the bottle bank
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample tooling / gong bank regeneration
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T081806Z-p3376-n315034900-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00128-run-fix-20260726T081806Z-p3376-n315034900-c1
-- **Owner base:** 3f38cd3a20f15068a47237dde39001bb1e451b15
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T08:18:06Z
-- **Owner until:** 2026-07-26T10:18:06Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-gong/`)
+- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-gong/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T081806Z-p3376-n315034900-c1 branch=task/bug-MM-BUG-KILN-00128-run-fix-20260726T081806Z-p3376-n315034900-c1 code=02717f27862004d75afa3168c7a8e1cde05bf32f gate=manual)
 
 ## Observation
 

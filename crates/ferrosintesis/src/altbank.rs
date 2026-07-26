@@ -76,6 +76,7 @@ const PIZZ: PluckPreset = PluckPreset {
     // v0.16 sitar/banjo fields: explicitly inert (no jawari bridge buzz, no
     // drum-head membrane) — the frozen v0.9 pizzicato has neither.
     jawari: None,
+    fret_contact: None,
     membrane: &[],
     // v0.16 §2.10 field at its inert default: 1.0 keeps the exact historic
     // velocity arithmetic (bit stream included).

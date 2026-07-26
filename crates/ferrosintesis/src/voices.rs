@@ -2626,6 +2626,25 @@ pub struct JawariSpec {
     pub follow_s: f32,
 }
 
+/// Attack-only string/fret contact for slap-bass gestures (GM 36/37).
+///
+/// The KS loop stores a travelling-wave amplitude, not a literal fretboard
+/// displacement sample. The contact therefore acts as a one-sided junction on
+/// that travelling wave during the onset: while the vertical motion exceeds the
+/// clearance threshold it reflects part of the excursion and briefly shortens
+/// the effective loop. That is the same bounded mechanism as `Jawari`, but
+/// gated to the slap attack instead of riding the whole sustain.
+#[derive(Clone, Copy)]
+pub struct FretContactSpec {
+    pub vel_floor: f32,
+    pub threshold: f32,
+    pub restitution: f32,
+    pub wrap: f32,
+    pub duration_s: f32,
+    pub horiz: f32,
+    pub vert: f32,
+}
+
 /// Excitation model for a plucked voice (natural-pluck redesign HLD §2).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ExcModel {
@@ -2838,6 +2857,9 @@ pub struct PluckPreset {
     // Sitar bridge contact inside the KS loop (None = plain string); see
     // `JawariSpec` for the model and its boundedness argument.
     pub jawari: Option<JawariSpec>,
+    // Attack-only string/fret collision for GM 36/37 slap/pop. None keeps every
+    // non-slap preset on the old plain-KS path.
+    pub fret_contact: Option<FretContactSpec>,
     // Banjo drum-head modes: (freq Hz, Q, linear gain) parallel bandpass
     // resonators driven by the string+pick signal and summed before the
     // body EQ — the tensioned mylar head the bridge stands on. Empty = no
@@ -2911,6 +2933,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     pickup_rlc: (0.0, 0.0),
     sustain: 0.0,
     jawari: None,
+    fret_contact: None,
     membrane: &[],
     vel_sense: 1.0,
     trem: true,
@@ -3478,6 +3501,15 @@ pub const SLAP: PluckPreset = PluckPreset {
     click: 2.4,            // the pop — post-out so the out-LP doesn't swallow it
     click_hp: 1500.0,
     click_post: true,
+    fret_contact: Some(FretContactSpec {
+        vel_floor: 0.52,
+        threshold: 0.58,
+        restitution: 0.34,
+        wrap: 0.018,
+        duration_s: 0.030,
+        horiz: 0.18,
+        vert: 1.0,
+    }),
     stop_thump: 0.9,
     ..DEFAULTS
 };
@@ -3495,6 +3527,15 @@ pub const SLAP_POP: PluckPreset = PluckPreset {
     sub: 0.24,        // thinner than the thumb, but held body stays in family
     click: 3.2,       // was 2.4: a sharper pull-off transient
     click_hp: 2600.0, // was 1500: the snap sits higher
+    fret_contact: Some(FretContactSpec {
+        vel_floor: 0.45,
+        threshold: 0.46,
+        restitution: 0.26,
+        wrap: 0.026,
+        duration_s: 0.038,
+        horiz: 0.24,
+        vert: 1.25,
+    }),
     ..SLAP
 };
 /// Picked bass (B2, GM 34): the plectrum click survives the chain.
@@ -3779,6 +3820,8 @@ struct KsLoop {
     drv: Option<SusDrv>,
     // sitar jawari bridge contact (None unless the preset authors `jawari`)
     jaw: Option<Jawari>,
+    // slap/pop fretboard contact (None unless the preset authors `fret_contact`)
+    fret: Option<FretContact>,
 }
 
 /// The jawari runtime (see `JawariSpec` for the model). All state is driven
@@ -3794,6 +3837,21 @@ struct Jawari {
     rest: f32,    // coefficient of restitution, clamped to [0, 1]
     wrap: f32,    // delay-shortening fraction while in contact, in [0, 0.05]
     depth: f32,   // last sample's normalized contact depth, 0..1
+}
+
+/// Attack-bounded fret collision runtime for slap bass. It is deliberately
+/// passive: the collision target is a convex blend between the incoming sample
+/// and a one-sided reflection whose magnitude never exceeds the original.
+struct FretContact {
+    age: u32,
+    until: u32,
+    strength: f32,
+    threshold: f32,
+    rest: f32,
+    wrap: f32,
+    fol: f32,
+    fol_k: f32,
+    depth: f32,
 }
 
 impl Jawari {
@@ -3844,6 +3902,64 @@ impl Jawari {
             // saturated square gate was measured to dump it into h1–h4
             self.depth = (e / (0.5 * self.fol + 1e-20)).min(1.0);
             e * self.rest - h
+        } else {
+            self.depth = 0.0;
+            s
+        }
+    }
+}
+
+impl FretContact {
+    fn new(spec: &FretContactSpec, vn: f32, sr: f32, lane: f32) -> Option<Self> {
+        let over = ((vn - spec.vel_floor) / (1.0 - spec.vel_floor).max(1e-6)).clamp(0.0, 1.0);
+        let strength = (lane * over * over).clamp(0.0, 1.0);
+        (strength > 0.0).then(|| FretContact {
+            age: 0,
+            until: (spec.duration_s.max(0.0) * sr) as u32,
+            strength,
+            threshold: spec.threshold.clamp(0.05, 0.98),
+            rest: spec.restitution.clamp(0.0, 1.0),
+            wrap: spec.wrap.clamp(0.0, 0.05),
+            fol: 0.0,
+            fol_k: 1.0 - (-1.0 / (0.004 * sr)).exp(),
+            depth: 0.0,
+        })
+    }
+
+    #[inline]
+    fn tap(&self, delay: f32) -> f32 {
+        if self.age < self.until && self.depth > 0.0 {
+            (delay - self.depth * self.wrap * delay).max(2.0)
+        } else {
+            delay
+        }
+    }
+
+    #[inline]
+    fn process(&mut self, s: f32) -> f32 {
+        if self.age >= self.until {
+            self.depth = 0.0;
+            self.age = self.age.saturating_add(1);
+            return s;
+        }
+        self.age += 1;
+
+        let a = s.abs();
+        if a > self.fol {
+            self.fol = a;
+        } else {
+            self.fol += self.fol_k * (a - self.fol);
+            if self.fol < 1e-24 {
+                self.fol = 0.0;
+            }
+        }
+
+        let h = self.threshold * self.fol;
+        if s < -h {
+            let e = -(s + h);
+            let reflected = e * self.rest - h;
+            self.depth = self.strength * (e / (0.5 * self.fol + 1e-20)).min(1.0);
+            s + self.strength * (reflected - s)
         } else {
             self.depth = 0.0;
             s
@@ -3918,6 +4034,7 @@ impl KsLoop {
             sr,
             drv: None,
             jaw: None,
+            fret: None,
         }
     }
 
@@ -4020,7 +4137,18 @@ impl KsLoop {
             Some(j) if j.depth > 0.0 => (self.delay - j.depth * j.wrap * self.delay).max(2.0),
             _ => self.delay,
         };
+        let tap = match &self.fret {
+            Some(f) => f.tap(tap),
+            None => tap,
+        };
         let s = self.dl.tap_cubic(tap);
+        // slap/pop fret collision: attack-bounded one-sided reflection before
+        // damping/feedback, so the contact changes the string rather than only
+        // adding an output garnish.
+        let s = match &mut self.fret {
+            Some(f) => f.process(s),
+            None => s,
+        };
         // sitar jawari: the bridge grazes the string INSIDE the loop, every
         // round trip (None compiles to the identical plain-KS path)
         let s = match &mut self.jaw {
@@ -4685,6 +4813,13 @@ impl Pluck {
             // both polarizations graze the same bridge
             horiz.jaw = Some(Jawari::new(spec, sr));
             vert.jaw = Some(Jawari::new(spec, sr));
+        }
+        if let Some(spec) = &p.fret_contact {
+            // The fretboard is in the vertical plane. A small horizontal share
+            // models bridge/fret coupling, but the weighty contact lives on the
+            // vertical polarization and then projects through the existing mix.
+            horiz.fret = FretContact::new(spec, vn, sr, spec.horiz);
+            vert.fret = FretContact::new(spec, vn, sr, spec.vert);
         }
 
         Pluck {
@@ -15776,6 +15911,7 @@ mod tests {
         ("BASS", &BASS),
         ("FRETLESS", &FRETLESS),
         ("SLAP", &SLAP),
+        ("SLAP_POP", &SLAP_POP),
         ("PICK", &PICK),
         ("UPRIGHT", &UPRIGHT),
         ("HARMONIC", &HARMONIC),
@@ -19707,6 +19843,123 @@ mod tests {
         );
         let f = crate::testutil::peak_locate(&slap[(0.1 * sr) as usize..], sr, 35.0, 50.0);
         assert!((f - 41.2).abs() < 4.0, "slap fundamental {f} Hz");
+    }
+
+    /// MM-BUG-KILN-00016: GM36/37 must get their slap/pop identity from a
+    /// string-path fret collision, not only the legacy post-output burst. The
+    /// contact-disabled lesion deliberately keeps `click_post`, so a pass here
+    /// proves the old burst alone no longer satisfies the identity oracle.
+    #[test]
+    fn slap_pop_identity_depends_on_fret_collision() {
+        let sr = 44100.0;
+        for (name, preset, key) in [("SLAP", &SLAP, 28u8), ("SLAP_POP", &SLAP_POP, 40)] {
+            let no_contact = PluckPreset {
+                fret_contact: None,
+                ..*preset
+            };
+            let with = render_pluck(preset, key, 114, 0.16, 0x1600 + key as u32);
+            let without = render_pluck(&no_contact, key, 114, 0.16, 0x1600 + key as u32);
+            let residual: Vec<f32> = with.iter().zip(&without).map(|(&a, &b)| a - b).collect();
+
+            let legacy_burst = hp_rms(segment(&without, sr, 0.0, 0.003), sr, 3000.0);
+            assert!(
+                legacy_burst > 1.0e-4,
+                "{name}: lesion accidentally removed the legacy post-output burst"
+            );
+
+            let attack_contact = hp_rms(segment(&residual, sr, 0.006, 0.030), sr, 2400.0);
+            let attack_body = hp_rms(segment(&with, sr, 0.006, 0.030), sr, 2400.0);
+            assert!(
+                attack_contact > 0.18 * attack_body.max(1e-9),
+                "{name}: fret contact does not carry the slap/pop attack identity: \
+                 residual {attack_contact:.6} vs body {attack_body:.6}"
+            );
+
+            let settled = segment(&with, sr, 0.080, 0.140);
+            let f0 = key_freq(key);
+            let pitch = peak_locate(settled, sr, f0 * 0.82, f0 * 1.18);
+            assert!(
+                (pitch / f0 - 1.0).abs() < 0.045,
+                "{name}: fret collision moved settled pitch to {pitch:.2} Hz, expected {f0:.2}"
+            );
+        }
+    }
+
+    /// The fret-collision layer is a thresholded physical contact: soft notes
+    /// should not chatter, hard notes should get disproportionately more contact
+    /// energy, and the contact must be bounded to the attack interval.
+    #[test]
+    fn slap_pop_fret_collision_scales_and_dies() {
+        let sr = 44100.0;
+        for (name, preset, key) in [("SLAP", &SLAP, 28u8), ("SLAP_POP", &SLAP_POP, 40)] {
+            let no_contact = PluckPreset {
+                fret_contact: None,
+                ..*preset
+            };
+            let contact = |vel: u8, a: f32, b: f32| {
+                let seed = 0x6100 + key as u32 + vel as u32;
+                let with = render_pluck(preset, key, vel, 0.18, seed);
+                let without = render_pluck(&no_contact, key, vel, 0.18, seed);
+                let residual: Vec<f32> = with.iter().zip(&without).map(|(&x, &y)| x - y).collect();
+                hp_rms(segment(&residual, sr, a, b), sr, 2400.0)
+            };
+            let soft = contact(34, 0.006, 0.032);
+            let mid = contact(84, 0.006, 0.032);
+            let hard = contact(124, 0.006, 0.032);
+            assert!(
+                soft < 0.12 * hard.max(1e-9),
+                "{name}: soft contact chatters too much: soft {soft:.6}, hard {hard:.6}"
+            );
+            assert!(
+                hard > 1.8 * mid.max(1e-9),
+                "{name}: contact does not grow superlinearly with velocity: \
+                 soft {soft:.6}, mid {mid:.6}, hard {hard:.6}"
+            );
+            let late = contact(124, 0.075, 0.135);
+            assert!(
+                late < 0.20 * hard.max(1e-9),
+                "{name}: fret contact leaves a sustained buzz tail: late {late:.6}, \
+                 hard attack {hard:.6}"
+            );
+        }
+    }
+
+    #[test]
+    fn slap_fret_collision_map_is_passive_and_attack_bounded() {
+        let sr = 44100.0;
+        for (name, spec) in [
+            ("SLAP", SLAP.fret_contact.unwrap()),
+            ("SLAP_POP", SLAP_POP.fret_contact.unwrap()),
+        ] {
+            assert!(
+                FretContact::new(&spec, spec.vel_floor * 0.95, sr, spec.vert).is_none(),
+                "{name}: below-threshold velocity armed fret contact"
+            );
+
+            let mut contact =
+                FretContact::new(&spec, 1.0, sr, spec.vert).expect("hard note arms contact");
+            let until = (spec.duration_s * sr) as usize;
+            let mut changed = 0usize;
+            for i in 0..(until + 64) {
+                let s = if i % 4 < 2 { -0.8 } else { 0.45 };
+                let y = contact.process(s);
+                assert!(
+                    y.abs() <= s.abs() + 1e-6,
+                    "{name}: fret reflection increased sample magnitude: {y} from {s}"
+                );
+                if i < until && y.to_bits() != s.to_bits() {
+                    changed += 1;
+                }
+                if i >= until {
+                    assert_eq!(
+                        y.to_bits(),
+                        s.to_bits(),
+                        "{name}: fret contact did not become exact pass-through after its attack window"
+                    );
+                }
+            }
+            assert!(changed > 0, "{name}: hard contact never touched the signal");
+        }
     }
 
     /// Oracle 9 (§5): FRETLESS finger noise — onset >2 kHz energy above the

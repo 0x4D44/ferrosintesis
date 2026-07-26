@@ -66,9 +66,13 @@ lead-bounded 2 ms fade-in and a 0.6 s squared fade-out, peak-normalized to 0.9;
 ## Regenerating
 
 ```powershell
-python tools/ferrosintesis-samples/prepare.py
+python tools/ferrosintesis-samples/prepare.py --only=grand
 ```
 
-Pure stdlib (no 7z — the archive is `.tar.bz2`). A bare run regenerates the
-whole bank including this one; the Salamander tarball is fetched once and cached
-under the system temp dir, then SHA-256-verified before extraction.
+The scoped grand path is pure stdlib (no 7z — the archive is `.tar.bz2`). The
+Salamander tarball is fetched once and cached under the system temp dir, then
+SHA-256-verified before extraction.
+
+A bare `python tools/ferrosintesis-samples/prepare.py` invocation is the
+full multi-bank workflow. It also rewrites unrelated sample crates and needs
+their external prerequisites, including 7z and ffmpeg.

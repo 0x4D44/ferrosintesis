@@ -1041,6 +1041,36 @@ class LocalBankSelectionTest(unittest.TestCase):
                 self.assertEqual(calls, expected)
 
 
+class GrandRegenerationRecipeTest(unittest.TestCase):
+    """MM-BUG-KILN-00135: packaged grand docs must select only the grand family."""
+
+    COMMAND = "python tools/ferrosintesis-samples/prepare.py --only=grand"
+
+    def test_packaged_grand_docs_use_the_scoped_command(self):
+        crate = os.path.join(
+            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-grand")
+        for name in ("README.md", "PROVENANCE.md"):
+            with self.subTest(name=name):
+                with open(os.path.join(crate, name), encoding="utf-8") as f:
+                    self.assertIn(self.COMMAND, f.read())
+
+    def test_grand_selector_excludes_unrelated_local_banks(self):
+        local_only, only = prepare._family_selection(["--only=grand"])
+        self.assertFalse(local_only)
+        self.assertEqual(only, {"grand"})
+        self.assertTrue(prepare._wants_family(only, "grand"))
+        self.assertFalse(prepare._wants_family(only, "gong"))
+        self.assertFalse(prepare._wants_family(only, "bottle"))
+        with mock.patch.object(
+            prepare, "_bake_gong_bank"
+        ) as gong, mock.patch.object(
+            prepare, "bake_bottle_loop"
+        ) as bottle:
+            self.assertEqual(prepare._bake_selected_local_banks(only), [])
+        gong.assert_not_called()
+        bottle.assert_not_called()
+
+
 class DarkenedGrandInventoryTest(unittest.TestCase):
     """MM-BUG-KILN-00123: a rebake must reject obsolete owned outputs."""
 

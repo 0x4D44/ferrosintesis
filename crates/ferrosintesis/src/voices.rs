@@ -9792,13 +9792,14 @@ const LA_FIDDLE: (f32, (f32, f32)) = (0.32, (0.11, 0.34));
 /// sample owns the onset. A slightly longer handover than the violin: a bass
 /// bow speaks slower. Gain tuned by ear (Arthur): a restrained bite.
 const LA_CONTRABASS: (f32, (f32, f32)) = (0.29, (0.16, 0.46));
-// GM 32 acoustic bass: real VSCO Solo-Contrabass pizzicato pluck over the Pluck(&UPRIGHT)
-// model. The sample carries the finger-pluck attack + string speech; the model keeps the
-// decay. A pluck onset (quicker than the arco contrabass); gain/fade ear-tunable.
-const LA_PIZZBASS: (f32, (f32, f32)) = (0.40, (0.05, 0.35));
-// GM 33/34/35 electric bass: real FreePats RBX finger/pick pluck over the Pluck model. The
-// finger and pick banks differ (that's the timbre); the crossfade is shared. Ear-tunable.
-const LA_EBASS: (f32, (f32, f32)) = (0.42, (0.05, 0.35));
+// GM 32-35 alternate-bank bass onset (MM-BUG-KILN-00085): additive, not a
+// replacement crossfade. The modeled bass stays live from sample zero and the
+// CC0 sample is a short transient overlay tapering out by 150 ms.
+const LA_BASS_ADD_MIX: f32 = 0.20;
+const LA_BASS_FADE: (f32, f32) = (0.0, 0.15);
+const LA_BASS_MAX_UP_RATIO: f32 = 1.334_839_8; // 2^(5/12)
+const LA_PIZZBASS: (f32, (f32, f32)) = (0.40 * LA_BASS_ADD_MIX, LA_BASS_FADE);
+const LA_EBASS: (f32, (f32, f32)) = (0.42 * LA_BASS_ADD_MIX, LA_BASS_FADE);
 // GM 4 Rhodes tine / 10 music box comb / 15 hammered dulcimer: real Freesound onsets over the
 // modeled voices. The sample carries the strike/pluck attack; the model keeps the body/decay.
 // Ear-tunable.
@@ -10062,51 +10063,18 @@ const LA_BANJO: (f32, (f32, f32)) = (0.42, (0.05, 0.20));
 /// does not bite), so the transient hands over across [0.10, 0.40] s.
 const LA_STRINGS: (f32, (f32, f32)) = (0.40, (0.10, 0.40));
 
-/// GM 32-35 bass seam taper (MM-BUG-KILN-00075).
+/// Relative GM 32-35 bass sample trim for the additive alternate bank.
 ///
-/// One flat `LA_EBASS` / `LA_PIZZBASS` gain sat the sampled bass onset 5-18 dB UNDER the
-/// model it displaces. `LaVoice`'s crossfade is sum-to-one, so nothing fills the deficit:
-/// the model is muted outright until `fade.0` (50 ms) and only sole owner at `fade.1`
-/// (350 ms). On a real bass line — Tubular Bells' bass part has a 146 ms median note, 90%
-/// shorter than the handover — the model never speaks and the part simply loses that
-/// level, along with the `BASS` preset's 75 ms `kick` thump.
-///
-/// **Fitted on the SAMPLE-OWNED window [0, 50 ms], not the fade span.** That is the
-/// window where the model is muted and the sample is the only source, so it is the only
-/// window where this gain is the whole story: `output = sample * gain` there, and the
-/// ratio scales linearly with the taper. Over the fade span the model term dominates
-/// progressively, so a gain barely moves it — measuring there (the GM48/49 printer's
-/// window, correct for *that* bug) reads this one as a mild -2..-5 dB and mis-fits the
-/// taper by ~10 dB. See `sampler::tests::print_ebass_wrap_level_ratios`, which prints all
-/// three windows precisely so that trap is visible.
-///
-/// Per-program AND per-key. GM33 and GM35 share the finger bank yet need different
-/// tapers, because the `BASS` and `FRETLESS` models they sit against differ in level —
-/// the mismatch is a property of the pair, not of the sample. Velocity is deliberately
-/// NOT split: the measured spread across vel 48-120 is only 1.06-1.46x (~1 dB), unlike
-/// the GM48/49 case where the sample bank itself splits at vel 80. Each value is the
-/// inverse of a 3-seed geomean, because the model's per-note jitter swings a single-seed
-/// ratio enough to mis-fit.
-///
-/// Measured result across the engaged grid (187 points, keys 16-64, vel 48-120):
-/// the sample-owned window moves from 0.389 (-8.2 dB, worst point -19 dB) to 0.866
-/// (-1.2 dB), and the whole handover from 0.582 (-4.7 dB) to 0.939 (-0.6 dB), with no
-/// window's geomean further than 1.2 dB from parity. Pinned by
-/// `sampler::tests::la_ebass_seam_level_parity`, which bounds BOTH the level and the peak
-/// — an RMS match is not a peak match when sample and model have different crest factors.
-fn ebass_seam_gain(program: u8, key: u8) -> f32 {
-    // (key, 1 / measured w0) — anchors at the measured keys, linear between, clamped flat
-    // past the ends. Ranges differ per program because the banks differ: GM32's pizzbass
-    // reaches far higher than the finger/pick banks.
-    // GM32 is the ONE program fitted on the whole handover [0, 350 ms] rather than on the
-    // sample-owned window. Fitted like its siblings it lands w0 at parity but then runs
-    // +6..+10 dB OVER the model through [50, 350] ms — because the real pizzicato
-    // contrabass recording rings on while `Pluck(&UPRIGHT)`'s short t60 has already
-    // decayed away. That is a decay-SHAPE mismatch (the mechanism MM-BUG-KILN-00045
-    // describes for UPRIGHT), and one scalar cannot fix both ends of it: buying onset
-    // parity here would buy a pizzicato that blooms after its own attack, which is the
-    // KILN-00046 defect with the sign flipped. Bounding the whole handover instead leaves
-    // GM32's onset ~3-5 dB under parity — the smallest residual available from a gain.
+/// The shape comes from the KILN-00075 replacement-crossfade calibration: those
+/// per-key values describe how each recording sits against its paired model.
+/// KILN-00085 scales that profile down with `LA_BASS_ADD_MIX`, because the model
+/// is no longer displaced. The sample is now a measured transient accent, not
+/// the whole onset level.
+fn ebass_additive_gain(program: u8, key: u8) -> f32 {
+    // (key, relative inverse level) — anchors at measured keys, linear between,
+    // clamped flat past the ends. Ranges differ per program because the banks
+    // and paired models differ. GM33 and GM35 share the finger bank, but not the
+    // same modeled sustain, so they keep separate trims.
     const PIZZ: [(f32, f32); 16] = [
         (16.0, 1.91),
         (20.0, 1.85),
@@ -13710,18 +13678,15 @@ fn apply_vel_correction(
     })
 }
 
-/// GM 32–35 CC0!=0 alt bank: the LA sampled bass onset crossfaded over the model.
+/// GM 32–35 CC0!=0 alt bank: the LA sampled bass onset layered over the model.
 ///
 /// This is the INVERSE of the 2026-07-20 arrangement. The sampled onset used to be
 /// the default and the pure model the alt; Arthur's 2026-07-24 A/B against a 19 July
-/// render reversed it, because `LaVoice`'s sum-to-one crossfade mutes the model for
-/// the first 50 ms and only hands it back at 350 ms, while the flat `LA_EBASS` /
-/// `LA_PIZZBASS` wrap gain sits the sampled onset ~15–18 dB UNDER the model it
-/// displaces. On a real bass line (Tubular Bells' ch-4: median note 146 ms, 90% of
-/// notes shorter than the 350 ms handover) the model never speaks, so the part lost
-/// 13–18 dB and its low `kick` thump. The seam mismatch itself is unfixed and tracked
-/// as MM-BUG-KILN-00075 — do NOT promote this back to the default bank until that is
-/// level-matched and guarded, the way MM-BUG-KILN-00046 did for the GM48/49 strings.
+/// render reversed it, because the old sum-to-one crossfade muted the model's
+/// 75 ms kick and handed back after most real bass-line notes had ended. KILN-00085
+/// keeps the model live from zero, overlays the CC0 onset briefly, and rejects
+/// upward sample repitches above five semitones. Do NOT promote this back to the
+/// default bank; the sampled bass remains an alternate pending a musical A/B.
 pub(crate) fn bass_la_alt(
     program: u8,
     key: u8,
@@ -13741,14 +13706,15 @@ pub(crate) fn bass_la_alt(
             // fretless take exists; the model carries the fretless "mwah").
             _ => (crate::sampler::finger_bass_bank(), LA_EBASS),
         };
-        crate::sampler::LaVoice::wrap(
+        crate::sampler::LaVoice::wrap_additive_limited(
             model,
             bank,
             key,
             vel,
             sr,
-            gain * ebass_seam_gain(program, key),
+            gain * ebass_additive_gain(program, key),
             fade,
+            LA_BASS_MAX_UP_RATIO,
         )
     } else {
         model

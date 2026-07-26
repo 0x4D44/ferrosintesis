@@ -3085,11 +3085,13 @@ pub const GUITAR_VAR: OnsetVar = OnsetVar {
 ///   across every wrapped program).
 /// - `[fade_end, ∞)`: the MODEL owns the sustain.
 ///
-/// [`LaVoice::wrap_release_b1`] is the one measured exception: that recording
+/// [`LaVoice::wrap_release_b1`] is a measured piano exception: that recording
 /// decays faster and can be strongly anti-correlated with its randomized model
 /// during the handoff, so it phase-corrects the sample, overlaps a slightly
 /// earlier model ramp, and normalizes destructive overlap from a local
-/// correlation estimate. Every general wrapper retains the one-owner contract.
+/// correlation estimate. [`LaVoice::wrap_additive_limited`] is the bass-only
+/// exception: the model stays live and the sample is a short overlay. Every
+/// general wrapper retains the one-owner contract.
 pub struct LaVoice {
     sustain: Box<dyn Voice>,
     zone: &'static Zone,
@@ -3133,6 +3135,7 @@ pub struct LaVoice {
     /// B1 freezes its handoff weights at key-up so equal-rate damper decay
     /// cannot be distorted by a moving sample/model ratio during the gap.
     fade_hold: Option<usize>,
+    blend: LaBlend,
     buf: Vec<f32>,
     fx: LaFx,
     /// Detuned side-read positions (source-rate samples).
@@ -3165,6 +3168,12 @@ pub struct LaVoice {
     rr: Option<RoundRobin>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LaBlend {
+    Replacement,
+    Additive,
+}
+
 /// Result of attempting to layer an LA sample over a modeled sustain.
 ///
 /// Most callers only need [`LaVoiceBuild::voice`]. Voice construction also uses
@@ -3195,6 +3204,7 @@ pub(crate) const DEFAULT_LA_RELEASE_T60: f32 = 0.06;
 /// `2ρab√(PsPm)`, so 0.60 means ρ=0.30: neither a fully coherent boost nor an
 /// uncorrelated power dip.
 const B1_TARGET_CROSS_COEFF: f32 = 0.60;
+const DEFAULT_MAX_UP_RATIO: f32 = 2.05;
 
 impl LaVoice {
     /// Wrap `sustain`; falls back to the bare model when the target is too
@@ -3226,6 +3236,38 @@ impl LaVoice {
         fade: (f32, f32),
     ) -> LaVoiceBuild {
         Self::wrap_fx_classified(sustain, zones, key, vel, sr, gain, fade, LaFx::default())
+    }
+
+    /// Bass-only additive LA contract: preserve the model from sample zero,
+    /// overlay the sampled transient, taper it to silence by `fade.1`, and use
+    /// a tighter upward repitch ceiling than the general LA wrappers.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn wrap_additive_limited(
+        sustain: Box<dyn Voice>,
+        zones: &'static [Zone],
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+        max_up_ratio: f32,
+    ) -> Box<dyn Voice> {
+        match Self::build(
+            sustain,
+            zones,
+            key,
+            vel,
+            sr,
+            gain,
+            fade,
+            LaFx::default(),
+            DEFAULT_LA_RELEASE_T60,
+            LaBlend::Additive,
+            max_up_ratio,
+        ) {
+            Ok(la) => Box::new(la),
+            Err(model) => model,
+        }
     }
 
     /// [`Self::wrap`] for a bank that carries several ROUND-ROBIN takes.
@@ -3283,6 +3325,8 @@ impl LaVoice {
             fade,
             LaFx::default(),
             DEFAULT_LA_RELEASE_T60,
+            LaBlend::Replacement,
+            DEFAULT_MAX_UP_RATIO,
         )?;
         if takes >= 2 {
             la.rr = Some(RoundRobin {
@@ -3332,6 +3376,8 @@ impl LaVoice {
             fade,
             fx,
             DEFAULT_LA_RELEASE_T60,
+            LaBlend::Replacement,
+            DEFAULT_MAX_UP_RATIO,
         ) {
             Ok(la) => LaVoiceBuild {
                 voice: Box::new(la),
@@ -3368,6 +3414,8 @@ impl LaVoice {
             fade,
             LaFx::default(),
             release_t60,
+            LaBlend::Replacement,
+            DEFAULT_MAX_UP_RATIO,
         ) {
             Ok(la) => Box::new(la),
             Err(model) => model,
@@ -3397,6 +3445,8 @@ impl LaVoice {
             fade,
             LaFx::default(),
             release_t60,
+            LaBlend::Replacement,
+            DEFAULT_MAX_UP_RATIO,
         ) {
             Ok(mut la) => {
                 la.b1_phase_robust_fade = true;
@@ -3463,6 +3513,8 @@ impl LaVoice {
             fade,
             fx,
             DEFAULT_LA_RELEASE_T60,
+            LaBlend::Replacement,
+            DEFAULT_MAX_UP_RATIO,
         ) {
             Ok(mut la) => {
                 la.var_mult = var_mult;
@@ -3501,6 +3553,8 @@ impl LaVoice {
         fade: (f32, f32),
         fx: LaFx,
         release_t60: f32,
+        blend: LaBlend,
+        max_up_ratio: f32,
     ) -> Result<LaVoice, Box<dyn Voice>> {
         let f = key_freq(key);
         let zone = nearest(zones, f);
@@ -3511,7 +3565,7 @@ impl LaVoice {
         // a far less credible octave-up repitch read ~0.922 and engaged
         // (MM-BUG-KILN-00061). Same order as the looped-sustain voices below.
         let ratio = f / zone.root;
-        if !(0.5..=2.05).contains(&ratio) {
+        if ratio < 0.5 || ratio > max_up_ratio {
             return Err(sustain);
         }
         let step = ratio * 44100.0 / sr;
@@ -3581,6 +3635,7 @@ impl LaVoice {
             b1_power_alpha: 1.0 - (-1.0 / (0.020 * sr)).exp(),
             b1_model_fade_end,
             fade_hold: None,
+            blend,
             buf: Vec::new(),
             fx,
             // 5 / 9 ms into the source (44.1 kHz zone data)
@@ -3611,10 +3666,16 @@ impl Voice for LaVoice {
             let t = self.t + i;
             let blend_t = self.fade_hold.unwrap_or(t);
             // §2.7 default: one sum-to-one crossfade weight — model discarded
-            // before fade_start, sole owner after fade_end. B1 is the measured
-            // phase-robust exception documented on `wrap_release_b1`.
-            let u = smooth((blend_t as f32 - self.fade_start as f32) / fade_len);
-            let model_weight = if self.b1_phase_robust_fade {
+            // before fade_start, sole owner after fade_end. The bass additive
+            // mode keeps the model live and uses the same smooth sample taper.
+            let u = if self.blend == LaBlend::Additive {
+                smooth(blend_t as f32 / self.fade_end.max(1) as f32)
+            } else {
+                smooth((blend_t as f32 - self.fade_start as f32) / fade_len)
+            };
+            let model_weight = if self.blend == LaBlend::Additive {
+                1.0
+            } else if self.b1_phase_robust_fade {
                 smooth(blend_t as f32 / self.b1_model_fade_end.max(1) as f32)
             } else {
                 u
@@ -6369,6 +6430,8 @@ mod tests {
             (0.05, 0.28),
             LaFx::default(),
             DEFAULT_LA_RELEASE_T60,
+            LaBlend::Replacement,
+            DEFAULT_MAX_UP_RATIO,
         ) {
             Ok(la) => la,
             Err(_) => panic!("the steel bank must wrap at E5"),
@@ -8050,16 +8113,15 @@ mod tests {
         }
     }
 
-    /// Calibration printer for the GM 32-35 bass seam taper (MM-BUG-KILN-00075).
+    /// Calibration printer for the GM 32-35 additive bass onset (MM-BUG-KILN-00085).
     ///
-    /// Measures the wrapped/model RMS ratio over the bass fade window [0.05, 0.35] s —
-    /// the window `LaVoice` hands from sample to model, and where the whole deficit
-    /// lives. Same method as the GM48/49 printer below: 3-seed geomean, because the
-    /// model's per-note jitter swings a single-seed ratio enough to mis-fit a taper.
+    /// Measures the combined wrapped/model RMS ratio and the isolated sample
+    /// contribution over the new [0, 150 ms] additive window. Same 3-seed
+    /// geomean as the older seam printers: the model's per-note jitter swings a
+    /// single-seed ratio enough to misread a taper.
     ///
-    /// Measured through `bass_la_alt`, which is where the LA bass now lives (Arthur
-    /// moved it off the default bank on 2026-07-24), so this reads the real shipped
-    /// path rather than a reconstruction of it.
+    /// Measured through `bass_la_alt`, where the CC0 alternate lives, so this
+    /// reads the real shipped path rather than a reconstruction of it.
     #[test]
     #[ignore = "calibration harness — run by hand"]
     fn print_ebass_wrap_level_ratios() {
@@ -8069,39 +8131,45 @@ mod tests {
                 16u8, 20, 24, 28, 31, 34, 38, 40, 43, 46, 50, 52, 55, 58, 62, 64,
             ] {
                 for vel in [48u8, 72, 100, 120] {
-                    // Decomposed by window, because the deficit is NOT uniform across the
-                    // crossfade: `LaVoice` mutes the model entirely until `fade.0`, so
-                    // [0, 0.05] is sample-owned and carries the whole hit, while
-                    // [0.15, 0.35] is nearly model-owned and barely moves. Measuring only
-                    // the [0.05, 0.35] fade span (the GM48/49 printer's window, where the
-                    // strings mismatch did live) reads this bug as a mild -2..-5 dB and
-                    // would mis-fit the taper by ~10 dB.
-                    let win = |seed: u32, samples: bool, t0: f32, t1: f32| {
+                    let render = |seed: u32, samples: bool| {
                         let mut v = voices::bass_la_alt(program, key, vel, sr, seed, samples);
                         let mut buf = vec![0f32; (0.5 * sr) as usize];
                         v.render(&mut buf);
-                        let (a, b) = ((t0 * sr) as usize, (t1 * sr) as usize);
-                        (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                        buf
+                    };
+                    let rms_win = |buf: &[f32], t0: f32, t1: f32| {
+                        let (a, z) = ((t0 * sr) as usize, (t1 * sr) as usize);
+                        (buf[a..z].iter().map(|&x| x * x).sum::<f32>() / (z - a) as f32).sqrt()
                     };
                     let seeds = [5u32, 21, 99];
-                    let geo = |t0: f32, t1: f32| {
-                        let r = |s: u32| win(s, true, t0, t1) / win(s, false, t0, t1).max(1e-12);
+                    let geo_combined = |t0: f32, t1: f32| {
+                        let r = |s: u32| {
+                            let (on, off) = (render(s, true), render(s, false));
+                            rms_win(&on, t0, t1) / rms_win(&off, t0, t1).max(1e-12)
+                        };
                         (seeds.iter().map(|&s| r(s).ln()).sum::<f32>() / seeds.len() as f32).exp()
                     };
-                    let (w0, w1, w2, all) = (
-                        geo(0.0, 0.05),
-                        geo(0.05, 0.15),
-                        geo(0.15, 0.35),
-                        geo(0.0, 0.35),
+                    let geo_sample = |t0: f32, t1: f32| {
+                        let r = |s: u32| {
+                            let (on, off) = (render(s, true), render(s, false));
+                            let diff = diff_signal(&on, &off);
+                            rms_win(&diff, t0, t1) / rms_win(&off, t0, t1).max(1e-12)
+                        };
+                        (seeds.iter().map(|&s| r(s).ln()).sum::<f32>() / seeds.len() as f32).exp()
+                    };
+                    let (c0, c1, all, s0, s1, tail) = (
+                        geo_combined(0.0, 0.05),
+                        geo_combined(0.05, 0.15),
+                        geo_combined(0.0, 0.15),
+                        geo_sample(0.0, 0.05),
+                        geo_sample(0.05, 0.15),
+                        geo_sample(0.151, 0.25),
                     );
-                    // Peak ratio too: an RMS match is NOT a peak match when the sampled
-                    // onset and the modeled attack have different crest factors, so a
-                    // taper fitted on RMS alone can push the sample into clipping.
                     let pk = |samples: bool| {
                         let mut v = voices::bass_la_alt(program, key, vel, sr, 5, samples);
                         let mut buf = vec![0f32; (0.5 * sr) as usize];
                         v.render(&mut buf);
-                        buf[..(0.35 * sr) as usize]
+                        buf[..(0.15 * sr) as usize]
                             .iter()
                             .fold(0f32, |m, x| m.max(x.abs()))
                     };
@@ -8109,12 +8177,12 @@ mod tests {
                     let db = |g: f32| 20.0 * g.max(1e-12).log10();
                     println!(
                         "ebass gm{program} key {key:3} vel {vel:3}: \
-                         muted[0,50ms] {w0:5.3} ({:+6.1} dB) | \
-                         [50,150] {w1:5.3} ({:+6.1}) | [150,350] {w2:5.3} ({:+6.1}) | \
-                         all[0,350] {all:5.3} ({:+6.1}) | peak {pk_on:.3}/{pk_off:.3} = {:.2}x",
-                        db(w0),
-                        db(w1),
-                        db(w2),
+                         combined[0,50ms] {c0:5.3} ({:+6.1} dB) | \
+                         combined[50,150] {c1:5.3} ({:+6.1}) | all[0,150] {all:5.3} ({:+6.1}) | \
+                         sample[0,50] {s0:5.3} sample[50,150] {s1:5.3} tail[151,250] {tail:5.3} | \
+                         peak {pk_on:.3}/{pk_off:.3} = {:.2}x",
+                        db(c0),
+                        db(c1),
                         db(all),
                         pk_on / pk_off.max(1e-12)
                     );
@@ -8123,36 +8191,186 @@ mod tests {
         }
     }
 
-    /// MM-BUG-KILN-00075: the GM 32-35 sampled bass onset must land on the level of the
-    /// model it displaces, through the window where it is the ONLY thing sounding.
-    ///
-    /// `LaVoice`'s crossfade is sum-to-one: the model is muted outright until `fade.0`
-    /// (50 ms here), so in `[0, 50 ms]` the wrap gain IS the output level and nothing
-    /// fills a deficit. One flat `LA_EBASS` / `LA_PIZZBASS` gain sat that window at 0.389
-    /// geomean — **-8.2 dB, worst point -19 dB** — and a real bass line never recovers it,
-    /// because 90% of its notes are shorter than the 350 ms handover.
-    ///
-    /// **Measured on the sample-owned window, not the fade span.** Measuring `[0.05,
-    /// 0.35]` (the GM48/49 oracle's window, correct for *that* bug) reads this one as a
-    /// mild -2..-5 dB, because the model term progressively dominates there and a gain
-    /// barely moves it. That mis-reads the defect by ~10 dB and would pass a taper fitted
-    /// 10 dB short. The printer prints all three windows so the trap stays visible.
-    ///
-    /// **Peak is bounded as well as level.** An RMS match is not a peak match when the
-    /// sampled onset and the modeled attack have different crest factors, so a
-    /// level-only bound would license a taper that restores RMS by shipping a spike.
-    ///
-    /// 3-seed geomean, as the strings oracle: the model's per-note jitter swings a
-    /// single-seed ratio enough to false-fail. Fail-first: untapered, the GM33 low keys
-    /// sit at 0.11-0.25 — far outside the 0.60 floor.
-    ///
-    /// The band is honestly wide on the low side because GM32 is a deliberate compromise:
-    /// it is fitted on the whole handover rather than the onset (its pizzicato sample
-    /// outlives the `UPRIGHT` model, so onset parity would buy a +10 dB bloom later), which
-    /// leaves its onset ~3.7 dB under. That residual is a decay-SHAPE mismatch, not a gain
-    /// error, and no scalar can close it.
+    fn render_bass_alt(
+        program: u8,
+        key: u8,
+        vel: u8,
+        seed: u32,
+        samples: bool,
+        secs: f32,
+    ) -> Vec<f32> {
+        let sr = 44100.0;
+        let mut v = voices::bass_la_alt(program, key, vel, sr, seed, samples);
+        let mut buf = vec![0f32; (secs * sr) as usize];
+        v.render(&mut buf);
+        buf
+    }
+
+    fn win<'a>(buf: &'a [f32], sr: f32, t0: f32, t1: f32) -> &'a [f32] {
+        &buf[(t0 * sr) as usize..(t1 * sr) as usize]
+    }
+
+    fn rms_win(buf: &[f32], sr: f32, t0: f32, t1: f32) -> f32 {
+        crate::testutil::rms(win(buf, sr, t0, t1))
+    }
+
+    fn diff_signal(a: &[f32], b: &[f32]) -> Vec<f32> {
+        a.iter().zip(b).map(|(&x, &y)| x - y).collect()
+    }
+
+    /// MM-BUG-KILN-00085: the sampled bass alternate is additive, not a
+    /// replacement crossfade. The modeled pluck must be present from sample zero,
+    /// while the sampled transient is a short overlay that is gone by 150 ms.
     #[test]
-    fn la_ebass_seam_level_parity() {
+    fn la_bass_alt_preserves_model_onset_and_tapers_sample_by_150ms() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        for (program, key, name) in [(32u8, 43u8, "pizz"), (33, 40, "finger"), (34, 40, "pick")] {
+            let bare = render_bass_alt(program, key, 100, 5, false, 0.25);
+            let layered = render_bass_alt(program, key, 100, 5, true, 0.25);
+            let sample = diff_signal(&layered, &bare);
+
+            let low_bare =
+                crate::testutil::spectral_band_rms(win(&bare, sr, 0.0, 0.05), sr, 35.0, 120.0);
+            let low_layered =
+                crate::testutil::spectral_band_rms(win(&layered, sr, 0.0, 0.05), sr, 35.0, 120.0);
+            let low_db = 20.0 * (low_layered / low_bare.max(1e-12)).log10();
+            assert!(
+                low_db.abs() <= 1.0,
+                "GM{program} {name} key {key}: additive onset moved the modeled low kick by {low_db:+.2} dB"
+            );
+
+            let sample_onset = rms_win(&sample, sr, 0.0, 0.05);
+            let bare_onset = rms_win(&bare, sr, 0.0, 0.05);
+            assert!(
+                sample_onset >= 0.03 * bare_onset.max(1e-12),
+                "GM{program} {name} key {key}: sampled onset contribution vanished ({sample_onset:.6})"
+            );
+
+            let combined =
+                rms_win(&layered, sr, 0.0, 0.15) / rms_win(&bare, sr, 0.0, 0.15).max(1e-12);
+            assert!(
+                (0.80..=1.45).contains(&combined),
+                "GM{program} {name} key {key}: additive onset is not level-calibrated ({combined:.3}x model)"
+            );
+
+            let near_end = rms_win(&sample, sr, 0.145, 0.150);
+            assert!(
+                near_end <= 0.08 * sample_onset.max(1e-12),
+                "GM{program} {name} key {key}: sample taper still has {near_end:.6} RMS just before 150 ms"
+            );
+            let after_end = rms_win(&sample, sr, 0.151, 0.200);
+            assert!(
+                after_end <= 1e-7,
+                "GM{program} {name} key {key}: sampled layer still contributes after 150 ms ({after_end:.8})"
+            );
+            assert_eq!(
+                &layered[(0.151 * sr) as usize..(0.200 * sr) as usize],
+                &bare[(0.151 * sr) as usize..(0.200 * sr) as usize],
+                "GM{program} {name} key {key}: model is not bit-identical after the additive handover"
+            );
+        }
+    }
+
+    /// MM-BUG-KILN-00085: bass samples may pitch upward by five semitones from
+    /// the selected zone root, then must fall back to the bare model.
+    #[test]
+    fn la_bass_alt_limits_upward_repitch_to_five_semitones() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        for (program, below_or_at, above, name) in [
+            (32u8, 60u8, 61u8, "pizz"),
+            (33, 42, 43, "finger"),
+            (34, 44, 45, "pick"),
+            (35, 42, 43, "fretless"),
+        ] {
+            let engaged = render_bass_alt(program, below_or_at, 100, 5, true, 0.2);
+            let engaged_bare = render_bass_alt(program, below_or_at, 100, 5, false, 0.2);
+            assert!(
+                engaged != engaged_bare,
+                "GM{program} {name} key {below_or_at}: sample should engage at or below the five-semitone ceiling"
+            );
+
+            let fallback = render_bass_alt(program, above, 100, 5, true, 0.2);
+            let bare = render_bass_alt(program, above, 100, 5, false, 0.2);
+            assert!(
+                fallback == bare,
+                "GM{program} {name} key {above}: sample should fall back immediately above the five-semitone ceiling"
+            );
+        }
+    }
+
+    struct ConstantVoice(f32);
+
+    impl Voice for ConstantVoice {
+        fn render(&mut self, out: &mut [f32]) -> bool {
+            for x in out {
+                *x += self.0;
+            }
+            true
+        }
+
+        fn note_off(&mut self) {}
+
+        fn released(&self) -> bool {
+            false
+        }
+
+        fn kind(&self) -> &'static str {
+            "constant"
+        }
+    }
+
+    fn constant_zone() -> &'static [Zone] {
+        static Z: OnceLock<Vec<Zone>> = OnceLock::new();
+        Z.get_or_init(|| {
+            vec![Zone {
+                root: key_freq(60),
+                data: vec![1.0; 44100],
+                sustain_loop: OnceLock::new(),
+            }]
+        })
+        .as_slice()
+    }
+
+    #[test]
+    fn ordinary_la_wrap_keeps_sum_to_one_onset_ownership() {
+        let sr = 44100.0;
+        let mut v = LaVoice::wrap(
+            Box::new(ConstantVoice(2.0)),
+            constant_zone(),
+            60,
+            127,
+            sr,
+            1.0,
+            (0.05, 0.20),
+        );
+        let mut buf = vec![0f32; (0.25 * sr) as usize];
+        v.render(&mut buf);
+        assert!(
+            (buf[(0.010 * sr) as usize] - 1.0).abs() <= 1e-6,
+            "default LaVoice onset must be sample-owned, not additive"
+        );
+        assert!(
+            (buf[(0.225 * sr) as usize] - 2.0).abs() <= 1e-6,
+            "default LaVoice sustain must return to the model"
+        );
+    }
+
+    /// MM-BUG-KILN-00085: the GM 32-35 sampled bass alternate is a calibrated
+    /// additive onset, not a replacement crossfade.
+    ///
+    /// The model must stay present throughout [0, 150 ms], the sampled transient
+    /// must remain measurable during the onset, and the sampled contribution
+    /// must be gone immediately after the 150 ms endpoint. The broad per-point
+    /// level band is deliberate: this is a short timbre accent, not a second
+    /// full-level bass note, and the tighter low-kick contract is covered by
+    /// `la_bass_alt_preserves_model_onset_and_tapers_sample_by_150ms`.
+    #[test]
+    fn la_ebass_additive_level_parity() {
         let sr = 44100.0;
         let seeds = [5u32, 21, 99];
         for program in [32u8, 33, 34, 35] {
@@ -8181,29 +8399,53 @@ mod tests {
                         };
                         (seeds.iter().map(|&s| r(s).ln()).sum::<f32>() / seeds.len() as f32).exp()
                     };
+                    let sample_ratio = |t0: f32, t1: f32| {
+                        let r = |s: u32| {
+                            let (on, off) = (render(s, true), render(s, false));
+                            let sample = diff_signal(&on, &off);
+                            rms_win(&sample, t0, t1) / rms_win(&off, t0, t1).max(1e-12)
+                        };
+                        (seeds.iter().map(|&s| r(s).ln()).sum::<f32>() / seeds.len() as f32).exp()
+                    };
+                    let sample_abs_max = |t0: f32, t1: f32| {
+                        seeds.iter().fold(0.0f32, |m, &s| {
+                            let (on, off) = (render(s, true), render(s, false));
+                            let sample = diff_signal(&on, &off);
+                            m.max(rms_win(&sample, t0, t1))
+                        })
+                    };
                     let onset = ratio(0.0, 0.05);
-                    let handover = ratio(0.0, 0.35);
+                    let decay = ratio(0.05, 0.15);
+                    let all = ratio(0.0, 0.15);
+                    let sample_onset = sample_ratio(0.0, 0.05);
+                    let sample_tail = sample_abs_max(0.151, 0.25);
                     let peak = |samples: bool| {
-                        render(5, samples)[..(0.35 * sr) as usize]
+                        render(5, samples)[..(0.15 * sr) as usize]
                             .iter()
                             .fold(0f32, |m, x| m.max(x.abs()))
                     };
                     let pk = peak(true) / peak(false).max(1e-12);
 
                     assert!(
-                        (0.40..=1.35).contains(&onset),
-                        "GM{program} key {key} vel {vel}: sampled onset sits at {onset:.3}x \
-                         the model over [0, 50 ms] ({:+.1} dB). The model is MUTED there, so \
-                         this gain is the whole output level — re-fit ebass_seam_gain with \
-                         sampler::tests::print_ebass_wrap_level_ratios.",
+                        (0.80..=1.45).contains(&onset),
+                        "GM{program} key {key} vel {vel}: additive [0, 50 ms] level \
+                         sits at {onset:.3}x the model ({:+.1} dB)",
                         20.0 * onset.max(1e-12).log10()
                     );
                     assert!(
-                        (0.60..=1.45).contains(&handover),
-                        "GM{program} key {key} vel {vel}: the whole [0, 350 ms] handover \
-                         sits at {handover:.3}x the model ({:+.1} dB) — the sampled layer \
-                         is not level-matched across the crossfade.",
-                        20.0 * handover.max(1e-12).log10()
+                        (0.80..=1.45).contains(&decay) && (0.80..=1.45).contains(&all),
+                        "GM{program} key {key} vel {vel}: additive window level is not \
+                         calibrated ([50,150] {decay:.3}x, all[0,150] {all:.3}x)"
+                    );
+                    assert!(
+                        (0.03..=0.35).contains(&sample_onset),
+                        "GM{program} key {key} vel {vel}: sampled onset contribution \
+                         {sample_onset:.3}x model is outside the additive accent band"
+                    );
+                    assert!(
+                        sample_tail <= 1e-7,
+                        "GM{program} key {key} vel {vel}: sampled layer still contributes \
+                         after 150 ms ({sample_tail:.8})"
                     );
                     assert!(
                         pk <= 1.60,

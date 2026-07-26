@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00092 — every NoteOn allocates in the audio callback: voices are `Box<dyn Voice>`
 
-- **State:** Blocked
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** engine / realtime
 - **Raised:** 2026-07-24
-- **Owner:** Arthur
-- **Owner role:** human
+- **Owner:** -
+- **Owner role:** -
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00082 by Claude Opus 4.8 (1M) while fixing it. 00082 fixed the bounded part; this is the part that needs an architectural decision. MEASURED, not inferred.) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — option 3 measured ample 1024-frame deadline margin; Arthur must choose the bounded construction exception or authorize a whole-engine voice-pool design)
+- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00082 by Claude Opus 4.8 (1M) while fixing it. 00082 fixed the bounded part; this is the part that needs an architectural decision. MEASURED, not inferred.) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — option 3 measured ample 1024-frame deadline margin; Arthur must choose the bounded construction exception or authorize a whole-engine voice-pool design) → Closed (2026-07-26, accepted by Arthur as an explicit best-effort soft-realtime constraint after reviewing the measured deadline margin; no voice-pool refactor authorized)
 
 ## Observation
 
@@ -93,6 +93,26 @@ and every other measured callback shape at zero.
 2. **Authorize the voice-pool build.** This is a major engine refactor: pre-allocate 128
    heterogeneous voice slots and make every concrete voice constructible in place, while
    preserving the unbounded offline renderer and all render identities.
+
+### Accepted decision (2026-07-26)
+
+Arthur accepted the voice-construction allocation as an explicit **soft-realtime**
+constraint and did not authorize the whole-engine voice-pool refactor. The measured
+single-NoteOn path has ample margin for amp-lab's development-tool workload, while the
+existing allocation oracle preserves the valuable boundary: steady rendering, controller
+bursts and panic handling remain at exactly zero allocations, and one NoteOn remains
+ratcheted at no more than 16.
+
+This acceptance deliberately does **not** claim that `LIVE_MAX_VOICES = 128` proves a hard
+timing bound. That cap limits simultaneous live voices, not cumulative allocations or the
+number of NoteOns arriving in one callback. Amp-lab is therefore best-effort realtime,
+with xrun telemetry, rather than allocation-free hard realtime.
+
+Reopen this architecture question if dense-note workloads produce observed xruns, the
+per-NoteOn allocation ratchet grows, or the shared engine becomes a production live-host
+surface that promises hard-realtime safety. Until one of those triggers exists, the
+measured risk does not justify replacing the engine's heterogeneous `Box<dyn Voice>`
+architecture.
 
 ## Notes
 

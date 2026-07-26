@@ -19,7 +19,7 @@
   bank-aware scan proved those same 11 are the complete CC0-nonzero GM29/30 set,
   but the tool called them contamination without that context. Extend the
   touched identity and MIDI scanner to include bank selectors.
-  (Promoted 2026-07-25: MM-REQ-KILN-00033. Re-verified first - `scan()` still returns only
+  (Promoted 2026-07-25: MM-REQ-KILN-00035. Re-verified first - `scan()` still returns only
   (programs, drum keys) and its event loop lumps CC into the skip-2-bytes arm, and albums really
   do author bank selects (every Slipstream movement sends CC0 on four channels). Filed rather
   than fixed here because it is not a one-liner: it needs a new CLI axis, a third return value,

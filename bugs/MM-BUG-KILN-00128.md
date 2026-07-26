@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample tooling / gong bank regeneration
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T081806Z-p3376-n315034900-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00128-run-fix-20260726T081806Z-p3376-n315034900-c1
+- **Owner base:** 3f38cd3a20f15068a47237dde39001bb1e451b15
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T08:18:06Z
+- **Owner until:** 2026-07-26T10:18:06Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

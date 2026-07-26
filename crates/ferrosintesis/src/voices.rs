@@ -1225,14 +1225,13 @@ pub(crate) enum PianoSampleCal {
     /// window: the most attack-peak margin available without losing gap behaviour.
     /// Swept over keys 36/48/60/72/84 x vel 40/64/100/120.
     ///
-    /// The crossfade stays at the conditioned bank's SHORT 0.18-0.45 s, for the same
-    /// reason that one is short — the hammer owns the onset then hands over promptly.
-    /// Lengthening it to 0.55/0.65/0.75 s was swept and made both properties worse.
-    ///
-    /// RESIDUAL, not fixed here: in the bass (key 36) the note still dips ~5 dB
-    /// around 400 ms and recovers to roughly its attack level. Gain cannot fix that
-    /// — it is the sampled layer's DECAY SHAPE through the crossfade, not its level.
-    /// Tracked as MM-BUG-KILN-00130.
+    /// The sample retirement stays at the conditioned bank's SHORT 0.18-0.45 s;
+    /// lengthening it to 0.55/0.65/0.75 s made both properties worse.
+    /// MM-BUG-KILN-00130 found the remaining ~5-9 dB trough was also a phase
+    /// mismatch: sample/model correlation measured −0.64..−0.87 before the seam,
+    /// then turned positive. `wrap_release_b1` therefore flips the inaudible sample
+    /// polarity, brings the model in 10% faster, and freezes that ratio at key-up.
+    /// The held-note rebound is now at most 1.5 dB without losing the damper gap.
     B1Upright,
 }
 
@@ -1460,7 +1459,8 @@ const GM0_FORTE_LAYER_GAIN: f32 = 0.569;
 /// and, more importantly, for why the usable window is only about 1.2-1.3 wide.
 /// Swept, not guessed: 0.90 leaves the model outrunning the recorded hammer.
 const B1_SAMPLE_GAIN: f32 = 1.30;
-/// The B1 shares the conditioned bank's short handoff, not the 0.85 s legacy one.
+/// The B1 keeps the conditioned bank's short sample retirement window. Its
+/// model uses a separate, slower rise from note start; see `LaFx`.
 const B1_SAMPLE_FADE: (f32, f32) = (0.18, 0.45);
 
 fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32, release_t60: f32) -> Modal {
@@ -12797,7 +12797,11 @@ pub fn acoustic_grand_with_bank(
             PianoSampleCal::B1Upright => (B1_SAMPLE_GAIN, B1_SAMPLE_FADE),
             PianoSampleCal::LegacyNormalized => LA_PIANO,
         };
-        crate::sampler::LaVoice::wrap_release(model, bank, key, vel, sr, gain, fade, la_t60)
+        if cal == PianoSampleCal::B1Upright {
+            crate::sampler::LaVoice::wrap_release_b1(model, bank, key, vel, sr, gain, fade, la_t60)
+        } else {
+            crate::sampler::LaVoice::wrap_release(model, bank, key, vel, sr, gain, fade, la_t60)
+        }
     } else {
         model
     }

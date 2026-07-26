@@ -3079,6 +3079,11 @@ pub const GUITAR_VAR: OnsetVar = OnsetVar {
 ///   the sum level-true through the seam (verified by `la_level_continuity`
 ///   across every wrapped program).
 /// - `[fade_end, ∞)`: the MODEL owns the sustain.
+///
+/// [`LaVoice::wrap_release_b1`] is the one measured exception: that recording
+/// is strongly anti-correlated with its model during the handoff and decays
+/// faster, so it phase-corrects the sample and overlaps a slightly earlier
+/// model ramp. Every general wrapper retains the one-owner contract.
 pub struct LaVoice {
     sustain: Box<dyn Voice>,
     zone: &'static Zone,
@@ -3101,6 +3106,16 @@ pub struct LaVoice {
     t: usize,
     fade_start: usize,
     fade_end: usize,
+    /// Shape the B1 handoff for its measured phase and decay mismatch: invert
+    /// the sample polarity, and let the model rise from note start while the
+    /// recorded layer still retires over `fade_start..fade_end`. The polarity
+    /// flip is inaudible for the isolated onset; measured sample/model
+    /// correlation is −0.64..−0.87 before the trough
+    /// (MM-BUG-KILN-00130).
+    b1_phase_matched_fade: bool,
+    /// B1 freezes its handoff weights at key-up so equal-rate damper decay
+    /// cannot be distorted by a moving sample/model ratio during the gap.
+    fade_hold: Option<usize>,
     buf: Vec<f32>,
     fx: LaFx,
     /// Detuned side-read positions (source-rate samples).
@@ -3338,6 +3353,38 @@ impl LaVoice {
         }
     }
 
+    /// B1-upright-specific release wrapper with its measured phase/decay-matched
+    /// handoff. Crate-private so this exceptional blend is not a general API.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn wrap_release_b1(
+        sustain: Box<dyn Voice>,
+        zones: &'static [Zone],
+        key: u8,
+        vel: u8,
+        sr: f32,
+        gain: f32,
+        fade: (f32, f32),
+        release_t60: f32,
+    ) -> Box<dyn Voice> {
+        match Self::build(
+            sustain,
+            zones,
+            key,
+            vel,
+            sr,
+            gain,
+            fade,
+            LaFx::default(),
+            release_t60,
+        ) {
+            Ok(mut la) => {
+                la.b1_phase_matched_fade = true;
+                Box::new(la)
+            }
+            Err(model) => model,
+        }
+    }
+
     /// [`Self::wrap_fx`] plus per-note onset variation (guitar-realism HLD
     /// §4) — the two acoustic-guitar arms only. Draws detune (locked across
     /// sample AND model), onset delay, and gain jitter from the voice seed.
@@ -3498,6 +3545,8 @@ impl LaVoice {
             t: 0,
             fade_start: (fade.0 * sr) as usize,
             fade_end: (fade.1 * sr) as usize,
+            b1_phase_matched_fade: false,
+            fade_hold: None,
             buf: Vec::new(),
             fx,
             // 5 / 9 ms into the source (44.1 kHz zone data)
@@ -3526,13 +3575,23 @@ impl Voice for LaVoice {
         let mut sample_live = false;
         for (i, o) in out.iter_mut().enumerate() {
             let t = self.t + i;
-            // §2.7: one sum-to-one crossfade weight — the model is silent
-            // (discarded, but running) before fade_start, sole owner after
-            // fade_end; the smoothstep keeps the seam edges C1-continuous.
-            let u = smooth((t as f32 - self.fade_start as f32) / fade_len);
-            let mut s = self.buf[i] * u;
+            let blend_t = self.fade_hold.unwrap_or(t);
+            // §2.7 default: one sum-to-one crossfade weight — model discarded
+            // before fade_start, sole owner after fade_end. B1 is the measured
+            // phase/decay-matched exception documented on `wrap_release_b1`.
+            let u = smooth((blend_t as f32 - self.fade_start as f32) / fade_len);
+            let model_weight = if self.b1_phase_matched_fade {
+                // A 10% faster model rise is the measured point that closes the
+                // held-note trough while retaining attack ownership and the
+                // felt-damper gap bound.
+                let model_fade_end = self.fade_end - (self.fade_end - self.fade_start) / 10;
+                smooth(blend_t as f32 / model_fade_end.max(1) as f32)
+            } else {
+                u
+            };
+            let mut s = self.buf[i] * model_weight;
             let j = self.pos as usize;
-            if t >= self.start && t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
+            if t >= self.start && blend_t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
                 sample_live = true;
                 let frac = self.pos - j as f32;
                 // 4-point cubic read (edge-clamped): linear interpolation dulls
@@ -3591,6 +3650,9 @@ impl Voice for LaVoice {
                     self.vel_lp += (v - self.vel_lp) * self.vel_lp_a;
                     v = self.vel_lp;
                 }
+                if self.b1_phase_matched_fade {
+                    v = -v;
+                }
                 if self.end_taper > 0.0 {
                     // graceful dry-out (review C8): fade as the read nears
                     // the zone's last frames — exactly 1.0 (bit-transparent)
@@ -3612,6 +3674,9 @@ impl Voice for LaVoice {
 
     fn note_off(&mut self) {
         self.sustain.note_off();
+        if self.b1_phase_matched_fade {
+            self.fade_hold = Some(self.t);
+        }
         // Apply the configured key-up damping (60 ms T60 for default callers).
         self.rel_mul = self.rel_t60_mul;
     }
@@ -3633,6 +3698,7 @@ impl Voice for LaVoice {
     fn legato_to(&mut self, key: u8, vel: u8) -> bool {
         // a slur has no fresh attack: retire the transient, glide the model
         if self.sustain.legato_to(key, vel) {
+            self.fade_hold = None;
             self.rel_mul = self.rel_t60_mul;
             true
         } else {
@@ -3684,6 +3750,7 @@ impl Voice for LaVoice {
             // Re-arm the onset: restart the crossfade clock and the read head,
             // and undo any release decay so the new stroke is at full level.
             self.t = 0;
+            self.fade_hold = None;
             self.pos = 0.0;
             self.pos2 = 220.0;
             self.pos3 = 397.0;
@@ -3700,6 +3767,7 @@ impl Voice for LaVoice {
         // burst articulates every stroke, decorrelated per stroke by
         // construction.
         if self.sustain.retrigger(key, vel) {
+            self.fade_hold = None;
             self.rel_mul = self.rel_t60_mul;
             true
         } else {
@@ -8332,6 +8400,43 @@ mod tests {
             "{label}: attack is not the peak — late window {late:.5} \
              above attack {attack:.5} by more than 1% ({fine:?})"
         );
+    }
+
+    /// MM-BUG-KILN-00130: the B1 upright's recorded body decays faster than
+    /// the modeled body during the 0.18-0.45 s handoff. A scalar gain can keep
+    /// the attack above the eventual sustain, but it cannot stop the envelope
+    /// falling into a trough and then swelling back as the model takes over.
+    #[test]
+    fn b1_upright_handoff_does_not_rebound() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44_100.0;
+        let window = (0.050 * sr) as usize;
+        for key in [72u8, 36] {
+            let mut voice = voices::make(0, key, 100, sr, 5, true);
+            let mut out = vec![0.0; (0.700 * sr) as usize];
+            assert!(
+                voice.render(&mut out),
+                "B1 upright key {key} died during hold"
+            );
+            let rms: Vec<f32> = out.chunks_exact(window).map(crate::testutil::rms).collect();
+
+            // For every 50 ms window after the 150 ms attack budget and before
+            // sole model ownership, find the loudest later window. A real piano
+            // cannot recover from a handoff trough; 1.5 dB admits modal beating.
+            let rebound_db = (3..9)
+                .map(|i| {
+                    let later = rms[i + 1..14].iter().copied().fold(0.0f32, f32::max);
+                    20.0 * (later / rms[i].max(1e-12)).log10()
+                })
+                .fold(f32::NEG_INFINITY, f32::max);
+            assert!(
+                rebound_db <= 1.5,
+                "B1 upright key {key} rebounds {rebound_db:.2} dB after its \
+                 crossfade trough (50 ms RMS: {rms:?})"
+            );
+        }
     }
 
     /// GM 7 clavinet routing (2026.07.17): the DEFAULT bank is the sampled voice,

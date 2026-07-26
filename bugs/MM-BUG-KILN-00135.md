@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00135 — Grand regeneration docs invoke the whole multi-bank bake
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / grand-piano regeneration
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T134236Z-p35852-n696737100-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00135-run-fix-20260726T134236Z-p35852-n696737100-c1
-- **Owner base:** 1b05d5a604c1d87e21b29867f05115b5e40a69a5
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T13:42:36Z
-- **Owner until:** 2026-07-26T15:42:36Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex review lead from the coverage-ledger review of `crates/ferrosintesis-samples-grand/`)
+- **State history:** Open (2026-07-26, raised by Codex review lead from the coverage-ledger review of `crates/ferrosintesis-samples-grand/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T134236Z-p35852-n696737100-c1 branch=task/bug-MM-BUG-KILN-00135-run-fix-20260726T134236Z-p35852-n696737100-c1 code=85c0bb734b417b3858d1a313184e19ec89a60559 gate=manual)
 
 ## Observation
 

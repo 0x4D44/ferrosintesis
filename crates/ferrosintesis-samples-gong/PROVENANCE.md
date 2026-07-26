@@ -95,7 +95,9 @@ replaced by a citation.
 Gong ageng chosen for the lowest/clearest fundamental (matches *Bronze Water*'s
 C2 colotomy anchor → least repitch stretch). Two velocity layers only — no
 clean (non-NonCommercial) source offers deeper layering; the `GongOneShot`
-voice velocity-crossfades between soft and loud.
+voice selects exactly one recording: soft through velocity 83, loud at velocity
+84 and above. This is a hard switch at velocity 84 because summing the two
+different recordings would comb-filter.
 
 | Output file | Source ID | Duration | Bytes |
 |---|---|---|---|

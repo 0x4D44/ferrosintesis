@@ -4689,6 +4689,15 @@ fn gong_layers() -> &'static (Vec<f32>, Vec<f32>) {
     })
 }
 
+#[cfg(feature = "embedded-samples")]
+fn gong_layer(vel: u8, layers: &'static (Vec<f32>, Vec<f32>)) -> &'static [f32] {
+    if vel >= GONG_LOUD_VEL {
+        layers.1.as_slice()
+    } else {
+        layers.0.as_slice()
+    }
+}
+
 /// A full-ring sampled gong one-shot that OWNS the whole voice (like
 /// `SampledDrum`, not the LA attack-plus-model `LaVoice`). Velocity selects the
 /// dynamic layer; the note key repitches the entire ring so the gong speaks in
@@ -4707,12 +4716,7 @@ pub struct GongOneShot {
 /// velocity, not round-robin), kept for a uniform voice-factory signature.
 #[cfg(feature = "embedded-samples")]
 pub fn gong_one_shot(key: u8, vel: u8, sr: f32, _seed: u32) -> Box<dyn Voice> {
-    let (soft, loud) = gong_layers();
-    let data: &'static [f32] = if vel >= GONG_LOUD_VEL {
-        loud.as_slice()
-    } else {
-        soft.as_slice()
-    };
+    let data = gong_layer(vel, gong_layers());
     // fold with the SAME window as the modeled tam-tam so external MIDIs fold
     // identically, then repitch the sample's ~99 Hz (G2) dominant to the target.
     let repitch = key_freq(crate::voices::fold_key(key, 36, 47)) / GONG_ROOT_HZ;
@@ -5045,6 +5049,28 @@ mod tests {
     use crate::dsp::OnePole;
     use crate::voices;
     use crate::voices::Voice;
+
+    #[test]
+    fn gong_provenance_describes_the_shipped_velocity_boundary() {
+        let layers = gong_layers();
+        assert!(
+            std::ptr::eq(gong_layer(GONG_LOUD_VEL - 1, layers), layers.0.as_slice()),
+            "velocity 83 must select only the soft gong take"
+        );
+        assert!(
+            std::ptr::eq(gong_layer(GONG_LOUD_VEL, layers), layers.1.as_slice()),
+            "velocity 84 must select only the loud gong take"
+        );
+        let provenance = include_str!("../../ferrosintesis-samples-gong/PROVENANCE.md");
+        assert!(
+            provenance.contains("hard switch at velocity 84"),
+            "gong provenance must name the shipped hard-switch boundary"
+        );
+        assert!(
+            !provenance.contains("velocity-crossfades"),
+            "gong provenance must not claim that the two recordings are summed"
+        );
+    }
 
     // ---------------------------------------------------------------------------
     // Prewarm coverage (MM-BUG-KILN-00059)

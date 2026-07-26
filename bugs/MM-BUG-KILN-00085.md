@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-24
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260726T230602Z-p9812-n782377700-c18
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18
-- **Owner base:** 41ff59b830f1561c7f46f09fe3fc3ea4ec75939d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T23:06:02Z
-- **Owner until:** 2026-07-27T00:01:27Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18-code-1785108252883
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B)

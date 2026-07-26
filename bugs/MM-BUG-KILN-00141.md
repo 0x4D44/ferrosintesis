@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample generation / provenance
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T150650Z-p48908-n149273900-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00141-run-fix-20260726T150650Z-p48908-n149273900-c1
+- **Owner base:** 87782e89fe3ce3cd1ff9b2fa4fbf5c09aecb3ea3
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T15:06:50Z
+- **Owner until:** 2026-07-26T17:06:50Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

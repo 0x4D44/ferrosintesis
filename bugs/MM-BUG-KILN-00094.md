@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00094 — GM120 can repeat the same fret-noise take on consecutive events
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth / GM120 fret-noise round-robin
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — replaced global-seed selection with a canonical per-channel twelve-take phase)
 
 ## Observation
 
@@ -60,6 +60,40 @@ events. Require no adjacent equality, every take reachable, and deterministic wr
 or deterministic no-repeat behavior as selected above.
 
 Estimated effort: Small–Medium.
+
+## Resolution — 2026-07-26
+
+`EngineCore` now owns one GM120 round-robin phase per MIDI channel. Every
+accepted sampled fret-noise spawn advances exactly once through the derived
+twelve-take bank, regardless of written key, unrelated accepted voices, or
+another channel's GM120 events. The phase wraps at the bank length rather than
+at an integer boundary.
+
+The engine passes the selected take directly to `sampled_fret_noise`. Standalone
+`voices::make` callers retain their prior deterministic seed mapping, while the
+modeled-only path remains unchanged. `FretNoiseOneShot::rr_phase` exposes the
+actual sounding take to the engine-level regression rather than inferring it
+from counters or waveform similarity.
+
+## Verification — 2026-07-26
+
+- The fail-first engine oracle reproduced take 2 where channel 0's first
+  canonical take had to be 0.
+- The corrected oracle passes 528 interleaved GM120 events: 264 per channel,
+  22 complete cycles each, all twelve takes reached, no adjacent replay, and
+  no phase consumption by other programs, written keys, or channels. This also
+  crosses a naive `u8` counter boundary.
+- All 6 focused GM120 voice tests pass, including modeled and sampled routing,
+  pitch independence, one-shot lifecycle, timbre, level, and standalone seed
+  variation.
+- The complete default suite passed (731 tests, 27 ignored), the true
+  model-only suite passed (628 tests, 22 ignored), and both doc-test sets passed
+  (4 each).
+- Strict workspace clippy and true model-only clippy passed with warnings
+  denied; formatting and `git diff --check` passed.
+- Fresh release binaries from exact baseline `5c2b4fe`, full 124-MIDI inventory
+  at 11.025 kHz: no catalog MIDI reaches GM120, so all 124 stayed
+  byte-identical, with zero contamination and zero missed reachable paths.
 
 ## Notes
 

@@ -2079,6 +2079,11 @@ pub(crate) struct EngineCore {
     // (A seed-modulo pick would immediate-repeat ~1/rr of the time — the
     // machine-gun artifact.)
     drum_rr: [u8; 128],
+    // Per-channel GM120 fret-noise phase. The bank is pitchless, so written
+    // keys share one canonical 0→1→…→11 cycle on a channel; another channel
+    // owns an independent cycle. Advancing here, at the accepted fresh-spawn
+    // seam, prevents unrelated global seed slots from replaying a take.
+    fret_noise_rr: [usize; 16],
     // TREM1 (tremolo restrike): the running sample clock (advanced per
     // rendered block; events are block-quantised, so this is exactly their
     // resolution) and the per-(channel, key) time of the previous NoteOn —
@@ -2156,6 +2161,7 @@ impl EngineCore {
             leslie_k: 1.0 - (-(BLOCK as f32) / (LESLIE_INERTIA_S * sr)).exp(),
             wah_smooth: 1.0 - (-(BLOCK as f32) / (WAH_SLEW_S * sr)).exp(),
             drum_rr: [0; 128],
+            fret_noise_rr: [0; 16],
             now: 0,
             key_on_at: vec![[u64::MAX; 128]; 16],
             pitched_rr: vec![[0u8; 128]; 16],
@@ -2659,6 +2665,19 @@ impl EngineCore {
                 self.strips[ci].kit,
                 self.opt.samples,
                 rr,
+            )
+        } else if program == 120 && self.opt.samples {
+            // GM120 is an ordered, pitchless twelve-take bank. Select it at
+            // the engine seam so every accepted sampled event advances once,
+            // independently per channel; the global note seed still advances
+            // below for every later voice exactly as before.
+            let takes = crate::sampler::fret_noise_round_robins();
+            let phase = &mut self.fret_noise_rr[ci];
+            let rr = *phase;
+            *phase = (rr + 1) % takes.max(1);
+            Some(
+                crate::sampler::sampled_fret_noise(vel, sr, rr)
+                    .unwrap_or_else(|| voices::make(program, key, vel, sr, seed, false)),
             )
         } else {
             let prog = self.strips[ci].program;
@@ -5061,6 +5080,89 @@ mod tests {
                 0,
                 "{what} consumed the mandolin's strike phase: its first stroke is not \
                  take 0"
+            );
+        }
+    }
+
+    /// MM-BUG-KILN-00094: sampled GM120 owns one deterministic phase per
+    /// channel. Other voices, written keys, and another channel cannot consume
+    /// that phase, and a run longer than the old 64-seed probe cycles all twelve
+    /// takes without an adjacent repeat.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_fret_noise_cycles_per_channel_across_interleaved_events() {
+        let mut core = EngineCore::new(CoreOptions {
+            sr: 44_100.0,
+            wet: 0.0,
+            delay_s: 0.0,
+            samples: true,
+            solo: 0xFFFF,
+            gtr_symp_on: false,
+            drum_room_on: false,
+            sitar_symp_on: false,
+        });
+        for ch in [0, 1] {
+            core.handle_event(EvKind::Prog { ch, prog: 120 });
+        }
+        core.handle_event(EvKind::Prog { ch: 2, prog: 0 });
+
+        let takes = ferrosintesis_samples_fretnoise::ROUND_ROBINS;
+        let mut next = [0usize; 2];
+        let mut seen = [
+            std::collections::BTreeSet::new(),
+            std::collections::BTreeSet::new(),
+        ];
+        // 528 events means 264 GM120 events on each channel: 22 complete
+        // twelve-take cycles and far enough to cross a naive u8 counter's
+        // boundary. This proves the phase wraps at the BANK, not at an integer.
+        for event in 0..528usize {
+            let ch = (event % 2) as u8;
+            core.handle_event(EvKind::NoteOn {
+                ch,
+                key: 48 + (event % 25) as u8,
+                vel: 100,
+            });
+            let sounding = core
+                .active
+                .last()
+                .expect("GM120 spawned a voice")
+                .voice
+                .rr_phase()
+                .expect("the sampled fret-noise voice reports its take");
+            assert_eq!(
+                sounding,
+                next[ch as usize] % takes,
+                "channel {ch} event {} did not take the next canonical round robin",
+                next[ch as usize]
+            );
+            seen[ch as usize].insert(sounding);
+            next[ch as usize] += 1;
+
+            // Unrelated accepted voices still consume global seed slots, but
+            // must not perturb either channel's GM120 phase.
+            if event % 4 == 0 {
+                core.handle_event(EvKind::NoteOn {
+                    ch: 2,
+                    key: 60 + (event % 12) as u8,
+                    vel: 80,
+                });
+            }
+            if event % 11 == 0 {
+                core.handle_event(EvKind::Prog { ch, prog: 0 });
+                core.handle_event(EvKind::NoteOn {
+                    ch,
+                    key: 36 + (event % 24) as u8,
+                    vel: 80,
+                });
+                core.handle_event(EvKind::Prog { ch, prog: 120 });
+            }
+        }
+
+        for (ch, phases) in seen.iter().enumerate() {
+            assert_eq!(
+                phases.len(),
+                takes,
+                "channel {ch} did not reach all {takes} fret-noise takes"
             );
         }
     }

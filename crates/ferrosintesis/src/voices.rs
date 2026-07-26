@@ -13875,12 +13875,14 @@ fn make_uncorrected(
         // GM 120 fret noise: DEFAULT is the owner-recorded Eastman E1D fret-slide
         // round-robin one-shot (LA sample layer, CC0, -fretnoise), which replaced the
         // toneless white-noise burst it measured ~12 dB under the SC-55/S-YXG50
-        // references (MM-BUG-KILN-00040). `--no-samples` and modeled-only builds keep
-        // the `SfxNoise` burst. The other seven SFX are dedicated voices (see the SFX
-        // block above SfxEnv).
+        // references (MM-BUG-KILN-00040). The event engine bypasses this standalone
+        // arm and passes its explicit per-channel phase to `sampled_fret_noise`
+        // (MM-BUG-KILN-00094). Direct factory callers retain the old deterministic
+        // seed mapping. `--no-samples` and modeled-only builds keep `SfxNoise`.
         120 => {
             if samples {
-                crate::sampler::sampled_fret_noise(vel, sr, seed)
+                let rr = (seed.wrapping_mul(2_654_435_761) >> 16) as usize;
+                crate::sampler::sampled_fret_noise(vel, sr, rr)
                     .unwrap_or_else(|| Box::new(SfxNoise::new(program, vel, sr, seed)))
             } else {
                 Box::new(SfxNoise::new(program, vel, sr, seed))

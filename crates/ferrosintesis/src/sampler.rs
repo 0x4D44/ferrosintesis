@@ -4753,9 +4753,9 @@ impl Voice for GongOneShot {
 // ---------------------------------------------------------------------------
 // GM 120 Guitar Fret Noise — the DEFAULT sampled voice (owner-recorded Eastman
 // E1D finger slides, CC0, -fretnoise). A round-robin one-shot: each NoteOn plays
-// one of twelve real fret-slide takes, picked from the note seed so consecutive
-// events do not repeat. `--no-samples` and modeled-only builds fall back to the
-// `voices::SfxNoise` white-noise burst (routed in `voices::make`).
+// one of twelve real fret-slide takes, selected by the engine's per-channel
+// phase so consecutive events cannot repeat. `--no-samples` and modeled-only
+// builds fall back to the `voices::SfxNoise` white-noise burst.
 //
 // GM SFX are pitch-less, so the take plays at native rate (no key repitch), only
 // resampled to the engine rate — this preserves the recorded winding-rasp band
@@ -4778,6 +4778,16 @@ const FRETNOISE_LEVEL: f32 = 0.23;
 static FRETNOISE_TAKES: OnceLock<Vec<Vec<f32>>> = OnceLock::new();
 
 #[cfg(feature = "embedded-samples")]
+pub(crate) fn fret_noise_round_robins() -> usize {
+    ferrosintesis_samples_fretnoise::ROUND_ROBINS
+}
+
+#[cfg(not(feature = "embedded-samples"))]
+pub(crate) fn fret_noise_round_robins() -> usize {
+    0
+}
+
+#[cfg(feature = "embedded-samples")]
 fn fret_noise_takes() -> &'static [Vec<f32>] {
     init_once!(FRETNOISE_TAKES, {
         (0..ferrosintesis_samples_fretnoise::ROUND_ROBINS)
@@ -4794,24 +4804,25 @@ fn fret_noise_takes() -> &'static [Vec<f32>] {
 #[cfg(feature = "embedded-samples")]
 pub struct FretNoiseOneShot {
     data: &'static [f32],
+    rr: usize,
     pos: f32,
     step: f32,
     gain: f32,
 }
 
-/// The default GM 120 voice. `seed` picks the round-robin take (hashed so the
-/// choice decorrelates from other uses of the same note seed); `vel` scales
-/// level. `None` on a modeled-only build, where `voices::make` falls back to
-/// `SfxNoise`.
+/// The default GM 120 sampled voice. `rr` is the engine-owned round-robin
+/// phase and wraps at the derived bank length; `vel` scales level. `None` on a
+/// modeled-only build, where the caller falls back to `SfxNoise`.
 #[cfg(feature = "embedded-samples")]
-pub fn sampled_fret_noise(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>> {
+pub fn sampled_fret_noise(vel: u8, sr: f32, rr: usize) -> Option<Box<dyn Voice>> {
     let takes = fret_noise_takes();
     if takes.is_empty() {
         return None;
     }
-    let rr = (seed.wrapping_mul(2_654_435_761) >> 16) as usize % takes.len();
+    let rr = rr % takes.len();
     Some(Box::new(FretNoiseOneShot {
         data: takes[rr].as_slice(),
+        rr,
         pos: 0.0,
         // native rate, resampled to the engine rate — GM SFX carry no pitch, so
         // the written key does NOT repitch the take.
@@ -4823,7 +4834,7 @@ pub fn sampled_fret_noise(vel: u8, sr: f32, seed: u32) -> Option<Box<dyn Voice>>
 /// Modeled-only builds have no fret-noise bank; the caller falls back to the
 /// modeled `SfxNoise` burst.
 #[cfg(not(feature = "embedded-samples"))]
-pub fn sampled_fret_noise(_vel: u8, _sr: f32, _seed: u32) -> Option<Box<dyn Voice>> {
+pub fn sampled_fret_noise(_vel: u8, _sr: f32, _rr: usize) -> Option<Box<dyn Voice>> {
     None
 }
 
@@ -4859,6 +4870,10 @@ impl Voice for FretNoiseOneShot {
 
     fn released(&self) -> bool {
         true
+    }
+
+    fn rr_phase(&self) -> Option<usize> {
+        Some(self.rr)
     }
 
     #[cfg(test)]

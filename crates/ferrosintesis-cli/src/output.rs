@@ -1,14 +1,9 @@
-use ferrosintesis::offline;
-use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::path::Path;
 
 #[cfg(windows)]
 use std::fs::File;
-
-static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) fn reject_input_alias(input: &Path, output: &Path) -> io::Result<()> {
     if paths_refer_to_same_file(input, output)? {
@@ -77,78 +72,10 @@ fn platform_same_file(_input: &Path, _output: &Path) -> io::Result<bool> {
     Ok(false)
 }
 
-pub(crate) fn write_wav_atomically(
-    output: &Path,
-    sample_rate: u32,
-    interleaved: &[i16],
-) -> io::Result<()> {
-    atomic_write(output, |temporary| {
-        offline::write_wav(temporary, sample_rate, interleaved)
-    })
-}
-
-fn atomic_write(
-    output: &Path,
-    write_temporary: impl FnOnce(&Path) -> io::Result<()>,
-) -> io::Result<()> {
-    let temporary = reserve_temporary_path(output)?;
-    let result = (|| {
-        write_temporary(&temporary)?;
-        OpenOptions::new()
-            .write(true)
-            .open(&temporary)?
-            .sync_all()?;
-        fs::rename(&temporary, output)
-    })();
-
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    result
-}
-
-fn reserve_temporary_path(output: &Path) -> io::Result<PathBuf> {
-    let parent = output
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    let file_name = output.file_name().ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("output {} has no file name", output.display()),
-        )
-    })?;
-
-    for _ in 0..100 {
-        let sequence = NEXT_TEMP_FILE.fetch_add(1, Ordering::Relaxed);
-        let mut temporary_name = OsString::from(".");
-        temporary_name.push(file_name);
-        temporary_name.push(format!(".{}.{}.tmp", std::process::id(), sequence));
-        let temporary = parent.join(temporary_name);
-
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary)
-        {
-            Ok(_) => return Ok(temporary),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(error),
-        }
-    }
-
-    Err(io::Error::new(
-        io::ErrorKind::AlreadyExists,
-        format!(
-            "could not reserve a temporary file beside {}",
-            output.display()
-        ),
-    ))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     struct TestDir(PathBuf);
@@ -236,36 +163,5 @@ mod tests {
         fs::write(&output, b"same bytes").expect("write output");
 
         reject_input_alias(&input, &output).expect("distinct files should be accepted");
-    }
-
-    #[test]
-    fn failed_temporary_write_preserves_existing_output() {
-        let dir = TestDir::new("write-failure");
-        let output = dir.join("score.wav");
-        fs::write(&output, b"prior output").expect("write prior output");
-
-        let error = atomic_write(&output, |temporary| {
-            fs::write(temporary, b"partial replacement")?;
-            Err(io::Error::other("injected write failure"))
-        })
-        .expect_err("injected write failure should escape");
-
-        assert_eq!(error.kind(), io::ErrorKind::Other);
-        assert_eq!(
-            fs::read(&output).expect("read preserved output"),
-            b"prior output"
-        );
-    }
-
-    #[test]
-    fn successful_temporary_write_replaces_existing_output() {
-        let dir = TestDir::new("write-success");
-        let output = dir.join("score.wav");
-        fs::write(&output, b"prior output").expect("write prior output");
-
-        atomic_write(&output, |temporary| fs::write(temporary, b"new output"))
-            .expect("replace output");
-
-        assert_eq!(fs::read(&output).expect("read new output"), b"new output");
     }
 }

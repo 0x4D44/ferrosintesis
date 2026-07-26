@@ -10,7 +10,7 @@
 //!
 //!     cargo run --release --example quickstart -- input.mid output.wav
 
-use ferrosintesis::offline::{self, Options};
+use ferrosintesis::offline::{self, Normalization, Options};
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,13 +29,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // `Options` has private fields: build it from Default with the with_* builders.
     let opt = Options::default().with_reverb(0.25);
 
-    // Interleaved stereo f32 at `opt.sample_rate()`, un-normalized.
-    let (samples, stats) = offline::render(&song, &opt);
+    // Render with bounded audio memory, normalize to -18 LUFS (BS.1770-4)
+    // under a -1 dBTP ceiling, and atomically publish the completed WAV.
+    let stats = offline::render_to_wav(
+        &song,
+        &opt,
+        Path::new(&output),
+        Normalization::loudness(-18.0, -1.0),
+    )?;
     eprintln!("{} voices, peak {:.3}", stats.voices_spawned, stats.peak);
-
-    // Integrated loudness to -18 LUFS (BS.1770-4) under a -1 dBTP true-peak
-    // ceiling, TPDF-dithered to 16-bit.
-    let pcm = offline::normalize_loudness(&samples, opt.sample_rate(), -18.0, -1.0);
-    offline::write_wav(Path::new(&output), opt.sample_rate(), &pcm)?;
     Ok(())
 }

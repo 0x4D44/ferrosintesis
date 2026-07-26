@@ -7,15 +7,15 @@
 //!
 //! Two surfaces:
 //!
-//! - [`offline`] — load or parse an SMF, render it to a buffer, normalize,
-//!   write a WAV. The path shown below.
+//! - [`offline`] — load or parse an SMF, then render, normalize, and atomically
+//!   write a WAV with bounded audio memory. The path shown below.
 //! - [`live`] — [`live::RealtimeSynth`]: raw MIDI bytes in via
 //!   [`write_byte`](live::RealtimeSynth::write_byte), stereo blocks summed
 //!   into your output buffer via
 //!   [`render_add`](live::RealtimeSynth::render_add).
 //!
-//! ```
-//! use ferrosintesis::offline::{self, Options};
+//! ```no_run
+//! use ferrosintesis::offline::{self, Normalization, Options};
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // A one-note Standard MIDI File, assembled in memory: format 0, one
 //! // track, 480 ticks per quarter; a harp plays middle C for one beat.
@@ -37,11 +37,12 @@
 //!
 //! let song = offline::parse(&smf)?;
 //! let opt = Options::default().with_tail(1.0); // short reverb tail
-//! let (samples, stats) = offline::render(&song, &opt);
-//!
-//! // Interleaved stereo f32 at `opt.sample_rate()`, un-normalized; from here,
-//! // `offline::normalize_loudness` and `offline::write_wav` make a WAV.
-//! assert!(!samples.is_empty() && samples.len() % 2 == 0);
+//! let stats = offline::render_to_wav(
+//!     &song,
+//!     &opt,
+//!     std::path::Path::new("output.wav"),
+//!     Normalization::loudness(-18.0, -1.0),
+//! )?;
 //! assert!(stats.voices_spawned >= 1 && stats.peak > 0.0);
 //! # Ok(())
 //! # }

@@ -620,9 +620,14 @@ fn validate_lyrics_sidecars(all: &[Track]) -> Result<(), String> {
 struct TempWav(PathBuf);
 
 impl TempWav {
-    fn new(idx: usize) -> Self {
-        let name = format!("render-catalog-{}-{}.wav", std::process::id(), idx);
-        TempWav(std::env::temp_dir().join(name))
+    fn new(destination: &Path, idx: usize) -> Self {
+        let parent = destination.parent().unwrap_or_else(|| Path::new("."));
+        let stem = destination
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let name = format!(".{stem}.render-{}-{idx}.wav", std::process::id());
+        TempWav(parent.join(name))
     }
     fn path(&self) -> &Path {
         &self.0
@@ -639,9 +644,14 @@ impl Drop for TempWav {
 /// calls ferrosintesis-cli makes under render_opus.py's flags.
 fn render_wav(midi: &Path, wav: &Path) -> Result<(), String> {
     let song = offline::load(midi).map_err(|e| e.to_string())?;
-    let (samples, _stats) = offline::render(&song, &synth_options(&song));
-    let pcm = offline::normalize_loudness(&samples, SR, TARGET_LUFS, TP_CEILING);
-    offline::write_wav(wav, SR, &pcm).map_err(|e| format!("writing {}: {e}", wav.display()))
+    offline::render_to_wav(
+        &song,
+        &synth_options(&song),
+        wav,
+        offline::Normalization::loudness(TARGET_LUFS, TP_CEILING),
+    )
+    .map(|_| ())
+    .map_err(|e| format!("rendering {}: {e}", wav.display()))
 }
 
 struct Outcome {
@@ -682,7 +692,7 @@ fn render_one(
         }
     }
 
-    let wav = TempWav::new(idx);
+    let wav = TempWav::new(&opus, idx);
     if let Err(e) = render_wav(&track.midi, wav.path()) {
         return fail(format!("ferrosintesis failed: {e}"));
     }

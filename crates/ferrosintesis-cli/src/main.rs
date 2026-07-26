@@ -150,9 +150,14 @@ fn main() {
         .with_echo(delay_s)
         .with_samples(samples)
         .with_solo(solo);
+    let normalization = if peak_normalize {
+        offline::Normalization::peak(0.891) // legacy: peak to -1 dBFS
+    } else {
+        offline::Normalization::loudness(target_lufs, tp_ceiling)
+    };
     // The library never writes to stderr; progress reporting is the caller's job.
-    let (samples, stats) = if verbose {
-        offline::render_with_progress(&song, &opt, &mut |p| {
+    let rendered = if verbose {
+        offline::render_to_wav_with_progress(&song, &opt, &output, normalization, &mut |p| {
             eprintln!(
                 "  rendered {:>3.0}%  ({:.1} s, {} live voices)",
                 p.fraction() * 100.0,
@@ -161,24 +166,20 @@ fn main() {
             );
         })
     } else {
-        offline::render(&song, &opt)
+        offline::render_to_wav(&song, &opt, &output, normalization)
     };
-    let pcm = if peak_normalize {
-        offline::normalize_to_i16(&samples, stats.peak, 0.891) // legacy: peak to -1 dBFS
-    } else {
-        // Default: per-track loudness normalization to `target_lufs` with a
-        // `tp_ceiling` true-peak limit (see the loudness overhaul PLN/CR docs).
-        offline::normalize_loudness(&samples, rate, target_lufs, tp_ceiling)
-    };
-    if let Err(e) = output::write_wav_atomically(&output, rate, &pcm) {
-        eprintln!("error writing {}: {e}", output.display());
+    let stats = rendered.unwrap_or_else(|e| {
+        eprintln!("error rendering {}: {e}", output.display());
         std::process::exit(1);
-    }
+    });
     if verbose {
+        let output_bytes = std::fs::metadata(&output)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0);
         eprintln!(
             "wrote {} ({:.1} MB) in {:.1} s — {} voices, peak {:.2}, max polyphony {}",
             output.display(),
-            (pcm.len() * 2) as f64 / 1e6,
+            output_bytes as f64 / 1e6,
             started.elapsed().as_secs_f64(),
             stats.voices_spawned,
             stats.peak,

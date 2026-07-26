@@ -165,7 +165,7 @@ mod tests {
             .filter(|p| !p.starts_with(&lib_src))
             .filter(|p| {
                 std::fs::read_to_string(p)
-                    .map(|s| s.contains("offline::render("))
+                    .map(|s| s.contains("offline::render"))
                     .unwrap_or(false)
             })
             .map(|p| {
@@ -190,7 +190,7 @@ mod tests {
         ];
         assert_eq!(
             found, expected,
-            "the set of files calling `offline::render` has changed.\nA new render entry \
+            "the set of files calling an `offline::render*` API has changed.\nA new render entry \
              point must either take its profile from `Options::default()` (like \
              ferrosintesis-cli and raw_dump) or pin it deliberately and be added to \
              `catalog_pins_match_the_library_default` (like render-catalog). Add it to the \
@@ -472,7 +472,7 @@ mod tests {
             ),
             (
                 "crates/ferrosintesis/examples/quickstart.rs",
-                "normalize_loudness(&samples, opt.sample_rate(), -18.0, -1.0)",
+                "Normalization::loudness(-18.0, -1.0)",
             ),
             ("crates/ferrosintesis/README.md", "-18 LUFS"),
         ] {

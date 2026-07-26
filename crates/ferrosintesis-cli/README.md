@@ -40,7 +40,9 @@ ferrosintesis <input.mid> [-o out.wav] [--rate N] [--wet X] [--delay MS] [--tail
 | `-q` | Quiet; suppress progress output. |
 
 By default the render is loudness-normalized to −18 LUFS with a −1 dBTP true-peak
-limit. `--peak-normalize` selects the older per-track behaviour.
+limit. `--peak-normalize` selects the older per-track behaviour. Both modes stream
+through scratch files beside the output, so audio memory does not grow with track
+duration; allow up to about 16 bytes of temporary/final disk space per stereo frame.
 
 ## Building without the embedded samples
 

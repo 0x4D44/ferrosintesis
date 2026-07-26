@@ -20,7 +20,7 @@ cargo add ferrosintesis
 ```
 
 ```rust
-use ferrosintesis::offline::{self, Options};
+use ferrosintesis::offline::{self, Normalization, Options};
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -30,20 +30,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // `Options` has private fields: build it from Default with the with_* builders.
     let opt = Options::default().with_reverb(0.25);
 
-    // Interleaved stereo f32 at `opt.sample_rate()`, un-normalized.
-    let (samples, stats) = offline::render(&song, &opt);
+    // Bounded-memory render, -18 LUFS loudness normalization, -1 dBTP limit,
+    // deterministic dither, and atomic WAV publication.
+    let stats = offline::render_to_wav(
+        &song,
+        &opt,
+        Path::new("output.wav"),
+        Normalization::loudness(-18.0, -1.0),
+    )?;
     eprintln!("{} voices, peak {:.3}", stats.voices_spawned, stats.peak);
-
-    // Integrated loudness to -18 LUFS (BS.1770-4) under a -1 dBTP true-peak
-    // ceiling, TPDF-dithered to 16-bit.
-    let pcm = offline::normalize_loudness(&samples, opt.sample_rate(), -18.0, -1.0);
-    offline::write_wav(Path::new("output.wav"), opt.sample_rate(), &pcm)?;
     Ok(())
 }
 ```
 
-`offline::parse(&bytes)` is `load` for in-memory data. For long renders,
-`offline::render_with_progress` takes a `FnMut(Progress)` callback — rendered
+`offline::parse(&bytes)` is `load` for in-memory data. For progress,
+`offline::render_to_wav_with_progress` takes a `FnMut(Progress)` callback — rendered
 seconds, total seconds, active voices, and a `fraction()` helper. `Song`
 exposes `title()`, `seconds()`, `initial_bpm()`, `events_len()` and
 `markers_len()`. Errors are `MidiError`, a plain enum implementing
@@ -51,17 +52,15 @@ exposes `title()`, `seconds()`, `initial_bpm()`, `events_len()` and
 
 ## The audio contract
 
-`offline::render` returns `(Vec<f32>, Stats)`: **interleaved stereo** — left,
-right, left, right — at `opt.sample_rate()`, un-normalized. `Stats` reports the absolute
-peak, voices spawned, and maximum polyphony. Renders are deterministic: the
-same MIDI, the same options and the same build produce byte-identical output.
+`offline::render_to_wav` is the normal file path. It streams float audio to
+scratch beside the output, measures loudness while rendering, applies exact
+disk-backed normalization and true-peak limiting, then incrementally writes and
+atomically publishes the WAV. Audio working memory does not grow with track duration.
 
-Getting from that buffer to a file is two calls.
-`normalize_loudness(&samples, sr, target_lufs, ceiling_dbtp)` measures
-integrated loudness per BS.1770-4, gains to the target, true-peak-limits to
-the ceiling (iterating, because limiting itself costs loudness), and
-TPDF-dithers to `Vec<i16>`; `normalize_to_i16` is the plain peak-scaling
-alternative. `write_wav` writes 16-bit PCM stereo. The measurement primitives
+`offline::render` remains the lower-level alternative. It returns `(Vec<f32>, Stats)`:
+**interleaved stereo** — left, right, left, right — at `opt.sample_rate()`,
+un-normalized. `normalize_loudness`, `normalize_to_i16`, and `write_wav` preserve the
+buffer-first building blocks for callers that need them. The measurement primitives
 — `integrated_lufs`, `true_peak_dbtp`, `limit_true_peak` — are public if you
 want your own gain staging.
 

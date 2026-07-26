@@ -1,12 +1,11 @@
-//! Offline rendering: a Standard MIDI File in, a buffer of audio out.
+//! Offline rendering: a Standard MIDI File in, an atomically completed WAV out.
 //!
-//! The steps are always the same — [`load`] (or [`parse`]) a MIDI, [`render`] it to
-//! samples, then convert those samples to 16-bit PCM with [`normalize_loudness`] and
-//! write them with [`write_wav`].
+//! The normal path is [`load`] (or [`parse`]), then [`render_to_wav`] with a
+//! [`Normalization`] policy. It uses bounded audio buffers and disk-backed passes.
 //!
-//! [`render`] returns **interleaved stereo `f32`** at [`Options::sample_rate`] Hz. The
-//! rate is not carried in the returned buffer, so pass the same `opt.sample_rate()` to
-//! every downstream call.
+//! [`render`] remains available when a caller deliberately wants **interleaved stereo
+//! `f32`** in memory. Its rate is not carried in the returned buffer, so pass the same
+//! [`Options::sample_rate`] to every downstream call.
 
 use std::path::Path;
 

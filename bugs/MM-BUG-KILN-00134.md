@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00134 — Salamander warm cache bypasses the pinned archive hash
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / grand-piano provenance
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T132336Z-p3016-n723439500-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00134-run-fix-20260726T132336Z-p3016-n723439500-c1
-- **Owner base:** daf18d1dec63435698eea1829740a72d131abf48
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T13:23:36Z
-- **Owner until:** 2026-07-26T15:23:36Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex review lead from the coverage-ledger review of `crates/ferrosintesis-samples-grand/`)
+- **State history:** Open (2026-07-26, raised by Codex review lead from the coverage-ledger review of `crates/ferrosintesis-samples-grand/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T132336Z-p3016-n723439500-c1 branch=task/bug-MM-BUG-KILN-00134-run-fix-20260726T132336Z-p3016-n723439500-c1 code=dfee483103f83aab8dfb64dd51be0276b0d897f8 gate=manual)
 
 ## Observation
 

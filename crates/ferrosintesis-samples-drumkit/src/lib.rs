@@ -679,7 +679,7 @@ pub static HH_PEDAL: Bank = Bank {
     source: &SOURCE,
     first_sample_index: 28,
 };
-/// Kick drum, snares on (`mid_kick_snon`) -- the source's full 4x4 grid of
+/// Kick drum, snares on (`kickmic_kick_snon`) -- the source's full 4x4 grid of
 /// velocity layers x TRUE round robins.
 pub static KICK: Bank = Bank {
     name: "kick",

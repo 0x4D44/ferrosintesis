@@ -2636,26 +2636,32 @@ impl EngineCore {
             vel
         };
 
-        if ch == 9 && matches!(key, 42 | 44 | 46) {
+        // Hi-hat choke group. Keyed on `is_drum`, not `ch == 9`, so a channel declared
+        // a drum part by XG or GS chokes its hats like channel 10 does — and on
+        // `a.ch == ch`, because a choke group belongs to ONE kit: an open hat on ch10
+        // must not be silenced by a pedal hat on some other declared drum channel. For
+        // ch9 both forms are identical, so this cannot move a committed render.
+        if is_drum && matches!(key, 42 | 44 | 46) {
             for a in self
                 .active
                 .iter_mut()
-                .filter(|a| a.ch == 9 && matches!(a.key, 42 | 44 | 46))
+                .filter(|a| a.ch == ch && matches!(a.key, 42 | 44 | 46))
             {
                 a.voice.choke();
             }
         }
 
-        if ch != 9 && needs_drive(program) {
+        if !is_drum && needs_drive(program) {
             self.make_room_for_driven_guitar(ch);
         }
 
         let seed = 0x9E37 ^ (self.voice_seed_index as u32).wrapping_mul(2654435761);
         // ch9 is always drums; a channel declared a drum part by XG (CC0==127) or GS
         // ("Use for Rhythm Part" SysEx) joins the drum path. `strips[ci].kit` is
-        // `strips[9].kit` when ch==9, so ch9 is unchanged; a declared drum channel uses
-        // the default V3 kit (its kit is never reassigned). `is_drum` is resolved
-        // above, before the tremolo-restrike predicate that also needs it.
+        // that channel's own kit: since 2026-07-26 a declared drum channel honours the
+        // ch-10 kit ladder too, so its program change selects a KIT rather than being
+        // read as a melodic instrument. `is_drum` is resolved above, before the
+        // tremolo-restrike predicate that also needs it.
         let voice = if is_drum {
             let rr = self.drum_rr[key as usize];
             self.drum_rr[key as usize] = rr.wrapping_add(1);
@@ -3092,7 +3098,16 @@ impl EngineCore {
         //                `v1_drum_render_signatures_are_stable`.
         // Any other program keeps selecting V3 (the committed showcase demo
         // authors prog 8 and must stay V3).
-        if ch == 9 {
+        //
+        // A channel is a drum part if it is channel 10, OR was declared one by an XG
+        // bank select (CC0 = 127) or a GS "Use for Rhythm Part" SysEx. Until 2026-07-26
+        // all three decisions below keyed on `ch == 9` alone, so a declared drum channel
+        // was stuck on the default kit AND read its program change as if it named a
+        // MELODIC instrument — inheriting that program's chorus/delay defaults and, for
+        // programs 29/30, a guitar amp insert. On a drum part the program number selects
+        // a KIT; it is not an instrument at all.
+        let is_drum_part = ch == 9 || s.xg_drum || s.gs_drum;
+        if is_drum_part {
             s.kit = match prog {
                 40 => drums::Kit::Brush,
                 25 => drums::Kit::V1,
@@ -3108,7 +3123,7 @@ impl EngineCore {
         // clobber both the value and the authored flag, so a foreign file that set
         // CC93/CC94 and then changed program mid-song lost its sends
         // (MM-BUG-KILN-00033).
-        let (cho, del) = if ch == 9 {
+        let (cho, del) = if is_drum_part {
             (0.0, 0.0)
         } else {
             fx_profile(prog, s.alt_bank_value)
@@ -3119,7 +3134,12 @@ impl EngineCore {
         if !s.delay_authored {
             s.delay_send = del;
         }
-        if needs_drive(prog) {
+        // `!is_drum_part`: a kit-select program number must not build a guitar amp.
+        // Verified safe for channel 10 by census — no album MIDI sends program 29 or 30
+        // on ch 10 (the catalogue uses only 0, 1, 16, 25 and 40 there), so this cannot
+        // change a committed render; it only stops a foreign XG/GS drum part from
+        // picking up a Drive insert it never asked for.
+        if needs_drive(prog) && !is_drum_part {
             // rebuild on a program CHANGE too: 29<->30 mid-song choreography
             // is an authored idiom, and the two programs differ in voicing,
             // stage gains and sag target (review C3). The BANK is part of the
@@ -5368,6 +5388,109 @@ mod tests {
             "drum tail at D4 ({}) must be far below the sustained organ ({})",
             tail(&xg13),
             tail(&organ)
+        );
+    }
+
+    /// A channel declared a drum part by XG bank select or GS SysEx must honour the
+    /// ch-10 kit ladder, exactly as channel 10 does.
+    ///
+    /// Before 2026-07-26 the ladder was gated on `ch == 9`, so such a channel was
+    /// permanently the default V3 kit however its program change was written — the
+    /// program was read as naming a melodic instrument instead of selecting a kit.
+    ///
+    /// Fail-first shape: each declared channel is compared against the SAME song on
+    /// channel 10. Under the old gate the brush cases rendered as V3 and these
+    /// assertions failed; the `assert_ne` against the default kit is what stops the
+    /// test passing vacuously if the ladder ever stops selecting anything at all.
+    ///
+    /// Keys 38 and 42 are chosen because `Kit::Brush` intercepts them with its own
+    /// voices, so V3-vs-Brush is a large difference rather than a subtle one.
+    #[test]
+    fn declared_drum_channels_honour_the_kit_ladder() {
+        let sr = 44100.0;
+        let opt = Options {
+            samples: true,
+            ..test_opts(sr)
+        };
+        let hits = |ch: u8| {
+            [
+                (0.05, EvKind::NoteOn { ch, key: 38, vel: 108 }),
+                (0.40, EvKind::NoteOn { ch, key: 42, vel: 96 }),
+                (0.75, EvKind::NoteOn { ch, key: 38, vel: 120 }),
+            ]
+        };
+        // Channel 10 is the reference: no declaration needed, the ladder always applied.
+        let ch10 = |prog: u8| {
+            let mut ev = vec![(0.0, EvKind::Prog { ch: 9, prog })];
+            ev.extend(hits(9));
+            render(&test_song(ev, 2.0), &opt).0
+        };
+        // An XG-declared drum channel: CC0 = 127, then the kit program.
+        let xg = |ch: u8, prog: u8| {
+            let mut ev = vec![
+                (0.0, EvKind::Cc { ch, num: 0, val: 127 }),
+                (0.0, EvKind::Prog { ch, prog }),
+            ];
+            ev.extend(hits(ch));
+            render(&test_song(ev, 2.0), &opt).0
+        };
+        // A GS-declared rhythm part: the SysEx, then the kit program. Note a GS part
+        // still sends CC0 = 0, which is why it cannot share the XG flag.
+        let gs = |ch: u8, prog: u8| {
+            let mut ev = vec![
+                (0.0, EvKind::DrumMode { ch, on: true }),
+                (0.0, EvKind::Prog { ch, prog }),
+            ];
+            ev.extend(hits(ch));
+            render(&test_song(ev, 2.0), &opt).0
+        };
+
+        let default_kit = ch10(0);
+        let brush_ch10 = ch10(40);
+        assert_ne!(
+            brush_ch10, default_kit,
+            "PC 40 must select the brush kit on ch10 — the reference itself is broken"
+        );
+        assert!(rms(&brush_ch10) > 1e-4, "the brush reference must sound");
+
+        // Compared with a TOLERANCE, not byte-equality. A declared drum channel sums
+        // into the master by a slightly different path from ch9, so identical voices
+        // land with a different float rounding order: measured max|diff| 3.8e-5
+        // (~-88 dBFS) with RMS equal to six decimals. That is summation order, not a
+        // behavioural difference, and asserting byte-equality here would be pinning the
+        // adder. The kit difference we DO care about is orders of magnitude larger,
+        // which the selectivity assertion below states rather than assumes.
+        let maxdiff = |a: &[f32], b: &[f32]| {
+            a.iter()
+                .zip(b)
+                .map(|(x, y)| (x - y).abs())
+                .fold(0f32, f32::max)
+        };
+        const SAME: f32 = 1e-3;
+
+        for (label, got) in [("XG", xg(13, 40)), ("GS", gs(11, 40))] {
+            let d = maxdiff(&got, &brush_ch10);
+            assert!(
+                d < SAME,
+                "{label}-declared drum channel ignored PC 40 (max|diff| vs the ch10 \
+                 brush kit = {d:.5}); it must select the brush kit as channel 10 does"
+            );
+        }
+        for (label, got) in [("XG", xg(13, 0)), ("GS", gs(11, 0))] {
+            let d = maxdiff(&got, &default_kit);
+            assert!(
+                d < SAME,
+                "{label}-declared drum channel with PC 0 is not the default kit \
+                 (max|diff| = {d:.5})"
+            );
+        }
+        // The ladder must actually SELECT. Without this, both checks above would pass
+        // if the kit were ignored entirely and everything rendered identically.
+        let kit_delta = maxdiff(&brush_ch10, &default_kit);
+        assert!(
+            kit_delta > 50.0 * SAME,
+            "brush and default kits are barely distinguishable (max|diff| = \
+             {kit_delta:.5}); the checks above would be passing vacuously"
         );
     }
 

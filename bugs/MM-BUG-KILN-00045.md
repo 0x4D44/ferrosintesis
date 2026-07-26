@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00045 — Bass family (GM 32–39) spans 21–25 dB internally where both reference synths span ~9 dB: the plucked basses' held body collapses while SynthBass 38 holds flat and hot
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth
@@ -23,6 +23,11 @@
   Arthur's listening call** — see "Why this is Blocked". Not a judgement on the bug, which
   is well-evidenced and still real; it cannot be finished unattended because the target
   numbers are not derivable.)
+  → Open (2026-07-26, unblocked by Arthur. Preserve the upright/fingered articulation
+  contrast while constraining the held-level family spread to about 9 dB; keep GM38
+  Synth Bass 1 moderately prominent rather than matching the quieter Roland reference.
+  Re-measure after the closed KILN-00042 decay-law fix, then implement and validate this
+  direction with the within-family oracle, render-diff inventory, and listening candidates.)
 
 ## Observation
 
@@ -188,6 +193,19 @@ a judgement this bug's own evidence says cannot be derived:
    `tools/instrument-balance/`). Re-run the Repro section and restate the residual.
 2. **Then Arthur decides** the family target: how hot GM38 should sit, and whether
    UPRIGHT/BASS keep their authored decay contrast.
+
+### Arthur's decision (2026-07-26)
+
+Arthur approved the recommended calibration direction:
+
+- Preserve the audible articulation difference: upright bass should remain shorter-lived
+  than fingered bass.
+- Constrain the held-level spread across GM 32–39 to about 9 dB.
+- Keep GM38 Synth Bass 1 moderately prominent rather than targeting the quieter Roland
+  reference.
+
+This supplies the missing listening judgement. The bug is Open for an autonomous fixer to
+re-measure the post-KILN-00042 tree and implement that direction.
 
 Item 1 of the Fix direction — the **within-family spread oracle** — is the durable,
 generalisable piece and needs no ear. It cannot land alone, though: written honestly it

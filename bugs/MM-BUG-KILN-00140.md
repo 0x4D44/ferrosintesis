@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00140 — Headroom rebakes retain obsolete generated WAVs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / Headroom generation
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T140612Z-p42948-n863098400-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00140-run-fix-20260726T140612Z-p42948-n863098400-c1
-- **Owner base:** 528fff6a234596943338b02c56c8baf478a158f5
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T14:06:12Z
-- **Owner until:** 2026-07-26T16:06:12Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new`)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T140612Z-p42948-n863098400-c1 branch=task/bug-MM-BUG-KILN-00140-run-fix-20260726T140612Z-p42948-n863098400-c1 code=563c584015ff37e02a4029f8110c8fbb872b6b38 gate=manual)
 
 ## Observation
 

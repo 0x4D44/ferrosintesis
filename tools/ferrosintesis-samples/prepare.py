@@ -2666,10 +2666,23 @@ def _bake_darkened_grand(_src):
     out_dir = os.path.join(REPO_ROOT, "crates",
                            "ferrosintesis-samples-dark-salamander", "samples")
     os.makedirs(out_dir, exist_ok=True)
+    source_names = sorted(f for f in os.listdir(grand_dir) if f.endswith(".wav"))
+    expected_outputs = {"dark" + fn for fn in source_names}
+    unexpected_outputs = sorted(
+        fn for fn in os.listdir(out_dir)
+        if fn.startswith("darkgrand_")
+        and fn.endswith(".wav")
+        and fn not in expected_outputs
+    )
+    if unexpected_outputs:
+        raise ValueError(
+            "dark-grand output contains unexpected generated WAVs: "
+            + ", ".join(unexpected_outputs)
+        )
     a = 1.0 - math.exp(-2.0 * math.pi * DARK_SHELF_HZ / OUT_SR)
     g = 1.0 - 10.0 ** (DARK_CUT_DB / 20.0)
     rows = []
-    for fn in sorted(f for f in os.listdir(grand_dir) if f.endswith(".wav")):
+    for fn in source_names:
         x, sr = read_wav(os.path.join(grand_dir, fn))  # already mono 16-bit 44.1k
         lp = 0.0
         y = []

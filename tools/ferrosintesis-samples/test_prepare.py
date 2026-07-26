@@ -739,6 +739,35 @@ class LocalBankSelectionTest(unittest.TestCase):
                 self.assertEqual(calls, expected)
 
 
+class DarkenedGrandInventoryTest(unittest.TestCase):
+    """MM-BUG-KILN-00123: a rebake must reject obsolete owned outputs."""
+
+    def test_rebake_rejects_unexpected_owned_output_before_writing(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            grand_dir = os.path.join(
+                repo_root, "crates", "ferrosintesis-samples-grand", "samples"
+            )
+            out_dir = os.path.join(
+                repo_root,
+                "crates",
+                "ferrosintesis-samples-dark-salamander",
+                "samples",
+            )
+            os.makedirs(grand_dir)
+            os.makedirs(out_dir)
+            open(os.path.join(grand_dir, "grand_C4_mf.wav"), "wb").close()
+            open(os.path.join(out_dir, "darkgrand_C4_mf.wav"), "wb").close()
+            open(os.path.join(out_dir, "darkgrand_old.wav"), "wb").close()
+
+            with mock.patch.object(prepare, "REPO_ROOT", repo_root), mock.patch.object(
+                prepare,
+                "read_wav",
+                side_effect=AssertionError("inventory must be checked before reading"),
+            ):
+                with self.assertRaisesRegex(ValueError, r"darkgrand_old\.wav"):
+                    prepare._bake_darkened_grand(None)
+
+
 class BottleLoopTest(unittest.TestCase):
     """MM-BUG-KILN-00065: the GM 76 whole-voice loop must have exactly one owner.
 

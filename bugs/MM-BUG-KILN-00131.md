@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample packaging / provenance
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T100451Z-p32652-n863317900-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00131-run-fix-20260726T100451Z-p32652-n863317900-c1
+- **Owner base:** 6f09c961a6f6f8d565f13eac2c57ba7c67612852
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T10:04:51Z
+- **Owner until:** 2026-07-26T12:04:51Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

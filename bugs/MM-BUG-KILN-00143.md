@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00143 — Honky-tonk rebakes retain obsolete generated WAVs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / honky-tonk generation
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T151951Z-p14020-n937483200-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00143-run-fix-20260726T151951Z-p14020-n937483200-c1
-- **Owner base:** e31a9bf99700928e88c0315cf7ccea0cb345773e
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T15:19:51Z
-- **Owner until:** 2026-07-26T17:19:51Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T151951Z-p14020-n937483200-c1 branch=task/bug-MM-BUG-KILN-00143-run-fix-20260726T151951Z-p14020-n937483200-c1 code=bd72fe78a418350aa4e00caae49a5aed017d5c12 gate=manual)
 
 ## Observation
 

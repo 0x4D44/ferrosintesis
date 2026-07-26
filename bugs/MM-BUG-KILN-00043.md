@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00043 — GM7 clavinet's baked decay is ~3x too fast: its body level reads 13.4 dB under both references while its attack level is correctly placed (a 1.6 s sample wall also exists, but measures inaudible)
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8-code-1785105359370
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment) → Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T221402Z-p9812-n155597100-c8 branch=task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8 code=0675dda7575d gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -179,6 +179,26 @@ Then re-run the M-CAL probe and confirm GM7 clears the `shape/short` guard on bo
 references and its `int_F` lands near -5 dB. Consider the same audit for the modeled
 `CLAVINET` preset (`t60: 0.78`) so `--no-samples` and the CC0 alt bank do not diverge
 from the default voice.
+
+## Fix
+
+### Fix summary (2026-07-26, deltic:auto run=fix-20260726T221402Z-p9812-n155597100-c8 code=0675dda7575d gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00043 in code and tests. The sampled GM7 clavinet now loops a cached pitch-synchronous body segment before the old 1.6 s tail and applies the approved output-time decay curve. The old baked decay is compensated inside the loop so repitching no longer changes the held-note t60. The modeled fallback now uses a per-preset pluck decay exponent and longer GM7 constants so --no-samples and the alt-bank route no longer die in the old short-decay regime. The focused clavinet regression reproduced the original failure before the implementation change and is green after the fix.
+
+Root cause: The default sampled voice replayed committed 1.6 s WAVs as one-shots; those WAVs already carried a too-fast baked exponential decay, and ClavinetSampled returned false when the buffer ended. The modeled fallback shared the same class of defect through CLAVINET's 0.78 s pluck t60 and explicit damper-hold opt-out.
+
+Changed:
+- crates/ferrosintesis/src/sampler.rs: added cached clavinet loop discovery, runtime output-time decay, baked-decay compensation, prewarm coverage, and GM7 regres
+- crates/ferrosintesis/src/voices.rs: added per-preset pluck t60 exponent support, retuned the CLAVINET fallback, and updated decay-law authoring oracles
+- crates/ferrosintesis/src/altbank.rs: set the frozen PIZZ preset's default pluck exponent after the PluckPreset field addition
+
+Tests:
+- $null | deltic timeout 300 cargo test -p ferrosintesis clavinet -- --nocapture (failed before the fix on the 1.6 s sampled wall and modeled fallback; passed aft
+- $null | deltic timeout 180 cargo test -p ferrosintesis every_sustain_loop_search_is_memoized_and_prewarmed -- --nocapture
+- $null | deltic timeout 240 cargo test -p ferrosintesis ks_decay -- --nocapture
+- $null | deltic timeout 180 cargo test -p ferrosintesis treble_hold_authoring_pins -- --nocapture
+- deltic timeout 120 cargo fmt -p ferrosintesis
 
 ## Notes
 

@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** GM0 piano voicing / LA sample-to-model crossfade
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T092559Z-p45536-n826874200-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00130-run-fix-20260726T092559Z-p45536-n826874200-c1
+- **Owner base:** 2caa732dae19862207e68c84c9e22d97ab89d857
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T09:25:59Z
+- **Owner until:** 2026-07-26T11:25:59Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

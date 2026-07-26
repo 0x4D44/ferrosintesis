@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** packaging / licensing
 - **Raised:** 2026-07-24
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260726T225402Z-p9812-n456509100-c15
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00068-run-fix-20260726T225402Z-p9812-n456509100-c15
-- **Owner base:** f2756d4e98b9fc24923031162545384a8642855e
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T22:54:02Z
-- **Owner until:** 2026-07-26T23:49:29Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00068-run-fix-20260726T225402Z-p9812-n456509100-c15-code-1785107114207
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-24, raised by Claude Opus 4.8 from the licence audit

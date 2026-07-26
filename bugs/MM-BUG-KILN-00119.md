@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00119 — calmeter's do-not-reuse note describes percentile's OLD floor-rank body; KILN-00055 inverted it
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** docs / ferrosintesis-cli examples
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — rewrote the do-not-reuse rationale for the current nearest-rank helper)
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — rewrote the do-not-reuse rationale for the current nearest-rank helper) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run by reading the two files against each other, as the bug's own repro instructs. `calmeter.rs` point 2 now reads "It implements nearest-rank, so p95 happens to return the max at n = 9 but stops doing so at n = 20", which matches the current body `sorted[ceil(q*len).clamp(1,len) - 1]`; the inverted pre-`b8f8247` floor-rank description is gone and the former implementation is now explicitly marked historical. I checked the arithmetic rather than taking the sentence on trust: at n = 19, ceil(0.95*19) = 19 -> index 18 = the maximum; at n = 20, ceil(19.0) = 19 -> index 18 = the second largest. So both the "max at n <= 19" claim in point 1 and the "stops at n = 20" claim in point 2 are exactly right. The "do not reuse" advice is retained on its surviving design argument, as the bug asked. `percentile_uses_nearest_rank` green and the `calmeter` example compiles under the gate's `--all-targets` clippy.)
 
 ## Observation
 

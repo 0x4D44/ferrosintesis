@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00057 — non_guitar_la_render_is_pinned freezes a raw-f32 FNV hash: the last un-migrated bit-exact render golden, no diagnostic on failure and fragile across codegen
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass; the original "will flip in release" premise was EMPIRICALLY TESTED here and found FALSE, and the bug re-scoped accordingly) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — replaced the raw-f32 hash with a portable, diagnostic render signature)
+- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass; the original "will flip in release" premise was EMPIRICALLY TESTED here and found FALSE, and the bug re-scoped accordingly) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — replaced the raw-f32 hash with a portable, diagnostic render signature) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run at source: the raw cross-commit FNV pin is gone. `non_guitar_la_render_is_pinned` and its `0xaa11_bc63_b298_af8e` constant no longer exist anywhere in `sampler.rs`; the test is now `non_guitar_la_render_signature_is_stable` (`sampler.rs:7144`), rendering the same GM56/key 69/velocity 100/seed 5 canary and freezing it through `testutil::assert_render_signature` (rms -16.398 dB, centroid 1767.767 Hz, late/early 13.049 dB) under the shared relative tolerances. Both defects the bug names are addressed: a failure now reports WHICH audible dimension moved, and the metric no longer depends on float-op ordering. Test green in the debug gate and in my focused run.)
 
 ## Observation
 

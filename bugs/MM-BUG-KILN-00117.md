@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00117 — EAR_DECIDED is a surviving hand-copy of engine.rs's deliberate-zero pins, so a fifth pin silently lets the tool re-litigate an ear decision
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** tooling / instrument balance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00109; it falsifies that bug's fix-note claim (e)) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the tool now derives every recorded zero decision from engine.rs in the same read as the shipped trim table)
+- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00109; it falsifies that bug's fix-note claim (e)) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the tool now derives every recorded zero decision from engine.rs in the same read as the shipped trim table) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run by executing the parser, not by reading it. The literal `EAR_DECIDED = {0, 1, 3, 11}` is gone; `load_shipped()` (`derive_trims.py:209`) returns the shipped trim table and the derived pin set from ONE read of `engine.rs`, assigned jointly at `:218`. I imported the module and checked the behaviour directly: it derives exactly `[0, 1, 3, 11]` from the real `engine.rs`, matching the hand-copy it replaced; feeding it an `engine.rs` text with a FIFTH pin added (GM42) yields `[0, 1, 3, 11, 42]`, so the precise consequence the bug describes - a new deliberate zero being silently re-litigated - no longer occurs. The fail-loud contract holds on all three degenerate inputs I tried: no pins, a duplicate pin, and an out-of-range program each raise a named `SystemExit`. `derive_trims.py --selftest` and `trim_derivation_reads_one_exact_engine_state` are green.)
 
 ## Observation
 

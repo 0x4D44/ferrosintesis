@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00051 — after the plucked t60 re-fit, the LA guitar sample→model crossfade seam blooms (~5%): the sample onset fades out before the now-hotter model sustain peaks
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sampler
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — surfaced by the plucked-family t60 re-fit; `la_level_continuity` now carries a bounded exception for the guitar labels) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — re-fitted GM24's high-register, medium-velocity sample gain and retired both guitar bloom allowances)
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — surfaced by the plucked-family t60 re-fit; `la_level_continuity` now carries a bounded exception for the guitar labels) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — re-fitted GM24's high-register, medium-velocity sample gain and retired both guitar bloom allowances) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run at source: the bounded `guitar` bloom allowance (`bloom <= 1.15`) is gone from `assert_attack_is_peak` (`sampler.rs:8199`), whose only surviving label special case is the documented, unrelated `piano-low` attack-window widening. Every struck row in `la_level_continuity` - including `steel-guitar-low`, the row whose failure the bug quotes verbatim (late 0.04411 above attack 0.04223) - now goes through the shared `late <= attack * 1.01` no-bloom rule and passes. `guitar_low_velocity_seam_continuity` covers GM24 key 76 at velocities 56/72/86 as the resolution claims, and `nylon_seam_gain` (`voices.rs:9221`) is exactly 1.0 through key 64, at velocity 40 and from velocity 100 up, so the correction is confined to the measured medium-velocity high-register corner. Both tests green.)
 
 ## Observation
 

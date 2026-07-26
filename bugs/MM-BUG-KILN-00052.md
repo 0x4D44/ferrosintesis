@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00052 — the KILN-00042 register-tilt oracle checks the closed-form corner helper, not the rendered path, so a rewiring that drops the damper hold in `Pluck::new` would pass unguarded
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) from the independent two-eyes closure of KILN-00042 by gpt-5.6-sol — a genuine test-coverage gap, not a defect in shipped behaviour) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — added a rendered register-tilt oracle with a forced-off non-vacuity control)
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) from the independent two-eyes closure of KILN-00042 by gpt-5.6-sol — a genuine test-coverage gap, not a defect in shipped behaviour) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — added a rendered register-tilt oracle with a forced-off non-vacuity control) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run at source: the coverage gap the bug reports - no oracle exercising the RENDERED decay path - is closed by `rendered_ks_decay_tilt_holds_across_register` (`voices.rs:15524`), which renders the shipped `NYLON` preset through `Pluck::new` at keys 48 and 76 and bounds the measured tilt to 1.0-3.5x. Critically it also renders a `DamperHold::Off` twin and requires that control to stay above 5.25x, so the test cannot silently go vacuous if the hold stops reaching the loop - exactly the regression the bug said would slip past the closed-form helper. Test green; the closed-form oracle it complements is retained (belt-and-braces).)
 
 ## Observation
 

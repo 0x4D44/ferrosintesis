@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00095 — The fret-noise bake's byte-identical promise has no stable environment
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** fret-noise sample generation / reproducibility
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — scoped byte identity to a locked canonical environment and added non-mutating per-file verification)
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — scoped byte identity to a locked canonical environment and added non-mutating per-file verification) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run by execution, not by reading. The unconditional byte-identity claim is gone: `fretnoise_bake.py`'s docstring now scopes it to the declared canonical environment, `requirements-fretnoise-bake.txt` pins `numpy==2.4.4`, and `BAKE-SHA256` pins all twelve outputs independently. I ran `fretnoise_bake.py --verify`: it re-baked the complete bank in memory, matched all twelve committed SHA-256 pins, and reported "verified 12 generated and committed files (998 KiB); wrote nothing". I proved the non-mutation claim myself rather than trusting it - snapshotted every WAV's bytes and mtime_ns before the run and re-compared afterwards: both unchanged, and `git status --porcelain` for the crate is empty.)
 
 ## Observation
 

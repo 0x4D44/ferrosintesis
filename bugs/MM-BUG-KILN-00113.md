@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00113 — Core provenance assigns the upright bank to the wrong GM program
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** core sample package / provenance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — corrected the shipped VSCO upright mapping to zero-based GM 0)
+- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — corrected the shipped VSCO upright mapping to zero-based GM 0) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run at source: `crates/ferrosintesis-samples-core/PROVENANCE.md:12` now reads "Upright piano (GM 0) onsets", consistent with the zero-based convention its violin GM40 and flute GM73 neighbours already used, and with `make_uncorrected(0)` dispatching to `sampler::piano_bank` while zero-based GM 1 continues to reach the separate VCSL Kawai bank. The false asset-to-program mapping a package auditor would have read is gone. The derived provenance inventory oracle passes for all packaged families.)
 
 ## Observation
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00121 — Clavinet README implies every other sample crate is CC0
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample licensing documentation
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol during the coverage-ledger review of `crates/ferrosintesis-samples-clavinet/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — the package now names the mixed CC0/MIT/CC BY licence set and links the derived distribution inventory)
+- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol during the coverage-ledger review of `crates/ferrosintesis-samples-clavinet/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — the package now names the mixed CC0/MIT/CC BY licence set and links the derived distribution inventory) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run at source: the parenthetical "unlike ferrosintesis's other, CC0, sample crates" is gone. `crates/ferrosintesis-samples-clavinet/README.md` now states "Some sibling banks are CC0, while others use MIT or CC BY" and links the authoritative inventory. I verified the link rather than assuming it: the target `#sample-provenance-and-licensing` resolves to the real `## Sample provenance and licensing` heading at `crates/ferrosintesis/README.md:192`, and the `0x4D44/ferrosintesis` repository URL is this crate's own declared `repository` field, used consistently across all 25 sample crates - not a typo for the enclosing repo. The reading that would tell a distributor the sibling banks need no attribution is no longer available. Both clavinet package tests and all seven derived licensing tests green.)
 
 ## Observation
 

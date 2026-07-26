@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00114 — Sample-family provenance rows are not enforced by their claimed oracle
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample inventory / provenance oracle
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle now parses one counted canonical row per packaged family from each crate's provenance alone)
+- **State history:** Open (2026-07-25, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-core/`) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle now parses one counted canonical row per packaged family from each crate's provenance alone) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run at source, and the bug's own adversarial mutation is now a committed fixture. The concatenate-README-PROVENANCE-NOTICE substring predicate is gone: `provenance_inventory_errors` (`inventory.rs:261`) parses each crate's `PROVENANCE.md` ALONE, requires exactly one canonical row of the form `| \`family_*\` | FILES |` per filesystem-derived family, compares the documented count against the actual file count, rejects duplicate rows, and rejects rows for families the crate does not package. `provenance_inventory_ignores_a_family_mention_outside_provenance` reproduces the exact hole the bug described - a README that names `piano_*` while the provenance carries no row - and requires the error. The real-tree oracle carries a `checked > 40` non-vacuity floor and scans every sample crate. All three tests green.)
 
 ## Observation
 

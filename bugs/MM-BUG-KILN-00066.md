@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00066 — A long-held GM76 note overflows its per-voice sample clock
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sampler / voice lifecycle
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol during the coverage-ledger review of `crates/ferrosintesis-samples-bottle/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — widened both copied loop-voice clocks and pinned modulation continuity across the old boundary)
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol during the coverage-ledger review of `crates/ferrosintesis-samples-bottle/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — widened both copied loop-voice clocks and pinned modulation continuity across the old boundary) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run at source: `BottleLoopVoice::t` (`sampler.rs:4128`) and the copied `SaxLoopVoice::t` (`:3860`) are both `u64`; at 44.1 kHz that clock cannot exhaust in any real session. `loop_voice_clocks_cross_u32_boundary_without_modulation_reset` starts both voices 511 samples below the old `u32::MAX`, compares each against a reference aligned to the same drift-scheduler phase, and asserts byte-identical output PLUS `t > u32::MAX` - so the test proves the boundary was genuinely crossed rather than passing vacuously. I checked the one remaining `t: u32` (`:2695`) as a possible residual and it is NOT the same defect: it belongs to the bagpipe `LoopVoice`, which advances with an explicit `wrapping_add(1)` (so no debug overflow panic) and consumes `t` only through `is_multiple_of` for the drift cadence - it never derives elapsed time from it, so there is no vibrato bloom to reset. The resolution's decision to leave it alone is correct; no residual to split. Test green in debug and via the gate.)
 
 ## Observation
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00115 — Licence boilerplate counts as a credit, and real copyright-line credits do not
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** licensing oracles / attribution
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, found by Claude Opus 4.6 while performing the two-eyes verification of MM-BUG-KILN-00110 — the reported instance was fixed, so the predicate was audited for others) → Fixed (2026-07-25, Claude Opus 4.6, same change; awaiting independent two-eyes verification)
+- **State history:** Open (2026-07-25, found by Claude Opus 4.6 while performing the two-eyes verification of MM-BUG-KILN-00110 — the reported instance was fixed, so the predicate was audited for others) → Fixed (2026-07-25, Claude Opus 4.6, same change; awaiting independent two-eyes verification) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: Claude Opus 4.6), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run BY REFUTATION ON THE REAL TREE, not by reading the fix - the same method that found this bug's three predecessors. I replaced the tracked `crates/ferrosintesis-samples-clavinet/NOTICE` with the bare MIT grant from the Observation, deleting Frank Wen, Michael Cowgill and S. Christian Collins entirely, and ran `cargo test -p ferrosintesis --lib licensing`. It went RED - three tests, the decisive one naming the crate and the reason: "ferrosintesis-samples-clavinet/NOTICE carries no source URL and no `Copyright (c) ...` line, so nothing in it identifies a licensor." The bug's recorded symptom (that reduction leaves "Software" and "AS IS" as surviving credit tokens while the suite stays green) is therefore false on this tree. NOTICE restored from my backup; `git status --porcelain` for the crate is clean. I also checked the `(c)` subtlety the fix note flags: `carries_licensor_owned_signal` (`licensing.rs:216`) accepts a bare copyright symbol but requires the spelled-out word to be paired with `(c)`, so the "The above copyright notice ... shall be included" sentence present in every licence body cannot re-admit boilerplate. All seven licensing tests green.)
 
 ## Observation
 

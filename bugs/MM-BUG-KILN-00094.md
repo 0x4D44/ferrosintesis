@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00094 — GM120 can repeat the same fret-noise take on consecutive events
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth / GM120 fret-noise round-robin
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — replaced global-seed selection with a canonical per-channel twelve-take phase)
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — replaced global-seed selection with a canonical per-channel twelve-take phase) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run at source: the seed-hash-modulo-twelve selection is gone. `sampled_fret_noise(vel, sr, rr)` (`sampler.rs:4817`) now receives the take index, and `EngineCore` owns `fret_noise_rr: [usize; 16]` - one phase per MIDI channel - advanced exactly once per accepted sampled GM120 spawn as `(rr + 1) % takes.max(1)`, i.e. wrapping at the bank length rather than an integer boundary. Under a strict +1-mod-12 sequence the adjacent repeats the bug enumerated (voice indices 27/28, 33/34, 44/45, 52/53, 55/56, 61/62 all reusing a take) are structurally impossible. `sampled_fret_noise_cycles_per_channel_across_interleaved_events` drives 528 interleaved events across two GM120 channels plus unrelated GM0 voices on a third, and asserts the SOUNDING take read back via `Voice::rr_phase()` - not a counter - equals the canonical next index every time, so unrelated voices consuming global seed slots cannot perturb it. Test green.)
 
 ## Observation
 

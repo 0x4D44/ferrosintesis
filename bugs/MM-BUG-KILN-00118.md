@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00118 — PROGRAM_TRIM_DB has no committed residual baseline, so trim staleness can only ever be found by a manual re-derive
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth / instrument balance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00107; it is that report's own section-4 remedy, left unimplemented) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — every panel run now checks a committed two-reference residual/guard baseline, including excluded programs)
+- **State history:** Open (2026-07-25, raised by Claude Opus 5 (1M) @ high during the independent two-eyes verification of MM-BUG-KILN-00107; it is that report's own section-4 remedy, left unimplemented) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — every panel run now checks a committed two-reference residual/guard baseline, including excluded programs) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run by adversarially probing the committed baseline myself, rather than trusting the selftest. `tools/instrument-balance/residual-baseline.csv` carries 256 rows (128 programs x 2 references) with residual, contemporaneous shipped trim and guard-excluded state per row, a blank residual meaning unmeasurable. Driving `residual_baseline_findings` with mutated copies: an unchanged baseline yields 0 findings; a guard-EXCLUDED GM6 drifting +2.0 dB IS reported (the property the bug demanded, and the exact hole MM-BUG-KILN-00108 fell through); an intentional scalar trim change of +3 dB cancels to 0 findings via the `residual + shipped_db` normalization; a real GM56 voice drift of +1.6 dB is caught while a sub-bar +0.4 dB correctly passes; and guard-state flips, measurability changes and missing rows are each detected. I also replayed the KILN-00108 shape verbatim - GM85 regressing 16 dB and self-excluding via the guard - and it produces TWO findings rather than being silently dropped. `derive_trims.py --selftest` (which reports "excluded cross-run drift retained") and `residual_baseline_covers_every_program_and_both_references` are green.)
 
 ## Observation
 

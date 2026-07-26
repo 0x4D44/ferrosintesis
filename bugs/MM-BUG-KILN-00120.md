@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00120 — Windows identity probe reports aliasing for ANY sharing violation on the output path
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — disambiguated self-induced and third-party Windows sharing violations)
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — disambiguated self-induced and third-party Windows sharing violations) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation reproduced VERBATIM on Windows against the fixed release binary, then re-checked for regression. Holding a distinct, pre-existing `held.wav` from a separate process with `[System.IO.FileShare]::None` and running `ferrosintesis in.mid -o held.wav` now yields `error: The process cannot access the file because it is being used by another process. (os error 32)` - the real sharing violation. The false `output ... aliases the input ...; refusing to overwrite the source MIDI` the bug recorded for two entirely different files is gone. The fail-safe behaviour the fix must not weaken is intact: pointing `-o` at the input itself is still refused with the aliasing message, the `.wav`-named-MIDI shape (the MM-BUG-KILN-00097 case) is still refused, a distinct output with no third-party holder still renders normally, and the input MIDI is byte-identical (45 bytes, md5 unchanged) across all four runs. All four `output_safety` integration tests and the six `output.rs` unit tests green.)
 
 ## Observation
 

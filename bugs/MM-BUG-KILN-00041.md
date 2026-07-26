@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00041 — GM126 Applause is a monochromatic 2.4–3.1 kHz sizzle (two fixed bandpasses + over-density), not resolvable claps
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "terrible" — Arthur's ear, code-confirmed) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — replaced the fixed 360-event/s sizzle with sparse, per-clap broadband resonators and corrected the +9.13 dB calibration residual)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "terrible" — Arthur's ear, code-confirmed) → Fixed (2026-07-25, GPT-5.6 Codex on KILN-Windows — replaced the fixed 360-event/s sizzle with sparse, per-clap broadband resonators and corrected the +9.13 dB calibration residual) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run INDEPENDENTLY end-to-end. Rendered GM126 through the release CLI and measured with my own code using the oracle's exact bands: body(200-1200 Hz)/presence(1200-4500 Hz) = 1.221 against a 0.45 floor, air(4500-9000 Hz)/presence = 0.509 against a 0.12 floor, and a 5 ms envelope coefficient of variation of 1.246 against a 0.32 floor. The "monochromatic 2.4-3.1 kHz sizzle with no low-mid body" is gone and the claps are individually resolvable - the primary complaint. On LEVEL I first measured a contradictory ratio and chased it down: the CLI normalizes each file to -18 LUFS independently, so a ratio taken across two separate renders is meaningless. Re-measured with piano and applause inside ONE render (normalization cancels) and `--wet 0`, GM126/GM0 = 0.269 - already below the recorded pre-fix 0.356 despite my hotter early window and the master bus-glue compression that `lessons_learnt.md` warns makes engine-level level measurement unreliable. The authoritative voice-level oracle prints 0.124, inside its 0.10-0.16 band, and both `gm126_applause_*` tests are green.)
 
 ## Observation
 

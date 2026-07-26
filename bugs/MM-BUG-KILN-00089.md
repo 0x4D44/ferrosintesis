@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00089 — The mandolin package still describes the retired two-dynamic bank and omits its legal text
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** mandolin sample package / documentation
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-mandolin/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — aligned the mandolin package with its shipped bank and made every CC0 sample crate carry legal text)
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-mandolin/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — aligned the mandolin package with its shipped bank and made every CC0 sample crate carry legal text) → Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: GPT-5.6 Codex on KILN-Windows), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree at b0b93d9: `cargo fmt --all --check`, `clippy --workspace --exclude amp-lab --all-targets -D warnings`, `clippy -p ferrosintesis --no-default-features --all-targets -D warnings`, `test -p ferrosintesis --no-default-features --locked` (628 passed) and `test --workspace --exclude amp-lab --locked` (731 passed) - 1461 tests, 0 failures. Original observation re-run at source and by packaging. The mandolin README now reads "one dynamic with four ordered round robins per zone"; a repo-wide grep for the stale strings the bug lists - "two dynamic layers", "+29 cents", "254-transient" - returns nothing under `crates/` or `tools/`. `cargo package --list --allow-dirty -p ferrosintesis-samples-mandolin` includes `LICENSE-CC0`, `PROVENANCE.md` and `README.md`, so the rustdoc pointer is no longer dangling and the asset-package contract is met. I audited the legal-text claim rather than trusting the count: `every_cc0_sample_crate_ships_its_legal_text` derives the CC0 set from each manifest's `license` field (not a grep), requires the file to exist AND to appear in `include`, and carries a `checked > 10` non-vacuity floor. All 16 crates declaring `license = "CC0-1.0"` ship `LICENSE-CC0`; the nine without it declare MIT or CC-BY, where it would be wrong. My own first pass grepped for "CC0" in PROVENANCE and over-matched at 24 crates - the manifest-derived predicate is the correct one. All 8 inventory tests green.)
 
 ## Observation
 

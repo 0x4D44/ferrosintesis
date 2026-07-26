@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00068 — ferrosintesis and -sax license fields do not disclose the embedded non-MIT/Apache audio
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / licensing
@@ -26,7 +26,9 @@
   crates.io crate is a distribution-semantics change that can break dependents’ licence
   gates on a version bump. Confirmed while routing: neither `ferrosintesis` nor
   `-samples-sax` sets `publish = false`, so both are publishable and both carry that risk.
-  See "What is needed to unblock" below.)
+  See "What is needed to unblock" below.) → Open (2026-07-26, unblocked by Arthur;
+  approved keeping the parent `ferrosintesis` package at `MIT OR Apache-2.0` and
+  correcting only `ferrosintesis-samples-sax` to `CC-BY-4.0 AND CC-BY-3.0`)
 
 ## Observation
 
@@ -100,3 +102,36 @@ added packaged per-crate provenance. This is metadata accuracy alone.
 - Deliberately raised rather than fixed inside KILN-00060: that bug's scope was the
   attribution *guide*, and silently changing a published crate's licence expression is
   not a call to make unattended.
+
+## Decision and autonomous implementation brief (2026-07-26)
+
+Arthur approved the split decision:
+
+1. **The parent `ferrosintesis` declaration stays `MIT OR Apache-2.0`.** Its manifest
+   describes that package's own code and packaged files. The sample banks are separately
+   packaged dependencies with their own licence metadata, so copying every dependency
+   licence into the parent expression would misstate which terms govern the parent
+   package. The consolidated `NOTICE` remains the human-readable distribution guide.
+2. **Change `ferrosintesis-samples-sax` to
+   `license = "CC-BY-4.0 AND CC-BY-3.0"`.** That package contains the CC BY 4.0
+   MTG.SoloSax derivative and underlying CC BY 3.0 good-sounds recordings. `AND`
+   accurately states that a distributor must comply with both attribution layers.
+
+This leaves a narrow, autonomously decidable implementation:
+
+- Change only the sax package's declared licence expression; do not broaden the parent
+  package's expression.
+- Keep the sax `NOTICE` and `PROVENANCE.md` packaged. They already identify both licence
+  layers and their sources; adjust related human-readable metadata only if necessary to
+  keep it consistent with the corrected declaration.
+- Preserve the licensing oracle's fail-closed behaviour. If its current simple-identifier
+  matching cannot understand a compound SPDX expression, teach it to require every `AND`
+  operand rather than weakening or bypassing the check. Add a focused regression proving
+  that omitting either `CC-BY-4.0` or `CC-BY-3.0` from the sax evidence fails.
+- Verify through `cargo metadata` that the sax package reports exactly
+  `CC-BY-4.0 AND CC-BY-3.0` and the parent still reports exactly
+  `MIT OR Apache-2.0`, then run the focused licensing tests.
+
+No dependency or broader licence-policy change is approved. Leave this bug **Fixed**, not
+Closed, after the manifest change and regression evidence land so an independent verifier
+can confirm both package declarations and both attribution layers.

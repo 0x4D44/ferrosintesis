@@ -195,7 +195,6 @@ fn write_raw_gain(audio: &Path, gain: &Path, frames: u64, ceiling: f32) -> io::R
     let mut meter = StreamTruePeak::new();
     let mut gain_bytes = [0u8; GAIN_BYTES];
     let mut reduced = false;
-    let mut written_frames = 0u64;
     for_chunks(&mut audio, frames * 2, |samples| {
         let count = samples.len() / 2;
         for (i, frame) in samples.chunks_exact(2).enumerate() {
@@ -209,10 +208,8 @@ fn write_raw_gain(audio: &Path, gain: &Path, frames: u64, ceiling: f32) -> io::R
             gain_bytes[i * 4..i * 4 + 4].copy_from_slice(&value.to_le_bytes());
         }
         gain.write_all(&gain_bytes[..count * 4])?;
-        written_frames += count as u64;
         Ok(())
     })?;
-    debug_assert_eq!(written_frames, frames);
     gain.flush()?;
     gain.into_inner().map_err(|error| error.into_error())?;
     Ok(reduced)

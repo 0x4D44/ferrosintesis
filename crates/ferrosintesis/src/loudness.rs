@@ -367,6 +367,7 @@ struct StreamTruePeakChannel {
     history: [f32; TP_TAPS_PER_PHASE],
     next: usize,
     len: usize,
+    #[cfg(test)]
     peak: f32,
 }
 
@@ -384,7 +385,10 @@ impl StreamTruePeakChannel {
             }
             peak = peak.max(acc.abs());
         }
-        self.peak = self.peak.max(peak);
+        #[cfg(test)]
+        {
+            self.peak = self.peak.max(peak);
+        }
         self.next = (self.next + 1) % TP_TAPS_PER_PHASE;
         peak
     }

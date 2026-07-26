@@ -310,6 +310,28 @@ mod tests {
     }
 
     #[test]
+    fn failed_final_rename_cleans_scratch_and_preserves_destination() {
+        let dir = TestDir::new("rename-failure");
+        let output = dir.join("song.wav");
+        fs::create_dir(&output).unwrap();
+        let song = parse(&file_from_track(&[])).unwrap();
+        let opt = Options::default()
+            .with_sample_rate(8_000)
+            .with_samples(false)
+            .with_tail(0.0);
+
+        render_to_wav(&song, &opt, &output, Normalization::loudness(-18.0, -1.0))
+            .expect_err("a completed WAV cannot rename over a directory");
+
+        assert!(output.is_dir(), "failed render replaced the destination");
+        assert_eq!(
+            fs::read_dir(&dir.0).unwrap().count(),
+            1,
+            "failed render leaked sibling scratch"
+        );
+    }
+
+    #[test]
     fn malformed_note_keys_render_as_their_seven_bit_values() {
         let opt = Options::default().with_samples(false).with_tail(0.2);
         let cases: [(&str, &[u8], &[u8]); 2] = [

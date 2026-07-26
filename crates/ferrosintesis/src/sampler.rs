@@ -956,10 +956,11 @@ pub fn piano_bank(vel: u8, rr2: bool) -> &'static [Zone] {
 }
 
 // GM 0 Acoustic Grand — Salamander Grand Piano V3 (Yamaha C5), CC BY 3.0, in the
-// ferrosintesis-samples-grand crate. A real concert grand, distinct from the CC0
-// VSCO upright that voices GM 1/3. Roots measured by autocorrelation in prepare.py
-// (F# zones stand in for the G positions — the nearest sampled pitch). RR2 is an
-// adjacent-higher velocity layer, peak-matched, so repeated notes vary.
+// ferrosintesis-samples-grand crate. Salamander is GM 0 CC0=2.
+// B1 upright is GM 0 CC0=0 default; the VSCO upright is GM 0 CC0=1.
+// Roots measured by autocorrelation in prepare.py (F# zones stand in for the G
+// positions — the nearest sampled pitch). RR2 is an adjacent-higher velocity
+// layer, peak-matched, so repeated notes vary.
 fn grand_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {

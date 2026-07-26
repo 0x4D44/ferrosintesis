@@ -1393,6 +1393,44 @@ mod tests {
                 }
             }
         }
+
+        // The generator and sampler identity blocks sit outside the packaged
+        // crate documents above. Derive their current slots from the same routing
+        // table so another piano re-order cannot leave stale program claims here.
+        let slot = |name: &str| {
+            crate::voices::GM0_SOURCES
+                .iter()
+                .position(|src| src.name == name)
+                .unwrap_or_else(|| panic!("GM0_SOURCES has no {name}"))
+        };
+        let (b1, vsco, salamander) = (slot("B1 upright"), slot("VSCO upright"), slot("Salamander"));
+        let read_source = |rel: &str| {
+            let p = root.join(rel);
+            std::fs::read_to_string(&p)
+                .unwrap_or_else(|e| panic!("cannot read {}: {e}", p.display()))
+        };
+        let prepare = read_source("tools/ferrosintesis-samples/prepare.py");
+        let prepare_grand = prepare
+            .split("# GM 0 Acoustic Grand — Salamander")
+            .nth(1)
+            .and_then(|tail| tail.split("SALAMANDER_ARCHIVE_URL").next())
+            .expect("prepare.py has no Salamander identity block");
+        let prepare_grand = norm(prepare_grand);
+        assert!(prepare_grand.contains(&format!("Salamander is GM 0 CC0={salamander}")));
+        assert!(prepare_grand.contains(&format!("VSCO upright is GM 0 CC0={vsco}")));
+
+        let sampler = read_source("crates/ferrosintesis/src/sampler.rs");
+        let sampler_grand = sampler
+            .split("// GM 0 Acoustic Grand — Salamander")
+            .nth(1)
+            .and_then(|tail| tail.split("fn grand_pp").next())
+            .expect("sampler.rs has no Salamander identity block");
+        let sampler_grand = norm(sampler_grand);
+        assert!(sampler_grand.contains(&format!("Salamander is GM 0 CC0={salamander}")));
+        assert!(sampler_grand.contains(&format!("VSCO upright is GM 0 CC0={vsco}")));
+        assert!(sampler_grand.contains(&format!("B1 upright is GM 0 CC0={b1} default")));
+        assert!(!prepare_grand.contains("GM 1/3"));
+        assert!(!sampler_grand.contains("GM 1/3"));
     }
 
     /// Render an alt-factory strings voice (`make` → `strings` for 48–51).

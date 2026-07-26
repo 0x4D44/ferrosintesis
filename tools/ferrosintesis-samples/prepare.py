@@ -651,9 +651,9 @@ BAGPIPE_MAX_WRAP_DB = -14.0
 BAGPIPE_TARGET_RMS = 0.18
 
 # GM 0 Acoustic Grand — Salamander Grand Piano V3 (a Yamaha C5 concert grand, AB
-# pair), by Alexander Holm, CC BY 3.0. Unlike the CC0 VSCO *upright* that voices
-# GM 1/3, this is a real grand, so GM 0 becomes its own instrument instead of the
-# upright with a treble shelf. Distributed as a .tar.bz2 — stdlib `tarfile` reads
+# pair), by Alexander Holm, CC BY 3.0. Salamander is GM 0 CC0=2.
+# The VSCO upright is GM 0 CC0=1; unlike it, Salamander is a real grand.
+# Distributed as a .tar.bz2 — stdlib `tarfile` reads
 # bz2 directly (no 7z, unlike the LZMA FreePats archives), so this gets its own
 # extraction helper while sharing the pinned-archive cache verifier. 16-bit STEREO 44.1 kHz
 # (downmixed to mono like every other family), sampled every minor third across 16

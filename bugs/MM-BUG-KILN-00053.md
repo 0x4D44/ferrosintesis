@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00053 — GM49 Slow Strings does not swell at low keys: the SawStack `strings()` MODEL's low-register envelope falls (body/onset ~0.76-0.79) where both references rise
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
 - **Raised:** 2026-07-23
-- **Owner:** Arthur
-- **Owner role:** human
+- **Owner:** -
+- **Owner role:** -
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) while fixing MM-BUG-KILN-00046 — the sampler-seam half of the same symptom; this is the model-envelope half) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required low-register envelope revoicing needs Arthur to choose the audible swell depth and timing against the two references)
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) while fixing MM-BUG-KILN-00046 — the sampler-seam half of the same symptom; this is the model-envelope half) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required low-register envelope revoicing needs Arthur to choose the audible swell depth and timing against the two references) → Open (2026-07-26, Arthur approved a reference-like low-register amplitude swell, tapering into the existing key-55 anchor)
 
 ## Observation
 
@@ -102,3 +102,34 @@ Those four answers are enough for a Build pass to select one envelope curve,
 extend `la_strings_slow_swell_not_inverted` through the low register, and return
 a bounded candidate A/B for final listening. No objective test can choose the
 depth and timing without silently making this product decision.
+
+### Decision and implementation contract — 2026-07-26
+
+Arthur approved this target:
+
+- At key 48, the 0.8–1.2 s body should be **+6 to +8 dB** above the
+  0–0.4 s onset (RMS ratio approximately 2.0–2.5), at velocities 72 and 110.
+- The body should arrive around **1.0 s**. Avoid a delayed step or an attack so
+  slow that the note still feels absent at 1.2 s.
+- Taper the additional low-register swell smoothly through key 52 into key
+  55's existing mild rise. Treat key 55 as the unchanged transition anchor.
+- Both model-only and full sampled GM49 must rise in the same direction after
+  the MM-BUG-KILN-00046 sampler-seam correction.
+
+Implement the swell in the model's amplitude-envelope path. First pin down why
+the low-frequency oscillator/filter interaction defeats the current
+`vel_attack(0.45, vel)` shape; do not simulate a swell by brightening the filter
+while level still falls. Keep GM48 Strings and the existing mid/high GM49
+envelope unchanged.
+
+Extend `la_strings_slow_swell_not_inverted` to cover keys 48, 52, and 55 at
+velocities 72 and 110, across seeds 5, 21, and 99. The oracle must check the
+approved key-48 band, a smooth register taper without a key-52 discontinuity,
+the preserved key-55 anchor, and consistent model-only/full-voice direction.
+Also retain sample/model seam parity, determinism, finite output, and existing
+strings-family controls.
+
+After focused tests pass, run the required full catalog render diff and create
+body-level-matched trunk-versus-candidate A/B renders for the audition matrix.
+Land the implementation as **Fixed**, not Closed, for independent verification
+and final perceptual sign-off.

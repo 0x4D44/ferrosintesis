@@ -15409,6 +15409,38 @@ mod tests {
         key_freq(key) * harm
     }
 
+    /// Rendered, settled Karplus-Strong decay rate in dB/s.
+    ///
+    /// Energy is accumulated across the preset's three standard oracle seeds
+    /// before taking the logarithm, so per-note t60/brightness jitter cannot
+    /// decide a rate. The narrow band follows the requested harmonic and avoids
+    /// conflating decay with the loss of unrelated upper partials.
+    fn rendered_ks_decay_rate(p: &PluckPreset, key: u8, vel: u8, harm: f32) -> f32 {
+        let sr = 44100.0;
+        let f0 = key_freq(key) * harm;
+        let (mut e_early, mut e_late) = (0.0f32, 0.0f32);
+        for &seed in &[5u32, 21, 99] {
+            let mut v = Pluck::new(p, key, vel, sr, seed);
+            let mut buf = vec![0f32; (1.1 * sr) as usize];
+            v.render(&mut buf);
+            let e = |a: f32, b: f32| {
+                let r = crate::testutil::band_rms(
+                    &buf[(a * sr) as usize..(b * sr) as usize],
+                    sr,
+                    f0,
+                    2.0,
+                );
+                r * r
+            };
+            e_early += e(0.45, 0.60);
+            e_late += e(0.90, 1.05);
+        }
+        20.0 * (e_late.sqrt() / e_early.sqrt().max(1e-12))
+            .max(1e-12)
+            .log10()
+            / 0.45
+    }
+
     /// KILN-00042 closed-form oracle — the register TILT the law produces.
     ///
     /// Asserts the one property of the decay law that is NOT self-fulfilling in
@@ -15418,11 +15450,12 @@ mod tests {
     /// by construction, so any assertion about that *level* would merely restate
     /// the law — the emergent register TILT is the part with teeth here. Convergence
     /// of instrument timbres is checked by the RENDERED
-    /// `damper_hold_preserves_instrument_identity`; this stays closed-form because a
-    /// rendered decay-RATE ratio is brittle (DRIVE reads through the engine's `Drive`
-    /// saturator — model/meas −11x vs 1.06 on linear presets; MUTED/SHAMISEN/BANJO
-    /// fall to the metric floor; momentary loudness conflates partials and the second
-    /// polarization per preset).
+    /// `damper_hold_preserves_instrument_identity`. This exhaustive preset sweep stays
+    /// closed-form because one rendered decay-RATE metric is brittle across every arm
+    /// (DRIVE reads through the engine's `Drive` saturator; MUTED/SHAMISEN/BANJO fall
+    /// to the metric floor; momentary loudness conflates partials and the second
+    /// polarization). `rendered_ks_decay_tilt_holds_across_register` separately pins
+    /// the actual `Pluck::new` wiring on one stable, linear Derived preset.
     #[test]
     fn ks_decay_law_holds_across_register() {
         let sr = 44100.0f32;
@@ -15478,6 +15511,44 @@ mod tests {
             checked >= 15,
             "oracle covered only {checked} Derived presets — it has gone vacuous \
              (presets silently flipped to Off drop out of the tilt guarantee)"
+        );
+    }
+
+    /// MM-BUG-KILN-00052: rendered-path twin of
+    /// `ks_decay_law_holds_across_register`. The closed-form oracle proves the
+    /// authored law, while this one proves `Pluck::new` actually wires that law
+    /// into the running loop.
+    #[test]
+    fn rendered_ks_decay_tilt_holds_across_register() {
+        let off = PluckPreset {
+            damper_hold: DamperHold::Off,
+            ..NYLON
+        };
+        let rates = |p: &PluckPreset| {
+            (
+                rendered_ks_decay_rate(p, 48, 100, 1.0).abs(),
+                rendered_ks_decay_rate(p, 76, 100, 1.0).abs(),
+            )
+        };
+        let (bottom, top) = rates(&NYLON);
+        let ratio = top / bottom.max(1e-6);
+        assert!(
+            (1.0..=3.5).contains(&ratio),
+            "NYLON's rendered decay tilts {ratio:.2}x from key 48 ({bottom:.1} dB/s) \
+             to key 76 ({top:.1} dB/s); outside the reference-bracketed 1.0-3.5x \
+             range, so the Derived hold is missing or over-correcting the rendered path"
+        );
+
+        // Non-vacuity / fail-first control. With the hold forced Off, the exact
+        // same rendered estimator reads 6.31x today (13.4 -> 84.3 dB/s), well
+        // beyond the 3.5x ceiling. If this does not stay decisively red, this
+        // register span no longer proves that a dropped hold would be caught.
+        let (off_bottom, off_top) = rates(&off);
+        let off_ratio = off_top / off_bottom.max(1e-6);
+        assert!(
+            off_ratio >= 5.25,
+            "negative control lost its margin: DamperHold::Off tilts only {off_ratio:.2}x \
+             from key 48 ({off_bottom:.1} dB/s) to key 76 ({off_top:.1} dB/s)"
         );
     }
 
@@ -18923,13 +18994,12 @@ mod tests {
         );
     }
 
-    /// KILN-00048 / KILN-00052: RENDERED decay-rate velocity invariance. The
+    /// KILN-00048: RENDERED decay-rate velocity invariance. The
     /// velocity/damper decouple makes a plucked string's decay RATE a function
     /// of pitch and `t60` alone, never of pluck strength.
-    /// `ks_decay_law_holds_across_register` guards the corner MATH (closed form);
-    /// THIS guards the rendered loop path (loop_gain, coupling, the whole KS
-    /// loop) end-to-end, so a rewiring that re-coupled velocity to decay trips a
-    /// test — which is the KILN-00052 residual the two-eyes closure asked for.
+    /// `rendered_ks_decay_tilt_holds_across_register` guards the register law's
+    /// rendered wiring; THIS guards velocity decoupling through that same loop
+    /// path (loop_gain, coupling, the whole KS loop) end-to-end.
     ///
     /// Decay is measured in the SETTLED regime (both windows past 0.45 s, so the
     /// front-loaded early cliff is excluded), band-limited to f0 (and 3·f0) to
@@ -18943,7 +19013,6 @@ mod tests {
     /// 11.9 dB/s (vel 127) vs 20.8 (vel 32) — a 1.75× f0-band spread.
     #[test]
     fn ks_decay_rate_is_velocity_invariant() {
-        let sr = 44100.0;
         let strip = |base: &PluckPreset| PluckPreset {
             sub: 0.0,
             kick: 0.0,
@@ -18959,36 +19028,12 @@ mod tests {
             ("KOTO", KOTO, 60),
             ("SHAMISEN", strip(&SHAMISEN), 60),
         ];
-        let rate = |p: &PluckPreset, key: u8, vel: u8, harm: f32| -> f32 {
-            let f0 = key_freq(key) * harm;
-            let (mut e_early, mut e_late) = (0.0f32, 0.0f32);
-            for &seed in &[5u32, 21, 99] {
-                let mut v = Pluck::new(p, key, vel, sr, seed);
-                let mut buf = vec![0f32; (1.1 * sr) as usize];
-                v.render(&mut buf);
-                let e = |a: f32, b: f32| {
-                    let r = crate::testutil::band_rms(
-                        &buf[(a * sr) as usize..(b * sr) as usize],
-                        sr,
-                        f0,
-                        2.0,
-                    );
-                    r * r
-                };
-                e_early += e(0.45, 0.60);
-                e_late += e(0.90, 1.05);
-            }
-            20.0 * (e_late.sqrt() / e_early.sqrt().max(1e-12))
-                .max(1e-12)
-                .log10()
-                / 0.45
-        };
         for (name, p, key) in &cases {
             for &(harm, k_tol, floor) in &[(1.0f32, 0.15f32, 1.5f32), (3.0, 0.20, 2.5)] {
-                let r100 = rate(p, *key, 100, harm);
+                let r100 = rendered_ks_decay_rate(p, *key, 100, harm);
                 let tol = (k_tol * r100.abs()).max(floor);
                 for &vel in &[32u8, 64, 127] {
-                    let rv = rate(p, *key, vel, harm);
+                    let rv = rendered_ks_decay_rate(p, *key, vel, harm);
                     assert!(
                         (rv - r100).abs() <= tol,
                         "{name} key {key} band×{harm}: decay {rv:.1} dB/s @vel {vel} vs \

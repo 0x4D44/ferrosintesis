@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00052 — the KILN-00042 register-tilt oracle checks the closed-form corner helper, not the rendered path, so a rewiring that drops the damper hold in `Pluck::new` would pass unguarded
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) from the independent two-eyes closure of KILN-00042 by gpt-5.6-sol — a genuine test-coverage gap, not a defect in shipped behaviour)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) from the independent two-eyes closure of KILN-00042 by gpt-5.6-sol — a genuine test-coverage gap, not a defect in shipped behaviour) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — added a rendered register-tilt oracle with a forced-off non-vacuity control)
 
 ## Observation
 
@@ -69,3 +69,33 @@ a preset that is `Derived`.
   *coverage*, not in output. Landing it should not move any render (render-diff clean).
 - Related: KILN-00048/00049/00050 (the KILN-00042 follow-up couplings). This one is
   orthogonal — it hardens the guard rather than extending the fix.
+
+## Resolution — 2026-07-26
+
+The settled, seed-averaged f0-band decay estimator previously local to the
+velocity-invariance test is now a shared test helper. The new
+`rendered_ks_decay_tilt_holds_across_register` oracle renders the shipped
+`NYLON` preset at keys 48 and 76 through `Pluck::new`, then bounds the measured
+high/low decay-rate tilt to 1.0–3.5×.
+
+The same test renders an otherwise identical `DamperHold::Off` twin and requires
+its tilt to remain at least 5.25×. That negative control proves the chosen span
+would turn red if the Derived branch stopped reaching the loop; the test cannot
+silently become vacuous as the voicing evolves.
+
+## Verification — 2026-07-26
+
+- Fail-first with the forced-off twin standing in for the shipped preset read
+  key 48 at 13.4 dB/s and key 72 at 47.5 dB/s, failing at 3.55×.
+- Register-span scoping selected the more robust key 76: the shipped Derived
+  path reads `13.4 → 20.4 dB/s` (1.52×), while the Off control reads
+  `13.4 → 84.3 dB/s` (6.31×).
+- The rendered tilt, closed-form tilt, and rendered velocity-invariance tests
+  pass together.
+- The complete default suite passed (727 tests, 27 ignored), the model-only
+  suite passed (626 tests, 22 ignored), and both doc-test sets passed (4 each).
+- Strict workspace clippy and true model-only clippy passed with warnings
+  denied; formatting and `git diff --check` passed.
+- Fresh release binaries from exact baseline `4831afe`, full 124-MIDI inventory
+  at 11.025 kHz: all 124 stayed byte-identical, with zero contamination and zero
+  missed paths, confirming the test-only change does not alter shipped output.

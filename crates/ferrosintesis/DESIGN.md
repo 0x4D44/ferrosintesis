@@ -69,7 +69,11 @@ organ (default and CC0=1 are the Leslie drawbar), the 29/30 sustaining
 DRIVE_LEAD, and the pre-sampling pure models for the sampled-by-default programs
 (clavinet 7, bagpipe 109, guitars 24–25, brass 56–61, reeds 68–71, EP 4,
 celesta 8, music box 10, vibraphone 11, dulcimer 15, basses 32–35); CC0=127
-declares an XG drum kit. On GM 14 the alt bank is a **tam-tam / gong ageng** — a
+declares an XG drum kit. GM 0 is the one exception to "non-zero selects an
+alt-bank": its CC0 indexes a table of six piano recordings with CC0=0 as the
+default (the B1 upright), so every value including zero picks a specific
+recording rather than falling back to a shared default voice. On GM 14 the
+alt bank is a **tam-tam / gong ageng** — a
 deep 65–124 Hz strike whose shimmer partials bloom in over 0.3–0.7 s and ring
 6–15 s under a short bright splash — while the default bank keeps tubular
 bells; CC0=2 with samples available swaps in the recorded gong-ageng one-shot,

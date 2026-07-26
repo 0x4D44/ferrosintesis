@@ -2,9 +2,9 @@
 
 Embedded grand-piano attack/body bank for ferrosintesis: 54 mono 16-bit 44.1 kHz
 WAVs (9 zones C2–C6 × 3 dynamics × 2 round robins), exposed as raw WAV bytes
-(`get`). This is the sample source for the **GM 0 Acoustic Grand** voice — a real
-Yamaha C5 concert grand, distinct from the CC0 VSCO *upright* that voices GM 1
-(Bright) and GM 3 (Honky-tonk).
+(`get`). This is the sample source for the **GM 0 Acoustic Grand alternate**
+(CC0=2) voice — a real Yamaha C5 concert grand, distinct from the CC0 VSCO
+*upright* that is the GM 0 CC0=1 alternate.
 
 Unlike the core/orchestral crates, this bank is **CC BY 3.0**, not CC0: the audio
 is "Salamander Grand Piano V3" by Alexander Holm. The required attribution ships

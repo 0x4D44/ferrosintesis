@@ -135,6 +135,27 @@ The kalimba's lamella bank lives under GM 108, grouped with the Modal chromatic-
 The rule throughout: an unauthored controller is inert. A channel that never
 sends one renders exactly as if the feature did not exist.
 
+### GM 0 piano recordings (CC0 bank select)
+
+Bank-select MSB picks which recording voices GM 0 Acoustic Grand. Bank 0 is what
+a channel that never sends CC0 hears. Each recording carries its own onset
+calibration, so a slot's number never changes how its bank was baked.
+
+| selector | recording |
+|----------|-----------|
+| CC0=0 | B1 upright |
+| CC0=1 | VSCO upright |
+| CC0=2 | Salamander |
+| CC0=3 | Steinway B |
+| CC0=4 | Headroom |
+| CC0=5 | dark-Salamander |
+
+Bank 0 became **our own Yamaha B1 upright** on 2026.07.26; the previous line-up
+shifted down one slot intact, so the VSCO upright that used to be the default is
+now bank 1. A CC0 value past the end plays the model alone. This table is checked
+against the code by `gm0_cc0_table_in_the_readme_matches_the_source`, so it cannot
+drift from the shipped routing the way the crate docs once did.
+
 ### Score-authored amp (driven guitars 29/30)
 
 A file can shape the driven-guitar amp and cabinet per channel, so two channels
@@ -233,8 +254,8 @@ bank in or out here, never who happens to own it.
 ### The CC0 banks
 
 The remaining fifteen need no attribution: **our own Yamaha B1 acoustic upright**
-(the GM 0 CC0=5 alternate — Arthur's instrument, performance and recording, dedicated
-to the public domain), the VSCO 2 Community Edition orchestral
+(the GM 0 default recording since 2026.07.26 — Arthur's instrument, performance and
+recording, dedicated to the public domain), the VSCO 2 Community Edition orchestral
 library (violin, flutes, brass, reeds, string sections), the FreePats Spanish
 classical guitar bank, **our own recordings of an Eastman E1D steel-string acoustic**
 (the GM 25 default bank in two articulations, picked and fingerstyle — first-party and

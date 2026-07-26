@@ -1,9 +1,9 @@
 # ferrosintesis-samples-ydp-grand
 
 Embedded **CC BY 3.0** FreePats YDP Grand (Yamaha Disklavier Pro) samples — the
-**brighter** grand in the GM0 audition, with a harder, more present hammer strike
-than the default Salamander C5. Voices a **GM 0 Acoustic Grand alternate** (CC0
-bank 7) in [ferrosintesis](https://github.com/0x4D44/ferrosintesis).
+**brighter** grand in the GM 1 audition, with a harder, more present hammer
+strike than the GM 1 default (VCSL Kawai). Voices the **GM 1 Bright Acoustic
+Piano alternate** (CC0=1) in [ferrosintesis](https://github.com/0x4D44/ferrosintesis).
 
 9 pitch zones (C2–C6) × single velocity = mono 16-bit 44.1 kHz WAVs, embedded via
 `include_bytes!`. Extracted from the SF2's middle velocity layer; dynamics come

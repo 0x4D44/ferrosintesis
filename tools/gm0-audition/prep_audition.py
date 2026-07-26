@@ -4,7 +4,7 @@ GM0 alternate bank (CC0 = bank select MSB) and optionally trim to the first N
 seconds.
 
 The synth selects a GM0 alternate grand via CC0 (Bank Select MSB) on the channel:
-CC0=0 -> default Salamander, CC0=1..N -> the alternate banks in altbank::make.
+CC0=0 -> default B1 upright, CC0=1..N -> the alternate banks in altbank::make.
 This script injects one `CC0=<bank>` event at tick 0 on the target channel(s) and
 (optionally) truncates the file at a tick, appending note-offs for anything still
 sounding so a trimmed excerpt ends cleanly.
@@ -15,7 +15,7 @@ status) for simplicity.
     # Tubular Bells opening, first ~35 s, piano (ch 0) on alt bank 2:
     python prep_audition.py in.mid -o out.mid --bank 2 --channel 0 --max-seconds 35
 
-    # bank 0 (Salamander default) is a no-op inject but still trims:
+    # bank 0 (B1 upright default) is a no-op inject but still trims:
     python prep_audition.py in.mid -o out.mid --bank 0 --max-seconds 35
 """
 import struct

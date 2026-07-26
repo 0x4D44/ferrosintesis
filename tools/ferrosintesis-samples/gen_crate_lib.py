@@ -9,7 +9,7 @@ on disk. FILE_COUNT and EXPECTED_BYTES are computed from the directory, so the
 tests are self-consistent by construction.
 
     python gen_crate_lib.py ../../crates/ferrosintesis-samples-vcsl-steinway \
-        --doc "Embedded CC0 VCSL Steinway-B grand samples (GM0 alternate bank 1)."
+        --doc "Embedded CC0 VCSL Steinway-B grand samples (GM0 alternate bank 3)."
 """
 import os
 import subprocess

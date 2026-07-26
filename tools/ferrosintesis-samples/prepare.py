@@ -684,7 +684,7 @@ GRAND_SOURCES = {
 }
 
 # --- GM0 alternate grand banks (CC0-selectable audition; see the 2026.07.18 PLN) ---
-# VCSL "Grand Piano, Steinway B" (CC0) -> GM0 alt bank 1. A warm, intimate vintage
+# VCSL "Grand Piano, Steinway B" (CC0) -> GM0 CC0=3. A warm, intimate vintage
 # Steinway, the tonal opposite of the bright Salamander C5. Whole-tone sampled, so
 # the grand's C/F# zone pitches are all present; labels are TRUE sounding pitch
 # (probed: C2=65.7, C4=262, C6=1050 Hz -> NOT octave-mislabelled like the VCSL
@@ -708,7 +708,8 @@ STEINWAYB_SOURCES = {
     for rr, v in (("", v_rr1), ("_rr2", v_rr2))
 }
 
-# VCSL "Grand Piano, Kawai" (CC0) -> GM0 alt bank 2. A darker, rounder vintage grand.
+# VCSL "Grand Piano, Kawai" (CC0) -> the GM 1 Bright Acoustic default (not GM0 at
+# all). A darker, rounder vintage grand.
 # CAUTION: Kawai labels sit ONE OCTAVE BELOW sounding pitch (probed: label C2 -> 131 Hz,
 # label C4 -> 525 Hz, label A#3 -> 469 Hz) -- the VCSL keyboard octave trap, UNLIKE the
 # Steinway B. So each dest zone (named by SOUNDING pitch) maps to the source file
@@ -736,7 +737,7 @@ KAWAI_SOURCES = {
     for rr, v in (("", v_rr1), ("_rr2", v_rr2))
 }
 
-# Headroom / Intimate Piano (Bengt Nilsson, Yamaha C3), CC-BY 4.0 -> GM0 alt bank 3.
+# Headroom / Intimate Piano (Bengt Nilsson, Yamaha C3), CC-BY 4.0 -> GM0 CC0=4.
 # A warm, intimate close-mic C3 studio grand. Distributed as FLAC (ffmpeg-transcoded,
 # same precedent as the banjo/sax/drumkit). MIDI-number labels ARE sounding pitch
 # (probed: 36->65 Hz C2, 60->262 Hz C4, 84->1050 Hz C6) -- no octave trap. 5 velocity
@@ -777,7 +778,7 @@ MUSESCORE_SF3_URL = (
 MUSESCORE_SF3_SHA256 = (
     "5ea2375e8bd7d8e71def1036978c1621e85b66934169b6a2744b27b9b3c2d99c"
 )
-# GM0 alt bank 4: the FULLER MuseScore_General soundfont's grand (MIT, S. Christian
+# GM 1 CC0=2: the FULLER MuseScore_General soundfont's grand (MIT, S. Christian
 # Collins), distinct from MS Basic above. Its "Grand Piano" preset (0) is a
 # velocity-layered multisample across "Piano MF-low/high" + "Piano FF-low/high"
 # instruments; we extract the MF tier as a dense single-velocity multisample (the LA
@@ -789,7 +790,7 @@ MUSESCORE_GENERAL_URL = (
 MUSESCORE_GENERAL_SHA256 = (
     "5b85b6c2c61d10b2b91cddd41efcce7b25cd31c8271d511c73afafbef20b6fa3"
 )
-# GM0 alt bank 7: FreePats YDP Grand (Zenph Yamaha Disklavier Pro / OLPC), CC-BY 3.0 —
+# GM 1 CC0=1: FreePats YDP Grand (Zenph Yamaha Disklavier Pro / OLPC), CC-BY 3.0 —
 # a BRIGHTER, harder-onset Yamaha grand. A .tar.bz2 holding a real SF2 (raw 16-bit PCM,
 # NOT SF3/Ogg). One preset "Grand Piano" (program 0) with 5 velocity-layer instruments
 # "piano layer 1..5"; we extract the middle layer ("piano layer 3") as a single-velocity
@@ -802,7 +803,7 @@ YDP_SHA256 = "d243dc3e182a60df2a16e92828c1821cf3eb5748b45e2e2bdcfa9cf7af056026"
 # C/F# every minor third, C2..C6 (MIDI) — same zone grid as the other grands.
 YDP_ZONE_MIDI = [36, 42, 48, 54, 60, 66, 72, 78, 84]
 
-# GM0 alt bank 8: FreePats Honky-tonk Piano (Frances Bacon player piano, Piotr Barcz),
+# The GM 3 default: FreePats Honky-tonk Piano (Frances Bacon player piano, Piotr Barcz),
 # CC0 — a DISTINCTIVE detuned/tack/jangly attack no other bank has. A .7z of per-note
 # FLAC (single velocity); extracted via 7z (as the guitar/bagpipe), then ffmpeg-decoded.
 HONKYTONK_URL = (
@@ -1117,7 +1118,7 @@ FAMILY_PACKAGE = {
     # First-party CC0 Eastman E1D guitar banks (GM 25 alternates).
     "eastpick": "ferrosintesis-samples-orchestral2",
     "eastpluck": "ferrosintesis-samples-orchestral2",
-    # GM0 alt bank 5: Arthur's own Yamaha B1 upright. `_bake_b1upright` direct-writes
+    # The GM 0 default (CC0=0): Arthur's own Yamaha B1 upright. `_bake_b1upright` direct-writes
     # into this crate (like ydp/honkytonk), so this entry is belt-and-braces — the
     # key is the OUTPUT filename prefix (`b1_normal_C3.wav`.split("_", 1)[0] == "b1"),
     # not the `--only=b1upright` family selector, so `sample_output_path` routes a
@@ -2351,7 +2352,7 @@ def ensure_musescore_general_sf3(src):
 
 def _bake_musescore_grand(src):
     """Bake the MuseScore_General grand's MF tier as a dense single-velocity
-    multisample (GM0 alt bank 4). Resolves 'Piano MF-low' + 'Piano MF-high' by NAME,
+    multisample (GM 1 CC0=2). Resolves 'Piano MF-low' + 'Piano MF-high' by NAME,
     takes one sample per distinct originalPitch in the C2..C6+ range, decodes each Ogg
     (ffmpeg), keeps 1.5 s of body (`trim_to_onset`), and re-measures the root in a
     tight window. Writes `musescoregrand_<pitch>.wav`; returns print rows. Single
@@ -2456,7 +2457,7 @@ def ensure_ydp_sf2(src):
 
 def _bake_ydp_grand(src):
     """Bake the YDP Grand's middle velocity layer as a single-velocity multisample
-    (GM0 alt bank 7). SF2 raw-PCM: resolves the "piano layer 3" instrument by name,
+    (GM 1 CC0=1). SF2 raw-PCM: resolves the "piano layer 3" instrument by name,
     extracts the C/F# minor-third zones (`YDP_ZONE_MIDI`) straight from the `smpl`
     chunk (shdr start/end are FRAME offsets — no ffmpeg), keeps 1.5 s of body, and
     re-measures each root. Writes `ydpgrand_<pitch>.wav`; returns print rows."""
@@ -2532,7 +2533,7 @@ def _bake_ydp_grand(src):
 
 def _bake_honkytonk(src):
     """Bake the FreePats honky-tonk player piano as a single-velocity multisample
-    (GM0 alt bank 8). 7z-extract the per-note FLACs (as the guitar/bagpipe archives),
+    (the GM 3 default). 7z-extract the per-note FLACs (as the guitar/bagpipe archives),
     ffmpeg-decode each, keep 1.5 s of body, and measure the (detuned) root in a tight
     window. Writes `honkytonk_<note>.wav`; returns print rows."""
     member_map = {f"htsrc_{n}.flac": f"{_HT_MEMBER_DIR}/{n}.flac"
@@ -2563,7 +2564,7 @@ def _bake_honkytonk(src):
     return rows
 
 
-# GM 0 alt bank 5: Arthur's own Yamaha B1 acoustic upright, recorded on a Tascam
+# The GM 0 default (CC0=0): Arthur's own Yamaha B1 acoustic upright, recorded on a Tascam
 # DR-05. The reproducible source of record is the committed Opus archive under
 # `samples/b1-upright/`; the raw 24-bit takes are far too large to commit. Each
 # take is decoded to a temp WAV named for the b1-slice TAKES table, sliced into
@@ -2590,7 +2591,7 @@ B1_ROOT_FALLBACK_CENTS = 100.0
 
 
 def _bake_b1upright(src):
-    """Bake Arthur's Yamaha B1 upright as a 3-timbre-layer GM0 alt bank (bank 5).
+    """Bake Arthur's Yamaha B1 upright as a 2-timbre-layer GM0 default bank (CC0=0).
 
     Decodes the committed Opus takes, slices them with `tools/b1-slice/slice.py`
     (subprocess), then for every *assigned* slice: a 20 Hz 4th-order Butterworth
@@ -2653,7 +2654,7 @@ def _bake_b1upright(src):
 
 
 def _bake_darkened_grand(_src):
-    """GM0 alt bank 4: a WARMER Salamander — the committed `-grand` samples with a
+    """GM0 CC0=5: a WARMER Salamander — the committed `-grand` samples with a
     high-shelf cut above ~2 kHz (a one-pole shelf: y = x - g*(x - lowpass(x))). Tests
     whether the maintainer's dislike of the bright Salamander C5 is fixable by EQ
     rather than a new instrument, and is itself a cheap shippable win. Same 54 zones
@@ -3062,35 +3063,35 @@ def main():
                     ms_src, _preset, _prefix, "ferrosintesis-samples-musescore", 0.62, 0.24
                 )
 
-        # GM0 alt bank 4: MuseScore_General grand — own transform (SF3 preset extract
+        # GM 1 CC0=2: MuseScore_General grand — own transform (SF3 preset extract
         # + Ogg decode), MF-tier single-velocity multisample to the MIT -musescore-grand crate.
         if want("musescoregrand"):
             msg_src = os.path.join(tempfile.gettempdir(), "musescore_general")
             os.makedirs(msg_src, exist_ok=True)
             rows += _bake_musescore_grand(msg_src)
 
-        # GM0 alt bank 4: darkened Salamander — the committed -grand samples, high-shelf
+        # GM0 CC0=5: darkened Salamander — the committed -grand samples, high-shelf
         # cut (warmer). No fetch: derives from the tracked grand crate.
         if want("darkgrand"):
             rows += _bake_darkened_grand(src)
 
-        # GM0 alt bank 7: FreePats YDP Grand — bright Yamaha Disklavier (SF2 raw-PCM
+        # GM 1 CC0=1: FreePats YDP Grand — bright Yamaha Disklavier (SF2 raw-PCM
         # extract of the middle velocity layer) to the CC-BY -ydp-grand crate.
         if want("ydpgrand"):
             ydp_src = os.path.join(tempfile.gettempdir(), "ydp_grand")
             os.makedirs(ydp_src, exist_ok=True)
             rows += _bake_ydp_grand(ydp_src)
 
-        # GM0 alt bank 8: FreePats honky-tonk (7z per-note FLAC) -> CC0 -honkytonk crate.
+        # The GM 3 default: FreePats honky-tonk (7z per-note FLAC) -> CC0 -honkytonk crate.
         if want("honkytonk"):
             ht_src = os.path.join(tempfile.gettempdir(), "honkytonk_fb")
             os.makedirs(ht_src, exist_ok=True)
             rows += _bake_honkytonk(ht_src)
 
-        # GM0 alt bank 5: Arthur's own Yamaha B1 upright (first-party DR-05 recording)
-        # -> the first-party -b1-upright crate. Own transform: decode the committed
-        # opus takes, slice them (b1-slice subprocess), 3 timbre layers (soft/normal/
-        # hard). No network; the opus archive is the reproducible source.
+        # The GM 0 default (CC0=0): Arthur's own Yamaha B1 upright (first-party DR-05
+        # recording) -> the first-party -b1-upright crate. Own transform: decode the
+        # committed opus takes, slice them (b1-slice subprocess), 2 timbre layers
+        # (normal/hard). No network; the opus archive is the reproducible source.
         if want("b1upright"):
             b1_src = os.path.join(tempfile.gettempdir(), "b1_upright")
             os.makedirs(b1_src, exist_ok=True)

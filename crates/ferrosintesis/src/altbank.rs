@@ -1036,35 +1036,20 @@ pub fn make(
     let samples = samples && crate::embedded_samples_available();
     match program {
         // GM 0-1 pianos — CC0-selectable alternate recordings (2026.07.18 re-voicing;
-        // PLN in wrk_docs). CC0=0 (the program default: GM 0 upright, GM 1 Kawai) never
-        // reaches here (alt_bank false). CC0 selects a source recording:
-        //   GM 0 (plain model): 1 Salamander · 2 Steinway B · 3 Headroom · 4 dark-Salamander
-        //     (a warmer high-shelf EQ of the Salamander — kept as a 5th GM 0 option)
-        //     · 5 B1 upright (Arthur's own Yamaha B1, three recorded dynamic layers)
-        //   GM 1 (bright model): 1 YDP bright grand · 2 MuseScore grand
-        // The model matches the slot (GM 1 = the brighter model), same as the defaults.
+        // PLN in wrk_docs). CC0=0 (the program default) never reaches here
+        // (alt_bank false), so the GM 0 alternates are simply `voices::GM0_SOURCES`
+        // indexed by the raw CC0 value — the SAME table the default reads slot 0 of.
+        // Do not restate the line-up here: re-order `GM0_SOURCES` and both ends move
+        // together. Each entry carries its own bake calibration, so the demoted
+        // conditioned bank keeps its 4x make-up gain wherever it sits.
+        //
+        // GM 1 (bright model) keeps its own short list: 1 YDP bright grand ·
+        // 2 MuseScore grand. The model matches the slot (GM 1 = the brighter model),
+        // same as the defaults.
         0 | 1 => {
             let bright = program == 1;
-            let src = if samples {
-                match (program, bank) {
-                    (0, 1) => Some(crate::sampler::grand_bank(vel, seed & 1 == 0)),
-                    (0, 2) => Some(crate::sampler::steinwayb_bank(vel, seed & 1 == 0)),
-                    (0, 3) => Some(crate::sampler::headroom_bank(vel, seed & 1 == 0)),
-                    // CC0=4: dark-Salamander — a warmer high-shelf EQ of the Salamander,
-                    // kept as a 5th GM 0 option (Arthur, 2026.07.18).
-                    (0, 4) => Some(crate::sampler::darkgrand_bank(vel, seed & 1 == 0)),
-                    // CC0=5: Arthur's own Yamaha B1 acoustic upright (first-party DR-05
-                    // recording, two recorded normal/hard timbre layers).
-                    (0, 5) => Some(crate::sampler::b1upright_bank(vel, seed & 1 == 0)),
-                    (1, 1) => Some(crate::sampler::ydpgrand_bank(vel, seed & 1 == 0)),
-                    (1, 2) => Some(crate::sampler::musescoregrand_bank(vel, seed & 1 == 0)),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            // Every alternate bank is independently peak-normalized, so it keeps the
-            // legacy layer gain. Its DAMPER is a different question, and until
+            // Every GM 1 alternate bank is independently peak-normalized, so it keeps
+            // the legacy layer gain. Its DAMPER is a different question, and until
             // MM-BUG-KILN-00103 the two were welded together by one `Option`: the
             // GM0 alternates inherited a 0.10 s string release over a 0.06 s sample
             // release, against the GM0 default's 0.45 s. Arthur heard it as the B1
@@ -1072,19 +1057,35 @@ pub fn make(
             // exceeds velocity 77 and so never reached the band where that deficit
             // is masked by the default's forte trim.
             //
-            // GM 0 alternates now share the GM0 default's damper. The GM 1 (bright)
-            // alternates stay on the legacy damper so they remain byte-identical to
-            // their own default, which Step 2 revisits with a key-dependent curve.
-            let voicing = if bright {
-                crate::voices::GM1_VOICING
-            } else {
-                crate::voices::GM0_ALTERNATE_VOICING
-            };
+            // GM 0 slots now take their voicing from their own `GM0_SOURCES` entry.
+            let src: Option<(&'static [crate::sampler::Zone], crate::voices::PianoVoicing)> =
+                if samples {
+                    match program {
+                        0 => crate::voices::GM0_SOURCES
+                            .get(bank as usize)
+                            .map(|s| ((s.bank)(vel, seed & 1 == 0), s.voicing())),
+                        _ => match bank {
+                            1 => Some((
+                                crate::sampler::ydpgrand_bank(vel, seed & 1 == 0),
+                                crate::voices::GM1_VOICING,
+                            )),
+                            2 => Some((
+                                crate::sampler::musescoregrand_bank(vel, seed & 1 == 0),
+                                crate::voices::GM1_VOICING,
+                            )),
+                            _ => None,
+                        },
+                    }
+                } else {
+                    None
+                };
             match src {
-                Some(b) => {
+                Some((b, voicing)) => {
                     crate::voices::acoustic_grand_with_bank(b, key, vel, sr, seed, bright, voicing)
                 }
                 // --no-samples or an unknown source digit: the slot's model alone.
+                // `cal` is unreachable with an empty bank, so any GM0/GM1 voicing
+                // gives an identical voice here; name the slot's own for clarity.
                 None => crate::voices::acoustic_grand_with_bank(
                     &[],
                     key,
@@ -1092,7 +1093,11 @@ pub fn make(
                     sr,
                     seed,
                     bright,
-                    voicing,
+                    if bright {
+                        crate::voices::GM1_VOICING
+                    } else {
+                        crate::voices::GM0_SOURCES[0].voicing()
+                    },
                 ),
             }
         }
@@ -1309,111 +1314,84 @@ mod tests {
         buf
     }
 
-    /// MM-BUG-KILN-00122: published selectors must follow the actual GM0
-    /// dispatch. Derive the numbers from the match arms so this oracle cannot
-    /// preserve a second stale hand-copy of the routing table.
+    /// MM-BUG-KILN-00122, generalised: EVERY GM0 asset crate's published
+    /// selector must match the shipped routing — not just the one crate whose
+    /// wrongness happened to get reported.
+    ///
+    /// This replaces a dark-Salamander-only version that recovered the slot by
+    /// parsing the `(0, N) => Some(crate::sampler::…)` match arms out of this
+    /// file's own source. That was a sound idea against the old dispatch shape,
+    /// but the shape was the weak point: those arms no longer exist (GM0 is now
+    /// one indexed table), so the scan would panic rather than protect. Reading
+    /// `GM0_SOURCES` directly is both simpler and immune to how the dispatch is
+    /// written.
+    ///
+    /// Widening it also earned its keep immediately: the sweep that produced
+    /// this test found EIGHT of ten piano crates carrying a stale slot, four of
+    /// which were not GM 0 at all. The reported crate was never the whole bug.
     #[test]
-    fn dark_salamander_documentation_matches_gm0_dispatch() {
-        let dispatch = include_str!("altbank.rs");
-        let routed_bank = |accessor: &str| -> u8 {
-            let marker = format!("Some(crate::sampler::{accessor}(");
-            let line = dispatch
-                .lines()
-                .find(|line| line.trim_start().starts_with("(0, ") && line.contains(&marker))
-                .unwrap_or_else(|| panic!("GM0 dispatch has no route to {accessor}"));
-            line.trim_start()
-                .strip_prefix("(0, ")
-                .and_then(|rest| rest.split_once(')'))
-                .and_then(|(bank, _)| bank.parse().ok())
-                .unwrap_or_else(|| panic!("cannot parse GM0 bank from: {line}"))
-        };
-        let raw = routed_bank("grand_bank");
-        let dark = routed_bank("darkgrand_bank");
-        let b1 = routed_bank("b1upright_bank");
-        assert_ne!(dark, raw, "dark and raw Salamander must be separate slots");
-        assert_ne!(
-            dark, b1,
-            "dark Salamander must not claim the B1 upright slot"
-        );
-
+    fn every_gm0_crate_documents_the_slot_the_router_gives_it() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(std::path::Path::parent)
             .expect("crate lives under <repo>/crates");
-        let read = |relative: &str| {
-            std::fs::read_to_string(root.join(relative))
-                .unwrap_or_else(|e| panic!("cannot read {relative}: {e}"))
-        };
-        let crate_dir = "crates/ferrosintesis-samples-dark-salamander";
-        let lib = read(&format!("{crate_dir}/src/lib.rs"));
-        let manifest = read(&format!("{crate_dir}/Cargo.toml"));
-        let readme = read(&format!("{crate_dir}/README.md"));
-        let provenance = read(&format!("{crate_dir}/PROVENANCE.md"));
-        let sampler = read("crates/ferrosintesis/src/sampler.rs");
-        let prepare = read("tools/ferrosintesis-samples/prepare.py");
+        let norm = |t: &str| t.split_whitespace().collect::<Vec<_>>().join(" ");
 
-        for (name, text, expected) in [
-            (
-                "crate module docs",
-                lib.as_str(),
-                format!("GM0 acoustic-grand alternate bank {dark}"),
-            ),
-            (
-                "manifest description",
-                manifest.as_str(),
-                format!("GM0 alternate bank {dark}"),
-            ),
-            ("crate README", readme.as_str(), format!("CC0 bank {dark}")),
-            (
-                "provenance selector",
-                provenance.as_str(),
-                format!("bank select CC0={dark}"),
-            ),
-            (
-                "provenance A/B",
-                provenance.as_str(),
-                format!("A/Bs CC0={dark} directly against CC0={raw}"),
-            ),
-            (
-                "sampler bank heading",
-                sampler.as_str(),
-                format!("ALTERNATE bank {dark} - DARKENED Salamander"),
-            ),
-            (
-                "sampler accessor docs",
-                sampler.as_str(),
-                format!("Voices GM 0 CC0 alt bank {dark} (darkened Salamander)"),
-            ),
-            (
-                "bake function docs",
-                prepare.as_str(),
-                format!("GM0 alt bank {dark}: a WARMER Salamander"),
-            ),
-            (
-                "bake dispatch docs",
-                prepare.as_str(),
-                format!("GM0 alt bank {dark}: darkened Salamander"),
-            ),
-        ] {
-            let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
-            assert!(
-                normalized.contains(&expected),
-                "{name} does not identify the routed selector: expected {expected:?}"
-            );
-        }
+        for (slot, src) in crate::voices::GM0_SOURCES.iter().enumerate() {
+            let Some(dir) = src.crate_dir else { continue };
+            let selector = format!("CC0={slot}");
+            let read = |rel: &str| {
+                let p = root.join(dir).join(rel);
+                std::fs::read_to_string(&p)
+                    .unwrap_or_else(|e| panic!("cannot read {}: {e}", p.display()))
+            };
+            let (lib, manifest) = (read("src/lib.rs"), read("Cargo.toml"));
+            let (readme, provenance) = (read("README.md"), read("PROVENANCE.md"));
 
-        for (name, text) in [
-            ("crate module docs", lib.as_str()),
-            ("manifest description", manifest.as_str()),
-            ("crate README", readme.as_str()),
-            ("provenance", provenance.as_str()),
-        ] {
-            let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
-            assert!(
-                !normalized.contains(&format!("bank {b1}"))
-                    && !normalized.contains(&format!("CC0={b1}")),
-                "{name} claims B1 upright selector {b1} for dark Salamander"
-            );
+            // Every published document must NAME this recording's own slot.
+            for (what, text) in [
+                ("module docs", &lib),
+                ("manifest description", &manifest),
+                ("README", &readme),
+                ("PROVENANCE", &provenance),
+            ] {
+                assert!(
+                    norm(text).contains(&selector),
+                    "{dir} {what} does not state `{selector}` — the router puts                      {} at CC0={slot}",
+                    src.name
+                );
+            }
+
+            // The IDENTITY lines must name that slot and no other. Prose may
+            // legitimately cross-reference a sibling (dark-Salamander cites its
+            // A/B partner; the Salamander contrasts itself with the upright), so
+            // exclusivity is enforced only where the crate declares what it IS:
+            // the OPENING PARAGRAPH of the module header, and the manifest
+            // description. Everything after the header's first blank `//!` line
+            // is commentary and may name whatever it needs to.
+            let header: String = lib
+                .lines()
+                .take_while(|l| l.starts_with("//!"))
+                .take_while(|l| l.trim_end() != "//!")
+                .collect::<Vec<_>>()
+                .join(" ");
+            let description = manifest
+                .lines()
+                .find(|l| l.starts_with("description"))
+                .unwrap_or_else(|| panic!("{dir}/Cargo.toml has no description"))
+                .to_owned();
+            for (what, text) in [("module header", &header), ("description", &description)] {
+                for other in 0..crate::voices::GM0_SOURCES.len() {
+                    if other == slot {
+                        continue;
+                    }
+                    assert!(
+                        !text.contains(&format!("CC0={other}")),
+                        "{dir} {what} claims CC0={other}, but the router gives                          {} CC0={slot}",
+                        src.name
+                    );
+                }
+            }
         }
     }
 

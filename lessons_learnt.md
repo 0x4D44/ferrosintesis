@@ -10,6 +10,11 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.26 — **An oracle that probes "the default" tests a SLOT, not a voice — alternates ship unproven until promoted** (`sampler.rs:assert_attack_is_peak`).
+  - The B1 upright swelled ABOVE its own attack for three days at CC0=5; nothing caught it because the
+    attack-is-peak, gap-release and damper oracles all probe program 0 only. Promotion is what tested it.
+  - Its fix is counterintuitive and must be re-measured, never re-guessed: raising an LA make-up gain cures
+    the late swell but WORSENS the fast-repeat gap drop (9.99 dB at 1.30, 10.78 at 2.40). Window ~1.2-1.3.
 - 2026.07.25 — **A file with a pinned SHA-256 needs `-text` — core.autocrlf greens it locally, reds every fresh clone** (`.gitattributes:_readme_and_license_*.txt`).
   - The retained Freesound licence manifests are committed as byte-exact EVIDENCE: their SHA-256 is recorded in
     `crates/ferrosintesis-samples-ccby/PROVENANCE.md` and checked by `crates/ferrosintesis/src/provenance.rs`.
@@ -454,17 +459,3 @@ belong in `CLAUDE.md`, not here.
     outlasts the window (the pedal chick rings past 200 ms). Measure the RESIDUAL instead — choked-render energy
     minus choker-played-alone energy (`sampled_closed_or_pedal_hat_chokes_open_in_engine`).
 
-- 2026.07.14 — **"Drums too far back" is INTERNAL KIT BALANCE, not bus level — −18 LUFS absorbs a flat lift; fix in `engine.rs:kit_balance`.**
-  - The master normalizes to a fixed −18 LUFS and true-peak-limits to −1 dBTP, so a +6.8 dB drum probe moved the
-    delivered master ~0.4 dB: the drums become the peak-driving element and the limiter clamps exactly the
-    kick/snare transients you hear.
-  - Diagnose per-FAMILY balance in a REAL track before reaching for bus tools: an env-gated per-key mute (keep
-    only 42/44/46, or only 35/36/38/40) + integrated LUFS on the ch10 solo stem shows which family dominates. On
-    a standard backbeat the hats measured 26 dB under the kick/snare (gone); on Hey Jude the crash sat 2 dB under
-    (too loud).
-  - Root cause: the sampled `sampler.rs:DRUM_LEVEL` table is calibrated to MATCH the modeled kit, so it faithfully
-    inherited the model's hat-light/cymbal-heavy voicing. Fix as a per-key trim in the drum MIX
-    (`engine.rs:kit_balance`), not in `DRUM_LEVEL` — it then scales the sampled and modeled kits equally and keeps
-    their parity.
-  - Beware the golden mix-balance fixture (re-pin ch10 only) and the stereo-imaging oracle (a hat-forward kit
-    correlates more; give its test pattern a present ride so it still exercises the L/R spread).

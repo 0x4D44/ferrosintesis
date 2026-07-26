@@ -1,8 +1,8 @@
 # ferrosintesis-samples-musescore-grand
 
 Embedded **MIT** MuseScore_General "Grand Piano" samples (MF velocity tier) — a
-warm-to-neutral GM grand that voices a **GM 0 Acoustic Grand alternate** (CC0
-bank 4) in [ferrosintesis](https://github.com/0x4D44/ferrosintesis).
+warm-to-neutral GM grand that voices the **GM 1 Bright Acoustic Piano
+alternate** (CC0=2) in [ferrosintesis](https://github.com/0x4D44/ferrosintesis).
 
 A **dense single-velocity multisample** (one sample per distinct sampled pitch,
 C2–C6+) of mono 16-bit 44.1 kHz WAVs, embedded via `include_bytes!`. Dynamics come

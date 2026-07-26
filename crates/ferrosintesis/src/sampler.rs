@@ -939,6 +939,11 @@ pub fn cello_bank(vel: u8) -> &'static [Zone] {
 /// Velocity picks the dynamic layer; alternating round robins keep repeated
 /// notes from being byte-identical, except quiet C2/G2 where the pinned source
 /// has one take and both banks deliberately select it.
+///
+/// The VSCO upright: GM 0's DEFAULT recording until 2026.07.26, now its CC0=1
+/// alternate. It is the one GM 0 bank baked with [`crate::voices::PianoSampleCal::Gm0Conditioned`]
+/// envelope conditioning, and that calibration followed it into the alternate
+/// slot — see `voices::GM0_SOURCES`.
 pub fn piano_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     match (vel, rr2) {
         (0..=51, false) => piano_pp(),
@@ -1058,8 +1063,9 @@ fn grand_f_rr2() -> &'static [Zone] {
 }
 
 /// Velocity picks the dynamic layer; the seed alternates round robins, exactly
-/// like [`piano_bank`]. Voices GM 0's CC0 alt bank 1 — the GM 0 DEFAULT is
-/// [`piano_bank`], and GM 1/3 have their own defaults ([`kawai_bank`], [`honkytonk_bank`]).
+/// like [`piano_bank`]. Voices GM 0's CC0 alt bank 2 — the GM 0 DEFAULT is
+/// [`b1upright_bank`], and GM 1/3 have their own defaults ([`kawai_bank`],
+/// [`honkytonk_bank`]).
 pub fn grand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     match (vel, rr2) {
         (0..=51, false) => grand_pp(),
@@ -1071,12 +1077,12 @@ pub fn grand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     }
 }
 
-// GM 0 Acoustic Grand ALTERNATE bank 1 - VCSL "Grand Piano, Steinway B" (CC0,
+// GM 0 Acoustic Grand ALTERNATE bank 3 - VCSL "Grand Piano, Steinway B" (CC0,
 // ferrosintesis-samples-vcsl-steinway). A warm vintage Steinway, the tonal
-// contrast to the default bright Salamander C5. Roots measured by autocorrelation
+// contrast to the bright Salamander C5 at CC0=2. Roots measured by autocorrelation
 // in prepare.py (family steinwayb); F# zones stand in for the G positions. RR2 is
 // an adjacent velocity layer, peak-matched, so repeated notes vary. Selected via
-// CC0 alt bank 1 on a GM 0 channel (altbank::make -> acoustic_grand_with_bank).
+// CC0 alt bank 3 on a GM 0 channel (altbank::make -> acoustic_grand_with_bank).
 fn steinwayb_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
@@ -1180,7 +1186,7 @@ fn steinwayb_f_rr2() -> &'static [Zone] {
 }
 
 /// Velocity picks the dynamic layer; the seed alternates round robins, exactly
-/// like [`grand_bank`]. Voices GM 0 CC0 alt bank 1 (VCSL Steinway B).
+/// like [`grand_bank`]. Voices GM 0 CC0 alt bank 3 (VCSL Steinway B).
 pub fn steinwayb_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     match (vel, rr2) {
         (0..=51, false) => steinwayb_pp(),
@@ -1192,10 +1198,11 @@ pub fn steinwayb_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     }
 }
 
-// GM 0 Acoustic Grand ALTERNATE bank 2 - VCSL "Grand Piano, Kawai" (CC0,
+// GM 1 Bright Acoustic DEFAULT - VCSL "Grand Piano, Kawai" (CC0,
 // ferrosintesis-samples-vcsl-kawai). A darker, rounder vintage grand. Roots MEASURED
 // (Kawai labels sit an octave below sounding pitch - see the crate PROVENANCE); 8
-// zones from the pitches with full v1..v4 coverage. Selected via CC0 alt bank 2.
+// zones from the pitches with full v1..v4 coverage. This is GM 1's default
+// recording (voices::make program 1), not a GM 0 alternate.
 fn kawai_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
@@ -1305,10 +1312,10 @@ pub fn kawai_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     }
 }
 
-// GM 0 Acoustic Grand ALTERNATE bank 3 - Headroom / Intimate Piano (Bengt Nilsson,
+// GM 0 Acoustic Grand ALTERNATE bank 4 - Headroom / Intimate Piano (Bengt Nilsson,
 // Yamaha C3), CC-BY 4.0, ferrosintesis-samples-headroom. A warm, intimate close-mic
 // C3 grand. Roots MEASURED (MIDI-number labels are true sounding pitch); F# stands
-// in for G. Selected via CC0 alt bank 3. ATTRIBUTION REQUIRED - see the crate NOTICE.
+// in for G. Selected via CC0 alt bank 4. ATTRIBUTION REQUIRED - see the crate NOTICE.
 fn headroom_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
@@ -1412,7 +1419,7 @@ fn headroom_f_rr2() -> &'static [Zone] {
 }
 
 /// Velocity picks the dynamic layer; the seed alternates round robins, like
-/// [`grand_bank`]. Voices GM 0 CC0 alt bank 3 (Headroom/Intimate C3).
+/// [`grand_bank`]. Voices GM 0 CC0 alt bank 4 (Headroom/Intimate C3).
 pub fn headroom_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     match (vel, rr2) {
         (0..=51, false) => headroom_pp(),
@@ -1424,10 +1431,11 @@ pub fn headroom_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     }
 }
 
-// GM 0 Acoustic Grand ALTERNATE bank 4 - MuseScore_General "Grand Piano" (MIT,
+// GM 1 Bright Acoustic ALTERNATE bank 2 - MuseScore_General "Grand Piano" (MIT,
 // ferrosintesis-samples-musescore-grand). A warm-to-neutral GM grand. A DENSE
 // SINGLE-VELOCITY multisample (MF tier); dynamics come from the LA blend + model.
-// Roots MEASURED near each SF3 originalPitch. Selected via CC0 alt bank 4.
+// Roots MEASURED near each SF3 originalPitch. Selected via CC0 alt bank 2 on a
+// GM 1 channel — not a GM 0 alternate.
 fn musescoregrand_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
@@ -1462,16 +1470,16 @@ fn musescoregrand_zones() -> &'static [Zone] {
 }
 
 /// Single-velocity multisample: the same zones regardless of velocity/RR
-/// (dynamics are carried by the LA blend + model). Voices GM 0 CC0 alt bank 4.
+/// (dynamics are carried by the LA blend + model). Voices GM 1 CC0 alt bank 2.
 pub fn musescoregrand_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
     musescoregrand_zones()
 }
 
-// GM 0 Acoustic Grand ALTERNATE bank 4 - DARKENED Salamander (CC-BY 3.0,
-// ferrosintesis-samples-dark-salamander). The default Salamander grand with a
+// GM 0 Acoustic Grand ALTERNATE bank 5 - DARKENED Salamander (CC-BY 3.0,
+// ferrosintesis-samples-dark-salamander). The CC0=2 Salamander grand with a
 // high-shelf EQ cut (warmer). Same zones/roots as grand; the "is it EQ not
-// instrument?" A/B against the raw Salamander at CC0 alt bank 1. Selected via
-// CC0 alt bank 4.
+// instrument?" A/B, whose other endpoint is CC0=2, not the GM 0 default.
+// Selected via CC0 alt bank 5.
 fn darkgrand_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
@@ -1587,10 +1595,11 @@ pub fn darkgrand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     }
 }
 
-// GM 0 Acoustic Grand ALTERNATE bank 7 - FreePats YDP Grand (Yamaha Disklavier Pro,
+// GM 1 Bright Acoustic ALTERNATE bank 1 - FreePats YDP Grand (Yamaha Disklavier Pro,
 // CC-BY 3.0, ferrosintesis-samples-ydp-grand). The BRIGHT grand: harder, more present
 // hammer than the distant Salamander C5. Single-velocity (middle SF2 layer); roots
 // MEASURED (the YDP is tuned ~15 cents sharp - the LA layer repitches by root).
+// Selected via CC0 alt bank 1 on a GM 1 channel — not a GM 0 alternate.
 fn ydpgrand_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
@@ -1609,15 +1618,16 @@ fn ydpgrand_zones() -> &'static [Zone] {
 }
 
 /// Single-velocity multisample (bright YDP grand); dynamics from the LA blend +
-/// model. Voices GM 0 CC0 alt bank 7.
+/// model. Voices GM 1 CC0 alt bank 1.
 pub fn ydpgrand_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
     ydpgrand_zones()
 }
 
-// GM 0 Acoustic Grand ALTERNATE bank 8 - FreePats Honky-tonk (Frances Bacon player
+// GM 3 Honky-tonk DEFAULT - FreePats Honky-tonk (Frances Bacon player
 // piano, CC0, ferrosintesis-samples-honkytonk). The DISTINCTIVE one: a detuned/jangly
 // saloon/tack attack no tuned grand can make. Single-velocity; roots MEASURED (repitch
 // by root keeps the note in tune while the internal unison-beat jangle survives).
+// This is GM 3's default recording (voices::make program 3), not a GM 0 alternate.
 fn honkytonk_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
@@ -1641,7 +1651,8 @@ pub fn honkytonk_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
     honkytonk_zones()
 }
 
-// GM 0 Acoustic Grand ALTERNATE bank 5 - Arthur's own Yamaha B1 acoustic UPRIGHT
+// GM 0 Acoustic Grand DEFAULT (CC0=0, since 2026.07.26) - Arthur's own Yamaha B1
+// acoustic UPRIGHT
 // (first-party Tascam DR-05 recording, CC0-1.0, ferrosintesis-samples-b1-upright).
 // A real upright, not a grand: warmer and boxier, with TWO genuinely-recorded
 // timbre layers (normal/hard dynamic passes) rather than one sample re-EQ'd.
@@ -1722,7 +1733,10 @@ fn b1_hard_zones() -> &'static [Zone] {
 /// no other bank has: the dynamics are genuinely different captured spectra, not
 /// one sample re-EQ'd. Loudness still comes from the engine's shared velocity
 /// law; the layer only supplies timbre. Split: `vel < 60` normal, `>= 60` hard.
-/// `rr2` is ignored (no round robins in v1). Voices GM 0 CC0 alt bank 5.
+/// `rr2` is ignored (no round robins in v1) — so unlike the banks it replaced,
+/// the GM 0 default no longer varies repeated notes at the sample layer; the
+/// model's own seeded modal variation is what keeps repeats from being identical.
+/// Voices the GM 0 DEFAULT (CC0=0) since 2026.07.26; it was the CC0=5 alternate.
 ///
 /// A third `soft` capture was recorded and dropped (2026.07.24). Measured
 /// noise-subtracted spectral tilt put it just +0.8 dB from `normal` — the same
@@ -7933,14 +7947,18 @@ mod tests {
                     // explicitly. Otherwise the measured "RR spread" also contains
                     // the model's seeded modal variation (about 0.6 dB here).
                     let voice = if samples {
+                        // The GM0 DEFAULT recording, read from the source table so
+                        // this tracks whatever slot 0 currently holds rather than
+                        // pinning one bank by name.
+                        let src = &voices::GM0_SOURCES[0];
                         voices::acoustic_grand_with_bank(
-                            piano_bank(104, seed == 2),
+                            (src.bank)(104, seed == 2),
                             key,
                             104,
                             sr,
                             1,
                             false,
-                            voices::GM0_DEFAULT_VOICING,
+                            src.voicing(),
                         )
                     } else {
                         voices::make(0, key, 104, sr, seed, false)
@@ -8095,19 +8113,25 @@ mod tests {
         );
         for (name, voice, control) in [
             (
-                // GM0 alternate: legacy sample calibration (its PCM is independently
-                // peak-normalized), but the GM0 damper — that is the 00103 fix.
+                // GM0 alternate: each alternate keeps its OWN bake calibration, but
+                // takes the GM0 damper — that is the 00103 fix. Bank 2 is the
+                // Salamander since the 2026.07.26 renumber; read it from the table
+                // rather than naming a slot, so a future re-order cannot make this
+                // control disagree with the voice it is checking.
                 "GM0 Salamander alternate",
-                crate::altbank::make(0, 1, 66, 104, sr, 1, true),
-                voices::acoustic_grand_with_bank(
-                    grand_bank(104, false),
-                    66,
-                    104,
-                    sr,
-                    1,
-                    false,
-                    voices::GM0_ALTERNATE_VOICING,
-                ),
+                crate::altbank::make(0, 2, 66, 104, sr, 1, true),
+                {
+                    let src = &voices::GM0_SOURCES[2];
+                    voices::acoustic_grand_with_bank(
+                        (src.bank)(104, false),
+                        66,
+                        104,
+                        sr,
+                        1,
+                        false,
+                        src.voicing(),
+                    )
+                },
             ),
             (
                 "GM0 undefined-CC0 fallback",
@@ -8119,7 +8143,7 @@ mod tests {
                     sr,
                     1,
                     false,
-                    voices::GM0_ALTERNATE_VOICING,
+                    voices::GM0_SOURCES[0].voicing(),
                 ),
             ),
             (
@@ -8254,11 +8278,16 @@ mod tests {
 
     /// Companion leg for struck/plucked rows of [`assert_wrap_seam`].
     fn assert_attack_is_peak(fine: &[f32], label: &str) {
-        // The conditioned bass-upright take reaches its hammer/body maximum in
-        // the 150-200 ms window, still inside LA_PIANO's 180 ms attack-owned
-        // region. Higher piano notes and every other struck voice must peak in
-        // the original 150 ms budget.
-        let attack_windows = if label == "piano-low" { 4 } else { 3 };
+        // Every struck voice must peak inside the 150 ms budget.
+        //
+        // `piano-low` used to get a 4th window: the CONDITIONED VSCO upright, GM0's
+        // default until 2026.07.26, reached its hammer/body maximum in the 150-200 ms
+        // window. The B1 upright that replaced it peaks in window 1 like everything
+        // else (once given its own make-up gain — `PianoSampleCal::B1Upright`), so the
+        // exception is retired rather than inherited. That is the point of retiring it
+        // HERE: had it been left in place it would have silently absorbed the B1's
+        // late-swell defect instead of exposing it.
+        let attack_windows = 3;
         let attack = fine[..attack_windows].iter().fold(0f32, |mx, &x| mx.max(x));
         let late = fine[attack_windows..].iter().fold(0f32, |mx, &x| mx.max(x));
         // The `harpsichord-low` exception that used to sit here is GONE, retired by its

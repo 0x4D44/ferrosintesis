@@ -1,8 +1,8 @@
 # ferrosintesis-samples-b1-upright
 
 Embedded **first-party** Yamaha **B1 acoustic upright** samples — Arthur's own
-piano, recorded on a Tascam DR-05 (2026-07-23). Voices a **GM 0 Acoustic Grand
-alternate** (CC0 bank 5) in
+piano, recorded on a Tascam DR-05 (2026-07-23). Voices the **GM 0 Acoustic Grand
+default** (CC0=0) in
 [ferrosintesis](https://github.com/0x4D44/ferrosintesis): a real upright, not a
 grand — a warmer, boxier acoustic with genuine per-note inharmonicity.
 

@@ -1191,12 +1191,49 @@ pub(crate) const GM0_RELEASE_T60: f32 = 0.45;
 /// changed the *damper physics* by 4.5x, which is not a thing a microphone can do.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum PianoSampleCal {
-    /// The GM0 default bank: envelope-conditioned at bake time (its cross-zone body
+    /// The VSCO upright: envelope-conditioned at bake time (its cross-zone body
     /// trend is preserved instead of each zone being peak-normalized), so it needs
-    /// the large make-up gain and the short crossfade.
+    /// the large make-up gain and the short crossfade. GM0's default until
+    /// 2026.07.26, now its CC0=1 alternate — the calibration followed the bank.
     Gm0Conditioned,
-    /// Independently peak-normalized banks — every CC0 alternate, and GM1.
+    /// Independently peak-normalized banks — the remaining CC0 alternates, and GM1.
     LegacyNormalized,
+    /// The B1 upright, GM0's default since 2026.07.26.
+    ///
+    /// Peak-normalized like [`LegacyNormalized`](PianoSampleCal::LegacyNormalized),
+    /// but it cannot share that calibration, because make-up gain is not really a
+    /// statement about peak level — it is what balances a recording's onset against
+    /// the modelled body underneath it. On `LegacyNormalized`'s 0.90 the B1's
+    /// recorded hammer sits BELOW its own model: a held note peaked at the attack,
+    /// decayed ~5 dB by 400 ms, then swelled back ABOVE the attack by 800 ms as the
+    /// crossfade handed over. Pianos decay monotonically; that swell was audible and
+    /// wrong. It went unnoticed while the B1 was a CC0 alternate because the
+    /// attack-is-the-peak and gap-release oracles only ever probed the DEFAULT slot.
+    ///
+    /// 1.30 is measured, and it sits in a NARROW window — which is the part worth
+    /// knowing. Gain trades two properties against each other:
+    ///
+    /// * too low and the model outruns the hammer (the swell above). Below ~1.2 the
+    ///   envelope peak leaves the attack window.
+    /// * too high and fast repeated notes stop damping cleanly. The louder sampled
+    ///   onset decays faster than the model under it, so the 62.5 ms key-up gap
+    ///   drops HARDER: measured 9.99 dB at 1.30, 10.45 at 2.00, 10.78 at 2.40
+    ///   (engine-level, key 66). That direction was a surprise — raising the gain to
+    ///   "hold the note up" does the opposite — so do not re-guess it, re-measure it.
+    ///
+    /// Both bounds hold only over roughly 1.2-1.3, and 1.30 is the top of that
+    /// window: the most attack-peak margin available without losing gap behaviour.
+    /// Swept over keys 36/48/60/72/84 x vel 40/64/100/120.
+    ///
+    /// The crossfade stays at the conditioned bank's SHORT 0.18-0.45 s, for the same
+    /// reason that one is short — the hammer owns the onset then hands over promptly.
+    /// Lengthening it to 0.55/0.65/0.75 s was swept and made both properties worse.
+    ///
+    /// RESIDUAL, not fixed here: in the bass (key 36) the note still dips ~5 dB
+    /// around 400 ms and recovers to roughly its attack level. Gain cannot fix that
+    /// — it is the sampled layer's DECAY SHAPE through the crossfade, not its level.
+    /// Tracked as MM-BUG-KILN-00130.
+    B1Upright,
 }
 
 /// The highest key that HAS a damper.
@@ -1299,18 +1336,107 @@ pub(crate) struct PianoVoicing {
     pub damper: PianoDamper,
 }
 
-/// GM0 default: the envelope-conditioned bank with the calibrated damper.
-pub(crate) const GM0_DEFAULT_VOICING: PianoVoicing = PianoVoicing {
-    cal: PianoSampleCal::Gm0Conditioned,
-    damper: GM0_DAMPER,
-};
+/// One GM 0 (Acoustic Grand) source recording, as selected by bank-select MSB.
+///
+/// `cal` travels in this struct, next to the bank it describes, because it is a
+/// statement about how THAT PCM was baked — not about which CC0 slot the
+/// recording happens to occupy. That distinction is the whole point: when the
+/// slots were re-ordered on 2026.07.26 the calibration moved with each bank
+/// automatically, where two slot-named constants would have silently mis-applied
+/// the conditioned bank's 4x make-up gain to a peak-normalized one.
+// `name` and `crate_dir` are documentation metadata: they carry no audio and are
+// read only by the oracles that hold the published docs to this table
+// (`gm0_cc0_table_in_the_readme_matches_the_source`,
+// `every_gm0_crate_documents_the_slot_the_router_gives_it`). They live here, next
+// to the routing they describe, precisely so the docs cannot be a second
+// hand-maintained copy of it — which is the defect this table exists to end.
+#[allow(dead_code)]
+pub(crate) struct Gm0Source {
+    /// Human name — the docs oracle matches the README's CC0 table against this.
+    pub name: &'static str,
+    /// This recording's sampled onset bank, `(velocity, round_robin) -> zones`.
+    pub bank: fn(u8, bool) -> &'static [crate::sampler::Zone],
+    /// How this recording was normalized at bake time.
+    pub cal: PianoSampleCal,
+    /// The asset crate that packages this recording, if it has one of its own.
+    /// `None` for banks that live inside a shared crate (the VSCO upright is one
+    /// of many banks in `-core`, so it has no crate-level slot to document).
+    pub crate_dir: Option<&'static str>,
+}
 
-/// Every GM0 CC0 alternate: independently peak-normalized PCM, GM0 damper.
-/// The damper no longer depends on which recording was selected (KILN-00103).
-pub(crate) const GM0_ALTERNATE_VOICING: PianoVoicing = PianoVoicing {
-    cal: PianoSampleCal::LegacyNormalized,
-    damper: GM0_DAMPER,
-};
+impl Gm0Source {
+    /// This recording over the GM0 damper. Every GM0 slot shares one damper —
+    /// the felt curve is a property of the instrument, not of the microphone
+    /// (MM-BUG-KILN-00103) — so only `cal` varies across the table.
+    pub(crate) fn voicing(&self) -> PianoVoicing {
+        PianoVoicing {
+            cal: self.cal,
+            damper: GM0_DAMPER,
+        }
+    }
+}
+
+/// Every GM 0 acoustic-grand recording, in bank-select-MSB (CC0) order.
+///
+/// **Index 0 is the DEFAULT** — what a channel that never sends CC0 hears.
+/// Indices 1.. are the CC0 alternates that [`crate::altbank::make`] selects.
+/// A CC0 value past the end falls through to the bare model, as it always has.
+///
+/// This table is the SINGLE source of truth for both the default and the
+/// alternates. They used to be two independent hand-written lists in two
+/// modules (plus a third in the README), which is exactly the drift that
+/// produced MM-BUG-KILN-00122 — so re-order HERE and everything follows.
+///
+/// Order set by Arthur on 2026.07.26: his own B1 upright is now the house
+/// piano, and the previous line-up shifted down one slot intact.
+pub(crate) const GM0_SOURCES: &[Gm0Source] = &[
+    // CC0=0 — Arthur's own Yamaha B1 acoustic upright (first-party DR-05
+    // recording, CC0-1.0). Promoted from CC0=5 to the default on 2026.07.26.
+    Gm0Source {
+        name: "B1 upright",
+        bank: crate::sampler::b1upright_bank,
+        cal: PianoSampleCal::B1Upright,
+        crate_dir: Some("crates/ferrosintesis-samples-b1-upright"),
+    },
+    // CC0=1 — the VSCO upright that was the GM0 default until 2026.07.26. It
+    // keeps `Gm0Conditioned`: that is how its PCM was baked, and demoting it to
+    // an alternate does not re-bake it.
+    Gm0Source {
+        name: "VSCO upright",
+        bank: crate::sampler::piano_bank,
+        cal: PianoSampleCal::Gm0Conditioned,
+        crate_dir: None,
+    },
+    // CC0=2 — Salamander grand (was CC0=1).
+    Gm0Source {
+        name: "Salamander",
+        bank: crate::sampler::grand_bank,
+        cal: PianoSampleCal::LegacyNormalized,
+        crate_dir: Some("crates/ferrosintesis-samples-grand"),
+    },
+    // CC0=3 — Steinway B (was CC0=2).
+    Gm0Source {
+        name: "Steinway B",
+        bank: crate::sampler::steinwayb_bank,
+        cal: PianoSampleCal::LegacyNormalized,
+        crate_dir: Some("crates/ferrosintesis-samples-vcsl-steinway"),
+    },
+    // CC0=4 — Headroom grand (was CC0=3).
+    Gm0Source {
+        name: "Headroom",
+        bank: crate::sampler::headroom_bank,
+        cal: PianoSampleCal::LegacyNormalized,
+        crate_dir: Some("crates/ferrosintesis-samples-headroom"),
+    },
+    // CC0=5 — dark-Salamander, a warmer high-shelf EQ of the Salamander (was
+    // CC0=4). Its own A/B partner is now CC0=2, the raw Salamander.
+    Gm0Source {
+        name: "dark-Salamander",
+        bank: crate::sampler::darkgrand_bank,
+        cal: PianoSampleCal::LegacyNormalized,
+        crate_dir: Some("crates/ferrosintesis-samples-dark-salamander"),
+    },
+];
 
 /// GM1 and its alternates: peak-normalized PCM over the modelled felt damper.
 pub(crate) const GM1_VOICING: PianoVoicing = PianoVoicing {
@@ -1329,6 +1455,13 @@ pub(crate) const LEGACY_VOICING: PianoVoicing = PianoVoicing {
 const GM0_SAMPLE_GAIN: f32 = 4.00;
 const GM0_SAMPLE_FADE: (f32, f32) = (0.18, 0.45);
 const GM0_FORTE_LAYER_GAIN: f32 = 0.569;
+
+/// B1 upright make-up gain — see [`PianoSampleCal::B1Upright`] for the derivation
+/// and, more importantly, for why the usable window is only about 1.2-1.3 wide.
+/// Swept, not guessed: 0.90 leaves the model outrunning the recorded hammer.
+const B1_SAMPLE_GAIN: f32 = 1.30;
+/// The B1 shares the conditioned bank's short handoff, not the 0.85 s legacy one.
+const B1_SAMPLE_FADE: (f32, f32) = (0.18, 0.45);
 
 fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32, release_t60: f32) -> Modal {
     let f = key_freq(key);
@@ -12661,6 +12794,7 @@ pub fn acoustic_grand_with_bank(
         // damper is chosen independently by the caller.
         let (gain, fade) = match cal {
             PianoSampleCal::Gm0Conditioned => (GM0_SAMPLE_GAIN * layer_gain, GM0_SAMPLE_FADE),
+            PianoSampleCal::B1Upright => (B1_SAMPLE_GAIN, B1_SAMPLE_FADE),
             PianoSampleCal::LegacyNormalized => LA_PIANO,
         };
         crate::sampler::LaVoice::wrap_release(model, bank, key, vel, sr, gain, fade, la_t60)
@@ -13124,22 +13258,28 @@ fn make_uncorrected(
         // CP-style electric grand, fully modeled. 0/1 ride the shared
         // acoustic_grand_with_bank blend; 3 keeps its detuned model underneath.
         //
-        // GM 0 Acoustic Grand — the CC0 VSCO upright, its ORIGINAL voicing (reverted
-        // from the Salamander grand). The warm grands (Salamander/Steinway B/Headroom)
-        // are CC0 alternates. Only the bank is evaluated when samples are on.
-        0 => acoustic_grand_with_bank(
-            if samples {
-                crate::sampler::piano_bank(vel, seed & 1 == 0)
-            } else {
-                &[]
-            },
-            key,
-            vel,
-            sr,
-            seed,
-            false,
-            GM0_DEFAULT_VOICING,
-        ),
+        // GM 0 Acoustic Grand — Arthur's own B1 upright as of 2026.07.26. The
+        // recording, and the calibration its bake needs, both come from slot 0 of
+        // GM0_SOURCES; the previous default (the VSCO upright) and the warm grands
+        // are the CC0 alternates at 1.. in that same table. Re-voice by re-ordering
+        // GM0_SOURCES — never by editing this arm.
+        // Only the bank is evaluated when samples are on.
+        0 => {
+            let src = &GM0_SOURCES[0];
+            acoustic_grand_with_bank(
+                if samples {
+                    (src.bank)(vel, seed & 1 == 0)
+                } else {
+                    &[]
+                },
+                key,
+                vel,
+                sr,
+                seed,
+                false,
+                src.voicing(),
+            )
+        }
         // GM 1 Bright Acoustic — the VCSL Kawai over the BRIGHTER model (fits the slot
         // and keeps GM 0/GM 1 distinct modeled-only). Bright grands (YDP / MuseScore)
         // are CC0 alternates.
@@ -27121,7 +27261,7 @@ mod damper_tests {
         let sr = 44100.0;
         let tail = |key: u8| {
             let b = note(
-                acoustic_grand_with_bank(&[], key, 90, sr, 7, false, GM0_DEFAULT_VOICING),
+                acoustic_grand_with_bank(&[], key, 90, sr, 7, false, GM0_SOURCES[0].voicing()),
                 0.5,
                 2.5,
                 sr,
@@ -27145,15 +27285,168 @@ mod damper_tests {
         );
     }
 
+    /// GM0's CC0 line-up, pinned to the order Arthur chose on 2026.07.26: his own
+    /// B1 upright became the house piano and the previous line-up shifted down one
+    /// slot intact.
+    ///
+    /// This is the one thing `GM0_SOURCES` cannot assert about itself — it records
+    /// the DECISION, so that re-ordering the table has to be a deliberate act with
+    /// a matching edit here, not something that happens incidentally while adding a
+    /// recording. Every OTHER property below is derived from the table rather than
+    /// re-listed.
+    #[test]
+    fn gm0_cc0_line_up_is_the_order_arthur_chose() {
+        let got: Vec<&str> = GM0_SOURCES.iter().map(|s| s.name).collect();
+        assert_eq!(
+            got,
+            vec![
+                "B1 upright",      // CC0=0 — the default
+                "VSCO upright",    // CC0=1 — the default until 2026.07.26
+                "Salamander",      // CC0=2
+                "Steinway B",      // CC0=3
+                "Headroom",        // CC0=4
+                "dark-Salamander", // CC0=5 — the A/B partner of CC0=2
+            ]
+        );
+    }
+
+    /// The README's CC0 table is DERIVED-checked against `GM0_SOURCES`.
+    ///
+    /// This is the guard MM-BUG-KILN-00122 asked for. That bug was a crate's docs
+    /// naming a CC0 number the code did not implement, and it was not an isolated
+    /// slip: a sweep found eight sample crates carrying a stale or simply wrong slot,
+    /// because every one of them was a separate hand-written copy of the routing.
+    ///
+    /// Written to be DEFEATED, per this repo's standing lesson that a derived oracle
+    /// is only as good as its predicate: it matches the `| N | name |` PAIRING, not
+    /// the presence of a name. A README gutted to a bare list of recordings, or one
+    /// with two rows transposed, fails — which a `contains(name)` check would not.
+    #[test]
+    fn gm0_cc0_table_in_the_readme_matches_the_source() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md");
+        let readme = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+        for (i, s) in GM0_SOURCES.iter().enumerate() {
+            let row = format!("| CC0={i} | {} |", s.name);
+            assert!(
+                readme.contains(&row),
+                "{} is missing the GM0 CC0 row `{row}`. The shipped routing puts \
+                 {} at CC0={i}; update the table in the README rather than this test.",
+                path.display(),
+                s.name
+            );
+        }
+        // And nothing claims a slot the code does not have.
+        let ghost = format!("| CC0={} |", GM0_SOURCES.len());
+        assert!(
+            !readme.contains(&ghost),
+            "{} documents a GM0 CC0={} row, but the source table has only {} slots",
+            path.display(),
+            GM0_SOURCES.len(),
+            GM0_SOURCES.len()
+        );
+    }
+
+    /// The bake calibration follows the RECORDING, not the slot.
+    ///
+    /// Exactly one GM0 bank was envelope-conditioned at bake time, and it needs a
+    /// 4x make-up gain that would be badly wrong applied to a peak-normalized one.
+    /// When that bank was demoted from CC0=0 to CC0=1 its calibration had to travel
+    /// with it. Asserted by NAME, not by index, so the pairing survives a re-order —
+    /// which is precisely the event that would otherwise break it.
+    #[test]
+    fn the_conditioned_bank_keeps_its_calibration_wherever_it_sits() {
+        let conditioned: Vec<&str> = GM0_SOURCES
+            .iter()
+            .filter(|s| s.cal == PianoSampleCal::Gm0Conditioned)
+            .map(|s| s.name)
+            .collect();
+        assert_eq!(
+            conditioned,
+            vec!["VSCO upright"],
+            "the envelope-conditioned bake belongs to the VSCO upright alone — a \
+             peak-normalized bank marked Gm0Conditioned gets a spurious 4x make-up \
+             gain, a short crossfade and the forte trim"
+        );
+    }
+
+    /// The GM0 default and the CC0 alternates read ONE table, checked on the AUDIO.
+    ///
+    /// `voices::make(0, ..)` must render slot 0 and `altbank::make(0, n, ..)` must
+    /// render slot n, sample for sample. Two dispatch sites restating one line-up is
+    /// exactly how the shipped routing and its own documentation drifted apart
+    /// (MM-BUG-KILN-00122); this makes them provably the same list.
+    ///
+    /// It also proves the slots are DISTINCT. Without that clause a bug that made
+    /// every lookup return one bank would satisfy the equality checks completely.
+    #[test]
+    fn gm0_default_and_altbank_both_render_the_source_table() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let (key, vel, seed) = (66u8, 96u8, 1u32);
+        let from_table = |i: usize| {
+            let s = &GM0_SOURCES[i];
+            note(
+                acoustic_grand_with_bank(
+                    (s.bank)(vel, seed & 1 == 0),
+                    key,
+                    vel,
+                    sr,
+                    seed,
+                    false,
+                    s.voicing(),
+                ),
+                0.5,
+                1.0,
+                sr,
+            )
+        };
+        assert!(
+            note(make(0, key, vel, sr, seed, true), 0.5, 1.0, sr) == from_table(0),
+            "the GM0 DEFAULT does not render GM0_SOURCES[0] ({})",
+            GM0_SOURCES[0].name
+        );
+        for (i, src) in GM0_SOURCES.iter().enumerate().skip(1) {
+            assert!(
+                note(
+                    crate::altbank::make(0, i as u8, key, vel, sr, seed, true),
+                    0.5,
+                    1.0,
+                    sr
+                ) == from_table(i),
+                "CC0={i} does not render GM0_SOURCES[{i}] ({})",
+                src.name
+            );
+        }
+        // Distinctness: six slots, six audibly different recordings.
+        let rendered: Vec<Vec<f32>> = (0..GM0_SOURCES.len()).map(from_table).collect();
+        for i in 0..rendered.len() {
+            for j in (i + 1)..rendered.len() {
+                assert!(
+                    rendered[i] != rendered[j],
+                    "CC0={i} ({}) and CC0={j} ({}) render identically — a lookup is \
+                     collapsing two slots onto one bank",
+                    GM0_SOURCES[i].name,
+                    GM0_SOURCES[j].name
+                );
+            }
+        }
+    }
+
     /// Every piano slot that shares the felt damper actually carries it, and GM3 —
     /// which is deliberately excluded — does not.
+    ///
+    /// DERIVED, not listed: the GM0 slots come from `GM0_SOURCES` itself, so a
+    /// recording added or re-ordered there is covered without touching this test.
     #[test]
     fn felt_damper_is_wired_to_every_shared_piano_slot() {
-        for (name, voicing) in [
-            ("GM0 default", GM0_DEFAULT_VOICING),
-            ("GM0 alternates", GM0_ALTERNATE_VOICING),
-            ("GM1", GM1_VOICING),
-        ] {
+        let gm0 = GM0_SOURCES
+            .iter()
+            .map(|s| (s.name, s.voicing()))
+            .collect::<Vec<_>>();
+        for (name, voicing) in gm0.into_iter().chain([("GM1", GM1_VOICING)]) {
             assert_eq!(
                 voicing.damper,
                 PianoDamper::Felt,

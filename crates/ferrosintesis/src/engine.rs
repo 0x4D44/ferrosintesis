@@ -4735,13 +4735,37 @@ mod tests {
             drops.push(20.0 * (before / after.max(1e-9)).log10());
         }
 
-        for (index, &drop) in drops.iter().enumerate() {
+        // Bars DERIVED from the felt damper curve, not a flat dB constant.
+        //
+        // This is the engine-side twin of `sampler::tests::gm0_fra_gap_release_bridges
+        // _then_clears`, which MM-BUG-KILN-00104 already converted from a flat band to
+        // ratios of the damper's own prediction — because a flat bar "assumed every key
+        // shared one release, which is the thing the felt damper models away". That
+        // conversion was never applied here, and the leftover flat 10 dB bar sat within
+        // 0.1 dB of what the damper itself prescribes at key 66 (9.91 dB). Any voice
+        // that follows its own damper faithfully therefore passed by luck; the bar was
+        // really measuring "does the sampled layer over-sustain the gap", which the
+        // outgoing conditioned bank did heavily (it bridged key 69 to 0.43x) and the B1
+        // does not.
+        //
+        // Same constants as the twin, same meaning: MAX catches a note that is cut
+        // rather than damped, MIN catches one that never damps at all.
+        for (index, (&drop, &key)) in drops.iter().zip(keys.iter()).enumerate() {
+            let (t60, _) = voices::PianoDamper::Felt.t60_for(key);
+            let expect = 60.0 * 0.0625 / t60;
             assert!(
-                drop <= 10.0,
-                "FRA note {} gap drop {:.2} dB exceeds 10 dB: {:?}",
+                drop <= expect * 1.10,
+                "FRA note {} (key {key}) gap drop {drop:.2} dB exceeds 1.10x the \
+                 {expect:.2} dB its {t60:.3}s damper predicts — the note is cut, not \
+                 damped: {drops:?}",
                 index + 1,
-                drop,
-                drops
+            );
+            assert!(
+                drop >= expect * 0.40,
+                "FRA note {} (key {key}) gap drop {drop:.2} dB is under 0.40x the \
+                 {expect:.2} dB its {t60:.3}s damper predicts — the note is not \
+                 damping between repeats: {drops:?}",
+                index + 1,
             );
         }
     }
@@ -12691,7 +12715,8 @@ mod tests {
         assert_eq!(after_reset, def, "CC0=0 must return to the default bank");
 
         // Alt bank + a program with no alternate definition delegates to default.
-        // Piano 0 is no longer such a control: CC0=1 selects its Salamander bank.
+        // Piano 0 is no longer such a control: CC0=1 selects its VSCO upright bank
+        // (the recording that was GM0's own default until the 2026.07.26 renumber).
         let alt_flute = left(&render(&test_song(bank_song(Some(1), 73), 2.0), &test_opts(sr)).0);
         let def_flute = left(&render(&test_song(bank_song(None, 73), 2.0), &test_opts(sr)).0);
         assert_eq!(

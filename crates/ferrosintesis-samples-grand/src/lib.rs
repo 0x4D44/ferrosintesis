@@ -1,8 +1,10 @@
-//! Embedded CC BY 3.0 Salamander Grand Piano V3 attack/body samples for GM 0.
+//! Embedded CC BY 3.0 Salamander Grand Piano V3 attack/body samples for the
+//! GM 0 Acoustic Grand alternate (CC0=2).
 //!
 //! A real Yamaha C5 concert grand (9 pitch zones C2–C6 × 3 dynamics × 2 round
-//! robins), voicing the GM 0 Acoustic Grand so it is a distinct instrument from
-//! the CC0 VSCO *upright* that voices GM 1/3. Consumers normally access this crate
+//! robins), voicing the GM 0 Acoustic Grand CC0=2 alternate so it is a distinct
+//! instrument from the CC0 VSCO *upright* that is the GM 0 CC0=1 alternate.
+//! Consumers normally access this crate
 //! through `ferrosintesis`. Attribution obligations are in `NOTICE`.
 
 #![forbid(unsafe_code)]

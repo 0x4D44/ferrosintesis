@@ -2667,7 +2667,7 @@ pub struct PluckPreset {
     /// [`KS_DAMP_BUDGET`] of its authored decay, which stops the "E6 dies in 100 ms"
     /// cliff (KILN-00042).
     pub damper_hold: DamperHold,
-    pub harmonic: bool,         // prog-31 flageolet: loop retuned to 2f/3f (G7)
+    pub harmonic: bool, // prog-31 flageolet: loop retuned and node-filtered (G7)
     pub mwah: Option<MwahSpec>, // fretless vocal formant bloom (GM 35)
     // --- v0.12 second-polarization "course" voicing (GM 15 dulcimer) ---
     // The vertical KS loop's detune, decay and damping relative to the
@@ -3425,9 +3425,9 @@ pub const UPRIGHT: PluckPreset = PluckPreset {
     stop_thump: 0.8,
     ..DEFAULTS
 };
-/// Guitar harmonics (G7, GM 31): the flageolet — the KS loop itself is
-/// retuned to the touched harmonic (2f below E4, 3f above), thin glassy
-/// ring, light grit, no heavy amp.
+/// Guitar harmonics (G7, GM 31): the flageolet — the KS loop is retuned to
+/// the touched harmonic (2f below E4, 3f above) and seeded with a node-filtered
+/// near-sine displacement, leaving a thin glassy ring under the touch click.
 pub const HARMONIC: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "HARMONIC",
@@ -4031,6 +4031,38 @@ fn top_up_h1(exc: &mut [f32], h1_target: f32) {
     }
 }
 
+/// A touched string node suppresses the ordinary pluck's broadband mode
+/// ladder. Keep the historic random burst's phase, but project its displacement
+/// onto the sounding loop fundamental. The separate click still carries the
+/// brief finger/string contact; the circulating string is the near-sine a
+/// flageolet leaves behind.
+fn flageolet_excitation(noise: &[f32], peak: f32) -> Vec<f32> {
+    let n = noise.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let (mut xr, mut xi) = (0.0f32, 0.0f32);
+    for (i, &x) in noise.iter().enumerate() {
+        let phase = 2.0 * std::f32::consts::PI * i as f32 / n as f32;
+        xr += x * phase.cos();
+        xi -= x * phase.sin();
+    }
+    let start_phase = xi.atan2(xr);
+    let mut exc: Vec<f32> = (0..n)
+        .map(|i| {
+            let phase = 2.0 * std::f32::consts::PI * i as f32 / n as f32 + start_phase;
+            peak * phase.cos()
+        })
+        .collect();
+    // A complete sampled cycle is zero-mean analytically; remove float residue
+    // so the node-filtered path never seeds a DC mode.
+    let mean = exc.iter().sum::<f32>() / n as f32;
+    for x in &mut exc {
+        *x -= mean;
+    }
+    exc
+}
+
 /// K4 Stage 1 wound-ness: bass strings are wound full-range; guitars cross
 /// from wound to plain around G3 (key 55). Pure arithmetic — no allpass
 /// (Stage 2 dispersion stays deferred, §7).
@@ -4475,32 +4507,36 @@ impl Pluck {
         let noise: Vec<f32> = (0..exc_len)
             .map(|i| raw[i] - 0.9 * raw[(i + comb) % exc_len])
             .collect();
-        let mut exc: Vec<f32> = match p.exc_model {
-            // Legacy: peak-normalize to v (bit-identical to the historic path —
-            // no extra rng draws, so every un-migrated preset is unchanged).
-            ExcModel::Legacy => {
-                let mut e = noise;
-                let peak = e.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-6);
-                for x in &mut e {
-                    *x *= v / peak;
+        let mut exc: Vec<f32> = if p.harmonic {
+            flageolet_excitation(&noise, v)
+        } else {
+            match p.exc_model {
+                // Legacy: peak-normalize to v (bit-identical to the historic path —
+                // no extra rng draws, so every un-migrated preset is unchanged).
+                ExcModel::Legacy => {
+                    let mut e = noise;
+                    let peak = e.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-6);
+                    for x in &mut e {
+                        *x *= v / peak;
+                    }
+                    e
                 }
-                e
+                // Shaped: the natural-rolloff harmonic build, sustain-band normalized.
+                ExcModel::Shaped => shaped_excitation(
+                    exc_len,
+                    pos,
+                    p.slope,
+                    p.noise_mix,
+                    pick_lp,
+                    &noise,
+                    v,
+                    p.exc_trim,
+                    K_SUS,
+                    sr,
+                    SHAPED_DISP,
+                    exc_rng,
+                ),
             }
-            // Shaped: the natural-rolloff harmonic build, sustain-band normalized.
-            ExcModel::Shaped => shaped_excitation(
-                exc_len,
-                pos,
-                p.slope,
-                p.noise_mix,
-                pick_lp,
-                &noise,
-                v,
-                p.exc_trim,
-                K_SUS,
-                sr,
-                SHAPED_DISP,
-                exc_rng,
-            ),
         };
         // Floor the initial burst's fundamental (harp fix; inert at h1_floor = 0). Guards
         // against a weak-h1 Rayleigh draw letting the octave dominate — see `top_up_h1`.
@@ -19682,6 +19718,52 @@ mod tests {
             sup_bent <= -12.0,
             "bent fundamental only {sup_bent:.1} dB down"
         );
+    }
+
+    /// MM-BUG-KILN-00037: retuning a broadband pluck does not make a
+    /// flageolet. After the short touch transient, the sounding harmonic must
+    /// carry a near-sine ring rather than an ordinary pluck's upper-partial
+    /// ladder. Check both sides of the shipped 2f/3f split.
+    #[test]
+    fn harmonic_flageolet_ring_is_spectrally_thin() {
+        let sr = 44100.0;
+        let peak_around = |seg: &[f32], f: f32| {
+            [0.996, 0.998, 1.0, 1.002, 1.004]
+                .into_iter()
+                .map(|ratio| crate::testutil::mag_at(seg, sr, f * ratio))
+                .fold(0.0f32, f32::max)
+        };
+        for (key, multiple) in [(52u8, 2.0f32), (64, 3.0)] {
+            let buf = render_pluck(&HARMONIC, key, 100, 0.5, 7);
+            let ring = &buf[(0.020 * sr) as usize..(0.250 * sr) as usize];
+            let sounding = key_freq(key) * multiple;
+            let h1 = peak_around(ring, sounding);
+            let upper = (2..=8)
+                .map(|harmonic| peak_around(ring, sounding * harmonic as f32).powi(2))
+                .sum::<f32>()
+                .sqrt();
+            let upper_db = 20.0 * (upper / h1.max(1e-12)).max(1e-12).log10();
+            let ring_rms = crate::testutil::rms(ring);
+            let tone_fraction = h1 / (2.0f32.sqrt() * ring_rms).max(1e-12);
+            println!(
+                "flageolet key {key}: h2..h8/h1 {upper_db:.1} dB, \
+                 h1 energy fraction {tone_fraction:.3}, rms {ring_rms:.4}"
+            );
+            assert!(
+                ring_rms > 1e-4,
+                "key {key}: spectrally thin flageolet became silent"
+            );
+            assert!(
+                tone_fraction >= 0.5,
+                "key {key}: sounding harmonic carries only {tone_fraction:.3} of \
+                 the ring energy; off-lattice noise can fake a thin harmonic ladder"
+            );
+            assert!(
+                upper_db <= -9.0,
+                "key {key}: flageolet upper-partial energy is {upper_db:.1} dB \
+                 relative to the sounding harmonic; expected a near-sine ring"
+            );
+        }
     }
 
     /// Oracle 12 (B2): the three bass articulations are genuinely distinct —

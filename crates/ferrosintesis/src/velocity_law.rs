@@ -405,11 +405,6 @@ mod tests {
             //         rather than compensated because no reference measurement exists
             //         for it, and an exponent near 3.5 would be a constant nobody
             //         could justify. Worth a look if an FX-heavy file ever reads wrong.
-            //  42-43  cello / contrabass — their RAW velocity curve turns over at the
-            //         top (v110 -> v127 DROPS ~1.1-1.6 dB where it should rise 2.49).
-            //         Pre-existing defect in the bowed-string model, not in the
-            //         velocity law; a scalar exponent cannot correct a non-monotonic
-            //         curve. Tracked separately - fixing it needs the model, not this.
             //  76     blown bottle — its default (samples-on) voice is a looped real
             //         recording (`BottleLoopVoice`) with a deliberately compressed
             //         taper; measures k≈0.39, same class as the bagpipe chanter loop.
@@ -419,7 +414,7 @@ mod tests {
             //         the_square_law_in_no_samples_builds` (the modeled `--no-samples` /
             //         repitch-fallback path). That model carries its measured exponent
             //         in-arm, while the recording stays bare.
-            if p == 6 || p == 76 || p == 96 || p == 109 || p == 42 || p == 43 {
+            if p == 6 || p == 76 || p == 96 || p == 109 {
                 continue;
             }
             let k = melodic_k_at(p, 60);
@@ -524,17 +519,58 @@ mod tests {
         }
     }
 
-    /// The excluded programs must STILL BE BROKEN. An exclusion that silently
-    /// becomes unnecessary is a dead blind spot: whoever fixes the bowed-string model
-    /// should be forced to delete the exemption, not left free to leave it rotting.
+    /// MM-BUG-KILN-00029: the bowed-string waveguide's intrinsic level must not
+    /// fight the shared velocity law at the top of the MIDI range.
+    ///
+    /// This uses the compensation-bypassed render, because a `VEL_LEVEL_EXP`
+    /// scalar can hide a slope error but cannot make a voice that drops at
+    /// fortissimo physically monotone.
     #[test]
-    fn excluded_programs_still_reproduce_their_defect() {
+    fn bowed_strings_raw_high_velocity_output_is_monotonic_and_law_shaped() {
+        const HIGH_VELS: [u8; 6] = [96, 105, 110, 115, 120, 127];
         for p in [42u8, 43] {
-            let k = melodic_k_at(p, 60);
-            assert!(
-                (k - 2.0).abs() > 0.25,
-                "GM{p} now fits {k:.3} — the bowed-string turnover appears FIXED.                  Delete its exclusion in every_gm_program_follows_the_square_law and                  its VEL_LEVEL_EXP note, then remove this assertion."
-            );
+            let keys: &[u8] = match p {
+                42 => &[36, 48, 50, 55, 60, 67, 76],
+                43 => &[28, 36, 48, 50, 55, 60, 64],
+                _ => unreachable!(),
+            };
+            for &key in keys {
+                let high_levels: Vec<(u8, f32)> = HIGH_VELS
+                    .iter()
+                    .map(|&v| {
+                        (
+                            v,
+                            level_db(&render(make_uncorrected_for_census(p, key, v), 1.2)),
+                        )
+                    })
+                    .collect();
+                for w in high_levels.windows(2) {
+                    assert!(
+                        w[1].1 >= w[0].1 - 0.05,
+                        "GM{p} key {key}: raw high-velocity level drops from v{} {:.2} dB \
+                         to v{} {:.2} dB",
+                        w[0].0,
+                        w[0].1,
+                        w[1].0,
+                        w[1].1
+                    );
+                }
+
+                let law_levels: Vec<(u8, f32)> = FIT_VELS
+                    .iter()
+                    .map(|&v| {
+                        (
+                            v,
+                            level_db(&render(make_uncorrected_for_census(p, key, v), 1.2)),
+                        )
+                    })
+                    .collect();
+                let k = fit_k(&law_levels);
+                assert!(
+                    (k - 2.0).abs() <= 0.25,
+                    "GM{p} key {key}: raw velocity exponent {k:.3}, want 2.0 +/- 0.25"
+                );
+            }
         }
     }
 

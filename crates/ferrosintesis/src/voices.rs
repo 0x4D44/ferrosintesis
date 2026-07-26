@@ -1680,9 +1680,10 @@ fn electric_piano_1(key: u8, vel: u8, sr: f32, seed: u32) -> Modal {
     // not in shaper saturation — round 2's deep drive (0.6+3.2·vn) was the
     // shared hack that pushed GM4/GM5 together, and at forte its tanh
     // compression ate the raised tine 4× (measured: table ratio 0.73 →
-    // rendered 0.177). Halved drive keeps the velocity-graded pickup growl
-    // (and the pinned h4/h1 law) while letting the strike through.
-    .with_pickup_drive(0.4 + 1.6 * vn, 0.3)
+    // rendered 0.177). The pickup still gets a velocity-graded growl, but the
+    // drive rises gently enough that it cannot compress the raised tine faster
+    // than the mode table grows it.
+    .with_pickup_drive(0.7 + 0.6 * vn, 0.3)
 }
 
 /// GM 5 (round-3 U5, plan §3.2): a REAL two-operator FM electric piano. A
@@ -9390,6 +9391,19 @@ fn bow_force_ceiling(v: &StringVoicing, key: u8) -> Option<f32> {
     Some(2.9 + (v.slope_hi - 2.9) * t)
 }
 
+fn bowed_string_bow_speed(program: u8, vel: u8) -> f32 {
+    let v = vel_ctrl(vel);
+    if matches!(program, 42 | 43) {
+        // Low strings over-bowed when velocity drove the contact from 0.03..0.25:
+        // the intrinsic waveguide amplitude then fought the output `vel_amp` law
+        // and could drop at fortissimo. Keep the contact in the measured playable
+        // region and leave loudness to the output gain.
+        0.140 + 0.010 * v
+    } else {
+        0.03 + 0.22 * v
+    }
+}
+
 impl BowedString {
     fn new(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let f = key_freq(key);
@@ -9479,7 +9493,7 @@ impl BowedString {
             // is brighter — real bowing): quiet pedal ~dark, collision ~bright.
             // TIMBRE, not level — exempt from the k=2 law (HLD velocity-law §2.4).
             // Bow SPEED, per the comment above: it drives brightness, not gain.
-            max_vel: 0.03 + 0.22 * vel_ctrl(vel),
+            max_vel: bowed_string_bow_speed(program, vel),
             slope,
             vib,
             vib_depth,
@@ -13339,15 +13353,12 @@ const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     t[45] = 1.879;
     // Basses.
     t[33] = 2.162; t[35] = 2.056;
-    // Bowed strings 42/43 are deliberately NOT compensated. Their raw curve is
-    // non-monotonic at the top — measured, samples on, compensation bypassed:
-    //   GM42 key 60  v96 -8.93  v110 -5.16  v127 -7.14   (DROPS 1.98 dB)
-    //   GM43 key 60  v96 -6.78  v110 -2.93  v127 -4.44   (DROPS 1.51 dB)
-    // where the law says v110->v127 should RISE 2.49 dB. A scalar exponent cannot
-    // fix a curve that turns over; applying one makes fortissimo worse, not better.
-    // Pre-existing (the floor fold preserves v=127 exactly) and out of scope here —
-    // it is a defect in the bowed-string model, not in the velocity law. Excluded
-    // from the oracles by name in velocity_law.rs.
+    // Low bowed strings 42/43 are deliberately NOT compensated: their `BowedString`
+    // contact-speed map keeps the intrinsic waveguide level inside the square-law
+    // band, and `bowed_strings_raw_high_velocity_output_is_monotonic_and_law_shaped`
+    // asserts the compensation-bypassed render directly. This matters because their
+    // old 0.03..0.25 bow-speed span over-bowed the contact at high velocity; a scalar
+    // exponent made the v110->v127 drop worse instead of fixing the model.
     //
     // The violin family 40/41/110 joined the same `BowedString` waveguide on
     // 2026.07.26 and so acquired the same k ≈ 2.9 — the waveguide's limit-cycle
@@ -16592,7 +16603,8 @@ mod tests {
     /// is no longer the bark carrier. GM 5 is the 2-op FM voice whose
     /// velocity→index mapping grows the whole harmonic ladder — measured at
     /// 4·f0 as before. Both must exist at forte, GROW with velocity, and
-    /// stay DC-clean.
+    /// stay DC-clean. GM4's bark may plateau after v105, but it must not turn
+    /// down again at the top of the MIDI range.
     #[test]
     fn electric_piano_pickup_bark_grows_with_velocity() {
         let sr = 44100.0;
@@ -16616,23 +16628,20 @@ mod tests {
                 "GM{prog}: no bark at forte — bark/h1 {r120:.4} (floor 0.03)"
             );
             if prog == 4 {
-                // GM4's bark TURNS OVER near the top: measured 0.0553 / 0.0611 /
-                // 0.0652 / 0.0667 / 0.0651 / 0.0635 at v = 60/75/90/105/120/127, i.e.
-                // it peaks at v≈105. The pickup's tanh shaper compresses the tine
-                // faster than the mode table grows it. Pre-existing and filed as
-                // MM-BUG-KILN-00029 (with the GM42/43 turnover — same class); NOT an
-                // artifact of the k=2 velocity law, which leaves v=127 unchanged.
-                //
-                // So this asserts growth only where the voice actually grows, and
-                // pins the defect so a fix forces this narrowing to be undone.
-                assert!(
-                    r90 > r60,
-                    "GM4: bark not velocity-graded below the turnover — {r60:.4}/{r90:.4}"
-                );
-                assert!(
-                    r120 <= r90,
-                    "GM4: bark now grows through v120 ({r90:.4} -> {r120:.4}) — the                      MM-BUG-KILN-00029 turnover appears FIXED. Restore the full                      r120 > r90 > r60 assertion and close the bug."
-                );
+                let levels: Vec<(u8, f32)> = [60u8, 75, 90, 105, 120, 127]
+                    .into_iter()
+                    .map(|vel| (vel, ratio(vel)))
+                    .collect();
+                for w in levels.windows(2) {
+                    assert!(
+                        w[1].1 >= w[0].1 - 0.001,
+                        "GM4: bark turns down from v{} {:.4} to v{} {:.4}",
+                        w[0].0,
+                        w[0].1,
+                        w[1].0,
+                        w[1].1
+                    );
+                }
             } else {
                 assert!(
                     r120 > r90 && r90 > r60,

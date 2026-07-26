@@ -180,6 +180,30 @@ mod tests {
             .collect())
     }
 
+    fn packaged_cc0_legal_text(manifest: &str, legal_text_exists: bool) -> Result<(), String> {
+        let license = package_assignment(manifest, "license")
+            .ok_or_else(|| "[package] has no explicit `license`".to_owned())?;
+        let license = toml_strings(&license);
+        if license.len() != 1 {
+            return Err("`license` must name exactly one string expression".to_owned());
+        }
+        if license[0] != "CC0-1.0" {
+            return Ok(());
+        }
+        if !legal_text_exists {
+            return Err("declares CC0-1.0 but has no LICENSE-CC0".to_owned());
+        }
+        let include = package_assignment(manifest, "include")
+            .ok_or_else(|| "[package] has no explicit `include`".to_owned())?;
+        if !toml_strings(&include)
+            .iter()
+            .any(|path| path == "LICENSE-CC0")
+        {
+            return Err("has LICENSE-CC0 but does not package it".to_owned());
+        }
+        Ok(())
+    }
+
     /// The FAMILY prefixes and counts a crate actually ships (`pizzbass_C2.wav` ->
     /// `pizzbass`).
     fn packaged_family_counts(krate: &str) -> BTreeMap<String, usize> {
@@ -419,6 +443,40 @@ mod tests {
         );
     }
 
+    /// Every CC0 sample archive carries the legal text promised by its manifest.
+    ///
+    /// A repository-level copy does not reach a separately published asset crate.
+    /// Both the file and its literal `include` entry are required.
+    #[test]
+    fn every_cc0_sample_crate_ships_its_legal_text() {
+        let mut errors = Vec::new();
+        let mut checked = 0usize;
+        for krate in sample_crates() {
+            let root = crates_dir().join(&krate);
+            let manifest = std::fs::read_to_string(root.join("Cargo.toml"))
+                .expect("a sample crate has a Cargo.toml");
+            if package_assignment(&manifest, "license")
+                .is_some_and(|value| toml_strings(&value) == ["CC0-1.0"])
+            {
+                checked += 1;
+            }
+            if let Err(error) =
+                packaged_cc0_legal_text(&manifest, root.join("LICENSE-CC0").is_file())
+            {
+                errors.push(format!("{krate}: {error}"));
+            }
+        }
+        assert!(
+            checked > 10,
+            "only {checked} CC0 sample crates were checked — the scan is broken"
+        );
+        assert!(
+            errors.is_empty(),
+            "CC0 sample package legal-text errors:\n  {}",
+            errors.join("\n  ")
+        );
+    }
+
     #[test]
     fn package_path_oracle_rejects_a_missing_literal_but_not_globs() {
         let manifest = "\
@@ -437,5 +495,27 @@ include = [\n\
         assert!(missing_declared_package_files(manifest, |_| true)
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn cc0_legal_text_oracle_rejects_missing_and_unpackaged_text() {
+        let missing = "\
+[package]\n\
+license = \"CC0-1.0\"\n\
+include = [\"src/**\", \"PROVENANCE.md\"]\n";
+        assert_eq!(
+            packaged_cc0_legal_text(missing, false).unwrap_err(),
+            "declares CC0-1.0 but has no LICENSE-CC0"
+        );
+        assert_eq!(
+            packaged_cc0_legal_text(missing, true).unwrap_err(),
+            "has LICENSE-CC0 but does not package it"
+        );
+
+        let packaged = "\
+[package]\n\
+license = \"CC0-1.0\"\n\
+include = [\"src/**\", \"LICENSE-CC0\", \"PROVENANCE.md\"]\n";
+        assert!(packaged_cc0_legal_text(packaged, true).is_ok());
     }
 }

@@ -6,16 +6,16 @@ Drums `mid` mic set + the Big Rusty Drums china, both CC0, pinned by commit
 SHA; FLAC decode shells out to ffmpeg at tool time). That bank's inventory
 and provenance live in `crates/ferrosintesis-samples-drumkit/PROVENANCE.md`.
 
-The rest of this README covers `prepare.py`: the generator, tests, full
-inventory, and provenance for
-ferrosintesis's 252 attack transients. The generated mono 16-bit 44.1 kHz WAVs are
-split across `crates/ferrosintesis-samples-core/samples/` (piano, violin, flute),
-`crates/ferrosintesis-samples-orchestral/samples/` (brass, reeds, string sections,
-nylon/steel guitars, harpsichord), the newer CC0 crate
-`crates/ferrosintesis-samples-orchestral2/samples/` (harp, timpani, recorder,
-ocarina, banjo — the `-orchestral` crate is at the crates.io size cap), and the MIT
-`crates/ferrosintesis-samples-musescore/samples/` (GM 104 sitar + GM 75/76/77 pipe
-onsets from the MS Basic soundfont). Those asset crates embed the bytes with
+The rest of this README covers `prepare.py`: the generator, tests, bank guide,
+and provenance pointers for ferrosintesis's attack transients. Do not maintain a
+global file count here: each sample crate's `PROVENANCE.md` carries its
+filesystem-derived family/count inventory, enforced by
+`inventory::tests::every_packaged_sample_family_has_one_counted_provenance_row`.
+
+The generated mono 16-bit 44.1 kHz WAVs route through the core, orchestral, and
+orchestral2 packages plus dedicated asset crates where licence or package size
+requires isolation. These include the MIT MuseScore banks and the owner-recorded
+CC0 mandolin bank. Those asset crates embed the bytes with
 `include_bytes!`; `crates/ferrosintesis/src/sampler.rs` uses them for LA-style
 synthesis. Each WAV supplies the onset of a note, then crossfades into the modeled
 body or sustain.
@@ -78,6 +78,12 @@ body or sustain.
   redistributing the sample bytes.
   Masters and per-zone bake sources for the Eastman banks live in the repo-root
   `samples/acoustic-guitar-eastman-e1d/`.
+- `mandolin_*_rr{1,2,3,4}.wav` — owner-recorded mandolin pluck onsets
+  reached as GM 25 with CC32 96. Ten pitch zones G3–E6 carry one dynamic
+  and four ordered round robins (40 onsets total) in the dedicated CC0
+  `ferrosintesis-samples-mandolin` crate. The order preserves the recorded
+  down/up picking alternation; `PROVENANCE.md` carries the current roots,
+  processing recipe, and source-cut checksums.
 - `harpsi_*.wav` — harpsichord (GM 6) quill-pluck onsets, 10 pitch zones
   sounding C2–F6 (~6-semitone C/F grid, one take per note: single register
   `Main`, single round robin), kept 0.9 s like the guitars so the sample carries

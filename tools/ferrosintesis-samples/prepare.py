@@ -1020,8 +1020,9 @@ FREESOUND_SOURCES = {
 # fetchable, so the per-note source cuts are committed here already downmixed to mono
 # 16-bit 44.1 kHz — exactly what the bake consumes — and ensure_mandolin_sources copies
 # them into the temp `src` for the main loop to trim and measure. Ten zones (open + 5th
-# fret on all four courses, plus 10th and 12th on the E course) x two dynamic layers.
-# Provenance, the measured roots and the intonation notes are in
+# fret on all four courses, plus 10th and 12th on the E course) x four ordered
+# round-robin takes at one dynamic. Provenance, measured roots, take order and source
+# checksums are in
 # crates/ferrosintesis-samples-mandolin/PROVENANCE.md.
 MANDOLIN_SRC = os.path.join(TOOL_DIR, "mandolin-src")
 MANDOLIN_SOURCES = {

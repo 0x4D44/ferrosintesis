@@ -7,7 +7,7 @@ description = "Embedded CC0 VCSL Steinway-B grand-piano samples for ferrosintesi
 license = "CC0-1.0"
 repository = "https://github.com/0x4D44/ferrosintesis"
 readme = "README.md"
-include = ["src/**", "samples/**", "README.md", "NOTICE", "PROVENANCE.md"]
+include = ["src/**", "samples/**", "README.md", "NOTICE", "PROVENANCE.md", "LICENSE-CC0"]
 
 [lib]
 path = "src/lib.rs"

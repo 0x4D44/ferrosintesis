@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00089 — The mandolin package still describes the retired two-dynamic bank and omits its legal text
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** mandolin sample package / documentation
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-mandolin/`)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-mandolin/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — aligned the mandolin package with its shipped bank and made every CC0 sample crate carry legal text)
 
 ## Observation
 
@@ -70,6 +70,40 @@ legal-text file, plus a documentation/inventory check derived from the current
 sample crates so the next bank cannot leave another retired count behind.
 
 Estimated effort: Small.
+
+## Resolution — 2026-07-26
+
+The mandolin README, generated crate documentation, preparation recipe, sampler
+comments, and test prose now describe the shipped one-dynamic, four-round-robin
+bank and its measured approximately +22-cent worst detuning. The tool README no
+longer freezes a repository-wide transient total; it points to the existing
+derived crate inventory and now documents the mandolin package explicitly.
+
+All 15 CC0 sample crates now carry their own `LICENSE-CC0`, and every affected
+package manifest includes it. `gen_crate_lib.py` derives its documentation links
+from legal and provenance files that the target manifest actually packages.
+The filesystem-derived inventory oracle checks both legal-text presence and
+package inclusion across every CC0 sample crate, with a negative regression for
+missing and unpackaged text.
+
+## Verification — 2026-07-26
+
+- The focused inventory suite passed all 8 tests, including both legal-text
+  regressions; the focused mandolin root-table test and both mandolin sample
+  crate tests passed.
+- The preparation tool's 33 Python unit tests passed. Both Python generators
+  compile, and stale two-dynamic, +29-cent, twenty-float, `_p`/`_f`, and global
+  transient-count descriptions are absent.
+- `cargo package --list --allow-dirty -p ferrosintesis-samples-mandolin`
+  includes `LICENSE-CC0`, `PROVENANCE.md`, and `README.md`.
+- The complete default suite passed (730 tests, 27 ignored), the true
+  model-only suite passed (628 tests, 22 ignored), and both doc-test sets passed
+  (4 each).
+- Strict workspace clippy and true model-only clippy passed with warnings
+  denied; formatting and `git diff --check` passed.
+- Fresh release binaries from exact baseline `a083682`, full 124-MIDI inventory
+  at 11.025 kHz: all 124 stayed byte-identical, with zero contamination and
+  zero missed paths.
 
 ## Notes
 

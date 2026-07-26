@@ -2435,7 +2435,7 @@ pub fn banjo_bank() -> &'static [Zone] {
 ///
 /// Roots are **MEASURED, not nominal**, and here that matters more than usual: the instrument's
 /// open strings are in tune (within a few cents) but its fretted notes run sharp — up to
-/// **+29 cents** at the 5th fret on the thickest course — so nominal pitches would detune every
+/// **+22 cents** at the 5th fret on the thickest course — so nominal pitches would detune every
 /// fretted zone. `LaVoice` repitches ±1 octave from the measured root.
 ///
 /// **One dynamic, four ROUND ROBINS.** A mandolin cannot be played at meaningfully different
@@ -5584,7 +5584,7 @@ mod tests {
         }
     }
 
-    /// The mandolin zone tables are twenty hand-transcribed floats, and the failure
+    /// The mandolin zone tables are forty hand-transcribed roots, and the failure
     /// they invite is silent: a mistyped or octave-shifted root still renders, just
     /// at the wrong pitch. This checks them WITHOUT re-typing the same numbers,
     /// which would only prove the copy-paste.
@@ -5595,12 +5595,12 @@ mod tests {
     ///    plus the 10th and 12th on the E course, so their semitone steps are fixed
     ///    by the fretboard: 5, 2, 5, 2, 5, 2, 5, 5, 2. Any octave error, swapped
     ///    file or fat-fingered digit breaks that sequence. The ±60-cent tolerance
-    ///    absorbs the instrument's real intonation (fretted notes run up to +29
+    ///    absorbs the instrument's real intonation (fretted notes run up to +22
     ///    cents sharp, so a nominal-2-semitone step genuinely measures ~1.67) while
     ///    still being four times tighter than the smallest error it must catch.
-    /// 2. **Cross-layer agreement.** `_p` and `_f` are the same ten physical notes
-    ///    measured from independent takes, so their roots must agree closely. A
-    ///    wrong root in one layer cannot hide, because the other layer disagrees.
+    /// 2. **Cross-take agreement.** `rr1` through `rr4` are the same ten physical
+    ///    notes measured from independent takes, so their roots must agree closely.
+    ///    A wrong root in one take cannot hide, because the other three disagree.
     ///
     /// Forcing both banks to decode also exercises `parse_wav`'s 16-bit/mono/44100
     /// assertion and proves `embedded_wav` can actually resolve the names through

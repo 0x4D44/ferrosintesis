@@ -12090,18 +12090,11 @@ mod tests {
     }
 
     #[cfg(feature = "embedded-samples")]
-    fn render_held_gm0(key: u8, samples: bool) -> Vec<f32> {
+    fn render_held_gm0(key: u8, vel: u8, samples: bool) -> Vec<f32> {
         let song = test_song(
             vec![
                 (0.0, EvKind::Prog { ch: 0, prog: 0 }),
-                (
-                    0.0,
-                    EvKind::NoteOn {
-                        ch: 0,
-                        key,
-                        vel: 100,
-                    },
-                ),
+                (0.0, EvKind::NoteOn { ch: 0, key, vel }),
                 (0.75, EvKind::NoteOff { ch: 0, key }),
             ],
             0.75,
@@ -12137,17 +12130,46 @@ mod tests {
     #[test]
     fn sampled_gm0_treble_does_not_rebound_through_the_engine() {
         let sr = 44_100.0;
-        for key in [72u8, 78, 84] {
-            for samples in [false, true] {
-                let signal = render_held_gm0(key, samples);
-                let (rebound_db, levels) = held_note_rebound_db(&signal, sr);
-                assert!(
-                    rebound_db <= 1.5,
-                    "GM0 key {key} samples={samples} rebounds {rebound_db:.2} dB through \
+        for vel in [50u8, 100] {
+            for key in 21u8..=108 {
+                for samples in [false, true] {
+                    let signal = render_held_gm0(key, vel, samples);
+                    let (rebound_db, levels) = held_note_rebound_db(&signal, sr);
+                    assert!(
+                        rebound_db <= 1.5,
+                        "GM0 key {key} vel {vel} samples={samples} rebounds {rebound_db:.2} dB through \
                      the engine after its 150 ms attack budget (50 ms RMS: {levels:?})"
                 );
+                }
             }
         }
+    }
+
+    /// MM-BUG-KILN-00133: a fixed recording must not force the modeled body to
+    /// one global seed. Repeated default-piano notes need the engine's per-voice
+    /// variation without re-opening the handoff trough.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn sampled_gm0_repeated_notes_are_not_clones() {
+        let sr = 44_100.0;
+        let render = |seed: u32| {
+            let mut voice = crate::voices::make(0, 72, 100, sr, seed, true);
+            let mut out = vec![0.0; (0.700 * sr) as usize];
+            voice.render(&mut out);
+            out
+        };
+        let a = render(0x9E37);
+        let a2 = render(0x9E37);
+        let b = render(0x9E37 ^ 2_654_435_761);
+        assert!(
+            a.iter().zip(&a2).all(|(x, y)| x.to_bits() == y.to_bits()),
+            "same engine seed must keep GM0 deterministic"
+        );
+        let ncc = ncc_max(&a, &b, 128);
+        assert!(
+            ncc < 0.99,
+            "different engine seeds leave repeated GM0 notes cloned (NCC {ncc:.6})"
+        );
     }
 
     fn render_keyboard_una_corda(program: u8, soft: bool) -> Vec<f32> {

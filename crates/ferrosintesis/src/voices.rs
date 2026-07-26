@@ -1225,16 +1225,16 @@ pub(crate) enum PianoSampleCal {
     /// window: the most attack-peak margin available without losing gap behaviour.
     /// Swept over keys 36/48/60/72/84 x vel 40/64/100/120.
     ///
-    /// The sample retirement stays at the conditioned bank's SHORT 0.18-0.45 s;
-    /// lengthening it to 0.55/0.65/0.75 s made both properties worse.
+    /// The sample retirement stays at the conditioned bank's SHORT 0.18-0.45 s
+    /// below C♯6; lengthening it to 0.55/0.65/0.75 s made both properties worse.
     /// MM-BUG-KILN-00130 found the remaining ~5-9 dB trough was also a phase
     /// mismatch: sample/model correlation measured −0.64..−0.87 before the seam,
     /// then turned positive. `wrap_release_b1` therefore flips the inaudible sample
-    /// polarity, brings the model in 10% faster, and freezes that ratio at key-up.
-    /// Because the recording is fixed, the paired model phase is fixed too:
-    /// randomizing only the model changed reinforcement into cancellation on the
-    /// engine's normal seed (MM-BUG-KILN-00133). The held-note rebound is now at
-    /// most 1.5 dB without losing the damper gap.
+    /// polarity, uses a register-matched modeled rise, and freezes that ratio at key-up.
+    /// MM-BUG-KILN-00133 made the overlap phase-robust across the engine's
+    /// per-note modeled phases, and retires the faster-decaying C♯6+ recordings
+    /// over 0.12-0.30 s. The held-note rebound is now at most 1.5 dB without
+    /// losing either variation or the damper gap.
     B1Upright,
 }
 
@@ -1462,14 +1462,11 @@ const GM0_FORTE_LAYER_GAIN: f32 = 0.569;
 /// and, more importantly, for why the usable window is only about 1.2-1.3 wide.
 /// Swept, not guessed: 0.90 leaves the model outrunning the recorded hammer.
 const B1_SAMPLE_GAIN: f32 = 1.30;
-/// The B1 keeps the conditioned bank's short sample retirement window. Its
-/// model uses a separate, slower rise from note start; see `LaFx`.
+/// The B1 recording decays faster than the model. Its established bass/mid
+/// window preserves the recorded identity; only C♯6+ needs earlier retirement
+/// before the much faster treble decay can expose a trough.
 const B1_SAMPLE_FADE: (f32, f32) = (0.18, 0.45);
-/// The B1 handoff phase-matches one fixed recording per key to its modeled body.
-/// A randomized model phase changes that relationship on every note and can turn
-/// the intended reinforcement back into a cancellation trough.
-const B1_MODEL_PHASE_SEED: u32 = 5;
-
+const B1_TREBLE_SAMPLE_FADE: (f32, f32) = (0.12, 0.30);
 fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32, release_t60: f32) -> Modal {
     let f = key_freq(key);
     let v = vel_amp(vel);
@@ -12766,15 +12763,10 @@ pub fn acoustic_grand_with_bank(
     // One damper, one note: the modeled body and the sampled onset release
     // together, at a rate that depends on WHERE on the keyboard this note sits.
     let (model_t60, la_t60) = damper.t60_for(key);
-    let model_seed = if !bank.is_empty() && cal == PianoSampleCal::B1Upright {
-        B1_MODEL_PHASE_SEED
-    } else {
-        seed
-    };
     let model: Box<dyn Voice> = if bright {
-        Box::new(bright_acoustic_piano(key, vel, sr, model_seed, model_t60))
+        Box::new(bright_acoustic_piano(key, vel, sr, seed, model_t60))
     } else {
-        Box::new(acoustic_piano(key, vel, sr, model_seed, model_t60))
+        Box::new(acoustic_piano(key, vel, sr, seed, model_t60))
     };
     // The conditioned forte takes share the same unweighted macro envelope as
     // pp/mf, but their brighter spectrum measures about 4.9 dB louder through
@@ -12806,7 +12798,14 @@ pub fn acoustic_grand_with_bank(
         // damper is chosen independently by the caller.
         let (gain, fade) = match cal {
             PianoSampleCal::Gm0Conditioned => (GM0_SAMPLE_GAIN * layer_gain, GM0_SAMPLE_FADE),
-            PianoSampleCal::B1Upright => (B1_SAMPLE_GAIN, B1_SAMPLE_FADE),
+            PianoSampleCal::B1Upright => (
+                B1_SAMPLE_GAIN,
+                if key >= 85 {
+                    B1_TREBLE_SAMPLE_FADE
+                } else {
+                    B1_SAMPLE_FADE
+                },
+            ),
             PianoSampleCal::LegacyNormalized => LA_PIANO,
         };
         if cal == PianoSampleCal::B1Upright {

@@ -5,19 +5,19 @@
 - **Severity:** Medium
 - **Area:** voices / BowedString
 - **Raised:** 2026-07-26
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260726T232502Z-p9812-n299435500-c21
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00146-run-fix-20260726T232502Z-p9812-n299435500-c21
-- **Owner base:** ebc1dda32db951d19e3b7cc4ee53e767f411dcea
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T23:25:02Z
-- **Owner until:** 2026-07-27T00:10:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
+- **Attempts:** fix=1, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high)
 
 ## Observation
@@ -41,3 +41,23 @@ The engine is unaffected: it hands out `0xBA60 ^ (index * 2654435761)` (crates/f
 <unfixed — raised only>
 
 ## Notes
+
+### Fix attempt summary (2026-07-27, deltic:auto run=fix-20260726T232502Z-p9812-n299435500-c21 outcome=no_work)
+
+Agent-reported summary: MM-BUG-KILN-00146 is already fixed in the current tree by the BowedString cello bow-force ceiling and the register regression tests in voices.rs. I reproduced the original observation by temporarily disabling the cello ceiling and running the focused cello register regression; it failed on GM42 keys 74 and 76 at about +1203 cents, matching the ledger. Restoring the ceiling made the same focused regression pass. The existing calibration test also passes and proves the register oracle still detects an un-ceiled high-force cello failure. No bug ledger, Cargo manifest, lockfile, journal, scratchpad, or lessons file was edited.
+
+Root cause: GM42 cello uses a short BowedString waveguide loop; at the top of the register, a high per-note bow-force draw can drive the loop onto the octave mode instead of the requested fundamental. The old wolf-band gate used small literal seeds 7/17/23, and raw xorshift32 maps their first draw near -1, so the test repeatedly exercised only the minimum bow force while production engine seeds cover the high
+
+Changed:
+- No durable source/test edit was needed in this pass; the current tree already contains the cello bow-force ceiling and BowedString register gates in crates/ferr
+- Wrote .deltic-run-summary.json only.
+
+Tests:
+- Expected failure after temporary no-ceiling edit: cargo test -p ferrosintesis --release bowed_string_cello_holds_register -- --nocapture (failed on GM42 keys 74
+- Focused regression: cargo test -p ferrosintesis --release bowed_string_cello_holds_register (passed).
+- Calibration support: cargo test -p ferrosintesis --release calibrate_register_gate_catches_the_known_wolf (passed).
+- Measurement support: cargo test -p ferrosintesis --release map_bowedstring_bow_force_ceiling -- --ignored --nocapture (passed).
+
+Left alone:
+- bugs/
+- Cargo.toml

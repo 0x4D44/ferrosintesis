@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00125 — Realtime prewarm omits the split accent-cymbal PCM cache
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** sampler / realtime drum kit
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T070129Z-p8852-n850611500-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00125-run-fix-20260726T070129Z-p8852-n850611500-c1
-- **Owner base:** 240f0b9d3f7a1962c0785cd51a5fdd6168efc9d2
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T07:01:29Z
-- **Owner until:** 2026-07-26T09:01:29Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`)
+- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T070129Z-p8852-n850611500-c1 branch=task/bug-MM-BUG-KILN-00125-run-fix-20260726T070129Z-p8852-n850611500-c1 code=62f6efc1175a1b8b8d3dff0aa99d595385ccd8f9 gate=manual)
 
 ## Observation
 

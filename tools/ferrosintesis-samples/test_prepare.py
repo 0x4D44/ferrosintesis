@@ -1285,9 +1285,27 @@ class LocalBankSelectionTest(unittest.TestCase):
 
 
 class GrandRegenerationRecipeTest(unittest.TestCase):
-    """MM-BUG-KILN-00135: packaged grand docs must select only the grand family."""
+    """MM-BUG-KILN-00135/00142: the copyable recipe selects only the grand family."""
 
     COMMAND = "python tools/ferrosintesis-samples/prepare.py --only=grand"
+
+    @staticmethod
+    def fenced_prepare_commands(text):
+        commands = []
+        block = None
+        for line in text.splitlines():
+            if line.startswith("```"):
+                if block is None:
+                    block = []
+                else:
+                    commands.extend(
+                        candidate.strip() for candidate in block
+                        if "prepare.py" in candidate
+                    )
+                    block = None
+            elif block is not None:
+                block.append(line)
+        return commands
 
     def test_packaged_grand_docs_use_the_scoped_command(self):
         crate = os.path.join(
@@ -1295,7 +1313,19 @@ class GrandRegenerationRecipeTest(unittest.TestCase):
         for name in ("README.md", "PROVENANCE.md"):
             with self.subTest(name=name):
                 with open(os.path.join(crate, name), encoding="utf-8") as f:
-                    self.assertIn(self.COMMAND, f.read())
+                    commands = self.fenced_prepare_commands(f.read())
+                self.assertEqual(commands, [self.COMMAND])
+
+    def test_wrong_fenced_command_is_not_redeemed_by_correct_prose(self):
+        adversarial = f"""
+```powershell
+python tools/ferrosintesis-samples/prepare.py
+```
+
+For comparison, the text mentions {self.COMMAND}.
+"""
+        self.assertNotEqual(
+            self.fenced_prepare_commands(adversarial), [self.COMMAND])
 
     def test_grand_selector_excludes_unrelated_local_banks(self):
         local_only, only = prepare._family_selection(["--only=grand"])

@@ -17,8 +17,13 @@ It is a separate crate so that `ferrosintesis-samples-core` stays under the
 crates.io 10 MiB publish cap.
 
 The WAVs under `samples/` are source, not build output. Regenerate only this bank
-from the repo root with
-`python tools/ferrosintesis-samples/prepare.py --only=grand`. That scoped path
-fetches and SHA-256-verifies the pinned Salamander `.tar.bz2`, decoded with
-Python's stdlib. A bare `prepare.py` invocation is the full multi-bank workflow;
-it rewrites unrelated sample crates and needs their additional tools.
+from the repo root:
+
+```powershell
+python tools/ferrosintesis-samples/prepare.py --only=grand
+```
+
+That scoped path fetches and SHA-256-verifies the pinned Salamander `.tar.bz2`,
+decoded with Python's stdlib. A bare `prepare.py` invocation is the full
+multi-bank workflow; it rewrites unrelated sample crates and needs their
+additional tools.

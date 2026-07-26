@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00132 — Gong provenance oracle pins the velocity boundary as a literal, so it can drift again
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** testing / provenance
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T101323Z-p35124-n478892700-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00132-run-fix-20260726T101323Z-p35124-n478892700-c1
-- **Owner base:** 9f3cbe279ee078561f6aa4c93e8bf67520c47bbd
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T10:13:23Z
-- **Owner until:** 2026-07-26T12:13:23Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T101323Z-p35124-n478892700-c1 branch=task/bug-MM-BUG-KILN-00132-run-fix-20260726T101323Z-p35124-n478892700-c1 code=3de3c3ef7d221b66e4b5223691766a4b15591223 gate=manual)
 
 ## Observation
 

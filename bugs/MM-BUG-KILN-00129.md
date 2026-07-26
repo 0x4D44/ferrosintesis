@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** gong sample-bank provenance
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T084844Z-p17868-n593068000-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00129-run-fix-20260726T084844Z-p17868-n593068000-c1
+- **Owner base:** 1a412a84e18e8b95586fe3612c1e1cd7bdafc4c3
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T08:48:44Z
+- **Owner until:** 2026-07-26T10:48:44Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

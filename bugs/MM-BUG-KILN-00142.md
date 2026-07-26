@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** testing / provenance
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T151417Z-p52260-n404105000-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00142-run-fix-20260726T151417Z-p52260-n404105000-c1
+- **Owner base:** 42ac59d9861478873ea58eda1bc343234d51c030
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T15:14:17Z
+- **Owner until:** 2026-07-26T17:14:17Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

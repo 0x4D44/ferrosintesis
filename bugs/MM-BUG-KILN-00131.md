@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00131 — Core drum-kit crate rustdoc names the wrong kick mic source (mid_kick_snon)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample packaging / provenance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T100451Z-p32652-n863317900-c1 branch=task/bug-MM-BUG-KILN-00131-run-fix-20260726T100451Z-p32652-n863317900-c1 code=4e2ee12b84f3cb0c4891d90745cd09dc602fc1cf gate=manual)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T100451Z-p32652-n863317900-c1 branch=task/bug-MM-BUG-KILN-00131-run-fix-20260726T100451Z-p32652-n863317900-c1 code=4e2ee12b84f3cb0c4891d90745cd09dc602fc1cf gate=manual) -> Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I RAISED this bug during the two-eyes verification of MM-BUG-KILN-00126 but did not fix it (fixer: deltic:auto role=fix), so I am eligible as the second pair of eyes, on the same footing as the MM-BUG-KILN-00110 closure. Repo gate green on the fix-bearing tree: `cargo fmt --all --check`, both clippy configurations with `-D warnings`, `test -p ferrosintesis --no-default-features --locked` (635 passed) and `test --workspace --exclude amp-lab --locked` (742 passed) - 1480 tests, 0 failures. Original observation re-run at source: `crates/ferrosintesis-samples-drumkit/src/lib.rs:682` now documents the kick as `kickmic_kick_snon`, matching the generator's actual source URL at `prepare_drumkit.py:105-109`. A repo-wide sweep finds one remaining `mid_kick_snon`, in `wrk_docs/2026.07.26 - CR - ...md` - a correctly dated code-review record, which this bug's own body said to leave alone as immutable history. The fix also did the part that stops it recurring, which is what I asked for: `test_core_provenance_source_stems_match_the_generator_manifest` is renamed `test_core_documented_source_stems_match_the_generator_manifest` and now parses the crate's `src/lib.rs` rustdoc alongside `PROVENANCE.md`, comparing BOTH against the same expectation derived from the generator's `BANKS`/`PSEUDO_RR_BANKS` manifest - so the gap that let this instance drift is closed, not just the instance. I proved the extension is non-vacuous by reintroducing the exact defect: restoring `mid_kick_snon` in the rustdoc turns it red with a precise diff (`'kick': 'mid_kick_snon'` != `'kick': 'kickmic_kick_snon'`). Restored; `git status --porcelain` clean.)
 
 ## Observation
 

@@ -3799,9 +3799,8 @@ mod tests {
             let sum: f32 = bands.iter().sum::<f32>().max(1e-12);
             bands.map(|b| b / sum)
         };
-        let dist = |a: [f32; 5], b: [f32; 5]| {
-            a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f32>()
-        };
+        let dist =
+            |a: [f32; 5], b: [f32; 5]| a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f32>();
 
         //     What the assertion can honestly be is STRUCTURAL: key 57 must not render
         //     as any round robin of key 49. Reverting the routing makes 57 rr(n) equal

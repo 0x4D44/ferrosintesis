@@ -5414,9 +5414,30 @@ mod tests {
         };
         let hits = |ch: u8| {
             [
-                (0.05, EvKind::NoteOn { ch, key: 38, vel: 108 }),
-                (0.40, EvKind::NoteOn { ch, key: 42, vel: 96 }),
-                (0.75, EvKind::NoteOn { ch, key: 38, vel: 120 }),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch,
+                        key: 38,
+                        vel: 108,
+                    },
+                ),
+                (
+                    0.40,
+                    EvKind::NoteOn {
+                        ch,
+                        key: 42,
+                        vel: 96,
+                    },
+                ),
+                (
+                    0.75,
+                    EvKind::NoteOn {
+                        ch,
+                        key: 38,
+                        vel: 120,
+                    },
+                ),
             ]
         };
         // Channel 10 is the reference: no declaration needed, the ladder always applied.
@@ -5428,7 +5449,14 @@ mod tests {
         // An XG-declared drum channel: CC0 = 127, then the kit program.
         let xg = |ch: u8, prog: u8| {
             let mut ev = vec![
-                (0.0, EvKind::Cc { ch, num: 0, val: 127 }),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch,
+                        num: 0,
+                        val: 127,
+                    },
+                ),
                 (0.0, EvKind::Prog { ch, prog }),
             ];
             ev.extend(hits(ch));

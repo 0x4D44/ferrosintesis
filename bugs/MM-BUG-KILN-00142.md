@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00142 — Grand recipe guard is a substring check, so a wrong fenced command still passes
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** testing / provenance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T151417Z-p52260-n404105000-c1 branch=task/bug-MM-BUG-KILN-00142-run-fix-20260726T151417Z-p52260-n404105000-c1 code=a80da2b81591fcd7f4d1e0ea7ef3534044ad9695 gate=manual)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T151417Z-p52260-n404105000-c1 branch=task/bug-MM-BUG-KILN-00142-run-fix-20260726T151417Z-p52260-n404105000-c1 code=a80da2b81591fcd7f4d1e0ea7ef3534044ad9695 gate=manual) -> Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I raised this bug out of the MM-BUG-KILN-00135 verification but did not fix it (fixer: deltic:auto role=fix), so I am eligible as the second pair of eyes, on the same footing as the MM-BUG-KILN-00110 closure. Repo gate green on the fix-bearing tree: `cargo fmt --all --check`, both clippy configurations with `-D warnings`, and both test suites - 1486 tests, 0 failures; the sample-tool Python suite passes 78, up from 75. Original observation re-run against the real documents, and the fix is exactly the remedy this report asked for. The whole-file `assertIn` is gone: `fenced_prepare_commands` (`tools/ferrosintesis-samples/test_prepare.py:1334`) walks the document, collects only the lines inside fenced code blocks that mention `prepare.py`, and the assertion is now `assertEqual(commands, [COMMAND])` - an exact match on the copyable recipe rather than a substring search that any passing mention could satisfy. I ran the extractor over both packaged documents myself: `crates/ferrosintesis-samples-grand/README.md` and `PROVENANCE.md` each yield exactly `['python tools/ferrosintesis-samples/prepare.py --only=grand']`, so the fenced recipe is the scoped one and the legitimate prose discussion of the bare invocation no longer counts toward the check. The adversarial fixture this report explicitly asked for exists as `test_wrong_fenced_command_is_not_redeemed_by_correct_prose`, and I confirmed its premise by hand rather than trusting the name: feeding the extractor a document whose fence holds the bare command while its prose names the scoped one returns `['python tools/ferrosintesis-samples/prepare.py']`, which is not equal to the expected list, so the guard REJECTS it. That is precisely the hole reported here, now closed and pinned. No residual.)
 
 ## Observation
 

@@ -610,10 +610,16 @@ pub struct BankSource {
     pub wav: fn(&str) -> Option<&'static [u8]>,
     /// Decoded mono 16-bit 44.1 kHz PCM for an exact file name, or `None` if absent.
     pub pcm: fn(&str) -> Option<&'static [i16]>,
+    /// Decoded PCM at an exact inventory index, or `None` if out of range.
+    pub pcm_by_index: fn(usize) -> Option<&'static [i16]>,
 }
 
 /// This crate's own embedded inventory. `ferrosintesis-samples-drumkit2` declares its own.
-pub static SOURCE: BankSource = BankSource { wav: get, pcm };
+pub static SOURCE: BankSource = BankSource {
+    wav: get,
+    pcm,
+    pcm_by_index,
+};
 
 /// A cymbal articulation: `vel_hi.len()` velocity layers x `round_robins`
 /// round-robin takes. File names follow `<name>_vl{L}_rr{R}.wav`, 1-based.
@@ -628,6 +634,9 @@ pub struct Bank {
     pub round_robins: usize,
     /// The crate embedding this bank's takes. See [`BankSource`].
     pub source: &'static BankSource,
+    /// First take in the owning source's PCM cache.
+    #[doc(hidden)]
+    pub first_sample_index: usize,
 }
 
 /// Ride cymbal, bow hit (`mid_ride_ride`).
@@ -636,6 +645,7 @@ pub static RIDE: Bank = Bank {
     vel_hi: &[42, 85, 127],
     round_robins: 4,
     source: &SOURCE,
+    first_sample_index: 56,
 };
 /// Ride cymbal, bell hit (`mid_ride_bell`).
 pub static RIDE_BELL: Bank = Bank {
@@ -643,6 +653,7 @@ pub static RIDE_BELL: Bank = Bank {
     vel_hi: &[42, 85, 127],
     round_robins: 3,
     source: &SOURCE,
+    first_sample_index: 68,
 };
 /// Hi-hat, closed hit (`mid_hh_closed`).
 pub static HH_CLOSED: Bank = Bank {
@@ -650,6 +661,7 @@ pub static HH_CLOSED: Bank = Bank {
     vel_hi: &[31, 63, 95, 127],
     round_robins: 4,
     source: &SOURCE,
+    first_sample_index: 0,
 };
 /// Hi-hat, open hit (`mid_hh_open`).
 pub static HH_OPEN: Bank = Bank {
@@ -657,6 +669,7 @@ pub static HH_OPEN: Bank = Bank {
     vel_hi: &[31, 63, 95, 127],
     round_robins: 3,
     source: &SOURCE,
+    first_sample_index: 16,
 };
 /// Hi-hat, pedal (`mid_hh_pedal`).
 pub static HH_PEDAL: Bank = Bank {
@@ -664,6 +677,7 @@ pub static HH_PEDAL: Bank = Bank {
     vel_hi: &[42, 85, 127],
     round_robins: 4,
     source: &SOURCE,
+    first_sample_index: 28,
 };
 /// Kick drum, snares on (`mid_kick_snon`) -- the source's full 4x4 grid of
 /// velocity layers x TRUE round robins.
@@ -672,6 +686,7 @@ pub static KICK: Bank = Bank {
     vel_hi: &[31, 63, 95, 127],
     round_robins: 4,
     source: &SOURCE,
+    first_sample_index: 40,
 };
 /// Snare, center hit (`mid_snare_center`). The source has 36 single-take
 /// velocity layers and no round robins; each of this bank's 6 layers fills
@@ -682,6 +697,7 @@ pub static SNARE: Bank = Bank {
     vel_hi: &[21, 41, 63, 84, 105, 127],
     round_robins: 3,
     source: &SOURCE,
+    first_sample_index: 86,
 };
 /// Snare with the wires thrown off (`mid_snareoff_center`); adjacent-layer
 /// round robins as `SNARE`.
@@ -690,6 +706,7 @@ pub static SNARE_OFF: Bank = Bank {
     vel_hi: &[32, 63, 95, 127],
     round_robins: 3,
     source: &SOURCE,
+    first_sample_index: 104,
 };
 /// Snare cross-stick (`mid_snare_crossstick`) -- the GM 37 side stick;
 /// adjacent-layer round robins.
@@ -698,6 +715,7 @@ pub static SIDESTICK: Bank = Bank {
     vel_hi: &[47, 87, 127],
     round_robins: 3,
     source: &SOURCE,
+    first_sample_index: 77,
 };
 /// High (rack) tom, center hit (`mid_htom_center`), root ~181 Hz;
 /// adjacent-layer round robins.
@@ -706,6 +724,7 @@ pub static TOM_HI: Bank = Bank {
     vel_hi: &[31, 63, 95, 127],
     round_robins: 3,
     source: &SOURCE,
+    first_sample_index: 116,
 };
 /// Low (floor) tom, center hit (`mid_ltom_center`), root ~113.5 Hz;
 /// adjacent-layer round robins.
@@ -714,6 +733,7 @@ pub static TOM_LO: Bank = Bank {
     vel_hi: &[31, 63, 95, 127],
     round_robins: 3,
     source: &SOURCE,
+    first_sample_index: 128,
 };
 
 /// Every articulation in the kit.
@@ -741,6 +761,13 @@ impl Bank {
     ///
     /// Panics if `layer` or `rr` is out of range.
     pub fn file_name(&self, layer: usize, rr: usize) -> String {
+        self.take_index(layer, rr);
+        format!("{}_vl{}_rr{}.wav", self.name, layer + 1, rr + 1)
+    }
+
+    /// Owning source's direct cache index for a take (0-based indices).
+    #[doc(hidden)]
+    pub fn take_index(&self, layer: usize, rr: usize) -> usize {
         assert!(
             layer < self.layers() && rr < self.round_robins,
             "{}: take vl{}/rr{} out of range ({} layers x {} round robins)",
@@ -750,7 +777,7 @@ impl Bank {
             self.layers(),
             self.round_robins,
         );
-        format!("{}_vl{}_rr{}.wav", self.name, layer + 1, rr + 1)
+        self.first_sample_index + layer * self.round_robins + rr
     }
 
     /// Raw embedded WAV bytes for a take (0-based indices).
@@ -762,8 +789,8 @@ impl Bank {
     /// Decoded mono 16-bit PCM at 44.1 kHz for a take (0-based indices).
     /// All files are decoded once on first use and cached.
     pub fn pcm(&self, layer: usize, rr: usize) -> &'static [i16] {
-        let name = self.file_name(layer, rr);
-        (self.source.pcm)(&name).expect("the embedded inventory covers every bank take")
+        let index = self.take_index(layer, rr);
+        (self.source.pcm_by_index)(index).expect("the embedded inventory covers every bank take")
     }
 }
 
@@ -784,6 +811,12 @@ pub fn pcm(name: &str) -> Option<&'static [i16]> {
         .iter()
         .position(|(candidate, _)| *candidate == name)?;
     Some(&cache[idx])
+}
+
+/// Returns decoded PCM at an exact inventory index.
+#[doc(hidden)]
+pub fn pcm_by_index(index: usize) -> Option<&'static [i16]> {
+    decoded_samples().get(index).map(Vec::as_slice)
 }
 
 /// Decode this package's complete PCM inventory now.
@@ -887,6 +920,27 @@ mod tests {
         for bank in BANKS {
             assert_eq!(*bank.vel_hi.last().unwrap(), 127, "{}", bank.name);
             assert!(bank.vel_hi.windows(2).all(|w| w[0] < w[1]), "{}", bank.name);
+        }
+    }
+
+    #[test]
+    fn bank_take_indices_match_the_owning_inventory() {
+        for bank in BANKS {
+            for layer in 0..bank.layers() {
+                for rr in 0..bank.round_robins {
+                    let index = bank.take_index(layer, rr);
+                    let name = bank.file_name(layer, rr);
+                    assert_eq!(
+                        SAMPLES[index].0, name,
+                        "{} mapped the wrong take",
+                        bank.name
+                    );
+                    assert!(std::ptr::eq(
+                        bank.pcm(layer, rr),
+                        pcm_by_index(index).expect("bank index is in range"),
+                    ));
+                }
+            }
         }
     }
 

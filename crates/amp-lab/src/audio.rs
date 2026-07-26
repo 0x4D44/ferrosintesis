@@ -465,6 +465,34 @@ mod tests {
         );
     }
 
+    /// MM-BUG-KILN-00127: a prewarmed sampled drum NoteOn allocates only its
+    /// engine-owned `Box<dyn Voice>`. Selecting the take itself must use direct
+    /// bounded indexing, without formatting a file name or scanning the bank.
+    #[test]
+    fn sampled_drum_note_on_does_not_allocate_for_take_lookup() {
+        use crate::rtalloc::measure;
+
+        let mut core = core_for(&smf(&[]));
+        core.synth.prewarm_samples();
+        core.synth.reserve_realtime_storage();
+        let mut buf = vec![0f32; 1024 * 2];
+        core.process(&mut buf, 1024).expect("warm");
+        core.command(Cmd::Play(false));
+        core.process(&mut buf, 1024).expect("settle");
+
+        let (_, allocations) = measure(|| {
+            core.command(Cmd::Midi(0x99));
+            core.command(Cmd::Midi(38));
+            core.command(Cmd::Midi(100));
+            core.process(&mut buf, 1024)
+        });
+        assert_eq!(
+            allocations, 1,
+            "a prewarmed sampled snare NoteOn allocated {allocations} times; \
+             only its engine-owned Box<dyn Voice> is expected"
+        );
+    }
+
     /// MM-BUG-KILN-00081: a callback LARGER than the scratch must still produce audio.
     ///
     /// `fill_device` used to require the whole callback to fit in its 4096-frame scratch

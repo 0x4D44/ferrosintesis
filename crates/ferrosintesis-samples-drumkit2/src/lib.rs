@@ -224,7 +224,11 @@ static PCM_CACHE: OnceLock<Vec<Vec<i16>>> = OnceLock::new();
 
 /// This crate's own embedded inventory, handed to each [`Bank`] below so that
 /// [`Bank::wav`] resolves against the crate that actually holds the bytes.
-pub static SOURCE: BankSource = BankSource { wav: get, pcm };
+pub static SOURCE: BankSource = BankSource {
+    wav: get,
+    pcm,
+    pcm_by_index,
+};
 
 /// Crash cymbal, normal hit (`mid_crash_crash`). GM 49 / 57.
 pub static CRASH: Bank = Bank {
@@ -232,6 +236,7 @@ pub static CRASH: Bank = Bank {
     vel_hi: &[42, 85, 127],
     round_robins: 4,
     source: &SOURCE,
+    first_sample_index: 20,
 };
 /// Sizzle crash (`mid_crash_sizzle`).
 ///
@@ -243,6 +248,7 @@ pub static CRASH_SIZZLE: Bank = Bank {
     vel_hi: &[42, 85, 127],
     round_robins: 4,
     source: &SOURCE,
+    first_sample_index: 32,
 };
 /// Hi-hat splash (`mid_hh_splash`) -- one full-range velocity layer at the
 /// source; the nearest thing this kit has to a splash cymbal. GM 55.
@@ -251,6 +257,7 @@ pub static SPLASH: Bank = Bank {
     vel_hi: &[127],
     round_robins: 4,
     source: &SOURCE,
+    first_sample_index: 44,
 };
 /// 18" china, stick hit (Big Rusty Drums `cn`, overhead mic). GM 52.
 pub static CHINA: Bank = Bank {
@@ -258,6 +265,7 @@ pub static CHINA: Bank = Bank {
     vel_hi: &[25, 51, 76, 101, 127],
     round_robins: 4,
     source: &SOURCE,
+    first_sample_index: 0,
 };
 
 /// Every articulation in this half of the kit.
@@ -280,6 +288,12 @@ pub fn pcm(name: &str) -> Option<&'static [i16]> {
         .iter()
         .position(|(candidate, _)| *candidate == name)?;
     Some(&cache[idx])
+}
+
+/// Returns decoded PCM at an exact inventory index.
+#[doc(hidden)]
+pub fn pcm_by_index(index: usize) -> Option<&'static [i16]> {
+    decoded_samples().get(index).map(Vec::as_slice)
 }
 
 /// Decode this package's complete PCM inventory now.
@@ -415,11 +429,21 @@ mod tests {
             for layer in 0..bank.layers() {
                 for rr in 0..bank.round_robins {
                     let name = bank.file_name(layer, rr);
+                    let index = bank.take_index(layer, rr);
                     assert!(
                         get(&name).is_some(),
                         "{name}: bank {} does not resolve in this crate",
                         bank.name
                     );
+                    assert_eq!(
+                        SAMPLES[index].0, name,
+                        "{} mapped the wrong take",
+                        bank.name
+                    );
+                    assert!(std::ptr::eq(
+                        bank.pcm(layer, rr),
+                        pcm_by_index(index).expect("bank index is in range"),
+                    ));
                     assert!(!bank.pcm(layer, rr).is_empty(), "{name}: empty PCM");
                     takes += 1;
                 }

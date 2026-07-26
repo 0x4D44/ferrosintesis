@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample assets / GM0 piano routing documentation
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T134703Z-p37944-n509596200-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00136-run-fix-20260726T134703Z-p37944-n509596200-c1
+- **Owner base:** be1337d3359ae20d9489129701c2b8dc6ce0985f
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T13:47:03Z
+- **Owner until:** 2026-07-26T15:47:03Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

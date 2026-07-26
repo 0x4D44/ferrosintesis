@@ -6979,7 +6979,8 @@ mod tests {
         // temp probe over assert_wrap_seam's exact windows):
         // nylon k76 = 1.72×/1.61× at vel 72/100 (in contract) but 3.22× at
         // vel 40 — the DOCUMENTED vel-40 limit (the corner scales with the
-        // velocity law), so the k76 row runs at vel 72 only. STEEL k76 is
+        // velocity law), so vel 40 stays excluded. MM-BUG-KILN-00051 widened
+        // the calibrated medium-velocity coverage to 56/72/86. STEEL k76 is
         // NOT added: 3.6–4.0× at EVERY velocity — a velocity-independent
         // take-vs-model LEVEL parity gap at high keys (the peak-normalized
         // recording speaks ~4× above the now-ringing model), a separate
@@ -6987,7 +6988,7 @@ mod tests {
         for (program, key, vels) in [
             (24u8, 52u8, &[40u8, 72][..]),
             (24, 64, &[40, 72]),
-            (24, 76, &[72]),
+            (24, 76, &[56, 72, 86]),
             (25, 52, &[40, 72]),
             (25, 64, &[40, 72]),
         ] {
@@ -8106,52 +8107,12 @@ mod tests {
         let attack_windows = if label == "piano-low" { 4 } else { 3 };
         let attack = fine[..attack_windows].iter().fold(0f32, |mx, &x| mx.max(x));
         let late = fine[attack_windows..].iter().fold(0f32, |mx, &x| mx.max(x));
-
         // The `harpsichord-low` exception that used to sit here is GONE, retired by its
         // own bounded assertion exactly as designed: once `LaFx::vel_sense` made the LA
         // onset inherit the model's compression (MM-BUG-KILN-00030), the bloom fell from
         // ~1.118 to 0.743 and tripped the `<= 1.02` side of the bound. The harpsichord
         // now meets the same attack-owns-the-peak rule as every other struck voice, so
         // it needs no special case here.
-
-        // KNOWN, NAMED interaction — the plucked-family t60 re-fit (2026.07.23) —
-        // self-retiring. The nylon/steel guitars now ring far longer, so the MODEL
-        // sustain sits higher relative to the LA sample onset, and the sample→model
-        // crossfade seam shows a small bloom (~5 %, 0.4 dB) a few windows in — the
-        // sample fades out just before the hotter model peaks. The attack is still
-        // essentially the peak; the seam is a level mismatch, not a swell. Filed as
-        // MM-BUG-KILN-00051 (the LA guitar crossfade gain should track the model
-        // level after the re-fit). Bounded on BOTH sides so a fix can't pass
-        // silently: if it drops back under 1.01 the crossfade tracks again and this
-        // exception must go; over 1.15 the seam WORSENED.
-        if label.contains("guitar") {
-            let bloom = late / attack.max(1e-9);
-            assert!(
-                bloom <= 1.15,
-                "{label}: crossfade seam bloom {bloom:.3} worsened past 1.15 \
-                 (KILN-00051) — the LA onset/model level mismatch grew ({fine:?})"
-            );
-            return;
-        }
-
-        // KILN-00048 amplified KILN-00051 at LOW velocity. The velocity/damper
-        // decouple makes a SOFT high note ring like a loud one, so the modelled
-        // sustain now exceeds the (soft, vel-scaled) sampled onset — a larger
-        // seam bloom than the vel-100 guitar case above. Same LA-onset-vs-model
-        // defect (KILN-00051: the crossfade gain should track the model level),
-        // just louder here because the model side moved. Bounded on the high side
-        // so a WORSENING trips (nylon k76 v72 reads ~1.33; a real regression would
-        // blow past 1.4); the low-key rows still read attack-is-peak (bloom < 1).
-        if label.starts_with("gtr-lowvel") {
-            let bloom = late / attack.max(1e-9);
-            assert!(
-                bloom <= 1.4,
-                "{label}: low-vel guitar seam bloom {bloom:.3} > 1.4 — the LA \
-                 onset/model level mismatch WORSENED (KILN-00051, amplified by the \
-                 KILN-00048 decouple) ({fine:?})"
-            );
-            return;
-        }
 
         // 1 % relative tolerance. The intent is "no LATE BLOOM" — the attack owns the
         // peak — and a bloom that matters is tens of percent. An exact float compare

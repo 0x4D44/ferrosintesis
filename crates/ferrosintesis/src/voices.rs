@@ -9207,6 +9207,40 @@ const LA_REED: (f32, (f32, f32)) = (0.45, (0.06, 0.24));
 /// (`guitar_zone_fade_budget`; the `LaVoice` end-taper covers non-44.1 k
 /// rates gracefully).
 pub(crate) const LA_GUITAR: (f32, (f32, f32)) = (0.42, (0.05, 0.28));
+/// GM 24 nylon-guitar seam make-up after the plucked-family decay re-fit.
+///
+/// The velocity-brightness filter lowers the recorded high-register pick more
+/// than the now-longer-running `NYLON` model around medium velocities. At key
+/// 76 that left the model's 250–300 ms crest 1.41×/1.33×/1.08× above the
+/// sample-owned attack at velocities 56/72/86, while key 64 and velocity 100
+/// already met the common attack-owns-the-peak contract. This measured surface
+/// therefore stays exactly 1.0 through key 64 and outside the affected velocity
+/// band, then interpolates to the key-76 correction. Velocity 40 deliberately
+/// remains 1.0: that documented corner already has a sample-over-model seam, so
+/// boosting it would correct the wrong side.
+fn nylon_seam_gain(key: u8, vel: u8) -> f32 {
+    const BY_VELOCITY: [(f32, f32); 5] = [
+        (40.0, 1.00),
+        (56.0, 1.50),
+        (72.0, 1.42),
+        (86.0, 1.14),
+        (100.0, 1.00),
+    ];
+    let v = vel as f32;
+    let mut full = 1.0;
+    if v > BY_VELOCITY[0].0 && v < BY_VELOCITY[BY_VELOCITY.len() - 1].0 {
+        for w in BY_VELOCITY.windows(2) {
+            let (v0, g0) = w[0];
+            let (v1, g1) = w[1];
+            if v <= v1 {
+                full = g0 + (v - v0) / (v1 - v0) * (g1 - g0);
+                break;
+            }
+        }
+    }
+    let key_mix = ((key as f32 - 64.0) / 12.0).clamp(0.0, 1.0);
+    1.0 + key_mix * (full - 1.0)
+}
 /// GM 25 steel guitar — its own LA gain since the Phase-2 Shaped excitation
 /// (pluck-redesign HLD §7). Nylon (24) still uses `LA_GUITAR` and is Legacy,
 /// so the shared constant can't move. `STEEL` went Shaped, which trades the
@@ -13438,7 +13472,7 @@ fn make_uncorrected(
                     key,
                     vel,
                     sr,
-                    gain,
+                    gain * nylon_seam_gain(key, vel),
                     fade,
                     crate::sampler::LaFx {
                         vel_lp: Some(5000.0),

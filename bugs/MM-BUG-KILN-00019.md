@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00019 — Per-program loudness match is damped 0.70×; residuals remain and older album mixes were tuned to the old balance
 
-- **State:** Blocked
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** engine
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; current balance spread matches the reference modules, while changing the 0.70 damping/±6 dB clamp and retouching album controllers require Arthur's listening decision)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; current balance spread matches the reference modules, while changing the 0.70 damping/±6 dB clamp and retouching album controllers require Arthur's listening decision) → Closed (2026-07-26, accepted-design disposition by Arthur after the independent 2026-07-25 control measurement; retain the 0.70 damping and ±6 dB clamp, do not retouch album controllers speculatively, and reopen or raise a focused defect only for a specifically audible album imbalance. No code fix landed because the measured residual is not a defect.)
 
 ## Observation
 
@@ -32,9 +32,16 @@ re-listen.
 
 ## Fix
 
-Optional second pass to tighten the 0.70× damping toward a closer SC-55 match
-(after Arthur listens), paired with a CC7/CC11 re-touch audit of the album mixes
-that were tuned to the old balance. Both are ear-in-the-loop calls.
+Resolved by design decision; no code change.
+
+Arthur accepted the current 0.70× damping and ±6 dB clamp as the shipped policy.
+The independent 2026-07-25 control measurement found that ferrosintesis's
+program-to-program spread already matches the two reference modules. A stronger
+SC-55 fit would be a taste change, not a correctness fix.
+
+Album CC7/CC11 values will not be retouched speculatively. If listening identifies
+a specific audible imbalance, track that concrete album/program observation
+separately with its own before/after evidence.
 
 ## Notes
 
@@ -76,7 +83,7 @@ shipped program-to-program spread is statistically indistinguishable from the SC
 S-YXG50 references, so increasing trim strength is a taste choice rather than a measured
 defect. The album CC7/CC11 retouch likewise needs listening against any chosen trim law.
 
-Unblock when Arthur chooses whether to retain or change the 0.70 damping and ±6 dB clamp
-after listening to the raw proposals, and identifies the album renders that need a
-controller-balance pass under that choice. Implementation and render-diff validation can
-then proceed against a concrete target.
+Resolved 2026-07-26: Arthur chose to retain the 0.70 damping and ±6 dB clamp. No
+album render has been identified as audibly misbalanced, so there is no
+controller-retouch target. The bug is closed as an accepted-design disposition,
+not represented as a code fix.

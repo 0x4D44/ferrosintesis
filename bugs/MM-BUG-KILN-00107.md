@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00107 — PROGRAM_TRIM_DB is calibrated against 2026-07-17 voices and was never re-verified; several trimmed programs have been re-voiced since
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth / instrument balance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high) → Fixed (2026-07-25, Claude Opus 5 (1M); discharged by the closed-loop re-derive in `1f80dbf`) → Fixed, closure REFUSED (2026-07-25, independent verification by Claude Opus 5 (1M) @ high, fresh context; the stated acceptance bar was not met, GM6 is unsettled, and the bug's explicit ear gate was overridden — see the verification note below) → Fixed, ear gate DISCHARGED (2026-07-26, Arthur ratified GM8 +3 and GM110 −6 on an A/B/C listening pass; the Fix note was corrected the same day. Closure now blocked only on the GM6 carve-out — item (c)) → Fixed, ALL CLOSURE CONDITIONS DISCHARGED (2026-07-26, Arthur accepted GM6 +6.0 dB on a Reference-Audition peer comparison backed by a momentary-loudness census; awaiting the two-eyes closure pass, which must be run by someone who authored none of this evidence)
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high) → Fixed (2026-07-25, Claude Opus 5 (1M); discharged by the closed-loop re-derive in `1f80dbf`) → Fixed, closure REFUSED (2026-07-25, independent verification by Claude Opus 5 (1M) @ high, fresh context; the stated acceptance bar was not met, GM6 is unsettled, and the bug's explicit ear gate was overridden — see the verification note below) → Fixed, ear gate DISCHARGED (2026-07-26, Arthur ratified GM8 +3 and GM110 −6 on an A/B/C listening pass; the Fix note was corrected the same day. Closure now blocked only on the GM6 carve-out — item (c)) → Fixed, ALL CLOSURE CONDITIONS DISCHARGED (2026-07-26, Arthur accepted GM6 +6.0 dB on a Reference-Audition peer comparison backed by a momentary-loudness census; awaiting the two-eyes closure pass, which must be run by someone who authored none of this evidence) → Closed (2026-07-26, independently verified by GPT-5 Codex in a fresh session; live two-reference re-derive, pre-fix regression, GM6 peer measurement, and full repo gate all reproduced — see final verification summary)
 
 ## Observation
 
@@ -304,3 +304,39 @@ Related: the report's own section 4 remedy - keeping a per-program residual
 baseline in the repo and diffing against it - was not implemented, while its
 section 5 remedy (deriving `SHIPPED`) was, in the same commit. Raised as
 MM-BUG-KILN-00118.
+
+### Verification summary (2026-07-26, independent second eyes) — CONFIRMED
+
+Verified by GPT-5 Codex in a fresh session. I authored none of the fix,
+ear-gate, GM6-measurement, or earlier verification evidence.
+
+I re-ran the original closed-loop observation on the fix-bearing trunk build:
+128 programs × 6 keys × 2 velocities against ferrosintesis, its no-samples
+twin, the Roland SC-55mkII, and the Yamaha S-YXG50. The panel proposes no
+`PROGRAM_TRIM_DB` changes. The SC-55 anchor is +8.16 dB with MAD 0.51 dB;
+the Yamaha anchor is -0.75 dB with MAD 0.94 dB. Every consumed program is
+below the bus-glue ceiling; only never-trimmed GM127 crosses it. The ordinary
+residual medians are -0.22 dB (SC-55) and -0.14 dB (Yamaha), consistent with
+the accepted run.
+
+The committed cross-run oracle exits 1 with 42 differences against its older
+2026-07-22 baseline. This is recorded, not hidden. It does not contradict this
+closure: it includes intentional post-baseline voice changes and still yields
+`AUTO-SHIP: (none)`. The named GM6 carve-out reproduces the accepted evidence
+almost exactly: current normalized drift is +1.49/-1.16 dB versus the fix
+report's +1.46/-1.07 dB. A separate current Reference Audition measurement
+also places GM6 as the quietest GM0-7 voice, 2.60 LUFS below the family median,
+matching the recorded 2.62 LUFS result.
+
+The regression is non-vacuous. With the current GM8/GM110 pin assertions
+transplanted onto `ff31237^`, `program_trim_scope_and_calibration` fails on
+GM8 (2.0 dB actual versus 3.0 dB required). It passes on trunk, alongside
+`every_program_trim_reaches_the_strip_at_its_tabled_value`,
+`the_strip_actually_applies_the_program_trim`, and
+`derive_trims.py --selftest`.
+
+The full repository gate is green on the fix-bearing tree: `cargo fmt`,
+both clippy configurations with warnings denied, modeled-only tests (636 unit
+and 4 doc), workspace tests (747 ferrosintesis unit tests plus every workspace
+crate/doc suite), and all 78 sample-tool Python tests. No residual remains in
+the bug's stated calibration question.

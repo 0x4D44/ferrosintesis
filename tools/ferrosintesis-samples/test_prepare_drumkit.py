@@ -9,6 +9,41 @@ import prepare_drumkit
 class DrumkitOutputPlanTests(unittest.TestCase):
     """MM-BUG-KILN-00124: the generator must preserve the package split."""
 
+    def test_core_provenance_source_stems_match_the_generator_manifest(self):
+        expected = {}
+        for bank in prepare_drumkit.BANKS:
+            package, family, url_format = bank[0], bank[1], bank[-1]
+            if package == prepare_drumkit.CORE_PACKAGE:
+                basename = os.path.splitext(os.path.basename(url_format))[0]
+                expected[family] = basename.split("_vl{vl}", 1)[0].split(
+                    "_rr{rr}", 1
+                )[0]
+        for bank in prepare_drumkit.PSEUDO_RR_BANKS:
+            package, family, url_format = bank[0], bank[1], bank[-1]
+            if package == prepare_drumkit.CORE_PACKAGE:
+                basename = os.path.splitext(os.path.basename(url_format))[0]
+                expected[family] = basename.split("_vl{vl}", 1)[0]
+
+        provenance_path = os.path.join(
+            prepare_drumkit.REPO_ROOT,
+            "crates",
+            prepare_drumkit.CORE_PACKAGE,
+            "PROVENANCE.md",
+        )
+        with open(provenance_path, encoding="utf-8") as provenance_file:
+            provenance = provenance_file.read()
+        documented = {}
+        for line in provenance.splitlines():
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) < 3 or not cells[0].startswith("`"):
+                continue
+            family = cells[0].split("`", 2)[1]
+            source_stem = cells[2]
+            if source_stem.startswith("`") and source_stem.endswith("`"):
+                documented[family] = source_stem.strip("`")
+
+        self.assertEqual(documented, expected)
+
     def test_output_plan_matches_both_committed_package_inventories(self):
         planned = prepare_drumkit.output_plan()
         committed = {}

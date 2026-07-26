@@ -1,10 +1,13 @@
 # Attack-transient sample-bank tooling
 
-This directory also holds `prepare_drumkit.py`, the generator for the
-sampled-cymbal bank in `crates/ferrosintesis-samples-drumkit/` (Virtuosity
-Drums `mid` mic set + the Big Rusty Drums china, both CC0, pinned by commit
-SHA; FLAC decode shells out to ffmpeg at tool time). That bank's inventory
-and provenance live in `crates/ferrosintesis-samples-drumkit/PROVENANCE.md`.
+This directory also holds `prepare_drumkit.py`, the generator for two CC0
+packages: the 140-WAV core kit in `crates/ferrosintesis-samples-drumkit/`, and
+the 48-WAV accent-cymbal bank in the size-capped companion
+`crates/ferrosintesis-samples-drumkit2/`. Virtuosity Drums supplies the core kit
+and three accent families from its `mid` mic set, except that the core kick uses
+the `kickmic` close-mic set; Big Rusty Drums supplies the china. Both sources are
+pinned by commit SHA, and FLAC decode shells out to ffmpeg at tool time. Each
+package's inventory and source details live in its own `PROVENANCE.md`.
 
 The rest of this README covers `prepare.py`: the generator, tests, bank guide,
 and provenance pointers for ferrosintesis's attack transients. Do not maintain a

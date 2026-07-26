@@ -45,11 +45,13 @@ output** — they are committed and embedded into the synth binary via
 - What it is: a contemporary jazz kit played with sticks by Austin McMahon,
   recorded at Virtuosity Musical Instruments, Boston, by Versilian Studios /
   Karoryfer Samples.
-- Mic set used: **`mid`** — of the seven recorded positions (`kickmic`,
-  `snaremic`, `oh`, `mid`, `room`, `lofi`, plus `perc`), `mid` is the balanced
-  mono-friendly middle position: more direct than `room`, less close than the
-  spot mics, no lo-fi coloration. One mic set keeps the bank size sane and the
-  kit image coherent.
+- Mic sets used: **`mid` for every family except the kick; `kickmic` for the
+  kick**. Of the seven recorded positions (`kickmic`, `snaremic`, `oh`, `mid`,
+  `room`, `lofi`, plus `perc`), `mid` is the balanced mono-friendly middle
+  position: more direct than `room`, less close than the spot mics, with no
+  lo-fi coloration. The kick uses its dedicated close mic because the `mid`
+  captures had little 30–70 Hz energy and sounded boxy; `kickmic` preserves the
+  low end while retaining the same 4×4 snares-on velocity/round-robin grid.
 
 ## Inventory
 
@@ -64,7 +66,7 @@ covers `(previous hi + 1)..=hi` in MIDI velocity; the first starts at 0.
 | `hhc` (hi-hat closed) | 16 | `mid_hh_closed` | 4: ≤31, ≤63, ≤95, ≤127 | 4 | 1.2 s / 0.25 s |
 | `hho` (hi-hat open) | 12 | `mid_hh_open` | 4: ≤31, ≤63, ≤95, ≤127 | 3 | 1.2 s / 0.30 s |
 | `hhp` (hi-hat pedal) | 12 | `mid_hh_pedal` | 3: ≤42, ≤85, ≤127 | 4 | 1.2 s / 0.25 s |
-| `kick` (snares on) | 16 | `mid_kick_snon` | 4: ≤31, ≤63, ≤95, ≤127 | 4 | 0.6 s / 0.15 s |
+| `kick` (snares on, close mic) | 16 | `kickmic_kick_snon` | 4: ≤31, ≤63, ≤95, ≤127 | 4 | 0.6 s / 0.15 s |
 | `snare` (center) | 18 | `mid_snare_center` | 6: ≤21, ≤41, ≤63, ≤84, ≤105, ≤127 | 3* | 0.6 s / 0.20 s |
 | `snareoff` (wires off) | 12 | `mid_snareoff_center` | 4: ≤32, ≤63, ≤95, ≤127 | 3* | 0.6 s / 0.20 s |
 | `sidestick` (cross-stick) | 9 | `mid_snare_crossstick` | 3: ≤47, ≤87, ≤127 | 3* | 0.4 s / 0.10 s |

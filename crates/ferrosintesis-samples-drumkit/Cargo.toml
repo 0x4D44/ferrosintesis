@@ -6,7 +6,7 @@ edition = "2021"
 # turns on clippy's `incompatible_msrv` lint, so a crate without it is silently unpoliced
 # (this one was, until 2026-07-25 — it was the only sample crate missing the line).
 rust-version = "1.87"
-description = "Embedded CC0 sampled-cymbal drum-kit bank for ferrosintesis"
+description = "Embedded CC0 sampled core drum-kit bank for ferrosintesis"
 license = "CC0-1.0"
 repository = "https://github.com/0x4D44/ferrosintesis"
 readme = "README.md"

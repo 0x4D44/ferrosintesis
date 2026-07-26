@@ -10,9 +10,10 @@ sibling `ferrosintesis-samples-drumkit2`, split out on 2026-07-25 to keep each
 package under the crates.io 10 MiB limit. That was a packaging split, not a
 musical one; renders are byte-identical across it.
 
-Source: Virtuosity Drums (`mid` mic set), CC0 1.0 — see `PROVENANCE.md` for the
-pinned revision, the full inventory with SFZ-derived velocity splits, and the
-processing chain. The license text ships as `LICENSE-CC0`.
+Source: Virtuosity Drums, CC0 1.0 — the balanced `mid` mic set for every family
+except the kick, which uses the `kickmic` close-mic set for its low end. See
+`PROVENANCE.md` for the pinned revision, full inventory with SFZ-derived velocity
+splits, and processing chain. The license text ships as `LICENSE-CC0`.
 
 The WAVs under `samples/` are source, not build output; regenerate them with
 `python tools/ferrosintesis-samples/prepare_drumkit.py` from the repo root.

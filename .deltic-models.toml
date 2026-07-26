@@ -1,2 +1,3 @@
 [models]
 bug_fix = "codex"
+bug_verify = "claude"

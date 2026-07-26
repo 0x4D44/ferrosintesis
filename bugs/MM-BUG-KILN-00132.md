@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00132 — Gong provenance oracle pins the velocity boundary as a literal, so it can drift again
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** testing / provenance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T101323Z-p35124-n478892700-c1 branch=task/bug-MM-BUG-KILN-00132-run-fix-20260726T101323Z-p35124-n478892700-c1 code=3de3c3ef7d221b66e4b5223691766a4b15591223 gate=manual)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T101323Z-p35124-n478892700-c1 branch=task/bug-MM-BUG-KILN-00132-run-fix-20260726T101323Z-p35124-n478892700-c1 code=3de3c3ef7d221b66e4b5223691766a4b15591223 gate=manual) -> Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I RAISED this bug during the two-eyes verification of MM-BUG-KILN-00129 but did not fix it (fixer: deltic:auto role=fix), so I am eligible as the second pair of eyes, on the same footing as the MM-BUG-KILN-00110 closure. Repo gate green on the fix-bearing tree: `cargo fmt --all --check`, both clippy configurations with `-D warnings`, `test -p ferrosintesis --no-default-features --locked` (635 passed) and `test --workspace --exclude amp-lab --locked` (744 passed) - 1482 tests, 0 failures. Original observation re-run at source, and the fix does more than the report asked. The literal is gone: `assert_gong_provenance_matches_velocity_boundary` (`sampler.rs:5121`) builds BOTH clauses with `format!` from the boundary it is handed - `hard switch at velocity {loud_vel}` and `soft through velocity {soft_max}` - and the live test passes it `GONG_LOUD_VEL`, so the documentation clause now follows the constant exactly as the two `ptr::eq` clauses already did. This is the pattern I cited from `altbank.rs:1342`. I checked the derivation is genuinely boundary-sensitive by simulating the predicate against the committed provenance: boundary 84 passes both clauses, boundaries 85 and 90 fail both - so moving `GONG_LOUD_VEL` would now turn the test red, which is precisely the hole this bug reported and which I demonstrated was open before. The fix also added something I did not ask for and which is better than a manual probe: `gong_provenance_guard_rejects_a_stale_velocity_boundary` is a `#[should_panic]` negative control that feeds the helper `GONG_LOUD_VEL + 1` and requires it to fail, implementing CLAUDE.md's "write the adversarial document that should fail your oracle, and check that it does". Both tests green, the negative control panicking as designed.)
 
 ## Observation
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00029 — voice models turn over near full velocity: GM42/43 bowed strings DROP up to 1.6 dB from v110 to v127, and GM4's pickup bark peaks at v≈105
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change)
+- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below)
 
 ## Observation
 
@@ -160,3 +160,84 @@ Unblock when Arthur can audition candidate GM42/43 normalization across the docu
 and velocity grid, and separately approve a GM4 bark curve through v127. The existing
 self-retiring velocity-law guards provide the machine exit conditions after those voicing
 targets are chosen.
+
+## Decision and focused prior-art research (2026-07-26)
+
+Arthur approved the following product targets, so candidate audition is no longer a blocker:
+
+- **GM42/43:** MIDI velocity owns rendered loudness. Raw output must be monotonic through
+  v127 and meet the existing square-law oracle within ±0.25, without hiding chaotic
+  over-bowing or introducing a register cliff. Bow nonlinearity may continue to shape
+  articulation and spectrum.
+- **GM4:** its 2.82·f0 bark must be non-decreasing across
+  v60/75/90/105/120/127. A gentle plateau above v≈105 is acceptable; a decline is not.
+  Preserve the existing forte floor, onset-to-sustain bloom, DC, GM4/GM5 distinctness, and
+  aggregate-level guards.
+- Representative before/after renders remain useful verification evidence, but the measurable
+  targets above are sufficient for an autonomous fixer to proceed.
+
+### Prior art and resulting constraints
+
+1. **Map into a playable region before normalizing output.** Serafin and Smith measured the
+   joint bow-force, bow-speed, and bow-position region that produces stable Helmholtz motion,
+   then used those measured limits in a real-time synthesizer; they report that this made the
+   model significantly more robust. They also found that attack trajectories change the
+   playable region. This rules out another one-dimensional `max_vel` clamp. First sweep this
+   model's `(key, velocity, slope, max_vel)` space and map each program/register into a stable
+   region, including a suitable attack trajectory.
+   Source: [Influence of Attack Parameters on the Playability of a Virtual Bowed String
+   Instrument](https://quod.lib.umich.edu/cgi/p/pod/dod-idx/influence-of-attack-parameters-on-the-playability.pdf?c=icmc%3Bidno%3Dbbp2372.2000.218%3Bformat%3Dpdf)
+   (ICMC 2000).
+
+2. **Keep the physical controls independent.** STK's reference waveguide exposes bow pressure,
+   position, and velocity independently; its nonlinear junction uses bow/string differential
+   velocity, while the output has a separate fixed body gain. That supports jointly retuning
+   `slope` and `max_vel` rather than asking one velocity scalar to supply timbre, stability,
+   and GM loudness simultaneously.
+   Sources: [STK `Bowed.cpp`](https://github.com/thestk/stk/blob/master/src/Bowed.cpp) and
+   [STK `Bowed.h`](https://github.com/thestk/stk/blob/master/include/Bowed.h).
+
+3. **Do not meter away an unstable source.** Energy-consistent/passive bowed-string schemes
+   are established precisely because the nonlinear contact can destabilize a numerical model.
+   Replacing this waveguide with an implicit/modal solver is out of scope, but an output
+   follower must not make the loudness test pass while the underlying limit cycle remains
+   chaotic. Add a period-to-period stability oracle (or equivalent Helmholtz-motion
+   classifier) alongside the loudness oracle.
+   Source: [Efficient Simulation of the Bowed String in Modal
+   Form](https://www.dafx.de/paper-archive/2022/papers/DAFx20in22_paper_14.pdf)
+   (DAFx 2022).
+
+4. **Use normalization only for residual level variation.** If the stable control map still
+   leaves register-dependent limit-cycle amplitude, use a slow, bounded follower derived from
+   the existing `amp_follow`. Measure the intrinsic post-body signal before `self.amp`, and
+   let the existing `vel_amp` output path set the target loudness. Bound gain and its slew so
+   the bow catch, natural sustain movement, and release are not flattened or pumped.
+
+5. **Retain GM4's nonlinear pickup, but do not drive a `tanh` blindly.** Measured Rhodes models
+   derive pickup voltage from the time derivative of position-dependent magnetic flux, and
+   measurements show that the pickup turns near-sinusoidal tine motion into a more complex
+   waveform. Separate work also identifies pickup intermodulation as a source of important
+   modes. Therefore keep the pickup colour, but retune the relation between the upstream
+   2.82·f0 tine partial and pickup drive so increasing strike velocity cannot compress that
+   partial faster than it grows. A full electromagnetic solver is not required for this bug.
+   Sources: [Real-time Physical Model of a Wurlitzer and Rhodes Electric
+   Piano](https://www.dafx17.eca.ed.ac.uk/papers/DAFx17_paper_79.pdf)
+   (DAFx 2017) and [The Rhodes electric piano: analysis and simulation of the inharmonic
+   overtones](https://doi.org/10.1121/10.0002002) (JASA 2020).
+
+### Autonomous implementation and regression brief
+
+1. Sweep both bowed programs across their playable compass. At minimum include the diagnosed
+   keys 36/48/50/55/60/67, compass boundaries, and velocities
+   96/105/110/115/120/127. Classify the source motion as well as measuring level.
+2. Jointly map `max_vel` and `slope` by program/register/velocity into the measured stable
+   region. Do not repeat the rejected flat bow-speed clamp.
+3. Add bounded residual normalization only if the stable map cannot satisfy the square-law
+   level oracle. Compare adjacent-key steps against the pre-fix baseline and add no new
+   register step greater than 1 dB beyond that baseline.
+4. For GM4, tune the 2.82·f0 partial/pickup-drive relationship and restore a full non-decreasing
+   bark assertion over v60/75/90/105/120/127. A plateau passes; deleting or bypassing
+   `PickupShaper` does not.
+5. Preserve all existing voice-character, velocity-law, DC, anti-alias, and deterministic
+   render guards. Land the fix with failing-before/passing-after regression coverage and leave
+   the bug `Fixed` for independent verification.

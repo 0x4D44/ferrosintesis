@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** sampler
 - **Raised:** 2026-07-22
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260726T221402Z-p9812-n155597100-c8
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8
-- **Owner base:** dcc6db48b10d4eeb34abd8e9c5b9afa3e3a44266
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T22:14:02Z
-- **Owner until:** 2026-07-26T23:19:34Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8-code-1785105359370
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment)

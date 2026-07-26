@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample assets / dark-grand generation
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T082900Z-p48364-n570595900-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00123-run-fix-20260726T082900Z-p48364-n570595900-c1
+- **Owner base:** 00edc615f18b05f36edfc68a1d734a02fdb8cf06
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T08:29:00Z
+- **Owner until:** 2026-07-26T10:29:00Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

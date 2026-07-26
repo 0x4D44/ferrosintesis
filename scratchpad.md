@@ -1,5 +1,18 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.26 — **GM 59 (Ride Cymbal 2) has the identical defect just fixed on GM 57, and is
+  still unfixed** — `crates/ferrosintesis/src/sampler.rs` (`sampled_drum`, the `51 | 59 =>
+  (&kit::RIDE, 1.0)` arm). Found while fixing crash 2, not fixed there to keep that change to
+  the one key Arthur signed off. The SC-55mkII ROM handles the two ride keys exactly as it
+  handles the two crash keys: `rom2.bin` STANDARD kit gives keys 51 and 59 the same tone
+  0x0175 "Ride Cymbal" at play notes 60 and 61 (+1 semitone) with pans 0x2C and 0x22. We
+  collapse them onto one bank at rate 1.0, so a file scoring two rides hears one. The fix is
+  the one-line twin of the crash change (`59 => (&kit::RIDE, CRASH_2_REPITCH)` — or a shared
+  `RIDE_2_REPITCH` constant), plus the same oracle shape. Note `engine::drum_pan` already
+  gives 51 and 59 the SAME value 0.70, so unlike the crash pair there is no pan split to lean
+  on either — worth splitting at the same time. In-repo usage is 1 file / 1 hit, but per
+  CLAUDE.md that is a fact about our albums, not about the synth.
+
 - [ ] 2026.07.25 — **`percentile_uses_nearest_rank` pins the historical failing value, not the
   convention** — `crates/ferrosintesis/src/voices.rs` (the test beside `fn percentile`). It
   asserts one case, p95 of nine values. An adversarial review of the KILN-00055 closure showed

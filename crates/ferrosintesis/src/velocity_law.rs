@@ -138,6 +138,43 @@ mod tests {
         fit_k(&levels)
     }
 
+    /// Does a program's velocity exponent depend on the SAMPLES flag?
+    ///
+    /// `VEL_LEVEL_EXP` is program-indexed and samples-blind, but `melodic_k_at`
+    /// measures the sample-wrapped composite. When the bare model and the wrapped
+    /// composite fit different exponents, one table entry cannot serve both — the
+    /// GM 76 / MM-BUG-KILN-00105 trap, where a single entry corrected the wrapped
+    /// voice and broke the `--no-samples` render. A program whose two columns
+    /// agree is safe for a single `VEL_LEVEL_EXP` entry; one whose columns diverge
+    /// needs a `modeled_vel_level_exp` override consumed inside its `make` arm.
+    ///
+    ///   cargo test -p ferrosintesis --release samples_flag_velocity_divergence \
+    ///     -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate"]
+    fn samples_flag_velocity_divergence() {
+        println!(
+            "{:>6} {:>5} {:>10} {:>10} {:>9}",
+            "prog", "key", "k_samples", "k_bare", "delta"
+        );
+        for p in [40u8, 41, 42, 43, 110] {
+            for key in FIT_KEYS {
+                let k_of = |samples: bool| {
+                    let levels: Vec<(u8, f32)> = FIT_VELS
+                        .iter()
+                        .map(|&v| (v, melodic_level_with_samples(p, key, v, samples)))
+                        .collect();
+                    fit_k(&levels)
+                };
+                let (on, off) = (k_of(true), k_of(false));
+                println!(
+                    "GM{p:<4} {key:>5} {on:>10.3} {off:>10.3} {:>+9.3}",
+                    off - on
+                );
+            }
+        }
+    }
+
     /// Worst (furthest from 2.0) k across the probe keys, for summary statistics.
     fn melodic_k(program: u8) -> f32 {
         FIT_KEYS
@@ -201,7 +238,7 @@ mod tests {
             }
         }
         // Is a suspect voice's RAW curve (compensation bypassed) even monotonic?
-        for p in [42u8, 43] {
+        for p in [40u8, 41, 42, 43, 110] {
             for key in [48u8, 60] {
                 print!("GM{p} key {key} raw:");
                 for &v in &[64u8, 80, 96, 110, 127] {

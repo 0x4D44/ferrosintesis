@@ -8965,6 +8965,7 @@ pub struct BowedString {
     vib_depth: f32,          //
     vib_delay: u32,          // vibrato onset delay
     grit: Biquad,            // bow-hair / rosin noise band (bandpass)
+    contact_noise: f32,      // broadband noise radiated straight from the contact
     bow_noise: f32,          // per-note grit level — no two bows are identical
     scratch: f32,            // decaying attack "catch" intensity (the bite before the tone)
     scratch_k: f32,          // its per-sample decay
@@ -9013,48 +9014,278 @@ fn bow_line_len(sr: f32, share: f32) -> usize {
     ((sr / BOW_MIN_HZ) * share).ceil() as usize + 2
 }
 
+/// One bowed instrument's voicing of the shared waveguide.
+///
+/// Was a 6-tuple while only the cello and contrabass existed; the violin family
+/// (GM 40/41/110) adds a fourth and fifth arm and two more per-program levers
+/// (`beta`, the bow-force ceiling), at which point positional fields stop being
+/// readable. Same values, named.
+#[derive(Clone, Copy)]
+struct StringVoicing {
+    /// Body resonances: air/Helmholtz, main wood mode, broad arco presence.
+    body_f: [f32; 3],
+    /// In-loop bridge damping — string loss, and the voice's brightness ceiling.
+    refl_sustain: f32,
+    /// Output gain before the velocity law. Was `amp_base` + `amp_span`, only
+    /// ever consumed as their sum — one number wearing two names, which made
+    /// every new voicing invent a split that changed nothing.
+    amp: f32,
+    /// Post-output darkening; 0.0 leaves the voice flat.
+    out_lp_hz: f32,
+    /// Loop-latency tuning compensation, in samples. MEASURED, never guessed.
+    loop_comp: f32,
+    /// Bow position as a fraction of the speaking length.
+    beta: f32,
+    /// Bow-force ceiling: full force below `slope_hi_key`, falling linearly to
+    /// `slope_hi` at `top_key` (this instrument's highest note). See
+    /// `bow_force_ceiling`.
+    slope_hi: f32,
+    slope_hi_key: u8,
+    top_key: u8,
+    vib_rate: f32,
+    vib_base: f32,
+    vib_span: f32,
+    vib_floor: f32,
+    /// Attack-catch and bow-grit multiplier — how hard the bow bites.
+    ///
+    /// The saw-based `Bowed` carried this per program (its `bite` field: 0.230
+    /// for the fiddle against 0.100 for the violin) and the waveguide had no
+    /// equivalent, so on migration GM110 inherited the violin's onset exactly and
+    /// stopped being a fiddle. A fiddle IS a violin played with more bite; that
+    /// difference is its whole GM identity, and it belongs in the voicing.
+    bite: f32,
+    /// Bow-hair noise radiated DIRECTLY from the bow/string contact, rather than
+    /// coupled through the string loop, as a fraction of the note's amplitude.
+    ///
+    /// The saw-based `Bowed` added its `bite` broadband, straight into the signal;
+    /// the waveguide's grit instead goes through a bandpass INTO the loop, where
+    /// the reflection filter and body damp it. That is why raising `bite` or
+    /// moving `grit_hz` barely touched the fiddle's early-HF signature
+    /// (`sweep_fiddle_brightness_levers`: 1.02x, against the 1.10x its identity
+    /// oracle requires), while the two loop-brightness levers saturated near
+    /// 1.08x even taken to absurd values.
+    ///
+    /// Not all bow noise couples through the string — some radiates from the
+    /// contact point directly, and that component is broadband and undamped by
+    /// the body. Modelling it gives the voicing an honest bite lever.
+    ///
+    /// Deliberately ZERO for every voicing except the fiddle, so the four
+    /// pre-existing programs render bit-identically to before this field existed.
+    contact_noise: f32,
+    /// Bow-hair fluctuation band, as (base Hz, span Hz); the per-note draw lands
+    /// somewhere inside it.
+    ///
+    /// This — not `bite` — is what makes a bow sound scrapier, because the grit
+    /// is BANDPASSED here before it reaches the string. Raising `bite` alone adds
+    /// energy inside the band, so it lifts the voice's total level as much as its
+    /// brightness; the fiddle needs the noise to move UP the spectrum, which is
+    /// also what a rosinier bow physically does.
+    grit_hz: (f32, f32),
+}
+
+/// Register-dependent voicing: one waveguide, retuned per instrument. The cello
+/// sits ~an octave above the contrabass, and the violin family two above that,
+/// so body resonances, string brightness and output level all move with the
+/// instrument.
+///
+/// `loop_comp` compensates the in-loop reflection filter plus structural
+/// latency — ~4 samples the bare `sr/f` never subtracts. Uncompensated, a string
+/// renders progressively flat with pitch (≈ −5 cents at E1 but −31/−45 cents at
+/// the C4/G4 the ear notices). Every value here is MEASURED, never guessed
+/// (lesson 2026.07.11), because the reflection filter's phase delay moves with
+/// its cutoff — so each `refl_sustain` carries its own `loop_comp`:
+///
+/// * cello 3.85 (refl 2600) — the original autocorrelation sweep;
+/// * contrabass 4.52 (refl 2200) — `measure_bowedstring_loop_latency`, HLD §2.4;
+/// * violin family (refl 3900/3500/4200) — `fit_violin_family_loop_comp`.
+///
+/// `beta` near 1/7 avoids locking onto a low mode; 0.127 mode-locked cello and
+/// bass keys 46–50 onto a higher one (MM-BUG-KILN-00012). The violin family
+/// needs its own value: at 0.140 it carries a dead note at key 90 and a crippled
+/// key 91, mapped by `map_bowedstring_bow_force_ceiling`.
+fn string_voicing(program: u8) -> StringVoicing {
+    const CELLO: StringVoicing = StringVoicing {
+        body_f: [110.0, 230.0, 500.0],
+        refl_sustain: 2600.0,
+        amp: 1.18, // was amp_base 0.36 + amp_span 0.82
+        out_lp_hz: 2600.0,
+        loop_comp: 3.85,
+        beta: 0.140,
+        // The cello's top two tones (D5/E5) lock an octave up whenever the
+        // per-note bow force draws near the top of its range — pre-existing, and
+        // caught by bowed_string_cello_holds_register once that gate started
+        // using engine-realistic seeds. A ceiling over the last few semitones is
+        // the targeted fix; retuning its `beta` would disturb the whole voice and
+        // the 46–50 wolf fix that depends on 0.140.
+        slope_hi: 2.55,
+        slope_hi_key: 72,
+        top_key: 76,
+        vib_rate: 5.2,
+        vib_base: 0.0055,
+        vib_span: 0.0055,
+        vib_floor: 0.12,
+        bite: 1.0,               // the pre-existing draw, unscaled
+        contact_noise: 0.0,      // no direct path: bit-identical to before
+        grit_hz: (500.0, 800.0), // the pre-existing 500-1300 Hz band
+    };
+    const CONTRABASS: StringVoicing = StringVoicing {
+        body_f: [70.0, 180.0, 700.0],
+        refl_sustain: 2200.0,
+        amp: 1.80, // was amp_base 0.55 + amp_span 1.25
+        out_lp_hz: 1800.0,
+        loop_comp: 4.52,
+        vib_rate: 4.2,
+        vib_base: 0.0050,
+        vib_span: 0.0050,
+        vib_floor: 0.10,
+        // Clean across its whole range at full bow force, so no ceiling — but
+        // `top_key` must still be its own, or it would inherit the cello's 76
+        // and taper a range it does not have.
+        slope_hi: 2.9,
+        slope_hi_key: 255,
+        top_key: 64,
+        ..CELLO
+    };
+    // The violin family. Body frequencies follow the same air / main-wood /
+    // broad-presence roles as the low strings: the violin's Helmholtz A0 near
+    // 280 Hz, its B1+ corpus mode near 560, and the broad "bridge hill" near
+    // 2200 that gives arco its presence. The viola's sit a fourth or so below.
+    const VIOLIN: StringVoicing = StringVoicing {
+        body_f: [280.0, 560.0, 2200.0],
+        refl_sustain: 3900.0,
+        // MEASURED by fit_violin_family_level_match: the median sustain level
+        // must match the saw-based `Bowed` this replaces, or every album mixed
+        // against the old voice shifts balance under it.
+        amp: 1.11,
+        out_lp_hz: 5200.0,
+        loop_comp: 3.16, // MEASURED at beta 0.170, fit_violin_family_loop_comp (sd 0.044)
+        // MEASURED by sweep_violin_family_beta. At the low strings' 0.140 the
+        // violin family carries a dead note at key 90 and a crippled key 91.
+        // The clean window is 0.168–0.176 (one pinhole at 0.172); 0.170 sits
+        // clear of both edges, and degradation past 0.178 is steep.
+        beta: 0.170,
+        // No bow-force ceiling: at beta 0.170 the violin family holds its
+        // fundamental across its whole register at FULL bow force. An earlier
+        // draft carried a ceiling here too; the calibration test proved it never
+        // fired, so it went rather than sit unexercised.
+        slope_hi: 2.9,
+        slope_hi_key: 255,
+        top_key: 100,
+        vib_rate: 5.7,
+        // Gentler than the low strings' in ratio terms, on purpose. This is the
+        // ALWAYS-ON baseline under every note; CC1 is the authored expressive
+        // control and needs headroom above it. At 0.0060+0.0060 the autonomous
+        // excursion measured 34 cents pk-pk and CC1 could only lift it 1.87x,
+        // which is a wobble the player cannot get out from under.
+        vib_base: 0.0048,
+        vib_span: 0.0048,
+        vib_floor: 0.12, // LA_VIOLIN fades 0.12 -> 0.38: wait for the handover
+        bite: 1.0,
+        contact_noise: 0.0,
+        grit_hz: (500.0, 800.0),
+    };
+    match program {
+        42 => CELLO,
+        40 => VIOLIN,
+        41 => StringVoicing {
+            body_f: [220.0, 475.0, 1800.0],
+            refl_sustain: 3500.0,
+            amp: 1.117, // MEASURED, fit_violin_family_level_match
+            out_lp_hz: 4400.0,
+            loop_comp: 3.36, // MEASURED at beta 0.170 (sd 0.035)
+            top_key: 88,
+            vib_rate: 5.4,
+            ..VIOLIN
+        },
+        // GM 110 fiddle: the same instrument as the violin, played brighter and
+        // with more bite — a faster, shallower vibrato and a higher brightness
+        // ceiling. Its sampled onset hands over earlier (LA_FIDDLE fades
+        // 0.08 -> 0.28), so the model's vibrato may start earlier too.
+        110 => StringVoicing {
+            refl_sustain: 4200.0,
+            // 5800 left the fiddle's SUSTAIN within 1.03x of the violin's once the
+            // attack scratch had decayed, and its identity oracle wants >= 1.05x on
+            // both sides of the sample handover. Raised post-loop rather than via
+            // `refl_sustain`, which would shift the reflection filter's phase delay
+            // and invalidate the measured `loop_comp`.
+            out_lp_hz: 8200.0,
+            loop_comp: 3.07, // MEASURED at beta 0.170 (sd 0.032)
+            amp: 0.98,       // MEASURED — already level-matched, unlike 40/41
+            top_key: 89,
+            vib_rate: 6.1,
+            vib_base: 0.0035,
+            vib_span: 0.0035,
+            vib_floor: 0.11, // tracks LA_FIDDLE's fade start
+            // The fiddle's defining difference from GM40. Pinned by
+            // `default_bowed_body_bands_and_fiddle_identity`, which requires its
+            // first 80 ms to be at least 1.10x the violin's above 2.5 kHz — so the
+            // grit band has to STRADDLE 2.5 kHz, not merely get louder below it.
+            bite: 1.4,
+            // MEASURED by sweep_fiddle_brightness_levers. 0.3 reached only 1.03x
+            // and the two loop-brightness levers saturate near 1.08x even taken to
+            // absurd values; 1.0 lands at 1.16x, clear of the 1.10x bar without
+            // becoming hiss. Chosen over `bite` (which reaches 1.24x at 5.0)
+            // because it is purely additive at the output and cannot perturb the
+            // loop dynamics, where `bite` feeds `slope_eff` and could destabilise.
+            contact_noise: 1.0,
+            grit_hz: (1900.0, 1700.0), // 1.9-3.6 kHz: a rosinier, brighter scrape
+            ..VIOLIN
+        },
+        // The `_` arm is the contrabass, matching the pre-refactor tuple `match`
+        // exactly. Keeping it that way is what makes this refactor a no-op for
+        // the two shipping programs.
+        _ => CONTRABASS,
+    }
+}
+
+/// The highest bow force a voicing may draw at `key`.
+///
+/// Below `slope_hi_key` the full 2.2…2.9 range is available. Above it the
+/// ceiling falls linearly to `slope_hi` by the top of the register, because a
+/// hard bow in a short loop drives the waveguide off its fundamental. The taper
+/// is deliberately monotone even though the measured failures are not (keys
+/// 81–83 take full force while 77–79 do not): the failures are discrete
+/// mode-crossing resonances, and a ceiling that dips back up between them would
+/// encode the measurement's grid rather than the physics.
+fn bow_force_ceiling(v: &StringVoicing, key: u8) -> f32 {
+    if key < v.slope_hi_key || v.top_key <= v.slope_hi_key {
+        return 2.9;
+    }
+    let lo = v.slope_hi_key as f32;
+    let t = ((key as f32 - lo) / (v.top_key as f32 - lo)).clamp(0.0, 1.0);
+    2.9 + (v.slope_hi - 2.9) * t
+}
+
 impl BowedString {
     fn new(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let f = key_freq(key);
         let mut rng = Rng::new(seed);
-        let beta = 0.140; // near 1/7; 0.127 mode-locked keys 46–50 onto a higher mode
-                          // Register-dependent voicing: the cello (42) sits ~an octave above the
-                          // contrabass (43), so its body resonances and string brightness are
-                          // higher and its output a touch lighter. Same waveguide, retuned.
-                          // (body freqs, in-loop bridge damping, amp base/span, OUTPUT lowpass Hz,
-                          // loop-latency tuning compensation in samples).
-                          // The output lowpass darkens each string without touching the loop's
-                          // nonlinear dynamics; the contrabass cutoff sits below the cello's.
-                          // loop_comp: the in-loop reflection filter + structural latency add ~4
-                          // samples the bare `sr/f` never subtracted, so an uncompensated string
-                          // renders progressively flat with pitch (≈ −5 cents at E1 but −31/−45
-                          // cents at the C4/G4 the ear notices). Both values are MEASURED, never
-                          // guessed (lesson 2026.07.11): the cello's 3.85 (refl_sustain 2600)
-                          // by the original autocorrelation sweep; the contrabass's 4.52 by the
-                          // in-tree `measure_bowedstring_loop_latency` harness (HLD §2.4). Its
-                          // darker refl_sustain 2200 lengthens the reflection filter's phase
-                          // delay, so the two waveguides NO LONGER share one in-loop phase and
-                          // each carries its own measured loop_comp.
-        let (body_f, refl_sustain, amp_base, amp_span, out_lp_hz, loop_comp) = match program {
-            42 => (
-                [110.0f32, 230.0, 500.0],
-                2600.0f32,
-                0.36f32,
-                0.82f32,
-                2600.0f32,
-                3.85f32,
-            ),
-            _ => ([70.0, 180.0, 700.0], 2200.0, 0.55, 1.25, 1800.0, 4.52),
-        };
+        let voicing = string_voicing(program);
+        let StringVoicing {
+            body_f,
+            refl_sustain,
+            amp,
+            out_lp_hz,
+            loop_comp,
+            beta,
+            ..
+        } = voicing;
         // Per-note character: the seed varies per voice (the engine's spawn
         // counter), so drawing the bow's force, grit, scratch and vibrato here
         // makes every stroke its own — the fix for "each note sounds the same".
         let u = |r: &mut Rng| r.white() * 0.5 + 0.5;
-        let slope = 2.2 + 0.7 * u(&mut rng); // bow force / pressure this stroke
-        let bow_noise = 0.05 + 0.06 * u(&mut rng); // how gritty this stroke is
-                                                   // the sampled arco bite now owns the onset, so the model's own synth
-                                                   // scratch is dialled right back — just a hint under the sample.
-        let scratch = 0.08 + 0.10 * u(&mut rng);
+        // Bow force / pressure this stroke, capped by what this pitch can take.
+        // Bowing hard in a SHORT loop drives the waveguide off its fundamental
+        // (`map_bowedstring_bow_force_ceiling`). Only the cello needs the cap:
+        // its top two tones lock an octave up under a hard bow, and unlike the
+        // violin family it cannot be cured by moving `beta`, because 0.140 is
+        // what holds its own 46–50 wolf band. Real players press less hard high
+        // on a string anyway, so the ceiling is physically right where it bites.
+        let slope = 2.2 + (bow_force_ceiling(&voicing, key) - 2.2) * u(&mut rng);
+        let bow_noise = (0.05 + 0.06 * u(&mut rng)) * voicing.bite; // how gritty this stroke is
+                                                                    // the sampled arco bite now owns the onset, so the model's own synth
+                                                                    // scratch is dialled right back — just a hint under the sample.
+        let scratch = (0.08 + 0.10 * u(&mut rng)) * voicing.bite;
         // B3 (MM-BUG-KILN-00004, HLD §2.3): render advances this LFO once per
         // CTRL samples, so it must be BUILT at sr/CTRL — control_lfo() is the
         // one constructor that makes the 16×-slow idiom bug impossible. Base
@@ -9064,8 +9295,9 @@ impl BowedString {
         // demoted CC0 alt-bank Bowed preset, and the slow-bass idiom). The 42/43
         // vibrato oracle (default_bowed_natural_vibrato_runs_at_named_rate) is the
         // single source of truth - its per-program nominals track these two literals.
-        let vib_rate = if program == 42 { 5.2 } else { 4.2 };
-        let vib = control_lfo(vib_rate, 0.10, &mut rng, sr);
+        // The violin family adds its own rates: violin 5.7 Hz and fiddle 6.1 Hz
+        // (fiddle idiom is faster and shallower), viola 5.4 Hz.
+        let vib = control_lfo(voicing.vib_rate, 0.10, &mut rng, sr);
         // Natural arco vibrato, deepened ~3.4x from the old shared 0.0016+0.0016*u
         // (~2.8-5.5 c peak, far shallower than a real cello/bass). Per-program: cello
         // 0.0055+0.0055*u ~ 9.5-19 c peak (5.2 Hz); contrabass 0.0050+0.0050*u ~
@@ -9077,14 +9309,9 @@ impl BowedString {
         // the model wobble ramps in. The bass floor (0.10 s) is earlier: no sample
         // vibrato to fight, and it gives short bass notes the vibrato the old 0.16 s
         // floor denied them.
-        let (vib_base, vib_span, vib_floor) = if program == 42 {
-            (0.0055, 0.0055, 0.12)
-        } else {
-            (0.0050, 0.0050, 0.10)
-        };
-        let vib_depth = vib_base + vib_span * u(&mut rng);
-        let vib_onset = (vib_floor + 0.24 * u(&mut rng)) * sr;
-        let grit_hz = 500.0 + 800.0 * u(&mut rng); // bow-hair fluctuation band (low-mid)
+        let vib_depth = voicing.vib_base + voicing.vib_span * u(&mut rng);
+        let vib_onset = (voicing.vib_floor + 0.24 * u(&mut rng)) * sr;
+        let grit_hz = voicing.grit_hz.0 + voicing.grit_hz.1 * u(&mut rng);
         let mut s = BowedString {
             bridge: DelayLine::new(bow_line_len(sr, beta)),
             neck: DelayLine::new(bow_line_len(sr, 1.0 - beta)),
@@ -9115,6 +9342,7 @@ impl BowedString {
             vib_depth,
             vib_delay: vib_onset as u32,
             grit: Biquad::bandpass(grit_hz.min(sr * 0.40), 0.8, sr),
+            contact_noise: voicing.contact_noise,
             bow_noise,
             scratch,
             // the catch decays over ~45-70 ms into the settled tone
@@ -9127,7 +9355,7 @@ impl BowedString {
             // limit-cycle amplitude barely tracks velocity, so the dynamic level
             // is applied here. Level-matched to the old contrabass so the album
             // mix balance holds (~0.11 at the quiet pedal, ~0.18 riff/collision).
-            amp: (amp_base + amp_span) * vel_amp(vel),
+            amp: amp * vel_amp(vel),
             refl_sustain,
             loop_comp,
             out_lp: if out_lp_hz > 0.0 {
@@ -9220,6 +9448,13 @@ impl Voice for BowedString {
             if let Some(lp) = &mut self.out_lp {
                 y = lp.process(y); // cello de-buzz; None for the bass
             }
+            // Direct contact radiation: broadband, gated by the same catch envelope
+            // as the scratch, so it is an ATTACK phenomenon that decays into the
+            // settled tone rather than a constant hiss. Placed after the body and
+            // output filters because this component never passes through them.
+            if self.contact_noise > 0.0 {
+                y += self.contact_noise * self.scratch * self.rng.white() * e;
+            }
             let hp = y - self.dc_x1 + 0.9985 * self.dc_y1;
             self.dc_x1 = y;
             self.dc_y1 = hp;
@@ -9263,7 +9498,13 @@ impl Voice for BowedString {
 /// LA layering (sampled attack + modeled sustain) — level-matched to the
 /// models by the `la_level_continuity` test.
 const LA_VIOLIN: (f32, (f32, f32)) = (0.30, (0.12, 0.38));
-const LA_FIDDLE: (f32, (f32, f32)) = (0.32, (0.08, 0.28));
+/// GM 110 fiddle: still the quickest handover of the bowed family — a fiddle
+/// attack is more percussive than a violin's — but no longer the saw-era
+/// 0.08 -> 0.28. A waveguide takes time to build its limit cycle, so a fade that
+/// finished while the model was still speaking left a 1.72x RMS step in the
+/// middle of the handover. Every other waveguide program already hands over
+/// later for exactly this reason (contrabass 0.16 -> 0.46, cello 0.13 -> 0.40).
+const LA_FIDDLE: (f32, (f32, f32)) = (0.32, (0.11, 0.34));
 /// GM 43 contrabass: a real cello-section arco *bite* over the waveguide
 /// sustain — the bow-catch is what the physical model fakes worst, so the
 /// sample owns the onset. A slightly longer handover than the violin: a bass
@@ -12958,13 +13199,31 @@ const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     t[33] = 2.320; t[35] = 2.160;
     // Bowed strings 42/43 are deliberately NOT compensated. Their raw curve is
     // non-monotonic at the top — measured, samples on, compensation bypassed:
-    //   GM42 key 60  v96 -9.67  v110 -5.54  v127 -7.14   (DROPS 1.60 dB)
-    //   GM43 key 60  v96 -7.51  v110 -3.33  v127 -4.44   (DROPS 1.11 dB)
+    //   GM42 key 60  v96 -8.93  v110 -5.16  v127 -7.14   (DROPS 1.98 dB)
+    //   GM43 key 60  v96 -6.78  v110 -2.93  v127 -4.44   (DROPS 1.51 dB)
     // where the law says v110->v127 should RISE 2.49 dB. A scalar exponent cannot
     // fix a curve that turns over; applying one makes fortissimo worse, not better.
     // Pre-existing (the floor fold preserves v=127 exactly) and out of scope here —
     // it is a defect in the bowed-string model, not in the velocity law. Excluded
     // from the oracles by name in velocity_law.rs.
+    //
+    // The violin family 40/41/110 joined the same `BowedString` waveguide on
+    // 2026.07.26 and so acquired the same k ≈ 2.9 — the waveguide's limit-cycle
+    // amplitude tracks bow speed (`max_vel`), adding an excitation slope on top of
+    // `vel_amp`'s square. They are compensated and NOT exempted, because unlike
+    // 42/43 their raw curve is strictly MONOTONIC — measured the same way:
+    //   GM40  key 60  v64 -21.11  v80 -15.10  v96 -10.01  v110 -6.15  v127 -2.04
+    //   GM41  key 60  v64 -21.18  v80 -15.14  v96 -10.05  v110 -6.19  v127 -2.09
+    //   GM110 key 60  v64 -22.12  v80 -16.12  v96 -11.03  v110 -7.17  v127 -3.05
+    // A scalar exponent is the right tool for a curve that only has the wrong
+    // slope, and exempting them would file a correctable deviation under an
+    // exemption that exists for an UNcorrectable one. Values from `velocity_census`;
+    // `samples_flag_velocity_divergence` confirms bare and sample-wrapped fit the
+    // same k to within 0.004, so one program-indexed entry serves both (the GM76 /
+    // MM-BUG-KILN-00105 trap does not apply). t[41] carries a KEY-DEPENDENT spread
+    // (k 2.662 at key 48 vs 2.960 at key 60) that one exponent cannot flatten; the
+    // residual lands at ±0.15, inside the oracle band but named here so it is visible.
+    t[40] = 1.211; t[41] = 1.189; t[110] = 1.230;
     // Ensembles and the orchestra hit.
     t[48] = 1.842; t[49] = 1.844; t[55] = 2.380;
     // Brass: lip bite and chiff are velocity-driven excitation.
@@ -13679,60 +13938,39 @@ fn make_uncorrected(
         36 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),            // B2: thumb slap
         37 => Box::new(Pluck::new(&SLAP_POP, key, vel, sr, seed)),        // B2: bridge pop
         35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
-        40 | 110 => {
-            let model = Box::new(Bowed::new(program, key, vel, sr, seed));
-            if samples {
-                let (gain, fade) = if program == 110 { LA_FIDDLE } else { LA_VIOLIN };
-                crate::sampler::LaVoice::wrap(
-                    model,
-                    crate::sampler::violin_bank(vel),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                )
-            } else {
-                model
-            }
-        }
-        // GM 42 cello / 43 contrabass: waveguide + arco LA is the DEFAULT bank.
-        // The Codex per-program `Bowed` set is the CC0 alt bank (altbank.rs).
-        42 | 43 => {
+        // Every solo bowed string — GM 40 violin, 41 viola, 42 cello,
+        // 43 contrabass, 110 fiddle — is the `BowedString` waveguide plus its own
+        // sampled arco onset. The waveguide is the DEFAULT bank; the Codex
+        // per-program `Bowed` set is the CC0 alt bank (altbank.rs).
+        //
+        // 40/41/110 moved here from the saw-based `Bowed` on 2026.07.26. That
+        // voice was a bandlimited saw through three static peak biquads, which is
+        // a static harmonic stack no EQ can turn into an instrument — the reason
+        // the fiddle read as synthy. `BowedString` already made that argument for
+        // the low strings in its own header; the violin family simply had never
+        // followed. Their voicings carry their own MEASURED `loop_comp` and a
+        // `beta` of 0.170 (see `string_voicing`).
+        //
+        // Sampled onsets are unchanged by the migration. GM 41 keeps its OWN
+        // viola bank (VSCO Viola Section susvib, CC0, -orchestral2) rather than
+        // the solo-violin attack 40 and 110 share — the fix for their
+        // bit-identical first ~380 ms (MM-BUG-KILN-00005). Routing pinned by
+        // `default_bowed_articulations_and_sample_routing`.
+        40 | 41 | 42 | 43 | 110 => {
             let model = Box::new(BowedString::new(program, key, vel, sr, seed));
             if samples {
-                let (gain, fade, bank) = if program == 42 {
-                    (LA_CELLO.0, LA_CELLO.1, crate::sampler::cello_bank(vel))
-                } else {
-                    (
+                let (gain, fade, bank) = match program {
+                    41 => (LA_VIOLIN.0, LA_VIOLIN.1, crate::sampler::viola_bank(vel)),
+                    42 => (LA_CELLO.0, LA_CELLO.1, crate::sampler::cello_bank(vel)),
+                    43 => (
                         LA_CONTRABASS.0,
                         LA_CONTRABASS.1,
                         crate::sampler::contrabass_bank(vel),
-                    )
+                    ),
+                    110 => (LA_FIDDLE.0, LA_FIDDLE.1, crate::sampler::violin_bank(vel)),
+                    _ => (LA_VIOLIN.0, LA_VIOLIN.1, crate::sampler::violin_bank(vel)),
                 };
                 crate::sampler::LaVoice::wrap(model, bank, key, vel, sr, gain, fade)
-            } else {
-                model
-            }
-        }
-        // GM 41 viola: its OWN dedicated sampled onset (VSCO Viola Section susvib, CC0,
-        // -orchestral2), so 40 and 41 no longer share the solo-violin attack — the fix for
-        // the bit-identical first ~380 ms (MM-BUG-KILN-00005). The Bowed model + BODY_VIOLA
-        // owns the sustain. Previously the violin bank repitched as a proxy; the dedicated
-        // viola bank is the fix. Routing pinned by default_bowed_articulations_and_sample_routing.
-        41 => {
-            let model = Box::new(Bowed::new(41, key, vel, sr, seed));
-            if samples {
-                let (gain, fade) = LA_VIOLIN;
-                crate::sampler::LaVoice::wrap(
-                    model,
-                    crate::sampler::viola_bank(vel),
-                    key,
-                    vel,
-                    sr,
-                    gain,
-                    fade,
-                )
             } else {
                 model
             }
@@ -27319,6 +27557,437 @@ mod tests {
         }
     }
 
+    /// Every `BowedString` program must hold its fundamental across its whole
+    /// register, for every bow force the engine can actually draw.
+    ///
+    /// Supersedes `bowed_string_wolf_band_holds_fundamental`'s coverage, which
+    /// checked five keys with seeds 7/17/23. Those seeds are all small, and
+    /// `Rng` is a raw-seeded xorshift32 whose first draw from a small seed is
+    /// ≈ −1.0, so all three collapse `slope` onto 2.2003…2.2010 out of an
+    /// intended 2.2…2.9 — one bow force tested three times, on the one axis
+    /// where this waveguide actually fails. Seeds here come from the engine's
+    /// own formula (`engine.rs:2207`) and `slope` is left to its natural draw.
+    ///
+    /// The criterion is the measured PERIOD, and deliberately nothing else. Both
+    /// observed failure modes move it: an octave-up mode lock halves it, and a
+    /// string that stops speaking leaves no coherent period to find.
+    ///
+    /// Two richer-looking criteria were tried and both were unsound:
+    ///
+    /// * **Spectral tilt** (`h2/h1 > 6 dB`) failed GM 43 keys 32–45 whose pitch
+    ///   was accurate to under a cent. A contrabass fundamental at 52 Hz sits
+    ///   below the lowest body resonance (70 Hz), so a 2f0-dominant radiated
+    ///   spectrum is that instrument's normal timbre. Tilt cannot tell "locked
+    ///   to 2f0" from "voiced with a strong 2nd". (It did independently
+    ///   reproduce the open `scratchpad.md:609` note about GM 43 keys 43–45
+    ///   turning noisy — real, pre-existing, and a timbre question.)
+    /// * **A relative level floor** failed GM 43 keys 37/51/52 at high bow force,
+    ///   again with sub-cent pitch. Over-pressing a real string chokes it —
+    ///   quieter and grainier is what the stick-slip model *should* do there, so
+    ///   a level drop is not evidence of failure.
+    ///
+    /// Both would have been false gates. The period answers the question on its
+    /// own, and `calibrate_register_gate_catches_the_known_wolf` proves it can
+    /// still see the failures this voicing was built to remove.
+    fn assert_bowed_string_register_holds(program: u8, lo: u8, hi: u8) {
+        let mut failures = bowed_string_register_failures(program, lo, hi);
+        failures.sort();
+        assert!(
+            failures.is_empty(),
+            "GM{program} loses its fundamental on {} of {} draws:\n{}",
+            failures.len(),
+            (hi - lo + 1) as usize * 4,
+            failures.join("\n")
+        );
+    }
+
+    /// The measurement behind [`assert_bowed_string_register_holds`], separated
+    /// so the calibration test can assert that it DOES fire on a known-bad
+    /// voicing rather than only that it stays quiet on a good one.
+    fn bowed_string_register_failures(program: u8, lo: u8, hi: u8) -> Vec<String> {
+        bowed_string_register_failures_with(program, lo, hi, None)
+    }
+
+    fn bowed_string_register_failures_with(
+        program: u8,
+        lo: u8,
+        hi: u8,
+        force_beta: Option<f32>,
+    ) -> Vec<String> {
+        bowed_string_register_failures_full(program, lo, hi, force_beta, None)
+    }
+
+    fn bowed_string_register_failures_full(
+        program: u8,
+        lo: u8,
+        hi: u8,
+        force_beta: Option<f32>,
+        force_slope: Option<f32>,
+    ) -> Vec<String> {
+        let sr = 44100.0;
+        let mut failures: Vec<String> = Vec::new();
+        for key in lo..=hi {
+            let f0 = key_freq(key);
+            for idx in 0u32..4 {
+                let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+                let mut v = BowedString::new(program, key, 100, sr, seed);
+                if let Some(s) = force_slope {
+                    v.slope = s;
+                }
+                let slope = v.slope; // natural draw unless explicitly forced
+                if let Some(b) = force_beta {
+                    v.beta = b;
+                    v.set_freq(f0);
+                }
+                v.vib_depth = 0.0; // a clean tone for the period measurement
+                v.drift = Drift::new(1, 0.0, 1);
+                let mut buf = vec![0f32; (1.5 * sr) as usize];
+                v.render(&mut buf);
+                let seg = &buf[(0.6 * sr) as usize..];
+                let (f_meas, _) = autocorr_pitch(seg, sr, f0, 2.2);
+                let cents = if f_meas > 0.0 {
+                    1200.0 * (f_meas / f0).log2()
+                } else {
+                    f32::NAN
+                };
+                if !cents.is_finite() || cents.abs() > 30.0 {
+                    failures.push(format!(
+                        "  GM{program} key {key} ({f0:.1} Hz) slope {slope:.3}: {cents:+.1} cents"
+                    ));
+                }
+            }
+        }
+        failures
+    }
+
+    /// Proves the register gate can SEE the failures this work removed.
+    ///
+    /// A gate that only ever passes is indistinguishable from a gate that
+    /// measures nothing, and this one polices a property the voicing was
+    /// specifically retuned to obtain. Re-running it at the low strings' bow
+    /// position (`beta` 0.140) must fail the violin and the fiddle — that is the
+    /// configuration whose dead note at key 90 motivated moving to 0.170.
+    #[test]
+    fn calibrate_register_gate_catches_the_known_wolf() {
+        // beta: load-bearing for the violin, whose register reaches the key-90
+        // dead note. The fiddle stops at 89 and the viola at 88, so neither
+        // reaches it — for them the bow-force ceiling is what does the work, and
+        // asserting beta here would assert something untrue.
+        let bad = bowed_string_register_failures_with(40, 55, 100, Some(0.140));
+        assert!(
+            !bad.is_empty(),
+            "GM40 shows no failures at beta 0.140, so the register gate cannot see \
+             the wolf that moving to 0.170 removed — it is not measuring what it \
+             claims to"
+        );
+        // The bow-force ceiling: load-bearing for the CELLO, the one voicing
+        // that has one. Forcing its range past the ceiling must break it, or the
+        // ceiling is dead weight that should be deleted rather than carried.
+        //
+        // The violin family deliberately has no ceiling — this same assertion
+        // applied to GM 40 is what proved the one it used to carry never fired.
+        let bad = bowed_string_register_failures_full(42, 36, 76, None, Some(2.90));
+        assert!(
+            !bad.is_empty(),
+            "GM42 survives bow force 2.90 across its whole register, so its bow-force \
+             ceiling is not earning its place — delete it rather than carry an \
+             unexercised constant"
+        );
+    }
+
+    #[test]
+    fn bowed_string_violin_holds_register() {
+        assert_bowed_string_register_holds(40, 55, 100);
+    }
+
+    #[test]
+    fn bowed_string_viola_holds_register() {
+        assert_bowed_string_register_holds(41, 48, 88);
+    }
+
+    #[test]
+    fn bowed_string_cello_holds_register() {
+        assert_bowed_string_register_holds(42, 36, 76);
+    }
+
+    #[test]
+    fn bowed_string_contrabass_holds_register() {
+        assert_bowed_string_register_holds(43, 28, 64);
+    }
+
+    #[test]
+    fn bowed_string_fiddle_holds_register() {
+        assert_bowed_string_register_holds(110, 55, 89);
+    }
+
+    /// Which voicing levers actually move the fiddle's early-HF identity metric?
+    ///
+    /// `default_bowed_body_bands_and_fiddle_identity` measures
+    /// `hp_rms(2.5 kHz and up) / rms` over the first 80 ms and wants the fiddle
+    /// at 1.10x the violin or better. Raising `bite` moved it 1.02x and raising
+    /// the grit band barely more, because the grit is injected INSIDE the loop
+    /// and the reflection filter and output lowpass both damp it before it
+    /// radiates. This sweeps each lever alone rather than guessing again.
+    ///
+    ///   cargo test -p ferrosintesis --release sweep_fiddle_brightness_levers \
+    ///     -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate — GM 110 voicing"]
+    fn sweep_fiddle_brightness_levers() {
+        let sr = 44100.0;
+        let early_hf = |mut v: BowedString| -> f32 {
+            let mut buf = vec![0f32; (0.08 * sr) as usize];
+            v.render(&mut buf);
+            crate::testutil::hp_rms(&buf, sr, 2500.0) / crate::testutil::rms(&buf).max(1e-9)
+        };
+        let violin = early_hf(BowedString::new(40, 69, 100, sr, 11));
+        println!("violin baseline {violin:.4}\n");
+        println!(
+            "{:>14} {:>10} {:>10} {:>8}",
+            "lever", "value", "fiddle", "ratio"
+        );
+        let report = |label: &str, value: String, got: f32| {
+            println!("{label:>14} {value:>10} {got:>10.4} {:>8.3}", got / violin);
+        };
+        report(
+            "as-shipped",
+            "-".into(),
+            early_hf(BowedString::new(110, 69, 100, sr, 11)),
+        );
+        for hz in [0.0f32, 8000.0, 12000.0, 16000.0] {
+            let mut v = BowedString::new(110, 69, 100, sr, 11);
+            v.out_lp = if hz > 0.0 {
+                Some(OnePole::lowpass(hz, sr))
+            } else {
+                None
+            };
+            report("out_lp_hz", format!("{hz:.0}"), early_hf(v));
+        }
+        for hz in [4600.0f32, 5500.0, 7000.0, 9000.0] {
+            let mut v = BowedString::new(110, 69, 100, sr, 11);
+            v.refl_sustain = hz;
+            v.refl = OnePole::lowpass(hz, sr);
+            report("refl_sustain", format!("{hz:.0}"), early_hf(v));
+        }
+        for b in [2.0f32, 3.0, 5.0] {
+            let mut v = BowedString::new(110, 69, 100, sr, 11);
+            v.bow_noise *= b / 1.4; // relative to the shipped 1.4
+            v.scratch *= b / 1.4;
+            report("bite", format!("{b:.1}"), early_hf(v));
+        }
+        for hz in [3000.0f32, 4500.0, 6000.0] {
+            let mut v = BowedString::new(110, 69, 100, sr, 11);
+            v.grit = Biquad::bandpass(hz.min(sr * 0.40), 0.8, sr);
+            report("grit_hz", format!("{hz:.0}"), early_hf(v));
+        }
+        for c in [0.3f32, 1.0, 3.0, 8.0] {
+            let mut v = BowedString::new(110, 69, 100, sr, 11);
+            v.contact_noise = c;
+            report("contact_noise", format!("{c:.1}"), early_hf(v));
+        }
+        // The combination, since no single lever reaches 1.10 alone.
+        for (lp, refl, c) in [
+            (0.0f32, 5500.0f32, 1.0f32),
+            (0.0, 7000.0, 2.0),
+            (12000.0, 5500.0, 2.0),
+        ] {
+            let mut v = BowedString::new(110, 69, 100, sr, 11);
+            v.out_lp = if lp > 0.0 {
+                Some(OnePole::lowpass(lp, sr))
+            } else {
+                None
+            };
+            v.refl_sustain = refl;
+            v.refl = OnePole::lowpass(refl, sr);
+            v.contact_noise = c;
+            report("combined", format!("{lp:.0}/{refl:.0}/{c:.1}"), early_hf(v));
+        }
+    }
+
+    /// Level-matches the new waveguide voicing against the saw-based `Bowed` it
+    /// replaces, per program and across the register.
+    ///
+    /// The two voices reach the output through different chains, so their `amp`
+    /// constants are not comparable on paper — copying the cello's numbers would
+    /// be a guess. Albums are mixed against the OLD level, so a migration that
+    /// changes loudness changes the mix; `amp` is fitted to make
+    /// the median ratio 1.0 instead.
+    ///
+    ///   cargo test -p ferrosintesis --release fit_violin_family_level_match \
+    ///     -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate — GM 40/41/110 migration"]
+    fn fit_violin_family_level_match() {
+        let sr = 44100.0;
+        let level = |mut v: Box<dyn Voice>| -> f32 {
+            let mut buf = vec![0f32; (2.0 * sr) as usize];
+            v.render(&mut buf);
+            // Skip the onset: the sustain is what the mix balance rides on.
+            crate::testutil::rms(&buf[(0.5 * sr) as usize..])
+        };
+        for (program, name, lo, hi) in [
+            (40u8, "violin", 55u8, 100u8),
+            (41, "viola", 48, 88),
+            (110, "fiddle", 55, 89),
+        ] {
+            let mut ratios: Vec<f32> = Vec::new();
+            for key in (lo..=hi).step_by(3) {
+                for vel in [64u8, 100, 127] {
+                    for idx in 0u32..2 {
+                        let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+                        let old = level(Box::new(Bowed::new(program, key, vel, sr, seed)));
+                        let new = level(Box::new(BowedString::new(program, key, vel, sr, seed)));
+                        if old > 1e-6 && new > 1e-6 {
+                            ratios.push(new / old);
+                        }
+                    }
+                }
+            }
+            ratios.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            if ratios.is_empty() {
+                println!("GM{program} {name}: no usable pairs");
+                continue;
+            }
+            let median = ratios[ratios.len() / 2];
+            let v = string_voicing(program);
+            println!(
+                "GM{program:>3} {name:<7} n={:<4} new/old level: median {median:.3} \
+                 (p10 {:.3}, p90 {:.3}) -> amp {:.3} should become {:.3}",
+                ratios.len(),
+                ratios[ratios.len() / 10],
+                ratios[ratios.len() * 9 / 10],
+                v.amp,
+                v.amp / median
+            );
+        }
+    }
+
+    /// Fits `loop_comp` for the violin family from measurement.
+    ///
+    /// Each voicing's `refl_sustain` sets its in-loop reflection filter's phase
+    /// delay, so each carries its own compensation — copying the cello's 3.85
+    /// would leave the violin sharp. Reports the IMPLIED loop latency
+    /// `T − sr/f0 + loop_comp` per key; the fitted constant is its mean over the
+    /// register, and the spread is what says whether one constant can serve.
+    ///
+    /// Vibrato and drift are disabled so the period is the waveguide's own.
+    ///
+    ///   cargo test -p ferrosintesis --release fit_violin_family_loop_comp \
+    ///     -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate — GM 40/41/110 migration"]
+    fn fit_violin_family_loop_comp() {
+        let sr = 44100.0;
+        for (program, name, lo, hi) in [
+            (40u8, "violin", 55u8, 100u8),
+            (41, "viola", 48, 88),
+            (110, "fiddle", 55, 89),
+        ] {
+            let mut ls: Vec<f32> = Vec::new();
+            for key in (lo..=hi).step_by(3) {
+                let f0 = key_freq(key);
+                for idx in 0u32..4 {
+                    let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+                    let mut v = BowedString::new(program, key, 100, sr, seed);
+                    v.vib_depth = 0.0;
+                    v.drift = Drift::new(1, 0.0, 1);
+                    let loop_comp = v.loop_comp;
+                    let mut buf = vec![0f32; (3.0 * sr) as usize];
+                    v.render(&mut buf);
+                    let seg = &buf[sr as usize..];
+                    let (f_meas, corr) = autocorr_pitch(seg, sr, f0, 2.2);
+                    // Only draws that actually held their fundamental inform the
+                    // fit; a wolf's period says nothing about loop latency.
+                    if f_meas <= 0.0 || corr < 0.95 {
+                        continue;
+                    }
+                    let cents = 1200.0 * (f_meas / f0).log2();
+                    if cents.abs() > 30.0 {
+                        continue;
+                    }
+                    ls.push(sr / f_meas - sr / f0 + loop_comp);
+                }
+            }
+            if ls.is_empty() {
+                println!("GM{program} {name}: no usable draws");
+                continue;
+            }
+            let mean = ls.iter().sum::<f32>() / ls.len() as f32;
+            let sd = (ls.iter().map(|l| (l - mean).powi(2)).sum::<f32>() / ls.len() as f32).sqrt();
+            let (lo_l, hi_l) = ls
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), &l| (a.min(l), b.max(l)));
+            println!(
+                "GM{program:>3} {name:<7} n={:<4} implied loop_comp mean {mean:.3} \
+                 sd {sd:.3} range [{lo_l:.3}, {hi_l:.3}]",
+                ls.len()
+            );
+        }
+    }
+
+    /// Sweeps `beta` (bow position) to find one that clears the violin family's
+    /// wolves.
+    ///
+    /// `beta` is the established lever for this failure mode: moving it from
+    /// 0.127 to 0.140 is what cleared the cello/bass 46–50 band
+    /// (MM-BUG-KILN-00012). At 0.140 the violin voicing carries a dead note at
+    /// key 90. This counts, for each candidate, how many (key, bow force) pairs
+    /// across each program's real register fail to hold their fundamental.
+    ///
+    ///   cargo test -p ferrosintesis --release sweep_violin_family_beta \
+    ///     -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate — GM 40/41/110 migration"]
+    fn sweep_violin_family_beta() {
+        let sr = 44100.0;
+        println!(
+            "{:>6} {:>10} {:>10} {:>10}",
+            "beta", "violin", "viola", "fiddle"
+        );
+        let mut b = 0.162f32;
+        while b <= 0.182 {
+            let mut cols: Vec<String> = Vec::new();
+            for (program, lo, hi) in [(40u8, 55u8, 100u8), (41, 48, 88), (110, 55, 89)] {
+                let mut bad = 0u32;
+                let mut worst = 0u8;
+                for key in lo..=hi {
+                    let f0 = key_freq(key);
+                    for slope in [2.20f32, 2.45, 2.70, 2.90] {
+                        let mut v = BowedString::new(program, key, 100, sr, 0xBA60);
+                        v.vib_depth = 0.0;
+                        v.drift = Drift::new(1, 0.0, 1);
+                        v.beta = b;
+                        v.slope = slope;
+                        v.set_freq(key_freq(key));
+                        let mut buf = vec![0f32; (2.0 * sr) as usize];
+                        v.render(&mut buf);
+                        let seg = &buf[(0.7 * sr) as usize..];
+                        let (f_meas, _) = autocorr_pitch(seg, sr, f0, 2.2);
+                        let h1 = crate::testutil::mag_at(seg, sr, f0);
+                        let h2 = crate::testutil::mag_at(seg, sr, 2.0 * f0);
+                        let ratio_db = 20.0 * (h2.max(1e-12) / h1.max(1e-12)).log10();
+                        let cents = if f_meas > 0.0 {
+                            1200.0 * (f_meas / f0).log2()
+                        } else {
+                            f32::NAN
+                        };
+                        if !cents.is_finite() || cents.abs() > 30.0 || ratio_db > 6.0 {
+                            bad += 1;
+                            worst = key;
+                        }
+                    }
+                }
+                cols.push(if bad == 0 {
+                    "clean".to_string()
+                } else {
+                    format!("{bad} (k{worst})")
+                });
+            }
+            println!("{b:>6.4} {:>10} {:>10} {:>10}", cols[0], cols[1], cols[2]);
+            b += 0.002;
+        }
+    }
+
     /// Does the SHIPPING wolf-band gate's seed choice hide live failures in GM
     /// 42/43?
     ///
@@ -27416,12 +28085,19 @@ mod tests {
             let ratio_db = 20.0 * (h2.max(1e-12) / h1.max(1e-12)).log10();
             (cents, ratio_db, crate::testutil::rms(&seg))
         };
+        // Spans the UNION register of every program still on the saw-based
+        // `Bowed`: viola from C3 (48), violin and fiddle up to ~E7 (100).
+        // `gentle_ok` is reported separately because above ~key 95 the reference
+        // draw itself may be broken, which would make the 0.75×ref level test
+        // compare against nonsense — a ceiling is only meaningful where the
+        // gentlest bow works at all.
         println!(
-            "{:>4} {:>8} {:>12} {:>10}",
-            "key", "f0", "max_slope_ok", "ref_rms"
+            "{:>4} {:>8} {:>9} {:>12} {:>10}",
+            "key", "f0", "gentle_ok", "max_slope_ok", "ref_rms"
         );
-        for key in (55u8..=89).step_by(2) {
-            let (_, _, ref_rms) = render(key, 2.20); // gentlest bow = the reference
+        for key in 48u8..=101 {
+            let (g_cents, g_ratio, ref_rms) = render(key, 2.20); // gentlest bow = reference
+            let gentle_ok = g_cents.is_finite() && g_cents.abs() <= 15.0 && g_ratio <= 6.0;
             let mut ceiling = f32::NAN;
             let mut s = 2.20f32;
             while s <= 2.95 {
@@ -27445,8 +28121,9 @@ mod tests {
                 format!("{ceiling:.2}")
             };
             println!(
-                "{key:>4} {:>8.1} {shown:>12} {ref_rms:>10.5}",
-                key_freq(key)
+                "{key:>4} {:>8.1} {:>9} {shown:>12} {ref_rms:>10.5}",
+                key_freq(key),
+                if gentle_ok { "yes" } else { "NO" }
             );
         }
     }

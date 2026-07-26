@@ -1487,7 +1487,7 @@ mod guards {
             (37, "SLAP_POP"),  // Stage 5a (B2): bridge pop
             (38, "synthbass"), // Phase 5 (B4)
             (39, "synthbass"), // Phase 5 (B4)
-            (40, "bowed"),
+            (40, "bowedstring"),
             (46, "HARP"),
             (47, "modal"),
             (48, "sawstack"),
@@ -1508,7 +1508,7 @@ mod guards {
             (106, "SHAMISEN"),
             (107, "KOTO"),
             (109, "reed"),
-            (110, "bowed"),
+            (110, "bowedstring"),
             (111, "reed"),
             (108, "modal"),
             (112, "modal"),

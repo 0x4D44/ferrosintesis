@@ -9467,8 +9467,13 @@ mod tests {
         left(&render(&song, &opt).0)
     }
 
+    /// GM44 tremolo strings is the only bowed program still on the saw-based
+    /// `Bowed` voice; 40/41/110 moved to the `BowedString` waveguide on
+    /// 2026.07.26 and are covered by `bowedstring_family_pitch_bounded`, which
+    /// measures by autocorrelation. Pointing the zero-crossing measure at a
+    /// waveguide reads its strong low harmonics as pitch instability.
     fn render_bowed_with_mod(mod_val: u8) -> Vec<f32> {
-        render_bowed_program_with_mod(40, mod_val)
+        render_bowed_program_with_mod(44, mod_val)
     }
 
     /// CC1 = 127 on a bowed note must produce a periodic pitch deviation
@@ -9493,13 +9498,16 @@ mod tests {
     }
 
     #[test]
-    fn gm110_fiddle_routes_to_bowed_and_takes_mod_vibrato() {
+    fn gm110_fiddle_routes_to_bowedstring_and_takes_mod_vibrato() {
         let sr = 44100.0;
         let routed = crate::voices::make(110, 69, 100, sr, 5, true);
+        // Was "bowed" until 2026.07.26. The fiddle now plays the `BowedString`
+        // waveguide like the rest of the solo bowed strings; the saw voice it
+        // left behind is what made it read as synthy.
         assert_eq!(
             routed.kind(),
-            "bowed",
-            "GM 110 must use the bowed/LA fiddle path"
+            "bowedstring",
+            "GM 110 must use the bowed-waveguide/LA fiddle path"
         );
         assert!(vibrato_family(110), "GM 110 must take authored CC1 vibrato");
         assert_eq!(
@@ -9508,19 +9516,11 @@ mod tests {
             "GM 110 should use the fiddle bus profile"
         );
 
-        let plain = render_bowed_program_with_mod(110, 0);
-        let modded = render_bowed_program_with_mod(110, 127);
-        let (a, b) = ((0.8 * sr) as usize, (2.2 * sr) as usize);
-        let spread_plain = cycle_freq_spread(&plain[a..b], sr);
-        let spread_mod = cycle_freq_spread(&modded[a..b], sr);
-        assert!(
-            spread_mod > 10.0,
-            "GM 110 mod vibrato too shallow: {spread_mod} Hz"
-        );
-        assert!(
-            spread_mod > 2.0 * spread_plain,
-            "GM 110 plain {spread_plain} Hz vs mod {spread_mod} Hz"
-        );
+        // The CC1 depth assertions that used to live here measured GM110 with the
+        // zero-crossing `cycle_freq_spread`, which cannot read a waveguide. They
+        // are not dropped: `bowedstring_family_pitch_bounded` makes the same two
+        // claims about GM110 (autonomous excursion bounded, CC1 at least doubles
+        // it) by autocorrelation, at both sample settings.
     }
 
     /// Natural vibrato, CC1 and channel aftertouch compose without either
@@ -9537,12 +9537,12 @@ mod tests {
         // partials (H2/H3 rival H1) fool the zero-crossing `cycle_freq_spread`
         // into reading a huge false pitch spread. Its pitch bound is enforced
         // with an autocorrelation measure in `bowedstring_gm43_pitch_bounded`.
-        for (program, key, samples) in [
-            (40u8, 69u8, false),
-            (110, 69, false),
-            (40, 69, true),
-            (110, 69, true),
-        ] {
+        // GM44 only: the other bowed programs are waveguides now and are covered
+        // by `bowedstring_family_pitch_bounded`. The [4, 12] cent band below is
+        // the SAW voice's band — a waveguide's own arco vibrato runs deeper and
+        // reads differently under this zero-crossing measure, so applying it to
+        // one would be asserting the wrong voice's numbers.
+        for (program, key, samples) in [(44u8, 69u8, false), (44, 69, true)] {
             let plain = render_bowed_controls(program, key, 0, 0, samples);
             let modded = render_bowed_controls(program, key, 127, 0, samples);
             let composed = render_bowed_controls(program, key, 127, 127, samples);
@@ -9627,20 +9627,39 @@ mod tests {
         1200.0 * (hi / lo).log2()
     }
 
-    /// GM43 waveguide: autonomous pitch is a gentle vibrato + human drift, CC1
-    /// deepens it, and CC1 + aftertouch compose without a runaway excursion or
-    /// amplitude dropouts — the same invariants as the saw-voice test above, but
-    /// measured with autocorrelation (robust to the waveguide's strong low
-    /// harmonics, which the zero-crossing measure cannot count correctly).
+    /// Every `BowedString` program: autonomous pitch is a gentle vibrato + human
+    /// drift, CC1 deepens it, and CC1 + aftertouch compose without a runaway
+    /// excursion or amplitude dropouts.
+    ///
+    /// Measured with autocorrelation, which is robust to the waveguide's strong
+    /// low harmonics (H2/H3 rival H1). The zero-crossing `cycle_freq_spread`
+    /// cannot count those correctly and reads a stable waveguide as wildly
+    /// unstable — it once read a false ~1780 cents here.
+    ///
+    /// Covered GM43 alone until 2026.07.26, when GM 40/41/110 moved onto the same
+    /// waveguide and inherited both the invariants and the measurement problem.
+    /// Their entries here replace the two zero-crossing tests that used to cover
+    /// them; keeping those would have been asserting a saw voice's numbers about a
+    /// voice that is no longer a saw.
     #[test]
-    fn bowedstring_gm43_pitch_bounded() {
+    fn bowedstring_family_pitch_bounded() {
         let sr = 44100.0;
         let range = ((0.8 * sr) as usize, (2.2 * sr) as usize);
-        for (key, samples) in [(45u8, false), (45u8, true), (40u8, false)] {
+        for (program, key, samples) in [
+            (43u8, 45u8, false),
+            (43, 45, true),
+            (43, 40, false),
+            (40, 69, false),
+            (40, 69, true),
+            (41, 60, false),
+            (42, 48, false),
+            (110, 69, false),
+            (110, 69, true),
+        ] {
             let f0 = crate::dsp::key_freq(key);
-            let plain = render_bowed_controls(43, key, 0, 0, samples);
-            let modded = render_bowed_controls(43, key, 127, 0, samples);
-            let composed = render_bowed_controls(43, key, 127, 127, samples);
+            let plain = render_bowed_controls(program, key, 0, 0, samples);
+            let modded = render_bowed_controls(program, key, 127, 0, samples);
+            let composed = render_bowed_controls(program, key, 127, 127, samples);
             let plain_c = autocorr_cents_spread(&plain[range.0..range.1], sr, f0);
             let mod_c = autocorr_cents_spread(&modded[range.0..range.1], sr, f0);
             let both_c = autocorr_cents_spread(&composed[range.0..range.1], sr, f0);
@@ -9650,19 +9669,19 @@ mod tests {
             // present and expressive, but bounded, never a runaway warble.
             assert!(
                 (3.0..=42.0).contains(&plain_c),
-                "GM43 key={key} samples={samples}: autonomous excursion {plain_c:.1} cents"
+                "GM{program} key={key} samples={samples}: autonomous excursion {plain_c:.1} cents"
             );
             // CC1 clearly deepens the vibrato
             assert!(
                 mod_c >= 2.0 * plain_c,
-                "GM43 key={key} samples={samples}: CC1 {mod_c:.1} vs natural {plain_c:.1} cents"
+                "GM{program} key={key} samples={samples}: CC1 {mod_c:.1} vs natural {plain_c:.1} cents"
             );
             // CC1 + aftertouch compose without a runaway (the zero-crossing
             // measure read a false ~1780 cents here; the true excursion is ~130
             // with the deepened natural vibrato underneath the maxed controllers)
             assert!(
                 both_c < 150.0,
-                "GM43 key={key} samples={samples}: composed excursion {both_c:.1} cents"
+                "GM{program} key={key} samples={samples}: composed excursion {both_c:.1} cents"
             );
             // no controller-induced amplitude dropouts
             let seg = &composed[range.0..range.1];
@@ -9674,7 +9693,7 @@ mod tests {
             let floor = levels.iter().copied().fold(f32::INFINITY, f32::min);
             assert!(
                 floor >= 0.25 * median,
-                "GM43 key={key} samples={samples}: controller beat dropout {floor:.5} vs median {median:.5}"
+                "GM{program} key={key} samples={samples}: controller beat dropout {floor:.5} vs median {median:.5}"
             );
         }
     }

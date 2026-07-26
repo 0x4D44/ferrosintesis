@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample assets / grand-piano regeneration
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T134236Z-p35852-n696737100-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00135-run-fix-20260726T134236Z-p35852-n696737100-c1
+- **Owner base:** 1b05d5a604c1d87e21b29867f05115b5e40a69a5
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T13:42:36Z
+- **Owner until:** 2026-07-26T15:42:36Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

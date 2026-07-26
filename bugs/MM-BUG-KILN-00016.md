@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-18
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260726T223701Z-p9812-n951988700-c12
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12
-- **Owner base:** b3b31af0cbb77f1978ee6d1b65bfaae1ec15b433
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T22:37:01Z
-- **Owner until:** 2026-07-26T23:32:39Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12-code-1785106371131
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis)

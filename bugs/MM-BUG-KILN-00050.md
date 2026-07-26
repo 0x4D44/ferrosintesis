@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00050 — above its crossover the KILN-00042 damper hold orders held corners by the preset's t60, not its bright, so plucked instruments re-order in brightness in the top register (ukulele drifts to/under nylon above ~key 64; koto's held corner exceeds nylon's)
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
 - **Raised:** 2026-07-23
-- **Owner:** Arthur
-- **Owner role:** human
+- **Owner:** -
+- **Owner role:** -
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing)
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing) → Open (2026-07-26, Arthur approved a focused, level-matched per-instrument revoicing pass with comparative A/B renders)
 
 ## Observation
 
@@ -110,6 +110,40 @@ seeds `0x6510`, `0x76A1`, and `0x1250` at keys 55, 60, and 64:
 The question is mutual identity in the held 30–420 ms window, not whether an
 isolated instrument sounds pleasant. The existing centroid evidence cannot
 decide that perceptual comparison.
+
+### Decision and implementation contract — 2026-07-26
+
+Arthur approved the **per-instrument revoicing** route. Preserve the shared
+`DamperHold::Derived` law and `KS_DAMP_BUDGET`; do not substitute the rejected
+global bright-anchor law.
+
+The autonomous Build should:
+
+1. Reproduce the trunk baseline for NYLON, STEEL, UKULELE, and KOTO at keys
+   55, 60, and 64, using seeds `0x6510`, `0x76A1`, and `0x1250` and the existing
+   `[0.030, 0.420]` second measurement window.
+2. Tune only preset-local voicing parameters. Prefer the narrowest control that
+   restores held brightness identity without changing the family-wide damper
+   equation. Do not shorten an instrument's validated ring merely to improve
+   centroid ordering; if `bright` alone cannot retain both ring and identity,
+   add a bounded preset-local held-corner scale rather than another shared law.
+3. Preserve these perceptual relationships across all three keys:
+   UKULELE brighter than NYLON; STEEL brighter than NYLON; KOTO darker than
+   NYLON. Require a stable margin above seed/measurement noise, not only the
+   correct sign in one render.
+4. Extend `damper_hold_preserves_instrument_identity` to cover the three keys
+   and all affected comparisons. Keep the existing plucked decay, variation,
+   jawari, determinism, and finite-output oracles green.
+5. Produce level-matched, same-note **trunk versus candidate** A/B renders for
+   each affected comparison. The listening target is mutual brightness in the
+   held 30–420 ms region, not isolated pleasantness.
+6. Run the required full catalog render diff because the change touches shared
+   plucked-voice presets, and inspect every changed program for unintended
+   loudness, decay, or register effects.
+
+Land a green implementation as **Fixed**, not Closed. Independent verification
+must check the objective ordering and the A/B pack; Arthur retains the final
+perceptual sign-off if the candidate changes audible identity materially.
 
 ## Notes
 

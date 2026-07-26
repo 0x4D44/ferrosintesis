@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00133 — Held GM0 treble notes rebound ~3-4 dB through the engine with the LA sample layer
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synthesis / engine
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T103423Z-p51164-n194166100-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00133-run-fix-20260726T103423Z-p51164-n194166100-c1
-- **Owner base:** 548d43996cd14e590e532097cfefda930031485f
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T10:34:23Z
-- **Owner until:** 2026-07-26T12:34:23Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T103423Z-p51164-n194166100-c1 branch=task/bug-MM-BUG-KILN-00133-run-fix-20260726T103423Z-p51164-n194166100-c1 code=59ed31676b5e1116b6193c8d7433284928a9356e gate=manual)
 
 ## Observation
 

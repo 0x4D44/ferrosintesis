@@ -2127,6 +2127,12 @@ pub(crate) struct EngineCore {
 /// (5–7 notes/s, IOI ≥ 143 ms, 43% above the gate), which must keep its
 /// full per-note articulation.
 const TREM_IOI_MAX_S: f32 = 0.10;
+const NOTE_VOICE_SEED_XOR: u32 = 0x9E37;
+const VOICE_SEED_STEP: u32 = 2_654_435_761;
+
+pub(crate) fn note_voice_seed(index: u64) -> u32 {
+    NOTE_VOICE_SEED_XOR ^ (index as u32).wrapping_mul(VOICE_SEED_STEP)
+}
 
 impl EngineCore {
     pub(crate) fn new(opt: CoreOptions) -> Self {
@@ -2214,7 +2220,7 @@ impl EngineCore {
         {
             return;
         }
-        let seed = 0xBA60 ^ (self.voice_seed_index as u32).wrapping_mul(2654435761);
+        let seed = 0xBA60 ^ (self.voice_seed_index as u32).wrapping_mul(VOICE_SEED_STEP);
         // Sampled drone by default; modeled when samples are off or on the CC0
         // alt bank — the same rule the chanter uses in voices::make, so the two
         // paths agree (HLD 2026.07.17 §5). `opt.samples` already folds in
@@ -2665,7 +2671,7 @@ impl EngineCore {
             self.make_room_for_driven_guitar(ch);
         }
 
-        let seed = 0x9E37 ^ (self.voice_seed_index as u32).wrapping_mul(2654435761);
+        let seed = note_voice_seed(self.voice_seed_index);
         // ch9 is always drums; a channel declared a drum part by XG (CC0==127) or GS
         // ("Use for Rhythm Part" SysEx) joins the drum path. `strips[ci].kit` is
         // that channel's own kit: since 2026-07-26 a declared drum channel honours the

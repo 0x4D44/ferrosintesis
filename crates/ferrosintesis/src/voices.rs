@@ -9310,14 +9310,14 @@ fn string_voicing(program: u8) -> StringVoicing {
         out_lp_hz: 2600.0,
         loop_comp: 3.85,
         beta: 0.140,
-        // The cello's top two tones (D5/E5) lock an octave up whenever the
-        // per-note bow force draws near the top of its range — pre-existing, and
-        // caught by bowed_string_cello_holds_register once that gate started
-        // using engine-realistic seeds. A ceiling over the last few semitones is
-        // the targeted fix; retuning its `beta` would disturb the whole voice and
-        // the 46–50 wolf fix that depends on 0.140.
+        // The cello's upper register can lock an octave up whenever the per-note
+        // bow force draws near the top of its range — pre-existing, and caught by
+        // bowed_string_cello_holds_register once that gate started using
+        // engine-realistic seeds. A ceiling over the last few semitones is the
+        // targeted fix; retuning its `beta` would disturb the whole voice and the
+        // 46–50 wolf fix that depends on 0.140.
         slope_hi: 2.55,
-        slope_hi_key: 72,
+        slope_hi_key: 71,
         top_key: 76,
         vib_rate: 5.2,
         vib_base: 0.0055,
@@ -9516,7 +9516,7 @@ impl BowedString {
         // Bow force / pressure this stroke, capped by what this pitch can take.
         // Bowing hard in a SHORT loop drives the waveguide off its fundamental
         // (`map_bowedstring_bow_force_ceiling`). Only the cello needs the cap:
-        // its top two tones lock an octave up under a hard bow, and unlike the
+        // its upper register locks an octave up under a hard bow, and unlike the
         // violin family it cannot be cured by moving `beta`, because 0.140 is
         // what holds its own 46–50 wolf band. Real players press less hard high
         // on a string anyway, so the ceiling is physically right where it bites.
@@ -28179,8 +28179,8 @@ mod tests {
         );
         for key in [73u8, 77, 79, 85, 87, 89] {
             let f0 = key_freq(key);
-            for idx in 0u32..6 {
-                let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+            for idx in 0u64..6 {
+                let seed = crate::engine::note_voice_seed(idx);
                 let mut v = BowedString::new(42, key, 100, sr, seed);
                 v.vib_depth = 0.0;
                 v.drift = Drift::new(1, 0.0, 1);
@@ -28208,7 +28208,7 @@ mod tests {
     /// ≈ −1.0, so all three collapse `slope` onto 2.2003…2.2010 out of an
     /// intended 2.2…2.9 — one bow force tested three times, on the one axis
     /// where this waveguide actually fails. Seeds here come from the engine's
-    /// own formula (`engine.rs:2207`) and `slope` is left to its natural draw.
+    /// own `engine::note_voice_seed` helper and `slope` is left to its natural draw.
     ///
     /// The criterion is the measured PERIOD, and deliberately nothing else. Both
     /// observed failure modes move it: an octave-up mode lock halves it, and a
@@ -28231,15 +28231,38 @@ mod tests {
     /// Both would have been false gates. The period answers the question on its
     /// own, and `calibrate_register_gate_catches_the_known_wolf` proves it can
     /// still see the failures this voicing was built to remove.
+    const BOWED_STRING_REGISTER_SEED_INDICES: [u64; 5] = [0, 1, 2, 3, 19];
+
     fn assert_bowed_string_register_holds(program: u8, lo: u8, hi: u8) {
+        assert_bowed_string_register_seed_set_covers_hard_bow(program, lo);
         let mut failures = bowed_string_register_failures(program, lo, hi);
         failures.sort();
         assert!(
             failures.is_empty(),
             "GM{program} loses its fundamental on {} of {} draws:\n{}",
             failures.len(),
-            (hi - lo + 1) as usize * 4,
+            (hi - lo + 1) as usize * BOWED_STRING_REGISTER_SEED_INDICES.len(),
             failures.join("\n")
+        );
+    }
+
+    fn assert_bowed_string_register_seed_set_covers_hard_bow(program: u8, key: u8) {
+        let max_slope = BOWED_STRING_REGISTER_SEED_INDICES
+            .iter()
+            .map(|&idx| {
+                BowedString::new(
+                    program,
+                    key,
+                    100,
+                    44100.0,
+                    crate::engine::note_voice_seed(idx),
+                )
+                .slope
+            })
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            max_slope >= 2.85,
+            "GM{program} register seed set no longer covers hard bow force; max slope {max_slope:.3}"
         );
     }
 
@@ -28271,8 +28294,8 @@ mod tests {
         let mut failures: Vec<String> = Vec::new();
         for key in lo..=hi {
             let f0 = key_freq(key);
-            for idx in 0u32..4 {
-                let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+            for &idx in &BOWED_STRING_REGISTER_SEED_INDICES {
+                let seed = crate::engine::note_voice_seed(idx);
                 let mut v = BowedString::new(program, key, 100, sr, seed);
                 if let Some(s) = force_slope {
                     v.slope = s;
@@ -28483,8 +28506,8 @@ mod tests {
             let mut ratios: Vec<f32> = Vec::new();
             for key in (lo..=hi).step_by(3) {
                 for vel in [64u8, 100, 127] {
-                    for idx in 0u32..2 {
-                        let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+                    for idx in 0u64..2 {
+                        let seed = crate::engine::note_voice_seed(idx);
                         let old = level(Box::new(Bowed::new(program, key, vel, sr, seed)));
                         let new = level(Box::new(BowedString::new(program, key, vel, sr, seed)));
                         if old > 1e-6 && new > 1e-6 {
@@ -28536,8 +28559,8 @@ mod tests {
             let mut ls: Vec<f32> = Vec::new();
             for key in (lo..=hi).step_by(3) {
                 let f0 = key_freq(key);
-                for idx in 0u32..4 {
-                    let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+                for idx in 0u64..4 {
+                    let seed = crate::engine::note_voice_seed(idx);
                     let mut v = BowedString::new(program, key, 100, sr, seed);
                     v.vib_depth = 0.0;
                     v.drift = Drift::new(1, 0.0, 1);
@@ -28665,8 +28688,8 @@ mod tests {
         for (program, keys) in [(42u8, 36u8..=76u8), (43u8, 28u8..=64u8)] {
             for key in keys {
                 let f0 = key_freq(key);
-                for idx in 0u32..8 {
-                    let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+                for idx in 0u64..8 {
+                    let seed = crate::engine::note_voice_seed(idx);
                     let mut v = BowedString::new(program, key, 100, sr, seed);
                     v.vib_depth = 0.0;
                     v.drift = Drift::new(1, 0.0, 1);
@@ -29132,12 +29155,12 @@ mod tests {
             // so seeds like 7/17/23 collapse every per-note draw onto the bottom
             // of its range — `slope` (bow force) lands on 2.2003…2.2010 out of an
             // intended 2.2…2.9. The engine never does this: it hands out
-            // `0xBA60 ^ (index · 2654435761)` (engine.rs:2207), a Knuth hash whose
-            // outputs are well spread, so real playback genuinely varies bow
-            // force. Mirroring that formula here is what makes this sweep cover
-            // the bow-force range instead of measuring one bow five times.
-            for idx in 0u32..6 {
-                let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+            // `engine::note_voice_seed(index)`, a Knuth-hashed stream whose outputs
+            // are well spread, so real playback genuinely varies bow force.
+            // Mirroring that helper here is what makes this sweep cover the
+            // bow-force range instead of measuring one bow five times.
+            for idx in 0u64..6 {
+                let seed = crate::engine::note_voice_seed(idx);
                 let mut v = BowedString::new(42, key, 100, sr, seed);
                 let slope = v.slope;
                 v.vib_depth = 0.0; // clean tone for the period measurement

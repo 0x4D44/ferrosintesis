@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00016 — GM36/37 slap and pop lack modeled string–fret collision identity
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12-code-1785106371131
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=1b55d834ab89 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -56,6 +56,26 @@ Unblock when Arthur either supplies an owner-recorded slap/pop take suitable for
 multisample bank, or approves a discovered CC0/CC-BY source with retained provenance and
 any required attribution. Reusing the existing finger/pick assets would not resolve the
 recorded identity defect.
+
+### Fix summary (2026-07-26, deltic:auto run=fix-20260726T223701Z-p9812-n951988700-c12 code=1b55d834ab89 gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00016 by adding a modeled, attack-bounded string-fret collision path for GM36 slap bass and GM37 slap-pop bass. The original observation reproduced: those programs were direct Pluck routes whose identity was carried by a post-output click burst, so the old slap oracle passed without any modeled fret collision. The new contact stage is deterministic, velocity-thresholded, passive sample-by-sample, and inserted inside the KS loop before pickup/body/output filtering. The regression keeps the legacy burst enabled in a contact-disabled lesion and proves the lesion no longer satisfies the slap/pop identity checks. Focused slap tests, loop-margin coverage, and untouched-pluck sign
+
+Root cause: GM36/37 authored only the legacy post-output click_post burst and had no string-path contact mechanism. The existing oracle measured the first 3 ms high-frequency transient, which the output burst could satisfy even though the modeled string never collided with the fretboard.
+
+Changed:
+- crates/ferrosintesis/src/voices.rs: added FretContactSpec, FretContact runtime, SLAP/SLAP_POP contact voicing, KS-loop wiring, and regression tests
+- crates/ferrosintesis/src/voices.rs: added SLAP_POP to the shared pluck preset stability sweep
+- crates/ferrosintesis/src/altbank.rs: set the frozen PIZZ PluckPreset to fret_contact None
+
+Tests:
+- FAIL-FIRST observed: cargo test -p ferrosintesis voices::tests::slap_pop_ -- --nocapture failed with zero contact residual before wiring
+- PASS: cargo test -p ferrosintesis voices::tests::slap -- --nocapture
+- PASS: cargo test -p ferrosintesis voices::tests::coupled_loop_margin_holds -- --nocapture
+- PASS: cargo test -p ferrosintesis voices::tests::v2_untouched_pluck_signatures_are_stable -- --nocapture
+
+Left alone:
+- bugs ledger files
 
 ## Notes
 

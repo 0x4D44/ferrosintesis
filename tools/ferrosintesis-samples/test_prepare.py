@@ -1015,6 +1015,47 @@ class PinnedFlacCacheTest(unittest.TestCase):
         self.assertNotEqual(first, changed_recipe)
 
 
+class HeadroomOutputInventoryTest(unittest.TestCase):
+    """MM-BUG-KILN-00140: rebakes must reject obsolete owned outputs."""
+
+    def assert_rebake_rejects_before_writing(self, sources, existing, unexpected):
+        with tempfile.TemporaryDirectory() as repo_root:
+            out_dir = os.path.join(
+                repo_root, "crates", "ferrosintesis-samples-headroom", "samples")
+            os.makedirs(out_dir)
+            for name in existing:
+                open(os.path.join(out_dir, name), "wb").close()
+
+            with mock.patch.object(prepare, "REPO_ROOT", repo_root), mock.patch.object(
+                prepare, "HEADROOM_SOURCES", sources
+            ), mock.patch.object(
+                prepare, "ensure_flac_sources"
+            ) as ensure_sources, mock.patch.object(
+                prepare, "write_wav_mono"
+            ) as write_output, mock.patch.object(
+                prepare.sys, "argv", ["prepare.py", "--only=headroom"]
+            ):
+                with self.assertRaisesRegex(ValueError, unexpected):
+                    prepare.main()
+
+            ensure_sources.assert_not_called()
+            write_output.assert_not_called()
+
+    def test_extra_output_is_rejected_before_the_first_write(self):
+        self.assert_rebake_rejects_before_writing(
+            {"headroom_C4_mf.wav": "https://example.invalid/C4.flac"},
+            ["headroom_C4_mf.wav", "headroom_old.wav"],
+            r"headroom_old\.wav",
+        )
+
+    def test_renamed_mapping_rejects_the_old_name_before_the_first_write(self):
+        self.assert_rebake_rejects_before_writing(
+            {"headroom_C4_medium.wav": "https://example.invalid/C4.flac"},
+            ["headroom_C4_mf.wav"],
+            r"headroom_C4_mf\.wav",
+        )
+
+
 class LocalBankSelectionTest(unittest.TestCase):
     """MM-BUG-KILN-00128: command modes must not rewrite an unrelated local bank."""
 

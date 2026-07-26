@@ -3062,6 +3062,26 @@ def _wants_family(only, family):
     return only is None or family in only
 
 
+def _validate_headroom_output_inventory(sources=None, repo_root=None):
+    """Fail closed when the Headroom package retains an obsolete generated WAV."""
+    expected = set(HEADROOM_SOURCES if sources is None else sources)
+    root = REPO_ROOT if repo_root is None else repo_root
+    out_dir = os.path.dirname(sample_output_path("headroom_.wav", root))
+    if not os.path.isdir(out_dir):
+        return
+    unexpected = sorted(
+        name for name in os.listdir(out_dir)
+        if name.startswith("headroom_")
+        and name.endswith(".wav")
+        and name not in expected
+    )
+    if unexpected:
+        raise ValueError(
+            "Headroom output contains unexpected generated WAVs: "
+            + ", ".join(unexpected)
+        )
+
+
 def _bake_gong_bank():
     """Regenerate the local-source gong bank and return its report rows."""
     rows = []
@@ -3101,6 +3121,11 @@ def main():
     # eastpick, eastpluck (the first-party Eastman E1D guitars), …
     def want(fam):
         return _wants_family(only, fam)
+
+    # Reject stale owned assets before fetching a source or writing any selected
+    # output. Silently retaining or deleting one can republish a removed sample.
+    if want("headroom"):
+        _validate_headroom_output_inventory()
 
     # `--sax-only` bakes ONLY the MTG saxophone LA layer (network + the -sax crate),
     # skipping the slow VSCO fetch/rewrite — fast iteration on the sax bank alone.

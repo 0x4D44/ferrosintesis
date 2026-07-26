@@ -4623,7 +4623,14 @@ pub fn sampled_drum(key: u8, vel: u8, seed: u32, hit_index: u8, sr: f32) -> Opti
         42 => (&kit::HH_CLOSED, 1.0),
         44 => (&kit::HH_PEDAL, 1.0),
         46 => (&kit::HH_OPEN, 1.0),
-        49 | 57 => (&kit2::CRASH, 1.0),
+        49 => (&kit2::CRASH, 1.0),
+        // GM names 49 "Crash Cymbal 1" and 57 "Crash Cymbal 2" — two different cymbals.
+        // Both played the same bank until 2026-07-26, so a file that scored two crashes
+        // heard one, and the sizzle crash shipped in `-drumkit2` with no key able to
+        // select it. A sizzle (rivetted) crash is not literally what "crash 2" names,
+        // but it IS the second crash this kit owns, and a distinct second cymbal is
+        // closer to what the notation asks for than a duplicate of the first.
+        57 => (&kit2::CRASH_SIZZLE, 1.0),
         51 | 59 => (&kit::RIDE, 1.0),
         53 => (&kit::RIDE_BELL, 1.0),
         52 => (&kit2::CHINA, 1.0),

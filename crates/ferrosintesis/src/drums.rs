@@ -3748,6 +3748,92 @@ mod tests {
         });
     }
 
+    /// GM 49 (Crash Cymbal 1) and GM 57 (Crash Cymbal 2) must not be the same cymbal.
+    ///
+    /// They played one bank until 2026-07-26, so a file that scored two crashes heard
+    /// one — while `CRASH_SIZZLE` sat in the drumkit2 crate with no key able to reach
+    /// it. Key 57 now plays it.
+    ///
+    /// Sampled path only, deliberately: this is a routing property of the sampled kit,
+    /// and the modelled path still voices both keys from the same crash model. That
+    /// remains true and is not what this oracle is about.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn crash_1_and_crash_2_are_different_cymbals() {
+        let sr = 44100.0;
+        let c1 = render_drum_kit_samples(49, 110, 4.0, Kit::V3, true);
+        let c2 = render_drum_kit_samples(57, 110, 4.0, Kit::V3, true);
+
+        // (a) The un-foolable clause: same velocity and seed must not render the same.
+        assert!(
+            c1 != c2,
+            "keys 49 and 57 render bit-identically — still one shared crash bank"
+        );
+
+        // (b) ...and a DIFFERENT BANK, not merely a different round robin of the same
+        //     one — which would also pass (a). Stated without assuming what a sizzle
+        //     crash sounds like: measure how far apart two round robins of key 49 are,
+        //     then require 49-vs-57 to be substantially further. That calibrates the
+        //     "same cymbal, different take" distance from the data instead of guessing
+        //     a threshold. (An earlier version asserted that rivets sustain the high
+        //     band; measured, these two banks differ by only 6.5% there, so that
+        //     hypothesis was wrong and asserting it would have meant fitting the test
+        //     to whatever the recordings happened to do.)
+        let render_rr = |key: u8, rr: u8| {
+            let mut v = make(key, 110, sr, 7, Kit::V3, true, rr).unwrap();
+            let mut buf = vec![0f32; (sr * 4.0) as usize];
+            v.render(&mut buf);
+            buf
+        };
+        // A coarse normalised spectral profile: shape only, so a level difference
+        // between two cymbals cannot masquerade as a timbre difference.
+        let profile = |s: &[f32]| {
+            let w = &s[..(1.0 * sr) as usize];
+            let bands = [
+                testutil::spectral_band_rms(w, sr, 300.0, 1000.0),
+                testutil::spectral_band_rms(w, sr, 1000.0, 2500.0),
+                testutil::spectral_band_rms(w, sr, 2500.0, 5000.0),
+                testutil::spectral_band_rms(w, sr, 5000.0, 10000.0),
+                testutil::spectral_band_rms(w, sr, 10000.0, 18000.0),
+            ];
+            let sum: f32 = bands.iter().sum::<f32>().max(1e-12);
+            bands.map(|b| b / sum)
+        };
+        let dist = |a: [f32; 5], b: [f32; 5]| {
+            a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f32>()
+        };
+
+        //     What the assertion can honestly be is STRUCTURAL: key 57 must not render
+        //     as any round robin of key 49. Reverting the routing makes 57 rr(n) equal
+        //     49 rr(n) exactly, so this catches the regression precisely.
+        for rr in 0..4u8 {
+            let a = render_rr(49, rr);
+            let b = render_rr(57, rr);
+            assert!(
+                a != b,
+                "key 57 round robin {rr} is bit-identical to key 49's — the two crash \
+                 keys are sharing a bank again"
+            );
+        }
+
+        //     The perceptual claim is NOT asserted, because the measurement does not
+        //     support it. Two round robins of key 49 differ from each other about four
+        //     times more than key 49 differs from key 57 (within-bank max ~0.099 vs
+        //     49-vs-57 ~0.025 on the profile below). So this routing buys a genuinely
+        //     different recording, but on this metric it does not obviously buy two
+        //     cymbals a listener would call distinct. Left as a printed measurement for
+        //     whoever revisits it; an ear is the arbiter, not this number.
+        let p49 = profile(&render_rr(49, 0));
+        let within = (1..4)
+            .map(|rr| dist(p49, profile(&render_rr(49, rr))))
+            .fold(0f32, f32::max);
+        let between = dist(p49, profile(&render_rr(57, 0)));
+        println!(
+            "spectral profile distance: within-bank (49 round robins) max={within:.4}, \
+             49-vs-57={between:.4}"
+        );
+    }
+
     /// A pedal hat (key 44) is closed by the FOOT — nothing strikes it. So it must not
     /// carry the stick click that a closed hat (key 42) leads with, and the two must not
     /// render identically.

@@ -6,7 +6,14 @@ rust-version = "1.87"
 description = "Command-line WAV renderer for ferrosintesis"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/0x4D44/ferrosintesis"
-publish = false
+readme = "README.md"
+# The library crate has no `[[bin]]`, so `cargo install ferrosintesis` installs nothing.
+# This crate is what makes the renderer installable, which is why it publishes. It must
+# be published LAST — after `ferrosintesis`, which is itself after the asset crates —
+# because its dependency below pins a version that has to exist on the registry first.
+include = ["src/**", "examples/**", "tests/**", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
+keywords = ["midi", "synthesizer", "audio", "renderer", "cli"]
+categories = ["multimedia::audio", "command-line-utilities"]
 
 [[bin]]
 name = "ferrosintesis"

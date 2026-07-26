@@ -194,9 +194,11 @@ enums plus every data-carrying variant are `#[non_exhaustive]`. Adding a render 
 error variant is therefore a minor bump, not a major one — keep it that way. Publish order is
 forced by the `=0.1.0` pins, and there are **25 sample crates**, not two: publish the 24
 independent ones in any order, then `-drumkit2` (the only crate that depends on another,
-`-drumkit`), then `ferrosintesis` last. Derive the order from the manifests rather than
-trusting a list here — that is what this sentence got wrong before.
-`ferrosintesis-cli`, `render-catalog` and `amp-lab` are `publish = false`.
+`-drumkit`), then `ferrosintesis`, and finally `ferrosintesis-cli`. Derive the order from
+the manifests rather than trusting a list here — that is what this sentence got wrong before.
+The CLI ships because the library has no `[[bin]]`: `cargo install ferrosintesis` installs
+nothing, `cargo install ferrosintesis-cli` installs the `ferrosintesis` renderer.
+`render-catalog` and `amp-lab` remain `publish = false`.
 
 Every crate declares **`rust-version = "1.87"`** — that declaration is what turns clippy's
 `incompatible_msrv` lint on, so keep it. An MSRV is only real once a toolchain at that

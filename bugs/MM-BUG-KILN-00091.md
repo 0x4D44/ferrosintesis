@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00091 — the default V3 kit is measurably weaker than legacy V1 on three velocity/attack behaviours
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** drums / kit voicing
 - **Raised:** 2026-07-24
-- **Owner:** -
-- **Owner role:** -
+- **Owner:** Arthur
+- **Owner role:** human
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,9 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00054 by Claude Opus 4.8 (1M)
-  while fixing it. 00054 was a coverage gap; extending those oracles to the default kit
-  MEASURED this difference, which nobody had looked at before because no oracle rendered V3.)
+- **State history:** Open (2026-07-24, split from MM-BUG-KILN-00054 by Claude Opus 4.8 (1M) while fixing it. 00054 was a coverage gap; extending those oracles to the default kit MEASURED this difference, which nobody had looked at before because no oracle rendered V3.) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the measurements cannot decide whether V3's softer kick attack and washier ride are the intended default voicing)
 
 ## Observation
 
@@ -73,3 +71,35 @@ oracles. Both would discard the only measurement anyone has of the difference.
   2026-07-24 is that anything measures it at all.
 - Severity Low / Priority Could because nothing is broken or inverted — this is a
   voicing-intent question with a committed measurement attached.
+
+## Blocker — 2026-07-26
+
+Blocking owner: **Arthur**. The three directions are objectively present, but
+their desired strength is a product/voicing decision. Raising the V3 thresholds
+would change the default kit used by nearly every album; accepting the current
+thresholds would deliberately preserve its softer kick and washier ride.
+
+Unblock with dry mono, samples-off renders from exact baseline `623798a`, at
+44.1 kHz with seed 7:
+
+- GM drum key 36, velocities 30 and 120, 0.5 seconds, for both `Kit::V1` and
+  `Kit::V3`;
+- GM drum key 51, velocity 110, 2.0 seconds, for both `Kit::V1` and `Kit::V3`;
+- audition each V1/V3 pair once at raw level and once body-level matched, so
+  overall loudness does not masquerade as attack definition.
+
+Return these exact inputs:
+
+1. For kick beater superlinearity, choose **keep V3's measured 1.128×
+   character** or **raise V3 to V1's >1.3× contract**.
+2. For gain-normalised kick click, choose **keep V3's measured 1.097×
+   character** or **raise V3 to V1's >1.3× contract**.
+3. For ride ping-over-wash, choose **keep V3's measured 2.90× character** or
+   **raise V3 to V1's >3.0× contract**.
+4. Confirm whether the two kick decisions must move together or may be voiced
+   independently.
+
+If all current V3 values are intentional, the follow-up is documentation-only:
+remove the “measured, not designed” caveats while retaining the per-kit bounds.
+Any raised target requires a Build pass to revoice V3 and prove the selected
+contract without changing unrelated drum keys.

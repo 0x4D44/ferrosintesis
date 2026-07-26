@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00142 — Grand recipe guard is a substring check, so a wrong fenced command still passes
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** testing / provenance
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T151417Z-p52260-n404105000-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00142-run-fix-20260726T151417Z-p52260-n404105000-c1
-- **Owner base:** 42ac59d9861478873ea58eda1bc343234d51c030
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T15:14:17Z
-- **Owner until:** 2026-07-26T17:14:17Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T151417Z-p52260-n404105000-c1 branch=task/bug-MM-BUG-KILN-00142-run-fix-20260726T151417Z-p52260-n404105000-c1 code=a80da2b81591fcd7f4d1e0ea7ef3534044ad9695 gate=manual)
 
 ## Observation
 

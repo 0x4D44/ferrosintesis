@@ -3855,7 +3855,9 @@ pub struct SaxLoopVoice {
     gain: f32,
     env: crate::dsp::Adsr,
     sr: f32,
-    t: u32,
+    // A held realtime note is unbounded by MIDI semantics. `u32` wrapped after
+    // 6–27 hours at supported rates and restarted bloom/drift (MM-BUG-KILN-00066).
+    t: u64,
     vib_phase: f32,
     vib_inc: f32,
     drift: f32,
@@ -3928,7 +3930,7 @@ impl Voice for SaxLoopVoice {
             }
             let depth = bloom * (1.0 + 2.0 * self.growl);
             // Slow bounded drift random-walk on the read rate.
-            if self.t.is_multiple_of(SAX_DRIFT_SAMP) {
+            if self.t.is_multiple_of(SAX_DRIFT_SAMP as u64) {
                 self.drift_target = SAX_DRIFT_MAX * self.rng.white();
             }
             self.drift += 0.002 * (self.drift_target - self.drift);
@@ -4121,7 +4123,9 @@ pub struct BottleLoopVoice {
     gain: f32,
     env: crate::dsp::Adsr,
     sr: f32,
-    t: u32,
+    // Mirrors SaxLoopVoice: wide enough that a valid held note cannot restart
+    // its bloom/drift state at the old u32 boundary (MM-BUG-KILN-00066).
+    t: u64,
     vib_phase: f32,
     vib_inc: f32,
     drift: f32,
@@ -4195,7 +4199,7 @@ impl Voice for BottleLoopVoice {
             }
             let depth = bloom * (1.0 + 2.0 * self.growl);
             // Slow bounded drift random-walk on the read rate.
-            if self.t.is_multiple_of(SAX_DRIFT_SAMP) {
+            if self.t.is_multiple_of(SAX_DRIFT_SAMP as u64) {
                 self.drift_target = SAX_DRIFT_MAX * self.rng.white();
             }
             self.drift += 0.002 * (self.drift_target - self.drift);
@@ -6809,6 +6813,77 @@ mod tests {
         assert!(
             wrap < 0.03,
             "loop wrap discontinuity {wrap:.4} (loop {ls}..{le}) — would click"
+        );
+    }
+
+    /// MM-BUG-KILN-00066 — loop-voice clocks must cross the old `u32`
+    /// boundary without panicking or restarting the shared vibrato/drift state.
+    ///
+    /// A settled reference clock with the same drift-scheduler phase must render
+    /// bit-identically. The absolute time differs, but both voices are past the
+    /// vibrato bloom; only the cadence phase is musically relevant thereafter.
+    #[test]
+    fn loop_voice_clocks_cross_u32_boundary_without_modulation_reset() {
+        let sr = 44100.0;
+        let near_start = u32::MAX as u64 - 511;
+        let period = SAX_DRIFT_SAMP as u64;
+        let settled_with_same_phase = |near: u64| {
+            let settled = (2.0 * sr) as u64;
+            settled + (near + period - settled % period) % period
+        };
+
+        let bottle_zone = nearest(bottle_loop_bank(), crate::dsp::key_freq(60));
+        let make_bottle = || {
+            BottleLoopVoice::new(
+                bottle_zone,
+                crate::dsp::key_freq(60),
+                100,
+                sr,
+                BOTTLE_LOOP_GAIN,
+                5,
+            )
+            .expect("representative bottle key must engage its loop")
+        };
+        let (mut bottle_near, mut bottle_reference) = (make_bottle(), make_bottle());
+        bottle_near.t = near_start;
+        bottle_reference.t = settled_with_same_phase(near_start);
+        let (mut bottle_actual, mut bottle_expected) = (vec![0.0; 1024], vec![0.0; 1024]);
+        bottle_near.render(&mut bottle_actual);
+        bottle_reference.render(&mut bottle_expected);
+        assert!(
+            bottle_near.t > u32::MAX as u64,
+            "bottle clock did not cross the old u32 boundary"
+        );
+        assert_eq!(
+            bottle_actual, bottle_expected,
+            "bottle modulation reset at the old u32 boundary"
+        );
+
+        let sax_zone = nearest(sax_bank(66, 100), crate::dsp::key_freq(60));
+        let make_sax = || {
+            SaxLoopVoice::new(
+                sax_zone,
+                crate::dsp::key_freq(60),
+                100,
+                sr,
+                sax_program_gain(66),
+                5,
+            )
+            .expect("representative sax key must engage its loop")
+        };
+        let (mut sax_near, mut sax_reference) = (make_sax(), make_sax());
+        sax_near.t = near_start;
+        sax_reference.t = settled_with_same_phase(near_start);
+        let (mut sax_actual, mut sax_expected) = (vec![0.0; 1024], vec![0.0; 1024]);
+        sax_near.render(&mut sax_actual);
+        sax_reference.render(&mut sax_expected);
+        assert!(
+            sax_near.t > u32::MAX as u64,
+            "sax clock did not cross the old u32 boundary"
+        );
+        assert_eq!(
+            sax_actual, sax_expected,
+            "sax modulation reset at the old u32 boundary"
         );
     }
 

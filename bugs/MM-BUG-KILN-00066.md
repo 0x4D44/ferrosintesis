@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00066 — A long-held GM76 note overflows its per-voice sample clock
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sampler / voice lifecycle
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol during the coverage-ledger review of `crates/ferrosintesis-samples-bottle/`)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol during the coverage-ledger review of `crates/ferrosintesis-samples-bottle/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — widened both copied loop-voice clocks and pinned modulation continuity across the old boundary)
 
 ## Observation
 
@@ -52,6 +52,34 @@ Use a `u64` sample clock and keep the drift cadence calculation type-compatible.
 Alternatively, separate a saturating onset/bloom clock from an explicitly wrapping
 modulation scheduler. Add a unit test that initializes the private counter near its
 boundary and proves rendering remains finite, non-panicking, and modulation-continuous.
+
+## Resolution — 2026-07-26
+
+`BottleLoopVoice::t` and the copied `SaxLoopVoice::t` are now `u64`. Their
+drift-cadence check converts the shared `u32` period at the comparison site, so
+the unrelated explicitly wrapping bagpipe `LoopVoice` scheduler stays
+unchanged.
+
+The new `loop_voice_clocks_cross_u32_boundary_without_modulation_reset`
+regression starts both affected voices 511 samples below the old maximum. It
+compares each against a settled reference with the same drift-scheduler phase,
+renders across the boundary, and requires byte-identical output plus a clock
+greater than `u32::MAX`.
+
+## Verification — 2026-07-26
+
+- Fail-first on the original `u32` clock reproduced the debug overflow panic at
+  `sampler.rs:4228`.
+- The boundary-crossing regression passes for bottle and sax in debug and
+  release profiles; neither clock panics, wraps, or resets modulation.
+- The complete default suite passed (728 tests, 27 ignored), the true
+  model-only suite passed (626 tests, 22 ignored), and both doc-test sets passed
+  (4 each).
+- Strict workspace clippy and true model-only clippy passed with warnings
+  denied; formatting and `git diff --check` passed.
+- Fresh release binaries from exact baseline `9e08340`, full 124-MIDI inventory
+  at 11.025 kHz: all 124 stayed byte-identical, with zero contamination and
+  zero missed paths. Normal-duration renders remain exactly unchanged.
 
 ## Notes
 

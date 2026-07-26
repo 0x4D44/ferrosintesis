@@ -857,6 +857,164 @@ class SalamanderArchiveCacheTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.manifest))
 
 
+class PinnedFlacCacheTest(unittest.TestCase):
+    """MM-BUG-KILN-00139: direct FLAC caches prove source and decoded identity."""
+
+    URL = "https://example.invalid/rev/Samples/source.flac"
+    SOURCES = {"headroom_C4_mf.wav": URL}
+
+    def setUp(self):
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.served = b"PINNED-FLAC"
+        self.pin = hashlib.sha256(self.served).hexdigest()
+        self.hashes = {"source.flac": self.pin}
+        self.fetches = 0
+        self.decodes = 0
+        self.decoded_sample = 1000
+        self.run_error = None
+        self.fetch_patch = mock.patch.object(
+            prepare, "fetch", side_effect=self.fake_fetch)
+        self.run_patch = mock.patch.object(
+            prepare.subprocess, "run", side_effect=self.fake_run)
+        self.fetch_patch.start()
+        self.run_patch.start()
+        self.addCleanup(self.fetch_patch.stop)
+        self.addCleanup(self.run_patch.stop)
+
+    @property
+    def wav(self):
+        return os.path.join(self.src, "headroom_C4_mf.wav")
+
+    @property
+    def flac(self):
+        return os.path.join(self.src, "source.flac")
+
+    @property
+    def manifest(self):
+        return self.wav + ".source.json"
+
+    def fake_fetch(self, _url, path):
+        self.fetches += 1
+        with open(path, "wb") as f:
+            f.write(self.served)
+
+    def fake_run(self, args, **_kwargs):
+        self.decodes += 1
+        output = args[-1]
+        with wave.open(output, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(44100)
+            w.writeframes(struct.pack("<32h", *([self.decoded_sample] * 32)))
+        if self.run_error is not None:
+            raise self.run_error
+
+    def ensure(self, recipe="pcm16le-v1", hashes=None):
+        prepare.ensure_flac_sources(
+            self.src, self.SOURCES, hashes or self.hashes, "headroom", recipe)
+
+    def test_valid_manifested_warm_cache_is_reused(self):
+        self.ensure()
+        self.ensure()
+        self.assertEqual(self.fetches, 1)
+        self.assertEqual(self.decodes, 1)
+
+    def test_changed_upstream_bytes_fail_closed(self):
+        self.served = b"UNPINNED"
+        with self.assertRaises(ValueError):
+            self.ensure()
+        self.assertFalse(os.path.exists(self.flac))
+        self.assertFalse(os.path.exists(self.wav))
+
+    def test_altered_cached_flac_is_refetched(self):
+        self.ensure()
+        with open(self.flac, "wb") as f:
+            f.write(b"ALTERED")
+        self.ensure()
+        self.assertEqual(self.fetches, 2)
+        self.assertEqual(self.decodes, 1)
+        self.assertEqual(prepare.sha256_file(self.flac), self.pin)
+
+    def test_truncated_cached_wav_is_rebuilt(self):
+        self.ensure()
+        with open(self.wav, "wb") as f:
+            f.write(b"RIFF")
+        self.ensure()
+        self.assertEqual(self.decodes, 2)
+        samples, sr = prepare.read_wav(self.wav)
+        self.assertEqual((len(samples), sr), (32, 44100))
+
+    def test_altered_valid_cached_wav_is_rebuilt(self):
+        self.ensure()
+        with wave.open(self.wav, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(44100)
+            w.writeframes(struct.pack("<32h", *([2000] * 32)))
+        self.ensure()
+        self.assertEqual(self.decodes, 2)
+        samples, _sr = prepare.read_wav(self.wav)
+        self.assertAlmostEqual(samples[0], 1000 / 32768.0)
+
+    def test_source_revision_change_with_stable_names_rebuilds(self):
+        self.ensure(recipe="rev-a")
+        self.served = b"NEW-PINNED-FLAC"
+        new_pin = hashlib.sha256(self.served).hexdigest()
+        self.decoded_sample = 2000
+        self.ensure(recipe="rev-b", hashes={"source.flac": new_pin})
+        self.assertEqual(self.fetches, 2)
+        self.assertEqual(self.decodes, 2)
+        samples, _sr = prepare.read_wav(self.wav)
+        self.assertAlmostEqual(samples[0], 2000 / 32768.0)
+
+    def test_interrupted_decode_leaves_no_partial_cache_entry(self):
+        self.run_error = RuntimeError("simulated ffmpeg interruption")
+        with self.assertRaises(RuntimeError):
+            self.ensure()
+        self.assertFalse(os.path.exists(self.wav))
+        self.assertFalse(os.path.exists(self.manifest))
+        leftovers = [
+            name for name in os.listdir(self.src)
+            if name.startswith("headroom_C4_mf.wav.") and name.endswith(".wav")
+        ]
+        self.assertEqual(leftovers, [])
+
+    def test_legacy_wav_without_manifest_is_rebuilt(self):
+        self.ensure()
+        os.remove(self.manifest)
+        self.ensure()
+        self.assertEqual(self.decodes, 2)
+
+    def test_malformed_manifest_is_rebuilt(self):
+        self.ensure()
+        with open(self.manifest, "w", encoding="utf-8") as f:
+            f.write("[]")
+        self.ensure()
+        self.assertEqual(self.decodes, 2)
+
+    def test_headroom_urls_and_all_unique_payloads_are_pinned(self):
+        source_names = {
+            prepare.urllib.parse.unquote(os.path.basename(url))
+            for url in prepare.HEADROOM_SOURCES.values()
+        }
+        self.assertEqual(len(source_names), 45)
+        self.assertEqual(source_names, set(prepare.HEADROOM_FLAC_SHA256))
+        self.assertTrue(all(
+            f"/{prepare.HEADROOM_REV}/Samples/" in url
+            for url in prepare.HEADROOM_SOURCES.values()
+        ))
+
+    def test_headroom_cache_identity_tracks_source_and_recipe_revisions(self):
+        first = prepare.headroom_cache_path(self.src, "source-a", "recipe-a")
+        changed_source = prepare.headroom_cache_path(
+            self.src, "source-b", "recipe-a")
+        changed_recipe = prepare.headroom_cache_path(
+            self.src, "source-a", "recipe-b")
+        self.assertNotEqual(first, changed_source)
+        self.assertNotEqual(first, changed_recipe)
+
+
 class LocalBankSelectionTest(unittest.TestCase):
     """MM-BUG-KILN-00128: command modes must not rewrite an unrelated local bank."""
 

@@ -743,9 +743,11 @@ KAWAI_SOURCES = {
 # (probed: 36->65 Hz C2, 60->262 Hz C4, 84->1050 Hz C6) -- no octave trap. 5 velocity
 # LEVELs, single mic set (CLOSE). ATTRIBUTION REQUIRED (CC-BY): credit Bengt Nilsson +
 # keep the instrument name (see the crate NOTICE).
+HEADROOM_REV = "2a7df3f7252227a3484202c1d61bc1bfe352a971"
+HEADROOM_RECIPE_REV = "ffmpeg-pcm-s16le-v1"
 _HEADROOM_BASE = (
     "https://raw.githubusercontent.com/sfzinstruments/BengtNilsson.HeadroomPiano/"
-    "master/Samples"
+    f"{HEADROOM_REV}/Samples"
 )
 # dest zone -> MIDI note (C/F# every minor third, C2..C6; all multiples of 3 in the set).
 _HEADROOM_ZONE_MIDI = {
@@ -760,6 +762,59 @@ HEADROOM_SOURCES = {
     for z, midi in _HEADROOM_ZONE_MIDI.items()
     for d, (lv_rr1, lv_rr2) in _HEADROOM_VEL.items()
     for rr, lv in (("", lv_rr1), ("_rr2", lv_rr2))
+}
+# SHA-256 of every unique selected FLAC at HEADROOM_REV. The 54 destination
+# names reuse LEVEL4 for two dynamics, so there are 45 authenticated payloads.
+_HEADROOM_FLAC_HASHES = {
+    (1, 36): "5a3e645a06d7dadea9d7056a414dd425342a00a1e85f46f90f26b2cb5c81d2a1",
+    (1, 42): "dcab1158816f06ad97131fec567b759b811e6376634bfc8b4cf9926e73d6158f",
+    (1, 48): "3da2e34d41f76fdd437fe77ead5ba58223414c1f9df351494d0357995d27d95a",
+    (1, 54): "b1ef3012cdb17ff228b7de35b5d6cf4d6cc090e1cecc3c68539044970e6be8f4",
+    (1, 60): "c1c411e534b6e65f127ac2343ddb9c9f8691e649bcae2907acf7e28a4e96678d",
+    (1, 66): "e0e6161519b2e5bb40f16212960b2e893e92d6209e79284f96553cd6391fda68",
+    (1, 72): "acca9bf965ef0ddf9c4b504b1e1e4fef782f652403b0d20eb345c826decfc5e3",
+    (1, 78): "bf2fbd720b33f814599b81d5dc128eea4c69d26a6e1f7c01c8ebf4a084589894",
+    (1, 84): "fe0ba98d14653b78f3c2ef10faa8c042e49645797419139454abef72d4438523",
+    (2, 36): "910796ba9bf0b6f75ef5cab4b1ae870d9ec38211e2f262b1cc8cf43ceceba0da",
+    (2, 42): "e89b613d10dccb14153ff83f3102da2fadd56f32e983572044748ca092c63594",
+    (2, 48): "52eaac81dbe6248cb4cd8e504e4c3a355d4419045181c847197f1c7efc92c52a",
+    (2, 54): "f21dd28ce50ff445e8adea188005e8cb8ce372d46f1cfbeeeab5abb71be7bbc5",
+    (2, 60): "01786069fa402d0d6657f125ffd9a884297980054c8db7ee294a0778f553c17e",
+    (2, 66): "06cc6e15851e6e39253743992da5bd46e02c0b08c71303f475d08c647679f9c9",
+    (2, 72): "913c48000bdd7344a9769a6670e54524e32ab71f2031f76931ea6d84d4dfb10f",
+    (2, 78): "958f25a9da1d247bb11a73a26e66df058c7b230553e4465a2ff79e9f8dedbe78",
+    (2, 84): "dd499915381d582edbdcf41450981b5473154d4d5897eecf5d645da759a6cef3",
+    (3, 36): "3a905f3d7f57153213027c8c818fbe9f28e1f8d17bf39c267d735d67c411764c",
+    (3, 42): "033a2d00715a0dd963412fa8d535f3710899d711f5cff6e2e1b5fc25aeca296b",
+    (3, 48): "a256066caf31bee87afa57f54c19d9420a4ff7a0faba34d5f81d3e5ad75df738",
+    (3, 54): "eafc6897676982f1fca56d5a2f58707ec1a5439892c014bae128954add61fabe",
+    (3, 60): "2ac13b4b386ae4533474f2a9885cf089c090b2bac4842d9efc6eb29ab2b8846d",
+    (3, 66): "60af1091563a45f38438a78e2d4238d212137c6ffde05f0ffe13fb2cb1a9b9c0",
+    (3, 72): "e82dae78feb8141e7794b0e71b318efbe7c1c2c0ef1fc1889c4378232f276527",
+    (3, 78): "39d28d0b927125076f0ece9b948cf0267cd7978095872cbfa5800415bd98b612",
+    (3, 84): "f6f89ef9782913c70768eed6d94ee7f137cf1ef3183b7f601e99690e205e635d",
+    (4, 36): "3b7fdccdd1c652365c0cec8fb850ea7bb773842de705d0fdcf8abde5aa1ad146",
+    (4, 42): "4b87edb58cba4b3a565115c887238a69019d077d8e193db101b76c3084c198bb",
+    (4, 48): "f37aac770e89bfd9715c461f8f0d33d0aee1585a925642edf98a688c117f4cbe",
+    (4, 54): "e4162c39ecaa39217f1de5e0e498b5618ae4b23fee5d03ad76ed6650ef927dc0",
+    (4, 60): "bbfdb70e1a866712d96955ad2c470a70eb89c3ac2a112b7220792bc6dfc885cf",
+    (4, 66): "0ee820e070fee44b72cae7871653e86e8f375f58b2c5a689142e5c3c8689b9db",
+    (4, 72): "2233c180bbf5974e65223ec6a0b74bc1ed5942c492fea3f9182768fc4229b5ad",
+    (4, 78): "6ff81850b415da3912e172bf2bbf164a0986fe8b9d1a6be8819998b5ebded768",
+    (4, 84): "bd1e317ad609933c3f208fa3a5ca9bb501cb57cb9d8568105f968c7d7046bbfb",
+    (5, 36): "ecaf6688e2d757780b2aee461b6b11b48bb39b85ac285563f9d27fff69f7ef8d",
+    (5, 42): "8ed61a1a2df5085ed18d1e710c07c060c9cefee79dc403661447170f8bf634cb",
+    (5, 48): "c0776559919c2445da4ec79cf77249e3c194b7a8e0b899cfbcdd878f3f502af3",
+    (5, 54): "a0df22bece2c7a3134b6e0f55709d7548b47875e60bd90a23fc4f6da797aab76",
+    (5, 60): "3ed66aa66df6e9b275d07f5ba53b63fde8511beba78796ba331c30ef672a8836",
+    (5, 66): "25942dfdf2df26a9f6d467c7a6a22f4d6c19be1d0408228221269fde2f3c34db",
+    (5, 72): "51fa5c98c0d730e1e2921de2bba68a2407da958386650c87bc100703419e2ae0",
+    (5, 78): "b57882fd231c5febee20ab7b0f013c7dd7fe3c77b0a210b015af5a7f569527e2",
+    (5, 84): "41b37d094e196ffaf97cb36ba831ab5c1ddcc74bcad6d89aad0317aa1be645a8",
+}
+HEADROOM_FLAC_SHA256 = {
+    f"HEADROOM PIANO LEVEL{level} CLOSE {midi}.flac": digest
+    for (level, midi), digest in _HEADROOM_FLAC_HASHES.items()
 }
 
 # Clavinet (GM 7) — the MuseScore "MS Basic" soundfont's clavinet (MIT, NOT CC0), the
@@ -1369,24 +1424,124 @@ def ensure_eastman_sources(src, source_map):
         shutil.copyfile(os.path.join(EASTMAN_SRC, fn), os.path.join(src, dest))
 
 
-def ensure_flac_sources(src, source_map, label):
-    """Like `ensure_direct_sources`, but each URL is a FLAC that ffmpeg transcodes to
-    a 16-bit PCM WAV at `src/<dest_name>` (same shell-out precedent as the banjo/sax/
-    drumkit intakes). The `.flac` download is cached alongside the WAV."""
+def validate_pcm16_wav(path):
+    """Reject incomplete or non-PCM16 decoded cache entries."""
+    with wave.open(path, "rb") as w:
+        channels = w.getnchannels()
+        width = w.getsampwidth()
+        sample_rate = w.getframerate()
+        frames = w.getnframes()
+        raw = w.readframes(frames)
+    if channels not in (1, 2):
+        raise ValueError(f"{path}: unsupported channel count {channels}")
+    if width != 2:
+        raise ValueError(f"{path}: sample width {width} is not PCM16")
+    if sample_rate <= 0 or frames <= 0:
+        raise ValueError(f"{path}: empty or invalid PCM stream")
+    expected = frames * channels * width
+    if len(raw) != expected:
+        raise ValueError(f"{path}: truncated WAV data ({len(raw)} bytes, expected {expected})")
+
+
+def decoded_source_manifest_path(wav):
+    return wav + ".source.json"
+
+
+def headroom_cache_path(root=None, source_revision=None, recipe_revision=None):
+    """Dedicated cache identity for Headroom source bytes and decode semantics."""
+    return os.path.join(
+        root or tempfile.gettempdir(),
+        "headroom_src",
+        source_revision or HEADROOM_REV,
+        recipe_revision or HEADROOM_RECIPE_REV,
+    )
+
+
+def decoded_wav_matches(wav, source_sha256, recipe_revision):
+    """Does a complete PCM16 WAV match its authenticated source and recipe?"""
+    try:
+        with open(decoded_source_manifest_path(wav), "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+        if not isinstance(manifest, dict):
+            return False
+        if manifest.get("source_sha256") != source_sha256:
+            return False
+        if manifest.get("recipe_revision") != recipe_revision:
+            return False
+        if sha256_file(wav) != manifest.get("wav_sha256"):
+            return False
+        validate_pcm16_wav(wav)
+    except (OSError, ValueError, EOFError, wave.Error):
+        return False
+    return True
+
+
+def write_decoded_source_manifest(wav, source_sha256, recipe_revision):
+    """Atomically bind a decoded WAV to the source bytes and decode recipe."""
+    manifest = {
+        "recipe_revision": recipe_revision,
+        "source_sha256": source_sha256,
+        "wav_sha256": sha256_file(wav),
+    }
+    directory = os.path.dirname(wav)
+    fd, tmp = tempfile.mkstemp(
+        prefix=os.path.basename(wav) + ".", suffix=".source.json", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, sort_keys=True)
+        os.replace(tmp, decoded_source_manifest_path(wav))
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+def ensure_flac_sources(src, source_map, source_sha256, label, recipe_revision):
+    """Authenticate FLACs and atomically cache complete PCM16 decodes.
+
+    Source files are cached once by their upstream basename, rather than once per
+    destination (Headroom's 54 names reuse 9 of its 45 FLACs). A decoded WAV is
+    accepted only when a manifest binds its exact bytes to both the pinned FLAC
+    and the decode recipe.
+    """
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     for fn, url in source_map.items():
         wav = os.path.join(src, fn)
-        if os.path.exists(wav):
-            continue
-        flac = wav + ".flac"
+        source_name = urllib.parse.unquote(os.path.basename(url))
+        expected = source_sha256.get(source_name)
+        if expected is None:
+            raise ValueError(f"{label}: no SHA-256 pin for {source_name}")
+        flac = os.path.join(src, source_name)
+        if os.path.exists(flac) and sha256_file(flac) != expected:
+            print(f"cached {source_name} disagrees with pin; refetching ...",
+                  file=sys.stderr)
+            os.remove(flac)
         if not os.path.exists(flac):
             print(f"fetching {label} {fn} ...", file=sys.stderr)
             fetch(url, flac)
-        subprocess.run(
-            [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-             "-i", flac, "-acodec", "pcm_s16le", wav],
-            check=True,
-        )
+            actual = sha256_file(flac)
+            if actual != expected:
+                os.remove(flac)
+                raise ValueError(
+                    f"{source_name}: sha256 {actual} != pinned {expected}")
+        if decoded_wav_matches(wav, expected, recipe_revision):
+            continue
+        fd, tmp = tempfile.mkstemp(
+            prefix=os.path.basename(wav) + ".", suffix=".wav", dir=src)
+        os.close(fd)
+        try:
+            subprocess.run(
+                [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                 "-i", flac, "-acodec", "pcm_s16le", tmp],
+                check=True,
+            )
+            validate_pcm16_wav(tmp)
+            os.replace(tmp, wav)
+        except Exception:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            raise
+        write_decoded_source_manifest(wav, expected, recipe_revision)
 
 
 def rebuild_salamander_cache(src, url, sha256, member_map):
@@ -2962,6 +3117,7 @@ def main():
     if not local_only:
         src = os.path.join(tempfile.gettempdir(), "vsco2ce_src", VSCO_REV)
         os.makedirs(src, exist_ok=True)
+        headroom_src = None
         for fn, url in SOURCES.items():
             if want(fn.split("_")[0]):
                 ensure_source(fn, url, src)
@@ -3036,7 +3192,11 @@ def main():
         if want("kawai"):
             ensure_direct_sources(src, KAWAI_SOURCES, "kawai")
         if want("headroom"):
-            ensure_flac_sources(src, HEADROOM_SOURCES, "headroom")
+            headroom_src = headroom_cache_path()
+            os.makedirs(headroom_src, exist_ok=True)
+            ensure_flac_sources(
+                headroom_src, HEADROOM_SOURCES, HEADROOM_FLAC_SHA256,
+                "headroom", HEADROOM_RECIPE_REV)
 
         # Looped bagpipe sustains (own transform: extract_loop, not trim_to_onset)
         if want("chanter"):
@@ -3136,7 +3296,8 @@ def main():
         ):
             if not want(fn.split("_")[0]):
                 continue
-            x, sr = read_wav(os.path.join(src, fn))
+            family_src = headroom_src if fn in HEADROOM_SOURCES else src
+            x, sr = read_wav(os.path.join(family_src, fn))
             x = resample(x, sr, OUT_SR)
             sr = OUT_SR
             keep_s, fade_s = KEEP_FILE.get(fn, KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S)))

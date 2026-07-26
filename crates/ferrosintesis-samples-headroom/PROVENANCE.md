@@ -25,14 +25,16 @@ warm, intimate close-mic grand — a smaller, rounder instrument than the bright
 Yamaha C5 Salamander grand (GM 0 CC0=2).
 
 - Repo: <https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano>
-  (`Samples/HEADROOM PIANO LEVEL<1-5> CLOSE <MIDI>.flac`)
+  at commit `2a7df3f7252227a3484202c1d61bc1bfe352a971`
+  (`Samples/HEADROOM PIANO LEVEL<1-5> CLOSE <MIDI>.flac`). The generator pins
+  SHA-256 for all 45 unique selected FLAC payloads.
 - We use the **CLOSE** ("Intimate") mic set only (the Decca-Tree set is skipped).
 - MIDI-number labels are **true sounding pitch** (measured: 36 → 65 Hz = C2,
   60 → 262 Hz = C4, 84 → 1050 Hz = C6). 5 velocity LEVELs, single RR.
 - Source format: 16-bit stereo FLAC (ffmpeg-transcoded to 16-bit PCM, downmixed
   to mono).
 - License: **CC BY 4.0** —
-  <https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano/blob/master/LICENSE>.
+  <https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano/blob/2a7df3f7252227a3484202c1d61bc1bfe352a971/LICENSE>.
 
 ## Selection
 
@@ -45,11 +47,13 @@ Yamaha C5 Salamander grand (GM 0 CC0=2).
 
 ## Processing (deterministic, `prepare.py` `headroom` family)
 
-Per file: ffmpeg FLAC → 16-bit PCM; `read_wav` decode (stereo → mono 0.5/0.5);
-resample to 44.1 kHz (no-op); `trim_to_onset` cuts to the onset (3% of peak, 8 ms
-lead-in pad), keeps **1.5 s** of body with a lead-bounded 2 ms fade-in and a 0.6 s
-squared fade-out, peak-normalized to 0.9; `measure_f0` records the autocorrelation
-root pinned in the `headroom_*` zone tables in
+The generator verifies each FLAC against its pinned SHA-256, then accepts a
+decoded warm cache only when a content manifest binds it to that source and the
+current decode recipe. Per file: ffmpeg FLAC → 16-bit PCM; `read_wav` decode
+(stereo → mono 0.5/0.5); resample to 44.1 kHz (no-op); `trim_to_onset` cuts to
+the onset (3% of peak, 8 ms lead-in pad), keeps **1.5 s** of body with a
+lead-bounded 2 ms fade-in and a 0.6 s squared fade-out, peak-normalized to 0.9;
+`measure_f0` records the autocorrelation root pinned in the `headroom_*` zone tables in
 `crates/ferrosintesis/src/sampler.rs`. Output: 16-bit mono WAV.
 
 ## Regenerating

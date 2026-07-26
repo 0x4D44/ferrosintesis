@@ -32,6 +32,21 @@ import wave
 
 VSCO_REV = "440300901dfe9275fd84e0b7763af1f8443ae62e"
 BASE = f"https://raw.githubusercontent.com/sgossner/VSCO-2-CE/{VSCO_REV}"
+# RETIRED (2026.07.26) — deliberately NOT merged into SOURCES any more, so no bake
+# writes these eight overlays into any crate. Nothing in ferrosintesis loads them (the
+# sampled kit in `ferrosintesis-samples-drumkit` superseded the overlay path), so
+# ~919 KiB of `include_bytes!` payload was shipping in every binary and in the published
+# `-orchestral` package for nothing. The baked WAVs now live in
+# `tools/ferrosintesis-samples/retired-drum-overlays/` — see that directory's README.
+#
+# The table is KEPT, not deleted: it is the upstream pin for files we still hold, and
+# `drum_crash1_ff_rr1.wav` is the real-cymbal measurement reference behind the shipped
+# MetalPlate model. It is kept *inert* rather than retargeted at the archive directory
+# because the trim/fade path has changed since these were baked (see `old_trim` in
+# test_prepare.py), so a re-bake would NOT reproduce the archived bytes — it would
+# quietly overwrite the calibration evidence with something else. Git history, not this
+# table, is the integrity record for what is committed. `KEEP_FILE` below keeps their
+# per-file trim recipe for the same documentary reason.
 DRUM_SOURCES = {
     "drum_sus_cymb1_mp_rr1.wav": f"{BASE}/Percussion/susCymb1-hit_mp_rr1.wav",
     "drum_sus_cymb1_mp_rr2.wav": f"{BASE}/Percussion/susCymb1-hit_mp_rr2.wav",
@@ -135,7 +150,8 @@ SOURCES = {
         f"{n.replace('#', '%23')}_{v}_1.wav"
     for n in ("C1", "G1", "D2", "A2", "E3", "B3")
     for d, v in (("p", "v1"), ("f", "v3"))
-} | DRUM_SOURCES
+}
+# NB: `DRUM_SOURCES` used to be merged in here. It is retired — see its comment above.
 
 # FreePats "Spanish classical guitar" (version 2019-06-18), CC0 1.0 public
 # domain dedication (readme.txt + cc0.txt inside the archive). One WAV per
@@ -3092,6 +3108,10 @@ def main():
             keep_s, fade_s = KEEP_FILE.get(fn, KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S)))
             seg = trim_to_onset(x, sr, keep_s, fade_s)
             fam = fn.split("_")[0]
+            # Unpitched one-shots skip root measurement. Inert since the drum overlays
+            # were retired out of SOURCES (see DRUM_SOURCES above); kept because it is
+            # the recipe record for the archived files and the hook any future
+            # unpitched family would reuse.
             if fn in DRUM_SOURCES:
                 root = f0 = cand = cents = conf = None
             else:

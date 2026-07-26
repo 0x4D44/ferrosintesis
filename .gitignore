@@ -83,6 +83,11 @@ _cal/
 !tools/ferrosintesis-samples/gong-src/*.wav
 !tools/ferrosintesis-samples/freesound-src/*.wav
 !tools/ferrosintesis-samples/mandolin-src/*.wav
+# ...and the retired VSCO drum overlays. Nothing in ferrosintesis loads them, so they
+# left the published `-orchestral` crate — but `drum_crash1_ff_rr1.wav` is the
+# real-cymbal MEASUREMENT REFERENCE the shipped MetalPlate model was calibrated
+# against, so the bytes must stay in the repo. See that directory's README.md.
+!tools/ferrosintesis-samples/retired-drum-overlays/*.wav
 # ...and the per-zone bake sources under the repo-root samples/ store. That store is
 # otherwise Opus-only (the `!samples/**/*.opus` rule above): the Eastman guitar
 # additionally commits its 16 pre-cut LOSSLESS zone WAVs, so prepare.py can rebake the

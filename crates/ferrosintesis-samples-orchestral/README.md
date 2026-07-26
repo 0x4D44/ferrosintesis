@@ -2,7 +2,7 @@
 
 Compile-time sample payload for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis). This crate embeds
-166 mono, 16-bit, 44.1 kHz WAV recordings (attack transients + looped sustains):
+158 mono, 16-bit, 44.1 kHz WAV recordings (attack transients + looped sustains):
 
 - 24 violin/cello ensemble onsets for the GM 48–49 string sections;
 - 56 brass onsets for trumpet, muted trumpet, trombone, tuba, and horn;
@@ -10,10 +10,7 @@ Compile-time sample payload for
 - 10 harpsichord onsets for the GM 6 voice;
 - 7 Spanish classical-guitar plucks for the nylon-guitar voice;
 - 8 steel-string acoustic-guitar plucks for the GM 25 voice;
-- 17 looped bagpipe recordings (2 drones, 15 chanter takes) for the GM 109 voice;
-- 8 drum overlays: two round robins each for crash cymbal, suspended cymbal,
-  kick, and snare. These are superseded — no ferrosintesis code reads them, and
-  the sampled kit lives in `ferrosintesis-samples-drumkit`.
+- 17 looped bagpipe recordings (2 drones, 15 chanter takes) for the GM 109 voice.
 
 `ferrosintesis` uses these recordings for the onset of a note, then crossfades
 into its modeled sustain. Cargo retrieves this package at build time and
@@ -23,18 +20,23 @@ runtime filesystem or network access.
 The small public API exists for `ferrosintesis`:
 
 ```rust
-assert_eq!(ferrosintesis_samples_orchestral::FILE_COUNT, 166);
+assert_eq!(ferrosintesis_samples_orchestral::FILE_COUNT, 158);
 let wav = ferrosintesis_samples_orchestral::get("trumpet_C3_f.wav").unwrap();
 assert_eq!(&wav[..4], b"RIFF");
 ```
 
 ## Provenance and license
 
-The 124 string, brass, reed, and drum WAVs were trimmed from
+The 116 string, brass, and reed WAVs were trimmed from
 [VSCO 2 Community Edition](https://github.com/sgossner/VSCO-2-CE) by Versilian
 Studios / sgossner, released under the CC0 1.0 Universal public-domain
 dedication. Source downloads are pinned to repository commit
 `440300901dfe9275fd84e0b7763af1f8443ae62e`.
+
+Eight VSCO drum overlays (crash, suspended cymbal, kick, snare — two round
+robins each) used to ship here. They were superseded by the sampled kit in
+`ferrosintesis-samples-drumkit`, no `ferrosintesis` code read them, and they
+left this package on 2026-07-26. See `PROVENANCE.md` for where they went.
 
 The seven `nylon_*` WAVs were trimmed from the
 [FreePats Spanish classical guitar](https://freepats.zenvoid.org/Guitar/acoustic-guitar.html)

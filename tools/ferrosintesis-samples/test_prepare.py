@@ -100,9 +100,17 @@ class PrepareSampleBankTests(unittest.TestCase):
                 else:
                     self.fail(f"unexpected sample package for {filename}: {relative[1]}")
 
-        self.assertEqual(len(filenames), 208)
+        # 208 -> 200 / orchestral 139 -> 131 on 2026.07.26: the eight retired VSCO
+        # drum overlays left SOURCES (and the published crate) for
+        # tools/ferrosintesis-samples/retired-drum-overlays/.
+        self.assertEqual(len(filenames), 200)
         self.assertEqual(len(core), 69)
-        self.assertEqual(len(orchestral), 139)
+        self.assertEqual(len(orchestral), 131)
+        self.assertNotIn(
+            "drum",
+            {name.split("_", 1)[0] for name in filenames},
+            "the retired drum overlays must not be baked back into a crate",
+        )
         self.assertTrue(
             all(name.startswith(("piano_", "violin_", "flute_")) for name in core)
         )

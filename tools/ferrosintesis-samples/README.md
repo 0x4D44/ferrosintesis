@@ -114,11 +114,14 @@ body or sustain.
   measured with a per-note ceiling (`TWO_F_STRONG`) or at the SF3 `originalPitch`; the
   ganjo WAVs are IEEE-float, transcoded to PCM by `ensure_banjo_sources` (ffmpeg).
 - `drum_sus_cymb1_*`, `drum_crash1_*`, `drum_kick_*`, `drum_snare2_*`
-  — **retired** drum-hit overlays for the pre-drumkit default kit. The WAVs
-  still ship in `-orchestral` (the published crate keeps its bytes) but the
-  synth no longer references them: the full sampled kit in
-  `crates/ferrosintesis-samples-drumkit/` (see `prepare_drumkit.py`)
-  superseded the overlay path.
+  — **retired** drum-hit overlays for the pre-drumkit default kit. The synth
+  never referenced them after the full sampled kit in
+  `crates/ferrosintesis-samples-drumkit/` (see `prepare_drumkit.py`) superseded
+  the overlay path, so on 2026-07-26 they left the published `-orchestral`
+  crate for `retired-drum-overlays/` here — kept because
+  `drum_crash1_ff_rr1.wav` is the MetalPlate cymbal model's measurement
+  reference. `DRUM_SOURCES` in `prepare.py` is now inert; see that directory's
+  `README.md`.
 
 ## Provenance & license
 

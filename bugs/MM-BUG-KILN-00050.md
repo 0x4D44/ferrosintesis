@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00050 — above its crossover the KILN-00042 damper hold orders held corners by the preset's t60, not its bright, so plucked instruments re-order in brightness in the top register (ukulele drifts to/under nylon above ~key 64; koto's held corner exceeds nylon's)
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
 - **Raised:** 2026-07-23
-- **Owner:** -
-- **Owner role:** -
+- **Owner:** Arthur
+- **Owner role:** human
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses)
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing)
 
 ## Observation
 
@@ -83,6 +83,33 @@ UKULELE brighter or shorter so it stays above nylon when held; if the koto's wid
 corner is audible on a real piece, lower its held reach specifically. Any change here needs
 the render-diff inventory and an ear pass, and should extend
 `damper_hold_preserves_instrument_identity` to the newly-guaranteed keys.
+
+### Blocker — 2026-07-26
+
+Blocking owner: **Arthur**. Current trunk still uses the relative-budget
+`DamperHold::Derived` law, and the record already establishes that its global
+alternative restores corner ordering only by failing the vetted rendered
+ukulele identity. Choosing either shared law or new per-preset constants without
+listening would repeat the trade this bug exists to preserve.
+
+Unblock with one level-matched, same-note comparative pass using the recorded
+seeds `0x6510`, `0x76A1`, and `0x1250` at keys 55, 60, and 64:
+
+1. Compare **UKULELE vs NYLON** and decide whether the ukulele remains
+   perceptually brighter at every key.
+2. Compare **KOTO vs NYLON** and decide whether the koto remains perceptually
+   darker at every key.
+3. Return one product verdict:
+   - **Current contrast is acceptable:** record the residual as ear-accepted
+     and close the bug without changing the shared physics.
+   - **Revoice the outlier(s):** identify ukulele, koto, or both and confirm the
+     target ordering above. A Build pass can then tune only those presets,
+     extend the rendered identity oracle across all three keys, and return the
+     exact candidate A/B for final sign-off.
+
+The question is mutual identity in the held 30–420 ms window, not whether an
+isolated instrument sounds pleasant. The existing centroid evidence cannot
+decide that perceptual comparison.
 
 ## Notes
 

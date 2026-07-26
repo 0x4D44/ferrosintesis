@@ -18,10 +18,11 @@
 //!    costing up to 3.14 dB on a fast-decay note. Nearest-rank p95 happens to equal
 //!    the max at n <= 19, so the two conventions are not approximations of each other
 //!    here — they are different statistics that coincide only by rank arithmetic.
-//! 2. **Do not reuse `voices.rs::percentile`.** Its doc comment says "nearest-rank"
-//!    but its body is `sorted[floor(q * (len - 1))]`, which at n = 9 returns the
-//!    SECOND-largest block. Measured through the full derivation that convention puts
-//!    median 0.41 / max 18.77 dB of error into the trim table.
+//! 2. **Do not reuse `voices.rs::percentile`.** It implements nearest-rank, so p95
+//!    happens to return the max at n = 9 but stops doing so at n = 20. Reusing it
+//!    would silently couple the calibration statistic to the number of blocks. Its
+//!    earlier floor-rank body demonstrated that risk: measured through the full
+//!    derivation, it put median 0.41 / max 18.77 dB of error into the trim table.
 //! 3. Max is right *because the window is a single isolated note*. The usual
 //!    objection to a maximum ("one hot moment sets it") is an argument about whole
 //!    tracks and does not apply.

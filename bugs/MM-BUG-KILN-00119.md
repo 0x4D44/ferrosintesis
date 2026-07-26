@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00119 — calmeter's do-not-reuse note describes percentile's OLD floor-rank body; KILN-00055 inverted it
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** docs / ferrosintesis-cli examples
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5@high)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — rewrote the do-not-reuse rationale for the current nearest-rank helper)
 
 ## Observation
 
@@ -55,7 +55,18 @@ Confirmed by reading both at `6c4c21e`; no build needed.
 
 ## Fix
 
-<unfixed — raised only>
+The example keeps its explicit-maximum rule but now describes the helper's
+current nearest-rank behavior. It explains that p95 equals the maximum for nine
+blocks only by coincidence, stops doing so at twenty blocks, and would couple
+the intended calibration statistic to window-derived block count. The measured
+error from the former floor-rank implementation remains clearly historical.
+
+## Verification — 2026-07-26
+
+- `ferrosintesis-cli`'s `calmeter` example compiles.
+- The focused nearest-rank regression still passes and returns 8.0 for p95 of
+  nine sorted values.
+- Formatting and `git diff --check` passed.
 
 ## Notes
 

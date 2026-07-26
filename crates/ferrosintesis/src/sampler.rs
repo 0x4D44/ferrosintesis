@@ -7042,26 +7042,33 @@ mod tests {
         assert_wrap_seam(25, 100, 100, 96000.0, 1, "steel key 100 @96k dry-out");
     }
 
-    /// Guitar-realism HLD §4 / AC8 — the variation machinery must not reach
-    /// any non-guitar LA path. FNV-1a pin over one wrapped program's exact
-    /// PCM (GM 56 trumpet). MM-BUG-KILN-00018 intentionally changed its
-    /// settled body ring; this pin captures that corrected render while still
-    /// guarding against later guitar-only leakage. Same-box golden (like the
-    /// repo's other bit-exact canaries); re-pin only with an explained diff.
+    /// Guitar-realism HLD §4 / AC8 — the variation machinery must not reach any
+    /// non-guitar LA path. Portable level/spectrum/envelope signature over one
+    /// wrapped program (GM 56 trumpet), using the shared cross-machine-stable
+    /// tolerances rather than a raw-f32 hash (MM-BUG-KILN-00057).
+    ///
+    /// MM-BUG-KILN-00018 intentionally changed the settled body ring; this
+    /// captures that corrected render while still guarding against later
+    /// guitar-only onset, pitch, or gain leakage.
     #[test]
-    fn non_guitar_la_render_is_pinned() {
+    fn non_guitar_la_render_signature_is_stable() {
         let mut v = voices::make(56, 69, 100, 44100.0, 5, true);
         let mut buf = vec![0f32; 22050];
         v.render(&mut buf);
-        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-        for x in &buf {
-            for b in x.to_bits().to_le_bytes() {
-                h = (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3);
-            }
-        }
-        assert_eq!(
-            h, 0xaa11_bc63_b298_af8e,
-            "non-guitar LA render changed (fnv {h:#x}) — guitar-only variation leaked? \n             (baseline re-pinned for the k=2 velocity law: GM56 carries VEL_LEVEL_EXP 1.284 \n             and the shared LA onset law changed; both deliberate and global)"
+        crate::testutil::assert_render_signature(
+            "GM56 non-guitar LA canary",
+            crate::testutil::render_signature(
+                &buf,
+                44100.0,
+                (0.0, 0.50),
+                (0.0, 0.10),
+                (0.35, 0.50),
+            ),
+            crate::testutil::RenderSignature {
+                rms_db: -16.398,
+                centroid_hz: 1767.767,
+                late_early_db: 13.049,
+            },
         );
     }
 

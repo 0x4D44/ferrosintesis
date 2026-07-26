@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00057 — non_guitar_la_render_is_pinned freezes a raw-f32 FNV hash: the last un-migrated bit-exact render golden, no diagnostic on failure and fragile across codegen
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass; the original "will flip in release" premise was EMPIRICALLY TESTED here and found FALSE, and the bug re-scoped accordingly)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-24, raised via `deltic bugs new` by Claude Opus 4.8 (1M), from a `lessons_learnt.md` pruning pass; the original "will flip in release" premise was EMPIRICALLY TESTED here and found FALSE, and the bug re-scoped accordingly) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — replaced the raw-f32 hash with a portable, diagnostic render signature)
 
 ## Observation
 
@@ -65,7 +65,35 @@ by 8 other call sites.
 
 ## Fix
 
-<unfixed — raised only>
+Replace the cross-commit FNV pin with the existing `RenderSignature` oracle. Preserve the
+same GM56 render and guard its level, spectrum, and envelope shape using the shared
+cross-machine tolerances.
+
+## Resolution — 2026-07-26
+
+`non_guitar_la_render_is_pinned` is now
+`non_guitar_la_render_signature_is_stable`. It renders the same GM56/key 69/velocity
+100/seed 5 canary, then freezes:
+
+- body RMS over 0.00–0.50 s: -16.398 dB;
+- spectral centroid over 0.00–0.50 s: 1767.767 Hz;
+- late/early level over 0.35–0.50 s versus 0.00–0.10 s: 13.049 dB.
+
+The oracle now reports which audible dimension moved and uses the shared ±0.15 dB /
+±2% tolerances instead of requiring every floating-point bit to match.
+
+## Verification — 2026-07-26
+
+- A fail-first zero signature reported the measured values and each tolerance failure:
+  `-16.398323 dB`, `1767.7667 Hz`, and `13.048706 dB`.
+- The focused oracle passed in debug and release profiles.
+- The complete default suite passed (727 tests, 27 ignored), the true model-only suite
+  passed (626 tests, 22 ignored), and both doc-test sets passed (4 each).
+- Strict workspace clippy and true model-only clippy passed with warnings denied;
+  formatting and `git diff --check` passed.
+- Fresh release binaries from exact baseline `d37b8ca`, full 124-MIDI inventory at
+  11.025 kHz: all 124 stayed byte-identical, with zero contamination and zero missed
+  paths, confirming the test-only migration does not alter shipped output.
 
 ## Notes
 

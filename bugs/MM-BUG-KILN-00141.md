@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00141 — ensure_ydp_sf2 trusts a warm cache without checking its pinned hash
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / provenance
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T150650Z-p48908-n149273900-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00141-run-fix-20260726T150650Z-p48908-n149273900-c1
-- **Owner base:** 87782e89fe3ce3cd1ff9b2fa4fbf5c09aecb3ea3
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T15:06:50Z
-- **Owner until:** 2026-07-26T17:06:50Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T150650Z-p48908-n149273900-c1 branch=task/bug-MM-BUG-KILN-00141-run-fix-20260726T150650Z-p48908-n149273900-c1 code=6ec035d9b4c09e345c071037ee58a7fcca266aa5 gate=manual)
 
 ## Observation
 

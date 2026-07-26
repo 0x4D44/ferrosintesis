@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00131 — Core drum-kit crate rustdoc names the wrong kick mic source (mid_kick_snon)
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample packaging / provenance
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T100451Z-p32652-n863317900-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00131-run-fix-20260726T100451Z-p32652-n863317900-c1
-- **Owner base:** 6f09c961a6f6f8d565f13eac2c57ba7c67612852
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T10:04:51Z
-- **Owner until:** 2026-07-26T12:04:51Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T100451Z-p32652-n863317900-c1 branch=task/bug-MM-BUG-KILN-00131-run-fix-20260726T100451Z-p32652-n863317900-c1 code=4e2ee12b84f3cb0c4891d90745cd09dc602fc1cf gate=manual)
 
 ## Observation
 

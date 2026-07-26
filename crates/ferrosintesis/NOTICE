@@ -80,6 +80,10 @@ ferrosintesis-samples-headroom — GM 0 grand piano (Yamaha C3)
     https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano
     This crate uses the close-mic ("Intimate") set only.
 
+---------------------------------------------------------------------------------
+CC BY 4.0 AND CC BY 3.0
+---------------------------------------------------------------------------------
+
 ferrosintesis-samples-sax — GM 64-67 saxophones
 
     Solo saxophone single notes from the MTG "good-sounds" dataset (Music Technology
@@ -88,6 +92,10 @@ ferrosintesis-samples-sax — GM 64-67 saxophones
     https://github.com/sfzinstruments/MTG.SoloSax
     The underlying good-sounds recordings published on Freesound are CC BY 3.0.
     Modified: decoded from FLAC, trimmed, downmixed to mono, resampled, repitched.
+
+---------------------------------------------------------------------------------
+CC BY 4.0  (https://creativecommons.org/licenses/by/4.0/)
+---------------------------------------------------------------------------------
 
 ferrosintesis-samples-ccby — GM 4 Rhodes and GM 15 hammered-dulcimer onsets
 

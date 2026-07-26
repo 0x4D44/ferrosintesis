@@ -109,10 +109,29 @@ mod tests {
         "upstream_licenses/ms_basic_license_d307a2bd899f15bf650efc3c2891211af5cb78b5.md"
     );
 
-    /// CC0 waives attribution. Everything else here (MIT, CC-BY-3.0, CC-BY-4.0) requires
-    /// the credit to travel with a binary distribution.
-    fn requires_attribution(license: &str) -> bool {
-        license != "CC0-1.0"
+    /// The individual SPDX license ids joined by the subset of expressions these
+    /// sample-crate manifests use.
+    fn license_terms(expression: &str) -> Vec<&str> {
+        expression
+            .split(" AND ")
+            .map(|term| {
+                term.trim()
+                    .trim_start_matches('(')
+                    .trim_end_matches(')')
+                    .trim()
+            })
+            .filter(|term| !term.is_empty())
+            .collect()
+    }
+
+    fn declared_attribution_licenses(declared_license: &str) -> Vec<&str> {
+        let mut licenses: Vec<&str> = license_terms(declared_license)
+            .into_iter()
+            .filter(|license| *license != "CC0-1.0")
+            .collect();
+        licenses.sort_unstable();
+        licenses.dedup();
+        licenses
     }
 
     /// Attribution-bearing licences accepted in sample-bank provenance records.
@@ -122,51 +141,59 @@ mod tests {
     /// document spells it.
     const ATTRIBUTION_LICENSES: &[&str] = &["MIT", "CC-BY-3.0", "CC-BY-4.0"];
 
-    /// Derive the obligation from the independent provenance record.
-    fn provenance_requires_attribution(provenance: &str) -> bool {
-        ATTRIBUTION_LICENSES
+    /// Derive the exact attribution-bearing licence ids from the independent provenance
+    /// record.
+    fn provenance_attribution_licenses(provenance: &str) -> Vec<&'static str> {
+        let mut licenses: Vec<&'static str> = ATTRIBUTION_LICENSES
             .iter()
-            .any(|license| names_license(provenance, license))
+            .copied()
+            .filter(|license| names_license_id(provenance, license))
+            .collect();
+        licenses.sort_unstable();
+        licenses.dedup();
+        licenses
     }
 
     /// Whether the manifest's attribution claim agrees with the crate's provenance.
     fn attribution_claim_agrees(declared_license: &str, provenance: &str) -> bool {
-        requires_attribution(declared_license) == provenance_requires_attribution(provenance)
+        declared_attribution_licenses(declared_license)
+            == provenance_attribution_licenses(provenance)
+    }
+
+    fn format_licenses(licenses: &[&str]) -> String {
+        if licenses.is_empty() {
+            "none".to_string()
+        } else {
+            licenses.join(", ")
+        }
     }
 
     /// Cross-check both records, then return the provenance-derived obligation.
     fn crate_requires_attribution(krate: &str, declared_license: &str) -> bool {
         let provenance = read(&crates_dir().join(krate).join("PROVENANCE.md"));
-        let provenance_requires = provenance_requires_attribution(&provenance);
+        let declared_licenses = declared_attribution_licenses(declared_license);
+        let provenance_licenses = provenance_attribution_licenses(&provenance);
         assert!(
-            attribution_claim_agrees(declared_license, &provenance),
-            "{krate}/Cargo.toml declares {declared_license}, which says attribution is {}, \
-             but {krate}/PROVENANCE.md says it is {}. The manifest cannot exempt its own \
-             audio from the attribution oracles; reconcile the declaration with the \
-             retained provenance evidence.",
-            if requires_attribution(declared_license) {
-                "required"
-            } else {
-                "not required"
-            },
-            if provenance_requires {
-                "required"
-            } else {
-                "not required"
-            }
+            declared_licenses == provenance_licenses,
+            "{krate}/Cargo.toml declares {declared_license}, whose attribution licence \
+             ids are {}, but {krate}/PROVENANCE.md names {}. The manifest cannot \
+             exempt, understate, or overstate its own audio obligations; reconcile \
+             the declaration with the retained provenance evidence.",
+            format_licenses(&declared_licenses),
+            format_licenses(&provenance_licenses)
         );
-        provenance_requires
+        !provenance_licenses.is_empty()
     }
 
-    /// Spellings of a licence id that count as naming it.
+    /// Spellings of one licence id that count as naming it.
     ///
     /// The repo uses both the SPDX form (`CC-BY-4.0`, in manifests) and the prose form
     /// (`CC BY 4.0`, in the notices a human reads); either satisfies "this document says
     /// which licence applies".
-    fn license_spellings(license: &str) -> Vec<String> {
-        let mut out = vec![license.to_string()];
-        if license.starts_with("CC-BY-") {
-            out.push(license.replace('-', " "));
+    fn license_spellings(license_id: &str) -> Vec<String> {
+        let mut out = vec![license_id.to_string()];
+        if license_id.starts_with("CC-BY-") {
+            out.push(license_id.replace('-', " "));
         }
         out
     }
@@ -194,11 +221,20 @@ mod tests {
         false
     }
 
-    /// Does `text` name this licence in any accepted spelling?
-    fn names_license(text: &str, license: &str) -> bool {
-        license_spellings(license)
+    /// Does `text` name this licence id in any accepted spelling?
+    fn names_license_id(text: &str, license_id: &str) -> bool {
+        license_spellings(license_id)
             .iter()
             .any(|s| contains_word(text, s))
+    }
+
+    /// Does `text` name every licence id in the declared expression?
+    fn names_license(text: &str, license: &str) -> bool {
+        let terms = license_terms(license);
+        !terms.is_empty()
+            && terms
+                .into_iter()
+                .all(|license_id| names_license_id(text, license_id))
     }
 
     /// Does this NOTICE carry something only the LICENSOR could have supplied?
@@ -392,15 +428,16 @@ mod tests {
             }
         }
         let krate = krate.to_ascii_lowercase();
-        let license_spellings: Vec<String> = license_spellings(license)
+        let license_words: Vec<String> = license_terms(license)
             .into_iter()
+            .flat_map(license_spellings)
             .map(|s| s.to_ascii_lowercase())
             .collect();
         out.retain(|candidate| {
             let candidate = candidate.to_ascii_lowercase();
             !krate.contains(&candidate)
                 && !"ferrosintesis".contains(&candidate)
-                && !license_spellings.iter().any(|s| s.contains(&candidate))
+                && !license_words.iter().any(|s| s.contains(&candidate))
         });
         out
     }
@@ -421,6 +458,44 @@ mod tests {
         assert!(
             !attribution_claim_agrees("CC0-1.0", provenance),
             "a CC0 manifest declaration must disagree with provenance that records CC BY audio"
+        );
+    }
+
+    #[test]
+    fn sax_manifest_declares_both_attribution_layers() {
+        assert_eq!(
+            declared_license("ferrosintesis-samples-sax"),
+            "CC-BY-4.0 AND CC-BY-3.0",
+            "the sax package embeds the CC BY 4.0 MTG.SoloSax derivative and the \
+             underlying CC BY 3.0 good-sounds recordings"
+        );
+    }
+
+    #[test]
+    fn compound_licence_expression_requires_every_and_operand() {
+        let declared = "CC-BY-4.0 AND CC-BY-3.0";
+        assert!(names_license(
+            "MTG.SoloSax is CC BY 4.0; the underlying good-sounds packs are CC BY 3.0.",
+            declared
+        ));
+        assert!(
+            !names_license("MTG.SoloSax is CC BY 4.0.", declared),
+            "omitting the underlying CC BY 3.0 layer must not satisfy the declaration"
+        );
+        assert!(
+            !names_license("The good-sounds packs are CC BY 3.0.", declared),
+            "omitting the derivative CC BY 4.0 layer must not satisfy the declaration"
+        );
+        assert!(
+            !attribution_claim_agrees(
+                declared,
+                "MTG.SoloSax derivative files are licensed CC BY 4.0."
+            ),
+            "provenance that omits CC BY 3.0 must disagree with a compound declaration"
+        );
+        assert!(
+            !attribution_claim_agrees(declared, "The underlying recordings are CC BY 3.0."),
+            "provenance that omits CC BY 4.0 must disagree with a compound declaration"
         );
     }
 

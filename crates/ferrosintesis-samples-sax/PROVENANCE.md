@@ -13,8 +13,8 @@ sax): 74 mono 16-bit 44.1 kHz WAVs — for each sax, ~9-10 pitch zones × 2 dyna
 MTG.SoloSax repository. The WAVs under `samples/` are **source, not build output** —
 they are committed and embedded into the synth binary via `include_bytes!`.
 
-Attribution obligations ship in `NOTICE` (this bank is **CC BY 4.0**, not CC0 — see
-`../ferrosintesis` for how the credit flows to downstream users). It is kept in its
+Attribution obligations ship in `NOTICE` (this bank is **CC BY 4.0 AND CC BY 3.0**,
+not CC0 — see `../ferrosintesis` for how the credit flows to downstream users). It is kept in its
 own crate so `ferrosintesis-samples-core` stays pure CC0 and under the crates.io
 10 MiB publish cap.
 

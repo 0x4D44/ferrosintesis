@@ -1,4 +1,4 @@
-//! Embedded CC BY 4.0 MTG.SoloSax saxophone samples for GM 64-67.
+//! Embedded CC BY 4.0 and CC BY 3.0 MTG.SoloSax saxophone samples for GM 64-67.
 //!
 //! Real solo-saxophone single notes (soprano/alto/tenor/baritone) from the MTG
 //! good-sounds.org dataset (Neumann U87), voicing the GM 64-67 saxophones as an LA

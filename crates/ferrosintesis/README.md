@@ -236,7 +236,7 @@ every licence here. The remaining fifteen banks are CC0 and require nothing.
 | `ferrosintesis-samples-ydp-grand` | CC BY 3.0 | GM 0 grand (Disklavier Pro) | "YDP Grand Piano" by roberto@zenvoid.org for FreePats; underlying samples Zenph Studios / One Laptop Per Child |
 | `ferrosintesis-samples-gong` | CC BY 3.0 | tam-tam gong | "CdM Gamelan Sample Library" by Digitópia / Casa da Música |
 | `ferrosintesis-samples-headroom` | CC BY 4.0 | GM 0 grand (Yamaha C3) | "Headroom Piano" / "Intimate Piano" recorded by Bengt Nilsson; SFZ mapping by kinwie |
-| `ferrosintesis-samples-sax` | CC BY 4.0 | GM 64-67 saxophones | MTG good-sounds dataset (Music Technology Group, Universitat Pompeu Fabra); "MTG Solo Saxophones" SFZ by kinwie |
+| `ferrosintesis-samples-sax` | CC BY 4.0 AND CC BY 3.0 | GM 64-67 saxophones | MTG good-sounds dataset (Music Technology Group, Universitat Pompeu Fabra); "MTG Solo Saxophones" SFZ by kinwie; underlying Freesound good-sounds packs |
 | `ferrosintesis-samples-ccby` | CC BY 4.0 | GM 4 Rhodes, GM 15 hammered-dulcimer onsets | "C_S Fender Rhodes Mark II" by tim.kahn; "Multi-sampled Hammered Dulcimer" by iternetcone |
 
 This table is not maintained by hand. `licensing.rs` derives the attribution-bearing

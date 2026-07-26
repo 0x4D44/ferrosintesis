@@ -46,11 +46,14 @@ pub(crate) struct WavWriter {
 
 impl WavWriter {
     pub(crate) fn create(path: &Path, sr: u32, sample_count: u64) -> io::Result<Self> {
+        checked_header(sr, sample_count)?;
+        Self::from_file(File::create(path)?, sr, sample_count)
+    }
+
+    pub(crate) fn from_file(file: File, sr: u32, sample_count: u64) -> io::Result<Self> {
         let data_len = checked_data_len(sample_count)?;
-        let byte_rate = sr
-            .checked_mul(4)
-            .ok_or_else(|| invalid_input("WAV sample rate exceeds the header limit"))?;
-        let mut writer = BufWriter::new(File::create(path)?);
+        let byte_rate = checked_header(sr, sample_count)?;
+        let mut writer = BufWriter::new(file);
         write_header(&mut writer, sr, byte_rate, data_len)?;
         Ok(Self {
             writer,
@@ -83,6 +86,12 @@ impl WavWriter {
         self.writer.flush()?;
         self.writer.into_inner().map_err(|error| error.into_error())
     }
+}
+
+pub(crate) fn checked_header(sr: u32, sample_count: u64) -> io::Result<u32> {
+    checked_data_len(sample_count)?;
+    sr.checked_mul(4)
+        .ok_or_else(|| invalid_input("WAV sample rate exceeds the header limit"))
 }
 
 fn write_header(writer: &mut impl Write, sr: u32, byte_rate: u32, data_len: u32) -> io::Result<()> {

@@ -4196,8 +4196,8 @@ pub fn normalize_to_i16(samples: &[f32], peak: f32, target: f32) -> Vec<i16> {
 }
 
 /// Max loudness-recovery iterations and the LUFS tolerance for "on target".
-const LOUDNESS_MAX_ITERS: usize = 6;
-const LOUDNESS_TOL_DB: f32 = 0.3;
+pub(crate) const LOUDNESS_MAX_ITERS: usize = 6;
+pub(crate) const LOUDNESS_TOL_DB: f32 = 0.3;
 
 /// Loudness-normalise: bring integrated loudness (BS.1770-4) to `target_lufs`,
 /// true-peak-limit to `ceiling_dbtp`, then TPDF-dither to interleaved i16.

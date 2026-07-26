@@ -413,6 +413,7 @@ impl StreamTruePeak {
             .max(self.right.push(right, &self.phases))
     }
 
+    #[cfg(test)]
     pub(crate) fn push(&mut self, interleaved_stereo: &[f32]) {
         assert!(
             interleaved_stereo.len().is_multiple_of(2),
@@ -423,6 +424,7 @@ impl StreamTruePeak {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn finish(self) -> f32 {
         let peak = self.left.peak.max(self.right.peak);
         if peak <= 0.0 {
@@ -473,7 +475,15 @@ const TP_SAFETY_DB: f32 = 1.0;
 /// Max limiter passes. A fast attack ramp straddling the FIR window slightly
 /// inflates the interpolated peak above g·env, so one pass can under-correct;
 /// re-measuring the limited buffer and re-limiting converges in a few passes.
-const TP_MAX_PASSES: usize = 12;
+pub(crate) const TP_MAX_PASSES: usize = 12;
+
+pub(crate) fn limiter_config(fs: u32, ceiling_dbtp: f32) -> (f32, f32, f32) {
+    let fs = fs as f32;
+    let ceiling = 10f32.powf((ceiling_dbtp - TP_SAFETY_DB) / 20.0);
+    let attack = 10f32.powf((20.0 / (TP_ATTACK_MS / 1000.0 * fs)) / 20.0);
+    let release = 10f32.powf((20.0 / (TP_RELEASE_MS / 1000.0 * fs)) / 20.0);
+    (ceiling, attack, release)
+}
 
 /// One bounded-slope limiter pass over de-interleaved channels: returns true if
 /// any gain reduction was applied (i.e. the buffer was over the ceiling).
@@ -532,12 +542,12 @@ fn limit_pass(
 /// preserves the stereo image. Content already under the ceiling is unchanged.
 /// Iterated to convergence so a fast attack ramp can't leave residual overshoot.
 pub fn limit_true_peak(interleaved_stereo: &mut [f32], fs: u32, ceiling_dbtp: f32) {
+    let (ceil_lin, _, _) = limiter_config(fs, ceiling_dbtp);
     let fs = fs as f32;
     let n_frames = interleaved_stereo.len() / 2;
     if n_frames == 0 {
         return;
     }
-    let ceil_lin = 10f32.powf((ceiling_dbtp - TP_SAFETY_DB) / 20.0);
     let phases = tp_polyphase();
 
     let mut left: Vec<f32> = (0..n_frames).map(|f| interleaved_stereo[2 * f]).collect();

@@ -15,6 +15,47 @@ pub use crate::error::{MidiError, MAX_SONG_SECONDS};
 pub use crate::loudness::{integrated_lufs, limit_true_peak, momentary_lufs, true_peak_dbtp};
 pub use crate::wav::write_wav;
 
+/// Normalization applied by [`render_to_wav`].
+///
+/// Construct a value with [`Normalization::loudness`] for programme loudness plus
+/// true-peak limiting, or [`Normalization::peak`] for the legacy scalar peak mode.
+/// The fields are private so future releases can extend the policy without exposing
+/// implementation details.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct Normalization {
+    kind: NormalizationKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum NormalizationKind {
+    Loudness { target_lufs: f32, ceiling_dbtp: f32 },
+    Peak { target: f32 },
+}
+
+impl Normalization {
+    /// Normalize integrated BS.1770 loudness to `target_lufs` and constrain
+    /// transients to `ceiling_dbtp`.
+    pub fn loudness(target_lufs: f32, ceiling_dbtp: f32) -> Self {
+        Self {
+            kind: NormalizationKind::Loudness {
+                target_lufs,
+                ceiling_dbtp,
+            },
+        }
+    }
+
+    /// Apply the legacy scalar normalization from the measured render peak to `target`.
+    ///
+    /// Most callers should use [`Normalization::loudness`]. This constructor exists
+    /// for workflows that deliberately retain the CLI's old peak-normalized sound.
+    pub fn peak(target: f32) -> Self {
+        Self {
+            kind: NormalizationKind::Peak { target },
+        }
+    }
+}
+
 /// A parsed Standard MIDI File: its tempo map, events and markers, ready to render.
 pub struct Song(crate::midi::Song);
 
@@ -118,9 +159,80 @@ pub fn render_with_progress(
     crate::engine::render_with_progress(&song.0, opt, on_progress)
 }
 
+/// Render, normalize, and atomically write a stereo 16-bit PCM WAV.
+///
+/// Unlike [`render`], this path keeps audio working memory effectively independent
+/// of song duration. It streams the synthesizer into sibling scratch files, applies
+/// the selected normalization in disk-backed passes, then incrementally writes the
+/// final WAV. The requested output is replaced only after the completed temporary
+/// WAV has been flushed and synchronized.
+///
+/// # Errors
+///
+/// Returns [`std::io::ErrorKind::InvalidInput`] before rendering if the result would
+/// exceed classic RIFF's 4 GiB size limit. Otherwise returns the underlying scratch,
+/// output, flush, synchronization, or rename error. A failed call preserves any
+/// existing output and removes its owned temporary files during normal unwinding.
+pub fn render_to_wav(
+    song: &Song,
+    opt: &Options,
+    output: &Path,
+    normalization: Normalization,
+) -> std::io::Result<Stats> {
+    render_to_wav_with_progress(song, opt, output, normalization, &mut |_| {})
+}
+
+/// The progress-reporting form of [`render_to_wav`].
+///
+/// The callback reports synthesizer progress roughly ten times. Disk-backed
+/// normalization and WAV writing happen after the callback reaches the end.
+///
+/// # Errors
+///
+/// Returns the same errors as [`render_to_wav`].
+pub fn render_to_wav_with_progress(
+    song: &Song,
+    opt: &Options,
+    output: &Path,
+    normalization: Normalization,
+    on_progress: &mut dyn FnMut(Progress),
+) -> std::io::Result<Stats> {
+    crate::scratch::render_to_wav(&song.0, opt, output, normalization.kind, on_progress)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new(label: &str) -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "ferrosintesis-offline-{label}-{}-{nonce}",
+                std::process::id()
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+
+        fn join(&self, name: &str) -> PathBuf {
+            self.0.join(name)
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
 
     fn file_from_track(events: &[u8]) -> Vec<u8> {
         let mut data = Vec::new();
@@ -136,6 +248,66 @@ mod tests {
         data.extend((track.len() as u32).to_be_bytes());
         data.extend(track);
         data
+    }
+
+    fn one_note_song() -> Song {
+        parse(&file_from_track(&[
+            0x00, 0xC0, 46, // harp
+            0x00, 0x90, 60, 100, // note on
+            0x83, 0x60, 0x80, 60, 0, // note off after one beat
+        ]))
+        .unwrap()
+    }
+
+    #[test]
+    fn render_to_wav_matches_buffered_loudness_and_peak_paths() {
+        let dir = TestDir::new("differential");
+        let song = one_note_song();
+        let opt = Options::default()
+            .with_sample_rate(8_000)
+            .with_samples(false)
+            .with_tail(0.5);
+        let (samples, expected_stats) = render(&song, &opt);
+
+        let cases = [
+            (
+                "loudness",
+                Normalization::loudness(-18.0, -1.0),
+                normalize_loudness(&samples, opt.sample_rate(), -18.0, -1.0),
+            ),
+            (
+                "peak",
+                Normalization::peak(0.891),
+                normalize_to_i16(&samples, expected_stats.peak, 0.891),
+            ),
+        ];
+        for (name, normalization, expected_pcm) in cases {
+            let expected = dir.join(&format!("{name}-expected.wav"));
+            let actual = dir.join(&format!("{name}-actual.wav"));
+            write_wav(&expected, opt.sample_rate(), &expected_pcm).unwrap();
+            fs::write(&actual, b"prior output").unwrap();
+
+            let actual_stats = render_to_wav(&song, &opt, &actual, normalization).unwrap();
+
+            assert_eq!(actual_stats, expected_stats);
+            assert_eq!(fs::read(&actual).unwrap(), fs::read(&expected).unwrap());
+        }
+    }
+
+    #[test]
+    fn riff_preflight_preserves_existing_output_and_creates_no_scratch() {
+        let dir = TestDir::new("preflight");
+        let output = dir.join("song.wav");
+        fs::write(&output, b"prior output").unwrap();
+        let song = one_note_song();
+        let opt = Options::default().with_sample_rate(u32::MAX).with_tail(1.0);
+
+        let error =
+            render_to_wav(&song, &opt, &output, Normalization::loudness(-18.0, -1.0)).unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        assert_eq!(fs::read(&output).unwrap(), b"prior output");
+        assert_eq!(fs::read_dir(&dir.0).unwrap().count(), 1);
     }
 
     #[test]

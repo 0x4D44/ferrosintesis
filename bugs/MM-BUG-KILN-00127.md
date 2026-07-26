@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sampler / realtime drum lookup
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T075807Z-p50144-n860597800-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00127-run-fix-20260726T075807Z-p50144-n860597800-c1
+- **Owner base:** d8a62badbd1d352d74ccbbb0875dfe6a92141d5b
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T07:58:07Z
+- **Owner until:** 2026-07-26T09:58:07Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

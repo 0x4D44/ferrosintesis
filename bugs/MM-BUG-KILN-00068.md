@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00068 — ferrosintesis and -sax license fields do not disclose the embedded non-MIT/Apache audio
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / licensing
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00068-run-fix-20260726T225402Z-p9812-n456509100-c15-code-1785107114207
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 from the licence audit
+- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 from the licence audit -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T225402Z-p9812-n456509100-c15 branch=task/bug-MM-BUG-KILN-00068-run-fix-20260726T225402Z-p9812-n456509100-c15 code=f3da7739c52f gate=cargo model=codex@xhigh)
   run while fixing KILN-00060; two independent review agents flagged the parent field)
   → Blocked (2026-07-24, Claude Opus 4.8 (1M) during a fixing pass. NOT a difficulty
   block — both edits are one line each. It needs a decision only **Arthur** can make, and
@@ -72,6 +72,26 @@ Options, in rough order of preference:
 - Or move to an explicit compound expression and accept the downstream churn.
 - The `-sax` case is narrower and lower-risk: that crate is not the one downstreams
   gate on, and `CC-BY-4.0 AND CC-BY-3.0` is simply more accurate.
+
+### Fix summary (2026-07-26, deltic:auto run=fix-20260726T225402Z-p9812-n456509100-c15 code=f3da7739c52f gate=cargo)
+
+Agent-reported summary: MM-BUG-KILN-00068 is fixed in code and tests: the sax sample crate now declares both attribution layers while the parent ferrosintesis crate remains MIT OR Apache-2.0. I reproduced the original observation with cargo metadata before the fix: ferrosintesis-samples-sax reported CC-BY-4.0 only. The root cause was that the sax crate shipped MTG.SoloSax derivative data plus underlying good-sounds recordings, but its manifest exposed only the derivative CC BY 4.0 layer and the licensing oracle only checked attribution as a boolean or a single license token. The oracle now splits AND expressions and requires every declared attribution license to appear in provenance, README, and NOTICE evidence. Th
+
+Root cause: ferrosintesis-samples-sax embedded bytes with two attribution layers, CC BY 4.0 for the MTG.SoloSax derivative and CC BY 3.0 for the underlying good-sounds recordings, but its Cargo license field declared only CC-BY-4.0. The existing licensing oracle let that through because it compared manifest and provenance at attribution/no-attribution level and treated a compound SPDX AND expression as one in
+
+Changed:
+- Corrected ferrosintesis-samples-sax license metadata to CC-BY-4.0 AND CC-BY-3.0.
+- Updated sax README, NOTICE, PROVENANCE, and crate docs plus the parent README and NOTICE evidence to name both attribution layers.
+- Extended ferrosintesis licensing tests to validate compound AND operands and the sax metadata.
+
+Tests:
+- Reproduced pre-fix with cargo metadata --format-version 1 --no-deps --quiet: ferrosintesis-samples-sax reported CC-BY-4.0.
+- cargo test -p ferrosintesis licensing (red after adding the regression, green after the fix).
+- cargo metadata --format-version 1 --no-deps --quiet verified ferrosintesis remains MIT OR Apache-2.0 and ferrosintesis-samples-sax reports CC-BY-4.0 AND CC-BY-3
+- git diff --check
+
+Left alone:
+- bugs/ ledger untouched.
 
 ## What is needed to unblock (2026-07-24)
 

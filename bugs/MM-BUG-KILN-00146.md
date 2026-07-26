@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** voices / BowedString
 - **Raised:** 2026-07-26
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260726T233602Z-p9812-n603751900-c22
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00146-run-fix-20260726T233602Z-p9812-n603751900-c22
-- **Owner base:** 69aa1d4b5574466d07590ad9fba538dbdf5e7493
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T23:36:02Z
-- **Owner until:** 2026-07-27T00:31:35Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00146-run-fix-20260726T233602Z-p9812-n603751900-c22-code-1785109987884
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high)

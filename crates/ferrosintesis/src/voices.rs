@@ -27151,6 +27151,372 @@ mod tests {
             }
         }
     }
+
+    /// Unbiased fundamental estimate by normalised autocorrelation over a WIDE
+    /// lag range — deliberately NOT `mean_period_samples`.
+    ///
+    /// `mean_period_samples` bandpasses at the *expected* f0 with Q=4 before
+    /// counting crossings, so it presupposes its own answer: when a waveguide
+    /// mode-locks onto a different partial, the filter attenuates the true tone
+    /// and its own ringing pulls the crossings back toward f0. That is fine for
+    /// a tuning-error gate on a voice already known to hold its mode, and wrong
+    /// for a survey whose whole purpose is to find mode collapse.
+    ///
+    /// Searches `f0 / span ..= f0 * span` so an octave jump either way is
+    /// visible, and returns `(f_measured, peak_normalised_correlation)`. A low
+    /// correlation means no stable period at all — noise, or a tone dividing its
+    /// energy between two modes.
+    ///
+    /// Takes the FIRST sufficiently-strong local peak, not the global maximum.
+    /// A periodic signal correlates just as well at two periods as at one, so a
+    /// global-max search takes octave-down errors whenever the double-lag peak
+    /// edges ahead on noise — measured here at F6, where a pure 1396.9 Hz saw
+    /// read as 699.1 Hz with corr 0.973. The true period is the SHORTEST lag
+    /// that explains the waveform.
+    fn autocorr_pitch(seg: &[f32], sr: f32, f0: f32, span: f32) -> (f32, f32) {
+        const PEAK_ACCEPT: f64 = 0.85; // fraction of the global peak that counts
+        let mean = seg.iter().sum::<f32>() / seg.len() as f32;
+        let x: Vec<f64> = seg.iter().map(|&s| (s - mean) as f64).collect();
+        if x.iter().map(|v| v * v).sum::<f64>() <= 0.0 {
+            return (0.0, 0.0);
+        }
+        let lag_lo = ((sr / (f0 * span)) as usize).max(2);
+        let lag_hi = ((sr / (f0 / span)) as usize).min(x.len() / 2);
+        if lag_hi <= lag_lo + 1 {
+            return (0.0, 0.0);
+        }
+        let corr: Vec<f64> = (lag_lo..=lag_hi)
+            .map(|lag| {
+                let n = x.len() - lag;
+                let (mut num, mut e0, mut e1) = (0.0, 0.0, 0.0);
+                for i in 0..n {
+                    num += x[i] * x[i + lag];
+                    e0 += x[i] * x[i];
+                    e1 += x[i + lag] * x[i + lag];
+                }
+                let d = (e0 * e1).sqrt();
+                if d > 0.0 {
+                    num / d
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let c_max = corr.iter().cloned().fold(f64::MIN, f64::max);
+        if c_max <= 0.0 {
+            return (0.0, 0.0);
+        }
+        // First interior local maximum clearing the acceptance bar; fall back to
+        // the global peak if the range is too narrow to hold one.
+        let mut idx = corr
+            .iter()
+            .position(|&c| c >= c_max) // global peak, as the fallback
+            .unwrap_or(0);
+        for i in 1..corr.len() - 1 {
+            if corr[i] >= PEAK_ACCEPT * c_max && corr[i] > corr[i - 1] && corr[i] >= corr[i + 1] {
+                idx = i;
+                break;
+            }
+        }
+        // Parabolic interpolation on the winner: at F6 the period is ~32 samples,
+        // where a whole-sample quantum is ~54 cents — an integer-only answer would
+        // manufacture tuning error comparable to what this spike is looking for.
+        let refined = if idx > 0 && idx + 1 < corr.len() {
+            let (a, b, c) = (corr[idx - 1], corr[idx], corr[idx + 1]);
+            let denom = a - 2.0 * b + c;
+            if denom.abs() > 1e-12 {
+                (lag_lo + idx) as f64 + 0.5 * (a - c) / denom
+            } else {
+                (lag_lo + idx) as f64
+            }
+        } else {
+            (lag_lo + idx) as f64
+        };
+        ((sr as f64 / refined) as f32, corr[idx] as f32)
+    }
+
+    /// The spike's estimator must be trustworthy BEFORE its output is read as
+    /// evidence, and it must be trustworthy in the two ways the spike depends on:
+    /// accurate at the short periods of the fiddle's top octave, and honest when
+    /// the real tone is NOT at the frequency it was told to expect.
+    ///
+    /// A saw at F6 has a ~32-sample period; without the parabolic refinement the
+    /// integer-lag quantum alone would be ~54 cents, comparable to the tuning
+    /// errors the spike is looking for.
+    #[test]
+    fn autocorr_pitch_is_accurate_and_not_anchored_to_the_expected_f0() {
+        let sr = 44100.0;
+        let saw = |f: f32, n: usize| -> Vec<f32> {
+            (0..n)
+                .map(|i| {
+                    let p = (f * i as f32 / sr).fract();
+                    2.0 * p - 1.0
+                })
+                .collect()
+        };
+        // Accurate across the fiddle register, told the truth.
+        for &f in &[196.0f32, 440.0, 880.0, 1396.9] {
+            let x = saw(f, (2.0 * sr) as usize);
+            let (m, c) = autocorr_pitch(&x, sr, f, 2.2);
+            let cents = 1200.0 * (m / f).log2();
+            assert!(
+                cents.abs() < 5.0 && c > 0.9,
+                "saw {f} Hz measured {m:.1} ({cents:+.1} cents, corr {c:.3})"
+            );
+        }
+        // Told a LIE: the signal is an octave above the expected f0. An estimator
+        // anchored to its hint would report ~0 cents; this one must report ~+1200.
+        let f_true = 880.0;
+        let x = saw(f_true, (2.0 * sr) as usize);
+        let (m, _) = autocorr_pitch(&x, sr, 440.0, 2.2);
+        let cents = 1200.0 * (m / 440.0).log2();
+        assert!(
+            (cents - 1200.0).abs() < 25.0,
+            "octave-up saw reported {cents:+.1} cents from the hint, not ~+1200 \
+             (measured {m:.1} Hz) — the estimator is anchored to its hint"
+        );
+    }
+
+    /// Confirms the spike's octave-up finding with a measurement that shares NO
+    /// machinery with it.
+    ///
+    /// `autocorr_pitch` takes the first sufficiently-strong local peak, which
+    /// biases it toward SHORT lags — i.e. toward reporting exactly the octave-up
+    /// result the spike reports. A finding must not rest on the one heuristic
+    /// most likely to manufacture it. This reads the spectrum directly
+    /// (`mag_at`, a Goertzel probe) and asks a blunter question: where is the
+    /// energy, at f0 or at 2·f0?
+    ///
+    ///   cargo test -p ferrosintesis --release confirm_bowedstring_octave_lock \
+    ///     -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate — GM 110 migration spike"]
+    fn confirm_bowedstring_octave_lock() {
+        let sr = 44100.0;
+        println!(
+            "{:>4} {:>8} {:>6} {:>10} {:>10} {:>9} {:>8}",
+            "key", "f0", "slope", "mag(f0)", "mag(2f0)", "h2/h1_dB", "rms"
+        );
+        for key in [73u8, 77, 79, 85, 87, 89] {
+            let f0 = key_freq(key);
+            for idx in 0u32..6 {
+                let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+                let mut v = BowedString::new(42, key, 100, sr, seed);
+                v.vib_depth = 0.0;
+                v.drift = Drift::new(1, 0.0, 1);
+                let slope = v.slope;
+                let mut buf = vec![0f32; (3.0 * sr) as usize];
+                v.render(&mut buf);
+                let seg = &buf[sr as usize..];
+                let h1 = crate::testutil::mag_at(seg, sr, f0);
+                let h2 = crate::testutil::mag_at(seg, sr, 2.0 * f0);
+                let ratio_db = 20.0 * (h2.max(1e-12) / h1.max(1e-12)).log10();
+                println!(
+                    "{key:>4} {f0:>8.1} {slope:>6.3} {h1:>10.5} {h2:>10.5} {ratio_db:>+9.1} {:>8.5}",
+                    crate::testutil::rms(seg)
+                );
+            }
+        }
+    }
+
+    /// Does the SHIPPING wolf-band gate's seed choice hide live failures in GM
+    /// 42/43?
+    ///
+    /// `bowed_string_wolf_band_holds_fundamental` uses seeds 7/17/23. All three
+    /// are small, and `Rng` is a raw-seeded xorshift32 whose first draw from a
+    /// small seed is ≈ −1.0, so all three collapse `slope` onto 2.2003…2.2010 —
+    /// the very bottom of the intended 2.2…2.9 bow-force range. The gate
+    /// therefore tests one bow force three times while claiming to cover "every
+    /// per-note seed". `scratchpad.md:609` independently records that
+    /// BowedString keys 43–45 turn noisy "for some bow-force draws" — exactly
+    /// the axis the gate cannot see.
+    ///
+    /// This re-runs the gate's own check over the two shipping programs' real
+    /// ranges with ENGINE-realistic seeds, and reports every draw that would
+    /// fail it.
+    ///
+    ///   cargo test -p ferrosintesis --release audit_shipping_wolf_gate_seed_coverage \
+    ///     -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate — GM 110 migration spike"]
+    fn audit_shipping_wolf_gate_seed_coverage() {
+        let sr = 44100.0;
+        let mut failures = 0u32;
+        let mut checked = 0u32;
+        for (program, keys) in [(42u8, 36u8..=76u8), (43u8, 28u8..=64u8)] {
+            for key in keys {
+                let f0 = key_freq(key);
+                for idx in 0u32..8 {
+                    let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+                    let mut v = BowedString::new(program, key, 100, sr, seed);
+                    v.vib_depth = 0.0;
+                    v.drift = Drift::new(1, 0.0, 1);
+                    let slope = v.slope;
+                    let mut buf = vec![0f32; (3.0 * sr) as usize];
+                    v.render(&mut buf);
+                    let seg = &buf[sr as usize..];
+                    checked += 1;
+                    // The gate's own criterion, measured without its bias.
+                    let (f_meas, corr) = autocorr_pitch(seg, sr, f0, 2.2);
+                    let cents = if f_meas > 0.0 {
+                        1200.0 * (f_meas / f0).log2()
+                    } else {
+                        f32::NAN
+                    };
+                    if !cents.is_finite() || cents.abs() > 30.0 {
+                        failures += 1;
+                        println!(
+                            "FAIL GM{program} key {key} ({f0:.1} Hz) slope {slope:.3}: \
+                             {cents:+.1} cents (corr {corr:.3}, rms {:.5})",
+                            crate::testutil::rms(seg)
+                        );
+                    }
+                }
+            }
+        }
+        println!("\n{failures} failing draws out of {checked} checked");
+    }
+
+    /// Maps the highest bow force each pitch can take before the waveguide
+    /// stops speaking properly — the curve a fix would have to encode.
+    ///
+    /// The spike shows failure is not a property of pitch alone but of the
+    /// (pitch, bow force) pair, so the actionable question is not "does key 89
+    /// work" but "how hard may key 89 be bowed". `slope` is overwritten directly
+    /// rather than drawn, so this sweeps the axis instead of sampling it.
+    ///
+    /// A draw counts as healthy when it keeps its fundamental (|cents| ≤ 15,
+    /// h2/h1 ≤ +6 dB) AND its level (rms ≥ 0.75 × the rms at the gentlest bow at
+    /// the same pitch). The level clause is what catches keys 85–89, where the
+    /// tone collapses without ever locking cleanly onto the octave.
+    ///
+    ///   cargo test -p ferrosintesis --release map_bowedstring_bow_force_ceiling \
+    ///     -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate — GM 110 migration spike"]
+    fn map_bowedstring_bow_force_ceiling() {
+        let sr = 44100.0;
+        let render = |key: u8, slope: f32| -> (f32, f32, f32) {
+            let mut v = BowedString::new(42, key, 100, sr, 0xBA60);
+            v.vib_depth = 0.0;
+            v.drift = Drift::new(1, 0.0, 1);
+            v.slope = slope;
+            let mut buf = vec![0f32; (3.0 * sr) as usize];
+            v.render(&mut buf);
+            let seg = buf[sr as usize..].to_vec();
+            let f0 = key_freq(key);
+            let (f_meas, _) = autocorr_pitch(&seg, sr, f0, 2.2);
+            let cents = if f_meas > 0.0 {
+                1200.0 * (f_meas / f0).log2()
+            } else {
+                f32::NAN
+            };
+            let h1 = crate::testutil::mag_at(&seg, sr, f0);
+            let h2 = crate::testutil::mag_at(&seg, sr, 2.0 * f0);
+            let ratio_db = 20.0 * (h2.max(1e-12) / h1.max(1e-12)).log10();
+            (cents, ratio_db, crate::testutil::rms(&seg))
+        };
+        println!(
+            "{:>4} {:>8} {:>12} {:>10}",
+            "key", "f0", "max_slope_ok", "ref_rms"
+        );
+        for key in (55u8..=89).step_by(2) {
+            let (_, _, ref_rms) = render(key, 2.20); // gentlest bow = the reference
+            let mut ceiling = f32::NAN;
+            let mut s = 2.20f32;
+            while s <= 2.95 {
+                let (cents, ratio_db, rms) = render(key, s);
+                let healthy = cents.is_finite()
+                    && cents.abs() <= 15.0
+                    && ratio_db <= 6.0
+                    && rms >= 0.75 * ref_rms;
+                if healthy {
+                    ceiling = s;
+                } else {
+                    break;
+                }
+                s += 0.05;
+            }
+            let shown = if ceiling.is_nan() {
+                "NONE".to_string()
+            } else if ceiling >= 2.90 {
+                ">=2.90 (full range)".to_string()
+            } else {
+                format!("{ceiling:.2}")
+            };
+            println!(
+                "{key:>4} {:>8.1} {shown:>12} {ref_rms:>10.5}",
+                key_freq(key)
+            );
+        }
+    }
+
+    /// SPIKE (2026.07.26): does `BowedString` hold together in the FIDDLE
+    /// register (GM 110 plays keys 55–89 in `albums/opus4-8/amarok/folk.py`)?
+    ///
+    /// `BowedString` ships only for GM 42 (cello) and 43 (contrabass), which sit
+    /// an octave or more below. This harness renders the cello voicing across
+    /// the fiddle's range and reports, per key and seed:
+    ///
+    /// * `cents` — unbiased pitch error (autocorrelation, see above);
+    /// * `corr` — how periodic the tone is at all (mode collapse shows here);
+    /// * `L` — the *implied* loop latency in samples, `T - sr/f0 + loop_comp`.
+    ///
+    /// `L` is the load-bearing column. `loop_comp` is a single constant fitted
+    /// at cello pitches, but the in-loop reflection filter's phase delay is
+    /// frequency-dependent. If `L` is flat across the register, one refitted
+    /// constant voices the fiddle; if it drifts with pitch, the compensation
+    /// has to become frequency-dependent and the migration is a much bigger job.
+    ///
+    ///   cargo test -p ferrosintesis --release spike_bowedstring_fiddle_register \
+    ///     -- --ignored --nocapture
+    #[test]
+    #[ignore = "measurement harness, not a gate — GM 110 migration spike"]
+    fn spike_bowedstring_fiddle_register() {
+        let sr = 44100.0;
+        println!(
+            "{:>4} {:>8} {:>6} {:>6} {:>7} {:>7} {:>8}",
+            "key", "f0", "slope", "corr", "cents", "L", "rms"
+        );
+        for key in (55u8..=89).step_by(2) {
+            let f0 = key_freq(key);
+            // ENGINE-REALISTIC seeds, not small literals. `Rng` is a raw-seeded
+            // xorshift32, whose first output from a small seed is always ≈ −1.0,
+            // so seeds like 7/17/23 collapse every per-note draw onto the bottom
+            // of its range — `slope` (bow force) lands on 2.2003…2.2010 out of an
+            // intended 2.2…2.9. The engine never does this: it hands out
+            // `0xBA60 ^ (index · 2654435761)` (engine.rs:2207), a Knuth hash whose
+            // outputs are well spread, so real playback genuinely varies bow
+            // force. Mirroring that formula here is what makes this sweep cover
+            // the bow-force range instead of measuring one bow five times.
+            for idx in 0u32..6 {
+                let seed = 0xBA60u32 ^ idx.wrapping_mul(2654435761);
+                let mut v = BowedString::new(42, key, 100, sr, seed);
+                let slope = v.slope;
+                v.vib_depth = 0.0; // clean tone for the period measurement
+                v.drift = Drift::new(1, 0.0, 1);
+                let loop_comp = v.loop_comp;
+                let mut buf = vec![0f32; (3.0 * sr) as usize];
+                v.render(&mut buf);
+                let seg = &buf[sr as usize..];
+                let r = crate::testutil::rms(seg);
+                let (f_meas, corr) = autocorr_pitch(seg, sr, f0, 2.2);
+                if f_meas <= 0.0 {
+                    println!(
+                        "{key:>4} {f0:>8.1} {slope:>6.3} {:>6} {:>7} {:>7} {r:>8.5}",
+                        "-", "-", "-"
+                    );
+                    continue;
+                }
+                let t = sr / f_meas;
+                let cents = 1200.0 * (f_meas / f0).log2();
+                let l = t - sr / f0 + loop_comp;
+                println!(
+                    "{key:>4} {f0:>8.1} {slope:>6.3} {corr:>6.3} {cents:>+7.1} {l:>7.3} {r:>8.5}"
+                );
+            }
+        }
+    }
 }
 
 /// Oracles for the modelled felt damper (MM-BUG-KILN-00104, Step 2).

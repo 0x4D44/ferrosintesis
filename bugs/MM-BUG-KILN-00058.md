@@ -1,12 +1,12 @@
 # MM-BUG-KILN-00058 — GM45 pizzicato's Shaped-vs-Legacy loudness parity broke KEY-DEPENDENTLY after the KILN-00048 decouple (offsets span ~7.5 dB, unfittable by the scalar exc_trim)
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
 - **Raised:** 2026-07-24
-- **Owner:** Arthur
-- **Owner role:** human
+- **Owner:** -
+- **Owner role:** -
 - **Owner run:** -
 - **Owner host:** -
 - **Owner branch:** -
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction)
+- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction) → Open (2026-07-26, Arthur approved preserving the Shaped timbre and restoring Legacy level parity with a smooth key/velocity gain correction)
 
 ## Observation
 
@@ -112,3 +112,34 @@ Return these exact product inputs:
 Those answers are enough for a Build pass to implement the narrowest
 key-aware law, restore PIZZ to `SHAPED_MIGRATED`, and present a bounded final
 A/B. Without them, changing `slope` or gain would silently invent the voice.
+
+### Decision and implementation contract — 2026-07-26
+
+Arthur selected **retain Shaped timbre with key/velocity gain**. Legacy's
+captured body level remains the zero-offset calibration contract.
+
+The autonomous Build should:
+
+1. Preserve PIZZ's current Shaped excitation slope, harmonic rolloff, attack,
+   loop corner, and decay. Apply the correction only in the PIZZ Shaped gain
+   path; do not use spectral or envelope changes to solve level parity.
+2. Fit the smallest smooth key/velocity correction that brings the mean
+   Shaped-minus-Legacy body level within **±0.5 dB** at all nine anchor cells:
+   keys 40, 52, and 64 × velocities 50, 100, and 120, using matched seeds 5,
+   21, and 99.
+3. Interpolate continuously between anchors and clamp safely beyond the
+   measured key/velocity range. Do not introduce a discontinuous nine-cell
+   lookup or extrapolate an unbounded gain curve.
+4. Add intermediate-key and intermediate-velocity checks so an anchor-perfect
+   fit cannot hide overshoot between cells. Retain the existing finite-output,
+   velocity-ordering, decay, and determinism oracles.
+5. Re-add `"PIZZ"` to `SHAPED_MIGRATED` and make
+   `shaped_g7_mean_parity_and_seed_bound` pass honestly across the expanded
+   grid. Add a level-matched spectral/attack regression proving the correction
+   did not materially change the current Shaped timbre.
+6. Produce both raw-level and body-level-matched trunk-versus-candidate A/B
+   renders for the nine anchors, then run the required full catalog render
+   diff and inspect every affected program.
+
+Land a green implementation as **Fixed**, not Closed. Independent verification
+must confirm parity, smooth interpolation, and unchanged level-matched timbre.

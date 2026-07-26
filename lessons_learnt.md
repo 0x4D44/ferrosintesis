@@ -10,6 +10,18 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.26 — **Test seeds 7/17/23 are NOT random: xorshift32's first draw from a small seed is ≈−1, pinning every per-note draw to its minimum** (`dsp.rs:Rng::new`).
+    - `Rng::new(seed)` seeds xorshift32 raw, so the first `white()` from a small seed returns ≈−1.0 and
+      `u = white()*0.5+0.5` returns ≈0.0. Seeds 7/17/23/31/41 all collapse `BowedString`'s bow force onto
+      2.2003–2.2010 out of an intended 2.2–2.9. `bowed_string_wolf_band_holds_fundamental` therefore tested
+      ONE bow force three times while claiming to cover "every per-note seed" — on the single axis this
+      waveguide actually fails on. It hid a live octave-lock defect in the shipping cello (keys 74/76).
+    - The ENGINE is fine: it hands out `0xBA60 ^ (index · 2654435761)` (`engine.rs:2207`), a Knuth hash whose
+      outputs are well spread. Only hand-written test seeds are affected — which is worse, because it makes
+      the gates weaker than production rather than stricter.
+    - So: in any test that relies on per-note variation, draw seeds from the engine's own formula, not from
+      small literals. Print the drawn value (bow force, jitter, whatever) as a column so degenerate coverage
+      is visible rather than inferred.
 - 2026.07.26 — **An oracle that probes "the default" tests a SLOT, not a voice — alternates ship unproven until promoted** (`sampler.rs:assert_attack_is_peak`).
   - The B1 upright swelled ABOVE its own attack for three days at CC0=5; nothing caught it because the
     attack-is-peak, gap-release and damper oracles all probe program 0 only. Promotion is what tested it.

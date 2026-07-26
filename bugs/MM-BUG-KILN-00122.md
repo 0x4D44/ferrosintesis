@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample assets / GM0 alternate-bank routing
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T073254Z-p43624-n750388200-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00122-run-fix-20260726T073254Z-p43624-n750388200-c1
+- **Owner base:** 653f4a8eb9f597ec80fed33121b7ec38aec101d3
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T07:32:54Z
+- **Owner until:** 2026-07-26T09:32:54Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

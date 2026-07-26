@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00126 — Published drum-kit inventory and kick provenance are stale
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** drum-kit package documentation / provenance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T083911Z-p34720-n358957300-c1 branch=task/bug-MM-BUG-KILN-00126-run-fix-20260726T083911Z-p34720-n358957300-c1 code=378167ab3245b4a6628e49bfb8227cf5d98734a3 gate=manual)
+- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T083911Z-p34720-n358957300-c1 branch=task/bug-MM-BUG-KILN-00126-run-fix-20260726T083911Z-p34720-n358957300-c1 code=378167ab3245b4a6628e49bfb8227cf5d98734a3 gate=manual) -> Closed (2026-07-26, verified by Claude Opus 5 @ high, fresh context - I did not author this fix (fixer: deltic:auto role=fix), so I am eligible as the second pair of eyes. Repo gate green on the fix-bearing tree: `cargo fmt --all --check`, both clippy configurations with `-D warnings`, `test -p ferrosintesis --no-default-features --locked` (635 passed) and `test --workspace --exclude amp-lab --locked` (740 passed) - 1478 tests, 0 failures; the sample-tool Python suite passes 44. Original observation re-run at source across every surface the bug named. The core README now states 140 WAVs and explicitly attributes crash, sizzle crash, splash and china to the sibling `ferrosintesis-samples-drumkit2`; the stale "109" claim is gone. `tools/ferrosintesis-samples/README.md` now describes the correct two-package ownership (140 core, 48 companion) including the kick's `kickmic` exception. The core `PROVENANCE.md` no longer says every family uses the `mid` mic set - it reads "`mid` for every family except the kick; `kickmic` for the kick" - and its kick row names `kickmic_kick_snon`, matching the generator's actual source URL at `prepare_drumkit.py:105-109`. The new guard `test_core_provenance_source_stems_match_the_generator_manifest` is properly derived: it reconstructs each core family's expected source stem from the generator's own `BANKS`/`PSEUDO_RR_BANKS` manifest rather than from a second hand-written list. CLOSED WITH A RESIDUAL SPLIT OUT AS MM-BUG-KILN-00131. Following this repo's own "enumerate all of L before fixing" rule, I swept the whole class repo-wide instead of only re-reading the cited lines, and found one surviving instance the fix did not sweep: `crates/ferrosintesis-samples-drumkit/src/lib.rs:682` still documents the kick as `mid_kick_snon`. That surface is PACKAGED - `Cargo.toml:13` includes `src/**` - so the wrong stem ships to crates.io and renders on docs.rs. It is a residual rather than a persistence of this bug: every line 00126 actually cited (`PROVENANCE.md:36-52,60-72`, `README.md:3-10`, the tooling overview) is correctly fixed, and the new oracle reads only `PROVENANCE.md`, never `src/lib.rs`, which is both why the instance survived and why it can drift again. Recorded in full on 00131.)
 
 ## Observation
 

@@ -1309,6 +1309,114 @@ mod tests {
         buf
     }
 
+    /// MM-BUG-KILN-00122: published selectors must follow the actual GM0
+    /// dispatch. Derive the numbers from the match arms so this oracle cannot
+    /// preserve a second stale hand-copy of the routing table.
+    #[test]
+    fn dark_salamander_documentation_matches_gm0_dispatch() {
+        let dispatch = include_str!("altbank.rs");
+        let routed_bank = |accessor: &str| -> u8 {
+            let marker = format!("Some(crate::sampler::{accessor}(");
+            let line = dispatch
+                .lines()
+                .find(|line| line.trim_start().starts_with("(0, ") && line.contains(&marker))
+                .unwrap_or_else(|| panic!("GM0 dispatch has no route to {accessor}"));
+            line.trim_start()
+                .strip_prefix("(0, ")
+                .and_then(|rest| rest.split_once(')'))
+                .and_then(|(bank, _)| bank.parse().ok())
+                .unwrap_or_else(|| panic!("cannot parse GM0 bank from: {line}"))
+        };
+        let raw = routed_bank("grand_bank");
+        let dark = routed_bank("darkgrand_bank");
+        let b1 = routed_bank("b1upright_bank");
+        assert_ne!(dark, raw, "dark and raw Salamander must be separate slots");
+        assert_ne!(
+            dark, b1,
+            "dark Salamander must not claim the B1 upright slot"
+        );
+
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(std::path::Path::parent)
+            .expect("crate lives under <repo>/crates");
+        let read = |relative: &str| {
+            std::fs::read_to_string(root.join(relative))
+                .unwrap_or_else(|e| panic!("cannot read {relative}: {e}"))
+        };
+        let crate_dir = "crates/ferrosintesis-samples-dark-salamander";
+        let lib = read(&format!("{crate_dir}/src/lib.rs"));
+        let manifest = read(&format!("{crate_dir}/Cargo.toml"));
+        let readme = read(&format!("{crate_dir}/README.md"));
+        let provenance = read(&format!("{crate_dir}/PROVENANCE.md"));
+        let sampler = read("crates/ferrosintesis/src/sampler.rs");
+        let prepare = read("tools/ferrosintesis-samples/prepare.py");
+
+        for (name, text, expected) in [
+            (
+                "crate module docs",
+                lib.as_str(),
+                format!("GM0 acoustic-grand alternate bank {dark}"),
+            ),
+            (
+                "manifest description",
+                manifest.as_str(),
+                format!("GM0 alternate bank {dark}"),
+            ),
+            ("crate README", readme.as_str(), format!("CC0 bank {dark}")),
+            (
+                "provenance selector",
+                provenance.as_str(),
+                format!("bank select CC0={dark}"),
+            ),
+            (
+                "provenance A/B",
+                provenance.as_str(),
+                format!("A/Bs CC0={dark} directly against CC0={raw}"),
+            ),
+            (
+                "sampler bank heading",
+                sampler.as_str(),
+                format!("ALTERNATE bank {dark} - DARKENED Salamander"),
+            ),
+            (
+                "sampler accessor docs",
+                sampler.as_str(),
+                format!("Voices GM 0 CC0 alt bank {dark} (darkened Salamander)"),
+            ),
+            (
+                "bake function docs",
+                prepare.as_str(),
+                format!("GM0 alt bank {dark}: a WARMER Salamander"),
+            ),
+            (
+                "bake dispatch docs",
+                prepare.as_str(),
+                format!("GM0 alt bank {dark}: darkened Salamander"),
+            ),
+        ] {
+            let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert!(
+                normalized.contains(&expected),
+                "{name} does not identify the routed selector: expected {expected:?}"
+            );
+        }
+
+        for (name, text) in [
+            ("crate module docs", lib.as_str()),
+            ("manifest description", manifest.as_str()),
+            ("crate README", readme.as_str()),
+            ("provenance", provenance.as_str()),
+        ] {
+            let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert!(
+                !normalized.contains(&format!("bank {b1}"))
+                    && !normalized.contains(&format!("CC0={b1}")),
+                "{name} claims B1 upright selector {b1} for dark Salamander"
+            );
+        }
+    }
+
     /// Render an alt-factory strings voice (`make` → `strings` for 48–51).
     fn render_str(prog: u8, key: u8, secs: f32) -> Vec<f32> {
         let sr = 44100.0;

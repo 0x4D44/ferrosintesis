@@ -2637,7 +2637,7 @@ def _bake_b1upright(src):
 
 
 def _bake_darkened_grand(_src):
-    """GM0 alt bank 5: a WARMER Salamander — the committed `-grand` samples with a
+    """GM0 alt bank 4: a WARMER Salamander — the committed `-grand` samples with a
     high-shelf cut above ~2 kHz (a one-pole shelf: y = x - g*(x - lowpass(x))). Tests
     whether the maintainer's dislike of the bright Salamander C5 is fixable by EQ
     rather than a new instrument, and is itself a cheap shippable win. Same 54 zones
@@ -3003,7 +3003,7 @@ def main():
             os.makedirs(msg_src, exist_ok=True)
             rows += _bake_musescore_grand(msg_src)
 
-        # GM0 alt bank 5: darkened Salamander — the committed -grand samples, high-shelf
+        # GM0 alt bank 4: darkened Salamander — the committed -grand samples, high-shelf
         # cut (warmer). No fetch: derives from the tracked grand crate.
         if want("darkgrand"):
             rows += _bake_darkened_grand(src)

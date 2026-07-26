@@ -7,20 +7,20 @@
 | `darkgrand_*` | 54 |
 
 A **warmer voicing of the Salamander grand** for a **GM 0 Acoustic Grand
-alternate** (bank select CC0=5): 54 mono 16-bit 44.1 kHz WAVs, the same 9 pitch zones
+alternate** (bank select CC0=4): 54 mono 16-bit 44.1 kHz WAVs, the same 9 pitch zones
 (C2–C6) × 3 dynamics × 2 round robins as `ferrosintesis-samples-grand`, with a
 high-shelf EQ cut applied to darken the bright top end. The WAVs under `samples/`
 are **source, not build output** — committed and embedded via `include_bytes!`.
 
 ## Why this bank exists
 
-The default GM 0 grand is the **bright Salamander C5**, which the maintainer finds
-too bright. This bank isolates the question: *is the dislike fixable by EQ, or does
-it need a different instrument?* It is the same recording, warmed — so in the
-audition it A/Bs directly against bank 0 (raw Salamander). If it sounds acceptably
-warm, the cheapest fix is EQ, not a new sample set. (This is the reproducible,
-shippable stand-in for the Noct-Salamander remaster, which is distributed only via
-a fragile 1.6 GB Google-Drive file.)
+The GM 0 CC0=1 alternate is the **bright raw Salamander C5**, which the maintainer
+finds too bright. This bank isolates the question: *is the dislike fixable by EQ,
+or does it need a different instrument?* It is the same recording, warmed — so in
+the audition it A/Bs CC0=4 directly against CC0=1 (raw Salamander). If it sounds
+acceptably warm, the cheapest fix is EQ, not a new sample set. (This is the
+reproducible, shippable stand-in for the Noct-Salamander remaster, which is
+distributed only via a fragile 1.6 GB Google-Drive file.)
 
 ## Source & processing
 

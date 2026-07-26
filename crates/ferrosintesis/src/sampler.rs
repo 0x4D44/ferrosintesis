@@ -1467,10 +1467,11 @@ pub fn musescoregrand_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
     musescoregrand_zones()
 }
 
-// GM 0 Acoustic Grand ALTERNATE bank 5 - DARKENED Salamander (CC-BY 3.0,
+// GM 0 Acoustic Grand ALTERNATE bank 4 - DARKENED Salamander (CC-BY 3.0,
 // ferrosintesis-samples-dark-salamander). The default Salamander grand with a
 // high-shelf EQ cut (warmer). Same zones/roots as grand; the "is it EQ not
-// instrument?" A/B. Selected via CC0 alt bank 5.
+// instrument?" A/B against the raw Salamander at CC0 alt bank 1. Selected via
+// CC0 alt bank 4.
 fn darkgrand_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
@@ -1574,7 +1575,7 @@ fn darkgrand_f_rr2() -> &'static [Zone] {
 }
 
 /// Velocity picks the dynamic layer; the seed alternates round robins, like
-/// [`grand_bank`]. Voices GM 0 CC0 alt bank 5 (darkened Salamander).
+/// [`grand_bank`]. Voices GM 0 CC0 alt bank 4 (darkened Salamander).
 pub fn darkgrand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
     match (vel, rr2) {
         (0..=51, false) => darkgrand_pp(),

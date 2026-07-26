@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00120 — Windows identity probe reports aliasing for ANY sharing violation on the output path
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5@high)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — disambiguated self-induced and third-party Windows sharing violations)
 
 ## Observation
 
@@ -71,7 +71,25 @@ Two different files, and the tool says one aliases the other.
 
 ## Fix
 
-<unfixed — raised only>
+The Windows identity probe now treats its first sharing violation as
+provisional. It releases the no-sharing input handle and retries the output
+open. A successful retry means our input guard caused the conflict, so the
+paths are aliases; a second failure is returned as the real output-access error
+instead of being relabelled as aliasing.
+
+The probe's comment now states that evidence boundary. No dependency or unsafe
+Windows API was added.
+
+## Verification — 2026-07-26
+
+- The new command-level regression failed before the fix with the false
+  `aliases the input` message. It now passes while holding a distinct output
+  with `share_mode(0)`, and proves the rejected command preserves both files.
+- All four output-safety integration tests pass.
+- All six `output.rs` unit tests pass, including normalized-path, symbolic-link,
+  and hard-link alias rejection.
+- Targeted strict clippy, the full `ferrosintesis-cli` test suite, Rust 1.87
+  compatibility, formatting, and `git diff --check` passed.
 
 ## Notes
 

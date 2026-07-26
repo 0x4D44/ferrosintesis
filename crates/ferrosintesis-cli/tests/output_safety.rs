@@ -112,3 +112,52 @@ fn distinct_output_still_replaces_an_existing_wav() {
         "successful render changed its input"
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn exclusively_held_distinct_output_is_not_reported_as_an_input_alias() {
+    use std::fs::OpenOptions;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let dir = TestDir::new("held-distinct-output");
+    let input = dir.join("score.mid");
+    let output = dir.join("score.wav");
+    fs::write(&input, SHORT_MIDI).expect("write MIDI fixture");
+    fs::write(&output, b"held prior output").expect("write prior output");
+    let output_guard = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .share_mode(0)
+        .open(&output)
+        .expect("hold output without sharing");
+
+    let result = Command::new(env!("CARGO_BIN_EXE_ferrosintesis"))
+        .arg(&input)
+        .args(["-o"])
+        .arg(&output)
+        .args(["--tail", "0", "--no-samples", "-q"])
+        .output()
+        .expect("run ferrosintesis");
+
+    assert!(
+        !result.status.success(),
+        "renderer unexpectedly replaced an exclusively held output"
+    );
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        !stderr.contains("aliases the input"),
+        "a third-party sharing violation was misreported as aliasing: {stderr}"
+    );
+    assert_eq!(
+        fs::read(&input).expect("read input after rejection"),
+        SHORT_MIDI,
+        "rejected command changed its input"
+    );
+
+    drop(output_guard);
+    assert_eq!(
+        fs::read(&output).expect("read output after releasing guard"),
+        b"held prior output",
+        "rejected command changed the held output"
+    );
+}

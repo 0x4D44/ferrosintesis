@@ -54,13 +54,20 @@ fn platform_same_file(input: &Path, output: &Path) -> io::Result<bool> {
 
     const ERROR_SHARING_VIOLATION: i32 = 32;
 
-    // Stable Rust does not expose Windows' volume/file-index identity. Holding the
-    // input with no sharing and probing the output asks the kernel whether both
-    // names resolve to the same file object, which also catches hard links.
-    let _input_guard = OpenOptions::new().read(true).share_mode(0).open(input)?;
+    // Stable Rust does not expose Windows' volume/file-index identity. Hold the input
+    // with no sharing, then probe the output. A sharing violation is identity evidence
+    // only if it disappears after releasing our guard; a third-party exclusive handle
+    // can produce the same error for an unrelated output.
+    let input_guard = OpenOptions::new().read(true).share_mode(0).open(input)?;
     match File::open(output) {
         Ok(_) => Ok(false),
-        Err(error) if error.raw_os_error() == Some(ERROR_SHARING_VIOLATION) => Ok(true),
+        Err(error) if error.raw_os_error() == Some(ERROR_SHARING_VIOLATION) => {
+            drop(input_guard);
+            match File::open(output) {
+                Ok(_) => Ok(true),
+                Err(retry_error) => Err(retry_error),
+            }
+        }
         Err(error) => Err(error),
     }
 }

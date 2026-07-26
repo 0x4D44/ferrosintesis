@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample assets / Headroom source intake
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260726T133112Z-p49604-n076479100-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00139-run-fix-20260726T133112Z-p49604-n076479100-c1
+- **Owner base:** 445ee4f44e1aaaa40242b787828d4caec2f25890
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-26T13:31:12Z
+- **Owner until:** 2026-07-26T15:31:12Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

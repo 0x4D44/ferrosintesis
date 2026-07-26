@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00095 — The fret-noise bake's byte-identical promise has no stable environment
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** fret-noise sample generation / reproducibility
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-24, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-fretnoise/`) → Fixed (2026-07-26, GPT-5.6 Codex on KILN-Windows — scoped byte identity to a locked canonical environment and added non-mutating per-file verification)
 
 ## Observation
 
@@ -61,6 +61,40 @@ identity is not guaranteed, state that limitation and use an explicit acoustic
 tolerance oracle in addition to canonical-environment hashes.
 
 Estimated effort: Small–Medium.
+
+## Resolution — 2026-07-26
+
+The bake now scopes byte identity to the environment that demonstrably produced
+the committed bank: 64-bit CPython 3.14.3 on Windows x86-64 with NumPy 2.4.4.
+The existing NumPy dependency is pinned in
+`requirements-fretnoise-bake.txt`, and the script refuses another interpreter,
+NumPy version, platform, or architecture before generating output.
+
+`BAKE-SHA256` pins all twelve outputs independently and is included in the
+published sample package. `fretnoise_bake.py --verify` regenerates the complete
+bank in memory, rejects missing, extra, malformed, duplicate, or changed pins,
+checks the committed files, and never creates or writes an output. A real bake
+also prepares and validates every payload before its first tracked-file write.
+
+The package documentation no longer claims cross-version or cross-platform FFT
+and random-stream identity. It identifies the existing GM120 level, spectrum,
+pitch-independence, and one-shot acoustic oracles as the behavior layer that a
+deliberate future environment and hash update must also satisfy.
+
+## Verification — 2026-07-26
+
+- A canonical in-memory re-bake matched all 12 committed WAVs byte-for-byte and
+  matched every independent SHA-256 pin.
+- Four new Python regressions passed, including an actual canonical re-bake that
+  proves `--verify` preserves every WAV's bytes and modification time. The full
+  sample-tool suite passed all 37 tests.
+- The fret-noise sample crate passed all 5 tests, and
+  `cargo package --list --allow-dirty` includes `BAKE-SHA256`.
+- All 6 GM120 modeled/sampled acoustic-tolerance tests passed.
+- Strict workspace clippy passed with warnings denied; formatting and
+  `git diff --check` passed.
+- No render inventory was needed: no WAV or synth path changed. The twelve
+  committed payload hashes are exactly unchanged from base `a73bec1`.
 
 ## Notes
 

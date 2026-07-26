@@ -31,9 +31,23 @@ attribution-guide oracles in `ferrosintesis::licensing`.
 `tools/ferrosintesis-samples/fretnoise_bake.py` converts the committed 48 kHz/24-bit
 `cuts/` to this crate's embedded format: resample to 44.1 kHz (band-limited FFT method),
 loudness-equalise each take's body RMS to a common target so the round-robin does not
-jump in level, TPDF-dither to 16-bit mono. Deterministic — a re-bake is byte-identical.
-The embedded WAVs are **16-bit mono 44.1 kHz** (the format `sampler::parse_wav`
-requires). Total embedded size ≈ 1.0 MiB.
+jump in level, TPDF-dither to 16-bit mono.
+
+Byte identity is scoped to the canonical bake environment: 64-bit CPython
+3.14.3 on Windows x86-64 with NumPy 2.4.4, installed from
+`tools/ferrosintesis-samples/requirements-fretnoise-bake.txt`. NumPy does not
+promise cross-version random streams, and this package does not claim
+cross-platform FFT identity. `BAKE-SHA256` pins every output; the bake's
+`--verify` mode regenerates all twelve files in memory and checks both generated
+and committed hashes without writing. The observed canonical re-bake matches all
+twelve pins.
+
+The embedded WAVs are **16-bit mono 44.1 kHz** (the format
+`sampler::parse_wav` requires). Total embedded size ≈ 1.0 MiB. Independent
+acoustic-tolerance oracles in `ferrosintesis::voices` guard the sampled GM120
+level, rasp spectrum, pitch independence, and one-shot lifetime even when a
+future canonical environment is deliberately changed and the hashes are
+reviewed.
 
 ## Why sampled
 

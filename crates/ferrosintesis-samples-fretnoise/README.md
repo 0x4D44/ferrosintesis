@@ -24,8 +24,26 @@ banks, and dedicated **CC0 1.0** (public domain) — no attribution required. Th
 measurements, cut map and bake procedure are in `PROVENANCE.md`. Consumers normally reach this
 crate through `ferrosintesis`.
 
-From a `midi-music` checkout, regenerate the embedded WAVs with:
+Byte-for-byte reproduction belongs to one canonical generator environment:
+64-bit CPython 3.14.3 on Windows x86-64 with NumPy 2.4.4. The bake refuses
+another environment because NumPy does not promise version-stable FFT or random
+output. From a `midi-music` checkout, create that environment and verify the
+committed bank without writing it:
 
 ```console
-python tools/ferrosintesis-samples/fretnoise_bake.py
+py -3.14 -m venv venv\fretnoise-bake
+venv\fretnoise-bake\Scripts\python -m pip install -r tools\ferrosintesis-samples\requirements-fretnoise-bake.txt
+venv\fretnoise-bake\Scripts\python tools\ferrosintesis-samples\fretnoise_bake.py --verify
 ```
+
+`BAKE-SHA256` pins every output independently. Verification re-bakes all twelve
+files in memory, checks the generated and committed hashes, and writes nothing.
+Omit `--verify` only when intentionally restoring the tracked WAVs from the
+committed source cuts; the script validates every generated hash before its
+first write.
+
+Cross-platform or cross-version byte identity is not claimed. The sampled GM120
+level, rasp spectrum, pitch independence, and one-shot lifetime are also guarded
+by acoustic-tolerance oracles in `ferrosintesis`, so a deliberate future
+canonical-environment change must satisfy both the re-pinned bytes and the
+audible contract.

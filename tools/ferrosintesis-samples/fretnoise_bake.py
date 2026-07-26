@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bake the GM 120 fret-noise round-robin bank (stdlib + numpy).
+"""Bake or verify the GM 120 fret-noise round-robin bank (stdlib + NumPy).
 
 Input : samples/fret-noise-eastman-e1d/cuts/fret_rrNN.wav  (24-bit, 48 kHz, mono)
 Output: crates/ferrosintesis-samples-fretnoise/samples/fretnoise_rrNN.wav
@@ -18,15 +18,19 @@ Steps, per file:
      to <= 0.95 so no take clips after resampling ripple.
   3. TPDF dither to 16-bit (two independent uniforms, +-1 LSB), the repo's dither.
 
-Reproducible: fixed target, deterministic resample, seeded dither. A re-bake is
-byte-identical. The committed cuts are the authoritative source (the Downloads
-masters live outside the repo), exactly as the guitar's zones/ are.
+Byte identity is scoped to the canonical Windows x86-64 environment declared by
+CANONICAL_* below and requirements-fretnoise-bake.txt. ``--verify`` bakes entirely
+in memory, checks every generated and committed SHA-256, and never writes an asset.
+The committed cuts are authoritative (the Downloads masters live outside the repo).
 
 Run from the repo (worktree) root:
-    python tools/ferrosintesis-samples/fretnoise_bake.py
+    python tools/ferrosintesis-samples/fretnoise_bake.py --verify
 """
 from __future__ import annotations
 
+import argparse
+import hashlib
+import platform
 import re
 import struct
 import sys
@@ -43,6 +47,11 @@ CUT_RE = re.compile(r"^fret_rr(\d{2})\.wav$")
 TARGET_BODY_RMS = 0.16
 PEAK_GUARD = 0.95
 DITHER_SEED = 0x5F58_0120  # SFX seed base ^ 120, matches the voice's seed idiom
+CANONICAL_PYTHON = (3, 14, 3)
+CANONICAL_NUMPY = "2.4.4"
+CANONICAL_PLATFORM = "win32"
+CANONICAL_MACHINE = "AMD64"
+PIN_RE = re.compile(r"^([0-9a-f]{64})  (fretnoise_rr\d{2}\.wav)$")
 
 
 def find_repo_root(start: Path) -> Path:
@@ -81,6 +90,64 @@ def discover_cuts(src_dir: Path) -> list[int]:
             f"{src_dir}: cut ordinals must be contiguous from 01, got {ordinals}"
         )
     return ordinals
+
+
+def canonical_environment_errors(
+    python_version: tuple[int, int, int] | None = None,
+    implementation: str | None = None,
+    numpy_version: str | None = None,
+    platform_name: str | None = None,
+    machine: str | None = None,
+) -> list[str]:
+    """Why this process is outside the one environment that owns byte identity."""
+    python_version = python_version or tuple(sys.version_info[:3])
+    implementation = implementation or sys.implementation.name
+    numpy_version = numpy_version or np.__version__
+    platform_name = platform_name or sys.platform
+    machine = machine or platform.machine()
+    errors = []
+    if implementation != "cpython":
+        errors.append(f"Python implementation {implementation!r}, want 'cpython'")
+    if python_version != CANONICAL_PYTHON:
+        errors.append(f"Python {python_version}, want {CANONICAL_PYTHON}")
+    if numpy_version != CANONICAL_NUMPY:
+        errors.append(f"NumPy {numpy_version}, want {CANONICAL_NUMPY}")
+    if platform_name != CANONICAL_PLATFORM:
+        errors.append(f"platform {platform_name!r}, want {CANONICAL_PLATFORM!r}")
+    if machine.casefold() != CANONICAL_MACHINE.casefold():
+        errors.append(f"machine {machine!r}, want {CANONICAL_MACHINE!r}")
+    return errors
+
+
+def require_canonical_environment() -> None:
+    errors = canonical_environment_errors()
+    if errors:
+        detail = "\n  ".join(errors)
+        raise SystemExit(
+            "fret-noise byte identity belongs to the canonical bake environment:\n"
+            f"  {detail}\n"
+            "Create it from tools/ferrosintesis-samples/"
+            "requirements-fretnoise-bake.txt."
+        )
+
+
+def load_output_pins(path: Path) -> dict[str, str]:
+    """Read a strict sha256sum-style manifest with no duplicate output names."""
+    pins: dict[str, str] = {}
+    for line_no, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = PIN_RE.fullmatch(line)
+        if match is None:
+            raise SystemExit(f"{path}:{line_no}: malformed SHA-256 pin {raw!r}")
+        digest, name = match.groups()
+        if name in pins:
+            raise SystemExit(f"{path}:{line_no}: duplicate SHA-256 pin for {name}")
+        pins[name] = digest
+    if not pins:
+        raise SystemExit(f"{path}: no fret-noise output pins")
+    return pins
 
 
 def read_wav(path: Path) -> tuple[np.ndarray, int, int]:
@@ -141,30 +208,25 @@ def tpdf_dither_16(x: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     return np.clip(q, -32768, 32767).astype("<i2")
 
 
-def write_wav16(path: Path, pcm16: np.ndarray, sr: int = DST_SR) -> None:
+def wav16_bytes(pcm16: np.ndarray, sr: int = DST_SR) -> bytes:
     data = pcm16.tobytes()
     hdr = b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVEfmt "
     hdr += struct.pack("<IHHIIHH", 16, 1, 1, sr, sr * 2, 2, 16)
     hdr += b"data" + struct.pack("<I", len(data))
-    path.write_bytes(hdr + data)
+    return hdr + data
 
 
-def main() -> int:
-    root = find_repo_root(Path(__file__).resolve())
-    src_dir = root / "samples" / "fret-noise-eastman-e1d" / "cuts"
-    out_dir = root / "crates" / "ferrosintesis-samples-fretnoise" / "samples"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
+def bake_payloads(src_dir: Path) -> list[tuple[str, bytes, float, float, float, float]]:
+    """Generate every output in memory before any tracked file can be replaced."""
     ordinals = discover_cuts(src_dir)
     # One shared RNG consumed sequentially, so every file's dither depends on the
     # total sample count of all its predecessors — the ordinal order below is what
     # keeps a re-bake byte-identical.
     rng = np.random.default_rng(DITHER_SEED)
-    total_bytes = 0
-    print(f"{'file':>18} {'src rms':>8} {'gain':>7} {'peak':>7} {'ms':>6}")
+    payloads = []
     for i in ordinals:
         src = src_dir / f"fret_rr{i:02d}.wav"
-        x, sr, bits = read_wav(src)
+        x, sr, _bits = read_wav(src)
         assert sr == SRC_SR, f"{src}: expected {SRC_SR} Hz"
         y = resample_fft(x, SRC_SR, DST_SR)
         rms = body_rms(y, DST_SR)
@@ -175,13 +237,94 @@ def main() -> int:
             gain *= PEAK_GUARD / pk
         y = y * gain
         pcm = tpdf_dither_16(y, rng)
-        out = out_dir / f"fretnoise_rr{i:02d}.wav"
-        write_wav16(out, pcm)
-        total_bytes += out.stat().st_size
-        print(f"{out.name:>18} {rms:>8.4f} {20*np.log10(gain):>+6.1f}dB "
-              f"{20*np.log10(float(np.abs(y).max())+1e-12):>+6.1f}dB {len(y)/DST_SR*1000:>5.0f}")
+        payloads.append(
+            (
+                f"fretnoise_rr{i:02d}.wav",
+                wav16_bytes(pcm),
+                rms,
+                20 * np.log10(gain),
+                20 * np.log10(float(np.abs(y).max()) + 1e-12),
+                len(y) / DST_SR * 1000,
+            )
+        )
+    return payloads
 
-    print(f"\nbaked {len(ordinals)} files, {total_bytes/1024:.0f} KiB total, into {out_dir}")
+
+def output_pin_errors(
+    payloads: list[tuple[str, bytes, float, float, float, float]],
+    pins: dict[str, str],
+    out_dir: Path | None = None,
+) -> list[str]:
+    """Check generated pins and, for verification, the committed output files."""
+    generated = {name: payload for name, payload, *_ in payloads}
+    errors = []
+    for name in sorted(set(generated) - set(pins)):
+        errors.append(f"{name}: generated output has no SHA-256 pin")
+    for name in sorted(set(pins) - set(generated)):
+        errors.append(f"{name}: pinned output was not generated")
+    if out_dir is not None:
+        committed_names = {path.name for path in out_dir.glob("fretnoise_rr*.wav")}
+        for name in sorted(committed_names - set(pins)):
+            errors.append(f"{name}: committed output has no SHA-256 pin")
+    for name in sorted(set(generated) & set(pins)):
+        digest = hashlib.sha256(generated[name]).hexdigest()
+        if digest != pins[name]:
+            errors.append(f"{name}: generated sha256 {digest} != pinned {pins[name]}")
+        if out_dir is not None:
+            committed = out_dir / name
+            if not committed.is_file():
+                errors.append(f"{name}: committed output is missing")
+            else:
+                digest = hashlib.sha256(committed.read_bytes()).hexdigest()
+                if digest != pins[name]:
+                    errors.append(f"{name}: committed sha256 {digest} != pinned {pins[name]}")
+    return errors
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="bake in memory and verify generated + committed SHA-256 values; write nothing",
+    )
+    args = parser.parse_args(argv)
+
+    root = find_repo_root(Path(__file__).resolve())
+    src_dir = root / "samples" / "fret-noise-eastman-e1d" / "cuts"
+    crate_dir = root / "crates" / "ferrosintesis-samples-fretnoise"
+    out_dir = crate_dir / "samples"
+    pins = load_output_pins(crate_dir / "BAKE-SHA256")
+    require_canonical_environment()
+    payloads = bake_payloads(src_dir)
+
+    errors = output_pin_errors(payloads, pins, out_dir if args.verify else None)
+    if errors:
+        print("fret-noise bake verification failed:", file=sys.stderr)
+        for error in errors:
+            print(f"  {error}", file=sys.stderr)
+        return 1
+
+    print(f"{'file':>18} {'src rms':>8} {'gain':>7} {'peak':>7} {'ms':>6}  sha256")
+    for name, payload, rms, gain_db, peak_db, ms in payloads:
+        digest = hashlib.sha256(payload).hexdigest()
+        print(
+            f"{name:>18} {rms:>8.4f} {gain_db:>+6.1f}dB "
+            f"{peak_db:>+6.1f}dB {ms:>5.0f}  {digest}"
+        )
+
+    total_bytes = sum(len(payload) for _, payload, *_ in payloads)
+    if args.verify:
+        print(
+            f"\nverified {len(payloads)} generated and committed files "
+            f"({total_bytes / 1024:.0f} KiB); wrote nothing"
+        )
+        return 0
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name, payload, *_ in payloads:
+        (out_dir / name).write_bytes(payload)
+    print(f"\nbaked {len(payloads)} files, {total_bytes / 1024:.0f} KiB total, into {out_dir}")
     return 0
 
 

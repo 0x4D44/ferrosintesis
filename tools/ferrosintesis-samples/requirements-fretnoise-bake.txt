@@ -1,0 +1,3 @@
+# Canonical dependency for fretnoise_bake.py. The script also requires the
+# Windows x86-64 CPython 3.14.3 interpreter that produced the committed bank.
+numpy==2.4.4

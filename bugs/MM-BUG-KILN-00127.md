@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00127 — Sampled drum NoteOn allocates a filename and scans the bank
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler / realtime drum lookup
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T075807Z-p50144-n860597800-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00127-run-fix-20260726T075807Z-p50144-n860597800-c1
-- **Owner base:** d8a62badbd1d352d74ccbbb0875dfe6a92141d5b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T07:58:07Z
-- **Owner until:** 2026-07-26T09:58:07Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`)
+- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T075807Z-p50144-n860597800-c1 branch=task/bug-MM-BUG-KILN-00127-run-fix-20260726T075807Z-p50144-n860597800-c1 code=b4383169955c6be8db71fedb1416f918d2d425aa gate=manual)
 
 ## Observation
 

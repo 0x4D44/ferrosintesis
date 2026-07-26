@@ -575,3 +575,17 @@
   voices.rs` at the vibrato test ("same instability family as the wolf band"). Probed across seeds
   7/11/13/17/23; keys 38 and 55 are clean on every seed. Re-parked so the residual does not
   disappear with its parent entry.
+
+- [ ] 2026-07-26 - **`gen_crate_lib.py`'s generated doc header has drifted from the 25 committed
+  crate `lib.rs` files: only 1 of 25 matches what the generator now emits.** The generator was
+  changed to derive the header from the crate's actually-packaged legal docs
+  (`Licence/provenance: see <files>`), but only `-gong` appears to have been regenerated: 12 crates
+  still carry the old fixed "Attribution/licence: see NOTICE / PROVENANCE.md" line and 12
+  carry neither form. Measured by running TRUNK's own generator against the committed
+  `-rain/src/lib.rs` - it differs on that line, so the drift is in the committed files, not in the
+  generator. Nothing catches it: no test regenerates a crate and compares. Consequence is a
+  published docs.rs front page that names the wrong provenance files for 24 of 25 crates - and,
+  worse, the old line names `NOTICE` for crates that do not ship one. Same recurring shape as the
+  three lists in CLAUDE.md: a per-crate value maintained by hand instead of derived. Fix is a
+  regen sweep plus an oracle that regenerates each crate in a temp dir and diffs. Spotted during
+  the 2026-07-25 scratchpad triage while re-verifying the rustfmt fix after rebasing onto it.

@@ -18,13 +18,20 @@ version_bump = "release-only"
 # replace them. `no_default_gate_is_paired_with_embedded_sample_coverage` pins this pair
 # so neither shipped configuration can silently lose its own coverage (MM-BUG-KILN-00090).
 #
-# `amp-lab` is a workspace member (so a root `cargo build --release` builds it) but a
-# dev-only GUI: it drags in egui + cpal (~200 crates) that no shipped crate needs.
-# clippy/test therefore run `--workspace --exclude amp-lab`, so the gate does not
-# compile that tree on every integration. `fmt --all` keeps it, since fmt is a cheap
-# parse with no build cost and keeps the lab formatted. The lab has its own tests and
-# rides a small, sealed slice of the ferrosintesis realtime API; run its checks with
-# `cargo clippy -p amp-lab` / `cargo test -p amp-lab` when touching it.
+# `amp-lab` (dev-only egui/cpal GUI) is no longer a workspace member at all, so the steps
+# below no longer name it. Keeping `--exclude amp-lab` would not have broken the gate —
+# cargo only warns, "excluded package(s) `amp-lab` not found in workspace" (measured) —
+# but a warning nobody can action is noise, so the flag is gone. It became its own
+# workspace root because cargo resolves the ENTIRE graph before honouring `--exclude`:
+# while it was a member, its ~200-crate registry tree was a prerequisite of every build
+# here, so this very gate could not run on a machine without crates.io access. See the
+# comment block in the root `Cargo.toml`.
+#
+# Consequence for this contract: the gate no longer sees amp-lab in ANY step, `fmt
+# --all` included. It rides a small, sealed slice of the ferrosintesis realtime API, so
+# a breaking change to that API will not be caught here. Run its checks from inside
+# `crates/amp-lab/` when you touch it — or after changing the realtime API:
+#   cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
 #
 # `tools/` is in the workspace component's paths, but every other command here is cargo —
 # so until this step existed a change under `tools/` triggered a Rust-only gate and
@@ -36,10 +43,10 @@ version_bump = "release-only"
 # repo already requires it (every album builds with `python build.py`).
 fallback = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
-  { program = "cargo", args = ["clippy", "--workspace", "--exclude", "amp-lab", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["clippy", "-p", "ferrosintesis", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["test", "-p", "ferrosintesis", "--no-default-features", "--locked"] },
-  { program = "cargo", args = ["test", "--workspace", "--exclude", "amp-lab", "--locked"] },
+  { program = "cargo", args = ["test", "--workspace", "--locked"] },
   { program = "python", args = ["-m", "unittest", "discover", "-s", "tools/ferrosintesis-samples"] },
 ]
 
@@ -48,9 +55,9 @@ name = "workspace"
 paths = ["crates/", "tools/"]
 gate = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
-  { program = "cargo", args = ["clippy", "--workspace", "--exclude", "amp-lab", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["clippy", "-p", "ferrosintesis", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["test", "-p", "ferrosintesis", "--no-default-features", "--locked"] },
-  { program = "cargo", args = ["test", "--workspace", "--exclude", "amp-lab", "--locked"] },
+  { program = "cargo", args = ["test", "--workspace", "--locked"] },
   { program = "python", args = ["-m", "unittest", "discover", "-s", "tools/ferrosintesis-samples"] },
 ]

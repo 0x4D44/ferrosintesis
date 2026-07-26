@@ -28,11 +28,22 @@ members = [
     "crates/ferrosintesis-samples-mandolin",
     "crates/ferrosintesis-samples-fretnoise",
     "crates/render-catalog",
-    # Dev tool (egui/cpal GUI). A member so a root `cargo build --release` builds
-    # it, but excluded from the integration gate (see .deltic-integrate.toml) so
-    # its ~200-crate dep tree is not compiled on every integration.
-    "crates/amp-lab",
 ]
+# `crates/amp-lab` (dev-only egui/cpal GUI) is deliberately NOT a member, and
+# `default-members` is NOT the way to achieve that: cargo resolves the ENTIRE
+# workspace graph before it honours `-p` or `--exclude`, so while amp-lab was a
+# member its ~200-crate registry tree was a hard prerequisite of every build. On a
+# machine with no crates.io access that failed outright —
+# `error: no matching package named 'eframe' found` — even for
+# `cargo build --offline -p ferrosintesis-cli`, and even for the
+# `--workspace --exclude amp-lab` invocation the integration gate itself uses.
+#
+# Excising it makes this workspace's dependency closure 100% first-party path
+# crates, which is what lets a fresh clone build and render the whole catalogue with
+# no network at all (the samples are `include_bytes!`, and there is no build.rs).
+# amp-lab is its own workspace root instead — same trick as `fuzz/`. Trade-off: a
+# root `cargo build --release` and `cargo fmt --all` no longer reach it, so run
+# `cargo build/clippy/test/fmt` inside `crates/amp-lab/` when you touch it.
 resolver = "2"
 
 # `cargo test` renders real audio. Unoptimised, the lib-test suite takes 287.6 s on KILN;

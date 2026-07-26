@@ -1,10 +1,23 @@
 # Dev tool for choosing the driven-guitar defaults by ear (Part B).
 #
-# A workspace MEMBER so a bare `cargo build --release` at the repo root builds it.
-# It pulls in egui + cpal (~200 crates), which the shipped crates do not — so the
-# integration gate in `.deltic-integrate.toml` runs `--workspace --exclude
-# amp-lab` to avoid compiling that tree on every integration for a tool it never
-# gates. The release profile (LTO) is inherited from the workspace root.
+# Deliberately NOT a member of the root workspace, and its own workspace root via the
+# empty `[workspace]` table below — the same arrangement as `fuzz/`. It pulls in
+# egui + cpal (~200 registry crates), which no shipped crate needs: the root
+# workspace's dependency closure is otherwise 100% first-party path crates, and that
+# is what lets a fresh clone build and render offline.
+#
+# Membership could not buy that back cheaply. Cargo resolves the whole workspace
+# graph before honouring `-p` or `--exclude`, so while this was a member its registry
+# tree was a hard prerequisite of every build in the repo — `cargo build --offline -p
+# ferrosintesis-cli` died on `no matching package named 'eframe'`. `default-members`
+# does not help; it selects what to build, not what to resolve (measured, both ways).
+#
+# Cost of standing alone: the root `cargo build --release` / `fmt --all` / gate no
+# longer reach this crate, and the LTO release profile is no longer inherited (see the
+# local `[profile.release]` below). Run its checks from inside this directory:
+#   cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
+[workspace]
+
 [package]
 name = "amp-lab"
 version = "0.1.0"
@@ -15,3 +28,11 @@ publish = false
 eframe = { version = "0.28", default-features = false, features = ["glow", "default_fonts"] }
 cpal = "0.15"
 ferrosintesis = { path = "../ferrosintesis" }
+
+# Mirrors the root workspace's release profile, which this crate no longer inherits now
+# that it is its own workspace root. It matters here: the lab auditions synth defaults
+# by ear in real time, so an unoptimised ferrosintesis would underrun the audio callback
+# and the tool would be judging dropouts rather than timbre.
+[profile.release]
+opt-level = 3
+lto = true

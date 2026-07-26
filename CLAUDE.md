@@ -202,11 +202,27 @@ nothing, `cargo install ferrosintesis-cli` installs the `ferrosintesis` renderer
 
 Every crate declares **`rust-version = "1.87"`** — that declaration is what turns clippy's
 `incompatible_msrv` lint on, so keep it. An MSRV is only real once a toolchain at that
-version has compiled it: prove it with `cargo +1.87 check --workspace --exclude amp-lab`,
-not by grepping for the newest std API. The exclusion is not a dodge — `amp-lab` is the
-dev-only egui GUI (`publish = false`), and its `image` dep declares `rust-version = 1.88`,
-so a bare `--workspace` fails on a crate nobody ships. `.deltic-integrate.toml` excludes it
-from clippy and test for the same reason. Every shipped crate compiles on 1.87. **Keep every dependency on ONE line** — a multi-line inline table is
+version has compiled it: prove it with `cargo +1.87 check --workspace`, not by grepping for
+the newest std API. No `--exclude` is needed any more: `amp-lab` (the dev-only egui GUI,
+`publish = false`, whose `image` dep declares `rust-version = 1.88`) left the workspace on
+2026.07.26 and is now its own workspace root, like `fuzz/`. Every shipped crate compiles on
+1.87.
+
+That move is load-bearing for more than the MSRV. **Cargo resolves the ENTIRE workspace
+graph before it honours `-p` or `--exclude`**, so while `amp-lab` was a member its ~200-crate
+registry tree was a hard prerequisite of every build here — on a box without crates.io even
+`cargo build --offline -p ferrosintesis-cli` died on `no matching package named 'eframe'`.
+`default-members` does **not** fix that (it selects what to *build*, not what to *resolve*;
+measured both ways). With it excised, the root workspace's dependency closure is 100%
+first-party path crates — zero `source =` lines in `Cargo.lock` — which is what lets a fresh
+clone build the synth and render the whole catalogue with **no network at all** (samples are
+`include_bytes!`, and there is no `build.rs` anywhere). Keep it that way: adding a registry
+dependency to any shipped crate forfeits the offline build. The cost is that the root
+`cargo build --release`, `fmt --all`, and the integration gate no longer reach `amp-lab`, so
+run its checks from inside `crates/amp-lab/` when you touch it — or after changing the
+realtime API it rides.
+
+**Keep every dependency on ONE line** — a multi-line inline table is
 invalid TOML 1.0, and cargo 1.87 refuses the manifest outright where newer cargo accepts it.
 (That rule is now enforced by `sampler`-adjacent oracle `manifest.rs`; it used to be only a
 comment, and the MSRV was quietly broken for ten days — MM-BUG-KILN-00067.)

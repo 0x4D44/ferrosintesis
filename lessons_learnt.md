@@ -10,6 +10,20 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.26 — **Algebraic equivalence is not BITWISE equivalence: `(2.9-2.2) != 0.7` in f32, so a "value-preserving" refactor moves every sample** (`voices.rs:bow_force_ceiling`).
+    - Two instances in one refactor. `2.2 + (2.9 - 2.2) * u` replacing `2.2 + 0.7 * u`: in f32 the subtraction
+      gives 0.70000005 against the literal's 0.69999999. Collapsing `amp_base 0.36 + amp_span 0.82` to the
+      literal `1.18`: the sum is 1.18000007, the literal 1.17999995. Six to twelve parts in 10^8.
+    - In a chaotic system (here a stick-slip waveguide) that is enough to change EVERY sample downstream. Two
+      cello albums the change must not have touched moved. Tests and clippy passed throughout, and a reviewer
+      reading either diff would have called both refactors value-preserving — because algebraically they are.
+    - Only a byte comparison of real renders catches this, which is the whole reason CLAUDE.md mandates the
+      render-diff inventory for voices/engine/drums/sampler. Treat "no logic reason to move" as a hypothesis
+      the inventory tests, not a fact that lets you skip it.
+    - The near-miss: the contrabass's `0.55 + 1.25` lands EXACTLY on `1.8`, so it did not move. Spot-checking
+      one low string would have produced a confident all-clear. Check the one that moved, not the one you picked.
+    - Fix shape: keep the original expression rather than an equal-looking rewrite — return `Option` so the
+      unchanged path keeps its literal, and write a collapsed constant as its sum so const-eval reproduces the bits.
 - 2026.07.26 — **Test seeds 7/17/23 are NOT random: xorshift32's first draw from a small seed is ≈−1, pinning every per-note draw to its minimum** (`dsp.rs:Rng::new`).
     - `Rng::new(seed)` seeds xorshift32 raw, so the first `white()` from a small seed returns ≈−1.0 and
       `u = white()*0.5+0.5` returns ≈0.0. Seeds 7/17/23/31/41 all collapse `BowedString`'s bow force onto

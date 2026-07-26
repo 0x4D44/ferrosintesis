@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high) → Fixed (2026-07-25, Claude Opus 5 (1M); discharged by the closed-loop re-derive in `1f80dbf`) → Fixed, closure REFUSED (2026-07-25, independent verification by Claude Opus 5 (1M) @ high, fresh context; the stated acceptance bar was not met, GM6 is unsettled, and the bug's explicit ear gate was overridden — see the verification note below) → Fixed, ear gate DISCHARGED (2026-07-26, Arthur ratified GM8 +3 and GM110 −6 on an A/B/C listening pass; the Fix note was corrected the same day. Closure now blocked only on the GM6 carve-out — item (c))
+- **State history:** Open (2026-07-25, raised via `deltic bugs new` model=claude-opus-5-1m@high) → Fixed (2026-07-25, Claude Opus 5 (1M); discharged by the closed-loop re-derive in `1f80dbf`) → Fixed, closure REFUSED (2026-07-25, independent verification by Claude Opus 5 (1M) @ high, fresh context; the stated acceptance bar was not met, GM6 is unsettled, and the bug's explicit ear gate was overridden — see the verification note below) → Fixed, ear gate DISCHARGED (2026-07-26, Arthur ratified GM8 +3 and GM110 −6 on an A/B/C listening pass; the Fix note was corrected the same day. Closure now blocked only on the GM6 carve-out — item (c)) → Fixed, ALL CLOSURE CONDITIONS DISCHARGED (2026-07-26, Arthur accepted GM6 +6.0 dB on a Reference-Audition peer comparison backed by a momentary-loudness census; awaiting the two-eyes closure pass, which must be run by someone who authored none of this evidence)
 
 ## Observation
 
@@ -164,16 +164,93 @@ magnitude.
 The renders were throwaway diagnostics and are not committed. Nothing shipped
 changed to produce them.
 
+## GM6 (2026-07-26) — condition (c) DISCHARGED, both ways
+
+GM6 got BOTH remedies condition (c) allowed: a targeted measurement outside the
+percussive guard, AND Arthur's explicit acceptance. **GM6 +6.0 dB stands.**
+
+The first listening pass used album mixes and was inconclusive for a reason worth
+recording: an absolute trim cannot be judged inside a mix, because the mix already
+encodes the composer's balance decisions. Arthur's read there was that the
+harpsichord "sounds quite loud", with the caveat that the album's balance might be
+what was wrong. He was right, and he named the better instrument himself — the
+**Reference Audition** (`demos/ferrosintesis_reference/`), which plays every voice
+one at a time, dry and flat.
+
+**Why the audition settles what the M-CAL rig cannot.** `tracks/audition.py` gives
+every slot in the piano family identical treatment: same root (D4 from register
+48-84), same velocity (104, `STRUCK`), same rising figure and landing, sends forced
+dry, no humanisation. Only the program changes. So a level difference between two
+of those slots is a difference between the VOICES, and GM6's natural peers GM0-GM7
+become a valid comparison set — no external reference module required, which is
+exactly the wall the percussive guard put in front of every other approach.
+
+**The measurement.** Peak momentary loudness (BS.1770, 400 ms window / 100 ms hop
+— the statistic `loudness.rs:momentary_lufs`'s own doc recommends for comparing
+events whose decay envelopes differ), per audition slot:
+
+```
+GM 000 Acoustic Grand Piano   -11.80 LUFS   +0.16 vs GM0-7 median
+GM 001 Bright Acoustic Piano  -12.14        -0.18
+GM 002 Electric Grand Piano    -8.98        +2.98
+GM 003 Honky-tonk Piano       -10.43        +1.53
+GM 004 Electric Piano 1       -12.11        -0.15
+GM 005 Electric Piano 2       -11.96         0.00
+GM 006 Harpsichord (+6)       -14.58        -2.62   <-- quietest of its family
+GM 007 Clavinet               -13.22        -1.26
+```
+
+The ladder, with every peer as a control:
+
+```
+GM6 trim   GM6 peak LUFS   vs GM0-7 median
+  0 dB        -20.50           -8.59
+ +3 dB        -17.52           -5.60
+ +6 dB        -14.58           -2.62   (shipped)
+```
+
+Across that ladder GM6 moves 2.94 and 5.92 dB while **no peer moves more than
+0.03 dB** — a clean linearity check that the trim reaches the audio exactly as
+written and touches nothing else.
+
+**Conclusion: on level, +6 dB is not too much — it is arguably still too little.**
+With the full shipped lift applied the harpsichord is the QUIETEST voice in its own
+family, 2.6 LUFS under the median; untrimmed it is 8.6 LUFS under. Parity would
+need about +8.6 dB. Cutting it would push it further below a family it is already
+at the bottom of. Arthur listened to the GM0-7 audition excerpt and confirmed the
+harpsichord "sounds fine at the 6 dB lift".
+
+**Why the ear and the meter disagreed, recorded so nobody re-litigates it.**
+Momentary LUFS is K-weighted energy; it does not model sharpness, roughness or
+transient salience. A harpsichord is bright, buzzy and hard-plucked, with its
+energy in a very short attack, so it can read quiet on a 400 ms window and still
+cut through — and in `Clockwork Orchard` it is the lead and plays almost
+continuously. "Sounds quite loud" in a mix and "2.6 LUFS below its peers on a flat
+audition" are both true and are about different things.
+
+**Limitation, stated plainly.** This is ferrosintesis measured against ITSELF. It
+shows GM6 is not a level outlier within our own bank; it does NOT show that our
+harpsichord sits where a real SC-55's does relative to a real SC-55's pianos. Both
+external references excluded GM6, so internal peer placement is the best evidence
+obtainable — and it is more than the M-CAL run ever produced for this program.
+Defensible, not referenced.
+
+**Method note for the plucked-envelope backlog.** This peer-comparison-on-the-
+audition technique settles any program the percussive guard excludes, which is the
+whole plucked family, not just GM6. It needed one dev-only helper to read
+`momentary_lufs` out of a WAV; that helper is NOT committed. Making it permanent is
+tracked separately.
+
 ## To close
 
-Conditions (a) and (b) from the 2026-07-25 verification are now discharged.
-Remaining:
+All three conditions from the 2026-07-25 verification are discharged:
+(a) ratified 2026-07-26, (b) corrected 2026-07-26, (c) measured and accepted
+2026-07-26.
 
-(c) GM6 needs a targeted measurement outside the percussive guard, or an explicit
-written acceptance of the +6.0 dB entry. Closure also still needs a second pair
-of eyes per the two-eyes rule — the ear-gate record above was written by neither
-the fixer nor the 07-25 verifier, but it records Arthur's judgement, not a
-verification.
+What remains is only the two-eyes closure pass. **It must be run by an agent who
+authored none of the 2026-07-26 evidence** — the ear-gate and GM6 records above
+record Arthur's judgement and a measurement, which is not the same thing as an
+independent verification of them.
 
 ### Verification summary (2026-07-25, independent second eyes) - CLOSURE REFUSED
 

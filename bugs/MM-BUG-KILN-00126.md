@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00126 — Published drum-kit inventory and kick provenance are stale
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** drum-kit package documentation / provenance
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T083911Z-p34720-n358957300-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00126-run-fix-20260726T083911Z-p34720-n358957300-c1
-- **Owner base:** fce100f88b04508f2c0c805851fca842fb41efe7
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T08:39:11Z
-- **Owner until:** 2026-07-26T10:39:11Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`)
+- **State history:** Open (2026-07-26, raised by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-drumkit/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T083911Z-p34720-n358957300-c1 branch=task/bug-MM-BUG-KILN-00126-run-fix-20260726T083911Z-p34720-n358957300-c1 code=378167ab3245b4a6628e49bfb8227cf5d98734a3 gate=manual)
 
 ## Observation
 

@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00136 — Grand source comments retain obsolete VSCO routing
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / GM0 piano routing documentation
 - **Raised:** 2026-07-26
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260726T134703Z-p37944-n509596200-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00136-run-fix-20260726T134703Z-p37944-n509596200-c1
-- **Owner base:** be1337d3359ae20d9489129701c2b8dc6ce0985f
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-26T13:47:03Z
-- **Owner until:** 2026-07-26T15:47:03Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by Codex review lead from the coverage-ledger review of `crates/ferrosintesis-samples-grand/`)
+- **State history:** Open (2026-07-26, raised by Codex review lead from the coverage-ledger review of `crates/ferrosintesis-samples-grand/`) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T134703Z-p37944-n509596200-c1 branch=task/bug-MM-BUG-KILN-00136-run-fix-20260726T134703Z-p37944-n509596200-c1 code=66c1cd950239579978767b57c97cb8ca80847b73 gate=manual)
 
 ## Observation
 

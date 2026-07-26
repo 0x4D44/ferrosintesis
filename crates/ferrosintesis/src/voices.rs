@@ -3386,17 +3386,9 @@ pub const CLAVINET: PluckPreset = PluckPreset {
 pub const BASS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "BASS",
-    // KILN-00048 DECOUPLED velocity from the loop-damper decay RATE (the coupling
-    // this was `Off` for under KILN-00042): the corner no longer scales with
-    // velocity, proven by `ks_decay_rate_is_velocity_invariant` (which covers
-    // BASS). So this CAN now flip to `Derived` — but flipping it (tried, reverted)
-    // makes the notes ring long enough to expose a velocity-KEY-dependent
-    // sub/mwah LEVEL bend that a scalar `VEL_LEVEL_EXP` cannot fit (FRETLESS
-    // spread 0.58 — no single exponent lands both keys in ±0.25). That bend is
-    // the §3 bass-family reconciliation (KILN-00045), so the flip lands there,
-    // WITH the fix, not here. The decay-rate coupling — the actual KILN-00048
-    // defect — is gone regardless of the hold. Left `Off` until §3.
-    damper_hold: DamperHold::Off,
+    // KILN-00045: GM33 joins the KILN-00042 derived damper hold now that the
+    // family-level calibration owns the exposed held-body level bend.
+    damper_hold: DamperHold::Derived,
     wound_all: true,
     t60: 3.2,
     // Muffled/flatwound top end: the loop and pluck are DARK (damped harmonics,
@@ -3439,25 +3431,20 @@ pub const FINGERED_BASS2: PluckPreset = PluckPreset {
 pub const FRETLESS: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "FRETLESS",
-    // KILN-00048 decoupled velocity from the loop-damper decay rate (see BASS),
-    // so this CAN flip to `Derived`. But GM35 is the case that proves the flip
-    // belongs in §3, not here: flipping it (tried, reverted) exposes a
-    // velocity-KEY-dependent mwah/sub level bend of spread 0.58 (k48 2.06, k60
-    // 2.64) that NO scalar `VEL_LEVEL_EXP` can fit into the square law. That is
-    // the §3 bass-family reconciliation (KILN-00045). Left `Off` until §3; the
-    // decay-rate coupling is already gone (`ks_decay_rate_is_velocity_invariant`).
-    damper_hold: DamperHold::Off,
+    // KILN-00045: GM35 joins the KILN-00042 derived damper hold with the rest of
+    // the default bass-family calibration.
+    damper_hold: DamperHold::Derived,
     wound_all: true,
-    t60: 2.6,
+    t60: 3.4,
     bright: 1050.0, // was 1300: darker
     pick_lp: 780.0, // was 900: rounder, softer attack
     pos: 0.40,
-    amp: 1.05,
+    amp: 1.35,
     attack_s: 0.012,
     body: &[(58.0, 0.8, 4.0), (105.0, 1.0, 2.2)], // deeper + woody
     out_lp: 1200.0,                               // was 1500: muffle
     pickup: 0.37,                                 // was 0.33: 2nd-harmonic weight
-    sub: 0.26,                                    // was 0.15: fuller fundamental
+    sub: 0.40,                                    // KILN-00045: held body closer to the bass family
     sub_ramp: 90,                                 // the sub speaks fast
     sub_shape: (0.4, 0.0), // B5: a real string's weight has a strong 2nd harmonic
     attack_noise: 0.55,    // was 0.7
@@ -3477,16 +3464,16 @@ pub const SLAP: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "SLAP",
     wound_all: true,
-    t60: 2.8,
+    t60: 3.8,
     bright: 3500.0,
     pick_lp: 4500.0,
     pos: 0.12,
-    amp: 1.0,
+    amp: 1.45,
     rel_t60: 0.12,
     body: &[(65.0, 0.7, 3.0)],
     out_lp: 4000.0,
     pickup: 0.28,
-    sub: 0.15,
+    sub: 0.36,
     sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
     click: 2.4,            // the pop — post-out so the out-LP doesn't swallow it
     click_hp: 1500.0,
@@ -3500,11 +3487,12 @@ pub const SLAP: PluckPreset = PluckPreset {
 pub const SLAP_POP: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "SLAP_POP",
-    pos: 0.06,        // near the bridge — thin, bright
-    bright: 5200.0,   // was 3500: the pop's HF snap
-    pick_lp: 6500.0,  // was 4500: let the snap through
-    t60: 1.8,         // was 2.8: dies faster than the thumb
-    sub: 0.08,        // was 0.15: thinner, less weight
+    pos: 0.06,       // near the bridge — thin, bright
+    bright: 5200.0,  // was 3500: the pop's HF snap
+    pick_lp: 6500.0, // was 4500: let the snap through
+    t60: 3.2,        // KILN-00045: still shorter than the thumb, no longer collapses
+    amp: 2.0,
+    sub: 0.24,        // thinner than the thumb, but held body stays in family
     click: 3.2,       // was 2.4: a sharper pull-off transient
     click_hp: 2600.0, // was 1500: the snap sits higher
     ..SLAP
@@ -3520,16 +3508,16 @@ pub const PICK: PluckPreset = PluckPreset {
     // key-aware target; tracked as a follow-up. The other 4 (STEEL/JAZZ/DULCIMER/
     // PIZZ) calibrate exactly.
     wound_all: true,
-    t60: 3.2,
+    t60: 3.8,
     bright: 2200.0,
     pick_lp: 2600.0,
     pos: 0.15,
-    amp: 1.0,
+    amp: 1.35,
     rel_t60: 0.12,
     body: &[(65.0, 0.7, 3.5)],
     out_lp: 2400.0,
     pickup: 0.28,
-    sub: 0.16,
+    sub: 0.30,
     sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
     click: 0.72,           // Phase-1 pluck-redesign cut 1.6 -> 0.72
     click_hp: 1800.0,
@@ -3546,17 +3534,17 @@ pub const UPRIGHT: PluckPreset = PluckPreset {
     // reference): shorter woody sustain, a bigger fingertip thud, and
     // longer-ringing (higher-Q) corpus modes — the body, not a pickup,
     // carries the tone; the electric keeps its pickup-comb identity.
-    t60: 1.8, // was 2.4: a gut/damped string dies faster than a fretted electric
+    t60: 2.6, // gut/damped string: faster than fingered, but no held-body collapse
     bright: 900.0,
     pick_lp: 600.0,
     pos: 0.38,
-    amp: 1.05,
+    amp: 1.25,
     attack_s: 0.008,
     // higher-Q corpus modes ring on under the shorter string — the woody
     // boom that outlives the pluck
     body: &[(65.0, 1.3, 4.5), (110.0, 1.8, 3.5)],
     out_lp: 2200.0,
-    sub: 0.15,
+    sub: 0.28,
     sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
     attack_noise: 0.90,    // was 0.65: the fingertip thud is half the instrument
     stop_thump: 0.8,
@@ -5380,7 +5368,7 @@ impl SynthBass {
             depth: 900.0 + 2600.0 * vn, // velocity opens the sweep
             q: 4.0,
             t: 0,
-            amp: 0.62 * vel_amp(vel),
+            amp: 0.44 * vel_amp(vel),
             sr,
         }
     }
@@ -9841,15 +9829,15 @@ fn ebass_seam_gain(program: u8, key: u8) -> f32 {
     // GM32's onset ~3-5 dB under parity — the smallest residual available from a gain.
     const PIZZ: [(f32, f32); 16] = [
         (16.0, 1.91),
-        (20.0, 1.78),
+        (20.0, 1.85),
         (24.0, 1.76),
         (28.0, 1.95),
         (31.0, 1.73),
-        (34.0, 1.97),
+        (34.0, 2.45),
         (38.0, 1.70),
         (40.0, 1.45),
-        (43.0, 1.19),
-        (46.0, 1.51),
+        (43.0, 1.55),
+        (46.0, 1.58),
         (50.0, 1.10),
         (52.0, 1.40),
         (55.0, 1.60),
@@ -9891,8 +9879,8 @@ fn ebass_seam_gain(program: u8, key: u8) -> f32 {
         (38.0, 2.27),
         (40.0, 1.56),
         (43.0, 1.54),
-        (46.0, 1.69),
-        (50.0, 1.14),
+        (46.0, 1.76),
+        (50.0, 1.40),
     ];
     let a: &[(f32, f32)] = match program {
         32 => &PIZZ,
@@ -13203,14 +13191,13 @@ const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     // velocity swing flatten the honest windowed law, so the compensation rises
     // to hold it at 2.0. GM24 gained an explicit entry (was default 2.0). Two
     // flags: t[28] and t[106] ride near the [1.5, 2.35] anti-papering bound
-    // (dark voices, out-swing removed) — named so drift is visible; t[36]/t[37]
-    // carry a KEY-DEPENDENT spread whose suspect is the f0-locked `sub`, not this
-    // task — that is the §3 bass-family re-measure (KILN-00045), not chased here.
+    // (dark voices, out-swing removed) — named so drift is visible. KILN-00045
+    // remeasured the bass entries after the family held-level calibration.
     t[22] = 1.837; t[24] = 2.119; t[26] = 2.005; t[27] = 2.190; t[28] = 2.315;
-    t[29] = 2.060; t[30] = 2.060; t[31] = 2.109; t[36] = 2.191; t[37] = 1.882;
+    t[29] = 2.060; t[30] = 2.060; t[31] = 2.109; t[36] = 2.191; t[37] = 2.075;
     t[45] = 1.879;
     // Basses.
-    t[33] = 2.320; t[35] = 2.160;
+    t[33] = 2.162; t[35] = 2.056;
     // Bowed strings 42/43 are deliberately NOT compensated. Their raw curve is
     // non-monotonic at the top — measured, samples on, compensation bypassed:
     //   GM42 key 60  v96 -8.93  v110 -5.16  v127 -7.14   (DROPS 1.98 dB)
@@ -15759,15 +15746,16 @@ mod tests {
         // down, electric bite removed), so the signature is regenerated — hotter
         // (rms -16.06 -> -14.10, the added low weight) and darker (centroid
         // 207 -> 178 Hz, the muffle), with a slower relative decay (late/early
-        // -15.1 -> -11.2, the big sustaining sub). Its muffled character is
-        // separately pinned by `bass_is_muffled_flatwound`.
+        // -15.1 -> -11.2, the big sustaining sub). KILN-00045 moved it onto the
+        // derived damper hold and repinned only the small level delta here; its
+        // muffled character is separately pinned by `bass_is_muffled_flatwound`.
         assert_render_signature(
             "BASS",
             render_signature(&bass_render, 44100.0, (0.05, 0.4), (0.05, 0.15), (0.5, 0.8)),
             RenderSignature {
-                rms_db: -15.599,
-                centroid_hz: 178.100,
-                late_early_db: -11.198,
+                rms_db: -15.076,
+                centroid_hz: 178.274,
+                late_early_db: -11.273,
             },
         );
     }
@@ -19487,13 +19475,11 @@ mod tests {
         // flipping a preset to `Off` would silently remove it from that oracle's
         // coverage instead of failing anything.
         // sorted so reordering ALL_PLUCK_PRESETS cannot fail this spuriously
-        // BASS/FRETLESS stay `Off`: KILN-00048 decoupled the decay-rate coupling
-        // they were held out for, but flipping their hold exposes a key-dependent
-        // sub/mwah LEVEL bend a scalar can't fit — deferred to the §3 bass-family
-        // reconciliation (KILN-00045), which flips them WITH that fix.
+        // KILN-00045 reconciled the bass-family held levels and moved BASS/FRETLESS
+        // back to the derived hold, so they must no longer appear in this opt-out list.
         // DRIVE_LEAD left this list in KILN-00049: its output-domain sustainer
         // controller now makes the derived hold safe across the full register.
-        const EXPECTED_OFF: &[&str] = &["BASS", "CLAVINET", "FRETLESS", "HARPSICHORD", "OUD"];
+        const EXPECTED_OFF: &[&str] = &["CLAVINET", "HARPSICHORD", "OUD"];
         let mut actual_off: Vec<&str> = ALL_PLUCK_PRESETS
             .iter()
             .filter(|(_, p)| p.damper_hold == DamperHold::Off)
@@ -20279,6 +20265,51 @@ mod tests {
             std::hint::black_box(BASS.t60),
         );
         assert!(u < b, "upright should decay faster: {u} vs {b}");
+    }
+
+    /// MM-BUG-KILN-00045: the default GM bass family must stay within the same
+    /// held-body level bracket as the reference modules. This measures the
+    /// original calibration grid's bass register and excludes the first 200 ms so
+    /// slap/pick/onset differences cannot hide a collapsed or over-hot sustain.
+    #[test]
+    fn default_bass_family_held_levels_stay_together() {
+        let sr = 44100.0;
+        let keys = [24u8, 29, 34, 39, 44, 49];
+        let velocities = [72u8, 110];
+        let mut levels = Vec::new();
+
+        for program in 32u8..=39 {
+            let mut energy = 0.0f64;
+            let mut samples = 0usize;
+            for &key in &keys {
+                for &vel in &velocities {
+                    let buf = render_program(program, key, vel, 1.3, 0x45_0000 + program as u32);
+                    let body = segment(&buf, sr, 0.20, 1.20);
+                    energy += body.iter().map(|&x| (x as f64) * (x as f64)).sum::<f64>();
+                    samples += body.len();
+                }
+            }
+            let level = 20.0 * ((energy / samples as f64).sqrt().max(1e-12)).log10() as f32;
+            eprintln!("GM{program} held bass-family level {level:.2} dB");
+            levels.push((program, level));
+        }
+
+        let (low_program, low) = levels
+            .iter()
+            .copied()
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .unwrap();
+        let (high_program, high) = levels
+            .iter()
+            .copied()
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+            .unwrap();
+        let spread = high - low;
+        assert!(
+            spread <= 9.25,
+            "GM32-39 held-body spread is {spread:.2} dB (GM{low_program} {low:.2}, \
+             GM{high_program} {high:.2}); reference modules sit around 9 dB"
+        );
     }
 
     /// GM046 harp must SHIMMER — its sustained tone carries upper-partial energy,

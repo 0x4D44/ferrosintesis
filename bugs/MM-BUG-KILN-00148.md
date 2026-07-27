@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00148 — Standalone MuseScore-grand crate omits the upstream MIT permission and full copyright notices
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample packaging / licensing
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00148-run-fix-20260726T235403Z-p9812-n116206100-c25-code-1785110429762
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T235403Z-p9812-n116206100-c25 branch=task/bug-MM-BUG-KILN-00148-run-fix-20260726T235403Z-p9812-n116206100-c25 code=6af24c31c86f gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -47,6 +47,26 @@ inspect the packaged bank's own documents and fail when the permission grant or
 required copyright block is removed.
 
 Estimated effort: Small.
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T235403Z-p9812-n116206100-c25 code=6af24c31c86f gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00148 by making the standalone MuseScore grand sample crate carry the complete upstream MIT permission text and MuseScore/FluidR3 copyright notices in its packaged NOTICE. Reproduced the original static observation by confirming the package include list shipped README.md, NOTICE, and PROVENANCE.md but none contained the MIT permission grant. Added a licensing regression that reads each MIT sample bank's own packaged documents rather than relying on the parent ferrosintesis notice. The new regression failed before the NOTICE fix on ferrosintesis-samples-musescore-grand and passed after the notice was completed. No bug ledger, Cargo manifest, lockfile, journal, scratchpad, or
+
+Root cause: The MuseScore grand crate's NOTICE was a hand-written abbreviated attribution that named MIT and some lineage credits, but the existing oracle only required a packaged NOTICE with a licence name and one licensor-owned signal. That allowed an independently publishable MIT sample crate to omit the permission grant and full upstream copyright block required to accompany redistributed WAV payloads.
+
+Changed:
+- Completed crates/ferrosintesis-samples-musescore-grand/NOTICE with the MuseScore/FluidR3 copyright block, source licence URL, and full MIT terms.
+- Extended crates/ferrosintesis/src/licensing.rs with a regression that checks packaged MIT bank documents for the MIT grant and MuseScore-lineage copyright fragm
+
+Tests:
+- $null | deltic timeout 180 cargo test -p ferrosintesis licensing (failed before the NOTICE fix, naming ferrosintesis-samples-musescore-grand)
+- $null | deltic timeout 180 cargo test -p ferrosintesis licensing (passed after the fix: 8 passed, 795 filtered out)
+- $null | deltic timeout 120 cargo fmt --package ferrosintesis
+
+Left alone:
+- bugs/
+- Cargo.toml
+- Cargo.lock
 
 ## Notes
 

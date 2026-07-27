@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00016 — GM36/37 slap and pop lack modeled string–fret collision identity
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00016-run-fix-20260727T121001Z-p9812-n920194600-c80-code-1785154867791
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=43fab4a47298c7938fcbfa7fa6e2b00798677827 gate=focused+render-diff model=codex@xhigh; held branch recovered by Codex) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T115901Z-p9812-n535270700-c79 verified_fix_run=fix-20260726T223701Z-p9812-n951988700-c12 verdict=doubt reason=gates-green-and-the-new-string-fret-collision-is-real-contained-and-well-tested model=claude)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=43fab4a47298c7938fcbfa7fa6e2b00798677827 gate=focused+render-diff model=codex@xhigh; held branch recovered by Codex) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T115901Z-p9812-n535270700-c79 verified_fix_run=fix-20260726T223701Z-p9812-n951988700-c12 verdict=doubt reason=gates-green-and-the-new-string-fret-collision-is-real-contained-and-well-tested model=claude) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T121001Z-p9812-n920194600-c80 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260727T121001Z-p9812-n920194600-c80 code=84f8f8694206 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -87,6 +87,26 @@ No Cargo manifest, lockfile, journal, scratchpad, or lesson file changed.
 ### Verification summary (2026-07-27, deltic:auto run=verify-20260727T115901Z-p9812-n535270700-c79 verified_fix_run=fix-20260726T223701Z-p9812-n951988700-c12 verdict=doubt)
 
 Verifier note: Gates green and the new string-fret collision is real, contained and well-tested, but acceptance-contract item 6 is unevidenced: the retained post-output click burst was never lesioned, and the new identity oracle measures 6-30 ms, excluding the 0-3 ms window the burst occupies. — HEAD abbfbf3 on trunk worktree. GATES (all green, observed): `cargo fmt --all -- --check` clean; `cargo clippy --workspace --all-targets -- -D warnings` clean (Finished dev profile); `cargo test --workspace` exit 0 (ferrosintesis 773 passed/0 failed/36 ignored, every other crate 0 failed); `cargo test -p ferrosintesi...
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T121001Z-p9812-n920194600-c80 code=84f8f8694206 gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00016 by making GM36/37 slap and slap-pop identity depend on the in-loop fret collision rather than the retained post-output burst. The fail-first regression reproduced the verifier's recorded doubt: before the fix, SLAP's removed post-output click carried 0.00040660 high-band burst energy while the measured string-contact residual carried only 0.00004923. The code now lowers the legacy post-output click gains to secondary-detail levels while leaving the fret-contact engine, routing, and non-slap presets unchanged. The new regression lesions only click while retaining fret_contact, proving the contact-only voice remains distinct from fingered bass and that the removed burst
+
+Root cause: The prior recovery added a real in-loop string-fret collision, but it kept the old SLAP and SLAP_POP post-output click gains at primary-attack levels. The existing regression compared only the 6-30 ms contact residual, excluding the 0-3 ms window where that legacy burst lived, so the burst could still dominate the audible onset without being tested.
+
+Changed:
+- crates/ferrosintesis/src/voices.rs: reduced SLAP and SLAP_POP post-output click gains to secondary-detail levels
+- crates/ferrosintesis/src/voices.rs: added a click-lesion regression for GM36/37 slap-pop contact identity
+
+Tests:
+- cargo test -p ferrosintesis voices::tests::slap_pop_post_click_is_secondary_to_fret_collision -- --nocapture failed before the preset fix, then passed after it
+- cargo test -p ferrosintesis voices::tests::slap -- --nocapture passed: 6 tests
+- cargo test -p ferrosintesis --no-default-features voices::tests::slap -- --nocapture passed: 6 tests
+- cargo fmt --package ferrosintesis
+- git diff --check -- crates/ferrosintesis/src/voices.rs passed, with only Git's LF-to-CRLF warning
+
+Left alone:
+- bugs/
 
 ## Notes
 

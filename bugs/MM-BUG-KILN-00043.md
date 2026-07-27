@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00043 — GM7 clavinet's baked decay is ~3x too fast: its body level reads 13.4 dB under both references while its attack level is correctly placed (a 1.6 s sample wall also exists, but measures inaudible)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sampler
 - **Raised:** 2026-07-22
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T143003Z-p9812-n329069200-c84
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00043-run-verify-20260727T143003Z-p9812-n329069200-c84
-- **Owner base:** 20c5142a1cf040adbc9bf6c2656ac3557bb696dd
-- **Owner fingerprint:** sha256:f6b1dc3b7b00db47b586bf283b3a40270013811ba99ad39199df282210d72436
-- **Owner since:** 2026-07-27T14:30:03Z
-- **Owner until:** 2026-07-27T15:25:33Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T221402Z-p9812-n155597100-c8 branch=task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8 code=aec98325699b918ac8fcdd651c105a157a445337 gate=focused+render-diff model=codex@xhigh; held branch recovered and hardened by Codex)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T221402Z-p9812-n155597100-c8 branch=task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8 code=aec98325699b918ac8fcdd651c105a157a445337 gate=focused+render-diff model=codex@xhigh; held branch recovered and hardened by Codex) → Closed (2026-07-27, deltic:auto role=verify run=verify-20260727T143003Z-p9812-n329069200-c84 verified_fix_run=fix-20260726T221402Z-p9812-n155597100-c8 verdict=close model=claude)
 
 ## Observation
 
@@ -205,6 +205,10 @@ Tests:
 - Full `demos/**/*.mid` render diff at 11,025 Hz: 3 expected changed, 14 expected same, 0 contamination, 0 not reached
 - Three alternating GM7 reference-demo renders averaged 2.835 s baseline and 2.864 s candidate (1.010×)
 - Representative baseline/candidate renders: `C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00043-perf\base-1.wav` and `C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00043-perf\cand-1.wav`
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T143003Z-p9812-n329069200-c84 verified_fix_run=fix-20260726T221402Z-p9812-n155597100-c8 verdict=close)
+
+Verifier note: Independently reproduced both recorded symptoms as GONE on trunk 9203edd: held GM7 now sustains smoothly past the old 1.6 s wall and its t60 is 5.03-3.31 s across keys 48-73 (was 1.90-1.30 s), inside Arthur's approved 5.0->3.3 s band; regression tests and all repo gates pass. — GATES (all from the worktree root, exit codes observed): `cargo fmt --all -- --check` clean; `cargo clippy --workspace --all-targets -- -D warnings` exit 0; `cargo test --workspace </dev/null` exit 0 (783 passed, 0 failed, 39 ignored in the ferrosintesis lib suite plus every sub-crate suite green; the 39 ignored are pre...
 
 ## Notes
 

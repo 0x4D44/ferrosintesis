@@ -28077,7 +28077,7 @@ mod tests {
         hi: u8,
         force_beta: Option<f32>,
     ) -> Vec<String> {
-        bowed_string_register_failures_full(program, lo, hi, force_beta, None)
+        bowed_string_register_failures_full(program, lo, hi, force_beta, None, None)
     }
 
     fn bowed_string_register_failures_full(
@@ -28086,6 +28086,7 @@ mod tests {
         hi: u8,
         force_beta: Option<f32>,
         force_slope: Option<f32>,
+        force_speed: Option<f32>,
     ) -> Vec<String> {
         let sr = 44100.0;
         let mut failures: Vec<String> = Vec::new();
@@ -28096,6 +28097,9 @@ mod tests {
                 let mut v = BowedString::new(program, key, 100, sr, seed);
                 if let Some(s) = force_slope {
                     v.slope = s;
+                }
+                if let Some(speed) = force_speed {
+                    v.max_vel = speed;
                 }
                 let slope = v.slope; // natural draw unless explicitly forced
                 if let Some(b) = force_beta {
@@ -28149,12 +28153,16 @@ mod tests {
         //
         // The violin family deliberately has no ceiling — this same assertion
         // applied to GM 40 is what proved the one it used to carry never fired.
-        let bad = bowed_string_register_failures_full(42, 36, 76, None, Some(2.90));
+        // MM-BUG-KILN-00029 now keeps speed and pressure inside the playable
+        // region jointly. Reconstruct the known-bad outside corner on BOTH axes:
+        // forcing pressure alone while leaving the new safe speed in place is no
+        // longer a valid calibration stimulus.
+        let bad = bowed_string_register_failures_full(42, 36, 76, None, Some(2.90), Some(0.25));
         assert!(
             !bad.is_empty(),
-            "GM42 survives bow force 2.90 across its whole register, so its bow-force \
-             ceiling is not earning its place — delete it rather than carry an \
-             unexercised constant"
+            "GM42 survives the known-bad speed 0.25 / force 2.90 corner across its \
+             whole register, so the register gate no longer sees the instability \
+             the joint control map excludes"
         );
     }
 

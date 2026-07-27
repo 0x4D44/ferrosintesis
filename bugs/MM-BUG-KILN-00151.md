@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00151 — Direct sample cache ignores pinned source revisions
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / direct-source cache
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00151-run-fix-20260727T172601Z-p9812-n763291500-c101-code-1785173537069
 - **Legacy fixed run:** -
-- **Attempts:** fix=2, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T085110Z-p9812-n624876700-c57 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T085110Z-p9812-n624876700-c57 code=ed7633742b1c172bb124eb1f919e754e9e1bca66 gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T164601Z-p9812-n625456400-c95 verified_fix_run=fix-20260727T085110Z-p9812-n624876700-c57 verdict=doubt reason=fix-and-regression-tests-look-correct-on-static-review-but-this-sessions-bash-pe model=claude)
+- **Attempts:** fix=3, doubt=1, indeterminate=0
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T085110Z-p9812-n624876700-c57 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T085110Z-p9812-n624876700-c57 code=ed7633742b1c gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T164601Z-p9812-n625456400-c95 verified_fix_run=fix-20260727T085110Z-p9812-n624876700-c57 verdict=doubt reason=fix-and-regression-tests-look-correct-on-static-review-but-this-sessions-bash-pe model=claude) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T172601Z-p9812-n763291500-c101 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T172601Z-p9812-n763291500-c101 code=f6fef6d00a78 gate=python model=codex@xhigh)
 
 ## Observation
 
@@ -82,6 +82,36 @@ Regression coverage:
 ### Verification summary (2026-07-27, deltic:auto run=verify-20260727T164601Z-p9812-n625456400-c95 verified_fix_run=fix-20260727T085110Z-p9812-n624876700-c57 verdict=doubt)
 
 Verifier note: Fix and regression tests look correct on static review, but this session's Bash permissions denied python and cargo, so neither the regression test nor the repo gates could be observed passing. — BLOCKER: every execution attempt was refused with 'Permission to use Bash has been denied because Claude Code is running in don't ask mode' -- denied commands: `python .../tools/ferrosintesis-samples/test_prepare.py`, `cargo test --workspace`, `cargo --version`, `deltic timeout 1800 cargo test --workspace`. git/ls/Read/Grep were permitted. So requirement 2 (regression test PASSES) and requirement 3 (c...
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T172601Z-p9812-n763291500-c101 code=f6fef6d00a78 gate=python)
+
+The implementation in `ed7633742b1c172bb124eb1f919e754e9e1bca66`
+binds every direct download to a `.source.json` sidecar containing its schema,
+exact URL, and SHA-256. This pass kept that implementation intact and added a
+wrapper-level regression in `f6fef6d00a78d8a90d36acee4db58f5c3df74521`.
+The regression proves that `ensure_direct_sources()` refetches when a source-map
+URL changes under an unchanged destination filename.
+
+Root cause: The original warm-cache predicate for direct-downloaded sample WAVs was destination filename plus WAV parseability. It stored neither the requested source URL nor a digest of the fetched bytes, so changed pinned revisions and valid local substitutions under the same destination name were reused as if authentic.
+
+Changed:
+- Added a regression in `tools/ferrosintesis-samples/test_prepare.py` covering
+  `ensure_direct_sources()` with a changed source-map URL and stable destination
+  filename.
+
+Tests:
+- The held pass reproduced the substituted-WAV observation against
+  `ed7633742b1c172bb124eb1f919e754e9e1bca66^` and confirmed the new wrapper
+  regression fails there.
+- `python -m unittest test_prepare.DirectSourceCacheTest`: 7 tests passed.
+- `python test_prepare.py`: 85 tests passed.
+- `python -m py_compile prepare.py test_prepare.py`: passed.
+
+Left alone:
+- `tools/ferrosintesis-samples/prepare.py`, whose URL and SHA-256 validation
+  already implements the correct cache identity.
+- `Cargo.toml` and `Cargo.lock`; this repository is release-only and this pass
+  did not change shipped code.
 
 ## Notes
 

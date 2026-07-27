@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00058-run-fix-20260727T032003Z-p9812-n201717900-c42-code-1785123200445
+- **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction) → Open (2026-07-26, Arthur approved preserving the Shaped timbre and restoring Legacy level parity with a smooth key/velocity gain correction) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T032003Z-p9812-n201717900-c42 branch=task/bug-MM-BUG-KILN-00058-run-fix-20260727T032003Z-p9812-n201717900-c42 code=60d261f2936e gate=cargo model=codex@xhigh)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction) → Open (2026-07-26, Arthur approved preserving the Shaped timbre and restoring Legacy level parity with a smooth key/velocity gain correction) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source `37f6bac002fdeb2995ca6ca59e45b7fbcf5e033d`; the smooth PIZZ-only Shaped gain surface restores all nine frozen Legacy anchors and directly measured parity at all 16 intermediate knots)
 
 ## Observation
 
@@ -72,23 +72,54 @@ Needs ears (this box has none) and re-inclusion in `SHAPED_MIGRATED` as the acce
 
 ## Fix
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T032003Z-p9812-n201717900-c42 code=60d261f2936e gate=cargo)
+### Fix summary (2026-07-27, GPT-5.6 Codex on KILN-Windows)
 
-Agent-reported summary: MM-BUG-KILN-00058 is fixed by restoring GM45 PIZZ to the Shaped migration parity oracle and adding the approved key/velocity gain correction. The original observation reproduced first: re-adding PIZZ made shaped_g7_mean_parity_and_seed_bound fail at key 40 velocity 50 with a -2.95 dB offset, and the ignored offset printer showed the recorded -4.58 to +2.91 dB spread. The fix leaves PIZZ's Shaped excitation slope, harmonic rolloff, loop corner, attack, and decay untouched; it applies only a clamped bilinear output-gain surface fitted to the nine recorded Legacy-parity cells. The post-fix printer reports 0.00 dB offset at all nine PIZZ cells. The focused Pluck baseline module is green.
+Source: `37f6bac002fdeb2995ca6ca59e45b7fbcf5e033d`.
 
-Root cause: KILN-00048 anchored the KS loop damper at the velocity-100 corner, and PIZZ's Shaped harmonic excitation and frozen Legacy noise excitation project that corner change differently across key and velocity. A single per-preset exc_trim is only a scalar, so it could move the mean offset but could not fit the key/velocity-dependent residual.
+KILN-00048's key-aware loop-corner change projects differently through PIZZ's
+Shaped harmonic excitation and its Legacy noise excitation. The resulting
+key/velocity-dependent level error cannot be corrected by the preset's scalar
+`exc_trim`.
 
-Changed:
-- ferrosintesis Pluck preset metadata now includes an optional Shaped gain correction
-- GM45 PIZZ opts into a clamped bilinear key/velocity gain surface; all other presets and the frozen alt-bank PIZZ opt out
-- Pluck output gain applies the correction only for Shaped presets
-- Pluck baseline tests restore PIZZ to SHAPED_MIGRATED and add parity, clamp, interpolation, and scalar-gain regression checks
+The fix preserves PIZZ's Shaped excitation, spectrum, attack, decay, and loop
+settings. A PIZZ-only `ShapedGain` applies a continuous, clamped piecewise-bilinear
+output gain. The nine contractual endpoints remain the frozen Legacy captures.
+Sixteen intermediate knots use direct Shaped-versus-Legacy body-level measurements
+with matched seeds 5, 21, and 99. Other presets and the frozen alt-bank PIZZ opt
+out. PIZZ is restored to `SHAPED_MIGRATED`.
 
-Tests:
-- Reproduced pre-fix failure with cargo test -p ferrosintesis shaped_g7_mean_parity_and_seed_bound after restoring PIZZ to SHAPED_MIGRATED
-- cargo test -p ferrosintesis pluck_baseline
-- cargo test -p ferrosintesis print_shaped_loudness_offset -- --ignored --nocapture
-- git diff --check
+The original three-by-three surface was anchor-perfect but its structural
+interpolation test did not compare against Legacy. A direct oracle exposed errors
+up to +4.06 dB between anchors. The final five-by-five surface now:
+
+- holds all nine frozen-anchor offsets within 0.02 dB;
+- holds all 16 directly measured intermediate means within 0.01 dB;
+- clamps outside keys 40–64 and velocities 50–120;
+- cannot overshoot any local cell's four knots;
+- remains a scalar gain for every tested key, velocity, and seed;
+- keeps final GM45 output strictly ordered by velocity while separately proving
+  that the underlying voice still follows the shared square law.
+
+Evidence:
+
+- `cargo test -p ferrosintesis pluck_baseline -- --nocapture`: 5 passed, 3 ignored.
+- `cargo test -p ferrosintesis print_shaped_loudness_offset -- --ignored --nocapture`:
+  PIZZ anchor offsets −0.00, +0.00, +0.00, +0.00, +0.01, +0.01, +0.02,
+  +0.02, and +0.01 dB; mean +0.01 dB.
+- `cargo clippy -p ferrosintesis --all-targets -- -D warnings`: green.
+- `cargo clippy -p ferrosintesis --all-targets --no-default-features -- -D warnings`:
+  green.
+- `cargo test -p ferrosintesis --lib --no-default-features`: 680 passed,
+  36 ignored.
+- `cargo fmt --all -- --check` and `git diff --check`: green.
+- Raw and body-level-matched nine-anchor A/B pack:
+  `C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00058-candidate`.
+  Raw movements match the gain endpoints within 0.001 dB. Body-matched
+  correlation is at least 0.999999997 and relative body-window RMS error is at
+  most 0.000083.
+- Full 124-MIDI catalog diff against exact base
+  `7bce430f1b532bb02a1441dd5323e4b495aea706`, classified as GM45:
+  5 expected changes, 119 expected identical, 0 contamination, 0 not reached.
 
 ## Notes
 

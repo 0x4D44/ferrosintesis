@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target) → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=5d56f6f83bd9b5522b8ff1ba387fea91c7e38753 gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target) → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=08cb7f6ad9c7dfa8407dff5589d36bba647c00d5 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -128,7 +128,7 @@ Closed, for independent listening verification.
 
 ## Fix
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T005703Z-p9812-n849374900-c34 code=5d56f6f83bd9b5522b8ff1ba387fea91c7e38753 gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T005703Z-p9812-n849374900-c34 code=08cb7f6ad9c7dfa8407dff5589d36bba647c00d5 gate=cargo)
 
 GM61 remains a five-player, sample-free modeled section. Each player now carries
 a seed-rotated identity through the lip/exciter cutoff and nonlinear drive,

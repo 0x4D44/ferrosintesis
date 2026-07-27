@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00150 — MuseScore sample notice omits mandatory upstream acknowledgements
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** sample packaging / licensing
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00150-run-fix-20260727T054903Z-p9812-n086124000-c54-code-1785131994265
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T054903Z-p9812-n086124000-c54 branch=task/bug-MM-BUG-KILN-00150-run-fix-20260727T054903Z-p9812-n086124000-c54 code=a2c655caa2dd gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -72,6 +72,24 @@ upstream licence is absent. Prefer checking against a committed verbatim copy of
 pinned upstream licence over maintaining another selective name list.
 
 Estimated effort: Small.
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T054903Z-p9812-n086124000-c54 code=a2c655caa2dd gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00150 by completing the MuseScore MS Basic attribution text in the packaged notices that transcribe the pinned source. Reproduced the original observation first: the MuseScore sample crate NOTICE was missing the Temple Blocks and Drumline Cymbals acknowledgement lines. Added a focused licensing regression that derives the required acknowledgement set from the committed pinned upstream licence fixture and checks the MS-Basic-derived asset notices plus the parent consolidated notice. Updated the MuseScore sample crate inventory/docs so celesta is named and the crate README points to its own PROVENANCE.md for the source pin and regeneration recipe. The focused licensing module
+
+Root cause: The MS Basic acknowledgement block was hand-transcribed into notices, while the existing licensing oracle only proved that some distinctive credit token travelled. That allowed a selective subset of the upstream-required acknowledgement lines to pass as complete attribution.
+
+Changed:
+- crates/ferrosintesis/src/licensing.rs adds an MS Basic acknowledgement completeness regression
+- crates/ferrosintesis/src/upstream_licenses/ adds the pinned MS Basic licence fixture used by the regression
+- crates/ferrosintesis-samples-musescore and crates/ferrosintesis-samples-clavinet NOTICE files now include the missing Temple Blocks and Drumline Cymbals acknowl
+- crates/ferrosintesis/NOTICE and crates/ferrosintesis/README.md now carry the complete MS Basic acknowledgement summary
+- crates/ferrosintesis-samples-musescore README, PROVENANCE, and crate docs now name celesta and point to crate-local provenance
+
+Tests:
+- deltic timeout 180 cargo test -p ferrosintesis licensing::tests::ms_basic_notices_reproduce_every_required_upstream_acknowledgement failed before the notice fix
+- deltic timeout 180 cargo test -p ferrosintesis licensing::tests passed
+- git diff --check passed
 
 ## Notes
 

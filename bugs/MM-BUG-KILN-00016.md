@@ -5,19 +5,19 @@
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-18
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T112702Z-p9812-n576359700-c74
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00016-run-verify-20260727T112702Z-p9812-n576359700-c74
-- **Owner base:** 1ea78af4f7e7ae1a2c5c4c4b389d9d8e8d2407f0
-- **Owner fingerprint:** sha256:aa7c5326a33043f06891e99e543a273548b1d8bf1cb4cd297031eed293fbf28b
-- **Owner since:** 2026-07-27T11:27:02Z
-- **Owner until:** 2026-07-27T12:12:02Z
-- **Verify retry after:** -
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
+- **Verify retry after:** 2026-07-27T11:45:53Z
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
+- **Attempts:** fix=0, doubt=0, indeterminate=1
 - **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=43fab4a47298c7938fcbfa7fa6e2b00798677827 gate=focused+render-diff model=codex@xhigh; held branch recovered by Codex)
 
 ## Observation

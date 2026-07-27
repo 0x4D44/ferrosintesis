@@ -9796,7 +9796,8 @@ const LA_CONTRABASS: (f32, (f32, f32)) = (0.29, (0.16, 0.46));
 // replacement crossfade. The modeled bass stays live from sample zero and the
 // CC0 sample is a short transient overlay tapering out by 150 ms.
 const LA_BASS_FADE: (f32, f32) = (0.0, 0.15);
-const LA_BASS_MAX_UP_RATIO: f32 = 1.334_839_8; // 2^(5/12)
+// 2^(5/12), inclusive.
+const LA_BASS_MAX_UP_RATIO: f32 = 1.334_839_8;
 // Each recording/model pair needs its own additive trim: one shared 0.20 mix
 // left the quieter pizz and pick attacks below the bank reachability floor,
 // while raising all four together would over-layer the louder finger take.

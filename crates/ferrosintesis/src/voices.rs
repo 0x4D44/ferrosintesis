@@ -10411,9 +10411,11 @@ fn ebass_additive_gain(program: u8, key: u8) -> f32 {
 /// Program-aware cap. GM49 (Slow Strings, a SWELL patch) caps the taper at 1.0:
 /// the sample must never speak OVER a still-swelling model, so where a zone sits
 /// under the model the onset is left soft (a soft onset *helps* the swell)
-/// rather than boosted. GM48 (String Ensemble 1, a normal attack) takes the
-/// full taper, including the modest boosts that pull its under-level zones up to
-/// parity. Linear-interp between anchors; clamped flat past the ends.
+/// rather than boosted. KILN-00053 adds a lower model onset below key 55, so GM49's
+/// low-key sample gain follows the same depth curve or the full voice flattens the
+/// restored swell. GM48 (String Ensemble 1, a normal attack) takes the full taper,
+/// including the modest boosts that pull its under-level zones up to parity.
+/// Linear-interp between anchors; clamped flat past the ends.
 fn strings_seam_gain(program: u8, key: u8, vel: u8) -> f32 {
     const P: [(f32, f32); 19] = [
         (28.0, 0.64),

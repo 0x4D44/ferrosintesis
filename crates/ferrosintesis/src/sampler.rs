@@ -8582,11 +8582,10 @@ mod tests {
 
     /// MM-BUG-KILN-00046: the sampled GM49 onset must not DEGRADE the envelope
     /// shape the `strings()` model produces on its own. Deliberately RELATIVE,
-    /// not an absolute "body >= onset": at low keys the model itself does not
-    /// swell (the strings MODEL's low-register envelope, KILN-00053, out of this
-    /// sampler seam's scope) and the sample owns a real section-attack PUNCH in
-    /// [0, 0.10] s that costs body/onset even at a level-matched seam — so
-    /// demanding an absolute swell would guard something this bug cannot deliver.
+    /// not the absolute KILN-00053 low-key swell contract guarded below: the
+    /// sample owns a real section-attack PUNCH in [0, 0.10] s that costs
+    /// body/onset even at a level-matched seam, so this test checks that the
+    /// wrapper preserves most of the model's shape rather than requiring equality.
     /// What it pins: where the model swells (m > 1.05), the wrapped body/onset
     /// stays within 30% of the model's — which fails hard on the original +6 dB
     /// onset (w/m ~0.5-0.6) and passes the taper (worst ~0.73). 3-seed geomean
@@ -8637,6 +8636,72 @@ mod tests {
             wm >= 0.70,
             "gm49 key {key} vel {vel}: sampled onset degrades the model's swell — wrapped/model-only body/onset ratio {wm:.2} < 0.70"
         );
+    }
+
+    /// MM-BUG-KILN-00053: GM49 Slow Strings must swell in the low register.
+    ///
+    /// KILN-00046 only guarded that the LA section onset did not degrade whatever
+    /// envelope the model already had. The remaining defect is model-owned: at
+    /// low keys, GM49's body around 1 s was not far enough above the 0-0.4 s
+    /// onset, so the full sampled voice also read as flat or falling.
+    #[test]
+    fn la_strings_slow_swell_not_inverted() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let seeds = [5u32, 21, 99];
+
+        // 3-seed geomean of body(0.8..1.2 s)/onset(0..0.4 s), for GM49.
+        let geo_rise = |key: u8, vel: u8, samples: bool| -> f32 {
+            let one = |seed: u32| {
+                let mut v = voices::make(49, key, vel, sr, seed, samples);
+                let mut buf = vec![0f32; (1.3 * sr) as usize];
+                v.render(&mut buf);
+                let m = |t0: f32, t1: f32| {
+                    let (a, b) = ((t0 * sr) as usize, (t1 * sr) as usize);
+                    (buf[a..b].iter().map(|&x| x * x).sum::<f32>() / (b - a) as f32).sqrt()
+                };
+                m(0.8, 1.2) / m(0.0, 0.4).max(1e-12)
+            };
+            (seeds.iter().map(|&s| one(s).ln()).sum::<f32>() / seeds.len() as f32).exp()
+        };
+
+        for vel in [72u8, 110] {
+            let k48_model = geo_rise(48, vel, false);
+            let k52_model = geo_rise(52, vel, false);
+            let k55_model = geo_rise(55, vel, false);
+            let k48_full = geo_rise(48, vel, true);
+            let k52_full = geo_rise(52, vel, true);
+            let k55_full = geo_rise(55, vel, true);
+            println!(
+                "gm49 low-swell vel {vel}: model k48 {k48_model:.2} k52 {k52_model:.2} k55 {k55_model:.2}; full k48 {k48_full:.2} k52 {k52_full:.2} k55 {k55_full:.2}"
+            );
+            assert!(
+                (2.0..=2.5).contains(&k48_model),
+                "GM49 key 48 vel {vel}: model body/onset {k48_model:.2} is outside the approved +6..+8 dB swell band"
+            );
+            assert!(
+                k48_full > 1.0,
+                "GM49 key 48 vel {vel}: full sampled voice still falls or stays flat, body/onset {k48_full:.2}"
+            );
+            assert!(
+                k52_model > k55_model && k52_model < k48_model,
+                "GM49 vel {vel}: key-52 model swell must taper smoothly between key 48 and the key-55 anchor, got k48 {k48_model:.2}, k52 {k52_model:.2}, k55 {k55_model:.2}"
+            );
+            assert!(
+                k52_full > 1.0,
+                "GM49 key 52 vel {vel}: full sampled voice still falls or stays flat, body/onset {k52_full:.2}"
+            );
+            assert!(
+                (1.05..=1.35).contains(&k55_model),
+                "GM49 key 55 vel {vel}: transition anchor moved out of its mild-swell band, model body/onset {k55_model:.2}"
+            );
+            assert!(
+                k55_full > 1.0,
+                "GM49 key 55 vel {vel}: full sampled transition anchor must still rise, body/onset {k55_full:.2}"
+            );
+        }
     }
 
     fn assert_wrap_seam(

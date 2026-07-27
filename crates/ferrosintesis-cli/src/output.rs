@@ -1,9 +1,13 @@
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io;
 use std::path::Path;
 
+// `OpenOptions` is reached only through `OpenOptionsExt::share_mode` in the Windows arm of
+// `platform_same_file`; keeping it in the unconditional import made it an unused import on
+// every unix host, which `-D warnings` promotes to a hard error and so failed the repo's
+// own clippy gate everywhere except Windows.
 #[cfg(windows)]
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 
 pub(crate) fn reject_input_alias(input: &Path, output: &Path) -> io::Result<()> {
     if paths_refer_to_same_file(input, output)? {

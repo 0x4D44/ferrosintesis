@@ -8350,15 +8350,14 @@ mod tests {
     }
 
     fn constant_zone() -> &'static [Zone] {
-        static Z: OnceLock<Vec<Zone>> = OnceLock::new();
-        Z.get_or_init(|| {
+        Box::leak(
             vec![Zone {
                 root: key_freq(60),
                 data: vec![1.0; 44100],
                 sustain_loop: OnceLock::new(),
             }]
-        })
-        .as_slice()
+            .into_boxed_slice(),
+        )
     }
 
     #[test]

@@ -9795,11 +9795,15 @@ const LA_CONTRABASS: (f32, (f32, f32)) = (0.29, (0.16, 0.46));
 // GM 32-35 alternate-bank bass onset (MM-BUG-KILN-00085): additive, not a
 // replacement crossfade. The modeled bass stays live from sample zero and the
 // CC0 sample is a short transient overlay tapering out by 150 ms.
-const LA_BASS_ADD_MIX: f32 = 0.20;
 const LA_BASS_FADE: (f32, f32) = (0.0, 0.15);
 const LA_BASS_MAX_UP_RATIO: f32 = 1.334_839_8; // 2^(5/12)
-const LA_PIZZBASS: (f32, (f32, f32)) = (0.40 * LA_BASS_ADD_MIX, LA_BASS_FADE);
-const LA_EBASS: (f32, (f32, f32)) = (0.42 * LA_BASS_ADD_MIX, LA_BASS_FADE);
+// Each recording/model pair needs its own additive trim: one shared 0.20 mix
+// left the quieter pizz and pick attacks below the bank reachability floor,
+// while raising all four together would over-layer the louder finger take.
+const LA_PIZZBASS: (f32, (f32, f32)) = (0.40 * 0.65, LA_BASS_FADE);
+const LA_FINGERBASS: (f32, (f32, f32)) = (0.42 * 0.30, LA_BASS_FADE);
+const LA_PICKBASS: (f32, (f32, f32)) = (0.42 * 0.50, LA_BASS_FADE);
+const LA_FRETLESS: (f32, (f32, f32)) = (0.42 * 0.46, LA_BASS_FADE);
 // GM 4 Rhodes tine / 10 music box comb / 15 hammered dulcimer: real Freesound onsets over the
 // modeled voices. The sample carries the strike/pluck attack; the model keeps the body/decay.
 // Ear-tunable.
@@ -10067,9 +10071,9 @@ const LA_STRINGS: (f32, (f32, f32)) = (0.40, (0.10, 0.40));
 ///
 /// The shape comes from the KILN-00075 replacement-crossfade calibration: those
 /// per-key values describe how each recording sits against its paired model.
-/// KILN-00085 scales that profile down with `LA_BASS_ADD_MIX`, because the model
-/// is no longer displaced. The sample is now a measured transient accent, not
-/// the whole onset level.
+/// KILN-00085 scales that profile down with the per-recording `LA_*BASS`
+/// additive trims, because the model is no longer displaced. The sample is now
+/// a measured transient accent, not the whole onset level.
 fn ebass_additive_gain(program: u8, key: u8) -> f32 {
     // (key, relative inverse level) — anchors at measured keys, linear between,
     // clamped flat past the ends. Ranges differ per program because the banks
@@ -10084,7 +10088,9 @@ fn ebass_additive_gain(program: u8, key: u8) -> f32 {
         (34.0, 2.45),
         (38.0, 1.70),
         (40.0, 1.45),
-        (43.0, 1.55),
+        // Additive layering exposes the modeled GM32 kick at this test/listening
+        // key; the old replacement-seam value lifts their correlated sum >1 dB.
+        (43.0, 1.00),
         (46.0, 1.58),
         (50.0, 1.10),
         (52.0, 1.40),
@@ -10100,7 +10106,7 @@ fn ebass_additive_gain(program: u8, key: u8) -> f32 {
         (31.0, 5.26),
         (34.0, 7.69),
         (38.0, 4.55),
-        (40.0, 3.45),
+        (40.0, 2.50),
         (43.0, 3.13),
         (46.0, 3.57),
         (50.0, 2.78),
@@ -10112,7 +10118,7 @@ fn ebass_additive_gain(program: u8, key: u8) -> f32 {
         (31.0, 2.17),
         (34.0, 2.27),
         (38.0, 2.04),
-        (40.0, 2.38),
+        (40.0, 1.10),
         (43.0, 2.17),
         (46.0, 2.27),
         (50.0, 2.27),
@@ -10125,7 +10131,7 @@ fn ebass_additive_gain(program: u8, key: u8) -> f32 {
         (31.0, 2.44),
         (34.0, 3.23),
         (38.0, 2.27),
-        (40.0, 1.56),
+        (40.0, 0.75),
         (43.0, 1.54),
         (46.0, 1.76),
         (50.0, 1.40),
@@ -13701,10 +13707,11 @@ pub(crate) fn bass_la_alt(
     let voice = if samples {
         let (bank, (gain, fade)) = match program {
             32 => (crate::sampler::pizzbass_bank(), LA_PIZZBASS),
-            34 => (crate::sampler::pick_bass_bank(), LA_EBASS),
-            // 33 fingered and 35 fretless share the finger bank (no free CC0
-            // fretless take exists; the model carries the fretless "mwah").
-            _ => (crate::sampler::finger_bass_bank(), LA_EBASS),
+            34 => (crate::sampler::pick_bass_bank(), LA_PICKBASS),
+            35 => (crate::sampler::finger_bass_bank(), LA_FRETLESS),
+            // No free CC0 fretless take exists; GM35 shares the finger sample
+            // while its model carries the fretless "mwah".
+            _ => (crate::sampler::finger_bass_bank(), LA_FINGERBASS),
         };
         crate::sampler::LaVoice::wrap_additive_limited(
             model,
@@ -14622,7 +14629,9 @@ mod tests {
             ("LA_FIDDLE", LA_FIDDLE),
             ("LA_CONTRABASS", LA_CONTRABASS),
             ("LA_PIZZBASS", LA_PIZZBASS),
-            ("LA_EBASS", LA_EBASS),
+            ("LA_FINGERBASS", LA_FINGERBASS),
+            ("LA_PICKBASS", LA_PICKBASS),
+            ("LA_FRETLESS", LA_FRETLESS),
             ("LA_RHODES", LA_RHODES),
             ("LA_MUSICBOX", LA_MUSICBOX),
             ("LA_DULCIMER", LA_DULCIMER),

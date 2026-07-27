@@ -5,17 +5,17 @@
 - **Severity:** Low
 - **Area:** orchestral2 / published metadata
 - **Raised:** 2026-07-27
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T092502Z-p9812-n774387000-c66
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00154-run-fix-20260727T092502Z-p9812-n774387000-c66
-- **Owner base:** 51b494f8609a8edcebe7270255d955b593d14b25
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T09:25:02Z
-- **Owner until:** 2026-07-27T10:10:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00154-run-fix-20260727T092502Z-p9812-n774387000-c66-code-1785144930278
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high)

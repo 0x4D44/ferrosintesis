@@ -684,4 +684,155 @@ mod tests {
             .find(|l| l.trim_start().starts_with("include"))
             .is_some_and(|l| l.contains("NOTICE"))
     }
+
+    /// Packaged documentation files for a bank crate: the text a crate consumer receives.
+    fn packaged_bank_documents(krate: &str) -> Vec<(String, String)> {
+        let root = crates_dir().join(krate);
+        manifest_include_items(krate)
+            .into_iter()
+            .filter(|item| !item.contains('*'))
+            .filter(|item| {
+                let lower = item.to_ascii_lowercase();
+                lower == "notice"
+                    || lower.ends_with(".md")
+                    || lower.contains("copying")
+                    || lower.contains("license")
+            })
+            .filter_map(|item| {
+                let path = root.join(&item);
+                path.is_file().then(|| (item, read(&path)))
+            })
+            .collect()
+    }
+
+    fn manifest_include_items(krate: &str) -> Vec<String> {
+        let manifest = read(&crates_dir().join(krate).join("Cargo.toml"));
+        let mut include = String::new();
+        let mut inside_include = false;
+        for line in manifest.lines() {
+            let trimmed = line.trim_start();
+            if !inside_include && trimmed.starts_with("include") {
+                inside_include = true;
+            }
+            if inside_include {
+                include.push_str(line);
+                include.push('\n');
+                if line.contains(']') {
+                    break;
+                }
+            }
+        }
+        assert!(
+            !include.is_empty(),
+            "{krate}/Cargo.toml declares no `include` list, so the licensing oracle \
+             cannot tell which upstream documents the published crate packages"
+        );
+
+        let mut out = Vec::new();
+        let mut rest = include.as_str();
+        while let Some((_, after_open)) = rest.split_once('"') {
+            match after_open.split_once('"') {
+                Some((item, after_close)) => {
+                    out.push(item.to_string());
+                    rest = after_close;
+                }
+                None => break,
+            }
+        }
+        assert!(
+            !out.is_empty(),
+            "{krate}/Cargo.toml has an `include` list but the oracle parsed no entries:\n\
+             {include}"
+        );
+        out
+    }
+
+    fn missing_mit_notice_requirements(docs: &str, provenance: &str) -> Vec<&'static str> {
+        let mut missing = Vec::new();
+        let required_mit_fragments = [
+            (
+                "MIT permission grant",
+                "Permission is hereby granted, free of charge",
+            ),
+            (
+                "MIT permission-notice inclusion condition",
+                "The above copyright notice and this permission notice shall be included",
+            ),
+            (
+                "MIT warranty disclaimer",
+                "THE SOFTWARE IS PROVIDED \"AS IS\"",
+            ),
+        ];
+        for (name, fragment) in required_mit_fragments {
+            if !docs.contains(fragment) {
+                missing.push(name);
+            }
+        }
+
+        if provenance.contains("MuseScore") || provenance.contains("FluidR3") {
+            let required_musescore_fragments = [
+                (
+                    "FluidR3 original copyright",
+                    "FluidR3 (original version) by Frank Wen Copyright (c) 2000-02",
+                ),
+                (
+                    "FluidR3Mono conversion copyright",
+                    "Mono conversion (FluidR3Mono) by Michael Cowgill Copyright (c) 2014-17",
+                ),
+                (
+                    "MuseScore_General adaptation copyright",
+                    "Adaptation for MuseScore_General.sf2 by S. Christian Collins Copyright (c) 2018-19",
+                ),
+                (
+                    "FluidR3Mono copyright notice",
+                    "Copyright (c) 2014-16 Michael Cowgill",
+                ),
+                (
+                    "FluidR3 copyright notice",
+                    "Copyright (c) 2000-2002, 2008 Frank Wen <getfrank@gmail.com>",
+                ),
+            ];
+            for (name, fragment) in required_musescore_fragments {
+                if !docs.contains(fragment) {
+                    missing.push(name);
+                }
+            }
+        }
+
+        missing
+    }
+
+    #[test]
+    fn mit_sample_banks_package_permission_grant_and_required_copyrights() {
+        let mut incomplete = Vec::new();
+        for krate in default_sample_crates() {
+            let license = declared_license(&krate);
+            if license != "MIT" {
+                continue;
+            }
+
+            let docs = packaged_bank_documents(&krate);
+            assert!(
+                !docs.is_empty(),
+                "{krate} declares MIT audio but packages no README/NOTICE/COPYING/LICENSE \
+                 document carrying the upstream terms"
+            );
+            let packaged_text = docs
+                .iter()
+                .map(|(name, text)| format!("--- {name} ---\n{text}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let provenance = read(&crates_dir().join(&krate).join("PROVENANCE.md"));
+            let missing = missing_mit_notice_requirements(&packaged_text, &provenance);
+            if !missing.is_empty() {
+                incomplete.push(format!("{krate}: {}", missing.join(", ")));
+            }
+        }
+
+        assert!(
+            incomplete.is_empty(),
+            "MIT sample bank package(s) omit required upstream notice text:\n  {}",
+            incomplete.join("\n  ")
+        );
+    }
 }

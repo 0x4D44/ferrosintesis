@@ -1,17 +1,39 @@
-ferrosintesis-samples-musescore-grand
-=====================================
+The grand-piano samples in this crate are extracted from the "Grand Piano"
+preset of the MuseScore_General soundfont (MuseScore_General.sf3), distributed
+under the MIT License. The MuseScore_General COPYING says this soundfont is
+shared under MIT, "as was FluidR3Mono and FluidR3 before it"; the MIT license and
+MuseScore's terms require that the acknowledgements and copyright notices below
+be included in any derivative work, so they are reproduced here:
 
-The embedded WAV samples in this crate are extracted from the "Grand Piano"
-preset of the MuseScore_General soundfont (MuseScore_General.sf3), the MF
-velocity tier.
+    FluidR3 (original version) by Frank Wen Copyright (c) 2000-02
+    Mono conversion (FluidR3Mono) by Michael Cowgill Copyright (c) 2014-17
+    Adaptation for MuseScore_General.sf2 by S. Christian Collins Copyright (c) 2018-19
+    Copyright (c) 2014-16 Michael Cowgill
+    Copyright (c) 2000-2002, 2008 Frank Wen <getfrank@gmail.com>
 
-MuseScore_General is shared under the MIT license (as described in its COPYING),
-"as was FluidR3Mono and FluidR3 before it".
-
-Copyright / acknowledgement notices retained per the MIT license:
-  - Adaptation for MuseScore_General.sf2 by S. Christian Collins,
-    Copyright (c) 2018-2019.
-  - Derived from FluidR3 / FluidR3Mono by Frank Wen and contributors.
+This crate holds the MF velocity tier of the MuseScore_General "Grand Piano"
+preset as a dense single-velocity multisample for GM 0 / Bright Acoustic Piano
+alternate use in ferrosintesis.
 
 Source: https://musescore.org/en/node/306828
         https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/
+        https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/MuseScore_General_License.md
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in the
+Software without restriction, including without limitation the rights to use, copy,
+modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

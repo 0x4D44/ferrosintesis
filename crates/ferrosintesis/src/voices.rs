@@ -14,8 +14,8 @@
 //!   OrchHit  — one-shot octave-stacked orchestral stab with a thump
 //!   Reed     — band-limited pulse reeds, including bagpipe chanter and shanai
 //!   Wind     — sine + harmonics + breath, with a pitch scoop into the note
-//!   Bowed    — sawtooth through a violin body, with scoop, attack bow
-//!              noise, and bow-pressure brightness
+//!   BowedString — bowed-string waveguide with stick-slip excitation, body
+//!                 response, bow catch, and per-instrument vibrato
 //!   ReverseCymbal — a pitch-agnostic reverse-cymbal swell for GM 119
 //!   SfxNoise — toneless noise squeak transient for GM 120 (fret noise)
 //!   Sfx*     — dedicated GM sound-effect voices 121-127: sustained
@@ -9142,16 +9142,20 @@ impl Voice for Wind {
 }
 
 // ---------------------------------------------------------------------------
-// Bowed solo strings (GM 40-44 / 110)
+// Bowed strings (GM 40-44 / 110)
 // ---------------------------------------------------------------------------
 
 const BODY_VIOLIN: [(f32, f32, f32); 3] =
     [(280.0, 1.2, 5.0), (610.0, 1.8, 4.0), (1350.0, 1.5, 3.0)];
+#[cfg(test)]
 const BODY_VIOLA: [(f32, f32, f32); 3] = [(220.0, 1.3, 7.5), (475.0, 1.8, 4.0), (1200.0, 1.6, 3.5)];
+#[cfg(test)]
 const BODY_CELLO: [(f32, f32, f32); 3] = [(105.0, 1.1, 5.5), (220.0, 1.5, 4.5), (650.0, 1.4, 3.5)];
+#[cfg(test)]
 const BODY_CONTRABASS: [(f32, f32, f32); 3] =
     [(62.0, 1.0, 2.5), (115.0, 1.3, 7.5), (380.0, 1.4, 3.0)];
 
+#[cfg(test)]
 #[derive(Clone, Copy)]
 struct BowedPreset {
     body: &'static [(f32, f32, f32); 3],
@@ -9165,6 +9169,7 @@ struct BowedPreset {
     tremolo: bool,
 }
 
+#[cfg(test)]
 const BOWED_VIOLIN: BowedPreset = BowedPreset {
     body: &BODY_VIOLIN,
     press_lo: 900.0,
@@ -9177,6 +9182,7 @@ const BOWED_VIOLIN: BowedPreset = BowedPreset {
     tremolo: false,
 };
 
+#[cfg(test)]
 fn bowed_preset(program: u8) -> BowedPreset {
     match program {
         41 => BowedPreset {
@@ -9229,7 +9235,8 @@ const BOW_TREM_RATE_LO_HZ: f32 = 6.0;
 const BOW_TREM_RATE_VEL_HZ: f32 = 3.0;
 const BOW_TREM_DEPTH_LO: f32 = 0.50;
 const BOW_TREM_DEPTH_VEL: f32 = 0.15;
-const BOW_TREM_BITE_S: f32 = 0.018;
+#[cfg(test)]
+const BOW_TREM_REBITE_WINDOW_S: f32 = 0.018;
 const BOW_TREM_JITTER: f32 = 0.06;
 const BOW_TREM_AMP_JITTER: f32 = 0.10;
 
@@ -9304,7 +9311,10 @@ pub(crate) fn render_pizz_legacy_probe_for_test(
     buf
 }
 
-pub struct Bowed {
+/// Retained only as a test oracle for migration-level comparisons against the
+/// pre-waveguide default voice.
+#[cfg(test)]
+struct LegacyBowed {
     saw: BlepSaw,
     base_f: f32,
     bend: f32,
@@ -9335,7 +9345,8 @@ pub struct Bowed {
     sr: f32,
 }
 
-impl Bowed {
+#[cfg(test)]
+impl LegacyBowed {
     fn new(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let f = key_freq(key);
         let mut rng = Rng::new(seed);
@@ -9350,7 +9361,7 @@ impl Bowed {
         } else {
             (0.0, 0.0)
         };
-        Bowed {
+        LegacyBowed {
             saw: BlepSaw::new(f * 0.975, sr, rng.white() * 0.5 + 0.5),
             base_f: f,
             bend: 1.0,
@@ -9387,7 +9398,8 @@ impl Bowed {
     }
 }
 
-impl Voice for Bowed {
+#[cfg(test)]
+impl Voice for LegacyBowed {
     fn render(&mut self, out: &mut [f32]) -> bool {
         for o in out.iter_mut() {
             if self.t.is_multiple_of(CTRL) {
@@ -9412,7 +9424,7 @@ impl Voice for Bowed {
                     self.trem_phase += self.trem_rate_cur * CTRL as f32 / self.sr;
                     if self.trem_phase >= 1.0 {
                         self.trem_phase -= 1.0;
-                        self.trem_bite_until = self.t + (BOW_TREM_BITE_S * self.sr) as u32;
+                        self.trem_bite_until = self.t + (BOW_TREM_REBITE_WINDOW_S * self.sr) as u32;
                         self.trem_stroke_gain = 1.0 + BOW_TREM_AMP_JITTER * self.rng.white();
                         self.trem_rate_cur =
                             self.trem_rate * (1.0 + BOW_TREM_JITTER * self.rng.white());
@@ -9520,11 +9532,11 @@ pub struct BowedString {
     trem_gain: f32,
     trem_stroke_gain: f32,
     trem_dir: f32,
-    drift: Drift,              // slow human pitch wander (intonation is never dead-steady)
-    amp_follow: f32,           // output magnitude follower, for the release tail
-    refl_sustain: f32,         // bridge-filter cutoff while bowed (register brightness)
-    loop_comp: f32,            // loop-latency tuning compensation, in samples
-    out_lp: Option<OnePole>,   // post-output darkening (cello de-buzz); None = flat
+    drift: Drift,            // slow human pitch wander (intonation is never dead-steady)
+    amp_follow: f32,         // output magnitude follower, for the release tail
+    refl_sustain: f32,       // bridge-filter cutoff while bowed (register brightness)
+    loop_comp: f32,          // loop-latency tuning compensation, in samples
+    out_lp: Option<OnePole>, // post-output darkening (cello de-buzz); None = flat
     rng: Rng,
     t: u32,
     amp: f32,
@@ -22234,12 +22246,12 @@ mod tests {
         assert!(blocks < 40, "palm mute rang too long ({blocks} blocks)");
     }
 
-    /// The fiddle's scoop should settle: pitch after a second must be much
-    /// closer to nominal than at the onset.
+    /// Keep the retired saw voice's scoop behavior available as a migration
+    /// comparison oracle.
     #[test]
-    fn bowed_scoop_settles() {
+    fn legacy_bowed_scoop_settles() {
         let sr = 44100.0;
-        let mut v = Bowed::new(40, 69, 100, sr, 11);
+        let mut v = LegacyBowed::new(40, 69, 100, sr, 11);
         let mut buf = vec![0f32; 44100 * 2];
         v.render(&mut buf);
         let measure = |seg: &[f32]| {
@@ -22258,9 +22270,9 @@ mod tests {
         assert!((late - 440.0).abs() < 8.0, "late pitch {late} Hz");
     }
 
-    fn render_default_bowed(program: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
+    fn render_legacy_bowed(program: u8, key: u8, vel: u8, secs: f32, seed: u32) -> Vec<f32> {
         let sr = 44100.0;
-        let mut v = Bowed::new(program, key, vel, sr, seed);
+        let mut v = LegacyBowed::new(program, key, vel, sr, seed);
         let mut buf = vec![0.0; (secs * sr) as usize];
         v.render(&mut buf);
         buf
@@ -22278,17 +22290,15 @@ mod tests {
             .unwrap_or(f32::INFINITY)
     }
 
-    /// Solo bowed presets must differ in both steady body and bow onset. The
-    /// timbre comparison is level-normalised so attenuation cannot masquerade
-    /// as a darker instrument.
+    /// Preserve the retired saw presets' distinctions as a migration baseline.
     #[test]
-    fn default_bowed_bodies_and_onsets_are_distinct() {
+    fn legacy_bowed_bodies_and_onsets_are_distinct() {
         let sr = 44100.0;
         let hf = |program: u8| {
             [50u8, 57, 64]
                 .iter()
                 .map(|&key| {
-                    let s = render_default_bowed(program, key, 100, 0.8, 7);
+                    let s = render_legacy_bowed(program, key, 100, 0.8, 7);
                     let body = segment(&s, sr, 0.25, 0.70);
                     hp_rms(body, sr, 2500.0) / rms(body).max(1e-9)
                 })
@@ -22311,7 +22321,7 @@ mod tests {
         let window_s = (0.005 * sr) as usize as f32 / sr;
         let rises: Vec<f32> = programs
             .iter()
-            .map(|&program| attack_rise_s(&render_default_bowed(program, 57, 100, 0.5, 11), sr))
+            .map(|&program| attack_rise_s(&render_legacy_bowed(program, 57, 100, 0.5, 11), sr))
             .collect();
         for (pair, labels) in rises.windows(2).zip(programs.windows(2)) {
             assert!(
@@ -22330,7 +22340,7 @@ mod tests {
     fn default_bowed_body_bands_and_fiddle_identity() {
         let sr = 44100.0;
         let prominence = |program: u8, key: u8, center: f32, q: f32| {
-            let s = render_default_bowed(program, key, 100, 0.8, 9);
+            let s = render_legacy_bowed(program, key, 100, 0.8, 9);
             let body = segment(&s, sr, 0.25, 0.70);
             band_rms(body, sr, center, q) / rms(body).max(1e-9)
         };
@@ -22390,37 +22400,20 @@ mod tests {
     #[test]
     fn default_bowed_natural_vibrato_runs_at_named_rate() {
         let sr = 44100.0;
-        // 40/41/110 ship as `Bowed` (make() routing): observe its control-rate
-        // LFO field directly, as before.
-        for (program, nominal) in [(40u8, 5.3f32), (41, 5.1), (110, 5.6)] {
-            let mut v = Bowed::new(program, 69, 100, sr, 17);
-            let mut values = Vec::new();
-            let mut block = [0.0; CTRL as usize];
-            let seconds = 3usize;
-            for _ in 0..(seconds * sr as usize / CTRL as usize) {
-                block.fill(0.0);
-                v.render(&mut block);
-                values.push(v.vib_val);
-            }
-            let crossings = values
-                .windows(2)
-                .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
-                .count() as f32
-                / seconds as f32;
-            assert!(
-                (crossings - nominal).abs() / nominal <= 0.15,
-                "GM{program} vibrato {crossings:.2} Hz, expected near {nominal:.2} Hz"
-            );
-        }
-        // 42/43 ship as `BowedString`: measure the RENDERED AUDIO's frequency
-        // modulation through make() — an internal LFO field cannot vouch for
-        // the CTRL-gated tick actually delivering the rate to the string.
+        // Measure the rendered audio through make(): an internal LFO field cannot
+        // vouch for the CTRL-gated tick actually delivering the rate to the string.
         // Keys sit outside the waveguide's 46–50 wolf band (see
         // o_pitch_cases), and the 43 leg uses key 38 (D2): a probe across
         // seeds showed the bass regime at keys 43–45 drowns the FM track for
         // some bow-force draws (same instability family as the wolf band —
         // scratchpad 2026.07.14), while key 38 detects cleanly on every seed.
-        for (program, key, nominal) in [(42u8, 52u8, 5.2f32), (43, 38, 4.2)] {
+        for (program, key, nominal) in [
+            (40u8, 69u8, 5.3f32),
+            (41, 60, 5.1),
+            (42, 52, 5.2),
+            (43, 38, 4.2),
+            (110, 69, 5.6),
+        ] {
             let sig = render_program_sampled(program, key, 100, 7.0, 11, false);
             let seg = segment(&sig, sr, 1.0, 6.95);
             let (peak, rate) = crate::testutil::fm_mod_rate(seg, sr, key_freq(key), 2.5, 7.5);
@@ -22442,14 +22435,14 @@ mod tests {
     fn default_bowed_arco_am_stays_small() {
         let sr = 44100.0;
         for program in [40u8, 110] {
-            let s = render_default_bowed(program, 69, 100, 1.4, 13);
+            let s = render_program_sampled(program, 69, 100, 1.4, 13, false);
             let depth = low_rate_am_depth(segment(&s, sr, 0.55, 1.35), sr);
             assert!(
                 depth < 0.03,
                 "GM{program} arco low-rate AM depth {depth:.4}"
             );
         }
-        let trem = render_default_bowed(44, 69, 100, 1.4, 13);
+        let trem = render_program_sampled(44, 69, 100, 1.4, 13, false);
         let trem_depth = low_rate_am_depth(segment(&trem, sr, 0.55, 1.35), sr);
         assert!(
             trem_depth >= 0.08,
@@ -22511,7 +22504,7 @@ mod tests {
                 }
             })
             .collect();
-        let w = (BOW_TREM_BITE_S * sr) as usize;
+        let w = (BOW_TREM_REBITE_WINDOW_S * sr) as usize;
         let ratios: Vec<f32> = reversals
             .iter()
             .copied()
@@ -22522,6 +22515,17 @@ mod tests {
             })
             .collect();
         let rebite = ratios.iter().sum::<f32>() / ratios.len().max(1) as f32;
+        let steps: Vec<f32> = signal.windows(2).map(|pair| pair[1] - pair[0]).collect();
+        let reversal_step = reversals
+            .iter()
+            .filter_map(|&i| (i > 0).then_some((signal[i] - signal[i - 1]).abs()))
+            .fold(0.0f32, f32::max);
+        let reversal_step_ratio = reversal_step / rms(&steps).max(1e-9);
+        assert!(
+            reversal_step_ratio <= 8.0,
+            "GM44 bow reversal introduced a click-like step: \
+             {reversal_step_ratio:.3} x ordinary step RMS"
+        );
         assert!(
             ratios.len() >= 8,
             "found only {} bow reversals",
@@ -22542,11 +22546,9 @@ mod tests {
         // Modeled-only bowed voices carry no sample layer: pizzicato (45).
         // Tremolo strings (44) is a section patch and belongs with the sampled
         // arco family below.
-        for program in [45u8] {
-            let on = bits(render_program_sampled(program, 69, 100, 0.5, 6, true));
-            let off = bits(render_program_sampled(program, 69, 100, 0.5, 6, false));
-            assert_eq!(on, off, "GM{program} must skip the sample layer");
-        }
+        let pizz_on = bits(render_program_sampled(45, 69, 100, 0.5, 6, true));
+        let pizz_off = bits(render_program_sampled(45, 69, 100, 0.5, 6, false));
+        assert_eq!(pizz_on, pizz_off, "GM45 must skip the sample layer");
         // Sampled voices carry their LA attack when the key is in the bank's
         // range: violin (40), viola (41), tremolo string section (44), fiddle
         // (110) and the cello (42) at A4; the contrabass (43) at a low E2 — A4
@@ -22604,7 +22606,7 @@ mod tests {
             }
         }
 
-        let mut v = Bowed::new(42, 57, 100, sr, 23);
+        let mut v = BowedString::new(42, 57, 100, sr, 23);
         let mut before = vec![0.0; (0.30 * sr) as usize];
         v.render(&mut before);
         assert!(v.legato_to(62, 96));
@@ -22619,12 +22621,12 @@ mod tests {
     }
 
     #[test]
-    fn default_bowed_family_level_and_numerical_safety() {
+    fn legacy_bowed_family_level_and_numerical_safety() {
         let sr = 44100.0;
-        let violin = render_default_bowed(40, 57, 100, 1.0, 29);
+        let violin = render_legacy_bowed(40, 57, 100, 1.0, 29);
         let violin_rms = rms(segment(&violin, sr, 0.20, 0.80));
         for program in [41u8, 42, 43, 110] {
-            let s = render_default_bowed(program, 57, 100, 1.0, 29);
+            let s = render_legacy_bowed(program, 57, 100, 1.0, 29);
             let level = rms(segment(&s, sr, 0.20, 0.80));
             let db = 20.0 * (level / violin_rms).log10();
             assert!(db.abs() <= 3.0, "GM{program} level is {db:.2} dB vs violin");
@@ -29728,7 +29730,7 @@ mod tests {
                 for vel in [64u8, 100, 127] {
                     for idx in 0u64..2 {
                         let seed = crate::engine::note_voice_seed(idx);
-                        let old = level(Box::new(Bowed::new(program, key, vel, sr, seed)));
+                        let old = level(Box::new(LegacyBowed::new(program, key, vel, sr, seed)));
                         let new = level(Box::new(BowedString::new(program, key, vel, sr, seed)));
                         if old > 1e-6 && new > 1e-6 {
                             ratios.push(new / old);

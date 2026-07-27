@@ -9473,33 +9473,31 @@ mod tests {
         left(&render(&song, &opt).0)
     }
 
-    /// GM44 tremolo strings is the only bowed program still on the saw-based
-    /// `Bowed` voice; 40/41/110 moved to the `BowedString` waveguide on
-    /// 2026.07.26 and are covered by `bowedstring_family_pitch_bounded`, which
-    /// measures by autocorrelation. Pointing the zero-crossing measure at a
-    /// waveguide reads its strong low harmonics as pitch instability.
+    /// Render GM44 through the engine so its authored CC1 path is exercised.
     fn render_bowed_with_mod(mod_val: u8) -> Vec<f32> {
         render_bowed_program_with_mod(44, mod_val)
     }
 
-    /// CC1 = 127 on a bowed note must produce a periodic pitch deviation
-    /// far beyond the voice's own gentle vibrato; CC1 = 0 must not.
+    /// CC1 = 127 on GM44 must deepen the waveguide's natural vibrato.
+    ///
+    /// Autocorrelation is required here: the strong low harmonics of a
+    /// `BowedString` make zero-crossing counts look wildly unstable.
     #[test]
     fn cc1_mod_wheel_adds_vibrato() {
         let sr = 44100.0;
         let plain = render_bowed_with_mod(0);
         let modded = render_bowed_with_mod(127);
         let (a, b) = ((0.8 * sr) as usize, (2.2 * sr) as usize);
-        let spread_plain = cycle_freq_spread(&plain[a..b], sr);
-        let spread_mod = cycle_freq_spread(&modded[a..b], sr);
-        // 35 cents of vibrato on A4 swings ~18 Hz peak-to-peak
+        let f0 = crate::dsp::key_freq(69);
+        let spread_plain = autocorr_cents_spread(&plain[a..b], sr, f0);
+        let spread_mod = autocorr_cents_spread(&modded[a..b], sr, f0);
         assert!(
-            spread_mod > 10.0,
-            "mod vibrato too shallow: {spread_mod} Hz"
+            (3.0..=42.0).contains(&spread_plain),
+            "GM44 autonomous excursion {spread_plain:.1} cents"
         );
         assert!(
             spread_mod > 2.0 * spread_plain,
-            "plain {spread_plain} Hz vs mod {spread_mod} Hz"
+            "GM44 CC1 {spread_mod:.1} vs natural {spread_plain:.1} cents"
         );
     }
 
@@ -9535,29 +9533,19 @@ mod tests {
     fn bowed_natural_cc1_aftertouch_composition_is_bounded() {
         let sr = 44100.0;
         let range = ((0.8 * sr) as usize, (2.2 * sr) as usize);
-        let cents = |spread_hz: f32, f0: f32| {
-            let half = spread_hz * 0.5;
-            1200.0 * ((f0 + half) / f0).log2()
-        };
-        // GM43 is a bowed-string *waveguide* (harmonic-rich): its strong low
-        // partials (H2/H3 rival H1) fool the zero-crossing `cycle_freq_spread`
-        // into reading a huge false pitch spread. Its pitch bound is enforced
-        // with an autocorrelation measure in `bowedstring_gm43_pitch_bounded`.
-        // GM44 only: the other bowed programs are waveguides now and are covered
-        // by `bowedstring_family_pitch_bounded`. The [4, 12] cent band below is
-        // the SAW voice's band — a waveguide's own arco vibrato runs deeper and
-        // reads differently under this zero-crossing measure, so applying it to
-        // one would be asserting the wrong voice's numbers.
+        // GM44 is now a `BowedString` waveguide. Its strong low partials fool
+        // zero-crossing counts, so use the same autocorrelation measure as the
+        // rest of the bowed-string family.
         for (program, key, samples) in [(44u8, 69u8, false), (44, 69, true)] {
             let plain = render_bowed_controls(program, key, 0, 0, samples);
             let modded = render_bowed_controls(program, key, 127, 0, samples);
             let composed = render_bowed_controls(program, key, 127, 127, samples);
             let f0 = crate::dsp::key_freq(key);
-            let plain_c = cents(cycle_freq_spread(&plain[range.0..range.1], sr), f0);
-            let mod_c = cents(cycle_freq_spread(&modded[range.0..range.1], sr), f0);
-            let both_c = cents(cycle_freq_spread(&composed[range.0..range.1], sr), f0);
+            let plain_c = autocorr_cents_spread(&plain[range.0..range.1], sr, f0);
+            let mod_c = autocorr_cents_spread(&modded[range.0..range.1], sr, f0);
+            let both_c = autocorr_cents_spread(&composed[range.0..range.1], sr, f0);
             assert!(
-                (4.0..=12.0).contains(&plain_c),
+                (3.0..=42.0).contains(&plain_c),
                 "GM{program} samples={samples}: autonomous excursion {plain_c:.1} cents"
             );
             assert!(
@@ -9565,7 +9553,7 @@ mod tests {
                 "GM{program} samples={samples}: CC1 {mod_c:.1} vs natural {plain_c:.1} cents"
             );
             assert!(
-                both_c < 75.0,
+                both_c < 150.0,
                 "GM{program} samples={samples}: composed excursion {both_c:.1} cents"
             );
 
@@ -9644,9 +9632,9 @@ mod tests {
     ///
     /// Covered GM43 alone until 2026.07.26, when GM 40/41/110 moved onto the same
     /// waveguide and inherited both the invariants and the measurement problem.
-    /// Their entries here replace the two zero-crossing tests that used to cover
-    /// them; keeping those would have been asserting a saw voice's numbers about a
-    /// voice that is no longer a saw.
+    /// GM44 followed on 2026.07.27 with its direction-reversing tremolo treatment.
+    /// These entries replace the zero-crossing coverage that asserted the old saw
+    /// voices' numbers.
     #[test]
     fn bowedstring_family_pitch_bounded() {
         let sr = 44100.0;
@@ -9659,6 +9647,8 @@ mod tests {
             (40, 69, true),
             (41, 60, false),
             (42, 48, false),
+            (44, 69, false),
+            (44, 69, true),
             (110, 69, false),
             (110, 69, true),
         ] {

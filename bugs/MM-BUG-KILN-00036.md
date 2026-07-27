@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-21
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T004001Z-p9812-n387868000-c31
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31
-- **Owner base:** 0d1a6295a6b1cb6a8c2938654e039fa24e0f73b0
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T00:40:01Z
-- **Owner until:** 2026-07-27T01:35:23Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31-code-1785113803438
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL

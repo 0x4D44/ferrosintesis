@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** banjo sample generation / reliability
 - **Raised:** 2026-07-27
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:gpt-5.5
+- **Owner role:** fix
+- **Owner run:** fix-20260727T184505Z-p9812-n028431900-c115
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00153-run-fix-20260727T184505Z-p9812-n028431900-c115
+- **Owner base:** a06d6295253b404f8b67e834dd9232ef8d536ce3
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-27T18:45:05Z
+- **Owner until:** 2026-07-27T19:30:05Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

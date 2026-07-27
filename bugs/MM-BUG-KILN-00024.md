@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** testutil
 - **Raised:** 2026-07-18
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260727T163502Z-p9812-n305326300-c94
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00024-run-verify-20260727T163502Z-p9812-n305326300-c94
+- **Owner base:** 0aef32bd99c76129c97fc90fe6391dc6fb806f6d
+- **Owner fingerprint:** sha256:d06e6f3c7a2be70eed19054884ab407e4cb94b9c85e5de6d90d671a34d54d2fc
+- **Owner since:** 2026-07-27T16:35:02Z
+- **Owner until:** 2026-07-27T17:20:02Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

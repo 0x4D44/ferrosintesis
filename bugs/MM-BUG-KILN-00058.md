@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00058 — GM45 pizzicato's Shaped-vs-Legacy loudness parity broke KEY-DEPENDENTLY after the KILN-00048 decouple (offsets span ~7.5 dB, unfittable by the scalar exc_trim)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction) → Open (2026-07-26, Arthur approved preserving the Shaped timbre and restoring Legacy level parity with a smooth key/velocity gain correction) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source `37f6bac002fdeb2995ca6ca59e45b7fbcf5e033d`; the smooth PIZZ-only Shaped gain surface restores all nine frozen Legacy anchors and directly measured parity at all 16 intermediate knots)
+- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction) → Open (2026-07-26, Arthur approved preserving the Shaped timbre and restoring Legacy level parity with a smooth key/velocity gain correction) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source `37f6bac002fdeb2995ca6ca59e45b7fbcf5e033d`; the smooth PIZZ-only Shaped gain surface restores all nine frozen Legacy anchors and directly measured parity at all 16 intermediate knots) → Closed (2026-07-27, claude-opus-5@high; independent two-eyes verification on trunk `8a4c90f` — all nine recorded offsets re-measured within 0.02 dB, guard proven two-sided reproducing the recorded −2.95 dB exactly, repo gates green)
 
 ## Observation
 
@@ -194,3 +194,56 @@ The autonomous Build should:
 
 Land a green implementation as **Fixed**, not Closed. Independent verification
 must confirm parity, smooth interpolation, and unchanged level-matched timbre.
+
+## Independent verification (2026-07-27, claude-opus-5@high — two-eyes, verifier ≠ fixer)
+
+Verified on trunk `8a4c90f`. Verdict: **Closed**.
+
+**All nine recorded offsets are resolved.** Re-running the measurement harness the report
+implies (`cargo test -p ferrosintesis print_shaped_loudness_offset -- --ignored --nocapture`)
+gives, against the recorded table:
+
+| key / vel | recorded | trunk |
+|---|---|---|
+| 40 / 50 | −2.95 | −0.00 |
+| 40 / 100 | −0.56 | +0.00 |
+| 40 / 120 | +0.45 | +0.00 |
+| 52 / 50 | −4.58 | +0.00 |
+| 52 / 100 | −1.59 | +0.01 |
+| 52 / 120 | −0.68 | +0.01 |
+| 64 / 50 | −1.75 | +0.02 |
+| 64 / 100 | +1.74 | +0.02 |
+| 64 / 120 | +2.91 | +0.01 |
+
+The 7.49 dB spread the report called unfittable by a scalar collapses to 0.02 dB.
+
+**The guard is genuinely two-sided, and reproduces the recorded defect exactly.** I set the
+PIZZ preset's `shaped_gain` back to `ShapedGain::None`
+(`crates/ferrosintesis/src/voices.rs:9252`), which is precisely the pre-fix state — scalar
+`exc_trim` only. `shaped_g7_mean_parity_and_seed_bound` then fails at
+`crates/ferrosintesis/src/testutil.rs:3912` with:
+
+```
+PIZZ 40 50: G7 parity -2.95 dB > tol 0.50 (legacy spread 2.9)
+```
+
+— digit-for-digit the first row of the recorded observation table.
+
+**The one real trap here is covered.** A 5×5 correction surface fitted to nine anchors can be
+anchor-perfect and wrong between them; the Fix section says an earlier 3×3 attempt was exactly
+that, with errors to +4.06 dB between anchors. That is not left to trust:
+`pizz_shaped_gain_matches_legacy_between_anchors`
+(`crates/ferrosintesis/src/testutil.rs:3743`) renders corrected and uncorrected probes and
+compares both against Legacy off the anchor grid, and
+`pizz_shaped_gain_is_smooth_and_level_only` pins the surface as a smooth scalar gain. Both
+pass. Without the first of those, this closure would not have been safe.
+
+**Observed but out of scope, stated so it is not mistaken for a silent pass:** the same harness
+shows STEEL still carrying per-cell offsets up to +2.05 dB at key 64 vel 50, with a −0.00 dB
+mean. This bug is PIZZ-only by construction and its guard governs the mean, which is clean. I
+am recording the STEEL reading as an observation, not asserting it is a defect — verifying that
+is not this pass's job.
+
+**Gates, observed at `8a4c90f`:** `cargo test --workspace --release` 812 passed / 0 failed /
+41 ignored, 0 failed across all 39 other suites; clippy clean under default and
+`--no-default-features`; `cargo fmt --all --check` clean.

@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8-code-1785105359370
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment) → Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T221402Z-p9812-n155597100-c8 branch=task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8 code=0675dda7575d gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T221402Z-p9812-n155597100-c8 branch=task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8 code=8867e24c746d6e9ebf04bfe48deb1f8ad1c1b5f2 gate=focused+render-diff model=codex@xhigh; held branch recovered and hardened by Codex)
 
 ## Observation
 
@@ -182,23 +182,29 @@ from the default voice.
 
 ## Fix
 
-### Fix summary (2026-07-26, deltic:auto run=fix-20260726T221402Z-p9812-n155597100-c8 code=0675dda7575d gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T221402Z-p9812-n155597100-c8 code=8867e24c746d6e9ebf04bfe48deb1f8ad1c1b5f2 gate=focused+render-diff)
 
 Agent-reported summary: Fixed MM-BUG-KILN-00043 in code and tests. The sampled GM7 clavinet now loops a cached pitch-synchronous body segment before the old 1.6 s tail and applies the approved output-time decay curve. The old baked decay is compensated inside the loop so repitching no longer changes the held-note t60. The modeled fallback now uses a per-preset pluck decay exponent and longer GM7 constants so --no-samples and the alt-bank route no longer die in the old short-decay regime. The focused clavinet regression reproduced the original failure before the implementation change and is green after the fix.
 
 Root cause: The default sampled voice replayed committed 1.6 s WAVs as one-shots; those WAVs already carried a too-fast baked exponential decay, and ClavinetSampled returned false when the buffer ended. The modeled fallback shared the same class of defect through CLAVINET's 0.78 s pluck t60 and explicit damper-hold opt-out.
 
 Changed:
-- crates/ferrosintesis/src/sampler.rs: added cached clavinet loop discovery, runtime output-time decay, baked-decay compensation, prewarm coverage, and GM7 regres
+- crates/ferrosintesis/src/sampler.rs: added cached clavinet loop discovery, runtime output-time decay, baked-decay compensation, prewarm coverage, and GM7 regression tests
 - crates/ferrosintesis/src/voices.rs: added per-preset pluck t60 exponent support, retuned the CLAVINET fallback, and updated decay-law authoring oracles
 - crates/ferrosintesis/src/altbank.rs: set the frozen PIZZ preset's default pluck exponent after the PluckPreset field addition
+- crates/ferrosintesis/src/sampler.rs: restored modeled-only compilation, added a direct all-zone seam oracle, reduced cold loop search from 16.45 s to about 0.01 s, and removed per-sample exponentiation from the audio loop
 
 Tests:
-- $null | deltic timeout 300 cargo test -p ferrosintesis clavinet -- --nocapture (failed before the fix on the 1.6 s sampled wall and modeled fallback; passed aft
-- $null | deltic timeout 180 cargo test -p ferrosintesis every_sustain_loop_search_is_memoized_and_prewarmed -- --nocapture
-- $null | deltic timeout 240 cargo test -p ferrosintesis ks_decay -- --nocapture
-- $null | deltic timeout 180 cargo test -p ferrosintesis treble_hold_authoring_pins -- --nocapture
-- deltic timeout 120 cargo fmt -p ferrosintesis
+- `cargo test -p ferrosintesis clavinet -- --nocapture` passed: 7 tests
+- `cargo test -p ferrosintesis --no-default-features clavinet -- --nocapture` passed: 2 modeled tests
+- `cargo test -p ferrosintesis every_sustain_loop_search_is_memoized_and_prewarmed -- --nocapture` passed
+- `cargo test -p ferrosintesis ks_decay -- --nocapture` passed: 3 tests
+- `cargo test -p ferrosintesis treble_hold_authoring_pins -- --nocapture` passed
+- default and modeled-only `cargo clippy -p ferrosintesis --all-targets -- -D warnings` passed
+- Full `albums/**/*.mid` render diff at 11,025 Hz: 1 expected changed, 123 expected same, 0 contamination, 0 not reached
+- Full `demos/**/*.mid` render diff at 11,025 Hz: 3 expected changed, 14 expected same, 0 contamination, 0 not reached
+- Three alternating GM7 reference-demo renders averaged 2.835 s baseline and 2.864 s candidate (1.010×)
+- Representative baseline/candidate renders: `C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00043-perf\base-1.wav` and `C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00043-perf\cand-1.wav`
 
 ## Notes
 
@@ -207,19 +213,15 @@ Tests:
   matching the GM idiom, not about physics. What is *not* a judgement call: two
   independent references (different vendor, era and synthesis method) agree to 0.16 dB
   against us, and the 1.6 s hard cutoff is wrong under any reading.
-- No committed album authors GM7 today. Per `CLAUDE.md`, that is not evidence the
-  voice is dead — ferrosintesis is a generic GM player and GM7 is a mainstream
-  keyboard program that any foreign MIDI file will reach.
+- The current catalogue contains one GM7 album and three GM7 demos. Their expected
+  movement and every unrelated render were checked by the full render-diff inventory.
 - Related but distinct: MM-BUG-KILN-00039 (GM107 koto) shares the insight that a
   static `PROGRAM_TRIM` cannot fix a voice-model defect, but its mechanism is a
   pitch-dependent gain, not a decay rate. MM-BUG-KILN-00019 (0.70x trim damping) is
   about 1-2.5 dB residuals inside the +/-6 dB clamp and cannot reach a guard-excluded,
   untrimmed program.
-- There is no oracle guarding GM7's sustain length. The two existing clavinet tests
-  (`voices.rs:17272` tangent scrape, `voices.rs:17329` buzz-into-sustain) cover the
-  *modeled* voice's timbre only, and `sampler.rs:5576` only asserts the
-  default/alt-bank routing. A held-note decay-rate oracle would have caught this and
-  would make the fix self-verifying.
+- The fix adds held-note decay, lifecycle, attack, modeled-fallback, and all-zone loop
+  seam oracles, closing the coverage gap that allowed the short one-shot to ship.
 - The M-CAL v3 certified report already states the general shape of this at the family
   level ("the plucked families fail on ENVELOPE, not level — that is voice work");
   this entry pins the specific program, the specific constant and the specific

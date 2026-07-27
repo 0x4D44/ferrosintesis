@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00050 — above its crossover the KILN-00042 damper hold orders held corners by the preset's t60, not its bright, so plucked instruments re-order in brightness in the top register (ukulele drifts to/under nylon above ~key 64; koto's held corner exceeds nylon's)
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00050-run-fix-20260727T011504Z-p9812-n352349500-c37
+- **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing) → Open (2026-07-26, Arthur approved a focused, level-matched per-instrument revoicing pass with comparative A/B renders)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing) → Open (2026-07-26, Arthur approved a focused, level-matched per-instrument revoicing pass with comparative A/B renders) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source candidate `7deb5cb8f775dd2fb599738960e903f842412c2f` restores the required steel/ukulele/koto held-brightness order with preset-local controls, level parity, focused regression coverage, and zero catalog contamination)
 
 ## Observation
 
@@ -144,6 +144,65 @@ The autonomous Build should:
 Land a green implementation as **Fixed**, not Closed. Independent verification
 must check the objective ordering and the A/B pack; Arthur retains the final
 perceptual sign-off if the candidate changes audible identity materially.
+
+## Fix evidence — 2026-07-27
+
+Source candidate `7deb5cb8f775dd2fb599738960e903f842412c2f` keeps
+`DamperHold::Derived` and `KS_DAMP_BUDGET` unchanged. It adds a bounded
+`PluckPreset::damper_hold_scale` (clamped to 1.0–2.5), leaves the default at
+1.0, and opens only UKULELE (2.2) and STEEL (2.4). STEEL's existing excitation
+trim moves from -1.51 dB to -2.18 dB to remove the measured +0.67 dB mean-energy
+side effect; NYLON and KOTO receive no voicing change.
+
+The new rendered regression uses the required keys 55/60/64, velocity 100,
+seeds `0x6510`, `0x76A1`, and `0x1250`, and the 0.030–0.420 s body. Four
+consecutive Hann-windowed 4096-sample DFT centroids avoid the large
+phase/seed noise in the old sparse full-window estimator. Every individual
+seed clears the contract's stable 4% margin:
+
+- STEEL / NYLON ranges 1.373–2.626.
+- UKULELE / NYLON ranges 1.303–2.297.
+- KOTO / NYLON ranges 0.685–0.834.
+
+The aggregate centroids (NYLON, STEEL, UKULELE, KOTO) are respectively
+455.5/721.8/984.2/354.1 Hz at key 55,
+559.0/1134.9/913.9/411.0 Hz at key 60, and
+714.9/1526.8/962.0/512.6 Hz at key 64. The former shared-law controls fail at
+least two comparisons, proving the oracle detects the defect. The legacy
+sparse estimator also retains the correct aggregate sign for all four
+instruments at all three keys.
+
+Focused validation passed:
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
+- `cargo test -p ferrosintesis pluck -- --nocapture` (16 passed; 2 diagnostics ignored)
+- `cargo test -p ferrosintesis damper_hold_preserves_instrument_identity`
+- `cargo test -p ferrosintesis plucked_hold_preserves_brightness_order_across_identity_keys`
+- `cargo test -p ferrosintesis ukulele_variation_is_brighter_and_shorter_than_nylon`
+- `cargo test -p ferrosintesis sitar_shamisen_koto_have_distinct_pluck_presets`
+- `cargo test -p ferrosintesis shaped_g7_mean_parity_and_seed_bound`
+
+Fresh release `raw_dump --no-samples` probes over keys 55/60/64 show NYLON and
+KOTO are byte-identical to trunk. Only STEEL and UKULELE change. Native
+integrated loudness moves -0.17 LU for STEEL (-50.18 to -50.35 LUFS) and
+-0.15 LU for UKULELE (-42.69 to -42.84 LUFS), so the brightness repair is not
+a level increase. Same-note raw and -18 LUFS level-matched comparisons are in
+`C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00050-candidate`.
+
+The required release-binary render inventory covered all 124 album MIDIs and
+17 demo MIDIs:
+
+- albums: 16 expected changed, 105 expected same, 0 contamination, 3 reported
+  not reached;
+- demos: 5 expected changed, 12 expected same, 0 contamination, 0 not reached.
+
+All 21 changed tracks use GM25 STEEL and/or GM24. The three album
+`NOT REACHED` rows declare GM24 but render unchanged bank-0 NYLON; the
+bank-blind inventory cannot distinguish those from the actually changed
+bank-LSB-96 UKULELE. Their unchanged hashes agree with the isolated NYLON
+proof, so they are expected false positives rather than missing wiring.
 
 ## Notes
 

@@ -5,17 +5,17 @@
 - **Severity:** Low
 - **Area:** synth
 - **Raised:** 2026-07-24
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T032003Z-p9812-n201717900-c42
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00058-run-fix-20260727T032003Z-p9812-n201717900-c42
-- **Owner base:** 0cedd735d321dcd83061c824ba4c2b3d5b321c7f
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T03:20:03Z
-- **Owner until:** 2026-07-27T04:15:29Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00058-run-fix-20260727T032003Z-p9812-n201717900-c42-code-1785123200445
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction) → Open (2026-07-26, Arthur approved preserving the Shaped timbre and restoring Legacy level parity with a smooth key/velocity gain correction)

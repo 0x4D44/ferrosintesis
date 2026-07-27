@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** testutil
 - **Raised:** 2026-07-18
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T000102Z-p9812-n317020100-c28
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28
-- **Owner base:** cc5bd986cd7191dcbaeb39cb7ed1e82e76e10c3b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T00:01:02Z
-- **Owner until:** 2026-07-27T00:56:24Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28-code-1785111555057
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle deliberately cannot decide whether GM48/49's shared-onset tail difference is perceptually sufficient; Arthur must supply the one planned same/different A/B verdict) → Open (2026-07-26, unblocked by Arthur's blinded A/B verdict on `175b594`: “the _A & _B samples sound pretty much the same to me (for both pairs)”; requires a durable GM49 Slow Strings identity)

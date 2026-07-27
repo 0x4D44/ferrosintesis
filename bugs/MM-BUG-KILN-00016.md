@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12-code-1785106371131
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=1b55d834ab89 gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=8f540f3a372b286e1f720f4092014981645d0efe gate=focused+render-diff model=codex@xhigh; held branch recovered by Codex)
 
 ## Observation
 
@@ -57,25 +57,32 @@ multisample bank, or approves a discovered CC0/CC-BY source with retained proven
 any required attribution. Reusing the existing finger/pick assets would not resolve the
 recorded identity defect.
 
-### Fix summary (2026-07-26, deltic:auto run=fix-20260726T223701Z-p9812-n951988700-c12 code=1b55d834ab89 gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T223701Z-p9812-n951988700-c12 code=8f540f3a372b286e1f720f4092014981645d0efe gate=focused+render-diff)
 
-Agent-reported summary: Fixed MM-BUG-KILN-00016 by adding a modeled, attack-bounded string-fret collision path for GM36 slap bass and GM37 slap-pop bass. The original observation reproduced: those programs were direct Pluck routes whose identity was carried by a post-output click burst, so the old slap oracle passed without any modeled fret collision. The new contact stage is deterministic, velocity-thresholded, passive sample-by-sample, and inserted inside the KS loop before pickup/body/output filtering. The regression keeps the legacy burst enabled in a contact-disabled lesion and proves the lesion no longer satisfies the slap/pop identity checks. Focused slap tests, loop-margin coverage, and untouched-pluck sign
+Agent-reported summary: Fixed MM-BUG-KILN-00016 by adding a modeled, attack-bounded string-fret collision path for GM36 slap bass and GM37 slap-pop bass. The original observation reproduced: those programs were direct Pluck routes whose identity was carried by a post-output click burst, so the old slap oracle passed without any modeled fret collision. The new contact stage is deterministic, velocity-thresholded, passive sample-by-sample, and inserted inside the KS loop before pickup/body/output filtering. The regression keeps the legacy burst enabled in a contact-disabled lesion and proves the lesion no longer satisfies the slap/pop identity checks. Recovery expanded the acceptance grid across three registers and velocities, retired the contact runtime after its attack window, and confirmed catalog isolation, lifecycle behaviour, render cost, and A/B reachability.
 
 Root cause: GM36/37 authored only the legacy post-output click_post burst and had no string-path contact mechanism. The existing oracle measured the first 3 ms high-frequency transient, which the output burst could satisfy even though the modeled string never collided with the fretboard.
 
 Changed:
 - crates/ferrosintesis/src/voices.rs: added FretContactSpec, FretContact runtime, SLAP/SLAP_POP contact voicing, KS-loop wiring, and regression tests
 - crates/ferrosintesis/src/voices.rs: added SLAP_POP to the shared pluck preset stability sweep
+- crates/ferrosintesis/src/voices.rs: added low/mid/high-register identity, determinism, pitch, finite-output, runtime-retirement, note-off, and reaping coverage
 - crates/ferrosintesis/src/altbank.rs: set the frozen PIZZ PluckPreset to fret_contact None
 
 Tests:
 - FAIL-FIRST observed: cargo test -p ferrosintesis voices::tests::slap_pop_ -- --nocapture failed with zero contact residual before wiring
-- PASS: cargo test -p ferrosintesis voices::tests::slap -- --nocapture
-- PASS: cargo test -p ferrosintesis voices::tests::coupled_loop_margin_holds -- --nocapture
-- PASS: cargo test -p ferrosintesis voices::tests::v2_untouched_pluck_signatures_are_stable -- --nocapture
+- `cargo test -p ferrosintesis voices::tests::slap -- --nocapture` passed: 5 tests.
+- `cargo test -p ferrosintesis --no-default-features voices::tests::slap -- --nocapture` passed: 5 tests.
+- `cargo test -p ferrosintesis voices::tests::coupled_loop_margin_holds -- --nocapture` passed.
+- `cargo test -p ferrosintesis voices::tests::v2_untouched_pluck_signatures_are_stable -- --nocapture` passed.
+- `cargo test -p ferrosintesis voices::tests::default_bass_family_held_levels_stay_together -- --nocapture` passed; GM32–39 span stayed within the 9.25 dB gate.
+- Full `albums/**/*.mid` render diff at 11,025 Hz: 124 expected same, 0 contamination, 0 not reached; the catalog contains no GM36/37 events.
+- Full `demos/**/*.mid` render diff at 11,025 Hz: 4 expected changed, 13 expected same, 0 contamination, 0 not reached.
+- The loudness-normalized 18-note low/mid/high × soft/medium/hard audition matrix is in `C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00016\before.wav` and `after.wav`.
+- Three alternating 44.1 kHz renders of that matrix averaged 6.872 s baseline and 6.772 s candidate (0.986×).
+- `cargo fmt --package ferrosintesis` and `git diff --check` passed.
 
-Left alone:
-- bugs ledger files
+No Cargo manifest, lockfile, journal, scratchpad, or lesson file changed.
 
 ## Notes
 

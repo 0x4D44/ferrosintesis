@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00068 — ferrosintesis and -sax license fields do not disclose the embedded non-MIT/Apache audio
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / licensing
 - **Raised:** 2026-07-24
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T144601Z-p9812-n984841900-c86
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00068-run-verify-20260727T144601Z-p9812-n984841900-c86
-- **Owner base:** 481b90cd20fdd7fbcf1ebc157f10c3200a827e48
-- **Owner fingerprint:** sha256:7b91f19d0d97da708350bda5274e65d4b6b3c115b711aa6c05a0150d25ba2618
-- **Owner since:** 2026-07-27T14:46:01Z
-- **Owner until:** 2026-07-27T15:31:01Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 from the licence audit
+- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 from the licence audit -> Closed (2026-07-27, deltic:auto role=verify run=verify-20260727T144601Z-p9812-n984841900-c86 verified_fix_run=fix-20260726T225402Z-p9812-n456509100-c15 verdict=close model=claude)
   run while fixing KILN-00060; two independent review agents flagged the parent field)
   → Blocked (2026-07-24, Claude Opus 4.8 (1M) during a fixing pass. NOT a difficulty
   block — both edits are one line each. It needs a decision only **Arthur** can make, and
@@ -94,6 +94,10 @@ Tests:
 - `cargo metadata --format-version 1 --no-deps --quiet` reported sax `CC-BY-4.0 AND CC-BY-3.0` and parent `MIT OR Apache-2.0`.
 - `cargo package -p ferrosintesis-samples-sax --allow-dirty --no-verify --list` included both `NOTICE` and `PROVENANCE.md`.
 - `git diff --check` passed.
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T144601Z-p9812-n984841900-c86 verified_fix_run=fix-20260726T225402Z-p9812-n456509100-c15 verdict=close)
+
+Verifier note: Sax crate now declares CC-BY-4.0 AND CC-BY-3.0; parent stays MIT OR Apache-2.0 per Arthur's recorded 2026-07-26 decision; oracle enforces every AND operand against real evidence and all gates are green. — On trunk 70ca25f. (1) Symptom: crates/ferrosintesis-samples-sax/Cargo.toml:8 now reads license = "CC-BY-4.0 AND CC-BY-3.0" (was CC-BY-4.0, git show f3edb8e); crates/ferrosintesis/Cargo.toml:7 still MIT OR Apache-2.0, which is instance 1's approved working-as-intended resolution recorded in the ledger's 2026-07-26 decision brief. Both attribution layers now named in sax NOTICE, PROVENANCE.md, ...
 
 ## What is needed to unblock (2026-07-24)
 

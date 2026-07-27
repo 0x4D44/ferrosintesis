@@ -4,7 +4,14 @@ from pathlib import Path
 import tempfile
 import unittest
 
-import numpy as np
+# numpy is an optional dev dependency of the bake tools, not of the synth or the
+# albums. Skip the module rather than letting the import raise: an ImportError here
+# fails the whole gate step on a box without numpy, while a SkipTest keeps it green
+# and still reports the lost coverage in the unittest summary.
+try:
+    import numpy as np
+except ImportError as exc:  # pragma: no cover - only on a box without numpy
+    raise unittest.SkipTest(f"numpy is required by banjo_extract: {exc}") from None
 
 
 SCRIPT = Path(__file__).with_name("banjo_extract.py")

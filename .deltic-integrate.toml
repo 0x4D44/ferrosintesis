@@ -39,15 +39,23 @@ version_bump = "release-only"
 # pipeline) never ran. MM-BUG-KILN-00062 and -00065 both cite a MANUAL `unittest` run as
 # their evidence, which is what an unautomated suite looks like. `discover -s` is required
 # rather than naming the module: the tests do a bare `import prepare`, and only discover
-# puts the start directory on `sys.path`. Runs in ~8 s and needs `python` on PATH — the
-# repo already requires it (every album builds with `python build.py`).
+# puts the start directory on `sys.path`. Runs in ~8 s.
+#
+# `python3`, not `python`: macOS and most Debian/WSL runners ship ONLY `python3`, so the
+# bare name made this step — and therefore `deltic integrate` — impossible off Windows.
+# scratchpad.md's 2026-07-25 entry called this exact caveat and named `python3` as the
+# fix. The fleet's Windows boxes carry both names, so this is safe there.
+#
+# Two of the 92 tests need numpy (the banjo and fret-noise bakes). numpy is an optional
+# dev dependency, so those two modules raise `unittest.SkipTest` at import when it is
+# absent: the step stays green and reports `OK (skipped=2)` rather than erroring out.
 fallback = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
   { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["clippy", "-p", "ferrosintesis", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["test", "-p", "ferrosintesis", "--no-default-features", "--locked"] },
   { program = "cargo", args = ["test", "--workspace", "--locked"] },
-  { program = "python", args = ["-m", "unittest", "discover", "-s", "tools/ferrosintesis-samples"] },
+  { program = "python3", args = ["-m", "unittest", "discover", "-s", "tools/ferrosintesis-samples"] },
 ]
 
 [[component]]
@@ -59,5 +67,5 @@ gate = [
   { program = "cargo", args = ["clippy", "-p", "ferrosintesis", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["test", "-p", "ferrosintesis", "--no-default-features", "--locked"] },
   { program = "cargo", args = ["test", "--workspace", "--locked"] },
-  { program = "python", args = ["-m", "unittest", "discover", "-s", "tools/ferrosintesis-samples"] },
+  { program = "python3", args = ["-m", "unittest", "discover", "-s", "tools/ferrosintesis-samples"] },
 ]

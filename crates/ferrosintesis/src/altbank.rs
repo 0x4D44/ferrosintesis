@@ -61,6 +61,7 @@ const PIZZ: PluckPreset = PluckPreset {
     // so the alt bank keeps the historic f³ damper. The DEFAULT-bank pizzicato
     // (voices::make) does get the fix; only this CC0 resurrection stays put.
     damper_hold: DamperHold::Off,
+    damper_hold_scale: 1.0,
     harmonic: false,
     mwah: None, // no fretless vocal bloom on a pizzicato
     // v0.12 course fields: the exact literals the Pluck core used to hardcode

@@ -2767,10 +2767,12 @@ impl DamperHold {
     /// the velocity-scaled one, so that the crossover sits at a fixed place
     /// per key and velocity still opens the damper the way it always did.
     /// Always ≥ 1.
-    fn corner_scale(self, f: f32, bright: f32, t60_dbps: f32) -> f32 {
+    fn corner_scale(self, f: f32, bright: f32, t60_dbps: f32, local_scale: f32) -> f32 {
         match self {
             DamperHold::Off => 1.0,
-            DamperHold::Derived => (Self::min_corner(f, t60_dbps) / bright).max(1.0),
+            DamperHold::Derived => {
+                (Self::min_corner(f, t60_dbps) * local_scale.clamp(1.0, 2.5) / bright).max(1.0)
+            }
         }
     }
 }
@@ -2828,6 +2830,10 @@ pub struct PluckPreset {
     /// [`KS_DAMP_BUDGET`] of its authored decay, which stops the "E6 dies in 100 ms"
     /// cliff (KILN-00042).
     pub damper_hold: DamperHold,
+    /// Preset-local multiplier on the derived held corner. Default 1.0 keeps the
+    /// shared KILN-00042 law; brighter family members can open only their own
+    /// held reach where the shared t60-ordered law collapses identity (KILN-00050).
+    pub damper_hold_scale: f32,
     pub harmonic: bool, // prog-31 flageolet: loop retuned and node-filtered (G7)
     pub mwah: Option<MwahSpec>, // fretless vocal formant bloom (GM 35)
     // --- v0.12 second-polarization "course" voicing (GM 15 dulcimer) ---
@@ -2929,6 +2935,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     // KILN-00042: default ON. The f³ damper collapse is a DEFECT, so a preset
     // opts OUT of the fix (Off) rather than into it.
     damper_hold: DamperHold::Derived,
+    damper_hold_scale: 1.0,
     harmonic: false,
     mwah: None,
     course_detune: 1.0013,
@@ -2998,10 +3005,11 @@ pub const NYLON: PluckPreset = PluckPreset {
 pub const UKULELE: PluckPreset = PluckPreset {
     #[cfg(test)]
     name: "UKULELE",
-    t60: 2.8,        // small body / short strings ring far shorter than a guitar
-    bright: 8500.0,  // higher damper corner — the ukulele's brighter voice
-    pick_lp: 3400.0, // brighter fingernail excitation
-    rel_t60: 0.55,   // little sustain past note-off
+    t60: 2.8,               // small body / short strings ring far shorter than a guitar
+    bright: 8500.0,         // higher damper corner — the ukulele's brighter voice
+    damper_hold_scale: 2.2, // KILN-00050: keep the held high-register corner above nylon
+    pick_lp: 3400.0,        // brighter fingernail excitation
+    rel_t60: 0.55,          // little sustain past note-off
     pos: 0.24,
     amp: 0.5,
     // The tiny soundbox resonates well above a guitar's: higher Helmholtz air
@@ -3052,12 +3060,15 @@ pub const STEEL: PluckPreset = PluckPreset {
     exc_model: ExcModel::Shaped,
     slope: 1.4,
     noise_mix: 0.30,
-    exc_trim: -1.51,
+    // KILN-00050: the local held-corner opening adds +0.67 dB mean energy;
+    // remove it at the existing excitation trim so brightness changes, not level.
+    exc_trim: -2.18,
     // Steel strings ring longer and brighter than nylon: raise t60 for the
     // aftersound and nudge the damper so the high harmonics sustain (the steel
     // "sparkle" that dies first under a low damper corner).
     t60: 7.0,
     bright: 5600.0,
+    damper_hold_scale: 2.4, // KILN-00050: restore steel-vs-nylon held brightness spread
     // Let-ring release (see NYLON): an un-muted steel string sustains past a
     // short MIDI note-off. Skank/staccato chops stay tight because they are so
     // short they are already low before the fade (measured -46 dB by +0.3 s).
@@ -4773,9 +4784,12 @@ impl Pluck {
         // corner is: the crossover must not move with velocity.
         let t60_static =
             (p.t60 * (220.0 / f).powf(p.t60_key_exp)).clamp(0.25, 14.0) * (1.0 - 0.12 * wound);
-        let hold =
-            p.damper_hold
-                .corner_scale(f, p.bright * (1.0 - 0.30 * wound), 60.0 / t60_static);
+        let hold = p.damper_hold.corner_scale(
+            f,
+            p.bright * (1.0 - 0.30 * wound),
+            60.0 / t60_static,
+            p.damper_hold_scale,
+        );
         let bright = (wound_bright * hold).min(sr * 0.45).max(300.0);
 
         // excitation: filtered noise burst with a pick-position comb.
@@ -16739,9 +16753,12 @@ mod tests {
                 let pre = (p.bright * (0.22 + 0.98 * vn)).min(sr * 0.45);
                 let wb = pre * (1.0 - 0.30 * wound);
                 let t60s = authored_t60(key);
-                let hold =
-                    p.damper_hold
-                        .corner_scale(f, p.bright * (1.0 - 0.30 * wound), 60.0 / t60s);
+                let hold = p.damper_hold.corner_scale(
+                    f,
+                    p.bright * (1.0 - 0.30 * wound),
+                    60.0 / t60s,
+                    p.damper_hold_scale,
+                );
                 let fc = (wb * hold).min(sr * 0.45).max(300.0);
                 let d = -20.0 * OnePole::lowpass_mag(fc, f, sr).log10() * f;
                 // the CLAMPED t60 — long-t60 presets hit the 14 s cap low down.
@@ -19658,6 +19675,132 @@ mod tests {
                  t60 re-fit amplifies."
             );
         }
+    }
+
+    /// KILN-00050: the held plucked-family brightness order must survive across
+    /// the playing register, not just at the old key-60 identity point.
+    #[test]
+    fn plucked_hold_preserves_brightness_order_across_identity_keys() {
+        let sr = 44100.0;
+        let body_lo = (0.030 * sr) as usize;
+        let body_hi = (0.420 * sr) as usize;
+        let centroid_seed = |pp: &PluckPreset, key: u8, seed: u32| -> f32 {
+            let rendered = render_pluck(pp, key, 100, 4.0, seed);
+            let body = &rendered[body_lo..body_hi];
+            let mut total = 0.0;
+            let mut windows = 0;
+            for window in body.chunks_exact(4096) {
+                total += crate::testutil::spectral_centroid(window, sr, 80.0, 10_000.0);
+                windows += 1;
+            }
+            total / windows as f32
+        };
+        let centroid = |pp: &PluckPreset, key: u8| -> f32 {
+            let mut acc = 0.0;
+            for &seed in &[0x6510u32, 0x76A1, 0x1250] {
+                acc += centroid_seed(pp, key, seed);
+            }
+            acc / 3.0
+        };
+        let sparse_centroid = |pp: &PluckPreset, key: u8| -> f32 {
+            [0x6510u32, 0x76A1, 0x1250]
+                .into_iter()
+                .map(|seed| {
+                    let rendered = render_pluck(pp, key, 100, 4.0, seed);
+                    crate::testutil::centroid(&rendered[body_lo..body_hi], sr)
+                })
+                .sum::<f32>()
+                / 3.0
+        };
+        let shared_steel = PluckPreset {
+            damper_hold_scale: 1.0,
+            ..STEEL
+        };
+        let shared_ukulele = PluckPreset {
+            damper_hold_scale: 1.0,
+            ..UKULELE
+        };
+
+        let mut failures = Vec::new();
+        let mut shared_failures = 0;
+        for key in [55u8, 60, 64] {
+            let nylon = centroid(&NYLON, key);
+            let steel = centroid(&STEEL, key);
+            let ukulele = centroid(&UKULELE, key);
+            let koto = centroid(&KOTO, key);
+            let old_steel = centroid(&shared_steel, key);
+            let old_ukulele = centroid(&shared_ukulele, key);
+            let sparse_nylon = sparse_centroid(&NYLON, key);
+            let sparse_steel = sparse_centroid(&STEEL, key);
+            let sparse_ukulele = sparse_centroid(&UKULELE, key);
+            let sparse_koto = sparse_centroid(&KOTO, key);
+            println!(
+                "KILN-00050 key {key}: nylon {nylon:.1}, steel {steel:.1} (shared {old_steel:.1}), \
+                 ukulele {ukulele:.1} (shared {old_ukulele:.1}), koto {koto:.1}"
+            );
+            println!(
+                "  sparse full-window aggregate: nylon {sparse_nylon:.1}, steel {sparse_steel:.1}, \
+                 ukulele {sparse_ukulele:.1}, koto {sparse_koto:.1}"
+            );
+            shared_failures += usize::from(old_steel <= 1.04 * nylon);
+            shared_failures += usize::from(old_ukulele <= 1.04 * nylon);
+            for seed in [0x6510u32, 0x76A1, 0x1250] {
+                let n = centroid_seed(&NYLON, key, seed);
+                let s = centroid_seed(&STEEL, key, seed);
+                let u = centroid_seed(&UKULELE, key, seed);
+                let k = centroid_seed(&KOTO, key, seed);
+                println!(
+                    "  seed {seed:04x}: steel/nylon {:.3}, uke/nylon {:.3}, koto/nylon {:.3}",
+                    s / n,
+                    u / n,
+                    k / n
+                );
+                if u <= 1.04 * n {
+                    failures.push(format!(
+                        "key {key} seed {seed:04x}: ukulele {u:.1} <= 1.04 * nylon {n:.1}"
+                    ));
+                }
+                if s <= 1.04 * n {
+                    failures.push(format!(
+                        "key {key} seed {seed:04x}: steel {s:.1} <= 1.04 * nylon {n:.1}"
+                    ));
+                }
+                if k >= 0.96 * n {
+                    failures.push(format!(
+                        "key {key} seed {seed:04x}: koto {k:.1} >= 0.96 * nylon {n:.1}"
+                    ));
+                }
+            }
+            if ukulele <= 1.04 * nylon {
+                failures.push(format!(
+                    "key {key}: ukulele {ukulele:.1} <= 1.04 * nylon {nylon:.1}"
+                ));
+            }
+            if steel <= 1.04 * nylon {
+                failures.push(format!(
+                    "key {key}: steel {steel:.1} <= 1.04 * nylon {nylon:.1}"
+                ));
+            }
+            if koto >= 0.96 * nylon {
+                failures.push(format!(
+                    "key {key}: koto {koto:.1} >= 0.96 * nylon {nylon:.1}"
+                ));
+            }
+            if sparse_steel <= sparse_nylon
+                || sparse_ukulele <= sparse_nylon
+                || sparse_koto >= sparse_nylon
+            {
+                failures.push(format!(
+                    "key {key}: sparse full-window order inverted: nylon {sparse_nylon:.1}, \
+                     steel {sparse_steel:.1}, ukulele {sparse_ukulele:.1}, koto {sparse_koto:.1}"
+                ));
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("; "));
+        assert!(
+            shared_failures >= 2,
+            "negative control lost sensitivity: the shared held-corner law violated only {shared_failures} comparisons"
+        );
     }
 
     /// GM 104 sitar (v0.16, jawari oracle 1): the buzz SURVIVES the decay.

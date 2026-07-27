@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00145 — No oracle asserts bake helpers validate their output inventory, so the class recurs per bank
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** testing / sample generation
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00145-run-fix-20260727T033403Z-p9812-n749513500-c45-code-1785124032820
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source `0788a860322e6432045a1aa49478163dc86450c1`; every `prepare.py` bake path that reaches a packaged WAV write must now validate its complete owned output inventory first)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source `0788a860322e6432045a1aa49478163dc86450c1`; every `prepare.py` bake path that reaches a packaged WAV write must now validate its complete owned output inventory first) → Closed (2026-07-27, claude-opus-5@high; independent two-eyes verification on trunk `8a4c90f` — the hand-placed call is now an enforced property, adversarial controls proven non-vacuous, repo gates green; enumeration-predicate residual split to MM-BUG-KILN-00156)
 
 ## Observation
 
@@ -93,3 +93,43 @@ Evidence:
 - No dependencies, manifests, lockfiles, or generated sample assets changed.
 
 ## Notes
+
+## Independent verification (2026-07-27, claude-opus-5@high — two-eyes, verifier ≠ fixer)
+
+Verified on trunk `8a4c90f`. Verdict: **Closed, with the residual split to
+MM-BUG-KILN-00156.**
+
+**The reported defect is fixed.** The complaint was that
+`_validate_generated_output_inventory` was an optional hand-placed call, invoked at exactly
+two sites, so a fifth bank inherited nothing. It is now an enforced property: any helper
+matching the file's `_bake_*` convention that reaches a packaged `write_wav_mono` without
+validating first turns the suite red, transitively and in call order.
+
+**The adversarial controls are real, not decorative.** I read all three and they defeat the
+obvious cheats — one hides the validator name in a *comment*, one delegates the write to a
+non-bake helper, one validates only *after* writing. Two positive controls pin the accepting
+cases. That is materially stronger than a `contains` check.
+
+**The predicate is not vacuous.** An AST census of `tools/ferrosintesis-samples/prepare.py`
+finds 12 top-level functions calling `write_wav_mono` directly; 11 match the guarded prefix
+(`_bake_bagpipe`, `_bake_clavinet`, `_bake_sf_onset`, `_bake_musescore_grand`,
+`_bake_ydp_grand`, `_bake_honkytonk`, `_bake_b1upright`, `_bake_darkened_grand`,
+`bake_bottle_loop`, `_bake_mtg_sax`, `_bake_gong_bank`). So the guard covers the real
+population, not a token two — which was the specific failure mode this bug was raised about.
+
+**Residual, split to MM-BUG-KILN-00156.** The enumeration filters by NAME
+(`crates/ferrosintesis/src/inventory.rs:233`), while this bug's own fix direction asked for a
+BEHAVIOURAL predicate. I took the oracle's positive control byte-for-byte, renamed the helper
+from `_bake_newbank` to `prepare_newbank`, and `unvalidated_bake_output_helpers` returned `[]`
+— the same defect, unflagged. All three adversarial controls share the `_bake_` prefix, so
+none of them tests the enumeration. The twelfth writer, `main`, is outside the guard and is
+correct today only by its author's care: it calls the validator at
+`tools/ferrosintesis-samples/prepare.py:3336`, ahead of its packaged writes at `:3564` and
+`:3572`. That is a narrower gap than the bug as filed, so it is tracked separately rather than
+holding this one open.
+
+**Gates, observed on the verification worktree at `8a4c90f`:** `cargo test --workspace
+--release` 812 passed / 0 failed / 41 ignored in the ferrosintesis suite, 0 failed across all
+39 other suites; `cargo clippy --workspace --all-targets -- -D warnings` and the same under
+`--no-default-features` both exit 0; `cargo fmt --all --check` clean. No known-unrelated
+failures.

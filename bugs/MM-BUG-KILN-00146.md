@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T233602Z-p9812-n603751900-c22 branch=task/bug-MM-BUG-KILN-00146-run-fix-20260726T233602Z-p9812-n603751900-c22 code=18aee0928a6993f74372779ef6b48b9d7be985b8 gate=focused+render-diff model=codex@xhigh)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T233602Z-p9812-n603751900-c22 branch=task/bug-MM-BUG-KILN-00146-run-fix-20260726T233602Z-p9812-n603751900-c22 code=67e6a15b8c57714dcade55d7769cc5e239b8d1f4 gate=focused+render-diff model=codex@xhigh)
 
 ## Observation
 
@@ -50,7 +50,7 @@ the register oracle follow that shipping path instead of copying a stale seed fo
 - The calibration oracle reconstructs the excluded high-speed/high-force corner and
   proves the pitch oracle still detects the original failure family.
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260726T233602Z-p9812-n603751900-c22 code=18aee0928a6993f74372779ef6b48b9d7be985b8 gate=focused+render-diff)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T233602Z-p9812-n603751900-c22 code=67e6a15b8c57714dcade55d7769cc5e239b8d1f4 gate=focused+render-diff)
 
 Agent-reported summary: Fixed MM-BUG-KILN-00146 by tying every BowedString register oracle to the engine's actual melodic note-seed helper and exercising the low-string velocity-dependent control map. Current trunk's cello force ceiling and MM-BUG-KILN-00029 joint controls already remove the shipping octave-lock corner, so this branch preserves the voicing byte-for-byte while repairing the stale coverage. All five register gates, the known-wolf calibration, both clippy configurations, and the full catalog render comparison are green.
 

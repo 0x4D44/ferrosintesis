@@ -5144,29 +5144,30 @@ fn find_clavinet_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
     let max_len = (MAX_LEN_S * CLAVINET_SOURCE_SR) as usize;
     let stride = (period / 8.0).max(1.0) as usize;
     let baked_t60 = clavinet_baked_t60(root);
-    let flatten = |i: usize, ls: usize| {
-        let dt = i.saturating_sub(ls) as f32 / CLAVINET_SOURCE_SR;
-        data[i] * 10f32.powf(3.0 * dt / baked_t60)
-    };
+    let makeup_step = 10f32.powf(3.0 / (baked_t60 * CLAVINET_SOURCE_SR));
+    // Compensate the baked envelope once, then use a prefix-energy table so each
+    // candidate's half-loop RMS is O(1). The original per-candidate scan made the
+    // eleven-zone prewarm take ~16.5 s on KILN.
+    let mut flat = vec![0.0f32; body_end + 1];
+    let mut energy = vec![0.0f64; body_end + 2];
+    let mut makeup = makeup_step.recip();
+    for i in start_lo - 1..=body_end {
+        flat[i] = data[i] * makeup;
+        energy[i + 1] = energy[i] + f64::from(flat[i]) * f64::from(flat[i]);
+        makeup *= makeup_step;
+    }
     let imbalance = |ls: usize, le: usize| -> f32 {
         let mid = (ls + le) / 2;
-        let rms = |a: usize, b: usize| {
-            (data[a..b]
-                .iter()
-                .enumerate()
-                .map(|(i, _)| {
-                    let x = flatten(a + i, ls);
-                    x * x
-                })
-                .sum::<f32>()
-                / (b - a).max(1) as f32)
-                .sqrt()
+        let rms = |a: usize, b: usize| -> f32 {
+            ((energy[b] - energy[a]) / (b - a).max(1) as f64).sqrt() as f32
         };
         let (r1, r2) = (rms(ls, mid), rms(mid, le));
         (r1 - r2).abs() / (0.5 * (r1 + r2) + 1e-6)
     };
     let mut best: Option<(f32, usize, usize)> = None;
     let mut ls = start_lo;
+    let stride_makeup = makeup_step.powi(stride as i32);
+    let mut ls_makeup = 1.0f32;
     while ls <= start_hi {
         let mut k = ((min_len as f32 / period).ceil() as usize).max(1);
         loop {
@@ -5178,10 +5179,11 @@ fn find_clavinet_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
             if le + 1 >= body_end {
                 break;
             }
-            let a = flatten(ls, ls);
-            let b = flatten(le, ls);
-            let prev_a = flatten(ls - 1, ls);
-            let prev_b = flatten(le - 1, ls);
+            let scale = ls_makeup.recip();
+            let a = flat[ls] * scale;
+            let b = flat[le] * scale;
+            let prev_a = flat[ls - 1] * scale;
+            let prev_b = flat[le - 1] * scale;
             let vseam = (b - a).abs();
             let sseam = ((b - prev_b) - (a - prev_a)).abs();
             let cost = vseam + 0.5 * sseam + 4.0 * imbalance(ls, le);
@@ -5191,6 +5193,7 @@ fn find_clavinet_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
             k += 1;
         }
         ls += stride;
+        ls_makeup *= stride_makeup;
     }
     best.map(|(_, ls, le)| (ls, le))
 }
@@ -5237,6 +5240,7 @@ pub struct ClavinetSampled {
     body_mul: f32,
     body_env: f32,
     baked_t60: f32,
+    baked_makeup: f32,
     rel_mul: f32,
     env: f32,
     releasing: bool,
@@ -5262,6 +5266,7 @@ pub fn clavinet_sampled(key: u8, vel: u8, sr: f32, _seed: u32) -> Box<dyn Voice>
         body_mul: 10f32.powf(-3.0 / (clavinet_body_t60(key) * sr)),
         body_env: 1.0,
         baked_t60: clavinet_baked_t60(zone.root),
+        baked_makeup: 1.0,
         rel_mul: 10f32.powf(-3.0 / (CLAVINET_RELEASE_T60 * sr)),
         env: 1.0,
         releasing: false,
@@ -5289,15 +5294,6 @@ impl ClavinetSampled {
         };
         self.data[idx]
     }
-
-    fn baked_makeup(&self) -> f32 {
-        if self.pos < self.loop_start as f32 {
-            1.0
-        } else {
-            let offset = self.pos - self.loop_start as f32;
-            10f32.powf(3.0 * offset / (self.baked_t60 * CLAVINET_SOURCE_SR))
-        }
-    }
 }
 
 #[cfg(feature = "embedded-samples")]
@@ -5305,9 +5301,11 @@ impl Voice for ClavinetSampled {
     fn render(&mut self, out: &mut [f32]) -> bool {
         let step = self.base_step * self.bend;
         let loop_len = (self.loop_end - self.loop_start) as f32;
+        let baked_makeup_mul = 10f32.powf(3.0 * step / (self.baked_t60 * CLAVINET_SOURCE_SR));
         for o in out.iter_mut() {
             let j = self.pos as usize;
             let frac = self.pos - j as f32;
+            let in_loop = self.pos >= self.loop_start as f32;
             // 4-point cubic read with looped neighbours: the old asset's tail is bounded,
             // but a GM held note owns its duration, so sustained reads wrap before the fade.
             let v = crate::dsp::cubic4(
@@ -5316,11 +5314,21 @@ impl Voice for ClavinetSampled {
                 self.sample_at(j as isize + 1),
                 self.sample_at(j as isize + 2),
                 frac,
-            ) * self.baked_makeup();
+            ) * if in_loop { self.baked_makeup } else { 1.0 };
             *o += v * self.gain * self.body_env * self.env;
             self.pos += step;
+            if in_loop {
+                self.baked_makeup *= baked_makeup_mul;
+            } else if self.pos >= self.loop_start as f32 {
+                let offset = self.pos - self.loop_start as f32;
+                self.baked_makeup =
+                    10f32.powf(3.0 * offset / (self.baked_t60 * CLAVINET_SOURCE_SR));
+            }
             while self.pos >= self.loop_end as f32 {
                 self.pos -= loop_len;
+                let offset = self.pos - self.loop_start as f32;
+                self.baked_makeup =
+                    10f32.powf(3.0 * offset / (self.baked_t60 * CLAVINET_SOURCE_SR));
             }
             self.body_env *= self.body_mul;
             if self.releasing {

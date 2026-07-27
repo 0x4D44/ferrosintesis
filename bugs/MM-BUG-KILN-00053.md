@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00053-run-fix-20260727T030201Z-p9812-n539021900-c39-code-1785122329048
+- **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) while fixing MM-BUG-KILN-00046 — the sampler-seam half of the same symptom; this is the model-envelope half) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required low-register envelope revoicing needs Arthur to choose the audible swell depth and timing against the two references) → Open (2026-07-26, Arthur approved a reference-like low-register amplitude swell, tapering into the existing key-55 anchor) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T030201Z-p9812-n539021900-c39 branch=task/bug-MM-BUG-KILN-00053-run-fix-20260727T030201Z-p9812-n539021900-c39 code=60491c9d5b04 gate=cargo model=codex@xhigh)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) while fixing MM-BUG-KILN-00046 — the sampler-seam half of the same symptom; this is the model-envelope half) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required low-register envelope revoicing needs Arthur to choose the audible swell depth and timing against the two references) → Open (2026-07-26, Arthur approved a reference-like low-register amplitude swell, tapering into the existing key-55 anchor) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source candidate `bb99f7422382a1bea92fb8130d2613ebcad268d3` extends the existing post-handover crescendo only below key 55, meets the approved rise and taper, and has zero catalog contamination)
 
 ## Observation
 
@@ -65,23 +65,60 @@ model already swells (`m > 1.05`); closing this bug extends that guard to the lo
 
 ## Fix
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T030201Z-p9812-n539021900-c39 code=60491c9d5b04 gate=cargo)
+Source candidate `bb99f7422382a1bea92fb8130d2613ebcad268d3`
+integrates this fix with the later MM-BUG-KILN-00024 handover repair. MM24
+already added one model-owned post-handover crescendo and moved trunk's key-48
+model body/onset to 1.94 (velocity 72) and 1.84 (velocity 110), close to but
+still below this bug's approved 2.0 floor. Keeping the held branch's separate
+amplitude ramp would have stacked two swells.
 
-Agent-reported summary: Fixed MM-BUG-KILN-00053 by giving GM49 Slow Strings a real low-register amplitude swell in the model path. The new regression fails on the pre-fix tree with key 48 model body/onset around 1.06 and full sampled body/onset around 0.91. After the fix, key 48 model body/onset is 2.11 at velocity 72 and 2.04 at velocity 110, with key 52 tapering between key 48 and the unchanged key 55 anchor. The GM49 low-key LA sample taper now follows the same swell depth so the full sampled voice rises instead of flattening the model swell. Existing string LA seam, pitch, audibility, and swell-preservation tests remain green.
+The final implementation therefore reuses the existing crescendo. Its target
+gain stays exactly 3.75 at key 55 and above, then increases linearly to 4.95 at
+key 48 and below. GM48, GM49 key 55, every higher GM49 note, the shared ADSR,
+and the sample seam gain remain unchanged.
 
-Root cause: GM49 reused the generic SawStack ADSR whose overshooting attack reaches full level early and then settles toward sustain; in the low saw-stack register this put too much RMS into the 0-0.4 s onset window, so the 0.8-1.2 s body was not sufficiently louder, and the old low-key sample taper then masked the corrected swell.
+The three-seed geometric-mean body/onset ratios over the approved windows are:
 
-Changed:
-- crates/ferrosintesis/src/voices.rs: added an inert-by-default SawStack amplitude swell and applied a curved low-key GM49 ramp below key 55
-- crates/ferrosintesis/src/voices.rs: reduced only GM49 low-key string sample seam gain along the same swell-depth curve
-- crates/ferrosintesis/src/sampler.rs: restored the la_strings_slow_swell_not_inverted regression and updated stale KILN-00046 comments
+- velocity 72: model key 48/52/55 = 2.31/2.17/2.13; full sampled =
+  1.82/1.73/1.68;
+- velocity 110: model key 48/52/55 = 2.20/2.09/2.05; full sampled =
+  1.69/1.60/1.76.
 
-Tests:
-- $null | cargo test -p ferrosintesis la_strings_slow_swell_not_inverted -- --nocapture
-- $null | cargo test -p ferrosintesis la_strings -- --nocapture
-- $null | cargo test -p ferrosintesis slow_strings_variation_has_longer_attack_than_base -- --nocapture
-- $null | cargo test -p ferrosintesis sawstack_family_signatures_are_stable -- --nocapture
-- git diff --check
+Key 48 clears the approved +6 to +8 dB model band, key 52 lies strictly
+between key 48 and the unchanged key-55 model anchor, and both model-only and
+full sampled paths rise at all six cells. The regression covers seeds 5, 21,
+and 99 and both velocities.
+
+Focused validation passed:
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
+- `cargo test -p ferrosintesis la_strings -- --nocapture` (5 passed)
+- `cargo test -p ferrosintesis slow_strings -- --nocapture` (2 passed)
+- `cargo test -p ferrosintesis sawstack_family_signatures_are_stable`
+- `cargo test -p ferrosintesis --no-default-features --locked`
+  (677 passed, 35 ignored; 4 doctests passed)
+
+Fresh release A/B renders cover keys 48/52/55, velocities 72/110, and both
+full sampled and model-only paths. Candidate body gain is matched back to
+trunk over 0.8–1.2 s: -1.568 dB at key 48, -0.685 dB at key 52, and exactly
+0 dB at key 55. The raw and body-matched pairs are in
+`C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00053-candidate`.
+
+The release-binary render inventory covered all 124 album MIDIs and 17 demo
+MIDIs:
+
+- albums: 14 expected changed, 90 expected same, 0 contamination, 20 reported
+  not reached;
+- demos: 1 expected changed, 15 expected same, 0 contamination, 1 reported
+  not reached.
+
+Every changed track uses GM49 below key 55. Direct MIDI inspection confirms
+all 20 unchanged album rows keep GM49 at key 55 or above (minimum keys
+55–81), and the unchanged demo uses only keys 58–65. The program-only
+inventory cannot encode the fix's deliberate register boundary, so those
+`NOT REACHED` rows are expected isolation proofs, not missing wiring.
 
 ## Notes
 

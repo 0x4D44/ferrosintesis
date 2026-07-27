@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample routing documentation
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:gpt-5.5
+- **Owner role:** fix
+- **Owner run:** fix-20260727T040306Z-p9812-n941510300-c51
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00149-run-fix-20260727T040306Z-p9812-n941510300-c51
+- **Owner base:** 8d8d637995754cdf6b6e31dabc74243681f9b529
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-27T04:03:06Z
+- **Owner until:** 2026-07-27T04:48:06Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

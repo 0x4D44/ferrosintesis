@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** voices / bowed strings
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:gpt-5.5
+- **Owner role:** fix
+- **Owner run:** fix-20260727T034803Z-p9812-n357621900-c48
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00147-run-fix-20260727T034803Z-p9812-n357621900-c48
+- **Owner base:** d515a7c7531fdba19e8da84c3104ec69cb7bbeae
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-27T03:48:03Z
+- **Owner until:** 2026-07-27T04:33:03Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

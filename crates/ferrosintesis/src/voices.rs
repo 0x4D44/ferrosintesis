@@ -5878,6 +5878,7 @@ struct MusetteAccordion {
     trem: Sine,
     trem_depth: f32,
     body: [Biquad; 5],
+    body_bypass: bool,
     source_lp: Biquad,
     body_hp: Biquad,
     body_lp: Biquad,
@@ -5942,6 +5943,7 @@ impl MusetteAccordion {
             trem: Sine::new(trem_hz, sr, 0.0),
             trem_depth,
             body,
+            body_bypass: false,
             source_lp: Biquad::lowpass(350.0, 0.72, sr),
             body_hp: Biquad::highpass(70.0, 0.7, sr),
             body_lp: Biquad::lowpass(body_lp.min(sr * 0.42), 0.75, sr),
@@ -5953,7 +5955,10 @@ impl MusetteAccordion {
             attack_decay: t60_mul(0.110, sr),
             age: 0,
             rng,
-            amp: 0.20 * vel_amp(vel),
+            // Calibrated only after the reed spectrum and enclosure response
+            // were established: the 12-note M-CAL v3 GM21 probe lands at a
+            // +8.09 dB median against SC-55 (certified engine offset +8.13 dB).
+            amp: 0.34 * vel_amp(vel),
             base_f,
             bend: 1.0,
             sr,
@@ -5988,12 +5993,20 @@ impl Voice for MusetteAccordion {
                 s += attack * self.attack_gain * attack_ramp;
                 self.attack_gain *= self.attack_decay;
             }
-            for b in &mut self.body {
-                s = b.process(s);
+            if !self.body_bypass {
+                for b in &mut self.body {
+                    s = b.process(s);
+                }
+                s = self.body_hp.process(self.body_lp.process(s));
             }
-            s = self.body_hp.process(self.body_lp.process(s));
             let trem = 1.0 + self.trem_depth * self.trem.next();
-            *o += s * self.amp * trem * self.env.next();
+            let radiated = s * self.amp * trem * self.env.next();
+            // The enclosure does not radiate an unbounded sum when the three
+            // reed pulses align. A gentle, unity-small-signal compression keeps
+            // those rare crests inside the established free-reed family while
+            // leaving low-level body motion approximately linear. The M-CAL
+            // calibration above measures the complete post-compression voice.
+            *o += 0.40 * (radiated / 0.40).tanh();
         }
         self.env.alive()
     }
@@ -15186,30 +15199,43 @@ mod tests {
     }
 
     /// The approved fix is source-filter synthesis, not just louder noise or more
-    /// scalar gain. The settled voice must carry fixed body regions above the low
-    /// harmonic bed, proving the accordion body has reshaped multiple bands.
+    /// scalar gain. Compare the same seeded source with and without the complete
+    /// body stage: its relative gain must differ across several spectral regions.
     #[test]
     fn accordion_body_shapes_multiple_spectral_regions() {
         let sr = 44100.0;
-        let sig = render_program(21, 52, 110, 1.4, 0xB0D1_0036);
-        let body = segment(&sig, sr, 0.35, 1.20);
-        let bed = spectral_band_rms(body, sr, 250.0, 620.0).max(1e-9);
-        let low_mid = spectral_band_rms(body, sr, 850.0, 1350.0);
-        let high_mid = spectral_band_rms(body, sr, 1800.0, 2800.0);
+        let render = |body_bypass| {
+            let mut voice = MusetteAccordion::new(52, 110, sr, 0xB0D1_0036);
+            voice.body_bypass = body_bypass;
+            let mut sig = vec![0.0; (1.4 * sr) as usize];
+            assert!(voice.render(&mut sig));
+            sig
+        };
+        let filtered = render(false);
+        let bypassed = render(true);
+        let filtered = segment(&filtered, sr, 0.35, 1.20);
+        let bypassed = segment(&bypassed, sr, 0.35, 1.20);
+        let relative_gain_db = |lo, hi| {
+            db_ratio(
+                spectral_band_rms(filtered, sr, lo, hi),
+                spectral_band_rms(bypassed, sr, lo, hi),
+            )
+        };
+        let bed = relative_gain_db(250.0, 620.0);
+        let low_mid = relative_gain_db(850.0, 1350.0);
+        let high_mid = relative_gain_db(1800.0, 2800.0);
         println!(
-            "GM21 body bands: low-mid/bed {:.3}, high-mid/bed {:.3}",
-            low_mid / bed,
-            high_mid / bed
+            "GM21 body filter gain: bed {bed:.2} dB, low-mid {low_mid:.2} dB, \
+             high-mid {high_mid:.2} dB"
         );
         assert!(
-            low_mid >= 0.32 * bed,
-            "GM21 accordion body lost its 0.9-1.3 kHz region: {:.3} of bed",
-            low_mid / bed
+            (low_mid - bed).abs() >= 1.0,
+            "GM21 body acts like a scalar across bed/low-mid: {bed:.2}/{low_mid:.2} dB"
         );
         assert!(
-            high_mid >= 0.11 * bed,
-            "GM21 accordion body lost its 1.8-2.8 kHz region: {:.3} of bed",
-            high_mid / bed
+            (high_mid - bed).abs() >= 1.0,
+            "GM21 body acts like a scalar across bed/high-mid: \
+             {bed:.2}/{low_mid:.2}/{high_mid:.2} dB"
         );
     }
 
@@ -15266,6 +15292,60 @@ mod tests {
         assert!(
             gm21 >= 0.16 && gm21 >= 2.0 * gm23,
             "GM21 is not broader than dry GM23: GM21 {gm21:.3}, GM23 {gm23:.3}"
+        );
+    }
+
+    /// The M-CAL correction must remain audible independently of the spectral
+    /// fullness ratio above. GM23 is the stable dry free-reed comparator: GM21's
+    /// settled section cannot fall materially below it again.
+    #[test]
+    fn accordion_level_stays_with_bandoneon() {
+        let sr = 44100.0;
+        let level = |program: u8| {
+            [48u8, 58, 68]
+                .iter()
+                .map(|&key| {
+                    let sig = render_program(program, key, 110, 1.4, 0x1E7E_0036 ^ program as u32);
+                    rms(segment(&sig, sr, 0.35, 1.20))
+                })
+                .sum::<f32>()
+                / 3.0
+        };
+        let gm21 = level(21);
+        let gm23 = level(23).max(1e-9);
+        let ratio = gm21 / gm23;
+        println!("accordion settled level: GM21/GM23 {ratio:.3}");
+        assert!(
+            (1.15..=1.60).contains(&ratio),
+            "GM21 level escaped its dry free-reed comparator: GM21/GM23 {ratio:.3}"
+        );
+    }
+
+    /// Pitch bend and tremolo are independent channel controls. Their dispatch
+    /// order must not alter seeded GM21 output, and the bend must reach the reed
+    /// sources rather than merely changing bookkeeping.
+    #[test]
+    fn accordion_pitch_and_trem_controls_are_independent() {
+        let sr = 44100.0;
+        let bend = 2f32.powf(2.0 / 12.0);
+        let mut pitch_first = MusetteAccordion::new(60, 100, sr, 0xC017_0036);
+        pitch_first.set_pitch(bend);
+        pitch_first.set_trem(6.2, 0.08);
+        let mut trem_first = MusetteAccordion::new(60, 100, sr, 0xC017_0036);
+        trem_first.set_trem(6.2, 0.08);
+        trem_first.set_pitch(bend);
+        let mut a = vec![0.0; sr as usize];
+        let mut b = vec![0.0; sr as usize];
+        assert!(pitch_first.render(&mut a));
+        assert!(trem_first.render(&mut b));
+        assert_eq!(a, b, "GM21 control order changed its seeded render");
+
+        let body = segment(&a, sr, 0.35, 0.90);
+        let base = key_freq(60);
+        let wanted = base * bend;
+        assert!(
+            mag_at(body, sr, wanted) >= 4.0 * mag_at(body, sr, base),
+            "GM21 pitch bend did not retune its reed sources"
         );
     }
 

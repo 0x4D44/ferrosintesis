@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28-code-1785111555057
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle deliberately cannot decide whether GM48/49's shared-onset tail difference is perceptually sufficient; Arthur must supply the one planned same/different A/B verdict) → Open (2026-07-26, unblocked by Arthur's blinded A/B verdict on `175b594`: “the _A & _B samples sound pretty much the same to me (for both pairs)”; requires a durable GM49 Slow Strings identity) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T000102Z-p9812-n317020100-c28 branch=task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28 code=3a5ea5c1826d gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle deliberately cannot decide whether GM48/49's shared-onset tail difference is perceptually sufficient; Arthur must supply the one planned same/different A/B verdict) → Open (2026-07-26, unblocked by Arthur's blinded A/B verdict on `175b594`: “the _A & _B samples sound pretty much the same to me (for both pairs)”; requires a durable GM49 Slow Strings identity) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T000102Z-p9812-n317020100-c28 branch=task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28 code=b0e7f9c958787fb4d698ce144c0bae982e79b30d gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -92,25 +92,46 @@ The autonomous fixer must:
    wider ensemble-family guards. Produce the same level-matched A/B evidence
    for independent verification, then leave the bug `Fixed`.
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T000102Z-p9812-n317020100-c28 code=3a5ea5c1826d gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T000102Z-p9812-n317020100-c28 code=b0e7f9c958787fb4d698ce144c0bae982e79b30d gate=cargo)
 
-Agent-reported summary: Fixed MM-BUG-KILN-00024 by making GM49 Slow Strings carry a durable post-handover identity instead of remaining hidden under the shared GM48/49 sampled onset. The pre-fix repro showed print_perceptual_matrix reporting GM48/49 as an EarPending tail pair at 0.0593, below BAR_TAIL 0.76. GM49 now has a much slower modeled swell, stronger transient bow-air under that swell, and a modest octave divisi layer, while GM48 keeps the existing normal-attack voicing. The GM48/49 EarPending allow-list exemption was removed and replaced with a samples-on regression that asserts the shared-onset pair clears the model-owned tail bar. The final diagnostic reports POS_TAIL GM 48/49: Tail 0.7777.
+GM49 Slow Strings now keeps the accepted shared sampled onset, then grows into a
+durable model-owned identity. Its existing 0.45-second envelope remains intact to
+avoid a discontinuous sample/model seam. A GM49-only section crescendo begins at
+the exact 0.40-second handover and reaches 3.75× by 2.50 seconds; a stronger bow-air
+catch and modest octave divisi layer distinguish its section body from GM48.
+The GM49 sample trim moved by 1.5% to preserve the strict seam-level contract.
+GM48 and every other `SawStack` retain their historical render path.
 
-Root cause: GM49's intended 0.45-second base attack was velocity-scaled to roughly the same duration as the shared sampled-onset handover, so the audible slow-swell difference was masked; after the handover both GM48 and GM49 were nearly the same SawStack body, leaving the perceptual oracle with no enforced tail distinction.
+The GM48/49 `EarPending` exemption is gone. A samples-on regression now requires
+the real shared-onset handover to retain at least 70% of the model-only swell, and
+the frozen tail oracle directly enforces the pair. The final diagnostic is
+`TAIL 0.7967` / `POS_TAIL GM48/49: Tail 0.7967`, above `BAR_TAIL = 0.76`.
 
-Changed:
-- crates/ferrosintesis/src/voices.rs: retuned only the GM49 Slow Strings SawStack path for a longer post-handover swell, stronger slow-string bow catch, and octav
-- crates/ferrosintesis/src/testutil.rs: removed the GM48/49 EarPending exemption, added POS_TAIL coverage, and added a samples-on regression for the GM48/49 tail
+Focused validation:
 
-Tests:
-- cargo test -p ferrosintesis testutil::perceptual_distinctness -- --nocapture
-- cargo test -p ferrosintesis slow_strings -- --nocapture
-- cargo test -p ferrosintesis string_section_model_has_bow_catch_onset -- --nocapture
-- cargo test -p ferrosintesis print_perceptual_matrix -- --ignored --nocapture (filtered to GM48/49 evidence)
+- `cargo fmt -p ferrosintesis --check`
+- `cargo clippy -p ferrosintesis --all-targets -- -D warnings`
+- `cargo clippy -p ferrosintesis --all-targets --no-default-features -- -D warnings`
+- `cargo test -p ferrosintesis la_strings_ -- --nocapture` — 4 passed; the
+  wrapped/model swell ratio is 0.72–1.00 across keys 48, 55, 58, 64, 68, and 72
+- `cargo test -p ferrosintesis la_level_continuity -- --nocapture` — passed
+- `cargo test -p ferrosintesis slow_strings -- --nocapture` — 2 passed
+- `cargo test -p ferrosintesis string_section_model_has_bow_catch_onset -- --nocapture`
+  — passed; GM48 ratio 1.97, GM49 ratio 2.05
+- `cargo test -p ferrosintesis testutil::perceptual_distinctness -- --nocapture`
+  — 11 passed, 2 diagnostic tests ignored
 
-Left alone:
-- bugs/ ledger
-- Cargo.toml
+Fresh release binaries produced a complete render-diff at 11,025 Hz. Of 124 album
+MIDIs, 34 GM49 users changed and 90 stayed identical. Of 17 demo MIDIs, two GM49
+users changed and 15 stayed identical. Both inventories report zero contamination
+and zero not-reached tracks.
+
+The candidate listening pack is
+`C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00024-candidate`. It reuses the
+original four blinded MIDIs and answer key: keys 48 and 72, velocity 100,
+three-second holds plus 0.1-second release, samples enabled, reverb and echo
+disabled, and independent −18 LUFS normalization. FFmpeg's independent meter reads
+−17.97/−18.10 LUFS at key 48 and −17.81/−18.03 LUFS at key 72.
 
 ## Notes
 

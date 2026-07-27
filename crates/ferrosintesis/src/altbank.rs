@@ -1022,6 +1022,48 @@ pub(crate) fn choir2_reg_weight(key: u8, section: usize) -> f32 {
     reg_weight(key, CHOIR2_SECTIONS[section].reg)
 }
 
+type PianoBank = fn(u8, bool) -> &'static [crate::sampler::Zone];
+
+struct Gm1AltSource {
+    #[cfg(test)]
+    name: &'static str,
+    bank: PianoBank,
+    #[cfg(test)]
+    crate_dir: &'static str,
+}
+
+/// GM 1 Bright Acoustic alternates, in bank-select-MSB (CC0) order.
+///
+/// CC0=0 is GM 1's default recording in `voices::make`; these are the non-zero
+/// alternates selected by this factory. Keeping the router and documentation
+/// regression on this one table prevents the parent inventory from drifting back
+/// to GM 0 claims while the shipped selector stays on program 1.
+const GM1_ALT_SOURCES: &[Gm1AltSource] = &[
+    Gm1AltSource {
+        #[cfg(test)]
+        name: "YDP bright grand",
+        bank: crate::sampler::ydpgrand_bank,
+        #[cfg(test)]
+        crate_dir: "crates/ferrosintesis-samples-ydp-grand",
+    },
+    Gm1AltSource {
+        #[cfg(test)]
+        name: "MuseScore grand",
+        bank: crate::sampler::musescoregrand_bank,
+        #[cfg(test)]
+        crate_dir: "crates/ferrosintesis-samples-musescore-grand",
+    },
+];
+
+fn gm1_alt_source(
+    bank: u8,
+    vel: u8,
+    rr2: bool,
+) -> Option<(&'static [crate::sampler::Zone], crate::voices::PianoVoicing)> {
+    let src = GM1_ALT_SOURCES.get(bank.checked_sub(1)? as usize)?;
+    Some(((src.bank)(vel, rr2), crate::voices::GM1_VOICING))
+}
+
 // ---------------------------------------------------------------------------
 // Factory — the alt bank remaps only 42-45/48-54; GM 40/41 (violin/viola) and
 // everything else delegate to the default `voices::make`, so an alt-bank channel
@@ -1068,17 +1110,7 @@ pub fn make(
                         0 => crate::voices::GM0_SOURCES
                             .get(bank as usize)
                             .map(|s| ((s.bank)(vel, seed & 1 == 0), s.voicing())),
-                        _ => match bank {
-                            1 => Some((
-                                crate::sampler::ydpgrand_bank(vel, seed & 1 == 0),
-                                crate::voices::GM1_VOICING,
-                            )),
-                            2 => Some((
-                                crate::sampler::musescoregrand_bank(vel, seed & 1 == 0),
-                                crate::voices::GM1_VOICING,
-                            )),
-                            _ => None,
-                        },
+                        _ => gm1_alt_source(bank, vel, seed & 1 == 0),
                     }
                 } else {
                     None
@@ -1435,6 +1467,116 @@ mod tests {
         assert!(sampler_grand.contains(&format!("B1 upright is GM 0 CC0={b1} default")));
         assert!(!prepare_grand.contains("GM 1/3"));
         assert!(!sampler_grand.contains("GM 1/3"));
+    }
+
+    /// MM-BUG-KILN-00149: GM1 alternate pianos are not GM0 recordings. The
+    /// parent README/NOTICE inventory used to keep its own hand-written program
+    /// labels, so it called the YDP and MuseScore GM1 alternate banks GM0 while
+    /// the router selected them only through the program-1 arm.
+    #[test]
+    fn every_gm1_alternate_parent_claim_matches_the_router() {
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root = manifest_dir
+            .parent()
+            .and_then(std::path::Path::parent)
+            .expect("crate lives under <repo>/crates");
+        let norm = |t: &str| t.split_whitespace().collect::<Vec<_>>().join(" ");
+        let read = |path: &std::path::Path| {
+            std::fs::read_to_string(path)
+                .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
+        };
+
+        let parent_readme = read(&manifest_dir.join("README.md"));
+        let parent_notice = read(&manifest_dir.join("NOTICE"));
+
+        for (i, src) in GM1_ALT_SOURCES.iter().enumerate() {
+            let bank = i + 1;
+            let selector = format!("CC0={bank}");
+            let crate_name = src
+                .crate_dir
+                .rsplit('/')
+                .next()
+                .expect("crate_dir has a final component");
+
+            let package_dir = root.join(src.crate_dir);
+            let package_lib = read(&package_dir.join("src/lib.rs"));
+            let package_manifest = read(&package_dir.join("Cargo.toml"));
+            let package_readme = read(&package_dir.join("README.md"));
+            let package_provenance = read(&package_dir.join("PROVENANCE.md"));
+
+            for (what, text) in [
+                ("module docs", &package_lib),
+                ("manifest description", &package_manifest),
+                ("README", &package_readme),
+                ("PROVENANCE", &package_provenance),
+            ] {
+                let text = norm(text);
+                assert!(
+                    text.contains("GM 1") && text.contains(&selector),
+                    "{} {what} does not state GM 1 `{selector}`; the router gives \
+                     {} program 1 {selector}",
+                    package_dir.display(),
+                    src.name
+                );
+            }
+
+            let readme_row = parent_readme
+                .lines()
+                .find(|line| line.contains(&format!("`{crate_name}`")))
+                .unwrap_or_else(|| panic!("parent README has no row for {crate_name}"));
+            let readme_row = norm(readme_row);
+            assert!(
+                readme_row.contains("GM 1 Bright Acoustic alternate")
+                    && readme_row.contains(&selector),
+                "parent README row for {crate_name} does not name GM 1 Bright Acoustic \
+                 alternate {selector}: {readme_row}"
+            );
+            assert!(
+                !readme_row.contains("GM 0"),
+                "parent README row for {crate_name} still claims GM 0: {readme_row}"
+            );
+
+            let notice_line = parent_notice
+                .lines()
+                .find(|line| line.starts_with(crate_name))
+                .unwrap_or_else(|| panic!("parent NOTICE has no line for {crate_name}"));
+            let notice_line = norm(notice_line);
+            assert!(
+                notice_line.contains("GM 1 Bright Acoustic alternate")
+                    && notice_line.contains(&selector),
+                "parent NOTICE line for {crate_name} does not name GM 1 Bright Acoustic \
+                 alternate {selector}: {notice_line}"
+            );
+            assert!(
+                !notice_line.contains("GM 0"),
+                "parent NOTICE line for {crate_name} still claims GM 0: {notice_line}"
+            );
+        }
+    }
+
+    /// An unlisted GM1 CC0 value must stay a pure-model fallback, not silently
+    /// alias the last known alternate recording.
+    #[test]
+    fn unknown_gm1_alternate_bank_falls_back_to_the_model() {
+        let bank = GM1_ALT_SOURCES.len() as u8 + 1;
+        let render = |samples| {
+            let sr = 44100.0;
+            let mut v = make(1, bank, 64, 96, sr, 29, samples);
+            let mut b = vec![0f32; (sr * 0.05) as usize];
+            v.render(&mut b);
+            b
+        };
+        let with_samples = render(true);
+        let model_only = render(false);
+        let first_diff = with_samples
+            .iter()
+            .zip(&model_only)
+            .position(|(a, b)| a.to_bits() != b.to_bits());
+        assert!(
+            first_diff.is_none(),
+            "GM1 CC0={bank} rendered a sample path; first model-only difference at {:?}",
+            first_diff
+        );
     }
 
     /// Render an alt-factory strings voice (`make` → `strings` for 48–51).

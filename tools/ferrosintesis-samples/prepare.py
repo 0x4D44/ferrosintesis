@@ -2308,7 +2308,7 @@ def _bake_bagpipe(src):
     harmonic of the lowest zone (F4, ~684 Hz) sits below the highest fundamental
     (G5, ~774 Hz), so one ceiling cannot be both above 774 and below 684.
     """
-    _validate_generated_output_families(BAGPIPE_SOURCES)
+    _validate_generated_output_families({"drone", "chanter"}, BAGPIPE_SOURCES)
     with open(os.path.join(src, "bagpipe.sfz"), encoding="utf-8",
               errors="replace") as f:
         loops = parse_sfz_loops(f.read())
@@ -2510,6 +2510,7 @@ def _bake_clavinet(src):
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-clavinet", "samples")
     _validate_generated_output_families(
+        {"clavinet"},
         {f"clavinet_{_midi_name(root)}.wav" for root, *_ in zones},
         output_dir=out_dir)
     rows = []
@@ -2554,6 +2555,7 @@ def _bake_sf_onset(src, preset, prefix, dest_crate, keep_s, fade_s):
     out_dir = os.path.join(REPO_ROOT, "crates", dest_crate, "samples")
     os.makedirs(out_dir, exist_ok=True)
     _validate_generated_output_families(
+        {prefix},
         {f"{prefix}_{_midi_name(root)}.wav" for root, *_ in zones},
         output_dir=out_dir)
     rows = []
@@ -2657,6 +2659,7 @@ def _bake_musescore_grand(src):
                            "ferrosintesis-samples-musescore-grand", "samples")
     os.makedirs(out_dir, exist_ok=True)
     _validate_generated_output_families(
+        {"musescoregrand"},
         {f"musescoregrand_{_midi_name(root)}.wav" for root in best},
         output_dir=out_dir)
     rows = []
@@ -2728,6 +2731,7 @@ def _bake_ydp_grand(src):
     out_dir = os.path.join(REPO_ROOT, "crates",
                            "ferrosintesis-samples-ydp-grand", "samples")
     _validate_generated_output_families(
+        {"ydpgrand"},
         {f"ydpgrand_{_midi_name(midi)}.wav" for midi in YDP_ZONE_MIDI},
         output_dir=out_dir)
     sf2 = open(ensure_ydp_sf2(src), "rb").read()
@@ -2900,6 +2904,7 @@ def _bake_b1upright(src):
             manifests.append(json.load(f))
 
     _validate_generated_output_families(
+        {"b1"},
         {
             f"b1_{sl['pass']}_{sl['assigned_note']}.wav"
             for man in manifests
@@ -2946,7 +2951,8 @@ def _bake_darkened_grand(_src):
     os.makedirs(out_dir, exist_ok=True)
     source_names = sorted(f for f in os.listdir(grand_dir) if f.endswith(".wav"))
     expected_outputs = {"dark" + fn for fn in source_names}
-    _validate_generated_output_families(expected_outputs, output_dir=out_dir)
+    _validate_generated_output_families(
+        {"darkgrand"}, expected_outputs, output_dir=out_dir)
     a = 1.0 - math.exp(-2.0 * math.pi * DARK_SHELF_HZ / OUT_SR)
     g = 1.0 - 10.0 ** (DARK_CUT_DB / 20.0)
     rows = []
@@ -3051,7 +3057,8 @@ def bake_bottle_loop(src_dir=FREESOUND_SRC, repo_root=REPO_ROOT, verify_source=T
     Returns the quantized 16-bit samples it wrote, so a test can compare them against
     the committed asset without reading the file back.
     """
-    _validate_generated_output_families({BOTTLE_LOOP_OUT}, repo_root=repo_root)
+    _validate_generated_output_families(
+        {"bottleloop"}, {BOTTLE_LOOP_OUT}, repo_root=repo_root)
     source = os.path.join(src_dir, BOTTLE_LOOP_SOURCE)
     if verify_source:
         digest = sha256_file(source)
@@ -3128,6 +3135,7 @@ def _bake_mtg_sax(src):
                 row = (out_name, f0, f0, nominal, cents, conf, len(seg) / wsr)
                 pending.append((out_name, seg, wsr, row))
     _validate_generated_output_families(
+        {"sax"},
         {out_name for out_name, _seg, _wsr, _row in pending},
         output_dir=out_dir)
     rows = []
@@ -3262,9 +3270,10 @@ def _validate_generated_output_inventory(family, expected, repo_root=None, outpu
         )
 
 
-def _validate_generated_output_families(expected, repo_root=None, output_dir=None):
-    """Validate every filename-prefix family represented in `expected`."""
-    by_family = {}
+def _validate_generated_output_families(
+        families, expected, repo_root=None, output_dir=None):
+    """Validate named families, including when the expected output set is empty."""
+    by_family = {family: set() for family in families}
     for name in expected:
         by_family.setdefault(name.split("_", 1)[0], set()).add(name)
     for family, owned in by_family.items():
@@ -3279,6 +3288,7 @@ def _bake_gong_bank():
         expected_by_package.setdefault(package, set()).add(out_name)
     for package, expected in expected_by_package.items():
         _validate_generated_output_families(
+            {name.split("_", 1)[0] for name in expected},
             expected,
             output_dir=os.path.join(REPO_ROOT, "crates", package, "samples"))
     rows = []

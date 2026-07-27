@@ -1419,6 +1419,27 @@ class UpstreamRefsArePinnedTest(unittest.TestCase):
                 self.assertEqual(unpinned_github_refs(text), [])
 
 
+class GeneratedOutputFamiliesTest(unittest.TestCase):
+    """The shared validator fails closed for empty and multi-family plans."""
+
+    def test_empty_expected_set_still_rejects_a_stale_owned_output(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            open(os.path.join(out_dir, "sax_old.wav"), "wb").close()
+            with self.assertRaisesRegex(ValueError, r"sax_old\.wav"):
+                prepare._validate_generated_output_families(
+                    {"sax"}, set(), output_dir=out_dir)
+
+    def test_each_named_family_is_checked_without_touching_siblings(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            for name in ("chanter_C4.wav", "drone_G2.wav", "other_old.wav"):
+                open(os.path.join(out_dir, name), "wb").close()
+            prepare._validate_generated_output_families(
+                {"chanter", "drone"},
+                {"chanter_C4.wav", "drone_G2.wav"},
+                output_dir=out_dir,
+            )
+
+
 class HeadroomOutputInventoryTest(unittest.TestCase):
     """MM-BUG-KILN-00140: rebakes must reject obsolete owned outputs."""
 

@@ -168,76 +168,81 @@ mod tests {
             .collect()
     }
 
-    fn python_call_graph(
-        functions: &BTreeMap<String, String>,
-    ) -> BTreeMap<String, BTreeSet<String>> {
-        functions
-            .iter()
-            .map(|(name, body)| {
-                let calls = functions
-                    .keys()
-                    .filter(|target| {
-                        *target != name && !python_call_positions(body, target).is_empty()
-                    })
-                    .cloned()
-                    .collect();
-                (name.clone(), calls)
-            })
-            .collect()
+    #[derive(Clone, Copy, Default)]
+    struct PythonBakeEffects {
+        writes: bool,
+        validates: bool,
+        validates_before_first_write: bool,
     }
 
-    fn reaches_python_function(
-        graph: &BTreeMap<String, BTreeSet<String>>,
-        start: &str,
-        target: &str,
-    ) -> bool {
-        let mut stack = vec![start];
-        let mut seen = BTreeSet::new();
-        while let Some(name) = stack.pop() {
-            if !seen.insert(name) {
-                continue;
-            }
-            let Some(calls) = graph.get(name) else {
-                continue;
-            };
-            if calls.contains(target) {
-                return true;
-            }
-            stack.extend(calls.iter().map(String::as_str));
+    fn python_bake_effects(
+        name: &str,
+        functions: &BTreeMap<String, String>,
+        memo: &mut BTreeMap<String, PythonBakeEffects>,
+        visiting: &mut BTreeSet<String>,
+    ) -> PythonBakeEffects {
+        const VALIDATOR: &str = "_validate_generated_output_inventory";
+        if let Some(&effects) = memo.get(name) {
+            return effects;
         }
-        false
+        if !visiting.insert(name.to_owned()) {
+            return PythonBakeEffects::default();
+        }
+
+        let body = &functions[name];
+        let mut calls: Vec<(usize, Option<&str>)> = python_call_positions(body, "write_wav_mono")
+            .into_iter()
+            .map(|position| (position, None))
+            .collect();
+        for target in functions.keys().filter(|target| target.as_str() != name) {
+            calls.extend(
+                python_call_positions(body, target)
+                    .into_iter()
+                    .map(|position| (position, Some(target.as_str()))),
+            );
+        }
+        calls.sort_by_key(|call| call.0);
+
+        let mut effects = PythonBakeEffects::default();
+        for (_, target) in calls {
+            let Some(target) = target else {
+                effects.writes = true;
+                effects.validates_before_first_write = effects.validates;
+                break;
+            };
+            if target == VALIDATOR {
+                effects.validates = true;
+                continue;
+            }
+            let called = python_bake_effects(target, functions, memo, visiting);
+            if called.writes {
+                effects.writes = true;
+                effects.validates_before_first_write =
+                    effects.validates || called.validates_before_first_write;
+                effects.validates |= called.validates;
+                break;
+            }
+            effects.validates |= called.validates;
+        }
+
+        visiting.remove(name);
+        memo.insert(name.to_owned(), effects);
+        effects
     }
 
     fn unvalidated_bake_output_helpers(source: &str) -> Vec<String> {
         let functions = top_level_python_functions(source);
-        let graph = python_call_graph(&functions);
-        let validator = "_validate_generated_output_inventory";
-        let validator_callers: BTreeSet<&str> = functions
-            .keys()
-            .filter_map(|name| {
-                (name == validator || reaches_python_function(&graph, name, validator))
-                    .then_some(name.as_str())
-            })
-            .collect();
+        let mut memo = BTreeMap::new();
 
         functions
-            .iter()
-            .filter_map(|(name, body)| {
+            .keys()
+            .filter_map(|name| {
                 if !(name.starts_with("_bake_") || name.starts_with("bake_")) {
                     return None;
                 }
-                let first_write = python_call_positions(body, "write_wav_mono")
-                    .into_iter()
-                    .min()?;
-                let first_validation = validator_callers
-                    .iter()
-                    .filter_map(|validator_name| {
-                        python_call_positions(body, validator_name)
-                            .into_iter()
-                            .min()
-                    })
-                    .min();
-                (!first_validation.is_some_and(|pos| pos < first_write)).then(|| name.clone())
+                let effects =
+                    python_bake_effects(name, &functions, &mut memo, &mut BTreeSet::new());
+                (effects.writes && !effects.validates_before_first_write).then(|| name.clone())
             })
             .collect()
     }
@@ -586,6 +591,41 @@ def _bake_newbank(src):
     }
 
     #[test]
+    fn bake_output_inventory_oracle_rejects_an_unvalidated_delegated_writer() {
+        let source = r#"
+def _validate_generated_output_inventory(family, expected):
+    pass
+
+def _write_newbank(out_dir):
+    for name in NAMES:
+        write_wav_mono(os.path.join(out_dir, f"newbank_{name}.wav"), [], OUT_SR)
+
+def _bake_newbank(src):
+    out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-new", "samples")
+    _write_newbank(out_dir)
+"#;
+
+        assert_eq!(unvalidated_bake_output_helpers(source), ["_bake_newbank"]);
+    }
+
+    #[test]
+    fn bake_output_inventory_oracle_rejects_delegated_validation_after_write() {
+        let source = r#"
+def _validate_generated_output_inventory(family, expected):
+    pass
+
+def _write_newbank(out_dir):
+    write_wav_mono(os.path.join(out_dir, "newbank_C4.wav"), [], OUT_SR)
+    _validate_generated_output_inventory("newbank", {"newbank_C4.wav"})
+
+def _bake_newbank(src):
+    _write_newbank(src)
+"#;
+
+        assert_eq!(unvalidated_bake_output_helpers(source), ["_bake_newbank"]);
+    }
+
+    #[test]
     fn bake_output_inventory_oracle_accepts_transitive_validation() {
         let source = r#"
 def _validate_generated_output_inventory(family, expected):
@@ -599,6 +639,23 @@ def _bake_goodbank(src):
     out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-good", "samples")
     for name in NAMES:
         write_wav_mono(os.path.join(out_dir, f"goodbank_{name}.wav"), [], OUT_SR)
+"#;
+
+        assert!(unvalidated_bake_output_helpers(source).is_empty());
+    }
+
+    #[test]
+    fn bake_output_inventory_oracle_accepts_validated_delegated_writer() {
+        let source = r#"
+def _validate_generated_output_inventory(family, expected):
+    pass
+
+def _write_goodbank(out_dir):
+    _validate_generated_output_inventory("goodbank", {"goodbank_C4.wav"})
+    write_wav_mono(os.path.join(out_dir, "goodbank_C4.wav"), [], OUT_SR)
+
+def _bake_goodbank(src):
+    _write_goodbank(src)
 "#;
 
         assert!(unvalidated_bake_output_helpers(source).is_empty());

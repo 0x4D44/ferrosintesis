@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00036 — GM21 Accordion is a sparse 12-sine additive stack: reads thin/synthetic AND perceptually quiet
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-21
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T180101Z-p9812-n797628000-c105
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00036-run-verify-20260727T180101Z-p9812-n797628000-c105
-- **Owner base:** 1679104bc906f5a505b0267c9b3368fde78b4fef
-- **Owner fingerprint:** sha256:aa3073c8d3672dfd73d317ef927825b3feeef4687c0d67b9ed5d5dfd041bf1ba
-- **Owner since:** 2026-07-27T18:01:01Z
-- **Owner until:** 2026-07-27T18:46:01Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; timbre defect confirmed by Fable 5 + Codex gpt-5.6-sol cross-agent reconciliation) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — current trunk still has the measured sparse additive voice, but Arthur must choose a modeled-reed target or approve a sourced LA accordion layer before an audible fix has a correctness target) → Open (2026-07-26, unblocked by Arthur after focused free-reed synthesis research; approved a modeled French-musette source-filter voice rather than a sampled layer) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T004001Z-p9812-n387868000-c31 branch=task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31 code=4e635f8cdc6b9bd40813e06e8aded6c374491689 gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; timbre defect confirmed by Fable 5 + Codex gpt-5.6-sol cross-agent reconciliation) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — current trunk still has the measured sparse additive voice, but Arthur must choose a modeled-reed target or approve a sourced LA accordion layer before an audible fix has a correctness target) → Open (2026-07-26, unblocked by Arthur after focused free-reed synthesis research; approved a modeled French-musette source-filter voice rather than a sampled layer) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T004001Z-p9812-n387868000-c31 branch=task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31 code=4e635f8cdc6b9bd40813e06e8aded6c374491689 gate=cargo model=codex@xhigh) → Closed (2026-07-27, deltic:auto role=verify run=verify-20260727T180101Z-p9812-n797628000-c105 verified_fix_run=fix-20260727T004001Z-p9812-n387868000-c31 verdict=close model=claude)
 
 ## Observation
 
@@ -191,3 +191,7 @@ probe MIDI/plan, raw baseline/candidate/SC-55 renders, and conventional
 `sc55_levelmatched.wav`. The three listening files use scalar-only gain and
 measure −18.1/−18.0/−18.0 LUFS respectively, so loudness does not disclose the
 candidate while its real envelope and spectrum remain intact.
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T180101Z-p9812-n797628000-c105 verified_fix_run=fix-20260727T004001Z-p9812-n387868000-c31 verdict=close)
+
+Verifier note: GM21's 12-sine stack is genuinely replaced by a band-limited source-filter musette voice; symptom gone, 8 oracles pass, all gates green. — 1) Original observation reproduced from source: git show ad3d795 (pre-fix parent) shows organ() case 21 = Organ::new with exactly 12 sine partials (1.0/2.0/3.0/4.0 each +/-16c, amps 0.92/0.58/0.58 .. 0.05/0.03/0.03) + with_reed_noise(0.018,..) -- verbatim the ledger's recorded root cause, with zero deterministic energy above H4. On this trunk GM21 routes to MusetteAccordion (voices.rs:5875, dispatch voices.rs:14336); organ() now handles only 16..=20|23. Liv...

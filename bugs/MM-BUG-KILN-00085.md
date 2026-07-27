@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T230602Z-p9812-n782377700-c18 branch=task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18 code=a0bdbdc7335105591dc6dc4228b8baa1bb61d30a gate=focused+render-diff model=codex@xhigh)
+- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T230602Z-p9812-n782377700-c18 branch=task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18 code=d00a5e0532e120413d207fdfdd7cc5c75e406278 gate=focused+render-diff model=codex@xhigh)
 
 ## Observation
 
@@ -128,26 +128,28 @@ Leave the bug **Fixed**, not Closed, after the code and regression tests land. I
 verification should inspect the automated evidence and audition a short representative
 GM 32–35 alternate-bank render before closure.
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260726T230602Z-p9812-n782377700-c18 code=a0bdbdc7335105591dc6dc4228b8baa1bb61d30a gate=focused+render-diff)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T230602Z-p9812-n782377700-c18 code=d00a5e0532e120413d207fdfdd7cc5c75e406278 gate=focused+render-diff)
 
-Agent-reported summary: Fixed MM-BUG-KILN-00085 by making the GM32-35 alternate bass sampled layer additive instead of letting it replace the modeled bass onset. The modeled bass now plays at full level from sample zero, while the sampled overlay fades out by 150 ms. The bass alternate path also refuses upward sample repitching beyond five semitones and falls back to the bare model above that ceiling. Regression tests cover onset preservation, the 150 ms taper, the upward repitch ceiling, note-off/reaping, and the unchanged ordinary LA replacement wrapper. Focused tests, both clippy feature configurations, catalog render comparisons, and an explicit alternate-bank A/B are green.
+Agent-reported summary: Fixed MM-BUG-KILN-00085 by making the GM32-35 alternate bass sampled layer additive instead of letting it replace the modeled bass onset. The modeled bass now plays at full level from sample zero, while the sampled overlay fades out by 150 ms. The bass alternate path also refuses upward sample repitching beyond five semitones and falls back to the bare model above that ceiling. Each recording/model pair has an independent additive trim, keeping the sample above the established alternate-bank reachability floor without moving the modeled kick by more than 1 dB. Regression tests cover onset preservation, the 150 ms taper, the upward repitch ceiling, note-off/reaping, and the unchanged ordinary LA replacement wrapper. Focused tests, both clippy feature configurations, catalog render comparisons, and an explicit alternate-bank A/B are green.
 
 Root cause: The shared LA sampled wrapper only implemented a sum-to-one replacement crossfade, so the bass alternate path inherited a 50 ms model mute and 350 ms handover. That envelope displaced the modeled kick/transient for bass notes that are often shorter than the handover, and the sample zone also remained eligible for overly broad upward repitching.
 
 Changed:
 - crates/ferrosintesis/src/sampler.rs: added explicit LA replacement/additive blend handling, a bass-only additive limited wrapper, and focused regression coverage.
-- crates/ferrosintesis/src/voices.rs: routed GM32-35 alternate bass through the additive wrapper with a 150 ms fade and five-semitone upward repitch ceiling.
+- crates/ferrosintesis/src/voices.rs: routed GM32-35 alternate bass through the additive wrapper with a 150 ms fade, five-semitone upward repitch ceiling, and per-recording additive gain calibration.
 
 Tests:
 - $null | deltic timeout 300 cargo test -p ferrosintesis la_bass_alt -- --nocapture
 - $null | deltic timeout 300 cargo test -p ferrosintesis la_ebass_additive_level_parity -- --nocapture
+- $null | deltic timeout 300 cargo test -p ferrosintesis altbank_sampled_programs_preserve_pure_model_and_default_layers -- --nocapture
 - $null | deltic timeout 300 cargo test -p ferrosintesis ordinary_la_wrap_keeps_sum_to_one_onset_ownership -- --nocapture
+- $null | deltic timeout 300 cargo test -p ferrosintesis prewarm_covers_every_lazy_cache -- --nocapture
 - $null | deltic timeout 300 cargo test -p ferrosintesis print_ebass_wrap_level_ratios -- --ignored --nocapture
 - $null | deltic timeout 300 cargo clippy -p ferrosintesis --all-targets -- -D warnings
 - $null | deltic timeout 300 cargo clippy -p ferrosintesis --all-targets --no-default-features -- -D warnings
-- deltic render-diff albums --baseline D:\worktrees\midi-music\BASELINE-00085\target\release\ferrosintesis.exe --candidate D:\worktrees\midi-music\bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18\target\release\ferrosintesis.exe: 0 changed, 82 expected same, 0 contamination; 42 default-bank GM32-35 tracks reported not reached because the harness is not bank-aware.
-- deltic render-diff demos --baseline D:\worktrees\midi-music\BASELINE-00085\target\release\ferrosintesis.exe --candidate D:\worktrees\midi-music\bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18\target\release\ferrosintesis.exe: 0 changed, 12 expected same, 0 contamination; 5 default-bank GM32-35 tracks reported not reached for the same reason.
-- Explicit CC0=1 GM32-35 audition: C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00085\before.wav and C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00085\after.wav have equal lengths and different SHA-256 hashes, proving the alternate-bank path changed while the default catalog did not.
+- python tools/render-diff/render_diff.py --baseline D:\worktrees\midi-music\BASELINE-00085\target\release\ferrosintesis.exe --new .\target\release\ferrosintesis.exe --program 32 --program 33 --program 34 --program 35 --rate 11025 --jobs 6: 0 changed, 82 expected same, 0 contamination; 42 default-bank GM32-35 tracks reported not reached because the harness is not bank-aware.
+- The same render-diff with --glob "demos/**/*.mid": 0 changed, 12 expected same, 0 contamination; 5 default-bank GM32-35 tracks reported not reached for the same reason.
+- Explicit CC0=1 GM32-35 audition: C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00085\before.wav (SHA-256 8C50FBC53113E310DE555DD311F1E44B7771CBBE5CB8A5E3B06CA7B430E45946) and C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00085\after.wav (SHA-256 A7B8D56BB75859DA7528F80F75713CA05CBD6E9C031CAC8CB19D65E31033AAF0) are both 1,488,416 bytes and differ, proving the alternate-bank path changed while the default catalog did not.
 
 Left alone:
 - Cargo.toml and Cargo.lock

@@ -237,9 +237,6 @@ mod tests {
         functions
             .keys()
             .filter_map(|name| {
-                if !(name.starts_with("_bake_") || name.starts_with("bake_")) {
-                    return None;
-                }
                 let effects =
                     python_bake_effects(name, &functions, &mut memo, &mut BTreeSet::new());
                 (effects.writes && !effects.validates_before_first_write).then(|| name.clone())
@@ -1001,6 +998,22 @@ def _bake_newbank(src):
     }
 
     #[test]
+    fn bake_output_inventory_oracle_rejects_unvalidated_writer_without_bake_name() {
+        let source = r#"
+def _validate_generated_output_inventory(family, expected):
+    pass
+
+def prepare_newbank(src):
+    # _validate_generated_output_inventory("newbank", NAMES) is only a comment.
+    out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-new", "samples")
+    for name in NAMES:
+        write_wav_mono(os.path.join(out_dir, f"newbank_{name}.wav"), [], OUT_SR)
+"#;
+
+        assert_eq!(unvalidated_bake_output_helpers(source), ["prepare_newbank"]);
+    }
+
+    #[test]
     fn bake_output_inventory_oracle_rejects_an_unvalidated_delegated_writer() {
         let source = r#"
 def _validate_generated_output_inventory(family, expected):
@@ -1015,7 +1028,10 @@ def _bake_newbank(src):
     _write_newbank(out_dir)
 "#;
 
-        assert_eq!(unvalidated_bake_output_helpers(source), ["_bake_newbank"]);
+        assert_eq!(
+            unvalidated_bake_output_helpers(source),
+            ["_bake_newbank", "_write_newbank"]
+        );
     }
 
     #[test]
@@ -1032,7 +1048,10 @@ def _bake_newbank(src):
     _write_newbank(src)
 "#;
 
-        assert_eq!(unvalidated_bake_output_helpers(source), ["_bake_newbank"]);
+        assert_eq!(
+            unvalidated_bake_output_helpers(source),
+            ["_bake_newbank", "_write_newbank"]
+        );
     }
 
     #[test]

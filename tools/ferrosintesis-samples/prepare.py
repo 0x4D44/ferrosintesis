@@ -1239,18 +1239,27 @@ def fetch(url, path):
         raise
 
 
-def ensure_source(fn, url, src):
+def ensure_source(fn, url, src, label=None, validate_wav=True):
     path = os.path.join(src, fn)
-    if not os.path.exists(path):
-        print(f"fetching {fn} ...", file=sys.stderr)
-        fetch(url, path)
+    display = f"{label} {fn}" if label else fn
+    if direct_source_matches(path, url, validate_wav=validate_wav):
         return path
+    if os.path.exists(path):
+        print(f"cached {display} missing source proof or stale; refetching ...",
+              file=sys.stderr)
+    else:
+        print(f"fetching {display} ...", file=sys.stderr)
+    fetch(url, path)
     try:
-        read_wav(path)
+        if validate_wav:
+            read_wav(path)
     except (ValueError, wave.Error, EOFError) as e:
-        print(f"cached {fn} invalid ({e}); refetching ...", file=sys.stderr)
-        os.remove(path)
-        fetch(url, path)
+        print(f"fetched {display} invalid ({e}); removing ...", file=sys.stderr)
+        if os.path.exists(path):
+            os.remove(path)
+        remove_direct_source_manifest(path)
+        raise
+    write_direct_source_manifest(path, url)
     return path
 
 
@@ -1261,6 +1270,57 @@ def sha256_file(path):
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def direct_source_manifest_path(path):
+    return path + ".source.json"
+
+
+def direct_source_matches(path, url, validate_wav=True):
+    """Does a direct-downloaded cache entry match the requested URL and bytes?"""
+    try:
+        with open(direct_source_manifest_path(path), "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+        if not isinstance(manifest, dict):
+            return False
+        if manifest.get("schema") != 1:
+            return False
+        if manifest.get("url") != url:
+            return False
+        if sha256_file(path) != manifest.get("sha256"):
+            return False
+        if validate_wav:
+            read_wav(path)
+    except (OSError, ValueError, EOFError, wave.Error):
+        return False
+    return True
+
+
+def write_direct_source_manifest(path, url):
+    """Atomically bind a direct-downloaded file to its source URL and bytes."""
+    manifest = {
+        "schema": 1,
+        "sha256": sha256_file(path),
+        "url": url,
+    }
+    directory = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(
+        prefix=os.path.basename(path) + ".", suffix=".source.json", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, sort_keys=True)
+        os.replace(tmp, direct_source_manifest_path(path))
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+def remove_direct_source_manifest(path):
+    try:
+        os.remove(direct_source_manifest_path(path))
+    except FileNotFoundError:
+        pass
 
 
 def member_manifest_path(src, url):
@@ -1390,14 +1450,13 @@ def ensure_direct_sources(src, source_map, label):
     """Fetch each `dest_name -> url` in `source_map` straight to `src/<dest_name>`.
 
     For GM0 alternate banks distributed as individual raw files (not an archive):
-    VCSL etc. Idempotent — skips files already present. The main bake loop then
-    reads `src/<dest_name>`, trims, measures the root, and routes it to the crate.
+    VCSL etc. Idempotent only when the cache sidecar proves the existing file
+    was fetched from the same URL and still has the same bytes. The main bake
+    loop then reads `src/<dest_name>`, trims, measures the root, and routes it
+    to the crate.
     """
     for fn, url in source_map.items():
-        dst = os.path.join(src, fn)
-        if not os.path.exists(dst):
-            print(f"fetching {label} {fn} ...", file=sys.stderr)
-            fetch(url, dst)
+        ensure_source(fn, url, src, label=label)
 
 
 def ensure_freesound_sources(src):
@@ -2910,7 +2969,7 @@ def ensure_banjo_sources(src):
     """
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     for fn, url in BANJO_URLS.items():
-        ensure_source(fn + ".f32", url, src)
+        ensure_source(fn + ".f32", url, src, label="banjo", validate_wav=False)
         subprocess.run(
             [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
              "-i", os.path.join(src, fn + ".f32"),

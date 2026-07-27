@@ -1,6 +1,7 @@
 import ast
 import hashlib
 import io
+import json
 import math
 import os
 import random
@@ -445,6 +446,93 @@ class PrepareSampleBankTests(unittest.TestCase):
                         os.truncate(path, os.path.getsize(path) - 17)
                         with self.assertRaises(ValueError):
                             prepare.read_wav(path)
+
+
+class DirectSourceCacheTest(unittest.TestCase):
+    """MM-BUG-KILN-00151: direct WAV caches must be bound to source URL + bytes."""
+
+    URL_A = "https://example.invalid/rev-a/sample.wav"
+    URL_B = "https://example.invalid/rev-b/sample.wav"
+
+    def setUp(self):
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.served_sample = 1000
+        self.fetches = []
+        self.fetch_patch = mock.patch.object(
+            prepare, "fetch", side_effect=self.fake_fetch)
+        self.fetch_patch.start()
+        self.addCleanup(self.fetch_patch.stop)
+
+    @property
+    def wav(self):
+        return os.path.join(self.src, "sample.wav")
+
+    @staticmethod
+    def write_constant_wav(path, sample):
+        with wave.open(path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(44100)
+            w.writeframes(struct.pack("<32h", *([sample] * 32)))
+
+    def fake_fetch(self, url, path):
+        self.fetches.append(url)
+        self.write_constant_wav(path, self.served_sample)
+
+    def ensure(self, url=URL_A):
+        prepare.ensure_source("sample.wav", url, self.src)
+
+    def cached_sample(self):
+        samples, _sr = prepare.read_wav(self.wav)
+        return round(samples[0] * 32768)
+
+    def test_valid_warm_cache_is_reused_without_refetch(self):
+        self.ensure()
+        self.ensure()
+        self.assertEqual(self.fetches, [self.URL_A])
+        self.assertEqual(self.cached_sample(), 1000)
+
+    def test_source_manifest_records_url_and_cached_sha256(self):
+        self.ensure()
+        with open(self.wav + ".source.json", "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+        self.assertEqual(
+            manifest,
+            {
+                "schema": 1,
+                "sha256": prepare.sha256_file(self.wav),
+                "url": self.URL_A,
+            },
+        )
+
+    def test_legacy_warm_wav_without_source_manifest_is_refetched(self):
+        self.write_constant_wav(self.wav, 2222)
+        self.ensure()
+        self.assertEqual(self.fetches, [self.URL_A])
+        self.assertEqual(self.cached_sample(), 1000)
+
+    def test_valid_local_substitution_is_refetched(self):
+        self.ensure()
+        self.write_constant_wav(self.wav, 2222)
+        self.ensure()
+        self.assertEqual(self.fetches, [self.URL_A, self.URL_A])
+        self.assertEqual(self.cached_sample(), 1000)
+
+    def test_url_revision_change_with_stable_destination_refetches(self):
+        self.ensure()
+        self.served_sample = 3333
+        self.ensure(self.URL_B)
+        self.assertEqual(self.fetches, [self.URL_A, self.URL_B])
+        self.assertEqual(self.cached_sample(), 3333)
+
+    def test_ensure_direct_sources_uses_the_authenticated_cache(self):
+        source_map = {"sample.wav": self.URL_A}
+        prepare.ensure_direct_sources(self.src, source_map, "demo")
+        self.write_constant_wav(self.wav, 2222)
+        prepare.ensure_direct_sources(self.src, source_map, "demo")
+        self.assertEqual(self.fetches, [self.URL_A, self.URL_A])
+        self.assertEqual(self.cached_sample(), 1000)
 
 
 class BagpipeLoopTests(unittest.TestCase):

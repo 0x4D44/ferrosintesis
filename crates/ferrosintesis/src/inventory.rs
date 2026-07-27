@@ -25,7 +25,7 @@
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::path::{Path, PathBuf};
 
     fn crates_dir() -> PathBuf {
@@ -51,6 +51,195 @@ mod tests {
             out.len()
         );
         out
+    }
+
+    fn top_level_python_def(line: &str) -> Option<String> {
+        let rest = line.strip_prefix("def ")?;
+        let name = rest.split_once('(')?.0;
+        Some(name.to_owned())
+    }
+
+    fn python_code_without_strings_or_comments(source: &str) -> String {
+        let chars: Vec<char> = source.chars().collect();
+        let mut out = String::with_capacity(source.len());
+        let mut i = 0usize;
+        let mut string: Option<(char, bool)> = None;
+
+        while i < chars.len() {
+            let ch = chars[i];
+            if let Some((quote, triple)) = string {
+                if triple {
+                    if ch == quote
+                        && i + 2 < chars.len()
+                        && chars[i + 1] == quote
+                        && chars[i + 2] == quote
+                    {
+                        string = None;
+                        i += 3;
+                        continue;
+                    }
+                    if ch == '\n' {
+                        out.push('\n');
+                    }
+                    i += 1;
+                    continue;
+                }
+
+                if ch == '\\' {
+                    i = (i + 2).min(chars.len());
+                    continue;
+                }
+                if ch == quote {
+                    string = None;
+                    i += 1;
+                    continue;
+                }
+                if ch == '\n' {
+                    string = None;
+                    out.push('\n');
+                }
+                i += 1;
+                continue;
+            }
+
+            match ch {
+                '#' => {
+                    while i < chars.len() && chars[i] != '\n' {
+                        i += 1;
+                    }
+                }
+                '\'' | '"' => {
+                    let triple = i + 2 < chars.len() && chars[i + 1] == ch && chars[i + 2] == ch;
+                    string = Some((ch, triple));
+                    i += if triple { 3 } else { 1 };
+                }
+                _ => {
+                    out.push(ch);
+                    i += 1;
+                }
+            }
+        }
+        out
+    }
+
+    fn top_level_python_functions(source: &str) -> BTreeMap<String, String> {
+        let mut functions = BTreeMap::new();
+        let mut current_name = None;
+        let mut current_body = String::new();
+
+        for line in source.lines() {
+            if let Some(name) = top_level_python_def(line) {
+                if let Some(previous) = current_name.replace(name) {
+                    functions.insert(
+                        previous,
+                        python_code_without_strings_or_comments(&current_body),
+                    );
+                    current_body.clear();
+                }
+            } else if current_name.is_some() {
+                current_body.push_str(line);
+                current_body.push('\n');
+            }
+        }
+
+        if let Some(previous) = current_name {
+            functions.insert(
+                previous,
+                python_code_without_strings_or_comments(&current_body),
+            );
+        }
+        functions
+    }
+
+    fn is_python_ident(ch: char) -> bool {
+        ch == '_' || ch.is_ascii_alphanumeric()
+    }
+
+    fn python_call_positions(code: &str, name: &str) -> Vec<usize> {
+        code.match_indices(name)
+            .filter_map(|(index, _)| {
+                let before = code[..index].chars().next_back();
+                if before.is_some_and(is_python_ident) {
+                    return None;
+                }
+                let after = &code[index + name.len()..];
+                after.trim_start().starts_with('(').then_some(index)
+            })
+            .collect()
+    }
+
+    fn python_call_graph(
+        functions: &BTreeMap<String, String>,
+    ) -> BTreeMap<String, BTreeSet<String>> {
+        functions
+            .iter()
+            .map(|(name, body)| {
+                let calls = functions
+                    .keys()
+                    .filter(|target| {
+                        *target != name && !python_call_positions(body, target).is_empty()
+                    })
+                    .cloned()
+                    .collect();
+                (name.clone(), calls)
+            })
+            .collect()
+    }
+
+    fn reaches_python_function(
+        graph: &BTreeMap<String, BTreeSet<String>>,
+        start: &str,
+        target: &str,
+    ) -> bool {
+        let mut stack = vec![start];
+        let mut seen = BTreeSet::new();
+        while let Some(name) = stack.pop() {
+            if !seen.insert(name) {
+                continue;
+            }
+            let Some(calls) = graph.get(name) else {
+                continue;
+            };
+            if calls.contains(target) {
+                return true;
+            }
+            stack.extend(calls.iter().map(String::as_str));
+        }
+        false
+    }
+
+    fn unvalidated_bake_output_helpers(source: &str) -> Vec<String> {
+        let functions = top_level_python_functions(source);
+        let graph = python_call_graph(&functions);
+        let validator = "_validate_generated_output_inventory";
+        let validator_callers: BTreeSet<&str> = functions
+            .keys()
+            .filter_map(|name| {
+                (name == validator || reaches_python_function(&graph, name, validator))
+                    .then_some(name.as_str())
+            })
+            .collect();
+
+        functions
+            .iter()
+            .filter_map(|(name, body)| {
+                if !(name.starts_with("_bake_") || name.starts_with("bake_")) {
+                    return None;
+                }
+                let first_write = python_call_positions(body, "write_wav_mono")
+                    .into_iter()
+                    .min()?;
+                let first_validation = validator_callers
+                    .iter()
+                    .filter_map(|validator_name| {
+                        python_call_positions(body, validator_name)
+                            .into_iter()
+                            .min()
+                    })
+                    .min();
+                (!first_validation.is_some_and(|pos| pos < first_write)).then(|| name.clone())
+            })
+            .collect()
     }
 
     /// The value assigned to `key` in `[package]`, including a multi-line array.
@@ -358,6 +547,61 @@ mod tests {
                 "canonical row `obsolete_*` has no packaged sample family",
             ]
         );
+    }
+
+    /// A helper that writes a generated sample family must validate that family's
+    /// packaged output inventory before its first write.
+    #[test]
+    fn every_generated_bake_output_family_is_inventory_validated() {
+        let root = crates_dir()
+            .parent()
+            .expect("crates/ lives under the repository root")
+            .to_path_buf();
+        let prepare = std::fs::read_to_string(root.join("tools/ferrosintesis-samples/prepare.py"))
+            .expect("prepare.py is readable");
+        let missing = unvalidated_bake_output_helpers(&prepare);
+        assert!(
+            missing.is_empty(),
+            "{} bake helper(s) write generated WAV outputs before reaching \
+             `_validate_generated_output_inventory`:\n  {}",
+            missing.len(),
+            missing.join("\n  ")
+        );
+    }
+
+    #[test]
+    fn bake_output_inventory_oracle_rejects_an_unvalidated_writer() {
+        let source = r#"
+def _validate_generated_output_inventory(family, expected):
+    pass
+
+def _bake_newbank(src):
+    # _validate_generated_output_inventory("newbank", NAMES) is only a comment.
+    out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-new", "samples")
+    for name in NAMES:
+        write_wav_mono(os.path.join(out_dir, f"newbank_{name}.wav"), [], OUT_SR)
+"#;
+
+        assert_eq!(unvalidated_bake_output_helpers(source), ["_bake_newbank"]);
+    }
+
+    #[test]
+    fn bake_output_inventory_oracle_accepts_transitive_validation() {
+        let source = r#"
+def _validate_generated_output_inventory(family, expected):
+    pass
+
+def _validate_generated_output_families(expected):
+    _validate_generated_output_inventory("goodbank", expected)
+
+def _bake_goodbank(src):
+    _validate_generated_output_families({f"goodbank_{name}.wav" for name in NAMES})
+    out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-good", "samples")
+    for name in NAMES:
+        write_wav_mono(os.path.join(out_dir, f"goodbank_{name}.wav"), [], OUT_SR)
+"#;
+
+        assert!(unvalidated_bake_output_helpers(source).is_empty());
     }
 
     /// Every sample crate ships a `PROVENANCE.md`, and actually packages it.

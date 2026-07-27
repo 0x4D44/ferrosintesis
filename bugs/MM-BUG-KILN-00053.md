@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00053 — GM49 Slow Strings does not swell at low keys: the SawStack `strings()` MODEL's low-register envelope falls (body/onset ~0.76-0.79) where both references rise
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00053-run-fix-20260727T030201Z-p9812-n539021900-c39-code-1785122329048
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) while fixing MM-BUG-KILN-00046 — the sampler-seam half of the same symptom; this is the model-envelope half) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required low-register envelope revoicing needs Arthur to choose the audible swell depth and timing against the two references) → Open (2026-07-26, Arthur approved a reference-like low-register amplitude swell, tapering into the existing key-55 anchor)
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) while fixing MM-BUG-KILN-00046 — the sampler-seam half of the same symptom; this is the model-envelope half) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required low-register envelope revoicing needs Arthur to choose the audible swell depth and timing against the two references) → Open (2026-07-26, Arthur approved a reference-like low-register amplitude swell, tapering into the existing key-55 anchor) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T030201Z-p9812-n539021900-c39 branch=task/bug-MM-BUG-KILN-00053-run-fix-20260727T030201Z-p9812-n539021900-c39 code=60491c9d5b04 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -62,6 +62,26 @@ references (lengthen / re-curve the low-register attack, or couple the swell to 
 brightness ramp). Needs ears (this box has none) and the render-diff inventory. KILN-00046's
 `la_strings_slow_swell_not_inverted` deliberately guards swell-preservation only where the
 model already swells (`m > 1.05`); closing this bug extends that guard to the low register.
+
+## Fix
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T030201Z-p9812-n539021900-c39 code=60491c9d5b04 gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00053 by giving GM49 Slow Strings a real low-register amplitude swell in the model path. The new regression fails on the pre-fix tree with key 48 model body/onset around 1.06 and full sampled body/onset around 0.91. After the fix, key 48 model body/onset is 2.11 at velocity 72 and 2.04 at velocity 110, with key 52 tapering between key 48 and the unchanged key 55 anchor. The GM49 low-key LA sample taper now follows the same swell depth so the full sampled voice rises instead of flattening the model swell. Existing string LA seam, pitch, audibility, and swell-preservation tests remain green.
+
+Root cause: GM49 reused the generic SawStack ADSR whose overshooting attack reaches full level early and then settles toward sustain; in the low saw-stack register this put too much RMS into the 0-0.4 s onset window, so the 0.8-1.2 s body was not sufficiently louder, and the old low-key sample taper then masked the corrected swell.
+
+Changed:
+- crates/ferrosintesis/src/voices.rs: added an inert-by-default SawStack amplitude swell and applied a curved low-key GM49 ramp below key 55
+- crates/ferrosintesis/src/voices.rs: reduced only GM49 low-key string sample seam gain along the same swell-depth curve
+- crates/ferrosintesis/src/sampler.rs: restored the la_strings_slow_swell_not_inverted regression and updated stale KILN-00046 comments
+
+Tests:
+- $null | cargo test -p ferrosintesis la_strings_slow_swell_not_inverted -- --nocapture
+- $null | cargo test -p ferrosintesis la_strings -- --nocapture
+- $null | cargo test -p ferrosintesis slow_strings_variation_has_longer_attack_than_base -- --nocapture
+- $null | cargo test -p ferrosintesis sawstack_family_signatures_are_stable -- --nocapture
+- git diff --check
 
 ## Notes
 

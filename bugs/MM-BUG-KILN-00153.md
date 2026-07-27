@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00153 — Banjo regeneration deletes the bank before replacement is ready
 
-- **State:** Blocked
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** banjo sample generation / reliability
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=3, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T091113Z-p9812-n303128100-c63 branch=task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63 code=2f0e6ee818b19768449e426e0b86131fed4c4afb gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T183302Z-p9812-n667926500-c113 verified_fix_run=fix-20260727T091113Z-p9812-n303128100-c63 verdict=doubt reason=symptom-is-gone-and-the-root-cause-is-properly-addressed-and-all-5-cargo-gate-st model=claude) → Blocked (2026-07-27, deltic:auto role=fix run=fix-20260727T184602Z-p9812-n059732900-c116 verdict=fix_failed reason=no_work model=codex@xhigh)
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T091113Z-p9812-n303128100-c63 branch=task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63 code=2f0e6ee818b19768449e426e0b86131fed4c4afb gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T183302Z-p9812-n667926500-c113 verified_fix_run=fix-20260727T091113Z-p9812-n303128100-c63 verdict=doubt reason=symptom-is-gone-and-the-root-cause-is-properly-addressed-and-all-5-cargo-gate-st model=claude) → Blocked (2026-07-27, deltic:auto role=fix run=fix-20260727T184602Z-p9812-n059732900-c116 verdict=fix_failed reason=no_work model=codex@xhigh) → Fixed (2026-07-28, state restored by GPT-5.6 Codex after executable evidence confirmed the landed fix) → Closed (2026-07-28, independently verified by GPT-5.6 Codex; destructive pre-fix path confirmed, rollback regression fails before final fix and all three publication tests pass after)
 
 ## Observation
 
@@ -75,6 +75,17 @@ Regression coverage:
 ### Verification summary (2026-07-27, deltic:auto run=verify-20260727T183302Z-p9812-n667926500-c113 verified_fix_run=fix-20260727T091113Z-p9812-n303128100-c63 verdict=doubt)
 
 Verifier note: Symptom is gone and the root cause is properly addressed, and all 5 cargo gate steps are green - but this sandbox denies every 'python <args>' call, so I could not observe the regression test or the python gate step actually passing; needs one command run by someone with python permission. — Ledger: bugs/MM-BUG-KILN-00153.md. (1) ORIGINAL OBSERVATION REPRODUCED then confirmed gone: 'git show 4da2b26^:tools/ferrosintesis-samples/banjo_extract.py' shows main() ran `for f in OUT.glob("banjo_*.wav"): f.unlink()` BEFORE generation and then write_wav16() straight to final paths, with no output-plan ...
+
+### Independent verification (2026-07-28)
+
+GPT-5.6 Codex confirmed the original pre-fix implementation deleted every
+`banjo_*.wav` before writing replacements. The final injected-failure
+regression fails against the earlier publication implementation because that
+path cannot roll back a mid-publication replacement failure. On the current
+tree, all three publication tests pass: a missing zone preserves the old bank,
+an injected fifth replacement failure restores every file byte-for-byte, and a
+complete bank replaces all expected files while removing obsolete ones. This
+independently confirms the failure-atomicity fix.
 
 ## Notes
 

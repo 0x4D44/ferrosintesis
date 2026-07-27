@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00152 — Orchestral2 publishes a no-op banjo regeneration recipe
 
-- **State:** Blocked
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** orchestral2 / regeneration provenance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=3, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T090201Z-p9812-n987723200-c60 branch=task/bug-MM-BUG-KILN-00152-run-fix-20260727T090201Z-p9812-n987723200-c60 code=de95960f899298440bbe24f06bbd548b3139c766 gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T165501Z-p9812-n885138800-c96 verified_fix_run=fix-20260727T090201Z-p9812-n987723200-c60 verdict=doubt reason=static-trace-and-rust-gates-all-support-the-fix-but-python-execution-is-blocked model=claude) → Blocked (2026-07-27, deltic:auto role=fix run=fix-20260727T181102Z-p9812-n078768700-c109 verdict=fix_failed reason=no_work model=codex@xhigh)
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T090201Z-p9812-n987723200-c60 branch=task/bug-MM-BUG-KILN-00152-run-fix-20260727T090201Z-p9812-n987723200-c60 code=de95960f899298440bbe24f06bbd548b3139c766 gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T165501Z-p9812-n885138800-c96 verified_fix_run=fix-20260727T090201Z-p9812-n987723200-c60 verdict=doubt reason=static-trace-and-rust-gates-all-support-the-fix-but-python-execution-is-blocked model=claude) → Blocked (2026-07-27, deltic:auto role=fix run=fix-20260727T181102Z-p9812-n078768700-c109 verdict=fix_failed reason=no_work model=codex@xhigh) → Fixed (2026-07-28, state restored by GPT-5.6 Codex after executable evidence confirmed the landed fix) → Closed (2026-07-28, independently verified by GPT-5.6 Codex; pre-fix successful no-op reproduced, current selectors reject early, 87 preparation tests green)
 
 ## Observation
 
@@ -76,6 +76,16 @@ Regression coverage:
 ### Verification summary (2026-07-27, deltic:auto run=verify-20260727T165501Z-p9812-n885138800-c96 verified_fix_run=fix-20260727T090201Z-p9812-n987723200-c60 verdict=doubt)
 
 Verifier note: Static trace and Rust gates all support the fix, but Python execution is blocked in this runner so I could not run the Python regression test or the symptom repro that the entire fix lives in. — Worktree == origin/main for all non-bugs paths (git diff --stat origin/main HEAD -- . ':!bugs' empty); fix commit de95960 is on main. RAN: cargo test --workspace = all 57 'test result: ok', 788 passed / 0 failed in ferrosintesis; cargo clippy --workspace --all-targets -- -D warnings = Finished clean; cargo fmt --all -- --check = no output. COULD NOT RUN: every python invocation beyond 'python --version...
+
+### Independent verification (2026-07-28)
+
+GPT-5.6 Codex ran the recorded command at pre-fix commit `0a7926a`:
+`prepare.py --only=banjo` returned success and printed an empty sample table.
+On the current tree, both `--only=banjo` and an unknown family return exit 1
+before fetching or baking, and the banjo error names the standalone extractor.
+All 87 tests in `test_prepare.py`, including the selector and packaged-recipe
+contracts, pass. This independently confirms fails-before, passes-after, and
+the documented producer correction.
 
 ## Notes
 

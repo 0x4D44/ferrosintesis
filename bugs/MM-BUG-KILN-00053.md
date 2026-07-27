@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00053 — GM49 Slow Strings does not swell at low keys: the SawStack `strings()` MODEL's low-register envelope falls (body/onset ~0.76-0.79) where both references rise
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) while fixing MM-BUG-KILN-00046 — the sampler-seam half of the same symptom; this is the model-envelope half) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required low-register envelope revoicing needs Arthur to choose the audible swell depth and timing against the two references) → Open (2026-07-26, Arthur approved a reference-like low-register amplitude swell, tapering into the existing key-55 anchor) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source candidate `bb99f7422382a1bea92fb8130d2613ebcad268d3` extends the existing post-handover crescendo only below key 55, meets the approved rise and taper, and has zero catalog contamination)
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) while fixing MM-BUG-KILN-00046 — the sampler-seam half of the same symptom; this is the model-envelope half) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required low-register envelope revoicing needs Arthur to choose the audible swell depth and timing against the two references) → Open (2026-07-26, Arthur approved a reference-like low-register amplitude swell, tapering into the existing key-55 anchor) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source candidate `bb99f7422382a1bea92fb8130d2613ebcad268d3` extends the existing post-handover crescendo only below key 55, meets the approved rise and taper, and has zero catalog contamination) → Closed (2026-07-27, claude-opus-5@high; independent two-eyes verification on trunk `8a4c90f` — the report’s own reproduce command re-run and inverted, oracle proven two-sided by reverting the key ramp, repo gates green)
 
 ## Observation
 
@@ -190,3 +190,44 @@ After focused tests pass, run the required full catalog render diff and create
 body-level-matched trunk-versus-candidate A/B renders for the audition matrix.
 Land the implementation as **Fixed**, not Closed, for independent verification
 and final perceptual sign-off.
+
+## Independent verification (2026-07-27, claude-opus-5@high — two-eyes, verifier ≠ fixer)
+
+Verified on trunk `8a4c90f`. Verdict: **Closed**.
+
+**The report's own reproduce command now inverts the observation.** Running exactly what the
+Observation prescribes — `cargo test -p ferrosintesis la_strings_slow_swell_not_inverted --
+--nocapture` — prints:
+
+```
+gm49 low-swell vel  72: model k48 2.31 k52 2.17 k55 2.13; full k48 1.82 k52 1.73 k55 1.68
+gm49 low-swell vel 110: model k48 2.20 k52 2.09 k55 2.05; full k48 1.69 k52 1.60 k55 1.76
+```
+
+The recorded defect was key 48 model **0.79** (vel 72) and **0.76** (vel 110) — below 1.0,
+i.e. falling rather than swelling. Both now exceed 2.0, and the model column is ordered
+`k48 > k52 > k55`, so the low register swells *hardest*, which is the approved shape. These
+reproduce the fixer's claimed figures digit-for-digit on an independent run.
+
+**The oracle is genuinely two-sided.** I reverted just the fix's mechanism — the key-dependent
+target in `slow_strings_swell_target` (`crates/ferrosintesis/src/voices.rs:7424`) back to the
+flat pre-fix `3.75` — and the guard **fails** at `crates/ferrosintesis/src/sampler.rs:8680`,
+with the column collapsing to `model k48 1.94 k52 2.00 k55 2.13`. That is the defect's exact
+signature: the ordering inverts, so the low register swells *least*.
+
+**That 1.94 independently corroborates the fix record.** The Fix section claims MM-BUG-KILN-00024's
+handover repair had already moved trunk's key-48 model ratio to 1.94 (vel 72), *"close to but
+still below this bug's approved 2.0 floor"*. My reverted measurement lands on exactly 1.94,
+which both confirms that account and explains why the oracle's floor sits at 2.0 rather than
+1.0 — the guard is calibrated against the post-MM24 baseline, not the original 0.79.
+
+**Gates, observed at `8a4c90f`:** `cargo test --workspace --release` 812 passed / 0 failed /
+41 ignored, 0 failed across all 39 other suites; clippy clean under default and
+`--no-default-features`; `cargo fmt --all --check` clean.
+
+**Provenance note.** The Fix section cites `bb99f74`. Both that commit and the earlier
+`1a86c7f` ("autonomous bug-drain fix") are on trunk and both contribute; the citation names
+only the later merge.
+
+**Not re-run here:** the 124-MIDI render-diff and the A/B listening renders. The register
+boundary is pinned by the oracle above, which fails when it moves.

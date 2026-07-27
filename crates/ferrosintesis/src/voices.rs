@@ -2659,6 +2659,57 @@ pub enum ExcModel {
     Shaped,
 }
 
+/// Optional level correction for Shaped pluck presets whose Legacy parity is
+/// key/velocity-dependent after the KILN-00048 loop-damper decouple.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ShapedGain {
+    /// No additional Shaped level correction.
+    None,
+    /// GM45 PIZZ: preserve the Shaped timbre, but restore post-decouple Legacy
+    /// body-level parity with a continuous key/velocity gain surface.
+    PizzPostKiln48,
+}
+
+const PIZZ_GAIN_KEYS: [f32; 3] = [40.0, 52.0, 64.0];
+const PIZZ_GAIN_VELS: [f32; 3] = [50.0, 100.0, 120.0];
+#[rustfmt::skip]
+const PIZZ_GAIN_DB: [[f32; 3]; 3] = [
+    [ 2.95,  0.56, -0.45],
+    [ 4.58,  1.59,  0.68],
+    [ 1.75, -1.74, -2.91],
+];
+
+fn axis_segment(x: f32, anchors: [f32; 3]) -> (usize, f32) {
+    let x = x.clamp(anchors[0], anchors[2]);
+    if x <= anchors[1] {
+        (0, (x - anchors[0]) / (anchors[1] - anchors[0]))
+    } else {
+        (1, (x - anchors[1]) / (anchors[2] - anchors[1]))
+    }
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
+fn pizz_gain_db(key: u8, vel: u8) -> f32 {
+    let (ki, kt) = axis_segment(key as f32, PIZZ_GAIN_KEYS);
+    let (vi, vt) = axis_segment(vel as f32, PIZZ_GAIN_VELS);
+    let lo = lerp(PIZZ_GAIN_DB[ki][vi], PIZZ_GAIN_DB[ki][vi + 1], vt);
+    let hi = lerp(PIZZ_GAIN_DB[ki + 1][vi], PIZZ_GAIN_DB[ki + 1][vi + 1], vt);
+    lerp(lo, hi, kt)
+}
+
+impl ShapedGain {
+    fn gain(self, key: u8, vel: u8) -> f32 {
+        let db = match self {
+            ShapedGain::None => 0.0,
+            ShapedGain::PizzPostKiln48 => pizz_gain_db(key, vel),
+        };
+        10f32.powf(db / 20.0)
+    }
+}
+
 /// The ceiling, in dB/s, on how much of a plucked note's decay the in-loop
 /// damper is allowed to contribute at the fundamental (KILN-00042).
 ///
@@ -2900,6 +2951,9 @@ pub struct PluckPreset {
     pub noise_mix: f32,
     /// Per-preset sustain-band trim, dB (≤ ±1.5; beyond = Tripwire 1). 0 = none.
     pub exc_trim: f32,
+    /// Output gain correction for migrated Shaped presets that need key/velocity
+    /// level parity without changing excitation spectrum or envelope shape.
+    pub shaped_gain: ShapedGain,
     #[cfg(test)]
     pub name: &'static str, // oracle-36 routing discriminant (test-only)
 }
@@ -2954,6 +3008,7 @@ const DEFAULTS: PluckPreset = PluckPreset {
     slope: 0.0,
     noise_mix: 0.0,
     exc_trim: 0.0,
+    shaped_gain: ShapedGain::None,
     #[cfg(test)]
     name: "DEFAULT",
 };
@@ -5059,7 +5114,12 @@ impl Pluck {
             trem_sus: false,
             trem_last_strike: 0,
             trem_drop: (TREM_SUS_DROP_S * sr) as u32,
-            amp: p.amp,
+            amp: p.amp
+                * if p.exc_model == ExcModel::Shaped {
+                    p.shaped_gain.gain(key, vel)
+                } else {
+                    1.0
+                },
             att: if p.attack_s <= 0.0 {
                 1.0
             } else {
@@ -9179,6 +9239,7 @@ const PIZZ: PluckPreset = PluckPreset {
     slope: 2.0,
     noise_mix: 0.20,
     exc_trim: 3.16,
+    shaped_gain: ShapedGain::PizzPostKiln48,
     t60: 0.9,
     bright: 2600.0,
     pick_lp: 1600.0,
@@ -9192,6 +9253,34 @@ const PIZZ: PluckPreset = PluckPreset {
     stop_thump: 0.5,
     ..DEFAULTS
 };
+
+#[cfg(test)]
+pub(crate) fn pizz_shaped_gain_db_for_test(key: u8, vel: u8) -> f32 {
+    pizz_gain_db(key, vel)
+}
+
+#[cfg(test)]
+pub(crate) fn render_pizz_shaped_gain_probe_for_test(
+    key: u8,
+    vel: u8,
+    seed: u32,
+    secs: f32,
+    corrected: bool,
+) -> Vec<f32> {
+    let preset = PluckPreset {
+        shaped_gain: if corrected {
+            ShapedGain::PizzPostKiln48
+        } else {
+            ShapedGain::None
+        },
+        ..PIZZ
+    };
+    let sr = 44100.0;
+    let mut v = Pluck::new(&preset, key, vel, sr, seed);
+    let mut buf = vec![0f32; (secs * sr) as usize];
+    v.render(&mut buf);
+    buf
+}
 
 pub struct Bowed {
     saw: BlepSaw,

@@ -3321,13 +3321,11 @@ mod pluck_baseline {
     const SEEDS: [u32; 3] = [3, 7, 11];
     /// Presets migrated to the Shaped excitation (Phase 2). PICK is DEFERRED to
     /// Legacy (its post-guard offset is key-dependent — a follow-up), so it is
-    /// NOT here. PIZZ joined it under KILN-00048: the velocity/damper decouple
-    /// broke its Shaped-vs-Legacy parity KEY-DEPENDENTLY (offsets span ~7.5 dB,
-    /// unfittable by the scalar exc_trim — the two excitation models respond to
-    /// the corner change differently). A per-key Shaped re-fit is deferred to
-    /// KILN-00058; PIZZ still ships Shaped, just isn't parity-guarded meanwhile.
+    /// NOT here. PIZZ rejoined under KILN-00058: the KILN-00048 decouple made its
+    /// Shaped-vs-Legacy parity key/velocity-dependent, so it now carries a smooth
+    /// Shaped gain correction instead of changing excitation slope or loop decay.
     /// NYLON is the Legacy canary in the G7 oracle.
-    const SHAPED_MIGRATED: &[&str] = &["STEEL", "JAZZ", "DULCIMER"];
+    const SHAPED_MIGRATED: &[&str] = &["STEEL", "JAZZ", "DULCIMER", "PIZZ"];
 
     /// (preset, key, vel, rms_db[0.05-0.35s], att/sus, onset tilt dB/oct, seed spread dB).
     type HeadRow = (&'static str, u8, u8, f32, f32, f32, f32);
@@ -3718,6 +3716,70 @@ mod pluck_baseline {
         // change means a trim needs re-fitting (or the guard crept back).
     }
 
+    #[test]
+    fn pizz_shaped_gain_is_smooth_and_level_only() {
+        #[rustfmt::skip]
+        const ANCHORS: &[(u8, u8, f32)] = &[
+            (40,  50,  2.95), (40, 100,  0.56), (40, 120, -0.45),
+            (52,  50,  4.58), (52, 100,  1.59), (52, 120,  0.68),
+            (64,  50,  1.75), (64, 100, -1.74), (64, 120, -2.91),
+        ];
+        let gain_db = |key, vel| voices::pizz_shaped_gain_db_for_test(key, vel);
+        for &(key, vel, expected) in ANCHORS {
+            let got = gain_db(key, vel);
+            assert!(
+                (got - expected).abs() <= 0.01,
+                "PIZZ correction {key}/{vel}: {got:+.2} dB != {expected:+.2} dB"
+            );
+        }
+
+        assert!((gain_db(20, 10) - gain_db(40, 50)).abs() <= 1e-6);
+        assert!((gain_db(96, 127) - gain_db(64, 120)).abs() <= 1e-6);
+
+        for &(k0, k1, v0, v1) in &[
+            (40, 52, 50, 100),
+            (40, 52, 100, 120),
+            (52, 64, 50, 100),
+            (52, 64, 100, 120),
+        ] {
+            let mid = gain_db((k0 + k1) / 2, (v0 + v1) / 2);
+            let corners = [
+                gain_db(k0, v0),
+                gain_db(k0, v1),
+                gain_db(k1, v0),
+                gain_db(k1, v1),
+            ];
+            let lo = corners.iter().copied().fold(f32::INFINITY, f32::min);
+            let hi = corners.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            assert!(
+                mid >= lo - 1e-6 && mid <= hi + 1e-6,
+                "PIZZ correction overshot inside {k0}-{k1}/{v0}-{v1}: {mid:+.2} not in {lo:+.2}..{hi:+.2}"
+            );
+        }
+
+        for &key in &[40, 46, 52, 58, 64] {
+            for &vel in &[50, 75, 100, 110, 120] {
+                let gain = 10f32.powf(gain_db(key, vel) / 20.0);
+                for &seed in &[5, 21, 99] {
+                    let corrected =
+                        voices::render_pizz_shaped_gain_probe_for_test(key, vel, seed, 0.40, true);
+                    let uncorrected =
+                        voices::render_pizz_shaped_gain_probe_for_test(key, vel, seed, 0.40, false);
+                    let diff: Vec<f32> = corrected
+                        .iter()
+                        .zip(&uncorrected)
+                        .map(|(&c, &u)| c - u * gain)
+                        .collect();
+                    let rel = rms(&diff) / rms(&corrected).max(1e-9);
+                    assert!(
+                        rel <= 2e-5,
+                        "PIZZ {key}/{vel} seed {seed}: correction is not scalar gain (relative RMS diff {rel:.6})"
+                    );
+                }
+            }
+        }
+    }
+
     /// Phase-2 G7 oracle (natural-pluck HLD amendment 2026.07.20 §4a, Fable) — the
     /// Tripwire-1 resolution proof. The TIGHT guarantee: each migrated preset's
     /// per-preset MEAN sustain-RMS offset vs frozen HEAD (Legacy) is ≤0.5 dB — no
@@ -3780,7 +3842,11 @@ mod pluck_baseline {
                         // Shaped stays within the Legacy cell's OWN envelope: bar =
                         // max(2.5, legacy_spread). (A key/velocity-aware target would
                         // flatten the ±2.5 and also unblock PICK — a possible follow-up.)
-                        let tol = 2.5f32.max(h_spread);
+                        let tol = if name == "PIZZ" {
+                            0.5
+                        } else {
+                            2.5f32.max(h_spread)
+                        };
                         assert!(
                             o.abs() <= tol,
                             "{name} {key} {vel}: G7 parity {o:+.2} dB > tol {tol:.2} (legacy spread {h_spread:.1})"

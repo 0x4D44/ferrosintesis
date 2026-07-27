@@ -92,6 +92,7 @@ const PIZZ: PluckPreset = PluckPreset {
     slope: 0.0,
     noise_mix: 0.0,
     exc_trim: 0.0,
+    shaped_gain: crate::voices::ShapedGain::None,
     #[cfg(test)]
     name: "PIZZ",
 };

@@ -501,9 +501,7 @@ mod tests {
                 // Monotonicity with a tolerance. The defect this catches is an
                 // UNCOMPENSATED layer step, which is >= 3 dB; sub-dB wobble across a
                 // crossfade is measurement scale, not a seam break, and a strict
-                // increase would fail on dips no ear can hear (GM42 dips 0.51 dB
-                // between v110 and v127 at one key — a local flattening in the cello's
-                // top end, not a bank boundary).
+                // increase would fail on sub-dB crossfade wobble no ear can hear.
                 for w in levels.windows(2) {
                     assert!(
                         w[1].1 > w[0].1 - 1.0,
@@ -527,49 +525,65 @@ mod tests {
     /// fortissimo physically monotone.
     #[test]
     fn bowed_strings_raw_high_velocity_output_is_monotonic_and_law_shaped() {
-        const HIGH_VELS: [u8; 6] = [96, 105, 110, 115, 120, 127];
+        const VELS: [u8; 10] = [32, 48, 64, 80, 96, 105, 110, 115, 120, 127];
+        const SEEDS: [u32; 4] = [
+            0xBA60,
+            0xBA60 ^ 2654435761,
+            0xBA60 ^ 2u32.wrapping_mul(2654435761),
+            0xBA60 ^ 3u32.wrapping_mul(2654435761),
+        ];
         for p in [42u8, 43] {
             let keys: &[u8] = match p {
-                42 => &[36, 48, 50, 55, 60, 67, 76],
-                43 => &[28, 36, 48, 50, 55, 60, 64],
+                42 => &[36, 48, 50, 55, 56, 60, 67, 76],
+                43 => &[28, 29, 31, 36, 48, 50, 55, 60, 64],
                 _ => unreachable!(),
             };
             for &key in keys {
-                let high_levels: Vec<(u8, f32)> = HIGH_VELS
-                    .iter()
-                    .map(|&v| {
-                        (
-                            v,
-                            level_db(&render(make_uncorrected_for_census(p, key, v), 1.2)),
-                        )
-                    })
-                    .collect();
-                for w in high_levels.windows(2) {
+                for &seed in &SEEDS {
+                    // Model-only: the regression owns the physical waveguide, not
+                    // the sampled attack layered over it in a default build.
+                    let levels: Vec<(u8, f32)> = VELS
+                        .iter()
+                        .map(|&vel| {
+                            (
+                                vel,
+                                level_db(&render(
+                                    voices::make_uncorrected_for_test(p, key, vel, SR, seed, false),
+                                    1.2,
+                                )),
+                            )
+                        })
+                        .collect();
+                    let high_start = levels.iter().position(|&(vel, _)| vel == 96).unwrap();
+                    for pair in levels[high_start..].windows(2) {
+                        assert!(
+                            pair[1].1 >= pair[0].1 - 0.05,
+                            "GM{p} key {key} seed {seed:#x}: raw high-velocity level \
+                             drops from v{} {:.2} dB to v{} {:.2} dB",
+                            pair[0].0,
+                            pair[0].1,
+                            pair[1].0,
+                            pair[1].1
+                        );
+                    }
+
+                    let law_levels: Vec<(u8, f32)> = FIT_VELS
+                        .iter()
+                        .map(|&vel| {
+                            levels
+                                .iter()
+                                .copied()
+                                .find(|&(measured_vel, _)| measured_vel == vel)
+                                .unwrap()
+                        })
+                        .collect();
+                    let k = fit_k(&law_levels);
                     assert!(
-                        w[1].1 >= w[0].1 - 0.05,
-                        "GM{p} key {key}: raw high-velocity level drops from v{} {:.2} dB \
-                         to v{} {:.2} dB",
-                        w[0].0,
-                        w[0].1,
-                        w[1].0,
-                        w[1].1
+                        (k - 2.0).abs() <= 0.25,
+                        "GM{p} key {key} seed {seed:#x}: raw velocity exponent {k:.3}, \
+                         want 2.0 +/- 0.25"
                     );
                 }
-
-                let law_levels: Vec<(u8, f32)> = FIT_VELS
-                    .iter()
-                    .map(|&v| {
-                        (
-                            v,
-                            level_db(&render(make_uncorrected_for_census(p, key, v), 1.2)),
-                        )
-                    })
-                    .collect();
-                let k = fit_k(&law_levels);
-                assert!(
-                    (k - 2.0).abs() <= 0.25,
-                    "GM{p} key {key}: raw velocity exponent {k:.3}, want 2.0 +/- 0.25"
-                );
             }
         }
     }

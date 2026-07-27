@@ -9088,22 +9088,28 @@ pub struct BowedString {
     body: [Biquad; 3], // the instrument body's broad low resonances
     dc_x1: f32,        // DC blocker state (bowed loops accumulate DC)
     dc_y1: f32,
-    env: Adsr,               // bow pressure/velocity envelope (the onset + release)
-    max_vel: f32,            // bow speed (loudness / brightness)
-    slope: f32,              // bow force: narrows the friction curve (brighter/scratchier)
-    vib: Sine,               // pitch vibrato
-    vib_depth: f32,          //
-    vib_delay: u32,          // vibrato onset delay
-    grit: Biquad,            // bow-hair / rosin noise band (bandpass)
-    contact_noise: f32,      // broadband noise radiated straight from the contact
-    bow_noise: f32,          // per-note grit level — no two bows are identical
-    scratch: f32,            // decaying attack "catch" intensity (the bite before the tone)
-    scratch_k: f32,          // its per-sample decay
-    drift: Drift,            // slow human pitch wander (intonation is never dead-steady)
-    amp_follow: f32,         // output magnitude follower, for the release tail
-    refl_sustain: f32,       // bridge-filter cutoff while bowed (register brightness)
-    loop_comp: f32,          // loop-latency tuning compensation, in samples
-    out_lp: Option<OnePole>, // post-output darkening (cello de-buzz); None = flat
+    env: Adsr,                 // bow pressure/velocity envelope (the onset + release)
+    max_vel: f32,              // bow speed (loudness / brightness)
+    slope: f32,                // bow force: narrows the friction curve (brighter/scratchier)
+    source_energy: f32,        // slow intrinsic post-body level estimate for low-string AGC
+    source_follow_k: f32,      // sample-rate-correct coefficient for `source_energy`
+    level_gain: f32,           // slow, bounded residual low-string normalization
+    level_target: Option<f32>, // calibrated intrinsic RMS; None leaves other voices bit-exact
+    level_fade_start: u32,     // normalization handover start, in samples
+    level_fade_end: u32,       // normalization handover end, in samples
+    vib: Sine,                 // pitch vibrato
+    vib_depth: f32,            //
+    vib_delay: u32,            // vibrato onset delay
+    grit: Biquad,              // bow-hair / rosin noise band (bandpass)
+    contact_noise: f32,        // broadband noise radiated straight from the contact
+    bow_noise: f32,            // per-note grit level — no two bows are identical
+    scratch: f32,              // decaying attack "catch" intensity (the bite before the tone)
+    scratch_k: f32,            // its per-sample decay
+    drift: Drift,              // slow human pitch wander (intonation is never dead-steady)
+    amp_follow: f32,           // output magnitude follower, for the release tail
+    refl_sustain: f32,         // bridge-filter cutoff while bowed (register brightness)
+    loop_comp: f32,            // loop-latency tuning compensation, in samples
+    out_lp: Option<OnePole>,   // post-output darkening (cello de-buzz); None = flat
     rng: Rng,
     t: u32,
     amp: f32,
@@ -9391,16 +9397,43 @@ fn bow_force_ceiling(v: &StringVoicing, key: u8) -> Option<f32> {
     Some(2.9 + (v.slope_hi - 2.9) * t)
 }
 
-fn bowed_string_bow_speed(program: u8, vel: u8) -> f32 {
-    let v = vel_ctrl(vel);
-    if matches!(program, 42 | 43) {
-        // Low strings over-bowed when velocity drove the contact from 0.03..0.25:
-        // the intrinsic waveguide amplitude then fought the output `vel_amp` law
-        // and could drop at fortissimo. Keep the contact in the measured playable
-        // region and leave loudness to the output gain.
-        0.140 + 0.010 * v
-    } else {
-        0.03 + 0.22 * v
+fn bowed_string_controls(
+    program: u8,
+    key: u8,
+    vel: u8,
+    natural_slope: f32,
+    voicing: &StringVoicing,
+) -> (f32, f32) {
+    let control = vel_ctrl(vel);
+    if !matches!(program, 42 | 43) {
+        return (0.03 + 0.22 * control, natural_slope);
+    }
+
+    // MM-BUG-KILN-00029: low strings used to run bow speed from 0.03 to 0.25
+    // while independently drawing force over 2.2..2.9. Full-compass measurement
+    // found unstable pockets in that rectangle (142 of the regression draws).
+    // Move both physical controls together through the measured playable region:
+    // speed still opens with velocity, while force converges toward a stable
+    // middle pressure. The cello's established high-register force ceiling stays
+    // authoritative. This is deliberately not the rejected one-dimensional clamp.
+    let speed = 0.100 + 0.050 * control;
+    let cap = bow_force_ceiling(voicing, key).unwrap_or(2.9);
+    let stable_force = 2.60f32.min(cap);
+    // By v96 the measured high-velocity region needs the stable force itself,
+    // not merely a partial move toward it: GM43 key 31 still octave-locked at
+    // v100 with slope 2.553, while 2.60 held across every tested speed and seed.
+    let pressure_mix = (control / vel_ctrl(96)).min(1.0);
+    let slope = natural_slope + (stable_force - natural_slope) * pressure_mix;
+    (speed, slope)
+}
+
+fn bowed_string_level_target(program: u8) -> Option<f32> {
+    match program {
+        // Median intrinsic steady-state RMS after the joint control map, measured
+        // over each full compass, ten velocities and four engine-realistic seeds.
+        42 => Some(0.286),
+        43 => Some(0.259),
+        _ => None,
     }
 }
 
@@ -9435,10 +9468,12 @@ impl BowedString {
         // 10^8 of bow force, fed into a chaotic stick-slip loop, is enough to
         // change every sample of the render — it moved two cello-only albums that
         // this change must not touch, and the render-diff inventory caught it.
-        let slope = match bow_force_ceiling(&voicing, key) {
+        let natural_slope = match bow_force_ceiling(&voicing, key) {
             None => 2.2 + 0.7 * u(&mut rng),
             Some(hi) => 2.2 + (hi - 2.2) * u(&mut rng),
         };
+        let (max_vel, slope) = bowed_string_controls(program, key, vel, natural_slope, &voicing);
+        let level_target = bowed_string_level_target(program);
         let bow_noise = (0.05 + 0.06 * u(&mut rng)) * voicing.bite; // how gritty this stroke is
                                                                     // the sampled arco bite now owns the onset, so the model's own synth
                                                                     // scratch is dialled right back — just a hint under the sample.
@@ -9493,8 +9528,16 @@ impl BowedString {
             // is brighter — real bowing): quiet pedal ~dark, collision ~bright.
             // TIMBRE, not level — exempt from the k=2 law (HLD velocity-law §2.4).
             // Bow SPEED, per the comment above: it drives brightness, not gain.
-            max_vel: bowed_string_bow_speed(program, vel),
+            max_vel,
             slope,
+            source_energy: level_target.map_or(0.0, |target| target * target),
+            // 80 ms source meter: slow enough to ignore individual stick-slip
+            // periods, fast enough to settle before the model owns the LA sustain.
+            source_follow_k: (-1.0 / (0.080 * sr)).exp(),
+            level_gain: 1.0,
+            level_target,
+            level_fade_start: (0.30 * sr) as u32,
+            level_fade_end: (0.55 * sr) as u32,
             vib,
             vib_depth,
             vib_delay: vib_onset as u32,
@@ -9615,7 +9658,31 @@ impl Voice for BowedString {
             let hp = y - self.dc_x1 + 0.9985 * self.dc_y1;
             self.dc_x1 = y;
             self.dc_y1 = hp;
-            let sample = (hp * self.amp).clamp(-1.5, 1.5);
+            let mut levelled = hp;
+            if let Some(target) = self.level_target {
+                self.source_energy = self.source_energy * self.source_follow_k
+                    + hp * hp * (1.0 - self.source_follow_k);
+                if self.t.is_multiple_of(CTRL) && !self.env.released() {
+                    let measured = self.source_energy.max(1e-12).sqrt();
+                    let desired = (target / measured).clamp(0.60, 1.70);
+                    // `desired` inherits the 80 ms meter's slew. Applying that
+                    // already-smoothed value directly avoids a second lag that
+                    // misses late-settling limit cycles.
+                    self.level_gain = desired;
+                }
+                // Preserve the sampled/modelled bow catch. The correction fades in
+                // only as the LA attack hands the note to the waveguide.
+                let mix = if self.t <= self.level_fade_start {
+                    0.0
+                } else if self.t >= self.level_fade_end {
+                    1.0
+                } else {
+                    (self.t - self.level_fade_start) as f32
+                        / (self.level_fade_end - self.level_fade_start) as f32
+                };
+                levelled *= 1.0 + (self.level_gain - 1.0) * mix;
+            }
+            let sample = (levelled * self.amp).clamp(-1.5, 1.5);
             *o += sample;
             self.amp_follow = self.amp_follow * 0.9997 + sample.abs() * 0.0003;
             self.t += 1;
@@ -28440,6 +28507,326 @@ mod tests {
             }
         }
         println!("\n{failures} failing draws out of {checked} checked");
+    }
+
+    /// MM-BUG-KILN-00029 calibration harness for the joint bow-speed, bow-force,
+    /// source-motion and residual-level map over both full shipping compasses.
+    #[test]
+    #[ignore = "full-compass calibration harness, not a routine gate"]
+    fn calibrate_mm29_bowed_playable_region() {
+        let sr = 44100.0;
+        const VELS: [u8; 10] = [32, 48, 64, 80, 96, 105, 110, 115, 120, 127];
+        const SEEDS: [u32; 4] = [
+            0xBA60,
+            0xBA60 ^ 2654435761,
+            0xBA60 ^ 2u32.wrapping_mul(2654435761),
+            0xBA60 ^ 3u32.wrapping_mul(2654435761),
+        ];
+        let fit_k = |levels: &[(u8, f32)]| {
+            let points: Vec<(f32, f32)> = levels
+                .iter()
+                .map(|&(vel, level)| (20.0 * (vel as f32 / 127.0).log10(), level))
+                .collect();
+            let n = points.len() as f32;
+            let mean_x = points.iter().map(|p| p.0).sum::<f32>() / n;
+            let mean_y = points.iter().map(|p| p.1).sum::<f32>() / n;
+            points
+                .iter()
+                .map(|p| (p.0 - mean_x) * (p.1 - mean_y))
+                .sum::<f32>()
+                / points.iter().map(|p| (p.0 - mean_x).powi(2)).sum::<f32>()
+        };
+
+        // Strategy 3 is the selected joint map. The numeric label preserves the
+        // calibration output recorded while comparing the four candidates.
+        for strategy in 3u8..4 {
+            let mut unstable = 0usize;
+            let mut worst_drop = (0.0f32, String::new());
+            let mut worst_k = (0.0f32, String::new());
+            let mut normalised_by_program = [Vec::new(), Vec::new()];
+            for (program, lo, hi) in [(42u8, 36u8, 76u8), (43u8, 28u8, 64u8)] {
+                for key in lo..=hi {
+                    let f0 = key_freq(key);
+                    for (seed_index, &seed) in SEEDS.iter().enumerate() {
+                        let mut levels = Vec::with_capacity(VELS.len());
+                        for vel in VELS {
+                            let mut voice = BowedString::new(program, key, vel, sr, seed);
+                            voice.vib_depth = 0.0;
+                            voice.drift = Drift::new(1, 0.0, 1);
+                            let mut buf = vec![0f32; (1.2 * sr) as usize];
+                            voice.render(&mut buf);
+                            let seg = &buf[(0.6 * sr) as usize..];
+                            let rendered_rms = crate::testutil::rms(seg);
+                            let level = 20.0 * rendered_rms.max(1e-12).log10();
+                            normalised_by_program[(program - 42) as usize]
+                                .push(rendered_rms / voice.amp);
+                            levels.push((vel, level));
+                            let (f_meas, corr) = autocorr_pitch(seg, sr, f0, 2.2);
+                            let cents = if f_meas > 0.0 {
+                                1200.0 * (f_meas / f0).log2()
+                            } else {
+                                f32::NAN
+                            };
+                            if !cents.is_finite() || cents.abs() > 30.0 || corr < 0.85 {
+                                unstable += 1;
+                            }
+                        }
+                        for pair in levels.windows(2) {
+                            let drop = pair[0].1 - pair[1].1;
+                            if drop > worst_drop.0 {
+                                worst_drop = (
+                                    drop,
+                                    format!(
+                                        "GM{program} k{key} seed{seed_index} v{}->{}",
+                                        pair[0].0, pair[1].0
+                                    ),
+                                );
+                            }
+                        }
+                        let k = fit_k(&levels);
+                        if (k - 2.0).abs() > worst_k.0 {
+                            worst_k = (
+                                (k - 2.0).abs(),
+                                format!("GM{program} k{key} seed{seed_index}: {k:.3}"),
+                            );
+                        }
+                    }
+                }
+            }
+            println!(
+                "strategy {strategy}: unstable {unstable}, worst drop {:.2} dB ({}), \
+                 worst |k-2| {:.3} ({})",
+                worst_drop.0, worst_drop.1, worst_k.0, worst_k.1
+            );
+            for (index, samples) in normalised_by_program.iter_mut().enumerate() {
+                samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                println!(
+                    "  GM{} normalised model rms p10 {:.4}, median {:.4}, p90 {:.4}, \
+                     range {:.4}..{:.4}",
+                    index + 42,
+                    samples[samples.len() / 10],
+                    samples[samples.len() / 2],
+                    samples[samples.len() * 9 / 10],
+                    samples[0],
+                    samples[samples.len() - 1]
+                );
+            }
+        }
+    }
+
+    /// MM-BUG-KILN-00029 calibration harness comparing every adjacent-key
+    /// steady-state step against the exact pre-fix control map.
+    #[test]
+    #[ignore = "full-compass baseline comparison, not a routine gate"]
+    fn calibrate_mm29_bowed_adjacent_key_steps() {
+        let sr = 44100.0;
+        const VELS: [u8; 6] = [96, 105, 110, 115, 120, 127];
+        const SEEDS: [u32; 4] = [
+            0xBA60,
+            0xBA60 ^ 2654435761,
+            0xBA60 ^ 2u32.wrapping_mul(2654435761),
+            0xBA60 ^ 3u32.wrapping_mul(2654435761),
+        ];
+        let level = |mut voice: BowedString| {
+            voice.vib_depth = 0.0;
+            voice.drift = Drift::new(1, 0.0, 1);
+            let mut buf = vec![0f32; (1.2 * sr) as usize];
+            voice.render(&mut buf);
+            20.0 * crate::testutil::rms(&buf[(0.6 * sr) as usize..])
+                .max(1e-12)
+                .log10()
+        };
+        let mut worst_added = (f32::NEG_INFINITY, String::new());
+        let mut worst_candidate = (0.0f32, String::new());
+        for (program, lo, hi) in [(42u8, 36u8, 76u8), (43u8, 28u8, 64u8)] {
+            for &seed in &SEEDS {
+                for vel in VELS {
+                    let mut baseline = Vec::new();
+                    let mut candidate = Vec::new();
+                    for key in lo..=hi {
+                        let mut old = BowedString::new(program, key, vel, sr, seed);
+                        let mut rng = Rng::new(seed);
+                        let u = rng.white() * 0.5 + 0.5;
+                        let voicing = string_voicing(program);
+                        old.slope = match bow_force_ceiling(&voicing, key) {
+                            None => 2.2 + 0.7 * u,
+                            Some(cap) => 2.2 + (cap - 2.2) * u,
+                        };
+                        old.max_vel = 0.03 + 0.22 * vel_ctrl(vel);
+                        old.level_target = None;
+                        baseline.push(level(old));
+                        candidate.push(level(BowedString::new(program, key, vel, sr, seed)));
+                    }
+                    for offset in 0..baseline.len() - 1 {
+                        let base_step = baseline[offset + 1] - baseline[offset];
+                        let candidate_step = candidate[offset + 1] - candidate[offset];
+                        let added = candidate_step.abs() - base_step.abs();
+                        let label = format!(
+                            "GM{program} key {}->{} velocity {vel} seed {seed:#x}: \
+                             baseline {base_step:+.2}, candidate {candidate_step:+.2}",
+                            lo + offset as u8,
+                            lo + offset as u8 + 1
+                        );
+                        if added > worst_added.0 {
+                            worst_added = (added, label.clone());
+                        }
+                        if candidate_step.abs() > worst_candidate.0 {
+                            worst_candidate = (candidate_step.abs(), label);
+                        }
+                    }
+                }
+            }
+        }
+        println!(
+            "worst added step {:+.2} dB ({})\nworst candidate step {:.2} dB ({})",
+            worst_added.0, worst_added.1, worst_candidate.0, worst_candidate.1
+        );
+    }
+
+    #[test]
+    #[ignore = "MM-BUG-KILN-00029 bottom-register control calibration"]
+    fn calibrate_mm29_contrabass_bottom_controls() {
+        let sr = 44100.0;
+        for key in [29u8, 31] {
+            let f0 = key_freq(key);
+            for slope in [2.40f32, 2.50, 2.60, 2.70, 2.80] {
+                let mut mask = String::new();
+                for speed in [0.11f32, 0.12, 0.13, 0.14, 0.15] {
+                    let healthy = (0u32..8).all(|index| {
+                        let seed = 0xBA60u32 ^ index.wrapping_mul(2654435761);
+                        let mut voice = BowedString::new(43, key, 100, sr, seed);
+                        voice.max_vel = speed;
+                        voice.slope = slope;
+                        voice.vib_depth = 0.0;
+                        voice.drift = Drift::new(1, 0.0, 1);
+                        let mut buf = vec![0f32; (1.5 * sr) as usize];
+                        voice.render(&mut buf);
+                        let (measured, corr) =
+                            autocorr_pitch(&buf[(0.6 * sr) as usize..], sr, f0, 2.2);
+                        let cents = 1200.0 * (measured / f0).log2();
+                        measured > 0.0 && cents.abs() <= 30.0 && corr >= 0.85
+                    });
+                    mask.push(if healthy { 'Y' } else { '.' });
+                }
+                println!("key {key} slope {slope:.2}: {mask} speeds .11 .12 .13 .14 .15");
+            }
+        }
+    }
+
+    const MM29_ENGINE_SEEDS: [u32; 4] = [
+        0xBA60,
+        0xBA60 ^ 2654435761,
+        0xBA60 ^ 2u32.wrapping_mul(2654435761),
+        0xBA60 ^ 3u32.wrapping_mul(2654435761),
+    ];
+
+    fn mm29_bowed_measure(mut voice: BowedString, key: u8) -> (f32, f32, f32) {
+        let sr = 44100.0;
+        voice.vib_depth = 0.0;
+        voice.drift = Drift::new(1, 0.0, 1);
+        let mut buf = vec![0f32; (1.2 * sr) as usize];
+        voice.render(&mut buf);
+        let seg = &buf[(0.6 * sr) as usize..];
+        let level = 20.0 * crate::testutil::rms(seg).max(1e-12).log10();
+        let f0 = key_freq(key);
+        let (measured, corr) = autocorr_pitch(seg, sr, f0, 2.2);
+        let cents = if measured > 0.0 {
+            1200.0 * (measured / f0).log2()
+        } else {
+            f32::NAN
+        };
+        (level, cents, corr)
+    }
+
+    /// MM-BUG-KILN-00029: the low-string control trajectory must remain in
+    /// coherent Helmholtz motion throughout the documented high-velocity grid.
+    ///
+    /// This checks source motion independently of output normalization. It also
+    /// proves the classifier still sees the rejected flat-speed patch's
+    /// bottom-register octave locks, so a silent measurement failure cannot turn
+    /// the gate green.
+    #[test]
+    fn bowed_low_strings_keep_stable_motion_at_high_velocity() {
+        const VELS: [u8; 6] = [96, 105, 110, 115, 120, 127];
+        for (program, keys) in [
+            (42u8, &[36u8, 48, 50, 55, 56, 60, 67, 76][..]),
+            (43u8, &[28u8, 29, 31, 36, 48, 50, 55, 60, 64][..]),
+        ] {
+            for &key in keys {
+                for vel in VELS {
+                    for &seed in &MM29_ENGINE_SEEDS {
+                        let (_, cents, corr) = mm29_bowed_measure(
+                            BowedString::new(program, key, vel, 44100.0, seed),
+                            key,
+                        );
+                        assert!(
+                            cents.is_finite() && cents.abs() <= 30.0 && corr >= 0.85,
+                            "GM{program} key {key} velocity {vel} seed {seed:#x}: \
+                             unstable source ({cents:+.1} cents, correlation {corr:.3})"
+                        );
+                    }
+                }
+            }
+        }
+
+        let mut rejected_failures = 0usize;
+        for key in [29u8, 31] {
+            for index in 0u32..8 {
+                let seed = 0xBA60u32 ^ index.wrapping_mul(2654435761);
+                let mut old = BowedString::new(43, key, 100, 44100.0, seed);
+                let mut rng = Rng::new(seed);
+                old.slope = 2.2 + 0.7 * (rng.white() * 0.5 + 0.5);
+                old.max_vel = 0.140 + 0.010 * vel_ctrl(100);
+                old.level_target = None;
+                old.vib_depth = 0.0;
+                old.drift = Drift::new(1, 0.0, 1);
+                let mut buf = vec![0f32; 3 * 44100];
+                old.render(&mut buf);
+                let f0 = key_freq(key);
+                let (measured, corr) = autocorr_pitch(&buf[44100..], 44100.0, f0, 2.2);
+                let cents = if measured > 0.0 {
+                    1200.0 * (measured / f0).log2()
+                } else {
+                    f32::NAN
+                };
+                if !cents.is_finite() || cents.abs() > 30.0 || corr < 0.85 {
+                    rejected_failures += 1;
+                }
+            }
+        }
+        assert!(
+            rejected_failures > 0,
+            "the source-motion classifier no longer detects the rejected flat-speed \
+             patch's bottom-register octave locks"
+        );
+    }
+
+    /// MM-BUG-KILN-00029: residual normalization must not trade the velocity
+    /// turnover for a register cliff. The full pre-fix/candidate sweep measured a
+    /// worst added step of 0.66 dB; an absolute sub-1 dB gate is stricter than the
+    /// bug's “no new step over baseline + 1 dB” acceptance limit.
+    #[test]
+    fn bowed_low_strings_have_no_adjacent_key_level_cliff() {
+        for (program, lo, hi) in [(42u8, 36u8, 76u8), (43u8, 28u8, 64u8)] {
+            for &seed in &MM29_ENGINE_SEEDS {
+                let levels: Vec<f32> = (lo..=hi)
+                    .map(|key| {
+                        mm29_bowed_measure(BowedString::new(program, key, 127, 44100.0, seed), key)
+                            .0
+                    })
+                    .collect();
+                for (offset, pair) in levels.windows(2).enumerate() {
+                    let step = pair[1] - pair[0];
+                    assert!(
+                        step.abs() < 1.0,
+                        "GM{program} key {}->{} velocity 127 seed {seed:#x}: \
+                         {step:+.2} dB adjacent-key cliff",
+                        lo + offset as u8,
+                        lo + offset as u8 + 1
+                    );
+                }
+            }
+        }
     }
 
     /// Maps the highest bow force each pitch can take before the waveguide

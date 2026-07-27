@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00152 — Orchestral2 publishes a no-op banjo regeneration recipe
 
-- **State:** Fixed
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** orchestral2 / regeneration provenance
 - **Raised:** 2026-07-27
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T165501Z-p9812-n885138800-c96
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00152-run-verify-20260727T165501Z-p9812-n885138800-c96
-- **Owner base:** 2791854ab8750c040ba7ff116bd7c3da9330385d
-- **Owner fingerprint:** sha256:738589928e4b2939e1168a90a4a7488fbfe31515f6a91a14dc13a4df7a79265e
-- **Owner since:** 2026-07-27T16:55:01Z
-- **Owner until:** 2026-07-27T17:50:27Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T090201Z-p9812-n987723200-c60 branch=task/bug-MM-BUG-KILN-00152-run-fix-20260727T090201Z-p9812-n987723200-c60 code=de95960f899298440bbe24f06bbd548b3139c766 gate=python model=codex@xhigh)
+- **Attempts:** fix=0, doubt=1, indeterminate=0
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T090201Z-p9812-n987723200-c60 branch=task/bug-MM-BUG-KILN-00152-run-fix-20260727T090201Z-p9812-n987723200-c60 code=de95960f899298440bbe24f06bbd548b3139c766 gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T165501Z-p9812-n885138800-c96 verified_fix_run=fix-20260727T090201Z-p9812-n987723200-c60 verdict=doubt reason=static-trace-and-rust-gates-all-support-the-fix-but-python-execution-is-blocked model=claude)
 
 ## Observation
 
@@ -72,6 +72,10 @@ Regression coverage:
 - Full `tools/ferrosintesis-samples/test_prepare.py`: 82/82 passed.
 - `python -m py_compile tools/ferrosintesis-samples/prepare.py
   tools/ferrosintesis-samples/test_prepare.py`: passed.
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T165501Z-p9812-n885138800-c96 verified_fix_run=fix-20260727T090201Z-p9812-n987723200-c60 verdict=doubt)
+
+Verifier note: Static trace and Rust gates all support the fix, but Python execution is blocked in this runner so I could not run the Python regression test or the symptom repro that the entire fix lives in. — Worktree == origin/main for all non-bugs paths (git diff --stat origin/main HEAD -- . ':!bugs' empty); fix commit de95960 is on main. RAN: cargo test --workspace = all 57 'test result: ok', 788 passed / 0 failed in ferrosintesis; cargo clippy --workspace --all-targets -- -D warnings = Finished clean; cargo fmt --all -- --check = no output. COULD NOT RUN: every python invocation beyond 'python --version...
 
 ## Notes
 

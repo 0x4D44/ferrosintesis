@@ -3499,7 +3499,7 @@ pub const SLAP: PluckPreset = PluckPreset {
     pickup: 0.28,
     sub: 0.36,
     sub_shape: (0.3, 0.0), // B5: a real string's weight has a 2nd harmonic
-    click: 2.4,            // the pop — post-out so the out-LP doesn't swallow it
+    click: 0.45,           // secondary fret/finger detail; string contact carries the attack
     click_hp: 1500.0,
     click_post: true,
     fret_contact: Some(FretContactSpec {
@@ -3526,7 +3526,7 @@ pub const SLAP_POP: PluckPreset = PluckPreset {
     t60: 3.2,        // KILN-00045: still shorter than the thumb, no longer collapses
     amp: 2.0,
     sub: 0.24,        // thinner than the thumb, but held body stays in family
-    click: 3.2,       // was 2.4: a sharper pull-off transient
+    click: 0.45,      // secondary pull-off detail; string contact carries the attack
     click_hp: 2600.0, // was 1500: the snap sits higher
     fret_contact: Some(FretContactSpec {
         vel_floor: 0.45,
@@ -20090,6 +20090,65 @@ mod tests {
             assert!(
                 (pitch / f0 - 1.0).abs() < 0.045,
                 "{name}: fret collision moved settled pitch to {pitch:.2} Hz, expected {f0:.2}"
+            );
+        }
+    }
+
+    /// The retained post-output click may add a small acoustic detail, but it
+    /// must not remain the identity carrier after the string-path collision
+    /// exists. This is the level-matched lesion the original KILN-00016 recovery
+    /// was missing: remove only `click`, keep `fret_contact`, and prove the
+    /// contact-only voice still reads as slap/pop while the removed burst is small.
+    #[test]
+    fn slap_pop_post_click_is_secondary_to_fret_collision() {
+        let sr = 44100.0;
+        let attack = (0.055 * sr) as usize;
+        let distance = |a: &[f32], b: &[f32]| {
+            let ar = rms(a).max(1e-12);
+            let br = rms(b).max(1e-12);
+            let residual: Vec<f32> = a.iter().zip(b).map(|(&x, &y)| x / ar - y / br).collect();
+            rms(&residual)
+        };
+
+        for (name, preset, key) in [("SLAP", &SLAP, 28u8), ("SLAP_POP", &SLAP_POP, 40)] {
+            let contact_only = PluckPreset {
+                click: 0.0,
+                ..*preset
+            };
+            let plain = PluckPreset {
+                click: 0.0,
+                fret_contact: None,
+                ..*preset
+            };
+            let seed = 0x16_5000 + key as u32;
+            let full = render_pluck(preset, key, 114, 0.18, seed);
+            let no_click = render_pluck(&contact_only, key, 114, 0.18, seed);
+            let no_contact = render_pluck(&plain, key, 114, 0.18, seed);
+            let finger = render_pluck(&BASS, key, 114, 0.18, seed);
+
+            let click_residual: Vec<f32> =
+                full.iter().zip(&no_click).map(|(&x, &y)| x - y).collect();
+            let contact_residual: Vec<f32> = no_click
+                .iter()
+                .zip(&no_contact)
+                .map(|(&x, &y)| x - y)
+                .collect();
+            let click_hf = hp_rms(segment(&click_residual, sr, 0.0, 0.003), sr, 3000.0);
+            let contact_hf = hp_rms(segment(&contact_residual, sr, 0.0, 0.030), sr, 2400.0);
+            let click_energy = click_hf * click_hf * 0.003;
+            let contact_energy = contact_hf * contact_hf * 0.030;
+            assert!(
+                click_energy < 0.35 * contact_energy.max(1e-12),
+                "{name}: post-output click is still too large relative to string contact: \
+                 click {click_energy:.8}, contact {contact_energy:.8}"
+            );
+
+            let contact_identity = distance(&no_click[..attack], &finger[..attack]);
+            let click_shift = distance(&full[..attack], &no_click[..attack]);
+            assert!(
+                contact_identity > 0.35 && click_shift < 0.45 * contact_identity,
+                "{name}: contact-only identity is not dominant after level matching: \
+                 contact/finger {contact_identity:.3}, full/no-click {click_shift:.3}"
             );
         }
     }

@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; timbre defect confirmed by Fable 5 + Codex gpt-5.6-sol cross-agent reconciliation) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — current trunk still has the measured sparse additive voice, but Arthur must choose a modeled-reed target or approve a sourced LA accordion layer before an audible fix has a correctness target) → Open (2026-07-26, unblocked by Arthur after focused free-reed synthesis research; approved a modeled French-musette source-filter voice rather than a sampled layer) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T004001Z-p9812-n387868000-c31 branch=task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31 code=e7507829ed648d4e0d492062e3093be489677d80 gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; timbre defect confirmed by Fable 5 + Codex gpt-5.6-sol cross-agent reconciliation) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — current trunk still has the measured sparse additive voice, but Arthur must choose a modeled-reed target or approve a sourced LA accordion layer before an audible fix has a correctness target) → Open (2026-07-26, unblocked by Arthur after focused free-reed synthesis research; approved a modeled French-musette source-filter voice rather than a sampled layer) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T004001Z-p9812-n387868000-c31 branch=task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31 code=4e635f8cdc6b9bd40813e06e8aded6c374491689 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -142,7 +142,7 @@ appears.
 
 ## Fix
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T004001Z-p9812-n387868000-c31 code=e7507829ed648d4e0d492062e3093be489677d80 gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T004001Z-p9812-n387868000-c31 code=4e635f8cdc6b9bd40813e06e8aded6c374491689 gate=cargo)
 
 GM21 now has the approved modeled French-musette source-filter voice. Three
 antialiased free-reed pulses retain the ±16-cent registration, a five-section

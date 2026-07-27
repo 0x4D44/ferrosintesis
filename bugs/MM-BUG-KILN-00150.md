@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00150 — MuseScore sample notice omits mandatory upstream acknowledgements
 
-- **State:** Fixed
+- **State:** Open
 - **Priority:** Should
 - **Severity:** High
 - **Area:** sample packaging / licensing
 - **Raised:** 2026-07-27
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T113201Z-p9812-n730268400-c75
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00150-run-verify-20260727T113201Z-p9812-n730268400-c75
-- **Owner base:** 2757fc304ca93bc6940d75c992cd02f497ea0b15
-- **Owner fingerprint:** sha256:2043d02a9e0e6baf25d3e390b64d28f50f7d4a2563a1019e13f95424adccb83c
-- **Owner since:** 2026-07-27T11:32:01Z
-- **Owner until:** 2026-07-27T12:17:01Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T054903Z-p9812-n086124000-c54 branch=task/bug-MM-BUG-KILN-00150-run-fix-20260727T054903Z-p9812-n086124000-c54 code=4278b0bdf638a33faa52cfec03304effd540f261 gate=focused-licensing model=codex@xhigh; held branch recovered by Codex)
+- **Attempts:** fix=0, doubt=1, indeterminate=0
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T054903Z-p9812-n086124000-c54 branch=task/bug-MM-BUG-KILN-00150-run-fix-20260727T054903Z-p9812-n086124000-c54 code=4278b0bdf638a33faa52cfec03304effd540f261 gate=focused-licensing model=codex@xhigh; held branch recovered by Codex) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T113201Z-p9812-n730268400-c75 verified_fix_run=fix-20260727T054903Z-p9812-n086124000-c54 verdict=doubt reason=static-fix-and-regression-look-correct-and-complete-but-this-sessions-bash-permi model=claude)
 
 ## Observation
 
@@ -96,6 +96,10 @@ Tests:
 - The committed fixture's alphanumeric content matches the pinned upstream file
   exactly; only Markdown wrapping and heading style differ.
 - git diff --check passed
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T113201Z-p9812-n730268400-c75 verified_fix_run=fix-20260727T054903Z-p9812-n086124000-c54 verdict=doubt)
+
+Verifier note: Static fix and regression look correct and complete, but this session's Bash permission mode denies cargo/rustc outright, so I could not execute the regression test or a single repo gate - criteria 2 (test PASSES) and 3 (gates PASS) are unverified, not failed. — Read bugs/MM-BUG-KILN-00150.md (State: Fixed, fix commit 4278b0b). CRITERION 1 (symptom) CONFIRMED gone: crates/ferrosintesis-samples-musescore/NOTICE now reproduces all five upstream acknowledgements including the two the bug named verbatim - 'Temple Blocks instrument provided by Ethan Winer Copyright (c) 2002' and 'Drumline Cymbals p...
 
 ## Notes
 

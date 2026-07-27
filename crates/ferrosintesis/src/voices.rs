@@ -11827,7 +11827,18 @@ fn brass_valve_adaa(x1: f64, x0: f64, k: f64, b: f64) -> f64 {
     }
 }
 
-/// One BrassPlayer per human player: solo programs run 1, section 61 runs 3,
+// Balanced section identities: (exciter brightness, bore/body weight, bell edge).
+// A seed rotates the table at note construction so the same section is deterministic
+// without pinning the bright/warm player to a fixed pan/arrival slot forever.
+const BR_SECTION_IDS: [(f32, f32, f32); 5] = [
+    (-0.85, 0.80, -0.65),
+    (-0.25, -0.55, 0.35),
+    (0.10, 0.15, -0.10),
+    (0.45, -0.20, 0.85),
+    (0.90, 0.55, 0.45),
+];
+
+/// One BrassPlayer per human player: solo programs run 1, section 61 runs 5,
 /// synth 62/63 run 5. (Skeleton: candidate B.)
 struct BrassPlayer {
     saw: BlepSaw,       // lip source (natural: at sr2; synth: at sr)
@@ -11846,6 +11857,21 @@ struct BrassPlayer {
     x_prev: f64,
     s_prev: f64,
     u_prev: f64,
+    lip_mul: f32,      // MM-BUG-KILN-00038 per-player exciter cutoff identity
+    drive_mul: f32,    // per-player nonlinear pressure/drive identity
+    bias_add: f32,     // per-player lip-valve asymmetry identity
+    cascade_mul: f32,  // per-player brass-up readiness
+    pressure_mul: f32, // per-player response to authored pressure/expression
+    kws: f32,          // current per-player shaper index
+    cascade_amt: f32,  // current per-player cascade amount
+    bore: Vec<Biquad>, // per-player bore/formants for GM61
+    bell_lp: OnePole,  // per-player bell/radiation shelf for GM61
+    bell_g: f32,
+    out_lp: Option<OnePole>, // per-player radiated lowpass for GM61
+    out_mul: f32,
+    breath_filt: Biquad,
+    breath_rng: Rng,
+    breath: f32,
 }
 
 impl BrassPlayer {
@@ -11918,7 +11944,8 @@ pub struct BrassSpec {
     pub env: (f32, f32, f32, f32), // amp A/D/S/R
     pub vib: (f32, f32, f32),      // BR7 (rate, depth, delay); depth=0 → none
     pub drift: f32,
-    pub growl: bool, // BR10 aftertouch growl enabled (naturals yes, synth no)
+    pub section_identity: bool, // GM61 per-player timbre spread, not a sample layer
+    pub growl: bool,            // BR10 aftertouch growl enabled (naturals yes, synth no)
     pub amp: f32,
     #[cfg(test)]
     pub name: &'static str, // kind() string, oracle-36 seam
@@ -11956,6 +11983,7 @@ const BR_DEFAULTS: BrassSpec = BrassSpec {
     env: (0.03, 0.10, 0.88, 0.12),
     vib: (0.0, 0.0, 0.0),
     drift: 0.0015,
+    section_identity: false,
     growl: true,
     amp: 0.30,
     #[cfg(test)]
@@ -12117,6 +12145,7 @@ pub const BR_SECTION: BrassSpec = BrassSpec {
     env: (0.06, 0.15, 0.88, 0.22),
     vib: (5.0, 0.0025, 0.35),
     drift: 0.0030,
+    section_identity: true,
     amp: 0.26,
     ..BR_DEFAULTS
 };
@@ -12229,6 +12258,19 @@ impl Brass {
         let oversample = spec.synth_sweep.is_none();
         let osr = if oversample { sr * 2.0 } else { sr };
         let n = spec.players.max(1);
+        let section_identity = spec.section_identity && n == BR_SECTION_IDS.len();
+        let id_rot = if section_identity {
+            (rng.next_u32() as usize) % BR_SECTION_IDS.len()
+        } else {
+            0
+        };
+        // upper bore formant — colours the breath and the tongue chiff
+        let upper = spec
+            .bore
+            .iter()
+            .map(|&(bf, _, _)| bf)
+            .fold(0.0f32, f32::max);
+        let upper = if upper > 0.0 { upper } else { f * 2.0 };
 
         let players: Vec<BrassPlayer> = (0..n)
             .map(|i| {
@@ -12266,12 +12308,57 @@ impl Brass {
                 } else {
                     osr * 0.45
                 };
+                let (excite_id, bore_id, bell_id) = if section_identity {
+                    BR_SECTION_IDS[(i + id_rot) % BR_SECTION_IDS.len()]
+                } else {
+                    (0.0, 0.0, 0.0)
+                };
+                let lip_mul = 2f32.powf(0.26 * excite_id);
+                let drive_mul = (1.0 + 0.14 * excite_id).max(0.70);
+                let bias_add = 0.030 * bore_id;
+                let cascade_mul = (1.0 + 0.25 * excite_id).max(0.55);
+                let pressure_mul = (1.0 + 0.12 * (0.7 * excite_id + 0.3 * bore_id)).max(0.70);
+                let bore: Vec<Biquad> = if section_identity {
+                    spec.bore
+                        .iter()
+                        .filter(|&&(bf, _, _)| bf > 0.0)
+                        .map(|&(bf, q, g)| {
+                            let shift = 2f32.powf(0.14 * bore_id - 0.05 * excite_id);
+                            let q = (q * (1.0 + 0.10 * bell_id)).max(0.35);
+                            let gain = g + 1.6 * bore_id - 0.5 * excite_id;
+                            Biquad::peak((bf * shift).clamp(80.0, sr * 0.4), q, gain, sr)
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                let upper_i =
+                    (upper * 2f32.powf(0.10 * bore_id + 0.04 * excite_id)).clamp(80.0, sr * 0.4);
+                let bell_fc = if section_identity {
+                    spec.bell_fc * 2f32.powf(0.22 * bell_id + 0.10 * excite_id)
+                } else {
+                    spec.bell_fc
+                }
+                .clamp(80.0, sr * 0.45);
+                let bell_g = if section_identity {
+                    spec.bell_g * (1.0 + 0.25 * bell_id).max(0.45)
+                } else {
+                    0.0
+                };
+                let out_mul = 2f32.powf(0.16 * bell_id + 0.08 * excite_id);
+                let out_lp = (section_identity && spec.out_base > 0.0)
+                    .then(|| OnePole::lowpass((spec.out_base * out_mul).min(sr * 0.45), sr));
+                let breath = if section_identity {
+                    spec.breath * (1.0 + 0.25 * bore_id - 0.10 * excite_id).max(0.55)
+                } else {
+                    0.0
+                };
                 let f_i = (f * detune).min(osr * 0.45);
                 BrassPlayer {
                     saw: BlepSaw::new(f_i, osr, rng.white() * 0.5 + 0.5),
                     detune,
                     onset,
-                    lip_lp: OnePole::lowpass(lip_fc, osr),
+                    lip_lp: OnePole::lowpass((lip_fc * lip_mul).min(osr * 0.24), osr),
                     decim: [
                         Biquad::lowpass(BR_DECIM_HZ, 0.8, osr),
                         Biquad::lowpass(BR_DECIM_HZ, 0.8, osr),
@@ -12284,24 +12371,34 @@ impl Brass {
                     x_prev: 0.0,
                     s_prev: 0.0,
                     u_prev: 0.0,
+                    lip_mul,
+                    drive_mul,
+                    bias_add,
+                    cascade_mul,
+                    pressure_mul,
+                    kws: spec.k_min,
+                    cascade_amt: 0.0,
+                    bore,
+                    bell_lp: OnePole::lowpass(bell_fc, sr),
+                    bell_g,
+                    out_lp,
+                    out_mul,
+                    breath_filt: Biquad::bandpass(upper_i, 1.5, sr),
+                    breath_rng: Rng::new(seed ^ 0xB045_0000 ^ (i as u32).wrapping_mul(977)),
+                    breath,
                 }
             })
             .collect();
 
-        // upper bore formant — colours the breath and the tongue chiff
-        let upper = spec
-            .bore
-            .iter()
-            .map(|&(bf, _, _)| bf)
-            .fold(0.0f32, f32::max);
-        let upper = if upper > 0.0 { upper } else { f * 2.0 };
-
-        let bore: Vec<Biquad> = spec
-            .bore
-            .iter()
-            .filter(|&&(bf, _, _)| bf > 0.0)
-            .map(|&(bf, q, g)| Biquad::peak(bf.min(sr * 0.4), q, g, sr))
-            .collect();
+        let bore: Vec<Biquad> = if section_identity {
+            Vec::new()
+        } else {
+            spec.bore
+                .iter()
+                .filter(|&&(bf, _, _)| bf > 0.0)
+                .map(|&(bf, q, g)| Biquad::peak(bf.min(sr * 0.4), q, g, sr))
+                .collect()
+        };
         let body_bore: Vec<Biquad> = spec
             .body_bore
             .iter()
@@ -12376,11 +12473,12 @@ impl Brass {
             body_onset_hp: spec.mute.then(|| Biquad::highpass(750.0, 0.7, sr)),
             body_register_mix: 1.0 - smoothstep(64.0, 76.0, key as f32),
             bell_lp: OnePole::lowpass(spec.bell_fc, sr),
-            bell_g: spec.bell_g,
-            out_lp: (spec.out_base > 0.0).then(|| OnePole::lowpass(spec.out_base, sr)),
+            bell_g: if section_identity { 0.0 } else { spec.bell_g },
+            out_lp: (!section_identity && spec.out_base > 0.0)
+                .then(|| OnePole::lowpass(spec.out_base, sr)),
             mute,
             breath_filt: Biquad::bandpass(upper.min(sr * 0.4), 1.5, sr),
-            breath: spec.breath,
+            breath: if section_identity { 0.0 } else { spec.breath },
             chiff,
             flutter: Sine::new(BR_GROWL_HZ, sr, 0.0),
             vib_depth: spec.vib.1,
@@ -12403,7 +12501,8 @@ impl Brass {
     }
 
     fn control_tick(&mut self) {
-        // BR2 loudness scalar L (one scalar drives the whole timbre)
+        // BR2 loudness scalar L. Solo/synth presets use it directly; GM61 folds
+        // stable per-player offsets into the same musical control.
         let press = BR_PRESS_FLOOR.0 + BR_PRESS_FLOOR.1 * self.pressure;
         let base_l = self.bloom * (BR_L_VEL.0 + BR_L_VEL.1 * self.vn) * press * (1.0 + self.bite);
         // BR-LB living-breath: fold a shallow zero-mean value-noise wander into L so the
@@ -12423,15 +12522,6 @@ impl Brass {
         // otherwise the lip lowpass / output lowpass cap it and only the
         // flutter AM survives. At growl 0 this is exactly `l` (BR-O2/O3 unmoved).
         let bright = (l + BR_GROWL_BRIGHT * self.growl_cur).min(1.5);
-        // BR2 lip-closure cutoff law (natural only; synth uses the sweep)
-        if self.oversample {
-            let fc = (self.base_f
-                * (self.spec.h_min + (self.spec.h_max - self.spec.h_min) * bright.powf(BR_H_EXP)))
-            .min(self.osr * 0.24);
-            for p in &mut self.players {
-                p.lip_lp.set_cutoff(fc, self.osr);
-            }
-        }
         // BR1/BR2/BR10 shaper index, composed drive clamped to the alias cap
         self.kws = (self.spec.k_min
             + (self.spec.k_max - self.spec.k_min) * l
@@ -12493,7 +12583,47 @@ impl Brass {
         };
         let (base_f, bend, vib_depth, osr, sr) =
             (self.base_f, self.bend, self.vib_depth, self.osr, self.sr);
+        let growl_bright = BR_GROWL_BRIGHT * self.growl_cur;
+        let growl_drive = BR_GROWL_DRIVE * self.growl_cur;
+        let r2 = {
+            let r = BR_CASCADE_F0 / base_f.max(BR_CASCADE_F0);
+            r * r
+        };
+        let lift = BR_CASCADE_F0_FLOOR * smoothstep(BR_CASCADE_LIFT_LO, BR_CASCADE_LIFT_HI, base_f);
+        let hf_derate = (r2 * r2).max(lift).min(1.0);
         for p in &mut self.players {
+            let p_l = (l * p.pressure_mul).min(1.3);
+            let p_bright = (p_l + growl_bright).min(1.5);
+            if self.oversample {
+                let fc = (base_f
+                    * (self.spec.h_min
+                        + (self.spec.h_max - self.spec.h_min) * p_bright.powf(BR_H_EXP))
+                    * p.lip_mul)
+                    .min(osr * 0.24);
+                p.lip_lp.set_cutoff(fc, osr);
+            }
+            p.kws = ((self.spec.k_min + (self.spec.k_max - self.spec.k_min) * p_l + growl_drive)
+                * p.drive_mul)
+                .min(BR_K_MAX);
+            p.cascade_amt = if self.oversample && self.spec.brassiness > 0.0 {
+                (self.spec.brassiness
+                    * BR_CASCADE_MAX
+                    * smoothstep(BR_CASCADE_LO, BR_CASCADE_HI, p_bright)
+                    * hf_derate
+                    * p.cascade_mul)
+                    .clamp(0.0, BR_CASCADE_MAX)
+            } else {
+                0.0
+            };
+            if let Some(lp) = &mut p.out_lp {
+                let open = 1.0 + BR_CASCADE_RADIATE * p.cascade_amt;
+                let cut = (self.spec.out_base
+                    * p.out_mul
+                    * open
+                    * 2f32.powf(self.spec.out_oct * p_bright))
+                .min(sr * 0.45);
+                lp.set_cutoff(cut, sr);
+            }
             p.scoop += p.scoop_k * (1.0 - p.scoop);
             // control_tick fires every CTRL OUTPUT samples (self.t counts at sr),
             // so the real tick period is CTRL/sr — divide by sr, not osr (osr=2·sr
@@ -12540,8 +12670,7 @@ impl Voice for Brass {
             // its own — a shared shaper would be a section tell). BR12 folds the
             // rasp cascade in per player too — the steepening is a per-lip effect,
             // not a section-bus one.
-            let (kws, bias, oversample, cascade_amt) =
-                (self.kws, self.spec.bias, self.oversample, self.cascade_amt);
+            let (bias, oversample) = (self.spec.bias, self.oversample);
             let mut sum = 0.0;
             for p in &mut self.players {
                 if self.t < p.onset {
@@ -12556,14 +12685,19 @@ impl Voice for Brass {
                         u * u * (3.0 - 2.0 * u) // smoothstep, no step click
                     }
                 };
-                let v = if oversample {
+                let mut v = if oversample {
                     // two sub-steps at sr2, decimated; keep the aligned sample.
                     // BR12 rasp cascade runs HERE, before decimation, so its extra
                     // harmonics see the same 13.5 kHz anti-alias cliff as BR1.
                     let mut y = 0.0;
                     for _ in 0..2 {
                         let lip = p.lip_lp.process(p.saw.next());
-                        let mut x = p.rasp_adaa(lip, kws, bias, cascade_amt);
+                        let mut x = p.rasp_adaa(
+                            lip,
+                            p.kws,
+                            (bias + p.bias_add).clamp(0.05, 0.65),
+                            p.cascade_amt,
+                        );
                         for d in p.decim.iter_mut() {
                             x = d.process(x);
                         }
@@ -12572,9 +12706,22 @@ impl Voice for Brass {
                     y
                 } else {
                     // synth path: near-linear (k≈0.6), no cascade (cascade_amt≡0)
-                    brass_valve(p.lip_lp.process(p.saw.next()), kws, bias)
+                    brass_valve(p.lip_lp.process(p.saw.next()), p.kws, bias + p.bias_add)
                 };
-                sum += v * ramp;
+                if p.breath > 0.0 {
+                    v += p.breath_filt.process(p.breath_rng.white()) * p.breath * e.max(0.0).sqrt();
+                }
+                v *= ramp;
+                for b in &mut p.bore {
+                    v = b.process(v);
+                }
+                if p.bell_g != 0.0 {
+                    v += p.bell_g * (v - p.bell_lp.process(v));
+                }
+                if let Some(lp) = &mut p.out_lp {
+                    v = lp.process(v);
+                }
+                sum += v;
             }
             sum /= self.players.len() as f32;
 
@@ -24356,6 +24503,140 @@ mod tests {
         assert!(
             a.iter().zip(&c).any(|(x, y)| x != y),
             "seeds 7 and 8 identical"
+        );
+    }
+
+    /// MM-BUG-KILN-00038: GM61 is a modeled brass SECTION, not one brass
+    /// oscillator cloned five times. This strips away the old width levers
+    /// (detune, onset scatter, vibrato, drift, breath noise, and tongue chiff)
+    /// and then listens to each same-note player alone. The remaining spread
+    /// must come from stable player timbre: exciter brightness, bore/formants,
+    /// and bell radiation.
+    #[test]
+    fn brass_o18_section_players_have_individual_timbres() {
+        let sr = 44100.0;
+        let isolate = |idx: usize| {
+            let mut v = brass(61, 60, 112, sr, 0x6138);
+            assert_eq!(v.players.len(), 5, "GM61 must stay a five-player section");
+            v.vib_depth = 0.0;
+            v.breath = 0.0;
+            for (i, p) in v.players.iter_mut().enumerate() {
+                p.detune = 1.0;
+                p.onset = if i == idx { 0 } else { u32::MAX / 2 };
+                p.vib_rate = 0.0;
+                p.drift = Drift::new(1, 0.0, 1);
+                p.scoop = 1.0;
+                p.scoop_k = 0.0;
+            }
+            let mut buf = vec![0f32; (1.2 * sr) as usize];
+            v.render(&mut buf);
+            buf
+        };
+
+        let profiles: Vec<(f32, f32, f32)> = (0..5)
+            .map(|idx| {
+                let b = isolate(idx);
+                let seg = &b[(0.42 * sr) as usize..(1.05 * sr) as usize];
+                let body = spectral_band_rms(seg, sr, 250.0, 1400.0).max(1e-9);
+                let upper = spectral_band_rms(seg, sr, 2200.0, 6200.0);
+                let bell = spectral_band_rms(seg, sr, 6200.0, 10_000.0);
+                (
+                    upper / body,
+                    bell / body,
+                    spectral_centroid(seg, sr, 180.0, 10_000.0),
+                )
+            })
+            .collect();
+        let spread = |slot: usize| {
+            let vals: Vec<f32> = profiles.iter().map(|&(a, b, c)| [a, b, c][slot]).collect();
+            let min = vals.iter().cloned().fold(f32::INFINITY, f32::min);
+            let max = vals.iter().cloned().fold(0.0f32, f32::max);
+            max / min.max(1e-9)
+        };
+        let upper_spread = spread(0);
+        let bell_spread = spread(1);
+        let centroid_spread = spread(2);
+        eprintln!(
+            "BR-O18 isolated GM61 profiles {profiles:?}; spreads upper {upper_spread:.3}, bell {bell_spread:.3}, centroid {centroid_spread:.3}"
+        );
+        assert!(
+            upper_spread >= 1.18 && bell_spread >= 1.25 && centroid_spread >= 1.10,
+            "isolated GM61 players are near-clones: upper {upper_spread:.3}, bell {bell_spread:.3}, centroid {centroid_spread:.3}"
+        );
+
+        let section = brass(61, 60, 112, sr, 0x6138);
+        assert!(
+            section.spec.detune_cents <= 18.0,
+            "GM61 identity must not be bought by excessive detune: {:.1} cents",
+            section.spec.detune_cents
+        );
+
+        let profile = |prog: u8| {
+            let b = render_brass(prog, 60, 112, 1.2, 0x6138);
+            let seg = &b[(0.42 * sr) as usize..(1.05 * sr) as usize];
+            let body = spectral_band_rms(seg, sr, 250.0, 1400.0).max(1e-9);
+            let upper = spectral_band_rms(seg, sr, 2200.0, 6200.0);
+            let bell = spectral_band_rms(seg, sr, 6200.0, 10_000.0);
+            (
+                upper / body,
+                bell / body,
+                spectral_centroid(seg, sr, 180.0, 10_000.0),
+            )
+        };
+        let distance = |a: (f32, f32, f32), b: (f32, f32, f32)| {
+            (a.0 / b.0.max(1e-9)).ln().abs()
+                + (a.1 / b.1.max(1e-9)).ln().abs()
+                + (a.2 / b.2.max(1e-9)).ln().abs()
+        };
+        let sec = profile(61);
+        let tpt = profile(56);
+        let syn = profile(62);
+        assert!(
+            distance(sec, tpt) >= 0.25 && distance(sec, syn) >= 0.25,
+            "GM61 must stay distinct from solo and synth brass: sec {sec:?}, trumpet {tpt:?}, synth {syn:?}"
+        );
+
+        let section_metrics = |vel: u8, pressure: f32| {
+            let mut v = brass(61, 60, vel, sr, 0x6138);
+            v.set_breath(pressure, 0.0);
+            let mut b = vec![0f32; (1.2 * sr) as usize];
+            v.render(&mut b);
+            let seg = &b[(0.42 * sr) as usize..(1.05 * sr) as usize];
+            let bright = hp_rms(seg, sr, 3000.0) / rms(seg).max(1e-9);
+            let hz = peak_locate(seg, sr, key_freq(60) * 0.92, key_freq(60) * 1.08);
+            (
+                bright,
+                rms(seg),
+                hz,
+                max_abs(&b),
+                b.iter().all(|x| x.is_finite()),
+            )
+        };
+        let soft = section_metrics(64, 0.55);
+        let loud = section_metrics(118, 1.0);
+        let level_db = 20.0 * (loud.1 / soft.1.max(1e-9)).log10();
+        let pitch_cents = |hz: f32| 1200.0 * (hz / key_freq(60)).log2();
+        assert!(
+            loud.0 >= 1.10 * soft.0,
+            "GM61 high pressure/velocity must add high harmonics: soft {:.3}, loud {:.3}",
+            soft.0,
+            loud.0
+        );
+        assert!(
+            (3.0..=18.0).contains(&level_db),
+            "GM61 pressure/velocity level jump uncontrolled: {level_db:.1} dB"
+        );
+        assert!(
+            pitch_cents(soft.2).abs() <= 25.0 && pitch_cents(loud.2).abs() <= 25.0,
+            "GM61 pitch moved under pressure: soft {:+.1} cents, loud {:+.1} cents",
+            pitch_cents(soft.2),
+            pitch_cents(loud.2)
+        );
+        assert!(
+            soft.4 && loud.4 && soft.3 < 1.5 && loud.3 < 1.5,
+            "GM61 render not finite/bounded: soft peak {:.3}, loud peak {:.3}",
+            soft.3,
+            loud.3
         );
     }
 

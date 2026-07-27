@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00045-run-fix-20260726T213802Z-p9812-n009629600-c2-code-1785103055898
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) from the M-CAL v3 certified reference-panel run; measured against two independent references, code-confirmed) -> Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T213802Z-p9812-n009629600-c2 branch=task/bug-MM-BUG-KILN-00045-run-fix-20260726T213802Z-p9812-n009629600-c2 code=fa2aa102b45f gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) from the M-CAL v3 certified reference-panel run; measured against two independent references, code-confirmed)
   → Blocked (2026-07-24, Claude Opus 4.8 (1M) during an autonomous fixing pass. **Needs
   Arthur's listening call** — see "Why this is Blocked". Not a judgement on the bug, which
   is well-evidenced and still real; it cannot be finished unattended because the target
@@ -28,6 +28,7 @@
   Synth Bass 1 moderately prominent rather than matching the quieter Roland reference.
   Re-measure after the closed KILN-00042 decay-law fix, then implement and validate this
   direction with the within-family oracle, render-diff inventory, and listening candidates.)
+  → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T213802Z-p9812-n009629600-c2 branch=task/bug-MM-BUG-KILN-00045-run-fix-20260726T213802Z-p9812-n009629600-c2 code=122ac5780b2765272aa571537d89b76a604abc3c gate=focused+render-diff model=codex@xhigh; held branch recovered by Codex)
 
 ## Observation
 
@@ -214,14 +215,14 @@ together with whatever calibration Arthur signs off.
 
 ## Fix
 
-### Fix summary (2026-07-26, deltic:auto run=fix-20260726T213802Z-p9812-n009629600-c2 code=fa2aa102b45f gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T213802Z-p9812-n009629600-c2 code=122ac5780b2765272aa571537d89b76a604abc3c gate=focused+render-diff)
 
 Agent-reported summary: Fixed MM-BUG-KILN-00045 by calibrating the default GM bass family so the held body no longer collapses across programs 32-39. The new regression reproduces the original defect class by measuring the original bass probe keys and velocities after the onset window, where the pre-fix tree spanned 22.08 dB. After the fix, the same focused regression reports GM32-39 within 7.95 dB, with GM38 still near the top instead of being flattened away. Related sampled-bass seam and velocity-law constants were re-fitted because the model levels changed. No bug ledger, Cargo manifest, lockfile, journal, scratchpad, or lesson file was edited.
 
 Root cause: The bass presets were calibrated in isolation: non-fingered plucked basses had short or underweighted held bodies while GM38/39 used a hot holding SynthBass ADSR, and no family-level oracle compared GM32-39 in the held window.
 
 Changed:
-- crates/ferrosintesis/src/voices.rs: rebalanced GM32-39 bass preset sustain, low-end weight, SynthBass level, bass seam gains, velocity compensation, and bass si
+- crates/ferrosintesis/src/voices.rs: rebalanced GM32-39 bass preset sustain, low-end weight, SynthBass level, bass seam gains, velocity compensation, and bass signatures
 - crates/ferrosintesis/src/voices.rs: added default_bass_family_held_levels_stay_together regression
 
 Tests:
@@ -231,6 +232,13 @@ Tests:
 - $null | cargo test -p ferrosintesis --lib treble_hold_authoring_pins -- --nocapture
 - $null | cargo test -p ferrosintesis --lib coupled_loop_margin_holds -- --nocapture
 - $null | cargo test -p ferrosintesis --lib v2_untouched_pluck_signatures_are_stable -- --nocapture
+- `python tools/render-diff/render_diff.py ... --glob 'albums/**/*.mid' --rate 11025`: 68 expected changed, 56 expected same, 0 contamination, 0 not reached
+- `python tools/render-diff/render_diff.py ... --glob 'demos/**/*.mid' --rate 11025`: 5 expected changed, 12 expected same, 0 contamination, 0 not reached
+- Rendered the reference audition's `02 - Bass, Solo Strings, Ensemble, Brass.mid`
+  with both exact-tree release binaries as before/after listening candidates.
+
+The event census found 73 bass-bearing files among 141 album/demo MIDIs. Every one
+changed, while all 68 non-bass files remained byte-identical.
 
 ## Notes
 

@@ -3391,9 +3391,17 @@ mod pluck_baseline {
         ("NYLON", 52, 50, -32.14, 1.47, -8.2, 4.70),
         ("NYLON", 52, 100, -23.28, 1.88, -6.5, 5.45),
         ("NYLON", 52, 120, -21.07, 2.03, -6.2, 5.43),
-        ("NYLON", 64, 50, -35.28, 2.14, -8.7, 0.72),
-        ("NYLON", 64, 100, -25.67, 2.43, -6.6, 1.25),
-        ("NYLON", 64, 120, -23.22, 2.57, -6.2, 1.95),
+        // MM-BUG-KILN-00155 re-pinned the three NYLON key-64 rows (+0.14/+0.13/
+        // +0.10 dB) when the K3 polarization coupling was made lag-free. Key 40
+        // and key 52 did NOT move, and neither did any other preset: the loop
+        // delay D shrinks with pitch, so the stale-read phase error the fix
+        // removed was only large enough to register in the top row of this grid.
+        // A drift confined to one preset's highest key is the shape a
+        // coupling-phase correction should have; a uniform shift across the grid
+        // would have meant a level change and a different conversation.
+        ("NYLON", 64, 50, -35.14, 2.14, -8.7, 0.72),
+        ("NYLON", 64, 100, -25.54, 2.43, -6.6, 1.25),
+        ("NYLON", 64, 120, -23.12, 2.57, -6.2, 1.95),
         ("HARP", 40, 50, -30.33, 1.48, -5.2, 0.91),
         ("HARP", 40, 100, -21.35, 1.54, -3.1, 0.22),
         ("HARP", 40, 120, -18.79, 1.56, -2.7, 0.26),

@@ -3819,6 +3819,12 @@ struct KsLoop {
     sr: f32,
     // guitar v2 sustainer driver (None unless the preset authors `sustain`)
     drv: Option<SusDrv>,
+    /// K3 polarization coupling this loop is half of, 0 when uncoupled. The
+    /// e-bow drive is sized from the string's per-trip DEFICIT, and a coupled
+    /// pair loses less per trip than either loop alone (|λ| = sqrt(a² + k²) > a),
+    /// so the deficit has to be taken against the pair or the driver over-pushes
+    /// — by a pitch-dependent amount, which tilts the hold (MM-BUG-KILN-00155).
+    k_couple: f32,
     // sitar jawari bridge contact (None unless the preset authors `jawari`)
     jaw: Option<Jawari>,
     // slap/pop fretboard contact (None unless the preset authors `fret_contact`)
@@ -3988,7 +3994,16 @@ struct SusDrv {
 /// small-signal round-trip target at the fundamental, the absolute drive
 /// cap, the saturator knee as a fraction of the hold level, and the ramp.
 const SUS_BP_Q: f32 = 4.0;
-const SUS_K_OVER: f32 = 1.18; // k = 1.18×deficit: constant supercriticality RATIO
+// k = 1.45×deficit: constant supercriticality RATIO.
+//
+// Was 1.18 while the K3 coupling read its partner one sample stale
+// (MM-BUG-KILN-00155). That lag was mildly GENERATIVE — the defect that let a
+// high nylon note run away also quietly fed the e-bow, so a smaller drive
+// reached the hold in time. With the coupling made lag-free the loop is a true
+// contraction again and the driver has to supply that energy itself, so the
+// ratio rises to keep the measured settle time (key 64 reaches its hold by
+// ~5 s, against ~4 s before; `sustain_holds_high_notes` is the gate).
+const SUS_K_OVER: f32 = 1.45;
 const SUS_K_MAX: f32 = 0.12;
 const SUS_L_SCALE: f32 = 0.7;
 const SUS_RAMP_S: f32 = 0.060; // drive engage ramp
@@ -4034,6 +4049,8 @@ impl KsLoop {
             t60,
             sr,
             drv: None,
+            // uncoupled until the owner pairs this loop with its partner
+            k_couple: 0.0,
             jaw: None,
             fret: None,
         }
@@ -4052,7 +4069,16 @@ impl KsLoop {
     /// e-bow's audible level after the pitch-dependent pickup/body projection.
     fn sus_headroom(&self, f: f32) -> f32 {
         let lg = 10f32.powf(-3.0 / (self.t60 * f));
-        let deficit = 1.0 - lg * self.damp_mag(f);
+        let a = lg * self.damp_mag(f);
+        // Against the PAIR, not this loop alone. K3 couples the two
+        // polarizations into the step matrix [[a, k], [-k, a]], whose spectral
+        // radius is sqrt(a² + k²) — strictly greater than `a`, so the pair
+        // sheds less per trip than the bare loop does. Sizing the drive from
+        // `1 - a` therefore over-pushes by k²/2a, and because that error scales
+        // with the deficit it lands differently at every pitch, which reads as
+        // a hold that tilts across the register instead of sitting flat.
+        let a_pair = (a * a + self.k_couple * self.k_couple).sqrt().min(1.0);
+        let deficit = 1.0 - a_pair;
         (deficit * SUS_K_OVER).clamp(0.0, SUS_K_MAX)
     }
 
@@ -4126,7 +4152,15 @@ impl KsLoop {
     }
 
     #[inline]
-    fn tick(&mut self, input: f32) -> f32 {
+    /// Read half of the loop step: advance the glide and produce this sample's
+    /// output.
+    ///
+    /// The output is a function of the delay line ALONE — it never depends on
+    /// what is written back this sample. That is the property the K3 coupling
+    /// relies on: a caller driving two coupled polarizations can read BOTH
+    /// before writing EITHER, so each plane is coupled to the other's value at
+    /// the same instant rather than one sample stale (MM-BUG-KILN-00155).
+    fn tick_read(&mut self) -> f32 {
         self.delay += self.glide_k * (self.target - self.delay);
         // K1: cubic-Lagrange tap — linear interpolation lowpasses the loop
         // at fractional delays and dulls short treble strings.
@@ -4158,10 +4192,16 @@ impl KsLoop {
         };
         // sitar jawari: the bridge grazes the string INSIDE the loop, every
         // round trip (None compiles to the identical plain-KS path)
-        let s = match &mut self.jaw {
+        match &mut self.jaw {
             Some(j) => j.process(s),
             None => s,
-        };
+        }
+    }
+
+    /// Write half of the loop step: the e-bow driver, the damper, the loop gain
+    /// and the caller's injection go back into the line. `s` must be the value
+    /// [`Self::tick_read`] just returned for this loop.
+    fn tick_write(&mut self, s: f32, input: f32) {
         // guitar v2 e-bow driver: band-limited saturating feedback at f0.
         // The bandpass runs even at k = 0 so engagement is click-free.
         let fb = match &mut self.drv {
@@ -4177,7 +4217,6 @@ impl KsLoop {
         };
         self.dl
             .push(self.damp.process(s) * self.loop_gain + input + fb);
-        s
     }
 }
 
@@ -4343,9 +4382,7 @@ pub struct Pluck {
     horiz: KsLoop,
     vert: KsLoop,
     // K3: energy sloshes between the two polarizations (skew-symmetric,
-    // one-sample-delayed cross-injection)
-    h_prev: f32,
-    v_prev: f32,
+    // same-sample cross-injection — see the coupling site in `render`)
     k_couple: f32,
     course_detune: f32,     // vertical-loop detune ratio (preset course_detune)
     course_mix: (f32, f32), // (horiz, vert) output mix
@@ -4812,6 +4849,11 @@ impl Pluck {
             &exc,
             sr,
         );
+        // the two loops are a K3-coupled pair; each must know the coupling to
+        // size its e-bow drive against the PAIR's decay (see `sus_headroom`).
+        // Set BEFORE arming the driver, which reads the headroom immediately.
+        horiz.k_couple = p.course_couple;
+        vert.k_couple = p.course_couple;
         if p.sustain > 0.0 {
             horiz.enable_driver(f);
             vert.enable_driver(f * p.course_detune);
@@ -4832,8 +4874,6 @@ impl Pluck {
         Pluck {
             horiz,
             vert,
-            h_prev: 0.0,
-            v_prev: 0.0,
             k_couple: p.course_couple,
             course_detune: p.course_detune,
             course_mix: p.course_mix,
@@ -5113,11 +5153,23 @@ impl Voice for Pluck {
             }
             // K3: skew-symmetric polarization coupling — energy sloshes
             // between the planes (the slow secondary bloom of a real string),
-            // none is created; each loop remains a contraction
-            let hc = self.horiz.tick(inject + self.k_couple * self.v_prev);
-            let vc = self.vert.tick(inject * 0.7 - self.k_couple * self.h_prev);
-            self.h_prev = hc;
-            self.v_prev = vc;
+            // none is created; each loop remains a contraction.
+            //
+            // Both planes are READ before either is WRITTEN, so each is coupled
+            // to the other's value at this instant. Coupling to the PREVIOUS
+            // sample instead (the `h_prev`/`v_prev` form this replaced) is not
+            // the step matrix [[a, k], [-k, a]] that `coupled_loop_margin_holds`
+            // proves bounded: the one-sample lag adds a 2π/D phase error per
+            // round trip, and at short delays (D ≲ 25 samples, i.e. above about
+            // key 92) that error turned the rotation net-GENERATIVE. A held
+            // nylon note at key 96 grew without bound to ~2e6 in 40 s
+            // (MM-BUG-KILN-00155). D shrinks with pitch, which is why only the
+            // top of the register blew up while the closed-form margin — which
+            // models the lag-free matrix — kept reporting a² + k² ≈ 0.99.
+            let hc = self.horiz.tick_read();
+            let vc = self.vert.tick_read();
+            self.horiz.tick_write(hc, inject + self.k_couple * vc);
+            self.vert.tick_write(vc, inject * 0.7 - self.k_couple * hc);
             let mut y = self.course_mix.0 * hc + self.course_mix.1 * vc;
             // guitar v2 hold latch (§3.D): watch the RAW string mix — before
             // the onset click (which never enters the loops) and the pickup
@@ -15940,6 +15992,15 @@ mod tests {
     /// explicitly requests the bare model (`samples=false`), whose GM24
     /// calibration (2.350) moves only NYLON's RMS to -22.675 dB in either feature
     /// configuration; its gain-invariant centroid and envelope remain identical.
+    /// MM-BUG-KILN-00155 re-pinned NYLON's `late_early_db` alone
+    /// (−16.290→−15.011). Making the K3 polarization coupling lag-free removed a
+    /// small energy leak the one-sample-stale read had been causing at this
+    /// key, so the string now rings very slightly longer; `rms_db` and
+    /// `centroid_hz` both stayed inside tolerance, and BASS — the control, which
+    /// is coupled the same way — did not move at all. A DECAY-SHAPE-only delta
+    /// on one preset is what a coupling-phase fix should look like; had the
+    /// level or the centroid moved with it, that would have been a different
+    /// change and worth stopping for.
     #[test]
     fn v2_untouched_pluck_signatures_are_stable() {
         let nylon_render = render_program(24, 52, 100, 1.0, 0xE1);
@@ -15956,7 +16017,7 @@ mod tests {
             RenderSignature {
                 rms_db: -22.675,
                 centroid_hz: 247.419,
-                late_early_db: -16.290,
+                late_early_db: -15.011,
             },
         );
         // BASS re-voiced to the MUFFLED FLATWOUND (2026.07, Arthur's brief:
@@ -16218,6 +16279,72 @@ mod tests {
             }
         }
         println!("V8b worst coupled margin (a²+k²) = {worst:.6} at {worst_at}");
+    }
+
+    /// MM-BUG-KILN-00155 regression — a held plucked note must DECAY, at every
+    /// key of every preset.
+    ///
+    /// This is deliberately a RENDERED oracle, not another closed form.
+    /// `coupled_loop_margin_holds` above asserts the lag-free step matrix
+    /// [[a, k], [-k, a]] is bounded, and it kept passing (a² + k² ≈ 0.99) all
+    /// the while the shipped loop diverged to ~2e6 on a 40 s key-96 nylon note:
+    /// the shipped coupling was reading the partner plane one sample stale, and
+    /// that lag is invisible to a formula written for the lag-free matrix. A
+    /// closed form can only ever police the model it was derived from, so the
+    /// backstop has to be the real signal out of the real voice.
+    ///
+    /// Growth is measured as a RATIO between two late windows rather than
+    /// against an absolute ceiling: divergence starts from the note's own tiny
+    /// residual, so it clears a fixed threshold only after tens of seconds,
+    /// while the ratio shows up within one. An absolute bound is kept too, for
+    /// the case that starts loud.
+    #[test]
+    fn held_plucked_notes_decay_at_every_key() {
+        let sr = 44100.0;
+        let secs = 4.0f32;
+        let win = |b: &[f32], a: f32, z: f32| {
+            b[(a * sr) as usize..(z * sr) as usize]
+                .iter()
+                .fold(0f32, |m, &x| m.max(x.abs()))
+        };
+        let mut worst = 0f32;
+        let mut worst_at = String::new();
+        for &(pname, p) in ALL_PLUCK_PRESETS {
+            for key in (21u8..=108).step_by(3) {
+                let mut v = Pluck::new(p, key, 100, sr, 99);
+                let mut buf = vec![0f32; (secs * sr) as usize];
+                v.render(&mut buf);
+                let peak = buf.iter().fold(0f32, |m, &x| m.max(x.abs()));
+                assert!(
+                    peak.is_finite() && peak < 8.0,
+                    "{pname} key {key}: peak {peak} — the loop is not contracting"
+                );
+                // a plucked string is at its loudest in the attack and only
+                // ever loses energy after it; a later window that is LOUDER
+                // than an earlier one means the loop is generating.
+                //
+                // EXCEPT for the e-bow presets (`sustain > 0`), which author a
+                // deliberately supercritical driver whose saturator pins the
+                // note at a HOLD level — those are supposed to bloom, so a
+                // rising envelope is their correct behaviour, not a defect.
+                // They keep the absolute ceiling above plus a generous cap that
+                // still catches a runaway, since the hold settles near the
+                // knee rather than climbing without limit.
+                let (early, late) = (win(&buf, 1.0, 2.0), win(&buf, 3.0, 4.0));
+                let ratio = late / early.max(1e-9);
+                let cap = if p.sustain > 0.0 { 4.0 } else { 1.0 };
+                if ratio / cap > worst {
+                    worst = ratio / cap;
+                    worst_at = format!("{pname} key {key} (ratio {ratio:.3}, cap {cap})");
+                }
+                assert!(
+                    ratio < cap,
+                    "{pname} key {key}: late window {late:.4e} vs early {early:.4e} \
+                     (ratio {ratio:.3} ≥ cap {cap}) — the coupled loop is generating energy"
+                );
+            }
+        }
+        println!("KILN-00155 worst late/early ratio = {worst:.4} at {worst_at}");
     }
 
     fn render_program_released(

@@ -13,8 +13,18 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 BIN="$ROOT/target/release/ferrosintesis"
 [ -x "$BIN" ] || BIN="$BIN.exe"
-# Reference MIDIs live only in the (untracked) main-clone test-corpus.
-TB="${TB_MIDI:-/d/language/midi-music/test-corpus/reference-midi/mike-oldfield/01-tubular-bells-part-one.mid}"
+# macOS and most Debian/WSL hosts ship only `python3`; the fleet's Windows boxes carry
+# both names. Resolve once here rather than hardcoding either.
+PY="${PYTHON:-$(command -v python3 || command -v python || true)}"
+[ -n "$PY" ] || { echo "no python interpreter on PATH (tried python3, python)" >&2; exit 1; }
+# Reference MIDIs live only in the (untracked) test-corpus. Default to the repo-relative
+# location so this resolves on any host and any clone; override with TB_MIDI.
+TB="${TB_MIDI:-$ROOT/test-corpus/reference-midi/mike-oldfield/01-tubular-bells-part-one.mid}"
+[ -f "$TB" ] || {
+  echo "reference MIDI not found: $TB" >&2
+  echo "the test-corpus is untracked — set TB_MIDI to your copy" >&2
+  exit 1
+}
 OUT="$HERE/renders"; mkdir -p "$OUT"
 TRIM="${TRIM_SECONDS:-30}"
 
@@ -36,13 +46,13 @@ BANKS=(
 )
 
 echo "binary: $BIN"
-python "$HERE/make_torture_midi.py" -o "$OUT/torture.mid" >/dev/null
+"$PY" "$HERE/make_torture_midi.py" -o "$OUT/torture.mid" >/dev/null
 
 render_bank () { # <bank-num> <label>
   local num="$1" lbl="$2"
-  python "$HERE/prep_audition.py" "$OUT/torture.mid" -o "$OUT/_t${num}.mid" --bank "$num" --channel 0 >/dev/null
+  "$PY" "$HERE/prep_audition.py" "$OUT/torture.mid" -o "$OUT/_t${num}.mid" --bank "$num" --channel 0 >/dev/null
   "$BIN" "$OUT/_t${num}.mid" -o "$OUT/torture_${num}_${lbl}.wav" -q
-  python "$HERE/prep_audition.py" "$TB" -o "$OUT/_tb${num}.mid" --bank "$num" --channel 0 --max-seconds "$TRIM" >/dev/null
+  "$PY" "$HERE/prep_audition.py" "$TB" -o "$OUT/_tb${num}.mid" --bank "$num" --channel 0 --max-seconds "$TRIM" >/dev/null
   "$BIN" "$OUT/_tb${num}.mid" -o "$OUT/tubularbells_${num}_${lbl}.wav" --solo 0 -q
   echo "rendered bank $num ($lbl)"
 }
@@ -51,7 +61,7 @@ for b in "${BANKS[@]}"; do render_bank "${b%%:*}" "${b#*:}"; done
 
 # Model-only reference (--no-samples): the pure GM0 model, as the source-vs-blend A/B.
 "$BIN" "$OUT/torture.mid" -o "$OUT/torture_model.wav" --no-samples -q
-python "$HERE/prep_audition.py" "$TB" -o "$OUT/_tbm.mid" --bank 0 --channel 0 --max-seconds "$TRIM" >/dev/null
+"$PY" "$HERE/prep_audition.py" "$TB" -o "$OUT/_tbm.mid" --bank 0 --channel 0 --max-seconds "$TRIM" >/dev/null
 "$BIN" "$OUT/_tbm.mid" -o "$OUT/tubularbells_model.wav" --no-samples --solo 0 -q
 echo "rendered model ref"
 

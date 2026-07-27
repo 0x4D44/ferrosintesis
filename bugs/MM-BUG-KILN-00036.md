@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00036 — GM21 Accordion is a sparse 12-sine additive stack: reads thin/synthetic AND perceptually quiet
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31-code-1785113803438
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T004001Z-p9812-n387868000-c31 branch=task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31 code=7b4a350acca2 gate=cargo model=codex@xhigh)
   instrument-audition review; timbre defect confirmed by Fable 5 + Codex gpt-5.6-sol
   cross-agent reconciliation) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — current trunk still has the measured sparse additive voice, but Arthur must choose a modeled-reed target or approve a sourced LA accordion layer before an audible fix has a correctness target) → Open (2026-07-26, unblocked by Arthur after focused free-reed synthesis research; approved a modeled French-musette source-filter voice rather than a sampled layer)
 
@@ -141,3 +141,25 @@ evidence and audition representative low/mid/high GM21 notes.
 The M-CAL derivation report and the audition markers labelled this slot "Percussive Organ"
 in places — GM21 is **Accordion**; GM17 is Percussive Organ. Correct the label where it
 appears.
+
+## Fix
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T004001Z-p9812-n387868000-c31 code=7b4a350acca2 gate=cargo)
+
+Agent-reported summary: MM-BUG-KILN-00036 is fixed by replacing GM21's old sparse additive organ arm with a modeled musette accordion voice. The new voice uses three detuned band-limited free-reed pulse sources, a short source-brightness opening, an accordion body filter, modest air residual, and decaying upper attack modes. The old private organ(21) arm was removed from the routed path, leaving GM20 and GM23 on their existing organ implementation. Regression tests now prove H5-H12 occupancy, high-key guard-band restraint, body spectral shaping, transient-mode decay, and GM21 fullness versus GM23. The focused accordion test filter is green after a fail-first run reproduced the original sparse-tail and missing-body-
+
+Root cause: GM21 was still implemented as a static H1-H4 sine-stop stack with only token bandpassed reed noise, so it had almost no H5-H12 harmonic tail or accordion body response. The sparse spectrum could meter near the reference while sounding thin, synthetic, and perceptually quiet because the energy occupied too few critical bands.
+
+Changed:
+- crates/ferrosintesis/src/voices.rs: replaced routed GM21 construction with a modeled MusetteAccordion source-filter voice
+- crates/ferrosintesis/src/voices.rs: removed the old organ(21) routed arm while leaving GM20 and GM23 on the existing Organ path
+- crates/ferrosintesis/src/voices.rs: added MM-BUG-KILN-00036 regression oracles for harmonic occupancy, body shaping, transient decay, and GM21-vs-GM23 fullness
+
+Tests:
+- Fail-first: $null | deltic timeout 240 cargo test -p ferrosintesis --lib accordion_ -- --nocapture (failed on old GM21 with H5-H12/H1-H4 about 0.001 and missing
+- Final: $null | deltic timeout 240 cargo test -p ferrosintesis --lib accordion -- --nocapture (7 passed)
+
+Left alone:
+- bugs/ ledger files untouched; Deltic owns the Open to Fixed transition
+- Cargo.toml and Cargo.lock untouched
+- Catalog render-diff and external M-CAL reference rerun were not run in this focused child pass

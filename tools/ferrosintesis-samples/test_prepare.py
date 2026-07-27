@@ -1584,9 +1584,13 @@ class Orchestral2RegenerationRecipeTest(unittest.TestCase):
         )
         with open(path, encoding="utf-8") as f:
             provenance = f.read()
-        self.assertIn(
-            "python tools/ferrosintesis-samples/banjo_extract.py",
+        # Interpreter-agnostic on purpose: `python` and `python3` are both correct
+        # depending on the host, so pinning one name made a docs portability sweep
+        # register here as a regression. What this oracle protects is that the
+        # packaged provenance publishes the extractor command at all.
+        self.assertRegex(
             provenance,
+            r"python[0-9.]*\s+tools/ferrosintesis-samples/banjo_extract\.py",
         )
         self.assertNotIn("prepare.py --only=<family>", provenance)
 
@@ -1594,10 +1598,16 @@ class Orchestral2RegenerationRecipeTest(unittest.TestCase):
 class GrandRegenerationRecipeTest(unittest.TestCase):
     """MM-BUG-KILN-00135/00142: the copyable recipe selects only the grand family."""
 
-    COMMAND = "python tools/ferrosintesis-samples/prepare.py --only=grand"
+    # The interpreter name is stripped before comparison. `python` and `python3` are
+    # both correct depending on the host, and pinning one turned a docs portability
+    # sweep into a false regression. What this oracle protects is unchanged: the
+    # crate's only fenced prepare.py recipe must be the SCOPED one, so nobody copies
+    # a command that regenerates every family.
+    INTERPRETER = re.compile(r"^python[0-9.]*\s+")
+    COMMAND = "tools/ferrosintesis-samples/prepare.py --only=grand"
 
-    @staticmethod
-    def fenced_prepare_commands(text):
+    @classmethod
+    def fenced_prepare_commands(cls, text):
         commands = []
         block = None
         for line in text.splitlines():
@@ -1606,7 +1616,8 @@ class GrandRegenerationRecipeTest(unittest.TestCase):
                     block = []
                 else:
                     commands.extend(
-                        candidate.strip() for candidate in block
+                        cls.INTERPRETER.sub("", candidate.strip())
+                        for candidate in block
                         if "prepare.py" in candidate
                     )
                     block = None
@@ -1633,6 +1644,36 @@ For comparison, the text mentions {self.COMMAND}.
 """
         self.assertNotEqual(
             self.fenced_prepare_commands(adversarial), [self.COMMAND])
+
+    def test_stripping_the_interpreter_does_not_excuse_an_unscoped_command(self):
+        """The loosened match must still turn on scoping, not on the interpreter.
+
+        Normalising `python`/`python3` away is what lets a portability sweep pass,
+        but it must not let an UNSCOPED recipe through — that is the whole defect
+        MM-BUG-KILN-00135/00142 filed. Each of these should be rejected.
+        """
+        for wrong in (
+            "python3 tools/ferrosintesis-samples/prepare.py",
+            "python tools/ferrosintesis-samples/prepare.py",
+            "python3.11 tools/ferrosintesis-samples/prepare.py",
+            "python3 tools/ferrosintesis-samples/prepare.py --only=orchestral",
+        ):
+            with self.subTest(wrong=wrong):
+                self.assertNotEqual(
+                    self.fenced_prepare_commands(f"```sh\n{wrong}\n```"),
+                    [self.COMMAND],
+                )
+
+    def test_the_scoped_command_is_accepted_under_either_interpreter(self):
+        for right in (
+            "python tools/ferrosintesis-samples/prepare.py --only=grand",
+            "python3 tools/ferrosintesis-samples/prepare.py --only=grand",
+        ):
+            with self.subTest(right=right):
+                self.assertEqual(
+                    self.fenced_prepare_commands(f"```sh\n{right}\n```"),
+                    [self.COMMAND],
+                )
 
     def test_grand_selector_excludes_unrelated_local_banks(self):
         local_only, only = prepare._family_selection(["--only=grand"])

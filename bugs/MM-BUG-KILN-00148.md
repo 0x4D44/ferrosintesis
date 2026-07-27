@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample packaging / licensing
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260727T111207Z-p9812-n103487800-c72
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00148-run-verify-20260727T111207Z-p9812-n103487800-c72
+- **Owner base:** 1180e2ba72fdd4ec464bec22cc54555b9b02cf1d
+- **Owner fingerprint:** sha256:66c784511f485f070286d5bd6435f8b3781dd81b4795e807abc8549c3410fbd1
+- **Owner since:** 2026-07-27T11:12:07Z
+- **Owner until:** 2026-07-27T11:57:07Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

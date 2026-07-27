@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample generation / direct-source cache
 - **Raised:** 2026-07-27
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:gpt-5.5
+- **Owner role:** fix
+- **Owner run:** fix-20260727T165501Z-p9812-n885138800-c98
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00151-run-fix-20260727T165501Z-p9812-n885138800-c98
+- **Owner base:** 23459601b8eb6b42c7f758b6f07e418a25c024e1
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-27T16:55:01Z
+- **Owner until:** 2026-07-27T17:40:01Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

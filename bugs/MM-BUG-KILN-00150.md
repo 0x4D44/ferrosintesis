@@ -5,19 +5,19 @@
 - **Severity:** High
 - **Area:** sample packaging / licensing
 - **Raised:** 2026-07-27
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T114402Z-p9812-n071981400-c77
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00150-run-fix-20260727T114402Z-p9812-n071981400-c77
-- **Owner base:** 2b06e7d2f5a5ada87b83329b1287c0f24ce2fd25
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T11:44:02Z
-- **Owner until:** 2026-07-27T12:29:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=1, doubt=1, indeterminate=0
+- **Attempts:** fix=2, doubt=1, indeterminate=0
 - **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T054903Z-p9812-n086124000-c54 branch=task/bug-MM-BUG-KILN-00150-run-fix-20260727T054903Z-p9812-n086124000-c54 code=4278b0bdf638a33faa52cfec03304effd540f261 gate=focused-licensing model=codex@xhigh; held branch recovered by Codex) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T113201Z-p9812-n730268400-c75 verified_fix_run=fix-20260727T054903Z-p9812-n086124000-c54 verdict=doubt reason=static-fix-and-regression-look-correct-and-complete-but-this-sessions-bash-permi model=claude)
 
 ## Observation
@@ -127,3 +127,23 @@ Left alone:
 - Cargo.lock
 - wrk_journals/
 - scratchpad.md
+
+### Fix attempt summary (2026-07-27, deltic:auto run=fix-20260727T114402Z-p9812-n071981400-c77 outcome=no_work)
+
+Agent-reported summary: Reproduced the original MM-BUG-KILN-00150 observation against the recorded pre-fix parent: the old MuseScore sample NOTICE promised to reproduce the MS Basic acknowledgements but omitted the Temple Blocks and Drumline Cymbals lines. The current tree already contains the root-cause fix from the earlier landed code change, so this pass made no additional shipped code or test edits. Current notices include the complete acknowledgement set for the MuseScore-derived sample crates and the parent ferrosintesis NOTICE. The regression in ferrosintesis licensing derives the required acknowledgement lines from the pinned upstream MS Basic licence fixture instead of a hand-maintained subset. The focused
+
+Root cause: The MS Basic acknowledgement block was hand-transcribed into packaged notices while the old licensing oracle only checked for partial attribution tokens, so missing required upstream acknowledgement lines were not detected.
+
+Changed:
+- No additional shipped code or test files changed in this pass; the current tree already contains the NOTICE updates and fixture-backed licensing regression for
+- .deltic-run-summary.json written for Deltic scheduler reporting.
+
+Tests:
+- $null | deltic timeout 180 cargo test -p ferrosintesis licensing::tests
+- $null | deltic timeout 180 cargo test -p ferrosintesis --no-default-features licensing::tests
+
+Left alone:
+- bugs/
+- Cargo.toml
+- Cargo.lock
+- wrk_journals/

@@ -3736,25 +3736,23 @@ mod pluck_baseline {
         assert!((gain_db(20, 10) - gain_db(40, 50)).abs() <= 1e-6);
         assert!((gain_db(96, 127) - gain_db(64, 120)).abs() <= 1e-6);
 
-        for &(k0, k1, v0, v1) in &[
-            (40, 52, 50, 100),
-            (40, 52, 100, 120),
-            (52, 64, 50, 100),
-            (52, 64, 100, 120),
-        ] {
-            let mid = gain_db((k0 + k1) / 2, (v0 + v1) / 2);
-            let corners = [
-                gain_db(k0, v0),
-                gain_db(k0, v1),
-                gain_db(k1, v0),
-                gain_db(k1, v1),
-            ];
-            let lo = corners.iter().copied().fold(f32::INFINITY, f32::min);
-            let hi = corners.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-            assert!(
-                mid >= lo - 1e-6 && mid <= hi + 1e-6,
-                "PIZZ correction overshot inside {k0}-{k1}/{v0}-{v1}: {mid:+.2} not in {lo:+.2}..{hi:+.2}"
-            );
+        for keys in [40u8, 46, 52, 58, 64].windows(2) {
+            for vels in [50u8, 75, 100, 110, 120].windows(2) {
+                let (k0, k1, v0, v1) = (keys[0], keys[1], vels[0], vels[1]);
+                let mid = gain_db((k0 + k1) / 2, (v0 + v1) / 2);
+                let corners = [
+                    gain_db(k0, v0),
+                    gain_db(k0, v1),
+                    gain_db(k1, v0),
+                    gain_db(k1, v1),
+                ];
+                let lo = corners.iter().copied().fold(f32::INFINITY, f32::min);
+                let hi = corners.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+                assert!(
+                    mid >= lo - 1e-6 && mid <= hi + 1e-6,
+                    "PIZZ correction overshot inside {k0}-{k1}/{v0}-{v1}: {mid:+.2} not in {lo:+.2}..{hi:+.2}"
+                );
+            }
         }
 
         for &key in &[40, 46, 52, 58, 64] {
@@ -3776,6 +3774,70 @@ mod pluck_baseline {
                         "PIZZ {key}/{vel} seed {seed}: correction is not scalar gain (relative RMS diff {rel:.6})"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn pizz_shaped_gain_matches_legacy_between_anchors() {
+        const GRID_KEYS: [u8; 5] = [40, 46, 52, 58, 64];
+        const GRID_VELS: [u8; 5] = [50, 75, 100, 110, 120];
+        const MATCHED_SEEDS: [u32; 3] = [5, 21, 99];
+        let mut worst = (0u8, 0u8, 0.0f32);
+
+        for &key in &GRID_KEYS {
+            for &vel in &GRID_VELS {
+                if KEYS.contains(&key) && VELS.contains(&vel) {
+                    continue;
+                }
+                let mut offsets = [0.0; 3];
+                for (i, &seed) in MATCHED_SEEDS.iter().enumerate() {
+                    let shaped =
+                        voices::render_pizz_shaped_gain_probe_for_test(key, vel, seed, 0.40, true);
+                    let legacy = voices::render_pizz_legacy_probe_for_test(key, vel, seed, 0.40);
+                    let sustain = (0.05 * SR) as usize..(0.35 * SR) as usize;
+                    offsets[i] =
+                        db(rms(&shaped[sustain.clone()])) - db(rms(&legacy[sustain.clone()]));
+                }
+                let offset = offsets.iter().sum::<f32>() / offsets.len() as f32;
+                eprintln!("PIZZ intermediate {key}/{vel}: {offset:+.2} dB");
+                if offset.abs() > worst.2.abs() {
+                    worst = (key, vel, offset);
+                }
+            }
+        }
+        assert!(
+            worst.2.abs() <= 0.5,
+            "PIZZ corrected Shaped vs Legacy worst intermediate {}/{}: {:+.2} dB",
+            worst.0,
+            worst.1,
+            worst.2
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn print_pizz_legacy_gain_surface() {
+        const MATCHED_SEEDS: [u32; 3] = [5, 21, 99];
+        println!("key vel correction_dB");
+        for &key in &[40, 46, 52, 58, 64] {
+            for &vel in &[50, 75, 100, 110, 120] {
+                let mut offsets = [0.0; 3];
+                for (i, &seed) in MATCHED_SEEDS.iter().enumerate() {
+                    let shaped =
+                        voices::render_pizz_shaped_gain_probe_for_test(key, vel, seed, 0.40, false);
+                    let legacy = voices::render_pizz_legacy_probe_for_test(key, vel, seed, 0.40);
+                    let sustain = (0.05 * SR) as usize..(0.35 * SR) as usize;
+                    offsets[i] =
+                        db(rms(&shaped[sustain.clone()])) - db(rms(&legacy[sustain.clone()]));
+                }
+                println!(
+                    "{key:>3} {vel:>3} {:+.2} ({:+.2}, {:+.2}, {:+.2})",
+                    -offsets.iter().sum::<f32>() / offsets.len() as f32,
+                    -offsets[0],
+                    -offsets[1],
+                    -offsets[2]
+                );
             }
         }
     }

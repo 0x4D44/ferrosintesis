@@ -2670,22 +2670,25 @@ pub enum ShapedGain {
     PizzPostKiln48,
 }
 
-const PIZZ_GAIN_KEYS: [f32; 3] = [40.0, 52.0, 64.0];
-const PIZZ_GAIN_VELS: [f32; 3] = [50.0, 100.0, 120.0];
+const PIZZ_GAIN_KEYS: [f32; 5] = [40.0, 46.0, 52.0, 58.0, 64.0];
+const PIZZ_GAIN_VELS: [f32; 5] = [50.0, 75.0, 100.0, 110.0, 120.0];
 #[rustfmt::skip]
-const PIZZ_GAIN_DB: [[f32; 3]; 3] = [
-    [ 2.95,  0.56, -0.45],
-    [ 4.58,  1.59,  0.68],
-    [ 1.75, -1.74, -2.91],
+const PIZZ_GAIN_DB: [[f32; 5]; 5] = [
+    [ 2.95,  0.94,  0.56, -0.83, -0.45],
+    [ 3.04,  0.99, -0.75, -1.40, -1.96],
+    [ 4.58,  1.27,  1.59, -1.21,  0.68],
+    [ 0.37, -1.69, -3.21, -3.72, -4.27],
+    [ 1.75, -0.74, -1.74, -3.15, -2.91],
 ];
 
-fn axis_segment(x: f32, anchors: [f32; 3]) -> (usize, f32) {
-    let x = x.clamp(anchors[0], anchors[2]);
-    if x <= anchors[1] {
-        (0, (x - anchors[0]) / (anchors[1] - anchors[0]))
-    } else {
-        (1, (x - anchors[1]) / (anchors[2] - anchors[1]))
+fn axis_segment<const N: usize>(x: f32, anchors: [f32; N]) -> (usize, f32) {
+    let x = x.clamp(anchors[0], anchors[N - 1]);
+    for i in 0..N - 1 {
+        if x <= anchors[i + 1] {
+            return (i, (x - anchors[i]) / (anchors[i + 1] - anchors[i]));
+        }
     }
+    (N - 2, 1.0)
 }
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
@@ -9273,6 +9276,25 @@ pub(crate) fn render_pizz_shaped_gain_probe_for_test(
         } else {
             ShapedGain::None
         },
+        ..PIZZ
+    };
+    let sr = 44100.0;
+    let mut v = Pluck::new(&preset, key, vel, sr, seed);
+    let mut buf = vec![0f32; (secs * sr) as usize];
+    v.render(&mut buf);
+    buf
+}
+
+#[cfg(test)]
+pub(crate) fn render_pizz_legacy_probe_for_test(
+    key: u8,
+    vel: u8,
+    seed: u32,
+    secs: f32,
+) -> Vec<f32> {
+    let preset = PluckPreset {
+        exc_model: ExcModel::Legacy,
+        shaped_gain: ShapedGain::None,
         ..PIZZ
     };
     let sr = 44100.0;

@@ -414,7 +414,11 @@ mod tests {
             //         the_square_law_in_no_samples_builds` (the modeled `--no-samples` /
             //         repitch-fallback path). That model carries its measured exponent
             //         in-arm, while the recording stays bare.
-            if p == 6 || p == 76 || p == 96 || p == 109 {
+            //  45     pizzicato strings — its KILN-00058 Shaped-vs-Legacy parity
+            //         correction is deliberately velocity-dependent. The correction
+            //         preserves ordering and the underlying voice remains on the
+            //         square law; both are pinned positively below.
+            if p == 6 || p == 45 || p == 76 || p == 96 || p == 109 {
                 continue;
             }
             let k = melodic_k_at(p, 60);
@@ -431,6 +435,36 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+    }
+
+    #[test]
+    fn pizz_parity_gain_preserves_square_law_and_velocity_order() {
+        for key in FIT_KEYS {
+            let levels: Vec<(u8, f32)> = FIT_VELS
+                .iter()
+                .map(|&vel| (vel, melodic_level(45, key, vel)))
+                .collect();
+            for pair in levels.windows(2) {
+                assert!(
+                    pair[1].1 > pair[0].1,
+                    "GM45 key {key}: velocity {} level {:.2} dB did not exceed velocity {} level {:.2} dB",
+                    pair[1].0,
+                    pair[1].1,
+                    pair[0].0,
+                    pair[0].1
+                );
+            }
+
+            let underlying: Vec<(u8, f32)> = levels
+                .iter()
+                .map(|&(vel, level)| (vel, level - voices::pizz_shaped_gain_db_for_test(key, vel)))
+                .collect();
+            let k = fit_k(&underlying);
+            assert!(
+                (k - 2.0).abs() <= 0.25,
+                "GM45 key {key}: gain-compensated velocity exponent {k:.3}, want 2.0 +/- 0.25"
+            );
+        }
     }
 
     /// KILN-00048 anti-papering bound: no `Pluck`-rendered program's

@@ -9310,14 +9310,14 @@ fn string_voicing(program: u8) -> StringVoicing {
         out_lp_hz: 2600.0,
         loop_comp: 3.85,
         beta: 0.140,
-        // The cello's upper register can lock an octave up whenever the per-note
-        // bow force draws near the top of its range — pre-existing, and caught by
-        // bowed_string_cello_holds_register once that gate started using
-        // engine-realistic seeds. A ceiling over the last few semitones is the
-        // targeted fix; retuning its `beta` would disturb the whole voice and the
-        // 46–50 wolf fix that depends on 0.140.
+        // The cello's top two tones (D5/E5) lock an octave up whenever the
+        // per-note bow force draws near the top of its range — pre-existing, and
+        // caught by bowed_string_cello_holds_register once that gate started
+        // using engine-realistic seeds. A ceiling over the last few semitones is
+        // the targeted fix; retuning its `beta` would disturb the whole voice and
+        // the 46–50 wolf fix that depends on 0.140.
         slope_hi: 2.55,
-        slope_hi_key: 71,
+        slope_hi_key: 72,
         top_key: 76,
         vib_rate: 5.2,
         vib_base: 0.0055,
@@ -9516,7 +9516,7 @@ impl BowedString {
         // Bow force / pressure this stroke, capped by what this pitch can take.
         // Bowing hard in a SHORT loop drives the waveguide off its fundamental
         // (`map_bowedstring_bow_force_ceiling`). Only the cello needs the cap:
-        // its upper register locks an octave up under a hard bow, and unlike the
+        // its top two tones lock an octave up under a hard bow, and unlike the
         // violin family it cannot be cured by moving `beta`, because 0.140 is
         // what holds its own 46–50 wolf band. Real players press less hard high
         // on a string anyway, so the ceiling is physically right where it bites.
@@ -28232,37 +28232,54 @@ mod tests {
     /// own, and `calibrate_register_gate_catches_the_known_wolf` proves it can
     /// still see the failures this voicing was built to remove.
     const BOWED_STRING_REGISTER_SEED_INDICES: [u64; 5] = [0, 1, 2, 3, 19];
+    const BOWED_STRING_REGISTER_VELOCITIES: [u8; 4] = [32, 64, 96, 127];
+    const BOWED_STRING_REGISTER_REFERENCE_VELOCITY: [u8; 1] = [100];
+
+    fn bowed_string_register_velocities(program: u8) -> &'static [u8] {
+        if matches!(program, 42 | 43) {
+            // MM-BUG-KILN-00029 maps low-string speed and pressure jointly, so
+            // their register gate must walk the velocity-dependent control path.
+            &BOWED_STRING_REGISTER_VELOCITIES
+        } else {
+            // Preserve the original register-only scope for violin/viola/fiddle.
+            // Their separate high-velocity stability defect is parked rather
+            // than silently expanding this cello bug into a family retune.
+            &BOWED_STRING_REGISTER_REFERENCE_VELOCITY
+        }
+    }
 
     fn assert_bowed_string_register_holds(program: u8, lo: u8, hi: u8) {
-        assert_bowed_string_register_seed_set_covers_hard_bow(program, lo);
+        assert_bowed_string_register_seed_set_covers_hard_bow();
         let mut failures = bowed_string_register_failures(program, lo, hi);
         failures.sort();
         assert!(
             failures.is_empty(),
             "GM{program} loses its fundamental on {} of {} draws:\n{}",
             failures.len(),
-            (hi - lo + 1) as usize * BOWED_STRING_REGISTER_SEED_INDICES.len(),
+            (hi - lo + 1) as usize
+                * BOWED_STRING_REGISTER_SEED_INDICES.len()
+                * bowed_string_register_velocities(program).len(),
             failures.join("\n")
         );
     }
 
-    fn assert_bowed_string_register_seed_set_covers_hard_bow(program: u8, key: u8) {
-        let max_slope = BOWED_STRING_REGISTER_SEED_INDICES
+    fn assert_bowed_string_register_seed_set_covers_hard_bow() {
+        // Inspect the raw per-note draw, before MM-BUG-KILN-00029 maps cello
+        // and contrabass pressure into their playable region. At high velocity
+        // that map intentionally converges every draw to 2.60, so asserting on
+        // BowedString::slope would test the stabilizer rather than seed coverage.
+        let max_natural_slope = BOWED_STRING_REGISTER_SEED_INDICES
             .iter()
             .map(|&idx| {
-                BowedString::new(
-                    program,
-                    key,
-                    100,
-                    44100.0,
-                    crate::engine::note_voice_seed(idx),
-                )
-                .slope
+                let mut rng = Rng::new(crate::engine::note_voice_seed(idx));
+                let u = rng.white() * 0.5 + 0.5;
+                2.2 + 0.7 * u
             })
             .fold(f32::NEG_INFINITY, f32::max);
         assert!(
-            max_slope >= 2.85,
-            "GM{program} register seed set no longer covers hard bow force; max slope {max_slope:.3}"
+            max_natural_slope >= 2.85,
+            "register seed set no longer covers hard bow force; max raw slope \
+             {max_natural_slope:.3}"
         );
     }
 
@@ -28294,35 +28311,38 @@ mod tests {
         let mut failures: Vec<String> = Vec::new();
         for key in lo..=hi {
             let f0 = key_freq(key);
-            for &idx in &BOWED_STRING_REGISTER_SEED_INDICES {
-                let seed = crate::engine::note_voice_seed(idx);
-                let mut v = BowedString::new(program, key, 100, sr, seed);
-                if let Some(s) = force_slope {
-                    v.slope = s;
-                }
-                if let Some(speed) = force_speed {
-                    v.max_vel = speed;
-                }
-                let slope = v.slope; // natural draw unless explicitly forced
-                if let Some(b) = force_beta {
-                    v.beta = b;
-                    v.set_freq(f0);
-                }
-                v.vib_depth = 0.0; // a clean tone for the period measurement
-                v.drift = Drift::new(1, 0.0, 1);
-                let mut buf = vec![0f32; (1.5 * sr) as usize];
-                v.render(&mut buf);
-                let seg = &buf[(0.6 * sr) as usize..];
-                let (f_meas, _) = autocorr_pitch(seg, sr, f0, 2.2);
-                let cents = if f_meas > 0.0 {
-                    1200.0 * (f_meas / f0).log2()
-                } else {
-                    f32::NAN
-                };
-                if !cents.is_finite() || cents.abs() > 30.0 {
-                    failures.push(format!(
-                        "  GM{program} key {key} ({f0:.1} Hz) slope {slope:.3}: {cents:+.1} cents"
-                    ));
+            for &vel in bowed_string_register_velocities(program) {
+                for &idx in &BOWED_STRING_REGISTER_SEED_INDICES {
+                    let seed = crate::engine::note_voice_seed(idx);
+                    let mut v = BowedString::new(program, key, vel, sr, seed);
+                    if let Some(s) = force_slope {
+                        v.slope = s;
+                    }
+                    if let Some(speed) = force_speed {
+                        v.max_vel = speed;
+                    }
+                    let slope = v.slope; // natural draw unless explicitly forced
+                    if let Some(b) = force_beta {
+                        v.beta = b;
+                        v.set_freq(f0);
+                    }
+                    v.vib_depth = 0.0; // a clean tone for the period measurement
+                    v.drift = Drift::new(1, 0.0, 1);
+                    let mut buf = vec![0f32; (1.5 * sr) as usize];
+                    v.render(&mut buf);
+                    let seg = &buf[(0.6 * sr) as usize..];
+                    let (f_meas, _) = autocorr_pitch(seg, sr, f0, 2.2);
+                    let cents = if f_meas > 0.0 {
+                        1200.0 * (f_meas / f0).log2()
+                    } else {
+                        f32::NAN
+                    };
+                    if !cents.is_finite() || cents.abs() > 30.0 {
+                        failures.push(format!(
+                            "  GM{program} key {key} ({f0:.1} Hz) vel {vel} slope \
+                             {slope:.3}: {cents:+.1} cents"
+                        ));
+                    }
                 }
             }
         }

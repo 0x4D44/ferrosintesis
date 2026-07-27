@@ -1,5 +1,16 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.07.27 — **GM40 violin, GM41 viola and GM110 fiddle mode-lock an octave
+  high at velocity 127 for hard production-seed bow draws.** Found while widening
+  MM-BUG-KILN-00146's cello register oracle across velocity. With engine seed index
+  19 (`slope 2.876`), the current `BowedString` loses f0 at 24 violin, 20 viola and
+  9 fiddle key/draw points; representative failures are violin key 67, viola key
+  48 and fiddle key 56, all near +1200 cents. Their existing register gates use
+  velocity 100 and therefore stay green. This is outside the cello-specific bug
+  and requires a violin-family playable-region decision like MM-BUG-KILN-00029,
+  not an incidental test-driven retune. See
+  `crates/ferrosintesis/src/voices.rs:bowed_string_register_failures_full`.
+
 - [ ] 2026.07.26 — **ASK ARTHUR BEFORE TOUCHING THIS.** He asked for it to be parked, not
   actioned: do not start work on it without checking with him first, whatever the item looks
   like on a later read. **The b1-upright re-bake breaks its own crate's inventory gate** —

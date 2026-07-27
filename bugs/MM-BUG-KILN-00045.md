@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00045 — Bass family (GM 32–39) spans 21–25 dB internally where both reference synths span ~9 dB: the plucked basses' held body collapses while SynthBass 38 holds flat and hot
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** synth
 - **Raised:** 2026-07-22
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T110308Z-p9812-n829579800-c71
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00045-run-verify-20260727T110308Z-p9812-n829579800-c71
-- **Owner base:** 4b6beb2220c8c5f925c5360c330b518885203c2b
-- **Owner fingerprint:** sha256:1515e0b949e5f74fe0ebe46a7f9acd1709452cf375322edb50a5700e872cf431
-- **Owner since:** 2026-07-27T11:03:08Z
-- **Owner until:** 2026-07-27T11:48:08Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) from the M-CAL v3 certified reference-panel run; measured against two independent references, code-confirmed)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) from the M-CAL v3 certified reference-panel run; measured against two independent references, code-confirmed) -> Closed (2026-07-27, deltic:auto role=verify run=verify-20260727T110308Z-p9812-n829579800-c71 verified_fix_run=fix-20260726T213802Z-p9812-n009629600-c2 verdict=close model=claude)
   → Blocked (2026-07-24, Claude Opus 4.8 (1M) during an autonomous fixing pass. **Needs
   Arthur's listening call** — see "Why this is Blocked". Not a judgement on the bug, which
   is well-evidenced and still real; it cannot be finished unattended because the target
@@ -244,6 +244,10 @@ Tests:
 
 The event census found 73 bass-bearing files among 141 album/demo MIDIs. Every one
 changed, while all 68 non-bass files remained byte-identical.
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T110308Z-p9812-n829579800-c71 verified_fix_run=fix-20260726T213802Z-p9812-n009629600-c2 verdict=close)
+
+Verifier note: Bass family GM32-39 held-body spread is now 7.95 dB (was 25.02 dB), inside both references' ~9 dB; regression test present and passing, all gates green, and the fix attacks the recorded sustain + low-end-weight mechanisms at the voice layer rather than via PROGRAM_TRIM_DB. — HEAD 43ef2a9. (1) Symptom: ran the fixer-independent original probe grid via the regression oracle - keys 24/29/34/39/44/49 x vel 72/110, which I confirmed equals mkprobe.py's KEYS (48,53,58,63,68,73) + family_offset(bass)=-24 and VELS=(72,110); measured GM32 -22.85, GM33 -14.90, GM34 -22.69, GM35 -21.15, GM36 -20.35, GM37...
 
 ## Notes
 

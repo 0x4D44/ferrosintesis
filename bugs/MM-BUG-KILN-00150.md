@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00150 — MuseScore sample notice omits mandatory upstream acknowledgements
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** High
 - **Area:** sample packaging / licensing
 - **Raised:** 2026-07-27
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T114906Z-p9812-n236554200-c78
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00150-run-fix-20260727T114906Z-p9812-n236554200-c78
-- **Owner base:** 4952d596cdee883981765d0ddfecc0826364dbf9
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T11:49:06Z
-- **Owner until:** 2026-07-27T12:34:06Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=2, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T054903Z-p9812-n086124000-c54 branch=task/bug-MM-BUG-KILN-00150-run-fix-20260727T054903Z-p9812-n086124000-c54 code=4278b0bdf638a33faa52cfec03304effd540f261 gate=focused-licensing model=codex@xhigh; held branch recovered by Codex) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T113201Z-p9812-n730268400-c75 verified_fix_run=fix-20260727T054903Z-p9812-n086124000-c54 verdict=doubt reason=static-fix-and-regression-look-correct-and-complete-but-this-sessions-bash-permi model=claude)
+- **Attempts:** fix=3, doubt=1, indeterminate=0
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T054903Z-p9812-n086124000-c54 branch=task/bug-MM-BUG-KILN-00150-run-fix-20260727T054903Z-p9812-n086124000-c54 code=4278b0bdf638a33faa52cfec03304effd540f261 gate=focused-licensing model=codex@xhigh; held branch recovered by Codex) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T113201Z-p9812-n730268400-c75 verified_fix_run=fix-20260727T054903Z-p9812-n086124000-c54 verdict=doubt reason=static-fix-and-regression-look-correct-and-complete-but-this-sessions-bash-permi model=claude) → Blocked (2026-07-27, deltic:auto role=fix run=fix-20260727T114906Z-p9812-n236554200-c78 verdict=fix_failed reason=no_work model=codex@xhigh)
 
 ## Observation
 
@@ -147,3 +147,23 @@ Left alone:
 - Cargo.toml
 - Cargo.lock
 - wrk_journals/
+
+### Fix attempt summary (2026-07-27, deltic:auto run=fix-20260727T114906Z-p9812-n236554200-c78 outcome=no_work)
+
+Agent-reported summary: MM-BUG-KILN-00150 was reopened because the prior verifier could not execute cargo, not because the static fix failed. I reproduced the original recorded observation against the pre-fix blob: the old MuseScore sample NOTICE omitted the Temple Blocks and Drumline Cymbals acknowledgement lines. I also proved the regression fails by temporarily removing those lines from the current NOTICE, then restored the final tree. The current tree contains those acknowledgements in the MuseScore-derived notices and the parent notice, plus the fixture-backed licensing regression. The focused licensing module passes in this worktree with default features and with --no-default-features.
+
+Root cause: The MS Basic acknowledgement block was hand-transcribed into packaged notices while the previous licensing oracle only checked partial attribution tokens, so a selective subset of the upstream-required acknowledgement lines could pass as complete.
+
+Changed:
+- No additional shipped code or test edits in this pass; the current tree already contains the NOTICE updates and licensing regression for this bug.
+- Temporarily removed and restored the two recorded acknowledgement lines from the MuseScore sample NOTICE to prove the regression fails before the fix.
+- Wrote .deltic-run-summary.json for Deltic scheduler reporting.
+
+Tests:
+- $null | deltic timeout 180 cargo test -p ferrosintesis licensing::tests::ms_basic_notices_reproduce_every_required_upstream_acknowledgement failed with the two
+- $null | deltic timeout 180 cargo test -p ferrosintesis licensing::tests::ms_basic_notices_reproduce_every_required_upstream_acknowledgement passed after restori
+- $null | deltic timeout 180 cargo test -p ferrosintesis licensing::tests
+- $null | deltic timeout 180 cargo test -p ferrosintesis --no-default-features licensing::tests
+
+Left alone:
+- bugs/

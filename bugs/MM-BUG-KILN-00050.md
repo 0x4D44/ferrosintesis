@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing) → Open (2026-07-26, Arthur approved a focused, level-matched per-instrument revoicing pass with comparative A/B renders) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source candidate `7deb5cb8f775dd2fb599738960e903f842412c2f` restores the required steel/ukulele/koto held-brightness order with preset-local controls, level parity, focused regression coverage, and zero catalog contamination)
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing) → Open (2026-07-26, Arthur approved a focused, level-matched per-instrument revoicing pass with comparative A/B renders) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source candidate `0acc6f7baa81d8ae0243a6012d0ce3e55d050123` restores the required steel/ukulele/koto held-brightness order with preset-local controls, level parity, focused regression coverage, and zero catalog contamination)
 
 ## Observation
 
@@ -147,7 +147,7 @@ perceptual sign-off if the candidate changes audible identity materially.
 
 ## Fix evidence — 2026-07-27
 
-Source candidate `7deb5cb8f775dd2fb599738960e903f842412c2f` keeps
+Source candidate `0acc6f7baa81d8ae0243a6012d0ce3e55d050123` keeps
 `DamperHold::Derived` and `KS_DAMP_BUDGET` unchanged. It adds a bounded
 `PluckPreset::damper_hold_scale` (clamped to 1.0–2.5), leaves the default at
 1.0, and opens only UKULELE (2.2) and STEEL (2.4). STEEL's existing excitation
@@ -183,6 +183,14 @@ Focused validation passed:
 - `cargo test -p ferrosintesis ukulele_variation_is_brighter_and_shorter_than_nylon`
 - `cargo test -p ferrosintesis sitar_shamisen_koto_have_distinct_pluck_presets`
 - `cargo test -p ferrosintesis shaped_g7_mean_parity_and_seed_bound`
+- `cargo test -p ferrosintesis --no-default-features --locked`
+  (677 passed, 35 ignored; 4 doctests passed)
+
+The first integration gate exposed that the local STEEL opening canceled the
+pre-existing wound-string attenuation (`wound_strings_darker`: wound 467 Hz
+versus plain 456 Hz). The final source carries that attenuation into the local
+held-corner multiplier. The canary then passes without changing the required
+key-55/60/64 ordering measurements above.
 
 Fresh release `raw_dump --no-samples` probes over keys 55/60/64 show NYLON and
 KOTO are byte-identical to trunk. Only STEEL and UKULELE change. Native

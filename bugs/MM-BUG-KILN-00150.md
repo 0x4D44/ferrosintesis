@@ -5,15 +5,15 @@
 - **Severity:** High
 - **Area:** sample packaging / licensing
 - **Raised:** 2026-07-27
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:gpt-5.5
+- **Owner role:** fix
+- **Owner run:** fix-20260727T113801Z-p9812-n904678400-c76
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00150-run-fix-20260727T113801Z-p9812-n904678400-c76
+- **Owner base:** 7e1c2bd042b02a59eadd25b7040a282edb1cfac0
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-27T11:38:01Z
+- **Owner until:** 2026-07-27T12:23:01Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

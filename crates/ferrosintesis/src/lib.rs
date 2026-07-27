@@ -114,8 +114,6 @@ mod provenance;
 #[cfg(test)]
 mod render_profile;
 pub(crate) mod reverb;
-#[cfg(test)]
-mod sample_tools;
 pub(crate) mod sampler;
 pub(crate) mod scratch;
 #[cfg(test)]

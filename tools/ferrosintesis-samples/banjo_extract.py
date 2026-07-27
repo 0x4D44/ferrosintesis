@@ -28,7 +28,7 @@ Usage:
     (SOURCE defaults to samples/banjo/banjo-5string-openG-2026-07-23.opus)
 """
 from __future__ import annotations
-import math, os, struct, subprocess, sys, tempfile
+import math, os, shutil, struct, subprocess, sys, tempfile
 from pathlib import Path
 import numpy as np
 
@@ -215,15 +215,42 @@ def validate_banjo_output_plan(staging: Path, repo: Path = REPO) -> frozenset[st
     return expected
 
 
-def publish_banjo_bank(staging: Path, out: Path = OUT, expected=None) -> None:
-    if expected is None:
-        expected = validate_banjo_output_plan(staging)
+def publish_banjo_bank(
+        staging: Path, out: Path = OUT, repo: Path = REPO,
+        replace_file=os.replace) -> None:
+    expected = validate_banjo_output_plan(staging, repo)
     out.mkdir(parents=True, exist_ok=True)
-    for name in sorted(expected):
-        (staging / name).replace(out / name)
-    for old in out.glob(BANJO_GLOB):
-        if old.name not in expected:
-            old.unlink()
+    originals = {p.name for p in out.glob(BANJO_GLOB)}
+    with tempfile.TemporaryDirectory(
+            prefix=".banjo-backup-", dir=out.parent) as backup_dir:
+        backup = Path(backup_dir)
+        for name in sorted(originals):
+            shutil.copy2(out / name, backup / name)
+        try:
+            for name in sorted(expected):
+                replace_file(staging / name, out / name)
+            for old in out.glob(BANJO_GLOB):
+                if old.name not in expected:
+                    old.unlink()
+        except BaseException as publish_error:
+            rollback_errors = []
+            for current in out.glob(BANJO_GLOB):
+                if current.name not in originals:
+                    try:
+                        current.unlink()
+                    except OSError as error:
+                        rollback_errors.append(f"remove {current.name}: {error}")
+            for name in sorted(originals):
+                try:
+                    os.replace(backup / name, out / name)
+                except OSError as error:
+                    rollback_errors.append(f"restore {name}: {error}")
+            if rollback_errors:
+                details = "; ".join(rollback_errors)
+                raise RuntimeError(
+                    f"banjo publication failed and rollback was incomplete: {details}"
+                ) from publish_error
+            raise
 
 
 def main():
@@ -279,8 +306,7 @@ def main():
             name = f"banjo_{note_name(m)}.wav"
             write_wav16(staging / name, clip)
             written.append((name, t["f0"]))
-        expected = validate_banjo_output_plan(staging)
-        publish_banjo_bank(staging, OUT, expected)
+        publish_banjo_bank(staging, OUT)
 
     for name, root in written:
         print(f"{name}  root {root:.2f} Hz")

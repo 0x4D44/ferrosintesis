@@ -534,6 +534,15 @@ class DirectSourceCacheTest(unittest.TestCase):
         self.assertEqual(self.fetches, [self.URL_A, self.URL_A])
         self.assertEqual(self.cached_sample(), 1000)
 
+    def test_ensure_direct_sources_refetches_changed_source_url(self):
+        prepare.ensure_direct_sources(
+            self.src, {"sample.wav": self.URL_A}, "demo")
+        self.served_sample = 3333
+        prepare.ensure_direct_sources(
+            self.src, {"sample.wav": self.URL_B}, "demo")
+        self.assertEqual(self.fetches, [self.URL_A, self.URL_B])
+        self.assertEqual(self.cached_sample(), 3333)
+
 
 class BagpipeLoopTests(unittest.TestCase):
     """The looped-sustain path (HLD 2026.07.17) — extract_loop and the SFZ parse.

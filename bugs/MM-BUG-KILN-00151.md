@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00151-run-fix-20260727T085110Z-p9812-n624876700-c57-code-1785142875974
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T085110Z-p9812-n624876700-c57 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T085110Z-p9812-n624876700-c57 code=2c2ac012b4fa gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T085110Z-p9812-n624876700-c57 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T085110Z-p9812-n624876700-c57 code=ed7633742b1c172bb124eb1f919e754e9e1bca66 gate=python model=codex@xhigh)
 
 ## Observation
 
@@ -54,27 +54,30 @@ control.
 
 ## Fix
 
-<unfixed — raised only>
+Direct downloads now write an atomic `.source.json` sidecar containing the exact
+source URL and fetched-file SHA-256. A warm entry is reused only when the
+sidecar URL and current file digest both match. Legacy entries, changed pinned
+URLs, and valid local substitutions therefore refetch before a bake can consume
+stale bytes.
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T085110Z-p9812-n624876700-c57 code=2c2ac012b4fa gate=cargo)
+`ensure_direct_sources()` now uses the same authenticated helper. The banjo
+float-WAV path also records URL and digest identity while deliberately skipping
+stdlib WAV parsing for its ffmpeg-only input format.
 
-Agent-reported summary: Fixed MM-BUG-KILN-00151 in the sample preparation direct-source cache. Direct URL downloads now write an atomic sidecar for each fetched file and reuse a warm file only when the sidecar URL and SHA-256 match the current request. Legacy entries, URL-revision changes, and valid local WAV substitutions now refetch before the bake can consume stale bytes. The direct-source wrapper uses the same authenticated helper, and the banjo float-WAV path keeps URL/hash authentication without forcing stdlib WAV parsing. Added focused regressions that failed before the fix and pass after it.
+Root cause: the former warm-cache identity was only the destination filename
+plus WAV parseability. It stored neither the requested URL nor the fetched
+content identity.
 
-Root cause: The warm-cache identity for direct downloads was the destination filename plus, for ensure_source, WAV parseability. The requested source URL and fetched bytes were never stored or checked, so a stable filename could hide a changed pinned revision or a valid local substitution.
+Regression coverage:
 
-Changed:
-- tools/ferrosintesis-samples/prepare.py: direct source sidecar verification, manifest writes, and shared helper wiring
-- tools/ferrosintesis-samples/test_prepare.py: DirectSourceCacheTest regressions for legacy, altered, URL-changed, and valid warm-cache cases
-
-Tests:
-- Pre-fix focused regression: DirectSourceCacheTest failed 4/5 as expected
-- Post-fix focused regression: DirectSourceCacheTest passed 6/6
-- Post-fix helper check: DirectSourceCacheTest plus PrepareSampleBankTests.test_ensure_source_refetches_poisoned_cache_once passed 7/7
-
-Left alone:
-- bugs/ ledger files; Deltic owns the Open to Fixed transition
-- Cargo.toml and Cargo.lock; Deltic owns versioning
-- Broad integration gate; Deltic runs it on the final landing tree
+- `DirectSourceCacheTest`: 6/6 passed, covering legacy, altered, URL-changed,
+  valid warm-cache, sidecar-content, and wrapper-routing cases.
+- `DirectSourceCacheTest` plus
+  `PrepareSampleBankTests.test_ensure_source_refetches_poisoned_cache_once`:
+  7/7 passed.
+- Full `tools/ferrosintesis-samples/test_prepare.py`: 79/79 passed.
+- `python -m py_compile tools/ferrosintesis-samples/prepare.py
+  tools/ferrosintesis-samples/test_prepare.py`: passed.
 
 ## Notes
 

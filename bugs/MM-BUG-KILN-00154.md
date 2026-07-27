@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00154 — Orchestral2 public inventory omits most shipped families
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** orchestral2 / published metadata
@@ -63,7 +63,7 @@ to `PROVENANCE.md`. Manifest descriptions cannot present a substantial partial
 family list, and crate docs cannot direct provenance readers only to unpackaged
 repository material.
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T092502Z-p9812-n774387000-c66 code=75895ae12ee3 gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T092502Z-p9812-n774387000-c66 code=75895ae12ee3 gate=cargo) → Closed (2026-07-28, claude-opus-5@high; independent two-eyes verification on trunk `d1365e5` — all three drifted surfaces corrected against a complete 14-family PROVENANCE.md, oracle proven two-sided naming the report’s nine omitted families verbatim, class-wide scan confirmed over every sample crate, repo gates green)
 
 Root cause: the complete packaged `PROVENANCE.md` inventory was already derived
 and checked, but README, manifest, and rustdoc prose lived outside that oracle.
@@ -98,3 +98,48 @@ Tests:
 Current packaging, family counts, and licences are correct. This is the public
 metadata residual left after MM-BUG-KILN-00069 added the complete packaged
 provenance table.
+
+## Independent verification (2026-07-28, claude-opus-5@high — two-eyes, verifier ≠ fixer)
+
+Verified on trunk `d1365e5`. Verdict: **Closed**.
+
+**Ground truth matches the report exactly.** `crates/ferrosintesis-samples-orchestral2/samples/`
+ships **132 WAVs across 14 families** — the report's own figures — and all 14 (`banjo`,
+`eastpick`, `eastpluck`, `glock`, `harp`, `marimba`, `musicbox`, `ocarina`, `recorder`,
+`timpani`, `tubular`, `vibes`, `viola`, `xylo`) appear in the packaged `PROVENANCE.md`. The new
+canonical authority is genuinely complete, which is the precondition for delegating to it.
+
+**All three drifted surfaces are corrected.**
+
+- `README.md` — the "Contents & provenance" section now delegates to `PROVENANCE.md` instead of
+  presenting five families as the inventory.
+- `Cargo.toml` — the description no longer embeds a partial family list; it names
+  `PROVENANCE.md` as the full inventory.
+- `src/lib.rs` — rustdoc points provenance readers at the packaged `PROVENANCE.md` rather than
+  the incomplete README and unpackaged repository tooling.
+
+**Two-sided, reproducing the report's list verbatim.** I put the recorded five-family table back
+into the README. The oracle fails at `crates/ferrosintesis/src/inventory.rs:687` with:
+
+```
+ferrosintesis-samples-orchestral2: README family table is partial (missing `eastpick_*`,
+`eastpluck_*`, `glock_*`, `marimba_*`, `musicbox_*`, `tubular_*`, `vibes_*`, `viola_*`,
+`xylo_*`; extra -)
+```
+
+Those are precisely the nine families the Observation lists as omitted — named individually,
+not merely counted.
+
+**The class is closed, not just the instance.**
+`every_public_sample_inventory_surface_is_complete_or_delegated` iterates **every** sample crate
+via `sample_crates()`, not orchestral2 alone, and carries a `checked > 20` self-guard so the
+scan cannot silently shrink to a handful of crates while staying green. That guard is the
+hardening this repo's CLAUDE.md demands of a derived oracle, and its absence is what made
+MM-BUG-KILN-00073 possible.
+
+**Gates, observed at `d1365e5`:** `cargo test --workspace --release` 812 passed / 0 failed /
+41 ignored, 0 failed across all 39 other suites; clippy clean under default and
+`--no-default-features`; `cargo fmt --all --check` clean. No known-unrelated failures.
+
+**Note:** the `Held branch` field still carries the fixer's host-local branch — housekeeping,
+not a defect in this bug.

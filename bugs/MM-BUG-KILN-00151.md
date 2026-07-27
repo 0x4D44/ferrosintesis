@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00151 — Direct sample cache ignores pinned source revisions
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / direct-source cache
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00151-run-fix-20260727T172601Z-p9812-n763291500-c101-code-1785173537069
 - **Legacy fixed run:** -
 - **Attempts:** fix=3, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T085110Z-p9812-n624876700-c57 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T085110Z-p9812-n624876700-c57 code=ed7633742b1c gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T164601Z-p9812-n625456400-c95 verified_fix_run=fix-20260727T085110Z-p9812-n624876700-c57 verdict=doubt reason=fix-and-regression-tests-look-correct-on-static-review-but-this-sessions-bash-pe model=claude) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T172601Z-p9812-n763291500-c101 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T172601Z-p9812-n763291500-c101 code=f6fef6d00a78 gate=python model=codex@xhigh)
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T085110Z-p9812-n624876700-c57 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T085110Z-p9812-n624876700-c57 code=ed7633742b1c gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T164601Z-p9812-n625456400-c95 verified_fix_run=fix-20260727T085110Z-p9812-n624876700-c57 verdict=doubt reason=fix-and-regression-tests-look-correct-on-static-review-but-this-sessions-bash-pe model=claude) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T172601Z-p9812-n763291500-c101 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T172601Z-p9812-n763291500-c101 code=f6fef6d00a78 gate=python model=codex@xhigh) → Closed (2026-07-28, claude-opus-5@high; independent two-eyes verification on trunk `d1365e5` — regression suite EXECUTED (87/87, DirectSourceCacheTest 7/7), predicate proven two-sided with 5 of 7 failing on the pre-fix parseability test, repo gates green; the earlier doubt-reopen was a could-not-execute verdict, now resolved by execution; fix provenance corrected to ed7633742b1c+f6fef6d00a78)
 
 ## Observation
 
@@ -157,3 +157,51 @@ Left alone:
 - bugs/
 - Cargo.toml
 - Cargo.lock
+
+## Independent verification (2026-07-28, claude-opus-5@high — two-eyes, verifier ≠ fixer)
+
+Verified on trunk `d1365e5`. Verdict: **Closed**.
+
+**This bug was reopened once for a reason that was never about the fix.** The `verdict=doubt`
+reopen records *"fix-and-regression-tests-look-correct-on-static-review-but-this-sessions-bash-pe…"*
+— that verifier could not execute anything and declined to bless it on a read-alone, which was
+the right call. Execution is precisely what this pass adds.
+
+**The regression suite runs and passes.** `python tools/ferrosintesis-samples/test_prepare.py`:
+**87 tests, OK**. `DirectSourceCacheTest` alone: **7 passed**, and the run prints the new
+mechanism firing — `cached sample.wav missing source proof or stale; refetching ...`.
+
+**The warm-cache predicate the report indicted is gone.** `ensure_source`
+(`tools/ferrosintesis-samples/prepare.py:1242`) now gates reuse on
+`direct_source_matches(path, url, validate_wav=validate_wav)` rather than on `read_wav()`
+merely succeeding, so the requested URL and the fetched content digest are both part of cache
+identity.
+
+**Two-sided, and the failures map onto the report's own defect list.** I reverted the predicate
+to the pre-fix parseability-only test. Five of the seven tests then fail:
+
+| failing test | recorded defect it encodes |
+|---|---|
+| `test_valid_local_substitution_is_refetched` | *"Any valid local substitution is also accepted for all 81"* |
+| `test_url_revision_change_with_stable_destination_refetches` | *"Advancing `VCSL_REV` leaves the cache path unchanged and reuses old, valid WAVs"* |
+| `test_legacy_warm_wav_without_source_manifest_is_refetched` | legacy entries carrying no stored proof |
+| `test_ensure_direct_sources_refetches_changed_source_url` | the `ensure_direct_sources()` wrapper path |
+| `test_ensure_direct_sources_uses_the_authenticated_cache` | wrapper routing to the authenticated helper |
+
+The two that keep passing are the no-refetch controls, which *should* be insensitive to the
+revert. A guard that went all-red would have been the weaker result.
+
+**Fix provenance corrected — and here it actively misleads.** The `Fixed` line cites
+`code=f6fef6d00a78`, but that commit contains **no production code at all**: it is nine lines
+adding `test_ensure_direct_sources_refetches_changed_source_url`. The substantive fix is
+`ed7633742b1c` (89 lines of `prepare.py` plus 88 of tests), also on trunk. Anyone running
+`git show f6fef6d` to review this fix sees one test and none of the mechanism. The added test
+earns its place — it is one of the five that fail without the fix — but it is not the fix.
+
+**Gates, observed at `d1365e5`:** `cargo test --workspace --release` 812 passed / 0 failed /
+41 ignored, 0 failed across all 39 other suites; clippy clean under default and
+`--no-default-features`; `cargo fmt --all --check` clean. Python suite 87/87. No
+known-unrelated failures.
+
+**Note:** the `Held branch` field still carries the fixer's host-local branch. Landing the fix
+did not clear it — housekeeping, not a defect in this bug.

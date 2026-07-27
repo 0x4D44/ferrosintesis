@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** sample generation / direct-source cache
 - **Raised:** 2026-07-27
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T172601Z-p9812-n763291500-c101
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00151-run-fix-20260727T172601Z-p9812-n763291500-c101
-- **Owner base:** 856cf54d038420f7776d387f9bf9960d81b931e8
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T17:26:01Z
-- **Owner until:** 2026-07-27T18:11:01Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00151-run-fix-20260727T172601Z-p9812-n763291500-c101-code-1785173537069
 - **Legacy fixed run:** -
 - **Attempts:** fix=2, doubt=1, indeterminate=0
 - **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T085110Z-p9812-n624876700-c57 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T085110Z-p9812-n624876700-c57 code=ed7633742b1c172bb124eb1f919e754e9e1bca66 gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T164601Z-p9812-n625456400-c95 verified_fix_run=fix-20260727T085110Z-p9812-n624876700-c57 verdict=doubt reason=fix-and-regression-tests-look-correct-on-static-review-but-this-sessions-bash-pe model=claude)

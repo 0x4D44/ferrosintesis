@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T230602Z-p9812-n782377700-c18 branch=task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18 code=d00a5e0532e120413d207fdfdd7cc5c75e406278 gate=focused+render-diff model=codex@xhigh)
+- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T230602Z-p9812-n782377700-c18 branch=task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18 code=210397b749f432f95b6b7f61d9c44bdab491a750 gate=focused+render-diff model=codex@xhigh)
 
 ## Observation
 
@@ -128,7 +128,7 @@ Leave the bug **Fixed**, not Closed, after the code and regression tests land. I
 verification should inspect the automated evidence and audition a short representative
 GM 32–35 alternate-bank render before closure.
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260726T230602Z-p9812-n782377700-c18 code=d00a5e0532e120413d207fdfdd7cc5c75e406278 gate=focused+render-diff)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T230602Z-p9812-n782377700-c18 code=210397b749f432f95b6b7f61d9c44bdab491a750 gate=focused+render-diff)
 
 Agent-reported summary: Fixed MM-BUG-KILN-00085 by making the GM32-35 alternate bass sampled layer additive instead of letting it replace the modeled bass onset. The modeled bass now plays at full level from sample zero, while the sampled overlay fades out by 150 ms. The bass alternate path also refuses upward sample repitching beyond five semitones and falls back to the bare model above that ceiling. Each recording/model pair has an independent additive trim, keeping the sample above the established alternate-bank reachability floor without moving the modeled kick by more than 1 dB. Regression tests cover onset preservation, the 150 ms taper, the upward repitch ceiling, note-off/reaping, and the unchanged ordinary LA replacement wrapper. Focused tests, both clippy feature configurations, catalog render comparisons, and an explicit alternate-bank A/B are green.
 

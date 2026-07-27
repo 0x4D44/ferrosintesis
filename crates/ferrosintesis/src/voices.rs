@@ -5817,6 +5817,213 @@ impl Voice for Organ {
     }
 }
 
+struct AccordionReed {
+    source: ReedPulse,
+    ratio: f32,
+    amp: f32,
+    drift: Drift,
+    wander_ratio: f32,
+    wander_amp: f32,
+    age: u64,
+}
+
+impl AccordionReed {
+    fn new(base_f: f32, ratio: f32, amp: f32, width: f32, sr: f32, seed: u32) -> Self {
+        let mut rng = Rng::new(seed);
+        Self {
+            source: ReedPulse::new(
+                base_f * ratio,
+                sr,
+                rng.next_u32() as f32 / u32::MAX as f32,
+                width * (1.0 + 0.02 * rng.white()),
+            ),
+            ratio,
+            amp: amp * (1.0 + 0.04 * rng.white()),
+            drift: Drift::new(seed ^ 0xA21C_C0ED, 1.4, 360),
+            wander_ratio: 1.0,
+            wander_amp: 1.0,
+            age: 0,
+        }
+    }
+
+    fn retune(&mut self, base_f: f32, bend: f32, sr: f32) {
+        self.source
+            .set_freq(base_f * self.ratio * bend * self.wander_ratio, sr);
+    }
+
+    #[inline]
+    fn next(&mut self, base_f: f32, bend: f32, sr: f32) -> f32 {
+        self.age = self.age.saturating_add(1);
+        if self.age % 64 == 1 {
+            let w = self.drift.next().clamp(-12.0, 12.0);
+            self.wander_ratio = 2f32.powf(w / 1200.0);
+            self.wander_amp = 10f32.powf(0.12 * w / 20.0);
+            self.retune(base_f, bend, sr);
+        }
+        self.source.next() * self.amp * self.wander_amp
+    }
+}
+
+struct AccordionAttackMode {
+    osc: Sine,
+    amp: f32,
+}
+
+/// GM21 accordion: modeled French musette free reeds through a compact body
+/// filter. This replaces the old H1-H4 sine stack while preserving the three-reed
+/// +/-16 cent registration that the musette oracles already pin.
+struct MusetteAccordion {
+    reeds: [AccordionReed; 3],
+    env: Adsr,
+    trem: Sine,
+    trem_depth: f32,
+    body: [Biquad; 5],
+    source_lp: Biquad,
+    body_hp: Biquad,
+    body_lp: Biquad,
+    air: Biquad,
+    air_amp: f32,
+    attack_noise: Biquad,
+    attack_modes: [AccordionAttackMode; 4],
+    attack_gain: f32,
+    attack_decay: f32,
+    age: u64,
+    rng: Rng,
+    amp: f32,
+    base_f: f32,
+    bend: f32,
+    sr: f32,
+}
+
+impl MusetteAccordion {
+    fn new(key: u8, vel: u8, sr: f32, seed: u32) -> Self {
+        let (trem_hz, trem_depth) = organ_trem_base(21);
+        let base_f = key_freq(key);
+        let reeds = [
+            AccordionReed::new(base_f, 1.0, 0.82, 0.34, sr, seed ^ 0x2100_0001),
+            AccordionReed::new(
+                base_f,
+                cent_ratio(-16.0),
+                0.52,
+                0.32,
+                sr,
+                seed ^ 0x2100_0002,
+            ),
+            AccordionReed::new(base_f, cent_ratio(16.0), 0.52, 0.36, sr, seed ^ 0x2100_0003),
+        ];
+        let body_specs: [(f32, f32, f32); 5] = [
+            (520.0, 0.75, 2.5),
+            (980.0, 0.85, 5.0),
+            (1450.0, 0.75, -2.5),
+            (2350.0, 0.95, 4.0),
+            (3550.0, 0.80, 2.0),
+        ];
+        let body = std::array::from_fn(|i| {
+            let (freq, q, gain_db) = body_specs[i];
+            Biquad::peak(freq.min(sr * 0.42), q, gain_db, sr)
+        });
+        let high_register = ((key as f32 - 60.0) / 36.0).clamp(0.0, 1.0);
+        let low_register = ((60.0 - key as f32) / 36.0).clamp(0.0, 1.0);
+        let body_lp =
+            (7600.0 + 700.0 * low_register - 2200.0 * high_register).clamp(5200.0, 8300.0);
+        let mode_ratios = [14.2, 18.5, 23.7, 29.4];
+        let mode_amps = [0.30, 0.24, 0.18, 0.13];
+        let mut rng = Rng::new(seed ^ 0xACCD_0021);
+        let attack_modes = std::array::from_fn(|i| {
+            let f = base_f * mode_ratios[i];
+            AccordionAttackMode {
+                osc: Sine::new(f.min(sr * 0.45), sr, rng.white() * TAU),
+                amp: if f < sr * 0.45 { mode_amps[i] } else { 0.0 },
+            }
+        });
+        Self {
+            reeds,
+            env: Adsr::new(0.035, 0.08, 0.98, 0.18, sr),
+            trem: Sine::new(trem_hz, sr, 0.0),
+            trem_depth,
+            body,
+            source_lp: Biquad::lowpass(350.0, 0.72, sr),
+            body_hp: Biquad::highpass(70.0, 0.7, sr),
+            body_lp: Biquad::lowpass(body_lp.min(sr * 0.42), 0.75, sr),
+            air: Biquad::bandpass((base_f * 5.2).clamp(900.0, 3400.0), 0.65, sr),
+            air_amp: 0.012 * (0.45 + 0.55 * vel_ctrl(vel)),
+            attack_noise: Biquad::bandpass((base_f * 18.0).clamp(3200.0, 7200.0), 0.75, sr),
+            attack_modes,
+            attack_gain: 0.55 * (0.35 + 0.65 * vel_ctrl(vel)),
+            attack_decay: t60_mul(0.110, sr),
+            age: 0,
+            rng,
+            amp: 0.20 * vel_amp(vel),
+            base_f,
+            bend: 1.0,
+            sr,
+        }
+    }
+}
+
+impl Voice for MusetteAccordion {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        for o in out.iter_mut() {
+            let t = self.age as f32 / self.sr;
+            self.age = self.age.saturating_add(1);
+            let mut s = self
+                .reeds
+                .iter_mut()
+                .map(|reed| reed.next(self.base_f, self.bend, self.sr))
+                .sum::<f32>();
+            s += self.air.process(self.rng.white()) * self.air_amp;
+            if self.age % 64 == 1 {
+                let open = (t / 0.075).clamp(0.0, 1.0);
+                let cutoff = 350.0 + (7600.0 - 350.0) * open * open;
+                self.source_lp
+                    .retune_lowpass(cutoff.min(self.sr * 0.42), 0.72, self.sr);
+            }
+            s = self.source_lp.process(s);
+            if self.attack_gain > 1e-5 {
+                let mut attack = self.attack_noise.process(self.rng.white()) * 0.10;
+                for mode in &mut self.attack_modes {
+                    attack += mode.osc.next() * mode.amp;
+                }
+                let attack_ramp = (t / 0.040).clamp(0.0, 1.0).powi(2);
+                s += attack * self.attack_gain * attack_ramp;
+                self.attack_gain *= self.attack_decay;
+            }
+            for b in &mut self.body {
+                s = b.process(s);
+            }
+            s = self.body_hp.process(self.body_lp.process(s));
+            let trem = 1.0 + self.trem_depth * self.trem.next();
+            *o += s * self.amp * trem * self.env.next();
+        }
+        self.env.alive()
+    }
+
+    fn note_off(&mut self) {
+        self.env.release();
+    }
+
+    fn released(&self) -> bool {
+        self.env.released()
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult.max(0.0001);
+        for reed in &mut self.reeds {
+            reed.retune(self.base_f, self.bend, self.sr);
+        }
+    }
+
+    fn set_trem(&mut self, rate_hz: f32, depth: f32) {
+        self.trem.set_freq(rate_hz, self.sr);
+        self.trem_depth = depth;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "accordion"
+    }
+}
+
 // ---------------------------------------------------------------------------
 // GM 19 cathedral organ
 // ---------------------------------------------------------------------------
@@ -6567,40 +6774,6 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             0.30,
         )
         .with_reed_noise(0.05, (f * 3.0).clamp(600.0, 2400.0), 0.7),
-        // Round-3 U7 (plan §3.4): a French MUSETTE — three reeds detuned ±16
-        // cents, each radiating its FULL harmonic series, so every harmonic h
-        // beats at ~h× the fundamental's beat rate (the shimmer the coherent
-        // tremolo faked). HEAD carried the detuned triple only on H1; H2/H3/H4
-        // were single static sines. Side reeds sit at ~0.63× the centre reed
-        // (matching H1's existing 0.58/0.92 ratio).
-        21 => Organ::new(
-            key,
-            vel,
-            sr,
-            seed,
-            &[
-                (1.0, 0.92),
-                (cent_ratio(-16.0), 0.58),
-                (cent_ratio(16.0), 0.58),
-                (2.0, 0.24),
-                (2.0 * cent_ratio(-16.0), 0.15),
-                (2.0 * cent_ratio(16.0), 0.15),
-                (3.0, 0.10),
-                (3.0 * cent_ratio(-16.0), 0.06),
-                (3.0 * cent_ratio(16.0), 0.06),
-                (4.0, 0.05),
-                (4.0 * cent_ratio(-16.0), 0.03),
-                (4.0 * cent_ratio(16.0), 0.03),
-            ],
-            Adsr::new(0.040, 0.08, 0.98, 0.18, sr),
-            trem_hz,
-            trem_depth,
-            0.0,
-            0.0,
-            0.0,
-            0.22,
-        )
-        .with_reed_noise(0.018, (f * 3.4).clamp(700.0, 2300.0), 0.8),
         // 22 harmonica moved to the Reed free-reed voice (§2.11) — see
         // HARMONICA in the ReedPreset table.
         // Round-3 U7 (plan §3.4): a DRIER, sharper bandoneon/tango box. HEAD
@@ -6632,7 +6805,7 @@ fn organ(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Organ {
             0.21,
         )
         .with_reed_noise(0.020, (f * 3.5).clamp(750.0, 2600.0), 0.75),
-        _ => unreachable!("organ() only handles GM16-21 and 23"),
+        _ => unreachable!("organ() only handles GM16-20 and 23"),
     }
 }
 
@@ -14146,7 +14319,8 @@ fn make_uncorrected(
         // legacy Leslie drawbar over the CathedralOrgan pipe model (retired),
         // so the default and the CC0 alt (legacy_church_organ) are now the
         // same voice.
-        16..=21 | 23 => Box::new(organ(program, key, vel, sr, seed)),
+        16..=20 | 23 => Box::new(organ(program, key, vel, sr, seed)),
+        21 => Box::new(MusetteAccordion::new(key, vel, sr, seed)),
         // §2.11: the harmonica is a FREE reed, not a drawbar organ — it now
         // rides the Reed family with a dedicated free-reed preset.
         22 => Box::new(reed(program, key, vel, sr, seed)),
@@ -14926,6 +15100,18 @@ mod tests {
         acc / keys.len() as f32
     }
 
+    fn harmonic_rms(seg: &[f32], sr: f32, f0: f32, first: u32, last: u32) -> f32 {
+        let mut energy = 0.0f32;
+        for h in first..=last {
+            let f = f0 * h as f32;
+            if f >= sr * 0.49 {
+                break;
+            }
+            energy += mag_at(seg, sr, f).powi(2);
+        }
+        energy.sqrt()
+    }
+
     /// Round-3 U7 (plan §3.4, replaces the global-AM musette check the coherent
     /// tremolo cheated): a French musette is per-harmonic reed BEATING — three
     /// reeds detuned ±16 c, each radiating its full series, so every harmonic
@@ -14965,6 +15151,121 @@ mod tests {
         assert!(
             g23_h1 >= 0.30,
             "GM23 stopped beating entirely: H1 CV {g23_h1:.3}"
+        );
+    }
+
+    /// MM-BUG-KILN-00036: GM21 must not be the old 12-sine accordion. A modeled
+    /// free-reed source needs a real H5-H12 tail on low and mid notes, while the
+    /// high-register output must stay below the conservative 0.45*sr guard band.
+    #[test]
+    fn accordion_source_populates_upper_harmonics_without_top_alias() {
+        let sr = 44100.0;
+        for &key in &[48u8, 60] {
+            let f0 = key_freq(key);
+            let sig = render_program(21, key, 110, 1.4, 0xACC0_0036);
+            let body = segment(&sig, sr, 0.35, 1.20);
+            let low = harmonic_rms(body, sr, f0, 1, 4).max(1e-9);
+            let upper = harmonic_rms(body, sr, f0, 5, 12);
+            let ratio = upper / low;
+            println!("GM21 key {key}: H5-H12/H1-H4 {ratio:.3}");
+            assert!(
+                ratio >= 0.16,
+                "GM21 key {key} is still a sparse H1-H4 sine stack: H5-H12/H1-H4 {ratio:.3}"
+            );
+        }
+
+        let high = render_program(21, 96, 110, 1.0, 0xACC0_0036);
+        let high_body = segment(&high, sr, 0.30, 0.85);
+        let guarded = spectral_band_rms(high_body, sr, 0.45 * sr, 0.49 * sr);
+        let useful = spectral_band_rms(high_body, sr, 900.0, 8000.0).max(1e-9);
+        assert!(
+            guarded <= 0.04 * useful,
+            "GM21 high note leaks unsafe top-band energy: guard/useful {:.3}",
+            guarded / useful
+        );
+    }
+
+    /// The approved fix is source-filter synthesis, not just louder noise or more
+    /// scalar gain. The settled voice must carry fixed body regions above the low
+    /// harmonic bed, proving the accordion body has reshaped multiple bands.
+    #[test]
+    fn accordion_body_shapes_multiple_spectral_regions() {
+        let sr = 44100.0;
+        let sig = render_program(21, 52, 110, 1.4, 0xB0D1_0036);
+        let body = segment(&sig, sr, 0.35, 1.20);
+        let bed = spectral_band_rms(body, sr, 250.0, 620.0).max(1e-9);
+        let low_mid = spectral_band_rms(body, sr, 850.0, 1350.0);
+        let high_mid = spectral_band_rms(body, sr, 1800.0, 2800.0);
+        println!(
+            "GM21 body bands: low-mid/bed {:.3}, high-mid/bed {:.3}",
+            low_mid / bed,
+            high_mid / bed
+        );
+        assert!(
+            low_mid >= 0.32 * bed,
+            "GM21 accordion body lost its 0.9-1.3 kHz region: {:.3} of bed",
+            low_mid / bed
+        );
+        assert!(
+            high_mid >= 0.11 * bed,
+            "GM21 accordion body lost its 1.8-2.8 kHz region: {:.3} of bed",
+            high_mid / bed
+        );
+    }
+
+    /// The higher reed modes belong to the attack. They should color the first
+    /// tenth of a second, then decay out of the sustained musette body.
+    #[test]
+    fn accordion_upper_mode_attack_decays_out() {
+        let sr = 44100.0;
+        let f0 = key_freq(60);
+        let sig = render_program(21, 60, 110, 1.2, 0xA77A_0036);
+        let early = segment(&sig, sr, 0.025, 0.120);
+        let sustain = segment(&sig, sr, 0.45, 0.90);
+        let upper_modes = |seg: &[f32]| {
+            [14.2f32, 18.5, 23.7]
+                .iter()
+                .map(|r| mag_at(seg, sr, f0 * *r).powi(2))
+                .sum::<f32>()
+                .sqrt()
+                / rms(seg).max(1e-9)
+        };
+        let e = upper_modes(early);
+        let s = upper_modes(sustain);
+        println!("GM21 attack upper-mode fraction early {e:.3}, sustain {s:.3}");
+        assert!(
+            e >= 0.008,
+            "GM21 attack has no audible upper-mode color: early fraction {e:.3}"
+        );
+        assert!(
+            e >= 1.6 * s,
+            "GM21 upper-mode color does not decay: early {e:.3}, sustain {s:.3}"
+        );
+    }
+
+    /// GM21 remains the wider, fuller French musette. GM23 keeps its dry bandoneon
+    /// role, so GM21 needs a materially broader upper harmonic tail.
+    #[test]
+    fn accordion_is_spectrally_fuller_than_bandoneon() {
+        let sr = 44100.0;
+        let fullness = |program: u8| {
+            [50u8, 55, 60]
+                .iter()
+                .map(|&key| {
+                    let f0 = key_freq(key);
+                    let sig = render_program(program, key, 110, 1.4, 0xF011_0036 ^ program as u32);
+                    let body = segment(&sig, sr, 0.35, 1.20);
+                    harmonic_rms(body, sr, f0, 5, 12) / harmonic_rms(body, sr, f0, 1, 4).max(1e-9)
+                })
+                .sum::<f32>()
+                / 3.0
+        };
+        let gm21 = fullness(21);
+        let gm23 = fullness(23);
+        println!("accordion fullness H5-H12/H1-H4: GM21 {gm21:.3}, GM23 {gm23:.3}");
+        assert!(
+            gm21 >= 0.16 && gm21 >= 2.0 * gm23,
+            "GM21 is not broader than dry GM23: GM21 {gm21:.3}, GM23 {gm23:.3}"
         );
     }
 
@@ -17431,9 +17732,13 @@ mod tests {
 
         for program in 20..=23 {
             let mut v = make(program, key, vel, sr, seed, false);
-            // §2.11: the harmonica (22) is a Reed free-reed voice now; the
-            // reed organ (20) and the accordions (21/23) stay on organ().
-            let want = if program == 22 { "reed" } else { "organ" };
+            // §2.11: the harmonica (22) is a Reed free-reed voice now. GM21
+            // is the modeled musette source-filter voice; GM20/23 stay on organ().
+            let want = match program {
+                21 => "accordion",
+                22 => "reed",
+                _ => "organ",
+            };
             assert_eq!(v.kind(), want, "GM{program} must route through make()");
             let mut buf = vec![0f32; (0.25 * sr) as usize];
             assert!(v.render(&mut buf), "GM{program} should sustain");

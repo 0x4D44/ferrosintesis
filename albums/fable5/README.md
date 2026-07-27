@@ -25,11 +25,11 @@ note.
   `The Ninth Bell/album_manifest.json`
 - Docs: `The Ninth Bell/README.md` and `The Ninth Bell/ALBUM.md`;
   design in `wrk_docs/2026.07.07 - HLD - The Ninth Bell.md`
-- Regenerate/verify: `python build.py` / `python build.py --verify`
+- Regenerate/verify: `python3 build.py` / `python3 build.py --verify`
   (thirteen oracles, written before the music — including the intro
   fidelity check against the demo gesture and the build/drop dynamic-arc
   contour)
-- Listen by rendering with `python build.py` (or
+- Listen by rendering with `python3 build.py` (or
   [ferrosintesis](../../crates/ferrosintesis/README.md) directly); the tagged
   `.opus` — git-ignored build output — lands under
   `listening/Claude Fable 5/The Ninth Bell/`
@@ -47,8 +47,8 @@ which also certifies a triple counterpoint (theme + answer + inversion)
 stacked in the finale.
 
 - Files: `Heliopause/midi/01..02 - Heliopause, Part One/Two.mid`
-- Docs: `Heliopause/README.md` and `ALBUM.md`; verify: `python build.py --verify`
-- Listen: render with `python build.py` (or
+- Docs: `Heliopause/README.md` and `ALBUM.md`; verify: `python3 build.py --verify`
+- Listen: render with `python3 build.py` (or
   [ferrosintesis](../../crates/ferrosintesis/README.md) directly); the tagged
   `.opus` (git-ignored build output) lands under `listening/Claude Fable 5/Heliopause/`
 
@@ -67,7 +67,7 @@ yet model brass.
 
 - Files: `The Burning Meridian/midi/01..03 - *.mid`
 - Docs: `The Burning Meridian/README.md` and `ALBUM.md`
-- Listen: render with `python build.py`; the tagged `.opus` (git-ignored build
+- Listen: render with `python3 build.py`; the tagged `.opus` (git-ignored build
   output) lands under `listening/Claude Fable 5/The Burning Meridian/`
 
 This is original material using broad film-music vocabulary; it is not a
@@ -82,7 +82,7 @@ ring.
 
 - File: `Tuxedo Noir/midi/01 - Tuxedo Noir.mid`
 - Docs: `Tuxedo Noir/README.md` and `ALBUM.md`
-- Listen: render with `python build.py`; the tagged `.opus` (git-ignored build
+- Listen: render with `python3 build.py`; the tagged `.opus` (git-ignored build
   output) lands under `listening/Claude Fable 5/Tuxedo Noir/`
 
 This is original material in the spy-score idiom; it quotes no existing
@@ -105,8 +105,8 @@ bend range 12 ending in a −7 semitone whammy dive.
 - Thirteen sections with MIDI markers; timed map in
   `Seven Kinds of Sunlight/album_manifest.json`
 - Docs: `Seven Kinds of Sunlight/README.md` and `ALBUM.md`
-- Regenerate/verify: `python build.py` / `python build.py --verify`
-- Listen by rendering with `python build.py` (or
+- Regenerate/verify: `python3 build.py` / `python3 build.py --verify`
+- Listen by rendering with `python3 build.py` (or
   [ferrosintesis](../../crates/ferrosintesis/README.md) directly); the tagged
   `.opus` — git-ignored build output — lands under
   `listening/Claude Fable 5/Seven Kinds of Sunlight/`
@@ -131,8 +131,8 @@ woodblock tapping SUB ROSA in Morse.
 - Six movements with MIDI markers; timed map in
   `Sub Rosa/album_manifest.json`
 - Docs: `Sub Rosa/README.md` and `Sub Rosa/ALBUM.md`
-- Regenerate/verify: `python build.py` / `python build.py --verify`
-- Listen by rendering with `python build.py` (or
+- Regenerate/verify: `python3 build.py` / `python3 build.py --verify`
+- Listen by rendering with `python3 build.py` (or
   [ferrosintesis](../../crates/ferrosintesis/README.md) directly); the tagged
   `.opus` — git-ignored build output — lands under `listening/Claude Fable 5/Sub Rosa/`
 
@@ -158,7 +158,7 @@ metadata a MIDI player will display.
 - Six movements with MIDI markers; timed maps in
   `Winter Guests/album_manifest.json`
 - Docs: `Winter Guests/README.md` and `ALBUM.md`
-- Regenerate/verify: `python build.py` / `python build.py --verify`
+- Regenerate/verify: `python3 build.py` / `python3 build.py --verify`
 - Listen via [ferrosintesis](../../crates/ferrosintesis/README.md) **v0.7** (its CC70 vowel
   morph, RPN bend-range/fine-tune, portamento, resonance, aftertouch and
   pedal features were built for this piece)
@@ -184,7 +184,7 @@ answered.
 - Six movements annotated with MIDI markers; timed map in
   `The Signal Fire/album_manifest.json`
 - Docs: `The Signal Fire/README.md` and `ALBUM.md`
-- Regenerate/verify: `python build.py` / `python build.py --verify`
+- Regenerate/verify: `python3 build.py` / `python3 build.py --verify`
 - Listen via [ferrosintesis](../../crates/ferrosintesis/README.md) **v0.6** (its CC1/CC64/
   CC74 features were built for this piece)
 
@@ -215,8 +215,8 @@ existing piece.
 Regenerate and verify with:
 
 ```powershell
-python ".\Hollow Hill\build.py"
-python ".\Hollow Hill\build.py" --verify
+python3 "Hollow Hill/build.py"
+python3 "Hollow Hill/build.py" --verify
 ```
 
 For listening, render the MIDI with [ferrosintesis](../../crates/ferrosintesis/README.md) —
@@ -243,5 +243,5 @@ of any existing score.
 Regenerate with:
 
 ```powershell
-python .\the_iron_tide.py
+python3 the_iron_tide.py
 ```

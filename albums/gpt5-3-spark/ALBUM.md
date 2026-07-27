@@ -47,11 +47,11 @@ This is original material using broad film-music and contemporary-classical voca
 Regenerate the album from this directory with:
 
 ```powershell
-python .\build.py
+python3 build.py
 ```
 
 Verify the generated MIDI files with:
 
 ```powershell
-python .\build.py --verify
+python3 build.py --verify
 ```

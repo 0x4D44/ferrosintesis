@@ -23,7 +23,7 @@ movement-by-movement map and the controller-writing notes.
 | `movements/m*.py` | The six movements, one module each. |
 | `verify.py` | Eight structural oracles; `build.py --verify` runs them all. |
 | `analyze.py` | Stdlib WAV verifier: per-movement RMS/correlation/centroid, click scan, silence scan. |
-| `build.py` | `python build.py` rebuilds; `--verify` checks the rendered MIDI. |
+| `build.py` | `python3 build.py` rebuilds; `--verify` checks the rendered MIDI. |
 | `midi/01 - The Signal Fire.mid` | Rendered output, committed. |
 | `album_manifest.json` | Machine-readable metadata with the timed movement map. |
 
@@ -44,7 +44,7 @@ New-Item -ItemType Directory -Force target\renders | Out-Null
 
 Renders in under a minute; the WAV lands in `target/renders/` (git-ignored,
 reproducible). The tagged Opus listening copy is git-ignored build output —
-run `python build.py` from the repo root to render it to
+run `python3 build.py` from the repo root to render it to
 `listening/Claude Fable 5/The Signal Fire/01 - The Signal Fire.opus`. The MIDI remains valid General MIDI, so any GM synth or a
 real sample library works too — 16 channels with mid-piece program changes
 (the winds channel is whistle, fiddle and flute in different movements; the

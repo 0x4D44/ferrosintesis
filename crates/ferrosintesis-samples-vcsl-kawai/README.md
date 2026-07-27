@@ -10,4 +10,4 @@ through `ferrosintesis`. Provenance and processing (including the VCSL octave-la
 trap) are in `PROVENANCE.md`. Licence: CC0 1.0 (public domain); `NOTICE` carries a
 courtesy credit to VCSL / Sam Gossner.
 
-Regenerate the WAVs with `python tools/ferrosintesis-samples/prepare.py --only=kawai`.
+Regenerate the WAVs with `python3 tools/ferrosintesis-samples/prepare.py --only=kawai`.

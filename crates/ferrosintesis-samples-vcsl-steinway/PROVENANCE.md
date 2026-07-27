@@ -59,7 +59,7 @@ records the autocorrelation root pinned in the `steinwayb_*` zone tables in
 ## Regenerating
 
 ```
-python tools/ferrosintesis-samples/prepare.py --only=steinwayb
+python3 tools/ferrosintesis-samples/prepare.py --only=steinwayb
 ```
 
 Downloads the VCSL Steinway B files once (cached under the system temp dir), then

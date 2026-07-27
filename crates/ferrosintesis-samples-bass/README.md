@@ -9,4 +9,4 @@ Each WAV is a mono 16-bit 44.1 kHz attack transient; `ferrosintesis` crossfades 
 modeled `Pluck` sustain. Consumers normally access this crate through `ferrosintesis`, not
 directly. All samples are CC0 1.0 / public-domain — no attribution required; provenance is
 in `PROVENANCE.md`. Regenerate with
-`python tools/ferrosintesis-samples/prepare.py --only=fingerbass,pickbass`.
+`python3 tools/ferrosintesis-samples/prepare.py --only=fingerbass,pickbass`.

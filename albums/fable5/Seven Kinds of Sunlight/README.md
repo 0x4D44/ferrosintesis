@@ -75,13 +75,13 @@ and lyric-lane chorus syllables ("oh", "oh-oh", "ah", "whoa-oh").
 ## Regenerate / verify / listen
 
 ```powershell
-python build.py             # rebuild midi + album_manifest.json
-python build.py --verify    # 19 oracles, incl. meters, driving bass,
+python3 build.py             # rebuild midi + album_manifest.json
+python3 build.py --verify    # 19 oracles, incl. meters, driving bass,
                             # drums, the counterpoint stack, RPN/bend
                             # hygiene, vowels, dynamics, bounds
 ```
 
-Listen by rendering with `python build.py` (or [ferrosintesis](../../../crates/ferrosintesis/README.md)
+Listen by rendering with `python3 build.py` (or [ferrosintesis](../../../crates/ferrosintesis/README.md)
 directly); that produces the git-ignored build output `listening/Claude Fable 5/Seven Kinds of Sunlight/01 - Seven Kinds of Sunlight.opus`.  Audio verified
 numerically: section RMS follows the form (final chorus loudest at
 −20.2 dB), no dead air, no discontinuities beyond kick onsets; stem

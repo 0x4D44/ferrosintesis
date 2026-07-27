@@ -50,10 +50,10 @@ controller/bend events alongside its 16,539 notes:
 
 ## Verification
 
-`python build.py --verify` runs eight oracles: structure, the material's
+`python3 build.py --verify` runs eight oracles: structure, the material's
 counterpoint/skeleton promises, the controller inventory, bend hygiene,
 note ranges, the six-movement dynamics arc (mean velocity strictly ordered
 Signal < Afterglow < Lattice < Ignition < Climb < Ascension, density peaking
-in Ascension), silence gaps, and per-movement bounds. `python analyze.py`
+in Ascension), silence gaps, and per-movement bounds. `python3 analyze.py`
 then measures the rendered WAV: RMS/correlation/centroid per movement,
 click scan, silence scan. All green at commit time.

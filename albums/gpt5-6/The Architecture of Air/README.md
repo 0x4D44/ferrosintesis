@@ -29,8 +29,8 @@ secondary organ bank.
 From this directory:
 
 ```powershell
-python build.py
-python build.py --verify
+python3 build.py
+python3 build.py --verify
 ```
 
 From the repository root, after building ferrosintesis:
@@ -39,6 +39,13 @@ From the repository root, after building ferrosintesis:
 target\release\ferrosintesis.exe "albums\gpt5-6\The Architecture of Air\midi\01 - The Architecture of Air.mid" -o "target\organ-showcase\full.wav"
 target\release\ferrosintesis.exe "albums\gpt5-6\The Architecture of Air\midi\01 - The Architecture of Air.mid" --solo 0 -o "target\organ-showcase\organ.wav"
 python "albums\gpt5-6\The Architecture of Air\analyze.py" "target\organ-showcase\full.wav" "target\organ-showcase\organ.wav"
+```
+
+```sh
+mkdir -p target/organ-showcase
+target/release/ferrosintesis "albums/gpt5-6/The Architecture of Air/midi/01 - The Architecture of Air.mid" -o "target/organ-showcase/full.wav"
+target/release/ferrosintesis "albums/gpt5-6/The Architecture of Air/midi/01 - The Architecture of Air.mid" --solo 0 -o "target/organ-showcase/organ.wav"
+python3 "albums/gpt5-6/The Architecture of Air/analyze.py" "target/organ-showcase/full.wav" "target/organ-showcase/organ.wav"
 ```
 
 `build.py --verify` checks the default-bank routing in the actual serialized

@@ -66,5 +66,5 @@ tragic (5, 8, 10) — every requested colour, shaped into a single journey.
 ## Output
 
 Each `tracks/NN_title.py` renders `midi/NN - Title.mid`. Regenerate the whole album
-with `python build.py`. Play any `.mid` through an orchestral-strings library for the
+with `python3 build.py`. Play any `.mid` through an orchestral-strings library for the
 intended sound; the GM defaults are a serviceable preview.

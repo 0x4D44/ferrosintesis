@@ -6,7 +6,7 @@ Your other reads: the HLD (globals + your track section), `engine.py` (the
 toolkit — skim the docstring index then the helpers you use), `material.py`
 (the album DNA). Do NOT re-derive any of this by exploring the repo — it is
 authoritative here. Budget your iterations: aim for green in ≤ ~12 runs of
-`python build.py --track N --check`.
+`python3 build.py --track N --check`.
 
 ## 1. Module contract (build.py/verify.py consume exactly these symbols)
 
@@ -206,9 +206,9 @@ are the catalog-proven colors — prefer them)
 
 ```
 cd "<album dir>"
-python build.py --track N --check     # in-memory oracles (fast loop)
-python build.py --track N             # writes midi/<FILE>
-python build.py --track N --verify    # file-backed + all oracles
+python3 build.py --track N --check     # in-memory oracles (fast loop)
+python3 build.py --track N             # writes midi/<FILE>
+python3 build.py --track N --verify    # file-backed + all oracles
 ```
-Never plain `python build.py` (other modules may not exist). Green means:
+Never plain `python3 build.py` (other modules may not exist). Green means:
 the nine generic checks + material + every one of your oracles PASS.

@@ -12,7 +12,7 @@ void, and a larger rebuild into the true climax and its second betrayal.
 - Key: A aeolian, 4/4, 101 bars. Eight movements with MIDI markers; timed
   map in `album_manifest.json`; per-movement notes in `ALBUM.md`.
 - Design: `wrk_docs/2026.07.07 - HLD - The Ninth Bell.md`
-- Listen by rendering with `python build.py` (or
+- Listen by rendering with `python3 build.py` (or
   [ferrosintesis](../../../crates/ferrosintesis/README.md) directly); the tagged
   `.opus` lands (git-ignored) under `listening/Claude Fable 5/The Ninth Bell/`.
 
@@ -43,9 +43,9 @@ note. The bell figure is the theme's own rising-sixth cell, inverted.
 ## Regenerate / verify
 
 ```powershell
-python build.py            # rebuild the MIDI + album_manifest.json
-python build.py --verify   # rebuild in memory, re-parse the .mid, run every oracle
-python build.py --check    # in-memory oracles only (no file I/O)
+python3 build.py            # rebuild the MIDI + album_manifest.json
+python3 build.py --verify   # rebuild in memory, re-parse the .mid, run every oracle
+python3 build.py --check    # in-memory oracles only (no file I/O)
 ```
 
 `--verify` runs thirteen structural oracles (`verify.py` +
@@ -60,7 +60,7 @@ Render-side (audio) verification of the arc, the reverb-tail silences,
 mono compatibility and clicks:
 
 ```powershell
-python analyze.py "audio/01 - The Ninth Bell.wav"
+python3 analyze.py "audio/01 - The Ninth Bell.wav"
 ```
 
 This is original material using Gabriel-Knight-vocabulary gestures; it

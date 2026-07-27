@@ -34,6 +34,12 @@ cargo build --release -p ferrosintesis-cli
     -o "target\demo\01 - Hollow Hill, Part One.wav"
 ```
 
+```sh
+cargo build --release -p ferrosintesis-cli
+./target/release/ferrosintesis "albums/fable5/Hollow Hill/midi/01 - Hollow Hill, Part One.mid" \
+    -o "target/demo/01 - Hollow Hill, Part One.wav"
+```
+
 A release (LTO) build renders a dense, fully-orchestrated track at roughly 5x
 realtime on a current desktop — measured 2026-07-13 on Big Weather's "First
 Light Freeway": 245.8 s of audio in 46.8 s wall. Sparser material is faster.

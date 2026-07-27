@@ -59,7 +59,7 @@ lead-bounded 2 ms fade-in and a 0.6 s squared fade-out, peak-normalized to 0.9;
 ## Regenerating
 
 ```
-python tools/ferrosintesis-samples/prepare.py --only=headroom
+python3 tools/ferrosintesis-samples/prepare.py --only=headroom
 ```
 
 Needs `ffmpeg` on PATH (FLAC decode), like the banjo/sax/drumkit intakes.

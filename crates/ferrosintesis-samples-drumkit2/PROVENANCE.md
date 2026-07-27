@@ -115,7 +115,7 @@ the rest land in `ferrosintesis-samples-drumkit`. After regenerating, refresh
 both crates' embedded tables:
 
 ```powershell
-python tools/ferrosintesis-samples/prepare_drumkit.py
-python tools/ferrosintesis-samples/regen_samples_table.py crates/ferrosintesis-samples-drumkit
-python tools/ferrosintesis-samples/regen_samples_table.py crates/ferrosintesis-samples-drumkit2
+python3 tools/ferrosintesis-samples/prepare_drumkit.py
+python3 tools/ferrosintesis-samples/regen_samples_table.py crates/ferrosintesis-samples-drumkit
+python3 tools/ferrosintesis-samples/regen_samples_table.py crates/ferrosintesis-samples-drumkit2
 ```

@@ -38,10 +38,10 @@ min-maj9 ring.
 ## Regenerate / verify / listen
 
 ```powershell
-python build.py             # rebuild + manifest
-python build.py --verify    # material + 12 structural oracles
+python3 build.py             # rebuild + manifest
+python3 build.py --verify    # material + 12 structural oracles
 ```
 
-Listen by rendering with `python build.py` (or [ferrosintesis](../../../crates/ferrosintesis/README.md)
+Listen by rendering with `python3 build.py` (or [ferrosintesis](../../../crates/ferrosintesis/README.md)
 directly); the tagged, git-ignored `.opus` lands at
 `listening/Claude Fable 5/Tuxedo Noir/01 - Tuxedo Noir.opus`.

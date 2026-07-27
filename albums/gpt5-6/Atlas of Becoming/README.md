@@ -21,7 +21,7 @@ melodies, signature riffs, lyrics, or arrangements.
 - `album_manifest.json` — durations, concepts, tags, and timed section maps.
 - `ALBUM.md` — listening notes and the design response to the brief.
 - `lyrics/` — exact-track UTF-8 listening guides embedded as multiline `LYRICS`
-  tags in the `.opus` files produced by `python build.py` (git-ignored build
+  tags in the `.opus` files produced by `python3 build.py` (git-ignored build
   output).
 
 ## Rebuild and verify
@@ -29,9 +29,9 @@ melodies, signature riffs, lyrics, or arrangements.
 From this directory:
 
 ```powershell
-python .\build.py
-python .\build.py --verify
-python .\build.py --verify --track 8
+python3 build.py
+python3 build.py --verify
+python3 build.py --verify --track 8
 ```
 
 The builder uses only the Python standard library and fixed seeds. Rebuilding is
@@ -45,7 +45,7 @@ After building the repository's `ferrosintesis` renderer, render the files into 
 directory using the same filename stems, then run:
 
 ```powershell
-python .\analyze.py <wav-directory>
+python3 analyze.py <wav-directory>
 ```
 
 The WAV scanner checks that every named section is audible, that the render has

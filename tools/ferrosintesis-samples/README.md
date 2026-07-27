@@ -199,7 +199,7 @@ violin, and flute output routes to the core package; every other family routes t
 the orchestral package.
 
 ```powershell
-python tools/ferrosintesis-samples/prepare.py
+python3 tools/ferrosintesis-samples/prepare.py
 ```
 
 ```sh

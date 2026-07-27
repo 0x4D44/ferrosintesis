@@ -65,7 +65,7 @@ channel (bodhrán, congas, bongos, shakers, toms, tambourine).
   and the final chord. A single `SCALE` constant dials the exact running time.
 
 ```bash
-python riverwake.py        # -> midi/Riverwake.mid, prints length + section count
+python3 riverwake.py        # -> midi/Riverwake.mid, prints length + section count
 ```
 
 ## Reviewed & refined

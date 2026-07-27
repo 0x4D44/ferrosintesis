@@ -60,4 +60,4 @@ ever pushes into the ring.
 
 8 bars, 104 bpm, A minor. Rhythm guitar (GM30 main) on ch0, **lead guitar (GM29
 lead) on ch1 — the knobs act on this one**, bass on ch2, drums on ch9.
-Regenerate with `python crates/amp-lab/tools/make_backing_loop.py` from the repo root.
+Regenerate with `python3 crates/amp-lab/tools/make_backing_loop.py` from the repo root.

@@ -78,6 +78,13 @@ cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D
 $null | cargo test --workspace --exclude amp-lab --locked
 ```
 
+```sh
+cargo fmt --all -- --check
+cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings
+cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings
+cargo test --workspace --exclude amp-lab --locked </dev/null
+```
+
 Then rehearse the packaging without touching the network:
 
 ```powershell
@@ -85,6 +92,12 @@ foreach ($c in (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).
          Where-Object { $_.name -like 'ferrosintesis-samples-*' }) {
   cargo package -p $c.name --no-verify --allow-dirty
 }
+```
+
+```sh
+for d in crates/ferrosintesis-samples-*/; do
+  cargo package -p "$(basename "$d")" --no-verify --allow-dirty
+done
 ```
 
 Confirm every crate reports **under 10 MiB compressed**.

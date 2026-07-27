@@ -19,7 +19,7 @@ See `ALBUM.md` for the movement-by-movement map.
 | `engine.py` | Composition toolkit + type-1 MIDI writer + verifying parser. Pure Python standard library. |
 | `material.py` | The recurring themes, written as scale degrees so they can be recast in any mode. |
 | `part_one.py` / `part_two.py` | The two roadmaps — every section, layer and entrance. |
-| `build.py` | `python build.py` rebuilds; `python build.py --verify` checks the rendered MIDI. |
+| `build.py` | `python3 build.py` rebuilds; `python3 build.py --verify` checks the rendered MIDI. |
 | `tracks/NN_*.py` | One thin entry point per track. |
 | `midi/NN - *.mid` | Rendered output, committed. |
 | `album_manifest.json` | Machine-readable metadata, including a timed section map. |
@@ -43,7 +43,7 @@ New-Item -ItemType Directory -Force target\renders | Out-Null
 
 Each part renders in ~10 seconds. The WAVs land in `target/renders/`
 (git-ignored — they are reproducible). The Opus listening copies are
-git-ignored build output too: run `python build.py` from the repo root to
+git-ignored build output too: run `python3 build.py` from the repo root to
 render them under `listening/Claude Fable 5/Hollow Hill/`. The MIDI also remains valid General MIDI, so any GM
 synth or a real orchestral library works too. Sixteen channels are used, with
 a handful of mid-piece program changes (the fretless bass and sweep pad only

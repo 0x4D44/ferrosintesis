@@ -39,7 +39,7 @@ Licence: **CC BY 3.0**, inherited from Salamander — attribution in `NOTICE`
 ## Regenerating
 
 ```
-python tools/ferrosintesis-samples/prepare.py --only=darkgrand
+python3 tools/ferrosintesis-samples/prepare.py --only=darkgrand
 ```
 
 No network — reads the tracked grand crate samples. Pure stdlib.

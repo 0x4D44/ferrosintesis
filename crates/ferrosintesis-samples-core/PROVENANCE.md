@@ -4,7 +4,7 @@ Every WAV this crate packages, with the pinned source it was baked from. Machine
 by `crates/ferrosintesis/src/inventory.rs`: a family that ships without a row here fails
 the build (MM-BUG-KILN-00069).
 
-Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=piano,violin,flute` from the repository
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=piano,violin,flute` from the repository
 root.
 
 | Family | Files | Instrument | Source | Licence |

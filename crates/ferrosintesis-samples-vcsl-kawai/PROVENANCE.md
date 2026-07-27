@@ -61,7 +61,7 @@ Output: 16-bit mono WAV.
 ## Regenerating
 
 ```
-python tools/ferrosintesis-samples/prepare.py --only=kawai
+python3 tools/ferrosintesis-samples/prepare.py --only=kawai
 ```
 
 Pure stdlib (plain WAV, no ffmpeg).

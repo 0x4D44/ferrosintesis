@@ -21,7 +21,7 @@ living artist's catalog or any existing recording.
 ## Regenerate / Verify
 
 ```powershell
-python .\build.py
-python .\build.py --verify
-python .\tracks\01_the_long_turning.py
+python3 build.py
+python3 build.py --verify
+python3 tracks/01_the_long_turning.py
 ```

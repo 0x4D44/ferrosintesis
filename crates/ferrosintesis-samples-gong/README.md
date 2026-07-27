@@ -13,6 +13,6 @@ downstream user while the ferrosintesis code stays MIT/Apache. See
 chain.
 
 The WAVs under `samples/` are source, not build output; regenerate them with
-`python tools/ferrosintesis-samples/prepare.py --local-only` from the repo root
+`python3 tools/ferrosintesis-samples/prepare.py --local-only` from the repo root
 (reads the committed source WAVs under `tools/ferrosintesis-samples/gong-src/`;
 no network needed).

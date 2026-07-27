@@ -64,8 +64,8 @@ sustain past the kept window.
 ## Regenerating
 
 ```powershell
-python tools/ferrosintesis-samples/prepare.py --sax-only   # sax bank only (fast)
-python tools/ferrosintesis-samples/prepare.py              # whole bank incl. sax
+python3 tools/ferrosintesis-samples/prepare.py --sax-only   # sax bank only (fast)
+python3 tools/ferrosintesis-samples/prepare.py              # whole bank incl. sax
 ```
 
 Needs `ffmpeg` on PATH. FLACs are fetched once from the pinned MTG revision and

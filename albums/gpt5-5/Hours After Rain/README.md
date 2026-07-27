@@ -39,7 +39,7 @@ The MIDI files are in **`midi/`**, numbered as an album. The score sources are i
 ## Regenerate / Verify
 
 ```powershell
-python .\build.py
-python .\build.py --verify
-python .\tracks\07_a_quiet_arithmetic_of_light.py
+python3 build.py
+python3 build.py --verify
+python3 tracks/07_a_quiet_arithmetic_of_light.py
 ```

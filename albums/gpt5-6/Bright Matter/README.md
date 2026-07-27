@@ -32,9 +32,9 @@ arrangements here are new.
 From this directory:
 
 ```bash
-python build.py
-python build.py --verify
-python build.py --verify --track 5
+python3 build.py
+python3 build.py --verify
+python3 build.py --verify --track 5
 ```
 
 The build uses only the Python standard library and fixed seeds. It performs an
@@ -46,13 +46,13 @@ byte-identical. The complete album currently runs **24:20**.
 From the repository root, after building `ferrosintesis`:
 
 ```bash
-python render_opus.py --album "Bright Matter"
+python3 render_opus.py --album "Bright Matter"
 ```
 
 To inspect intermediate WAV renders before encoding:
 
 ```bash
-python "albums/gpt5-6/Bright Matter/analyze.py" <wav-directory>
+python3 "albums/gpt5-6/Bright Matter/analyze.py" <wav-directory>
 ```
 
 The committed source and MIDI are the canonical composition. Listening copies are

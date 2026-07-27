@@ -23,7 +23,7 @@ for the movement map and the controller-writing notes.
 | `movements/m*.py` | The six movements, one module each (m1–m3 Part One, m4–m6 Part Two). |
 | `verify.py` | 14 oracles per part; `build.py --verify` runs them. |
 | `analyze.py` | Stdlib WAV verifier (per-movement RMS/correlation/centroid, click + silence scans); `--track N` picks the part. |
-| `build.py` | `python build.py` rebuilds both parts; `--verify` checks them. |
+| `build.py` | `python3 build.py` rebuilds both parts; `--verify` checks them. |
 | `midi/01 - Winter Guests, Part One.mid`, `midi/02 - …, Part Two.mid` | Rendered output, committed. |
 | `album_manifest.json` | Machine-readable metadata with both timed movement maps. |
 
@@ -45,7 +45,7 @@ New-Item -ItemType Directory -Force target\renders | Out-Null
 
 Each part renders in well under a minute; the WAVs land in `target/renders/`
 (git-ignored, reproducible). The tagged Opus listening copies are git-ignored
-build output produced by `python build.py` (run from the repo root); they land under
+build output produced by `python3 build.py` (run from the repo root); they land under
 `listening/Claude Fable 5/Winter Guests/`. The MIDI is valid General MIDI, so any GM synth
 works too — though the vowel morph, portamento and aftertouch are
 ferrosintesis features a stock wavetable will ignore.

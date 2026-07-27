@@ -38,11 +38,11 @@ triple stack; the second sequencer detuned +6 cents) → Afterimage.
 ## Regenerate / verify / listen
 
 ```powershell
-python build.py             # rebuild both parts + manifest
-python build.py --verify    # material + 12 structural oracles / part
+python3 build.py             # rebuild both parts + manifest
+python3 build.py --verify    # material + 12 structural oracles / part
 ```
 
-Listen by rendering with `python build.py` (or
+Listen by rendering with `python3 build.py` (or
 [ferrosintesis](../../../crates/ferrosintesis/README.md) directly); the tagged
 `.opus` lands, git-ignored, under `listening/Claude Fable 5/Heliopause/`.  Renders measured clean: no dead air, no
 discontinuities beyond drum onsets, both parts peaking in their

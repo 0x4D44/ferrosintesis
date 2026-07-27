@@ -25,5 +25,5 @@ equal temperament while keeping the upright's inharmonicity and Railsback stretc
 **Licence: CC0 1.0** — Arthur's own instrument, performance and recording, dedicated
 to the public domain. No attribution required, for source or binary redistribution.
 
-Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=b1upright`
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=b1upright`
 (decodes the committed opus archive under `samples/b1-upright/`, slices, and bakes).

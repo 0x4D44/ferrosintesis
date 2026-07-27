@@ -13,10 +13,10 @@ See `wrk_docs/2026.07.09 - HLD - opus to midi transcription tool.md`.
 ## Usage
 
 ```
-python transcribe.py song.opus            # a mix: auto-separate (Demucs) then transcribe
-python transcribe.py stems_dir/           # a directory of pre-made stems, transcribed directly
-python transcribe.py song.opus -o out/    # choose the output directory
-python transcribe.py --selftest           # the no-ML assemble oracle (needs no tools)
+python3 transcribe.py song.opus            # a mix: auto-separate (Demucs) then transcribe
+python3 transcribe.py stems_dir/           # a directory of pre-made stems, transcribed directly
+python3 transcribe.py song.opus -o out/    # choose the output directory
+python3 transcribe.py --selftest           # the no-ML assemble oracle (needs no tools)
 ```
 
 - **Mix input** (a file) is separated into 6 stems (vocals/drums/bass/guitar/piano/other).

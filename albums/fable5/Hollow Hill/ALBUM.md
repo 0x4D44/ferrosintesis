@@ -49,6 +49,6 @@ bells, a false ending, and a reel to see everyone out the door.
 Regenerate and verify from this directory:
 
 ```powershell
-python .\build.py
-python .\build.py --verify
+python3 build.py
+python3 build.py --verify
 ```

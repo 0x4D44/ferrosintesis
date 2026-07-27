@@ -20,7 +20,7 @@ The WAVs under `samples/` are source, not build output. Regenerate only this ban
 from the repo root:
 
 ```powershell
-python tools/ferrosintesis-samples/prepare.py --only=grand
+python3 tools/ferrosintesis-samples/prepare.py --only=grand
 ```
 
 That scoped path fetches and SHA-256-verifies the pinned Salamander `.tar.bz2`,

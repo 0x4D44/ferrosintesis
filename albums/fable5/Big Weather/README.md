@@ -21,11 +21,11 @@ and the wide-voice drum-solo spread checks on the two drum-feature tracks.
 ## Rebuild and verify
 
 ```
-python build.py                     # rebuild all 10 MIDIs + manifest
-python build.py --track N           # rebuild one track
-python build.py --verify            # full structural oracle table
-python build.py --track N --verify  # one track (the composer's loop)
-python build.py --track N --check   # in-memory only, safe while composing
+python3 build.py                     # rebuild all 10 MIDIs + manifest
+python3 build.py --track N           # rebuild one track
+python3 build.py --verify            # full structural oracle table
+python3 build.py --track N --verify  # one track (the composer's loop)
+python3 build.py --track N --check   # in-memory only, safe while composing
 ```
 
 Seeds are fixed per track, so a rebuild is byte-identical and `--verify`
@@ -36,7 +36,7 @@ reasons about the same Scores that produced the committed files.
 ```
 cargo build --release -p ferrosintesis-cli   # from the repo root
 bash render_all.sh                           # midi/*.mid -> audio/*.wav
-python analyze.py                            # audio oracle table
+python3 analyze.py                            # audio oracle table
 ```
 
 `analyze.py` guards against stale renders (a WAV older than its MIDI
@@ -47,7 +47,7 @@ stereo spread, feature audibility). `audio/` and `*.wav` are gitignored.
 ## Listening copies
 
 ```
-python render_opus.py --album "Big Weather"   # from the repo root
+python3 render_opus.py --album "Big Weather"   # from the repo root
 ```
 
 writes tagged listening copies to `listening/Claude Fable 5/Big Weather/`

@@ -11,5 +11,5 @@ from the LA blend + model, not the sample layer (see `PROVENANCE.md`).
 **Licence: MIT.** `NOTICE` retains the S. Christian Collins / FluidR3 copyright and
 acknowledgement notices.
 
-Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=musescoregrand`
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=musescoregrand`
 (needs `ffmpeg` on PATH for the Ogg decode).

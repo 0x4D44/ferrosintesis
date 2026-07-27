@@ -12,5 +12,5 @@ in [ferrosintesis](https://github.com/0x4D44/ferrosintesis).
 **Licence: CC0 1.0** (public domain); `NOTICE` carries a courtesy credit to the
 FreePats project / Piotr Barcz.
 
-Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=honkytonk`
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=honkytonk`
 (needs `7z` and `ffmpeg` on PATH).

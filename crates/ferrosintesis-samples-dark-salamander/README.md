@@ -12,5 +12,5 @@ Salamander grand and answer whether the fix is EQ rather than a new instrument
 **Licence: CC BY 3.0**, inherited from Salamander; `NOTICE` credits Alexander Holm
 and marks the EQ modification.
 
-Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=darkgrand`
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=darkgrand`
 (no network — derives from the tracked grand crate).

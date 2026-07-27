@@ -38,5 +38,5 @@ It draws from broad progressive folk-rock and contemporary-classical materials w
 ## Verification
 
 ```powershell
-python .\build.py --verify
+python3 build.py --verify
 ```

@@ -90,7 +90,7 @@ whose top-octave pitch is unmeasurable — its root falls back to the ET frequen
 ## Regenerating
 
 ```
-python tools/ferrosintesis-samples/prepare.py --only=b1upright
+python3 tools/ferrosintesis-samples/prepare.py --only=b1upright
 ```
 
 Pure stdlib Python plus `ropusdec` on PATH (to decode the opus archive).

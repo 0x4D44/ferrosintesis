@@ -111,7 +111,7 @@ the synth applies velocity gain). Output: 16-bit mono WAV.
 ## Regenerating
 
 ```powershell
-python tools/ferrosintesis-samples/prepare_drumkit.py
+python3 tools/ferrosintesis-samples/prepare_drumkit.py
 ```
 
 Pure-stdlib Python except the FLAC decode, which shells out to `ffmpeg` (must

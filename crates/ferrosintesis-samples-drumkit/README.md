@@ -16,4 +16,4 @@ except the kick, which uses the `kickmic` close-mic set for its low end. See
 splits, and processing chain. The license text ships as `LICENSE-CC0`.
 
 The WAVs under `samples/` are source, not build output; regenerate them with
-`python tools/ferrosintesis-samples/prepare_drumkit.py` from the repo root.
+`python3 tools/ferrosintesis-samples/prepare_drumkit.py` from the repo root.

@@ -27,7 +27,7 @@ Windows Python needs Windows-style paths (not Git-Bash `/c/…`):
 ```bash
 FLUIDSYNTH="C:/tools/fluidsynth/fluidsynth-v2.5.5-win10-x64-cpp11/bin/fluidsynth.exe" \
 FLUIDR3="C:/tools/fluidsynth/soundfonts/FluidR3_GM.sf2" \
-python tools/pluck-attack/gen_fluidr3_golden.py
+python3 tools/pluck-attack/gen_fluidr3_golden.py
 ```
 
 Paste the printed const over `FLUIDR3_GOLDEN` in

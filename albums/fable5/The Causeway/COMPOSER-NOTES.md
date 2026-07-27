@@ -6,7 +6,7 @@ Read THIS plus the HLD ("wrk_docs/2026.07.18 - HLD - The Causeway album
 `engine.py`'s docstring index, then only the helpers you use.  Do NOT
 re-derive any of this by exploring the repo — it is authoritative here.
 Budget your iterations: aim for green in <= ~12 runs of
-`python build.py --track N --check`.
+`python3 build.py --track N --check`.
 
 **The idiom is a duet of shores.** The ISLAND writes late-ABBA ice — 
 incantatory repeated notes, off-beat pushes, sequenced chill — inside
@@ -298,11 +298,11 @@ deepen seams by appending explicit dips.  Still points per the law table.
 
 ```
 cd "albums/fable5/The Causeway"
-python build.py --track N --check     # in-memory oracles (fast loop)
-python build.py --track N             # writes midi/<FILE>
-python build.py --track N --verify    # file-backed + all oracles
+python3 build.py --track N --check     # in-memory oracles (fast loop)
+python3 build.py --track N             # writes midi/<FILE>
+python3 build.py --track N --verify    # file-backed + all oracles
 ```
-Never plain `python build.py` (other modules may not exist). Green means:
+Never plain `python3 build.py` (other modules may not exist). Green means:
 the nine generic checks + material + every one of your oracles PASS.
 Write your module in SEVERAL SMALL Write/Edit chunks (a single giant write
 dies on the output cap — repo lesson), and keep the movements/ file total

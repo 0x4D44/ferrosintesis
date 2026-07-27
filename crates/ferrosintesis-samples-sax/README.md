@@ -16,5 +16,5 @@ saxophones from the modeled reed voice alone and does not link this crate.
 
 Public API: `get(name: &str) -> Option<&'static [u8]>` and `FILE_COUNT`.
 
-Regenerate with `python tools/ferrosintesis-samples/prepare.py --sax-only` (needs
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --sax-only` (needs
 `ffmpeg`).

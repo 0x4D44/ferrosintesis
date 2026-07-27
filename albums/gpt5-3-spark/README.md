@@ -39,12 +39,12 @@ The MIDI files are in **`midi/`**, numbered as an album. The score sources are i
 ## Regenerate / Verify
 
 ```powershell
-python .\build.py
-python .\build.py --verify
+python3 build.py
+python3 build.py --verify
 ```
 
 You can also rebuild individual tracks:
 
 ```powershell
-python .\tracks\07_midnight_engine.py
+python3 tracks/07_midnight_engine.py
 ```

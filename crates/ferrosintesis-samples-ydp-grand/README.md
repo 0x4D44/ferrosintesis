@@ -13,4 +13,4 @@ from the LA blend + model (see `PROVENANCE.md`).
 (who produced the SoundFont for FreePats) and the underlying Zenph Studios / One Laptop
 Per Child recordings. Copy the `NOTICE`, not this summary.
 
-Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=ydpgrand`.
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=ydpgrand`.

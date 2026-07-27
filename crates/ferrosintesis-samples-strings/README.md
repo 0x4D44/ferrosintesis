@@ -22,4 +22,4 @@ pitch; the bake in `tools/ferrosintesis-samples/prepare.py` measures every root 
 names by the sounding pitch, so the zone tables never trust the source label.
 
 No attribution is required (CC0). Regenerate with
-`python tools/ferrosintesis-samples/prepare.py --only=cellosolo,dbass`.
+`python3 tools/ferrosintesis-samples/prepare.py --only=cellosolo,dbass`.

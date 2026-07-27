@@ -12,5 +12,5 @@ through `ferrosintesis`. Provenance and processing: see `PROVENANCE.md`.
 **Licence: CC BY 4.0 — attribution is required.** `NOTICE` credits Bengt Nilsson
 and retains the instrument name, as the licence and the author's terms require.
 
-Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=headroom`
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=headroom`
 (needs `ffmpeg` on PATH for the FLAC decode).

@@ -49,7 +49,7 @@ Output: 16-bit mono WAV.
 ## Regenerating
 
 ```
-python tools/ferrosintesis-samples/prepare.py --only=ydpgrand
+python3 tools/ferrosintesis-samples/prepare.py --only=ydpgrand
 ```
 
 Pure stdlib (raw-PCM SF2 — no ffmpeg).

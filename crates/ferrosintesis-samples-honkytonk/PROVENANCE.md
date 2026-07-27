@@ -48,7 +48,7 @@ Output: 16-bit mono WAV.
 ## Regenerating
 
 ```
-python tools/ferrosintesis-samples/prepare.py --only=honkytonk
+python3 tools/ferrosintesis-samples/prepare.py --only=honkytonk
 ```
 
 Needs `7z` (archive) and `ffmpeg` (FLAC decode) on PATH.

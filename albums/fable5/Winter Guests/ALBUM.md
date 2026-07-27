@@ -51,9 +51,9 @@ Winter Guests exists partly to exercise ferrosintesis v0.7's new expression:
 
 ## Verification
 
-`python build.py --verify` runs 14 oracles per part: structure, the
+`python3 build.py --verify` runs 14 oracles per part: structure, the
 material's tri-guise/hummable/counterpoint promises, the controller
 inventory (vowels, RPN well-formedness, pedals, portamento, aftertouch),
 RPN-aware bend hygiene, ranges, the per-part dynamics arc, gaps, bounds,
-lyric and key-signature presence. `python analyze.py <wav> --track N` then
+lyric and key-signature presence. `python3 analyze.py <wav> --track N` then
 measures each render. All green at commit time.

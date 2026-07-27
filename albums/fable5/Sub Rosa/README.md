@@ -53,13 +53,13 @@ that taps **SUB ROSA** in Morse in the title movement.
 ## Regenerate / verify / listen
 
 ```powershell
-python build.py             # rebuild midi + album_manifest.json
-python build.py --verify    # 16 oracles: material, structure, CC
+python3 build.py             # rebuild midi + album_manifest.json
+python3 build.py --verify    # 16 oracles: material, structure, CC
                             # inventory, vowels, pedals, portamento,
                             # RPN/bend hygiene, Morse, dynamics, bounds
 ```
 
-Listen by rendering with `python build.py` from the repo root (or
+Listen by rendering with `python3 build.py` from the repo root (or
 [ferrosintesis](../../../crates/ferrosintesis/README.md) directly); the tagged
 `listening/Claude Fable 5/Sub Rosa/01 - Sub Rosa.opus` is git-ignored build output.  The audio was verified
 numerically: the RMS arc follows the movement plan (Limina loudest at

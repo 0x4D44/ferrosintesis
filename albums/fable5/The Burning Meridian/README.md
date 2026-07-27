@@ -44,10 +44,10 @@ held-breath bar and a two-semitone horn FALL into the grand pause →
 ## Regenerate / verify / listen
 
 ```powershell
-python build.py             # rebuild all three + manifest
-python build.py --verify    # material + 12 structural oracles / track
+python3 build.py             # rebuild all three + manifest
+python3 build.py --verify    # material + 12 structural oracles / track
 ```
 
-Listen by rendering with `python build.py` (or
+Listen by rendering with `python3 build.py` (or
 [ferrosintesis](../../../crates/ferrosintesis/README.md) directly); the tagged
 `.opus` lands, git-ignored, under `listening/Claude Fable 5/The Burning Meridian/`.

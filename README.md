@@ -173,8 +173,8 @@ cargo run --release -p render-catalog -- --album "Sub Rosa"  # just one album
 cargo run --release -p render-catalog -- --jobs 4            # limit parallelism
 
 # Regenerate/verify one album's MIDI (run inside that album's own directory):
-python build.py                      # rebuild the .mid + manifest
-python build.py --verify             # re-parse the written MIDI and run every oracle
+python3 build.py                      # rebuild the .mid + manifest
+python3 build.py --verify             # re-parse the written MIDI and run every oracle
 
 # Build and test the synth on its own:
 cargo build --release -p ferrosintesis-cli

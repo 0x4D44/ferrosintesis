@@ -49,8 +49,9 @@ holds design and review docs; `wrk_journals/` is the engineer's log.
 
 ## Commands
 
-> **Run every build/render below from a task worktree — never the main clone
-> `D:\language\midi-music`.** An album's own `python build.py` (run from an album
+> **Run every build/render below from a task worktree — never the main clone**
+> (`D:\language\ferrosintesis` on the Windows boxes, `~/language/ferrosintesis`
+> elsewhere). An album's own `python3 build.py` (run from an album
 > directory) rewrites the **tracked** `.mid` / `album_manifest.json`; run in the main
 > clone it dirties the sacred trunk-holder (violating worktree-first) and blocks its
 > `git pull --ff-only`. Rendering (`render-catalog`, `cargo`)
@@ -89,7 +90,7 @@ byte-identical and `--verify` reasons about the same Score that produced the fil
 (`--verify` covers all fable5 + gpt5 albums; VIGIL's builder only rebuilds. Some
 fable5 albums also add `--check` for in-memory-only oracles, safe to run while composing.)
 
-**Always run bare `python build.py` FIRST, then `--verify`.** Neither `--verify` nor
+**Always run bare `python3 build.py` FIRST, then `--verify`.** Neither `--verify` nor
 `--track N --verify` writes the `.mid` — they run the oracles on the in-memory Score and
 re-parse the *existing* file, so after editing a movement they report green on music the
 committed MIDI does not contain. The order is: edit → `build.py` (writes) → `--verify` →

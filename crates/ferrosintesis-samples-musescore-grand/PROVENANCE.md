@@ -49,7 +49,7 @@ of body (0.6 s fade-out), peak-normalized to 0.9; `measure_f0` (tight window aro
 ## Regenerating
 
 ```
-python tools/ferrosintesis-samples/prepare.py --only=musescoregrand
+python3 tools/ferrosintesis-samples/prepare.py --only=musescoregrand
 ```
 
 Needs `ffmpeg` on PATH (Ogg decode).

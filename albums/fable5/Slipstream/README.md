@@ -23,11 +23,11 @@ built with (module contract, emitter patterns, trip-wires).
 ## Rebuild and verify (stdlib Python only)
 
 ```
-python build.py                     # rebuild all 10 MIDIs + album_manifest.json
-python build.py --track N           # rebuild one track
-python build.py --verify            # every oracle over every track (exit != 0 on failure)
-python build.py --track N --verify  # one track's oracles (the composing loop)
-python build.py --track N --check   # in-memory oracles only, no file I/O
+python3 build.py                     # rebuild all 10 MIDIs + album_manifest.json
+python3 build.py --track N           # rebuild one track
+python3 build.py --verify            # every oracle over every track (exit != 0 on failure)
+python3 build.py --track N --verify  # one track's oracles (the composing loop)
+python3 build.py --track N --check   # in-memory oracles only, no file I/O
 ```
 
 Seeds are fixed per track (in `conductor.REGISTRY`), so rebuilds are
@@ -41,8 +41,8 @@ Requires the repo synth (ferrosintesis v0.21+):
 ```
 cargo build --release -p ferrosintesis-cli      # from the repo root
 bash render_all.sh                              # all 10 tracks -> audio/*.wav (parallel)
-python analyze.py                               # generic + per-track audio oracles
-python analyze.py --track N                     # one track
+python3 analyze.py                               # generic + per-track audio oracles
+python3 analyze.py --track N                     # one track
 ```
 
 `audio/` and `*.wav` are disposable intermediates (gitignored). The audio

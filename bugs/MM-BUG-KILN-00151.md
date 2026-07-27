@@ -5,19 +5,19 @@
 - **Severity:** Medium
 - **Area:** sample generation / direct-source cache
 - **Raised:** 2026-07-27
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T171504Z-p9812-n454118900-c100
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00151-run-fix-20260727T171504Z-p9812-n454118900-c100
-- **Owner base:** 9b456a99b5a5b83888a1562b35f386d2d3a3f8f3
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T17:15:04Z
-- **Owner until:** 2026-07-27T18:00:04Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=1, doubt=1, indeterminate=0
+- **Attempts:** fix=2, doubt=1, indeterminate=0
 - **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T085110Z-p9812-n624876700-c57 branch=task/bug-MM-BUG-KILN-00151-run-fix-20260727T085110Z-p9812-n624876700-c57 code=ed7633742b1c172bb124eb1f919e754e9e1bca66 gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T164601Z-p9812-n625456400-c95 verified_fix_run=fix-20260727T085110Z-p9812-n624876700-c57 verdict=doubt reason=fix-and-regression-tests-look-correct-on-static-review-but-this-sessions-bash-pe model=claude)
 
 ## Observation
@@ -108,3 +108,22 @@ Tests:
 Left alone:
 - bugs/ ledger files
 - Cargo.toml and Cargo.lock
+
+### Fix attempt summary (2026-07-27, deltic:auto run=fix-20260727T171504Z-p9812-n454118900-c100 outcome=no_work)
+
+Agent-reported summary: MM-BUG-KILN-00151 was already corrected in the current tree, so I did not add an artificial code change. I reproduced the original recorded observation against the pre-fix prepare.py source: after replacing a warm cache entry with another valid WAV, the old cache predicate did not refetch and consumed the substituted sample. The current implementation binds each direct-downloaded cache file to a .source.json sidecar containing the requested URL and SHA-256 of the cached bytes. The focused regression suite for the direct source cache is green and covers the valid-cache control, legacy cache refetch, valid local substitution refetch, stable-destination URL revision refetch, sidecar contents, a
+
+Root cause: The original warm-cache predicate for direct-downloaded sample WAVs was destination filename plus WAV parseability. It stored neither the requested URL nor the fetched-file digest, so a changed pinned source revision or a valid local substitution under the same destination name reused stale bytes.
+
+Changed:
+- No new code/test edits were made in this pass; the current tree already contains URL and SHA-256 sidecar validation in tools/ferrosintesis-samples/prepare.py.
+- Existing regression coverage in tools/ferrosintesis-samples/test_prepare.py exercises the direct source cache identity checks.
+
+Tests:
+- Reproduced the original observation against the pre-fix prepare.py from ed7633742b1c172bb124eb1f919e754e9e1bca66^: fetches stayed at one request and cached_samp
+- From tools/ferrosintesis-samples: [PATH] Files\LibreOffice\program\python.exe -m unittest test_prepare.DirectSourceCacheTest (6 tests, OK).
+
+Left alone:
+- bugs/
+- Cargo.toml
+- Cargo.lock

@@ -5,19 +5,19 @@
 - **Severity:** Low
 - **Area:** banjo sample generation / reliability
 - **Raised:** 2026-07-27
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T183302Z-p9812-n667926500-c114
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00153-run-fix-20260727T183302Z-p9812-n667926500-c114
-- **Owner base:** 3e1494565cf991b1d8f64e13e46caebc52f957fd
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T18:33:02Z
-- **Owner until:** 2026-07-27T19:18:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=1, indeterminate=0
+- **Attempts:** fix=1, doubt=1, indeterminate=0
 - **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T091113Z-p9812-n303128100-c63 branch=task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63 code=2f0e6ee818b19768449e426e0b86131fed4c4afb gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T183302Z-p9812-n667926500-c113 verified_fix_run=fix-20260727T091113Z-p9812-n303128100-c63 verdict=doubt reason=symptom-is-gone-and-the-root-cause-is-properly-addressed-and-all-5-cargo-gate-st model=claude)
 
 ## Observation

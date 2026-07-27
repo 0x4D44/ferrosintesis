@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below) → Fixed (2026-07-27, Codex GPT-5.6; recovered the scheduler-held branch, rejected its one-dimensional bow-speed clamp, and completed the approved joint control map plus bounded normalization; code=52d998be6339 gate=focused+render-diff)
+- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below) → Fixed (2026-07-27, Codex GPT-5.6; recovered the scheduler-held branch, rejected its one-dimensional bow-speed clamp, and completed the approved joint control map plus bounded normalization; code=3bfe206deb67 gate=focused+render-diff)
 
 ## Observation
 
@@ -244,7 +244,7 @@ Arthur approved the following product targets, so candidate audition is no longe
 
 ## Fix
 
-### Fix summary (2026-07-27, Codex GPT-5.6, code=52d998be6339, gate=focused+render-diff)
+### Fix summary (2026-07-27, Codex GPT-5.6, code=3bfe206deb67, gate=focused+render-diff)
 
 GM42/43 now move bow speed and force together through a measured stable region. A slow
 80 ms post-body meter applies only a bounded 0.60–1.70 residual gain after the sampled bow

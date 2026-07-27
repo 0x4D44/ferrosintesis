@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** banjo sample generation / reliability
 - **Raised:** 2026-07-27
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T181102Z-p9812-n078768700-c108
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00153-run-verify-20260727T181102Z-p9812-n078768700-c108
-- **Owner base:** d86e94c88881940bc7971718128ff3967c1a7f1c
-- **Owner fingerprint:** sha256:7881c2e5cab4969a1038d0b708b7f650082b0d0482f3a399407b634464474185
-- **Owner since:** 2026-07-27T18:11:02Z
-- **Owner until:** 2026-07-27T18:56:02Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** 2026-07-27T17:34:56Z
 - **Held branch:** -
 - **Legacy fixed run:** -

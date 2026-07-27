@@ -12353,12 +12353,17 @@ impl Brass {
                 } else {
                     0.0
                 };
+                let player_lip_fc = if section_identity {
+                    (lip_fc * lip_mul).min(osr * 0.24)
+                } else {
+                    lip_fc
+                };
                 let f_i = (f * detune).min(osr * 0.45);
                 BrassPlayer {
                     saw: BlepSaw::new(f_i, osr, rng.white() * 0.5 + 0.5),
                     detune,
                     onset,
-                    lip_lp: OnePole::lowpass((lip_fc * lip_mul).min(osr * 0.24), osr),
+                    lip_lp: OnePole::lowpass(player_lip_fc, osr),
                     decim: [
                         Biquad::lowpass(BR_DECIM_HZ, 0.8, osr),
                         Biquad::lowpass(BR_DECIM_HZ, 0.8, osr),
@@ -12522,6 +12527,16 @@ impl Brass {
         // otherwise the lip lowpass / output lowpass cap it and only the
         // flutter AM survives. At growl 0 this is exactly `l` (BR-O2/O3 unmoved).
         let bright = (l + BR_GROWL_BRIGHT * self.growl_cur).min(1.5);
+        // Preserve the established solo/synth path exactly. GM61 alone moves this
+        // law inside the player loop so each modeled player can carry an identity.
+        if self.oversample && !self.spec.section_identity {
+            let fc = (self.base_f
+                * (self.spec.h_min + (self.spec.h_max - self.spec.h_min) * bright.powf(BR_H_EXP)))
+            .min(self.osr * 0.24);
+            for p in &mut self.players {
+                p.lip_lp.set_cutoff(fc, self.osr);
+            }
+        }
         // BR1/BR2/BR10 shaper index, composed drive clamped to the alias cap
         self.kws = (self.spec.k_min
             + (self.spec.k_max - self.spec.k_min) * l
@@ -12583,60 +12598,73 @@ impl Brass {
         };
         let (base_f, bend, vib_depth, osr, sr) =
             (self.base_f, self.bend, self.vib_depth, self.osr, self.sr);
-        let growl_bright = BR_GROWL_BRIGHT * self.growl_cur;
-        let growl_drive = BR_GROWL_DRIVE * self.growl_cur;
-        let r2 = {
-            let r = BR_CASCADE_F0 / base_f.max(BR_CASCADE_F0);
-            r * r
-        };
-        let lift = BR_CASCADE_F0_FLOOR * smoothstep(BR_CASCADE_LIFT_LO, BR_CASCADE_LIFT_HI, base_f);
-        let hf_derate = (r2 * r2).max(lift).min(1.0);
-        for p in &mut self.players {
-            let p_l = (l * p.pressure_mul).min(1.3);
-            let p_bright = (p_l + growl_bright).min(1.5);
-            if self.oversample {
+        if self.spec.section_identity {
+            let growl_bright = BR_GROWL_BRIGHT * self.growl_cur;
+            let growl_drive = BR_GROWL_DRIVE * self.growl_cur;
+            let r2 = {
+                let r = BR_CASCADE_F0 / base_f.max(BR_CASCADE_F0);
+                r * r
+            };
+            let lift =
+                BR_CASCADE_F0_FLOOR * smoothstep(BR_CASCADE_LIFT_LO, BR_CASCADE_LIFT_HI, base_f);
+            let hf_derate = (r2 * r2).max(lift).min(1.0);
+            for p in &mut self.players {
+                let p_l = (l * p.pressure_mul).min(1.3);
+                let p_bright = (p_l + growl_bright).min(1.5);
                 let fc = (base_f
                     * (self.spec.h_min
                         + (self.spec.h_max - self.spec.h_min) * p_bright.powf(BR_H_EXP))
                     * p.lip_mul)
                     .min(osr * 0.24);
                 p.lip_lp.set_cutoff(fc, osr);
-            }
-            p.kws = ((self.spec.k_min + (self.spec.k_max - self.spec.k_min) * p_l + growl_drive)
-                * p.drive_mul)
-                .min(BR_K_MAX);
-            p.cascade_amt = if self.oversample && self.spec.brassiness > 0.0 {
-                (self.spec.brassiness
+                p.kws =
+                    ((self.spec.k_min + (self.spec.k_max - self.spec.k_min) * p_l + growl_drive)
+                        * p.drive_mul)
+                        .min(BR_K_MAX);
+                p.cascade_amt = (self.spec.brassiness
                     * BR_CASCADE_MAX
                     * smoothstep(BR_CASCADE_LO, BR_CASCADE_HI, p_bright)
                     * hf_derate
                     * p.cascade_mul)
-                    .clamp(0.0, BR_CASCADE_MAX)
-            } else {
-                0.0
-            };
-            if let Some(lp) = &mut p.out_lp {
-                let open = 1.0 + BR_CASCADE_RADIATE * p.cascade_amt;
-                let cut = (self.spec.out_base
-                    * p.out_mul
-                    * open
-                    * 2f32.powf(self.spec.out_oct * p_bright))
-                .min(sr * 0.45);
-                lp.set_cutoff(cut, sr);
+                    .clamp(0.0, BR_CASCADE_MAX);
+                if let Some(lp) = &mut p.out_lp {
+                    let open = 1.0 + BR_CASCADE_RADIATE * p.cascade_amt;
+                    let cut = (self.spec.out_base
+                        * p.out_mul
+                        * open
+                        * 2f32.powf(self.spec.out_oct * p_bright))
+                    .min(sr * 0.45);
+                    lp.set_cutoff(cut, sr);
+                }
+                p.scoop += p.scoop_k * (1.0 - p.scoop);
+                // control_tick fires every CTRL OUTPUT samples (self.t counts at sr),
+                // so the real tick period is CTRL/sr — divide by sr, not osr (osr=2·sr
+                // for natural presets would halve the rate; only BR_SECTION is affected).
+                p.vib_phase += TAU * p.vib_rate * CTRL as f32 / sr;
+                let vib = if ramp > 0.0 && vib_depth > 0.0 {
+                    vib_depth * ramp * p.vib_phase.sin()
+                } else {
+                    0.0
+                };
+                let drift = p.drift.next();
+                let f_i =
+                    (base_f * p.detune * bend * p.scoop * (1.0 + vib + drift)).min(osr * 0.45);
+                p.saw.set_freq(f_i, osr);
             }
-            p.scoop += p.scoop_k * (1.0 - p.scoop);
-            // control_tick fires every CTRL OUTPUT samples (self.t counts at sr),
-            // so the real tick period is CTRL/sr — divide by sr, not osr (osr=2·sr
-            // for natural presets would halve the rate; only BR_SECTION is affected).
-            p.vib_phase += TAU * p.vib_rate * CTRL as f32 / sr;
-            let vib = if ramp > 0.0 && vib_depth > 0.0 {
-                vib_depth * ramp * p.vib_phase.sin()
-            } else {
-                0.0
-            };
-            let drift = p.drift.next();
-            let f_i = (base_f * p.detune * bend * p.scoop * (1.0 + vib + drift)).min(osr * 0.45);
-            p.saw.set_freq(f_i, osr);
+        } else {
+            for p in &mut self.players {
+                p.scoop += p.scoop_k * (1.0 - p.scoop);
+                p.vib_phase += TAU * p.vib_rate * CTRL as f32 / sr;
+                let vib = if ramp > 0.0 && vib_depth > 0.0 {
+                    vib_depth * ramp * p.vib_phase.sin()
+                } else {
+                    0.0
+                };
+                let drift = p.drift.next();
+                let f_i =
+                    (base_f * p.detune * bend * p.scoop * (1.0 + vib + drift)).min(osr * 0.45);
+                p.saw.set_freq(f_i, osr);
+            }
         }
     }
 }
@@ -12670,7 +12698,9 @@ impl Voice for Brass {
             // its own — a shared shaper would be a section tell). BR12 folds the
             // rasp cascade in per player too — the steepening is a per-lip effect,
             // not a section-bus one.
-            let (bias, oversample) = (self.spec.bias, self.oversample);
+            let section_identity = self.spec.section_identity;
+            let (kws, bias, oversample, cascade_amt) =
+                (self.kws, self.spec.bias, self.oversample, self.cascade_amt);
             let mut sum = 0.0;
             for p in &mut self.players {
                 if self.t < p.onset {
@@ -12694,9 +12724,17 @@ impl Voice for Brass {
                         let lip = p.lip_lp.process(p.saw.next());
                         let mut x = p.rasp_adaa(
                             lip,
-                            p.kws,
-                            (bias + p.bias_add).clamp(0.05, 0.65),
-                            p.cascade_amt,
+                            if section_identity { p.kws } else { kws },
+                            if section_identity {
+                                (bias + p.bias_add).clamp(0.05, 0.65)
+                            } else {
+                                bias
+                            },
+                            if section_identity {
+                                p.cascade_amt
+                            } else {
+                                cascade_amt
+                            },
                         );
                         for d in p.decim.iter_mut() {
                             x = d.process(x);
@@ -12706,8 +12744,12 @@ impl Voice for Brass {
                     y
                 } else {
                     // synth path: near-linear (k≈0.6), no cascade (cascade_amt≡0)
-                    brass_valve(p.lip_lp.process(p.saw.next()), p.kws, bias + p.bias_add)
+                    brass_valve(p.lip_lp.process(p.saw.next()), kws, bias)
                 };
+                if !section_identity {
+                    sum += v * ramp;
+                    continue;
+                }
                 if p.breath > 0.0 {
                     v += p.breath_filt.process(p.breath_rng.white()) * p.breath * e.max(0.0).sqrt();
                 }
@@ -24515,38 +24557,74 @@ mod tests {
     #[test]
     fn brass_o18_section_players_have_individual_timbres() {
         let sr = 44100.0;
-        let isolate = |idx: usize| {
+        let render_players = |active: Option<usize>| {
             let mut v = brass(61, 60, 112, sr, 0x6138);
             assert_eq!(v.players.len(), 5, "GM61 must stay a five-player section");
             v.vib_depth = 0.0;
             v.breath = 0.0;
             for (i, p) in v.players.iter_mut().enumerate() {
                 p.detune = 1.0;
-                p.onset = if i == idx { 0 } else { u32::MAX / 2 };
+                p.onset = if active.is_none_or(|idx| i == idx) {
+                    0
+                } else {
+                    u32::MAX / 2
+                };
                 p.vib_rate = 0.0;
                 p.drift = Drift::new(1, 0.0, 1);
                 p.scoop = 1.0;
                 p.scoop_k = 0.0;
+                p.breath = 0.0;
             }
             let mut buf = vec![0f32; (1.2 * sr) as usize];
             v.render(&mut buf);
             buf
         };
 
-        let profiles: Vec<(f32, f32, f32)> = (0..5)
-            .map(|idx| {
-                let b = isolate(idx);
-                let seg = &b[(0.42 * sr) as usize..(1.05 * sr) as usize];
-                let body = spectral_band_rms(seg, sr, 250.0, 1400.0).max(1e-9);
-                let upper = spectral_band_rms(seg, sr, 2200.0, 6200.0);
-                let bell = spectral_band_rms(seg, sr, 6200.0, 10_000.0);
-                (
-                    upper / body,
-                    bell / body,
-                    spectral_centroid(seg, sr, 180.0, 10_000.0),
-                )
-            })
-            .collect();
+        let identity_set = |seed| {
+            let v = brass(61, 60, 112, sr, seed);
+            let mut ids: Vec<[f32; 8]> = v
+                .players
+                .iter()
+                .map(|p| {
+                    [
+                        p.lip_mul,
+                        p.drive_mul,
+                        p.bias_add,
+                        p.cascade_mul,
+                        p.pressure_mul,
+                        p.bell_g,
+                        p.out_mul,
+                        p.breath,
+                    ]
+                })
+                .collect();
+            ids.sort_by(|a, b| a[0].total_cmp(&b[0]));
+            ids
+        };
+        assert_eq!(
+            identity_set(0x6138),
+            identity_set(0x6139),
+            "the seed may assign player seats, but must preserve the balanced identity set"
+        );
+
+        let isolated: Vec<Vec<f32>> = (0..5).map(|idx| render_players(Some(idx))).collect();
+        let spectral_profile = |b: &[f32]| {
+            let seg = &b[(0.42 * sr) as usize..(1.05 * sr) as usize];
+            let body = spectral_band_rms(seg, sr, 250.0, 1400.0).max(1e-9);
+            let upper = spectral_band_rms(seg, sr, 2200.0, 6200.0);
+            let bell = spectral_band_rms(seg, sr, 6200.0, 10_000.0);
+            (
+                upper / body,
+                bell / body,
+                spectral_centroid(seg, sr, 180.0, 10_000.0),
+            )
+        };
+        let profiles: Vec<(f32, f32, f32)> = isolated.iter().map(|b| spectral_profile(b)).collect();
+        let distance = |a: (f32, f32, f32), b: (f32, f32, f32)| {
+            (a.0 / b.0.max(1e-9)).ln().abs()
+                + (a.1 / b.1.max(1e-9)).ln().abs()
+                + (a.2 / b.2.max(1e-9)).ln().abs()
+        };
         let spread = |slot: usize| {
             let vals: Vec<f32> = profiles.iter().map(|&(a, b, c)| [a, b, c][slot]).collect();
             let min = vals.iter().cloned().fold(f32::INFINITY, f32::min);
@@ -24563,6 +24641,47 @@ mod tests {
             upper_spread >= 1.18 && bell_spread >= 1.25 && centroid_spread >= 1.10,
             "isolated GM61 players are near-clones: upper {upper_spread:.3}, bell {bell_spread:.3}, centroid {centroid_spread:.3}"
         );
+        for i in 0..profiles.len() {
+            for j in (i + 1)..profiles.len() {
+                assert!(
+                    distance(profiles[i], profiles[j]) >= 0.04,
+                    "GM61 players {i} and {j} have near-identical spectral envelopes: {:?} vs {:?}",
+                    profiles[i],
+                    profiles[j]
+                );
+            }
+        }
+
+        let centroid_track: Vec<[f32; 3]> = isolated
+            .iter()
+            .map(|b| {
+                [(0.42, 0.60), (0.64, 0.82), (0.86, 1.04)].map(|(start, end)| {
+                    spectral_centroid(
+                        &b[(start * sr) as usize..(end * sr) as usize],
+                        sr,
+                        180.0,
+                        10_000.0,
+                    )
+                })
+            })
+            .collect();
+        let range = |values: &[f32]| {
+            let lo = values.iter().copied().fold(f32::INFINITY, f32::min);
+            let hi = values.iter().copied().fold(0.0f32, f32::max);
+            hi - lo
+        };
+        let section_span = range(&profiles.iter().map(|p| p.2).collect::<Vec<_>>());
+        let max_player_wander = centroid_track
+            .iter()
+            .map(|track| range(track))
+            .fold(0.0f32, f32::max);
+        eprintln!(
+            "BR-O18 stable spectral envelope: section span {section_span:.1} Hz, max player wander {max_player_wander:.1} Hz, tracks {centroid_track:?}"
+        );
+        assert!(
+            section_span >= 500.0 && section_span >= 3.0 * max_player_wander,
+            "GM61 section spectrum is not broader than its individual stable players: section {section_span:.1} Hz, player wander {max_player_wander:.1} Hz"
+        );
 
         let section = brass(61, 60, 112, sr, 0x6138);
         assert!(
@@ -24571,26 +24690,9 @@ mod tests {
             section.spec.detune_cents
         );
 
-        let profile = |prog: u8| {
-            let b = render_brass(prog, 60, 112, 1.2, 0x6138);
-            let seg = &b[(0.42 * sr) as usize..(1.05 * sr) as usize];
-            let body = spectral_band_rms(seg, sr, 250.0, 1400.0).max(1e-9);
-            let upper = spectral_band_rms(seg, sr, 2200.0, 6200.0);
-            let bell = spectral_band_rms(seg, sr, 6200.0, 10_000.0);
-            (
-                upper / body,
-                bell / body,
-                spectral_centroid(seg, sr, 180.0, 10_000.0),
-            )
-        };
-        let distance = |a: (f32, f32, f32), b: (f32, f32, f32)| {
-            (a.0 / b.0.max(1e-9)).ln().abs()
-                + (a.1 / b.1.max(1e-9)).ln().abs()
-                + (a.2 / b.2.max(1e-9)).ln().abs()
-        };
-        let sec = profile(61);
-        let tpt = profile(56);
-        let syn = profile(62);
+        let sec = spectral_profile(&render_brass(61, 60, 112, 1.2, 0x6138));
+        let tpt = spectral_profile(&render_brass(56, 60, 112, 1.2, 0x6138));
+        let syn = spectral_profile(&render_brass(62, 60, 112, 1.2, 0x6138));
         assert!(
             distance(sec, tpt) >= 0.25 && distance(sec, syn) >= 0.25,
             "GM61 must stay distinct from solo and synth brass: sec {sec:?}, trumpet {tpt:?}, synth {syn:?}"
@@ -24637,6 +24739,79 @@ mod tests {
             "GM61 render not finite/bounded: soft peak {:.3}, loud peak {:.3}",
             soft.3,
             loud.3
+        );
+    }
+
+    /// MM-BUG-KILN-00038 containment: the GM61 identity path must not narrow
+    /// synth brass's intentionally near-open source filter. A first version
+    /// applied GM61's 0.24×sample-rate anti-alias clamp to GM62/63 at note-on.
+    #[test]
+    fn brass_o18_non_section_source_filter_is_inert() {
+        let sr = 44100.0;
+        for prog in [62, 63] {
+            let mut v = brass(prog, 60, 100, sr, 7);
+            assert!(
+                !v.spec.section_identity,
+                "GM{prog} entered GM61 identity path"
+            );
+            let mut expected = OnePole::lowpass(sr * 0.45, sr);
+            for (i, input) in [1.0, 0.0, 0.0, 0.0].into_iter().enumerate() {
+                assert_eq!(
+                    v.players[0].lip_lp.process(input).to_bits(),
+                    expected.process(input).to_bits(),
+                    "GM{prog} source filter changed at impulse sample {i}"
+                );
+            }
+        }
+    }
+
+    /// Manual performance oracle for MM-BUG-KILN-00038. The control has the
+    /// same five-player GM61 preset but retains the old shared-filter path.
+    /// Run optimized: `cargo test --release brass_o18_render_cost_budget
+    /// -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn brass_o18_render_cost_budget() {
+        const CONTROL: BrassSpec = BrassSpec {
+            section_identity: false,
+            ..BR_SECTION
+        };
+        let sr = 44100.0;
+        let timed = |spec: &'static BrassSpec| {
+            let started = std::time::Instant::now();
+            let mut checksum = 0.0f32;
+            for seed in 0..24 {
+                let mut v = Brass::new(spec, 60, 112, sr, 0x6138 + seed);
+                let mut buf = vec![0.0f32; (2.0 * sr) as usize];
+                v.render(&mut buf);
+                checksum += rms(&buf);
+            }
+            std::hint::black_box(checksum);
+            started.elapsed().as_secs_f64()
+        };
+
+        // Warm both code paths before the paired measurement.
+        std::hint::black_box(timed(&CONTROL));
+        std::hint::black_box(timed(&BR_SECTION));
+        let mut control_s = 0.0;
+        let mut modeled_s = 0.0;
+        for round in 0..2 {
+            if round % 2 == 0 {
+                modeled_s += timed(&BR_SECTION);
+                control_s += timed(&CONTROL);
+            } else {
+                control_s += timed(&CONTROL);
+                modeled_s += timed(&BR_SECTION);
+            }
+        }
+        let ratio = modeled_s / control_s.max(f64::EPSILON);
+        eprintln!(
+            "BR-O18 render cost: shared control {control_s:.3}s, modeled identities {modeled_s:.3}s, ratio {ratio:.3}"
+        );
+        assert!(
+            ratio <= 1.25,
+            "GM61 per-player identity path regressed render cost by {:.1}%",
+            (ratio - 1.0) * 100.0
         );
     }
 

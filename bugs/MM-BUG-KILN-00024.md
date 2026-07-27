@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00024 — GM 48/49 ensemble identity remains EarPending and unenforced
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** testutil
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28-code-1785111555057
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle deliberately cannot decide whether GM48/49's shared-onset tail difference is perceptually sufficient; Arthur must supply the one planned same/different A/B verdict) → Open (2026-07-26, unblocked by Arthur's blinded A/B verdict on `175b594`: “the _A & _B samples sound pretty much the same to me (for both pairs)”; requires a durable GM49 Slow Strings identity)
+- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle deliberately cannot decide whether GM48/49's shared-onset tail difference is perceptually sufficient; Arthur must supply the one planned same/different A/B verdict) → Open (2026-07-26, unblocked by Arthur's blinded A/B verdict on `175b594`: “the _A & _B samples sound pretty much the same to me (for both pairs)”; requires a durable GM49 Slow Strings identity) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T000102Z-p9812-n317020100-c28 branch=task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28 code=3a5ea5c1826d gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -91,6 +91,26 @@ The autonomous fixer must:
 5. Preserve the GM48/49 seam-level, class-identity, deterministic-render, and
    wider ensemble-family guards. Produce the same level-matched A/B evidence
    for independent verification, then leave the bug `Fixed`.
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T000102Z-p9812-n317020100-c28 code=3a5ea5c1826d gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00024 by making GM49 Slow Strings carry a durable post-handover identity instead of remaining hidden under the shared GM48/49 sampled onset. The pre-fix repro showed print_perceptual_matrix reporting GM48/49 as an EarPending tail pair at 0.0593, below BAR_TAIL 0.76. GM49 now has a much slower modeled swell, stronger transient bow-air under that swell, and a modest octave divisi layer, while GM48 keeps the existing normal-attack voicing. The GM48/49 EarPending allow-list exemption was removed and replaced with a samples-on regression that asserts the shared-onset pair clears the model-owned tail bar. The final diagnostic reports POS_TAIL GM 48/49: Tail 0.7777.
+
+Root cause: GM49's intended 0.45-second base attack was velocity-scaled to roughly the same duration as the shared sampled-onset handover, so the audible slow-swell difference was masked; after the handover both GM48 and GM49 were nearly the same SawStack body, leaving the perceptual oracle with no enforced tail distinction.
+
+Changed:
+- crates/ferrosintesis/src/voices.rs: retuned only the GM49 Slow Strings SawStack path for a longer post-handover swell, stronger slow-string bow catch, and octav
+- crates/ferrosintesis/src/testutil.rs: removed the GM48/49 EarPending exemption, added POS_TAIL coverage, and added a samples-on regression for the GM48/49 tail
+
+Tests:
+- cargo test -p ferrosintesis testutil::perceptual_distinctness -- --nocapture
+- cargo test -p ferrosintesis slow_strings -- --nocapture
+- cargo test -p ferrosintesis string_section_model_has_bow_catch_onset -- --nocapture
+- cargo test -p ferrosintesis print_perceptual_matrix -- --ignored --nocapture (filtered to GM48/49 evidence)
+
+Left alone:
+- bugs/ ledger
+- Cargo.toml
 
 ## Notes
 

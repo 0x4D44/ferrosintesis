@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00147-run-fix-20260727T034803Z-p9812-n357621900-c48-code-1785124935354
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high) -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T034803Z-p9812-n357621900-c48 branch=task/bug-MM-BUG-KILN-00147-run-fix-20260727T034803Z-p9812-n357621900-c48 code=1c801edef6dd gate=cargo model=codex@xhigh)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source `12df88f0a96bc7ea661055ab184f18c7383799bc`; GM44 now uses a direction-reversing bowed-string waveguide plus the string-section LA onset)
 
 ## Observation
 
@@ -33,26 +33,55 @@ Impact is low. A census of every committed .mid on 2026-07-26 found no album or 
 
 ## Fix
 
-<unfixed — raised only>
+### Fix summary (2026-07-27, GPT-5.6 Codex on KILN-Windows)
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T034803Z-p9812-n357621900-c48 code=1c801edef6dd gate=cargo)
+Source: `12df88f0a96bc7ea661055ab184f18c7383799bc`.
 
-Agent-reported summary: Fixed MM-BUG-KILN-00147 by moving GM44 Tremolo Strings off the legacy saw-based Bowed default path and onto the BowedString waveguide. The default GM44 path now uses the existing string-section LA onset bank, so samples-on differs from samples-off where embedded samples are available. The waveguide has a GM44-only tremolo path that flips bow direction, jitters stroke timing and gain, and re-establishes the scratch catch at each reversal instead of using a plain gain LFO. The GM44 velocity response changed with the waveguide migration, so the existing per-program velocity compensation table now includes GM44. The focused regression was made red before the fix by requiring GM44 to route as bow
+GM44 was the last default bowed program still routed to the retired saw-based
+`Bowed` voice. The earlier bowed-string migration had no physical tremolo
+treatment and had not settled whether this GM section patch should use a solo or
+section onset.
 
-Root cause: GM44 was left as a bare Bowed::new arm because the previous migration handled solo arco programs but did not add a tremolo-capable bowed-string default treatment or choose a section-appropriate sampled onset. That left Tremolo Strings as the only bowed default program still using the legacy saw-based voice and the only one without an LA sampled onset.
+The fix routes GM44 through the violin-family `BowedString` waveguide, with a
+GM44-only tremolo treatment that:
 
-Changed:
-- crates/ferrosintesis/src/voices.rs: GM44 default routing, BowedString tremolo stroke handling, LA routing table, velocity compensation, and bowed routing regres
+- reverses bow direction at 6–9 Hz, accelerated by velocity;
+- jitters each stroke's timing and force;
+- re-establishes the stick-slip scratch catch at every reversal;
+- keeps reversal discontinuities bounded so the re-bite does not become a click.
 
-Tests:
-- cargo test -p ferrosintesis --lib voices::tests::default_bowed_articulations_and_sample_routing
-- cargo test -p ferrosintesis --lib voices::tests::default_bowed_pitch_range_and_legato
-- cargo test -p ferrosintesis --lib velocity_law::tests::every_gm_program_follows_the_square_law
-- git diff --check
+The default samples-on path uses the existing LA string-section bank rather than
+a solo-violin onset. The sample changes the attack, then hands over to the
+waveguide. The per-program velocity compensation table includes GM44 because the
+waveguide adds a monotonic excitation slope beyond the shared square law.
 
-Left alone:
-- bugs/ ledger files
-- Cargo.toml and Cargo.lock
-- broad integration gate and render-diff inventory for Deltic
+Review also found controller tests still measuring GM44 with the old saw voice's
+zero-crossing oracle. They now use the bowed-family autocorrelation oracle, and
+GM44 is included in the all-`BowedString` controller matrix. The retired saw
+implementation remains only as an explicitly named test migration reference; it
+can no longer be mistaken for the shipping default.
+
+Evidence:
+
+- `cargo test -p ferrosintesis --lib`: 807 passed, 41 diagnostics ignored.
+- `cargo test -p ferrosintesis --lib --no-default-features`: 686 passed,
+  36 diagnostics ignored.
+- `cargo clippy -p ferrosintesis --all-targets -- -D warnings`: green.
+- `cargo clippy -p ferrosintesis --all-targets --no-default-features -- -D warnings`:
+  green.
+- `cargo fmt --check` and `git diff --check`: green.
+- The reversal oracle measured the largest reversal step at 1.29× ordinary
+  sample-step RMS, below its 8× click guard.
+- Raw low/mid/high A/B pack:
+  `C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00147-candidate`.
+  Candidate layered/model sustain correlation is 0.999985–0.999995, confirming
+  the section sample changes the onset and hands over to the model. Candidate
+  model versus baseline sustain correlation is −0.147 to +0.133, confirming the
+  physical model genuinely replaces the saw voice. Raw candidate peak stays
+  below 0.206.
+- Full 124-MIDI render-diff against exact base
+  `22c7e0c200603f929d55cf2e88f9fc3bc6e9660c`, classified as GM44 at the
+  tool-supported 11.025 kHz rate: 1 expected change, 123 expected identical,
+  0 contamination, and 0 not reached.
 
 ## Notes

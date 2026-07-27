@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00029 — voice models turn over near full velocity: GM42/43 bowed strings DROP up to 1.6 dB from v110 to v127, and GM4's pickup bark peaks at v≈105
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below) → Fixed (2026-07-27, Codex GPT-5.6; recovered the scheduler-held branch, rejected its one-dimensional bow-speed clamp, and completed the approved joint control map plus bounded normalization; code=3bfe206deb67 gate=focused+render-diff)
+- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below) → Fixed (2026-07-27, Codex GPT-5.6; recovered the scheduler-held branch, rejected its one-dimensional bow-speed clamp, and completed the approved joint control map plus bounded normalization; code=3bfe206deb67 gate=focused+render-diff) → Closed (2026-07-27, claude-opus-5@high; independent two-eyes verification — original observation reproduced on the pre-fix baseline and measured gone on trunk `eab17c8` with samples ON, regression proven two-sided against baseline `bf99f9e`, workspace tests + both Clippy configurations green; fix provenance corrected to code=81b84fec7c30+3bfe206deb67)
 
 ## Observation
 
@@ -288,3 +288,90 @@ Left alone:
 
 - No crate version bump; this repository advances versions only during a deliberate release.
 - No unrelated voice, album source, or generated listening asset.
+
+## Independent verification (2026-07-27, claude-opus-5@high — two-eyes, verifier ≠ fixer)
+
+Verified on trunk `eab17c8` (contains the fix) against the pre-fix baseline `bf99f9e`
+(= `81b84fe^`, the last commit before any 00029 code landed), in a throwaway baseline
+worktree. Verdict: **Closed**.
+
+### 1. The original recorded observation is gone — including with samples ON
+
+The recorded observation was measured through `make_uncorrected_for_test` with
+`VEL_LEVEL_EXP` bypassed and **samples on**. The committed regression measures the
+**model-only** path, so the shipping (samples-on) configuration was probed separately
+here. Max BS.1770 momentary block, 1.2 s, `SEED = 0x5EED_1234`, samples ON:
+
+| probe | pre-fix `bf99f9e` | trunk `eab17c8` |
+|---|---|---|
+| GM42 key60, v96→v127 | −8.93 / −6.44 / −5.16 / **−9.60** / −2.70 / **−7.14** | −11.80 / −10.16 / −9.28 / −8.43 / −7.60 / −6.50 |
+| GM42 key60 worst adjacent drop | **4.44 dB** | **0.00 dB** |
+| GM43 key60 worst adjacent drop | 2.11 dB | 0.00 dB |
+| GM42 key50 worst adjacent drop | 3.42 dB | 0.00 dB |
+| GM42 key36 worst adjacent drop | 0.67 dB | 0.00 dB |
+| GM43 key28 worst adjacent drop | 0.00 dB | 0.00 dB |
+
+The baseline column reproduces the ledger's recorded chaotic pocket exactly
+(v110 −5.16 → v115 −9.60 → v120 −2.70 → v127 −7.14, i.e. the documented ±4 dB swing
+across *adjacent* velocities). On trunk every probed key rises monotonically through
+v127. Model-only readings agree to within 0.3 dB, so the fix is not sample-layer
+masking.
+
+GM4 bark/h1, same builds: pre-fix `v60 0.0553 / v90 0.0652 / v120 0.0651` — matching the
+recorded turnover — versus trunk `v60 0.0555 / v90 0.0672 / v120 0.0735`, non-decreasing
+across the full v60/75/90/105/120/127 sweep the restored assertion checks.
+
+### 2. The regression coverage is genuinely two-sided
+
+`bowed_strings_raw_high_velocity_output_is_monotonic_and_law_shaped` was ported verbatim
+onto the pre-fix baseline and **fails there** — `GM42 key 36 seed 0xba60: raw velocity
+exponent 2.622, want 2.0 +/- 0.25` — and passes on trunk. Not taken on faith.
+
+`bowed_low_strings_keep_stable_motion_at_high_velocity` is **not circular** with the
+level oracle: it classifies *source motion* (`autocorr_pitch` → cents deviation and
+periodicity correlation), which a bounded output gain cannot launder, and it carries its
+own canary asserting the classifier still detects the rejected flat-speed patch's
+bottom-register octave locks. That satisfies the prior-art constraint recorded above
+("do not meter away an unstable source").
+
+### 3. The exit condition has retired its own guards
+
+`excluded_programs_still_reproduce_their_defect` no longer exists in
+`crates/ferrosintesis/src/velocity_law.rs`, and GM42/43 are back inside the
+`every_gm_program_follows_the_square_law` program set. The self-retiring exemption was
+removed rather than left as a dead blind spot, exactly as the exit condition required.
+
+### 4. Fix provenance corrected
+
+The `Fixed` line cites `code=3bfe206deb67` only. The landed fix is **two** commits:
+
+- `81b84fec7c30` (2026-07-26) — the GM4 pickup-drive retune and the restored full
+  non-decreasing bark assertion, plus the first `bowed_string_bow_speed` map.
+- `3bfe206deb67` (2026-07-27) — replaced that map with the joint bow speed/force map and
+  the bounded post-body normalization.
+
+`3bfe206` does not touch the bark path at all (zero `bark` lines in its diff), so the GM4
+half of this bug is not explained by the cited commit alone. The fixer's own render-diff
+baseline `1927c2b` predates `81b84fe`, i.e. the inventory correctly measured both commits
+as one change; only the ledger's `code=` field was narrow. The separate claim that the
+scheduler-*held* patch was not landed is accurate — that is `aab501a`, which is not an
+ancestor of trunk.
+
+### 5. Repo gates, observed on the verification worktree off `eab17c8`
+
+- `cargo test --workspace --release` — **788 passed, 0 failed, 39 ignored** in the
+  ferrosintesis suite, and 0 failed across all 29 other crate suites.
+- `cargo clippy --workspace --all-targets -- -D warnings` — clean.
+- `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.
+- `cargo fmt --all --check` — clean.
+- All four 00029 guards also pass under `--no-default-features` (the modeled-only shipped
+  configuration; 698 tests filtered vs 824 with defaults, confirming the feature flag
+  really changed the build rather than reusing the default artifacts).
+
+No known-unrelated failures: the tree is green as a whole, not green-with-exceptions.
+
+### 6. Not re-run here
+
+The catalogue render-diff inventory was not independently re-executed; it is a
+change-time report, and the fixer's run used a baseline (`1927c2b`) that is a true
+ancestor spanning both fix commits with only ledger churn in between, which is sound.

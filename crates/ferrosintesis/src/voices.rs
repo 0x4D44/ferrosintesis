@@ -4788,7 +4788,11 @@ impl Pluck {
             f,
             p.bright * (1.0 - 0.30 * wound),
             60.0 / t60_static,
-            p.damper_hold_scale,
+            // Once the hold engages, its `/ bright` term cancels the wound
+            // factor above. Carry that authored darkening into the local
+            // multiplier so a brighter preset does not flatten its wound/plain
+            // string contrast (KILN-00050 integration canary).
+            p.damper_hold_scale * (1.0 - 0.30 * wound),
         );
         let bright = (wound_bright * hold).min(sr * 0.45).max(300.0);
 
@@ -16757,7 +16761,7 @@ mod tests {
                     f,
                     p.bright * (1.0 - 0.30 * wound),
                     60.0 / t60s,
-                    p.damper_hold_scale,
+                    p.damper_hold_scale * (1.0 - 0.30 * wound),
                 );
                 let fc = (wb * hold).min(sr * 0.45).max(300.0);
                 let d = -20.0 * OnePole::lowpass_mag(fc, f, sr).log10() * f;

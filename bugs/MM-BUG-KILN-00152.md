@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** orchestral2 / regeneration provenance
 - **Raised:** 2026-07-27
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260727T165501Z-p9812-n885138800-c96
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00152-run-verify-20260727T165501Z-p9812-n885138800-c96
+- **Owner base:** 2791854ab8750c040ba7ff116bd7c3da9330385d
+- **Owner fingerprint:** sha256:738589928e4b2939e1168a90a4a7488fbfe31515f6a91a14dc13a4df7a79265e
+- **Owner since:** 2026-07-27T16:55:01Z
+- **Owner until:** 2026-07-27T17:40:01Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

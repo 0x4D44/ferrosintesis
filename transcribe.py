@@ -24,6 +24,7 @@ import json
 import struct
 import subprocess
 import sys
+import sysconfig
 import tempfile
 from pathlib import Path
 
@@ -401,6 +402,32 @@ def _build_raw_midi(division: int, events: list[tuple[int, bytes]]) -> bytes:
     return b"MThd" + struct.pack(">IHHH", 6, 0, 1, division) + trk
 
 
+def _stdlib_names() -> frozenset[str]:
+    """The stdlib module names, on Python 3.9 as well as 3.10+.
+
+    `sys.stdlib_module_names` is 3.10+, so reaching for it directly turned this
+    gate into an AttributeError that took the whole `--selftest` down on the 3.9
+    interpreter macOS still ships as `python3`. Fall back to enumerating the
+    stdlib directory, which is what the attribute is a cached copy of.
+    """
+    names = getattr(sys, "stdlib_module_names", None)
+    if names is not None:
+        return frozenset(names)
+
+    found = set(sys.builtin_module_names)
+    stdlib_dir = Path(sysconfig.get_paths()["stdlib"])
+    for entry in stdlib_dir.iterdir():
+        if entry.suffix == ".py":
+            found.add(entry.stem)
+        elif entry.is_dir() and "." not in entry.name:
+            found.add(entry.name)
+    # Compiled extension modules (math, _socket, ...) live beside, not inside.
+    dynload = stdlib_dir / "lib-dynload"
+    if dynload.is_dir():
+        found.update(entry.name.split(".", 1)[0] for entry in dynload.iterdir())
+    return frozenset(found)
+
+
 def _check_import_purity() -> list[str]:
     """Assert this module imports only the standard library."""
     src = Path(__file__).read_text(encoding="utf-8")
@@ -411,7 +438,8 @@ def _check_import_purity() -> list[str]:
             mods.update(a.name.split(".")[0] for a in node.names)
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             mods.add(node.module.split(".")[0])
-    third_party = sorted(m for m in mods if m not in sys.stdlib_module_names)
+    stdlib = _stdlib_names()
+    third_party = sorted(m for m in mods if m not in stdlib)
     return [] if not third_party else [f"non-stdlib imports: {third_party}"]
 
 

@@ -1384,10 +1384,26 @@ def verified_archive_path(src, url, sha256, cache_name=None):
 def rebuild_archive_cache(src, url, sha256, member_map, extract_subdir):
     """Verify a pinned 7z archive, extract it, and copy its selected members."""
     arc = verified_archive_path(src, url, sha256)
-    seven = shutil.which("7z") or r"C:\Program Files\7-Zip\7z.exe"
+    # `7zz` is Homebrew's sevenzip name, `7za` Debian's p7zip; the hardcoded install
+    # path stays as the Windows last resort. Report a missing binary at the call
+    # rather than up front, so a caller that stubs out `subprocess.run` (the archive
+    # refetch tests do) still exercises this path on a box with no 7-Zip at all.
+    seven = (
+        shutil.which("7z")
+        or shutil.which("7zz")
+        or shutil.which("7za")
+        or r"C:\Program Files\7-Zip\7z.exe"
+    )
     ext = os.path.join(src, extract_subdir)
-    subprocess.run([seven, "x", "-y", f"-o{ext}", arc], check=True,
-                   stdout=subprocess.DEVNULL)
+    try:
+        subprocess.run([seven, "x", "-y", f"-o{ext}", arc], check=True,
+                       stdout=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise SystemExit(
+            "no 7-Zip binary on PATH (tried 7z, 7zz, 7za). Install it with "
+            "`brew install sevenzip` on macOS, `apt install p7zip-full` on "
+            "Debian/Ubuntu, or from https://www.7-zip.org/ on Windows."
+        ) from None
     for fn, member in member_map.items():
         shutil.copyfile(os.path.join(ext, *member.split("/")),
                         os.path.join(src, fn))

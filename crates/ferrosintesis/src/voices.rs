@@ -7131,9 +7131,10 @@ fn vel_attack(base: f32, vel: u8) -> f32 {
 
 fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     let slow = program == 49;
+    let cutoff = if slow { 3200.0 } else { 4200.0 };
     // (excess bow-air level, T60): the fast section catches over its ~70 ms
-    // attack; the slow section's rosin noise follows its ~420 ms swell.
-    let bow_catch = if slow { (0.20, 0.80) } else { (0.24, 0.35) };
+    // attack; the slow section's rosin noise follows its post-handover swell.
+    let bow_catch = if slow { (0.55, 0.70) } else { (0.24, 0.35) };
     let mut s = SawStack::new(
         key,
         vel,
@@ -7142,9 +7143,9 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         5,
         0.007,
         0.0035,
-        StackFilter::Lp(Biquad::lowpass(if slow { 3200.0 } else { 4200.0 }, 0.7, sr)),
+        StackFilter::Lp(Biquad::lowpass(cutoff, 0.7, sr)),
         if slow {
-            Adsr::new(vel_attack(0.45, vel), 0.3, 0.85, 0.8, sr)
+            Adsr::new(vel_attack(5.5, vel), 0.3, 0.85, 0.8, sr)
         } else {
             Adsr::new(vel_attack(0.07, vel), 0.3, 0.85, 0.35, sr)
         },
@@ -7159,6 +7160,9 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         0.22,
     )
     .with_breath_attack(bow_catch.0, bow_catch.1);
+    if slow {
+        s.push_interval_layer(Wave::Saw, 2.0, 0.75, 0.0025, seed ^ 0x49A5);
+    }
     s.legato_enabled = true;
     s
 }

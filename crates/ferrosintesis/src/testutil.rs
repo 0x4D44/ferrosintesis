@@ -2065,10 +2065,12 @@ mod perceptual_distinctness {
     const MARGIN_MUL: f32 = 1.3;
 
     /// Ear-accepted distinct pairs asserted ≥ `MARGIN_MUL · BAR_FULL` (§7
-    /// POS_full; all classify independent-onset). 48/49, 72/73 and 40/44 are
-    /// deliberately absent: reported by `print_perceptual_matrix`, adjudicated
-    /// by ear once (§6/§7), never silently anchored.
+    /// POS_full; all classify independent-onset). 72/73 and 40/44 are deliberately
+    /// absent: reported by `print_perceptual_matrix`, adjudicated by ear once
+    /// (§6/§7), never silently anchored. 48/49 received a too-similar verdict
+    /// and moved to POS_TAIL coverage.
     const POS_FULL: &[(u8, u8)] = &[(64, 65), (16, 23), (17, 21), (83, 87), (11, 12)];
+    const POS_TAIL: &[(u8, u8)] = &[(48, 49)];
 
     #[derive(Clone, Copy)]
     enum Why {
@@ -2101,20 +2103,13 @@ mod perceptual_distinctness {
         // entry stays until a future 29≠30 split (overdriven vs distortion
         // voicing) deletes both together.
         (29, 30, Why::Collapse("a future GM29≠30 voicing split")),
-        // §7 contingent controls — shared violin/strings banks; the model
-        // tails measure 0.13/0.06, far under BAR_TAIL. Probable true
-        // positives the old matrix missed (40/41 = the repitched-violin
-        // viola proxy). One batched human listen each decides: EarAccepted
-        // or a voice-fix requirement (viola bank = roadmap Stage 3).
+        // §7 contingent control — shared violin bank; the model tail measured
+        // far under BAR_TAIL. One human listen decides: EarAccepted or a
+        // voice-fix requirement (viola bank = roadmap Stage 3).
         (
             40,
             41,
             Why::EarPending("viola is a repitched-violin proxy — same or different?"),
-        ),
-        (
-            48,
-            49,
-            Why::EarPending("string ensembles 1/2 — real swell-time difference?"),
         ),
     ];
 
@@ -2690,6 +2685,24 @@ mod perceptual_distinctness {
         );
     }
 
+    /// MM-BUG-KILN-00024: GM48 and GM49 share the same sampled onset, so Slow
+    /// Strings must prove its identity in the model-owned tail after the LA
+    /// handover, not by a non-binding EarPending exemption.
+    #[test]
+    fn slow_strings_clears_tail_bar_after_sample_handover() {
+        let ps = passports();
+        let (tier, score, bar) = score_pair(&ps[48], &ps[49]);
+        assert_eq!(
+            tier,
+            Tier::Tail,
+            "GM48/49 should still be judged on the post-handover tail while they share the strings onset"
+        );
+        assert!(
+            score >= bar,
+            "GM48/49 tail score {score:.4} < BAR_TAIL {bar:.4}; Slow Strings has no durable post-handover identity"
+        );
+    }
+
     /// §3 test 2 — every `Collapse` entry is still a perceived clone on this
     /// build. The moment a round-3 voice fix lands, this fails and forces the
     /// entry's deletion: the mechanical GREEN transition.
@@ -3251,6 +3264,10 @@ mod perceptual_distinctness {
             println!("POS GM {a}/{b}: {tier:?} {s:.4}");
             pos_min = pos_min.min(s);
         }
+        for &(a, b) in POS_TAIL {
+            let (tier, s, _) = score_pair(&ps[a as usize], &ps[b as usize]);
+            println!("POS_TAIL GM {a}/{b}: {tier:?} {s:.4}");
+        }
         for (base, name) in [(56u8, "brass"), (64u8, "reed")] {
             let mut fam_min = f32::INFINITY;
             for a in base..base + 8 {
@@ -3264,7 +3281,7 @@ mod perceptual_distinctness {
             println!("{name} family tier-1 minimum: {fam_min:.4}");
             pos_min = pos_min.min(fam_min);
         }
-        for &(a, b) in &[(40u8, 41u8), (48, 49), (72, 73), (40, 44)] {
+        for &(a, b) in &[(40u8, 41u8), (72, 73), (40, 44)] {
             let (tier, s, _) = score_pair(&ps[a as usize], &ps[b as usize]);
             println!("ADJUDICATE GM {a}/{b}: {tier:?} {s:.4} (ear once, §6/§7)");
         }

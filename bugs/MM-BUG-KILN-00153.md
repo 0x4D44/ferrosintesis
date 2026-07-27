@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00153 — Banjo regeneration deletes the bank before replacement is ready
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** banjo sample generation / reliability
 - **Raised:** 2026-07-27
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T184602Z-p9812-n059732900-c116
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00153-run-fix-20260727T184602Z-p9812-n059732900-c116
-- **Owner base:** 7c4ec5c36c65699eac8168cdca2f96d9ea6f926f
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T18:46:02Z
-- **Owner until:** 2026-07-27T19:31:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=2, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T091113Z-p9812-n303128100-c63 branch=task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63 code=2f0e6ee818b19768449e426e0b86131fed4c4afb gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T183302Z-p9812-n667926500-c113 verified_fix_run=fix-20260727T091113Z-p9812-n303128100-c63 verdict=doubt reason=symptom-is-gone-and-the-root-cause-is-properly-addressed-and-all-5-cargo-gate-st model=claude)
+- **Attempts:** fix=3, doubt=1, indeterminate=0
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T091113Z-p9812-n303128100-c63 branch=task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63 code=2f0e6ee818b19768449e426e0b86131fed4c4afb gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T183302Z-p9812-n667926500-c113 verified_fix_run=fix-20260727T091113Z-p9812-n303128100-c63 verdict=doubt reason=symptom-is-gone-and-the-root-cause-is-properly-addressed-and-all-5-cargo-gate-st model=claude) → Blocked (2026-07-27, deltic:auto role=fix run=fix-20260727T184602Z-p9812-n059732900-c116 verdict=fix_failed reason=no_work model=codex@xhigh)
 
 ## Observation
 

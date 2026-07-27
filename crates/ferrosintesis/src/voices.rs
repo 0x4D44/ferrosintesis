@@ -7354,6 +7354,15 @@ fn vel_attack(base: f32, vel: u8) -> f32 {
     base * (1.45 - 0.65 * (vel as f32 / 127.0))
 }
 
+/// MM-BUG-KILN-00053: extend MM-BUG-KILN-00024's model-owned crescendo only
+/// where the low register still falls short of the approved 6–8 dB rise.
+/// Key 55 retains the existing 3.75 target; the extra gain tapers linearly to
+/// it from the full key-48 correction, avoiding a second envelope mechanism.
+fn slow_strings_swell_target(key: u8) -> f32 {
+    let low_depth = ((55.0 - key as f32) / 7.0).clamp(0.0, 1.0);
+    3.75 + 1.20 * low_depth
+}
+
 fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     let slow = program == 49;
     let cutoff = if slow { 3200.0 } else { 4200.0 };
@@ -7387,7 +7396,7 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     .with_breath_attack(bow_catch.0, bow_catch.1);
     if slow {
         s.push_interval_layer(Wave::Saw, 2.0, 0.75, 0.0025, seed ^ 0x49A5);
-        s = s.with_post_handover_swell(0.40, 2.50, 3.75);
+        s = s.with_post_handover_swell(0.40, 2.50, slow_strings_swell_target(key));
     }
     s.legato_enabled = true;
     s
@@ -10411,11 +10420,9 @@ fn ebass_additive_gain(program: u8, key: u8) -> f32 {
 /// Program-aware cap. GM49 (Slow Strings, a SWELL patch) caps the taper at 1.0:
 /// the sample must never speak OVER a still-swelling model, so where a zone sits
 /// under the model the onset is left soft (a soft onset *helps* the swell)
-/// rather than boosted. KILN-00053 adds a lower model onset below key 55, so GM49's
-/// low-key sample gain follows the same depth curve or the full voice flattens the
-/// restored swell. GM48 (String Ensemble 1, a normal attack) takes the full taper,
-/// including the modest boosts that pull its under-level zones up to parity.
-/// Linear-interp between anchors; clamped flat past the ends.
+/// rather than boosted. GM48 (String Ensemble 1, a normal attack) takes the
+/// full taper, including the modest boosts that pull its under-level zones up to
+/// parity. Linear-interp between anchors; clamped flat past the ends.
 fn strings_seam_gain(program: u8, key: u8, vel: u8) -> f32 {
     const P: [(f32, f32); 19] = [
         (28.0, 0.64),

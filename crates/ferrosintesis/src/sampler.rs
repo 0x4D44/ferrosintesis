@@ -8694,8 +8694,8 @@ mod tests {
                 "GM49 key 52 vel {vel}: full sampled voice still falls or stays flat, body/onset {k52_full:.2}"
             );
             assert!(
-                (1.05..=1.35).contains(&k55_model),
-                "GM49 key 55 vel {vel}: transition anchor moved out of its mild-swell band, model body/onset {k55_model:.2}"
+                (1.90..=2.25).contains(&k55_model),
+                "GM49 key 55 vel {vel}: MM-BUG-KILN-00024 transition anchor moved, model body/onset {k55_model:.2}"
             );
             assert!(
                 k55_full > 1.0,

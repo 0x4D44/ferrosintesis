@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00058 — GM45 pizzicato's Shaped-vs-Legacy loudness parity broke KEY-DEPENDENTLY after the KILN-00048 decouple (offsets span ~7.5 dB, unfittable by the scalar exc_trim)
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00058-run-fix-20260727T032003Z-p9812-n201717900-c42-code-1785123200445
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction) → Open (2026-07-26, Arthur approved preserving the Shaped timbre and restoring Legacy level parity with a smooth key/velocity gain correction)
+- **State history:** Open (2026-07-24, raised by Claude Opus 4.8 (1M) while landing KILN-00048 — the decouple exposed it; PIZZ dropped from the shaped_g7 parity check meanwhile, like PICK before it) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — the required key-aware excitation re-fit needs Arthur to choose whether level or spectral slope should carry the audible correction) → Open (2026-07-26, Arthur approved preserving the Shaped timbre and restoring Legacy level parity with a smooth key/velocity gain correction) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T032003Z-p9812-n201717900-c42 branch=task/bug-MM-BUG-KILN-00058-run-fix-20260727T032003Z-p9812-n201717900-c42 code=60d261f2936e gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -69,6 +69,26 @@ it.
 Re-fit PIZZ's Shaped excitation for the post-decouple corner — a per-key or slope adjustment
 (`slope`/`exc_trim` are the levers; a scalar `exc_trim` alone won't do it, mirroring PICK).
 Needs ears (this box has none) and re-inclusion in `SHAPED_MIGRATED` as the acceptance test.
+
+## Fix
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T032003Z-p9812-n201717900-c42 code=60d261f2936e gate=cargo)
+
+Agent-reported summary: MM-BUG-KILN-00058 is fixed by restoring GM45 PIZZ to the Shaped migration parity oracle and adding the approved key/velocity gain correction. The original observation reproduced first: re-adding PIZZ made shaped_g7_mean_parity_and_seed_bound fail at key 40 velocity 50 with a -2.95 dB offset, and the ignored offset printer showed the recorded -4.58 to +2.91 dB spread. The fix leaves PIZZ's Shaped excitation slope, harmonic rolloff, loop corner, attack, and decay untouched; it applies only a clamped bilinear output-gain surface fitted to the nine recorded Legacy-parity cells. The post-fix printer reports 0.00 dB offset at all nine PIZZ cells. The focused Pluck baseline module is green.
+
+Root cause: KILN-00048 anchored the KS loop damper at the velocity-100 corner, and PIZZ's Shaped harmonic excitation and frozen Legacy noise excitation project that corner change differently across key and velocity. A single per-preset exc_trim is only a scalar, so it could move the mean offset but could not fit the key/velocity-dependent residual.
+
+Changed:
+- ferrosintesis Pluck preset metadata now includes an optional Shaped gain correction
+- GM45 PIZZ opts into a clamped bilinear key/velocity gain surface; all other presets and the frozen alt-bank PIZZ opt out
+- Pluck output gain applies the correction only for Shaped presets
+- Pluck baseline tests restore PIZZ to SHAPED_MIGRATED and add parity, clamp, interpolation, and scalar-gain regression checks
+
+Tests:
+- Reproduced pre-fix failure with cargo test -p ferrosintesis shaped_g7_mean_parity_and_seed_bound after restoring PIZZ to SHAPED_MIGRATED
+- cargo test -p ferrosintesis pluck_baseline
+- cargo test -p ferrosintesis print_shaped_loudness_offset -- --ignored --nocapture
+- git diff --check
 
 ## Notes
 

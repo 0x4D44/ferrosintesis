@@ -5,10 +5,11 @@ Embedded **CC0 1.0** instrument-onset samples for
 onset crate: the original `ferrosintesis-samples-orchestral` is at the crates.io
 per-crate size cap, so newer CC0 families land here.
 
-Each WAV is a mono 16-bit 44.1 kHz attack transient trimmed by
-`tools/ferrosintesis-samples/prepare.py`; the synth plays it as the onset of a note
-and crossfades into the modeled sustain (LA synthesis). Consumers normally access
-this crate through `ferrosintesis`, not directly.
+Each non-banjo WAV is a mono 16-bit 44.1 kHz attack transient trimmed by
+`tools/ferrosintesis-samples/prepare.py`; the banjo WAVs are extracted by
+`tools/ferrosintesis-samples/banjo_extract.py`. The synth plays each WAV as the
+onset of a note and crossfades into the modeled sustain (LA synthesis).
+Consumers normally access this crate through `ferrosintesis`, not directly.
 
 ## Contents & provenance
 

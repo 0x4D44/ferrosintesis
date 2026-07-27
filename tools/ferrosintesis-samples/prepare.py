@@ -3136,11 +3136,87 @@ def _family_selection(args):
             only = set(filter(None, arg.split("=", 1)[1].split(",")))
     if local_only:
         only = {"gong"}
+    elif only is not None:
+        _validate_only_families(only)
     return local_only, only
 
 
 def _wants_family(only, family):
     return only is None or family in only
+
+
+def _family_prefixes(*tables):
+    return {name.split("_", 1)[0] for table in tables for name in table}
+
+
+def _prepare_only_families():
+    """Families whose selected prepare.py path writes at least one sample row."""
+    source_backed = _family_prefixes(
+        SOURCES,
+        GUITAR_SOURCES,
+        STEEL_URLS,
+        HARPSICHORD_URLS,
+        HARP_URLS,
+        OCARINA_URLS,
+        RECORDER_URLS,
+        TIMPANI_URLS,
+        VIOLA_URLS,
+        SOLO_CELLO_URLS,
+        SOLO_DBASS_URLS,
+        PIZZBASS_URLS,
+        MARIMBA_URLS,
+        XYLO_URLS,
+        GLOCK_URLS,
+        VIBES_URLS,
+        TUBULAR_URLS,
+        FINGERBASS_SOURCES,
+        PICKBASS_SOURCES,
+        FREESOUND_SOURCES,
+        MANDOLIN_SOURCES,
+        EASTPICK_SOURCES,
+        EASTPLUCK_SOURCES,
+        GRAND_SOURCES,
+        STEINWAYB_SOURCES,
+        KAWAI_SOURCES,
+        HEADROOM_SOURCES,
+    )
+    own_recipe = {
+        "b1upright",
+        "bottle",
+        "celesta",
+        "chanter",
+        "clavinet",
+        "darkgrand",
+        "gong",
+        "honkytonk",
+        "musescoregrand",
+        "panflute",
+        "sax",
+        "shakuhachi",
+        "sitar",
+        "ydpgrand",
+    }
+    return source_backed | own_recipe
+
+
+def _validate_only_families(only):
+    if not only:
+        raise SystemExit("prepare.py --only requires at least one family")
+    unsupported = sorted(only - _prepare_only_families())
+    if not unsupported:
+        return
+    hints = {
+        "banjo": (
+            "banjo (use python tools/ferrosintesis-samples/banjo_extract.py)"
+        ),
+    }
+    rendered = ", ".join(hints.get(family, family) for family in unsupported)
+    noun = "family" if len(unsupported) == 1 else "families"
+    supported = ", ".join(sorted(_prepare_only_families()))
+    raise SystemExit(
+        f"unsupported prepare.py --only {noun}: {rendered}. "
+        f"Supported families: {supported}"
+    )
 
 
 def _validate_generated_output_inventory(family, expected, repo_root=None):
@@ -3198,8 +3274,9 @@ def main():
     # leaving every other tracked WAV untouched and skipping their fetches (incl. the
     # 7z / SF3 / tarball sources) — used to ADD one instrument without rewriting the
     # whole bank. `fam` is the sample-name prefix: harp, timpani, recorder, ocarina,
-    # banjo, sitar, panflute, bottle, shakuhachi, clavinet, chanter (bagpipe), grand, sax,
-    # eastpick, eastpluck (the first-party Eastman E1D guitars), …
+    # sitar, panflute, bottle, shakuhachi, clavinet, chanter (bagpipe), grand, sax,
+    # eastpick, eastpluck (the first-party Eastman E1D guitars), ...
+    # Banjo is a standalone owner-recording extraction; use banjo_extract.py.
     def want(fam):
         return _wants_family(only, fam)
 

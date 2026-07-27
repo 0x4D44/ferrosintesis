@@ -1528,6 +1528,39 @@ class LocalBankSelectionTest(unittest.TestCase):
                 self.assertEqual(calls, expected)
 
 
+class PrepareOnlySelectionContractTest(unittest.TestCase):
+    """MM-BUG-KILN-00152: --only must fail for families prepare.py cannot produce."""
+
+    def test_banjo_selector_points_at_the_real_recipe(self):
+        with self.assertRaisesRegex(SystemExit, r"banjo.*banjo_extract\.py"):
+            prepare._family_selection(["--only=banjo"])
+
+    def test_unknown_selector_is_rejected(self):
+        with self.assertRaisesRegex(
+            SystemExit, r"unsupported prepare\.py --only family.*notafamily"
+        ):
+            prepare._family_selection(["--only=notafamily"])
+
+
+class Orchestral2RegenerationRecipeTest(unittest.TestCase):
+    """MM-BUG-KILN-00152: packaged docs must publish the banjo extractor command."""
+
+    def test_packaged_provenance_names_the_banjo_extractor_command(self):
+        path = os.path.join(
+            prepare.REPO_ROOT,
+            "crates",
+            "ferrosintesis-samples-orchestral2",
+            "PROVENANCE.md",
+        )
+        with open(path, encoding="utf-8") as f:
+            provenance = f.read()
+        self.assertIn(
+            "python tools/ferrosintesis-samples/banjo_extract.py",
+            provenance,
+        )
+        self.assertNotIn("prepare.py --only=<family>", provenance)
+
+
 class GrandRegenerationRecipeTest(unittest.TestCase):
     """MM-BUG-KILN-00135/00142: the copyable recipe selects only the grand family."""
 

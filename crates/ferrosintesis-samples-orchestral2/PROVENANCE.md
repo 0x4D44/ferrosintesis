@@ -4,12 +4,18 @@ Every WAV this crate packages, with the pinned source it was baked from. Machine
 by `crates/ferrosintesis/src/inventory.rs`: a family that ships without a row here fails
 the build (MM-BUG-KILN-00069).
 
-Regenerate with `python tools/ferrosintesis-samples/prepare.py --only=<family>` from the repository
-root.
+Regenerate non-banjo families with `python tools/ferrosintesis-samples/prepare.py
+--only=<non-banjo-family>` from the repository root.
+
+Regenerate banjo with:
+
+```powershell
+python tools/ferrosintesis-samples/banjo_extract.py
+```
 
 | Family | Files | Instrument | Source | Licence |
 |--------|------:|------------|--------|---------|
-| `banjo_*` | 24 | 5-string banjo (GM 105) onsets | **Owner-recorded** by Arthur (`samples/banjo/*.opus`), baked by `banjo_extract.py` | CC0-1.0 |
+| `banjo_*` | 24 | 5-string banjo (GM 105) onsets | **Owner-recorded** by Arthur (`samples/banjo/*.opus`), baked by `python tools/ferrosintesis-samples/banjo_extract.py` | CC0-1.0 |
 | `eastpick_*` | 8 | Eastman E1D steel guitar, picked (GM 25) | **Owner-recorded** (Eastman E1D), committed per-zone cuts | CC0-1.0 |
 | `eastpluck_*` | 8 | Eastman E1D steel guitar, plucked | **Owner-recorded** (Eastman E1D), committed per-zone cuts | CC0-1.0 |
 | `glock_*` | 4 | Glockenspiel (GM 9) strikes | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |

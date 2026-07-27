@@ -6725,6 +6725,10 @@ pub struct SawStack {
     breath: f32,
     breath_attack: f32,
     breath_attack_k: f32,
+    /// Optional model-owned crescendo `(start, end, target gain)` in samples.
+    /// GM49 uses it after the shared sampled onset has handed over; `None`
+    /// keeps every other stack on the historical render path.
+    post_handover_swell: Option<(u32, u32, f32)>,
     rng: Rng,
     sweep: Option<(f32, f32, f32, f32)>, // (lfo phase, rate Hz, base cutoff, octaves)
     sweep_q: f32,
@@ -6873,6 +6877,7 @@ impl SawStack {
             breath,
             breath_attack: 0.0,
             breath_attack_k: 0.0,
+            post_handover_swell: None,
             rng,
             sweep: sweep.map(|(rate, base, oct)| (sweep_phase, rate, base, oct)),
             sweep_q,
@@ -6921,6 +6926,14 @@ impl SawStack {
         } else {
             0.0
         };
+        self
+    }
+
+    /// Add a gradual section crescendo after an onset layer has handed over.
+    fn with_post_handover_swell(mut self, start_s: f32, end_s: f32, target_gain: f32) -> Self {
+        let start = (start_s.max(0.0) * self.sr) as u32;
+        let end = (end_s.max(start_s + 0.001) * self.sr) as u32;
+        self.post_handover_swell = Some((start, end, target_gain.max(1.0)));
         self
     }
 
@@ -7063,7 +7076,15 @@ impl Voice for SawStack {
             if self.drive > 0.0 {
                 s = (s * self.drive).tanh() / self.drive_norm;
             }
-            *o += s * self.amp * self.env.next();
+            let env = self.env.next();
+            if let Some((start, end, target)) = self.post_handover_swell {
+                let progress =
+                    (self.t.saturating_sub(start) as f32 / (end - start) as f32).min(1.0);
+                let swell = 1.0 + (target - 1.0) * progress;
+                *o += s * self.amp * env * swell;
+            } else {
+                *o += s * self.amp * env;
+            }
             self.t += 1;
         }
         self.env.alive()
@@ -7145,7 +7166,7 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
         0.0035,
         StackFilter::Lp(Biquad::lowpass(cutoff, 0.7, sr)),
         if slow {
-            Adsr::new(vel_attack(5.5, vel), 0.3, 0.85, 0.8, sr)
+            Adsr::new(vel_attack(0.45, vel), 0.3, 0.85, 0.8, sr)
         } else {
             Adsr::new(vel_attack(0.07, vel), 0.3, 0.85, 0.35, sr)
         },
@@ -7162,6 +7183,7 @@ fn strings(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> SawStack {
     .with_breath_attack(bow_catch.0, bow_catch.1);
     if slow {
         s.push_interval_layer(Wave::Saw, 2.0, 0.75, 0.0025, seed ^ 0x49A5);
+        s = s.with_post_handover_swell(0.40, 2.50, 3.75);
     }
     s.legato_enabled = true;
     s
@@ -10248,7 +10270,7 @@ fn strings_seam_gain(program: u8, key: u8, vel: u8) -> f32 {
     }
     // GM49 swell protection: the sample must never speak over the model.
     if program == 49 {
-        g.min(1.0)
+        g.min(1.0) * 0.985
     } else {
         g
     }

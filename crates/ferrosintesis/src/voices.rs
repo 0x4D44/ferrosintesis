@@ -3534,7 +3534,7 @@ pub const SLAP_POP: PluckPreset = PluckPreset {
         wrap: 0.026,
         duration_s: 0.038,
         horiz: 0.24,
-        vert: 1.25,
+        vert: 1.0,
     }),
     ..SLAP
 };
@@ -4146,7 +4146,13 @@ impl KsLoop {
         // damping/feedback, so the contact changes the string rather than only
         // adding an output garnish.
         let s = match &mut self.fret {
-            Some(f) => f.process(s),
+            Some(f) => {
+                let y = f.process(s);
+                if f.age >= f.until {
+                    self.fret = None;
+                }
+                y
+            }
             None => s,
         };
         // sitar jawari: the bridge grazes the string INSIDE the loop, every
@@ -19959,6 +19965,89 @@ mod tests {
                 }
             }
             assert!(changed > 0, "{name}: hard contact never touched the signal");
+        }
+    }
+
+    /// The complete MM-BUG-KILN-00016 acceptance grid: slap, pop, and fingered
+    /// bass stay level-matched but timbrally distinct across the useful register
+    /// and performance range; hard contact stays pitched, deterministic, finite,
+    /// attack-only, and the released voices still reap.
+    #[test]
+    fn slap_pop_identity_holds_across_register_and_lifecycle() {
+        let sr = 44100.0;
+        let distance = |a: &[f32], b: &[f32]| {
+            let ar = rms(a).max(1e-12);
+            let br = rms(b).max(1e-12);
+            let residual: Vec<f32> = a.iter().zip(b).map(|(&x, &y)| x / ar - y / br).collect();
+            rms(&residual)
+        };
+
+        for key in [28u8, 40, 52] {
+            for vel in [64u8, 96, 124] {
+                let seed = 0x16_0000 + ((key as u32) << 8) + vel as u32;
+                let slap = render_pluck(&SLAP, key, vel, 0.16, seed);
+                let pop = render_pluck(&SLAP_POP, key, vel, 0.16, seed);
+                let finger = render_pluck(&BASS, key, vel, 0.16, seed);
+                assert!(
+                    slap.iter().chain(&pop).all(|x| x.is_finite()),
+                    "key {key} vel {vel}: slap/pop produced non-finite output"
+                );
+                assert_eq!(
+                    slap,
+                    render_pluck(&SLAP, key, vel, 0.16, seed),
+                    "key {key} vel {vel}: slap render is not deterministic"
+                );
+                assert_eq!(
+                    pop,
+                    render_pluck(&SLAP_POP, key, vel, 0.16, seed),
+                    "key {key} vel {vel}: pop render is not deterministic"
+                );
+
+                let attack = (0.055 * sr) as usize;
+                let sf = distance(&slap[..attack], &finger[..attack]);
+                let pf = distance(&pop[..attack], &finger[..attack]);
+                let sp = distance(&slap[..attack], &pop[..attack]);
+                assert!(
+                    sf > 0.35 && pf > 0.35 && sp > 0.20,
+                    "key {key} vel {vel}: level-matched attack identities collapsed \
+                     (slap/finger {sf:.3}, pop/finger {pf:.3}, slap/pop {sp:.3})"
+                );
+
+                if vel == 124 {
+                    let settled = segment(&slap, sr, 0.080, 0.150);
+                    let f0 = key_freq(key);
+                    let pitch = peak_locate(settled, sr, f0 * 0.82, f0 * 1.18);
+                    assert!(
+                        (pitch / f0 - 1.0).abs() < 0.045,
+                        "key {key}: hard slap settled at {pitch:.2} Hz, expected {f0:.2}"
+                    );
+                }
+            }
+        }
+
+        for (name, preset) in [("SLAP", &SLAP), ("SLAP_POP", &SLAP_POP)] {
+            let mut voice = Pluck::new(preset, 40, 124, sr, 0x16_FF);
+            let mut attack = vec![0.0; (0.080 * sr) as usize];
+            voice.render(&mut attack);
+            assert!(
+                voice.horiz.fret.is_none() && voice.vert.fret.is_none(),
+                "{name}: expired fret-contact runtime was not retired"
+            );
+            voice.note_off();
+            let mut block = [0.0f32; 256];
+            let mut alive = true;
+            for _ in 0..((5.0 * sr) as usize / block.len() + 1) {
+                block.fill(0.0);
+                alive = voice.render(&mut block);
+                assert!(
+                    block.iter().all(|x| x.is_finite()),
+                    "{name}: release produced non-finite output"
+                );
+                if !alive {
+                    break;
+                }
+            }
+            assert!(!alive, "{name}: voice did not reap within five seconds");
         }
     }
 

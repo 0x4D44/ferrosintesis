@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00024 — GM 48/49 ensemble identity remains EarPending and unenforced
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** testutil
 - **Raised:** 2026-07-18
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T163502Z-p9812-n305326300-c94
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00024-run-verify-20260727T163502Z-p9812-n305326300-c94
-- **Owner base:** 0aef32bd99c76129c97fc90fe6391dc6fb806f6d
-- **Owner fingerprint:** sha256:d06e6f3c7a2be70eed19054884ab407e4cb94b9c85e5de6d90d671a34d54d2fc
-- **Owner since:** 2026-07-27T16:35:02Z
-- **Owner until:** 2026-07-27T17:20:02Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle deliberately cannot decide whether GM48/49's shared-onset tail difference is perceptually sufficient; Arthur must supply the one planned same/different A/B verdict) → Open (2026-07-26, unblocked by Arthur's blinded A/B verdict on `175b594`: “the _A & _B samples sound pretty much the same to me (for both pairs)”; requires a durable GM49 Slow Strings identity) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T000102Z-p9812-n317020100-c28 branch=task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28 code=969af616d16aa8a023c8afc76718140e8424f692 gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle deliberately cannot decide whether GM48/49's shared-onset tail difference is perceptually sufficient; Arthur must supply the one planned same/different A/B verdict) → Open (2026-07-26, unblocked by Arthur's blinded A/B verdict on `175b594`: “the _A & _B samples sound pretty much the same to me (for both pairs)”; requires a durable GM49 Slow Strings identity) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T000102Z-p9812-n317020100-c28 branch=task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28 code=969af616d16aa8a023c8afc76718140e8424f692 gate=cargo model=codex@xhigh) → Closed (2026-07-27, deltic:auto role=verify run=verify-20260727T163502Z-p9812-n305326300-c94 verified_fix_run=fix-20260727T000102Z-p9812-n317020100-c28 verdict=close model=claude)
 
 ## Observation
 
@@ -132,6 +132,10 @@ original four blinded MIDIs and answer key: keys 48 and 72, velocity 100,
 three-second holds plus 0.1-second release, samples enabled, reverb and echo
 disabled, and independent −18 LUFS normalization. FFmpeg's independent meter reads
 −17.97/−18.10 LUFS at key 48 and −17.81/−18.03 LUFS at key 72.
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T163502Z-p9812-n305326300-c94 verified_fix_run=fix-20260727T000102Z-p9812-n317020100-c28 verdict=close)
+
+Verifier note: EarPending exemption gone and GM48/49 now enforced at the frozen BAR_TAIL (0.7967 >= 0.76) by both the headline anti-clone gate and a dedicated regression test; all gates green; fix targets the recorded root cause at the right layer. — (1) Symptom gone: crates/ferrosintesis/src/testutil.rs ALLOW table (lines ~2092-2115) now holds only (29,30) Collapse and (40,41) EarPending - the (48,49) EarPending entry is removed, so the headline gate every_gm_family_sounds_free_of_unexpected_clones enforces the pair. Ran the ledger's own repro, 'cargo test -p ferrosintesis print_perceptual_matrix -- --ignor...
 
 ## Notes
 

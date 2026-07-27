@@ -5,8 +5,8 @@
 //! is a mono 16-bit 44.1 kHz attack transient; `ferrosintesis` plays it as a note's
 //! onset and crossfades into the modeled sustain. Consumers normally access this
 //! crate through `ferrosintesis`, not directly. All samples are CC0 1.0 /
-//! public-domain — no attribution required; provenance is in README.md and
-//! `tools/ferrosintesis-samples/`.
+//! public-domain — no attribution required. The canonical packaged inventory
+//! and source provenance are in `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

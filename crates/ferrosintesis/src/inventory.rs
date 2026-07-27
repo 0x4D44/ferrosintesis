@@ -490,6 +490,145 @@ mod tests {
         errors
     }
 
+    fn markdown_family_patterns(markdown: &str) -> Vec<String> {
+        let mut rows = Vec::new();
+        for line in markdown.lines() {
+            let line = line.trim();
+            if !line.starts_with('|') || !line.ends_with('|') {
+                continue;
+            }
+            let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
+            let Some(pattern) = cells
+                .first()
+                .and_then(|cell| cell.strip_prefix('`'))
+                .and_then(|cell| cell.strip_suffix("_*`"))
+            else {
+                continue;
+            };
+            if !pattern.is_empty() {
+                rows.push(pattern.to_owned());
+            }
+        }
+        rows.sort();
+        rows.dedup();
+        rows
+    }
+
+    fn package_description(manifest: &str) -> Result<String, String> {
+        let description = package_assignment(manifest, "description")
+            .ok_or_else(|| "[package] has no explicit `description`".to_owned())?;
+        let description = toml_strings(&description);
+        if description.len() != 1 {
+            return Err("`description` must name exactly one string expression".to_owned());
+        }
+        Ok(description[0].clone())
+    }
+
+    fn family_prefix_mentions(text: &str, packaged: &BTreeMap<String, usize>) -> Vec<String> {
+        let tokens: Vec<String> = text
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .filter(|token| !token.is_empty())
+            .map(|token| token.to_ascii_lowercase())
+            .collect();
+        packaged
+            .keys()
+            .filter(|family| {
+                tokens
+                    .iter()
+                    .any(|token| token == &family.to_ascii_lowercase())
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn family_list(families: &[String]) -> String {
+        if families.is_empty() {
+            "-".to_owned()
+        } else {
+            families
+                .iter()
+                .map(|family| format!("`{family}_*`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    }
+
+    fn public_inventory_surface_errors(
+        packaged: &BTreeMap<String, usize>,
+        readme: &str,
+        manifest: &str,
+        lib: &str,
+    ) -> Vec<String> {
+        let mut errors = Vec::new();
+        let packaged_families: Vec<String> = packaged.keys().cloned().collect();
+
+        let readme_rows = markdown_family_patterns(readme);
+        let mut readme_table_is_complete = false;
+        if !readme_rows.is_empty() {
+            let missing: Vec<String> = packaged_families
+                .iter()
+                .filter(|family| !readme_rows.contains(*family))
+                .cloned()
+                .collect();
+            let extra: Vec<String> = readme_rows
+                .iter()
+                .filter(|family| !packaged.contains_key(*family))
+                .cloned()
+                .collect();
+            if !missing.is_empty() || !extra.is_empty() {
+                errors.push(format!(
+                    "README family table is partial (missing {}; extra {})",
+                    family_list(&missing),
+                    family_list(&extra)
+                ));
+            } else {
+                readme_table_is_complete = true;
+            }
+        } else if readme.to_ascii_lowercase().contains("contents")
+            && !readme.contains("PROVENANCE.md")
+        {
+            errors.push(
+                "README contents section has no family table and does not delegate to packaged \
+                 PROVENANCE.md"
+                    .to_owned(),
+            );
+        }
+
+        match package_description(manifest) {
+            Ok(description) => {
+                let mentions = family_prefix_mentions(&description, packaged);
+                if mentions.len() >= 3 && mentions.len() < packaged.len() {
+                    let missing: Vec<String> = packaged_families
+                        .iter()
+                        .filter(|family| !mentions.contains(*family))
+                        .cloned()
+                        .collect();
+                    errors.push(format!(
+                        "manifest description names a partial family list (mentions {}; omits {})",
+                        family_list(&mentions),
+                        family_list(&missing)
+                    ));
+                }
+            }
+            Err(error) => errors.push(format!("manifest description is malformed: {error}")),
+        }
+
+        let lib_lower = lib.to_ascii_lowercase();
+        if lib_lower.contains("provenance")
+            && (lib.contains("README.md") || lib.contains("tools/ferrosintesis-samples"))
+            && !lib.contains("PROVENANCE.md")
+            && !readme_table_is_complete
+        {
+            errors.push(
+                "module docs direct provenance readers to README/tooling without naming packaged \
+                 PROVENANCE.md"
+                    .to_owned(),
+            );
+        }
+
+        errors
+    }
+
     /// Every packaged sample family has one counted row in its crate's provenance.
     #[test]
     fn every_packaged_sample_family_has_one_counted_provenance_row() {
@@ -515,6 +654,39 @@ mod tests {
             errors.is_empty(),
             "{} provenance inventory error(s); each packaged family needs exactly one \
              canonical `| `family_*` | FILES |` row in its own PROVENANCE.md:\n  {}",
+            errors.len(),
+            errors.join("\n  ")
+        );
+    }
+
+    #[test]
+    fn every_public_sample_inventory_surface_is_complete_or_delegated() {
+        let mut errors = Vec::new();
+        let mut checked = 0usize;
+        for krate in sample_crates() {
+            let root = crates_dir().join(&krate);
+            let packaged = packaged_family_counts(&krate);
+            let read = |rel: &str| {
+                std::fs::read_to_string(root.join(rel))
+                    .unwrap_or_else(|e| panic!("cannot read {krate}/{rel}: {e}"))
+            };
+            let readme = read("README.md");
+            let manifest = read("Cargo.toml");
+            let lib = read("src/lib.rs");
+            checked += 1;
+            errors.extend(
+                public_inventory_surface_errors(&packaged, &readme, &manifest, &lib)
+                    .into_iter()
+                    .map(|error| format!("{krate}: {error}")),
+            );
+        }
+        assert!(
+            checked > 20,
+            "only {checked} sample crates were checked - the scan is broken"
+        );
+        assert!(
+            errors.is_empty(),
+            "{} public sample inventory surface error(s):\n  {}",
             errors.len(),
             errors.join("\n  ")
         );
@@ -659,6 +831,62 @@ def _bake_goodbank(src):
 "#;
 
         assert!(unvalidated_bake_output_helpers(source).is_empty());
+    }
+
+    #[test]
+    fn public_inventory_oracle_rejects_partial_front_door_inventories() {
+        let packaged = BTreeMap::from([
+            ("banjo".to_owned(), 24),
+            ("eastpick".to_owned(), 8),
+            ("glock".to_owned(), 4),
+            ("harp".to_owned(), 11),
+        ]);
+        let readme = "\
+## Contents & provenance\n\
+\n\
+| Prefix | GM | Source |\n\
+|--------|----|--------|\n\
+| `banjo_*` | 105 | local |\n\
+| `harp_*` | 46 | VCSL |\n";
+        let manifest = "\
+[package]\n\
+description = \"Embedded samples for ferrosintesis (banjo, glock, harp)\"\n";
+        let lib = "\
+//! Embedded samples.\n\
+//!\n\
+//! Source provenance is in README.md and tools/ferrosintesis-samples.\n";
+
+        let errors = public_inventory_surface_errors(&packaged, readme, manifest, lib);
+        assert!(errors.iter().any(|error| error.contains("README")));
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("manifest description")));
+        assert!(errors.iter().any(|error| error.contains("module docs")));
+    }
+
+    #[test]
+    fn public_inventory_oracle_accepts_complete_table_or_packaged_provenance_delegation() {
+        let packaged = BTreeMap::from([("banjo".to_owned(), 24), ("harp".to_owned(), 11)]);
+        let complete_readme = "\
+| Prefix | GM | Source |\n\
+|--------|----|--------|\n\
+| `banjo_*` | 105 | local |\n\
+| `harp_*` | 46 | VCSL |\n";
+        let delegated_readme = "\
+## Contents & provenance\n\
+\n\
+The canonical packaged inventory is `PROVENANCE.md`.\n";
+        let manifest = "\
+[package]\n\
+description = \"Embedded CC0 onset samples for ferrosintesis; packaged PROVENANCE.md lists the full inventory\"\n";
+        let lib = "//! Source provenance is in packaged `PROVENANCE.md`.\n";
+
+        assert!(
+            public_inventory_surface_errors(&packaged, complete_readme, manifest, lib).is_empty()
+        );
+        assert!(
+            public_inventory_surface_errors(&packaged, delegated_readme, manifest, lib).is_empty()
+        );
     }
 
     /// Every sample crate ships a `PROVENANCE.md`, and actually packages it.

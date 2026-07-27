@@ -2932,6 +2932,7 @@ pub fn prewarm() {
     // loop here, so no NoteOn ever runs that search inside the audio callback
     // (MM-BUG-KILN-00064/00043). `bottle_loop_bank` is the ACTIVE GM 76 route; the
     // `bottle_bank` onset bank above is the retired one and is prewarmed separately.
+    #[cfg(feature = "embedded-samples")]
     for zone in clavinet_bank() {
         let _ = zone.sustain_loop(find_clavinet_loop);
     }
@@ -5479,6 +5480,35 @@ mod tests {
             assert!(
                 (t60 - want).abs() <= 0.55,
                 "GM7 sampled key {key} t60 {t60:.2}s, expected {want:.2}s"
+            );
+        }
+    }
+
+    #[test]
+    fn clavinet_sampled_sustain_loops_have_no_step_outlier() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        for zone in clavinet_bank() {
+            let (loop_start, loop_end) = zone
+                .sustain_loop(find_clavinet_loop)
+                .expect("embedded clavinet zone must contain a sustain loop");
+            let baked_t60 = clavinet_baked_t60(zone.root);
+            let flatten = |i: usize| {
+                let dt = i.saturating_sub(loop_start) as f32 / CLAVINET_SOURCE_SR;
+                zone.data[i] * 10f32.powf(3.0 * dt / baked_t60)
+            };
+            let mut steps: Vec<f32> = (loop_start..loop_end - 1)
+                .map(|i| (flatten(i + 1) - flatten(i)).abs())
+                .collect();
+            steps.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let p99 = steps[steps.len() * 99 / 100].max(1e-7);
+            let wrap = (flatten(loop_start) - flatten(loop_end - 1)).abs();
+            assert!(
+                wrap <= p99,
+                "GM7 clavinet zone {:.2} Hz loop step {wrap:.6} exceeds its p99 \
+                 adjacent step {p99:.6}; the runtime wrap would click",
+                zone.root
             );
         }
     }

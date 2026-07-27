@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample generation / direct-source cache
 - **Raised:** 2026-07-27
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260727T164601Z-p9812-n625456400-c95
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00151-run-verify-20260727T164601Z-p9812-n625456400-c95
+- **Owner base:** 6427a6cc6ab88a2bb6f055d5480eb607fb54d2cd
+- **Owner fingerprint:** sha256:449a67a0aa476ecd45017fc29fc0bd5237a8f45647a4320fcd9e22b77d52ddf8
+- **Owner since:** 2026-07-27T16:46:01Z
+- **Owner until:** 2026-07-27T17:31:01Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -5,19 +5,19 @@
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-21
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T182402Z-p9812-n426934100-c112
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00038-run-fix-20260727T182402Z-p9812-n426934100-c112
-- **Owner base:** 2564079eb60df9a684ed8be4ee40a07c19645459
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T18:24:02Z
-- **Owner until:** 2026-07-27T19:09:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=1, indeterminate=0
+- **Attempts:** fix=1, doubt=1, indeterminate=0
 - **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target) → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=08cb7f6ad9c7dfa8407dff5589d36bba647c00d5 gate=cargo model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T182402Z-p9812-n426934100-c111 verified_fix_run=fix-20260727T005703Z-p9812-n849374900-c34 verdict=doubt reason=engineering-evidence-is-fully-green-and-the-fix-plausibly-addresses-the-root-cau model=claude)
 
 ## Observation

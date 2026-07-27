@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00148 — Standalone MuseScore-grand crate omits the upstream MIT permission and full copyright notices
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample packaging / licensing
 - **Raised:** 2026-07-26
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T111207Z-p9812-n103487800-c72
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00148-run-verify-20260727T111207Z-p9812-n103487800-c72
-- **Owner base:** 1180e2ba72fdd4ec464bec22cc54555b9b02cf1d
-- **Owner fingerprint:** sha256:66c784511f485f070286d5bd6435f8b3781dd81b4795e807abc8549c3410fbd1
-- **Owner since:** 2026-07-27T11:12:07Z
-- **Owner until:** 2026-07-27T11:57:07Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T235403Z-p9812-n116206100-c25 branch=task/bug-MM-BUG-KILN-00148-run-fix-20260726T235403Z-p9812-n116206100-c25 code=4c7e9b49a225a67dfed2a9a7f1827ddfae2cf922 gate=focused-licensing model=codex@xhigh; held branch recovered by Codex)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T235403Z-p9812-n116206100-c25 branch=task/bug-MM-BUG-KILN-00148-run-fix-20260726T235403Z-p9812-n116206100-c25 code=4c7e9b49a225a67dfed2a9a7f1827ddfae2cf922 gate=focused-licensing model=codex@xhigh; held branch recovered by Codex) → Closed (2026-07-27, deltic:auto role=verify run=verify-20260727T111207Z-p9812-n103487800-c72 verified_fix_run=fix-20260726T235403Z-p9812-n116206100-c25 verdict=close model=claude)
 
 ## Observation
 
@@ -68,6 +68,10 @@ Tests:
 - `git diff --check` passed.
 
 No Cargo manifest, lockfile, journal, scratchpad, or lesson file changed.
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T111207Z-p9812-n103487800-c72 verified_fix_run=fix-20260726T235403Z-p9812-n116206100-c25 verdict=close)
+
+Verifier note: Standalone musescore-grand crate now packages the full MIT grant plus all 7 required MuseScore/FluidR3 copyright lines; a non-vacuous, load-bearing regression covers all 3 MIT banks and every gate is green. — (1) Reproduced original observation: `git show ee7dc60^:crates/ferrosintesis-samples-musescore-grand/NOTICE` shows the pre-fix file had NO 'Permission is hereby granted' grant and only 2 abbreviated credit lines. On this trunk the NOTICE carries the full MIT grant (permission/inclusion-condition/AS-IS disclaimer) and all 7 upstream copyright+acknowledgement lines; Cargo.toml:10 include li...
 
 ## Notes
 

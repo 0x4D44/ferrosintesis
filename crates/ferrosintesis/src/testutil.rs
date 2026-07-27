@@ -1360,8 +1360,10 @@ mod guards {
         (2, -39.05, 604.8),
         (3, -41.51, 481.6),
         (4, -33.04, 811.3),
-        (5, -20.37, 245.9),
-        (6, -28.19, 190.8),
+        // MM-BUG-KILN-00045 deliberately rebalanced the held GM bass family.
+        // Only the GM33/35 rows move; the piano and strings canaries remain exact.
+        (5, -20.17, 244.7),
+        (6, -23.49, 180.7),
         (7, -24.95, 588.8),
         (8, -34.65, 2090.1),
         // ch 9 re-pinned for the DRUM_FORWARD removal (2.0 -> 1.0, 2026-07-21): the kit
@@ -1377,7 +1379,7 @@ mod guards {
     ];
     /// Full-mix pre-normalise master peak (re-captured with the table above).
     /// 2.22899 -> 1.37511 (-4.19 dB) tracks ch 9 exactly: the drums set the master peak.
-    const GOLDEN_MASTER_PEAK: f32 = 1.37333; // re-pinned 2026-07-26 with the table above
+    const GOLDEN_MASTER_PEAK: f32 = 1.40295; // MM-BUG-KILN-00045 bass rebalance
 
     const RMS_TOL_DB: f32 = 2.5;
     const CENTROID_TOL: f32 = 0.20; // ±20% spectral-balance clause

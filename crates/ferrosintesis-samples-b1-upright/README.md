@@ -12,6 +12,14 @@ sample re-EQ'd. 52 mono 16-bit 44.1 kHz WAVs across the two layers, embedded via
 `include_bytes!`. Loudness comes from the engine's shared velocity law; the layers
 supply timbre per dynamic (see `PROVENANCE.md`).
 
+The bake preserves the recorded hammer shape through 30 ms, then statically
+conditions each zone so its level meets the modeled body cleanly. The engine keeps
+the sample as sole owner through 50 ms and uses the same ordinary complementary
+sample-to-model crossfade as the VSCO alternate over 50–75 ms. There is no
+signal-dependent sustain gain; the modeled piano owns the note after the short
+handoff. The bank is stored at 0.25 scale for conditioning headroom and restored
+with a fixed 5.20 runtime gain, preserving the established 1.30 audible hammer gain.
+
 A third **soft** pass was recorded and then dropped (2026-07-24). Measured against
 `normal` note-for-note with the noise subtracted, it was only **+0.8 dB** apart in
 spectral tilt — the same timbre — while carrying **11 dB less SNR** (28.1 dB vs

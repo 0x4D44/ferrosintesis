@@ -3135,8 +3135,8 @@ mod perceptual_distinctness {
             ),
             (
                 "bowed-vibrato 40-43,110",
-                0,
-                "piano has no vibrato (fm_depth ~ 0.05), must fail the vibrato floor",
+                8,
+                "celesta has no vibrato (fm_depth ~ 0.001), must fail the vibrato floor",
             ),
             (
                 "ensemble/choir 48-54",

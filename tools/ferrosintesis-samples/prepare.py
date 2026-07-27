@@ -2273,6 +2273,186 @@ def condition_piano_bank(bank, sr):
     return conditioned
 
 
+_B1_NAME_RE = re.compile(r"^b1_(normal|hard)_[A-G]#?[0-8]\.wav$")
+_B1_LAYER_COUNTS = {"normal": 25, "hard": 27}
+_B1_BANK_SCALE = 0.25
+_B1_SAMPLE_GAIN = 5.20
+_B1_HANDOFF = (0.050, 0.075)
+_B1_IDENTITY_END = 0.030
+_B1_MAX_HANDOFF_GAIN = 4.0
+# Empirical guard for randomized sample/model cancellation. The all-key,
+# layer-boundary, four-seed rebound sweep is the acceptance oracle.
+_B1_HANDOFF_MARGIN = 2.50
+
+
+def validate_b1_output_inventory(names):
+    """Validate and return the exact shipped B1 normal/hard output inventory."""
+    names = set(names)
+    counts = {layer: 0 for layer in _B1_LAYER_COUNTS}
+    invalid = []
+    for name in names:
+        match = _B1_NAME_RE.match(name)
+        if match is None:
+            invalid.append(name)
+        else:
+            counts[match.group(1)] += 1
+    if invalid:
+        raise ValueError(f"B1 output contains a retired or unknown layer: {sorted(invalid)}")
+    if counts != _B1_LAYER_COUNTS:
+        raise ValueError(
+            "B1 output must contain exactly 25 normal and 27 hard zones; "
+            f"got {counts}"
+        )
+    return names
+
+
+def validate_b1_generated_inventory(expected, generated):
+    """Require a generated B1 bank to match the committed inventory exactly."""
+    expected = validate_b1_output_inventory(expected)
+    generated = validate_b1_output_inventory(generated)
+    if generated != expected:
+        raise ValueError(
+            "B1 generated inventory differs from the committed bank; "
+            f"missing={sorted(expected - generated)}, "
+            f"extra={sorted(generated - expected)}"
+        )
+    return generated
+
+
+def _b1_model_expected_rms(key, vel, age_s, sr):
+    """Expected RMS for `voices.rs:acoustic_piano` across randomized phases."""
+    freq = _midi_hz(key)
+    bright = 0.55 + 0.40 * (vel / 127.0)
+    t1 = max(0.4, min(12.0, 9.0 * (110.0 / freq) ** 0.65))
+    power = 0.0
+    for harmonic in range(1, 17):
+        h = float(harmonic)
+        partial_freq = freq * h * math.sqrt(1.0 + 0.00045 * h * h)
+        if partial_freq > sr * 0.42:
+            break
+        amp = bright ** (harmonic - 1) / h ** 1.08
+        t60 = t1 / (1.0 + 0.6 * (h - 1.0))
+        modes = [(amp * 0.85, t60)]
+        if harmonic <= 6:
+            modes.append((amp * 0.22, t60 * 2.8))
+        if harmonic <= 4:
+            modes.append((amp * 0.60, t60 * 0.9))
+        for mode_amp, mode_t60 in modes:
+            live_amp = 0.5 * mode_amp * 10.0 ** (-3.0 * age_s / mode_t60)
+            power += 0.5 * live_amp * live_amp
+    return math.sqrt(power)
+
+
+def _b1_handoff_gain_knots(values, sr, key, vel):
+    """Fit static PCM gain to a monotonic expected-power ownership transfer."""
+    fade_start, fade_end = _B1_HANDOFF
+    ages = [
+        fade_start + (fade_end - fade_start) * i / 10.0
+        for i in range(11)
+    ]
+    half_window = int(0.0125 * sr)
+
+    def sample_rms(age):
+        center = int(age * sr)
+        return _rms_window(values, center - half_window, center + half_window)
+
+    raw_sample_start = _B1_SAMPLE_GAIN * sample_rms(fade_start)
+    model_start = _b1_model_expected_rms(key, vel, fade_start, sr)
+    start_gain = max(
+        1.0 / _B1_MAX_HANDOFF_GAIN,
+        min(
+            _B1_MAX_HANDOFF_GAIN,
+            _B1_HANDOFF_MARGIN * model_start / max(raw_sample_start, 1e-12),
+        ),
+    )
+    sample_start = raw_sample_start * start_gain
+    model_end = _b1_model_expected_rms(key, vel, fade_end, sr)
+    max_log_gain = math.log(_B1_MAX_HANDOFF_GAIN)
+    knots = []
+    for age in ages:
+        u = _smoothstep((age - fade_start) / (fade_end - fade_start))
+        target = math.exp(
+            (1.0 - u) * math.log(max(sample_start, 1e-12))
+            + u * math.log(max(model_end, 1e-12))
+        )
+        model = u * _b1_model_expected_rms(key, vel, age, sr)
+        sample = (1.0 - u) * _B1_SAMPLE_GAIN * sample_rms(age)
+        required = math.sqrt(max(0.0, target * target - model * model)) / max(sample, 1e-12)
+        log_gain = math.log(max(required, 1e-12))
+        knots.append((age, max(-max_log_gain, min(max_log_gain, log_gain))))
+    knots[0] = (knots[0][0], math.log(start_gain))
+    knots[-1] = (knots[-1][0], knots[-2][1])
+    return knots
+
+
+def condition_b1_handoff(bank, sr, note_midis, layers):
+    """Condition the static 50-75 ms handoff while preserving the first 30 ms."""
+    names = validate_b1_output_inventory(bank)
+    if names != set(note_midis) or names != set(layers):
+        raise ValueError("B1 bank, note map, and layer map must name the same zones")
+    source = {name: list(values) for name, values in bank.items()}
+    scaled = {
+        name: [value * _B1_BANK_SCALE for value in values]
+        for name, values in source.items()
+    }
+    conditioned = {}
+
+    for name, values in scaled.items():
+        vel = 50 if layers[name] == "normal" else 90
+        knots = _b1_handoff_gain_knots(values, sr, note_midis[name], vel)
+
+        def render(positive_scale):
+            shaped = []
+            for i, value in enumerate(values):
+                age = i / sr
+                if age <= _B1_IDENTITY_END or age >= knots[-1][0] + 0.050:
+                    log_gain = 0.0
+                elif age < knots[0][0]:
+                    u = _smoothstep(
+                        (age - _B1_IDENTITY_END)
+                        / (knots[0][0] - _B1_IDENTITY_END)
+                    )
+                    log_gain = knots[0][1] * u
+                elif age >= knots[-1][0]:
+                    u = _smoothstep((age - knots[-1][0]) / 0.050)
+                    log_gain = knots[-1][1] * (1.0 - u)
+                else:
+                    left = next(
+                        j for j in range(len(knots) - 1)
+                        if knots[j][0] <= age < knots[j + 1][0]
+                    )
+                    a_age, a_gain = knots[left]
+                    b_age, b_gain = knots[left + 1]
+                    u = _smoothstep((age - a_age) / (b_age - a_age))
+                    log_gain = a_gain + (b_gain - a_gain) * u
+                if log_gain > 0.0:
+                    log_gain *= positive_scale
+                shaped.append(value * math.exp(log_gain))
+            return shaped
+
+        shaped = render(1.0)
+        if max(abs(value) for value in shaped) > 0.9:
+            lower = 0.0
+            upper = 1.0
+            for _ in range(24):
+                middle = (lower + upper) / 2.0
+                if max(abs(value) for value in render(middle)) <= 0.9:
+                    lower = middle
+                else:
+                    upper = middle
+            shaped = render(lower)
+
+        identity_end = int(_B1_IDENTITY_END * sr) + 1
+        if shaped[:identity_end] != values[:identity_end]:
+            raise ValueError(f"{name}: B1 conditioner changed the first 30 ms")
+        peak = max(abs(value) for value in shaped)
+        if peak > 0.900001:
+            raise ValueError(f"{name}: conditioned peak {peak:.6f} exceeds 0.9")
+        conditioned[name] = shaped
+
+    return conditioned
+
+
 def trim_lead_and_ring(x, sr, pre_s, end_fade_s):
     """Trim leading pre-onset silence, KEEP the full ring, de-click both ends,
     peak-normalize to 0.9.
@@ -2929,6 +3109,10 @@ def _bake_b1upright(src):
     out_dir = os.path.join(REPO_ROOT, "crates",
                            "ferrosintesis-samples-b1-upright", "samples")
     os.makedirs(out_dir, exist_ok=True)
+    expected = validate_b1_output_inventory({
+        name for name in os.listdir(out_dir)
+        if name.startswith("b1_") and name.endswith(".wav")
+    })
 
     manifests = []
     for decoded_name, opus_name in B1_OPUS_TAKES.items():
@@ -2955,12 +3139,17 @@ def _bake_b1upright(src):
             if sl.get("status") == "assigned"
         },
         output_dir=out_dir)
-    rows = []
+    pending = {}
     for man in manifests:
         for sl in man["slices"]:
             if sl.get("status") != "assigned":
                 continue
             layer = sl["pass"]               # soft / normal / hard
+            if layer == "soft":
+                # Deliberately retired: same timbre as normal, 11 dB worse SNR.
+                continue
+            if layer not in _B1_LAYER_COUNTS:
+                raise ValueError(f"unexpected assigned B1 layer: {layer}")
             note = sl["assigned_note"]       # e.g. C3 (both ladders are all-natural)
             midi = sl["assigned_midi"]
             x, sr = read_wav(os.path.join(slice_out, sl["file"]))
@@ -2972,9 +3161,27 @@ def _bake_b1upright(src):
             cents = 1200.0 * math.log2(f1 / et) if f1 > 0 else 0.0
             root = f1 if (f1 > 0 and abs(cents) <= B1_ROOT_FALLBACK_CENTS) else et
             out_name = f"b1_{layer}_{note}.wav"
-            write_wav_mono(os.path.join(out_dir, out_name), seg, OUT_SR)
-            rows.append((out_name, root, f1, et, cents,
-                         sl.get("pitch_confidence") or 0.0, len(seg) / OUT_SR))
+            if out_name in pending:
+                raise ValueError(f"duplicate generated B1 zone: {out_name}")
+            pending[out_name] = (
+                seg,
+                midi,
+                layer,
+                (out_name, root, f1, et, cents,
+                 sl.get("pitch_confidence") or 0.0, len(seg) / OUT_SR),
+            )
+
+    validate_b1_generated_inventory(expected, set(pending))
+    conditioned = condition_b1_handoff(
+        {name: item[0] for name, item in pending.items()},
+        OUT_SR,
+        {name: item[1] for name, item in pending.items()},
+        {name: item[2] for name, item in pending.items()},
+    )
+    rows = []
+    for name in sorted(pending):
+        write_wav_mono(os.path.join(out_dir, name), conditioned[name], OUT_SR)
+        rows.append(pending[name][3])
     return rows
 
 

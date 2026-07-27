@@ -284,6 +284,86 @@ class PrepareSampleBankTests(unittest.TestCase):
                         f"{name}: body level misses register trend",
                     )
 
+    def test_b1_output_inventory_rejects_retired_or_incomplete_layers(self):
+        sample_dir = os.path.join(
+            prepare.REPO_ROOT,
+            "crates",
+            "ferrosintesis-samples-b1-upright",
+            "samples",
+        )
+        expected = {
+            name for name in os.listdir(sample_dir)
+            if name.startswith("b1_") and name.endswith(".wav")
+        }
+        self.assertEqual(prepare.validate_b1_output_inventory(expected), expected)
+        self.assertEqual(
+            prepare.validate_b1_generated_inventory(expected, expected),
+            expected,
+        )
+
+        with self.assertRaisesRegex(ValueError, "25 normal and 27 hard"):
+            prepare.validate_b1_generated_inventory(expected, expected - {"b1_normal_A2.wav"})
+        with self.assertRaisesRegex(ValueError, "retired or unknown"):
+            prepare.validate_b1_generated_inventory(expected, expected | {"b1_soft_C4.wav"})
+        substituted = (expected - {"b1_normal_A2.wav"}) | {"b1_normal_C#0.wav"}
+        with self.assertRaisesRegex(ValueError, "differs from the committed bank"):
+            prepare.validate_b1_generated_inventory(expected, substituted)
+
+    def test_b1_handoff_conditioner_is_deterministic_and_preserves_the_hammer(self):
+        sample_dir = os.path.join(
+            prepare.REPO_ROOT,
+            "crates",
+            "ferrosintesis-samples-b1-upright",
+            "samples",
+        )
+        names = sorted(
+            name for name in os.listdir(sample_dir)
+            if name.startswith("b1_") and name.endswith(".wav")
+        )
+        midi_by_name = {}
+        layer_by_name = {}
+        for name in names:
+            note = name.rsplit("_", 1)[1][:-4]
+            midi_by_name[name] = next(
+                midi for midi in range(21, 109)
+                if prepare._midi_name(midi) == note
+            )
+            layer_by_name[name] = name.split("_", 2)[1]
+
+        sr = 4000
+        source = {}
+        for name in names:
+            freq = prepare._midi_hz(midi_by_name[name])
+            source[name] = [
+                0.20
+                * math.exp(-2.0 * i / sr)
+                * math.sin(2.0 * math.pi * freq * i / sr + 0.3)
+                for i in range(int(0.150 * sr))
+            ]
+
+        first = prepare.condition_b1_handoff(source, sr, midi_by_name, layer_by_name)
+        second = prepare.condition_b1_handoff(source, sr, midi_by_name, layer_by_name)
+        self.assertEqual(first, second)
+
+        identity_end = int(prepare._B1_IDENTITY_END * sr) + 1
+        changed_after_hammer = False
+        for name in names:
+            self.assertLessEqual(max(abs(value) for value in first[name]), 0.900001)
+            for original, conditioned in zip(
+                source[name][:identity_end],
+                first[name][:identity_end],
+            ):
+                self.assertAlmostEqual(
+                    conditioned * prepare._B1_SAMPLE_GAIN,
+                    original * 1.30,
+                    places=12,
+                )
+            changed_after_hammer |= (
+                first[name][identity_end:] !=
+                [value * prepare._B1_BANK_SCALE for value in source[name][identity_end:]]
+            )
+        self.assertTrue(changed_after_hammer)
+
     def test_committed_piano_round_robins_are_distinct_or_declared_single_take(self):
         sample_dir = os.path.join(
             prepare.REPO_ROOT, "crates", "ferrosintesis-samples-core", "samples"

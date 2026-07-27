@@ -77,10 +77,18 @@ better microphone would; the pass stays in the archived take under
 2. Slice per note with `tools/b1-slice/slice.py` (channel L only; onset by attack
    steepness; pitch by an inharmonic partial fit). The hard take's top B7 is
    force-assigned by ladder position — the top-octave detector cannot pitch it.
-3. Per assigned slice: **20 Hz 4th-order Butterworth high-pass** (kills the DR-05's
+3. Retire the soft pass and require the exact shipped inventory—25 normal plus
+   27 hard zones—before writing any output.
+4. Per retained slice: **20 Hz 4th-order Butterworth high-pass** (kills the DR-05's
    2–5 Hz infrasonic rumble + DC) on the 48 kHz signal; band-limited resample to
    44.1 kHz; `trim_to_onset` keeps the onset + **1.5 s** of body (0.6 s squared
-   fade-out), peak-normalised to 0.9; 16-bit mono.
+   fade-out), peak-normalised to 0.9.
+5. Preserve the first 30 ms waveform shape, then apply a deterministic static
+   envelope which fits the 50–75 ms complementary handoff to the acoustic model's
+   expected modal power. Relax the envelope back to unity by 125 ms, constrain
+   positive shaping to 0.9 peak, and store the whole bank at 0.25 scale for
+   headroom. The fixed 5.20 runtime gain restores the established 1.30 audible
+   hammer gain. Write 16-bit mono in sorted filename order.
 
 `root` (in `crates/ferrosintesis/src/sampler.rs`) is each slice's **measured first
 partial f1**, so the note plays at exact equal temperament while its recorded

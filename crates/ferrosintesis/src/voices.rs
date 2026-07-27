@@ -1200,18 +1200,21 @@ pub(crate) enum PianoSampleCal {
     LegacyNormalized,
     /// The B1 upright, GM0's default since 2026.07.26.
     ///
-    /// Peak-normalized like [`LegacyNormalized`](PianoSampleCal::LegacyNormalized),
-    /// but it cannot share that calibration, because make-up gain is not really a
-    /// statement about peak level — it is what balances a recording's onset against
-    /// the modelled body underneath it. On `LegacyNormalized`'s 0.90 the B1's
+    /// Its source slices begin peak-normalized, then the bank is statically
+    /// conditioned and uniformly scaled for headroom. It cannot share the legacy
+    /// calibration because make-up gain is not really a statement about peak level —
+    /// it balances a recording's onset against the modelled body underneath it. On
+    /// `LegacyNormalized`'s 0.90 the B1's
     /// recorded hammer sits BELOW its own model: a held note peaked at the attack,
     /// decayed ~5 dB by 400 ms, then swelled back ABOVE the attack by 800 ms as the
     /// crossfade handed over. Pianos decay monotonically; that swell was audible and
     /// wrong. It went unnoticed while the B1 was a CC0 alternate because the
     /// attack-is-the-peak and gap-release oracles only ever probed the DEFAULT slot.
     ///
-    /// 1.30 is measured, and it sits in a NARROW window — which is the part worth
-    /// knowing. Gain trades two properties against each other:
+    /// The audible 1.30 is measured, and it sits in a NARROW window — which is the
+    /// part worth knowing. The bank is stored at 0.25 scale to leave shaping
+    /// headroom, so the runtime constant is 5.20 and their product remains 1.30.
+    /// Audible gain trades two properties against each other:
     ///
     /// * too low and the model outruns the hammer (the swell above). Below ~1.2 the
     ///   envelope peak leaves the attack window.
@@ -1225,16 +1228,11 @@ pub(crate) enum PianoSampleCal {
     /// window: the most attack-peak margin available without losing gap behaviour.
     /// Swept over keys 36/48/60/72/84 x vel 40/64/100/120.
     ///
-    /// The sample retirement stays at the conditioned bank's SHORT 0.18-0.45 s
-    /// below C♯6; lengthening it to 0.55/0.65/0.75 s made both properties worse.
-    /// MM-BUG-KILN-00130 found the remaining ~5-9 dB trough was also a phase
-    /// mismatch: sample/model correlation measured −0.64..−0.87 before the seam,
-    /// then turned positive. `wrap_release_b1` therefore flips the inaudible sample
-    /// polarity, uses a register-matched modeled rise, and freezes that ratio at key-up.
-    /// MM-BUG-KILN-00133 made the overlap phase-robust across the engine's
-    /// per-note modeled phases, and retires the faster-decaying C♯6+ recordings
-    /// over 0.12-0.30 s. The held-note rebound is now at most 1.5 dB without
-    /// losing either variation or the damper gap.
+    /// MM-BUG-KILN-00130/00133 found the longer handoff's remaining trough and
+    /// shimmer came from changing sample/model phase plus an adaptive gain stage.
+    /// The B1 now uses VSCO's static complementary wrapper over 0.05-0.075 s:
+    /// the recorded hammer owns the first 50 ms, then the randomized model owns
+    /// the sustain before their phase relationship can modulate the envelope.
     B1Upright,
 }
 
@@ -1461,12 +1459,10 @@ const GM0_FORTE_LAYER_GAIN: f32 = 0.569;
 /// B1 upright make-up gain — see [`PianoSampleCal::B1Upright`] for the derivation
 /// and, more importantly, for why the usable window is only about 1.2-1.3 wide.
 /// Swept, not guessed: 0.90 leaves the model outrunning the recorded hammer.
-const B1_SAMPLE_GAIN: f32 = 1.30;
-/// The B1 recording decays faster than the model. Its established bass/mid
-/// window preserves the recorded identity; only C♯6+ needs earlier retirement
-/// before the much faster treble decay can expose a trough.
-const B1_SAMPLE_FADE: (f32, f32) = (0.18, 0.45);
-const B1_TREBLE_SAMPLE_FADE: (f32, f32) = (0.12, 0.30);
+const B1_SAMPLE_GAIN: f32 = 5.20;
+/// Keep the recorded sample as sole owner for 50 ms, then hand over quickly enough that
+/// the uncorrelated recording and randomized model cannot form a moving trough.
+const B1_SAMPLE_FADE: (f32, f32) = (0.05, 0.075);
 fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32, release_t60: f32) -> Modal {
     let f = key_freq(key);
     let v = vel_amp(vel);
@@ -13891,30 +13887,14 @@ pub fn acoustic_grand_with_bank(
         model
     };
     if !bank.is_empty() {
-        // Envelope conditioning preserves the upright's cross-zone body trend,
-        // which puts its high-register peaks below the independently normalised
-        // legacy banks. Match that conditioned bank back to the unchanged model
-        // so the hammer remains the peak instead of blooming into the model.
-        //
-        // This is a statement about how the PCM was baked, nothing more. The
-        // damper is chosen independently by the caller.
+        // Match each bank's bake level and usable attack length to the unchanged
+        // model. The damper remains an independent caller choice.
         let (gain, fade) = match cal {
             PianoSampleCal::Gm0Conditioned => (GM0_SAMPLE_GAIN * layer_gain, GM0_SAMPLE_FADE),
-            PianoSampleCal::B1Upright => (
-                B1_SAMPLE_GAIN,
-                if key >= 85 {
-                    B1_TREBLE_SAMPLE_FADE
-                } else {
-                    B1_SAMPLE_FADE
-                },
-            ),
+            PianoSampleCal::B1Upright => (B1_SAMPLE_GAIN, B1_SAMPLE_FADE),
             PianoSampleCal::LegacyNormalized => LA_PIANO,
         };
-        if cal == PianoSampleCal::B1Upright {
-            crate::sampler::LaVoice::wrap_release_b1(model, bank, key, vel, sr, gain, fade, la_t60)
-        } else {
-            crate::sampler::LaVoice::wrap_release(model, bank, key, vel, sr, gain, fade, la_t60)
-        }
+        crate::sampler::LaVoice::wrap_release(model, bank, key, vel, sr, gain, fade, la_t60)
     } else {
         model
     }

@@ -1735,8 +1735,8 @@ fn b1_hard_zones() -> &'static [Zone] {
 /// one sample re-EQ'd. Loudness still comes from the engine's shared velocity
 /// law; the layer only supplies timbre. Split: `vel < 60` normal, `>= 60` hard.
 /// `rr2` is ignored (no round robins in v1). Its modeled partner retains per-note
-/// phase variation; the B1-specific wrapper makes their handoff robust to that
-/// changing correlation (MM-BUG-KILN-00133).
+/// phase variation; the short static handoff retires the recording before that
+/// changing correlation can modulate the sustain (MM-BUG-KILN-00133).
 /// Voices the GM 0 DEFAULT (CC0=0) since 2026.07.26; it was the CC0=5 alternate.
 ///
 /// A third `soft` capture was recorded and dropped (2026.07.24). Measured
@@ -3644,7 +3644,6 @@ impl LaVoice {
         };
         let fade_start = (fade.0 * sr) as usize;
         let fade_end = (fade.1 * sr) as usize;
-        let b1_model_fade_end = 2 * fade_start / 3;
         Ok(LaVoice {
             sustain,
             zone,
@@ -3731,7 +3730,7 @@ impl Voice for LaVoice {
             let mut sample_raw = 0.0;
             let mut s = model_raw * model_weight;
             let j = self.pos as usize;
-            if t >= self.start && blend_t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
+            if t >= self.start && t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
                 sample_live = true;
                 let frac = self.pos - j as f32;
                 // 4-point cubic read (edge-clamped): linear interpolation dulls
@@ -3790,9 +3789,6 @@ impl Voice for LaVoice {
                     self.vel_lp += (v - self.vel_lp) * self.vel_lp_a;
                     v = self.vel_lp;
                 }
-                if self.b1_phase_robust_fade {
-                    v = -v;
-                }
                 if self.end_taper > 0.0 {
                     // graceful dry-out (review C8): fade as the read nears
                     // the zone's last frames — exactly 1.0 (bit-transparent)
@@ -3802,43 +3798,12 @@ impl Voice for LaVoice {
                     let remaining_src = n as f32 - 2.0 - self.pos;
                     v *= (remaining_src / (self.end_taper * self.step.max(1e-6))).clamp(0.0, 1.0);
                 }
-                if self.b1_phase_robust_fade {
-                    sample_raw = v * self.gain * self.rel_gain;
-                } else {
-                    // Preserve the established operation order bit-for-bit for
-                    // every general LA wrapper. Reassociation here moved every
-                    // sampled voice in the corpus during MM-BUG-KILN-00133.
-                    s += v * (1.0 - u) * self.gain * self.rel_gain;
-                }
+                // Preserve the established operation order bit-for-bit for every
+                // general LA wrapper. Reassociation here moved every sampled voice
+                // in the corpus during MM-BUG-KILN-00133.
+                s += v * (1.0 - u) * self.gain * self.rel_gain;
                 self.rel_gain *= self.rel_mul;
                 self.pos += self.step;
-            }
-            if self.b1_phase_robust_fade {
-                s = model_raw * model_weight + sample_raw * (1.0 - u);
-                let a = self.b1_power_alpha;
-                self.b1_sample_power += a * (sample_raw * sample_raw - self.b1_sample_power);
-                self.b1_model_power += a * (model_raw * model_raw - self.b1_model_power);
-                self.b1_cross_power += a * (sample_raw * model_raw - self.b1_cross_power);
-
-                let sample_weight = 1.0 - u;
-                let actual_power = sample_weight * sample_weight * self.b1_sample_power
-                    + model_weight * model_weight * self.b1_model_power
-                    + 2.0 * sample_weight * model_weight * self.b1_cross_power;
-                let target_power = sample_weight * sample_weight * self.b1_sample_power
-                    + model_weight * model_weight * self.b1_model_power
-                    + B1_TARGET_CROSS_COEFF
-                        * sample_weight
-                        * model_weight
-                        * (self.b1_sample_power * self.b1_model_power).sqrt();
-                if actual_power > 1e-16 && target_power > 0.0 {
-                    // Normalize to a fixed weak-coherence target: lift
-                    // destructive overlap and trim strongly constructive
-                    // overlap without making the handoff quieter than its two
-                    // owners. The bounds prevent a momentary near-null or
-                    // near-lock from turning numerical residue into an impulse.
-                    let compensation = (target_power / actual_power).sqrt().clamp(0.5, 3.0);
-                    s *= compensation;
-                }
             }
             *o += s;
         }
@@ -3851,9 +3816,6 @@ impl Voice for LaVoice {
 
     fn note_off(&mut self) {
         self.sustain.note_off();
-        if self.b1_phase_robust_fade {
-            self.fade_hold = Some(self.t);
-        }
         // Apply the configured key-up damping (60 ms T60 for default callers).
         self.rel_mul = self.rel_t60_mul;
     }
@@ -3879,6 +3841,7 @@ impl Voice for LaVoice {
             if self.t < self.fade_end && self.transient_handover.is_none() {
                 self.transient_handover = Some((self.t, self.transient_handover_len));
             }
+            self.rel_mul = self.rel_t60_mul;
             true
         } else {
             false
@@ -3947,7 +3910,6 @@ impl Voice for LaVoice {
         // burst articulates every stroke, decorrelated per stroke by
         // construction.
         if self.sustain.retrigger(key, vel) {
-            self.fade_hold = None;
             self.rel_mul = self.rel_t60_mul;
             true
         } else {
@@ -9078,6 +9040,69 @@ mod tests {
         )
     }
 
+    fn explicit_b1_voice(key: u8, vel: u8, sr: f32, seed: u32, samples: bool) -> Box<dyn Voice> {
+        let source = voices::GM0_SOURCES
+            .iter()
+            .find(|source| source.name == "B1 upright")
+            .expect("GM0 source table lost the B1 upright");
+        let bank = if samples {
+            (source.bank)(vel, seed & 1 == 0)
+        } else {
+            &[]
+        };
+        voices::acoustic_grand_with_bank(bank, key, vel, sr, seed, false, source.voicing())
+    }
+
+    fn literal_static_b1_voice(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
+        let source = voices::GM0_SOURCES
+            .iter()
+            .find(|source| source.name == "B1 upright")
+            .expect("GM0 source table lost the B1 upright");
+        let model =
+            voices::acoustic_grand_with_bank(&[], key, vel, sr, seed, false, source.voicing());
+        let (_, release_t60) = source.voicing().damper.t60_for(key);
+        LaVoice::wrap_release(
+            model,
+            (source.bank)(vel, seed & 1 == 0),
+            key,
+            vel,
+            sr,
+            5.20,
+            (0.05, 0.075),
+            release_t60,
+        )
+    }
+
+    #[test]
+    fn b1_upright_is_exactly_the_literal_static_handoff() {
+        let sr = 44_100.0;
+        for key in [21u8, 60, 85, 108] {
+            for vel in [59u8, 60, 100] {
+                for seed in [0x1357_9BDFu32, 0x6A09_E667] {
+                    let mut shipped = explicit_b1_voice(key, vel, sr, seed, true);
+                    let mut reference = literal_static_b1_voice(key, vel, sr, seed);
+                    let mut shipped_hold = vec![0.0; (0.120 * sr) as usize];
+                    let mut reference_hold = vec![0.0; shipped_hold.len()];
+                    assert_eq!(
+                        shipped.render(&mut shipped_hold),
+                        reference.render(&mut reference_hold)
+                    );
+                    assert_eq!(shipped_hold, reference_hold);
+
+                    shipped.note_off();
+                    reference.note_off();
+                    let mut shipped_release = vec![0.0; (0.500 * sr) as usize];
+                    let mut reference_release = vec![0.0; shipped_release.len()];
+                    assert_eq!(
+                        shipped.render(&mut shipped_release),
+                        reference.render(&mut reference_release)
+                    );
+                    assert_eq!(shipped_release, reference_release);
+                }
+            }
+        }
+    }
+
     /// How far the MEASURED release may sit from the damper curve's own prediction.
     ///
     /// Not free parameters: calibrated against measured renders, then left with just
@@ -9470,22 +9495,30 @@ mod tests {
         );
     }
 
-    /// MM-BUG-KILN-00130/00133: the B1 upright's recorded body decays faster
-    /// than the modeled body during the handoff. A scalar gain can keep the
-    /// attack above the eventual sustain, but it cannot stop the envelope
-    /// falling into a phase-dependent trough and then swelling back.
+    /// MM-BUG-KILN-00130/00133: the B1 recording and randomized model can form
+    /// a phase-dependent trough during a long handoff. The static 50-75 ms
+    /// seam must finish before that overlap becomes a late swell.
     #[test]
     fn b1_upright_handoff_does_not_rebound() {
         if !crate::embedded_samples_available() {
             return;
         }
         let sr = 44_100.0;
-        let window = (0.050 * sr) as usize;
-        for vel in [50u8, 100] {
-            for seed in [5u32, 21, 0x9E37, 0x9E37 ^ 2_654_435_761] {
+        let window = (0.025 * sr) as usize;
+        let mut worst = (
+            f32::NEG_INFINITY,
+            0u8,
+            0u8,
+            0u32,
+            0.0f32,
+            0.0f32,
+            Vec::new(),
+        );
+        for vel in [50u8, 59, 60, 100] {
+            for seed in [0x1357_9BDFu32, 0x6A09_E667, 0x9E37_79B9, 0xD1B5_4A35] {
                 for key in 21u8..=108 {
                     let render_rebound = |samples| {
-                        let mut voice = voices::make(0, key, vel, sr, seed, samples);
+                        let mut voice = explicit_b1_voice(key, vel, sr, seed, samples);
                         let mut out = vec![0.0; (0.700 * sr) as usize];
                         assert!(
                             voice.render(&mut out),
@@ -9494,9 +9527,9 @@ mod tests {
                         );
                         let rms: Vec<f32> =
                             out.chunks_exact(window).map(crate::testutil::rms).collect();
-                        let rebound_db = (3..9)
+                        let rebound_db = (2..11)
                             .map(|i| {
-                                let later = rms[i + 1..14].iter().copied().fold(0.0f32, f32::max);
+                                let later = rms[i + 1..20].iter().copied().fold(0.0f32, f32::max);
                                 20.0 * (later / rms[i].max(1e-12)).log10()
                             })
                             .fold(f32::NEG_INFINITY, f32::max);
@@ -9508,16 +9541,98 @@ mod tests {
                     // model beats slightly more, the sampled handoff must add
                     // no meaningful rebound of its own.
                     let limit = 1.5f32.max(model_rebound + 0.5);
-                    assert!(
-                        rebound_db <= limit,
-                        "B1 upright key {key} vel {vel} seed {seed} rebounds \
-                         {rebound_db:.2} dB after its crossfade trough \
-                         versus {model_rebound:.2} dB model-only (limit \
-                         {limit:.2} dB; 50 ms RMS: {rms:?})"
-                    );
+                    let excess = rebound_db - limit;
+                    if excess > worst.0 {
+                        worst = (excess, key, vel, seed, rebound_db, model_rebound, rms);
+                    }
                 }
             }
         }
+        let (excess, key, vel, seed, rebound_db, model_rebound, rms) = worst;
+        println!(
+            "B1 upright worst rebound: key {key} vel {vel} seed {seed}, \
+             wrapped {rebound_db:.2} dB, model-only {model_rebound:.2} dB, \
+             allowance margin {excess:.2} dB"
+        );
+        assert!(
+            excess <= 0.0,
+            "B1 upright worst case: key {key} vel {vel} seed {seed} rebounds \
+             {rebound_db:.2} dB after its crossfade trough versus \
+             {model_rebound:.2} dB model-only ({excess:.2} dB over the allowed \
+             limit; 25 ms RMS: {rms:?})"
+        );
+    }
+
+    /// Key-up must not introduce its own swell at any ownership phase. Before
+    /// 50 ms the held voice can still rise normally as its static handoff
+    /// approaches, so compare release with an identical held control there.
+    /// From the seam onward, retain the absolute 1.5 dB rise cap as well.
+    #[test]
+    fn b1_release_is_stable_before_during_and_after_the_handoff() {
+        let sr = 44_100.0;
+        let mut worst_absolute = (f32::NEG_INFINITY, 0u8, 0u8, 0.0f32);
+        let mut worst_vs_held = (f32::NEG_INFINITY, 0u8, 0u8, 0.0f32);
+        for key in [60u8, 91] {
+            for vel in [59u8, 60] {
+                // Before, boundary, midpoint, and end of the 50-75 ms handoff,
+                // followed by representative post-handoff releases.
+                for hold_s in [0.040f32, 0.050, 0.0625, 0.075, 0.100, 0.3125, 0.550] {
+                    let mut voice = explicit_b1_voice(key, vel, sr, 0x6A09_E667, true);
+                    let mut held_control = explicit_b1_voice(key, vel, sr, 0x6A09_E667, true);
+                    let hold_len = (hold_s * sr) as usize;
+                    let window = (0.020 * sr) as usize;
+                    let mut held = vec![0.0; hold_len];
+                    let mut control_prefix = vec![0.0; hold_len];
+                    assert!(voice.render(&mut held));
+                    assert!(held_control.render(&mut control_prefix));
+                    assert_eq!(held, control_prefix);
+                    let before = crate::testutil::rms(&held[hold_len - window..]);
+                    voice.note_off();
+                    let mut released = vec![0.0; (0.250 * sr) as usize];
+                    let mut control_tail = vec![0.0; released.len()];
+                    voice.render(&mut released);
+                    held_control.render(&mut control_tail);
+                    let release_windows: Vec<f32> = released
+                        .chunks_exact(window)
+                        .take(4)
+                        .map(crate::testutil::rms)
+                        .collect();
+                    let held_windows: Vec<f32> = control_tail
+                        .chunks_exact(window)
+                        .take(4)
+                        .map(crate::testutil::rms)
+                        .collect();
+                    let after_peak = release_windows.iter().copied().fold(0.0f32, f32::max);
+                    let rise_db = 20.0 * (after_peak / before.max(1e-12)).log10();
+                    if hold_s >= 0.050 && rise_db > worst_absolute.0 {
+                        worst_absolute = (rise_db, key, vel, hold_s);
+                    }
+                    let vs_held_db = release_windows
+                        .iter()
+                        .zip(&held_windows)
+                        .map(|(&released, &held)| 20.0 * (released / held.max(1e-12)).log10())
+                        .fold(f32::NEG_INFINITY, f32::max);
+                    if vs_held_db > worst_vs_held.0 {
+                        worst_vs_held = (vs_held_db, key, vel, hold_s);
+                    }
+                }
+            }
+        }
+        let (rise_db, key, vel, hold_s) = worst_absolute;
+        println!(
+            "B1 upright worst seam-or-later release rise: key {key} vel {vel}, \
+             note-off at {hold_s:.4}s, {rise_db:.2} dB"
+        );
+        assert!(
+            rise_db <= 1.5,
+            "B1 key {key} vel {vel} note-off at {hold_s:.4}s rises {rise_db:.2} dB"
+        );
+        let (vs_held_db, key, vel, hold_s) = worst_vs_held;
+        assert!(
+            vs_held_db <= 0.01,
+            "B1 key {key} vel {vel} note-off at {hold_s:.4}s exceeds its held \
+             control by {vs_held_db:.2} dB"
+        );
     }
 
     /// GM 7 clavinet routing (2026.07.17): the DEFAULT bank is the sampled voice,

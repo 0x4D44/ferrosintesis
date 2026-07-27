@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00146-run-fix-20260726T233602Z-p9812-n603751900-c22-code-1785109987884
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high) -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T233602Z-p9812-n603751900-c22 branch=task/bug-MM-BUG-KILN-00146-run-fix-20260726T233602Z-p9812-n603751900-c22 code=c88cf5fef2fa gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T233602Z-p9812-n603751900-c22 branch=task/bug-MM-BUG-KILN-00146-run-fix-20260726T233602Z-p9812-n603751900-c22 code=18aee0928a6993f74372779ef6b48b9d7be985b8 gate=focused+render-diff model=codex@xhigh)
 
 ## Observation
 
@@ -30,7 +30,7 @@ Root cause: bowing hard in a SHORT loop drives the waveguide off its fundamental
 
 **2. Why nobody saw it.** `bowed_string_wolf_band_holds_fundamental` asserts that 'every per-note seed must settle onto the requested fundamental', using seeds 7/17/23. All three are small, and `Rng::new` (crates/ferrosintesis/src/dsp.rs) seeds xorshift32 raw — its first output from a small seed is ~= -1.0, so `u = white()*0.5+0.5` ~= 0.0 and bow force collapses onto 2.2003..2.2010 out of 2.2-2.9. The gate tested ONE bow force three times, on the single axis this waveguide fails on.
 
-The engine is unaffected: it hands out `0xBA60 ^ (index * 2654435761)` (crates/ferrosintesis/src/engine.rs:2207), a Knuth hash whose outputs are well spread, so real playback genuinely varies bow force. The gates were weaker than production, not stricter.
+The engine is unaffected: melodic notes use `0x9E37 ^ (index * 2654435761)`, a Knuth-hashed stream whose outputs are well spread, so real playback genuinely varies bow force. The gates were weaker than production, not stricter.
 
 **Fix on branch** `task/20260726-TSK-HUM-spike-bowedstring-in-fiddle-register-key`: a bow-force ceiling over the cello's top few semitones (its `beta` cannot move — 0.140 is what holds its own 46-50 band), plus five per-program register gates (`bowed_string_{violin,viola,cello,contrabass,fiddle}_holds_register`) that use the engine's seed formula and let `slope` draw naturally, and `calibrate_register_gate_catches_the_known_wolf` which asserts each lever fails when removed.
 
@@ -38,25 +38,38 @@ The engine is unaffected: it hands out `0xBA60 ^ (index * 2654435761)` (crates/f
 
 ## Fix
 
-<unfixed — raised only>
+Current trunk already carries both behavioral stabilizers: the cello's top-register
+bow-force ceiling and MM-BUG-KILN-00029's joint bow-speed/pressure map. This fix makes
+the register oracle follow that shipping path instead of copying a stale seed formula:
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260726T233602Z-p9812-n603751900-c22 code=c88cf5fef2fa gate=cargo)
+- `engine::note_voice_seed` is now the single source of truth for melodic note seeds.
+- The register seed set proves its raw first draw reaches hard bow force before the
+  low-string playable-region map intentionally converges high-velocity pressure to 2.60.
+- Cello and contrabass register gates walk velocities 32/64/96/127 across their full
+  compasses. Violin, viola and fiddle retain their register-only velocity-100 scope.
+- The calibration oracle reconstructs the excluded high-speed/high-force corner and
+  proves the pitch oracle still detects the original failure family.
 
-Agent-reported summary: Fixed MM-BUG-KILN-00146 in the BowedString cello register path. I reproduced the original recorded observation by temporarily disabling the cello bow-force ceiling; the focused regression failed on GM42 keys 74 and 76 at about +1203 cents with the old seed stream. After tying the regression to the current production note-seed helper, it exposed the same hard-bow octave lock one semitone lower, so the cello ceiling now starts at key 71. The final tree keeps the top-note ceiling at 2.55 and verifies the sampled production seed set includes a hard-bow draw. The focused cello regression and calibration test are green.
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T233602Z-p9812-n603751900-c22 code=18aee0928a6993f74372779ef6b48b9d7be985b8 gate=focused+render-diff)
 
-Root cause: GM42 cello uses a short BowedString waveguide loop that can mode-lock onto the octave when a high per-note bow-force draw occurs in the upper register. The previous wolf-band test used small literal seeds that collapsed bow force to the bottom of the range, and the later register oracle copied a stale seed formula rather than the current Engine note seed stream.
+Agent-reported summary: Fixed MM-BUG-KILN-00146 by tying every BowedString register oracle to the engine's actual melodic note-seed helper and exercising the low-string velocity-dependent control map. Current trunk's cello force ceiling and MM-BUG-KILN-00029 joint controls already remove the shipping octave-lock corner, so this branch preserves the voicing byte-for-byte while repairing the stale coverage. All five register gates, the known-wolf calibration, both clippy configurations, and the full catalog render comparison are green.
+
+Root cause: GM42 cello uses a short BowedString waveguide loop that can mode-lock onto the octave at the high-speed/high-force corner. The previous wolf-band test used small literal seeds that collapsed force to the bottom of its range, while the later register oracle copied a stale seed formula and only tested velocity 100. Subsequent MM-BUG-KILN-00029 controls made that one-velocity seed assertion additionally misleading by intentionally converging every high-velocity low-string draw to stable force 2.60.
 
 Changed:
-- crates/ferrosintesis/src/engine.rs: added a crate-visible note_voice_seed helper and reused the common seed step in note and bagpipe-drone seed generation.
-- crates/ferrosintesis/src/voices.rs: started the GM42 cello bow-force taper at key 71, switched BowedString register tests to the engine seed helper, and added a
+- crates/ferrosintesis/src/engine.rs: added the crate-visible `note_voice_seed` source of truth and reused the common Knuth step without changing generated seed bits.
+- crates/ferrosintesis/src/voices.rs: switched BowedString tests to the engine seed helper, separated raw seed-span coverage from post-control pressure, and exercised GM42/43 across four velocities.
+- scratchpad.md: parked the separately discovered GM40/41/110 velocity-127 octave locks for independent triage.
 
 Tests:
-- cargo test -p ferrosintesis --release bowed_string_cello_holds_register
-- cargo test -p ferrosintesis --release calibrate_register_gate_catches_the_known_wolf
-- Pre-fix reproduction: with the cello ceiling temporarily disabled, the old-seed regression failed on GM42 keys 74 and 76 at about +1203 cents; after the product
+- `$null | deltic timeout 600 cargo test -p ferrosintesis --release holds_register -- --nocapture` (five passed).
+- `$null | deltic timeout 600 cargo test -p ferrosintesis --release calibrate_register_gate_catches_the_known_wolf -- --nocapture` (passed).
+- `$null | deltic timeout 300 cargo clippy -p ferrosintesis --all-targets -- -D warnings` (passed).
+- `$null | deltic timeout 300 cargo clippy -p ferrosintesis --all-targets --no-default-features -- -D warnings` (passed).
+- `python tools/render-diff/render_diff.py --baseline D:\worktrees\midi-music\BASELINE-00146\target\release\ferrosintesis.exe --new .\target\release\ferrosintesis.exe --program 42 --rate 8000 --jobs 6`: 0 changed, 73 expected same, 0 contamination, 51 expected not-reached because production behavior is intentionally bit-identical.
+- The same render diff with `--glob "demos/**/*.mid"`: 0 changed, 14 expected same, 0 contamination, 3 expected not-reached.
 
 Left alone:
-- bugs/
 - Cargo.toml
 - Cargo.lock
 

@@ -15,12 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34-code-1785114834940
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=35fb4231414e gate=cargo model=codex@xhigh)
-  instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target)
-  → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target) → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=5d56f6f83bd9b5522b8ff1ba387fea91c7e38753 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -130,22 +128,57 @@ Closed, for independent listening verification.
 
 ## Fix
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T005703Z-p9812-n849374900-c34 code=35fb4231414e gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T005703Z-p9812-n849374900-c34 code=5d56f6f83bd9b5522b8ff1ba387fea91c7e38753 gate=cargo)
 
-Agent-reported summary: Fixed MM-BUG-KILN-00038 by giving GM61 Brass Section modeled per-player timbre identities instead of adding a sample layer. The original observation was reproduced: the existing GM61 sample-on/sample-off test passed, proving it was model-only, and the new fail-first oracle measured all isolated players as near-clones with profile spreads of 1.000 before the fix. The final model keeps five deterministic section players but gives each player seed-rotated exciter, bore/formant, bell/output, pressure, cascade, and breath-noise variation before summing. The new regression is green and the existing focused brass and sample-routing guards remain green. I left the bug ledger, Cargo manifests, git st
+GM61 remains a five-player, sample-free modeled section. Each player now carries
+a seed-rotated identity through the lip/exciter cutoff and nonlinear drive,
+bore/formant centres and gains, bell/output radiation, pressure response, and
+independent filtered breath before the players are summed. The fixed identity
+set contains balanced warm, neutral, and bright players; the seed changes their
+seat assignment without changing the section's overall population.
 
-Root cause: GM61 used five players but drove them through shared lip cutoff, shaper drive/bias, bore/formant EQ, bell/output filtering, and shared breath noise after summing; only onset, detune, vibrato, and drift varied, so same-note players were timbre clones and the section read synthetic.
+The first candidate leaked GM61's 0.24×sample-rate source-filter clamp into
+GM62/63 synth brass. The final constructor and render paths explicitly contain
+the identity work to GM61. Fresh release renders of GM56–60 and GM62/63 are
+byte-identical to trunk; GM61 alone changes. No sample asset, dependency, level
+trim, or version change was added.
 
-Changed:
-- crates/ferrosintesis/src/voices.rs: added GM61 per-player section identities and moved GM61 bore/bell/output/breath variation before the player sum
-- crates/ferrosintesis/src/voices.rs: added brass_o18_section_players_have_individual_timbres regression oracle
+The strengthened regression removes detune, onset scatter, vibrato, drift, and
+both shared and per-player breath before isolating each player. The five
+steady-state spectral profiles span 1.525× in upper/body energy, 3.793× in
+bell/body energy, and 1.388× in centroid. Every pair remains distinct. Their
+combined identity envelope spans 889.0 Hz while the largest within-player
+centroid drift is 0.1 Hz. The identity set is invariant across seeds, while the
+existing onset-scatter and same-seed determinism oracle remains green. The
+velocity/expression, pitch, finite-output, solo/synth distance, and detune-cap
+guards also pass.
 
-Tests:
-- $null | deltic timeout 120 cargo test -p ferrosintesis brass_section_61_skips_sample_layer -- --nocapture (pre-fix reproduction: passed)
-- $null | deltic timeout 120 cargo test -p ferrosintesis brass_o18_section_players_have_individual_timbres -- --nocapture (failed before fix; passed after fix)
-- $null | deltic timeout 180 cargo test -p ferrosintesis brass_o -- --nocapture (19 passed)
-- $null | deltic timeout 120 cargo test -p ferrosintesis brass_living_breath_scope_and_inertness -- --nocapture (passed)
-- git diff --check (passed; Git emitted only an LF/CRLF working-copy warning)
+The optimized direct render-cost oracle compares the final per-player path with
+the same five-player preset on the previous shared-filter path. It measured
+6.573 s versus 6.568 s (1.001×), within the 1.25× ceiling. The 12-note M-CAL v3
+probe measured raw integrated loudness of −40.58 LUFS versus trunk's −41.13
+LUFS, a +0.55 LU change. Applied to the certified −1.15 dB residual, the
+candidate is approximately −0.60 dB from target, so the existing `amp` remains
+correct. Raw peak is 0.0615, below the 0.30 glue ceiling.
 
-Left alone:
-- bugs/ ledger
+Focused validation:
+
+- `cargo fmt --all -- --check`
+- `cargo test -p ferrosintesis brass_o -- --nocapture` — 20 passed, one manual
+  performance oracle ignored
+- `cargo test -p ferrosintesis brass_section_61_skips_sample_layer -- --nocapture`
+- `cargo test -p ferrosintesis brass_living_breath_scope_and_inertness -- --nocapture`
+- `cargo test --release -p ferrosintesis brass_o18_render_cost_budget -- --ignored --nocapture`
+- `cargo clippy -p ferrosintesis --all-targets -- -D warnings`
+- `cargo clippy -p ferrosintesis --all-targets --no-default-features -- -D warnings`
+- release no-sample renders of GM56–60 and GM62/63 — SHA-256-identical to
+  trunk; GM61 changed
+
+Fresh final release binaries produced complete 11,025 Hz render inventories.
+Twenty-five of 124 album MIDIs and four of 17 demos changed, all because they
+use GM61. The other 112 tracks stayed byte-identical. Both inventories report
+zero contamination and zero not-reached tracks.
+
+Independent low/mid/high and M-CAL listening evidence is under
+`C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00038-candidate`. It contains
+raw and level-matched trunk/candidate WAVs plus the exact MIDI and plan files.

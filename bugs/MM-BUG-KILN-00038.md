@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00038 — GM61 Brass Section has no LA sample layer (pure 5-player waveshaper) and reads synthetic
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34-code-1785114834940
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=35fb4231414e gate=cargo model=codex@xhigh)
   instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target)
   → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research)
 
@@ -127,3 +127,25 @@ The regression oracle must prove:
 After the focused oracle passes, run the required full catalog render diff and
 audition low, middle, and high GM61 notes. Land the fix as **Fixed**, not
 Closed, for independent listening verification.
+
+## Fix
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T005703Z-p9812-n849374900-c34 code=35fb4231414e gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00038 by giving GM61 Brass Section modeled per-player timbre identities instead of adding a sample layer. The original observation was reproduced: the existing GM61 sample-on/sample-off test passed, proving it was model-only, and the new fail-first oracle measured all isolated players as near-clones with profile spreads of 1.000 before the fix. The final model keeps five deterministic section players but gives each player seed-rotated exciter, bore/formant, bell/output, pressure, cascade, and breath-noise variation before summing. The new regression is green and the existing focused brass and sample-routing guards remain green. I left the bug ledger, Cargo manifests, git st
+
+Root cause: GM61 used five players but drove them through shared lip cutoff, shaper drive/bias, bore/formant EQ, bell/output filtering, and shared breath noise after summing; only onset, detune, vibrato, and drift varied, so same-note players were timbre clones and the section read synthetic.
+
+Changed:
+- crates/ferrosintesis/src/voices.rs: added GM61 per-player section identities and moved GM61 bore/bell/output/breath variation before the player sum
+- crates/ferrosintesis/src/voices.rs: added brass_o18_section_players_have_individual_timbres regression oracle
+
+Tests:
+- $null | deltic timeout 120 cargo test -p ferrosintesis brass_section_61_skips_sample_layer -- --nocapture (pre-fix reproduction: passed)
+- $null | deltic timeout 120 cargo test -p ferrosintesis brass_o18_section_players_have_individual_timbres -- --nocapture (failed before fix; passed after fix)
+- $null | deltic timeout 180 cargo test -p ferrosintesis brass_o -- --nocapture (19 passed)
+- $null | deltic timeout 120 cargo test -p ferrosintesis brass_living_breath_scope_and_inertness -- --nocapture (passed)
+- git diff --check (passed; Git emitted only an LF/CRLF working-copy warning)
+
+Left alone:
+- bugs/ ledger

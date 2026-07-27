@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** voices / BowedString
 - **Raised:** 2026-07-26
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260727T160401Z-p9812-n403774100-c90
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00146-run-verify-20260727T160401Z-p9812-n403774100-c90
+- **Owner base:** 8c71b557d833a172be2679b2f67db25ab29ae9ab
+- **Owner fingerprint:** sha256:4c316c320d0eefd2058a6262e23832b27a998df3db99a53572b6d316650a6539
+- **Owner since:** 2026-07-27T16:04:01Z
+- **Owner until:** 2026-07-27T16:49:01Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

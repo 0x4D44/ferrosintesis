@@ -15,12 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31-code-1785113803438
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T004001Z-p9812-n387868000-c31 branch=task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31 code=7b4a350acca2 gate=cargo model=codex@xhigh)
-  instrument-audition review; timbre defect confirmed by Fable 5 + Codex gpt-5.6-sol
-  cross-agent reconciliation) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — current trunk still has the measured sparse additive voice, but Arthur must choose a modeled-reed target or approve a sourced LA accordion layer before an audible fix has a correctness target) → Open (2026-07-26, unblocked by Arthur after focused free-reed synthesis research; approved a modeled French-musette source-filter voice rather than a sampled layer)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; timbre defect confirmed by Fable 5 + Codex gpt-5.6-sol cross-agent reconciliation) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — current trunk still has the measured sparse additive voice, but Arthur must choose a modeled-reed target or approve a sourced LA accordion layer before an audible fix has a correctness target) → Open (2026-07-26, unblocked by Arthur after focused free-reed synthesis research; approved a modeled French-musette source-filter voice rather than a sampled layer) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T004001Z-p9812-n387868000-c31 branch=task/bug-MM-BUG-KILN-00036-run-fix-20260727T004001Z-p9812-n387868000-c31 code=e7507829ed648d4e0d492062e3093be489677d80 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -144,22 +142,52 @@ appears.
 
 ## Fix
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T004001Z-p9812-n387868000-c31 code=7b4a350acca2 gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T004001Z-p9812-n387868000-c31 code=e7507829ed648d4e0d492062e3093be489677d80 gate=cargo)
 
-Agent-reported summary: MM-BUG-KILN-00036 is fixed by replacing GM21's old sparse additive organ arm with a modeled musette accordion voice. The new voice uses three detuned band-limited free-reed pulse sources, a short source-brightness opening, an accordion body filter, modest air residual, and decaying upper attack modes. The old private organ(21) arm was removed from the routed path, leaving GM20 and GM23 on their existing organ implementation. Regression tests now prove H5-H12 occupancy, high-key guard-band restraint, body spectral shaping, transient-mode decay, and GM21 fullness versus GM23. The focused accordion test filter is green after a fail-first run reproduced the original sparse-tail and missing-body-
+GM21 now has the approved modeled French-musette source-filter voice. Three
+antialiased free-reed pulses retain the ±16-cent registration, a five-section
+body filter supplies the enclosure response, a velocity-responsive air residual
+and four short upper modes colour the attack, and subtle seeded drift keeps the
+reeds alive. GM20 reed organ and GM23 bandoneon remain on their old paths.
 
-Root cause: GM21 was still implemented as a static H1-H4 sine-stop stack with only token bandpassed reed noise, so it had almost no H5-H12 harmonic tail or accordion body response. The sparse spectrum could meter near the reference while sounding thin, synthetic, and perceptually quiet because the energy occupied too few critical bands.
+The initial candidate's final-output-only body test was insufficient: its richer
+source could have passed without the body filters doing useful work. The final
+oracle lesions the complete body stage from the same seeded source. Measured
+filter gain is +1.47 dB in the 250–620 Hz bed, +3.56 dB at 850–1350 Hz, and
++3.71 dB at 1.8–2.8 kHz, proving non-scalar multi-region shaping.
 
-Changed:
-- crates/ferrosintesis/src/voices.rs: replaced routed GM21 construction with a modeled MusetteAccordion source-filter voice
-- crates/ferrosintesis/src/voices.rs: removed the old organ(21) routed arm while leaving GM20 and GM23 on the existing Organ path
-- crates/ferrosintesis/src/voices.rs: added MM-BUG-KILN-00036 regression oracles for harmonic occupancy, body shaping, transient decay, and GM21-vs-GM23 fullness
+The initial candidate was also 3.82 dB too quiet in the required external
+calibration and violated the existing free-reed peak guard when raised directly.
+A gentle enclosure compression now controls rare three-reed crest alignment,
+and the pre-compression amplitude was then recalibrated. The final 12-note M-CAL
+v3 probe (six keys, velocities 72/110) measures a median ferro–SC-55 gap of
++8.09 dB against the certified +8.13 dB engine offset. All notes are glue-inert
+(worst raw peak 0.0252 versus the 0.30 ceiling), register spread is 2.62 dB, and
+the candidate's integrated raw loudness is 0.67 LU above the old thin voice.
 
-Tests:
-- Fail-first: $null | deltic timeout 240 cargo test -p ferrosintesis --lib accordion_ -- --nocapture (failed on old GM21 with H5-H12/H1-H4 about 0.001 and missing
-- Final: $null | deltic timeout 240 cargo test -p ferrosintesis --lib accordion -- --nocapture (7 passed)
+Focused validation:
 
-Left alone:
-- bugs/ ledger files untouched; Deltic owns the Open to Fixed transition
-- Cargo.toml and Cargo.lock untouched
-- Catalog render-diff and external M-CAL reference rerun were not run in this focused child pass
+- `cargo fmt -p ferrosintesis --check`
+- `cargo clippy -p ferrosintesis --all-targets -- -D warnings`
+- `cargo clippy -p ferrosintesis --all-targets --no-default-features -- -D warnings`
+- `cargo test -p ferrosintesis --lib accordion -- --nocapture` — 9 passed,
+  including H5–H12 occupancy, high-key guard band, body lesion, attack-mode decay,
+  GM21/GM23 fullness and settled-level comparison, family peak/RMS limits, and
+  pitch/trem order independence
+- `cargo test -p ferrosintesis --lib testutil::perceptual_distinctness -- --nocapture`
+  — 11 passed, 2 diagnostic tests ignored
+- `cargo test -p ferrosintesis --lib program_trim_scope_and_calibration -- --nocapture`
+  — passed
+
+Fresh final release binaries produced a complete render-diff at 11,025 Hz. Two
+of 124 album MIDIs and three of 17 demos changed, all because they use GM21.
+The other 136 tracks stayed byte-identical; both inventories report zero
+contamination and zero not-reached tracks.
+
+Independent listening evidence is under
+`C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00036-candidate`. It contains the
+probe MIDI/plan, raw baseline/candidate/SC-55 renders, and conventional
+`baseline_levelmatched.wav`, `candidate_levelmatched.wav`, and
+`sc55_levelmatched.wav`. The three listening files use scalar-only gain and
+measure −18.1/−18.0/−18.0 LUFS respectively, so loudness does not disclose the
+candidate while its real envelope and spectrum remain intact.

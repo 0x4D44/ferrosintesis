@@ -9482,8 +9482,8 @@ impl Voice for Bowed {
 /// instrument's identity is in the *time domain*. Here every partial comes
 /// from one coupled oscillator locked to the fundamental, so the tone fuses by
 /// construction, and the stick-slip nonlinearity gives it the living,
-/// slightly-irregular motion a static spectrum cannot fake. Contrabass-only
-/// (default GM 43); the Codex per-program `Bowed` set is the CC0 alt bank.
+/// slightly-irregular motion a static spectrum cannot fake. The Codex
+/// per-program `Bowed` set is the CC0 alt bank.
 pub struct BowedString {
     bridge: DelayLine, // bow -> bridge -> bow section
     neck: DelayLine,   // bow -> nut -> bow section
@@ -9513,6 +9513,13 @@ pub struct BowedString {
     bow_noise: f32,            // per-note grit level — no two bows are identical
     scratch: f32,              // decaying attack "catch" intensity (the bite before the tone)
     scratch_k: f32,            // its per-sample decay
+    trem_rate: f32,            // GM44 bow-direction reversal rate; 0.0 elsewhere
+    trem_rate_cur: f32,
+    trem_phase: f32,
+    trem_depth: f32,
+    trem_gain: f32,
+    trem_stroke_gain: f32,
+    trem_dir: f32,
     drift: Drift,              // slow human pitch wander (intonation is never dead-steady)
     amp_follow: f32,           // output magnitude follower, for the release tail
     refl_sustain: f32,         // bridge-filter cutoff while bowed (register brightness)
@@ -9780,6 +9787,10 @@ fn string_voicing(program: u8) -> StringVoicing {
             grit_hz: (1900.0, 1700.0), // 1.9-3.6 kHz: a rosinier, brighter scrape
             ..VIOLIN
         },
+        // GM 44 Tremolo Strings: base the physical model on the violin-family
+        // waveguide the old `Bowed(44)` was trying to approximate, then use the
+        // section LA bank at dispatch so the default patch remains a section sound.
+        44 => VIOLIN,
         // The `_` arm is the contrabass, matching the pre-refactor tuple `match`
         // exactly. Keeping it that way is what makes this refactor a no-op for
         // the two shipping programs.
@@ -9849,6 +9860,7 @@ impl BowedString {
     fn new(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Self {
         let f = key_freq(key);
         let mut rng = Rng::new(seed);
+        let vn = vel as f32 / 127.0;
         let voicing = string_voicing(program);
         let StringVoicing {
             body_f,
@@ -9912,6 +9924,14 @@ impl BowedString {
         let vib_depth = voicing.vib_base + voicing.vib_span * u(&mut rng);
         let vib_onset = (voicing.vib_floor + 0.24 * u(&mut rng)) * sr;
         let grit_hz = voicing.grit_hz.0 + voicing.grit_hz.1 * u(&mut rng);
+        let (trem_rate, trem_depth) = if program == 44 {
+            (
+                BOW_TREM_RATE_LO_HZ + BOW_TREM_RATE_VEL_HZ * vn,
+                BOW_TREM_DEPTH_LO + BOW_TREM_DEPTH_VEL * vn,
+            )
+        } else {
+            (0.0, 0.0)
+        };
         let mut s = BowedString {
             bridge: DelayLine::new(bow_line_len(sr, beta)),
             neck: DelayLine::new(bow_line_len(sr, 1.0 - beta)),
@@ -9955,6 +9975,13 @@ impl BowedString {
             scratch,
             // the catch decays over ~45-70 ms into the settled tone
             scratch_k: (-1.0 / (0.055 * sr)).exp(),
+            trem_rate,
+            trem_rate_cur: trem_rate,
+            trem_phase: 0.0,
+            trem_depth,
+            trem_gain: 1.0,
+            trem_stroke_gain: 1.0,
+            trem_dir: 1.0,
             drift: Drift::new(seed ^ 0x2BED_51CE, 0.0018, (0.05 * sr / CTRL as f32) as u32),
             amp_follow: 1.0,
             rng,
@@ -10005,6 +10032,20 @@ impl Voice for BowedString {
                 };
                 let drift = self.drift.next();
                 self.set_freq(self.base_f * self.bend * (1.0 + vib) * (1.0 + drift));
+                if self.trem_rate > 0.0 {
+                    self.trem_phase += self.trem_rate_cur * CTRL as f32 / self.sr;
+                    if self.trem_phase >= 1.0 {
+                        self.trem_phase -= 1.0;
+                        self.trem_dir = -self.trem_dir;
+                        self.scratch = 1.0;
+                        self.trem_stroke_gain = 1.0 + BOW_TREM_AMP_JITTER * self.rng.white();
+                        self.trem_rate_cur =
+                            self.trem_rate * (1.0 + BOW_TREM_JITTER * self.rng.white());
+                    }
+                    let c = (TAU * self.trem_phase).cos();
+                    self.trem_gain = self.trem_stroke_gain
+                        * ((1.0 - self.trem_depth) + self.trem_depth * 0.5 * (1.0 - c));
+                }
                 // the bow lifts on release: the loop loses its energy source and
                 // the string damps faster (darker) as it decays.
                 let refl_hz = if self.env.released() {
@@ -10028,7 +10069,8 @@ impl Voice for BowedString {
             let noise_amt = self.bow_noise * (0.6 + 7.0 * self.scratch);
             // the catch also presses harder — more slip, scratchier — then eases.
             let slope_eff = self.slope * (1.0 + 1.3 * self.scratch);
-            let bow_vel = self.max_vel * e * (1.0 + noise_amt * bow_n);
+            let bow_vel =
+                self.max_vel * self.trem_gain * self.trem_dir * e * (1.0 + noise_amt * bow_n);
             // loop loss: enough per-period loss that the limit-cycle amplitude
             // is set by the balance of bow energy in vs loss out — that is what
             // makes loudness track bow SPEED (dynamics). Heavier once released so
@@ -14000,13 +14042,15 @@ const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     // exponent made the v110->v127 drop worse instead of fixing the model.
     //
     // The violin family 40/41/110 joined the same `BowedString` waveguide on
-    // 2026.07.26 and so acquired the same k ≈ 2.9 — the waveguide's limit-cycle
-    // amplitude tracks bow speed (`max_vel`), adding an excitation slope on top of
+    // 2026.07.26; GM44 joined with its tremolo treatment on 2026.07.27. They
+    // acquired the same extra velocity slope: the waveguide's limit-cycle
+    // amplitude tracks bow speed (`max_vel`), adding excitation on top of
     // `vel_amp`'s square. They are compensated and NOT exempted, because unlike
     // 42/43 their raw curve is strictly MONOTONIC — measured the same way:
     //   GM40  key 60  v64 -21.11  v80 -15.10  v96 -10.01  v110 -6.15  v127 -2.04
     //   GM41  key 60  v64 -21.18  v80 -15.14  v96 -10.05  v110 -6.19  v127 -2.09
     //   GM110 key 60  v64 -22.12  v80 -16.12  v96 -11.03  v110 -7.17  v127 -3.05
+    //   GM44  key 60  rendered k=2.54 before compensation after the tremolo move
     // A scalar exponent is the right tool for a curve that only has the wrong
     // slope, and exempting them would file a correctable deviation under an
     // exemption that exists for an UNcorrectable one. Values from `velocity_census`;
@@ -14015,7 +14059,7 @@ const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     // MM-BUG-KILN-00105 trap does not apply). t[41] carries a KEY-DEPENDENT spread
     // (k 2.662 at key 48 vs 2.960 at key 60) that one exponent cannot flatten; the
     // residual lands at ±0.15, inside the oracle band but named here so it is visible.
-    t[40] = 1.211; t[41] = 1.189; t[110] = 1.230;
+    t[40] = 1.211; t[41] = 1.189; t[44] = 1.460; t[110] = 1.230;
     // Ensembles and the orchestra hit.
     t[48] = 1.842; t[49] = 1.844; t[55] = 2.380;
     // Brass: lip bite and chiff are velocity-driven excitation.
@@ -14730,9 +14774,10 @@ fn make_uncorrected(
         36 => Box::new(Pluck::new(&SLAP, key, vel, sr, seed)),            // B2: thumb slap
         37 => Box::new(Pluck::new(&SLAP_POP, key, vel, sr, seed)),        // B2: bridge pop
         35 => Box::new(Pluck::new(&FRETLESS, key, vel, sr, seed)),
-        // Every solo bowed string — GM 40 violin, 41 viola, 42 cello,
-        // 43 contrabass, 110 fiddle — is the `BowedString` waveguide plus its own
-        // sampled arco onset. The waveguide is the DEFAULT bank; the Codex
+        // Every default-bank arco/tremolo bowed string — GM 40 violin, 41 viola,
+        // 42 cello, 43 contrabass, 44 tremolo strings, 110 fiddle — is the
+        // `BowedString` waveguide plus a sampled arco/section onset. The
+        // waveguide is the DEFAULT bank; the Codex
         // per-program `Bowed` set is the CC0 alt bank (altbank.rs).
         //
         // 40/41/110 moved here from the saw-based `Bowed` on 2026.07.26. That
@@ -14743,12 +14788,13 @@ fn make_uncorrected(
         // followed. Their voicings carry their own MEASURED `loop_comp` and a
         // `beta` of 0.170 (see `string_voicing`).
         //
-        // Sampled onsets are unchanged by the migration. GM 41 keeps its OWN
+        // Sampled solo onsets are unchanged by the migration. GM 41 keeps its OWN
         // viola bank (VSCO Viola Section susvib, CC0, -orchestral2) rather than
         // the solo-violin attack 40 and 110 share — the fix for their
-        // bit-identical first ~380 ms (MM-BUG-KILN-00005). Routing pinned by
-        // `default_bowed_articulations_and_sample_routing`.
-        40 | 41 | 42 | 43 | 110 => {
+        // bit-identical first ~380 ms (MM-BUG-KILN-00005). GM 44 is a section
+        // patch, so it uses the string-section bank instead of the solo-violin
+        // onset. Routing pinned by `default_bowed_articulations_and_sample_routing`.
+        40 | 41 | 42 | 43 | 44 | 110 => {
             let model = Box::new(BowedString::new(program, key, vel, sr, seed));
             if samples {
                 let (gain, fade, bank) = match program {
@@ -14759,6 +14805,11 @@ fn make_uncorrected(
                         LA_CONTRABASS.1,
                         crate::sampler::contrabass_bank(vel),
                     ),
+                    44 => (
+                        LA_STRINGS.0,
+                        LA_STRINGS.1,
+                        crate::sampler::strings_bank(vel),
+                    ),
                     110 => (LA_FIDDLE.0, LA_FIDDLE.1, crate::sampler::violin_bank(vel)),
                     _ => (LA_VIOLIN.0, LA_VIOLIN.1, crate::sampler::violin_bank(vel)),
                 };
@@ -14767,7 +14818,6 @@ fn make_uncorrected(
                 model
             }
         }
-        44 => Box::new(Bowed::new(44, key, vel, sr, seed)),
         45 => Box::new(Pluck::new(&PIZZ, key, vel, sr, seed)),
         // GM 46 harp: LA sampled pluck onset (VCSL Concert Harp, CC0, -orchestral2)
         // crossfaded into the Pluck(&HARP) model — same wrap as the nylon/steel guitars.
@@ -22407,9 +22457,8 @@ mod tests {
         );
     }
 
-    /// Default-bank tremolo and pizzicato are articulation-correct solo proxies
-    /// that skip the sustained violin sample wrapper; the viola (round-2) DOES take
-    /// the LA bowed attack, matching its violin/cello/bass siblings.
+    /// Default-bank tremolo strings uses the bowed-string model plus a section
+    /// sampled onset; pizzicato remains a modeled-only solo articulation.
     #[test]
     fn default_bowed_articulations_and_sample_routing() {
         let sr = 44100.0;
@@ -22418,24 +22467,34 @@ mod tests {
             env_autocorr_peak_detrend(segment(&trem, sr, 0.4, 2.4), sr, 0.08, 0.20, 4.0);
         assert!(peak >= BW_TREM_PEAK_FLOOR, "tremolo AM peak {peak:.3}");
         assert!((6.0..=9.5).contains(&rate), "tremolo rate {rate:.2} Hz");
+        assert_eq!(
+            make(44, 69, 100, sr, 5, false).kind(),
+            "bowedstring",
+            "GM44 default must use the bowed-string waveguide, not the saw-based Bowed voice"
+        );
 
-        let slow = Bowed::new(44, 69, 32, sr, 5).trem_rate;
-        let fast = Bowed::new(44, 69, 127, sr, 5).trem_rate;
+        let slow = BowedString::new(44, 69, 32, sr, 5).trem_rate;
+        let fast = BowedString::new(44, 69, 127, sr, 5).trem_rate;
         assert!(
             fast - slow >= 1.5,
             "GM44 velocity did not accelerate tremolo: {slow:.2} -> {fast:.2} Hz"
         );
 
-        let mut voice = Bowed::new(44, 69, 100, sr, 5);
+        let mut voice = BowedString::new(44, 69, 100, sr, 5);
         let mut signal = Vec::with_capacity((2.0 * sr) as usize);
         let mut reversals = Vec::new();
         let mut block = [0.0; CTRL as usize];
         while signal.len() < (2.0 * sr) as usize {
             let reversal = voice.t as usize;
-            let old_until = voice.trem_bite_until;
+            let old_dir = voice.trem_dir;
             block.fill(0.0);
             voice.render(&mut block);
-            if voice.trem_bite_until != old_until {
+            if voice.trem_dir != old_dir {
+                assert!(
+                    voice.scratch > 0.98,
+                    "GM44 reversal did not re-establish bow catch; scratch {}",
+                    voice.scratch
+                );
                 reversals.push(reversal);
             }
             signal.extend_from_slice(&block);
@@ -22480,20 +22539,27 @@ mod tests {
         let bits = |s: Vec<f32>| s.into_iter().map(f32::to_bits).collect::<Vec<_>>();
         let samples_available = bits(render_program_sampled(0, 69, 100, 0.5, 6, true))
             != bits(render_program_sampled(0, 69, 100, 0.5, 6, false));
-        // Modeled-only bowed voices carry no sample layer: tremolo (44) and
-        // pizzicato (45). (Round-2: the viola 41 now DOES carry the LA layer —
-        // Arthur's "replace with alt" — so it moved to the sampled group below.)
-        for program in [44u8, 45] {
+        // Modeled-only bowed voices carry no sample layer: pizzicato (45).
+        // Tremolo strings (44) is a section patch and belongs with the sampled
+        // arco family below.
+        for program in [45u8] {
             let on = bits(render_program_sampled(program, 69, 100, 0.5, 6, true));
             let off = bits(render_program_sampled(program, 69, 100, 0.5, 6, false));
             assert_eq!(on, off, "GM{program} must skip the sample layer");
         }
         // Sampled voices carry their LA attack when the key is in the bank's
-        // range: violin (40), viola (41, round-2), fiddle (110) and the cello (42)
-        // at A4; the contrabass (43) at a low E2 — A4 is above its zones, so there
-        // it correctly falls back to the bare waveguide (tested in the skip spirit
-        // by the range guard, not here).
-        for (program, key) in [(40u8, 69u8), (41, 69), (110, 69), (42, 69), (43, 40)] {
+        // range: violin (40), viola (41), tremolo string section (44), fiddle
+        // (110) and the cello (42) at A4; the contrabass (43) at a low E2 — A4
+        // is above its zones, so there it correctly falls back to the bare
+        // waveguide (tested in the skip spirit by the range guard, not here).
+        for (program, key) in [
+            (40u8, 69u8),
+            (41, 69),
+            (44, 69),
+            (110, 69),
+            (42, 69),
+            (43, 40),
+        ] {
             let on = bits(render_program_sampled(program, key, 100, 0.5, 6, true));
             let off = bits(render_program_sampled(program, key, 100, 0.5, 6, false));
             if samples_available {
@@ -28824,8 +28890,8 @@ mod tests {
     /// where `samples: true` renders a different signal (everything else
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
-        0, 1, 3, 6, 7, 9, 12, 13, 24, 25, 40, 41, 42, 43, 46, 47, 48, 49, 56, 57, 58, 59, 60, 68,
-        69, 70, 71, 72, 73, 74, 75, 76, 77, 79, 104, 105, 109, 110,
+        0, 1, 3, 6, 7, 9, 12, 13, 24, 25, 40, 41, 42, 43, 44, 46, 47, 48, 49, 56, 57, 58, 59, 60,
+        68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 79, 104, 105, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

@@ -5,19 +5,19 @@
 - **Severity:** High
 - **Area:** sample packaging / licensing
 - **Raised:** 2026-07-27
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T113801Z-p9812-n904678400-c76
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00150-run-fix-20260727T113801Z-p9812-n904678400-c76
-- **Owner base:** 7e1c2bd042b02a59eadd25b7040a282edb1cfac0
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T11:38:01Z
-- **Owner until:** 2026-07-27T12:23:01Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=1, indeterminate=0
+- **Attempts:** fix=1, doubt=1, indeterminate=0
 - **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T054903Z-p9812-n086124000-c54 branch=task/bug-MM-BUG-KILN-00150-run-fix-20260727T054903Z-p9812-n086124000-c54 code=4278b0bdf638a33faa52cfec03304effd540f261 gate=focused-licensing model=codex@xhigh; held branch recovered by Codex) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T113201Z-p9812-n730268400-c75 verified_fix_run=fix-20260727T054903Z-p9812-n086124000-c54 verdict=doubt reason=static-fix-and-regression-look-correct-and-complete-but-this-sessions-bash-permi model=claude)
 
 ## Observation
@@ -107,3 +107,23 @@ This is not a duplicate of `MM-BUG-KILN-00148`, which concerns the standalone
 MuseScore-grand crate omitting the MIT permission grant. The primary defect here is
 two missing acknowledgements in the `-musescore` crate, which no existing Open bug
 covers.
+
+### Fix attempt summary (2026-07-27, deltic:auto run=fix-20260727T113801Z-p9812-n904678400-c76 outcome=no_work)
+
+Agent-reported summary: MM-BUG-KILN-00150 was already code-fixed in this worktree by the prior landed fix commit, which is contained in main; this pass reproduced the original recorded defect against the pre-fix parent and verified the current tree. The pre-fix MuseScore sample NOTICE promised to reproduce the MS Basic acknowledgements but omitted the Temple Blocks and Drumline Cymbals lines. The current tree carries the full required acknowledgement set in the MuseScore, clavinet, and parent notices, plus a licensing regression derived from the pinned upstream licence fixture. The focused licensing tests passed with default features and with --no-default-features. No Cargo, bug ledger, journal, scratchpad, or addi
+
+Root cause: The MS Basic acknowledgement block was hand-transcribed into packaged notices, while the old licensing oracle only proved that some distinctive credit token travelled. That allowed a selective subset of the upstream-required acknowledgement lines to look complete.
+
+Changed:
+- No additional shipped code or test files changed in this pass; the current tree already contains the relevant NOTICE updates and licensing regression for MM-BUG
+
+Tests:
+- deltic timeout 180 cargo test -p ferrosintesis licensing::tests
+- deltic timeout 180 cargo test -p ferrosintesis --no-default-features licensing::tests
+
+Left alone:
+- bugs/
+- Cargo.toml
+- Cargo.lock
+- wrk_journals/
+- scratchpad.md

@@ -5,15 +5,15 @@
 - **Severity:** High
 - **Area:** synth
 - **Raised:** 2026-07-22
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260727T110308Z-p9812-n829579800-c71
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00045-run-verify-20260727T110308Z-p9812-n829579800-c71
+- **Owner base:** 4b6beb2220c8c5f925c5360c330b518885203c2b
+- **Owner fingerprint:** sha256:1515e0b949e5f74fe0ebe46a7f9acd1709452cf375322edb50a5700e872cf431
+- **Owner since:** 2026-07-27T11:03:08Z
+- **Owner until:** 2026-07-27T11:48:08Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

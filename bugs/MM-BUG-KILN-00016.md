@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00016 — GM36/37 slap and pop lack modeled string–fret collision identity
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-18
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T141401Z-p9812-n833636500-c83
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00016-run-verify-20260727T141401Z-p9812-n833636500-c83
-- **Owner base:** 7a2818b48f3ae4aee6cce604c02572c7a6a0671a
-- **Owner fingerprint:** sha256:26f999535bd3700a8d0bd1c1304c34736c85bc1440afc066ed3e035e34f28f58
-- **Owner since:** 2026-07-27T14:14:01Z
-- **Owner until:** 2026-07-27T14:59:01Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=43fab4a47298c7938fcbfa7fa6e2b00798677827 gate=focused+render-diff model=codex@xhigh; held branch recovered by Codex) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T115901Z-p9812-n535270700-c79 verified_fix_run=fix-20260726T223701Z-p9812-n951988700-c12 verdict=doubt reason=gates-green-and-the-new-string-fret-collision-is-real-contained-and-well-tested model=claude) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T121001Z-p9812-n920194600-c80 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260727T121001Z-p9812-n920194600-c80 code=1e2029f12de7148f34d1fa8050d792962acfdcb9 gate=focused+render-diff model=codex@xhigh)
+- **Attempts:** fix=0, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=43fab4a47298c7938fcbfa7fa6e2b00798677827 gate=focused+render-diff model=codex@xhigh; held branch recovered by Codex) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T115901Z-p9812-n535270700-c79 verified_fix_run=fix-20260726T223701Z-p9812-n951988700-c12 verdict=doubt reason=gates-green-and-the-new-string-fret-collision-is-real-contained-and-well-tested model=claude) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T121001Z-p9812-n920194600-c80 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260727T121001Z-p9812-n920194600-c80 code=1e2029f12de7148f34d1fa8050d792962acfdcb9 gate=focused+render-diff model=codex@xhigh) → Closed (2026-07-27, deltic:auto role=verify run=verify-20260727T141401Z-p9812-n833636500-c83 verified_fix_run=fix-20260727T121001Z-p9812-n920194600-c80 verdict=close model=claude)
 
 ## Observation
 
@@ -112,6 +112,10 @@ Tests:
 
 Left alone:
 - bugs/
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T141401Z-p9812-n833636500-c83 verified_fix_run=fix-20260727T121001Z-p9812-n920194600-c80 verdict=close)
+
+Verifier note: GM36/37 now get slap identity from a genuinely in-loop, passive, velocity-gated fret collision; the prior verifier's item-6 doubt is closed by a level-matched click lesion that measures the exact 0-3 ms window it flagged. — Trunk worktree at HEAD 8a14f73 (== origin/main), tree clean apart from the untracked .deltic-verify-out/schema files. (1) SYMPTOM REPRODUCED THEN GONE: `git show 122ac57:crates/ferrosintesis/src/voices.rs` (the commit immediately before the first KILN-00016 fix) shows SLAP with NO fret_contact field at all and `click: 2.4, click_post: true` - the whole slap identity was a p...
 
 ## Notes
 

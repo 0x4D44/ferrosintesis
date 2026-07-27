@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00154 — Orchestral2 public inventory omits most shipped families
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** orchestral2 / published metadata
@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00154-run-fix-20260727T092502Z-p9812-n774387000-c66-code-1785144930278
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T092502Z-p9812-n774387000-c66 branch=task/bug-MM-BUG-KILN-00154-run-fix-20260727T092502Z-p9812-n774387000-c66 code=75895ae12ee3 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -52,7 +52,46 @@ the inventory oracle to guard every surface that claims exhaustiveness.
 
 ## Fix
 
-<unfixed — raised only>
+The crate now names packaged `PROVENANCE.md` as the canonical public inventory.
+Its README delegates the complete family/count/source/licence table there, its
+manifest description no longer embeds a partial family list, and its crate-level
+documentation points provenance readers to the same packaged authority.
+
+The shared inventory oracle now checks every sample crate. A README family table
+must match the packaged WAV families exactly, or a contents section must delegate
+to `PROVENANCE.md`. Manifest descriptions cannot present a substantial partial
+family list, and crate docs cannot direct provenance readers only to unpackaged
+repository material.
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T092502Z-p9812-n774387000-c66 code=75895ae12ee3 gate=cargo)
+
+Root cause: the complete packaged `PROVENANCE.md` inventory was already derived
+and checked, but README, manifest, and rustdoc prose lived outside that oracle.
+When orchestral2 grew from five to 14 families, those hand-maintained surfaces
+drifted while still looking exhaustive.
+
+Changed:
+- `crates/ferrosintesis/src/inventory.rs`: added a derived public-inventory
+  surface oracle plus fail/pass unit cases.
+- `crates/ferrosintesis-samples-orchestral2/README.md`: replaced the stale
+  five-family table with a canonical packaged-provenance delegation.
+- `crates/ferrosintesis-samples-orchestral2/Cargo.toml`: removed the partial
+  family list from the package description.
+- `crates/ferrosintesis-samples-orchestral2/src/lib.rs`: pointed crate docs at
+  packaged `PROVENANCE.md`.
+
+Tests:
+- The held pass observed the new public-surface regression fail against the stale
+  orchestral2 metadata before applying the fix.
+- `cargo test -p ferrosintesis inventory::tests -- --nocapture`: 17 passed.
+- `cargo test -p ferrosintesis --no-default-features inventory::tests -- --nocapture`:
+  17 passed.
+- `cargo clippy -p ferrosintesis --all-targets -- -D warnings`: passed.
+- `cargo clippy -p ferrosintesis --all-targets --no-default-features -- -D warnings`:
+  passed.
+- `cargo fmt -p ferrosintesis -- --check` and `git diff --check`: passed.
+- No render comparison was required because the change affects published
+  metadata and test-only inventory validation, not audio behavior.
 
 ## Notes
 

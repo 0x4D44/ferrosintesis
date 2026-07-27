@@ -309,60 +309,31 @@ class PrepareSampleBankTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "differs from the committed bank"):
             prepare.validate_b1_generated_inventory(expected, substituted)
 
-    def test_b1_handoff_conditioner_is_deterministic_and_preserves_the_hammer(self):
-        sample_dir = os.path.join(
-            prepare.REPO_ROOT,
-            "crates",
-            "ferrosintesis-samples-b1-upright",
-            "samples",
-        )
-        names = sorted(
-            name for name in os.listdir(sample_dir)
-            if name.startswith("b1_") and name.endswith(".wav")
-        )
-        midi_by_name = {}
-        layer_by_name = {}
-        for name in names:
-            note = name.rsplit("_", 1)[1][:-4]
-            midi_by_name[name] = next(
-                midi for midi in range(21, 109)
-                if prepare._midi_name(midi) == note
-            )
-            layer_by_name[name] = name.split("_", 2)[1]
-
+    def test_b1_body_is_the_ordinary_onset_trim_with_only_a_short_end_taper(self):
         sr = 4000
-        source = {}
-        for name in names:
-            freq = prepare._midi_hz(midi_by_name[name])
-            source[name] = [
-                0.20
-                * math.exp(-2.0 * i / sr)
-                * math.sin(2.0 * math.pi * freq * i / sr + 0.3)
-                for i in range(int(0.150 * sr))
-            ]
+        source = [0.0] * 40 + [
+            0.42
+            * math.exp(-0.30 * i / sr)
+            * math.sin(2.0 * math.pi * 220.0 * i / sr + 0.3)
+            for i in range(int(2.0 * sr))
+        ]
 
-        first = prepare.condition_b1_handoff(source, sr, midi_by_name, layer_by_name)
-        second = prepare.condition_b1_handoff(source, sr, midi_by_name, layer_by_name)
-        self.assertEqual(first, second)
+        expected = prepare.trim_to_onset(source, sr, 1.5, 0.010)
+        untapered = prepare.trim_to_onset(source, sr, 1.5, 0.0)
+        first = prepare.prepare_b1_body(source, sr)
+        second = prepare.prepare_b1_body(source, sr)
 
-        identity_end = int(prepare._B1_IDENTITY_END * sr) + 1
-        changed_after_hammer = False
-        for name in names:
-            self.assertLessEqual(max(abs(value) for value in first[name]), 0.900001)
-            for original, conditioned in zip(
-                source[name][:identity_end],
-                first[name][:identity_end],
-            ):
-                self.assertAlmostEqual(
-                    conditioned * prepare._B1_SAMPLE_GAIN,
-                    original * 1.30,
-                    places=12,
-                )
-            changed_after_hammer |= (
-                first[name][identity_end:] !=
-                [value * prepare._B1_BANK_SCALE for value in source[name][identity_end:]]
-            )
-        self.assertTrue(changed_after_hammer)
+        self.assertEqual(first, expected)
+        self.assertEqual(second, expected)
+        self.assertEqual(len(first), int((prepare.PRE_S + 1.5) * sr))
+        self.assertLessEqual(max(abs(value) for value in first), 0.900001)
+
+        # The retired 600 ms taper began around 0.9 s. The experiment must retain
+        # the untapered body there and differ only inside the terminal 10 ms.
+        fade_start = len(first) - int(0.010 * sr)
+        self.assertEqual(first[:fade_start], untapered[:fade_start])
+        self.assertNotEqual(first[fade_start:], untapered[fade_start:])
+        self.assertLess(abs(first[-1]), 1e-3)
 
     def test_committed_piano_round_robins_are_distinct_or_declared_single_take(self):
         sample_dir = os.path.join(

@@ -1198,41 +1198,9 @@ pub(crate) enum PianoSampleCal {
     Gm0Conditioned,
     /// Independently peak-normalized banks — the remaining CC0 alternates, and GM1.
     LegacyNormalized,
-    /// The B1 upright, GM0's default since 2026.07.26.
-    ///
-    /// Its source slices begin peak-normalized, then the bank is statically
-    /// conditioned and uniformly scaled for headroom. It cannot share the legacy
-    /// calibration because make-up gain is not really a statement about peak level —
-    /// it balances a recording's onset against the modelled body underneath it. On
-    /// `LegacyNormalized`'s 0.90 the B1's
-    /// recorded hammer sits BELOW its own model: a held note peaked at the attack,
-    /// decayed ~5 dB by 400 ms, then swelled back ABOVE the attack by 800 ms as the
-    /// crossfade handed over. Pianos decay monotonically; that swell was audible and
-    /// wrong. It went unnoticed while the B1 was a CC0 alternate because the
-    /// attack-is-the-peak and gap-release oracles only ever probed the DEFAULT slot.
-    ///
-    /// The audible 1.30 is measured, and it sits in a NARROW window — which is the
-    /// part worth knowing. The bank is stored at 0.25 scale to leave shaping
-    /// headroom, so the runtime constant is 5.20 and their product remains 1.30.
-    /// Audible gain trades two properties against each other:
-    ///
-    /// * too low and the model outruns the hammer (the swell above). Below ~1.2 the
-    ///   envelope peak leaves the attack window.
-    /// * too high and fast repeated notes stop damping cleanly. The louder sampled
-    ///   onset decays faster than the model under it, so the 62.5 ms key-up gap
-    ///   drops HARDER: measured 9.99 dB at 1.30, 10.45 at 2.00, 10.78 at 2.40
-    ///   (engine-level, key 66). That direction was a surprise — raising the gain to
-    ///   "hold the note up" does the opposite — so do not re-guess it, re-measure it.
-    ///
-    /// Both bounds hold only over roughly 1.2-1.3, and 1.30 is the top of that
-    /// window: the most attack-peak margin available without losing gap behaviour.
-    /// Swept over keys 36/48/60/72/84 x vel 40/64/100/120.
-    ///
-    /// MM-BUG-KILN-00130/00133 found the longer handoff's remaining trough and
-    /// shimmer came from changing sample/model phase plus an adaptive gain stage.
-    /// The B1 now uses VSCO's static complementary wrapper over 0.05-0.075 s:
-    /// the recorded hammer owns the first 50 ms, then the randomized model owns
-    /// the sustain before their phase relationship can modulate the envelope.
+    /// The B1 upright, GM0's default since 2026.07.26. Its sample-only listening
+    /// experiment uses the peak-normalized recording as the complete bounded voice
+    /// at audible gain 1.30. No sample/model crossfade applies to this calibration.
     B1Upright,
 }
 
@@ -1456,13 +1424,8 @@ const GM0_SAMPLE_GAIN: f32 = 4.00;
 const GM0_SAMPLE_FADE: (f32, f32) = (0.18, 0.45);
 const GM0_FORTE_LAYER_GAIN: f32 = 0.569;
 
-/// B1 upright make-up gain — see [`PianoSampleCal::B1Upright`] for the derivation
-/// and, more importantly, for why the usable window is only about 1.2-1.3 wide.
-/// Swept, not guessed: 0.90 leaves the model outrunning the recorded hammer.
-const B1_SAMPLE_GAIN: f32 = 5.20;
-/// Keep the recorded sample as sole owner for 50 ms, then hand over quickly enough that
-/// the uncorrelated recording and randomized model cannot form a moving trough.
-const B1_SAMPLE_FADE: (f32, f32) = (0.05, 0.075);
+/// Audible scale retained from the original B1 transient calibration.
+const B1_SAMPLE_GAIN: f32 = 1.30;
 fn acoustic_piano(key: u8, vel: u8, sr: f32, seed: u32, release_t60: f32) -> Modal {
     let f = key_freq(key);
     let v = vel_amp(vel);
@@ -13846,8 +13809,9 @@ impl Voice for Fx {
 /// Grand); `bright=true` = the brighter `bright_acoustic_piano` voicing (GM 1 Bright
 /// Acoustic). Giving GM 1 the brighter model both fits the slot AND keeps GM 0/GM 1
 /// distinct in a modeled-only build (samples off, they'd otherwise share one model).
-/// The sampled recording rides on top via the shared LA blend; pass `&[]` for
-/// the bare-model path.
+/// Most sampled recordings ride on top via the shared LA blend. The experimental
+/// B1 calibration instead returns its bounded recording as the complete samples-on
+/// voice. Pass `&[]` for either calibration's bare-model path.
 pub fn acoustic_grand_with_bank(
     bank: &'static [crate::sampler::Zone],
     key: u8,
@@ -13858,9 +13822,16 @@ pub fn acoustic_grand_with_bank(
     voicing: PianoVoicing,
 ) -> Box<dyn Voice> {
     let PianoVoicing { cal, damper } = voicing;
-    // One damper, one note: the modeled body and the sampled onset release
-    // together, at a rate that depends on WHERE on the keyboard this note sits.
+    // One damper, one note: whichever owner this calibration selects releases at
+    // a rate that depends on where the note sits on the keyboard.
     let (model_t60, la_t60) = damper.t60_for(key);
+    if !bank.is_empty() && cal == PianoSampleCal::B1Upright {
+        if let Some(sample) =
+            crate::sampler::b1upright_sampled(bank, key, vel, sr, B1_SAMPLE_GAIN, la_t60)
+        {
+            return sample;
+        }
+    }
     let model: Box<dyn Voice> = if bright {
         Box::new(bright_acoustic_piano(key, vel, sr, seed, model_t60))
     } else {
@@ -13891,7 +13862,9 @@ pub fn acoustic_grand_with_bank(
         // model. The damper remains an independent caller choice.
         let (gain, fade) = match cal {
             PianoSampleCal::Gm0Conditioned => (GM0_SAMPLE_GAIN * layer_gain, GM0_SAMPLE_FADE),
-            PianoSampleCal::B1Upright => (B1_SAMPLE_GAIN, B1_SAMPLE_FADE),
+            // A B1 zone outside the credible repitch span falls back to the model.
+            // Standard 88-key coverage returns through the whole-sample path above.
+            PianoSampleCal::B1Upright => return model,
             PianoSampleCal::LegacyNormalized => LA_PIANO,
         };
         crate::sampler::LaVoice::wrap_release(model, bank, key, vel, sr, gain, fade, la_t60)

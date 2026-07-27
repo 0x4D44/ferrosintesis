@@ -81,14 +81,12 @@ better microphone would; the pass stays in the archived take under
    27 hard zones—before writing any output.
 4. Per retained slice: **20 Hz 4th-order Butterworth high-pass** (kills the DR-05's
    2–5 Hz infrasonic rumble + DC) on the 48 kHz signal; band-limited resample to
-   44.1 kHz; `trim_to_onset` keeps the onset + **1.5 s** of body (0.6 s squared
-   fade-out), peak-normalised to 0.9.
-5. Preserve the first 30 ms waveform shape, then apply a deterministic static
-   envelope which fits the 50–75 ms complementary handoff to the acoustic model's
-   expected modal power. Relax the envelope back to unity by 125 ms, constrain
-   positive shaping to 0.9 peak, and store the whole bank at 0.25 scale for
-   headroom. The fixed 5.20 runtime gain restores the established 1.30 audible
-   hammer gain. Write 16-bit mono in sorted filename order.
+   44.1 kHz; `prepare_b1_body` keeps the onset + **1.5 s** of body with only a
+   **10 ms squared terminal taper**, peak-normalised to 0.9.
+5. Write the unconditioned body as 16-bit mono in sorted filename order. During the
+   sample-only listening experiment, runtime plays this bounded recording at
+   `1.30 × vel_amp(velocity)` with no modal-piano handoff. Samples-off remains the
+   modeled control; the experiment intentionally exposes the short asset boundary.
 
 `root` (in `crates/ferrosintesis/src/sampler.rs`) is each slice's **measured first
 partial f1**, so the note plays at exact equal temperament while its recorded

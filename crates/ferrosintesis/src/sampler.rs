@@ -1734,9 +1734,9 @@ fn b1_hard_zones() -> &'static [Zone] {
 /// no other bank has: the dynamics are genuinely different captured spectra, not
 /// one sample re-EQ'd. Loudness still comes from the engine's shared velocity
 /// law; the layer only supplies timbre. Split: `vel < 60` normal, `>= 60` hard.
-/// `rr2` is ignored (no round robins in v1). Its modeled partner retains per-note
-/// phase variation; the short static handoff retires the recording before that
-/// changing correlation can modulate the sustain (MM-BUG-KILN-00133).
+/// `rr2` is ignored (no round robins in v1). During the sample-only listening
+/// experiment this bank owns the complete samples-on voice; the generic randomized
+/// piano remains only as the modeled-only fallback.
 /// Voices the GM 0 DEFAULT (CC0=0) since 2026.07.26; it was the CC0=5 alternate.
 ///
 /// A third `soft` capture was recorded and dropped (2026.07.24). Measured
@@ -1755,6 +1755,107 @@ pub fn b1upright_bank(vel: u8, _rr2: bool) -> &'static [Zone] {
         b1_normal_zones()
     } else {
         b1_hard_zones()
+    }
+}
+
+/// Experimental whole-body B1 voice. It intentionally plays the bounded recording
+/// to its baked end rather than handing over to an unrelated modal piano.
+#[cfg(feature = "embedded-samples")]
+struct B1Sampled {
+    data: &'static [f32],
+    pos: f32,
+    base_step: f32,
+    bend: f32,
+    gain: f32,
+    rel_mul: f32,
+    env: f32,
+    releasing: bool,
+}
+
+#[cfg(feature = "embedded-samples")]
+pub fn b1upright_sampled(
+    zones: &'static [Zone],
+    key: u8,
+    vel: u8,
+    sr: f32,
+    gain: f32,
+    release_t60: f32,
+) -> Option<Box<dyn Voice>> {
+    let f = key_freq(key);
+    let zone = nearest(zones, f);
+    let ratio = f / zone.root;
+    if !(0.5..=2.05).contains(&ratio) {
+        return None;
+    }
+    Some(Box::new(B1Sampled {
+        data: zone.data.as_slice(),
+        pos: 0.0,
+        base_step: ratio * 44_100.0 / sr,
+        bend: 1.0,
+        gain: gain * vel_amp(vel),
+        rel_mul: 10f32.powf(-3.0 / (release_t60 * sr)),
+        env: 1.0,
+        releasing: false,
+    }))
+}
+
+#[cfg(not(feature = "embedded-samples"))]
+pub fn b1upright_sampled(
+    _zones: &'static [Zone],
+    _key: u8,
+    _vel: u8,
+    _sr: f32,
+    _gain: f32,
+    _release_t60: f32,
+) -> Option<Box<dyn Voice>> {
+    None
+}
+
+#[cfg(feature = "embedded-samples")]
+impl Voice for B1Sampled {
+    fn render(&mut self, out: &mut [f32]) -> bool {
+        let n = self.data.len();
+        let step = self.base_step * self.bend;
+        for o in out {
+            let j = self.pos as usize;
+            if j + 1 >= n {
+                return false;
+            }
+            let frac = self.pos - j as f32;
+            let value = crate::dsp::cubic4(
+                self.data[j.saturating_sub(1)],
+                self.data[j],
+                self.data[j + 1],
+                self.data[(j + 2).min(n - 1)],
+                frac,
+            );
+            *o += value * self.gain * self.env;
+            self.pos += step;
+            if self.releasing {
+                self.env *= self.rel_mul;
+                if self.env < 1e-4 {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    fn note_off(&mut self) {
+        self.releasing = true;
+    }
+
+    fn released(&self) -> bool {
+        self.releasing
+    }
+
+    fn set_pitch(&mut self, mult: f32) {
+        self.bend = mult;
+    }
+
+    #[cfg(test)]
+    fn kind(&self) -> &'static str {
+        "b1sampled"
     }
 }
 
@@ -5437,6 +5538,26 @@ impl Voice for ClavinetSampled {
     }
 }
 
+#[cfg(all(test, not(feature = "embedded-samples")))]
+mod modeled_only_tests {
+    use crate::voices;
+
+    #[test]
+    fn requested_b1_samples_fall_back_to_the_same_model() {
+        let render = |samples| {
+            let mut voice = voices::make(0, 60, 60, 44_100.0, 0x6A09_E667, samples);
+            let mut out = vec![0.0; 44_100];
+            voice.render(&mut out);
+            out
+        };
+        assert_eq!(
+            render(true),
+            render(false),
+            "a modeled-only build changed GM0 when samples were requested"
+        );
+    }
+}
+
 #[cfg(all(test, feature = "embedded-samples"))]
 mod tests {
     use super::*;
@@ -9053,54 +9174,167 @@ mod tests {
         voices::acoustic_grand_with_bank(bank, key, vel, sr, seed, false, source.voicing())
     }
 
-    fn literal_static_b1_voice(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
-        let source = voices::GM0_SOURCES
+    #[cfg(feature = "embedded-samples")]
+    fn decode_parent_b1_c5_prefix(vel: u8) -> Vec<f32> {
+        let hex = if vel < 60 {
+            include_str!("../tests/fixtures/b1_parent_edcd116_normal_C5_first30.hex")
+        } else {
+            include_str!("../tests/fixtures/b1_parent_edcd116_hard_C5_first30.hex")
+        }
+        .trim();
+        assert_eq!(hex.len(), 1_324 * 4);
+        hex.as_bytes()
+            .chunks_exact(4)
+            .map(|digits| {
+                let text = std::str::from_utf8(digits).expect("parent fixture is ASCII hex");
+                u16::from_str_radix(text, 16).expect("parent fixture contains valid hex") as i16
+                    as f32
+                    / 32768.0
+            })
+            .collect()
+    }
+
+    /// The rejected conditioned implementation at `edcd116` deliberately kept its
+    /// first 30 ms unchanged. Pin that transient while replacing its later handoff:
+    /// compare the exact parent's stored PCM against the new full-scale bake through
+    /// the same cubic read, stopping before any tap can cross the identity boundary.
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn b1_sample_only_preserves_the_exact_parent_first_30ms() {
+        const PARENT_GAIN: f32 = 5.20;
+        const EXPERIMENT_GAIN: f32 = 1.30;
+        const LAST_PARENT_FRAME: usize = (0.030 * 44_100.0) as usize;
+        const MAX_ERROR: f32 = 0.00025;
+
+        for vel in [59u8, 60] {
+            let zones = b1upright_bank(vel, false);
+            for key in [72u8, 73] {
+                let frequency = key_freq(key);
+                let zone = nearest(zones, frequency);
+                let step = frequency / zone.root;
+                let frame_count = (0..)
+                    .take_while(|frame| {
+                        ((*frame as f32 * step).floor() as usize) + 2 <= LAST_PARENT_FRAME
+                    })
+                    .count();
+
+                let parent = decode_parent_b1_c5_prefix(vel);
+                let mut expected = Vec::with_capacity(frame_count);
+                let mut pos = 0.0f32;
+                for _ in 0..frame_count {
+                    let j = pos.floor() as usize;
+                    let frac = pos - j as f32;
+                    expected.push(
+                        crate::dsp::cubic4(
+                            parent[j.saturating_sub(1)],
+                            parent[j],
+                            parent[j + 1],
+                            parent[j + 2],
+                            frac,
+                        ) * PARENT_GAIN
+                            * vel_amp(vel),
+                    );
+                    pos += step;
+                }
+                assert!(
+                    pos.floor() as usize + 2 > LAST_PARENT_FRAME,
+                    "fixture did not stop at the cubic-support boundary"
+                );
+
+                let mut actual = vec![0.0; frame_count];
+                let mut voice = b1upright_sampled(zones, key, vel, 44_100.0, EXPERIMENT_GAIN, 1.0)
+                    .expect("C5 controls are inside B1 coverage");
+                assert!(voice.render(&mut actual));
+                let max_error = actual
+                    .iter()
+                    .zip(&expected)
+                    .map(|(actual, expected)| (actual - expected).abs())
+                    .fold(0.0, f32::max);
+                assert!(
+                    max_error <= MAX_ERROR,
+                    "key {key} velocity {vel}: first-30ms parent parity error \
+                     {max_error:.9} exceeds {MAX_ERROR}"
+                );
+            }
+        }
+    }
+
+    fn b1_release_curve_error(
+        mut released: Box<dyn Voice>,
+        mut held: Box<dyn Voice>,
+        sr: f32,
+        t60: f32,
+    ) -> f32 {
+        let hold_len = (0.3125 * sr) as usize;
+        let mut released_prefix = vec![0.0; hold_len];
+        let mut held_prefix = vec![0.0; hold_len];
+        released.render(&mut released_prefix);
+        held.render(&mut held_prefix);
+        assert_eq!(released_prefix, held_prefix);
+
+        released.note_off();
+        let mut released_tail = vec![0.0; (0.250 * sr) as usize];
+        let mut held_tail = vec![0.0; released_tail.len()];
+        released.render(&mut released_tail);
+        held.render(&mut held_tail);
+        released_tail
             .iter()
-            .find(|source| source.name == "B1 upright")
-            .expect("GM0 source table lost the B1 upright");
-        let model =
-            voices::acoustic_grand_with_bank(&[], key, vel, sr, seed, false, source.voicing());
-        let (_, release_t60) = source.voicing().damper.t60_for(key);
-        LaVoice::wrap_release(
-            model,
-            (source.bank)(vel, seed & 1 == 0),
-            key,
-            vel,
-            sr,
-            5.20,
-            (0.05, 0.075),
-            release_t60,
-        )
+            .zip(&held_tail)
+            .enumerate()
+            .filter(|(_, (_, held))| held.abs() > 1e-5)
+            .map(|(i, (&released, &held))| {
+                let expected = 10f32.powf(-3.0 * i as f32 / (t60 * sr));
+                (released / held - expected).abs()
+            })
+            .fold(0.0, f32::max)
     }
 
     #[test]
-    fn b1_upright_is_exactly_the_literal_static_handoff() {
+    fn b1_upright_sample_path_is_recording_only_and_seed_invariant() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
         let sr = 44_100.0;
+        let seeds = [0x1357_9BDFu32, 0x6A09_E667];
         for key in [21u8, 60, 85, 108] {
-            for vel in [59u8, 60, 100] {
-                for seed in [0x1357_9BDFu32, 0x6A09_E667] {
-                    let mut shipped = explicit_b1_voice(key, vel, sr, seed, true);
-                    let mut reference = literal_static_b1_voice(key, vel, sr, seed);
-                    let mut shipped_hold = vec![0.0; (0.120 * sr) as usize];
-                    let mut reference_hold = vec![0.0; shipped_hold.len()];
-                    assert_eq!(
-                        shipped.render(&mut shipped_hold),
-                        reference.render(&mut reference_hold)
-                    );
-                    assert_eq!(shipped_hold, reference_hold);
-
-                    shipped.note_off();
-                    reference.note_off();
-                    let mut shipped_release = vec![0.0; (0.500 * sr) as usize];
-                    let mut reference_release = vec![0.0; shipped_release.len()];
-                    assert_eq!(
-                        shipped.render(&mut shipped_release),
-                        reference.render(&mut reference_release)
-                    );
-                    assert_eq!(shipped_release, reference_release);
-                }
+            for vel in [59u8, 60] {
+                let mut sampled_a = explicit_b1_voice(key, vel, sr, seeds[0], true);
+                let mut sampled_b = explicit_b1_voice(key, vel, sr, seeds[1], true);
+                assert_eq!(sampled_a.kind(), "b1sampled");
+                assert_eq!(sampled_b.kind(), "b1sampled");
+                let mut a = vec![0.0; sr as usize];
+                let mut b = vec![0.0; a.len()];
+                assert!(sampled_a.render(&mut a));
+                assert!(sampled_b.render(&mut b));
+                assert_eq!(
+                    a, b,
+                    "key {key} velocity {vel} still depends on the model seed"
+                );
             }
         }
+
+        // Calibrate the oracle against the unchanged model owner. A pair of tiny
+        // xorshift seeds can look nearly identical even when a randomized model is
+        // still present, so the pair above must first move the samples-off path by
+        // at least 5% normalized RMS over a model-owned window.
+        let mut model_a = explicit_b1_voice(60, 60, sr, seeds[0], false);
+        let mut model_b = explicit_b1_voice(60, 60, sr, seeds[1], false);
+        let mut a = vec![0.0; (0.500 * sr) as usize];
+        let mut b = vec![0.0; a.len()];
+        model_a.render(&mut a);
+        model_b.render(&mut b);
+        let start = (0.100 * sr) as usize;
+        let diff: Vec<f32> = a[start..]
+            .iter()
+            .zip(&b[start..])
+            .map(|(x, y)| x - y)
+            .collect();
+        let normalized = crate::testutil::rms(&diff)
+            / crate::testutil::rms(&a[start..]).max(crate::testutil::rms(&b[start..]));
+        assert!(
+            normalized >= 0.05,
+            "seed pair does not exercise model randomness: normalized RMS difference {normalized}"
+        );
     }
 
     /// How far the MEASURED release may sit from the damper curve's own prediction.
@@ -9171,12 +9405,26 @@ mod tests {
                         gap_drop / gap_expect,
                         tail_drop / tail_expect
                     );
-                    assert!(
-                        gap_drop <= gap_expect * GAP_RATIO_MAX,
-                        "GM0 key {key} seed {seed} samples={samples}: 62.5ms gap drop \
-                         {gap_drop:.2} dB exceeds {GAP_RATIO_MAX}x the {gap_expect:.2} dB \
-                         its {t60:.3}s damper predicts — the note is cut, not damped"
-                    );
+                    if samples {
+                        let error = b1_release_curve_error(
+                            explicit_b1_voice(key, 104, sr, seed, true),
+                            explicit_b1_voice(key, 104, sr, seed, true),
+                            sr,
+                            t60,
+                        );
+                        assert!(
+                            error < 2e-4,
+                            "GM0 key {key} seed {seed}: B1 release differs from the \
+                             felt-damper exponential by {error}"
+                        );
+                    } else {
+                        assert!(
+                            gap_drop <= gap_expect * GAP_RATIO_MAX,
+                            "GM0 key {key} seed {seed}: 62.5ms model gap drop \
+                             {gap_drop:.2} dB exceeds {GAP_RATIO_MAX}x the {gap_expect:.2} dB \
+                             its {t60:.3}s damper predicts — the note is cut, not damped"
+                        );
+                    }
                     let gap_min = if samples {
                         GAP_RATIO_MIN_SAMPLED
                     } else {
@@ -9495,144 +9743,144 @@ mod tests {
         );
     }
 
-    /// MM-BUG-KILN-00130/00133: the B1 recording and randomized model can form
-    /// a phase-dependent trough during a long handoff. The static 50-75 ms
-    /// seam must finish before that overlap becomes a late swell.
+    /// The experiment deliberately exposes a bounded recording rather than hiding
+    /// its end behind a model. A held note must survive the shared first-second
+    /// judgment window, then reap at its natural baked boundary. Pitch bend must
+    /// change that boundary by changing the source read rate.
     #[test]
-    fn b1_upright_handoff_does_not_rebound() {
+    fn b1_sample_only_voice_is_bounded_and_pitch_bend_changes_its_read_rate() {
         if !crate::embedded_samples_available() {
             return;
         }
         let sr = 44_100.0;
-        let window = (0.025 * sr) as usize;
-        let mut worst = (
-            f32::NEG_INFINITY,
-            0u8,
-            0u8,
-            0u32,
-            0.0f32,
-            0.0f32,
-            Vec::new(),
-        );
-        for vel in [50u8, 59, 60, 100] {
-            for seed in [0x1357_9BDFu32, 0x6A09_E667, 0x9E37_79B9, 0xD1B5_4A35] {
-                for key in 21u8..=108 {
-                    let render_rebound = |samples| {
-                        let mut voice = explicit_b1_voice(key, vel, sr, seed, samples);
-                        let mut out = vec![0.0; (0.700 * sr) as usize];
-                        assert!(
-                            voice.render(&mut out),
-                            "B1 upright key {key} vel {vel} seed {seed} \
-                             samples={samples} died during hold"
-                        );
-                        let rms: Vec<f32> =
-                            out.chunks_exact(window).map(crate::testutil::rms).collect();
-                        let rebound_db = (2..11)
-                            .map(|i| {
-                                let later = rms[i + 1..20].iter().copied().fold(0.0f32, f32::max);
-                                20.0 * (later / rms[i].max(1e-12)).log10()
-                            })
-                            .fold(f32::NEG_INFINITY, f32::max);
-                        (rebound_db, rms)
-                    };
-                    let (model_rebound, _) = render_rebound(false);
-                    let (rebound_db, rms) = render_rebound(true);
-                    // 1.5 dB admits normal modal beating. For a seed whose bare
-                    // model beats slightly more, the sampled handoff must add
-                    // no meaningful rebound of its own.
-                    let limit = 1.5f32.max(model_rebound + 0.5);
-                    let excess = rebound_db - limit;
-                    if excess > worst.0 {
-                        worst = (excess, key, vel, seed, rebound_db, model_rebound, rms);
-                    }
-                }
-            }
-        }
-        let (excess, key, vel, seed, rebound_db, model_rebound, rms) = worst;
-        println!(
-            "B1 upright worst rebound: key {key} vel {vel} seed {seed}, \
-             wrapped {rebound_db:.2} dB, model-only {model_rebound:.2} dB, \
-             allowance margin {excess:.2} dB"
-        );
+        let seed = 0x6A09_E667;
+        let mut natural = explicit_b1_voice(60, 60, sr, seed, true);
+        let mut first_second = vec![0.0; sr as usize];
+        assert!(natural.render(&mut first_second));
+        assert!(crate::testutil::rms(&first_second[(0.8 * sr) as usize..]) > 1e-5);
+
+        let mut natural_tail = vec![0.0; (1.5 * sr) as usize];
+        assert!(!natural.render(&mut natural_tail));
+
+        let mut bent = explicit_b1_voice(60, 60, sr, seed, true);
+        bent.set_pitch(2.0);
+        let mut bent_tail = vec![0.0; sr as usize];
         assert!(
-            excess <= 0.0,
-            "B1 upright worst case: key {key} vel {vel} seed {seed} rebounds \
-             {rebound_db:.2} dB after its crossfade trough versus \
-             {model_rebound:.2} dB model-only ({excess:.2} dB over the allowed \
-             limit; 25 ms RMS: {rms:?})"
+            !bent.render(&mut bent_tail),
+            "octave-up bend did not consume the sample faster"
         );
     }
 
-    /// Key-up must not introduce its own swell at any ownership phase. Before
-    /// 50 ms the held voice can still rise normally as its static handoff
-    /// approaches, so compare release with an identical held control there.
-    /// From the seam onward, retain the absolute 1.5 dB rise cap as well.
+    /// Held body and felt-damper release are separate questions. The held controls
+    /// must be identical through note-off; after key-up the released voice must sit
+    /// below the still-held recording for both captured hardness layers.
     #[test]
-    fn b1_release_is_stable_before_during_and_after_the_handoff() {
+    fn b1_sample_only_note_off_applies_the_felt_damper() {
         let sr = 44_100.0;
-        let mut worst_absolute = (f32::NEG_INFINITY, 0u8, 0u8, 0.0f32);
-        let mut worst_vs_held = (f32::NEG_INFINITY, 0u8, 0u8, 0.0f32);
-        for key in [60u8, 91] {
-            for vel in [59u8, 60] {
-                // Before, boundary, midpoint, and end of the 50-75 ms handoff,
-                // followed by representative post-handoff releases.
-                for hold_s in [0.040f32, 0.050, 0.0625, 0.075, 0.100, 0.3125, 0.550] {
-                    let mut voice = explicit_b1_voice(key, vel, sr, 0x6A09_E667, true);
-                    let mut held_control = explicit_b1_voice(key, vel, sr, 0x6A09_E667, true);
-                    let hold_len = (hold_s * sr) as usize;
-                    let window = (0.020 * sr) as usize;
-                    let mut held = vec![0.0; hold_len];
-                    let mut control_prefix = vec![0.0; hold_len];
-                    assert!(voice.render(&mut held));
-                    assert!(held_control.render(&mut control_prefix));
-                    assert_eq!(held, control_prefix);
-                    let before = crate::testutil::rms(&held[hold_len - window..]);
-                    voice.note_off();
-                    let mut released = vec![0.0; (0.250 * sr) as usize];
-                    let mut control_tail = vec![0.0; released.len()];
-                    voice.render(&mut released);
-                    held_control.render(&mut control_tail);
-                    let release_windows: Vec<f32> = released
-                        .chunks_exact(window)
-                        .take(4)
-                        .map(crate::testutil::rms)
-                        .collect();
-                    let held_windows: Vec<f32> = control_tail
-                        .chunks_exact(window)
-                        .take(4)
-                        .map(crate::testutil::rms)
-                        .collect();
-                    let after_peak = release_windows.iter().copied().fold(0.0f32, f32::max);
-                    let rise_db = 20.0 * (after_peak / before.max(1e-12)).log10();
-                    if hold_s >= 0.050 && rise_db > worst_absolute.0 {
-                        worst_absolute = (rise_db, key, vel, hold_s);
-                    }
-                    let vs_held_db = release_windows
-                        .iter()
-                        .zip(&held_windows)
-                        .map(|(&released, &held)| 20.0 * (released / held.max(1e-12)).log10())
-                        .fold(f32::NEG_INFINITY, f32::max);
-                    if vs_held_db > worst_vs_held.0 {
-                        worst_vs_held = (vs_held_db, key, vel, hold_s);
-                    }
-                }
-            }
+        for vel in [59u8, 60] {
+            let mut released = explicit_b1_voice(60, vel, sr, 0x6A09_E667, true);
+            let mut held = explicit_b1_voice(60, vel, sr, 0x6A09_E667, true);
+            let mut released_prefix = vec![0.0; (0.100 * sr) as usize];
+            let mut held_prefix = vec![0.0; released_prefix.len()];
+            released.render(&mut released_prefix);
+            held.render(&mut held_prefix);
+            assert_eq!(released_prefix, held_prefix);
+
+            released.note_off();
+            let mut released_tail = vec![0.0; (0.300 * sr) as usize];
+            let mut held_tail = vec![0.0; released_tail.len()];
+            released.render(&mut released_tail);
+            held.render(&mut held_tail);
+            let late = (0.200 * sr) as usize;
+            assert!(
+                crate::testutil::rms(&released_tail[late..])
+                    < crate::testutil::rms(&held_tail[late..]) * 0.20,
+                "velocity {vel}: felt damper did not suppress the recorded body"
+            );
+
+            let (t60, _) = voices::PianoDamper::Felt.t60_for(60);
+            let error = b1_release_curve_error(
+                explicit_b1_voice(60, vel, sr, 0x6A09_E667, true),
+                explicit_b1_voice(60, vel, sr, 0x6A09_E667, true),
+                sr,
+                t60,
+            );
+            assert!(
+                error < 2e-4,
+                "velocity {vel}: release differs from the felt curve by {error}"
+            );
         }
-        let (rise_db, key, vel, hold_s) = worst_absolute;
-        println!(
-            "B1 upright worst seam-or-later release rise: key {key} vel {vel}, \
-             note-off at {hold_s:.4}s, {rise_db:.2} dB"
-        );
-        assert!(
-            rise_db <= 1.5,
-            "B1 key {key} vel {vel} note-off at {hold_s:.4}s rises {rise_db:.2} dB"
-        );
-        let (vs_held_db, key, vel, hold_s) = worst_vs_held;
-        assert!(
-            vs_held_db <= 0.01,
-            "B1 key {key} vel {vel} note-off at {hold_s:.4}s exceeds its held \
-             control by {vs_held_db:.2} dB"
-        );
+    }
+
+    /// Explicit listening artifacts for the sample-only experiment. This diagnostic
+    /// renders the voice directly, so no engine combs, sends, BusGlue, limiter, or
+    /// catalogue normalization can alter the recording. It runs only by name with
+    /// `--ignored`; ordinary tests never write outside `target`.
+    #[test]
+    #[ignore = "writes B1 dry-control WAVs to the OS temp directory for human audition"]
+    fn write_b1_sample_only_dry_controls() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44_100.0;
+        let output_dir = std::env::temp_dir().join("ferrosintesis-b1-sample-only");
+        std::fs::create_dir_all(&output_dir).expect("create B1 diagnostic directory");
+
+        let cases = [
+            ("dry-aligned-b1-normal-root-C5-v59.wav", 72u8, 59u8, None),
+            ("dry-aligned-b1-hard-root-C5-v60.wav", 72, 60, None),
+            (
+                "dry-aligned-b1-normal-repitch-Csharp5-v59.wav",
+                73,
+                59,
+                None,
+            ),
+            (
+                "dry-aligned-b1-normal-release-C5-v59.wav",
+                72,
+                59,
+                Some(0.100f32),
+            ),
+        ];
+        for (name, key, vel, release_at) in cases {
+            let mut voice = explicit_b1_voice(key, vel, sr, 0x6A09_E667, true);
+            let total = (1.5 * sr) as usize;
+            let release = release_at.map(|seconds| (seconds * sr) as usize);
+            let mut rendered = vec![0.0f32; total];
+            let mut offset = 0;
+            while offset < total {
+                if release == Some(offset) {
+                    voice.note_off();
+                }
+                let next = release
+                    .filter(|&at| at > offset)
+                    .map_or((offset + 64).min(total), |at| at.min(offset + 64));
+                voice.render(&mut rendered[offset..next]);
+                offset = next;
+            }
+            let peak = rendered.iter().copied().map(f32::abs).fold(0.0, f32::max);
+            // Remove only the known runtime velocity/gain scalar. This makes the
+            // dry rung directly level-comparable with the 0.9-peak archival/baked
+            // rungs without measuring or normalizing the rendered file itself.
+            let runtime_scalar = 1.30 * vel_amp(vel);
+            let alignment_scalar = runtime_scalar.recip();
+            let mut stereo = Vec::with_capacity(rendered.len() * 2);
+            for value in rendered {
+                let aligned = value * alignment_scalar;
+                let pcm = (aligned.clamp(-1.0, 1.0) * i16::MAX as f32).round() as i16;
+                stereo.extend([pcm, pcm]);
+            }
+            let path = output_dir.join(name);
+            crate::wav::write_wav(&path, sr as u32, &stereo)
+                .unwrap_or_else(|error| panic!("write {}: {error}", path.display()));
+            println!(
+                "{}: runtime scalar {:.9}, alignment scalar {:.9}, aligned peak {:.6}",
+                path.display(),
+                runtime_scalar,
+                alignment_scalar,
+                peak * alignment_scalar
+            );
+        }
     }
 
     /// GM 7 clavinet routing (2026.07.17): the DEFAULT bank is the sampled voice,

@@ -12216,52 +12216,67 @@ mod tests {
         (rebound_db, levels)
     }
 
-    /// MM-BUG-KILN-00133: the engine must preserve a monotone GM0 envelope with
-    /// either voice source. The old voice-level oracle pinned seed 5 and could
-    /// not see the cancellation produced by the engine's normal seeded phase.
+    /// The model remains monotone; the sample-only experiment instead preserves the
+    /// recording's natural beating and must keep its body alive through the common
+    /// first-second listening window.
     #[cfg(feature = "embedded-samples")]
     #[test]
-    fn sampled_gm0_treble_does_not_rebound_through_the_engine() {
+    fn gm0_model_stays_monotone_and_sample_only_body_survives() {
         let sr = 44_100.0;
         for vel in [50u8, 100] {
             for key in 21u8..=108 {
-                for samples in [false, true] {
-                    let signal = render_held_gm0(key, vel, samples);
-                    let (rebound_db, levels) = held_note_rebound_db(&signal, sr);
-                    assert!(
-                        rebound_db <= 1.5,
-                        "GM0 key {key} vel {vel} samples={samples} rebounds {rebound_db:.2} dB through \
+                let model = render_held_gm0(key, vel, false);
+                let (rebound_db, levels) = held_note_rebound_db(&model, sr);
+                assert!(
+                    rebound_db <= 1.5,
+                    "GM0 model key {key} vel {vel} rebounds {rebound_db:.2} dB through \
                      the engine after its 150 ms attack budget (50 ms RMS: {levels:?})"
                 );
-                }
+
+                let sampled = render_held_gm0(key, vel, true);
+                assert!(sampled.iter().all(|value| value.is_finite()));
+                let late =
+                    crate::testutil::rms(&sampled[(0.550 * sr) as usize..(0.700 * sr) as usize]);
+                assert!(
+                    late > 1e-5,
+                    "GM0 sample-only key {key} vel {vel} lost its recorded body before 700 ms"
+                );
             }
         }
     }
 
-    /// MM-BUG-KILN-00133: a fixed recording must not force the modeled body to
-    /// one global seed. Repeated default-piano notes need the engine's per-voice
-    /// variation without re-opening the handoff trough.
+    /// The sample-only experiment must ignore model seeds. Calibrate that assertion
+    /// with the samples-off control so a weak seed pair cannot make both routes look
+    /// invariant.
     #[cfg(feature = "embedded-samples")]
     #[test]
-    fn sampled_gm0_repeated_notes_are_not_clones() {
+    fn sample_only_gm0_is_seed_invariant_while_the_model_control_is_not() {
         let sr = 44_100.0;
-        let render = |seed: u32| {
-            let mut voice = crate::voices::make(0, 72, 100, sr, seed, true);
+        let render = |seed: u32, samples: bool| {
+            let mut voice = crate::voices::make(0, 72, 100, sr, seed, samples);
             let mut out = vec![0.0; (0.700 * sr) as usize];
             voice.render(&mut out);
             out
         };
-        let a = render(0x9E37);
-        let a2 = render(0x9E37);
-        let b = render(0x9E37 ^ 2_654_435_761);
+        let seeds = [0x1357_9BDFu32, 0x6A09_E667];
+        let a = render(seeds[0], true);
+        let a2 = render(seeds[0], true);
+        let b = render(seeds[1], true);
         assert!(
             a.iter().zip(&a2).all(|(x, y)| x.to_bits() == y.to_bits()),
             "same engine seed must keep GM0 deterministic"
         );
-        let ncc = ncc_max(&a, &b, 128);
+        assert!(
+            a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()),
+            "sample-only GM0 still depends on the model seed"
+        );
+
+        let model_a = render(seeds[0], false);
+        let model_b = render(seeds[1], false);
+        let ncc = ncc_max(&model_a, &model_b, 128);
         assert!(
             ncc < 0.99,
-            "different engine seeds leave repeated GM0 notes cloned (NCC {ncc:.6})"
+            "seed pair does not move the model control (NCC {ncc:.6})"
         );
     }
 

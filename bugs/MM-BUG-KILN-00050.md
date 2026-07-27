@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00050 — above its crossover the KILN-00042 damper hold orders held corners by the preset's t60, not its bright, so plucked instruments re-order in brightness in the top register (ukulele drifts to/under nylon above ~key 64; koto's held corner exceeds nylon's)
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing) → Open (2026-07-26, Arthur approved a focused, level-matched per-instrument revoicing pass with comparative A/B renders) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source candidate `0acc6f7baa81d8ae0243a6012d0ce3e55d050123` restores the required steel/ukulele/koto held-brightness order with preset-local controls, level parity, focused regression coverage, and zero catalog contamination)
+- **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing) → Open (2026-07-26, Arthur approved a focused, level-matched per-instrument revoicing pass with comparative A/B renders) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source candidate `0acc6f7baa81d8ae0243a6012d0ce3e55d050123` restores the required steel/ukulele/koto held-brightness order with preset-local controls, level parity, focused regression coverage, and zero catalog contamination) → Closed (2026-07-27, claude-opus-5@high; independent two-eyes verification on trunk `8a4c90f` — centroids reproduced digit-for-digit, ordering holds at all 9 key×seed cells per pair, guard proven two-sided by reverting the two openings, repo gates green)
 
 ## Observation
 
@@ -244,3 +244,45 @@ plucked family, not just a top-octave curiosity. Bumping Severity considerations
 Low-ish audibly (the owner approved the re-fit's rings by ear, with each instrument in
 isolation), but it is the reason the family's *mutual* contrast has narrowed. The fix is
 unchanged (per-instrument voicing, or a bright-dependent held corner); its value rose.
+
+## Independent verification (2026-07-27, claude-opus-5@high — two-eyes, verifier ≠ fixer)
+
+Verified on trunk `8a4c90f`. Verdict: **Closed**.
+
+**The recorded centroids reproduce digit-for-digit** on an independent run of
+`plucked_hold_preserves_brightness_order_across_identity_keys` — nylon/steel/ukulele/koto
+455.5/721.8/984.2/354.1 at key 55, 559.0/1134.9/913.9/411.0 at key 60, and
+714.9/1526.8/962.0/512.6 at key 64, with STEEL/NYLON spanning 1.373–2.626, UKULELE/NYLON
+1.303–2.297 and KOTO/NYLON 0.685–0.834. Every ratio sits on the correct side of 1.0 at
+**all nine key×seed cells** for each pair, which is the register-stability contract this bug
+asked for.
+
+Both recorded inversions are gone: the ukulele no longer crosses under nylon in the top
+register, and the koto is consistently darker rather than carrying a wider held corner.
+
+**The guard is genuinely two-sided.** Reverting only the fix's mechanism — `damper_hold_scale`
+back to the default `1.0` for UKULELE (`crates/ferrosintesis/src/voices.rs:3068`) and STEEL
+(`:3129`) — makes it fail at `crates/ferrosintesis/src/voices.rs:19985`, with STEEL/NYLON
+collapsing to 0.727–1.341 (steel reads *darker* than nylon at keys 60 and 64) and the
+ukulele's key-64 margin falling to 1.172–1.257.
+
+**The canary the first integration gate caught is green.** `wound_strings_darker` — which the
+Fix evidence records as having been broken by STEEL's local opening and then repaired by
+carrying the wound-string attenuation into the multiplier — passes, as does
+`ukulele_variation_is_brighter_and_shorter_than_nylon`.
+
+**One honest caveat about margin.** The guard deliberately uses a new four-window Hann DFT
+centroid rather than the sparse full-window estimator the Observation quoted, because the old
+one carries large phase/seed noise. On the legacy sparse aggregate the test also prints, the
+key-64 ukulele margin is thin — nylon 903.1 versus ukulele 944.7, a ratio of about 1.05 —
+against a comfortable 1.303–1.429 on the new estimator. The sign is correct on both, which is
+what the fix contract claimed, but anyone revisiting this should know the older metric leaves
+little headroom at the top of the ukulele's register.
+
+**Gates, observed at `8a4c90f`:** `cargo test --workspace --release` 812 passed / 0 failed /
+41 ignored, 0 failed across all 39 other suites; clippy clean under default and
+`--no-default-features`; `cargo fmt --all --check` clean.
+
+**Not re-run here:** the 141-MIDI render inventory and the loudness A/B pack. The level side
+effect the fix reports (STEEL `exc_trim` −1.51 → −2.18 dB) is pinned by the focused pluck
+suite, which is green.

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00155 — A modeled GM 24 nylon voice self-oscillates and diverges to 1.7e12, silently crushing the whole render
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** High
 - **Area:** voices / plucked (Karplus-Strong polarization coupling)
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised by claude-opus-5@high while regenerating the test-corpus renders) → Fixed (2026-07-27, claude-opus-5@high)
+- **State history:** Open (2026-07-26, raised by claude-opus-5@high while regenerating the test-corpus renders) → Fixed (2026-07-27, claude-opus-5@high) → Closed (2026-07-28, independently verified by Codex on trunk `1f80bfe`: exact corpus repro peak 0.09; regression fails before and passes after; full repo gate green)
 
 ## Observation
 
@@ -182,6 +182,29 @@ defect. The lag was the defect, and removing it costs nothing elsewhere.
   not move at all) and three key-64 G7 canary cells (`+0.14 / +0.13 / +0.10 dB`). NYLON keys 40 and
   52 did not move, which is the delay-length dependence the diagnosis predicts — a uniform shift
   across the grid would have meant something else was wrong.
+
+### Independent verification (2026-07-28)
+
+Codex independently verified fix commit `22bceb1d2f98defa44b4abfc7c8fb5f973edb9e0`
+on trunk `1f80bfe50a17e72e22228d5f237a4f6a483ccf36`.
+
+- Re-running the original channel-5 observation against the exact local corpus input
+  `test-corpus/reference-midi/mike-oldfield/04-incantations-part-iv-xg.mid`
+  (SHA-256 `60c92f6a1f9355629b60329203b181fce174b5f4ba915b503eb1992eb4289264`)
+  completed 333 voices with peak `0.09` and max polyphony 16. The recorded runaway
+  peak was `1.7e12`, so the destructive normalization trigger is gone.
+- The committed `held_plucked_notes_decay_at_every_key` regression was copied
+  unchanged onto the exact pre-fix parent `2f8a99e2c665ad7dd7c876efd4c577696cca09d7`.
+  It failed there at `NYLON key 96`, where the late/early ratio was `2.205`.
+  On the fixed tree it passed, with worst normalized ratio `0.6096`.
+- Every command in `.deltic-integrate.toml` passed: formatting; workspace clippy;
+  modeled-only clippy; modeled-only tests; workspace tests; and all 99 sample-tool
+  tests.
+
+The before/after rendered signal confirms the stated root cause: removing the
+one-sample-stale cross-plane read restores contraction exactly where the old
+high-note coupling generated energy. No residual symptom or untracked gap was
+found.
 
 ## Notes
 

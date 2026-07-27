@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63-code-1785144242660
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T091113Z-p9812-n303128100-c63 branch=task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63 code=843604ee70ee gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T091113Z-p9812-n303128100-c63 branch=task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63 code=2f0e6ee818b19768449e426e0b86131fed4c4afb gate=python model=codex@xhigh)
 
 ## Observation
 
@@ -50,26 +50,27 @@ survives.
 
 ## Fix
 
-<unfixed — raised only>
+Banjo extraction now writes into a sibling staging directory and derives the
+exact expected 24-file inventory from both the sample crate and sampler table.
+It validates every staged file as non-empty mono 16-bit PCM at 44.1 kHz before
+publishing anything.
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T091113Z-p9812-n303128100-c63 code=843604ee70ee gate=cargo)
+Publication backs up the current bank, atomically replaces each file, and rolls
+the complete bank back if any replacement or obsolete-file removal fails.
+Obsolete files are removed only after all expected replacements succeed.
 
-Agent-reported summary: Fixed MM-BUG-KILN-00153 by changing the standalone banjo extractor so regeneration is staged and validated before tracked bank files are replaced. The old implementation selected whatever zones survived QC, deleted every existing banjo WAV, and wrote directly to final paths, so a write failure or missing zone could leave the bank missing or partial. The new path derives the expected 24-file inventory from the sample crate and sampler table, validates staged WAV names and mono 16-bit 44.1 kHz contracts, then publishes with atomic per-file replacement. I added a focused Rust source-level regression that failed on the original delete-before-write shape and passes on the staged publication contr
+Root cause: generation and publication were interleaved. The script deleted the
+current bank before proving that the selected zones formed a complete, valid
+replacement.
 
-Root cause: banjo_extract.py mixed generation and publication: it deleted the existing banjo_*.wav files before validating a complete replacement plan and before write_wav16 had succeeded for all outputs.
+Regression coverage:
 
-Changed:
-- tools/ferrosintesis-samples/banjo_extract.py: added derived exact-inventory validation, staged generation, WAV-contract checks, and post-validation per-file rep
-- crates/ferrosintesis/src/sample_tools.rs and crates/ferrosintesis/src/lib.rs: added focused regression coverage for the banjo extractor publication contract.
-
-Tests:
-- Reproduced original observation by source-order check: f.unlink() preceded direct final-path write_wav16(OUT / ...) and no EXPECTED_BANJO_FILES guard existed.
-- $null | deltic timeout 180 cargo test -p ferrosintesis --no-default-features banjo_extract
-- deltic timeout 60 cargo fmt -p ferrosintesis --check
-- git diff --check
-
-Left alone:
-- bugs/ ledger, Cargo.toml, Cargo.lock, and shipped sample WAVs were not edited.
+- `test_banjo_extract.py`: 3/3 passed, including a missing-zone rejection,
+  injected fifth-replacement failure with byte-for-byte rollback, and the
+  successful replacement/removal path.
+- Full Python discovery under `tools/ferrosintesis-samples`: 93/93 passed.
+- `python -m py_compile tools/ferrosintesis-samples/banjo_extract.py
+  tools/ferrosintesis-samples/test_banjo_extract.py`: passed.
 
 ## Notes
 

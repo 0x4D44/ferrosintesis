@@ -5,17 +5,17 @@
 - **Severity:** Low
 - **Area:** synth
 - **Raised:** 2026-07-23
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T011504Z-p9812-n352349500-c37
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00050-run-fix-20260727T011504Z-p9812-n352349500-c37
-- **Owner base:** 9a41bc68c50f000c1f70dd5d1c96b4aa486a8e9c
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T01:15:04Z
-- **Owner until:** 2026-07-27T02:00:04Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00050-run-fix-20260727T011504Z-p9812-n352349500-c37
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-23, raised by Claude Opus 4.8 (1M) — the acknowledged residual of the KILN-00042 relative-budget damper hold, surfaced by a rendered identity scan and confirmed against both experts' analyses) → Blocked (2026-07-26, GPT-5.6 Codex on KILN-Windows — both shared laws trade one identity defect for another and the recorded fix requires Arthur to judge the current plucked-family contrast before any per-instrument revoicing) → Open (2026-07-26, Arthur approved a focused, level-matched per-instrument revoicing pass with comparative A/B renders)

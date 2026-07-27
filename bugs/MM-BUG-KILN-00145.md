@@ -17,8 +17,8 @@
 - **Verify retry after:** -
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00145-run-fix-20260727T033403Z-p9812-n749513500-c45-code-1785124032820
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T033403Z-p9812-n749513500-c45 branch=task/bug-MM-BUG-KILN-00145-run-fix-20260727T033403Z-p9812-n749513500-c45 code=6c6e1a7ada37 gate=cargo model=codex@xhigh)
+- **Attempts:** fix=1, doubt=0, indeterminate=0
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-27, GPT-5.6 Codex on KILN-Windows — source `0788a860322e6432045a1aa49478163dc86450c1`; every `prepare.py` bake path that reaches a packaged WAV write must now validate its complete owned output inventory first)
 
 ## Observation
 
@@ -56,24 +56,40 @@ Do the same here: derive the set of bake helpers that own an output family (for 
 
 <unfixed — raised only>
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T033403Z-p9812-n749513500-c45 code=6c6e1a7ada37 gate=cargo)
+### Fix summary (2026-07-27, GPT-5.6 Codex on KILN-Windows)
 
-Agent-reported summary: Fixed MM-BUG-KILN-00145 by turning the recurring per-bank output-inventory guard into a source-derived Cargo regression. The regression first failed on the current tree, naming bake helpers that wrote generated WAV outputs before reaching the shared validator. The bake helpers now validate their expected output families before their first packaged WAV write, including direct-write crates and dynamically derived output sets. The shared validator now accepts an explicit output directory, so direct-write helpers do not need fake routing-table entries. The focused inventory tests and Rust format check are green.
+Source: `0788a860322e6432045a1aa49478163dc86450c1`.
 
-Root cause: The existing `_validate_generated_output_inventory` helper was only called where a previous per-bank bug had added it by hand, so new or direct-write bake helpers inherited no mandatory output-inventory check and could retain obsolete packaged WAVs.
+The recurring defect was possible because
+`_validate_generated_output_inventory` remained an optional hand-placed call.
+New bake helpers inherited no requirement to reject obsolete family-owned WAVs.
 
-Changed:
-- tools/ferrosintesis-samples/prepare.py: shared output-family validation and pre-write validator calls for generated bake helpers
-- crates/ferrosintesis/src/inventory.rs: source-scan regression with negative and transitive-validation controls
+The fix adds one source-derived Cargo oracle over
+`tools/ferrosintesis-samples/prepare.py`. It discovers top-level bake helpers,
+follows both packaged `write_wav_mono` calls and inventory validation through
+delegated helpers, preserves call order, and rejects any path whose first write
+precedes validation. Its adversarial controls prove it rejects:
 
-Tests:
-- $null | deltic timeout 180 cargo test -p ferrosintesis inventory::tests::every_generated_bake_output_family_is_inventory_validated -- --exact (failed before fix
-- $null | deltic timeout 240 cargo test -p ferrosintesis inventory::tests:: (passed)
-- deltic timeout 120 cargo fmt -p ferrosintesis --check (passed)
+- a direct unvalidated writer;
+- an unvalidated delegated writer;
+- a delegated helper that validates only after writing.
 
-Left alone:
-- bugs/ ledger unchanged
-- Cargo.toml and Cargo.lock unchanged
-- Python unittest runner was unavailable in this sandbox; validation used the scoped Cargo source-scan regression
+Positive controls prove direct and delegated validation are accepted. This closes
+the gap where a future bake could hide its write behind another helper.
+
+The existing bake paths now validate their complete owned output sets before
+writing. The shared validator accepts an explicit output directory for direct-write
+crates and requires explicit family names, so an empty dynamic output plan still
+rejects stale owned WAVs. Python controls cover empty plans and multi-family
+directories without treating sibling families as contamination.
+
+Evidence:
+
+- `cargo test -p ferrosintesis inventory::tests:: -- --nocapture`: 14 passed.
+- `python tools\ferrosintesis-samples\test_prepare.py`: 84 passed.
+- Python byte-compilation of `prepare.py` and `test_prepare.py`: green.
+- `cargo clippy -p ferrosintesis --all-targets -- -D warnings`: green.
+- `cargo fmt --all -- --check` and `git diff --check`: green.
+- No dependencies, manifests, lockfiles, or generated sample assets changed.
 
 ## Notes

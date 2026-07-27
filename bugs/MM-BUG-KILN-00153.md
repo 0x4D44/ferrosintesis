@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00153 — Banjo regeneration deletes the bank before replacement is ready
 
-- **State:** Fixed
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** banjo sample generation / reliability
 - **Raised:** 2026-07-27
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T183302Z-p9812-n667926500-c113
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00153-run-verify-20260727T183302Z-p9812-n667926500-c113
-- **Owner base:** 407011406135e5889a86c43db5bf5473110fda1d
-- **Owner fingerprint:** sha256:7881c2e5cab4969a1038d0b708b7f650082b0d0482f3a399407b634464474185
-- **Owner since:** 2026-07-27T18:33:02Z
-- **Owner until:** 2026-07-27T19:18:02Z
-- **Verify retry after:** 2026-07-27T17:34:56Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
+- **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=1
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T091113Z-p9812-n303128100-c63 branch=task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63 code=2f0e6ee818b19768449e426e0b86131fed4c4afb gate=python model=codex@xhigh)
+- **Attempts:** fix=0, doubt=1, indeterminate=0
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T091113Z-p9812-n303128100-c63 branch=task/bug-MM-BUG-KILN-00153-run-fix-20260727T091113Z-p9812-n303128100-c63 code=2f0e6ee818b19768449e426e0b86131fed4c4afb gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T183302Z-p9812-n667926500-c113 verified_fix_run=fix-20260727T091113Z-p9812-n303128100-c63 verdict=doubt reason=symptom-is-gone-and-the-root-cause-is-properly-addressed-and-all-5-cargo-gate-st model=claude)
 
 ## Observation
 
@@ -71,6 +71,10 @@ Regression coverage:
 - Full Python discovery under `tools/ferrosintesis-samples`: 93/93 passed.
 - `python -m py_compile tools/ferrosintesis-samples/banjo_extract.py
   tools/ferrosintesis-samples/test_banjo_extract.py`: passed.
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T183302Z-p9812-n667926500-c113 verified_fix_run=fix-20260727T091113Z-p9812-n303128100-c63 verdict=doubt)
+
+Verifier note: Symptom is gone and the root cause is properly addressed, and all 5 cargo gate steps are green - but this sandbox denies every 'python <args>' call, so I could not observe the regression test or the python gate step actually passing; needs one command run by someone with python permission. — Ledger: bugs/MM-BUG-KILN-00153.md. (1) ORIGINAL OBSERVATION REPRODUCED then confirmed gone: 'git show 4da2b26^:tools/ferrosintesis-samples/banjo_extract.py' shows main() ran `for f in OUT.glob("banjo_*.wav"): f.unlink()` BEFORE generation and then write_wav16() straight to final paths, with no output-plan ...
 
 ## Notes
 

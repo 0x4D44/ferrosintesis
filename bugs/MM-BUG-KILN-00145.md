@@ -5,17 +5,17 @@
 - **Severity:** Low
 - **Area:** testing / sample generation
 - **Raised:** 2026-07-26
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T033403Z-p9812-n749513500-c45
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00145-run-fix-20260727T033403Z-p9812-n749513500-c45
-- **Owner base:** 6d9a568872af153f75f17fa5cee40c2b6ce73410
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T03:34:03Z
-- **Owner until:** 2026-07-27T04:29:36Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00145-run-fix-20260727T033403Z-p9812-n749513500-c45-code-1785124032820
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-5@high)

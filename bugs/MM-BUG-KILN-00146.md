@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00146 — GM42 cello keys 74/76 lock an octave up at high bow force, and the wolf gate's seeds could not see it
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** voices / BowedString
 - **Raised:** 2026-07-26
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T160401Z-p9812-n403774100-c90
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00146-run-verify-20260727T160401Z-p9812-n403774100-c90
-- **Owner base:** 8c71b557d833a172be2679b2f67db25ab29ae9ab
-- **Owner fingerprint:** sha256:4c316c320d0eefd2058a6262e23832b27a998df3db99a53572b6d316650a6539
-- **Owner since:** 2026-07-27T16:04:01Z
-- **Owner until:** 2026-07-27T16:59:27Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T233602Z-p9812-n603751900-c22 branch=task/bug-MM-BUG-KILN-00146-run-fix-20260726T233602Z-p9812-n603751900-c22 code=67e6a15b8c57714dcade55d7769cc5e239b8d1f4 gate=focused+render-diff model=codex@xhigh)
+- **State history:** Open (2026-07-26, raised via `deltic bugs new` model=claude-opus-4.6@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T233602Z-p9812-n603751900-c22 branch=task/bug-MM-BUG-KILN-00146-run-fix-20260726T233602Z-p9812-n603751900-c22 code=67e6a15b8c57714dcade55d7769cc5e239b8d1f4 gate=focused+render-diff model=codex@xhigh) → Closed (2026-07-27, deltic:auto role=verify run=verify-20260727T160401Z-p9812-n403774100-c90 verified_fix_run=fix-20260726T233602Z-p9812-n603751900-c22 verdict=close model=claude)
 
 ## Observation
 
@@ -72,6 +72,10 @@ Tests:
 Left alone:
 - Cargo.toml
 - Cargo.lock
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T160401Z-p9812-n403774100-c90 verified_fix_run=fix-20260726T233602Z-p9812-n603751900-c22 verdict=close)
+
+Verifier note: GM42 keys 74/76 hold their fundamental at every reachable bow force on this trunk; the register gates now seed from engine::note_voice_seed and are proven non-vacuous; all repo gates green. — Trunk 0e86ca0. (1) Symptom: ran map_bowedstring_bow_force_ceiling --ignored (forces v.slope directly, bypassing both stabilizers) - GM42 keys 48-101 report max_slope_ok '>=2.90 (full range)' for every key except 90/91 (2.65/2.40), which sit above the cello register (top_key 76) and are the documented beta-0.140 violin-family dead notes; the bug's keys 74 and 76 take the whole 2.20-2.95 sweep within 15 cen...
 
 ## Notes
 

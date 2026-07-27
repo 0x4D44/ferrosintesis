@@ -37,6 +37,8 @@ SRC = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "samples/banjo/banjo-5s
 OUT = REPO / "crates/ferrosintesis-samples-orchestral2/samples"
 SR = 44100
 NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+BANJO_GLOB = "banjo_*.wav"
+EXPECTED_BANJO_FILE_COUNT = 24
 np.random.seed(1234)  # deterministic dither
 
 
@@ -46,6 +48,51 @@ def note_name(m: int) -> str:
 
 def note_freq(m: int) -> float:
     return 440.0 * 2 ** ((m - 69) / 12)
+
+
+def _quoted_fields(line: str) -> list[str]:
+    return line.split('"')[1::2]
+
+
+def _sample_crate_banjo_files(repo: Path = REPO) -> frozenset[str]:
+    lib = repo / "crates/ferrosintesis-samples-orchestral2/src/lib.rs"
+    names = set()
+    for raw in lib.read_text(encoding="utf-8").splitlines():
+        if "include_bytes!" not in raw:
+            continue
+        for field in _quoted_fields(raw):
+            if field.startswith("banjo_") and field.endswith(".wav"):
+                names.add(field)
+    return frozenset(names)
+
+
+def _sampler_banjo_files(repo: Path = REPO) -> frozenset[str]:
+    sampler = repo / "crates/ferrosintesis/src/sampler.rs"
+    names = set()
+    for raw in sampler.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith('"banjo_') and '" =>' in line:
+            names.add(_quoted_fields(line)[0])
+    return frozenset(names)
+
+
+def _format_names(names) -> str:
+    return ", ".join(sorted(names)) if names else "<none>"
+
+
+def expected_banjo_files(repo: Path = REPO) -> frozenset[str]:
+    sample_crate = _sample_crate_banjo_files(repo)
+    sampler = _sampler_banjo_files(repo)
+    if sample_crate != sampler:
+        raise RuntimeError(
+            "banjo inventory mismatch between sample crate and sampler.rs; "
+            f"only in sample crate: {_format_names(sample_crate - sampler)}; "
+            f"only in sampler.rs: {_format_names(sampler - sample_crate)}")
+    if len(sample_crate) != EXPECTED_BANJO_FILE_COUNT:
+        raise RuntimeError(
+            f"banjo regeneration expected {EXPECTED_BANJO_FILE_COUNT} files, "
+            f"found {len(sample_crate)} in the checked-in bank inventory")
+    return sample_crate
 
 
 def decode_mono(path: Path) -> np.ndarray:
@@ -134,6 +181,51 @@ def write_wav16(path, sig):
     Path(path).write_bytes(hdr + data)
 
 
+def validate_wav16_contract(path: Path) -> None:
+    data = path.read_bytes()
+    if len(data) < 44:
+        raise RuntimeError(f"{path.name}: WAV is too short")
+    if data[:4] != b"RIFF" or data[8:12] != b"WAVE" or data[12:16] != b"fmt ":
+        raise RuntimeError(f"{path.name}: not a canonical RIFF/WAVE file")
+    riff_size = struct.unpack("<I", data[4:8])[0]
+    if riff_size != len(data) - 8:
+        raise RuntimeError(f"{path.name}: RIFF size does not match file length")
+    fmt_size, audio_format, channels, sr, byte_rate, block_align, bits = struct.unpack(
+        "<IHHIIHH", data[16:36])
+    if (fmt_size, audio_format, channels, sr, byte_rate, block_align, bits) != (
+            16, 1, 1, SR, SR * 2, 2, 16):
+        raise RuntimeError(f"{path.name}: expected mono 16-bit PCM at {SR} Hz")
+    if data[36:40] != b"data":
+        raise RuntimeError(f"{path.name}: expected data chunk after fmt chunk")
+    data_size = struct.unpack("<I", data[40:44])[0]
+    if data_size == 0 or data_size % 2 or data_size != len(data) - 44:
+        raise RuntimeError(f"{path.name}: data chunk size is invalid")
+
+
+def validate_banjo_output_plan(staging: Path, repo: Path = REPO) -> frozenset[str]:
+    expected = expected_banjo_files(repo)
+    actual = {p.name for p in staging.glob(BANJO_GLOB)}
+    if actual != expected:
+        raise RuntimeError(
+            "banjo regeneration produced the wrong file set; "
+            f"missing: {_format_names(expected - actual)}; "
+            f"unexpected: {_format_names(actual - expected)}")
+    for name in sorted(expected):
+        validate_wav16_contract(staging / name)
+    return expected
+
+
+def publish_banjo_bank(staging: Path, out: Path = OUT, expected=None) -> None:
+    if expected is None:
+        expected = validate_banjo_output_plan(staging)
+    out.mkdir(parents=True, exist_ok=True)
+    for name in sorted(expected):
+        (staging / name).replace(out / name)
+    for old in out.glob(BANJO_GLOB):
+        if old.name not in expected:
+            old.unlink()
+
+
 def main():
     y = decode_mono(SRC)
     ons = onsets(y)
@@ -172,19 +264,26 @@ def main():
     zones = [m for m in sorted(best) if best[m]["clar"] >= 0.62]
 
     OUT.mkdir(parents=True, exist_ok=True)
-    for f in OUT.glob("banjo_*.wav"):
-        f.unlink()
-    for m in zones:
-        t = best[m]; on = t["on"]; keep = max(0.40, min(0.50, t["room"] - 0.03))
-        w0, w1 = max(0, on - int(0.008 * SR)), on + int(0.025 * SR)
-        win = y[w0:w1]; lp = np.max(np.abs(win)) + 1e-9
-        start = max(0, w0 + int(np.argmax(np.abs(win) > 0.02 * lp)) - int(0.003 * SR))
-        clip = y[start:start + int(keep * SR)].astype(np.float64)
-        clip = clip / (np.max(np.abs(clip)) + 1e-12) * 10 ** (-1 / 20)
-        fo = int(0.012 * SR); clip[-fo:] *= np.linspace(1, 0, fo)
-        fi = int(0.003 * SR); clip[:fi] *= np.linspace(0, 1, fi)
-        write_wav16(OUT / f"banjo_{note_name(m)}.wav", clip)
-        print(f"banjo_{note_name(m)}.wav  root {t['f0']:.2f} Hz")
+    written = []
+    with tempfile.TemporaryDirectory(prefix=".banjo-staging-", dir=OUT.parent) as stage_dir:
+        staging = Path(stage_dir)
+        for m in zones:
+            t = best[m]; on = t["on"]; keep = max(0.40, min(0.50, t["room"] - 0.03))
+            w0, w1 = max(0, on - int(0.008 * SR)), on + int(0.025 * SR)
+            win = y[w0:w1]; lp = np.max(np.abs(win)) + 1e-9
+            start = max(0, w0 + int(np.argmax(np.abs(win) > 0.02 * lp)) - int(0.003 * SR))
+            clip = y[start:start + int(keep * SR)].astype(np.float64)
+            clip = clip / (np.max(np.abs(clip)) + 1e-12) * 10 ** (-1 / 20)
+            fo = int(0.012 * SR); clip[-fo:] *= np.linspace(1, 0, fo)
+            fi = int(0.003 * SR); clip[:fi] *= np.linspace(0, 1, fi)
+            name = f"banjo_{note_name(m)}.wav"
+            write_wav16(staging / name, clip)
+            written.append((name, t["f0"]))
+        expected = validate_banjo_output_plan(staging)
+        publish_banjo_bank(staging, OUT, expected)
+
+    for name, root in written:
+        print(f"{name}  root {root:.2f} Hz")
     print(f"\n{len(zones)} zones written to {OUT}")
     print("Remember to sync the bank!() roots in sampler.rs and the SAMPLES list in the crate lib.rs.")
 

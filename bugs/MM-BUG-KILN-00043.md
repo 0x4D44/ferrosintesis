@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sampler
 - **Raised:** 2026-07-22
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260727T143003Z-p9812-n329069200-c84
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00043-run-verify-20260727T143003Z-p9812-n329069200-c84
+- **Owner base:** 20c5142a1cf040adbc9bf6c2656ac3557bb696dd
+- **Owner fingerprint:** sha256:f6b1dc3b7b00db47b586bf283b3a40270013811ba99ad39199df282210d72436
+- **Owner since:** 2026-07-27T14:30:03Z
+- **Owner until:** 2026-07-27T15:15:03Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

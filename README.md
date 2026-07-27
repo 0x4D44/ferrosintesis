@@ -184,9 +184,10 @@ cargo test                           # numeric audio oracles — this machine ha
 Rendering the catalog is pure Rust (`crates/render-catalog`) — no Python involved; it
 needs a Rust toolchain plus `ropusenc` from the sibling `ropus` project on PATH. Python
 is still what *composes* the music: each album directory has its own `build.py` that
-rebuilds that album's MIDI, standard-library only, so a bare `python3` is enough. The
-`.opus` / `.wav` files are git-ignored build output; only the sources and `.mid` are
-committed.
+rebuilds that album's MIDI, standard-library only, so a bare `python3` is enough — with
+one exception: `albums/opus4-8/` writes its MIDI through `mido`, pinned in that album's
+own `requirements.txt`. The `.opus` / `.wav` files are git-ignored build output; only the
+sources and `.mid` are committed.
 
 ## Layout
 

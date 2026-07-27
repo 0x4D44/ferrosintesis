@@ -82,9 +82,20 @@ fine adjustments may still be wanted — tell me what you hear.
 
 ## Regenerate / render
 
+Unlike every other album here, this engine is **not** standard-library only — it
+writes its MIDI through `mido`. Install the pinned version first:
+
 ```bash
-python build.py            # rebuilds all 12 midi/*.mid and reports the album length
-python tracks/05_letters_unsent.py   # rebuild a single track
+python3 -m pip install -r requirements.txt
+```
+
+The pin is deliberate. The committed `midi/*.mid` is this album's source of truth,
+so the writer version is part of its reproducibility contract; `mido==1.3.3`
+rebuilds all 12 tracks byte-identically (verified 2026-07-27, macOS/Python 3.9.6).
+
+```bash
+python3 build.py            # rebuilds all 12 midi/*.mid and reports the album length
+python3 tracks/05_letters_unsent.py   # rebuild a single track
 ```
 
 Bounce a track to audio with a SoundFont:

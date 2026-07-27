@@ -8,7 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 composed by a different language model and committed as reproducible source. It holds
 two kinds of code that meet at the MIDI file:
 
-1. **Composition engines** — per-album **Python** (standard-library only) that emit
+1. **Composition engines** — per-album **Python** (standard-library only, except
+   `albums/opus4-8/`, which needs `mido` — see its `requirements.txt`) that emit
    `.mid` files. One engine per album; the album *is* the code plus its rendered MIDI.
 2. **ferrosintesis** — a Rust MIDI-to-WAV synthesizer with **zero third-party
    code dependencies**
@@ -74,10 +75,16 @@ Run tests with stdin closed (`$null | cargo test …` in PowerShell,
 
 ### Composition engines (Python) — from inside an **album** directory
 ```
-python build.py            # regenerate the .mid (+ album_manifest.json)
-python build.py --verify   # rebuild in memory, re-parse the written MIDI, run the oracle table
+python3 build.py            # regenerate the .mid (+ album_manifest.json)
+python3 build.py --verify   # rebuild in memory, re-parse the written MIDI, run the oracle table
 ```
-No third-party deps — a bare `python3` is enough. Seeds are fixed, so a rebuild is
+`python3`, not `python`: macOS and most Debian/WSL hosts ship only the suffixed name,
+and the fleet's Windows boxes carry both.
+
+No third-party deps — a bare `python3` is enough — **except `albums/opus4-8/`**, whose
+`engine.py` writes MIDI through `mido`; install it with
+`python3 -m pip install -r requirements.txt` from that album directory. It is the only
+album in the repo that needs anything off-stdlib. Seeds are fixed, so a rebuild is
 byte-identical and `--verify` reasons about the same Score that produced the file.
 (`--verify` covers all fable5 + gpt5 albums; VIGIL's builder only rebuilds. Some
 fable5 albums also add `--check` for in-memory-only oracles, safe to run while composing.)
@@ -311,7 +318,7 @@ Two shapes:
 
 | Path | Role |
 |------|------|
-| `engine.py` (+ `conductor.py` / `material.py` / `movements/`) | composition engine, stdlib-only |
+| `engine.py` (+ `conductor.py` / `material.py` / `movements/`) | composition engine, stdlib-only (`opus4-8` excepted: needs `mido`) |
 | `build.py` | entry point: rebuild / `--verify` / `--check` |
 | `verify.py`, `analyze.py` | structural oracles (MIDI) and audio oracles (render) |
 | `midi/NN - Title.mid` | rendered MIDI, **committed**, reproducible |

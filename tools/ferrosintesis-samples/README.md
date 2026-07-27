@@ -208,8 +208,9 @@ python3 tools/ferrosintesis-samples/prepare.py
 
 ## Optional dev dependencies
 
-`prepare.py` and the album engines are standard-library only. Two of the bake
-tools are not: `banjo_extract.py` and `fretnoise_bake.py` both `import numpy`.
+`prepare.py` is standard-library only, as are the album engines bar
+`albums/opus4-8/` (which needs `mido`). Two of the bake tools are not:
+`banjo_extract.py` and `fretnoise_bake.py` both `import numpy`.
 
 numpy is therefore an **optional dev dependency of this directory only** — it is
 not needed to build the synth, render a catalogue, or rebuild an album. The test

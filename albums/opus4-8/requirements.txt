@@ -1,0 +1,12 @@
+# The one album in this repo whose engine is NOT standard-library only.
+#
+# `engine.py` writes its MIDI through mido rather than the stdlib writer the other
+# albums share. Pinned, not floated: this album's committed `midi/*.mid` is its
+# source of truth, and an unpinned writer could change the byte layout and break
+# the reproducibility that the whole repo rests on.
+#
+# Verified 2026-07-27 on macOS/Python 3.9.6 — `python build.py` under this pin
+# rebuilds all 12 tracks byte-identically to the committed MIDI.
+#
+#   python3 -m pip install -r requirements.txt
+mido==1.3.3

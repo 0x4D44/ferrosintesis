@@ -7,7 +7,7 @@
 //! (metal-bar bell strike). Each WAV is a
 //! mono 16-bit 44.1 kHz onset; `ferrosintesis` crossfades it into the modeled sustain.
 //! Consumers normally access this crate through `ferrosintesis`. Attribution
-//! obligations (the FluidR3 / MuseScore_General notices) are in `NOTICE`; the GM 7
+//! obligations (the MS Basic acknowledgement set) are in `NOTICE`; the GM 7
 //! clavinet from the same soundfont ships separately in `ferrosintesis-samples-clavinet`.
 
 #![forbid(unsafe_code)]

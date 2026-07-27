@@ -20,10 +20,11 @@ root.
 SHA-256 `5ea2375e8bd7d8e71def1036978c1621e85b66934169b6a2744b27b9b3c2d99c`.
 
 **Licence.** MIT, **not** CC0 - this crate is deliberately separate from the CC0 banks so
-those stay pure CC0. The MIT permission notice and the retained upstream copyright lines
-(FluidR3 by Frank Wen; FluidR3Mono by Michael Cowgill; MuseScore_General adaptation by
-S. Christian Collins) are reproduced in this crate's `NOTICE`, which must travel with any
-binary distribution.
+those stay pure CC0. The MIT permission notice and the retained upstream acknowledgement
+set (FluidR3 by Frank Wen; FluidR3Mono by Michael Cowgill; MuseScore_General adaptation
+by S. Christian Collins; Temple Blocks by Ethan Winer; Drumline Cymbals by Michael
+Schorsch) are reproduced in this crate's `NOTICE`, which must travel with any binary
+distribution.
 
 The GM 8 celesta was previously absent from this file, the README and the crate
 description even though `src/lib.rs` documented it (MM-BUG-KILN-00069 item 1).

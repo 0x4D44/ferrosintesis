@@ -24,5 +24,5 @@ The GM 7 clavinet from the same soundfont ships separately in
 ## License
 
 **MIT** — attribution (the FluidR3 / MuseScore_General copyright notices) must
-travel with the samples; see `NOTICE`. Source pin (commit SHA + SHA-256) and the
-regeneration recipe live in `tools/ferrosintesis-samples/README.md`.
+travel with the samples; see `NOTICE`. Source pin (commit SHA + SHA-256), scoped
+inventory, and the regeneration recipe live in this crate's `PROVENANCE.md`.

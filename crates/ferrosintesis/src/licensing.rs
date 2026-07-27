@@ -104,6 +104,11 @@ pub(crate) fn declared_license(krate: &str) -> String {
 mod tests {
     use super::*;
 
+    const MS_BASIC_SOURCE_REV: &str = "d307a2bd899f15bf650efc3c2891211af5cb78b5";
+    const MS_BASIC_LICENSE: &str = include_str!(
+        "upstream_licenses/ms_basic_license_d307a2bd899f15bf650efc3c2891211af5cb78b5.md"
+    );
+
     /// CC0 waives attribution. Everything else here (MIT, CC-BY-3.0, CC-BY-4.0) requires
     /// the credit to travel with a binary distribution.
     fn requires_attribution(license: &str) -> bool {
@@ -229,6 +234,66 @@ mod tests {
         has_source_url || has_copyright_line
     }
 
+    fn normalized_credit(text: &str) -> String {
+        let separated: String = text
+            .to_ascii_lowercase()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' })
+            .collect();
+        separated.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    fn ms_basic_required_acknowledgements() -> Vec<(&'static str, String)> {
+        let obligation = "The acknowledgements and copyright notices above must be included";
+        let before_obligation = MS_BASIC_LICENSE.split_once(obligation).unwrap_or_else(|| {
+            panic!(
+                "the committed MS Basic licence fixture no longer carries the redistribution \
+                 obligation marker"
+            )
+        });
+        let required: Vec<(&str, String)> = before_obligation
+            .0
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.contains("Copyright (c)"))
+            .map(|line| (line, normalized_credit(line)))
+            .collect();
+        assert!(
+            required.len() >= 5,
+            "the committed MS Basic licence fixture yielded only {} acknowledgement \
+             line(s); the parser is probably too narrow",
+            required.len()
+        );
+        required
+    }
+
+    fn ms_basic_sample_crates() -> Vec<String> {
+        let crates: Vec<String> = default_sample_crates()
+            .into_iter()
+            .filter(|krate| {
+                let provenance = read(&crates_dir().join(krate).join("PROVENANCE.md"));
+                provenance.contains(MS_BASIC_SOURCE_REV)
+                    && provenance.contains("MS Basic.sf3")
+                    && provenance.contains("SHA-256")
+            })
+            .collect();
+        assert!(
+            !crates.is_empty(),
+            "no default sample crate provenance names the pinned MS Basic SF3 source"
+        );
+        crates
+    }
+
+    fn missing_ms_basic_acknowledgements(document: &str, text: &str) -> Vec<String> {
+        let haystack = normalized_credit(text);
+        ms_basic_required_acknowledgements()
+            .into_iter()
+            .filter_map(|(raw, normalized)| {
+                (!haystack.contains(&normalized)).then(|| format!("{document}: {raw}"))
+            })
+            .collect()
+    }
+
     #[test]
     fn licence_boilerplate_alone_is_not_an_attribution() {
         // The exact reduction that defeats the credit-token check: clavinet's NOTICE with
@@ -254,6 +319,27 @@ mod tests {
         assert!(!carries_licensor_owned_signal(
             "Licensed CC BY 4.0, see https://creativecommons.org/licenses/by/4.0/"
         ));
+    }
+
+    #[test]
+    fn ms_basic_notices_reproduce_every_required_upstream_acknowledgement() {
+        let mut missing = Vec::new();
+        for krate in ms_basic_sample_crates() {
+            missing.extend(missing_ms_basic_acknowledgements(
+                &format!("{krate}/NOTICE"),
+                &read(&crates_dir().join(&krate).join("NOTICE")),
+            ));
+        }
+        missing.extend(missing_ms_basic_acknowledgements(
+            "ferrosintesis/NOTICE",
+            &read(&crates_dir().join("ferrosintesis").join("NOTICE")),
+        ));
+        assert!(
+            missing.is_empty(),
+            "MS-Basic-derived sample notices omit required upstream acknowledgement \
+             line(s):\n  {}",
+            missing.join("\n  ")
+        );
     }
 
     #[test]

@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00038 — GM61 Brass Section has no LA sample layer (pure 5-player waveshaper) and reads synthetic
 
-- **State:** Fixed
+- **State:** Open
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-21
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T182402Z-p9812-n426934100-c111
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00038-run-verify-20260727T182402Z-p9812-n426934100-c111
-- **Owner base:** aeaac15c473c9032480247ba9d05174d27f92e0a
-- **Owner fingerprint:** sha256:3c4e2c238a848a4b18534f892e1ad4b35d1ec485510b927722cddb640602e201
-- **Owner since:** 2026-07-27T18:24:02Z
-- **Owner until:** 2026-07-27T19:09:02Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target) → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=08cb7f6ad9c7dfa8407dff5589d36bba647c00d5 gate=cargo model=codex@xhigh)
+- **Attempts:** fix=0, doubt=1, indeterminate=0
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target) → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=08cb7f6ad9c7dfa8407dff5589d36bba647c00d5 gate=cargo model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T182402Z-p9812-n426934100-c111 verified_fix_run=fix-20260727T005703Z-p9812-n849374900-c34 verdict=doubt reason=engineering-evidence-is-fully-green-and-the-fix-plausibly-addresses-the-root-cau model=claude)
 
 ## Observation
 
@@ -182,3 +182,7 @@ zero contamination and zero not-reached tracks.
 Independent low/mid/high and M-CAL listening evidence is under
 `C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00038-candidate`. It contains
 raw and level-matched trunk/candidate WAVs plus the exact MIDI and plan files.
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T182402Z-p9812-n426934100-c111 verified_fix_run=fix-20260727T005703Z-p9812-n849374900-c34 verdict=doubt)
+
+Verifier note: Engineering evidence is fully green and the fix plausibly addresses the root cause, but the original observation is an audible timbre judgement I cannot reproduce on an earless box, and the ledger's own Arthur-approved contract says to land as Fixed 'for independent listening verification' - so closing now would bypass that gate. — Ledger: bugs/MM-BUG-KILN-00038.md; fix commits 829c63f..08cb7f6 touch only crates/ferrosintesis/src/voices.rs (+ledger). (1) Recorded code-confirmed root cause was 'BR_SECTION is a pure model - 5 waveshaped brass_valve players' with no per-player variance; that cond...

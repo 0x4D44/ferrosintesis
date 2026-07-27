@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T221402Z-p9812-n155597100-c8 branch=task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8 code=8867e24c746d6e9ebf04bfe48deb1f8ad1c1b5f2 gate=focused+render-diff model=codex@xhigh; held branch recovered and hardened by Codex)
+- **State history:** Open (2026-07-22, raised by Claude Opus 4.8 (1M) during M-CAL v3 reference-panel triage; measured on both references and code-confirmed to the bake constant) → Blocked (2026-07-25, Codex GPT-5.6-Sol; removing the 1.6 s wall must be coupled to a new GM7 decay law, whose GM-reference-versus-physical target and runtime-loop design require Arthur's audition decision) → Open (2026-07-26, unblocked by Arthur; approved the GM-reference decay idiom, a runtime-looped sampled sustain with an output-time decay envelope, roughly 5 s low/mid tapering to 3.3 s at the top, and fallback alignment) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T221402Z-p9812-n155597100-c8 branch=task/bug-MM-BUG-KILN-00043-run-fix-20260726T221402Z-p9812-n155597100-c8 code=aec98325699b918ac8fcdd651c105a157a445337 gate=focused+render-diff model=codex@xhigh; held branch recovered and hardened by Codex)
 
 ## Observation
 
@@ -182,7 +182,7 @@ from the default voice.
 
 ## Fix
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260726T221402Z-p9812-n155597100-c8 code=8867e24c746d6e9ebf04bfe48deb1f8ad1c1b5f2 gate=focused+render-diff)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T221402Z-p9812-n155597100-c8 code=aec98325699b918ac8fcdd651c105a157a445337 gate=focused+render-diff)
 
 Agent-reported summary: Fixed MM-BUG-KILN-00043 in code and tests. The sampled GM7 clavinet now loops a cached pitch-synchronous body segment before the old 1.6 s tail and applies the approved output-time decay curve. The old baked decay is compensated inside the loop so repitching no longer changes the held-note t60. The modeled fallback now uses a per-preset pluck decay exponent and longer GM7 constants so --no-samples and the alt-bank route no longer die in the old short-decay regime. The focused clavinet regression reproduced the original failure before the implementation change and is green after the fix.
 

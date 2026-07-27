@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=8f540f3a372b286e1f720f4092014981645d0efe gate=focused+render-diff model=codex@xhigh; held branch recovered by Codex)
+- **State history:** Open (2026-07-18, raised by Claude Opus 4.8 (1M) — ferrosintesis subsystem audit) → Blocked (2026-07-25, Codex GPT-5.6-Sol; GM32–35 are complete, but GM36/37 require a real slap-bass multisample with usable provenance; Arthur must provide an owner recording or approve a discovered CC0/CC-BY source) → Open (2026-07-26, Arthur approved replacing the unavailable GM36/37 sample requirement with researched string–fret collision synthesis) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T223701Z-p9812-n951988700-c12 branch=task/bug-MM-BUG-KILN-00016-run-fix-20260726T223701Z-p9812-n951988700-c12 code=43fab4a47298c7938fcbfa7fa6e2b00798677827 gate=focused+render-diff model=codex@xhigh; held branch recovered by Codex)
 
 ## Observation
 
@@ -57,7 +57,7 @@ multisample bank, or approves a discovered CC0/CC-BY source with retained proven
 any required attribution. Reusing the existing finger/pick assets would not resolve the
 recorded identity defect.
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260726T223701Z-p9812-n951988700-c12 code=8f540f3a372b286e1f720f4092014981645d0efe gate=focused+render-diff)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260726T223701Z-p9812-n951988700-c12 code=43fab4a47298c7938fcbfa7fa6e2b00798677827 gate=focused+render-diff)
 
 Agent-reported summary: Fixed MM-BUG-KILN-00016 by adding a modeled, attack-bounded string-fret collision path for GM36 slap bass and GM37 slap-pop bass. The original observation reproduced: those programs were direct Pluck routes whose identity was carried by a post-output click burst, so the old slap oracle passed without any modeled fret collision. The new contact stage is deterministic, velocity-thresholded, passive sample-by-sample, and inserted inside the KS loop before pickup/body/output filtering. The regression keeps the legacy burst enabled in a contact-disabled lesion and proves the lesion no longer satisfies the slap/pop identity checks. Recovery expanded the acceptance grid across three registers and velocities, retired the contact runtime after its attack window, and confirmed catalog isolation, lifecycle behaviour, render cost, and A/B reachability.
 

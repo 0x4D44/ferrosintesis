@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle deliberately cannot decide whether GM48/49's shared-onset tail difference is perceptually sufficient; Arthur must supply the one planned same/different A/B verdict) → Open (2026-07-26, unblocked by Arthur's blinded A/B verdict on `175b594`: “the _A & _B samples sound pretty much the same to me (for both pairs)”; requires a durable GM49 Slow Strings identity) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T000102Z-p9812-n317020100-c28 branch=task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28 code=b0e7f9c958787fb4d698ce144c0bae982e79b30d gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-18, raised via `deltic bugs new` model=gpt-5@xhigh) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — the oracle deliberately cannot decide whether GM48/49's shared-onset tail difference is perceptually sufficient; Arthur must supply the one planned same/different A/B verdict) → Open (2026-07-26, unblocked by Arthur's blinded A/B verdict on `175b594`: “the _A & _B samples sound pretty much the same to me (for both pairs)”; requires a durable GM49 Slow Strings identity) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T000102Z-p9812-n317020100-c28 branch=task/bug-MM-BUG-KILN-00024-run-fix-20260727T000102Z-p9812-n317020100-c28 code=969af616d16aa8a023c8afc76718140e8424f692 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -92,7 +92,7 @@ The autonomous fixer must:
    wider ensemble-family guards. Produce the same level-matched A/B evidence
    for independent verification, then leave the bug `Fixed`.
 
-### Fix summary (2026-07-27, deltic:auto run=fix-20260727T000102Z-p9812-n317020100-c28 code=b0e7f9c958787fb4d698ce144c0bae982e79b30d gate=cargo)
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T000102Z-p9812-n317020100-c28 code=969af616d16aa8a023c8afc76718140e8424f692 gate=cargo)
 
 GM49 Slow Strings now keeps the accepted shared sampled onset, then grows into a
 durable model-owned identity. Its existing 0.45-second envelope remains intact to

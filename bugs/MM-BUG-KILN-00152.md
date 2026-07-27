@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00152 — Orchestral2 publishes a no-op banjo regeneration recipe
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** orchestral2 / regeneration provenance
@@ -18,7 +18,7 @@
 - **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00152-run-fix-20260727T090201Z-p9812-n987723200-c60-code-1785143390172
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T090201Z-p9812-n987723200-c60 branch=task/bug-MM-BUG-KILN-00152-run-fix-20260727T090201Z-p9812-n987723200-c60 code=8366bf79d414 gate=cargo model=codex@xhigh)
 
 ## Observation
 
@@ -54,6 +54,26 @@ contract regression for `--only=banjo` and for an unknown family.
 ## Fix
 
 <unfixed — raised only>
+
+### Fix summary (2026-07-27, deltic:auto run=fix-20260727T090201Z-p9812-n987723200-c60 code=8366bf79d414 gate=cargo)
+
+Agent-reported summary: Fixed MM-BUG-KILN-00152, where the published orchestral2 banjo regeneration recipe pointed maintainers at a successful no-op. I reproduced the original observation: prepare.py --only=banjo exited 0 and printed only the sample-table header. The selector now rejects banjo with the real banjo_extract.py command and rejects unknown families before any bake path can report success. The orchestral2 README and PROVENANCE now distinguish non-banjo prepare.py families from the standalone banjo extractor. The focused regression and the surrounding sample-tool test file are green.
+
+Root cause: prepare.py accepted arbitrary --only family names and treated an empty selected work set as success; banjo was still listed as a family in provenance/package metadata but its active bake path had been intentionally moved to banjo_extract.py.
+
+Changed:
+- tools/ferrosintesis-samples/prepare.py validates --only selectors against families with active prepare.py recipes and gives banjo a specific extractor hint.
+- tools/ferrosintesis-samples/test_prepare.py adds regressions for --only=banjo, an unknown family, and the packaged orchestral2 banjo command.
+- crates/ferrosintesis-samples-orchestral2/PROVENANCE.md and README.md document banjo_extract.py instead of attributing every WAV to prepare.py.
+
+Tests:
+- Before the fix: python -m unittest test_prepare.PrepareOnlySelectionContractTest test_prepare.Orchestral2RegenerationRecipeTest failed 3 tests.
+- After the fix: python -m unittest test_prepare.PrepareOnlySelectionContractTest test_prepare.Orchestral2RegenerationRecipeTest passed 3 tests.
+- After the fix: python -m unittest test_prepare passed 76 tests.
+- After the fix: prepare.py --only=banjo and prepare.py --only=notafamily both exit nonzero with clear errors.
+
+Left alone:
+- No files under bugs/ were edited.
 
 ## Notes
 

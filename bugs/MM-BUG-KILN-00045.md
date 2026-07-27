@@ -224,6 +224,8 @@ Root cause: The bass presets were calibrated in isolation: non-fingered plucked 
 Changed:
 - crates/ferrosintesis/src/voices.rs: rebalanced GM32-39 bass preset sustain, low-end weight, SynthBass level, bass seam gains, velocity compensation, and bass signatures
 - crates/ferrosintesis/src/voices.rs: added default_bass_family_held_levels_stay_together regression
+- crates/ferrosintesis/src/testutil.rs: re-pinned only the GM33/35 mix-golden rows
+  and resulting master peak in `bf297d459f412d3a4d4df5b39fb45ba5c397bc4d`
 
 Tests:
 - $null | cargo test -p ferrosintesis --lib default_bass_family_held_levels_stay_together -- --nocapture
@@ -232,6 +234,9 @@ Tests:
 - $null | cargo test -p ferrosintesis --lib treble_hold_authoring_pins -- --nocapture
 - $null | cargo test -p ferrosintesis --lib coupled_loop_margin_holds -- --nocapture
 - $null | cargo test -p ferrosintesis --lib v2_untouched_pluck_signatures_are_stable -- --nocapture
+- `$null | cargo test -p ferrosintesis --no-default-features golden_mix_balance_holds -- --nocapture`
+- `$null | cargo test -p ferrosintesis golden_mix_balance_holds -- --nocapture`
+- `$null | cargo test -p ferrosintesis --no-default-features default_bass_family_held_levels_stay_together -- --nocapture`
 - `python tools/render-diff/render_diff.py ... --glob 'albums/**/*.mid' --rate 11025`: 68 expected changed, 56 expected same, 0 contamination, 0 not reached
 - `python tools/render-diff/render_diff.py ... --glob 'demos/**/*.mid' --rate 11025`: 5 expected changed, 12 expected same, 0 contamination, 0 not reached
 - Rendered the reference audition's `02 - Bass, Solo Strings, Ensemble, Brass.mid`

@@ -8206,7 +8206,7 @@ mod tests {
         buf
     }
 
-    fn win<'a>(buf: &'a [f32], sr: f32, t0: f32, t1: f32) -> &'a [f32] {
+    fn win(buf: &[f32], sr: f32, t0: f32, t1: f32) -> &[f32] {
         &buf[(t0 * sr) as usize..(t1 * sr) as usize]
     }
 
@@ -8299,6 +8299,31 @@ mod tests {
             assert!(
                 fallback == bare,
                 "GM{program} {name} key {above}: sample should fall back immediately above the five-semitone ceiling"
+            );
+        }
+    }
+
+    #[test]
+    fn la_bass_alt_note_off_releases_and_reaps() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        for (program, key) in [(32u8, 43u8), (33, 40), (34, 40), (35, 40)] {
+            let mut voice = voices::bass_la_alt(program, key, 100, sr, 0x8500 + key as u32, true);
+            let mut onset = vec![0.0; (0.10 * sr) as usize];
+            assert!(
+                voice.render(&mut onset),
+                "GM{program} additive bass died during its onset"
+            );
+            voice.note_off();
+            assert!(
+                voice.released(),
+                "GM{program} additive bass did not forward note-off to its model"
+            );
+            assert!(
+                dies_within(voice, sr, 2.0),
+                "GM{program} additive bass stayed alive two seconds after note-off"
             );
         }
     }

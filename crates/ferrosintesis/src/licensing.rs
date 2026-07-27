@@ -784,6 +784,14 @@ mod tests {
                     "Adaptation for MuseScore_General.sf2 by S. Christian Collins Copyright (c) 2018-19",
                 ),
                 (
+                    "Temple Blocks copyright",
+                    "Temple Blocks instrument provided by Ethan Winer Copyright (c) 2002",
+                ),
+                (
+                    "Drumline Cymbals copyright",
+                    "Drumline Cymbals provided by Michael Schorsch Copyright (c) 2016",
+                ),
+                (
                     "FluidR3Mono copyright notice",
                     "Copyright (c) 2014-16 Michael Cowgill",
                 ),

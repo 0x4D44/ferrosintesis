@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00085 — the LA bass crossfade SHAPE still costs the onset: a 50 ms model mute erases the kick thump and a 350 ms handover outlasts 90% of a bass line's notes
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** synth
 - **Raised:** 2026-07-24
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260727T151705Z-p9812-n993904500-c87
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00085-run-verify-20260727T151705Z-p9812-n993904500-c87
-- **Owner base:** 8c75ad2ec1bc629f7f8cb033771f6fb4dd30a6c9
-- **Owner fingerprint:** sha256:a29125ef9edbcfe62addab76898b5da56f64777cddb64e7d1870189f249cbb6a
-- **Owner since:** 2026-07-27T15:17:05Z
-- **Owner until:** 2026-07-27T16:02:05Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T230602Z-p9812-n782377700-c18 branch=task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18 code=210397b749f432f95b6b7f61d9c44bdab491a750 gate=focused+render-diff model=codex@xhigh)
+- **State history:** Open (2026-07-24 — split from MM-BUG-KILN-00075 on its Open → Fixed transition by Claude Opus 4.8 (1M), which landed that bug's gain items 1–2 and could not land items 3–4) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the remaining fade shape, handover duration, and bass-onset repitch limit are audible product decisions Arthur must make, while extending the bank needs owner-recorded or approved licensed source material) → Open (2026-07-26, unblocked by Arthur; approved a bass-specific additive onset ending at approximately 150 ms, a five-semitone upward-repitch ceiling with model fallback, and retention as an alternate bank pending a later A/B) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260726T230602Z-p9812-n782377700-c18 branch=task/bug-MM-BUG-KILN-00085-run-fix-20260726T230602Z-p9812-n782377700-c18 code=210397b749f432f95b6b7f61d9c44bdab491a750 gate=focused+render-diff model=codex@xhigh) → Closed (2026-07-27, deltic:auto role=verify run=verify-20260727T151705Z-p9812-n993904500-c87 verified_fix_run=fix-20260726T230602Z-p9812-n782377700-c18 verdict=close model=claude)
 
 ## Observation
 
@@ -153,6 +153,10 @@ Tests:
 
 Left alone:
 - Cargo.toml and Cargo.lock
+
+### Verification summary (2026-07-27, deltic:auto run=verify-20260727T151705Z-p9812-n993904500-c87 verified_fix_run=fix-20260726T230602Z-p9812-n782377700-c18 verdict=close)
+
+Verifier note: All four recorded symptoms are structurally cured at the right layer; six regression tests and the full repo gates are green on this trunk. — GATES (worktree HEAD fc36f6d): cargo fmt --all -- --check clean; cargo clippy --workspace --all-targets -- -D warnings exit 0; cargo test --workspace exit 0 (787 passed, 0 failed, 39 ignored). REGRESSION TESTS present and passing: sampler::tests::la_bass_alt_preserves_model_onset_and_tapers_sample_by_150ms, la_bass_alt_limits_upward_repitch_to_five_semitones, la_bass_alt_note_off_releases_and_reaps, la_ebass_additive_level_parity, ordinary_la_wrap_keeps_...
 
 ## Notes
 

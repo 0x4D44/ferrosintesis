@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00029-run-fix-20260726T215802Z-p9812-n612744600-c5-code-1785103974747
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below) → Fixed (2026-07-26, deltic:auto role=fix run=fix-20260726T215802Z-p9812-n612744600-c5 branch=task/bug-MM-BUG-KILN-00029-run-fix-20260726T215802Z-p9812-n612744600-c5 code=ac143d62b4a9 gate=cargo model=codex@xhigh)
+- **State history:** Open (2026-07-20, raised by Claude Opus 4.8 during the velocity-law alignment to k=2; found by the new `velocity_law` oracles, confirmed by Fable 5 which measured the EP sweep independently) → Blocked (2026-07-25, Codex GPT-5.6-Sol; the diagnosed bowed-waveguide normalization and separate GM4 pickup-shaper retune both require Arthur's ear validation before a safe voicing change) → Open (2026-07-26, unblocked by Arthur; approved monotonic GM42/43 loudness with stable bow character and a non-decreasing, plateau-permitted GM4 bark curve; focused prior-art constraints recorded below) → Fixed (2026-07-27, Codex GPT-5.6; recovered the scheduler-held branch, rejected its one-dimensional bow-speed clamp, and completed the approved joint control map plus bounded normalization; code=52d998be6339 gate=focused+render-diff)
 
 ## Observation
 
@@ -244,22 +244,47 @@ Arthur approved the following product targets, so candidate audition is no longe
 
 ## Fix
 
-### Fix summary (2026-07-26, deltic:auto run=fix-20260726T215802Z-p9812-n612744600-c5 code=ac143d62b4a9 gate=cargo)
+### Fix summary (2026-07-27, Codex GPT-5.6, code=52d998be6339, gate=focused+render-diff)
 
-Agent-reported summary: Fixed MM-BUG-KILN-00029 by making MIDI velocity own the affected voices' rendered loudness instead of letting nonlinear timbre controls push the output curve backward. GM42/43 now use a low-string BowedString contact-speed map that stays inside the playable region, so the compensation-bypassed high-velocity render is monotonic and the normal all-program velocity-law oracle no longer needs an exemption. GM4 keeps its pickup color, but the pickup drive rises gently enough that the 2.82*f0 bark partial no longer gets compressed down after v105. Added regression coverage for the documented bowed-string key and velocity grid, and tightened the GM4 bark oracle through v127. Focused tests are green
+GM42/43 now move bow speed and force together through a measured stable region. A slow
+80 ms post-body meter applies only a bounded 0.60–1.70 residual gain after the sampled bow
+catch hands over, leaving MIDI velocity's existing square-law output gain in charge of
+loudness. GM4 keeps its nonlinear pickup, but its drive rises gently enough that the
+2.82·f0 bark no longer falls after v105.
 
-Root cause: GM42/43 used MIDI velocity both as output gain and as bow contact speed; near full velocity that over-bowed the waveguide, reducing intrinsic source amplitude and fighting the shared square-law gain. GM4's raised tine partial was fed through a tanh pickup drive that grew too aggressively with velocity, so shaper compression ate the bark partial faster than the mode table grew it above about v105.
+The scheduler-held implementation used the already-rejected near-flat bow-speed clamp. Its
+single-seed level test passed while a multi-seed motion audit still found contrabass octave
+locks. That patch was not landed. The replacement jointly maps bow speed and pressure,
+retains the cello's high-register pressure ceiling, and verifies source motion independently
+of output normalization.
+
+Evidence:
+
+- Full-compass calibration: 78 keys × 10 velocities × 4 engine-realistic seeds; zero
+  unstable draws, zero velocity drops, and worst fitted `|k−2| = 0.042`.
+- Full adjacent-key comparison at six high velocities and four seeds: worst new step over
+  baseline `+0.66 dB`; worst candidate step `0.77 dB`, both below the 1 dB limit.
+- Permanent source-motion, monotonic-level, square-law, register-cliff, GM4 bark, DC,
+  identity, and existing whole-register gates pass with default and no-default features.
+- GM4 bark/h1 is non-decreasing (`v60 0.0555`, `v90 0.0672`, `v120 0.0735`);
+  GM4/GM5 onset, sustain, and distinctness guards remain green.
+- Default and modeled-only focused tests pass; both focused Clippy configurations pass
+  with warnings denied.
+- Catalogue render diff against branch point `1927c2b`: albums `68 changed / 56 same`,
+  demos `7 changed / 10 same`; zero contamination and zero not-reached tracks.
+- Three-run reference-track render time: baseline `4.173 s`, candidate `4.182 s`
+  (`1.002×`).
+- Loudness-matched A/B renders are in
+  `C:\Users\marti\AppData\Local\Temp\MM-BUG-KILN-00029`.
 
 Changed:
-- crates/ferrosintesis/src/voices.rs: retuned GM42/43 BowedString bow-speed mapping and GM4 pickup drive
-- crates/ferrosintesis/src/velocity_law.rs: removed GM42/43 square-law exemption and added MM-BUG-KILN-00029 regression coverage
 
-Tests:
-- cargo test -p ferrosintesis --lib velocity_law -- --nocapture
-- cargo test -p ferrosintesis --lib electric_piano -- --nocapture
-- cargo test -p ferrosintesis --lib e_pianos -- --nocapture
-- cargo test -p ferrosintesis --lib bowed_string -- --nocapture
-- git diff --check
+- `crates/ferrosintesis/src/voices.rs`: joint low-string bow controls, bounded residual
+  normalization, GM4 pickup-drive retune, and motion/register calibration guards.
+- `crates/ferrosintesis/src/velocity_law.rs`: removed the GM42/43 exemption and added the
+  multi-seed monotonic/square-law regression.
 
 Left alone:
-- bugs/ ledger
+
+- No crate version bump; this repository advances versions only during a deliberate release.
+- No unrelated voice, album source, or generated listening asset.

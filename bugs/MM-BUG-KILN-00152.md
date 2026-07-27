@@ -5,19 +5,19 @@
 - **Severity:** Medium
 - **Area:** orchestral2 / regeneration provenance
 - **Raised:** 2026-07-27
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260727T180101Z-p9812-n797628000-c106
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00152-run-fix-20260727T180101Z-p9812-n797628000-c106
-- **Owner base:** 4701bf1235ed2972ce37b661cd3b1fbb433fea57
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-27T18:01:01Z
-- **Owner until:** 2026-07-27T18:46:01Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=1, doubt=1, indeterminate=0
+- **Attempts:** fix=2, doubt=1, indeterminate=0
 - **State history:** Open (2026-07-27, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T090201Z-p9812-n987723200-c60 branch=task/bug-MM-BUG-KILN-00152-run-fix-20260727T090201Z-p9812-n987723200-c60 code=de95960f899298440bbe24f06bbd548b3139c766 gate=python model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T165501Z-p9812-n885138800-c96 verified_fix_run=fix-20260727T090201Z-p9812-n987723200-c60 verdict=doubt reason=static-trace-and-rust-gates-all-support-the-fix-but-python-execution-is-blocked model=claude)
 
 ## Observation

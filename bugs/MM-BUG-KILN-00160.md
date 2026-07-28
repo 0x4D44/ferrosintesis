@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample packaging / strings metadata
 - **Raised:** 2026-07-28
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260728T180303Z-p57192-n445935800-c270
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00160-run-verify-20260728T180303Z-p57192-n445935800-c270
+- **Owner base:** c56fc4515a07fb9326c18ab5befad64c4010c27e
+- **Owner fingerprint:** sha256:08a812e1b25b7a1ac035486b67dadf9255a3f86ca5ff1a2c72074b2a62f6c38a
+- **Owner since:** 2026-07-28T18:03:03Z
+- **Owner until:** 2026-07-28T18:48:03Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

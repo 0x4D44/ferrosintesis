@@ -8,7 +8,8 @@
 //! - `inventory.rs` asks *"has a crate's PACKAGED sample set outgrown its documentation?"*
 //!   — keyed off `crates/ferrosintesis-samples-*/samples/*.wav`.
 //! - This module asks *"is every committed INPUT still the one we say it is?"* — keyed off
-//!   `tools/ferrosintesis-samples/*-src/`.
+//!   discovered `tools/ferrosintesis-samples/*-src/` roots plus the explicit registry for
+//!   repo-root first-party archives.
 //!
 //! Nothing else covers that third set. The `*-src/` directories hold the material we cannot
 //! re-fetch: Freesound gates its downloads behind a login, and the owner-recorded mandolin
@@ -20,11 +21,11 @@
 //!
 //! The requirement that raised this named one crate. The repo's standing lesson is that a
 //! reported item is evidence a list is unmaintained, not a specification of the work — so the
-//! predicate here is a glob, `tools/ferrosintesis-samples/*-src`, not a list of directory
-//! names. A future `flute-src/` is covered on the day it is created, by nobody's decision.
-//!
-//! An earlier draft of this oracle *did* carry a hand-written list of the three directories
-//! that exist today. That guard would have inherited the exact defect it exists to catch.
+//! tool-owned predicate is a glob, `tools/ferrosintesis-samples/*-src`, not a list of
+//! directory names. A future `flute-src/` is covered on the day it is created, by nobody's
+//! decision. Inputs elsewhere in the repository cross an ownership boundary and therefore
+//! enter an explicit registry; treating every `samples/*` directory as input would sweep in
+//! derived cuts and caches.
 //!
 //! ## What is deliberately NOT asserted here
 //!
@@ -55,10 +56,10 @@ mod tests {
     /// dependencies, and a provenance oracle that cannot hash is no oracle at all.
     ///
     /// Correctness is pinned two ways: the NIST vectors in `sha256_matches_known_vectors`,
-    /// and — the one that actually matters — the 77 committed source files whose recorded
+    /// and — the one that actually matters — the 79 committed source files whose recorded
     /// hashes were produced independently by Python's `hashlib`. If this implementation were
     /// subtly wrong, `every_committed_source_is_pinned_by_a_packaged_document` would fail on
-    /// all 77 at once.
+    /// all 79 at once.
     fn sha256_hex(data: &[u8]) -> String {
         #[rustfmt::skip]
         const K: [u32; 64] = [
@@ -161,11 +162,13 @@ mod tests {
 
     // ------------------------------------------------------- committed sources
 
-    /// Every committed-source directory, read from the filesystem rather than a list.
+    /// Every committed-source directory.
     ///
-    /// The predicate is `tools/ferrosintesis-samples/*-src`. A new one is covered the day it
-    /// appears; nobody has to remember to add it here.
+    /// Tool-owned sources are discovered by `tools/ferrosintesis-samples/*-src`.
+    /// Repo-root first-party archives are registered explicitly.
     fn source_dirs() -> Vec<PathBuf> {
+        const REPO_SOURCE_DIRS: &[&[&str]] = &[&["samples", "b1-upright"]];
+
         let tools = repo_root().join("tools").join("ferrosintesis-samples");
         let mut out: Vec<PathBuf> = std::fs::read_dir(&tools)
             .expect("tools/ferrosintesis-samples is readable")
@@ -178,22 +181,68 @@ mod tests {
                     .unwrap_or(false)
             })
             .collect();
+        for components in REPO_SOURCE_DIRS {
+            let dir = components
+                .iter()
+                .fold(repo_root(), |path, component| path.join(component));
+            assert!(
+                dir.is_dir(),
+                "registered committed-source directory {} is missing",
+                dir.display()
+            );
+            out.push(dir);
+        }
         out.sort();
         assert!(
-            out.len() >= 3,
-            "found only {} committed-source directories under {} — the scan is not reading \
-             what it thinks it is",
+            out.len() >= 4,
+            "found only {} committed-source directories including roots under {} — the scan is \
+             not reading what it thinks it is",
             out.len(),
             tools.display()
         );
         out
     }
 
+    #[test]
+    fn source_registry_covers_repo_root_b1_recordings() {
+        let b1 = repo_root().join("samples").join("b1-upright");
+        assert!(
+            source_dirs().contains(&b1),
+            "{} must be a committed-source root",
+            b1.display()
+        );
+        let sources = committed_sources();
+        let b1_sources: Vec<(String, String)> = sources
+            .into_iter()
+            .filter(|(name, _)| name.starts_with("samples/b1-upright/"))
+            .collect();
+        assert_eq!(
+            b1_sources.len(),
+            2,
+            "the two B1 Opus archives must be scanned"
+        );
+        assert_eq!(
+            unpinned(
+                &b1_sources,
+                "The sources are DR0000_0195_normal_soft.opus and DR0000_0200_hard.opus."
+            ),
+            [
+                "samples/b1-upright/DR0000_0195_normal_soft.opus",
+                "samples/b1-upright/DR0000_0200_hard.opus",
+            ],
+            "names without hashes must not satisfy the B1 provenance check"
+        );
+    }
+
     /// Every committed source file, as `(display path, sha-256)`.
     fn committed_sources() -> Vec<(String, String)> {
         let mut out = Vec::new();
         for dir in source_dirs() {
-            let dir_name = dir.file_name().unwrap().to_string_lossy().to_string();
+            let dir_name = dir
+                .strip_prefix(repo_root())
+                .expect("a committed-source directory is inside the repository")
+                .to_string_lossy()
+                .replace('\\', "/");
             let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
                 .expect("a committed-source directory is readable")
                 .filter_map(|e| e.ok())

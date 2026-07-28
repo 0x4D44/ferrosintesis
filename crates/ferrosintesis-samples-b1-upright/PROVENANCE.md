@@ -27,10 +27,10 @@ under **CC0 1.0**. No attribution is required to use, modify or redistribute it.
 The reproducible source of record is the committed Opus archive (the raw 24-bit
 takes are hundreds of MiB and are not committed):
 
-| file | pass(es) | note |
-|---|---|---|
-| `samples/b1-upright/DR0000_0195_normal_soft.opus` | **normal** then **soft** | clean; peak −11.0 dBFS |
-| `samples/b1-upright/DR0000_0200_hard.opus` | **hard** (re-recorded) | clean; peak −4.8 dBFS |
+| file | SHA-256 | pass(es) | note |
+|---|---|---|---|
+| `samples/b1-upright/DR0000_0195_normal_soft.opus` | `a3f8fa906cbfb2706836ad6dd648e3267fad2dd0dadfd6c64fac06a2b3e5b602` | **normal** then **soft** | clean; peak −11.0 dBFS |
+| `samples/b1-upright/DR0000_0200_hard.opus` | `fa4b89c9b78db1b0a53c67a826cd8edac6e8d39c3f8765f3861d12ffaf0eb2d0` | **hard** (re-recorded) | clean; peak −4.8 dBFS |
 
 The hard take was re-recorded at reduced input gain after a first attempt clipped.
 It sits **−9.4 dB ± 0.6 dB** below the normal/soft take, but Arthur played it at

@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00168 — B1 source recordings evade the committed-input provenance oracle
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** B1 sample provenance / source integrity
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260728T232959Z-p58892-n493739700-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00168-run-fix-20260728T232959Z-p58892-n493739700-c1
-- **Owner base:** 884b253589e02258b4ec4911d9af4f56e3172579
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T23:29:59Z
-- **Owner until:** 2026-07-29T01:29:59Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260728T232959Z-p58892-n493739700-c1 branch=task/bug-MM-BUG-KILN-00168-run-fix-20260728T232959Z-p58892-n493739700-c1 code=9df73cb gate=manual)
 
 ## Observation
 

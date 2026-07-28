@@ -2549,6 +2549,60 @@ class DarkenedGrandInventoryTest(unittest.TestCase):
                     prepare._bake_darkened_grand(None)
 
 
+class KawaiProvenanceMappingTest(unittest.TestCase):
+    """MM-BUG-KILN-00161: packaged zone provenance follows the bake mapping."""
+
+    @staticmethod
+    def selection_mapping(provenance):
+        rows = {}
+        in_selection = False
+        for line in provenance.splitlines():
+            if line.startswith("## Selection"):
+                in_selection = True
+                continue
+            if in_selection and line.startswith("## "):
+                break
+            if not in_selection or not line.startswith("|"):
+                continue
+            cells = [cell.strip().strip("`") for cell in line.split("|")[1:-1]]
+            if len(cells) < 2 or cells[0] in {"dest zone (sounds)", "---"}:
+                continue
+            rows[cells[0]] = cells[1]
+        return rows
+
+    def assert_matches_bake_mapping(self, provenance):
+        self.assertEqual(
+            self.selection_mapping(provenance),
+            prepare._KAWAI_ZONE_LABEL,
+            "the packaged Kawai selection table must match _KAWAI_ZONE_LABEL exactly",
+        )
+
+    def test_packaged_selection_matches_the_bake_mapping(self):
+        path = os.path.join(
+            prepare.REPO_ROOT,
+            "crates",
+            "ferrosintesis-samples-vcsl-kawai",
+            "PROVENANCE.md",
+        )
+        with open(path, encoding="utf-8") as f:
+            self.assert_matches_bake_mapping(f.read())
+
+    def test_wrong_source_row_is_rejected(self):
+        rows = "\n".join(
+            f"| {zone} | {label} | |"
+            for zone, label in prepare._KAWAI_ZONE_LABEL.items()
+        )
+        wrong = (
+            "## Selection — negative control\n\n"
+            "| dest zone (sounds) | source label | dynamic |\n"
+            "|---|---|---|\n"
+            f"{rows}\n\n"
+            "## Processing\n"
+        ).replace("| A2 | A1 |", "| A2 | A0 |")
+        with self.assertRaises(AssertionError):
+            self.assert_matches_bake_mapping(wrong)
+
+
 class BottleLoopTest(unittest.TestCase):
     """MM-BUG-KILN-00065: the GM 76 whole-voice loop must have exactly one owner.
 

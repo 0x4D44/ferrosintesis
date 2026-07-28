@@ -38,9 +38,9 @@ file labelled one octave down:
 | dest zone (sounds) | source label | dynamic → velocity (RR1, RR2) |
 |---|---|---|
 | C2 | C1 | pp→v1,v2 · mf→v2,v3 · f→v4,v3 |
-| A2 | A0 | (same) |
+| A2 | A1 | (same) |
 | C3 | C2 | |
-| A3 | A1 | |
+| A#3 | A#2 | |
 | C4 | C3 | |
 | A#4 | A#3 | |
 | C5 | C4 | |

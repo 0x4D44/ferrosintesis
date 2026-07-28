@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** testing / sample generation
 - **Raised:** 2026-07-27
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260728T160304Z-p57192-n714102000-c246
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00156-run-verify-20260728T160304Z-p57192-n714102000-c246
+- **Owner base:** 34d090f89e989417e26c8692d38b4b5f58cbca7d
+- **Owner fingerprint:** sha256:41a31041877ddbe0e1b264246003c9ca0a781af776f9a18db527affbfa5532ca
+- **Owner since:** 2026-07-28T16:03:04Z
+- **Owner until:** 2026-07-28T16:48:04Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

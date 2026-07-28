@@ -1519,6 +1519,13 @@ def validate_pcm16_wav(path):
         raise ValueError(f"{path}: truncated WAV data ({len(raw)} bytes, expected {expected})")
 
 
+def validate_decoded_wav(path):
+    """Reject unreadable, empty, or truncated decoded WAV cache entries."""
+    samples, sr = read_wav(path)
+    if sr <= 0 or not samples:
+        raise ValueError(f"{path}: empty or invalid PCM stream")
+
+
 def decoded_source_manifest_path(wav):
     return wav + ".source.json"
 
@@ -1533,8 +1540,9 @@ def headroom_cache_path(root=None, source_revision=None, recipe_revision=None):
     )
 
 
-def decoded_wav_matches(wav, source_sha256, recipe_revision):
-    """Does a complete PCM16 WAV match its authenticated source and recipe?"""
+def decoded_wav_matches(
+        wav, source_sha256, recipe_revision, validate_wav=validate_pcm16_wav):
+    """Does a complete decoded WAV match its authenticated source and recipe?"""
     try:
         with open(decoded_source_manifest_path(wav), "r", encoding="utf-8") as f:
             manifest = json.load(f)
@@ -1546,7 +1554,7 @@ def decoded_wav_matches(wav, source_sha256, recipe_revision):
             return False
         if sha256_file(wav) != manifest.get("wav_sha256"):
             return False
-        validate_pcm16_wav(wav)
+        validate_wav(wav)
     except (OSError, ValueError, EOFError, wave.Error):
         return False
     return True
@@ -3033,17 +3041,49 @@ MTG_SAX_ZONE_STEP = 4   # keep every Nth sampled note (~N-semitone zones; max re
 MTG_SAX_KEEP_S = 0.62   # attack + early body; the model carries the sustain (reed recipe)
 MTG_SAX_FADE_S = 0.20
 MTG_SAX_MIN_CONF = 0.85  # drop a zone whose measured root is not trustworthy (neighbours cover)
+MTG_SAX_DECODE_RECIPE_REV = "ffmpeg-pcm-s24le-mono-v1"
 
 
 def _mtg_region_keys(src, prefix, dyn):
     """Parse Data/<prefix>_<dyn>_rr1.txt -> {midi_key: sample_basename} for MTG sax."""
     fn = f"{prefix}_{dyn}_rr1.txt"
-    path = os.path.join(src, fn)
-    if not os.path.exists(path):
-        fetch(f"{MTG_SAX_BASE}/Data/{fn}", path)
-    text = open(path, encoding="utf-8").read()
+    path = ensure_source(
+        fn, f"{MTG_SAX_BASE}/Data/{fn}", src, label="mtg-sax",
+        validate_wav=False)
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
     return {int(m.group(1)): m.group(2)
             for m in re.finditer(r"key=(\d+)\s+sample=(\S+?)\.\$EXT", text)}
+
+
+def _ensure_mtg_sax_wav(src, base, ffmpeg):
+    """Return a decoded MTG sax WAV proven against its FLAC bytes and recipe."""
+    flac_name = base + ".flac"
+    flac = ensure_source(
+        flac_name, f"{MTG_SAX_BASE}/Samples/{flac_name}", src,
+        label="mtg-sax", validate_wav=False)
+    source_sha256 = sha256_file(flac)
+    wav = os.path.join(src, base + ".wav")
+    if decoded_wav_matches(
+            wav, source_sha256, MTG_SAX_DECODE_RECIPE_REV,
+            validate_wav=validate_decoded_wav):
+        return wav
+    fd, tmp = tempfile.mkstemp(
+        prefix=os.path.basename(wav) + ".", suffix=".wav", dir=src)
+    os.close(fd)
+    try:
+        subprocess.run(
+            [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+             "-i", flac, "-ac", "1", "-acodec", "pcm_s24le", tmp],
+            check=True)
+        validate_decoded_wav(tmp)
+        os.replace(tmp, wav)
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+    write_decoded_source_manifest(wav, source_sha256, MTG_SAX_DECODE_RECIPE_REV)
+    return wav
 
 
 # --- GM 76 blown bottle: the whole-voice loop -------------------------------------
@@ -3126,14 +3166,7 @@ def _bake_mtg_sax(src):
             for key in chosen:
                 base = kmap[key]
                 nominal = 440.0 * 2 ** ((key - 69) / 12.0)
-                flac = os.path.join(src, base + ".flac")
-                wav = os.path.join(src, base + ".wav")
-                if not os.path.exists(flac):
-                    fetch(f"{MTG_SAX_BASE}/Samples/{base}.flac", flac)
-                if not os.path.exists(wav):
-                    subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-                                    "-i", flac, "-ac", "1", "-acodec", "pcm_s24le", wav],
-                                   check=True)
+                wav = _ensure_mtg_sax_wav(src, base, ffmpeg)
                 x, wsr = read_wav(wav)
                 x = resample(x, wsr, OUT_SR)
                 wsr = OUT_SR

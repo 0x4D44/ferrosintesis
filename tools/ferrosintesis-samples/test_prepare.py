@@ -905,6 +905,10 @@ class PinnedWarmCacheAuthenticationTest(unittest.TestCase):
     """Every pinned ensure helper must authenticate an already-present cache."""
 
     AUTHENTICATORS = {"cached_members_match", "sha256_file"}
+    GUARDED_FETCH_AUTHENTICATORS = AUTHENTICATORS | {
+        "decoded_wav_matches",
+        "direct_source_matches",
+    }
 
     @classmethod
     def unauthenticated_helpers(cls, source):
@@ -1013,6 +1017,88 @@ def ensure_bad(src):
     return path
 """
         self.assertEqual(self.unauthenticated_helpers(source), ["ensure_bad"])
+
+    @classmethod
+    def guarded_fetches_without_authentication(cls, source):
+        tree = ast.parse(source)
+        functions = [
+            node for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+
+        def call_name(call):
+            if isinstance(call.func, ast.Name):
+                return call.func.id
+            if isinstance(call.func, ast.Attribute):
+                return call.func.attr
+            return None
+
+        def is_missing_guard(test):
+            return (
+                isinstance(test, ast.UnaryOp)
+                and isinstance(test.op, ast.Not)
+                and any(
+                    isinstance(node, ast.Call) and call_name(node) == "exists"
+                    for node in ast.walk(test)
+                )
+            )
+
+        def is_hashlib_sha256(call):
+            return (
+                call_name(call) == "sha256"
+                and isinstance(call.func, ast.Attribute)
+                and isinstance(call.func.value, ast.Name)
+                and call.func.value.id == "hashlib"
+            )
+
+        offenders = []
+        for function in functions:
+            guarded_fetch = False
+            direct_auth = False
+
+            def walk(node, behind_missing_guard=False):
+                nonlocal guarded_fetch, direct_auth
+                if isinstance(node, ast.If):
+                    guarded = behind_missing_guard or is_missing_guard(node.test)
+                    walk(node.test, behind_missing_guard)
+                    for child in node.body:
+                        walk(child, guarded)
+                    for child in node.orelse:
+                        walk(child, behind_missing_guard)
+                    return
+                if isinstance(node, ast.Call):
+                    called = call_name(node)
+                    if called == "fetch" and behind_missing_guard:
+                        guarded_fetch = True
+                    if not behind_missing_guard and (
+                        called in cls.GUARDED_FETCH_AUTHENTICATORS
+                        or is_hashlib_sha256(node)
+                    ):
+                        direct_auth = True
+                for child in ast.iter_child_nodes(node):
+                    walk(child, behind_missing_guard)
+
+            for statement in function.body:
+                walk(statement)
+            if guarded_fetch and not direct_auth:
+                offenders.append(function.name)
+        return sorted(offenders)
+
+    def test_raw_fetch_behind_missing_file_guard_authenticates_warm_cache(self):
+        with open(prepare.__file__, encoding="utf-8") as f:
+            source = f.read()
+        self.assertEqual(self.guarded_fetches_without_authentication(source), [])
+
+    def test_oracle_rejects_bespoke_fetch_guard_without_digest(self):
+        source = """
+def _bake_bad(src):
+    path = src + "/cached"
+    if not os.path.exists(path):
+        fetch("https://example.invalid/cached", path)
+    return path
+"""
+        self.assertEqual(
+            self.guarded_fetches_without_authentication(source), ["_bake_bad"])
 
 
 class SalamanderArchiveCacheTest(unittest.TestCase):
@@ -1313,6 +1399,151 @@ class PinnedFlacCacheTest(unittest.TestCase):
             self.src, "source-a", "recipe-b")
         self.assertNotEqual(first, changed_source)
         self.assertNotEqual(first, changed_recipe)
+
+
+class MtgSaxCacheTest(unittest.TestCase):
+    """MM-BUG-KILN-00157: sax warm inputs must prove their source identity."""
+
+    BASE = "source"
+
+    def setUp(self):
+        self.src = tempfile.mkdtemp()
+        self.repo_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.addCleanup(shutil.rmtree, self.repo_root, True)
+        os.makedirs(os.path.join(
+            self.repo_root, "crates", "ferrosintesis-samples-sax", "samples"))
+        self.served_flac = b"PINNED-SAX-FLAC"
+        self.decoded_sample = 1000
+        self.fetches = []
+        self.decodes = 0
+        self.run_error = None
+
+    @property
+    def flac(self):
+        return os.path.join(self.src, self.BASE + ".flac")
+
+    @property
+    def wav(self):
+        return os.path.join(self.src, self.BASE + ".wav")
+
+    @property
+    def wav_manifest(self):
+        return self.wav + ".source.json"
+
+    def write_constant_wav(self, path, sample, sample_width=3):
+        with wave.open(path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(sample_width)
+            w.setframerate(48000)
+            if sample_width == 2:
+                frame = struct.pack("<h", sample)
+                w.writeframes(frame * 64)
+            else:
+                frame = int(sample).to_bytes(3, "little", signed=True)
+                w.writeframes(frame * 64)
+
+    def write_region(self, dyn, sample_base=BASE):
+        with open(os.path.join(self.src, f"sop_{dyn}_rr1.txt"),
+                  "w", encoding="utf-8") as f:
+            f.write(f"<region> key=60 sample={sample_base}.$EXT\n")
+
+    def fake_fetch(self, _url, path):
+        self.fetches.append(os.path.basename(path))
+        if path.endswith(".txt"):
+            self.write_region("f" if "_f_" in path else "p")
+        elif path.endswith(".flac"):
+            with open(path, "wb") as f:
+                f.write(self.served_flac)
+        else:
+            raise AssertionError(f"unexpected sax fetch target {path}")
+
+    def fake_run(self, args, **_kwargs):
+        self.decodes += 1
+        self.write_constant_wav(args[-1], self.decoded_sample)
+        if self.run_error is not None:
+            raise self.run_error
+
+    def fake_measure(self, _x, _sr, nominal):
+        return nominal, 1.0
+
+    def fake_trim(self, x, _sr, _keep_s, _fade_s):
+        return x[:16]
+
+    def bake(self, recipe="mtg-sax-pcm24-v1"):
+        with mock.patch.object(prepare, "MTG_SAX_INSTR", [("sop", "sop")]), \
+             mock.patch.object(prepare, "MTG_SAX_ZONE_STEP", 99), \
+             mock.patch.object(prepare, "MTG_SAX_DECODE_RECIPE_REV", recipe,
+                               create=True), \
+             mock.patch.object(prepare, "REPO_ROOT", self.repo_root), \
+             mock.patch.object(prepare, "fetch", side_effect=self.fake_fetch), \
+             mock.patch.object(prepare.subprocess, "run",
+                               side_effect=self.fake_run), \
+             mock.patch.object(prepare, "measure_f0_robust",
+                               side_effect=self.fake_measure), \
+             mock.patch.object(prepare, "trim_to_onset",
+                               side_effect=self.fake_trim):
+            return prepare._bake_mtg_sax(self.src)
+
+    def fetch_count(self, suffix):
+        return sum(1 for name in self.fetches if name.endswith(suffix))
+
+    def test_valid_manifested_warm_cache_is_reused_without_refetch_or_decode(self):
+        self.bake()
+        fetches = list(self.fetches)
+        decodes = self.decodes
+        self.bake()
+        self.assertEqual(self.fetches, fetches)
+        self.assertEqual(self.decodes, decodes)
+
+    def test_altered_sfz_region_is_refetched(self):
+        self.bake()
+        region_fetches = self.fetch_count("_rr1.txt")
+        for dyn in ("f", "p"):
+            self.write_region(dyn, "poison")
+        self.bake()
+        self.assertGreater(self.fetch_count("_rr1.txt"), region_fetches)
+        self.assertEqual(self.fetch_count("poison.flac"), 0)
+
+    def test_altered_cached_flac_is_refetched(self):
+        self.bake()
+        flac_fetches = self.fetch_count(".flac")
+        with open(self.flac, "wb") as f:
+            f.write(b"ALTERED")
+        self.bake()
+        self.assertGreater(self.fetch_count(".flac"), flac_fetches)
+        self.assertEqual(prepare.sha256_file(self.flac),
+                         hashlib.sha256(self.served_flac).hexdigest())
+
+    def test_altered_cached_decoded_wav_is_rebuilt(self):
+        self.bake()
+        decodes = self.decodes
+        self.write_constant_wav(self.wav, 2222)
+        self.bake()
+        self.assertGreater(self.decodes, decodes)
+        samples, _sr = prepare.read_wav(self.wav)
+        self.assertAlmostEqual(samples[0], 1000 / 8388608.0)
+
+    def test_decode_recipe_change_rebuilds_cached_wav(self):
+        self.bake(recipe="recipe-a")
+        decodes = self.decodes
+        self.decoded_sample = 2000
+        self.bake(recipe="recipe-b")
+        self.assertGreater(self.decodes, decodes)
+        samples, _sr = prepare.read_wav(self.wav)
+        self.assertAlmostEqual(samples[0], 2000 / 8388608.0)
+
+    def test_interrupted_decode_leaves_no_partial_cache_entry(self):
+        self.run_error = RuntimeError("simulated ffmpeg interruption")
+        with self.assertRaises(RuntimeError):
+            self.bake()
+        self.assertFalse(os.path.exists(self.wav))
+        self.assertFalse(os.path.exists(self.wav_manifest))
+        leftovers = [
+            name for name in os.listdir(self.src)
+            if name.startswith(self.BASE + ".wav.") and name.endswith(".wav")
+        ]
+        self.assertEqual(leftovers, [])
 
 
 #: URL ref position in a GitHub fetch: raw.githubusercontent.com/<owner>/<repo>/<REF>/…

@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00159 — Published sax provenance describes the retired onset-only voice
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / sax documentation
 - **Raised:** 2026-07-28
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260728T173704Z-p57192-n572381000-c263
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00159-run-verify-20260728T173704Z-p57192-n572381000-c263
-- **Owner base:** 62f5e9024aedfd99935a0cc88e47055af1056eca
-- **Owner fingerprint:** sha256:17193d7db3e2dce872531c16bc9b5ed07822ce1ee8ded8cab8b6bfb1944fa324
-- **Owner since:** 2026-07-28T17:37:04Z
-- **Owner until:** 2026-07-28T18:22:04Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T040109Z-p57192-n646860400-c93 branch=task/bug-MM-BUG-KILN-00159-run-fix-20260728T040109Z-p57192-n646860400-c93 code=0df7aa7c3dae8e9851afd7dba024d9321d02c2ba gate=deltic model=codex@xhigh)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T040109Z-p57192-n646860400-c93 branch=task/bug-MM-BUG-KILN-00159-run-fix-20260728T040109Z-p57192-n646860400-c93 code=0df7aa7c3dae8e9851afd7dba024d9321d02c2ba gate=deltic model=codex@xhigh) → Closed (2026-07-28, deltic:auto role=verify run=verify-20260728T173704Z-p57192-n572381000-c263 verified_fix_run=fix-20260728T040109Z-p57192-n646860400-c93 verdict=close model=claude)
 
 ## Observation
 
@@ -47,5 +47,9 @@ Focused validation:
 
 - `cargo test -p ferrosintesis sax_published_docs_describe_the_looped_recording_voice` — passed.
 - `deltic integrate --push` — affected-area gate passed and landed code commit `0df7aa7c3dae8e9851afd7dba024d9321d02c2ba`.
+
+### Verification summary (2026-07-28, deltic:auto run=verify-20260728T173704Z-p57192-n572381000-c263 verified_fix_run=fix-20260728T040109Z-p57192-n646860400-c93 verdict=close)
+
+Verifier note: All three recorded stale-doc locations are corrected, the new wording matches the real SaxLoopVoice routing, the regression test is non-vacuous and passes, and fmt/clippy/test are green. — Reproduced the original observation from the pre-fix blobs (git show 0df7aa7c^:crates/ferrosintesis-samples-sax/{PROVENANCE.md,README.md,src/lib.rs,NOTICE} and tools/ferrosintesis-samples/prepare.py): PROVENANCE said 'Saxophone attack/body bank' and 'The model carries the sustain past the kept window'; lib.rs said 'as an LA sample layer over the modeled reed'. On this trunk all three are gone and replaced wi...
 
 ## Notes

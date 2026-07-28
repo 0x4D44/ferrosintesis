@@ -1,9 +1,10 @@
 //! Embedded CC BY 4.0 and CC BY 3.0 MTG.SoloSax saxophone samples for GM 64-67.
 //!
 //! Real solo-saxophone single notes (soprano/alto/tenor/baritone) from the MTG
-//! good-sounds.org dataset (Neumann U87), voicing the GM 64-67 saxophones as an LA
-//! sample layer over the modeled reed. Consumers normally access this crate through
-//! `ferrosintesis`. Attribution obligations are in `NOTICE`.
+//! good-sounds.org dataset (Neumann U87), supplying recorded attack plus looped recorded sustain
+//! for the GM 64-67 saxophones. The modeled reed is the
+//! `--no-samples` or unusable-loop fallback. Consumers normally access this crate
+//! through `ferrosintesis`. Attribution obligations are in `NOTICE`.
 
 #![forbid(unsafe_code)]
 

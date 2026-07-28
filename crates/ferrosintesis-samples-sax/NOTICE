@@ -8,7 +8,7 @@ Source: https://github.com/sfzinstruments/MTG.SoloSax — individual FLAC single
 notes recorded with a Neumann U87; the underlying recordings are the MTG
 good-sounds.org packs published on Freesound (CC BY 3.0).
 
-Modifications: the individual notes were decoded from FLAC, trimmed to attack+body
-transients, downmixed to mono, resampled to 44.1 kHz 16-bit, and repitched into the
-ferrosintesis LA sample layer. This is a modified use of the material; no
-endorsement by the original authors is implied.
+Modifications: the individual notes were decoded from FLAC, trimmed to keep attack
+plus loopable recorded sustain, downmixed to mono, resampled to 44.1 kHz 16-bit,
+and used as the recorded default sax voice in ferrosintesis. This is a modified
+use of the material; no endorsement by the original authors is implied.

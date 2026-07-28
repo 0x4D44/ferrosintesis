@@ -1,7 +1,8 @@
 # ferrosintesis-samples-sax
 
 Embedded **CC BY 4.0 AND CC BY 3.0** saxophone samples for [`ferrosintesis`](../ferrosintesis) —
-the LA sample layer for the GM 64-67 saxophones (soprano, alto, tenor, baritone).
+recorded attack plus looped recorded sustain for the GM 64-67 saxophones (soprano,
+alto, tenor, baritone).
 
 74 mono 16-bit 44.1 kHz WAVs (per sax: ~9-10 pitch zones × soft/loud), embedded via
 `include_bytes!`. Source recordings are the **MTG "good-sounds" solo-saxophone**

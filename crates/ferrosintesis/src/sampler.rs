@@ -5524,6 +5524,89 @@ mod tests {
         assert_gong_provenance_matches_velocity_boundary(provenance, GONG_LOUD_VEL + 1);
     }
 
+    fn normalized_ws(text: &str) -> String {
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    fn assert_text_contains(name: &str, text: &str, phrase: &str) {
+        let text = normalized_ws(text);
+        let phrase = normalized_ws(phrase);
+        assert!(
+            text.contains(&phrase),
+            "{name} must contain the current sax routing phrase {phrase:?}"
+        );
+    }
+
+    fn assert_text_omits(name: &str, text: &str, phrase: &str) {
+        let text = normalized_ws(text);
+        let phrase = normalized_ws(phrase);
+        assert!(
+            !text.contains(&phrase),
+            "{name} still contains retired sax routing phrase {phrase:?}"
+        );
+    }
+
+    #[test]
+    fn sax_published_docs_describe_the_looped_recording_voice() {
+        let provenance = include_str!("../../ferrosintesis-samples-sax/PROVENANCE.md");
+        let readme = include_str!("../../ferrosintesis-samples-sax/README.md");
+        let rustdoc = include_str!("../../ferrosintesis-samples-sax/src/lib.rs");
+        let notice = include_str!("../../ferrosintesis-samples-sax/NOTICE");
+        let prepare = include_str!("../../../tools/ferrosintesis-samples/prepare.py");
+
+        assert_text_contains(
+            "sax provenance",
+            provenance,
+            "recorded attack plus looped recorded sustain bank",
+        );
+        assert_text_contains(
+            "sax provenance",
+            provenance,
+            "The modeled reed is only the `--no-samples` / unusable-loop fallback",
+        );
+        assert_text_contains(
+            "sax README",
+            readme,
+            "recorded attack plus looped recorded sustain",
+        );
+        assert_text_contains(
+            "sax rustdoc",
+            rustdoc,
+            "recorded attack plus looped recorded sustain",
+        );
+        assert_text_contains(
+            "sax NOTICE",
+            notice,
+            "trimmed to keep attack plus loopable recorded sustain",
+        );
+        assert_text_contains(
+            "prepare.py sax comments",
+            prepare,
+            "recorded attack plus early loopable sustain",
+        );
+
+        for (name, text) in [
+            ("sax provenance", provenance),
+            ("sax README", readme),
+            ("sax rustdoc", rustdoc),
+            ("sax NOTICE", notice),
+            ("prepare.py sax comments", prepare),
+        ] {
+            for stale in [
+                "Saxophone attack/body bank",
+                "The model carries the\nsustain",
+                "the model carries the sustain",
+                "sample layer over the modeled reed",
+                "LA sample layer for the GM 64-67",
+                "MTG.SoloSax LA layer",
+                "attack+body transients",
+                "ferrosintesis LA sample layer",
+            ] {
+                assert_text_omits(name, text, stale);
+            }
+        }
+    }
+
     #[test]
     fn clavinet_sampled_hold_survives_the_baked_tail_and_decays_in_output_time() {
         let sr = 44100.0;

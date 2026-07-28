@@ -3019,7 +3019,7 @@ def ensure_banjo_sources(src):
         )
 
 
-# --- GM 64-67 saxophones: MTG.SoloSax LA sample layer (CC-BY 4.0) -------------
+# --- GM 64-67 saxophones: MTG.SoloSax recorded sax bank (CC-BY 4.0) ------------
 # Source: github.com/sfzinstruments/MTG.SoloSax — the MTG good-sounds.org single-note
 # dataset (Neumann U87, 24-bit/48 kHz FLAC), pinned by commit. The FLAC filenames are
 # NUMBERED, not pitched, so the authoritative note is the `key=` in each SFZ region
@@ -3029,7 +3029,7 @@ def ensure_banjo_sources(src):
 # "labels can lie, measure f0" rule. Output routes EXPLICITLY to the separate CC-BY
 # `ferrosintesis-samples-sax` crate (like the clavinet/gong intakes) so the CC0 core
 # banks stay pure CC0. rr1 take only; p and f dynamic layers are INDEPENDENT zone
-# lists (reed_bank picks a whole bank by velocity), so they need not be pitch-aligned.
+# lists (sax_bank picks a whole bank by velocity), so they need not be pitch-aligned.
 MTG_SAX_REV = "b494d256549b3d088fdec176ce82867f8a1f58b2"
 MTG_SAX_BASE = (
     "https://raw.githubusercontent.com/sfzinstruments/MTG.SoloSax/"
@@ -3038,7 +3038,7 @@ MTG_SAX_BASE = (
 # (out-prefix, sfz-prefix): GM 64 soprano, 65 alto, 66 tenor, 67 baritone
 MTG_SAX_INSTR = [("sop", "sop"), ("alt", "alt"), ("ten", "ten"), ("bar", "bar")]
 MTG_SAX_ZONE_STEP = 4   # keep every Nth sampled note (~N-semitone zones; max repitch ~N/2)
-MTG_SAX_KEEP_S = 0.62   # attack + early body; the model carries the sustain (reed recipe)
+MTG_SAX_KEEP_S = 0.62   # recorded attack plus early loopable sustain; synth loops its body
 MTG_SAX_FADE_S = 0.20
 MTG_SAX_MIN_CONF = 0.85  # drop a zone whose measured root is not trustworthy (neighbours cover)
 MTG_SAX_DECODE_RECIPE_REV = "ffmpeg-pcm-s24le-mono-v1"
@@ -3145,13 +3145,15 @@ def bake_bottle_loop(src_dir=FREESOUND_SRC, repo_root=REPO_ROOT, verify_source=T
 
 
 def _bake_mtg_sax(src):
-    """Fetch + decode + bake the MTG.SoloSax LA layer for GM 64-67.
+    """Fetch + decode + bake the MTG.SoloSax recorded sax bank for GM 64-67.
 
     Writes `sax_<inst>_<midiname>_<p|f>.wav` (16-bit mono 44.1 kHz) into the CC-BY
     `ferrosintesis-samples-sax` crate; returns print-table rows. FLAC decode shells
     out to ffmpeg (mono 24-bit, source rate), matching the clavinet/drumkit path.
     Zones are selected by index across each dynamic's available notes, so gaps in the
-    source do not break selection; the ROOT stored is the measured f0.
+    source do not break selection; the ROOT stored is the measured f0. The default
+    synth voice plays the recorded attack and loops the recorded sustain, with the
+    modeled reed only as fallback.
     """
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-sax", "samples")
@@ -3384,7 +3386,7 @@ def main():
     if want("headroom"):
         _validate_generated_output_inventory("headroom", HEADROOM_SOURCES)
 
-    # `--sax-only` bakes ONLY the MTG saxophone LA layer (network + the -sax crate),
+    # `--sax-only` bakes ONLY the MTG recorded sax bank (network + the -sax crate),
     # skipping the slow VSCO fetch/rewrite — fast iteration on the sax bank alone.
     sax_only = "--sax-only" in sys.argv[1:]
 
@@ -3559,7 +3561,7 @@ def main():
             os.makedirs(b1_src, exist_ok=True)
             rows += _bake_b1upright(b1_src)
 
-        # GM 64-67 saxophones: MTG.SoloSax LA layer (own transform: FLAC fetch +
+        # GM 64-67 saxophones: MTG.SoloSax recorded sax bank (own transform: FLAC fetch +
         # ffmpeg decode), cached by MTG rev, output to the separate CC-BY `-sax` crate.
         if want("sax"):
             sax_src = os.path.join(tempfile.gettempdir(), "mtg_sax_src", MTG_SAX_REV)

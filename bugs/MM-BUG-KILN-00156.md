@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00156 — Bake-inventory oracle enumerates by _bake_ name prefix, not by packaged-write behaviour
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** testing / sample generation
@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00156-run-fix-20260727T221803Z-p57192-n557379000-c48-code-1785191172211
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260727T221803Z-p57192-n557379000-c48 branch=task/bug-MM-BUG-KILN-00156-run-fix-20260727T221803Z-p57192-n557379000-c48 code=cd0ebbd46e7d0d06ad9ba94c88107961dc7d2f50 gate=deltic model=codex@xhigh)
 
 ## Observation
 
@@ -66,6 +66,21 @@ function whose transitive effects include a packaged write, and exclude only wha
 deliberately exempt. Keep the existing effect resolver as-is. Add a control that renames a
 flagged helper off the `_bake_` prefix and requires it to STILL be flagged, so the
 enumeration itself is tested rather than assumed.
+
+## Fix
+
+The bake-output inventory oracle now derives its candidate set from transitive
+packaged-write effects instead of `_bake_`/`bake_` function-name prefixes. A
+writer renamed to `prepare_newbank` therefore remains guarded.
+
+Restoring the old prefix filter made the renamed-writer regression fail with
+`[]` instead of `["prepare_newbank"]`; the fixed tree passed all inventory
+tests, including the later public-metadata checks from MM-BUG-KILN-00160.
+
+Focused validation:
+
+- `cargo test -p ferrosintesis inventory::tests` — 18 passed on the held fix.
+- `deltic integrate --push` — the combined final tree passed and landed code commit `cd0ebbd46e7d0d06ad9ba94c88107961dc7d2f50`.
 
 ## Notes
 

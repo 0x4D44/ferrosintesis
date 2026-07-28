@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** Steinway sample package / memory and package size
 - **Raised:** 2026-07-28
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260728T224716Z-p56232-n275068800-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00165-run-fix-20260728T224716Z-p56232-n275068800-c1
+- **Owner base:** 0a0492ebdb1ea9fce73acfe8a40c1e1d53c7b636
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-28T22:47:16Z
+- **Owner until:** 2026-07-29T00:47:16Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

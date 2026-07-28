@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00157 — Sax regeneration trusts unauthenticated warm-cache inputs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / sax cache
@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00157-run-fix-20260728T173704Z-p57192-n572381000-c267-code-1785261719001
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T030703Z-p57192-n099327800-c79 branch=task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79 code=336355b461c7f32a82cca417a1ac8ef1e02eb33e gate=deltic model=codex@xhigh) → Open (2026-07-28, deltic:auto role=verify run=verify-20260728T162705Z-p57192-n426209200-c251 verified_fix_run=fix-20260728T030703Z-p57192-n099327800-c79 verdict=doubt reason=fix-is-statically-sound-and-5-6-gate-steps-are-green-but-python3-is-denied-in-th model=claude)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T030703Z-p57192-n099327800-c79 branch=task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79 code=336355b461c7f32a82cca417a1ac8ef1e02eb33e gate=deltic model=codex@xhigh) → Open (2026-07-28, deltic:auto role=verify run=verify-20260728T162705Z-p57192-n426209200-c251 verified_fix_run=fix-20260728T030703Z-p57192-n099327800-c79 verdict=doubt reason=fix-is-statically-sound-and-5-6-gate-steps-are-green-but-python3-is-denied-in-th model=claude) → Fixed (2026-07-28, recovered by OpenAI Codex; code `95feab7f7f21d87430f1574db5a185c875329907`; focused Python regression and Deltic workspace gate passed)
 
 ## Observation
 
@@ -53,6 +53,24 @@ Focused validation:
 ### Verification summary (2026-07-28, deltic:auto run=verify-20260728T162705Z-p57192-n426209200-c251 verified_fix_run=fix-20260728T030703Z-p57192-n099327800-c79 verdict=doubt)
 
 Verifier note: Fix is statically sound and 5/6 gate steps are green, but python3 is denied in this session so the Python regression suite - the only gate step covering this bug - was never executed. — HEAD=9569393, fix commit 336355b confirmed an ancestor (touches only tools/ferrosintesis-samples/prepare.py + test_prepare.py). (1) Symptom, STATIC only: pre-fix _mtg_region_keys and _bake_mtg_sax used 'if not os.path.exists(p): fetch(...)' and 'if not os.path.exists(wav): subprocess.run(ffmpeg)'; on trunk they route through ensure_source (prepare.py:1242, digest+URL via direct_source_matches:1279) and _ensure_...
+
+### Fix summary (2026-07-28, held-branch recovery)
+
+Recovered the held direct regression as
+`95feab7f7f21d87430f1574db5a185c875329907`. It proves legacy sax
+SFZ, FLAC, and decoded WAV cache entries without manifests are refetched and
+rebuilt. The original implementation fix remains
+`336355b461c7f32a82cca417a1ac8ef1e02eb33e`.
+
+Evidence:
+
+- The focused direct-source and sax cache suite passed all 29 tests with Python 3.12.
+- The seven current `MtgSaxCacheTest` cases produced six failures and no errors
+  against the pre-fix `prepare.py`; only healthy-cache reuse passed.
+- `deltic integrate --push` selected the workspace component, passed its exact
+  gate including all 130 sample-preparation tests, and landed the regression.
+
+The bug remains Fixed for independent verification; the fixer did not close it.
 
 ## Notes
 

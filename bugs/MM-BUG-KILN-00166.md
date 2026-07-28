@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** Steinway sample generation / output inventory
 - **Raised:** 2026-07-28
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260728T232217Z-p36364-n404969000-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00166-run-fix-20260728T232217Z-p36364-n404969000-c1
+- **Owner base:** fc3193dd8ec05995066e1ab5137b76d5e461b3be
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-28T23:22:17Z
+- **Owner until:** 2026-07-29T01:22:17Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

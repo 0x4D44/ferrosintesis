@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00157 — Sax regeneration trusts unauthenticated warm-cache inputs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / sax cache
@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79-code-1785208641196
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T030703Z-p57192-n099327800-c79 branch=task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79 code=336355b461c7f32a82cca417a1ac8ef1e02eb33e gate=deltic model=codex@xhigh)
 
 ## Observation
 
@@ -34,6 +34,20 @@
 
 ## Fix
 
-<unfixed — raised only>
+The MTG sax path now authenticates warm SFZ and FLAC inputs through the
+direct-source manifest cache. Decoded WAVs are accepted only when a manifest
+binds their bytes to the authenticated FLAC digest and decode-recipe revision;
+replacement decodes are staged, validated, and atomically installed.
+
+Regression coverage proves that altered SFZ, FLAC, and decoded WAV entries are
+rejected, recipe changes trigger a new decode, interrupted decodes leave no
+partial cache, and a healthy warm cache is reused without fetching or decoding.
+The same tests produced six failures against the pre-fix parent
+`a6d202d4b594e0494771d0207a64462c63b06b9a` and passed on the fix.
+
+Focused validation:
+
+- `python3 -m unittest test_prepare.DirectSourceCacheTest test_prepare.PinnedFlacCacheTest test_prepare.PinnedWarmCacheAuthenticationTest test_prepare.MtgSaxCacheTest` — 28 passed.
+- `deltic integrate --push` — affected-area gate passed and landed code commit `336355b461c7f32a82cca417a1ac8ef1e02eb33e`.
 
 ## Notes

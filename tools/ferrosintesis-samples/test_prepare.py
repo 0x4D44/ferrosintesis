@@ -335,6 +335,301 @@ class PrepareSampleBankTests(unittest.TestCase):
         self.assertNotEqual(first[fade_start:], untapered[fade_start:])
         self.assertLess(abs(first[-1]), 1e-3)
 
+    def test_b1_sustain_pilot_output_is_outside_every_git_tree_and_empty(self):
+        with tempfile.TemporaryDirectory() as root:
+            accepted = os.path.join(root, "new-output")
+            self.assertEqual(
+                prepare.validate_b1_pilot_output_dir(accepted, repo_root=prepare.REPO_ROOT),
+                os.path.realpath(accepted),
+            )
+
+            os.makedirs(accepted)
+            open(os.path.join(accepted, "old.wav"), "wb").close()
+            with self.assertRaisesRegex(ValueError, "new or empty"):
+                prepare.validate_b1_pilot_output_dir(
+                    accepted, repo_root=prepare.REPO_ROOT
+                )
+
+        with tempfile.TemporaryDirectory() as git_root:
+            os.makedirs(os.path.join(git_root, ".git"))
+            nested = os.path.join(git_root, "untracked", "pilot")
+            with self.assertRaisesRegex(ValueError, "Git working tree"):
+                prepare.validate_b1_pilot_output_dir(
+                    nested, repo_root=prepare.REPO_ROOT
+                )
+
+        with self.assertRaisesRegex(ValueError, "repository"):
+            prepare.validate_b1_pilot_output_dir(
+                os.path.join(prepare.REPO_ROOT, "pilot-output"),
+                repo_root=prepare.REPO_ROOT,
+            )
+
+    def test_b1_sustain_pilot_dispatches_before_the_ordinary_baker(self):
+        with tempfile.TemporaryDirectory() as root:
+            output = os.path.join(root, "pilot")
+            with (
+                mock.patch.object(
+                    prepare, "run_b1_sustain_pilot", return_value={"ok": True}
+                ) as pilot,
+                mock.patch.object(
+                    prepare,
+                    "_family_selection",
+                    side_effect=AssertionError("ordinary baker was reached"),
+                ),
+                mock.patch.object(
+                    prepare.sys,
+                    "argv",
+                    ["prepare.py", f"--b1-sustain-pilot={output}"],
+                ),
+            ):
+                prepare.main()
+            pilot.assert_called_once_with(output)
+
+    def test_b1_sustain_pilot_preserves_assets_and_cleans_decode_temp(self):
+        before = prepare.b1_asset_hashes()
+        decode_dirs = []
+
+        def successful_worker(_output, decode_dir):
+            decode_dirs.append(decode_dir)
+            open(os.path.join(decode_dir, "sentinel"), "wb").close()
+            return {"ok": True}
+
+        with tempfile.TemporaryDirectory() as root:
+            output = os.path.join(root, "success")
+            with mock.patch.object(
+                prepare, "_build_b1_sustain_pilot", side_effect=successful_worker
+            ):
+                self.assertEqual(
+                    prepare.run_b1_sustain_pilot(output),
+                    {"ok": True},
+                )
+            self.assertFalse(os.path.exists(decode_dirs[-1]))
+
+            failed = os.path.join(root, "failed")
+            with mock.patch.object(
+                prepare,
+                "_build_b1_sustain_pilot",
+                side_effect=RuntimeError("deliberate failure"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "deliberate failure"):
+                    prepare.run_b1_sustain_pilot(failed)
+            self.assertFalse(os.path.exists(failed))
+
+        self.assertEqual(prepare.b1_asset_hashes(), before)
+
+    def test_b1_sustain_budget_is_register_weighted_and_has_raw_headroom(self):
+        self.assertEqual(prepare.b1_pilot_append_s(35), 1.25)
+        self.assertEqual(prepare.b1_pilot_append_s(36), 0.75)
+        self.assertEqual(prepare.b1_pilot_append_s(59), 0.75)
+        self.assertEqual(prepare.b1_pilot_append_s(60), 0.50)
+        self.assertEqual(prepare.b1_pilot_append_s(83), 0.50)
+        self.assertEqual(prepare.b1_pilot_append_s(84), 0.0)
+
+        sample_dir = os.path.join(
+            prepare.REPO_ROOT,
+            "crates",
+            "ferrosintesis-samples-b1-upright",
+            "samples",
+        )
+        projection = prepare.b1_pilot_size_projection(sample_dir)
+        self.assertEqual(projection["zones"], 52)
+        self.assertEqual(projection["append_frames"], 1267875)
+        self.assertLessEqual(projection["projected_raw_bytes"], 9_500_000)
+        self.assertGreaterEqual(projection["raw_headroom_ratio"], 0.05)
+
+    def test_b1_pilot_felt_damper_matches_the_rust_curve(self):
+        # Captured from voices.rs:PianoDamper::t60_for. Key 88 is the last
+        # damped string; key 89 (F6) takes the 12-second undamped branch.
+        expected = {
+            21: 0.95,
+            48: 0.6363961,
+            65: 0.38949145,
+            88: 0.20045221,
+            89: 12.0,
+        }
+        for key, want in expected.items():
+            self.assertAlmostEqual(prepare.b1_pilot_felt_t60(key), want, places=6)
+
+        sr = 44100
+        t60 = prepare.b1_pilot_felt_t60(65)
+        mul = prepare.b1_pilot_release_mul(65, sr)
+        self.assertAlmostEqual(mul ** round(t60 * sr), 1e-3, places=5)
+        self.assertEqual(prepare.B1_PILOT_REAP_ENV, 1e-4)
+
+    def test_b1_decay_fit_recovers_slow_shape_without_erasing_beats(self):
+        hop_s = 0.025
+        times = [1.5 + i * hop_s for i in range(261)]
+        floor = 10 ** (-70.0 / 20.0)
+
+        def slow_db(t):
+            return -8.0 - 3.4 * (t - 1.5) - 3.0 * (1.0 - math.exp(-(t - 1.5)))
+
+        observed = []
+        for t in times:
+            ripple_db = 0.7 * math.sin(2.0 * math.pi * 1.7 * t)
+            signal = 10 ** ((slow_db(t) + ripple_db) / 20.0)
+            observed.append(math.sqrt(signal * signal + floor * floor))
+
+        fit = prepare.fit_b1_decay(
+            times,
+            observed,
+            floor,
+            knot_times=(1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.5, 8.0),
+            median_radius_s=0.25,
+        )
+        self.assertGreaterEqual(len(fit), 6)
+        self.assertTrue(
+            all(a[1] >= b[1] for a, b in zip(fit, fit[1:])),
+            f"fitted dB knots are not monotone: {fit}",
+        )
+        for t, got_db in fit:
+            self.assertLess(abs(got_db - slow_db(t)), 1.0)
+
+        residual = []
+        for t, value in zip(times, observed):
+            fitted_db = prepare.b1_decay_db_at(fit, t)
+            clean = math.sqrt(max(0.0, value * value - floor * floor))
+            residual.append(20.0 * math.log10(max(clean, 1e-12)) - fitted_db)
+        self.assertGreater(max(residual) - min(residual), 1.0)
+
+    def test_b1_loop_search_uses_the_same_decaying_beating_recording(self):
+        sr = 4000
+        f0 = 200.0
+        duration_s = 4.0
+        source = []
+        for i in range(round(duration_s * sr)):
+            t = i / sr
+            decay = 10 ** (-3.0 * t / 20.0)
+            tone = (
+                math.sin(2.0 * math.pi * f0 * t)
+                + 0.55 * math.sin(2.0 * math.pi * (f0 + 0.8) * t + 0.3)
+                + 0.25 * math.sin(2.0 * math.pi * 2.03 * f0 * t + 0.7)
+            )
+            source.append(0.35 * decay * tone)
+
+        knots = [(1.5, -4.5), (2.0, -6.0), (2.5, -7.5), (3.0, -9.0)]
+        loop = prepare.find_b1_piano_loop(
+            source,
+            sr,
+            search_start=round(1.5 * sr),
+            search_end=round(2.5 * sr),
+            f0=f0,
+            decay_knots=knots,
+        )
+        self.assertGreaterEqual(loop["end"] - loop["start"], round(0.5 * sr))
+        self.assertGreaterEqual(loop["start"], round(1.5 * sr))
+        self.assertLessEqual(loop["end"], round(2.5 * sr))
+        self.assertGreaterEqual(loop["crossfade"], round(0.020 * sr))
+        self.assertLessEqual(loop["crossfade"], round(0.080 * sr))
+        self.assertGreaterEqual(loop["crossfade_step_ratio"], 0.0)
+        self.assertLess(loop["wrap_db"], -10.0)
+
+        clean = prepare.b1_piano_loop_wrap_db(
+            source, sr, loop["start"], loop["end"], knots
+        )
+        broken = prepare.b1_piano_loop_wrap_db(
+            source, sr, loop["start"], loop["end"] - 37, knots
+        )
+        self.assertGreater(
+            broken,
+            clean + 3.0,
+            f"37-frame endpoint displacement was not caught: {clean:.1f} vs {broken:.1f} dB",
+        )
+
+        rendered = prepare.render_b1_piano_loop(
+            source,
+            sr,
+            loop,
+            knots,
+            duration_s=3.5,
+            bend=2 ** (2.0 / 12.0),
+        )
+        self.assertEqual(len(rendered), round(3.5 * sr))
+        self.assertTrue(all(math.isfinite(v) for v in rendered))
+        self.assertLessEqual(max(abs(v) for v in rendered), 1.2)
+
+        bend = 2 ** (2.0 / 12.0)
+        flat = prepare._b1_decay_flattened(source, sr, knots)
+        flat_reference_db = prepare.b1_decay_db_at(knots, knots[0][0])
+        stride = loop["end"] - loop["start"] - loop["crossfade"]
+        checked_fractional_loop = False
+        for frame in range(math.ceil(
+                (loop["end"] + loop["crossfade"]) / bend), len(rendered)):
+            source_time = frame * bend
+            pos = loop["start"] + loop["crossfade"] + (
+                (source_time - loop["end"] - loop["crossfade"]) % stride
+            )
+            if pos >= loop["end"] - loop["crossfade"] or pos + 2 >= len(source):
+                continue
+            frac = pos - int(pos)
+            if not 0.1 < frac < 0.9:
+                continue
+            expected = prepare._b1_cubic_loop(
+                flat, pos, loop["start"], loop["end"]
+            )
+            target_db = prepare.b1_decay_db_at(knots, frame / sr)
+            expected *= 10 ** ((target_db - flat_reference_db) / 20.0)
+            self.assertAlmostEqual(rendered[frame], expected, places=12)
+            checked_fractional_loop = True
+            break
+        self.assertTrue(checked_fractional_loop)
+
+        unbent = prepare.render_b1_piano_loop(
+            source, sr, loop, knots, duration_s=3.5
+        )
+        self.assertEqual(unbent[:loop["end"]], source[:loop["end"]])
+        beat = prepare.b1_beat_diagnostic(source, sr, knots, floor_rms=1e-6)
+        self.assertTrue(beat["supported"])
+        self.assertGreater(beat["residual_depth_db_p90_p10"], 0.1)
+
+    def test_b1_background_discards_handling_noise_but_keeps_note_free_room(self):
+        sr = 8000
+        rng = random.Random(119)
+        samples = []
+        for i in range(round(1.5 * sr)):
+            time_s = i / sr
+            scale = 0.025 if time_s < 0.60 else 0.003
+            samples.append(scale * rng.uniform(-1.0, 1.0))
+        pcm = struct.pack(
+            f"<{len(samples)}h",
+            *[int(value * 32767) for value in samples],
+        )
+        with tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, "take.wav")
+            with wave.open(path, "wb") as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(sr)
+                wav.writeframes(pcm)
+            floor = prepare.measure_b1_take_background(
+                path, first_onset_sample=round(1.45 * sr)
+            )
+        self.assertGreaterEqual(floor["discarded_lead_s"], 0.20)
+        self.assertLessEqual(floor["trend_db"], 3.0)
+        self.assertLessEqual(floor["spread_db"], 6.0)
+
+    def test_b1_background_rejects_a_stable_pitched_floor(self):
+        sr = 8000
+        samples = [
+            0.01 * math.sin(2.0 * math.pi * 120.0 * i / sr)
+            for i in range(round(1.5 * sr))
+        ]
+        pcm = struct.pack(
+            f"<{len(samples)}h",
+            *[int(value * 32767) for value in samples],
+        )
+        with tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, "pitched-take.wav")
+            with wave.open(path, "wb") as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(sr)
+                wav.writeframes(pcm)
+            with self.assertRaisesRegex(ValueError, "coherent pitched energy"):
+                prepare.measure_b1_take_background(
+                    path, first_onset_sample=round(1.45 * sr)
+                )
+
     def test_committed_piano_round_robins_are_distinct_or_declared_single_take(self):
         sample_dir = os.path.join(
             prepare.REPO_ROOT, "crates", "ferrosintesis-samples-core", "samples"

@@ -2277,6 +2277,18 @@ _B1_NAME_RE = re.compile(r"^b1_(normal|hard)_[A-G]#?[0-8]\.wav$")
 _B1_LAYER_COUNTS = {"normal": 25, "hard": 27}
 B1_BODY_S = 1.5
 B1_END_FADE_S = 0.010
+B1_PILOT_REAP_ENV = 1e-4
+B1_PILOT_PACKAGE_LIMIT = 10 * 1024 * 1024
+B1_PILOT_MIN_HEADROOM = 0.05
+B1_PILOT_MAX_BACKGROUND_COHERENCE = 0.50
+B1_PILOT_ZONES = (
+    ("hard", "A0"),
+    ("hard", "B1"),
+    ("normal", "C3"),
+    ("normal", "F4"),
+    ("hard", "F4"),
+    ("normal", "F6"),
+)
 
 
 def validate_b1_output_inventory(names):
@@ -2316,6 +2328,1194 @@ def validate_b1_generated_inventory(expected, generated):
 def prepare_b1_body(x, sr):
     """Keep the recorded B1 body intact, with only a terminal de-click taper."""
     return trim_to_onset(x, sr, B1_BODY_S, B1_END_FADE_S)
+
+
+def prepare_b1_archival(x, sr):
+    """The full onset-aligned B1 slice at the exact body's normalization gain."""
+    peak = max(abs(v) for v in x)
+    onset = next(i for i, v in enumerate(x) if abs(v) > 0.03 * peak)
+    start = max(0, onset - int(PRE_S * sr))
+    seg = list(x[start:])
+    lead = onset - start
+    fade_in = min(int(0.002 * sr), lead)
+    for i in range(min(fade_in, len(seg))):
+        seg[i] *= i / fade_in
+
+    body = list(seg[:int((PRE_S + B1_BODY_S) * sr)])
+    fade_out = int(B1_END_FADE_S * sr)
+    for i in range(fade_out):
+        j = len(body) - fade_out + i
+        if 0 <= j < len(body):
+            t = 1.0 - i / fade_out
+            body[j] *= t * t
+    body_peak = max(abs(v) for v in body)
+    gain = 0.9 / body_peak if body_peak > 0.0 else 1.0
+    return [v * gain for v in seg], gain
+
+
+def read_wav_channel_range(path, start, end, channel=0):
+    """Read one channel and frame range without materializing a whole take."""
+    with wave.open(path, "rb") as w:
+        channels = w.getnchannels()
+        width = w.getsampwidth()
+        sr = w.getframerate()
+        frames = w.getnframes()
+        if not (0 <= channel < channels and 0 <= start < end <= frames):
+            raise ValueError("invalid WAV channel/range")
+        w.setpos(start)
+        raw = w.readframes(end - start)
+    count = (end - start) * channels
+    if width == 2:
+        values = struct.unpack(f"<{count}h", raw)
+        scale = 1.0 / 32768.0
+    elif width == 3:
+        values = [
+            int.from_bytes(raw[i:i + 3], "little", signed=True)
+            for i in range(0, len(raw), 3)
+        ]
+        scale = 1.0 / 8388608.0
+    else:
+        raise ValueError(f"{path}: unsupported sample width {width}")
+    return [values[i * channels + channel] * scale for i in range(end - start)], sr
+
+
+def _b1_frame_rms(x, sr, window_s=0.050, hop_s=0.025, start_s=0.0):
+    window = max(1, round(window_s * sr))
+    hop = max(1, round(hop_s * sr))
+    start = max(0, round(start_s * sr))
+    power = [0.0] * (len(x) + 1)
+    for i, value in enumerate(x):
+        power[i + 1] = power[i] + value * value
+    rows = []
+    for i in range(start, len(x) - window + 1, hop):
+        rms = math.sqrt(max(0.0, (power[i + window] - power[i]) / window))
+        rows.append(((i + window / 2) / sr, rms))
+    return rows
+
+
+def measure_b1_take_background(
+        path, first_onset_sample, reject_coherence=True):
+    """Measure validated channel-L ambience before a take's first strike."""
+    with wave.open(path, "rb") as w:
+        sr = w.getframerate()
+    start = round(0.20 * sr)
+    end = first_onset_sample - round(0.25 * sr)
+    if end - start < round(0.50 * sr):
+        raise ValueError("B1 take has no validated pre-strike ambience interval")
+    x, read_sr = read_wav_channel_range(path, start, end, channel=0)
+    x = _butter_hp4(x, read_sr, B1_HPF_HZ)
+    x = resample(x, read_sr, OUT_SR)
+    frames = _b1_frame_rms(x, OUT_SR, window_s=0.10, hop_s=0.05)
+    if len(frames) < 6:
+        raise ValueError("B1 ambience interval is too short")
+    levels = [rms for _, rms in frames]
+    chosen = None
+    # A recorder-handling transient may contaminate the start of an otherwise
+    # note-free interval. Select the longest trailing interval that is itself
+    # stable; never include post-strike audio or silently average the trend away.
+    for offset in range(0, len(levels) - 5):
+        candidate = levels[offset:]
+        half = len(candidate) // 2
+        first = statistics.median(candidate[:half])
+        second = statistics.median(candidate[half:])
+        trend_db = abs(
+            20.0 * math.log10(max(first, 1e-12) / max(second, 1e-12))
+        )
+        candidate_db = [
+            20.0 * math.log10(max(value, 1e-12)) for value in candidate
+        ]
+        spread_db = (
+            _b1_percentile(candidate_db, 0.90)
+            - _b1_percentile(candidate_db, 0.10)
+        )
+        if trend_db <= 3.0 and spread_db <= 6.0:
+            chosen = (offset, candidate, trend_db, spread_db)
+            break
+    if chosen is None:
+        raise ValueError("B1 ambience has no stable note-free trailing interval")
+    offset, levels, trend_db, spread_db = chosen
+    probe_start = round(offset * 0.05 * OUT_SR)
+    probe = x[probe_start:probe_start + round(0.25 * OUT_SR)]
+    _, coherence = _autocorr_f0(probe, OUT_SR, 20.0, 5000.0)
+    if reject_coherence and coherence > B1_PILOT_MAX_BACKGROUND_COHERENCE:
+        raise ValueError(f"B1 ambience contains coherent pitched energy ({coherence:.3f})")
+    return {
+        "rms": statistics.median(levels),
+        "trend_db": trend_db,
+        "spread_db": spread_db,
+        "coherence": coherence,
+        "duration_s": len(levels) * 0.05 + 0.05,
+        "discarded_lead_s": offset * 0.05,
+    }
+
+
+def _path_is_within(path, root):
+    """Whether resolved `path` is `root` or one of its descendants."""
+    try:
+        return os.path.commonpath((path, root)) == root
+    except ValueError:
+        # Different Windows drives have no common path.
+        return False
+
+
+def validate_b1_pilot_output_dir(path, repo_root=REPO_ROOT):
+    """Resolve and fail closed on the offline pilot's output destination.
+
+    The pilot exists to make disposable listening controls. It may never point at
+    this repo, another worktree, or a directory that already carries artifacts.
+    """
+    resolved = os.path.realpath(os.path.abspath(path))
+    repo = os.path.realpath(os.path.abspath(repo_root))
+    if _path_is_within(resolved, repo):
+        raise ValueError("B1 pilot output must be outside the repository")
+
+    cursor = resolved
+    while True:
+        if os.path.exists(os.path.join(cursor, ".git")):
+            raise ValueError("B1 pilot output must be outside every Git working tree")
+        parent = os.path.dirname(cursor)
+        if parent == cursor:
+            break
+        cursor = parent
+
+    if os.path.exists(resolved):
+        if not os.path.isdir(resolved) or os.listdir(resolved):
+            raise ValueError("B1 pilot output directory must be new or empty")
+    return resolved
+
+
+def _note_name_to_midi(note):
+    match = re.fullmatch(r"([A-G])(#?)([0-8])", note)
+    if match is None:
+        raise ValueError(f"invalid note name {note!r}")
+    names = ("C", "C#", "D", "D#", "E", "F",
+             "F#", "G", "G#", "A", "A#", "B")
+    pitch = match.group(1) + match.group(2)
+    return (int(match.group(3)) + 1) * 12 + names.index(pitch)
+
+
+def b1_pilot_append_s(root_midi):
+    """Maximum contiguous PCM appended after the accepted 1.5-second body."""
+    if root_midi <= 35:       # through B1: slow bass / bichord beat
+        return 1.25
+    if root_midi <= 59:       # C2-B3
+        return 0.75
+    if root_midi <= 83:       # C4-B5
+        return 0.50
+    return 0.0                # C6 up: pilot tests "no continuation required"
+
+
+def b1_pilot_size_projection(sample_dir):
+    """Conservative raw-byte projection for the exact committed B1 inventory."""
+    names = validate_b1_output_inventory({
+        name for name in os.listdir(sample_dir)
+        if name.startswith("b1_") and name.endswith(".wav")
+    })
+    base_bytes = 0
+    append_frames = 0
+    allocation = {}
+    for name in sorted(names):
+        note = name.rsplit("_", 1)[1][:-4]
+        midi = _note_name_to_midi(note)
+        frames = round(b1_pilot_append_s(midi) * OUT_SR)
+        allocation[name] = frames
+        append_frames += frames
+        base_bytes += os.path.getsize(os.path.join(sample_dir, name))
+    projected = base_bytes + 2 * append_frames
+    return {
+        "zones": len(names),
+        "base_bytes": base_bytes,
+        "append_frames": append_frames,
+        "projected_raw_bytes": projected,
+        "raw_headroom_ratio": (B1_PILOT_PACKAGE_LIMIT - projected)
+        / B1_PILOT_PACKAGE_LIMIT,
+        "allocation_frames": allocation,
+    }
+
+
+def b1_asset_hashes(sample_dir=None):
+    """Snapshot the exact committed B1 WAV payload without touching it."""
+    if sample_dir is None:
+        sample_dir = os.path.join(
+            REPO_ROOT,
+            "crates",
+            "ferrosintesis-samples-b1-upright",
+            "samples",
+        )
+    names = validate_b1_output_inventory({
+        name for name in os.listdir(sample_dir)
+        if name.startswith("b1_") and name.endswith(".wav")
+    })
+    return {
+        name: sha256_file(os.path.join(sample_dir, name))
+        for name in sorted(names)
+    }
+
+
+def b1_pilot_felt_t60(key):
+    """Python mirror of voices.rs:PianoDamper::t60_for for offline controls."""
+    if key > 88:
+        return 12.0
+    return min(0.95, max(0.18, 0.45 * 2.0 ** ((60.0 - key) / 24.0)))
+
+
+def b1_pilot_release_mul(key, sr):
+    return 10.0 ** (-3.0 / (b1_pilot_felt_t60(key) * sr))
+
+
+def fit_b1_decay(times, rms_values, floor_rms, knot_times, median_radius_s):
+    """Fit a small monotone dB table after subtracting a measured power floor."""
+    if len(times) != len(rms_values) or not times:
+        raise ValueError("B1 decay fit needs equally sized, non-empty observations")
+    if floor_rms < 0.0 or median_radius_s <= 0.0:
+        raise ValueError("B1 decay fit has invalid floor or median radius")
+
+    clean = []
+    floor_power = floor_rms * floor_rms
+    for t, value in zip(times, rms_values):
+        power = max(0.0, value * value - floor_power)
+        amp = math.sqrt(power)
+        # Within 6 dB of the independently measured floor is not evidence.
+        if amp > 2.0 * max(floor_rms, 1e-12):
+            clean.append((t, 20.0 * math.log10(max(amp, 1e-12))))
+
+    fitted = []
+    previous = float("inf")
+    for knot in knot_times:
+        points = [(t, db) for t, db in clean if abs(t - knot) <= median_radius_s]
+        if len(points) < 3:
+            continue
+        # Evaluate a robust local line AT the knot. A plain median is biased late
+        # at the first knot because that neighborhood is necessarily one-sided.
+        slope, intercept = _robust_line(points)
+        value = min(previous, slope * knot + intercept)
+        fitted.append((float(knot), value))
+        previous = value
+    if len(fitted) < 2:
+        raise ValueError("B1 decay fit has insufficient uncensored knot support")
+    return fitted
+
+
+def b1_decay_db_at(knots, time_s):
+    """Linear-in-dB lookup over a fitted B1 decay table."""
+    if not knots:
+        raise ValueError("empty B1 decay table")
+    if time_s <= knots[0][0]:
+        return knots[0][1]
+    for (ta, da), (tb, db) in zip(knots, knots[1:]):
+        if time_s <= tb:
+            f = (time_s - ta) / (tb - ta)
+            return da + f * (db - da)
+    return knots[-1][1]
+
+
+def b1_decay_db_extrapolated(knots, time_s):
+    """Extend only the terminal measured slope for a labelled listening file."""
+    if time_s <= knots[-1][0]:
+        return b1_decay_db_at(knots, time_s)
+    (ta, da), (tb, db) = knots[-2:]
+    slope = (db - da) / (tb - ta)
+    slope = min(-1.0, max(-12.0, slope))
+    return db + slope * (time_s - tb)
+
+
+def fit_b1_joint_floor(times, rms_values, upper_rms=None):
+    """Jointly estimate a constant power floor and a decaying late-note line.
+
+    This is the fail-closed fallback when the independent pre-strike ambience
+    trends too much to serve as a fixed floor. It never declares the last note
+    frames to be noise: candidate floors are judged by how nearly subtracting
+    them makes the SNR-valid late power a straight decaying line.
+    """
+    if len(times) != len(rms_values) or len(times) < 24:
+        raise ValueError("B1 joint floor fit needs at least 24 observations")
+    powers = [value * value for value in rms_values]
+    positive = sorted(value for value in powers if value > 0.0)
+    if len(positive) < 24:
+        raise ValueError("B1 joint floor fit has insufficient positive power")
+    upper = positive[max(0, len(positive) // 10 - 1)] * 0.95
+    if upper_rms is not None:
+        if upper_rms <= 0.0:
+            raise ValueError("B1 joint floor upper bound must be positive")
+        upper = min(upper, upper_rms * upper_rms)
+    candidates = [upper * i / 40.0 for i in range(41)]
+    best = None
+    for floor_power in candidates:
+        points = [
+            (t, 10.0 * math.log10(power - floor_power))
+            for t, power in zip(times, powers)
+            if power > 4.0 * max(floor_power, 1e-24)
+        ]
+        if len(points) < 16:
+            continue
+        slope, intercept = _robust_line(points)
+        if slope >= -0.05:
+            continue
+        residuals = sorted(abs(db - (slope * t + intercept)) for t, db in points)
+        robust_error = residuals[len(residuals) // 2]
+        # Prefer a supported non-zero floor only when it improves linearity.
+        score = robust_error - 0.02 * math.sqrt(floor_power / max(upper, 1e-24))
+        if best is None or score < best[0]:
+            best = (score, floor_power, slope, len(points))
+    if best is None:
+        raise ValueError("B1 joint floor fit found no decaying solution")
+    return {
+        "rms": math.sqrt(best[1]),
+        "slope_db_s": best[2],
+        "support_frames": best[3],
+        "method": "joint_constant_floor",
+    }
+
+
+def _b1_decay_flattened(x, sr, decay_knots):
+    """Remove only the fitted slow envelope, preserving faster recorded beats."""
+    reference_db = b1_decay_db_at(decay_knots, decay_knots[0][0])
+    out = [0.0] * len(x)
+    for i, value in enumerate(x):
+        source_db = b1_decay_db_at(decay_knots, i / sr)
+        out[i] = value * 10.0 ** ((reference_db - source_db) / 20.0)
+    return out
+
+
+def b1_piano_loop_wrap_db(x, sr, start, end, decay_knots):
+    """Physical wrap error after removing only the fitted slow decay."""
+    if not (0 <= start < end <= len(x)):
+        raise ValueError("invalid B1 loop bounds")
+    flat = _b1_decay_flattened(x, sr, decay_knots)
+    return _b1_flat_wrap_db(flat, sr, start, end)
+
+
+def _b1_flat_wrap_db(flat, sr, start, end):
+    length = end - start
+    probe = min(round(0.080 * sr), length // 4, len(flat) - end)
+    if probe < 8:
+        raise ValueError("B1 loop has no source continuation for wrap scoring")
+    return wrap_error_db(flat, start, length, probe)
+
+
+def find_b1_piano_loop(x, sr, search_start, search_end, f0, decay_knots):
+    """Find one long, beat-preserving B1 loop inside a fixed byte allocation."""
+    if f0 <= 0.0 or not (0 <= search_start < search_end <= len(x)):
+        raise ValueError("invalid B1 piano loop search")
+    min_length = round(0.5 * sr)
+    if search_end - search_start < min_length:
+        raise ValueError("B1 loop allocation is shorter than 0.5 seconds")
+
+    period = sr / f0
+    max_length = search_end - search_start
+    k_lo = max(1, math.ceil(min_length / period))
+    k_hi = max(k_lo, math.floor(max_length / period))
+    quarter = min(256, max(1, round(period / 4.0)))
+    offset_step = max(1, quarter // 4)
+    offsets = sorted(set(range(-quarter, quarter + 1, offset_step)) | {0, quarter})
+    lengths = sorted({
+        round(k * period) + offset
+        for k in range(k_lo, k_hi + 1)
+        for offset in offsets
+        if min_length <= round(k * period) + offset <= max_length
+    } | {min_length, max_length})
+    if not lengths:
+        raise ValueError("B1 loop search produced no candidate lengths")
+
+    flat = _b1_decay_flattened(x, sr, decay_knots)
+    energy_sum, hf_sum = _prefix_sums(flat)
+
+    def balance_cost(start, end):
+        half = (end - start) // 2
+        mid = start + half
+        ea = (energy_sum[mid] - energy_sum[start]) / half
+        eb = (energy_sum[end] - energy_sum[mid]) / (end - mid)
+        if ea <= 0.0 or eb <= 0.0:
+            return float("inf")
+        ha = (hf_sum[mid] - hf_sum[start]) / (ea * half)
+        hb = (hf_sum[end] - hf_sum[mid]) / (eb * (end - mid))
+        level_db = abs(10.0 * math.log10(ea / eb))
+        bright_db = abs(10.0 * math.log10((ha + 1e-12) / (hb + 1e-12)))
+        return 2.0 * level_db + 2.0 * bright_db
+
+    start_step = max(1, round(max(period / 2.0, 0.005 * sr)))
+    candidates = []
+    for start in range(search_start, search_end - min_length + 1, start_step):
+        for length in lengths:
+            end = start + length
+            if end > search_end or end + 8 > len(x):
+                continue
+            try:
+                wrap_db = _b1_flat_wrap_db(flat, sr, start, end)
+            except ValueError:
+                continue
+            balance = balance_cost(start, end)
+            # `wrap_db` is already level-normalized and lower is better. Balance
+            # terms stop a clean endpoint from hiding a swell or spectral ramp.
+            candidates.append((wrap_db + balance, wrap_db, start, end))
+    if not candidates:
+        raise ValueError("B1 loop search found no scoreable candidate")
+    window = round(0.050 * sr)
+    hop = round(0.025 * sr)
+
+    def select_crossfade(start, end):
+        crossfade_min = round(0.020 * sr)
+        crossfade_max = min(round(0.080 * sr), (end - start) // 4)
+        crossfade_step = max(1, round(period / 4.0))
+        crossfades = set(range(
+            crossfade_min,
+            crossfade_max + 1,
+            crossfade_step,
+        )) | {crossfade_min, crossfade_max}
+        reference_step = _b1_percentile(
+            [abs(flat[i] - flat[i - 1]) for i in range(start + 1, end)],
+            0.95,
+        )
+        natural_frames = _b1_frame_rms(
+            flat[start:end], sr, window_s=0.050, hop_s=0.025
+        )
+        natural_db = [
+            20.0 * math.log10(max(value, 1e-12))
+            for _, value in natural_frames
+        ]
+        natural_rms_p95 = _b1_percentile(
+            [abs(b - a) for a, b in zip(natural_db, natural_db[1:])],
+            0.95,
+        )
+
+        def local_value(kind, length, relative):
+            if relative >= 0:
+                return flat[start + length + relative]
+            if kind == "first":
+                pos = end + length + relative
+                if pos < end:
+                    return flat[pos]
+                mix = (pos - end) / length
+                return (
+                    (1.0 - mix) * flat[pos]
+                    + mix * flat[start + pos - end]
+                )
+            pos = end + relative
+            if pos < end - length:
+                return flat[pos]
+            mix = (pos - (end - length)) / length
+            return (
+                (1.0 - mix) * flat[pos]
+                + mix * flat[start + pos - (end - length)]
+            )
+
+        def rms_step(kind, length):
+            before = [
+                local_value(kind, length, relative)
+                for relative in range(-hop, window - hop)
+            ]
+            after = [
+                local_value(kind, length, relative)
+                for relative in range(0, window)
+            ]
+            before_rms = math.sqrt(sum(v * v for v in before) / len(before))
+            after_rms = math.sqrt(sum(v * v for v in after) / len(after))
+            return abs(20.0 * math.log10(
+                max(after_rms, 1e-12) / max(before_rms, 1e-12)
+            ))
+
+        choices = []
+        for length in crossfades:
+            if (
+                end + length + window >= len(flat)
+                or start + length + window >= end
+            ):
+                continue
+            mix = (length - 1) / length
+            head_before = flat[start + length - 1]
+            head_after = flat[start + length]
+            first_before = (
+                (1.0 - mix) * flat[end + length - 1] + mix * head_before
+            )
+            cyclic_before = (
+                (1.0 - mix) * flat[end - 1] + mix * head_before
+            )
+            step_ratio = max(
+                abs(head_after - first_before),
+                abs(head_after - cyclic_before),
+            ) / max(reference_step, 1e-12)
+            rms_ratio = max(
+                rms_step("first", length),
+                rms_step("cyclic", length),
+            ) / max(natural_rms_p95, 1e-12)
+            choices.append((max(step_ratio, rms_ratio), rms_ratio,
+                            step_ratio, length))
+        if not choices:
+            raise ValueError("B1 loop has no supported crossfade")
+        return min(choices)
+
+    evaluated = []
+    for base_score, wrap_db, start, end in sorted(candidates)[:128]:
+        try:
+            seam_cost, rms_ratio, step_ratio, crossfade = select_crossfade(
+                start, end
+            )
+        except ValueError:
+            continue
+        accepted = seam_cost <= 1.0
+        # Among source-relative seam passes, preserve the original broadband
+        # ranking. If none passes, return the least-bad diagnostic candidate.
+        rank = (0, base_score) if accepted else (1, seam_cost)
+        evaluated.append((
+            rank, wrap_db, start, end, crossfade, step_ratio, rms_ratio
+        ))
+    if not evaluated:
+        raise ValueError("B1 loop search found no crossfade-supported candidate")
+    (_, wrap_db, start, end, crossfade,
+     crossfade_step_ratio, crossfade_rms_ratio) = min(evaluated)
+    cycles = (end - start) / period
+    return {
+        "start": start,
+        "end": end,
+        "crossfade": crossfade,
+        "crossfade_step_ratio": crossfade_step_ratio,
+        "crossfade_rms_ratio": crossfade_rms_ratio,
+        "wrap_db": wrap_db,
+        "cycle_error": abs(cycles - round(cycles)),
+    }
+
+
+def _b1_cubic4(pm1, p0, p1, p2, frac):
+    """Exact Python mirror of dsp.rs:cubic4 for the offline pilot."""
+    wm1 = -frac * (frac - 1.0) * (frac - 2.0) / 6.0
+    w0 = (frac + 1.0) * (frac - 1.0) * (frac - 2.0) / 2.0
+    w1 = -(frac + 1.0) * frac * (frac - 2.0) / 2.0
+    w2 = (frac + 1.0) * frac * (frac - 1.0) / 6.0
+    return wm1 * pm1 + w0 * p0 + w1 * p1 + w2 * p2
+
+
+def _b1_cubic_unwrapped(x, pos):
+    j = int(pos)
+    frac = pos - j
+    if j + 2 >= len(x):
+        return x[-1]
+    return _b1_cubic4(
+        x[max(0, j - 1)],
+        x[j],
+        x[j + 1],
+        x[j + 2],
+        frac,
+    )
+
+
+def _b1_cubic_loop(x, pos, start, end):
+    length = end - start
+    rel = (pos - start) % length
+    j = int(rel)
+    frac = rel - j
+
+    def at(offset):
+        return x[start + ((j + offset) % length)]
+
+    return _b1_cubic4(at(-1), at(0), at(1), at(2), frac)
+
+
+def render_b1_piano_loop(
+        x, sr, loop, decay_knots, duration_s, bend=1.0, extrapolate=False):
+    """Offline reference renderer: contiguous first pass, then cyclic loop.
+
+    The first pass remains untouched through `loop.end`. Its real continuation
+    supplies the outgoing side of the first crossfade. Later wraps mix the loop
+    tail into the already-skipped head, so cyclic cubic interpolation sees four
+    valid neighbours at every pitch-bent boundary.
+    """
+    if bend <= 0.0 or duration_s <= 0.0:
+        raise ValueError("invalid B1 loop render request")
+    start, end = loop["start"], loop["end"]
+    crossfade = loop["crossfade"]
+    loop_stride = end - start - crossfade
+    if loop_stride <= 0 or end + crossfade + 2 >= len(x):
+        raise ValueError("B1 loop lacks source support for its first crossfade")
+
+    decay_at = b1_decay_db_extrapolated if extrapolate else b1_decay_db_at
+    flat = _b1_decay_flattened(x, sr, decay_knots)
+    flat_reference_db = b1_decay_db_at(decay_knots, decay_knots[0][0])
+
+    def wall_clock_gain(source_pos, wall_time_s):
+        source_db = b1_decay_db_at(decay_knots, source_pos / sr)
+        target_db = decay_at(decay_knots, wall_time_s)
+        return 10.0 ** ((target_db - source_db) / 20.0)
+
+    def loop_value(pos, wall_time_s):
+        value = _b1_cubic_loop(flat, pos, start, end)
+        target_db = decay_at(decay_knots, wall_time_s)
+        return value * 10.0 ** ((target_db - flat_reference_db) / 20.0)
+
+    out = []
+    for frame in range(round(duration_s * sr)):
+        source_time = frame * bend
+        wall_time_s = frame / sr
+        if source_time < end:
+            value = _b1_cubic_unwrapped(x, source_time)
+            value *= wall_clock_gain(source_time, wall_time_s)
+        elif source_time < end + crossfade:
+            mix = (source_time - end) / crossfade
+            outgoing = _b1_cubic_unwrapped(x, source_time)
+            outgoing *= wall_clock_gain(source_time, wall_time_s)
+            incoming = loop_value(
+                start + (source_time - end),
+                wall_time_s,
+            )
+            value = (1.0 - mix) * outgoing + mix * incoming
+        else:
+            pos = start + crossfade + (
+                (source_time - end - crossfade) % loop_stride
+            )
+            value = loop_value(pos, wall_time_s)
+            if pos >= end - crossfade:
+                mix = (pos - (end - crossfade)) / crossfade
+                head = loop_value(start + (pos - (end - crossfade)), wall_time_s)
+                value = (1.0 - mix) * value + mix * head
+        out.append(value)
+    return out
+
+
+def apply_b1_pilot_release(x, key, sr, note_off_s):
+    """Apply the current felt-damper curve to an already decaying held note."""
+    out = list(x)
+    start = max(0, round(note_off_s * sr))
+    mul = b1_pilot_release_mul(key, sr)
+    env = 1.0
+    for i in range(start, len(out)):
+        out[i] *= env
+        env *= mul
+        if env < B1_PILOT_REAP_ENV:
+            out[i:] = [0.0] * (len(out) - i)
+            break
+    return out
+
+
+def _b1_percentile(values, fraction):
+    ordered = sorted(values)
+    if not ordered:
+        return 0.0
+    return ordered[round((len(ordered) - 1) * fraction)]
+
+
+def _b1_render_diagnostics(rendered, natural, sr, loop, decay_knots, bend):
+    """Small numeric seam battery; periodic character remains an audition call."""
+    body = round((PRE_S + B1_BODY_S) * sr)
+    body_frame = round(body / bend)
+    rendered_steps = [
+        abs(rendered[i] - rendered[i - 1])
+        for i in range(max(1, body_frame), len(rendered))
+    ]
+    natural_bent = []
+    frame = 0
+    while frame * bend + 2 < len(natural):
+        source_pos = frame * bend
+        value = _b1_cubic_unwrapped(natural, source_pos)
+        source_db = b1_decay_db_at(decay_knots, source_pos / sr)
+        wall_db = b1_decay_db_at(decay_knots, frame / sr)
+        natural_bent.append(value * 10.0 ** ((wall_db - source_db) / 20.0))
+        frame += 1
+    natural_steps = [
+        abs(natural_bent[i] - natural_bent[i - 1])
+        for i in range(max(1, body_frame), len(natural_bent))
+    ]
+    reference_step = _b1_percentile(natural_steps, 0.95)
+
+    seam_frames = []
+    first = round((loop["end"] + loop["crossfade"]) / bend)
+    stride = (loop["end"] - loop["start"] - loop["crossfade"]) / bend
+    seam = first
+    while seam < len(rendered):
+        seam_frames.append(round(seam))
+        seam += stride
+    seam_steps = [
+        abs(rendered[i] - rendered[i - 1])
+        for i in seam_frames
+        if 1 <= i < len(rendered)
+    ]
+
+    frames = _b1_frame_rms(
+        rendered, sr, window_s=0.050, hop_s=0.025,
+        start_s=body_frame / sr,
+    )
+    natural_frames = _b1_frame_rms(
+        natural_bent, sr, window_s=0.050, hop_s=0.025,
+        start_s=body_frame / sr,
+    )
+    rms_db = [20.0 * math.log10(max(value, 1e-12)) for _, value in frames]
+    natural_rms_db = [
+        20.0 * math.log10(max(value, 1e-12))
+        for _, value in natural_frames
+    ]
+    rms_steps = [abs(b - a) for a, b in zip(rms_db, rms_db[1:])]
+    natural_rms_steps = [
+        abs(b - a) for a, b in zip(natural_rms_db, natural_rms_db[1:])
+    ]
+    natural_rms_p95 = _b1_percentile(natural_rms_steps, 0.95)
+    seam_rms_steps = []
+    for seam_frame in seam_frames:
+        seam_time = seam_frame / sr
+        row = round((seam_time - body_frame / sr) / 0.025)
+        if 1 <= row < len(rms_db):
+            seam_rms_steps.append(abs(rms_db[row] - rms_db[row - 1]))
+
+    seam_ratio = max(seam_steps, default=0.0) / max(reference_step, 1e-12)
+    rms_ratio = (
+        max(seam_rms_steps, default=0.0) / max(natural_rms_p95, 1e-12)
+    )
+    result = {
+        "bend": bend,
+        "seams": len(seam_steps),
+        "worst_seam_step": max(seam_steps, default=0.0),
+        "natural_step_p95": reference_step,
+        "seam_to_natural_p95": seam_ratio,
+        "post_body_step_p95": _b1_percentile(rendered_steps, 0.95),
+        "adjacent_50ms_rms_step_db_p95": _b1_percentile(rms_steps, 0.95),
+        "worst_seam_50ms_rms_step_db": max(seam_rms_steps, default=0.0),
+        "natural_50ms_rms_step_db_p95": natural_rms_p95,
+        "seam_rms_to_natural_p95": rms_ratio,
+        "finite": all(math.isfinite(value) for value in rendered),
+    }
+    result["seam_gate_pass"] = (
+        result["finite"] and seam_ratio <= 1.0 and rms_ratio <= 1.0
+    )
+    return result
+
+
+def b1_beat_diagnostic(x, sr, decay_knots, floor_rms):
+    """Report decay-divided envelope modulation without pretending it is a gate."""
+    frames = _b1_frame_rms(
+        x, sr, window_s=0.050, hop_s=0.025, start_s=1.5
+    )
+    residual = []
+    for time_s, rms in frames:
+        clean = math.sqrt(max(0.0, rms * rms - floor_rms * floor_rms))
+        if clean <= 2.0 * max(floor_rms, 1e-12):
+            continue
+        observed_db = 20.0 * math.log10(max(clean, 1e-12))
+        residual.append(observed_db - b1_decay_db_at(decay_knots, time_s))
+    if len(residual) < 24:
+        return {"supported": False, "frames": len(residual)}
+    center = statistics.mean(residual)
+    residual = [value - center for value in residual]
+    energy = sum(value * value for value in residual)
+    best = None
+    # 25 ms hops: 0.5..8 Hz corresponds to lags 80..5.
+    for lag in range(5, min(80, len(residual) // 2) + 1):
+        numerator = sum(
+            residual[i] * residual[i - lag]
+            for i in range(lag, len(residual))
+        )
+        denominator = energy * (len(residual) - lag) / len(residual)
+        correlation = numerator / max(denominator, 1e-12)
+        if best is None or correlation > best[0]:
+            best = (correlation, lag)
+    assert best is not None
+    return {
+        "supported": True,
+        "frames": len(residual),
+        "window_s": len(residual) * 0.025,
+        "period_s": best[1] * 0.025,
+        "frequency_hz": 1.0 / (best[1] * 0.025),
+        "autocorrelation": best[0],
+        "residual_depth_db_p90_p10": (
+            _b1_percentile(residual, 0.90)
+            - _b1_percentile(residual, 0.10)
+        ),
+    }
+
+
+def _b1_pilot_assignments(manifests):
+    assignments = {}
+    generated = set()
+    for manifest in manifests:
+        for item in manifest["slices"]:
+            if item.get("status") != "assigned":
+                continue
+            layer = item["pass"]
+            if layer == "soft":
+                continue
+            if layer not in _B1_LAYER_COUNTS:
+                raise ValueError(f"unexpected assigned B1 layer: {layer}")
+            name = f"b1_{layer}_{item['assigned_note']}.wav"
+            if name in assignments:
+                raise ValueError(f"duplicate generated B1 zone: {name}")
+            assignments[name] = item
+            generated.add(name)
+    return assignments, generated
+
+
+def _b1_pilot_backgrounds(manifests, decode_dir):
+    backgrounds = {}
+    errors = {}
+    rejected_bounds = {}
+    for manifest in manifests:
+        source = manifest["source"]["file"]
+        first_onset = min(item["onset_sample"] for item in manifest["slices"])
+        try:
+            backgrounds[source] = measure_b1_take_background(
+                os.path.join(decode_dir, source),
+                first_onset,
+            )
+            backgrounds[source]["method"] = "validated_pre_strike"
+        except ValueError as exc:
+            errors[source] = str(exc)
+            # The note-free interval still provides an upper bound for the
+            # joint note-tail fit; its coherent content is not called noise.
+            rejected_bounds[source] = measure_b1_take_background(
+                os.path.join(decode_dir, source),
+                first_onset,
+                reject_coherence=False,
+            )
+    return backgrounds, errors, rejected_bounds
+
+
+def _b1_pilot_package_projection(projection):
+    crate_dir = os.path.join(
+        REPO_ROOT, "crates", "ferrosintesis-samples-b1-upright"
+    )
+    manifest_path = os.path.join(crate_dir, "Cargo.toml")
+    with open(manifest_path, encoding="utf-8") as handle:
+        manifest = handle.read()
+    version_match = re.search(r'^version = "([^"]+)"$', manifest, re.MULTILINE)
+    if version_match is None:
+        raise ValueError("B1 sample crate has no package version")
+    version = version_match.group(1)
+    crate_tree_bytes = sum(
+        os.path.getsize(os.path.join(root, name))
+        for root, dirs, files in os.walk(crate_dir)
+        for name in files
+        if ".git" not in dirs
+    )
+    metadata_allowance = 16 * 1024
+    added_pcm_bytes = 2 * projection["append_frames"]
+    projected_tree = crate_tree_bytes + added_pcm_bytes + metadata_allowance
+
+    subprocess.run(
+        [
+            "cargo", "package", "--allow-dirty", "--no-verify",
+            "-p", "ferrosintesis-samples-b1-upright",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
+    package_path = os.path.join(
+        REPO_ROOT,
+        "target",
+        "package",
+        f"ferrosintesis-samples-b1-upright-{version}.crate",
+    )
+    current_package = os.path.getsize(package_path)
+    conservative_package = current_package + added_pcm_bytes + metadata_allowance
+    conservative = max(projected_tree, conservative_package)
+    return {
+        "current_crate_tree_bytes": crate_tree_bytes,
+        "current_packaged_crate_bytes": current_package,
+        "metadata_allowance_bytes": metadata_allowance,
+        "projected_crate_tree_bytes": projected_tree,
+        "projected_packaged_upper_bound_bytes": conservative_package,
+        "conservative_bytes": conservative,
+        "headroom_ratio": (
+            B1_PILOT_PACKAGE_LIMIT - conservative
+        ) / B1_PILOT_PACKAGE_LIMIT,
+        "passes": (
+            conservative <= B1_PILOT_PACKAGE_LIMIT
+            and (
+                B1_PILOT_PACKAGE_LIMIT - conservative
+            ) / B1_PILOT_PACKAGE_LIMIT >= B1_PILOT_MIN_HEADROOM
+        ),
+    }
+
+
+def _build_b1_sustain_pilot(output_dir, decode_dir):
+    sample_dir = os.path.join(
+        REPO_ROOT,
+        "crates",
+        "ferrosintesis-samples-b1-upright",
+        "samples",
+    )
+    expected = validate_b1_output_inventory(set(b1_asset_hashes(sample_dir)))
+    manifests = _slice_b1_sources(decode_dir)
+    assignments, generated = _b1_pilot_assignments(manifests)
+    validate_b1_generated_inventory(expected, generated)
+
+    requested = {
+        f"b1_{layer}_{note}.wav" for layer, note in B1_PILOT_ZONES
+    }
+    missing = requested - set(assignments)
+    if missing:
+        raise ValueError(f"B1 pilot zones are missing: {sorted(missing)}")
+
+    backgrounds, background_errors, background_bounds = (
+        _b1_pilot_backgrounds(manifests, decode_dir)
+    )
+    projection = b1_pilot_size_projection(sample_dir)
+    package_projection = _b1_pilot_package_projection(projection)
+    if not package_projection["passes"]:
+        raise ValueError("B1 pilot representation exceeds its package budget")
+
+    # Build in the disposable decode tree. The requested destination remains
+    # untouched until every zone and report has completed successfully.
+    artifact_dir = os.path.join(decode_dir, "artifacts")
+    os.makedirs(artifact_dir)
+    zones = []
+    slice_dir = os.path.join(decode_dir, "slices")
+    for layer, note in B1_PILOT_ZONES:
+        name = f"b1_{layer}_{note}.wav"
+        item = assignments[name]
+        midi = item["assigned_midi"]
+        source, source_sr = read_wav(os.path.join(slice_dir, item["file"]))
+        source = _butter_hp4(source, source_sr, B1_HPF_HZ)
+        source = resample(source, source_sr, OUT_SR)
+        archival, gain = prepare_b1_archival(source, OUT_SR)
+        committed, committed_sr = read_wav(os.path.join(sample_dir, name))
+        if committed_sr != OUT_SR:
+            raise ValueError(f"{name}: committed sample rate changed")
+
+        parity_end = len(committed) - round(B1_END_FADE_S * OUT_SR)
+        expected_pcm = [
+            max(-32768, min(32767, int(value * 32767)))
+            for value in archival[:parity_end]
+        ]
+        actual_pcm = [round(value * 32768) for value in committed[:parity_end]]
+        worst_lsb = max(
+            abs(a - b) for a, b in zip(expected_pcm, actual_pcm)
+        )
+        if worst_lsb > 1:
+            raise ValueError(f"{name}: archival/body parity misses by {worst_lsb} LSB")
+
+        observations = _b1_frame_rms(
+            archival, OUT_SR, window_s=0.050, hop_s=0.025, start_s=1.45
+        )
+        times = [time_s for time_s, _ in observations]
+        rms_values = [value for _, value in observations]
+        source_name = item["source_file"]
+        if source_name in backgrounds:
+            floor = backgrounds[source_name]["rms"] * gain
+            floor_record = dict(backgrounds[source_name])
+            floor_record["rms_normalized"] = floor
+        else:
+            upper = background_bounds[source_name]
+            floor_record = fit_b1_joint_floor(
+                times,
+                rms_values,
+                upper_rms=upper["rms"] * gain,
+            )
+            floor = floor_record["rms"]
+            floor_record["pre_strike_rejection"] = background_errors[source_name]
+            floor_record["rejected_pre_strike_upper_rms"] = upper["rms"] * gain
+            floor_record["rejected_pre_strike_coherence"] = upper["coherence"]
+
+        body_end = round((PRE_S + B1_BODY_S) * OUT_SR)
+        body_rows = _b1_frame_rms(
+            archival, OUT_SR, window_s=0.050, hop_s=0.025,
+            start_s=body_end / OUT_SR - 0.050,
+        )
+        body_rms = body_rows[0][1]
+        append_s = b1_pilot_append_s(midi)
+        zone = {
+            "zone": name,
+            "midi": midi,
+            "source_slice": item["file"],
+            "archival_duration_s": len(archival) / OUT_SR,
+            "normalization_gain": gain,
+            "body_parity_worst_lsb": worst_lsb,
+            "floor": floor_record,
+            "append_allocation_s": append_s,
+        }
+
+        prefix = f"{layer}-{note}"
+        write_wav_mono(
+            os.path.join(artifact_dir, f"{prefix}-natural-archive.wav"),
+            archival,
+            OUT_SR,
+        )
+
+        if append_s == 0.0:
+            zone["outcome"] = "no_continuation"
+            zone["body_floor_margin_db"] = 20.0 * math.log10(
+                max(body_rms, 1e-12) / max(floor, 1e-12)
+            )
+            zone["no_continuation_pass"] = zone["body_floor_margin_db"] <= 6.0
+            zone["required_gate_status"] = (
+                "passed_no_continuation"
+                if zone["no_continuation_pass"]
+                else "rejected_at_no_continuation"
+            )
+            write_wav_mono(
+                os.path.join(artifact_dir, f"{prefix}-current-sample-only.wav"),
+                committed,
+                OUT_SR,
+            )
+            write_wav_mono(
+                os.path.join(artifact_dir, f"{prefix}-candidate-bounded.wav"),
+                committed,
+                OUT_SR,
+            )
+            zones.append(zone)
+            continue
+
+        final_time = min(8.0, len(archival) / OUT_SR - 0.05)
+        knot_times = [
+            time_s for time_s in (1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.5, 8.0)
+            if time_s <= final_time
+        ]
+        if final_time - knot_times[-1] >= 0.25:
+            knot_times.append(final_time)
+        radius = 0.35 if midi <= 35 else 0.25
+        decay = fit_b1_decay(
+            times, rms_values, floor, tuple(knot_times), median_radius_s=radius
+        )
+        zone["decay_knots_db"] = decay
+        zone["recorded_beat_diagnostic"] = b1_beat_diagnostic(
+            archival, OUT_SR, decay, floor
+        )
+        supported_duration = decay[-1][0]
+        control = committed + [0.0] * max(
+            0, round(supported_duration * OUT_SR) - len(committed)
+        )
+        write_wav_mono(
+            os.path.join(artifact_dir, f"{prefix}-current-sample-only.wav"),
+            control,
+            OUT_SR,
+        )
+
+        search_end = body_end + round(append_s * OUT_SR)
+        if decay[-1][0] * OUT_SR < search_end:
+            raise ValueError(f"{name}: decay fit does not support the loop end")
+        loop = find_b1_piano_loop(
+            archival,
+            OUT_SR,
+            search_start=body_end,
+            search_end=search_end,
+            f0=item["f1_hz"] or _midi_hz(midi),
+            decay_knots=decay,
+        )
+        loop_rms = math.sqrt(
+            sum(value * value for value in archival[loop["start"]:loop["end"]])
+            / (loop["end"] - loop["start"])
+        )
+        signal_rms = math.sqrt(max(0.0, loop_rms * loop_rms - floor * floor))
+        snr_db = 20.0 * math.log10(
+            max(signal_rms, 1e-12) / max(floor, 1e-12)
+        )
+        if snr_db < 20.0:
+            zone.update({
+                "outcome": "rejected_low_snr",
+                "loop": loop,
+                "loop_snr_db": snr_db,
+                "required_gate_status": "rejected_at_snr",
+                "unevaluated_required_gates": [
+                    "seam", "reference_tracking", "modulation",
+                    "click_detection", "bent_pitch",
+                ],
+            })
+            zones.append(zone)
+            continue
+
+        candidate = render_b1_piano_loop(
+            archival, OUT_SR, loop, decay, supported_duration
+        )
+        write_wav_mono(
+            os.path.join(artifact_dir, f"{prefix}-candidate.wav"),
+            candidate,
+            OUT_SR,
+        )
+        extrapolated = render_b1_piano_loop(
+            archival, OUT_SR, loop, decay, 10.0, extrapolate=True
+        )
+        write_wav_mono(
+            os.path.join(artifact_dir, f"{prefix}-candidate-EXTRAPOLATED-10s.wav"),
+            extrapolated,
+            OUT_SR,
+        )
+
+        diagnostics = []
+        for semitones in (-2, 0, 2):
+            bend = 2.0 ** (semitones / 12.0)
+            bent = render_b1_piano_loop(
+                archival, OUT_SR, loop, decay, supported_duration, bend=bend
+            )
+            diagnostics.append(
+                _b1_render_diagnostics(
+                    bent, archival, OUT_SR, loop, decay, bend
+                )
+            )
+            if semitones:
+                label = "minus2" if semitones < 0 else "plus2"
+                write_wav_mono(
+                    os.path.join(artifact_dir, f"{prefix}-candidate-{label}.wav"),
+                    bent,
+                    OUT_SR,
+                )
+
+        release_points = {
+            "body": min(0.75, supported_duration / 4.0),
+            "first-pass": (body_end + loop["end"]) / (2.0 * OUT_SR),
+            "loop": min(supported_duration - 0.25, loop["end"] / OUT_SR + 0.25),
+        }
+        for label, note_off_s in release_points.items():
+            released = apply_b1_pilot_release(
+                candidate, midi, OUT_SR, note_off_s
+            )
+            write_wav_mono(
+                os.path.join(artifact_dir, f"{prefix}-release-{label}.wav"),
+                released,
+                OUT_SR,
+            )
+
+        seam_pass = all(
+            item["seam_gate_pass"] for item in diagnostics
+        )
+        zone.update({
+            "outcome": "loop",
+            "loop": loop,
+            "loop_snr_db": snr_db,
+            "diagnostics": diagnostics,
+            "seam_gate_pass": seam_pass,
+            "required_gate_status": (
+                "incomplete_after_seam"
+                if seam_pass
+                else "rejected_at_seam"
+            ),
+            "unevaluated_required_gates": [
+                "reference_tracking", "modulation",
+                "click_detection", "bent_pitch",
+            ],
+            "release_note_off_s": release_points,
+        })
+        zones.append(zone)
+
+    report = {
+        "experiment": "B1 same-recording sustain pilot",
+        "sample_rate": OUT_SR,
+        "zones": zones,
+        "allocation": projection,
+        "package_projection": package_projection,
+        "background_rejections": background_errors,
+        "asset_sha256": b1_asset_hashes(sample_dir),
+    }
+    report_path = os.path.join(artifact_dir, "b1-sustain-pilot-report.json")
+    with open(report_path, "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(report, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    os.makedirs(output_dir, exist_ok=True)
+    for name in os.listdir(artifact_dir):
+        shutil.move(
+            os.path.join(artifact_dir, name),
+            os.path.join(output_dir, name),
+        )
+    return report
+
+
+def run_b1_sustain_pilot(output_dir):
+    """Run the disposable pilot while proving the shipped B1 bank is immutable."""
+    resolved = validate_b1_pilot_output_dir(output_dir)
+    before = b1_asset_hashes()
+    try:
+        with tempfile.TemporaryDirectory(prefix="b1-sustain-pilot-") as decode_dir:
+            result = _build_b1_sustain_pilot(resolved, decode_dir)
+    finally:
+        after = b1_asset_hashes()
+        if after != before:
+            raise RuntimeError("B1 sustain pilot changed a committed sample asset")
+    return result
 
 
 def trim_lead_and_ring(x, sr, pre_s, end_fade_s):
@@ -2951,34 +4151,13 @@ B1_HPF_HZ = 20.0
 B1_ROOT_FALLBACK_CENTS = 100.0
 
 
-def _bake_b1upright(src):
-    """Bake Arthur's Yamaha B1 upright as a 2-timbre-layer GM0 default bank (CC0=0).
-
-    Decodes the committed Opus takes, slices them with `tools/b1-slice/slice.py`
-    (subprocess), then for every *assigned* slice: a 20 Hz 4th-order Butterworth
-    high-pass on the 48 kHz signal, band-limited resample to 44.1 kHz,
-    `prepare_b1_body` (1.5 s body, 10 ms terminal taper, per-file 0.9
-    peak-normalise), 16-bit mono. Writes
-    `b1_<layer>_<note>.wav` for the retained normal/hard passes straight into
-    the crate `samples/` dir, and returns print rows. The noisy soft pass is
-    deliberately skipped below.
-
-    root = the slicer's measured first partial f1 (exact-ET repitch that keeps
-    the per-note inharmonicity — the house convention), falling back to the
-    note's ET frequency when the measurement lands more than a semitone off
-    (only the force-assigned B7)."""
+def _slice_b1_sources(src):
+    """Decode the two committed B1 takes and return their archival manifests."""
     ropusdec = shutil.which("ropusdec") or "ropusdec"
     slicer = os.path.join(REPO_ROOT, "tools", "b1-slice", "slice.py")
     slice_out = os.path.join(src, "slices")
     os.makedirs(src, exist_ok=True)
     os.makedirs(slice_out, exist_ok=True)
-    out_dir = os.path.join(REPO_ROOT, "crates",
-                           "ferrosintesis-samples-b1-upright", "samples")
-    os.makedirs(out_dir, exist_ok=True)
-    expected = validate_b1_output_inventory({
-        name for name in os.listdir(out_dir)
-        if name.startswith("b1_") and name.endswith(".wav")
-    })
 
     manifests = []
     for decoded_name, opus_name in B1_OPUS_TAKES.items():
@@ -2995,6 +4174,34 @@ def _bake_b1upright(src):
                              os.path.splitext(decoded_name)[0] + ".manifest.json")
         with open(mpath, encoding="utf-8") as f:
             manifests.append(json.load(f))
+    return manifests
+
+
+def _bake_b1upright(src):
+    """Bake Arthur's Yamaha B1 upright as a 2-timbre-layer GM0 default bank (CC0=0).
+
+    Decodes the committed Opus takes, slices them with `tools/b1-slice/slice.py`
+    (subprocess), then for every *assigned* slice: a 20 Hz 4th-order Butterworth
+    high-pass on the 48 kHz signal, band-limited resample to 44.1 kHz,
+    `prepare_b1_body` (1.5 s body, 10 ms terminal taper, per-file 0.9
+    peak-normalise), 16-bit mono. Writes
+    `b1_<layer>_<note>.wav` for the retained normal/hard passes straight into
+    the crate `samples/` dir, and returns print rows. The noisy soft pass is
+    deliberately skipped below.
+
+    root = the slicer's measured first partial f1 (exact-ET repitch that keeps
+    the per-note inharmonicity — the house convention), falling back to the
+    note's ET frequency when the measurement lands more than a semitone off
+    (only the force-assigned B7)."""
+    slice_out = os.path.join(src, "slices")
+    manifests = _slice_b1_sources(src)
+    out_dir = os.path.join(REPO_ROOT, "crates",
+                           "ferrosintesis-samples-b1-upright", "samples")
+    os.makedirs(out_dir, exist_ok=True)
+    expected = validate_b1_output_inventory({
+        name for name in os.listdir(out_dir)
+        if name.startswith("b1_") and name.endswith(".wav")
+    })
 
     _validate_generated_output_families(
         {"b1"},
@@ -3454,6 +4661,22 @@ def _bake_selected_local_banks(only):
 
 
 def main():
+    pilot_args = [
+        arg for arg in sys.argv[1:]
+        if arg.startswith("--b1-sustain-pilot=")
+    ]
+    if pilot_args:
+        if len(pilot_args) != 1 or len(sys.argv) != 2:
+            raise SystemExit(
+                "--b1-sustain-pilot=<new-output-dir> is mutually exclusive"
+            )
+        output_dir = pilot_args[0].split("=", 1)[1]
+        if not output_dir:
+            raise SystemExit("--b1-sustain-pilot requires an output directory")
+        run_b1_sustain_pilot(output_dir)
+        print(f"B1 sustain pilot: {os.path.realpath(output_dir)}")
+        return
+
     socket.setdefaulttimeout(60)
     # `--local-only` skips the fetched full bank (network + rewriting the tracked
     # core/orchestral WAVs) and regenerates ONLY the local gong intake below.

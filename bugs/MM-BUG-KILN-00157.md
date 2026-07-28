@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample generation / sax cache
 - **Raised:** 2026-07-28
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260728T162705Z-p57192-n426209200-c251
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00157-run-verify-20260728T162705Z-p57192-n426209200-c251
+- **Owner base:** f3719784f605e28f40fdcd5b9c76fdb3d1c6ecbf
+- **Owner fingerprint:** sha256:597aa5c7da1eaeb591b9ac5df5fcde190af8c43a979d0984eb8b1415ba83ea8b
+- **Owner since:** 2026-07-28T16:27:05Z
+- **Owner until:** 2026-07-28T17:12:05Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00163 — Kawai rebakes can retain stale WAVs behind an unrelated family validation
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** Kawai sample generation / output inventory
 - **Raised:** 2026-07-28
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260728T223542Z-p16556-n556412300-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00163-run-fix-20260728T223542Z-p16556-n556412300-c1
-- **Owner base:** 47ef269fa7b2b6571951d2b35fa4dbba8532674f
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T22:35:42Z
-- **Owner until:** 2026-07-29T00:35:42Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T223542Z-p16556-n556412300-c1 branch=task/bug-MM-BUG-KILN-00163-run-fix-20260728T223542Z-p16556-n556412300-c1 code=4c68345 gate=manual)
 
 ## Observation
 

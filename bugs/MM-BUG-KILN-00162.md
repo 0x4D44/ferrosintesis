@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** Kawai sample package / memory and package size
 - **Raised:** 2026-07-28
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260728T214613Z-p27608-n422372700-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00162-run-fix-20260728T214613Z-p27608-n422372700-c1
+- **Owner base:** c55a1ff0d2e83de3947b2fb478110f3a6ac30c25
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-28T21:46:13Z
+- **Owner until:** 2026-07-28T23:46:13Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

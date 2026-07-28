@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00156 — Bake-inventory oracle enumerates by _bake_ name prefix, not by packaged-write behaviour
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** testing / sample generation
 - **Raised:** 2026-07-27
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260728T160304Z-p57192-n714102000-c246
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00156-run-verify-20260728T160304Z-p57192-n714102000-c246
-- **Owner base:** 34d090f89e989417e26c8692d38b4b5f58cbca7d
-- **Owner fingerprint:** sha256:41a31041877ddbe0e1b264246003c9ca0a781af776f9a18db527affbfa5532ca
-- **Owner since:** 2026-07-28T16:03:04Z
-- **Owner until:** 2026-07-28T16:48:04Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260727T221803Z-p57192-n557379000-c48 branch=task/bug-MM-BUG-KILN-00156-run-fix-20260727T221803Z-p57192-n557379000-c48 code=cd0ebbd46e7d0d06ad9ba94c88107961dc7d2f50 gate=deltic model=codex@xhigh)
+- **State history:** Open (2026-07-27, raised via `deltic bugs new` model=claude-opus-5@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260727T221803Z-p57192-n557379000-c48 branch=task/bug-MM-BUG-KILN-00156-run-fix-20260727T221803Z-p57192-n557379000-c48 code=cd0ebbd46e7d0d06ad9ba94c88107961dc7d2f50 gate=deltic model=codex@xhigh) → Closed (2026-07-28, deltic:auto role=verify run=verify-20260728T160304Z-p57192-n714102000-c246 verified_fix_run=fix-20260727T221803Z-p57192-n557379000-c48 verdict=close model=claude)
 
 ## Observation
 
@@ -81,6 +81,10 @@ Focused validation:
 
 - `cargo test -p ferrosintesis inventory::tests` — 18 passed on the held fix.
 - `deltic integrate --push` — the combined final tree passed and landed code commit `cd0ebbd46e7d0d06ad9ba94c88107961dc7d2f50`.
+
+### Verification summary (2026-07-28, deltic:auto run=verify-20260728T160304Z-p57192-n714102000-c246 verified_fix_run=fix-20260727T221803Z-p57192-n557379000-c48 verdict=close)
+
+Verifier note: Name-prefix enumeration filter is gone from unvalidated_bake_output_helpers; the recorded rename reproduction now flags the writer, a sensitive regression test covers it, and all gates are green. — Ledger: bugs/MM-BUG-KILN-00156.md (State: Fixed, code commit cd0ebbd). Confirmed cd0ebbd is an ancestor of HEAD 030f812; `git show --stat` shows it touches only crates/ferrosintesis/src/inventory.rs (+24/-5). (1) Original observation reproduced and gone: the recorded repro was the oracle's own positive control with its helper renamed _bake_newbank -> prepare_newbank returning []. I read crates/ferro...
 
 ## Notes
 

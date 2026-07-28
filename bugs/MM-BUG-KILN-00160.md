@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00160 — Strings sample package still omits GM32 from public metadata and regeneration
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample packaging / strings metadata
@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00160-run-fix-20260728T111505Z-p57192-n305240400-c180-code-1785238947483
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T111505Z-p57192-n305240400-c180 branch=task/bug-MM-BUG-KILN-00160-run-fix-20260728T111505Z-p57192-n305240400-c180 code=caf644c6539ac8b3728cf5f9bb74fb3118a889bf gate=deltic model=codex@xhigh)
 
 ## Observation
 
@@ -63,7 +63,20 @@ the package-level summaries omit GM32 `pizzbass_*`.
 
 ## Fix
 
-<unfixed — raised only>
+The strings sample package now describes all three shipped families: GM 32
+pizzicato bass, GM 42 cello, and GM 43 double bass. Its public regeneration
+command selects `cellosolo,dbass,pizzbass`, so it rebuilds all 40 packaged WAVs.
+
+The source-derived inventory oracle now compares concrete `--only` selectors
+with packaged family prefixes and rejects partial summaries for small packages.
+Changing the real README command back to `cellosolo,dbass` made the oracle fail
+with the omitted `pizzbass_*` family; the fixed tree passed all 19 inventory
+tests.
+
+Focused validation:
+
+- `cargo test -p ferrosintesis inventory::tests` — 19 passed.
+- `deltic integrate --push` — affected-area gate passed and landed code commit `caf644c6539ac8b3728cf5f9bb74fb3118a889bf`.
 
 Update the README command to
 `--only=cellosolo,dbass,pizzbass`. Make the Cargo description, crate rustdoc, and

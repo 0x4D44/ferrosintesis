@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00160 — Strings sample package still omits GM32 from public metadata and regeneration
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample packaging / strings metadata
 - **Raised:** 2026-07-28
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260728T180303Z-p57192-n445935800-c270
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00160-run-verify-20260728T180303Z-p57192-n445935800-c270
-- **Owner base:** c56fc4515a07fb9326c18ab5befad64c4010c27e
-- **Owner fingerprint:** sha256:08a812e1b25b7a1ac035486b67dadf9255a3f86ca5ff1a2c72074b2a62f6c38a
-- **Owner since:** 2026-07-28T18:03:03Z
-- **Owner until:** 2026-07-28T18:48:03Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T111505Z-p57192-n305240400-c180 branch=task/bug-MM-BUG-KILN-00160-run-fix-20260728T111505Z-p57192-n305240400-c180 code=caf644c6539ac8b3728cf5f9bb74fb3118a889bf gate=deltic model=codex@xhigh)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T111505Z-p57192-n305240400-c180 branch=task/bug-MM-BUG-KILN-00160-run-fix-20260728T111505Z-p57192-n305240400-c180 code=caf644c6539ac8b3728cf5f9bb74fb3118a889bf gate=deltic model=codex@xhigh) → Closed (2026-07-28, deltic:auto role=verify run=verify-20260728T180303Z-p57192-n445935800-c270 verified_fix_run=fix-20260728T111505Z-p57192-n305240400-c180 verdict=close model=claude)
 
 ## Observation
 
@@ -88,6 +88,10 @@ selector with the packaged family prefixes. Its negative control should keep a
 complete family table while omitting one family from the command, because the
 current inventory oracle accepts exactly that shape. Harden the public-summary
 oracle so a two-of-three family description cannot evade its current threshold.
+
+### Verification summary (2026-07-28, deltic:auto run=verify-20260728T180303Z-p57192-n445935800-c270 verified_fix_run=fix-20260728T111505Z-p57192-n305240400-c180 verdict=close)
+
+Verifier note: All four strings-package surfaces now cover GM32 pizzbass, the README recipe rebuilds all 40 WAVs, and a source-derived selector oracle with two on-point negative controls prevents recurrence. — Symptom gone: README.md:26-27 and PROVENANCE.md:7 both now read --only=cellosolo,dbass,pizzbass; README.md:3-8 intro, Cargo.toml:6 description and src/lib.rs:1-13 rustdoc each name GM 32 pizzicato + GM 42 cello + GM 43 double bass; PROVENANCE.md:16-19 replaces the false 'already corrected' claim with an honest history. Recipe is functionally complete, not just textually: pizzbass is an exact family tok...
 
 ## Notes
 

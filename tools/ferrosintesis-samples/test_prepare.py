@@ -2661,6 +2661,44 @@ class KawaiAliasDeduplicationTest(unittest.TestCase):
             )
 
 
+class KawaiOutputInventoryTest(unittest.TestCase):
+    """MM-BUG-KILN-00163: rebakes must reject retired Kawai outputs."""
+
+    def test_removed_source_rejects_its_stale_output_before_fetching_or_writing(self):
+        sources = dict(prepare.KAWAI_SOURCES)
+        stale = next(iter(sources))
+        sources.pop(stale)
+
+        with tempfile.TemporaryDirectory() as repo_root:
+            out_dir = os.path.join(
+                repo_root,
+                "crates",
+                "ferrosintesis-samples-vcsl-kawai",
+                "samples",
+            )
+            os.makedirs(out_dir)
+            open(os.path.join(out_dir, stale), "wb").close()
+
+            with mock.patch.object(prepare, "REPO_ROOT", repo_root), mock.patch.object(
+                prepare, "KAWAI_SOURCES", sources
+            ), mock.patch.object(
+                prepare, "ensure_direct_sources"
+            ) as ensure_sources, mock.patch.object(
+                prepare,
+                "read_wav",
+                side_effect=AssertionError("inventory must be checked before reading"),
+            ), mock.patch.object(
+                prepare, "write_wav_mono"
+            ) as write_output, mock.patch.object(
+                prepare.sys, "argv", ["prepare.py", "--only=kawai"]
+            ):
+                with self.assertRaisesRegex(ValueError, re.escape(stale)):
+                    prepare.main()
+
+            ensure_sources.assert_not_called()
+            write_output.assert_not_called()
+
+
 class BottleLoopTest(unittest.TestCase):
     """MM-BUG-KILN-00065: the GM 76 whole-voice loop must have exactly one owner.
 

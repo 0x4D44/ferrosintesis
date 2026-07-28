@@ -5339,6 +5339,8 @@ def main():
 
     # Reject stale owned assets before fetching a source or writing any selected
     # output. Silently retaining or deleting one can republish a removed sample.
+    if want("kawai"):
+        _validate_generated_output_inventory("kawai", KAWAI_SOURCES)
     if want("headroom"):
         _validate_generated_output_inventory("headroom", HEADROOM_SOURCES)
 

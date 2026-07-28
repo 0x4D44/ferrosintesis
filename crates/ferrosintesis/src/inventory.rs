@@ -168,6 +168,47 @@ mod tests {
             .collect()
     }
 
+    fn has_scoped_validation_before_source_use(
+        source: &str,
+        function: &str,
+        family: &str,
+        expected: &str,
+    ) -> bool {
+        let definition = format!("def {function}(");
+        let validator = format!("_validate_generated_output_inventory(\"{family}\", {expected})");
+        let mut in_function = false;
+        let mut validation_line = None;
+        let mut source_uses = Vec::new();
+
+        for (line_number, line) in source.lines().enumerate() {
+            if line.starts_with("def ") {
+                if in_function {
+                    break;
+                }
+                in_function = line.starts_with(&definition);
+                continue;
+            }
+            if !in_function {
+                continue;
+            }
+            let code = line.trim();
+            if code.starts_with('#') {
+                continue;
+            }
+            if code == validator {
+                validation_line = Some(line_number);
+            }
+            if code.contains(expected) {
+                source_uses.push(line_number);
+            }
+        }
+
+        validation_line.is_some_and(|validation| {
+            source_uses.first() == Some(&validation)
+                && source_uses.iter().any(|line| *line > validation)
+        })
+    }
+
     #[derive(Clone, Copy, Default)]
     struct PythonBakeEffects {
         writes: bool,
@@ -979,6 +1020,10 @@ mod tests {
             missing.len(),
             missing.join("\n  ")
         );
+        assert!(
+            has_scoped_validation_before_source_use(&prepare, "main", "kawai", "KAWAI_SOURCES"),
+            "main must validate the Kawai output against KAWAI_SOURCES before using that table"
+        );
     }
 
     #[test]
@@ -1088,6 +1133,40 @@ def _bake_goodbank(src):
 "#;
 
         assert!(unvalidated_bake_output_helpers(source).is_empty());
+    }
+
+    #[test]
+    fn bake_output_inventory_oracle_rejects_an_unrelated_family_validation() {
+        let source = r#"
+def main():
+    _validate_generated_output_inventory("headroom", HEADROOM_SOURCES)
+    ensure_direct_sources(src, KAWAI_SOURCES, "kawai")
+    write_wav_mono(sample_output_path(fn), [], OUT_SR)
+"#;
+
+        assert!(!has_scoped_validation_before_source_use(
+            source,
+            "main",
+            "kawai",
+            "KAWAI_SOURCES"
+        ));
+    }
+
+    #[test]
+    fn bake_output_inventory_oracle_rejects_the_wrong_expected_set() {
+        let source = r#"
+def main():
+    _validate_generated_output_inventory("kawai", HEADROOM_SOURCES)
+    ensure_direct_sources(src, KAWAI_SOURCES, "kawai")
+    write_wav_mono(sample_output_path(fn), [], OUT_SR)
+"#;
+
+        assert!(!has_scoped_validation_before_source_use(
+            source,
+            "main",
+            "kawai",
+            "KAWAI_SOURCES"
+        ));
     }
 
     #[test]

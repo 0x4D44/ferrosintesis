@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** Kawai sample generation / output inventory
 - **Raised:** 2026-07-28
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260728T223542Z-p16556-n556412300-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00163-run-fix-20260728T223542Z-p16556-n556412300-c1
+- **Owner base:** 47ef269fa7b2b6571951d2b35fa4dbba8532674f
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-28T22:35:42Z
+- **Owner until:** 2026-07-29T00:35:42Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

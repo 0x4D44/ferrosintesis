@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00165 — Steinway logical aliases duplicate half of packaged and decoded PCM
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** Steinway sample package / memory and package size
 - **Raised:** 2026-07-28
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260728T224716Z-p56232-n275068800-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00165-run-fix-20260728T224716Z-p56232-n275068800-c1
-- **Owner base:** 0a0492ebdb1ea9fce73acfe8a40c1e1d53c7b636
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T22:47:16Z
-- **Owner until:** 2026-07-29T00:47:16Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260728T224716Z-p56232-n275068800-c1 branch=task/bug-MM-BUG-KILN-00165-run-fix-20260728T224716Z-p56232-n275068800-c1 code=1b3a172 gate=manual)
 
 ## Observation
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00038 — GM61 Brass Section has no LA sample layer (pure 5-player waveshaper) and reads synthetic
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** synth
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=3, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target) → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=08cb7f6ad9c7dfa8407dff5589d36bba647c00d5 gate=cargo model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T182402Z-p9812-n426934100-c111 verified_fix_run=fix-20260727T005703Z-p9812-n849374900-c34 verdict=doubt reason=engineering-evidence-is-fully-green-and-the-fix-plausibly-addresses-the-root-cau model=claude) → Blocked (2026-07-27, deltic:auto role=fix run=fix-20260727T185002Z-p9812-n175953200-c118 verdict=fix_failed reason=no_work model=codex@xhigh) → Open (2026-07-28, Arthur rejected the modeled candidate as still synthy and approved the dedicated MuseScore MS Basic preset-61 sampled-section route) → Fixed (2026-07-28, code 704201b adds the pinned ten-zone MS Basic ensemble onset/body bank, hybrid model handover, provenance, regressions, and zero-contamination catalog evidence; independent listening remains required before Closed) → Open (2026-07-28, Arthur's audition of the sampled WAV found the high chord around 0:15 still synthetic and the aftertouch passage around 0:21 “farty”; exact A/B analysis reproduced both residual defects)
+- **State history:** Open (2026-07-21, raised by Claude Opus 4.8 during the M-CAL instrument-audition review; "quiet synthetic" — Arthur's ear, code-confirmed) → Blocked (2026-07-25, GPT-5.6 Codex on KILN-Windows — trunk deliberately keeps GM61 model-only because the old sample was a wrong solo trumpet and no licensed brass-section onset exists; Arthur must approve a source or a modeled-section target) → Open (2026-07-26, Arthur approved a modeled heterogeneous natural-brass section after focused brass-synthesis research) → Fixed (2026-07-27, deltic:auto role=fix run=fix-20260727T005703Z-p9812-n849374900-c34 branch=task/bug-MM-BUG-KILN-00038-run-fix-20260727T005703Z-p9812-n849374900-c34 code=08cb7f6ad9c7dfa8407dff5589d36bba647c00d5 gate=cargo model=codex@xhigh) → Open (2026-07-27, deltic:auto role=verify run=verify-20260727T182402Z-p9812-n426934100-c111 verified_fix_run=fix-20260727T005703Z-p9812-n849374900-c34 verdict=doubt reason=engineering-evidence-is-fully-green-and-the-fix-plausibly-addresses-the-root-cau model=claude) → Blocked (2026-07-27, deltic:auto role=fix run=fix-20260727T185002Z-p9812-n175953200-c118 verdict=fix_failed reason=no_work model=codex@xhigh) → Open (2026-07-28, Arthur rejected the modeled candidate as still synthy and approved the dedicated MuseScore MS Basic preset-61 sampled-section route) → Fixed (2026-07-28, code 704201b adds the pinned ten-zone MS Basic ensemble onset/body bank, hybrid model handover, provenance, regressions, and zero-contamination catalog evidence; independent listening remains required before Closed) → Open (2026-07-28, Arthur's audition of the sampled WAV found the high chord around 0:15 still synthetic and the aftertouch passage around 0:21 “farty”; exact A/B analysis reproduced both residual defects) → Fixed (2026-07-28, code c78bde3 retains the recorded high-register body through an 800 ms handover and removes GM61's coherent 30 Hz section-wide aftertouch flutter; independent listening remains required before Closed)
 
 ## Observation
 
@@ -239,3 +239,24 @@ pressure passage exposed one coherent 30 Hz post-sum growl flutter across all
 five modeled players. The bug is reopened until the longer recorded-body
 handover and section-specific aftertouch containment are committed and rendered
 for another independent listen.
+
+### Listening-residual fix summary (2026-07-28, code `c78bde3`)
+
+The ten GM61 recordings now retain 1.9 seconds of source audio. Runtime keeps
+the recording fully present through 450 ms and completes its handover at
+800 ms, so the C5/E5/G5 chord around 0:15 no longer falls back almost entirely
+to the model while useful recorded body remains.
+
+GM61 now bypasses solo brass's post-sum 30 Hz amplitude flutter. Its
+controller-driven brightness, drive, cascade response, engine gain, and
+vibrato remain active; GM56–60 keep their existing solo growl.
+
+Both regressions failed against the prior candidate and pass with `c78bde3`.
+The full workspace tests, formatting, clippy with warnings denied, 92
+sample-preparation tests, release build, and exact 135-track catalog inventory
+are green. Twenty-eight GM61 catalog tracks changed, 107 unrelated tracks
+stayed byte-identical, and the inventory found zero contamination and zero
+not-reached tracks.
+
+State is **Fixed**, not Closed. Arthur's next listen to the revised WAV remains
+the independent closure gate for this subjective timbre defect.

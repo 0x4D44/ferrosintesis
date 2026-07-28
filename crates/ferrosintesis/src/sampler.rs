@@ -15,10 +15,20 @@ use std::sync::OnceLock;
 pub struct Zone {
     root: f32,
     data: Vec<f32>,
+    b1_tail: Option<B1Tail>,
     /// Memoized pitch-synchronous sustain-loop bounds — see [`Zone::sustain_loop`].
     /// `Some(None)` means "searched, no usable loop"; that verdict is cached too.
     sustain_loop: OnceLock<Option<(usize, usize)>>,
 }
+
+struct B1Tail {
+    entry_frame: usize,
+    rate_divisor: usize,
+    source_frames: usize,
+    data: Vec<f32>,
+}
+
+const B1_TAIL_END_FADE_FRAMES: f32 = 0.080 * 44_100.0;
 
 /// A pitch-synchronous sustain-loop search: `(zone PCM, zone root Hz)` in,
 /// `(loop_start, loop_end)` out. `find_sax_loop` and `find_bottle_loop` are the two.
@@ -67,6 +77,124 @@ fn parse_wav(bytes: &[u8]) -> Vec<f32> {
     }
     assert!(!data.is_empty(), "sample bank file has no data chunk");
     data
+}
+
+fn decode_b1_tail_code(code: u8) -> f32 {
+    let value = code as f64 / 127.5 - 1.0;
+    if value == 0.0 {
+        0.0
+    } else {
+        (value.signum() * (value.abs() * 256.0f64.ln()).exp_m1() / 255.0) as f32
+    }
+}
+
+fn parse_b1_tail(bytes: &[u8], pcm_frames: usize) -> Result<B1Tail, &'static str> {
+    if bytes.len() < 12 || &bytes[..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err("B1 asset is not RIFF/WAVE");
+    }
+    let declared_end = 8usize
+        .checked_add(u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize)
+        .ok_or("B1 RIFF size overflow")?;
+    if declared_end != bytes.len() {
+        return Err("B1 RIFF size does not match the asset");
+    }
+
+    let mut pos = 12usize;
+    let mut fmt_count = 0usize;
+    let mut data_frames = None;
+    let mut tail = None;
+    while pos < declared_end {
+        let header_end = pos.checked_add(8).ok_or("B1 chunk header overflow")?;
+        if header_end > declared_end {
+            return Err("B1 RIFF has a truncated chunk header");
+        }
+        let chunk_len = u32::from_le_bytes(bytes[pos + 4..header_end].try_into().unwrap()) as usize;
+        let body_start = header_end;
+        let body_end = body_start
+            .checked_add(chunk_len)
+            .ok_or("B1 chunk body overflow")?;
+        let padded_end = body_end
+            .checked_add(chunk_len & 1)
+            .ok_or("B1 chunk padding overflow")?;
+        if padded_end > declared_end {
+            return Err("B1 RIFF has a truncated or oversized chunk");
+        }
+        if chunk_len & 1 != 0 && bytes[body_end] != 0 {
+            return Err("B1 RIFF has a nonzero pad byte");
+        }
+
+        match &bytes[pos..pos + 4] {
+            b"fmt " => {
+                fmt_count += 1;
+                let body = &bytes[body_start..body_end];
+                if body.len() < 16
+                    || u16::from_le_bytes(body[0..2].try_into().unwrap()) != 1
+                    || u16::from_le_bytes(body[2..4].try_into().unwrap()) != 1
+                    || u32::from_le_bytes(body[4..8].try_into().unwrap()) != 44_100
+                    || u16::from_le_bytes(body[12..14].try_into().unwrap()) != 2
+                    || u16::from_le_bytes(body[14..16].try_into().unwrap()) != 16
+                {
+                    return Err("B1 body is not PCM16 mono 44.1 kHz");
+                }
+            }
+            b"data" => {
+                if chunk_len == 0 || chunk_len & 1 != 0 {
+                    return Err("B1 PCM body is empty or has a partial frame");
+                }
+                if data_frames.replace(chunk_len / 2).is_some() {
+                    return Err("B1 RIFF has duplicate PCM data chunks");
+                }
+            }
+            b"b1t " => {
+                if tail.is_some() {
+                    return Err("B1 RIFF has duplicate natural tails");
+                }
+                if padded_end != declared_end {
+                    return Err("B1 natural tail is not terminal");
+                }
+                let body = &bytes[body_start..body_end];
+                if body.len() < 13 {
+                    return Err("B1 natural tail is truncated or empty");
+                }
+                let version = body[0];
+                let rate_divisor = body[1] as usize;
+                let reserved = u16::from_le_bytes(body[2..4].try_into().unwrap());
+                let entry_frame = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
+                let source_frames = u32::from_le_bytes(body[8..12].try_into().unwrap()) as usize;
+                let payload = &body[12..];
+                if version != 1 {
+                    return Err("unsupported B1 natural-tail version");
+                }
+                if rate_divisor != 4 {
+                    return Err("unsupported B1 natural-tail rate divisor");
+                }
+                if reserved != 0 {
+                    return Err("nonzero B1 natural-tail reserved field");
+                }
+                if entry_frame >= pcm_frames {
+                    return Err("B1 natural-tail entry is outside the PCM body");
+                }
+                if payload.len() != source_frames.div_ceil(rate_divisor) {
+                    return Err("B1 natural-tail payload length mismatch");
+                }
+                tail = Some(B1Tail {
+                    entry_frame,
+                    rate_divisor,
+                    source_frames,
+                    data: payload.iter().copied().map(decode_b1_tail_code).collect(),
+                });
+            }
+            _ => {}
+        }
+        pos = padded_end;
+    }
+    if fmt_count != 1 || data_frames.is_none() {
+        return Err("B1 RIFF requires exactly one fmt and one data chunk");
+    }
+    if data_frames != Some(pcm_frames) {
+        return Err("B1 strict PCM body disagrees with the decoded body");
+    }
+    tail.ok_or("B1 RIFF is missing its natural tail")
 }
 
 #[cfg(feature = "embedded-samples")]
@@ -165,6 +293,10 @@ pub(crate) static BANK_INITS: std::sync::atomic::AtomicUsize =
 pub(crate) static LOOP_SEARCHES: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
+#[cfg(test)]
+pub(crate) static TAIL_DECODES: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
 /// Source lines of every `init_once` call that has actually run its builder.
 ///
 /// Test-only. `BANK_INITS` counts `bank!` expansions, which is narrower than "lazy
@@ -193,7 +325,29 @@ macro_rules! bank {
         vec![$(Zone {
             root: $root,
             data: parse_wav(embedded_wav($file)),
+            b1_tail: None,
             sustain_loop: OnceLock::new(),
+        }),+]
+    }};
+}
+
+macro_rules! b1_bank {
+    ($($file:literal => $root:expr),+ $(,)?) => {{
+        #[cfg(test)]
+        crate::sampler::BANK_INITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        vec![$({
+            let bytes = embedded_wav($file);
+            let data = parse_wav(bytes);
+            let b1_tail = parse_b1_tail(bytes, data.len())
+                .unwrap_or_else(|error| panic!("{}: {error}", $file));
+            #[cfg(test)]
+            crate::sampler::TAIL_DECODES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Zone {
+                root: $root,
+                data,
+                b1_tail: Some(b1_tail),
+                sustain_loop: OnceLock::new(),
+            }
         }),+]
     }};
 }
@@ -1665,7 +1819,7 @@ pub fn honkytonk_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
 fn b1_normal_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
-        bank!(
+        b1_bank!(
             "b1_normal_C1.wav" => 31.71,
             "b1_normal_E1.wav" => 40.28,
             "b1_normal_G1.wav" => 47.86,
@@ -1698,7 +1852,7 @@ fn b1_normal_zones() -> &'static [Zone] {
 fn b1_hard_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
-        bank!(
+        b1_bank!(
             "b1_hard_A0.wav" => 26.77,
             "b1_hard_C1.wav" => 31.73,
             "b1_hard_E1.wav" => 40.28,
@@ -1758,11 +1912,12 @@ pub fn b1upright_bank(vel: u8, _rr2: bool) -> &'static [Zone] {
     }
 }
 
-/// Experimental whole-body B1 voice. It intentionally plays the bounded recording
-/// to its baked end rather than handing over to an unrelated modal piano.
+/// Whole-recording B1 voice: untouched PCM body, then the same note's compact
+/// non-looping natural tail. It never hands over to an unrelated modal piano.
 #[cfg(feature = "embedded-samples")]
 struct B1Sampled {
     data: &'static [f32],
+    tail: &'static B1Tail,
     pos: f32,
     base_step: f32,
     bend: f32,
@@ -1789,6 +1944,10 @@ pub fn b1upright_sampled(
     }
     Some(Box::new(B1Sampled {
         data: zone.data.as_slice(),
+        tail: zone
+            .b1_tail
+            .as_ref()
+            .expect("embedded B1 zone has no natural tail"),
         pos: 0.0,
         base_step: ratio * 44_100.0 / sr,
         bend: 1.0,
@@ -1814,21 +1973,51 @@ pub fn b1upright_sampled(
 #[cfg(feature = "embedded-samples")]
 impl Voice for B1Sampled {
     fn render(&mut self, out: &mut [f32]) -> bool {
-        let n = self.data.len();
         let step = self.base_step * self.bend;
+        let entry = self.tail.entry_frame as f32;
+        let natural_end = (self.tail.entry_frame + self.tail.source_frames) as f32;
+        let crossfade_frames = (self.data.len() - self.tail.entry_frame) as f32;
         for o in out {
-            let j = self.pos as usize;
-            if j + 1 >= n {
+            if self.pos >= natural_end {
                 return false;
             }
+            let j = self.pos as usize;
             let frac = self.pos - j as f32;
-            let value = crate::dsp::cubic4(
-                self.data[j.saturating_sub(1)],
-                self.data[j],
-                self.data[j + 1],
-                self.data[(j + 2).min(n - 1)],
-                frac,
-            );
+            let head = if j < self.data.len() {
+                Some(crate::dsp::cubic4(
+                    self.data[j.saturating_sub(1)],
+                    self.data[j],
+                    self.data[(j + 1).min(self.data.len() - 1)],
+                    self.data[(j + 2).min(self.data.len() - 1)],
+                    frac,
+                ))
+            } else {
+                None
+            };
+            let tail = if self.pos >= entry {
+                let tail_pos = (self.pos - entry) / self.tail.rate_divisor as f32;
+                let tail_index = tail_pos as usize;
+                if tail_index >= self.tail.data.len() {
+                    return false;
+                }
+                let tail_frac = tail_pos - tail_index as f32;
+                let a = self.tail.data[tail_index];
+                let b = self.tail.data[(tail_index + 1).min(self.tail.data.len() - 1)];
+                let remaining = natural_end - self.pos;
+                let taper = (remaining / B1_TAIL_END_FADE_FRAMES).clamp(0.0, 1.0);
+                Some((a + (b - a) * tail_frac) * taper)
+            } else {
+                None
+            };
+            let value = match (head, tail) {
+                (Some(head), Some(tail)) => {
+                    let mix = ((self.pos - entry) / crossfade_frames).clamp(0.0, 1.0);
+                    head * (1.0 - mix) + tail * mix
+                }
+                (Some(head), None) => head,
+                (None, Some(tail)) => tail,
+                (None, None) => return false,
+            };
             *o += value * self.gain * self.env;
             self.pos += step;
             if self.releasing {
@@ -9194,6 +9383,204 @@ mod tests {
             .collect()
     }
 
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn b1_natural_tail_codec_and_asset_metadata_are_pinned() {
+        let codes = [0u8, 32, 98, 128, 157, 223, 255];
+        let expected = [
+            -1.0,
+            -0.2456980837065721,
+            -0.010225303858321285,
+            8.621159565072071e-5,
+            0.010225303858321294,
+            0.2456980837065721,
+            1.0,
+        ];
+        for (code, want) in codes.into_iter().zip(expected) {
+            assert!((decode_b1_tail_code(code) - want as f32).abs() < 1e-7);
+        }
+
+        let bytes = embedded_wav("b1_hard_A4.wav");
+        let body = parse_wav(bytes);
+        let tail = parse_b1_tail(bytes, body.len()).expect("hard A4 has a valid natural tail");
+        assert_eq!(tail.entry_frame, 59_535);
+        assert_eq!(tail.rate_divisor, 4);
+        assert_eq!(tail.source_frames, 292_987);
+        assert_eq!(tail.data.len(), tail.source_frames.div_ceil(4));
+
+        let mut truncated = bytes.to_vec();
+        truncated.pop();
+        assert!(parse_b1_tail(&truncated, body.len()).is_err());
+
+        let tail_start = bytes
+            .windows(4)
+            .rposition(|window| window == b"b1t ")
+            .expect("hard A4 tail FourCC");
+        let mut unsupported = bytes.to_vec();
+        unsupported[tail_start + 8] = 2;
+        assert!(parse_b1_tail(&unsupported, body.len()).is_err());
+
+        let data_start = bytes
+            .windows(4)
+            .position(|window| window == b"data")
+            .expect("hard A4 PCM data FourCC");
+        let data_len =
+            u32::from_le_bytes(bytes[data_start + 4..data_start + 8].try_into().unwrap());
+        let mut odd_pcm = bytes.to_vec();
+        odd_pcm[data_start + 4..data_start + 8].copy_from_slice(&(data_len - 1).to_le_bytes());
+        assert_eq!(
+            parse_b1_tail(&odd_pcm, body.len()).err(),
+            Some("B1 PCM body is empty or has a partial frame")
+        );
+        let mut empty_pcm = bytes.to_vec();
+        empty_pcm[data_start + 4..data_start + 8].copy_from_slice(&0u32.to_le_bytes());
+        assert_eq!(
+            parse_b1_tail(&empty_pcm, body.len()).err(),
+            Some("B1 PCM body is empty or has a partial frame")
+        );
+    }
+
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn b1_natural_tail_extends_the_body_once_and_stops_at_the_recorded_end() {
+        let key = 69u8;
+        let vel = 100u8;
+        let zones = b1upright_bank(vel, false);
+        let zone = nearest(zones, key_freq(key));
+        let tail = zone.b1_tail.as_ref().expect("B1 zone has a natural tail");
+        let step = key_freq(key) / zone.root;
+        let body_end = (zone.data.len() as f32 / step).ceil() as usize;
+        let mut natural_end = 0usize;
+        let mut source_pos = 0.0f32;
+        while source_pos < (tail.entry_frame + tail.source_frames) as f32 {
+            natural_end += 1;
+            source_pos += step;
+        }
+        assert!(natural_end > body_end + 2 * 44_100);
+
+        let mut voice =
+            b1upright_sampled(zones, key, vel, 44_100.0, 1.0, 1.0).expect("covered B1 note");
+        let mut through_old_eof = vec![0.0; body_end + 44_100 / 4];
+        assert!(voice.render(&mut through_old_eof));
+        assert!(
+            crate::testutil::rms(&through_old_eof[body_end..]) > 1e-6,
+            "natural tail is silent after the old body EOF"
+        );
+
+        let mut whole =
+            b1upright_sampled(zones, key, vel, 44_100.0, 1.0, 1.0).expect("covered B1 note");
+        let mut rendered = vec![0.0; natural_end + 256];
+        assert!(!whole.render(&mut rendered));
+        assert_eq!(&rendered[natural_end + 8..], &[0.0; 248]);
+        assert!(
+            crate::testutil::rms(&rendered[natural_end - 44_100 / 20..natural_end])
+                < crate::testutil::rms(
+                    &rendered[natural_end - 44_100 / 10..natural_end - 44_100 / 20]
+                ),
+            "terminal taper does not reduce the final 50 ms"
+        );
+    }
+
+    #[cfg(feature = "embedded-samples")]
+    #[test]
+    fn b1_natural_tail_seams_stay_local_at_common_rates_and_bends() {
+        fn root_and_worst_keys(zones: &'static [Zone]) -> Vec<u8> {
+            let mut keys = std::collections::BTreeSet::new();
+            for zone in zones {
+                let key = (21u8..=108)
+                    .min_by(|a, b| {
+                        (key_freq(*a) / zone.root)
+                            .log2()
+                            .abs()
+                            .partial_cmp(&(key_freq(*b) / zone.root).log2().abs())
+                            .unwrap()
+                    })
+                    .unwrap();
+                keys.insert(key);
+            }
+            let worst = (21u8..=108)
+                .filter_map(|key| {
+                    let zone = nearest(zones, key_freq(key));
+                    let ratio = key_freq(key) / zone.root;
+                    (0.5..=2.05)
+                        .contains(&ratio)
+                        .then_some((ratio.log2().abs(), key))
+                })
+                .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+                .unwrap()
+                .1;
+            keys.insert(worst);
+            keys.into_iter().collect()
+        }
+
+        fn assert_local_seam(rendered: &[f32], seam: usize, window: usize, label: &str) {
+            let seam_step = (rendered[seam] - rendered[seam - 1]).abs();
+            let local_start = seam.saturating_sub(window).max(1);
+            let local_end = (seam + window).min(rendered.len());
+            let local_max = (local_start..local_end)
+                .filter(|i| i.abs_diff(seam) > 4)
+                .map(|i| (rendered[i] - rendered[i - 1]).abs())
+                .fold(0.0f32, f32::max);
+            let quantization_margin = (decode_b1_tail_code(128) - decode_b1_tail_code(127)).abs();
+            assert!(
+                seam_step <= local_max + quantization_margin,
+                "{label}: seam step {seam_step:.6} exceeds local maximum {local_max:.6} \
+                 plus one near-zero tail-code step"
+            );
+        }
+
+        fn output_frame_for_source(source_frame: usize, step: f32) -> usize {
+            let mut position = 0.0f32;
+            let mut output_frame = 0usize;
+            while position < source_frame as f32 {
+                position += step;
+                output_frame += 1;
+            }
+            output_frame
+        }
+
+        for vel in [59u8, 60] {
+            let zones = b1upright_bank(vel, false);
+            for key in root_and_worst_keys(zones) {
+                let zone = nearest(zones, key_freq(key));
+                let tail = zone.b1_tail.as_ref().expect("B1 zone has a natural tail");
+                for sample_rate in [44_100.0f32, 48_000.0, 96_000.0] {
+                    for bend_semitones in [-2.0f32, 0.0, 2.0] {
+                        let bend = 2.0f32.powf(bend_semitones / 12.0);
+                        let step = key_freq(key) / zone.root * 44_100.0 / sample_rate * bend;
+                        let entry = output_frame_for_source(tail.entry_frame, step);
+                        let body_end = output_frame_for_source(zone.data.len(), step);
+                        let window = (0.020 * sample_rate) as usize;
+                        let mut rendered = vec![0.0; body_end + window + 8];
+                        let mut voice = b1upright_sampled(zones, key, vel, sample_rate, 1.0, 1.0)
+                            .expect("covered B1 key");
+                        voice.set_pitch(bend);
+                        assert!(
+                            voice.render(&mut rendered),
+                            "velocity {vel} key {key} rate {sample_rate} bend {bend_semitones}: \
+                             natural tail ended at the old body EOF"
+                        );
+                        assert!(
+                            rendered.iter().all(|value| value.is_finite()),
+                            "velocity {vel} key {key} rate {sample_rate} bend {bend_semitones}: \
+                             natural tail produced a non-finite sample"
+                        );
+                        let label = format!(
+                            "velocity {vel} key {key} rate {sample_rate} bend {bend_semitones}"
+                        );
+                        assert_local_seam(&rendered, entry, window, &format!("{label} entry"));
+                        assert_local_seam(
+                            &rendered,
+                            body_end,
+                            window,
+                            &format!("{label} body EOF"),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// The rejected conditioned implementation at `edcd116` deliberately kept its
     /// first 30 ms unchanged. Pin that transient while replacing its later handoff:
     /// compare the exact parent's stored PCM against the new full-scale bake through
@@ -9743,12 +10130,11 @@ mod tests {
         );
     }
 
-    /// The experiment deliberately exposes a bounded recording rather than hiding
-    /// its end behind a model. A held note must survive the shared first-second
-    /// judgment window, then reap at its natural baked boundary. Pitch bend must
-    /// change that boundary by changing the source read rate.
+    /// The natural tail is still bounded evidence, not an indefinite sustain. A
+    /// held note survives the old 1.5-second body boundary, then reaps at its
+    /// recorded endpoint. Pitch bend changes that endpoint in playback time.
     #[test]
-    fn b1_sample_only_voice_is_bounded_and_pitch_bend_changes_its_read_rate() {
+    fn b1_natural_tail_is_bounded_and_pitch_bend_changes_its_read_rate() {
         if !crate::embedded_samples_available() {
             return;
         }
@@ -9759,15 +10145,30 @@ mod tests {
         assert!(natural.render(&mut first_second));
         assert!(crate::testutil::rms(&first_second[(0.8 * sr) as usize..]) > 1e-5);
 
-        let mut natural_tail = vec![0.0; (1.5 * sr) as usize];
+        let mut past_old_eof = vec![0.0; sr as usize];
+        assert!(natural.render(&mut past_old_eof));
+        assert!(crate::testutil::rms(&past_old_eof) > 1e-6);
+        let mut natural_tail = vec![0.0; (6.0 * sr) as usize];
         assert!(!natural.render(&mut natural_tail));
 
-        let mut bent = explicit_b1_voice(60, 60, sr, seed, true);
-        bent.set_pitch(2.0);
-        let mut bent_tail = vec![0.0; sr as usize];
+        let lifetime = |bend: f32| {
+            let mut voice = explicit_b1_voice(60, 60, sr, seed, true);
+            voice.set_pitch(bend);
+            let mut frames = 0usize;
+            loop {
+                let mut block = [0.0; 1024];
+                frames += block.len();
+                if !voice.render(&mut block) {
+                    return frames;
+                }
+                assert!(frames < 12 * sr as usize, "B1 natural tail did not end");
+            }
+        };
+        let unbent_frames = lifetime(1.0);
+        let bent_frames = lifetime(2.0);
         assert!(
-            !bent.render(&mut bent_tail),
-            "octave-up bend did not consume the sample faster"
+            (0.49..=0.51).contains(&(bent_frames as f32 / unbent_frames as f32)),
+            "octave-up bend lifetime {bent_frames} is not half of {unbent_frames}"
         );
     }
 
@@ -9778,25 +10179,27 @@ mod tests {
     fn b1_sample_only_note_off_applies_the_felt_damper() {
         let sr = 44_100.0;
         for vel in [59u8, 60] {
-            let mut released = explicit_b1_voice(60, vel, sr, 0x6A09_E667, true);
-            let mut held = explicit_b1_voice(60, vel, sr, 0x6A09_E667, true);
-            let mut released_prefix = vec![0.0; (0.100 * sr) as usize];
-            let mut held_prefix = vec![0.0; released_prefix.len()];
-            released.render(&mut released_prefix);
-            held.render(&mut held_prefix);
-            assert_eq!(released_prefix, held_prefix);
+            for hold_s in [0.100f32, 1.400, 1.700] {
+                let mut released = explicit_b1_voice(60, vel, sr, 0x6A09_E667, true);
+                let mut held = explicit_b1_voice(60, vel, sr, 0x6A09_E667, true);
+                let mut released_prefix = vec![0.0; (hold_s * sr) as usize];
+                let mut held_prefix = vec![0.0; released_prefix.len()];
+                released.render(&mut released_prefix);
+                held.render(&mut held_prefix);
+                assert_eq!(released_prefix, held_prefix);
 
-            released.note_off();
-            let mut released_tail = vec![0.0; (0.300 * sr) as usize];
-            let mut held_tail = vec![0.0; released_tail.len()];
-            released.render(&mut released_tail);
-            held.render(&mut held_tail);
-            let late = (0.200 * sr) as usize;
-            assert!(
-                crate::testutil::rms(&released_tail[late..])
-                    < crate::testutil::rms(&held_tail[late..]) * 0.20,
-                "velocity {vel}: felt damper did not suppress the recorded body"
-            );
+                released.note_off();
+                let mut released_tail = vec![0.0; (0.300 * sr) as usize];
+                let mut held_tail = vec![0.0; released_tail.len()];
+                released.render(&mut released_tail);
+                held.render(&mut held_tail);
+                let late = (0.200 * sr) as usize;
+                assert!(
+                    crate::testutil::rms(&released_tail[late..])
+                        < crate::testutil::rms(&held_tail[late..]) * 0.20,
+                    "velocity {vel} hold {hold_s:.1}s: felt damper did not suppress the recording"
+                );
+            }
 
             let (t60, _) = voices::PianoDamper::Felt.t60_for(60);
             let error = b1_release_curve_error(
@@ -9812,8 +10215,9 @@ mod tests {
         }
     }
 
-    /// Explicit listening artifacts for the sample-only experiment. This diagnostic
-    /// renders the voice directly, so no engine combs, sends, BusGlue, limiter, or
+    /// Explicit listening artifacts for the natural-tail voice. This diagnostic
+    /// renders four seconds directly, including the body-to-tail crossfade and
+    /// post-body continuation, so no engine combs, sends, BusGlue, limiter, or
     /// catalogue normalization can alter the recording. It runs only by name with
     /// `--ignored`; ordinary tests never write outside `target`.
     #[test]
@@ -9844,7 +10248,7 @@ mod tests {
         ];
         for (name, key, vel, release_at) in cases {
             let mut voice = explicit_b1_voice(key, vel, sr, 0x6A09_E667, true);
-            let total = (1.5 * sr) as usize;
+            let total = (4.0 * sr) as usize;
             let release = release_at.map(|seconds| (seconds * sr) as usize);
             let mut rendered = vec![0.0f32; total];
             let mut offset = 0;

@@ -218,8 +218,10 @@ impl RealtimeSynth {
     /// a live stream can select any program or alternate bank at any moment, so a
     /// partial prewarm leaves exactly the dropout this call exists to prevent. That is
     /// the trade you are opting into: it costs setup time and holds the decoded PCM
-    /// (roughly twice the embedded sample payload) resident for the process lifetime.
-    /// If you would rather pay in occasional first-use stalls, simply do not call it.
+    /// resident for the process lifetime. Ordinary PCM16 banks expand to roughly twice
+    /// their embedded bytes. The B1's 3.35 MB byte-companded natural tails expand to
+    /// about 13.4 MB. If you would rather pay in occasional first-use stalls, simply do
+    /// not call it.
     pub fn prewarm_samples(&self) {
         sampler::prewarm();
     }
@@ -907,8 +909,8 @@ mod tests {
         RealtimeSynth::new(opts()).prewarm_samples();
     }
 
-    /// MM-BUG-KILN-00064: after `prewarm_samples()`, a burst of GM 76 NoteOns driven
-    /// through the REAL realtime path must decode nothing and search no sustain loop.
+    /// MM-BUG-KILN-00064: after `prewarm_samples()`, real GM 76 and B1 NoteOns driven
+    /// through the realtime path must decode no bank or B1 tail and search no loop.
     ///
     /// `sample_prewarm_is_available` above only proves the call does not panic. This one
     /// proves the contract the call actually makes — that nothing is left to do inside
@@ -932,6 +934,7 @@ mod tests {
         synth.prewarm_samples();
         let banks_before = crate::sampler::BANK_INITS.load(Ordering::SeqCst);
         let searches_before = crate::sampler::LOOP_SEARCHES.load(Ordering::SeqCst);
+        let tails_before = crate::sampler::TAIL_DECODES.load(Ordering::SeqCst);
         assert!(
             searches_before > 0,
             "prewarm_samples() resolved no sustain loop — this oracle would pass vacuously"
@@ -946,6 +949,15 @@ mod tests {
             synth.write_byte(key);
             synth.write_byte(100);
         }
+        // Return to GM0 and cross the B1's real normal/hard velocity split. Both
+        // compact-tail caches must already have decoded on the setup thread.
+        synth.write_byte(0xC0);
+        synth.write_byte(0);
+        for velocity in [59u8, 60] {
+            synth.write_byte(0x90);
+            synth.write_byte(69);
+            synth.write_byte(velocity);
+        }
         let mut out = vec![0f32; LIVE_BLOCK * 2];
         synth.render_add(LIVE_BLOCK, &mut out).unwrap();
         assert!(
@@ -956,6 +968,7 @@ mod tests {
 
         let searched = crate::sampler::LOOP_SEARCHES.load(Ordering::SeqCst) - searches_before;
         let decoded = crate::sampler::BANK_INITS.load(Ordering::SeqCst) - banks_before;
+        let tails = crate::sampler::TAIL_DECODES.load(Ordering::SeqCst) - tails_before;
         assert_eq!(
             searched, 0,
             "{searched} sustain-loop search(es) ran inside the realtime render block \
@@ -965,6 +978,11 @@ mod tests {
         assert_eq!(
             decoded, 0,
             "{decoded} sample bank(s) decoded inside the realtime render block after \
+             prewarm_samples() promised they would not."
+        );
+        assert_eq!(
+            tails, 0,
+            "{tails} B1 natural tail(s) decoded inside the realtime render block after \
              prewarm_samples() promised they would not."
         );
     }

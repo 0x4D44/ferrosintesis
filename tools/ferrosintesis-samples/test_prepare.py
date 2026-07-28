@@ -398,6 +398,41 @@ class PrepareSampleBankTests(unittest.TestCase):
         for got, want in zip(first, expected_prefix):
             self.assertAlmostEqual(got, want, places=15)
 
+    def test_b1_natural_tail_audit_accepts_identity_and_rejects_coloration(self):
+        entry = prepare.B1_TAIL_ENTRY_FRAME
+        body_frames = entry + 4096
+        source_frames = 16_384
+        archival = [
+            0.15 * math.sin(2.0 * math.pi * 220.0 * i / prepare.OUT_SR)
+            + 0.05 * math.sin(2.0 * math.pi * 1760.0 * i / prepare.OUT_SR)
+            for i in range(entry + source_frames)
+        ]
+        body = list(archival[:body_frames])
+        payload = prepare.compand_b1_tail(
+            prepare.decimate_b1_tail(archival[entry:])
+        )
+
+        accepted = prepare.audit_b1_natural_tail(
+            body, archival, payload, source_frames
+        )
+        self.assertGreaterEqual(accepted["waveform_snr_db"], 16.0)
+        self.assertLessEqual(accepted["max_band_delta_db"], 6.0)
+        self.assertLessEqual(accepted["centroid_delta_ratio"], 0.16)
+        self.assertGreaterEqual(accepted["late_min_waveform_snr_db"], 2.0)
+        self.assertLessEqual(accepted["late_max_band_delta_db"], 8.0)
+        self.assertLessEqual(accepted["late_max_centroid_delta_ratio"], 0.40)
+        self.assertLessEqual(accepted["max_seam_rms_delta_db"], 1.0)
+        self.assertLessEqual(accepted["final_100ms_dc_error"], 1e-4)
+
+        # A deliberately dark, half-amplitude tail is not the same recording.
+        coloured = prepare.compand_b1_tail(
+            [0.5 * value for value in prepare.decimate_b1_tail(archival[entry:])]
+        )
+        rejected = prepare.audit_b1_natural_tail(
+            body, archival, coloured, source_frames
+        )
+        self.assertTrue(rejected["failures"])
+
     def test_b1_tail_chunk_is_strict_and_standard_wave_compatible(self):
         with tempfile.TemporaryDirectory() as output_dir:
             plain = os.path.join(output_dir, "plain.wav")

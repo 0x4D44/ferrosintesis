@@ -2282,6 +2282,7 @@ B1_TAIL_ENTRY_FRAME = 59_535
 B1_TAIL_RATE_DIVISOR = 4
 B1_TAIL_CUTOFF_HZ = 4_800.0
 B1_TAIL_MU = 255.0
+B1_TAIL_END_FADE_S = 0.080
 B1_TAIL_CHUNK = b"b1t "
 B1_TAIL_VERSION = 1
 B1_PILOT_REAP_ENV = 1e-4
@@ -2428,6 +2429,229 @@ def decode_b1_tail(payload):
             else 0.0
         )
     return output
+
+
+def _b1_expanded_tail_value(decoded, source_offset, source_frames):
+    """Linearly expand one compact-tail sample and apply the accepted end taper."""
+    position = source_offset / B1_TAIL_RATE_DIVISOR
+    index = int(position)
+    if index >= len(decoded):
+        return 0.0
+    fraction = position - index
+    left = decoded[index]
+    right = decoded[min(index + 1, len(decoded) - 1)]
+    value = left + (right - left) * fraction
+    fade_frames = int(B1_TAIL_END_FADE_S * OUT_SR)
+    return value * min(1.0, (source_frames - source_offset) / fade_frames)
+
+
+def _b1_coarse_spectrum(signal):
+    """Four coarse Goertzel bands and their energy-weighted centroid."""
+    if not signal:
+        raise ValueError("B1 spectral audit received an empty signal")
+    windowed = [
+        value * (0.5 - 0.5 * math.cos(2.0 * math.pi * i / (len(signal) - 1)))
+        for i, value in enumerate(signal)
+    ]
+    bands = [0.0, 0.0, 0.0, 0.0]
+    weighted = 0.0
+    total = 0.0
+    for frequency in range(125, 5001, 125):
+        coefficient = 2.0 * math.cos(2.0 * math.pi * frequency / OUT_SR)
+        previous = 0.0
+        previous_two = 0.0
+        for sample in windowed:
+            current = sample + coefficient * previous - previous_two
+            previous_two = previous
+            previous = current
+        power = max(
+            0.0,
+            previous * previous
+            + previous_two * previous_two
+            - coefficient * previous * previous_two,
+        )
+        band = 0 if frequency <= 500 else 1 if frequency <= 1500 else 2 if frequency <= 3000 else 3
+        bands[band] += power
+        weighted += frequency * power
+        total += power
+    return bands, weighted / max(total, 1e-30)
+
+
+def _b1_fidelity_metrics(reference, shipped):
+    """Waveform and coarse spectral deltas for two equal-length signal windows."""
+    if len(reference) != len(shipped) or not reference:
+        raise ValueError("B1 fidelity audit received unequal or empty signals")
+    reference_power = sum(value * value for value in reference)
+    error_power = sum(
+        (actual - expected) ** 2 for actual, expected in zip(shipped, reference)
+    )
+    waveform_snr_db = 10.0 * math.log10(
+        max(reference_power, 1e-30) / max(error_power, 1e-30)
+    )
+
+    reference_bands, reference_centroid = _b1_coarse_spectrum(reference)
+    shipped_bands, shipped_centroid = _b1_coarse_spectrum(shipped)
+    # A -40 dB analysis floor prevents an empty band from turning codec noise
+    # into a meaningless unbounded ratio while remaining far below audible tone.
+    band_floor = max(sum(reference_bands) * 1e-4, 1e-30)
+    band_deltas = [
+        abs(10.0 * math.log10((actual + band_floor) / (expected + band_floor)))
+        for actual, expected in zip(shipped_bands, reference_bands)
+    ]
+    centroid_delta_ratio = abs(shipped_centroid - reference_centroid) / max(
+        reference_centroid, 1e-30
+    )
+    return {
+        "waveform_snr_db": waveform_snr_db,
+        "max_band_delta_db": max(band_deltas),
+        "centroid_delta_ratio": centroid_delta_ratio,
+    }
+
+
+def audit_b1_natural_tail(body, archival, payload, source_frames):
+    """Fail closed unless one shipping tail remains faithful to its full-rate take."""
+    entry = B1_TAIL_ENTRY_FRAME
+    if (
+        len(body) <= entry
+        or len(archival) < entry + source_frames
+        or len(payload) != math.ceil(source_frames / B1_TAIL_RATE_DIVISOR)
+    ):
+        raise ValueError("B1 natural-tail audit received inconsistent inputs")
+    decoded = decode_b1_tail(payload)
+    body_end = len(body)
+
+    def render(frame, compact):
+        if frame < entry:
+            return body[frame]
+        offset = frame - entry
+        tail = (
+            _b1_expanded_tail_value(decoded, offset, source_frames)
+            if compact
+            else archival[frame]
+            * min(
+                1.0,
+                (source_frames - offset) / int(B1_TAIL_END_FADE_S * OUT_SR),
+            )
+        )
+        if frame >= body_end:
+            return tail
+        mix = offset / (body_end - entry)
+        return body[frame] * (1.0 - mix) + tail * mix
+
+    reference = [render(frame, False) for frame in range(entry, body_end)]
+    shipped = [render(frame, True) for frame in range(entry, body_end)]
+    crossfade = _b1_fidelity_metrics(reference, shipped)
+
+    late_window = round(0.020 * OUT_SR)
+    late_start = body_end
+    late_end = (
+        entry
+        + source_frames
+        - round(B1_TAIL_END_FADE_S * OUT_SR)
+        - late_window
+    )
+    late_metrics = []
+    for index in range(6):
+        start = late_start + round((late_end - late_start) * index / 5)
+        stop = start + late_window
+        late_metrics.append(
+            _b1_fidelity_metrics(
+                [render(frame, False) for frame in range(start, stop)],
+                [render(frame, True) for frame in range(start, stop)],
+            )
+        )
+
+    window = round(0.020 * OUT_SR)
+
+    def rms_change(signal, seam):
+        before = signal[seam - window:seam]
+        after = signal[seam:seam + window]
+        before_rms = math.sqrt(sum(value * value for value in before) / len(before))
+        after_rms = math.sqrt(sum(value * value for value in after) / len(after))
+        return 20.0 * math.log10(max(after_rms, 1e-12) / max(before_rms, 1e-12))
+
+    analysis_start = entry - window
+    analysis_end = body_end + window
+    reference_seams = [
+        render(frame, False) for frame in range(analysis_start, analysis_end)
+    ]
+    shipped_seams = [
+        render(frame, True) for frame in range(analysis_start, analysis_end)
+    ]
+    seam_offsets = [entry - analysis_start, body_end - analysis_start]
+    seam_rms_deltas = [
+        abs(rms_change(shipped_seams, seam) - rms_change(reference_seams, seam))
+        for seam in seam_offsets
+    ]
+
+    final_start = max(0, source_frames - round(0.100 * OUT_SR))
+    final = [
+        _b1_expanded_tail_value(decoded, offset, source_frames)
+        for offset in range(final_start, source_frames)
+    ]
+    final_reference = [
+        archival[entry + offset]
+        * min(
+            1.0,
+            (source_frames - offset) / int(B1_TAIL_END_FADE_S * OUT_SR),
+        )
+        for offset in range(final_start, source_frames)
+    ]
+    final_dc_error = abs(
+        sum(final) / len(final) - sum(final_reference) / len(final_reference)
+    )
+    result = {
+        "waveform_snr_db": crossfade["waveform_snr_db"],
+        "max_band_delta_db": crossfade["max_band_delta_db"],
+        "centroid_delta_ratio": crossfade["centroid_delta_ratio"],
+        "late_min_waveform_snr_db": min(
+            row["waveform_snr_db"] for row in late_metrics
+        ),
+        "late_max_band_delta_db": max(
+            row["max_band_delta_db"] for row in late_metrics
+        ),
+        "late_max_centroid_delta_ratio": max(
+            row["centroid_delta_ratio"] for row in late_metrics
+        ),
+        "max_seam_rms_delta_db": max(seam_rms_deltas),
+        "final_100ms_dc_error": final_dc_error,
+    }
+    failures = []
+    # Arthur could not distinguish the full-rate reference from the measured
+    # worst cases (hard G7 for SNR, hard E5 for spectrum). These bounds retain a
+    # narrow deterministic margin around that accepted bank without pretending
+    # the earlier uncalibrated thresholds were perceptual facts.
+    if result["waveform_snr_db"] < 16.0:
+        failures.append(
+            f"waveform SNR {result['waveform_snr_db']:.2f} dB < 16 dB"
+        )
+    if result["max_band_delta_db"] > 6.0:
+        failures.append(f"band delta {result['max_band_delta_db']:.2f} dB > 6 dB")
+    if result["centroid_delta_ratio"] > 0.16:
+        failures.append(
+            f"centroid delta {result['centroid_delta_ratio']:.1%} > 16%"
+        )
+    if result["late_min_waveform_snr_db"] < 2.0:
+        failures.append(
+            f"late waveform SNR {result['late_min_waveform_snr_db']:.2f} dB < 2 dB"
+        )
+    if result["late_max_band_delta_db"] > 8.0:
+        failures.append(
+            f"late band delta {result['late_max_band_delta_db']:.2f} dB > 8 dB"
+        )
+    if result["late_max_centroid_delta_ratio"] > 0.40:
+        failures.append(
+            "late centroid delta "
+            f"{result['late_max_centroid_delta_ratio']:.1%} > 40%"
+        )
+    if result["max_seam_rms_delta_db"] > 1.0:
+        failures.append(
+            f"seam RMS delta {result['max_seam_rms_delta_db']:.2f} dB > 1 dB"
+        )
+    if final_dc_error > 1e-4:
+        failures.append(f"final DC error {final_dc_error:.2e} > 1e-4")
+    result["failures"] = failures
+    return result
 
 
 def _b1_has_zero_run(samples, frames):
@@ -2577,11 +2801,13 @@ def attach_b1_tail_chunk(
     return bytes(output)
 
 
+def _pcm16_values(samples):
+    """Quantize exactly once for both the writer and shipping-signal audits."""
+    return [max(-32768, min(32767, int(value * 32767))) for value in samples]
+
+
 def _pcm16_wav_bytes(samples, sample_rate):
-    pcm = struct.pack(
-        f"<{len(samples)}h",
-        *[max(-32768, min(32767, int(value * 32767))) for value in samples],
-    )
+    pcm = struct.pack(f"<{len(samples)}h", *_pcm16_values(samples))
     output = io.BytesIO()
     with wave.open(output, "wb") as writer:
         writer.setnchannels(1)
@@ -4507,6 +4733,7 @@ def _bake_b1upright(src):
         },
         output_dir=out_dir)
     pending = {}
+    tail_audits = []
     for man in manifests:
         for sl in man["slices"]:
             if sl.get("status") != "assigned":
@@ -4519,17 +4746,21 @@ def _bake_b1upright(src):
                 raise ValueError(f"unexpected assigned B1 layer: {layer}")
             note = sl["assigned_note"]       # e.g. C3 (both ladders are all-natural)
             midi = sl["assigned_midi"]
+            out_name = f"b1_{layer}_{note}.wav"
             x, sr = read_wav(os.path.join(slice_out, sl["file"]))
             x = _butter_hp4(x, sr, B1_HPF_HZ)          # on the 48 kHz signal
             x = resample(x, sr, OUT_SR)
             seg = prepare_b1_body(x, OUT_SR)
             archival, _gain = prepare_b1_archival(x, OUT_SR)
             tail, tail_frames = prepare_b1_tail(archival)
+            shipping_body = [value / 32768.0 for value in _pcm16_values(seg)]
+            audit = audit_b1_natural_tail(
+                shipping_body, archival, tail, tail_frames
+            )
             et = _midi_hz(midi)
             f1 = sl["f1_hz"] or 0.0
             cents = 1200.0 * math.log2(f1 / et) if f1 > 0 else 0.0
             root = f1 if (f1 > 0 and abs(cents) <= B1_ROOT_FALLBACK_CENTS) else et
-            out_name = f"b1_{layer}_{note}.wav"
             if out_name in pending:
                 raise ValueError(f"duplicate generated B1 zone: {out_name}")
             pending[out_name] = (
@@ -4541,8 +4772,76 @@ def _bake_b1upright(src):
                 (out_name, root, f1, et, cents,
                  sl.get("pitch_confidence") or 0.0, len(seg) / OUT_SR),
             )
+            tail_audits.append((out_name, audit))
 
     validate_b1_generated_inventory(expected, set(pending))
+    extrema = {
+        "min waveform SNR": min(
+            tail_audits, key=lambda item: item[1]["waveform_snr_db"]
+        ),
+        "max band delta": max(
+            tail_audits, key=lambda item: item[1]["max_band_delta_db"]
+        ),
+        "max centroid delta": max(
+            tail_audits, key=lambda item: item[1]["centroid_delta_ratio"]
+        ),
+        "min late waveform SNR": min(
+            tail_audits, key=lambda item: item[1]["late_min_waveform_snr_db"]
+        ),
+        "max late band delta": max(
+            tail_audits, key=lambda item: item[1]["late_max_band_delta_db"]
+        ),
+        "max late centroid delta": max(
+            tail_audits,
+            key=lambda item: item[1]["late_max_centroid_delta_ratio"],
+        ),
+        "max seam RMS delta": max(
+            tail_audits, key=lambda item: item[1]["max_seam_rms_delta_db"]
+        ),
+        "max final DC error": max(
+            tail_audits, key=lambda item: item[1]["final_100ms_dc_error"]
+        ),
+    }
+    print(
+        "B1 natural-tail audit:"
+        f" min waveform SNR={extrema['min waveform SNR'][1]['waveform_snr_db']:.2f} dB"
+        f" ({extrema['min waveform SNR'][0]});"
+        f" max band delta={extrema['max band delta'][1]['max_band_delta_db']:.2f} dB"
+        f" ({extrema['max band delta'][0]});"
+        f" max centroid delta={extrema['max centroid delta'][1]['centroid_delta_ratio']:.2%}"
+        f" ({extrema['max centroid delta'][0]});"
+        f" min late SNR={extrema['min late waveform SNR'][1]['late_min_waveform_snr_db']:.2f} dB"
+        f" ({extrema['min late waveform SNR'][0]});"
+        f" max late band={extrema['max late band delta'][1]['late_max_band_delta_db']:.2f} dB"
+        f" ({extrema['max late band delta'][0]});"
+        f" max late centroid={extrema['max late centroid delta'][1]['late_max_centroid_delta_ratio']:.2%}"
+        f" ({extrema['max late centroid delta'][0]});"
+        f" max seam RMS delta={extrema['max seam RMS delta'][1]['max_seam_rms_delta_db']:.2f} dB"
+        f" ({extrema['max seam RMS delta'][0]});"
+        f" max final DC error={extrema['max final DC error'][1]['final_100ms_dc_error']:.2e}"
+        f" ({extrema['max final DC error'][0]})"
+    )
+    for control in ("b1_hard_A4.wav", "b1_hard_C7.wav"):
+        audit = dict(tail_audits)[control]
+        print(
+            f"  {control}: SNR={audit['waveform_snr_db']:.2f} dB,"
+            f" band={audit['max_band_delta_db']:.2f} dB,"
+            f" centroid={audit['centroid_delta_ratio']:.2%},"
+            f" late SNR={audit['late_min_waveform_snr_db']:.2f} dB,"
+            f" late band={audit['late_max_band_delta_db']:.2f} dB,"
+            f" late centroid={audit['late_max_centroid_delta_ratio']:.2%},"
+            f" seam={audit['max_seam_rms_delta_db']:.2f} dB,"
+            f" DC error={audit['final_100ms_dc_error']:.2e}"
+        )
+    failed_audits = [
+        f"{name}: {'; '.join(audit['failures'])}"
+        for name, audit in tail_audits
+        if audit["failures"]
+    ]
+    if failed_audits:
+        raise ValueError(
+            "B1 natural-tail bank audit failed:\n  " + "\n  ".join(failed_audits)
+        )
     publish_b1_bank(
         out_dir,
         {

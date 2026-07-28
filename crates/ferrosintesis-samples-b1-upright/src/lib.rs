@@ -250,8 +250,7 @@ mod tests {
         let mut found = None;
         while pos < declared_end {
             assert!(pos + 8 <= declared_end);
-            let len =
-                u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().unwrap()) as usize;
+            let len = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().unwrap()) as usize;
             let body_start = pos + 8;
             let body_end = body_start.checked_add(len).expect("RIFF chunk overflow");
             let padded_end = body_end + (len & 1);
@@ -269,8 +268,7 @@ mod tests {
                     59_535,
                     "unexpected B1 tail entry"
                 );
-                let source_frames =
-                    u32::from_le_bytes(body[8..12].try_into().unwrap()) as usize;
+                let source_frames = u32::from_le_bytes(body[8..12].try_into().unwrap()) as usize;
                 assert_eq!(
                     body.len() - 12,
                     source_frames.div_ceil(4),
@@ -309,7 +307,10 @@ mod tests {
             assert!(bytes.len() >= 12, "{name} is too short to be a WAV");
             assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
             assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
-            assert!(!b1_tail(bytes).is_empty(), "{name} has an empty natural tail");
+            assert!(
+                !b1_tail(bytes).is_empty(),
+                "{name} has an empty natural tail"
+            );
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(

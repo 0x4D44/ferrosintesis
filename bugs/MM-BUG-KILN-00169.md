@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00169 — Advertised B1 library regeneration deletes natural-tail validation
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** B1 sample crate / regeneration reliability
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260728T234120Z-p63176-n935322400-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00169-run-fix-20260728T234120Z-p63176-n935322400-c1
-- **Owner base:** 9887302d9aed374a958db8079317c2fb367ef48e
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T23:41:20Z
-- **Owner until:** 2026-07-29T01:41:20Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260728T234120Z-p63176-n935322400-c1 branch=task/bug-MM-BUG-KILN-00169-run-fix-20260728T234120Z-p63176-n935322400-c1 code=429720f gate=manual)
 
 ## Observation
 

@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00166 — Steinway rebakes can retain obsolete WAVs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** Steinway sample generation / output inventory
 - **Raised:** 2026-07-28
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260728T232217Z-p36364-n404969000-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00166-run-fix-20260728T232217Z-p36364-n404969000-c1
-- **Owner base:** fc3193dd8ec05995066e1ab5137b76d5e461b3be
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T23:22:17Z
-- **Owner until:** 2026-07-29T01:22:17Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260728T232217Z-p36364-n404969000-c1 branch=task/bug-MM-BUG-KILN-00166-run-fix-20260728T232217Z-p36364-n404969000-c1 code=84c6446 gate=manual)
 
 ## Observation
 

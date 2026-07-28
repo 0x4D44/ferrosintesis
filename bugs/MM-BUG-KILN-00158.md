@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00158 — Published sax crate omits the CC BY 3.0 licence URI
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / licensing
@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00158-run-fix-20260728T031803Z-p57192-n403887300-c85-code-1785211214095
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T031803Z-p57192-n403887300-c85 branch=task/bug-MM-BUG-KILN-00158-run-fix-20260728T031803Z-p57192-n403887300-c85 code=cf82c32e52243975552bbc78e9cb6d801398e50b gate=deltic model=codex@xhigh)
 
 ## Observation
 
@@ -34,6 +34,19 @@
 
 ## Fix
 
-<unfixed — raised only>
+The separately publishable sax sample crate now links its CC BY 3.0 licence in
+the packaged `NOTICE`. The licensing oracle derives every declared CC-BY
+operand for each default sample crate and requires its shipped documents to
+carry the matching canonical URI or legal text.
+
+Regression coverage removes only the sax package's CC BY 3.0 URI and proves
+that its CC BY 4.0 URI cannot satisfy the separate licence layer. That negative
+case failed with `ferrosintesis-samples-sax: CC-BY-3.0`; the fixed tree passed
+all 13 licensing tests.
+
+Focused validation:
+
+- `cargo test -p ferrosintesis licensing::tests` — 13 passed.
+- `deltic integrate --push` — affected-area gate passed and landed code commit `cf82c32e52243975552bbc78e9cb6d801398e50b`.
 
 ## Notes

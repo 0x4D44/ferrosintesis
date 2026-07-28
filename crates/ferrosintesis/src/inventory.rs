@@ -1024,6 +1024,15 @@ mod tests {
             has_scoped_validation_before_source_use(&prepare, "main", "kawai", "KAWAI_SOURCES"),
             "main must validate the Kawai output against KAWAI_SOURCES before using that table"
         );
+        assert!(
+            has_scoped_validation_before_source_use(
+                &prepare,
+                "main",
+                "steinwayb",
+                "STEINWAYB_SOURCES"
+            ),
+            "main must validate the Steinway output against STEINWAYB_SOURCES before using that table"
+        );
     }
 
     #[test]

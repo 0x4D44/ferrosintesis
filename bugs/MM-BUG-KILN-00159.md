@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample assets / sax documentation
 - **Raised:** 2026-07-28
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:claude
+- **Owner role:** verify
+- **Owner run:** verify-20260728T173704Z-p57192-n572381000-c263
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00159-run-verify-20260728T173704Z-p57192-n572381000-c263
+- **Owner base:** 62f5e9024aedfd99935a0cc88e47055af1056eca
+- **Owner fingerprint:** sha256:17193d7db3e2dce872531c16bc9b5ed07822ce1ee8ded8cab8b6bfb1944fa324
+- **Owner since:** 2026-07-28T17:37:04Z
+- **Owner until:** 2026-07-28T18:22:04Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

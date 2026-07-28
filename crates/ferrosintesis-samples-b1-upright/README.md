@@ -33,5 +33,17 @@ equal temperament while keeping the upright's inharmonicity and Railsback stretc
 **Licence: CC0 1.0** — Arthur's own instrument, performance and recording, dedicated
 to the public domain. No attribution required, for source or binary redistribution.
 
-Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=b1upright`
-(decodes the committed opus archive under `samples/b1-upright/`, slices, and bakes).
+Regenerate and verify the complete bank from the repository root:
+
+```powershell
+python3 tools/ferrosintesis-samples/prepare.py --only=b1upright
+python3 tools/ferrosintesis-samples/regen_samples_table.py crates/ferrosintesis-samples-b1-upright
+cargo test -p ferrosintesis-samples-b1-upright
+```
+
+The first command decodes the committed Opus archives under `samples/b1-upright/`,
+slices, and bakes all 52 WAVs. The inventory updater validates every terminal `b1t `
+natural-tail chunk before updating `FILE_COUNT`, `EXPECTED_BYTES`, and
+`EXPECTED_TAIL_BYTES`; review its reported old and new pin values before committing.
+It changes only the marked inventory and derived pins, preserving the handwritten
+B1 tail validator.

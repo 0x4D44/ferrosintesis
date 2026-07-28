@@ -17,6 +17,7 @@ from unittest import mock
 
 import gen_crate_lib
 import prepare
+import regen_samples_table
 
 
 def old_trim(x, sr, keep_s, fade_s):
@@ -2792,6 +2793,73 @@ class KawaiOutputInventoryTest(unittest.TestCase):
 
             ensure_sources.assert_not_called()
             write_output.assert_not_called()
+
+
+class B1InventoryRegenerationTest(unittest.TestCase):
+    """MM-BUG-KILN-00169: B1 regeneration must preserve its natural-tail oracle."""
+
+    @staticmethod
+    def extended_wav(payload=b"\x80"):
+        tail = (
+            bytes((1, 4, 0, 0))
+            + struct.pack("<II", 59_535, len(payload) * 4)
+            + payload
+        )
+        chunk = b"b1t " + struct.pack("<I", len(tail)) + tail
+        chunk += b"\0" * (len(tail) & 1)
+        body = b"WAVE" + chunk
+        return b"RIFF" + struct.pack("<I", len(body)) + body
+
+    def test_refresh_updates_both_pins_without_deleting_b1_tail_assertions(self):
+        bespoke_tail_oracle = """
+    fn b1_tail(bytes: &[u8]) -> &[u8] {
+        assert_eq!(body[0], 1, "unsupported B1 tail version");
+        assert_eq!(body[1], 4, "unsupported B1 tail rate divisor");
+        assert_eq!(&body[2..4], &[0, 0], "nonzero B1 tail reserved field");
+        assert_eq!(padded_end, declared_end, "B1 tail must be terminal");
+        found.expect("missing B1 natural-tail chunk")
+    }
+"""
+        source = """// BEGIN GENERATED SAMPLE INVENTORY
+pub const FILE_COUNT: usize = 1;
+
+static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
+    ("retired.wav", include_bytes!("../samples/retired.wav")),
+];
+// END GENERATED SAMPLE INVENTORY
+
+#[cfg(test)]
+mod tests {
+    const EXPECTED_BYTES: usize = 1;
+    const EXPECTED_TAIL_BYTES: usize = 1;
+""" + bespoke_tail_oracle + "}\n"
+
+        with tempfile.TemporaryDirectory() as crate:
+            os.makedirs(os.path.join(crate, "src"))
+            samples = os.path.join(crate, "samples")
+            os.makedirs(samples)
+            wav = self.extended_wav()
+            with open(os.path.join(samples, "current.wav"), "wb") as f:
+                f.write(wav)
+            lib = os.path.join(crate, "src", "lib.rs")
+            with open(lib, "w", encoding="utf-8", newline="\n") as f:
+                f.write(source)
+
+            with mock.patch.object(
+                regen_samples_table.sys,
+                "argv",
+                ["regen_samples_table.py", crate],
+            ), mock.patch.object(regen_samples_table.subprocess, "run"):
+                regen_samples_table.main()
+
+            with open(lib, encoding="utf-8") as f:
+                refreshed = f.read()
+
+        self.assertIn('"current.wav"', refreshed)
+        self.assertNotIn('"retired.wav"', refreshed)
+        self.assertIn(f"const EXPECTED_BYTES: usize = {len(wav)};", refreshed)
+        self.assertIn("const EXPECTED_TAIL_BYTES: usize = 1;", refreshed)
+        self.assertIn(bespoke_tail_oracle.strip(), refreshed)
 
 
 class BottleLoopTest(unittest.TestCase):

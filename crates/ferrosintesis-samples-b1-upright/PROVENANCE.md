@@ -104,6 +104,12 @@ whose top-octave pitch is unmeasurable — its root falls back to the ET frequen
 
 ```
 python3 tools/ferrosintesis-samples/prepare.py --only=b1upright
+python3 tools/ferrosintesis-samples/regen_samples_table.py crates/ferrosintesis-samples-b1-upright
+cargo test -p ferrosintesis-samples-b1-upright
 ```
 
-Pure stdlib Python plus `ropusdec` on PATH (to decode the opus archive).
+Pure stdlib Python plus `ropusdec` on PATH (to decode the Opus archives). The
+inventory updater strictly validates every terminal `b1t ` chunk, then reports and
+updates `FILE_COUNT`, `EXPECTED_BYTES`, and `EXPECTED_TAIL_BYTES`. Review those
+old/new values after the full-bank bake. Only the marked inventory and derived
+pins change; the handwritten natural-tail oracle remains intact.

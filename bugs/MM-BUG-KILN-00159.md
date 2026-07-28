@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample assets / sax documentation
 - **Raised:** 2026-07-28
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:gpt-5.5
+- **Owner role:** fix
+- **Owner run:** fix-20260728T040109Z-p57192-n646860400-c93
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00159-run-fix-20260728T040109Z-p57192-n646860400-c93
+- **Owner base:** 4bd6a5691900ed63e620eae8a13345a3e6167eae
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-28T04:01:09Z
+- **Owner until:** 2026-07-28T04:46:09Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

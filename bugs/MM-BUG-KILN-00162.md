@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00162 — Kawai logical layer aliases duplicate one-third of packaged and decoded PCM
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** Kawai sample package / memory and package size
 - **Raised:** 2026-07-28
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260728T214613Z-p27608-n422372700-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00162-run-fix-20260728T214613Z-p27608-n422372700-c1
-- **Owner base:** c55a1ff0d2e83de3947b2fb478110f3a6ac30c25
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T21:46:13Z
-- **Owner until:** 2026-07-28T23:46:13Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T214613Z-p27608-n422372700-c1 branch=task/bug-MM-BUG-KILN-00162-run-fix-20260728T214613Z-p27608-n422372700-c1 code=364ca8f05dd1631ddb290d637a3842be2fc63d91 gate=manual)
 
 ## Observation
 

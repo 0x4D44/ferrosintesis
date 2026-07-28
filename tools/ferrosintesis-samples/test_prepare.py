@@ -2661,6 +2661,63 @@ class KawaiAliasDeduplicationTest(unittest.TestCase):
             )
 
 
+class SteinwayAliasDeduplicationTest(unittest.TestCase):
+    """MM-BUG-KILN-00165: logical cells must not duplicate physical payloads."""
+
+    ALIASES_PATH = os.path.join(
+        prepare.REPO_ROOT,
+        "crates",
+        "ferrosintesis-samples-vcsl-steinway",
+        "ALIASES",
+    )
+
+    def assert_aliases_cover_logical_sources(self, physical, aliases):
+        expected_physical, expected_aliases = prepare._canonicalize_source_aliases(
+            prepare._STEINWAYB_LOGICAL_SOURCES
+        )
+        self.assertEqual(physical, expected_physical)
+        self.assertEqual(aliases, expected_aliases)
+
+    def test_packaged_sources_do_not_repeat_upstream_payloads(self):
+        urls = list(prepare.STEINWAYB_SOURCES.values())
+        self.assertEqual(
+            len(urls),
+            len(set(urls)),
+            "STEINWAYB_SOURCES must name each physical upstream payload once",
+        )
+
+    def test_declared_aliases_exactly_cover_repeated_logical_sources(self):
+        expected_physical, expected_aliases = prepare._canonicalize_source_aliases(
+            prepare._STEINWAYB_LOGICAL_SOURCES
+        )
+        self.assert_aliases_cover_logical_sources(
+            prepare.STEINWAYB_SOURCES,
+            prepare.STEINWAYB_ALIASES,
+        )
+        self.assertEqual(len(expected_physical), 27)
+        self.assertEqual(len(expected_aliases), 27)
+        self.assertEqual(
+            gen_crate_lib.read_aliases(
+                os.path.dirname(self.ALIASES_PATH),
+                sorted(expected_physical),
+            ),
+            expected_aliases,
+            "the package alias manifest must be derived from the bake source map",
+        )
+
+    def test_missing_alias_is_rejected_by_the_source_derived_oracle(self):
+        _, expected = prepare._canonicalize_source_aliases(
+            prepare._STEINWAYB_LOGICAL_SOURCES
+        )
+        incomplete = dict(expected)
+        incomplete.pop("steinwayb_C2_mf.wav")
+        with self.assertRaises(AssertionError):
+            self.assert_aliases_cover_logical_sources(
+                prepare.STEINWAYB_SOURCES,
+                incomplete,
+            )
+
+
 class KawaiOutputInventoryTest(unittest.TestCase):
     """MM-BUG-KILN-00163: rebakes must reject retired Kawai outputs."""
 

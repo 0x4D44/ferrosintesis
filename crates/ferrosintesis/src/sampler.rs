@@ -1281,20 +1281,7 @@ fn steinwayb_pp_rr2() -> &'static [Zone] {
 }
 
 fn steinwayb_mf() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "steinwayb_C2_mf.wav" => 65.79,
-            "steinwayb_F#2_mf.wav" => 92.40,
-            "steinwayb_C3_mf.wav" => 131.27,
-            "steinwayb_F#3_mf.wav" => 185.91,
-            "steinwayb_C4_mf.wav" => 262.92,
-            "steinwayb_F#4_mf.wav" => 372.55,
-            "steinwayb_C5_mf.wav" => 526.49,
-            "steinwayb_F#5_mf.wav" => 740.67,
-            "steinwayb_C6_mf.wav" => 1049.34,
-        )
-    })
+    steinwayb_pp_rr2()
 }
 
 fn steinwayb_mf_rr2() -> &'static [Zone] {
@@ -1315,37 +1302,11 @@ fn steinwayb_mf_rr2() -> &'static [Zone] {
 }
 
 fn steinwayb_f() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "steinwayb_C2_f.wav" => 65.67,
-            "steinwayb_F#2_f.wav" => 92.39,
-            "steinwayb_C3_f.wav" => 131.39,
-            "steinwayb_F#3_f.wav" => 185.95,
-            "steinwayb_C4_f.wav" => 262.84,
-            "steinwayb_F#4_f.wav" => 372.49,
-            "steinwayb_C5_f.wav" => 526.67,
-            "steinwayb_F#5_f.wav" => 743.63,
-            "steinwayb_C6_f.wav" => 1049.46,
-        )
-    })
+    steinwayb_mf_rr2()
 }
 
 fn steinwayb_f_rr2() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "steinwayb_C2_f_rr2.wav" => 65.79,
-            "steinwayb_F#2_f_rr2.wav" => 92.40,
-            "steinwayb_C3_f_rr2.wav" => 131.27,
-            "steinwayb_F#3_f_rr2.wav" => 185.91,
-            "steinwayb_C4_f_rr2.wav" => 262.92,
-            "steinwayb_F#4_f_rr2.wav" => 372.55,
-            "steinwayb_C5_f_rr2.wav" => 526.49,
-            "steinwayb_F#5_f_rr2.wav" => 740.67,
-            "steinwayb_C6_f_rr2.wav" => 1049.34,
-        )
-    })
+    steinwayb_pp_rr2()
 }
 
 /// Velocity picks the dynamic layer; the seed alternates round robins, exactly
@@ -7330,6 +7291,25 @@ mod tests {
         assert!(
             std::ptr::eq(kawai_mf_rr2(), kawai_f_rr2()),
             "Kawai mf RR2 and f RR2 are the same upstream velocity layer"
+        );
+    }
+
+    #[test]
+    fn steinway_logical_aliases_share_decoded_banks() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        assert!(
+            std::ptr::eq(steinwayb_pp_rr2(), steinwayb_mf()),
+            "Steinway pp RR2 and mf RR1 are the same upstream velocity layer"
+        );
+        assert!(
+            std::ptr::eq(steinwayb_mf_rr2(), steinwayb_f()),
+            "Steinway mf RR2 and f RR1 are the same upstream velocity layer"
+        );
+        assert!(
+            std::ptr::eq(steinwayb_pp_rr2(), steinwayb_f_rr2()),
+            "Steinway pp RR2 and f RR2 are the same upstream velocity layer"
         );
     }
 

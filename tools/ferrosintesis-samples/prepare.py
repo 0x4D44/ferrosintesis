@@ -716,13 +716,16 @@ _STEINWAYB_ZONES = ["C2", "F#2", "C3", "F#3", "C4", "F#4", "C5", "F#5", "C6"]
 # dynamic -> (RR1 velocity layer, RR2 velocity layer). vl4 has no higher neighbour,
 # so f's RR2 borrows vl3 (a softer strike at the same normalized level).
 _STEINWAYB_VEL = {"pp": (2, 3), "mf": (3, 4), "f": (4, 3)}
-STEINWAYB_SOURCES = {
+_STEINWAYB_LOGICAL_SOURCES = {
     f"steinwayb_{z}_{d}{rr}.wav":
         f"{_VCSL_STEINWAY_BASE}/JHPiano_Sus_Close_{z.replace('#', '%23')}_vl{v}_rr1.wav"
     for z in _STEINWAYB_ZONES
     for d, (v_rr1, v_rr2) in _STEINWAYB_VEL.items()
     for rr, v in (("", v_rr1), ("_rr2", v_rr2))
 }
+STEINWAYB_SOURCES, STEINWAYB_ALIASES = _canonicalize_source_aliases(
+    _STEINWAYB_LOGICAL_SOURCES
+)
 
 # VCSL "Grand Piano, Kawai" (CC0) -> the GM 1 Bright Acoustic default (not GM0 at
 # all). A darker, rounder vintage grand.

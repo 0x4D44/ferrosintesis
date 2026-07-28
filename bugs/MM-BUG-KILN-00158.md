@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** packaging / licensing
 - **Raised:** 2026-07-28
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260728T031803Z-p57192-n403887300-c85
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00158-run-fix-20260728T031803Z-p57192-n403887300-c85
-- **Owner base:** 2fbf85b37166d6a316946ce369e092f2350a1133
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T03:18:03Z
-- **Owner until:** 2026-07-28T04:03:03Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00158-run-fix-20260728T031803Z-p57192-n403887300-c85-code-1785211214095
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)

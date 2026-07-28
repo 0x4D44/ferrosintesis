@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00159 — Published sax provenance describes the retired onset-only voice
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / sax documentation
@@ -15,10 +15,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00159-run-fix-20260728T040109Z-p57192-n646860400-c93-code-1785213404434
+- **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T040109Z-p57192-n646860400-c93 branch=task/bug-MM-BUG-KILN-00159-run-fix-20260728T040109Z-p57192-n646860400-c93 code=0df7aa7c3dae8e9851afd7dba024d9321d02c2ba gate=deltic model=codex@xhigh)
 
 ## Observation
 
@@ -34,6 +34,18 @@
 
 ## Fix
 
-<unfixed — raised only>
+The sax crate README, provenance, notice, rustdoc, and generator comments now
+describe the active default voice: recorded attack followed by a
+pitch-synchronous loop of recorded sustain. They identify the modeled reed only
+as the `--no-samples` or unusable-loop fallback.
+
+Restoring the obsolete “LA sample layer” wording in the real README made the
+source-scanning regression fail; the corrected tree passed both the focused test
+and Deltic’s final combined sax gate.
+
+Focused validation:
+
+- `cargo test -p ferrosintesis sax_published_docs_describe_the_looped_recording_voice` — passed.
+- `deltic integrate --push` — affected-area gate passed and landed code commit `0df7aa7c3dae8e9851afd7dba024d9321d02c2ba`.
 
 ## Notes

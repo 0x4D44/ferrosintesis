@@ -780,6 +780,13 @@ mod tests {
             .collect()
     }
 
+    fn packaged_documents_text(docs: &[(String, String)]) -> String {
+        docs.iter()
+            .map(|(name, text)| format!("--- {name} ---\n{text}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     fn manifest_include_items(krate: &str) -> Vec<String> {
         let manifest = read(&crates_dir().join(krate).join("Cargo.toml"));
         let mut include = String::new();
@@ -820,6 +827,87 @@ mod tests {
              {include}"
         );
         out
+    }
+
+    fn cc_by_canonical_uri(license_id: &str) -> Option<&'static str> {
+        match license_id {
+            "CC-BY-3.0" => Some("https://creativecommons.org/licenses/by/3.0/"),
+            "CC-BY-4.0" => Some("https://creativecommons.org/licenses/by/4.0/"),
+            _ => None,
+        }
+    }
+
+    fn cc_by_legal_text_marker(license_id: &str) -> Option<&'static str> {
+        match license_id {
+            "CC-BY-3.0" => Some("Creative Commons Attribution 3.0 Unported"),
+            "CC-BY-4.0" => Some("Creative Commons Attribution 4.0 International Public License"),
+            _ => None,
+        }
+    }
+
+    fn missing_cc_by_license_documents<'a>(docs: &str, declared_license: &'a str) -> Vec<&'a str> {
+        license_terms(declared_license)
+            .into_iter()
+            .filter(|license_id| license_id.starts_with("CC-BY-"))
+            .filter(|license_id| {
+                let uri_present =
+                    cc_by_canonical_uri(license_id).is_some_and(|uri| docs.contains(uri));
+                let legal_text_present =
+                    cc_by_legal_text_marker(license_id).is_some_and(|marker| docs.contains(marker));
+                !(uri_present || legal_text_present)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn cc_by_sample_banks_package_license_uri_or_text() {
+        let mut incomplete = Vec::new();
+        for krate in default_sample_crates() {
+            let license = declared_license(&krate);
+            if !license_terms(&license)
+                .into_iter()
+                .any(|license_id| license_id.starts_with("CC-BY-"))
+            {
+                continue;
+            }
+
+            let docs = packaged_bank_documents(&krate);
+            assert!(
+                !docs.is_empty(),
+                "{krate} declares {license} audio but packages no README/NOTICE/COPYING/LICENSE \
+                 document carrying the upstream terms"
+            );
+            let missing =
+                missing_cc_by_license_documents(&packaged_documents_text(&docs), &license);
+            if !missing.is_empty() {
+                incomplete.push(format!("{krate}: {}", missing.join(", ")));
+            }
+        }
+
+        assert!(
+            incomplete.is_empty(),
+            "CC BY sample bank package(s) omit the licence URI or legal text required by \
+             their declared licence:\n  {}",
+            incomplete.join("\n  ")
+        );
+    }
+
+    #[test]
+    fn sax_cc_by_3_uri_is_required_independently_of_cc_by_4_uri() {
+        let krate = "ferrosintesis-samples-sax";
+        let license = declared_license(krate);
+        let docs = packaged_documents_text(&packaged_bank_documents(krate));
+        assert!(
+            missing_cc_by_license_documents(&docs, &license).is_empty(),
+            "the checked-in sax package must carry every declared CC BY licence URI or text"
+        );
+
+        let without_cc_by_3_uri = docs.replace("https://creativecommons.org/licenses/by/3.0/", "");
+        assert_eq!(
+            missing_cc_by_license_documents(&without_cc_by_3_uri, &license),
+            vec!["CC-BY-3.0"],
+            "a CC BY 4.0 URI must not satisfy the sax package's independent CC BY 3.0 layer"
+        );
     }
 
     fn missing_mit_notice_requirements(docs: &str, provenance: &str) -> Vec<&'static str> {
@@ -900,11 +988,7 @@ mod tests {
                 "{krate} declares MIT audio but packages no README/NOTICE/COPYING/LICENSE \
                  document carrying the upstream terms"
             );
-            let packaged_text = docs
-                .iter()
-                .map(|(name, text)| format!("--- {name} ---\n{text}"))
-                .collect::<Vec<_>>()
-                .join("\n");
+            let packaged_text = packaged_documents_text(&docs);
             let provenance = read(&crates_dir().join(&krate).join("PROVENANCE.md"));
             let missing = missing_mit_notice_requirements(&packaged_text, &provenance);
             if !missing.is_empty() {

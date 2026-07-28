@@ -3743,6 +3743,26 @@ def _b1_pilot_package_projection(projection):
 
 
 def _build_b1_sustain_pilot(output_dir, decode_dir):
+    output_dir = validate_b1_pilot_output_dir(output_dir)
+    artifact_suffixes = (
+        "natural-archive",
+        "current-sample-only",
+        "candidate-bounded",
+        "candidate",
+        "candidate-EXTRAPOLATED-10s",
+        "candidate-minus2",
+        "candidate-plus2",
+        "release-body",
+        "release-first-pass",
+        "release-loop",
+    )
+    expected_artifacts = {
+        f"{layer}-{note}-{suffix}.wav"
+        for layer, note in B1_PILOT_ZONES
+        for suffix in artifact_suffixes
+    }
+    _validate_generated_output_inventory(
+        None, expected_artifacts, output_dir=output_dir)
     sample_dir = os.path.join(
         REPO_ROOT,
         "crates",
@@ -5194,25 +5214,32 @@ def _validate_only_families(only):
 
 
 def _validate_generated_output_inventory(family, expected, repo_root=None, output_dir=None):
-    """Fail closed when a package retains an obsolete family-owned WAV."""
+    """Fail closed when an output retains an obsolete generated WAV.
+
+    `family=None` validates every WAV in a complete disposable output directory;
+    packaged banks pass their filename prefix and validate only that family.
+    """
     expected = set(expected)
     root = REPO_ROOT if repo_root is None else repo_root
     out_dir = (
         os.path.dirname(sample_output_path(f"{family}_.wav", root))
-        if output_dir is None
+        if output_dir is None and family is not None
         else output_dir
     )
+    if out_dir is None:
+        raise ValueError("complete generated-output validation requires output_dir")
     if not os.path.isdir(out_dir):
         return
     unexpected = sorted(
         name for name in os.listdir(out_dir)
-        if name.startswith(f"{family}_")
-        and name.endswith(".wav")
+        if name.endswith(".wav")
+        and (family is None or name.startswith(f"{family}_"))
         and name not in expected
     )
     if unexpected:
+        label = "generated" if family is None else f"{family} output"
         raise ValueError(
-            f"{family} output contains unexpected generated WAVs: "
+            f"{label} contains unexpected generated WAVs: "
             + ", ".join(unexpected)
         )
 

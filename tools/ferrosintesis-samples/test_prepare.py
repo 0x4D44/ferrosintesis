@@ -2199,6 +2199,15 @@ class UpstreamRefsArePinnedTest(unittest.TestCase):
 class GeneratedOutputFamiliesTest(unittest.TestCase):
     """The shared validator fails closed for empty and multi-family plans."""
 
+    def test_complete_directory_rejects_an_unexpected_generated_wav(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            open(os.path.join(out_dir, "accepted.wav"), "wb").close()
+            open(os.path.join(out_dir, "stale.wav"), "wb").close()
+            open(os.path.join(out_dir, "report.json"), "wb").close()
+            with self.assertRaisesRegex(ValueError, r"stale\.wav"):
+                prepare._validate_generated_output_inventory(
+                    None, {"accepted.wav"}, output_dir=out_dir)
+
     def test_empty_expected_set_still_rejects_a_stale_owned_output(self):
         with tempfile.TemporaryDirectory() as out_dir:
             open(os.path.join(out_dir, "sax_old.wav"), "wb").close()

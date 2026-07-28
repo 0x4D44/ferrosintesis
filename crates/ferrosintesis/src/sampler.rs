@@ -15,12 +15,14 @@ use std::sync::OnceLock;
 pub struct Zone {
     root: f32,
     data: Vec<f32>,
+    #[cfg(feature = "embedded-samples")]
     b1_tail: Option<B1Tail>,
     /// Memoized pitch-synchronous sustain-loop bounds — see [`Zone::sustain_loop`].
     /// `Some(None)` means "searched, no usable loop"; that verdict is cached too.
     sustain_loop: OnceLock<Option<(usize, usize)>>,
 }
 
+#[cfg(feature = "embedded-samples")]
 struct B1Tail {
     entry_frame: usize,
     rate_divisor: usize,
@@ -28,6 +30,7 @@ struct B1Tail {
     data: Vec<f32>,
 }
 
+#[cfg(feature = "embedded-samples")]
 const B1_TAIL_END_FADE_FRAMES: f32 = 0.080 * 44_100.0;
 
 /// A pitch-synchronous sustain-loop search: `(zone PCM, zone root Hz)` in,
@@ -79,6 +82,7 @@ fn parse_wav(bytes: &[u8]) -> Vec<f32> {
     data
 }
 
+#[cfg(feature = "embedded-samples")]
 fn decode_b1_tail_code(code: u8) -> f32 {
     let value = code as f64 / 127.5 - 1.0;
     if value == 0.0 {
@@ -88,6 +92,7 @@ fn decode_b1_tail_code(code: u8) -> f32 {
     }
 }
 
+#[cfg(feature = "embedded-samples")]
 fn parse_b1_tail(bytes: &[u8], pcm_frames: usize) -> Result<B1Tail, &'static str> {
     if bytes.len() < 12 || &bytes[..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return Err("B1 asset is not RIFF/WAVE");
@@ -325,6 +330,7 @@ macro_rules! bank {
         vec![$(Zone {
             root: $root,
             data: parse_wav(embedded_wav($file)),
+            #[cfg(feature = "embedded-samples")]
             b1_tail: None,
             sustain_loop: OnceLock::new(),
         }),+]
@@ -338,6 +344,7 @@ macro_rules! b1_bank {
         vec![$({
             let bytes = embedded_wav($file);
             let data = parse_wav(bytes);
+            #[cfg(feature = "embedded-samples")]
             let b1_tail = parse_b1_tail(bytes, data.len())
                 .unwrap_or_else(|error| panic!("{}: {error}", $file));
             #[cfg(test)]
@@ -345,6 +352,7 @@ macro_rules! b1_bank {
             Zone {
                 root: $root,
                 data,
+                #[cfg(feature = "embedded-samples")]
                 b1_tail: Some(b1_tail),
                 sustain_loop: OnceLock::new(),
             }
@@ -3400,13 +3408,9 @@ pub const GUITAR_VAR: OnsetVar = OnsetVar {
 ///   across every wrapped program).
 /// - `[fade_end, ∞)`: the MODEL owns the sustain.
 ///
-/// [`LaVoice::wrap_release_b1`] is a measured piano exception: that recording
-/// decays faster and can be strongly anti-correlated with its randomized model
-/// during the handoff, so it phase-corrects the sample, overlaps a slightly
-/// earlier model ramp, and normalizes destructive overlap from a local
-/// correlation estimate. [`LaVoice::wrap_additive_limited`] is the bass-only
-/// exception: the model stays live and the sample is a short overlay. Every
-/// general wrapper retains the one-owner contract.
+/// [`LaVoice::wrap_additive_limited`] is the bass-only exception: the model
+/// stays live and the sample is a short overlay. Every general wrapper retains
+/// the one-owner contract.
 pub struct LaVoice {
     sustain: Box<dyn Voice>,
     zone: &'static Zone,
@@ -3429,27 +3433,6 @@ pub struct LaVoice {
     t: usize,
     fade_start: usize,
     fade_end: usize,
-    /// Shape the B1 handoff for its measured phase and decay mismatch: invert
-    /// the sample polarity, let the model rise from note start, and normalize
-    /// destructive overlap from a local energy/correlation estimate. The
-    /// polarity flip is inaudible for the isolated onset; the adaptive
-    /// normalization makes the overlap independent of the randomized model
-    /// phase (MM-BUG-KILN-00130/00133).
-    b1_phase_robust_fade: bool,
-    /// Local raw sample/model energy and cross-correlation for the B1-only
-    /// phase-robust handoff. Raw owner signals are tracked so the compensation
-    /// is exactly unity when either crossfade weight reaches zero.
-    b1_sample_power: f32,
-    b1_model_power: f32,
-    b1_cross_power: f32,
-    b1_power_alpha: f32,
-    /// Separate modeled rise endpoint. The B1 wrapper preserves the established
-    /// 10%-faster rise over keys 36-50, where it keeps the recorded piano
-    /// distinct, and brings the model in before sample retirement elsewhere.
-    b1_model_fade_end: usize,
-    /// B1 freezes its handoff weights at key-up so equal-rate damper decay
-    /// cannot be distorted by a moving sample/model ratio during the gap.
-    fade_hold: Option<usize>,
     /// Start and duration of the slur handover. A transient cannot be
     /// released while the replacement model is still suppressed: this promotes
     /// the model with the same smooth weight that retires the sample.
@@ -3523,10 +3506,6 @@ pub(crate) const DEFAULT_LA_RELEASE_T60: f32 = 0.06;
 /// A slur must retire the old-pitch transient quickly regardless of the
 /// instrument's note-off damping (piano dampers can otherwise stretch to seconds).
 const LA_SLUR_HANDOVER_S: f32 = 0.06;
-/// Fixed weak-coherence target for the B1 overlap power. The cross term is
-/// `2ρab√(PsPm)`, so 0.60 means ρ=0.30: neither a fully coherent boost nor an
-/// uncorrelated power dip.
-const B1_TARGET_CROSS_COEFF: f32 = 0.60;
 const DEFAULT_MAX_UP_RATIO: f32 = 2.05;
 
 impl LaVoice {
@@ -3745,43 +3724,6 @@ impl LaVoice {
         }
     }
 
-    /// B1-upright-specific release wrapper with its measured phase-robust
-    /// handoff. Crate-private so this exceptional blend is not a general API.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn wrap_release_b1(
-        sustain: Box<dyn Voice>,
-        zones: &'static [Zone],
-        key: u8,
-        vel: u8,
-        sr: f32,
-        gain: f32,
-        fade: (f32, f32),
-        release_t60: f32,
-    ) -> Box<dyn Voice> {
-        match Self::build(
-            sustain,
-            zones,
-            key,
-            vel,
-            sr,
-            gain,
-            fade,
-            LaFx::default(),
-            release_t60,
-            LaBlend::Replacement,
-            DEFAULT_MAX_UP_RATIO,
-        ) {
-            Ok(mut la) => {
-                la.b1_phase_robust_fade = true;
-                if (36..=50).contains(&key) {
-                    la.b1_model_fade_end = la.fade_end - (la.fade_end - la.fade_start) / 10;
-                }
-                Box::new(la)
-            }
-            Err(model) => model,
-        }
-    }
-
     /// [`Self::wrap_fx`] plus per-note onset variation (guitar-realism HLD
     /// §4) — the two acoustic-guitar arms only. Draws detune (locked across
     /// sample AND model), onset delay, and gain jitter from the voice seed.
@@ -3948,15 +3890,6 @@ impl LaVoice {
             t: 0,
             fade_start,
             fade_end,
-            b1_phase_robust_fade: false,
-            b1_sample_power: 0.0,
-            b1_model_power: 0.0,
-            b1_cross_power: 0.0,
-            // 20 ms one-pole: long enough not to follow individual piano
-            // cycles, short enough to follow either B1 handoff window.
-            b1_power_alpha: 1.0 - (-1.0 / (0.020 * sr)).exp(),
-            b1_model_fade_end,
-            fade_hold: None,
             transient_handover: None,
             transient_handover_len: (LA_SLUR_HANDOVER_S * sr) as usize,
             blend,
@@ -3988,19 +3921,16 @@ impl Voice for LaVoice {
         let mut sample_live = false;
         for (i, o) in out.iter_mut().enumerate() {
             let t = self.t + i;
-            let blend_t = self.fade_hold.unwrap_or(t);
             // §2.7 default: one sum-to-one crossfade weight — model discarded
             // before fade_start, sole owner after fade_end. The bass additive
             // mode keeps the model live and uses the same smooth sample taper.
             let base_u = if self.blend == LaBlend::Additive {
-                smooth(blend_t as f32 / self.fade_end.max(1) as f32)
+                smooth(t as f32 / self.fade_end.max(1) as f32)
             } else {
-                smooth((blend_t as f32 - self.fade_start as f32) / fade_len)
+                smooth((t as f32 - self.fade_start as f32) / fade_len)
             };
             let base_model_weight = if self.blend == LaBlend::Additive {
                 1.0
-            } else if self.b1_phase_robust_fade {
-                smooth(blend_t as f32 / self.b1_model_fade_end.max(1) as f32)
             } else {
                 base_u
             };
@@ -4016,9 +3946,7 @@ impl Voice for LaVoice {
             } else {
                 (base_u, base_model_weight)
             };
-            let model_raw = self.buf[i];
-            let mut sample_raw = 0.0;
-            let mut s = model_raw * model_weight;
+            let mut s = self.buf[i] * model_weight;
             let j = self.pos as usize;
             if t >= self.start && t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
                 sample_live = true;
@@ -4127,11 +4055,9 @@ impl Voice for LaVoice {
     fn legato_to(&mut self, key: u8, vel: u8) -> bool {
         // a slur has no fresh attack: retire the transient, glide the model
         if self.sustain.legato_to(key, vel) {
-            self.fade_hold = None;
             if self.t < self.fade_end && self.transient_handover.is_none() {
                 self.transient_handover = Some((self.t, self.transient_handover_len));
             }
-            self.rel_mul = self.rel_t60_mul;
             true
         } else {
             false
@@ -4182,7 +4108,6 @@ impl Voice for LaVoice {
             // Re-arm the onset: restart the crossfade clock and the read head,
             // and undo any release decay so the new stroke is at full level.
             self.t = 0;
-            self.fade_hold = None;
             self.transient_handover = None;
             self.pos = 0.0;
             self.pos2 = 220.0;
@@ -8926,6 +8851,8 @@ mod tests {
             vec![Zone {
                 root: key_freq(60),
                 data: vec![1.0; 44100],
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
                 sustain_loop: OnceLock::new(),
             }]
             .into_boxed_slice(),

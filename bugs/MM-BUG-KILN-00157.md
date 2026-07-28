@@ -5,17 +5,17 @@
 - **Severity:** Medium
 - **Area:** sample generation / sax cache
 - **Raised:** 2026-07-28
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260728T030703Z-p57192-n099327800-c79
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79
-- **Owner base:** 1f8fde4624a0312692e79565979d2faf763fa99e
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T03:07:03Z
-- **Owner until:** 2026-07-28T03:52:03Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
-- **Held branch:** -
+- **Held branch:** host-local:KILN:task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79-code-1785208641196
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)

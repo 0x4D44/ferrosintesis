@@ -14,6 +14,7 @@ python tools/ferrosintesis-samples/prepare.py
 """
 
 import hashlib
+import io
 import json
 import math
 import os
@@ -2277,6 +2278,12 @@ _B1_NAME_RE = re.compile(r"^b1_(normal|hard)_[A-G]#?[0-8]\.wav$")
 _B1_LAYER_COUNTS = {"normal": 25, "hard": 27}
 B1_BODY_S = 1.5
 B1_END_FADE_S = 0.010
+B1_TAIL_ENTRY_FRAME = 59_535
+B1_TAIL_RATE_DIVISOR = 4
+B1_TAIL_CUTOFF_HZ = 4_800.0
+B1_TAIL_MU = 255.0
+B1_TAIL_CHUNK = b"b1t "
+B1_TAIL_VERSION = 1
 B1_PILOT_REAP_ENV = 1e-4
 B1_PILOT_PACKAGE_LIMIT = 10 * 1024 * 1024
 B1_PILOT_MIN_HEADROOM = 0.05
@@ -2351,6 +2358,285 @@ def prepare_b1_archival(x, sr):
     body_peak = max(abs(v) for v in body)
     gain = 0.9 / body_peak if body_peak > 0.0 else 1.0
     return [v * gain for v in seg], gain
+
+
+def _b1_tail_filter():
+    """The accepted probe's normalized 63-tap, 4.8 kHz Hamming-windowed sinc."""
+    count = 63
+    midpoint = count // 2
+    cutoff = B1_TAIL_CUTOFF_HZ / OUT_SR
+    taps = []
+    for n in range(count):
+        k = n - midpoint
+        value = (
+            2.0 * cutoff
+            if k == 0
+            else math.sin(2.0 * math.pi * cutoff * k) / (math.pi * k)
+        )
+        value *= 0.54 - 0.46 * math.cos(2.0 * math.pi * n / (count - 1))
+        taps.append(value)
+    scale = sum(taps)
+    return [value / scale for value in taps]
+
+
+def decimate_b1_tail(samples):
+    """Low-pass and take phase-anchored frames 0,4,8,... exactly as auditioned."""
+    taps = _b1_tail_filter()
+    midpoint = len(taps) // 2
+    output = []
+    for center in range(0, len(samples), B1_TAIL_RATE_DIVISOR):
+        value = 0.0
+        for n, coefficient in enumerate(taps):
+            source = center + n - midpoint
+            if 0 <= source < len(samples):
+                value += coefficient * samples[source]
+        output.append(value)
+    return output
+
+
+def compand_b1_tail(samples):
+    """Encode the accepted continuous mu=255 law as one ties-to-even byte/sample."""
+    denominator = math.log1p(B1_TAIL_MU)
+    output = bytearray()
+    for value in samples:
+        value = max(-1.0, min(1.0, value))
+        encoded = (
+            math.copysign(
+                math.log1p(B1_TAIL_MU * abs(value)) / denominator,
+                value,
+            )
+            if value
+            else 0.0
+        )
+        quantized = round((encoded + 1.0) * 127.5)
+        output.append(max(0, min(255, quantized)))
+    return bytes(output)
+
+
+def decode_b1_tail(payload):
+    """Reference inverse used by baker tests and end-to-end diagnostics."""
+    denominator = math.log1p(B1_TAIL_MU)
+    output = []
+    for quantized in payload:
+        value = quantized / 127.5 - 1.0
+        output.append(
+            math.copysign(
+                math.expm1(abs(value) * denominator) / B1_TAIL_MU,
+                value,
+            )
+            if value
+            else 0.0
+        )
+    return output
+
+
+def _b1_has_zero_run(samples, frames):
+    run = 0
+    for value in samples:
+        run = run + 1 if value == 0.0 else 0
+        if run >= frames:
+            return True
+    return False
+
+
+def prepare_b1_tail(archival):
+    """Build one non-looping compact tail from an onset-aligned normalized note."""
+    if len(archival) <= B1_TAIL_ENTRY_FRAME:
+        raise ValueError("B1 archival note ends before the natural-tail entry")
+    source = archival[B1_TAIL_ENTRY_FRAME:]
+    if _b1_has_zero_run(source, round(0.010 * OUT_SR)):
+        raise ValueError("B1 natural tail contains at least 10 ms of exact-zero padding")
+    return compand_b1_tail(decimate_b1_tail(source)), len(source)
+
+
+def _walk_b1_riff(wav_bytes, require_tail):
+    """Strictly inspect one PCM B1 RIFF and optionally require its custom tail."""
+    if len(wav_bytes) < 12 or wav_bytes[:4] != b"RIFF" or wav_bytes[8:12] != b"WAVE":
+        raise ValueError("B1 asset is not a RIFF/WAVE file")
+    declared_end = 8 + struct.unpack_from("<I", wav_bytes, 4)[0]
+    if declared_end > len(wav_bytes):
+        raise ValueError("B1 RIFF is truncated")
+    if declared_end < len(wav_bytes):
+        raise ValueError("B1 asset has bytes beyond RIFF")
+
+    fmt_chunks = []
+    data_chunks = []
+    tail_chunks = []
+    pos = 12
+    while pos < declared_end:
+        if declared_end - pos < 8:
+            raise ValueError("B1 RIFF has a truncated chunk header")
+        chunk_id = wav_bytes[pos:pos + 4]
+        chunk_len = struct.unpack_from("<I", wav_bytes, pos + 4)[0]
+        body_start = pos + 8
+        body_end = body_start + chunk_len
+        padded_end = body_end + (chunk_len & 1)
+        if body_end < body_start or padded_end > declared_end:
+            raise ValueError("B1 RIFF has a truncated or oversized chunk")
+        if chunk_len & 1 and wav_bytes[body_end] != 0:
+            raise ValueError("B1 RIFF odd chunk has a nonzero pad byte")
+        body = wav_bytes[body_start:body_end]
+        if chunk_id == b"fmt ":
+            fmt_chunks.append(body)
+        elif chunk_id == b"data":
+            data_chunks.append(body)
+        elif chunk_id == B1_TAIL_CHUNK:
+            tail_chunks.append((body, padded_end == declared_end))
+        pos = padded_end
+    if pos != declared_end:
+        raise ValueError("B1 RIFF traversal did not end on its declared boundary")
+    if len(fmt_chunks) != 1 or len(data_chunks) != 1:
+        raise ValueError("B1 RIFF requires exactly one fmt and one data chunk")
+
+    fmt = fmt_chunks[0]
+    if len(fmt) < 16:
+        raise ValueError("B1 RIFF fmt chunk is truncated")
+    audio_format, channels, sample_rate = struct.unpack_from("<HHI", fmt)
+    block_align, bits = struct.unpack_from("<HH", fmt, 12)
+    if (
+        audio_format != 1
+        or channels != 1
+        or sample_rate != OUT_SR
+        or block_align != 2
+        or bits != 16
+    ):
+        raise ValueError("B1 body must be PCM16 mono 44.1 kHz")
+    pcm_data = data_chunks[0]
+    if not pcm_data or len(pcm_data) & 1:
+        raise ValueError("B1 PCM body is empty or has a partial frame")
+
+    if len(tail_chunks) > 1:
+        raise ValueError("B1 RIFF contains a duplicate natural-tail chunk")
+    if not tail_chunks:
+        if require_tail:
+            raise ValueError("B1 RIFF is missing its natural-tail chunk")
+        return {"pcm_data": pcm_data, "tail": None}
+    tail, terminal = tail_chunks[0]
+    if not terminal:
+        raise ValueError("B1 natural-tail chunk must be terminal")
+    if len(tail) < 13:
+        raise ValueError("B1 natural-tail chunk is truncated or empty")
+    version, divisor, reserved, entry_frame = struct.unpack_from("<BBHI", tail)
+    if version != B1_TAIL_VERSION:
+        raise ValueError(f"unsupported B1 natural-tail version {version}")
+    if divisor != B1_TAIL_RATE_DIVISOR:
+        raise ValueError(f"unsupported B1 natural-tail rate divisor {divisor}")
+    if reserved != 0:
+        raise ValueError("B1 natural-tail reserved field is nonzero")
+    if entry_frame >= len(pcm_data) // 2:
+        raise ValueError("B1 natural-tail entry is outside its PCM body")
+    source_tail_frames = struct.unpack_from("<I", tail, 8)[0]
+    expected_payload = (
+        source_tail_frames + divisor - 1
+    ) // divisor
+    if len(tail) - 12 != expected_payload:
+        raise ValueError("B1 natural-tail payload length does not match its source frames")
+    return {
+        "pcm_data": pcm_data,
+        "tail": tail,
+        "entry_frame": entry_frame,
+        "rate_divisor": divisor,
+        "source_tail_frames": source_tail_frames,
+        "payload": tail[12:],
+    }
+
+
+def inspect_b1_wav(wav_bytes):
+    """Return validated PCM/tail fields from one complete extended B1 WAV."""
+    return _walk_b1_riff(wav_bytes, require_tail=True)
+
+
+def attach_b1_tail_chunk(
+        wav_bytes,
+        payload,
+        source_tail_frames,
+        entry_frame=B1_TAIL_ENTRY_FRAME):
+    """Append one versioned B1 tail and update RIFF's declared size."""
+    if not payload:
+        raise ValueError("B1 natural-tail payload is empty")
+    base = _walk_b1_riff(wav_bytes, require_tail=False)
+    if base["tail"] is not None:
+        raise ValueError("B1 RIFF contains a duplicate natural-tail chunk")
+    if len(payload) != math.ceil(source_tail_frames / B1_TAIL_RATE_DIVISOR):
+        raise ValueError("B1 natural-tail payload length does not match its source frames")
+    body = struct.pack(
+        "<BBHII",
+        B1_TAIL_VERSION,
+        B1_TAIL_RATE_DIVISOR,
+        0,
+        entry_frame,
+        source_tail_frames,
+    ) + payload
+    chunk = B1_TAIL_CHUNK + struct.pack("<I", len(body)) + body
+    if len(body) & 1:
+        chunk += b"\0"
+    output = bytearray(wav_bytes)
+    output.extend(chunk)
+    struct.pack_into("<I", output, 4, len(output) - 8)
+    inspect_b1_wav(bytes(output))
+    return bytes(output)
+
+
+def _pcm16_wav_bytes(samples, sample_rate):
+    pcm = struct.pack(
+        f"<{len(samples)}h",
+        *[max(-32768, min(32767, int(value * 32767))) for value in samples],
+    )
+    output = io.BytesIO()
+    with wave.open(output, "wb") as writer:
+        writer.setnchannels(1)
+        writer.setsampwidth(2)
+        writer.setframerate(sample_rate)
+        writer.writeframes(pcm)
+    return output.getvalue()
+
+
+def _stage_b1_wav(destination, body, payload, source_tail_frames, sample_rate):
+    """Write and validate one complete B1 WAV under a unique sibling name."""
+    extended = attach_b1_tail_chunk(
+        _pcm16_wav_bytes(body, sample_rate),
+        payload,
+        source_tail_frames,
+    )
+    directory = os.path.dirname(destination)
+    descriptor, staged = tempfile.mkstemp(
+        prefix=os.path.basename(destination) + ".b1-stage-",
+        suffix=".wav",
+        dir=directory,
+    )
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(extended)
+        with open(staged, "rb") as handle:
+            inspect_b1_wav(handle.read())
+        return staged
+    except Exception:
+        if os.path.exists(staged):
+            os.remove(staged)
+        raise
+
+
+def publish_b1_bank(output_dir, prepared, sample_rate=OUT_SR):
+    """Stage the complete bank before per-file atomic destination replacement."""
+    staged = {}
+    try:
+        for name in sorted(prepared):
+            body, payload, source_tail_frames = prepared[name]
+            destination = os.path.join(output_dir, name)
+            staged[name] = _stage_b1_wav(
+                destination,
+                body,
+                payload,
+                source_tail_frames,
+                sample_rate,
+            )
+        for name in sorted(staged):
+            os.replace(staged[name], os.path.join(output_dir, name))
+            staged[name] = None
+    finally:
+        for path in staged.values():
+            if path is not None and os.path.exists(path):
+                os.remove(path)
 
 
 def read_wav_channel_range(path, start, end, channel=0):
@@ -2506,7 +2792,7 @@ def b1_pilot_append_s(root_midi):
 
 
 def b1_pilot_size_projection(sample_dir):
-    """Conservative raw-byte projection for the exact committed B1 inventory."""
+    """Historical loop-pilot projection from each asset's PCM-body representation."""
     names = validate_b1_output_inventory({
         name for name in os.listdir(sample_dir)
         if name.startswith("b1_") and name.endswith(".wav")
@@ -2520,7 +2806,14 @@ def b1_pilot_size_projection(sample_dir):
         frames = round(b1_pilot_append_s(midi) * OUT_SR)
         allocation[name] = frames
         append_frames += frames
-        base_bytes += os.path.getsize(os.path.join(sample_dir, name))
+        with open(os.path.join(sample_dir, name), "rb") as handle:
+            wav_bytes = handle.read()
+        info = _walk_b1_riff(wav_bytes, require_tail=False)
+        tail = info["tail"]
+        if tail is None:
+            base_bytes += len(wav_bytes)
+        else:
+            base_bytes += len(wav_bytes) - 8 - len(tail) - (len(tail) & 1)
     projected = base_bytes + 2 * append_frames
     return {
         "zones": len(names),
@@ -4184,9 +4477,10 @@ def _bake_b1upright(src):
     (subprocess), then for every *assigned* slice: a 20 Hz 4th-order Butterworth
     high-pass on the 48 kHz signal, band-limited resample to 44.1 kHz,
     `prepare_b1_body` (1.5 s body, 10 ms terminal taper, per-file 0.9
-    peak-normalise), 16-bit mono. Writes
-    `b1_<layer>_<note>.wav` for the retained normal/hard passes straight into
-    the crate `samples/` dir, and returns print rows. The noisy soft pass is
+    peak-normalise), plus the same normalized recording's non-looping tail from
+    1.35 s (11.025 kHz, mu=255 one byte/sample) in a versioned terminal RIFF
+    chunk. Stages all retained normal/hard WAVs before publishing them into the
+    crate `samples/` dir, then returns print rows. The noisy soft pass is
     deliberately skipped below.
 
     root = the slicer's measured first partial f1 (exact-ET repitch that keeps
@@ -4229,6 +4523,8 @@ def _bake_b1upright(src):
             x = _butter_hp4(x, sr, B1_HPF_HZ)          # on the 48 kHz signal
             x = resample(x, sr, OUT_SR)
             seg = prepare_b1_body(x, OUT_SR)
+            archival, _gain = prepare_b1_archival(x, OUT_SR)
+            tail, tail_frames = prepare_b1_tail(archival)
             et = _midi_hz(midi)
             f1 = sl["f1_hz"] or 0.0
             cents = 1200.0 * math.log2(f1 / et) if f1 > 0 else 0.0
@@ -4238,6 +4534,8 @@ def _bake_b1upright(src):
                 raise ValueError(f"duplicate generated B1 zone: {out_name}")
             pending[out_name] = (
                 seg,
+                tail,
+                tail_frames,
                 midi,
                 layer,
                 (out_name, root, f1, et, cents,
@@ -4245,10 +4543,15 @@ def _bake_b1upright(src):
             )
 
     validate_b1_generated_inventory(expected, set(pending))
-    rows = []
-    for name in sorted(pending):
-        write_wav_mono(os.path.join(out_dir, name), pending[name][0], OUT_SR)
-        rows.append(pending[name][3])
+    publish_b1_bank(
+        out_dir,
+        {
+            name: (pending[name][0], pending[name][1], pending[name][2])
+            for name in pending
+        },
+        sample_rate=OUT_SR,
+    )
+    rows = [pending[name][5] for name in sorted(pending)]
     return rows
 
 

@@ -335,6 +335,162 @@ class PrepareSampleBankTests(unittest.TestCase):
         self.assertNotEqual(first[fade_start:], untapered[fade_start:])
         self.assertLess(abs(first[-1]), 1e-3)
 
+    def test_b1_tail_compander_is_the_accepted_mu255_mapping(self):
+        controls = [-1.0, -0.25, -0.01, 0.0, 0.01, 0.25, 1.0]
+        expected_codes = bytes([0, 32, 98, 128, 157, 223, 255])
+        encoded = prepare.compand_b1_tail(controls)
+        self.assertEqual(encoded, expected_codes)
+
+        decoded = prepare.decode_b1_tail(encoded)
+        expected_decoded = [
+            -1.0,
+            -0.2456980837065721,
+            -0.010225303858321285,
+            8.621159565072071e-05,
+            0.010225303858321294,
+            0.2456980837065721,
+            1.0,
+        ]
+        for got, want in zip(decoded, expected_decoded):
+            self.assertAlmostEqual(got, want, places=14)
+        self.assertTrue(all(a < b for a, b in zip(decoded, decoded[1:])))
+        self.assertEqual(
+            prepare.compand_b1_tail(prepare.decode_b1_tail(bytes(range(256)))),
+            bytes(range(256)),
+        )
+
+    def test_b1_tail_decimator_pins_phase_length_and_stopband(self):
+        self.assertEqual(
+            len(prepare.decimate_b1_tail([0.25] * 1025)),
+            math.ceil(1025 / prepare.B1_TAIL_RATE_DIVISOR),
+        )
+        dc = prepare.decimate_b1_tail([0.25] * 8192)
+        self.assertAlmostEqual(sum(dc[32:-32]) / len(dc[32:-32]), 0.25, places=12)
+
+        def tone_rms(frequency):
+            signal = [
+                math.sin(2.0 * math.pi * frequency * i / prepare.OUT_SR)
+                for i in range(prepare.OUT_SR)
+            ]
+            result = prepare.decimate_b1_tail(signal)[100:-100]
+            return math.sqrt(sum(v * v for v in result) / len(result))
+
+        reference = tone_rms(2000.0)
+        at_5600 = 20.0 * math.log10(tone_rms(5600.0) / reference)
+        at_6000 = 20.0 * math.log10(tone_rms(6000.0) / reference)
+        self.assertLessEqual(at_5600, -20.0)
+        self.assertLessEqual(at_6000, -45.0)
+
+        impulse = [1.0] + [0.0] * 127
+        first = prepare.decimate_b1_tail(impulse)
+        second = prepare.decimate_b1_tail(impulse)
+        self.assertEqual(first, second)
+        expected_prefix = [
+            0.2172666306994329,
+            0.0302020278725563,
+            -0.024697074581141825,
+            0.017385945063066392,
+            -0.010244953477404076,
+            0.004803899643777737,
+            -0.001638684494291428,
+            0.00033810192489805674,
+        ]
+        for got, want in zip(first, expected_prefix):
+            self.assertAlmostEqual(got, want, places=15)
+
+    def test_b1_tail_chunk_is_strict_and_standard_wave_compatible(self):
+        with tempfile.TemporaryDirectory() as output_dir:
+            plain = os.path.join(output_dir, "plain.wav")
+            write_wav(plain, sample_width=2, channels=1)
+            with open(plain, "rb") as handle:
+                original = handle.read()
+
+            payload = bytes(range(17))
+            extended = prepare.attach_b1_tail_chunk(
+                original,
+                payload,
+                entry_frame=64,
+                source_tail_frames=65,
+            )
+            info = prepare.inspect_b1_wav(extended)
+            self.assertEqual(info["entry_frame"], 64)
+            self.assertEqual(info["rate_divisor"], 4)
+            self.assertEqual(info["source_tail_frames"], 65)
+            self.assertEqual(info["payload"], payload)
+            self.assertEqual(info["pcm_data"], original[44:])
+            self.assertEqual(len(extended) % 2, 0)
+            self.assertEqual(
+                struct.unpack_from("<I", extended, 4)[0],
+                len(extended) - 8,
+            )
+
+            # Python's standard reader must ignore the custom terminal chunk.
+            with wave.open(io.BytesIO(extended), "rb") as reader:
+                self.assertEqual(reader.getnframes(), 128)
+                self.assertEqual(reader.readframes(128), original[44:])
+
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                prepare.inspect_b1_wav(
+                    prepare.attach_b1_tail_chunk(
+                        extended,
+                        b"\x80",
+                        entry_frame=64,
+                        source_tail_frames=1,
+                    )
+                )
+            truncated = bytearray(extended)
+            truncated.pop()
+            with self.assertRaisesRegex(ValueError, "RIFF|truncated"):
+                prepare.inspect_b1_wav(bytes(truncated))
+            outside_riff = extended + b"x"
+            with self.assertRaisesRegex(ValueError, "beyond RIFF"):
+                prepare.inspect_b1_wav(outside_riff)
+            unsupported = bytearray(extended)
+            tail = unsupported.index(b"b1t ")
+            unsupported[tail + 8] = 2
+            with self.assertRaisesRegex(ValueError, "version"):
+                prepare.inspect_b1_wav(bytes(unsupported))
+            wrong_length = bytearray(extended)
+            struct.pack_into("<I", wrong_length, tail + 16, 69)
+            with self.assertRaisesRegex(ValueError, "payload length"):
+                prepare.inspect_b1_wav(bytes(wrong_length))
+
+    def test_b1_bank_publication_stages_every_file_before_replace(self):
+        with tempfile.TemporaryDirectory() as output_dir:
+            destinations = {
+                "b1_hard_A0.wav": ([0.0] * 60_000, b"\x80\x81", 8),
+                "b1_normal_C1.wav": ([0.0] * 60_000, b"\x82\x83", 8),
+            }
+            originals = {}
+            for name in destinations:
+                path = os.path.join(output_dir, name)
+                write_wav(path, sample_width=2, channels=1)
+                with open(path, "rb") as handle:
+                    originals[name] = handle.read()
+
+            real_stage = prepare._stage_b1_wav
+            calls = 0
+
+            def fail_second(*args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError("injected staging failure")
+                return real_stage(*args, **kwargs)
+
+            with mock.patch.object(
+                prepare,
+                "_stage_b1_wav",
+                side_effect=fail_second,
+            ):
+                with self.assertRaisesRegex(OSError, "injected staging failure"):
+                    prepare.publish_b1_bank(output_dir, destinations, sample_rate=44100)
+
+            for name, expected in originals.items():
+                with open(os.path.join(output_dir, name), "rb") as handle:
+                    self.assertEqual(handle.read(), expected)
+            self.assertFalse(any(".b1-stage-" in name for name in os.listdir(output_dir)))
+
     def test_b1_sustain_pilot_output_is_outside_every_git_tree_and_empty(self):
         with tempfile.TemporaryDirectory() as root:
             accepted = os.path.join(root, "new-output")

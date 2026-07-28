@@ -235,9 +235,53 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    // Aggregate byte size of the embedded WAVs; regenerate with
-    // gen_crate_lib.py and re-pin if the bank changes.
-    const EXPECTED_BYTES: usize = 6918496;
+    // Aggregate byte sizes of the extended WAVs and their compact natural tails;
+    // re-pin both only after a deterministic full-bank bake.
+    const EXPECTED_BYTES: usize = 10271480;
+    const EXPECTED_TAIL_BYTES: usize = 3351922;
+
+    fn b1_tail(bytes: &[u8]) -> &[u8] {
+        assert_eq!(&bytes[..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+        let declared_end = 8 + u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+        assert_eq!(declared_end, bytes.len());
+
+        let mut pos = 12;
+        let mut found = None;
+        while pos < declared_end {
+            assert!(pos + 8 <= declared_end);
+            let len =
+                u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().unwrap()) as usize;
+            let body_start = pos + 8;
+            let body_end = body_start.checked_add(len).expect("RIFF chunk overflow");
+            let padded_end = body_end + (len & 1);
+            assert!(padded_end <= declared_end);
+            if &bytes[pos..pos + 4] == b"b1t " {
+                assert!(found.is_none(), "duplicate B1 natural-tail chunk");
+                assert_eq!(padded_end, declared_end, "B1 tail must be terminal");
+                let body = &bytes[body_start..body_end];
+                assert!(body.len() > 12, "empty B1 natural-tail payload");
+                assert_eq!(body[0], 1, "unsupported B1 tail version");
+                assert_eq!(body[1], 4, "unsupported B1 tail rate divisor");
+                assert_eq!(&body[2..4], &[0, 0], "nonzero B1 tail reserved field");
+                assert_eq!(
+                    u32::from_le_bytes(body[4..8].try_into().unwrap()),
+                    59_535,
+                    "unexpected B1 tail entry"
+                );
+                let source_frames =
+                    u32::from_le_bytes(body[8..12].try_into().unwrap()) as usize;
+                assert_eq!(
+                    body.len() - 12,
+                    source_frames.div_ceil(4),
+                    "B1 tail payload length does not match its source frames"
+                );
+                found = Some(&body[12..]);
+            }
+            pos = padded_end;
+        }
+        found.expect("missing B1 natural-tail chunk")
+    }
 
     #[test]
     fn inventory_matches_packaged_wavs() {
@@ -256,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn every_sample_is_a_nonempty_wav_with_the_expected_aggregate_size() {
+    fn every_sample_is_an_extended_wav_with_the_expected_aggregate_sizes() {
         assert_eq!(
             SAMPLES.iter().map(|(_, b)| b.len()).sum::<usize>(),
             EXPECTED_BYTES
@@ -265,8 +309,16 @@ mod tests {
             assert!(bytes.len() >= 12, "{name} is too short to be a WAV");
             assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
             assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
+            assert!(!b1_tail(bytes).is_empty(), "{name} has an empty natural tail");
             assert_eq!(get(name), Some(bytes));
         }
+        assert_eq!(
+            SAMPLES
+                .iter()
+                .map(|(_, bytes)| b1_tail(bytes).len())
+                .sum::<usize>(),
+            EXPECTED_TAIL_BYTES
+        );
         assert_eq!(get("missing.wav"), None);
     }
 }

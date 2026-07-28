@@ -8,16 +8,17 @@ grand — a warmer, boxier acoustic with genuine per-note inharmonicity.
 
 **Two recorded timbre layers** — normal / hard — sampled from two separate
 dynamic passes, so hard is a genuinely brighter recorded spectrum rather than one
-sample re-EQ'd. 52 mono 16-bit 44.1 kHz WAVs across the two layers, embedded via
-`include_bytes!`. Loudness comes from the engine's shared velocity law; the layers
-supply timbre per dynamic (see `PROVENANCE.md`).
+sample re-EQ'd. The bank carries 52 mono 16-bit 44.1 kHz WAV bodies across the two
+layers, embedded via `include_bytes!`. Loudness comes from the engine's shared
+velocity law; the layers supply timbre per dynamic (see `PROVENANCE.md`).
 
-This experimental bake keeps **1.5 seconds of the recorded body** with only a 10 ms
-terminal taper. With samples enabled, the recording is the complete bounded B1
-voice at the established 1.30 audible scale; no handoff conditioner or randomized
-modal piano alters it. The samples-off path remains the modeled piano. This is a
-listening experiment, not a final long-sustain design: a held note ends when the
-short packaged recording ends.
+Each WAV keeps the accepted **1.5 seconds of recorded body** and appends the same
+note's real, non-looping 3.7–8.0 second decay in a versioned RIFF chunk. The tail
+begins at 1.35 seconds, is low-passed and decimated to 11.025 kHz, and uses
+mu=255 one-byte companding. Runtime decodes it during sample prewarm, crossfades
+from the untouched body, and stops at the recording's natural endpoint. There is
+no synthetic piano handoff and no repeated sustain loop. The samples-off path
+remains the modeled piano.
 
 A third **soft** pass was recorded and then dropped (2026-07-24). Measured against
 `normal` note-for-note with the noise subtracted, it was only **+0.8 dB** apart in

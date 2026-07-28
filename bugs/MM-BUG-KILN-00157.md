@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00157 — Sax regeneration trusts unauthenticated warm-cache inputs
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / sax cache
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=1, doubt=1, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T030703Z-p57192-n099327800-c79 branch=task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79 code=336355b461c7f32a82cca417a1ac8ef1e02eb33e gate=deltic model=codex@xhigh) → Open (2026-07-28, deltic:auto role=verify run=verify-20260728T162705Z-p57192-n426209200-c251 verified_fix_run=fix-20260728T030703Z-p57192-n099327800-c79 verdict=doubt reason=fix-is-statically-sound-and-5-6-gate-steps-are-green-but-python3-is-denied-in-th model=claude) → Fixed (2026-07-28, recovered by OpenAI Codex; code `95feab7f7f21d87430f1574db5a185c875329907`; focused Python regression and Deltic workspace gate passed)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T030703Z-p57192-n099327800-c79 branch=task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79 code=336355b461c7f32a82cca417a1ac8ef1e02eb33e gate=deltic model=codex@xhigh) → Open (2026-07-28, deltic:auto role=verify run=verify-20260728T162705Z-p57192-n426209200-c251 verified_fix_run=fix-20260728T030703Z-p57192-n099327800-c79 verdict=doubt reason=fix-is-statically-sound-and-5-6-gate-steps-are-green-but-python3-is-denied-in-th model=claude) → Fixed (2026-07-28, recovered by OpenAI Codex; code `95feab7f7f21d87430f1574db5a185c875329907`; focused Python regression and Deltic workspace gate passed) → Closed (2026-07-28, independently verified by Claude Opus 4.5 on trunk `1caf524`; ran the Python regression the earlier `verdict=doubt` verifier could not: 6/7 `MtgSaxCacheTest` fail on pre-fix `0b03fcd`, 7/7 pass on trunk; 130/130 sample-preparation tests green)
 
 ## Observation
 

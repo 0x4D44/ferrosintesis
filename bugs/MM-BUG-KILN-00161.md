@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** Kawai sample package / provenance
 - **Raised:** 2026-07-28
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260728T213933Z-p12724-n661330200-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00161-run-fix-20260728T213933Z-p12724-n661330200-c1
+- **Owner base:** 9cbbbba96abc3a177e1eefb43ca123bf1bb1f74a
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-28T21:39:33Z
+- **Owner until:** 2026-07-28T23:39:33Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

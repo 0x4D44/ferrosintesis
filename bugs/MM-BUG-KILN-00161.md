@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00161 — Kawai package provenance maps two zones to wrong upstream labels
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** Kawai sample package / provenance
 - **Raised:** 2026-07-28
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260728T213933Z-p12724-n661330200-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00161-run-fix-20260728T213933Z-p12724-n661330200-c1
-- **Owner base:** 9cbbbba96abc3a177e1eefb43ca123bf1bb1f74a
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T21:39:33Z
-- **Owner until:** 2026-07-28T23:39:33Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T213933Z-p12724-n661330200-c1 branch=task/bug-MM-BUG-KILN-00161-run-fix-20260728T213933Z-p12724-n661330200-c1 code=b95a70f5e45d9729acab3756a4febc1eed2e4f4a gate=manual)
 
 ## Observation
 

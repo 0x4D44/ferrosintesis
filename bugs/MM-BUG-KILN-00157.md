@@ -5,19 +5,19 @@
 - **Severity:** Medium
 - **Area:** sample generation / sax cache
 - **Raised:** 2026-07-28
-- **Owner:** deltic:gpt-5.5
-- **Owner role:** fix
-- **Owner run:** fix-20260728T165502Z-p57192-n970469200-c261
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00157-run-fix-20260728T165502Z-p57192-n970469200-c261
-- **Owner base:** 73549cd72e526d45fe2b56e8fa5a010c82780154
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-28T16:55:02Z
-- **Owner until:** 2026-07-28T17:40:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=1, indeterminate=0
+- **Attempts:** fix=1, doubt=1, indeterminate=0
 - **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T030703Z-p57192-n099327800-c79 branch=task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79 code=336355b461c7f32a82cca417a1ac8ef1e02eb33e gate=deltic model=codex@xhigh) → Open (2026-07-28, deltic:auto role=verify run=verify-20260728T162705Z-p57192-n426209200-c251 verified_fix_run=fix-20260728T030703Z-p57192-n099327800-c79 verdict=doubt reason=fix-is-statically-sound-and-5-6-gate-steps-are-green-but-python3-is-denied-in-th model=claude)
 
 ## Observation
@@ -55,3 +55,23 @@ Focused validation:
 Verifier note: Fix is statically sound and 5/6 gate steps are green, but python3 is denied in this session so the Python regression suite - the only gate step covering this bug - was never executed. — HEAD=9569393, fix commit 336355b confirmed an ancestor (touches only tools/ferrosintesis-samples/prepare.py + test_prepare.py). (1) Symptom, STATIC only: pre-fix _mtg_region_keys and _bake_mtg_sax used 'if not os.path.exists(p): fetch(...)' and 'if not os.path.exists(wav): subprocess.run(ffmpeg)'; on trunk they route through ensure_source (prepare.py:1242, digest+URL via direct_source_matches:1279) and _ensure_...
 
 ## Notes
+
+### Fix attempt summary (2026-07-28, deltic:auto run=fix-20260728T165502Z-p57192-n970469200-c261 outcome=no_work)
+
+Agent-reported summary: MM-BUG-KILN-00157 was already carrying the prior code fix in this worktree, so I verified rather than adding a second patch. I reproduced the original warm-cache trust bug by loading the pre-fix parent of commit 336355b461c7f32a82cca417a1ac8ef1e02eb33e and running the current MtgSaxCacheTest against it; five of the six sax cache tests failed before the fix. On the current tree, the focused sax/direct-source regression suite passes under python3.12. No ledger, Cargo manifest, lockfile, journal, scratchpad, branch, staging, or commit changes were made. The original root cause is addressed by routing sax SFZ and FLAC cache entries through source manifests and binding decoded WAV cache entries t
+
+Root cause: The MTG sax regeneration path accepted warm SFZ region files, FLAC source files, and decoded WAV files based on path existence instead of authenticated source metadata. That let substituted files under the pinned revision cache be reused as if they came from the pinned MTG revision, and let decoded WAVs survive source or decode-recipe changes.
+
+Changed:
+- No new code or regression edits were needed in this pass; the existing fix is present in tools/ferrosintesis-samples/prepare.py and the existing regression cove
+
+Tests:
+- Pre-fix reproduction: loaded 336355b461c7f32a82cca417a1ac8ef1e02eb33e^:tools/ferrosintesis-samples/prepare.py and ran current MtgSaxCacheTest; 5 failures, 1 pas
+- Focused regression: python3.12 -m unittest test_prepare.DirectSourceCacheTest test_prepare.PinnedFlacCacheTest test_prepare.PinnedWarmCacheAuthenticationTest te
+
+Left alone:
+- bugs/
+- Cargo.toml
+- Cargo.lock
+- wrk_journals/
+- lessons_learnt.md

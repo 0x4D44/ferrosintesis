@@ -660,11 +660,12 @@ mod tests {
     /// correction must follow that result, not the GM program or caller flag.
     #[test]
     fn modeled_velocity_calibration_follows_the_voice_actually_built() {
-        const CASES: [(u8, f32); 8] = [
+        const CASES: [(u8, f32); 9] = [
             (24, 2.350),
             (56, 1.428),
             (57, 1.118),
             (59, 1.308),
+            (61, 1.380),
             (64, 1.716),
             (65, 1.685),
             (66, 1.645),
@@ -696,13 +697,13 @@ mod tests {
         }
     }
 
-    /// The eight model paths whose sampled voices have a different measured
+    /// The model paths whose sampled voices have a different measured
     /// response must satisfy the square law in a default binary with runtime
     /// samples disabled. Compile-time no-sample coverage alone cannot catch that
     /// dispatch seam.
     #[test]
     fn runtime_sample_opt_out_models_follow_the_square_law() {
-        for program in [24u8, 56, 57, 59, 64, 65, 66, 67] {
+        for program in [24u8, 56, 57, 59, 61, 64, 65, 66, 67] {
             for key in FIT_KEYS {
                 let levels: Vec<(u8, f32)> = FIT_VELS
                     .iter()

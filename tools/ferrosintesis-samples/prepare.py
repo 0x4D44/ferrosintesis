@@ -833,6 +833,7 @@ MUSESCORE_SF3_URL = (
 MUSESCORE_SF3_SHA256 = (
     "5ea2375e8bd7d8e71def1036978c1621e85b66934169b6a2744b27b9b3c2d99c"
 )
+BRASS_SECTION_ROOTS = (41, 48, 54, 58, 60, 65, 69, 72, 77, 84)
 # GM 1 CC0=2: the FULLER MuseScore_General soundfont's grand (MIT, S. Christian
 # Collins), distinct from MS Basic above. Its "Grand Piano" preset (0) is a
 # velocity-layered multisample across "Piano MF-low/high" + "Piano FF-low/high"
@@ -2388,11 +2389,12 @@ def _sf_preset_zones(sf3, preset=7):
     """Parse an SF2/SF3 soundfont and return a bank-0 preset's sample zones.
 
     `preset` is the GM program number in bank 0 (default 7 = clavinet, the
-    original caller; the GM 75/76/77 pipes and GM 104 sitar reuse this same
-    extractor). Returns (smpl_data_offset, [(root_midi, sample_start, sample_end,
-    startloop, endloop, samplerate), ...]) — SF3 start/end are BYTE offsets into
-    `smpl` (each slice is one self-contained Ogg-Vorbis stream); startloop/endloop
-    are decoded-frame offsets from the sample start.
+    original caller; the GM 61 section, GM 75/76/77 pipes, and GM 104 sitar reuse
+    this same extractor). Returns (smpl_data_offset, [(root_midi, sample_start,
+    sample_end, startloop, endloop, samplerate, sample_type), ...]) — SF3
+    start/end are BYTE offsets into `smpl` (each slice is one self-contained
+    Ogg-Vorbis stream); startloop/endloop are decoded-frame offsets from the
+    sample start.
     """
     assert sf3[0:4] == b"RIFF" and sf3[8:12] == b"sfbk", "not an SF2/SF3 file"
 
@@ -2455,8 +2457,22 @@ def _sf_preset_zones(sf3, preset=7):
         h = shdr[sid]
         start, end, sl, el, sr = struct.unpack("<IIIII", h[20:40])
         root = h[40]  # originalPitch (MIDI) — trustworthy; sample NAME octave is +1
-        zones.append((root, start, end, sl, el, sr))
+        sample_type = u16(h, 44)
+        zones.append((root, start, end, sl, el, sr, sample_type))
     return smpl_off, zones
+
+
+def _validate_sf_onset_zones(zones, expected_roots):
+    """Fail closed if a reviewed SF3 preset's source-zone contract changes."""
+    roots = tuple(sorted(zone[0] for zone in zones))
+    expected = tuple(expected_roots)
+    if roots != expected or len(set(roots)) != len(roots):
+        raise ValueError(f"SF3 onset roots {roots} != reviewed roots {expected}")
+    # SF3 adds bit 0x10 to the SF2 channel type to mark Vorbis compression, so
+    # the reviewed mono zones are type 17 rather than plain-SF2 type 1.
+    non_mono = [(zone[0], zone[6]) for zone in zones if zone[6] & 0x0f != 1]
+    if non_mono:
+        raise ValueError(f"SF3 onset zones must be mono samples: {non_mono}")
 
 
 def _seamless_loop(x, sl, el, xf):
@@ -2538,7 +2554,7 @@ def _bake_clavinet(src):
         {f"clavinet_{_midi_name(root)}.wav" for root, *_ in zones},
         output_dir=out_dir)
     rows = []
-    for root, start, end, _sl, _el, _sr in sorted(zones):
+    for root, start, end, _sl, _el, _sr, _sample_type in sorted(zones):
         ogg = os.path.join(src, f"clavinet_{root}.ogg")
         wav = os.path.join(src, f"clavinet_{root}.wav")
         with open(ogg, "wb") as f:
@@ -2561,7 +2577,8 @@ def _bake_clavinet(src):
     return rows
 
 
-def _bake_sf_onset(src, preset, prefix, dest_crate, keep_s, fade_s):
+def _bake_sf_onset(
+        src, preset, prefix, dest_crate, keep_s, fade_s, expected_roots=None):
     """Extract a bank-0 preset's zones from MS Basic.sf3 as ONSET samples.
 
     Unlike `_bake_clavinet` (which bakes a full decaying LOOPED note), this trims each
@@ -2575,6 +2592,8 @@ def _bake_sf_onset(src, preset, prefix, dest_crate, keep_s, fade_s):
     """
     sf3 = open(ensure_musescore_sf3(src), "rb").read()
     smpl_off, zones = _sf_preset_zones(sf3, preset)
+    if expected_roots is not None:
+        _validate_sf_onset_zones(zones, expected_roots)
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     out_dir = os.path.join(REPO_ROOT, "crates", dest_crate, "samples")
     os.makedirs(out_dir, exist_ok=True)
@@ -2583,7 +2602,7 @@ def _bake_sf_onset(src, preset, prefix, dest_crate, keep_s, fade_s):
         {f"{prefix}_{_midi_name(root)}.wav" for root, *_ in zones},
         output_dir=out_dir)
     rows = []
-    for root, start, end, _sl, _el, _sr in sorted(zones):
+    for root, start, end, _sl, _el, _sr, _sample_type in sorted(zones):
         ogg = os.path.join(src, f"{prefix}_{root}.ogg")
         wav = os.path.join(src, f"{prefix}_{root}.wav")
         with open(ogg, "wb") as f:
@@ -3261,6 +3280,7 @@ def _prepare_only_families():
     own_recipe = {
         "b1upright",
         "bottle",
+        "brasssection",
         "celesta",
         "chanter",
         "clavinet",
@@ -3375,7 +3395,8 @@ def main():
     # leaving every other tracked WAV untouched and skipping their fetches (incl. the
     # 7z / SF3 / tarball sources) — used to ADD one instrument without rewriting the
     # whole bank. `fam` is the sample-name prefix: harp, timpani, recorder, ocarina,
-    # sitar, panflute, bottle, shakuhachi, clavinet, chanter (bagpipe), grand, sax,
+    # sitar, brasssection, panflute, bottle, shakuhachi, clavinet, chanter
+    # (bagpipe), grand, sax,
     # eastpick, eastpluck (the first-party Eastman E1D guitars), ...
     # Banjo is a standalone owner-recording extraction; use banjo_extract.py.
     def want(fam):
@@ -3512,6 +3533,22 @@ def main():
             os.makedirs(ms_src, exist_ok=True)
             rows += _bake_sf_onset(
                 ms_src, 8, "celesta", "ferrosintesis-samples-musescore", 0.9, 0.24
+            )
+
+        # GM 61 brass section: preserve 1.2 s of the real ensemble attack and early
+        # body, then hand over to the bendable modeled section. The reviewed preset
+        # has ten unique mono roots; reject source drift before writing any output.
+        if want("brasssection"):
+            ms_src = os.path.join(tempfile.gettempdir(), "musescore_sf3", MUSESCORE_REV)
+            os.makedirs(ms_src, exist_ok=True)
+            rows += _bake_sf_onset(
+                ms_src,
+                61,
+                "brasssection",
+                "ferrosintesis-samples-musescore",
+                1.2,
+                0.20,
+                expected_roots=BRASS_SECTION_ROOTS,
             )
 
         # GM 75/76/77 pipes: SF3 WIND onsets (keep 0.62) → the MIT -musescore crate. Pan

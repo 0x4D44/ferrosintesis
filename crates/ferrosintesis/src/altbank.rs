@@ -2086,6 +2086,7 @@ mod tests {
             (4u8, 48u8, 1u8),
             (10u8, 84u8, 1u8),
             (15u8, 62u8, 1u8),
+            (61u8, 60u8, 1u8),
         ] {
             // (a) alt bank ignores the sample layer → pure model, byte-identical on/off.
             let alt_on = render_make_bank(prog, alt, key, 100, 0.5, 6, true);

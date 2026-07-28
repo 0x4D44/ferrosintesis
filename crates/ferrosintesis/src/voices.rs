@@ -10250,6 +10250,10 @@ pub(crate) const LA_PIANO: (f32, (f32, f32)) = (0.90, (0.18, 0.85));
 // left the sampled trumpet onset stepping 2.5x under the model's spoken
 // level at the seam; 0.45 meets it inside the la_level_continuity cap.
 const LA_BRASS: (f32, (f32, f32)) = (0.45, (0.10, 0.32));
+// GM 61's real ensemble onset speaks a little more slowly than the solo-brass
+// bank. Keep its early body through 120 ms, then hand over to the bendable model
+// by 420 ms. The 1.2 s source remains long enough at the 2.05x repitch limit.
+const LA_BRASS_SECTION: (f32, (f32, f32)) = (0.45, (0.12, 0.42));
 /// The tuba speaks slowly — its sampled front carries little early RMS —
 /// so its wrap gain scales up further to meet the model at the seam
 /// (probed via la_level_continuity's differential windows).
@@ -14076,7 +14080,10 @@ const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     t[48] = 1.842; t[49] = 1.844; t[55] = 2.380;
     // Brass: lip bite and chiff are velocity-driven excitation.
     t[56] = 1.284; t[57] = 0.886; t[58] = 1.627; t[59] = 1.530; t[60] = 1.680;
-    t[61] = 1.380;
+    // GM 61's sampled composite has a separate response from its model-only
+    // fallback: raw k=2.552/2.673 at keys 48/60, so the census-derived
+    // correction is 1.387. The bare model retains its prior 1.380 below.
+    t[61] = 1.387;
     // Reeds and pipes: breath pressure drives the reed/edge tone.
     t[65] = 2.066; t[66] = 2.085; t[68] = 1.675; t[69] = 1.760; t[70] = 1.590;
     // GM76 has NO entry: it was 1.450 for the retired modeled pan-flute/bottle, but
@@ -14137,6 +14144,7 @@ fn modeled_vel_level_exp(program: u8) -> Option<f32> {
         56 => Some(1.428),
         57 => Some(1.118),
         59 => Some(1.308),
+        61 => Some(1.380),
         64 => Some(1.716),
         65 => Some(1.685),
         66 => Some(1.645),
@@ -14918,11 +14926,34 @@ fn make_uncorrected(
                 model
             }
         }
-        // 61 brass section: pure model (§2.7) — no CC0 section sample exists
-        // and the old fallback layered a SOLO trumpet attack over the section
-        // (the wrong instrument); BR_SECTION's five scattered players carry
-        // the width instead. 62/63 synth brass: pure model by design.
-        61..=63 => Box::new(brass(program, key, vel, sr, seed)),
+        // GM 61 uses its own real ENSEMBLE onset and early body; it must never
+        // fall through to `brass_bank`, whose samples are solo instruments.
+        // The model remains the bendable, controller-responsive sustain and the
+        // samples-off / out-of-repitch-window fallback.
+        61 => {
+            let model = Box::new(brass(program, key, vel, sr, seed));
+            if samples {
+                let (gain, fade) = LA_BRASS_SECTION;
+                let built = crate::sampler::LaVoice::wrap_classified(
+                    model,
+                    crate::sampler::brass_section_bank(),
+                    key,
+                    vel,
+                    sr,
+                    gain,
+                    fade,
+                );
+                if !built.used_sample {
+                    vel_exp_override = modeled_vel_level_exp(program);
+                }
+                built.voice
+            } else {
+                vel_exp_override = modeled_vel_level_exp(program);
+                model
+            }
+        }
+        // 62/63 synth brass remain pure model by design.
+        62..=63 => Box::new(brass(program, key, vel, sr, seed)),
         // GM 64-67 saxophones (2026.07.18 holds audit): the WHOLE voice is the real
         // MTG.SoloSax recording — attack played through into a pitch-synchronous loop of
         // the recorded sustain (`SaxLoopVoice`). This replaces the onset-only LA layer,
@@ -15242,6 +15273,7 @@ mod tests {
             ("LA_FLUTE", LA_FLUTE),
             ("LA_PIANO", LA_PIANO),
             ("LA_BRASS", LA_BRASS),
+            ("LA_BRASS_SECTION", LA_BRASS_SECTION),
             ("LA_REED", LA_REED),
             ("LA_GUITAR", LA_GUITAR),
             ("LA_STRINGS", LA_STRINGS),
@@ -28893,7 +28925,7 @@ mod tests {
     /// routes identically, so re-checking it would only re-run the model leg).
     const LA_PROGRAMS: &[u8] = &[
         0, 1, 3, 6, 7, 9, 12, 13, 24, 25, 40, 41, 42, 43, 44, 46, 47, 48, 49, 56, 57, 58, 59, 60,
-        68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 79, 104, 105, 109, 110,
+        61, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 79, 104, 105, 109, 110,
     ];
 
     /// On/off-lattice Goertzel contrast at the known key: the strongest

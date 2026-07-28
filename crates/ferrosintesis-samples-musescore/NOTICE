@@ -16,8 +16,9 @@ per its own license they trace to the FluidR3Mono samples (Frank Wen / Michael
 Cowgill / S. Christian Collins), with the upstream Temple Blocks and Drumline Cymbals
 acknowledgements retained because the pinned source requires the whole acknowledgement
 set to travel. This crate holds the ONSET transients of GM 8 celesta, GM 104 sitar,
-and the GM 75/76/77 pipes (pan flute / blown bottle / shakuhachi); the GM 7 clavinet
-from the same soundfont ships separately in ferrosintesis-samples-clavinet.
+GM 61 brass section (including its early body), and the GM 75/76/77 pipes (pan flute /
+blown bottle / shakuhachi); the GM 7 clavinet from the same soundfont ships separately
+in ferrosintesis-samples-clavinet.
 
 MIT License
 

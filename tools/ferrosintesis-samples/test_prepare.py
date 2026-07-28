@@ -1792,6 +1792,10 @@ class LocalBankSelectionTest(unittest.TestCase):
 class PrepareOnlySelectionContractTest(unittest.TestCase):
     """MM-BUG-KILN-00152: --only must fail for families prepare.py cannot produce."""
 
+    def test_brass_section_selector_is_supported(self):
+        _local_only, only = prepare._family_selection(["--only=brasssection"])
+        self.assertEqual(only, {"brasssection"})
+
     def test_banjo_selector_points_at_the_real_recipe(self):
         with self.assertRaisesRegex(SystemExit, r"banjo.*banjo_extract\.py"):
             prepare._family_selection(["--only=banjo"])
@@ -1801,6 +1805,36 @@ class PrepareOnlySelectionContractTest(unittest.TestCase):
             SystemExit, r"unsupported prepare\.py --only family.*notafamily"
         ):
             prepare._family_selection(["--only=notafamily"])
+
+
+class SoundfontOnsetZoneContractTest(unittest.TestCase):
+    """A pinned preset must keep its reviewed root and channel inventory."""
+
+    ROOTS = (41, 48, 54, 58, 60, 65, 69, 72, 77, 84)
+
+    @staticmethod
+    def zones(roots, sample_type=17):
+        return [
+            (root, index * 100, index * 100 + 80, 0, 0, 32000, sample_type)
+            for index, root in enumerate(roots)
+        ]
+
+    def test_exact_unique_mono_inventory_is_accepted(self):
+        prepare._validate_sf_onset_zones(self.zones(self.ROOTS), self.ROOTS)
+
+    def test_duplicate_root_is_rejected(self):
+        roots = self.ROOTS[:-1] + (77,)
+        with self.assertRaisesRegex(ValueError, "roots"):
+            prepare._validate_sf_onset_zones(self.zones(roots), self.ROOTS)
+
+    def test_wrong_root_is_rejected(self):
+        roots = self.ROOTS[:-1] + (85,)
+        with self.assertRaisesRegex(ValueError, "roots"):
+            prepare._validate_sf_onset_zones(self.zones(roots), self.ROOTS)
+
+    def test_linked_or_stereo_zone_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "mono"):
+            prepare._validate_sf_onset_zones(self.zones(self.ROOTS, sample_type=18), self.ROOTS)
 
 
 class Orchestral2RegenerationRecipeTest(unittest.TestCase):

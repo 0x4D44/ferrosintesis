@@ -12,6 +12,7 @@ access this crate through `ferrosintesis`, not directly.
 
 | Prefix | GM | Instrument |
 |--------|----|-----------|
+| `brasssection_*` | 61 | Brass section (ensemble onset + early body), 10 zones |
 | `sitar_*` | 104 | Sitar (pluck + jawari buzz onset) |
 | `celesta_*` | 8 | Celesta (struck-bar onset), 8 zones |
 | `panflute_*` | 75 | Pan flute (breath onset) |

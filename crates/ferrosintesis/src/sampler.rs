@@ -1933,10 +1933,34 @@ fn celesta() -> &'static [Zone] {
     })
 }
 
+fn brass_section() -> &'static [Zone] {
+    static B: OnceLock<Vec<Zone>> = OnceLock::new();
+    init_once!(B, {
+        bank!(
+            "brasssection_F2.wav" => 87.28,
+            "brasssection_C3.wav" => 130.93,
+            "brasssection_F#3.wav" => 185.54,
+            "brasssection_A#3.wav" => 234.59,
+            "brasssection_C4.wav" => 262.50,
+            "brasssection_F4.wav" => 350.88,
+            "brasssection_A4.wav" => 441.64,
+            "brasssection_C5.wav" => 524.46,
+            "brasssection_F5.wav" => 700.31,
+            "brasssection_C6.wav" => 1049.46,
+        )
+    })
+}
+
 /// GM 8 celesta onset (MS Basic SF3, MIT, -musescore) over the bell(CELESTA) model.
 /// Roots MEASURED at bake near the SF3 originalPitch (all clean). 8 zones sound F#3..C7.
 pub fn celesta_bank() -> &'static [Zone] {
     celesta()
+}
+
+/// GM 61 brass-section onset and early body (MS Basic SF3, MIT, -musescore).
+/// Ten measured zones sound F2..C6; the modeled section carries the expressive sustain.
+pub fn brass_section_bank() -> &'static [Zone] {
+    brass_section()
 }
 
 pub fn flute_bank() -> &'static [Zone] {
@@ -1945,8 +1969,8 @@ pub fn flute_bank() -> &'static [Zone] {
 
 /// Bank for the layered brass programs (GM 56–60). Velocity picks the
 /// dynamic layer (VSCO v1 → p, v3 → f, threshold as `violin_bank`).
-/// 61 (section) is pure model (§2.7): no CC0 section sample exists, and
-/// the old trumpet fall-through layered the WRONG instrument's attack.
+/// GM 61 uses [`brass_section_bank`] instead; it must never fall through to
+/// this solo-instrument bank.
 pub fn brass_bank(program: u8, vel: u8) -> &'static [Zone] {
     let f = vel >= 80;
     match program {
@@ -2884,6 +2908,7 @@ pub fn prewarm() {
         let _ = brass_bank(program, 1);
         let _ = brass_bank(program, 127);
     }
+    let _ = brass_section_bank();
     for program in [68, 70, 71] {
         let _ = reed_bank(program, 1);
         let _ = reed_bank(program, 127);
@@ -3135,6 +3160,11 @@ pub struct LaVoice {
     /// B1 freezes its handoff weights at key-up so equal-rate damper decay
     /// cannot be distorted by a moving sample/model ratio during the gap.
     fade_hold: Option<usize>,
+    /// Start and duration of the slur handover. A transient cannot be
+    /// released while the replacement model is still suppressed: this promotes
+    /// the model with the same smooth weight that retires the sample.
+    transient_handover: Option<(usize, usize)>,
+    transient_handover_len: usize,
     blend: LaBlend,
     buf: Vec<f32>,
     fx: LaFx,
@@ -3200,6 +3230,9 @@ struct RoundRobin {
 }
 
 pub(crate) const DEFAULT_LA_RELEASE_T60: f32 = 0.06;
+/// A slur must retire the old-pitch transient quickly regardless of the
+/// instrument's note-off damping (piano dampers can otherwise stretch to seconds).
+const LA_SLUR_HANDOVER_S: f32 = 0.06;
 /// Fixed weak-coherence target for the B1 overlap power. The cross term is
 /// `2ρab√(PsPm)`, so 0.60 means ρ=0.30: neither a fully coherent boost nor an
 /// uncorrelated power dip.
@@ -3635,6 +3668,8 @@ impl LaVoice {
             b1_power_alpha: 1.0 - (-1.0 / (0.020 * sr)).exp(),
             b1_model_fade_end,
             fade_hold: None,
+            transient_handover: None,
+            transient_handover_len: (LA_SLUR_HANDOVER_S * sr) as usize,
             blend,
             buf: Vec::new(),
             fx,
@@ -3668,17 +3703,29 @@ impl Voice for LaVoice {
             // §2.7 default: one sum-to-one crossfade weight — model discarded
             // before fade_start, sole owner after fade_end. The bass additive
             // mode keeps the model live and uses the same smooth sample taper.
-            let u = if self.blend == LaBlend::Additive {
+            let base_u = if self.blend == LaBlend::Additive {
                 smooth(blend_t as f32 / self.fade_end.max(1) as f32)
             } else {
                 smooth((blend_t as f32 - self.fade_start as f32) / fade_len)
             };
-            let model_weight = if self.blend == LaBlend::Additive {
+            let base_model_weight = if self.blend == LaBlend::Additive {
                 1.0
             } else if self.b1_phase_robust_fade {
                 smooth(blend_t as f32 / self.b1_model_fade_end.max(1) as f32)
             } else {
-                u
+                base_u
+            };
+            // Keep the overwhelmingly common inactive path bit-identical. Even
+            // algebraically reducing `1 - (1 - base_u) * 1` to `base_u` changes
+            // floating-point rounding and contaminates every sampled render.
+            let (u, model_weight) = if let Some((start, len)) = self.transient_handover {
+                let handover = smooth((t as f32 - start as f32) / len.max(1) as f32);
+                (
+                    1.0 - (1.0 - base_u) * (1.0 - handover),
+                    1.0 - (1.0 - base_model_weight) * (1.0 - handover),
+                )
+            } else {
+                (base_u, base_model_weight)
             };
             let model_raw = self.buf[i];
             let mut sample_raw = 0.0;
@@ -3796,6 +3843,9 @@ impl Voice for LaVoice {
             *o += s;
         }
         self.t += out.len();
+        if self.t >= self.fade_end {
+            self.transient_handover = None;
+        }
         sustain_alive || sample_live
     }
 
@@ -3826,7 +3876,9 @@ impl Voice for LaVoice {
         // a slur has no fresh attack: retire the transient, glide the model
         if self.sustain.legato_to(key, vel) {
             self.fade_hold = None;
-            self.rel_mul = self.rel_t60_mul;
+            if self.t < self.fade_end && self.transient_handover.is_none() {
+                self.transient_handover = Some((self.t, self.transient_handover_len));
+            }
             true
         } else {
             false
@@ -3878,6 +3930,7 @@ impl Voice for LaVoice {
             // and undo any release decay so the new stroke is at full level.
             self.t = 0;
             self.fade_hold = None;
+            self.transient_handover = None;
             self.pos = 0.0;
             self.pos2 = 220.0;
             self.pos3 = 397.0;
@@ -5792,6 +5845,7 @@ mod tests {
         }
         let _ = banjo_bank();
         let _ = bottle_bank();
+        let _ = brass_section_bank();
         let _ = celesta_bank();
         let _ = chanter_bank();
         let _ = clavinet_bank();
@@ -7128,6 +7182,7 @@ mod tests {
             (58, 40, "tuba"),
             (59, 69, "muted-trumpet"),
             (60, 62, "french-horn"),
+            (61, 69, "brass-section"),
         ] {
             let f0 = crate::dsp::key_freq(key);
             let mut v = voices::make(program, key, 100, sr, 5, true);
@@ -7959,25 +8014,146 @@ mod tests {
         }
     }
 
-    /// GM 61 brass section stays pure model (§2.7): no CC0 section sample
-    /// exists and the old trumpet fall-through layered the WRONG
-    /// instrument's attack — samples on/off must render byte-identical so a
-    /// future wrap cannot land without re-deciding that.
+    /// GM 61 uses its own ten-zone ensemble bank. It must engage in the
+    /// reviewed register and must not silently fall back to a solo trumpet.
     #[test]
-    fn brass_section_61_skips_sample_layer() {
+    fn brass_section_61_uses_its_own_sample_layer() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
         let sr = 44100.0;
-        let bits = |b: &[f32]| b.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+        let bank = brass_section_bank();
+        assert_eq!(bank.len(), 10);
+        assert_eq!(
+            bank.iter().map(|zone| zone.root).collect::<Vec<_>>(),
+            [87.28, 130.93, 185.54, 234.59, 262.50, 350.88, 441.64, 524.46, 700.31, 1049.46]
+        );
         let render = |samples: bool| {
             let mut v = voices::make(61, 69, 100, sr, 6, samples);
-            let mut buf = vec![0f32; 22050];
+            let mut buf = vec![0f32; (0.05 * sr) as usize];
             v.render(&mut buf);
             buf
         };
-        assert_eq!(
-            bits(&render(true)),
-            bits(&render(false)),
-            "brass section 61 not sample-independent"
+        let (on, off) = (render(true), render(false));
+        let diff: Vec<f32> = on.iter().zip(&off).map(|(a, b)| a - b).collect();
+        assert!(
+            crate::testutil::rms(&diff) > 0.3 * crate::testutil::rms(&off),
+            "brass-section ensemble onset is not materially audible"
         );
+    }
+
+    /// Every eligible GM61 repitch must have enough decoded PCM to reach the
+    /// 420 ms handover endpoint before the read head reaches the source tail.
+    #[test]
+    fn brass_section_source_covers_the_full_handover_window() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let bank = brass_section_bank();
+        let fade_frames = 0.42 * 44100.0;
+        let baked_fade_frames = 0.20 * 44100.0;
+        for key in 0u8..=127 {
+            let target = crate::dsp::key_freq(key);
+            let zone = nearest(bank, target);
+            let ratio = target / zone.root;
+            if (0.5..=2.05).contains(&ratio) {
+                assert!(
+                    zone.data.len() as f32 - baked_fade_frames > fade_frames * ratio + 2.0,
+                    "key {key}, root {:.2}: {} unfaded source frames do not cover {:.0}",
+                    zone.root,
+                    zone.data.len() as f32 - baked_fade_frames,
+                    fade_frames * ratio
+                );
+            }
+        }
+    }
+
+    /// An early slur must crossfade the active transient into the already-running
+    /// model. Releasing the sample alone creates a deep gap because the normal
+    /// GM61 model handover has not started at 20 ms.
+    #[test]
+    fn early_la_legato_has_no_transient_gap() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let mut voice = voices::make(61, 69, 100, sr, 6, true);
+        let mut before = vec![0.0; (0.02 * sr) as usize];
+        voice.render(&mut before);
+        assert!(voice.legato_to(71, 100));
+        let mut after = vec![0.0; (0.02 * sr) as usize];
+        voice.render(&mut after);
+        // A second note inside the 60 ms handover must not restart the blend
+        // and bring the old attack back.
+        assert!(voice.legato_to(72, 100));
+        let mut tail = vec![0.0; (0.08 * sr) as usize];
+        voice.render(&mut tail);
+        after.extend(tail);
+
+        let window = (0.01 * sr) as usize;
+        let before_rms = crate::testutil::rms(&before[before.len() - window..]);
+        let rms: Vec<f32> = after
+            .chunks_exact(window)
+            .map(crate::testutil::rms)
+            .collect();
+        let floor = rms.iter().copied().fold(f32::INFINITY, f32::min);
+        assert!(
+            floor > before_rms * 0.05,
+            "early legato dropped into a transient gap: before {before_rms:.5}, floor {floor:.5}"
+        );
+        for pair in rms.windows(2) {
+            let ratio = pair[0].max(pair[1]) / pair[0].min(pair[1]).max(1e-9);
+            assert!(
+                ratio < 2.4,
+                "early legato introduced a 10 ms level step of {ratio:.2}x"
+            );
+        }
+        let f0 = crate::dsp::key_freq(72);
+        let hz = crate::testutil::peak_locate(
+            &after[after.len() - (0.04 * sr) as usize..],
+            sr,
+            f0 * 0.8,
+            f0 * 1.25,
+        );
+        let cents = 1200.0 * (hz / f0).log2();
+        assert!(
+            cents.abs() < 45.0,
+            "old-pitch transient survived the slur handover: {hz:.2} Hz ({cents:.0} cents)"
+        );
+    }
+
+    /// Key-up immediately around either GM61 handover boundary must remain a
+    /// smooth release rather than exposing a sample/model ownership step.
+    #[test]
+    fn brass_section_staccato_is_smooth_at_handover_boundaries() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        let window = (0.005 * sr) as usize;
+        for off_s in [0.11f32, 0.13, 0.41, 0.43] {
+            let mut voice = voices::make(61, 60, 100, sr, 6, true);
+            let mut before = vec![0.0; (off_s * sr) as usize];
+            voice.render(&mut before);
+            voice.note_off();
+            let mut after = vec![0.0; (0.06 * sr) as usize];
+            voice.render(&mut after);
+            let boundary = before.len();
+            before.extend(after);
+            let start = boundary.saturating_sub(2 * window);
+            let end = (boundary + 4 * window).min(before.len());
+            let levels: Vec<f32> = before[start..end]
+                .chunks_exact(window)
+                .map(crate::testutil::rms)
+                .collect();
+            for pair in levels.windows(2) {
+                let ratio = pair[0].max(pair[1]) / pair[0].min(pair[1]).max(1e-9);
+                assert!(
+                    ratio < 3.0,
+                    "note-off at {off_s:.2}s introduced a 5 ms level step of {ratio:.2}x"
+                );
+            }
+        }
     }
 
     /// The LA wrapper forwards `set_breath` to the wrapped model (routed
@@ -8006,8 +8182,8 @@ mod tests {
             "neutral set_breath(1.0, 0) must be a bit-exact no-op"
         );
         // authored pressure must change the render for every LA-wrapped
-        // wind family the forward serves (brass 56, reed 68, flute 73)
-        for prog in [56u8, 68, 73] {
+        // wind family the forward serves (solo brass 56, section 61, reed 68, flute 73)
+        for prog in [56u8, 61, 68, 73] {
             let (plain, blown) = (render(prog, None), render(prog, Some((0.4, 0.0))));
             assert_ne!(
                 bits(&plain),
@@ -8090,6 +8266,9 @@ mod tests {
             (58u8, 40, "tuba", false),
             (59u8, 69, "muted-trumpet", false),
             (60u8, 62, "french-horn", false),
+            (61u8, 41, "brass-section-low", false),
+            (61u8, 60, "brass-section-mid", false),
+            (61u8, 84, "brass-section-high", false),
             (68u8, 76, "oboe", false),
             (69u8, 64, "english-horn", false),
             (70u8, 48, "bassoon", false),

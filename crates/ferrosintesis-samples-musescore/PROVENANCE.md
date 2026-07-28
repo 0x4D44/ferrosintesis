@@ -4,11 +4,12 @@ Every WAV this crate packages, with the pinned source it was baked from. Machine
 by `crates/ferrosintesis/src/inventory.rs`: a family that ships without a row here fails
 the build (MM-BUG-KILN-00069).
 
-Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=sitar,panflute,bottle,shakuhachi,celesta` from the repository
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=brasssection,sitar,panflute,bottle,shakuhachi,celesta` from the repository
 root.
 
 | Family | Files | Instrument | Source | Licence |
 |--------|------:|------------|--------|---------|
+| `brasssection_*` | 10 | Brass section (GM 61) onset + early body | MuseScore "MS Basic" SF3 | MIT |
 | `sitar_*` | 8 | Sitar (GM 104) onsets | MuseScore "MS Basic" SF3 | MIT |
 | `panflute_*` | 8 | Pan flute (GM 75) onsets | MuseScore "MS Basic" SF3 | MIT |
 | `bottle_*` | 1 | Blown bottle (GM 76) onset - retired, superseded by `ferrosintesis-samples-bottle` | MuseScore "MS Basic" SF3 | MIT |

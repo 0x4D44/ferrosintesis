@@ -3,8 +3,8 @@
 //!
 //! Attack transients extracted from the MuseScore "MS Basic" soundfont (MIT;
 //! FluidR3Mono lineage) for programs whose modeled onset benefits from a real one:
-//! the GM 104 sitar (pluck + jawari buzz), the GM 75/76/77 pipes, and the GM 8 celesta
-//! (metal-bar bell strike). Each WAV is a
+//! the GM 104 sitar (pluck + jawari buzz), GM 61 brass section, GM 75/76/77 pipes,
+//! and GM 8 celesta (metal-bar bell strike). Each WAV is a
 //! mono 16-bit 44.1 kHz onset; `ferrosintesis` crossfades it into the modeled sustain.
 //! Consumers normally access this crate through `ferrosintesis`. Attribution
 //! obligations (the MS Basic acknowledgement set) are in `NOTICE`; the GM 7
@@ -16,6 +16,46 @@
 /// case-sensitive. Kept as a slice so families can be added without a count constant.
 static SAMPLES: &[(&str, &[u8])] = &[
     ("bottle_C6.wav", include_bytes!("../samples/bottle_C6.wav")),
+    (
+        "brasssection_F2.wav",
+        include_bytes!("../samples/brasssection_F2.wav"),
+    ),
+    (
+        "brasssection_C3.wav",
+        include_bytes!("../samples/brasssection_C3.wav"),
+    ),
+    (
+        "brasssection_F#3.wav",
+        include_bytes!("../samples/brasssection_F#3.wav"),
+    ),
+    (
+        "brasssection_A#3.wav",
+        include_bytes!("../samples/brasssection_A#3.wav"),
+    ),
+    (
+        "brasssection_C4.wav",
+        include_bytes!("../samples/brasssection_C4.wav"),
+    ),
+    (
+        "brasssection_F4.wav",
+        include_bytes!("../samples/brasssection_F4.wav"),
+    ),
+    (
+        "brasssection_A4.wav",
+        include_bytes!("../samples/brasssection_A4.wav"),
+    ),
+    (
+        "brasssection_C5.wav",
+        include_bytes!("../samples/brasssection_C5.wav"),
+    ),
+    (
+        "brasssection_F5.wav",
+        include_bytes!("../samples/brasssection_F5.wav"),
+    ),
+    (
+        "brasssection_C6.wav",
+        include_bytes!("../samples/brasssection_C6.wav"),
+    ),
     (
         "panflute_C4.wav",
         include_bytes!("../samples/panflute_C4.wav"),
@@ -147,5 +187,29 @@ mod tests {
             assert_eq!(get(name), Some(*bytes));
         }
         assert_eq!(get("missing.wav"), None);
+    }
+
+    #[test]
+    fn brass_section_inventory_is_the_reviewed_ten_zone_bank() {
+        let names: Vec<&str> = SAMPLES
+            .iter()
+            .map(|(name, _)| *name)
+            .filter(|name| name.starts_with("brasssection_"))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "brasssection_F2.wav",
+                "brasssection_C3.wav",
+                "brasssection_F#3.wav",
+                "brasssection_A#3.wav",
+                "brasssection_C4.wav",
+                "brasssection_F4.wav",
+                "brasssection_A4.wav",
+                "brasssection_C5.wav",
+                "brasssection_F5.wav",
+                "brasssection_C6.wav",
+            ]
+        );
     }
 }

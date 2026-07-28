@@ -39,10 +39,11 @@ body or sustain.
   `tuba_*_{p,f}.wav`, `horn_*_{p,f}.wav` — brass sustain onsets for
   GM 56–60, 5–6 pitch zones × 2 dynamic layers (VSCO v1 → p, v3 → f;
   the horn's top D4 zone exists only as v1 at the pinned rev and is
-  reused for both layers), ~0.63 s. GM 61 (brass section) is pure model —
-  the old fallback layered a solo trumpet attack over the section (the
-  wrong instrument) and was dropped; `BR_SECTION`'s five scattered
-  players carry the width.
+  reused for both layers), ~0.63 s.
+- `brasssection_*.wav` — GM 61 ensemble onset + early body from the pinned
+  MIT MuseScore MS Basic SF3, 10 zones sounding F2–C6, ~1.21 s. This dedicated
+  section bank replaces the rejected solo-trumpet fallback; the `BR_SECTION`
+  model carries the bendable, controller-responsive sustain.
 - `oboe_*_{p,f}.wav`, `bassoon_*_{p,f}.wav`, `clarinet_*_{p,f}.wav` — reed
   sustain onsets for GM 68–71, 6 pitch zones × 2 dynamic layers (VSCO
   v1 → p, v3 → f; the bassoon has only v1/v2 at the pinned rev, so
@@ -180,8 +181,8 @@ zones (D#3–G#5, near-chromatic) are extracted from it by `banjo_extract.py` (o
 robust octave-correct pitch → QC gate for clarity/clipping/next-pluck-bleed → trim to a ~0.5 s
 onset → peak-normalize → TPDF-dither to 16-bit). Roots are the MEASURED sounding pitch, so the
 player's slightly-sharp fretting up the neck is captured per-root and repitched back in tune.
-The **GM 104 sitar and
-GM 75/76/77 pipe onsets** come from the same **MIT MS Basic** soundfont as the clavinet (same
+  The **GM 61 brass section, GM 104 sitar, and GM 75/76/77 pipe onsets** come
+  from the same **MIT MS Basic** soundfont as the clavinet (same
 commit + SHA-256 pin) via `_bake_sf_onset`, and ship in `ferrosintesis-samples-musescore` with
 a `NOTICE`. Exact zone/source tables live in `prepare.py` (`_HARP_ZONES`, `_TIMPANI_ZONES`,
 `_RECORDER_ZONES`, `_OCARINA_ZONES`, `_GANJO_ZONES`, and the `_bake_sf_onset` preset calls).

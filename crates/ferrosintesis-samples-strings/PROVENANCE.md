@@ -13,7 +13,7 @@ root.
 | `dbass_*` | 16 | Solo double bass (GM 43) arco onsets | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `pizzbass_*` | 8 | Solo double bass **pizzicato** (GM 32 acoustic bass) | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 
-The `pizzbass_*` family shipped undocumented: the README and crate description named only
-`cellosolo_*` and `dbass_*` (32 of the 40 packaged WAVs), and the stated regeneration
-command omitted it, so it rebuilt 32 of 40 files. Both are corrected here and in the
-README (MM-BUG-KILN-00069 item 7).
+The `pizzbass_*` family once shipped undocumented: earlier public summaries named only
+`cellosolo_*` and `dbass_*` (32 of the 40 packaged WAVs), and one README regeneration
+command omitted it, so it rebuilt 32 of 40 files. The packaged inventory and regeneration
+command here are the canonical public record for all three families.

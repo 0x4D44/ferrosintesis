@@ -541,6 +541,151 @@ mod tests {
             .collect()
     }
 
+    fn markdown_family_row_text(markdown: &str) -> BTreeMap<String, String> {
+        let mut rows = BTreeMap::new();
+        for line in markdown.lines() {
+            let line = line.trim();
+            if !line.starts_with('|') || !line.ends_with('|') {
+                continue;
+            }
+            let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
+            let Some(family) = cells
+                .first()
+                .and_then(|cell| cell.strip_prefix('`'))
+                .and_then(|cell| cell.strip_suffix("_*`"))
+            else {
+                continue;
+            };
+            if !family.is_empty() {
+                rows.entry(family.to_owned())
+                    .or_insert_with(String::new)
+                    .push_str(&cells.join(" "));
+            }
+        }
+        rows
+    }
+
+    fn gm_programs(text: &str) -> BTreeSet<u8> {
+        let mut programs = BTreeSet::new();
+        let bytes = text.as_bytes();
+        let mut index = 0usize;
+        while let Some(offset) = text[index..].find("GM") {
+            index += offset + 2;
+            while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+                index += 1;
+            }
+            loop {
+                let start = index;
+                while index < bytes.len() && bytes[index].is_ascii_digit() {
+                    index += 1;
+                }
+                if start == index {
+                    break;
+                }
+                if let Ok(program) = text[start..index].parse::<u8>() {
+                    programs.insert(program);
+                }
+                if index < bytes.len() && bytes[index] == b'/' {
+                    index += 1;
+                    continue;
+                }
+                break;
+            }
+        }
+        programs
+    }
+
+    fn documented_family_programs(
+        readme: &str,
+        provenance: &str,
+        packaged: &BTreeMap<String, usize>,
+    ) -> BTreeMap<String, BTreeSet<u8>> {
+        let mut out: BTreeMap<String, BTreeSet<u8>> = BTreeMap::new();
+        for rows in [
+            markdown_family_row_text(readme),
+            markdown_family_row_text(provenance),
+        ] {
+            for (family, text) in rows {
+                if packaged.contains_key(&family) {
+                    out.entry(family).or_default().extend(gm_programs(&text));
+                }
+            }
+        }
+        out
+    }
+
+    fn family_gm_mentions(
+        text: &str,
+        family_programs: &BTreeMap<String, BTreeSet<u8>>,
+    ) -> Vec<String> {
+        let mentioned = gm_programs(text);
+        family_programs
+            .iter()
+            .filter(|(_, programs)| programs.iter().any(|program| mentioned.contains(program)))
+            .map(|(family, _)| family.clone())
+            .collect()
+    }
+
+    fn markdown_intro(markdown: &str) -> String {
+        markdown
+            .lines()
+            .take_while(|line| {
+                let trimmed = line.trim();
+                !trimmed.starts_with('|') && !trimmed.contains("PROVENANCE.md")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn module_docs(lib: &str) -> String {
+        lib.lines()
+            .take_while(|line| {
+                let trimmed = line.trim_start();
+                trimmed.starts_with("//!") || trimmed.is_empty()
+            })
+            .map(|line| line.trim_start().trim_start_matches("//!"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn concrete_prepare_only_selectors(markdown: &str) -> Vec<String> {
+        let mut selectors = Vec::new();
+        for line in markdown.lines() {
+            let mut rest = line;
+            while let Some(offset) = rest.find("--only=") {
+                let after = &rest[offset + "--only=".len()..];
+                let selector: String = after
+                    .chars()
+                    .take_while(|ch| {
+                        ch.is_ascii_alphanumeric()
+                            || *ch == '_'
+                            || *ch == '-'
+                            || *ch == ','
+                            || *ch == '<'
+                            || *ch == '>'
+                    })
+                    .collect();
+                let selector_len = selector.len();
+                if !selector.is_empty() && !selector.contains('<') && !selector.contains('>') {
+                    selectors.push(selector);
+                }
+                rest = &after[selector_len..];
+            }
+        }
+        selectors
+    }
+
+    fn selector_families(selector: &str) -> Vec<String> {
+        let mut families: Vec<String> = selector
+            .split(',')
+            .filter(|family| !family.is_empty())
+            .map(str::to_owned)
+            .collect();
+        families.sort();
+        families.dedup();
+        families
+    }
+
     fn family_list(families: &[String]) -> String {
         if families.is_empty() {
             "-".to_owned()
@@ -553,14 +698,85 @@ mod tests {
         }
     }
 
+    fn sorted_set_list(families: BTreeSet<String>) -> Vec<String> {
+        families.into_iter().collect()
+    }
+
+    fn partial_summary_error(
+        surface: &str,
+        text: &str,
+        packaged: &BTreeMap<String, usize>,
+        family_programs: &BTreeMap<String, BTreeSet<u8>>,
+        include_family_prefixes: bool,
+    ) -> Option<String> {
+        if packaged.len() > 8 {
+            return None;
+        }
+        let mut mentions: BTreeSet<String> = family_gm_mentions(text, family_programs)
+            .into_iter()
+            .collect();
+        if include_family_prefixes {
+            mentions.extend(family_prefix_mentions(text, packaged));
+        }
+        if mentions.is_empty() || mentions.len() == packaged.len() {
+            return None;
+        }
+        let missing: BTreeSet<String> = packaged
+            .keys()
+            .filter(|family| !mentions.contains(*family))
+            .cloned()
+            .collect();
+        Some(format!(
+            "{surface} summary names a partial family list (mentions {}; omits {})",
+            family_list(&sorted_set_list(std::mem::take(&mut mentions))),
+            family_list(&sorted_set_list(missing))
+        ))
+    }
+
+    fn regeneration_selector_errors(
+        surface: &str,
+        markdown: &str,
+        packaged: &BTreeMap<String, usize>,
+    ) -> Vec<String> {
+        concrete_prepare_only_selectors(markdown)
+            .into_iter()
+            .filter_map(|selector| {
+                let selected = selector_families(&selector);
+                if !selected.iter().any(|family| packaged.contains_key(family)) {
+                    return None;
+                }
+                let missing: Vec<String> = packaged
+                    .keys()
+                    .filter(|family| !selected.contains(*family))
+                    .cloned()
+                    .collect();
+                let extra: Vec<String> = selected
+                    .iter()
+                    .filter(|family| !packaged.contains_key(*family))
+                    .cloned()
+                    .collect();
+                (!missing.is_empty() || !extra.is_empty()).then(|| {
+                    format!(
+                        "{surface} regeneration selector `--only={selector}` does not match \
+                         packaged families (missing {}; extra {})",
+                        family_list(&missing),
+                        family_list(&extra)
+                    )
+                })
+            })
+            .collect()
+    }
+
     fn public_inventory_surface_errors(
         packaged: &BTreeMap<String, usize>,
         readme: &str,
+        provenance: &str,
         manifest: &str,
         lib: &str,
     ) -> Vec<String> {
         let mut errors = Vec::new();
         let packaged_families: Vec<String> = packaged.keys().cloned().collect();
+        let family_programs = documented_family_programs(readme, provenance, packaged);
 
         let readme_rows = markdown_family_patterns(readme);
         let mut readme_table_is_complete = false;
@@ -596,22 +812,43 @@ mod tests {
 
         match package_description(manifest) {
             Ok(description) => {
-                let mentions = family_prefix_mentions(&description, packaged);
-                if mentions.len() >= 3 && mentions.len() < packaged.len() {
-                    let missing: Vec<String> = packaged_families
-                        .iter()
-                        .filter(|family| !mentions.contains(*family))
-                        .cloned()
-                        .collect();
-                    errors.push(format!(
-                        "manifest description names a partial family list (mentions {}; omits {})",
-                        family_list(&mentions),
-                        family_list(&missing)
-                    ));
+                if let Some(error) = partial_summary_error(
+                    "manifest description",
+                    &description,
+                    packaged,
+                    &family_programs,
+                    true,
+                ) {
+                    errors.push(error);
                 }
             }
             Err(error) => errors.push(format!("manifest description is malformed: {error}")),
         }
+
+        if let Some(error) = partial_summary_error(
+            "README introduction",
+            &markdown_intro(readme),
+            packaged,
+            &family_programs,
+            false,
+        ) {
+            errors.push(error);
+        }
+        if let Some(error) = partial_summary_error(
+            "module docs",
+            &module_docs(lib),
+            packaged,
+            &family_programs,
+            false,
+        ) {
+            errors.push(error);
+        }
+        errors.extend(regeneration_selector_errors("README", readme, packaged));
+        errors.extend(regeneration_selector_errors(
+            "PROVENANCE",
+            provenance,
+            packaged,
+        ));
 
         let lib_lower = lib.to_ascii_lowercase();
         if lib_lower.contains("provenance")
@@ -671,11 +908,12 @@ mod tests {
                     .unwrap_or_else(|e| panic!("cannot read {krate}/{rel}: {e}"))
             };
             let readme = read("README.md");
+            let provenance = read("PROVENANCE.md");
             let manifest = read("Cargo.toml");
             let lib = read("src/lib.rs");
             checked += 1;
             errors.extend(
-                public_inventory_surface_errors(&packaged, &readme, &manifest, &lib)
+                public_inventory_surface_errors(&packaged, &readme, &provenance, &manifest, &lib)
                     .into_iter()
                     .map(|error| format!("{krate}: {error}")),
             );
@@ -855,13 +1093,93 @@ description = \"Embedded samples for ferrosintesis (banjo, glock, harp)\"\n";
 //! Embedded samples.\n\
 //!\n\
 //! Source provenance is in README.md and tools/ferrosintesis-samples.\n";
+        let provenance = "\
+| Family | Files | Instrument |\n\
+| --- | ---: | --- |\n\
+| `banjo_*` | 24 | Banjo (GM 105) |\n\
+| `eastpick_*` | 8 | Steel guitar (GM 25) |\n\
+| `glock_*` | 4 | Glockenspiel (GM 9) |\n\
+| `harp_*` | 11 | Harp (GM 46) |\n";
 
-        let errors = public_inventory_surface_errors(&packaged, readme, manifest, lib);
+        let errors = public_inventory_surface_errors(&packaged, readme, provenance, manifest, lib);
         assert!(errors.iter().any(|error| error.contains("README")));
         assert!(errors
             .iter()
             .any(|error| error.contains("manifest description")));
         assert!(errors.iter().any(|error| error.contains("module docs")));
+    }
+
+    #[test]
+    fn public_inventory_oracle_rejects_partial_regeneration_selector_with_complete_table() {
+        let packaged = BTreeMap::from([
+            ("cellosolo".to_owned(), 16),
+            ("dbass".to_owned(), 16),
+            ("pizzbass".to_owned(), 8),
+        ]);
+        let readme = "\
+| Prefix | GM | Instrument |\n\
+| --- | --- | --- |\n\
+| `cellosolo_*` | 42 | Solo cello |\n\
+| `dbass_*` | 43 | Solo double bass |\n\
+| `pizzbass_*` | 32 | Pizzicato double bass |\n\
+\n\
+Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=cellosolo,dbass`.\n";
+        let provenance = "\
+| Family | Files | Instrument |\n\
+| --- | ---: | --- |\n\
+| `cellosolo_*` | 16 | Solo cello (GM 42) |\n\
+| `dbass_*` | 16 | Solo double bass (GM 43) |\n\
+| `pizzbass_*` | 8 | Pizzicato double bass (GM 32) |\n";
+        let manifest = "\
+[package]\n\
+description = \"Embedded CC0 string samples for ferrosintesis; packaged PROVENANCE.md lists the full inventory\"\n";
+        let lib = "//! Source provenance is in packaged `PROVENANCE.md`.\n";
+
+        let errors = public_inventory_surface_errors(&packaged, readme, provenance, manifest, lib);
+        assert_eq!(
+            errors,
+            ["README regeneration selector `--only=cellosolo,dbass` does not match packaged families (missing `pizzbass_*`; extra -)"]
+        );
+    }
+
+    #[test]
+    fn public_inventory_oracle_rejects_two_of_three_gm_summary() {
+        let packaged = BTreeMap::from([
+            ("cellosolo".to_owned(), 16),
+            ("dbass".to_owned(), 16),
+            ("pizzbass".to_owned(), 8),
+        ]);
+        let readme = "\
+Embedded string samples for GM 42 cello and GM 43 double bass.\n\
+\n\
+| Prefix | GM | Instrument |\n\
+| --- | --- | --- |\n\
+| `cellosolo_*` | 42 | Solo cello |\n\
+| `dbass_*` | 43 | Solo double bass |\n\
+| `pizzbass_*` | 32 | Pizzicato double bass |\n";
+        let provenance = "\
+| Family | Files | Instrument |\n\
+| --- | ---: | --- |\n\
+| `cellosolo_*` | 16 | Solo cello (GM 42) |\n\
+| `dbass_*` | 16 | Solo double bass (GM 43) |\n\
+| `pizzbass_*` | 8 | Pizzicato double bass (GM 32) |\n";
+        let manifest = "\
+[package]\n\
+description = \"Embedded samples for GM 42 cello and GM 43 double bass\"\n";
+        let lib = "\
+//! Embedded samples for GM 42 cello and GM 43 double bass.\n\
+//! Source provenance is in packaged `PROVENANCE.md`.\n";
+
+        let errors = public_inventory_surface_errors(&packaged, readme, provenance, manifest, lib);
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("manifest description summary")));
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("README introduction summary")));
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("module docs summary")));
     }
 
     #[test]
@@ -880,13 +1198,28 @@ The canonical packaged inventory is `PROVENANCE.md`.\n";
 [package]\n\
 description = \"Embedded CC0 onset samples for ferrosintesis; packaged PROVENANCE.md lists the full inventory\"\n";
         let lib = "//! Source provenance is in packaged `PROVENANCE.md`.\n";
+        let provenance = "\
+| Family | Files | Instrument |\n\
+| --- | ---: | --- |\n\
+| `banjo_*` | 24 | Banjo (GM 105) |\n\
+| `harp_*` | 11 | Harp (GM 46) |\n";
 
-        assert!(
-            public_inventory_surface_errors(&packaged, complete_readme, manifest, lib).is_empty()
-        );
-        assert!(
-            public_inventory_surface_errors(&packaged, delegated_readme, manifest, lib).is_empty()
-        );
+        assert!(public_inventory_surface_errors(
+            &packaged,
+            complete_readme,
+            provenance,
+            manifest,
+            lib
+        )
+        .is_empty());
+        assert!(public_inventory_surface_errors(
+            &packaged,
+            delegated_readme,
+            provenance,
+            manifest,
+            lib
+        )
+        .is_empty());
     }
 
     /// Every sample crate ships a `PROVENANCE.md`, and actually packages it.

@@ -1,14 +1,16 @@
 # ferrosintesis-samples-strings
 
-Embedded **CC0 1.0 / public-domain** solo-bowed-string onset samples for
+Embedded **CC0 1.0 / public-domain** solo string onset samples for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis): real **solo cello**
-(GM 42) and **solo double bass** (GM 43) attack transients. Each WAV is a mono
-16-bit 44.1 kHz onset; the synth plays it as the note's attack and crossfades
-into the modeled bowed-string waveguide sustain.
+(GM 42 arco), **solo double bass** (GM 43 arco), and **pizzicato double bass**
+(GM 32 acoustic bass) attack transients. Each WAV is a mono 16-bit 44.1 kHz
+onset; the synth plays it as the note's attack and crossfades into the
+appropriate modeled sustain.
 
-These replace the previous GM 42/43 onset, which repitched the VSCO cello-*section*
-(`celens`) recording — an ensemble that read as a small cello section rather than a
-soloist, and (for GM 43) as a cello an octave low rather than a double bass.
+The arco cello and double-bass families replace the previous GM 42/43 onset,
+which repitched the VSCO cello-*section* (`celens`) recording — an ensemble that
+read as a small cello section rather than a soloist, and (for GM 43) as a cello
+an octave low rather than a double bass.
 
 | Prefix | GM | Instrument | Source | License |
 |--------|----|-----------|--------|---------|
@@ -22,4 +24,4 @@ pitch; the bake in `tools/ferrosintesis-samples/prepare.py` measures every root 
 names by the sounding pitch, so the zone tables never trust the source label.
 
 No attribution is required (CC0). Regenerate with
-`python3 tools/ferrosintesis-samples/prepare.py --only=cellosolo,dbass`.
+`python3 tools/ferrosintesis-samples/prepare.py --only=cellosolo,dbass,pizzbass`.

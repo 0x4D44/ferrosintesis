@@ -1,15 +1,16 @@
-//! Embedded CC0 1.0 solo-bowed-string onset samples for ferrosintesis.
+//! Embedded CC0 1.0 solo string onset samples for ferrosintesis.
 //!
 //! Real SOLO cello (GM 42, Karoryfer x bigcat "Bigcat Cello", down-bow arco) and
-//! SOLO double bass (GM 43, VSCO 2 CE "Solo Contrabass", non-vibrato arco) attack
-//! transients. These replace the previous onset for GM 42/43, which repitched the
-//! VSCO cello-*section* (`celens`) samples — an ensemble recording that read as a
-//! small cello section rather than a soloist, and (for GM 43) as a cello an octave
-//! low rather than a double bass. Each WAV is a mono 16-bit 44.1 kHz onset;
-//! `ferrosintesis` plays it as the note's attack and crossfades into the modeled
-//! bowed-string waveguide sustain. Consumers normally access this crate through
+//! SOLO double bass (GM 43, VSCO 2 CE "Solo Contrabass", non-vibrato arco), plus
+//! VSCO 2 CE pizzicato double bass for GM 32 acoustic bass. The arco families
+//! replace the previous onset for GM 42/43, which repitched the VSCO
+//! cello-*section* (`celens`) samples — an ensemble recording that read as a small
+//! cello section rather than a soloist, and (for GM 43) as a cello an octave low
+//! rather than a double bass. Each WAV is a mono 16-bit 44.1 kHz onset;
+//! `ferrosintesis` plays it as the note's attack and crossfades into the
+//! appropriate modeled sustain. Consumers normally access this crate through
 //! `ferrosintesis`, not directly. All samples are CC0 1.0 / public-domain — no
-//! attribution required; provenance is in README.md and `tools/ferrosintesis-samples/`.
+//! attribution required; provenance is in packaged `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

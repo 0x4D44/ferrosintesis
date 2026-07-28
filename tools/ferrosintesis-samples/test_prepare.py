@@ -2025,6 +2025,23 @@ class MtgSaxCacheTest(unittest.TestCase):
     def fetch_count(self, suffix):
         return sum(1 for name in self.fetches if name.endswith(suffix))
 
+    def test_legacy_unmanifested_warm_cache_is_not_trusted(self):
+        for dyn in ("f", "p"):
+            self.write_region(dyn)
+        with open(self.flac, "wb") as f:
+            f.write(b"ALTERED")
+        self.write_constant_wav(self.wav, 2222)
+
+        self.bake()
+
+        self.assertGreater(self.fetch_count("_rr1.txt"), 0)
+        self.assertGreater(self.fetch_count(".flac"), 0)
+        self.assertGreater(self.decodes, 0)
+        self.assertEqual(prepare.sha256_file(self.flac),
+                         hashlib.sha256(self.served_flac).hexdigest())
+        samples, _sr = prepare.read_wav(self.wav)
+        self.assertAlmostEqual(samples[0], 1000 / 8388608.0)
+
     def test_valid_manifested_warm_cache_is_reused_without_refetch_or_decode(self):
         self.bake()
         fetches = list(self.fetches)

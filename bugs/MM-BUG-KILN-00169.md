@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** B1 sample crate / regeneration reliability
 - **Raised:** 2026-07-29
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260728T234120Z-p63176-n935322400-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00169-run-fix-20260728T234120Z-p63176-n935322400-c1
+- **Owner base:** 9887302d9aed374a958db8079317c2fb367ef48e
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-28T23:41:20Z
+- **Owner until:** 2026-07-29T01:41:20Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -3535,8 +3535,8 @@ def main():
                 ms_src, 8, "celesta", "ferrosintesis-samples-musescore", 0.9, 0.24
             )
 
-        # GM 61 brass section: preserve 1.2 s of the real ensemble attack and early
-        # body, then hand over to the bendable modeled section. The reviewed preset
+        # GM 61 brass section: preserve 1.9 s of the real ensemble attack and body,
+        # then hand over to the bendable modeled section. The reviewed preset
         # has ten unique mono roots; reject source drift before writing any output.
         if want("brasssection"):
             ms_src = os.path.join(tempfile.gettempdir(), "musescore_sf3", MUSESCORE_REV)
@@ -3546,7 +3546,7 @@ def main():
                 61,
                 "brasssection",
                 "ferrosintesis-samples-musescore",
-                1.2,
+                1.9,
                 0.20,
                 expected_roots=BRASS_SECTION_ROOTS,
             )

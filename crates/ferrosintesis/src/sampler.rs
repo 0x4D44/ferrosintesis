@@ -8042,15 +8042,53 @@ mod tests {
         );
     }
 
+    /// Arthur's 2026-07-28 listening check caught the C5/E5/G5 audition chord
+    /// handing back to the synthetic model by 0.42 s. The bank contains useful
+    /// recorded body beyond that point, so the sample must still materially
+    /// distinguish the high register from the model in the 0.45–0.65 s window.
+    #[test]
+    fn brass_section_recording_carries_the_high_early_body() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        let sr = 44100.0;
+        for key in [72u8, 76, 79] {
+            let render = |samples: bool| {
+                let mut voice = voices::make(61, key, 96, sr, 6, samples);
+                let mut buf = vec![0.0; (0.70 * sr) as usize];
+                voice.render(&mut buf);
+                buf
+            };
+            let (sampled, modeled) = (render(true), render(false));
+            let a = (0.45 * sr) as usize;
+            let b = (0.65 * sr) as usize;
+            let sampled = &sampled[a..b];
+            let modeled = &modeled[a..b];
+            let model_power = modeled.iter().map(|x| x * x).sum::<f32>().max(1e-12);
+            let align = sampled.iter().zip(modeled).map(|(x, y)| x * y).sum::<f32>() / model_power;
+            let residual: Vec<f32> = sampled
+                .iter()
+                .zip(modeled)
+                .map(|(x, y)| x - align * y)
+                .collect();
+            let ratio = crate::testutil::rms(&residual) / crate::testutil::rms(sampled).max(1e-9);
+            assert!(
+                ratio >= 0.20,
+                "GM61 key {key}: recorded high body has already vanished by 0.45 s \
+                 (gain-aligned residual {ratio:.3})"
+            );
+        }
+    }
+
     /// Every eligible GM61 repitch must have enough decoded PCM to reach the
-    /// 420 ms handover endpoint before the read head reaches the source tail.
+    /// 800 ms handover endpoint before the read head reaches the source tail.
     #[test]
     fn brass_section_source_covers_the_full_handover_window() {
         if !crate::embedded_samples_available() {
             return;
         }
         let bank = brass_section_bank();
-        let fade_frames = 0.42 * 44100.0;
+        let fade_frames = 0.80 * 44100.0;
         let baked_fade_frames = 0.20 * 44100.0;
         for key in 0u8..=127 {
             let target = crate::dsp::key_freq(key);
@@ -8131,7 +8169,7 @@ mod tests {
         }
         let sr = 44100.0;
         let window = (0.005 * sr) as usize;
-        for off_s in [0.11f32, 0.13, 0.41, 0.43] {
+        for off_s in [0.44f32, 0.46, 0.79, 0.81] {
             let mut voice = voices::make(61, 60, 100, sr, 6, true);
             let mut before = vec![0.0; (off_s * sr) as usize];
             voice.render(&mut before);

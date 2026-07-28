@@ -10251,9 +10251,9 @@ pub(crate) const LA_PIANO: (f32, (f32, f32)) = (0.90, (0.18, 0.85));
 // level at the seam; 0.45 meets it inside the la_level_continuity cap.
 const LA_BRASS: (f32, (f32, f32)) = (0.45, (0.10, 0.32));
 // GM 61's real ensemble onset speaks a little more slowly than the solo-brass
-// bank. Keep its early body through 120 ms, then hand over to the bendable model
-// by 420 ms. The 1.2 s source remains long enough at the 2.05x repitch limit.
-const LA_BRASS_SECTION: (f32, (f32, f32)) = (0.45, (0.12, 0.42));
+// bank. Keep its recorded body through 450 ms, then hand over to the bendable
+// model by 800 ms. The 1.9 s source remains long enough at the 2.05x repitch limit.
+const LA_BRASS_SECTION: (f32, (f32, f32)) = (0.45, (0.45, 0.80));
 /// The tuba speaks slowly — its sampled front carries little early RMS —
 /// so its wrap gain scales up further to meet the model at the seam
 /// (probed via la_level_continuity's differential windows).
@@ -13019,8 +13019,15 @@ impl Voice for Brass {
                 sum = y * 0.40;
             }
             // BR10 flutter AM (post-decimation, so its ±30 Hz sidebands can't
-            // alias); same growl_cur as the bite, so both halves ramp together
-            let am = 1.0 - BR_GROWL_AM * self.growl_cur * (1.0 + self.flutter.next()) * 0.5;
+            // alias). A solo player's growl can flutter as one lip; applying
+            // that same AM after summing GM61's five players makes the entire
+            // section pump coherently. Keep the section's aftertouch-driven
+            // brightness/drive above, but not this bus-wide motorboating.
+            let am = if section_identity {
+                1.0
+            } else {
+                1.0 - BR_GROWL_AM * self.growl_cur * (1.0 + self.flutter.next()) * 0.5
+            };
             sum *= am;
 
             // BR6 tongue transient ("tuh"): a fresh-attack onset spike, added
@@ -14081,9 +14088,10 @@ const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     // Brass: lip bite and chiff are velocity-driven excitation.
     t[56] = 1.284; t[57] = 0.886; t[58] = 1.627; t[59] = 1.530; t[60] = 1.680;
     // GM 61's sampled composite has a separate response from its model-only
-    // fallback: raw k=2.552/2.673 at keys 48/60, so the census-derived
-    // correction is 1.387. The bare model retains its prior 1.380 below.
-    t[61] = 1.387;
+    // fallback. Extending the recording through the 0.45-0.80 s handover
+    // re-measures k=1.506/1.718 at keys 48/60 with the old correction, so the
+    // census-derived correction is 1.775. The bare model retains 1.380 below.
+    t[61] = 1.775;
     // Reeds and pipes: breath pressure drives the reed/edge tone.
     t[65] = 2.066; t[66] = 2.085; t[68] = 1.675; t[69] = 1.760; t[70] = 1.590;
     // GM76 has NO entry: it was 1.450 for the retired modeled pan-flute/bottle, but
@@ -24803,6 +24811,36 @@ mod tests {
             hp_on / hp_off >= 1.4,
             "growl bite hp(2k) ratio {:.3} (need ≥ 1.4)",
             hp_on / hp_off
+        );
+    }
+
+    /// A brass section must not pump all five players through one coherent
+    /// 30 Hz amplitude modulator. Aftertouch still opens the modeled tone, but
+    /// the post-sum flutter that sounds like motorboating belongs to solo brass.
+    #[test]
+    fn brass_section_aftertouch_has_no_coherent_flutter() {
+        let sr = 44100.0;
+        let run = |growl: f32| {
+            let mut voice = brass(61, 60, 92, sr, 7);
+            let mut warm = vec![0.0; (0.4 * sr) as usize];
+            voice.render(&mut warm);
+            voice.set_breath(1.0, growl);
+            let mut buf = vec![0.0; (1.4 * sr) as usize];
+            voice.render(&mut buf);
+            let seg = &buf[(0.4 * sr) as usize..(1.3 * sr) as usize];
+            (flutter30(seg, sr), hp_rms(seg, sr, 2000.0))
+        };
+        let (plain_flutter, plain_high) = run(0.0);
+        let (pressed_flutter, pressed_high) = run(112.0 / 127.0);
+        assert!(
+            pressed_flutter < 0.04 && pressed_flutter < 1.8 * plain_flutter,
+            "GM61 aftertouch pumps the whole section at 30 Hz: \
+             plain {plain_flutter:.4}, pressed {pressed_flutter:.4}"
+        );
+        assert!(
+            pressed_high > 1.05 * plain_high,
+            "GM61 aftertouch lost its tonal response: high-band ratio {:.3}",
+            pressed_high / plain_high.max(1e-9)
         );
     }
 

@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00157 — Sax regeneration trusts unauthenticated warm-cache inputs
 
-- **State:** Fixed
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / sax cache
 - **Raised:** 2026-07-28
-- **Owner:** deltic:claude
-- **Owner role:** verify
-- **Owner run:** verify-20260728T162705Z-p57192-n426209200-c251
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00157-run-verify-20260728T162705Z-p57192-n426209200-c251
-- **Owner base:** f3719784f605e28f40fdcd5b9c76fdb3d1c6ecbf
-- **Owner fingerprint:** sha256:597aa5c7da1eaeb591b9ac5df5fcde190af8c43a979d0984eb8b1415ba83ea8b
-- **Owner since:** 2026-07-28T16:27:05Z
-- **Owner until:** 2026-07-28T17:12:05Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
-- **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T030703Z-p57192-n099327800-c79 branch=task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79 code=336355b461c7f32a82cca417a1ac8ef1e02eb33e gate=deltic model=codex@xhigh)
+- **Attempts:** fix=0, doubt=1, indeterminate=0
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) → Fixed (2026-07-28, deltic:auto role=fix run=fix-20260728T030703Z-p57192-n099327800-c79 branch=task/bug-MM-BUG-KILN-00157-run-fix-20260728T030703Z-p57192-n099327800-c79 code=336355b461c7f32a82cca417a1ac8ef1e02eb33e gate=deltic model=codex@xhigh) → Open (2026-07-28, deltic:auto role=verify run=verify-20260728T162705Z-p57192-n426209200-c251 verified_fix_run=fix-20260728T030703Z-p57192-n099327800-c79 verdict=doubt reason=fix-is-statically-sound-and-5-6-gate-steps-are-green-but-python3-is-denied-in-th model=claude)
 
 ## Observation
 
@@ -49,5 +49,9 @@ Focused validation:
 
 - `python3 -m unittest test_prepare.DirectSourceCacheTest test_prepare.PinnedFlacCacheTest test_prepare.PinnedWarmCacheAuthenticationTest test_prepare.MtgSaxCacheTest` — 28 passed.
 - `deltic integrate --push` — affected-area gate passed and landed code commit `336355b461c7f32a82cca417a1ac8ef1e02eb33e`.
+
+### Verification summary (2026-07-28, deltic:auto run=verify-20260728T162705Z-p57192-n426209200-c251 verified_fix_run=fix-20260728T030703Z-p57192-n099327800-c79 verdict=doubt)
+
+Verifier note: Fix is statically sound and 5/6 gate steps are green, but python3 is denied in this session so the Python regression suite - the only gate step covering this bug - was never executed. — HEAD=9569393, fix commit 336355b confirmed an ancestor (touches only tools/ferrosintesis-samples/prepare.py + test_prepare.py). (1) Symptom, STATIC only: pre-fix _mtg_region_keys and _bake_mtg_sax used 'if not os.path.exists(p): fetch(...)' and 'if not os.path.exists(wav): subprocess.run(ffmpeg)'; on trunk they route through ensure_source (prepare.py:1242, digest+URL via direct_source_matches:1279) and _ensure_...
 
 ## Notes

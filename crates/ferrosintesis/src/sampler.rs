@@ -1399,19 +1399,7 @@ fn kawai_pp_rr2() -> &'static [Zone] {
 }
 
 fn kawai_mf() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "kawai_C2_mf.wav" => 65.12,
-            "kawai_A2_mf.wav" => 109.50,
-            "kawai_C3_mf.wav" => 130.47,
-            "kawai_A#3_mf.wav" => 231.60,
-            "kawai_C4_mf.wav" => 261.05,
-            "kawai_A#4_mf.wav" => 464.18,
-            "kawai_C5_mf.wav" => 521.86,
-            "kawai_C6_mf.wav" => 1045.95,
-        )
-    })
+    kawai_pp_rr2()
 }
 
 fn kawai_mf_rr2() -> &'static [Zone] {
@@ -1447,19 +1435,7 @@ fn kawai_f() -> &'static [Zone] {
 }
 
 fn kawai_f_rr2() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "kawai_C2_f_rr2.wav" => 65.51,
-            "kawai_A2_f_rr2.wav" => 109.95,
-            "kawai_C3_f_rr2.wav" => 131.34,
-            "kawai_A#3_f_rr2.wav" => 233.31,
-            "kawai_C4_f_rr2.wav" => 261.90,
-            "kawai_A#4_f_rr2.wav" => 466.39,
-            "kawai_C5_f_rr2.wav" => 522.87,
-            "kawai_C6_f_rr2.wav" => 1046.29,
-        )
-    })
+    kawai_mf_rr2()
 }
 
 /// Velocity picks the dynamic layer; the seed alternates round robins, like
@@ -7340,6 +7316,21 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn kawai_logical_aliases_share_decoded_banks() {
+        if !crate::embedded_samples_available() {
+            return;
+        }
+        assert!(
+            std::ptr::eq(kawai_pp_rr2(), kawai_mf()),
+            "Kawai pp RR2 and mf RR1 are the same upstream velocity layer"
+        );
+        assert!(
+            std::ptr::eq(kawai_mf_rr2(), kawai_f_rr2()),
+            "Kawai mf RR2 and f RR2 are the same upstream velocity layer"
+        );
     }
 
     fn pitch_of(seg: &[f32], sr: f32) -> f32 {

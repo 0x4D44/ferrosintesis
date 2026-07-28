@@ -16,6 +16,34 @@ import subprocess
 import sys
 
 
+def read_aliases(crate, physical_names):
+    """Read optional `ALIASES` rows as `logical-name canonical-physical-name`."""
+    path = os.path.join(crate, "ALIASES")
+    if not os.path.isfile(path):
+        return {}
+    physical = set(physical_names)
+    aliases = {}
+    with open(path, encoding="utf-8") as f:
+        for number, raw in enumerate(f, 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            fields = line.split()
+            if len(fields) != 2:
+                raise ValueError(f"{path}:{number}: expected ALIAS CANONICAL")
+            alias, canonical = fields
+            if alias in physical:
+                raise ValueError(f"{path}:{number}: alias {alias} is also a physical WAV")
+            if canonical not in physical:
+                raise ValueError(
+                    f"{path}:{number}: canonical target {canonical} is not a physical WAV"
+                )
+            if alias in aliases:
+                raise ValueError(f"{path}:{number}: duplicate alias {alias}")
+            aliases[alias] = canonical
+    return aliases
+
+
 def main():
     crate = sys.argv[1]
     doc = "Embedded ferrosintesis sample bank."
@@ -30,6 +58,7 @@ def main():
     names = sorted(f for f in os.listdir(samples_dir) if f.endswith(".wav"))
     if not names:
         raise SystemExit(f"no .wav files in {samples_dir}")
+    aliases = read_aliases(crate, names)
     total = sum(os.path.getsize(os.path.join(samples_dir, n)) for n in names)
     manifest_path = os.path.join(crate, "Cargo.toml")
     with open(manifest_path, encoding="utf-8") as f:
@@ -56,14 +85,29 @@ def main():
     lines.append("")
     lines.append("/// Number of WAV files embedded in this package.")
     lines.append(f"pub const FILE_COUNT: usize = {len(names)};")
+    if aliases:
+        lines.append("")
+        lines.append("/// Number of exact logical names accepted, including aliases.")
+        lines.append(f"pub const LOGICAL_FILE_COUNT: usize = {len(names) + len(aliases)};")
     lines.append("")
     lines.append("static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [")
     for n in names:
         lines.append(f'    ("{n}", include_bytes!("../samples/{n}")),')
     lines.append("];")
+    if aliases:
+        lines.append("")
+        lines.append(f"static ALIASES: [(&str, &str); {len(aliases)}] = [")
+        for alias, canonical in sorted(aliases.items()):
+            lines.append(f'    ("{alias}", "{canonical}"),')
+        lines.append("];")
     lines.append("")
     lines.append("/// Returns the embedded WAV bytes for an exact (case-sensitive) file name.")
     lines.append("pub fn get(name: &str) -> Option<&'static [u8]> {")
+    if aliases:
+        lines.append("    let name = ALIASES")
+        lines.append("        .iter()")
+        lines.append("        .find(|(alias, _)| *alias == name)")
+        lines.append("        .map_or(name, |(_, canonical)| *canonical);")
     lines.append("    SAMPLES")
     lines.append("        .iter()")
     lines.append("        .find(|(candidate, _)| *candidate == name)")
@@ -114,6 +158,43 @@ def main():
     lines.append("        }")
     lines.append('        assert_eq!(get("missing.wav"), None);')
     lines.append("    }")
+    if aliases:
+        lines.append("")
+        lines.append("    #[test]")
+        lines.append("    fn aliases_resolve_without_duplicate_physical_payloads() {")
+        lines.append("        assert_eq!(LOGICAL_FILE_COUNT, FILE_COUNT + ALIASES.len());")
+        lines.append("        let declared: Vec<(&str, &str)> = include_str!(\"../ALIASES\")")
+        lines.append("            .lines()")
+        lines.append("            .filter_map(|line| {")
+        lines.append("                let line = line.trim();")
+        lines.append("                if line.is_empty() || line.starts_with('#') {")
+        lines.append("                    return None;")
+        lines.append("                }")
+        lines.append("                let mut fields = line.split_whitespace();")
+        lines.append("                let pair = (fields.next().unwrap(), fields.next().unwrap());")
+        lines.append("                assert!(fields.next().is_none(), \"malformed alias row {line}\");")
+        lines.append("                Some(pair)")
+        lines.append("            })")
+        lines.append("            .collect();")
+        lines.append("        assert_eq!(declared, ALIASES);")
+        lines.append("        for (alias, canonical) in ALIASES {")
+        lines.append("            assert_eq!(get(alias), get(canonical), \"alias {alias}\");")
+        lines.append("        }")
+        lines.append("        for (left, (left_name, left_bytes)) in")
+        lines.append("            SAMPLES.iter().copied().enumerate()")
+        lines.append("        {")
+        lines.append("            for (right_name, right_bytes) in")
+        lines.append("                SAMPLES.iter().copied().skip(left + 1)")
+        lines.append("            {")
+        lines.append("                assert!(")
+        lines.append("                    left_bytes != right_bytes,")
+        lines.append("                    \"undeclared duplicate payloads: {} and {}\",")
+        lines.append("                    left_name,")
+        lines.append("                    right_name")
+        lines.append("                );")
+        lines.append("            }")
+        lines.append("        }")
+        lines.append("    }")
     lines.append("}")
     lines.append("")
 

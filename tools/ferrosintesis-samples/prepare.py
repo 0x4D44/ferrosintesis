@@ -684,6 +684,21 @@ GRAND_SOURCES = {
     for rr, v in (("", v_rr1), ("_rr2", v_rr2))
 }
 
+
+def _canonicalize_source_aliases(logical_sources):
+    """Split logical names into one physical name per source plus exact-name aliases."""
+    canonical_for_source = {}
+    physical = {}
+    aliases = {}
+    for name, source in logical_sources.items():
+        canonical = canonical_for_source.get(source)
+        if canonical is None:
+            canonical_for_source[source] = name
+            physical[name] = source
+        else:
+            aliases[name] = canonical
+    return physical, aliases
+
 # --- GM0 alternate grand banks (CC0-selectable audition; see the 2026.07.18 PLN) ---
 # VCSL "Grand Piano, Steinway B" (CC0) -> GM0 CC0=3. A warm, intimate vintage
 # Steinway, the tonal opposite of the bright Salamander C5. Whole-tone sampled, so
@@ -730,13 +745,14 @@ _KAWAI_ZONE_LABEL = {
 }
 # dynamic -> (RR1 velocity, RR2 velocity) over v1..v4.
 _KAWAI_VEL = {"pp": (1, 2), "mf": (2, 3), "f": (4, 3)}
-KAWAI_SOURCES = {
+_KAWAI_LOGICAL_SOURCES = {
     f"kawai_{zone}_{d}{rr}.wav":
         f"{_VCSL_KAWAI_BASE}/GPiano_sus_{lbl.replace('#', '%23')}_v{v}_rr1_Player.wav"
     for zone, lbl in _KAWAI_ZONE_LABEL.items()
     for d, (v_rr1, v_rr2) in _KAWAI_VEL.items()
     for rr, v in (("", v_rr1), ("_rr2", v_rr2))
 }
+KAWAI_SOURCES, KAWAI_ALIASES = _canonicalize_source_aliases(_KAWAI_LOGICAL_SOURCES)
 
 # Headroom / Intimate Piano (Bengt Nilsson, Yamaha C3), CC-BY 4.0 -> GM0 CC0=4.
 # A warm, intimate close-mic C3 studio grand. Distributed as FLAC (ffmpeg-transcoded,

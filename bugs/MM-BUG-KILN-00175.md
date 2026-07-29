@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample assets / drum-kit2 inventory
 - **Raised:** 2026-07-29
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260729T142237Z-p72360-n516310600-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00175-run-fix-20260729T142237Z-p72360-n516310600-c1
+- **Owner base:** 75b2c2a7db0fb67d59c2fa51d79d2005e1c1f8ee
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-29T14:22:37Z
+- **Owner until:** 2026-07-29T16:22:37Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

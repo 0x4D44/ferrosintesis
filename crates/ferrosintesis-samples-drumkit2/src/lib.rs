@@ -348,20 +348,83 @@ fn decode_wav(bytes: &[u8]) -> Vec<i16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsStr;
+    use std::fs;
+    use std::path::Path;
+
+    fn validate_packaged_inventory(mut packaged: Vec<String>) -> Result<(), String> {
+        let mut embedded: Vec<String> =
+            SAMPLES.iter().map(|(name, _)| (*name).to_owned()).collect();
+        let mut unique = embedded.clone();
+        unique.sort();
+        unique.dedup();
+        if SAMPLES.len() != FILE_COUNT || unique.len() != FILE_COUNT {
+            return Err(format!(
+                "SAMPLES has {} rows, {} unique names; FILE_COUNT is {FILE_COUNT}",
+                SAMPLES.len(),
+                unique.len(),
+            ));
+        }
+
+        packaged.sort();
+        embedded.sort();
+        if packaged != embedded {
+            let unembedded: Vec<&str> = packaged
+                .iter()
+                .filter(|name| embedded.binary_search(name).is_err())
+                .map(String::as_str)
+                .collect();
+            let unpackaged: Vec<&str> = embedded
+                .iter()
+                .filter(|name| packaged.binary_search(name).is_err())
+                .map(String::as_str)
+                .collect();
+            return Err(format!(
+                "packaged WAVs absent from SAMPLES: {unembedded:?}; \
+                 SAMPLES entries absent from the package: {unpackaged:?}",
+            ));
+        }
+        Ok(())
+    }
 
     /// The embedded table must match the packaged directory exactly. Catches a
     /// sample added to `samples/` without regenerating, and vice versa.
     #[test]
     fn inventory_matches_packaged_wavs() {
-        assert_eq!(SAMPLES.len(), FILE_COUNT);
-        let mut names: Vec<&str> = SAMPLES.iter().map(|(n, _)| *n).collect();
-        names.sort_unstable();
-        names.dedup();
-        assert_eq!(names.len(), FILE_COUNT, "duplicate file name in SAMPLES");
+        let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
+        let packaged = fs::read_dir(samples_dir)
+            .expect("sample directory must exist")
+            .map(|entry| {
+                entry
+                    .expect("sample directory entry must be readable")
+                    .path()
+            })
+            .filter(|path| path.extension() == Some(OsStr::new("wav")))
+            .map(|path| {
+                path.file_name()
+                    .expect("sample must have a file name")
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        validate_packaged_inventory(packaged)
+            .unwrap_or_else(|error| panic!("packaged inventory mismatch: {error}"));
+
         for (name, bytes) in SAMPLES.iter() {
             assert!(name.ends_with(".wav"), "{name} is not a .wav");
             assert!(bytes.len() > 44, "{name} is smaller than a WAV header");
         }
+    }
+
+    #[test]
+    fn inventory_comparison_rejects_an_unembedded_packaged_wav() {
+        let mut packaged: Vec<String> =
+            SAMPLES.iter().map(|(name, _)| (*name).to_owned()).collect();
+        packaged.push("unembedded_fixture.wav".to_owned());
+
+        let error = validate_packaged_inventory(packaged)
+            .expect_err("an unembedded packaged WAV must fail the inventory oracle");
+        assert!(error.contains("unembedded_fixture.wav"), "{error}");
     }
 
     /// Velocity splits, carried over from the core crate's test when these four

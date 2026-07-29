@@ -35,7 +35,7 @@
   hand-maintained-list defect class, the enumeration question ("which families lack the
   guard?") is probably the real unit of work rather than b1-upright alone.
 
-- [ ] 2026.07.25 — **`percentile_uses_nearest_rank` pins the historical failing value, not the
+- [x] 2026.07.25 — **`percentile_uses_nearest_rank` pins the historical failing value, not the
   convention** — `crates/ferrosintesis/src/voices.rs` (the test beside `fn percentile`). It
   asserts one case, p95 of nine values. An adversarial review of the KILN-00055 closure showed
   at least three broken variants still pass it: `sorted[((len-1) as f32 * q).ceil()]`,
@@ -49,6 +49,8 @@
 - [ ] 2026.07.22 — **M-CAL residual watchlist: the metric disagrees with ear-vetted trims
   on the slow-attack families** — GM56/57 brass (−6.7/−6.3 dB), GM67 (−4.8), GM48/50/51
   ensembles (+3.7..+4.3). Either the single-held-note probe biases slow-attack voices, or
+  (Done 2026-07-29: added both cases. The q=0.05/n=9 case exercises the lower-rank
+  clamp; q=0.05/n=20 pins one-based nearest-rank indexing when q*n is integral.)
   those shipped trims are stale. Only listening settles which; do NOT renumber them on the
   metric alone. Evidence: residual-oracle section of `_cal/derivation_v3.txt`.
   (Re-verified 2026-07-25 and it REPRODUCES - every parked number lands within ~0.5 dB on a fresh

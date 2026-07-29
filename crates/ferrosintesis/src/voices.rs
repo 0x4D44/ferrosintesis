@@ -24498,6 +24498,21 @@ mod tests {
     fn percentile_uses_nearest_rank() {
         let sorted = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
         assert_eq!(percentile(&sorted, 0.95), 8.0);
+        assert_eq!(
+            percentile(&sorted, 0.05),
+            0.0,
+            "p5 must exercise the lower-rank clamp used by both live callers"
+        );
+
+        let integral_rank = [
+            0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+            16.0, 17.0, 18.0, 19.0,
+        ];
+        assert_eq!(
+            percentile(&integral_rank, 0.05),
+            0.0,
+            "nearest rank is one-based when q*n is integral"
+        );
     }
 
     /// p5–p95 spread (Hz) of a sliding spectral-centroid time-series over the sustain —

@@ -9796,7 +9796,19 @@ fn bowed_string_controls(
 ) -> (f32, f32) {
     let control = vel_ctrl(vel);
     if !matches!(program, 42 | 43) {
-        return (0.03 + 0.22 * control, natural_slope);
+        // A fast bow still owns the violin family's high-velocity brightness,
+        // but pressure and speed cannot both sit at their independent maxima:
+        // at v127 the hardest production draws mode-lock an octave high across
+        // GM40/41/110. Preserve every draw through v96, then move both controls
+        // toward the least-restrictive full-compass stable endpoint measured by
+        // `calibrate_violin_family_high_velocity_controls`: speed 0.22 with a
+        // force ceiling of 2.60. Softer natural draws remain untouched instead
+        // of converging upward.
+        let pressure_t =
+            ((control - vel_ctrl(96)) / (vel_ctrl(127) - vel_ctrl(96))).clamp(0.0, 1.0);
+        let force_cap = 2.9 + (2.60 - 2.9) * pressure_t;
+        let speed = 0.03 + 0.22 * control + (0.22 - 0.25) * pressure_t;
+        return (speed, natural_slope.min(force_cap));
     }
 
     // MM-BUG-KILN-00029: low strings used to run bow speed from 0.03 to 0.25
@@ -22423,6 +22435,28 @@ mod tests {
         }
     }
 
+    /// The contrabass's mid-bass register must keep enough coherent string
+    /// motion for its natural vibrato to remain audible across production seed
+    /// draws. These keys were previously routed around after noisy bow-force
+    /// draws buried the FM track.
+    #[test]
+    fn contrabass_mid_bass_keeps_natural_vibrato() {
+        let sr = 44100.0;
+        for key in 43u8..=45 {
+            let production = [0u64, 1, 2, 3, 19].map(crate::engine::note_voice_seed);
+            for seed in [7u32, 11, 13, 17, 23].into_iter().chain(production) {
+                let sig = render_program_sampled(43, key, 100, 7.0, seed, false);
+                let seg = segment(&sig, sr, 1.0, 6.95);
+                let (peak, rate) = crate::testutil::fm_mod_rate(seg, sr, key_freq(key), 2.5, 7.5);
+                assert!(
+                    peak >= 0.35 && (rate - 4.2).abs() <= 0.8,
+                    "GM43 key {key} seed {seed:#x}: natural vibrato is buried \
+                     (autocorr peak {peak:.3} at {rate:.2} Hz)"
+                );
+            }
+        }
+    }
+
     /// Corrected pitch vibrato must not reappear as periodic bow-hiss AM.
     #[test]
     fn default_bowed_arco_am_stays_small() {
@@ -29473,19 +29507,8 @@ mod tests {
     /// still see the failures this voicing was built to remove.
     const BOWED_STRING_REGISTER_SEED_INDICES: [u64; 5] = [0, 1, 2, 3, 19];
     const BOWED_STRING_REGISTER_VELOCITIES: [u8; 4] = [32, 64, 96, 127];
-    const BOWED_STRING_REGISTER_REFERENCE_VELOCITY: [u8; 1] = [100];
-
-    fn bowed_string_register_velocities(program: u8) -> &'static [u8] {
-        if matches!(program, 42 | 43) {
-            // MM-BUG-KILN-00029 maps low-string speed and pressure jointly, so
-            // their register gate must walk the velocity-dependent control path.
-            &BOWED_STRING_REGISTER_VELOCITIES
-        } else {
-            // Preserve the original register-only scope for violin/viola/fiddle.
-            // Their separate high-velocity stability defect is parked rather
-            // than silently expanding this cello bug into a family retune.
-            &BOWED_STRING_REGISTER_REFERENCE_VELOCITY
-        }
+    fn bowed_string_register_velocities(_program: u8) -> &'static [u8] {
+        &BOWED_STRING_REGISTER_VELOCITIES
     }
 
     fn assert_bowed_string_register_holds(program: u8, lo: u8, hi: u8) {
@@ -29626,6 +29649,99 @@ mod tests {
              whole register, so the register gate no longer sees the instability \
              the joint control map excludes"
         );
+    }
+
+    /// Calibration harness for the violin-family high-velocity playable region.
+    ///
+    /// The fail-first register expansion showed that pressure-only limiting still
+    /// leaves upper violin keys locked an octave high. Sweep joint speed/pressure
+    /// endpoints across the complete GM40/41/110 compasses and production seeds.
+    #[test]
+    #[ignore = "full-compass calibration harness, not a routine gate"]
+    fn calibrate_violin_family_high_velocity_controls() {
+        let sr = 44100.0;
+        for speed in [0.25f32, 0.22, 0.20, 0.18, 0.15] {
+            for force_cap in [2.60f32, 2.50, 2.40] {
+                let mut failures = 0usize;
+                let mut checked = 0usize;
+                for (program, lo, hi) in
+                    [(40u8, 55u8, 100u8), (41u8, 48u8, 88u8), (110u8, 55u8, 89u8)]
+                {
+                    for key in lo..=hi {
+                        let f0 = key_freq(key);
+                        for &idx in &BOWED_STRING_REGISTER_SEED_INDICES {
+                            let seed = crate::engine::note_voice_seed(idx);
+                            let mut voice = BowedString::new(program, key, 127, sr, seed);
+                            voice.max_vel = speed;
+                            voice.slope = voice.slope.min(force_cap);
+                            voice.vib_depth = 0.0;
+                            voice.drift = Drift::new(1, 0.0, 1);
+                            let mut buf = vec![0f32; (1.5 * sr) as usize];
+                            voice.render(&mut buf);
+                            let (measured, corr) =
+                                autocorr_pitch(&buf[(0.6 * sr) as usize..], sr, f0, 2.2);
+                            let cents = if measured > 0.0 {
+                                1200.0 * (measured / f0).log2()
+                            } else {
+                                f32::NAN
+                            };
+                            checked += 1;
+                            if !cents.is_finite() || cents.abs() > 30.0 || corr < 0.85 {
+                                failures += 1;
+                            }
+                        }
+                    }
+                }
+                println!(
+                    "speed {speed:.2} force cap {force_cap:.2}: \
+                     {failures} unstable of {checked}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn violin_family_high_velocity_controls_reach_measured_playable_region() {
+        for program in [40u8, 41, 110] {
+            let voicing = string_voicing(program);
+            let old_speed_at_96 = 0.03 + 0.22 * vel_ctrl(96);
+            let (speed_96, force_96) = bowed_string_controls(program, 60, 96, 2.9, &voicing);
+            assert_eq!(
+                speed_96.to_bits(),
+                old_speed_at_96.to_bits(),
+                "GM{program}: the stable map must be bit-inert through velocity 96"
+            );
+            assert_eq!(
+                force_96.to_bits(),
+                2.9f32.to_bits(),
+                "GM{program}: bow force changed before the measured unstable region"
+            );
+
+            let (speed_127, hard_force_127) =
+                bowed_string_controls(program, 60, 127, 2.9, &voicing);
+            assert!(
+                (speed_127 - 0.22).abs() <= 1e-6 && (hard_force_127 - 2.60).abs() <= 1e-6,
+                "GM{program}: v127 controls ({speed_127:.4}, {hard_force_127:.4}) \
+                 missed the measured stable endpoint"
+            );
+            let (_, soft_force_127) = bowed_string_controls(program, 60, 127, 2.4, &voicing);
+            assert_eq!(
+                soft_force_127.to_bits(),
+                2.4f32.to_bits(),
+                "GM{program}: the high-velocity ceiling must not raise soft force draws"
+            );
+
+            let mut previous_speed = speed_96;
+            for vel in 97u8..=127 {
+                let (speed, _) = bowed_string_controls(program, 60, vel, 2.9, &voicing);
+                assert!(
+                    speed >= previous_speed,
+                    "GM{program}: bow speed fell from {previous_speed:.5} to \
+                     {speed:.5} at velocity {vel}"
+                );
+                previous_speed = speed;
+            }
+        }
     }
 
     #[test]

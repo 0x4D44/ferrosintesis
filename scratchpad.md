@@ -1,16 +1,5 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
-- [ ] 2026.07.27 — **GM40 violin, GM41 viola and GM110 fiddle mode-lock an octave
-  high at velocity 127 for hard production-seed bow draws.** Found while widening
-  MM-BUG-KILN-00146's cello register oracle across velocity. With engine seed index
-  19 (`slope 2.876`), the current `BowedString` loses f0 at 24 violin, 20 viola and
-  9 fiddle key/draw points; representative failures are violin key 67, viola key
-  48 and fiddle key 56, all near +1200 cents. Their existing register gates use
-  velocity 100 and therefore stay green. This is outside the cello-specific bug
-  and requires a violin-family playable-region decision like MM-BUG-KILN-00029,
-  not an incidental test-driven retune. See
-  `crates/ferrosintesis/src/voices.rs:bowed_string_register_failures_full`.
-
 - [ ] 2026.07.22 — **M-CAL residual watchlist: the metric disagrees with ear-vetted trims
   on the slow-attack families** — GM56/57 brass (−6.7/−6.3 dB), GM67 (−4.8), GM48/50/51
   ensembles (+3.7..+4.3). Either the single-held-note probe biases slow-attack voices, or
@@ -58,11 +47,3 @@
   BASS.t60 plus a body mode; NOTHING asserts the two RENDER distinguishably. Add that oracle
   before touching the presets. Both `pos` values are ~0.37, i.e. effectively identical pluck
   position, which is a plausible cause of the impression.)
-- [ ] 2026-07-25 - **BowedString keys 43-45: for some bow-force draws the bass regime turns noisy
-  enough to bury the vibrato FM entirely.** Split out of the 2026.07.14 wolf-band entry, whose main
-  claim (keys 46-50 mode-locking onto 3*f0) was fixed by MM-BUG-KILN-00012 (beta 0.127 -> 0.140).
-  This part was NOT fixed: pitch lands correctly on f0 at 43-45, but the vibrato oracle still routes
-  AROUND those keys, and the comment recording why is still live in `crates/ferrosintesis/src/
-  voices.rs` at the vibrato test ("same instability family as the wolf band"). Probed across seeds
-  7/11/13/17/23; keys 38 and 55 are clean on every seed. Re-parked so the residual does not
-  disappear with its parent entry.

@@ -55,6 +55,7 @@ import tempfile
 import wave
 
 from prepare import (
+    atomic_replace,
     decoded_wav_matches,
     ensure_source,
     read_wav,
@@ -216,28 +217,38 @@ def wav_info(path):
 def decode_flac(ffmpeg, flac_path, wav_path, recipe_revision=DECODE_RECIPE_REV):
     """Cache a decode only when it matches the FLAC bytes and decode recipe."""
     source_sha256 = sha256_file(flac_path)
-    if decoded_wav_matches(
-            wav_path, source_sha256, recipe_revision,
-            validate_wav=validate_decoded_wav):
-        return
-    part = wav_path + ".part.wav"
-    if os.path.exists(part):
-        os.remove(part)
-    try:
-        subprocess.run(
-            [ffmpeg, "-v", "error", "-y", "-i", flac_path,
-             "-c:a", "pcm_s24le", part],
-            check=True,
+    for _attempt in range(3):
+        if decoded_wav_matches(
+                wav_path, source_sha256, recipe_revision,
+                validate_wav=validate_decoded_wav):
+            return
+        directory = os.path.dirname(wav_path) or os.curdir
+        fd, part = tempfile.mkstemp(
+            prefix=os.path.basename(wav_path) + ".",
+            suffix=".part.wav",
+            dir=directory,
         )
-        validate_decoded_wav(part)
-        os.replace(part, wav_path)
-        write_decoded_source_manifest(
-            wav_path, source_sha256, recipe_revision
-        )
-    except Exception:
-        if os.path.exists(part):
-            os.remove(part)
-        raise
+        os.close(fd)
+        try:
+            subprocess.run(
+                [ffmpeg, "-v", "error", "-y", "-i", flac_path,
+                 "-c:a", "pcm_s24le", part],
+                check=True,
+            )
+            validate_decoded_wav(part)
+            atomic_replace(part, wav_path)
+            write_decoded_source_manifest(
+                wav_path, source_sha256, recipe_revision
+            )
+        except Exception:
+            if os.path.exists(part):
+                os.remove(part)
+            raise
+        if decoded_wav_matches(
+                wav_path, source_sha256, recipe_revision,
+                validate_wav=validate_decoded_wav):
+            return
+    raise RuntimeError(f"{wav_path}: cache changed during three decode attempts")
 
 
 def ensure_decoded_source(

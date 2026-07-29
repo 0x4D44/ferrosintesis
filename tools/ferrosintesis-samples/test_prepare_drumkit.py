@@ -3,6 +3,7 @@ import os
 import re
 import struct
 import tempfile
+import threading
 import unittest
 import wave
 from unittest import mock
@@ -297,6 +298,120 @@ class DrumkitSourceCacheTests(unittest.TestCase):
 
         self.assertEqual(self.fetches, 2)
         self.assertEqual(self.decodes, 2)
+
+
+class DrumkitDecodeConcurrencyTests(unittest.TestCase):
+    """MM-BUG-KILN-00173: concurrent decodes must own their staging files."""
+
+    def setUp(self):
+        self.cache_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.cache_dir.cleanup)
+        self.flac = os.path.join(self.cache_dir.name, "source.flac")
+        self.wav = os.path.join(self.cache_dir.name, "source_dec.wav")
+        with open(self.flac, "wb") as source:
+            source.write(b"AUTHENTICATED-FLAC")
+
+    @staticmethod
+    def write_wav(path, sample):
+        with wave.open(path, "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(44100)
+            output.writeframes(struct.pack("<32h", *([sample] * 32)))
+
+    def run_threads(self, calls):
+        errors = []
+
+        def invoke(name, call):
+            try:
+                call()
+            except Exception as error:
+                errors.append(error)
+
+        threads = [
+            threading.Thread(target=invoke, name=name, args=(name, call))
+            for name, call in calls
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(5)
+            self.assertFalse(thread.is_alive(), "concurrent decode test deadlocked")
+        return errors
+
+    def test_two_decode_writers_publish_complete_authenticated_entries(self):
+        writers_ready = threading.Barrier(2)
+        decode_counts = {}
+
+        def overlapping_decode(args, **_kwargs):
+            name = threading.current_thread().name
+            decode_counts[name] = decode_counts.get(name, 0) + 1
+            sample = 1000 if name == "writer-a" else 2000
+            self.write_wav(args[-1], sample)
+            if decode_counts[name] == 1:
+                writers_ready.wait(2)
+
+        with mock.patch.object(
+                prepare_drumkit.subprocess, "run",
+                side_effect=overlapping_decode):
+            errors = self.run_threads([
+                ("writer-a", lambda: prepare_drumkit.decode_flac(
+                    "ffmpeg", self.flac, self.wav
+                )),
+                ("writer-b", lambda: prepare_drumkit.decode_flac(
+                    "ffmpeg", self.flac, self.wav
+                )),
+            ])
+
+        self.assertEqual(errors, [])
+        samples, _sample_rate = prepare.read_wav(self.wav)
+        self.assertIn(round(samples[0] * 32768), (1000, 2000))
+        self.assertTrue(prepare.decoded_wav_matches(
+            self.wav,
+            prepare.sha256_file(self.flac),
+            prepare_drumkit.DECODE_RECIPE_REV,
+            validate_wav=prepare.validate_decoded_wav,
+        ))
+
+    def test_failed_decode_cleans_only_its_own_staging_file(self):
+        failed_ready = threading.Event()
+        successful_ready = threading.Event()
+        failed_cleanup_done = threading.Event()
+
+        def overlapping_decode(args, **_kwargs):
+            self.write_wav(args[-1], 1000)
+            if threading.current_thread().name == "failed":
+                failed_ready.set()
+                self.assertTrue(successful_ready.wait(2))
+                raise OSError("injected decode failure")
+            successful_ready.set()
+            self.assertTrue(failed_ready.wait(2))
+            self.assertTrue(failed_cleanup_done.wait(2))
+
+        def failed_decode():
+            try:
+                prepare_drumkit.decode_flac("ffmpeg", self.flac, self.wav)
+            finally:
+                failed_cleanup_done.set()
+
+        with mock.patch.object(
+                prepare_drumkit.subprocess, "run",
+                side_effect=overlapping_decode):
+            errors = self.run_threads([
+                ("failed", failed_decode),
+                ("successful", lambda: prepare_drumkit.decode_flac(
+                    "ffmpeg", self.flac, self.wav
+                )),
+            ])
+
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], OSError)
+        samples, _sample_rate = prepare.read_wav(self.wav)
+        self.assertAlmostEqual(samples[0], 1000 / 32768.0)
+        self.assertEqual(
+            sorted(os.listdir(self.cache_dir.name)),
+            ["source.flac", "source_dec.wav", "source_dec.wav.source.json"],
+        )
 
 
 if __name__ == "__main__":

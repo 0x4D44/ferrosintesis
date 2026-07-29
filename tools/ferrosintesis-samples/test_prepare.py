@@ -10,6 +10,7 @@ import shutil
 import struct
 import tarfile
 import tempfile
+import threading
 import unittest
 import urllib.error
 import wave
@@ -985,6 +986,91 @@ class PrepareSampleBankTests(unittest.TestCase):
                         os.truncate(path, os.path.getsize(path) - 17)
                         with self.assertRaises(ValueError):
                             prepare.read_wav(path)
+
+
+class FetchConcurrencyTest(unittest.TestCase):
+    """MM-BUG-KILN-00173: cache downloads must not share staging paths."""
+
+    def run_threads(self, calls):
+        errors = []
+
+        def invoke(call):
+            try:
+                call()
+            except Exception as error:
+                errors.append(error)
+
+        threads = [threading.Thread(target=invoke, args=(call,)) for call in calls]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(5)
+            self.assertFalse(thread.is_alive(), "concurrent fetch test deadlocked")
+        return errors
+
+    def test_two_download_writers_publish_complete_entries(self):
+        with tempfile.TemporaryDirectory() as cache:
+            final = os.path.join(cache, "source.flac")
+            writers_ready = threading.Barrier(2)
+            staging_paths = []
+
+            def overlapping_transfer(url, staging):
+                staging_paths.append(staging)
+                with open(staging, "wb") as output:
+                    output.write(url.encode("ascii"))
+                writers_ready.wait(2)
+
+            with mock.patch.object(
+                    prepare.urllib.request, "urlretrieve",
+                    side_effect=overlapping_transfer):
+                errors = self.run_threads([
+                    lambda: prepare.fetch("writer-a", final),
+                    lambda: prepare.fetch("writer-b", final),
+                ])
+
+            self.assertEqual(errors, [])
+            self.assertEqual(len(set(staging_paths)), 2)
+            with open(final, "rb") as cached:
+                self.assertIn(cached.read(), (b"writer-a", b"writer-b"))
+            self.assertEqual(os.listdir(cache), ["source.flac"])
+
+    def test_failed_download_cleans_only_its_own_staging_file(self):
+        with tempfile.TemporaryDirectory() as cache:
+            final = os.path.join(cache, "source.flac")
+            failed_ready = threading.Event()
+            successful_ready = threading.Event()
+            failed_cleanup_done = threading.Event()
+
+            def overlapping_transfer(url, staging):
+                with open(staging, "wb") as output:
+                    output.write(url.encode("ascii"))
+                if url == "failed":
+                    failed_ready.set()
+                    self.assertTrue(successful_ready.wait(2))
+                    raise OSError("injected transfer failure")
+                successful_ready.set()
+                self.assertTrue(failed_ready.wait(2))
+                self.assertTrue(failed_cleanup_done.wait(2))
+
+            def failed_fetch():
+                try:
+                    prepare.fetch("failed", final)
+                finally:
+                    failed_cleanup_done.set()
+
+            with mock.patch.object(
+                    prepare.urllib.request, "urlretrieve",
+                    side_effect=overlapping_transfer):
+                errors = self.run_threads([
+                    failed_fetch,
+                    lambda: prepare.fetch("successful", final),
+                ])
+
+            self.assertEqual(len(errors), 1)
+            self.assertIsInstance(errors[0], OSError)
+            with open(final, "rb") as cached:
+                self.assertEqual(cached.read(), b"successful")
+            self.assertEqual(os.listdir(cache), ["source.flac"])
 
 
 class DirectSourceCacheTest(unittest.TestCase):

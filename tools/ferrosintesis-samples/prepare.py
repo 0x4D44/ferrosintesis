@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 import wave
@@ -1247,13 +1248,27 @@ def read_wav(path):
     return norm, sr
 
 
+def atomic_replace(source, destination):
+    """Replace a cache entry, tolerating a concurrent Windows reader."""
+    for attempt in range(50):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if attempt == 49:
+                raise
+            time.sleep(0.01)
+
+
 def fetch(url, path):
-    part = path + ".part"
-    if os.path.exists(part):
-        os.remove(part)
+    directory = os.path.dirname(path) or os.curdir
+    fd, part = tempfile.mkstemp(
+        prefix=os.path.basename(path) + ".", suffix=".part", dir=directory
+    )
+    os.close(fd)
     try:
         urllib.request.urlretrieve(url, part)
-        os.replace(part, path)
+        atomic_replace(part, path)
     except Exception:
         if os.path.exists(part):
             os.remove(part)
@@ -1293,6 +1308,17 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+def sha256_cache_file(path):
+    """Hash a cache winner, tolerating a concurrent Windows replacement."""
+    for attempt in range(50):
+        try:
+            return sha256_file(path)
+        except PermissionError:
+            if attempt == 49:
+                raise
+            time.sleep(0.01)
+
+
 def direct_source_manifest_path(path):
     return path + ".source.json"
 
@@ -1321,7 +1347,7 @@ def write_direct_source_manifest(path, url):
     """Atomically bind a direct-downloaded file to its source URL and bytes."""
     manifest = {
         "schema": 1,
-        "sha256": sha256_file(path),
+        "sha256": sha256_cache_file(path),
         "url": url,
     }
     directory = os.path.dirname(path)
@@ -1330,7 +1356,7 @@ def write_direct_source_manifest(path, url):
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2, sort_keys=True)
-        os.replace(tmp, direct_source_manifest_path(path))
+        atomic_replace(tmp, direct_source_manifest_path(path))
     except Exception:
         if os.path.exists(tmp):
             os.remove(tmp)
@@ -1586,7 +1612,7 @@ def write_decoded_source_manifest(wav, source_sha256, recipe_revision):
     manifest = {
         "recipe_revision": recipe_revision,
         "source_sha256": source_sha256,
-        "wav_sha256": sha256_file(wav),
+        "wav_sha256": sha256_cache_file(wav),
     }
     directory = os.path.dirname(wav)
     fd, tmp = tempfile.mkstemp(
@@ -1594,7 +1620,7 @@ def write_decoded_source_manifest(wav, source_sha256, recipe_revision):
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2, sort_keys=True)
-        os.replace(tmp, decoded_source_manifest_path(wav))
+        atomic_replace(tmp, decoded_source_manifest_path(wav))
     except Exception:
         if os.path.exists(tmp):
             os.remove(tmp)

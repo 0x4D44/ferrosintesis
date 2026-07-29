@@ -15162,8 +15162,8 @@ mod tests {
     // Audio oracle helpers used by the v0.9 reed/brass oracles (bare names).
     use crate::testutil::{
         assert_render_signature, band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend,
-        hp_rms, mag_at, peak_locate, render_signature, rms, spectral_band_rms, spectral_centroid,
-        traj, traj_peak_time_s, RenderSignature, BW_TREM_PEAK_FLOOR,
+        hp_rms, inter_corr, mag_at, peak_locate, render_signature, rms, spectral_band_rms,
+        spectral_centroid, traj, traj_peak_time_s, RenderSignature, BW_TREM_PEAK_FLOOR,
     };
 
     /// MM-BUG-KILN-00074: every program must render at every plausible output rate,
@@ -21796,6 +21796,32 @@ mod tests {
             std::hint::black_box(BASS.t60),
         );
         assert!(u < b, "upright should decay faster: {u} vs {b}");
+    }
+
+    /// The preset-table checks above do not prove the factory routes GM32 and
+    /// GM33 to audibly different signals. Compare gain-normalised renders over
+    /// three notes so a future dispatch regression cannot make the two defaults
+    /// identical while leaving their unused preset constants intact.
+    #[test]
+    fn acoustic_and_fingered_bass_defaults_render_distinctly() {
+        let mut correlations = Vec::new();
+        for (index, key) in [36u8, 40, 45].into_iter().enumerate() {
+            let seed = 0xB455_0000 + index as u32;
+            let upright = render_program(32, key, 92, 0.70, seed);
+            let fingered = render_program(33, key, 92, 0.70, seed);
+            let start = (0.025 * 44_100.0) as usize;
+            let correlation = inter_corr(&upright[start..], &fingered[start..]);
+            correlations.push(correlation);
+            assert!(
+                correlation < 0.98,
+                "GM32/33 key {key} gain-normalised correlation {correlation:.3} is effectively identical"
+            );
+        }
+        let mean = correlations.iter().sum::<f32>() / correlations.len() as f32;
+        assert!(
+            mean < 0.90,
+            "GM32/33 mean gain-normalised correlation {mean:.3} is too similar: {correlations:?}"
+        );
     }
 
     /// MM-BUG-KILN-00045: the default GM bass family must stay within the same

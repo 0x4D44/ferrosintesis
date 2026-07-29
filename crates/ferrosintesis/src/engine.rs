@@ -2052,6 +2052,10 @@ pub(crate) struct EngineCore {
     reverb: Reverb,
     cathedral: CathedralReverb,
     rev_hp: Biquad,
+    #[cfg(test)]
+    cathedral_send_hp: Biquad,
+    #[cfg(test)]
+    cathedral_send_hpf_on: bool,
     chorus: Chorus,
     echo: Option<PingPong>,
     symp: Sympathetic,
@@ -2149,6 +2153,10 @@ impl EngineCore {
             reverb: Reverb::new(sr, DEFAULT_HALL_ROOM, DEFAULT_HALL_DAMP, opt.wet),
             cathedral: CathedralReverb::new(sr, opt.wet * CATHEDRAL_WET_SCALE),
             rev_hp: Biquad::highpass(150.0, 0.7, sr),
+            #[cfg(test)]
+            cathedral_send_hp: Biquad::highpass(150.0, 0.7, sr),
+            #[cfg(test)]
+            cathedral_send_hpf_on: false,
             chorus: Chorus::new(sr),
             echo: (opt.delay_s > 0.0).then(|| PingPong::new(sr, opt.delay_s)),
             symp: Sympathetic::piano(sr),
@@ -4004,6 +4012,12 @@ impl EngineCore {
             &mut self.mix_l[..n],
             &mut self.mix_r[..n],
         );
+        #[cfg(test)]
+        if self.cathedral_send_hpf_on {
+            for x in self.send_cathedral[..n].iter_mut() {
+                *x = self.cathedral_send_hp.process(*x);
+            }
+        }
         self.cathedral.process(
             &self.send_cathedral[..n],
             &mut self.mix_l[..n],
@@ -14241,6 +14255,169 @@ mod tests {
         assert!(
             cat_tail > leg_tail * 2.0 && cat_tail > 1e-4,
             "cathedral reverb tail ({cat_tail:.2e}) should ring well past the Leslie's ({leg_tail:.2e})"
+        );
+    }
+
+    /// Human-decision artifact for the parked cathedral-send question. The
+    /// shipped path intentionally leaves the cathedral send full-band; this
+    /// ignored test compares it with the ordinary hall's 150 Hz high-pass using
+    /// the same GM19/CC0=2 phrase and the real engine routing.
+    ///
+    /// Subtracting an otherwise identical wet=0 render isolates each wet return.
+    /// The high-passed return is then gain-matched to the current return by
+    /// BS.1770 integrated loudness. A common final gain preserves that match.
+    #[test]
+    #[ignore = "writes matched cathedral-send A/B WAVs to the OS temp directory"]
+    fn write_cathedral_send_hpf_matched_ab() {
+        fn render_variant(song: &Song, opt: &Options, highpass: bool) -> Vec<f32> {
+            let total = render_sample_count(song, opt);
+            let mut out = vec![0.0f32; total * 2];
+            drive_render(
+                song,
+                opt,
+                true,
+                true,
+                true,
+                &mut |_| {},
+                |core, block_start, n| {
+                    core.cathedral_send_hpf_on = highpass;
+                    core.render_block_add(n, &mut out[block_start * 2..(block_start + n) * 2]);
+                    Ok::<(), std::convert::Infallible>(())
+                },
+            )
+            .expect("an infallible render sink cannot fail");
+            out
+        }
+
+        let song = test_song(
+            vec![
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 0,
+                        val: 2,
+                    },
+                ),
+                (0.0, EvKind::Prog { ch: 0, prog: 19 }),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 7,
+                        val: 70,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 11,
+                        val: 100,
+                    },
+                ),
+                (
+                    0.0,
+                    EvKind::Cc {
+                        ch: 0,
+                        num: 91,
+                        val: 90,
+                    },
+                ),
+                (
+                    0.05,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 36,
+                        vel: 84,
+                    },
+                ),
+                (
+                    0.35,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 43,
+                        vel: 80,
+                    },
+                ),
+                (
+                    0.65,
+                    EvKind::NoteOn {
+                        ch: 0,
+                        key: 48,
+                        vel: 76,
+                    },
+                ),
+                (3.35, EvKind::NoteOff { ch: 0, key: 48 }),
+                (3.50, EvKind::NoteOff { ch: 0, key: 43 }),
+                (3.65, EvKind::NoteOff { ch: 0, key: 36 }),
+            ],
+            4.0,
+        );
+        let mut wet_options = test_opts(44_100.0);
+        wet_options.wet = 0.32;
+        wet_options.tail = 8.0;
+        let mut dry_options = wet_options.clone();
+        dry_options.wet = 0.0;
+
+        let dry = render_variant(&song, &dry_options, false);
+        let full_band_mix = render_variant(&song, &wet_options, false);
+        let highpass_mix = render_variant(&song, &wet_options, true);
+        let full_band_return: Vec<f32> = full_band_mix
+            .iter()
+            .zip(&dry)
+            .map(|(wet, dry)| wet - dry)
+            .collect();
+        let mut highpass_return: Vec<f32> = highpass_mix
+            .iter()
+            .zip(&dry)
+            .map(|(wet, dry)| wet - dry)
+            .collect();
+
+        let sr = wet_options.sr as u32;
+        let full_band_lufs = crate::loudness::integrated_lufs(&full_band_return, sr);
+        let highpass_lufs = crate::loudness::integrated_lufs(&highpass_return, sr);
+        assert!(
+            full_band_lufs.is_finite() && highpass_lufs.is_finite(),
+            "both isolated cathedral returns must have measurable loudness"
+        );
+        let match_gain_db = full_band_lufs - highpass_lufs;
+        let match_gain = 10f32.powf(match_gain_db / 20.0);
+        for sample in &mut highpass_return {
+            *sample *= match_gain;
+        }
+        let matched_lufs = crate::loudness::integrated_lufs(&highpass_return, sr);
+        assert!(
+            (full_band_lufs - matched_lufs).abs() < 0.05,
+            "matched return differs by {:.3} LU",
+            full_band_lufs - matched_lufs
+        );
+
+        let common_peak = full_band_return
+            .iter()
+            .chain(&highpass_return)
+            .copied()
+            .map(f32::abs)
+            .fold(0.0f32, f32::max);
+        assert!(common_peak > 1e-6, "cathedral returns are silent");
+        let common_gain = 0.80 / common_peak;
+        let output_dir = std::env::temp_dir().join("ferrosintesis-cathedral-send-hpf");
+        std::fs::create_dir_all(&output_dir).expect("create cathedral A/B directory");
+        for (name, samples) in [
+            ("current-full-band-return.wav", &full_band_return),
+            ("candidate-150hz-hpf-return.wav", &highpass_return),
+        ] {
+            let pcm = dither_quantize(samples, common_gain);
+            let path = output_dir.join(name);
+            crate::wav::write_wav(&path, sr, &pcm)
+                .unwrap_or_else(|error| panic!("write {}: {error}", path.display()));
+            println!("{}", path.display());
+        }
+        println!(
+            "current {full_band_lufs:.3} LUFS; HPF {highpass_lufs:.3} LUFS raw, \
+             {matched_lufs:.3} LUFS matched; HPF match gain {match_gain_db:+.3} dB; \
+             common output gain {:+.3} dB",
+            20.0 * common_gain.log10()
         );
     }
 }

@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00176 — GM67 high notes expose short recorded-sustain loops
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** audio / sampled sax sustain
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260729T175256Z-p22520-n925390200-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00176-run-fix-20260729T175256Z-p22520-n925390200-c1
-- **Owner base:** 98037c3341654add9bed0ae93fca78a06ea35c4e
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-29T17:52:56Z
-- **Owner until:** 2026-07-29T19:52:56Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised from Arthur's interactive M-CAL audition by GPT-5.6 Codex)
+- **State history:** Open (2026-07-29, raised from Arthur's interactive M-CAL audition by GPT-5.6 Codex) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T175256Z-p22520-n925390200-c1 branch=task/bug-MM-BUG-KILN-00176-run-fix-20260729T175256Z-p22520-n925390200-c1 code=0798a789f057b04bea1073b30a064611c5b539b8 gate=manual)
 
 ## Observation
 

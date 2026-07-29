@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00170 — The committed-source registry is hand-maintained: 3 of 4 repo-root recording roots are unpinned and invisible to the provenance oracle
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample provenance / oracle enumeration
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260729T113244Z-p34508-n560217800-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00170-run-fix-20260729T113244Z-p34508-n560217800-c1
-- **Owner base:** db47941e9c6564fbb9cf3ade97928008281ba900
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-29T11:32:44Z
-- **Owner until:** 2026-07-29T13:32:44Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, split from MM-BUG-KILN-00168 during its independent two-eyes closure by Claude Opus 5 on trunk `be161eb`)
+- **State history:** Open (2026-07-29, split from MM-BUG-KILN-00168 during its independent two-eyes closure by Claude Opus 5 on trunk `be161eb`) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T113244Z-p34508-n560217800-c1 branch=task/bug-MM-BUG-KILN-00170-run-fix-20260729T113244Z-p34508-n560217800-c1 code=ef81ac23702a266ffb2b3b5d8e59d89188b34ae3 gate=manual)
 
 ## Observation
 

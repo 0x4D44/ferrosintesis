@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample generation / drum-kit cache
 - **Raised:** 2026-07-29
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260729T140318Z-p42048-n751314100-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00173-run-fix-20260729T140318Z-p42048-n751314100-c1
+- **Owner base:** 0553a71856912fd3d8778965f8bc3dbcb9981592
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-29T14:03:18Z
+- **Owner until:** 2026-07-29T16:03:18Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

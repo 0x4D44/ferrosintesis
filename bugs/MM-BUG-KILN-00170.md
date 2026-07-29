@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample provenance / oracle enumeration
 - **Raised:** 2026-07-29
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260729T113244Z-p34508-n560217800-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00170-run-fix-20260729T113244Z-p34508-n560217800-c1
+- **Owner base:** db47941e9c6564fbb9cf3ade97928008281ba900
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-29T11:32:44Z
+- **Owner until:** 2026-07-29T13:32:44Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

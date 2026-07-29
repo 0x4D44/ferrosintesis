@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00177 — GM67 keys 64-67 still expose the recorded sustain loop: the MM-BUG-KILN-00176 gate was drawn at the reported key, not the measured onset
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** audio / sampled sax sustain
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260729T223554Z-p5432-n906511000-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00177-run-fix-20260729T223554Z-p5432-n906511000-c1
-- **Owner base:** 747c73e561373fb6274bb47650e3e05e852a978c
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-29T22:35:54Z
-- **Owner until:** 2026-07-30T00:35:54Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260729T223554Z-p5432-n906511000-c1 branch=task/bug-MM-BUG-KILN-00177-run-fix-20260729T223554Z-p5432-n906511000-c1 code=88532550b160f935e7779a18c3381d94960f8c8c gate=manual)
 
 ## Observation
 

@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00178 — GM67 key 58 'fartiness' from Arthur's audition is still undiagnosed: the other half of MM-BUG-KILN-00176's observation
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** audio / sampled sax sustain
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260729T232125Z-p54804-n080502500-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00178-run-fix-20260729T232125Z-p54804-n080502500-c1
-- **Owner base:** b9e3424518145697091656755dc68b73962e25ab
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-29T23:21:25Z
-- **Owner until:** 2026-07-30T01:21:25Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260729T232125Z-p54804-n080502500-c1 branch=task/bug-MM-BUG-KILN-00178-run-fix-20260729T232125Z-p54804-n080502500-c1 code=190b8c66e4d754ef6ddf3c299e652a7e4d8370fc gate=manual)
 
 ## Observation
 

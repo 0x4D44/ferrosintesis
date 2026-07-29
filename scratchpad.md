@@ -11,7 +11,7 @@
   not an incidental test-driven retune. See
   `crates/ferrosintesis/src/voices.rs:bowed_string_register_failures_full`.
 
-- [ ] 2026.07.26 — **ASK ARTHUR BEFORE TOUCHING THIS.** He asked for it to be parked, not
+- [x] 2026.07.26 — **ASK ARTHUR BEFORE TOUCHING THIS.** He asked for it to be parked, not
   actioned: do not start work on it without checking with him first, whatever the item looks
   like on a later read. **The b1-upright re-bake breaks its own crate's inventory gate** —
   `D:\language\midi-music\tools\ferrosintesis-samples\prepare.py` (`_bake_b1upright`) and
@@ -34,6 +34,10 @@
   turn a silent 74-vs-52 mismatch into a bake-time error. Given the repo's
   hand-maintained-list defect class, the enumeration question ("which families lack the
   guard?") is probably the real unit of work rather than b1-upright alone.
+  (Already fixed: commit `6064e95` on 2026-07-27 stopped emitting the retired soft layer,
+  stages the 52 retained normal/hard files, and added source-derived inventory rejection.
+  `test_b1_output_inventory_rejects_retired_or_incomplete_layers` rejects both a missing
+  retained zone and a stray `b1_soft_*.wav`. This pass changed no B1 code.)
 
 - [x] 2026.07.25 — **`percentile_uses_nearest_rank` pins the historical failing value, not the
   convention** — `crates/ferrosintesis/src/voices.rs` (the test beside `fn percentile`). It

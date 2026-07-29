@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00172 — Drum-kit regeneration trusts unauthenticated warm-cache inputs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / drum-kit cache
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260729T135230Z-p67316-n040854600-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00172-run-fix-20260729T135230Z-p67316-n040854600-c1
-- **Owner base:** 3dac1b4ad25242120db2e8f2d6f513b85395071b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-29T13:52:30Z
-- **Owner until:** 2026-07-29T15:52:30Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T135230Z-p67316-n040854600-c1 branch=task/bug-MM-BUG-KILN-00172-run-fix-20260729T135230Z-p67316-n040854600-c1 code=81bb5b8405a43dbc6481b8cda8dcfb6622b42b4c gate=manual)
 
 ## Observation
 

@@ -44,7 +44,10 @@ default embedded asset crates; their generator and full provenance live under
 instrument recordings** — the performance masters we own outright, kept as Opus
 plus the pre-cut per-zone sources the bake consumes; it is **source, not output**,
 and distinct from the baked banks inside the asset crates (see `samples/README.md`
-for the per-instrument convention). `demos/` holds synth test pieces; `wrk_docs/`
+for the per-instrument convention). Store bulky take masters as 160 kbps Opus; decoded
+roots re-slice within 0.75 cents. Any text evidence pinned by SHA-256 must carry
+`-text` in `.gitattributes`, and its hash must come from the committed tree rather
+than a filtered working copy. `demos/` holds synth test pieces; `wrk_docs/`
 holds design and review docs; `wrk_journals/` is the engineer's log.
 
 ## Commands
@@ -133,7 +136,8 @@ Module map (`src/`):
   asset crates — onset banks, sustain loops, whole-voice instruments, and the
   sampled drum kit) crossfaded into modeled instrument bodies and sustains. The
   per-crate inventory lives in `tools/ferrosintesis-samples/README.md` — trust
-  it, not counts quoted here.
+  it, not counts quoted here. `LaVoice` velocity layers encode timbre, not level;
+  its `vel_amp` law owns loudness.
 - `reverb.rs`, `wav.rs` — Freeverb hall plus the cathedral feedback-delay network;
   16-bit PCM writer with TPDF dither.
 - `testutil.rs` — pitch (Goertzel), RMS, click-detection helpers for the audio oracles.
@@ -305,6 +309,10 @@ is *composed to pass them* — write the oracle before the music. `analyze.py` m
 oracles against the **rendered audio** (RMS/pitch), because presence in the MIDI is not
 audibility in the render. `build.py --verify` prints a pass/fail oracle table and exits
 nonzero on any failure; treat green oracles as the definition of done for an album.
+
+For album-scale composition, run composers serially and feed each a compact pattern
+digest. Parallel composer fan-outs exceed the shared work window before they land
+durable tracks.
 
 Two shapes:
 - **Older `tracks/` shape** (`albums/opus4-8/`, `albums/gpt5-5/`, `albums/gpt5-3-spark/`) — `engine.py` +

@@ -4210,6 +4210,11 @@ const SAX_VIB_DELAY_S: f32 = 0.20; // vibrato blooms after the onset
 const SAX_VIB_BLOOM_S: f32 = 0.35; // ramp-in time
 const SAX_DRIFT_MAX: f32 = 0.0022; // ±0.22% slow random-walk on the rate (defeats the loop-tell)
 const SAX_DRIFT_SAMP: u32 = 1024; // new drift target ~ every 23 ms
+const SAX_GRAIN_BODY_START_S: f32 = 0.30;
+const SAX_GRAIN_BODY_END_S: f32 = 0.50;
+const SAX_GRAIN_MIN_S: f32 = 0.05;
+const SAX_GRAIN_MAX_S: f32 = 0.13;
+const SAX_GRAIN_CROSSFADE_S: f32 = 0.025;
 
 // The synthetic air rides on top of a REAL recording that already breathes, so it must
 // stay a subtle enhancement, not a second breath. Measured (2026.07.19, solo-sax stems,
@@ -4227,12 +4232,27 @@ const SAX_BRIGHT_HI_HZ: f32 = 7000.0; // → loud, open (near pass-through)
 
 /// GM 64-67 sax voice: recorded attack played through into a looped recorded sustain,
 /// with the loop animated by intrinsic vibrato/tremolo/drift/breath (inc 2) so the hold
-/// is alive rather than a static repeat. The loop is found once at construction.
+/// is alive rather than a static repeat. The loop is found once at construction. GM67's
+/// keys 68 and above, whose short loops are exposed by high repitching, move each pass to
+/// a phase-aligned slice elsewhere in the steady body through a short crossfade. Lower
+/// notes and the other saxes retain their established single-slice playback.
 pub struct SaxLoopVoice {
     data: &'static [f32],
     loop_start: usize,
     loop_end: usize,
     pos: f32,
+    next_pos: Option<f32>,
+    next_loop_start: usize,
+    next_grain_len: usize,
+    next_grain_gain: f32,
+    grain_len: usize,
+    grain_gain: f32,
+    grain_reference_rms: f32,
+    grain_body_start: usize,
+    grain_body_end: usize,
+    source_period: f32,
+    grain_crossfade: f32,
+    grain_motion: bool,
     base_step: f32,
     step: f32,
     gain: f32,
@@ -4261,6 +4281,7 @@ impl SaxLoopVoice {
         sr: f32,
         base_gain: f32,
         seed: u32,
+        grain_motion: bool,
     ) -> Option<Self> {
         // Cheap rejection FIRST: an out-of-range key falls back to the modeled reed, and
         // must not pay for a loop search to learn that (MM-BUG-KILN-00064).
@@ -4270,11 +4291,28 @@ impl SaxLoopVoice {
         }
         let (loop_start, loop_end) = zone.sustain_loop(find_sax_loop)?;
         let base_step = ratio * 44100.0 / sr;
+        let grain_len = loop_end - loop_start;
+        let grain_body_start = (SAX_GRAIN_BODY_START_S * 44_100.0) as usize;
+        let grain_body_end =
+            ((SAX_GRAIN_BODY_END_S * 44_100.0) as usize).min(zone.data.len().saturating_sub(2));
+        let grain_reference_rms = Self::grain_rms(zone.data.as_slice(), loop_start, grain_len);
         Some(SaxLoopVoice {
             data: zone.data.as_slice(),
             loop_start,
             loop_end,
             pos: 0.0,
+            next_pos: None,
+            next_loop_start: loop_start,
+            next_grain_len: grain_len,
+            next_grain_gain: 1.0,
+            grain_len,
+            grain_gain: 1.0,
+            grain_reference_rms,
+            grain_body_start,
+            grain_body_end,
+            source_period: 44_100.0 / zone.root,
+            grain_crossfade: (SAX_GRAIN_CROSSFADE_S * 44_100.0).min(0.45 * grain_len as f32),
+            grain_motion,
             base_step,
             step: base_step,
             // p/f banks already carry the bulk of the dynamic; a gentle vel taper on top.
@@ -4295,11 +4333,88 @@ impl SaxLoopVoice {
             bright_active: false,
         })
     }
+
+    /// Grain level for splice normalization. The slice is bounded to 50–130 ms,
+    /// so this is at most 5,733 multiply-adds per transition — far below the
+    /// memoized multi-candidate loop search that cannot run in realtime.
+    fn grain_rms(data: &[f32], start: usize, len: usize) -> f32 {
+        let energy = data[start..start + len].iter().map(|&x| x * x).sum::<f32>();
+        (energy / len.max(1) as f32).sqrt()
+    }
+
+    /// Refine an integer-period start against the actual recorded waveform.
+    /// The measured zone root is only an average: local vibrato can leave two
+    /// nominally equal phases far enough apart to dip during a crossfade.
+    fn phase_match_grain(&self, nominal: usize, grain_len: usize) -> usize {
+        let radius = (0.5 * self.source_period).round() as isize;
+        let fade_start = self.loop_end.saturating_sub(self.grain_crossfade as usize);
+        let compare_len = ((0.006 * 44_100.0) as usize)
+            .min(self.grain_crossfade as usize)
+            .min(self.loop_end.saturating_sub(fade_start));
+        let candidate_hi = self.grain_body_end.saturating_sub(grain_len);
+        let mut best = nominal;
+        let mut best_corr = f64::NEG_INFINITY;
+        for offset in (-radius..=radius).step_by(2) {
+            let candidate = (nominal as isize + offset)
+                .clamp(self.grain_body_start as isize, candidate_hi as isize)
+                as usize;
+            let mut dot = 0.0f64;
+            let mut a2 = 0.0f64;
+            let mut b2 = 0.0f64;
+            for i in 0..compare_len {
+                let a = self.data[fade_start + i] as f64;
+                let b = self.data[candidate + i] as f64;
+                dot += a * b;
+                a2 += a * a;
+                b2 += b * b;
+            }
+            let corr = dot / (a2 * b2).sqrt().max(1e-20);
+            if corr > best_corr {
+                best_corr = corr;
+                best = candidate;
+            }
+        }
+        best
+    }
+
+    /// Choose another source slice on the same fundamental phase as the current one.
+    /// Phase alignment keeps the grain crossfade from becoming a pitch or comb transient;
+    /// seeded selection makes the slice order deterministic but non-periodic.
+    fn choose_next_grain(&mut self) -> (usize, usize) {
+        let min_periods = ((SAX_GRAIN_MIN_S * 44_100.0) / self.source_period)
+            .ceil()
+            .max(1.0) as usize;
+        let max_periods = ((SAX_GRAIN_MAX_S * 44_100.0) / self.source_period)
+            .floor()
+            .max(min_periods as f32) as usize;
+        let length_unit = (0.5 * (self.rng.white() + 1.0)).clamp(0.0, 0.999_999);
+        let periods = min_periods + (length_unit * (max_periods - min_periods + 1) as f32) as usize;
+        let grain_len = (periods as f32 * self.source_period).round() as usize;
+        let grain_start_hi = self
+            .grain_body_end
+            .saturating_sub(grain_len)
+            .max(self.grain_body_start);
+        let origin = self.loop_start as f32;
+        let first = ((self.grain_body_start as f32 - origin) / self.source_period).ceil() as i32;
+        let last = ((grain_start_hi as f32 - origin) / self.source_period).floor() as i32;
+        if last < first {
+            return (self.grain_body_start, grain_len);
+        }
+        let count = (last - first + 1) as usize;
+        let unit = (0.5 * (self.rng.white() + 1.0)).clamp(0.0, 0.999_999);
+        let mut step = first + (unit * count as f32) as i32;
+        let mut start = (origin + step as f32 * self.source_period).round() as usize;
+        if start.abs_diff(self.loop_start) < (0.5 * self.source_period) as usize {
+            step = if step < last { step + 1 } else { first };
+            start = (origin + step as f32 * self.source_period).round() as usize;
+        }
+        let nominal = start.clamp(self.grain_body_start, grain_start_hi);
+        (self.phase_match_grain(nominal, grain_len), grain_len)
+    }
 }
 
 impl Voice for SaxLoopVoice {
     fn render(&mut self, out: &mut [f32]) -> bool {
-        let loop_len = (self.loop_end - self.loop_start) as f32;
         for o in out.iter_mut() {
             let e = self.env.next();
             let time = self.t as f32 / self.sr;
@@ -4319,18 +4434,37 @@ impl Voice for SaxLoopVoice {
             self.drift += 0.002 * (self.drift_target - self.drift);
             let eff_step = self.step * (1.0 + SAX_VIB_PITCH * depth * s + self.drift);
             let amp = 1.0 + SAX_VIB_AMP * depth * s;
-            // Read the looped sample. Wrapped neighbour at the seam: an unwrapped read
-            // clicks once per loop.
+            // Move to a different phase-aligned slice before this one wraps. The
+            // crossfade is long enough to hide the splice but short enough not to smear
+            // the reed articulation.
+            let fade_start = self.loop_end as f32 - self.grain_crossfade;
+            if self.grain_motion && self.next_pos.is_none() && self.pos >= fade_start {
+                (self.next_loop_start, self.next_grain_len) = self.choose_next_grain();
+                let next_rms =
+                    Self::grain_rms(self.data, self.next_loop_start, self.next_grain_len);
+                self.next_grain_gain =
+                    (self.grain_reference_rms / next_rms.max(1e-6)).clamp(0.5, 2.0);
+                self.next_pos = Some(self.next_loop_start as f32);
+            }
+
             let j = self.pos as usize;
             let frac = self.pos - j as f32;
             let a = self.data[j];
-            let jn = j + 1;
-            let b = if jn >= self.loop_end {
+            let b = if !self.grain_motion && j + 1 >= self.loop_end {
                 self.data[self.loop_start]
             } else {
-                self.data[jn]
+                self.data[j + 1]
             };
-            let mut tone = a + (b - a) * frac;
+            let mut tone = (a + (b - a) * frac) * self.grain_gain;
+            if let Some(next_pos) = self.next_pos {
+                let nj = next_pos as usize;
+                let nf = next_pos - nj as f32;
+                let next_tone = (self.data[nj] + (self.data[nj + 1] - self.data[nj]) * nf)
+                    * self.next_grain_gain;
+                let x = ((self.pos - fade_start) / self.grain_crossfade).clamp(0.0, 1.0);
+                let smooth = x * x * (3.0 - 2.0 * x);
+                tone += (next_tone - tone) * smooth;
+            }
             if self.bright_active {
                 tone = self.bright.process(tone);
             }
@@ -4340,8 +4474,22 @@ impl Voice for SaxLoopVoice {
             let breath = (w - self.breath_hp.process(w)) * self.breath_amt;
             *o += (tone * amp + breath) * self.gain * e;
             self.pos += eff_step;
+            if let Some(next_pos) = &mut self.next_pos {
+                *next_pos += eff_step;
+            }
             if self.pos >= self.loop_end as f32 {
-                self.pos -= loop_len;
+                if self.grain_motion {
+                    self.pos = self
+                        .next_pos
+                        .take()
+                        .expect("sax grain crossfade must start before the current slice ends");
+                    self.loop_start = self.next_loop_start;
+                    self.grain_len = self.next_grain_len;
+                    self.grain_gain = self.next_grain_gain;
+                    self.loop_end = self.loop_start + self.grain_len;
+                } else {
+                    self.pos -= self.grain_len as f32;
+                }
             }
             self.t += 1;
         }
@@ -4386,8 +4534,16 @@ pub fn sax_loop_voice(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Opti
     let zones = sax_bank(program, vel);
     let f = key_freq(key);
     let zone = nearest(zones, f);
-    SaxLoopVoice::new(zone, f, vel, sr, sax_program_gain(program), seed)
-        .map(|v| Box::new(v) as Box<dyn Voice>)
+    SaxLoopVoice::new(
+        zone,
+        f,
+        vel,
+        sr,
+        sax_program_gain(program),
+        seed,
+        program == 67 && key >= 68,
+    )
+    .map(|v| Box::new(v) as Box<dyn Voice>)
 }
 
 // ---------------------------------------------------------------------------
@@ -7731,6 +7887,126 @@ mod tests {
         }
     }
 
+    /// MM-BUG-KILN-00176 — the high baritone-sax hold must not expose the
+    /// 50–130 ms source slice as a repeating spectral envelope.
+    ///
+    /// Track the relative energy in eight harmonic bands, then compare
+    /// correlation at the selected loop period (and twice it) with three
+    /// off-period decoy lags. The old single-slice reader produces a 0.962
+    /// excess peak; the phase-aligned multi-slice hold remains below 0.33.
+    #[test]
+    fn baritone_sax_high_hold_does_not_expose_the_source_loop_period() {
+        fn spectral_envelope_periodicity(signal: &[f32], sr: f32, f0: f32, lag_s: f32) -> f32 {
+            const HARMONICS: usize = 8;
+            let frame_len = 512usize;
+            let hop = 64usize;
+            let mut shapes = Vec::<[f32; HARMONICS]>::new();
+            for frame in signal.windows(frame_len).step_by(hop) {
+                let windowed: Vec<f32> = frame
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &x)| {
+                        let w = 0.5
+                            - 0.5
+                                * (std::f32::consts::TAU * i as f32 / (frame_len - 1) as f32).cos();
+                        x * w
+                    })
+                    .collect();
+                let mut shape = [0.0; HARMONICS];
+                for (h, value) in shape.iter_mut().enumerate() {
+                    let hz = f0 * (h + 1) as f32;
+                    *value = [0.98, 1.0, 1.02]
+                        .iter()
+                        .map(|&scale| crate::testutil::mag_at(&windowed, sr, hz * scale))
+                        .sum::<f32>()
+                        .max(1e-8)
+                        .ln();
+                }
+                let frame_mean = shape.iter().sum::<f32>() / HARMONICS as f32;
+                shape.iter_mut().for_each(|x| *x -= frame_mean);
+                shapes.push(shape);
+            }
+            for h in 0..HARMONICS {
+                let mean = shapes.iter().map(|shape| shape[h]).sum::<f32>() / shapes.len() as f32;
+                shapes.iter_mut().for_each(|shape| shape[h] -= mean);
+            }
+
+            let correlation = |lag_s: f32| {
+                let lag = ((lag_s * sr) / hop as f32).round().max(1.0) as usize;
+                assert!(shapes.len() > lag + 8, "periodicity window is too short");
+                let mut covariance = 0.0f64;
+                let mut energy_a = 0.0f64;
+                let mut energy_b = 0.0f64;
+                for i in 0..shapes.len() - lag {
+                    for (&a, &b) in shapes[i].iter().zip(&shapes[i + lag]) {
+                        let a = a as f64;
+                        let b = b as f64;
+                        covariance += a * b;
+                        energy_a += a * a;
+                        energy_b += b * b;
+                    }
+                }
+                covariance / (energy_a * energy_b).sqrt().max(1e-20)
+            };
+            let target = correlation(lag_s);
+            let mut decoys = [
+                correlation(0.73 * lag_s),
+                correlation(1.37 * lag_s),
+                correlation(1.91 * lag_s),
+            ];
+            decoys.sort_by(f64::total_cmp);
+            (target - decoys[1]) as f32
+        }
+
+        let sr = 44_100.0;
+        for (key, vel) in [(68u8, 72u8), (68, 110), (73, 72), (73, 110)] {
+            let f0 = crate::dsp::key_freq(key);
+            let zone = nearest(sax_bank(67, vel), f0);
+            let (loop_start, loop_end) = zone
+                .sustain_loop(find_sax_loop)
+                .expect("reported high baritone-sax note must have a recorded sustain loop");
+            let source_step = (f0 / zone.root) * 44_100.0 / sr;
+            let loop_period_s = (loop_end - loop_start) as f32 / source_step / sr;
+
+            let mut voice = voices::make(67, key, vel, sr, 0x1760_0000 + key as u32, true);
+            assert_eq!(
+                voice.kind(),
+                "saxloop",
+                "key {key} velocity {vel} fell back to the model"
+            );
+            let mut rendered = vec![0.0; (1.35 * sr) as usize];
+            voice.render(&mut rendered);
+            let hold = &rendered[(0.55 * sr) as usize..(1.30 * sr) as usize];
+            let at_period = spectral_envelope_periodicity(hold, sr, f0, loop_period_s);
+            let at_twice = spectral_envelope_periodicity(hold, sr, f0, 2.0 * loop_period_s);
+            let exposed = at_period.max(at_twice);
+            assert!(
+                exposed < 0.40,
+                "GM67 key {key} velocity {vel}: spectral-envelope correlation excess \
+                 {exposed:.3} exposes the {loop_period_s:.4}s source loop \
+                 (1x {at_period:.3}, 2x {at_twice:.3})"
+            );
+
+            let frame_len = (0.02 * sr) as usize;
+            let levels: Vec<f32> = hold
+                .chunks_exact(frame_len)
+                .map(crate::testutil::rms)
+                .collect();
+            let mean = levels.iter().sum::<f32>() / levels.len() as f32;
+            let variance = levels
+                .iter()
+                .map(|&level| (level - mean).powi(2))
+                .sum::<f32>()
+                / levels.len() as f32;
+            let level_cov = variance.sqrt() / mean.max(1e-9);
+            assert!(
+                level_cov < 0.12,
+                "GM67 key {key} velocity {vel}: multi-slice hold pulses in level \
+                 (20ms frame-RMS CoV {level_cov:.3})"
+            );
+        }
+    }
+
     /// The looped blown bottle (GM 76) must (a) actually engage — a `BottleLoopVoice`,
     /// not the modeled Wind fallback — at representative in-window keys; (b) sit within
     /// rough parity of the modeled bottle it replaces over the hold (measured +0.2 dB at
@@ -7851,6 +8127,7 @@ mod tests {
                 sr,
                 sax_program_gain(66),
                 5,
+                false,
             )
             .expect("representative sax key must engage its loop")
         };

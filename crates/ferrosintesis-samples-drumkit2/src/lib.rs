@@ -284,17 +284,17 @@ pub fn get(name: &str) -> Option<&'static [u8]> {
 
 /// Returns the decoded mono 16-bit 44.1 kHz PCM for an exact file name.
 pub fn pcm(name: &str) -> Option<&'static [i16]> {
-    let cache = decoded_samples();
     let idx = SAMPLES
         .iter()
         .position(|(candidate, _)| *candidate == name)?;
-    Some(&cache[idx])
+    Some(&decoded_samples()[idx])
 }
 
 /// Returns decoded PCM at an exact inventory index.
 #[doc(hidden)]
 pub fn pcm_by_index(index: usize) -> Option<&'static [i16]> {
-    decoded_samples().get(index).map(Vec::as_slice)
+    SAMPLES.get(index)?;
+    Some(decoded_samples()[index].as_slice())
 }
 
 /// Decode this package's complete PCM inventory now.
@@ -392,6 +392,47 @@ mod tests {
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);
+    }
+
+    #[test]
+    fn lookup_misses_do_not_initialize_pcm_cache() {
+        const PROBE: &str = "FERRO_DRUMKIT2_PCM_MISS_PROBE";
+        const NAME: &str = "tests::lookup_misses_do_not_initialize_pcm_cache";
+
+        if std::env::var_os(PROBE).is_none() {
+            let output = std::process::Command::new(
+                std::env::current_exe().expect("the test binary's own path"),
+            )
+            .args([NAME, "--exact", "--nocapture", "--test-threads=1"])
+            .env(PROBE, "1")
+            .output()
+            .expect("re-exec this test in a pristine process");
+            assert!(
+                output.status.success(),
+                "the pristine-process PCM lookup probe failed:\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+            return;
+        }
+
+        assert_eq!(pcm_cache_initializations(), 0);
+        assert_eq!(pcm("missing.wav"), None);
+        assert_eq!(pcm_by_index(SAMPLES.len()), None);
+        assert_eq!(
+            pcm_cache_initializations(),
+            0,
+            "failed lookups initialized the package-wide PCM cache",
+        );
+
+        assert!(!pcm(SAMPLES[0].0)
+            .expect("known sample must resolve")
+            .is_empty());
+        assert_eq!(
+            pcm_cache_initializations(),
+            1,
+            "a valid lookup must preserve intentional eager initialization",
+        );
     }
 
     /// Duration bounds per articulation, carried over from the core crate's

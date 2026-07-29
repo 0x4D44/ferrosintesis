@@ -2,6 +2,7 @@
 //!
 //! Two full-ring one-shot layers (soft + loud). Consumers normally access this
 //! crate through `ferrosintesis`. Attribution obligations are in `NOTICE`.
+//! `ferrosintesis`. Licence/provenance: see `NOTICE` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

@@ -15,6 +15,7 @@
 //! Mono 16-bit 44.1 kHz. CC0-1.0 -- no attribution obligation; see
 //! `PROVENANCE.md` for the pinned source revisions and the articulation
 //! inventory. Consumers normally access this crate through `ferrosintesis`.
+//! `ferrosintesis`. Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

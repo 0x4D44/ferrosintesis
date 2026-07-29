@@ -4,6 +4,7 @@
 //! extracted from the MuseScore "MS Basic" soundfont (MIT). Consumers normally
 //! access this crate through `ferrosintesis`. Attribution obligations are in
 //! `NOTICE`; source and pin are in `PROVENANCE.md`.
+//! `ferrosintesis`. Licence/provenance: see `NOTICE` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

@@ -155,7 +155,7 @@
   7/11/13/17/23; keys 38 and 55 are clean on every seed. Re-parked so the residual does not
   disappear with its parent entry.
 
-- [ ] 2026-07-26 - **`gen_crate_lib.py`'s generated doc header has drifted from the 25 committed
+- [x] 2026-07-26 - **`gen_crate_lib.py`'s generated doc header has drifted from the 25 committed
   crate `lib.rs` files: only 1 of 25 matches what the generator now emits.** The generator was
   changed to derive the header from the crate's actually-packaged legal docs
   (`Licence/provenance: see <files>`), but only `-gong` appears to have been regenerated: 12 crates
@@ -179,3 +179,6 @@
       (Done 2026-07-29: the parser now scans only the score-authored amp section.
       An adversarial test places numbered tables both before and after it and proves
       they are ignored.)
+  (Done 2026-07-29: updated the 20 headers still stale on current trunk and added a
+  25-crate source-derived guard. The guard checks only the generated legal/provenance
+  line, preserving custom crate code such as B1's natural-tail validation.)

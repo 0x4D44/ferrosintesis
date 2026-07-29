@@ -5,6 +5,7 @@
 //! recorded attack blows through once, then a pitch-synchronous loop of the recorded
 //! body carries the hold. Consumers normally access this crate through `ferrosintesis`.
 //! CC0 1.0 — no attribution required; provenance is in `PROVENANCE.md`.
+//! `ferrosintesis`. Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

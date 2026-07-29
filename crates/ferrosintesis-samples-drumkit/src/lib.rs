@@ -19,6 +19,7 @@
 //!
 //! Consumers normally access this crate through `ferrosintesis`, which depends
 //! on both halves and routes GM channel-10 keys across them transparently.
+//! `ferrosintesis`. Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

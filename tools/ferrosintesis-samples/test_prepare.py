@@ -2795,6 +2795,57 @@ class KawaiOutputInventoryTest(unittest.TestCase):
             write_output.assert_not_called()
 
 
+class GeneratedCrateDocHeaderTest(unittest.TestCase):
+    """Every generated sample-crate header names its packaged legal documents."""
+
+    def test_every_sample_crate_header_matches_the_generator(self):
+        crates_dir = os.path.join(prepare.REPO_ROOT, "crates")
+        crates = sorted(
+            os.path.join(crates_dir, name)
+            for name in os.listdir(crates_dir)
+            if name.startswith("ferrosintesis-samples-")
+            and os.path.isfile(os.path.join(crates_dir, name, "src", "lib.rs"))
+        )
+        self.assertEqual(len(crates), 25, "sample-crate census changed")
+
+        failures = []
+        for crate in crates:
+            lib = os.path.join(crate, "src", "lib.rs")
+            with open(lib, encoding="utf-8") as handle:
+                actual = [
+                    line.rstrip("\n")
+                    for line in handle
+                    if "Licence/provenance:" in line
+                    or "Attribution/licence:" in line
+                ]
+            expected = [gen_crate_lib.legal_doc_line(crate)]
+            if actual != expected:
+                failures.append(
+                    f"{os.path.basename(crate)}: expected {expected[0]!r}, got {actual!r}"
+                )
+
+        self.assertEqual(failures, [], "\n".join(failures))
+
+    def test_header_ignores_present_but_unshipped_documents(self):
+        with tempfile.TemporaryDirectory() as crate:
+            for name in gen_crate_lib.LEGAL_DOC_NAMES:
+                open(os.path.join(crate, name), "w", encoding="utf-8").close()
+            with open(
+                os.path.join(crate, "Cargo.toml"),
+                "w",
+                encoding="utf-8",
+                newline="\n",
+            ) as manifest:
+                manifest.write(
+                    '[package]\ninclude = ["LICENSE-MIT", "PROVENANCE.md"]\n'
+                )
+
+            self.assertEqual(
+                gen_crate_lib.shipped_docs(crate),
+                ["LICENSE-MIT", "PROVENANCE.md"],
+            )
+
+
 class B1InventoryRegenerationTest(unittest.TestCase):
     """MM-BUG-KILN-00169: B1 regeneration must preserve its natural-tail oracle."""
 

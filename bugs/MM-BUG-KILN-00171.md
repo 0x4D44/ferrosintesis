@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** DSP / oscillator stability
 - **Raised:** 2026-07-29
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260729T115712Z-p46072-n989625000-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00171-run-fix-20260729T115712Z-p46072-n989625000-c1
+- **Owner base:** 02d71a167ca1dc548cd18ef3f74b87b899bfc5e9
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-29T11:57:12Z
+- **Owner until:** 2026-07-29T13:57:12Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -116,6 +116,14 @@ path is bit-identical (all new state guarded by `if self.grain_motion`, `grain_g
 stays 1.0, and `choose_next_grain` - the only new `rng.white()` consumer - is
 unreachable, so the RNG stream is untouched).
 
+**Render-diff inventory completed clean (recorded after closure).** The `albums/**` half
+finished after this closure landed: 124 MIDIs, 0 changed, 124 same, 0 contamination,
+0 not-reached. Combined with `demos/**` the full catalogue is 141 MIDIs, 1 changed,
+139 same, 0 contamination, 1 explained not-reached. The single moved file is
+`demos/synth_feature_showcase/midi/03 - Skyline Brass Reactor.mid`, the only MIDI in the
+repo authoring GM67 at or above the gate. The change reached exactly one file, and exactly
+the right one.
+
 **Gates:** `cargo test --workspace` exit 0 (57 suites, zero failures),
 `cargo clippy --workspace --all-targets -- -D warnings` exit 0, `cargo fmt --check`
 exit 0, 147 Python tests OK.

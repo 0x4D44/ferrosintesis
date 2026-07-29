@@ -77,7 +77,7 @@
   (a hidden program-level dependence in the master character). Effect small ("a dB or
   two"); making it loudness-relative would re-voice every album, so treat as deliberate.
 
-- [ ] 2026.07.18 — **Rotating-phasor `Sine` is never renormalized** (`dsp.rs:~50`, 2-D
+- [x] 2026.07.18 — **Rotating-phasor `Sine` is never renormalized** (`dsp.rs:~50`, 2-D
   rotation, no periodic 1/|z| rescale), so float error slowly drifts amplitude (and
   marginally frequency) on long held tones from the additive banks (pads/organ). Cheap
   occasional rescale would fix it. Very low audible impact.
@@ -102,6 +102,9 @@
 
 - [x] 2026.07.13 — `distinctness::Why` (`crates/ferrosintesis/src/testutil.rs:1139`)
   is now a **single-variant enum** (`Collapse(u8)`) after Stage 4 deleted the last
+  (Promoted 2026-07-29: `MM-BUG-KILN-00171`. The mechanism and generic-player
+  exposure remain; the tracked fix must calibrate a renormalization interval and run
+  the synth-wide render-diff inventory.)
   `Legit` pair (synth strings 50/51). Not wrong, but a mild smell: it forced a
   plain destructuring `let Why::Collapse(stage) = why;` at the once-`if let` site.
   If it stays single-variant through Stages 5/7a/7b (none of which add `Legit`),

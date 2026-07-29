@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00171 — Long-held rotating-phasor oscillators drift in amplitude
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** DSP / oscillator stability
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260729T115712Z-p46072-n989625000-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00171-run-fix-20260729T115712Z-p46072-n989625000-c1
-- **Owner base:** 02d71a167ca1dc548cd18ef3f74b87b899bfc5e9
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-29T11:57:12Z
-- **Owner until:** 2026-07-29T13:57:12Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, promoted from the 2026-07-18 scratchpad observation by GPT-5.6 Codex)
+- **State history:** Open (2026-07-29, promoted from the 2026-07-18 scratchpad observation by GPT-5.6 Codex) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T115712Z-p46072-n989625000-c1 branch=task/bug-MM-BUG-KILN-00171-run-fix-20260729T115712Z-p46072-n989625000-c1 code=503e9eea6403bc3a9326b3097490e83a4abf8556 gate=manual)
 
 ## Observation
 

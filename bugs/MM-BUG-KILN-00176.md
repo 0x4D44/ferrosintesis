@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** audio / sampled sax sustain
 - **Raised:** 2026-07-29
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260729T175256Z-p22520-n925390200-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00176-run-fix-20260729T175256Z-p22520-n925390200-c1
+- **Owner base:** 98037c3341654add9bed0ae93fca78a06ea35c4e
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-29T17:52:56Z
+- **Owner until:** 2026-07-29T19:52:56Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

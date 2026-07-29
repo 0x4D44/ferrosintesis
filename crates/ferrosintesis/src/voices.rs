@@ -9795,7 +9795,7 @@ fn bowed_string_controls(
     voicing: &StringVoicing,
 ) -> (f32, f32) {
     let control = vel_ctrl(vel);
-    if !matches!(program, 42 | 43) {
+    if matches!(program, 40 | 41 | 110) {
         // A fast bow still owns the violin family's high-velocity brightness,
         // but pressure and speed cannot both sit at their independent maxima:
         // at v127 the hardest production draws mode-lock an octave high across
@@ -9809,6 +9809,11 @@ fn bowed_string_controls(
         let force_cap = 2.9 + (2.60 - 2.9) * pressure_t;
         let speed = 0.03 + 0.22 * control + (0.22 - 0.25) * pressure_t;
         return (speed, natural_slope.min(force_cap));
+    }
+    if program == 44 {
+        // Tremolo Strings was not part of the violin-family stability defect.
+        // Preserve its established bow-speed/pressure map exactly.
+        return (0.03 + 0.22 * control, natural_slope);
     }
 
     // MM-BUG-KILN-00029: low strings used to run bow speed from 0.03 to 0.25
@@ -14044,10 +14049,15 @@ const EMBEDDED_VEL_LEVEL_EXP: [f32; 128] = {
     // exemption that exists for an UNcorrectable one. Values from `velocity_census`;
     // `samples_flag_velocity_divergence` confirms bare and sample-wrapped fit the
     // same k to within 0.004, so one program-indexed entry serves both (the GM76 /
-    // MM-BUG-KILN-00105 trap does not apply). t[41] carries a KEY-DEPENDENT spread
-    // (k 2.662 at key 48 vs 2.960 at key 60) that one exponent cannot flatten; the
-    // residual lands at ±0.15, inside the oracle band but named here so it is visible.
-    t[40] = 1.211; t[41] = 1.189; t[44] = 1.460; t[110] = 1.230;
+    // MM-BUG-KILN-00105 trap does not apply).
+    //
+    // Re-measured after the v97..127 playable-region map reduced violin-family
+    // bow speed to 0.22. The old compensation under-read the new top end
+    // (GM40/41/110 key-48 k = 1.789/1.693/1.795). Centre each program's two-key
+    // raw spread around 2.0: GM40 raw 2.578..2.837 -> 1.293, GM41
+    // 2.504..2.894 -> 1.301, GM110 2.565..2.788 -> 1.324. GM44 was outside
+    // that approved stability change and keeps both its old controls and 1.460.
+    t[40] = 1.293; t[41] = 1.301; t[44] = 1.460; t[110] = 1.324;
     // Ensembles and the orchestra hit.
     t[48] = 1.842; t[49] = 1.844; t[55] = 2.380;
     // Brass: lip bite and chiff are velocity-driven excitation.
@@ -29767,6 +29777,22 @@ mod tests {
                 );
                 previous_speed = speed;
             }
+        }
+
+        let tremolo_voicing = string_voicing(44);
+        for vel in [96u8, 110, 127] {
+            let natural_speed = 0.03 + 0.22 * vel_ctrl(vel);
+            let (speed, force) = bowed_string_controls(44, 60, vel, 2.9, &tremolo_voicing);
+            assert_eq!(
+                speed.to_bits(),
+                natural_speed.to_bits(),
+                "GM44: violin-family stability map leaked into tremolo strings at v{vel}"
+            );
+            assert_eq!(
+                force.to_bits(),
+                2.9f32.to_bits(),
+                "GM44: violin-family force ceiling leaked into tremolo strings at v{vel}"
+            );
         }
     }
 

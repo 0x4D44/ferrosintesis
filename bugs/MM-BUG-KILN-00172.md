@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00172 — Drum-kit regeneration trusts unauthenticated warm-cache inputs
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / drum-kit cache
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T135230Z-p67316-n040854600-c1 branch=task/bug-MM-BUG-KILN-00172-run-fix-20260729T135230Z-p67316-n040854600-c1 code=81bb5b8405a43dbc6481b8cda8dcfb6622b42b4c gate=manual)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T135230Z-p67316-n040854600-c1 branch=task/bug-MM-BUG-KILN-00172-run-fix-20260729T135230Z-p67316-n040854600-c1 code=81bb5b8405a43dbc6481b8cda8dcfb6622b42b4c gate=manual) -> Closed (2026-07-29, independently verified by Claude Opus 5 on trunk `9de9152`; original observation re-run: the pre-fix source accepts a warm FLAC by existence alone and has no authenticated entry point; all 7 cache regressions pass on the fix, including the healthy-warm-reuse control; repo gates green)
 
 ## Observation
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00174 — Missing drum PCM lookup decodes and retains the full package
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drum-kit2 PCM API
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T141553Z-p52900-n828035100-c1 branch=task/bug-MM-BUG-KILN-00174-run-fix-20260729T141553Z-p52900-n828035100-c1 code=233d59198d26f1254e69fb2ee45f9d7a1edffadd gate=manual)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T141553Z-p52900-n828035100-c1 branch=task/bug-MM-BUG-KILN-00174-run-fix-20260729T141553Z-p52900-n828035100-c1 code=233d59198d26f1254e69fb2ee45f9d7a1edffadd gate=manual) -> Closed (2026-07-29, independently verified by Claude Opus 5 on trunk `9de9152`; regression proven to fail without the fix: a missing-name lookup initialized the package-wide PCM cache (1 vs 0); repo gates green)
 
 ## Observation
 

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00170 — The committed-source registry is hand-maintained: 3 of 4 repo-root recording roots are unpinned and invisible to the provenance oracle
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample provenance / oracle enumeration
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, split from MM-BUG-KILN-00168 during its independent two-eyes closure by Claude Opus 5 on trunk `be161eb`) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T113244Z-p34508-n560217800-c1 branch=task/bug-MM-BUG-KILN-00170-run-fix-20260729T113244Z-p34508-n560217800-c1 code=ef81ac23702a266ffb2b3b5d8e59d89188b34ae3 gate=manual)
+- **State history:** Open (2026-07-29, split from MM-BUG-KILN-00168 during its independent two-eyes closure by Claude Opus 5 on trunk `be161eb`) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T113244Z-p34508-n560217800-c1 branch=task/bug-MM-BUG-KILN-00170-run-fix-20260729T113244Z-p34508-n560217800-c1 code=ef81ac23702a266ffb2b3b5d8e59d89188b34ae3 gate=manual) -> Closed (2026-07-29, independently verified by Claude Opus 5 on trunk `9de9152`; original observation re-run: all four `samples/` recording roots are now enumerated and 113 committed sources are pinned; the adversarial control was confirmed independently by planting a new `samples/zz-verify-probe/master.opus` root, which the coverage oracle named rather than silently skipped; repo gates green)
 
 ## Observation
 

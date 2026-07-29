@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00175 — Companion drum-kit inventory test never compares packaged WAVs
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drum-kit2 inventory
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T142237Z-p72360-n516310600-c1 branch=task/bug-MM-BUG-KILN-00175-run-fix-20260729T142237Z-p72360-n516310600-c1 code=8ce254b4b5591ef78d297a8a55dbaa4360cf931d gate=manual)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T142237Z-p72360-n516310600-c1 branch=task/bug-MM-BUG-KILN-00175-run-fix-20260729T142237Z-p72360-n516310600-c1 code=8ce254b4b5591ef78d297a8a55dbaa4360cf931d gate=manual) -> Closed (2026-07-29, independently verified by Claude Opus 5 on trunk `9de9152`; regression proven to fail without the fix; confirmed independently by dropping a real unembedded WAV into the packaged `samples/` directory, which the oracle failed by name; repo gates green)
 
 ## Observation
 

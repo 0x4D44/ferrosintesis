@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00171 — Long-held rotating-phasor oscillators drift in amplitude
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** DSP / oscillator stability
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, promoted from the 2026-07-18 scratchpad observation by GPT-5.6 Codex) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T115712Z-p46072-n989625000-c1 branch=task/bug-MM-BUG-KILN-00171-run-fix-20260729T115712Z-p46072-n989625000-c1 code=503e9eea6403bc3a9326b3097490e83a4abf8556 gate=manual)
+- **State history:** Open (2026-07-29, promoted from the 2026-07-18 scratchpad observation by GPT-5.6 Codex) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T115712Z-p46072-n989625000-c1 branch=task/bug-MM-BUG-KILN-00171-run-fix-20260729T115712Z-p46072-n989625000-c1 code=503e9eea6403bc3a9326b3097490e83a4abf8556 gate=manual) -> Closed (2026-07-29, independently verified by Claude Opus 5 on trunk `9de9152`; regression proven to fail without the fix (7 of 8 cases drift, max magnitude error 0.076); the render-diff inventory the fix note asked for was run and is clean -- a 9.5-minute sustained album track moves only -101.6 dBFS RMS / -78.3 dBFS peak (dither floor) while `demos/orchestral_demo.mid` is bit-identical, matching the >=57,345-tick first-correction threshold exactly; repo gates green)
 
 ## Observation
 

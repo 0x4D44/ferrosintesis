@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00173 — Concurrent drum-kit regenerations race fixed shared-cache temporary files
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample generation / drum-kit cache
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T140318Z-p42048-n751314100-c1 branch=task/bug-MM-BUG-KILN-00173-run-fix-20260729T140318Z-p42048-n751314100-c1 code=c0a74497bf12a494bdc6173afba399726e2bed5a gate=manual)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T140318Z-p42048-n751314100-c1 branch=task/bug-MM-BUG-KILN-00173-run-fix-20260729T140318Z-p42048-n751314100-c1 code=c0a74497bf12a494bdc6173afba399726e2bed5a gate=manual) -> Closed (2026-07-29, independently verified by Claude Opus 5 on trunk `9de9152`; regression proven to fail without the fix -- the pre-fix `fetch` shares one `.part` path (1 staging path, not 2) and its failing writer destroys the successful writer's entry (2 errors, not 1); repo gates green)
 
 ## Observation
 

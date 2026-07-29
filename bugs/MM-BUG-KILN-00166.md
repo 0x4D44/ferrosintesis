@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00166 — Steinway rebakes can retain obsolete WAVs
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** Steinway sample generation / output inventory
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260728T232217Z-p36364-n404969000-c1 branch=task/bug-MM-BUG-KILN-00166-run-fix-20260728T232217Z-p36364-n404969000-c1 code=84c6446 gate=manual)
+- **State history:** Open (2026-07-28, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260728T232217Z-p36364-n404969000-c1 branch=task/bug-MM-BUG-KILN-00166-run-fix-20260728T232217Z-p36364-n404969000-c1 code=84c6446 gate=manual) -> Closed (2026-07-29, independently verified by Claude Opus 5 on trunk `be161eb`; original observation re-run, regression proven to fail without the fix, repo gates green)
 
 ## Observation
 
@@ -34,6 +34,25 @@ Estimated effort: Small.
 
 ## Fix
 
-<unfixed — raised only>
+Code commit `84c6446`. `prepare.main()` now calls
+`_validate_generated_output_inventory("steinwayb", STEINWAYB_SOURCES)` before
+any Steinway fetch or write, and the family-scoped oracle was extended to cover
+the Steinway family and expected set.
 
 ## Notes
+
+### Verification (2026-07-29, independent two-eyes, Claude Opus 5)
+
+Fails-before proven twice, exactly as for the Kawai sibling. Deleting only the
+two added `prepare.py` lines makes
+`SteinwayOutputInventoryTest::test_removed_source_rejects_its_stale_output_before_fetching_or_writing`
+fail with `inventory must be checked before reading`, and
+`every_generated_bake_output_family_is_inventory_validated` fail at the Steinway
+assertion. Both pass on the restored tree.
+
+The retirement path the bug described is now guarded: a removed
+`STEINWAYB_SOURCES` entry whose WAV is still on disk aborts the run with a
+`ValueError` naming that file, before `ensure_direct_sources` fetches anything
+or `write_wav_mono` writes anything.
+
+Repo gates on the exact verified tree (trunk `be161eb`, worktree clean): `cargo test --workspace` exit 0 (no failures), `cargo clippy --workspace --all-targets -- -D warnings` exit 0, `cargo fmt --check` exit 0, and `python3 -m pytest tools/ferrosintesis-samples/test_prepare.py` 129 passed / 35 subtests.

@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00169 — Advertised B1 library regeneration deletes natural-tail validation
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** B1 sample crate / regeneration reliability
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260728T234120Z-p63176-n935322400-c1 branch=task/bug-MM-BUG-KILN-00169-run-fix-20260728T234120Z-p63176-n935322400-c1 code=429720f gate=manual)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260728T234120Z-p63176-n935322400-c1 branch=task/bug-MM-BUG-KILN-00169-run-fix-20260728T234120Z-p63176-n935322400-c1 code=429720f gate=manual) -> Closed (2026-07-29, independently verified by Claude Opus 5 on trunk `be161eb`; original observation re-run, regression proven to fail without the fix, repo gates green)
 
 ## Observation
 
@@ -63,6 +63,8 @@ misleading regeneration workflow.
 
 ## Fix
 
+### Proposed (at raise time)
+
 Mark only the inventory table as generated. Provide a B1-aware updater, or
 extend the region-only updater, so it preserves the bespoke tests and
 deliberately reports/updates both aggregate size pins after a verified full-bank
@@ -72,6 +74,15 @@ proving regeneration retains the `b1_tail` assertions.
 As part of correcting the stale generated header, change its nonexistent
 `NOTICE` pointer at `src/lib.rs:5` to the packaged `LICENSE-CC0`.
 
+### As landed
+
+Code commit `429720f`. Marks only the inventory table generated (BEGIN/END
+delimiters), makes `regen_samples_table.py` B1-aware so it validates every
+terminal `b1t ` chunk and re-pins `FILE_COUNT`, `EXPECTED_BYTES` and
+`EXPECTED_TAIL_BYTES` while preserving the handwritten tail validator, documents
+the full bake/update/test sequence in the crate README, corrects the stale
+`NOTICE` pointer to `LICENSE-CC0`, and adds a regeneration regression.
+
 ## Notes
 
 `MM-REQ-KILN-00031` is not a duplicate. It is an Implemented, fret-noise-scoped
@@ -79,3 +90,37 @@ requirement whose resolution merely identifies `regen_samples_table.py` as the
 safe preservation mechanism.
 
 Estimated effort: Small–Medium.
+
+## Verification (2026-07-29, independent two-eyes, Claude Opus 5)
+
+Verified end-to-end against the real crate, not just the fixture. Perturbed the
+two pins in `crates/ferrosintesis-samples-b1-upright/src/lib.rs`
+(`EXPECTED_BYTES` to 7, `EXPECTED_TAIL_BYTES` to 1) and ran the newly documented
+step verbatim: `python3 tools/ferrosintesis-samples/regen_samples_table.py
+crates/ferrosintesis-samples-b1-upright`. It reported `EXPECTED_BYTES=7->10271480`
+and `EXPECTED_TAIL_BYTES=1->3351922`, restored both correctly, and left the
+handwritten `b1_tail` validator content-identical -- so the advertised path both
+re-pins deliberately and no longer erases the semantic tail oracle. Tree
+restored clean.
+
+Header and docs check out: the generated region is delimited, the rustdoc now
+names `regen_samples_table.py`, and the `NOTICE` pointer is corrected to
+`LICENSE-CC0` (the crate genuinely ships no `NOTICE`). The README documents
+bake -> update -> test.
+
+Fails-before proven: with the pre-fix `regen_samples_table.py` restored,
+`B1InventoryRegenerationTest::test_refresh_updates_both_pins_without_deleting_b1_tail_assertions`
+fails; it passes on trunk.
+
+One weakness noted, judged not worth its own ID: the fixture's
+`EXPECTED_TAIL_BYTES` starts at 1 and its computed value is also 1, so that
+assertion alone cannot tell "recomputed" from "left alone". The real-crate run
+above settles the behaviour directly, and
+`every_sample_is_an_extended_wav_with_the_expected_aggregate_sizes` pins the true
+value on every workspace test run.
+
+Operational note for anyone re-running the updater: it writes LF line endings,
+so on a CRLF working tree the file reads modified until git normalises it. The
+content is unchanged; `git diff` is empty.
+
+Repo gates on the exact verified tree (trunk `be161eb`, worktree clean): `cargo test --workspace` exit 0 (no failures), `cargo clippy --workspace --all-targets -- -D warnings` exit 0, `cargo fmt --check` exit 0, and `python3 -m pytest tools/ferrosintesis-samples/test_prepare.py` 129 passed / 35 subtests.

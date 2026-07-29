@@ -49,12 +49,12 @@
   integral. KILN-00055 is correctly Closed (the fix is right, and the red-before/green-after
   was run against the real body) — this is test strength, not a defect. Add a q=0.05 case and
   an integral-`q*n` case.
+  (Done 2026-07-29: added both cases. The q=0.05/n=9 case exercises the lower-rank
+  clamp; q=0.05/n=20 pins one-based nearest-rank indexing when q*n is integral.)
 
 - [ ] 2026.07.22 — **M-CAL residual watchlist: the metric disagrees with ear-vetted trims
   on the slow-attack families** — GM56/57 brass (−6.7/−6.3 dB), GM67 (−4.8), GM48/50/51
   ensembles (+3.7..+4.3). Either the single-held-note probe biases slow-attack voices, or
-  (Done 2026-07-29: added both cases. The q=0.05/n=9 case exercises the lower-rank
-  clamp; q=0.05/n=20 pins one-based nearest-rank indexing when q*n is integral.)
   those shipped trims are stale. Only listening settles which; do NOT renumber them on the
   metric alone. Evidence: residual-oracle section of `_cal/derivation_v3.txt`.
   (Re-verified 2026-07-25 and it REPRODUCES - every parked number lands within ~0.5 dB on a fresh
@@ -75,11 +75,14 @@
   no `rev_hp` (contrast the hall send) at `CATHEDRAL_WET_SCALE=1.30`, so sub-150 Hz feeds
   the long FDN tail at +2.3 dB — possible LF mud. Scoped to GM19 CC0=2 organ, so contained.
 
-- [ ] 2026.07.18 — **BusGlue compression keys off the raw pre-normalization internal
+- [x] 2026.07.18 — **BusGlue compression keys off the raw pre-normalization internal
   level.** `BusGlue thr=0.32` detects on raw level (`engine.rs:~676`) and runs *before*
   `normalize_loudness`, so two albums both landing at −18 LUFS can receive different glue
   (a hidden program-level dependence in the master character). Effect small ("a dB or
   two"); making it loudness-relative would re-voice every album, so treat as deliberate.
+  (Obsolete 2026-07-29: the observation still describes the code, but not a defect.
+  `BusGlue` is deliberately part of the pre-normalization mix character; making its
+  detector loudness-relative would replace that voicing without an active complaint.)
 
 - [x] 2026.07.18 — **Rotating-phasor `Sine` is never renormalized** (`dsp.rs:~50`, 2-D
   rotation, no periodic 1/|z| rescale), so float error slowly drifts amplitude (and
@@ -99,6 +102,9 @@
   no gain. Keep open, low priority, because ferrosintesis is a GENERIC GM player: a foreign
   10-minute drone or a held note on the realtime `live.rs` path still reaches ~8 dB of
   inter-partial spread. `dsp.rs::sine_stays_bounded` does NOT cover this - it runs 1 s.)
+  (Promoted 2026-07-29: `MM-BUG-KILN-00171`. The mechanism and generic-player
+  exposure remain; the tracked fix must calibrate a renormalization interval and run
+  the synth-wide render-diff inventory.)
 - [ ] 2026.07.18 — **Two shipped drumkit banks are unreachable dead payload:**
   `CRASH_SIZZLE` and `SNARE_OFF` exist in the drumkit crate but no GM key maps to them
   (`sampler.rs:~2313` comment; absent from `sampled_drum` dispatch). Compiled-in but never
@@ -106,9 +112,6 @@
 
 - [x] 2026.07.13 — `distinctness::Why` (`crates/ferrosintesis/src/testutil.rs:1139`)
   is now a **single-variant enum** (`Collapse(u8)`) after Stage 4 deleted the last
-  (Promoted 2026-07-29: `MM-BUG-KILN-00171`. The mechanism and generic-player
-  exposure remain; the tracked fix must calibrate a renormalization interval and run
-  the synth-wide render-diff inventory.)
   `Legit` pair (synth strings 50/51). Not wrong, but a mild smell: it forced a
   plain destructuring `let Why::Collapse(stage) = why;` at the once-`if let` site.
   If it stays single-variant through Stages 5/7a/7b (none of which add `Legit`),
@@ -123,7 +126,7 @@
   `perceptual_distinctness::Why` IS genuinely two-variant - do not collapse that one.)
   (Done 2026-07-29: collapsed only `distinctness::Why` to a bare `u8` stage ID
   across its five sites. The sibling `perceptual_distinctness::Why` remains intact.)
-- [ ] 2026.07.15 — **Drum-bus glue compressor (ch9) — unshipped idea recovered from the
+- [x] 2026.07.15 — **Drum-bus glue compressor (ch9) — unshipped idea recovered from the
   superseded `dry-drum-bus-for-forward-kit` branch before reaping it.** A feed-forward
   3:1 peak compressor + makeup gain on the channel-10 bus (sibling of the existing
   `BusGlue`), so kit prominence rides through the −18 LUFS / −1 dBTP master as RMS body
@@ -133,6 +136,9 @@
   DrumGlue bus-compressor idea before reaping dry-drum-bus branch.md`. Would slot into
   `crates/ferrosintesis/src/engine.rs` next to `BusGlue`. Worth a look if "kit still
   not prominent enough" comes back up after the shipped `kit_balance()` fix.
+  (Obsolete 2026-07-29: there is no current kit-prominence complaint, and the
+  recovered journal itself says the shipped diagnosis was `kit_balance`, not a bus
+  problem. The journal keeps the experiment if new listening feedback revives it.)
 
 - [ ] 2026-07-13 — **No root LICENSE** (`d:\language\midi-music\`). Only the four crate dirs
   carry licence text, so everything outside them — `tools/ferrosintesis-samples/prepare.py`
@@ -175,6 +181,9 @@
   three lists in CLAUDE.md: a per-crate value maintained by hand instead of derived. Fix is a
   regen sweep plus an oracle that regenerates each crate in a temp dir and diffs. Spotted during
   the 2026-07-25 scratchpad triage while re-verifying the rustfmt fix after rebasing onto it.
+  (Done 2026-07-29: updated the 20 headers still stale on current trunk and added a
+  25-crate source-derived guard. The guard checks only the generated legal/provenance
+  line, preserving custom crate code such as B1's natural-tail validation.)
 
 - [x] 2026-07-26 — `engine.rs:amp_protocol_has_one_definition` scrapes the NRPN knob table by
       matching ANY `| <int> | <text> |` row in the WHOLE of `crates/ferrosintesis/README.md`
@@ -186,6 +195,3 @@
       (Done 2026-07-29: the parser now scans only the score-authored amp section.
       An adversarial test places numbered tables both before and after it and proves
       they are ignored.)
-  (Done 2026-07-29: updated the 20 headers still stale on current trunk and added a
-  25-crate source-derived guard. The guard checks only the generated legal/provenance
-  line, preserving custom crate code such as B1's natural-tail validation.)

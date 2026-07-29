@@ -1576,8 +1576,8 @@ mod guards {
 /// feature vector, and asserts every within-family pair differs by at least
 /// [`EPS`] on its most-distinguishing feature — UNLESS the pair is on [`ALLOW`].
 ///
-/// Every entry is a [`Why::Collapse`] — a KNOWN current collapse the woodwind/LA
-/// HLD schedules a fix for. Deleting the entry is part of that stage's definition
+/// Every entry carries the HLD stage for a KNOWN current collapse. Deleting the
+/// entry is part of that stage's definition
 /// of done, and the matrix then proves the fix landed.
 /// `allowlisted_collapses_are_really_clones` fails loudly the moment a stage
 /// differentiates a family, forcing the delete. (There is no longer any
@@ -1636,15 +1636,9 @@ mod distinctness {
     /// relative difference. Same order as `Feat`.
     const FLOOR: Feat = [100.0, 0.05, 0.10, 0.02, 0.05];
 
-    #[derive(Clone, Copy)]
-    enum Why {
-        /// Known current collapse; the named HLD stage removes this entry.
-        Collapse(u8),
-    }
-
     /// Unordered program pairs exempt from the distinctness assertion, kept sorted
-    /// (a < b). Every `Collapse` entry cites the HLD stage that deletes it.
-    const ALLOW: &[(u8, u8, Why)] = &[
+    /// (a < b). Every entry cites the HLD stage that deletes it.
+    const ALLOW: &[(u8, u8, u8)] = &[
         // -- Stage 1: Pipe 72-79 — DONE. The `whistle` bool became an 8-entry
         //    WindPreset table, so all 28 pipe pairs are now genuinely distinct
         //    instruments and carry no exemption. (This is the pattern: a stage's
@@ -1679,10 +1673,10 @@ mod distinctness {
         //    grand (2, higher inharmonicity / fast decay / no soundboard
         //    aftersound) and the wide-trichord honky-tonk (3); all six former
         //    collapse entries are deleted and the matrix proves the split. --
-        (29, 30, Why::Collapse(5)), // guitar: two "overdrive/distortion" share DRIVE — Stage 7b
+        (29, 30, 5), // guitar: two "overdrive/distortion" share DRIVE — Stage 7b
     ];
 
-    fn allow_reason(a: u8, b: u8) -> Option<Why> {
+    fn allow_reason(a: u8, b: u8) -> Option<u8> {
         let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
         ALLOW
             .iter()
@@ -1779,8 +1773,7 @@ mod distinctness {
     #[test]
     fn allowlisted_collapses_are_really_clones() {
         let feats = all_feats();
-        for &(a, b, why) in ALLOW {
-            let Why::Collapse(stage) = why;
+        for &(a, b, stage) in ALLOW {
             let s = score(&feats[a as usize], &feats[b as usize]);
             assert!(
                 s < EPS,
@@ -1829,7 +1822,7 @@ mod distinctness {
                 for b in (a + 1)..base + 8 {
                     let s = score(&feats[a as usize], &feats[b as usize]);
                     let tag = match allow_reason(a, b) {
-                        Some(Why::Collapse(_)) => " [Collapse]",
+                        Some(_) => " [Collapse]",
                         None => "",
                     };
                     let flag = if s < EPS && allow_reason(a, b).is_none() {

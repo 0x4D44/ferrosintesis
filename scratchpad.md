@@ -100,7 +100,7 @@
   (`sampler.rs:~2313` comment; absent from `sampled_drum` dispatch). Compiled-in but never
   selectable — GM has no dedicated key for either. Drop or wire behind a CC0 alt-bank.
 
-- [ ] 2026.07.13 — `distinctness::Why` (`crates/ferrosintesis/src/testutil.rs:1139`)
+- [x] 2026.07.13 — `distinctness::Why` (`crates/ferrosintesis/src/testutil.rs:1139`)
   is now a **single-variant enum** (`Collapse(u8)`) after Stage 4 deleted the last
   `Legit` pair (synth strings 50/51). Not wrong, but a mild smell: it forced a
   plain destructuring `let Why::Collapse(stage) = why;` at the once-`if let` site.
@@ -114,6 +114,8 @@
   in this pass: it is cosmetic, and `testutil.rs` is a hot file in a repo where several agents
   work concurrently, so the conflict risk outweighs the tidy. Note the sibling
   `perceptual_distinctness::Why` IS genuinely two-variant - do not collapse that one.)
+  (Done 2026-07-29: collapsed only `distinctness::Why` to a bare `u8` stage ID
+  across its five sites. The sibling `perceptual_distinctness::Why` remains intact.)
 - [ ] 2026.07.15 — **Drum-bus glue compressor (ch9) — unshipped idea recovered from the
   superseded `dry-drum-bus-for-forward-kit` branch before reaping it.** A feed-forward
   3:1 peak compressor + makeup gain on the channel-10 bus (sibling of the existing

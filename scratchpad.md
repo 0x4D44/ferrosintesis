@@ -20,14 +20,14 @@
   stayed unchanged because its level evidence conflicts and sampled-sustain defects
   contaminate the comparison. The GM67 defects were promoted to MM-BUG-KILN-00176.
   Done 2026-07-29.)
-- [ ] 2026.07.18 — **Cathedral reverb send skips the 150 Hz send high-pass and is boosted
+- [x] 2026.07.18 — **Cathedral reverb send skips the 150 Hz send high-pass and is boosted
   1.30×.** `send_cathedral` goes straight to `cathedral.process` (`engine.rs:~2446`) with
   no `rev_hp` (contrast the hall send) at `CATHEDRAL_WET_SCALE=1.30`, so sub-150 Hz feeds
   the long FDN tail at +2.3 dB — possible LF mud. Scoped to GM19 CC0=2 organ, so contained.
   (Measured 2026-07-29 through the real engine path. The 150 Hz candidate loses 2.179 LU
   before matching. A matched, wet-return-only blind pair is at
-  `_cal/listening/cathedral/`; awaiting Arthur's listening verdict. Shipped routing is
-  unchanged.)
+  `_cal/listening/cathedral/`. Arthur preferred B, the current full-band send,
+  for its greater presence. Retired 2026-07-29: keep the shipped routing unchanged.)
 
 - [ ] 2026-07-19 FINGERED BASS (GM 33, `BASS` preset) and UPRIGHT bass (GM 32, `UPRIGHT`) sound "more or less the same" to Arthur (showcase audition), despite the v0.12 §2.12 "widened 32/33 split". Expected: an electric flatwound (muffled, pickup-comb identity) vs a woody ACOUSTIC upright (corpus modes, fingertip thud, no pickup) should be clearly distinct. Investigate whether the split is audibly insufficient (or the showcase phrase just does not reveal it). Separate from the pluck redesign (a distinctiveness issue). crates/ferrosintesis/src/voices.rs BASS (~2773) + UPRIGHT (~2903).
   (Re-verified 2026-07-25: the CODE does not corroborate "more or less the same" - the presets now

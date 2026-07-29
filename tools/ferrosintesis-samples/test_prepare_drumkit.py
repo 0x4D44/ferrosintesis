@@ -1,9 +1,13 @@
+import hashlib
 import os
 import re
+import struct
 import tempfile
 import unittest
+import wave
 from unittest import mock
 
+import prepare
 import prepare_drumkit
 
 
@@ -164,6 +168,135 @@ class DrumkitOutputPlanTests(unittest.TestCase):
                     self.assertFalse(os.path.exists(
                         os.path.join(output_dir, name + ".part")
                     ))
+
+
+class DrumkitSourceCacheTests(unittest.TestCase):
+    """MM-BUG-KILN-00172: warm inputs must prove their source and recipe."""
+
+    URL = "https://example.invalid/rev-a/source.flac"
+
+    def setUp(self):
+        self.cache_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.cache_dir.cleanup)
+        self.served = b"PINNED-FLAC-A"
+        self.decoded_sample = 1000
+        self.fetches = 0
+        self.decodes = 0
+
+    @property
+    def flac(self):
+        return os.path.join(self.cache_dir.name, "source.flac")
+
+    @property
+    def wav(self):
+        return os.path.join(self.cache_dir.name, "source_dec.wav")
+
+    def fake_fetch(self, _url, path):
+        self.fetches += 1
+        with open(path, "wb") as output:
+            output.write(self.served)
+
+    def fake_run(self, args, **_kwargs):
+        self.decodes += 1
+        with wave.open(args[-1], "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(44100)
+            output.writeframes(struct.pack(
+                "<32h", *([self.decoded_sample] * 32)
+            ))
+
+    def ensure(self, url=URL, recipe="ffmpeg-pcm-s24le-native-v1"):
+        with mock.patch.object(prepare, "fetch", side_effect=self.fake_fetch), \
+                mock.patch.object(
+                    prepare_drumkit.subprocess, "run", side_effect=self.fake_run
+                ):
+            return prepare_drumkit.ensure_decoded_source(
+                "ffmpeg", self.cache_dir.name, url, recipe
+            )
+
+    def test_authenticated_warm_entry_is_reused(self):
+        self.ensure()
+        self.ensure()
+
+        self.assertEqual(self.fetches, 1)
+        self.assertEqual(self.decodes, 1)
+
+    def test_substituted_cached_flac_is_refetched(self):
+        self.ensure()
+        with open(self.flac, "wb") as output:
+            output.write(b"SUBSTITUTED-VALID-FLAC")
+
+        self.ensure()
+
+        self.assertEqual(self.fetches, 2)
+        self.assertEqual(
+            prepare.sha256_file(self.flac),
+            hashlib.sha256(self.served).hexdigest(),
+        )
+
+    def test_substituted_valid_decoded_wav_is_rebuilt(self):
+        self.ensure()
+        with wave.open(self.wav, "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(44100)
+            output.writeframes(struct.pack("<32h", *([2000] * 32)))
+
+        self.ensure()
+
+        self.assertEqual(self.decodes, 2)
+        samples, _sample_rate = prepare.read_wav(self.wav)
+        self.assertAlmostEqual(samples[0], 1000 / 32768.0)
+
+    def test_changed_url_with_stable_basename_refetches_and_redecodes(self):
+        self.ensure()
+        self.served = b"PINNED-FLAC-B"
+        self.decoded_sample = 2000
+
+        self.ensure("https://example.invalid/rev-b/source.flac")
+
+        self.assertEqual(self.fetches, 2)
+        self.assertEqual(self.decodes, 2)
+        samples, _sample_rate = prepare.read_wav(self.wav)
+        self.assertAlmostEqual(samples[0], 2000 / 32768.0)
+
+    def test_changed_decode_recipe_rebuilds_cached_wav(self):
+        self.ensure(recipe="recipe-a")
+        self.decoded_sample = 2000
+
+        self.ensure(recipe="recipe-b")
+
+        self.assertEqual(self.fetches, 1)
+        self.assertEqual(self.decodes, 2)
+        samples, _sample_rate = prepare.read_wav(self.wav)
+        self.assertAlmostEqual(samples[0], 2000 / 32768.0)
+
+    def test_legacy_unmanifested_warm_entries_are_rebuilt(self):
+        with open(self.flac, "wb") as output:
+            output.write(b"LEGACY-FLAC")
+        with wave.open(self.wav, "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(44100)
+            output.writeframes(struct.pack("<32h", *([2000] * 32)))
+
+        self.ensure()
+
+        self.assertEqual(self.fetches, 1)
+        self.assertEqual(self.decodes, 1)
+
+    def test_malformed_manifests_are_rejected(self):
+        self.ensure()
+        with open(self.flac + ".source.json", "w", encoding="utf-8") as manifest:
+            manifest.write("[]")
+        with open(self.wav + ".source.json", "w", encoding="utf-8") as manifest:
+            manifest.write("[]")
+
+        self.ensure()
+
+        self.assertEqual(self.fetches, 2)
+        self.assertEqual(self.decodes, 2)
 
 
 if __name__ == "__main__":

@@ -54,7 +54,15 @@ import sys
 import tempfile
 import wave
 
-from prepare import fetch, read_wav, resample
+from prepare import (
+    decoded_wav_matches,
+    ensure_source,
+    read_wav,
+    resample,
+    sha256_file,
+    validate_decoded_wav,
+    write_decoded_source_manifest,
+)
 
 VIRTUOSITY_REV = "9f04cf9a734527edfbb0a4eee1f674e45bbf71bc"
 BIG_RUSTY_REV = "f07ce00df34a46b6b08375be56fe116cf15782bc"
@@ -73,6 +81,7 @@ OUT_SR = 44100
 PRE_S = 0.008      # pad kept before the onset
 FADE_IN_S = 0.002  # fade-in applied at the segment start
 PEAK = 0.9         # peak-normalization target (bank convention)
+DECODE_RECIPE_REV = "ffmpeg-pcm-s24le-native-v1"
 
 CORE_PACKAGE = "ferrosintesis-samples-drumkit"
 ACCENT_PACKAGE = "ferrosintesis-samples-drumkit2"
@@ -204,22 +213,44 @@ def wav_info(path):
         return w.getnchannels(), w.getframerate()
 
 
-def decode_flac(ffmpeg, flac_path, wav_path):
-    """FLAC -> 24-bit WAV at the native rate/channels (bit-exact decode)."""
-    if os.path.exists(wav_path):
-        try:
-            wav_info(wav_path)
-            return
-        except (wave.Error, EOFError):
-            os.remove(wav_path)
+def decode_flac(ffmpeg, flac_path, wav_path, recipe_revision=DECODE_RECIPE_REV):
+    """Cache a decode only when it matches the FLAC bytes and decode recipe."""
+    source_sha256 = sha256_file(flac_path)
+    if decoded_wav_matches(
+            wav_path, source_sha256, recipe_revision,
+            validate_wav=validate_decoded_wav):
+        return
     part = wav_path + ".part.wav"
     if os.path.exists(part):
         os.remove(part)
-    subprocess.run(
-        [ffmpeg, "-v", "error", "-y", "-i", flac_path, "-c:a", "pcm_s24le", part],
-        check=True,
+    try:
+        subprocess.run(
+            [ffmpeg, "-v", "error", "-y", "-i", flac_path,
+             "-c:a", "pcm_s24le", part],
+            check=True,
+        )
+        validate_decoded_wav(part)
+        os.replace(part, wav_path)
+        write_decoded_source_manifest(
+            wav_path, source_sha256, recipe_revision
+        )
+    except Exception:
+        if os.path.exists(part):
+            os.remove(part)
+        raise
+
+
+def ensure_decoded_source(
+        ffmpeg, cache, url, recipe_revision=DECODE_RECIPE_REV):
+    """Return a URL-authenticated FLAC decode from the persistent cache."""
+    cache_stem = os.path.splitext(os.path.basename(url))[0]
+    flac = ensure_source(
+        f"{cache_stem}.flac", url, cache,
+        label="drumkit", validate_wav=False,
     )
-    os.replace(part, wav_path)
+    decoded = flac[:-5] + "_dec.wav"
+    decode_flac(ffmpeg, flac, decoded, recipe_revision)
+    return decoded
 
 
 def prepare_take(ffmpeg, cache, url, out_path, keep_s, fade_s):
@@ -230,13 +261,7 @@ def prepare_take(ffmpeg, cache, url, out_path, keep_s, fade_s):
     at a different mic set must re-fetch, not silently reuse the old mic's
     audio from the cache.
     """
-    cache_stem = os.path.splitext(os.path.basename(url))[0]
-    flac = os.path.join(cache, f"{cache_stem}.flac")
-    if not os.path.exists(flac):
-        print(f"fetching {cache_stem}.flac ...", file=sys.stderr)
-        fetch(url, flac)
-    dec = flac[:-5] + "_dec.wav"
-    decode_flac(ffmpeg, flac, dec)
+    dec = ensure_decoded_source(ffmpeg, cache, url)
     ch, src_sr = wav_info(dec)
     x, sr = read_wav(dec)   # downmixes stereo to mono
     x = resample(x, sr, OUT_SR)

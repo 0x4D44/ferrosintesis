@@ -33,6 +33,7 @@ pub struct Sine {
     im: f32,
     cr: f32,
     ci: f32,
+    renorm_ticks: u16,
 }
 
 impl Sine {
@@ -43,6 +44,12 @@ impl Sine {
             im: phase.sin(),
             cr: w.cos(),
             ci: w.sin(),
+            // A u16 wrap gives one correction per 65,536 ticks. Keep the first
+            // correction in the final eighth of that interval so short voices
+            // remain bit-identical, while frequency/phase differences spread a
+            // large additive bank's square roots over ~8k samples instead of
+            // putting them all on one realtime frame.
+            renorm_ticks: ((freq.to_bits() ^ sr.to_bits() ^ phase.to_bits()) & 0x1fff) as u16,
         }
     }
 
@@ -51,6 +58,12 @@ impl Sine {
         let (re, im) = (self.re, self.im);
         self.re = re * self.cr - im * self.ci;
         self.im = re * self.ci + im * self.cr;
+        self.renorm_ticks = self.renorm_ticks.wrapping_add(1);
+        if self.renorm_ticks == 0 {
+            let magnitude = (self.re * self.re + self.im * self.im).sqrt();
+            self.re /= magnitude;
+            self.im /= magnitude;
+        }
         self.im
     }
 
@@ -867,13 +880,52 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sine_stays_bounded() {
-        let mut s = Sine::new(440.0, 44100.0, 0.0);
-        let mut peak = 0f32;
-        for _ in 0..44100 {
-            peak = peak.max(s.next().abs());
+    fn sine_long_hold_stays_unit_and_on_frequency() {
+        const TICKS: u32 = 3_200_000;
+        const PHASE: f32 = 0.37;
+        const CASES: &[(f32, f32)] = &[
+            (0.09, 44_100.0),
+            (0.09, 44_100.0 / 16.0),
+            (5.0, 44_100.0 / 16.0),
+            (55.0, 44_100.0),
+            (440.0, 44_100.0),
+            (5_000.0, 44_100.0),
+            (19_000.0, 44_100.0),
+            (19_000.0, 88_200.0),
+        ];
+
+        let mut failures = Vec::new();
+        for &(freq, sr) in CASES {
+            let mut sine = Sine::new(freq, sr, PHASE);
+            let mut max_magnitude_error = 0.0f32;
+            for _ in 0..TICKS {
+                sine.next();
+                let magnitude = (sine.re * sine.re + sine.im * sine.im).sqrt();
+                max_magnitude_error = max_magnitude_error.max((magnitude - 1.0).abs());
+            }
+
+            let end_phase = sine.im.atan2(sine.re) as f64;
+            let phase_delta = (end_phase - PHASE as f64 + std::f64::consts::PI)
+                .rem_euclid(std::f64::consts::TAU)
+                - std::f64::consts::PI;
+            let expected_cycles = freq as f64 * TICKS as f64 / sr as f64;
+            let fractional_cycles = phase_delta / std::f64::consts::TAU;
+            let observed_cycles = (expected_cycles - fractional_cycles).round() + fractional_cycles;
+            let observed_freq = observed_cycles * sr as f64 / TICKS as f64;
+            let cents_error = 1_200.0 * (observed_freq / freq as f64).log2();
+
+            if max_magnitude_error > 0.002 || cents_error.abs() > 0.01 {
+                failures.push(format!(
+                    "{freq} Hz at {sr} Hz: max magnitude error {max_magnitude_error:.6}, \
+                     frequency error {cents_error:+.6} cents"
+                ));
+            }
         }
-        assert!(peak <= 1.001 && peak > 0.99, "peak {peak}");
+        assert!(
+            failures.is_empty(),
+            "long-held rotating phasors drifted:\n{}",
+            failures.join("\n")
+        );
     }
 
     #[test]

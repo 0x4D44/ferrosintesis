@@ -219,3 +219,10 @@ See **[CLAUDE.md](CLAUDE.md)** for the architecture and working conventions in d
 
 Each album is original material written in the vocabulary of its idiom; none quotes or
 samples an existing piece. The per-album `README.md` states this for each one.
+
+## License
+
+Repository-owned software, tooling, configuration, and technical documentation are
+dual-licensed under MIT or Apache-2.0. Music, albums, demos, audio/sample assets,
+third-party material, and paths with their own terms are excluded from that root grant.
+See [LICENSING.md](LICENSING.md) for the exact scope.

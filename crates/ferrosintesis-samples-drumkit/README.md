@@ -1,11 +1,11 @@
 # ferrosintesis-samples-drumkit
 
-Embedded CC0 sampled drum-kit bank for ferrosintesis: kick, snare (snares on
-and off), sidestick, rack and floor toms, hi-hat closed/open/pedal, and ride
-(bow and bell) — 140 mono 16-bit 44.1 kHz WAVs with velocity layers and round
+Embedded CC0 sampled drum-kit bank for ferrosintesis: kick, snare, sidestick,
+rack and floor toms, hi-hat closed/open/pedal, and ride
+(bow and bell) — 128 mono 16-bit 44.1 kHz WAVs with velocity layers and round
 robins, exposed as raw WAV bytes (`get`) and decoded PCM (`Bank::pcm`).
 
-The accent cymbals — crash, sizzle crash, splash and an 18" china — are in the
+The accent cymbals — crash, splash and an 18" china — are in the
 sibling `ferrosintesis-samples-drumkit2`, split out on 2026-07-25 to keep each
 package under the crates.io 10 MiB limit. That was a packaging split, not a
 musical one; renders are byte-identical across it.

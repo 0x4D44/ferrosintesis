@@ -4741,7 +4741,7 @@ const ELECTRIC_SNARE_REPITCH: f32 = 1.15;
 /// alongside this constant (Roland separates the rides by 10 units against the
 /// crashes' 40: two rides sit near each other on a kit, two crashes do not).
 ///
-/// History: 57 played `CRASH_SIZZLE` for one commit (2026-07-26). That bank is
+/// History: 57 played the former `CRASH_SIZZLE` bank for one commit (2026-07-26). It was
 /// the same physical plate with a sizzler — its sub-4 kHz modes match the plain
 /// crash to a median 0.32 Hz — so it was never the "second cymbal" that routing
 /// claimed, and by ear it did not read as a second cymbal either.
@@ -6897,8 +6897,7 @@ mod tests {
     }
 
     /// The thirteen GM-routed drum banks (35/36, 37, 38/40, 41/43, 42, 44,
-    /// 45/47/48/50, 46, 49/57, 51/59, 53, 52, 55). `CRASH_SIZZLE` and
-    /// `SNARE_OFF` ship in the bank but have no GM key yet.
+    /// 45/47/48/50, 46, 49/57, 51/59, 53, 52, 55).
     fn routed_banks() -> [&'static kitbank::Bank; 13] {
         [
             &kitbank2::CRASH,

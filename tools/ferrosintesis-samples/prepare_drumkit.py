@@ -1,14 +1,14 @@
 """Rebuild the sampled drum-kit banks.
 
-The core kit lands in ``ferrosintesis-samples-drumkit``. The crash, sizzle
-crash, splash and china banks land in the size-capped companion crate
+The core kit lands in ``ferrosintesis-samples-drumkit``. The crash, splash and
+china banks land in the size-capped companion crate
 ``ferrosintesis-samples-drumkit2``.
 
 Sources (both CC0 1.0 Universal, verified from each repo's LICENSE file):
 - github.com/sfzinstruments/virtuosity_drums @ VIRTUOSITY_REV — a stick-played
   contemporary jazz kit; this bank takes the `mid` mic set (the balanced mono-
-  friendly mid position) for most of the kit — snare (center, snares-off,
-  cross-stick), hi/low toms, ride bow + bell, crash, sizzle crash, hi-hat
+  friendly mid position) for most of the kit — snare (center and cross-stick),
+  hi/low toms, ride bow + bell, crash, hi-hat
   closed/open/pedal, and the hi-hat splash. The KICK alone comes from the
   `kickmic` close-mic set (same 4x4 snares-on grid, same velocity splits):
   the overhead `mid` position barely captures the kick's sub — its
@@ -98,8 +98,6 @@ BANKS = [
      f"{V_BASE}/Samples/{MICSET}/ride/{MICSET}_ride_bell_vl{{vl}}_rr{{rr}}.flac"),
     (ACCENT_PACKAGE, "crash", 3, 4, 2.8, 0.35, (42, 85, 127),
      f"{V_BASE}/Samples/{MICSET}/crash/{MICSET}_crash_crash_vl{{vl}}_rr{{rr}}.flac"),
-    (ACCENT_PACKAGE, "sizzle", 3, 4, 2.8, 0.35, (42, 85, 127),
-     f"{V_BASE}/Samples/{MICSET}/crash/{MICSET}_crash_sizzle_vl{{vl}}_rr{{rr}}.flac"),
     # the hi-hat splash has no velocity layers at the source (one full-range
     # layer, 4 RRs); it rings, so it gets the china-length tail cap
     (ACCENT_PACKAGE, "splash", 1, 4, 2.2, 0.35, (127,),
@@ -125,7 +123,6 @@ BANKS = [
 # target layer's round-robin slots are filled by adjacent source layers (see
 # module docstring). Source layer counts/hivels parsed from the SFZ mappings:
 #   snare_center      36 layers (hivel 3,7,10,...,127 — every ~3.5)
-#   snareoff_center   12 layers (hivel 10,21,...,127 — every ~10.6)
 #   snare_crossstick  16 layers (hivel 7,15,...,127 — every 8)
 #   htom/ltom_center  16 layers (hivel 7,15,...,127 — every 8)
 PSEUDO_RR_BANKS = [
@@ -135,10 +132,6 @@ PSEUDO_RR_BANKS = [
      ((4, 5, 6), (10, 11, 12), (16, 17, 18),
       (22, 23, 24), (28, 29, 30), (34, 35, 36)),
      f"{V_BASE}/Samples/{MICSET}/snare/{MICSET}_snare_center_vl{{vl}}.flac"),
-    # snares-off snare: all 12 source layers, 4 targets x 3 takes
-    (CORE_PACKAGE, "snareoff", 0.6, 0.20, (32, 63, 95, 127),
-     ((1, 2, 3), (4, 5, 6), (7, 8, 9), (10, 11, 12)),
-     f"{V_BASE}/Samples/{MICSET}/snareoff/{MICSET}_snareoff_center_vl{{vl}}.flac"),
     # cross-stick (GM 37 side stick): quiet, timbrally stable — 3 targets
     (CORE_PACKAGE, "sidestick", 0.4, 0.10, (47, 87, 127),
      ((4, 5, 6), (9, 10, 11), (14, 15, 16)),

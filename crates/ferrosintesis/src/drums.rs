@@ -3768,7 +3768,7 @@ mod tests {
     ///
     /// 1. Until 2026-07-26 keys 49 and 57 both played `CRASH` at rate 1.0, so a file
     ///    scoring two crashes heard one. Keys 51 and 59 had the identical bug, unnoticed.
-    /// 2. For one commit, 57 played `CRASH_SIZZLE` on the theory that it was the kit's
+    /// 2. For one commit, 57 played the former `CRASH_SIZZLE` bank on the theory that it was the kit's
     ///    second cymbal. It is not: measured on the raw WAVs, the two banks' sub-4 kHz
     ///    plate modes agree to a median of 0.32 Hz (445.8 vs 445.5, 1387.0 vs 1386.6) —
     ///    the same plate with a sizzler, not a second cymbal. The control is decisive:

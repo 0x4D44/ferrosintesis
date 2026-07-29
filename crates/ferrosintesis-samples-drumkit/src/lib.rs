@@ -2,18 +2,18 @@
 //!
 //! Mono 16-bit 44.1 kHz WAVs trimmed from CC0 1.0 Virtuosity Drums (`mid` mic
 //! set) by `tools/ferrosintesis-samples/prepare_drumkit.py`: kick, snare
-//! center/snares-off/cross-stick, hi/low toms, ride bow/bell, and hi-hat
+//! center/cross-stick, hi/low toms, ride bow/bell, and hi-hat
 //! closed/open/pedal. See `PROVENANCE.md` for the pinned revisions, license
 //! text, and the full articulation inventory -- including which banks' "round
 //! robins" are adjacent source velocity layers (the deep-layered articulations
 //! have no true round robins at the source).
 //!
-//! The four accent-cymbal banks -- crash, sizzle crash, splash and the Karoryfer
+//! The three accent-cymbal banks -- crash, splash and the Karoryfer
 //! Big Rusty Drums 18" china -- live in the companion crate
 //! `ferrosintesis-samples-drumkit2`. That is a PACKAGING split, not a musical
 //! one: the combined kit packaged at 15.8 MiB and crates.io rejects any crate
 //! over 10 MiB. The cymbals are the long-decaying, largest files, so moving
-//! exactly those four splits ~20.5 MB into two ~10.5 MB halves. The [`Bank`]
+//! those long cymbals keeps both packages below the limit. The [`Bank`]
 //! type stays here and stays single; see [`BankSource`] for how a bank in the
 //! other crate reaches its own bytes.
 //!
@@ -26,7 +26,7 @@
 use std::sync::OnceLock;
 
 /// Number of WAV files embedded in this package.
-pub const FILE_COUNT: usize = 140;
+pub const FILE_COUNT: usize = 128;
 
 /// Sample rate of every embedded WAV, in hertz.
 pub const SAMPLE_RATE_HZ: u32 = 44_100;
@@ -449,54 +449,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/snare_vl6_rr3.wav"),
     ),
     (
-        "snareoff_vl1_rr1.wav",
-        include_bytes!("../samples/snareoff_vl1_rr1.wav"),
-    ),
-    (
-        "snareoff_vl1_rr2.wav",
-        include_bytes!("../samples/snareoff_vl1_rr2.wav"),
-    ),
-    (
-        "snareoff_vl1_rr3.wav",
-        include_bytes!("../samples/snareoff_vl1_rr3.wav"),
-    ),
-    (
-        "snareoff_vl2_rr1.wav",
-        include_bytes!("../samples/snareoff_vl2_rr1.wav"),
-    ),
-    (
-        "snareoff_vl2_rr2.wav",
-        include_bytes!("../samples/snareoff_vl2_rr2.wav"),
-    ),
-    (
-        "snareoff_vl2_rr3.wav",
-        include_bytes!("../samples/snareoff_vl2_rr3.wav"),
-    ),
-    (
-        "snareoff_vl3_rr1.wav",
-        include_bytes!("../samples/snareoff_vl3_rr1.wav"),
-    ),
-    (
-        "snareoff_vl3_rr2.wav",
-        include_bytes!("../samples/snareoff_vl3_rr2.wav"),
-    ),
-    (
-        "snareoff_vl3_rr3.wav",
-        include_bytes!("../samples/snareoff_vl3_rr3.wav"),
-    ),
-    (
-        "snareoff_vl4_rr1.wav",
-        include_bytes!("../samples/snareoff_vl4_rr1.wav"),
-    ),
-    (
-        "snareoff_vl4_rr2.wav",
-        include_bytes!("../samples/snareoff_vl4_rr2.wav"),
-    ),
-    (
-        "snareoff_vl4_rr3.wav",
-        include_bytes!("../samples/snareoff_vl4_rr3.wav"),
-    ),
-    (
         "tomhi_vl1_rr1.wav",
         include_bytes!("../samples/tomhi_vl1_rr1.wav"),
     ),
@@ -598,8 +550,8 @@ static PCM_CACHE: OnceLock<Vec<Vec<i16>>> = OnceLock::new();
 
 /// Where a bank's embedded takes actually live.
 ///
-/// A `Bank` descriptor and the WAVs it names are not always in the same crate. The four
-/// accent-cymbal banks (crash, sizzle crash, splash, china) were split out into
+/// A `Bank` descriptor and the WAVs it names are not always in the same crate. The three
+/// accent-cymbal banks (crash, splash, china) were split out into
 /// `ferrosintesis-samples-drumkit2` so that neither package exceeds the crates.io 10 MiB
 /// per-crate limit — the combined kit packaged at 15.8 MiB and was rejected outright.
 ///
@@ -700,15 +652,6 @@ pub static SNARE: Bank = Bank {
     source: &SOURCE,
     first_sample_index: 86,
 };
-/// Snare with the wires thrown off (`mid_snareoff_center`); adjacent-layer
-/// round robins as `SNARE`.
-pub static SNARE_OFF: Bank = Bank {
-    name: "snareoff",
-    vel_hi: &[32, 63, 95, 127],
-    round_robins: 3,
-    source: &SOURCE,
-    first_sample_index: 104,
-};
 /// Snare cross-stick (`mid_snare_crossstick`) -- the GM 37 side stick;
 /// adjacent-layer round robins.
 pub static SIDESTICK: Bank = Bank {
@@ -725,7 +668,7 @@ pub static TOM_HI: Bank = Bank {
     vel_hi: &[31, 63, 95, 127],
     round_robins: 3,
     source: &SOURCE,
-    first_sample_index: 116,
+    first_sample_index: 104,
 };
 /// Low (floor) tom, center hit (`mid_ltom_center`), root ~113.5 Hz;
 /// adjacent-layer round robins.
@@ -734,13 +677,12 @@ pub static TOM_LO: Bank = Bank {
     vel_hi: &[31, 63, 95, 127],
     round_robins: 3,
     source: &SOURCE,
-    first_sample_index: 128,
+    first_sample_index: 116,
 };
 
 /// Every articulation in the kit.
-pub static BANKS: [&Bank; 11] = [
-    &RIDE, &RIDE_BELL, &HH_CLOSED, &HH_OPEN, &HH_PEDAL, &KICK, &SNARE, &SNARE_OFF, &SIDESTICK,
-    &TOM_HI, &TOM_LO,
+pub static BANKS: [&Bank; 10] = [
+    &RIDE, &RIDE_BELL, &HH_CLOSED, &HH_OPEN, &HH_PEDAL, &KICK, &SNARE, &SIDESTICK, &TOM_HI, &TOM_LO,
 ];
 
 impl Bank {
@@ -982,7 +924,7 @@ mod tests {
         assert_eq!(get("missing.wav"), None);
     }
 
-    const EXPECTED_BYTES: usize = 10277006;
+    const EXPECTED_BYTES: usize = 9632990;
 
     #[test]
     fn decoded_banks_are_valid_audio() {
@@ -992,7 +934,6 @@ mod tests {
             (&HH_CLOSED, 0.2, 1.25),
             (&KICK, 0.3, 0.65),
             (&SNARE, 0.3, 0.65),
-            (&SNARE_OFF, 0.3, 0.65),
             (&SIDESTICK, 0.2, 0.45),
             (&TOM_HI, 0.5, 0.85),
             (&TOM_LO, 0.5, 0.85),

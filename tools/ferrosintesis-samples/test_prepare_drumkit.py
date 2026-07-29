@@ -88,8 +88,8 @@ class DrumkitOutputPlanTests(unittest.TestCase):
         self.assertEqual(
             {package: len(names) for package, names in planned.items()},
             {
-                "ferrosintesis-samples-drumkit": 140,
-                "ferrosintesis-samples-drumkit2": 48,
+                "ferrosintesis-samples-drumkit": 128,
+                "ferrosintesis-samples-drumkit2": 36,
             },
         )
 

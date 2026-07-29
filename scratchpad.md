@@ -23,11 +23,6 @@
   no `rev_hp` (contrast the hall send) at `CATHEDRAL_WET_SCALE=1.30`, so sub-150 Hz feeds
   the long FDN tail at +2.3 dB — possible LF mud. Scoped to GM19 CC0=2 organ, so contained.
 
-- [ ] 2026.07.18 — **Two shipped drumkit banks are unreachable dead payload:**
-  `CRASH_SIZZLE` and `SNARE_OFF` exist in the drumkit crate but no GM key maps to them
-  (`sampler.rs:~2313` comment; absent from `sampled_drum` dispatch). Compiled-in but never
-  selectable — GM has no dedicated key for either. Drop or wire behind a CC0 alt-bank.
-
 - [ ] 2026-07-13 — **No root LICENSE** (`d:\language\midi-music\`). Only the four crate dirs
   carry licence text, so everything outside them — `tools/ferrosintesis-samples/prepare.py`
   (the very file the published crate READMEs cite as CC0 provenance evidence), `albums/`,

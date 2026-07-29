@@ -1,10 +1,10 @@
-//! Embedded CC0 accent-cymbal banks for ferrosintesis -- crash, sizzle crash,
-//! splash and an 18" china.
+//! Embedded CC0 accent-cymbal banks for ferrosintesis -- crash, splash and an
+//! 18" china.
 //!
 //! The overflow half of the sampled drum kit. `ferrosintesis-samples-drumkit`
 //! packaged at 15.8 MiB, over the crates.io 10 MiB per-crate limit; cymbals are
-//! the long-decaying, largest files, so moving exactly these four banks splits
-//! ~20.5 MB into two ~10.5 MB halves. It is a PACKAGING seam and nothing else --
+//! the long-decaying, largest files, so moving these banks keeps each package
+//! below that limit. It is a PACKAGING seam and nothing else --
 //! same sources, same pinned revisions, same `prepare_drumkit.py`, byte-identical
 //! renders. The ride, ride bell and hi-hats are cymbals too and stayed behind.
 //!
@@ -24,7 +24,7 @@ use std::sync::OnceLock;
 pub use ferrosintesis_samples_drumkit::{Bank, BankSource, SAMPLE_RATE_HZ};
 
 /// Number of WAV files embedded in this package.
-pub const FILE_COUNT: usize = 48;
+pub const FILE_COUNT: usize = 36;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
@@ -156,54 +156,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/crash_vl3_rr4.wav"),
     ),
     (
-        "sizzle_vl1_rr1.wav",
-        include_bytes!("../samples/sizzle_vl1_rr1.wav"),
-    ),
-    (
-        "sizzle_vl1_rr2.wav",
-        include_bytes!("../samples/sizzle_vl1_rr2.wav"),
-    ),
-    (
-        "sizzle_vl1_rr3.wav",
-        include_bytes!("../samples/sizzle_vl1_rr3.wav"),
-    ),
-    (
-        "sizzle_vl1_rr4.wav",
-        include_bytes!("../samples/sizzle_vl1_rr4.wav"),
-    ),
-    (
-        "sizzle_vl2_rr1.wav",
-        include_bytes!("../samples/sizzle_vl2_rr1.wav"),
-    ),
-    (
-        "sizzle_vl2_rr2.wav",
-        include_bytes!("../samples/sizzle_vl2_rr2.wav"),
-    ),
-    (
-        "sizzle_vl2_rr3.wav",
-        include_bytes!("../samples/sizzle_vl2_rr3.wav"),
-    ),
-    (
-        "sizzle_vl2_rr4.wav",
-        include_bytes!("../samples/sizzle_vl2_rr4.wav"),
-    ),
-    (
-        "sizzle_vl3_rr1.wav",
-        include_bytes!("../samples/sizzle_vl3_rr1.wav"),
-    ),
-    (
-        "sizzle_vl3_rr2.wav",
-        include_bytes!("../samples/sizzle_vl3_rr2.wav"),
-    ),
-    (
-        "sizzle_vl3_rr3.wav",
-        include_bytes!("../samples/sizzle_vl3_rr3.wav"),
-    ),
-    (
-        "sizzle_vl3_rr4.wav",
-        include_bytes!("../samples/sizzle_vl3_rr4.wav"),
-    ),
-    (
         "splash_vl1_rr1.wav",
         include_bytes!("../samples/splash_vl1_rr1.wav"),
     ),
@@ -239,18 +191,6 @@ pub static CRASH: Bank = Bank {
     source: &SOURCE,
     first_sample_index: 20,
 };
-/// Sizzle crash (`mid_crash_sizzle`).
-///
-/// Reachable through the `Bank` API but not routed by any GM channel-10 key.
-/// That is deliberate: ferrosintesis is a generic GM player and this bank is
-/// part of the public instrument. Do not cull it for lack of an in-repo user.
-pub static CRASH_SIZZLE: Bank = Bank {
-    name: "sizzle",
-    vel_hi: &[42, 85, 127],
-    round_robins: 4,
-    source: &SOURCE,
-    first_sample_index: 32,
-};
 /// Hi-hat splash (`mid_hh_splash`) -- one full-range velocity layer at the
 /// source; the nearest thing this kit has to a splash cymbal. GM 55.
 pub static SPLASH: Bank = Bank {
@@ -258,7 +198,7 @@ pub static SPLASH: Bank = Bank {
     vel_hi: &[127],
     round_robins: 4,
     source: &SOURCE,
-    first_sample_index: 44,
+    first_sample_index: 32,
 };
 /// 18" china, stick hit (Big Rusty Drums `cn`, overhead mic). GM 52.
 pub static CHINA: Bank = Bank {
@@ -270,7 +210,7 @@ pub static CHINA: Bank = Bank {
 };
 
 /// Every articulation in this half of the kit.
-pub static BANKS: [&Bank; 4] = [&CRASH, &CRASH_SIZZLE, &SPLASH, &CHINA];
+pub static BANKS: [&Bank; 3] = [&CRASH, &SPLASH, &CHINA];
 
 /// Returns the embedded WAV bytes for an exact file name.
 ///
@@ -427,7 +367,7 @@ mod tests {
         assert!(error.contains("unembedded_fixture.wav"), "{error}");
     }
 
-    /// Velocity splits, carried over from the core crate's test when these four
+    /// Velocity splits, carried over from the core crate's test when these banks
     /// banks moved here. Parsed from the source SFZ `hivel` bounds, not guessed.
     #[test]
     fn layer_for_velocity_respects_the_sfz_splits() {
@@ -443,7 +383,7 @@ mod tests {
     /// re-cut of a different length.
     #[test]
     fn every_sample_is_a_nonempty_wav_with_the_expected_aggregate_size() {
-        const EXPECTED_BYTES: usize = 10619904;
+        const EXPECTED_BYTES: usize = 7647408;
         assert_eq!(
             SAMPLES.iter().map(|(_, bytes)| bytes.len()).sum::<usize>(),
             EXPECTED_BYTES

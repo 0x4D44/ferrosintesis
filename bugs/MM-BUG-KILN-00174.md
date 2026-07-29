@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** sample assets / drum-kit2 PCM API
 - **Raised:** 2026-07-29
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260729T141553Z-p52900-n828035100-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00174-run-fix-20260729T141553Z-p52900-n828035100-c1
+- **Owner base:** 37a9c4aa452aaf12674156276c04fe261093f4b8
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-29T14:15:53Z
+- **Owner until:** 2026-07-29T16:15:53Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

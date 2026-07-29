@@ -2387,13 +2387,13 @@ fn sax_ten_f() -> &'static [Zone] {
 fn sax_bar_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
+        // Keep the rough G#3 take packaged for provenance, but do not use it as a runtime zone.
         bank!(
             "sax_bar_C2_p.wav" => 69.65,
             "sax_bar_E2_p.wav" => 82.52,
             "sax_bar_G#2_p.wav" => 103.47,
             "sax_bar_C3_p.wav" => 130.04,
             "sax_bar_E3_p.wav" => 163.27,
-            "sax_bar_G#3_p.wav" => 208.95,
             "sax_bar_C4_p.wav" => 263.75,
             "sax_bar_E4_p.wav" => 335.01,
             "sax_bar_G#4_p.wav" => 421.23,
@@ -2411,7 +2411,6 @@ fn sax_bar_f() -> &'static [Zone] {
             "sax_bar_G#2_f.wav" => 103.46,
             "sax_bar_C3_f.wav" => 130.22,
             "sax_bar_E3_f.wav" => 162.90,
-            "sax_bar_G#3_f.wav" => 209.52,
             "sax_bar_C4_f.wav" => 261.13,
             "sax_bar_E4_f.wav" => 334.08,
             "sax_bar_G#4_f.wav" => 420.54,
@@ -7893,6 +7892,47 @@ mod tests {
             assert!(
                 wrap < 0.03,
                 "{name}: loop wrap discontinuity {wrap:.4} (loop {ls}..{le}) — would click"
+            );
+        }
+    }
+
+    /// MM-BUG-KILN-00178 — key 58 must not select a recorded baritone zone
+    /// whose waveform breaks up from one fundamental cycle to the next.
+    ///
+    /// This is deliberately not the sustain-loop oracle below: it compares
+    /// adjacent 4–5 ms pitch cycles inside the unlooped source body, rather than
+    /// looking for a repeating 50–130 ms spectral envelope in the rendered hold.
+    #[test]
+    fn baritone_sax_key58_avoids_a_rough_source_zone() {
+        fn best_cycle_correlation(zone: &Zone) -> f64 {
+            let body = &zone.data[(0.30 * 44_100.0) as usize..(0.50 * 44_100.0) as usize];
+            let period = (44_100.0 / zone.root).round() as isize;
+            (-5..=5)
+                .map(|offset| {
+                    let lag = (period + offset) as usize;
+                    let (mut dot, mut a2, mut b2) = (0.0f64, 0.0f64, 0.0f64);
+                    for (&a, &b) in body[..body.len() - lag].iter().zip(&body[lag..]) {
+                        let (a, b) = (a as f64, b as f64);
+                        dot += a * b;
+                        a2 += a * a;
+                        b2 += b * b;
+                    }
+                    dot / (a2 * b2).sqrt().max(1e-20)
+                })
+                .max_by(f64::total_cmp)
+                .expect("the lag sweep is non-empty")
+        }
+
+        let f0 = crate::dsp::key_freq(58);
+        for vel in [72u8, 110] {
+            let zone = nearest(sax_bank(67, vel), f0);
+            let correlation = best_cycle_correlation(zone);
+            assert!(
+                correlation > 0.996,
+                "GM67 key 58 velocity {vel}: selected {root:.2} Hz source has only \
+                 {correlation:.4} adjacent-cycle correlation; the rough source body \
+                 is the measured 'fartiness'",
+                root = zone.root,
             );
         }
     }

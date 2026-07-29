@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00173 — Concurrent drum-kit regenerations race fixed shared-cache temporary files
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample generation / drum-kit cache
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260729T140318Z-p42048-n751314100-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00173-run-fix-20260729T140318Z-p42048-n751314100-c1
-- **Owner base:** 0553a71856912fd3d8778965f8bc3dbcb9981592
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-29T14:03:18Z
-- **Owner until:** 2026-07-29T16:03:18Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T140318Z-p42048-n751314100-c1 branch=task/bug-MM-BUG-KILN-00173-run-fix-20260729T140318Z-p42048-n751314100-c1 code=c0a74497bf12a494bdc6173afba399726e2bed5a gate=manual)
 
 ## Observation
 

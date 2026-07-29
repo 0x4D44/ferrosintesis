@@ -30,6 +30,35 @@ python3 tools/ferrosintesis-samples/banjo_extract.py
 | `viola_*` | 14 | Solo viola (GM 41) arco onsets | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `xylo_*` | 8 | Xylophone (GM 13) strikes | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 
+## First-party committed-source checksums
+
+SHA-256 pins for the owner-recorded performance archives and committed lossless
+zone inputs under the repo-root `samples/` store. The provenance oracle derives
+these files from `samples/*/`; adding another recording root or nested cut cannot
+silently escape this table.
+
+| Source file | SHA-256 |
+|-------------|---------|
+| `samples/acoustic-guitar-eastman-e1d/picked.opus` | `35e9e45b42a70f2fada2c9d93bf809d9046562fa3fa40cbac415ef75b92d926d` |
+| `samples/acoustic-guitar-eastman-e1d/plucked.opus` | `16f5a8c7cde555441143243f264a03eff142cb8aafb6924236a82755a0396ce0` |
+| `samples/acoustic-guitar-eastman-e1d/zones/picked_A#3.wav` | `85f06652f4ab43fa0b7f0c9ddb7e008313415af5069bb7d22dd08e1616f71b5d` |
+| `samples/acoustic-guitar-eastman-e1d/zones/picked_A#4.wav` | `19bfda8712d10fe4eb92beb98f079d480fd46fcf52189999c47a908fc283b697` |
+| `samples/acoustic-guitar-eastman-e1d/zones/picked_B2.wav` | `842d215bbd10c838c02318bb4862d565a01da21e59169903081df48a2d639373` |
+| `samples/acoustic-guitar-eastman-e1d/zones/picked_B5.wav` | `f967a5ec2cd85331d0b5ac79b2bbdb20bfe9a46cd1c175a264aa20aee45cb018` |
+| `samples/acoustic-guitar-eastman-e1d/zones/picked_E2.wav` | `5c4c063a9a27f8289910c5f7926edecc25ff07aaa633bb5d391da0a65316ef74` |
+| `samples/acoustic-guitar-eastman-e1d/zones/picked_E3.wav` | `fda7798e27ad5e6e86cf55dee98e6b7dd1ae2ce79a7562125eb3c2828091d7e1` |
+| `samples/acoustic-guitar-eastman-e1d/zones/picked_E4.wav` | `4ee8304d22420b5a15d55cd6d709975feb0cc33984fe74029bedf49baf2d719a` |
+| `samples/acoustic-guitar-eastman-e1d/zones/picked_F5.wav` | `7239543f24687ed4378a8c0b2b71f543127f5abb9b936d810b16ef357d58a18c` |
+| `samples/acoustic-guitar-eastman-e1d/zones/plucked_A#2.wav` | `0ccb404059123b7054529b49decccd3f4e36dc9c38db517596b51be40c268575` |
+| `samples/acoustic-guitar-eastman-e1d/zones/plucked_A#3.wav` | `6e16b8cf495d5d0df1a589964cccfa5b249d4a28f43c0f7a5816a3978e03dae0` |
+| `samples/acoustic-guitar-eastman-e1d/zones/plucked_B4.wav` | `303ae094c66ae566edf1dc5c7650b2572f5e2c1e10494b4b3f9ddf64d5d04f23` |
+| `samples/acoustic-guitar-eastman-e1d/zones/plucked_B5.wav` | `180d61d77aae2c72cde8654c3177707a81408a4ccf3e07863e5f58e96c3b4446` |
+| `samples/acoustic-guitar-eastman-e1d/zones/plucked_E2.wav` | `a3d6fb94426726f21f846fde5e03c8417149506b629238eb23ebe9ade1475ff5` |
+| `samples/acoustic-guitar-eastman-e1d/zones/plucked_E3.wav` | `5c9fb1cca4287f5fd15931e2024194b51698e53fe97141c397ddf0bc54aae6b8` |
+| `samples/acoustic-guitar-eastman-e1d/zones/plucked_E4.wav` | `48c7545759708c6a630dce90639085e0ffa4b46a1bf38966cd319721e200ea60` |
+| `samples/acoustic-guitar-eastman-e1d/zones/plucked_F5.wav` | `af393deec96e076ca04fb32d11e4ff1361e3492fbc0ec050cdf7864510ce61da` |
+| `samples/banjo/banjo-5string-openG-2026-07-23.opus` | `e9f62de0234f2107b14624a8bcf63cf09646b92aecf70bab13543722ca41e56f` |
+
 ## GM 10 music box - per-sound licence record
 
 The music box was declared CC0 by a code comment alone. The author's Freesound catalogue

@@ -32,6 +32,12 @@ Keep this archive small: one file per recording, rarely changed.
 Per-instrument provenance (signal chain, tuning, zone slice map) lives in each
 instrument's own `README.md` where one is present.
 
+Every `.opus` performance archive and nested `.wav` zone/cut is byte-pinned in
+the packaged `PROVENANCE.md` of the sample crate that consumes it. The
+`ferrosintesis::provenance` oracle derives all `samples/*/` roots recursively,
+ignores only the per-instrument `README.md`, and fails closed on any other file
+type until this source convention is extended deliberately.
+
 ## Re-extracting a bank from a recording
 
 The per-note extraction (onset-segment → robust pitch/QC gate → trim to ~0.5 s onset →

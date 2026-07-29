@@ -8,8 +8,8 @@
 //! - `inventory.rs` asks *"has a crate's PACKAGED sample set outgrown its documentation?"*
 //!   — keyed off `crates/ferrosintesis-samples-*/samples/*.wav`.
 //! - This module asks *"is every committed INPUT still the one we say it is?"* — keyed off
-//!   discovered `tools/ferrosintesis-samples/*-src/` roots plus the explicit registry for
-//!   repo-root first-party archives.
+//!   discovered `tools/ferrosintesis-samples/*-src/` roots plus every repo-root first-party
+//!   recording directory under `samples/`.
 //!
 //! Nothing else covers that third set. The `*-src/` directories hold the material we cannot
 //! re-fetch: Freesound gates its downloads behind a login, and the owner-recorded mandolin
@@ -23,9 +23,10 @@
 //! reported item is evidence a list is unmaintained, not a specification of the work — so the
 //! tool-owned predicate is a glob, `tools/ferrosintesis-samples/*-src`, not a list of
 //! directory names. A future `flute-src/` is covered on the day it is created, by nobody's
-//! decision. Inputs elsewhere in the repository cross an ownership boundary and therefore
-//! enter an explicit registry; treating every `samples/*` directory as input would sweep in
-//! derived cuts and caches.
+//! decision. Repo-owned recordings follow the same rule: every `samples/*/` directory is
+//! discovered, and every nested `.opus` or `.wav` is covered. Those include both performance
+//! masters and committed zone/cut inputs. Per-root `README.md` files are prose, not bake
+//! inputs; any other file type fails closed until the convention is extended deliberately.
 //!
 //! ## What is deliberately NOT asserted here
 //!
@@ -165,10 +166,8 @@ mod tests {
     /// Every committed-source directory.
     ///
     /// Tool-owned sources are discovered by `tools/ferrosintesis-samples/*-src`.
-    /// Repo-root first-party archives are registered explicitly.
+    /// Repo-root first-party recordings are discovered by `samples/*`.
     fn source_dirs() -> Vec<PathBuf> {
-        const REPO_SOURCE_DIRS: &[&[&str]] = &[&["samples", "b1-upright"]];
-
         let tools = repo_root().join("tools").join("ferrosintesis-samples");
         let mut out: Vec<PathBuf> = std::fs::read_dir(&tools)
             .expect("tools/ferrosintesis-samples is readable")
@@ -181,17 +180,7 @@ mod tests {
                     .unwrap_or(false)
             })
             .collect();
-        for components in REPO_SOURCE_DIRS {
-            let dir = components
-                .iter()
-                .fold(repo_root(), |path, component| path.join(component));
-            assert!(
-                dir.is_dir(),
-                "registered committed-source directory {} is missing",
-                dir.display()
-            );
-            out.push(dir);
-        }
+        out.extend(repo_recording_dirs(&repo_root().join("samples")));
         out.sort();
         assert!(
             out.len() >= 4,
@@ -201,6 +190,54 @@ mod tests {
             tools.display()
         );
         out
+    }
+
+    fn repo_recording_dirs(samples: &Path) -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = std::fs::read_dir(samples)
+            .unwrap_or_else(|e| panic!("{} is not readable: {e}", samples.display()))
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .collect();
+        dirs.sort();
+        dirs
+    }
+
+    fn repo_recording_files(samples: &Path) -> Vec<PathBuf> {
+        fn visit(dir: &Path, out: &mut Vec<PathBuf>) {
+            let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+                .unwrap_or_else(|e| panic!("{} is not readable: {e}", dir.display()))
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .collect();
+            entries.sort();
+            for path in entries {
+                if path.is_dir() {
+                    visit(&path, out);
+                } else if path.file_name().is_some_and(|name| name == "README.md") {
+                    // Per-instrument prose is documentation, not a byte-identity source.
+                } else {
+                    let extension = path
+                        .extension()
+                        .and_then(|extension| extension.to_str())
+                        .unwrap_or("");
+                    assert!(
+                        matches!(extension, "opus" | "wav"),
+                        "{} is neither a documented recording/bake input nor README.md; \
+                         classify this new samples/ file type before it can evade provenance",
+                        path.display()
+                    );
+                    out.push(path);
+                }
+            }
+        }
+
+        let mut files = Vec::new();
+        for dir in repo_recording_dirs(samples) {
+            visit(&dir, &mut files);
+        }
+        files.sort();
+        files
     }
 
     #[test]
@@ -234,25 +271,101 @@ mod tests {
         );
     }
 
+    #[test]
+    fn source_registry_covers_every_repo_root_recording() {
+        let samples = repo_root().join("samples");
+        let registered = source_dirs();
+        let mut missing: Vec<String> = std::fs::read_dir(&samples)
+            .expect("samples/ is readable")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .filter(|path| !registered.contains(path))
+            .map(|path| {
+                path.strip_prefix(repo_root())
+                    .expect("a samples/ child is inside the repository")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+        missing.sort();
+        assert!(
+            missing.is_empty(),
+            "repo-root recording directories escaped the committed-source scan:\n  {}",
+            missing.join("\n  ")
+        );
+    }
+
+    #[test]
+    fn a_new_repo_recording_root_and_nested_cut_cannot_evade_discovery() {
+        let fixture = std::env::temp_dir().join(format!(
+            "ferrosintesis-provenance-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time is after the Unix epoch")
+                .as_nanos()
+        ));
+        let root = fixture.join("future-instrument");
+        let cuts = root.join("cuts");
+        std::fs::create_dir_all(&cuts).expect("fixture directories are creatable");
+        std::fs::write(root.join("master.opus"), b"master").expect("fixture master is writable");
+        std::fs::write(cuts.join("zone.wav"), b"cut").expect("fixture cut is writable");
+        std::fs::write(root.join("README.md"), b"prose").expect("fixture README is writable");
+
+        let relative: Vec<String> = repo_recording_files(&fixture)
+            .into_iter()
+            .map(|path| {
+                path.strip_prefix(&fixture)
+                    .expect("fixture source is inside fixture root")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+        assert_eq!(
+            relative,
+            [
+                "future-instrument/cuts/zone.wav",
+                "future-instrument/master.opus"
+            ]
+        );
+
+        std::fs::remove_dir_all(&fixture).expect("fixture directory is removable");
+    }
+
     /// Every committed source file, as `(display path, sha-256)`.
     fn committed_sources() -> Vec<(String, String)> {
         let mut out = Vec::new();
+        let samples = repo_root().join("samples");
+        let repo_files = repo_recording_files(&samples);
         for dir in source_dirs() {
             let dir_name = dir
                 .strip_prefix(repo_root())
                 .expect("a committed-source directory is inside the repository")
                 .to_string_lossy()
                 .replace('\\', "/");
-            let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
-                .expect("a committed-source directory is readable")
-                .filter_map(|e| e.ok())
-                .map(|e| e.path())
-                .filter(|p| p.is_file())
-                .collect();
+            let mut files: Vec<PathBuf> = if dir.starts_with(&samples) {
+                repo_files
+                    .iter()
+                    .filter(|path| path.starts_with(&dir))
+                    .cloned()
+                    .collect()
+            } else {
+                std::fs::read_dir(&dir)
+                    .expect("a committed-source directory is readable")
+                    .filter_map(|entry| entry.ok())
+                    .map(|entry| entry.path())
+                    .filter(|path| path.is_file())
+                    .collect()
+            };
             files.sort();
             for f in files {
                 let bytes = std::fs::read(&f).expect("a committed source file is readable");
-                let name = f.file_name().unwrap().to_string_lossy().to_string();
+                let name = f
+                    .strip_prefix(&dir)
+                    .expect("a source file is inside its source directory")
+                    .to_string_lossy()
+                    .replace('\\', "/");
                 out.push((format!("{dir_name}/{name}"), sha256_hex(&bytes)));
             }
         }
@@ -317,9 +430,9 @@ mod tests {
         assert!(
             missing.is_empty(),
             "{} of {} committed source files have no SHA-256 in any packaged PROVENANCE.md.\n\
-             These are inputs we cannot re-fetch — Freesound gates downloads behind a login, \
-             and the mandolin raw take is not committed — so an unpinned one is a file nobody \
-             can prove is still the one the licence record describes.\n\
+             These performance masters and committed bake inputs are provenance evidence; an \
+             unpinned one is a file nobody can prove is still the one its source record \
+             describes.\n\
              Add its hash to the owning crate's PROVENANCE.md:\n  {}",
             missing.len(),
             sources.len(),

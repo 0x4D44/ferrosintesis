@@ -15,10 +15,14 @@ include = ["src/**", "examples/**", "tests/**", "README.md", "LICENSE-APACHE", "
 keywords = ["midi", "synthesizer", "audio", "renderer", "cli"]
 categories = ["multimedia::audio", "command-line-utilities"]
 
+[features]
+default = ["embedded-samples"]
+embedded-samples = ["ferrosintesis/embedded-samples"]
+
 [[bin]]
 name = "ferrosintesis"
 path = "src/main.rs"
 
 [dependencies]
-ferrosintesis = { path = "../ferrosintesis", version = "0.21.0" }
+ferrosintesis = { path = "../ferrosintesis", version = "0.21.0", default-features = false }
 

@@ -10,9 +10,12 @@ readme = "README.md"
 # `examples/**` ships deliberately: `examples/quickstart.rs` IS the README's code block, and
 # it exists so `clippy --all-targets` fails when the API drifts from what the front page
 # claims. A published crate without it invites the drift the file was written to prevent.
-include = ["src/**", "examples/**", "README.md", "CHANGELOG.md", "NOTICE", "LICENSE-APACHE", "LICENSE-MIT"]
+include = ["src/**", "examples/**", "tests/**", "README.md", "CHANGELOG.md", "NOTICE", "LICENSE-APACHE", "LICENSE-MIT"]
 keywords = ["midi", "synthesizer", "audio", "dsp"]
 categories = ["multimedia::audio"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ferrosintesis_repository_tests)'] }
 
 # docs.rs builds with default features unless told otherwise, and our default feature pulls
 # in 24 asset crates embedding ~107 MiB of PCM — a download-and-compile that risks blowing

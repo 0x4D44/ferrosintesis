@@ -1,0 +1,6 @@
+# These tests inspect sibling crates, repository tools, and fleet policy that are
+# deliberately absent from the crates.io archive. The cfg is local workspace policy,
+# not a Cargo feature: registry users should get the same self-contained test suite
+# under both default features and `--all-features`.
+[build]
+rustflags = ["--cfg", "ferrosintesis_repository_tests"]

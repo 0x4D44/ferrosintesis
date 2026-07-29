@@ -4323,6 +4323,7 @@ mod tests {
     /// because this crate's identifiers are abbreviations of the published names
     /// (`AMP_TIGHT` / "Tightness", `AMP_PRES` / "Presence", `AMP_CABTONE` /
     /// "Cab Tone"). That is a derived relationship, not a mapping table.
+    #[cfg(ferrosintesis_repository_tests)]
     #[test]
     fn amp_protocol_has_one_definition() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

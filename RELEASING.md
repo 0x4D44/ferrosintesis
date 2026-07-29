@@ -1,166 +1,146 @@
-# Releasing ferrosintesis to crates.io
+# Publishing to crates.io
 
-The synth ships as **25 crates**: `ferrosintesis` plus **24 sample-asset crates** it pins
-at exact versions. Publishing is irreversible — a version can be *yanked* but never
-removed, and the name/version pair is burned forever. A half-finished publish leaves the
-registry holding asset crates that no released parent uses.
+The publishable workspace contains **27 crates**: 25 sample-asset crates,
+`ferrosintesis`, and `ferrosintesis-cli`. `render-catalog` and the separate
+`crates/amp-lab` workspace do not publish.
 
-So this is a runbook, not a habit. Read it end to end before the first `cargo publish`.
+Publishing is irreversible. A crate version cannot be replaced or reused, and a partial
+workspace publish can leave dependency crates live before the parent. Run this procedure
+only with explicit release authority, from a clean, integrated `origin/main`.
 
-> **Status as of 2026-07-25: nothing real has been published.** `crates.io/crates/ferrosintesis`
-> holds only a name-reservation stub `0.0.0`, pushed 2026-07-09. All 24 sample-crate names
-> are **unregistered** — see "Name reservation" below, because that is the one genuinely
-> urgent item here.
+As of 2026-07-29, `ferrosintesis` has only the `0.0.0` name-reservation stub on crates.io.
+No real library, CLI, or sample-asset release has shipped.
 
----
+## Dependency order
 
-## The constraint that dictates everything: publish order
+Cargo derives the order from the manifests. The current graph has four layers:
 
-`crates/ferrosintesis/Cargo.toml` pins every asset crate with `=0.1.0`:
+1. 24 independent sample crates, including `ferrosintesis-samples-drumkit`.
+2. `ferrosintesis-samples-drumkit2`, which depends on `-drumkit`.
+3. `ferrosintesis`, which pins all 25 sample crates.
+4. `ferrosintesis-cli`, which depends on `ferrosintesis`.
 
-```toml
-ferrosintesis-samples-core = { path = "../ferrosintesis-samples-core", version = "=0.1.0", optional = true }
+Do not maintain a second hand-written package list. Confirm the graph with:
+
+```text
+cargo publish --workspace --exclude render-catalog --dry-run --locked
 ```
 
-Those are **real registry dependencies**, not just path dependencies. `cargo publish`
-resolves them against the index, so:
+The dry run prints Cargo's derived publish order and verifies every normalized package.
 
-1. Every sample crate must be on crates.io **before** `ferrosintesis` can be published at all.
-2. `ferrosintesis-samples-drumkit2` depends on `ferrosintesis-samples-drumkit` (it shares the
-   `Bank` type), so **drumkit must precede drumkit2**.
-3. Everything else is order-independent among the samples.
+## Prepare the release
 
-Until then, `cargo package -p ferrosintesis` fails with
-`no matching package named ferrosintesis-samples-<x> found` — that is expected and is not a
-defect in the manifest.
+Wait until every intended fix is integrated. Then create a release task from
+`origin/main`; this repository uses `version_bump = "release-only"`, so ordinary
+integrations do not change crate versions.
 
-`ferrosintesis-cli`, `render-catalog` and `amp-lab` are `publish = false` and never ship.
+In that release task:
 
-## Hard limits you will hit
+1. Choose the library and CLI versions from their manifests. Change a sample crate's
+   version only if that already-published sample payload changed. Keep every
+   `ferrosintesis` sample dependency pinned with `=`.
+2. Run `cargo check --locked` after version edits so `Cargo.lock` changes in lockstep.
+3. Replace `## [Unreleased]` in `crates/ferrosintesis/CHANGELOG.md` with the chosen
+   library version and release date. Add a fresh empty `Unreleased` section above it.
+4. Search the packaged README, NOTICE, licences, provenance files, repository URL,
+   version references, and install commands for stale claims.
+5. Integrate the release task. Do not package or publish the unintegrated task branch.
 
-| Limit | Value | Where it bites |
-|---|---|---|
-| `.crate` tarball size | **10 MiB** | The drum kit. See below. |
-| Rate limit, new crates | ~1 per 10 min (burst 5) | Publishing 24 new names in one sitting. |
-| Yank ≠ delete | — | You cannot take a bad version back. |
+Do not use `--allow-dirty` or `--no-verify` for the release.
 
-**The size limit is why the drum kit is two crates.** The combined kit packaged at 15.8 MiB
-and would have been rejected outright. It was split on 2026-07-25 into
-`-drumkit` (7.5 MiB) and `-drumkit2` (8.4 MiB). Check headroom before adding samples:
+## Preflight on integrated trunk
 
-```powershell
-cargo package -p <crate> --no-verify --allow-dirty   # prints "Packaged N files, X (Y compressed)"
+First prove that the local checkout is exactly the clean remote trunk:
+
+```text
+git fetch origin
+git status --short
+git rev-parse HEAD
+git rev-parse origin/main
 ```
 
-`Y compressed` is the figure crates.io measures. Crates that depend on an unpublished
-sibling cannot be measured this way until that sibling is up; estimate with
-`tar -cf - samples src Cargo.toml README.md PROVENANCE.md LICENSE-CC0 | gzip -6 | wc -c`.
+`git status --short` must be empty, and the two revisions must match.
 
-## Name reservation — do this first, separately
+Run the repository gates with stdin closed:
 
-The parent name is held; **the 24 asset-crate names are not**. Anyone can take
-`ferrosintesis-samples-core` today, and if they do, the pinned dependency graph cannot be
-published under these names at all. Reserving them is cheap and reversible in a way that
-publishing real content is not.
-
-This is a deliberate decision point, not a step to run on autopilot — reserving 24 names is
-itself an irreversible public act. Get Arthur's explicit go.
-
-## Pre-flight
-
-Run from a **clean checkout of `origin/main`** (never a task branch — an artifact built off
-an un-integrated branch silently lags the trunk while carrying an identical version string):
-
-```powershell
+```text
 cargo fmt --all -- --check
-cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings
+cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings
-$null | cargo test --workspace --exclude amp-lab --locked
+cargo test -p ferrosintesis --no-default-features --locked
+cargo test --workspace --locked
+python3 -m unittest discover -s tools/ferrosintesis-samples
+cargo +1.87.0 check --workspace --locked
+cargo doc -p ferrosintesis --no-default-features --no-deps --locked
 ```
 
-```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --exclude amp-lab --all-targets --locked -- -D warnings
-cargo clippy -p ferrosintesis --no-default-features --all-targets --locked -- -D warnings
-cargo test --workspace --exclude amp-lab --locked </dev/null
+On PowerShell, prefix each test command with `$null |`. On bash, append `</dev/null`.
+
+Package and dry-run the exact publishable graph:
+
+```text
+cargo package --workspace --exclude render-catalog --locked
+cargo publish --workspace --exclude render-catalog --dry-run --locked
 ```
 
-Then rehearse the packaging without touching the network:
+Read every `Packaged ... compressed` line. crates.io rejects an archive over its upload
+limit; do not assume an uncompressed directory size is the relevant number. The largest
+archive measured on 2026-07-29 was 7.4 MiB compressed.
 
-```powershell
-foreach ($c in (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages |
-         Where-Object { $_.name -like 'ferrosintesis-samples-*' }) {
-  cargo package -p $c.name --no-verify --allow-dirty
-}
+The library archive's tests must also be self-contained. Repository-wide oracles are
+enabled by `.cargo/config.toml` in a checkout and are absent from the archive; crate-local
+fixtures under `crates/ferrosintesis/tests/` are packaged. If either boundary changes,
+unpack the generated `.crate` outside the repository and run both:
+
+```text
+cargo test --locked
+cargo test --no-default-features --locked
 ```
 
-```sh
-for d in crates/ferrosintesis-samples-*/; do
-  cargo package -p "$(basename "$d")" --no-verify --allow-dirty
-done
+Running the unpacked test from under the repository is not equivalent: Cargo discovers
+the ancestor `.cargo/config.toml` and enables repository-only tests.
+
+Finally, check every exact crate name on crates.io. It must either be unclaimed or already
+owned by the releasing account. Stop if any name belongs to someone else, if two-factor
+authentication is unavailable, or if the token cannot publish all 27 crates. Never print
+or commit the token.
+
+## Publish
+
+From the same clean, integrated checkout:
+
+```text
+cargo publish --workspace --exclude render-catalog --locked
 ```
 
-Confirm every crate reports **under 10 MiB compressed**.
+Current Cargo publishes the selected workspace in dependency order. It may pause while a
+new dependency becomes visible in the registry, and crates.io may rate-limit a long first
+publish. Do not work around either check.
 
-Checklist before the first real publish:
+If the command stops after uploading anything, **do not blindly rerun it**. Inspect
+crates.io and the command output to identify the exact versions already accepted. Resume
+only the missing packages with `cargo publish -p <package> --locked`, preserving the four
+dependency layers above. An accepted asset crate is not a rollback condition; finish the
+remaining graph with the same reviewed versions.
 
-- [ ] Version numbers are deliberate. `.deltic-integrate.toml` sets
-      `version_bump = "release-only"`, so integration never bumps: the number you see is
-      the number that ships. Bump it as a conscious release act.
-- [ ] `CHANGELOG.md` has an entry for this version.
-- [ ] Every crate has `description`, `license`, `repository`, `readme`, `rust-version`.
-- [ ] Each attribution-bearing crate ships its `NOTICE` **in its `include` list**
-      (`cargo test -p ferrosintesis --lib licensing` proves this).
-- [ ] The payload prose matches reality
-      (`cargo test -p ferrosintesis --lib payload`).
-- [ ] `cargo +1.87 check --workspace` passes — the declared MSRV is only real once a
-      toolchain at that version has compiled it.
+## Verify the public release
 
-## Publishing
+Wait until the versions appear in the crates.io index, then install from the registry into
+an empty temporary root:
 
-**Dry run the whole set first.** `--dry-run` performs everything except the upload:
-
-```powershell
-cargo publish -p ferrosintesis-samples-core --dry-run
+```text
+cargo install ferrosintesis-cli --version <cli-version> --locked --root <temp-root>
+<temp-root>/bin/ferrosintesis --help
 ```
 
-Then, for real, samples first. `--locked` keeps the resolved graph identical to what you
-tested. After each, wait for the index to update before the crate that depends on it:
+Also prove the modeled-only install advertised in the CLI README:
 
-```powershell
-# 1. drumkit BEFORE drumkit2 (drumkit2 depends on it)
-cargo publish -p ferrosintesis-samples-drumkit --locked
-# ...wait for the index, then:
-cargo publish -p ferrosintesis-samples-drumkit2 --locked
-
-# 2. the remaining 22, any order, minding the rate limit
-cargo publish -p ferrosintesis-samples-core --locked
-# ... etc
-
-# 3. only once all 24 are live and indexed:
-cargo publish -p ferrosintesis --locked
+```text
+cargo install ferrosintesis-cli --version <cli-version> --no-default-features --locked --root <another-temp-root>
+<another-temp-root>/bin/ferrosintesis --help
 ```
 
-Publishing the parent is the point of no return: it is the version the world resolves.
-
-## Verify after
-
-- `cargo install ferrosintesis-cli` will NOT work (it is `publish = false`); instead, in a
-  scratch directory outside the workspace: `cargo add ferrosintesis && cargo build`, to
-  prove the published graph resolves without any path dependency.
-- Check docs.rs built. It is configured with `no-default-features = true`
-  (`crates/ferrosintesis/Cargo.toml`); without that it would try to compile ~104 MiB of PCM
-  and likely time out, leaving the crate with no documentation.
-- Confirm the README renders on the crates.io page and its repository links resolve.
-
-## If it goes wrong
-
-- **A bad version is live.** `cargo yank --version X.Y.Z -p <crate>`. Yank does not delete;
-  it stops *new* dependents resolving to it. Existing `Cargo.lock`s keep working. Publish a
-  fixed version afterwards — you cannot reuse the yanked number.
-- **A sample crate published but the parent failed.** Harmless. Fix the parent and publish
-  it; the asset crates are already where they need to be.
-- **A crate is over 10 MiB.** Split it (follow `ferrosintesis-samples-drumkit2`: keep the
-  shared type in the original crate and give the new one its own `BankSource`), or ask
-  crates.io for a limit increase. Do NOT trim samples to fit — that changes the render, and
-  a size-driven re-voicing is exactly the kind of change nobody will remember making.
+Confirm that crates.io renders the README, licence, repository link, features, and
+dependencies correctly. Confirm that docs.rs builds `ferrosintesis` documentation. Only
+after the public artifacts are sound should the release tag or GitHub release be created,
+and each remains a separate externally visible action requiring explicit authority.

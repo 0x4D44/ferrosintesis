@@ -94,24 +94,26 @@ pub(crate) mod altbank;
 pub(crate) mod drums;
 pub(crate) mod dsp;
 pub(crate) mod engine;
-#[cfg(test)]
+// These oracles inspect sibling packages and repository policy. `.cargo/config.toml`
+// enables them in a checkout; the published archive omits both the inputs and the cfg.
+#[cfg(all(test, ferrosintesis_repository_tests))]
 mod inventory;
 
-#[cfg(test)]
+#[cfg(all(test, ferrosintesis_repository_tests))]
 mod balance;
-#[cfg(test)]
+#[cfg(all(test, ferrosintesis_repository_tests))]
 mod licensing;
 pub(crate) mod loudness;
-#[cfg(test)]
+#[cfg(all(test, ferrosintesis_repository_tests))]
 mod manifest;
 pub(crate) mod midi;
 #[cfg(test)]
 mod parse_robustness;
-#[cfg(test)]
+#[cfg(all(test, ferrosintesis_repository_tests))]
 mod payload;
-#[cfg(test)]
+#[cfg(all(test, ferrosintesis_repository_tests))]
 mod provenance;
-#[cfg(test)]
+#[cfg(all(test, ferrosintesis_repository_tests))]
 mod render_profile;
 pub(crate) mod reverb;
 pub(crate) mod sampler;

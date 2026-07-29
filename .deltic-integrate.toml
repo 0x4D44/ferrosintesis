@@ -3,8 +3,9 @@ version = 1
 # Release-only: integration NEVER bumps a crate version. A shared-version bump
 # invalidates every crate's Cargo `-C metadata` fingerprint, forcing a full-workspace
 # recompile each integration (the fleet convention for Cargo workspaces — see deltic
-# and mddosem). ferrosintesis is published to crates.io; bump its version deliberately
-# as part of a release, not per task. Per-integration identity rides the git SHA.
+# and mddosem). The ferrosintesis name is reserved on crates.io and the workspace is
+# publishable; bump versions deliberately as part of a release, not per task.
+# Per-integration identity rides the git SHA.
 version_bump = "release-only"
 
 # `--no-default-features` (the modeled-only synth the README offers to anyone who does

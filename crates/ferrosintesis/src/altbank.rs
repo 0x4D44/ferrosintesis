@@ -1025,10 +1025,10 @@ pub(crate) fn choir2_reg_weight(key: u8, section: usize) -> f32 {
 type PianoBank = fn(u8, bool) -> &'static [crate::sampler::Zone];
 
 struct Gm1AltSource {
-    #[cfg(test)]
+    #[cfg(all(test, ferrosintesis_repository_tests))]
     name: &'static str,
     bank: PianoBank,
-    #[cfg(test)]
+    #[cfg(all(test, ferrosintesis_repository_tests))]
     crate_dir: &'static str,
 }
 
@@ -1040,17 +1040,17 @@ struct Gm1AltSource {
 /// to GM 0 claims while the shipped selector stays on program 1.
 const GM1_ALT_SOURCES: &[Gm1AltSource] = &[
     Gm1AltSource {
-        #[cfg(test)]
+        #[cfg(all(test, ferrosintesis_repository_tests))]
         name: "YDP bright grand",
         bank: crate::sampler::ydpgrand_bank,
-        #[cfg(test)]
+        #[cfg(all(test, ferrosintesis_repository_tests))]
         crate_dir: "crates/ferrosintesis-samples-ydp-grand",
     },
     Gm1AltSource {
-        #[cfg(test)]
+        #[cfg(all(test, ferrosintesis_repository_tests))]
         name: "MuseScore grand",
         bank: crate::sampler::musescoregrand_bank,
-        #[cfg(test)]
+        #[cfg(all(test, ferrosintesis_repository_tests))]
         crate_dir: "crates/ferrosintesis-samples-musescore-grand",
     },
 ];
@@ -1365,6 +1365,7 @@ mod tests {
     /// Widening it also earned its keep immediately: the sweep that produced
     /// this test found EIGHT of ten piano crates carrying a stale slot, four of
     /// which were not GM 0 at all. The reported crate was never the whole bug.
+    #[cfg(ferrosintesis_repository_tests)]
     #[test]
     fn every_gm0_crate_documents_the_slot_the_router_gives_it() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1473,6 +1474,7 @@ mod tests {
     /// parent README/NOTICE inventory used to keep its own hand-written program
     /// labels, so it called the YDP and MuseScore GM1 alternate banks GM0 while
     /// the router selected them only through the program-1 arm.
+    #[cfg(ferrosintesis_repository_tests)]
     #[test]
     fn every_gm1_alternate_parent_claim_matches_the_router() {
         let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));

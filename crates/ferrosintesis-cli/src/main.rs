@@ -187,3 +187,14 @@ fn main() {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn embedded_samples_feature_is_forwarded_to_the_library() {
+        assert_eq!(
+            ferrosintesis::embedded_samples_available(),
+            cfg!(feature = "embedded-samples")
+        );
+    }
+}

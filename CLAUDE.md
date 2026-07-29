@@ -198,9 +198,11 @@ contamination. Explain the NON-diffs too — a file carrying the changed pattern
 move usually pins down exactly why.
 
 ferrosintesis is versioned (`crates/ferrosintesis/Cargo.toml` holds the current
-number — trust it, not versions quoted in docs); a shipped-code change needs one
-version bump per integrated task. The crate is **published to crates.io**, so its public API
-carries a semver promise: `Options`/`RealtimeOptions` are sealed (private fields — construct
+number — trust it, not versions quoted in docs). This is a **release-only** workspace:
+ordinary integrations do not bump versions; a deliberate release task does. The
+`ferrosintesis` name is reserved on crates.io with a `0.0.0` stub, but no real release has
+shipped yet. Its public API is nevertheless designed for the semver promise it will carry:
+`Options`/`RealtimeOptions` are sealed (private fields — construct
 with `Options::default()` + the `with_*` builders, read with the accessors), and the error
 enums plus every data-carrying variant are `#[non_exhaustive]`. Adding a render knob or an
 error variant is therefore a minor bump, not a major one — keep it that way. Publish order is

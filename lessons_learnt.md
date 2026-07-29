@@ -10,6 +10,12 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.29 — **Archive tests inherit ancestor Cargo config; unpack outside the repo** (`.cargo/config.toml:[build]`).
+  - `cargo test --manifest-path target/package/...` still discovers the checkout's
+    `.cargo/config.toml`, so it enables repository-only cfgs and is not a consumer test.
+  - Copy or unpack the normalized crate under OS temp, outside the checkout, before
+    claiming its registry test suite is self-contained.
+
 - 2026.07.26 — **Equal f32 formulas can change bits; preserve original expressions** (`voices.rs:bow_force_ceiling`).
   - `2.9 - 2.2` is `0.70000005`, not literal `0.69999999`; likewise `0.36 + 0.82` and
     literal `1.18` differ by one f32 step.

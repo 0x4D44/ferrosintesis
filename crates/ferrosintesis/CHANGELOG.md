@@ -45,6 +45,14 @@ and `wrk_journals/`.
 
 ### Fixed
 
+- **The crates.io archive now carries its crate-local test fixtures and excludes
+  repository-only oracles.** `cargo test` on the normalized package no longer tries to
+  read sibling sample crates, repository tools, or fleet policy files that cannot exist
+  in a registry download.
+- **`ferrosintesis-cli --no-default-features` now reaches the library.** The CLI owns an
+  `embedded-samples` feature that forwards explicitly to `ferrosintesis`, while its
+  dependency disables library defaults. The default install remains unchanged; the
+  documented modeled-only install no longer compiles all 25 sample crates.
 - **GM 42 cello keys 74 and 76 locked an octave up** whenever the per-note bow force drew
   near the top of its range — roughly one note in eight at the top two tones of its range,
   at +1203 cents with the level down ~60%. Bowing hard in a short loop drives the waveguide

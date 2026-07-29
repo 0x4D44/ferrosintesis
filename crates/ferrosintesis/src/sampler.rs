@@ -5828,6 +5828,7 @@ mod tests {
         5.0 + (3.3 - 5.0) * u
     }
 
+    #[cfg(ferrosintesis_repository_tests)]
     fn assert_gong_provenance_matches_velocity_boundary(provenance: &str, loud_vel: u8) {
         let soft_max = loud_vel
             .checked_sub(1)
@@ -5848,6 +5849,7 @@ mod tests {
         );
     }
 
+    #[cfg(ferrosintesis_repository_tests)]
     #[test]
     fn gong_provenance_describes_the_shipped_velocity_boundary() {
         let layers = gong_layers();
@@ -5863,6 +5865,7 @@ mod tests {
         assert_gong_provenance_matches_velocity_boundary(provenance, GONG_LOUD_VEL);
     }
 
+    #[cfg(ferrosintesis_repository_tests)]
     #[test]
     #[should_panic(expected = "gong provenance must name the shipped hard switch")]
     fn gong_provenance_guard_rejects_a_stale_velocity_boundary() {
@@ -5870,10 +5873,12 @@ mod tests {
         assert_gong_provenance_matches_velocity_boundary(provenance, GONG_LOUD_VEL + 1);
     }
 
+    #[cfg(ferrosintesis_repository_tests)]
     fn normalized_ws(text: &str) -> String {
         text.split_whitespace().collect::<Vec<_>>().join(" ")
     }
 
+    #[cfg(ferrosintesis_repository_tests)]
     fn assert_text_contains(name: &str, text: &str, phrase: &str) {
         let text = normalized_ws(text);
         let phrase = normalized_ws(phrase);
@@ -5883,6 +5888,7 @@ mod tests {
         );
     }
 
+    #[cfg(ferrosintesis_repository_tests)]
     fn assert_text_omits(name: &str, text: &str, phrase: &str) {
         let text = normalized_ws(text);
         let phrase = normalized_ws(phrase);
@@ -5892,6 +5898,7 @@ mod tests {
         );
     }
 
+    #[cfg(ferrosintesis_repository_tests)]
     #[test]
     fn sax_published_docs_describe_the_looped_recording_voice() {
         let provenance = include_str!("../../ferrosintesis-samples-sax/PROVENANCE.md");

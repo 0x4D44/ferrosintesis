@@ -1841,7 +1841,7 @@ mod distinctness {
 /// gate. The latter cannot render embedded recordings, so pin the repository
 /// contract that always runs both shipped configurations (MM-BUG-KILN-00020,
 /// MM-BUG-KILN-00090).
-#[cfg(not(feature = "embedded-samples"))]
+#[cfg(all(not(feature = "embedded-samples"), ferrosintesis_repository_tests))]
 #[test]
 fn no_default_gate_is_paired_with_embedded_sample_coverage() {
     const POLICY: &str = include_str!("../../../.deltic-integrate.toml");

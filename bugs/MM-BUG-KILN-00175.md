@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00175 — Companion drum-kit inventory test never compares packaged WAVs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drum-kit2 inventory
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260729T142237Z-p72360-n516310600-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00175-run-fix-20260729T142237Z-p72360-n516310600-c1
-- **Owner base:** 75b2c2a7db0fb67d59c2fa51d79d2005e1c1f8ee
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-29T14:22:37Z
-- **Owner until:** 2026-07-29T16:22:37Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-07-29, deltic:auto role=fix run=fix-20260729T142237Z-p72360-n516310600-c1 branch=task/bug-MM-BUG-KILN-00175-run-fix-20260729T142237Z-p72360-n516310600-c1 code=8ce254b4b5591ef78d297a8a55dbaa4360cf931d gate=manual)
 
 ## Observation
 

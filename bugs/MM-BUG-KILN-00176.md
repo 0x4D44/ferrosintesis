@@ -30,6 +30,12 @@ Arthur's report, verbatim:
 
 Build under test: `d180304d633c5a58cfeee4008263ff997ff285d4`.
 
+Arthur's direct left/right comparison localized the higher-pitched "fartiness"
+to notes 5 and 6 (MIDI key 58 at velocities 72 and 110). The sustain oscillation
+is most noticeable on notes 11 and 12 (key 73 at velocities 72 and 110).
+Ferrosintesis was the left channel in both comparisons, and channel extraction
+was hash-verified against the source renders.
+
 Reproduction:
 
 1. Render default-bank GM67 with samples enabled, sends disabled, and the M-CAL
@@ -52,9 +58,9 @@ sample-loop period, or twice that period:
 | key 73, velocity 110 | 63.1 ms | 0.568 | 0.568 |
 
 Across the same four notes, SC-55 and S-YXG50 peak between 0.036 and 0.220.
-This confirms the audible-loop report on ferrosintesis. The separate
-"fartiness" description remains a preserved human observation; the current
-probe has not localized or objectively defined it.
+This confirms the audible-loop report on ferrosintesis. Arthur has localized
+the separate "fartiness" description to key 58, but the current probe has not
+yet objectively defined or diagnosed it.
 
 **Expected.** A held baritone-sax note varies naturally without exposing the
 short source-buffer repetition.

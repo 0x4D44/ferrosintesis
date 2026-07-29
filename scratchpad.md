@@ -1,6 +1,6 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
-- [ ] 2026.07.22 — **M-CAL residual watchlist: the metric disagrees with ear-vetted trims
+- [x] 2026.07.22 — **M-CAL residual watchlist: the metric disagrees with ear-vetted trims
   on the slow-attack families** — GM56/57 brass (−6.7/−6.3 dB), GM67 (−4.8), GM48/50/51
   ensembles (+3.7..+4.3). Either the single-held-note probe biases slow-attack voices, or
   those shipped trims are stale. Only listening settles which; do NOT renumber them on the
@@ -13,10 +13,13 @@
   failure; and commit `4c24cb9` later changed the MODELED velocity exponents for GM 56/57/67 -
   three of the six - so the residuals above predate it and should be re-read before acting.
   MM-BUG-KILN-00118 covers the systemic half, that there is no committed residual baseline.
-  Re-measured 2026-07-29 on the current build: all six residuals remain within 0.33 dB
-  of the accepted baseline. GM48/56/57/67 remain two-reference consensus outliers;
-  GM50/51 still lack cross-vendor consensus. No trim changed. The blind 18-file pack
-  is at `_cal/listening/mcal/`; awaiting Arthur's listening verdict.)
+  Re-measured 2026-07-29 on the current build: all six residuals remained within 0.33 dB
+  of the accepted baseline. Direct left/right listening settled the discrepancy:
+  GM48 was raised 0.5 dB to the existing +6 dB ceiling; GM50/51 stayed unchanged;
+  GM56/57 stayed unchanged because only their loud-note sustains were hotter; GM67
+  stayed unchanged because its level evidence conflicts and sampled-sustain defects
+  contaminate the comparison. The GM67 defects were promoted to MM-BUG-KILN-00176.
+  Done 2026-07-29.)
 - [ ] 2026.07.18 — **Cathedral reverb send skips the 150 Hz send high-pass and is boosted
   1.30×.** `send_cathedral` goes straight to `cathedral.process` (`engine.rs:~2446`) with
   no `rev_hp` (contrast the hall send) at `CATHEDRAL_WET_SCALE=1.30`, so sub-150 Hz feeds

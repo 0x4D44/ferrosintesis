@@ -1188,6 +1188,14 @@ fn fx_profile(program: u8, bank: u8) -> (f32, f32) {
 /// master bus compressor is proven inert over the probe, so the differential is
 /// linear where it was measured. See
 /// `wrk_docs/2026.07.22 - M-CAL v3 certified derivation report.md`.
+///
+/// Arthur's 2026.07.29 direct left/right audition found GM48 slightly quieter
+/// than both references, so its +5.5 dB trim moved to the existing +6 dB ceiling.
+/// GM50/51 stayed put because their differences were small or tonal. GM56/57
+/// stayed put because only their loud-note sustains ran hotter; a global scalar
+/// would make their already-matched quiet notes wrong. GM67 stayed put pending
+/// MM-BUG-KILN-00176 because its sampled-sustain artifacts contaminate the level
+/// comparison.
 #[rustfmt::skip] // keep the 8-per-row GM grid aligned for readability
 pub(crate) const PROGRAM_TRIM_DB: [f32; 128] = [
      0.0,  0.0,  0.0,  0.0,  0.0,  1.0,  6.0,  0.0, //   0-7   Piano (5 +1, 6 harpsichord +6dB)
@@ -1196,7 +1204,7 @@ pub(crate) const PROGRAM_TRIM_DB: [f32; 128] = [
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  24-31  Guitar     (untouched)
      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0, //  32-39  Bass       (untouched)
     -4.0, -4.0, -3.5, -6.0, -4.0,  0.0,  0.0,  0.0, //  40-47  Strings (bowed; pizz/harp/timpani=0)
-     5.5,  1.5,  6.0,  5.0,  2.5,  6.0,  5.0,  0.0, //  48-55  Ensemble (sections/choir; orch-hit=0)
+     6.0,  1.5,  6.0,  5.0,  2.5,  6.0,  5.0,  0.0, //  48-55  Ensemble (sections/choir; orch-hit=0)
     -6.0, -6.0, -6.0, -2.0, -3.0, -2.0,  0.0,  5.0, //  56-63  Brass
      0.0, -2.5, -3.0, -3.0,  2.0,  1.5,  0.0,  0.0, //  64-71  Reed
     -4.0, -4.0, -2.0, -5.0, -6.0, -6.0,  0.0,  0.0, //  72-79  Pipe
@@ -4541,6 +4549,7 @@ mod tests {
 
         // Flagship corrections: sections/choir lifted, solo strings/brass/flutes/
         // organ trimmed.
+        assert_eq!(PROGRAM_TRIM_DB[48], 6.0); // StringEnsemble1 — direct L/R audition
         assert_eq!(PROGRAM_TRIM_DB[50], 6.0); // SynthStrings1 — lifted
         assert_eq!(PROGRAM_TRIM_DB[53], 6.0); // VoiceOohs     — lifted
         assert_eq!(PROGRAM_TRIM_DB[56], -6.0); // Trumpet      — trimmed

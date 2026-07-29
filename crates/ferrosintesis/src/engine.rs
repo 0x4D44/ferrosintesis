@@ -4261,6 +4261,25 @@ mod tests {
     /// "struck voices are untrimmed" intent still holds everywhere it was not
     /// positively measured. Their values are pinned below for the same reason the
     /// sustained anchors are.
+    fn amp_protocol_readme_rows(readme: &str) -> Vec<(usize, String)> {
+        let amp_section = readme
+            .split("### Score-authored amp (driven guitars 29/30)")
+            .nth(1)
+            .expect("README score-authored amp section")
+            .split("\n### ")
+            .next()
+            .expect("README score-authored amp section body");
+        amp_section
+            .lines()
+            .filter_map(|line| {
+                let mut cells = line.trim().strip_prefix('|')?.split('|');
+                let index = cells.next()?.trim().parse().ok()?;
+                Some((index, cells.next()?.trim().to_string()))
+            })
+            .filter(|(index, _)| *index < AMP_PARAM_COUNT)
+            .collect()
+    }
+
     /// MM-REQ-KILN-00030: the amp-control protocol has THREE independent
     /// statements — this crate's constants, `amp-lab`'s published `amp::KNOBS`
     /// table, and the README's NRPN table — and nothing forced them to agree.
@@ -4421,15 +4440,7 @@ mod tests {
         );
 
         // ---- the README's NRPN table ----
-        let rows: Vec<(usize, String)> = readme
-            .lines()
-            .filter_map(|l| {
-                let mut c = l.trim().strip_prefix('|')?.split('|');
-                let idx = c.next()?.trim().parse().ok()?;
-                Some((idx, c.next()?.trim().to_string()))
-            })
-            .filter(|(i, _)| *i < AMP_PARAM_COUNT)
-            .collect();
+        let rows = amp_protocol_readme_rows(&readme);
         assert_eq!(
             rows.len(),
             AMP_PARAM_COUNT,
@@ -4452,6 +4463,27 @@ mod tests {
                  \"{doc_name}\""
             );
         }
+    }
+
+    #[test]
+    fn amp_protocol_readme_scan_ignores_other_numbered_tables() {
+        let readme = r#"
+### Unrelated table
+| 0 | Wrong before |
+
+### Score-authored amp (driven guitars 29/30)
+| LSB | knob |
+|-----|------|
+| 0 | Drive |
+| 1 | Tone |
+
+### Later table
+| 2 | Wrong after |
+"#;
+        assert_eq!(
+            amp_protocol_readme_rows(readme),
+            [(0, "Drive".to_string()), (1, "Tone".to_string())]
+        );
     }
 
     #[test]

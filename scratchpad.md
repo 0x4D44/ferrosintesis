@@ -169,10 +169,13 @@
   regen sweep plus an oracle that regenerates each crate in a temp dir and diffs. Spotted during
   the 2026-07-25 scratchpad triage while re-verifying the rustfmt fix after rebasing onto it.
 
-- [ ] 2026-07-26 — `engine.rs:amp_protocol_has_one_definition` scrapes the NRPN knob table by
+- [x] 2026-07-26 — `engine.rs:amp_protocol_has_one_definition` scrapes the NRPN knob table by
       matching ANY `| <int> | <text> |` row in the WHOLE of `crates/ferrosintesis/README.md`
       (`crates/ferrosintesis/src/engine.rs:4331`), rather than the rows of its own table. Adding
       an unrelated numbered table to that README silently doubles its count and fails the oracle
       — which is what a new GM0 CC0 table did on 2026.07.26 (worked around by giving that table a
       `CC0=N` first column instead of a bare integer). Scope the scan to the NRPN section so the
       next numbered table does not have to know about it.
+      (Done 2026-07-29: the parser now scans only the score-authored amp section.
+      An adversarial test places numbered tables both before and after it and proves
+      they are ignored.)

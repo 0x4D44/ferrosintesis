@@ -5,12 +5,13 @@ All notable changes to `ferrosintesis` are recorded here. The format follows
 [semantic versioning](https://semver.org/) — with the pre-1.0 caveat that a minor bump may
 break the API.
 
-`ferrosintesis` has **not yet been published to crates.io**. Only a name-reservation stub
-`0.0.0` exists there (2026-07-09); it contains no code. This file begins at the version
-that will be the first real release, and older history lives in the repository's git log
-and `wrk_journals/`.
+The `0.21.56` release is the first real crates.io release. It supersedes the `0.0.0`
+name-reservation stub published on 2026-07-09, which contained no code. Older history
+lives in the repository's git log and `wrk_journals/`.
 
 ## [Unreleased]
+
+## [0.21.56] - 2026-07-30
 
 ### Changed — BREAKING
 
@@ -45,6 +46,17 @@ and `wrk_journals/`.
 
 ### Fixed
 
+- **Held GM 67 baritone-sax notes no longer expose their short recorded sustain loops.**
+  Multi-slice grain motion now covers the whole program rather than starting at a
+  hand-written key boundary, and shorter moving slices suppress the residual repetition
+  around keys 64–67.
+- **GM 67 key 58 no longer selects two rough G-sharp source zones.** The recordings remain
+  packaged for provenance, but the runtime banks now choose the surrounding healthy takes.
+  A population-relative roughness oracle checks every runtime zone and carries both
+  positive and negative controls.
+- **The sax loop regression now proves its own sensitivity.** Every covered key and
+  velocity is compared with an otherwise identical single-slice positive control, so the
+  guard cannot pass merely because its periodicity metric stopped seeing the defect.
 - **The crates.io archive now carries its crate-local test fixtures and excludes
   repository-only oracles.** `cargo test` on the normalized package no longer tries to
   read sibling sample crates, repository tools, or fleet policy files that cannot exist

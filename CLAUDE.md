@@ -200,8 +200,8 @@ move usually pins down exactly why.
 ferrosintesis is versioned (`crates/ferrosintesis/Cargo.toml` holds the current
 number — trust it, not versions quoted in docs). This is a **release-only** workspace:
 ordinary integrations do not bump versions; a deliberate release task does. The
-`ferrosintesis` name is reserved on crates.io with a `0.0.0` stub, but no real release has
-shipped yet. Its public API is nevertheless designed for the semver promise it will carry:
+`ferrosintesis` `0.0.0` crates.io package is a code-free name-reservation stub; real
+library releases start at `0.21.56`. Its public API is designed for the semver promise it carries:
 `Options`/`RealtimeOptions` are sealed (private fields — construct
 with `Options::default()` + the `with_*` builders, read with the accessors), and the error
 enums plus every data-carrying variant are `#[non_exhaustive]`. Adding a render knob or an

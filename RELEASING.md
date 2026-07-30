@@ -8,8 +8,8 @@ Publishing is irreversible. A crate version cannot be replaced or reused, and a 
 workspace publish can leave dependency crates live before the parent. Run this procedure
 only with explicit release authority, from a clean, integrated `origin/main`.
 
-As of 2026-07-29, `ferrosintesis` has only the `0.0.0` name-reservation stub on crates.io.
-No real library, CLI, or sample-asset release has shipped.
+The `0.0.0` `ferrosintesis` package is a name-reservation stub containing no code.
+Real library releases start at `0.21.56`; always inspect crates.io for the current state.
 
 ## Dependency order
 

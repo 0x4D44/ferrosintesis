@@ -11,13 +11,17 @@ belong in `CLAUDE.md`, not here.
 <!-- lessons-format: index-v1 -->
 
 - 2026.07.30 — **A one-case bar hides fitting; census every value it would flag** (`sampler.rs:best_cycle_correlation`).
-  - `baritone_sax_key58_avoids_a_rough_source_zone` asserts `> 0.996` on the single zone
-    key 58 selects. Applying its own metric to all 20 baritone zones: the real defect was
-    0.779, but five HEALTHY shipping zones sit at 0.993–0.9960, i.e. below the bar.
-  - The threshold separates "the zone we removed" from "the zone we kept", not rough from
-    smooth. It passes only because one key happens to land above it (MM-BUG-KILN-00180).
-  - A derived-looking oracle can still carry a hand-fitted constant. Run the metric over
-    the whole population it could ever see, and check the bar falls in a real gap.
+  - The retired `baritone_sax_key58_avoids_a_rough_source_zone` asserted `> 0.996` on the
+    single zone key 58 selects. Applying its own metric to all 20 baritone zones: the real
+    defect was 0.779, but five HEALTHY shipping zones sat at 0.993–0.9960, below the bar.
+    It separated "the zone we removed" from "the zone we kept", not rough from smooth, and
+    passed only because one key happened to land above it (MM-BUG-KILN-00180).
+  - Copy the fixed shape, `sampler.rs:baritone_sax_bank_rejects_the_rough_source_population_outlier`:
+    census the whole runtime population, set the bar RELATIVE to it (`10 x median`), and
+    keep both a positive control (must be flagged) and a negative one (must not be).
+  - Check the bar lands in a real gap, both sides: worst healthy 0.00704 roughness, bar
+    0.03105, real defect 0.22135. Then prove it — restoring the rough take must fail the
+    oracle AND restoring the healthy one must pass it. The old bar failed that second test.
 
 - 2026.07.29 — **Archive tests inherit ancestor Cargo config; unpack outside the repo** (`.cargo/config.toml:[build]`).
   - `cargo test --manifest-path target/package/...` still discovers the checkout's

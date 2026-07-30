@@ -10,6 +10,15 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.30 — **A one-case bar hides fitting; census every value it would flag** (`sampler.rs:best_cycle_correlation`).
+  - `baritone_sax_key58_avoids_a_rough_source_zone` asserts `> 0.996` on the single zone
+    key 58 selects. Applying its own metric to all 20 baritone zones: the real defect was
+    0.779, but five HEALTHY shipping zones sit at 0.993–0.9960, i.e. below the bar.
+  - The threshold separates "the zone we removed" from "the zone we kept", not rough from
+    smooth. It passes only because one key happens to land above it (MM-BUG-KILN-00180).
+  - A derived-looking oracle can still carry a hand-fitted constant. Run the metric over
+    the whole population it could ever see, and check the bar falls in a real gap.
+
 - 2026.07.29 — **Archive tests inherit ancestor Cargo config; unpack outside the repo** (`.cargo/config.toml:[build]`).
   - `cargo test --manifest-path target/package/...` still discovers the checkout's
     `.cargo/config.toml`, so it enables repository-only cfgs and is not a consumer test.

@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** oracle design / sampled sax zones
 - **Raised:** 2026-07-30
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260730T083147Z-p60316-n677279500-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-KILN-00180-run-fix-20260730T083147Z-p60316-n677279500-c1
+- **Owner base:** bf885c2e2582a109347612d170c356b585f5d126
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-30T08:31:47Z
+- **Owner until:** 2026-07-30T10:31:47Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

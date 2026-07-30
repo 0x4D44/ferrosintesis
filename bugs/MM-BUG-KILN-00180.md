@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00180 — The MM-BUG-KILN-00178 roughness bar (0.996) is fitted to the removed zone, not derived: six shipping baritone zones sit below it
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** oracle design / sampled sax zones
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-30, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260730T083147Z-p60316-n677279500-c1 branch=task/bug-MM-BUG-KILN-00180-run-fix-20260730T083147Z-p60316-n677279500-c1 code=f1ad832dd1a1a6e1acb0fa572dd7aaa9ff0950bc gate=manual)
+- **State history:** Open (2026-07-30, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260730T083147Z-p60316-n677279500-c1 branch=task/bug-MM-BUG-KILN-00180-run-fix-20260730T083147Z-p60316-n677279500-c1 code=f1ad832dd1a1a6e1acb0fa572dd7aaa9ff0950bc gate=manual) -> Closed (2026-07-30, independently verified by claude-opus-5@high on trunk 53902d0; fix authored by OpenAI Codex GPT-5, so two-eyes holds)
 
 ## Observation
 
@@ -95,6 +95,83 @@ are still packaged — MM-BUG-KILN-00178 deliberately kept them for provenance.
 
 ## Fix
 
-<unfixed — raised only>
+`f1ad832d` (OpenAI Codex GPT-5) at `crates/ferrosintesis/src/sampler.rs`, replacing
+`baritone_sax_key58_avoids_a_rough_source_zone` with
+`baritone_sax_bank_rejects_the_rough_source_population_outlier`:
+
+- Censuses **every** zone in both runtime banks rather than the one zone a single
+  key selects, so changing a key or a zone boundary can no longer hide a rough take.
+- Derives the bar from the shipping population: `outlier_bar = 10 x median(1 - correlation)`.
+  No absolute constant is compared against a recording.
+- Loads both packaged-but-unshipped G#3 takes as controls — the forte take as the
+  **positive** control that must be the unique outlier, the soft take as a
+  **negative** control that must not be flagged.
+- Asserts three things: exactly one outlier exists, it is `sax_bar_G#3_f.wav`, and
+  it is not in a runtime bank.
 
 ## Notes
+
+**Independent verification, 2026-07-30, claude-opus-5@high on trunk 53902d0**
+(worktree `D:\worktrees\midi-music\20260730-TSK-HUM-verify-close-kiln180`).
+I raised this bug but did not fix it — the fix is GPT-5's, so the two-eyes rule
+holds (it binds the fixer, not the reporter).
+
+**Original observation replicated exactly.** Forcing the new assertion to print its
+census reproduces all 20 values in the Observation table digit-for-digit — every
+shipping zone from bar_p 69.65 Hz = 0.99646 through bar_f 448.84 Hz = 0.99674, plus
+`sax_bar_G#3_p.wav` = 0.99481 and `sax_bar_G#3_f.wav` = 0.77865. Same measurements,
+so the fix is judged against the numbers that raised the bug.
+
+**The complaint is resolved: the bar now sits in a real gap.** The derived bar is
+0.03105 roughness (correlation 0.96895):
+
+| | roughness | vs bar |
+| --- | ---: | --- |
+| worst *healthy* shipping zone (bar_f 130.22 Hz) | 0.00704 | 4.4x below |
+| derived bar | 0.03105 | — |
+| the real defect (`sax_bar_G#3_f.wav`) | 0.22135 | 7.1x above |
+
+All five healthy zones this bug named as wrongly-flagged (bar_p 82.52 / 103.47 /
+130.04, bar_f 82.38 / 130.22) now pass with margin. The old 0.996 bar sat *inside*
+the healthy population; this one sits in the empty band between the population and
+the outlier.
+
+**Discrimination proven in both directions — the check the old bar failed.**
+
+- Restoring the rough `sax_bar_G#3_f.wav` to `sax_bar_f()` **fails**: two outliers
+  against an expected one (the bar itself barely moved, 0.03105 -> 0.03171, so a
+  single contaminating entry cannot drag the population bar over its own outlier).
+- Restoring the healthy `sax_bar_G#3_p.wav` to `sax_bar_p()` **passes**. The old bar
+  would have failed this — 0.99481 is below 0.996. That is the false-positive this
+  bug was raised about, and it is gone.
+
+**Not vacuous under the mutations that would have holed it.** A metric stuck at 1.0
+gives median 0, bar 0, zero outliers -> fails. A metric stuck at 0 gives bar 10,
+zero outliers -> fails. Dropping the controls gives zero outliers -> fails. A bank
+contaminated with many rough takes raises the median until nothing is an outlier ->
+fails. Every path I could construct fails closed rather than passing silently.
+
+**Feature gating checked, and correct.** Under `--no-default-features` the test is
+compiled out (0 run, 745 filtered). That is not the MM-BUG-KILN-00020 pattern: this
+oracle censuses embedded sample banks, which do not exist in a modeled-only build,
+so it has nothing to assert there. MM-BUG-KILN-00020's vanished oracle was still
+meaningful without samples; this one is not.
+
+**Coverage of the parent bug is not lost.** MM-BUG-KILN-00178's property was "key 58
+must not select a rough zone". "No shipping zone is rough" strictly implies it, so
+the replacement is stronger, not narrower.
+
+**Second residual from the Observation — the 8.3-semitone zone gap — is NOT addressed
+by this fix, and that is correct.** It was recorded as an observation, not a defect;
+nothing here claims to guard zone stretch, and no evidence has been gathered that it
+is audible. Not carried forward as a new ID: raising a bug with no observed symptom
+would be speculative. If a stretch artifact is ever heard, it should be raised on its
+own evidence.
+
+**Gates green on the exact tree:** `cargo test --workspace --release` 842 passed /
+0 failed in `ferrosintesis` plus every sample crate green;
+`cargo clippy --workspace --all-targets -- -D warnings` clean;
+`cargo fmt --all -- --check` clean.
+
+Verification mutations were temporary and are not committed; the tree was restored
+to 53902d0 and confirmed clean before the gate run.

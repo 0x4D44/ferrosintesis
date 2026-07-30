@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00179 — The MM-BUG-KILN-00176 periodicity oracle has no positive control, so nothing preserves its ability to see the artifact
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** oracle design / sampled sax sustain
 - **Raised:** 2026-07-29
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260729T235614Z-p67528-n716300100-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00179-run-fix-20260729T235614Z-p67528-n716300100-c1
-- **Owner base:** 3e4e0580010fa6159f6507133032bd3b19088da0
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-29T23:56:14Z
-- **Owner until:** 2026-07-30T01:56:14Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260729T235614Z-p67528-n716300100-c1 branch=task/bug-MM-BUG-KILN-00179-run-fix-20260729T235614Z-p67528-n716300100-c1 code=fcae2c2e88eea43acd4536d882cd163a1e089f6b gate=manual)
 
 ## Observation
 

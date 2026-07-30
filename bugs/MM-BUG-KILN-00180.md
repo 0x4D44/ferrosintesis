@@ -1,24 +1,24 @@
 # MM-BUG-KILN-00180 — The MM-BUG-KILN-00178 roughness bar (0.996) is fitted to the removed zone, not derived: six shipping baritone zones sit below it
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** oracle design / sampled sax zones
 - **Raised:** 2026-07-30
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260730T083147Z-p60316-n677279500-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-KILN-00180-run-fix-20260730T083147Z-p60316-n677279500-c1
-- **Owner base:** bf885c2e2582a109347612d170c356b585f5d126
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-30T08:31:47Z
-- **Owner until:** 2026-07-30T10:31:47Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-30, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-07-30, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260730T083147Z-p60316-n677279500-c1 branch=task/bug-MM-BUG-KILN-00180-run-fix-20260730T083147Z-p60316-n677279500-c1 code=f1ad832dd1a1a6e1acb0fa572dd7aaa9ff0950bc gate=manual)
 
 ## Observation
 

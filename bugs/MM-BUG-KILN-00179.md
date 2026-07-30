@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00179 — The MM-BUG-KILN-00176 periodicity oracle has no positive control, so nothing preserves its ability to see the artifact
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** oracle design / sampled sax sustain
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260729T235614Z-p67528-n716300100-c1 branch=task/bug-MM-BUG-KILN-00179-run-fix-20260729T235614Z-p67528-n716300100-c1 code=fcae2c2e88eea43acd4536d882cd163a1e089f6b gate=manual)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260729T235614Z-p67528-n716300100-c1 branch=task/bug-MM-BUG-KILN-00179-run-fix-20260729T235614Z-p67528-n716300100-c1 code=fcae2c2e88eea43acd4536d882cd163a1e089f6b gate=manual) -> Closed (2026-07-30, independently verified by claude-opus-5@high on trunk 73ec2f2; fix authored by GPT-5.6, so two-eyes holds)
 
 ## Observation
 
@@ -75,6 +75,60 @@ fix it guards was independently verified correct at closure.
 
 ## Fix
 
-<unfixed — raised only>
+`fcae2c2e` (GPT-5.6) at `crates/ferrosintesis/src/sampler.rs`, in
+`baritone_sax_hold_does_not_expose_the_source_loop_period`:
+
+- Adds the positive control the bug specified, built exactly as the Observation
+  predicted it could be — `SaxLoopVoice::new(zone, f0, vel, sr, gain, seed,
+  false)` renders the identical key/velocity through the single-slice path with
+  the *same seed*, and the metric must exceed the bar: `control_exposed > 0.40`.
+- Replaces the absolute `exposed < 0.40` with the differential
+  `exposed < 0.65 * control_exposed`, matching the
+  `snare_grain_is_aperiodic_and_impulsive_v3` pattern the Observation cites.
+- Both assertions run per key/velocity, so all 12 cases carry their own control.
+- The unenforced doc-comment claim ("produces a 0.962 excess peak") is gone,
+  replaced by a statement of what the control proves.
 
 ## Notes
+
+**Independent verification, 2026-07-30, claude-opus-5@high on trunk 73ec2f2**
+(worktree `D:\worktrees\midi-music\20260730-TSK-HUM-verify-close-sax-bugs`).
+Fix authored by GPT-5.6 — a different actor, so two-eyes holds.
+
+**The exact vacuity path this bug named is closed, proven both directions.** The
+Observation's concrete attack was changing `HARMONICS` from 8 to 1, which zeroes
+the metric outright so the test passes forever. Both halves measured:
+
+| oracle version | `HARMONICS` 8 → 1 | result |
+| --- | --- | --- |
+| pre-fix (`190b8c6`, absolute `exposed < 0.40`) | applied | **PASSES** — vacuous, exactly as reported |
+| fixed (`fcae2c2`, positive control) | applied | **FAILS** — "GM67 key 64 velocity 72: the single-slice positive control did not expose the 0.0576s source loop (excess 0.000; 1x 0.000, 2x 0.000)" |
+
+The pre-fix run is the counterfactual that matters: it confirms the reported
+vacuity was real and not theoretical, so the fix closes a live hole rather than
+guarding a hypothetical one. Note the mutant is caught by the *control*
+assertion, before the main bar is ever evaluated — the intended mechanism.
+
+**The unproven cases named in the Observation are now proven.** The bug recorded
+that only key 68 velocity 72 had been demonstrated, because the old assertion
+panicked on the first case. Each of the 12 key/velocity pairs now computes and
+asserts its own control, so 68/110, 73/72 and 73/110 — plus the eight cases
+MM-BUG-KILN-00177 added — each carry live evidence. Measured single-slice control
+values run 0.62–1.20 across the set, all comfortably above the 0.40 control bar.
+
+**The absolute bar is gone, as the Observation asked.** `exposed < 0.65 *
+control_exposed` is relative to a value measured in the same run, so the oracle
+no longer depends on a hand-tuned threshold surviving unrelated synthesis changes.
+
+**Scope confirmed.** This was a guard-durability defect, not a shipped audio
+defect, and the fix is test-only — `git show fcae2c2 --stat` touches only the test
+body in `sampler.rs`. No render behaviour changes, so no render-diff inventory is
+owed.
+
+**Gates green on the exact tree:** `cargo test --workspace --release` 842 passed
+/ 0 failed in `ferrosintesis` plus every sample crate green;
+`cargo clippy --workspace --all-targets -- -D warnings` clean;
+`cargo fmt --all -- --check` clean.
+
+Verification mutations were temporary and are not committed; the tree was restored
+to 73ec2f2 and confirmed clean before the gate run.

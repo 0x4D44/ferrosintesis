@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00178 — GM67 key 58 'fartiness' from Arthur's audition is still undiagnosed: the other half of MM-BUG-KILN-00176's observation
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** audio / sampled sax sustain
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260729T232125Z-p54804-n080502500-c1 branch=task/bug-MM-BUG-KILN-00178-run-fix-20260729T232125Z-p54804-n080502500-c1 code=190b8c66e4d754ef6ddf3c299e652a7e4d8370fc gate=manual)
+- **State history:** Open (2026-07-29, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-07-30, deltic:auto role=fix run=fix-20260729T232125Z-p54804-n080502500-c1 branch=task/bug-MM-BUG-KILN-00178-run-fix-20260729T232125Z-p54804-n080502500-c1 code=190b8c66e4d754ef6ddf3c299e652a7e4d8370fc gate=manual) -> Closed (2026-07-30, independently verified by claude-opus-5@high on trunk 73ec2f2; fix authored by GPT-5.6, so two-eyes holds; oracle-design residual split to MM-BUG-KILN-00180)
 
 ## Observation
 
@@ -77,6 +77,60 @@ shares the number.
 
 ## Fix
 
-<unfixed — raised only>
+`190b8c66` (GPT-5.6) at `crates/ferrosintesis/src/sampler.rs`:
+
+- Dropped `"sax_bar_G#3_p.wav" => 208.95` from `sax_bar_p()` and
+  `"sax_bar_G#3_f.wav" => 209.52` from `sax_bar_f()`, so key 58 no longer selects
+  them. Both WAVs stay packaged for provenance.
+- Added `baritone_sax_key58_avoids_a_rough_source_zone`, which defines the missing
+  metric the Observation asked for: best adjacent-pitch-cycle correlation inside
+  the unlooped source body (0.30–0.50 s), swept ±5 samples around the period.
+  Deliberately distinct from the sustain-loop oracle — it measures 4–5 ms cycles
+  in the *source*, not a 50–130 ms envelope repeat in the *render*.
 
 ## Notes
+
+**Independent verification, 2026-07-30, claude-opus-5@high on trunk 73ec2f2**
+(worktree `D:\worktrees\midi-music\20260730-TSK-HUM-verify-close-sax-bugs`).
+Fix authored by GPT-5.6 — a different actor, so two-eyes holds.
+
+**The diagnostic first work item this bug asked for is done, and the answer is
+decisive.** Restoring the two G#3 zones and applying the new metric to every zone
+in both baritone banks: `sax_bar_G#3_f.wav` measures **0.77865** adjacent-cycle
+correlation. Every other zone in either bank spans 0.99296–0.99967. That take is
+genuinely broken up cycle-to-cycle — an objective correlate for Arthur's
+"fartiness", localized to exactly the key he named.
+
+**The original observation is addressed at the reported key.** Key 58 (f0 233.08
+Hz) selected root 208.95 Hz at velocity 72 and 209.52 Hz at velocity 110 — the
+rough take at both. With the zones removed it selects 263.75 Hz (0.99753) and
+261.13 Hz (0.99821). The reported velocities 72 and 110 are both covered by the
+new test.
+
+**Regression genuinely fails before / passes after.** Restoring only the two zone
+lines fails the test: "GM67 key 58 velocity 72: selected 208.95 Hz source has only
+0.9948 adjacent-cycle correlation". Removed again, it passes.
+
+**Sequencing note (not a defect).** This bug's Observation reasoned that the
+MM-BUG-KILN-00176 fix "cannot have affected key 58" because grain motion was gated
+on `key >= 68`. MM-BUG-KILN-00177's fix landed first and removed that key gate, so
+key 58 now *does* render with grain motion. Verified directly by buffer
+comparison. That does not disturb this diagnosis — the roughness is in the source
+recording, upstream of any loop-reading strategy — but the Observation's reasoning
+is stale as written.
+
+**Residual, split to MM-BUG-KILN-00180.** The new test's 0.996 bar is fitted, not
+derived: five *healthy* shipping zones already sit below it (bar_p 82.52 / 103.47
+/ 130.04, bar_f 82.38 / 130.22), while the real defect was 0.779. The test passes
+only because it checks one key that happens to land above the bar. Also recorded
+there: removing both G#3 zones opens an 8.3-semitone gap (163.27 → 263.75 Hz) that
+nothing guards. Neither is what this bug was raised for, and neither is a shipped
+audio defect, so this ID closes and the residual stays tracked.
+
+**Gates green on the exact tree:** `cargo test --workspace --release` 842 passed
+/ 0 failed in `ferrosintesis` plus every sample crate green;
+`cargo clippy --workspace --all-targets -- -D warnings` clean;
+`cargo fmt --all -- --check` clean.
+
+Verification probes were temporary and are not committed; the tree was restored
+to 73ec2f2 and confirmed clean before the gate run.

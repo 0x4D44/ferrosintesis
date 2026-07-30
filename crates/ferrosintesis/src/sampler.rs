@@ -7896,17 +7896,27 @@ mod tests {
         }
     }
 
-    /// MM-BUG-KILN-00178 — key 58 must not select a recorded baritone zone
-    /// whose waveform breaks up from one fundamental cycle to the next.
+    /// MM-BUG-KILN-00178 / MM-BUG-KILN-00180 — no shipping baritone zone may
+    /// approach the rejected G#3 forte take's cycle-to-cycle breakup.
     ///
     /// This is deliberately not the sustain-loop oracle below: it compares
     /// adjacent 4–5 ms pitch cycles inside the unlooped source body, rather than
     /// looking for a repeating 50–130 ms spectral envelope in the rendered hold.
+    /// Census both runtime banks so changing a key or zone boundary cannot hide a
+    /// rough take. The rejected packaged take is the positive control; the bar is
+    /// one order of magnitude above the runtime population's median roughness,
+    /// rather than fitted between two individual recordings.
     #[test]
-    fn baritone_sax_key58_avoids_a_rough_source_zone() {
-        fn best_cycle_correlation(zone: &Zone) -> f64 {
-            let body = &zone.data[(0.30 * 44_100.0) as usize..(0.50 * 44_100.0) as usize];
-            let period = (44_100.0 / zone.root).round() as isize;
+    fn baritone_sax_bank_rejects_the_rough_source_population_outlier() {
+        struct Reading {
+            name: String,
+            correlation: f64,
+            shipping: bool,
+        }
+
+        fn best_cycle_correlation(data: &[f32], root: f32) -> f64 {
+            let body = &data[(0.30 * 44_100.0) as usize..(0.50 * 44_100.0) as usize];
+            let period = (44_100.0 / root).round() as isize;
             (-5..=5)
                 .map(|offset| {
                     let lag = (period + offset) as usize;
@@ -7923,18 +7933,75 @@ mod tests {
                 .expect("the lag sweep is non-empty")
         }
 
-        let f0 = crate::dsp::key_freq(58);
-        for vel in [72u8, 110] {
-            let zone = nearest(sax_bank(67, vel), f0);
-            let correlation = best_cycle_correlation(zone);
-            assert!(
-                correlation > 0.996,
-                "GM67 key 58 velocity {vel}: selected {root:.2} Hz source has only \
-                 {correlation:.4} adjacent-cycle correlation; the rough source body \
-                 is the measured 'fartiness'",
-                root = zone.root,
-            );
+        let mut readings = Vec::new();
+        for (layer, zones) in [("p", sax_bar_p()), ("f", sax_bar_f())] {
+            for zone in zones {
+                readings.push(Reading {
+                    name: format!("shipping {layer} {:.2} Hz", zone.root),
+                    correlation: best_cycle_correlation(&zone.data, zone.root),
+                    shipping: true,
+                });
+            }
         }
+        let mut shipping_roughness: Vec<f64> = readings
+            .iter()
+            .map(|reading| 1.0 - reading.correlation)
+            .collect();
+        shipping_roughness.sort_by(f64::total_cmp);
+        let middle = shipping_roughness.len() / 2;
+        let median_roughness = if shipping_roughness.len().is_multiple_of(2) {
+            (shipping_roughness[middle - 1] + shipping_roughness[middle]) / 2.0
+        } else {
+            shipping_roughness[middle]
+        };
+        let outlier_bar = 10.0 * median_roughness;
+
+        // MM-BUG-KILN-00178 kept both removed zones packaged for provenance. The
+        // soft layer is an ordinary healthy control; the forte layer is the
+        // measured breakup this population-relative classifier must reject.
+        for (name, root) in [
+            ("sax_bar_G#3_p.wav", 208.95f32),
+            ("sax_bar_G#3_f.wav", 209.52f32),
+        ] {
+            let data = parse_wav(embedded_wav(name));
+            readings.push(Reading {
+                name: name.to_owned(),
+                correlation: best_cycle_correlation(&data, root),
+                shipping: false,
+            });
+        }
+
+        let outliers: Vec<&Reading> = readings
+            .iter()
+            .filter(|reading| 1.0 - reading.correlation > outlier_bar)
+            .collect();
+        let census: Vec<String> = readings
+            .iter()
+            .map(|reading| {
+                format!(
+                    "{}={:.5}{}",
+                    reading.name,
+                    reading.correlation,
+                    if reading.shipping { " [shipping]" } else { "" }
+                )
+            })
+            .collect();
+        assert_eq!(
+            outliers.len(),
+            1,
+            "expected one baritone-sax population outlier beyond the median-relative \
+             roughness bar {outlier_bar:.5}; census: {census:?}"
+        );
+        assert_eq!(
+            outliers[0].name, "sax_bar_G#3_f.wav",
+            "the unique rough source must remain the rejected forte G#3 take; \
+             census: {census:?}"
+        );
+        assert!(
+            !outliers[0].shipping,
+            "the rejected rough G#3 forte take was restored to a runtime bank; \
+             census: {census:?}"
+        );
     }
 
     /// MM-BUG-KILN-00176 / MM-BUG-KILN-00177 — the baritone-sax hold must not

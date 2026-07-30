@@ -7942,8 +7942,8 @@ mod tests {
     ///
     /// Track the relative energy in eight harmonic bands, then compare
     /// correlation at the selected loop period (and twice it) with three
-    /// off-period decoy lags. The old single-slice reader produces a 0.962
-    /// excess peak; the phase-aligned multi-slice hold remains below 0.35.
+    /// off-period decoy lags. A single-slice positive control first proves the
+    /// metric can see the artifact; the moving-slice hold must then reduce it.
     #[test]
     fn baritone_sax_hold_does_not_expose_the_source_loop_period() {
         fn spectral_envelope_periodicity(signal: &[f32], sr: f32, f0: f32, lag_s: f32) -> f32 {
@@ -8031,7 +8031,8 @@ mod tests {
             let source_step = (f0 / zone.root) * 44_100.0 / sr;
             let loop_period_s = (loop_end - loop_start) as f32 / source_step / sr;
 
-            let mut voice = voices::make(67, key, vel, sr, 0x1760_0000 + key as u32, true);
+            let seed = 0x1760_0000 + key as u32;
+            let mut voice = voices::make(67, key, vel, sr, seed, true);
             assert_eq!(
                 voice.kind(),
                 "saxloop",
@@ -8043,11 +8044,30 @@ mod tests {
             let at_period = spectral_envelope_periodicity(hold, sr, f0, loop_period_s);
             let at_twice = spectral_envelope_periodicity(hold, sr, f0, 2.0 * loop_period_s);
             let exposed = at_period.max(at_twice);
+
+            let mut control =
+                SaxLoopVoice::new(zone, f0, vel, sr, sax_program_gain(67), seed, false)
+                    .expect("covered baritone-sax note must engage the single-slice control");
+            let mut control_rendered = vec![0.0; (1.35 * sr) as usize];
+            control.render(&mut control_rendered);
+            let control_hold = &control_rendered[(0.55 * sr) as usize..(1.30 * sr) as usize];
+            let control_at_period =
+                spectral_envelope_periodicity(control_hold, sr, f0, loop_period_s);
+            let control_at_twice =
+                spectral_envelope_periodicity(control_hold, sr, f0, 2.0 * loop_period_s);
+            let control_exposed = control_at_period.max(control_at_twice);
             assert!(
-                exposed < 0.40,
+                control_exposed > 0.40,
+                "GM67 key {key} velocity {vel}: the single-slice positive control did not \
+                 expose the {loop_period_s:.4}s source loop (excess {control_exposed:.3}; \
+                 1x {control_at_period:.3}, 2x {control_at_twice:.3})"
+            );
+            assert!(
+                exposed < 0.65 * control_exposed,
                 "GM67 key {key} velocity {vel}: spectral-envelope correlation excess \
                  {exposed:.3} exposes the {loop_period_s:.4}s source loop \
-                 (1x {at_period:.3}, 2x {at_twice:.3})"
+                 (1x {at_period:.3}, 2x {at_twice:.3}) versus single-slice control \
+                 {control_exposed:.3}"
             );
 
             let frame_len = (0.02 * sr) as usize;

@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** crates/render-catalog / encoder preflight
 - **Raised:** 2026-07-31
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260731T224022Z-p70228-n873410000-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00010-run-fix-20260731T224022Z-p70228-n873410000-c1
+- **Owner base:** c2ed18905edcb15910edef26d58c26fe39784c41
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-31T22:40:22Z
+- **Owner until:** 2026-08-01T00:40:22Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

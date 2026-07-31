@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00011 — Encoder subprocesses can hang the catalog indefinitely
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/render-catalog / encoder process control
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T225122Z-p12404-n037798400-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00011-run-fix-20260731T225122Z-p12404-n037798400-c1
-- **Owner base:** 46b928b33d112360a9bf4e4129466d547e13f85d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T22:51:22Z
-- **Owner until:** 2026-08-01T00:51:22Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review)
+- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review) -> Fixed (2026-07-31T23:01:01Z, deltic:auto role=fix run=fix-20260731T225122Z-p12404-n037798400-c1 branch=task/bug-MM-BUG-CRUCIBLE-00011-run-fix-20260731T225122Z-p12404-n037798400-c1 code=cc0c78d6186412819e8614b39620356abe0d1719 gate=manual)
 
 ## Observation
 

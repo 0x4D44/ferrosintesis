@@ -14,5 +14,5 @@ One track, 7:34, D aeolian, 124 bpm (ritardando from 6:58).
 | 5 | Limina | 576–832 | 4:38–6:42 | The widescreen.  Same chant, new ground (Bb C Dm Am F Gm Bb C), choir at full "ah" with the machine-certified descant; climax-guise bass (octave pops, 7 pitches/bar) ending in an octave pump; organ Leslie spin-up; palm-mute chug; 16th sequencer; bells, glass, the densest bar of the piece. |
 | 6 | Afterglow | 832–928 | 6:42–7:34 | The cut.  Drone, bell and heartbeat remain; the chant sings its cadence tail and finally lands on the tonic; one last bass slide home; the pad's filter closes; a final whispered "(veritas)". |
 
-The whispered text (lyric metas, original Latin): *sub rosa* / *in
+The whispered text (lyric metas, Latin written for this track): *sub rosa* / *in
 silentio* / *veritas dormit* / *sub rosa loquimur* / *(veritas)*.

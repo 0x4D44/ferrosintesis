@@ -264,8 +264,8 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
         // were read as a `kind`+`len` pair and `len` further bytes were swallowed,
         // desyncing the rest of the track (usually surfacing as `UnexpectedEof`).
         // SMF 1.0 says meta/SysEx cancel running status, so continuing it is
-        // strictly malformed — but sequencers emit such files and ferrosintesis
-        // plays any GM file, so we carry the latch across instead of desyncing.
+        // strictly malformed — but sequencers emit such files, so we carry the
+        // latch across instead of desyncing.
         let mut running_status: u8 = 0;
         while track.pos < track.data.len() {
             tick = tick.wrapping_add(track.vlq()?);
@@ -1052,9 +1052,9 @@ mod tests {
     /// Running status must survive an interleaved META event.
     ///
     /// SMF 1.0 says meta/SysEx cancel running status, so a file that continues it
-    /// is strictly malformed — but real sequencers emit these, and ferrosintesis is
-    /// a faithful player of ANY GM file. The failure mode we are ruling out is not
-    /// a clean rejection but a SILENT DESYNC: with the system byte latched as the
+    /// is strictly malformed — but real sequencers emit these. The failure mode we
+    /// are ruling out is not a clean rejection but a SILENT DESYNC: with the system
+    /// byte latched as the
     /// running status, the following data bytes are read as a meta `kind` + `len`
     /// pair and `len` further bytes are swallowed, corrupting the rest of the track.
     #[test]

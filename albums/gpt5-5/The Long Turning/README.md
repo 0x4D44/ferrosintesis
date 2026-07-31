@@ -6,8 +6,9 @@ bells, distant choir, and percussion. The piece uses a long-form progressive
 folk-rock/classical collage vocabulary: recurring guitar cells, abrupt chapter
 changes, pastoral whistle themes, organ beds, bell returns, and driving percussion.
 
-This is original material. It is not a direct imitation or continuation of any
-living artist's catalog or any existing recording.
+The brief asks for a new composition rather than a direct imitation or
+continuation of a named catalog. That is a statement of intent, not a guarantee
+against incidental similarity.
 
 ## Layout
 

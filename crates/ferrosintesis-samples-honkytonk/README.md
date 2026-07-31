@@ -1,8 +1,7 @@
 # ferrosintesis-samples-honkytonk
 
-Embedded **CC0** FreePats honky-tonk player-piano samples — the **distinctive**
-option: a detuned, jangly, saloon/tack attack no properly-tuned grand or upright
-can make. Voices the **GM 3 Honky-tonk Piano default** (no CC0 select needed)
+Embedded **CC0** FreePats honky-tonk player-piano samples with a detuned,
+jangly, saloon/tack attack. Voices the **GM 3 Honky-tonk Piano default** (no CC0 select needed)
 in [ferrosintesis](https://github.com/0x4D44/ferrosintesis).
 
 9 pitch zones (C2–C6) × single velocity = mono 16-bit 44.1 kHz WAVs, embedded via

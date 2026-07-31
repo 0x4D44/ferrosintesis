@@ -8,7 +8,7 @@ late-ABBA ice (incantatory repeated notes, off-beat pushes, sequenced chill)
 wrapped in Enigma/Delerium weather — breath flutes, vowel choirs, echo
 throws; the **mainland** writes in McCartney warmth — melodic protagonist
 bass, piano pump, clavinet strut, suite-form pivots — layered with Oldfield
-patience. Original material throughout; the album writes in the *vocabulary*
+patience. The brief asks for new material; the album writes in the *vocabulary*
 of those idioms and quotes nothing.
 
 **Act One (1–5): the winter apart.** The two shore themes begin a tritone

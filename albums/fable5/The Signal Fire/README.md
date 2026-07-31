@@ -7,7 +7,7 @@ a filter that opens over minutes, the lift into major), *Tubular Bells III*
 (minor-key drive, bells over four-on-the-floor) and *The Millennium Bell*
 "Mastermind" (funk bass riff, wah guitar, Hammond organ).
 
-All material is original: one bass riff in three rhythmic guises (4/4
+The themes and riffs were generated for this piece: one bass riff in three rhythmic guises (4/4
 sixteenth funk, a 10/8 additive ostinato grouped 3+3+2+2, and an augmented
 half-time version), and three themes written over the same i–♭VII ground so
 they stack in counterpoint at the finale. See `ALBUM.md` for the
@@ -42,11 +42,12 @@ New-Item -ItemType Directory -Force target\renders | Out-Null
 .\target\release\ferrosintesis.exe "albums\fable5\The Signal Fire\midi\01 - The Signal Fire.mid" -o "target\renders\The Signal Fire.wav"
 ```
 
-Renders in under a minute; the WAV lands in `target/renders/` (git-ignored,
+The WAV lands in `target/renders/` (git-ignored,
 reproducible). The tagged Opus listening copy is git-ignored build output —
 run `python3 build.py` from the repo root to render it to
-`listening/Claude Fable 5/The Signal Fire/01 - The Signal Fire.opus`. The MIDI remains valid General MIDI, so any GM synth or a
-real sample library works too — 16 channels with mid-piece program changes
+`listening/Claude Fable 5/The Signal Fire/01 - The Signal Fire.opus`. Other
+GM-compatible instruments can load the MIDI, but voicing and supported
+extensions will differ. It uses 16 channels with mid-piece program changes
 (the winds channel is whistle, fiddle and flute in different movements; the
 bells channel is a tremolo mandolin until the peal).
 

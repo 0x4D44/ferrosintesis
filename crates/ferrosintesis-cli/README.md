@@ -2,8 +2,8 @@
 
 Command-line MIDI-to-WAV renderer for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis) — a General MIDI
-synthesizer with no SoundFont, no runtime asset loading, and no third-party code
-dependencies.
+synthesizer that needs no external SoundFont or runtime sound-bank lookup and
+has no third-party Rust code dependencies.
 
 The binary is called `ferrosintesis` (this crate exists because the library of that
 name has no `[[bin]]`).
@@ -13,9 +13,9 @@ cargo install ferrosintesis-cli
 ferrosintesis song.mid -o song.wav
 ```
 
-Rendering is offline and deterministic: same input, same build, same bytes. There is
-no realtime device access and no network or filesystem lookup for instruments — the
-sample banks are compiled in.
+Rendering is offline and deterministic for a fixed executable, input, and options.
+There is no realtime device access and no network or filesystem lookup for
+instruments — the sample banks are compiled in.
 
 ## Usage
 

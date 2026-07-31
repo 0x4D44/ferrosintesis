@@ -1,9 +1,8 @@
-//! A General MIDI synthesizer with zero third-party dependencies and no
-//! SoundFont. Instruments are physical and spectral models — Karplus-Strong
-//! strings, modal partial banks, lip-valve brass, a cathedral pipe organ —
-//! with their attacks reinforced by an embedded bank of CC0 recorded
-//! transients. Input is a Standard MIDI File; output is interleaved stereo
-//! `f32`.
+//! A pure-Rust General MIDI synthesizer. Its DSP code has no third-party Rust
+//! dependencies. Default builds embed separately licensed recorded material
+//! from first-party asset crates, so no external SoundFont or runtime sound-bank
+//! lookup is required. Input is a Standard MIDI File; output is interleaved
+//! stereo `f32`.
 //!
 //! Two surfaces:
 //!
@@ -48,8 +47,8 @@
 //! # }
 //! ```
 //!
-//! Renders are deterministic: the same MIDI, options and build produce
-//! byte-identical output. The default `embedded-samples` feature compiles
+//! Rendering is deterministic for a fixed executable, MIDI file, and options.
+//! The default `embedded-samples` feature compiles
 //! roughly 111 MiB of recorded audio — 1156 WAVs across twenty-five
 //! first-party asset crates — into the binary; `default-features = false`
 //! builds the fully modeled synth instead, a far smaller artifact with
@@ -62,12 +61,12 @@
 //! `NOTICE` file at the repository root is the index of what you must
 //! reproduce, and each asset crate packages the exact required text.
 //!
-//! GM coverage is broad: every melodic program has a real model behind it,
-//! and the GM sound-effects block 120–127 is fully voiced — 121–127 as
-//! dedicated models, and 120 (fret noise) as a round-robin bank of real
-//! finger-slide recordings, falling back to a modeled burst when samples are
-//! disabled. The README carries the program-by-program table; DESIGN.md in
-//! the repository carries the full design essay.
+//! All 128 GM melodic program numbers route to a synthesized voice family, but
+//! programs within a family may share an engine and support varies by program.
+//! The GM sound-effects block 120–127 also has explicit voice paths. This is not
+//! a claim of GM conformance or reference-module timbre. The README carries the
+//! program-by-program table; DESIGN.md in the repository carries the full design
+//! essay.
 
 #![forbid(unsafe_code)]
 // The public surface ships to docs.rs. An undocumented public item is a bug, and the

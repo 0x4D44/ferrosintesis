@@ -6,7 +6,7 @@ Visitors*' cold sequenced arpeggios; *Super Trouper*'s stacked-thirds
 choruses, off-beat piano octaves and the truck-driver gear change) and the
 **Crash Test Dummies** (*Mmm Mmm Mmm Mmm*'s low wordless baritone hum).
 
-All material is original. The trick that keeps the guests from fighting is
+The themes were generated for this piece. The trick that keeps the guests from fighting is
 **one theme with three machine-verified guises** — hummed low (CTD), stacked
 as a parallel-thirds chorus (ABBA), and unwound as an Oldfield guitar line —
 all reducing to the same strong-beat skeleton. The piece opens in E minor
@@ -43,12 +43,12 @@ New-Item -ItemType Directory -Force target\renders | Out-Null
 .\target\release\ferrosintesis.exe "albums\fable5\Winter Guests\midi\02 - Winter Guests, Part Two.mid" -o "target\renders\Winter Guests, Part Two.wav"
 ```
 
-Each part renders in well under a minute; the WAVs land in `target/renders/`
+The WAVs land in `target/renders/`
 (git-ignored, reproducible). The tagged Opus listening copies are git-ignored
 build output produced by `python3 build.py` (run from the repo root); they land under
-`listening/Claude Fable 5/Winter Guests/`. The MIDI is valid General MIDI, so any GM synth
-works too — though the vowel morph, portamento and aftertouch are
-ferrosintesis features a stock wavetable will ignore.
+`listening/Claude Fable 5/Winter Guests/`. Other GM-compatible instruments can
+load the MIDI, but voicing will differ and the vowel morph, portamento, and
+aftertouch include ferrosintesis-specific behaviour.
 
 *Honest caveat:* this machine has no audio output. Both the MIDI and the
 rendered audio were verified by measurement — 14 structural oracles per part

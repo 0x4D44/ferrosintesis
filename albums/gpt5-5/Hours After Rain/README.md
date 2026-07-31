@@ -1,11 +1,12 @@
 # Hours After Rain
-### an original cinematic-minimalist MIDI album in twelve parts · ~58 minutes
+### a cinematic-minimalist MIDI album in twelve parts · ~58 minutes
 
 Piano, strings, celesta, and sparse low percussion, shaped as an emotional journey
 through slow grief, rapid motion, pressure, introspection, tragedy, and release.
 
-This is original material using broad film-music and contemporary-classical
-vocabulary; it is not a direct imitation of any living composer or existing score.
+The brief uses broad film-music and contemporary-classical vocabulary and asks
+for a new composition rather than a direct imitation. That is a statement of
+intent, not a guarantee against incidental similarity.
 
 The MIDI files are in **`midi/`**, numbered as an album. The score sources are in
 **`tracks/`**, one entry point per track, with the shared generator in **`engine.py`**.

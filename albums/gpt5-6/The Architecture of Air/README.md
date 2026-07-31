@@ -1,6 +1,6 @@
 # The Architecture of Air
 
-One original 6:52 composition for the default ferrosintesis GM19 cathedral
+One 6:52 composition for the default ferrosintesis GM19 cathedral
 organ, with sparse choir, tower bells, and timpani. The piece is both music and
 an honest listening tour of the model: its technical demonstrations are built
 into the dramatic form.

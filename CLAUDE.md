@@ -4,17 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-`midi-music` is a collection of **original, generative instrumental albums**, each
-composed by a different language model and committed as reproducible source. It holds
+`midi-music` is a collection of **generative instrumental albums**, produced by
+language models and committed as reproducible source. It holds
 two kinds of code that meet at the MIDI file:
 
 1. **Composition engines** — per-album **Python** (standard-library only, except
    `albums/opus4-8/`, which needs `mido` — see its `requirements.txt`) that emit
    `.mid` files. One engine per album; the album *is* the code plus its rendered MIDI.
-2. **ferrosintesis** — a Rust MIDI-to-WAV synthesizer with **zero third-party
-   code dependencies**
-   (`crates/ferrosintesis/`) that renders those MIDIs to audio. It is voiced for the
-   *fable5* (Mike-Oldfield-idiom) albums but plays any GM file as a faithful player.
+2. **ferrosintesis** — a Rust MIDI-to-WAV synthesizer with no third-party Rust
+   code dependencies (`crates/ferrosintesis/`) that renders those MIDIs to
+   audio. Default builds also embed first-party asset crates containing recorded
+   material under separate licences. It accepts GM files beyond the catalog but
+   does not claim universal conformance or reference-module timbre.
 
 The pipeline is: `engine.py` → committed `.mid` → **ferrosintesis** → `.wav` →
 `ropusenc` → `listening/*.opus`. The committed `.mid` (every album) is the
@@ -117,9 +118,10 @@ are pinned to `ferrosintesis-cli`'s defaults by a parameter-parity test, and its
 
 ## ferrosintesis architecture
 
-Zero third-party code dependencies; `[profile.release]` uses LTO. The default
-`embedded-samples` Cargo feature compiles the two asset crates into the final binary;
-`default-features = false` builds the modeled-only synth without downloading them.
+No third-party Rust code dependencies; `[profile.release]` uses LTO. The default
+`embedded-samples` Cargo feature compiles the first-party asset crates into the
+final binary; `default-features = false` builds the modeled-only synth without
+downloading them.
 Module map (`src/`):
 
 - `midi.rs` — GM file parser → tempo map, events, markers.
@@ -142,8 +144,10 @@ Module map (`src/`):
   16-bit PCM writer with TPDF dither.
 - `testutil.rs` — pitch (Goertzel), RMS, click-detection helpers for the audio oracles.
 
-**ferrosintesis does not model every GM program**, but as of v0.10 the orchestral middle is
-filled: **brass 56–63** and **reeds 64–71** are now modelled voices (v0.9), joining the
+**ferrosintesis routes every GM melodic program number, but many programs share a
+family engine and support is not a GM-conformance claim.** As of v0.10 the
+orchestral middle is filled: **brass 56–63** and **reeds 64–71** are now
+modelled voices (v0.9), joining the
 orchestra hit 55, strings 48–51 and choir 52–54. GM sound effects 121–127 are dedicated
 voices since 2026.07.14 (sustained seashore/helicopter/applause/breath textures that follow
 key hold; telephone/bird/gunshot one-shots); fret noise 120 plays a sampled finger-slide
@@ -165,10 +169,11 @@ default-on with a diff-driven asset refresh.** Two regimes:
   anyone who renders after your change simply hears the improved synth, and the
   committed album source (the `.mid`) is unaffected.
 
-**The synth is a GENERIC GM player — never cull a feature just because no in-repo album
-uses it.** ferrosintesis is *voiced* for the fable5 albums but is a faithful player of **any**
-GM file, so "nothing under `albums/` authors this" is **not** evidence that a voice, kit,
-controller path or GM program is dead. The selectable channel-10 kits (PC 24 `Synth`,
+**The synth accepts GM files beyond the repository catalog — never cull a feature
+just because no in-repo album uses it.** Compatibility beyond the catalog does
+not imply universal GM conformance or reference-module timbre, but "nothing under
+`albums/` authors this" is **not** evidence that a voice, kit, controller path or
+GM program is dead. The selectable channel-10 kits (PC 24 `Synth`,
 PC 25 `V1` the original kit, PC 40 `Brush`), GM programs no album happens to reach, and
 controller handling are all part of the public instrument — kept for foreign MIDI files and
 for future pieces. Judge a feature by whether it is **correct and reachable**, not by an

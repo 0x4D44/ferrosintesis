@@ -8,9 +8,10 @@ guitars, a false ending and a hidden Morse-code message (*Amarok*), ambient
 electronic pools (*The Songs of Distant Earth*), and folk dances to finish
 (*Tubular Bells*' hornpipe, by way of a jig and a reel of my own).
 
-All of the material is original: the ostinato is 13 quavers (3+3+3+2+2), not
-Oldfield's 15, and every theme, riff and dance tune was written for this piece.
-See `ALBUM.md` for the movement-by-movement map.
+The themes, riffs, and dance tunes were generated for this piece. The 13-quaver
+ostinato (3+3+3+2+2) is deliberately different from Oldfield's 15. This process
+description is not a guarantee against incidental similarity. See `ALBUM.md`
+for the movement-by-movement map.
 
 ## Files
 
@@ -29,10 +30,8 @@ fixed per-track seed.
 
 ## Listening
 
-The best way to hear the piece is through **[ferrosintesis](../../../crates/ferrosintesis/README.md)**,
-the companion Rust synthesizer built for this album — modeled (not sampled)
-instruments: Karplus-Strong guitars and basses, hand-tuned tubular-bell
-partials, formant-filtered choir, drawbar organs, and a hall reverb.
+The project render uses **[ferrosintesis](../../../crates/ferrosintesis/README.md)**,
+the companion Rust synthesizer developed alongside this album.
 
 ```powershell
 cargo build --release -p ferrosintesis-cli
@@ -41,11 +40,12 @@ New-Item -ItemType Directory -Force target\renders | Out-Null
 .\target\release\ferrosintesis.exe "albums\fable5\Hollow Hill\midi\02 - Hollow Hill, Part Two.mid" -o "target\renders\Hollow Hill, Part Two.wav"
 ```
 
-Each part renders in ~10 seconds. The WAVs land in `target/renders/`
+The WAVs land in `target/renders/`
 (git-ignored — they are reproducible). The Opus listening copies are
 git-ignored build output too: run `python3 build.py` from the repo root to
-render them under `listening/Claude Fable 5/Hollow Hill/`. The MIDI also remains valid General MIDI, so any GM
-synth or a real orchestral library works too. Sixteen channels are used, with
+render them under `listening/Claude Fable 5/Hollow Hill/`. Other GM-compatible
+instruments can load the MIDI, but voicing and supported extensions will differ.
+Sixteen channels are used, with
 a handful of mid-piece program changes (the fretless bass and sweep pad only
 exist in the ocean movements, the mandolin borrows the timpani channel for
 the roll call, and so on).

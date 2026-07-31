@@ -8,7 +8,7 @@ and is answered. Cross-bred from four corners of the Oldfield catalogue:
 and *The Millennium Bell* "Mastermind" (the funk engine: riff bass, wah
 guitar, a Hammond whose Leslie spins up).
 
-All material is original. The piece's DNA is deliberately small: **one bass
+The themes and riffs were generated for this piece. Its DNA is deliberately small: **one bass
 riff in three rhythmic guises** (its degree skeleton `1 8 7 5 6 4 5 ♭7 1` is
 machine-checked identical across all three), and **three themes composed
 over the same Am|G ground** so the finale can stack them in counterpoint —

@@ -7,8 +7,9 @@ wind-and-whoosh transitions, and big moments made by SUBTRACTION —
 each part has a full drop where the machine cuts out and one voice
 sings.  A aeolian throughout.
 
-This is original material using Jarre-vocabulary gestures; it quotes
-no existing piece.
+The brief uses Jarre-vocabulary gestures and asks for a new composition
+rather than a reconstruction of a named piece. That intent is not a
+guarantee against incidental similarity.
 
 ## The machine-verified DNA (`material.py`)
 

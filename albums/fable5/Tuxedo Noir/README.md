@@ -6,11 +6,11 @@ velvet middle, a 7/8 chase, and the genre's signature colour — the
 minor-major-9 chord — saved for the final ring.  E aeolian, swung at
 128.
 
-**This is original material in the spy-score idiom; it quotes no
-existing piece** (the famous theme it tips its hat to is only an
-influence — every riff, vamp and stab here is newly composed, and the
+**The brief asks for a new piece in the spy-score idiom rather than a
+reconstruction of a named work.** The famous theme is a reference point;
+the project generated the riffs, vamp, and stabs for this piece, and the
 one chromatic note in the piece, the D# of the closing E-minor-major-9,
-is written raw and used once).
+is written raw and used once.
 
 ## The machine-verified DNA (`material.py`)
 

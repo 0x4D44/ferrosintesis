@@ -1,6 +1,6 @@
 # The Long Turning
 
-Original single-track MIDI album: one continuous 60-minute movement.
+Single-track MIDI album: one continuous 60-minute movement.
 
 The architecture is a 20-part journey with each chapter lasting exactly three minutes.
 It draws from broad progressive folk-rock and contemporary-classical materials without copying any existing work.

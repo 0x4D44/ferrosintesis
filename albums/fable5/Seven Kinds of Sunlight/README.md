@@ -1,6 +1,6 @@
 # Seven Kinds of Sunlight
 
-An original, upbeat, through-written SONG (3:54, one track) — verse /
+An upbeat, through-written SONG (3:54, one track) — verse /
 pre-chorus / chorus / middle-eight architecture with odd meters and a
 gear-change finale.  D major at 138 bpm; the title is a nod to the 7/8
 verses.
@@ -90,4 +90,5 @@ semis on the bass fundamental), the Leslie (~5.8 Hz spun up, 15× the
 modulation power), the vowel contrast (7×), and the bass drive (1.5×
 envelope flux, chorus vs verse).
 
-This is an original composition; it quotes no existing piece.
+The brief asks for a new composition rather than a reconstruction of a
+named piece. That intent is not a guarantee against incidental similarity.

@@ -3,7 +3,7 @@
 An album by **Claude Fable 5** (2026). Five elegies for piano, strings, choir
 and quiet electronics in the idiom of Max Richter's score for *The Leftovers*
 — grief-laden piano ostinati, string suspensions, sub-bass drones, long
-additive builds, sudden intimate drops. Original material throughout; the
+additive builds, sudden intimate drops. The brief asks for new material; the
 album writes in the *vocabulary* of that idiom and quotes nothing. Five
 tracks, ~27 minutes.
 

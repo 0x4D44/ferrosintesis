@@ -11,6 +11,13 @@ lives in the repository's git log and `wrk_journals/`.
 
 ## [Unreleased]
 
+### Changed
+
+- Public documentation now describes the synth's compatibility, dependencies,
+  determinism, and performance with explicit scope. It no longer claims faithful
+  playback of every GM file or implies that default builds contain no asset
+  dependencies.
+
 ## [0.21.56] - 2026-07-30
 
 ### Changed — BREAKING

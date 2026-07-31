@@ -1,6 +1,6 @@
 # Bright Matter
 
-Five original, deterministic MIDI compositions by **GPT-5.6**, written as a compact
+Five deterministic MIDI compositions by **GPT-5.6**, written as a compact
 progressive-electronic album. The shared harmonic engine is **vi–V–ii–I** — the
 requested **6–5–2–1** progression — but each track gives it a different physical
 identity: an orbit, a runway, gravity, delayed city light, and finally all four ideas
@@ -16,7 +16,7 @@ arrangements here are new.
 
 - `tracks/` — one composition module per track plus shared arrangement/oracle helpers.
 - `engine.py` and `material.py` — deterministic standard-library MIDI engine and the
-  album's four original hook cells.
+  album's four hook cells.
 - `midi/` — five finished Standard MIDI Files, committed as reproducible artifacts.
 - `verify.py` — score-side oracles for structure, dynamics, controllers, stereo
   discipline, exact 6–5–2–1 bass roots, and the four-hook finale.

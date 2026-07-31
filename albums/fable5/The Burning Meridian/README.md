@@ -6,8 +6,9 @@ organ + saw stack in octaves, fattened with a +6-cent fine-tune spread,
 doubled by choir and strings at the summits, because the synth version
 used for this album did not yet model brass.
 
-This is original material using broad film-music vocabulary; it is
-not a copy of any existing score.
+The brief uses broad film-music vocabulary and asks for a new composition
+rather than a reconstruction of a named score. That intent is not a
+guarantee against incidental similarity.
 
 ## The machine-verified DNA (`material.py`)
 

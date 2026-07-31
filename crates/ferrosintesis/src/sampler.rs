@@ -1,11 +1,10 @@
-//! LA-style sample layer — the Roland D-50 trick: a short PCM attack
-//! transient supplies the first ~200 ms (the bow bite, the breath chiff —
-//! exactly what synthesis fakes worst), then crossfades into the modeled
-//! sustain, which keeps all its expressive vibrato, scoop and dynamics.
+//! LA-style sample layer: a short PCM attack supplies the initial transient,
+//! then crossfades into the modeled sustain, which retains its vibrato, scoop,
+//! and dynamics.
 //!
-//! The transients are trimmed from VSCO 2 Community Edition (CC0 / public
-//! domain) sustains and embedded from two compile-time asset crates, so the tool
-//! remains a single self-contained executable. Each zone's root frequency was
+//! The recordings are embedded from first-party compile-time asset crates under
+//! the licences recorded in their `NOTICE` files, so runtime rendering needs no
+//! external sound bank. Each zone's root frequency was
 //! measured by autocorrelation, so repitching is cent-accurate.
 
 use crate::dsp::{key_freq, vel_amp, vel_amp_sensed, Rng};

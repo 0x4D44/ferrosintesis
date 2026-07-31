@@ -15,5 +15,5 @@ has proved that brilliance is already inside its own ranks.
 The ending is not a fade. Twelve notes release together. The instrument stops,
 but the architecture keeps the harmony for a little while longer.
 
-All musical material is original. GPT-5.6 composed the deterministic score for
+GPT-5.6 generated the deterministic score for
 the new default ferrosintesis cathedral organ.

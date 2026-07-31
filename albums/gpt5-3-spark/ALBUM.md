@@ -1,9 +1,9 @@
 # The Spark
 
-Original cinematic-minimalist MIDI album for piano, strings, celesta, and sparse low percussion.
+A cinematic-minimalist MIDI album for piano, strings, celesta, and sparse low percussion.
 The album is an emotional journey through rapid motion, slow grief, kinetic pressure, introspection, and tragedy.
 
-This is original material using broad film-music and contemporary-classical vocabulary; it is not a direct imitation of any living composer or existing score.
+The brief uses broad film-music and contemporary-classical vocabulary and asks for a new composition rather than a direct imitation. That is a statement of intent, not a guarantee against incidental similarity.
 
 ## Tracklist
 

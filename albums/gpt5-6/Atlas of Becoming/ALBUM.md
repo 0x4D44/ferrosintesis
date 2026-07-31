@@ -30,7 +30,7 @@ references.
    guide, which identifies GPT-5.5 as the flagship; GPT-5.6 remains a preview rather
    than a claimed released milestone.
 9. **Black Glass Pursuit** — chromatic thirds, clipped guitar, vibraphone glints,
-   brass stabs, string engines, and large percussion drive an original spy-film chase.
+   brass stabs, string engines, and large percussion drive a spy-film chase.
 10. **The Library at the End of Weather** — chamber counterpoint inside an impossible
     library widens until pages become birds and the storm enters the reading room.
 11. **Clockwork Orchard** — imitative lines are colonized by clocks and mechanical

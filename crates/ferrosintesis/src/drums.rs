@@ -1672,8 +1672,8 @@ fn make_uncorrected(
     }
     // GM2 extended percussion (keys 27–34, 83–87): alias each to its nearest
     // modeled voice instead of the generic `_` tick (MM-BUG-KILN-00022).
-    // ferrosintesis is a faithful player of any GM file, so a foreign file using
-    // these keys should sound the instrument, not a toneless click. The in-repo
+    // A file using these keys should sound the named instrument, not a toneless
+    // click. The in-repo
     // albums never use them (program whitelists), so no committed render moves.
     // Applied AFTER the sampled-kit check (these keys are never sampled), so both
     // `--no-samples` and the default build gain. The surdos (86/87) have no

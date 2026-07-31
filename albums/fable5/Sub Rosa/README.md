@@ -1,13 +1,13 @@
 # Sub Rosa
 
-An original single-track instrumental (7:34) in the **Enigma** idiom —
+A single-track instrumental (7:34) in the **Enigma** idiom —
 plainsong over a fast programmed groove (124 bpm), a melodic synth-bass
 hook, a shakuhachi that answers the choir, glass and whispers in a big
 dark room.  *Sub rosa*: "under the rose" — in secrecy.
 
-This is original material using Enigma-vocabulary gestures (chant +
-groove + breath); it quotes no existing piece.  The whispered Latin is
-original text, written into the MIDI lyric lane.
+The brief uses Enigma-vocabulary gestures (chant + groove + breath) and asks
+for a new composition rather than a reconstruction of a named piece. The
+whispered Latin was written for this track and stored in the MIDI lyric lane.
 
 ## Shape
 

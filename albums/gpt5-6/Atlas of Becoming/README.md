@@ -1,14 +1,15 @@
 # Atlas of Becoming
 
-Fourteen original, deterministic MIDI compositions by GPT-5.6. The set moves
+Fourteen deterministic MIDI compositions by GPT-5.6. The set moves
 from aquatic spectacle through contemporary fracture, biological evolution,
 linked-song form, machine history, cinematic pursuit, and five freely chosen
 worlds. Every melody, chord sequence, bass line, and rhythmic cell was written for
 this album.
 
 Named works in the brief are reference points for broad form, pacing, ensemble
-colour, or dramatic function only. The scores do not quote or reconstruct their
-melodies, signature riffs, lyrics, or arrangements.
+colour, or dramatic function. The brief asks for new material rather than
+deliberate quotation or reconstruction; that intent is not a guarantee against
+incidental similarity.
 
 ## Files
 

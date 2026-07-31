@@ -63,5 +63,6 @@ mono compatibility and clicks:
 python3 analyze.py "audio/01 - The Ninth Bell.wav"
 ```
 
-This is original material using Gabriel-Knight-vocabulary gestures; it
-quotes no existing piece.
+The brief uses Gabriel-Knight-vocabulary gestures and asks for a new
+composition rather than a reconstruction of a named piece. That intent is
+not a guarantee against incidental similarity.

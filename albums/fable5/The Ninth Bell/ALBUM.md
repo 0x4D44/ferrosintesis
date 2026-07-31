@@ -31,5 +31,6 @@ the home ground and the hardened climax ground, so it can run straight
 through the peak. The theme ends hanging on the second degree, wanting the
 tonic — and only the ninth bell grants it.
 
-This is original material using Gabriel-Knight-vocabulary gestures (Robert
-Holmes' dark-cathedral idiom); it quotes no existing piece.
+The brief uses Gabriel-Knight-vocabulary gestures (Robert Holmes'
+dark-cathedral idiom) and asks for a new composition rather than a
+reconstruction of a named piece.

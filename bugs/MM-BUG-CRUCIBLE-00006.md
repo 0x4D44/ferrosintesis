@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00006 — Realtime voice buckets allocate above 64 same-channel voices
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / realtime renderer
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T065132Z-p82136-n128071600-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00006-run-fix-20260731T065132Z-p82136-n128071600-c1
-- **Owner base:** 4866778d4d0744daca4ad50d7fe0b941ffed72dc
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T06:51:32Z
-- **Owner until:** 2026-07-31T08:51:32Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-07-31T07:25:23Z, deltic:auto role=fix run=fix-20260731T065132Z-p82136-n128071600-c1 branch=task/bug-MM-BUG-CRUCIBLE-00006-run-fix-20260731T065132Z-p82136-n128071600-c1 code=c439884297e9e388ae9da988ad253036bc245d2b gate=manual)
 
 ## Observation
 

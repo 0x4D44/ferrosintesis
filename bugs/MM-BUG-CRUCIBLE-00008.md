@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00008 — Catalog MIDI overlap oracle misses cross-track, equal-tick, and unbalanced ambiguity
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/render-catalog / MIDI overlap oracle
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T220807Z-p75660-n943457900-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00008-run-fix-20260731T220807Z-p75660-n943457900-c1
-- **Owner base:** 4f3dd3bb567e62dc8e15aaa581026cdb7f6d5a00
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T22:08:07Z
-- **Owner until:** 2026-08-01T00:08:07Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review)
+- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review) -> Fixed (2026-07-31T22:29:17Z, deltic:auto role=fix run=fix-20260731T220807Z-p75660-n943457900-c1 branch=task/bug-MM-BUG-CRUCIBLE-00008-run-fix-20260731T220807Z-p75660-n943457900-c1 code=3fbe77f110af25a5473aacff01296acee93e40a6 gate=manual)
 
 ## Observation
 

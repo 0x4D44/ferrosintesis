@@ -477,39 +477,59 @@ fn find_repo_root(start: &Path) -> Result<PathBuf, String> {
     ))
 }
 
-fn sorted_midis(dir: &Path) -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = std::fs::read_dir(dir)
+type DirectoryEntries = Vec<Result<PathBuf, String>>;
+type DirectoryReader<'a> = dyn Fn(&Path) -> Result<DirectoryEntries, String> + 'a;
+
+fn read_directory_entries(dir: &Path) -> Result<DirectoryEntries, String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    Ok(entries
+        .map(|entry| {
+            entry
+                .map(|entry| entry.path())
+                .map_err(|e| format!("{}: {e}", dir.display()))
+        })
+        .collect())
+}
+
+fn directory_paths(dir: &Path, read_dir: &DirectoryReader<'_>) -> Result<Vec<PathBuf>, String> {
+    read_dir(dir)?.into_iter().collect()
+}
+
+fn sorted_midis(dir: &Path, read_dir: &DirectoryReader<'_>) -> Result<Vec<PathBuf>, String> {
+    let mut out: Vec<PathBuf> = directory_paths(dir, read_dir)?
         .into_iter()
-        .flatten()
-        .flatten()
-        .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|e| e == "mid"))
         .collect();
     out.sort();
-    out
+    Ok(out)
 }
 
-fn find_midis_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
+fn find_midis_recursive(
+    dir: &Path,
+    out: &mut Vec<PathBuf>,
+    read_dir: &DirectoryReader<'_>,
+) -> Result<(), String> {
+    for path in directory_paths(dir, read_dir)? {
         if path.is_dir() {
-            find_midis_recursive(&path, out);
+            find_midis_recursive(&path, out, read_dir)?;
         } else if path.extension().is_some_and(|e| e == "mid") {
             out.push(path);
         }
     }
+    Ok(())
 }
 
 /// Every catalog MIDI, in `ALBUMS` order. Errors if an album has no MIDIs, or if
 /// a `.mid` under `albums/` is owned by no album — both guards from the Python.
 /// (Like the Python, the unclaimed scan covers `albums/` only, not `demos/`.)
 fn discover(repo: &Path) -> Result<Vec<Track>, String> {
+    discover_with(repo, &read_directory_entries)
+}
+
+fn discover_with(repo: &Path, read_dir: &DirectoryReader<'_>) -> Result<Vec<Track>, String> {
     let mut tracks = Vec::new();
     for (i, (key, ..)) in ALBUMS.iter().enumerate() {
-        let midis = sorted_midis(&repo.join(key).join("midi"));
+        let midis = sorted_midis(&repo.join(key).join("midi"), read_dir)?;
         if midis.is_empty() {
             return Err(format!("album {key:?} has no MIDI files"));
         }
@@ -518,7 +538,7 @@ fn discover(repo: &Path) -> Result<Vec<Track>, String> {
 
     let claimed: BTreeSet<&Path> = tracks.iter().map(|t| t.midi.as_path()).collect();
     let mut under_albums = Vec::new();
-    find_midis_recursive(&repo.join("albums"), &mut under_albums);
+    find_midis_recursive(&repo.join("albums"), &mut under_albums, read_dir)?;
     let mut unclaimed: Vec<String> = under_albums
         .iter()
         .filter(|p| !claimed.contains(p.as_path()))
@@ -564,6 +584,13 @@ fn lyrics_for(midi: &Path) -> Result<Option<String>, String> {
 /// MIDI set, so a partial `--album`/`--only-list` run cannot mistake a
 /// not-selected track's sidecar for an orphan.
 fn validate_lyrics_sidecars(all: &[Track]) -> Result<(), String> {
+    validate_lyrics_sidecars_with(all, &read_directory_entries)
+}
+
+fn validate_lyrics_sidecars_with(
+    all: &[Track],
+    read_dir: &DirectoryReader<'_>,
+) -> Result<(), String> {
     let mut stems_by_album: BTreeMap<PathBuf, BTreeSet<String>> = BTreeMap::new();
     for t in all {
         let album_dir = t
@@ -587,10 +614,8 @@ fn validate_lyrics_sidecars(all: &[Track]) -> Result<(), String> {
         if !lyrics_dir.is_dir() {
             continue;
         }
-        let mut orphans: Vec<String> = std::fs::read_dir(&lyrics_dir)
-            .map_err(|e| format!("{}: {e}", lyrics_dir.display()))?
-            .flatten()
-            .map(|e| e.path())
+        let mut orphans: Vec<String> = directory_paths(&lyrics_dir, read_dir)?
+            .into_iter()
             .filter(|p| p.extension().is_some_and(|e| e == "txt"))
             .filter_map(|p| {
                 let stem = p.file_stem()?.to_string_lossy().into_owned();
@@ -1102,6 +1127,66 @@ mod tests {
         let repo = repo();
         let all = discover(&repo).expect("discovery clean");
         validate_lyrics_sidecars(&all).expect("no orphan sidecars");
+    }
+
+    #[test]
+    fn discovery_rejects_an_entry_error_after_a_valid_entry() {
+        let repo = repo();
+        let target = repo.join(ALBUMS[0].0).join("midi");
+        let valid = read_directory_entries(&target)
+            .expect("open target MIDI directory")
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("read target MIDI directory")
+            .into_iter()
+            .next()
+            .expect("target album has a MIDI");
+        let reader = |dir: &Path| {
+            if dir == target {
+                Ok(vec![
+                    Ok(valid.clone()),
+                    Err(format!("{}: injected entry failure", dir.display())),
+                ])
+            } else {
+                read_directory_entries(dir)
+            }
+        };
+
+        let result = discover_with(&repo, &reader);
+        assert!(result.is_err(), "entry failure must not shrink discovery");
+        let error = result.err().expect("discovery error");
+        assert!(error.contains(&target.display().to_string()));
+        assert!(error.contains("injected entry failure"));
+    }
+
+    #[test]
+    fn lyrics_validation_rejects_an_entry_error_after_a_valid_entry() {
+        let repo = repo();
+        let all = discover(&repo).expect("discovery clean");
+        let valid = all
+            .iter()
+            .map(|track| lyrics_path_for(&track.midi))
+            .find(|path| path.is_file())
+            .expect("catalog has a lyrics sidecar");
+        let target = valid
+            .parent()
+            .expect("lyrics sidecar has parent")
+            .to_path_buf();
+        let reader = |dir: &Path| {
+            if dir == target {
+                Ok(vec![
+                    Ok(valid.clone()),
+                    Err(format!("{}: injected entry failure", dir.display())),
+                ])
+            } else {
+                read_directory_entries(dir)
+            }
+        };
+
+        let error = validate_lyrics_sidecars_with(&all, &reader)
+            .expect_err("entry failure must not shrink sidecar scan");
+        assert!(error.contains(&target.display().to_string()));
+        assert!(error.contains("injected entry failure"));
     }
 
     #[test]

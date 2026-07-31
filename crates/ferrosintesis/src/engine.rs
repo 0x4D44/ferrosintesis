@@ -2380,13 +2380,17 @@ impl EngineCore {
     /// oldest — and the longest-ringing voice is the most decayed). Stealing is
     /// a hard cut, so it can click under genuine overload; that is the safety
     /// valve's cost versus xruns/dropouts.
-    /// Reserve voice storage up front, so a NoteOn inside the audio callback never
-    /// grows the vector (MM-BUG-KILN-00082).
+    /// Reserve voice and per-channel index storage up front, so a NoteOn or the next
+    /// bucket rebuild inside the audio callback never grows a vector
+    /// (MM-BUG-KILN-00082, MM-BUG-CRUCIBLE-00006).
     ///
     /// Realtime-only: the offline renderer is unbounded by design and pays nothing for
     /// growth amortised over a whole render, so it does not call this.
     pub(crate) fn reserve_voices(&mut self, cap: usize) {
         self.active.reserve(cap.saturating_sub(self.active.len()));
+        for bucket in &mut self.voice_by_ch {
+            bucket.reserve(cap.saturating_sub(bucket.len()));
+        }
     }
 
     pub(crate) fn enforce_voice_cap(&mut self, cap: usize) {

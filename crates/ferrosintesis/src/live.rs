@@ -226,8 +226,9 @@ impl RealtimeSynth {
         sampler::prewarm();
     }
 
-    /// Reserve the voice storage a live session can need, so a NoteOn in the callback
-    /// does not grow a `Vec` on the audio thread (MM-BUG-KILN-00082).
+    /// Reserve the voice and per-channel index storage a live session can need, so a
+    /// NoteOn or the following bucket rebuild does not grow a `Vec` on the audio thread
+    /// (MM-BUG-KILN-00082, MM-BUG-CRUCIBLE-00006).
     ///
     /// Separate from [`prewarm_samples`](Self::prewarm_samples) because it is not about
     /// samples: a `--no-samples` build needs this just as much. Call both at setup.

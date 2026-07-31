@@ -465,6 +465,62 @@ mod tests {
         );
     }
 
+    #[test]
+    fn realtime_bucket_reservation_covers_the_single_channel_voice_cap() {
+        use crate::rtalloc::measure;
+
+        fn allocations_for_next_voice(existing: usize, channels: u8) -> usize {
+            let options = RealtimeOptions::default()
+                .with_sample_rate(SR)
+                .with_reverb(0.0)
+                .with_echo(0.0)
+                .with_samples(false);
+            let mut synth = RealtimeSynth::new(options);
+            synth.reserve_realtime_storage();
+            let mut buf = vec![0.0f32; SYNTH_BLOCK * 2];
+
+            for key in 0..existing {
+                synth.write_byte(0x90 | (key as u8 % channels));
+                synth.write_byte(key as u8);
+                synth.write_byte(80);
+                buf.fill(0.0);
+                synth.render_add(SYNTH_BLOCK, &mut buf).unwrap();
+            }
+            assert_eq!(synth.active_voice_count(), existing);
+
+            let (_, allocations) = measure(|| {
+                synth.write_byte(0x90);
+                synth.write_byte(existing as u8);
+                synth.write_byte(80);
+                buf.fill(0.0);
+                synth.render_add(SYNTH_BLOCK, &mut buf)
+            });
+            assert_eq!(synth.active_voice_count(), existing + 1);
+            allocations
+        }
+
+        // Match each crowded case against the SAME next key and total polyphony with
+        // prior voices spread across channels. Voice-model allocation counts vary by
+        // key, so comparing key 127 with key 63 would not isolate bucket growth.
+        let spread_65 = allocations_for_next_voice(64, 2);
+        let crowded_65 = allocations_for_next_voice(64, 1);
+        assert_eq!(
+            crowded_65, spread_65,
+            "same-channel voice 65 allocated {crowded_65} times versus the matched \
+             spread-channel control's {spread_65}; \
+             the same-channel index bucket grew inside the callback"
+        );
+
+        let spread_128 = allocations_for_next_voice(127, 3);
+        let crowded_128 = allocations_for_next_voice(127, 1);
+        assert_eq!(
+            crowded_128, spread_128,
+            "same-channel voice 128 allocated {crowded_128} times versus the matched \
+             spread-channel control's {spread_128}; \
+             setup did not reserve the bucket through the live cap"
+        );
+    }
+
     /// MM-BUG-KILN-00127: a prewarmed sampled drum NoteOn allocates only its
     /// engine-owned `Box<dyn Voice>`. Selecting the take itself must use direct
     /// bounded indexing, without formatting a file name or scanning the bank.

@@ -10,6 +10,7 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.07.31 — **Zero-length clamps orphan note-offs; collapse duplicate starts first** (`engine.py:_resolve_overlaps`).
 - 2026.07.30 — **A one-case bar hides fitting; census every value it would flag** (`sampler.rs:best_cycle_correlation`).
   - The retired `baritone_sax_key58_avoids_a_rough_source_zone` asserted `> 0.996` on the
     single zone key 58 selects. Applying its own metric to all 20 baritone zones: the real

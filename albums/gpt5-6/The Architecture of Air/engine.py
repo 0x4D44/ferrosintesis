@@ -275,28 +275,34 @@ class Score:
         return self.seconds_at(self.last_beat)
 
     def _resolve_overlaps(self) -> None:
-        for ch, ev in self.events.items():
-            on_ticks: dict[int, list[int]] = {}
-            off_idxs: dict[int, list[int]] = {}
-            for i, (tk, _prio, data) in enumerate(ev):
+        """Collapse simultaneous duplicate starts, then clamp overlaps."""
+        for ev in self.events.values():
+            on_indices: dict[int, list[int]] = {}
+            off_indices: dict[int, list[int]] = {}
+            for i, (_tick, _priority, data) in enumerate(ev):
                 status = data[0] & 0xF0
                 if status == 0x90 and data[2] > 0:
-                    on_ticks.setdefault(data[1], []).append(tk)
+                    on_indices.setdefault(data[1], []).append(i)
                 elif status == 0x80 or (status == 0x90 and data[2] == 0):
-                    off_idxs.setdefault(data[1], []).append(i)
-            for p, ons in on_ticks.items():
-                idxs = off_idxs.get(p, [])
-                if len(idxs) != len(ons):
+                    off_indices.setdefault(data[1], []).append(i)
+            remove: set[int] = set()
+            for pitch, ons in on_indices.items():
+                offs = off_indices.get(pitch, [])
+                if len(offs) != len(ons):
                     continue
-                ons.sort()
-                idxs.sort(key=lambda i: ev[i][0])
-                offs = [ev[i][0] for i in idxs]
-                for k in range(len(ons) - 1):
-                    if offs[k] > ons[k + 1]:
-                        offs[k] = ons[k + 1]
-                for i, tk in zip(idxs, offs):
-                    if ev[i][0] != tk:
-                        ev[i] = (tk, ev[i][1], ev[i][2])
+                ons.sort(key=lambda i: (ev[i][0], i))
+                offs.sort(key=lambda i: (ev[i][0], i))
+                kept: list[tuple[int, int]] = []
+                for pair in zip(ons, offs):
+                    if kept and ev[kept[-1][0]][0] == ev[pair[0]][0]:
+                        remove.update(kept.pop())
+                    kept.append(pair)
+                for (_on, off), (next_on, _next_off) in zip(kept, kept[1:]):
+                    next_tick = ev[next_on][0]
+                    if ev[off][0] > next_tick:
+                        ev[off] = (next_tick, ev[off][1], ev[off][2])
+            for i in sorted(remove, reverse=True):
+                del ev[i]
 
     def to_bytes(self, title: str | None = None, comment: str = "") -> bytes:
         self._resolve_overlaps()

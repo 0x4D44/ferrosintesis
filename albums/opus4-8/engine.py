@@ -179,24 +179,33 @@ class Score:
                                     value=int(max(0, min(127, value))), channel=ch)))
 
     def _resolve_overlaps(self):
-        """Truncate same-pitch overlaps before serializing the score."""
+        """Collapse simultaneous duplicate starts, then clamp overlaps."""
         for events in self.ev.values():
-            on_ticks = {}
+            on_indices = {}
             off_indices = {}
             for i, (tick, _order, msg) in enumerate(events):
                 if msg.type == 'note_on' and msg.velocity > 0:
-                    on_ticks.setdefault(msg.note, []).append(tick)
+                    on_indices.setdefault(msg.note, []).append(i)
                 elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
                     off_indices.setdefault(msg.note, []).append(i)
-            for pitch, starts in on_ticks.items():
-                indices = off_indices.get(pitch, [])
-                if len(indices) != len(starts):
+            remove = set()
+            for pitch, starts in on_indices.items():
+                ends = off_indices.get(pitch, [])
+                if len(ends) != len(starts):
                     continue
-                starts.sort()
-                indices.sort(key=lambda i: events[i][0])
-                for start, index in zip(starts[1:], indices):
-                    if events[index][0] > start:
-                        events[index] = (start, events[index][1], events[index][2])
+                starts.sort(key=lambda i: (events[i][0], i))
+                ends.sort(key=lambda i: (events[i][0], i))
+                kept = []
+                for pair in zip(starts, ends):
+                    if kept and events[kept[-1][0]][0] == events[pair[0]][0]:
+                        remove.update(kept.pop())
+                    kept.append(pair)
+                for (_start, end), (next_start, _next_end) in zip(kept, kept[1:]):
+                    next_tick = events[next_start][0]
+                    if events[end][0] > next_tick:
+                        events[end] = (next_tick, events[end][1], events[end][2])
+            for index in sorted(remove, reverse=True):
+                del events[index]
 
 
 # ----------------------------------------------------------------------------

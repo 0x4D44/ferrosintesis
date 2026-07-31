@@ -201,25 +201,34 @@ class Score:
         return self.seconds_at(self.last_beat)
 
     def _resolve_overlaps(self) -> None:
-        """Truncate same-pitch overlaps before serializing the score."""
+        """Collapse simultaneous duplicate starts, then clamp overlaps."""
         for ev in self.events.values():
-            on_ticks: dict[int, list[int]] = {}
+            on_indices: dict[int, list[int]] = {}
             off_indices: dict[int, list[int]] = {}
-            for i, (tick, _priority, data) in enumerate(ev):
+            for i, (_tick, _priority, data) in enumerate(ev):
                 status = data[0] & 0xF0
                 if status == 0x90 and data[2] > 0:
-                    on_ticks.setdefault(data[1], []).append(tick)
+                    on_indices.setdefault(data[1], []).append(i)
                 elif status == 0x80 or (status == 0x90 and data[2] == 0):
                     off_indices.setdefault(data[1], []).append(i)
-            for pitch, starts in on_ticks.items():
-                indices = off_indices.get(pitch, [])
-                if len(indices) != len(starts):
+            remove: set[int] = set()
+            for pitch, starts in on_indices.items():
+                ends = off_indices.get(pitch, [])
+                if len(ends) != len(starts):
                     continue
-                starts.sort()
-                indices.sort(key=lambda i: ev[i][0])
-                for start, index in zip(starts[1:], indices):
-                    if ev[index][0] > start:
-                        ev[index] = (start, ev[index][1], ev[index][2])
+                starts.sort(key=lambda i: (ev[i][0], i))
+                ends.sort(key=lambda i: (ev[i][0], i))
+                kept: list[tuple[int, int]] = []
+                for pair in zip(starts, ends):
+                    if kept and ev[kept[-1][0]][0] == ev[pair[0]][0]:
+                        remove.update(kept.pop())
+                    kept.append(pair)
+                for (_start, end), (next_start, _next_end) in zip(kept, kept[1:]):
+                    next_tick = ev[next_start][0]
+                    if ev[end][0] > next_tick:
+                        ev[end] = (next_tick, ev[end][1], ev[end][2])
+            for index in sorted(remove, reverse=True):
+                del ev[index]
 
     def write(self, path: Path, title: str, comment: str = "") -> None:
         self._resolve_overlaps()

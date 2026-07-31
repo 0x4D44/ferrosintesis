@@ -239,29 +239,35 @@ class Score:
         return self.seconds_at(self.last_beat)
 
     def _resolve_overlaps(self) -> None:
-        """Shorten same-pitch notes when a repeated note begins before its note-off."""
+        """Collapse simultaneous duplicate starts, then clamp overlaps."""
         for events in self.events.values():
             ons: dict[int, list[int]] = {}
             offs: dict[int, list[int]] = {}
             for index, (event_tick, _priority, data) in enumerate(events):
                 kind = data[0] & 0xF0
                 if kind == 0x90 and len(data) == 3 and data[2] > 0:
-                    ons.setdefault(data[1], []).append(event_tick)
+                    ons.setdefault(data[1], []).append(index)
                 elif kind == 0x80 or (kind == 0x90 and len(data) == 3 and data[2] == 0):
                     offs.setdefault(data[1], []).append(index)
+            remove: set[int] = set()
             for note, starts in ons.items():
-                indices = offs.get(note, [])
-                if len(indices) != len(starts):
+                ends = offs.get(note, [])
+                if len(ends) != len(starts):
                     continue
-                starts.sort()
-                indices.sort(key=lambda i: events[i][0])
-                end_ticks = [events[i][0] for i in indices]
-                for i in range(len(starts) - 1):
-                    if end_ticks[i] > starts[i + 1]:
-                        end_ticks[i] = starts[i + 1]
-                for index, end_tick in zip(indices, end_ticks):
-                    old = events[index]
-                    events[index] = (end_tick, old[1], old[2])
+                starts.sort(key=lambda i: (events[i][0], i))
+                ends.sort(key=lambda i: (events[i][0], i))
+                kept: list[tuple[int, int]] = []
+                for pair in zip(starts, ends):
+                    if kept and events[kept[-1][0]][0] == events[pair[0]][0]:
+                        remove.update(kept.pop())
+                    kept.append(pair)
+                for (_start, end), (next_start, _next_end) in zip(kept, kept[1:]):
+                    next_tick = events[next_start][0]
+                    if events[end][0] > next_tick:
+                        old = events[end]
+                        events[end] = (next_tick, old[1], old[2])
+            for index in sorted(remove, reverse=True):
+                del events[index]
 
     def to_bytes(self, title: str | None = None, comment: str = "") -> bytes:
         self._resolve_overlaps()

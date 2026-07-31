@@ -223,33 +223,40 @@ class Score:
         return self.seconds_at(self.last_beat)
 
     def _resolve_overlaps(self) -> None:
-        """Truncate same-pitch overlapping notes so the file is unambiguous
-        on any GM synth: whenever two notes on one (channel, pitch) overlap,
-        the earlier note's off is clamped to the later note's on.  At an
-        equal tick the note-off sorts before the note-on (priority 4 < 5),
-        so the re-strike is always clean.  Idempotent; called by write()."""
-        for ch, ev in self.events.items():
-            per_pitch_ons: dict[int, list[int]] = {}
+        """Make each same-channel, same-pitch lifecycle unambiguous.
+
+        Simultaneous duplicate starts cannot be addressed independently by a
+        later note-off, so keep the last-authored start and longest positional
+        pair. Clamp every remaining earlier off to the next distinct start.
+        Idempotent; called by write().
+        """
+        for ev in self.events.values():
+            on_indices: dict[int, list[int]] = {}
             off_indices: dict[int, list[int]] = {}
-            for i, (tick, prio, data) in enumerate(ev):
+            for i, (_tick, _priority, data) in enumerate(ev):
                 status = data[0] & 0xF0
                 if status == 0x90 and data[2] > 0:
-                    per_pitch_ons.setdefault(data[1], []).append(tick)
+                    on_indices.setdefault(data[1], []).append(i)
                 elif status == 0x80 or (status == 0x90 and data[2] == 0):
                     off_indices.setdefault(data[1], []).append(i)
-            for p, ons in per_pitch_ons.items():
-                idxs = off_indices.get(p, [])
-                if len(idxs) != len(ons):
+            remove: set[int] = set()
+            for pitch, ons in on_indices.items():
+                offs = off_indices.get(pitch, [])
+                if len(offs) != len(ons):
                     continue                    # unbalanced: leave untouched
-                ons.sort()
-                idxs.sort(key=lambda i: ev[i][0])
-                offs = [ev[i][0] for i in idxs]
-                for k in range(len(ons) - 1):
-                    if offs[k] > ons[k + 1]:
-                        offs[k] = ons[k + 1]    # clamp to the re-strike
-                for i, tick in zip(idxs, offs):
-                    if ev[i][0] != tick:
-                        ev[i] = (tick, ev[i][1], ev[i][2])
+                ons.sort(key=lambda i: (ev[i][0], i))
+                offs.sort(key=lambda i: (ev[i][0], i))
+                kept: list[tuple[int, int]] = []
+                for pair in zip(ons, offs):
+                    if kept and ev[kept[-1][0]][0] == ev[pair[0]][0]:
+                        remove.update(kept.pop())
+                    kept.append(pair)
+                for (_on, off), (next_on, _next_off) in zip(kept, kept[1:]):
+                    next_tick = ev[next_on][0]
+                    if ev[off][0] > next_tick:
+                        ev[off] = (next_tick, ev[off][1], ev[off][2])
+            for i in sorted(remove, reverse=True):
+                del ev[i]
 
     def write(self, path: Path, title: str, comment: str = "") -> None:
         self._resolve_overlaps()

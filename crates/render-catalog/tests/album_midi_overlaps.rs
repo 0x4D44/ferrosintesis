@@ -39,12 +39,42 @@ fn skip(bytes: &[u8], pos: &mut usize, len: usize) -> Result<(), String> {
     Ok(())
 }
 
-fn track_overlaps(track: &[u8]) -> Result<usize, String> {
+#[derive(Clone, Copy)]
+enum NoteKind {
+    On,
+    Off,
+}
+
+#[derive(Clone, Copy)]
+struct NoteEvent {
+    tick: u32,
+    ordinal: usize,
+    channel: u8,
+    key: u8,
+    kind: NoteKind,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct NoteAudit {
+    overlaps: usize,
+    unmatched_note_ons: usize,
+    unmatched_note_offs: usize,
+}
+
+impl NoteAudit {
+    fn is_clean(&self) -> bool {
+        self.overlaps == 0 && self.unmatched_note_ons == 0 && self.unmatched_note_offs == 0
+    }
+}
+
+fn track_note_events(
+    track: &[u8],
+    events: &mut Vec<NoteEvent>,
+    ordinal: &mut usize,
+) -> Result<(), String> {
     let mut pos = 0usize;
     let mut tick = 0u32;
     let mut running_status = None;
-    let mut ons: BTreeMap<(u8, u8), Vec<u32>> = BTreeMap::new();
-    let mut offs: BTreeMap<(u8, u8), Vec<u32>> = BTreeMap::new();
 
     while pos < track.len() {
         tick = tick
@@ -89,40 +119,34 @@ fn track_overlaps(track: &[u8]) -> Result<usize, String> {
                     continue;
                 }
                 let key = data[0] & 0x7f;
-                if kind == 0x90 && data[1] > 0 {
-                    ons.entry((channel, key)).or_default().push(tick);
+                let kind = if kind == 0x90 && data[1] > 0 {
+                    NoteKind::On
                 } else {
-                    offs.entry((channel, key)).or_default().push(tick);
-                }
+                    NoteKind::Off
+                };
+                events.push(NoteEvent {
+                    tick,
+                    ordinal: *ordinal,
+                    channel,
+                    key,
+                    kind,
+                });
+                *ordinal = ordinal
+                    .checked_add(1)
+                    .ok_or_else(|| "note event ordinal overflow".to_string())?;
             }
             _ => return Err(format!("unsupported status 0x{status:02x}")),
         }
     }
-
-    let mut overlaps = 0usize;
-    for (key, starts) in ons {
-        let Some(ends) = offs.get(&key) else {
-            continue;
-        };
-        if starts.len() != ends.len() {
-            continue;
-        }
-        overlaps += starts
-            .windows(2)
-            .zip(ends)
-            .filter(|(pair, end)| **end > pair[1])
-            .count();
-    }
-    Ok(overlaps)
+    Ok(())
 }
 
-fn midi_overlaps(path: &Path) -> Result<usize, String> {
-    let bytes = fs::read(path).map_err(|error| error.to_string())?;
+fn audit_midi_bytes(bytes: &[u8]) -> Result<NoteAudit, String> {
     if bytes.get(0..4) != Some(b"MThd") {
         return Err("missing MThd".to_string());
     }
     let mut pos = 4usize;
-    let header_len = be_u32(&bytes, &mut pos)? as usize;
+    let header_len = be_u32(bytes, &mut pos)? as usize;
     let header_end = 8usize
         .checked_add(header_len)
         .ok_or_else(|| "header length overflow".to_string())?;
@@ -138,23 +162,55 @@ fn midi_overlaps(path: &Path) -> Result<usize, String> {
     );
     pos = header_end;
 
-    let mut overlaps = 0usize;
+    let mut events = Vec::new();
+    let mut ordinal = 0usize;
     for _ in 0..track_count {
         if bytes.get(pos..pos + 4) != Some(b"MTrk") {
             return Err("missing MTrk".to_string());
         }
         pos += 4;
-        let len = be_u32(&bytes, &mut pos)? as usize;
+        let len = be_u32(bytes, &mut pos)? as usize;
         let end = pos
             .checked_add(len)
             .ok_or_else(|| "track length overflow".to_string())?;
         let track = bytes
             .get(pos..end)
             .ok_or_else(|| "track extends past file".to_string())?;
-        overlaps += track_overlaps(track)?;
+        track_note_events(track, &mut events, &mut ordinal)?;
         pos = end;
     }
-    Ok(overlaps)
+
+    events.sort_by_key(|event| (event.tick, event.ordinal));
+    let mut active: BTreeMap<(u8, u8), usize> = BTreeMap::new();
+    let mut audit = NoteAudit::default();
+    for event in events {
+        let note = (event.channel, event.key);
+        match event.kind {
+            NoteKind::On => {
+                let depth = active.entry(note).or_default();
+                if *depth > 0 {
+                    audit.overlaps += 1;
+                }
+                *depth += 1;
+            }
+            NoteKind::Off => match active.get_mut(&note) {
+                Some(depth) => {
+                    *depth -= 1;
+                    if *depth == 0 {
+                        active.remove(&note);
+                    }
+                }
+                None => audit.unmatched_note_offs += 1,
+            },
+        }
+    }
+    audit.unmatched_note_ons = active.values().sum();
+    Ok(audit)
+}
+
+fn midi_note_audit(path: &Path) -> Result<NoteAudit, String> {
+    let bytes = fs::read(path).map_err(|error| error.to_string())?;
+    audit_midi_bytes(&bytes)
 }
 
 fn find_midis(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -180,11 +236,14 @@ fn committed_album_midis_have_no_same_pitch_overlaps() {
 
     let failures: Vec<String> = midis
         .iter()
-        .filter_map(|path| match midi_overlaps(path) {
-            Ok(0) => None,
-            Ok(count) => Some(format!(
-                "{}: {count} same-pitch overlap(s)",
-                path.strip_prefix(repo).unwrap_or(path).display()
+        .filter_map(|path| match midi_note_audit(path) {
+            Ok(audit) if audit.is_clean() => None,
+            Ok(audit) => Some(format!(
+                "{}: {} same-pitch overlap(s), {} unmatched note-on(s), {} unmatched note-off(s)",
+                path.strip_prefix(repo).unwrap_or(path).display(),
+                audit.overlaps,
+                audit.unmatched_note_ons,
+                audit.unmatched_note_offs
             )),
             Err(error) => Some(format!(
                 "{}: {error}",
@@ -198,4 +257,82 @@ fn committed_album_midis_have_no_same_pitch_overlaps() {
         "committed album MIDIs must be unambiguous on oldest- and newest-note-off synths:\n{}",
         failures.join("\n")
     );
+}
+
+#[cfg(test)]
+mod controls {
+    use super::{audit_midi_bytes, NoteAudit};
+
+    fn midi_file(tracks: &[&[u8]]) -> Vec<u8> {
+        let mut midi = Vec::new();
+        midi.extend_from_slice(b"MThd");
+        midi.extend_from_slice(&6u32.to_be_bytes());
+        midi.extend_from_slice(&1u16.to_be_bytes());
+        midi.extend_from_slice(&(tracks.len() as u16).to_be_bytes());
+        midi.extend_from_slice(&480u16.to_be_bytes());
+        for events in tracks {
+            let mut track = events.to_vec();
+            track.extend_from_slice(&[0x00, 0xff, 0x2f, 0x00]);
+            midi.extend_from_slice(b"MTrk");
+            midi.extend_from_slice(&(track.len() as u32).to_be_bytes());
+            midi.extend_from_slice(&track);
+        }
+        midi
+    }
+
+    fn audit(tracks: &[&[u8]]) -> NoteAudit {
+        audit_midi_bytes(&midi_file(tracks)).expect("audit MIDI control")
+    }
+
+    #[test]
+    fn detects_overlap_split_across_tracks() {
+        let first = [0x00, 0x90, 60, 100, 0x14, 0x80, 60, 0];
+        let second = [0x0a, 0x90, 60, 100, 0x14, 0x80, 60, 0];
+        assert_eq!(
+            audit(&[&first, &second]),
+            NoteAudit {
+                overlaps: 1,
+                ..NoteAudit::default()
+            }
+        );
+    }
+
+    #[test]
+    fn same_tick_serialization_order_distinguishes_handoff_from_overlap() {
+        let off_before_on = [
+            0x00, 0x90, 60, 100, 0x0a, 0x80, 60, 0, 0x00, 0x90, 60, 100, 0x0a, 0x80, 60, 0,
+        ];
+        let on_before_off = [
+            0x00, 0x90, 60, 100, 0x0a, 0x90, 60, 100, 0x00, 0x80, 60, 0, 0x0a, 0x80, 60, 0,
+        ];
+        assert_eq!(audit(&[&off_before_on]), NoteAudit::default());
+        assert_eq!(
+            audit(&[&on_before_off]),
+            NoteAudit {
+                overlaps: 1,
+                ..NoteAudit::default()
+            }
+        );
+    }
+
+    #[test]
+    fn detects_overlap_when_note_lifecycle_is_unbalanced() {
+        let events = [0x00, 0x90, 60, 100, 0x0a, 0x90, 60, 100, 0x0a, 0x80, 60, 0];
+        assert_eq!(
+            audit(&[&events]),
+            NoteAudit {
+                overlaps: 1,
+                unmatched_note_ons: 1,
+                unmatched_note_offs: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn accepts_balanced_repeated_note() {
+        let events = [
+            0x00, 0x90, 60, 100, 0x0a, 0x80, 60, 0, 0x0a, 0x90, 60, 100, 0x0a, 0x80, 60, 0,
+        ];
+        assert_eq!(audit(&[&events]), NoteAudit::default());
+    }
 }

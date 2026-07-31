@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00001 — Published YDP notices omit named performer Dr. Mikhail Krishtal
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / licensing
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T061755Z-p76200-n609412900-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00001-run-fix-20260731T061755Z-p76200-n609412900-c1
-- **Owner base:** f9058bc31540cb4e4c332a57e44e3eef62a64d84
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T06:17:55Z
-- **Owner until:** 2026-07-31T08:17:55Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised via `deltic bugs new`)
+- **State history:** Open (2026-07-31, raised via `deltic bugs new`) -> Fixed (2026-07-31, deltic:auto role=fix run=fix-20260731T061755Z-p76200-n609412900-c1 branch=task/bug-MM-BUG-CRUCIBLE-00001-run-fix-20260731T061755Z-p76200-n609412900-c1 code=d305249e287da01fc300c8a3ff2f44ab6ca3ff57 gate=manual)
 
 ## Observation
 

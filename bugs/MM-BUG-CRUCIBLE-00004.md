@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00004 — Equal-tick tempo changes lose authored order
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / SMF tempo map
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T063651Z-p33684-n469525500-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00004-run-fix-20260731T063651Z-p33684-n469525500-c1
-- **Owner base:** 0a2eb58e3a9eafd24a64bae0fbbdc3bd87d54f22
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T06:36:51Z
-- **Owner until:** 2026-07-31T08:36:51Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-07-31, deltic:auto role=fix run=fix-20260731T063651Z-p33684-n469525500-c1 branch=task/bug-MM-BUG-CRUCIBLE-00004-run-fix-20260731T063651Z-p33684-n469525500-c1 code=2043bf1ce98b1321a874188389d5d9fb903a227b gate=manual)
 
 ## Observation
 

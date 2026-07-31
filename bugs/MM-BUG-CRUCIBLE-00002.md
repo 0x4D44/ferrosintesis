@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** YDP sample crate / provenance
 - **Raised:** 2026-07-31
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260731T072613Z-p65064-n373806300-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00002-run-fix-20260731T072613Z-p65064-n373806300-c1
+- **Owner base:** c917a93f3c8c1f7424f50b5e78b6d79768fccc57
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-31T07:26:13Z
+- **Owner until:** 2026-07-31T09:26:13Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

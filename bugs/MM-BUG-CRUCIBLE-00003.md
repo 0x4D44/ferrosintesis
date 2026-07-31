@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00003 — Malformed SMF Program Change can panic rendering
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / SMF parser and renderer
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T062701Z-p86820-n912298900-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00003-run-fix-20260731T062701Z-p86820-n912298900-c1
-- **Owner base:** 98a7d1fea6838576d10ff046140d1549828eab16
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T06:27:01Z
-- **Owner until:** 2026-07-31T08:27:01Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-07-31, deltic:auto role=fix run=fix-20260731T062701Z-p86820-n912298900-c1 branch=task/bug-MM-BUG-CRUCIBLE-00003-run-fix-20260731T062701Z-p86820-n912298900-c1 code=1f894e1e3d31dc3075231c6816843d14a8b5666a gate=manual)
 
 ## Observation
 

@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** ferrosintesis / SMF parser and renderer
 - **Raised:** 2026-07-31
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260731T062701Z-p86820-n912298900-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00003-run-fix-20260731T062701Z-p86820-n912298900-c1
+- **Owner base:** 98a7d1fea6838576d10ff046140d1549828eab16
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-31T06:27:01Z
+- **Owner until:** 2026-07-31T08:27:01Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

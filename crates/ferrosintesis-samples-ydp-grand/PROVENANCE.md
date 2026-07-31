@@ -18,7 +18,9 @@ a harder, more present hammer strike than the distant Salamander C5 capture.
 ## Source
 
 **FreePats YDP Grand Piano** (roberto@zenvoid.org, from the Zenph Studios / OLPC
-Yamaha Disklavier Pro reperformance). A modern Yamaha grand, close-mic'd via a
+Yamaha Disklavier Pro reperformance). The original samples were computer-performed
+and recorded for OLPC by Dr. Mikhail Krishtal, Director of Music Research and
+Production, and his Zenph Studios team. A modern Yamaha grand, close-mic'd via a
 robotic reperformance — clean and present.
 
 - URL: <https://freepats.zenvoid.org/Piano/YDP-GrandPiano/YDP-GrandPiano-SF2-20160804.tar.bz2>
@@ -28,7 +30,8 @@ robotic reperformance — clean and present.
   layer** ("piano layer 3") as a single-velocity multisample.
 - License: **CC BY 3.0** —
   <https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html>. Attribution
-  (Zenph/OLPC/FreePats) ships in `NOTICE`.
+  (Dr. Mikhail Krishtal and his Zenph Studios team / OLPC / FreePats) ships in
+  `NOTICE`.
 
 ## Selection & the single-velocity simplification
 

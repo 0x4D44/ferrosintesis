@@ -233,7 +233,7 @@ every licence here. The remaining fifteen banks are CC0 and require nothing.
 | `ferrosintesis-samples-musescore-grand` | MIT | GM 1 Bright Acoustic alternate (CC0=2, MF velocity tier) | MuseScore_General "Grand Piano", adaptation by S. Christian Collins, derived from FluidR3 by Frank Wen |
 | `ferrosintesis-samples-grand` | CC BY 3.0 | GM 0 grand (Yamaha C5) | "Salamander Grand Piano V3" by Alexander Holm |
 | `ferrosintesis-samples-dark-salamander` | CC BY 3.0 | GM 0 grand, darkened voicing | "Salamander Grand Piano V3" by Alexander Holm — **modified** (high-shelf EQ cut) |
-| `ferrosintesis-samples-ydp-grand` | CC BY 3.0 | GM 1 Bright Acoustic alternate (CC0=1, Disklavier Pro) | "YDP Grand Piano" by roberto@zenvoid.org for FreePats; underlying samples Zenph Studios / One Laptop Per Child |
+| `ferrosintesis-samples-ydp-grand` | CC BY 3.0 | GM 1 Bright Acoustic alternate (CC0=1, Disklavier Pro) | "YDP Grand Piano" by roberto@zenvoid.org for FreePats; underlying samples computer-performed and recorded for OLPC by Dr. Mikhail Krishtal and his Zenph Studios team |
 | `ferrosintesis-samples-gong` | CC BY 3.0 | tam-tam gong | "CdM Gamelan Sample Library" by Digitópia / Casa da Música |
 | `ferrosintesis-samples-headroom` | CC BY 4.0 | GM 0 grand (Yamaha C3) | "Headroom Piano" / "Intimate Piano" recorded by Bengt Nilsson; SFZ mapping by kinwie |
 | `ferrosintesis-samples-sax` | CC BY 4.0 AND CC BY 3.0 | GM 64-67 saxophones | MTG good-sounds dataset (Music Technology Group, Universitat Pompeu Fabra); "MTG Solo Saxophones" SFZ by kinwie; underlying Freesound good-sounds packs |

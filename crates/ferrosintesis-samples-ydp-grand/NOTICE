@@ -4,13 +4,16 @@ ferrosintesis-samples-ydp-grand
 The embedded WAV samples in this crate are extracted from the "YDP Grand Piano"
 SoundFont (the middle velocity layer of the "Grand Piano" preset) produced by
 roberto@zenvoid.org for the FreePats project, from the Zenph Studios / OLPC
-Yamaha Disklavier Pro reperformance samples.
+Yamaha Disklavier Pro reperformance samples. The original samples were
+computer-performed and recorded for OLPC by Dr. Mikhail Krishtal, Director of
+Music Research and Production, and his Zenph Studios team.
 
 Licensed under the **Creative Commons Attribution 3.0 (CC BY 3.0)** license:
 https://creativecommons.org/licenses/by/3.0/
 
 ATTRIBUTION (required by CC BY 3.0):
   - "YDP Grand Piano" SoundFont by roberto@zenvoid.org for the FreePats project.
-  - Underlying samples: Zenph Studios / One Laptop Per Child (OLPC), CC BY.
+  - Underlying samples: computer-performed and recorded for OLPC by
+    Dr. Mikhail Krishtal and his Zenph Studios team, CC BY.
 
 Source: https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html

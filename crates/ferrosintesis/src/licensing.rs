@@ -108,6 +108,8 @@ mod tests {
     const MS_BASIC_LICENSE: &str = include_str!(
         "upstream_licenses/ms_basic_license_d307a2bd899f15bf650efc3c2891211af5cb78b5.md"
     );
+    const YDP_GRAND_UPSTREAM_CREDITS: &str =
+        include_str!("upstream_licenses/ydp_grand_freepats_credits_20260731.md");
 
     /// The individual SPDX license ids joined by the subset of expressions these
     /// sample-crate manifests use.
@@ -277,6 +279,76 @@ mod tests {
             .map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' })
             .collect();
         separated.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    fn required_distributed_credits(evidence: &str) -> Vec<&str> {
+        let required: Vec<&str> = evidence
+            .lines()
+            .filter_map(|line| line.strip_prefix("- Required distributed credit: `"))
+            .filter_map(|credit| credit.strip_suffix('`'))
+            .collect();
+        assert!(
+            !required.is_empty(),
+            "retained upstream credit evidence contains no required distributed credits"
+        );
+        required
+    }
+
+    fn missing_required_credits<'a>(evidence: &'a str, document: &str) -> Vec<&'a str> {
+        let normalized_document = normalized_credit(document);
+        required_distributed_credits(evidence)
+            .into_iter()
+            .filter(|credit| !normalized_document.contains(&normalized_credit(credit)))
+            .collect()
+    }
+
+    #[test]
+    fn ydp_credit_oracle_rejects_notice_missing_krishtal() {
+        let gutted = r#"
+            "YDP Grand Piano" SoundFont by roberto@zenvoid.org for FreePats.
+            Underlying computer-performed samples by the Zenph Studios team,
+            recorded for OLPC.
+            Source: https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html
+        "#;
+        let missing = missing_required_credits(YDP_GRAND_UPSTREAM_CREDITS, gutted);
+        assert!(
+            missing.contains(&"Dr. Mikhail Krishtal"),
+            "the retained upstream evidence must reject a notice that keeps Roberto, \
+             the work title, the source URL, and the recording context but removes \
+             Dr. Mikhail Krishtal; missing={missing:?}"
+        );
+    }
+
+    #[test]
+    fn ydp_documents_reproduce_retained_upstream_credits() {
+        let ydp = crates_dir().join("ferrosintesis-samples-ydp-grand");
+        let parent = crates_dir().join("ferrosintesis");
+        let documents = [
+            (
+                "ferrosintesis-samples-ydp-grand/NOTICE",
+                read(&ydp.join("NOTICE")),
+            ),
+            (
+                "ferrosintesis-samples-ydp-grand/PROVENANCE.md",
+                read(&ydp.join("PROVENANCE.md")),
+            ),
+            ("ferrosintesis/NOTICE", read(&parent.join("NOTICE"))),
+            ("ferrosintesis/README.md", read(&parent.join("README.md"))),
+        ];
+
+        let incomplete: Vec<String> = documents
+            .into_iter()
+            .filter_map(|(name, text)| {
+                let missing = missing_required_credits(YDP_GRAND_UPSTREAM_CREDITS, &text);
+                (!missing.is_empty()).then(|| format!("{name}: {}", missing.join(", ")))
+            })
+            .collect();
+        assert!(
+            incomplete.is_empty(),
+            "published YDP credit documents omit identity or role fragments retained \
+             from the independent FreePats source record:\n  {}",
+            incomplete.join("\n  ")
+        );
     }
 
     fn ms_basic_required_acknowledgements() -> Vec<(&'static str, String)> {

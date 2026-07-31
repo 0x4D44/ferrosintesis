@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00005 — SMF event reads can cross declared track boundaries
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / SMF parser
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T064404Z-p95088-n720289300-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00005-run-fix-20260731T064404Z-p95088-n720289300-c1
-- **Owner base:** d29c2d0c070541a238ef66de2718fafd4c33c6ca
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T06:44:04Z
-- **Owner until:** 2026-07-31T08:44:04Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-07-31, deltic:auto role=fix run=fix-20260731T064404Z-p95088-n720289300-c1 branch=task/bug-MM-BUG-CRUCIBLE-00005-run-fix-20260731T064404Z-p95088-n720289300-c1 code=a6e209bce42fdf8ffec0295c027e3af2b7958a70 gate=manual)
 
 ## Observation
 

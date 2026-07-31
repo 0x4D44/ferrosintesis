@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00009 — Catalog discovery drops filesystem errors and can silently omit inputs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/render-catalog / discovery
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T223018Z-p26036-n683158100-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00009-run-fix-20260731T223018Z-p26036-n683158100-c1
-- **Owner base:** 763a2a987a873525b7d2e369870f25df3ef2fd3b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T22:30:18Z
-- **Owner until:** 2026-08-01T00:30:18Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review)
+- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review) -> Fixed (2026-07-31T22:39:18Z, deltic:auto role=fix run=fix-20260731T223018Z-p26036-n683158100-c1 branch=task/bug-MM-BUG-CRUCIBLE-00009-run-fix-20260731T223018Z-p26036-n683158100-c1 code=86e7ecfa6defc03554b65be69d85936337349f58 gate=manual)
 
 ## Observation
 

@@ -1439,6 +1439,46 @@ class ArchiveRefetchTest(unittest.TestCase):
         self.assertEqual(self.fetches, 2, "one initial fetch plus exactly one refetch")
 
 
+class YdpZoneProvenanceTest(unittest.TestCase):
+    """MM-BUG-CRUCIBLE-00002: selected roots and published spacing agree."""
+
+    STALE_SPACING_CLAIMS = (
+        "C/F# minor thirds",
+        "C/F# every minor third",
+    )
+
+    def assert_tritone_spacing(self, text):
+        intervals = [
+            upper - lower
+            for lower, upper in zip(
+                prepare.YDP_ZONE_MIDI,
+                prepare.YDP_ZONE_MIDI[1:],
+            )
+        ]
+        self.assertEqual(intervals, [6] * (len(prepare.YDP_ZONE_MIDI) - 1))
+        self.assertRegex(text, r"(?:tritone-spaced|every six semitones)")
+        for stale in self.STALE_SPACING_CLAIMS:
+            self.assertNotIn(stale, text)
+
+    def test_packaged_provenance_matches_the_selected_root_intervals(self):
+        path = os.path.join(
+            prepare.REPO_ROOT,
+            "crates",
+            "ferrosintesis-samples-ydp-grand",
+            "PROVENANCE.md",
+        )
+        with open(path, encoding="utf-8") as f:
+            self.assert_tritone_spacing(f.read())
+
+        self.assert_tritone_spacing(prepare._bake_ydp_grand.__doc__)
+
+    def test_stale_minor_third_claim_is_rejected(self):
+        with self.assertRaises(AssertionError):
+            self.assert_tritone_spacing(
+                "Selected C/F# minor thirds; the source layer is denser."
+            )
+
+
 class YdpArchiveCacheTest(unittest.TestCase):
     """MM-BUG-KILN-00141: YDP warm caches remain bound to the archive pin."""
 

@@ -877,7 +877,7 @@ YDP_URL = (
     "YDP-GrandPiano-SF2-20160804.tar.bz2"
 )
 YDP_SHA256 = "d243dc3e182a60df2a16e92828c1821cf3eb5748b45e2e2bdcfa9cf7af056026"
-# C/F# every minor third, C2..C6 (MIDI) — same zone grid as the other grands.
+# C/F-sharp roots every six semitones, C2..C6 (MIDI) — a tritone-spaced grid.
 YDP_ZONE_MIDI = [36, 42, 48, 54, 60, 66, 72, 78, 84]
 
 # The GM 3 default: FreePats Honky-tonk Piano (Frances Bacon player piano, Piotr Barcz),
@@ -4597,7 +4597,7 @@ def ensure_ydp_sf2(src):
 def _bake_ydp_grand(src):
     """Bake the YDP Grand's middle velocity layer as a single-velocity multisample
     (GM 1 CC0=1). SF2 raw-PCM: resolves the "piano layer 3" instrument by name,
-    extracts the C/F# minor-third zones (`YDP_ZONE_MIDI`) straight from the `smpl`
+    extracts the C/F-sharp roots every six semitones (`YDP_ZONE_MIDI`) from the `smpl`
     chunk (shdr start/end are FRAME offsets — no ffmpeg), keeps 1.5 s of body, and
     re-measures each root. Writes `ydpgrand_<pitch>.wav`; returns print rows."""
     out_dir = os.path.join(REPO_ROOT, "crates",

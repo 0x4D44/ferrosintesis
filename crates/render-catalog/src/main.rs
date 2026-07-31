@@ -18,6 +18,7 @@
 
 use ferrosintesis::offline::{self, Options, Song};
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -767,6 +768,42 @@ fn usage_error(msg: impl std::fmt::Display) -> ! {
     std::process::exit(2)
 }
 
+fn ropusenc_preflight(search_path: Option<&OsStr>) -> Result<(), String> {
+    let mut command = Command::new("ropusenc");
+    if let Some(path) = search_path {
+        command.env("PATH", path);
+    }
+    let output = command
+        .arg("--version")
+        .output()
+        .map_err(|e| format!("`ropusenc` not found on PATH: {e}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = stderr_tail(&output.stderr, 200);
+    let detail = if stderr.is_empty() {
+        output.status.to_string()
+    } else {
+        format!("{}; stderr: {stderr}", output.status)
+    };
+    Err(format!("`ropusenc --version` failed ({detail})"))
+}
+
+fn stderr_tail(stderr: &[u8], max_chars: usize) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let mut tail: Vec<char> = text.trim().chars().rev().take(max_chars).collect();
+    tail.reverse();
+    tail.into_iter().collect()
+}
+
+fn with_encoder_preflight<T>(
+    search_path: Option<&OsStr>,
+    next: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    ropusenc_preflight(search_path)?;
+    next()
+}
+
 fn main() {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let args = match parse_args(&argv) {
@@ -781,13 +818,9 @@ fn main() {
     let cwd = std::env::current_dir().unwrap_or_else(|e| fatal(e));
     let repo = find_repo_root(&cwd).unwrap_or_else(|e| fatal(e));
 
-    // Pre-flight: fail fast and clearly if the encoder is missing, rather than
-    // failing every track mid-run.
-    if Command::new("ropusenc").arg("--version").output().is_err() {
-        fatal("`ropusenc` not found on PATH (build it from the sibling `ropus` repo)");
-    }
-
-    let all = discover(&repo).unwrap_or_else(|e| fatal(e));
+    // Pre-flight: fail fast and clearly if the encoder is unusable, rather than
+    // failing every track after synthesis.
+    let all = with_encoder_preflight(None, || discover(&repo)).unwrap_or_else(|e| fatal(e));
 
     // Filter: --album narrows first, then --only-list intersects (as the Python did).
     let mut selected: Vec<&Track> = all.iter().collect();
@@ -906,6 +939,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
 
     fn repo() -> PathBuf {
         find_repo_root(&std::env::current_dir().unwrap()).expect("repo root")
@@ -1187,6 +1221,67 @@ mod tests {
             .expect_err("entry failure must not shrink sidecar scan");
         assert!(error.contains(&target.display().to_string()));
         assert!(error.contains("injected entry failure"));
+    }
+
+    #[test]
+    fn nonzero_encoder_preflight_stops_before_discovery() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "ferrosintesis-ropusenc-preflight-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&dir).expect("create fake encoder directory");
+
+        #[cfg(windows)]
+        let fake = {
+            let fake = dir.join("ropusenc.exe");
+            let system_root = std::env::var_os("SystemRoot").expect("SystemRoot");
+            std::fs::copy(Path::new(&system_root).join("System32/where.exe"), &fake)
+                .expect("copy failing executable");
+            fake
+        };
+        #[cfg(unix)]
+        let fake = {
+            use std::os::unix::fs::PermissionsExt;
+            let fake = dir.join("ropusenc");
+            std::fs::write(
+                &fake,
+                "#!/bin/sh\nprintf 'fake encoder failure\\n' >&2\nexit 23\n",
+            )
+            .expect("write failing executable");
+            let mut permissions = std::fs::metadata(&fake).unwrap().permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(&fake, permissions).unwrap();
+            fake
+        };
+
+        let old_path = std::env::var_os("PATH").unwrap_or_default();
+        let mut search_dirs = vec![dir.clone()];
+        search_dirs.extend(std::env::split_paths(&old_path));
+        let search_path = std::env::join_paths(search_dirs).expect("join fake encoder PATH");
+        let entered_discovery = Cell::new(false);
+        let result = with_encoder_preflight(Some(&search_path), || {
+            entered_discovery.set(true);
+            Ok(())
+        });
+
+        std::fs::remove_file(fake).expect("remove fake encoder");
+        std::fs::remove_dir(dir).expect("remove fake encoder directory");
+        let error = result.expect_err("nonzero --version must fail preflight");
+        assert!(error.contains("`ropusenc --version` failed"));
+        assert!(
+            !entered_discovery.get(),
+            "discovery must not run after failure"
+        );
+    }
+
+    #[test]
+    fn encoder_preflight_stderr_uses_a_bounded_tail() {
+        assert_eq!(stderr_tail("prefix-αβγδε".as_bytes(), 3), "γδε");
+        assert_eq!(stderr_tail(b"  short message\r\n", 200), "short message");
     }
 
     #[test]

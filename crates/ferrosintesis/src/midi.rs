@@ -247,10 +247,15 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
             return Err(MidiError::MissingTrack { index: track_index });
         }
         let len = c.u32()? as usize;
-        // Attacker-controlled track length; saturate rather than overflow on 32-bit.
-        // Unguarded, a wrapped `end` made a truncated track parse as an EMPTY SONG with
-        // no error at all — silently, in release. MM-BUG-KILN-00101.
-        let end = c.pos.saturating_add(len);
+        // Read the declared payload once, then parse through its own cursor. This makes
+        // the MTrk boundary structural for every fixed-size field, VLQ, meta payload and
+        // SysEx payload. A whole-file cursor only checked where an event STARTED, so a
+        // truncated event could borrow bytes from the next chunk and then rewind.
+        let track_data = c.bytes(len)?;
+        let mut track = Cursor {
+            data: track_data,
+            pos: 0,
+        };
         let mut tick: u32 = 0;
         // The running status is the last CHANNEL VOICE status byte (0x80..=0xEF).
         // A system byte — meta (0xFF) or SysEx (0xF0/0xF7) — applies to its own
@@ -262,10 +267,10 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
         // strictly malformed — but sequencers emit such files and ferrosintesis
         // plays any GM file, so we carry the latch across instead of desyncing.
         let mut running_status: u8 = 0;
-        while c.pos < end {
-            tick = tick.wrapping_add(c.vlq()?);
-            let status = if c.peek()? >= 0x80 {
-                let explicit = c.u8()?;
+        while track.pos < track.data.len() {
+            tick = tick.wrapping_add(track.vlq()?);
+            let status = if track.peek()? >= 0x80 {
+                let explicit = track.u8()?;
                 if (0x80..=0xEF).contains(&explicit) {
                     running_status = explicit;
                 }
@@ -277,9 +282,9 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
             };
             match status {
                 0xFF => {
-                    let kind = c.u8()?;
-                    let len = c.vlq()? as usize;
-                    let payload = c.bytes(len)?;
+                    let kind = track.u8()?;
+                    let len = track.vlq()? as usize;
+                    let payload = track.bytes(len)?;
                     match kind {
                         0x51 if len >= 3 => {
                             let us = ((payload[0] as u32) << 16)
@@ -297,8 +302,8 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                     }
                 }
                 0xF0 | 0xF7 => {
-                    let len = c.vlq()? as usize;
-                    let payload = c.bytes(len)?;
+                    let len = track.vlq()? as usize;
+                    let payload = track.bytes(len)?;
                     // In an SMF only F0 begins a SysEx message. Accept a complete
                     // single-event message; standalone F7 escape/continuation data
                     // and unterminated F0 packets are deliberately not recognized.
@@ -316,13 +321,13 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                     let kind = status & 0xF0;
                     match kind {
                         0x80 => {
-                            let key = c.channel_data()?;
-                            let _v = c.channel_data()?;
+                            let key = track.channel_data()?;
+                            let _v = track.channel_data()?;
                             raw.push((tick, seq, EvKind::NoteOff { ch, key }));
                         }
                         0x90 => {
-                            let key = c.channel_data()?;
-                            let vel = c.channel_data()?;
+                            let key = track.channel_data()?;
+                            let vel = track.channel_data()?;
                             raw.push((
                                 tick,
                                 seq,
@@ -334,28 +339,28 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                             ));
                         }
                         0xB0 => {
-                            let num = c.channel_data()?;
-                            let val = c.channel_data()?;
+                            let num = track.channel_data()?;
+                            let val = track.channel_data()?;
                             raw.push((tick, seq, EvKind::Cc { ch, num, val }));
                         }
                         0xC0 => {
-                            let prog = c.channel_data()?;
+                            let prog = track.channel_data()?;
                             raw.push((tick, seq, EvKind::Prog { ch, prog }));
                         }
                         0xD0 => {
-                            let val = c.channel_data()?;
+                            let val = track.channel_data()?;
                             raw.push((tick, seq, EvKind::Aftertouch { ch, val }));
                         }
                         0xE0 => {
-                            let lsb = c.channel_data()? as i32;
-                            let msb = c.channel_data()? as i32;
+                            let lsb = track.channel_data()? as i32;
+                            let msb = track.channel_data()? as i32;
                             let val = (msb << 7) | lsb; // 0..16383, centre 8192
                             let semis = (val - 8192) as f32 / 8192.0 * 2.0;
                             raw.push((tick, seq, EvKind::Bend { ch, semis }));
                         }
                         0xA0 => {
-                            let key = c.channel_data()?;
-                            let val = c.channel_data()?;
+                            let key = track.channel_data()?;
+                            let val = track.channel_data()?;
                             raw.push((tick, seq, EvKind::PolyAftertouch { ch, key, val }));
                         }
                         _ => return Err(MidiError::BadStatusByte { status }),
@@ -364,7 +369,6 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                 }
             }
         }
-        c.pos = end;
     }
 
     // tick -> seconds via the tempo map
@@ -635,6 +639,37 @@ mod tests {
         d.extend((tr.len() as u32).to_be_bytes());
         d.extend(&tr);
         d
+    }
+
+    #[test]
+    fn event_reads_cannot_cross_the_declared_track_boundary() {
+        let mut d = Vec::new();
+        d.extend(b"MThd");
+        d.extend(6u32.to_be_bytes());
+        d.extend(1u16.to_be_bytes()); // format 1
+        d.extend(2u16.to_be_bytes()); // 2 tracks
+        d.extend(480u16.to_be_bytes());
+
+        // Track 0 ends after the Program Change status, before its required data byte.
+        d.extend(b"MTrk");
+        d.extend(2u32.to_be_bytes());
+        d.extend([0x00, 0xC0]);
+
+        // A valid track follows immediately. The old whole-file cursor borrowed its
+        // leading 'M' as track 0's missing program byte, then rewound and parsed it again.
+        let track_1 = [
+            0x00, 0x90, 60, 100, // note on
+            0x60, 0x80, 60, 0, // note off
+            0x00, 0xFF, 0x2F, 0x00, // end of track
+        ];
+        d.extend(b"MTrk");
+        d.extend((track_1.len() as u32).to_be_bytes());
+        d.extend(track_1);
+
+        assert!(
+            matches!(parse(&d), Err(MidiError::UnexpectedEof)),
+            "an event truncated by its MTrk boundary borrowed bytes from the next chunk"
+        );
     }
 
     /// A GS "Use for Rhythm Part" SysEx track event (delta 0): part block `blk`

@@ -1,6 +1,6 @@
 # MM-BUG-CRUCIBLE-00003 — Malformed SMF Program Change can panic rendering
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / SMF parser and renderer
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-07-31, deltic:auto role=fix run=fix-20260731T062701Z-p86820-n912298900-c1 branch=task/bug-MM-BUG-CRUCIBLE-00003-run-fix-20260731T062701Z-p86820-n912298900-c1 code=1f894e1e3d31dc3075231c6816843d14a8b5666a gate=manual)
+- **State history:** Open (2026-07-31, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-07-31, deltic:auto role=fix run=fix-20260731T062701Z-p86820-n912298900-c1 branch=task/bug-MM-BUG-CRUCIBLE-00003-run-fix-20260731T062701Z-p86820-n912298900-c1 code=1f894e1e3d31dc3075231c6816843d14a8b5666a gate=manual) -> Closed (2026-07-31, claude-opus-5; independent two-eyes verification on trunk `ddd71e6`. The fixer was `deltic:auto role=fix` with GPT-5.6 as the authoring model on `1f894e1`; I did not fix it. ORIGINAL OBSERVATION re-run VERBATIM through the public CLI, not through a unit test: a format-0 file whose only track payload is the report's exact bytes `00 C0 FF 00 FF 2F 00`. Against a binary built at the pre-fix commit (`c86f850`, = `1f894e1~1`) it panics with `index out of bounds: the len is 128 but the index is 255` at `crates/ferrosintesis/src/engine.rs:1223` — the `PROGRAM_TRIM_DB` site the report named, reached with no NoteOn, exactly as reported. Against a binary from the fix-bearing tree the same file renders to completion (6.0 s tail, 0 voices, peak 0.00). TWO-SIDED at unit level as well: splicing the fix-bearing test modules onto the pre-fix source, all four new tests FAIL — `program_change_data_bytes_are_limited_to_seven_bits` reports `Prog { ch: 0, prog: 255 }`, and `offline::tests::malformed_program_change_renders_as_its_seven_bit_value` panics at `voices.rs:14261`, i.e. the SECOND index site (`VEL_LEVEL_EXP`) the report named, so both recorded crash sites are covered. ROOT CAUSE addressed at the right layer: the fix adds `Cursor::channel_data` and routes EVERY channel-voice data byte through it, so no out-of-range value reaches channel state — the report explicitly warned against clamping only at the array index, and the fix does not. `all_retained_channel_data_fields_are_limited_to_seven_bits` pins that wider policy across NoteOn/CC/pressure/bend/poly-pressure. Repo gate green on the exact tree: fmt, both clippy configurations with `-D warnings`, `cargo test -p ferrosintesis --no-default-features` (714 passed), `cargo test --workspace` (849 passed in the lib, 0 failures), and the Python sample-tool suite. No residual.)
 
 ## Observation
 

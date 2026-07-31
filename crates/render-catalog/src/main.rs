@@ -19,9 +19,11 @@
 use ferrosintesis::offline::{self, Options, Song};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 // ---------------------------------------------------------------------------
 // Constants — the catalog PINS its render profile rather than following the
@@ -59,6 +61,17 @@ const TP_CEILING: f32 = -4.5;
 const R128_REFERENCE_LUFS: f32 = -23.0;
 
 const DEFAULT_JOBS: usize = 6;
+
+/// Encoder discovery should be effectively instant. A deadline also prevents a
+/// broken executable from blocking all catalog discovery.
+const PREFLIGHT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Encoding is normally faster than playback, but catalog tracks vary widely in
+/// length. Thirty minutes leaves generous headroom while still bounding a stuck
+/// worker and the scoped thread join that owns it.
+const ENCODE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+const PROCESS_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 /// Album metadata, keyed by the directory that holds the `midi/` folder.
 /// `(dir key, album title, artist == composer == album-artist, genre)`
@@ -737,13 +750,14 @@ fn render_one(
         &opus.to_string_lossy(),
         &wav.path().to_string_lossy(),
     );
-    let out = match Command::new("ropusenc").args(&argv).output() {
+    let mut command = Command::new("ropusenc");
+    command.args(&argv);
+    let out = match output_with_timeout(&mut command, ENCODE_TIMEOUT, "ropusenc encode") {
         Ok(o) => o,
-        Err(e) => return fail(format!("ropusenc failed to start: {e}")),
+        Err(e) => return fail(e.to_string()),
     };
     if !out.status.success() || !opus.exists() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        let err: String = err.trim().chars().take(200).collect();
+        let err = stderr_tail(&out.stderr, 200);
         return fail(format!("ropusenc failed: {err}"));
     }
 
@@ -768,15 +782,132 @@ fn usage_error(msg: impl std::fmt::Display) -> ! {
     std::process::exit(2)
 }
 
+#[derive(Debug)]
+enum BoundedCommandError {
+    Spawn {
+        label: &'static str,
+        source: io::Error,
+    },
+    Monitor {
+        label: &'static str,
+        source: io::Error,
+    },
+    Terminate {
+        label: &'static str,
+        limit: Duration,
+        source: io::Error,
+    },
+    TimedOut {
+        label: &'static str,
+        limit: Duration,
+        /// Receiving an `Output` proves `wait_with_output` completed after the
+        /// kill, so the owned child has been reaped rather than detached.
+        output: Box<Output>,
+    },
+}
+
+impl std::fmt::Display for BoundedCommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Spawn { label, source } => write!(f, "{label} failed to start: {source}"),
+            Self::Monitor { label, source } => {
+                write!(f, "waiting for {label} failed: {source}")
+            }
+            Self::Terminate {
+                label,
+                limit,
+                source,
+            } => write!(
+                f,
+                "{label} exceeded {limit:?} and could not be killed: {source}"
+            ),
+            Self::TimedOut {
+                label,
+                limit,
+                output,
+            } => {
+                let stderr = stderr_tail(&output.stderr, 200);
+                if stderr.is_empty() {
+                    write!(
+                        f,
+                        "{label} timed out after {limit:?}; child killed and reaped"
+                    )
+                } else {
+                    write!(
+                        f,
+                        "{label} timed out after {limit:?}; child killed and reaped; stderr: {stderr}"
+                    )
+                }
+            }
+        }
+    }
+}
+
+/// Run a child with captured output and a hard deadline. On expiry this kills
+/// the owned process and waits for it before reporting the timeout. If the OS
+/// refuses the kill while the process is still live, return immediately rather
+/// than replacing one unbounded wait with another.
+fn output_with_timeout(
+    command: &mut Command,
+    limit: Duration,
+    label: &'static str,
+) -> Result<Output, BoundedCommandError> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|source| BoundedCommandError::Spawn { label, source })?;
+    let started = Instant::now();
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return child
+                    .wait_with_output()
+                    .map_err(|source| BoundedCommandError::Monitor { label, source });
+            }
+            Ok(None) if started.elapsed() >= limit => {
+                if let Err(source) = child.kill() {
+                    match child.try_wait() {
+                        Ok(Some(_)) => {}
+                        _ => {
+                            return Err(BoundedCommandError::Terminate {
+                                label,
+                                limit,
+                                source,
+                            });
+                        }
+                    }
+                }
+                let output = child
+                    .wait_with_output()
+                    .map_err(|source| BoundedCommandError::Monitor { label, source })?;
+                return Err(BoundedCommandError::TimedOut {
+                    label,
+                    limit,
+                    output: Box::new(output),
+                });
+            }
+            Ok(None) => {
+                let remaining = limit.saturating_sub(started.elapsed());
+                std::thread::sleep(PROCESS_POLL_INTERVAL.min(remaining));
+            }
+            Err(source) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(BoundedCommandError::Monitor { label, source });
+            }
+        }
+    }
+}
+
 fn ropusenc_preflight(search_path: Option<&OsStr>) -> Result<(), String> {
     let mut command = Command::new("ropusenc");
     if let Some(path) = search_path {
         command.env("PATH", path);
     }
-    let output = command
-        .arg("--version")
-        .output()
-        .map_err(|e| format!("`ropusenc` not found on PATH: {e}"))?;
+    command.arg("--version");
+    let output = output_with_timeout(&mut command, PREFLIGHT_TIMEOUT, "`ropusenc --version`")
+        .map_err(|e| e.to_string())?;
     if output.status.success() {
         return Ok(());
     }
@@ -1282,6 +1413,76 @@ mod tests {
     fn encoder_preflight_stderr_uses_a_bounded_tail() {
         assert_eq!(stderr_tail("prefix-αβγδε".as_bytes(), 3), "γδε");
         assert_eq!(stderr_tail(b"  short message\r\n", 200), "short message");
+    }
+
+    #[test]
+    fn hanging_fake_encoder_is_bounded_reaped_and_drops_temp_wav() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "ferrosintesis-hanging-encoder-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&dir).expect("create fake encoder directory");
+        let marker = dir.join("started");
+        let opus = dir.join("track.opus");
+        let wav_path;
+        let started = std::time::Instant::now();
+        let result = {
+            let wav = TempWav::new(&opus, 0);
+            wav_path = wav.path().to_path_buf();
+            std::fs::write(wav.path(), b"temporary wav").expect("create temporary WAV");
+
+            let mut fake_encoder = Command::new(std::env::current_exe().expect("test binary"));
+            fake_encoder
+                .args([
+                    "--exact",
+                    "tests::hanging_encoder_child",
+                    "--ignored",
+                    "--nocapture",
+                ])
+                .env("FERROSINTESIS_HANGING_ENCODER_MARKER", &marker);
+            output_with_timeout(
+                &mut fake_encoder,
+                std::time::Duration::from_secs(1),
+                "fake ropusenc",
+            )
+        };
+        let elapsed = started.elapsed();
+
+        let child_started = marker.exists();
+        let wav_cleaned = !wav_path.exists();
+        let _ = std::fs::remove_file(&marker);
+        if !wav_cleaned {
+            let _ = std::fs::remove_file(&wav_path);
+        }
+        std::fs::remove_dir(&dir).expect("remove fake encoder directory");
+
+        let error = result.expect_err("hanging encoder must time out");
+        let message = error.to_string();
+        let BoundedCommandError::TimedOut { output, .. } = error else {
+            panic!("hanging encoder returned the wrong failure");
+        };
+        assert!(child_started, "the fake encoder must enter its hang");
+        assert!(!output.status.success(), "the killed child must be reaped");
+        assert!(message.contains("fake ropusenc timed out after 1s"));
+        assert!(message.contains("child killed and reaped"));
+        assert!(elapsed < std::time::Duration::from_secs(5));
+        assert!(wav_cleaned, "the temporary WAV must be removed on timeout");
+    }
+
+    #[test]
+    #[ignore = "helper process for hanging_fake_encoder_is_bounded_reaped_and_drops_temp_wav"]
+    fn hanging_encoder_child() {
+        let Some(marker) = std::env::var_os("FERROSINTESIS_HANGING_ENCODER_MARKER") else {
+            return;
+        };
+        std::fs::write(marker, b"started").expect("write fake encoder marker");
+        loop {
+            std::thread::park_timeout(std::time::Duration::from_secs(60));
+        }
     }
 
     #[test]

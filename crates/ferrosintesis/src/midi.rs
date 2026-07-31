@@ -156,6 +156,15 @@ impl<'a> Cursor<'a> {
         Ok(b)
     }
 
+    /// One channel-voice data byte, normalized to MIDI's seven-bit domain.
+    ///
+    /// Keep this at the parser boundary so malformed SMFs cannot put values above 127
+    /// into engine state. Masking matches the established malformed-note-key policy
+    /// while preserving event alignment for the rest of the track.
+    fn channel_data(&mut self) -> Result<u8, MidiError> {
+        self.u8().map(|byte| byte & 0x7F)
+    }
+
     fn peek(&self) -> Result<u8, MidiError> {
         Ok(*self.data.get(self.pos).ok_or(MidiError::UnexpectedEof)?)
     }
@@ -307,13 +316,13 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                     let kind = status & 0xF0;
                     match kind {
                         0x80 => {
-                            let key = c.u8()? & 0x7F;
-                            let _v = c.u8()?;
+                            let key = c.channel_data()?;
+                            let _v = c.channel_data()?;
                             raw.push((tick, seq, EvKind::NoteOff { ch, key }));
                         }
                         0x90 => {
-                            let key = c.u8()? & 0x7F;
-                            let vel = c.u8()?;
+                            let key = c.channel_data()?;
+                            let vel = c.channel_data()?;
                             raw.push((
                                 tick,
                                 seq,
@@ -325,28 +334,28 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                             ));
                         }
                         0xB0 => {
-                            let num = c.u8()?;
-                            let val = c.u8()?;
+                            let num = c.channel_data()?;
+                            let val = c.channel_data()?;
                             raw.push((tick, seq, EvKind::Cc { ch, num, val }));
                         }
                         0xC0 => {
-                            let prog = c.u8()?;
+                            let prog = c.channel_data()?;
                             raw.push((tick, seq, EvKind::Prog { ch, prog }));
                         }
                         0xD0 => {
-                            let val = c.u8()?;
+                            let val = c.channel_data()?;
                             raw.push((tick, seq, EvKind::Aftertouch { ch, val }));
                         }
                         0xE0 => {
-                            let lsb = c.u8()? as i32;
-                            let msb = c.u8()? as i32;
+                            let lsb = c.channel_data()? as i32;
+                            let msb = c.channel_data()? as i32;
                             let val = (msb << 7) | lsb; // 0..16383, centre 8192
                             let semis = (val - 8192) as f32 / 8192.0 * 2.0;
                             raw.push((tick, seq, EvKind::Bend { ch, semis }));
                         }
                         0xA0 => {
-                            let key = c.u8()? & 0x7F;
-                            let val = c.u8()?;
+                            let key = c.channel_data()?;
+                            let val = c.channel_data()?;
                             raw.push((tick, seq, EvKind::PolyAftertouch { ch, key, val }));
                         }
                         _ => return Err(MidiError::BadStatusByte { status }),
@@ -539,6 +548,16 @@ mod tests {
         let song = parse(&d).unwrap();
         assert!(
             matches!(song.events[0].kind, EvKind::Prog { ch: 3, prog: 30 }),
+            "{:?}",
+            song.events[0].kind
+        );
+    }
+
+    #[test]
+    fn program_change_data_bytes_are_limited_to_seven_bits() {
+        let song = parse(&file_from_track(&[0x00, 0xC0, 0xFF])).unwrap();
+        assert!(
+            matches!(song.events[0].kind, EvKind::Prog { ch: 0, prog: 127 }),
             "{:?}",
             song.events[0].kind
         );
@@ -883,6 +902,57 @@ mod tests {
         assert!(matches!(
             song.events[2].kind,
             EvKind::NoteOff { ch: 0, key: 72 }
+        ));
+    }
+
+    #[test]
+    fn all_retained_channel_data_fields_are_limited_to_seven_bits() {
+        let song = parse(&file_from_track(&[
+            0x00, 0x90, 60, 228, // NoteOn velocity: 228 -> 100
+            0x00, 0xB0, 199, 255, // CC number/value: 199 -> 71, 255 -> 127
+            0x00, 0xD0, 192, // channel pressure: 192 -> 64
+            0x00, 0xE0, 255, 255, // bend bytes: both -> 127
+            0x00, 0xA0, 60, 192, // poly pressure: 192 -> 64
+            0x60, 0x80, 60, 255, // ignored NoteOff velocity is consumed consistently
+        ]))
+        .unwrap();
+
+        assert!(matches!(
+            song.events[0].kind,
+            EvKind::NoteOn {
+                ch: 0,
+                key: 60,
+                vel: 100
+            }
+        ));
+        assert!(matches!(
+            song.events[1].kind,
+            EvKind::Cc {
+                ch: 0,
+                num: 71,
+                val: 127
+            }
+        ));
+        assert!(matches!(
+            song.events[2].kind,
+            EvKind::Aftertouch { ch: 0, val: 64 }
+        ));
+        assert!(matches!(
+            song.events[3].kind,
+            EvKind::Bend { ch: 0, semis }
+                if (semis - 1.999_755_9).abs() < 1e-6
+        ));
+        assert!(matches!(
+            song.events[4].kind,
+            EvKind::PolyAftertouch {
+                ch: 0,
+                key: 60,
+                val: 64
+            }
+        ));
+        assert!(matches!(
+            song.events[5].kind,
+            EvKind::NoteOff { ch: 0, key: 60 }
         ));
     }
 

@@ -367,6 +367,30 @@ mod tests {
         }
     }
 
+    #[test]
+    fn malformed_program_change_renders_as_its_seven_bit_value() {
+        let malformed = parse(&file_from_track(&[
+            0x00, 0xC0, 0xFF, // malformed program 255
+            0x00, 0x90, 60, 100, // note on
+            0x60, 0x80, 60, 0, // note off
+        ]))
+        .unwrap();
+        let canonical = parse(&file_from_track(&[
+            0x00, 0xC0, 0x7F, // canonical program 127
+            0x00, 0x90, 60, 100, // note on
+            0x60, 0x80, 60, 0, // note off
+        ]))
+        .unwrap();
+        let opt = Options::default().with_samples(false).with_tail(0.2);
+
+        let (malformed_audio, malformed_stats) = render(&malformed, &opt);
+        let (canonical_audio, canonical_stats) = render(&canonical, &opt);
+
+        assert!(malformed_audio.iter().any(|sample| sample.abs() > 1e-6));
+        assert_eq!(malformed_audio, canonical_audio);
+        assert_eq!(malformed_stats, canonical_stats);
+    }
+
     /// MM-BUG-KILN-00035: a mid-file GM On stops the old voice before the next
     /// one, while Stats retain both allocations and the pre-reset audio peak.
     #[test]

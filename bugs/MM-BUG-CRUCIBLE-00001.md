@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** packaging / licensing
 - **Raised:** 2026-07-31
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260731T061755Z-p76200-n609412900-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00001-run-fix-20260731T061755Z-p76200-n609412900-c1
+- **Owner base:** f9058bc31540cb4e4c332a57e44e3eef62a64d84
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-31T06:17:55Z
+- **Owner until:** 2026-07-31T08:17:55Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

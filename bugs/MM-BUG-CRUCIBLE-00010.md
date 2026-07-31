@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00010 — Nonzero encoder preflight is accepted before expensive catalog synthesis
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/render-catalog / encoder preflight
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T224022Z-p70228-n873410000-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00010-run-fix-20260731T224022Z-p70228-n873410000-c1
-- **Owner base:** c2ed18905edcb15910edef26d58c26fe39784c41
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T22:40:22Z
-- **Owner until:** 2026-08-01T00:40:22Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review)
+- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review) -> Fixed (2026-07-31T22:50:21Z, deltic:auto role=fix run=fix-20260731T224022Z-p70228-n873410000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00010-run-fix-20260731T224022Z-p70228-n873410000-c1 code=a529c05e6c8f8a3af4a5d93c09c1e5eef6230e74 gate=manual)
 
 ## Observation
 

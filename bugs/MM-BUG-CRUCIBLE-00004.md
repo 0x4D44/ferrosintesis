@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** ferrosintesis / SMF tempo map
 - **Raised:** 2026-07-31
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260731T063651Z-p33684-n469525500-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00004-run-fix-20260731T063651Z-p33684-n469525500-c1
+- **Owner base:** 0a2eb58e3a9eafd24a64bae0fbbdc3bd87d54f22
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-31T06:36:51Z
+- **Owner until:** 2026-07-31T08:36:51Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

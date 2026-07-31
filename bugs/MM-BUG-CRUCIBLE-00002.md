@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00002 — Published YDP provenance calls tritone-spaced roots minor thirds
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** YDP sample crate / provenance
 - **Raised:** 2026-07-31
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260731T072613Z-p65064-n373806300-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00002-run-fix-20260731T072613Z-p65064-n373806300-c1
-- **Owner base:** c917a93f3c8c1f7424f50b5e78b6d79768fccc57
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-07-31T07:26:13Z
-- **Owner until:** 2026-07-31T09:26:13Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised via `deltic bugs new`)
+- **State history:** Open (2026-07-31, raised via `deltic bugs new`) -> Fixed (2026-07-31T07:33:20Z, deltic:auto role=fix run=fix-20260731T072613Z-p65064-n373806300-c1 branch=task/bug-MM-BUG-CRUCIBLE-00002-run-fix-20260731T072613Z-p65064-n373806300-c1 code=52be8b538f5678d5730d0edf746a32f4e0fd9d97 gate=manual)
 
 ## Observation
 

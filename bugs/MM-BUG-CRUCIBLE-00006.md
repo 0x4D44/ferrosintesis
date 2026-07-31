@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** ferrosintesis / realtime renderer
 - **Raised:** 2026-07-31
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260731T065132Z-p82136-n128071600-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00006-run-fix-20260731T065132Z-p82136-n128071600-c1
+- **Owner base:** 4866778d4d0744daca4ad50d7fe0b941ffed72dc
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-07-31T06:51:32Z
+- **Owner until:** 2026-07-31T08:51:32Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

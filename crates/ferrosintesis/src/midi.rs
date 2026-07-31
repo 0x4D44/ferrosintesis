@@ -368,7 +368,22 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
     }
 
     // tick -> seconds via the tempo map
-    tempos.sort_unstable();
+    // A track may author several Set-Tempo events at one tick. Preserve their encounter
+    // order while sorting by tick, then make the effective map explicit: the last
+    // authored value governs the following interval. Sorting the `(tick, tempo)` tuples
+    // used to break this by ordering equal-tick entries numerically by tempo instead.
+    tempos.sort_by_key(|&(tick, _)| tick);
+    let mut effective_tempos: Vec<(u32, u32)> = Vec::with_capacity(tempos.len());
+    for (tick, us) in tempos {
+        if let Some(last) = effective_tempos.last_mut() {
+            if last.0 == tick {
+                last.1 = us;
+                continue;
+            }
+        }
+        effective_tempos.push((tick, us));
+    }
+    let mut tempos = effective_tempos;
     if tempos.is_empty() {
         tempos.push((0, 500_000)); // MIDI default 120 bpm
     } else if tempos[0].0 > 0 {
@@ -473,6 +488,49 @@ mod tests {
             "{}",
             song.events[1].sec
         );
+    }
+
+    #[test]
+    fn equal_tick_tempo_changes_are_last_authored_wins() {
+        fn file_with_tempos(first: u32, second: u32) -> Vec<u8> {
+            let mut d = Vec::new();
+            d.extend(b"MThd");
+            d.extend(6u32.to_be_bytes());
+            d.extend(0u16.to_be_bytes());
+            d.extend(1u16.to_be_bytes());
+            d.extend(480u16.to_be_bytes());
+
+            let mut tr = Vec::new();
+            for us_per_quarter in [first, second] {
+                tr.extend([0x00, 0xFF, 0x51, 0x03]);
+                tr.extend(&us_per_quarter.to_be_bytes()[1..]);
+            }
+            tr.extend([0x00, 0x90, 60, 100]);
+            tr.extend([0x83, 0x60, 0x80, 60, 0]);
+            tr.extend([0x00, 0xFF, 0x2F, 0x00]);
+            d.extend(b"MTrk");
+            d.extend((tr.len() as u32).to_be_bytes());
+            d.extend(tr);
+            d
+        }
+
+        let cases = [
+            (1_000_000, 500_000, 120.0, 0.5),
+            (500_000, 1_000_000, 60.0, 1.0),
+        ];
+        for (first, second, expected_bpm, expected_seconds) in cases {
+            let song = parse(&file_with_tempos(first, second)).unwrap();
+            assert!(
+                (song.initial_bpm - expected_bpm).abs() < 1e-9,
+                "{first} then {second}: initial BPM {} != {expected_bpm}",
+                song.initial_bpm
+            );
+            assert!(
+                (song.seconds - expected_seconds).abs() < 1e-9,
+                "{first} then {second}: timeline {} s != {expected_seconds} s",
+                song.seconds
+            );
+        }
     }
 
     /// MM-BUG-KILN-00032: when the first Set-Tempo is at a tick > 0, the SMF

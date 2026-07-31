@@ -698,7 +698,7 @@ dependencies = [
 
 [[package]]
 name = "ferrosintesis"
-version = "0.21.56"
+version = "0.21.57"
 dependencies = [
  "ferrosintesis-samples-b1-upright",
  "ferrosintesis-samples-bass",
@@ -784,7 +784,7 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-honkytonk"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "ferrosintesis-samples-mandolin"
@@ -808,7 +808,7 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-rain"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "ferrosintesis-samples-sax"
@@ -828,7 +828,7 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-ydp-grand"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "find-msvc-tools"

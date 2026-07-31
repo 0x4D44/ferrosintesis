@@ -11,6 +11,20 @@ lives in the repository's git log and `wrk_journals/`.
 
 ## [Unreleased]
 
+## [0.21.57] - 2026-07-31
+
+### Fixed
+
+- MIDI parsing now masks channel-voice data bytes to seven bits before they reach
+  synthesizer state, so malformed program changes cannot index beyond the GM program table.
+- Truncated MIDI track events can no longer consume bytes from the following track chunk.
+- When several tempo changes share a tick, the last one authored now consistently wins in
+  both the tempo timeline and reported initial tempo.
+- Realtime rendering reserves each channel's full voice capacity up front, avoiding heap
+  growth when the active voices are concentrated on one channel.
+- The YDP Grand sample attribution retains the performer's credit and correctly documents
+  the source recording's tritone root spacing.
+
 ### Changed
 
 - Public documentation now describes the synth's compatibility, dependencies,

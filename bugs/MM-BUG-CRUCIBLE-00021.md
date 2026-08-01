@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** electric-bass samples / onset de-click
 - **Raised:** 2026-08-01
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260801T061614Z-p88600-n294560700-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00021-run-fix-20260801T061614Z-p88600-n294560700-c1
+- **Owner base:** 3e98f7cf9b347aed150c660a502104c44dc4a40b
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-01T06:16:14Z
+- **Owner until:** 2026-08-01T08:16:14Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

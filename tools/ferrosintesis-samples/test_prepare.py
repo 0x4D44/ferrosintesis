@@ -928,6 +928,42 @@ class PrepareSampleBankTests(unittest.TestCase):
             f"fade cap is not biting: new {new_peak:.4f} vs old {old_peak:.4f}",
         )
 
+    def test_frame_zero_onset_is_declicked_without_erasing_the_attack(self):
+        sr = prepare.OUT_SR
+        x = [
+            0.4 + 0.6 * math.sin(math.pi * 0.5 * min(i / 50.0, 1.0))
+            for i in range(sr)
+        ]
+        ordinary_step = max(abs(x[i] - x[i - 1]) for i in range(1, 88))
+
+        seg = prepare.trim_to_onset(x, sr, keep_s=0.9, fade_s=0.30)
+
+        initial_steps = [abs(seg[0])] + [
+            abs(seg[i] - seg[i - 1]) for i in range(1, 88)
+        ]
+        self.assertLessEqual(max(initial_steps), ordinary_step * 0.9 * 1.01)
+        self.assertGreater(max(abs(value) for value in seg[:88]), 0.85)
+
+    def test_committed_bass_bank_starts_with_continuous_pcm(self):
+        sample_dir = os.path.join(
+            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-bass", "samples"
+        )
+        paths = sorted(
+            os.path.join(sample_dir, name)
+            for name in os.listdir(sample_dir)
+            if name.endswith(".wav")
+        )
+        self.assertEqual(len(paths), 13)
+        for path in paths:
+            with self.subTest(sample=os.path.basename(path)):
+                samples, sr = prepare.read_wav(path)
+                window = min(len(samples), int(0.010 * sr))
+                ordinary_step = max(
+                    abs(samples[i] - samples[i - 1]) for i in range(1, window)
+                )
+                self.assertLessEqual(abs(samples[0]), ordinary_step)
+                self.assertLessEqual(abs(samples[0]), 1.0 / 32768.0)
+
     def test_fetch_is_atomic_on_short_transfer(self):
         with tempfile.TemporaryDirectory() as td:
             final = os.path.join(td, "sample.wav")

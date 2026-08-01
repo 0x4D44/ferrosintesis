@@ -10,6 +10,11 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.08.01 — **A zero-frame onset still needs a slope-bounded micro-fade** (`prepare.py:trim_to_onset`).
+  - Capping a fade to available lead-in preserves tight attacks, but leaves a full-scale
+    step when the source begins mid-wave. Choose the shortest fade whose steps fit the
+    source's ordinary early motion, capped at 2 ms, so the transient survives.
+
 - 2026.08.01 — **Archive extraction needs empty staging before attestation** (`prepare.py:rebuild_archive_cache`).
   - Overwriting a persistent extraction tree leaves removed or renamed archive members
     behind. Validate every selected member in a fresh directory before publishing any cache

@@ -2081,7 +2081,8 @@ def trim_to_onset(x, sr, keep_s, fade_s):
     """Cut `x` to its onset, de-click both ends, and peak-normalize.
 
     Returns the finished segment: PRE_S of lead-in, then `keep_s` of audio,
-    with a 2 ms fade-in and a `fade_s` squared fade-out, normalized to 0.9.
+    with an at-most 2 ms data-aware fade-in and a `fade_s` squared fade-out,
+    normalized to 0.9.
     """
     peak = max(abs(v) for v in x)
     # onset: first sample above 3% of peak
@@ -2097,14 +2098,37 @@ def trim_to_onset(x, sr, keep_s, fade_s):
     # capture. That is not hypothetical: many measured sources have their onset
     # inside 2 ms, worst among them the Martin steel takes (median onset 8
     # samples, 0.18 ms) which would lose their entire pick attack.
-    # Every source begins at near-silence (max |x[0]| over the bank is 0.015),
-    # so there is no step to de-click in the first place and shortening the
-    # fade cannot introduce one. Capping the fade at `lead` therefore fixes the
-    # tight-trim case and is exactly inert for sources with >= 2 ms of lead-in.
+    # Most sources begin at near-silence, so capping the fade at `lead` preserves
+    # their tight attacks. A few archive members begin on an already-moving wave,
+    # however, and `lead == 0` would publish that value as a NoteOn step. For those,
+    # select the shortest micro-fade whose steps fit within the source's ordinary
+    # first-2-ms motion. This reaches the untouched attack as early as its own slope
+    # permits instead of applying a fixed fade to every tightly trimmed source.
     # Pinned by test_fade_in_never_exceeds_available_lead_in and
     # test_fade_in_is_inert_when_lead_in_exceeds_the_window.
     lead = onset - start
     fin = min(int(0.002 * sr), lead)
+    if fin == 0 and seg and seg[0] != 0.0:
+        max_fin = min(int(0.002 * sr), len(seg) - 1)
+        if max_fin == 0:
+            seg[0] = 0.0
+        else:
+            ordinary_step = max(
+                abs(seg[i] - seg[i - 1]) for i in range(1, max_fin + 1)
+            )
+            fin = max_fin
+            for candidate in range(1, max_fin + 1):
+                previous = 0.0
+                acceptable = True
+                for i in range(candidate + 1):
+                    value = seg[i] * min(1.0, i / candidate)
+                    if abs(value - previous) > ordinary_step * (1.0 + 1e-12):
+                        acceptable = False
+                        break
+                    previous = value
+                if acceptable:
+                    fin = candidate
+                    break
     for i in range(min(fin, len(seg))):
         seg[i] *= i / fin
     fout = int(fade_s * sr)

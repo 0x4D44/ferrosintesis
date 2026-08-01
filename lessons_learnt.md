@@ -10,6 +10,11 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.08.01 — **Archive cache keys need source selectors, not just output hashes** (`prepare.py:cached_members_match`).
+  - A destination name and hash prove cached bytes stayed intact, but not that the current
+    recipe still selects the archive member that produced them. Bind the exact member map
+    into the manifest and require equality before warm reuse.
+
 - 2026.08.01 — **A bounded ring needs a captured head to bound each drain** (`ring.rs:drain_published`).
   - A `while pop()` callback can exceed the ring's capacity when the producer replenishes
     slots during the loop. Capture the published head once and leave later commands for

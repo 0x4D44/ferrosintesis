@@ -1375,6 +1375,9 @@ def member_manifest_path(src, url):
     return os.path.join(src, os.path.basename(url) + ".members.json")
 
 
+MEMBER_MANIFEST_VERSION = 2
+
+
 def cached_members_match(src, url, sha256, member_map):
     """Do the cached members provably come from the archive pinned at `sha256`?
 
@@ -1392,14 +1395,21 @@ def cached_members_match(src, url, sha256, member_map):
             manifest = json.load(f)
     except (OSError, ValueError):
         return False
+    if manifest.get("version") != MEMBER_MANIFEST_VERSION:
+        return False
     if manifest.get("archive_sha256") != sha256:
         return False
     recorded = manifest.get("members") or {}
-    if set(recorded) < set(member_map):  # a caller added a member since
+    if set(recorded) != set(member_map):
         return False
-    for fn in member_map:
+    for fn, archive_member in member_map.items():
         path = os.path.join(src, fn)
-        if not os.path.exists(path) or sha256_file(path) != recorded.get(fn):
+        entry = recorded.get(fn)
+        if not isinstance(entry, dict):
+            return False
+        if entry.get("archive_member") != archive_member:
+            return False
+        if not os.path.exists(path) or sha256_file(path) != entry.get("sha256"):
             return False
     return True
 
@@ -1457,10 +1467,17 @@ def rebuild_archive_cache(src, url, sha256, member_map, extract_subdir):
 
 
 def write_member_manifest(src, url, sha256, member_map):
-    """Record the pin and each extracted member's hash, so a later run can trust them."""
+    """Bind each cached destination to its archive pin, source path and bytes."""
     manifest = {
+        "version": MEMBER_MANIFEST_VERSION,
         "archive_sha256": sha256,
-        "members": {fn: sha256_file(os.path.join(src, fn)) for fn in member_map},
+        "members": {
+            fn: {
+                "archive_member": archive_member,
+                "sha256": sha256_file(os.path.join(src, fn)),
+            }
+            for fn, archive_member in member_map.items()
+        },
     }
     path = member_manifest_path(src, url)
     tmp = path + ".part"

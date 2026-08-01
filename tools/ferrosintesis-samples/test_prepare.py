@@ -1322,7 +1322,7 @@ class ArchiveCacheTest(unittest.TestCase):
         self.rebuilt += 1
         for fn in self.MEMBERS:
             with open(os.path.join(self.src, fn), "wb") as f:
-                f.write(b"PINNED-" + fn.encode())
+                f.write(b"PINNED-" + self.MEMBERS[fn].encode())
 
     def warm(self, pin=None):
         """Populate a cache the way a successful run leaves it."""
@@ -1346,7 +1346,7 @@ class ArchiveCacheTest(unittest.TestCase):
             f.write(b"ALTERED-BUT-STILL-A-FILE")
         self.warm()
         self.assertEqual(self.rebuilt, 2, "an altered member must force a rebuild")
-        self.assertEqual(self.member("one.wav"), b"PINNED-one.wav")
+        self.assertEqual(self.member("one.wav"), b"PINNED-pack/one.wav")
 
     def test_a_truncated_member_is_rejected_and_restored(self):
         self.warm()
@@ -1354,13 +1354,20 @@ class ArchiveCacheTest(unittest.TestCase):
             f.write(b"PIN")
         self.warm()
         self.assertEqual(self.rebuilt, 2, "a truncated member must force a rebuild")
-        self.assertEqual(self.member("two.wav"), b"PINNED-two.wav")
+        self.assertEqual(self.member("two.wav"), b"PINNED-pack/two.wav")
 
     def test_a_changed_pin_with_unchanged_member_names_is_rejected(self):
         """The nastiest case: nothing about the FILENAMES says the source moved."""
         self.warm()
         self.warm(pin="b" * 64)
         self.assertEqual(self.rebuilt, 2, "a new archive pin must force a rebuild")
+
+    def test_a_changed_source_member_with_unchanged_destination_is_rebuilt(self):
+        self.warm()
+        self.MEMBERS = dict(self.MEMBERS, **{"one.wav": "pack/replacement.wav"})
+        self.warm()
+        self.assertEqual(self.rebuilt, 2, "a new source member must force a rebuild")
+        self.assertEqual(self.member("one.wav"), b"PINNED-pack/replacement.wav")
 
     def test_a_missing_member_is_rejected(self):
         self.warm()
@@ -1375,7 +1382,7 @@ class ArchiveCacheTest(unittest.TestCase):
                 f.write(b"WHO-KNOWS")
         self.warm()
         self.assertEqual(self.rebuilt, 1, "an unmanifested cache must be rebuilt")
-        self.assertEqual(self.member("one.wav"), b"PINNED-one.wav")
+        self.assertEqual(self.member("one.wav"), b"PINNED-pack/one.wav")
 
     def test_a_corrupt_manifest_is_not_trusted(self):
         self.warm()

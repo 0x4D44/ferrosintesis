@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00020 — Archive rebuilds can attest stale extraction leftovers
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / archive provenance
 - **Raised:** 2026-08-01
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260801T060800Z-p83800-n615076000-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00020-run-fix-20260801T060800Z-p83800-n615076000-c1
-- **Owner base:** e4dd159b77baeed535b737e395b0a384c39212a9
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-01T06:08:00Z
-- **Owner until:** 2026-08-01T08:08:00Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`)
+- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`) -> Fixed (2026-08-01T06:15:08Z, deltic:auto role=fix run=fix-20260801T060800Z-p83800-n615076000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00020-run-fix-20260801T060800Z-p83800-n615076000-c1 code=86b23cca7bba88b9f5b78cd536c5664c733bd305 gate=manual)
 
 ## Observation
 

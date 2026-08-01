@@ -291,6 +291,26 @@ fn drain_ui_commands(rx: &Consumer, core: &mut Core) -> usize {
     drained
 }
 
+fn choose_f32_sample_rate(default_rate: u32, ranges: &[(u32, u32)]) -> Option<u32> {
+    let supported = |rate: u32| {
+        ranges
+            .iter()
+            .any(|&(minimum, maximum)| (minimum..=maximum).contains(&rate))
+    };
+    if supported(default_rate) {
+        return Some(default_rate);
+    }
+    for preferred in [48_000, 44_100] {
+        if supported(preferred) {
+            return Some(preferred);
+        }
+    }
+    ranges
+        .iter()
+        .flat_map(|&(minimum, maximum)| [minimum, maximum])
+        .min_by_key(|&rate| (rate.abs_diff(default_rate), rate))
+}
+
 pub fn start(rx: Consumer, midi: &[u8]) -> Result<Engine, String> {
     let host = cpal::default_host();
     let device = host
@@ -308,17 +328,30 @@ pub fn start(rx: Consumer, midi: &[u8]) -> Result<Engine, String> {
     let config = if default_config.sample_format() == cpal::SampleFormat::F32 {
         default_config
     } else {
-        let wanted = device
+        let ranges: Vec<_> = device
             .supported_output_configs()
             .map_err(|e| format!("cannot enumerate output configs: {e}"))?
-            .find(|c| c.sample_format() == cpal::SampleFormat::F32)
+            .filter(|c| c.sample_format() == cpal::SampleFormat::F32)
+            .collect();
+        let range_bounds: Vec<_> = ranges
+            .iter()
+            .map(|range| (range.min_sample_rate().0, range.max_sample_rate().0))
+            .collect();
+        let chosen_rate = choose_f32_sample_rate(default_config.sample_rate().0, &range_bounds)
             .ok_or_else(|| {
                 format!(
-                    "{device_name} offers no f32 output configuration (its default is                      {:?}); amp-lab renders f32 and does not convert",
+                    "{device_name} offers no f32 output configuration (its default is \
+                     {:?}); amp-lab renders f32 and does not convert",
                     default_config.sample_format()
                 )
             })?;
-        wanted.with_max_sample_rate()
+        ranges
+            .into_iter()
+            .find(|range| {
+                (range.min_sample_rate().0..=range.max_sample_rate().0).contains(&chosen_rate)
+            })
+            .expect("the chosen rate came from these ranges")
+            .with_sample_rate(cpal::SampleRate(chosen_rate))
     };
     let sample_rate = config.sample_rate().0;
     let channels = config.channels() as usize;
@@ -754,6 +787,31 @@ mod tests {
                 assert_eq!(extra, 0.0, "{ch}-channel device got noise on the extras");
             }
         }
+    }
+
+    #[test]
+    fn f32_fallback_rate_follows_the_normal_rate_policy() {
+        assert_eq!(
+            choose_f32_sample_rate(44_100, &[(8_000, 192_000)]),
+            Some(44_100),
+            "use the device default when f32 supports it"
+        );
+        assert_eq!(
+            choose_f32_sample_rate(32_000, &[(48_000, 192_000)]),
+            Some(48_000),
+            "prefer 48 kHz over the range maximum"
+        );
+        assert_eq!(
+            choose_f32_sample_rate(32_000, &[(44_100, 44_100), (96_000, 192_000)]),
+            Some(44_100),
+            "fall back to 44.1 kHz when 48 kHz is unavailable"
+        );
+        assert_eq!(
+            choose_f32_sample_rate(50_000, &[(32_000, 40_000), (60_000, 96_000)]),
+            Some(40_000),
+            "otherwise clamp to the nearest supported boundary"
+        );
+        assert_eq!(choose_f32_sample_rate(48_000, &[]), None);
     }
 
     fn core_for(midi: &[u8]) -> Core {

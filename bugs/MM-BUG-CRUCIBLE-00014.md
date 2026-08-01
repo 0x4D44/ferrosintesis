@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00014 — amp-lab sequencer violates its first-tempo contract
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** amp-lab / sequencer
 - **Raised:** 2026-08-01
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260801T062615Z-p40124-n250195500-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00014-run-fix-20260801T062615Z-p40124-n250195500-c1
-- **Owner base:** 9b325c9277e22e714a7c11aee2cda6812e737781
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-01T06:26:15Z
-- **Owner until:** 2026-08-01T08:26:15Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol xhigh from a static multi-lens review; Deltic mint was sandbox-blocked, so the ID was allocated per `bugs/README.md`)
+- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol xhigh from a static multi-lens review; Deltic mint was sandbox-blocked, so the ID was allocated per `bugs/README.md`) -> Fixed (2026-08-01T06:35:18Z, deltic:auto role=fix run=fix-20260801T062615Z-p40124-n250195500-c1 branch=task/bug-MM-BUG-CRUCIBLE-00014-run-fix-20260801T062615Z-p40124-n250195500-c1 code=d4a7176771cda032103643d3f28d092f75bcd348 gate=manual)
 
 ## Observation
 

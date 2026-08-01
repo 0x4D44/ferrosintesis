@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00016 — amp-lab non-f32 fallback selects the maximum sample rate
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** amp-lab / audio device configuration
 - **Raised:** 2026-08-01
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260801T063556Z-p69260-n044641400-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00016-run-fix-20260801T063556Z-p69260-n044641400-c1
-- **Owner base:** dbd25e34cb75d05d366f62e001e58f4977aa3342
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-01T06:35:56Z
-- **Owner until:** 2026-08-01T08:35:56Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol xhigh from a static multi-lens review; Deltic mint was sandbox-blocked, so the ID was allocated per `bugs/README.md`)
+- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol xhigh from a static multi-lens review; Deltic mint was sandbox-blocked, so the ID was allocated per `bugs/README.md`) -> Fixed (2026-08-01T06:46:43Z, deltic:auto role=fix run=fix-20260801T063556Z-p69260-n044641400-c1 branch=task/bug-MM-BUG-CRUCIBLE-00016-run-fix-20260801T063556Z-p69260-n044641400-c1 code=4a43c844649dba176c9ac79534a14a498663c55a gate=manual)
 
 ## Observation
 

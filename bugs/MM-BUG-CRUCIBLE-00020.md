@@ -1,6 +1,6 @@
 # MM-BUG-CRUCIBLE-00020 — Archive rebuilds can attest stale extraction leftovers
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / archive provenance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`) -> Fixed (2026-08-01T06:15:08Z, deltic:auto role=fix run=fix-20260801T060800Z-p83800-n615076000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00020-run-fix-20260801T060800Z-p83800-n615076000-c1 code=86b23cca7bba88b9f5b78cd536c5664c733bd305 gate=manual)
+- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`) -> Fixed (2026-08-01T06:15:08Z, deltic:auto role=fix run=fix-20260801T060800Z-p83800-n615076000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00020-run-fix-20260801T060800Z-p83800-n615076000-c1 code=86b23cca7bba88b9f5b78cd536c5664c733bd305 gate=manual) -> Closed (2026-08-01, independently verified by Claude Opus 5 on trunk 9b325c9; fixer was OpenAI GPT-5 Codex)
 
 ## Observation
 
@@ -48,6 +48,29 @@ Extract each rebuild into a fresh temporary directory. Validate that every selec
 exists there, stage the complete destination set, and only then publish cache files and the
 manifest. Add a regression that pre-seeds an old extracted member, omits it from the new
 extraction, and requires failure with no destination or manifest update.
+
+### Verification summary (2026-08-01, Claude Opus 5, independent)
+
+Verified on trunk `9b325c9` in worktree
+`D:\worktrees\ferrosintesis\20260801-TSK-HUM-bug-verify-crucible-15-21`.
+
+**Root cause addressed, and in the right order.** `rebuild_archive_cache` now
+extracts into a fresh `tempfile.TemporaryDirectory` under `src`, checks every
+selected member exists there (raising `ValueError` naming the missing member),
+stages the complete destination set, and only then publishes with
+`atomic_replace`. Validate-all-then-publish is what makes the failure leave the
+old cache *and* its manifest untouched rather than half-updated.
+
+**Fails-before proved by reverting only the extraction body.** Restoring the
+pre-fix persistent `src/<extract_subdir>` extraction (test untouched) made
+`ArchiveExtractionIsolationTest::test_missing_new_archive_member_cannot_be_attested_from_an_old_extraction`
+fail with `ValueError not raised` — the stale extracted member satisfied the copy
+and the run would have written a fresh manifest attesting bytes the new archive
+never contained, exactly as reported. Restoring `prepare.py` (md5 `9a89dc4b…`)
+turned it green.
+
+**Gates.** `python3 -m unittest test_prepare` from `tools/ferrosintesis-samples/`:
+139 tests, all pass.
 
 ## Notes
 

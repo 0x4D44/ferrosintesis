@@ -1,5 +1,13 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.08.01 — **Root `Cargo.toml` still describes a gate flag that is gone.**
+  `D:\language\ferrosintesis\Cargo.toml:39` says the failure hit "even for the
+  `--workspace --exclude amp-lab` invocation the integration gate itself uses" — present
+  tense, but `.deltic-integrate.toml` dropped `--exclude amp-lab` when amp-lab left the
+  workspace. The sentence sits inside a past-tense explanation, so it is a wording nit,
+  not a wrong instruction. Spotted while verifying MM-BUG-CRUCIBLE-00015, which fixed the
+  same class of drift in `crates/amp-lab/README.md`.
+
 - [x] 2026.07.22 — **M-CAL residual watchlist: the metric disagrees with ear-vetted trims
   on the slow-attack families** — GM56/57 brass (−6.7/−6.3 dB), GM67 (−4.8), GM48/50/51
   ensembles (+3.7..+4.3). Either the single-held-note probe biases slow-attack voices, or

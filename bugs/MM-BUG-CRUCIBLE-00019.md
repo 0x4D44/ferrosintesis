@@ -1,6 +1,6 @@
 # MM-BUG-CRUCIBLE-00019 — Warm archive caches ignore selected-member mapping changes
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / archive provenance
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`) -> Fixed (2026-08-01T06:07:19Z, deltic:auto role=fix run=fix-20260801T055954Z-p97736-n464799300-c1 branch=task/bug-MM-BUG-CRUCIBLE-00019-run-fix-20260801T055954Z-p97736-n464799300-c1 code=f3a86f0072d1fd19e064aad133576e89d53c9026 gate=manual)
+- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`) -> Fixed (2026-08-01T06:07:19Z, deltic:auto role=fix run=fix-20260801T055954Z-p97736-n464799300-c1 branch=task/bug-MM-BUG-CRUCIBLE-00019-run-fix-20260801T055954Z-p97736-n464799300-c1 code=f3a86f0072d1fd19e064aad133576e89d53c9026 gate=manual) -> Closed (2026-08-01, independently verified by Claude Opus 5 on trunk 9b325c9; fixer was OpenAI GPT-5 Codex)
 
 ## Observation
 
@@ -50,6 +50,30 @@ Version the member manifest and bind each destination to its exact archive-membe
 plus content hash, or bind a canonical digest of the complete mapping. Require exact map
 equality before warm reuse. Add a regression that warms a cache, changes only one mapping
 value, and proves the destination is rebuilt from the newly selected member.
+
+### Verification summary (2026-08-01, Claude Opus 5, independent)
+
+Verified on trunk `9b325c9` in worktree
+`D:\worktrees\ferrosintesis\20260801-TSK-HUM-bug-verify-crucible-15-21`.
+
+**Root cause addressed.** The manifest is now versioned (`MEMBER_MANIFEST_VERSION
+= 2`) and binds each destination to `{archive_member, sha256}` rather than a bare
+destination hash, and `cached_members_match` requires exact set equality plus an
+exact `archive_member` match. So the mapping value the report identified as
+invisible is now part of the cache predicate. The version bump also makes every v1
+manifest fail closed, so no existing warm cache inherits the old semantics.
+
+**Fails-before proved by reverting only the two production functions.** Restoring
+the pre-fix `cached_members_match` **and** `write_member_manifest` (tests
+untouched — reverting only one would have made the test pass for the wrong reason,
+by mismatching the manifest shape) made
+`ArchiveCacheTest::test_a_changed_source_member_with_unchanged_destination_is_rebuilt`
+fail with `1 != 2 : a new source member must force a rebuild` — the warm cache was
+accepted despite the recipe change, exactly as reported. Restoring `prepare.py`
+(md5 `9a89dc4b…`) turned it green.
+
+**Gates.** `python3 -m unittest test_prepare` from `tools/ferrosintesis-samples/`:
+139 tests, all pass.
 
 ## Notes
 

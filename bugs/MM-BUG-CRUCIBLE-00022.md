@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** electric-bass sample generation / output inventory
 - **Raised:** 2026-08-01
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260801T071307Z-p76832-n922353200-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00022-run-fix-20260801T071307Z-p76832-n922353200-c1
+- **Owner base:** 9eaa6195e79ae0de1f3e0d6c4273ff04a4f87346
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-01T07:13:07Z
+- **Owner until:** 2026-08-01T09:13:07Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

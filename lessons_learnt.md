@@ -10,6 +10,11 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.08.01 — **Archive extraction needs empty staging before attestation** (`prepare.py:rebuild_archive_cache`).
+  - Overwriting a persistent extraction tree leaves removed or renamed archive members
+    behind. Validate every selected member in a fresh directory before publishing any cache
+    destination or its provenance manifest.
+
 - 2026.08.01 — **Archive cache keys need source selectors, not just output hashes** (`prepare.py:cached_members_match`).
   - A destination name and hash prove cached bytes stayed intact, but not that the current
     recipe still selects the archive member that produced them. Bind the exact member map

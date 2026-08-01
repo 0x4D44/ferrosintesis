@@ -1393,6 +1393,41 @@ class ArchiveCacheTest(unittest.TestCase):
         self.assertEqual(self.rebuilt, 2, "an unreadable manifest must force a rebuild")
 
 
+class ArchiveExtractionIsolationTest(unittest.TestCase):
+    """MM-BUG-CRUCIBLE-00020: a rebuild cannot consume an old extraction."""
+
+    def test_missing_new_archive_member_cannot_be_attested_from_an_old_extraction(self):
+        member_map = {"one.wav": "pack/one.wav"}
+        with tempfile.TemporaryDirectory() as src:
+            old_extraction = os.path.join(src, "ext", "pack")
+            os.makedirs(old_extraction)
+            with open(os.path.join(old_extraction, "one.wav"), "wb") as f:
+                f.write(b"STALE-EXTRACTION")
+
+            destination = os.path.join(src, "one.wav")
+            with open(destination, "wb") as f:
+                f.write(b"ORIGINAL-CACHE")
+            prepare.write_member_manifest(src, "https://example.invalid/pack.7z",
+                                          "a" * 64, member_map)
+            manifest = prepare.member_manifest_path(
+                src, "https://example.invalid/pack.7z")
+            with open(manifest, "rb") as f:
+                original_manifest = f.read()
+
+            with mock.patch.object(
+                prepare, "verified_archive_path", return_value=os.path.join(src, "pack.7z")
+            ), mock.patch.object(prepare.subprocess, "run"):
+                with self.assertRaisesRegex(ValueError, r"missing archive member.*pack/one\.wav"):
+                    prepare.ensure_archive_sources(
+                        src, "https://example.invalid/pack.7z", "b" * 64,
+                        member_map, "ext")
+
+            with open(destination, "rb") as f:
+                self.assertEqual(f.read(), b"ORIGINAL-CACHE")
+            with open(manifest, "rb") as f:
+                self.assertEqual(f.read(), original_manifest)
+
+
 class ArchiveRefetchTest(unittest.TestCase):
     """A local archive that does not match the pin self-heals once, then raises."""
 
@@ -1411,8 +1446,9 @@ class ArchiveRefetchTest(unittest.TestCase):
         self.addCleanup(setattr, prepare.subprocess, "run", self.real_run)
         prepare.subprocess.run = self.fake_extract
 
-    def fake_extract(self, *_args, **_kwargs):
-        ext = os.path.join(self.src, "ext", "pack")
+    def fake_extract(self, command, **_kwargs):
+        output_arg = next(arg for arg in command if arg.startswith("-o"))
+        ext = os.path.join(output_arg[2:], "pack")
         os.makedirs(ext, exist_ok=True)
         with open(os.path.join(ext, "one.wav"), "wb") as f:
             f.write(b"MEMBER")

@@ -1439,7 +1439,7 @@ def verified_archive_path(src, url, sha256, cache_name=None):
 
 
 def rebuild_archive_cache(src, url, sha256, member_map, extract_subdir):
-    """Verify a pinned 7z archive, extract it, and copy its selected members."""
+    """Verify a pinned 7z archive, then stage and publish its selected members."""
     arc = verified_archive_path(src, url, sha256)
     # `7zz` is Homebrew's sevenzip name, `7za` Debian's p7zip; the hardcoded install
     # path stays as the Windows last resort. Report a missing binary at the call
@@ -1451,19 +1451,30 @@ def rebuild_archive_cache(src, url, sha256, member_map, extract_subdir):
         or shutil.which("7za")
         or r"C:\Program Files\7-Zip\7z.exe"
     )
-    ext = os.path.join(src, extract_subdir)
-    try:
-        subprocess.run([seven, "x", "-y", f"-o{ext}", arc], check=True,
-                       stdout=subprocess.DEVNULL)
-    except FileNotFoundError:
-        raise SystemExit(
-            "no 7-Zip binary on PATH (tried 7z, 7zz, 7za). Install it with "
-            "`brew install sevenzip` on macOS, `apt install p7zip-full` on "
-            "Debian/Ubuntu, or from https://www.7-zip.org/ on Windows."
-        ) from None
-    for fn, member in member_map.items():
-        shutil.copyfile(os.path.join(ext, *member.split("/")),
-                        os.path.join(src, fn))
+    with tempfile.TemporaryDirectory(prefix=f".{extract_subdir}-", dir=src) as staging:
+        ext = os.path.join(staging, "extract")
+        selected = os.path.join(staging, "selected")
+        try:
+            subprocess.run([seven, "x", "-y", f"-o{ext}", arc], check=True,
+                           stdout=subprocess.DEVNULL)
+        except FileNotFoundError:
+            raise SystemExit(
+                "no 7-Zip binary on PATH (tried 7z, 7zz, 7za). Install it with "
+                "`brew install sevenzip` on macOS, `apt install p7zip-full` on "
+                "Debian/Ubuntu, or from https://www.7-zip.org/ on Windows."
+            ) from None
+        for fn, member in member_map.items():
+            extracted = os.path.join(ext, *member.split("/"))
+            if not os.path.isfile(extracted):
+                raise ValueError(
+                    f"{os.path.basename(url)}: missing archive member {member!r}")
+            staged = os.path.join(selected, fn)
+            os.makedirs(os.path.dirname(staged), exist_ok=True)
+            shutil.copyfile(extracted, staged)
+        for fn in member_map:
+            destination = os.path.join(src, fn)
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            atomic_replace(os.path.join(selected, fn), destination)
 
 
 def write_member_manifest(src, url, sha256, member_map):

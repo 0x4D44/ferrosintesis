@@ -2491,6 +2491,40 @@ class HeadroomOutputInventoryTest(unittest.TestCase):
         )
 
 
+class BassOutputInventoryTest(unittest.TestCase):
+    """MM-BUG-CRUCIBLE-00022: bass rebakes must reject retired outputs."""
+
+    def test_removed_mapping_rejects_its_stale_output_before_fetching_or_writing(self):
+        finger_sources = dict(prepare.FINGERBASS_SOURCES)
+        stale = next(iter(finger_sources))
+        finger_sources.pop(stale)
+
+        with tempfile.TemporaryDirectory() as repo_root:
+            out_dir = os.path.join(
+                repo_root, "crates", "ferrosintesis-samples-bass", "samples")
+            os.makedirs(out_dir)
+            open(os.path.join(out_dir, stale), "wb").close()
+
+            with mock.patch.object(prepare, "REPO_ROOT", repo_root), mock.patch.object(
+                prepare, "FINGERBASS_SOURCES", finger_sources
+            ), mock.patch.object(
+                prepare, "ensure_ebass_sources",
+                side_effect=AssertionError("inventory must be checked before fetching"),
+            ) as ensure_sources, mock.patch.object(
+                prepare, "read_wav",
+                side_effect=AssertionError("inventory must be checked before reading"),
+            ), mock.patch.object(
+                prepare, "write_wav_mono"
+            ) as write_output, mock.patch.object(
+                prepare.sys, "argv", ["prepare.py", "--only=fingerbass"]
+            ):
+                with self.assertRaisesRegex(ValueError, re.escape(stale)):
+                    prepare.main()
+
+            ensure_sources.assert_not_called()
+            write_output.assert_not_called()
+
+
 class HonkytonkOutputInventoryTest(unittest.TestCase):
     """MM-BUG-KILN-00143: rebakes must reject obsolete owned outputs."""
 

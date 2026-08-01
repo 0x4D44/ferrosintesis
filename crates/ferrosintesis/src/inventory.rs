@@ -168,17 +168,16 @@ mod tests {
             .collect()
     }
 
-    fn has_scoped_validation_before_source_use(
+    fn has_scoped_validation_call_before_source_uses(
         source: &str,
         function: &str,
-        family: &str,
-        expected: &str,
+        validator: &str,
+        expected: &[&str],
     ) -> bool {
         let definition = format!("def {function}(");
-        let validator = format!("_validate_generated_output_inventory(\"{family}\", {expected})");
         let mut in_function = false;
         let mut validation_line = None;
-        let mut source_uses = Vec::new();
+        let mut source_uses = vec![Vec::new(); expected.len()];
 
         for (line_number, line) in source.lines().enumerate() {
             if line.starts_with("def ") {
@@ -198,15 +197,28 @@ mod tests {
             if code == validator {
                 validation_line = Some(line_number);
             }
-            if code.contains(expected) {
-                source_uses.push(line_number);
+            for (uses, expected) in source_uses.iter_mut().zip(expected) {
+                if code.contains(expected) {
+                    uses.push(line_number);
+                }
             }
         }
 
         validation_line.is_some_and(|validation| {
-            source_uses.first() == Some(&validation)
-                && source_uses.iter().any(|line| *line > validation)
+            source_uses.iter().all(|uses| {
+                uses.first() == Some(&validation) && uses.iter().any(|line| *line > validation)
+            })
         })
+    }
+
+    fn has_scoped_validation_before_source_use(
+        source: &str,
+        function: &str,
+        family: &str,
+        expected: &str,
+    ) -> bool {
+        let validator = format!("_validate_generated_output_inventory(\"{family}\", {expected})");
+        has_scoped_validation_call_before_source_uses(source, function, &validator, &[expected])
     }
 
     #[derive(Clone, Copy, Default)]
@@ -1033,6 +1045,15 @@ mod tests {
             ),
             "main must validate the Steinway output against STEINWAYB_SOURCES before using that table"
         );
+        assert!(
+            has_scoped_validation_call_before_source_uses(
+                &prepare,
+                "main",
+                "_validate_generated_output_families({\"fingerbass\", \"pickbass\"}, FINGERBASS_SOURCES | PICKBASS_SOURCES)",
+                &["FINGERBASS_SOURCES", "PICKBASS_SOURCES"],
+            ),
+            "main must validate both bass output families against their combined source tables before using either table"
+        );
     }
 
     #[test]
@@ -1175,6 +1196,26 @@ def main():
             "main",
             "kawai",
             "KAWAI_SOURCES"
+        ));
+    }
+
+    #[test]
+    fn bake_output_inventory_oracle_rejects_an_unrelated_conditional_before_bass_use() {
+        let source = r#"
+def main():
+    if want("headroom"):
+        _validate_generated_output_inventory("headroom", HEADROOM_SOURCES)
+    if want("fingerbass") or want("pickbass"):
+        ensure_ebass_sources(src)
+    for fn in FINGERBASS_SOURCES | PICKBASS_SOURCES:
+        write_wav_mono(sample_output_path(fn), [], OUT_SR)
+"#;
+
+        assert!(!has_scoped_validation_call_before_source_uses(
+            source,
+            "main",
+            "_validate_generated_output_families({\"fingerbass\", \"pickbass\"}, FINGERBASS_SOURCES | PICKBASS_SOURCES)",
+            &["FINGERBASS_SOURCES", "PICKBASS_SOURCES"],
         ));
     }
 

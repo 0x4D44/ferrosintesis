@@ -10,6 +10,10 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.08.01 — **Bind inventory guards to each family and source table** (`inventory.rs:inventory::tests`).
+  - Seeing any validator before a transitive write is not enough. Require the selected
+    family's exact validator to be the first use of every source table that drives its bake.
+
 - 2026.08.01 — **Never advance past dropped MIDI state; reset at a known boundary** (`audio.rs:Core::process`).
   - A bounded event batch can strand a note when its NoteOff overflows. Discard the partial
     batch, stop and rewind playback, and hard-reset every channel before rendering again.

@@ -5426,6 +5426,8 @@ def main():
         _validate_generated_output_inventory("kawai", KAWAI_SOURCES)
     if want("headroom"):
         _validate_generated_output_inventory("headroom", HEADROOM_SOURCES)
+    if want("fingerbass") or want("pickbass"):
+        _validate_generated_output_families({"fingerbass", "pickbass"}, FINGERBASS_SOURCES | PICKBASS_SOURCES)
 
     # `--sax-only` bakes ONLY the MTG recorded sax bank (network + the -sax crate),
     # skipping the slow VSCO fetch/rewrite — fast iteration on the sax bank alone.

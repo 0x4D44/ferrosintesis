@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** amp-lab / realtime audio
 - **Raised:** 2026-08-01
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260801T052423Z-p69264-n537202200-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00013-run-fix-20260801T052423Z-p69264-n537202200-c1
+- **Owner base:** 698078999110a5536d1e2cfd53f690223c6d8caf
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-01T05:24:23Z
+- **Owner until:** 2026-08-01T07:24:23Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

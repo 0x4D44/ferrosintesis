@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** amp-lab / audio device configuration
 - **Raised:** 2026-08-01
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260801T063556Z-p69260-n044641400-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00016-run-fix-20260801T063556Z-p69260-n044641400-c1
+- **Owner base:** dbd25e34cb75d05d366f62e001e58f4977aa3342
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-01T06:35:56Z
+- **Owner until:** 2026-08-01T08:35:56Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

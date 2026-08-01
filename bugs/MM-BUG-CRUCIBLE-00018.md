@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00018 — amp-lab event-cap overflow permanently drops note events
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** amp-lab / realtime sequencer
 - **Raised:** 2026-08-01
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260801T065846Z-p87252-n946572800-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00018-run-fix-20260801T065846Z-p87252-n946572800-c1
-- **Owner base:** 91d1b991ca18e3dcf6eb48126e25afadce3c293b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-01T06:58:46Z
-- **Owner until:** 2026-08-01T08:58:46Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol xhigh from a static multi-lens review; Deltic mint was sandbox-blocked, so the ID was allocated per `bugs/README.md`)
+- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol xhigh from a static multi-lens review; Deltic mint was sandbox-blocked, so the ID was allocated per `bugs/README.md`) -> Fixed (2026-08-01T07:12:22Z, deltic:auto role=fix run=fix-20260801T065846Z-p87252-n946572800-c1 branch=task/bug-MM-BUG-CRUCIBLE-00018-run-fix-20260801T065846Z-p87252-n946572800-c1 code=2d1d62bf4ba4ef53058d1a69cb0e1192ebab683a gate=manual)
 
 ## Observation
 

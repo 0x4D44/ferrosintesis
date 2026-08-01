@@ -47,12 +47,12 @@ pub struct Engine {
 /// The channel carrying the guitar we are auditioning. Solo mutes everything else.
 pub const GUITAR_CHANNELS: [u8; 2] = [0, 1];
 
-/// How many scheduled events one callback can hold before we stop honouring offsets.
+/// How many scheduled events one callback can hold before playback stops and resets.
 ///
 /// Sized far above anything a real block produces (the shipped 8-bar loop is 614 events
 /// across ~19 s, so a 1024-frame callback sees a handful). It exists only so `process`
-/// can be allocation-free: pushing within capacity never allocates, and overflowing is
-/// counted as an xrun rather than growing the `Vec` on the audio thread.
+/// can be allocation-free: pushing within capacity never allocates. Overflow is one xrun
+/// and a hard reset; applying a partial batch could strand a note when its NoteOff is lost.
 const MAX_EVENTS_PER_BLOCK: usize = 256;
 
 /// Everything one audio callback does, with no cpal in sight.
@@ -138,21 +138,31 @@ impl Core {
         buf[..frames * 2].fill(0.0);
 
         self.pending.clear();
+        let mut event_overflow = false;
         if self.playing {
-            let (solo, pending, xruns) = (self.solo, &mut self.pending, &mut self.xruns);
+            let (solo, pending) = (self.solo, &mut self.pending);
             self.player.advance(&self.lp, frames as u64, |off, msg| {
                 if solo && msg[0] < 0xF0 && !GUITAR_CHANNELS.contains(&(msg[0] & 0x0F)) {
                     return;
                 }
                 if pending.len() == pending.capacity() {
-                    // Full: keep playing rather than dropping the event, but say so.
-                    *xruns += 1;
+                    event_overflow = true;
                     return;
                 }
                 let mut b = [0u8; 3];
                 b[..msg.len()].copy_from_slice(msg);
                 pending.push((off, b, msg.len() as u8));
             });
+        }
+        if event_overflow {
+            // The player has advanced past events we could not retain. Never apply the
+            // prefix and continue from a corrupted note state: stop at a known boundary
+            // and silence every channel. Toggle the transport off and on to restart.
+            self.pending.clear();
+            self.xruns += 1;
+            self.playing = false;
+            self.player.rewind();
+            all_notes_off(&mut self.synth);
         }
 
         let mut done = 0usize;
@@ -787,6 +797,73 @@ mod tests {
                 assert_eq!(extra, 0.0, "{ch}-channel device got noise on the extras");
             }
         }
+    }
+
+    #[test]
+    fn event_overflow_stops_and_resets_instead_of_losing_note_offs() {
+        let synth = RealtimeSynth::new(
+            RealtimeOptions::default()
+                .with_sample_rate(SR)
+                .with_reverb(0.0)
+                .with_echo(0.0)
+                .with_samples(false),
+        );
+        let mut core = Core::new(
+            synth,
+            Loop {
+                events: Vec::new(),
+                frames: 64,
+            },
+            64,
+        );
+        for byte in [0x90, 60, 100] {
+            core.command(Cmd::Midi(byte));
+        }
+        let mut out = vec![0.0; 128];
+        core.process(&mut out, 64).expect("prime one voice");
+        assert!(
+            core.active_voice_count() > 0,
+            "the reset has no live voice to prove"
+        );
+
+        let mut events = Vec::new();
+        for key in 0..150u64 {
+            events.push(crate::seq::Event {
+                frame: 0,
+                bytes: [0x90, (key % 128) as u8, 100],
+                len: 3,
+            });
+            events.push(crate::seq::Event {
+                frame: 1,
+                bytes: [0x80, (key % 128) as u8, 0],
+                len: 3,
+            });
+        }
+        core.lp = Loop { events, frames: 64 };
+        core.player.rewind();
+        core.playing = true;
+
+        core.process(&mut out, 64)
+            .expect("overflow fallback renders safely");
+
+        assert_eq!(core.xruns, 1, "one dense block is one explicit overflow");
+        assert!(
+            !core.playing,
+            "the corrupted sequence must not keep advancing"
+        );
+        assert_eq!(
+            core.player.pos, 0,
+            "resume must start from a known boundary"
+        );
+        assert_eq!(
+            core.active_voice_count(),
+            0,
+            "the hard reset must prevent a stuck note"
+        );
+        assert!(
+            core.pending.is_empty(),
+            "no partial event batch may be applied"
+        );
     }
 
     #[test]

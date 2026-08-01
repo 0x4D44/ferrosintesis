@@ -10,6 +10,10 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.08.01 — **Never advance past dropped MIDI state; reset at a known boundary** (`audio.rs:Core::process`).
+  - A bounded event batch can strand a note when its NoteOff overflows. Discard the partial
+    batch, stop and rewind playback, and hard-reset every channel before rendering again.
+
 - 2026.08.01 — **Embedded data still needs fallible, chunk-bounded parsing** (`seq.rs:Loop::parse`).
   - Compile-time inclusion removes attacker reachability, not truncation risk. Bound every
     VLQ and payload by its declared track end, and reject every strict asset prefix.

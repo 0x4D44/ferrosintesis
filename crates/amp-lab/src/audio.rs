@@ -12,7 +12,7 @@ use std::sync::Arc;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ferrosintesis::live::{RealtimeOptions, RealtimeSynth};
 
-use crate::ring::{Cmd, Consumer};
+use crate::ring::{Cmd, Consumer, MAX_QUEUED_COMMANDS};
 use crate::seq::{Loop, Player};
 
 /// Read-only telemetry the UI polls. Atomics so neither side ever waits.
@@ -91,12 +91,18 @@ impl Core {
         match c {
             Cmd::Midi(b) => self.synth.write_byte(b),
             Cmd::Play(p) => {
+                if self.playing == p {
+                    return;
+                }
                 self.playing = p;
                 if !p {
                     all_notes_off(&mut self.synth);
                 }
             }
             Cmd::Solo(s) => {
+                if self.solo == s {
+                    return;
+                }
                 self.solo = s;
                 // Muting mid-note would strand its note-off and leave the voice
                 // stuck, so silence the channels we stop feeding rather than just
@@ -246,6 +252,45 @@ impl Core {
     }
 }
 
+/// Drain the complete bounded UI backlog and coalesce its idempotent controls.
+///
+/// Panic runs first, then the latest rig bytes, Play and Solo. This preserves recovery's
+/// "panic, then restore state" order while applying repeated state only once. The fixed
+/// stack buffer and the ring's 63-entry ceiling keep callback work and synth commands
+/// within retained capacity.
+fn drain_ui_commands(rx: &Consumer, core: &mut Core) -> usize {
+    let mut commands = [Cmd::Panic; MAX_QUEUED_COMMANDS];
+    let drained = rx.drain_published(&mut commands);
+    let mut playing = None;
+    let mut solo = None;
+    let mut panic = false;
+
+    for &command in &commands[..drained] {
+        match command {
+            Cmd::Midi(_) => {}
+            Cmd::Play(value) => playing = Some(value),
+            Cmd::Solo(value) => solo = Some(value),
+            Cmd::Panic => panic = true,
+        }
+    }
+
+    if panic {
+        core.command(Cmd::Panic);
+    }
+    for &command in &commands[..drained] {
+        if let Cmd::Midi(byte) = command {
+            core.command(Cmd::Midi(byte));
+        }
+    }
+    if let Some(value) = playing {
+        core.command(Cmd::Play(value));
+    }
+    if let Some(value) = solo {
+        core.command(Cmd::Solo(value));
+    }
+    drained
+}
+
 pub fn start(rx: Consumer, midi: &[u8]) -> Result<Engine, String> {
     let host = cpal::default_host();
     let device = host
@@ -302,10 +347,8 @@ pub fn start(rx: Consumer, midi: &[u8]) -> Result<Engine, String> {
         .build_output_stream(
             &config.into(),
             move |out: &mut [f32], _| {
-                // 1. Drain the UI's commands.
-                while let Some(c) = rx.pop() {
-                    core.command(c);
-                }
+                // 1. Drain the UI's bounded backlog and coalesce repeated state.
+                drain_ui_commands(&rx, &mut core);
 
                 // 2. Advance the loop and render it, event by event at its own
                 //    offset. All of that lives in `Core` so it is testable without a
@@ -462,6 +505,94 @@ mod tests {
         assert!(
             note <= 16,
             "a single NoteOn allocated {note} times — the per-voice Box is ~13; more              than that means something new allocates in the callback (KILN-00092)"
+        );
+    }
+
+    #[test]
+    fn ui_backlog_is_bounded_and_does_not_grow_the_synth_queue() {
+        use crate::amp::Rig;
+        use crate::outbox::Outbox;
+        use crate::ring::Ring;
+        use crate::rtalloc::measure;
+
+        let (tx, rx) = Ring::channel();
+        let mut outbox = Outbox::new(tx, 1);
+        let mut rig = Rig::default();
+        let mut core = core_for(&smf(&[]));
+        core.synth.prewarm_samples();
+        core.synth.reserve_realtime_storage();
+        let mut buf = vec![0f32; 1024 * 2];
+        // Warm the initial rig outside the measured steady-state callback. Program and
+        // insert setup has bounded first-use work unrelated to backlog growth.
+        outbox.send_rig(&rig);
+        drain_ui_commands(&rx, &mut core);
+        core.process(&mut buf, 1024).expect("warm");
+
+        // The old incremental path emitted three completed CC messages per knob. Fifty
+        // updates therefore exceeded RealtimeSynth's retained 128-command queue before
+        // the next render; the bounded snapshot path must coalesce them instead.
+        for value in 0..50u8 {
+            rig.vals[0] = value;
+            outbox.send_knob(&rig, 0);
+        }
+
+        let ((drained, rendered), allocations) = measure(|| {
+            let drained = drain_ui_commands(&rx, &mut core);
+            (drained, core.process(&mut buf, 1024))
+        });
+        rendered.expect("backlog render");
+        assert!(
+            drained <= MAX_QUEUED_COMMANDS && allocations == 0,
+            "one callback drained {drained} UI commands and allocated {allocations} times; \
+             the command budget is {MAX_QUEUED_COMMANDS} and retained control traffic \
+             must allocate zero"
+        );
+    }
+
+    #[test]
+    fn a_full_mixed_ui_ring_is_coalesced_without_allocating() {
+        use crate::amp::Rig;
+        use crate::outbox::Outbox;
+        use crate::ring::Ring;
+        use crate::rtalloc::measure;
+
+        let (tx, rx) = Ring::channel();
+        let mut outbox = Outbox::new(tx, 1);
+        let rig = Rig::default();
+        let mut core = core_for(&smf(&[]));
+        core.synth.prewarm_samples();
+        core.synth.reserve_realtime_storage();
+        let mut buf = vec![0f32; 1024 * 2];
+
+        // Warm first-use rig setup, then fill all 63 slots with one 61-command state
+        // snapshot and two panic requests. A third panic becomes the held recovery item.
+        outbox.send_rig(&rig);
+        drain_ui_commands(&rx, &mut core);
+        core.process(&mut buf, 1024).expect("warm");
+        outbox.send_rig(&rig);
+        outbox.request_panic();
+        outbox.request_panic();
+        outbox.request_panic();
+        assert!(
+            outbox.saturated(),
+            "the full-ring panic was not held for retry"
+        );
+
+        let ((drained, rendered), allocations) = measure(|| {
+            let drained = drain_ui_commands(&rx, &mut core);
+            (drained, core.process(&mut buf, 1024))
+        });
+        rendered.expect("full mixed backlog render");
+        assert_eq!(drained, MAX_QUEUED_COMMANDS, "ring was not actually full");
+        assert_eq!(
+            allocations, 0,
+            "a full mixed UI ring allocated {allocations} times in the callback"
+        );
+
+        outbox.pump(&rig, true, false);
+        assert!(
+            !outbox.saturated(),
+            "held panic did not recover after the drain"
         );
     }
 

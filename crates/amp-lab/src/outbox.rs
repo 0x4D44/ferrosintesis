@@ -5,9 +5,11 @@
 //! stall (the ring backing up, then draining) could leave the heard synth on a stale rig
 //! while the UI showed the new one, with no path back to agreement (MM-BUG-KILN-00083).
 //!
-//! `Outbox` closes that gap without changing the realtime side. The UI already repaints
-//! continuously, so the fix is convergence, not reliability of a single push:
+//! `Outbox` and the bounded consumer close that gap through convergence, not reliance on
+//! any single push:
 //!
+//! - Every edit tries to send one complete state snapshot. Only one snapshot fits in the
+//!   ring, so later edits coalesce in `Outbox` instead of growing callback work.
 //! - Every failed enqueue sets a `dirty` flag.
 //! - [`Outbox::pump`], called once per frame, resends the COMPLETE latest state as one
 //!   atomic snapshot whenever `dirty` is set, and clears it only when the whole snapshot
@@ -25,6 +27,11 @@ use crate::ring::{Cmd, Producer};
 pub struct Outbox {
     tx: Producer,
     ch: u8,
+    /// Latest UI state. Every enqueue carries all of it, so a full ring coalesces later
+    /// edits here instead of building an unbounded callback backlog.
+    rig: Rig,
+    playing: bool,
+    solo: bool,
     /// The audio thread may not reflect the latest UI state — resend on the next pump.
     dirty: bool,
     /// A panic was requested but did not fit — keep trying until it lands.
@@ -38,6 +45,9 @@ impl Outbox {
         Outbox {
             tx,
             ch,
+            rig: Rig::default(),
+            playing: true,
+            solo: false,
             dirty: false,
             panic_pending: false,
             saturated: false,
@@ -52,26 +62,48 @@ impl Outbox {
         }
     }
 
-    /// Send one knob's triple (the cheap incremental path). A miss marks dirty, so the
-    /// next [`pump`](Self::pump) resends the whole rig rather than losing this edit.
-    pub fn send_knob(&mut self, rig: &Rig, idx: u8) {
-        let ok = self
-            .tx
-            .push_midi(&Rig::knob_bytes(self.ch, idx, rig.vals[idx as usize]));
+    /// Publish the latest rig after a knob edit. A state snapshot is deliberately large
+    /// enough that only one fits in the ring: later edits coalesce in `self.rig` until the
+    /// audio thread consumes it.
+    pub fn send_knob(&mut self, rig: &Rig, _idx: u8) {
+        self.rig = *rig;
+        let ok = self.push_snapshot();
         self.observe(ok);
     }
 
     /// Send the whole rig (a voice change rebuilds the insert, so everything re-sends).
     pub fn send_rig(&mut self, rig: &Rig) {
-        let ok = self.tx.push_midi(&rig.bytes(self.ch));
+        self.rig = *rig;
+        let ok = self.push_snapshot();
         self.observe(ok);
     }
 
     /// Transport / solo are STATE, so they ride the snapshot: a miss just marks dirty and
     /// `pump` re-establishes the correct play/solo along with the rig.
     pub fn send_cmd(&mut self, c: Cmd) {
-        let ok = self.tx.push(c);
+        match c {
+            Cmd::Play(playing) => self.playing = playing,
+            Cmd::Solo(solo) => self.solo = solo,
+            Cmd::Panic => {
+                self.request_panic();
+                return;
+            }
+            Cmd::Midi(byte) => {
+                let ok = self.tx.push_midi(&[byte]);
+                self.observe(ok);
+                return;
+            }
+        }
+        let ok = self.push_snapshot();
         self.observe(ok);
+    }
+
+    fn push_snapshot(&self) -> bool {
+        let rig_bytes = self.rig.bytes(self.ch);
+        let mut snapshot = Vec::with_capacity(rig_bytes.len() + 2);
+        snapshot.extend(rig_bytes.into_iter().map(Cmd::Midi));
+        snapshot.extend([Cmd::Play(self.playing), Cmd::Solo(self.solo)]);
+        self.tx.push_batch(&snapshot)
     }
 
     /// Request panic (all-notes-off). Retried every frame until it lands.
@@ -95,6 +127,10 @@ impl Outbox {
     /// "partial recall" the bug describes). When everything is delivered, `dirty` and
     /// `saturated` clear together.
     pub fn pump(&mut self, rig: &Rig, playing: bool, solo: bool) {
+        self.rig = *rig;
+        self.playing = playing;
+        self.solo = solo;
+
         if self.panic_pending && self.tx.push(Cmd::Panic) {
             self.panic_pending = false;
         }
@@ -104,13 +140,7 @@ impl Outbox {
             return;
         }
 
-        // Rig bytes + Play + Solo, written behind the unpublished head and made visible
-        // by one Release store.
-        let rig_bytes = rig.bytes(self.ch);
-        let mut snapshot = Vec::with_capacity(rig_bytes.len() + 2);
-        snapshot.extend(rig_bytes.into_iter().map(Cmd::Midi));
-        snapshot.extend([Cmd::Play(playing), Cmd::Solo(solo)]);
-        if self.tx.push_batch(&snapshot) {
+        if self.push_snapshot() {
             self.dirty = false;
         }
         self.saturated = self.dirty || self.panic_pending;
@@ -250,6 +280,39 @@ mod tests {
         assert!(
             drain(&c).is_empty(),
             "pump sent something with nothing dirty"
+        );
+    }
+
+    #[test]
+    fn more_than_128_completed_messages_coalesce_to_the_latest_snapshot() {
+        let (p, c) = Ring::channel();
+        let mut ob = Outbox::new(p, CH);
+        let mut rig = Rig::default();
+
+        // The former incremental path emitted three completed CC messages per edit.
+        // Fifty rapid edits therefore queued 150 messages before one callback.
+        for value in 0..50u8 {
+            rig.vals[0] = value;
+            ob.send_knob(&rig, 0);
+        }
+        assert!(
+            ob.saturated(),
+            "later edits did not coalesce behind the full ring"
+        );
+        assert_eq!(
+            drain(&c).len(),
+            crate::ring::MAX_QUEUED_COMMANDS - 2,
+            "the ring held more than one complete state snapshot"
+        );
+
+        ob.pump(&rig, true, false);
+        let (midi, play, solo) = apply(&drain(&c));
+        assert_eq!(midi, rig.bytes(CH), "recovery did not send the latest edit");
+        assert_eq!(play, Some(true));
+        assert_eq!(solo, Some(false));
+        assert!(
+            !ob.saturated(),
+            "latest state remained pending after recovery"
         );
     }
 }

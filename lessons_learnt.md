@@ -10,6 +10,13 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.08.01 — **A bounded ring needs a captured head to bound each drain** (`ring.rs:drain_published`).
+  - A `while pop()` callback can exceed the ring's capacity when the producer replenishes
+    slots during the loop. Capture the published head once and leave later commands for
+    the next callback.
+  - Publish the new tail only after copying that snapshot. The producer then cannot reuse
+    a slot while the consumer still reads it.
+
 - 2026.07.31 — **Zero-length clamps orphan note-offs; collapse duplicate starts first** (`engine.py:_resolve_overlaps`).
 - 2026.07.30 — **A one-case bar hides fitting; census every value it would flag** (`sampler.rs:best_cycle_correlation`).
   - The retired `baritone_sax_key58_avoids_a_rough_source_zone` asserted `> 0.996` on the

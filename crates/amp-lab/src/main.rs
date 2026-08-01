@@ -92,18 +92,11 @@ impl Lab {
     }
 
     fn apply(&mut self, r: Rig, label: Option<char>) {
-        let voice_changed = r.program != self.rig.program || r.lead_bank != self.rig.lead_bank;
         self.rig = r;
         self.showing = label;
-        // A voice change rebuilds the Drive insert, so re-send everything; a knob
-        // change alone only needs its own triple.
-        if voice_changed {
-            self.send_rig();
-        } else {
-            for k in KNOBS {
-                self.send_knob(k.idx);
-            }
-        }
+        // Every enqueue is a complete state snapshot. Sending once also coalesces a
+        // multi-knob recall into one bounded callback update.
+        self.send_rig();
     }
 }
 

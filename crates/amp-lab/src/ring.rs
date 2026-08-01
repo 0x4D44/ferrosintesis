@@ -26,7 +26,10 @@ pub enum Cmd {
     Panic,
 }
 
-const CAP: usize = 4096; // power of two; ~1300 three-byte CC messages
+/// One complete rig + Play + Solo snapshot occupies 61 entries. Two spare entries keep
+/// panic deliverable without letting a recovered backlog dominate the next callback.
+pub(crate) const MAX_QUEUED_COMMANDS: usize = 63;
+const CAP: usize = MAX_QUEUED_COMMANDS + 1; // one slot stays empty to distinguish full
 
 pub struct Ring {
     buf: Box<[std::cell::UnsafeCell<Cmd>]>,
@@ -194,7 +197,30 @@ impl Producer {
 }
 
 impl Consumer {
-    /// Pop one command, or None if empty. Called only from the audio thread.
+    /// Drain exactly the commands published when this call begins.
+    ///
+    /// The producer may publish more commands concurrently, but they stay behind the
+    /// captured head for the next callback. Publishing `tail` once at the end also keeps
+    /// the producer from reusing a slot while this copy is in progress.
+    pub fn drain_published(&self, output: &mut [Cmd; MAX_QUEUED_COMMANDS]) -> usize {
+        let r = &*self.0;
+        let stop = r.head.load(Ordering::Acquire);
+        let mut tail = r.tail.load(Ordering::Relaxed);
+        let mut len = 0usize;
+        while tail != stop {
+            // SAFETY: the captured head published this slot, and the producer cannot
+            // reuse it until the final Release store advances tail.
+            output[len] = unsafe { *r.buf[tail].get() };
+            len += 1;
+            tail = (tail + 1) % CAP;
+        }
+        r.tail.store(tail, Ordering::Release);
+        len
+    }
+
+    /// Pop one command, or None if empty. Test-only; production drains one captured
+    /// callback snapshot so concurrent publication cannot extend its work.
+    #[cfg(test)]
     pub fn pop(&self) -> Option<Cmd> {
         let r = &*self.0;
         let tail = r.tail.load(Ordering::Relaxed);
@@ -247,13 +273,17 @@ mod tests {
     #[test]
     fn round_trips_in_order() {
         let (p, c) = Ring::channel();
-        for i in 0..100u8 {
-            assert!(p.push(Cmd::Midi(i)));
+        for round in 0..4usize {
+            for offset in 0..MAX_QUEUED_COMMANDS {
+                let value = ((round * MAX_QUEUED_COMMANDS + offset) % 128) as u8;
+                assert!(p.push(Cmd::Midi(value)));
+            }
+            for offset in 0..MAX_QUEUED_COMMANDS {
+                let value = ((round * MAX_QUEUED_COMMANDS + offset) % 128) as u8;
+                assert_eq!(c.pop(), Some(Cmd::Midi(value)));
+            }
+            assert_eq!(c.pop(), None);
         }
-        for i in 0..100u8 {
-            assert_eq!(c.pop(), Some(Cmd::Midi(i)));
-        }
-        assert_eq!(c.pop(), None);
     }
 
     #[test]
@@ -262,9 +292,9 @@ mod tests {
         let mut n = 0;
         while p.push(Cmd::Panic) {
             n += 1;
-            assert!(n <= CAP, "push never reported full");
+            assert!(n <= MAX_QUEUED_COMMANDS, "push never reported full");
         }
-        assert_eq!(n, CAP - 1);
+        assert_eq!(n, MAX_QUEUED_COMMANDS);
     }
 
     #[test]
@@ -312,5 +342,24 @@ mod tests {
         assert!(producer.join().expect("producer thread"));
         let actual: Vec<_> = std::iter::from_fn(|| c.pop()).collect();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn published_drain_cannot_exceed_the_callback_budget() {
+        let (p, c) = Ring::channel();
+        for index in 0..MAX_QUEUED_COMMANDS {
+            assert!(p.push(Cmd::Midi(index as u8)));
+        }
+        assert!(
+            !p.push(Cmd::Panic),
+            "ring accepted more than the callback budget"
+        );
+
+        let mut commands = [Cmd::Panic; MAX_QUEUED_COMMANDS];
+        let drained = c.drain_published(&mut commands);
+        assert_eq!(drained, MAX_QUEUED_COMMANDS);
+        for (index, command) in commands.into_iter().enumerate() {
+            assert_eq!(command, Cmd::Midi(index as u8));
+        }
     }
 }

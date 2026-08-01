@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** sample generation / archive provenance
 - **Raised:** 2026-08-01
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260801T055954Z-p97736-n464799300-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00019-run-fix-20260801T055954Z-p97736-n464799300-c1
+- **Owner base:** 0d0a18addf73c335fa5a05c1b44cb91e2956707c
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-01T05:59:54Z
+- **Owner until:** 2026-08-01T07:59:54Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

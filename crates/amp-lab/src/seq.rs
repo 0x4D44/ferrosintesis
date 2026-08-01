@@ -50,9 +50,8 @@ fn be32(d: &[u8], i: usize) -> u32 {
 impl Loop {
     /// Parse an SMF (format 0 or 1) into frame-scheduled events.
     ///
-    /// Tempo is taken from the first Set-Tempo meta event; the loop we ship has a
-    /// single constant tempo, and a tempo map would only add a scheduling mode the
-    /// tool has no use for.
+    /// The loop we ship has one constant Set-Tempo event. A second tempo is rejected:
+    /// accepting it would require a tempo map, a scheduling mode this tool has no use for.
     pub fn parse(data: &[u8], sample_rate: f64) -> Result<Loop, String> {
         if data.len() < 14 || &data[0..4] != b"MThd" {
             return Err("not a MIDI file".into());
@@ -66,11 +65,11 @@ impl Loop {
 
         // Pass 1: gather (tick, message) across all tracks.
         let mut raw: Vec<(u64, [u8; 3], u8)> = Vec::new();
-        let mut tempo_us = 500_000f64; // 120 bpm until a Set-Tempo says otherwise
-                                       // The latest End-of-Track any track declares. This is the AUTHORED loop
-                                       // boundary: the generator places it on the bar line, past the last note-off,
-                                       // so the tail inside the final bar is deliberate and the seam is metric
-                                       // (MM-BUG-KILN-00079).
+        let mut tempo_us: Option<f64> = None; // 120 bpm when no Set-Tempo is authored
+                                              // The latest End-of-Track any track declares. This is the AUTHORED loop
+                                              // boundary: the generator places it on the bar line, past the last note-off,
+                                              // so the tail inside the final bar is deliberate and the seam is metric
+                                              // (MM-BUG-KILN-00079).
         let mut eot_tick: Option<u64> = None;
         let mut pos = 14usize;
         for _ in 0..ntrk {
@@ -106,11 +105,18 @@ impl Loop {
                             eot_tick = Some(eot_tick.map_or(tick, |e: u64| e.max(tick)));
                         }
                         if ty == 0x51 && l == 3 && i + 3 <= data.len() {
-                            tempo_us = f64::from(
+                            let value = f64::from(
                                 (u32::from(data[i]) << 16)
                                     | (u32::from(data[i + 1]) << 8)
                                     | u32::from(data[i + 2]),
                             );
+                            if tempo_us.replace(value).is_some() {
+                                return Err(
+                                    "multiple Set-Tempo events are not supported; amp-lab \
+                                     requires a constant tempo"
+                                        .into(),
+                                );
+                            }
                         }
                         i += l;
                     }
@@ -135,7 +141,7 @@ impl Loop {
         }
 
         raw.sort_by_key(|e| e.0);
-        let spt = tempo_us * 1e-6 / ppq; // seconds per tick
+        let spt = tempo_us.unwrap_or(500_000.0) * 1e-6 / ppq; // seconds per tick
         let events: Vec<Event> = raw
             .iter()
             .map(|&(t, bytes, len)| Event {
@@ -244,6 +250,49 @@ mod tests {
         out.extend_from_slice(&(trk.len() as u32).to_be_bytes());
         out.append(&mut trk);
         out
+    }
+
+    fn smf(format: u16, tracks: &[Vec<u8>]) -> Vec<u8> {
+        let mut out = b"MThd".to_vec();
+        out.extend_from_slice(&6u32.to_be_bytes());
+        out.extend_from_slice(&format.to_be_bytes());
+        out.extend_from_slice(&(tracks.len() as u16).to_be_bytes());
+        out.extend_from_slice(&480u16.to_be_bytes());
+        for track in tracks {
+            out.extend_from_slice(b"MTrk");
+            out.extend_from_slice(&(track.len() as u32).to_be_bytes());
+            out.extend_from_slice(track);
+        }
+        out
+    }
+
+    #[test]
+    fn two_tempo_format_zero_file_is_rejected() {
+        let track = vec![
+            0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20, // 500000 us/quarter
+            0x00, 0xFF, 0x51, 0x03, 0x09, 0x27, 0xC0, // 600000 us/quarter
+            0x00, 0xFF, 0x2F, 0x00,
+        ];
+        let error = Loop::parse(&smf(0, &[track]), 44_100.0)
+            .err()
+            .expect("two tempos must be rejected");
+        assert!(error.contains("multiple Set-Tempo"), "{error}");
+    }
+
+    #[test]
+    fn tempo_in_multiple_format_one_tracks_is_rejected_in_either_order() {
+        let fast = vec![
+            0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20, 0x00, 0xFF, 0x2F, 0x00,
+        ];
+        let slow = vec![
+            0x00, 0xFF, 0x51, 0x03, 0x09, 0x27, 0xC0, 0x00, 0xFF, 0x2F, 0x00,
+        ];
+        for tracks in [[fast.clone(), slow.clone()], [slow, fast]] {
+            let error = Loop::parse(&smf(1, &tracks), 44_100.0)
+                .err()
+                .expect("two tempos must be rejected");
+            assert!(error.contains("multiple Set-Tempo"), "{error}");
+        }
     }
 
     /// MM-BUG-KILN-00079: the shipped loop is EXACTLY eight bars.

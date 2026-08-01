@@ -22,19 +22,20 @@ pub struct Loop {
     pub frames: u64,
 }
 
-fn vlq(d: &[u8], i: &mut usize) -> u32 {
+fn vlq(d: &[u8], i: &mut usize, end: usize, what: &str) -> Result<u32, String> {
     let mut v = 0u32;
-    loop {
-        if *i >= d.len() {
-            return v;
+    for _ in 0..4 {
+        if *i >= end {
+            return Err(format!("truncated {what}"));
         }
         let b = d[*i];
         *i += 1;
         v = (v << 7) | u32::from(b & 0x7F);
         if b & 0x80 == 0 {
-            return v;
+            return Ok(v);
         }
     }
+    Err(format!("{what} exceeds four bytes"))
 }
 
 fn be16(d: &[u8], i: usize) -> u16 {
@@ -65,46 +66,66 @@ impl Loop {
 
         // Pass 1: gather (tick, message) across all tracks.
         let mut raw: Vec<(u64, [u8; 3], u8)> = Vec::new();
-        let mut tempo_us: Option<f64> = None; // 120 bpm when no Set-Tempo is authored
-                                              // The latest End-of-Track any track declares. This is the AUTHORED loop
-                                              // boundary: the generator places it on the bar line, past the last note-off,
-                                              // so the tail inside the final bar is deliberate and the seam is metric
-                                              // (MM-BUG-KILN-00079).
+        // Fall back to 120 bpm when no Set-Tempo is authored.
+        let mut tempo_us: Option<f64> = None;
+        // The latest End-of-Track any track declares. This is the AUTHORED loop
+        // boundary: the generator places it on the bar line, past the last note-off,
+        // so the tail inside the final bar is deliberate and the seam is metric
+        // (MM-BUG-KILN-00079).
         let mut eot_tick: Option<u64> = None;
         let mut pos = 14usize;
-        for _ in 0..ntrk {
+        for track_index in 0..ntrk {
+            let track_number = track_index + 1;
             if pos + 8 > data.len() || &data[pos..pos + 4] != b"MTrk" {
-                break;
+                return Err(format!("missing or invalid track {track_number} header"));
             }
             let len = be32(data, pos + 4) as usize;
-            let end = (pos + 8 + len).min(data.len());
             let mut i = pos + 8;
+            let end = i
+                .checked_add(len)
+                .filter(|&end| end <= data.len())
+                .ok_or_else(|| format!("track {track_number} data is truncated"))?;
             let mut tick = 0u64;
-            let mut status = 0u8;
+            let mut running_status: Option<u8> = None;
             while i < end {
-                tick += u64::from(vlq(data, &mut i));
+                tick = tick
+                    .checked_add(u64::from(vlq(data, &mut i, end, "delta-time VLQ")?))
+                    .ok_or_else(|| format!("track {track_number} tick overflow"))?;
                 if i >= end {
-                    break;
+                    return Err(format!("track {track_number} ends after its delta-time"));
                 }
-                let mut b = data[i];
-                if b & 0x80 != 0 {
-                    status = b;
+                let byte = data[i];
+                let b = if byte & 0x80 != 0 {
                     i += 1;
-                    if i > end {
-                        break;
+                    if (0x80..=0xEF).contains(&byte) {
+                        running_status = Some(byte);
                     }
+                    byte
                 } else {
-                    b = status; // running status
-                }
+                    running_status.ok_or_else(|| {
+                        format!("track {track_number} uses data without running status")
+                    })?
+                };
                 match b {
                     0xFF => {
+                        if i >= end {
+                            return Err(format!(
+                                "track {track_number} has a truncated meta event type"
+                            ));
+                        }
                         let ty = data[i];
                         i += 1;
-                        let l = vlq(data, &mut i) as usize;
+                        let l = vlq(data, &mut i, end, "meta event length VLQ")? as usize;
+                        let payload_end = i
+                            .checked_add(l)
+                            .filter(|&payload_end| payload_end <= end)
+                            .ok_or_else(|| {
+                                format!("track {track_number} has a truncated meta event payload")
+                            })?;
                         if ty == 0x2F {
                             eot_tick = Some(eot_tick.map_or(tick, |e: u64| e.max(tick)));
                         }
-                        if ty == 0x51 && l == 3 && i + 3 <= data.len() {
+                        if ty == 0x51 && l == 3 {
                             let value = f64::from(
                                 (u32::from(data[i]) << 16)
                                     | (u32::from(data[i + 1]) << 8)
@@ -118,26 +139,38 @@ impl Loop {
                                 );
                             }
                         }
-                        i += l;
+                        i = payload_end;
                     }
                     0xF0 | 0xF7 => {
-                        let l = vlq(data, &mut i) as usize;
-                        i += l; // the loop authors no SysEx; skip it
+                        let l = vlq(data, &mut i, end, "SysEx length VLQ")? as usize;
+                        i = i
+                            .checked_add(l)
+                            .filter(|&payload_end| payload_end <= end)
+                            .ok_or_else(|| {
+                                format!("track {track_number} has a truncated SysEx payload")
+                            })?;
                     }
-                    _ => {
+                    0x80..=0xEF => {
                         let hi = b & 0xF0;
                         let n = if matches!(hi, 0xC0 | 0xD0) { 1 } else { 2 };
                         if i + n > end {
-                            break;
+                            return Err(format!(
+                                "track {track_number} has a truncated channel message"
+                            ));
                         }
                         let mut msg = [b, 0, 0];
                         msg[1..=n].copy_from_slice(&data[i..i + n]);
                         raw.push((tick, msg, (n + 1) as u8));
                         i += n;
                     }
+                    _ => {
+                        return Err(format!(
+                            "track {track_number} has unsupported status 0x{b:02X}"
+                        ));
+                    }
                 }
             }
-            pos = pos + 8 + len;
+            pos = end;
         }
 
         raw.sort_by_key(|e| e.0);
@@ -292,6 +325,56 @@ mod tests {
                 .err()
                 .expect("two tempos must be rejected");
             assert!(error.contains("multiple Set-Tempo"), "{error}");
+        }
+    }
+
+    fn parse_error(track: Vec<u8>) -> String {
+        Loop::parse(&smf(0, &[track]), 44_100.0)
+            .err()
+            .expect("malformed track must be rejected")
+    }
+
+    #[test]
+    fn terminal_meta_status_is_rejected_without_panicking() {
+        assert!(parse_error(vec![0x00, 0xFF]).contains("meta event type"));
+    }
+
+    #[test]
+    fn truncated_delta_vlq_is_rejected() {
+        assert!(parse_error(vec![0x81]).contains("delta-time VLQ"));
+    }
+
+    #[test]
+    fn overlong_meta_and_sysex_payloads_are_rejected() {
+        let meta = parse_error(vec![0x00, 0xFF, 0x01, 0x05, b'x']);
+        assert!(meta.contains("meta event payload"), "{meta}");
+        let sysex = parse_error(vec![0x00, 0xF0, 0x05, 0x01]);
+        assert!(sysex.contains("SysEx payload"), "{sysex}");
+    }
+
+    #[test]
+    fn truncated_channel_message_is_rejected() {
+        let error = parse_error(vec![0x00, 0x90, 0x3C]);
+        assert!(error.contains("channel message"), "{error}");
+    }
+
+    #[test]
+    fn missing_declared_second_track_is_rejected() {
+        let mut data = smf(1, &[vec![0x00, 0xFF, 0x2F, 0x00]]);
+        data[11] = 2;
+        let error = Loop::parse(&data, 44_100.0)
+            .err()
+            .expect("missing second track must be rejected");
+        assert!(error.contains("track 2"), "{error}");
+    }
+
+    #[test]
+    fn every_strict_backing_file_prefix_is_rejected() {
+        for end in 0..crate::BACKING.len() {
+            assert!(
+                Loop::parse(&crate::BACKING[..end], 44_100.0).is_err(),
+                "accepted the shipped MIDI truncated to {end} bytes"
+            );
         }
     }
 

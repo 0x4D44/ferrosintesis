@@ -10,6 +10,10 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.08.01 — **Embedded data still needs fallible, chunk-bounded parsing** (`seq.rs:Loop::parse`).
+  - Compile-time inclusion removes attacker reachability, not truncation risk. Bound every
+    VLQ and payload by its declared track end, and reject every strict asset prefix.
+
 - 2026.08.01 — **A zero-frame onset still needs a slope-bounded micro-fade** (`prepare.py:trim_to_onset`).
   - Capping a fade to available lead-in preserves tight attacks, but leaves a full-scale
     step when the source begins mid-wave. Choose the shortest fade whose steps fit the

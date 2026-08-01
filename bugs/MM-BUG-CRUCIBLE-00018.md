@@ -5,15 +5,15 @@
 - **Severity:** Low
 - **Area:** amp-lab / realtime sequencer
 - **Raised:** 2026-08-01
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260801T065846Z-p87252-n946572800-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00018-run-fix-20260801T065846Z-p87252-n946572800-c1
+- **Owner base:** 91d1b991ca18e3dcf6eb48126e25afadce3c293b
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-01T06:58:46Z
+- **Owner until:** 2026-08-01T08:58:46Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -5,15 +5,15 @@
 - **Severity:** Medium
 - **Area:** amp-lab / documentation
 - **Raised:** 2026-08-01
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260801T054807Z-p71432-n418791500-c1
+- **Owner host:** KILN
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00015-run-fix-20260801T054807Z-p71432-n418791500-c1
+- **Owner base:** 9ec128131c77cb3301786fc8889d4ffaa078430c
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-01T05:48:07Z
+- **Owner until:** 2026-08-01T07:48:07Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

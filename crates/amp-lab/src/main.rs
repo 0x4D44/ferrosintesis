@@ -289,3 +289,43 @@ impl eframe::App for Lab {
         });
     }
 }
+
+#[cfg(test)]
+mod docs_tests {
+    #[test]
+    fn documented_commands_match_the_standalone_workspace() {
+        let manifest = include_str!("../Cargo.toml");
+        let readme = include_str!("../README.md");
+        let generator = include_str!("../tools/make_backing_loop.py");
+
+        assert!(
+            manifest.lines().any(|line| line.trim() == "[workspace]"),
+            "amp-lab no longer declares its own workspace"
+        );
+        for command in [
+            "cd crates/amp-lab",
+            "cargo run --release",
+            "cargo fmt",
+            "cargo clippy --all-targets -- -D warnings",
+            "cargo test",
+        ] {
+            assert!(readme.contains(command), "README omits `{command}`");
+        }
+        for stale in [
+            "-p amp-lab",
+            "workspace member",
+            "--exclude amp-lab",
+            "from the repo root",
+        ] {
+            assert!(!readme.contains(stale), "README retains stale `{stale}`");
+        }
+        assert!(
+            generator.contains("python3 tools/make_backing_loop.py"),
+            "generator docstring does not use its standalone-workspace path"
+        );
+        assert!(
+            !generator.contains("python tools/make_backing_loop.py"),
+            "generator docstring retains the broken root-relative command"
+        );
+    }
+}

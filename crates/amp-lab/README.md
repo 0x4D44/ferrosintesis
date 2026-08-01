@@ -4,15 +4,20 @@ Twiddle the driven-guitar amp knobs live, over a looping backing track, to decid
 what GM29/GM30 should default to (MM-REQ-KILN-00028 Part B).
 
 ```
-cargo run --release -p amp-lab     # from the repo root
+cd crates/amp-lab
+cargo run --release
 ```
 
-It is a **workspace member**, so a bare `cargo build --release` at the repo root
-builds it too. But it drags in egui + cpal (~200 crates) that no shipped crate
-needs, so the integration gate runs `--workspace --exclude amp-lab` (see
-`.deltic-integrate.toml`) and does not compile that tree on every integration.
-When you touch the lab, lint and test it explicitly: `cargo clippy -p amp-lab`,
-`cargo test -p amp-lab`.
+It is a **standalone workspace**, deliberately outside the root workspace because
+egui + cpal add roughly 200 crates that no shipped crate needs. Root Cargo commands
+and the integration gate therefore do not reach it. When you touch the lab, run its
+checks from `crates/amp-lab/`:
+
+```
+cargo fmt
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
 
 ## What it does
 
@@ -49,7 +54,7 @@ no ferrosintesis API of its own.
 | `src/audio.rs` | cpal stream; the audio thread owns the synth and sequencer |
 | `src/ring.rs` | lock-free SPSC command ring (UI → audio) |
 | `src/seq.rs` | minimal SMF reader + frame-accurate loop playback |
-| `assets/backing.mid` | the 8-bar loop, regenerate with `crates/amp-lab/tools/make_backing_loop.py` |
+| `assets/backing.mid` | the 8-bar loop, regenerate with `python3 tools/make_backing_loop.py` |
 
 The threading split is the load-bearing part: `RealtimeSynth` buffers `write_byte`
 for the next `render_add`, so it must be owned by one thread. Sharing it with a
@@ -60,4 +65,4 @@ ever pushes into the ring.
 
 8 bars, 104 bpm, A minor. Rhythm guitar (GM30 main) on ch0, **lead guitar (GM29
 lead) on ch1 — the knobs act on this one**, bass on ch2, drums on ch9.
-Regenerate with `python3 crates/amp-lab/tools/make_backing_loop.py` from the repo root.
+Regenerate from `crates/amp-lab/` with `python3 tools/make_backing_loop.py`.

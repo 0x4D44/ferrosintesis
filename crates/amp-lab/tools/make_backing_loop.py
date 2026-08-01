@@ -12,8 +12,8 @@ Channel map (amp-lab solos ch0+ch1):
     2  bass           GM33
     9  drums
 
-Stdlib only, like the album engines. Run from the repo root:
-    python tools/make_backing_loop.py
+Stdlib only, like the album engines. Run from crates/amp-lab:
+    python3 tools/make_backing_loop.py
 """
 import os
 import struct

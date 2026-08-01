@@ -90,10 +90,10 @@ impl Outbox {
 
     /// Reconcile the audio thread to the current UI state. Call once per frame.
     ///
-    /// Panic first (safety), then the state snapshot. The snapshot is atomic: it is
-    /// attempted only when the ring has room for ALL of it, so the audio thread never
-    /// sees a half-applied rig (the A/B "partial recall" the bug describes). When
-    /// everything is delivered, `dirty` and `saturated` clear together.
+    /// Panic first (safety), then the state snapshot. The ring publishes the snapshot
+    /// with one head update, so the audio thread never sees a half-applied rig (the A/B
+    /// "partial recall" the bug describes). When everything is delivered, `dirty` and
+    /// `saturated` clear together.
     pub fn pump(&mut self, rig: &Rig, playing: bool, solo: bool) {
         if self.panic_pending && self.tx.push(Cmd::Panic) {
             self.panic_pending = false;
@@ -104,18 +104,14 @@ impl Outbox {
             return;
         }
 
-        // rig bytes + Play + Solo, as one unit.
+        // Rig bytes + Play + Solo, written behind the unpublished head and made visible
+        // by one Release store.
         let rig_bytes = rig.bytes(self.ch);
-        if self.tx.free() >= rig_bytes.len() + 2 {
-            let ok = self.tx.push_midi(&rig_bytes)
-                && self.tx.push(Cmd::Play(playing))
-                && self.tx.push(Cmd::Solo(solo));
-            // The preflight guaranteed room, so `ok` is true; assert the invariant rather
-            // than trust it silently.
-            debug_assert!(ok, "snapshot preflight said it fit but a push still failed");
-            if ok {
-                self.dirty = false;
-            }
+        let mut snapshot = Vec::with_capacity(rig_bytes.len() + 2);
+        snapshot.extend(rig_bytes.into_iter().map(Cmd::Midi));
+        snapshot.extend([Cmd::Play(playing), Cmd::Solo(solo)]);
+        if self.tx.push_batch(&snapshot) {
+            self.dirty = false;
         }
         self.saturated = self.dirty || self.panic_pending;
     }

@@ -144,12 +144,10 @@ impl Producer {
         true
     }
 
-    /// How many more commands the ring can accept right now.
-    ///
-    /// Lets a caller preflight a multi-command snapshot as one unit — push it only when
-    /// the WHOLE thing fits, so it can never be partially applied
-    /// (MM-BUG-KILN-00083). Like the `push_midi` preflight, it is a lower bound from the
-    /// producer's view: the consumer can only make room, never take it.
+    /// How many more commands the ring can accept right now. Test-only because production
+    /// callers must use the atomic batch operations instead of preflighting and publishing
+    /// commands separately.
+    #[cfg(test)]
     pub fn free(&self) -> usize {
         let r = &*self.0;
         let head = r.head.load(Ordering::Relaxed);
@@ -158,20 +156,40 @@ impl Producer {
         CAP - 1 - used
     }
 
+    /// Push commands and publish them to the consumer as one batch.
+    ///
+    /// The producer writes behind its unpublished head, then advances the shared head
+    /// once, so the consumer sees either none of the batch or all of it.
+    pub fn push_batch(&self, commands: &[Cmd]) -> bool {
+        self.push_generated(commands.len(), |index| commands[index])
+    }
+
+    /// Shared publication primitive for command and MIDI slices. Keep the generator
+    /// private: calling back into this producer while slots are unpublished would break
+    /// the single-publication invariant.
+    fn push_generated(&self, len: usize, mut command_at: impl FnMut(usize) -> Cmd) -> bool {
+        let r = &*self.0;
+        let mut head = r.head.load(Ordering::Relaxed);
+        let tail = r.tail.load(Ordering::Acquire);
+        let used = (head + CAP - tail) % CAP;
+        if CAP - 1 - used < len {
+            return false;
+        }
+
+        for index in 0..len {
+            // SAFETY: we are the only producer, the capacity check proved every slot
+            // belongs to it, and `head` remains unpublished until the Release store.
+            unsafe { *r.buf[head].get() = command_at(index) };
+            head = (head + 1) % CAP;
+        }
+        r.head.store(head, Ordering::Release);
+        true
+    }
+
     /// Push a whole MIDI message, all-or-nothing, so a CC can never be torn
     /// across a full-ring boundary and leave the parser mid-message.
     pub fn push_midi(&self, bytes: &[u8]) -> bool {
-        let r = &*self.0;
-        let head = r.head.load(Ordering::Relaxed);
-        let tail = r.tail.load(Ordering::Acquire);
-        let used = (head + CAP - tail) % CAP;
-        if CAP - 1 - used < bytes.len() {
-            return false;
-        }
-        for &b in bytes {
-            self.push(Cmd::Midi(b));
-        }
-        true
+        self.push_generated(bytes.len(), |index| Cmd::Midi(bytes[index]))
     }
 }
 
@@ -194,6 +212,8 @@ impl Consumer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc;
+    use std::time::Duration;
 
     /// The endpoints still cross threads in the shape the app actually uses: the
     /// consumer is MOVED to the audio thread while the producer stays on the UI
@@ -261,5 +281,36 @@ mod tests {
         assert!(!p.push_midi(&[0xB0, 99, 0x30]));
         c.pop();
         assert!(p.push_midi(&[0xB0, 99, 0x30]));
+    }
+
+    #[test]
+    fn batch_is_published_atomically() {
+        let (p, c) = Ring::channel();
+        let expected = vec![Cmd::Midi(0xC1), Cmd::Play(true), Cmd::Solo(false)];
+        let (reached_pause, paused) = mpsc::channel();
+        let (resume, resumed) = mpsc::channel();
+        let commands = expected.clone();
+        let producer = std::thread::spawn(move || {
+            p.push_generated(commands.len(), |index| {
+                if index == 1 {
+                    reached_pause.send(()).expect("test still listening");
+                    resumed.recv().expect("test resumes producer");
+                }
+                commands[index]
+            })
+        });
+        paused
+            .recv_timeout(Duration::from_secs(2))
+            .expect("producer did not pause inside the batch");
+        assert_eq!(
+            c.pop(),
+            None,
+            "consumer observed a prefix before the batch was complete"
+        );
+
+        resume.send(()).expect("producer still waiting");
+        assert!(producer.join().expect("producer thread"));
+        let actual: Vec<_> = std::iter::from_fn(|| c.pop()).collect();
+        assert_eq!(actual, expected);
     }
 }

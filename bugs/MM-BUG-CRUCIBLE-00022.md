@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00022 — Bass rebakes retain obsolete packaged WAVs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** electric-bass sample generation / output inventory
 - **Raised:** 2026-08-01
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260801T071307Z-p76832-n922353200-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00022-run-fix-20260801T071307Z-p76832-n922353200-c1
-- **Owner base:** 9eaa6195e79ae0de1f3e0d6c4273ff04a4f87346
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-01T07:13:07Z
-- **Owner until:** 2026-08-01T09:13:07Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`)
+- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`) -> Fixed (2026-08-01T07:26:11Z, deltic:auto role=fix run=fix-20260801T071307Z-p76832-n922353200-c1 branch=task/bug-MM-BUG-CRUCIBLE-00022-run-fix-20260801T071307Z-p76832-n922353200-c1 code=b9114c83033f3ba77d8a5b99d7a5fd37ccc1f9e8 gate=manual)
 
 ## Observation
 

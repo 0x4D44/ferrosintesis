@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00019 — Warm archive caches ignore selected-member mapping changes
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / archive provenance
 - **Raised:** 2026-08-01
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260801T055954Z-p97736-n464799300-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00019-run-fix-20260801T055954Z-p97736-n464799300-c1
-- **Owner base:** 0d0a18addf73c335fa5a05c1b44cb91e2956707c
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-01T05:59:54Z
-- **Owner until:** 2026-08-01T07:59:54Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`)
+- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`) -> Fixed (2026-08-01T06:07:19Z, deltic:auto role=fix run=fix-20260801T055954Z-p97736-n464799300-c1 branch=task/bug-MM-BUG-CRUCIBLE-00019-run-fix-20260801T055954Z-p97736-n464799300-c1 code=f3a86f0072d1fd19e064aad133576e89d53c9026 gate=manual)
 
 ## Observation
 

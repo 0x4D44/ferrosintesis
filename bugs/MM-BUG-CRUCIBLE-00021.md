@@ -1,24 +1,24 @@
 # MM-BUG-CRUCIBLE-00021 — Six bass samples inject a note-on discontinuity
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** electric-bass samples / onset de-click
 - **Raised:** 2026-08-01
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260801T061614Z-p88600-n294560700-c1
-- **Owner host:** KILN
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00021-run-fix-20260801T061614Z-p88600-n294560700-c1
-- **Owner base:** 3e98f7cf9b347aed150c660a502104c44dc4a40b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-01T06:16:14Z
-- **Owner until:** 2026-08-01T08:16:14Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`)
+- **State history:** Open (2026-08-01, raised by Codex GPT-5.6-Sol from a static multi-lens review; ID allocated per `bugs/README.md`) -> Fixed (2026-08-01T06:25:42Z, deltic:auto role=fix run=fix-20260801T061614Z-p88600-n294560700-c1 branch=task/bug-MM-BUG-CRUCIBLE-00021-run-fix-20260801T061614Z-p88600-n294560700-c1 code=bea209f04e9d5980d495fda2b01d950250c8fb2a gate=manual)
 
 ## Observation
 

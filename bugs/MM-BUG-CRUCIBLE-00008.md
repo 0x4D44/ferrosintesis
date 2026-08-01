@@ -1,6 +1,6 @@
 # MM-BUG-CRUCIBLE-00008 — Catalog MIDI overlap oracle misses cross-track, equal-tick, and unbalanced ambiguity
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/render-catalog / MIDI overlap oracle
@@ -18,7 +18,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review) -> Fixed (2026-07-31T22:29:17Z, deltic:auto role=fix run=fix-20260731T220807Z-p75660-n943457900-c1 branch=task/bug-MM-BUG-CRUCIBLE-00008-run-fix-20260731T220807Z-p75660-n943457900-c1 code=3fbe77f110af25a5473aacff01296acee93e40a6 gate=manual)
+- **State history:** Open (2026-07-31, raised by Codex GPT-5.6-Sol during static code review) -> Fixed (2026-07-31T22:29:17Z, deltic:auto role=fix run=fix-20260731T220807Z-p75660-n943457900-c1 branch=task/bug-MM-BUG-CRUCIBLE-00008-run-fix-20260731T220807Z-p75660-n943457900-c1 code=3fbe77f110af25a5473aacff01296acee93e40a6 gate=manual) -> Closed (2026-08-01, independently verified by Claude Opus 5 on trunk 789baed; fixer was Codex GPT-5.6-Sol)
 
 ## Observation
 
@@ -55,6 +55,39 @@ and report unmatched note lifecycles separately rather than skipping them.
 Add adversarial positive controls for a cross-track overlap; same-tick
 off-before-on (clean) and on-before-off (ambiguous); two ons with one off; and a
 normal repeated note. The controls must fail against the current implementation.
+
+### Verification summary (2026-08-01, Claude Opus 5, independent)
+
+Verified on trunk `789baed` in worktree
+`D:\worktrees\ferrosintesis\20260801-TSK-HUM-bug-verify-crucible-8-11`.
+
+**Original observation reproduced against the pre-fix tree.** Both oracle versions
+were compiled standalone (`rustc --test`, the file is std-only) with
+`CARGO_MANIFEST_DIR` pointed at the pre-fix `albums/` tree extracted from
+`3fbe77f^`:
+
+- the pre-fix oracle returns **clean** on that corpus (`1 passed`) — the blindness
+  in the report;
+- the post-fix oracle **fails** on the same corpus, naming 25 files and 7 243
+  same-pitch overlaps (e.g. `The Long Turning` 1 528, `Meridian` 1 328,
+  `Riverwake` 902), plus unmatched note-on/off lifecycles.
+
+That is the fails-before evidence for both the oracle and the committed MIDI it
+now rejects.
+
+**Post-fix tree green.** `cargo test -p render-catalog`: 21 unit tests pass
+(1 ignored helper) and all 5 overlap tests pass, including the three adversarial
+controls that map one-to-one onto the reported shapes — cross-track overlap,
+same-tick on-before-off vs off-before-on, and the unbalanced `on/on/off`
+lifecycle — plus the balanced-repeat negative control.
+
+**Regenerated MIDI is reproducible.** `python3 build.py` in
+`albums/fable5/The Burning Meridian` (3 MIDIs rewritten by the fix) reproduced the
+committed `.mid` and `album_manifest.json` byte-identically (`git status` clean),
+and `build.py --verify` reports `RESULT: PASS - all oracles green`.
+
+**Gates.** `cargo clippy -p render-catalog --all-targets -- -D warnings` clean;
+`cargo fmt --all -- --check` clean.
 
 ## Notes
 

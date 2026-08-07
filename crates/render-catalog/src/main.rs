@@ -206,6 +206,12 @@ const ALBUMS: &[(&str, &str, &str, &str)] = &[
         "Progressive Electronic / Instrumental",
     ),
     (
+        "albums/gpt5-6/Every Voice Forward",
+        "Every Voice Forward",
+        "GPT-5.6",
+        "Progressive Pop / Cinematic / Instrumental",
+    ),
+    (
         "albums/opus4-8",
         "VIGIL",
         "Claude Opus 4.8",

@@ -8,3 +8,13 @@
 # fresh clone, not on the machine that committed them. `-text` disables the conversion in both
 # directions. Applies at any depth, so a future pack's manifest is covered on arrival.
 _readme_and_license_*.txt -text
+
+# Same rule for an album that pins its own sources by SHA-256. `Every Voice Forward`
+# ships a SHA256SUMS.txt whose hashes are taken from the committed (LF) blobs; with
+# core.autocrlf=true every text entry in it fails on a fresh Windows clone while the
+# binary .mid entries pass. `-text` keeps the checked-out bytes equal to the attested
+# ones. build.py writes album_manifest.json with LF, so a rebuild stays verifiable too.
+"albums/gpt5-6/Every Voice Forward/*.md" -text
+"albums/gpt5-6/Every Voice Forward/*.py" -text
+"albums/gpt5-6/Every Voice Forward/album_manifest.json" -text
+"albums/gpt5-6/Every Voice Forward/SHA256SUMS.txt" -text

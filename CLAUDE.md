@@ -32,7 +32,7 @@ render-on-demand.)
 ## Layout
 
 `albums/` = **one directory per model** (`fable5/`, `opus4-8/`, `gpt5-5/`,
-`gpt5-3-spark/`), each holding one or more albums. An album lives either at the
+`gpt5-3-spark/`, `gpt5-6/`), each holding one or more albums. An album lives either at the
 model-dir root or in a named subfolder. `listening/` holds tagged `.opus` listening
 copies grouped by artist and album for drag-and-drop playback — **git-ignored build
 output**, produced by `cargo run --release -p render-catalog` (not committed).

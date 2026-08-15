@@ -43,6 +43,9 @@ fn skip(bytes: &[u8], pos: &mut usize, len: usize) -> Result<(), String> {
 enum NoteKind {
     On,
     Off,
+    /// GM System On. Not a note, but it ends every sounding one, so the audit has to
+    /// see it or it mis-reads valid reset-bearing MIDI (MM-BUG-CRUCIBLE-00034).
+    Reset,
 }
 
 #[derive(Clone, Copy)]
@@ -65,6 +68,13 @@ impl NoteAudit {
     fn is_clean(&self) -> bool {
         self.overlaps == 0 && self.unmatched_note_ons == 0 && self.unmatched_note_offs == 0
     }
+}
+
+/// The universal GM System On message body, as `midi::decode_sysex_payload` matches it:
+/// `F0 7E <device> 09 01 F7`, with the framing `F0` already consumed and the payload
+/// still carrying its terminating `F7`. The device byte is any value.
+fn is_gm_system_on(payload: &[u8]) -> bool {
+    matches!(payload.strip_suffix(&[0xf7]), Some([0x7e, _, 0x09, 0x01]))
 }
 
 fn track_note_events(
@@ -101,7 +111,30 @@ fn track_note_events(
             }
             0xf0 | 0xf7 => {
                 let len = vlq(track, &mut pos)? as usize;
-                skip(track, &mut pos, len)?;
+                let end = pos
+                    .checked_add(len)
+                    .ok_or_else(|| "sysex length overflow".to_string())?;
+                let payload = track
+                    .get(pos..end)
+                    .ok_or_else(|| "sysex extends past track".to_string())?;
+                pos = end;
+                // Mirrors `midi::parse` exactly: in an SMF only F0 begins a message,
+                // the payload must be terminated by F7, and the body is then matched
+                // against the universal GM System On shape. Getting any of those three
+                // wrong would make the audit disagree with the renderer, which is the
+                // whole defect this arm exists to fix.
+                if status == 0xf0 && is_gm_system_on(payload) {
+                    events.push(NoteEvent {
+                        tick,
+                        ordinal: *ordinal,
+                        channel: 0,
+                        key: 0,
+                        kind: NoteKind::Reset,
+                    });
+                    *ordinal = ordinal
+                        .checked_add(1)
+                        .ok_or_else(|| "note event ordinal overflow".to_string())?;
+                }
             }
             0x80..=0xef => {
                 let kind = status & 0xf0;
@@ -180,8 +213,23 @@ fn audit_midi_bytes(bytes: &[u8]) -> Result<NoteAudit, String> {
         pos = end;
     }
 
-    events.sort_by_key(|event| (event.tick, event.ordinal));
+    // A GM System On sorts BEFORE other events at the same tick, exactly as
+    // `midi::parse` orders it — otherwise a reset and its replacement note-on at one
+    // tick would be read in the wrong order and the replacement would look like an
+    // overlap. `false < true`, so the reset key sorts first.
+    events.sort_by_key(|event| {
+        (
+            event.tick,
+            !matches!(event.kind, NoteKind::Reset),
+            event.ordinal,
+        )
+    });
     let mut active: BTreeMap<(u8, u8), usize> = BTreeMap::new();
+    // Notes a reset silenced, which may still be followed by their original note-off.
+    // The renderer ignores such an off — the voice is already gone — so the audit must
+    // too. Counted per note rather than forgiven wholesale, so an off for a key that
+    // was never held still counts as unmatched in the new epoch.
+    let mut cleared_by_reset: BTreeMap<(u8, u8), usize> = BTreeMap::new();
     let mut audit = NoteAudit::default();
     for event in events {
         let note = (event.channel, event.key);
@@ -200,8 +248,24 @@ fn audit_midi_bytes(bytes: &[u8]) -> Result<NoteAudit, String> {
                         active.remove(&note);
                     }
                 }
-                None => audit.unmatched_note_offs += 1,
+                None => match cleared_by_reset.get_mut(&note) {
+                    // A stale off from before the reset: harmless in the renderer.
+                    Some(pending) => {
+                        *pending -= 1;
+                        if *pending == 0 {
+                            cleared_by_reset.remove(&note);
+                        }
+                    }
+                    None => audit.unmatched_note_offs += 1,
+                },
             },
+            NoteKind::Reset => {
+                // The engine clears every active voice, so nothing sounding survives
+                // and none of it is "unmatched" — it was ended, just not by a note-off.
+                for (note, depth) in std::mem::take(&mut active) {
+                    *cleared_by_reset.entry(note).or_default() += depth;
+                }
+            }
         }
     }
     audit.unmatched_note_ons = active.values().sum();
@@ -282,6 +346,117 @@ mod controls {
 
     fn audit(tracks: &[&[u8]]) -> NoteAudit {
         audit_midi_bytes(&midi_file(tracks)).expect("audit MIDI control")
+    }
+
+    /// `F0 05 7E 7F 09 01 F7` — the universal GM System On, as it appears in a track.
+    const GM_SYSTEM_ON: [u8; 7] = [0xf0, 0x05, 0x7e, 0x7f, 0x09, 0x01, 0xf7];
+
+    /// MM-BUG-CRUCIBLE-00034: GM System On ends every sounding note, so the audit must
+    /// see it. It skipped all SysEx, which made valid reset-bearing MIDI fail the
+    /// repository gate as overlapping or unbalanced.
+    ///
+    /// A note held across a reset is not "unmatched": the renderer ended it, just not
+    /// with a note-off.
+    #[test]
+    fn gm_system_on_clears_a_held_note() {
+        let mut events = vec![0x00, 0x90, 60, 100, 0x0a];
+        events.extend_from_slice(&GM_SYSTEM_ON);
+        assert_eq!(audit(&[&events]), NoteAudit::default());
+    }
+
+    /// The reset is ordered before other events at the same tick, exactly as
+    /// `midi::parse` orders it — so a replacement note-on at the reset's own tick is a
+    /// handoff, not an overlap. Getting the order wrong is the difference between a
+    /// clean file and a reported overlap, which is why this control uses delta 0.
+    #[test]
+    fn gm_system_on_and_a_replacement_note_at_one_tick_is_not_an_overlap() {
+        let mut events = vec![0x00, 0x90, 60, 100, 0x0a];
+        events.extend_from_slice(&GM_SYSTEM_ON);
+        events.extend_from_slice(&[0x00, 0x90, 60, 100, 0x0a, 0x80, 60, 0]);
+        assert_eq!(audit(&[&events]), NoteAudit::default());
+    }
+
+    /// A note-off left over from before the reset is harmless in the renderer — its
+    /// voice is already gone — so the audit forgives it. Once, and only for a note the
+    /// reset actually cleared.
+    ///
+    /// The replacement note is what makes this a real test of forgiveness. Without it
+    /// the sequence is just an on and an off, which an audit that ignores the reset
+    /// entirely also reads as clean — so the fixture would agree with the broken
+    /// implementation and prove nothing. Here the second off has no active note to
+    /// match, so it reaches the forgiveness path or it is counted.
+    #[test]
+    fn a_stale_note_off_after_a_reset_is_forgiven() {
+        let mut events = vec![0x00, 0x90, 60, 100, 0x0a];
+        events.extend_from_slice(&GM_SYSTEM_ON);
+        events.extend_from_slice(&[
+            0x00, 0x90, 60, 100, // replacement note in the new epoch
+            0x0a, 0x80, 60, 0, // its own note-off, which matches it
+            0x0a, 0x80, 60, 0, // the stale one from before the reset
+        ]);
+        assert_eq!(audit(&[&events]), NoteAudit::default());
+    }
+
+    /// The other half of that forgiveness, and the reason it is counted per note
+    /// rather than granted wholesale: a reset does not license every later note-off.
+    /// An off for a key the reset never cleared is still unmatched, and a SECOND off
+    /// for a key it cleared once is too.
+    #[test]
+    fn a_reset_does_not_forgive_note_offs_it_never_cleared() {
+        let mut never_held = vec![0x00, 0x90, 60, 100, 0x0a];
+        never_held.extend_from_slice(&GM_SYSTEM_ON);
+        never_held.extend_from_slice(&[0x0a, 0x80, 67, 0]); // key 67 was never on
+        assert_eq!(
+            audit(&[&never_held]),
+            NoteAudit {
+                unmatched_note_offs: 1,
+                ..NoteAudit::default()
+            }
+        );
+
+        let mut twice = vec![0x00, 0x90, 60, 100, 0x0a];
+        twice.extend_from_slice(&GM_SYSTEM_ON);
+        twice.extend_from_slice(&[0x0a, 0x80, 60, 0, 0x0a, 0x80, 60, 0]);
+        assert_eq!(
+            audit(&[&twice]),
+            NoteAudit {
+                unmatched_note_offs: 1,
+                ..NoteAudit::default()
+            }
+        );
+    }
+
+    /// Only the exact GM System On shape resets anything. A SysEx that merely looks
+    /// similar must stay invisible, or the audit would forgive notes the renderer
+    /// keeps sounding — the same disagreement in the opposite direction.
+    #[test]
+    fn other_sysex_does_not_reset_the_audit() {
+        // Right prefix, wrong sub-ID (09 02 is GM System Off, not On).
+        let mut gm_off = vec![0x00, 0x90, 60, 100, 0x0a];
+        gm_off.extend_from_slice(&[0xf0, 0x05, 0x7e, 0x7f, 0x09, 0x02, 0xf7]);
+        // Right bytes but unterminated: no F7, so `midi::parse` does not recognize it.
+        let mut unterminated = vec![0x00, 0x90, 62, 100, 0x0a];
+        unterminated.extend_from_slice(&[0xf0, 0x04, 0x7e, 0x7f, 0x09, 0x01]);
+        // A GS Reset — a real message the renderer models, but not a voice reset.
+        let mut gs = vec![0x00, 0x90, 64, 100, 0x0a];
+        gs.extend_from_slice(&[
+            0xf0, 0x0a, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7f, 0x00, 0x41, 0xf7,
+        ]);
+
+        for (label, events) in [
+            ("GM System Off", gm_off),
+            ("unterminated", unterminated),
+            ("GS Reset", gs),
+        ] {
+            assert_eq!(
+                audit(&[&events]),
+                NoteAudit {
+                    unmatched_note_ons: 1,
+                    ..NoteAudit::default()
+                },
+                "{label} was treated as a GM System On"
+            );
+        }
     }
 
     #[test]

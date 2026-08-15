@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / MIDI loading
 - **Raised:** 2026-08-14T11:47:21Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T071503Z-p19272-n598691600-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00027-run-fix-20260815T071503Z-p19272-n598691600-c1
+- **Owner base:** 4986ac837e5147a61fc821fb8ed0c7ccf0008911
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T07:15:03Z
+- **Owner until:** 2026-08-15T09:15:03Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

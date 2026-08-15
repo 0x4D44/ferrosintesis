@@ -6,15 +6,15 @@
 - **Area:** samples-sax / published provenance
 - **Raised:** 2026-08-14T08:07:54Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T155727Z-p36440-n828496700-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-KILN-00198-run-fix-20260815T155727Z-p36440-n828496700-c1
+- **Owner base:** 0dac19017cf0ccc0902e7245845e8a18b016150a
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T15:57:27Z
+- **Owner until:** 2026-08-15T17:57:27Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -6,15 +6,15 @@
 - **Area:** sample assets / orchestral2 viola provenance
 - **Raised:** 2026-08-13T22:54:31Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T153519Z-p43376-n739262500-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-KILN-00192-run-fix-20260815T153519Z-p43376-n739262500-c1
+- **Owner base:** 1e3ae32798779a86e404b92e00f2ea2e94dae5bd
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T15:35:19Z
+- **Owner until:** 2026-08-15T17:35:19Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

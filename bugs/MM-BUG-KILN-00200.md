@@ -6,15 +6,15 @@
 - **Area:** sampler embedded_wav / oracles
 - **Raised:** 2026-08-14T10:21:10Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T163920Z-p33716-n490348200-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-KILN-00200-run-fix-20260815T163920Z-p33716-n490348200-c1
+- **Owner base:** 1a8a3196c5298d298202ef1b82a8999688301fd7
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T16:39:20Z
+- **Owner until:** 2026-08-15T18:39:20Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

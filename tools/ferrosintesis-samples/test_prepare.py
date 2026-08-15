@@ -2680,6 +2680,103 @@ class GeneratedOutputFamiliesTest(unittest.TestCase):
             )
 
 
+class SelectedFamilyPreflightTest(unittest.TestCase):
+    """MM-BUG-KILN-00182 / MM-BUG-KILN-00191: every SELECTED family is pre-validated.
+
+    `main()` named four families by hand — steinwayb, kawai, headroom and the bass
+    pair — so the other 37 source-backed families ran the generic write loop with no
+    scoped inventory check. An obsolete owned WAV therefore survived a regeneration,
+    and since cargo packages `samples/**` and the inventory generator enumerates
+    whatever remains, a later table refresh would embed it and look self-consistent.
+    """
+
+    def test_the_derived_family_map_matches_every_committed_directory(self):
+        """The pre-flight is only safe if the derived expectation IS the truth.
+
+        If a family's table did not name exactly the files committed under its crate,
+        the new check would reject a legitimate regeneration on the first run. This
+        asserts the property the pre-flight depends on, over all 41 source-backed
+        families at once — and it doubles as drift detection, since a file added to a
+        crate without its table entry fails here.
+        """
+        owned = prepare._family_output_sets()
+        self.assertGreater(len(owned), 30, "the derived family map collapsed")
+
+        on_disk = {}
+        crates = os.path.join(prepare.REPO_ROOT, "crates")
+        for crate in os.listdir(crates):
+            sample_dir = os.path.join(crates, crate, "samples")
+            if not os.path.isdir(sample_dir):
+                continue
+            for name in os.listdir(sample_dir):
+                if name.endswith(".wav"):
+                    on_disk.setdefault(name.split("_", 1)[0], set()).add(name)
+
+        for family, expected in sorted(owned.items()):
+            with self.subTest(family=family):
+                self.assertEqual(
+                    expected,
+                    on_disk.get(family, set()),
+                    f"{family}: the source table and the committed directory disagree",
+                )
+
+    def test_every_source_backed_family_is_guarded_when_selected(self):
+        """Derived from the map, not from a list of families someone remembered.
+
+        Each family is selected on its own and the pre-flight must reject a stale
+        owned WAV for it. Driving `main()` itself is what makes this a test of the
+        WIRING rather than of the validator, which already had its own tests.
+
+        `fetch` and `write_wav_mono` are both stubbed to RAISE. That asserts the other
+        half of what both bugs ask for — the rejection must come before any source is
+        fetched or any output written — and it is also what makes the test safe to
+        run against broken code.
+
+        Mocking the write is not belt-and-braces here, it is the actual containment.
+        Patching `prepare.REPO_ROOT` does NOT redirect output: `sample_output_path`
+        binds `repo_root=REPO_ROOT` as a DEFAULT ARGUMENT, evaluated once at import,
+        so every call that omits it writes to the real repository whatever the module
+        attribute says. The first version of this test learned that the hard way — run
+        against the pre-fix code it regenerated samples into the working tree. See
+        MM-BUG-NMI-00003.
+        """
+        owned = prepare._family_output_sets()
+        self.assertGreater(len(owned), 30, "the derived family map collapsed")
+
+        def refuse_fetch(url, _path):
+            raise AssertionError(f"fetched {url} before validating the output set")
+
+        def refuse_write(path, *_args, **_kwargs):
+            raise AssertionError(f"wrote {path} before validating the output set")
+
+        for family, expected in sorted(owned.items()):
+            with self.subTest(family=family):
+                with tempfile.TemporaryDirectory() as repo_root:
+                    sample = sorted(expected)[0]
+                    out_dir = os.path.dirname(
+                        prepare.sample_output_path(sample, repo_root)
+                    )
+                    os.makedirs(out_dir, exist_ok=True)
+                    stale = f"{family}_STALE_UNEXPECTED.wav"
+                    open(os.path.join(out_dir, stale), "wb").close()
+
+                    with mock.patch.object(prepare, "REPO_ROOT", repo_root), \
+                            mock.patch.object(prepare, "fetch", refuse_fetch), \
+                            mock.patch.object(
+                                prepare, "write_wav_mono", refuse_write), \
+                            mock.patch.object(
+                                prepare.sys, "argv",
+                                ["prepare.py", f"--only={family}"]), \
+                            mock.patch.object(prepare.socket, "setdefaulttimeout"):
+                        with self.assertRaises(ValueError) as caught:
+                            prepare.main()
+                    self.assertIn(
+                        stale,
+                        str(caught.exception),
+                        f"{family}: a stale owned output was not rejected",
+                    )
+
+
 class HeadroomOutputInventoryTest(unittest.TestCase):
     """MM-BUG-KILN-00140: rebakes must reject obsolete owned outputs."""
 

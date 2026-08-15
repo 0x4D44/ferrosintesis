@@ -5278,9 +5278,15 @@ def _family_prefixes(*tables):
     return {name.split("_", 1)[0] for table in tables for name in table}
 
 
-def _prepare_only_families():
-    """Families whose selected prepare.py path writes at least one sample row."""
-    source_backed = _family_prefixes(
+def _source_tables():
+    """Every table whose KEYS are owned output WAV names, one entry per family.
+
+    Single source of truth for two derived things: which families `--only` accepts,
+    and which outputs each family owns. They were separate before, which is how
+    MM-BUG-KILN-00182 and MM-BUG-KILN-00191 happened — `main()` knew every family a
+    run could select but pre-validated only four of them by hand.
+    """
+    return (
         SOURCES,
         GUITAR_SOURCES,
         STEEL_URLS,
@@ -5309,6 +5315,24 @@ def _prepare_only_families():
         KAWAI_SOURCES,
         HEADROOM_SOURCES,
     )
+
+
+def _family_output_sets():
+    """family prefix -> the exact set of output WAVs that family owns.
+
+    Derived from the source tables, never hand-listed, so a family added to a table
+    is validated by `main()` on its very first run (MM-BUG-KILN-00182/00191).
+    """
+    owned = {}
+    for table in _source_tables():
+        for name in table:
+            owned.setdefault(name.split("_", 1)[0], set()).add(name)
+    return owned
+
+
+def _prepare_only_families():
+    """Families whose selected prepare.py path writes at least one sample row."""
+    source_backed = _family_prefixes(*_source_tables())
     own_recipe = {
         "b1upright",
         "bottle",
@@ -5458,15 +5482,22 @@ def main():
         return _wants_family(only, fam)
 
     # Reject stale owned assets before fetching a source or writing any selected
-    # output. Silently retaining or deleting one can republish a removed sample.
-    if want("steinwayb"):
-        _validate_generated_output_inventory("steinwayb", STEINWAYB_SOURCES)
-    if want("kawai"):
-        _validate_generated_output_inventory("kawai", KAWAI_SOURCES)
-    if want("headroom"):
-        _validate_generated_output_inventory("headroom", HEADROOM_SOURCES)
-    if want("fingerbass") or want("pickbass"):
-        _validate_generated_output_families({"fingerbass", "pickbass"}, FINGERBASS_SOURCES | PICKBASS_SOURCES)
+    # output. Silently retaining or deleting one can republish a removed sample:
+    # cargo packages `samples/**`, and the inventory generator enumerates whatever
+    # WAVs remain — so a later table refresh embeds the obsolete file and makes the
+    # generated table self-consistent with the wrong directory.
+    #
+    # Derived from the source tables, one check per SELECTED family
+    # (MM-BUG-KILN-00182, MM-BUG-KILN-00191). This used to name steinwayb, kawai,
+    # headroom and the bass pair by hand, so the other 37 source-backed families —
+    # grand, and every generic orchestral2 family: harp, ocarina, recorder, timpani,
+    # viola, marimba, xylo, glock, vibes, tubular, musicbox, eastpick, eastpluck —
+    # ran the generic write loop with no scoped check at all and silently kept
+    # obsolete outputs. A hand-written list of which families to guard is the same
+    # defect class it was guarding against.
+    for family, expected in sorted(_family_output_sets().items()):
+        if want(family):
+            _validate_generated_output_inventory(family, expected)
 
     # `--sax-only` bakes ONLY the MTG recorded sax bank (network + the -sax crate),
     # skipping the slow VSCO fetch/rewrite — fast iteration on the sax bank alone.
@@ -5730,4 +5761,6 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
 

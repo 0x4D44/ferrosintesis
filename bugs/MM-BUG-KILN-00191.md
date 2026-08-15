@@ -6,15 +6,15 @@
 - **Area:** sample generation / orchestral2 output inventory
 - **Raised:** 2026-08-13T22:54:22Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T130327Z-p39504-n673029900-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-KILN-00191-run-fix-20260815T130327Z-p39504-n673029900-c1
+- **Owner base:** 6f928ae5a8c80bf3b2f6ac9490f22da1afbc1787
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T13:03:27Z
+- **Owner until:** 2026-08-15T15:03:27Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

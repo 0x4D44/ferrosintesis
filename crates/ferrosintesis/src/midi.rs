@@ -286,10 +286,23 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
     // MM-BUG-KILN-00101.
     c.pos = 8usize.saturating_add(hlen);
 
-    // pass over every track, collecting tick-stamped events
-    let mut raw: Vec<(u32, u32, EvKind)> = Vec::new(); // (tick, seq, kind)
-    let mut tempos: Vec<(u32, u32)> = Vec::new(); // (tick, us per quarter)
-    let mut raw_markers: Vec<(u32, String)> = Vec::new();
+    // pass over every track, collecting tick-stamped events.
+    //
+    // Absolute tick is `u64`, not `u32` (MM-BUG-CRUCIBLE-00029). Each delta is a legal
+    // four-byte VLQ of at most 0x0FFF_FFFF, but their SUM is not bounded by that, and a
+    // `u32` accumulator wrapped: a hostile file placed a late event back near the start
+    // of the timeline, where it sorted into the wrong place AND showed the duration
+    // guard below a small value, so it evaded the 24-hour limit entirely.
+    //
+    // Widening rather than rejecting on overflow is the correct fix, not merely the
+    // safer one. A `u32` tick space is genuinely too small for a legal file: at the
+    // maximum division of 32767 ticks per quarter, `u32::MAX` ticks is only about
+    // 131_072 s at 120 bpm, and a faster tempo reaches it sooner still — so a file well
+    // inside the documented 24-hour limit can legitimately need more than `u32` ticks.
+    // Rejecting on overflow would refuse files the contract promises to accept.
+    let mut raw: Vec<(u64, u32, EvKind)> = Vec::new(); // (tick, seq, kind)
+    let mut tempos: Vec<(u64, u32)> = Vec::new(); // (tick, us per quarter)
+    let mut raw_markers: Vec<(u64, String)> = Vec::new();
     let mut title = String::new();
     let mut seq: u32 = 0;
 
@@ -307,7 +320,7 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
             data: track_data,
             pos: 0,
         };
-        let mut tick: u32 = 0;
+        let mut tick: u64 = 0;
         // The running status is the last CHANNEL VOICE status byte (0x80..=0xEF).
         // A system byte — meta (0xFF) or SysEx (0xF0/0xF7) — applies to its own
         // event only and must NOT be latched here: latching it made the next
@@ -319,7 +332,12 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
         // latch across instead of desyncing.
         let mut running_status: u8 = 0;
         while track.pos < track.data.len() {
-            tick = tick.wrapping_add(track.vlq()?);
+            // Saturating, not wrapping: saturation can only push an event LATER, where
+            // the duration guard below refuses it, whereas wrapping moved it earlier and
+            // hid it. Unreachable in practice — a track is bounded by
+            // `MAX_MIDI_FILE_BYTES`, so at most ~64M deltas of at most 0x0FFF_FFFF each,
+            // some 1.7e16 ticks against a `u64` ceiling of 1.8e19.
+            tick = tick.saturating_add(track.vlq()? as u64);
             let status = if track.peek()? >= 0x80 {
                 let explicit = track.u8()?;
                 if (0x80..=0xEF).contains(&explicit) {
@@ -428,7 +446,7 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
     // authored value governs the following interval. Sorting the `(tick, tempo)` tuples
     // used to break this by ordering equal-tick entries numerically by tempo instead.
     tempos.sort_by_key(|&(tick, _)| tick);
-    let mut effective_tempos: Vec<(u32, u32)> = Vec::with_capacity(tempos.len());
+    let mut effective_tempos: Vec<(u64, u32)> = Vec::with_capacity(tempos.len());
     for (tick, us) in tempos {
         if let Some(last) = effective_tempos.last_mut() {
             if last.0 == tick {
@@ -451,9 +469,9 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
     }
     let tpq = division as f64;
     // cumulative seconds at each tempo change
-    let mut cum: Vec<(u32, f64, f64)> = Vec::with_capacity(tempos.len()); // (tick, sec, sec/tick)
+    let mut cum: Vec<(u64, f64, f64)> = Vec::with_capacity(tempos.len()); // (tick, sec, sec/tick)
     let mut sec = 0.0;
-    let mut prev_tick = 0u32;
+    let mut prev_tick = 0u64;
     let mut spt = tempos[0].1 as f64 / 1_000_000.0 / tpq;
     for &(tick, us) in &tempos {
         sec += (tick - prev_tick) as f64 * spt;
@@ -461,7 +479,7 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
         spt = us as f64 / 1_000_000.0 / tpq;
         cum.push((tick, sec, spt));
     }
-    let to_sec = |tick: u32| -> f64 {
+    let to_sec = |tick: u64| -> f64 {
         let i = match cum.binary_search_by_key(&tick, |e| e.0) {
             Ok(i) => i,
             Err(0) => 0,
@@ -505,6 +523,134 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The largest value a legal four-byte VLQ can carry, and its encoding.
+    const MAX_DELTA: u64 = 0x0FFF_FFFF;
+    const MAX_DELTA_BYTES: [u8; 4] = [0xFF, 0xFF, 0xFF, 0x7F];
+    /// The largest legal ticks-per-quarter division (bit 15 set means SMPTE).
+    const MAX_DIVISION: u16 = 0x7FFF;
+
+    /// A format-0 file: one tempo at tick 0, then `deltas` maximal delta times each
+    /// followed by a note-on, then end-of-track.
+    fn file_with_maximal_deltas(division: u16, us_per_quarter: u32, deltas: usize) -> Vec<u8> {
+        let mut tr: Vec<u8> = vec![
+            0x00,
+            0xFF,
+            0x51,
+            0x03,
+            (us_per_quarter >> 16) as u8,
+            (us_per_quarter >> 8) as u8,
+            us_per_quarter as u8,
+        ];
+        for _ in 0..deltas {
+            tr.extend(MAX_DELTA_BYTES);
+            tr.extend([0x90, 60, 100]);
+        }
+        tr.extend([0x00, 0xFF, 0x2F, 0x00]);
+
+        let mut d: Vec<u8> = Vec::new();
+        d.extend(b"MThd");
+        d.extend(6u32.to_be_bytes());
+        d.extend(0u16.to_be_bytes());
+        d.extend(1u16.to_be_bytes());
+        d.extend(division.to_be_bytes());
+        d.extend(b"MTrk");
+        d.extend((tr.len() as u32).to_be_bytes());
+        d.extend(tr);
+        d
+    }
+
+    /// MM-BUG-CRUCIBLE-00029: cumulative tick time must not wrap.
+    ///
+    /// 17 maximal deltas total 4_563_402_735 ticks, which is past `u32::MAX`. The old
+    /// `u32` accumulator wrapped to 268_435_439 — so the file's last event was placed
+    /// back near the START of the timeline, where it both sorted into the wrong place
+    /// and showed the duration guard a small value. At the maximum division and one
+    /// second per quarter that turned a 139_268 s song into an 8_192 s one, and the
+    /// 24-hour limit never fired.
+    #[test]
+    fn cumulative_ticks_do_not_wrap_past_the_duration_guard() {
+        let deltas = 17;
+        let total_ticks = MAX_DELTA * deltas as u64;
+        assert!(
+            total_ticks > u32::MAX as u64,
+            "fixture no longer crosses the u32 boundary it exists to cross"
+        );
+        let wrapped = total_ticks - (1u64 << 32);
+        let true_seconds = total_ticks as f64 / MAX_DIVISION as f64;
+        let wrapped_seconds = wrapped as f64 / MAX_DIVISION as f64;
+        assert!(
+            true_seconds > MAX_SONG_SECONDS && wrapped_seconds < MAX_SONG_SECONDS,
+            "fixture must straddle the limit: true {true_seconds}, wrapped {wrapped_seconds}"
+        );
+
+        let data = file_with_maximal_deltas(MAX_DIVISION, 1_000_000, deltas);
+
+        match parse(&data) {
+            Err(MidiError::TooLong { seconds, .. }) => assert!(
+                (seconds - true_seconds).abs() < 1.0,
+                "the guard saw {seconds} s, not the true {true_seconds} s"
+            ),
+            Ok(song) => panic!(
+                "a {true_seconds:.0} s file evaded the {MAX_SONG_SECONDS:.0} s limit, \
+                 parsing as {:.0} s",
+                song.seconds
+            ),
+            Err(e) => panic!("expected TooLong, got {e:?}"),
+        }
+    }
+
+    /// The other half: a tick count past `u32::MAX` is LEGITIMATE when the tempo is
+    /// fast enough, and must be timed correctly rather than refused.
+    ///
+    /// This is why the fix widens the accumulator instead of rejecting on overflow.
+    /// At the maximum division, `u32::MAX` ticks is only about 131_072 s at 120 bpm and
+    /// less at a faster tempo, so a file well inside the documented 24-hour limit can
+    /// legitimately need more than `u32` ticks. Here 17 maximal deltas at 1000 us per
+    /// quarter are 139.27 s — which the old accumulator reported as 8.19 s.
+    #[test]
+    fn a_tick_count_past_u32_is_timed_correctly_when_the_song_is_short() {
+        let deltas = 17;
+        let total_ticks = MAX_DELTA * deltas as u64;
+        let us_per_quarter = 1_000u32;
+        let sec_per_tick = us_per_quarter as f64 / 1_000_000.0 / MAX_DIVISION as f64;
+        let expected = total_ticks as f64 * sec_per_tick;
+        // What a wrapped accumulator actually reports here is NOT the wrapped total:
+        // the 17th event lands back at 268_435_439 ticks and sorts into the middle, so
+        // the LAST event becomes the 16th at 4_294_967_280 ticks. Measured at 131.076 s
+        // against the true 139.268 s. Both the misreported duration and the lost
+        // ordering are asserted below.
+        let wrapped_expected = (MAX_DELTA * 16) as f64 * sec_per_tick;
+        assert!(
+            expected < MAX_SONG_SECONDS,
+            "this fixture must be a LEGAL song, not a rejected one"
+        );
+
+        let song = parse(&file_with_maximal_deltas(
+            MAX_DIVISION,
+            us_per_quarter,
+            deltas,
+        ))
+        .expect("a short song with many ticks must parse");
+
+        assert_eq!(song.events.len(), deltas);
+        assert!(
+            (song.seconds - expected).abs() < 0.01,
+            "song is {:.3} s; expected {expected:.3} s (a wrapped accumulator reports \
+             {wrapped_expected:.3} s, the 16th event, because the 17th sorted back \
+             into the middle)",
+            song.seconds
+        );
+        // Authored order must survive: every event strictly later than the one before.
+        for pair in song.events.windows(2) {
+            assert!(
+                pair[1].sec > pair[0].sec,
+                "events are not strictly increasing: {} then {}",
+                pair[0].sec,
+                pair[1].sec
+            );
+        }
+    }
 
     fn read_vlq(bytes: &[u8]) -> Result<u32, MidiError> {
         Cursor {

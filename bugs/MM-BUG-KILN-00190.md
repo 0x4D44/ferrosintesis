@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00190 — MuseScore sample regeneration rewrites the separate bottle bank
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** MuseScore sample package / regeneration scope
 - **Raised:** 2026-08-13T22:31:45Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T152809Z-p11220-n214089500-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00190-run-fix-20260815T152809Z-p11220-n214089500-c1
-- **Owner base:** 590f521e98578652c64ba0926260b136b82eef89
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T15:28:09Z
-- **Owner until:** 2026-08-15T17:28:09Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T22:31:45Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-13T22:31:45Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-08-15T15:34:36Z, deltic:auto role=fix run=fix-20260815T152809Z-p11220-n214089500-c1 branch=task/bug-MM-BUG-KILN-00190-run-fix-20260815T152809Z-p11220-n214089500-c1 code=1ceb2bc gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00196 — b1-upright packages samples/** but its inventory oracle counts only lowercase top-level .wav, so junk ships unvetted
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** samples-b1-upright / packaging
 - **Raised:** 2026-08-14T07:06:14Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T154441Z-p20220-n322888900-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00196-run-fix-20260815T154441Z-p20220-n322888900-c1
-- **Owner base:** 713cf43e0d188aa4cd1553edc0fd36b861f808a8
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T15:44:41Z
-- **Owner until:** 2026-08-15T17:44:41Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T07:06:14Z, raised via `deltic bugs new` model=claude-fable-5)
+- **State history:** Open (2026-08-14T07:06:14Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T15:49:24Z, deltic:auto role=fix run=fix-20260815T154441Z-p20220-n322888900-c1 branch=task/bug-MM-BUG-KILN-00196-run-fix-20260815T154441Z-p20220-n322888900-c1 code=5ca3a8f gate=manual)
 
 ## Observation
 

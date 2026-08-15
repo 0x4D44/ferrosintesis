@@ -1,5 +1,14 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.08.15 — **`TP_MAX_PASSES` may be too small for real material.**
+  MM-BUG-CRUCIBLE-00031 showed `albums/fable5/Slipstream/midi/01 - Wheels Up.mid`
+  still had true-peak overages after its last `limit_audio` call, so a single call's
+  pass budget was exhausted with work left. The fix gives it another full budget, which
+  was enough there — but nothing proves one extra call is always enough.
+  `C:\language\ferrosintesis\crates\ferrosintesis\src\loudness.rs:TP_MAX_PASSES`. Worth
+  measuring how many passes real album material actually needs, and either raising the
+  cap or looping until `write_raw_gain` reports no reduction.
+
 - [ ] 2026.08.15 — **The CLI silently accepts a rate it will not use.** Since
   MM-BUG-CRUCIBLE-00026 the library builders clamp, so `ferrosintesis in.mid --rate
   1000000` renders at 384 kHz without saying so.

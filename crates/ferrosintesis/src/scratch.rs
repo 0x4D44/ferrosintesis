@@ -121,14 +121,23 @@ fn normalize_audio(
                     break;
                 }
                 let delta = target_lufs - measured;
-                if delta.abs() < engine::LOUDNESS_TOL_DB {
-                    break;
+                // The ceiling applies whether or not the loudness needed gain — the
+                // same control-flow fix as the buffered normalizer, and for the same
+                // reason (MM-BUG-CRUCIBLE-00031). This `break` sat above the limiter,
+                // so a signal already on target was written out unlimited. The scratch
+                // parity test could not catch it: it compares against the buffered
+                // implementation, which carried the identical bug.
+                let on_target = delta.abs() < engine::LOUDNESS_TOL_DB;
+                if !on_target {
+                    scale_audio(audio, frames * 2, 10f32.powf(delta / 20.0))?;
+                    iterations += 1;
                 }
-                scale_audio(audio, frames * 2, 10f32.powf(delta / 20.0))?;
-                iterations += 1;
                 let passes = limit_audio(audio, gain, frames, sample_rate, ceiling_dbtp)?;
                 limiter_passes += passes;
                 max_limiter_passes = max_limiter_passes.max(passes);
+                if on_target {
+                    break;
+                }
                 measured = measure_loudness_file(audio, frames, sample_rate)?;
             }
             Ok((iterations, limiter_passes, max_limiter_passes))
@@ -534,6 +543,58 @@ mod tests {
         );
         assert_eq!(actual, pcm_bytes(&expected));
         assert_eq!(work, (0, 0, 0));
+    }
+
+    /// MM-BUG-CRUCIBLE-00031, the scratch half — and deliberately NOT a parity test.
+    ///
+    /// The existing parity oracle compares this implementation against the buffered
+    /// one, which carried the identical control-flow bug, so it agreed with it and
+    /// proved nothing. This one measures the WRITTEN PCM against the ceiling directly.
+    #[test]
+    fn scratch_loudness_applies_the_ceiling_when_already_on_target() {
+        let sample_rate = 44_100u32;
+        let ceiling = -6.0f32;
+        let samples: Vec<f32> = (0..sample_rate as usize * 2)
+            .flat_map(|i| {
+                let s = 0.9
+                    * (2.0 * std::f32::consts::PI * 997.0 * i as f32 / sample_rate as f32).sin();
+                [s, s]
+            })
+            .collect();
+
+        let target = loudness::integrated_lufs(&samples, sample_rate);
+        let peak_in = loudness::true_peak_dbtp(&samples, sample_rate);
+        assert!(
+            peak_in > ceiling + 1.0,
+            "premise: the input must exceed the ceiling, but it is {peak_in:.2} dBTP"
+        );
+
+        let (pcm, _work) = scratch_pcm(
+            "ceiling-on-target",
+            &samples,
+            sample_rate,
+            NormalizationKind::Loudness {
+                target_lufs: target,
+                ceiling_dbtp: ceiling,
+            },
+            samples.iter().fold(0.0f32, |m, &x| m.max(x.abs())),
+        );
+
+        let back: Vec<f32> = pcm
+            .chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0)
+            .collect();
+        let peak_out = loudness::true_peak_dbtp(&back, sample_rate);
+        assert!(
+            peak_out <= ceiling + 0.3,
+            "already-on-target signal was written unlimited: {peak_out:.2} dBTP \
+             against a {ceiling:.1} dBTP ceiling"
+        );
+        let loudness_out = loudness::integrated_lufs(&back, sample_rate);
+        assert!(
+            loudness_out <= target + 0.3,
+            "loudness overshot the target: {loudness_out:.2} LUFS against {target:.2}"
+        );
     }
 
     #[test]

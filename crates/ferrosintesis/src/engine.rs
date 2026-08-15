@@ -4365,14 +4365,27 @@ pub fn normalize_loudness(
             break; // silence — leave ungained
         }
         let delta = target_lufs - measured;
-        if delta.abs() < LOUDNESS_TOL_DB {
-            break; // on target
+        let on_target = delta.abs() < LOUDNESS_TOL_DB;
+        if !on_target {
+            let g = 10f32.powf(delta / 20.0);
+            for x in buf.iter_mut() {
+                *x *= g;
+            }
         }
-        let g = 10f32.powf(delta / 20.0);
-        for x in buf.iter_mut() {
-            *x *= g;
-        }
+        // The ceiling applies whether or not the loudness needed gain
+        // (MM-BUG-CRUCIBLE-00031). This `break` used to sit ABOVE the limiter, so a
+        // high-crest signal that arrived already on target was returned unlimited —
+        // contradicting the documented promise to constrain transients. Loudness is a
+        // TARGET; the true-peak ceiling is a CONSTRAINT, and a constraint cannot be
+        // skipped because a target happens to be met.
+        //
+        // Costs nothing when it is not needed: `limit_true_peak` writes the samples
+        // back unchanged if its first pass finds nothing above the ceiling, so a
+        // signal already under it is bit-identical to before this change.
         crate::loudness::limit_true_peak(&mut buf, sr, ceiling_dbtp);
+        if on_target {
+            break;
+        }
     }
     dither_quantize(&buf, 1.0)
 }
@@ -4814,6 +4827,57 @@ mod tests {
         assert!(seen
             .windows(2)
             .all(|w| w[1].rendered_seconds >= w[0].rendered_seconds));
+    }
+
+    /// MM-BUG-CRUCIBLE-00031: the true-peak ceiling is a CONSTRAINT, not something
+    /// skipped because the loudness TARGET happens to be met.
+    ///
+    /// Constructed by measuring first and then asking for exactly that loudness, so
+    /// `delta` is zero and the normalizer takes its already-on-target path on the very
+    /// first iteration — where the `break` used to sit above the limiter. The ceiling
+    /// is set below the signal's real intersample peak, and the test asserts that
+    /// premise before it asserts anything else, so it cannot pass because the input
+    /// was already quiet enough.
+    ///
+    /// Both properties are checked on the OUTPUT, independently: the true peak must
+    /// respect the ceiling, and the loudness must not overshoot the target. Limiting
+    /// only removes energy, so a signal that has to be limited lands below its target
+    /// — "as close as the ceiling allows" — which is why the loudness assertion is
+    /// one-sided.
+    #[test]
+    fn loudness_normalization_applies_the_ceiling_when_already_on_target() {
+        let sr = 44_100u32;
+        let ceiling = -6.0f32;
+        // 997 Hz is the standard test tone precisely because it does not land on
+        // sample points, so it has genuine intersample peaks.
+        let samples: Vec<f32> = (0..sr as usize * 2)
+            .flat_map(|i| {
+                let s = 0.9 * (2.0 * std::f32::consts::PI * 997.0 * i as f32 / sr as f32).sin();
+                [s, s]
+            })
+            .collect();
+
+        let target = crate::loudness::integrated_lufs(&samples, sr);
+        let peak_in = crate::loudness::true_peak_dbtp(&samples, sr);
+        assert!(
+            peak_in > ceiling + 1.0,
+            "premise: the input must exceed the ceiling, but it is {peak_in:.2} dBTP"
+        );
+
+        let out = normalize_loudness(&samples, sr, target, ceiling);
+        let back: Vec<f32> = out.iter().map(|&s| s as f32 / 32768.0).collect();
+
+        let peak_out = crate::loudness::true_peak_dbtp(&back, sr);
+        assert!(
+            peak_out <= ceiling + 0.3,
+            "already-on-target signal was returned unlimited: {peak_out:.2} dBTP \
+             against a {ceiling:.1} dBTP ceiling"
+        );
+        let loudness_out = crate::loudness::integrated_lufs(&back, sr);
+        assert!(
+            loudness_out <= target + 0.3,
+            "loudness overshot the target: {loudness_out:.2} LUFS against {target:.2}"
+        );
     }
 
     /// U4 full-chain oracle: loudness-normalising an arbitrary-level stereo tone

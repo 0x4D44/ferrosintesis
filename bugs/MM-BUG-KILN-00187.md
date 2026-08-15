@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00187 — MuseScore-grand standalone NOTICE assigns the bank to GM0
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** MuseScore grand sample package / routing documentation
 - **Raised:** 2026-08-13T21:20:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T152256Z-p32100-n802301500-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00187-run-fix-20260815T152256Z-p32100-n802301500-c1
-- **Owner base:** b1ec960f7e1ff93d161044fcd20c527602b8b2ff
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T15:22:56Z
-- **Owner until:** 2026-08-15T17:22:56Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T21:20:10Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-13T21:20:10Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-08-15T15:27:33Z, deltic:auto role=fix run=fix-20260815T152256Z-p32100-n802301500-c1 branch=task/bug-MM-BUG-KILN-00187-run-fix-20260815T152256Z-p32100-n802301500-c1 code=94ffc27 gate=manual)
 
 ## Observation
 

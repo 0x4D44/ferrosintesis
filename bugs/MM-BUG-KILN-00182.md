@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00182 — Grand regeneration silently retains obsolete packaged WAVs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample generation / grand output inventory
 - **Raised:** 2026-08-13T17:58:21Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T120824Z-p31472-n188684700-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00182-run-fix-20260815T120824Z-p31472-n188684700-c1
-- **Owner base:** 296c4768d12854444005651c2865c6469529c389
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T12:08:24Z
-- **Owner until:** 2026-08-15T14:08:24Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T17:58:21Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-13T17:58:21Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T13:05:03Z, deltic:auto role=fix run=fix-20260815T120824Z-p31472-n188684700-c1 branch=task/bug-MM-BUG-KILN-00182-run-fix-20260815T120824Z-p31472-n188684700-c1 code=291ab66 gate=manual)
 
 ## Observation
 

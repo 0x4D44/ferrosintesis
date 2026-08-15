@@ -748,18 +748,26 @@ pub fn get(name: &str) -> Option<&'static [u8]> {
 }
 
 /// Returns the decoded mono 16-bit 44.1 kHz PCM for an exact file name.
+///
+/// A miss leaves the cache COLD. Resolving the name first is the whole point
+/// (MM-BUG-CRUCIBLE-00023): this used to call `decoded_samples()` before searching,
+/// so a typo or an availability probe decoded all 128 WAVs — 9,627,358 bytes of PCM,
+/// retained for the process lifetime — and then returned `None`. Eager decode after a
+/// VALID lookup is intentional and unchanged.
 pub fn pcm(name: &str) -> Option<&'static [i16]> {
-    let cache = decoded_samples();
     let idx = SAMPLES
         .iter()
         .position(|(candidate, _)| *candidate == name)?;
-    Some(&cache[idx])
+    Some(&decoded_samples()[idx])
 }
 
 /// Returns decoded PCM at an exact inventory index.
+///
+/// Out of range leaves the cache cold, for the same reason as [`pcm`].
 #[doc(hidden)]
 pub fn pcm_by_index(index: usize) -> Option<&'static [i16]> {
-    decoded_samples().get(index).map(Vec::as_slice)
+    SAMPLES.get(index)?;
+    Some(decoded_samples()[index].as_slice())
 }
 
 /// Decode this package's complete PCM inventory now.
@@ -962,5 +970,55 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// MM-BUG-CRUCIBLE-00023: a failed lookup must leave the cache cold.
+    ///
+    /// Ported from the companion `-drumkit2` crate, which got this fix as
+    /// MM-BUG-KILN-00174 while this crate kept the pre-fix ordering — the same
+    /// one-crate-at-a-time pattern that CLAUDE.md calls the recurring defect here.
+    ///
+    /// It re-execs itself in a PRISTINE process because the assertion is about a
+    /// process-global `OnceLock`: any other test in this binary that touches PCM would
+    /// have initialized it first, and the check would pass or fail on test ORDER rather
+    /// than on the code. `--test-threads=1` keeps the child from racing itself.
+    #[test]
+    fn lookup_misses_do_not_initialize_pcm_cache() {
+        const PROBE: &str = "FERRO_DRUMKIT_PCM_MISS_PROBE";
+        const NAME: &str = "tests::lookup_misses_do_not_initialize_pcm_cache";
+
+        if std::env::var_os(PROBE).is_none() {
+            let output = std::process::Command::new(
+                std::env::current_exe().expect("the test binary's own path"),
+            )
+            .args([NAME, "--exact", "--nocapture", "--test-threads=1"])
+            .env(PROBE, "1")
+            .output()
+            .expect("re-exec this test in a pristine process");
+            assert!(
+                output.status.success(),
+                "the pristine-process PCM lookup probe failed:\n{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+            return;
+        }
+
+        assert_eq!(pcm_cache_initializations(), 0);
+        assert_eq!(pcm("missing.wav"), None);
+        assert_eq!(pcm_by_index(SAMPLES.len()), None);
+        assert_eq!(
+            pcm_cache_initializations(),
+            0,
+            "failed lookups initialized the package-wide PCM cache",
+        );
+        assert!(!pcm(SAMPLES[0].0)
+            .expect("known sample must resolve")
+            .is_empty());
+        assert_eq!(
+            pcm_cache_initializations(),
+            1,
+            "a valid lookup must preserve intentional eager initialization",
+        );
     }
 }

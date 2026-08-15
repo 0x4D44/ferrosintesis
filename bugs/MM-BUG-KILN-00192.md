@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00192 — Published orchestral2 provenance misidentifies the viola source as solo
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / orchestral2 viola provenance
 - **Raised:** 2026-08-13T22:54:31Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T153519Z-p43376-n739262500-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00192-run-fix-20260815T153519Z-p43376-n739262500-c1
-- **Owner base:** 1e3ae32798779a86e404b92e00f2ea2e94dae5bd
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T15:35:19Z
-- **Owner until:** 2026-08-15T17:35:19Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T22:54:31Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-13T22:54:31Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-08-15T15:43:36Z, deltic:auto role=fix run=fix-20260815T153519Z-p43376-n739262500-c1 branch=task/bug-MM-BUG-KILN-00192-run-fix-20260815T153519Z-p43376-n739262500-c1 code=a6abb0c gate=manual)
 
 ## Observation
 

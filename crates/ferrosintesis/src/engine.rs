@@ -2513,12 +2513,24 @@ impl EngineCore {
             EvKind::Prog { ch, prog } => self.program_change(ch, prog),
             // GS "Use for Rhythm Part": flag/unflag the channel a drum part. Frozen
             // into each voice's `is_drum` at spawn, so only later notes are affected.
-            EvKind::DrumMode { ch, on } => self.strips[ch as usize].gs_drum = on,
+            EvKind::DrumMode { ch, on } => {
+                // Re-derive only on a real change, and only for the channel that
+                // changed: re-running the derivation is idempotent for an unchanged
+                // routing, but doing it needlessly would widen this event's blast
+                // radius for no reason (MM-BUG-CRUCIBLE-00030).
+                if self.strips[ch as usize].gs_drum != on {
+                    self.strips[ch as usize].gs_drum = on;
+                    self.rederive_routing_derived_state(ch);
+                }
+            }
             // GS Reset: revert part modes — clear every GS-declared rhythm part (ch9
             // stays drums via the ch==9 rule; the other GS reset effects aren't modeled).
             EvKind::GsReset => {
-                for s in &mut self.strips {
-                    s.gs_drum = false;
+                for ch in 0..self.strips.len() {
+                    if self.strips[ch].gs_drum {
+                        self.strips[ch].gs_drum = false;
+                        self.rederive_routing_derived_state(ch as u8);
+                    }
                 }
             }
             EvKind::GmReset => self.gm_system_on(),
@@ -2973,25 +2985,26 @@ impl EngineCore {
                     s.alt_bank = val != 0; // CC0 bank select: non-zero = alt voicings
                     s.alt_bank_value = val; // raw value: 1 = legacy alt, 2 = GM19 cathedral organ
                 }
-                let (cho, del) = fx_profile(s.program, s.alt_bank_value);
-                if !s.chorus_authored {
-                    s.chorus_send = cho;
-                }
-                if !s.delay_authored {
-                    s.delay_send = del;
-                }
                 // The bank selects the driven cabinet's fine-structure depth
                 // (MICRO_CAB_LEAD_DEPTH), so a CC0 that arrives AFTER the
                 // program change must rebuild the insert — our albums order
                 // bank-select first, but a foreign GM file need not.
-                if needs_drive(s.program) && s.drive.as_ref().map(|d| d.alt) != Some(s.alt_bank) {
-                    let mut d = Drive::new(s.program, s.alt_bank, sr);
-                    if s.amp_authored {
-                        s.amp_prime_all();
-                        d.apply_params(&s.amp_cur, true);
-                    }
-                    s.drive = Some(d);
-                }
+                //
+                // Routed through the shared derivation since MM-BUG-CRUCIBLE-00030.
+                // This arm used to apply `fx_profile` unconditionally, so CC0 = 127 —
+                // which DECLARES the channel a drum part on the line above — went on to
+                // give it a melodic program's chorus/delay defaults and, for programs
+                // 29/30, a guitar amp insert. That is the same defect as the GS side,
+                // in the opposite direction.
+                //
+                // Byte-identical for every non-127 bank select, which is all the
+                // catalog sends: for a melodic channel the shared path computes the
+                // same `fx_profile(program, alt_bank_value)` under the same
+                // `*_authored` guards, and its drive predicate
+                // `(d.program, d.alt) != (program, alt_bank)` agrees with the old
+                // `d.alt != alt_bank` because `drive` is only ever built from
+                // `s.program`, so `d.program == s.program` always holds here.
+                self.rederive_routing_derived_state(ch);
             }
             1 => {
                 s.mod_target = v;
@@ -3194,8 +3207,29 @@ impl EngineCore {
     }
 
     fn program_change(&mut self, ch: u8, prog: u8) {
+        self.strips[ch as usize].program = prog;
+        self.rederive_routing_derived_state(ch);
+    }
+
+    /// Re-derive everything that depends on the channel's **drum routing**: the kit,
+    /// the unauthored effect sends, and the `Drive` insert.
+    ///
+    /// Program Change is not the only thing that changes that routing. A GS "Use for
+    /// Rhythm Part" SysEx and a GS Reset change it too, and until MM-BUG-CRUCIBLE-00030
+    /// they flipped the `gs_drum` flag and nothing else — so the derived state stayed
+    /// as whatever the LAST Program Change had computed under the OLD routing. Declare
+    /// channel 11 a rhythm part, select program 29, then GS Reset and play: the note is
+    /// melodic again, but keeps the zeroed sends and absent drive it was given as a
+    /// drum part. The inverse holds too: a newly declared drum part kept melodic sends
+    /// and a guitar amp insert.
+    ///
+    /// Both directions now route through here, so the invariant is stated once:
+    /// **after any routing change, the derived state matches the routing.** Authored
+    /// controller values are still preserved — the `*_authored` guards are what make
+    /// this safe to re-run, since RP-015 keeps CC91/93/94 across these transitions.
+    fn rederive_routing_derived_state(&mut self, ch: u8) {
         let s = &mut self.strips[ch as usize];
-        s.program = prog;
+        let prog = s.program;
         // Drums use the best current kit by default. GM/GM2 Program Changes on
         // channel 10 are retained as authored metadata, not a compatibility
         // downgrade path — with three GM2 exceptions, a small "kit bank" ladder:
@@ -5877,6 +5911,73 @@ mod tests {
             after_reset, melodic,
             "GS Reset must clear the rhythm part (renders melodic, identical to a plain ch11 note)"
         );
+    }
+
+    /// MM-BUG-CRUCIBLE-00030: a routing change must re-derive the state that depends
+    /// on it, WITHOUT a following Program Change to paper over it.
+    ///
+    /// The routing flag flipped immediately but the kit, the unauthored effect sends
+    /// and the `Drive` insert were only recomputed by `program_change`. So a channel
+    /// declared a rhythm part and given program 29 kept that drum-derived state — zero
+    /// sends, no drive — after a GS Reset made it melodic again. The test above misses
+    /// this precisely because it issues `Prog` after the reset; every case here omits
+    /// it, which is the whole point.
+    ///
+    /// Both directions and both kinds of program: 29 (a `needs_drive` guitar, where
+    /// the `Drive` insert is the audible difference) and 52 (choir aahs, an ordinary
+    /// program whose `fx_profile` sends are nonzero). The reference for each case is a
+    /// render that reaches the same routing by the path that always worked, so a
+    /// failure means the two paths disagree — not merely that something changed.
+    #[test]
+    fn gs_routing_changes_rederive_program_state_without_a_program_change() {
+        let sr = 44100.0;
+        let opt = test_opts(sr);
+        let key = 62u8;
+        let render_ev = |ev: Vec<(f64, EvKind)>| render(&test_song(ev, 1.5), &opt).0;
+        let note = |ch: u8| (0.9, EvKind::NoteOn { ch, key, vel: 100 });
+
+        for prog in [29u8, 52] {
+            // Melodic reference: program selected while the channel is melodic.
+            let melodic = render_ev(vec![(0.0, EvKind::Prog { ch: 11, prog }), note(11)]);
+            // Drum reference: program selected while the channel is a rhythm part.
+            let drum = render_ev(vec![
+                (0.0, EvKind::DrumMode { ch: 11, on: true }),
+                (0.1, EvKind::Prog { ch: 11, prog }),
+                note(11),
+            ]);
+            assert_ne!(
+                melodic, drum,
+                "prog {prog}: the two references are identical, so this test cannot \
+                 distinguish anything"
+            );
+
+            // Declared a rhythm part, program selected there, then GS Reset — and NO
+            // further Program Change. Must match the melodic reference.
+            let reset_no_pc = render_ev(vec![
+                (0.0, EvKind::DrumMode { ch: 11, on: true }),
+                (0.1, EvKind::Prog { ch: 11, prog }),
+                (0.2, EvKind::GsReset),
+                note(11),
+            ]);
+            assert_eq!(
+                reset_no_pc, melodic,
+                "prog {prog}: after GS Reset the channel is melodic again but kept \
+                 drum-derived sends/drive — a Program Change should not be required to \
+                 repair it"
+            );
+
+            // The inverse: program selected while melodic, THEN declared a rhythm
+            // part, with no further Program Change. Must match the drum reference.
+            let declared_no_pc = render_ev(vec![
+                (0.0, EvKind::Prog { ch: 11, prog }),
+                (0.2, EvKind::DrumMode { ch: 11, on: true }),
+                note(11),
+            ]);
+            assert_eq!(
+                declared_no_pc, drum,
+                "prog {prog}: a newly declared rhythm part kept melodic sends/drive"
+            );
+        }
     }
 
     /// Oracle (D10d, kit internal balance): the kit voicing was cymbal-heavy and

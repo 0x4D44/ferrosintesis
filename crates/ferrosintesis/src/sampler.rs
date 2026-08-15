@@ -6696,6 +6696,160 @@ mod tests {
         }
     }
 
+    /// MM-BUG-KILN-00201: every pinned zone root must agree with the note in its own
+    /// filename.
+    ///
+    /// The 27 `steinwayb_*` roots are hand-transcribed f0 literals copied from the
+    /// bake, and nothing checked them. The crate side cannot help: its tests check the
+    /// name set, RIFF magic and one AGGREGATE byte size, and all 27 payloads are
+    /// exactly 133,048 bytes — so as far as every existing test can see, the payloads
+    /// are interchangeable. A transposed digit or a row-vs-filename mismatch repitches
+    /// a zone silently, on a box with no ears.
+    ///
+    /// `mandolin_zone_roots_match_the_fretboard` below guards its bank with an
+    /// INTERVAL check, which the steinway ladder cannot reuse: its steps are a uniform
+    /// 6 semitones, so a whole-table shift keeps every interval correct. Comparing
+    /// each root against the pitch its OWN filename names catches that, and catches
+    /// the row-vs-filename swap an interval check is blind to by construction.
+    ///
+    /// Derived over every note-named zone table in this file rather than the one bank
+    /// that was reported — 57 families, 700+ zones — so a new bank is covered on its
+    /// first commit.
+    ///
+    /// Two tolerances, because two different mistakes are in scope:
+    ///
+    /// - Against the FAMILY's own median offset, which absorbs a bank's tuning and its
+    ///   labelling convention. Several VSCO section banks sound an octave above their
+    ///   labels (documented in `F0_RANGE`), and their medians land near +1200 cents
+    ///   rather than 0 — measured, not listed here, so the guard needs no register of
+    ///   which banks those are. This is what catches a single mis-transcribed zone.
+    /// - Against the nearest octave of the labelled pitch, which catches a wild value
+    ///   in a family too small for a median to mean anything.
+    ///
+    /// Both are set from the measured population: the widest real deviation from a
+    /// family median today is 53 cents (horn) and from the nearest octave 57
+    /// (chanter), so the bars sit above those and still well inside the 100 cents a
+    /// semitone error would move a root.
+    #[test]
+    fn every_note_named_zone_root_matches_its_filename() {
+        const FAMILY_TOLERANCE_CENTS: f32 = 70.0;
+        const OCTAVE_TOLERANCE_CENTS: f32 = 90.0;
+
+        let source = include_str!("sampler.rs");
+        let notes = [
+            ("C", 0),
+            ("C#", 1),
+            ("D", 2),
+            ("D#", 3),
+            ("E", 4),
+            ("F", 5),
+            ("F#", 6),
+            ("G", 7),
+            ("G#", 8),
+            ("A", 9),
+            ("A#", 10),
+            ("B", 11),
+        ];
+
+        // (family, label, offset in cents from the pitch the filename names)
+        let mut measured: Vec<(String, String, f32)> = Vec::new();
+        for (index, _) in source.match_indices("\" =>") {
+            let head = &source[..index];
+            let Some(open) = head.rfind('"') else {
+                continue;
+            };
+            let name = &head[open + 1..];
+            let Some(stem) = name.strip_suffix(".wav") else {
+                continue;
+            };
+            let Some((family, rest)) = stem.split_once('_') else {
+                continue;
+            };
+            // `<NOTE><OCTAVE>` is the first segment after the family.
+            let token = rest.split('_').next().unwrap_or(rest);
+            let Some((note, semitone)) = notes
+                .iter()
+                .filter(|(note, _)| token.starts_with(note))
+                .max_by_key(|(note, _)| note.len())
+            else {
+                continue;
+            };
+            let Ok(octave) = token[note.len()..].parse::<i32>() else {
+                continue;
+            };
+            let tail = &source[index + 4..];
+            let root: f32 = match tail
+                .trim_start()
+                .split(|c: char| !(c.is_ascii_digit() || c == '.'))
+                .next()
+                .unwrap_or("")
+                .parse()
+            {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            if root <= 0.0 {
+                continue;
+            }
+            let midi = (octave + 1) * 12 + semitone;
+            let labelled = 440.0 * 2f32.powf((midi as f32 - 69.0) / 12.0);
+            let cents = 1200.0 * (root / labelled).log2();
+            measured.push((family.to_owned(), format!("{stem} ({root} Hz)"), cents));
+        }
+
+        assert!(
+            measured.len() > 600,
+            "the zone scan found only {} note-named roots; it stopped working",
+            measured.len()
+        );
+
+        let mut families: std::collections::BTreeMap<String, Vec<(String, f32)>> =
+            std::collections::BTreeMap::new();
+        for (family, label, cents) in measured {
+            families.entry(family).or_default().push((label, cents));
+        }
+        assert!(
+            families.len() > 40,
+            "only {} zone families were seen; the scan is not reaching the tables",
+            families.len()
+        );
+
+        let mut errors: Vec<String> = Vec::new();
+        for (family, zones) in &families {
+            let mut sorted: Vec<f32> = zones.iter().map(|(_, c)| *c).collect();
+            sorted.sort_by(|a, b| a.partial_cmp(b).expect("finite cents"));
+            let median = sorted[sorted.len() / 2];
+            for (label, cents) in zones {
+                // Every family, however small: the root must be the labelled pitch in
+                // SOME octave.
+                let octaves = (cents / 1200.0).round() * 1200.0;
+                if (cents - octaves).abs() > OCTAVE_TOLERANCE_CENTS {
+                    errors.push(format!(
+                        "{label} is {cents:.1} cents from {family}'s label — not the \
+                         named pitch in any octave"
+                    ));
+                    continue;
+                }
+                // Families with enough zones to have a meaningful centre: the zone must
+                // sit with its siblings, which is what catches one bad transcription.
+                if zones.len() >= 4 && (cents - median).abs() > FAMILY_TOLERANCE_CENTS {
+                    errors.push(format!(
+                        "{label} is {:.1} cents off {family}'s median ({median:.1}) — a \
+                         transposed digit or a row/filename mismatch",
+                        cents - median
+                    ));
+                }
+            }
+        }
+
+        assert!(
+            errors.is_empty(),
+            "{} zone root(s) disagree with their filenames:\n  {}",
+            errors.len(),
+            errors.join("\n  ")
+        );
+    }
+
     /// The mandolin zone tables are forty hand-transcribed roots, and the failure
     /// they invite is silent: a mistyped or octave-shifted root still renders, just
     /// at the wrong pitch. This checks them WITHOUT re-typing the same numbers,
@@ -10718,3 +10872,4 @@ mod tests {
         );
     }
 }
+

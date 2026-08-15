@@ -6,15 +6,15 @@
 - **Area:** sample assets / core drum-kit cache regression
 - **Raised:** 2026-08-15T13:48:05Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T160555Z-p45968-n192851000-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00035-run-fix-20260815T160555Z-p45968-n192851000-c1
+- **Owner base:** 2d9a2bab0e1bb69a28dd6e0f64a1342850399e39
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T16:05:55Z
+- **Owner until:** 2026-08-15T18:05:55Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

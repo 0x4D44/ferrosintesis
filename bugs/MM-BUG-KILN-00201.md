@@ -6,15 +6,15 @@
 - **Area:** sampler zone tables / oracles
 - **Raised:** 2026-08-14T10:21:10Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T164408Z-p20132-n151918200-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-KILN-00201-run-fix-20260815T164408Z-p20132-n151918200-c1
+- **Owner base:** f2c396e80d00abc2189c1fa93c73e24b47f78ecd
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T16:44:08Z
+- **Owner until:** 2026-08-15T18:44:08Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

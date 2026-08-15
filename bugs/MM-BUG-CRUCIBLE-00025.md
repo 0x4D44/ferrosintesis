@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / realtime MIDI queue
 - **Raised:** 2026-08-14T11:47:06Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T035517Z-p44240-n504663000-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00025-run-fix-20260815T035517Z-p44240-n504663000-c1
+- **Owner base:** 2840e29d3fa7a44aedf26ea36b62a48789f8fecd
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T03:55:17Z
+- **Owner until:** 2026-08-15T05:55:17Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

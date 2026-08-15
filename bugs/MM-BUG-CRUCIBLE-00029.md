@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / MIDI timing
 - **Raised:** 2026-08-14T11:47:23Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T101815Z-p35368-n819711200-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00029-run-fix-20260815T101815Z-p35368-n819711200-c1
+- **Owner base:** 9284cae17f081322ca8b47371dcf7dffcedc98b0
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T10:18:15Z
+- **Owner until:** 2026-08-15T12:18:15Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

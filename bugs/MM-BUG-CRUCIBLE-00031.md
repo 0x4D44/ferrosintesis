@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / loudness normalization
 - **Raised:** 2026-08-14T11:47:25Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T104337Z-p42868-n011065400-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00031-run-fix-20260815T104337Z-p42868-n011065400-c1
+- **Owner base:** 8923ffcbc0e2fa004fecc79f0eee5ee6a55cc63e
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T10:43:37Z
+- **Owner until:** 2026-08-15T12:43:37Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

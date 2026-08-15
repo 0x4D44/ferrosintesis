@@ -6,15 +6,15 @@
 - **Area:** sample tooling / core piano bake reproducibility
 - **Raised:** 2026-08-15T11:56:51Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T161214Z-p18772-n712089000-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-NMI-00002-run-fix-20260815T161214Z-p18772-n712089000-c1
+- **Owner base:** 65cb7f7eca21dcce40f37645c2dc4224bc62c12f
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T16:12:14Z
+- **Owner until:** 2026-08-15T18:12:14Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

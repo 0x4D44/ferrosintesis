@@ -6,15 +6,15 @@
 - **Area:** samples crates / published rustdoc
 - **Raised:** 2026-08-14T08:07:50Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T155002Z-p29528-n450830600-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-KILN-00197-run-fix-20260815T155002Z-p29528-n450830600-c1
+- **Owner base:** e94abb830e964fd39f9278035b51ed446a74cf5e
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T15:50:02Z
+- **Owner until:** 2026-08-15T17:50:02Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

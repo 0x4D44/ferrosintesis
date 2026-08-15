@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / MIDI parser
 - **Raised:** 2026-08-14T11:47:22Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T100751Z-p34060-n822582500-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00028-run-fix-20260815T100751Z-p34060-n822582500-c1
+- **Owner base:** ab068f6a1f7ff4952c922ed86812d8eb6d80bdfc
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T10:07:51Z
+- **Owner until:** 2026-08-15T12:07:51Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

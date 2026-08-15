@@ -17,6 +17,79 @@ const SYSEX_CAPTURE_LEN: usize = 9;
 /// entirely (no deadline → unbounded polyphony).
 const LIVE_MAX_VOICES: usize = 128;
 
+/// How many completed MIDI commands the queue between [`RealtimeSynth::write_byte`]
+/// and the next [`RealtimeSynth::render_add`] block can hold.
+///
+/// MM-BUG-CRUCIBLE-00025: this queue used to be a growable `Vec`, so a caller feeding
+/// valid messages without rendering grew memory without limit, and the next audio
+/// callback then applied the whole backlog — an unbounded stall on a deadline-bearing
+/// thread. A fixed budget makes both bounded, and because the block drains the whole
+/// queue, one constant bounds storage *and* per-block work.
+///
+/// Sized against real traffic, not guesswork: a 31 250-baud MIDI port delivers roughly
+/// one message per millisecond and a block is 64 frames (1.45 ms at 44.1 kHz), so a
+/// block's honest worst case is a handful of commands. A host that buffers a scheduling
+/// hiccup and delivers 100 ms in one go still lands around 300. 1024 clears that with
+/// margin while costing a few KB of inline storage.
+const LIVE_MAX_PENDING: usize = 1024;
+
+/// The fixed-capacity command queue between `write_byte` and `render_add`.
+///
+/// Overflow policy is **drop the newest and count it**: the queue never allocates,
+/// never reorders what it does keep, and the loss is observable through
+/// [`RealtimeSynth::dropped_command_count`]. Dropping the newest rather than the
+/// oldest keeps the applied prefix a contiguous, in-order piece of the caller's
+/// stream, which is what makes the behaviour deterministic to reason about.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingQueue {
+    commands: [LiveCommand; LIVE_MAX_PENDING],
+    len: usize,
+    dropped: u64,
+}
+
+impl PendingQueue {
+    pub(crate) fn new() -> Self {
+        Self {
+            commands: [LiveCommand::SystemReset; LIVE_MAX_PENDING],
+            len: 0,
+            dropped: 0,
+        }
+    }
+
+    /// Queue one command, or count it as dropped if the budget is spent.
+    pub(crate) fn push(&mut self, command: LiveCommand) {
+        if self.len < LIVE_MAX_PENDING {
+            self.commands[self.len] = command;
+            self.len += 1;
+        } else {
+            self.dropped = self.dropped.saturating_add(1);
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[LiveCommand] {
+        &self.commands[..self.len]
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.len
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Forget the queued commands. Does NOT reset the dropped counter, which is
+    /// cumulative for the synth's lifetime.
+    pub(crate) fn clear(&mut self) {
+        self.len = 0;
+    }
+
+    pub(crate) fn dropped(&self) -> u64 {
+        self.dropped
+    }
+}
+
 /// How to configure a [`RealtimeSynth`].
 ///
 /// Start from [`RealtimeOptions::default`] and refine with the `with_*` builders. As
@@ -161,7 +234,7 @@ impl std::error::Error for RealtimeError {}
 pub struct RealtimeSynth {
     core: EngineCore,
     parser: MidiByteParser,
-    pending: Vec<LiveCommand>,
+    pending: PendingQueue,
     ring: [f32; LIVE_BLOCK * 2],
     ring_pos: usize,
     ring_len: usize,
@@ -185,11 +258,10 @@ impl RealtimeSynth {
         Self {
             core,
             parser: MidiByteParser::new(),
-            // Sized at construction, not grown in the callback: a completed MIDI message
-            // pushes here, and a zero-capacity Vec would allocate on the FIRST message
-            // the audio thread ever completes (MM-BUG-KILN-00082). One command per live
-            // voice is far more than any single block can complete.
-            pending: Vec::with_capacity(LIVE_MAX_VOICES),
+            // Inline fixed storage: a completed MIDI message pushes here from the audio
+            // thread, so it must neither allocate (MM-BUG-KILN-00082) nor grow without
+            // limit (MM-BUG-CRUCIBLE-00025).
+            pending: PendingQueue::new(),
             ring: [0.0; LIVE_BLOCK * 2],
             ring_pos: 0,
             ring_len: 0,
@@ -242,8 +314,26 @@ impl RealtimeSynth {
     /// sensing) interleaved mid-message, so you can hand it a raw port's bytes verbatim.
     /// Bytes are buffered and take effect at the start of the next
     /// [`render_add`](Self::render_add) block.
+    ///
+    /// The buffer between the two calls is **fixed-size**, so neither its memory nor
+    /// the work the next block does can grow without limit. Completing more than 1024
+    /// commands before a block drops the excess — the newest — and counts it in
+    /// [`dropped_command_count`](Self::dropped_command_count). Real traffic does not
+    /// come close: that is roughly 700 times what a 1.45 ms block can carry at MIDI
+    /// wire rate.
     pub fn write_byte(&mut self, byte: u8) {
         self.parser.push(byte, &mut self.pending);
+    }
+
+    /// How many MIDI commands have been dropped because the queue between
+    /// [`write_byte`](Self::write_byte) and [`render_add`](Self::render_add) was full.
+    ///
+    /// Cumulative for the life of the synth, and **not** cleared by
+    /// [`reset`](Self::reset) — a caller polling it wants to notice that it once
+    /// overran, not just that it is not overrunning now. A nonzero value means you are
+    /// feeding faster than you render; render more often, or feed less.
+    pub fn dropped_command_count(&self) -> u64 {
+        self.pending.dropped()
     }
 
     /// Render `frames` frames and **add** them into `output`.
@@ -293,12 +383,17 @@ impl RealtimeSynth {
     }
 
     fn fill_ring(&mut self) {
-        for command in self.pending.drain(..) {
+        // Bounded by LIVE_MAX_PENDING: the queue cannot hold more, so the block
+        // cannot apply more (MM-BUG-CRUCIBLE-00025). Indexed rather than iterated
+        // so the queue and the core can be borrowed as the disjoint fields they are.
+        for i in 0..self.pending.len() {
+            let command = self.pending.as_slice()[i];
             match command {
                 LiveCommand::Channel(kind) => self.core.handle_event(kind),
                 LiveCommand::SystemReset => self.core.hard_reset(),
             }
         }
+        self.pending.clear();
         // Bound polyphony before the (deadline-bearing) block render — this is
         // the ONLY caller of enforce_voice_cap, so offline stays unbounded and
         // bit-identical (MM-BUG-KILN-00013).
@@ -366,7 +461,7 @@ impl MidiByteParser {
         self.sysex_overflow = false;
     }
 
-    pub(crate) fn push(&mut self, byte: u8, out: &mut Vec<LiveCommand>) {
+    pub(crate) fn push(&mut self, byte: u8, out: &mut PendingQueue) {
         if self.in_sysex {
             self.push_sysex(byte, out);
             return;
@@ -388,7 +483,7 @@ impl MidiByteParser {
         self.push_data(byte, out);
     }
 
-    fn push_sysex(&mut self, byte: u8, out: &mut Vec<LiveCommand>) {
+    fn push_sysex(&mut self, byte: u8, out: &mut PendingQueue) {
         match byte {
             0xF8..=0xFE => {}
             0xFF => {
@@ -425,7 +520,7 @@ impl MidiByteParser {
         }
     }
 
-    fn push_status(&mut self, status: u8, out: &mut Vec<LiveCommand>) {
+    fn push_status(&mut self, status: u8, out: &mut PendingQueue) {
         match status {
             0x80..=0xEF => {
                 self.running = Some(status);
@@ -469,7 +564,7 @@ impl MidiByteParser {
         }
     }
 
-    fn push_data(&mut self, byte: u8, out: &mut Vec<LiveCommand>) {
+    fn push_data(&mut self, byte: u8, out: &mut PendingQueue) {
         if self.len < self.data.len() {
             self.data[self.len] = byte;
         }
@@ -595,6 +690,169 @@ mod tests {
         assert_eq!(count, n, "voices stolen below the cap");
     }
 
+    /// Feed `count` complete, perfectly valid non-voice messages (CC 7 volume on
+    /// channel 0) without rendering. Returns the last value sent.
+    fn flood_controllers(synth: &mut RealtimeSynth, count: usize) -> u8 {
+        let mut last = 0u8;
+        for i in 0..count {
+            last = (i % 128) as u8;
+            synth.write_byte(0xB0);
+            synth.write_byte(7);
+            synth.write_byte(last);
+        }
+        last
+    }
+
+    /// MM-BUG-CRUCIBLE-00025: storage between `write_byte` and `render_add` is
+    /// bounded, and the overflow is counted rather than silent.
+    ///
+    /// The old `Vec` grew with the burst: three times the budget in valid CC
+    /// messages meant three times the memory and three times the work in the next
+    /// audio callback. Non-voice messages on purpose — they spawn nothing, so the
+    /// only thing under test is the queue itself.
+    ///
+    /// Deliberately NOT asserted against `LIVE_MAX_PENDING`: the queue derives its
+    /// own length from that same constant, so such an assertion could only agree
+    /// with itself and would still pass if the budget were raised to infinity. The
+    /// claims here are independent of its value — the queue kept strictly fewer
+    /// commands than were fed (so it is bounded at all), it sits under an absolute
+    /// ceiling (so the budget is a realtime-sane size), and kept + dropped equals
+    /// fed (so nothing was lost silently, which is the property the counter is for).
+    #[test]
+    fn pending_queue_is_bounded_and_counts_drops() {
+        let fed = 30_000usize;
+        let mut synth = RealtimeSynth::new(opts());
+        flood_controllers(&mut synth, fed);
+
+        let kept = synth.pending.len();
+        let dropped = synth.dropped_command_count();
+        assert!(
+            kept < fed,
+            "queue absorbed the whole flood: {kept} of {fed}"
+        );
+        assert!(
+            kept <= 4096,
+            "realtime queue budget is implausibly large: {kept}"
+        );
+        assert_eq!(
+            kept as u64 + dropped,
+            fed as u64,
+            "commands vanished without being counted: kept {kept}, dropped {dropped}"
+        );
+    }
+
+    /// The budget bounds per-block work too: one block applies at most the budget
+    /// and leaves the queue empty, so a burst cannot stall a second callback.
+    #[test]
+    fn one_block_applies_at_most_the_budget_and_drains_the_queue() {
+        let mut synth = RealtimeSynth::new(opts());
+        flood_controllers(&mut synth, LIVE_MAX_PENDING * 3);
+        let queued = synth.pending.len();
+        assert!(queued <= LIVE_MAX_PENDING);
+
+        let mut out = vec![0f32; LIVE_BLOCK * 2];
+        synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+
+        assert!(synth.pending.is_empty(), "queue not drained by the block");
+    }
+
+    /// Overflow drops the NEWEST, so what survives is the caller's stream prefix.
+    ///
+    /// Both ends are checked, and the values are chosen so the two candidate
+    /// policies disagree at both. An earlier version of this test used `i % 128`
+    /// for the flood and 127 for the overflow command — under which drop-newest
+    /// and drop-oldest BOTH leave 127 last, so it passed against either policy
+    /// and proved nothing. The flood now steps mod 100, so the last accepted
+    /// value is 23 and the dropped one is 127.
+    #[test]
+    fn overflow_drops_the_newest_and_keeps_the_prefix() {
+        let mut synth = RealtimeSynth::new(opts());
+        for i in 0..LIVE_MAX_PENDING {
+            synth.write_byte(0xB0);
+            synth.write_byte(7);
+            synth.write_byte((i % 100) as u8);
+        }
+        let first_sent = 0u8;
+        let last_accepted = ((LIVE_MAX_PENDING - 1) % 100) as u8;
+        assert_ne!(
+            last_accepted, 127,
+            "the fixture must distinguish the policies"
+        );
+        // One command past the budget, carrying a value none of the accepted
+        // commands ends on.
+        synth.write_byte(0xB0);
+        synth.write_byte(7);
+        synth.write_byte(127);
+
+        assert_eq!(synth.dropped_command_count(), 1);
+        let queued = synth.pending.as_slice();
+        let cc = |val| LiveCommand::Channel(EvKind::Cc { ch: 0, num: 7, val });
+        assert_eq!(
+            queued[0],
+            cc(first_sent),
+            "overflow discarded the head of the stream instead of the tail"
+        );
+        assert_eq!(
+            *queued.last().unwrap(),
+            cc(last_accepted),
+            "the dropped command displaced an accepted one"
+        );
+    }
+
+    /// A NoteOn burst is bounded by the same budget, so the block spawns a bounded
+    /// number of voices and the cap trims them in one pass — the case that used to
+    /// mean an unbounded spawn followed by quadratic stealing.
+    #[test]
+    fn noteon_burst_is_bounded_and_capped() {
+        let mut synth = RealtimeSynth::new(opts());
+        // Far more note-ons than either budget, all distinct (channel, key) pairs
+        // so each is a fresh voice rather than a retrigger.
+        let mut spawned = 0usize;
+        'outer: for ch in 0u8..9 {
+            for key in 21u8..=108 {
+                synth.write_byte(0x90 | ch);
+                synth.write_byte(key);
+                synth.write_byte(80);
+                spawned += 1;
+                if spawned >= LIVE_MAX_PENDING * 2 {
+                    break 'outer;
+                }
+            }
+        }
+        assert!(
+            synth.pending.len() <= LIVE_MAX_PENDING,
+            "note-on burst grew the queue past its budget"
+        );
+
+        let mut out = vec![0f32; LIVE_BLOCK * 2];
+        synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+
+        assert_eq!(
+            synth.active_voice_count(),
+            LIVE_MAX_VOICES,
+            "burst left polyphony above the cap"
+        );
+        assert!(synth.pending.is_empty());
+    }
+
+    /// `reset` clears queued commands but keeps the cumulative drop count — a
+    /// caller polling it must still learn that it once overran.
+    #[test]
+    fn reset_clears_the_queue_but_keeps_the_drop_count() {
+        let mut synth = RealtimeSynth::new(opts());
+        flood_controllers(&mut synth, LIVE_MAX_PENDING + 5);
+        assert_eq!(synth.dropped_command_count(), 5);
+
+        synth.reset();
+
+        assert!(synth.pending.is_empty(), "reset left commands queued");
+        assert_eq!(
+            synth.dropped_command_count(),
+            5,
+            "reset erased the overflow evidence"
+        );
+    }
+
     fn assert_send<T: Send>() {}
 
     #[test]
@@ -605,13 +863,13 @@ mod tests {
     #[test]
     fn parser_handles_running_status_and_realtime_interleave() {
         let mut parser = MidiByteParser::new();
-        let mut out = Vec::new();
+        let mut out = PendingQueue::new();
         for b in [0x90, 60, 100, 0xF8, 64, 0, 67, 80] {
             parser.push(b, &mut out);
         }
         assert_eq!(
-            out,
-            vec![
+            out.as_slice(),
+            [
                 LiveCommand::Channel(EvKind::NoteOn {
                     ch: 0,
                     key: 60,
@@ -630,15 +888,15 @@ mod tests {
     #[test]
     fn parser_emits_poly_aftertouch_and_consumes_system_common() {
         let mut parser = MidiByteParser::new();
-        let mut out = Vec::new();
+        let mut out = PendingQueue::new();
         // 0xA0 poly-aftertouch is now forwarded (the engine acts on it); the 0xF2
         // system-common message and its data bytes are still consumed and ignored.
         for b in [0xA0, 60, 12, 0x90, 60, 100, 0xF2, 1, 2, 64, 100] {
             parser.push(b, &mut out);
         }
         assert_eq!(
-            out,
-            vec![
+            out.as_slice(),
+            [
                 LiveCommand::Channel(EvKind::PolyAftertouch {
                     ch: 0,
                     key: 60,
@@ -656,13 +914,13 @@ mod tests {
     #[test]
     fn parser_emits_gm_and_system_resets() {
         let mut parser = MidiByteParser::new();
-        let mut out = Vec::new();
+        let mut out = PendingQueue::new();
         for b in [0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7, 0xFF] {
             parser.push(b, &mut out);
         }
         assert_eq!(
-            out,
-            vec![
+            out.as_slice(),
+            [
                 LiveCommand::Channel(EvKind::GmReset),
                 LiveCommand::SystemReset,
             ]
@@ -686,7 +944,7 @@ mod tests {
     #[test]
     fn parser_emits_all_modeled_system_sysex() {
         let mut parser = MidiByteParser::new();
-        let mut out = Vec::new();
+        let mut out = PendingQueue::new();
         let bytes = [
             // XG System On, with transparent timing clock interleaved.
             0xF0, 0x43, 0x10, 0xF8, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7,
@@ -700,8 +958,8 @@ mod tests {
             parser.push(byte, &mut out);
         }
         assert_eq!(
-            out,
-            vec![
+            out.as_slice(),
+            [
                 LiveCommand::Channel(EvKind::XgReset),
                 LiveCommand::Channel(EvKind::XgEffectParam {
                     addr_lo: 0x5A,
@@ -719,13 +977,13 @@ mod tests {
     #[test]
     fn parser_recovers_channel_status_from_malformed_sysex() {
         let mut parser = MidiByteParser::new();
-        let mut out = Vec::new();
+        let mut out = PendingQueue::new();
         for byte in [0xF0, 0x7E, 0x7F, 0x90, 60, 100] {
             parser.push(byte, &mut out);
         }
         assert_eq!(
-            out,
-            vec![LiveCommand::Channel(EvKind::NoteOn {
+            out.as_slice(),
+            [LiveCommand::Channel(EvKind::NoteOn {
                 ch: 0,
                 key: 60,
                 vel: 100,
@@ -742,29 +1000,29 @@ mod tests {
         });
 
         let mut parser = MidiByteParser::new();
-        let mut out = Vec::new();
+        let mut out = PendingQueue::new();
         // A valid GM prefix extended past the fixed capture cannot become a reset.
         for byte in [
             0xF0, 0x7E, 0x7F, 0x09, 0x01, 0, 0, 0, 0, 0, 0, 0xF7, 0x90, 60, 100,
         ] {
             parser.push(byte, &mut out);
         }
-        assert_eq!(out, vec![note]);
+        assert_eq!(out.as_slice(), [note]);
 
         let mut parser = MidiByteParser::new();
-        let mut out = Vec::new();
+        let mut out = PendingQueue::new();
         // FF acts immediately and clears the partial GM prefix. Its remaining
         // bytes cannot later complete a second reset; normal traffic recovers.
         for byte in [0xF0, 0x7E, 0x7F, 0x09, 0xFF, 0x01, 0xF7, 0x90, 60, 100] {
             parser.push(byte, &mut out);
         }
-        assert_eq!(out, vec![LiveCommand::SystemReset, note]);
+        assert_eq!(out.as_slice(), [LiveCommand::SystemReset, note]);
     }
 
     #[test]
     fn parser_does_not_false_reset_on_extended_sysex_prefix() {
         let mut parser = MidiByteParser::new();
-        let mut out = Vec::new();
+        let mut out = PendingQueue::new();
         for b in [0xF0, 0x7E, 0x7F, 0x09, 0x01, 0x00, 0xF7] {
             parser.push(b, &mut out);
         }

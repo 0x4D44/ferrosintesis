@@ -2393,15 +2393,38 @@ impl EngineCore {
         }
     }
 
+    /// Steal voices until at most `cap` remain: released ones first (in age order),
+    /// then the oldest un-released ones.
+    ///
+    /// One pass, not one pass per stolen voice. The loop this replaces re-scanned
+    /// from the front and `Vec::remove`d for every single voice over the cap, which
+    /// is quadratic in the excess — and a live stream can put the excess in the
+    /// hundreds within one block, on the deadline-bearing audio thread
+    /// (MM-BUG-CRUCIBLE-00025). Removing a released voice cannot change any other
+    /// voice's released state, so the victims can be chosen up front and dropped in
+    /// a single `retain`; `retain` visits in index order, which is what preserves
+    /// the released-first-then-oldest order the old loop produced.
     pub(crate) fn enforce_voice_cap(&mut self, cap: usize) {
-        while self.active.len() > cap {
-            let victim = self
-                .active
-                .iter()
-                .position(|a| a.voice.released())
-                .unwrap_or(0);
-            self.active.remove(victim);
+        let len = self.active.len();
+        if len <= cap {
+            return;
         }
+        let excess = len - cap;
+        let released = self.active.iter().filter(|a| a.voice.released()).count();
+        let mut released_budget = excess.min(released);
+        let mut unreleased_budget = excess - released_budget;
+        self.active.retain(|a| {
+            if a.voice.released() {
+                if released_budget > 0 {
+                    released_budget -= 1;
+                    return false;
+                }
+            } else if unreleased_budget > 0 {
+                unreleased_budget -= 1;
+                return false;
+            }
+            true
+        });
     }
 
     pub(crate) fn handle_event(&mut self, kind: EvKind) {
@@ -12027,6 +12050,86 @@ mod tests {
             "offline polyphony was capped: {} of {spawned} voices survived",
             core.active_voice_count()
         );
+    }
+
+    /// MM-BUG-CRUCIBLE-00025: the single-pass cap must steal exactly what the
+    /// quadratic loop it replaces stole.
+    ///
+    /// Differential against that loop, kept here as a reference over
+    /// `(key, released)` pairs, across every combination of population size, cap
+    /// and release pattern below — including the boundary
+    /// cases (cap 0, cap == len, nothing released, everything released) — 540 in
+    /// all. The
+    /// linearization is only safe because removing a released voice cannot change
+    /// another voice's released state; if that ever stops holding, this fails.
+    #[test]
+    fn enforce_voice_cap_matches_the_quadratic_reference() {
+        fn reference(mut voices: Vec<(u8, bool)>, cap: usize) -> Vec<u8> {
+            while voices.len() > cap {
+                let victim = voices
+                    .iter()
+                    .position(|(_, released)| *released)
+                    .unwrap_or(0);
+                voices.remove(victim);
+            }
+            voices.into_iter().map(|(key, _)| key).collect()
+        }
+
+        let mut checked = 0usize;
+        for population in [1usize, 2, 5, 12, 20] {
+            // Release patterns as bitmasks over voice index: none, all, every
+            // other one from each parity, the first half, the last half, and two
+            // irregular ones. Each is a distinct shape for the two-phase choice.
+            for pattern in 0u8..12 {
+                for cap in 0..=population {
+                    let mut core = dry_core();
+                    let keys: Vec<u8> = (0..population as u8).map(|i| 60 + i).collect();
+                    for &key in &keys {
+                        core.handle_event(EvKind::NoteOn {
+                            ch: 0,
+                            key,
+                            vel: 100,
+                        });
+                    }
+                    for (i, &key) in keys.iter().enumerate() {
+                        let release = match pattern {
+                            0 => false,
+                            1 => true,
+                            2 => i % 2 == 0,
+                            3 => i % 2 == 1,
+                            4 => i < population / 2,
+                            5 => i >= population / 2,
+                            6 => i % 3 == 0,
+                            7 => i % 3 == 1,
+                            8 => i == 0,
+                            9 => i + 1 == population,
+                            10 => i > 0 && i + 1 < population,
+                            _ => (i * 7 + population) % 5 < 2,
+                        };
+                        if release {
+                            core.handle_event(EvKind::NoteOff { ch: 0, key });
+                        }
+                    }
+                    let before: Vec<(u8, bool)> = core
+                        .active
+                        .iter()
+                        .map(|a| (a.key, a.voice.released()))
+                        .collect();
+                    assert_eq!(before.len(), population, "note-off removed a voice");
+                    let expected = reference(before, cap);
+
+                    core.enforce_voice_cap(cap);
+
+                    let got: Vec<u8> = core.active.iter().map(|a| a.key).collect();
+                    assert_eq!(
+                        got, expected,
+                        "population={population} pattern={pattern} cap={cap}"
+                    );
+                    checked += 1;
+                }
+            }
+        }
+        assert_eq!(checked, 540, "the configuration sweep shrank");
     }
 
     /// MM-BUG-KILN-00013: the cap steals the RIGHT voices — the oldest first,

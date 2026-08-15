@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00031 — Loudness normalization skips the true-peak ceiling when loudness is already on target
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / loudness normalization
 - **Raised:** 2026-08-14T11:47:25Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T104337Z-p42868-n011065400-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00031-run-fix-20260815T104337Z-p42868-n011065400-c1
-- **Owner base:** 8923ffcbc0e2fa004fecc79f0eee5ee6a55cc63e
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T10:43:37Z
-- **Owner until:** 2026-08-15T12:43:37Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:25Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-08-14T11:47:25Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T10:58:37Z, deltic:auto role=fix run=fix-20260815T104337Z-p42868-n011065400-c1 branch=task/bug-MM-BUG-CRUCIBLE-00031-run-fix-20260815T104337Z-p42868-n011065400-c1 code=e58a7bb gate=manual)
 
 ## Observation
 

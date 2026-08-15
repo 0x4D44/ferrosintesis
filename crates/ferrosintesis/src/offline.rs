@@ -35,6 +35,11 @@ pub(crate) enum NormalizationKind {
 impl Normalization {
     /// Normalize integrated BS.1770 loudness to `target_lufs` and constrain
     /// transients to `ceiling_dbtp`.
+    ///
+    /// Both must be finite, `target_lufs` in `-70..=0` LUFS and `ceiling_dbtp` in
+    /// `-60..=0` dBTP. The constructor itself accepts anything — validation happens in
+    /// [`render_to_wav`], which is fallible and so can tell you what was wrong; it
+    /// returns [`std::io::ErrorKind::InvalidInput`] before creating any file.
     pub fn loudness(target_lufs: f32, ceiling_dbtp: f32) -> Self {
         Self {
             kind: NormalizationKind::Loudness {
@@ -48,6 +53,9 @@ impl Normalization {
     ///
     /// Most callers should use [`Normalization::loudness`]. This constructor exists
     /// for workflows that deliberately retain the CLI's old peak-normalized sound.
+    ///
+    /// `target` must be finite and in `0..=1`; as with [`Normalization::loudness`],
+    /// [`render_to_wav`] is where that is checked and reported.
     pub fn peak(target: f32) -> Self {
         Self {
             kind: NormalizationKind::Peak { target },
@@ -174,10 +182,13 @@ pub fn render_with_progress(
 ///
 /// # Errors
 ///
-/// Returns [`std::io::ErrorKind::InvalidInput`] before rendering if the result would
-/// exceed classic RIFF's 4 GiB size limit. Otherwise returns the underlying scratch,
-/// output, flush, synchronization, or rename error. A failed call preserves any
-/// existing output and removes its owned temporary files during normal unwinding.
+/// Returns [`std::io::ErrorKind::InvalidInput`] before creating any file if
+/// `normalization` is not finite and within its documented range (see
+/// [`Normalization::loudness`] and [`Normalization::peak`]), and before rendering if
+/// the result would exceed classic RIFF's 4 GiB size limit. Otherwise returns the
+/// underlying scratch, output, flush, synchronization, or rename error. A failed call
+/// preserves any existing output and removes its owned temporary files during normal
+/// unwinding.
 pub fn render_to_wav(
     song: &Song,
     opt: &Options,
@@ -400,6 +411,133 @@ mod tests {
             samples.iter().all(|x| x.is_finite()),
             "extreme options produced non-finite audio"
         );
+    }
+
+    /// MM-BUG-CRUCIBLE-00032: a non-finite or absurd normalization setting is a
+    /// diagnostic, not silent audio — and it is caught before anything is written.
+    ///
+    /// Every case previously SUCCEEDED. A NaN loudness target produced a NaN gain that
+    /// the i16 quantizer cast to zero, writing a near-silent WAV and reporting success.
+    /// A NaN ceiling was quieter still in its failure: every comparison against NaN is
+    /// false, so the limiter simply stopped limiting while the call still said it had
+    /// worked. Both are checked here on all three knobs, for NaN and both infinities,
+    /// plus the finite-but-absurd values the range check exists for.
+    ///
+    /// The destination and its directory are asserted untouched, so this also proves
+    /// the check runs before any file is created — which is the part a caller relies
+    /// on when overwriting an existing render.
+    #[test]
+    fn non_finite_normalization_is_rejected_before_anything_is_written() {
+        let dir = TestDir::new("bad-normalization");
+        let output = dir.join("song.wav");
+        fs::write(&output, b"prior output").unwrap();
+        let song = one_note_song();
+        let opt = Options::default()
+            .with_sample_rate(8_000)
+            .with_samples(false)
+            .with_tail(0.0);
+
+        let bad = [
+            (
+                "loudness target NaN",
+                Normalization::loudness(f32::NAN, -1.0),
+            ),
+            (
+                "loudness target +Inf",
+                Normalization::loudness(f32::INFINITY, -1.0),
+            ),
+            (
+                "loudness target -Inf",
+                Normalization::loudness(f32::NEG_INFINITY, -1.0),
+            ),
+            ("ceiling NaN", Normalization::loudness(-18.0, f32::NAN)),
+            (
+                "ceiling +Inf",
+                Normalization::loudness(-18.0, f32::INFINITY),
+            ),
+            (
+                "ceiling -Inf",
+                Normalization::loudness(-18.0, f32::NEG_INFINITY),
+            ),
+            ("peak NaN", Normalization::peak(f32::NAN)),
+            ("peak +Inf", Normalization::peak(f32::INFINITY)),
+            ("peak -Inf", Normalization::peak(f32::NEG_INFINITY)),
+            // Finite but outside the documented range.
+            (
+                "loudness target above 0",
+                Normalization::loudness(3.0, -1.0),
+            ),
+            ("ceiling above 0", Normalization::loudness(-18.0, 6.0)),
+            ("peak above 1", Normalization::peak(2.0)),
+            ("peak below 0", Normalization::peak(-0.5)),
+        ];
+
+        for (label, normalization) in bad {
+            let error = render_to_wav(&song, &opt, &output, normalization)
+                .expect_err(&format!("{label} was accepted"));
+            assert_eq!(
+                error.kind(),
+                std::io::ErrorKind::InvalidInput,
+                "{label}: wrong error kind ({error})"
+            );
+            assert_eq!(
+                fs::read(&output).unwrap(),
+                b"prior output",
+                "{label}: the existing output was modified"
+            );
+            assert_eq!(
+                fs::read_dir(&dir.0).unwrap().count(),
+                1,
+                "{label}: scratch files were created before validation"
+            );
+        }
+
+        // The floor: a good setting on the same inputs must still succeed, or the
+        // assertions above would pass for a renderer that rejected everything.
+        render_to_wav(&song, &opt, &output, Normalization::loudness(-18.0, -1.0))
+            .expect("a valid normalization must still render");
+        assert_ne!(fs::read(&output).unwrap(), b"prior output");
+    }
+
+    /// The infallible in-memory helper cannot report a bad setting, so its documented
+    /// answer is to leave the audio alone rather than return the silence a NaN gain
+    /// used to produce.
+    #[test]
+    fn buffered_normalization_passes_non_finite_settings_through_ungained() {
+        let sr = 44_100u32;
+        // Three seconds, not a fraction of one. BS.1770 integrated loudness is gated
+        // over 400 ms blocks, so a short signal measures as non-finite and
+        // `normalize_loudness` takes its silence path — breaking out before it could
+        // ever compute a gain. An earlier version of this test used 0.1 s and passed
+        // with the guard REMOVED, because it never reached the code it was testing.
+        let samples: Vec<f32> = (0..sr as usize * 3)
+            .flat_map(|i| {
+                let s = 0.5 * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sr as f32).sin();
+                [s, s]
+            })
+            .collect();
+        assert!(
+            crate::loudness::integrated_lufs(&samples, sr).is_finite(),
+            "the fixture must be long enough to measure, or the NaN path is unreachable"
+        );
+        let reference = crate::engine::normalize_loudness(&samples, sr, -18.0, -1.0);
+        assert!(
+            reference.iter().any(|&s| s != 0),
+            "the reference render is silent, so this test cannot detect silence"
+        );
+
+        for (label, target, ceiling) in [
+            ("target NaN", f32::NAN, -1.0f32),
+            ("ceiling NaN", -18.0f32, f32::NAN),
+            ("target +Inf", f32::INFINITY, -1.0),
+            ("ceiling -Inf", -18.0, f32::NEG_INFINITY),
+        ] {
+            let out = crate::engine::normalize_loudness(&samples, sr, target, ceiling);
+            assert!(
+                out.iter().any(|&s| s != 0),
+                "{label}: a non-finite setting produced silence"
+            );
+        }
     }
 
     #[test]

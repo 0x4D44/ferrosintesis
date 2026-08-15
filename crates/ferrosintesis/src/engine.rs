@@ -4352,6 +4352,12 @@ pub(crate) const LOUDNESS_TOL_DB: f32 = 0.3;
 /// overshoots — so this converges (or, for a track that genuinely cannot reach the
 /// target without over-limiting, lands as close as the ceiling allows). Silence
 /// (no gated blocks) passes through ungained.
+///
+/// A non-finite `target_lufs` or `ceiling_dbtp` also passes through ungained. This
+/// function cannot report an error, so leaving the audio alone is the one answer that
+/// neither destroys it nor pretends the setting was honoured; use
+/// [`render_to_wav`](crate::offline::render_to_wav) if you want the setting validated
+/// and rejected instead.
 pub fn normalize_loudness(
     samples: &[f32],
     sr: u32,
@@ -4359,6 +4365,19 @@ pub fn normalize_loudness(
     ceiling_dbtp: f32,
 ) -> Vec<i16> {
     let mut buf: Vec<f32> = samples.to_vec();
+    // This helper is infallible, so it cannot report a bad setting the way
+    // `render_to_wav` does — its documented behaviour for a non-finite target or
+    // ceiling is therefore to leave the audio ALONE (MM-BUG-CRUCIBLE-00032). It used
+    // to compute a NaN gain, fill the buffer with NaN, and hand that to the quantizer,
+    // which casts NaN to zero: a silent result returned as if it had succeeded.
+    // Passing the samples through unchanged is the honest infallible answer — the
+    // caller still has its audio, and `render_to_wav` is there when a diagnostic is
+    // wanted instead.
+
+    if !target_lufs.is_finite() || !ceiling_dbtp.is_finite() {
+        return dither_quantize(&buf, 1.0);
+    }
+
     for _ in 0..LOUDNESS_MAX_ITERS {
         let measured = crate::loudness::integrated_lufs(&buf, sr);
         if !measured.is_finite() {

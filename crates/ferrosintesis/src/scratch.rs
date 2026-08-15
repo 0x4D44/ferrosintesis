@@ -23,6 +23,14 @@ pub(crate) fn render_to_wav(
     normalization: NormalizationKind,
     on_progress: &mut dyn FnMut(Progress),
 ) -> io::Result<Stats> {
+    // Before anything is reserved, created or measured: a non-finite or absurd
+    // normalization setting must be a diagnostic, not silent audio
+    // (MM-BUG-CRUCIBLE-00032). `Normalization::loudness(f32::NAN, -1.0)` used to
+    // produce a NaN gain that the i16 quantizer cast to zero — a near-silent WAV,
+    // written successfully, with nothing to tell the caller. A NaN CEILING was worse:
+    // every comparison against it is false, so the limiter silently stopped limiting
+    // while the call still reported success.
+    validate_normalization(normalization)?;
     let frames = engine::render_sample_count(song, opt) as u64;
     let sample_count = frames
         .checked_mul(2)
@@ -63,6 +71,55 @@ pub(crate) fn render_to_wav(
     .sync_all()?;
     fs::rename(final_temp.path(), output)?;
     Ok(stats)
+}
+
+/// Widest loudness target this renderer will accept, in LUFS.
+const MIN_TARGET_LUFS: f32 = -70.0;
+/// Widest true-peak ceiling this renderer will accept, in dBTP. A positive ceiling
+/// would be a licence to clip, so full scale is the top.
+const MIN_CEILING_DBTP: f32 = -60.0;
+
+/// Reject a normalization setting that cannot produce meaningful audio.
+///
+/// Finiteness is the defect this exists for; the ranges are here so an absurd-but-finite
+/// value is a diagnostic too. They are deliberately wide — far wider than anything this
+/// repository asks for (-18 LUFS / -1 dBTP) — because the job is to catch nonsense, not
+/// to impose taste.
+fn validate_normalization(normalization: NormalizationKind) -> io::Result<()> {
+    match normalization {
+        NormalizationKind::Loudness {
+            target_lufs,
+            ceiling_dbtp,
+        } => {
+            if !target_lufs.is_finite() || !(MIN_TARGET_LUFS..=0.0).contains(&target_lufs) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "loudness target {target_lufs} LUFS is not a finite value in \
+                     {MIN_TARGET_LUFS}..=0"
+                    ),
+                ));
+            }
+            if !ceiling_dbtp.is_finite() || !(MIN_CEILING_DBTP..=0.0).contains(&ceiling_dbtp) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "true-peak ceiling {ceiling_dbtp} dBTP is not a finite value in \
+                     {MIN_CEILING_DBTP}..=0"
+                    ),
+                ));
+            }
+        }
+        NormalizationKind::Peak { target } => {
+            if !target.is_finite() || !(0.0..=1.0).contains(&target) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("peak target {target} is not a finite value in 0..=1"),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn render_float_scratch(

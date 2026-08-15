@@ -7,7 +7,7 @@
 //! crate through `ferrosintesis`, not directly. All samples are CC0 1.0 /
 //! public-domain — no attribution required. The canonical packaged inventory
 //! and source provenance are in `PROVENANCE.md`.
-//! `ferrosintesis`. Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
+//! Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

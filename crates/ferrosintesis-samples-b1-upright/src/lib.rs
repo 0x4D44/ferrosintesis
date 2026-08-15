@@ -3,7 +3,7 @@
 //! The generated sample inventory is refreshed from the committed `samples/*.wav`
 //! by `tools/ferrosintesis-samples/regen_samples_table.py`; the B1-specific tail
 //! validator below remains handwritten. Consumers normally reach this crate through
-//! `ferrosintesis`. Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
+//! Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

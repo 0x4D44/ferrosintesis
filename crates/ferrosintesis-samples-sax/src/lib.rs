@@ -5,7 +5,7 @@
 //! for the GM 64-67 saxophones. The modeled reed is the
 //! `--no-samples` or unusable-loop fallback. Consumers normally access this crate
 //! through `ferrosintesis`. Attribution obligations are in `NOTICE`.
-//! `ferrosintesis`. Licence/provenance: see `NOTICE` / `PROVENANCE.md`.
+//! Licence/provenance: see `NOTICE` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

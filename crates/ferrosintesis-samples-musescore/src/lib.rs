@@ -9,7 +9,7 @@
 //! Consumers normally access this crate through `ferrosintesis`. Attribution
 //! obligations (the MS Basic acknowledgement set) are in `NOTICE`; the GM 7
 //! clavinet from the same soundfont ships separately in `ferrosintesis-samples-clavinet`.
-//! `ferrosintesis`. Licence/provenance: see `NOTICE` / `PROVENANCE.md`.
+//! Licence/provenance: see `NOTICE` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

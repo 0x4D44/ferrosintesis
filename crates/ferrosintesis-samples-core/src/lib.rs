@@ -1,7 +1,7 @@
 //! Embedded CC0 attack-transient samples for piano, violin, and flute voices.
 //!
 //! Consumers normally access this crate through `ferrosintesis`.
-//! `ferrosintesis`. Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
+//! Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

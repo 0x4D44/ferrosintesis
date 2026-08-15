@@ -5,7 +5,7 @@
 //! size, derived from the table below. Consumers normally access this crate through
 //! `ferrosintesis`. CC0-1.0 (public-domain dedication) — no attribution obligation;
 //! see `PROVENANCE.md` for the recording provenance.
-//! `ferrosintesis`. Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
+//! Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

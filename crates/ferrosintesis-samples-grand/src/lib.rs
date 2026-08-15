@@ -6,7 +6,7 @@
 //! instrument from the CC0 VSCO *upright* that is the GM 0 CC0=1 alternate.
 //! Consumers normally access this crate
 //! through `ferrosintesis`. Attribution obligations are in `NOTICE`.
-//! `ferrosintesis`. Licence/provenance: see `NOTICE` / `PROVENANCE.md`.
+//! Licence/provenance: see `NOTICE` / `PROVENANCE.md`.
 
 #![forbid(unsafe_code)]
 

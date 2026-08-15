@@ -1,6 +1,6 @@
 # MM-BUG-NMI-00001 — Ten packaged WAVs across four banks still open on a frame-zero PCM step
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample assets / onset de-click coverage
@@ -19,7 +19,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T03:38:52Z, raised via `deltic bugs new`) -> Blocked (2026-08-15, six of the ten fixed in 3d186d0; the remaining five are all `-core` piano and cannot be regenerated until MM-BUG-NMI-00002 is fixed — `prepare.py --only=piano` rewrites all 48 files in the family rather than reproducing the committed bank. Blocked on that bug, not on a decision.) -> Open (2026-08-15T16:25:34Z, deltic:manual host=NMI verdict=reopen) -> Fixed (2026-08-15T16:27:44Z, deltic:auto role=fix run=fix-20260815T162554Z-p14984-n995209800-c1 branch=task/bug-MM-BUG-NMI-00001-run-fix-20260815T162554Z-p14984-n995209800-c1 code=e4272da gate=manual)
+- **State history:** Open (2026-08-15T03:38:52Z, raised via `deltic bugs new`) -> Blocked (2026-08-15, six of the ten fixed in 3d186d0; the remaining five are all `-core` piano and cannot be regenerated until MM-BUG-NMI-00002 is fixed — `prepare.py --only=piano` rewrites all 48 files in the family rather than reproducing the committed bank. Blocked on that bug, not on a decision.) -> Open (2026-08-15T16:25:34Z, deltic:manual host=NMI verdict=reopen) -> Fixed (2026-08-15T16:27:44Z, deltic:auto role=fix run=fix-20260815T162554Z-p14984-n995209800-c1 branch=task/bug-MM-BUG-NMI-00001-run-fix-20260815T162554Z-p14984-n995209800-c1 code=e4272da gate=manual) -> Closed (2026-08-15T22:50:00Z, independent verify: extracted piano_C3_pp/_rr2/G3_pp/G4_pp/G5_f.wav at e4272da^ and e4272da via `git show`, re-ran the census predicate from this bug's own Correction section directly on the PCM — all 5 DISCONTINUOUS before, all 5 `ok` (first=0.0) after; also confirmed the other 5 (b1_normal_C1/C3, eastpick_E2, eastpluck_E2, pizzbass_E1) are `ok` at HEAD. Ran `python -m unittest discover -s tools/ferrosintesis-samples`: 155 tests, only the 2 pre-existing environment failures (b1_sustain_pilot vs. $env:TEMP inside a git tree) matching the fixer's own report — now separately tracked as MM-BUG-NMI-00004.)
 
 ## Correction (2026-08-15, while fixing)
 

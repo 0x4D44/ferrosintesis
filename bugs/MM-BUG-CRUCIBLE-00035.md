@@ -1,6 +1,6 @@
 # MM-BUG-CRUCIBLE-00035 — Inherited drumkit PCM probe marker bypasses pristine-process test isolation
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / core drum-kit cache regression
@@ -19,7 +19,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T13:48:05Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:11:37Z, deltic:auto role=fix run=fix-20260815T160555Z-p45968-n192851000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00035-run-fix-20260815T160555Z-p45968-n192851000-c1 code=759d11d gate=manual)
+- **State history:** Open (2026-08-15T13:48:05Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:11:37Z, deltic:auto role=fix run=fix-20260815T160555Z-p45968-n192851000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00035-run-fix-20260815T160555Z-p45968-n192851000-c1 code=759d11d gate=manual) -> Closed (2026-08-15T22:50:00Z, independent verify: reproduced deterministically as the fix commit describes — `FERRO_DRUMKIT_PCM_MISS_PROBE=1 FERRO_DRUMKIT2_PCM_MISS_PROBE=1 cargo test -p ferrosintesis-samples-drumkit -p ferrosintesis-samples-drumkit2 -- --test-threads=1` FAILS at `759d11d^` (`lookup_misses_do_not_initialize_pcm_cache` panics `left: 1, right: 0`, exactly as reported) and PASSES at `759d11d`. Confirmed both crates' fix is the same shape: pristine-mode now requires the marker AND an observed-cold `pcm_cache_initializations() == 0`, not the marker alone.)
 
 ## Observation
 

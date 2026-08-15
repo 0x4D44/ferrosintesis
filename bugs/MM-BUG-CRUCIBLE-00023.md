@@ -1,6 +1,6 @@
 # MM-BUG-CRUCIBLE-00023 — Failed core drum PCM lookups initialize the entire cache
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / core drum-kit PCM API
@@ -19,7 +19,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-11T08:30:10Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T12:03:46Z, deltic:auto role=fix run=fix-20260815T120005Z-p20964-n399449000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00023-run-fix-20260815T120005Z-p20964-n399449000-c1 code=44fcdf3 gate=manual)
+- **State history:** Open (2026-08-11T08:30:10Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T12:03:46Z, deltic:auto role=fix run=fix-20260815T120005Z-p20964-n399449000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00023-run-fix-20260815T120005Z-p20964-n399449000-c1 code=44fcdf3 gate=manual) -> Closed (2026-08-15T22:50:00Z, independent verify: confirmed `44fcdf3^:crates/ferrosintesis-samples-drumkit/src/lib.rs` has zero occurrences of `lookup_misses_do_not_initialize_pcm_cache`, and `44fcdf3` adds it (2 occurrences) plus reorders `pcm`/`pcm_by_index` to resolve the name/index before calling `decoded_samples()`. Ran the same test alongside CRUCIBLE-00035's deterministic repro (marker exported, `--test-threads=1` forcing `decoded_banks_are_valid_audio` to warm the cache first) in a scratch worktree: FAILS at `759d11d^` with `left: 1, right: 0` (cache got warmed by a miss), PASSES at `759d11d` (which carries this fix). `cargo test -p ferrosintesis-samples-drumkit -p ferrosintesis-samples-drumkit2` both green at HEAD.)
 
 ## Observation
 

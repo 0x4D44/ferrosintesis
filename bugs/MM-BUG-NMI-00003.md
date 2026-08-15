@@ -1,6 +1,6 @@
 # MM-BUG-NMI-00003 — sample_output_path binds repo_root=REPO_ROOT at import, so patching REPO_ROOT never redirects writes
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample tooling / output path resolution
@@ -19,7 +19,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T13:03:50Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:32:27Z, deltic:auto role=fix run=fix-20260815T162821Z-p13848-n700969000-c1 branch=task/bug-MM-BUG-NMI-00003-run-fix-20260815T162821Z-p13848-n700969000-c1 code=d844a36 gate=manual)
+- **State history:** Open (2026-08-15T13:03:50Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:32:27Z, deltic:auto role=fix run=fix-20260815T162821Z-p13848-n700969000-c1 branch=task/bug-MM-BUG-NMI-00003-run-fix-20260815T162821Z-p13848-n700969000-c1 code=d844a36 gate=manual) -> Closed (2026-08-15T22:50:00Z, independent verify: confirmed `d844a36^` still has `def sample_output_path(filename, repo_root=REPO_ROOT)` — the early-bound default the bug describes; at `d844a36` this is `repo_root=None` resolved at call time. Ran the new `RepoRootIsResolvedAtCallTimeTest` (both `test_sample_output_path_follows_a_patched_repo_root` and the derived source-scan `test_no_module_binds_repo_root_as_a_default_argument`) at HEAD — both green. Root cause (Python default-argument binding at def-time) is unambiguous from the diff and doesn't need re-deriving.)
 
 ## Observation
 

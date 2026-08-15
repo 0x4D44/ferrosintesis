@@ -1,6 +1,6 @@
 # MM-BUG-NMI-00002 — the core piano bank was stale: a whole-bank conditioner re-levels all 48 takes after any onset change
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample tooling / core piano bake reproducibility
@@ -19,7 +19,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T11:56:51Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:27:25Z, deltic:auto role=fix run=fix-20260815T161214Z-p18772-n712089000-c1 branch=task/bug-MM-BUG-NMI-00002-run-fix-20260815T161214Z-p18772-n712089000-c1 code=e4272da gate=manual)
+- **State history:** Open (2026-08-15T11:56:51Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:27:25Z, deltic:auto role=fix run=fix-20260815T161214Z-p18772-n712089000-c1 branch=task/bug-MM-BUG-NMI-00002-run-fix-20260815T161214Z-p18772-n712089000-c1 code=e4272da gate=manual) -> Closed (2026-08-15T22:50:00Z, independent verify: same evidence as MM-BUG-NMI-00001 (one fix commit, e4272da, covers both) — the 5 previously-stale `-core` piano takes now start on PCM 0 at HEAD, `python -m unittest discover -s tools/ferrosintesis-samples` gives 155 tests with only the 2 pre-existing environment failures now tracked as MM-BUG-NMI-00004. Root cause (whole-bank minimax conditioner re-deriving every take's correction after any of the 5 onsets moved) matches the observed 48-file delta pattern and the diagnosis is internally consistent with the corrected 2026-08-15 Correction note.)
 
 ## Correction (2026-08-15, while fixing)
 

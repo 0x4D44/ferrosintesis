@@ -6,15 +6,15 @@
 - **Area:** samples gen_crate_lib / oracles
 - **Raised:** 2026-08-14T10:21:09Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T163323Z-p32188-n779561800-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-KILN-00199-run-fix-20260815T163323Z-p32188-n779561800-c1
+- **Owner base:** 9d72124d6779bc10f5c1a67ece1fddbcf9d8624d
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T16:33:23Z
+- **Owner until:** 2026-08-15T18:33:23Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00034 — Catalog overlap oracle ignores GM System On voice resets
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/render-catalog / MIDI overlap oracle
 - **Raised:** 2026-08-14T12:51:04Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T110711Z-p34000-n736568800-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00034-run-fix-20260815T110711Z-p34000-n736568800-c1
-- **Owner base:** e478cf3563c24d51f6eb673a50804b780b1f2c12
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T11:07:11Z
-- **Owner until:** 2026-08-15T13:07:11Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T12:51:04Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-14T12:51:04Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T11:11:28Z, deltic:auto role=fix run=fix-20260815T110711Z-p34000-n736568800-c1 branch=task/bug-MM-BUG-CRUCIBLE-00034-run-fix-20260815T110711Z-p34000-n736568800-c1 code=fe1fb49 gate=manual)
 
 ## Observation
 

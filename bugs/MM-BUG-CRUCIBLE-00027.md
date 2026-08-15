@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00027 — offline::load reads unbounded MIDI files before parser limits apply
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / MIDI loading
 - **Raised:** 2026-08-14T11:47:21Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T071503Z-p19272-n598691600-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00027-run-fix-20260815T071503Z-p19272-n598691600-c1
-- **Owner base:** 4986ac837e5147a61fc821fb8ed0c7ccf0008911
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T07:15:03Z
-- **Owner until:** 2026-08-15T09:15:03Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:21Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-08-14T11:47:21Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T07:27:34Z, deltic:auto role=fix run=fix-20260815T071503Z-p19272-n598691600-c1 branch=task/bug-MM-BUG-CRUCIBLE-00027-run-fix-20260815T071503Z-p19272-n598691600-c1 code=ccf2cdf gate=manual)
 
 ## Observation
 

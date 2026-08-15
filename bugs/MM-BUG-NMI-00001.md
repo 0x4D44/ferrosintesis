@@ -1,6 +1,6 @@
 # MM-BUG-NMI-00001 — Ten packaged WAVs across four banks still open on a frame-zero PCM step
 
-- **State:** Blocked
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample assets / onset de-click coverage
@@ -19,7 +19,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T03:38:52Z, raised via `deltic bugs new`) -> Blocked (2026-08-15, six of the ten fixed in 3d186d0; the remaining five are all `-core` piano and cannot be regenerated until MM-BUG-NMI-00002 is fixed — `prepare.py --only=piano` rewrites all 48 files in the family rather than reproducing the committed bank. Blocked on that bug, not on a decision.)
+- **State history:** Open (2026-08-15T03:38:52Z, raised via `deltic bugs new`) -> Blocked (2026-08-15, six of the ten fixed in 3d186d0; the remaining five are all `-core` piano and cannot be regenerated until MM-BUG-NMI-00002 is fixed — `prepare.py --only=piano` rewrites all 48 files in the family rather than reproducing the committed bank. Blocked on that bug, not on a decision.) -> Open (2026-08-15T16:25:34Z, deltic:manual host=NMI verdict=reopen)
 
 ## Correction (2026-08-15, while fixing)
 
@@ -125,3 +125,6 @@ already-pinned banks do.
 - Estimated effort: Medium — the derived oracle is small, the per-family
   regeneration and pin refresh is the bulk.
 
+### Reopen note (2026-08-15T16:25:34Z, deltic:manual host=NMI verdict=reopen)
+
+Reopen reason: The blocker (MM-BUG-NMI-00002) is resolved: the core piano bank was stale, not irreproducible, and regenerating it fixes the remaining five onsets.

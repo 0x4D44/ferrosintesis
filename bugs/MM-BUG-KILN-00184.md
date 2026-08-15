@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00184 — Headroom logical alias duplicates packaged and decoded PCM
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** Headroom sample package / memory and package size
 - **Raised:** 2026-08-13T19:30:29Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T152013Z-p47488-n173234600-c2
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00184-run-fix-20260815T152013Z-p47488-n173234600-c2
-- **Owner base:** 94cb2b249c9a28da87e633c45a95a09c6c0d441b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T15:20:13Z
-- **Owner until:** 2026-08-15T17:20:13Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T19:30:29Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-13T19:30:29Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T15:22:12Z, deltic:auto role=fix run=fix-20260815T152013Z-p47488-n173234600-c2 branch=task/bug-MM-BUG-KILN-00184-run-fix-20260815T152013Z-p47488-n173234600-c2 code=0f54b1a gate=manual)
 
 ## Observation
 

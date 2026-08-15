@@ -6,15 +6,15 @@
 - **Area:** Headroom sample package / memory and package size
 - **Raised:** 2026-08-13T19:30:29Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T130650Z-p16352-n940070000-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00184-run-fix-20260815T130650Z-p16352-n940070000-c1
-- **Owner base:** 6a5da0cd4149c49384060064f0d2e21aa16c39d7
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T13:06:50Z
-- **Owner until:** 2026-08-15T15:06:50Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

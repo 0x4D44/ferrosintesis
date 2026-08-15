@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00028 — Overlong MIDI VLQs panic in checked builds and silently wrap in release
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** ferrosintesis / MIDI parser
 - **Raised:** 2026-08-14T11:47:22Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T100751Z-p34060-n822582500-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00028-run-fix-20260815T100751Z-p34060-n822582500-c1
-- **Owner base:** ab068f6a1f7ff4952c922ed86812d8eb6d80bdfc
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T10:07:51Z
-- **Owner until:** 2026-08-15T12:07:51Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:22Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-08-14T11:47:22Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T10:17:39Z, deltic:auto role=fix run=fix-20260815T100751Z-p34060-n822582500-c1 branch=task/bug-MM-BUG-CRUCIBLE-00028-run-fix-20260815T100751Z-p34060-n822582500-c1 code=a462a88 gate=manual)
 
 ## Observation
 

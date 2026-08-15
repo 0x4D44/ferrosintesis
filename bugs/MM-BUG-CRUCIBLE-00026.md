@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00026 — Unchecked render options can request allocator-aborting DSP buffers
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** ferrosintesis / render option validation
 - **Raised:** 2026-08-14T11:47:20Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T043516Z-p11252-n216628300-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00026-run-fix-20260815T043516Z-p11252-n216628300-c1
-- **Owner base:** aa9073543850b1cad3c1d84d67290d177b8bb25c
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T04:35:16Z
-- **Owner until:** 2026-08-15T06:35:16Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:20Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-08-14T11:47:20Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T04:48:46Z, deltic:auto role=fix run=fix-20260815T043516Z-p11252-n216628300-c1 branch=task/bug-MM-BUG-CRUCIBLE-00026-run-fix-20260815T043516Z-p11252-n216628300-c1 code=209e7f0 gate=manual)
 
 ## Observation
 

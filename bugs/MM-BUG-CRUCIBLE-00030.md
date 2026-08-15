@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00030 — GS drum-mode transitions leave melodic effect state derived from the old routing
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / GS channel routing
 - **Raised:** 2026-08-14T11:47:24Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T102800Z-p13352-n472573600-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00030-run-fix-20260815T102800Z-p13352-n472573600-c1
-- **Owner base:** aa7eca7ed6cbc98b52f77a52accdef211419776c
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T10:28:00Z
-- **Owner until:** 2026-08-15T12:28:00Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:24Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-08-14T11:47:24Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T10:42:44Z, deltic:auto role=fix run=fix-20260815T102800Z-p13352-n472573600-c1 branch=task/bug-MM-BUG-CRUCIBLE-00030-run-fix-20260815T102800Z-p13352-n472573600-c1 code=ac54258 gate=manual)
 
 ## Observation
 

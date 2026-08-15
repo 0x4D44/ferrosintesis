@@ -36,8 +36,8 @@ version* of it, neither of which is recoverable from a sound page that the autho
 
 | Manifest | Pack | Sounds | Licence tally | SHA-256 |
 |----------|------|--------|---------------|---------|
-| [`_readme_and_license_3957.txt`](../../tools/ferrosintesis-samples/freesound-src/_readme_and_license_3957.txt) | 3957 (Rhodes, tim.kahn) | 53 | 53/53 "Attribution 4.0" | `5b6e87bc35b225215f90d87fc0e92872851befa7a331514040abf8fd2234a099` |
-| [`_readme_and_license_19445.txt`](../../tools/ferrosintesis-samples/freesound-src/_readme_and_license_19445.txt) | 19445 (dulcimer, iternetcone) | 15 | 15/15 "Attribution 4.0" | `5de6b40b93943d6b29634aa0069710069aad6e8a07152d71f3e64e7083a2d36a` |
+| [`_readme_and_license_3957.txt`](licence-evidence/_readme_and_license_3957.txt) | 3957 (Rhodes, tim.kahn) | 53 | 53/53 "Attribution 4.0" | `5b6e87bc35b225215f90d87fc0e92872851befa7a331514040abf8fd2234a099` |
+| [`_readme_and_license_19445.txt`](licence-evidence/_readme_and_license_19445.txt) | 19445 (dulcimer, iternetcone) | 15 | 15/15 "Attribution 4.0" | `5de6b40b93943d6b29634aa0069710069aad6e8a07152d71f3e64e7083a2d36a` |
 
 The tallies are counted from the manifests themselves, and they are what license the "no
 exceptions" claim above. Note the licence **version**: pack IDs 3957 and 19445 predate CC BY 4.0,
@@ -111,3 +111,4 @@ only, while `prepare.py` claimed it recorded "exact pack IDs/SHAs"
 | `rhodes_E5.wav` | `9150e1a2ac6d5b148b74965690828b20e0038a7cac742587f2e7bc09a2dc08e3` |
 | `rhodes_G#2.wav` | `7fc33a0f36a6168b815ca229b9b85759f1d903a7e423461496baabb44cc76eae` |
 | `rhodes_G#5.wav` | `af3a1da6689861828ae079b58e199f2c4f87b966159641983432e824030f67aa` |
+

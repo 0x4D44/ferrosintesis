@@ -7,7 +7,8 @@ description = "Embedded CC-BY Freesound onset samples for ferrosintesis (GM 4 Rh
 license = "CC-BY-4.0"
 repository = "https://github.com/0x4D44/ferrosintesis"
 readme = "README.md"
-include = ["src/**", "samples/**", "README.md", "PROVENANCE.md", "NOTICE"]
+include = ["src/**", "samples/**", "licence-evidence/**", "README.md", "PROVENANCE.md", "NOTICE"]
 
 [lib]
 path = "src/lib.rs"
+

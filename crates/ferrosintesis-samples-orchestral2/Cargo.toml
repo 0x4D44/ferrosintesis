@@ -7,7 +7,9 @@ description = "Embedded CC0 overflow instrument-onset samples for ferrosintesis;
 license = "CC0-1.0"
 repository = "https://github.com/0x4D44/ferrosintesis"
 readme = "README.md"
-include = ["src/**", "samples/**", "README.md", "PROVENANCE.md", "LICENSE-CC0"]
+include = ["src/**", "samples/**", "licence-evidence/**", "README.md", "PROVENANCE.md", "LICENSE-CC0"]
 
 [lib]
 path = "src/lib.rs"
+
+

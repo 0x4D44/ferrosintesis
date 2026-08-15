@@ -27,7 +27,7 @@ python3 tools/ferrosintesis-samples/banjo_extract.py
 | `timpani_*` | 5 | Timpani (GM 47) strikes | VCSL (Versilian Community Sample Library), pinned `c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e` | CC0-1.0 |
 | `tubular_*` | 9 | Tubular bells (GM 14) strikes | VCSL (Versilian Community Sample Library), pinned `c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e` | CC0-1.0 |
 | `vibes_*` | 10 | Vibraphone (GM 11), soft mallets | VCSL (Versilian Community Sample Library), pinned `c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e` | CC0-1.0 |
-| `viola_*` | 14 | Solo viola (GM 41) arco onsets | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
+| `viola_*` | 14 | Viola SECTION `susvib` arco onsets, routed to solo viola (GM 41) | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `xylo_*` | 8 | Xylophone (GM 13) strikes | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 
 ## First-party committed-source checksums
@@ -68,9 +68,10 @@ page states "Creative Commons 0". The record is committed here so the check is n
 repeated (MM-BUG-KILN-00069 item 9).
 
 That check no longer rests on someone having read eleven web pages. The pack's bundled
-[`_readme_and_license_44539.txt`](../../tools/ferrosintesis-samples/freesound-src/_readme_and_license_44539.txt)
-(SHA-256 `3e75a460120b3b5b7a87d3511d7dc1c45e639b189a0884303c2471470d347e08`) is now committed
-verbatim, and it states "Creative Commons 0" for all 11 sounds — 11/11, no exceptions
+[`_readme_and_license_44539.txt`](licence-evidence/_readme_and_license_44539.txt)
+(SHA-256 `3e75a460120b3b5b7a87d3511d7dc1c45e639b189a0884303c2471470d347e08`) is committed
+verbatim **inside this package**, and it states
+"Creative Commons 0" for all 11 sounds — 11/11, no exceptions
 (MM-REQ-KILN-00029). The manifest also pins the pack as 44539, which is what rules out the
 near-miss noted below.
 
@@ -119,3 +120,4 @@ carried no hash).
 **Retired source.** The banjo was previously baked from `sfzinstruments/ganjo` (CC0); that
 route was retired on 2026-07-23 in favour of the owner recording and is kept in
 `prepare.py` as history only.
+

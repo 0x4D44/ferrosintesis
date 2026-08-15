@@ -35,6 +35,93 @@ mod tests {
             .to_path_buf()
     }
 
+    /// MM-BUG-KILN-00193: a link in a PACKAGED document must resolve inside the
+    /// published package.
+    ///
+    /// `-orchestral2`'s PROVENANCE promised retained offline licence evidence and then
+    /// linked `../../tools/ferrosintesis-samples/freesound-src/...`, which cargo does
+    /// not package: the prose and the SHA-256 travelled to crates.io, the evidence they
+    /// cite did not. `-ccby` had two more of the same. Now the manifests are committed
+    /// inside each crate and this refuses any relative link that escapes the crate or
+    /// names a file the manifest's `include` would leave out of the archive.
+    ///
+    /// Enumerated from the filesystem, so a new crate or a new packaged document is
+    /// covered without being added anywhere.
+    #[test]
+    fn packaged_documents_never_link_outside_their_own_package() {
+        let mut errors: Vec<String> = Vec::new();
+        let mut checked_links = 0usize;
+
+        for crate_name in sample_crates() {
+            let crate_dir = crates_dir().join(&crate_name);
+            let manifest = std::fs::read_to_string(crate_dir.join("Cargo.toml"))
+                .unwrap_or_else(|_| panic!("{crate_name} has a Cargo.toml"));
+            let include = manifest
+                .lines()
+                .find(|line| line.trim_start().starts_with("include ="))
+                .unwrap_or("")
+                .to_owned();
+
+            for doc in ["README.md", "PROVENANCE.md", "NOTICE"] {
+                let path = crate_dir.join(doc);
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                // Markdown inline links: `](target)`. Absolute URLs are someone else's
+                // to keep working; only repository-relative targets are ours.
+                for (_, target) in text.match_indices("](").map(|(i, _)| {
+                    let rest = &text[i + 2..];
+                    let end = rest.find(')').unwrap_or(rest.len());
+                    ((), &rest[..end])
+                }) {
+                    if target.starts_with("http://")
+                        || target.starts_with("https://")
+                        || target.starts_with('#')
+                        || target.is_empty()
+                    {
+                        continue;
+                    }
+                    checked_links += 1;
+                    if target.starts_with("../") || target.starts_with('/') {
+                        errors.push(format!(
+                            "{crate_name}/{doc} links `{target}`, which escapes the \
+                             published package"
+                        ));
+                        continue;
+                    }
+                    if !crate_dir.join(target).exists() {
+                        errors.push(format!(
+                            "{crate_name}/{doc} links `{target}`, which does not exist"
+                        ));
+                        continue;
+                    }
+                    // In the archive too, not merely on disk: cargo publishes only what
+                    // `include` names.
+                    let top = target.split('/').next().unwrap_or(target);
+                    let covered = include.contains(&format!("\"{top}\""))
+                        || include.contains(&format!("\"{top}/**\""));
+                    if !covered {
+                        errors.push(format!(
+                            "{crate_name}/{doc} links `{target}`, but `include` does not \
+                             package `{top}`"
+                        ));
+                    }
+                }
+            }
+        }
+
+        assert!(
+            checked_links > 3,
+            "no relative links were examined; the scan stopped finding documents"
+        );
+        assert!(
+            errors.is_empty(),
+            "{} packaged-document link error(s):\n  {}",
+            errors.len(),
+            errors.join("\n  ")
+        );
+    }
+
     /// Every first-party sample-asset crate, read from the filesystem rather than a list.
     fn sample_crates() -> Vec<String> {
         let mut out: Vec<String> = std::fs::read_dir(crates_dir())

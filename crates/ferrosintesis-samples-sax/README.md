@@ -1,6 +1,7 @@
 # ferrosintesis-samples-sax
 
-Embedded **CC BY 4.0 AND CC BY 3.0** saxophone samples for [`ferrosintesis`](../ferrosintesis) —
+Embedded **CC BY 4.0 AND CC BY 3.0** saxophone samples for
+[`ferrosintesis`](https://crates.io/crates/ferrosintesis) —
 recorded attack plus looped recorded sustain for the GM 64-67 saxophones (soprano,
 alto, tenor, baritone).
 

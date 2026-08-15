@@ -1,6 +1,9 @@
 ferrosintesis-samples-ydp-grand
 ===============================
 
+This crate voices the GM 1 Bright Acoustic Piano alternate (CC0=1) in
+ferrosintesis.
+
 The embedded WAV samples in this crate are extracted from the "YDP Grand Piano"
 SoundFont (the middle velocity layer of the "Grand Piano" preset) produced by
 roberto@zenvoid.org for the FreePats project, from the Zenph Studios / OLPC

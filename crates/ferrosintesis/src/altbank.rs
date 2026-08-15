@@ -1505,18 +1505,33 @@ mod tests {
             let package_manifest = read(&package_dir.join("Cargo.toml"));
             let package_readme = read(&package_dir.join("README.md"));
             let package_provenance = read(&package_dir.join("PROVENANCE.md"));
+            // The package's OWN notice, not just the parent's line about it. A crate
+            // published to crates.io carries this file and nothing else explains its
+            // program identity to a standalone consumer — and it was the one surface
+            // this guard did not read, so `-musescore-grand`'s NOTICE went on calling
+            // the bank "GM 0 / Bright Acoustic Piano" long after MM-BUG-KILN-00149
+            // corrected every other document (MM-BUG-KILN-00187).
+            let package_notice = read(&package_dir.join("NOTICE"));
 
             for (what, text) in [
                 ("module docs", &package_lib),
                 ("manifest description", &package_manifest),
                 ("README", &package_readme),
                 ("PROVENANCE", &package_provenance),
+                ("NOTICE", &package_notice),
             ] {
                 let text = norm(text);
                 assert!(
                     text.contains("GM 1") && text.contains(&selector),
                     "{} {what} does not state GM 1 `{selector}`; the router gives \
                      {} program 1 {selector}",
+                    package_dir.display(),
+                    src.name
+                );
+                assert!(
+                    !text.contains("GM 0"),
+                    "{} {what} still claims GM 0; the router gives {} program 1 \
+                     {selector}",
                     package_dir.display(),
                     src.name
                 );

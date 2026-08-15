@@ -14,8 +14,8 @@ be included in any derivative work, so they are reproduced here:
     Copyright (c) 2000-2002, 2008 Frank Wen <getfrank@gmail.com>
 
 This crate holds the MF velocity tier of the MuseScore_General "Grand Piano"
-preset as a dense single-velocity multisample for GM 0 / Bright Acoustic Piano
-alternate use in ferrosintesis.
+preset as a dense single-velocity multisample for GM 1 Bright Acoustic Piano
+alternate use (CC0=2) in ferrosintesis.
 
 Source: https://musescore.org/en/node/306828
         https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/
@@ -39,3 +39,4 @@ PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIG
 HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+

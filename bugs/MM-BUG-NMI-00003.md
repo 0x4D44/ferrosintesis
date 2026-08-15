@@ -6,15 +6,15 @@
 - **Area:** sample tooling / output path resolution
 - **Raised:** 2026-08-15T13:03:50Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T162821Z-p13848-n700969000-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-NMI-00003-run-fix-20260815T162821Z-p13848-n700969000-c1
+- **Owner base:** 6c4bb3038a49ba3f7f077bae7315c84d31d31a9c
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T16:28:21Z
+- **Owner until:** 2026-08-15T18:28:21Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

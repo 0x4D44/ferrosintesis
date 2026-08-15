@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00032 — Non-finite normalization settings silently produce clipped or silent WAV output
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / normalization validation
 - **Raised:** 2026-08-14T11:47:26Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T105918Z-p8844-n753669700-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00032-run-fix-20260815T105918Z-p8844-n753669700-c1
-- **Owner base:** 9c59ec5dc7333611b89f8d83564769d944bab6ee
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T10:59:18Z
-- **Owner until:** 2026-08-15T12:59:18Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:26Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-08-14T11:47:26Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T11:06:35Z, deltic:auto role=fix run=fix-20260815T105918Z-p8844-n753669700-c1 branch=task/bug-MM-BUG-CRUCIBLE-00032-run-fix-20260815T105918Z-p8844-n753669700-c1 code=236e96d gate=manual)
 
 ## Observation
 

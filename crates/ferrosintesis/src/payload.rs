@@ -479,6 +479,34 @@ mod tests {
                     }
                 }
             }
+
+            // ALIASES logical names are part of the namespace too
+            // (MM-BUG-KILN-00200). Each crate's `get()` rewrites its own alias names
+            // to canonical files BEFORE looking anything up, so `embedded_wav`'s
+            // first-match-wins chain resolves them exactly like physical names — but
+            // this scan saw only what was on disk, leaving the alias names invisible.
+            //
+            // Both directions were unguarded: an earlier crate adding a physical WAV
+            // that shadows a later crate's alias, and a later crate adding one that a
+            // an earlier alias already claims. Either way a voice plays the wrong
+            // recording with every suite green.
+            if let Ok(aliases) = std::fs::read_to_string(dir.join("ALIASES")) {
+                for line in aliases.lines() {
+                    let line = line.trim();
+                    if line.is_empty() || line.starts_with('#') {
+                        continue;
+                    }
+                    let Some(alias) = line.split_whitespace().next() else {
+                        continue;
+                    };
+                    scanned += 1;
+                    if let Some(first) = owner.insert(alias.to_owned(), krate.clone()) {
+                        clashes.push(format!(
+                            "{alias} is an alias in {krate} and a name in {first}"
+                        ));
+                    }
+                }
+            }
         }
 
         assert!(

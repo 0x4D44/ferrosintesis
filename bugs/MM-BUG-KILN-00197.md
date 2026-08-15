@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00197 — Sample-crate rustdoc headers carry a dangling 'ferrosintesis.' sentence fragment left by the legal-header sync
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** samples crates / published rustdoc
 - **Raised:** 2026-08-14T08:07:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T155002Z-p29528-n450830600-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00197-run-fix-20260815T155002Z-p29528-n450830600-c1
-- **Owner base:** e94abb830e964fd39f9278035b51ed446a74cf5e
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T15:50:02Z
-- **Owner until:** 2026-08-15T17:50:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T08:07:50Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-14T08:07:50Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T15:56:06Z, deltic:auto role=fix run=fix-20260815T155002Z-p29528-n450830600-c1 branch=task/bug-MM-BUG-KILN-00197-run-fix-20260815T155002Z-p29528-n450830600-c1 code=02fd273 gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00201 — Steinway/piano-family zone-root pins have no oracle; equal-size payloads make a swapped include_bytes silently mispitch
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** sampler zone tables / oracles
 - **Raised:** 2026-08-14T10:21:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T164408Z-p20132-n151918200-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00201-run-fix-20260815T164408Z-p20132-n151918200-c1
-- **Owner base:** f2c396e80d00abc2189c1fa93c73e24b47f78ecd
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T16:44:08Z
-- **Owner until:** 2026-08-15T18:44:08Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T10:21:10Z, raised via `deltic bugs new` model=claude-fable-5)
+- **State history:** Open (2026-08-14T10:21:10Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T16:56:38Z, deltic:auto role=fix run=fix-20260815T164408Z-p20132-n151918200-c1 branch=task/bug-MM-BUG-KILN-00201-run-fix-20260815T164408Z-p20132-n151918200-c1 code=8bb77f8 gate=manual)
 
 ## Observation
 

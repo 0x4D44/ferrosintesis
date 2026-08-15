@@ -71,6 +71,13 @@ pub enum MidiError {
     },
     /// The data ended in the middle of a header, chunk, or event.
     UnexpectedEof,
+    /// A variable-length quantity ran past the four bytes SMF allows.
+    ///
+    /// Delta times and meta/SysEx lengths are VLQs, and SMF 1.0 caps them at four
+    /// bytes (largest value 0x0FFF_FFFF). A fifth continuation byte is refused rather
+    /// than shifted, which is what stops an overlong encoding from overflowing in a
+    /// checked build or silently wrapping to a different value in release.
+    OverlongVlq,
     /// The tempo map declares a song longer than this reader will render.
     ///
     /// Rendering allocates in proportion to the song's length, so an absurd length from
@@ -112,6 +119,9 @@ impl fmt::Display for MidiError {
             MidiError::MissingTrack { index } => write!(f, "track {index}: missing MTrk header"),
             MidiError::BadStatusByte { status } => write!(f, "bad status byte {status:#04x}"),
             MidiError::UnexpectedEof => f.write_str("unexpected end of file"),
+            MidiError::OverlongVlq => {
+                f.write_str("a variable-length quantity is longer than the four bytes SMF allows")
+            }
             MidiError::TooLong { seconds } => write!(
                 f,
                 "song is {seconds:.0} s long, which exceeds the {MAX_SONG_SECONDS:.0} s limit \

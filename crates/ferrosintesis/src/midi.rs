@@ -7,6 +7,10 @@
 use crate::error::{MidiError, MAX_MIDI_FILE_BYTES, MAX_SONG_SECONDS};
 use std::path::Path;
 
+/// Bytes an SMF variable-length quantity may occupy. SMF 1.0 fixes this at four,
+/// which is why the largest representable VLQ is 0x0FFF_FFFF.
+const VLQ_MAX_BYTES: usize = 4;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EvKind {
     NoteOn {
@@ -195,15 +199,28 @@ impl<'a> Cursor<'a> {
         Ok(u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
     }
 
+    /// One SMF variable-length quantity: at most four bytes, so at most 0x0FFF_FFFF.
+    ///
+    /// MM-BUG-CRUCIBLE-00028: this used to loop until a byte cleared the continuation
+    /// bit, with no byte count. A delta like `90 80 80 80 00` — five bytes, each with
+    /// the continuation bit set until the last — overflowed `v << 7` on the fifth
+    /// shift: a panic in checked builds, and in release a silent wrap that accepted a
+    /// *different* tick value than the file encoded. Shorter overlong forms were
+    /// accepted silently even when they did not overflow.
+    ///
+    /// The four-byte cap is what makes the arithmetic safe, not a checked shift: after
+    /// three bytes `v` is at most 0x001F_FFFF, so the fourth `v << 7` reaches at most
+    /// 0x0FFF_FF80 and cannot overflow. A fifth byte is refused before it is shifted.
     fn vlq(&mut self) -> Result<u32, MidiError> {
         let mut v: u32 = 0;
-        loop {
+        for _ in 0..VLQ_MAX_BYTES {
             let b = self.u8()?;
             v = (v << 7) | (b & 0x7F) as u32;
             if b < 0x80 {
                 return Ok(v);
             }
         }
+        Err(MidiError::OverlongVlq)
     }
 }
 
@@ -488,6 +505,52 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn read_vlq(bytes: &[u8]) -> Result<u32, MidiError> {
+        Cursor {
+            data: bytes,
+            pos: 0,
+        }
+        .vlq()
+    }
+
+    /// MM-BUG-CRUCIBLE-00028: the VLQ reader honours SMF's four-byte limit.
+    ///
+    /// The decoder is tested directly rather than through a whole file because the
+    /// interesting values cannot survive a round trip: a maximal delta of 0x0FFF_FFFF
+    /// ticks is about 6.5 days at 480 tpqn and 120 bpm, so a file carrying one is
+    /// rejected as `TooLong` before its VLQ handling could be observed. Testing the
+    /// boundary here separates "the decoder is correct" from "the song is plausible".
+    #[test]
+    fn vlq_honours_the_four_byte_limit_at_both_ends() {
+        // Every valid length, including both boundaries.
+        assert_eq!(read_vlq(&[0x00]).unwrap(), 0);
+        assert_eq!(read_vlq(&[0x7F]).unwrap(), 127);
+        assert_eq!(read_vlq(&[0x81, 0x00]).unwrap(), 128);
+        assert_eq!(read_vlq(&[0xC0, 0x80, 0x00]).unwrap(), 0x0010_0000);
+        // The largest value four bytes can encode. The old reader reached this fine;
+        // what it could not do was refuse the byte AFTER it.
+        assert_eq!(read_vlq(&[0xFF, 0xFF, 0xFF, 0x7F]).unwrap(), 0x0FFF_FFFF);
+
+        // The bug's own fixture: five bytes, the first four all continuations. The old
+        // reader shifted a fifth time — a panic in a checked build, and in release a
+        // silent wrap to a DIFFERENT tick value than the file encoded.
+        assert!(matches!(
+            read_vlq(&[0x90, 0x80, 0x80, 0x80, 0x00]),
+            Err(MidiError::OverlongVlq)
+        ));
+        // An overlong encoding is refused even when it would not have overflowed:
+        // five bytes encoding the value 0.
+        assert!(matches!(
+            read_vlq(&[0x80, 0x80, 0x80, 0x80, 0x00]),
+            Err(MidiError::OverlongVlq)
+        ));
+        // A truncated VLQ is still EOF, not an overlong one — the two must not merge.
+        assert!(matches!(
+            read_vlq(&[0x80, 0x80]),
+            Err(MidiError::UnexpectedEof)
+        ));
+    }
 
     /// Hand-assembled one-track file: 120 bpm for one quarter note, then
     /// 60 bpm; note-on at tick 0, note-off at tick 960 (two quarters).

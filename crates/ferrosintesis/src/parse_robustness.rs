@@ -171,6 +171,7 @@ mod tests {
             MidiError::MissingTrack { .. } => "MissingTrack",
             MidiError::BadStatusByte { .. } => "BadStatusByte",
             MidiError::UnexpectedEof => "UnexpectedEof",
+            MidiError::OverlongVlq => "OverlongVlq",
             MidiError::TooLong { .. } => "TooLong",
             MidiError::TooLarge { .. } => "TooLarge",
         }
@@ -283,6 +284,29 @@ mod tests {
             // `midi::tests::system_status_never_becomes_the_running_status`. Not
             // duplicated here.
             Case {
+                what: "OverlongVlq: the first event's delta time is the five-byte \
+                       sequence 90 80 80 80 00 — four continuation bytes and a \
+                       terminator, one byte past SMF's four-byte limit. Everything \
+                       after it is the valid template's note-on, note-off and \
+                       end-of-track, so the file is otherwise complete and \
+                       structurally plausible: only the VLQ length is wrong. This \
+                       exact sequence is the one that overflowed `v << 7` on the fifth \
+                       shift — panicking in a checked build, and in release WRAPPING \
+                       to a different tick value and rendering happily \
+                       (MM-BUG-CRUCIBLE-00028).",
+                bytes: corrupted(|f| {
+                    assert_eq!(
+                        f.tracks[0].events[0], 0x00,
+                        "fixture drift: events[0] is no longer the first delta time"
+                    );
+                    f.tracks[0]
+                        .events
+                        .splice(0..1, [0x90, 0x80, 0x80, 0x80, 0x00]);
+                }),
+                expected: "OverlongVlq",
+                is_expected: |e| matches!(e, MidiError::OverlongVlq),
+            },
+            Case {
                 what: "UnexpectedEof: zero bytes. The magic comparison needs four bytes \
                        and cannot get them, so an empty input is EOF and the magic is \
                        never examined. Worth pinning because `NotMidi` is the intuitive \
@@ -337,12 +361,21 @@ mod tests {
             },
             Case {
                 what: "UnexpectedEof: a text meta event (FF 01) whose VLQ payload length \
-                       is 8F FF FF FF 7F = 4_294_967_295, so the payload read runs off \
-                       the end. This is the third 32-bit overflow site, `self.pos + n` \
-                       in `Cursor::bytes` (midi.rs:166), reached through the meta arm; \
-                       an F0 SysEx event with the same length reaches it too.",
+                       is FF FF FF 7F = 268_435_455 — the largest a legal four-byte VLQ \
+                       can express — so the payload read runs off the end. This reaches \
+                       `self.pos + n` in `Cursor::bytes` through the meta arm; an F0 \
+                       SysEx event with the same length reaches it too. \
+                       \
+                       This used to carry the five-byte 8F FF FF FF 7F = 4_294_967_295, \
+                       which also exercised that site's 32-bit OVERFLOW half. Since \
+                       MM-BUG-CRUCIBLE-00028 a VLQ cannot express a value that large — \
+                       the reader refuses the fifth byte first — so the overflow half \
+                       is now carried by the declared-track-length fixture above, which \
+                       reaches the same `Cursor::bytes` through a raw u32 and is \
+                       unaffected by the VLQ limit. The MM-BUG-KILN-00101 claim is \
+                       therefore still covered; only its route moved.",
                 bytes: corrupted(|f| {
-                    let mut events = vec![0x00, 0xFF, 0x01, 0x8F, 0xFF, 0xFF, 0xFF, 0x7F];
+                    let mut events = vec![0x00, 0xFF, 0x01, 0xFF, 0xFF, 0xFF, 0x7F];
                     events.extend(good_events());
                     f.tracks[0].events = events;
                 }),
@@ -444,6 +477,7 @@ mod tests {
                 "BadStatusByte",
                 "MissingTrack",
                 "NotMidi",
+                "OverlongVlq",
                 "TooLong",
                 "UnexpectedEof",
                 "UnsupportedFormat",

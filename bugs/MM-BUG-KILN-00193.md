@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00193 — Published orchestral2 provenance links licence evidence outside the package
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / orchestral2 licence evidence
 - **Raised:** 2026-08-13T22:54:39Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T153642Z-p13472-n987109500-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00193-run-fix-20260815T153642Z-p13472-n987109500-c1
-- **Owner base:** e809b3b493262f9415a28c70ef9ae9ef74d066ac
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T15:36:42Z
-- **Owner until:** 2026-08-15T17:36:42Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T22:54:39Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-13T22:54:39Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-08-15T15:43:57Z, deltic:auto role=fix run=fix-20260815T153642Z-p13472-n987109500-c1 branch=task/bug-MM-BUG-KILN-00193-run-fix-20260815T153642Z-p13472-n987109500-c1 code=a6abb0c gate=manual)
 
 ## Observation
 

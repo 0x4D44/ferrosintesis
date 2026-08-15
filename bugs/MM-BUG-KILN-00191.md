@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00191 — Orchestral2 regeneration silently retains obsolete packaged WAVs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample generation / orchestral2 output inventory
 - **Raised:** 2026-08-13T22:54:22Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T130327Z-p39504-n673029900-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00191-run-fix-20260815T130327Z-p39504-n673029900-c1
-- **Owner base:** 6f928ae5a8c80bf3b2f6ac9490f22da1afbc1787
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T13:03:27Z
-- **Owner until:** 2026-08-15T15:03:27Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T22:54:22Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-13T22:54:22Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-08-15T13:05:23Z, deltic:auto role=fix run=fix-20260815T130327Z-p39504-n673029900-c1 branch=task/bug-MM-BUG-KILN-00191-run-fix-20260815T130327Z-p39504-n673029900-c1 code=291ab66 gate=manual)
 
 ## Observation
 

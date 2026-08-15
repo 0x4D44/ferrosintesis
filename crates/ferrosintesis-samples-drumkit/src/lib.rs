@@ -987,7 +987,17 @@ mod tests {
         const PROBE: &str = "FERRO_DRUMKIT_PCM_MISS_PROBE";
         const NAME: &str = "tests::lookup_misses_do_not_initialize_pcm_cache";
 
-        if std::env::var_os(PROBE).is_none() {
+        // Re-exec unless this process is BOTH marked and actually pristine
+        // (MM-BUG-CRUCIBLE-00035). Keying only on the marker made an inherited value
+        // — from the caller's shell or a CI environment — select child mode, so the
+        // cold-cache assertions would run in the shared libtest process and fail or
+        // pass on scheduling rather than on the code.
+        //
+        // The cache state is the real precondition, so it is what decides. A fresh
+        // child cannot loop: it runs with `--exact`, so nothing else in it touches
+        // `PCM_CACHE`, and it therefore starts cold and proceeds.
+        let pristine = std::env::var_os(PROBE).is_some() && pcm_cache_initializations() == 0;
+        if !pristine {
             let output = std::process::Command::new(
                 std::env::current_exe().expect("the test binary's own path"),
             )

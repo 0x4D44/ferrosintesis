@@ -48,6 +48,35 @@ def old_trim(x, sr, keep_s, fade_s):
     return [v * g for v in seg]
 
 
+def old_lead_and_ring(x, sr, pre_s, end_fade_s):
+    """The pre-MM-BUG-CRUCIBLE-00024 `trim_lead_and_ring`, kept as a reference.
+
+    Its fade-in was capped at the available lead-in but had never grown the
+    zero-lead branch `trim_to_onset` gained on 2026.08.01, so a source whose
+    onset sits at frame zero got NO fade at all and shipped its first sample as
+    a NoteOn step. Retained so the inertness oracle can compare against the real
+    thing rather than an approximation of it.
+    """
+    peak = max(abs(v) for v in x)
+    thr = 0.03 * peak
+    onset = next(i for i, v in enumerate(x) if abs(v) > thr)
+    start = max(0, onset - int(pre_s * sr))
+    seg = x[start:]
+    lead = onset - start
+    fin = min(int(0.002 * sr), lead)
+    for i in range(min(fin, len(seg))):
+        seg[i] *= i / fin
+    fout = int(end_fade_s * sr)
+    for i in range(fout):
+        j = len(seg) - fout + i
+        if 0 <= j < len(seg):
+            t = 1.0 - i / fout
+            seg[j] *= t * t
+    pk = max(abs(v) for v in seg)
+    g = 0.9 / pk if pk > 0 else 1.0
+    return [v * g for v in seg]
+
+
 def write_wav(path, sample_width, channels):
     frames = 128
     raw = bytearray()
@@ -943,6 +972,73 @@ class PrepareSampleBankTests(unittest.TestCase):
         ]
         self.assertLessEqual(max(initial_steps), ordinary_step * 0.9 * 1.01)
         self.assertGreater(max(abs(value) for value in seg[:88]), 0.85)
+
+    def test_lead_and_ring_frame_zero_onset_is_declicked_without_erasing_attack(self):
+        """MM-BUG-CRUCIBLE-00024: the ring trim must de-click a zero-lead source.
+
+        The gong bank goes through `trim_lead_and_ring`, not `trim_to_onset`, and
+        its onset sits at frame zero — so the shipped soft layer began on PCM
+        -2769, 13x its own first-window motion. The bound is against the source's
+        ORDINARY first-window step, not a fixed fade: a fixed fade would flatten
+        the attack a one-shot gong exists to deliver.
+        """
+        sr = prepare.OUT_SR
+        # a source that starts on an already-moving wave: onset at frame zero,
+        # first sample well above the 3%-of-peak threshold
+        x = [
+            0.4 + 0.6 * math.sin(math.pi * 0.5 * min(i / 50.0, 1.0))
+            for i in range(sr)
+        ]
+        window = int(0.002 * sr)
+        ordinary_step = max(abs(x[i] - x[i - 1]) for i in range(1, window))
+
+        seg = prepare.trim_lead_and_ring(list(x), sr, prepare.PRE_S, 0.30)
+
+        initial_steps = [abs(seg[0])] + [
+            abs(seg[i] - seg[i - 1]) for i in range(1, window)
+        ]
+        self.assertLessEqual(max(initial_steps), ordinary_step * 0.9 * 1.01)
+        # and the attack still arrives at essentially the normalized ceiling
+        self.assertGreater(max(abs(value) for value in seg[:window]), 0.85)
+
+    def test_lead_and_ring_fade_is_inert_when_lead_in_exceeds_the_window(self):
+        """A ring source with >= 2 ms of lead-in must be cut exactly as before.
+
+        Differential against the pre-fix algorithm. This is the claim the
+        already-committed `gong_ageng_loud.wav` rests on — it has real lead-in,
+        so sharing the zero-lead branch must not move a single sample of it.
+        """
+        sr = prepare.OUT_SR
+        fin = int(0.002 * sr)  # 88 samples — the de-click window
+        for lead in (fin, fin + 1, 127, 352, 1374):
+            with self.subTest(lead_samples=lead):
+                body = [math.sin(2 * math.pi * 55.0 * i / sr) for i in range(sr)]
+                x = [0.0] * lead + body
+                new = prepare.trim_lead_and_ring(list(x), sr, prepare.PRE_S, 0.30)
+                ref = old_lead_and_ring(list(x), sr, prepare.PRE_S, 0.30)
+                self.assertEqual(len(new), len(ref))
+                self.assertEqual(new, ref)
+
+    def test_committed_gong_bank_starts_with_continuous_pcm(self):
+        """Asset-level oracle: neither packaged gong layer opens on a step."""
+        sample_dir = os.path.join(
+            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-gong", "samples"
+        )
+        paths = sorted(
+            os.path.join(sample_dir, name)
+            for name in os.listdir(sample_dir)
+            if name.endswith(".wav")
+        )
+        self.assertEqual(len(paths), 2)
+        for path in paths:
+            with self.subTest(sample=os.path.basename(path)):
+                samples, sr = prepare.read_wav(path)
+                window = min(len(samples), int(0.010 * sr))
+                ordinary_step = max(
+                    abs(samples[i] - samples[i - 1]) for i in range(1, window)
+                )
+                self.assertLessEqual(abs(samples[0]), ordinary_step)
+                self.assertLessEqual(abs(samples[0]), 1.0 / 32768.0)
 
     def test_committed_bass_bank_starts_with_continuous_pcm(self):
         sample_dir = os.path.join(

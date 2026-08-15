@@ -118,6 +118,15 @@ the attack-transient bank there is NO short attack trim, because a gong's
 multi-second bloom is the whole instrument. Output: 16-bit mono WAV. One-shots
 like the drum sources — `measure_f0` is skipped.
 
+The soft source's onset sits at frame **zero**, so it has no lead-in for the
+2 ms fade to occupy. It therefore takes the shared `declick_fade_in` zero-lead
+branch: the shortest micro-fade whose own steps stay inside the source's
+ordinary first-2 ms motion — 12 samples (0.27 ms) here, which zeroes the first
+sample while leaving the 2 ms attack peak unchanged. Until
+MM-BUG-CRUCIBLE-00024 `trim_lead_and_ring` lacked that branch, and this layer
+shipped starting on PCM `-2769`, a click on every soft strike. Both layers are
+now pinned by `test_committed_gong_bank_starts_with_continuous_pcm`.
+
 ## Regenerating
 
 ```powershell

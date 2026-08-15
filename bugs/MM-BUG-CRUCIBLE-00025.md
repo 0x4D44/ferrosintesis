@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00025 — RealtimeSynth buffers an unbounded MIDI command burst before one audio block
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** ferrosintesis / realtime MIDI queue
 - **Raised:** 2026-08-14T11:47:06Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T035517Z-p44240-n504663000-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00025-run-fix-20260815T035517Z-p44240-n504663000-c1
-- **Owner base:** 2840e29d3fa7a44aedf26ea36b62a48789f8fecd
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T03:55:17Z
-- **Owner until:** 2026-08-15T05:55:17Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:06Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-08-14T11:47:06Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T04:07:51Z, deltic:auto role=fix run=fix-20260815T035517Z-p44240-n504663000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00025-run-fix-20260815T035517Z-p44240-n504663000-c1 code=9d10dcd gate=manual)
 
 ## Observation
 

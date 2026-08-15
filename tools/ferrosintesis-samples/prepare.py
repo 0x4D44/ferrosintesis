@@ -1395,11 +1395,28 @@ def cached_members_match(src, url, sha256, member_map):
             manifest = json.load(f)
     except (OSError, ValueError):
         return False
+    # Everything below treats the manifest as UNTRUSTED. It is a file on disk that a
+    # partial write, an older tool version, or an unrelated program could have left in
+    # any shape at all, and its members are paths that may not be regular files.
+    # MM-BUG-KILN-00181: only a missing file and a JSON *syntax* error degraded to a
+    # cache miss. Valid JSON whose root was `null`, an array or a scalar reached
+    # `manifest.get` and raised AttributeError; a non-mapping `members` reached
+    # `recorded.get` and did the same; and a member naming a DIRECTORY passed
+    # `os.path.exists` and then raised IsADirectoryError inside `sha256_file`. Each
+    # aborted the regeneration instead of rebuilding the very cache that was wrong.
+    #
+    # The contract is one line: any doubt answers False and the caller rebuilds from
+    # the pinned archive. A cache is never worth raising over — rebuilding is always
+    # available and always correct.
+    if not isinstance(manifest, dict):
+        return False
     if manifest.get("version") != MEMBER_MANIFEST_VERSION:
         return False
     if manifest.get("archive_sha256") != sha256:
         return False
-    recorded = manifest.get("members") or {}
+    recorded = manifest.get("members")
+    if not isinstance(recorded, dict):
+        return False
     if set(recorded) != set(member_map):
         return False
     for fn, archive_member in member_map.items():
@@ -1409,7 +1426,17 @@ def cached_members_match(src, url, sha256, member_map):
             return False
         if entry.get("archive_member") != archive_member:
             return False
-        if not os.path.exists(path) or sha256_file(path) != entry.get("sha256"):
+        # `isfile`, not `exists`: a directory, a dangling symlink or a device node
+        # all pass `exists` and then raise on read.
+        # `isfile`, not `exists`: a directory, a dangling symlink or a device node
+        # all pass `exists` and then raise on read.
+        if not os.path.isfile(path):
+            return False
+        try:
+            digest = sha256_file(path)
+        except OSError:
+            return False
+        if digest != entry.get("sha256"):
             return False
     return True
 
@@ -5703,3 +5730,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

@@ -2079,6 +2079,99 @@ class SalamanderArchiveCacheTest(unittest.TestCase):
         self.assertEqual(self.member("grand_A.wav"), b"NEW-A")
         self.assertEqual(self.fetches, 2)
 
+    def test_wrongly_shaped_manifests_are_a_cache_miss_not_a_crash(self):
+        """MM-BUG-KILN-00181: a malformed cache must rebuild, never raise.
+
+        Every shape here is syntactically valid JSON, which is exactly why the old
+        code reached it: it caught `ValueError` from the parse and then assumed what
+        came back was a mapping. `null`, an array and a scalar all made `manifest.get`
+        raise `AttributeError`, and a non-mapping `members` did the same one line
+        later — aborting the whole regeneration instead of rebuilding the cache that
+        was wrong.
+
+        Asserted through `cached_members_match` AND through `ensure`, because
+        returning False is only half the contract: the caller has to actually rebuild
+        the member from the pinned archive.
+        """
+        shapes = {
+            "null root": "null",
+            "array root": "[]",
+            "scalar root": "42",
+            "string root": '"members"',
+            "non-mapping members": json.dumps(
+                {
+                    "version": prepare.MEMBER_MANIFEST_VERSION,
+                    "archive_sha256": self.pin,
+                    "members": ["grand_A.wav", "grand_B.wav"],
+                }
+            ),
+            "member entry is not a mapping": json.dumps(
+                {
+                    "version": prepare.MEMBER_MANIFEST_VERSION,
+                    "archive_sha256": self.pin,
+                    "members": {"grand_A.wav": "deadbeef", "grand_B.wav": "deadbeef"},
+                }
+            ),
+        }
+        for label, text in shapes.items():
+            with self.subTest(manifest=label):
+                self.ensure()
+                with open(self.manifest, "w", encoding="utf-8") as f:
+                    f.write(text)
+                with open(os.path.join(self.src, "grand_A.wav"), "wb") as f:
+                    f.write(b"ALTERED")
+
+                self.assertFalse(
+                    prepare.cached_members_match(
+                        self.src, self.url, self.pin, self.MEMBERS
+                    ),
+                    f"{label}: a malformed manifest was trusted",
+                )
+                self.ensure()
+                self.assertEqual(
+                    self.member("grand_A.wav"),
+                    b"PINNED-A",
+                    f"{label}: the member was not rebuilt from the pinned archive",
+                )
+
+    def test_a_member_that_is_not_a_regular_file_is_a_cache_miss(self):
+        """A directory passes `os.path.exists` and then raises inside `sha256_file`.
+
+        `os.path.isfile` is the check that distinguishes them, and this is the case
+        that proves it: `exists` alone would let a directory through to the hash.
+        """
+        self.ensure()
+        member = os.path.join(self.src, "grand_A.wav")
+        os.remove(member)
+        os.mkdir(member)
+        try:
+            self.assertFalse(
+                prepare.cached_members_match(
+                    self.src, self.url, self.pin, self.MEMBERS
+                ),
+                "a directory standing in for a member was trusted",
+            )
+        finally:
+            os.rmdir(member)
+
+    def test_an_unreadable_member_is_a_cache_miss(self):
+        """A member that exists and is a regular file can still fail to read.
+
+        Provoked by making `sha256_file` raise rather than by chmod, which does not
+        deny read access to the owner on Windows — a permissions fixture here would
+        silently pass without exercising anything on this platform.
+        """
+        self.ensure()
+        with mock.patch.object(
+            prepare, "sha256_file", side_effect=PermissionError("denied")
+        ):
+            self.assertFalse(
+                prepare.cached_members_match(
+                    self.src, self.url, self.pin, self.MEMBERS
+                ),
+                "an unreadable member was trusted",
+            )
+
     def test_missing_manifest_is_not_trusted(self):
         self.ensure()
         os.remove(self.manifest)

@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00024 — Soft gong starts with an unfaded NoteOn step
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample assets / gong onset conditioning
 - **Raised:** 2026-08-12T08:47:34Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T032051Z-p42576-n588484800-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00024-run-fix-20260815T032051Z-p42576-n588484800-c1
-- **Owner base:** 4a0357da5211d372371c8fd3572629822eb4a7da
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T03:20:51Z
-- **Owner until:** 2026-08-15T05:20:51Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-12T08:47:34Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-12T08:47:34Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T03:37:28Z, deltic:auto role=fix run=fix-20260815T032051Z-p42576-n588484800-c1 branch=task/bug-MM-BUG-CRUCIBLE-00024-run-fix-20260815T032051Z-p42576-n588484800-c1 code=1c2fc723be08c9ab74671e39489c3f7ed64bf19c gate=manual)
 
 ## Observation
 

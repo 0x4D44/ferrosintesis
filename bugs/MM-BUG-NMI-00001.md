@@ -6,15 +6,15 @@
 - **Area:** sample assets / onset de-click coverage
 - **Raised:** 2026-08-15T03:38:52Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T162554Z-p14984-n995209800-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-NMI-00001-run-fix-20260815T162554Z-p14984-n995209800-c1
+- **Owner base:** 568d66274ace9ce1cd1ff2c7db644ac7cbbab932
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T16:25:54Z
+- **Owner until:** 2026-08-15T18:25:54Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

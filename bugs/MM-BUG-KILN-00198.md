@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00198 — Sax PROVENANCE says every packaged root is pinned in the sampler zone tables, but the two baritone G#3 takes are not
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** samples-sax / published provenance
 - **Raised:** 2026-08-14T08:07:54Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T155727Z-p36440-n828496700-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00198-run-fix-20260815T155727Z-p36440-n828496700-c1
-- **Owner base:** 0dac19017cf0ccc0902e7245845e8a18b016150a
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T15:57:27Z
-- **Owner until:** 2026-08-15T17:57:27Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T08:07:54Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-14T08:07:54Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:04:26Z, deltic:auto role=fix run=fix-20260815T155727Z-p36440-n828496700-c1 branch=task/bug-MM-BUG-KILN-00198-run-fix-20260815T155727Z-p36440-n828496700-c1 code=80bec63 gate=manual)
 
 ## Observation
 

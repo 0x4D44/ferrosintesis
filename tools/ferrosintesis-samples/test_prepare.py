@@ -2680,6 +2680,88 @@ class GeneratedOutputFamiliesTest(unittest.TestCase):
             )
 
 
+class PackagedRecipeRoutingTest(unittest.TestCase):
+    """MM-BUG-KILN-00190: a crate's documented recipe must touch only that crate.
+
+    `-musescore`'s PROVENANCE says to regenerate with `--only=...,bottle,...`. That
+    selector answered for TWO unrelated banks — the MuseScore SF3 breath onset
+    `bottle_C6.wav` in `-musescore`, and the separately sourced whole-voice loop
+    `bottleloop_G3.wav` in `-bottle` — so following one crate's published recipe
+    silently rewrote another crate's active asset.
+    """
+
+    @staticmethod
+    def packaged_in(name):
+        """The sample crate that actually ships `name`, read from the tree."""
+        crates_dir = os.path.join(prepare.REPO_ROOT, "crates")
+        return {
+            crate
+            for crate in os.listdir(crates_dir)
+            if os.path.isfile(os.path.join(crates_dir, crate, "samples", name))
+        }
+
+    def test_the_two_bottle_banks_ship_in_different_crates(self):
+        """Asserted against the committed tree, not against `sample_output_path`.
+
+        That helper is NOT the routing for these files. `_bake_sf_onset` takes its
+        destination crate as an argument, and `FAMILY_PACKAGE["bottle"]` in fact
+        points at `-bottle` while the onset it names ships in `-musescore` — the
+        mapping is a safety net for the generic discovery path, not a description of
+        where this bake writes. Reading the tree avoids encoding either routing's
+        assumption into the test.
+        """
+        onset = self.packaged_in("bottle_C6.wav")
+        loop = self.packaged_in(prepare.BOTTLE_LOOP_OUT)
+        self.assertEqual(onset, {"ferrosintesis-samples-musescore"})
+        self.assertEqual(loop, {"ferrosintesis-samples-bottle"})
+        self.assertNotEqual(
+            onset, loop, "the two bottle banks must live in different crates"
+        )
+
+    def test_only_bottle_does_not_reach_the_separate_loop_crate(self):
+        """The regression itself: `--only=bottle` must not bake the loop.
+
+        Asserted by running the local-bank dispatcher, which is where the two
+        selectors met, rather than by reading the source.
+        """
+        with mock.patch.object(prepare, "bake_bottle_loop") as bake_loop, \
+                mock.patch.object(prepare, "_bake_gong_bank", return_value=[]):
+            prepare._bake_selected_local_banks({"bottle"})
+            bake_loop.assert_not_called()
+
+            prepare._bake_selected_local_banks({"bottleloop"})
+            bake_loop.assert_called_once()
+
+    def test_every_documented_recipe_selector_is_a_supported_family(self):
+        """A published recipe that names an unsupported family is a dead command.
+
+        Reads the `--only=` selectors out of every crate's own documents, so a recipe
+        edited without checking the tool fails here rather than for whoever follows
+        it.
+        """
+        supported = prepare._prepare_only_families()
+        crates_dir = os.path.join(prepare.REPO_ROOT, "crates")
+        checked = 0
+        for crate in sorted(os.listdir(crates_dir)):
+            for doc in ("PROVENANCE.md", "README.md"):
+                path = os.path.join(crates_dir, crate, doc)
+                if not os.path.isfile(path):
+                    continue
+                with open(path, encoding="utf-8") as handle:
+                    text = handle.read()
+                for match in re.finditer(r"--only=([A-Za-z0-9,]+)", text):
+                    for family in match.group(1).split(","):
+                        checked += 1
+                        with self.subTest(crate=crate, doc=doc, family=family):
+                            self.assertIn(
+                                family,
+                                supported,
+                                f"{crate}/{doc} documents `--only={family}`, which "
+                                f"prepare.py does not accept",
+                            )
+        self.assertGreater(checked, 5, "no documented recipes were found to check")
+
+
 class SelectedFamilyPreflightTest(unittest.TestCase):
     """MM-BUG-KILN-00182 / MM-BUG-KILN-00191: every SELECTED family is pre-validated.
 
@@ -2895,13 +2977,21 @@ class HonkytonkOutputInventoryTest(unittest.TestCase):
 
 
 class LocalBankSelectionTest(unittest.TestCase):
-    """MM-BUG-KILN-00128: command modes must not rewrite an unrelated local bank."""
+    """MM-BUG-KILN-00128: command modes must not rewrite an unrelated local bank.
+
+    The `--only=bottle` row used to expect the bottle LOOP, which is the behaviour
+    MM-BUG-KILN-00190 identified as the defect: `bottle` is the MuseScore SF3 breath
+    onset in `-musescore`, and baking `-bottle`'s whole-voice loop for it rewrote an
+    unrelated crate. Splitting the selector serves this test's original intent rather
+    than contradicting it — the loop now answers to `bottleloop`.
+    """
 
     def test_command_modes_select_only_the_intended_local_banks(self):
         cases = [
             (["--local-only"], ["gong"]),
-            (["--only=bottle"], ["bottle"]),
-            ([], ["gong", "bottle"]),
+            (["--only=bottle"], []),
+            (["--only=bottleloop"], ["bottleloop"]),
+            ([], ["gong", "bottleloop"]),
         ]
         for args, expected in cases:
             with self.subTest(args=args):
@@ -2913,7 +3003,7 @@ class LocalBankSelectionTest(unittest.TestCase):
                 ), mock.patch.object(
                     prepare,
                     "bake_bottle_loop",
-                    side_effect=lambda: calls.append("bottle") or [],
+                    side_effect=lambda: calls.append("bottleloop") or [],
                 ):
                     _local_only, only = prepare._family_selection(args)
                     prepare._bake_selected_local_banks(only)

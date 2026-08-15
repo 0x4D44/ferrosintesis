@@ -5343,7 +5343,11 @@ def _prepare_only_families():
     source_backed = _family_prefixes(*_source_tables())
     own_recipe = {
         "b1upright",
+        # `bottle` is the MuseScore SF3 breath onset in `-musescore`; `bottleloop` is
+        # the separately sourced whole-voice loop in `-bottle`. Two selectors because
+        # they are two banks in two crates (MM-BUG-KILN-00190).
         "bottle",
+        "bottleloop",
         "brasssection",
         "celesta",
         "chanter",
@@ -5450,7 +5454,15 @@ def _bake_selected_local_banks(only):
     rows = []
     if _wants_family(only, "gong"):
         rows += _bake_gong_bank()
-    if _wants_family(only, "bottle"):
+    # `bottleloop`, NOT `bottle` (MM-BUG-KILN-00190). Two unrelated banks used to
+    # answer to one selector: the MuseScore SF3 breath ONSET `bottle_C6.wav`, which
+    # belongs to `-musescore`, and this separately sourced whole-voice LOOP
+    # `bottleloop_G3.wav`, which belongs to `-bottle`. So `--only=bottle` — the
+    # command `-musescore`'s own PROVENANCE tells you to run — silently rewrote a
+    # different crate's active asset. The selector now matches the output prefix, the
+    # way every other family's does, and `FAMILY_PACKAGE` already mapped
+    # `bottleloop` to the right crate.
+    if _wants_family(only, "bottleloop"):
         seg = bake_bottle_loop()
         rows.append((BOTTLE_LOOP_OUT, None, None, None, None, None,
                      len(seg) / OUT_SR))
@@ -5769,6 +5781,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
 
 
 

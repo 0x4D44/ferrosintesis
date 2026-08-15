@@ -6,15 +6,15 @@
 - **Area:** sample assets / core drum-kit PCM API
 - **Raised:** 2026-08-11T08:30:10Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T120005Z-p20964-n399449000-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00023-run-fix-20260815T120005Z-p20964-n399449000-c1
+- **Owner base:** a907b969af6a0ffbaaf090c84851b05c41b8beb1
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T12:00:05Z
+- **Owner until:** 2026-08-15T14:00:05Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

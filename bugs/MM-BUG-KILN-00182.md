@@ -6,15 +6,15 @@
 - **Area:** sample generation / grand output inventory
 - **Raised:** 2026-08-13T17:58:21Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T120824Z-p31472-n188684700-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-KILN-00182-run-fix-20260815T120824Z-p31472-n188684700-c1
+- **Owner base:** 296c4768d12854444005651c2865c6469529c389
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T12:08:24Z
+- **Owner until:** 2026-08-15T14:08:24Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

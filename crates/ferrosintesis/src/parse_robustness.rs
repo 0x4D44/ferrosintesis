@@ -172,6 +172,7 @@ mod tests {
             MidiError::BadStatusByte { .. } => "BadStatusByte",
             MidiError::UnexpectedEof => "UnexpectedEof",
             MidiError::TooLong { .. } => "TooLong",
+            MidiError::TooLarge { .. } => "TooLarge",
         }
     }
 
@@ -449,13 +450,17 @@ mod tests {
                 "UnsupportedTimeDivision",
             ],
             "the fixture table no longer reaches every MidiError variant that `parse` \
-             can produce (`Io` is excluded — only `load` produces it)"
+             can produce (`Io` and `TooLarge` are excluded — only `load` produces \
+             them; `Io` is covered below, `TooLarge` by \
+             `offline::tests::load_rejects_an_oversized_file`)"
         );
     }
 
-    /// `Io` is the one variant `parse` cannot produce: it works from bytes already in
-    /// memory. `load` is its only source, so cover it there — including the path and the
-    /// underlying `ErrorKind`, which are what a caller actually reports to a user.
+    /// `Io` is one of the two variants `parse` cannot produce: it works from bytes
+    /// already in memory. `load` is its only source, so cover it there — including the
+    /// path and the underlying `ErrorKind`, which are what a caller actually reports to
+    /// a user. (`TooLarge` is the other, covered in `offline`'s tests, where the
+    /// temp-directory helper lives.)
     #[test]
     fn load_reports_io_with_the_path_and_the_underlying_kind() {
         let missing = Path::new("no-such-directory-4f21b9/no-such-file.mid");

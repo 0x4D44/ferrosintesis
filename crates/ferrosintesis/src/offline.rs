@@ -10,7 +10,7 @@
 use std::path::Path;
 
 pub use crate::engine::{normalize_loudness, normalize_to_i16, Options, Progress, Stats};
-pub use crate::error::{MidiError, MAX_SONG_SECONDS};
+pub use crate::error::{MidiError, MAX_MIDI_FILE_BYTES, MAX_SONG_SECONDS};
 pub use crate::loudness::{integrated_lufs, limit_true_peak, momentary_lufs, true_peak_dbtp};
 pub use crate::wav::write_wav;
 
@@ -89,10 +89,16 @@ impl Song {
 
 /// Read and parse a Standard MIDI File from disk.
 ///
+/// Treats the path as untrusted: the file's size is checked against
+/// [`MAX_MIDI_FILE_BYTES`] *before* any of it is read, and the read is bounded as
+/// well, so a hostile path cannot exhaust memory ahead of the parser's own checks. If
+/// you genuinely have a larger file, read the bytes yourself and call [`parse`], which
+/// has no size limit.
+///
 /// # Errors
 ///
-/// [`MidiError::Io`] if the file cannot be read, or any [`parse`] error if the bytes
-/// are not a type-0/1 SMF.
+/// [`MidiError::Io`] if the file cannot be read, [`MidiError::TooLarge`] if it exceeds
+/// [`MAX_MIDI_FILE_BYTES`], or any [`parse`] error if the bytes are not a type-0/1 SMF.
 pub fn load(path: &Path) -> Result<Song, MidiError> {
     crate::midi::load(path).map(Song)
 }
@@ -291,6 +297,83 @@ mod tests {
             assert_eq!(actual_stats, expected_stats);
             assert_eq!(fs::read(&actual).unwrap(), fs::read(&expected).unwrap());
         }
+    }
+
+    /// MM-BUG-CRUCIBLE-00027: `load` refuses an oversized file instead of
+    /// materializing it.
+    ///
+    /// The discriminator is the error, not merely the failure: the file is
+    /// `MAX_MIDI_FILE_BYTES + 1` zero bytes, so a `load` with no limit at all reads it
+    /// and returns `NotMidi` — which is what this asserted against before the fix.
+    ///
+    /// What this test does NOT prove is the ORDER of the two bounds. An earlier
+    /// version of this comment claimed it did. It cannot: `read_bounded` checks the
+    /// advertised size before reading *and* the byte count after, so removing the
+    /// preflight alone still yields `TooLarge` here. The preflight is a cost
+    /// optimization — it is what makes a multi-gigabyte file free to reject — and the
+    /// property that actually bounds memory is the `take`. Proving the ordering would
+    /// need a genuinely multi-gigabyte fixture, which would make the test cost more
+    /// when passing than the bug costs when present.
+    #[test]
+    fn load_rejects_an_oversized_file() {
+        let dir = TestDir::new("oversized");
+        let path = dir.join("huge.mid");
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(MAX_MIDI_FILE_BYTES + 1).unwrap();
+        drop(file);
+
+        match load(&path).err() {
+            Some(MidiError::TooLarge { bytes, .. }) => {
+                assert_eq!(bytes, MAX_MIDI_FILE_BYTES + 1)
+            }
+            Some(MidiError::NotMidi) => {
+                panic!("`load` has no size limit: it read the whole file and parsed it")
+            }
+            other => panic!("expected TooLarge, got {other:?}"),
+        }
+    }
+
+    /// The boundary is inclusive: a file exactly at the limit is read, not refused.
+    /// Without this, a limit off by one in the refusing direction would go unnoticed.
+    #[test]
+    fn load_accepts_a_file_exactly_at_the_limit() {
+        let dir = TestDir::new("at-limit");
+        let path = dir.join("limit.mid");
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(MAX_MIDI_FILE_BYTES).unwrap();
+        drop(file);
+
+        // Zeros are not an SMF, so reaching `NotMidi` is exactly the proof that the
+        // size check let it through to the parser.
+        assert!(
+            matches!(load(&path), Err(MidiError::NotMidi)),
+            "a file at the limit was refused"
+        );
+    }
+
+    /// MM-BUG-CRUCIBLE-00027, the other half: a track chunk may DECLARE a near-4-GiB
+    /// length in 8 bytes. `parse` must reject that from the declared length alone,
+    /// without allocating anything proportional to it.
+    ///
+    /// This already held — `Cursor::bytes` slices the buffer it was given rather than
+    /// reserving from the declared length — but nothing pinned it, and the bug named
+    /// it as the case to cover.
+    #[test]
+    fn parse_rejects_a_track_declaring_almost_four_gibibytes() {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"MThd");
+        data.extend_from_slice(&6u32.to_be_bytes());
+        data.extend_from_slice(&0u16.to_be_bytes()); // format 0
+        data.extend_from_slice(&1u16.to_be_bytes()); // one track
+        data.extend_from_slice(&480u16.to_be_bytes()); // ticks per quarter
+        data.extend_from_slice(b"MTrk");
+        data.extend_from_slice(&0xFFFF_FF00u32.to_be_bytes()); // ~4 GiB declared
+        data.extend_from_slice(&[0x00, 0xFF, 0x2F, 0x00]); // four bytes actually present
+
+        assert!(
+            matches!(parse(&data), Err(MidiError::UnexpectedEof)),
+            "a track declaring 4 GiB was not rejected from its declared length"
+        );
     }
 
     /// MM-BUG-CRUCIBLE-00026: the buffered render path survives the extreme request

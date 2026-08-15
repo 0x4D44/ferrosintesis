@@ -14,6 +14,22 @@ use std::path::PathBuf;
 /// [`MidiError::TooLong`].
 pub const MAX_SONG_SECONDS: f64 = 24.0 * 3600.0;
 
+/// Largest file [`load`](crate::offline::load) will read, in bytes (64 MiB).
+///
+/// [`parse`](crate::offline::parse) works from bytes the caller already holds, so it
+/// cannot help with the cost of *obtaining* them: `load` used to `std::fs::read` the
+/// whole path before any header, track length or [`MAX_SONG_SECONDS`] check could run,
+/// so one hostile path — a multi-gigabyte regular or sparse file — exhausted memory
+/// before a [`MidiError`] could be returned (MM-BUG-CRUCIBLE-00027).
+///
+/// `load` now refuses anything larger with [`MidiError::TooLarge`], checking the
+/// advertised size *before* reading and bounding the read itself in case that size
+/// under-reports. The limit is far above any real Standard MIDI File — the largest in
+/// this repository's own catalog is 537 KB, so this is over a hundred times the real
+/// worst case. A caller who genuinely has a larger file can read the bytes itself and
+/// call [`parse`](crate::offline::parse), which is unaffected by this limit.
+pub const MAX_MIDI_FILE_BYTES: u64 = 64 * 1024 * 1024;
+
 /// Why a Standard MIDI File could not be read.
 ///
 /// This enum is `#[non_exhaustive]`, and so is every variant that carries data: match
@@ -65,6 +81,18 @@ pub enum MidiError {
         /// The nominal length the tempo map implies, in seconds.
         seconds: f64,
     },
+    /// The file on disk is larger than [`load`](crate::offline::load) will read.
+    ///
+    /// Only `load` produces this; [`parse`](crate::offline::parse) takes bytes the
+    /// caller already holds and has no size limit of its own. See
+    /// [`MAX_MIDI_FILE_BYTES`].
+    #[non_exhaustive]
+    TooLarge {
+        /// The file's size in bytes. This is the size the filesystem advertised, or —
+        /// if the file turned out to be larger than it advertised — how far the
+        /// bounded read got before giving up.
+        bytes: u64,
+    },
 }
 
 impl fmt::Display for MidiError {
@@ -88,6 +116,11 @@ impl fmt::Display for MidiError {
                 f,
                 "song is {seconds:.0} s long, which exceeds the {MAX_SONG_SECONDS:.0} s limit \
                  (the tempo map is probably malformed)"
+            ),
+            MidiError::TooLarge { bytes } => write!(
+                f,
+                "MIDI file is {bytes} bytes, which exceeds the {MAX_MIDI_FILE_BYTES} byte \
+                 limit (read the bytes yourself and call `parse` if this is genuine)"
             ),
         }
     }

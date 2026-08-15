@@ -4,7 +4,7 @@
 //! skips anything it does not model (sysex and metas such as lyrics and
 //! key signatures).
 
-use crate::error::{MidiError, MAX_SONG_SECONDS};
+use crate::error::{MidiError, MAX_MIDI_FILE_BYTES, MAX_SONG_SECONDS};
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -208,11 +208,45 @@ impl<'a> Cursor<'a> {
 }
 
 pub fn load(path: &Path) -> Result<Song, MidiError> {
-    let data = std::fs::read(path).map_err(|source| MidiError::Io {
+    parse(&read_bounded(path)?)
+}
+
+/// Read a path into memory, refusing anything over [`MAX_MIDI_FILE_BYTES`].
+///
+/// MM-BUG-CRUCIBLE-00027: this used to be a bare `std::fs::read`, which materializes
+/// the whole file before `parse` can apply a single check — so the parser's careful
+/// treatment of MIDI bytes as attacker-controlled was bypassed by the very entry point
+/// most callers use. A multi-gigabyte regular or sparse file exhausted memory before
+/// any `MidiError` could be returned.
+///
+/// Two bounds, not one. The advertised size is checked FIRST, so an oversized file is
+/// refused without reading a byte of it — that is what makes the sparse case cheap.
+/// The read is then bounded as well, because the advertised size is not a promise: a
+/// file can grow between the two calls, and not every filesystem reports a meaningful
+/// length. Whichever bound trips, the error carries the size that tripped it.
+fn read_bounded(path: &Path) -> Result<Vec<u8>, MidiError> {
+    use std::io::Read;
+
+    let io = |source| MidiError::Io {
         path: path.to_path_buf(),
         source,
-    })?;
-    parse(&data)
+    };
+    let file = std::fs::File::open(path).map_err(io)?;
+    let advertised = file.metadata().map_err(io)?.len();
+    if advertised > MAX_MIDI_FILE_BYTES {
+        return Err(MidiError::TooLarge { bytes: advertised });
+    }
+
+    let mut data = Vec::new();
+    file.take(MAX_MIDI_FILE_BYTES + 1)
+        .read_to_end(&mut data)
+        .map_err(io)?;
+    if data.len() as u64 > MAX_MIDI_FILE_BYTES {
+        return Err(MidiError::TooLarge {
+            bytes: data.len() as u64,
+        });
+    }
+    Ok(data)
 }
 
 pub fn parse(data: &[u8]) -> Result<Song, MidiError> {

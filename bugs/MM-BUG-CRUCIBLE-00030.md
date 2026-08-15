@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / GS channel routing
 - **Raised:** 2026-08-14T11:47:24Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T102800Z-p13352-n472573600-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00030-run-fix-20260815T102800Z-p13352-n472573600-c1
+- **Owner base:** aa7eca7ed6cbc98b52f77a52accdef211419776c
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T10:28:00Z
+- **Owner until:** 2026-08-15T12:28:00Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

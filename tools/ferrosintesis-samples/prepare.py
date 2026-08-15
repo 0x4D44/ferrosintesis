@@ -777,13 +777,21 @@ _HEADROOM_ZONE_MIDI = {
 }
 # dynamic -> (RR1 LEVEL, RR2 LEVEL) over LEVEL1..5. L5 is loudest; f's RR2 borrows L4.
 _HEADROOM_VEL = {"pp": (1, 2), "mf": (3, 4), "f": (5, 4)}
-HEADROOM_SOURCES = {
+_HEADROOM_LOGICAL_SOURCES = {
     f"headroom_{z}_{d}{rr}.wav":
         f"{_HEADROOM_BASE}/HEADROOM%20PIANO%20LEVEL{lv}%20CLOSE%20{midi}.flac"
     for z, midi in _HEADROOM_ZONE_MIDI.items()
     for d, (lv_rr1, lv_rr2) in _HEADROOM_VEL.items()
     for rr, lv in (("", lv_rr1), ("_rr2", lv_rr2))
 }
+# `f`'s RR2 borrows LEVEL4, which is also `mf`'s RR2 — an intentional musical
+# mapping, but it made nine pairs of BYTE-IDENTICAL packaged WAVs
+# (MM-BUG-KILN-00184). Canonicalize the way steinwayb and kawai already do: one
+# physical file per upstream payload, and the repeated logical names become exact
+# aliases resolved by the crate's `get`. 54 logical names, 45 physical files.
+HEADROOM_SOURCES, HEADROOM_ALIASES = _canonicalize_source_aliases(
+    _HEADROOM_LOGICAL_SOURCES
+)
 # SHA-256 of every unique selected FLAC at HEADROOM_REV. The 54 destination
 # names reuse LEVEL4 for two dynamics, so there are 45 authenticated payloads.
 _HEADROOM_FLAC_HASHES = {
@@ -5761,6 +5769,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
 
 
 

@@ -7,7 +7,7 @@ description = "Embedded CC-BY 4.0 Headroom/Intimate Piano (Bengt Nilsson) sample
 license = "CC-BY-4.0"
 repository = "https://github.com/0x4D44/ferrosintesis"
 readme = "README.md"
-include = ["src/**", "samples/**", "README.md", "NOTICE", "PROVENANCE.md"]
+include = ["src/**", "samples/**", "ALIASES", "README.md", "NOTICE", "PROVENANCE.md"]
 
 [lib]
 path = "src/lib.rs"

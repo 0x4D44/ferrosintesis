@@ -211,6 +211,58 @@ mod tests {
         })
     }
 
+    /// Does `function` run `validator` before it first mentions each `expected` name?
+    ///
+    /// The sibling above requires the source-table name to appear ON the validation
+    /// line, which is right for a hand-written `_validate_generated_output_inventory(
+    /// "kawai", KAWAI_SOURCES)` and impossible for a DERIVED one: a loop over a
+    /// family->outputs map names no table at all. This asks the question that
+    /// actually matters either way — validation happens first — so the oracle no
+    /// longer forces `main` back into the hand-listed shape whose incompleteness was
+    /// MM-BUG-KILN-00182 / MM-BUG-KILN-00191.
+    fn validation_precedes_source_uses(
+        source: &str,
+        function: &str,
+        validator: &str,
+        expected: &[&str],
+    ) -> bool {
+        let definition = format!("def {function}(");
+        let mut in_function = false;
+        let mut validation_line = None;
+        let mut first_use = vec![None; expected.len()];
+
+        for (line_number, line) in source.lines().enumerate() {
+            if line.starts_with("def ") {
+                if in_function {
+                    break;
+                }
+                in_function = line.starts_with(&definition);
+                continue;
+            }
+            if !in_function {
+                continue;
+            }
+            let code = line.trim();
+            if code.starts_with('#') {
+                continue;
+            }
+            if code == validator {
+                validation_line.get_or_insert(line_number);
+            }
+            for (first, expected) in first_use.iter_mut().zip(expected) {
+                if code.contains(expected) && first.is_none() {
+                    *first = Some(line_number);
+                }
+            }
+        }
+
+        validation_line.is_some_and(|validation| {
+            first_use
+                .iter()
+                .all(|first| first.is_some_and(|use_line| use_line > validation))
+        })
+    }
+
     fn has_scoped_validation_before_source_use(
         source: &str,
         function: &str,
@@ -1032,27 +1084,35 @@ mod tests {
             missing.len(),
             missing.join("\n  ")
         );
+        // `main` used to name four families' validations by hand, and this oracle
+        // pinned those exact three call sites — so it could only ever confirm the
+        // families someone had already remembered. MM-BUG-KILN-00182/00191 were the
+        // 37 it did not name. `main` now derives the check from the source tables,
+        // and this asserts THAT: the derived call must appear before ANY source table
+        // is used, and the table list below deliberately includes the families the
+        // old form missed (grand, headroom), so a regression to hand-listing fails
+        // here rather than passing on the four it happened to cover.
         assert!(
-            has_scoped_validation_before_source_use(&prepare, "main", "kawai", "KAWAI_SOURCES"),
-            "main must validate the Kawai output against KAWAI_SOURCES before using that table"
-        );
-        assert!(
-            has_scoped_validation_before_source_use(
+            validation_precedes_source_uses(
                 &prepare,
                 "main",
-                "steinwayb",
-                "STEINWAYB_SOURCES"
+                "_validate_generated_output_inventory(family, expected)",
+                &[
+                    "KAWAI_SOURCES",
+                    "STEINWAYB_SOURCES",
+                    "HEADROOM_SOURCES",
+                    "GRAND_SOURCES",
+                    "FINGERBASS_SOURCES",
+                    "PICKBASS_SOURCES",
+                ],
             ),
-            "main must validate the Steinway output against STEINWAYB_SOURCES before using that table"
+            "main must validate every SELECTED family's packaged output — derived from \
+             the source tables — before using any of those tables"
         );
         assert!(
-            has_scoped_validation_call_before_source_uses(
-                &prepare,
-                "main",
-                "_validate_generated_output_families({\"fingerbass\", \"pickbass\"}, FINGERBASS_SOURCES | PICKBASS_SOURCES)",
-                &["FINGERBASS_SOURCES", "PICKBASS_SOURCES"],
-            ),
-            "main must validate both bass output families against their combined source tables before using either table"
+            prepare.contains("for family, expected in sorted(_family_output_sets().items()):"),
+            "the derived validation must iterate the family->outputs map, so a family \
+             added to a source table is guarded on its first run"
         );
     }
 

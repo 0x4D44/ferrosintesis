@@ -7,16 +7,15 @@
 #![forbid(unsafe_code)]
 
 /// Number of WAV files embedded in this package.
-pub const FILE_COUNT: usize = 54;
+pub const FILE_COUNT: usize = 45;
+
+/// Number of exact logical names accepted, including aliases.
+pub const LOGICAL_FILE_COUNT: usize = 54;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
         "headroom_C2_f.wav",
         include_bytes!("../samples/headroom_C2_f.wav"),
-    ),
-    (
-        "headroom_C2_f_rr2.wav",
-        include_bytes!("../samples/headroom_C2_f_rr2.wav"),
     ),
     (
         "headroom_C2_mf.wav",
@@ -39,10 +38,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/headroom_C3_f.wav"),
     ),
     (
-        "headroom_C3_f_rr2.wav",
-        include_bytes!("../samples/headroom_C3_f_rr2.wav"),
-    ),
-    (
         "headroom_C3_mf.wav",
         include_bytes!("../samples/headroom_C3_mf.wav"),
     ),
@@ -61,10 +56,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
         "headroom_C4_f.wav",
         include_bytes!("../samples/headroom_C4_f.wav"),
-    ),
-    (
-        "headroom_C4_f_rr2.wav",
-        include_bytes!("../samples/headroom_C4_f_rr2.wav"),
     ),
     (
         "headroom_C4_mf.wav",
@@ -87,10 +78,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/headroom_C5_f.wav"),
     ),
     (
-        "headroom_C5_f_rr2.wav",
-        include_bytes!("../samples/headroom_C5_f_rr2.wav"),
-    ),
-    (
         "headroom_C5_mf.wav",
         include_bytes!("../samples/headroom_C5_mf.wav"),
     ),
@@ -109,10 +96,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
         "headroom_C6_f.wav",
         include_bytes!("../samples/headroom_C6_f.wav"),
-    ),
-    (
-        "headroom_C6_f_rr2.wav",
-        include_bytes!("../samples/headroom_C6_f_rr2.wav"),
     ),
     (
         "headroom_C6_mf.wav",
@@ -135,10 +118,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/headroom_F#2_f.wav"),
     ),
     (
-        "headroom_F#2_f_rr2.wav",
-        include_bytes!("../samples/headroom_F#2_f_rr2.wav"),
-    ),
-    (
         "headroom_F#2_mf.wav",
         include_bytes!("../samples/headroom_F#2_mf.wav"),
     ),
@@ -157,10 +136,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
         "headroom_F#3_f.wav",
         include_bytes!("../samples/headroom_F#3_f.wav"),
-    ),
-    (
-        "headroom_F#3_f_rr2.wav",
-        include_bytes!("../samples/headroom_F#3_f_rr2.wav"),
     ),
     (
         "headroom_F#3_mf.wav",
@@ -183,10 +158,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/headroom_F#4_f.wav"),
     ),
     (
-        "headroom_F#4_f_rr2.wav",
-        include_bytes!("../samples/headroom_F#4_f_rr2.wav"),
-    ),
-    (
         "headroom_F#4_mf.wav",
         include_bytes!("../samples/headroom_F#4_mf.wav"),
     ),
@@ -207,10 +178,6 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/headroom_F#5_f.wav"),
     ),
     (
-        "headroom_F#5_f_rr2.wav",
-        include_bytes!("../samples/headroom_F#5_f_rr2.wav"),
-    ),
-    (
         "headroom_F#5_mf.wav",
         include_bytes!("../samples/headroom_F#5_mf.wav"),
     ),
@@ -228,8 +195,24 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ),
 ];
 
+static ALIASES: [(&str, &str); 9] = [
+    ("headroom_C2_f_rr2.wav", "headroom_C2_mf_rr2.wav"),
+    ("headroom_C3_f_rr2.wav", "headroom_C3_mf_rr2.wav"),
+    ("headroom_C4_f_rr2.wav", "headroom_C4_mf_rr2.wav"),
+    ("headroom_C5_f_rr2.wav", "headroom_C5_mf_rr2.wav"),
+    ("headroom_C6_f_rr2.wav", "headroom_C6_mf_rr2.wav"),
+    ("headroom_F#2_f_rr2.wav", "headroom_F#2_mf_rr2.wav"),
+    ("headroom_F#3_f_rr2.wav", "headroom_F#3_mf_rr2.wav"),
+    ("headroom_F#4_f_rr2.wav", "headroom_F#4_mf_rr2.wav"),
+    ("headroom_F#5_f_rr2.wav", "headroom_F#5_mf_rr2.wav"),
+];
+
 /// Returns the embedded WAV bytes for an exact (case-sensitive) file name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
+    let name = ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == name)
+        .map_or(name, |(_, canonical)| *canonical);
     SAMPLES
         .iter()
         .find(|(candidate, _)| *candidate == name)
@@ -245,7 +228,7 @@ mod tests {
 
     // Aggregate byte size of the embedded WAVs; regenerate with
     // gen_crate_lib.py and re-pin if the bank changes.
-    const EXPECTED_BYTES: usize = 7184592;
+    const EXPECTED_BYTES: usize = 5987160;
 
     #[test]
     fn inventory_matches_packaged_wavs() {
@@ -276,5 +259,37 @@ mod tests {
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);
+    }
+
+    #[test]
+    fn aliases_resolve_without_duplicate_physical_payloads() {
+        assert_eq!(LOGICAL_FILE_COUNT, FILE_COUNT + ALIASES.len());
+        let declared: Vec<(&str, &str)> = include_str!("../ALIASES")
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    return None;
+                }
+                let mut fields = line.split_whitespace();
+                let pair = (fields.next().unwrap(), fields.next().unwrap());
+                assert!(fields.next().is_none(), "malformed alias row {line}");
+                Some(pair)
+            })
+            .collect();
+        assert_eq!(declared, ALIASES);
+        for (alias, canonical) in ALIASES {
+            assert_eq!(get(alias), get(canonical), "alias {alias}");
+        }
+        for (left, (left_name, left_bytes)) in SAMPLES.iter().copied().enumerate() {
+            for (right_name, right_bytes) in SAMPLES.iter().copied().skip(left + 1) {
+                assert!(
+                    left_bytes != right_bytes,
+                    "undeclared duplicate payloads: {} and {}",
+                    left_name,
+                    right_name
+                );
+            }
+        }
     }
 }

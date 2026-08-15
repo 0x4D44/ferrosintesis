@@ -1500,21 +1500,22 @@ fn headroom_f() -> &'static [Zone] {
     })
 }
 
+/// `f`'s RR2 IS `mf`'s RR2 — one shared bank, not a copy of one.
+///
+/// The bake gives both dynamics LEVEL4 for their second round robin, so the nine
+/// `headroom_*_f_rr2.wav` names are exact aliases of `headroom_*_mf_rr2.wav` in the
+/// packaged crate (MM-BUG-KILN-00184), and these two zone tables listed the same
+/// measured roots to two spellings of the same bytes. Building both therefore
+/// decoded and retained the identical PCM twice, which is the other half of what
+/// that bug asked to stop — deduplicating the package alone would have left the
+/// runtime cost untouched.
+///
+/// Delegating rather than aliasing the accessor keeps the round-robin call sites
+/// honest: `headroom_bank` still asks for `f`'s RR2 by name. If a future bake ever
+/// gives `f` its own RR2 source, restore an independent `bank!` here — and the
+/// alias rows in the crate's `ALIASES` have to go at the same time.
 fn headroom_f_rr2() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "headroom_C2_f_rr2.wav" => 66.33,
-            "headroom_F#2_f_rr2.wav" => 93.82,
-            "headroom_C3_f_rr2.wav" => 132.37,
-            "headroom_F#3_f_rr2.wav" => 186.66,
-            "headroom_C4_f_rr2.wav" => 262.66,
-            "headroom_F#4_f_rr2.wav" => 372.72,
-            "headroom_C5_f_rr2.wav" => 526.85,
-            "headroom_F#5_f_rr2.wav" => 745.73,
-            "headroom_C6_f_rr2.wav" => 1055.27,
-        )
-    })
+    headroom_mf_rr2()
 }
 
 /// Velocity picks the dynamic layer; the seed alternates round robins, like

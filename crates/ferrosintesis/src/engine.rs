@@ -1737,11 +1737,58 @@ impl Strip {
     }
 }
 
+/// Lowest supported output sample rate, in Hz.
+pub(crate) const MIN_SAMPLE_RATE: u32 = 8_000;
+/// Highest supported output sample rate, in Hz — above every rate real hardware offers.
+pub(crate) const MAX_SAMPLE_RATE: u32 = 384_000;
+/// Longest supported reverb tail, in seconds.
+pub(crate) const MAX_TAIL_S: f32 = 3_600.0;
+/// Longest supported echo time, in seconds. The echo bus sizes two power-of-two delay
+/// lines from this, so it is the knob that turns a typo into a multi-GiB allocation.
+pub(crate) const MAX_ECHO_S: f32 = 10.0;
+/// Highest supported realtime master gain.
+pub(crate) const MAX_MASTER_GAIN: f32 = 8.0;
+
+/// Bring one render knob into its supported range before anything sizes a buffer
+/// from it (MM-BUG-CRUCIBLE-00026).
+///
+/// Finite values clamp; non-finite ones fall back to `fallback`, because there is no
+/// sensible clamp for NaN and `f32::clamp` propagates it. Clamping rather than
+/// rejecting is what keeps this non-breaking: `Options` and `RealtimeOptions` are
+/// sealed, so the builders are the ONLY way a value reaches the DSP, and
+/// `offline::render` and `RealtimeSynth::new` are both infallible — turning them
+/// fallible would break every caller. The accessors report the clamped value, so a
+/// caller that cares can see what it actually got.
+///
+/// In-range values pass through untouched, so no render this repo produces moves a
+/// bit: the catalog's own echo is already clamped to 0.20-0.62 s upstream, and every
+/// other value in the workspace sits far inside these bounds.
+pub(crate) fn sanitize_knob(value: f32, lo: f32, hi: f32, fallback: f32) -> f32 {
+    if value.is_finite() {
+        value.clamp(lo, hi)
+    } else {
+        fallback
+    }
+}
+
+/// Bring a requested sample rate into the supported range.
+pub(crate) fn sanitize_sample_rate(rate: u32) -> u32 {
+    rate.clamp(MIN_SAMPLE_RATE, MAX_SAMPLE_RATE)
+}
+
 /// How to render a [`Song`](crate::offline::Song).
 ///
 /// Start from [`Options::default`] and refine with the `with_*` builders. The fields
 /// are private on purpose: that is what lets a future minor release add a render knob,
 /// or rename one, without breaking your code. Read them back with the accessors.
+///
+/// # Supported ranges
+///
+/// Every builder clamps its argument into the range its own documentation states, and
+/// a non-finite argument falls back to the default. Sizing a DSP buffer from an
+/// unchecked value is how a single typed call used to abort in the allocator —
+/// `with_echo(100_000.0)` asked for about 64 GiB of delay line
+/// (MM-BUG-CRUCIBLE-00026). Read a value back with its accessor to see what was kept.
 ///
 /// ```
 /// use ferrosintesis::offline::Options;
@@ -1787,22 +1834,24 @@ impl Default for Options {
 }
 
 impl Options {
-    /// Set the output sample rate in Hz. Default 44100.
+    /// Set the output sample rate in Hz. Default 44100, clamped to 8000..=384000.
     pub fn with_sample_rate(mut self, sr: u32) -> Self {
-        self.sr = sr as f32;
+        self.sr = sanitize_sample_rate(sr) as f32;
         self
     }
 
-    /// Set the reverb send, 0.0 (dry) to 1.0. Default 0.32.
+    /// Set the reverb send, 0.0 (dry) to 1.0. Default 0.32. Clamped to that range;
+    /// a non-finite value falls back to the default.
     pub fn with_reverb(mut self, wet: f32) -> Self {
-        self.wet = wet;
+        self.wet = sanitize_knob(wet, 0.0, 1.0, Self::default().wet);
         self
     }
 
     /// Set how many seconds of reverb tail are rendered past the last note-off.
-    /// Default 6.0.
+    /// Default 6.0, clamped to 0.0..=3600.0; a non-finite value falls back to the
+    /// default.
     pub fn with_tail(mut self, tail: f32) -> Self {
-        self.tail = tail;
+        self.tail = sanitize_knob(tail, 0.0, MAX_TAIL_S, Self::default().tail);
         self
     }
 
@@ -1813,9 +1862,12 @@ impl Options {
         self
     }
 
-    /// Set the echo time in seconds. Pass 0.0 to disable the echo bus. Default 0.375.
+    /// Set the echo time in seconds. Pass 0.0 to disable the echo bus. Default 0.375,
+    /// clamped to 0.0..=10.0; a non-finite value falls back to the default. The echo
+    /// bus sizes two power-of-two delay lines from this, so the clamp is what stops a
+    /// mistyped value asking the allocator for tens of GiB.
     pub fn with_echo(mut self, delay_s: f32) -> Self {
-        self.delay_s = delay_s;
+        self.delay_s = sanitize_knob(delay_s, 0.0, MAX_ECHO_S, Self::default().delay_s);
         self
     }
 
@@ -12050,6 +12102,76 @@ mod tests {
             "offline polyphony was capped: {} of {spawned} voices survived",
             core.active_voice_count()
         );
+    }
+
+    /// MM-BUG-CRUCIBLE-00026: no argument to a builder can reach the DSP out of
+    /// range, so nothing downstream can size a buffer from an impossible value.
+    ///
+    /// Non-allocating on purpose: it asserts on the accessors, never rendering. The
+    /// values that used to abort — `with_echo(100_000.0)` asked `PingPong::new` for
+    /// about 64 GiB — are checked here without ever reaching an allocator.
+    #[test]
+    fn option_builders_clamp_every_knob_into_its_supported_range() {
+        let d = Options::default();
+
+        for rate in [0u32, 1, 7_999, u32::MAX, MAX_SAMPLE_RATE + 1] {
+            let got = Options::default().with_sample_rate(rate).sample_rate();
+            assert!(
+                (MIN_SAMPLE_RATE..=MAX_SAMPLE_RATE).contains(&got),
+                "rate {rate} survived as {got}"
+            );
+        }
+        assert_eq!(
+            Options::default().with_sample_rate(0).sample_rate(),
+            MIN_SAMPLE_RATE
+        );
+        assert_eq!(
+            Options::default().with_sample_rate(u32::MAX).sample_rate(),
+            MAX_SAMPLE_RATE
+        );
+
+        // Huge finite values clamp to the ceiling; negatives clamp to the floor.
+        assert_eq!(Options::default().with_echo(100_000.0).echo(), MAX_ECHO_S);
+        assert_eq!(Options::default().with_echo(f32::MAX).echo(), MAX_ECHO_S);
+        assert_eq!(Options::default().with_echo(-1.0).echo(), 0.0);
+        assert_eq!(Options::default().with_tail(f32::MAX).tail(), MAX_TAIL_S);
+        assert_eq!(Options::default().with_tail(-5.0).tail(), 0.0);
+        assert_eq!(Options::default().with_reverb(9.0).reverb(), 1.0);
+        assert_eq!(Options::default().with_reverb(-9.0).reverb(), 0.0);
+
+        // Non-finite values have no sensible clamp (`f32::clamp` propagates NaN), so
+        // each falls back to that knob's default.
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(Options::default().with_echo(bad).echo(), d.delay_s, "{bad}");
+            assert_eq!(Options::default().with_tail(bad).tail(), d.tail, "{bad}");
+            assert_eq!(Options::default().with_reverb(bad).reverb(), d.wet, "{bad}");
+        }
+    }
+
+    /// The clamps must be inert for every value this repo actually renders with —
+    /// that is what keeps the catalog bit-identical.
+    ///
+    /// Checked against values taken from the shipping call sites rather than from the
+    /// limits, so it cannot pass by agreeing with the constants it guards: 44.1/48/96
+    /// kHz are what the CLI and render-catalog use, and 0.20-0.62 s is the range
+    /// `render-catalog`'s own `default_delay_s` already clamps the echo to.
+    #[test]
+    fn option_builders_leave_shipping_values_untouched() {
+        for rate in [44_100u32, 48_000, 88_200, 96_000, 192_000] {
+            assert_eq!(
+                Options::default().with_sample_rate(rate).sample_rate(),
+                rate
+            );
+        }
+        for echo in [0.0f32, 0.20, 0.375, 0.62, 1.0] {
+            assert_eq!(Options::default().with_echo(echo).echo(), echo);
+        }
+        for tail in [0.0f32, 0.1, 0.2, 0.5, 1.0, 6.0, 8.0] {
+            assert_eq!(Options::default().with_tail(tail).tail(), tail);
+        }
+        for wet in [0.0f32, 0.25, 0.32, 1.0] {
+            assert_eq!(Options::default().with_reverb(wet).reverb(), wet);
+        }
     }
 
     /// MM-BUG-CRUCIBLE-00025: the single-pass cap must steal exactly what the

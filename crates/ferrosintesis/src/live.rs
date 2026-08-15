@@ -1,6 +1,8 @@
 //! Realtime raw-MIDI byte input and block-render API.
 
-use crate::engine::{CoreOptions, EngineCore};
+use crate::engine::{
+    sanitize_knob, sanitize_sample_rate, CoreOptions, EngineCore, MAX_ECHO_S, MAX_MASTER_GAIN,
+};
 use crate::midi::{decode_sysex_payload, EvKind};
 use crate::sampler;
 
@@ -128,21 +130,25 @@ impl Default for RealtimeOptions {
 }
 
 impl RealtimeOptions {
-    /// Set the output sample rate in Hz. Default 44100.
+    /// Set the output sample rate in Hz. Default 44100, clamped to 8000..=384000.
     pub fn with_sample_rate(mut self, sample_rate: u32) -> Self {
-        self.sample_rate = sample_rate;
+        self.sample_rate = sanitize_sample_rate(sample_rate);
         self
     }
 
-    /// Set the reverb send, 0.0 (dry) to 1.0. Default 0.32.
+    /// Set the reverb send, 0.0 (dry) to 1.0. Default 0.32. Clamped to that range;
+    /// a non-finite value falls back to the default.
     pub fn with_reverb(mut self, wet: f32) -> Self {
-        self.wet = wet;
+        self.wet = sanitize_knob(wet, 0.0, 1.0, Self::default().wet);
         self
     }
 
-    /// Set the echo time in seconds. Pass 0.0 to disable the echo bus. Default 0.375.
+    /// Set the echo time in seconds. Pass 0.0 to disable the echo bus. Default 0.375,
+    /// clamped to 0.0..=10.0; a non-finite value falls back to the default. The echo
+    /// bus sizes two power-of-two delay lines from this, so the clamp is what stops a
+    /// mistyped value asking the allocator for tens of GiB (MM-BUG-CRUCIBLE-00026).
     pub fn with_echo(mut self, delay_s: f32) -> Self {
-        self.delay_s = delay_s;
+        self.delay_s = sanitize_knob(delay_s, 0.0, MAX_ECHO_S, Self::default().delay_s);
         self
     }
 
@@ -152,9 +158,15 @@ impl RealtimeOptions {
         self
     }
 
-    /// Set the master output gain applied to the mix. Default 0.70.
+    /// Set the master output gain applied to the mix. Default 0.70, clamped to
+    /// 0.0..=8.0; a non-finite value falls back to the default.
     pub fn with_master_gain(mut self, master_gain: f32) -> Self {
-        self.master_gain = master_gain;
+        self.master_gain = sanitize_knob(
+            master_gain,
+            0.0,
+            MAX_MASTER_GAIN,
+            Self::default().master_gain,
+        );
         self
     }
 
@@ -850,6 +862,105 @@ mod tests {
             synth.dropped_command_count(),
             5,
             "reset erased the overflow evidence"
+        );
+    }
+
+    /// MM-BUG-CRUCIBLE-00026: the realtime builders clamp too. `RealtimeSynth::new`
+    /// is infallible, so an unchecked `u32::MAX` rate went straight into the reverb,
+    /// chorus, delay and sympathetic-resonance constructors.
+    #[test]
+    fn realtime_option_builders_clamp_every_knob() {
+        let d = RealtimeOptions::default();
+
+        assert_eq!(
+            RealtimeOptions::default()
+                .with_sample_rate(u32::MAX)
+                .sample_rate(),
+            crate::engine::MAX_SAMPLE_RATE
+        );
+        assert_eq!(
+            RealtimeOptions::default().with_sample_rate(0).sample_rate(),
+            crate::engine::MIN_SAMPLE_RATE
+        );
+        assert_eq!(
+            RealtimeOptions::default().with_echo(f32::MAX).echo(),
+            MAX_ECHO_S
+        );
+        assert_eq!(RealtimeOptions::default().with_reverb(9.0).reverb(), 1.0);
+        assert_eq!(
+            RealtimeOptions::default()
+                .with_master_gain(f32::MAX)
+                .master_gain(),
+            MAX_MASTER_GAIN
+        );
+        assert_eq!(
+            RealtimeOptions::default()
+                .with_master_gain(-1.0)
+                .master_gain(),
+            0.0
+        );
+
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(
+                RealtimeOptions::default().with_echo(bad).echo(),
+                d.delay_s,
+                "{bad}"
+            );
+            assert_eq!(
+                RealtimeOptions::default().with_reverb(bad).reverb(),
+                d.wet,
+                "{bad}"
+            );
+            assert_eq!(
+                RealtimeOptions::default()
+                    .with_master_gain(bad)
+                    .master_gain(),
+                d.master_gain,
+                "{bad}"
+            );
+        }
+
+        // The shipping values must pass through untouched.
+        for rate in [44_100u32, 48_000, 96_000] {
+            assert_eq!(
+                RealtimeOptions::default()
+                    .with_sample_rate(rate)
+                    .sample_rate(),
+                rate
+            );
+        }
+        for gain in [0.0f32, 0.5, 0.7, 0.8, 1.0] {
+            assert_eq!(
+                RealtimeOptions::default()
+                    .with_master_gain(gain)
+                    .master_gain(),
+                gain
+            );
+        }
+    }
+
+    /// The end-to-end claim: a synth built from the most extreme request a caller can
+    /// type constructs and renders instead of aborting in the allocator.
+    #[test]
+    fn realtime_construction_survives_extreme_requests() {
+        let mut synth = RealtimeSynth::new(
+            RealtimeOptions::default()
+                .with_sample_rate(u32::MAX)
+                .with_echo(f32::MAX)
+                .with_reverb(f32::INFINITY)
+                .with_master_gain(f32::NAN)
+                .with_samples(false),
+        );
+        synth.write_byte(0x90);
+        synth.write_byte(60);
+        synth.write_byte(100);
+
+        let mut out = vec![0f32; LIVE_BLOCK * 2];
+        synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+
+        assert!(
+            out.iter().all(|x| x.is_finite()),
+            "extreme options produced non-finite audio"
         );
     }
 

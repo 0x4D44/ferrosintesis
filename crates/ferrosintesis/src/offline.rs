@@ -293,13 +293,49 @@ mod tests {
         }
     }
 
+    /// MM-BUG-CRUCIBLE-00026: the buffered render path survives the extreme request
+    /// that used to abort in the allocator.
+    ///
+    /// `with_echo(100_000.0)` reached `PingPong::new`, which at 44.1 kHz asked
+    /// `DelayLine::new` for two power-of-two buffers of about 32 GiB each. This
+    /// renders for real rather than only checking the accessors, so it covers the
+    /// whole chain from a typed public call to the sized buffer.
+    #[test]
+    fn render_survives_extreme_option_requests() {
+        let song = one_note_song();
+        let opt = Options::default()
+            .with_sample_rate(u32::MAX)
+            .with_echo(f32::MAX)
+            .with_reverb(f32::NAN)
+            .with_samples(false)
+            .with_tail(0.5);
+
+        let (samples, _stats) = render(&song, &opt);
+
+        assert!(!samples.is_empty(), "extreme options rendered nothing");
+        assert!(
+            samples.iter().all(|x| x.is_finite()),
+            "extreme options produced non-finite audio"
+        );
+    }
+
     #[test]
     fn riff_preflight_preserves_existing_output_and_creates_no_scratch() {
         let dir = TestDir::new("preflight");
         let output = dir.join("song.wav");
         fs::write(&output, b"prior output").unwrap();
         let song = one_note_song();
-        let opt = Options::default().with_sample_rate(u32::MAX).with_tail(1.0);
+        // Oversized through SUPPORTED values, not an absurd one: since
+        // MM-BUG-CRUCIBLE-00026 the builders clamp, so `with_sample_rate(u32::MAX)`
+        // no longer produces an oversized result and would have quietly stopped
+        // exercising the preflight. The top supported rate with a long-but-supported
+        // tail still passes RIFF's 4 GiB ceiling — 384 kHz stereo 16-bit is 4 bytes a
+        // frame, so 4 GiB is 2796 s and 2800 s clears it.
+        let opt = Options::default()
+            .with_sample_rate(384_000)
+            .with_tail(2_800.0);
+        assert_eq!(opt.sample_rate(), 384_000, "the rate was clamped away");
+        assert_eq!(opt.tail(), 2_800.0, "the tail was clamped away");
 
         let error =
             render_to_wav(&song, &opt, &output, Normalization::loudness(-18.0, -1.0)).unwrap_err();

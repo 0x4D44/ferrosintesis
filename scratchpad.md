@@ -1,5 +1,13 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.08.15 — **The CLI silently accepts a rate it will not use.** Since
+  MM-BUG-CRUCIBLE-00026 the library builders clamp, so `ferrosintesis in.mid --rate
+  1000000` renders at 384 kHz without saying so.
+  `C:\language\ferrosintesis\crates\ferrosintesis-cli\src\main.rs:147` passes the parsed
+  value straight to `with_sample_rate`; it could compare the accessor afterwards and warn.
+  Library-side clamping is right (the API is infallible and sealed); telling the human is
+  a CLI concern. Same applies to `--reverb` and the echo knob.
+
 - [ ] 2026.08.01 — **Root `Cargo.toml` still describes a gate flag that is gone.**
   `D:\language\ferrosintesis\Cargo.toml:39` says the failure hit "even for the
   `--workspace --exclude amp-lab` invocation the integration gate itself uses" — present

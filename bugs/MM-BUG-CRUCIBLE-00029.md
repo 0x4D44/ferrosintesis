@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00029 — Legal MIDI delta sequences wrap cumulative tick time and evade duration limits
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** ferrosintesis / MIDI timing
 - **Raised:** 2026-08-14T11:47:23Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T101815Z-p35368-n819711200-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00029-run-fix-20260815T101815Z-p35368-n819711200-c1
-- **Owner base:** 9284cae17f081322ca8b47371dcf7dffcedc98b0
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T10:18:15Z
-- **Owner until:** 2026-08-15T12:18:15Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:23Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh)
+- **State history:** Open (2026-08-14T11:47:23Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T10:27:17Z, deltic:auto role=fix run=fix-20260815T101815Z-p35368-n819711200-c1 branch=task/bug-MM-BUG-CRUCIBLE-00029-run-fix-20260815T101815Z-p35368-n819711200-c1 code=eb74fa4 gate=manual)
 
 ## Observation
 

@@ -207,8 +207,17 @@ def main():
         lines.append("            })")
         lines.append("            .collect();")
         lines.append("        assert_eq!(declared, ALIASES);")
+        # `assert_eq!(get(alias), get(canonical))` alone is VACUOUSLY GREEN when the
+        # canonical name is missing from SAMPLES: both sides are `None` and the
+        # assertion holds while the alias resolves to nothing (MM-BUG-KILN-00199).
+        # Resolving to actual bytes is the property, so assert that first — then the
+        # equality means what its name says.
         lines.append("        for (alias, canonical) in ALIASES {")
-        lines.append("            assert_eq!(get(alias), get(canonical), \"alias {alias}\");")
+        lines.append("            let bytes = get(canonical).unwrap_or_else(|| {")
+        lines.append("                panic!(\"alias {alias} names {canonical}, which is not packaged\")")
+        lines.append("            });")
+        lines.append("            assert!(!bytes.is_empty(), \"alias {alias} resolves to empty bytes\");")
+        lines.append("            assert_eq!(get(alias), Some(bytes), \"alias {alias}\");")
         lines.append("        }")
         lines.append("        for (left, (left_name, left_bytes)) in")
         lines.append("            SAMPLES.iter().copied().enumerate()")

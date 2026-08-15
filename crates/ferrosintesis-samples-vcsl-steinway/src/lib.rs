@@ -225,7 +225,11 @@ mod tests {
             .collect();
         assert_eq!(declared, ALIASES);
         for (alias, canonical) in ALIASES {
-            assert_eq!(get(alias), get(canonical), "alias {alias}");
+            let bytes = get(canonical).unwrap_or_else(|| {
+                panic!("alias {alias} names {canonical}, which is not packaged")
+            });
+            assert!(!bytes.is_empty(), "alias {alias} resolves to empty bytes");
+            assert_eq!(get(alias), Some(bytes), "alias {alias}");
         }
         for (left, (left_name, left_bytes)) in SAMPLES.iter().copied().enumerate() {
             for (right_name, right_bytes) in SAMPLES.iter().copied().skip(left + 1) {

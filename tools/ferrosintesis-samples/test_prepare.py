@@ -2672,6 +2672,62 @@ class GeneratedOutputFamiliesTest(unittest.TestCase):
             )
 
 
+class RepoRootIsResolvedAtCallTimeTest(unittest.TestCase):
+    """MM-BUG-NMI-00003: patching `REPO_ROOT` must actually redirect the writes.
+
+    A default argument is evaluated ONCE, when the module loads. So
+    `def f(..., repo_root=REPO_ROOT)` captures the real repository path forever, and
+    `mock.patch.object(prepare, "REPO_ROOT", tmp)` — the obvious way to point a bake
+    at a scratch directory — redirects nothing. Every call that omits the argument
+    still writes into the working tree.
+
+    That is not hypothetical: a test written for MM-BUG-KILN-00182 relied on exactly
+    that patch and, run against deliberately-broken code, regenerated samples into
+    `-core` and `-ccby` in the live worktree.
+    """
+
+    def test_sample_output_path_follows_a_patched_repo_root(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            with mock.patch.object(prepare, "REPO_ROOT", scratch):
+                resolved = prepare.sample_output_path("piano_C4_mf.wav")
+            self.assertTrue(
+                resolved.startswith(scratch),
+                f"sample_output_path ignored the patched REPO_ROOT: {resolved}",
+            )
+
+    def test_no_module_binds_repo_root_as_a_default_argument(self):
+        """Derived from the source, so a NEW function with the same shape fails here.
+
+        A one-off fix to the four functions that had this would be forgotten the next
+        time someone writes `repo_root=REPO_ROOT`; the point of scanning is that they
+        cannot.
+        """
+        offenders = []
+        tool_dir = os.path.dirname(os.path.abspath(prepare.__file__))
+        for name in sorted(os.listdir(tool_dir)):
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(tool_dir, name)
+            with open(path, encoding="utf-8") as handle:
+                for number, line in enumerate(handle, 1):
+                    stripped = line.strip()
+                    if stripped.startswith("#") or not stripped.startswith("def "):
+                        continue
+                    for captured in ("=REPO_ROOT", "=FREESOUND_SRC", "=EASTMAN_SRC"):
+                        if captured in line:
+                            offenders.append(
+                                f"{name}:{number} binds `{captured.lstrip('=')}` as a "
+                                f"default argument, so it is fixed at import: "
+                                f"{stripped}"
+                            )
+        self.assertEqual(
+            offenders,
+            [],
+            "default arguments capture module paths at import; take `None` and "
+            "resolve inside the body instead:\n  " + "\n  ".join(offenders),
+        )
+
+
 class PackagedRecipeRoutingTest(unittest.TestCase):
     """MM-BUG-KILN-00190: a crate's documented recipe must touch only that crate.
 

@@ -1222,8 +1222,17 @@ for octave in range(0, 8):
         NOTE_HZ[f"{name}{octave}"] = 440.0 * 2 ** ((12 * (octave + 1) + i - 69) / 12)
 
 
-def sample_output_path(filename, repo_root=REPO_ROOT):
-    """Return the sample-package destination for a generated WAV."""
+def sample_output_path(filename, repo_root=None):
+    """Return the sample-package destination for a generated WAV.
+
+    `repo_root` resolves at CALL time, not import time (MM-BUG-NMI-00003). It used
+    to default to `repo_root=REPO_ROOT`, and a default argument is evaluated ONCE
+    when the module loads — so `mock.patch.object(prepare, "REPO_ROOT", tmp)`, the
+    obvious way to point a bake at a scratch directory, redirected nothing and every
+    call that omitted the argument still wrote into the real repository. A test
+    doing exactly that regenerated samples into the working tree.
+    """
+    repo_root = REPO_ROOT if repo_root is None else repo_root
     family = filename.split("_", 1)[0]
     if family in FAMILY_PACKAGE:
         package = FAMILY_PACKAGE[family]
@@ -3116,12 +3125,14 @@ def _path_is_within(path, root):
         return False
 
 
-def validate_b1_pilot_output_dir(path, repo_root=REPO_ROOT):
+def validate_b1_pilot_output_dir(path, repo_root=None):
     """Resolve and fail closed on the offline pilot's output destination.
 
     The pilot exists to make disposable listening controls. It may never point at
     this repo, another worktree, or a directory that already carries artifacts.
     """
+    # Call-time, not import-time (MM-BUG-NMI-00003).
+    repo_root = REPO_ROOT if repo_root is None else repo_root
     resolved = os.path.realpath(os.path.abspath(path))
     repo = os.path.realpath(os.path.abspath(repo_root))
     if _path_is_within(resolved, repo):
@@ -5166,12 +5177,15 @@ BOTTLE_LOOP_FADE_OUT = 2647        # samples, quadratic (1 - t)^2
 BOTTLE_LOOP_PEAK = 0.9
 
 
-def bake_bottle_loop(src_dir=FREESOUND_SRC, repo_root=REPO_ROOT, verify_source=True):
+def bake_bottle_loop(src_dir=None, repo_root=None, verify_source=True):
     """Bake the GM 76 whole-voice bottle loop from its pinned committed source.
 
     Returns the quantized 16-bit samples it wrote, so a test can compare them against
     the committed asset without reading the file back.
     """
+    # Call-time, not import-time (MM-BUG-NMI-00003).
+    src_dir = FREESOUND_SRC if src_dir is None else src_dir
+    repo_root = REPO_ROOT if repo_root is None else repo_root
     _validate_generated_output_families(
         {"bottleloop"}, {BOTTLE_LOOP_OUT}, repo_root=repo_root)
     source = os.path.join(src_dir, BOTTLE_LOOP_SOURCE)
@@ -5781,6 +5795,8 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
 
 
 

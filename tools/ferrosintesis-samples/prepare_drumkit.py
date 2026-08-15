@@ -380,8 +380,10 @@ def publish_staged(staging_root, repo_root, plans):
                 os.remove(part)
 
 
-def regenerate(ffmpeg, cache, repo_root=REPO_ROOT):
+def regenerate(ffmpeg, cache, repo_root=None):
     """Stage the whole two-package kit, then publish it."""
+    # Call-time, not import-time (MM-BUG-NMI-00003).
+    repo_root = REPO_ROOT if repo_root is None else repo_root
     plans = output_plan()
     with tempfile.TemporaryDirectory(prefix="drumkit_staging_") as staging_root:
         total_bytes = generate_staged(ffmpeg, cache, staging_root, plans)
@@ -415,3 +417,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

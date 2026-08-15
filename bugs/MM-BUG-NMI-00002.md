@@ -1,25 +1,25 @@
 # MM-BUG-NMI-00002 — the core piano bank was stale: a whole-bank conditioner re-levels all 48 takes after any onset change
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample tooling / core piano bake reproducibility
 - **Raised:** 2026-08-15T11:56:51Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T161214Z-p18772-n712089000-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-NMI-00002-run-fix-20260815T161214Z-p18772-n712089000-c1
-- **Owner base:** 65cb7f7eca21dcce40f37645c2dc4224bc62c12f
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T16:12:14Z
-- **Owner until:** 2026-08-15T18:12:14Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T11:56:51Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-15T11:56:51Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:27:25Z, deltic:auto role=fix run=fix-20260815T161214Z-p18772-n712089000-c1 branch=task/bug-MM-BUG-NMI-00002-run-fix-20260815T161214Z-p18772-n712089000-c1 code=e4272da gate=manual)
 
 ## Correction (2026-08-15, while fixing)
 

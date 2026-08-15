@@ -1,25 +1,25 @@
 # MM-BUG-NMI-00003 — sample_output_path binds repo_root=REPO_ROOT at import, so patching REPO_ROOT never redirects writes
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample tooling / output path resolution
 - **Raised:** 2026-08-15T13:03:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T162821Z-p13848-n700969000-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-NMI-00003-run-fix-20260815T162821Z-p13848-n700969000-c1
-- **Owner base:** 6c4bb3038a49ba3f7f077bae7315c84d31d31a9c
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T16:28:21Z
-- **Owner until:** 2026-08-15T18:28:21Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T13:03:50Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-15T13:03:50Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:32:27Z, deltic:auto role=fix run=fix-20260815T162821Z-p13848-n700969000-c1 branch=task/bug-MM-BUG-NMI-00003-run-fix-20260815T162821Z-p13848-n700969000-c1 code=d844a36 gate=manual)
 
 ## Observation
 

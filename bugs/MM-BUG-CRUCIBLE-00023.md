@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00023 — Failed core drum PCM lookups initialize the entire cache
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / core drum-kit PCM API
 - **Raised:** 2026-08-11T08:30:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T120005Z-p20964-n399449000-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00023-run-fix-20260815T120005Z-p20964-n399449000-c1
-- **Owner base:** a907b969af6a0ffbaaf090c84851b05c41b8beb1
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T12:00:05Z
-- **Owner until:** 2026-08-15T14:00:05Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-11T08:30:10Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-11T08:30:10Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T12:03:46Z, deltic:auto role=fix run=fix-20260815T120005Z-p20964-n399449000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00023-run-fix-20260815T120005Z-p20964-n399449000-c1 code=44fcdf3 gate=manual)
 
 ## Observation
 

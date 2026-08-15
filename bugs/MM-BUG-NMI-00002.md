@@ -1,4 +1,4 @@
-# MM-BUG-NMI-00002 — prepare.py --only=piano rewrites all 48 core piano WAVs instead of reproducing the committed bank
+# MM-BUG-NMI-00002 — the core piano bank was stale: a whole-bank conditioner re-levels all 48 takes after any onset change
 
 - **State:** Open
 - **Priority:** Should
@@ -20,6 +20,36 @@
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-08-15T11:56:51Z, raised via `deltic bugs new`)
+
+## Correction (2026-08-15, while fixing)
+
+**The title and diagnosis below are wrong. The bake is deterministic and does
+reproduce the committed bank — under the code that produced it.** I raised this from
+a single observation (48 files rewritten) and inferred non-determinism without
+testing for it.
+
+Measured on 2026-08-15:
+
+- Running `--only=piano` twice gives byte-identical output both times. The bake is
+  deterministic.
+- Disabling the zero-lead de-click branch in `declick_fade_in` and re-baking
+  reproduces the committed bank **exactly — 0 of 48 files differ**.
+
+So the 48-file delta has a single cause, and it is not a defect in the bake.
+`condition_piano_bank` fits a minimax line across the WHOLE 52-take bank and derives
+every take's correction from it. MM-BUG-CRUCIBLE-00021 (2026-08-01) changed 5 takes'
+onsets, which moved their `piano_envelope_stats`, which moved the fit, which changed
+the correction for all 48. The bank was simply never regenerated after that fix — it
+was stale, not irreproducible.
+
+The regeneration is safe, measured rather than assumed: the level change is at most
+0.062 dB and averages -0.003 dB, and the largest changes land on exactly the five
+defective takes. Rendering a GM 0 CC0=1 probe across all three dynamic layers gives
+a maximum sample delta of -47.7 dBFS and an overall RMS change of +0.0002 dB — the
+onset clicks removed and nothing else audible.
+
+**Resolution: the bank is regenerated.** That also unblocks the remaining half of
+MM-BUG-NMI-00001.
 
 ## Observation
 
@@ -72,4 +102,5 @@ changed exactly the 2 files with the defect; `--only=pizzbass` exactly 1;
   runs byte-identical, then require a run against the committed bank to be a no-op.
   The second is the property that actually failed here and nothing checks it.
 - Estimated effort: Medium — the diagnosis is the work; the repair may be small.
+
 

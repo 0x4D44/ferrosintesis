@@ -1019,24 +1019,16 @@ class PrepareSampleBankTests(unittest.TestCase):
                 self.assertEqual(len(new), len(ref))
                 self.assertEqual(new, ref)
 
-    # MM-BUG-NMI-00001: packaged WAVs that still open on a discontinuity. Each is
-    # blocked on a SEPARATE defect — `prepare.py --only=piano` no longer reproduces
-    # the committed core bank, rewriting 48 files (including ones already starting at
-    # zero) rather than the 5 that need it, so regenerating them here would replace
-    # the flagship piano's sound under an onset fix. See MM-BUG-NMI-00002.
+    # Empty, and it stays that way. This held the five `-core` piano takes while
+    # MM-BUG-NMI-00001 was blocked; regenerating that bank (MM-BUG-NMI-00002) fixed
+    # them, and the sweep's second assertion below is what forced these entries out
+    # rather than letting them linger — exactly what the allow-list was built to do.
     #
-    # This is an allow-list, which this repository rightly distrusts — so it is built
-    # to RETIRE ITSELF. The sweep below asserts both directions: no file outside this
-    # set may fail, AND every file in it must still be failing. Fix the piano bake and
-    # the second assertion goes red, forcing the entry out. An entry cannot rot
-    # unnoticed the way MM-BUG-KILN-00060/59/69's lists did.
-    KNOWN_DISCONTINUOUS_ONSETS = {
-        ("ferrosintesis-samples-core", "piano_C3_pp.wav"),
-        ("ferrosintesis-samples-core", "piano_C3_pp_rr2.wav"),
-        ("ferrosintesis-samples-core", "piano_G3_pp.wav"),
-        ("ferrosintesis-samples-core", "piano_G4_pp.wav"),
-        ("ferrosintesis-samples-core", "piano_G5_f.wav"),
-    }
+    # Anything added here needs the same treatment: the sweep asserts BOTH that no
+    # file outside the set fails AND that every file inside it still fails, so an
+    # entry cannot outlive the defect it documents the way MM-BUG-KILN-00060/59/69's
+    # lists did.
+    KNOWN_DISCONTINUOUS_ONSETS = set()
 
     @staticmethod
     def _onset_continuity(path):

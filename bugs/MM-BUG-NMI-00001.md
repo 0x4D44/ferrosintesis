@@ -1,25 +1,25 @@
 # MM-BUG-NMI-00001 — Ten packaged WAVs across four banks still open on a frame-zero PCM step
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample assets / onset de-click coverage
 - **Raised:** 2026-08-15T03:38:52Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T162554Z-p14984-n995209800-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-NMI-00001-run-fix-20260815T162554Z-p14984-n995209800-c1
-- **Owner base:** 568d66274ace9ce1cd1ff2c7db644ac7cbbab932
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T16:25:54Z
-- **Owner until:** 2026-08-15T18:25:54Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T03:38:52Z, raised via `deltic bugs new`) -> Blocked (2026-08-15, six of the ten fixed in 3d186d0; the remaining five are all `-core` piano and cannot be regenerated until MM-BUG-NMI-00002 is fixed — `prepare.py --only=piano` rewrites all 48 files in the family rather than reproducing the committed bank. Blocked on that bug, not on a decision.) -> Open (2026-08-15T16:25:34Z, deltic:manual host=NMI verdict=reopen)
+- **State history:** Open (2026-08-15T03:38:52Z, raised via `deltic bugs new`) -> Blocked (2026-08-15, six of the ten fixed in 3d186d0; the remaining five are all `-core` piano and cannot be regenerated until MM-BUG-NMI-00002 is fixed — `prepare.py --only=piano` rewrites all 48 files in the family rather than reproducing the committed bank. Blocked on that bug, not on a decision.) -> Open (2026-08-15T16:25:34Z, deltic:manual host=NMI verdict=reopen) -> Fixed (2026-08-15T16:27:44Z, deltic:auto role=fix run=fix-20260815T162554Z-p14984-n995209800-c1 branch=task/bug-MM-BUG-NMI-00001-run-fix-20260815T162554Z-p14984-n995209800-c1 code=e4272da gate=manual)
 
 ## Correction (2026-08-15, while fixing)
 

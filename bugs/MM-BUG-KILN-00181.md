@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00181 — Wrong-shaped archive cache manifests abort sample regeneration
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample generation / archive cache reliability
 - **Raised:** 2026-08-13T17:58:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260815T120422Z-p20252-n181203500-c1
-- **Owner host:** NMI
-- **Owner branch:** task/bug-MM-BUG-KILN-00181-run-fix-20260815T120422Z-p20252-n181203500-c1
-- **Owner base:** 117cf0a87796863542cb8cea5ecb5390dff1f2aa
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-08-15T12:04:22Z
-- **Owner until:** 2026-08-15T14:04:22Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T17:58:10Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-13T17:58:10Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T12:07:42Z, deltic:auto role=fix run=fix-20260815T120422Z-p20252-n181203500-c1 branch=task/bug-MM-BUG-KILN-00181-run-fix-20260815T120422Z-p20252-n181203500-c1 code=2cf3840 gate=manual)
 
 ## Observation
 

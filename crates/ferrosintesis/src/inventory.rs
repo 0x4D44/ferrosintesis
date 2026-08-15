@@ -122,6 +122,62 @@ mod tests {
         );
     }
 
+    /// MM-BUG-KILN-00196: what a crate PACKAGES and what its oracle CHECKS must be
+    /// the same set.
+    ///
+    /// Every sample crate's manifest includes `samples/**` — everything, recursively.
+    /// Each crate's generated inventory test enumerates with a non-recursive
+    /// `read_dir` filtered by a case-sensitive `extension() == "wav"`, and the regen
+    /// tool uses the same shape. So `samples/extra.WAV`, `samples/notes.txt`, or a
+    /// `samples/raw/` subdirectory holding anything at all is invisible to both the
+    /// test and the tool and still ships in the published `.crate` — package bloat at
+    /// best, unvetted content in a CC0-declared crate at worst.
+    ///
+    /// Checked here once for every crate rather than in each crate's own generated
+    /// test: the gap is identical in all of them, and the reporting bug said so —
+    /// "whoever fixes this should enumerate all of them first". A per-crate fix would
+    /// have to be remembered again for the next crate; this one cannot be missed.
+    #[test]
+    fn packaged_sample_directories_hold_only_top_level_lowercase_wavs() {
+        let mut errors: Vec<String> = Vec::new();
+        let mut checked = 0usize;
+
+        for crate_name in sample_crates() {
+            let samples = crates_dir().join(&crate_name).join("samples");
+            let Ok(entries) = std::fs::read_dir(&samples) else {
+                continue;
+            };
+            for entry in entries {
+                let entry = entry.expect("readable sample directory entry");
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let kind = entry.file_type().expect("entry has a file type");
+                checked += 1;
+                if kind.is_dir() {
+                    errors.push(format!(
+                        "{crate_name}/samples/{name}/ is a subdirectory; `samples/**` \
+                         packages it but no oracle or tool enumerates it"
+                    ));
+                } else if !name.ends_with(".wav") {
+                    errors.push(format!(
+                        "{crate_name}/samples/{name} is packaged but is not a `.wav`; \
+                         the inventory oracle and the regen tool both skip it"
+                    ));
+                }
+            }
+        }
+
+        assert!(
+            checked > 500,
+            "the sweep stopped reaching the sample directories (saw {checked} entries)"
+        );
+        assert!(
+            errors.is_empty(),
+            "{} packaged-sample-directory error(s):\n  {}",
+            errors.len(),
+            errors.join("\n  ")
+        );
+    }
+
     /// Every first-party sample-asset crate, read from the filesystem rather than a list.
     fn sample_crates() -> Vec<String> {
         let mut out: Vec<String> = std::fs::read_dir(crates_dir())

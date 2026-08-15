@@ -6,15 +6,15 @@
 - **Area:** samples-b1-upright / packaging
 - **Raised:** 2026-08-14T07:06:14Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260815T154441Z-p20220-n322888900-c1
+- **Owner host:** NMI
+- **Owner branch:** task/bug-MM-BUG-KILN-00196-run-fix-20260815T154441Z-p20220-n322888900-c1
+- **Owner base:** 713cf43e0d188aa4cd1553edc0fd36b861f808a8
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-08-15T15:44:41Z
+- **Owner until:** 2026-08-15T17:44:41Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

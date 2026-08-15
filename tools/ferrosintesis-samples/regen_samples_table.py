@@ -49,7 +49,20 @@ def replace_size_pin(source, name, value):
 
 
 def b1_tail_payload_size(wav, path):
-    """Validate one extended B1 WAV and return its compact tail payload bytes."""
+    """Validate one extended B1 WAV and return its compact tail payload bytes.
+
+    A deliberate mirror of the runtime's `parse_b1_tail`
+    (`crates/ferrosintesis/src/sampler.rs`) and of the crate-side
+    `parse_b1_strict` (`crates/ferrosintesis-samples-b1-upright/src/lib.rs`).
+
+    MM-BUG-KILN-00195: this checked only the `b1t ` chunk, exactly as the
+    crate-side validator did, so the tool and the test shared one blind spot and
+    could not fail independently — the correlated-oracle mode of
+    MM-BUG-KILN-00071/72/73. Both now carry the runtime's full predicate:
+    zero pad bytes, exactly one strict `fmt `, exactly one nonzero even `data`,
+    and a tail entry that falls inside that PCM body. `B1StrictPredicateTest`
+    in `test_prepare.py` mutates a valid asset once per check.
+    """
     if len(wav) < 12 or wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
         raise ValueError(f"{path}: not a RIFF/WAVE file")
     declared_end = 8 + int.from_bytes(wav[4:8], "little")
@@ -60,6 +73,9 @@ def b1_tail_payload_size(wav, path):
 
     position = 12
     payload_size = None
+    fmt_count = 0
+    data_frames = None
+    entry_frame = None
     while position < declared_end:
         if position + 8 > declared_end:
             raise ValueError(f"{path}: truncated RIFF chunk header")
@@ -69,6 +85,28 @@ def b1_tail_payload_size(wav, path):
         padded_end = body_end + (chunk_size & 1)
         if padded_end > declared_end:
             raise ValueError(f"{path}: RIFF chunk extends beyond the file")
+        if chunk_size & 1 and wav[body_end] != 0:
+            raise ValueError(f"{path}: nonzero RIFF pad byte")
+        if wav[position : position + 4] == b"fmt ":
+            fmt_count += 1
+            body = wav[body_start:body_end]
+            # The same five fields the runtime checks — byte rate is deliberately
+            # NOT among them, so this stays a mirror and never rejects an asset
+            # the consumer would accept.
+            if len(body) < 16 or (
+                int.from_bytes(body[0:2], "little"),
+                int.from_bytes(body[2:4], "little"),
+                int.from_bytes(body[4:8], "little"),
+                int.from_bytes(body[12:14], "little"),
+                int.from_bytes(body[14:16], "little"),
+            ) != (1, 1, 44_100, 2, 16):
+                raise ValueError(f"{path}: body is not PCM16 mono 44.1 kHz")
+        if wav[position : position + 4] == b"data":
+            if chunk_size == 0 or chunk_size & 1:
+                raise ValueError(f"{path}: PCM body is empty or has a partial frame")
+            if data_frames is not None:
+                raise ValueError(f"{path}: duplicate PCM data chunks")
+            data_frames = chunk_size // 2
         if wav[position : position + 4] == b"b1t ":
             if payload_size is not None:
                 raise ValueError(f"{path}: duplicate B1 natural-tail chunk")
@@ -96,6 +134,17 @@ def b1_tail_payload_size(wav, path):
 
     if payload_size is None:
         raise ValueError(f"{path}: missing B1 natural-tail chunk")
+    if fmt_count != 1:
+        raise ValueError(f"{path}: expected exactly one fmt chunk, found {fmt_count}")
+    if data_frames is None:
+        raise ValueError(f"{path}: missing PCM data chunk")
+    # The runtime relates the tail entry to an independently decoded body; here
+    # the `data` chunk is that body, so this is the same check.
+    if entry_frame >= data_frames:
+        raise ValueError(
+            f"{path}: B1 tail entry {entry_frame} is outside a "
+            f"{data_frames}-frame PCM body"
+        )
     return payload_size
 
 

@@ -3185,15 +3185,32 @@ class B1InventoryRegenerationTest(unittest.TestCase):
     """MM-BUG-KILN-00169: B1 regeneration must preserve its natural-tail oracle."""
 
     @staticmethod
-    def extended_wav(payload=b"\x80"):
+    def extended_wav(payload=b"\x80", fmt=None, data_frames=59_536, chunks=None):
+        """Build a strictly-valid extended B1 asset, or a defeated variant.
+
+        MM-BUG-KILN-00195: this fixture used to emit a `b1t ` chunk and nothing
+        else — no `fmt `, no `data`, no audio at all — and the tool accepted it.
+        That the fixture could be that thin was itself the blind spot. It now
+        carries the whole strict shape, and `chunks` lets a test rebuild a
+        variant that defeats exactly one check.
+        """
+        if fmt is None:
+            fmt = struct.pack("<HHIIHH", 1, 1, 44_100, 88_200, 2, 16)
         tail = (
             bytes((1, 4, 0, 0))
             + struct.pack("<II", 59_535, len(payload) * 4)
             + payload
         )
-        chunk = b"b1t " + struct.pack("<I", len(tail)) + tail
-        chunk += b"\0" * (len(tail) & 1)
-        body = b"WAVE" + chunk
+        if chunks is None:
+            chunks = [
+                (b"fmt ", fmt),
+                (b"data", b"\0" * (data_frames * 2)),
+                (b"b1t ", tail),
+            ]
+        body = b"WAVE"
+        for name, chunk in chunks:
+            body += name + struct.pack("<I", len(chunk)) + chunk
+            body += b"\0" * (len(chunk) & 1)
         return b"RIFF" + struct.pack("<I", len(body)) + body
 
     def test_refresh_updates_both_pins_without_deleting_b1_tail_assertions(self):
@@ -3246,6 +3263,90 @@ mod tests {
         self.assertIn(f"const EXPECTED_BYTES: usize = {len(wav)};", refreshed)
         self.assertIn("const EXPECTED_TAIL_BYTES: usize = 1;", refreshed)
         self.assertIn(bespoke_tail_oracle.strip(), refreshed)
+
+
+class B1StrictPredicateTest(unittest.TestCase):
+    """MM-BUG-KILN-00195: the regen predicate must carry the runtime's checks.
+
+    The tool and the crate-side test were both tail-only, so they shared one
+    blind spot and could not fail independently. Each case below defeats exactly
+    one check the runtime enforces; a predicate missing that check accepts the
+    asset here and the consumer panics at bank build.
+    """
+
+    build = staticmethod(B1InventoryRegenerationTest.extended_wav)
+
+    def test_a_strictly_valid_asset_is_accepted(self):
+        """The floor: a predicate that rejected everything would pass the
+        defeat cases below for the wrong reason."""
+        self.assertEqual(
+            regen_samples_table.b1_tail_payload_size(self.build(), "valid.wav"), 1
+        )
+
+    def test_each_defeated_asset_is_rejected(self):
+        good_fmt = struct.pack("<HHIIHH", 1, 1, 44_100, 88_200, 2, 16)
+        tail = bytes((1, 4, 0, 0)) + struct.pack("<II", 59_535, 4) + b"\x80"
+        data = b"\0" * (59_536 * 2)
+        cases = {
+            "stereo fmt": dict(fmt=struct.pack("<HHIIHH", 1, 2, 44_100, 176_400, 4, 16)),
+            "8-bit fmt": dict(fmt=struct.pack("<HHIIHH", 1, 1, 44_100, 44_100, 1, 8)),
+            "22.05 kHz fmt": dict(fmt=struct.pack("<HHIIHH", 1, 1, 22_050, 44_100, 2, 16)),
+            "non-PCM fmt": dict(fmt=struct.pack("<HHIIHH", 2, 1, 44_100, 88_200, 2, 16)),
+            "truncated fmt": dict(fmt=good_fmt[:14]),
+            "data stops at the tail entry frame": dict(data_frames=59_535),
+            "absent fmt": dict(chunks=[(b"data", data), (b"b1t ", tail)]),
+            "duplicate fmt": dict(
+                chunks=[
+                    (b"fmt ", good_fmt),
+                    (b"fmt ", good_fmt),
+                    (b"data", data),
+                    (b"b1t ", tail),
+                ]
+            ),
+            "data renamed to junk": dict(
+                chunks=[(b"fmt ", good_fmt), (b"junk", data), (b"b1t ", tail)]
+            ),
+            "duplicate data": dict(
+                chunks=[
+                    (b"fmt ", good_fmt),
+                    (b"data", data),
+                    (b"data", data),
+                    (b"b1t ", tail),
+                ]
+            ),
+            "empty data": dict(
+                chunks=[(b"fmt ", good_fmt), (b"data", b""), (b"b1t ", tail)]
+            ),
+            "half a frame of data": dict(
+                chunks=[(b"fmt ", good_fmt), (b"data", data[:-1]), (b"b1t ", tail)]
+            ),
+        }
+        for label, kwargs in cases.items():
+            with self.subTest(defeat=label):
+                with self.assertRaises(ValueError):
+                    regen_samples_table.b1_tail_payload_size(
+                        self.build(**kwargs), f"{label}.wav"
+                    )
+
+    def test_a_nonzero_pad_byte_is_rejected(self):
+        """Built by hand: the fixture always writes a zero pad, which is the
+        point — only a corrupted asset carries a nonzero one."""
+        wav = bytearray(
+            self.build(
+                chunks=[
+                    (b"fmt ", struct.pack("<HHIIHH", 1, 1, 44_100, 88_200, 2, 16)),
+                    (b"junk", b"\x01"),
+                    (b"data", b"\0" * (59_536 * 2)),
+                    (b"b1t ", bytes((1, 4, 0, 0)) + struct.pack("<II", 59_535, 4) + b"\x80"),
+                ]
+            )
+        )
+        pad = wav.index(b"junk") + 8 + 1
+        self.assertEqual(wav[pad], 0, "fixture should place a zero pad byte here")
+        regen_samples_table.b1_tail_payload_size(bytes(wav), "zero-pad.wav")
+        wav[pad] = 0xFF
+        with self.assertRaises(ValueError):
+            regen_samples_table.b1_tail_payload_size(bytes(wav), "nonzero-pad.wav")
 
 
 class BottleLoopTest(unittest.TestCase):

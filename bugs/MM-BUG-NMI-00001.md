@@ -21,6 +21,36 @@
 - **Attempts:** fix=0, doubt=0, indeterminate=0
 - **State history:** Open (2026-08-15T03:38:52Z, raised via `deltic bugs new`)
 
+## Correction (2026-08-15, while fixing)
+
+**The count in the original observation below is wrong: 10, not 15.** The census
+predicate treated every packaged WAV as a one-shot, and five of the fifteen are not.
+`chanter_A#4`, `chanter_A#4_rr2`, `chanter_A4`, `chanter_D5_rr2` and `drone_G3` are
+**seamless loops** produced by `extract_loop`, whose returned window deliberately
+begins mid-waveform; the discontinuity that matters for a loop is the WRAP, and
+`find_loop` already optimises it. Measured on those five, the wrap step (0.008-0.046)
+sits far BELOW their own ordinary first-window motion (0.048-0.186) — they are
+correctly formed. De-clicking their starts would have destroyed the seam that search
+bought, converting one click at note-on into one per repetition.
+
+This is the failure CLAUDE.md warns about directly: a derived oracle is only as good
+as its enumeration predicate, and the predicate is itself an assumption. The corrected
+predicate decides from the DATA which kind of sample it is looking at — a file that
+ends at silence is a one-shot and is judged on its start; one that ends mid-waveform
+is a loop and is judged on its seam.
+
+Under the corrected predicate, a sweep of all 1,089 packaged WAVs finds 1,068
+one-shots and 21 loops, with **zero** failing loop seams.
+
+**Status: 6 of the 10 fixed; 5 remain** (b1_normal_C1/C3, eastpick_E2, eastpluck_E2,
+pizzbass_E1 regenerated, plus the sub-threshold eastpick_E3). The remaining five are
+all `-core` piano and are **blocked on MM-BUG-NMI-00002**: `prepare.py --only=piano`
+no longer reproduces the committed bank, rewriting 48 WAVs — including files that
+already start at zero — so regenerating them would replace the flagship piano's sound
+under an onset fix. They are pinned in `KNOWN_DISCONTINUOUS_ONSETS` in
+`tools/ferrosintesis-samples/test_prepare.py`, which asserts they are still failing
+so the entry cannot outlive the defect.
+
 ## Observation
 
 The zero-lead de-click was fixed twice, one bank at a time, and the rest of the

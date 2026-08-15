@@ -1019,46 +1019,87 @@ class PrepareSampleBankTests(unittest.TestCase):
                 self.assertEqual(len(new), len(ref))
                 self.assertEqual(new, ref)
 
-    def test_committed_gong_bank_starts_with_continuous_pcm(self):
-        """Asset-level oracle: neither packaged gong layer opens on a step."""
-        sample_dir = os.path.join(
-            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-gong", "samples"
-        )
-        paths = sorted(
-            os.path.join(sample_dir, name)
-            for name in os.listdir(sample_dir)
-            if name.endswith(".wav")
-        )
-        self.assertEqual(len(paths), 2)
-        for path in paths:
-            with self.subTest(sample=os.path.basename(path)):
-                samples, sr = prepare.read_wav(path)
-                window = min(len(samples), int(0.010 * sr))
-                ordinary_step = max(
-                    abs(samples[i] - samples[i - 1]) for i in range(1, window)
-                )
-                self.assertLessEqual(abs(samples[0]), ordinary_step)
-                self.assertLessEqual(abs(samples[0]), 1.0 / 32768.0)
+    # MM-BUG-NMI-00001: packaged WAVs that still open on a discontinuity. Each is
+    # blocked on a SEPARATE defect — `prepare.py --only=piano` no longer reproduces
+    # the committed core bank, rewriting 48 files (including ones already starting at
+    # zero) rather than the 5 that need it, so regenerating them here would replace
+    # the flagship piano's sound under an onset fix. See MM-BUG-NMI-00002.
+    #
+    # This is an allow-list, which this repository rightly distrusts — so it is built
+    # to RETIRE ITSELF. The sweep below asserts both directions: no file outside this
+    # set may fail, AND every file in it must still be failing. Fix the piano bake and
+    # the second assertion goes red, forcing the entry out. An entry cannot rot
+    # unnoticed the way MM-BUG-KILN-00060/59/69's lists did.
+    KNOWN_DISCONTINUOUS_ONSETS = {
+        ("ferrosintesis-samples-core", "piano_C3_pp.wav"),
+        ("ferrosintesis-samples-core", "piano_C3_pp_rr2.wav"),
+        ("ferrosintesis-samples-core", "piano_G3_pp.wav"),
+        ("ferrosintesis-samples-core", "piano_G4_pp.wav"),
+        ("ferrosintesis-samples-core", "piano_G5_f.wav"),
+    }
 
-    def test_committed_bass_bank_starts_with_continuous_pcm(self):
-        sample_dir = os.path.join(
-            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-bass", "samples"
+    @staticmethod
+    def _onset_continuity(path):
+        """Return (is_one_shot, offending_step, ordinary_step) for one packaged WAV.
+
+        The predicate DEPENDS on what kind of sample it is, which is the correction
+        MM-BUG-NMI-00001 needed. A one-shot decays to silence, so its first sample is
+        preceded by silence and must not jump away from it. A looped sustain is
+        different in kind: `extract_loop` deliberately returns a window whose start is
+        mid-waveform, and the discontinuity that matters is the WRAP — last sample back
+        to first — which `find_loop` optimises. De-clicking a loop's start would
+        destroy exactly the seam that search bought, turning one click at note-on into
+        one per repetition.
+
+        Which kind a file is comes from the DATA, not a list: a sample that ends at
+        silence is a one-shot; one that ends mid-waveform is a loop.
+        """
+        samples, sr = prepare.read_wav(path)
+        window = min(len(samples), int(0.010 * sr))
+        ordinary_step = max(abs(samples[i] - samples[i - 1]) for i in range(1, window))
+        one_shot = abs(samples[-1]) <= 2.0 / 32768.0
+        step = abs(samples[0]) if one_shot else abs(samples[0] - samples[-1])
+        return one_shot, step, ordinary_step
+
+    def test_every_packaged_bank_starts_without_a_discontinuity(self):
+        """Derived sweep over EVERY packaged sample crate.
+
+        This replaces the per-bank copies that used to cover `-bass` and `-gong` alone.
+        Those were added one bug at a time, which is precisely the pattern
+        CLAUDE.md's "hand-maintained lists are the recurring defect here" describes:
+        each fix added its own bank and nobody re-measured the rest, so five other
+        banks shipped the same defect unnoticed for weeks. Enumerating the crates from
+        the filesystem means a NEW bank cannot land outside the check.
+        """
+        crates_dir = os.path.join(prepare.REPO_ROOT, "crates")
+        checked = 0
+        offenders = set()
+        for crate in sorted(os.listdir(crates_dir)):
+            sample_dir = os.path.join(crates_dir, crate, "samples")
+            if not os.path.isdir(sample_dir):
+                continue
+            for name in sorted(os.listdir(sample_dir)):
+                if not name.endswith(".wav"):
+                    continue
+                path = os.path.join(sample_dir, name)
+                one_shot, step, ordinary_step = self._onset_continuity(path)
+                checked += 1
+                limit = max(ordinary_step, 1.0 / 32768.0) if one_shot else ordinary_step
+                if step > limit:
+                    offenders.add((crate, name))
+
+        self.assertGreater(checked, 1000, "the sweep stopped reaching the sample crates")
+        self.assertEqual(
+            offenders - self.KNOWN_DISCONTINUOUS_ONSETS,
+            set(),
+            "a packaged sample opens on a discontinuity",
         )
-        paths = sorted(
-            os.path.join(sample_dir, name)
-            for name in os.listdir(sample_dir)
-            if name.endswith(".wav")
+        self.assertEqual(
+            self.KNOWN_DISCONTINUOUS_ONSETS - offenders,
+            set(),
+            "these are fixed — delete them from KNOWN_DISCONTINUOUS_ONSETS "
+            "(and close MM-BUG-NMI-00001 if the set is now empty)",
         )
-        self.assertEqual(len(paths), 13)
-        for path in paths:
-            with self.subTest(sample=os.path.basename(path)):
-                samples, sr = prepare.read_wav(path)
-                window = min(len(samples), int(0.010 * sr))
-                ordinary_step = max(
-                    abs(samples[i] - samples[i - 1]) for i in range(1, window)
-                )
-                self.assertLessEqual(abs(samples[0]), ordinary_step)
-                self.assertLessEqual(abs(samples[0]), 1.0 / 32768.0)
 
     def test_fetch_is_atomic_on_short_transfer(self):
         with tempfile.TemporaryDirectory() as td:
@@ -3412,3 +3453,5 @@ class BottleLoopTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

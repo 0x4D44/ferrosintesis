@@ -1,5 +1,15 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.08.15 — **Packaged docs still point outside the package in prose, not just
+  in links.** MM-BUG-KILN-00193 added
+  `inventory.rs:packaged_documents_never_link_outside_their_own_package`, which only
+  sees markdown links. `C:\language\ferrosintesis\crates\ferrosintesis-samples-sax\PROVENANCE.md:20`
+  says "see `../ferrosintesis` for how the credit flows to downstream users" as a
+  backticked path, so it reads as a dead pointer on crates.io without tripping the
+  oracle. Spotted while fixing MM-BUG-KILN-00198. Worth a sweep for backticked `../`
+  paths in packaged documents, and a decision on whether they should become crates.io
+  URLs like the `-sax` README link now is.
+
 - [ ] 2026.08.15 — **`TP_MAX_PASSES` may be too small for real material.**
   MM-BUG-CRUCIBLE-00031 showed `albums/fable5/Slipstream/midi/01 - Wheels Up.mid`
   still had true-peak overages after its last `limit_audio` call, so a single call's

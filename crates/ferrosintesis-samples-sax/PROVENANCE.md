@@ -49,6 +49,20 @@ Each zone's **root** is the autocorrelation-measured fundamental of the recordin
 tuning offset (the SFZ `tune=` cents) never reaches the render. The measured roots are
 pinned in the `sax_*` zone tables in `crates/ferrosintesis/src/sampler.rs`.
 
+### Two packaged takes are NOT runtime zones
+
+`sax_bar_G#3_p.wav` and `sax_bar_G#3_f.wav` are packaged but **do not appear in any
+zone table**, so they are never rendered. The forte take breaks up — it is a rough
+outlier against the rest of the baritone population — and the soft layer was removed
+with it to keep the `p`/`f` pair symmetric (MM-BUG-KILN-00178). Their measured roots
+(208.95 / 209.52 Hz) live in the guarding test
+`baritone_sax_bank_rejects_the_rough_source_population_outlier`, not in a zone table,
+which is why the sentence above does not cover them.
+
+They stay packaged deliberately: the exclusion is a judgement about one recording, and
+keeping the takes lets a future reader re-measure it rather than take it on trust. A
+consumer of this crate should expect 74 packaged WAVs and 72 reachable zones.
+
 ## Inventory
 
 Aggregate: 4,101,968 bytes (74 files). Pinned by the `EXPECTED_BYTES` constant in
@@ -74,3 +88,5 @@ python3 tools/ferrosintesis-samples/prepare.py              # whole bank incl. s
 
 Needs `ffmpeg` on PATH. FLACs are fetched once from the pinned MTG revision and
 cached under the system temp dir.
+
+

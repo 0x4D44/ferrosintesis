@@ -7906,6 +7906,77 @@ mod tests {
     /// rough take. The rejected packaged take is the positive control; the bar is
     /// one order of magnitude above the runtime population's median roughness,
     /// rather than fitted between two individual recordings.
+    /// MM-BUG-KILN-00198: a packaged sax take that is NOT a runtime zone must be
+    /// named in the crate's own PROVENANCE.
+    ///
+    /// The document told a crates.io consumer that "the measured roots are pinned in
+    /// the `sax_*` zone tables" and presented all 74 packaged WAVs as supplying the
+    /// voice. Two do not: `sax_bar_G#3_p/f` were removed from the zone tables by
+    /// MM-BUG-KILN-00178 and kept packaged for provenance only. The exclusion lived in
+    /// a code comment and a bug record — neither of which ships with the crate.
+    ///
+    /// Derived from the tree, not from a list: the exclusion set is whatever is
+    /// packaged and absent from the zone tables, and each member must appear in
+    /// PROVENANCE.md. Excluding another take without documenting it fails here, and so
+    /// does documenting one that is actually reachable.
+    #[test]
+    fn packaged_sax_takes_outside_the_zone_tables_are_documented() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("crates/ferrosintesis has a parent");
+        let crate_dir = root.join("ferrosintesis-samples-sax");
+        let packaged: std::collections::BTreeSet<String> =
+            std::fs::read_dir(crate_dir.join("samples"))
+                .expect("sax samples directory")
+                .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+                .filter(|n| n.ends_with(".wav"))
+                .collect();
+
+        let source = std::fs::read_to_string(root.join("ferrosintesis/src/sampler.rs"))
+            .expect("sampler.rs is readable");
+        // A zone entry is `"name.wav" => root`; a bare mention (a comment, or this
+        // test) is not one.
+        let zoned: std::collections::BTreeSet<String> = source
+            .match_indices("\" =>")
+            .filter_map(|(end, _)| {
+                let head = &source[..end];
+                let start = head.rfind('"')?;
+                Some(head[start + 1..].to_owned())
+            })
+            .filter(|name| name.starts_with("sax_") && name.ends_with(".wav"))
+            .collect();
+
+        assert!(
+            zoned.len() > 60,
+            "the zone-table scan found only {} sax entries; it stopped working",
+            zoned.len()
+        );
+        let excluded: Vec<&String> = packaged.difference(&zoned).collect();
+
+        let provenance = std::fs::read_to_string(crate_dir.join("PROVENANCE.md"))
+            .expect("sax PROVENANCE.md is readable");
+        for name in &excluded {
+            let stem = name.trim_end_matches(".wav");
+            assert!(
+                provenance.contains(stem),
+                "{name} is packaged but is not a runtime zone, and PROVENANCE.md never \
+                 mentions it — a consumer is told every packaged take supplies the voice"
+            );
+        }
+        // The count is stated in PROVENANCE and is the claim a consumer acts on, so
+        // it is asserted rather than left to the prose to keep in step.
+        assert!(
+            provenance.contains(&format!(
+                "{} packaged WAVs and {} reachable zones",
+                packaged.len(),
+                zoned.len()
+            )),
+            "PROVENANCE.md does not state the {} packaged / {} reachable split",
+            packaged.len(),
+            zoned.len()
+        );
+    }
+
     #[test]
     fn baritone_sax_bank_rejects_the_rough_source_population_outlier() {
         struct Reading {

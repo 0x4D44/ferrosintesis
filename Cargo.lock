@@ -13,7 +13,6 @@ dependencies = [
  "ferrosintesis-samples-ccby",
  "ferrosintesis-samples-clavinet",
  "ferrosintesis-samples-core",
- "ferrosintesis-samples-dark-salamander",
  "ferrosintesis-samples-drumkit",
  "ferrosintesis-samples-drumkit2",
  "ferrosintesis-samples-fretnoise",
@@ -67,10 +66,6 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-core"
-version = "0.1.0"
-
-[[package]]
-name = "ferrosintesis-samples-dark-salamander"
 version = "0.1.0"
 
 [[package]]

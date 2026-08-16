@@ -5029,47 +5029,6 @@ def _bake_b1upright(src):
     return rows
 
 
-def _bake_darkened_grand(_src):
-    """GM0 CC0=5: a WARMER Salamander — the committed `-grand` samples with a
-    high-shelf cut above ~2 kHz (a one-pole shelf: y = x - g*(x - lowpass(x))). Tests
-    whether the maintainer's dislike of the bright Salamander C5 is fixable by EQ
-    rather than a new instrument, and is itself a cheap shippable win. Same 54 zones
-    and roots as the grand; derives from the CC-BY 3.0 Salamander, so inherits that
-    licence. EAR-TUNABLE (this box has no ears): `DARK_SHELF_HZ` / `DARK_CUT_DB`."""
-    DARK_SHELF_HZ = 2000.0
-    DARK_CUT_DB = -6.0
-    grand_dir = os.path.join(REPO_ROOT, "crates",
-                             "ferrosintesis-samples-grand", "samples")
-    out_dir = os.path.join(REPO_ROOT, "crates",
-                           "ferrosintesis-samples-dark-salamander", "samples")
-    os.makedirs(out_dir, exist_ok=True)
-    source_names = sorted(f for f in os.listdir(grand_dir) if f.endswith(".wav"))
-    expected_outputs = {"dark" + fn for fn in source_names}
-    _validate_generated_output_families(
-        {"darkgrand"}, expected_outputs, output_dir=out_dir)
-    a = 1.0 - math.exp(-2.0 * math.pi * DARK_SHELF_HZ / OUT_SR)
-    g = 1.0 - 10.0 ** (DARK_CUT_DB / 20.0)
-    rows = []
-    for fn in source_names:
-        x, sr = read_wav(os.path.join(grand_dir, fn))  # already mono 16-bit 44.1k
-        lp = 0.0
-        y = []
-        for v in x:
-            lp += a * (v - lp)
-            y.append(v - g * (v - lp))
-        pk = max(abs(v) for v in y) or 1.0
-        y = [v * 0.9 / pk for v in y]
-        out_name = "dark" + fn  # grand_C2_pp.wav -> darkgrand_C2_pp.wav
-        write_wav_mono(os.path.join(out_dir, out_name), y, sr)
-        note = next(p for p in fn[:-4].split("_")
-                    if p[0] in "ABCDEFG" and p[-1].isdigit())
-        nominal = NOTE_HZ[note]
-        f0, conf = measure_f0(y, sr, nominal * 0.8, nominal * 1.4)
-        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
-        rows.append((out_name, f0, f0, nominal, cents, conf, len(y) / sr))
-    return rows
-
-
 def ensure_banjo_sources(src):
     """Fetch the ganjo banjo WAVs and transcode them to 16-bit PCM.
 
@@ -5366,7 +5325,6 @@ def _prepare_only_families():
         "celesta",
         "chanter",
         "clavinet",
-        "darkgrand",
         "gong",
         "honkytonk",
         "musescoregrand",
@@ -5696,11 +5654,6 @@ def main():
             msg_src = os.path.join(tempfile.gettempdir(), "musescore_general")
             os.makedirs(msg_src, exist_ok=True)
             rows += _bake_musescore_grand(msg_src)
-
-        # GM0 CC0=5: darkened Salamander — the committed -grand samples, high-shelf
-        # cut (warmer). No fetch: derives from the tracked grand crate.
-        if want("darkgrand"):
-            rows += _bake_darkened_grand(src)
 
         # GM 1 CC0=1: FreePats YDP Grand — bright Yamaha Disklavier (SF2 raw-PCM
         # extract of the middle velocity layer) to the CC-BY -ydp-grand crate.

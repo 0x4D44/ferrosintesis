@@ -241,7 +241,6 @@ fn embedded_wav(name: &str) -> &'static [u8] {
         .or_else(|| ferrosintesis_samples_vcsl_kawai::get(name))
         .or_else(|| ferrosintesis_samples_headroom::get(name))
         .or_else(|| ferrosintesis_samples_musescore_grand::get(name))
-        .or_else(|| ferrosintesis_samples_dark_salamander::get(name))
         .or_else(|| ferrosintesis_samples_ydp_grand::get(name))
         .or_else(|| ferrosintesis_samples_honkytonk::get(name))
         .or_else(|| ferrosintesis_samples_b1_upright::get(name))
@@ -1602,126 +1601,6 @@ fn musescoregrand_zones() -> &'static [Zone] {
 /// (dynamics are carried by the LA blend + model). Voices GM 1 CC0 alt bank 2.
 pub fn musescoregrand_bank(_vel: u8, _rr2: bool) -> &'static [Zone] {
     musescoregrand_zones()
-}
-
-// GM 0 Acoustic Grand ALTERNATE bank 5 - DARKENED Salamander (CC-BY 3.0,
-// ferrosintesis-samples-dark-salamander). The CC0=2 Salamander grand with a
-// high-shelf EQ cut (warmer). Same zones/roots as grand; the "is it EQ not
-// instrument?" A/B, whose other endpoint is CC0=2, not the GM 0 default.
-// Selected via CC0 alt bank 5.
-fn darkgrand_pp() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "darkgrand_C2_pp.flac" => 65.22,
-            "darkgrand_F#2_pp.flac" => 91.97,
-            "darkgrand_C3_pp.flac" => 130.41,
-            "darkgrand_F#3_pp.flac" => 184.72,
-            "darkgrand_C4_pp.flac" => 261.50,
-            "darkgrand_F#4_pp.flac" => 369.35,
-            "darkgrand_C5_pp.flac" => 524.09,
-            "darkgrand_F#5_pp.flac" => 741.86,
-            "darkgrand_C6_pp.flac" => 1051.48,
-        )
-    })
-}
-
-fn darkgrand_pp_rr2() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "darkgrand_C2_pp_rr2.flac" => 65.32,
-            "darkgrand_F#2_pp_rr2.flac" => 92.13,
-            "darkgrand_C3_pp_rr2.flac" => 130.40,
-            "darkgrand_F#3_pp_rr2.flac" => 184.77,
-            "darkgrand_C4_pp_rr2.flac" => 261.53,
-            "darkgrand_F#4_pp_rr2.flac" => 369.41,
-            "darkgrand_C5_pp_rr2.flac" => 524.11,
-            "darkgrand_F#5_pp_rr2.flac" => 741.87,
-            "darkgrand_C6_pp_rr2.flac" => 1052.11,
-        )
-    })
-}
-
-fn darkgrand_mf() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "darkgrand_C2_mf.flac" => 65.59,
-            "darkgrand_F#2_mf.flac" => 92.33,
-            "darkgrand_C3_mf.flac" => 130.44,
-            "darkgrand_F#3_mf.flac" => 185.00,
-            "darkgrand_C4_mf.flac" => 261.89,
-            "darkgrand_F#4_mf.flac" => 370.04,
-            "darkgrand_C5_mf.flac" => 524.45,
-            "darkgrand_F#5_mf.flac" => 741.86,
-            "darkgrand_C6_mf.flac" => 1052.95,
-        )
-    })
-}
-
-fn darkgrand_mf_rr2() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "darkgrand_C2_mf_rr2.flac" => 65.61,
-            "darkgrand_F#2_mf_rr2.flac" => 92.40,
-            "darkgrand_C3_mf_rr2.flac" => 130.44,
-            "darkgrand_F#3_mf_rr2.flac" => 185.02,
-            "darkgrand_C4_mf_rr2.flac" => 261.85,
-            "darkgrand_F#4_mf_rr2.flac" => 370.07,
-            "darkgrand_C5_mf_rr2.flac" => 524.50,
-            "darkgrand_F#5_mf_rr2.flac" => 741.86,
-            "darkgrand_C6_mf_rr2.flac" => 1052.99,
-        )
-    })
-}
-
-fn darkgrand_f() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "darkgrand_C2_f.flac" => 65.69,
-            "darkgrand_F#2_f.flac" => 92.72,
-            "darkgrand_C3_f.flac" => 130.61,
-            "darkgrand_F#3_f.flac" => 185.21,
-            "darkgrand_C4_f.flac" => 262.38,
-            "darkgrand_F#4_f.flac" => 370.24,
-            "darkgrand_C5_f.flac" => 524.86,
-            "darkgrand_F#5_f.flac" => 741.87,
-            "darkgrand_C6_f.flac" => 1054.35,
-        )
-    })
-}
-
-fn darkgrand_f_rr2() -> &'static [Zone] {
-    static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, {
-        bank!(
-            "darkgrand_C2_f_rr2.flac" => 65.69,
-            "darkgrand_F#2_f_rr2.flac" => 92.82,
-            "darkgrand_C3_f_rr2.flac" => 130.67,
-            "darkgrand_F#3_f_rr2.flac" => 185.29,
-            "darkgrand_C4_f_rr2.flac" => 262.32,
-            "darkgrand_F#4_f_rr2.flac" => 370.26,
-            "darkgrand_C5_f_rr2.flac" => 525.27,
-            "darkgrand_F#5_f_rr2.flac" => 741.94,
-            "darkgrand_C6_f_rr2.flac" => 1054.56,
-        )
-    })
-}
-
-/// Velocity picks the dynamic layer; the seed alternates round robins, like
-/// [`grand_bank`]. Voices GM 0 CC0 alt bank 4 (darkened Salamander).
-pub fn darkgrand_bank(vel: u8, rr2: bool) -> &'static [Zone] {
-    match (vel, rr2) {
-        (0..=51, false) => darkgrand_pp(),
-        (0..=51, true) => darkgrand_pp_rr2(),
-        (52..=95, false) => darkgrand_mf(),
-        (52..=95, true) => darkgrand_mf_rr2(),
-        (_, false) => darkgrand_f(),
-        (_, true) => darkgrand_f_rr2(),
-    }
 }
 
 // GM 1 Bright Acoustic ALTERNATE bank 1 - FreePats YDP Grand (Yamaha Disklavier Pro,
@@ -3146,7 +3025,6 @@ pub fn prewarm() {
         let _ = kawai_bank(vel, rr2);
         let _ = headroom_bank(vel, rr2);
         let _ = musescoregrand_bank(vel, rr2);
-        let _ = darkgrand_bank(vel, rr2);
         let _ = ydpgrand_bank(vel, rr2);
         let _ = honkytonk_bank(vel, rr2);
         let _ = b1upright_bank(vel, rr2);
@@ -6146,7 +6024,6 @@ mod tests {
             let _ = kawai_bank(vel, rr2);
             let _ = headroom_bank(vel, rr2);
             let _ = musescoregrand_bank(vel, rr2);
-            let _ = darkgrand_bank(vel, rr2);
             let _ = ydpgrand_bank(vel, rr2);
             let _ = honkytonk_bank(vel, rr2);
             let _ = b1upright_bank(vel, rr2);

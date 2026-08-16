@@ -51,12 +51,6 @@ ferrosintesis-samples-grand — GM 0 grand piano (Yamaha C5)
     https://archive.org/details/SalamanderGrandPianoV3
     Modified: trimmed, downmixed to mono, split into attack/body transients.
 
-ferrosintesis-samples-dark-salamander — GM 0 grand piano, darkened voicing
-
-    "Salamander Grand Piano V3" by Alexander Holm, CC BY 3.0.
-    https://archive.org/details/SalamanderGrandPianoV3
-    Modified: high-shelf EQ cut (a warmer voicing) by the ferrosintesis project.
-
 ferrosintesis-samples-ydp-grand — GM 1 Bright Acoustic alternate, CC0=1 (Yamaha Disklavier Pro)
 
     "YDP Grand Piano" SoundFont by roberto@zenvoid.org for the FreePats project,

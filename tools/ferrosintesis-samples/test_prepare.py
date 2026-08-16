@@ -3226,33 +3226,58 @@ For comparison, the text mentions {self.COMMAND}.
         bottle.assert_not_called()
 
 
-class DarkenedGrandInventoryTest(unittest.TestCase):
-    """MM-BUG-KILN-00123: a rebake must reject obsolete owned outputs."""
+class ObsoleteOwnedOutputTest(unittest.TestCase):
+    """MM-BUG-KILN-00123: a rebake must reject obsolete owned outputs.
 
-    def test_rebake_rejects_unexpected_owned_output_before_writing(self):
-        with tempfile.TemporaryDirectory() as repo_root:
-            grand_dir = os.path.join(
-                repo_root, "crates", "ferrosintesis-samples-grand", "samples"
-            )
-            out_dir = os.path.join(
-                repo_root,
-                "crates",
-                "ferrosintesis-samples-dark-salamander",
-                "samples",
-            )
-            os.makedirs(grand_dir)
-            os.makedirs(out_dir)
-            open(os.path.join(grand_dir, "grand_C4_mf.wav"), "wb").close()
-            open(os.path.join(out_dir, "darkgrand_C4_mf.wav"), "wb").close()
-            open(os.path.join(out_dir, "darkgrand_old.wav"), "wb").close()
+    Was `DarkenedGrandInventoryTest`, driven through `_bake_darkened_grand`.
+    That baker went away with the dark-Salamander bank (2026.08.16), but the
+    PROPERTY was never the baker's: ten bakers call this validator, and the bug
+    was that a stale output could survive a rebake in any of them. So the check
+    now drives the validator directly, with a negative control, and a third test
+    pins the ordering the old one got for free from its baker -- validate before
+    you read a source, or the rebake is already under way when it fails.
+    """
 
-            with mock.patch.object(prepare, "REPO_ROOT", repo_root), mock.patch.object(
-                prepare,
-                "read_wav",
-                side_effect=AssertionError("inventory must be checked before reading"),
-            ):
-                with self.assertRaisesRegex(ValueError, r"darkgrand_old\.wav"):
-                    prepare._bake_darkened_grand(None)
+    def test_validator_rejects_an_unexpected_owned_output(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            open(os.path.join(out_dir, "somebank_C4_mf.wav"), "wb").close()
+            open(os.path.join(out_dir, "somebank_old.wav"), "wb").close()
+
+            with self.assertRaisesRegex(ValueError, r"somebank_old\.wav"):
+                prepare._validate_generated_output_families(
+                    {"somebank"}, {"somebank_C4_mf.wav"}, output_dir=out_dir
+                )
+
+    def test_validator_accepts_an_exact_projection(self):
+        """Negative control: a correct bank must NOT be rejected."""
+        with tempfile.TemporaryDirectory() as out_dir:
+            open(os.path.join(out_dir, "somebank_C4_mf.wav"), "wb").close()
+            prepare._validate_generated_output_families(
+                {"somebank"}, {"somebank_C4_mf.wav"}, output_dir=out_dir
+            )
+
+    def test_every_baker_validates_before_it_reads_a_source(self):
+        """Source-shape, because the ordering of ten bakers cannot be observed
+        from outside without running all ten (several need fetched archives)."""
+        source = open(
+            os.path.join(os.path.dirname(__file__), "prepare.py"), encoding="utf-8"
+        ).read()
+        checked = 0
+        for name in re.findall(r"^def (_?bake_\w+)\(", source, re.M):
+            body = re.split(r"^def ", source.split(f"def {name}(", 1)[1],
+                            maxsplit=1, flags=re.M)[0]
+            if "_validate_generated_output_families" not in body:
+                continue
+            checked += 1
+            validate_at = body.index("_validate_generated_output_families")
+            read_at = body.find("read_wav(")
+            self.assertTrue(
+                read_at == -1 or validate_at < read_at,
+                f"{name} reads a source before validating its owned outputs",
+            )
+        self.assertGreaterEqual(
+            checked, 8, "the baker scan stopped finding validators; it guards nothing"
+        )
 
 
 class KawaiProvenanceMappingTest(unittest.TestCase):

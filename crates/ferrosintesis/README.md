@@ -1,7 +1,7 @@
 # ferrosintesis
 
 A pure-Rust General MIDI synthesizer and stereo renderer. Its DSP code has no
-third-party Rust dependencies. Default builds also embed twenty-five first-party
+third-party Rust dependencies. Default builds also embed twenty-four first-party
 asset crates containing recorded instrument material under the licences listed
 below. No external SoundFont or runtime sound-bank lookup is required.
 
@@ -81,9 +81,9 @@ allows `Options` to evolve without requiring callers to construct its fields.
 
 ## Feature flags
 
-`embedded-samples` (default) compiles twenty-five first-party asset crates into
-the binary: 1080 recordings -- attack transients, sustain loops, whole-voice
-instruments and the sampled drum kit -- embedding ~54 MiB. The synth uses
+`embedded-samples` (default) compiles twenty-four first-party asset crates into
+the binary: 1026 recordings -- attack transients, sustain loops, whole-voice
+instruments and the sampled drum kit -- embedding ~52 MiB. The synth uses
 an LA-synthesis structure: recorded onset material adds attack detail before
 crossfading into a modeled body or sustain.
 
@@ -155,7 +155,6 @@ calibration, so a slot's number never changes how its bank was baked.
 | CC0=2 | Salamander |
 | CC0=3 | Steinway B |
 | CC0=4 | Headroom |
-| CC0=5 | dark-Salamander |
 
 Bank 0 became **our own Yamaha B1 upright** on 2026.07.26; the previous line-up
 shifted down one slot intact, so the VSCO upright that used to be the default is
@@ -221,7 +220,7 @@ representative material on the target machine. Debug builds are much slower.
 ## Sample provenance and licensing
 
 The code is licensed **MIT OR Apache-2.0**. The embedded PCM is not: it comes from
-twenty-five first-party asset crates, and while most of them are **CC0 1.0** and need
+twenty-four first-party asset crates, and while most of them are **CC0 1.0** and need
 no credit, ten are not. The asset crates contain nothing but that PCM and
 `include_bytes!`; the per-crate inventory, provenance and regeneration tooling live
 under
@@ -230,7 +229,7 @@ which is the authority on what each bank contains.
 
 ### If you distribute a binary
 
-A build with default features embeds all twenty-five banks. **You must reproduce the
+A build with default features embeds all twenty-four banks. **You must reproduce the
 notices of the ten attribution-bearing banks below.** Each ships the exact required
 text in its own crate's `NOTICE` file — concatenating those ten files satisfies
 every licence here. The remaining fifteen banks are CC0 and require nothing.
@@ -241,7 +240,6 @@ every licence here. The remaining fifteen banks are CC0 and require nothing.
 | `ferrosintesis-samples-musescore` | MIT | GM 61 brass section, GM 104 sitar, GM 75/76/77 pipe onsets, GM 8 celesta | same MS Basic acknowledgement set as above |
 | `ferrosintesis-samples-musescore-grand` | MIT | GM 1 Bright Acoustic alternate (CC0=2, MF velocity tier) | MuseScore_General "Grand Piano", adaptation by S. Christian Collins, derived from FluidR3 by Frank Wen |
 | `ferrosintesis-samples-grand` | CC BY 3.0 | GM 0 grand (Yamaha C5) | "Salamander Grand Piano V3" by Alexander Holm |
-| `ferrosintesis-samples-dark-salamander` | CC BY 3.0 | GM 0 grand, darkened voicing | "Salamander Grand Piano V3" by Alexander Holm — **modified** (high-shelf EQ cut) |
 | `ferrosintesis-samples-ydp-grand` | CC BY 3.0 | GM 1 Bright Acoustic alternate (CC0=1, Disklavier Pro) | "YDP Grand Piano" by roberto@zenvoid.org for FreePats; underlying samples computer-performed and recorded for OLPC by Dr. Mikhail Krishtal and his Zenph Studios team |
 | `ferrosintesis-samples-gong` | CC BY 3.0 | tam-tam gong | "CdM Gamelan Sample Library" by Digitópia / Casa da Música |
 | `ferrosintesis-samples-headroom` | CC BY 4.0 | GM 0 grand (Yamaha C3) | "Headroom Piano" / "Intimate Piano" recorded by Bengt Nilsson; SFZ mapping by kinwie |

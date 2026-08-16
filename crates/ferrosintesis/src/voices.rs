@@ -1396,14 +1396,12 @@ pub(crate) const GM0_SOURCES: &[Gm0Source] = &[
         cal: PianoSampleCal::LegacyNormalized,
         crate_dir: Some("crates/ferrosintesis-samples-headroom"),
     },
-    // CC0=5 — dark-Salamander, a warmer high-shelf EQ of the Salamander (was
-    // CC0=4). Its own A/B partner is now CC0=2, the raw Salamander.
-    Gm0Source {
-        name: "dark-Salamander",
-        bank: crate::sampler::darkgrand_bank,
-        cal: PianoSampleCal::LegacyNormalized,
-        crate_dir: Some("crates/ferrosintesis-samples-dark-salamander"),
-    },
+    // CC0=5 held dark-Salamander, a high-shelf EQ of the CC0=2 Salamander that
+    // existed to A/B against it. Removed 2026.08.16 once that question was
+    // settled: it correlated with CC0=2 at r = 0.9928 across all 54 matched
+    // notes — the same take, darkened. It was the LAST slot, so removing it
+    // renumbers none of CC0=0..4; CC0=5 now falls through to the modelled voice
+    // like any other unassigned bank.
 ];
 
 /// GM1 and its alternates: peak-normalized PCM over the modelled felt damper.
@@ -30779,12 +30777,11 @@ mod damper_tests {
         assert_eq!(
             got,
             vec![
-                "B1 upright",      // CC0=0 — the default
-                "VSCO upright",    // CC0=1 — the default until 2026.07.26
-                "Salamander",      // CC0=2
-                "Steinway B",      // CC0=3
-                "Headroom",        // CC0=4
-                "dark-Salamander", // CC0=5 — the A/B partner of CC0=2
+                "B1 upright",   // CC0=0 — the default
+                "VSCO upright", // CC0=1 — the default until 2026.07.26
+                "Salamander",   // CC0=2
+                "Steinway B",   // CC0=3
+                "Headroom",     // CC0=4 — the last assigned slot since 2026.08.16
             ]
         );
     }

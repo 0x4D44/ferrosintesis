@@ -42,7 +42,6 @@ BANKS=(
   "2:salamander"
   "3:vcsl-steinwayb"
   "4:headroom"
-  "5:dark-salamander"
 )
 
 echo "binary: $BIN"

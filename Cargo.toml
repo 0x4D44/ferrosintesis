@@ -17,7 +17,6 @@ members = [
     "crates/ferrosintesis-samples-vcsl-kawai",
     "crates/ferrosintesis-samples-headroom",
     "crates/ferrosintesis-samples-musescore-grand",
-    "crates/ferrosintesis-samples-dark-salamander",
     "crates/ferrosintesis-samples-ydp-grand",
     "crates/ferrosintesis-samples-honkytonk",
     "crates/ferrosintesis-samples-b1-upright",

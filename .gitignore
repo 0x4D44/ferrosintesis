@@ -72,7 +72,6 @@ _cal/
 !crates/ferrosintesis-samples-vcsl-kawai/samples/*.wav
 !crates/ferrosintesis-samples-headroom/samples/*.wav
 !crates/ferrosintesis-samples-musescore-grand/samples/*.wav
-!crates/ferrosintesis-samples-dark-salamander/samples/*.wav
 !crates/ferrosintesis-samples-ydp-grand/samples/*.wav
 !crates/ferrosintesis-samples-honkytonk/samples/*.wav
 !crates/ferrosintesis-samples-b1-upright/samples/*.wav

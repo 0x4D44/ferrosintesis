@@ -52,8 +52,37 @@ impl Zone {
     }
 }
 
-/// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).
+/// Decode one embedded sample-bank asset to normalized mono f32.
+///
+/// Accepts both container shapes on purpose. The banks are stored as FLAC —
+/// lossless, and roughly half the bytes of the RIFF originals, which matters
+/// because every one of them is `include_bytes!`d into the final binary. The
+/// RIFF path stays because the `b1t` natural-tail assets are still RIFF (they
+/// carry a custom chunk a FLAC container has nowhere to put).
+///
+/// Dispatch is on the magic bytes rather than a file extension: the extension
+/// is not present in the embedded bytes, and keying off the accessor name would
+/// be a second hand-maintained list of exactly the kind `CLAUDE.md` warns about.
+///
+/// FLAC being lossless is what makes this switch inaudible BY CONSTRUCTION
+/// rather than by listening: the decoded `i16` values are bit-identical to the
+/// PCM the encoder was handed, so the same `/ 32768.0` below yields the same
+/// f32 and the rendered catalogue is byte-for-byte unchanged.
 fn parse_wav(bytes: &[u8]) -> Vec<f32> {
+    if bytes.starts_with(b"fLaC") {
+        // An embedded asset that fails to decode is an asset-pipeline bug, not
+        // a runtime condition — the same contract the RIFF assertions below
+        // have always had. The decoder itself is fully fallible and
+        // bounds-checked; only this call site turns that into a panic.
+        let pcm = crate::flac::decode_mono16(bytes)
+            .unwrap_or_else(|error| panic!("embedded sample bank is not decodable: {error}"));
+        return pcm.into_iter().map(|s| f32::from(s) / 32768.0).collect();
+    }
+    parse_riff_wav(bytes)
+}
+
+/// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).
+fn parse_riff_wav(bytes: &[u8]) -> Vec<f32> {
     assert!(&bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
     let mut pos = 12;
     let mut data = Vec::new();
@@ -10872,4 +10901,3 @@ mod tests {
         );
     }
 }
-

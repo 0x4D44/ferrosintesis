@@ -93,6 +93,11 @@ pub(crate) mod altbank;
 pub(crate) mod drums;
 pub(crate) mod dsp;
 pub(crate) mod engine;
+// The embedded sample banks are stored as FLAC. Decoding them needs a decoder,
+// and a registry one would forfeit the zero-`source =` offline build CLAUDE.md
+// pins — so this crate carries its own, deliberately scoped to the 16-bit mono
+// 44.1 kHz subset the banks actually use.
+pub(crate) mod flac;
 // These oracles inspect sibling packages and repository policy. `.cargo/config.toml`
 // enables them in a checkout; the published archive omits both the inputs and the cfg.
 #[cfg(all(test, ferrosintesis_repository_tests))]

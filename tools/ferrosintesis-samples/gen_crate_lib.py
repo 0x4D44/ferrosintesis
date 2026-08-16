@@ -96,6 +96,8 @@ def main():
             raise SystemExit(f"unknown arg {a[i]}")
     samples_dir = os.path.join(crate, "samples")
     names = sorted(
+        f for f in os.listdir(samples_dir) if f.endswith((".wav", ".flac"))
+    )
     if not names:
         raise SystemExit(f"no .wav/.flac files in {samples_dir}")
     aliases = read_aliases(crate, names)
@@ -162,6 +164,9 @@ def main():
     lines.append('            .expect("sample directory must exist")')
     lines.append('            .map(|e| e.expect("readable entry").path())')
     lines.append(
+        '            .filter(|p| matches!(p.extension().and_then(OsStr::to_str), '
+        'Some("wav" | "flac")))'
+    )
     lines.append('            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())')
     lines.append("            .collect();")
     lines.append("        packaged.sort();")

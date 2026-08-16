@@ -157,7 +157,7 @@ mod tests {
                         "{crate_name}/samples/{name}/ is a subdirectory; `samples/**` \
                          packages it but no oracle or tool enumerates it"
                     ));
-                } else if !name.ends_with(".wav") {
+                } else if !name.ends_with(".wav") && !name.ends_with(".flac") {
                     errors.push(format!(
                         "{crate_name}/samples/{name} is packaged but is not a `.wav`; \
                          the inventory oracle and the regen tool both skip it"
@@ -651,7 +651,7 @@ mod tests {
             .expect("a sample crate has a samples/ directory")
             .filter_map(|entry| entry.ok())
             .map(|entry| entry.file_name().to_string_lossy().to_string())
-            .filter(|name| name.ends_with(".wav"))
+            .filter(|name| name.ends_with(".wav") || name.ends_with(".flac"))
         {
             if let Some(family) = name.split('_').next() {
                 *families.entry(family.to_owned()).or_insert(0) += 1;

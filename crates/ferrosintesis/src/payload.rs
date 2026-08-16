@@ -55,7 +55,11 @@ pub(crate) fn embedded_payload() -> (usize, usize, u64) {
         });
         for entry in entries {
             let entry = entry.expect("readable directory entry");
-            if entry.path().extension().is_some_and(|e| e == "wav") {
+            if entry
+                .path()
+                .extension()
+                .is_some_and(|e| e == "wav" || e == "flac")
+            {
                 files += 1;
                 bytes += entry.metadata().expect("readable metadata").len();
             }
@@ -420,8 +424,14 @@ mod tests {
              the default feature is embedded by nobody; add it to the feature list, or \
              mark it optional-by-design here."
         );
+        // Anti-vacuity floor, NOT a size budget: it exists so a scan that has
+        // stopped matching anything fails loudly rather than passing on an
+        // empty set. Re-pinned when the banks moved from RIFF to FLAC, which
+        // took the payload from ~111 MiB to ~61 MiB without losing a single
+        // recording. Kept just under the real figure, for the same reason it
+        // sat just under the old one.
         assert!(
-            files > 1000 && bytes > 100 * 1024 * 1024,
+            files > 1000 && bytes > 55 * 1024 * 1024,
             "payload scan found only {files} files / {bytes} bytes"
         );
     }
@@ -467,7 +477,7 @@ mod tests {
             };
             for entry in entries {
                 let path = entry.expect("readable directory entry").path();
-                if path.extension().is_some_and(|e| e == "wav") {
+                if path.extension().is_some_and(|e| e == "wav" || e == "flac") {
                     let name = path
                         .file_name()
                         .and_then(|n| n.to_str())

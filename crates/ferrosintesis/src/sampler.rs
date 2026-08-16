@@ -296,7 +296,7 @@ macro_rules! init_once {
 #[cfg(feature = "embedded-samples")]
 pub fn rain_loop() -> &'static [f32] {
     static L: OnceLock<Vec<f32>> = OnceLock::new();
-    init_once!(L, parse_wav(embedded_wav("rain_loop.wav")))
+    init_once!(L, parse_wav(embedded_wav("rain_loop.flac")))
 }
 
 /// Counts how many sample banks have run their one-time decode.
@@ -394,12 +394,12 @@ fn violin_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "violin_G3_f.wav" => 196.00,
-            "violin_E4_f.wav" => 329.33,
-            "violin_C5_f.wav" => 519.94,
-            "violin_G5_f.wav" => 786.90,
-            "violin_C6_f.wav" => 1040.45,
-            "violin_E6_f.wav" => 1329.58,
+            "violin_G3_f.flac" => 196.00,
+            "violin_E4_f.flac" => 329.33,
+            "violin_C5_f.flac" => 519.94,
+            "violin_G5_f.flac" => 786.90,
+            "violin_C6_f.flac" => 1040.45,
+            "violin_E6_f.flac" => 1329.58,
         )
     })
 }
@@ -408,12 +408,12 @@ fn violin_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "violin_G3_p.wav" => 195.11,
-            "violin_E4_p.wav" => 329.51,
-            "violin_C5_p.wav" => 521.61,
-            "violin_G5_p.wav" => 787.21,
-            "violin_C6_p.wav" => 1045.77,
-            "violin_E6_p.wav" => 1320.88,
+            "violin_G3_p.flac" => 195.11,
+            "violin_E4_p.flac" => 329.51,
+            "violin_C5_p.flac" => 521.61,
+            "violin_G5_p.flac" => 787.21,
+            "violin_C6_p.flac" => 1045.77,
+            "violin_E6_p.flac" => 1320.88,
         )
     })
 }
@@ -422,11 +422,11 @@ fn flute() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "flute_C4.wav" => 523.23,
-            "flute_A4.wav" => 879.92,
-            "flute_E5.wav" => 1320.47,
-            "flute_A5.wav" => 1757.81,
-            "flute_C6.wav" => 2091.31,
+            "flute_C4.flac" => 523.23,
+            "flute_A4.flac" => 879.92,
+            "flute_E5.flac" => 1320.47,
+            "flute_A5.flac" => 1757.81,
+            "flute_C6.flac" => 2091.31,
         )
     })
 }
@@ -435,15 +435,15 @@ fn piano_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "piano_C2_pp.wav" => 65.05,
-            "piano_G2_pp.wav" => 97.77,
-            "piano_C3_pp.wav" => 130.68,
-            "piano_G3_pp.wav" => 195.31,
-            "piano_C4_pp.wav" => 261.04,
-            "piano_G4_pp.wav" => 393.15,
-            "piano_C5_pp.wav" => 523.65,
-            "piano_G5_pp.wav" => 784.41,
-            "piano_C6_pp.wav" => 1051.84,
+            "piano_C2_pp.flac" => 65.05,
+            "piano_G2_pp.flac" => 97.77,
+            "piano_C3_pp.flac" => 130.68,
+            "piano_G3_pp.flac" => 195.31,
+            "piano_C4_pp.flac" => 261.04,
+            "piano_G4_pp.flac" => 393.15,
+            "piano_C5_pp.flac" => 523.65,
+            "piano_G5_pp.flac" => 784.41,
+            "piano_C6_pp.flac" => 1051.84,
         )
     })
 }
@@ -452,15 +452,15 @@ fn piano_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "piano_C2_mf.wav" => 65.17,
-            "piano_G2_mf.wav" => 98.10,
-            "piano_C3_mf.wav" => 130.94,
-            "piano_G3_mf.wav" => 196.23,
-            "piano_C4_mf.wav" => 261.25,
-            "piano_G4_mf.wav" => 393.58,
-            "piano_C5_mf.wav" => 524.52,
-            "piano_G5_mf.wav" => 785.35,
-            "piano_C6_mf.wav" => 1050.22,
+            "piano_C2_mf.flac" => 65.17,
+            "piano_G2_mf.flac" => 98.10,
+            "piano_C3_mf.flac" => 130.94,
+            "piano_G3_mf.flac" => 196.23,
+            "piano_C4_mf.flac" => 261.25,
+            "piano_G4_mf.flac" => 393.58,
+            "piano_C5_mf.flac" => 524.52,
+            "piano_G5_mf.flac" => 785.35,
+            "piano_C6_mf.flac" => 1050.22,
         )
     })
 }
@@ -469,15 +469,15 @@ fn piano_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "piano_C2_f.wav" => 65.52,
-            "piano_G2_f.wav" => 98.33,
-            "piano_C3_f.wav" => 131.19,
-            "piano_G3_f.wav" => 195.73,
-            "piano_C4_f.wav" => 261.74,
-            "piano_G4_f.wav" => 393.96,
-            "piano_C5_f.wav" => 525.21,
-            "piano_G5_f.wav" => 786.26,
-            "piano_C6_f.wav" => 1050.00,
+            "piano_C2_f.flac" => 65.52,
+            "piano_G2_f.flac" => 98.33,
+            "piano_C3_f.flac" => 131.19,
+            "piano_G3_f.flac" => 195.73,
+            "piano_C4_f.flac" => 261.74,
+            "piano_G4_f.flac" => 393.96,
+            "piano_C5_f.flac" => 525.21,
+            "piano_G5_f.flac" => 786.26,
+            "piano_C6_f.flac" => 1050.00,
         )
     })
 }
@@ -488,15 +488,15 @@ fn piano_pp_rr2() -> &'static [Zone] {
         bank!(
             // The pinned VSCO bank has only one pp take for C2/G2. Alias those
             // zones honestly; every other cell below contains a real second take.
-            "piano_C2_pp.wav" => 65.05,
-            "piano_G2_pp.wav" => 97.77,
-            "piano_C3_pp_rr2.wav" => 130.60,
-            "piano_G3_pp_rr2.wav" => 194.91,
-            "piano_C4_pp_rr2.wav" => 261.00,
-            "piano_G4_pp_rr2.wav" => 392.77,
-            "piano_C5_pp_rr2.wav" => 523.95,
-            "piano_G5_pp_rr2.wav" => 784.04,
-            "piano_C6_pp_rr2.wav" => 1049.08,
+            "piano_C2_pp.flac" => 65.05,
+            "piano_G2_pp.flac" => 97.77,
+            "piano_C3_pp_rr2.flac" => 130.60,
+            "piano_G3_pp_rr2.flac" => 194.91,
+            "piano_C4_pp_rr2.flac" => 261.00,
+            "piano_G4_pp_rr2.flac" => 392.77,
+            "piano_C5_pp_rr2.flac" => 523.95,
+            "piano_G5_pp_rr2.flac" => 784.04,
+            "piano_C6_pp_rr2.flac" => 1049.08,
         )
     })
 }
@@ -505,15 +505,15 @@ fn piano_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "piano_C2_mf_rr2.wav" => 65.51,
-            "piano_G2_mf_rr2.wav" => 98.28,
-            "piano_C3_mf_rr2.wav" => 131.12,
-            "piano_G3_mf_rr2.wav" => 196.23,
-            "piano_C4_mf_rr2.wav" => 261.29,
-            "piano_G4_mf_rr2.wav" => 393.76,
-            "piano_C5_mf_rr2.wav" => 524.92,
-            "piano_G5_mf_rr2.wav" => 785.18,
-            "piano_C6_mf_rr2.wav" => 1049.43,
+            "piano_C2_mf_rr2.flac" => 65.51,
+            "piano_G2_mf_rr2.flac" => 98.28,
+            "piano_C3_mf_rr2.flac" => 131.12,
+            "piano_G3_mf_rr2.flac" => 196.23,
+            "piano_C4_mf_rr2.flac" => 261.29,
+            "piano_G4_mf_rr2.flac" => 393.76,
+            "piano_C5_mf_rr2.flac" => 524.92,
+            "piano_G5_mf_rr2.flac" => 785.18,
+            "piano_C6_mf_rr2.flac" => 1049.43,
         )
     })
 }
@@ -522,15 +522,15 @@ fn piano_f_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "piano_C2_f_rr2.wav" => 65.58,
-            "piano_G2_f_rr2.wav" => 98.43,
-            "piano_C3_f_rr2.wav" => 131.20,
-            "piano_G3_f_rr2.wav" => 196.39,
-            "piano_C4_f_rr2.wav" => 261.73,
-            "piano_G4_f_rr2.wav" => 393.77,
-            "piano_C5_f_rr2.wav" => 525.19,
-            "piano_G5_f_rr2.wav" => 786.16,
-            "piano_C6_f_rr2.wav" => 1050.12,
+            "piano_C2_f_rr2.flac" => 65.58,
+            "piano_G2_f_rr2.flac" => 98.43,
+            "piano_C3_f_rr2.flac" => 131.20,
+            "piano_G3_f_rr2.flac" => 196.39,
+            "piano_C4_f_rr2.flac" => 261.73,
+            "piano_G4_f_rr2.flac" => 393.77,
+            "piano_C5_f_rr2.flac" => 525.19,
+            "piano_G5_f_rr2.flac" => 786.16,
+            "piano_C6_f_rr2.flac" => 1050.12,
         )
     })
 }
@@ -539,11 +539,11 @@ fn trumpet_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "trumpet_F2_p.wav" => 174.88,
-            "trumpet_C3_p.wav" => 259.21,
-            "trumpet_G3_p.wav" => 392.78,
-            "trumpet_D4_p.wav" => 586.53,
-            "trumpet_A4_p.wav" => 877.64,
+            "trumpet_F2_p.flac" => 174.88,
+            "trumpet_C3_p.flac" => 259.21,
+            "trumpet_G3_p.flac" => 392.78,
+            "trumpet_D4_p.flac" => 586.53,
+            "trumpet_A4_p.flac" => 877.64,
         )
     })
 }
@@ -552,11 +552,11 @@ fn trumpet_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "trumpet_F2_f.wav" => 172.61,
-            "trumpet_C3_f.wav" => 261.15,
-            "trumpet_G3_f.wav" => 393.83,
-            "trumpet_D4_f.wav" => 588.04,
-            "trumpet_A4_f.wav" => 886.84,
+            "trumpet_F2_f.flac" => 172.61,
+            "trumpet_C3_f.flac" => 261.15,
+            "trumpet_G3_f.flac" => 393.83,
+            "trumpet_D4_f.flac" => 588.04,
+            "trumpet_A4_f.flac" => 886.84,
         )
     })
 }
@@ -565,11 +565,11 @@ fn mutetpt_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "mutetpt_A#2_p.wav" => 232.97,
-            "mutetpt_D3_p.wav" => 293.86,
-            "mutetpt_G3_p.wav" => 392.99,
-            "mutetpt_D4_p.wav" => 586.63,
-            "mutetpt_A4_p.wav" => 880.37,
+            "mutetpt_A#2_p.flac" => 232.97,
+            "mutetpt_D3_p.flac" => 293.86,
+            "mutetpt_G3_p.flac" => 392.99,
+            "mutetpt_D4_p.flac" => 586.63,
+            "mutetpt_A4_p.flac" => 880.37,
         )
     })
 }
@@ -578,11 +578,11 @@ fn mutetpt_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "mutetpt_A#2_f.wav" => 233.07,
-            "mutetpt_D3_f.wav" => 293.30,
-            "mutetpt_G3_f.wav" => 392.47,
-            "mutetpt_D4_f.wav" => 586.39,
-            "mutetpt_A4_f.wav" => 880.34,
+            "mutetpt_A#2_f.flac" => 233.07,
+            "mutetpt_D3_f.flac" => 293.30,
+            "mutetpt_G3_f.flac" => 392.47,
+            "mutetpt_D4_f.flac" => 586.39,
+            "mutetpt_A4_f.flac" => 880.34,
         )
     })
 }
@@ -591,12 +591,12 @@ fn trombone_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "trombone_F1_p.wav" => 87.34,
-            "trombone_A#1_p.wav" => 116.31,
-            "trombone_D2_p.wav" => 146.73,
-            "trombone_F2_p.wav" => 174.45,
-            "trombone_C3_p.wav" => 261.43,
-            "trombone_F3_p.wav" => 349.09,
+            "trombone_F1_p.flac" => 87.34,
+            "trombone_A#1_p.flac" => 116.31,
+            "trombone_D2_p.flac" => 146.73,
+            "trombone_F2_p.flac" => 174.45,
+            "trombone_C3_p.flac" => 261.43,
+            "trombone_F3_p.flac" => 349.09,
         )
     })
 }
@@ -605,12 +605,12 @@ fn trombone_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "trombone_F1_f.wav" => 87.21,
-            "trombone_A#1_f.wav" => 116.56,
-            "trombone_D2_f.wav" => 146.73,
-            "trombone_F2_f.wav" => 174.53,
-            "trombone_C3_f.wav" => 261.56,
-            "trombone_F3_f.wav" => 349.05,
+            "trombone_F1_f.flac" => 87.21,
+            "trombone_A#1_f.flac" => 116.56,
+            "trombone_D2_f.flac" => 146.73,
+            "trombone_F2_f.flac" => 174.53,
+            "trombone_C3_f.flac" => 261.56,
+            "trombone_F3_f.flac" => 349.05,
         )
     })
 }
@@ -619,12 +619,12 @@ fn tuba_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "tuba_A#0_p.wav" => 58.01,
-            "tuba_D#1_p.wav" => 78.25,
-            "tuba_A#1_p.wav" => 116.03,
-            "tuba_D2_p.wav" => 146.34,
-            "tuba_F2_p.wav" => 174.46,
-            "tuba_A#2_p.wav" => 231.99,
+            "tuba_A#0_p.flac" => 58.01,
+            "tuba_D#1_p.flac" => 78.25,
+            "tuba_A#1_p.flac" => 116.03,
+            "tuba_D2_p.flac" => 146.34,
+            "tuba_F2_p.flac" => 174.46,
+            "tuba_A#2_p.flac" => 231.99,
         )
     })
 }
@@ -633,12 +633,12 @@ fn tuba_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "tuba_A#0_f.wav" => 58.35,
-            "tuba_D#1_f.wav" => 77.78,
-            "tuba_A#1_f.wav" => 116.34,
-            "tuba_D2_f.wav" => 145.88,
-            "tuba_F2_f.wav" => 174.42,
-            "tuba_A#2_f.wav" => 233.19,
+            "tuba_A#0_f.flac" => 58.35,
+            "tuba_D#1_f.flac" => 77.78,
+            "tuba_A#1_f.flac" => 116.34,
+            "tuba_D2_f.flac" => 145.88,
+            "tuba_F2_f.flac" => 174.42,
+            "tuba_A#2_f.flac" => 233.19,
         )
     })
 }
@@ -647,12 +647,12 @@ fn horn_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "horn_A#1_p.wav" => 116.90,
-            "horn_D2_p.wav" => 148.36,
-            "horn_F2_p.wav" => 173.95,
-            "horn_A2_p.wav" => 219.46,
-            "horn_C3_p.wav" => 260.59,
-            "horn_D4_p.wav" => 604.11,
+            "horn_A#1_p.flac" => 116.90,
+            "horn_D2_p.flac" => 148.36,
+            "horn_F2_p.flac" => 173.95,
+            "horn_A2_p.flac" => 219.46,
+            "horn_C3_p.flac" => 260.59,
+            "horn_D4_p.flac" => 604.11,
         )
     })
 }
@@ -661,12 +661,12 @@ fn horn_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "horn_A#1_f.wav" => 116.81,
-            "horn_D2_f.wav" => 146.41,
-            "horn_F2_f.wav" => 173.93,
-            "horn_A2_f.wav" => 219.08,
-            "horn_C3_f.wav" => 260.84,
-            "horn_D4_f.wav" => 604.11,
+            "horn_A#1_f.flac" => 116.81,
+            "horn_D2_f.flac" => 146.41,
+            "horn_F2_f.flac" => 173.93,
+            "horn_A2_f.flac" => 219.08,
+            "horn_C3_f.flac" => 260.84,
+            "horn_D4_f.flac" => 604.11,
         )
     })
 }
@@ -675,12 +675,12 @@ fn oboe_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "oboe_D3_p.wav" => 293.50,
-            "oboe_F3_p.wav" => 347.64,
-            "oboe_A#3_p.wav" => 464.35,
-            "oboe_D4_p.wav" => 586.46,
-            "oboe_F4_p.wav" => 698.81,
-            "oboe_A#4_p.wav" => 935.72,
+            "oboe_D3_p.flac" => 293.50,
+            "oboe_F3_p.flac" => 347.64,
+            "oboe_A#3_p.flac" => 464.35,
+            "oboe_D4_p.flac" => 586.46,
+            "oboe_F4_p.flac" => 698.81,
+            "oboe_A#4_p.flac" => 935.72,
         )
     })
 }
@@ -689,12 +689,12 @@ fn oboe_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "oboe_D3_f.wav" => 294.16,
-            "oboe_F3_f.wav" => 349.95,
-            "oboe_A#3_f.wav" => 466.12,
-            "oboe_D4_f.wav" => 588.05,
-            "oboe_F4_f.wav" => 698.94,
-            "oboe_A#4_f.wav" => 930.35,
+            "oboe_D3_f.flac" => 294.16,
+            "oboe_F3_f.flac" => 349.95,
+            "oboe_A#3_f.flac" => 466.12,
+            "oboe_D4_f.flac" => 588.05,
+            "oboe_F4_f.flac" => 698.94,
+            "oboe_A#4_f.flac" => 930.35,
         )
     })
 }
@@ -703,12 +703,12 @@ fn bassoon_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "bassoon_A#0_p.wav" => 58.31,
-            "bassoon_F1_p.wav" => 87.26,
-            "bassoon_C2_p.wav" => 130.70,
-            "bassoon_G2_p.wav" => 195.98,
-            "bassoon_D#3_p.wav" => 312.70,
-            "bassoon_C4_p.wav" => 523.95,
+            "bassoon_A#0_p.flac" => 58.31,
+            "bassoon_F1_p.flac" => 87.26,
+            "bassoon_C2_p.flac" => 130.70,
+            "bassoon_G2_p.flac" => 195.98,
+            "bassoon_D#3_p.flac" => 312.70,
+            "bassoon_C4_p.flac" => 523.95,
         )
     })
 }
@@ -717,12 +717,12 @@ fn bassoon_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "bassoon_A#0_f.wav" => 58.25,
-            "bassoon_F1_f.wav" => 87.29,
-            "bassoon_C2_f.wav" => 130.76,
-            "bassoon_G2_f.wav" => 195.94,
-            "bassoon_D#3_f.wav" => 311.06,
-            "bassoon_C4_f.wav" => 523.15,
+            "bassoon_A#0_f.flac" => 58.25,
+            "bassoon_F1_f.flac" => 87.29,
+            "bassoon_C2_f.flac" => 130.76,
+            "bassoon_G2_f.flac" => 195.94,
+            "bassoon_D#3_f.flac" => 311.06,
+            "bassoon_C4_f.flac" => 523.15,
         )
     })
 }
@@ -731,12 +731,12 @@ fn clarinet_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "clarinet_A#2_p.wav" => 232.55,
-            "clarinet_D3_p.wav" => 293.36,
-            "clarinet_F3_p.wav" => 349.08,
-            "clarinet_A#3_p.wav" => 466.23,
-            "clarinet_D4_p.wav" => 586.91,
-            "clarinet_F4_p.wav" => 698.75,
+            "clarinet_A#2_p.flac" => 232.55,
+            "clarinet_D3_p.flac" => 293.36,
+            "clarinet_F3_p.flac" => 349.08,
+            "clarinet_A#3_p.flac" => 466.23,
+            "clarinet_D4_p.flac" => 586.91,
+            "clarinet_F4_p.flac" => 698.75,
         )
     })
 }
@@ -745,12 +745,12 @@ fn clarinet_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "clarinet_A#2_f.wav" => 233.09,
-            "clarinet_D3_f.wav" => 292.97,
-            "clarinet_F3_f.wav" => 348.60,
-            "clarinet_A#3_f.wav" => 466.38,
-            "clarinet_D4_f.wav" => 587.88,
-            "clarinet_F4_f.wav" => 700.07,
+            "clarinet_A#2_f.flac" => 233.09,
+            "clarinet_D3_f.flac" => 292.97,
+            "clarinet_F3_f.flac" => 348.60,
+            "clarinet_A#3_f.flac" => 466.38,
+            "clarinet_D4_f.flac" => 587.88,
+            "clarinet_F4_f.flac" => 700.07,
         )
     })
 }
@@ -763,14 +763,14 @@ fn steel() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "steel_E2.wav" => 81.98,
-            "steel_A#2.wav" => 116.33,
-            "steel_E3.wav" => 164.56,
-            "steel_A#3.wav" => 231.86,
-            "steel_E4.wav" => 327.92,
-            "steel_B4.wav" => 490.67,
-            "steel_F5.wav" => 693.98,
-            "steel_B5.wav" => 978.93,
+            "steel_E2.flac" => 81.98,
+            "steel_A#2.flac" => 116.33,
+            "steel_E3.flac" => 164.56,
+            "steel_A#3.flac" => 231.86,
+            "steel_E4.flac" => 327.92,
+            "steel_B4.flac" => 490.67,
+            "steel_F5.flac" => 693.98,
+            "steel_B5.flac" => 978.93,
         )
     })
 }
@@ -794,14 +794,14 @@ fn eastpick() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "eastpick_E2.wav" => 83.56,
-            "eastpick_B2.wav" => 124.31,
-            "eastpick_E3.wav" => 166.21,
-            "eastpick_A#3.wav" => 233.27,
-            "eastpick_E4.wav" => 331.56,
-            "eastpick_A#4.wav" => 469.73,
-            "eastpick_F5.wav" => 702.02,
-            "eastpick_B5.wav" => 991.03,
+            "eastpick_E2.flac" => 83.56,
+            "eastpick_B2.flac" => 124.31,
+            "eastpick_E3.flac" => 166.21,
+            "eastpick_A#3.flac" => 233.27,
+            "eastpick_E4.flac" => 331.56,
+            "eastpick_A#4.flac" => 469.73,
+            "eastpick_F5.flac" => 702.02,
+            "eastpick_B5.flac" => 991.03,
         )
     })
 }
@@ -817,14 +817,14 @@ fn eastpluck() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "eastpluck_E2.wav" => 83.33,
-            "eastpluck_A#2.wav" => 116.61,
-            "eastpluck_E3.wav" => 165.49,
-            "eastpluck_A#3.wav" => 232.21,
-            "eastpluck_E4.wav" => 330.31,
-            "eastpluck_B4.wav" => 495.27,
-            "eastpluck_F5.wav" => 699.35,
-            "eastpluck_B5.wav" => 987.59,
+            "eastpluck_E2.flac" => 83.33,
+            "eastpluck_A#2.flac" => 116.61,
+            "eastpluck_E3.flac" => 165.49,
+            "eastpluck_A#3.flac" => 232.21,
+            "eastpluck_E4.flac" => 330.31,
+            "eastpluck_B4.flac" => 495.27,
+            "eastpluck_F5.flac" => 699.35,
+            "eastpluck_B5.flac" => 987.59,
         )
     })
 }
@@ -833,13 +833,13 @@ fn nylon() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "nylon_E2.wav" => 82.47,
-            "nylon_B2.wav" => 124.07,
-            "nylon_E3.wav" => 165.21,
-            "nylon_A#3.wav" => 234.63,
-            "nylon_E4.wav" => 326.69,
-            "nylon_A#4.wav" => 466.15,
-            "nylon_E5.wav" => 661.48,
+            "nylon_E2.flac" => 82.47,
+            "nylon_B2.flac" => 124.07,
+            "nylon_E3.flac" => 165.21,
+            "nylon_A#3.flac" => 234.63,
+            "nylon_E4.flac" => 326.69,
+            "nylon_A#4.flac" => 466.15,
+            "nylon_E5.flac" => 661.48,
         )
     })
 }
@@ -852,18 +852,18 @@ fn strsec_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "celens_C1_p.wav" => 65.48,
-            "celens_G1_p.wav" => 97.46,
-            "celens_D2_p.wav" => 146.97,
-            "celens_A2_p.wav" => 219.85,
-            "celens_E3_p.wav" => 329.02,
-            "celens_B3_p.wav" => 493.92,
-            "vlnens_G2_p.wav" => 196.06,
-            "vlnens_D3_p.wav" => 293.66,
-            "vlnens_A3_p.wav" => 440.80,
-            "vlnens_E4_p.wav" => 660.20,
-            "vlnens_B4_p.wav" => 989.79,
-            "vlnens_D5_p.wav" => 1175.21,
+            "celens_C1_p.flac" => 65.48,
+            "celens_G1_p.flac" => 97.46,
+            "celens_D2_p.flac" => 146.97,
+            "celens_A2_p.flac" => 219.85,
+            "celens_E3_p.flac" => 329.02,
+            "celens_B3_p.flac" => 493.92,
+            "vlnens_G2_p.flac" => 196.06,
+            "vlnens_D3_p.flac" => 293.66,
+            "vlnens_A3_p.flac" => 440.80,
+            "vlnens_E4_p.flac" => 660.20,
+            "vlnens_B4_p.flac" => 989.79,
+            "vlnens_D5_p.flac" => 1175.21,
         )
     })
 }
@@ -872,18 +872,18 @@ fn strsec_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "celens_C1_f.wav" => 65.38,
-            "celens_G1_f.wav" => 97.71,
-            "celens_D2_f.wav" => 146.73,
-            "celens_A2_f.wav" => 219.17,
-            "celens_E3_f.wav" => 328.79,
-            "celens_B3_f.wav" => 493.91,
-            "vlnens_G2_f.wav" => 195.56,
-            "vlnens_D3_f.wav" => 292.71,
-            "vlnens_A3_f.wav" => 441.25,
-            "vlnens_E4_f.wav" => 657.60,
-            "vlnens_B4_f.wav" => 991.44,
-            "vlnens_D5_f.wav" => 1170.87,
+            "celens_C1_f.flac" => 65.38,
+            "celens_G1_f.flac" => 97.71,
+            "celens_D2_f.flac" => 146.73,
+            "celens_A2_f.flac" => 219.17,
+            "celens_E3_f.flac" => 328.79,
+            "celens_B3_f.flac" => 493.91,
+            "vlnens_G2_f.flac" => 195.56,
+            "vlnens_D3_f.flac" => 292.71,
+            "vlnens_A3_f.flac" => 441.25,
+            "vlnens_E4_f.flac" => 657.60,
+            "vlnens_B4_f.flac" => 991.44,
+            "vlnens_D5_f.flac" => 1170.87,
         )
     })
 }
@@ -899,14 +899,14 @@ fn contrabass_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "dbass_E1_p.wav" => 41.22,
-            "dbass_A#1_p.wav" => 57.95,
-            "dbass_E2_p.wav" => 82.31,
-            "dbass_A2_p.wav" => 108.96,
-            "dbass_C#3_p.wav" => 137.69,
-            "dbass_E3_p.wav" => 164.19,
-            "dbass_G#3_p.wav" => 207.89,
-            "dbass_B3_p.wav" => 244.89,
+            "dbass_E1_p.flac" => 41.22,
+            "dbass_A#1_p.flac" => 57.95,
+            "dbass_E2_p.flac" => 82.31,
+            "dbass_A2_p.flac" => 108.96,
+            "dbass_C#3_p.flac" => 137.69,
+            "dbass_E3_p.flac" => 164.19,
+            "dbass_G#3_p.flac" => 207.89,
+            "dbass_B3_p.flac" => 244.89,
         )
     })
 }
@@ -915,14 +915,14 @@ fn contrabass_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "dbass_E1_f.wav" => 41.15,
-            "dbass_A#1_f.wav" => 57.63,
-            "dbass_E2_f.wav" => 82.21,
-            "dbass_A2_f.wav" => 109.20,
-            "dbass_C#3_f.wav" => 138.30,
-            "dbass_E3_f.wav" => 164.89,
-            "dbass_G#3_f.wav" => 206.22,
-            "dbass_B3_f.wav" => 243.45,
+            "dbass_E1_f.flac" => 41.15,
+            "dbass_A#1_f.flac" => 57.63,
+            "dbass_E2_f.flac" => 82.21,
+            "dbass_A2_f.flac" => 109.20,
+            "dbass_C#3_f.flac" => 138.30,
+            "dbass_E3_f.flac" => 164.89,
+            "dbass_G#3_f.flac" => 206.22,
+            "dbass_B3_f.flac" => 243.45,
         )
     })
 }
@@ -941,14 +941,14 @@ fn pizzbass() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "pizzbass_E1.wav" => 41.09,
-            "pizzbass_G1.wav" => 48.60,
-            "pizzbass_A#1.wav" => 58.25,
-            "pizzbass_C2.wav" => 65.04,
-            "pizzbass_E2.wav" => 82.41,
-            "pizzbass_G#2.wav" => 102.12,
-            "pizzbass_A2.wav" => 112.51,
-            "pizzbass_G#3.wav" => 205.95,
+            "pizzbass_E1.flac" => 41.09,
+            "pizzbass_G1.flac" => 48.60,
+            "pizzbass_A#1.flac" => 58.25,
+            "pizzbass_C2.flac" => 65.04,
+            "pizzbass_E2.flac" => 82.41,
+            "pizzbass_G#2.flac" => 102.12,
+            "pizzbass_A2.flac" => 112.51,
+            "pizzbass_G#3.flac" => 205.95,
         )
     })
 }
@@ -965,12 +965,12 @@ fn finger_bass() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "fingerbass_E1.wav" => 41.22,
-            "fingerbass_F#1.wav" => 46.84,
-            "fingerbass_G#1.wav" => 52.12,
-            "fingerbass_A#1.wav" => 58.69,
-            "fingerbass_C2.wav" => 65.40,
-            "fingerbass_D2.wav" => 73.27,
+            "fingerbass_E1.flac" => 41.22,
+            "fingerbass_F#1.flac" => 46.84,
+            "fingerbass_G#1.flac" => 52.12,
+            "fingerbass_A#1.flac" => 58.69,
+            "fingerbass_C2.flac" => 65.40,
+            "fingerbass_D2.flac" => 73.27,
         )
     })
 }
@@ -987,13 +987,13 @@ fn pick_bass() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "pickbass_E1.wav" => 41.62,
-            "pickbass_F#1.wav" => 47.19,
-            "pickbass_G#1.wav" => 52.55,
-            "pickbass_A#1.wav" => 58.70,
-            "pickbass_C2.wav" => 65.83,
-            "pickbass_D2.wav" => 73.70,
-            "pickbass_E2.wav" => 82.13,
+            "pickbass_E1.flac" => 41.62,
+            "pickbass_F#1.flac" => 47.19,
+            "pickbass_G#1.flac" => 52.55,
+            "pickbass_A#1.flac" => 58.70,
+            "pickbass_C2.flac" => 65.83,
+            "pickbass_D2.flac" => 73.70,
+            "pickbass_E2.flac" => 82.13,
         )
     })
 }
@@ -1008,17 +1008,17 @@ fn rhodes() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "rhodes_E1.wav" => 41.21,
-            "rhodes_A#1.wav" => 58.24,
-            "rhodes_C#2.wav" => 69.26,
-            "rhodes_E2.wav" => 82.35,
-            "rhodes_G#2.wav" => 104.18,
-            "rhodes_C#3.wav" => 138.59,
-            "rhodes_D#5.wav" => 622.77,
-            "rhodes_E5.wav" => 659.30,
-            "rhodes_G#5.wav" => 826.52,
-            "rhodes_A#5.wav" => 931.19,
-            "rhodes_C#6.wav" => 1106.02,
+            "rhodes_E1.flac" => 41.21,
+            "rhodes_A#1.flac" => 58.24,
+            "rhodes_C#2.flac" => 69.26,
+            "rhodes_E2.flac" => 82.35,
+            "rhodes_G#2.flac" => 104.18,
+            "rhodes_C#3.flac" => 138.59,
+            "rhodes_D#5.flac" => 622.77,
+            "rhodes_E5.flac" => 659.30,
+            "rhodes_G#5.flac" => 826.52,
+            "rhodes_A#5.flac" => 931.19,
+            "rhodes_C#6.flac" => 1106.02,
         )
     })
 }
@@ -1034,15 +1034,15 @@ fn dulcimer_la() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "dulcimer_C#4.wav" => 280.62,
-            "dulcimer_D4.wav" => 295.17,
-            "dulcimer_E4.wav" => 330.95,
-            "dulcimer_F#4.wav" => 373.89,
-            "dulcimer_G4.wav" => 394.73,
-            "dulcimer_A4.wav" => 442.73,
-            "dulcimer_B4.wav" => 496.11,
-            "dulcimer_C5.wav" => 525.46,
-            "dulcimer_D5.wav" => 594.66,
+            "dulcimer_C#4.flac" => 280.62,
+            "dulcimer_D4.flac" => 295.17,
+            "dulcimer_E4.flac" => 330.95,
+            "dulcimer_F#4.flac" => 373.89,
+            "dulcimer_G4.flac" => 394.73,
+            "dulcimer_A4.flac" => 442.73,
+            "dulcimer_B4.flac" => 496.11,
+            "dulcimer_C5.flac" => 525.46,
+            "dulcimer_D5.flac" => 594.66,
         )
     })
 }
@@ -1057,17 +1057,17 @@ fn musicbox() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "musicbox_E5.wav" => 668.51,
-            "musicbox_A5.wav" => 873.59,
-            "musicbox_B5.wav" => 983.03,
-            "musicbox_C6.wav" => 1049.43,
-            "musicbox_D6.wav" => 1190.81,
-            "musicbox_E6.wav" => 1328.91,
-            "musicbox_F6.wav" => 1412.39,
-            "musicbox_G#6.wav" => 1686.54,
-            "musicbox_A6.wav" => 1784.92,
-            "musicbox_B6.wav" => 2006.59,
-            "musicbox_C7.wav" => 2127.34,
+            "musicbox_E5.flac" => 668.51,
+            "musicbox_A5.flac" => 873.59,
+            "musicbox_B5.flac" => 983.03,
+            "musicbox_C6.flac" => 1049.43,
+            "musicbox_D6.flac" => 1190.81,
+            "musicbox_E6.flac" => 1328.91,
+            "musicbox_F6.flac" => 1412.39,
+            "musicbox_G#6.flac" => 1686.54,
+            "musicbox_A6.flac" => 1784.92,
+            "musicbox_B6.flac" => 2006.59,
+            "musicbox_C7.flac" => 2127.34,
         )
     })
 }
@@ -1088,14 +1088,14 @@ fn cello_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "cellosolo_C2_p.wav" => 65.50,
-            "cellosolo_A2_p.wav" => 109.19,
-            "cellosolo_C3_p.wav" => 130.82,
-            "cellosolo_A3_p.wav" => 215.89,
-            "cellosolo_C4_p.wav" => 261.79,
-            "cellosolo_A4_p.wav" => 439.37,
-            "cellosolo_C5_p.wav" => 522.21,
-            "cellosolo_F#5_p.wav" => 739.94,
+            "cellosolo_C2_p.flac" => 65.50,
+            "cellosolo_A2_p.flac" => 109.19,
+            "cellosolo_C3_p.flac" => 130.82,
+            "cellosolo_A3_p.flac" => 215.89,
+            "cellosolo_C4_p.flac" => 261.79,
+            "cellosolo_A4_p.flac" => 439.37,
+            "cellosolo_C5_p.flac" => 522.21,
+            "cellosolo_F#5_p.flac" => 739.94,
         )
     })
 }
@@ -1104,14 +1104,14 @@ fn cello_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "cellosolo_C2_f.wav" => 65.29,
-            "cellosolo_A2_f.wav" => 109.39,
-            "cellosolo_C3_f.wav" => 130.50,
-            "cellosolo_A3_f.wav" => 220.00,
-            "cellosolo_C4_f.wav" => 261.55,
-            "cellosolo_A4_f.wav" => 439.31,
-            "cellosolo_C5_f.wav" => 521.47,
-            "cellosolo_F#5_f.wav" => 742.74,
+            "cellosolo_C2_f.flac" => 65.29,
+            "cellosolo_A2_f.flac" => 109.39,
+            "cellosolo_C3_f.flac" => 130.50,
+            "cellosolo_A3_f.flac" => 220.00,
+            "cellosolo_C4_f.flac" => 261.55,
+            "cellosolo_A4_f.flac" => 439.31,
+            "cellosolo_C5_f.flac" => 521.47,
+            "cellosolo_F#5_f.flac" => 742.74,
         )
     })
 }
@@ -1155,15 +1155,15 @@ fn grand_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "grand_C2_pp.wav" => 65.23,
-            "grand_F#2_pp.wav" => 92.00,
-            "grand_C3_pp.wav" => 130.39,
-            "grand_F#3_pp.wav" => 184.74,
-            "grand_C4_pp.wav" => 261.50,
-            "grand_F#4_pp.wav" => 369.37,
-            "grand_C5_pp.wav" => 524.09,
-            "grand_F#5_pp.wav" => 741.81,
-            "grand_C6_pp.wav" => 1051.21,
+            "grand_C2_pp.flac" => 65.23,
+            "grand_F#2_pp.flac" => 92.00,
+            "grand_C3_pp.flac" => 130.39,
+            "grand_F#3_pp.flac" => 184.74,
+            "grand_C4_pp.flac" => 261.50,
+            "grand_F#4_pp.flac" => 369.37,
+            "grand_C5_pp.flac" => 524.09,
+            "grand_F#5_pp.flac" => 741.81,
+            "grand_C6_pp.flac" => 1051.21,
         )
     })
 }
@@ -1172,15 +1172,15 @@ fn grand_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "grand_C2_pp_rr2.wav" => 65.34,
-            "grand_F#2_pp_rr2.wav" => 92.14,
-            "grand_C3_pp_rr2.wav" => 130.39,
-            "grand_F#3_pp_rr2.wav" => 184.80,
-            "grand_C4_pp_rr2.wav" => 261.52,
-            "grand_F#4_pp_rr2.wav" => 369.43,
-            "grand_C5_pp_rr2.wav" => 524.17,
-            "grand_F#5_pp_rr2.wav" => 741.84,
-            "grand_C6_pp_rr2.wav" => 1051.95,
+            "grand_C2_pp_rr2.flac" => 65.34,
+            "grand_F#2_pp_rr2.flac" => 92.14,
+            "grand_C3_pp_rr2.flac" => 130.39,
+            "grand_F#3_pp_rr2.flac" => 184.80,
+            "grand_C4_pp_rr2.flac" => 261.52,
+            "grand_F#4_pp_rr2.flac" => 369.43,
+            "grand_C5_pp_rr2.flac" => 524.17,
+            "grand_F#5_pp_rr2.flac" => 741.84,
+            "grand_C6_pp_rr2.flac" => 1051.95,
         )
     })
 }
@@ -1189,15 +1189,15 @@ fn grand_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "grand_C2_mf.wav" => 65.62,
-            "grand_F#2_mf.wav" => 92.38,
-            "grand_C3_mf.wav" => 130.45,
-            "grand_F#3_mf.wav" => 185.07,
-            "grand_C4_mf.wav" => 262.03,
-            "grand_F#4_mf.wav" => 370.25,
-            "grand_C5_mf.wav" => 524.71,
-            "grand_F#5_mf.wav" => 741.85,
-            "grand_C6_mf.wav" => 1053.01,
+            "grand_C2_mf.flac" => 65.62,
+            "grand_F#2_mf.flac" => 92.38,
+            "grand_C3_mf.flac" => 130.45,
+            "grand_F#3_mf.flac" => 185.07,
+            "grand_C4_mf.flac" => 262.03,
+            "grand_F#4_mf.flac" => 370.25,
+            "grand_C5_mf.flac" => 524.71,
+            "grand_F#5_mf.flac" => 741.85,
+            "grand_C6_mf.flac" => 1053.01,
         )
     })
 }
@@ -1206,15 +1206,15 @@ fn grand_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "grand_C2_mf_rr2.wav" => 65.65,
-            "grand_F#2_mf_rr2.wav" => 92.49,
-            "grand_C3_mf_rr2.wav" => 130.47,
-            "grand_F#3_mf_rr2.wav" => 185.08,
-            "grand_C4_mf_rr2.wav" => 262.08,
-            "grand_F#4_mf_rr2.wav" => 370.29,
-            "grand_C5_mf_rr2.wav" => 524.79,
-            "grand_F#5_mf_rr2.wav" => 741.87,
-            "grand_C6_mf_rr2.wav" => 1053.05,
+            "grand_C2_mf_rr2.flac" => 65.65,
+            "grand_F#2_mf_rr2.flac" => 92.49,
+            "grand_C3_mf_rr2.flac" => 130.47,
+            "grand_F#3_mf_rr2.flac" => 185.08,
+            "grand_C4_mf_rr2.flac" => 262.08,
+            "grand_F#4_mf_rr2.flac" => 370.29,
+            "grand_C5_mf_rr2.flac" => 524.79,
+            "grand_F#5_mf_rr2.flac" => 741.87,
+            "grand_C6_mf_rr2.flac" => 1053.05,
         )
     })
 }
@@ -1223,15 +1223,15 @@ fn grand_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "grand_C2_f.wav" => 65.72,
-            "grand_F#2_f.wav" => 92.85,
-            "grand_C3_f.wav" => 130.77,
-            "grand_F#3_f.wav" => 185.32,
-            "grand_C4_f.wav" => 262.90,
-            "grand_F#4_f.wav" => 370.52,
-            "grand_C5_f.wav" => 525.38,
-            "grand_F#5_f.wav" => 741.92,
-            "grand_C6_f.wav" => 1054.71,
+            "grand_C2_f.flac" => 65.72,
+            "grand_F#2_f.flac" => 92.85,
+            "grand_C3_f.flac" => 130.77,
+            "grand_F#3_f.flac" => 185.32,
+            "grand_C4_f.flac" => 262.90,
+            "grand_F#4_f.flac" => 370.52,
+            "grand_C5_f.flac" => 525.38,
+            "grand_F#5_f.flac" => 741.92,
+            "grand_C6_f.flac" => 1054.71,
         )
     })
 }
@@ -1240,15 +1240,15 @@ fn grand_f_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "grand_C2_f_rr2.wav" => 65.68,
-            "grand_F#2_f_rr2.wav" => 92.97,
-            "grand_C3_f_rr2.wav" => 130.85,
-            "grand_F#3_f_rr2.wav" => 185.42,
-            "grand_C4_f_rr2.wav" => 262.81,
-            "grand_F#4_f_rr2.wav" => 370.56,
-            "grand_C5_f_rr2.wav" => 525.99,
-            "grand_F#5_f_rr2.wav" => 742.05,
-            "grand_C6_f_rr2.wav" => 1055.09,
+            "grand_C2_f_rr2.flac" => 65.68,
+            "grand_F#2_f_rr2.flac" => 92.97,
+            "grand_C3_f_rr2.flac" => 130.85,
+            "grand_F#3_f_rr2.flac" => 185.42,
+            "grand_C4_f_rr2.flac" => 262.81,
+            "grand_F#4_f_rr2.flac" => 370.56,
+            "grand_C5_f_rr2.flac" => 525.99,
+            "grand_F#5_f_rr2.flac" => 742.05,
+            "grand_C6_f_rr2.flac" => 1055.09,
         )
     })
 }
@@ -1278,15 +1278,15 @@ fn steinwayb_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "steinwayb_C2_pp.wav" => 65.88,
-            "steinwayb_F#2_pp.wav" => 92.54,
-            "steinwayb_C3_pp.wav" => 130.91,
-            "steinwayb_F#3_pp.wav" => 185.51,
-            "steinwayb_C4_pp.wav" => 262.25,
-            "steinwayb_F#4_pp.wav" => 371.37,
-            "steinwayb_C5_pp.wav" => 525.53,
-            "steinwayb_F#5_pp.wav" => 739.00,
-            "steinwayb_C6_pp.wav" => 1049.52,
+            "steinwayb_C2_pp.flac" => 65.88,
+            "steinwayb_F#2_pp.flac" => 92.54,
+            "steinwayb_C3_pp.flac" => 130.91,
+            "steinwayb_F#3_pp.flac" => 185.51,
+            "steinwayb_C4_pp.flac" => 262.25,
+            "steinwayb_F#4_pp.flac" => 371.37,
+            "steinwayb_C5_pp.flac" => 525.53,
+            "steinwayb_F#5_pp.flac" => 739.00,
+            "steinwayb_C6_pp.flac" => 1049.52,
         )
     })
 }
@@ -1295,15 +1295,15 @@ fn steinwayb_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "steinwayb_C2_pp_rr2.wav" => 65.79,
-            "steinwayb_F#2_pp_rr2.wav" => 92.40,
-            "steinwayb_C3_pp_rr2.wav" => 131.27,
-            "steinwayb_F#3_pp_rr2.wav" => 185.91,
-            "steinwayb_C4_pp_rr2.wav" => 262.92,
-            "steinwayb_F#4_pp_rr2.wav" => 372.55,
-            "steinwayb_C5_pp_rr2.wav" => 526.49,
-            "steinwayb_F#5_pp_rr2.wav" => 740.67,
-            "steinwayb_C6_pp_rr2.wav" => 1049.34,
+            "steinwayb_C2_pp_rr2.flac" => 65.79,
+            "steinwayb_F#2_pp_rr2.flac" => 92.40,
+            "steinwayb_C3_pp_rr2.flac" => 131.27,
+            "steinwayb_F#3_pp_rr2.flac" => 185.91,
+            "steinwayb_C4_pp_rr2.flac" => 262.92,
+            "steinwayb_F#4_pp_rr2.flac" => 372.55,
+            "steinwayb_C5_pp_rr2.flac" => 526.49,
+            "steinwayb_F#5_pp_rr2.flac" => 740.67,
+            "steinwayb_C6_pp_rr2.flac" => 1049.34,
         )
     })
 }
@@ -1316,15 +1316,15 @@ fn steinwayb_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "steinwayb_C2_mf_rr2.wav" => 65.67,
-            "steinwayb_F#2_mf_rr2.wav" => 92.39,
-            "steinwayb_C3_mf_rr2.wav" => 131.39,
-            "steinwayb_F#3_mf_rr2.wav" => 185.95,
-            "steinwayb_C4_mf_rr2.wav" => 262.84,
-            "steinwayb_F#4_mf_rr2.wav" => 372.49,
-            "steinwayb_C5_mf_rr2.wav" => 526.67,
-            "steinwayb_F#5_mf_rr2.wav" => 743.63,
-            "steinwayb_C6_mf_rr2.wav" => 1049.46,
+            "steinwayb_C2_mf_rr2.flac" => 65.67,
+            "steinwayb_F#2_mf_rr2.flac" => 92.39,
+            "steinwayb_C3_mf_rr2.flac" => 131.39,
+            "steinwayb_F#3_mf_rr2.flac" => 185.95,
+            "steinwayb_C4_mf_rr2.flac" => 262.84,
+            "steinwayb_F#4_mf_rr2.flac" => 372.49,
+            "steinwayb_C5_mf_rr2.flac" => 526.67,
+            "steinwayb_F#5_mf_rr2.flac" => 743.63,
+            "steinwayb_C6_mf_rr2.flac" => 1049.46,
         )
     })
 }
@@ -1359,14 +1359,14 @@ fn kawai_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "kawai_C2_pp.wav" => 64.82,
-            "kawai_A2_pp.wav" => 109.29,
-            "kawai_C3_pp.wav" => 130.04,
-            "kawai_A#3_pp.wav" => 231.94,
-            "kawai_C4_pp.wav" => 260.88,
-            "kawai_A#4_pp.wav" => 464.44,
-            "kawai_C5_pp.wav" => 522.09,
-            "kawai_C6_pp.wav" => 1046.16,
+            "kawai_C2_pp.flac" => 64.82,
+            "kawai_A2_pp.flac" => 109.29,
+            "kawai_C3_pp.flac" => 130.04,
+            "kawai_A#3_pp.flac" => 231.94,
+            "kawai_C4_pp.flac" => 260.88,
+            "kawai_A#4_pp.flac" => 464.44,
+            "kawai_C5_pp.flac" => 522.09,
+            "kawai_C6_pp.flac" => 1046.16,
         )
     })
 }
@@ -1375,14 +1375,14 @@ fn kawai_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "kawai_C2_pp_rr2.wav" => 65.12,
-            "kawai_A2_pp_rr2.wav" => 109.50,
-            "kawai_C3_pp_rr2.wav" => 130.47,
-            "kawai_A#3_pp_rr2.wav" => 231.60,
-            "kawai_C4_pp_rr2.wav" => 261.05,
-            "kawai_A#4_pp_rr2.wav" => 464.18,
-            "kawai_C5_pp_rr2.wav" => 521.86,
-            "kawai_C6_pp_rr2.wav" => 1045.95,
+            "kawai_C2_pp_rr2.flac" => 65.12,
+            "kawai_A2_pp_rr2.flac" => 109.50,
+            "kawai_C3_pp_rr2.flac" => 130.47,
+            "kawai_A#3_pp_rr2.flac" => 231.60,
+            "kawai_C4_pp_rr2.flac" => 261.05,
+            "kawai_A#4_pp_rr2.flac" => 464.18,
+            "kawai_C5_pp_rr2.flac" => 521.86,
+            "kawai_C6_pp_rr2.flac" => 1045.95,
         )
     })
 }
@@ -1395,14 +1395,14 @@ fn kawai_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "kawai_C2_mf_rr2.wav" => 65.51,
-            "kawai_A2_mf_rr2.wav" => 109.95,
-            "kawai_C3_mf_rr2.wav" => 131.34,
-            "kawai_A#3_mf_rr2.wav" => 233.31,
-            "kawai_C4_mf_rr2.wav" => 261.90,
-            "kawai_A#4_mf_rr2.wav" => 466.39,
-            "kawai_C5_mf_rr2.wav" => 522.87,
-            "kawai_C6_mf_rr2.wav" => 1046.29,
+            "kawai_C2_mf_rr2.flac" => 65.51,
+            "kawai_A2_mf_rr2.flac" => 109.95,
+            "kawai_C3_mf_rr2.flac" => 131.34,
+            "kawai_A#3_mf_rr2.flac" => 233.31,
+            "kawai_C4_mf_rr2.flac" => 261.90,
+            "kawai_A#4_mf_rr2.flac" => 466.39,
+            "kawai_C5_mf_rr2.flac" => 522.87,
+            "kawai_C6_mf_rr2.flac" => 1046.29,
         )
     })
 }
@@ -1411,14 +1411,14 @@ fn kawai_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "kawai_C2_f.wav" => 65.64,
-            "kawai_A2_f.wav" => 110.15,
-            "kawai_C3_f.wav" => 131.01,
-            "kawai_A#3_f.wav" => 234.22,
-            "kawai_C4_f.wav" => 262.53,
-            "kawai_A#4_f.wav" => 467.69,
-            "kawai_C5_f.wav" => 524.03,
-            "kawai_C6_f.wav" => 1044.80,
+            "kawai_C2_f.flac" => 65.64,
+            "kawai_A2_f.flac" => 110.15,
+            "kawai_C3_f.flac" => 131.01,
+            "kawai_A#3_f.flac" => 234.22,
+            "kawai_C4_f.flac" => 262.53,
+            "kawai_A#4_f.flac" => 467.69,
+            "kawai_C5_f.flac" => 524.03,
+            "kawai_C6_f.flac" => 1044.80,
         )
     })
 }
@@ -1448,15 +1448,15 @@ fn headroom_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "headroom_C2_pp.wav" => 65.50,
-            "headroom_F#2_pp.wav" => 92.37,
-            "headroom_C3_pp.wav" => 131.18,
-            "headroom_F#3_pp.wav" => 185.59,
-            "headroom_C4_pp.wav" => 262.46,
-            "headroom_F#4_pp.wav" => 372.02,
-            "headroom_C5_pp.wav" => 526.16,
-            "headroom_F#5_pp.wav" => 744.53,
-            "headroom_C6_pp.wav" => 1054.19,
+            "headroom_C2_pp.flac" => 65.50,
+            "headroom_F#2_pp.flac" => 92.37,
+            "headroom_C3_pp.flac" => 131.18,
+            "headroom_F#3_pp.flac" => 185.59,
+            "headroom_C4_pp.flac" => 262.46,
+            "headroom_F#4_pp.flac" => 372.02,
+            "headroom_C5_pp.flac" => 526.16,
+            "headroom_F#5_pp.flac" => 744.53,
+            "headroom_C6_pp.flac" => 1054.19,
         )
     })
 }
@@ -1465,15 +1465,15 @@ fn headroom_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "headroom_C2_pp_rr2.wav" => 66.25,
-            "headroom_F#2_pp_rr2.wav" => 92.77,
-            "headroom_C3_pp_rr2.wav" => 131.60,
-            "headroom_F#3_pp_rr2.wav" => 185.93,
-            "headroom_C4_pp_rr2.wav" => 262.50,
-            "headroom_F#4_pp_rr2.wav" => 372.24,
-            "headroom_C5_pp_rr2.wav" => 526.29,
-            "headroom_F#5_pp_rr2.wav" => 745.36,
-            "headroom_C6_pp_rr2.wav" => 1054.02,
+            "headroom_C2_pp_rr2.flac" => 66.25,
+            "headroom_F#2_pp_rr2.flac" => 92.77,
+            "headroom_C3_pp_rr2.flac" => 131.60,
+            "headroom_F#3_pp_rr2.flac" => 185.93,
+            "headroom_C4_pp_rr2.flac" => 262.50,
+            "headroom_F#4_pp_rr2.flac" => 372.24,
+            "headroom_C5_pp_rr2.flac" => 526.29,
+            "headroom_F#5_pp_rr2.flac" => 745.36,
+            "headroom_C6_pp_rr2.flac" => 1054.02,
         )
     })
 }
@@ -1482,15 +1482,15 @@ fn headroom_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "headroom_C2_mf.wav" => 66.43,
-            "headroom_F#2_mf.wav" => 93.07,
-            "headroom_C3_mf.wav" => 132.09,
-            "headroom_F#3_mf.wav" => 186.21,
-            "headroom_C4_mf.wav" => 262.55,
-            "headroom_F#4_mf.wav" => 372.58,
-            "headroom_C5_mf.wav" => 526.52,
-            "headroom_F#5_mf.wav" => 745.43,
-            "headroom_C6_mf.wav" => 1054.45,
+            "headroom_C2_mf.flac" => 66.43,
+            "headroom_F#2_mf.flac" => 93.07,
+            "headroom_C3_mf.flac" => 132.09,
+            "headroom_F#3_mf.flac" => 186.21,
+            "headroom_C4_mf.flac" => 262.55,
+            "headroom_F#4_mf.flac" => 372.58,
+            "headroom_C5_mf.flac" => 526.52,
+            "headroom_F#5_mf.flac" => 745.43,
+            "headroom_C6_mf.flac" => 1054.45,
         )
     })
 }
@@ -1499,15 +1499,15 @@ fn headroom_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "headroom_C2_mf_rr2.wav" => 66.33,
-            "headroom_F#2_mf_rr2.wav" => 93.82,
-            "headroom_C3_mf_rr2.wav" => 132.37,
-            "headroom_F#3_mf_rr2.wav" => 186.66,
-            "headroom_C4_mf_rr2.wav" => 262.66,
-            "headroom_F#4_mf_rr2.wav" => 372.72,
-            "headroom_C5_mf_rr2.wav" => 526.85,
-            "headroom_F#5_mf_rr2.wav" => 745.73,
-            "headroom_C6_mf_rr2.wav" => 1055.27,
+            "headroom_C2_mf_rr2.flac" => 66.33,
+            "headroom_F#2_mf_rr2.flac" => 93.82,
+            "headroom_C3_mf_rr2.flac" => 132.37,
+            "headroom_F#3_mf_rr2.flac" => 186.66,
+            "headroom_C4_mf_rr2.flac" => 262.66,
+            "headroom_F#4_mf_rr2.flac" => 372.72,
+            "headroom_C5_mf_rr2.flac" => 526.85,
+            "headroom_F#5_mf_rr2.flac" => 745.73,
+            "headroom_C6_mf_rr2.flac" => 1055.27,
         )
     })
 }
@@ -1516,15 +1516,15 @@ fn headroom_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "headroom_C2_f.wav" => 66.23,
-            "headroom_F#2_f.wav" => 94.08,
-            "headroom_C3_f.wav" => 132.59,
-            "headroom_F#3_f.wav" => 186.86,
-            "headroom_C4_f.wav" => 262.79,
-            "headroom_F#4_f.wav" => 372.89,
-            "headroom_C5_f.wav" => 527.10,
-            "headroom_F#5_f.wav" => 746.62,
-            "headroom_C6_f.wav" => 1055.91,
+            "headroom_C2_f.flac" => 66.23,
+            "headroom_F#2_f.flac" => 94.08,
+            "headroom_C3_f.flac" => 132.59,
+            "headroom_F#3_f.flac" => 186.86,
+            "headroom_C4_f.flac" => 262.79,
+            "headroom_F#4_f.flac" => 372.89,
+            "headroom_C5_f.flac" => 527.10,
+            "headroom_F#5_f.flac" => 746.62,
+            "headroom_C6_f.flac" => 1055.91,
         )
     })
 }
@@ -1569,31 +1569,31 @@ fn musescoregrand_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "musescoregrand_B1.wav" => 62.20,
-            "musescoregrand_D2.wav" => 74.09,
-            "musescoregrand_E2.wav" => 83.24,
-            "musescoregrand_G2.wav" => 98.56,
-            "musescoregrand_A2.wav" => 110.65,
-            "musescoregrand_B2.wav" => 124.31,
-            "musescoregrand_C3.wav" => 131.54,
-            "musescoregrand_D3.wav" => 147.97,
-            "musescoregrand_E3.wav" => 165.70,
-            "musescoregrand_G3.wav" => 196.77,
-            "musescoregrand_A3.wav" => 221.51,
-            "musescoregrand_B3.wav" => 248.60,
-            "musescoregrand_C4.wav" => 263.02,
-            "musescoregrand_D4.wav" => 295.29,
-            "musescoregrand_E4.wav" => 331.03,
-            "musescoregrand_G4.wav" => 393.37,
-            "musescoregrand_A4.wav" => 441.71,
-            "musescoregrand_B4.wav" => 496.71,
-            "musescoregrand_C5.wav" => 524.28,
-            "musescoregrand_E5.wav" => 661.14,
-            "musescoregrand_G5.wav" => 786.25,
-            "musescoregrand_G#5.wav" => 832.82,
-            "musescoregrand_B5.wav" => 990.56,
-            "musescoregrand_C#6.wav" => 1112.86,
-            "musescoregrand_D#6.wav" => 1254.21,
+            "musescoregrand_B1.flac" => 62.20,
+            "musescoregrand_D2.flac" => 74.09,
+            "musescoregrand_E2.flac" => 83.24,
+            "musescoregrand_G2.flac" => 98.56,
+            "musescoregrand_A2.flac" => 110.65,
+            "musescoregrand_B2.flac" => 124.31,
+            "musescoregrand_C3.flac" => 131.54,
+            "musescoregrand_D3.flac" => 147.97,
+            "musescoregrand_E3.flac" => 165.70,
+            "musescoregrand_G3.flac" => 196.77,
+            "musescoregrand_A3.flac" => 221.51,
+            "musescoregrand_B3.flac" => 248.60,
+            "musescoregrand_C4.flac" => 263.02,
+            "musescoregrand_D4.flac" => 295.29,
+            "musescoregrand_E4.flac" => 331.03,
+            "musescoregrand_G4.flac" => 393.37,
+            "musescoregrand_A4.flac" => 441.71,
+            "musescoregrand_B4.flac" => 496.71,
+            "musescoregrand_C5.flac" => 524.28,
+            "musescoregrand_E5.flac" => 661.14,
+            "musescoregrand_G5.flac" => 786.25,
+            "musescoregrand_G#5.flac" => 832.82,
+            "musescoregrand_B5.flac" => 990.56,
+            "musescoregrand_C#6.flac" => 1112.86,
+            "musescoregrand_D#6.flac" => 1254.21,
         )
     })
 }
@@ -1613,15 +1613,15 @@ fn darkgrand_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "darkgrand_C2_pp.wav" => 65.22,
-            "darkgrand_F#2_pp.wav" => 91.97,
-            "darkgrand_C3_pp.wav" => 130.41,
-            "darkgrand_F#3_pp.wav" => 184.72,
-            "darkgrand_C4_pp.wav" => 261.50,
-            "darkgrand_F#4_pp.wav" => 369.35,
-            "darkgrand_C5_pp.wav" => 524.09,
-            "darkgrand_F#5_pp.wav" => 741.86,
-            "darkgrand_C6_pp.wav" => 1051.48,
+            "darkgrand_C2_pp.flac" => 65.22,
+            "darkgrand_F#2_pp.flac" => 91.97,
+            "darkgrand_C3_pp.flac" => 130.41,
+            "darkgrand_F#3_pp.flac" => 184.72,
+            "darkgrand_C4_pp.flac" => 261.50,
+            "darkgrand_F#4_pp.flac" => 369.35,
+            "darkgrand_C5_pp.flac" => 524.09,
+            "darkgrand_F#5_pp.flac" => 741.86,
+            "darkgrand_C6_pp.flac" => 1051.48,
         )
     })
 }
@@ -1630,15 +1630,15 @@ fn darkgrand_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "darkgrand_C2_pp_rr2.wav" => 65.32,
-            "darkgrand_F#2_pp_rr2.wav" => 92.13,
-            "darkgrand_C3_pp_rr2.wav" => 130.40,
-            "darkgrand_F#3_pp_rr2.wav" => 184.77,
-            "darkgrand_C4_pp_rr2.wav" => 261.53,
-            "darkgrand_F#4_pp_rr2.wav" => 369.41,
-            "darkgrand_C5_pp_rr2.wav" => 524.11,
-            "darkgrand_F#5_pp_rr2.wav" => 741.87,
-            "darkgrand_C6_pp_rr2.wav" => 1052.11,
+            "darkgrand_C2_pp_rr2.flac" => 65.32,
+            "darkgrand_F#2_pp_rr2.flac" => 92.13,
+            "darkgrand_C3_pp_rr2.flac" => 130.40,
+            "darkgrand_F#3_pp_rr2.flac" => 184.77,
+            "darkgrand_C4_pp_rr2.flac" => 261.53,
+            "darkgrand_F#4_pp_rr2.flac" => 369.41,
+            "darkgrand_C5_pp_rr2.flac" => 524.11,
+            "darkgrand_F#5_pp_rr2.flac" => 741.87,
+            "darkgrand_C6_pp_rr2.flac" => 1052.11,
         )
     })
 }
@@ -1647,15 +1647,15 @@ fn darkgrand_mf() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "darkgrand_C2_mf.wav" => 65.59,
-            "darkgrand_F#2_mf.wav" => 92.33,
-            "darkgrand_C3_mf.wav" => 130.44,
-            "darkgrand_F#3_mf.wav" => 185.00,
-            "darkgrand_C4_mf.wav" => 261.89,
-            "darkgrand_F#4_mf.wav" => 370.04,
-            "darkgrand_C5_mf.wav" => 524.45,
-            "darkgrand_F#5_mf.wav" => 741.86,
-            "darkgrand_C6_mf.wav" => 1052.95,
+            "darkgrand_C2_mf.flac" => 65.59,
+            "darkgrand_F#2_mf.flac" => 92.33,
+            "darkgrand_C3_mf.flac" => 130.44,
+            "darkgrand_F#3_mf.flac" => 185.00,
+            "darkgrand_C4_mf.flac" => 261.89,
+            "darkgrand_F#4_mf.flac" => 370.04,
+            "darkgrand_C5_mf.flac" => 524.45,
+            "darkgrand_F#5_mf.flac" => 741.86,
+            "darkgrand_C6_mf.flac" => 1052.95,
         )
     })
 }
@@ -1664,15 +1664,15 @@ fn darkgrand_mf_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "darkgrand_C2_mf_rr2.wav" => 65.61,
-            "darkgrand_F#2_mf_rr2.wav" => 92.40,
-            "darkgrand_C3_mf_rr2.wav" => 130.44,
-            "darkgrand_F#3_mf_rr2.wav" => 185.02,
-            "darkgrand_C4_mf_rr2.wav" => 261.85,
-            "darkgrand_F#4_mf_rr2.wav" => 370.07,
-            "darkgrand_C5_mf_rr2.wav" => 524.50,
-            "darkgrand_F#5_mf_rr2.wav" => 741.86,
-            "darkgrand_C6_mf_rr2.wav" => 1052.99,
+            "darkgrand_C2_mf_rr2.flac" => 65.61,
+            "darkgrand_F#2_mf_rr2.flac" => 92.40,
+            "darkgrand_C3_mf_rr2.flac" => 130.44,
+            "darkgrand_F#3_mf_rr2.flac" => 185.02,
+            "darkgrand_C4_mf_rr2.flac" => 261.85,
+            "darkgrand_F#4_mf_rr2.flac" => 370.07,
+            "darkgrand_C5_mf_rr2.flac" => 524.50,
+            "darkgrand_F#5_mf_rr2.flac" => 741.86,
+            "darkgrand_C6_mf_rr2.flac" => 1052.99,
         )
     })
 }
@@ -1681,15 +1681,15 @@ fn darkgrand_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "darkgrand_C2_f.wav" => 65.69,
-            "darkgrand_F#2_f.wav" => 92.72,
-            "darkgrand_C3_f.wav" => 130.61,
-            "darkgrand_F#3_f.wav" => 185.21,
-            "darkgrand_C4_f.wav" => 262.38,
-            "darkgrand_F#4_f.wav" => 370.24,
-            "darkgrand_C5_f.wav" => 524.86,
-            "darkgrand_F#5_f.wav" => 741.87,
-            "darkgrand_C6_f.wav" => 1054.35,
+            "darkgrand_C2_f.flac" => 65.69,
+            "darkgrand_F#2_f.flac" => 92.72,
+            "darkgrand_C3_f.flac" => 130.61,
+            "darkgrand_F#3_f.flac" => 185.21,
+            "darkgrand_C4_f.flac" => 262.38,
+            "darkgrand_F#4_f.flac" => 370.24,
+            "darkgrand_C5_f.flac" => 524.86,
+            "darkgrand_F#5_f.flac" => 741.87,
+            "darkgrand_C6_f.flac" => 1054.35,
         )
     })
 }
@@ -1698,15 +1698,15 @@ fn darkgrand_f_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "darkgrand_C2_f_rr2.wav" => 65.69,
-            "darkgrand_F#2_f_rr2.wav" => 92.82,
-            "darkgrand_C3_f_rr2.wav" => 130.67,
-            "darkgrand_F#3_f_rr2.wav" => 185.29,
-            "darkgrand_C4_f_rr2.wav" => 262.32,
-            "darkgrand_F#4_f_rr2.wav" => 370.26,
-            "darkgrand_C5_f_rr2.wav" => 525.27,
-            "darkgrand_F#5_f_rr2.wav" => 741.94,
-            "darkgrand_C6_f_rr2.wav" => 1054.56,
+            "darkgrand_C2_f_rr2.flac" => 65.69,
+            "darkgrand_F#2_f_rr2.flac" => 92.82,
+            "darkgrand_C3_f_rr2.flac" => 130.67,
+            "darkgrand_F#3_f_rr2.flac" => 185.29,
+            "darkgrand_C4_f_rr2.flac" => 262.32,
+            "darkgrand_F#4_f_rr2.flac" => 370.26,
+            "darkgrand_C5_f_rr2.flac" => 525.27,
+            "darkgrand_F#5_f_rr2.flac" => 741.94,
+            "darkgrand_C6_f_rr2.flac" => 1054.56,
         )
     })
 }
@@ -1733,15 +1733,15 @@ fn ydpgrand_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "ydpgrand_C2.wav" => 66.38,
-            "ydpgrand_F#2.wav" => 93.06,
-            "ydpgrand_C3.wav" => 131.75,
-            "ydpgrand_F#3.wav" => 186.71,
-            "ydpgrand_C4.wav" => 263.56,
-            "ydpgrand_F#4.wav" => 372.67,
-            "ydpgrand_C5.wav" => 530.39,
-            "ydpgrand_F#5.wav" => 747.92,
-            "ydpgrand_C6.wav" => 1053.83,
+            "ydpgrand_C2.flac" => 66.38,
+            "ydpgrand_F#2.flac" => 93.06,
+            "ydpgrand_C3.flac" => 131.75,
+            "ydpgrand_F#3.flac" => 186.71,
+            "ydpgrand_C4.flac" => 263.56,
+            "ydpgrand_F#4.flac" => 372.67,
+            "ydpgrand_C5.flac" => 530.39,
+            "ydpgrand_F#5.flac" => 747.92,
+            "ydpgrand_C6.flac" => 1053.83,
         )
     })
 }
@@ -1761,15 +1761,15 @@ fn honkytonk_zones() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "honkytonk_C2.wav" => 66.64,
-            "honkytonk_F2.wav" => 88.64,
-            "honkytonk_C3.wav" => 131.73,
-            "honkytonk_F#3.wav" => 186.74,
-            "honkytonk_C4.wav" => 264.42,
-            "honkytonk_F4.wav" => 350.12,
-            "honkytonk_C5.wav" => 524.27,
-            "honkytonk_F#5.wav" => 739.95,
-            "honkytonk_C6.wav" => 1041.02,
+            "honkytonk_C2.flac" => 66.64,
+            "honkytonk_F2.flac" => 88.64,
+            "honkytonk_C3.flac" => 131.73,
+            "honkytonk_F#3.flac" => 186.74,
+            "honkytonk_C4.flac" => 264.42,
+            "honkytonk_F4.flac" => 350.12,
+            "honkytonk_C5.flac" => 524.27,
+            "honkytonk_F#5.flac" => 739.95,
+            "honkytonk_C6.flac" => 1041.02,
         )
     })
 }
@@ -2034,13 +2034,13 @@ fn viola_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "viola_C3_f.wav" => 130.50,
-            "viola_G3_f.wav" => 194.96,
-            "viola_D4_f.wav" => 292.40,
-            "viola_A4_f.wav" => 441.08,
-            "viola_E5_f.wav" => 660.40,
-            "viola_B5_f.wav" => 984.52,
-            "viola_D6_f.wav" => 1172.20,
+            "viola_C3_f.flac" => 130.50,
+            "viola_G3_f.flac" => 194.96,
+            "viola_D4_f.flac" => 292.40,
+            "viola_A4_f.flac" => 441.08,
+            "viola_E5_f.flac" => 660.40,
+            "viola_B5_f.flac" => 984.52,
+            "viola_D6_f.flac" => 1172.20,
         )
     })
 }
@@ -2049,13 +2049,13 @@ fn viola_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "viola_C3_p.wav" => 130.59,
-            "viola_G3_p.wav" => 196.06,
-            "viola_D4_p.wav" => 292.94,
-            "viola_A4_p.wav" => 438.77,
-            "viola_E5_p.wav" => 659.14,
-            "viola_B5_p.wav" => 989.91,
-            "viola_D6_p.wav" => 1172.65,
+            "viola_C3_p.flac" => 130.59,
+            "viola_G3_p.flac" => 196.06,
+            "viola_D4_p.flac" => 292.94,
+            "viola_A4_p.flac" => 438.77,
+            "viola_E5_p.flac" => 659.14,
+            "viola_B5_p.flac" => 989.91,
+            "viola_D6_p.flac" => 1172.65,
         )
     })
 }
@@ -2075,16 +2075,16 @@ fn marimba() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "marimba_F1.wav" => 43.68,
-            "marimba_C2.wav" => 65.62,
-            "marimba_G2.wav" => 98.00,
-            "marimba_B2.wav" => 123.40,
-            "marimba_F3.wav" => 174.45,
-            "marimba_C4.wav" => 262.15,
-            "marimba_G4.wav" => 391.46,
-            "marimba_B4.wav" => 493.90,
-            "marimba_F5.wav" => 697.02,
-            "marimba_C6.wav" => 1047.88,
+            "marimba_F1.flac" => 43.68,
+            "marimba_C2.flac" => 65.62,
+            "marimba_G2.flac" => 98.00,
+            "marimba_B2.flac" => 123.40,
+            "marimba_F3.flac" => 174.45,
+            "marimba_C4.flac" => 262.15,
+            "marimba_G4.flac" => 391.46,
+            "marimba_B4.flac" => 493.90,
+            "marimba_F5.flac" => 697.02,
+            "marimba_C6.flac" => 1047.88,
         )
     })
 }
@@ -2098,14 +2098,14 @@ fn xylo() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "xylo_G3.wav" => 195.77,
-            "xylo_C4.wav" => 264.37,
-            "xylo_G4.wav" => 395.62,
-            "xylo_C5.wav" => 528.10,
-            "xylo_G5.wav" => 789.28,
-            "xylo_C6.wav" => 1056.14,
-            "xylo_G6.wav" => 1584.39,
-            "xylo_C7.wav" => 2116.63,
+            "xylo_G3.flac" => 195.77,
+            "xylo_C4.flac" => 264.37,
+            "xylo_G4.flac" => 395.62,
+            "xylo_C5.flac" => 528.10,
+            "xylo_G5.flac" => 789.28,
+            "xylo_C6.flac" => 1056.14,
+            "xylo_G6.flac" => 1584.39,
+            "xylo_C7.flac" => 2116.63,
         )
     })
 }
@@ -2119,10 +2119,10 @@ fn glock() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "glock_C5.wav" => 524.98,
-            "glock_G5.wav" => 773.51,
-            "glock_G6.wav" => 1582.22,
-            "glock_C7.wav" => 2121.85,
+            "glock_C5.flac" => 524.98,
+            "glock_G5.flac" => 773.51,
+            "glock_G6.flac" => 1582.22,
+            "glock_C7.flac" => 2121.85,
         )
     })
 }
@@ -2136,16 +2136,16 @@ fn vibes() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "vibes_A2.wav" => 112.07,
-            "vibes_C3.wav" => 129.70,
-            "vibes_E3.wav" => 164.64,
-            "vibes_G3.wav" => 195.90,
-            "vibes_B3.wav" => 246.78,
-            "vibes_D4.wav" => 293.56,
-            "vibes_F4.wav" => 349.08,
-            "vibes_A4.wav" => 439.95,
-            "vibes_C5.wav" => 523.13,
-            "vibes_E5.wav" => 659.19,
+            "vibes_A2.flac" => 112.07,
+            "vibes_C3.flac" => 129.70,
+            "vibes_E3.flac" => 164.64,
+            "vibes_G3.flac" => 195.90,
+            "vibes_B3.flac" => 246.78,
+            "vibes_D4.flac" => 293.56,
+            "vibes_F4.flac" => 349.08,
+            "vibes_A4.flac" => 439.95,
+            "vibes_C5.flac" => 523.13,
+            "vibes_E5.flac" => 659.19,
         )
     })
 }
@@ -2161,15 +2161,15 @@ fn tubular() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "tubular_C4.wav" => 261.63,
-            "tubular_D4.wav" => 293.66,
-            "tubular_E4.wav" => 334.83,
-            "tubular_F4.wav" => 356.35,
-            "tubular_G4.wav" => 393.95,
-            "tubular_A4.wav" => 441.19,
-            "tubular_B4.wav" => 501.37,
-            "tubular_C5.wav" => 528.56,
-            "tubular_D5.wav" => 583.52,
+            "tubular_C4.flac" => 261.63,
+            "tubular_D4.flac" => 293.66,
+            "tubular_E4.flac" => 334.83,
+            "tubular_F4.flac" => 356.35,
+            "tubular_G4.flac" => 393.95,
+            "tubular_A4.flac" => 441.19,
+            "tubular_B4.flac" => 501.37,
+            "tubular_C5.flac" => 528.56,
+            "tubular_D5.flac" => 583.52,
         )
     })
 }
@@ -2185,14 +2185,14 @@ fn celesta() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "celesta_F#3.wav" => 184.77,
-            "celesta_C4.wav" => 261.14,
-            "celesta_F#4.wav" => 370.10,
-            "celesta_C5.wav" => 523.20,
-            "celesta_F#5.wav" => 739.76,
-            "celesta_C6.wav" => 1052.66,
-            "celesta_F#6.wav" => 1481.45,
-            "celesta_C7.wav" => 2098.53,
+            "celesta_F#3.flac" => 184.77,
+            "celesta_C4.flac" => 261.14,
+            "celesta_F#4.flac" => 370.10,
+            "celesta_C5.flac" => 523.20,
+            "celesta_F#5.flac" => 739.76,
+            "celesta_C6.flac" => 1052.66,
+            "celesta_F#6.flac" => 1481.45,
+            "celesta_C7.flac" => 2098.53,
         )
     })
 }
@@ -2201,16 +2201,16 @@ fn brass_section() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "brasssection_F2.wav" => 87.28,
-            "brasssection_C3.wav" => 130.93,
-            "brasssection_F#3.wav" => 185.54,
-            "brasssection_A#3.wav" => 234.59,
-            "brasssection_C4.wav" => 262.50,
-            "brasssection_F4.wav" => 350.88,
-            "brasssection_A4.wav" => 441.64,
-            "brasssection_C5.wav" => 524.46,
-            "brasssection_F5.wav" => 700.31,
-            "brasssection_C6.wav" => 1049.46,
+            "brasssection_F2.flac" => 87.28,
+            "brasssection_C3.flac" => 130.93,
+            "brasssection_F#3.flac" => 185.54,
+            "brasssection_A#3.flac" => 234.59,
+            "brasssection_C4.flac" => 262.50,
+            "brasssection_F4.flac" => 350.88,
+            "brasssection_A4.flac" => 441.64,
+            "brasssection_C5.flac" => 524.46,
+            "brasssection_F5.flac" => 700.31,
+            "brasssection_C6.flac" => 1049.46,
         )
     })
 }
@@ -2315,15 +2315,15 @@ fn sax_sop_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "sax_sop_G#3_p.wav" => 209.75,
-            "sax_sop_C4_p.wav" => 261.55,
-            "sax_sop_E4_p.wav" => 330.82,
-            "sax_sop_G#4_p.wav" => 419.59,
-            "sax_sop_C5_p.wav" => 530.91,
-            "sax_sop_E5_p.wav" => 665.84,
-            "sax_sop_G#5_p.wav" => 843.37,
-            "sax_sop_C6_p.wav" => 1069.46,
-            "sax_sop_E6_p.wav" => 1329.38,
+            "sax_sop_G#3_p.flac" => 209.75,
+            "sax_sop_C4_p.flac" => 261.55,
+            "sax_sop_E4_p.flac" => 330.82,
+            "sax_sop_G#4_p.flac" => 419.59,
+            "sax_sop_C5_p.flac" => 530.91,
+            "sax_sop_E5_p.flac" => 665.84,
+            "sax_sop_G#5_p.flac" => 843.37,
+            "sax_sop_C6_p.flac" => 1069.46,
+            "sax_sop_E6_p.flac" => 1329.38,
         )
     })
 }
@@ -2332,15 +2332,15 @@ fn sax_sop_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "sax_sop_G#3_f.wav" => 209.85,
-            "sax_sop_C4_f.wav" => 261.43,
-            "sax_sop_E4_f.wav" => 332.00,
-            "sax_sop_G#4_f.wav" => 419.58,
-            "sax_sop_C5_f.wav" => 529.13,
-            "sax_sop_E5_f.wav" => 667.07,
-            "sax_sop_G#5_f.wav" => 842.03,
-            "sax_sop_C6_f.wav" => 1069.69,
-            "sax_sop_E6_f.wav" => 1344.32,
+            "sax_sop_G#3_f.flac" => 209.85,
+            "sax_sop_C4_f.flac" => 261.43,
+            "sax_sop_E4_f.flac" => 332.00,
+            "sax_sop_G#4_f.flac" => 419.58,
+            "sax_sop_C5_f.flac" => 529.13,
+            "sax_sop_E5_f.flac" => 667.07,
+            "sax_sop_G#5_f.flac" => 842.03,
+            "sax_sop_C6_f.flac" => 1069.69,
+            "sax_sop_E6_f.flac" => 1344.32,
         )
     })
 }
@@ -2349,15 +2349,15 @@ fn sax_alt_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "sax_alt_C#3_p.wav" => 139.90,
-            "sax_alt_F3_p.wav" => 173.47,
-            "sax_alt_A3_p.wav" => 219.58,
-            "sax_alt_C#4_p.wav" => 277.31,
-            "sax_alt_F4_p.wav" => 353.06,
-            "sax_alt_A4_p.wav" => 440.99,
-            "sax_alt_C#5_p.wav" => 560.01,
-            "sax_alt_F5_p.wav" => 707.98,
-            "sax_alt_A5_p.wav" => 890.68,
+            "sax_alt_C#3_p.flac" => 139.90,
+            "sax_alt_F3_p.flac" => 173.47,
+            "sax_alt_A3_p.flac" => 219.58,
+            "sax_alt_C#4_p.flac" => 277.31,
+            "sax_alt_F4_p.flac" => 353.06,
+            "sax_alt_A4_p.flac" => 440.99,
+            "sax_alt_C#5_p.flac" => 560.01,
+            "sax_alt_F5_p.flac" => 707.98,
+            "sax_alt_A5_p.flac" => 890.68,
         )
     })
 }
@@ -2366,15 +2366,15 @@ fn sax_alt_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "sax_alt_C#3_f.wav" => 140.43,
-            "sax_alt_F3_f.wav" => 174.15,
-            "sax_alt_A3_f.wav" => 220.50,
-            "sax_alt_C#4_f.wav" => 279.95,
-            "sax_alt_F4_f.wav" => 355.08,
-            "sax_alt_A4_f.wav" => 444.03,
-            "sax_alt_C#5_f.wav" => 562.81,
-            "sax_alt_F5_f.wav" => 710.03,
-            "sax_alt_A5_f.wav" => 889.20,
+            "sax_alt_C#3_f.flac" => 140.43,
+            "sax_alt_F3_f.flac" => 174.15,
+            "sax_alt_A3_f.flac" => 220.50,
+            "sax_alt_C#4_f.flac" => 279.95,
+            "sax_alt_F4_f.flac" => 355.08,
+            "sax_alt_A4_f.flac" => 444.03,
+            "sax_alt_C#5_f.flac" => 562.81,
+            "sax_alt_F5_f.flac" => 710.03,
+            "sax_alt_A5_f.flac" => 889.20,
         )
     })
 }
@@ -2383,15 +2383,15 @@ fn sax_ten_p() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "sax_ten_G#2_p.wav" => 104.63,
-            "sax_ten_C3_p.wav" => 131.41,
-            "sax_ten_E3_p.wav" => 166.22,
-            "sax_ten_G#3_p.wav" => 208.67,
-            "sax_ten_C4_p.wav" => 263.70,
-            "sax_ten_E4_p.wav" => 332.76,
-            "sax_ten_G#4_p.wav" => 419.05,
-            "sax_ten_C5_p.wav" => 528.68,
-            "sax_ten_E5_p.wav" => 673.20,
+            "sax_ten_G#2_p.flac" => 104.63,
+            "sax_ten_C3_p.flac" => 131.41,
+            "sax_ten_E3_p.flac" => 166.22,
+            "sax_ten_G#3_p.flac" => 208.67,
+            "sax_ten_C4_p.flac" => 263.70,
+            "sax_ten_E4_p.flac" => 332.76,
+            "sax_ten_G#4_p.flac" => 419.05,
+            "sax_ten_C5_p.flac" => 528.68,
+            "sax_ten_E5_p.flac" => 673.20,
         )
     })
 }
@@ -2400,15 +2400,15 @@ fn sax_ten_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "sax_ten_G#2_f.wav" => 104.54,
-            "sax_ten_C3_f.wav" => 131.32,
-            "sax_ten_E3_f.wav" => 166.28,
-            "sax_ten_G#3_f.wav" => 209.25,
-            "sax_ten_C4_f.wav" => 263.37,
-            "sax_ten_E4_f.wav" => 331.10,
-            "sax_ten_G#4_f.wav" => 417.77,
-            "sax_ten_C5_f.wav" => 527.47,
-            "sax_ten_E5_f.wav" => 674.90,
+            "sax_ten_G#2_f.flac" => 104.54,
+            "sax_ten_C3_f.flac" => 131.32,
+            "sax_ten_E3_f.flac" => 166.28,
+            "sax_ten_G#3_f.flac" => 209.25,
+            "sax_ten_C4_f.flac" => 263.37,
+            "sax_ten_E4_f.flac" => 331.10,
+            "sax_ten_G#4_f.flac" => 417.77,
+            "sax_ten_C5_f.flac" => 527.47,
+            "sax_ten_E5_f.flac" => 674.90,
         )
     })
 }
@@ -2418,15 +2418,15 @@ fn sax_bar_p() -> &'static [Zone] {
     init_once!(B, {
         // Keep the rough G#3 take packaged for provenance, but do not use it as a runtime zone.
         bank!(
-            "sax_bar_C2_p.wav" => 69.65,
-            "sax_bar_E2_p.wav" => 82.52,
-            "sax_bar_G#2_p.wav" => 103.47,
-            "sax_bar_C3_p.wav" => 130.04,
-            "sax_bar_E3_p.wav" => 163.27,
-            "sax_bar_C4_p.wav" => 263.75,
-            "sax_bar_E4_p.wav" => 335.01,
-            "sax_bar_G#4_p.wav" => 421.23,
-            "sax_bar_A4_p.wav" => 450.50,
+            "sax_bar_C2_p.flac" => 69.65,
+            "sax_bar_E2_p.flac" => 82.52,
+            "sax_bar_G#2_p.flac" => 103.47,
+            "sax_bar_C3_p.flac" => 130.04,
+            "sax_bar_E3_p.flac" => 163.27,
+            "sax_bar_C4_p.flac" => 263.75,
+            "sax_bar_E4_p.flac" => 335.01,
+            "sax_bar_G#4_p.flac" => 421.23,
+            "sax_bar_A4_p.flac" => 450.50,
         )
     })
 }
@@ -2435,15 +2435,15 @@ fn sax_bar_f() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "sax_bar_C2_f.wav" => 65.83,
-            "sax_bar_E2_f.wav" => 82.38,
-            "sax_bar_G#2_f.wav" => 103.46,
-            "sax_bar_C3_f.wav" => 130.22,
-            "sax_bar_E3_f.wav" => 162.90,
-            "sax_bar_C4_f.wav" => 261.13,
-            "sax_bar_E4_f.wav" => 334.08,
-            "sax_bar_G#4_f.wav" => 420.54,
-            "sax_bar_A4_f.wav" => 448.84,
+            "sax_bar_C2_f.flac" => 65.83,
+            "sax_bar_E2_f.flac" => 82.38,
+            "sax_bar_G#2_f.flac" => 103.46,
+            "sax_bar_C3_f.flac" => 130.22,
+            "sax_bar_E3_f.flac" => 162.90,
+            "sax_bar_C4_f.flac" => 261.13,
+            "sax_bar_E4_f.flac" => 334.08,
+            "sax_bar_G#4_f.flac" => 420.54,
+            "sax_bar_A4_f.flac" => 448.84,
         )
     })
 }
@@ -2534,16 +2534,16 @@ fn harpsichord() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "harpsi_C2.wav" => 65.64,
-            "harpsi_F2.wav" => 87.44,
-            "harpsi_C3.wav" => 131.38,
-            "harpsi_F3.wav" => 175.14,
-            "harpsi_C4.wav" => 262.36,
-            "harpsi_F4.wav" => 349.68,
-            "harpsi_C5.wav" => 524.79,
-            "harpsi_F5.wav" => 699.37,
-            "harpsi_C6.wav" => 1045.81,
-            "harpsi_F6.wav" => 1394.14,
+            "harpsi_C2.flac" => 65.64,
+            "harpsi_F2.flac" => 87.44,
+            "harpsi_C3.flac" => 131.38,
+            "harpsi_F3.flac" => 175.14,
+            "harpsi_C4.flac" => 262.36,
+            "harpsi_F4.flac" => 349.68,
+            "harpsi_C5.flac" => 524.79,
+            "harpsi_F5.flac" => 699.37,
+            "harpsi_C6.flac" => 1045.81,
+            "harpsi_F6.flac" => 1394.14,
         )
     })
 }
@@ -2562,17 +2562,17 @@ fn harp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "harp_G1.wav" => 48.47,
-            "harp_D2.wav" => 73.35,
-            "harp_A2.wav" => 110.11,
-            "harp_E3.wav" => 164.84,
-            "harp_B3.wav" => 245.33,
-            "harp_F4.wav" => 348.62,
-            "harp_C5.wav" => 520.04,
-            "harp_G5.wav" => 779.98,
-            "harp_D6.wav" => 1165.80,
-            "harp_A6.wav" => 1739.41,
-            "harp_F7.wav" => 2744.97,
+            "harp_G1.flac" => 48.47,
+            "harp_D2.flac" => 73.35,
+            "harp_A2.flac" => 110.11,
+            "harp_E3.flac" => 164.84,
+            "harp_B3.flac" => 245.33,
+            "harp_F4.flac" => 348.62,
+            "harp_C5.flac" => 520.04,
+            "harp_G5.flac" => 779.98,
+            "harp_D6.flac" => 1165.80,
+            "harp_A6.flac" => 1739.41,
+            "harp_F7.flac" => 2744.97,
         )
     })
 }
@@ -2591,9 +2591,9 @@ fn ocarina() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "ocarina_E4.wav" => 329.00,
-            "ocarina_G#4.wav" => 414.48,
-            "ocarina_C5.wav" => 519.23,
+            "ocarina_E4.flac" => 329.00,
+            "ocarina_G#4.flac" => 414.48,
+            "ocarina_C5.flac" => 519.23,
         )
     })
 }
@@ -2612,13 +2612,13 @@ fn recorder() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "recorder_F3.wav" => 174.67,
-            "recorder_A#3.wav" => 232.62,
-            "recorder_E4.wav" => 329.88,
-            "recorder_A#4.wav" => 467.80,
-            "recorder_E5.wav" => 659.37,
-            "recorder_A#5.wav" => 937.94,
-            "recorder_C6.wav" => 1051.96,
+            "recorder_F3.flac" => 174.67,
+            "recorder_A#3.flac" => 232.62,
+            "recorder_E4.flac" => 329.88,
+            "recorder_A#4.flac" => 467.80,
+            "recorder_E5.flac" => 659.37,
+            "recorder_A#5.flac" => 937.94,
+            "recorder_C6.flac" => 1051.96,
         )
     })
 }
@@ -2637,11 +2637,11 @@ fn timpani() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "timpani_A#1.wav" => 57.05,
-            "timpani_F2.wav" => 88.17,
-            "timpani_G#2.wav" => 105.64,
-            "timpani_D3.wav" => 142.91,
-            "timpani_F3.wav" => 173.12,
+            "timpani_A#1.flac" => 57.05,
+            "timpani_F2.flac" => 88.17,
+            "timpani_G#2.flac" => 105.64,
+            "timpani_D3.flac" => 142.91,
+            "timpani_F3.flac" => 173.12,
         )
     })
 }
@@ -2660,14 +2660,14 @@ fn sitar() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "sitar_E3.wav" => 165.05,
-            "sitar_G3.wav" => 196.17,
-            "sitar_C4.wav" => 262.53,
-            "sitar_E4.wav" => 330.02,
-            "sitar_C5.wav" => 524.23,
-            "sitar_E5.wav" => 659.16,
-            "sitar_C6.wav" => 1049.01,
-            "sitar_G6.wav" => 1587.62,
+            "sitar_E3.flac" => 165.05,
+            "sitar_G3.flac" => 196.17,
+            "sitar_C4.flac" => 262.53,
+            "sitar_E4.flac" => 330.02,
+            "sitar_C5.flac" => 524.23,
+            "sitar_E5.flac" => 659.16,
+            "sitar_C6.flac" => 1049.01,
+            "sitar_G6.flac" => 1587.62,
         )
     })
 }
@@ -2692,30 +2692,30 @@ fn banjo() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "banjo_D#3.wav" => 156.43,
-            "banjo_F3.wav" => 176.25,
-            "banjo_G3.wav" => 196.19,
-            "banjo_G#3.wav" => 209.28,
-            "banjo_A3.wav" => 221.81,
-            "banjo_A#3.wav" => 235.29,
-            "banjo_B3.wav" => 247.19,
-            "banjo_C4.wav" => 263.44,
-            "banjo_D4.wav" => 293.46,
-            "banjo_D#4.wav" => 314.67,
-            "banjo_E4.wav" => 330.58,
-            "banjo_F4.wav" => 351.26,
-            "banjo_F#4.wav" => 371.23,
-            "banjo_G4.wav" => 390.90,
-            "banjo_G#4.wav" => 414.57,
-            "banjo_A4.wav" => 440.86,
-            "banjo_A#4.wav" => 468.37,
-            "banjo_C5.wav" => 526.41,
-            "banjo_C#5.wav" => 560.81,
-            "banjo_D5.wav" => 593.49,
-            "banjo_D#5.wav" => 629.48,
-            "banjo_E5.wav" => 669.23,
-            "banjo_G5.wav" => 805.64,
-            "banjo_G#5.wav" => 850.14,
+            "banjo_D#3.flac" => 156.43,
+            "banjo_F3.flac" => 176.25,
+            "banjo_G3.flac" => 196.19,
+            "banjo_G#3.flac" => 209.28,
+            "banjo_A3.flac" => 221.81,
+            "banjo_A#3.flac" => 235.29,
+            "banjo_B3.flac" => 247.19,
+            "banjo_C4.flac" => 263.44,
+            "banjo_D4.flac" => 293.46,
+            "banjo_D#4.flac" => 314.67,
+            "banjo_E4.flac" => 330.58,
+            "banjo_F4.flac" => 351.26,
+            "banjo_F#4.flac" => 371.23,
+            "banjo_G4.flac" => 390.90,
+            "banjo_G#4.flac" => 414.57,
+            "banjo_A4.flac" => 440.86,
+            "banjo_A#4.flac" => 468.37,
+            "banjo_C5.flac" => 526.41,
+            "banjo_C#5.flac" => 560.81,
+            "banjo_D5.flac" => 593.49,
+            "banjo_D#5.flac" => 629.48,
+            "banjo_E5.flac" => 669.23,
+            "banjo_G5.flac" => 805.64,
+            "banjo_G#5.flac" => 850.14,
         )
     })
 }
@@ -2759,16 +2759,16 @@ fn mandolin_rr1() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "mandolin_G3_rr1.wav" => 195.57,
-            "mandolin_C4_rr1.wav" => 264.95,
-            "mandolin_D4_rr1.wav" => 292.93,
-            "mandolin_G4_rr1.wav" => 394.37,
-            "mandolin_A4_rr1.wav" => 440.41,
-            "mandolin_D5_rr1.wav" => 591.60,
-            "mandolin_E5_rr1.wav" => 658.52,
-            "mandolin_A5_rr1.wav" => 883.17,
-            "mandolin_D6_rr1.wav" => 1182.91,
-            "mandolin_E6_rr1.wav" => 1328.92,
+            "mandolin_G3_rr1.flac" => 195.57,
+            "mandolin_C4_rr1.flac" => 264.95,
+            "mandolin_D4_rr1.flac" => 292.93,
+            "mandolin_G4_rr1.flac" => 394.37,
+            "mandolin_A4_rr1.flac" => 440.41,
+            "mandolin_D5_rr1.flac" => 591.60,
+            "mandolin_E5_rr1.flac" => 658.52,
+            "mandolin_A5_rr1.flac" => 883.17,
+            "mandolin_D6_rr1.flac" => 1182.91,
+            "mandolin_E6_rr1.flac" => 1328.92,
         )
     })
 }
@@ -2778,16 +2778,16 @@ fn mandolin_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "mandolin_G3_rr2.wav" => 195.74,
-            "mandolin_C4_rr2.wav" => 264.82,
-            "mandolin_D4_rr2.wav" => 292.65,
-            "mandolin_G4_rr2.wav" => 395.11,
-            "mandolin_A4_rr2.wav" => 439.28,
-            "mandolin_D5_rr2.wav" => 591.17,
-            "mandolin_E5_rr2.wav" => 656.88,
-            "mandolin_A5_rr2.wav" => 883.72,
-            "mandolin_D6_rr2.wav" => 1181.88,
-            "mandolin_E6_rr2.wav" => 1328.13,
+            "mandolin_G3_rr2.flac" => 195.74,
+            "mandolin_C4_rr2.flac" => 264.82,
+            "mandolin_D4_rr2.flac" => 292.65,
+            "mandolin_G4_rr2.flac" => 395.11,
+            "mandolin_A4_rr2.flac" => 439.28,
+            "mandolin_D5_rr2.flac" => 591.17,
+            "mandolin_E5_rr2.flac" => 656.88,
+            "mandolin_A5_rr2.flac" => 883.72,
+            "mandolin_D6_rr2.flac" => 1181.88,
+            "mandolin_E6_rr2.flac" => 1328.13,
         )
     })
 }
@@ -2797,16 +2797,16 @@ fn mandolin_rr3() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "mandolin_G3_rr3.wav" => 195.84,
-            "mandolin_C4_rr3.wav" => 264.59,
-            "mandolin_D4_rr3.wav" => 293.03,
-            "mandolin_G4_rr3.wav" => 394.68,
-            "mandolin_A4_rr3.wav" => 440.40,
-            "mandolin_D5_rr3.wav" => 591.36,
-            "mandolin_E5_rr3.wav" => 657.51,
-            "mandolin_A5_rr3.wav" => 882.60,
-            "mandolin_D6_rr3.wav" => 1181.48,
-            "mandolin_E6_rr3.wav" => 1327.97,
+            "mandolin_G3_rr3.flac" => 195.84,
+            "mandolin_C4_rr3.flac" => 264.59,
+            "mandolin_D4_rr3.flac" => 293.03,
+            "mandolin_G4_rr3.flac" => 394.68,
+            "mandolin_A4_rr3.flac" => 440.40,
+            "mandolin_D5_rr3.flac" => 591.36,
+            "mandolin_E5_rr3.flac" => 657.51,
+            "mandolin_A5_rr3.flac" => 882.60,
+            "mandolin_D6_rr3.flac" => 1181.48,
+            "mandolin_E6_rr3.flac" => 1327.97,
         )
     })
 }
@@ -2816,16 +2816,16 @@ fn mandolin_rr4() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "mandolin_G3_rr4.wav" => 195.61,
-            "mandolin_C4_rr4.wav" => 264.64,
-            "mandolin_D4_rr4.wav" => 293.33,
-            "mandolin_G4_rr4.wav" => 394.98,
-            "mandolin_A4_rr4.wav" => 439.17,
-            "mandolin_D5_rr4.wav" => 590.84,
-            "mandolin_E5_rr4.wav" => 656.93,
-            "mandolin_A5_rr4.wav" => 883.22,
-            "mandolin_D6_rr4.wav" => 1181.42,
-            "mandolin_E6_rr4.wav" => 1327.72,
+            "mandolin_G3_rr4.flac" => 195.61,
+            "mandolin_C4_rr4.flac" => 264.64,
+            "mandolin_D4_rr4.flac" => 293.33,
+            "mandolin_G4_rr4.flac" => 394.98,
+            "mandolin_A4_rr4.flac" => 439.17,
+            "mandolin_D5_rr4.flac" => 590.84,
+            "mandolin_E5_rr4.flac" => 656.93,
+            "mandolin_A5_rr4.flac" => 883.22,
+            "mandolin_D6_rr4.flac" => 1181.42,
+            "mandolin_E6_rr4.flac" => 1327.72,
         )
     })
 }
@@ -2853,14 +2853,14 @@ fn panflute() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "panflute_F#3.wav" => 184.12,
-            "panflute_C4.wav" => 261.21,
-            "panflute_F#4.wav" => 368.91,
-            "panflute_C5.wav" => 523.07,
-            "panflute_F#5.wav" => 740.14,
-            "panflute_C6.wav" => 1046.07,
-            "panflute_F#6.wav" => 1478.67,
-            "panflute_C7.wav" => 2092.01,
+            "panflute_F#3.flac" => 184.12,
+            "panflute_C4.flac" => 261.21,
+            "panflute_F#4.flac" => 368.91,
+            "panflute_C5.flac" => 523.07,
+            "panflute_F#5.flac" => 740.14,
+            "panflute_C6.flac" => 1046.07,
+            "panflute_F#6.flac" => 1478.67,
+            "panflute_C7.flac" => 2092.01,
         )
     })
 }
@@ -2875,7 +2875,7 @@ pub fn panflute_bank() -> &'static [Zone] {
 /// and falls back to the modeled bottle elsewhere — thin, but a real breath onset near range.
 fn bottle() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, bank!("bottle_C6.wav" => 1056.51))
+    init_once!(B, bank!("bottle_C6.flac" => 1056.51))
 }
 
 /// GM 76 blown bottle attack bank (see [`bottle`]).
@@ -2891,7 +2891,7 @@ pub fn bottle_bank() -> &'static [Zone] {
 /// single-zone caveat as the blown bottle: the onset engages within ~1 octave of C5.
 fn shakuhachi() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, bank!("shakuhachi_C5.wav" => 521.06))
+    init_once!(B, bank!("shakuhachi_C5.flac" => 521.06))
 }
 
 /// GM 77 shakuhachi attack bank (see [`shakuhachi`]).
@@ -2921,16 +2921,16 @@ fn chanter() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "chanter_F4.wav" => 341.37,
-            "chanter_G4.wav" => 383.74,
-            "chanter_A4.wav" => 432.55,
-            "chanter_A#4.wav" => 454.57,
-            "chanter_B4.wav" => 481.39,
-            "chanter_C5.wav" => 512.01,
-            "chanter_C#5.wav" => 538.52,
-            "chanter_D5.wav" => 578.53,
-            "chanter_F#5.wav" => 716.27,
-            "chanter_G5.wav" => 771.47,
+            "chanter_F4.flac" => 341.37,
+            "chanter_G4.flac" => 383.74,
+            "chanter_A4.flac" => 432.55,
+            "chanter_A#4.flac" => 454.57,
+            "chanter_B4.flac" => 481.39,
+            "chanter_C5.flac" => 512.01,
+            "chanter_C#5.flac" => 538.52,
+            "chanter_D5.flac" => 578.53,
+            "chanter_F#5.flac" => 716.27,
+            "chanter_G5.flac" => 771.47,
         )
     })
 }
@@ -2942,11 +2942,11 @@ fn chanter_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "chanter_A4_rr2.wav" => 431.28,
-            "chanter_A#4_rr2.wav" => 454.56,
-            "chanter_B4_rr2.wav" => 482.11,
-            "chanter_C5_rr2.wav" => 512.34,
-            "chanter_D5_rr2.wav" => 578.09,
+            "chanter_A4_rr2.flac" => 431.28,
+            "chanter_A#4_rr2.flac" => 454.56,
+            "chanter_B4_rr2.flac" => 482.11,
+            "chanter_C5_rr2.flac" => 512.34,
+            "chanter_D5_rr2.flac" => 578.09,
         )
     })
 }
@@ -2954,13 +2954,13 @@ fn chanter_rr2() -> &'static [Zone] {
 /// GM 109 bass drone (single recorded G2). One zone — `nearest` always returns it.
 fn drone_g2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, bank!("drone_G2.wav" => 98.22))
+    init_once!(B, bank!("drone_G2.flac" => 98.22))
 }
 
 /// GM 109 tenor drone (single recorded G3).
 fn drone_g3() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
-    init_once!(B, bank!("drone_G3.wav" => 196.21))
+    init_once!(B, bank!("drone_G3.flac" => 196.21))
 }
 
 pub fn chanter_bank() -> &'static [Zone] {
@@ -4604,7 +4604,7 @@ fn bottle_loop_bank() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "bottleloop_G3.wav" => 205.0,
+            "bottleloop_G3.flac" => 205.0,
         )
     })
 }
@@ -5269,8 +5269,8 @@ static GONG_LAYERS: OnceLock<(Vec<f32>, Vec<f32>)> = OnceLock::new();
 fn gong_layers() -> &'static (Vec<f32>, Vec<f32>) {
     init_once!(GONG_LAYERS, {
         (
-            parse_wav(embedded_wav("gong_ageng_soft.wav")),
-            parse_wav(embedded_wav("gong_ageng_loud.wav")),
+            parse_wav(embedded_wav("gong_ageng_soft.flac")),
+            parse_wav(embedded_wav("gong_ageng_loud.flac")),
         )
     })
 }
@@ -5620,17 +5620,17 @@ fn clavinet() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "clavinet_G1.wav" => 49.00,
-            "clavinet_C2.wav" => 65.41,
-            "clavinet_G2.wav" => 98.00,
-            "clavinet_C3.wav" => 130.81,
-            "clavinet_G3.wav" => 196.00,
-            "clavinet_C4.wav" => 261.63,
-            "clavinet_G4.wav" => 392.00,
-            "clavinet_C5.wav" => 523.25,
-            "clavinet_G5.wav" => 783.99,
-            "clavinet_C6.wav" => 1046.50,
-            "clavinet_G6.wav" => 1567.98,
+            "clavinet_G1.flac" => 49.00,
+            "clavinet_C2.flac" => 65.41,
+            "clavinet_G2.flac" => 98.00,
+            "clavinet_C3.flac" => 130.81,
+            "clavinet_G3.flac" => 196.00,
+            "clavinet_C4.flac" => 261.63,
+            "clavinet_G4.flac" => 392.00,
+            "clavinet_C5.flac" => 523.25,
+            "clavinet_G5.flac" => 783.99,
+            "clavinet_C6.flac" => 1046.50,
+            "clavinet_G6.flac" => 1567.98,
         )
     })
 }
@@ -6788,7 +6788,10 @@ mod tests {
                 continue;
             };
             let name = &head[open + 1..];
-            let Some(stem) = name.strip_suffix(".wav") else {
+            let Some(stem) = name
+                .strip_suffix(".flac")
+                .or_else(|| name.strip_suffix(".wav"))
+            else {
                 continue;
             };
             let Some((family, rest)) = stem.split_once('_') else {
@@ -8112,7 +8115,7 @@ mod tests {
             std::fs::read_dir(crate_dir.join("samples"))
                 .expect("sax samples directory")
                 .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
-                .filter(|n| n.ends_with(".wav"))
+                .filter(|n| n.ends_with(".wav") || n.ends_with(".flac"))
                 .collect();
 
         let source = std::fs::read_to_string(root.join("ferrosintesis/src/sampler.rs"))
@@ -8126,7 +8129,9 @@ mod tests {
                 let start = head.rfind('"')?;
                 Some(head[start + 1..].to_owned())
             })
-            .filter(|name| name.starts_with("sax_") && name.ends_with(".wav"))
+            .filter(|name| {
+                name.starts_with("sax_") && (name.ends_with(".wav") || name.ends_with(".flac"))
+            })
             .collect();
 
         assert!(
@@ -8139,7 +8144,7 @@ mod tests {
         let provenance = std::fs::read_to_string(crate_dir.join("PROVENANCE.md"))
             .expect("sax PROVENANCE.md is readable");
         for name in &excluded {
-            let stem = name.trim_end_matches(".wav");
+            let stem = name.trim_end_matches(".flac").trim_end_matches(".wav");
             assert!(
                 provenance.contains(stem),
                 "{name} is packaged but is not a runtime zone, and PROVENANCE.md never \
@@ -8214,8 +8219,8 @@ mod tests {
         // soft layer is an ordinary healthy control; the forte layer is the
         // measured breakup this population-relative classifier must reject.
         for (name, root) in [
-            ("sax_bar_G#3_p.wav", 208.95f32),
-            ("sax_bar_G#3_f.wav", 209.52f32),
+            ("sax_bar_G#3_p.flac", 208.95f32),
+            ("sax_bar_G#3_f.flac", 209.52f32),
         ] {
             let data = parse_wav(embedded_wav(name));
             readings.push(Reading {
@@ -8247,7 +8252,7 @@ mod tests {
              roughness bar {outlier_bar:.5}; census: {census:?}"
         );
         assert_eq!(
-            outliers[0].name, "sax_bar_G#3_f.wav",
+            outliers[0].name, "sax_bar_G#3_f.flac",
             "the unique rough source must remain the rejected forte G#3 take; \
              census: {census:?}"
         );

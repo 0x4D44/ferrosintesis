@@ -20,164 +20,164 @@
 /// added without threading a count constant through the file.
 static SAMPLES: &[(&str, &[u8])] = &[
     (
-        "cellosolo_A2_f.wav",
-        include_bytes!("../samples/cellosolo_A2_f.wav"),
+        "cellosolo_A2_f.flac",
+        include_bytes!("../samples/cellosolo_A2_f.flac"),
     ),
     (
-        "cellosolo_A2_p.wav",
-        include_bytes!("../samples/cellosolo_A2_p.wav"),
+        "cellosolo_A2_p.flac",
+        include_bytes!("../samples/cellosolo_A2_p.flac"),
     ),
     (
-        "cellosolo_A3_f.wav",
-        include_bytes!("../samples/cellosolo_A3_f.wav"),
+        "cellosolo_A3_f.flac",
+        include_bytes!("../samples/cellosolo_A3_f.flac"),
     ),
     (
-        "cellosolo_A3_p.wav",
-        include_bytes!("../samples/cellosolo_A3_p.wav"),
+        "cellosolo_A3_p.flac",
+        include_bytes!("../samples/cellosolo_A3_p.flac"),
     ),
     (
-        "cellosolo_A4_f.wav",
-        include_bytes!("../samples/cellosolo_A4_f.wav"),
+        "cellosolo_A4_f.flac",
+        include_bytes!("../samples/cellosolo_A4_f.flac"),
     ),
     (
-        "cellosolo_A4_p.wav",
-        include_bytes!("../samples/cellosolo_A4_p.wav"),
+        "cellosolo_A4_p.flac",
+        include_bytes!("../samples/cellosolo_A4_p.flac"),
     ),
     (
-        "cellosolo_C2_f.wav",
-        include_bytes!("../samples/cellosolo_C2_f.wav"),
+        "cellosolo_C2_f.flac",
+        include_bytes!("../samples/cellosolo_C2_f.flac"),
     ),
     (
-        "cellosolo_C2_p.wav",
-        include_bytes!("../samples/cellosolo_C2_p.wav"),
+        "cellosolo_C2_p.flac",
+        include_bytes!("../samples/cellosolo_C2_p.flac"),
     ),
     (
-        "cellosolo_C3_f.wav",
-        include_bytes!("../samples/cellosolo_C3_f.wav"),
+        "cellosolo_C3_f.flac",
+        include_bytes!("../samples/cellosolo_C3_f.flac"),
     ),
     (
-        "cellosolo_C3_p.wav",
-        include_bytes!("../samples/cellosolo_C3_p.wav"),
+        "cellosolo_C3_p.flac",
+        include_bytes!("../samples/cellosolo_C3_p.flac"),
     ),
     (
-        "cellosolo_C4_f.wav",
-        include_bytes!("../samples/cellosolo_C4_f.wav"),
+        "cellosolo_C4_f.flac",
+        include_bytes!("../samples/cellosolo_C4_f.flac"),
     ),
     (
-        "cellosolo_C4_p.wav",
-        include_bytes!("../samples/cellosolo_C4_p.wav"),
+        "cellosolo_C4_p.flac",
+        include_bytes!("../samples/cellosolo_C4_p.flac"),
     ),
     (
-        "cellosolo_C5_f.wav",
-        include_bytes!("../samples/cellosolo_C5_f.wav"),
+        "cellosolo_C5_f.flac",
+        include_bytes!("../samples/cellosolo_C5_f.flac"),
     ),
     (
-        "cellosolo_C5_p.wav",
-        include_bytes!("../samples/cellosolo_C5_p.wav"),
+        "cellosolo_C5_p.flac",
+        include_bytes!("../samples/cellosolo_C5_p.flac"),
     ),
     (
-        "cellosolo_F#5_f.wav",
-        include_bytes!("../samples/cellosolo_F#5_f.wav"),
+        "cellosolo_F#5_f.flac",
+        include_bytes!("../samples/cellosolo_F#5_f.flac"),
     ),
     (
-        "cellosolo_F#5_p.wav",
-        include_bytes!("../samples/cellosolo_F#5_p.wav"),
+        "cellosolo_F#5_p.flac",
+        include_bytes!("../samples/cellosolo_F#5_p.flac"),
     ),
     (
-        "dbass_A#1_f.wav",
-        include_bytes!("../samples/dbass_A#1_f.wav"),
+        "dbass_A#1_f.flac",
+        include_bytes!("../samples/dbass_A#1_f.flac"),
     ),
     (
-        "dbass_A#1_p.wav",
-        include_bytes!("../samples/dbass_A#1_p.wav"),
+        "dbass_A#1_p.flac",
+        include_bytes!("../samples/dbass_A#1_p.flac"),
     ),
     (
-        "dbass_A2_f.wav",
-        include_bytes!("../samples/dbass_A2_f.wav"),
+        "dbass_A2_f.flac",
+        include_bytes!("../samples/dbass_A2_f.flac"),
     ),
     (
-        "dbass_A2_p.wav",
-        include_bytes!("../samples/dbass_A2_p.wav"),
+        "dbass_A2_p.flac",
+        include_bytes!("../samples/dbass_A2_p.flac"),
     ),
     (
-        "dbass_B3_f.wav",
-        include_bytes!("../samples/dbass_B3_f.wav"),
+        "dbass_B3_f.flac",
+        include_bytes!("../samples/dbass_B3_f.flac"),
     ),
     (
-        "dbass_B3_p.wav",
-        include_bytes!("../samples/dbass_B3_p.wav"),
+        "dbass_B3_p.flac",
+        include_bytes!("../samples/dbass_B3_p.flac"),
     ),
     (
-        "dbass_C#3_f.wav",
-        include_bytes!("../samples/dbass_C#3_f.wav"),
+        "dbass_C#3_f.flac",
+        include_bytes!("../samples/dbass_C#3_f.flac"),
     ),
     (
-        "dbass_C#3_p.wav",
-        include_bytes!("../samples/dbass_C#3_p.wav"),
+        "dbass_C#3_p.flac",
+        include_bytes!("../samples/dbass_C#3_p.flac"),
     ),
     (
-        "dbass_E1_f.wav",
-        include_bytes!("../samples/dbass_E1_f.wav"),
+        "dbass_E1_f.flac",
+        include_bytes!("../samples/dbass_E1_f.flac"),
     ),
     (
-        "dbass_E1_p.wav",
-        include_bytes!("../samples/dbass_E1_p.wav"),
+        "dbass_E1_p.flac",
+        include_bytes!("../samples/dbass_E1_p.flac"),
     ),
     (
-        "dbass_E2_f.wav",
-        include_bytes!("../samples/dbass_E2_f.wav"),
+        "dbass_E2_f.flac",
+        include_bytes!("../samples/dbass_E2_f.flac"),
     ),
     (
-        "dbass_E2_p.wav",
-        include_bytes!("../samples/dbass_E2_p.wav"),
+        "dbass_E2_p.flac",
+        include_bytes!("../samples/dbass_E2_p.flac"),
     ),
     (
-        "dbass_E3_f.wav",
-        include_bytes!("../samples/dbass_E3_f.wav"),
+        "dbass_E3_f.flac",
+        include_bytes!("../samples/dbass_E3_f.flac"),
     ),
     (
-        "dbass_E3_p.wav",
-        include_bytes!("../samples/dbass_E3_p.wav"),
+        "dbass_E3_p.flac",
+        include_bytes!("../samples/dbass_E3_p.flac"),
     ),
     (
-        "dbass_G#3_f.wav",
-        include_bytes!("../samples/dbass_G#3_f.wav"),
+        "dbass_G#3_f.flac",
+        include_bytes!("../samples/dbass_G#3_f.flac"),
     ),
     (
-        "dbass_G#3_p.wav",
-        include_bytes!("../samples/dbass_G#3_p.wav"),
+        "dbass_G#3_p.flac",
+        include_bytes!("../samples/dbass_G#3_p.flac"),
     ),
     (
-        "pizzbass_E1.wav",
-        include_bytes!("../samples/pizzbass_E1.wav"),
+        "pizzbass_E1.flac",
+        include_bytes!("../samples/pizzbass_E1.flac"),
     ),
     (
-        "pizzbass_G1.wav",
-        include_bytes!("../samples/pizzbass_G1.wav"),
+        "pizzbass_G1.flac",
+        include_bytes!("../samples/pizzbass_G1.flac"),
     ),
     (
-        "pizzbass_A#1.wav",
-        include_bytes!("../samples/pizzbass_A#1.wav"),
+        "pizzbass_A#1.flac",
+        include_bytes!("../samples/pizzbass_A#1.flac"),
     ),
     (
-        "pizzbass_C2.wav",
-        include_bytes!("../samples/pizzbass_C2.wav"),
+        "pizzbass_C2.flac",
+        include_bytes!("../samples/pizzbass_C2.flac"),
     ),
     (
-        "pizzbass_E2.wav",
-        include_bytes!("../samples/pizzbass_E2.wav"),
+        "pizzbass_E2.flac",
+        include_bytes!("../samples/pizzbass_E2.flac"),
     ),
     (
-        "pizzbass_G#2.wav",
-        include_bytes!("../samples/pizzbass_G#2.wav"),
+        "pizzbass_G#2.flac",
+        include_bytes!("../samples/pizzbass_G#2.flac"),
     ),
     (
-        "pizzbass_A2.wav",
-        include_bytes!("../samples/pizzbass_A2.wav"),
+        "pizzbass_A2.flac",
+        include_bytes!("../samples/pizzbass_A2.flac"),
     ),
     (
-        "pizzbass_G#3.wav",
-        include_bytes!("../samples/pizzbass_G#3.wav"),
+        "pizzbass_G#3.flac",
+        include_bytes!("../samples/pizzbass_G#3.flac"),
     ),
 ];
 
@@ -202,7 +202,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn inventory_matches_packaged_wavs() {
+    fn inventory_matches_packaged_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
         let mut packaged: Vec<String> = fs::read_dir(samples_dir)
             .expect("sample directory must exist")

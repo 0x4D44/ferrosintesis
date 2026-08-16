@@ -17,56 +17,56 @@
 /// threaded through the declaration — see [`FILE_COUNT`].
 static SAMPLES: &[(&str, &[u8])] = &[
     (
-        "fretnoise_rr01.wav",
-        include_bytes!("../samples/fretnoise_rr01.wav"),
+        "fretnoise_rr01.flac",
+        include_bytes!("../samples/fretnoise_rr01.flac"),
     ),
     (
-        "fretnoise_rr02.wav",
-        include_bytes!("../samples/fretnoise_rr02.wav"),
+        "fretnoise_rr02.flac",
+        include_bytes!("../samples/fretnoise_rr02.flac"),
     ),
     (
-        "fretnoise_rr03.wav",
-        include_bytes!("../samples/fretnoise_rr03.wav"),
+        "fretnoise_rr03.flac",
+        include_bytes!("../samples/fretnoise_rr03.flac"),
     ),
     (
-        "fretnoise_rr04.wav",
-        include_bytes!("../samples/fretnoise_rr04.wav"),
+        "fretnoise_rr04.flac",
+        include_bytes!("../samples/fretnoise_rr04.flac"),
     ),
     (
-        "fretnoise_rr05.wav",
-        include_bytes!("../samples/fretnoise_rr05.wav"),
+        "fretnoise_rr05.flac",
+        include_bytes!("../samples/fretnoise_rr05.flac"),
     ),
     (
-        "fretnoise_rr06.wav",
-        include_bytes!("../samples/fretnoise_rr06.wav"),
+        "fretnoise_rr06.flac",
+        include_bytes!("../samples/fretnoise_rr06.flac"),
     ),
     (
-        "fretnoise_rr07.wav",
-        include_bytes!("../samples/fretnoise_rr07.wav"),
+        "fretnoise_rr07.flac",
+        include_bytes!("../samples/fretnoise_rr07.flac"),
     ),
     (
-        "fretnoise_rr08.wav",
-        include_bytes!("../samples/fretnoise_rr08.wav"),
+        "fretnoise_rr08.flac",
+        include_bytes!("../samples/fretnoise_rr08.flac"),
     ),
     (
-        "fretnoise_rr09.wav",
-        include_bytes!("../samples/fretnoise_rr09.wav"),
+        "fretnoise_rr09.flac",
+        include_bytes!("../samples/fretnoise_rr09.flac"),
     ),
     (
-        "fretnoise_rr10.wav",
-        include_bytes!("../samples/fretnoise_rr10.wav"),
+        "fretnoise_rr10.flac",
+        include_bytes!("../samples/fretnoise_rr10.flac"),
     ),
     (
-        "fretnoise_rr11.wav",
-        include_bytes!("../samples/fretnoise_rr11.wav"),
+        "fretnoise_rr11.flac",
+        include_bytes!("../samples/fretnoise_rr11.flac"),
     ),
     (
-        "fretnoise_rr12.wav",
-        include_bytes!("../samples/fretnoise_rr12.wav"),
+        "fretnoise_rr12.flac",
+        include_bytes!("../samples/fretnoise_rr12.flac"),
     ),
 ];
 
-/// Number of WAV files embedded in this package. Derived from [`SAMPLES`] so the
+/// Number of sample files embedded in this package. Derived from [`SAMPLES`] so the
 /// whole chain (count → round-robin size → the synth's take cache) bottoms out on
 /// the table of `include_bytes!` rows, never on a hand-written number.
 pub const FILE_COUNT: usize = SAMPLES.len();
@@ -140,7 +140,7 @@ mod tests {
     /// through any permutation of the rows. `samples_are_in_canonical_round_robin_order`
     /// is the oracle that covers that gap; keep both.
     #[test]
-    fn inventory_matches_packaged_wavs() {
+    fn inventory_matches_packaged_samples() {
         let packaged = packaged_names();
 
         let mut embedded: Vec<String> =
@@ -205,15 +205,16 @@ mod tests {
     }
 
     #[test]
-    fn every_sample_is_a_nonempty_wav_with_the_expected_aggregate_size() {
+    fn every_sample_is_a_nonempty_bank_file_with_the_expected_size() {
         assert_eq!(
             SAMPLES.iter().map(|(_, bytes)| bytes.len()).sum::<usize>(),
             EXPECTED_BYTES
         );
         for (name, bytes) in SAMPLES {
-            assert!(bytes.len() >= 12, "{name} is too short to be a WAV");
-            assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
-            assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
+            assert!(bytes.len() >= 12, "{name} is too short to be a sample");
+            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
+            let flac = &bytes[..4] == b"fLaC";
+            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
             assert_eq!(get(name), Some(*bytes));
         }
         assert_eq!(get("missing.wav"), None);
@@ -221,7 +222,7 @@ mod tests {
 
     #[test]
     fn take_name_wraps_round_robin() {
-        assert_eq!(take_name(0), "fretnoise_rr01.wav");
+        assert_eq!(take_name(0), "fretnoise_rr01.flac");
         assert_eq!(take_name(ROUND_ROBINS), take_name(0));
         assert_eq!(take_name(ROUND_ROBINS + 3), take_name(3));
     }

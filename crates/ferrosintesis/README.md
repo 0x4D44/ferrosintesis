@@ -82,10 +82,18 @@ allows `Options` to evolve without requiring callers to construct its fields.
 ## Feature flags
 
 `embedded-samples` (default) compiles twenty-five first-party asset crates into
-the binary: 1156 recorded WAVs -- attack transients, sustain loops, whole-voice
-instruments and the sampled drum kit -- embedding ~111 MiB of PCM. The synth uses
+the binary: 1080 recordings -- attack transients, sustain loops, whole-voice
+instruments and the sampled drum kit -- embedding ~61 MiB. The synth uses
 an LA-synthesis structure: recorded onset material adds attack detail before
 crossfading into a modeled body or sustain.
+
+Most banks are stored as **FLAC** and decoded once at `prewarm`, off the realtime
+thread; the decoder is vendored in `src/flac.rs` because a registry one would
+forfeit this workspace's zero-dependency offline build. FLAC is lossless, so the
+decoded PCM is bit-identical to the recordings and a render is byte-for-byte what
+it was when the banks were RIFF. Some banks still use RIFF: `b1-upright` carries
+a custom `b1t` chunk a FLAC container cannot hold, while `drumkit` and `drumkit2`
+decode PCM inside the asset crate itself, where the decoder is not reachable.
 
 ## The instrument models
 

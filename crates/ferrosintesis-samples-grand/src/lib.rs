@@ -10,225 +10,225 @@
 
 #![forbid(unsafe_code)]
 
-/// Number of WAV files embedded in this package.
+/// Number of sample files embedded in this package.
 pub const FILE_COUNT: usize = 54;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
-        "grand_C2_f.wav",
-        include_bytes!("../samples/grand_C2_f.wav"),
+        "grand_C2_f.flac",
+        include_bytes!("../samples/grand_C2_f.flac"),
     ),
     (
-        "grand_C2_f_rr2.wav",
-        include_bytes!("../samples/grand_C2_f_rr2.wav"),
+        "grand_C2_f_rr2.flac",
+        include_bytes!("../samples/grand_C2_f_rr2.flac"),
     ),
     (
-        "grand_C2_mf.wav",
-        include_bytes!("../samples/grand_C2_mf.wav"),
+        "grand_C2_mf.flac",
+        include_bytes!("../samples/grand_C2_mf.flac"),
     ),
     (
-        "grand_C2_mf_rr2.wav",
-        include_bytes!("../samples/grand_C2_mf_rr2.wav"),
+        "grand_C2_mf_rr2.flac",
+        include_bytes!("../samples/grand_C2_mf_rr2.flac"),
     ),
     (
-        "grand_C2_pp.wav",
-        include_bytes!("../samples/grand_C2_pp.wav"),
+        "grand_C2_pp.flac",
+        include_bytes!("../samples/grand_C2_pp.flac"),
     ),
     (
-        "grand_C2_pp_rr2.wav",
-        include_bytes!("../samples/grand_C2_pp_rr2.wav"),
+        "grand_C2_pp_rr2.flac",
+        include_bytes!("../samples/grand_C2_pp_rr2.flac"),
     ),
     (
-        "grand_C3_f.wav",
-        include_bytes!("../samples/grand_C3_f.wav"),
+        "grand_C3_f.flac",
+        include_bytes!("../samples/grand_C3_f.flac"),
     ),
     (
-        "grand_C3_f_rr2.wav",
-        include_bytes!("../samples/grand_C3_f_rr2.wav"),
+        "grand_C3_f_rr2.flac",
+        include_bytes!("../samples/grand_C3_f_rr2.flac"),
     ),
     (
-        "grand_C3_mf.wav",
-        include_bytes!("../samples/grand_C3_mf.wav"),
+        "grand_C3_mf.flac",
+        include_bytes!("../samples/grand_C3_mf.flac"),
     ),
     (
-        "grand_C3_mf_rr2.wav",
-        include_bytes!("../samples/grand_C3_mf_rr2.wav"),
+        "grand_C3_mf_rr2.flac",
+        include_bytes!("../samples/grand_C3_mf_rr2.flac"),
     ),
     (
-        "grand_C3_pp.wav",
-        include_bytes!("../samples/grand_C3_pp.wav"),
+        "grand_C3_pp.flac",
+        include_bytes!("../samples/grand_C3_pp.flac"),
     ),
     (
-        "grand_C3_pp_rr2.wav",
-        include_bytes!("../samples/grand_C3_pp_rr2.wav"),
+        "grand_C3_pp_rr2.flac",
+        include_bytes!("../samples/grand_C3_pp_rr2.flac"),
     ),
     (
-        "grand_C4_f.wav",
-        include_bytes!("../samples/grand_C4_f.wav"),
+        "grand_C4_f.flac",
+        include_bytes!("../samples/grand_C4_f.flac"),
     ),
     (
-        "grand_C4_f_rr2.wav",
-        include_bytes!("../samples/grand_C4_f_rr2.wav"),
+        "grand_C4_f_rr2.flac",
+        include_bytes!("../samples/grand_C4_f_rr2.flac"),
     ),
     (
-        "grand_C4_mf.wav",
-        include_bytes!("../samples/grand_C4_mf.wav"),
+        "grand_C4_mf.flac",
+        include_bytes!("../samples/grand_C4_mf.flac"),
     ),
     (
-        "grand_C4_mf_rr2.wav",
-        include_bytes!("../samples/grand_C4_mf_rr2.wav"),
+        "grand_C4_mf_rr2.flac",
+        include_bytes!("../samples/grand_C4_mf_rr2.flac"),
     ),
     (
-        "grand_C4_pp.wav",
-        include_bytes!("../samples/grand_C4_pp.wav"),
+        "grand_C4_pp.flac",
+        include_bytes!("../samples/grand_C4_pp.flac"),
     ),
     (
-        "grand_C4_pp_rr2.wav",
-        include_bytes!("../samples/grand_C4_pp_rr2.wav"),
+        "grand_C4_pp_rr2.flac",
+        include_bytes!("../samples/grand_C4_pp_rr2.flac"),
     ),
     (
-        "grand_C5_f.wav",
-        include_bytes!("../samples/grand_C5_f.wav"),
+        "grand_C5_f.flac",
+        include_bytes!("../samples/grand_C5_f.flac"),
     ),
     (
-        "grand_C5_f_rr2.wav",
-        include_bytes!("../samples/grand_C5_f_rr2.wav"),
+        "grand_C5_f_rr2.flac",
+        include_bytes!("../samples/grand_C5_f_rr2.flac"),
     ),
     (
-        "grand_C5_mf.wav",
-        include_bytes!("../samples/grand_C5_mf.wav"),
+        "grand_C5_mf.flac",
+        include_bytes!("../samples/grand_C5_mf.flac"),
     ),
     (
-        "grand_C5_mf_rr2.wav",
-        include_bytes!("../samples/grand_C5_mf_rr2.wav"),
+        "grand_C5_mf_rr2.flac",
+        include_bytes!("../samples/grand_C5_mf_rr2.flac"),
     ),
     (
-        "grand_C5_pp.wav",
-        include_bytes!("../samples/grand_C5_pp.wav"),
+        "grand_C5_pp.flac",
+        include_bytes!("../samples/grand_C5_pp.flac"),
     ),
     (
-        "grand_C5_pp_rr2.wav",
-        include_bytes!("../samples/grand_C5_pp_rr2.wav"),
+        "grand_C5_pp_rr2.flac",
+        include_bytes!("../samples/grand_C5_pp_rr2.flac"),
     ),
     (
-        "grand_C6_f.wav",
-        include_bytes!("../samples/grand_C6_f.wav"),
+        "grand_C6_f.flac",
+        include_bytes!("../samples/grand_C6_f.flac"),
     ),
     (
-        "grand_C6_f_rr2.wav",
-        include_bytes!("../samples/grand_C6_f_rr2.wav"),
+        "grand_C6_f_rr2.flac",
+        include_bytes!("../samples/grand_C6_f_rr2.flac"),
     ),
     (
-        "grand_C6_mf.wav",
-        include_bytes!("../samples/grand_C6_mf.wav"),
+        "grand_C6_mf.flac",
+        include_bytes!("../samples/grand_C6_mf.flac"),
     ),
     (
-        "grand_C6_mf_rr2.wav",
-        include_bytes!("../samples/grand_C6_mf_rr2.wav"),
+        "grand_C6_mf_rr2.flac",
+        include_bytes!("../samples/grand_C6_mf_rr2.flac"),
     ),
     (
-        "grand_C6_pp.wav",
-        include_bytes!("../samples/grand_C6_pp.wav"),
+        "grand_C6_pp.flac",
+        include_bytes!("../samples/grand_C6_pp.flac"),
     ),
     (
-        "grand_C6_pp_rr2.wav",
-        include_bytes!("../samples/grand_C6_pp_rr2.wav"),
+        "grand_C6_pp_rr2.flac",
+        include_bytes!("../samples/grand_C6_pp_rr2.flac"),
     ),
     (
-        "grand_F#2_f.wav",
-        include_bytes!("../samples/grand_F#2_f.wav"),
+        "grand_F#2_f.flac",
+        include_bytes!("../samples/grand_F#2_f.flac"),
     ),
     (
-        "grand_F#2_f_rr2.wav",
-        include_bytes!("../samples/grand_F#2_f_rr2.wav"),
+        "grand_F#2_f_rr2.flac",
+        include_bytes!("../samples/grand_F#2_f_rr2.flac"),
     ),
     (
-        "grand_F#2_mf.wav",
-        include_bytes!("../samples/grand_F#2_mf.wav"),
+        "grand_F#2_mf.flac",
+        include_bytes!("../samples/grand_F#2_mf.flac"),
     ),
     (
-        "grand_F#2_mf_rr2.wav",
-        include_bytes!("../samples/grand_F#2_mf_rr2.wav"),
+        "grand_F#2_mf_rr2.flac",
+        include_bytes!("../samples/grand_F#2_mf_rr2.flac"),
     ),
     (
-        "grand_F#2_pp.wav",
-        include_bytes!("../samples/grand_F#2_pp.wav"),
+        "grand_F#2_pp.flac",
+        include_bytes!("../samples/grand_F#2_pp.flac"),
     ),
     (
-        "grand_F#2_pp_rr2.wav",
-        include_bytes!("../samples/grand_F#2_pp_rr2.wav"),
+        "grand_F#2_pp_rr2.flac",
+        include_bytes!("../samples/grand_F#2_pp_rr2.flac"),
     ),
     (
-        "grand_F#3_f.wav",
-        include_bytes!("../samples/grand_F#3_f.wav"),
+        "grand_F#3_f.flac",
+        include_bytes!("../samples/grand_F#3_f.flac"),
     ),
     (
-        "grand_F#3_f_rr2.wav",
-        include_bytes!("../samples/grand_F#3_f_rr2.wav"),
+        "grand_F#3_f_rr2.flac",
+        include_bytes!("../samples/grand_F#3_f_rr2.flac"),
     ),
     (
-        "grand_F#3_mf.wav",
-        include_bytes!("../samples/grand_F#3_mf.wav"),
+        "grand_F#3_mf.flac",
+        include_bytes!("../samples/grand_F#3_mf.flac"),
     ),
     (
-        "grand_F#3_mf_rr2.wav",
-        include_bytes!("../samples/grand_F#3_mf_rr2.wav"),
+        "grand_F#3_mf_rr2.flac",
+        include_bytes!("../samples/grand_F#3_mf_rr2.flac"),
     ),
     (
-        "grand_F#3_pp.wav",
-        include_bytes!("../samples/grand_F#3_pp.wav"),
+        "grand_F#3_pp.flac",
+        include_bytes!("../samples/grand_F#3_pp.flac"),
     ),
     (
-        "grand_F#3_pp_rr2.wav",
-        include_bytes!("../samples/grand_F#3_pp_rr2.wav"),
+        "grand_F#3_pp_rr2.flac",
+        include_bytes!("../samples/grand_F#3_pp_rr2.flac"),
     ),
     (
-        "grand_F#4_f.wav",
-        include_bytes!("../samples/grand_F#4_f.wav"),
+        "grand_F#4_f.flac",
+        include_bytes!("../samples/grand_F#4_f.flac"),
     ),
     (
-        "grand_F#4_f_rr2.wav",
-        include_bytes!("../samples/grand_F#4_f_rr2.wav"),
+        "grand_F#4_f_rr2.flac",
+        include_bytes!("../samples/grand_F#4_f_rr2.flac"),
     ),
     (
-        "grand_F#4_mf.wav",
-        include_bytes!("../samples/grand_F#4_mf.wav"),
+        "grand_F#4_mf.flac",
+        include_bytes!("../samples/grand_F#4_mf.flac"),
     ),
     (
-        "grand_F#4_mf_rr2.wav",
-        include_bytes!("../samples/grand_F#4_mf_rr2.wav"),
+        "grand_F#4_mf_rr2.flac",
+        include_bytes!("../samples/grand_F#4_mf_rr2.flac"),
     ),
     (
-        "grand_F#4_pp.wav",
-        include_bytes!("../samples/grand_F#4_pp.wav"),
+        "grand_F#4_pp.flac",
+        include_bytes!("../samples/grand_F#4_pp.flac"),
     ),
     (
-        "grand_F#4_pp_rr2.wav",
-        include_bytes!("../samples/grand_F#4_pp_rr2.wav"),
+        "grand_F#4_pp_rr2.flac",
+        include_bytes!("../samples/grand_F#4_pp_rr2.flac"),
     ),
     (
-        "grand_F#5_f.wav",
-        include_bytes!("../samples/grand_F#5_f.wav"),
+        "grand_F#5_f.flac",
+        include_bytes!("../samples/grand_F#5_f.flac"),
     ),
     (
-        "grand_F#5_f_rr2.wav",
-        include_bytes!("../samples/grand_F#5_f_rr2.wav"),
+        "grand_F#5_f_rr2.flac",
+        include_bytes!("../samples/grand_F#5_f_rr2.flac"),
     ),
     (
-        "grand_F#5_mf.wav",
-        include_bytes!("../samples/grand_F#5_mf.wav"),
+        "grand_F#5_mf.flac",
+        include_bytes!("../samples/grand_F#5_mf.flac"),
     ),
     (
-        "grand_F#5_mf_rr2.wav",
-        include_bytes!("../samples/grand_F#5_mf_rr2.wav"),
+        "grand_F#5_mf_rr2.flac",
+        include_bytes!("../samples/grand_F#5_mf_rr2.flac"),
     ),
     (
-        "grand_F#5_pp.wav",
-        include_bytes!("../samples/grand_F#5_pp.wav"),
+        "grand_F#5_pp.flac",
+        include_bytes!("../samples/grand_F#5_pp.flac"),
     ),
     (
-        "grand_F#5_pp_rr2.wav",
-        include_bytes!("../samples/grand_F#5_pp_rr2.wav"),
+        "grand_F#5_pp_rr2.flac",
+        include_bytes!("../samples/grand_F#5_pp_rr2.flac"),
     ),
 ];
 
@@ -254,7 +254,7 @@ mod tests {
     const EXPECTED_BYTES: usize = 7_184_592;
 
     #[test]
-    fn inventory_matches_packaged_wavs() {
+    fn inventory_matches_packaged_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
         let mut packaged: Vec<String> = fs::read_dir(samples_dir)
             .expect("sample directory must exist")
@@ -282,15 +282,16 @@ mod tests {
     }
 
     #[test]
-    fn every_sample_is_a_nonempty_wav_with_the_expected_aggregate_size() {
+    fn every_sample_is_a_nonempty_bank_file_with_the_expected_size() {
         assert_eq!(
             SAMPLES.iter().map(|(_, bytes)| bytes.len()).sum::<usize>(),
             EXPECTED_BYTES
         );
         for (name, bytes) in SAMPLES {
-            assert!(bytes.len() >= 12, "{name} is too short to be a WAV");
-            assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
-            assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
+            assert!(bytes.len() >= 12, "{name} is too short to be a sample");
+            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
+            let flac = &bytes[..4] == b"fLaC";
+            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);

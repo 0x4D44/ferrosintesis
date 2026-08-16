@@ -134,6 +134,164 @@ struct StreamInfo {
     channels: u8,
     bits_per_sample: u8,
     total_samples: u64,
+    /// MD5 of the UNENCODED audio, written by every real FLAC encoder.
+    ///
+    /// This is what makes each bank self-verifying. Without it, proving the
+    /// decoder correct would need the original WAV kept beside the FLAC — which
+    /// would defeat the entire point of the change. With it, the asset carries
+    /// its own answer and the check needs no external file and no external tool.
+    /// All-zero means the encoder declined to compute it.
+    md5: [u8; 16],
+}
+
+/// A dependency-free MD5, used only to check STREAMINFO's audio digest.
+///
+/// Vendored for the same reason as the decoder around it: a registry hash crate
+/// would forfeit the zero-`source =` offline build. MD5's collision weakness is
+/// irrelevant here — this detects decoder bugs and bit rot in a first-party
+/// asset, not an adversary, and the digest choice is the FLAC format's, not
+/// ours.
+mod md5 {
+    const S: [u32; 64] = [
+        7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5,
+        9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10,
+        15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+    ];
+
+    const K: [u32; 64] = [
+        0xd76a_a478,
+        0xe8c7_b756,
+        0x2420_70db,
+        0xc1bd_ceee,
+        0xf57c_0faf,
+        0x4787_c62a,
+        0xa830_4613,
+        0xfd46_9501,
+        0x6980_98d8,
+        0x8b44_f7af,
+        0xffff_5bb1,
+        0x895c_d7be,
+        0x6b90_1122,
+        0xfd98_7193,
+        0xa679_438e,
+        0x49b4_0821,
+        0xf61e_2562,
+        0xc040_b340,
+        0x265e_5a51,
+        0xe9b6_c7aa,
+        0xd62f_105d,
+        0x0244_1453,
+        0xd8a1_e681,
+        0xe7d3_fbc8,
+        0x21e1_cde6,
+        0xc337_07d6,
+        0xf4d5_0d87,
+        0x455a_14ed,
+        0xa9e3_e905,
+        0xfcef_a3f8,
+        0x676f_02d9,
+        0x8d2a_4c8a,
+        0xfffa_3942,
+        0x8771_f681,
+        0x6d9d_6122,
+        0xfde5_380c,
+        0xa4be_ea44,
+        0x4bde_cfa9,
+        0xf6bb_4b60,
+        0xbebf_bc70,
+        0x289b_7ec6,
+        0xeaa1_27fa,
+        0xd4ef_3085,
+        0x0488_1d05,
+        0xd9d4_d039,
+        0xe6db_99e5,
+        0x1fa2_7cf8,
+        0xc4ac_5665,
+        0xf429_2244,
+        0x432a_ff97,
+        0xab94_23a7,
+        0xfc93_a039,
+        0x655b_59c3,
+        0x8f0c_cc92,
+        0xffef_f47d,
+        0x8584_5dd1,
+        0x6fa8_7e4f,
+        0xfe2c_e6e0,
+        0xa301_4314,
+        0x4e08_11a1,
+        0xf753_7e82,
+        0xbd3a_f235,
+        0x2ad7_d2bb,
+        0xeb86_d391,
+    ];
+
+    /// MD5 of `data`.
+    pub(super) fn digest(data: &[u8]) -> [u8; 16] {
+        let mut state: [u32; 4] = [0x6745_2301, 0xefcd_ab89, 0x98ba_dcfe, 0x1032_5476];
+
+        let bit_len = (data.len() as u64).wrapping_mul(8);
+        // Message + 0x80 + zero padding to 56 mod 64 + 8-byte little-endian length.
+        let mut tail = Vec::with_capacity(128);
+        tail.push(0x80u8);
+        while (data.len() + tail.len()) % 64 != 56 {
+            tail.push(0);
+        }
+        tail.extend_from_slice(&bit_len.to_le_bytes());
+
+        let mut block = [0u8; 64];
+        let mut filled = 0usize;
+        for &byte in data.iter().chain(tail.iter()) {
+            block[filled] = byte;
+            filled += 1;
+            if filled == 64 {
+                compress(&mut state, &block);
+                filled = 0;
+            }
+        }
+        debug_assert_eq!(filled, 0, "padding must land on a block boundary");
+
+        let mut out = [0u8; 16];
+        for (i, word) in state.iter().enumerate() {
+            out[i * 4..i * 4 + 4].copy_from_slice(&word.to_le_bytes());
+        }
+        out
+    }
+
+    fn compress(state: &mut [u32; 4], block: &[u8; 64]) {
+        let mut m = [0u32; 16];
+        for (i, word) in m.iter_mut().enumerate() {
+            *word = u32::from_le_bytes([
+                block[i * 4],
+                block[i * 4 + 1],
+                block[i * 4 + 2],
+                block[i * 4 + 3],
+            ]);
+        }
+
+        let (mut a, mut b, mut c, mut d) = (state[0], state[1], state[2], state[3]);
+        for i in 0..64 {
+            let (f, g) = match i / 16 {
+                0 => ((b & c) | (!b & d), i),
+                1 => ((d & b) | (!d & c), (5 * i + 1) % 16),
+                2 => (b ^ c ^ d, (3 * i + 5) % 16),
+                _ => (c ^ (b | !d), (7 * i) % 16),
+            };
+            let tmp = d;
+            d = c;
+            c = b;
+            let sum = a
+                .wrapping_add(f)
+                .wrapping_add(K[i])
+                .wrapping_add(m[g])
+                .rotate_left(S[i]);
+            b = b.wrapping_add(sum);
+            a = tmp;
+        }
+        state[0] = state[0].wrapping_add(a);
+        state[1] = state[1].wrapping_add(b);
+        state[2] = state[2].wrapping_add(c);
+        state[3] = state[3].wrapping_add(d);
+    }
 }
 
 /// Decode a 16-bit mono 44.1 kHz FLAC stream to interleaved PCM.
@@ -191,6 +349,27 @@ pub fn decode_mono16(bytes: &[u8]) -> Result<Vec<i16>> {
     if out.len() != total {
         return Err("FLAC: decoded sample count does not match STREAMINFO");
     }
+
+    // Verify the decode against the digest the ENCODER computed over the
+    // original PCM. This is the property the whole change rests on — that the
+    // bytes coming out of here are the bytes that went into the encoder — and
+    // checking it here means every bank proves it on every load, with no
+    // reference WAV kept beside it and no external tool.
+    //
+    // Always on, not behind a debug flag. The cost is a hash over data we have
+    // just spent longer decoding, it runs in `prewarm` off the realtime thread,
+    // and a check that only runs in debug builds is not the one that protects a
+    // release render.
+    if info.md5 != [0u8; 16] {
+        let mut pcm_bytes = Vec::with_capacity(out.len() * 2);
+        for sample in &out {
+            pcm_bytes.extend_from_slice(&sample.to_le_bytes());
+        }
+        if md5::digest(&pcm_bytes) != info.md5 {
+            return Err("FLAC: decoded audio does not match the STREAMINFO MD5");
+        }
+    }
+
     Ok(out)
 }
 
@@ -219,14 +398,21 @@ fn read_metadata(reader: &mut BitReader) -> Result<StreamInfo> {
             let hi = u64::from(reader.read(4)?);
             let lo = u64::from(reader.read(32)?);
             let total_samples = (hi << 32) | lo;
-            // The MD5 signature and any trailing bytes of an over-long block.
-            skip_bytes(reader, length - 34 + 16)?;
+            // STREAMINFO is 34 bytes INCLUDING the trailing 16-byte MD5; 18
+            // have been consumed above. Read the digest, then skip whatever a
+            // longer-than-spec block carries after it.
+            let mut md5 = [0u8; 16];
+            for byte in md5.iter_mut() {
+                *byte = reader.read(8)? as u8;
+            }
+            skip_bytes(reader, length - 34)?;
             info = Some(StreamInfo {
                 max_block_size: max_block,
                 sample_rate,
                 channels,
                 bits_per_sample,
                 total_samples,
+                md5,
             });
         } else if block_type == 127 {
             return Err("FLAC: invalid metadata block type 127");
@@ -582,6 +768,43 @@ mod tests {
         // 0b00 is 0, and the two remaining bits are all that is left.
         assert_eq!(reader.read_signed(2).unwrap(), 0);
         assert!(reader.read_signed(1).is_err());
+    }
+
+    /// MD5 against the RFC 1321 test vectors.
+    ///
+    /// A hash is exactly the kind of code that looks right and is subtly wrong,
+    /// and the STREAMINFO check is worthless if the digest is. These are the
+    /// published vectors, not values this implementation produced.
+    #[test]
+    fn md5_matches_the_published_test_vectors() {
+        let cases: [(&str, &str); 5] = [
+            ("", "d41d8cd98f00b204e9800998ecf8427e"),
+            ("a", "0cc175b9c0f1b6a831c399e269772661"),
+            ("abc", "900150983cd24fb0d6963f7d28e17f72"),
+            ("message digest", "f96b697d7cb7938d525a2f31aaf161d0"),
+            (
+                "abcdefghijklmnopqrstuvwxyz",
+                "c3fcd3d76192e4007dfb496cca67e13b",
+            ),
+        ];
+        for (input, expected) in cases {
+            let hex: String = md5::digest(input.as_bytes())
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect();
+            assert_eq!(hex, expected, "MD5 of {input:?}");
+        }
+    }
+
+    /// The multi-block path, which the short vectors above never reach.
+    #[test]
+    fn md5_spans_multiple_blocks() {
+        let long: String = "1234567890".repeat(8);
+        let hex: String = md5::digest(long.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert_eq!(hex, "57edf4a22be3c955ac49da2e2107b67a");
     }
 
     #[test]

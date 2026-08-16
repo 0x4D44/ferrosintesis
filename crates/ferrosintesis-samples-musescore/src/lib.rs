@@ -16,122 +16,125 @@
 /// Embedded (file-name, bytes) pairs. Names include the `.wav` suffix and are
 /// case-sensitive. Kept as a slice so families can be added without a count constant.
 static SAMPLES: &[(&str, &[u8])] = &[
-    ("bottle_C6.wav", include_bytes!("../samples/bottle_C6.wav")),
     (
-        "brasssection_F2.wav",
-        include_bytes!("../samples/brasssection_F2.wav"),
+        "bottle_C6.flac",
+        include_bytes!("../samples/bottle_C6.flac"),
     ),
     (
-        "brasssection_C3.wav",
-        include_bytes!("../samples/brasssection_C3.wav"),
+        "brasssection_F2.flac",
+        include_bytes!("../samples/brasssection_F2.flac"),
     ),
     (
-        "brasssection_F#3.wav",
-        include_bytes!("../samples/brasssection_F#3.wav"),
+        "brasssection_C3.flac",
+        include_bytes!("../samples/brasssection_C3.flac"),
     ),
     (
-        "brasssection_A#3.wav",
-        include_bytes!("../samples/brasssection_A#3.wav"),
+        "brasssection_F#3.flac",
+        include_bytes!("../samples/brasssection_F#3.flac"),
     ),
     (
-        "brasssection_C4.wav",
-        include_bytes!("../samples/brasssection_C4.wav"),
+        "brasssection_A#3.flac",
+        include_bytes!("../samples/brasssection_A#3.flac"),
     ),
     (
-        "brasssection_F4.wav",
-        include_bytes!("../samples/brasssection_F4.wav"),
+        "brasssection_C4.flac",
+        include_bytes!("../samples/brasssection_C4.flac"),
     ),
     (
-        "brasssection_A4.wav",
-        include_bytes!("../samples/brasssection_A4.wav"),
+        "brasssection_F4.flac",
+        include_bytes!("../samples/brasssection_F4.flac"),
     ),
     (
-        "brasssection_C5.wav",
-        include_bytes!("../samples/brasssection_C5.wav"),
+        "brasssection_A4.flac",
+        include_bytes!("../samples/brasssection_A4.flac"),
     ),
     (
-        "brasssection_F5.wav",
-        include_bytes!("../samples/brasssection_F5.wav"),
+        "brasssection_C5.flac",
+        include_bytes!("../samples/brasssection_C5.flac"),
     ),
     (
-        "brasssection_C6.wav",
-        include_bytes!("../samples/brasssection_C6.wav"),
+        "brasssection_F5.flac",
+        include_bytes!("../samples/brasssection_F5.flac"),
     ),
     (
-        "panflute_C4.wav",
-        include_bytes!("../samples/panflute_C4.wav"),
+        "brasssection_C6.flac",
+        include_bytes!("../samples/brasssection_C6.flac"),
     ),
     (
-        "panflute_C5.wav",
-        include_bytes!("../samples/panflute_C5.wav"),
+        "panflute_C4.flac",
+        include_bytes!("../samples/panflute_C4.flac"),
     ),
     (
-        "panflute_C6.wav",
-        include_bytes!("../samples/panflute_C6.wav"),
+        "panflute_C5.flac",
+        include_bytes!("../samples/panflute_C5.flac"),
     ),
     (
-        "panflute_C7.wav",
-        include_bytes!("../samples/panflute_C7.wav"),
+        "panflute_C6.flac",
+        include_bytes!("../samples/panflute_C6.flac"),
     ),
     (
-        "panflute_F#3.wav",
-        include_bytes!("../samples/panflute_F#3.wav"),
+        "panflute_C7.flac",
+        include_bytes!("../samples/panflute_C7.flac"),
     ),
     (
-        "panflute_F#4.wav",
-        include_bytes!("../samples/panflute_F#4.wav"),
+        "panflute_F#3.flac",
+        include_bytes!("../samples/panflute_F#3.flac"),
     ),
     (
-        "panflute_F#5.wav",
-        include_bytes!("../samples/panflute_F#5.wav"),
+        "panflute_F#4.flac",
+        include_bytes!("../samples/panflute_F#4.flac"),
     ),
     (
-        "panflute_F#6.wav",
-        include_bytes!("../samples/panflute_F#6.wav"),
+        "panflute_F#5.flac",
+        include_bytes!("../samples/panflute_F#5.flac"),
     ),
     (
-        "shakuhachi_C5.wav",
-        include_bytes!("../samples/shakuhachi_C5.wav"),
-    ),
-    ("sitar_C4.wav", include_bytes!("../samples/sitar_C4.wav")),
-    ("sitar_C5.wav", include_bytes!("../samples/sitar_C5.wav")),
-    ("sitar_C6.wav", include_bytes!("../samples/sitar_C6.wav")),
-    ("sitar_E3.wav", include_bytes!("../samples/sitar_E3.wav")),
-    ("sitar_E4.wav", include_bytes!("../samples/sitar_E4.wav")),
-    ("sitar_E5.wav", include_bytes!("../samples/sitar_E5.wav")),
-    ("sitar_G3.wav", include_bytes!("../samples/sitar_G3.wav")),
-    ("sitar_G6.wav", include_bytes!("../samples/sitar_G6.wav")),
-    (
-        "celesta_F#3.wav",
-        include_bytes!("../samples/celesta_F#3.wav"),
+        "panflute_F#6.flac",
+        include_bytes!("../samples/panflute_F#6.flac"),
     ),
     (
-        "celesta_C4.wav",
-        include_bytes!("../samples/celesta_C4.wav"),
+        "shakuhachi_C5.flac",
+        include_bytes!("../samples/shakuhachi_C5.flac"),
+    ),
+    ("sitar_C4.flac", include_bytes!("../samples/sitar_C4.flac")),
+    ("sitar_C5.flac", include_bytes!("../samples/sitar_C5.flac")),
+    ("sitar_C6.flac", include_bytes!("../samples/sitar_C6.flac")),
+    ("sitar_E3.flac", include_bytes!("../samples/sitar_E3.flac")),
+    ("sitar_E4.flac", include_bytes!("../samples/sitar_E4.flac")),
+    ("sitar_E5.flac", include_bytes!("../samples/sitar_E5.flac")),
+    ("sitar_G3.flac", include_bytes!("../samples/sitar_G3.flac")),
+    ("sitar_G6.flac", include_bytes!("../samples/sitar_G6.flac")),
+    (
+        "celesta_F#3.flac",
+        include_bytes!("../samples/celesta_F#3.flac"),
     ),
     (
-        "celesta_F#4.wav",
-        include_bytes!("../samples/celesta_F#4.wav"),
+        "celesta_C4.flac",
+        include_bytes!("../samples/celesta_C4.flac"),
     ),
     (
-        "celesta_C5.wav",
-        include_bytes!("../samples/celesta_C5.wav"),
+        "celesta_F#4.flac",
+        include_bytes!("../samples/celesta_F#4.flac"),
     ),
     (
-        "celesta_F#5.wav",
-        include_bytes!("../samples/celesta_F#5.wav"),
+        "celesta_C5.flac",
+        include_bytes!("../samples/celesta_C5.flac"),
     ),
     (
-        "celesta_C6.wav",
-        include_bytes!("../samples/celesta_C6.wav"),
+        "celesta_F#5.flac",
+        include_bytes!("../samples/celesta_F#5.flac"),
     ),
     (
-        "celesta_F#6.wav",
-        include_bytes!("../samples/celesta_F#6.wav"),
+        "celesta_C6.flac",
+        include_bytes!("../samples/celesta_C6.flac"),
     ),
     (
-        "celesta_C7.wav",
-        include_bytes!("../samples/celesta_C7.wav"),
+        "celesta_F#6.flac",
+        include_bytes!("../samples/celesta_F#6.flac"),
+    ),
+    (
+        "celesta_C7.flac",
+        include_bytes!("../samples/celesta_C7.flac"),
     ),
 ];
 
@@ -156,7 +159,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn inventory_matches_packaged_wavs() {
+    fn inventory_matches_packaged_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
         let mut packaged: Vec<String> = fs::read_dir(samples_dir)
             .expect("sample directory must exist")
@@ -200,16 +203,16 @@ mod tests {
         assert_eq!(
             names,
             [
-                "brasssection_F2.wav",
-                "brasssection_C3.wav",
-                "brasssection_F#3.wav",
-                "brasssection_A#3.wav",
-                "brasssection_C4.wav",
-                "brasssection_F4.wav",
-                "brasssection_A4.wav",
-                "brasssection_C5.wav",
-                "brasssection_F5.wav",
-                "brasssection_C6.wav",
+                "brasssection_F2.flac",
+                "brasssection_C3.flac",
+                "brasssection_F#3.flac",
+                "brasssection_A#3.flac",
+                "brasssection_C4.flac",
+                "brasssection_F4.flac",
+                "brasssection_A4.flac",
+                "brasssection_C5.flac",
+                "brasssection_F5.flac",
+                "brasssection_C6.flac",
             ]
         );
     }

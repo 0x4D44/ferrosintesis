@@ -9,12 +9,12 @@
 
 #![forbid(unsafe_code)]
 
-/// Number of WAV files embedded in this package.
+/// Number of sample files embedded in this package.
 pub const FILE_COUNT: usize = 1;
 
 static SAMPLES: [(&str, &[u8]); 1] = [(
-    "bottleloop_G3.wav",
-    include_bytes!("../samples/bottleloop_G3.wav"),
+    "bottleloop_G3.flac",
+    include_bytes!("../samples/bottleloop_G3.flac"),
 )];
 
 /// Returns the embedded WAV bytes for an exact file name.
@@ -35,7 +35,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn inventory_matches_packaged_wavs() {
+    fn inventory_matches_packaged_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
         let mut packaged: Vec<String> = fs::read_dir(samples_dir)
             .expect("sample directory must exist")
@@ -75,9 +75,10 @@ mod tests {
     #[test]
     fn every_sample_is_a_nonempty_wav() {
         for (name, bytes) in SAMPLES {
-            assert!(bytes.len() >= 12, "{name} is too short to be a WAV");
-            assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
-            assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
+            assert!(bytes.len() >= 12, "{name} is too short to be a sample");
+            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
+            let flac = &bytes[..4] == b"fLaC";
+            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);

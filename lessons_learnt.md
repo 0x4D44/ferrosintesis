@@ -10,6 +10,16 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.08.16 — **Some asset crates decode their own PCM; check before a container change** (`samples-drumkit:decode_wav`).
+  - The banks look like passive `include_bytes!` tables, and 22 of 25 are. But
+    `-drumkit` and `-drumkit2` carry `decode_wav` + `PCM_CACHE` in their OWN
+    `lib.rs`, so a RIFF-to-FLAC swap broke them from inside the asset crate —
+    ~50 workspace failures whose only naming assertion sat at
+    `ferrosintesis-samples-drumkit/src/lib.rs:794`, not in ferrosintesis.
+  - They are dependency-free by design and published, so handing them a vendored
+    decoder needs a new shared crate in a published graph. Grep the asset crates
+    for a runtime decoder while PLANNING a container change, not after it.
+
 - 2026.08.01 — **Bind inventory guards to each family and source table** (`inventory.rs:inventory::tests`).
   - Seeing any validator before a transitive write is not enough. Require the selected
     family's exact validator to be the first use of every source table that drives its bake.

@@ -9,305 +9,305 @@
 
 #![forbid(unsafe_code)]
 
-/// Number of WAV files embedded in this package.
+/// Number of sample files embedded in this package.
 pub const FILE_COUNT: usize = 74;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
-        "sax_alt_A3_f.wav",
-        include_bytes!("../samples/sax_alt_A3_f.wav"),
+        "sax_alt_A3_f.flac",
+        include_bytes!("../samples/sax_alt_A3_f.flac"),
     ),
     (
-        "sax_alt_A3_p.wav",
-        include_bytes!("../samples/sax_alt_A3_p.wav"),
+        "sax_alt_A3_p.flac",
+        include_bytes!("../samples/sax_alt_A3_p.flac"),
     ),
     (
-        "sax_alt_A4_f.wav",
-        include_bytes!("../samples/sax_alt_A4_f.wav"),
+        "sax_alt_A4_f.flac",
+        include_bytes!("../samples/sax_alt_A4_f.flac"),
     ),
     (
-        "sax_alt_A4_p.wav",
-        include_bytes!("../samples/sax_alt_A4_p.wav"),
+        "sax_alt_A4_p.flac",
+        include_bytes!("../samples/sax_alt_A4_p.flac"),
     ),
     (
-        "sax_alt_A5_f.wav",
-        include_bytes!("../samples/sax_alt_A5_f.wav"),
+        "sax_alt_A5_f.flac",
+        include_bytes!("../samples/sax_alt_A5_f.flac"),
     ),
     (
-        "sax_alt_A5_p.wav",
-        include_bytes!("../samples/sax_alt_A5_p.wav"),
+        "sax_alt_A5_p.flac",
+        include_bytes!("../samples/sax_alt_A5_p.flac"),
     ),
     (
-        "sax_alt_C#3_f.wav",
-        include_bytes!("../samples/sax_alt_C#3_f.wav"),
+        "sax_alt_C#3_f.flac",
+        include_bytes!("../samples/sax_alt_C#3_f.flac"),
     ),
     (
-        "sax_alt_C#3_p.wav",
-        include_bytes!("../samples/sax_alt_C#3_p.wav"),
+        "sax_alt_C#3_p.flac",
+        include_bytes!("../samples/sax_alt_C#3_p.flac"),
     ),
     (
-        "sax_alt_C#4_f.wav",
-        include_bytes!("../samples/sax_alt_C#4_f.wav"),
+        "sax_alt_C#4_f.flac",
+        include_bytes!("../samples/sax_alt_C#4_f.flac"),
     ),
     (
-        "sax_alt_C#4_p.wav",
-        include_bytes!("../samples/sax_alt_C#4_p.wav"),
+        "sax_alt_C#4_p.flac",
+        include_bytes!("../samples/sax_alt_C#4_p.flac"),
     ),
     (
-        "sax_alt_C#5_f.wav",
-        include_bytes!("../samples/sax_alt_C#5_f.wav"),
+        "sax_alt_C#5_f.flac",
+        include_bytes!("../samples/sax_alt_C#5_f.flac"),
     ),
     (
-        "sax_alt_C#5_p.wav",
-        include_bytes!("../samples/sax_alt_C#5_p.wav"),
+        "sax_alt_C#5_p.flac",
+        include_bytes!("../samples/sax_alt_C#5_p.flac"),
     ),
     (
-        "sax_alt_F3_f.wav",
-        include_bytes!("../samples/sax_alt_F3_f.wav"),
+        "sax_alt_F3_f.flac",
+        include_bytes!("../samples/sax_alt_F3_f.flac"),
     ),
     (
-        "sax_alt_F3_p.wav",
-        include_bytes!("../samples/sax_alt_F3_p.wav"),
+        "sax_alt_F3_p.flac",
+        include_bytes!("../samples/sax_alt_F3_p.flac"),
     ),
     (
-        "sax_alt_F4_f.wav",
-        include_bytes!("../samples/sax_alt_F4_f.wav"),
+        "sax_alt_F4_f.flac",
+        include_bytes!("../samples/sax_alt_F4_f.flac"),
     ),
     (
-        "sax_alt_F4_p.wav",
-        include_bytes!("../samples/sax_alt_F4_p.wav"),
+        "sax_alt_F4_p.flac",
+        include_bytes!("../samples/sax_alt_F4_p.flac"),
     ),
     (
-        "sax_alt_F5_f.wav",
-        include_bytes!("../samples/sax_alt_F5_f.wav"),
+        "sax_alt_F5_f.flac",
+        include_bytes!("../samples/sax_alt_F5_f.flac"),
     ),
     (
-        "sax_alt_F5_p.wav",
-        include_bytes!("../samples/sax_alt_F5_p.wav"),
+        "sax_alt_F5_p.flac",
+        include_bytes!("../samples/sax_alt_F5_p.flac"),
     ),
     (
-        "sax_bar_A4_f.wav",
-        include_bytes!("../samples/sax_bar_A4_f.wav"),
+        "sax_bar_A4_f.flac",
+        include_bytes!("../samples/sax_bar_A4_f.flac"),
     ),
     (
-        "sax_bar_A4_p.wav",
-        include_bytes!("../samples/sax_bar_A4_p.wav"),
+        "sax_bar_A4_p.flac",
+        include_bytes!("../samples/sax_bar_A4_p.flac"),
     ),
     (
-        "sax_bar_C2_f.wav",
-        include_bytes!("../samples/sax_bar_C2_f.wav"),
+        "sax_bar_C2_f.flac",
+        include_bytes!("../samples/sax_bar_C2_f.flac"),
     ),
     (
-        "sax_bar_C2_p.wav",
-        include_bytes!("../samples/sax_bar_C2_p.wav"),
+        "sax_bar_C2_p.flac",
+        include_bytes!("../samples/sax_bar_C2_p.flac"),
     ),
     (
-        "sax_bar_C3_f.wav",
-        include_bytes!("../samples/sax_bar_C3_f.wav"),
+        "sax_bar_C3_f.flac",
+        include_bytes!("../samples/sax_bar_C3_f.flac"),
     ),
     (
-        "sax_bar_C3_p.wav",
-        include_bytes!("../samples/sax_bar_C3_p.wav"),
+        "sax_bar_C3_p.flac",
+        include_bytes!("../samples/sax_bar_C3_p.flac"),
     ),
     (
-        "sax_bar_C4_f.wav",
-        include_bytes!("../samples/sax_bar_C4_f.wav"),
+        "sax_bar_C4_f.flac",
+        include_bytes!("../samples/sax_bar_C4_f.flac"),
     ),
     (
-        "sax_bar_C4_p.wav",
-        include_bytes!("../samples/sax_bar_C4_p.wav"),
+        "sax_bar_C4_p.flac",
+        include_bytes!("../samples/sax_bar_C4_p.flac"),
     ),
     (
-        "sax_bar_E2_f.wav",
-        include_bytes!("../samples/sax_bar_E2_f.wav"),
+        "sax_bar_E2_f.flac",
+        include_bytes!("../samples/sax_bar_E2_f.flac"),
     ),
     (
-        "sax_bar_E2_p.wav",
-        include_bytes!("../samples/sax_bar_E2_p.wav"),
+        "sax_bar_E2_p.flac",
+        include_bytes!("../samples/sax_bar_E2_p.flac"),
     ),
     (
-        "sax_bar_E3_f.wav",
-        include_bytes!("../samples/sax_bar_E3_f.wav"),
+        "sax_bar_E3_f.flac",
+        include_bytes!("../samples/sax_bar_E3_f.flac"),
     ),
     (
-        "sax_bar_E3_p.wav",
-        include_bytes!("../samples/sax_bar_E3_p.wav"),
+        "sax_bar_E3_p.flac",
+        include_bytes!("../samples/sax_bar_E3_p.flac"),
     ),
     (
-        "sax_bar_E4_f.wav",
-        include_bytes!("../samples/sax_bar_E4_f.wav"),
+        "sax_bar_E4_f.flac",
+        include_bytes!("../samples/sax_bar_E4_f.flac"),
     ),
     (
-        "sax_bar_E4_p.wav",
-        include_bytes!("../samples/sax_bar_E4_p.wav"),
+        "sax_bar_E4_p.flac",
+        include_bytes!("../samples/sax_bar_E4_p.flac"),
     ),
     (
-        "sax_bar_G#2_f.wav",
-        include_bytes!("../samples/sax_bar_G#2_f.wav"),
+        "sax_bar_G#2_f.flac",
+        include_bytes!("../samples/sax_bar_G#2_f.flac"),
     ),
     (
-        "sax_bar_G#2_p.wav",
-        include_bytes!("../samples/sax_bar_G#2_p.wav"),
+        "sax_bar_G#2_p.flac",
+        include_bytes!("../samples/sax_bar_G#2_p.flac"),
     ),
     (
-        "sax_bar_G#3_f.wav",
-        include_bytes!("../samples/sax_bar_G#3_f.wav"),
+        "sax_bar_G#3_f.flac",
+        include_bytes!("../samples/sax_bar_G#3_f.flac"),
     ),
     (
-        "sax_bar_G#3_p.wav",
-        include_bytes!("../samples/sax_bar_G#3_p.wav"),
+        "sax_bar_G#3_p.flac",
+        include_bytes!("../samples/sax_bar_G#3_p.flac"),
     ),
     (
-        "sax_bar_G#4_f.wav",
-        include_bytes!("../samples/sax_bar_G#4_f.wav"),
+        "sax_bar_G#4_f.flac",
+        include_bytes!("../samples/sax_bar_G#4_f.flac"),
     ),
     (
-        "sax_bar_G#4_p.wav",
-        include_bytes!("../samples/sax_bar_G#4_p.wav"),
+        "sax_bar_G#4_p.flac",
+        include_bytes!("../samples/sax_bar_G#4_p.flac"),
     ),
     (
-        "sax_sop_C4_f.wav",
-        include_bytes!("../samples/sax_sop_C4_f.wav"),
+        "sax_sop_C4_f.flac",
+        include_bytes!("../samples/sax_sop_C4_f.flac"),
     ),
     (
-        "sax_sop_C4_p.wav",
-        include_bytes!("../samples/sax_sop_C4_p.wav"),
+        "sax_sop_C4_p.flac",
+        include_bytes!("../samples/sax_sop_C4_p.flac"),
     ),
     (
-        "sax_sop_C5_f.wav",
-        include_bytes!("../samples/sax_sop_C5_f.wav"),
+        "sax_sop_C5_f.flac",
+        include_bytes!("../samples/sax_sop_C5_f.flac"),
     ),
     (
-        "sax_sop_C5_p.wav",
-        include_bytes!("../samples/sax_sop_C5_p.wav"),
+        "sax_sop_C5_p.flac",
+        include_bytes!("../samples/sax_sop_C5_p.flac"),
     ),
     (
-        "sax_sop_C6_f.wav",
-        include_bytes!("../samples/sax_sop_C6_f.wav"),
+        "sax_sop_C6_f.flac",
+        include_bytes!("../samples/sax_sop_C6_f.flac"),
     ),
     (
-        "sax_sop_C6_p.wav",
-        include_bytes!("../samples/sax_sop_C6_p.wav"),
+        "sax_sop_C6_p.flac",
+        include_bytes!("../samples/sax_sop_C6_p.flac"),
     ),
     (
-        "sax_sop_E4_f.wav",
-        include_bytes!("../samples/sax_sop_E4_f.wav"),
+        "sax_sop_E4_f.flac",
+        include_bytes!("../samples/sax_sop_E4_f.flac"),
     ),
     (
-        "sax_sop_E4_p.wav",
-        include_bytes!("../samples/sax_sop_E4_p.wav"),
+        "sax_sop_E4_p.flac",
+        include_bytes!("../samples/sax_sop_E4_p.flac"),
     ),
     (
-        "sax_sop_E5_f.wav",
-        include_bytes!("../samples/sax_sop_E5_f.wav"),
+        "sax_sop_E5_f.flac",
+        include_bytes!("../samples/sax_sop_E5_f.flac"),
     ),
     (
-        "sax_sop_E5_p.wav",
-        include_bytes!("../samples/sax_sop_E5_p.wav"),
+        "sax_sop_E5_p.flac",
+        include_bytes!("../samples/sax_sop_E5_p.flac"),
     ),
     (
-        "sax_sop_E6_f.wav",
-        include_bytes!("../samples/sax_sop_E6_f.wav"),
+        "sax_sop_E6_f.flac",
+        include_bytes!("../samples/sax_sop_E6_f.flac"),
     ),
     (
-        "sax_sop_E6_p.wav",
-        include_bytes!("../samples/sax_sop_E6_p.wav"),
+        "sax_sop_E6_p.flac",
+        include_bytes!("../samples/sax_sop_E6_p.flac"),
     ),
     (
-        "sax_sop_G#3_f.wav",
-        include_bytes!("../samples/sax_sop_G#3_f.wav"),
+        "sax_sop_G#3_f.flac",
+        include_bytes!("../samples/sax_sop_G#3_f.flac"),
     ),
     (
-        "sax_sop_G#3_p.wav",
-        include_bytes!("../samples/sax_sop_G#3_p.wav"),
+        "sax_sop_G#3_p.flac",
+        include_bytes!("../samples/sax_sop_G#3_p.flac"),
     ),
     (
-        "sax_sop_G#4_f.wav",
-        include_bytes!("../samples/sax_sop_G#4_f.wav"),
+        "sax_sop_G#4_f.flac",
+        include_bytes!("../samples/sax_sop_G#4_f.flac"),
     ),
     (
-        "sax_sop_G#4_p.wav",
-        include_bytes!("../samples/sax_sop_G#4_p.wav"),
+        "sax_sop_G#4_p.flac",
+        include_bytes!("../samples/sax_sop_G#4_p.flac"),
     ),
     (
-        "sax_sop_G#5_f.wav",
-        include_bytes!("../samples/sax_sop_G#5_f.wav"),
+        "sax_sop_G#5_f.flac",
+        include_bytes!("../samples/sax_sop_G#5_f.flac"),
     ),
     (
-        "sax_sop_G#5_p.wav",
-        include_bytes!("../samples/sax_sop_G#5_p.wav"),
+        "sax_sop_G#5_p.flac",
+        include_bytes!("../samples/sax_sop_G#5_p.flac"),
     ),
     (
-        "sax_ten_C3_f.wav",
-        include_bytes!("../samples/sax_ten_C3_f.wav"),
+        "sax_ten_C3_f.flac",
+        include_bytes!("../samples/sax_ten_C3_f.flac"),
     ),
     (
-        "sax_ten_C3_p.wav",
-        include_bytes!("../samples/sax_ten_C3_p.wav"),
+        "sax_ten_C3_p.flac",
+        include_bytes!("../samples/sax_ten_C3_p.flac"),
     ),
     (
-        "sax_ten_C4_f.wav",
-        include_bytes!("../samples/sax_ten_C4_f.wav"),
+        "sax_ten_C4_f.flac",
+        include_bytes!("../samples/sax_ten_C4_f.flac"),
     ),
     (
-        "sax_ten_C4_p.wav",
-        include_bytes!("../samples/sax_ten_C4_p.wav"),
+        "sax_ten_C4_p.flac",
+        include_bytes!("../samples/sax_ten_C4_p.flac"),
     ),
     (
-        "sax_ten_C5_f.wav",
-        include_bytes!("../samples/sax_ten_C5_f.wav"),
+        "sax_ten_C5_f.flac",
+        include_bytes!("../samples/sax_ten_C5_f.flac"),
     ),
     (
-        "sax_ten_C5_p.wav",
-        include_bytes!("../samples/sax_ten_C5_p.wav"),
+        "sax_ten_C5_p.flac",
+        include_bytes!("../samples/sax_ten_C5_p.flac"),
     ),
     (
-        "sax_ten_E3_f.wav",
-        include_bytes!("../samples/sax_ten_E3_f.wav"),
+        "sax_ten_E3_f.flac",
+        include_bytes!("../samples/sax_ten_E3_f.flac"),
     ),
     (
-        "sax_ten_E3_p.wav",
-        include_bytes!("../samples/sax_ten_E3_p.wav"),
+        "sax_ten_E3_p.flac",
+        include_bytes!("../samples/sax_ten_E3_p.flac"),
     ),
     (
-        "sax_ten_E4_f.wav",
-        include_bytes!("../samples/sax_ten_E4_f.wav"),
+        "sax_ten_E4_f.flac",
+        include_bytes!("../samples/sax_ten_E4_f.flac"),
     ),
     (
-        "sax_ten_E4_p.wav",
-        include_bytes!("../samples/sax_ten_E4_p.wav"),
+        "sax_ten_E4_p.flac",
+        include_bytes!("../samples/sax_ten_E4_p.flac"),
     ),
     (
-        "sax_ten_E5_f.wav",
-        include_bytes!("../samples/sax_ten_E5_f.wav"),
+        "sax_ten_E5_f.flac",
+        include_bytes!("../samples/sax_ten_E5_f.flac"),
     ),
     (
-        "sax_ten_E5_p.wav",
-        include_bytes!("../samples/sax_ten_E5_p.wav"),
+        "sax_ten_E5_p.flac",
+        include_bytes!("../samples/sax_ten_E5_p.flac"),
     ),
     (
-        "sax_ten_G#2_f.wav",
-        include_bytes!("../samples/sax_ten_G#2_f.wav"),
+        "sax_ten_G#2_f.flac",
+        include_bytes!("../samples/sax_ten_G#2_f.flac"),
     ),
     (
-        "sax_ten_G#2_p.wav",
-        include_bytes!("../samples/sax_ten_G#2_p.wav"),
+        "sax_ten_G#2_p.flac",
+        include_bytes!("../samples/sax_ten_G#2_p.flac"),
     ),
     (
-        "sax_ten_G#3_f.wav",
-        include_bytes!("../samples/sax_ten_G#3_f.wav"),
+        "sax_ten_G#3_f.flac",
+        include_bytes!("../samples/sax_ten_G#3_f.flac"),
     ),
     (
-        "sax_ten_G#3_p.wav",
-        include_bytes!("../samples/sax_ten_G#3_p.wav"),
+        "sax_ten_G#3_p.flac",
+        include_bytes!("../samples/sax_ten_G#3_p.flac"),
     ),
     (
-        "sax_ten_G#4_f.wav",
-        include_bytes!("../samples/sax_ten_G#4_f.wav"),
+        "sax_ten_G#4_f.flac",
+        include_bytes!("../samples/sax_ten_G#4_f.flac"),
     ),
     (
-        "sax_ten_G#4_p.wav",
-        include_bytes!("../samples/sax_ten_G#4_p.wav"),
+        "sax_ten_G#4_p.flac",
+        include_bytes!("../samples/sax_ten_G#4_p.flac"),
     ),
 ];
 
@@ -333,7 +333,7 @@ mod tests {
     const EXPECTED_BYTES: usize = 4_101_968;
 
     #[test]
-    fn inventory_matches_packaged_wavs() {
+    fn inventory_matches_packaged_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
         let mut packaged: Vec<String> = fs::read_dir(samples_dir)
             .expect("sample directory must exist")
@@ -361,15 +361,16 @@ mod tests {
     }
 
     #[test]
-    fn every_sample_is_a_nonempty_wav_with_the_expected_aggregate_size() {
+    fn every_sample_is_a_nonempty_bank_file_with_the_expected_size() {
         assert_eq!(
             SAMPLES.iter().map(|(_, bytes)| bytes.len()).sum::<usize>(),
             EXPECTED_BYTES
         );
         for (name, bytes) in SAMPLES {
-            assert!(bytes.len() >= 12, "{name} is too short to be a WAV");
-            assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
-            assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
+            assert!(bytes.len() >= 12, "{name} is too short to be a sample");
+            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
+            let flac = &bytes[..4] == b"fLaC";
+            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);

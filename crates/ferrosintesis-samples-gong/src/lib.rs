@@ -6,17 +6,17 @@
 
 #![forbid(unsafe_code)]
 
-/// Number of WAV files embedded in this package.
+/// Number of sample files embedded in this package.
 pub const FILE_COUNT: usize = 2;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
-        "gong_ageng_loud.wav",
-        include_bytes!("../samples/gong_ageng_loud.wav"),
+        "gong_ageng_loud.flac",
+        include_bytes!("../samples/gong_ageng_loud.flac"),
     ),
     (
-        "gong_ageng_soft.wav",
-        include_bytes!("../samples/gong_ageng_soft.wav"),
+        "gong_ageng_soft.flac",
+        include_bytes!("../samples/gong_ageng_soft.flac"),
     ),
 ];
 
@@ -37,10 +37,10 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    const EXPECTED_BYTES: usize = 2971398;
+    const EXPECTED_BYTES: usize = 1160636;
 
     #[test]
-    fn inventory_matches_packaged_wavs() {
+    fn inventory_matches_packaged_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
         let mut packaged: Vec<String> = fs::read_dir(samples_dir)
             .expect("sample directory must exist")
@@ -68,15 +68,16 @@ mod tests {
     }
 
     #[test]
-    fn every_sample_is_a_nonempty_wav_with_the_expected_aggregate_size() {
+    fn every_sample_is_a_nonempty_bank_file_with_the_expected_size() {
         assert_eq!(
             SAMPLES.iter().map(|(_, bytes)| bytes.len()).sum::<usize>(),
             EXPECTED_BYTES
         );
         for (name, bytes) in SAMPLES {
-            assert!(bytes.len() >= 12, "{name} is too short to be a WAV");
-            assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
-            assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
+            assert!(bytes.len() >= 12, "{name} is too short to be a sample");
+            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
+            let flac = &bytes[..4] == b"fLaC";
+            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);

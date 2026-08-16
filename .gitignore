@@ -47,7 +47,17 @@ _cal/
 # ...but the B1-upright bank's committed opus takes ARE source — the reproducible
 # record the bake re-slices (the raw 24-bit takes are too large to commit).
 !samples/b1-upright/*.opus
-# ...but the synth's attack-transient sample banks are source, not output
+# ...but the synth's attack-transient sample banks are source, not output.
+#
+# NOTE ON THE `.flac` BANKS: most banks are now FLAC, and `*.flac` is NOT
+# ignored above, so they are tracked without needing an un-ignore line. The
+# `!...*.wav` lines below therefore cover a SHRINKING set — `b1-upright` (a
+# custom `b1t` chunk a FLAC container cannot hold) and `drumkit`/`drumkit2`
+# (which decode PCM inside the asset crate itself). Do not copy the `.wav`
+# pattern for a NEW sample crate: bake it to FLAC with
+# `tools/ferrosintesis-samples/to_flac.py` and it needs no line here at all.
+# CLAUDE.md's warning still applies in reverse — after adding a crate, confirm
+# with `git ls-files <crate>/samples` that its bank actually got committed.
 !crates/ferrosintesis-samples-clavinet/samples/*.wav
 !crates/ferrosintesis-samples-core/samples/*.wav
 !crates/ferrosintesis-samples-drumkit/samples/*.wav

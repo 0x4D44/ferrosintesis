@@ -430,7 +430,12 @@ mod tests {
         let mut packaged: Vec<String> = fs::read_dir(samples_dir)
             .expect("sample directory must exist")
             .map(|entry| entry.expect("sample entry must be readable").path())
-            .filter(|path| path.extension() == Some(OsStr::new("wav")))
+            .filter(|path| {
+                matches!(
+                    path.extension().and_then(OsStr::to_str),
+                    Some("wav" | "flac")
+                )
+            })
             .map(|path| {
                 path.file_name()
                     .expect("sample must have a file name")
@@ -449,11 +454,12 @@ mod tests {
     }
 
     #[test]
-    fn every_sample_is_a_nonempty_wav() {
+    fn every_sample_is_a_nonempty_bank_file() {
         for (name, bytes) in SAMPLES {
-            assert!(bytes.len() >= 44, "{name} is too short to be a WAV");
-            assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
-            assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
+            assert!(bytes.len() >= 12, "{name} is too short to be a sample");
+            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
+            let flac = &bytes[..4] == b"fLaC";
+            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
             assert_eq!(get(name), Some(*bytes));
         }
         assert_eq!(get("missing.wav"), None);

@@ -25,7 +25,7 @@
 
 use std::sync::OnceLock;
 
-/// Number of WAV files embedded in this package.
+/// Number of sample files embedded in this package.
 pub const FILE_COUNT: usize = 128;
 
 /// Sample rate of every embedded WAV, in hertz.
@@ -33,516 +33,516 @@ pub const SAMPLE_RATE_HZ: u32 = 44_100;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
-        "hhc_vl1_rr1.wav",
-        include_bytes!("../samples/hhc_vl1_rr1.wav"),
+        "hhc_vl1_rr1.flac",
+        include_bytes!("../samples/hhc_vl1_rr1.flac"),
     ),
     (
-        "hhc_vl1_rr2.wav",
-        include_bytes!("../samples/hhc_vl1_rr2.wav"),
+        "hhc_vl1_rr2.flac",
+        include_bytes!("../samples/hhc_vl1_rr2.flac"),
     ),
     (
-        "hhc_vl1_rr3.wav",
-        include_bytes!("../samples/hhc_vl1_rr3.wav"),
+        "hhc_vl1_rr3.flac",
+        include_bytes!("../samples/hhc_vl1_rr3.flac"),
     ),
     (
-        "hhc_vl1_rr4.wav",
-        include_bytes!("../samples/hhc_vl1_rr4.wav"),
+        "hhc_vl1_rr4.flac",
+        include_bytes!("../samples/hhc_vl1_rr4.flac"),
     ),
     (
-        "hhc_vl2_rr1.wav",
-        include_bytes!("../samples/hhc_vl2_rr1.wav"),
+        "hhc_vl2_rr1.flac",
+        include_bytes!("../samples/hhc_vl2_rr1.flac"),
     ),
     (
-        "hhc_vl2_rr2.wav",
-        include_bytes!("../samples/hhc_vl2_rr2.wav"),
+        "hhc_vl2_rr2.flac",
+        include_bytes!("../samples/hhc_vl2_rr2.flac"),
     ),
     (
-        "hhc_vl2_rr3.wav",
-        include_bytes!("../samples/hhc_vl2_rr3.wav"),
+        "hhc_vl2_rr3.flac",
+        include_bytes!("../samples/hhc_vl2_rr3.flac"),
     ),
     (
-        "hhc_vl2_rr4.wav",
-        include_bytes!("../samples/hhc_vl2_rr4.wav"),
+        "hhc_vl2_rr4.flac",
+        include_bytes!("../samples/hhc_vl2_rr4.flac"),
     ),
     (
-        "hhc_vl3_rr1.wav",
-        include_bytes!("../samples/hhc_vl3_rr1.wav"),
+        "hhc_vl3_rr1.flac",
+        include_bytes!("../samples/hhc_vl3_rr1.flac"),
     ),
     (
-        "hhc_vl3_rr2.wav",
-        include_bytes!("../samples/hhc_vl3_rr2.wav"),
+        "hhc_vl3_rr2.flac",
+        include_bytes!("../samples/hhc_vl3_rr2.flac"),
     ),
     (
-        "hhc_vl3_rr3.wav",
-        include_bytes!("../samples/hhc_vl3_rr3.wav"),
+        "hhc_vl3_rr3.flac",
+        include_bytes!("../samples/hhc_vl3_rr3.flac"),
     ),
     (
-        "hhc_vl3_rr4.wav",
-        include_bytes!("../samples/hhc_vl3_rr4.wav"),
+        "hhc_vl3_rr4.flac",
+        include_bytes!("../samples/hhc_vl3_rr4.flac"),
     ),
     (
-        "hhc_vl4_rr1.wav",
-        include_bytes!("../samples/hhc_vl4_rr1.wav"),
+        "hhc_vl4_rr1.flac",
+        include_bytes!("../samples/hhc_vl4_rr1.flac"),
     ),
     (
-        "hhc_vl4_rr2.wav",
-        include_bytes!("../samples/hhc_vl4_rr2.wav"),
+        "hhc_vl4_rr2.flac",
+        include_bytes!("../samples/hhc_vl4_rr2.flac"),
     ),
     (
-        "hhc_vl4_rr3.wav",
-        include_bytes!("../samples/hhc_vl4_rr3.wav"),
+        "hhc_vl4_rr3.flac",
+        include_bytes!("../samples/hhc_vl4_rr3.flac"),
     ),
     (
-        "hhc_vl4_rr4.wav",
-        include_bytes!("../samples/hhc_vl4_rr4.wav"),
+        "hhc_vl4_rr4.flac",
+        include_bytes!("../samples/hhc_vl4_rr4.flac"),
     ),
     (
-        "hho_vl1_rr1.wav",
-        include_bytes!("../samples/hho_vl1_rr1.wav"),
+        "hho_vl1_rr1.flac",
+        include_bytes!("../samples/hho_vl1_rr1.flac"),
     ),
     (
-        "hho_vl1_rr2.wav",
-        include_bytes!("../samples/hho_vl1_rr2.wav"),
+        "hho_vl1_rr2.flac",
+        include_bytes!("../samples/hho_vl1_rr2.flac"),
     ),
     (
-        "hho_vl1_rr3.wav",
-        include_bytes!("../samples/hho_vl1_rr3.wav"),
+        "hho_vl1_rr3.flac",
+        include_bytes!("../samples/hho_vl1_rr3.flac"),
     ),
     (
-        "hho_vl2_rr1.wav",
-        include_bytes!("../samples/hho_vl2_rr1.wav"),
+        "hho_vl2_rr1.flac",
+        include_bytes!("../samples/hho_vl2_rr1.flac"),
     ),
     (
-        "hho_vl2_rr2.wav",
-        include_bytes!("../samples/hho_vl2_rr2.wav"),
+        "hho_vl2_rr2.flac",
+        include_bytes!("../samples/hho_vl2_rr2.flac"),
     ),
     (
-        "hho_vl2_rr3.wav",
-        include_bytes!("../samples/hho_vl2_rr3.wav"),
+        "hho_vl2_rr3.flac",
+        include_bytes!("../samples/hho_vl2_rr3.flac"),
     ),
     (
-        "hho_vl3_rr1.wav",
-        include_bytes!("../samples/hho_vl3_rr1.wav"),
+        "hho_vl3_rr1.flac",
+        include_bytes!("../samples/hho_vl3_rr1.flac"),
     ),
     (
-        "hho_vl3_rr2.wav",
-        include_bytes!("../samples/hho_vl3_rr2.wav"),
+        "hho_vl3_rr2.flac",
+        include_bytes!("../samples/hho_vl3_rr2.flac"),
     ),
     (
-        "hho_vl3_rr3.wav",
-        include_bytes!("../samples/hho_vl3_rr3.wav"),
+        "hho_vl3_rr3.flac",
+        include_bytes!("../samples/hho_vl3_rr3.flac"),
     ),
     (
-        "hho_vl4_rr1.wav",
-        include_bytes!("../samples/hho_vl4_rr1.wav"),
+        "hho_vl4_rr1.flac",
+        include_bytes!("../samples/hho_vl4_rr1.flac"),
     ),
     (
-        "hho_vl4_rr2.wav",
-        include_bytes!("../samples/hho_vl4_rr2.wav"),
+        "hho_vl4_rr2.flac",
+        include_bytes!("../samples/hho_vl4_rr2.flac"),
     ),
     (
-        "hho_vl4_rr3.wav",
-        include_bytes!("../samples/hho_vl4_rr3.wav"),
+        "hho_vl4_rr3.flac",
+        include_bytes!("../samples/hho_vl4_rr3.flac"),
     ),
     (
-        "hhp_vl1_rr1.wav",
-        include_bytes!("../samples/hhp_vl1_rr1.wav"),
+        "hhp_vl1_rr1.flac",
+        include_bytes!("../samples/hhp_vl1_rr1.flac"),
     ),
     (
-        "hhp_vl1_rr2.wav",
-        include_bytes!("../samples/hhp_vl1_rr2.wav"),
+        "hhp_vl1_rr2.flac",
+        include_bytes!("../samples/hhp_vl1_rr2.flac"),
     ),
     (
-        "hhp_vl1_rr3.wav",
-        include_bytes!("../samples/hhp_vl1_rr3.wav"),
+        "hhp_vl1_rr3.flac",
+        include_bytes!("../samples/hhp_vl1_rr3.flac"),
     ),
     (
-        "hhp_vl1_rr4.wav",
-        include_bytes!("../samples/hhp_vl1_rr4.wav"),
+        "hhp_vl1_rr4.flac",
+        include_bytes!("../samples/hhp_vl1_rr4.flac"),
     ),
     (
-        "hhp_vl2_rr1.wav",
-        include_bytes!("../samples/hhp_vl2_rr1.wav"),
+        "hhp_vl2_rr1.flac",
+        include_bytes!("../samples/hhp_vl2_rr1.flac"),
     ),
     (
-        "hhp_vl2_rr2.wav",
-        include_bytes!("../samples/hhp_vl2_rr2.wav"),
+        "hhp_vl2_rr2.flac",
+        include_bytes!("../samples/hhp_vl2_rr2.flac"),
     ),
     (
-        "hhp_vl2_rr3.wav",
-        include_bytes!("../samples/hhp_vl2_rr3.wav"),
+        "hhp_vl2_rr3.flac",
+        include_bytes!("../samples/hhp_vl2_rr3.flac"),
     ),
     (
-        "hhp_vl2_rr4.wav",
-        include_bytes!("../samples/hhp_vl2_rr4.wav"),
+        "hhp_vl2_rr4.flac",
+        include_bytes!("../samples/hhp_vl2_rr4.flac"),
     ),
     (
-        "hhp_vl3_rr1.wav",
-        include_bytes!("../samples/hhp_vl3_rr1.wav"),
+        "hhp_vl3_rr1.flac",
+        include_bytes!("../samples/hhp_vl3_rr1.flac"),
     ),
     (
-        "hhp_vl3_rr2.wav",
-        include_bytes!("../samples/hhp_vl3_rr2.wav"),
+        "hhp_vl3_rr2.flac",
+        include_bytes!("../samples/hhp_vl3_rr2.flac"),
     ),
     (
-        "hhp_vl3_rr3.wav",
-        include_bytes!("../samples/hhp_vl3_rr3.wav"),
+        "hhp_vl3_rr3.flac",
+        include_bytes!("../samples/hhp_vl3_rr3.flac"),
     ),
     (
-        "hhp_vl3_rr4.wav",
-        include_bytes!("../samples/hhp_vl3_rr4.wav"),
+        "hhp_vl3_rr4.flac",
+        include_bytes!("../samples/hhp_vl3_rr4.flac"),
     ),
     (
-        "kick_vl1_rr1.wav",
-        include_bytes!("../samples/kick_vl1_rr1.wav"),
+        "kick_vl1_rr1.flac",
+        include_bytes!("../samples/kick_vl1_rr1.flac"),
     ),
     (
-        "kick_vl1_rr2.wav",
-        include_bytes!("../samples/kick_vl1_rr2.wav"),
+        "kick_vl1_rr2.flac",
+        include_bytes!("../samples/kick_vl1_rr2.flac"),
     ),
     (
-        "kick_vl1_rr3.wav",
-        include_bytes!("../samples/kick_vl1_rr3.wav"),
+        "kick_vl1_rr3.flac",
+        include_bytes!("../samples/kick_vl1_rr3.flac"),
     ),
     (
-        "kick_vl1_rr4.wav",
-        include_bytes!("../samples/kick_vl1_rr4.wav"),
+        "kick_vl1_rr4.flac",
+        include_bytes!("../samples/kick_vl1_rr4.flac"),
     ),
     (
-        "kick_vl2_rr1.wav",
-        include_bytes!("../samples/kick_vl2_rr1.wav"),
+        "kick_vl2_rr1.flac",
+        include_bytes!("../samples/kick_vl2_rr1.flac"),
     ),
     (
-        "kick_vl2_rr2.wav",
-        include_bytes!("../samples/kick_vl2_rr2.wav"),
+        "kick_vl2_rr2.flac",
+        include_bytes!("../samples/kick_vl2_rr2.flac"),
     ),
     (
-        "kick_vl2_rr3.wav",
-        include_bytes!("../samples/kick_vl2_rr3.wav"),
+        "kick_vl2_rr3.flac",
+        include_bytes!("../samples/kick_vl2_rr3.flac"),
     ),
     (
-        "kick_vl2_rr4.wav",
-        include_bytes!("../samples/kick_vl2_rr4.wav"),
+        "kick_vl2_rr4.flac",
+        include_bytes!("../samples/kick_vl2_rr4.flac"),
     ),
     (
-        "kick_vl3_rr1.wav",
-        include_bytes!("../samples/kick_vl3_rr1.wav"),
+        "kick_vl3_rr1.flac",
+        include_bytes!("../samples/kick_vl3_rr1.flac"),
     ),
     (
-        "kick_vl3_rr2.wav",
-        include_bytes!("../samples/kick_vl3_rr2.wav"),
+        "kick_vl3_rr2.flac",
+        include_bytes!("../samples/kick_vl3_rr2.flac"),
     ),
     (
-        "kick_vl3_rr3.wav",
-        include_bytes!("../samples/kick_vl3_rr3.wav"),
+        "kick_vl3_rr3.flac",
+        include_bytes!("../samples/kick_vl3_rr3.flac"),
     ),
     (
-        "kick_vl3_rr4.wav",
-        include_bytes!("../samples/kick_vl3_rr4.wav"),
+        "kick_vl3_rr4.flac",
+        include_bytes!("../samples/kick_vl3_rr4.flac"),
     ),
     (
-        "kick_vl4_rr1.wav",
-        include_bytes!("../samples/kick_vl4_rr1.wav"),
+        "kick_vl4_rr1.flac",
+        include_bytes!("../samples/kick_vl4_rr1.flac"),
     ),
     (
-        "kick_vl4_rr2.wav",
-        include_bytes!("../samples/kick_vl4_rr2.wav"),
+        "kick_vl4_rr2.flac",
+        include_bytes!("../samples/kick_vl4_rr2.flac"),
     ),
     (
-        "kick_vl4_rr3.wav",
-        include_bytes!("../samples/kick_vl4_rr3.wav"),
+        "kick_vl4_rr3.flac",
+        include_bytes!("../samples/kick_vl4_rr3.flac"),
     ),
     (
-        "kick_vl4_rr4.wav",
-        include_bytes!("../samples/kick_vl4_rr4.wav"),
+        "kick_vl4_rr4.flac",
+        include_bytes!("../samples/kick_vl4_rr4.flac"),
     ),
     (
-        "ride_vl1_rr1.wav",
-        include_bytes!("../samples/ride_vl1_rr1.wav"),
+        "ride_vl1_rr1.flac",
+        include_bytes!("../samples/ride_vl1_rr1.flac"),
     ),
     (
-        "ride_vl1_rr2.wav",
-        include_bytes!("../samples/ride_vl1_rr2.wav"),
+        "ride_vl1_rr2.flac",
+        include_bytes!("../samples/ride_vl1_rr2.flac"),
     ),
     (
-        "ride_vl1_rr3.wav",
-        include_bytes!("../samples/ride_vl1_rr3.wav"),
+        "ride_vl1_rr3.flac",
+        include_bytes!("../samples/ride_vl1_rr3.flac"),
     ),
     (
-        "ride_vl1_rr4.wav",
-        include_bytes!("../samples/ride_vl1_rr4.wav"),
+        "ride_vl1_rr4.flac",
+        include_bytes!("../samples/ride_vl1_rr4.flac"),
     ),
     (
-        "ride_vl2_rr1.wav",
-        include_bytes!("../samples/ride_vl2_rr1.wav"),
+        "ride_vl2_rr1.flac",
+        include_bytes!("../samples/ride_vl2_rr1.flac"),
     ),
     (
-        "ride_vl2_rr2.wav",
-        include_bytes!("../samples/ride_vl2_rr2.wav"),
+        "ride_vl2_rr2.flac",
+        include_bytes!("../samples/ride_vl2_rr2.flac"),
     ),
     (
-        "ride_vl2_rr3.wav",
-        include_bytes!("../samples/ride_vl2_rr3.wav"),
+        "ride_vl2_rr3.flac",
+        include_bytes!("../samples/ride_vl2_rr3.flac"),
     ),
     (
-        "ride_vl2_rr4.wav",
-        include_bytes!("../samples/ride_vl2_rr4.wav"),
+        "ride_vl2_rr4.flac",
+        include_bytes!("../samples/ride_vl2_rr4.flac"),
     ),
     (
-        "ride_vl3_rr1.wav",
-        include_bytes!("../samples/ride_vl3_rr1.wav"),
+        "ride_vl3_rr1.flac",
+        include_bytes!("../samples/ride_vl3_rr1.flac"),
     ),
     (
-        "ride_vl3_rr2.wav",
-        include_bytes!("../samples/ride_vl3_rr2.wav"),
+        "ride_vl3_rr2.flac",
+        include_bytes!("../samples/ride_vl3_rr2.flac"),
     ),
     (
-        "ride_vl3_rr3.wav",
-        include_bytes!("../samples/ride_vl3_rr3.wav"),
+        "ride_vl3_rr3.flac",
+        include_bytes!("../samples/ride_vl3_rr3.flac"),
     ),
     (
-        "ride_vl3_rr4.wav",
-        include_bytes!("../samples/ride_vl3_rr4.wav"),
+        "ride_vl3_rr4.flac",
+        include_bytes!("../samples/ride_vl3_rr4.flac"),
     ),
     (
-        "ridebell_vl1_rr1.wav",
-        include_bytes!("../samples/ridebell_vl1_rr1.wav"),
+        "ridebell_vl1_rr1.flac",
+        include_bytes!("../samples/ridebell_vl1_rr1.flac"),
     ),
     (
-        "ridebell_vl1_rr2.wav",
-        include_bytes!("../samples/ridebell_vl1_rr2.wav"),
+        "ridebell_vl1_rr2.flac",
+        include_bytes!("../samples/ridebell_vl1_rr2.flac"),
     ),
     (
-        "ridebell_vl1_rr3.wav",
-        include_bytes!("../samples/ridebell_vl1_rr3.wav"),
+        "ridebell_vl1_rr3.flac",
+        include_bytes!("../samples/ridebell_vl1_rr3.flac"),
     ),
     (
-        "ridebell_vl2_rr1.wav",
-        include_bytes!("../samples/ridebell_vl2_rr1.wav"),
+        "ridebell_vl2_rr1.flac",
+        include_bytes!("../samples/ridebell_vl2_rr1.flac"),
     ),
     (
-        "ridebell_vl2_rr2.wav",
-        include_bytes!("../samples/ridebell_vl2_rr2.wav"),
+        "ridebell_vl2_rr2.flac",
+        include_bytes!("../samples/ridebell_vl2_rr2.flac"),
     ),
     (
-        "ridebell_vl2_rr3.wav",
-        include_bytes!("../samples/ridebell_vl2_rr3.wav"),
+        "ridebell_vl2_rr3.flac",
+        include_bytes!("../samples/ridebell_vl2_rr3.flac"),
     ),
     (
-        "ridebell_vl3_rr1.wav",
-        include_bytes!("../samples/ridebell_vl3_rr1.wav"),
+        "ridebell_vl3_rr1.flac",
+        include_bytes!("../samples/ridebell_vl3_rr1.flac"),
     ),
     (
-        "ridebell_vl3_rr2.wav",
-        include_bytes!("../samples/ridebell_vl3_rr2.wav"),
+        "ridebell_vl3_rr2.flac",
+        include_bytes!("../samples/ridebell_vl3_rr2.flac"),
     ),
     (
-        "ridebell_vl3_rr3.wav",
-        include_bytes!("../samples/ridebell_vl3_rr3.wav"),
+        "ridebell_vl3_rr3.flac",
+        include_bytes!("../samples/ridebell_vl3_rr3.flac"),
     ),
     (
-        "sidestick_vl1_rr1.wav",
-        include_bytes!("../samples/sidestick_vl1_rr1.wav"),
+        "sidestick_vl1_rr1.flac",
+        include_bytes!("../samples/sidestick_vl1_rr1.flac"),
     ),
     (
-        "sidestick_vl1_rr2.wav",
-        include_bytes!("../samples/sidestick_vl1_rr2.wav"),
+        "sidestick_vl1_rr2.flac",
+        include_bytes!("../samples/sidestick_vl1_rr2.flac"),
     ),
     (
-        "sidestick_vl1_rr3.wav",
-        include_bytes!("../samples/sidestick_vl1_rr3.wav"),
+        "sidestick_vl1_rr3.flac",
+        include_bytes!("../samples/sidestick_vl1_rr3.flac"),
     ),
     (
-        "sidestick_vl2_rr1.wav",
-        include_bytes!("../samples/sidestick_vl2_rr1.wav"),
+        "sidestick_vl2_rr1.flac",
+        include_bytes!("../samples/sidestick_vl2_rr1.flac"),
     ),
     (
-        "sidestick_vl2_rr2.wav",
-        include_bytes!("../samples/sidestick_vl2_rr2.wav"),
+        "sidestick_vl2_rr2.flac",
+        include_bytes!("../samples/sidestick_vl2_rr2.flac"),
     ),
     (
-        "sidestick_vl2_rr3.wav",
-        include_bytes!("../samples/sidestick_vl2_rr3.wav"),
+        "sidestick_vl2_rr3.flac",
+        include_bytes!("../samples/sidestick_vl2_rr3.flac"),
     ),
     (
-        "sidestick_vl3_rr1.wav",
-        include_bytes!("../samples/sidestick_vl3_rr1.wav"),
+        "sidestick_vl3_rr1.flac",
+        include_bytes!("../samples/sidestick_vl3_rr1.flac"),
     ),
     (
-        "sidestick_vl3_rr2.wav",
-        include_bytes!("../samples/sidestick_vl3_rr2.wav"),
+        "sidestick_vl3_rr2.flac",
+        include_bytes!("../samples/sidestick_vl3_rr2.flac"),
     ),
     (
-        "sidestick_vl3_rr3.wav",
-        include_bytes!("../samples/sidestick_vl3_rr3.wav"),
+        "sidestick_vl3_rr3.flac",
+        include_bytes!("../samples/sidestick_vl3_rr3.flac"),
     ),
     (
-        "snare_vl1_rr1.wav",
-        include_bytes!("../samples/snare_vl1_rr1.wav"),
+        "snare_vl1_rr1.flac",
+        include_bytes!("../samples/snare_vl1_rr1.flac"),
     ),
     (
-        "snare_vl1_rr2.wav",
-        include_bytes!("../samples/snare_vl1_rr2.wav"),
+        "snare_vl1_rr2.flac",
+        include_bytes!("../samples/snare_vl1_rr2.flac"),
     ),
     (
-        "snare_vl1_rr3.wav",
-        include_bytes!("../samples/snare_vl1_rr3.wav"),
+        "snare_vl1_rr3.flac",
+        include_bytes!("../samples/snare_vl1_rr3.flac"),
     ),
     (
-        "snare_vl2_rr1.wav",
-        include_bytes!("../samples/snare_vl2_rr1.wav"),
+        "snare_vl2_rr1.flac",
+        include_bytes!("../samples/snare_vl2_rr1.flac"),
     ),
     (
-        "snare_vl2_rr2.wav",
-        include_bytes!("../samples/snare_vl2_rr2.wav"),
+        "snare_vl2_rr2.flac",
+        include_bytes!("../samples/snare_vl2_rr2.flac"),
     ),
     (
-        "snare_vl2_rr3.wav",
-        include_bytes!("../samples/snare_vl2_rr3.wav"),
+        "snare_vl2_rr3.flac",
+        include_bytes!("../samples/snare_vl2_rr3.flac"),
     ),
     (
-        "snare_vl3_rr1.wav",
-        include_bytes!("../samples/snare_vl3_rr1.wav"),
+        "snare_vl3_rr1.flac",
+        include_bytes!("../samples/snare_vl3_rr1.flac"),
     ),
     (
-        "snare_vl3_rr2.wav",
-        include_bytes!("../samples/snare_vl3_rr2.wav"),
+        "snare_vl3_rr2.flac",
+        include_bytes!("../samples/snare_vl3_rr2.flac"),
     ),
     (
-        "snare_vl3_rr3.wav",
-        include_bytes!("../samples/snare_vl3_rr3.wav"),
+        "snare_vl3_rr3.flac",
+        include_bytes!("../samples/snare_vl3_rr3.flac"),
     ),
     (
-        "snare_vl4_rr1.wav",
-        include_bytes!("../samples/snare_vl4_rr1.wav"),
+        "snare_vl4_rr1.flac",
+        include_bytes!("../samples/snare_vl4_rr1.flac"),
     ),
     (
-        "snare_vl4_rr2.wav",
-        include_bytes!("../samples/snare_vl4_rr2.wav"),
+        "snare_vl4_rr2.flac",
+        include_bytes!("../samples/snare_vl4_rr2.flac"),
     ),
     (
-        "snare_vl4_rr3.wav",
-        include_bytes!("../samples/snare_vl4_rr3.wav"),
+        "snare_vl4_rr3.flac",
+        include_bytes!("../samples/snare_vl4_rr3.flac"),
     ),
     (
-        "snare_vl5_rr1.wav",
-        include_bytes!("../samples/snare_vl5_rr1.wav"),
+        "snare_vl5_rr1.flac",
+        include_bytes!("../samples/snare_vl5_rr1.flac"),
     ),
     (
-        "snare_vl5_rr2.wav",
-        include_bytes!("../samples/snare_vl5_rr2.wav"),
+        "snare_vl5_rr2.flac",
+        include_bytes!("../samples/snare_vl5_rr2.flac"),
     ),
     (
-        "snare_vl5_rr3.wav",
-        include_bytes!("../samples/snare_vl5_rr3.wav"),
+        "snare_vl5_rr3.flac",
+        include_bytes!("../samples/snare_vl5_rr3.flac"),
     ),
     (
-        "snare_vl6_rr1.wav",
-        include_bytes!("../samples/snare_vl6_rr1.wav"),
+        "snare_vl6_rr1.flac",
+        include_bytes!("../samples/snare_vl6_rr1.flac"),
     ),
     (
-        "snare_vl6_rr2.wav",
-        include_bytes!("../samples/snare_vl6_rr2.wav"),
+        "snare_vl6_rr2.flac",
+        include_bytes!("../samples/snare_vl6_rr2.flac"),
     ),
     (
-        "snare_vl6_rr3.wav",
-        include_bytes!("../samples/snare_vl6_rr3.wav"),
+        "snare_vl6_rr3.flac",
+        include_bytes!("../samples/snare_vl6_rr3.flac"),
     ),
     (
-        "tomhi_vl1_rr1.wav",
-        include_bytes!("../samples/tomhi_vl1_rr1.wav"),
+        "tomhi_vl1_rr1.flac",
+        include_bytes!("../samples/tomhi_vl1_rr1.flac"),
     ),
     (
-        "tomhi_vl1_rr2.wav",
-        include_bytes!("../samples/tomhi_vl1_rr2.wav"),
+        "tomhi_vl1_rr2.flac",
+        include_bytes!("../samples/tomhi_vl1_rr2.flac"),
     ),
     (
-        "tomhi_vl1_rr3.wav",
-        include_bytes!("../samples/tomhi_vl1_rr3.wav"),
+        "tomhi_vl1_rr3.flac",
+        include_bytes!("../samples/tomhi_vl1_rr3.flac"),
     ),
     (
-        "tomhi_vl2_rr1.wav",
-        include_bytes!("../samples/tomhi_vl2_rr1.wav"),
+        "tomhi_vl2_rr1.flac",
+        include_bytes!("../samples/tomhi_vl2_rr1.flac"),
     ),
     (
-        "tomhi_vl2_rr2.wav",
-        include_bytes!("../samples/tomhi_vl2_rr2.wav"),
+        "tomhi_vl2_rr2.flac",
+        include_bytes!("../samples/tomhi_vl2_rr2.flac"),
     ),
     (
-        "tomhi_vl2_rr3.wav",
-        include_bytes!("../samples/tomhi_vl2_rr3.wav"),
+        "tomhi_vl2_rr3.flac",
+        include_bytes!("../samples/tomhi_vl2_rr3.flac"),
     ),
     (
-        "tomhi_vl3_rr1.wav",
-        include_bytes!("../samples/tomhi_vl3_rr1.wav"),
+        "tomhi_vl3_rr1.flac",
+        include_bytes!("../samples/tomhi_vl3_rr1.flac"),
     ),
     (
-        "tomhi_vl3_rr2.wav",
-        include_bytes!("../samples/tomhi_vl3_rr2.wav"),
+        "tomhi_vl3_rr2.flac",
+        include_bytes!("../samples/tomhi_vl3_rr2.flac"),
     ),
     (
-        "tomhi_vl3_rr3.wav",
-        include_bytes!("../samples/tomhi_vl3_rr3.wav"),
+        "tomhi_vl3_rr3.flac",
+        include_bytes!("../samples/tomhi_vl3_rr3.flac"),
     ),
     (
-        "tomhi_vl4_rr1.wav",
-        include_bytes!("../samples/tomhi_vl4_rr1.wav"),
+        "tomhi_vl4_rr1.flac",
+        include_bytes!("../samples/tomhi_vl4_rr1.flac"),
     ),
     (
-        "tomhi_vl4_rr2.wav",
-        include_bytes!("../samples/tomhi_vl4_rr2.wav"),
+        "tomhi_vl4_rr2.flac",
+        include_bytes!("../samples/tomhi_vl4_rr2.flac"),
     ),
     (
-        "tomhi_vl4_rr3.wav",
-        include_bytes!("../samples/tomhi_vl4_rr3.wav"),
+        "tomhi_vl4_rr3.flac",
+        include_bytes!("../samples/tomhi_vl4_rr3.flac"),
     ),
     (
-        "tomlo_vl1_rr1.wav",
-        include_bytes!("../samples/tomlo_vl1_rr1.wav"),
+        "tomlo_vl1_rr1.flac",
+        include_bytes!("../samples/tomlo_vl1_rr1.flac"),
     ),
     (
-        "tomlo_vl1_rr2.wav",
-        include_bytes!("../samples/tomlo_vl1_rr2.wav"),
+        "tomlo_vl1_rr2.flac",
+        include_bytes!("../samples/tomlo_vl1_rr2.flac"),
     ),
     (
-        "tomlo_vl1_rr3.wav",
-        include_bytes!("../samples/tomlo_vl1_rr3.wav"),
+        "tomlo_vl1_rr3.flac",
+        include_bytes!("../samples/tomlo_vl1_rr3.flac"),
     ),
     (
-        "tomlo_vl2_rr1.wav",
-        include_bytes!("../samples/tomlo_vl2_rr1.wav"),
+        "tomlo_vl2_rr1.flac",
+        include_bytes!("../samples/tomlo_vl2_rr1.flac"),
     ),
     (
-        "tomlo_vl2_rr2.wav",
-        include_bytes!("../samples/tomlo_vl2_rr2.wav"),
+        "tomlo_vl2_rr2.flac",
+        include_bytes!("../samples/tomlo_vl2_rr2.flac"),
     ),
     (
-        "tomlo_vl2_rr3.wav",
-        include_bytes!("../samples/tomlo_vl2_rr3.wav"),
+        "tomlo_vl2_rr3.flac",
+        include_bytes!("../samples/tomlo_vl2_rr3.flac"),
     ),
     (
-        "tomlo_vl3_rr1.wav",
-        include_bytes!("../samples/tomlo_vl3_rr1.wav"),
+        "tomlo_vl3_rr1.flac",
+        include_bytes!("../samples/tomlo_vl3_rr1.flac"),
     ),
     (
-        "tomlo_vl3_rr2.wav",
-        include_bytes!("../samples/tomlo_vl3_rr2.wav"),
+        "tomlo_vl3_rr2.flac",
+        include_bytes!("../samples/tomlo_vl3_rr2.flac"),
     ),
     (
-        "tomlo_vl3_rr3.wav",
-        include_bytes!("../samples/tomlo_vl3_rr3.wav"),
+        "tomlo_vl3_rr3.flac",
+        include_bytes!("../samples/tomlo_vl3_rr3.flac"),
     ),
     (
-        "tomlo_vl4_rr1.wav",
-        include_bytes!("../samples/tomlo_vl4_rr1.wav"),
+        "tomlo_vl4_rr1.flac",
+        include_bytes!("../samples/tomlo_vl4_rr1.flac"),
     ),
     (
-        "tomlo_vl4_rr2.wav",
-        include_bytes!("../samples/tomlo_vl4_rr2.wav"),
+        "tomlo_vl4_rr2.flac",
+        include_bytes!("../samples/tomlo_vl4_rr2.flac"),
     ),
     (
-        "tomlo_vl4_rr3.wav",
-        include_bytes!("../samples/tomlo_vl4_rr3.wav"),
+        "tomlo_vl4_rr3.flac",
+        include_bytes!("../samples/tomlo_vl4_rr3.flac"),
     ),
 ];
 
@@ -700,12 +700,12 @@ impl Bank {
     }
 
     /// File name of a take (0-based indices), e.g. `file_name(0, 0)` is
-    /// `"ride_vl1_rr1.wav"`.
+    /// `"ride_vl1_rr1.flac"`.
     ///
     /// Panics if `layer` or `rr` is out of range.
     pub fn file_name(&self, layer: usize, rr: usize) -> String {
         self.take_index(layer, rr);
-        format!("{}_vl{}_rr{}.wav", self.name, layer + 1, rr + 1)
+        format!("{}_vl{}_rr{}.flac", self.name, layer + 1, rr + 1)
     }
 
     /// Owning source's direct cache index for a take (0-based indices).
@@ -789,8 +789,30 @@ fn decoded_samples() -> &'static Vec<Vec<i16>> {
     PCM_CACHE.get_or_init(|| SAMPLES.iter().map(|(_, bytes)| decode_wav(bytes)).collect())
 }
 
-/// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).
+/// Decode one bank asset to PCM (16-bit mono 44.1 kHz), FLAC or RIFF.
+///
+/// Unlike the other asset crates this one decodes its own PCM rather than
+/// handing bytes up to `ferrosintesis` — `pcm()` and `prewarm()` are part of its
+/// published API — so it takes the shared decoder directly. Dispatch is on the
+/// magic bytes, not a file extension: the extension is not present in the
+/// embedded bytes.
+///
+/// FLAC is lossless, so the values this returns are bit-identical to the PCM the
+/// encoder was handed and the kit sounds exactly as it did when the bank was
+/// RIFF.
 fn decode_wav(bytes: &[u8]) -> Vec<i16> {
+    if bytes.starts_with(b"fLaC") {
+        // An embedded asset that fails to decode is an asset-pipeline bug, not a
+        // runtime condition — the same contract the RIFF assertions below have
+        // always had. The decoder itself is fully fallible and bounds-checked.
+        return ferrosintesis_flac::decode_mono16(bytes)
+            .unwrap_or_else(|error| panic!("embedded drum bank is not decodable: {error}"));
+    }
+    decode_riff_wav(bytes)
+}
+
+/// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).
+fn decode_riff_wav(bytes: &[u8]) -> Vec<i16> {
     assert!(&bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
     let mut pos = 12;
     let mut data = Vec::new();
@@ -826,7 +848,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn inventory_matches_packaged_wavs() {
+    fn inventory_matches_packaged_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
         let mut packaged: Vec<String> = fs::read_dir(samples_dir)
             .expect("sample directory must exist")
@@ -835,7 +857,12 @@ mod tests {
                     .expect("sample directory entry must be readable")
                     .path()
             })
-            .filter(|path| path.extension() == Some(OsStr::new("wav")))
+            .filter(|path| {
+                matches!(
+                    path.extension().and_then(OsStr::to_str),
+                    Some("wav" | "flac")
+                )
+            })
             .map(|path| {
                 path.file_name()
                     .expect("sample must have a file name")
@@ -918,21 +945,22 @@ mod tests {
     }
 
     #[test]
-    fn every_sample_is_a_nonempty_wav_with_the_expected_aggregate_size() {
+    fn every_sample_is_a_nonempty_bank_file_with_the_expected_size() {
         assert_eq!(
             SAMPLES.iter().map(|(_, bytes)| bytes.len()).sum::<usize>(),
             EXPECTED_BYTES
         );
         for (name, bytes) in SAMPLES {
-            assert!(bytes.len() >= 12, "{name} is too short to be a WAV");
-            assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
-            assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
+            assert!(bytes.len() >= 12, "{name} is too short to be a sample");
+            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
+            let flac = &bytes[..4] == b"fLaC";
+            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);
     }
 
-    const EXPECTED_BYTES: usize = 9632990;
+    const EXPECTED_BYTES: usize = 5428756;
 
     #[test]
     fn decoded_banks_are_valid_audio() {

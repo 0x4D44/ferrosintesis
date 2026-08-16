@@ -251,7 +251,7 @@ mod tests {
 
     // Aggregate byte size of the 54 embedded WAVs; regenerate with prepare.py and
     // re-pin if the bank changes. Guards against an accidental sample re-cut.
-    const EXPECTED_BYTES: usize = 7_184_592;
+    const EXPECTED_BYTES: usize = 2361631;
 
     #[test]
     fn inventory_matches_packaged_samples() {
@@ -263,7 +263,12 @@ mod tests {
                     .expect("sample directory entry must be readable")
                     .path()
             })
-            .filter(|path| path.extension() == Some(OsStr::new("wav")))
+            .filter(|path| {
+                matches!(
+                    path.extension().and_then(OsStr::to_str),
+                    Some("wav" | "flac")
+                )
+            })
             .map(|path| {
                 path.file_name()
                     .expect("sample must have a file name")

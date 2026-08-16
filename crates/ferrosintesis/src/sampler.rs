@@ -74,7 +74,7 @@ fn parse_wav(bytes: &[u8]) -> Vec<f32> {
         // a runtime condition — the same contract the RIFF assertions below
         // have always had. The decoder itself is fully fallible and
         // bounds-checked; only this call site turns that into a panic.
-        let pcm = crate::flac::decode_mono16(bytes)
+        let pcm = ferrosintesis_flac::decode_mono16(bytes)
             .unwrap_or_else(|error| panic!("embedded sample bank is not decodable: {error}"));
         return pcm.into_iter().map(|s| f32::from(s) / 32768.0).collect();
     }

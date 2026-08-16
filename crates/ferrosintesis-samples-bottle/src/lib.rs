@@ -44,7 +44,12 @@ mod tests {
                     .expect("sample directory entry must be readable")
                     .path()
             })
-            .filter(|path| path.extension() == Some(OsStr::new("wav")))
+            .filter(|path| {
+                matches!(
+                    path.extension().and_then(OsStr::to_str),
+                    Some("wav" | "flac")
+                )
+            })
             .map(|path| {
                 path.file_name()
                     .expect("sample must have a file name")
@@ -73,7 +78,7 @@ mod tests {
     }
 
     #[test]
-    fn every_sample_is_a_nonempty_wav() {
+    fn every_sample_is_a_nonempty_bank_file() {
         for (name, bytes) in SAMPLES {
             assert!(bytes.len() >= 12, "{name} is too short to be a sample");
             let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";

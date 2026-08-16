@@ -311,7 +311,12 @@ mod tests {
                     .expect("sample directory entry must be readable")
                     .path()
             })
-            .filter(|path| path.extension() == Some(OsStr::new("wav")))
+            .filter(|path| {
+                matches!(
+                    path.extension().and_then(OsStr::to_str),
+                    Some("wav" | "flac")
+                )
+            })
             .map(|path| {
                 path.file_name()
                     .expect("sample must have a file name")

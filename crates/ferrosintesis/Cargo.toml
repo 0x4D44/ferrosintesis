@@ -58,6 +58,7 @@ embedded-samples = [
 ]
 
 [dependencies]
+ferrosintesis-flac = { path = "../ferrosintesis-flac", version = "=0.1.0" }
 # The `=` pins are deliberate: the sample bank IS the version, and a floating
 # bank would break bit-identical re-renders for a pinned ferrosintesis.
 # NB: keep each dependency on ONE line — a multi-line inline table is invalid

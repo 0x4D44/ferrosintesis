@@ -14,3 +14,12 @@ include = ["src/**", "samples/**", "README.md", "PROVENANCE.md", "LICENSE-CC0"]
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+# The shared FLAC decoder. This crate decodes PCM itself (see `decode_wav`), so
+# unlike the other asset crates it needs a decoder rather than just embedding
+# bytes. First-party path crate, so the workspace stays free of registry
+# dependencies and the no-network build survives. Keep it on ONE line: a
+# multi-line inline table is invalid TOML 1.0 and cargo at our MSRV (1.87)
+# refuses the manifest outright.
+ferrosintesis-flac = { path = "../ferrosintesis-flac", version = "=0.1.0" }

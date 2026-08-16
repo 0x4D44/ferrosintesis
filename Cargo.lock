@@ -6,6 +6,7 @@ version = 4
 name = "ferrosintesis"
 version = "0.21.57"
 dependencies = [
+ "ferrosintesis-flac",
  "ferrosintesis-samples-b1-upright",
  "ferrosintesis-samples-bass",
  "ferrosintesis-samples-bottle",
@@ -41,6 +42,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrosintesis-flac"
+version = "0.1.0"
+
+[[package]]
 name = "ferrosintesis-samples-b1-upright"
 version = "0.1.0"
 
@@ -71,11 +76,15 @@ version = "0.1.0"
 [[package]]
 name = "ferrosintesis-samples-drumkit"
 version = "0.1.0"
+dependencies = [
+ "ferrosintesis-flac",
+]
 
 [[package]]
 name = "ferrosintesis-samples-drumkit2"
 version = "0.1.0"
 dependencies = [
+ "ferrosintesis-flac",
  "ferrosintesis-samples-drumkit",
 ]
 

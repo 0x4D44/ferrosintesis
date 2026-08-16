@@ -23,153 +23,153 @@ use std::sync::OnceLock;
 
 pub use ferrosintesis_samples_drumkit::{Bank, BankSource, SAMPLE_RATE_HZ};
 
-/// Number of WAV files embedded in this package.
+/// Number of sample files embedded in this package.
 pub const FILE_COUNT: usize = 36;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
-        "china_vl1_rr1.wav",
-        include_bytes!("../samples/china_vl1_rr1.wav"),
+        "china_vl1_rr1.flac",
+        include_bytes!("../samples/china_vl1_rr1.flac"),
     ),
     (
-        "china_vl1_rr2.wav",
-        include_bytes!("../samples/china_vl1_rr2.wav"),
+        "china_vl1_rr2.flac",
+        include_bytes!("../samples/china_vl1_rr2.flac"),
     ),
     (
-        "china_vl1_rr3.wav",
-        include_bytes!("../samples/china_vl1_rr3.wav"),
+        "china_vl1_rr3.flac",
+        include_bytes!("../samples/china_vl1_rr3.flac"),
     ),
     (
-        "china_vl1_rr4.wav",
-        include_bytes!("../samples/china_vl1_rr4.wav"),
+        "china_vl1_rr4.flac",
+        include_bytes!("../samples/china_vl1_rr4.flac"),
     ),
     (
-        "china_vl2_rr1.wav",
-        include_bytes!("../samples/china_vl2_rr1.wav"),
+        "china_vl2_rr1.flac",
+        include_bytes!("../samples/china_vl2_rr1.flac"),
     ),
     (
-        "china_vl2_rr2.wav",
-        include_bytes!("../samples/china_vl2_rr2.wav"),
+        "china_vl2_rr2.flac",
+        include_bytes!("../samples/china_vl2_rr2.flac"),
     ),
     (
-        "china_vl2_rr3.wav",
-        include_bytes!("../samples/china_vl2_rr3.wav"),
+        "china_vl2_rr3.flac",
+        include_bytes!("../samples/china_vl2_rr3.flac"),
     ),
     (
-        "china_vl2_rr4.wav",
-        include_bytes!("../samples/china_vl2_rr4.wav"),
+        "china_vl2_rr4.flac",
+        include_bytes!("../samples/china_vl2_rr4.flac"),
     ),
     (
-        "china_vl3_rr1.wav",
-        include_bytes!("../samples/china_vl3_rr1.wav"),
+        "china_vl3_rr1.flac",
+        include_bytes!("../samples/china_vl3_rr1.flac"),
     ),
     (
-        "china_vl3_rr2.wav",
-        include_bytes!("../samples/china_vl3_rr2.wav"),
+        "china_vl3_rr2.flac",
+        include_bytes!("../samples/china_vl3_rr2.flac"),
     ),
     (
-        "china_vl3_rr3.wav",
-        include_bytes!("../samples/china_vl3_rr3.wav"),
+        "china_vl3_rr3.flac",
+        include_bytes!("../samples/china_vl3_rr3.flac"),
     ),
     (
-        "china_vl3_rr4.wav",
-        include_bytes!("../samples/china_vl3_rr4.wav"),
+        "china_vl3_rr4.flac",
+        include_bytes!("../samples/china_vl3_rr4.flac"),
     ),
     (
-        "china_vl4_rr1.wav",
-        include_bytes!("../samples/china_vl4_rr1.wav"),
+        "china_vl4_rr1.flac",
+        include_bytes!("../samples/china_vl4_rr1.flac"),
     ),
     (
-        "china_vl4_rr2.wav",
-        include_bytes!("../samples/china_vl4_rr2.wav"),
+        "china_vl4_rr2.flac",
+        include_bytes!("../samples/china_vl4_rr2.flac"),
     ),
     (
-        "china_vl4_rr3.wav",
-        include_bytes!("../samples/china_vl4_rr3.wav"),
+        "china_vl4_rr3.flac",
+        include_bytes!("../samples/china_vl4_rr3.flac"),
     ),
     (
-        "china_vl4_rr4.wav",
-        include_bytes!("../samples/china_vl4_rr4.wav"),
+        "china_vl4_rr4.flac",
+        include_bytes!("../samples/china_vl4_rr4.flac"),
     ),
     (
-        "china_vl5_rr1.wav",
-        include_bytes!("../samples/china_vl5_rr1.wav"),
+        "china_vl5_rr1.flac",
+        include_bytes!("../samples/china_vl5_rr1.flac"),
     ),
     (
-        "china_vl5_rr2.wav",
-        include_bytes!("../samples/china_vl5_rr2.wav"),
+        "china_vl5_rr2.flac",
+        include_bytes!("../samples/china_vl5_rr2.flac"),
     ),
     (
-        "china_vl5_rr3.wav",
-        include_bytes!("../samples/china_vl5_rr3.wav"),
+        "china_vl5_rr3.flac",
+        include_bytes!("../samples/china_vl5_rr3.flac"),
     ),
     (
-        "china_vl5_rr4.wav",
-        include_bytes!("../samples/china_vl5_rr4.wav"),
+        "china_vl5_rr4.flac",
+        include_bytes!("../samples/china_vl5_rr4.flac"),
     ),
     (
-        "crash_vl1_rr1.wav",
-        include_bytes!("../samples/crash_vl1_rr1.wav"),
+        "crash_vl1_rr1.flac",
+        include_bytes!("../samples/crash_vl1_rr1.flac"),
     ),
     (
-        "crash_vl1_rr2.wav",
-        include_bytes!("../samples/crash_vl1_rr2.wav"),
+        "crash_vl1_rr2.flac",
+        include_bytes!("../samples/crash_vl1_rr2.flac"),
     ),
     (
-        "crash_vl1_rr3.wav",
-        include_bytes!("../samples/crash_vl1_rr3.wav"),
+        "crash_vl1_rr3.flac",
+        include_bytes!("../samples/crash_vl1_rr3.flac"),
     ),
     (
-        "crash_vl1_rr4.wav",
-        include_bytes!("../samples/crash_vl1_rr4.wav"),
+        "crash_vl1_rr4.flac",
+        include_bytes!("../samples/crash_vl1_rr4.flac"),
     ),
     (
-        "crash_vl2_rr1.wav",
-        include_bytes!("../samples/crash_vl2_rr1.wav"),
+        "crash_vl2_rr1.flac",
+        include_bytes!("../samples/crash_vl2_rr1.flac"),
     ),
     (
-        "crash_vl2_rr2.wav",
-        include_bytes!("../samples/crash_vl2_rr2.wav"),
+        "crash_vl2_rr2.flac",
+        include_bytes!("../samples/crash_vl2_rr2.flac"),
     ),
     (
-        "crash_vl2_rr3.wav",
-        include_bytes!("../samples/crash_vl2_rr3.wav"),
+        "crash_vl2_rr3.flac",
+        include_bytes!("../samples/crash_vl2_rr3.flac"),
     ),
     (
-        "crash_vl2_rr4.wav",
-        include_bytes!("../samples/crash_vl2_rr4.wav"),
+        "crash_vl2_rr4.flac",
+        include_bytes!("../samples/crash_vl2_rr4.flac"),
     ),
     (
-        "crash_vl3_rr1.wav",
-        include_bytes!("../samples/crash_vl3_rr1.wav"),
+        "crash_vl3_rr1.flac",
+        include_bytes!("../samples/crash_vl3_rr1.flac"),
     ),
     (
-        "crash_vl3_rr2.wav",
-        include_bytes!("../samples/crash_vl3_rr2.wav"),
+        "crash_vl3_rr2.flac",
+        include_bytes!("../samples/crash_vl3_rr2.flac"),
     ),
     (
-        "crash_vl3_rr3.wav",
-        include_bytes!("../samples/crash_vl3_rr3.wav"),
+        "crash_vl3_rr3.flac",
+        include_bytes!("../samples/crash_vl3_rr3.flac"),
     ),
     (
-        "crash_vl3_rr4.wav",
-        include_bytes!("../samples/crash_vl3_rr4.wav"),
+        "crash_vl3_rr4.flac",
+        include_bytes!("../samples/crash_vl3_rr4.flac"),
     ),
     (
-        "splash_vl1_rr1.wav",
-        include_bytes!("../samples/splash_vl1_rr1.wav"),
+        "splash_vl1_rr1.flac",
+        include_bytes!("../samples/splash_vl1_rr1.flac"),
     ),
     (
-        "splash_vl1_rr2.wav",
-        include_bytes!("../samples/splash_vl1_rr2.wav"),
+        "splash_vl1_rr2.flac",
+        include_bytes!("../samples/splash_vl1_rr2.flac"),
     ),
     (
-        "splash_vl1_rr3.wav",
-        include_bytes!("../samples/splash_vl1_rr3.wav"),
+        "splash_vl1_rr3.flac",
+        include_bytes!("../samples/splash_vl1_rr3.flac"),
     ),
     (
-        "splash_vl1_rr4.wav",
-        include_bytes!("../samples/splash_vl1_rr4.wav"),
+        "splash_vl1_rr4.flac",
+        include_bytes!("../samples/splash_vl1_rr4.flac"),
     ),
 ];
 
@@ -256,8 +256,30 @@ fn decoded_samples() -> &'static Vec<Vec<i16>> {
     PCM_CACHE.get_or_init(|| SAMPLES.iter().map(|(_, bytes)| decode_wav(bytes)).collect())
 }
 
-/// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).
+/// Decode one bank asset to PCM (16-bit mono 44.1 kHz), FLAC or RIFF.
+///
+/// Unlike the other asset crates this one decodes its own PCM rather than
+/// handing bytes up to `ferrosintesis` — `pcm()` and `prewarm()` are part of its
+/// published API — so it takes the shared decoder directly. Dispatch is on the
+/// magic bytes, not a file extension: the extension is not present in the
+/// embedded bytes.
+///
+/// FLAC is lossless, so the values this returns are bit-identical to the PCM the
+/// encoder was handed and the kit sounds exactly as it did when the bank was
+/// RIFF.
 fn decode_wav(bytes: &[u8]) -> Vec<i16> {
+    if bytes.starts_with(b"fLaC") {
+        // An embedded asset that fails to decode is an asset-pipeline bug, not a
+        // runtime condition — the same contract the RIFF assertions below have
+        // always had. The decoder itself is fully fallible and bounds-checked.
+        return ferrosintesis_flac::decode_mono16(bytes)
+            .unwrap_or_else(|error| panic!("embedded drum bank is not decodable: {error}"));
+    }
+    decode_riff_wav(bytes)
+}
+
+/// Minimal RIFF walker for the bank's own files (16-bit mono 44.1 kHz).
+fn decode_riff_wav(bytes: &[u8]) -> Vec<i16> {
     assert!(&bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
     let mut pos = 12;
     let mut data = Vec::new();
@@ -330,7 +352,7 @@ mod tests {
     /// The embedded table must match the packaged directory exactly. Catches a
     /// sample added to `samples/` without regenerating, and vice versa.
     #[test]
-    fn inventory_matches_packaged_wavs() {
+    fn inventory_matches_packaged_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
         let packaged = fs::read_dir(samples_dir)
             .expect("sample directory must exist")
@@ -339,7 +361,12 @@ mod tests {
                     .expect("sample directory entry must be readable")
                     .path()
             })
-            .filter(|path| path.extension() == Some(OsStr::new("wav")))
+            .filter(|path| {
+                matches!(
+                    path.extension().and_then(OsStr::to_str),
+                    Some("wav" | "flac")
+                )
+            })
             .map(|path| {
                 path.file_name()
                     .expect("sample must have a file name")
@@ -351,20 +378,26 @@ mod tests {
             .unwrap_or_else(|error| panic!("packaged inventory mismatch: {error}"));
 
         for (name, bytes) in SAMPLES.iter() {
-            assert!(name.ends_with(".wav"), "{name} is not a .wav");
-            assert!(bytes.len() > 44, "{name} is smaller than a WAV header");
+            assert!(
+                name.ends_with(".flac") || name.ends_with(".wav"),
+                "{name} is not a bank asset"
+            );
+            assert!(
+                bytes.len() > 44,
+                "{name} is smaller than any real bank asset"
+            );
         }
     }
 
     #[test]
-    fn inventory_comparison_rejects_an_unembedded_packaged_wav() {
+    fn inventory_comparison_rejects_an_unembedded_packaged_asset() {
         let mut packaged: Vec<String> =
             SAMPLES.iter().map(|(name, _)| (*name).to_owned()).collect();
-        packaged.push("unembedded_fixture.wav".to_owned());
+        packaged.push("unembedded_fixture.flac".to_owned());
 
         let error = validate_packaged_inventory(packaged)
             .expect_err("an unembedded packaged WAV must fail the inventory oracle");
-        assert!(error.contains("unembedded_fixture.wav"), "{error}");
+        assert!(error.contains("unembedded_fixture.flac"), "{error}");
     }
 
     /// Velocity splits, carried over from the core crate's test when these banks
@@ -382,16 +415,17 @@ mod tests {
     /// Aggregate embedded size, pinned. Catches a sample silently replaced by a
     /// re-cut of a different length.
     #[test]
-    fn every_sample_is_a_nonempty_wav_with_the_expected_aggregate_size() {
-        const EXPECTED_BYTES: usize = 7647408;
+    fn every_sample_is_a_nonempty_bank_file_with_the_expected_size() {
+        const EXPECTED_BYTES: usize = 4301372;
         assert_eq!(
             SAMPLES.iter().map(|(_, bytes)| bytes.len()).sum::<usize>(),
             EXPECTED_BYTES
         );
         for (name, bytes) in SAMPLES {
-            assert!(bytes.len() >= 12, "{name} is too short to be a WAV");
-            assert_eq!(&bytes[..4], b"RIFF", "{name} has no RIFF header");
-            assert_eq!(&bytes[8..12], b"WAVE", "{name} has no WAVE signature");
+            assert!(bytes.len() >= 12, "{name} is too short to be a sample");
+            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
+            let flac = &bytes[..4] == b"fLaC";
+            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
             assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);

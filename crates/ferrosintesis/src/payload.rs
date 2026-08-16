@@ -427,11 +427,11 @@ mod tests {
         // Anti-vacuity floor, NOT a size budget: it exists so a scan that has
         // stopped matching anything fails loudly rather than passing on an
         // empty set. Re-pinned when the banks moved from RIFF to FLAC, which
-        // took the payload from ~111 MiB to ~61 MiB without losing a single
+        // took the payload from ~111 MiB to ~54 MiB without losing a single
         // recording. Kept just under the real figure, for the same reason it
         // sat just under the old one.
         assert!(
-            files > 1000 && bytes > 55 * 1024 * 1024,
+            files > 1000 && bytes > 48 * 1024 * 1024,
             "payload scan found only {files} files / {bytes} bytes"
         );
     }

@@ -19,3 +19,5 @@ path = "src/lib.rs"
 # dependency on ONE line: a multi-line inline table is invalid TOML 1.0 and cargo at our
 # MSRV (1.87) refuses the manifest outright.
 ferrosintesis-samples-drumkit = { path = "../ferrosintesis-samples-drumkit", version = "=0.1.0" }
+# The shared FLAC decoder — same reason as -drumkit: this crate decodes its own PCM.
+ferrosintesis-flac = { path = "../ferrosintesis-flac", version = "=0.1.0" }

@@ -52,14 +52,11 @@ SKIP_CRATES = {
     # the 2026.07.28 HLD). A FLAC container has nowhere to put it. Moving these
     # needs the tail in a FLAC APPLICATION block -- a real design change.
     "ferrosintesis-samples-b1-upright",
-    # These two DECODE PCM THEMSELVES, in the sample crate: `decode_wav` +
-    # `PCM_CACHE` in their own lib.rs, rather than handing bytes to
-    # ferrosintesis. Every sample crate is dependency-free by design and these
-    # are published to crates.io, so giving them FLAC means a new shared
-    # first-party crate in a published dependency graph -- an architectural
-    # decision, not a mechanical one. Deliberately deferred.
-    "ferrosintesis-samples-drumkit",
-    "ferrosintesis-samples-drumkit2",
+    # `-drumkit` and `-drumkit2` used to sit here. They decode PCM inside the
+    # asset crate (`decode_wav` + `PCM_CACHE` in their own lib.rs) because
+    # `pcm()` and `prewarm()` are part of their published API, so they needed a
+    # decoder rather than just bytes. Resolved by `ferrosintesis-flac`, a shared
+    # first-party crate all three depend on; they convert like the rest now.
 }
 
 

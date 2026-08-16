@@ -2,6 +2,11 @@
 members = [
     "crates/ferrosintesis",
     "crates/ferrosintesis-cli",
+    # The minimal FLAC decoder for the embedded banks. Its own crate because
+    # THREE packages need it — `ferrosintesis` and the two drum banks, which
+    # decode PCM inside the asset crate rather than handing bytes up. A shared
+    # crate is what keeps that from becoming three copies of a bit reader.
+    "crates/ferrosintesis-flac",
     "crates/ferrosintesis-samples-clavinet",
     "crates/ferrosintesis-samples-core",
     "crates/ferrosintesis-samples-drumkit",

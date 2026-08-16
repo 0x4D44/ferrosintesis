@@ -106,7 +106,7 @@ mod tests {
     /// property — that the embedded bytes are the committed files, byte-length for
     /// byte-length — is `embedded_bytes_match_the_committed_files`, which needs no
     /// re-pinning.
-    const EXPECTED_BYTES: usize = 1_021_972;
+    const EXPECTED_BYTES: usize = 739062;
 
     fn samples_dir() -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("samples")
@@ -119,7 +119,12 @@ mod tests {
         let mut names: Vec<String> = fs::read_dir(samples_dir())
             .expect("sample directory must exist")
             .map(|entry| entry.expect("sample dir entry must be readable").path())
-            .filter(|path| path.extension() == Some(OsStr::new("wav")))
+            .filter(|path| {
+                matches!(
+                    path.extension().and_then(OsStr::to_str),
+                    Some("wav" | "flac")
+                )
+            })
             .map(|path| {
                 path.file_name()
                     .expect("sample must have a file name")
@@ -175,7 +180,7 @@ mod tests {
         for (rr, name) in embedded.iter().enumerate() {
             assert_eq!(
                 name.as_str(),
-                format!("fretnoise_rr{:02}.wav", rr + 1),
+                format!("fretnoise_rr{:02}.flac", rr + 1),
                 "round-robin slot {rr} must hold ordinal {} — the ordinals must run \
                  contiguously from 01",
                 rr + 1

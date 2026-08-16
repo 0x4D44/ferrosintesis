@@ -83,17 +83,20 @@ allows `Options` to evolve without requiring callers to construct its fields.
 
 `embedded-samples` (default) compiles twenty-five first-party asset crates into
 the binary: 1080 recordings -- attack transients, sustain loops, whole-voice
-instruments and the sampled drum kit -- embedding ~61 MiB. The synth uses
+instruments and the sampled drum kit -- embedding ~54 MiB. The synth uses
 an LA-synthesis structure: recorded onset material adds attack detail before
 crossfading into a modeled body or sustain.
 
-Most banks are stored as **FLAC** and decoded once at `prewarm`, off the realtime
-thread; the decoder is vendored in `src/flac.rs` because a registry one would
-forfeit this workspace's zero-dependency offline build. FLAC is lossless, so the
-decoded PCM is bit-identical to the recordings and a render is byte-for-byte what
-it was when the banks were RIFF. Some banks still use RIFF: `b1-upright` carries
-a custom `b1t` chunk a FLAC container cannot hold, while `drumkit` and `drumkit2`
-decode PCM inside the asset crate itself, where the decoder is not reachable.
+The banks are stored as **FLAC** and decoded once at `prewarm`, off the realtime
+thread. The decoder is the first-party `ferrosintesis-flac` package rather than a
+registry crate, because a registry dependency would forfeit this workspace's
+zero-dependency offline build; it is a separate package rather than a module here
+because the two drum-bank crates decode their own PCM and need it too. FLAC is
+lossless, so the decoded PCM is bit-identical to the recordings and a render is
+byte-for-byte what it was when the banks were RIFF.
+
+Only `b1-upright` still uses RIFF: its files carry a custom `b1t` chunk (a
+decimated mu-law natural tail) that a FLAC container has nowhere to put.
 
 ## The instrument models
 

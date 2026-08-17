@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00226 — Dark-Salamander regeneration can publish a mixed bank after a late failure
 
-- **State:** Open
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** dark-Salamander sample generation / failure atomicity
@@ -19,7 +19,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T16:08:50Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-16T16:08:50Z, raised via `deltic bugs new` model=gpt-5.6-sol@high); Closed (2026-08-17T20:21:52Z, moot — subject code removed in 04d841ba, closed on Arthur's decision)
 
 ## Observation
 
@@ -35,6 +35,27 @@ Existing records do not cover this path: MM-BUG-KILN-00123 covers stale dark des
 
 ## Fix
 
-<unfixed — raised only>
+Not fixed — **closed as moot**. The failure path described here belongs to the
+dark-Salamander regeneration recipe, and that bank was removed in `04d841ba`
+("samples: remove the dark-Salamander alternate (GM 0 CC0=5)"). There is no
+`--only=darkgrand` recipe left to run, so the interleaved generate-and-publish
+sequence it describes no longer exists.
+
+Closed on Arthur's explicit decision (2026-08-17), which is the second pair of
+eyes the ledger's two-eyes rule requires. Note the rule is written for verifying
+a *fix*; there is no fix to verify here, and the check that matters instead is
+that the subject code is genuinely gone — `crates/ferrosintesis-samples-dark-salamander/`
+is absent from trunk and the sample-crate census is now 24, pinned by
+`test_every_sample_crate_header_matches_the_generator`.
 
 ## Notes
+
+The general lesson outlived the bank, and the surviving generators now satisfy
+it. `55298fb1` ("Bake sample banks as FLAC end to end") gave every publication
+path the staging-then-publish shape this record asked for: `prepare.py` writes
+WAVs and converts a finished bank in one pass, `prepare_drumkit.py` and
+`banjo_extract.py` encode every take before any tracked file is replaced, and
+both carry negative controls for an injected mid-publication failure
+(`test_publish_encode_failure_preserves_both_packages`,
+`test_mid_publish_write_failure_rolls_back_every_file`). So the fix this bug
+proposed exists — for the banks that still ship.

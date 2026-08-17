@@ -1,6 +1,6 @@
 # MM-REQ-KILN-00033 — Dark Salamander must remain a verified projection of the source grand bank
 
-- **State:** Draft
+- **State:** Retired
 - **Priority:** Should
 - **Area:** sample assets / dark-grand generation
 - **Raised:** 2026-07-26
@@ -17,7 +17,10 @@
 - **Owner since:** -
 - **Owner until:** -
 - **Auto attempts:** 0
-- **State history:** Draft (2026-07-26, captured by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-dark-salamander/`)
+- **Depends-on:** —
+- **Design:** —
+- **Owner role:** -
+- **State history:** Draft (2026-07-26, captured by Codex GPT-5.6-Sol from the coverage-ledger review of `crates/ferrosintesis-samples-dark-salamander/`) -> Retired (2026-08-17T20:21:17Z, deltic:manual retire host=CRUCIBLE)
 
 ## Statement
 
@@ -46,3 +49,5 @@ high-band attenuation so a self-consistent bad transform cannot redefine the
 expectation.
 
 Proposed priority: Should. Proposed flow: light. Estimated effort: Medium.
+
+Retired (2026-08-17T20:21:17Z): Moot: the subject crate no longer exists. The dark-Salamander alternate bank (GM 0 CC0=5) was removed in 04d841ba, so there is no bank left to verify as a projection of the grand source and no transform left to measure. Retired on Arthur's decision (2026-08-17) rather than left Draft against deleted code. The underlying lesson stands and applies to the surviving banks: a filename/aggregate-bytes/magic check does not prove a payload is the transform it claims to be.

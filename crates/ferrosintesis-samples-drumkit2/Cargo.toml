@@ -1,6 +1,6 @@
 [package]
 name = "ferrosintesis-samples-drumkit2"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.87"
 description = "Embedded CC0 accent-cymbal banks for ferrosintesis (crash, splash, china) — overflow from the size-capped -drumkit crate"
@@ -18,6 +18,6 @@ path = "src/lib.rs"
 # hold a single `&'static Bank` without caring which crate the bytes came from. Keep the
 # dependency on ONE line: a multi-line inline table is invalid TOML 1.0 and cargo at our
 # MSRV (1.87) refuses the manifest outright.
-ferrosintesis-samples-drumkit = { path = "../ferrosintesis-samples-drumkit", version = "=0.1.0" }
+ferrosintesis-samples-drumkit = { path = "../ferrosintesis-samples-drumkit", version = "=0.2.0" }
 # The shared FLAC decoder — same reason as -drumkit: this crate decodes its own PCM.
 ferrosintesis-flac = { path = "../ferrosintesis-flac", version = "=0.1.0" }

@@ -1,6 +1,6 @@
 [package]
 name = "ferrosintesis-samples-ccby"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.87"
 description = "Embedded CC-BY Freesound onset samples for ferrosintesis (GM 4 Rhodes, GM 15 hammered dulcimer)"

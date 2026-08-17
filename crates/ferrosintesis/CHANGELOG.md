@@ -11,6 +11,39 @@ lives in the repository's git log and `wrk_journals/`.
 
 ## [Unreleased]
 
+## [0.21.58] - 2026-08-17
+
+### Changed
+
+- **The embedded sample banks now ship as FLAC instead of WAV.** A default-feature release
+  binary drops from 110,864,384 to 55,486,976 bytes — 105.7 MiB to 52.9 MiB, half the size.
+  Most of that is the container change; a small part is the removal of one redundant
+  alternate bank (below). FLAC is lossless, so the decoded PCM is bit-identical and rendered
+  audio is unchanged: every album MIDI in the catalogue was rendered against the previous
+  build and compared byte for byte.
+- Sample decoding uses a new first-party crate, **`ferrosintesis-flac`** — an
+  implementation of RFC 9639 with no external dependencies. That keeps this workspace's
+  offline-build property intact: `Cargo.lock` still carries no registry sources, and no
+  crate has a `build.rs`.
+
+### Removed
+
+- The `dark-salamander` alternate grand bank (GM 0, `CC0=5`). It was a darkened projection
+  of `ferrosintesis-samples-grand` rather than an independent recording, and carried no
+  provenance of its own.
+
+### Notes for users of the sample crates
+
+Each converted bank takes a **minor** bump (`0.1.x` -> `0.2.0`), because every name its
+`get()` accepts changed extension: `piano_C4.wav` is now `piano_C4.flac`. Under pre-1.0
+semantic versioning the minor is the breaking slot, and this is a breaking change for any
+crate that reaches a bank directly. Consumers going through `ferrosintesis` are unaffected —
+it pins each bank with `=` and moved in lockstep.
+
+`ferrosintesis-samples-b1-upright` is the deliberate exception and stays WAV, at `0.1.1`.
+Its files carry a custom `b1t ` tail chunk that the synth reads at load time, and FLAC has
+nowhere to store it.
+
 ## [0.21.57] - 2026-07-31
 
 ### Fixed

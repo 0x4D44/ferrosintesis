@@ -1,6 +1,6 @@
 [package]
 name = "ferrosintesis-samples-fretnoise"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.87"
 description = "Embedded owner-recorded fret-noise (finger-slide) one-shots for ferrosintesis (GM 120 Guitar Fret Noise)"

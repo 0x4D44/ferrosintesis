@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "ferrosintesis"
-version = "0.21.57"
+version = "0.21.58"
 dependencies = [
  "ferrosintesis-flac",
  "ferrosintesis-samples-b1-upright",
@@ -35,7 +35,7 @@ dependencies = [
 
 [[package]]
 name = "ferrosintesis-cli"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "ferrosintesis",
 ]
@@ -46,38 +46,38 @@ version = "0.1.0"
 
 [[package]]
 name = "ferrosintesis-samples-b1-upright"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "ferrosintesis-samples-bass"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-bottle"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-ccby"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-clavinet"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-core"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-drumkit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrosintesis-flac",
 ]
 
 [[package]]
 name = "ferrosintesis-samples-drumkit2"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrosintesis-flac",
  "ferrosintesis-samples-drumkit",
@@ -85,67 +85,67 @@ dependencies = [
 
 [[package]]
 name = "ferrosintesis-samples-fretnoise"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-gong"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-grand"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-headroom"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-honkytonk"
-version = "0.1.1"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-mandolin"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-musescore"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-musescore-grand"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-orchestral"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-orchestral2"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-rain"
-version = "0.1.1"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-sax"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-strings"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-vcsl-kawai"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-vcsl-steinway"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ferrosintesis-samples-ydp-grand"
-version = "0.1.1"
+version = "0.2.0"
 
 [[package]]
 name = "render-catalog"

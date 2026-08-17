@@ -1,6 +1,6 @@
 [package]
 name = "ferrosintesis-cli"
-version = "0.14.3"
+version = "0.14.4"
 edition = "2021"
 rust-version = "1.87"
 description = "Command-line WAV renderer for ferrosintesis"

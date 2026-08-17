@@ -1,7 +1,11 @@
 # SHA-256 of each take's 16-bit PCM, not of the FLAC container: the bake
-# determines the audio, ffmpeg determines the container. Regenerate with
-# `python tools/ferrosintesis-samples/fretnoise_bake.py` on the canonical
-# environment declared in that script.
+# determines the audio, ffmpeg determines the container, and pinning the
+# container would tie this oracle to one ffmpeg build.
+#
+# Updated BY HAND, deliberately: `fretnoise_bake.py` reads this file and never
+# writes it, so re-pinning is always a conscious act rather than a side effect
+# of running the bake. To change a pin, run the bake on the canonical
+# environment it declares and copy the digest column it prints.
 feb74018a43cd8b67a5a7e470ed7f9631ce589b8990f21671fc0c1d25bbba286  fretnoise_rr01.flac
 d9e01cc01c23cafd834ce6f5a6c4a5f4941ef8dcc242499f9ea93f966ca60351  fretnoise_rr02.flac
 c05af2dabbea4fc8c54a5467230e7c306e006344f6f9d8de2e78a1ad91db3cda  fretnoise_rr03.flac

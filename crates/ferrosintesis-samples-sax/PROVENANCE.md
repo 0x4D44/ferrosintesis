@@ -61,7 +61,7 @@ which is why the sentence above does not cover them.
 
 They stay packaged deliberately: the exclusion is a judgement about one recording, and
 keeping the takes lets a future reader re-measure it rather than take it on trust. A
-consumer of this crate should expect 74 packaged WAVs and 72 reachable zones.
+consumer of this crate should expect 74 packaged samples and 72 reachable zones.
 
 ## Inventory
 

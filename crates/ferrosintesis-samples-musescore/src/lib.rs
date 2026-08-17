@@ -4,8 +4,8 @@
 //! Attack transients extracted from the MuseScore "MS Basic" soundfont (MIT;
 //! FluidR3Mono lineage) for programs whose modeled onset benefits from a real one:
 //! the GM 104 sitar (pluck + jawari buzz), GM 61 brass section, GM 75/76/77 pipes,
-//! and GM 8 celesta (metal-bar bell strike). Each WAV is a
-//! mono 16-bit 44.1 kHz onset; `ferrosintesis` crossfades it into the modeled sustain.
+//! and GM 8 celesta (metal-bar bell strike). Each sample is a
+//! mono 16-bit 44.1 kHz onset stored as FLAC; `ferrosintesis` crossfades it into the modeled sustain.
 //! Consumers normally access this crate through `ferrosintesis`. Attribution
 //! obligations (the MS Basic acknowledgement set) are in `NOTICE`; the GM 7
 //! clavinet from the same soundfont ships separately in `ferrosintesis-samples-clavinet`.
@@ -183,7 +183,10 @@ mod tests {
             SAMPLES.iter().map(|(name, _)| (*name).to_owned()).collect();
         embedded.sort();
 
-        assert_eq!(embedded, packaged, "embedded list must match packaged WAVs");
+        assert_eq!(
+            embedded, packaged,
+            "embedded list must match packaged samples"
+        );
         assert_eq!(embedded.len(), FILE_COUNT);
     }
 

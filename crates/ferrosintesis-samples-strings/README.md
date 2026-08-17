@@ -3,7 +3,7 @@
 Embedded **CC0 1.0 / public-domain** solo string onset samples for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis): real **solo cello**
 (GM 42 arco), **solo double bass** (GM 43 arco), and **pizzicato double bass**
-(GM 32 acoustic bass) attack transients. Each WAV is a mono 16-bit 44.1 kHz
+(GM 32 acoustic bass) attack transients. Each sample is a mono 16-bit 44.1 kHz
 onset; the synth plays it as the note's attack and crossfades into the
 appropriate modeled sustain.
 

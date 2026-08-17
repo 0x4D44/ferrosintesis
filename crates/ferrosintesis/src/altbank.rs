@@ -1400,8 +1400,9 @@ mod tests {
             }
 
             // The IDENTITY lines must name that slot and no other. Prose may
-            // legitimately cross-reference a sibling (dark-Salamander cites its
-            // A/B partner; the Salamander contrasts itself with the upright), so
+            // legitimately cross-reference a sibling (the Salamander contrasts
+            // itself with the upright; the MuseScore onsets point at the
+            // clavinet from the same soundfont), so
             // exclusivity is enforced only where the crate declares what it IS:
             // the OPENING PARAGRAPH of the module header, and the manifest
             // description. Everything after the header's first blank `//!` line

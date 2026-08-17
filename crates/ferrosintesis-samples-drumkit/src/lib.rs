@@ -1,6 +1,6 @@
 //! Embedded CC0 sampled drum-kit bank for ferrosintesis -- the core kit.
 //!
-//! Mono 16-bit 44.1 kHz WAVs trimmed from CC0 1.0 Virtuosity Drums (`mid` mic
+//! Mono 16-bit 44.1 kHz FLACs trimmed from CC0 1.0 Virtuosity Drums (`mid` mic
 //! set) by `tools/ferrosintesis-samples/prepare_drumkit.py`: kick, snare
 //! center/cross-stick, hi/low toms, ride bow/bell, and hi-hat
 //! closed/open/pedal. See `PROVENANCE.md` for the pinned revisions, license

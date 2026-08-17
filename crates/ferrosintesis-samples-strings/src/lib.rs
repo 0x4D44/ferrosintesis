@@ -6,7 +6,8 @@
 //! replace the previous onset for GM 42/43, which repitched the VSCO
 //! cello-*section* (`celens`) samples — an ensemble recording that read as a small
 //! cello section rather than a soloist, and (for GM 43) as a cello an octave low
-//! rather than a double bass. Each WAV is a mono 16-bit 44.1 kHz onset;
+//! rather than a double bass. Each sample is a mono 16-bit 44.1 kHz onset
+//! stored as FLAC;
 //! `ferrosintesis` plays it as the note's attack and crossfades into the
 //! appropriate modeled sustain. Consumers normally access this crate through
 //! `ferrosintesis`, not directly. All samples are CC0 1.0 / public-domain — no
@@ -226,7 +227,10 @@ mod tests {
             SAMPLES.iter().map(|(name, _)| (*name).to_owned()).collect();
         embedded.sort();
 
-        assert_eq!(embedded, packaged, "embedded list must match packaged WAVs");
+        assert_eq!(
+            embedded, packaged,
+            "embedded list must match packaged samples"
+        );
         assert_eq!(embedded.len(), FILE_COUNT);
     }
 

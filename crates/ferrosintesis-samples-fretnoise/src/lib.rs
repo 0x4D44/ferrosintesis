@@ -136,7 +136,7 @@ mod tests {
         names
     }
 
-    /// Every packaged WAV is embedded and vice versa.
+    /// Every packaged sample is embedded and vice versa.
     ///
     /// This is the generated-crate shape emitted by `gen_crate_lib.py:79-86`, where
     /// `get(name)` is the only accessor and row order genuinely does not matter — so

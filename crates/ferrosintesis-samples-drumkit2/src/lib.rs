@@ -342,7 +342,7 @@ mod tests {
                 .map(String::as_str)
                 .collect();
             return Err(format!(
-                "packaged WAVs absent from SAMPLES: {unembedded:?}; \
+                "packaged samples absent from SAMPLES: {unembedded:?}; \
                  SAMPLES entries absent from the package: {unpackaged:?}",
             ));
         }
@@ -396,7 +396,7 @@ mod tests {
         packaged.push("unembedded_fixture.flac".to_owned());
 
         let error = validate_packaged_inventory(packaged)
-            .expect_err("an unembedded packaged WAV must fail the inventory oracle");
+            .expect_err("an unembedded packaged sample must fail the inventory oracle");
         assert!(error.contains("unembedded_fixture.flac"), "{error}");
     }
 

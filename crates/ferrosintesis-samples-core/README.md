@@ -29,7 +29,7 @@ their single takes; they are aliases, not additional embedded files.
 
 ## Provenance and license
 
-Every WAV in this package was trimmed from
+Every recording in this package was trimmed from
 [VSCO 2 Community Edition](https://github.com/sgossner/VSCO-2-CE) by Versilian
 Studios / sgossner, released under the CC0 1.0 Universal public-domain
 dedication. Source downloads are pinned to repository commit
@@ -41,6 +41,6 @@ performs onset detection, trimming, fades, peak normalization, and conversion
 to mono 16-bit 44.1 kHz WAV. The piano transients retain about 1.8 seconds; the
 violin and flute transients retain about 0.63 seconds.
 
-The packaged WAVs and this package are dedicated to the public domain under
+The packaged samples and this package are dedicated to the public domain under
 CC0-1.0. The full legal text is in `LICENSE-CC0`. Attribution is not required
 and is included here with thanks.

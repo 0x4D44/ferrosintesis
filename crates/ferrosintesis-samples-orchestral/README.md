@@ -93,6 +93,6 @@ The repository's
 performs onset detection, trimming, fades, peak normalization, and conversion
 to mono 16-bit 44.1 kHz WAV.
 
-The packaged WAVs and this package are dedicated to the public domain under
+The packaged samples and this package are dedicated to the public domain under
 CC0-1.0. The full legal text is in `LICENSE-CC0`. Attribution is not required
 and is included here with thanks.

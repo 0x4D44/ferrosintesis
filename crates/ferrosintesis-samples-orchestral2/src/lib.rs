@@ -1,8 +1,8 @@
 //! Embedded CC0 1.0 instrument-onset samples for ferrosintesis.
 //!
 //! The second CC0 onset crate: the original `ferrosintesis-samples-orchestral` is
-//! at the crates.io per-crate size cap, so newer CC0 families land here. Each WAV
-//! is a mono 16-bit 44.1 kHz attack transient; `ferrosintesis` plays it as a note's
+//! at the crates.io per-crate size cap, so newer CC0 families land here. Each
+//! sample is a mono 16-bit 44.1 kHz attack transient stored as FLAC; `ferrosintesis` plays it as a note's
 //! onset and crossfades into the modeled sustain. Consumers normally access this
 //! crate through `ferrosintesis`, not directly. All samples are CC0 1.0 /
 //! public-domain — no attribution required. The canonical packaged inventory
@@ -449,7 +449,10 @@ mod tests {
             SAMPLES.iter().map(|(name, _)| (*name).to_owned()).collect();
         embedded.sort();
 
-        assert_eq!(embedded, packaged, "embedded list must match packaged WAVs");
+        assert_eq!(
+            embedded, packaged,
+            "embedded list must match packaged samples"
+        );
         assert_eq!(embedded.len(), FILE_COUNT);
     }
 

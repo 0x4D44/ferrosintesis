@@ -8032,7 +8032,7 @@ mod tests {
         // it is asserted rather than left to the prose to keep in step.
         assert!(
             provenance.contains(&format!(
-                "{} packaged WAVs and {} reachable zones",
+                "{} packaged samples and {} reachable zones",
                 packaged.len(),
                 zoned.len()
             )),

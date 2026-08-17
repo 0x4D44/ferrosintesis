@@ -1,6 +1,6 @@
 # Provenance - ferrosintesis-samples-musescore
 
-Every WAV this crate packages, with the pinned source it was baked from. Machine-checked
+Every recording this crate packages, with the pinned source it was baked from. Machine-checked
 by `crates/ferrosintesis/src/inventory.rs`: a family that ships without a row here fails
 the build (MM-BUG-KILN-00069).
 

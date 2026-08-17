@@ -4,7 +4,7 @@ Embedded **MIT-licensed** instrument-onset samples for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis), extracted from the
 MuseScore "MS Basic" soundfont (MuseScore_General / FluidR3Mono lineage).
 
-Each WAV is a mono 16-bit 44.1 kHz attack transient; the synth plays it as a note's
+Each sample is a mono 16-bit 44.1 kHz attack transient stored as FLAC; the synth plays it as a note's
 onset and crossfades into the modeled sustain (LA synthesis). Consumers normally
 access this crate through `ferrosintesis`, not directly.
 

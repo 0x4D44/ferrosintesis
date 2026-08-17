@@ -7982,6 +7982,11 @@ mod tests {
     /// packaged and absent from the zone tables, and each member must appear in
     /// PROVENANCE.md. Excluding another take without documenting it fails here, and so
     /// does documenting one that is actually reachable.
+    /// Repository-only: it reads the sax crate's `PROVENANCE.md`, a sibling that is
+    /// absent from the published `ferrosintesis` archive. Without this gate a
+    /// registry user running `cargo test` panics on the missing file — and since the
+    /// test landed after 0.21.57, this release would have been the first to ship it.
+    #[cfg(ferrosintesis_repository_tests)]
     #[test]
     fn packaged_sax_takes_outside_the_zone_tables_are_documented() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

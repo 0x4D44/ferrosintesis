@@ -211,9 +211,10 @@ library releases start at `0.21.56`. Its public API is designed for the semver p
 with `Options::default()` + the `with_*` builders, read with the accessors), and the error
 enums plus every data-carrying variant are `#[non_exhaustive]`. Adding a render knob or an
 error variant is therefore a minor bump, not a major one — keep it that way. Publish order is
-forced by the `=0.1.0` pins, and there are **25 sample crates**, not two: publish the 24
-independent ones in any order, then `-drumkit2` (the only crate that depends on another,
-`-drumkit`), then `ferrosintesis`, and finally `ferrosintesis-cli`. Derive the order from
+forced by the `=0.1.0` pins, and there are **24 sample crates**, not two: publish the 23
+independent ones plus `ferrosintesis-flac` in any order, then `-drumkit2` (the only sample
+crate that depends on another, `-drumkit`), then `ferrosintesis`, and finally
+`ferrosintesis-cli`. Derive the order from
 the manifests rather than trusting a list here — that is what this sentence got wrong before.
 The CLI ships because the library has no `[[bin]]`: `cargo install ferrosintesis` installs
 nothing, `cargo install ferrosintesis-cli` installs the `ferrosintesis` renderer.

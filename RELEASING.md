@@ -1,8 +1,8 @@
 # Publishing to crates.io
 
-The publishable workspace contains **27 crates**: 25 sample-asset crates,
-`ferrosintesis`, and `ferrosintesis-cli`. `render-catalog` and the separate
-`crates/amp-lab` workspace do not publish.
+The publishable workspace contains **27 crates**: 24 sample-asset crates,
+`ferrosintesis-flac`, `ferrosintesis`, and `ferrosintesis-cli`. `render-catalog` and the
+separate `crates/amp-lab` workspace do not publish.
 
 Publishing is irreversible. A crate version cannot be replaced or reused, and a partial
 workspace publish can leave dependency crates live before the parent. Run this procedure
@@ -15,9 +15,10 @@ Real library releases start at `0.21.56`; always inspect crates.io for the curre
 
 Cargo derives the order from the manifests. The current graph has four layers:
 
-1. 24 independent sample crates, including `ferrosintesis-samples-drumkit`.
+1. 23 independent sample crates (including `ferrosintesis-samples-drumkit`) plus
+   `ferrosintesis-flac`, which depends on nothing.
 2. `ferrosintesis-samples-drumkit2`, which depends on `-drumkit`.
-3. `ferrosintesis`, which pins all 25 sample crates.
+3. `ferrosintesis`, which pins all 24 sample crates and `ferrosintesis-flac`.
 4. `ferrosintesis-cli`, which depends on `ferrosintesis`.
 
 Do not maintain a second hand-written package list. Confirm the graph with:
